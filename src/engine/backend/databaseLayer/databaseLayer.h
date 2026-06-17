@@ -134,6 +134,11 @@ struct ibDialectDictionary
 	// splits a batch into one statement per clause when this is false.
 	bool m_alterTableMultiClause = true;
 
+	// Column-drop spelling. Default = ANSI "DROP COLUMN c" (PG / SQLite 3.35+ / MySQL).
+	// Firebird rejects the COLUMN keyword — it takes plain "ALTER TABLE t DROP c". Used by
+	// DropColumn and the multi-clause ALTER fold.
+	wxString m_dropColumnClause = wxT("DROP COLUMN ");
+
 	// Row-lock clause APPENDED to a top-level SELECT for a pessimistic read-for-update (the
 	// register set lock). Default = PG / MySQL " FOR UPDATE"; Firebird overrides to " WITH
 	// LOCK"; SQLite leaves it EMPTY (it locks the whole DB per transaction — the open TX IS

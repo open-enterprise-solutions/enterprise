@@ -6,7 +6,6 @@
 #include "debugServer.h"
 
 #include "backend/compiler/procUnit.h"
-#include "backend/databaseLayer/databaseLayer.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"

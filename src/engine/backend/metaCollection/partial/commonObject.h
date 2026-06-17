@@ -181,13 +181,11 @@ public:
 	virtual bool AccessRight_Show() const { return true; }
 #pragma endregion
 
-	virtual bool FilterChild(const ibClassID& clsid) const {
-		if (
-			clsid == g_metaFormCLSID ||
-			clsid == g_metaTemplateCLSID
-			)
-			return true;
-		return false;
+	virtual ibClassID ResolveChild(const ibClassID& clsid) const {
+		if (clsid == g_metaFormCLSID ||
+			clsid == g_metaTemplateCLSID)
+			return clsid;
+		return 0;
 	}
 
 	//get data selector 
@@ -287,13 +285,13 @@ class BACKEND_API ibValueMetaObjectRecordData
 
 public:
 
-	virtual bool FilterChild(const ibClassID& clsid) const {
-		if (
-			clsid == g_metaAttributeCLSID ||
-			clsid == g_metaTableCLSID
-			)
-			return true;
-		return ibValueMetaObjectGenericData::FilterChild(clsid);
+	virtual ibClassID ResolveChild(const ibClassID& clsid) const {
+		if (clsid == g_metaAttributeCLSID)
+			return clsid;
+		// RAM owner (processor / report): either tabular-section variant maps to MD_TBL.
+		if (clsid == g_metaTableCLSID || clsid == g_metaTableRefCLSID)
+			return g_metaTableCLSID;
+		return ibValueMetaObjectGenericData::ResolveChild(clsid);
 	}
 
 	//get data selector 
@@ -526,12 +524,14 @@ public:
 	virtual ibSelectorDataType GetFilterDataType() const { return ibSelectorDataType::ibSelectorDataType_reference; }
 
 	//reference owners persist their tabular sections to the DB — they take the MD_TBLR variant
-	//(processors/reports keep the RAM MD_TBL via the base RecordData::FilterChild).
-	virtual bool FilterChild(const ibClassID& clsid) const {
-		if (clsid == g_metaAttributeCLSID ||
-			clsid == g_metaTableRefCLSID)
-			return true;
-		return ibValueMetaObjectGenericData::FilterChild(clsid);
+	//(processors/reports keep the RAM MD_TBL via the base RecordData::ResolveChild).
+	virtual ibClassID ResolveChild(const ibClassID& clsid) const {
+		if (clsid == g_metaAttributeCLSID)
+			return clsid;
+		// reference owner (catalog / document): either tabular-section variant maps to MD_TBLR.
+		if (clsid == g_metaTableCLSID || clsid == g_metaTableRefCLSID)
+			return g_metaTableRefCLSID;
+		return ibValueMetaObjectGenericData::ResolveChild(clsid);
 	}
 
 	//meta events
@@ -922,11 +922,13 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 	virtual bool ProcessChoice(ibBackendControlFrame* ownerValue,
 		const wxString& strFormName = wxEmptyString, ibSelectMode selMode = ibSelectMode::ibSelectMode_Items) const;
 
-	virtual bool FilterChild(const ibClassID& clsid) const {
-		if (clsid == g_metaAttributeCLSID ||
-			clsid == g_metaTableRefCLSID)
-			return true;
-		return ibValueMetaObjectGenericData::FilterChild(clsid);
+	virtual ibClassID ResolveChild(const ibClassID& clsid) const {
+		if (clsid == g_metaAttributeCLSID)
+			return clsid;
+		// reference owner (catalog / document): either tabular-section variant maps to MD_TBLR.
+		if (clsid == g_metaTableCLSID || clsid == g_metaTableRefCLSID)
+			return g_metaTableRefCLSID;
+		return ibValueMetaObjectGenericData::ResolveChild(clsid);
 	}
 
 	//events: 
@@ -1240,14 +1242,12 @@ public:
 	virtual const ibValueMetaObjectModule* GetObjectModule() const { return nullptr; }
 	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const { return nullptr; }
 
-	virtual bool FilterChild(const ibClassID& clsid) const {
-		if (
-			clsid == g_metaDimensionCLSID ||
+	virtual ibClassID ResolveChild(const ibClassID& clsid) const {
+		if (clsid == g_metaDimensionCLSID ||
 			clsid == g_metaResourceCLSID ||
-			clsid == g_metaAttributeCLSID
-			)
-			return true;
-		return ibValueMetaObjectGenericData::FilterChild(clsid);
+			clsid == g_metaAttributeCLSID)
+			return clsid;
+		return ibValueMetaObjectGenericData::ResolveChild(clsid);
 	}
 
 	//meta events
@@ -1382,9 +1382,23 @@ public:
 	virtual ibSourceExplorer GetSourceExplorer() const = 0;
 	virtual bool GetModel(ibValueModel*& tableValue, const ibMetaID& id) = 0;
 
-	//support source set/get data 
+	//support source set/get data
 	virtual bool SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal) { return false; }
 	virtual bool GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const { return false; }
+
+	// Path access: the same source fed an ordered metaId path instead of a single id.
+	// The first id is read off the source itself (GetValueByMetaID); each further id
+	// steps into the previous reference value. A one-id path is just GetValueByMetaID.
+	// The path is a plain lightweight vector — no property-side description type leaks
+	// into the source. The walker lives on the source so every kind (RAM / list /
+	// object / record set / manager) inherits one traversal — read-only navigation.
+	bool GetValueByPath(const std::vector<ibMetaID>& path, ibValue& pvarMetaVal) const;
+	ibValue GetValueByPath(const std::vector<ibMetaID>& path) const {
+		ibValue retValue;
+		if (GetValueByPath(path, retValue))
+			return retValue;
+		return ibValue();
+	}
 
 	//counter
 	virtual void SourceIncrRef() = 0;

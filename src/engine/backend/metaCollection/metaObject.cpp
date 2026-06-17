@@ -8,7 +8,6 @@
 #include "backend/metadataConfiguration.h"   // ibMetaDataConfigurationBase::GetRestructureInfo (the static ledger accessor)
 
 #include "backend/metaData.h"
-#include "backend/databaseLayer/databaseLayer.h"
 #include "backend/databaseLayer/databaseErrorCodes.h"
 
 // Restructure-ledger facade — one call onto the active config's ledger (the static accessor).
@@ -370,9 +369,16 @@ bool ibValueMetaObject::PasteObject(ibReaderMemory& reader)
 						break;
 					if (clsid > 0) {
 						ibValueMetaObject* metaObject = metaData->CreateMetaObject(clsid, pasteObject, false);
-						if (metaObject != nullptr && !PasteObject(metaObject, *readerMemory)) {
-							wxDELETE(metaObject);
-							return false;
+						if (metaObject != nullptr) {
+							if (!PasteObject(metaObject, *readerMemory)) {
+								wxDELETE(metaObject);
+								return false;
+							}
+						}
+						else {
+							// Don't drop silently: a child the target owner cannot host is a real
+							// mismatch worth a log, not a quietly-incomplete paste.
+							wxLogWarning(wxT("PasteObject: child clsid %u not accepted by target owner - skipped"), (unsigned int)clsid);
 						}
 					}
 					prevReaderMemory = readerMemory;
@@ -420,9 +426,16 @@ bool ibValueMetaObject::PasteObject(ibReaderMemory& reader)
 						break;
 					if (clsid > 0) {
 						ibValueMetaObject* metaObject = metaData->CreateMetaObject(clsid, pasteObject, false);
-						if (metaObject != nullptr && !PasteObject(metaObject, *readerMemory)) {
-							wxDELETE(metaObject);
-							return false;
+						if (metaObject != nullptr) {
+							if (!PasteObject(metaObject, *readerMemory)) {
+								wxDELETE(metaObject);
+								return false;
+							}
+						}
+						else {
+							// Don't drop silently: a child the target owner cannot host is a real
+							// mismatch worth a log, not a quietly-incomplete paste.
+							wxLogWarning(wxT("PasteObject: child clsid %u not accepted by target owner - skipped"), (unsigned int)clsid);
 						}
 					}
 					prevReaderMemory = readerMemory;

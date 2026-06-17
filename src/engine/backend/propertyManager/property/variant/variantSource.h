@@ -2,6 +2,7 @@
 #define __SOURCE_DATA_VARIANT_H__
 
 #include "variantType.h"
+#include "backend/sourceDescription.h"
 
 class BACKEND_API ibVariantDataAttributeSource : public ibVariantDataAttribute {
 protected:
@@ -48,7 +49,15 @@ public:
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	bool IsEmptySource() const { return GetIdByGuid(m_dataSource) == wxNOT_FOUND; }
+	// Empty when no leaf is bound OR the leaf no longer resolves (e.g. the attribute was
+	// removed from the metadata) — never a live binding to a dangling metaId. Resolves
+	// the leaf, matching the historical guid-based behaviour; callers rely on this to skip
+	// a removed attribute instead of dereferencing a null metaobject.
+	bool IsEmptySource() const;
+
+	// True when the binding walks one or more references before the leaf (a dotted
+	// path) rather than a single direct column. Cheap — just the path length.
+	bool IsDotWalk() const { return m_sourceDesc.IsDotWalk(); }
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -66,17 +75,35 @@ public:
 
 	//////////////////////////////////////////////////
 
-	ibValueMetaObjectAttributeBase* GetSourceAttributeObject() const;
+	const ibValueMetaObjectAttributeBase* GetSourceAttributeObject() const;
+
+	//////////////////////////////////////////////////
+
+	// The binding address: a single ordered metaId path (first hop .. leaf). This is
+	// the variant's only stored state — what gets serialised (mirrors ibMetaDescription
+	// on the meta-binding variants) and fed to the source object as a plain path.
+	ibSourceDescription& GetSourceDesc() { return m_sourceDesc; }
+	const ibSourceDescription& GetSourceDesc() const { return m_sourceDesc; }
+
+	// Replace the whole path (e.g. the picker committing a chosen field), refreshing
+	// the live type helper from the new leaf.
+	void SetSourceDesc(const ibSourceDescription& desc, bool fillTypeDesc = true) {
+		m_sourceDesc = desc;
+		if (fillTypeDesc) {
+			m_attributeSource->SetFromMetaDesc(m_sourceDesc.GetLeaf());
+			m_typeDescLeaf = m_sourceDesc.GetLeaf();
+		}
+	}
 
 	//////////////////////////////////////////////////
 
 	void SetSource(const ibMetaID& id, bool fillTypeDesc = true);
-	ibMetaID GetSource() const;
+	ibMetaID GetSource() const { return m_sourceDesc.GetLeaf(); }   // the leaf — the column read/written
 
 	//////////////////////////////////////////////////
 
 	void SetSourceGuid(const ibGuid& guid, bool fillTypeDesc = true);
-	ibGuid GetSourceGuid() const;
+	ibGuid GetSourceGuid() const { return GetGuidByID(m_sourceDesc.GetLeaf()); }
 
 	//////////////////////////////////////////////////
 
@@ -92,6 +119,15 @@ public:
 	ibMetaID GetIdByGuid(const ibGuid& guid) const;
 	ibGuid GetGuidByID(const ibMetaID& id) const;
 
+	//////////////////////////////////////////////////
+
+	// The source object this binding reads from — the owning property's factory already
+	// holds it, so a control never has to pass it in.
+	class ibSourceObject* GetOwnerSource() const { return m_ownerProperty != nullptr ? m_ownerProperty->GetSourceObject() : nullptr; }
+
+	// Config metadata behind this binding — drives the metaId<->guid resolution at save/load.
+	const class ibMetaData* GetMetaData() const { return m_ownerProperty != nullptr ? m_ownerProperty->GetMetaData() : nullptr; }
+
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	bool IsPropAllowed() const;
@@ -99,35 +135,37 @@ public:
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	ibVariantDataSource(const ibBackendTypeSourceFactory* prop, const ibMetaID& id) : wxVariantData(),
-		m_attributeSource(nullptr), m_ownerProperty(prop), m_dataSource(wxNullGuid) {
+		m_attributeSource(nullptr), m_ownerProperty(prop) {
 
 		m_attributeSource = new ibVariantDataAttributeSource(prop, id);
-		//m_attributeSource->IncRef(); // always one 
-
-		m_dataSource = GetGuidByID(id);
+		if (id != wxNOT_FOUND) m_sourceDesc.SetDefaultSource(id);
 	}
 
 	ibVariantDataSource(const ibBackendTypeSourceFactory* prop, const ibGuid& id, bool fillTypeDesc = true) : wxVariantData(),
-		m_attributeSource(nullptr), m_ownerProperty(prop), m_dataSource(id) {
+		m_attributeSource(nullptr), m_ownerProperty(prop) {
 
-		m_attributeSource = new ibVariantDataAttributeSource(prop, fillTypeDesc ? GetIdByGuid(id) : wxNOT_FOUND);
-		//m_attributeSource->IncRef(); // always one 
-
-		//m_dataSource = GetSourceGuid();
+		const ibMetaID mid = GetIdByGuid(id);
+		m_attributeSource = new ibVariantDataAttributeSource(prop, fillTypeDesc ? mid : wxNOT_FOUND);
+		if (mid != wxNOT_FOUND) m_sourceDesc.SetDefaultSource(mid);
 	}
 
 	ibVariantDataSource(const ibBackendTypeSourceFactory* prop, const ibTypeDescription& typeDesc) : wxVariantData(),
-		m_attributeSource(nullptr), m_ownerProperty(prop), m_dataSource(wxNullGuid) {
+		m_attributeSource(nullptr), m_ownerProperty(prop) {
 
 		m_attributeSource = new ibVariantDataAttributeSource(prop, typeDesc);
-		//m_attributeSource->IncRef(); // always one 
+	}
+
+	ibVariantDataSource(const ibBackendTypeSourceFactory* prop, const ibSourceDescription& desc) : wxVariantData(),
+		m_attributeSource(nullptr), m_ownerProperty(prop), m_sourceDesc(desc) {
+
+		m_attributeSource = new ibVariantDataAttributeSource(prop, m_sourceDesc.GetLeaf());
+		m_typeDescLeaf = m_sourceDesc.GetLeaf();
 	}
 
 	ibVariantDataSource(const ibVariantDataSource& srcData) : wxVariantData(),
-		m_attributeSource(nullptr), m_ownerProperty(srcData.m_ownerProperty), m_dataSource(srcData.m_dataSource) {
+		m_attributeSource(nullptr), m_ownerProperty(srcData.m_ownerProperty), m_sourceDesc(srcData.m_sourceDesc) {
 
 		m_attributeSource = new ibVariantDataAttributeSource(*srcData.m_attributeSource);
-		//m_attributeSource->IncRef(); // always one 
 	}
 
 	virtual ~ibVariantDataSource() { m_attributeSource->DecRef(); }
@@ -141,7 +179,7 @@ public:
 		if (srcData != nullptr) {
 			ibVariantDataAttribute* srcAttr = srcData->m_attributeSource;
 			wxASSERT(srcAttr);
-			return m_dataSource == srcData->m_dataSource && srcAttr->Eq(*m_attributeSource);
+			return m_sourceDesc.GetPath() == srcData->m_sourceDesc.GetPath() && srcAttr->Eq(*m_attributeSource);
 		}
 		return false;
 	}
@@ -165,9 +203,10 @@ public:
 
 protected:
 
-	ibGuid m_dataSource;
+	ibSourceDescription m_sourceDesc;          // binding address: [first hop .. leaf], metaIds
+	mutable ibMetaID m_typeDescLeaf = wxNOT_FOUND;   // leaf the type helper is currently synced to
 	const ibBackendTypeSourceFactory* m_ownerProperty = nullptr;
-	ibVariantDataAttributeSource* m_attributeSource = nullptr;
+	ibVariantDataAttributeSource* m_attributeSource = nullptr;  // live type helper (derived from leaf, not serialised)
 };
 
 #endif // !__TYPE_VARIANT_H__

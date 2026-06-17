@@ -111,7 +111,7 @@ class ibValueTextCtrl : public ibValueWindow,
 	virtual ibSourceObject* GetSourceObject() const;
 
 	//Get source attribute  
-	virtual ibValueMetaObjectAttributeBase* GetSourceAttributeObject() const {
+	virtual const ibValueMetaObjectAttributeBase* GetSourceAttributeObject() const {
 		return m_propertySource->GetSourceAttributeObject();
 	}
 
@@ -303,7 +303,7 @@ class ibValueCheckbox : public ibValueWindow,
 	virtual ibSourceObject* GetSourceObject() const;
 
 	//get source attribute  
-	virtual ibValueMetaObjectAttributeBase* GetSourceAttributeObject() const {
+	virtual const ibValueMetaObjectAttributeBase* GetSourceAttributeObject() const {
 		return m_propertySource->GetSourceAttributeObject();
 	}
 

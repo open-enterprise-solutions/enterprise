@@ -1,5 +1,4 @@
 #include "authorization.h"
-#include "backend/databaseLayer/databaseLayer.h"
 #include "backend/appData.h"
 
 ///////////////////////////////////////////////////////////////////////////

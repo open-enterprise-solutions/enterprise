@@ -28,7 +28,7 @@ class FRONTEND_API ibTypeControlFactory : public ibBackendTypeSourceFactory {
 public:
 
 	//////////////////////////////////////////////////
-	virtual ibValueMetaObjectAttributeBase* GetSourceAttributeObject() const = 0;
+	virtual const ibValueMetaObjectAttributeBase* GetSourceAttributeObject() const = 0;
 	//////////////////////////////////////////////////
 
 	static bool SimpleChoice(ibControlFrame* ownerValue, const ibClassID& clsid, wxWindow* parent);

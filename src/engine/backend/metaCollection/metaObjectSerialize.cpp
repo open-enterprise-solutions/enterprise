@@ -10,7 +10,6 @@
 
 #include "backend/metaData.h"
 #include "backend/backend_exception.h"
-#include "backend/databaseLayer/databaseLayer.h"
 #include "backend/databaseLayer/databaseErrorCodes.h"
 
 #define metaBlock 0x200222

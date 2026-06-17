@@ -8,7 +8,6 @@
 
 #include "backend/system/value/valueMap.h"
 #include "backend/system/value/valueTable.h"
-#include "backend/databaseLayer/databaseLayer.h"
 #include "backend/appData.h"
 #include "backend/session/session.h"
 #include "backend/query/dataQueryBuilder.h"   // L3 door — From(slice) + Select materialises the slice through L3

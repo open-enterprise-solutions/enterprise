@@ -462,7 +462,7 @@ void ibTypeControlFactory::QuickChoice(ibControlFrame* controlValue, ibValue& ne
 
 ibSelectMode ibTypeControlFactory::GetSelectMode() const
 {
-	ibValueMetaObjectAttributeBase* sourceObject = GetSourceAttributeObject();
+	const ibValueMetaObjectAttributeBase* sourceObject = GetSourceAttributeObject();
 	if (sourceObject != nullptr) return sourceObject->GetSelectMode();
 	return ibSelectMode::ibSelectMode_Items;
 }
@@ -474,14 +474,14 @@ ibValue ibTypeControlFactory::CreateValue() const
 
 ibValue* ibTypeControlFactory::CreateValueRef() const
 {
-	ibValueMetaObjectAttributeBase* sourceObject = GetSourceAttributeObject();
+	const ibValueMetaObjectAttributeBase* sourceObject = GetSourceAttributeObject();
 	if (sourceObject != nullptr) return sourceObject->CreateValueRef();
 	return ibBackendTypeSourceFactory::CreateValueRef();
 }
 
 ibClassID ibTypeControlFactory::GetDataType() const
 {
-	ibValueMetaObjectAttributeBase* sourceObject = GetSourceAttributeObject();
+	const ibValueMetaObjectAttributeBase* sourceObject = GetSourceAttributeObject();
 	if (sourceObject != nullptr) return ShowSelectType(sourceObject->GetMetaData(), sourceObject->GetTypeDesc());
 	return ShowSelectType(GetMetaData(), GetTypeDesc());
 }

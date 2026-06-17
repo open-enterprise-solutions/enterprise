@@ -18,7 +18,9 @@ void ibValueCheckbox::OnClickedCheckbox(wxCommandEvent& event)
 	if (!m_propertySource->IsEmptyProperty()) {
 		ibSourceDataObject* srcData = m_formOwner->GetSourceObject();
 		wxASSERT(srcData);
-		srcData->SetValueByMetaID(m_propertySource->GetValueAsSource(), m_selValue);
+		// A dotted reference path is read-only — only a single-column binding writes back.
+		if (srcData != nullptr && !m_propertySource->IsDotWalk())
+			srcData->SetValueByMetaID(m_propertySource->GetValueAsSource(), m_selValue);
 	}
 
 	m_formOwner->RefreshForm();

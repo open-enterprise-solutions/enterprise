@@ -8,7 +8,6 @@
 
 #include "backend/system/value/valueMap.h"
 #include "backend/system/value/valueTable.h"
-#include "backend/databaseLayer/databaseLayer.h"
 #include "backend/databaseLayer/databaseQueryBuilder.h"        // L2 — structured IR for balance / turnover aggregates
 #include "backend/databaseLayer/databaseResultSet.h"           // raw result set for materialisation
 #include "backend/query/dataQueryBuilder.h"                     // L3 door — From(balance/turnover queryable).Select()

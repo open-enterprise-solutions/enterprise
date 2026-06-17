@@ -66,10 +66,10 @@ public:
 	//get table class
 	ibTypeDescription GetTypeDesc() const;
 
-	virtual bool FilterChild(const ibClassID& clsid) const {
+	virtual ibClassID ResolveChild(const ibClassID& clsid) const {
 		if (clsid == g_metaAttributeCLSID)
-			return true;
-		return false;
+			return clsid;
+		return 0;
 	}
 
 	//ctor

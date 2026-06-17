@@ -277,8 +277,19 @@ public:
 	wxString GetModuleName() const;
 	wxString GetDocPath() const { return m_metaGuid.str(); }
 
-	//filter children element
-	virtual bool FilterChild(const ibClassID& clsid) const { return false; }
+	// Resolve a child's clsid against THIS owner: returns the canonical clsid the owner hosts
+	// (possibly remapped) or 0 if it does not host this child. ibClassID is UNSIGNED, so 0 — not
+	// -1 — is the "not allowed" sentinel (a real clsid is always > 0, see CreateMetaObject's
+	// wxASSERT(clsid != 0)). This is the single "may I host this child, and as what" gate — it
+	// replaces the old bool FilterChild + a separate remap. A tabular section comes in two clsids
+	// of the same kind: RAM (MD_TBL, processors/reports) and DB-backed reference (MD_TBLR,
+	// catalogs/documents); each owner maps either input to ITS variant, so a tabular section
+	// copy/pastes across owner kinds. CreateMetaObject builds the RETURNED clsid. Owners override.
+	virtual ibClassID ResolveChild(const ibClassID& clsid) const { return 0; }
+
+	// Bool view of ResolveChild for the many filter-only call sites (copy/serialize walkers):
+	// a resolved clsid is > 0; 0 means the child is not allowed.
+	bool FilterChild(const ibClassID& clsid) const { return ResolveChild(clsid) > 0; }
 
 	//process choice
 	virtual bool ProcessChoice(ibBackendControlFrame* ownerValue,
@@ -408,7 +419,7 @@ public:
 		return FindObjectByFilter<_T1>(id, {});
 	}
 
-#pragma endregion 
+#pragma endregion
 
 	template<typename T, typename... Args>
 	T* CreateMetaObjectAndSetParent(Args&&... args) {

@@ -1,7 +1,6 @@
 #include "metaAttributeObject.h"
 
 #include "backend/appData.h"
-#include "backend/databaseLayer/databaseLayer.h"
 #include "backend/databaseLayer/databaseErrorCodes.h"
 
 #include "backend/metaData.h"

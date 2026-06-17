@@ -73,8 +73,8 @@ wxString ibValueCheckbox::GetControlTitle() const
 	}
 	else if (!m_propertySource->IsEmptyProperty()) {
 		const ibValueMetaObject* metaObject = m_propertySource->GetSourceAttributeObject();
-		wxASSERT(metaObject);
-		return metaObject->GetSynonym();
+		if (metaObject != nullptr)   // null when the bound attribute was just removed
+			return metaObject->GetSynonym();
 	}
 	return wxEmptyString;
 }
@@ -109,14 +109,17 @@ void ibValueCheckbox::Update(wxObject* wxobject, ibVisualHost* visualHost)
 #endif
 
 	if (checkbox != nullptr) {
-		// Source-backed value refresh — shared metadata work.
+		// Source-backed value refresh: hand the source the binding path; it walks it.
 		if (!m_propertySource->IsEmptyProperty() && m_formOwner != nullptr) {
 			ibSourceDataObject* srcObject = m_formOwner->GetSourceObject();
 			if (srcObject != nullptr)
-				srcObject->GetValueByMetaID(m_propertySource->GetValueAsSource(), m_selValue);
+				m_selValue = srcObject->GetValueByPath(m_propertySource->GetValueAsPath());
 		}
 
 		checkbox->SetLabel(GetControlTitle());
+		// A dotted reference path is read-only.
+		if (m_propertySource->IsDotWalk())
+			checkbox->Enable(false);
 #ifdef OES_USE_WEB
 		checkbox->SetValue(m_selValue.GetBoolean());
 #else
@@ -152,8 +155,10 @@ bool ibValueCheckbox::GetControlValue(ibValue& pvarControlVal) const
 {
 	if (!m_propertySource->IsEmptyProperty() && m_formOwner->GetSourceObject()) {
 		ibSourceDataObject* srcObject = m_formOwner->GetSourceObject();
-		if (srcObject != nullptr)
-			return srcObject->GetValueByMetaID(m_propertySource->GetValueAsSource(), pvarControlVal);
+		if (srcObject != nullptr) {
+			pvarControlVal = srcObject->GetValueByPath(m_propertySource->GetValueAsPath());   // dotted path -> read-only walk
+			return true;
+		}
 	}
 
 	pvarControlVal = ibTypeControlFactory::AdjustValue(m_selValue);
@@ -166,7 +171,8 @@ bool ibValueCheckbox::SetControlValue(const ibValue& varControlVal)
 {
 	if (!m_propertySource->IsEmptyProperty() && m_formOwner->GetSourceObject()) {
 		ibSourceDataObject* srcObject = m_formOwner->GetSourceObject();
-		if (srcObject != nullptr)
+		// A dotted reference path is read-only — only a single-column binding writes back.
+		if (srcObject != nullptr && !m_propertySource->IsDotWalk())
 			srcObject->SetValueByMetaID(m_propertySource->GetValueAsSource(), varControlVal);
 	}
 

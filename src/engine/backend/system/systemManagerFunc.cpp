@@ -5,7 +5,6 @@
 
 #include "systemManager.h"
 
-#include "backend/databaseLayer/databaseLayer.h"
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/metadataConfiguration.h"
 

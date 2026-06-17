@@ -1,6 +1,5 @@
 ﻿#include "objectSelector.h"
 #include "backend/metaCollection/partial/reference/reference.h"
-#include "backend/databaseLayer/databaseLayer.h"
 #include "backend/appData.h"
 
 ibValueSelectorDataObject::ibValueSelectorDataObject() : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true)

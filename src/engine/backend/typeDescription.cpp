@@ -34,6 +34,6 @@ bool ibMetaDescriptionMemory::LoadData(ibReaderMemory& reader, ibMetaDescription
 bool ibMetaDescriptionMemory::SaveData(ibWriterMemory& writer, ibMetaDescription& metaDesc)
 {
 	writer.w_u32(metaDesc.m_listMetaClass.size());
-	for (auto id : metaDesc.m_listMetaClass) writer.w_u32(id);	
+	for (auto id : metaDesc.m_listMetaClass) writer.w_u32(id);
 	return true;
 }

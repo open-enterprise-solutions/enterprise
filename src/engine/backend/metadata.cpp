@@ -198,8 +198,19 @@ void ibMetaData::DoGenerateNewID(ibMetaID& id, const ibValueMetaObject* top) con
 	}
 }
 
-ibValueMetaObject* ibMetaData::CreateMetaObject(const ibClassID& clsid, ibValueMetaObject* parent, bool runObject)
+ibValueMetaObject* ibMetaData::CreateMetaObject(const ibClassID& clsidIn, ibValueMetaObject* parent, bool runObject)
 {
+	// Resolve the requested clsid against the owner: a tabular section's RAM (MD_TBL) and
+	// DB-backed reference (MD_TBLR) variants are the same kind, so the owner remaps a pasted
+	// child to ITS variant (ResolveChild). A positive result remaps; 0 (owner has no opinion)
+	// leaves the clsid as asked — this only fixes cross-owner equivalents, it never rejects.
+	ibClassID clsid = clsidIn;
+	if (parent != nullptr) {
+		const ibClassID resolved = parent->ResolveChild(clsidIn);
+		if (resolved > 0)
+			clsid = resolved;
+	}
+
 	wxASSERT(clsid != 0);
 
 	ibValue* ppParams[] = { parent };

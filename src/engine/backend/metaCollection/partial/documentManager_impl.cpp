@@ -6,7 +6,6 @@
 #include "documentManager.h"
 #include "backend/appData.h"
 #include "backend/session/session.h"
-#include "backend/databaseLayer/databaseLayer.h"
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
 #include "backend/query/dataQueryBuilder.h"   // L3 door — FindByNumber via WhereLike / WhereCompare
 

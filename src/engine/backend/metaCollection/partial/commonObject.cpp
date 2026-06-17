@@ -15,10 +15,56 @@
 #include "backend/metaCollection/partial/reference/reference.h"
 
 //***********************************************************************
-//*								 metaData                               * 
+//*								 metaData                               *
 //***********************************************************************
 
+//***********************************************************************
+//*					ibSourceDataObject — path walk                       *
+//***********************************************************************
 
+// One traversal shared by every source kind. The first id is read off the
+// source itself (GetValueByMetaID, which each kind resolves its own way —
+// RAM / list / object / record set / manager). Each further id steps into the
+// previous reference value by attribute name: the source's metadata resolves the
+// id to its name (config-wide, so a nested reference's field is found) and member
+// access reads it off the value. Read-only navigation.
+bool ibSourceDataObject::GetValueByPath(const std::vector<ibMetaID>& path, ibValue& pvarMetaVal) const
+{
+	if (path.empty())
+		return false;
+
+	// First hop — the source resolves its own column.
+	ibValue current;
+	if (!GetValueByMetaID(path.front(), current))
+		return false;
+
+	if (path.size() == 1) {
+		pvarMetaVal = current;
+		return true;
+	}
+
+	const ibValueMetaObjectGenericData* generic = GetSourceMetaObject();
+	const ibMetaData* metaData = generic != nullptr ? generic->GetMetaData() : nullptr;
+	if (metaData == nullptr)
+		return false;
+
+	// Deeper hops — step into each reference value by the attribute's name.
+	for (size_t i = 1; i < path.size(); ++i) {
+		const ibValueMetaObject* field = metaData->FindAnyObjectByFilter(path[i], true);
+		if (field == nullptr)
+			return false;
+		const long propNum = current.FindProp(field->GetName());
+		if (propNum == wxNOT_FOUND)
+			return false;
+		ibValue next;
+		if (!current.GetPropVal(propNum, next))
+			return false;
+		current = next;
+	}
+
+	pvarMetaVal = current;
+	return true;
+}
 
 //***********************************************************************
 //*							ibValueMetaObjectGenericData				    *

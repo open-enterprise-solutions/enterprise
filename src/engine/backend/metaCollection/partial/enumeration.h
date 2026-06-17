@@ -26,10 +26,10 @@ class ibValueMetaObjectEnumeration : public ibValueMetaObjectRecordDataEnumRef {
 
 public:
 
-	virtual bool FilterChild(const ibClassID& clsid) const {
+	virtual ibClassID ResolveChild(const ibClassID& clsid) const {
 		if (clsid == g_metaEnumCLSID)
-			return true;
-		return ibValueMetaObjectGenericData::FilterChild(clsid);
+			return clsid;
+		return ibValueMetaObjectGenericData::ResolveChild(clsid);
 	}
 
 	ibValueMetaObjectEnumeration();

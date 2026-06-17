@@ -1,5 +1,4 @@
 #include "activeUser.h"
-#include "backend/databaseLayer/databaseLayer.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/appData.h"
 #include "backend/session/session.h"

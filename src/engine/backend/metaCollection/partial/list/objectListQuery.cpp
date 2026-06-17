@@ -6,7 +6,6 @@
 #include "objectList.h"
 #include "backend/appData.h"
 #include "backend/session/session.h"
-#include "backend/databaseLayer/databaseLayer.h"
 #include "backend/query/dataQueryBuilder.h"        // universal (half-)L3 read entry
 #include "backend/composition/listFetchDriver.h"   // L5 — the fetch driver (envelope in, rows out)
 

@@ -19,11 +19,11 @@ bool ibValueTextCtrl::GetChoiceForm(ibPropertyList* property)
 	if (metaData != nullptr) {
 		const ibValueMetaObjectRecordDataRef* metaObject = nullptr;
 		if (!m_propertySource->IsEmptyProperty()) {
-			const ibValueMetaObjectGenericData* metaObjectValue =
-				m_formOwner->GetMetaObject();
-			if (metaObjectValue != nullptr) {
-				const ibValueMetaObjectAttributeBase* attribute = dynamic_cast<ibValueMetaObjectAttributeBase*>(metaObjectValue->FindAnyObjectByFilter(m_propertySource->GetValueAsSource()));
-				wxASSERT(attribute);
+			// Resolve the bound attribute config-wide — a dotted path's leaf lives in a
+			// referenced type, not the form's own metaobject (so the source-scoped lookup
+			// here would miss it and assert). GetSourceAttributeObject handles both.
+			const ibValueMetaObjectAttributeBase* attribute = m_propertySource->GetSourceAttributeObject();
+			if (attribute != nullptr) {
 				const ibCtorMetaValueType* so = metaData->GetTypeCtor(attribute->GetFirstClsid());
 				if (so != nullptr) {
 					metaObject = dynamic_cast<const ibValueMetaObjectRecordDataRef*>(so->GetMetaObject());
@@ -117,8 +117,8 @@ wxString ibValueTextCtrl::GetControlTitle() const
 	}
 	else if (!m_propertySource->IsEmptyProperty()) {
 		const ibValueMetaObject* metaObject = m_propertySource->GetSourceAttributeObject();
-		wxASSERT(metaObject);
-		return metaObject->GetSynonym();
+		if (metaObject != nullptr)   // null when the bound attribute was just removed
+			return metaObject->GetSynonym();
 	}
 	return wxEmptyString;
 }
@@ -139,7 +139,7 @@ wxObject* ibValueTextCtrl::Create(ibFrontendWindow* wxparent, ibVisualHost* visu
 	if (!m_propertySource->IsEmptyProperty()) {
 		ibSourceDataObject* srcObject = m_formOwner->GetSourceObject();
 		if (srcObject != nullptr)
-			srcObject->GetValueByMetaID(m_propertySource->GetValueAsSource(), m_selValue);
+			m_selValue = srcObject->GetValueByPath(m_propertySource->GetValueAsPath());
 	} else {
 		m_selValue = ibTypeControlFactory::AdjustValue(m_selValue);
 	}
@@ -177,7 +177,7 @@ void ibValueTextCtrl::Update(wxObject* wxobject, ibVisualHost* visualHost)
 	if (!m_propertySource->IsEmptyProperty() && m_formOwner != nullptr) {
 		ibSourceDataObject* srcObject = m_formOwner->GetSourceObject();
 		if (srcObject != nullptr)
-			srcObject->GetValueByMetaID(m_propertySource->GetValueAsSource(), m_selValue);
+			m_selValue = srcObject->GetValueByPath(m_propertySource->GetValueAsPath());
 	}
 	else {
 		m_selValue = ibTypeControlFactory::AdjustValue(m_selValue);
@@ -191,7 +191,9 @@ void ibValueTextCtrl::Update(wxObject* wxobject, ibVisualHost* visualHost)
 		textEditor->SetValue(m_selValue.GetString());
 	textEditor->SetPasswordMode(m_propertyPasswordMode->GetValueAsBoolean());
 	textEditor->SetMultilineMode(m_propertyMultilineMode->GetValueAsBoolean());
-	textEditor->SetTextEditMode(m_propertyTexteditMode->GetValueAsBoolean());
+	// A dotted reference path (Source.Ref.Field) is read-only — force edit mode off
+	// regardless of the control's TextEditMode property.
+	textEditor->SetTextEditMode(m_propertyTexteditMode->GetValueAsBoolean() && !m_propertySource->IsDotWalk());
 	textEditor->ShowSelectButton(m_propertySelectButton->GetValueAsBoolean());
 	textEditor->ShowOpenButton(m_propertyOpenButton->GetValueAsBoolean());
 	textEditor->ShowClearButton(m_propertyClearButton->GetValueAsBoolean());
@@ -250,9 +252,10 @@ void ibValueTextCtrl::Cleanup(wxObject* wxobject, ibVisualHost* visualHost)
 
 bool ibValueTextCtrl::GetControlValue(ibValue& pvarControlVal) const
 {
-	const ibSourceDataObject* sourceObject = m_formOwner->GetSourceObject();
+	ibSourceDataObject* sourceObject = m_formOwner->GetSourceObject();
 	if (!m_propertySource->IsEmptyProperty() && sourceObject != nullptr) {
-		return sourceObject->GetValueByMetaID(m_propertySource->GetValueAsSource(), pvarControlVal);
+		pvarControlVal = sourceObject->GetValueByPath(m_propertySource->GetValueAsPath());   // dotted path -> read-only walk
+		return true;
 	}
 
 	pvarControlVal = ibTypeControlFactory::AdjustValue(m_selValue);
@@ -262,10 +265,12 @@ bool ibValueTextCtrl::GetControlValue(ibValue& pvarControlVal) const
 bool ibValueTextCtrl::SetControlValue(const ibValue& varControlVal)
 {
 	ibSourceDataObject* sourceObject = m_formOwner->GetSourceObject();
-	if (!m_propertySource->IsEmptyProperty() && sourceObject != nullptr) {
-		const ibValueMetaObjectAttributeBase* metaObject = m_propertySource->GetSourceAttributeObject();
-		wxASSERT(metaObject);
-		sourceObject->SetValueByMetaID(m_propertySource->GetValueAsSource(), varControlVal);
+	const ibValueMetaObjectAttributeBase* metaObject = (!m_propertySource->IsEmptyProperty() && sourceObject != nullptr)
+		? m_propertySource->GetSourceAttributeObject() : nullptr;
+	if (metaObject != nullptr) {
+		// A dotted reference path is read-only — only a single-column binding writes back.
+		if (!m_propertySource->IsDotWalk())
+			sourceObject->SetValueByMetaID(m_propertySource->GetValueAsSource(), varControlVal);
 		m_selValue = metaObject->AdjustValue(varControlVal);
 	}
 	else {

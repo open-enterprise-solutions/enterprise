@@ -33,8 +33,7 @@ public:
 	bool AccessRight_ModeAllFunction(const ibRoleUserInfo& roleInfo = ibRoleUserInfo()) const { return AccessRight(m_roleModeAllFunction, roleInfo.IsSetRole() ? roleInfo : GetUserRoleInfo()); }
 #pragma endregion
 
-	virtual bool FilterChild(const ibClassID& clsid) const {
-
+	virtual ibClassID ResolveChild(const ibClassID& clsid) const {
 		if (
 			clsid == g_metaCommonModuleCLSID ||
 			clsid == g_metaCommonFormCLSID ||
@@ -55,9 +54,9 @@ public:
 			clsid == g_metaChartOfAccountsCLSID ||
 			clsid == g_metaAccountingRegisterCLSID
 			)
-			return true;
+			return clsid;
 
-		return false;
+		return 0;
 	}
 
 	ibProgramSyntax GetCompileSyntax() const { return m_propertySyntax->GetValueAsEnum(); }

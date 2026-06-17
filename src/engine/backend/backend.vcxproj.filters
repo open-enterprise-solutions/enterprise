@@ -536,6 +536,7 @@
       <Filter>propertyManager\property</Filter>
     </ClInclude>
     <ClInclude Include="backend_type.h" />
+    <ClInclude Include="sourceDescription.h" />
     <ClInclude Include="typeDescription.h" />
     <ClInclude Include="propertyManager\property\eventAction.h">
       <Filter>propertyManager\property</Filter>
@@ -1533,6 +1534,7 @@
     <ClCompile Include="compiler\valueFactory.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
+    <ClCompile Include="sourceDescription.cpp" />
     <ClCompile Include="typeDescription.cpp" />
     <ClCompile Include="system\systemManager.cpp">
       <Filter>system</Filter>

@@ -44,6 +44,7 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 		d.m_typeNumberPattern = wxT("NUMERIC(%d,%d)");
 		d.m_rowLockSuffix     = wxT(" WITH LOCK");     // FB pessimistic row lock (not FOR UPDATE)
 		d.m_rowLockNoWaitSuffix = wxEmptyString;       // FB has no FOR UPDATE NOWAIT — noWait rides the TX (isc_tpb_nowait)
+		d.m_dropColumnClause  = wxT("DROP ");          // FB rejects the COLUMN keyword: ALTER TABLE t DROP c
 		d.m_ddlCommitBeforeData = true;                // legacy isc_* API can't mix CREATE/ALTER + bound INSERT in one TX
 		return d;
 	}();

@@ -6,6 +6,7 @@
 
 //////////////////////////////////////////////////////////////////
 struct ibTypeDescription;
+struct ibSourceDescription;
 //////////////////////////////////////////////////////////////////
 
 //base property for "source"
@@ -15,6 +16,7 @@ class BACKEND_API ibPropertySource : public ibProperty {
 	wxVariantData* CreateVariantData(const ibPropertyObject* property, const ibTypeDescription& typeDesc) const;
 	wxVariantData* CreateVariantData(const ibPropertyObject* property, const ibMetaID& id) const;
 	wxVariantData* CreateVariantData(const ibPropertyObject* property, const ibGuid& id, bool fillTypeDesc = true) const;
+	wxVariantData* CreateVariantData(const ibPropertyObject* property, const ibSourceDescription& desc) const;
 public:
 
 #pragma region _value_
@@ -22,12 +24,28 @@ public:
 	ibGuid GetValueAsSourceGuid() const;
 	ibTypeDescription& GetValueAsTypeDesc(bool fillTypeDesc = true) const;
 
+	// The binding address — a single ordered metaId path stored in the variant. Returned
+	// by reference so serialisation fills it in place (mirrors GetValueAsMetaDesc on the
+	// meta-binding properties). The same description is fed to the source object.
+	ibSourceDescription& GetValueAsSourceDesc() const;
+
+	// The binding address as a plain metaId path — the identifier a control hands to
+	// ibSourceDataObject::GetValueByPath. The property only supplies it; it never reads
+	// or writes the value itself.
+	const std::vector<ibMetaID>& GetValueAsPath() const;
+
 	void SetValue(const ibMetaID& val);
 	void SetValue(const ibGuid& val, bool fillTypeDesc = true);
 	void SetValue(const ibTypeDescription& val);
-#pragma endregion 
+	void SetValue(const ibSourceDescription& val);
 
-	class ibValueMetaObjectAttributeBase* GetSourceAttributeObject() const;
+	// True when the binding walks one or more reference columns (a dotted path,
+	// Source.Ref.Field) instead of a single direct column. CHEAP — just the path
+	// length on the variant. A dot-walk binding is READ-ONLY.
+	bool IsDotWalk() const;
+#pragma endregion
+
+	const class ibValueMetaObjectAttributeBase* GetSourceAttributeObject() const;
 
 	ibPropertySource(ibPropertyCategory* cat, const wxString& name, const ibValueTypes& type = ibValueTypes::TYPE_STRING)
 		: ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject(), type))

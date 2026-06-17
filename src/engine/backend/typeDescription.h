@@ -528,7 +528,7 @@ public:
 
 class BACKEND_API ibMetaDescriptionMemory {
 public:
-	//load & save object in control 
+	//load & save object in control
 	static bool LoadData(class ibReaderMemory& reader, ibMetaDescription& metaDesc);
 	static bool SaveData(class ibWriterMemory& writer, ibMetaDescription& metaDesc);
 };

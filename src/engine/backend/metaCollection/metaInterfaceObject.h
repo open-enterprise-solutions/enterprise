@@ -24,14 +24,10 @@ public:
 		return ibBackendPicture::CreatePicture(g_metaCommonMetadataCLSID);
 	}
 
-	virtual bool FilterChild(const ibClassID& clsid) const {
-
-		if (
-			clsid == g_metaInterfaceCLSID
-			)
-			return true;
-
-		return false;
+	virtual ibClassID ResolveChild(const ibClassID& clsid) const {
+		if (clsid == g_metaInterfaceCLSID)
+			return clsid;
+		return 0;
 	}
 
 	ibValueMetaObjectInterface(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString);

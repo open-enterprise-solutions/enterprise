@@ -119,13 +119,69 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 			const wxString m_nameProp;
 			const ibMetaID m_id;
 			const bool m_tableSection;
+			const std::vector<ibMetaID> m_prefixPath;           // ancestor metaId chain (empty = top level)
+			const std::vector<const ibValueMetaObjectCompositeData*> m_refTypes;  // ALL referenced types (composite) => lazily expandable
+			bool m_loaded = false;                              // referenced children already built?
 		public:
-			ibTreeItemDataSource(const wxString& nameProp, const ibMetaID& id, bool tableSection) : wxTreeItemData(), m_nameProp(nameProp), m_id(id), m_tableSection(tableSection) {};
+			ibTreeItemDataSource(const wxString& nameProp, const ibMetaID& id, bool tableSection,
+				std::vector<ibMetaID> prefixPath = {},
+				std::vector<const ibValueMetaObjectCompositeData*> refTypes = {})
+				: wxTreeItemData(), m_nameProp(nameProp), m_id(id), m_tableSection(tableSection),
+				m_prefixPath(std::move(prefixPath)), m_refTypes(std::move(refTypes)) {};
 
 			const wxString& GetPropName() const { return m_nameProp; }
 			const ibMetaID& GetID() const { return m_id; }
 			const bool IsTableSection() const { return m_tableSection; }
+			const std::vector<ibMetaID>& GetPrefixPath() const { return m_prefixPath; }
+			const std::vector<const ibValueMetaObjectCompositeData*>& GetRefTypes() const { return m_refTypes; }
+			bool HasRef() const { return !m_refTypes.empty(); }
+			bool IsLoaded() const { return m_loaded; }
+			void SetLoaded() { m_loaded = true; }
+
+			// A node's children inherit its full chain: ancestor prefix + this node's own id.
+			std::vector<ibMetaID> ChildPrefix() const {
+				std::vector<ibMetaID> child = m_prefixPath;
+				child.push_back(m_id);
+				return child;
+			}
+
+			// The whole binding address for this node: ancestor prefix + this node (leaf).
+			ibSourceDescription GetSourceDesc() const {
+				ibSourceDescription desc(m_prefixPath);
+				desc.AppendSource(m_id);
+				return desc;
+			}
 		};
+
+		// A reference attribute -> the metaobjects of EVERY type it can point at. A composite
+		// attribute has several reference types; the picker expands all of them so the user can
+		// reach a field of any branch (each field keeps its own type-specific metaId, so the
+		// runtime renders it only when the live value is of that type).
+		static std::vector<const ibValueMetaObjectCompositeData*> GetReferencedTypes(const ibValueMetaObject* attrMeta, const ibMetaData* metaData) {
+			std::vector<const ibValueMetaObjectCompositeData*> types;
+			const ibValueMetaObjectAttributeBase* attr = dynamic_cast<const ibValueMetaObjectAttributeBase*>(attrMeta);
+			if (attr == nullptr || metaData == nullptr) return types;
+			for (const ibClassID& clsid : attr->GetTypeDesc().GetClsidList()) {
+				const ibCtorMetaValueType* typeCtor = metaData->GetTypeCtor(clsid);
+				if (typeCtor != nullptr && typeCtor->GetMetaTypeCtor() == ibCtorObjectMetaType::ibCtorObjectMetaType_Reference) {
+					const ibValueMetaObjectCompositeData* refType = dynamic_cast<const ibValueMetaObjectCompositeData*>(typeCtor->GetMetaObject());
+					if (refType != nullptr) types.push_back(refType);
+				}
+			}
+			return types;
+		}
+
+		// Find the child node of `parent` whose stored metaId matches — used to walk a
+		// saved dotted path on re-open and land on the same leaf.
+		static wxTreeItemId FindChildByMetaID(wxTreeCtrl* tc, const wxTreeItemId& parent, const ibMetaID& id) {
+			wxTreeItemIdValue cookie;
+			for (wxTreeItemId child = tc->GetFirstChild(parent, cookie); child.IsOk(); child = tc->GetNextChild(parent, cookie)) {
+				ibTreeItemDataSource* data = dynamic_cast<ibTreeItemDataSource*>(tc->GetItemData(child));
+				if (data != nullptr && data->GetID() == id)
+					return child;
+			}
+			return wxTreeItemId();
+		}
 
 		wxImageList* GetSourceImageList() const {
 			wxImageList* list = new wxImageList(icon_size, icon_size);
@@ -181,6 +237,7 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 			tc->SetFocus();
 
 			const ibSourceDataObject* srcObject = dynamic_cast<ibSourceDataObject*>(typeFactory->GetSourceObject());
+			wxTreeItemId rootItem;   // hoisted: re-open positioning (below) walks the saved path from it
 			if (srcObject != nullptr) {
 
 				bool allow_create = true;
@@ -202,7 +259,6 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 						);
 					}
 				}
-				wxTreeItemId rootItem = nullptr;
 				if (srcExplorer.IsTableSection()) {
 					rootItem = tc->AddRoot(srcExplorer.GetSourceName() + wxT(" (") + MakeTypeString(typeFactory->GetMetaData(), srcExplorer.GetClsidList()) + wxT(")"), icon_table, icon_table, srcItemData);
 				}
@@ -217,13 +273,17 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 					}
 					for (unsigned int idx = 0; idx < srcExplorer.GetHelperCount(); idx++) {
 						const ibSourceExplorer& srcNextExplorer = srcExplorer.GetHelper(idx);
+						// Reference attribute? Then this node is lazily expandable into the
+						// referenced types' fields; remember ALL referenced types (composite).
+						std::vector<const ibValueMetaObjectCompositeData*> refTypes = GetReferencedTypes(srcNextExplorer.GetMetaObject(), metaData);
 						ibTreeItemDataSource* itemData = nullptr;
 						if (typeFactory->FilterSource(srcNextExplorer, srcExplorer.GetSourceId())) {
 							if (srcNextExplorer.IsSelect()) {
 								itemData = new ibTreeItemDataSource(
 									srcNextExplorer.GetSourceName() + wxT(" (") + MakeTypeString(typeFactory->GetMetaData(), srcNextExplorer.GetClsidList()) + wxT(")"),
 									srcNextExplorer.GetSourceId(),
-									srcNextExplorer.IsTableSection()
+									srcNextExplorer.IsTableSection(),
+									{}, refTypes
 								);
 							}
 						}
@@ -258,6 +318,10 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 							}
 						}
 
+						if (!refTypes.empty() && itemData != nullptr) {
+							tc->AppendItem(newItem, wxEmptyString);   // dummy child -> shows [+]; built lazily on expand
+						}
+
 						if (needDelete) {
 							tc->Delete(newItem);
 						}
@@ -272,7 +336,60 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 
 			}
 
-			tc->ExpandAll(); int res = dlg->ShowModal();
+			// Lazy dot-expansion. A reference node carries a single dummy child (the [+]);
+			// on its first expand we drop the dummy and build the referenced type's fields,
+			// each carrying the accumulated guid chain. NEVER expand references eagerly — a
+			// self / cyclic reference (A.B.A...) would otherwise blow the stack (hence no
+			// ExpandAll: only the root level is shown up front, the rest opens on demand).
+			tc->Bind(wxEVT_TREE_ITEM_EXPANDING, [tc, metaData](wxTreeEvent& evt) {
+				wxTreeItemId node = evt.GetItem();
+				ibTreeItemDataSource* data = dynamic_cast<ibTreeItemDataSource*>(tc->GetItemData(node));
+				if (data == nullptr || !data->HasRef() || data->IsLoaded())
+					return;
+				data->SetLoaded();
+				tc->DeleteChildren(node);                          // drop the dummy
+
+				const std::vector<ibMetaID> childPrefix = data->ChildPrefix();
+				const bool multi = data->GetRefTypes().size() > 1;            // composite: disambiguate fields by type
+					for (const ibValueMetaObjectCompositeData* refType : data->GetRefTypes()) {
+						if (refType == nullptr)
+							continue;
+						for (ibValueMetaObjectAttributeBase* attr : refType->GetGenericAttributeArrayObject()) {
+					if (attr->IsDeleted())
+						continue;
+					const wxString label = multi ? attr->GetSynonym() + wxT(" - ") + refType->GetSynonym() : attr->GetSynonym();
+						std::vector<const ibValueMetaObjectCompositeData*> childRefTypes = GetReferencedTypes(attr, metaData);
+					ibTreeItemDataSource* childData = new ibTreeItemDataSource(
+						label, attr->GetMetaID(), false, childPrefix, childRefTypes);
+					wxTreeItemId childItem = tc->AppendItem(node, label, icon_attribute, icon_attribute, childData);
+					if (!childRefTypes.empty())
+						tc->AppendItem(childItem, wxEmptyString);   // dummy -> [+] for the next level
+						} // close inner attr loop (outer refType loop closed by the next brace)
+				}
+			});
+
+			// Re-open positioning: walk the saved metaId path (first hop .. leaf), expanding
+			// each reference node (programmatic Expand fires the lazy build above) and
+			// selecting the leaf — the user lands on it. A length-1 path lands on a top field.
+			if (srcData != nullptr && rootItem.IsOk()) {
+				const std::vector<ibMetaID>& chain = srcData->GetSourceDesc().GetPath();
+				wxTreeItemId node = rootItem;
+				for (size_t i = 0; i < chain.size(); ++i) {
+					wxTreeItemId child = FindChildByMetaID(tc, node, chain[i]);
+					if (!child.IsOk())
+						break;
+					if (i + 1 < chain.size()) {
+						tc->Expand(child);                      // build the next level
+						node = child;
+					}
+					else {
+						tc->SelectItem(child);
+						tc->EnsureVisible(child);
+					}
+				}
+			}
+
+			int res = dlg->ShowModal();
 
 			wxTreeItemId selItem = tc->GetSelection();
 			if (selItem.IsOk()) {
@@ -281,7 +398,9 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 					ibTreeItemDataSource* item = dynamic_cast<ibTreeItemDataSource*>(dataItem);
 					wxASSERT(item);
 					if (is_tableBox == item->IsTableSection()) {
-						SetValue(new ibVariantDataSource(typeFactory, item->GetID()));
+						ibVariantDataSource* variant = new ibVariantDataSource(typeFactory, item->GetID());
+						variant->SetSourceDesc(item->GetSourceDesc());      // full path (length-1 for a top-level field)
+						SetValue(variant);
 					}
 					else {
 						dlg->Destroy();

@@ -7,7 +7,36 @@
 #include "backend/metaData.h"
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/metaCollection/partial/tabularSection/tabularSection.h"
-#include "backend/databaseLayer/databaseLayer.h"
+
+#include <vector>
+#include <algorithm>
+#include <utility>
+
+// Re-entrancy guard for the eager reference read. A self / cyclic reference (a document
+// field pointing at the same record, or A -> B -> A) makes ReadData recurse: it reads a
+// reference field, whose eager PrepareRef calls ReadData again, forever -> stack overflow.
+// While a ref identity (type + guid) is already being read up the stack, the nested re-read
+// is skipped (the field keeps its key, loads lazily on demand). A self-reference is a LEGAL
+// config, so this must terminate rather than crash.
+//
+// A thread-local stack of identities (each worker reads on its own call stack): push on
+// entry, pop on exit (RAII — correct across the FB exceptions ReadData can throw). It costs
+// no allocation once the vector's capacity settles, and a linear scan over a depth that is
+// tiny in practice — negligible next to the DB query the read itself issues.
+namespace {
+	thread_local std::vector<std::pair<ibMetaID, ibGuid>> g_refReadStack;
+
+	struct ibRefReadGuard {
+		bool m_cycle = false;
+		ibRefReadGuard(const ibMetaID& metaId, const ibGuid& guid) {
+			const std::pair<ibMetaID, ibGuid> key{ metaId, guid };
+			m_cycle = std::find(g_refReadStack.begin(), g_refReadStack.end(), key) != g_refReadStack.end();
+			g_refReadStack.push_back(key);
+		}
+		~ibRefReadGuard() { g_refReadStack.pop_back(); }
+		bool Cycle() const { return m_cycle; }   // true == this identity is already being read up the stack
+	};
+}
 
 
 //**********************************************************************************************
@@ -40,8 +69,13 @@ void ibValueReferenceDataObject::PrepareRef(bool createData)
 				new ibValueTabularSectionDataObjectRef(this, object));
 		}
 	}
-	else if (ibValueReferenceDataObject::ReadData(createData)) {
-		m_foundedRef = true; m_newObject = false;
+	else {
+		// Break self / cyclic references: read this identity only if it is not already
+		// being read up the stack (otherwise leave it lazy — no infinite recursion).
+		ibRefReadGuard guard(m_metaObject->GetMetaID(), m_objGuid);
+		if (!guard.Cycle() && ibValueReferenceDataObject::ReadData(createData)) {
+			m_foundedRef = true; m_newObject = false;
+		}
 	}
 
 	if (createData) {

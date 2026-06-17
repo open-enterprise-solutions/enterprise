@@ -825,7 +825,7 @@ wxString ibQueryRenderer::RenderDDL(const ibDdlStatement& ddl)
 		return sql;
 	}
 	case ibDdlKind::DropColumn: {
-		wxString sql = wxT("ALTER TABLE ") + QuoteIdent(ddl.m_table) + wxT(" DROP COLUMN ");
+		wxString sql = wxT("ALTER TABLE ") + QuoteIdent(ddl.m_table) + wxT(" ") + m_dialect.m_dropColumnClause;
 		if (!ddl.m_columns.empty()) sql += QuoteIdent(ddl.m_columns[0].m_name);
 		return sql;
 	}
@@ -838,7 +838,7 @@ wxString ibQueryRenderer::RenderDDL(const ibDdlStatement& ddl)
 			if (clause.m_op == ibAlterOp::Add)
 				sql += wxT("ADD ") + RenderColumn(clause.m_column);
 			else
-				sql += wxT("DROP COLUMN ") + QuoteIdent(clause.m_column.m_name);
+				sql += m_dialect.m_dropColumnClause + QuoteIdent(clause.m_column.m_name);
 		}
 		return sql;
 	}

@@ -91,8 +91,8 @@ wxString ibValueModelTableBoxColumn::GetControlTitle() const
 	}
 	else if (!m_propertySource->IsEmptyProperty()) {
 		const ibValueMetaObject* metaObject = m_propertySource->GetSourceAttributeObject();
-		wxASSERT(metaObject);
-		return metaObject->GetSynonym();
+		if (metaObject != nullptr)   // null when the bound attribute was just removed
+			return metaObject->GetSynonym();
 	}
 
 	return m_propertyName->GetValueAsString();
