@@ -197,13 +197,38 @@ that read `m_methodHelper != nullptr ? …GetNProps() : 0` becomes
   exports-only, surfaced by the descriptor tail; explicit PrepareNames() removed from InitializeObject.
 - **Manager family (composition by ctor chain):** `ibValueManagerObject` →
   `ibValueDynamicMembers(TYPE_VALUE, true)`; `ibValueManagerDataObject::FillMembers`
-  (CopyMethod — see TODO wart), `…Predefined::FillPredefined` (predefined props, composes),
-  standalone managers bind `FillManagerMethods` in their ctor (drop the old base
-  `::PrepareNames()` call). Done: **catalog, document, chartOfAccounts,
+  (surfaces module methods via the descriptor — see below), `…Predefined::FillPredefined`
+  (predefined props, composes), standalone managers bind `FillManagerMethods` in their
+  ctor (drop the old base `::PrepareNames()` call). Done: **catalog, document, chartOfAccounts,
   chartOfCharacteristicTypes, accounting/accumulation/informationRegister, enumeration**.
-  - **CopyMethod is a flagged wart** (TODO in commonObject.cpp `FillMembers`): the
-    manager copies the common module's whole method table into its helper. Better:
-    surface the common module's exports via its own descriptor. Revisit.
+  - **CopyMethod wart — RESOLVED 2026-06-17.** `ibValueManagerDataObject::FillMembers`
+    no longer copies the wrapper's helper table; it surfaces the module's exported
+    methods straight from its runtime descriptor via the public
+    `ibRuntimeModuleDataObject::ExportMethodsToHelper(helper, g_aliasExport)` (the
+    method-only half of `ExportNamesToHelper`, which now composes the two public halves
+    `ExportMethodsToHelper` + `ExportPropsToHelper`). The bytecode-function index it
+    keys on is exactly what `CallAsProc/Func` feed back into `pRefData`, so dispatch
+    lines up with no duplicated table. `pRefData` is typed (`ibValueModuleUnit*`) — no
+    `dynamic_cast`. The two **external** DP/Report managers in `moduleManagerExt.cpp`
+    keep `CopyMethod` (mirror an external *object value*'s surface, not a module
+    descriptor — separate shape).
+    - **NB — a manager-module export handler not resolving (`Catalogs.X.BeforeWrite`)
+      is a SEPARATE bug, not this refactor.** Reverting to the old `CopyMethod` did NOT
+      fix it: when `FillMembers` runs, the wrapper's ProcUnit/bytecode may not be
+      compiled yet (modules register with `compileNow=false`), so BOTH the bytecode
+      surface and the old helper copy come up empty. Root cause is manager-module
+      compile timing vs. first manager access, tracked separately.
+  - **⚠️ Build-watch snapshot below — SUPERSEDED, kept as design history.** Everything
+    from "Still TODO" through the "FORCED next targets" / "STILL old-path" notes was
+    written mid-build and is now LANDED. Verified against current code 2026-06-17:
+    `ibValueFrame` (frame.h:69), `ibValueForm` (form.h:32), `ibValueModuleManager`
+    (moduleManager.h:24), `ibValueModel` (tableInfo.h:88), `ibValueModelColumnCollection`
+    (tableInfo.h:317) and `ibValueModelReturnLine` (tableInfo.h:390) are all
+    `ibValueDynamicMembers`; `ibValueRecordSetObject` rides the migrated `ibValueModel`
+    chain; the static-helper managers (constant / external DP / report) dropped their
+    `static` helper for the by-value base. The ONLY live `PrepareNames()` left in the
+    tree is the separate `CMethodHelper` CValue* dialog hierarchy (valueGrid / Font /
+    File / Colour dialogs) — a different base class, out of scope for this arc.
   - **Still TODO (static-helper managers — different shape):** `constantManager`,
     `…ExternalDataProcessor`, `…ExternalReport` use a `static ibValueMethodHelper` +
     own `DoGetPMethods` (type-invariant, no base call). Convert to either

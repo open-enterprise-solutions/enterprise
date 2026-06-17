@@ -1442,7 +1442,8 @@ class BACKEND_API ibValueManagerDataObject : public ibValueManagerObject {
 
 	// Helper + NVI DoGetPMethods come from ibValueDynamicMembers. The surface is
 	// composed from member fillers bound along the ctor chain: this base contributes
-	// the manager module's methods (FillMembers / CopyMethod); subclasses add their own.
+	// the manager module's methods (FillMembers surfaces them via the module's
+	// descriptor, ExportMethodsToHelper); subclasses add their own.
 	ibValueManagerDataObject() : ibValueManagerObject() { m_members.Bind(this, &ibValueManagerDataObject::FillMembers); }
 	virtual ~ibValueManagerDataObject() {}
 

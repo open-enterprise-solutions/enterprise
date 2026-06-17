@@ -145,6 +145,12 @@ protected:
 	const ibByteCode* m_pByteCode = nullptr;
 	ibValue*** m_pppArrayList = {}; //pointers to arrays of variable pointers (0 - local variables, 1 - variables of the current module, 2 and higher - variables of parent modules)
 	ibProcUnit** m_ppArrayCode = {}; //pointers to arrays of executable modules (0 - current module, 1 and higher - parent modules)
+	// "Body already executed" flag — set when Execute runs the module body
+	// (bDelta), cleared in Reset(). Marks the frame DIRTY so a repeat Execute on
+	// the same bytecode rebuilds instead of reusing locals left live by the prior
+	// run. A Run(false) prepare pass never sets it, so the paired Run(true) reuses
+	// the frame Run(false) built.
+	bool m_bExecuted = false;
 	std::vector <ibProcUnit*> m_procParent;
 
 	// Per-thread state (m_currentRunModule, ms_runContext, s_nRecCount,

@@ -1338,9 +1338,11 @@ ibValueRecordManagerObject* ibValueMetaObjectRegisterData::CopyRecordManagerObje
 //*                        ibValueManagerDataObject						*
 //***********************************************************************
 
-// Manager-module methods. TODO(arc): CopyMethod duplicates the common module's
-// method table into this helper — a known wart; better would be to surface the
-// common module's exports directly (its own descriptor), not copy them.
+// Manager-module methods. Surfaces the common module's exported methods through its
+// runtime descriptor (ExportMethodsToHelper) rather than copying its whole helper
+// table — the former CopyMethod wart. The bytecode-function index it keys on is
+// exactly what CallAsProc/Func below feed back into pRefData, so dispatch lines up
+// with no duplicated table.
 void ibValueManagerDataObject::FillMembers(ibMemberTable& helper) const
 {
 	const ibValueMetaObjectGenericData* valueMetaObject = GetMetaObject();
@@ -1349,18 +1351,13 @@ void ibValueManagerDataObject::FillMembers(ibMemberTable& helper) const
 	const ibMetaData* metaData = valueMetaObject->GetMetaData();
 	wxASSERT(metaData);
 
-	// Manager module's compiled unit — from the designer manager in the Designer,
-	// from the session root mm at runtime. FindCommonModule is virtual on the base.
-	ibValue* pRefData = nullptr;
-	if (auto* moduleManager = ibSession::EditModuleManagerFor(metaData))
-		pRefData = moduleManager->FindCommonModule(GetManagerModule());
+	// Manager module's compiled unit — designer mm in the Designer, session root
+	// mm at runtime. FindCommonModule returns the typed descriptor (ibValueModuleUnit).
+	auto* moduleManager = ibSession::EditModuleManagerFor(metaData);
+	auto* pRefData = moduleManager ? moduleManager->FindCommonModule(GetManagerModule()) : nullptr;
 
-	if (pRefData != nullptr) {
-		// add methods from context
-		for (long idx = 0; idx < pRefData->GetNMethods(); idx++) {
-			helper.CopyMethod(pRefData->GetPMethods(), idx);
-		}
-	}
+	if (pRefData != nullptr)
+		pRefData->ExportMethodsToHelper(&helper, g_aliasExport);
 }
 
 bool ibValueManagerDataObject::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
@@ -1371,9 +1368,8 @@ bool ibValueManagerDataObject::CallAsProc(const long lMethodNum, ibValue** paPar
 	const ibMetaData* metaData = valueMetaObject->GetMetaData();
 	wxASSERT(metaData);
 
-	ibValue* pRefData = nullptr;
-	if (auto* moduleManager = ibSession::EditModuleManagerFor(metaData))
-		pRefData = moduleManager->FindCommonModule(GetManagerModule());
+	auto* moduleManager = ibSession::EditModuleManagerFor(metaData);
+	auto* pRefData = moduleManager ? moduleManager->FindCommonModule(GetManagerModule()) : nullptr;
 
 	if (pRefData != nullptr)
 		return pRefData->CallAsProc(lMethodNum, paParams, lSizeArray);
@@ -1389,9 +1385,8 @@ bool ibValueManagerDataObject::CallAsFunc(const long lMethodNum, ibValue& pvarRe
 	const ibMetaData* metaData = valueMetaObject->GetMetaData();
 	wxASSERT(metaData);
 
-	ibValue* pRefData = nullptr;
-	if (auto* moduleManager = ibSession::EditModuleManagerFor(metaData))
-		pRefData = moduleManager->FindCommonModule(GetManagerModule());
+	auto* moduleManager = ibSession::EditModuleManagerFor(metaData);
+	auto* pRefData = moduleManager ? moduleManager->FindCommonModule(GetManagerModule()) : nullptr;
 
 	if (pRefData != nullptr)
 		return pRefData->CallAsFunc(lMethodNum, pvarRetValue, paParams, lSizeArray);

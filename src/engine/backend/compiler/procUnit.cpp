@@ -171,6 +171,7 @@ void ibProcUnit::Reset()
 	m_pppArrayList = nullptr;
 	m_ppArrayCode = nullptr;
 	m_pByteCode = nullptr;
+	m_bExecuted = false;
 }
 
 //**************************************************************************************************************
@@ -1311,6 +1312,18 @@ void ibProcUnit::Execute(const ibByteCode& cByteCode, ibByteBinder& br, ibValue*
 	// during-initial-pass), but the two always moved together. The
 	// variable() macro expands to use bDelta directly, so keep the name.
 	const bool bDelta = br.IsDelta();
+
+	// Build the frame only when it isn't already built-and-clean for THIS
+	// bytecode. AttachRuntime runs each module twice — Run(false) builds the
+	// structure (no body, leaves it CLEAN), Run(true) executes it. The frame
+	// (locals + parent tables) depends only on the bytecode, so Run(true) REUSES
+	// the frame prepared by Run(false) instead of Reset + re-allocating (which
+	// would leak the first frame's heap locals). Rebuild when: bytecode changed,
+	// no frame yet, or the frame is DIRTY — m_bExecuted means a previous body run
+	// left live state in the locals, so a fresh run needs a clean frame. (Pre-
+	// flight below still refreshes live bindings on every pass, reused or not.)
+	const bool bNeedsBuild = (m_pByteCode != &cByteCode || m_ppArrayCode == nullptr || m_bExecuted);
+	if (bNeedsBuild) {
 	Reset();
 
 	if (!cByteCode.m_bCompile)
@@ -1363,7 +1376,12 @@ void ibProcUnit::Execute(const ibByteCode& cByteCode, ibByteBinder& br, ibValue*
 		m_ppArrayCode[i + 1] = pCurUnit;
 		m_pppArrayList[i + 2] = pCurUnit->m_cCurContext.m_pRefLocVars;
 	}
+	} // end frame allocation (bNeedsBuild) — structure reused on a repeat Execute
 
+	// Pre-flight runs on EVERY Execute, including the reused-frame pass: it copies
+	// the binder's LIVE values into the frame. So a Run(true) following a Run(false)
+	// prepare pulls the CURRENT bindings (e.g. common-module values initialised in
+	// between the two passes), not the stale ones captured on the first pass.
 	// Pre-flight: every required binding (m_listVar entry with
 	// kind ∈ {External, Context}) must be wired and its class type
 	// must match. Catches missed SetVar() calls (slot still null) and
@@ -1428,6 +1446,12 @@ void ibProcUnit::Execute(const ibByteCode& cByteCode, ibByteBinder& br, ibValue*
 		// Module-body entry — m_currentFunction stays null (frame is
 		// not inside a function). Runtime carries no compile-context
 		// at all — eval / debugger pull all metadata from bytecode.
+		// Mark the frame DIRTY: once the body has run, its locals hold
+		// live state, so the next Execute on the same bytecode must
+		// rebuild (bNeedsBuild) rather than reuse. A Run(false) prepare
+		// pass never reaches here, so it leaves the flag clean and the
+		// following Run(true) reuses the prepared frame.
+		m_bExecuted = true;
 		m_cCurContext.m_currentFunction = nullptr;
 		Execute(&m_cCurContext, pvarRetValue, bDelta);
 	}

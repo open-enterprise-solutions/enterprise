@@ -221,22 +221,32 @@ bool ibValueModuleRuntimeManager::AttachRuntime(ibSession* session)
 	if (!wantsRuntime)
 		return true;
 	// Imperative pipeline — each descriptor owns its m_procUnit.
-	// CreateMainModule already compiled m_compileModule; now we just
-	// allocate the runtime slot and execute the top-level.
+	// CreateMainModule already compiled m_compileModule.
+	//
+	// SPLIT init from execution: create EVERY module's runtime first, run the
+	// main body only after. Otherwise the main module's top-level would execute
+	// (Run(true)) while common / manager modules still have no ProcUnit — and a
+	// manager-module export reached from the top-level (e.g.
+	// `Catalogs.X.BeforeWrite(...)` from ConfigurationModule) would resolve
+	// against an empty ProcUnit ("'<method>' - not an aggregate object").
+	//
+	// Phase 1a — root: allocate the ProcUnit and register its functions WITHOUT
+	// running the body (Run(false)).
 	if (!appData->DesignerMode() && m_compileModule != nullptr) {
 		try {
 			InitializeRuntime();     // ensure root's ProcUnit exists
-			Run();                    // execute main module top-level (delta defaults true → runs the body)
+			Run(false);              // register functions; do NOT run the top-level yet
 		}
 		catch (const ibBackendException& err) {
-			wxLogWarning(_("AttachRuntime main: %s"), err.GetErrorDescription());
+			wxLogWarning(_("AttachRuntime main prepare: %s"), err.GetErrorDescription());
 			return false;
 		}
 	}
-	// Common modules — each has its own compile + m_procUnit. Parent
-	// is wired in ibValueModuleUnit's ctor (SetParent(moduleManager)),
-	// which cascades procUnit->SetParent on creation inside
-	// InitializeRuntime() below.
+	// Phase 1b — common / manager modules: each has its own compile + m_procUnit.
+	// Parent is wired in ibValueModuleUnit's ctor (SetParent(moduleManager)),
+	// which cascades procUnit->SetParent on creation inside InitializeRuntime().
+	// Run(false) registers their functions (a common module's top-level is just
+	// declarations — there's no body to run).
 	for (auto& moduleValue : m_listCommonModuleManager) {
 		if (!moduleValue)
 			continue;
@@ -259,17 +269,31 @@ bool ibValueModuleRuntimeManager::AttachRuntime(ibSession* session)
 			return false;
 		}
 	}
-
-	// LOAD-BEARING — do not drop. The compile-time helper build (inside
-	// CreateCommonModule) ran BEFORE this AttachRuntime, i.e. with no per-session
-	// ProcUnit yet, so each common module's method-helper exported an empty/partial
-	// name set. Symptom: a bound common module resolves as a non-aggregate at
-	// runtime ("'<method>' - a variable is not an aggregate object"). Invalidate this
-	// manager AND every common module so the next name resolution rebuilds (descriptor
-	// export tail) now that InitializeRuntime/Run above wired every module's ProcUnit.
+	// LOAD-BEARING — invalidate BEFORE Phase 2, do not drop. The compile-time
+	// helper build (inside CreateCommonModule) ran with no per-session ProcUnit,
+	// so each module's method-helper exported an empty/partial name set. Phase 1
+	// above wired every module's ProcUnit; invalidate this manager AND every
+	// common / manager module NOW, so that when the main body runs (Phase 2) and
+	// reaches a module export (e.g. Catalogs.X.BeforeWrite from ConfigurationModule)
+	// the name resolution rebuilds the surface against the LIVE ProcUnit.
+	// Invalidating AFTER Phase 2 is too late — the body already resolved against
+	// the empty cache ("'<method>' - a variable is not an aggregate object").
 	m_members.Invalidate();
 	for (auto& module : m_listCommonModuleManager) {
 		module->InvalidateNames();
+	}
+
+	// Phase 2 — every module's ProcUnit now exists and surfaces are invalidated;
+	// run the main body. The top-level can now reach any manager / common module
+	// export and resolve it against the live runtime.
+	if (!appData->DesignerMode() && m_compileModule != nullptr) {
+		try {
+			Run(true);               // execute main module top-level
+		}
+		catch (const ibBackendException& err) {
+			wxLogWarning(_("AttachRuntime main run: %s"), err.GetErrorDescription());
+			return false;
+		}
 	}
 	return true;
 }

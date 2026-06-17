@@ -193,6 +193,46 @@ public:
 	// for orphan descriptors — no root reachable upward.
 	virtual const ibRuntimeRoot* GetRoot() const;
 
+	// Surface ONLY this descriptor's EXPORT *methods* into another value's helper,
+	// keyed by the bytecode-function index. For a delegating host (a module-backed
+	// manager) that routes CallAsProc/Func straight back through this descriptor — the
+	// method numbers line up exactly, no copy of the helper table needed. Reads the
+	// runtime ProcUnit's bytecode; AttachRuntime's split Init/Run guarantees the
+	// wrapper's ProcUnit is wired (Run(false)) before any business code resolves it.
+	// Public on purpose: the caller is a sibling value, not a subclass.
+	void ExportMethodsToHelper(ibValue::ibMemberTable* helper, long alias) const {
+		if (helper == nullptr) return;
+		const auto pu = GetProcUnit();
+		if (!pu) return;
+		const ibByteCode* bc = pu->GetByteCode();
+		if (bc == nullptr) return;
+		for (const auto& fn : bc->m_listFunc) {
+			if (!fn.IsExport()) continue;
+			helper->AppendMethod(fn.m_strRealName,
+				bc->GetNParams(fn),
+				bc->HasRetVal(fn),
+				(long)fn,
+				alias);
+		}
+	}
+
+	// Symmetric export-var (prop) half of ExportNamesToHelper. Public to keep the
+	// method/prop split parallel. A module-backed manager host surfaces only the
+	// method half (export-vars resolve through the host's own ProcUnit alias, which a
+	// manager doesn't have); descriptors that own their runtime surface both via
+	// ExportNamesToHelper.
+	void ExportPropsToHelper(ibValue::ibMemberTable* helper, long alias) const {
+		if (helper == nullptr) return;
+		const auto pu = GetProcUnit();
+		if (!pu) return;
+		const ibByteCode* bc = pu->GetByteCode();
+		if (bc == nullptr) return;
+		for (const auto& v : bc->m_listVar) {
+			if (!v.IsExport()) continue;
+			helper->AppendProp(v.m_strRealName, v, alias);
+		}
+	}
+
 protected:
 	// Method call (array form). Resolves the runtime through
 	// GetProcUnit(); local shared_ptr keeps the ProcUnit alive for the
@@ -248,24 +288,13 @@ protected:
 		}
 	}
 
+	// Full descriptor surface = methods + export-var props, both keyed by the
+	// canonical alias. Self-surfacing descriptors (records/forms) call this via
+	// ExportThunk; a delegating host (manager) surfaces only the method half, see
+	// the public ExportMethodsToHelper.
 	void ExportNamesToHelper(ibValue::ibMemberTable* helper, long alias) const {
-		if (helper == nullptr) return;
-		const auto pu = GetProcUnit();
-		if (!pu) return;
-		const ibByteCode* bc = pu->GetByteCode();
-		if (bc == nullptr) return;
-		for (const auto& fn : bc->m_listFunc) {
-			if (!fn.IsExport()) continue;
-			helper->AppendMethod(fn.m_strRealName,
-				bc->GetNParams(fn),
-				bc->HasRetVal(fn),
-				(long)fn,
-				alias);
-		}
-		for (const auto& v : bc->m_listVar) {
-			if (!v.IsExport()) continue;
-			helper->AppendProp(v.m_strRealName, v, alias);
-		}
+		ExportMethodsToHelper(helper, alias);
+		ExportPropsToHelper(helper, alias);
 	}
 
 	// Materialise this descriptor's EXPORT bindings (RegisterRecords / Filter /

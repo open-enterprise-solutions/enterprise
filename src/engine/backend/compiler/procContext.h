@@ -23,6 +23,14 @@ struct ibRunContextSmall {
 	~ibRunContextSmall();
 
 	void SetLocalCount(const long varCount) {
+		// Free a prior heap frame before re-sizing. SetLocalCount can run twice
+		// for the same context (AttachRuntime's Run(false) prepare pass, then
+		// Run(true) execute); a second new[] without this leaks the first frame.
+		// Static-buffer frames (== m_c*) are never freed.
+		if (m_pLocVars != nullptr && m_pLocVars != m_cLocVars)
+			delete[] m_pLocVars;
+		if (m_pRefLocVars != nullptr && m_pRefLocVars != m_cRefLocVars)
+			delete[] m_pRefLocVars;
 		m_lVarCount = varCount;
 		if (m_lVarCount > MAX_STATIC_VAR) {
 			m_pLocVars = new ibValue[m_lVarCount];
