@@ -1,5 +1,11 @@
 # Metadata storage: per-entry container
 
+> **FOLDED INTO DIRECTION (2026-06-17):** "single-blob → per-entry rows" is
+> exactly file-per-object — the **lower half** of
+> [schema-first-metadata.md](schema-first-metadata.md). The per-entry container
+> is realized by the schema file-tree (each object = a file at its path). Pursue
+> it through that direction, not as a standalone storage refactor.
+
 Status: **design detailed; backlog until the size / partial-save triggers fire** (see end).
 Builds directly on the landed node-serialization walk (`metadata-serialization-arc.md`):
 `SaveSubtree`/`LoadSubtree` already (de)serialize one node + its subtree — that is exactly

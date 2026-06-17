@@ -1,5 +1,12 @@
 # Metadata serialization arc — self-serializing node + atomic load/save
 
+> **SUPERSEDED BY DIRECTION (2026-06-17):** the node-owned chunk-walk here is
+> heading for **replacement**, not completion. See
+> [schema-first-metadata.md](schema-first-metadata.md): the schema becomes the
+> owner, metadata the skeleton, and the chunk-blob gives way to a named
+> file-tree (the `Save`/`Load` walk is reused through a field-visitor backend).
+> Treat this arc as background/history; do not invest in building it out as-is.
+
 Status: **partially implemented in the working copy — NOT yet built/verified.**
 
 Landed (working copy, unbuilt):
