@@ -136,14 +136,15 @@ breakpoint. Whoever frees it is not yet identified — needs a free-stack.
    network even with a local-only sympath). Use `.ecxr; kn; r` and raw memory
    reads instead; keep symbol path local (`-y <bin\Win32\Debug>`), no srv*.
 
-### Cheap targeted mitigation (Face B only, ~3 lines)
+### Cheap targeted mitigation (Face B only) — APPLIED
 
-Copy `strDocPath` / `strModuleName` into local `wxString` values at the top of
-`DoDebugLoop` (while `byteCode` is still alive) and use the copies in both the
-EnterLoop and LeaveLoop packet blocks. That makes the packet send survive a
-`byteCode` free during the park — kills Face B without knowing the freer. It
-does **not** fix Face A (watch eval) or the underlying premature free, so it's
-hardening, not a root-cause fix.
+`DoDebugLoop` now copies `strDocPath` / `strModuleName` into local `wxString`
+values at the top of the function (while `byteCode` is still alive) and uses
+the copies in both the EnterLoop and LeaveLoop packet blocks. The packet send
+therefore survives a `byteCode` free during the park — Face B is killed without
+knowing the freer. This does **not** fix Face A (watch eval) or the underlying
+premature free, so it is hardening, not a root-cause fix; the OPEN BUG above
+stays open until the freer is pinned (PageHeap recipe in "How to pin it").
 
 See also memory note `reference_debugger_parked_eval_uaf` and
 [debug protocol multiplex](#) (`debugServer.cpp` / `debugClient.cpp`).

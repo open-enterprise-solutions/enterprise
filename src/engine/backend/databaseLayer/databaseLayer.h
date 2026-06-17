@@ -16,6 +16,7 @@
 #include <wx/arrstr.h>
 #include <wx/variant.h>
 
+#include <atomic>
 #include <memory>
 #include <vector>
 
@@ -506,14 +507,20 @@ protected:
 
 	/// Nested-transaction depth counter. Owned by the base-class
 	/// Begin / Commit / RollBack wrappers; drivers must not touch it.
-	int m_txDepth = 0;
+	/// Atomic for cross-thread visibility: a TX-pinned connection
+	/// resolves across the session's worker threads (see BeginTransaction),
+	/// so the counter may be observed from a different thread than the one
+	/// that last mutated it. Access is still logically serial per session;
+	/// atomicity buys memory visibility, not contention handling.
+	std::atomic<int> m_txDepth{0};
 
 	/// "Aborted" flag — set by any RollBack while a transaction is
 	/// still open, cleared when the outermost level finally resolves.
 	/// Makes the outermost Commit fall through to a real DoRollBack
 	/// so an inner failure can poison an otherwise successful outer
-	/// commit.
-	bool m_txAborted = false;
+	/// commit. Atomic for the same cross-thread-visibility reason as
+	/// m_txDepth.
+	std::atomic<bool> m_txAborted{false};
 
 	/// Back-pointer to the holder that has this layer reserved for an
 	/// active TX. Maintained exclusively by ibConnectionPool — see

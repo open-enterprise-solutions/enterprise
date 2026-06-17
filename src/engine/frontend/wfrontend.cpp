@@ -553,7 +553,7 @@ bool FinishConnect(const std::string& ibUser, const std::string& ibPassword)
 	// allocation/compile and runtime init through OnFirstConnect /
 	// OnAuthenticated; nothing to do here beyond auth.
 	//
-	// Kind == WebServer (default for eWEB_ENTERPRISE_MODE through the
+	// Kind == WebServer (default for eWEB_RUNTIME_MODE through the
 	// no-arg CreateSession overload) registers this session as the
 	// process's server in ibSessionRegistry::ServerSession(); subsequent
 	// per-tab WebClient sessions auto-link to it.
@@ -596,7 +596,7 @@ WFRONTEND_API bool wfrontendInitFile(
 
 	EnsurePngHandler();
 
-	if (!appDataCreateFile(ibRunMode::eWEB_ENTERPRISE_MODE,
+	if (!appDataCreateFile(ibRunMode::eWEB_RUNTIME_MODE,
 		wxString::FromUTF8(filePath.c_str()),
 		wxString::FromUTF8(locale.c_str())))
 	{
@@ -635,7 +635,7 @@ WFRONTEND_API bool wfrontendInitServer(
 
 	EnsurePngHandler();
 
-	if (!appDataCreateServer(ibRunMode::eWEB_ENTERPRISE_MODE,
+	if (!appDataCreateServer(ibRunMode::eWEB_RUNTIME_MODE,
 		wxString::FromUTF8(server.c_str()),
 		wxString::FromUTF8(port.c_str()),
 		wxString::FromUTF8(user.c_str()),

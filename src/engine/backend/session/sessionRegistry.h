@@ -95,9 +95,9 @@ struct BACKEND_API ibRegistryRequest {
 struct BACKEND_API ibConnectRequest {
 	wxString  m_computer;
 	wxString  m_address;           // "host:port" for web; "" for desktop
-	// Process-level run mode — stays eWEB_ENTERPRISE_MODE across all
+	// Process-level run mode — stays eWEB_RUNTIME_MODE across all
 	// sessions that belong to a wes process, even per-tab clients.
-	ibRunMode m_appMode = eENTERPRISE_MODE;
+	ibRunMode m_appMode = eRUNTIME_MODE;
 	// Session-level role. WebServer for wes's own technical row;
 	// WebClient for per-tab connections; other values mirror runMode.
 	// Default computed from m_appMode (see SessionKindFromRunMode).

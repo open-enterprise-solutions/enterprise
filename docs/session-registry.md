@@ -106,7 +106,7 @@ GET /                                            # cookie mint (id = new guid)
 
 POST /login { user, password }
 └── ibWebSession::Login(user, pwd)
-    ├── ibConnectRequest req { computer, eENTERPRISE_MODE,
+    ├── ibConnectRequest req { computer, eRUNTIME_MODE,
     │                          address = wfrontendServerAddress() }
     ├── registry.Connect(req)                    # anonymous row INSERT
     ├── m_ticket = move(result.ticket)
@@ -298,15 +298,15 @@ thread); surfaced under heavy debugger use.
 enum class ibSessionKind : int {
     Launcher   = eLAUNCHER_MODE,
     Designer   = eDESIGNER_MODE,
-    Enterprise = eENTERPRISE_MODE,
+    Enterprise = eRUNTIME_MODE,
     Service    = eSERVICE_MODE,
-    WebServer  = eWEB_ENTERPRISE_MODE,   // wes process technical row
+    WebServer  = eWEB_RUNTIME_MODE,   // wes process technical row
     WebClient  = 100,                     // per-tab / API caller
 };
 ```
 
 - Desktop `appData->CreateSession()` → `SessionKindFromRunMode(m_runMode)` (wes process passes `WebServer` explicitly via the typed factory).
-- `ibWebSession::Login` → `ibSessionKind::WebClient` + `m_appMode = eWEB_ENTERPRISE_MODE`.
+- `ibWebSession::Login` → `ibSessionKind::WebClient` + `m_appMode = eWEB_RUNTIME_MODE`.
 - `sys_session.kind` is added via `MigrateTableSession` (best-effort ALTER TABLE); legacy schemas without it still work (kinds read as 0).
 - `moduleManager::AttachRuntime` filters by kind: runtime runs for `Enterprise / WebClient / Service`, skipped for the rest.
 
@@ -541,7 +541,7 @@ needed only in `.cpp` for `static_cast`.
 
 ## Session list label
 
-`ibApplicationDataSessionArray::GetApplication(idx)` must disambiguate WebServer vs WebClient on web because both share `ibRunMode::eWEB_ENTERPRISE_MODE`. Implementation: when the stored run-mode is `eWEB_ENTERPRISE_MODE`, pick "Web client" if `m_kind == ibSessionKind::WebClient (100)`, otherwise "Web server". Other run modes fall through to `GetRunModeDescr`. `m_kind` is kept as `int` in `ibApplicationDataSessionUnit` to avoid pulling `session.h` into `appData.h`.
+`ibApplicationDataSessionArray::GetApplication(idx)` must disambiguate WebServer vs WebClient on web because both share `ibRunMode::eWEB_RUNTIME_MODE`. Implementation: when the stored run-mode is `eWEB_RUNTIME_MODE`, pick "Web client" if `m_kind == ibSessionKind::WebClient (100)`, otherwise "Web server". Other run modes fall through to `GetRunModeDescr`. `m_kind` is kept as `int` in `ibApplicationDataSessionUnit` to avoid pulling `session.h` into `appData.h`.
 
 ## Testing
 

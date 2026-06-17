@@ -115,12 +115,12 @@ int ibAppEnterprise::DoOnRun()
 	bool ret = false;
 
 	if (!m_strFile.IsEmpty()) {
-		ret = appDataCreateFile(ibRunMode::eENTERPRISE_MODE,
+		ret = appDataCreateFile(ibRunMode::eRUNTIME_MODE,
 			m_strFile, m_strLocale
 		);
 	}
 	else if (!m_strServer.IsEmpty() && !m_strDatabase.IsEmpty()) {
-		ret = appDataCreateServer(ibRunMode::eENTERPRISE_MODE,
+		ret = appDataCreateServer(ibRunMode::eRUNTIME_MODE,
 			m_strServer, m_strPort, m_strUser, m_strPassword, m_strDatabase, m_strLocale
 		);
 	}

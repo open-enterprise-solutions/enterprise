@@ -690,7 +690,7 @@ sessions picking this up:
   are out-of-line in `debugServer.cpp` (always emitted; desktop build
   just never calls them) so `wfrontend.dll` can link against
   `backend.dll` regardless of `OES_USE_WEB`.
-- **`eWEB_ENTERPRISE_MODE = 5`** added to `ibRunMode`. `EnterpriseMode()`
+- **`eWEB_RUNTIME_MODE = 5`** added to `ibRunMode`. `EnterpriseMode()`
   returns true for both thick and web; new `WebEnterpriseMode()`
   separates them when needed. `wfrontend.cpp` passes it to
   `appDataCreateFile/Server`.

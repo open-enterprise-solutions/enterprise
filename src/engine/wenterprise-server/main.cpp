@@ -955,7 +955,7 @@ int main(int argc, char** argv)
 	wfrontendSetServerAddress(args.host, boundPort);
 
 	// AccessMode (Server) is set by appData's ctor inside InitBackend
-	// based on the eWEB_ENTERPRISE_MODE runMode.
+	// based on the eWEB_RUNTIME_MODE runMode.
 	if (!InitBackend(args)) {
 		const std::string err = wfrontendLastError();
 		std::cerr << "Failed to open the database";

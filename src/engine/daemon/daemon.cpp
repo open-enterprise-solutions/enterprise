@@ -89,7 +89,7 @@ int main(int argc, char** argv)
 	// wxSocketBase::Initialize() already ran inside ibOesConsoleBoot above.
 
 	// Init appData (sets AccessMode internally based on runMode).
-	bool connected = appDataCreateServer(ibRunMode::eENTERPRISE_MODE,
+	bool connected = appDataCreateServer(ibRunMode::eRUNTIME_MODE,
 		strServer, strPort, strUser, strPassword, strDatabase, wxT("en")
 	);
 

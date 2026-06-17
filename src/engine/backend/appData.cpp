@@ -127,7 +127,7 @@ ibApplicationData* ibApplicationData::s_instance = nullptr;
 // hosts (wes, future oes-server) get 4 × CPU cores up to 32.
 static std::size_t PickWorkerCount(ibRunMode runMode)
 {
-	if (runMode != eWEB_ENTERPRISE_MODE) return 0;
+	if (runMode != eWEB_RUNTIME_MODE) return 0;
 	const std::size_t hw = std::thread::hardware_concurrency();
 	return std::min<std::size_t>(32, std::max<std::size_t>(4, hw * 4));
 }
@@ -146,7 +146,7 @@ static std::size_t PickWorkerCount(ibRunMode runMode)
 static std::size_t PickConnectionMinIdle(ibRunMode runMode)
 {
 	switch (runMode) {
-	case eWEB_ENTERPRISE_MODE: return 4;
+	case eWEB_RUNTIME_MODE: return 4;
 	case eSERVICE_MODE:        return 2;
 	default:                   return 2;   // designer / enterprise / launcher
 	}
@@ -182,7 +182,7 @@ ibApplicationData::ibApplicationData(ibRunMode runMode) :
 	// ibSession::SetAccessMode (which routes through ibSessionRegistry::
 	// Instance() and asserts on the global) would fire wxASSERT mid-ctor.
 	switch (runMode) {
-	case eWEB_ENTERPRISE_MODE:
+	case eWEB_RUNTIME_MODE:
 		m_sessionRegistry->SetAccessMode(ibSession::AccessMode::Shared);
 		// Worker pool was allocated by the registry ctor (PickWorkerCount
 		// returned a positive cap for this mode) — registry owns its own

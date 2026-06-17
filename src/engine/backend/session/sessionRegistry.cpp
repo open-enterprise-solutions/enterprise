@@ -210,7 +210,7 @@ ibSession* ibSessionRegistry::CreateSessionWithFactory(ibRunMode runMode,
 	ibConnectRequest req;
 	req.m_computer       = computer;
 	req.m_appMode        = runMode;
-	req.m_kind           = (runMode == eWEB_ENTERPRISE_MODE)
+	req.m_kind           = (runMode == eWEB_RUNTIME_MODE)
 	                         ? ibSessionKind::WebServer
 	                         : SessionKindFromRunMode(runMode);
 	req.m_sessionFactory = std::move(factory);

@@ -33,9 +33,9 @@
 enum ibRunMode {
 	eLAUNCHER_MODE = 1,		// for create db, only backmode
 	eDESIGNER_MODE = 2,		// backmode + frontmode
-	eENTERPRISE_MODE = 3,	// backmode + frontmode (thick client)
+	eRUNTIME_MODE = 3,	// backmode + frontmode (thick client)
 	eSERVICE_MODE = 4,		// only backmode
-	eWEB_ENTERPRISE_MODE = 5	// backmode + wfrontend (web — wes process)
+	eWEB_RUNTIME_MODE = 5	// backmode + wfrontend (web — wes process)
 };
 
 enum ibDatabaseMode {
@@ -90,7 +90,7 @@ public:
 
 
 	///////////////////////////////////////////////////////////////////////////
-	static bool CreateAppDataEnv(ibRunMode runMode = ibRunMode::eENTERPRISE_MODE);
+	static bool CreateAppDataEnv(ibRunMode runMode = ibRunMode::eRUNTIME_MODE);
 	///////////////////////////////////////////////////////////////////////////
 
 	static bool CreateFileAppDataEnv(ibRunMode runMode, const wxString& strDirDatabase, const wxString& strLocale = wxT(""));
@@ -235,10 +235,10 @@ public:
 	bool LauncherMode() const { return m_runMode == ibRunMode::eLAUNCHER_MODE; }
 	bool DesignerMode() const { return m_runMode == ibRunMode::eDESIGNER_MODE; }
 	bool EnterpriseMode() const {
-		return m_runMode == ibRunMode::eENTERPRISE_MODE
-			|| m_runMode == ibRunMode::eWEB_ENTERPRISE_MODE;
+		return m_runMode == ibRunMode::eRUNTIME_MODE
+			|| m_runMode == ibRunMode::eWEB_RUNTIME_MODE;
 	}
-	bool WebEnterpriseMode() const { return m_runMode == ibRunMode::eWEB_ENTERPRISE_MODE; }
+	bool WebEnterpriseMode() const { return m_runMode == ibRunMode::eWEB_RUNTIME_MODE; }
 	bool ServiceMode() const { return m_runMode == ibRunMode::eSERVICE_MODE; }
 
 	inline wxString GetRunModeDescr(const ibRunMode& mode) const {
@@ -248,9 +248,9 @@ public:
 			return wxEmptyString;
 		case eDESIGNER_MODE:
 			return _("Designer");
-		case eENTERPRISE_MODE:
+		case eRUNTIME_MODE:
 			return _("Thick client (GUI)");
-		case eWEB_ENTERPRISE_MODE:
+		case eWEB_RUNTIME_MODE:
 			return _("Web server");
 		case eSERVICE_MODE:
 			return _("Daemon");

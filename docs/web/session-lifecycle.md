@@ -34,7 +34,7 @@ splits into two distinct session kinds inside one wes process:
 `WebServer` (the technical bootstrap session, no script runtime) and
 `WebClient` (per-tab / per-API-caller, runs scripts).
 `SessionKindFromRunMode` returns `WebClient` for
-`eWEB_ENTERPRISE_MODE` (the common per-tab case); the wes process's
+`eWEB_RUNTIME_MODE` (the common per-tab case); the wes process's
 own `WebServer` row is created with the kind passed explicitly.
 
 `AttachRuntime` filters by kind:
@@ -61,7 +61,7 @@ session-creation time.
 POST /w/<prefix>/login
     │
     └── ibWebSession::Login(user, password)
-        ├── ibConnectRequest req { computer, eWEB_ENTERPRISE_MODE,
+        ├── ibConnectRequest req { computer, eWEB_RUNTIME_MODE,
         │                          address = wfrontendServerAddress(),
         │                          presetGuid = tabSid (from cookie/header) }
         │

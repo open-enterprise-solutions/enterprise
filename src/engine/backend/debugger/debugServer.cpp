@@ -252,6 +252,15 @@ bool ibDebuggerServer::IsDebugLooped() const
 
 void ibDebuggerServer::DoDebugLoop(const wxString& strDocPath, const wxString& strModuleName, int numLine, ibRunContext* runContext)
 {
+	// Own the doc/module path up front. Both params are `const&` into the
+	// caller's `byteCode` fields; the LeaveLoop packet below is built AFTER
+	// the CV park, by which point the byteCode owner may have been freed
+	// (startup-form rebuild) — using the references there would dangle
+	// (Face B of the 0xdd debugger UAF, see docs/debugger-per-session.md).
+	// Local copies survive a free during the park.
+	const wxString docPath    = strDocPath;
+	const wxString moduleName = strModuleName;
+
 	// Resolve the script-thread's session — caller is ibProcUnit::Execute
 	// which runs under ibSessionScope, so Current() is the session that
 	// actually hit the breakpoint. The per-session ibDebugSession is the
@@ -286,8 +295,8 @@ void ibDebuggerServer::DoDebugLoop(const wxString& strDocPath, const wxString& s
 		// designer side can route Continue/Step/Eval back to the right
 		// session in a multi-tab wes process.
 		commandChannelEnterLoop.w_stringZ(sess->GetId());
-		commandChannelEnterLoop.w_stringZ(strDocPath);
-		commandChannelEnterLoop.w_stringZ(strModuleName);
+		commandChannelEnterLoop.w_stringZ(docPath);
+		commandChannelEnterLoop.w_stringZ(moduleName);
 		commandChannelEnterLoop.w_s32(numLine);
 
 		SendCommand(commandChannelEnterLoop.pointer(), commandChannelEnterLoop.size());
@@ -354,8 +363,8 @@ void ibDebuggerServer::DoDebugLoop(const wxString& strDocPath, const wxString& s
 
 		commandChannelLeaveLoop.w_u16(CommandId_LeaveLoop);
 		commandChannelLeaveLoop.w_stringZ(sess->GetId());
-		commandChannelLeaveLoop.w_stringZ(strDocPath);
-		commandChannelLeaveLoop.w_stringZ(strModuleName);
+		commandChannelLeaveLoop.w_stringZ(docPath);
+		commandChannelLeaveLoop.w_stringZ(moduleName);
 		commandChannelLeaveLoop.w_s32(numLine);
 
 		SendCommand(commandChannelLeaveLoop.pointer(), commandChannelLeaveLoop.size());

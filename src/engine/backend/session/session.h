@@ -76,21 +76,21 @@ enum class ibAuthState : int {
 // ibSessionKind — sessions-layer enum. Shares numeric values with
 // ibRunMode for the 1:1 cases (Launcher/Designer/Enterprise/Service)
 // so casts round-trip; splits the web case into two distinct session
-// roles that both share ibRunMode::eWEB_ENTERPRISE_MODE as the host
+// roles that both share ibRunMode::eWEB_RUNTIME_MODE as the host
 // process's run mode. Physically only the wes process runs — inside
 // it sessions come in two flavours:
 //   WebServer  — the process's own technical sys_session row
 //   WebClient  — per-tab / per-API-caller connections
 // Desktop binaries populate their corresponding session kind directly;
 // SessionKindFromRunMode is the default for unambiguous cases and
-// returns WebClient for eWEB_ENTERPRISE_MODE (the common per-tab case).
+// returns WebClient for eWEB_RUNTIME_MODE (the common per-tab case).
 // ------------------------------------------------------------------
 enum class ibSessionKind : int {
 	Launcher   = eLAUNCHER_MODE,       // 1
 	Designer   = eDESIGNER_MODE,       // 2
-	Enterprise = eENTERPRISE_MODE,     // 3
+	Enterprise = eRUNTIME_MODE,     // 3
 	Service    = eSERVICE_MODE,        // 4
-	WebServer  = eWEB_ENTERPRISE_MODE, // 5 — wes process technical row
+	WebServer  = eWEB_RUNTIME_MODE, // 5 — wes process technical row
 	WebClient  = 100,                  // per-tab / API caller
 };
 
@@ -98,7 +98,7 @@ inline ibSessionKind SessionKindFromRunMode(ibRunMode m) {
 	// Web run mode is ambiguous at this layer — default to WebClient
 	// (the per-tab common case). Callers that need WebServer set the
 	// kind explicitly (see ibSessionRegistry::CreateSessionWithFactory).
-	if (m == eWEB_ENTERPRISE_MODE) return ibSessionKind::WebClient;
+	if (m == eWEB_RUNTIME_MODE) return ibSessionKind::WebClient;
 	return static_cast<ibSessionKind>(m);
 }
 

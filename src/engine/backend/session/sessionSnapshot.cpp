@@ -33,10 +33,10 @@ wxString ibSessionSnapshot::GetApplication(unsigned int idx) const {
 	const auto& row = m_listSession[idx];
 	// ibSessionKind values mirror ibRunMode for 1:1 cases (Launcher /
 	// Designer / Enterprise / Service), plus two web roles that share
-	// the same ibRunMode::eWEB_ENTERPRISE_MODE. Pick a web-specific
+	// the same ibRunMode::eWEB_RUNTIME_MODE. Pick a web-specific
 	// label when the kind disambiguates, otherwise fall back to the
 	// run-mode description.
-	if (row.m_runMode == ibRunMode::eWEB_ENTERPRISE_MODE) {
+	if (row.m_runMode == ibRunMode::eWEB_RUNTIME_MODE) {
 		// ibSessionKind::WebServer = 5, WebClient = 100.
 		if (row.m_kind == 100) return _("Web client");
 		return _("Web server");
@@ -69,7 +69,7 @@ wxString ibSessionSnapshot::GetSessionKindDescr(unsigned int idx) const
 	// m_kind = 0; interpret that as Server when run-mode is web (the
 	// historic behaviour before per-tab sessions landed) and Client
 	// otherwise.
-	if (row.m_runMode == ibRunMode::eWEB_ENTERPRISE_MODE) {
+	if (row.m_runMode == ibRunMode::eWEB_RUNTIME_MODE) {
 		// ibSessionKind::WebClient = 100.
 		return (row.m_kind == 100) ? _("Client") : _("Server");
 	}

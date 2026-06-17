@@ -57,12 +57,12 @@ Each executable links against both DLLs and provides a `wxApp` subclass that sel
 |---|---|---|
 | `launcher.exe` | `eLAUNCHER_MODE` | Connection chooser; creates/selects database |
 | `designer.exe` | `eDESIGNER_MODE` | Full IDE — metadata editor, form designer, debugger client |
-| `enterprise.exe` | `eENTERPRISE_MODE` | Desktop thick-client runtime (GUI, single user session per process) |
-| `wenterprise-server.exe` | `eWEB_ENTERPRISE_MODE` | Web runtime host — HTTP server, N per-cookie user sessions, browser client |
+| `enterprise.exe` | `eRUNTIME_MODE` | Desktop thick-client runtime (GUI, single user session per process) |
+| `wenterprise-server.exe` | `eWEB_RUNTIME_MODE` | Web runtime host — HTTP server, N per-cookie user sessions, browser client |
 | `daemon.exe` | `eSERVICE_MODE` | Headless background service |
 | `codeRunner.exe` | `eSERVICE_MODE` | Executes a single script module |
 
-> A rename `eENTERPRISE_MODE → eRUNTIME_MODE` is planned — the current name misleads, both thick-client and web hosts are "runtime", just with different UI transports. The constants stay as-is until the rename lands.
+> Both thick-client and web hosts are "runtime", differing only in UI transport — hence `eRUNTIME_MODE` / `eWEB_RUNTIME_MODE` (renamed from the former `eENTERPRISE_MODE` / `eWEB_ENTERPRISE_MODE`).
 
 ### Backend Layer (`backend.dll`)
 

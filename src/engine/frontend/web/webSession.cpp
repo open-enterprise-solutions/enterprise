@@ -90,7 +90,7 @@ bool ibWebSession::Login(const wxString& user, const wxString& password)
 	// Anonymous-phase create through the session registry — same shape as
 	// desktop's appData->CreateSession<ibEnterpriseSession>() (see
 	// enterprise/mainApp.cpp). The anonymous row lands in sys_session
-	// immediately (empty userName + eWEB_ENTERPRISE_MODE app mode) so
+	// immediately (empty userName + eWEB_RUNTIME_MODE app mode) so
 	// admin / Active-Users listings see "login in progress" between
 	// GET / (cookie mint) and POST /login settling. Reuse the tab's
 	// sessionStorage id as the registry's session guid — one identifier

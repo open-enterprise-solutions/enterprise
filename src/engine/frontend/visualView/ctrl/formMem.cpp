@@ -115,7 +115,6 @@ wxMemoryBuffer ibValueForm::SaveForm()
 	writerMemory.w_chunk(GetControlID(), writerMetaMemory.pointer(), writerMetaMemory.size());
 	writerData.w_chunk(GetClassType(), writerMemory.pointer(), writerMemory.size());
 
-	//ibValueForm::PrepareNames();
 	return writerData.buffer();
 }
 

@@ -634,7 +634,7 @@ Per-runMode `minIdle` defaults are picked by `appData::PickConnectionMinIdle`:
 
 | runMode | minIdle | rationale |
 |---|---|---|
-| `eWEB_ENTERPRISE_MODE` (wes) | 4 | multi-tab burst absorption |
+| `eWEB_RUNTIME_MODE` (wes) | 4 | multi-tab burst absorption |
 | `eSERVICE_MODE` (daemon) | 2 | background tasks, modest load |
 | desktop GUI / launcher | 2 | session-manager bookkeeping conn + UI thread |
 
@@ -652,16 +652,9 @@ addition.
 - **CheckoutWithTimeout.** `Checkout(std::chrono::milliseconds)`
   returning nullptr if pool saturated. Debug safety net.
 
-- **Per-connection atomic TX counter.** `std::atomic<int> m_txDepth`
-  and `std::atomic<bool> m_txAborted`. Defense in depth.
-
 - **Savepoints API.** `ibDatabaseLayer::Savepoint(name) / RollbackTo(name)`
   for callers that need real sub-TX (inner rollback without affecting
   outer). Supported by FB/PG/MySQL/MSSQL, not SQLite.
-
-- **FB `fb_tr_list` cleanup.** Native nested-TX stack is now dead
-  (counter collapses everything to depth 1). Remove the linked-list
-  code for clarity — `m_fbNode` becomes a single-slot.
 
 - **Pool stats endpoint.** `/admin/pool` on wes returning JSON with
   LiveSize / IdleSize / MaxSize. For ops monitoring.
