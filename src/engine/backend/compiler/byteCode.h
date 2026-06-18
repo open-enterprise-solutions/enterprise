@@ -36,6 +36,7 @@ enum class ibVarKind : uint8_t {
 	External,
 	Context,
 	ContextProp,
+	Protected,   // appended (AOT-stable) — visible to children, not config-wide
 };
 
 // Function-side discriminator. Three categories — matches the
@@ -61,6 +62,7 @@ enum class ibFnKind : uint8_t {
 	// safe even if the filter is missed (no valid identifier starts
 	// with it). Cross-bc invisible by definition (anonymous).
 	Lambda,
+	Protected,   // appended (AOT-stable) — visible to children, not config-wide
 };
 
 // Forward decl — full definition lives after ibByteCode so the
@@ -148,6 +150,9 @@ struct ibByteCode {
 		bool IsExternal()    const { return m_kind == ibVarKind::External; }
 		bool IsContext()     const { return m_kind == ibVarKind::Context; }
 		bool IsContextProp() const { return m_kind == ibVarKind::ContextProp; }
+		bool IsProtected()   const { return m_kind == ibVarKind::Protected; }
+		bool IsPublic()      const { return IsExport(); }  // access-named alias
+		bool IsPrivate()     const { return IsLocal(); }   // access-named alias
 		// "Required to bind" — runtime binder fills these slots.
 		bool IsBindRequired() const { return m_kind == ibVarKind::External || m_kind == ibVarKind::Context; }
 		// "Bindable" — the binder MAY seed this slot. Adds plain Local (a bound
@@ -224,6 +229,8 @@ struct ibByteCode {
 				m_kind = ibVarKind::Context;
 			else if (v.m_bExport)
 				m_kind = ibVarKind::Export;
+			else if (v.IsProtected())
+				m_kind = ibVarKind::Protected;
 			else
 				m_kind = ibVarKind::Local;
 		}
@@ -266,6 +273,9 @@ struct ibByteCode {
 		bool IsExport()        const { return m_kind == ibFnKind::Export; }
 		bool IsContextMethod() const { return m_kind == ibFnKind::ContextMethod; }
 		bool IsLambda()        const { return m_kind == ibFnKind::Lambda; }
+		bool IsProtected()     const { return m_kind == ibFnKind::Protected; }
+		bool IsPublic()        const { return IsExport(); }  // access-named alias
+		bool IsPrivate()       const { return IsLocal(); }   // access-named alias
 		// Visible cross-bc — Export and ContextMethod (privates + lambdas filtered).
 		bool IsCrossBcVisible() const { return m_kind == ibFnKind::Export || m_kind == ibFnKind::ContextMethod; }
 
@@ -338,6 +348,7 @@ struct ibByteCode {
 				: ibValue::GetIDObjectFromString(src.m_strType)),
 			  m_kind(!src.m_strContext.IsEmpty() ? ibFnKind::ContextMethod
 			        : src.m_bExport              ? ibFnKind::Export
+			        : src.IsProtected()          ? ibFnKind::Protected
 			                                     : ibFnKind::Local),
 			  m_needsHeapFrame(src.m_needsHeapFrame),
 			  m_strRealName(src.m_strRealName),

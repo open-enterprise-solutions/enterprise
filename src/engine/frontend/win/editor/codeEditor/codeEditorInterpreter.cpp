@@ -1055,10 +1055,12 @@ bool ibPrecompileCode::CompileFunction()
 
 	ExpectDelimeter(')');
 
-	if (IsNextKeyWord(KEY_EXPORT)) {
-		ExpectKeyword(KEY_EXPORT);
+	if (IsNextKeyWord(KEY_PUBLIC)) {
+		ExpectKeyword(KEY_PUBLIC);
 		pFunction->m_isExport = true;
 	}
+	else if (IsNextKeyWord(KEY_PRIVATE))   ExpectKeyword(KEY_PRIVATE);
+	else if (IsNextKeyWord(KEY_PROTECTED)) ExpectKeyword(KEY_PROTECTED);
 
 	// check for typing
 	GetContext()->m_functions[funcName] = pFunction;
@@ -1115,10 +1117,12 @@ bool ibPrecompileCode::CompileDeclaration()
 		}
 
 		bool isExport = false;
-		if (IsNextKeyWord(KEY_EXPORT)) {
-			ExpectKeyword(KEY_EXPORT);
+		if (IsNextKeyWord(KEY_PUBLIC)) {
+			ExpectKeyword(KEY_PUBLIC);
 			isExport = true;
 		}
+		else if (IsNextKeyWord(KEY_PRIVATE))   ExpectKeyword(KEY_PRIVATE);
+		else if (IsNextKeyWord(KEY_PROTECTED)) ExpectKeyword(KEY_PROTECTED);
 
 		ibParamValue inferred;
 		bool         hasInit = false;
@@ -1329,7 +1333,24 @@ bool ibPrecompileCode::CompileBlock(bool allowSingleStmt)
 
 					int nSet = 1;
 					ibParamValue variable = GetCurrentIdentifier(nSet);
-					if (nSet)
+
+					// postfix ++ / -- on a bare variable — consume the doubled
+					// sign instead of ExpectDelimeter('='), whose miss-path skips
+					// lexems to EOF and would swallow the rest of the module.
+					wxUniChar incOp = 0;
+					if (nSet && m_cursor + 2 < (int)m_listLexem.size()
+						&& m_listLexem[m_cursor + 1].m_lexType == DELIMITER
+						&& m_listLexem[m_cursor + 2].m_lexType == DELIMITER
+						&& (m_listLexem[m_cursor + 1].m_numData == '+' || m_listLexem[m_cursor + 1].m_numData == '-')
+						&& m_listLexem[m_cursor + 1].m_numData == m_listLexem[m_cursor + 2].m_numData)
+						incOp = (wxUniChar)m_listLexem[m_cursor + 1].m_numData;
+
+					if (incOp != 0)
+					{
+						ExpectDelimeter(incOp);
+						ExpectDelimeter(incOp);
+					}
+					else if (nSet)
 					{
 						ExpectDelimeter('=');
 
@@ -1376,6 +1397,15 @@ bool ibPrecompileCode::CompileBlock(bool allowSingleStmt)
 				break;
 			}
 			else if (ENDPROGRAM == lex.m_lexType) break;
+			else if (DELIMITER == lex.m_lexType && ('+' == lex.m_numData || '-' == lex.m_numData)
+				&& IsNextDelimeter(lex.m_numData))
+			{
+				// prefix ++ / -- (`++x;`) — consume the second sign and the target
+				// name so the walker doesn't fall to `return false` and abort
+				// variable collection for the rest of the module.
+				ExpectDelimeter(lex.m_numData);
+				(void)ExpectIdentifier(true);
+			}
 			else return false;
 		}
 	}//while
@@ -2145,9 +2175,27 @@ ibParamValue ibPrecompileCode::GetExpression(int priority)
 	}
 	else if (lex.m_lexType == IDENTIFIER)
 	{
+		// postfix ++ / -- on a bare variable — consume the adjacent doubled
+		// sign so `x++` doesn't leave a stray operator for MOperation to
+		// mis-thread. Type stays NUMBER (the +/- result).
+		wxUniChar incOp = 0;
+		if (m_cursor + 2 < (int)m_listLexem.size()
+			&& m_listLexem[m_cursor + 1].m_lexType == DELIMITER
+			&& m_listLexem[m_cursor + 2].m_lexType == DELIMITER
+			&& (m_listLexem[m_cursor + 1].m_numData == '+' || m_listLexem[m_cursor + 1].m_numData == '-')
+			&& m_listLexem[m_cursor + 1].m_numData == m_listLexem[m_cursor + 2].m_numData
+			&& m_listLexem[m_cursor + 2].m_numString == m_listLexem[m_cursor + 1].m_numString + 1)
+			incOp = (wxUniChar)m_listLexem[m_cursor + 1].m_numData;
+
 		m_cursor--;// step back
 		int nSet = 0;
 		variable = GetCurrentIdentifier(nSet);
+		if (incOp != 0)
+		{
+			ExpectDelimeter(incOp);
+			ExpectDelimeter(incOp);
+			variable.m_paramType = wxT("NUMBER");
+		}
 	}
 	else if (lex.m_lexType == CONSTANT)
 	{

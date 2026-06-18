@@ -121,7 +121,10 @@ ibParamUnit ibCompileContext::GetVariable(const wxString& strVarName, bool bFind
 		// "one level up" default. Triple-nested lambdas (inner →
 		// outer through middle) decrement past 0 otherwise.
 		auto tryEmit = [&](const std::shared_ptr<ibVariable>& cur, int depth, bool blockReturn, ibParamUnit& out) {
-			if (!(m_numReturn == RETURN_BLOCK || numCanUseLocalInParent > 0 || cur->m_bExport || crossedLambda))
+			// Public and Protected are both visible up the parent chain (children
+			// see them). The difference is the cross-module export registry:
+			// Public is in it (config-wide); Protected is NOT.
+			if (!(m_numReturn == RETURN_BLOCK || numCanUseLocalInParent > 0 || cur->IsPublic() || cur->IsProtected() || crossedLambda))
 				return false;
 			out.m_numArray = blockReturn ? (long long)DEF_VAR_TEMP : (long long)depth;
 			out.m_numIndex = cur->m_numVariable;
@@ -310,6 +313,11 @@ void ibCompileContext::PushVariable(const wxString& strVarName, const wxString& 
 
 	currentVariable->m_strRealName = strVarName;
 	currentVariable->m_bExport = exportVar;
+	// Keep m_access in lock-step with the export flag for the parent-chain gate
+	// (which now reads m_access, not m_bExport): every exported var — user Public
+	// AND system extern/context bindings — reads as Public. Protected is stamped
+	// separately by CompileDeclaration after the variable is created.
+	currentVariable->m_access = exportVar ? ACCESS_PUBLIC : ACCESS_PRIVATE;
 	currentVariable->m_bContext = contextVar;
 
 	currentVariable->m_strContext = strContextVar;  //variable for which the attribute is called

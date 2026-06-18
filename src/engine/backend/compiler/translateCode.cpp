@@ -44,7 +44,9 @@ struct ibKeyWords s_listKeyWord[] =
 	{"EndProcedure"},
 	{"Function"},
 	{"EndFunction"},
-	{"Export"},
+	{"Public"},      // KEY_PUBLIC    — was "Export"; leading access modifier
+	{"Private"},     // KEY_PRIVATE
+	{"Protected"},   // KEY_PROTECTED
 	{"Val"},
 	{"Return"},
 	{"Try"},

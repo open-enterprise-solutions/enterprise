@@ -23,6 +23,15 @@ enum {
 	RETURN_BLOCK,              //block-scope (`{ }` in CES, control-structure body)
 };
 
+// Access modifier for functions / procedures / module variables. Exactly one
+// per declaration; default Private. Replaces the old boolean "export" flag —
+// Public is the export level, Protected is the new child-visible middle tier.
+enum {
+	ACCESS_PRIVATE = 0,   // default — module-local, not visible outside
+	ACCESS_PUBLIC,        // exported — visible config-wide (was `Export`)
+	ACCESS_PROTECTED,     // visible to children (object -> its forms)
+};
+
 // True when a context is any lambda boundary — Phase B compile
 // discipline stops parent-context walks here so lambda bodies can't
 // see outer-function locals.
@@ -90,6 +99,9 @@ struct ibCompileContext {
 		}
 
 		bool m_bExport;
+		// Access modifier (ibAccessModifier): Private(0) / Public / Protected,
+		// default Private. m_bExport is kept as the derived "== Public".
+		int  m_access = 0;
 		bool m_bContext;
 		// Set in PrepareModuleData Pass 1 for entries declared via
 		// AddExternalValue. Distinct from m_bContext: externs are bound
@@ -131,6 +143,12 @@ struct ibCompileContext {
 		bool IsContextRelated() const {
 			return m_bContext || !m_strContext.IsEmpty();
 		}
+
+		// Access predicates over m_access (Private default). Mirror the
+		// bc-side ibByteCodeVarInfo names; IsPrivate == bc-side IsLocal.
+		bool IsProtected() const { return m_access == ACCESS_PROTECTED; }
+		bool IsPublic()    const { return m_access == ACCESS_PUBLIC; }
+		bool IsPrivate()   const { return m_access == ACCESS_PRIVATE; }
 	};
 
 	//function definition
@@ -204,7 +222,16 @@ struct ibCompileContext {
 
 		~ibFunction() = default;
 
+		// Access predicates over m_access (Private default). Mirror the
+		// bc-side ibByteFunction names; IsPrivate == bc-side IsLocal.
+		bool IsProtected() const { return m_access == ACCESS_PROTECTED; }
+		bool IsPublic()    const { return m_access == ACCESS_PUBLIC; }
+		bool IsPrivate()   const { return m_access == ACCESS_PRIVATE; }
+
 		bool m_bExport, m_bContext;
+		// Access modifier (ibAccessModifier): Private(0) / Public / Protected,
+		// default Private. m_bExport is kept as the derived "== Public".
+		int  m_access = 0;
 
 		// Mirror of bytecode-side m_bCodeRet — true for FUNCTION (returns
 		// a value), false for PROCEDURE. Settled at CompileFunction

@@ -175,7 +175,10 @@ enum { // numbers of keywords (in strict sequence as the values ​​themselves
 	KEY_ENDPROCEDURE,
 	KEY_FUNCTION,
 	KEY_ENDFUNCTION,
-	KEY_EXPORT,
+	// === access modifiers (leading) — replaced the old trailing `Export` ===
+	KEY_PUBLIC,           // `Public`    — exported / visible everywhere (was `Export`)
+	KEY_PRIVATE,          // `Private`   — module-local (default; optional explicit-intent)
+	KEY_PROTECTED,        // `Protected` — visible to children (object -> its forms)
 	KEY_VAL,
 	KEY_RETURN,
 	KEY_TRY,

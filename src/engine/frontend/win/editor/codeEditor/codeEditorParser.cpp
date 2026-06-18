@@ -81,11 +81,13 @@ bool ibParserModule::ParseModule(const wxString& sModule)
 
 				bool isExport = false;
 
-				if (IsNextKeyWord(KEY_EXPORT))
+				if (IsNextKeyWord(KEY_PUBLIC))
 				{
-					ExpectKeyword(KEY_EXPORT);
+					ExpectKeyword(KEY_PUBLIC);
 					isExport = true;
 				}
+				else if (IsNextKeyWord(KEY_PRIVATE))   ExpectKeyword(KEY_PRIVATE);
+				else if (IsNextKeyWord(KEY_PROTECTED)) ExpectKeyword(KEY_PROTECTED);
 
 				if (IsNextDelimeter('='))// initial initialization - works only inside the text of modules (but not re-declaring procedures and functions)
 				{
@@ -198,10 +200,12 @@ bool ibParserModule::ParseModule(const wxString& sModule)
 
 			bool isExport = false;
 
-			if (IsNextKeyWord(KEY_EXPORT))
+			if (IsNextKeyWord(KEY_PUBLIC))
 			{
-				ExpectKeyword(KEY_EXPORT); isExport = true;
+				ExpectKeyword(KEY_PUBLIC); isExport = true;
 			}
+			else if (IsNextKeyWord(KEY_PRIVATE))   ExpectKeyword(KEY_PRIVATE);
+			else if (IsNextKeyWord(KEY_PROTECTED)) ExpectKeyword(KEY_PROTECTED);
 
 			ibModuleElement data;
 			data.m_name = strFuncName;

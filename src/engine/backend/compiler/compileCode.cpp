@@ -873,18 +873,33 @@ bool ibCompileCode::CompileDeclaration(ibCompileContext* context)
 			GETDelimeter(']');
 		}
 
+		// Access modifier — exactly one of Public / Private / Protected, in
+		// place of the old single Export check. All optional (none = Private);
+		// more than one is an error.
 		bool bExport = false;
-
-		if (IsNextKeyWord(KEY_EXPORT)) {
-			if (bExport) // there was an Export announcement
-				break;
-			GETKeyWord(KEY_EXPORT);
-			bExport = true;
+		int varAccess = ACCESS_PRIVATE;
+		int numModifiers = 0;
+		if (IsNextKeyWord(KEY_PUBLIC))    { GETKeyWord(KEY_PUBLIC);    bExport = true; varAccess = ACCESS_PUBLIC;    numModifiers++; }
+		if (IsNextKeyWord(KEY_PRIVATE))   { GETKeyWord(KEY_PRIVATE);                   varAccess = ACCESS_PRIVATE;   numModifiers++; }
+		if (IsNextKeyWord(KEY_PROTECTED)) { GETKeyWord(KEY_PROTECTED);                 varAccess = ACCESS_PROTECTED; numModifiers++; }
+		if (numModifiers > 1) {
+			SetError(ERROR_CODE); // only one access modifier (Public / Private / Protected) is allowed
+			return false;
 		}
 
 		// there was no variable declaration yet - add
 		ibParamUnit variable =
 			context->AddVariable(strRealName, strType, bExport);
+
+		// Stamp the access enum onto the just-created variable so Protected is
+		// distinguishable from Private at resolve time. The parent-chain
+		// visibility gate honours Protected (visible to children, not config-
+		// wide); Public already rides m_bExport.
+		if (varAccess != ACCESS_PRIVATE) {
+			std::shared_ptr<ibCompileContext::ibVariable> declVar;
+			if (context->FindVariable(strRealName, declVar) && declVar)
+				declVar->m_access = varAccess;
+		}
 
 		// Tape declarator at the natural source position of the
 		// declaration. Caller-side emission keeps ibCompileContext
@@ -1438,10 +1453,19 @@ bool ibCompileCode::ParseFunctionSignature(ibCompileContext* context,
 		GETDelimeter(',');
 	}
 	GETDelimeter(')');
-	if (IsNextKeyWord(KEY_EXPORT)) {
-		GETKeyWord(KEY_EXPORT);
-		outFunction->m_bExport = true;
+
+	// Access modifier — exactly one of Public / Private / Protected, in place of
+	// the old single Export check. All optional (none = Private, the default);
+	// more than one is an error. m_access holds the enum, m_bExport is derived.
+	int numModifiers = 0;
+	if (IsNextKeyWord(KEY_PUBLIC))    { GETKeyWord(KEY_PUBLIC);    outFunction->m_access = ACCESS_PUBLIC;    numModifiers++; }
+	if (IsNextKeyWord(KEY_PRIVATE))   { GETKeyWord(KEY_PRIVATE);   outFunction->m_access = ACCESS_PRIVATE;   numModifiers++; }
+	if (IsNextKeyWord(KEY_PROTECTED)) { GETKeyWord(KEY_PROTECTED); outFunction->m_access = ACCESS_PROTECTED; numModifiers++; }
+	if (numModifiers > 1) {
+		SetError(ERROR_CODE); // only one access modifier (Public / Private / Protected) is allowed
+		return false;
 	}
+	outFunction->m_bExport = (outFunction->m_access == ACCESS_PUBLIC);
 
 	return true;
 }
@@ -3247,6 +3271,31 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 					context->m_listLabelDef[nextLexem.m_strData] = m_cByteCode.m_listCode.size() - 1;
 					GETDelimeter(':');
 				}
+				else if (IsNextDelimeter(wxT('+')) || IsNextDelimeter(wxT('-'))) {
+					// postfix ++ / -- on a bare variable: `x++;` / `x--;`  is sugar for
+					// `x = x +/- 1`. Reached only when the identifier is IMMEDIATELY
+					// followed by +/- (no '.' / '[' / '(' between), so a member/array
+					// GET-temp can never be silently incremented. At statement level the
+					// value is unused, so prefix and postfix collapse to the same store.
+					const wxUniChar incOp = IsNextDelimeter(wxT('+')) ? wxT('+') : wxT('-');
+					const wxString strRealName = nextLexem.m_valData.GetString();
+					GETDelimeter(incOp);
+					if (!IsNextDelimeter(incOp)) { // a lone +/- after a bare identifier — not valid here
+						SetError(ERROR_CODE);
+						return false;
+					}
+					GETDelimeter(incOp);
+
+					ibParamUnit variable = context->GetVariable(strRealName, true, true); // must already exist
+					ibByteUnit code;
+					AddLineInfo(code);
+					code.m_numOper = (incOp == wxT('+')) ? OPER_ADD : OPER_SUB;
+					ibValue oneVal; oneVal.SetNumber(wxT("1"));
+					code.m_param1 = variable;          // dest in place — same shape the bShortLet fold of `x = x + 1` produces
+					code.m_param2 = variable;          // left operand
+					code.m_param3 = FindConst(oneVal); // right operand = 1
+					m_cByteCode.m_listCode.emplace_back(std::move(code));
+				}
 				else { //function and method calls, expression assignments are processed here
 
 					m_numCurrentCompile--;// step back
@@ -3303,6 +3352,30 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 						}
 					}
 				}
+			}
+			else if (nextLexem.m_lexType == DELIMITER
+				&& (nextLexem.m_numData == wxT('+') || nextLexem.m_numData == wxT('-')))
+			{
+				// prefix ++ / -- (statement form): `++x;` / `--x;` is sugar for
+				// `x = x +/- 1`. The first +/- was just consumed as nextLexem;
+				// require it doubled, then a bare variable. Value is unused at
+				// statement level, so this is identical to the postfix store.
+				const wxUniChar incOp = nextLexem.m_numData;
+				if (!IsNextDelimeter(incOp)) { // a lone leading +/- — syntax error, as before
+					SetError(ERROR_CODE);
+					return false;
+				}
+				GETDelimeter(incOp); // consume the second +/-
+				const wxString strRealName = GETIdentifier(true); // target variable
+				ibParamUnit variable = context->GetVariable(strRealName, true, true); // must already exist
+				ibByteUnit code;
+				AddLineInfo(code);
+				code.m_numOper = (incOp == wxT('+')) ? OPER_ADD : OPER_SUB;
+				ibValue oneVal; oneVal.SetNumber(wxT("1"));
+				code.m_param1 = variable;
+				code.m_param2 = variable;
+				code.m_param3 = FindConst(oneVal);
+				m_cByteCode.m_listCode.emplace_back(std::move(code));
 			}
 			else if (nextLexem.m_lexType == DELIMITER
 				&& nextLexem.m_numData == wxT(';'))
@@ -4417,14 +4490,78 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 		m_cByteCode.m_listCode.emplace_back(std::move(code));
 	}
 	else if (lex.m_lexType == IDENTIFIER) {
-		m_numCurrentCompile--;// step back
-		int numSet = 0;
-		variable = GetCurrentIdentifier(context, numSet);
+		// postfix ++ / -- in expression on a BARE variable: `x++` / `x--` yields
+		// the OLD value, then stores x = x +/- 1. Gate: the identifier is
+		// IMMEDIATELY followed by a doubled, source-ADJACENT +/- — so member /
+		// array GET-temps (`obj.a++`, `arr[i]++`) fall through to a normal read,
+		// and `a - -b` (spaced) is not mistaken for `a--`.
+		wxUniChar incOp = 0;
+		if (m_numCurrentCompile + 2 < m_listLexem.size()
+			&& m_listLexem[m_numCurrentCompile + 1].m_lexType == DELIMITER
+			&& m_listLexem[m_numCurrentCompile + 2].m_lexType == DELIMITER
+			&& (m_listLexem[m_numCurrentCompile + 1].m_numData == '+' || m_listLexem[m_numCurrentCompile + 1].m_numData == '-')
+			&& m_listLexem[m_numCurrentCompile + 1].m_numData == m_listLexem[m_numCurrentCompile + 2].m_numData
+			&& m_listLexem[m_numCurrentCompile + 2].m_numString == m_listLexem[m_numCurrentCompile + 1].m_numString + 1)
+			incOp = (wxUniChar)m_listLexem[m_numCurrentCompile + 1].m_numData;
+
+		if (incOp != 0) {
+			const wxString strRealName = lex.m_valData.GetString();
+			GETDelimeter(incOp);
+			GETDelimeter(incOp);
+			ibParamUnit target = context->GetVariable(strRealName, true, true); // lvalue, must exist
+			// expression value = a temp holding the OLD value (captured before the store)
+			variable = context->CreateVariable();
+			ibByteUnit getOld;
+			AddLineInfo(getOld);
+			getOld.m_numOper = OPER_LET;
+			getOld.m_param1 = variable;
+			getOld.m_param2 = target;
+			m_cByteCode.m_listCode.emplace_back(std::move(getOld));
+			// store target = target +/- 1
+			ibByteUnit incCode;
+			AddLineInfo(incCode);
+			incCode.m_numOper = (incOp == '+') ? OPER_ADD : OPER_SUB;
+			ibValue oneVal; oneVal.SetNumber(wxT("1"));
+			incCode.m_param1 = target;
+			incCode.m_param2 = target;
+			incCode.m_param3 = FindConst(oneVal);
+			m_cByteCode.m_listCode.emplace_back(std::move(incCode));
+		}
+		else {
+			m_numCurrentCompile--;// step back
+			int numSet = 0;
+			variable = GetCurrentIdentifier(context, numSet);
+		}
 	}
 	else if (lex.m_lexType == CONSTANT) {
 		variable = FindConst(lex.m_valData);
 	}
 	else if ((lex.m_lexType == DELIMITER && lex.m_numData == '+') || (lex.m_lexType == DELIMITER && lex.m_numData == '-')) {
+
+		// prefix ++ / -- in expression: `++x` / `--x` store x = x +/- 1, then
+		// yield x (the new value). Caught BEFORE the unary-sign logic below —
+		// else `++x` parses as `+(+x)` and silently no-ops. Require the two
+		// signs ADJACENT in source (m_numString) so `a - -b` (spaced) stays a
+		// binary minus + unary minus, not a phantom `a--`.
+		if (m_numCurrentCompile + 1 < m_listLexem.size()
+			&& m_listLexem[m_numCurrentCompile + 1].m_lexType == DELIMITER
+			&& m_listLexem[m_numCurrentCompile + 1].m_numData == lex.m_numData
+			&& m_listLexem[m_numCurrentCompile + 1].m_numString == m_listLexem[m_numCurrentCompile].m_numString + 1) {
+			const wxUniChar incOp = lex.m_numData;
+			GETDelimeter(incOp); // consume the second +/-
+			const wxString strRealName = GETIdentifier(true); // target — a bare variable
+			ibParamUnit target = context->GetVariable(strRealName, true, true); // must already exist
+			ibByteUnit incCode;
+			AddLineInfo(incCode);
+			incCode.m_numOper = (incOp == '+') ? OPER_ADD : OPER_SUB;
+			ibValue oneVal; oneVal.SetNumber(wxT("1"));
+			incCode.m_param1 = target;
+			incCode.m_param2 = target;
+			incCode.m_param3 = FindConst(oneVal);
+			m_cByteCode.m_listCode.emplace_back(std::move(incCode));
+			variable = target; // prefix yields the NEW value; rejoin the operator loop
+			goto delimOperation;
+		}
 
 		// Unary sign at expression-start position — always allowed,
 		// regardless of caller's binary-priority context. Earlier this
