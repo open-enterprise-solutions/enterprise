@@ -1,6 +1,7 @@
 #include "propertyList.h"
+#include "backend/serialize/dataBuilder.h"
 
-//get property for grid  	
+//get property for grid
 wxObject* (*ibPropertyList::ms_propertyList)(const wxString&, const wxString&, const wxPGChoices&, const int&) = nullptr;
 
 //base property for "list"
@@ -33,14 +34,14 @@ bool ibPropertyList::GetDataValue(ibValue& pvarPropVal) const
 	return false;
 };
 
-bool ibPropertyList::LoadData(ibReaderMemory& reader)
+bool ibPropertyList::ReadNodeValue(const ibDataValue& value)
 {
-	SetValue((long)reader.r_s32());
+	ibPropertyList::SetValue((long)value.AsInt());
 	return true;
-};
+}
 
-bool ibPropertyList::SaveData(ibWriterMemory& writer)
+bool ibPropertyList::WriteNodeValue(ibDataValue& value) const
 {
-	writer.w_s32(GetValueAsInteger());
+	value = ibDataValue::Int(ibPropertyList::GetValueAsInteger());
 	return true;
-};
+}

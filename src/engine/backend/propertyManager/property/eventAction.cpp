@@ -1,5 +1,6 @@
 #include "eventAction.h"
 #include "backend/propertyManager/property/variant/variantAction.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataValue — node value (Binary, transitional)
 
 // get property for grid
 wxObject* (*ibEventAction::ms_propertyEventAction)(const wxString&, const wxString&, const wxPGChoices&, const wxVariant&) = nullptr;
@@ -69,27 +70,32 @@ bool ibEventAction::GetDataValue(ibValue& pvarPropVal) const
 	return false;
 }
 
-bool ibActionDescriptionMemory::LoadData(ibReaderMemory& reader, ibActionDescription& typeDesc)
+// node form: a Child { Action: <system id>, Name: <custom handler> }.
+bool ibActionDescriptionMemory::ReadNode(const ibDataValue& value, ibActionDescription& actionDesc)
 {
-	typeDesc.m_lAction = reader.r_s32();
-	typeDesc.m_strAction = reader.r_stringZ();
+	const std::shared_ptr<ibDataNode>& root = value.AsChild();
+	if (!root)
+		return false;
+	actionDesc.m_lAction = root->GetValue<s32>(wxT("Action"));
+	actionDesc.m_strAction = root->GetValue<wxString>(wxT("Name"));
 	return true;
 }
 
-bool ibActionDescriptionMemory::SaveData(ibWriterMemory& writer, ibActionDescription& typeDesc)
+bool ibActionDescriptionMemory::WriteNode(ibDataValue& value, const ibActionDescription& actionDesc)
 {
-	writer.w_s32(typeDesc.m_lAction);
-	writer.w_stringZ(typeDesc.m_strAction);
+	auto root = std::make_shared<ibDataNode>();
+	root->SetValue(wxT("Action"), (s32)actionDesc.m_lAction);
+	root->SetValue(wxT("Name"),   actionDesc.m_strAction);
+	value = ibDataValue::Child(root);
 	return true;
 }
 
-
-bool ibEventAction::LoadData(ibReaderMemory& reader)
+bool ibEventAction::ReadNodeValue(const ibDataValue& value)
 {
-	return ibActionDescriptionMemory::LoadData(reader, GetValueAsActionDesc());
+	return ibActionDescriptionMemory::ReadNode(value, GetValueAsActionDesc());
 }
 
-bool ibEventAction::SaveData(ibWriterMemory& writer)
+bool ibEventAction::WriteNodeValue(ibDataValue& value) const
 {
-	return ibActionDescriptionMemory::SaveData(writer, GetValueAsActionDesc());
+	return ibActionDescriptionMemory::WriteNode(value, GetValueAsActionDesc());
 }

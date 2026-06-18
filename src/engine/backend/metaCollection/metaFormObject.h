@@ -69,9 +69,17 @@ public:
 	virtual void SetFormData(const wxMemoryBuffer& formData) = 0;
 	virtual wxMemoryBuffer GetFormData() const = 0;
 
-	// copy form data
-	wxMemoryBuffer CopyFormData() const;
+	// copy form data — the LIVE form's control tree AS a transparent node (Child), not a
+	// blob: pull the live form, save it to a node directly (no base64 round-trip).
+	ibDataValue CopyFormData() const;
 	bool PasteFormData();
+
+	// node <-> runtime-blob shim ("прокладка"): the form blob already IS the binary-provider
+	// node format, so the adapter is ONE provider round-trip. This lets the runtime stay
+	// blob-based (SaveForm / LoadForm, the property cell, the prop-grid variant) while the
+	// metadata serializes a transparent node tree — no base64 lump on disk / in JSON.
+	static ibDataValue   FormBlobToNode(const wxMemoryBuffer& blob);
+	static wxMemoryBuffer FormNodeToBlob(const ibDataValue& formNode);
 
 	/**
 	* Get type form
@@ -81,11 +89,6 @@ public:
 	//prepare menu for item
 	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
 	virtual void ProcessCommand(unsigned int id);
-
-protected:
-
-	virtual bool LoadData(ibReaderMemory& reader) = 0;
-	virtual bool SaveData(ibWriterMemory& writer) = 0;
 };
 
 // -----------------------------------------------------------------------
@@ -143,8 +146,8 @@ public:
 
 protected:
 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) override;
 
 private:
 
@@ -214,10 +217,10 @@ class BACKEND_API ibValueMetaObjectCommonForm :
 
 protected:
 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) override;
 
-	//get default form 
+	//get default form
 	virtual ibBackendValueForm* GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) {
 
 		if (cmdType == ibInterfaceCommandType::ibInterfaceCommandType_Default)

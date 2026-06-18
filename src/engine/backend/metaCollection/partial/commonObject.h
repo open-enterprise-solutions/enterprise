@@ -606,9 +606,8 @@ protected:
 	virtual bool FillArrayObjectBySearched(std::vector<ibValueMetaObjectAttributeBase*>& array) const { return true; }
 
 	//load & save metaData from DB 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
-	virtual bool DeleteData() { return true; }
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) override;
 
 protected:
 
@@ -704,8 +703,8 @@ protected:
 	virtual void ContributeTables(ibSchemaSnapshot& out) const override;
 
 	//load & save metaData from DB
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) override;
 
 private:
 
@@ -813,8 +812,8 @@ protected:
 	virtual void ContributeTables(ibSchemaSnapshot& out) const override;
 
 	//load & save metaData from DB
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) override;
 
 	//create empty object
 	virtual ibValueRecordDataObjectRef* CreateObjectRefValue(const ibGuid& objGuid = wxNullGuid) const = 0; //create object and read by guid
@@ -1012,8 +1011,8 @@ protected:
 	virtual void ContributeTables(ibSchemaSnapshot& out) const override;
 
 	//load & save metaData from DB 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) override;
 
 	//create empty object
 	virtual ibValueRecordDataObjectHierarchyRef* CreateObjectRefValue(ibObjectMode mode, const ibGuid& objGuid = wxNullGuid) const = 0; //create object and read by guid
@@ -1307,9 +1306,8 @@ protected:
 	virtual void ContributeTables(ibSchemaSnapshot& out) const override;
 
 	//load & save metaData from DB
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
-	virtual bool DeleteData() { return true; }
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) override;
 
 protected:
 

@@ -1,5 +1,7 @@
 #include "propertyForm.h"
 #include "backend/propertyManager/property/variant/variantForm.h"
+#include "backend/serialize/dataBuilder.h"          // ibDataValue / ibDataNode
+#include "backend/metaCollection/metaFormObject.h"  // ibValueMetaObjectFormBase — the form-blob<->node shim
 
 #define chunkForm 0x023456543
 
@@ -49,40 +51,53 @@ bool ibPropertyForm::GetDataValue(ibValue& pvarPropVal) const
 	return true;
 }
 
-bool ibPropertyForm::LoadData(ibReaderMemory& reader)
+// node form: a Child { Layout: <control tree, Child>, Module: <module text, String> }.
+// The Layout node comes straight from the form-blob<->node shim — the stored cell keeps
+// its runtime blob, the metadata sees a transparent control-tree subtree.
+bool ibPropertyForm::ReadNodeValue(const ibDataValue& value)
 {
-	reader.r_chunk(chunkForm, GetValueAsMemoryBuffer());
-	ibPropertyForm::SetValue(reader.r_stringZ());
+	const std::shared_ptr<ibDataNode>& root = value.AsChild();
+	if (root) {
+		ibPropertyForm::SetValue(ibValueMetaObjectFormBase::FormNodeToBlob(root->GetProperty(wxT("Layout"))));
+		ibPropertyForm::SetValue(root->GetValue<wxString>(wxT("Module")));
+	}
 	return true;
 }
 
-bool ibPropertyForm::SaveData(ibWriterMemory& writer)
+bool ibPropertyForm::WriteNodeValue(ibDataValue& value) const
 {
-	writer.w_chunk(chunkForm, GetValueAsMemoryBuffer());
-	writer.w_stringZ(GetValueAsString());
+	auto root = std::make_shared<ibDataNode>();
+	root->SetProperty(wxT("Layout"), ibValueMetaObjectFormBase::FormBlobToNode(GetValueAsMemoryBuffer()));
+	root->SetValue(wxT("Module"),    GetValueAsString());
+	value = ibDataValue::Child(root);
 	return true;
 }
 
 //////////////////////////////////////////////////////////
 
-#include "backend/metaCollection/metaFormObject.h"
-
-bool ibPropertyForm::PasteData(ibReaderMemory& reader)
+// clipboard copy pulls the LIVE form (CopyFormData → control tree node), not the stored
+// buffer — the one case where CopyNodeValue differs from WriteNodeValue.
+bool ibPropertyForm::CopyNodeValue(ibDataValue& value) const
 {
 	ibValueMetaObjectFormBase* metaForm = dynamic_cast<ibValueMetaObjectFormBase*>(m_owner);
 	if (metaForm == nullptr) return false;
-	reader.r_chunk(chunkForm, GetValueAsMemoryBuffer());
-	ibPropertyForm::SetValue(reader.r_stringZ());
-	return metaForm->PasteFormData();
+	auto root = std::make_shared<ibDataNode>();
+	root->SetProperty(wxT("Layout"), metaForm->CopyFormData());
+	root->SetValue(wxT("Module"),    GetValueAsString());
+	value = ibDataValue::Child(root);
+	return true;
 }
 
-bool ibPropertyForm::CopyData(ibWriterMemory& writer)
+bool ibPropertyForm::PasteNodeValue(const ibDataValue& value)
 {
 	ibValueMetaObjectFormBase* metaForm = dynamic_cast<ibValueMetaObjectFormBase*>(m_owner);
 	if (metaForm == nullptr) return false;
-	writer.w_chunk(chunkForm, metaForm->CopyFormData());
-	writer.w_stringZ(GetValueAsString());
-	return true;
+	const std::shared_ptr<ibDataNode>& root = value.AsChild();
+	if (root) {
+		ibPropertyForm::SetValue(ibValueMetaObjectFormBase::FormNodeToBlob(root->GetProperty(wxT("Layout"))));
+		ibPropertyForm::SetValue(root->GetValue<wxString>(wxT("Module")));
+	}
+	return metaForm->PasteFormData();
 }
 
 //////////////////////////////////////////////////////////

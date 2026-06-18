@@ -5,6 +5,7 @@
 
 #include "metaSpreadsheetObject.h"
 #include "backend/metaData.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode — per-type node data
 
 
 
@@ -26,28 +27,32 @@ bool ibValueMetaObjectSpreadsheetBase::OnAfterCloseMetaObject()
 //*                           Spreadsheet                               *
 //***********************************************************************
 
-bool ibValueMetaObjectSpreadsheet::LoadData(ibReaderMemory& reader)
+bool ibValueMetaObjectSpreadsheet::ReadData(const ibDataNode& node)
 {
-	return m_propertyTemplate->LoadData(reader);
+	m_propertyTemplate->ReadNodeValue(node.GetProperty(m_propertyTemplate->GetName()));
+	return true;
 }
 
-bool ibValueMetaObjectSpreadsheet::SaveData(ibWriterMemory& writer)
+bool ibValueMetaObjectSpreadsheet::WriteData(ibDataNode& node)
 {
-	return m_propertyTemplate->SaveData(writer);
+	node.SetProperty(m_propertyTemplate->GetName(), m_propertyTemplate->GetNodeValue());
+	return true;
 }
 
 //***********************************************************************
 //*                       Common Spreadsheet							*
 //***********************************************************************
 
-bool ibValueMetaObjectCommonSpreadsheet::LoadData(ibReaderMemory& reader)
+bool ibValueMetaObjectCommonSpreadsheet::ReadData(const ibDataNode& node)
 {
-	return m_propertyTemplate->LoadData(reader);
+	m_propertyTemplate->ReadNodeValue(node.GetProperty(m_propertyTemplate->GetName()));
+	return true;
 }
 
-bool ibValueMetaObjectCommonSpreadsheet::SaveData(ibWriterMemory& writer)
+bool ibValueMetaObjectCommonSpreadsheet::WriteData(ibDataNode& node)
 {
-	return m_propertyTemplate->SaveData(writer);
+	node.SetProperty(m_propertyTemplate->GetName(), m_propertyTemplate->GetNodeValue());
+	return true;
 }
 
 //***********************************************************************

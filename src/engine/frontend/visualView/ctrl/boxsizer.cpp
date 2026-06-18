@@ -1,4 +1,5 @@
 #include "sizer.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #ifdef OES_USE_WEB
 #include "frontend/web/webSizer.h"
 #endif
@@ -52,16 +53,16 @@ void ibValueBoxSizer::Cleanup(wxObject* obj, ibVisualHost *visualHost)
 //*                            Data									*
 //*******************************************************************
 
-bool ibValueBoxSizer::LoadData(ibReaderMemory &reader)
+bool ibValueBoxSizer::ReadData(const ibDataNode& node)
 {
-	m_propertyOrient->SetValue(reader.r_u16());
-	return ibValueSizer::LoadData(reader);
+	m_propertyOrient->ReadNodeValue(node.GetProperty(m_propertyOrient->GetName()));
+	return ibValueSizer::ReadData(node);
 }
 
-bool ibValueBoxSizer::SaveData(ibWriterMemory& writer)
+bool ibValueBoxSizer::WriteData(ibDataNode& node) const
 {
-	writer.w_u16(m_propertyOrient->GetValueAsInteger());
-	return ibValueSizer::SaveData(writer);
+	node.SetProperty(m_propertyOrient->GetName(), m_propertyOrient->GetNodeValue());
+	return ibValueSizer::WriteData(node);
 }
 
 //***********************************************************************

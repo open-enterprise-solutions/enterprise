@@ -1,5 +1,6 @@
 
 #include "widgets.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "backend/compiler/procUnit.h"
 
 
@@ -44,12 +45,12 @@ void ibValueListBox::Cleanup(wxObject* obj, ibVisualHost* visualHost)
 //*								Data	                            *
 //*******************************************************************
 
-bool ibValueListBox::LoadData(ibReaderMemory& reader)
+bool ibValueListBox::ReadData(const ibDataNode& node)
 {
-	return ibValueWindow::LoadData(reader);
+	return ibValueWindow::ReadData(node);
 }
 
-bool ibValueListBox::SaveData(ibWriterMemory& writer)
+bool ibValueListBox::WriteData(ibDataNode& node) const
 {
-	return ibValueWindow::SaveData(writer);
+	return ibValueWindow::WriteData(node);
 }

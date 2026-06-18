@@ -23,10 +23,10 @@ bool ibValueMetaObjectConstant::CreateConstantSQLTable()
 	ibDatabaseQueryBuilder q;
 	if (!q.TableExists(ibValueMetaObjectConstant::GetPhysicalTableName())) {
 
-		if (q.Execute(ibCreateTable(ibValueMetaObjectConstant::GetPhysicalTableName(), {
+		// A real failure THROWS; the DDL affected-row count (0) is not an error.
+		q.Execute(ibCreateTable(ibValueMetaObjectConstant::GetPhysicalTableName(), {
 				{ wxT("RECORD_KEY"), ibTypeChar(1), /*notNull*/false, /*pk*/true, wxT("'6'") },
-			})) == DATABASE_LAYER_QUERY_RESULT_ERROR)
-			return false;
+			}));
 		// The single '6' key row is created on demand by the data restore's UPSERT (the L3-3 mover keys
 		// sys_const on its RECORD_KEY primary key) — no up-front seed row needed.
 	}
@@ -40,8 +40,8 @@ bool ibValueMetaObjectConstant::DeleteConstantSQLTable()
 	ibDatabaseQueryBuilder q;
 	if (q.TableExists(ibValueMetaObjectConstant::GetPhysicalTableName())) {
 
-		if (q.Execute(ibDropTable(ibValueMetaObjectConstant::GetPhysicalTableName())) == DATABASE_LAYER_QUERY_RESULT_ERROR)
-			return false;
+		// A real failure THROWS; the DDL affected-row count (0) is not an error.
+		q.Execute(ibDropTable(ibValueMetaObjectConstant::GetPhysicalTableName()));
 	}
 
 	return q.IsOpen();

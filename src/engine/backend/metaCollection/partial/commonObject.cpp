@@ -9,6 +9,7 @@
 #include "backend/system/systemManager.h"
 #include "backend/objCtor.h"
 #include "backend/session/session.h"
+#include "backend/serialize/dataBuilder.h"   // node serialization (WriteData / ReadData)
 
 #include "backend/query/queryableHooks.h"   // light L4 source registration hooks (no appData / factory include here)
 
@@ -274,27 +275,21 @@ ibValueMetaObjectRecordDataRef::~ibValueMetaObjectRecordDataRef()
 //*                       Save & load metaData                              *
 //***************************************************************************
 
-bool ibValueMetaObjectRecordDataRef::LoadData(ibReaderMemory& dataReader)
+// Node form. Base ibValueMetaObjectRecordData has no data of its own, so the chain
+// bottoms out HERE — no base WriteData call (it would hit the $data bridge).
+
+bool ibValueMetaObjectRecordDataRef::ReadData(const ibDataNode& node)
 {
-	//get quick choice
-	m_propertyQuickChoice->SetValue(dataReader.r_u8());
-
-	//load default attributes:
-	(*m_propertyAttributeReference)->LoadMeta(dataReader);
-
-	return ibValueMetaObjectRecordData::LoadData(dataReader);
+	m_propertyQuickChoice->ReadNodeValue(node.GetProperty(m_propertyQuickChoice->GetName()));
+	m_propertyAttributeReference->ReadNodeValue(node.GetProperty(m_propertyAttributeReference->GetName()));
+	return true;
 }
 
-bool ibValueMetaObjectRecordDataRef::SaveData(ibWriterMemory& dataWritter)
+bool ibValueMetaObjectRecordDataRef::WriteData(ibDataNode& node)
 {
-	//set quick choice
-	dataWritter.w_u8(m_propertyQuickChoice->GetValueAsBoolean());
-
-	//save default attributes:
-	(*m_propertyAttributeReference)->SaveMeta(dataWritter);
-
-	//create or update table:
-	return ibValueMetaObjectRecordData::SaveData(dataWritter);
+	node.SetProperty(m_propertyQuickChoice->GetName(), m_propertyQuickChoice->GetNodeValue());
+	node.SetProperty(m_propertyAttributeReference->GetName(), m_propertyAttributeReference->GetNodeValue());
+	return true;
 }
 
 //***********************************************************************
@@ -427,18 +422,16 @@ ibValueMetaObjectRecordDataEnumRef::~ibValueMetaObjectRecordDataEnumRef()
 //*                       Save & load metaData                              *
 //***************************************************************************
 
-bool ibValueMetaObjectRecordDataEnumRef::LoadData(ibReaderMemory& dataReader)
+bool ibValueMetaObjectRecordDataEnumRef::WriteData(ibDataNode& node)
 {
-	//load default attributes:
-	(*m_propertyAttributeOrder)->LoadMeta(dataReader);
-	return ibValueMetaObjectRecordDataRef::LoadData(dataReader);
+	node.SetProperty(m_propertyAttributeOrder->GetName(), m_propertyAttributeOrder->GetNodeValue());
+	return ibValueMetaObjectRecordDataRef::WriteData(node);
 }
 
-bool ibValueMetaObjectRecordDataEnumRef::SaveData(ibWriterMemory& dataWritter)
+bool ibValueMetaObjectRecordDataEnumRef::ReadData(const ibDataNode& node)
 {
-	//save default attributes:
-	(*m_propertyAttributeOrder)->SaveMeta(dataWritter);
-	return ibValueMetaObjectRecordDataRef::SaveData(dataWritter);
+	m_propertyAttributeOrder->ReadNodeValue(node.GetProperty(m_propertyAttributeOrder->GetName()));
+	return ibValueMetaObjectRecordDataRef::ReadData(node);
 }
 
 //***********************************************************************
@@ -525,29 +518,24 @@ ibValueMetaObjectRecordDataMutableRef::~ibValueMetaObjectRecordDataMutableRef()
 //*                       Save & load metaData                              *
 //***************************************************************************
 
-bool ibValueMetaObjectRecordDataMutableRef::LoadData(ibReaderMemory& dataReader)
+bool ibValueMetaObjectRecordDataMutableRef::WriteData(ibDataNode& node)
 {
-	//load default attributes:
-	(*m_propertyAttributeDataVersion)->LoadMeta(dataReader);
-	(*m_propertyAttributeDeletionMark)->LoadMeta(dataReader);
-
-	if (!ibValueMetaObjectRecordDataRef::LoadData(dataReader))
+	node.SetProperty(m_propertyAttributeDataVersion->GetName(), m_propertyAttributeDataVersion->GetNodeValue());
+	node.SetProperty(m_propertyAttributeDeletionMark->GetName(), m_propertyAttributeDeletionMark->GetNodeValue());
+	if (!ibValueMetaObjectRecordDataRef::WriteData(node))
 		return false;
-
-	return m_propertyGeneration->LoadData(dataReader);
+	node.SetProperty(m_propertyGeneration->GetName(), m_propertyGeneration->GetNodeValue());
+	return true;
 }
 
-bool ibValueMetaObjectRecordDataMutableRef::SaveData(ibWriterMemory& dataWritter)
+bool ibValueMetaObjectRecordDataMutableRef::ReadData(const ibDataNode& node)
 {
-	//save default attributes:
-	(*m_propertyAttributeDataVersion)->SaveMeta(dataWritter);
-	(*m_propertyAttributeDeletionMark)->SaveMeta(dataWritter);
-
-	//create or update table:
-	if (!ibValueMetaObjectRecordDataRef::SaveData(dataWritter))
+	m_propertyAttributeDataVersion->ReadNodeValue(node.GetProperty(m_propertyAttributeDataVersion->GetName()));
+	m_propertyAttributeDeletionMark->ReadNodeValue(node.GetProperty(m_propertyAttributeDeletionMark->GetName()));
+	if (!ibValueMetaObjectRecordDataRef::ReadData(node))
 		return false;
-
-	return m_propertyGeneration->SaveData(dataWritter);
+	m_propertyGeneration->ReadNodeValue(node.GetProperty(m_propertyGeneration->GetName()));
+	return true;
 }
 
 //***********************************************************************
@@ -808,69 +796,54 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::DeletePredefinedValue(const
 //*                       Save & load metaData                              *
 //***************************************************************************
 
-bool ibValueMetaObjectRecordDataHierarchyMutableRef::LoadData(ibReaderMemory& dataReader)
+bool ibValueMetaObjectRecordDataHierarchyMutableRef::WriteData(ibDataNode& node)
 {
-	//load predefined value 
-	wxMemoryBuffer predefined_buffer;
-	if (!dataReader.r_chunk(predefinedBlock, predefined_buffer))
-		return false;
-
-	ibReaderMemory predefinedReader(predefined_buffer);
-
-	unsigned int size = predefinedReader.r_u32();
-	for (unsigned int i = 0; i < size; i++)
-	{
-		const ibGuid& valueGuid =
-			predefinedReader.r_stringZ();
-
-		wxString valueName = predefinedReader.r_stringZ();
-		wxString valueCode = predefinedReader.r_stringZ();
-		wxString valueDescription = predefinedReader.r_stringZ();
-
-		bool valueIsFolder = predefinedReader.r_u8();
-
-		m_predefinedObjectVector.emplace_back(
-			new ibPredefinedValueObject(valueGuid, valueName, valueCode, valueDescription));
+	// predefined values -> an Array of Child{ guid, name, code, description, isFolder }
+	std::vector<ibDataValue> predefined;
+	for (const auto& value : m_predefinedObjectVector) {
+		auto pv = std::make_shared<ibDataNode>();
+		pv->SetValue(wxT("Guid"), value->GetPredefinedGuid());
+		pv->SetValue(wxT("Name"), value->GetPredefinedName());
+		pv->SetValue(wxT("Code"), value->GetPredefinedCode());
+		pv->SetValue(wxT("Description"), value->GetPredefinedDescription());
+		pv->SetValue(wxT("IsFolder"), (bool)value->IsPredefinedFolder());
+		predefined.push_back(ibDataValue::Child(pv));
 	}
+	node.SetProperty(wxT("Predefined"), ibDataValue::Array(predefined));
 
-	//load default attributes:
-	(*m_propertyAttributePredefined)->LoadMeta(dataReader);
-	(*m_propertyAttributeCode)->LoadMeta(dataReader);
-	(*m_propertyAttributeDescription)->LoadMeta(dataReader);
-	(*m_propertyAttributeParent)->LoadMeta(dataReader);
-	(*m_propertyAttributeIsFolder)->LoadMeta(dataReader);
+	node.SetProperty(m_propertyAttributePredefined->GetName(), m_propertyAttributePredefined->GetNodeValue());
+	node.SetProperty(m_propertyAttributeCode->GetName(), m_propertyAttributeCode->GetNodeValue());
+	node.SetProperty(m_propertyAttributeDescription->GetName(), m_propertyAttributeDescription->GetNodeValue());
+	node.SetProperty(m_propertyAttributeParent->GetName(), m_propertyAttributeParent->GetNodeValue());
+	node.SetProperty(m_propertyAttributeIsFolder->GetName(), m_propertyAttributeIsFolder->GetNodeValue());
 
-	return ibValueMetaObjectRecordDataMutableRef::LoadData(dataReader);
+	return ibValueMetaObjectRecordDataMutableRef::WriteData(node);
 }
 
-bool ibValueMetaObjectRecordDataHierarchyMutableRef::SaveData(ibWriterMemory& dataWritter)
+bool ibValueMetaObjectRecordDataHierarchyMutableRef::ReadData(const ibDataNode& node)
 {
-	//save predefined value 
-	ibWriterMemory predefinedWritter;
-	predefinedWritter.w_u32(m_predefinedObjectVector.size());
-
-	for (const auto& value : m_predefinedObjectVector)
-	{
-		predefinedWritter.w_stringZ(value->GetPredefinedGuid());
-		predefinedWritter.w_stringZ(value->GetPredefinedName());
-
-		predefinedWritter.w_stringZ(value->GetPredefinedCode());
-		predefinedWritter.w_stringZ(value->GetPredefinedDescription());
-
-		predefinedWritter.w_u8(value->IsPredefinedFolder());
+	const ibDataValue predefinedVal = node.GetProperty(wxT("Predefined"));
+	if (predefinedVal.Kind() == ibDataKind::Array) {
+		for (const ibDataValue& item : predefinedVal.AsArray()) {
+			const std::shared_ptr<ibDataNode>& pv = item.AsChild();
+			if (!pv)
+				continue;
+			const ibGuid valueGuid = pv->GetValue<ibGuid>(wxT("Guid"));
+			wxString valueName = pv->GetValue<wxString>(wxT("Name"));
+			wxString valueCode = pv->GetValue<wxString>(wxT("Code"));
+			wxString valueDescription = pv->GetValue<wxString>(wxT("Description"));
+			m_predefinedObjectVector.emplace_back(
+				new ibPredefinedValueObject(valueGuid, valueName, valueCode, valueDescription));
+		}
 	}
 
-	dataWritter.w_chunk(predefinedBlock, predefinedWritter.buffer());
+	m_propertyAttributePredefined->ReadNodeValue(node.GetProperty(m_propertyAttributePredefined->GetName()));
+	m_propertyAttributeCode->ReadNodeValue(node.GetProperty(m_propertyAttributeCode->GetName()));
+	m_propertyAttributeDescription->ReadNodeValue(node.GetProperty(m_propertyAttributeDescription->GetName()));
+	m_propertyAttributeParent->ReadNodeValue(node.GetProperty(m_propertyAttributeParent->GetName()));
+	m_propertyAttributeIsFolder->ReadNodeValue(node.GetProperty(m_propertyAttributeIsFolder->GetName()));
 
-	//save default attributes:
-	(*m_propertyAttributePredefined)->SaveMeta(dataWritter);
-	(*m_propertyAttributeCode)->SaveMeta(dataWritter);
-	(*m_propertyAttributeDescription)->SaveMeta(dataWritter);
-	(*m_propertyAttributeParent)->SaveMeta(dataWritter);
-	(*m_propertyAttributeIsFolder)->SaveMeta(dataWritter);
-
-	//create or update table:
-	return ibValueMetaObjectRecordDataMutableRef::SaveData(dataWritter);
+	return ibValueMetaObjectRecordDataMutableRef::ReadData(node);
 }
 
 //***********************************************************************
@@ -1082,27 +1055,23 @@ ibValueMetaObjectRegisterData::~ibValueMetaObjectRegisterData()
 //*                       Save & load metaData                              *
 //***************************************************************************
 
-bool ibValueMetaObjectRegisterData::LoadData(ibReaderMemory& dataReader)
+// Base ibValueMetaObjectGenericData has no data of its own — chain bottoms here.
+bool ibValueMetaObjectRegisterData::WriteData(ibDataNode& node)
 {
-	//load default attributes:
-	(*m_propertyAttributeLineActive)->LoadMeta(dataReader);
-	(*m_propertyAttributePeriod)->LoadMeta(dataReader);
-	(*m_propertyAttributeRecorder)->LoadMeta(dataReader);
-	(*m_propertyAttributeLineNumber)->LoadMeta(dataReader);
-
-	return ibValueMetaObjectGenericData::LoadData(dataReader);
+	node.SetProperty(m_propertyAttributeLineActive->GetName(), m_propertyAttributeLineActive->GetNodeValue());
+	node.SetProperty(m_propertyAttributePeriod->GetName(), m_propertyAttributePeriod->GetNodeValue());
+	node.SetProperty(m_propertyAttributeRecorder->GetName(), m_propertyAttributeRecorder->GetNodeValue());
+	node.SetProperty(m_propertyAttributeLineNumber->GetName(), m_propertyAttributeLineNumber->GetNodeValue());
+	return true;
 }
 
-bool ibValueMetaObjectRegisterData::SaveData(ibWriterMemory& dataWritter)
+bool ibValueMetaObjectRegisterData::ReadData(const ibDataNode& node)
 {
-	//save default attributes:
-	(*m_propertyAttributeLineActive)->SaveMeta(dataWritter);
-	(*m_propertyAttributePeriod)->SaveMeta(dataWritter);
-	(*m_propertyAttributeRecorder)->SaveMeta(dataWritter);
-	(*m_propertyAttributeLineNumber)->SaveMeta(dataWritter);
-
-	//create or update table:
-	return ibValueMetaObjectGenericData::SaveData(dataWritter);
+	m_propertyAttributeLineActive->ReadNodeValue(node.GetProperty(m_propertyAttributeLineActive->GetName()));
+	m_propertyAttributePeriod->ReadNodeValue(node.GetProperty(m_propertyAttributePeriod->GetName()));
+	m_propertyAttributeRecorder->ReadNodeValue(node.GetProperty(m_propertyAttributeRecorder->GetName()));
+	m_propertyAttributeLineNumber->ReadNodeValue(node.GetProperty(m_propertyAttributeLineNumber->GetName()));
+	return true;
 }
 
 //***********************************************************************

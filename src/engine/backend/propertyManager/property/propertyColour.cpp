@@ -1,4 +1,5 @@
 #include "propertyColour.h"
+#include "backend/serialize/dataBuilder.h"
 #include "backend/system/value/valueColour.h"
 
 // get property for grid	
@@ -20,14 +21,14 @@ bool ibPropertyColour::GetDataValue(ibValue& pvarPropVal) const
 	return true;
 }
 
-bool ibPropertyColour::LoadData(ibReaderMemory& reader)
+bool ibPropertyColour::ReadNodeValue(const ibDataValue& value)
 {
-	SetValue(reader.r_stringZ());
+	ibPropertyColour::SetValue(value.AsString());
 	return true;
 }
 
-bool ibPropertyColour::SaveData(ibWriterMemory& writer)
+bool ibPropertyColour::WriteNodeValue(ibDataValue& value) const
 {
-	writer.w_stringZ(ibPropertyColour::GetValueAsString());
+	value = ibDataValue::String(ibPropertyColour::GetValueAsString());
 	return true;
 }

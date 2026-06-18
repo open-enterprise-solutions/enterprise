@@ -1,4 +1,5 @@
 #include "propertyString.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode — readable String node value
 
 // get property for grid
 wxObject* (*ibPropertyStringBase::ms_propertyString)(const wxString&, const wxString&, const wxString&) = nullptr;
@@ -20,14 +21,14 @@ bool ibPropertyStringBase::GetDataValue(ibValue& pvarPropVal) const
 	return true;
 }
 
-bool ibPropertyStringBase::LoadData(ibReaderMemory& reader)
+bool ibPropertyStringBase::ReadNodeValue(const ibDataValue& value)
 {
-	ibPropertyStringBase::SetValue(reader.r_stringZ());
+	ibPropertyStringBase::SetValue(value.AsString()); // AsString validates kind (Empty -> default "")
 	return true;
 }
 
-bool ibPropertyStringBase::SaveData(ibWriterMemory& writer)
+bool ibPropertyStringBase::WriteNodeValue(ibDataValue& value) const
 {
-	writer.w_stringZ(ibPropertyStringBase::GetValueAsString());
+	value = ibDataValue::String(ibPropertyStringBase::GetValueAsString());
 	return true;
 }

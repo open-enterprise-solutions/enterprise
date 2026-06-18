@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "constant.h"
+#include "backend/serialize/dataBuilder.h"
 #include "backend/metaData.h"
 #include "backend/query/queryableHooks.h"   // light L4 source registration hooks (no appData / factory include here)
 
@@ -29,25 +30,18 @@ ibValueMetaObjectConstant::~ibValueMetaObjectConstant()
 {
 }
 
-bool ibValueMetaObjectConstant::LoadData(ibReaderMemory& dataReader)
+bool ibValueMetaObjectConstant::ReadData(const ibDataNode& node)
 {
-	//load object module
-	m_propertyModule->GetMetaObject()->LoadMeta(dataReader);
+	m_propertyModule->ReadNodeValue(node.GetProperty(m_propertyModule->GetName()));
 
-	return ibValueMetaObjectAttribute::LoadData(dataReader);
+	return ibValueMetaObjectAttribute::ReadData(node);
 }
 
-bool ibValueMetaObjectConstant::SaveData(ibWriterMemory& dataWritter)
+bool ibValueMetaObjectConstant::WriteData(ibDataNode& node)
 {
-	//save object module
-	m_propertyModule->GetMetaObject()->SaveMeta(dataWritter);
+	node.SetProperty(m_propertyModule->GetName(), m_propertyModule->GetNodeValue());
 
-	return ibValueMetaObjectAttribute::SaveData(dataWritter);
-}
-
-bool ibValueMetaObjectConstant::DeleteData()
-{
-	return ibValueMetaObjectAttribute::DeleteData();
+	return ibValueMetaObjectAttribute::WriteData(node);
 }
 
 //***********************************************************************

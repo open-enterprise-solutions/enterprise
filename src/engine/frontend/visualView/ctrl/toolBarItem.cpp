@@ -1,4 +1,5 @@
 #include "toolbar.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "backend/appData.h"
 #ifdef OES_USE_WEB
 #include "frontend/web/webWindow.h"
@@ -374,44 +375,44 @@ bool ibValueToolBarSeparator::CanDeleteControl() const
 //*                                  Data	                                       *
 //**********************************************************************************
 
-bool ibValueToolBarItem::LoadData(ibReaderMemory& reader)
+bool ibValueToolBarItem::ReadData(const ibDataNode& node)
 {
-	m_propertyTitle->LoadData(reader);
-	m_propertyPicture->LoadData(reader);
-	m_propertyRepresentation->LoadData(reader);
-	m_propertyContextMenu->LoadData(reader);
-	m_properyTooltip->LoadData(reader);
-	m_propertyEnabled->LoadData(reader);
-	m_eventAction->LoadData(reader);
+	m_propertyTitle->ReadNodeValue(node.GetProperty(m_propertyTitle->GetName()));
+	m_propertyPicture->ReadNodeValue(node.GetProperty(m_propertyPicture->GetName()));
+	m_propertyRepresentation->ReadNodeValue(node.GetProperty(m_propertyRepresentation->GetName()));
+	m_propertyContextMenu->ReadNodeValue(node.GetProperty(m_propertyContextMenu->GetName()));
+	m_properyTooltip->ReadNodeValue(node.GetProperty(m_properyTooltip->GetName()));
+	m_propertyEnabled->ReadNodeValue(node.GetProperty(m_propertyEnabled->GetName()));
+	m_eventAction->ReadNodeValue(node.GetProperty(m_eventAction->GetName()));
 
 	//events 
-	m_eventAction->LoadData(reader);
-	return ibValueControl::LoadData(reader);
+	m_eventAction->ReadNodeValue(node.GetProperty(m_eventAction->GetName()));
+	return ibValueControl::ReadData(node);
 }
 
-bool ibValueToolBarItem::SaveData(ibWriterMemory& writer)
+bool ibValueToolBarItem::WriteData(ibDataNode& node) const
 {
-	m_propertyTitle->SaveData(writer);
-	m_propertyPicture->SaveData(writer);
-	m_propertyRepresentation->SaveData(writer);
-	m_propertyContextMenu->SaveData(writer);
-	m_properyTooltip->SaveData(writer);
-	m_propertyEnabled->SaveData(writer);
-	m_eventAction->SaveData(writer);
+	node.SetProperty(m_propertyTitle->GetName(), m_propertyTitle->GetNodeValue());
+	node.SetProperty(m_propertyPicture->GetName(), m_propertyPicture->GetNodeValue());
+	node.SetProperty(m_propertyRepresentation->GetName(), m_propertyRepresentation->GetNodeValue());
+	node.SetProperty(m_propertyContextMenu->GetName(), m_propertyContextMenu->GetNodeValue());
+	node.SetProperty(m_properyTooltip->GetName(), m_properyTooltip->GetNodeValue());
+	node.SetProperty(m_propertyEnabled->GetName(), m_propertyEnabled->GetNodeValue());
+	node.SetProperty(m_eventAction->GetName(), m_eventAction->GetNodeValue());
 
 	//events 
-	m_eventAction->SaveData(writer);
-	return ibValueControl::SaveData(writer);
+	node.SetProperty(m_eventAction->GetName(), m_eventAction->GetNodeValue());
+	return ibValueControl::WriteData(node);
 }
 
-bool ibValueToolBarSeparator::LoadData(ibReaderMemory& reader)
+bool ibValueToolBarSeparator::ReadData(const ibDataNode& node)
 {
-	return ibValueControl::LoadData(reader);
+	return ibValueControl::ReadData(node);
 }
 
-bool ibValueToolBarSeparator::SaveData(ibWriterMemory& writer)
+bool ibValueToolBarSeparator::WriteData(ibDataNode& node) const
 {
-	return ibValueControl::SaveData(writer);
+	return ibValueControl::WriteData(node);
 }
 
 //***********************************************************************

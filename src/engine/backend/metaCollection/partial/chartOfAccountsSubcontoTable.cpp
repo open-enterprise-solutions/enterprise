@@ -6,6 +6,7 @@
 #include "chartOfAccountsSubcontoTable.h"
 #include "backend/metaData.h"
 #include "backend/objCtor.h"   // tabular value-ctor register macros (registerTabularSection / _String)
+#include "backend/serialize/dataBuilder.h"   // ibDataNode — per-type node data
 
 
 ibValueMetaObjectSubcontoKindsTable::ibValueMetaObjectSubcontoKindsTable(const wxString& name, const wxString& synonym, const wxString& comment)
@@ -25,24 +26,21 @@ ibValueMetaObjectSubcontoKindsTable::~ibValueMetaObjectSubcontoKindsTable()
 {
 }
 
-bool ibValueMetaObjectSubcontoKindsTable::LoadData(ibReaderMemory& dataReader)
+// predefined columns as Child sub-nodes + the base table data (NumberLine + Use).
+bool ibValueMetaObjectSubcontoKindsTable::WriteData(ibDataNode& node)
 {
-	//load default attributes:
-	(*m_propertySubcontoKind)->LoadMeta(dataReader);
-	(*m_propertyOrder)->LoadMeta(dataReader);
-	(*m_propertySummaryOnly)->LoadMeta(dataReader);
-
-	return ibValueMetaObjectTableData::LoadData(dataReader);
+	node.SetProperty(m_propertySubcontoKind->GetName(), m_propertySubcontoKind->GetNodeValue());
+	node.SetProperty(m_propertyOrder->GetName(),        m_propertyOrder->GetNodeValue());
+	node.SetProperty(m_propertySummaryOnly->GetName(),  m_propertySummaryOnly->GetNodeValue());
+	return ibValueMetaObjectTableData::WriteData(node);
 }
 
-bool ibValueMetaObjectSubcontoKindsTable::SaveData(ibWriterMemory& dataWritter)
+bool ibValueMetaObjectSubcontoKindsTable::ReadData(const ibDataNode& node)
 {
-	//save default attributes:
-	(*m_propertySubcontoKind)->SaveMeta(dataWritter);
-	(*m_propertyOrder)->SaveMeta(dataWritter);
-	(*m_propertySummaryOnly)->SaveMeta(dataWritter);
-
-	return ibValueMetaObjectTableData::SaveData(dataWritter);
+	m_propertySubcontoKind->ReadNodeValue(node.GetProperty(m_propertySubcontoKind->GetName()));
+	m_propertyOrder->ReadNodeValue(node.GetProperty(m_propertyOrder->GetName()));
+	m_propertySummaryOnly->ReadNodeValue(node.GetProperty(m_propertySummaryOnly->GetName()));
+	return ibValueMetaObjectTableData::ReadData(node);
 }
 
 bool ibValueMetaObjectSubcontoKindsTable::OnCreateMetaObject(ibMetaData* metaData, int flags)

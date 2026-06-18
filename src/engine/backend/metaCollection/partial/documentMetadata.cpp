@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "document.h"
+#include "backend/serialize/dataBuilder.h"
 #include "list/objectList.h"
 #include "backend/metaData.h"
 #include "backend/moduleManager/moduleManager.h"
@@ -150,49 +151,40 @@ wxString ibValueMetaObjectDocument::GetDataPresentation(const ibValueDataObject*
 //*                       Save & load metaData                              *
 //***************************************************************************
 
-bool ibValueMetaObjectDocument::LoadData(ibReaderMemory& dataReader)
+bool ibValueMetaObjectDocument::WriteData(ibDataNode& node)
 {
-	//load default attributes:
-	(*m_propertyAttributeNumber)->LoadMeta(dataReader);
-	(*m_propertyAttributeDate)->LoadMeta(dataReader);
-	(*m_propertyAttributePosted)->LoadMeta(dataReader);
+	node.SetProperty(m_propertyAttributeNumber->GetName(), m_propertyAttributeNumber->GetNodeValue());
+	node.SetProperty(m_propertyAttributeDate->GetName(), m_propertyAttributeDate->GetNodeValue());
+	node.SetProperty(m_propertyAttributePosted->GetName(), m_propertyAttributePosted->GetNodeValue());
 
-	//load object module
-	(*m_propertyObjectModule)->LoadMeta(dataReader);
-	(*m_propertyManagerModule)->LoadMeta(dataReader);
+	node.SetProperty(m_propertyObjectModule->GetName(), m_propertyObjectModule->GetNodeValue());
+	node.SetProperty(m_propertyManagerModule->GetName(), m_propertyManagerModule->GetNodeValue());
 
-	//load default form 
-	m_propertyDefFormObject->SetValue(GetIdByGuid(dataReader.r_stringZ()));
-	m_propertyDefFormList->SetValue(GetIdByGuid(dataReader.r_stringZ()));
-	m_propertyDefFormSelect->SetValue(GetIdByGuid(dataReader.r_stringZ()));
+	node.SetValue(m_propertyDefFormObject->GetName(), GetGuidByID(m_propertyDefFormObject->GetValueAsInteger()).str());
+	node.SetValue(m_propertyDefFormList->GetName(), GetGuidByID(m_propertyDefFormList->GetValueAsInteger()).str());
+	node.SetValue(m_propertyDefFormSelect->GetName(), GetGuidByID(m_propertyDefFormSelect->GetValueAsInteger()).str());
 
-	if (!m_propertyRegisterRecord->LoadData(dataReader))
-		return false;
+	node.SetProperty(m_propertyRegisterRecord->GetName(), m_propertyRegisterRecord->GetNodeValue());
 
-	return ibValueMetaObjectRecordDataMutableRef::LoadData(dataReader);
+	return ibValueMetaObjectRecordDataMutableRef::WriteData(node);
 }
 
-bool ibValueMetaObjectDocument::SaveData(ibWriterMemory& dataWritter)
+bool ibValueMetaObjectDocument::ReadData(const ibDataNode& node)
 {
-	//save default attributes:
-	(*m_propertyAttributeNumber)->SaveMeta(dataWritter);
-	(*m_propertyAttributeDate)->SaveMeta(dataWritter);
-	(*m_propertyAttributePosted)->SaveMeta(dataWritter);
+	m_propertyAttributeNumber->ReadNodeValue(node.GetProperty(m_propertyAttributeNumber->GetName()));
+	m_propertyAttributeDate->ReadNodeValue(node.GetProperty(m_propertyAttributeDate->GetName()));
+	m_propertyAttributePosted->ReadNodeValue(node.GetProperty(m_propertyAttributePosted->GetName()));
 
-	//save object module
-	(*m_propertyObjectModule)->SaveMeta(dataWritter);
-	(*m_propertyManagerModule)->SaveMeta(dataWritter);
+	m_propertyObjectModule->ReadNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
+	m_propertyManagerModule->ReadNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
 
-	//save default form 
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormObject->GetValueAsInteger()));
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormList->GetValueAsInteger()));
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormSelect->GetValueAsInteger()));
+	m_propertyDefFormObject->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormObject->GetName())));
+	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormList->GetName())));
+	m_propertyDefFormSelect->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormSelect->GetName())));
 
-	if (!m_propertyRegisterRecord->SaveData(dataWritter))
-		return false;
+	m_propertyRegisterRecord->ReadNodeValue(node.GetProperty(m_propertyRegisterRecord->GetName()));
 
-	//create or update table:
-	return ibValueMetaObjectRecordDataMutableRef::SaveData(dataWritter);
+	return ibValueMetaObjectRecordDataMutableRef::ReadData(node);
 }
 
 //***********************************************************************

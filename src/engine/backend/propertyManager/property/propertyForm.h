@@ -40,12 +40,12 @@ public:
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
 
 	//load & save object in control 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+	virtual bool ReadNodeValue(const ibDataValue& value) override;
+	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
-	//copy & paste object in control 
-	virtual bool PasteData(ibReaderMemory& reader);
-	virtual bool CopyData(ibWriterMemory& writer);
+	//copy & paste — pulls the LIVE form data (not the stored buffer)
+	virtual bool CopyNodeValue(ibDataValue& value) const override;
+	virtual bool PasteNodeValue(const ibDataValue& value) override;
 
 public:
 

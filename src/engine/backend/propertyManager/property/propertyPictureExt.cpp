@@ -1,5 +1,6 @@
 #include "propertyPicture.h"
 #include "backend/propertyManager/property/variant/variantPicture.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataValue — node value (Binary, transitional)
 
 ////////////////////////////////////////////////////////////////////////
 
@@ -51,12 +52,12 @@ bool ibPropertyExternalPicture::GetDataValue(ibValue& pvarPropVal) const
 	return true;
 }
 
-bool ibPropertyExternalPicture::LoadData(ibReaderMemory& reader)
+bool ibPropertyExternalPicture::ReadNodeValue(const ibDataValue& value)
 {
-	return ibExternalPictureDescriptionMemory::LoadData(reader, GetValueAsPictureDesc());
+	return ibExternalPictureDescriptionMemory::ReadNode(value, GetValueAsPictureDesc());
 }
 
-bool ibPropertyExternalPicture::SaveData(ibWriterMemory& writer)
+bool ibPropertyExternalPicture::WriteNodeValue(ibDataValue& value) const
 {
-	return ibExternalPictureDescriptionMemory::SaveData(writer, GetValueAsPictureDesc());
-}
+	return ibExternalPictureDescriptionMemory::WriteNode(value, GetValueAsPictureDesc());
+}

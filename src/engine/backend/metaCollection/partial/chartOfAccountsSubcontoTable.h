@@ -31,6 +31,9 @@ class ibValueMetaObjectSubcontoKindsTable : public ibValueMetaObjectTableData {
 	virtual bool OnBeforeCloseMetaObject();
 	virtual bool OnAfterCloseMetaObject();
 
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) override;
+
 protected:
 
 	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const override {
@@ -44,8 +47,6 @@ protected:
 	}
 
 	//load & save metaData from DB
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
 
 private:
 

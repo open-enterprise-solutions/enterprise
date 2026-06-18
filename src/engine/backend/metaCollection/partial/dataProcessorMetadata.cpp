@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "dataProcessor.h"
+#include "backend/serialize/dataBuilder.h"
 #include "backend/metaData.h"
 #include "backend/metadataDataProcessor.h"
 #include "backend/moduleManager/moduleManagerExt.h"
@@ -87,28 +88,24 @@ ibBackendValueForm* ibValueMetaObjectDataProcessor::GetObjectForm(const wxString
 //*                       Save & load metaData                              *
 //***************************************************************************
 
-bool ibValueMetaObjectDataProcessor::LoadData(ibReaderMemory& dataReader)
+bool ibValueMetaObjectDataProcessor::WriteData(ibDataNode& node)
 {
-	//Load object module
-	(*m_propertyObjectModule)->LoadMeta(dataReader);
-	(*m_propertyManagerModule)->LoadMeta(dataReader);
+	node.SetProperty(m_propertyObjectModule->GetName(), m_propertyObjectModule->GetNodeValue());
+	node.SetProperty(m_propertyManagerModule->GetName(), m_propertyManagerModule->GetNodeValue());
 
-	//Load default form
-	m_propertyDefFormObject->SetValue(GetIdByGuid(dataReader.r_stringZ()));
+	node.SetValue(m_propertyDefFormObject->GetName(), GetGuidByID(m_propertyDefFormObject->GetValueAsInteger()).str());
 
-	return ibValueMetaObjectRecordDataExt::LoadData(dataReader);
+	return true;
 }
 
-bool ibValueMetaObjectDataProcessor::SaveData(ibWriterMemory& dataWritter)
+bool ibValueMetaObjectDataProcessor::ReadData(const ibDataNode& node)
 {
-	//Save object module
-	(*m_propertyObjectModule)->SaveMeta(dataWritter);
-	(*m_propertyManagerModule)->SaveMeta(dataWritter);
+	m_propertyObjectModule->ReadNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
+	m_propertyManagerModule->ReadNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
 
-	//Save default form
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormObject->GetValueAsInteger()));
+	m_propertyDefFormObject->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormObject->GetName())));
 
-	return ibValueMetaObjectRecordDataExt::SaveData(dataWritter);
+	return true;
 }
 
 //***********************************************************************

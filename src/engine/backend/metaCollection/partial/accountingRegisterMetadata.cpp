@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "accountingRegister.h"
+#include "backend/serialize/dataBuilder.h"
 #include "chartOfAccounts.h"
 #include "list/objectList.h"
 #include "backend/metadataConfiguration.h"
@@ -35,39 +36,42 @@ ibBackendValueForm* ibValueMetaObjectAccountingRegister::GetListForm(const wxStr
 }
 #pragma endregion
 
-bool ibValueMetaObjectAccountingRegister::LoadData(ibReaderMemory& dataReader)
+bool ibValueMetaObjectAccountingRegister::ReadData(const ibDataNode& node)
 {
-	(*m_propertyAttributeRecordType)->LoadMeta(dataReader);
-	(*m_propertyAttributeAccount)->LoadMeta(dataReader);
-	(*m_propertyAttributeSubconto1)->LoadMeta(dataReader);
-	(*m_propertyAttributeSubconto2)->LoadMeta(dataReader);
-	(*m_propertyAttributeSubconto3)->LoadMeta(dataReader);
-	m_propertyDefFormList->SetValue(GetIdByGuid(dataReader.r_stringZ()));
+	m_propertyAttributeRecordType->ReadNodeValue(node.GetProperty(m_propertyAttributeRecordType->GetName()));
+	m_propertyAttributeAccount->ReadNodeValue(node.GetProperty(m_propertyAttributeAccount->GetName()));
+	m_propertyAttributeSubconto1->ReadNodeValue(node.GetProperty(m_propertyAttributeSubconto1->GetName()));
+	m_propertyAttributeSubconto2->ReadNodeValue(node.GetProperty(m_propertyAttributeSubconto2->GetName()));
+	m_propertyAttributeSubconto3->ReadNodeValue(node.GetProperty(m_propertyAttributeSubconto3->GetName()));
 
-	if (!m_propertyChartOfAccounts->LoadData(dataReader))
-		return false;
+	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormList->GetName())));
 
-	(*m_propertyObjectModule)->LoadMeta(dataReader);
-	(*m_propertyManagerModule)->LoadMeta(dataReader);
-	return ibValueMetaObjectRegisterData::LoadData(dataReader);
+	m_propertyChartOfAccounts->ReadNodeValue(node.GetProperty(m_propertyChartOfAccounts->GetName()));
+
+	m_propertyObjectModule->ReadNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
+	m_propertyManagerModule->ReadNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
+
+	return ibValueMetaObjectRegisterData::ReadData(node);
 }
 
-bool ibValueMetaObjectAccountingRegister::SaveData(ibWriterMemory& dataWritter)
+bool ibValueMetaObjectAccountingRegister::WriteData(ibDataNode& node)
 {
-	(*m_propertyAttributeRecordType)->SaveMeta(dataWritter);
-	(*m_propertyAttributeAccount)->SaveMeta(dataWritter);
-	(*m_propertyAttributeSubconto1)->SaveMeta(dataWritter);
-	(*m_propertyAttributeSubconto2)->SaveMeta(dataWritter);
-	(*m_propertyAttributeSubconto3)->SaveMeta(dataWritter);
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormList->GetValueAsInteger()));
+	node.SetProperty(m_propertyAttributeRecordType->GetName(), m_propertyAttributeRecordType->GetNodeValue());
+	node.SetProperty(m_propertyAttributeAccount->GetName(), m_propertyAttributeAccount->GetNodeValue());
+	node.SetProperty(m_propertyAttributeSubconto1->GetName(), m_propertyAttributeSubconto1->GetNodeValue());
+	node.SetProperty(m_propertyAttributeSubconto2->GetName(), m_propertyAttributeSubconto2->GetNodeValue());
+	node.SetProperty(m_propertyAttributeSubconto3->GetName(), m_propertyAttributeSubconto3->GetNodeValue());
 
-	if (!m_propertyChartOfAccounts->SaveData(dataWritter))
-		return false;
+	node.SetValue(m_propertyDefFormList->GetName(), GetGuidByID(m_propertyDefFormList->GetValueAsInteger()).str());
 
-	(*m_propertyObjectModule)->SaveMeta(dataWritter);
-	(*m_propertyManagerModule)->SaveMeta(dataWritter);
-	return ibValueMetaObjectRegisterData::SaveData(dataWritter);
+	node.SetProperty(m_propertyChartOfAccounts->GetName(), m_propertyChartOfAccounts->GetNodeValue());
+
+	node.SetProperty(m_propertyObjectModule->GetName(), m_propertyObjectModule->GetNodeValue());
+	node.SetProperty(m_propertyManagerModule->GetName(), m_propertyManagerModule->GetNodeValue());
+
+	return ibValueMetaObjectRegisterData::WriteData(node);
 }
+
 
 #include "backend/appData.h"
 

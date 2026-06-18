@@ -219,14 +219,15 @@ bool ibUserInfo::Save(const ibUserInfo& info)
 	// UPDATE OR INSERT … MATCHING (FB), so the per-driver fork is gone. The blob binds via ibConstBlob.
 	try {
 		ibDatabaseQueryBuilder q;
-		return q.Execute(ibUpsert(user_table, {
+		q.Execute(ibUpsert(user_table, {
 			{ wxT("guid"),       ibConst(ibValue(info.m_strUserGuid)) },
 			{ wxT("name"),       ibConst(ibValue(info.m_strUserName)) },
 			{ wxT("fullName"),   ibConst(ibValue(info.m_strUserFullName)) },
 			{ wxT("changed"),    ibConst(ibValue(wxDateTime::Now())) },
 			{ wxT("dataSize"),   ibConst(ibValue(static_cast<unsigned int>(writer.size()))) },
 			{ wxT("binaryData"), ibConstBlob(writer.pointer(), writer.size()) },
-		}, { wxT("guid") })) != DATABASE_LAYER_QUERY_RESULT_ERROR;
+		}, { wxT("guid") }));
+		return true;   // a real failure THROWS (caught below); the affected-row count is not an error
 	}
 	catch (...) { return false; }
 }
@@ -237,9 +238,9 @@ bool ibUserInfo::Delete(const ibGuid& userGuid)
 		return false;
 	try {
 		ibDatabaseQueryBuilder q;
-		return q.Execute(ibDelete(user_table,
-			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("guid")), ibConst(ibValue(userGuid.str())))))
-			!= DATABASE_LAYER_QUERY_RESULT_ERROR;
+		q.Execute(ibDelete(user_table,
+			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("guid")), ibConst(ibValue(userGuid.str())))));
+		return true;   // deleting an absent user (0 rows) is success; a real failure THROWS
 	}
 	catch (...) { return false; }
 }

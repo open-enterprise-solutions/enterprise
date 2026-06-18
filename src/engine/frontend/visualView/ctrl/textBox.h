@@ -29,8 +29,8 @@ class ibValueTextBox : public ibValueWindow {
 	static wxIcon GetIconGroup();
 
 	//load & save object in control 
-	virtual bool LoadData(ibReaderMemory &reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool ReadData(const ibDataNode& node);
+	virtual bool WriteData(ibDataNode& node) const;
 };
 
 #endif

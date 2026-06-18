@@ -1,5 +1,6 @@
 
 #include "sizer.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #ifdef OES_USE_WEB
 #include "frontend/web/webSizer.h"
 #endif
@@ -52,20 +53,20 @@ void ibValueGridSizer::Cleanup(wxObject* obj, ibVisualHost* visualHost)
 //*                           Property                                             *
 //**********************************************************************************
 
-bool ibValueGridSizer::LoadData(ibReaderMemory& reader)
+bool ibValueGridSizer::ReadData(const ibDataNode& node)
 {
-	m_propertyRows->SetValue(reader.r_s32());
-	m_propertyCols->SetValue(reader.r_s32());
+	m_propertyRows->ReadNodeValue(node.GetProperty(m_propertyRows->GetName()));
+	m_propertyCols->ReadNodeValue(node.GetProperty(m_propertyCols->GetName()));
 
-	return ibValueSizer::LoadData(reader);
+	return ibValueSizer::ReadData(node);
 }
 
-bool ibValueGridSizer::SaveData(ibWriterMemory& writer)
+bool ibValueGridSizer::WriteData(ibDataNode& node) const
 {
-	writer.w_s32(m_propertyRows->GetValueAsUInteger());
-	writer.w_s32(m_propertyCols->GetValueAsUInteger());
+	node.SetProperty(m_propertyRows->GetName(), m_propertyRows->GetNodeValue());
+	node.SetProperty(m_propertyCols->GetName(), m_propertyCols->GetNodeValue());
 
-	return ibValueSizer::SaveData(writer);
+	return ibValueSizer::WriteData(node);
 }
 
 //***********************************************************************

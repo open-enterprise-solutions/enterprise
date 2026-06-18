@@ -266,9 +266,7 @@ public:
 public:
 
 	virtual bool LoadForm(const wxMemoryBuffer& formData);
-	bool LoadChildForm(ibReaderMemory& readerData, ibValueFrame* controlParent);
 	virtual wxMemoryBuffer SaveForm();
-	bool SaveChildForm(ibWriterMemory& writerData, ibValueFrame* controlParent);
 
 	//notify
 	virtual void NotifyCreate(const ibValue& vCreated);
@@ -327,8 +325,8 @@ public:
 	static wxIcon GetIconGroup();
 
 	//load & save object in control 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool ReadData(const ibDataNode& node);
+	virtual bool WriteData(ibDataNode& node) const;
 
 	virtual int GetComponentType() const { return COMPONENT_TYPE_FRAME; }
 
@@ -346,13 +344,6 @@ private:
 	// ibWebTimer). Inline in the header dragged web-specific includes
 	// into every desktop TU.
 	void OnIdleHandler(wxTimerEvent& event);
-
-
-	enum
-	{
-		eDataBlock = 0x3550,
-		eChildBlock = 0x3570
-	};
 
 	ibValue					m_createdValue;
 	ibValue					m_changedValue;

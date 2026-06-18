@@ -11,201 +11,149 @@
 #include "backend/metaData.h"
 #include "backend/backend_exception.h"
 #include "backend/databaseLayer/databaseErrorCodes.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode — universal structure bridge (BuildDataNode/ApplyDataNode)
 
-#define metaBlock 0x200222
-#define helpBlock 0x200224
-
-bool ibValueMetaObject::LoadMeta(ibReaderMemory& dataReader)
+// SaveNode — write this object into the node. Common header (intrinsics → fields,
+// editable values → props, interface/roles), then per-type WriteData. Every value
+// is in its REAL form, so a JSON view shows `"Name": "Цена"`, not a base64 blob.
+bool ibValueMetaObject::SaveNode(ibDataNode& node)
 {
-	//Save meta version
-	(void)dataReader.r_u32(); //reserved
+	// intrinsics → fields
+	node.SetValue(wxT("Guid"), m_metaGuid);
+	node.SetValue(wxT("Id"), (s32)m_metaId);
+	node.SetValue(wxT("Deleted"), IsDeleted());
+	node.SetValue(wxT("Help"), m_strHelpContent);
 
-	//Load unique guid
-	wxString strGuid;
-	dataReader.r_stringZ(strGuid);
-	m_metaGuid = strGuid;
+	// system marker — a predefined (engine-created) object, so a consumer (the AI)
+	// can tell it apart from a user-defined one. Only emitted when set; not read back
+	// (the flag is re-derived on construction).
+	if (IsPinnedToParent())
+		node.SetValue(wxT("NodePredefined"), true);
 
-	//Load meta id
-	m_metaId = dataReader.r_u32();
+	// editable property values → props (owner names them inline; the property yields the value)
+	node.SetProperty(m_propertyName->GetName(),    m_propertyName->GetNodeValue());
+	node.SetProperty(m_propertySynonym->GetName(), m_propertySynonym->GetNodeValue());
+	node.SetProperty(m_propertyComment->GetName(), m_propertyComment->GetNodeValue());
 
-	//Load standart fields
-	m_propertyName->LoadData(dataReader);
-	m_propertySynonym->LoadData(dataReader);
-	m_propertyComment->LoadData(dataReader);
+	// interface / roles → fields (opaque sub-structures; become Child later)
+	ibWriterMemory interfaceWriter;
+	if (!SaveInterface(interfaceWriter))
+		return false;
+	node.SetValue(wxT("Interface"), interfaceWriter.buffer());
 
-	//special info deleted
-	if (dataReader.r_u8()) {
+	ibWriterMemory roleWriter;
+	if (!SaveRole(roleWriter))
+		return false;
+	node.SetValue(wxT("Roles"), roleWriter.buffer());
+
+	return WriteData(node);
+}
+
+// LoadNode — read this object from a CONST node. Mirror of SaveNode.
+bool ibValueMetaObject::LoadNode(const ibDataNode& node)
+{
+	// intrinsics ← fields
+	m_metaGuid = node.GetValue<ibGuid>(wxT("Guid"));
+	m_metaId = (ibMetaID)node.GetValue<s32>(wxT("Id"));
+	if (node.GetValue<bool>(wxT("Deleted")))
 		MarkAsDeleted();
+	m_strHelpContent = node.GetValue<wxString>(wxT("Help"));
+
+	// editable property values ← props (owner names them inline; the property takes the value)
+	m_propertyName->ReadNodeValue(node.GetProperty(m_propertyName->GetName()));
+	m_propertySynonym->ReadNodeValue(node.GetProperty(m_propertySynonym->GetName()));
+	m_propertyComment->ReadNodeValue(node.GetProperty(m_propertyComment->GetName()));
+
+	// interface / roles ← fields
+	wxMemoryBuffer interfaceBuf = node.GetValue<wxMemoryBuffer>(wxT("Interface"));
+	if (interfaceBuf.GetDataLen()) {
+		ibReaderMemory reader(interfaceBuf);
+		if (!LoadInterface(reader))
+			return false;
+	}
+	wxMemoryBuffer roleBuf = node.GetValue<wxMemoryBuffer>(wxT("Roles"));
+	if (roleBuf.GetDataLen()) {
+		ibReaderMemory reader(roleBuf);
+		if (!LoadRole(reader))
+			return false;
 	}
 
-	//load interface 
-	if (!LoadInterface(dataReader))
-		return false;
+	return ReadData(node);
+}
 
-	//load roles 
-	if (!LoadRole(dataReader))
-		return false;
+// WriteData / ReadData — the PER-TYPE data hook, the ONLY per-type serialization.
+// The base has no data of its own (a type with no extra data — e.g. Enum — needs no
+// override). A type overrides to write/read its data as typed named values (props /
+// fields / Child sub-nodes). There is no byte SaveData/LoadData anymore: the node IS
+// the data, rendered to bytes / json / xml by the chosen provider.
 
-	//load meta 
-	wxMemoryBuffer meta_buffer;
-	if (!dataReader.r_chunk(metaBlock, meta_buffer))
-		return false;
-
-	ibReaderMemory metaObjectReader(meta_buffer);
-	metaObjectReader.r_u32(); //reserved flags
-	if (!LoadData(metaObjectReader))
-		return false;
-
-	//load help 
-	wxMemoryBuffer help_buffer;
-	if (!dataReader.r_chunk(helpBlock, help_buffer))
-		return false;
-	
-	ibReaderMemory helpReader(help_buffer);
-	m_strHelpContent = helpReader.r_stringZ();
+bool ibValueMetaObject::ReadData(const ibDataNode& node)
+{
 	return true;
 }
 
-bool ibValueMetaObject::SaveMeta(ibWriterMemory& dataWritter)
+bool ibValueMetaObject::WriteData(ibDataNode& node)
 {
-	//save meta version 
-	dataWritter.w_u32(version_oes_last); //reserved 
-
-	//save unique guid
-	dataWritter.w_stringZ(m_metaGuid);
-
-	//save meta id 
-	dataWritter.w_u32(m_metaId);
-
-	//save standart fields
-	m_propertyName->SaveData(dataWritter);
-	m_propertySynonym->SaveData(dataWritter);
-	m_propertyComment->SaveData(dataWritter);
-
-	//special info deleted
-	dataWritter.w_u8(IsDeleted());
-
-	//save interface 
-	if (!SaveInterface(dataWritter))
-		return false;
-
-	//save roles 
-	if (!SaveRole(dataWritter))
-		return false;
-
-	//save meta 
-	ibWriterMemory metaObjectWritter;
-	metaObjectWritter.w_u32(0); //reserved flags
-	if (!SaveData(metaObjectWritter))
-		return false;
-
-	dataWritter.w_chunk(metaBlock, metaObjectWritter.buffer());
-
-	//save help 
-	ibWriterMemory helpWritter;
-	helpWritter.w_stringZ(m_strHelpContent);
-	dataWritter.w_chunk(helpBlock, helpWritter.buffer());
 	return true;
 }
 
-bool ibValueMetaObject::LoadSubtree(ibReaderMemory& nodeReader, bool resetId)
+
+// Build this node + descendants into the builder's tree. Metadata owns the
+// lifecycle event (OnSaveMetaObject); SaveNode owns the field serialization.
+bool ibValueMetaObject::BuildDataNode(ibDataNode& node, int flags)
 {
-	// NB: do NOT clear m_children here. The node's constructor (OnCreateMetaObject)
-	// already populated it with the PREDEFINED attributes via
-	// CreateMetaObjectAndSetParent (SetParent + AddChild). Those are not serialized
-	// (FilterChild excludes them in SaveSubtree), so a blanket RemoveAllChildren
-	// would orphan them (parent → null, dropped from m_children) and they'd never be
-	// rebuilt — breaking GetFullName, the predefined finder, and the restructure
-	// diff (predefined seen as removed+new → drop+re-add). We only append the
-	// serialized children below.
+	// The node's identity is THIS object's own — so a builder root fills itself from
+	// any root object (configuration / data processor / report), with no hardcoded
+	// clsid at the call site. Children already get theirs via AddChild below.
+	node.SetClsid(GetClassType());
+	node.SetMetaId(GetMetaID());
 
-	// children first (created via factory + recursive LoadSubtree), then own data.
-	// Each child inherits this node's metadata at creation (this node's m_metaData
-	// is always set — root by the container, children here), so no owner threading.
-	std::shared_ptr <ibReaderMemory> readerChildMemory(nodeReader.open_chunk(ibMetaData::eChildBlock));
-	if (readerChildMemory) {
-		ibClassID clsid = 0;
-		ibReaderMemory* prevReaderMemory = nullptr;
-		while (!readerChildMemory->eof()) {
-			ibReaderMemory* readerMemory = readerChildMemory->open_chunk_iterator(clsid, &*prevReaderMemory);
-			if (!readerMemory)
-				break;
-			u64 meta_id = 0;
-			ibReaderMemory* prevReaderMetaMemory = nullptr;
-			while (!readerMemory->eof()) {
-				ibReaderMemory* readerMetaMemory = readerMemory->open_chunk_iterator(meta_id, &*prevReaderMetaMemory);
-				if (!readerMetaMemory)
-					break;
-				wxASSERT(clsid != 0);
-				// AddChild (inside Init via ppParams[0]=this) takes the owning
-				// reference; no explicit IncrRef here. A factory miss or a child
-				// load failure throws ibBackendException — the half-built tree is
-				// owned (ibValuePtr) and unwound by the caller; no catch(...) swallow.
-				ibValue* ppParams[] = { this };
-				ibValueMetaObject* newMetaObject =
-					ibValue::CreateAndConvertObjectRef<ibValueMetaObject>(clsid, ppParams, 1);
-				if (newMetaObject == nullptr)
-					ibBackendCoreException::Error(
-						_("Unknown metadata class id %lld while loading subtree of '%s'"),
-						(long long)clsid, GetName());
-				newMetaObject->SetMetaData(m_metaData);
-				newMetaObject->LoadSubtree(*readerMetaMemory, resetId); // throws on error
-				prevReaderMetaMemory = readerMetaMemory;
-			}
-			prevReaderMemory = readerMemory;
-		}
-	}
-
-	// own data (folds the former LoadMetaObject: LoadMeta + OnLoadMetaObject).
-	// m_metaData is already stamped by the caller (container for the root, parent
-	// for children), so we no longer set it here.
-	std::shared_ptr <ibReaderMemory> readerDataMemory(nodeReader.open_chunk(ibMetaData::eDataBlock));
-	if (!readerDataMemory)
-		ibBackendCoreException::Error(_("Missing data block while loading metadata '%s'"), GetName());
-	if (!LoadMeta(*readerDataMemory))
-		ibBackendCoreException::Error(_("Failed to load metadata fields for '%s'"), GetName());
-	if (!OnLoadMetaObject(m_metaData))
-		ibBackendCoreException::Error(_("OnLoadMetaObject failed for '%s'"), GetName());
-
-	// Grafting a file's subtree into a config: the file's metaId would collide with the
-	// existing config objects (same id → same ctor clsid → "Object is exist" on Run).
-	// Regenerate it from this node's metadata counter (already stamped above). The root's
-	// guid is reset separately by the importer (ResetAll) since its clsid keys on guid.
-	if (resetId)
-		ResetId();
-	return true;
-}
-
-bool ibValueMetaObject::SaveSubtree(const ibClassID& chunkId, ibWriterMemory& writer, int flags)
-{
 	const bool saveToFile = (flags & saveToFileFlag) != 0;
 
-	// own data (folds the former SaveMetaObject: SaveMeta + OnSaveMetaObject)
-	ibWriterMemory writerDataMemory;
-	if (!SaveMeta(writerDataMemory))
+	if (!SaveNode(node))
 		return false;
 	if (!saveToFile && !OnSaveMetaObject(flags))
 		return false;
 
-	ibWriterMemory writerMetaMemory;
-	writerMetaMemory.w_chunk(ibMetaData::eDataBlock, writerDataMemory.pointer(), writerDataMemory.size());
-
-	// children
-	ibWriterMemory writerChildMemory;
+	// children (filtered + non-deleted, recursive)
 	for (unsigned int idx = 0; idx < GetChildCount(); idx++) {
 		ibValueMetaObject* child = GetChild(idx);
 		if (!FilterChild(child->GetClassType()))
 			continue;
 		if (child->IsDeleted())
 			continue;
-		if (!child->SaveSubtree(child->GetClassType(), writerChildMemory, flags))
+		ibDataNode& childNode = node.AddChild(child->GetClassType(), child->GetMetaID());
+		if (!child->BuildDataNode(childNode, flags))
 			return false;
 	}
-	writerMetaMemory.w_chunk(ibMetaData::eChildBlock, writerChildMemory.pointer(), writerChildMemory.size());
+	return true;
+}
 
-	ibWriterMemory writerMemory;
-	writerMemory.w_chunk(GetMetaID(), writerMetaMemory.pointer(), writerMetaMemory.size());
-	writer.w_chunk(chunkId, writerMemory.pointer(), writerMemory.size());
+// Apply the builder's (CONST) tree into this node + descendants. Children first
+// (factory-create by clsid + recurse), then own data via LoadNode, then the load
+// event (OnLoadMetaObject). Predefined children created in OnCreateMetaObject stay;
+// we only APPEND the serialized ones.
+bool ibValueMetaObject::ApplyDataNode(const ibDataNode& node, bool resetId)
+{
+	for (const ibDataNode& childNode : node.Children()) {
+		ibValue* ppParams[] = { this };
+		ibValueMetaObject* newMetaObject =
+			ibValue::CreateAndConvertObjectRef<ibValueMetaObject>(childNode.GetClsid(), ppParams, 1);
+		if (newMetaObject == nullptr)
+			ibBackendCoreException::Error(
+				_("Unknown metadata class id %lld while loading subtree of '%s'"),
+				(long long)childNode.GetClsid(), GetName());
+		newMetaObject->SetMetaData(m_metaData);
+		newMetaObject->ApplyDataNode(childNode, resetId); // throws on error
+	}
+
+	if (!LoadNode(node))
+		ibBackendCoreException::Error(_("Failed to load metadata fields for '%s'"), GetName());
+	if (!OnLoadMetaObject(m_metaData))
+		ibBackendCoreException::Error(_("OnLoadMetaObject failed for '%s'"), GetName());
+
+	if (resetId)
+		ResetId();
 	return true;
 }
 
@@ -221,10 +169,6 @@ bool ibValueMetaObject::DeleteSubtree()
 			continue;
 
 		const bool deleted = child->IsDeleted();
-		if (deleted) {
-			if (!child->DeleteData())
-				return false;
-		}
 		if (!child->DeleteSubtree())
 			return false;
 		if (deleted) {

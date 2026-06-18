@@ -212,18 +212,13 @@ bool ibMetaDataConfigurationStorage::OnSaveDatabase(int flags)
 
 	// One UPSERT — the L2 door renders ON CONFLICT (PG/SQLite/MySQL) vs UPDATE OR INSERT … MATCHING (FB)
 	// from the match key, so the per-driver fork is gone. The blob rides as ibConstBlob (bound, not inlined).
+	// A real failure THROWS (caught below); the affected-row count is not inspected.
 	ibDatabaseQueryBuilder q_save;
-	if (q_save.Execute(ibUpsert(config_save_table, {
+	q_save.Execute(ibUpsert(config_save_table, {
 			{ wxT("file_name"),   ibConst(ibValue(config_name)) },
 			{ wxT("binary_data"), ibConstBlob(writerData.pointer(), writerData.size()) },
 			{ wxT("file_guid"),   ibConst(ibValue(m_metaGuid.str())) },
-		}, { wxT("file_name") })) == DATABASE_LAYER_QUERY_RESULT_ERROR) {
-#if _USE_SAVE_METADATA_IN_TRANSACTION == 1
-		db_query->RollBack(); return false;
-#else
-		return false;
-#endif
-	}
+		}, { wxT("file_name") }));
 
 	m_md5Hash = ibMD5::ComputeMd5(
 		wxBase64Encode(writerData.pointer(), writerData.size())
@@ -233,13 +228,10 @@ bool ibMetaDataConfigurationStorage::OnSaveDatabase(int flags)
 
 		// Copy the just-saved config_save → config (whole-table). Both go through L2 — DELETE, then
 		// INSERT … SELECT (ibInsertSelect with an empty projection = SELECT *). Standard SQL, no fork.
-		bool hasError =
-			q_save.Execute(ibDelete(config_table)) == DATABASE_LAYER_QUERY_RESULT_ERROR;
-		hasError = hasError ||
-			q_save.Execute(ibInsertSelect(config_table, {}, ibProject(ibScan(config_save_table))))
-				== DATABASE_LAYER_QUERY_RESULT_ERROR;
-		if (hasError)
-			return false;
+		// Execute returns the affected-row COUNT and signals a real failure by THROWING (caught below) —
+		// a 0 count is NOT an error (an empty config_table on the first save has nothing to delete).
+		q_save.Execute(ibDelete(config_table));
+		q_save.Execute(ibInsertSelect(config_table, {}, ibProject(ibScan(config_save_table))));
 	}
 
 	return db_query->IsActiveTransaction();
@@ -363,11 +355,10 @@ bool ibMetaDataConfigurationStorage::RollbackDatabase()
 {
 	// Restore config_save from config (the inverse of OnSaveDatabase's copy) — both through L2:
 	// DELETE, then INSERT … SELECT (ibInsertSelect, empty projection = SELECT *). Standard SQL, no fork.
+	// A real failure THROWS; a 0-row DELETE (empty config_save) is not an error.
 	ibDatabaseQueryBuilder q;
-	bool hasError = q.Execute(ibDelete(config_save_table)) == DATABASE_LAYER_QUERY_RESULT_ERROR;
-	hasError = hasError || q.Execute(ibInsertSelect(config_save_table, {}, ibProject(ibScan(config_table))))
-		== DATABASE_LAYER_QUERY_RESULT_ERROR;
-	if (hasError) return false;
+	q.Execute(ibDelete(config_save_table));
+	q.Execute(ibInsertSelect(config_save_table, {}, ibProject(ibScan(config_table))));
 	//close data 
 	if (ibMetaDataConfiguration::IsConfigOpen()) {
 		if (!CloseDatabase(forceCloseFlag)) {

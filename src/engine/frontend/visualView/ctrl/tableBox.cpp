@@ -1,4 +1,5 @@
 #include "tableBox.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #ifndef OES_USE_WEB
 // Renderer pulls in dataview.h (wxDataView heavy). Web stubs don't
 // touch the renderer at all.
@@ -629,56 +630,54 @@ void ibValueModelTableBox::Cleanup(wxObject* obj, ibVisualHost* visualHost)
 //*                                  Property                                       *
 //***********************************************************************************
 
-bool ibValueModelTableBox::LoadData(ibReaderMemory& reader)
+bool ibValueModelTableBox::ReadData(const ibDataNode& node)
 {
-	if (!m_propertySource->LoadData(reader))
-		return false;
+	m_propertySource->ReadNodeValue(node.GetProperty(m_propertySource->GetName()));
 
-	m_propertyHeader->LoadData(reader);
-	m_propertyHeaderHeight->LoadData(reader);
-	m_propertyFooter->LoadData(reader);
-	m_propertyFooterHeight->LoadData(reader);
+	m_propertyHeader->ReadNodeValue(node.GetProperty(m_propertyHeader->GetName()));
+	m_propertyHeaderHeight->ReadNodeValue(node.GetProperty(m_propertyHeaderHeight->GetName()));
+	m_propertyFooter->ReadNodeValue(node.GetProperty(m_propertyFooter->GetName()));
+	m_propertyFooterHeight->ReadNodeValue(node.GetProperty(m_propertyFooterHeight->GetName()));
 
-	m_propertyFreezeRow->LoadData(reader);
-	m_propertyFreezeCol->LoadData(reader);
+	m_propertyFreezeRow->ReadNodeValue(node.GetProperty(m_propertyFreezeRow->GetName()));
+	m_propertyFreezeCol->ReadNodeValue(node.GetProperty(m_propertyFreezeCol->GetName()));
 
-	m_propertyRowSelectionMode->LoadData(reader);
+	m_propertyRowSelectionMode->ReadNodeValue(node.GetProperty(m_propertyRowSelectionMode->GetName()));
 
 	//events
-	m_eventSelection->LoadData(reader);
-	m_eventBeforeAddRow->LoadData(reader);
-	m_eventBeforeDeleteRow->LoadData(reader);
-	m_eventOnActivateRow->LoadData(reader);
-	m_eventOnAddRow->LoadData(reader);
-	m_eventOnDeleteRow->LoadData(reader);
+	m_eventSelection->ReadNodeValue(node.GetProperty(m_eventSelection->GetName()));
+	m_eventBeforeAddRow->ReadNodeValue(node.GetProperty(m_eventBeforeAddRow->GetName()));
+	m_eventBeforeDeleteRow->ReadNodeValue(node.GetProperty(m_eventBeforeDeleteRow->GetName()));
+	m_eventOnActivateRow->ReadNodeValue(node.GetProperty(m_eventOnActivateRow->GetName()));
+	m_eventOnAddRow->ReadNodeValue(node.GetProperty(m_eventOnAddRow->GetName()));
+	m_eventOnDeleteRow->ReadNodeValue(node.GetProperty(m_eventOnDeleteRow->GetName()));
 
-	return ibValueWindow::LoadData(reader);
+	return ibValueWindow::ReadData(node);
 }
 
-bool ibValueModelTableBox::SaveData(ibWriterMemory& writer)
+bool ibValueModelTableBox::WriteData(ibDataNode& node) const
 {
-	if (!m_propertySource->SaveData(writer))
-		return false;
+	node.SetProperty(m_propertySource->GetName(), m_propertySource->GetNodeValue());
 
-	m_propertyHeader->SaveData(writer);
-	m_propertyHeaderHeight->SaveData(writer);
-	m_propertyFooter->SaveData(writer);
-	m_propertyFooterHeight->SaveData(writer);
+	node.SetProperty(m_propertyHeader->GetName(), m_propertyHeader->GetNodeValue());
+	node.SetProperty(m_propertyHeaderHeight->GetName(), m_propertyHeaderHeight->GetNodeValue());
+	node.SetProperty(m_propertyFooter->GetName(), m_propertyFooter->GetNodeValue());
+	node.SetProperty(m_propertyFooterHeight->GetName(), m_propertyFooterHeight->GetNodeValue());
 
-	m_propertyFreezeRow->SaveData(writer);
-	m_propertyFreezeCol->SaveData(writer);
+	node.SetProperty(m_propertyFreezeRow->GetName(), m_propertyFreezeRow->GetNodeValue());
+	node.SetProperty(m_propertyFreezeCol->GetName(), m_propertyFreezeCol->GetNodeValue());
 
-	m_propertyRowSelectionMode->SaveData(writer);
+	node.SetProperty(m_propertyRowSelectionMode->GetName(), m_propertyRowSelectionMode->GetNodeValue());
 
 	//events
-	m_eventSelection->SaveData(writer);
-	m_eventBeforeAddRow->SaveData(writer);
-	m_eventBeforeDeleteRow->SaveData(writer);
-	m_eventOnActivateRow->SaveData(writer);
-	m_eventOnAddRow->SaveData(writer);
-	m_eventOnDeleteRow->SaveData(writer);
+	node.SetProperty(m_eventSelection->GetName(), m_eventSelection->GetNodeValue());
+	node.SetProperty(m_eventBeforeAddRow->GetName(), m_eventBeforeAddRow->GetNodeValue());
+	node.SetProperty(m_eventBeforeDeleteRow->GetName(), m_eventBeforeDeleteRow->GetNodeValue());
+	node.SetProperty(m_eventOnActivateRow->GetName(), m_eventOnActivateRow->GetNodeValue());
+	node.SetProperty(m_eventOnAddRow->GetName(), m_eventOnAddRow->GetNodeValue());
+	node.SetProperty(m_eventOnDeleteRow->GetName(), m_eventOnDeleteRow->GetNodeValue());
 
-	return ibValueWindow::SaveData(writer);
+	return ibValueWindow::WriteData(node);
 }
 
 //***********************************************************************************

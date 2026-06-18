@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "catalog.h"
+#include "backend/serialize/dataBuilder.h"
 #include "list/objectList.h"
 #include "backend/metaData.h"
 #include "backend/moduleManager/moduleManager.h"
@@ -164,47 +165,38 @@ wxString ibValueMetaObjectCatalog::GetDataPresentation(const ibValueDataObject* 
 //*                       Save & load metaData                              *
 //***************************************************************************
 
-bool ibValueMetaObjectCatalog::LoadData(ibReaderMemory& dataReader)
+bool ibValueMetaObjectCatalog::WriteData(ibDataNode& node)
 {
-	//load default attributes:
-	(*m_propertyAttributeOwner)->LoadMeta(dataReader);
+	node.SetProperty(m_propertyAttributeOwner->GetName(), m_propertyAttributeOwner->GetNodeValue());
 
-	//Load object module
-	(*m_propertyObjectModule)->LoadMeta(dataReader);
-	(*m_propertyManagerModule)->LoadMeta(dataReader);
+	node.SetProperty(m_propertyObjectModule->GetName(), m_propertyObjectModule->GetNodeValue());
+	node.SetProperty(m_propertyManagerModule->GetName(), m_propertyManagerModule->GetNodeValue());
 
-	//load default form 
-	m_propertyDefFormObject->SetValue(GetIdByGuid(dataReader.r_stringZ()));
-	m_propertyDefFormFolder->SetValue(GetIdByGuid(dataReader.r_stringZ()));
-	m_propertyDefFormList->SetValue(GetIdByGuid(dataReader.r_stringZ()));
-	m_propertyDefFormSelect->SetValue(GetIdByGuid(dataReader.r_stringZ()));
+	node.SetValue(m_propertyDefFormObject->GetName(), GetGuidByID(m_propertyDefFormObject->GetValueAsInteger()).str());
+	node.SetValue(m_propertyDefFormFolder->GetName(), GetGuidByID(m_propertyDefFormFolder->GetValueAsInteger()).str());
+	node.SetValue(m_propertyDefFormList->GetName(), GetGuidByID(m_propertyDefFormList->GetValueAsInteger()).str());
+	node.SetValue(m_propertyDefFormSelect->GetName(), GetGuidByID(m_propertyDefFormSelect->GetValueAsInteger()).str());
 
-	if (!m_propertyOwner->LoadData(dataReader))
-		return false;
+	node.SetProperty(m_propertyOwner->GetName(), m_propertyOwner->GetNodeValue());
 
-	return ibValueMetaObjectRecordDataHierarchyMutableRef::LoadData(dataReader);
+	return ibValueMetaObjectRecordDataHierarchyMutableRef::WriteData(node);
 }
 
-bool ibValueMetaObjectCatalog::SaveData(ibWriterMemory& dataWritter)
+bool ibValueMetaObjectCatalog::ReadData(const ibDataNode& node)
 {
-	//save default attributes:
-	(*m_propertyAttributeOwner)->SaveMeta(dataWritter);
+	m_propertyAttributeOwner->ReadNodeValue(node.GetProperty(m_propertyAttributeOwner->GetName()));
 
-	//Save object module
-	(*m_propertyObjectModule)->SaveMeta(dataWritter);
-	(*m_propertyManagerModule)->SaveMeta(dataWritter);
+	m_propertyObjectModule->ReadNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
+	m_propertyManagerModule->ReadNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
 
-	//save default form 
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormObject->GetValueAsInteger()));
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormFolder->GetValueAsInteger()));
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormList->GetValueAsInteger()));
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormSelect->GetValueAsInteger()));
+	m_propertyDefFormObject->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormObject->GetName())));
+	m_propertyDefFormFolder->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormFolder->GetName())));
+	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormList->GetName())));
+	m_propertyDefFormSelect->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormSelect->GetName())));
 
-	if (!m_propertyOwner->SaveData(dataWritter))
-		return false;
+	m_propertyOwner->ReadNodeValue(node.GetProperty(m_propertyOwner->GetName()));
 
-	//create or update table:
-	return ibValueMetaObjectRecordDataHierarchyMutableRef::SaveData(dataWritter);
+	return ibValueMetaObjectRecordDataHierarchyMutableRef::ReadData(node);
 }
 
 //***********************************************************************

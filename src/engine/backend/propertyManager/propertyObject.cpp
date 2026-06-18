@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "propertyObject.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataValue — property node serialization
 
 #define propBlock 0x00023456
 #define eventBlock 0x00023457
@@ -33,9 +34,28 @@ void ibEvent::InitEvent(ibPropertyCategory* cat, const wxVariant& value)
 
 ///////////////////////////////////////////////////////////////////////////////
 
-bool ibProperty::PasteData(ibReaderMemory& reader)
+///////////////////////////////////////////////////////////////////////////////
+// copy & paste hooks over the node value. Default = the property's node value; the
+// owner's CopyProperty / PasteProperty does the byte transport once via the provider.
+bool ibBackendProperty::CopyNodeValue(ibDataValue& value) const
 {
-	return LoadData(reader);
+	return WriteNodeValue(value);
+}
+
+bool ibBackendProperty::PasteNodeValue(const ibDataValue& value)
+{
+	return ReadNodeValue(value);
+}
+
+// by-value convenience — delegates to the virtual out-param getter (so it dispatches
+// to the property type's override) and yields the value for inline placement.
+// Yields null when the getter declines (returns false).
+ibDataValue ibBackendProperty::GetNodeValue() const
+{
+	ibDataValue value;
+	if (!WriteNodeValue(value))
+		return ibDataValue();
+	return value;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -157,61 +177,59 @@ unsigned int ibPropertyObject::GetPropertyIndex(const wxString& nameParam) const
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-bool ibPropertyObject::PasteProperty(ibReaderMemory& reader)
-{
-	std::shared_ptr <ibReaderMemory>propReader(reader.open_chunk(propBlock));
-	if (propReader != nullptr) {
-		for (u64 iter_pos = 0; ; iter_pos++) {
-			std::shared_ptr <ibReaderMemory>propDataReader(propReader->open_chunk(iter_pos));
-			if (propDataReader == nullptr)
-				break;
-			ibProperty* prop = GetProperty(propDataReader->r_stringZ());
-			if (prop != nullptr && !prop->PasteData(*propDataReader))
-				return false;
-		}
-	}
-	std::shared_ptr <ibReaderMemory>eventReader(reader.open_chunk(eventBlock));
-	if (eventReader != nullptr) {
-		for (u64 iter_pos = 0; ; iter_pos++) {
-			std::shared_ptr <ibReaderMemory>eventDataReader(eventReader->open_chunk(iter_pos));
-			if (eventDataReader == nullptr)
-				break;
-			ibEvent* event = GetEvent(eventDataReader->r_stringZ());
-			if (event != nullptr && !event->PasteData(*eventDataReader))
-				return false;
-		};
-	}
-
-	return true;
-}
-
+// Copy/paste build ONE node tree (props + events as named values under two child
+// sub-nodes) and let the binary provider do the single byte transport to/from the
+// clipboard. No per-property byte writer — each property yields its node value.
 bool ibPropertyObject::CopyProperty(ibWriterMemory& writer) const
 {
-	ibWriterMemory propWritter;
+	ibDataBuilder builder;
+
+	ibDataNode& propsNode = builder.Root().Child(wxT("props"));
 	for (unsigned int idx = 0; idx < GetPropertyCount(); idx++) {
 		ibProperty* prop = GetProperty(idx);
 		wxASSERT(prop);
-		ibWriterMemory propDataWritter;
-		propDataWritter.w_stringZ(prop->GetName());
-		if (!prop->CopyData(propDataWritter))
+		ibDataValue value;
+		if (!prop->CopyNodeValue(value))
 			return false;
-		propWritter.w_chunk(idx, propDataWritter.pointer(), propDataWritter.size());
+		propsNode.SetProperty(prop->GetName(), value);
 	}
 
-	writer.w_chunk(propBlock, propWritter.pointer(), propWritter.size());
-
-	ibWriterMemory eventWritter;
+	ibDataNode& eventsNode = builder.Root().Child(wxT("events"));
 	for (unsigned int idx = 0; idx < GetEventCount(); idx++) {
 		ibEvent* event = GetEvent(idx);
 		wxASSERT(event);
-		ibWriterMemory eventDataWritter;
-		eventDataWritter.w_stringZ(event->GetName());
-		if (!event->CopyData(eventDataWritter))
+		ibDataValue value;
+		if (!event->CopyNodeValue(value))
 			return false;
-		eventWritter.w_chunk(idx, eventDataWritter.pointer(), eventDataWritter.size());
+		eventsNode.SetProperty(event->GetName(), value);
 	}
 
-	writer.w_chunk(eventBlock, eventWritter.pointer(), eventWritter.size());
+	return builder.Save(ibBinaryProvider(), writer);
+}
+
+bool ibPropertyObject::PasteProperty(ibReaderMemory& reader)
+{
+	ibDataBuilder builder;
+	if (!builder.Load(ibBinaryProvider(), reader))
+		return false;
+
+	if (const ibDataNode* propsNode = builder.Root().FindChild(wxT("props"))) {
+		for (unsigned int idx = 0; idx < GetPropertyCount(); idx++) {
+			ibProperty* prop = GetProperty(idx);
+			wxASSERT(prop);
+			if (!prop->PasteNodeValue(propsNode->GetProperty(prop->GetName())))
+				return false;
+		}
+	}
+	if (const ibDataNode* eventsNode = builder.Root().FindChild(wxT("events"))) {
+		for (unsigned int idx = 0; idx < GetEventCount(); idx++) {
+			ibEvent* event = GetEvent(idx);
+			wxASSERT(event);
+			if (!event->PasteNodeValue(eventsNode->GetProperty(event->GetName())))
+				return false;
+		}
+	}
+
 	return true;
 }
 

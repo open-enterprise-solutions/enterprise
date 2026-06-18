@@ -63,15 +63,37 @@ static const ibValueMetaObject* ResolveMetaWide(const ibBackendTypeSourceFactory
 	return metaData != nullptr ? metaData->FindAnyObjectByFilter(key, true) : nullptr;
 }
 
+// SCOPED to this binding's own source object — the first hop must be a member of it. This is
+// the GATE: a copied object pasted into a foreign container (its source no longer holds the
+// first hop) resolves to null here, so the binding reads back as <not selected> instead of
+// chasing the stale metaId config-wide and finding the ORIGINAL object in the global table.
+template <typename TKey>
+static const ibValueMetaObject* ResolveInSource(const ibBackendTypeSourceFactory* owner, const TKey& key)
+{
+	const ibSourceObject* srcObject = owner != nullptr ? owner->GetSourceObject() : nullptr;
+	const ibValueMetaObject* sourceMeta = srcObject != nullptr ? srcObject->GetSourceMetaObject() : nullptr;
+	return sourceMeta != nullptr ? sourceMeta->FindAnyObjectByFilter(key) : nullptr;
+}
+
+// hop 0 -> gated to the source object; deeper hops -> the real cross-metaobject dot-walk.
+const ibValueMetaObject* ibVariantDataSource::ResolveHop(unsigned int idx) const
+{
+	if (idx >= m_sourceDesc.GetSourceCount())
+		return nullptr;
+	const ibMetaID id = m_sourceDesc.GetByIdx(idx);
+	return idx == 0 ? ResolveInSource(m_ownerProperty, id) : ResolveMetaWide(m_ownerProperty, id);
+}
+
 wxString ibVariantDataSource::MakeString() const
 {
 	const std::vector<ibMetaID>& path = m_sourceDesc.GetPath();
 	if (path.empty()) return _("<not selected>");
 
-	// Full dotted path (e.g. "Producer.Region"), first hop first, leaf last.
+	// Full dotted path (e.g. "Producer.Region"), first hop first, leaf last. Hop 0 is gated
+	// to the source object (ResolveHop), so a foreign-pasted binding reads <not selected>.
 	wxString text;
 	for (size_t i = 0; i < path.size(); ++i) {
-		const ibValueMetaObject* seg = ResolveMetaWide(m_ownerProperty, path[i]);
+		const ibValueMetaObject* seg = ResolveHop((unsigned int)i);
 		if (seg == nullptr || !seg->IsAllowed()) return _("<not selected>");
 		if (i > 0) text += wxT(".");
 		text += seg->GetName();
@@ -99,20 +121,24 @@ ibGuid ibVariantDataSource::GetGuidByID(const ibMetaID& id) const
 
 bool ibVariantDataSource::IsEmptySource() const
 {
-	const ibMetaID leaf = m_sourceDesc.GetLeaf();
-	if (leaf == wxNOT_FOUND) return true;
-	// Removed / unresolved leaf reads as empty (the attribute may have been deleted from
-	// the metadata while a control was still bound to it).
-	const ibValueMetaObject* meta = ResolveMetaWide(m_ownerProperty, leaf);
-	return meta == nullptr || !meta->IsAllowed();
+	if (m_sourceDesc.GetPath().empty()) return true;
+	// GATE: the first hop must live in this binding's source object. A foreign-pasted binding
+	// (its source no longer holds the first hop) reads as empty, not as the stale original.
+	const ibValueMetaObject* first = ResolveHop(0);
+	if (first == nullptr || !first->IsAllowed()) return true;
+	// then the leaf (removed / unresolved leaf also reads as empty)
+	const ibValueMetaObject* leaf = ResolveHop(m_sourceDesc.GetSourceCount() - 1);
+	return leaf == nullptr || !leaf->IsAllowed();
 }
 
 const ibValueMetaObjectAttributeBase* ibVariantDataSource::GetSourceAttributeObject() const
 {
-	const ibMetaID leaf = m_sourceDesc.GetLeaf();
-	if (leaf == wxNOT_FOUND) return nullptr;
-	// Read-only resolve off the const GetMetaData chain — no const_cast needed.
-	return dynamic_cast<const ibValueMetaObjectAttributeBase*>(ResolveMetaWide(m_ownerProperty, leaf));
+	if (m_sourceDesc.GetLeaf() == wxNOT_FOUND) return nullptr;
+	// GATE the first hop to the source object before trusting the leaf (read-only resolve off
+	// the const GetMetaData chain — no const_cast needed).
+	const ibValueMetaObject* first = ResolveHop(0);
+	if (first == nullptr || !first->IsAllowed()) return nullptr;
+	return dynamic_cast<const ibValueMetaObjectAttributeBase*>(ResolveHop(m_sourceDesc.GetSourceCount() - 1));
 }
 
 ////////////////////////////////////////////////////////////////////////////

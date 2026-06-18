@@ -481,11 +481,19 @@ public:
 	}
 };
 
+class BACKEND_API ibDataValue;   // serialize/dataBuilder.h — node value (Child / Array)
+class BACKEND_API ibMetaData;    // resolves a reference-type clsid <-> its portable type name
+
 class BACKEND_API ibTypeDescriptionMemory {
 public:
-	//load & save object in control 
-	static bool LoadData(class ibReaderMemory& reader, ibTypeDescription& typeDesc);
-	static bool SaveData(class ibWriterMemory& writer, ibTypeDescription& typeDesc);
+	// node form: a Child (struct) — a "types" Array + the number / date / string qualifier
+	// fields. Each type entry carries its raw clsid (TypeId) AND, when metaData is given, a
+	// copy-aware TypeName (e.g. "CatalogRef.Catalog1"): a reference type's clsid is
+	// config-specific, so on load the NAME is resolved back to THIS config's live clsid —
+	// the clsid is only the same-config fallback. Shared by ibPropertyType and predefined
+	// attributes — same readable shape everywhere.
+	static bool ReadNode(const ibDataValue& value, ibTypeDescription& typeDesc, const ibMetaData* metaData = nullptr);
+	static bool WriteNode(ibDataValue& value, const ibTypeDescription& typeDesc, const ibMetaData* metaData = nullptr);
 };
 
 struct ibMetaDescription {
@@ -528,9 +536,13 @@ public:
 
 class BACKEND_API ibMetaDescriptionMemory {
 public:
-	//load & save object in control
-	static bool LoadData(class ibReaderMemory& reader, ibMetaDescription& metaDesc);
-	static bool SaveData(class ibWriterMemory& writer, ibMetaDescription& metaDesc);
+	// node form: an Array of references. With metaData each is a copy-aware GUID string
+	// (the metaobject's stable id, resolved back to THIS config's live metaId on load);
+	// without it, the raw metaId int — the same-config fallback. Mirrors ibSourceDescription
+	// and ibTypeDescription. Every property holding an ibMetaDescription (Owner, Generation,
+	// Record, ChartOfAccounts, ChartOfCharacteristicTypes) calls this.
+	static bool ReadNode(const ibDataValue& value, ibMetaDescription& metaDesc, const ibMetaData* metaData = nullptr);
+	static bool WriteNode(ibDataValue& value, const ibMetaDescription& metaDesc, const ibMetaData* metaData = nullptr);
 };
 
 #endif

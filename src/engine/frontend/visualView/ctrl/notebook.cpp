@@ -1,4 +1,5 @@
 #include "notebook.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "form.h"
 
 //***********************************************************************************
@@ -101,22 +102,22 @@ void ibValueNotebook::Cleanup(wxObject* wxobject, ibVisualHost* visualHost)
 //*                                   Data		                                   *
 //**********************************************************************************
 
-bool ibValueNotebook::LoadData(ibReaderMemory& reader)
+bool ibValueNotebook::ReadData(const ibDataNode& node)
 {
-	m_propertyOrient->SetValue(reader.r_s32());
+	m_propertyOrient->ReadNodeValue(node.GetProperty(m_propertyOrient->GetName()));
 
 	//events
-	m_eventOnPageChanged->LoadData(reader);
-	return ibValueWindow::LoadData(reader);
+	m_eventOnPageChanged->ReadNodeValue(node.GetProperty(m_eventOnPageChanged->GetName()));
+	return ibValueWindow::ReadData(node);
 }
 
-bool ibValueNotebook::SaveData(ibWriterMemory& writer)
+bool ibValueNotebook::WriteData(ibDataNode& node) const
 {
-	writer.w_s32(m_propertyOrient->GetValueAsInteger());
+	node.SetProperty(m_propertyOrient->GetName(), m_propertyOrient->GetNodeValue());
 
 	//events
-	m_eventOnPageChanged->SaveData(writer);
-	return ibValueWindow::SaveData(writer);
+	node.SetProperty(m_eventOnPageChanged->GetName(), m_eventOnPageChanged->GetNodeValue());
+	return ibValueWindow::WriteData(node);
 }
 
 //**********************************************************************************

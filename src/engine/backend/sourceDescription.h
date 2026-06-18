@@ -71,6 +71,11 @@ class BACKEND_API ibSourceDescriptionMemory {
 public:
 	static bool LoadData(class ibReaderMemory& reader, ibSourceDescription& srcDesc, const class ibMetaData* metaData);
 	static bool SaveData(class ibWriterMemory& writer, ibSourceDescription& srcDesc, const class ibMetaData* metaData);
+
+	// node form — kept as a Binary blob (the copy-aware GUID round-trip stays in the
+	// byte path); the byte writer is contained here, not in the property.
+	static bool ReadNode(const class ibDataValue& value, ibSourceDescription& srcDesc, const class ibMetaData* metaData);
+	static bool WriteNode(class ibDataValue& value, ibSourceDescription& srcDesc, const class ibMetaData* metaData);
 };
 
 #endif // !__SOURCE_DESCRIPTION_H__

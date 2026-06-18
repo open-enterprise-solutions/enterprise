@@ -1,4 +1,5 @@
 #include "gridbox.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 
 //***********************************************************************************
 //*                           IMPLEMENT_DYNAMIC_CLASS                               *
@@ -72,16 +73,18 @@ wxPrintout* ibValueGridBox::CreatePrintout() const
 //*                                   Data										   *
 //**********************************************************************************
 
-bool ibValueGridBox::LoadData(ibReaderMemory& reader)
+bool ibValueGridBox::ReadData(const ibDataNode& node)
 {
-	ibSpreadsheetDescriptionMemory::LoadData(reader, m_valueSpreadsheet->GetSpreadsheetDesc());
-	return ibValueWindow::LoadData(reader);
+	ibSpreadsheetDescriptionMemory::ReadNode(node.GetProperty(wxT("Spreadsheet")), m_valueSpreadsheet->GetSpreadsheetDesc());	
+	return ibValueWindow::ReadData(node);
 }
 
-bool ibValueGridBox::SaveData(ibWriterMemory& writer)
+bool ibValueGridBox::WriteData(ibDataNode& node) const
 {
-	ibSpreadsheetDescriptionMemory::SaveData(writer, m_valueSpreadsheet->GetSpreadsheetDesc());
-	return ibValueWindow::SaveData(writer);
+	ibDataValue spreadsheet;
+	ibSpreadsheetDescriptionMemory::WriteNode(spreadsheet, m_valueSpreadsheet->GetSpreadsheetDesc());
+	node.SetProperty(wxT("Spreadsheet"), spreadsheet);
+	return ibValueWindow::WriteData(node);
 }
 
 //***********************************************************************************

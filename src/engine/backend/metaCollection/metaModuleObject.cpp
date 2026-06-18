@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "metaModuleObject.h"
+#include "backend/serialize/dataBuilder.h"
 #include "backend/appData.h"
 #include "backend/metaData.h" // ibCompileValueCache::GetModuleManager (designer compile-cache)
 #include "backend/compiler/cache/byteCodeCache.h"
@@ -94,16 +95,16 @@ void ibValueMetaObjectModuleBase::SetDefaultProcedure(const wxString& procname, 
 //*                           Metamodule                                *
 //***********************************************************************
 
-bool ibValueMetaObjectModule::LoadData(ibReaderMemory& reader)
+bool ibValueMetaObjectModule::ReadData(const ibDataNode& node)
 {
-	//reader.r_stringZ(m_moduleData);
-	return m_propertyModule->LoadData(reader);
+	m_propertyModule->ReadNodeValue(node.GetProperty(m_propertyModule->GetName()));
+	return true;
 }
 
-bool ibValueMetaObjectModule::SaveData(ibWriterMemory& writer)
+bool ibValueMetaObjectModule::WriteData(ibDataNode& node)
 {
-	//writer.w_stringZ(m_moduleData);
-	return m_propertyModule->SaveData(writer);
+	node.SetProperty(m_propertyModule->GetName(), m_propertyModule->GetNodeValue());
+	return true;
 }
 
 //***********************************************************************
@@ -115,18 +116,17 @@ ibValueMetaObjectCommonModule::ibValueMetaObjectCommonModule(const wxString& nam
 {
 }
 
-bool ibValueMetaObjectCommonModule::LoadData(ibReaderMemory& reader)
+bool ibValueMetaObjectCommonModule::ReadData(const ibDataNode& node)
 {
-	m_propertyModule->LoadData(reader); //reader.r_stringZ(m_moduleData);
-	m_propertyGlobalModule->SetValue(reader.r_u8());
+	m_propertyModule->ReadNodeValue(node.GetProperty(m_propertyModule->GetName()));
+	m_propertyGlobalModule->ReadNodeValue(node.GetProperty(m_propertyGlobalModule->GetName()));
 	return true;
 }
 
-bool ibValueMetaObjectCommonModule::SaveData(ibWriterMemory& writer)
+bool ibValueMetaObjectCommonModule::WriteData(ibDataNode& node)
 {
-	//writer.w_stringZ(m_moduleData);
-	m_propertyModule->SaveData(writer);
-	writer.w_u8(m_propertyGlobalModule->GetValueAsBoolean());
+	node.SetProperty(m_propertyModule->GetName(), m_propertyModule->GetNodeValue());
+	node.SetProperty(m_propertyGlobalModule->GetName(), m_propertyGlobalModule->GetNodeValue());
 	return true;
 }
 

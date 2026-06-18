@@ -2,6 +2,7 @@
 #define __META_CONTEXT_H__
 
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataValue — node value (String guid)
 
 #pragma region __property_standart_h__
 
@@ -46,18 +47,26 @@ public:
 		return true;
 	}
 
-	//load & save object in control 
-	virtual bool LoadData(ibReaderMemory& reader) { return false; }
-	virtual bool SaveData(ibWriterMemory& writer) { return false; }
-
-	//copy & paste object in control 
-	virtual bool PasteData(ibReaderMemory& reader) {
-		m_metaObject->SetCommonGuid(reader.r_stringZ());
+	//per-type node value — the held metaobject's whole node (a Child sub-node)
+	virtual bool ReadNodeValue(const ibDataValue& value) override {
+		const std::shared_ptr<ibDataNode>& child = value.AsChild();
+		if (child) m_metaObject->LoadNode(*child);
+		return true;
+	}
+	virtual bool WriteNodeValue(ibDataValue& value) const override {
+		auto child = std::make_shared<ibDataNode>();
+		m_metaObject->SaveNode(*child);
+		value = ibDataValue::Child(child);
 		return true;
 	}
 
-	virtual bool CopyData(ibWriterMemory& writer) {
-		writer.w_stringZ(m_metaObject->GetCommonGuid());
+	//copy & paste — preserves the predefined child's CommonGuid
+	virtual bool CopyNodeValue(ibDataValue& value) const override {
+		value = ibDataValue::String(m_metaObject->GetCommonGuid());
+		return true;
+	}
+	virtual bool PasteNodeValue(const ibDataValue& value) override {
+		m_metaObject->SetCommonGuid(value.AsString());
 		return true;
 	}
 

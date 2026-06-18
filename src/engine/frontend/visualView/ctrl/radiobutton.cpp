@@ -1,5 +1,6 @@
 
 #include "widgets.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "backend/compiler/procUnit.h"
 
 
@@ -45,14 +46,14 @@ void ibValueRadioButton::Cleanup(wxObject* obj, ibVisualHost *visualHost)
 //*                             Property                            *
 //*******************************************************************
 
-bool ibValueRadioButton::LoadData(ibReaderMemory &reader)
+bool ibValueRadioButton::ReadData(const ibDataNode& node)
 {
-	return ibValueWindow::LoadData(reader);
+	return ibValueWindow::ReadData(node);
 }
 
-bool ibValueRadioButton::SaveData(ibWriterMemory& writer)
+bool ibValueRadioButton::WriteData(ibDataNode& node) const
 {
-	return ibValueWindow::SaveData(writer);
+	return ibValueWindow::WriteData(node);
 }
 
 //***********************************************************************

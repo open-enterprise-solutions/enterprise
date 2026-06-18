@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "form.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "backend/metaCollection/partial/commonObject.h"
 #ifdef OES_USE_WEB
 // ibWebTimer full type needed for the dtor's delete in the idle-handler
@@ -94,33 +95,25 @@ void ibValueForm::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVi
 //*                                   Data		                                   *
 //**********************************************************************************
 
-bool ibValueForm::LoadData(ibReaderMemory& reader)
+bool ibValueForm::ReadData(const ibDataNode& node)
 {
-	wxString propValue = wxEmptyString;
-	reader.r_stringZ(propValue);
-	m_propertyTitle->SetValue(propValue);
-	m_propertyOrient->SetValue(reader.r_s32());
-	reader.r_stringZ(propValue);
-	m_propertyFG->SetValue(typeConv::StringToColour(propValue));
-	reader.r_stringZ(propValue);
-	m_propertyBG->SetValue(typeConv::StringToColour(propValue));
-	m_propertyEnabled->SetValue((bool)reader.r_u8());
-	return ibValueFrame::LoadData(reader);
+	m_propertyTitle->ReadNodeValue(node.GetProperty(m_propertyTitle->GetName()));
+	m_propertyOrient->ReadNodeValue(node.GetProperty(m_propertyOrient->GetName()));
+	m_propertyFG->ReadNodeValue(node.GetProperty(m_propertyFG->GetName()));
+	m_propertyBG->ReadNodeValue(node.GetProperty(m_propertyBG->GetName()));
+	m_propertyEnabled->ReadNodeValue(node.GetProperty(m_propertyEnabled->GetName()));
+	return ibValueFrame::ReadData(node);
 }
 
-bool ibValueForm::SaveData(ibWriterMemory& writer)
+bool ibValueForm::WriteData(ibDataNode& node) const
 {
-	writer.w_stringZ(m_propertyTitle->GetValueAsString());
-	writer.w_s32(m_propertyOrient->GetValueAsInteger());
+	node.SetProperty(m_propertyTitle->GetName(), m_propertyTitle->GetNodeValue());
+	node.SetProperty(m_propertyOrient->GetName(), m_propertyOrient->GetNodeValue());
 
-	writer.w_stringZ(
-		m_propertyFG->GetValueAsString()
-	);
-	writer.w_stringZ(
-		m_propertyBG->GetValueAsString()
-	);
-	writer.w_u8(m_propertyEnabled->GetValueAsBoolean());
-	return ibValueFrame::SaveData(writer);
+	node.SetProperty(m_propertyFG->GetName(), m_propertyFG->GetNodeValue());
+	node.SetProperty(m_propertyBG->GetName(), m_propertyBG->GetNodeValue());
+	node.SetProperty(m_propertyEnabled->GetName(), m_propertyEnabled->GetNodeValue());
+	return ibValueFrame::WriteData(node);
 }
 
 //**********************************************************************************

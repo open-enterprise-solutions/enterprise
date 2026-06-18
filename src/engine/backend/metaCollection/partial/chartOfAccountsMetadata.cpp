@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "chartOfAccounts.h"
+#include "backend/serialize/dataBuilder.h"
 #include "list/objectList.h"
 #include "backend/metaData.h"
 #include "backend/moduleManager/moduleManager.h"
@@ -107,54 +108,52 @@ wxString ibValueMetaObjectChartOfAccounts::GetDataPresentation(const ibValueData
 	return wxEmptyString;
 }
 
-bool ibValueMetaObjectChartOfAccounts::LoadData(ibReaderMemory& dataReader)
+bool ibValueMetaObjectChartOfAccounts::WriteData(ibDataNode& node)
 {
-	(*m_propertyObjectModule)->LoadMeta(dataReader);
-	(*m_propertyManagerModule)->LoadMeta(dataReader);
-	m_propertyDefFormObject->SetValue(GetIdByGuid(dataReader.r_stringZ()));
-	m_propertyDefFormFolder->SetValue(GetIdByGuid(dataReader.r_stringZ()));
-	m_propertyDefFormList->SetValue(GetIdByGuid(dataReader.r_stringZ()));
-	m_propertyDefFormSelect->SetValue(GetIdByGuid(dataReader.r_stringZ()));
-	m_propertyDefFormFolderSelect->SetValue(GetIdByGuid(dataReader.r_stringZ()));
+	node.SetProperty(m_propertyObjectModule->GetName(), m_propertyObjectModule->GetNodeValue());
+	node.SetProperty(m_propertyManagerModule->GetName(), m_propertyManagerModule->GetNodeValue());
 
-	//load default attributes:
-	(*m_propertyAttributeAccountType)->LoadMeta(dataReader);
-	(*m_propertyAttributeOffBalance)->LoadMeta(dataReader);
-	(*m_propertyAttributeQuantitative)->LoadMeta(dataReader);
-	(*m_propertyAttributeCurrency)->LoadMeta(dataReader);
-	(*m_propertyAttributeMaxSubcontoCount)->LoadMeta(dataReader);
+	node.SetValue(m_propertyDefFormObject->GetName(), GetGuidByID(m_propertyDefFormObject->GetValueAsInteger()).str());
+	node.SetValue(m_propertyDefFormFolder->GetName(), GetGuidByID(m_propertyDefFormFolder->GetValueAsInteger()).str());
+	node.SetValue(m_propertyDefFormList->GetName(), GetGuidByID(m_propertyDefFormList->GetValueAsInteger()).str());
+	node.SetValue(m_propertyDefFormSelect->GetName(), GetGuidByID(m_propertyDefFormSelect->GetValueAsInteger()).str());
+	node.SetValue(m_propertyDefFormFolderSelect->GetName(), GetGuidByID(m_propertyDefFormFolderSelect->GetValueAsInteger()).str());
 
-	(*m_propertySubcontoKindsTable)->LoadMeta(dataReader);
+	node.SetProperty(m_propertyAttributeAccountType->GetName(), m_propertyAttributeAccountType->GetNodeValue());
+	node.SetProperty(m_propertyAttributeOffBalance->GetName(), m_propertyAttributeOffBalance->GetNodeValue());
+	node.SetProperty(m_propertyAttributeQuantitative->GetName(), m_propertyAttributeQuantitative->GetNodeValue());
+	node.SetProperty(m_propertyAttributeCurrency->GetName(), m_propertyAttributeCurrency->GetNodeValue());
+	node.SetProperty(m_propertyAttributeMaxSubcontoCount->GetName(), m_propertyAttributeMaxSubcontoCount->GetNodeValue());
 
-	if (!m_propertyChartOfCharacteristicTypes->LoadData(dataReader))
-		return false;
+	node.SetProperty(m_propertySubcontoKindsTable->GetName(), m_propertySubcontoKindsTable->GetNodeValue());
 
-	return ibValueMetaObjectRecordDataHierarchyMutableRef::LoadData(dataReader);
+	node.SetProperty(m_propertyChartOfCharacteristicTypes->GetName(), m_propertyChartOfCharacteristicTypes->GetNodeValue());
+
+	return ibValueMetaObjectRecordDataHierarchyMutableRef::WriteData(node);
 }
 
-bool ibValueMetaObjectChartOfAccounts::SaveData(ibWriterMemory& dataWritter)
+bool ibValueMetaObjectChartOfAccounts::ReadData(const ibDataNode& node)
 {
-	(*m_propertyObjectModule)->SaveMeta(dataWritter);
-	(*m_propertyManagerModule)->SaveMeta(dataWritter);
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormObject->GetValueAsInteger()));
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormFolder->GetValueAsInteger()));
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormList->GetValueAsInteger()));
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormSelect->GetValueAsInteger()));
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormFolderSelect->GetValueAsInteger()));
+	m_propertyObjectModule->ReadNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
+	m_propertyManagerModule->ReadNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
 
-	//save default attributes:
-	(*m_propertyAttributeAccountType)->SaveMeta(dataWritter);
-	(*m_propertyAttributeOffBalance)->SaveMeta(dataWritter);
-	(*m_propertyAttributeQuantitative)->SaveMeta(dataWritter);
-	(*m_propertyAttributeCurrency)->SaveMeta(dataWritter);
-	(*m_propertyAttributeMaxSubcontoCount)->SaveMeta(dataWritter);
+	m_propertyDefFormObject->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormObject->GetName())));
+	m_propertyDefFormFolder->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormFolder->GetName())));
+	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormList->GetName())));
+	m_propertyDefFormSelect->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormSelect->GetName())));
+	m_propertyDefFormFolderSelect->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormFolderSelect->GetName())));
 
-	(*m_propertySubcontoKindsTable)->SaveMeta(dataWritter);
+	m_propertyAttributeAccountType->ReadNodeValue(node.GetProperty(m_propertyAttributeAccountType->GetName()));
+	m_propertyAttributeOffBalance->ReadNodeValue(node.GetProperty(m_propertyAttributeOffBalance->GetName()));
+	m_propertyAttributeQuantitative->ReadNodeValue(node.GetProperty(m_propertyAttributeQuantitative->GetName()));
+	m_propertyAttributeCurrency->ReadNodeValue(node.GetProperty(m_propertyAttributeCurrency->GetName()));
+	m_propertyAttributeMaxSubcontoCount->ReadNodeValue(node.GetProperty(m_propertyAttributeMaxSubcontoCount->GetName()));
 
-	if (!m_propertyChartOfCharacteristicTypes->SaveData(dataWritter))
-		return false;
+	m_propertySubcontoKindsTable->ReadNodeValue(node.GetProperty(m_propertySubcontoKindsTable->GetName()));
 
-	return ibValueMetaObjectRecordDataHierarchyMutableRef::SaveData(dataWritter);
+	m_propertyChartOfCharacteristicTypes->ReadNodeValue(node.GetProperty(m_propertyChartOfCharacteristicTypes->GetName()));
+
+	return ibValueMetaObjectRecordDataHierarchyMutableRef::ReadData(node);
 }
 
 bool ibValueMetaObjectChartOfAccounts::OnCreateMetaObject(ibMetaData* metaData, int flags)

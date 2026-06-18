@@ -1,5 +1,6 @@
 
 #include "sizer.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #ifdef OES_USE_WEB
 #include "frontend/web/webSizer.h"
 #endif
@@ -95,45 +96,38 @@ void ibValueStaticBoxSizer::Cleanup(wxObject* wxobject, ibVisualHost* visualHost
 
 
 
-bool ibValueStaticBoxSizer::LoadData(ibReaderMemory& reader)
+bool ibValueStaticBoxSizer::ReadData(const ibDataNode& node)
 {
-	m_propertyOrient->SetValue(reader.r_u16());	
-	wxString propValue = wxEmptyString;
-	reader.r_stringZ(propValue);
-	m_propertyTitle->SetValue(propValue);
-	reader.r_stringZ(propValue);
-	m_propertyFont->SetValue(typeConv::StringToFont(propValue));
-	reader.r_stringZ(propValue);
-	m_propertyFG->SetValue(typeConv::StringToColour(propValue));
-	reader.r_stringZ(propValue);
-	m_propertyBG->SetValue(typeConv::StringToColour(propValue));
+	m_propertyOrient->ReadNodeValue(node.GetProperty(m_propertyOrient->GetName()));	
+	m_propertyTitle->ReadNodeValue(node.GetProperty(m_propertyTitle->GetName()));
+	m_propertyFont->ReadNodeValue(node.GetProperty(m_propertyFont->GetName()));
+	m_propertyFG->ReadNodeValue(node.GetProperty(m_propertyFG->GetName()));
+	m_propertyBG->ReadNodeValue(node.GetProperty(m_propertyBG->GetName()));
 
-	reader.r_stringZ(propValue);
-	m_propertyTooltip->SetValue(propValue);
-	reader.r_stringZ(propValue);
-	m_propertyContextHelp->SetValue(propValue);
+	m_propertyTooltip->ReadNodeValue(node.GetProperty(m_propertyTooltip->GetName()));
+	m_propertyContextHelp->ReadNodeValue(node.GetProperty(m_propertyContextHelp->GetName()));
 
-	m_propertyContextMenu->SetValue(reader.r_u8());
-	m_propertyEnabled->SetValue(reader.r_u8());
-	m_propertyVisible->SetValue(reader.r_u8());
+	m_propertyContextMenu->ReadNodeValue(node.GetProperty(m_propertyContextMenu->GetName()));
+	m_propertyEnabled->ReadNodeValue(node.GetProperty(m_propertyEnabled->GetName()));
+	m_propertyVisible->ReadNodeValue(node.GetProperty(m_propertyVisible->GetName()));
 
-	return ibValueSizer::LoadData(reader);
+	return ibValueSizer::ReadData(node);
 }
 
-bool ibValueStaticBoxSizer::SaveData(ibWriterMemory& writer)
+bool ibValueStaticBoxSizer::WriteData(ibDataNode& node) const
 {
-	writer.w_u16(m_propertyOrient->GetValueAsInteger());
-	writer.w_stringZ(m_propertyTitle->GetValueAsString());
-	writer.w_stringZ(m_propertyFont->GetValueAsString());
-	writer.w_stringZ(m_propertyFG->GetValueAsString());
-	writer.w_stringZ(m_propertyBG->GetValueAsString());
-	writer.w_stringZ(m_propertyTooltip->GetValueAsString());
-	writer.w_stringZ(m_propertyContextHelp->GetValueAsString());
-	writer.w_u8(m_propertyContextMenu->GetValueAsBoolean());
-	writer.w_u8(m_propertyEnabled->GetValueAsBoolean());
-	writer.w_u8(m_propertyVisible->GetValueAsBoolean());
+	node.SetProperty(m_propertyOrient->GetName(), m_propertyOrient->GetNodeValue());
+	node.SetProperty(m_propertyTitle->GetName(), m_propertyTitle->GetNodeValue());
+	node.SetProperty(m_propertyFont->GetName(), m_propertyFont->GetNodeValue());
+	node.SetProperty(m_propertyFG->GetName(), m_propertyFG->GetNodeValue());
+	node.SetProperty(m_propertyBG->GetName(), m_propertyBG->GetNodeValue());
+	node.SetProperty(m_propertyTooltip->GetName(), m_propertyTooltip->GetNodeValue());
+	node.SetProperty(m_propertyContextHelp->GetName(), m_propertyContextHelp->GetNodeValue());
+	node.SetProperty(m_propertyContextMenu->GetName(), m_propertyContextMenu->GetNodeValue());
+	node.SetProperty(m_propertyEnabled->GetName(), m_propertyEnabled->GetNodeValue());
+	node.SetProperty(m_propertyVisible->GetName(), m_propertyVisible->GetNodeValue());
 
-	return ibValueSizer::SaveData(writer);
+	return ibValueSizer::WriteData(node);
 }
 
 //***********************************************************************

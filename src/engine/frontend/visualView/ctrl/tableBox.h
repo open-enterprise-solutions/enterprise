@@ -161,8 +161,8 @@ class ibValueModelTableBox : public ibValueWindow,
 
 
 	//load & save object in control 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool ReadData(const ibDataNode& node);
+	virtual bool WriteData(ibDataNode& node) const;
 
 	/**
 	* Override actionData
@@ -411,8 +411,8 @@ public:
 	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue);
 
 	//load & save object in control 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool ReadData(const ibDataNode& node);
+	virtual bool WriteData(ibDataNode& node) const;
 
 public:
 

@@ -311,6 +311,12 @@
     <ClInclude Include="fileSystem\fs.h">
       <Filter>fileSystem</Filter>
     </ClInclude>
+    <ClInclude Include="serialize\dataBuilder.h">
+      <Filter>serialize</Filter>
+    </ClInclude>
+    <ClInclude Include="serialize\jsonProvider.h">
+      <Filter>serialize</Filter>
+    </ClInclude>
     <ClInclude Include="fileSystem\types.h">
       <Filter>fileSystem</Filter>
     </ClInclude>
@@ -1041,6 +1047,12 @@
     </ClCompile>
     <ClCompile Include="fileSystem\fs.cpp">
       <Filter>fileSystem</Filter>
+    </ClCompile>
+    <ClCompile Include="serialize\dataBuilder.cpp">
+      <Filter>serialize</Filter>
+    </ClCompile>
+    <ClCompile Include="serialize\jsonProvider.cpp">
+      <Filter>serialize</Filter>
     </ClCompile>
     <ClCompile Include="metadataConfiguration.cpp" />
     <ClCompile Include="roleHelper.cpp" />
@@ -1814,6 +1826,9 @@
     </Filter>
     <Filter Include="fileSystem">
       <UniqueIdentifier>{abe9471e-5391-4bba-a9f7-6f050759d4b2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="serialize">
+      <UniqueIdentifier>{3f1c8a64-2d7e-4b19-9c0a-7e5b1a2f6d40}</UniqueIdentifier>
     </Filter>
     <Filter Include="fileSystem\lz">
       <UniqueIdentifier>{b90ba678-9672-4d50-aebb-fac2355d5f67}</UniqueIdentifier>

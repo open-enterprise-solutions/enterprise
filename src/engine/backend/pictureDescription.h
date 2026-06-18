@@ -28,9 +28,9 @@ struct ibExternalPictureDescription {
 
 class BACKEND_API ibExternalPictureDescriptionMemory {
 public:
-	//load & save object in control 
-	static bool LoadData(class ibReaderMemory& reader, ibExternalPictureDescription& pictureDesc);
-	static bool SaveData(class ibWriterMemory& writer, ibExternalPictureDescription& pictureDesc);
+	// node form: a Child { Name, Buffer(image bytes), Width, Height }
+	static bool ReadNode(const class ibDataValue& value, ibExternalPictureDescription& pictureDesc);
+	static bool WriteNode(class ibDataValue& value, const ibExternalPictureDescription& pictureDesc);
 };
 
 struct ibPictureDescription {
@@ -80,9 +80,9 @@ struct ibPictureDescription {
 
 class BACKEND_API ibPictureDescriptionMemory {
 public:
-	//load & save object in control 
-	static bool LoadData(class ibReaderMemory& reader, ibPictureDescription& pictureDesc);
-	static bool SaveData(class ibWriterMemory& writer, ibPictureDescription& pictureDesc);
+	// node form: a Child { Type, then per type ClassId / Guid / Image(Child) }
+	static bool ReadNode(const class ibDataValue& value, ibPictureDescription& pictureDesc);
+	static bool WriteNode(class ibDataValue& value, const ibPictureDescription& pictureDesc);
 };
 
 // Initialize with XPM data

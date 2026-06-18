@@ -5,6 +5,7 @@
 
 #include "metaAttributeObject.h"
 #include "backend/metadata.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode — per-type DescribeData
 
 ////////////////////////////////////////////////////////////////////////////
 
@@ -132,44 +133,44 @@ bool ibValueMetaObjectAttributeBase::OnAfterRunMetaObject(int flags)
 //*                               Data				                    *
 //***********************************************************************
 
-bool ibValueMetaObjectAttribute::LoadData(ibReaderMemory& reader)
+// Per-type data = the attribute's properties, each serializing ITSELF into the
+// node (self-naming via GetName(), typed where the property type overrides SaveTo):
+// FillCheck is a readable Bool; ItemMode/Select/Type ride the base Binary bridge
+// until their property types override (enum -> Int, Type -> Child sub-node).
+
+bool ibValueMetaObjectAttribute::ReadData(const ibDataNode& node)
 {
-	if (!m_propertyType->LoadData(reader))
-		return false;
-
-	m_propertyFillCheck->LoadData(reader);
-	m_propertyItemMode->LoadData(reader);
-	m_propertySelectMode->LoadData(reader);
-
+	m_propertyType->ReadNodeValue(node.GetProperty(m_propertyType->GetName()));
+	m_propertyFillCheck->ReadNodeValue(node.GetProperty(m_propertyFillCheck->GetName()));
+	m_propertyItemMode->ReadNodeValue(node.GetProperty(m_propertyItemMode->GetName()));
+	m_propertySelectMode->ReadNodeValue(node.GetProperty(m_propertySelectMode->GetName()));
+	return true;
+}
+bool ibValueMetaObjectAttribute::WriteData(ibDataNode& node)
+{
+	node.SetProperty(m_propertyType->GetName(),       m_propertyType->GetNodeValue());
+	node.SetProperty(m_propertyFillCheck->GetName(),  m_propertyFillCheck->GetNodeValue());
+	node.SetProperty(m_propertyItemMode->GetName(),   m_propertyItemMode->GetNodeValue());
+	node.SetProperty(m_propertySelectMode->GetName(), m_propertySelectMode->GetNodeValue());
 	return true;
 }
 
-bool ibValueMetaObjectAttribute::SaveData(ibWriterMemory& writer)
-{
-	if (!m_propertyType->SaveData(writer))
-		return false;
 
-	m_propertyFillCheck->SaveData(writer);
-	m_propertyItemMode->SaveData(writer);
-	m_propertySelectMode->SaveData(writer);
+// Node form: the type descriptor as a Child (same readable shape as ibPropertyType,
+// via the shared ibTypeDescriptionMemory::WriteNode) + the fill flag.
+bool ibValueMetaObjectAttributePredefined::WriteData(ibDataNode& node)
+{
+	ibDataValue typeValue;
+	ibTypeDescriptionMemory::WriteNode(typeValue, m_typeDesc, GetMetaData());
+	node.SetProperty(wxT("Type"), typeValue);
+	node.SetValue(wxT("FillCheck"), (bool)m_fillCheck);
 	return true;
 }
 
-bool ibValueMetaObjectAttributePredefined::LoadData(ibReaderMemory& reader)
+bool ibValueMetaObjectAttributePredefined::ReadData(const ibDataNode& node)
 {
-	if (!ibTypeDescriptionMemory::LoadData(reader, m_typeDesc))
-		return false;
-
-	m_fillCheck = reader.r_u8();
-	return true;
-}
-
-bool ibValueMetaObjectAttributePredefined::SaveData(ibWriterMemory& writer)
-{
-	if (!ibTypeDescriptionMemory::SaveData(writer, m_typeDesc))
-		return false;
-
-	writer.w_u8(m_fillCheck);
+	ibTypeDescriptionMemory::ReadNode(node.GetProperty(wxT("Type")), m_typeDesc, GetMetaData());
+	m_fillCheck = node.GetValue<bool>(wxT("FillCheck"));
 	return true;
 }
 

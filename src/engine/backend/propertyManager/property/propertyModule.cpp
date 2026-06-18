@@ -1,4 +1,5 @@
 #include "propertyModule.h"
+#include "backend/serialize/dataBuilder.h"
 #include "backend/propertyManager/property/variant/variantModule.h"
 
 #define chunkForm 0x023456543
@@ -39,14 +40,14 @@ bool ibPropertyModule::GetDataValue(ibValue& pvarPropVal) const
 	return true;
 }
 
-bool ibPropertyModule::LoadData(ibReaderMemory& reader)
+bool ibPropertyModule::ReadNodeValue(const ibDataValue& value)
 {
-	ibPropertyModule::SetValue(reader.r_stringZ());
+	ibPropertyModule::SetValue(value.AsString());
 	return true;
 }
 
-bool ibPropertyModule::SaveData(ibWriterMemory& writer)
+bool ibPropertyModule::WriteNodeValue(ibDataValue& value) const
 {
-	writer.w_stringZ(GetValueAsString());
+	value = ibDataValue::String(ibPropertyModule::GetValueAsString());
 	return true;
 }

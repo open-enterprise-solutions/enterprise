@@ -1,4 +1,5 @@
 ﻿#include "informationRegister.h"
+#include "backend/serialize/dataBuilder.h"
 #include "list/objectList.h"
 #include "backend/metaData.h"
 #include "backend/moduleManager/moduleManager.h"
@@ -62,39 +63,32 @@ ibBackendValueForm* ibValueMetaObjectInformationRegister::GetListForm(const wxSt
 //*                       Save & load metaData                              *
 //***************************************************************************
 
-bool ibValueMetaObjectInformationRegister::LoadData(ibReaderMemory& dataReader)
+bool ibValueMetaObjectInformationRegister::WriteData(ibDataNode& node)
 {
-	//load default form 
-	m_propertyDefFormRecord->SetValue(GetIdByGuid(dataReader.r_stringZ()));
-	m_propertyDefFormList->SetValue(GetIdByGuid(dataReader.r_stringZ()));
+	node.SetValue(m_propertyDefFormRecord->GetName(), GetGuidByID(m_propertyDefFormRecord->GetValueAsInteger()).str());
+	node.SetValue(m_propertyDefFormList->GetName(), GetGuidByID(m_propertyDefFormList->GetValueAsInteger()).str());
 
-	//load data 
-	m_propertyWriteMode->SetValue(dataReader.r_u16());
-	m_propertyPeriodicity->SetValue(dataReader.r_u16());
+	node.SetProperty(m_propertyWriteMode->GetName(), m_propertyWriteMode->GetNodeValue());
+	node.SetProperty(m_propertyPeriodicity->GetName(), m_propertyPeriodicity->GetNodeValue());
 
-	//load object module
-	(*m_propertyObjectModule)->LoadMeta(dataReader);
-	(*m_propertyManagerModule)->LoadMeta(dataReader);
+	node.SetProperty(m_propertyObjectModule->GetName(), m_propertyObjectModule->GetNodeValue());
+	node.SetProperty(m_propertyManagerModule->GetName(), m_propertyManagerModule->GetNodeValue());
 
-	return ibValueMetaObjectRegisterData::LoadData(dataReader);
+	return ibValueMetaObjectRegisterData::WriteData(node);
 }
 
-bool ibValueMetaObjectInformationRegister::SaveData(ibWriterMemory& dataWritter)
+bool ibValueMetaObjectInformationRegister::ReadData(const ibDataNode& node)
 {
-	//save default form 
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormRecord->GetValueAsInteger()));
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormList->GetValueAsInteger()));
+	m_propertyDefFormRecord->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormRecord->GetName())));
+	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormList->GetName())));
 
-	//save data
-	dataWritter.w_u16(m_propertyWriteMode->GetValueAsInteger());
-	dataWritter.w_u16(m_propertyPeriodicity->GetValueAsInteger());
+	m_propertyWriteMode->ReadNodeValue(node.GetProperty(m_propertyWriteMode->GetName()));
+	m_propertyPeriodicity->ReadNodeValue(node.GetProperty(m_propertyPeriodicity->GetName()));
 
-	//Save object module
-	(*m_propertyObjectModule)->SaveMeta(dataWritter);
-	(*m_propertyManagerModule)->SaveMeta(dataWritter);
+	m_propertyObjectModule->ReadNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
+	m_propertyManagerModule->ReadNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
 
-	//create or update table:
-	return ibValueMetaObjectRegisterData::SaveData(dataWritter);
+	return ibValueMetaObjectRegisterData::ReadData(node);
 }
 
 //***********************************************************************

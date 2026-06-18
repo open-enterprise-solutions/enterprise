@@ -1,4 +1,5 @@
 #include "htmlbox.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 
 //***********************************************************************************
 //*                           IMPLEMENT_DYNAMIC_CLASS                               *
@@ -58,14 +59,14 @@ void ibValueHTMLBox::Cleanup(wxObject* obj, ibVisualHost* visualHost)
 //*                                   Data										   *
 //**********************************************************************************
 
-bool ibValueHTMLBox::LoadData(ibReaderMemory& reader)
+bool ibValueHTMLBox::ReadData(const ibDataNode& node)
 {
-	return ibValueWindow::LoadData(reader);
+	return ibValueWindow::ReadData(node);
 }
 
-bool ibValueHTMLBox::SaveData(ibWriterMemory& writer)
+bool ibValueHTMLBox::WriteData(ibDataNode& node) const
 {
-	return ibValueWindow::SaveData(writer);
+	return ibValueWindow::WriteData(node);
 }
 
 //**********************************************************************************

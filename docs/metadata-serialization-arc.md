@@ -1,13 +1,16 @@
 # Metadata serialization arc — self-serializing node + atomic load/save
 
-> **SUPERSEDED BY DIRECTION (2026-06-17):** the node-owned chunk-walk here is
-> heading for **replacement**, not completion. See
-> [schema-first-metadata.md](schema-first-metadata.md): the schema becomes the
-> owner, metadata the skeleton, and the chunk-blob gives way to a named
-> file-tree (the `Save`/`Load` walk is reused through a field-visitor backend).
-> Treat this arc as background/history; do not invest in building it out as-is.
+> **REPLACED (2026-06-18) — HISTORY ONLY.** The byte `SaveData`/`LoadData` /
+> `SaveMeta`/`LoadMeta` / `SaveSubtree`/`LoadSubtree` chunk-walk described here was
+> **removed**, not completed. Self-serialization now goes through the node model +
+> pluggable providers (`ibDataNode` / `ibBinaryProvider` / `ibJsonProvider`, per-type
+> `WriteData`/`ReadData`) — see the **LANDED** section of
+> [schema-first-metadata.md](schema-first-metadata.md) for the shipped names. The
+> atomic detached-root load/swap and the two-phase preflight ideas below are the
+> parts that carried over (still valid). Read this file for that design rationale and
+> the apply-flow fixes; ignore the byte-walk specifics.
 
-Status: **partially implemented in the working copy — NOT yet built/verified.**
+Status: **byte path REMOVED; node path landed (schema-first-metadata.md). Below = design history.**
 
 Landed (working copy, unbuilt):
 - Node-owned walk on `ibValueMetaObject`: `SaveSubtree` / `LoadSubtree` / `DeleteSubtree`

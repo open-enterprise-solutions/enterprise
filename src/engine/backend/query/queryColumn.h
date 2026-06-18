@@ -121,11 +121,14 @@ public:
 	RawType               GetRawType()      const { return m_type; }   // the provider's bind selector
 
 	// Convenience makers — read cleaner than naming the enum at the call site, with no extra
-	// type to maintain (these are static factories, not subclasses). Only the kinds actually
-	// scaffolded by ContributeTables / used by tests are kept; the rest were dead.
-	static ibRawDBColumn String (const wxString& field) { return ibRawDBColumn(field, RawType::String);  }
-	static ibRawDBColumn Guid   (const wxString& field) { return ibRawDBColumn(field, RawType::Guid);    }
-	static ibRawDBColumn Blob   (const wxString& field) { return ibRawDBColumn(field, RawType::Blob);    }
+	// type to maintain (these are static factories, not subclasses). One per RawType.
+	static ibRawDBColumn String   (const wxString& field) { return ibRawDBColumn(field, RawType::String);    }
+	static ibRawDBColumn Number   (const wxString& field) { return ibRawDBColumn(field, RawType::Number);    }
+	static ibRawDBColumn Reference(const wxString& field) { return ibRawDBColumn(field, RawType::Reference); }
+	static ibRawDBColumn Date     (const wxString& field) { return ibRawDBColumn(field, RawType::Date);      }
+	static ibRawDBColumn Boolean  (const wxString& field) { return ibRawDBColumn(field, RawType::Boolean);   }
+	static ibRawDBColumn Guid     (const wxString& field) { return ibRawDBColumn(field, RawType::Guid);      }
+	static ibRawDBColumn Blob     (const wxString& field) { return ibRawDBColumn(field, RawType::Blob);      }
 
 private:
 	wxString                  m_field;

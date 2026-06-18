@@ -11,6 +11,8 @@ class BACKEND_API ibPropertyObject;
 
 class BACKEND_API ibProperty;
 class BACKEND_API ibEvent;
+class BACKEND_API ibDataNode;   // serialize/dataBuilder.h — universal structure node
+class BACKEND_API ibDataValue;  // serialize/dataBuilder.h — a node value (scalar / Child)
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -198,13 +200,29 @@ public:
 	virtual wxObject* GetPGProperty() const = 0;
 	virtual void RefreshPGProperty(wxPGProperty* pg) {};
 
-	//load & save object in control 
-	virtual bool LoadData(ibReaderMemory& reader) = 0;
-	virtual bool SaveData(ibWriterMemory& writer) = 0;
+	// Property <-> node value — the ONLY per-property serialization (no byte
+	// SaveData/LoadData anymore). Read/Write pair: bool + out-param + const on the
+	// writer, PARALLEL to the runtime GetDataValue/SetDataValue but over ibDataValue.
+	// WriteNodeValue yields the property's value into `value`: a typed scalar, or a
+	// Child sub-node (a SET of values) for a composite; the sub-node is shared via
+	// shared_ptr, so the owner can place the SAME value under one or several named
+	// areas cheaply. ReadNodeValue sets the property from a value found by name:
+	//     ibDataValue v; prop->WriteNodeValue(v); node.SetProperty(name, v);
+	virtual bool ReadNodeValue(const ibDataValue& value) = 0;
+	virtual bool WriteNodeValue(ibDataValue& value) const = 0;
 
-	//copy & paste object in control 
-	virtual bool PasteData(ibReaderMemory& reader) { return LoadData(reader); }
-	virtual bool CopyData(ibWriterMemory& writer) { return SaveData(writer); }
+	// Non-virtual by-value convenience over WriteNodeValue, for owners that "get the
+	// value as is" inline (yields null when the writer declines). A DIFFERENT name
+	// from the virtual, so an override does NOT hide it — no `using` needed:
+	//     node.SetProperty(name, prop->GetNodeValue());
+	ibDataValue GetNodeValue() const;
+
+	// copy & paste over the NODE value (clipboard hook, no bytes). Default = the node
+	// value (GetNodeValue / ReadNodeValue); a type whose clipboard shape differs (the
+	// form pulls its LIVE data) overrides. The byte transport lives once at the
+	// owner's CopyProperty / PasteProperty boundary, through the binary provider.
+	virtual bool CopyNodeValue(ibDataValue& value) const;
+	virtual bool PasteNodeValue(const ibDataValue& value);
 
 	//Set/Get property data
 	virtual bool SetDataValue(const ibValue& varPropVal) = 0;
@@ -227,8 +245,6 @@ protected:
 	ibProperty(ibPropertyCategory* cat, const wxString& name, const wxVariant& value) : ibBackendProperty(cat, name, value) { InitProperty(cat, value); }
 	ibProperty(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxVariant& value) : ibBackendProperty(cat, name, label, value) { InitProperty(cat, value); }
 	ibProperty(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const wxVariant& value) : ibBackendProperty(cat, name, label, helpString, value) { InitProperty(cat, value); }
-public:
-	virtual bool PasteData(ibReaderMemory& reader);
 };
 
 class BACKEND_API ibEvent : public ibBackendProperty {
@@ -322,9 +338,20 @@ public:
 	/// Default false; ibValueMetaObject pins predefined children.
 	virtual bool IsPinnedToParent() const { return false; }
 
-	/// Gets the metadata object
+	/// Gets the metadata object. The CONST overload is the one types actually implement
+	/// (a control resolves it through its owning form; ibValueMetaObject returns m_metaData).
 	virtual const ibMetaData* GetMetaData() const { return nullptr; }
-	virtual ibMetaData* GetMetaData() { return nullptr; }
+	/// The non-const overload is for MUTABLE metadata owners only (ibValueMetaObject). A type
+	/// that overrides just the const one (e.g. a form control) inherits THIS default — and a
+	/// call through a non-const ibPropertyObject* then silently yields null. That is the exact
+	/// "binding loses its source" trap: a property serialising against a null metaData writes
+	/// null GUIDs. Reach the const overload through a const pointer unless you truly own a
+	/// mutable metaData. Guard so the trap surfaces in debug instead of corrupting data.
+	virtual ibMetaData* GetMetaData() {
+		wxFAIL_MSG(wxT("ibPropertyObject::GetMetaData(): non-const overload not overridden — ")
+			wxT("call the const one (through a const pointer); this returns null."));
+		return nullptr;
+	}
 
 	/**
 	* Obtiene la propiedad identificada por el nombre.
@@ -398,7 +425,7 @@ public:
 
 protected:
 
-	//copy & paste property 
+	//copy & paste property
 	bool CopyProperty(ibWriterMemory& writer) const;
 	bool PasteProperty(ibReaderMemory& reader);
 

@@ -6,6 +6,7 @@
 #include "control.h"
 #include "form.h"
 #include "backend/compiler/procUnit.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode / ibDataBuilder / ibBinaryProvider
 
 #ifdef OES_USE_WEB
 #include <iostream>
@@ -62,70 +63,67 @@ bool ibValueFrame::IsEditable() const
 	return false;
 }
 
+// The control is serialized as a node tree (header + per-type WriteData), rendered to
+// the form buffer by the binary provider — the same path metaobjects use.
 bool ibValueFrame::LoadControl(const ibValueMetaObjectFormBase* metaForm, ibReaderMemory& dataReader)
 {
-#ifdef OES_USE_WEB
-	std::cerr << "[LoadControl] enter this=" << this
-		<< " metaForm=" << metaForm << std::endl;
-#endif
-	//save meta version
-	const ibVersionID& version = dataReader.r_u32(); //reserved
-
-#ifdef OES_USE_WEB
-	std::cerr << "[LoadControl] version ok, reading m_controlId" << std::endl;
-#endif
-
-	//Load meta id
-	m_controlId = dataReader.r_u32();
-
-#ifdef OES_USE_WEB
-	std::cerr << "[LoadControl] m_controlId=" << m_controlId << std::endl;
-#endif
-
-	//Load standart fields
-	SetControlName(dataReader.r_stringZ());
-
-#ifdef OES_USE_WEB
-	std::cerr << "[LoadControl] name set" << std::endl;
-#endif
-
-	//default value
-	m_expanded = dataReader.r_u8();
-
-	//load frame
-	wxMemoryBuffer buffer_chunk;
-	if (!dataReader.r_chunk(frameBlock, buffer_chunk))
+	ibDataBuilder builder;
+	if (!builder.Load(ibBinaryProvider(), dataReader))
 		return false;
-
-	ibReaderMemory dataObjectReader(buffer_chunk);
-	dataObjectReader.r_u32(); //reserved flags
-	if (!LoadData(dataObjectReader))
-		return false;
-
-	return true;
+	return LoadNode(builder.Root());
 }
 
 bool ibValueFrame::SaveControl(const ibValueMetaObjectFormBase* metaForm, ibWriterMemory& dataWritter, bool copy_form)
 {
-	//save meta version 
-	dataWritter.w_u32(version_oes_last); //reserved 
+	ibDataBuilder builder;
+	if (!SaveNode(builder.Root()))
+		return false;
+	return builder.Save(ibBinaryProvider(), dataWritter);
+}
 
-	//save meta id 
-	dataWritter.w_u32(m_controlId);
-
-	//save standart fields
-	dataWritter.w_stringZ(GetControlName());
-
-	//default value 
-	dataWritter.w_u8(m_expanded);
-
-	//save frame 
-	ibWriterMemory dataObjectWritter;
-	dataObjectWritter.w_u32(0); //reserved flags
-	if (!SaveData(dataObjectWritter))
+// control header (id / name / expanded as fields) + per-type Read/WriteData, then the
+// sub-controls recurse as node CHILDREN — so a control's node IS its whole subtree and
+// the form is one transparent node tree (the provider frames each child in kChildBlock).
+bool ibValueFrame::LoadNode(const ibDataNode& node)
+{
+	m_controlId = (ibFormID)node.GetValue<s32>(wxT("ControlId"));
+	SetControlName(node.GetValue<wxString>(wxT("Name")));
+	m_expanded = node.GetValue<bool>(wxT("Expanded"));
+	if (!ReadData(node))
 		return false;
 
-	dataWritter.w_chunk(frameBlock, dataObjectWritter.buffer());
+	// Re-create each sub-control through the owning form's factory (NewObject attaches it
+	// to this parent and stamps the owner form), then recurse into its own subtree.
+	ibValueForm* ownerForm = GetOwnerForm();
+	if (ownerForm != nullptr) {
+		for (const ibDataNode& childNode : node.Children()) {
+			ibValueFrame* child = ownerForm->NewObject(childNode.GetClsid(), this, false);
+			if (child == nullptr)
+				continue;
+			if (!child->LoadNode(childNode))
+				return false;
+		}
+	}
+	return true;
+}
+
+bool ibValueFrame::SaveNode(ibDataNode& node)
+{
+	node.SetValue(wxT("ControlId"), (s32)m_controlId);
+	node.SetValue(wxT("Name"),      GetControlName());
+	node.SetValue(wxT("Expanded"),  m_expanded);
+	if (!WriteData(node))
+		return false;
+
+	// clsid = control type, metaId = control id — the load side recreates by clsid.
+	for (unsigned int idx = 0; idx < GetChildCount(); idx++) {
+		ibValueFrame* child = GetChild(idx);
+		if (child == nullptr)
+			continue;
+		ibDataNode& childNode = node.AddChild(child->GetClassType(), child->GetControlID());
+		if (!child->SaveNode(childNode))
+			return false;
+	}
 	return true;
 }
 

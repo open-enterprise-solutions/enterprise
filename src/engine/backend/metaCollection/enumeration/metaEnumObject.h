@@ -15,8 +15,6 @@ class BACKEND_API ibValueMetaObjectEnum : public ibValueMetaObject {
 	static wxIcon GetIconGroup();
 
 	//load & save metaData from DB 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
 };
 
 #endif

@@ -1,5 +1,6 @@
 #include "propertySpreadsheet.h"
 #include "backend/propertyManager/property/variant/variantSpreadsheet.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataValue — node value (Binary, transitional)
 
 wxObject* (*ibPropertySpreadsheet::ms_propertySpreadsheet)(ibPropertyObject*, const wxString&, const wxString&, const wxVariant&) = nullptr;
 
@@ -50,12 +51,12 @@ bool ibPropertySpreadsheet::GetDataValue(ibValue& pvarPropVal) const
 	return true;
 }
 
-bool ibPropertySpreadsheet::LoadData(ibReaderMemory& reader)
+bool ibPropertySpreadsheet::ReadNodeValue(const ibDataValue& value)
 {
-	return ibSpreadsheetDescriptionMemory::LoadData(reader, GetValueAsSpreadsheetDesc());
+	return ibSpreadsheetDescriptionMemory::ReadNode(value, GetValueAsSpreadsheetDesc());
 }
 
-bool ibPropertySpreadsheet::SaveData(ibWriterMemory& writer)
+bool ibPropertySpreadsheet::WriteNodeValue(ibDataValue& value) const
 {
-	return ibSpreadsheetDescriptionMemory::SaveData(writer, GetValueAsSpreadsheetDesc());
-}
+	return ibSpreadsheetDescriptionMemory::WriteNode(value, GetValueAsSpreadsheetDesc());
+}

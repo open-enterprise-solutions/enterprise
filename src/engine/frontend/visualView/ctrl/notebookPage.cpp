@@ -1,4 +1,5 @@
 #include "notebook.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "frontend/visualView/pageWindow.h"
 
 //***********************************************************************************
@@ -118,26 +119,26 @@ bool ibValueNotebookPage::CanDeleteControl() const
 //*                              Read & save property                               *
 //***********************************************************************************
 
-bool ibValueNotebookPage::LoadData(ibReaderMemory& reader)
+bool ibValueNotebookPage::ReadData(const ibDataNode& node)
 {
-    m_propertyTitle->LoadData(reader);
-    m_propertyRepresentation->LoadData(reader);
-    m_propertyPicture->LoadData(reader);
-    m_propertyVisible->LoadData(reader);
-    m_propertyOrient->LoadData(reader);
+    m_propertyTitle->ReadNodeValue(node.GetProperty(m_propertyTitle->GetName()));
+    m_propertyRepresentation->ReadNodeValue(node.GetProperty(m_propertyRepresentation->GetName()));
+    m_propertyPicture->ReadNodeValue(node.GetProperty(m_propertyPicture->GetName()));
+    m_propertyVisible->ReadNodeValue(node.GetProperty(m_propertyVisible->GetName()));
+    m_propertyOrient->ReadNodeValue(node.GetProperty(m_propertyOrient->GetName()));
 
-    return ibValueControl::LoadData(reader);
+    return ibValueControl::ReadData(node);
 }
 
-bool ibValueNotebookPage::SaveData(ibWriterMemory& writer)
+bool ibValueNotebookPage::WriteData(ibDataNode& node) const
 {
-    m_propertyTitle->SaveData(writer);
-    m_propertyRepresentation->SaveData(writer);
-    m_propertyPicture->SaveData(writer);
-    m_propertyVisible->SaveData(writer);
-    m_propertyOrient->SaveData(writer);
+    node.SetProperty(m_propertyTitle->GetName(), m_propertyTitle->GetNodeValue());
+    node.SetProperty(m_propertyRepresentation->GetName(), m_propertyRepresentation->GetNodeValue());
+    node.SetProperty(m_propertyPicture->GetName(), m_propertyPicture->GetNodeValue());
+    node.SetProperty(m_propertyVisible->GetName(), m_propertyVisible->GetNodeValue());
+    node.SetProperty(m_propertyOrient->GetName(), m_propertyOrient->GetNodeValue());
 
-    return ibValueControl::SaveData(writer);
+    return ibValueControl::WriteData(node);
 }
 
 //***********************************************************************

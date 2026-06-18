@@ -1,5 +1,6 @@
 
 #include "widgets.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "backend/compiler/procUnit.h"
 
 
@@ -60,20 +61,20 @@ void ibValueGauge::Cleanup(wxObject* obj, ibVisualHost* visualHost)
 //*								Data                                *
 //*******************************************************************
 
-bool ibValueGauge::LoadData(ibReaderMemory& reader)
+bool ibValueGauge::ReadData(const ibDataNode& node)
 {
-	m_propertyRange->SetValue(reader.r_s32());
-	m_propertyValue->SetValue(reader.r_s32());
-	m_propertyOrient->SetValue(reader.r_s32());
-	return ibValueWindow::LoadData(reader);
+	m_propertyRange->ReadNodeValue(node.GetProperty(m_propertyRange->GetName()));
+	m_propertyValue->ReadNodeValue(node.GetProperty(m_propertyValue->GetName()));
+	m_propertyOrient->ReadNodeValue(node.GetProperty(m_propertyOrient->GetName()));
+	return ibValueWindow::ReadData(node);
 }
 
-bool ibValueGauge::SaveData(ibWriterMemory& writer)
+bool ibValueGauge::WriteData(ibDataNode& node) const
 {
-	writer.w_s32(m_propertyRange->GetValueAsInteger());
-	writer.w_s32(m_propertyValue->GetValueAsInteger());
-	writer.w_s32(m_propertyOrient->GetValueAsInteger());
-	return ibValueWindow::SaveData(writer);
+	node.SetProperty(m_propertyRange->GetName(), m_propertyRange->GetNodeValue());
+	node.SetProperty(m_propertyValue->GetName(), m_propertyValue->GetNodeValue());
+	node.SetProperty(m_propertyOrient->GetName(), m_propertyOrient->GetNodeValue());
+	return ibValueWindow::WriteData(node);
 }
 
 //***********************************************************************

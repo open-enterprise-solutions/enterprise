@@ -1,19 +1,18 @@
 #include "propertyEnum.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataValue — readable Number node value
 
-//get property for grid 	
+//get property for grid
 wxObject* (*ibPropertyEnumBase::ms_propertyEnum)(const wxString&, const wxString&, const wxPGChoices&, const int&) = nullptr;
 
 //load & save object in control 
-bool ibPropertyEnumBase::LoadData(ibReaderMemory& reader)
+bool ibPropertyEnumBase::ReadNodeValue(const ibDataValue& value)
 {
-	const s32& enumVariant = reader.r_s32();
-	ibPropertyEnumBase::SetValue(enumVariant);
+	ibPropertyEnumBase::SetValue((long)value.AsInt()); // AsInt validates kind (Empty -> default)
 	return true;
 }
 
-bool ibPropertyEnumBase::SaveData(ibWriterMemory& writer)
+bool ibPropertyEnumBase::WriteNodeValue(ibDataValue& value) const
 {
-	const s32& enumVariant = ibPropertyEnumBase::GetValueAsInteger();
-	writer.w_s32(enumVariant);
+	value = ibDataValue::Int(ibPropertyEnumBase::GetValueAsInteger());
 	return true;
 }

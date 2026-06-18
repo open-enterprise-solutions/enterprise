@@ -1,4 +1,5 @@
 #include "sizer.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #ifdef OES_USE_WEB
 // Needed so ibWebSizer's SetMinSize / Layout no-ops are visible when
 // UpdateSizer calls through an ibFrontendSizer* that resolves to
@@ -73,21 +74,16 @@ void ibSizerOps::SetChildParams(ibFrontendSizer* sizer, wxObject* child,
 //*                                    Data										   *
 //**********************************************************************************
 
-bool ibValueSizer::LoadData(ibReaderMemory& reader)
+bool ibValueSizer::ReadData(const ibDataNode& node)
 {
-	wxString propValue = wxEmptyString;
-	reader.r_stringZ(propValue);
-	m_propertyMinSize->SetValue(typeConv::StringToSize(propValue));
-	reader.r_stringZ(propValue);
+	m_propertyMinSize->ReadNodeValue(node.GetProperty(m_propertyMinSize->GetName()));
 
-	return ibValueFrame::LoadData(reader);
+	return ibValueFrame::ReadData(node);
 }
 
-bool ibValueSizer::SaveData(ibWriterMemory& writer)
+bool ibValueSizer::WriteData(ibDataNode& node) const
 {
-	writer.w_stringZ(
-		m_propertyMinSize->GetValueAsString()
-	);
+	node.SetProperty(m_propertyMinSize->GetName(), m_propertyMinSize->GetNodeValue());
 
-	return ibValueFrame::SaveData(writer);
+	return ibValueFrame::WriteData(node);
 }

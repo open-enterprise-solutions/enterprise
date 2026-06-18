@@ -1,5 +1,6 @@
 #include "propertyNumber.h"
 #include "backend/propertyManager/property/variant/variantNumber.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataValue — node value (Binary, transitional)
 
 //get property for grid 
 wxObject* (*ibPropertyNumber::ms_propertyNumber)(const wxString&, const wxString&, const ibNumber&) = nullptr;
@@ -38,12 +39,14 @@ bool ibPropertyNumber::GetDataValue(ibValue& pvarPropVal) const
 	return true;
 }
 
-bool ibPropertyNumber::LoadData(ibReaderMemory& reader)
+bool ibPropertyNumber::ReadNodeValue(const ibDataValue& value)
 {
-	return GetValueAsNumber().SetBuffer(reader);
+	GetValueAsNumber().SetBuffer(value.AsBinary());
+	return true;
 }
 
-bool ibPropertyNumber::SaveData(ibWriterMemory& writer)
+bool ibPropertyNumber::WriteNodeValue(ibDataValue& value) const
 {
-	return GetValueAsNumber().GetBuffer(writer);
-}
+	value = ibDataValue::Binary(GetValueAsNumber().GetBuffer());
+	return true;
+}

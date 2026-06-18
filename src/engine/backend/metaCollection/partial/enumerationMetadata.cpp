@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "enumeration.h"
+#include "backend/serialize/dataBuilder.h"
 #include "backend/metaData.h"
 #include "list/objectList.h"
 
@@ -94,29 +95,24 @@ wxString ibValueMetaObjectEnumeration::GetDataPresentation(const ibValueDataObje
 //*                       Save & load metaData                              *
 //***************************************************************************
 
-bool ibValueMetaObjectEnumeration::LoadData(ibReaderMemory& dataReader)
+bool ibValueMetaObjectEnumeration::WriteData(ibDataNode& node)
 {
-	//Load object module
-	(*m_propertyManagerModule)->LoadMeta(dataReader);
+	node.SetProperty(m_propertyManagerModule->GetName(), m_propertyManagerModule->GetNodeValue());
 
-	//save default form 
-	m_propertyDefFormList->SetValue(GetIdByGuid(dataReader.r_stringZ()));
-	m_propertyDefFormSelect->SetValue(GetIdByGuid(dataReader.r_stringZ()));
+	node.SetValue(m_propertyDefFormList->GetName(), GetGuidByID(m_propertyDefFormList->GetValueAsInteger()).str());
+	node.SetValue(m_propertyDefFormSelect->GetName(), GetGuidByID(m_propertyDefFormSelect->GetValueAsInteger()).str());
 
-	return ibValueMetaObjectRecordDataEnumRef::LoadData(dataReader);
+	return ibValueMetaObjectRecordDataEnumRef::WriteData(node);
 }
 
-bool ibValueMetaObjectEnumeration::SaveData(ibWriterMemory& dataWritter)
+bool ibValueMetaObjectEnumeration::ReadData(const ibDataNode& node)
 {
-	//Save object module
-	(*m_propertyManagerModule)->SaveMeta(dataWritter);
+	m_propertyManagerModule->ReadNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
 
-	//save default form 
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormList->GetValueAsInteger()));
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormSelect->GetValueAsInteger()));
+	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormList->GetName())));
+	m_propertyDefFormSelect->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormSelect->GetName())));
 
-	//create or update table:
-	return ibValueMetaObjectRecordDataEnumRef::SaveData(dataWritter);
+	return ibValueMetaObjectRecordDataEnumRef::ReadData(node);
 }
 
 //***********************************************************************

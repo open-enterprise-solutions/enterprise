@@ -23,6 +23,8 @@
 #include "backend/backend_exception.h"   // catch ibBackendException at the LoadCommonTree boundary
 #include "backend/query/schemaSnapshot.h"   // ibSchemaSnapshot / ibSchemaTable — ContributeTables drives data dump
 #include "backend/query/dataMover.h"         // ibDataMover::Dump / Restore (L3-3 row mover)
+#include "backend/serialize/dataBuilder.h"      // ibDataBuilder / ibBinaryProvider — top-level structure builder
+#include "backend/objCtor.h"                       // ibCtorMetaValueType::GetClassName — clsid -> type name
 
 bool ibMetaDataConfigurationBase::LoadConfigFromFile(const wxString& strFileName)
 {
@@ -364,9 +366,16 @@ bool ibMetaDataConfigurationFile::LoadCommonTree(const ibClassID& clsid, ibReade
 	if (!readerMetaMemory)
 		return true; // empty config — keep the existing root
 
-	// Detached-root atomic swap: load into a freshly-built root, not the live one.
-	// LoadSubtree throws ibBackendException on a malformed/missing chunk or factory
-	// miss — on a throw the fresh root is discarded and m_commonObject is untouched
+	// Parse the stream into the universal structure tree. readerMetaMemory is the
+	// root's INNER content ({ eDataBlock, eChildBlock }) — clsid/metaId already
+	// peeled above — so the binary provider reads exactly what BuildDataNode wrote.
+	ibDataNode rootNode(clsid, (ibMetaID)meta_id);
+	ibBinaryProvider provider;
+	provider.Read(*readerMetaMemory, rootNode);
+
+	// Detached-root atomic swap: apply into a freshly-built root, not the live one.
+	// ApplyDataNode throws ibBackendException on a factory miss or bad data — on a
+	// throw the fresh root is discarded and m_commonObject is untouched
 	// (all-or-nothing). On success, swap it in and release the old root. The caller
 	// has already closed the old tree's run-state (or it was never run), so the
 	// DecrRef below can't leave dangling entries in m_factoryCtors.
@@ -374,7 +383,7 @@ bool ibMetaDataConfigurationFile::LoadCommonTree(const ibClassID& clsid, ibReade
 	if (!fresh)
 		return false;
 	try {
-		fresh->LoadSubtree(*readerMetaMemory);
+		fresh->ApplyDataNode(rootNode);
 	}
 	catch (const ibBackendException& err) {
 		return false; // fresh (ibValuePtr) discards the root automatically
@@ -652,8 +661,27 @@ bool ibMetaDataConfigurationFile::SaveCommonTree(const ibClassID& clsid, ibWrite
 		writerData.w_chunk(eHeaderBlock, headerWriter.pointer(), headerWriter.size());
 	}
 
-	// The whole tree serialization is owned by the node (ibValueMetaObject::SaveSubtree).
-	return m_commonObject->SaveSubtree(clsid, writerData, flags);
+	// Top-level structure builder: the tree is built into a universal ibDataNode
+	// (BuildDataNode, which fills the root's clsid/metaId from the object itself) and
+	// serialized through the binary provider.
+	(void)clsid; // root identity now comes from the object, not this hint
+	ibDataBuilder builder;
+	if (!m_commonObject->BuildDataNode(builder.Root(), flags))
+		return false;
+
+	// The provider writes the root's INNER content; the container owns the identity frame.
+	// Wrap it in chunk(clsid){ chunk(metaId){ inner } } — exactly what LoadCommonTree peels
+	// (open_chunk(clsid) -> open_chunk_iterator(metaId) -> provider.Read). Identity comes
+	// from the built root, mirroring how children are framed inside the tree.
+	ibBinaryProvider provider;
+	ibWriterMemory innerWriter;
+	if (!builder.Save(provider, innerWriter))
+		return false;
+
+	ibWriterMemory metaWriter;
+	metaWriter.w_chunk((u64)builder.Root().GetMetaId(), innerWriter.pointer(), innerWriter.size());
+	writerData.w_chunk((u64)builder.Root().GetClsid(), metaWriter.pointer(), metaWriter.size());
+	return true;
 }
 
 bool ibMetaDataConfigurationStorage::DeleteCommonTree(const ibClassID& clsid)
@@ -661,3 +689,5 @@ bool ibMetaDataConfigurationStorage::DeleteCommonTree(const ibClassID& clsid)
 	// Deleted-node purge is owned by the node (ibValueMetaObject::DeleteSubtree).
 	return m_commonObject->DeleteSubtree();
 }
+
+

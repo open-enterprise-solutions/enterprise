@@ -119,6 +119,11 @@ public:
 	ibMetaID GetIdByGuid(const ibGuid& guid) const;
 	ibGuid GetGuidByID(const ibMetaID& id) const;
 
+	// Resolve hop `idx` of the path: hop 0 is GATED to this binding's own source object
+	// (scoped search), deeper hops are real cross-metaobject references (config-wide). A
+	// copied binding whose source no longer holds the first hop resolves to null here.
+	const class ibValueMetaObject* ResolveHop(unsigned int idx) const;
+
 	//////////////////////////////////////////////////
 
 	// The source object this binding reads from — the owning property's factory already

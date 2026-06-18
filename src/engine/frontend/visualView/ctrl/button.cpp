@@ -1,4 +1,5 @@
 #include "widgets.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "backend/compiler/procUnit.h"
 #ifdef OES_USE_WEB
 #include "frontend/web/webWindow.h"
@@ -96,28 +97,28 @@ void ibValueButton::Cleanup(wxObject* obj, ibVisualHost* visualHost)
 //*                           Data									*
 //*******************************************************************
 
-bool ibValueButton::LoadData(ibReaderMemory& reader)
+bool ibValueButton::ReadData(const ibDataNode& node)
 {
-	m_propertyTitle->LoadData(reader);
-	m_propertyRepresentation->LoadData(reader);
-	m_propertyPicture->LoadData(reader);
+	m_propertyTitle->ReadNodeValue(node.GetProperty(m_propertyTitle->GetName()));
+	m_propertyRepresentation->ReadNodeValue(node.GetProperty(m_propertyRepresentation->GetName()));
+	m_propertyPicture->ReadNodeValue(node.GetProperty(m_propertyPicture->GetName()));
 
 	//events
-	m_onButtonPressed->LoadData(reader);
+	m_onButtonPressed->ReadNodeValue(node.GetProperty(m_onButtonPressed->GetName()));
 
-	return ibValueWindow::LoadData(reader);
+	return ibValueWindow::ReadData(node);
 }
 
-bool ibValueButton::SaveData(ibWriterMemory& writer)
+bool ibValueButton::WriteData(ibDataNode& node) const
 {
-	m_propertyTitle->SaveData(writer);
-	m_propertyRepresentation->SaveData(writer);
-	m_propertyPicture->SaveData(writer);
+	node.SetProperty(m_propertyTitle->GetName(), m_propertyTitle->GetNodeValue());
+	node.SetProperty(m_propertyRepresentation->GetName(), m_propertyRepresentation->GetNodeValue());
+	node.SetProperty(m_propertyPicture->GetName(), m_propertyPicture->GetNodeValue());
 
 	//events
-	m_onButtonPressed->SaveData(writer);
+	node.SetProperty(m_onButtonPressed->GetName(), m_onButtonPressed->GetNodeValue());
 
-	return ibValueWindow::SaveData(writer);
+	return ibValueWindow::WriteData(node);
 }
 
 //***********************************************************************

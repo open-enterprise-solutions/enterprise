@@ -161,6 +161,8 @@
     <ClInclude Include="debugger\debugServer.h" />
     <ClInclude Include="backend_form.h" />
     <ClInclude Include="fileSystem\fs.h" />
+    <ClInclude Include="serialize\dataBuilder.h" />
+    <ClInclude Include="serialize\jsonProvider.h" />
     <ClInclude Include="fileSystem\lz\lzhuf.h" />
     <ClInclude Include="fileSystem\quicklz\quicklz.h" />
     <ClInclude Include="fileSystem\types.h" />
@@ -457,6 +459,8 @@
     <ClCompile Include="debugger\debugServer.cpp" />
     <ClCompile Include="backend_form.cpp" />
     <ClCompile Include="fileSystem\fs.cpp" />
+    <ClCompile Include="serialize\dataBuilder.cpp" />
+    <ClCompile Include="serialize\jsonProvider.cpp" />
     <ClCompile Include="fileSystem\lz\lzhuf.cpp" />
     <ClCompile Include="fileSystem\quicklz\quicklz.c" />
     <ClCompile Include="guid.cpp" />

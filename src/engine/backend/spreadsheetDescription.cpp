@@ -1,5 +1,6 @@
 #include "spreadsheetDescription.h"
 #include "backend/fileSystem/fs.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataValue — node form (Binary blob)
 
 #define cell_sign		0x0243565431
 
@@ -276,5 +277,28 @@ bool ibSpreadsheetDescriptionMemory::SaveData(ibWriterMemory& writer, const ibSp
 	mainWriter.w_chunk(data_block, dataWriter.buffer());
 
 	writer.w_chunk(grid_block, mainWriter.buffer());
+	return true;
+}
+
+////////////////////////////////////////////////////////////////////////
+// node form — the whole sheet is a genuine blob: a Binary value. The byte reader /
+// writer is contained here, not in the property.
+
+bool ibSpreadsheetDescriptionMemory::ReadNode(const ibDataValue& value, ibSpreadsheetDescription& spreadsheetDesc)
+{
+	const wxMemoryBuffer& data = value.AsBinary();
+	if (data.GetDataLen()) {
+		ibReaderMemory reader(data);
+		return LoadData(reader, spreadsheetDesc);
+	}
+	return true;
+}
+
+bool ibSpreadsheetDescriptionMemory::WriteNode(ibDataValue& value, const ibSpreadsheetDescription& spreadsheetDesc)
+{
+	ibWriterMemory writer;
+	if (!SaveData(writer, spreadsheetDesc))
+		return false;
+	value = ibDataValue::Binary(writer.buffer());
 	return true;
 }

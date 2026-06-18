@@ -13,6 +13,8 @@
 
 //*******************************************************************************
 class BACKEND_API ibMetaData;
+class BACKEND_API ibDataNode;   // serialize/dataBuilder.h — universal structure node
+class BACKEND_API ibDataValue;  // serialize/dataBuilder.h — a node value (Child for a nested object)
 //*******************************************************************************
 //*                          define commom clsid                                *
 //*******************************************************************************
@@ -309,29 +311,31 @@ public:
 	virtual wxIcon GetIcon() const override { return wxNullIcon; }
 	static wxIcon GetIconGroup() { return wxNullIcon; }
 
-	//load & save object in metaObject 
-	bool LoadMeta(ibReaderMemory& dataReader);
-	bool SaveMeta(ibWriterMemory& dataWritter);
-
-	// Recursive tree (de)serialization, node-owned. The ibMetaData containers
-	// delegate their whole-tree Save/Load/Delete here (see ibMetaData::*Tree).
-	// Byte layout: <chunkId>{ <metaID>{ eDataBlock{own data} eChildBlock{children} } }.
-	// All three use this node's own m_metaData (a node's parent always has it:
-	// the root is stamped by the container via SetMetaData, and each child is
-	// stamped here from its parent at creation), so no owner is threaded.
-	//   SaveSubtree  - write this node + descendants under `chunkId`.
-	//   LoadSubtree  - `nodeReader` is this node's { eDataBlock, eChildBlock }
-	//                  content; create+load children (stamping their metadata),
-	//                  then load own data. `resetId` regenerates each loaded node's
-	//                  metaId from its (already-stamped) metadata counter - used when
-	//                  grafting a file's subtree into a config so the imported objects
-	//                  get fresh ids instead of the file's (which would collide with
-	//                  existing config objects). The root additionally needs ResetAll
-	//                  (guid drives its ctor clsid) - done by the importing container.
-	//   DeleteSubtree- purge IsDeleted descendants (DeleteMetaObject + detach).
-	bool SaveSubtree(const ibClassID& chunkId, ibWriterMemory& writer, int flags = defaultFlag);
-	bool LoadSubtree(ibReaderMemory& nodeReader, bool resetId = false);
+	// Recursive tree (de)serialization into/from the universal ibDataNode structure
+	// (serialize/dataBuilder.h). The ibMetaData containers drive the whole tree through
+	// the top-level ibDataBuilder + ibBinaryProvider; this node owns only the
+	// metaobject<->node mapping (each node carries its own m_metaData).
+	//   ApplyDataNode - factory-create children by clsid + LoadNode(this) +
+	//                   OnLoadMetaObject; `resetId` regenerates each metaId (grafting a
+	//                   file subtree into a config). Throws ibBackendException on bad data.
+	//   BuildDataNode - SaveNode(this) + OnSaveMetaObject + children recursed.
+	//   DeleteSubtree - purge IsDeleted descendants (detach).
+	bool ApplyDataNode(const ibDataNode& node, bool resetId = false);
+	bool BuildDataNode(ibDataNode& node, int flags = defaultFlag);
 	bool DeleteSubtree();
+
+	// Node form, SEPARATE per direction (no flag): LoadNode reads a genuinely CONST node
+	// into the object; SaveNode writes the object into the node. Both handle the common
+	// header (guid/id/deleted/help -> fields, name/synonym/comment -> props, interface/
+	// roles) then delegate the per-type data to ReadData / WriteData.
+	bool LoadNode(const ibDataNode& node);
+	bool SaveNode(ibDataNode& node);
+
+	// A NESTED metaobject (module, predefined attribute, …) is embedded by its holder
+	// PROPERTY like any value — m_propertyObjectModule->WriteNodeValue/ReadNodeValue
+	// yields/consumes a Child sub-node that wraps this object's SaveNode/LoadNode.
+
+public:
 
 	// Runtime lifecycle walk over THIS node + descendants. before=true is the pre
 	// phase (OnBeforeRun/Close), before=false the post phase. Deleted nodes (and
@@ -458,10 +462,10 @@ public:
 
 protected:
 
-	//load & save metaData from DB
-	virtual bool LoadData(ibReaderMemory& reader) { return true; }
-	virtual bool SaveData(ibWriterMemory& writer) { return true; }
-	virtual bool DeleteData() { return true; }
+	// per-type data hook: a type reads/writes its OWN data — props / fields / Child.
+	// The base has none; a type overrides. Driven only by SaveNode / LoadNode.
+	virtual bool ReadData(const ibDataNode& node);
+	virtual bool WriteData(ibDataNode& node);
 
 protected:
 

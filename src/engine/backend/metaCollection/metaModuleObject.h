@@ -2,6 +2,7 @@
 #define _METAMODULE_OBJECT_H__
 
 #include "metaObject.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode — holder serializes its metaobject's node
 
 enum ibContentHelper {
 	eProcedureHelper = 1,
@@ -56,9 +57,18 @@ public:
 		return true;
 	}
 
-	//load & save object in control 
-	virtual bool LoadData(ibReaderMemory& reader) { return m_metaObject->GetModuleProperty()->LoadData(reader); }
-	virtual bool SaveData(ibWriterMemory& writer) { return m_metaObject->GetModuleProperty()->SaveData(writer); }
+	//per-type node value — the held metaobject's whole node (a Child sub-node)
+	virtual bool ReadNodeValue(const ibDataValue& value) override {
+		const std::shared_ptr<ibDataNode>& child = value.AsChild();
+		if (child) m_metaObject->LoadNode(*child);
+		return true;
+	}
+	virtual bool WriteNodeValue(ibDataValue& value) const override {
+		auto child = std::make_shared<ibDataNode>();
+		m_metaObject->SaveNode(*child);
+		value = ibDataValue::Child(child);
+		return true;
+	}
 
 private:
 	ibValuePtr<T> m_metaObject;
@@ -154,8 +164,8 @@ class BACKEND_API ibValueMetaObjectModule : public ibValueMetaObjectModuleBase {
 
 protected:
 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) override;
 
 private:
 	ibPropertyModule* m_propertyModule = ibPropertyObject::CreateProperty<ibPropertyModule>(m_categoryContext, wxT("Module"), _("Module"));
@@ -221,8 +231,8 @@ public:
 
 protected:
 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) override;
 
 private:
 	ibPropertyModule* m_propertyModule = ibPropertyObject::CreateProperty<ibPropertyModule>(m_categoryContext, wxT("Module"), _("Module"));

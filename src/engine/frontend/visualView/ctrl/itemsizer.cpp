@@ -1,4 +1,5 @@
 #include "sizer.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "form.h"
 #ifndef OES_USE_WEB
 #include "frontend/visualView/pageWindow.h"
@@ -168,46 +169,46 @@ ibFormID ibValueSizerItem::GetTypeForm() const
 //*                                    Data										   *
 //**********************************************************************************
 
-bool ibValueSizerItem::LoadData(ibReaderMemory& reader)
+bool ibValueSizerItem::ReadData(const ibDataNode& node)
 {
-	//m_propertyProportion->SetValue(reader.r_s32());
-	//m_propertyFlagBorder->SetValue(reader.r_s64());
-	//m_propertyFlagState->SetValue(reader.r_s64());
-	//m_propertyBorder->SetValue(reader.r_s32());
+	//m_propertyProportion->ReadNodeValue(node.GetProperty(m_propertyProportion->GetName()));
+	//m_propertyFlagBorder->ReadNodeValue(node.GetProperty(m_propertyFlagBorder->GetName()));
+	//m_propertyFlagState->ReadNodeValue(node.GetProperty(m_propertyFlagState->GetName()));
+	//m_propertyBorder->ReadNodeValue(node.GetProperty(m_propertyBorder->GetName()));
 
-	m_propertyProportion->LoadData(reader);
-	//m_propertyFlagBorder->LoadData(reader);
+	m_propertyProportion->ReadNodeValue(node.GetProperty(m_propertyProportion->GetName()));
+	//m_propertyFlagBorder->ReadNodeValue(node.GetProperty(m_propertyFlagBorder->GetName()));
 
-	m_propertyFlagBorderLeft->LoadData(reader);
-	m_propertyFlagBorderRight->LoadData(reader);
-	m_propertyFlagBorderTop->LoadData(reader);
-	m_propertyFlagBorderBottom->LoadData(reader);
+	m_propertyFlagBorderLeft->ReadNodeValue(node.GetProperty(m_propertyFlagBorderLeft->GetName()));
+	m_propertyFlagBorderRight->ReadNodeValue(node.GetProperty(m_propertyFlagBorderRight->GetName()));
+	m_propertyFlagBorderTop->ReadNodeValue(node.GetProperty(m_propertyFlagBorderTop->GetName()));
+	m_propertyFlagBorderBottom->ReadNodeValue(node.GetProperty(m_propertyFlagBorderBottom->GetName()));
 
-	m_propertyFlagState->LoadData(reader);
-	m_propertyBorder->LoadData(reader);
+	m_propertyFlagState->ReadNodeValue(node.GetProperty(m_propertyFlagState->GetName()));
+	m_propertyBorder->ReadNodeValue(node.GetProperty(m_propertyBorder->GetName()));
 
-	return ibValueFrame::LoadData(reader);
+	return ibValueFrame::ReadData(node);
 }
 
-bool ibValueSizerItem::SaveData(ibWriterMemory& writer)
+bool ibValueSizerItem::WriteData(ibDataNode& node) const
 {
-	//writer.w_s32(m_propertyProportion->GetValueAsInteger());
-	//writer.w_s64(m_propertyFlagBorder->GetValueAsInteger());
-	//writer.w_s64(m_propertyFlagState->GetValueAsInteger());
-	//writer.w_s32(m_propertyBorder->GetValueAsInteger());
+	//node.SetProperty(m_propertyProportion->GetName(), m_propertyProportion->GetNodeValue());
+	//node.SetProperty(m_propertyFlagBorder->GetName(), m_propertyFlagBorder->GetNodeValue());
+	//node.SetProperty(m_propertyFlagState->GetName(), m_propertyFlagState->GetNodeValue());
+	//node.SetProperty(m_propertyBorder->GetName(), m_propertyBorder->GetNodeValue());
 
-	m_propertyProportion->SaveData(writer);
-	//m_propertyFlagBorder->SaveData(writer);
+	node.SetProperty(m_propertyProportion->GetName(), m_propertyProportion->GetNodeValue());
+	//node.SetProperty(m_propertyFlagBorder->GetName(), m_propertyFlagBorder->GetNodeValue());
 
-	m_propertyFlagBorderLeft->SaveData(writer);
-	m_propertyFlagBorderRight->SaveData(writer);
-	m_propertyFlagBorderTop->SaveData(writer);
-	m_propertyFlagBorderBottom->SaveData(writer);
+	node.SetProperty(m_propertyFlagBorderLeft->GetName(), m_propertyFlagBorderLeft->GetNodeValue());
+	node.SetProperty(m_propertyFlagBorderRight->GetName(), m_propertyFlagBorderRight->GetNodeValue());
+	node.SetProperty(m_propertyFlagBorderTop->GetName(), m_propertyFlagBorderTop->GetNodeValue());
+	node.SetProperty(m_propertyFlagBorderBottom->GetName(), m_propertyFlagBorderBottom->GetNodeValue());
 
-	m_propertyFlagState->SaveData(writer);
-	m_propertyBorder->SaveData(writer);
+	node.SetProperty(m_propertyFlagState->GetName(), m_propertyFlagState->GetNodeValue());
+	node.SetProperty(m_propertyBorder->GetName(), m_propertyBorder->GetNodeValue());
 
-	return ibValueFrame::SaveData(writer);
+	return ibValueFrame::WriteData(node);
 }
 
 //***********************************************************************

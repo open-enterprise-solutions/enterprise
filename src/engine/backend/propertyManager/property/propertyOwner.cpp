@@ -1,4 +1,5 @@
 #include "propertyOwner.h"
+#include "backend/serialize/dataBuilder.h"
 #include "backend/propertyManager/property/variant/variantOwner.h"
 
 wxObject* (*ibPropertyOwner::ms_propertyOwner)(ibPropertyObject*, const wxString&, const wxString&, const wxVariant&) = nullptr;
@@ -36,12 +37,14 @@ bool ibPropertyOwner::GetDataValue(ibValue& pvarPropVal) const
 	return true;
 }
 
-bool ibPropertyOwner::LoadData(ibReaderMemory& reader)
+bool ibPropertyOwner::ReadNodeValue(const ibDataValue& value)
 {
-	return ibMetaDescriptionMemory::LoadData(reader, GetValueAsMetaDesc());
+	const ibPropertyObject* owner = m_owner;
+	return ibMetaDescriptionMemory::ReadNode(value, GetValueAsMetaDesc(), owner->GetMetaData());
 }
 
-bool ibPropertyOwner::SaveData(ibWriterMemory& writer)
+bool ibPropertyOwner::WriteNodeValue(ibDataValue& value) const
 {
-	return ibMetaDescriptionMemory::SaveData(writer, GetValueAsMetaDesc());
+	const ibPropertyObject* owner = m_owner;
+	return ibMetaDescriptionMemory::WriteNode(value, GetValueAsMetaDesc(), owner->GetMetaData());
 }

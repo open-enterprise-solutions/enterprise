@@ -25,6 +25,7 @@ class BACKEND_API ibValueMetaObjectFormBase;
 class BACKEND_API ibSourceDataObject;
 class BACKEND_API ibValueListDataObject;
 class BACKEND_API ibValueRecordDataObject;
+class BACKEND_API ibDataNode;   // serialize/dataBuilder.h — universal node (control -> node)
 
 class FRONTEND_API ibValueForm;
 class FRONTEND_API ibVisualHostClient;
@@ -444,18 +445,23 @@ public:
 		return arr;
 	}
 
-	//load & save object in metaObject 
+	// (de)serialize the whole control through the binary provider (form-blob entry)
 	bool LoadControl(const ibValueMetaObjectFormBase* metaForm, ibReaderMemory& dataReader);
 	bool SaveControl(const ibValueMetaObjectFormBase* metaForm, ibWriterMemory& dataWritter, bool copy_form = false);
+
+	// Node form, mirrors the metaobject path. Load/SaveNode add the header
+	// (id / name / expanded) then delegate the per-type data to Read/WriteData — the
+	// base has none, a control overrides. (Read/Load before Write/Save in every pair.)
+	bool LoadNode(const ibDataNode& node);
+	bool SaveNode(ibDataNode& node);
 
 protected:
 
 	virtual void OnChangeChildPosition(ibValueFrame* obj, unsigned int pos) {}
 	virtual void OnChoiceProcessing(ibValue& vSelected) {}
 
-	//load & save object in control 
-	virtual bool LoadData(ibReaderMemory& reader) { return true; }
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory()) { return true; }
+	virtual bool ReadData(const ibDataNode& node) { return true; }
+	virtual bool WriteData(ibDataNode& node) const { return true; }
 
 protected:
 

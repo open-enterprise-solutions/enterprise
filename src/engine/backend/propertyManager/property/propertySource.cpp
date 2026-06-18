@@ -1,5 +1,6 @@
 #include "propertySource.h"
 #include "backend/propertyManager/property/variant/variantSource.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataValue — node value (Binary, transitional)
 #include "backend/sourceDescription.h"
 #include "backend/metaCollection/partial/commonObject.h"   // ibSourceDataObject + path walk
 
@@ -95,15 +96,21 @@ bool ibPropertySource::GetDataValue(ibValue& pvarPropVal) const
 	return true;
 }
 
-bool ibPropertySource::LoadData(ibReaderMemory& reader)
+// NB: go through a CONST owner pointer. ibPropertyObject has two virtual GetMetaData
+// overloads (const + non-const); a control overrides only the CONST one (the form-based
+// metaData) — the non-const base overload still returns nullptr. A non-const m_owner would
+// pick the null one, so the source binding would serialize against a null metaData and the
+// path GUIDs would all come out null. Selecting the const overload resolves them correctly.
+bool ibPropertySource::ReadNodeValue(const ibDataValue& value)
 {
-	// Copy-aware GUID round-trip lives in ibSourceDescriptionMemory (see its header note).
-	ibVariantDataSource* variant = get_cell_variant<ibVariantDataSource>();
-	return ibSourceDescriptionMemory::LoadData(reader, variant->GetSourceDesc(), variant->GetMetaData());
+	const ibPropertyObject* owner = m_owner;
+	return ibSourceDescriptionMemory::ReadNode(value,
+		GetValueAsSourceDesc(), owner->GetMetaData());
 }
 
-bool ibPropertySource::SaveData(ibWriterMemory& writer)
+bool ibPropertySource::WriteNodeValue(ibDataValue& value) const
 {
-	ibVariantDataSource* variant = get_cell_variant<ibVariantDataSource>();
-	return ibSourceDescriptionMemory::SaveData(writer, variant->GetSourceDesc(), variant->GetMetaData());
+	const ibPropertyObject* owner = m_owner;
+	return ibSourceDescriptionMemory::WriteNode(value,
+		GetValueAsSourceDesc(), owner->GetMetaData());
 }

@@ -28,8 +28,10 @@ public:
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
 
 	//load & save object in control
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+
+	// readable node value
+	virtual bool ReadNodeValue(const ibDataValue& value) override;
+	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
 public:
 

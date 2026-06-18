@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "metaObjectMetadata.h"
+#include "backend/serialize/dataBuilder.h"
 #include "metaModuleObject.h"
 #include "backend/appData.h"
 #include "backend/session/session.h"
@@ -46,26 +47,26 @@ ibValueMetaObjectConfiguration::~ibValueMetaObjectConfiguration()
 {
 }
 
-bool ibValueMetaObjectConfiguration::LoadData(ibReaderMemory& dataReader)
+bool ibValueMetaObjectConfiguration::ReadData(const ibDataNode& node)
 {
-	m_propertyVersion->SetValue(dataReader.r_s32());
+	m_propertyVersion->ReadNodeValue(node.GetProperty(m_propertyVersion->GetName()));
 
-	m_propertyDefRole->LoadData(dataReader);
-	m_propertyDefLanguage->LoadData(dataReader);
-	(*m_propertyModuleConfiguration)->LoadMeta(dataReader);
-	m_propertySyntax->LoadData(dataReader);
+	m_propertyDefRole->ReadNodeValue(node.GetProperty(m_propertyDefRole->GetName()));
+	m_propertyDefLanguage->ReadNodeValue(node.GetProperty(m_propertyDefLanguage->GetName()));
+	m_propertyModuleConfiguration->ReadNodeValue(node.GetProperty(m_propertyModuleConfiguration->GetName()));
+	m_propertySyntax->ReadNodeValue(node.GetProperty(m_propertySyntax->GetName()));
 
 	return true;
 }
 
-bool ibValueMetaObjectConfiguration::SaveData(ibWriterMemory& dataWritter)
+bool ibValueMetaObjectConfiguration::WriteData(ibDataNode& node)
 {
-	dataWritter.w_s32(m_propertyVersion->GetValueAsInteger());
+	node.SetProperty(m_propertyVersion->GetName(), m_propertyVersion->GetNodeValue());
 
-	m_propertyDefRole->SaveData(dataWritter);
-	m_propertyDefLanguage->SaveData(dataWritter);
-	(*m_propertyModuleConfiguration)->SaveMeta(dataWritter);
-	m_propertySyntax->SaveData(dataWritter);
+	node.SetProperty(m_propertyDefRole->GetName(), m_propertyDefRole->GetNodeValue());
+	node.SetProperty(m_propertyDefLanguage->GetName(), m_propertyDefLanguage->GetNodeValue());
+	node.SetProperty(m_propertyModuleConfiguration->GetName(), m_propertyModuleConfiguration->GetNodeValue());
+	node.SetProperty(m_propertySyntax->GetName(), m_propertySyntax->GetNodeValue());
 
 	return true;
 }

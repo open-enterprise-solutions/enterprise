@@ -1,4 +1,5 @@
 #include "metaInterfaceObject.h"
+#include "backend/serialize/dataBuilder.h"
 
 //***********************************************************************
 //*                            IntrfaceObject                           *
@@ -34,14 +35,17 @@ bool ibValueMetaObjectInterface::GetInterfaceItemArrayObject(ibInterfaceCommandS
 	return array.size() > 0;
 }
 
-bool ibValueMetaObjectInterface::LoadData(ibReaderMemory& reader)
+bool ibValueMetaObjectInterface::ReadData(const ibDataNode& node)
 {
-	return m_propertyPicture->LoadData(reader);
+	m_propertyPicture->ReadNodeValue(node.GetProperty(m_propertyPicture->GetName()));
+	return true;
 }
 
-bool ibValueMetaObjectInterface::SaveData(ibWriterMemory& writer)
+
+bool ibValueMetaObjectInterface::WriteData(ibDataNode& node)
 {
-	return m_propertyPicture->SaveData(writer);
+	node.SetProperty(m_propertyPicture->GetName(), m_propertyPicture->GetNodeValue());
+	return true;
 }
 
 //***********************************************************************

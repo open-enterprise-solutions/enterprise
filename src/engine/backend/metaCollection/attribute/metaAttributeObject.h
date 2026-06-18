@@ -134,8 +134,11 @@ class BACKEND_API ibValueMetaObjectAttribute : public ibValueMetaObjectAttribute
 
 protected:
 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+
+	// per-type values: FillCheck/ItemMode/Select readable, Type (composite) binary
+	// for now → becomes a Child sub-node later. Separate save/load (const on read).
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) override;
 
 private:
 
@@ -232,8 +235,9 @@ public:
 
 protected:
 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+
+	virtual bool ReadData(const ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) override;
 
 private:
 

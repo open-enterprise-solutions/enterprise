@@ -1,4 +1,5 @@
 #include "tableBox.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "form.h"
 #ifndef OES_USE_WEB
 // Renderer pulls in dataview.h (wxDataView heavy). Web stubs don't
@@ -262,86 +263,72 @@ bool ibValueModelTableBoxColumn::GetControlValue(ibValue& pvarControlVal) const
 //*                                  Data											*
 //***********************************************************************************
 
-bool ibValueModelTableBoxColumn::LoadData(ibReaderMemory& reader)
+bool ibValueModelTableBoxColumn::ReadData(const ibDataNode& node)
 {
-	m_propertyTitle->LoadData(reader);
-	m_propertyRepresentation->LoadData(reader);
-	m_propertyFooterText->LoadData(reader);
-
-	m_propertyHeaderPicture->LoadData(reader);
-	m_propertyFooterPicture->LoadData(reader);
-
-	m_propertyPasswordMode->LoadData(reader);
-	m_propertyMultilineMode->LoadData(reader);
-	m_propertyTexteditMode->LoadData(reader);
-
-	m_propertySelectButton->LoadData(reader);
-	m_propertyOpenButton->LoadData(reader);
-	m_propertyClearButton->LoadData(reader);
-
-	m_propertyHeaderAlign->LoadData(reader);
-	m_propertyFooterAlign->LoadData(reader);
-
-	m_propertyWidth->LoadData(reader);
-	m_propertyVisible->LoadData(reader);
-	m_propertyResizable->LoadData(reader);
-	//m_propertySortable->LoadData(reader);
-	m_propertyReorderable->LoadData(reader);
-
-	m_propertyChoiceForm->LoadData(reader);
-
-	if (!m_propertySource->LoadData(reader))
-		return false;
+	m_propertyTitle->ReadNodeValue(node.GetProperty(m_propertyTitle->GetName()));
+	m_propertyRepresentation->ReadNodeValue(node.GetProperty(m_propertyRepresentation->GetName()));
+	m_propertyFooterText->ReadNodeValue(node.GetProperty(m_propertyFooterText->GetName()));
+	m_propertyHeaderPicture->ReadNodeValue(node.GetProperty(m_propertyHeaderPicture->GetName()));
+	m_propertyFooterPicture->ReadNodeValue(node.GetProperty(m_propertyFooterPicture->GetName()));
+	m_propertyPasswordMode->ReadNodeValue(node.GetProperty(m_propertyPasswordMode->GetName()));
+	m_propertyMultilineMode->ReadNodeValue(node.GetProperty(m_propertyMultilineMode->GetName()));
+	m_propertyTexteditMode->ReadNodeValue(node.GetProperty(m_propertyTexteditMode->GetName()));
+	m_propertySelectButton->ReadNodeValue(node.GetProperty(m_propertySelectButton->GetName()));
+	m_propertyOpenButton->ReadNodeValue(node.GetProperty(m_propertyOpenButton->GetName()));
+	m_propertyClearButton->ReadNodeValue(node.GetProperty(m_propertyClearButton->GetName()));
+	m_propertyHeaderAlign->ReadNodeValue(node.GetProperty(m_propertyHeaderAlign->GetName()));
+	m_propertyFooterAlign->ReadNodeValue(node.GetProperty(m_propertyFooterAlign->GetName()));
+	m_propertyWidth->ReadNodeValue(node.GetProperty(m_propertyWidth->GetName()));
+	m_propertyVisible->ReadNodeValue(node.GetProperty(m_propertyVisible->GetName()));
+	m_propertyResizable->ReadNodeValue(node.GetProperty(m_propertyResizable->GetName()));
+	//m_propertySortable->ReadNodeValue(node.GetProperty(m_propertySortable->GetName()));
+	m_propertyReorderable->ReadNodeValue(node.GetProperty(m_propertyReorderable->GetName()));
+	m_propertyChoiceForm->ReadNodeValue(node.GetProperty(m_propertyChoiceForm->GetName()));
+	m_propertySource->ReadNodeValue(node.GetProperty(m_propertySource->GetName()));
 
 	//events
-	m_eventOnChange->LoadData(reader);
-	m_eventStartChoice->LoadData(reader);
-	m_eventStartListChoice->LoadData(reader);
-	m_eventClearing->LoadData(reader);
-	m_eventOpening->LoadData(reader);
-	m_eventChoiceProcessing->LoadData(reader);
-	return ibValueControl::LoadData(reader);
+	m_eventOnChange->ReadNodeValue(node.GetProperty(m_eventOnChange->GetName()));
+	m_eventStartChoice->ReadNodeValue(node.GetProperty(m_eventStartChoice->GetName()));
+	m_eventStartListChoice->ReadNodeValue(node.GetProperty(m_eventStartListChoice->GetName()));
+	m_eventClearing->ReadNodeValue(node.GetProperty(m_eventClearing->GetName()));
+	m_eventOpening->ReadNodeValue(node.GetProperty(m_eventOpening->GetName()));
+	m_eventChoiceProcessing->ReadNodeValue(node.GetProperty(m_eventChoiceProcessing->GetName()));
+	
+	return ibValueControl::ReadData(node);
 }
 
-bool ibValueModelTableBoxColumn::SaveData(ibWriterMemory& writer)
+bool ibValueModelTableBoxColumn::WriteData(ibDataNode& node) const
 {
-	m_propertyTitle->SaveData(writer);
-	m_propertyRepresentation->SaveData(writer);
-	m_propertyFooterText->SaveData(writer);
-
-	m_propertyHeaderPicture->SaveData(writer);
-	m_propertyFooterPicture->SaveData(writer);
-
-	m_propertyPasswordMode->SaveData(writer);
-	m_propertyMultilineMode->SaveData(writer);
-	m_propertyTexteditMode->SaveData(writer);
-
-	m_propertySelectButton->SaveData(writer);
-	m_propertyOpenButton->SaveData(writer);
-	m_propertyClearButton->SaveData(writer);
-
-	m_propertyHeaderAlign->SaveData(writer);
-	m_propertyFooterAlign->SaveData(writer);
-
-	m_propertyWidth->SaveData(writer);
-	m_propertyVisible->SaveData(writer);
-	m_propertyResizable->SaveData(writer);
-	//m_propertySortable->SaveData(writer);
-	m_propertyReorderable->SaveData(writer);
-
-	m_propertyChoiceForm->SaveData(writer);
-
-	if (!m_propertySource->SaveData(writer))
-		return false;
+	node.SetProperty(m_propertyTitle->GetName(), m_propertyTitle->GetNodeValue());
+	node.SetProperty(m_propertyRepresentation->GetName(), m_propertyRepresentation->GetNodeValue());
+	node.SetProperty(m_propertyFooterText->GetName(), m_propertyFooterText->GetNodeValue());
+	node.SetProperty(m_propertyHeaderPicture->GetName(), m_propertyHeaderPicture->GetNodeValue());
+	node.SetProperty(m_propertyFooterPicture->GetName(), m_propertyFooterPicture->GetNodeValue());
+	node.SetProperty(m_propertyPasswordMode->GetName(), m_propertyPasswordMode->GetNodeValue());
+	node.SetProperty(m_propertyMultilineMode->GetName(), m_propertyMultilineMode->GetNodeValue());
+	node.SetProperty(m_propertyTexteditMode->GetName(), m_propertyTexteditMode->GetNodeValue());
+	node.SetProperty(m_propertySelectButton->GetName(), m_propertySelectButton->GetNodeValue());
+	node.SetProperty(m_propertyOpenButton->GetName(), m_propertyOpenButton->GetNodeValue());
+	node.SetProperty(m_propertyClearButton->GetName(), m_propertyClearButton->GetNodeValue());
+	node.SetProperty(m_propertyHeaderAlign->GetName(), m_propertyHeaderAlign->GetNodeValue());
+	node.SetProperty(m_propertyFooterAlign->GetName(), m_propertyFooterAlign->GetNodeValue());
+	node.SetProperty(m_propertyWidth->GetName(), m_propertyWidth->GetNodeValue());
+	node.SetProperty(m_propertyVisible->GetName(), m_propertyVisible->GetNodeValue());
+	node.SetProperty(m_propertyResizable->GetName(), m_propertyResizable->GetNodeValue());
+	//node.SetProperty(m_propertySortable->GetName(), m_propertySortable->GetNodeValue());
+	node.SetProperty(m_propertyReorderable->GetName(), m_propertyReorderable->GetNodeValue());
+	node.SetProperty(m_propertyChoiceForm->GetName(), m_propertyChoiceForm->GetNodeValue());
+	node.SetProperty(m_propertySource->GetName(), m_propertySource->GetNodeValue());
 
 	//events
-	m_eventOnChange->SaveData(writer);
-	m_eventStartChoice->SaveData(writer);
-	m_eventStartListChoice->SaveData(writer);
-	m_eventClearing->SaveData(writer);
-	m_eventOpening->SaveData(writer);
-	m_eventChoiceProcessing->SaveData(writer);
-	return ibValueControl::SaveData(writer);
+	node.SetProperty(m_eventOnChange->GetName(), m_eventOnChange->GetNodeValue());
+	node.SetProperty(m_eventStartChoice->GetName(), m_eventStartChoice->GetNodeValue());
+	node.SetProperty(m_eventStartListChoice->GetName(), m_eventStartListChoice->GetNodeValue());
+	node.SetProperty(m_eventClearing->GetName(), m_eventClearing->GetNodeValue());
+	node.SetProperty(m_eventOpening->GetName(), m_eventOpening->GetNodeValue());
+	node.SetProperty(m_eventChoiceProcessing->GetName(), m_eventChoiceProcessing->GetNodeValue());
+	
+	return ibValueControl::WriteData(node);
 }
 
 #ifdef OES_USE_WEB

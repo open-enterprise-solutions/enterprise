@@ -29,9 +29,9 @@ struct ibActionDescription {
 
 class ibActionDescriptionMemory {
 public:
-	//load & save object in control 
-	static bool LoadData(class ibReaderMemory& reader, ibActionDescription& typeDesc);
-	static bool SaveData(class ibWriterMemory& writer, ibActionDescription& typeDesc);
+	// node form
+	static bool ReadNode(const class ibDataValue& value, ibActionDescription& actionDesc);
+	static bool WriteNode(class ibDataValue& value, const ibActionDescription& actionDesc);
 };
 
 #include "backend_picture.h"

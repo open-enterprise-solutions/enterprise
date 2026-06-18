@@ -1,4 +1,5 @@
 #include "chartBox.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "frontend/win/ctrls/charts/wxcharts.h"
 
 //***********************************************************************************
@@ -154,14 +155,14 @@ void ibValueChartBox::Cleanup(wxObject* obj, ibVisualHost *visualHost)
 //*                                   Data		                                   *
 //**********************************************************************************
 
-bool ibValueChartBox::LoadData(ibReaderMemory &reader)
+bool ibValueChartBox::ReadData(const ibDataNode& node)
 {
-	return ibValueWindow::LoadData(reader);
+	return ibValueWindow::ReadData(node);
 }
 
-bool ibValueChartBox::SaveData(ibWriterMemory& writer)
+bool ibValueChartBox::WriteData(ibDataNode& node) const
 {
-	return ibValueWindow::SaveData(writer);
+	return ibValueWindow::WriteData(node);
 }
 
 //***********************************************************************

@@ -1,4 +1,5 @@
 #include "textBox.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 
 //***********************************************************************************
 //*                           IMPLEMENT_DYNAMIC_CLASS                               *
@@ -63,14 +64,14 @@ wxPrintout* ibValueTextBox::CreatePrintout() const
 //*                                   Data										   *
 //**********************************************************************************
 
-bool ibValueTextBox::LoadData(ibReaderMemory& reader)
+bool ibValueTextBox::ReadData(const ibDataNode& node)
 {
-	return ibValueWindow::LoadData(reader);
+	return ibValueWindow::ReadData(node);
 }
 
-bool ibValueTextBox::SaveData(ibWriterMemory& writer)
+bool ibValueTextBox::WriteData(ibDataNode& node) const
 {
-	return ibValueWindow::SaveData(writer);
+	return ibValueWindow::WriteData(node);
 }
 
 //***********************************************************************************

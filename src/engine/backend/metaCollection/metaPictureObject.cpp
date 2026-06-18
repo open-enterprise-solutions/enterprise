@@ -1,4 +1,5 @@
 #include "metaPictureObject.h"
+#include "backend/serialize/dataBuilder.h"
 
 //***********************************************************************
 //*                            IntrfaceObject                           *
@@ -14,14 +15,16 @@ ibValueMetaObjectPicture::ibValueMetaObjectPicture(const wxString& name, const w
 {
 }
 
-bool ibValueMetaObjectPicture::LoadData(ibReaderMemory& reader)
+bool ibValueMetaObjectPicture::ReadData(const ibDataNode& node)
 {
-	return m_propertyPicture->LoadData(reader);
+	m_propertyPicture->ReadNodeValue(node.GetProperty(m_propertyPicture->GetName()));
+	return true;
 }
 
-bool ibValueMetaObjectPicture::SaveData(ibWriterMemory& writer)
+bool ibValueMetaObjectPicture::WriteData(ibDataNode& node)
 {
-	return m_propertyPicture->SaveData(writer);
+	node.SetProperty(m_propertyPicture->GetName(), m_propertyPicture->GetNodeValue());
+	return true;
 }
 
 //***********************************************************************

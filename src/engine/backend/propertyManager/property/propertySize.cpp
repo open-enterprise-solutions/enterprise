@@ -1,4 +1,5 @@
 #include "propertySize.h"
+#include "backend/serialize/dataBuilder.h"
 #include "backend/system/value/valueSize.h"
 
 wxObject* (*ibPropertySize::ms_propertySize)(const wxString&, const wxString&, const wxSize&) = nullptr;
@@ -19,14 +20,14 @@ bool ibPropertySize::GetDataValue(ibValue& pvarPropVal) const
 	return true;
 }
 
-bool ibPropertySize::LoadData(ibReaderMemory& reader)
+bool ibPropertySize::ReadNodeValue(const ibDataValue& value)
 {
-	ibPropertySize::SetValue(reader.r_stringZ());
+	ibPropertySize::SetValue(value.AsString());
 	return true;
 }
 
-bool ibPropertySize::SaveData(ibWriterMemory& writer)
+bool ibPropertySize::WriteNodeValue(ibDataValue& value) const
 {
-	writer.w_stringZ(ibPropertySize::GetValueAsString());
+	value = ibDataValue::String(ibPropertySize::GetValueAsString());
 	return true;
 }

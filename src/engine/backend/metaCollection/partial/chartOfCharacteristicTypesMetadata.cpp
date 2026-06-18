@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "chartOfCharacteristicTypes.h"
+#include "backend/serialize/dataBuilder.h"
 #include "list/objectList.h"
 #include "backend/metaData.h"
 #include "backend/moduleManager/moduleManager.h"
@@ -160,47 +161,40 @@ wxString ibValueMetaObjectChartOfCharacteristicTypes::GetDataPresentation(const 
 //*                       Save & load metaData                              *
 //***************************************************************************
 
-bool ibValueMetaObjectChartOfCharacteristicTypes::LoadData(ibReaderMemory& dataReader)
+bool ibValueMetaObjectChartOfCharacteristicTypes::WriteData(ibDataNode& node)
 {
-	//load default attributes:
-	(*m_propertyAttributeType)->LoadMeta(dataReader);
+	node.SetProperty(m_propertyAttributeType->GetName(), m_propertyAttributeType->GetNodeValue());
 
-	//Load object module
-	(*m_propertyObjectModule)->LoadMeta(dataReader);
-	(*m_propertyManagerModule)->LoadMeta(dataReader);
+	node.SetProperty(m_propertyObjectModule->GetName(), m_propertyObjectModule->GetNodeValue());
+	node.SetProperty(m_propertyManagerModule->GetName(), m_propertyManagerModule->GetNodeValue());
 
-	m_propertyTypesOfCharacteristics->LoadData(dataReader);
+	node.SetProperty(m_propertyTypesOfCharacteristics->GetName(), m_propertyTypesOfCharacteristics->GetNodeValue());
 
-	//load default form
-	m_propertyDefFormObject->SetValue(GetIdByGuid(dataReader.r_stringZ()));
-	m_propertyDefFormFolder->SetValue(GetIdByGuid(dataReader.r_stringZ()));
-	m_propertyDefFormList->SetValue(GetIdByGuid(dataReader.r_stringZ()));
-	m_propertyDefFormSelect->SetValue(GetIdByGuid(dataReader.r_stringZ()));
-	m_propertyDefFormFolderSelect->SetValue(GetIdByGuid(dataReader.r_stringZ()));
+	node.SetValue(m_propertyDefFormObject->GetName(), GetGuidByID(m_propertyDefFormObject->GetValueAsInteger()).str());
+	node.SetValue(m_propertyDefFormFolder->GetName(), GetGuidByID(m_propertyDefFormFolder->GetValueAsInteger()).str());
+	node.SetValue(m_propertyDefFormList->GetName(), GetGuidByID(m_propertyDefFormList->GetValueAsInteger()).str());
+	node.SetValue(m_propertyDefFormSelect->GetName(), GetGuidByID(m_propertyDefFormSelect->GetValueAsInteger()).str());
+	node.SetValue(m_propertyDefFormFolderSelect->GetName(), GetGuidByID(m_propertyDefFormFolderSelect->GetValueAsInteger()).str());
 
-	return ibValueMetaObjectRecordDataHierarchyMutableRef::LoadData(dataReader);
+	return ibValueMetaObjectRecordDataHierarchyMutableRef::WriteData(node);
 }
 
-bool ibValueMetaObjectChartOfCharacteristicTypes::SaveData(ibWriterMemory& dataWritter)
+bool ibValueMetaObjectChartOfCharacteristicTypes::ReadData(const ibDataNode& node)
 {
-	//save default attributes:
-	(*m_propertyAttributeType)->SaveMeta(dataWritter);
+	m_propertyAttributeType->ReadNodeValue(node.GetProperty(m_propertyAttributeType->GetName()));
 
-	//Save object module
-	(*m_propertyObjectModule)->SaveMeta(dataWritter);
-	(*m_propertyManagerModule)->SaveMeta(dataWritter);
+	m_propertyObjectModule->ReadNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
+	m_propertyManagerModule->ReadNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
 
-	m_propertyTypesOfCharacteristics->SaveData(dataWritter);
+	m_propertyTypesOfCharacteristics->ReadNodeValue(node.GetProperty(m_propertyTypesOfCharacteristics->GetName()));
 
-	//save default form
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormObject->GetValueAsInteger()));
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormFolder->GetValueAsInteger()));
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormList->GetValueAsInteger()));
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormSelect->GetValueAsInteger()));
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormFolderSelect->GetValueAsInteger()));
+	m_propertyDefFormObject->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormObject->GetName())));
+	m_propertyDefFormFolder->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormFolder->GetName())));
+	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormList->GetName())));
+	m_propertyDefFormSelect->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormSelect->GetName())));
+	m_propertyDefFormFolderSelect->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormFolderSelect->GetName())));
 
-	//create or update table:
-	return ibValueMetaObjectRecordDataHierarchyMutableRef::SaveData(dataWritter);
+	return ibValueMetaObjectRecordDataHierarchyMutableRef::ReadData(node);
 }
 
 //***********************************************************************

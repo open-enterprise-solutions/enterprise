@@ -1,4 +1,5 @@
 #include "widgets.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #ifdef OES_USE_WEB
 #include "frontend/web/webWindow.h"
 #else
@@ -196,29 +197,26 @@ bool ibValueCheckbox::SetControlValue(const ibValue& varControlVal)
 //*							 Data	                                *
 //*******************************************************************
 
-bool ibValueCheckbox::LoadData(ibReaderMemory& reader)
+bool ibValueCheckbox::ReadData(const ibDataNode& node)
 {
-	wxString title; reader.r_stringZ(title);
-	m_propertyTitle->SetValue(title);
-	m_propertyTitleLocation->SetValue(reader.r_s32());
-	if (!m_propertySource->LoadData(reader))
-		return false;
+	m_propertyTitle->ReadNodeValue(node.GetProperty(m_propertyTitle->GetName()));
+	m_propertyTitleLocation->ReadNodeValue(node.GetProperty(m_propertyTitleLocation->GetName()));
+	m_propertySource->ReadNodeValue(node.GetProperty(m_propertySource->GetName()));
 
 	//events
-	m_onCheckboxClicked->LoadData(reader);
-	return ibValueWindow::LoadData(reader);
+	m_onCheckboxClicked->ReadNodeValue(node.GetProperty(m_onCheckboxClicked->GetName()));
+	return ibValueWindow::ReadData(node);
 }
 
-bool ibValueCheckbox::SaveData(ibWriterMemory& writer)
+bool ibValueCheckbox::WriteData(ibDataNode& node) const
 {
-	writer.w_stringZ(m_propertyTitle->GetValueAsString());
-	writer.w_s32(m_propertyTitleLocation->GetValueAsInteger());
-	if (!m_propertySource->SaveData(writer))
-		return false;
+	node.SetProperty(m_propertyTitle->GetName(), m_propertyTitle->GetNodeValue());
+	node.SetProperty(m_propertyTitleLocation->GetName(), m_propertyTitleLocation->GetNodeValue());
+	node.SetProperty(m_propertySource->GetName(), m_propertySource->GetNodeValue());
 
 	//events
-	m_onCheckboxClicked->SaveData(writer);
-	return ibValueWindow::SaveData(writer);
+	node.SetProperty(m_onCheckboxClicked->GetName(), m_onCheckboxClicked->GetNodeValue());
+	return ibValueWindow::WriteData(node);
 }
 
 //***********************************************************************

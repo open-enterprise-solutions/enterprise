@@ -1,6 +1,7 @@
 #include "propertyBoolean.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode — readable Bool node value
 
-//get property for grid	
+//get property for grid
 wxObject* (*ibPropertyBoolean::ms_propertyBoolean)(const wxString&, const wxString&, const bool&) = nullptr;
 
 //base property for "bool"
@@ -16,14 +17,14 @@ bool ibPropertyBoolean::GetDataValue(ibValue& pvarPropVal) const
 	return true;
 }
 
-bool ibPropertyBoolean::LoadData(ibReaderMemory& reader)
+bool ibPropertyBoolean::ReadNodeValue(const ibDataValue& value)
 {
-	SetValue(reader.r_u8());
+	ibPropertyBoolean::SetValue(value.AsBool()); // AsBool validates kind (Empty -> default false)
 	return true;
 }
 
-bool ibPropertyBoolean::SaveData(ibWriterMemory& writer)
+bool ibPropertyBoolean::WriteNodeValue(ibDataValue& value) const
 {
-	writer.w_u8(ibPropertyBoolean::GetValueAsBoolean());
+	value = ibDataValue::Bool(ibPropertyBoolean::GetValueAsBoolean());
 	return true;
 }

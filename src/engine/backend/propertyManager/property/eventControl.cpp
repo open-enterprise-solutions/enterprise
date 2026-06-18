@@ -1,5 +1,6 @@
 #include "eventControl.h"
 #include "backend/system/value/valueEvent.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataValue — node value (Binary, transitional)
 
 // get property for grid
 wxObject* (*ibEventControl::ms_propertyEvent)(const wxString&, const wxString&, const wxString&) = nullptr;
@@ -19,16 +20,22 @@ bool ibEventControl::GetDataValue(ibValue& pvarPropVal) const
 	return true;
 }
 
-bool ibEventControl::LoadData(ibReaderMemory& reader)
+// A child node with named properties (Name + handler Value) — no opaque bytes.
+bool ibEventControl::ReadNodeValue(const ibDataValue& value)
 {
-	m_propName = reader.r_stringZ();
-	m_propValue = reader.r_stringZ();
+	const std::shared_ptr<ibDataNode>& node = value.AsChild();
+	if (node) {
+		m_propName = node->GetValue<wxString>(wxT("Name"));
+		m_propValue = node->GetValue<wxString>(wxT("Value"));
+	}
 	return true;
 }
 
-bool ibEventControl::SaveData(ibWriterMemory& writer)
+bool ibEventControl::WriteNodeValue(ibDataValue& value) const
 {
-	writer.w_stringZ(m_propName);
-	writer.w_stringZ(m_propValue.GetString());
+	auto node = std::make_shared<ibDataNode>();
+	node->SetValue(wxT("Name"), m_propName);
+	node->SetValue(wxT("Value"), m_propValue.GetString());
+	value = ibDataValue::Child(node);
 	return true;
-}
+}

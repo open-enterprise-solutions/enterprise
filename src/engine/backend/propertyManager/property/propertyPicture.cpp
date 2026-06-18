@@ -1,5 +1,6 @@
 #include "propertyPicture.h"
 #include "backend/propertyManager/property/variant/variantPicture.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataValue — node value (Binary, transitional)
 
 // get property for grid
 wxObject* (*ibPropertyPicture::ms_propertyPicture)(const wxString&, const wxString&, const wxVariant&) = nullptr;
@@ -53,12 +54,12 @@ bool ibPropertyPicture::GetDataValue(ibValue& pvarPropVal) const
 	return true;
 }
 
-bool ibPropertyPicture::LoadData(ibReaderMemory& reader)
+bool ibPropertyPicture::ReadNodeValue(const ibDataValue& value)
 {
-	return ibPictureDescriptionMemory::LoadData(reader, GetValueAsPictureDesc());
+	return ibPictureDescriptionMemory::ReadNode(value, GetValueAsPictureDesc());
 }
 
-bool ibPropertyPicture::SaveData(ibWriterMemory& writer)
+bool ibPropertyPicture::WriteNodeValue(ibDataValue& value) const
 {
-	return ibPictureDescriptionMemory::SaveData(writer, GetValueAsPictureDesc());
-}
+	return ibPictureDescriptionMemory::WriteNode(value, GetValueAsPictureDesc());
+}

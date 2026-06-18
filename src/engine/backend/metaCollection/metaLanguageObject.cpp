@@ -1,4 +1,5 @@
 #include "metaLanguageObject.h"
+#include "backend/serialize/dataBuilder.h"
 
 //***********************************************************************
 //*                            MetaObjectLanguage                       *
@@ -82,14 +83,16 @@ bool ibValueMetaObjectLanguage::OnAfterRunMetaObject(int flags)
 	return ibValueMetaObject::OnAfterRunMetaObject(flags);
 }
 
-bool ibValueMetaObjectLanguage::LoadData(ibReaderMemory& reader)
+bool ibValueMetaObjectLanguage::ReadData(const ibDataNode& node)
 {
-	return m_propertyCode->LoadData(reader);
+	m_propertyCode->ReadNodeValue(node.GetProperty(m_propertyCode->GetName()));
+	return true;
 }
 
-bool ibValueMetaObjectLanguage::SaveData(ibWriterMemory& writer)
+bool ibValueMetaObjectLanguage::WriteData(ibDataNode& node)
 {
-	return m_propertyCode->SaveData(writer);
+	node.SetProperty(m_propertyCode->GetName(), m_propertyCode->GetNodeValue());
+	return true;
 }
 
 //***********************************************************************

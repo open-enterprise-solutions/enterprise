@@ -1,5 +1,6 @@
 
 #include "widgets.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "backend/compiler/procUnit.h"
 #ifdef OES_USE_WEB
 #include "frontend/web/webWindow.h"
@@ -64,22 +65,21 @@ void ibValueStaticText::Cleanup(wxObject* obj, ibVisualHost* visualHost)
 //*                              Data	                            *
 //*******************************************************************
 
-bool ibValueStaticText::LoadData(ibReaderMemory& reader)
+bool ibValueStaticText::ReadData(const ibDataNode& node)
 {
-	m_propertyMarkup->SetValue(reader.r_u8());
-	m_propertyWrap->SetValue(reader.r_u32());
-	wxString label; reader.r_stringZ(label);
-	m_propertyTitle->SetValue(label);
-	return ibValueWindow::LoadData(reader);
+	m_propertyMarkup->ReadNodeValue(node.GetProperty(m_propertyMarkup->GetName()));
+	m_propertyWrap->ReadNodeValue(node.GetProperty(m_propertyWrap->GetName()));
+	m_propertyTitle->ReadNodeValue(node.GetProperty(m_propertyTitle->GetName()));
+	return ibValueWindow::ReadData(node);
 }
 
-bool ibValueStaticText::SaveData(ibWriterMemory& writer)
+bool ibValueStaticText::WriteData(ibDataNode& node) const
 {
-	writer.w_u8(m_propertyMarkup->GetValueAsBoolean());
-	writer.w_u32(m_propertyWrap->GetValueAsUInteger());
-	writer.w_stringZ(m_propertyTitle->GetValueAsString());
+	node.SetProperty(m_propertyMarkup->GetName(), m_propertyMarkup->GetNodeValue());
+	node.SetProperty(m_propertyWrap->GetName(), m_propertyWrap->GetNodeValue());
+	node.SetProperty(m_propertyTitle->GetName(), m_propertyTitle->GetNodeValue());
 
-	return ibValueWindow::SaveData(writer);
+	return ibValueWindow::WriteData(node);
 }
 
 //***********************************************************************

@@ -15,8 +15,8 @@ class ibValueWindow : public ibValueControl {
 	ibValueWindow();
 
 	//load & save object in control
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer = ibWriterMemory());
+	virtual bool ReadData(const ibDataNode& node);
+	virtual bool WriteData(ibDataNode& node) const;
 
 	virtual int GetComponentType() const { return COMPONENT_TYPE_WINDOW; }
 

@@ -370,9 +370,17 @@ public:
 		return FindObjectByFilter<_T2, ibValueMetaObject, ibValueMetaObject, _T1>(id, filter, use_child_filter);
 	}
 
-#pragma endregion 
+#pragma endregion
 
-	//ID's 
+	// Copy-aware identity resolve — a metaId is config-local (shifts on copy / reorder), the
+	// metaobject's GUID is stable. Serialised references (source paths, meta-description lists,
+	// reference types) store the GUID and resolve back through these. One home for both the
+	// source- and meta-description memory serialisers (was a file-local duplicate). GetCommonGuid
+	// yields the COPY-guid mid-copy, so a binding inside a copied object points at the copy.
+	ibGuid  GuidByMetaId(const ibMetaID& id)  const;   // metaId -> stable guid (null if absent / not allowed)
+	ibMetaID MetaIdByGuid(const ibGuid& guid) const;   // guid -> live metaId (wxNOT_FOUND if unresolved)
+
+	//ID's
 	ibMetaID GenerateNewID() const;
 
 	//generate new name
@@ -441,9 +449,10 @@ protected:
 
 public:
 
-	// Serialization chunk IDs for the metadata blob tree. Public so the
-	// node-owned walk on ibValueMetaObject (SaveSubtree/LoadChildren) can emit
-	// the same layout the ibMetaData containers expect.
+	// Serialization chunk IDs for the metadata blob tree. The containers write
+	// eHeaderBlock and frame the root; the per-node {eDataBlock,eChildBlock} layout
+	// is emitted by ibBinaryProvider (serialize/dataBuilder.cpp), which mirrors these
+	// ids for byte-compatibility (kept in sync there).
 	enum
 	{
 		eHeaderBlock = 0x2320,

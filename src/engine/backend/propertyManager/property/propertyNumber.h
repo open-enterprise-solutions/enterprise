@@ -2,6 +2,7 @@
 #define __PROPERTY_NUMBER_H__
 
 #include "backend/propertyManager/propertyObject.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataValue — node value (inline Int for integers)
 
 //base property for "number"
 class BACKEND_API ibPropertyNumber : public ibProperty {
@@ -39,9 +40,9 @@ public:
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
 
-	//load & save object in control 
-	virtual bool LoadData(ibReaderMemory& reader);
-	virtual bool SaveData(ibWriterMemory& writer);
+	//per-type node value
+	virtual bool ReadNodeValue(const ibDataValue& value) override;
+	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
 public:
 
@@ -90,14 +91,13 @@ public:
 		return true;
 	}
 
-	//load & save object in control 
-	virtual bool LoadData(ibReaderMemory& reader) {
-		SetValue(reader.r_s32());
+	//per-type node value
+	virtual bool ReadNodeValue(const ibDataValue& value) override {
+		SetValue((int)value.AsInt());
 		return true;
 	}
-
-	virtual bool SaveData(ibWriterMemory& writer) {
-		writer.w_s32(GetValueAsInteger());
+	virtual bool WriteNodeValue(ibDataValue& value) const override {
+		value = ibDataValue::Int(GetValueAsInteger());
 		return true;
 	}
 
@@ -149,14 +149,13 @@ public:
 		return true;
 	}
 
-	//load & save object in control 
-	virtual bool LoadData(ibReaderMemory& reader) {
-		SetValue(reader.r_u32());
+	//per-type node value
+	virtual bool ReadNodeValue(const ibDataValue& value) override {
+		SetValue((unsigned int)value.AsInt());
 		return true;
 	}
-
-	virtual bool SaveData(ibWriterMemory& writer) {
-		writer.w_u32(GetValueAsUInteger());
+	virtual bool WriteNodeValue(ibDataValue& value) const override {
+		value = ibDataValue::Int(GetValueAsUInteger());
 		return true;
 	}
 

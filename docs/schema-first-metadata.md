@@ -1,14 +1,103 @@
 # Schema-first metadata
 
-**Status: DIRECTION — design only, no code yet (2026-06-17).** This document
-captures an architectural direction, not a landed feature. It reframes
-metadata serialization in light of the now-landed L3 schema tier. The core
-shift: **the schema becomes primary over metadata.**
-
-It supersedes the "build it out as-is" plan of
-[metadata-serialization-arc.md](metadata-serialization-arc.md) and is the
-upper half of [metadata-storage-container-arc.md](metadata-storage-container-arc.md)
+**Status: DIRECTION + FIRST SLICE LANDED (2026-06-18, Debug|x86 green, runtime-validated).**
+The core shift — **the schema becomes primary over metadata** — is the direction;
+the node model, the pluggable providers, and a transparent form serialization
+have shipped (see **LANDED** below). The byte path of
+[metadata-serialization-arc.md](metadata-serialization-arc.md) was **removed**, not
+completed. This is the upper half of
+[metadata-storage-container-arc.md](metadata-storage-container-arc.md)
 (single-blob → per-entry == file-per-object).
+
+---
+
+## LANDED (2026-06-18) — the node model + providers are real
+
+The "design only" parts below that shipped, with names as built:
+
+**Node model** — `backend/serialize/dataBuilder.{h,cpp}`:
+- `ibDataNode` = the uniform self-similar node (identity `clsid`/`metaId`, a named
+  **fields** area, a separate **props** area, a transitional raw blob, child
+  sub-nodes). `ibDataValue` = the typed scalar (`ibDataKind`:
+  Empty/Bool/Number(`ibNumber`, huge-capable)/Date(s64 ticks)/String/Binary/Child/
+  Array). `ibDataCodec<T>` maps C++ ↔ value (wxString, bool, s32, wxMemoryBuffer,
+  ibGuid→String, ibNumber→Number, wxDateTime→Date).
+- **Optimistic-cursor** reader (`FindField`/`FindProperty`) is exactly the design's
+  "try current position → else search → else default". Forward-compat by name is live.
+
+**Providers** — pluggable `ibFormatProvider`:
+- `ibBinaryProvider` (internal/fast, chunk-framed) = runtime/DB format;
+  `ibJsonProvider` (external/AI, write-only export) = readable keys. `ibDataBuilder`
+  drives `Save(provider, writer)` / `Load(provider, reader)`.
+- **Write/Read are TRUE INVERSES** — both emit the node's *inner* content; the
+  identity frame `chunk(clsid){chunk(metaId){inner}}` is the **container's** job
+  (config/Report/DataProcessor wrap the root; on-disk bytes unchanged). A naive
+  `builder.Save`→`builder.Load` not peeling the frame was the bug that read forms/
+  controls back empty.
+- **A `Child` value carries its WHOLE subtree** (`WriteChildren`/`ReadChildren`):
+  per child clsid+metaId+fields+props+recursive children. Without it a form's
+  control tree (children of the `Layout` `Child`) was silently dropped on config
+  save → controls + bindings lost on reopen.
+
+**Per-type hook** — `WriteData(ibDataNode&) const` / `ReadData(const ibDataNode&)`
+replaced byte `SaveData`/`LoadData` on every metaobject, property, and form control.
+Canon: properties `ReadNodeValue`/`WriteNodeValue` (Read-first) + non-virtual
+`GetNodeValue()` convenience; metaobjects keep `ReadData`/`WriteData` **protected**
+(driven only by `Load/SaveNode`). Nested metaobjects embed via their holder property
+(`GetNodeChild`/`SetNodeChild` removed — `ibPropertyContainer`/`ibPropertyInnerModule`
+wrap `SaveNode`/`LoadNode` into a `Child`).
+
+**Form is a transparent node** (not a base64 blob): `ibPropertyForm` →
+`Child{ Module: String, Layout: Child(control tree) }`. The runtime stays
+blob-based (`SaveForm`/`LoadForm`, prop-grid variant) via ONE shim
+`ibValueMetaObjectFormBase::FormBlobToNode`/`FormNodeToBlob` — the form blob IS the
+binary-provider node format, so the adapter is a single provider round-trip.
+`ibValueFrame::SaveNode`/`LoadNode` recurse sub-controls as node children (load via
+`GetOwnerForm()->NewObject`); the hand-rolled `formMem` chunk framing is gone.
+
+**JSON intrinsic keys** are `NodeType`/`NodeId`/`NodeChildren`/`NodeRaw`/
+`NodePredefined` (not `_`-prefixed) — readable AND clear of an object's own
+properties (which may legitimately be named `Type`/`Id`/`Predefined`).
+
+### Copy-awareness — guid for object refs, with a load-order caveat
+- **Source binding** (`ibSourceDescriptionMemory`) + **reference types**
+  (`ibTypeDescriptionMemory`) serialize copy-aware: a metaobject ref → its stable
+  GUID (`ibMetaData::GuidByMetaId`/`MetaIdByGuid`, copy-aware via `GetCommonGuid`);
+  a type clsid → its portable name; resolved back to THIS config's live id/clsid on
+  load (raw id/clsid = same-config fallback).
+- **`ibMetaDescriptionMemory` (Owner/Generation/Record/Chart refs) stays raw
+  metaId** — it lives INSIDE the metadata tree, so its targets aren't all loaded
+  when read; a guid→id resolve at `ReadNode` time returns NOT_FOUND and breaks init.
+  Copy-awareness here needs a **deferred** (post-tree) pass, not load-time.
+- **Source first-hop GATE** (`variantSource.cpp` `ResolveHop`): hop 0 resolves
+  **scoped to the binding's own source object** (`GetSourceObject()->
+  GetSourceMetaObject()->FindAnyObjectByFilter`), deeper hops config-wide. A copied
+  binding whose source no longer holds the first hop reads `<not selected>` instead
+  of chasing the stale metaId config-wide into the original (which cascaded into a
+  factory "Error initializing object" — a symptom). The value side gates naturally
+  (`GetValueByPath` hop 0 = the source's own `GetValueByMetaID`); the variant mirrors
+  it for display/type. See [universal-form-sources arc] in memory.
+
+### Traps recorded (cost real time)
+- **const/non-const `GetMetaData`** — `ibPropertyObject` declares both overloads;
+  controls override only the **const** one, so a non-const `m_owner->GetMetaData()`
+  silently returns null → the binding serialized against null metaData → null GUIDs →
+  lost source. Call through a `const ibPropertyObject*`; a guard `wxFAIL_MSG`s the
+  non-const default.
+- **`Execute(dml) == DATABASE_LAYER_QUERY_RESULT_ERROR` is wrong** — `Execute`
+  returns the affected-row COUNT and signals failure by **throwing**; `0` is a valid
+  count (DELETE on an empty table). Fixed in the config copy/UPSERT/restore, constant
+  CREATE/DROP, `userInfo` Save/Delete. The structure-builder subsystem
+  (`schemaSnapshot`/`structureBatch`/`structureBuilder`, ~15 sites) has the same
+  latent pattern — by-demand.
+
+### Still deferred (unchanged from the direction)
+File-tree / ZIP **reader** provider (folder-tree → nodes, for GitHub navigation;
+write-side derives folders from `clsid`+`Name` in the provider, no marker on nodes);
+owner inversion; lazy fault-in; replacing the `sys_config` blob; tree **patch**
+(identity-addressed op-list — diff exists via Compare/Merge, apply-as-ops is new).
+The substrate is now in place, so each is a new provider/pass, not a touch of the
+per-type code.
 
 ---
 

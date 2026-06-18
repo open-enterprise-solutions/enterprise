@@ -1,4 +1,5 @@
 #include "propertyChartOfCharacteristicTypes.h"
+#include "backend/serialize/dataBuilder.h"
 #include "backend/propertyManager/property/variant/variantOwner.h"
 
 wxObject* (*ibPropertyChartOfCharacteristicTypes::ms_propertyChartOfCharacteristicTypes)(ibPropertyObject*, const wxString&, const wxString&, const wxVariant&) = nullptr;
@@ -29,12 +30,14 @@ bool ibPropertyChartOfCharacteristicTypes::GetDataValue(ibValue& pvarPropVal) co
 	return true;
 }
 
-bool ibPropertyChartOfCharacteristicTypes::LoadData(ibReaderMemory& reader)
+bool ibPropertyChartOfCharacteristicTypes::ReadNodeValue(const ibDataValue& value)
 {
-	return ibMetaDescriptionMemory::LoadData(reader, GetValueAsMetaDesc());
+	const ibPropertyObject* owner = m_owner;
+	return ibMetaDescriptionMemory::ReadNode(value, GetValueAsMetaDesc(), owner->GetMetaData());
 }
 
-bool ibPropertyChartOfCharacteristicTypes::SaveData(ibWriterMemory& writer)
+bool ibPropertyChartOfCharacteristicTypes::WriteNodeValue(ibDataValue& value) const
 {
-	return ibMetaDescriptionMemory::SaveData(writer, GetValueAsMetaDesc());
+	const ibPropertyObject* owner = m_owner;
+	return ibMetaDescriptionMemory::WriteNode(value, GetValueAsMetaDesc(), owner->GetMetaData());
 }

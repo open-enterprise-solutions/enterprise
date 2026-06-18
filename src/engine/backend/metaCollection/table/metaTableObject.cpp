@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "metaTableObject.h"
+#include "backend/serialize/dataBuilder.h"
 #include "backend/metaData.h"
 
 
@@ -62,20 +63,25 @@ ibValueMetaObjectTableData::~ibValueMetaObjectTableData()
 	//wxDELETE(m_numberLine);
 }
 
-bool ibValueMetaObjectTableData::LoadData(ibReaderMemory& dataReader)
-{
-	m_propertyUse->SetValue(dataReader.r_u16());
+// The per-type byte path now rides the builder: the binary provider decodes the
+// stream into a node tree, ReadData applies it. Bytes are just one provider — the
+// SAME node tree renders to JSON / XML through the others. WriteData/ReadData are
+// the single source of truth for this object's data.
 
-	//load default attributes:
-	return (*m_propertyNumberLine)->LoadMeta(dataReader);
+bool ibValueMetaObjectTableData::ReadData(const ibDataNode& node)
+{
+	m_propertyUse->ReadNodeValue(node.GetProperty(m_propertyUse->GetName()));
+	m_propertyNumberLine->ReadNodeValue(node.GetProperty(m_propertyNumberLine->GetName()));
+
+	return true;
 }
 
-bool ibValueMetaObjectTableData::SaveData(ibWriterMemory& dataWritter)
+bool ibValueMetaObjectTableData::WriteData(ibDataNode& node)
 {
-	dataWritter.w_u16(m_propertyUse->GetValueAsInteger());
+	node.SetProperty(m_propertyUse->GetName(), m_propertyUse->GetNodeValue());
+	node.SetProperty(m_propertyNumberLine->GetName(), m_propertyNumberLine->GetNodeValue());
 
-	//save default attributes:
-	return (*m_propertyNumberLine)->SaveMeta(dataWritter);;
+	return true;
 }
 
 //***********************************************************************

@@ -1,4 +1,5 @@
 ﻿#include "accumulationRegister.h"
+#include "backend/serialize/dataBuilder.h"
 #include "list/objectList.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/moduleManager/moduleManager.h"
@@ -48,41 +49,32 @@ ibBackendValueForm* ibValueMetaObjectAccumulationRegister::GetListForm(const wxS
 //*                       Save & load metaData                              *
 //***************************************************************************
 
-bool ibValueMetaObjectAccumulationRegister::LoadData(ibReaderMemory& dataReader)
+bool ibValueMetaObjectAccumulationRegister::WriteData(ibDataNode& node)
 {
-	//load default attributes:
-	(*m_propertyAttributibRecordType)->LoadMeta(dataReader);
+	node.SetProperty(m_propertyAttributibRecordType->GetName(), m_propertyAttributibRecordType->GetNodeValue());
 
-	//load default form 
-	m_propertyDefFormList->SetValue(GetIdByGuid(dataReader.r_stringZ()));
+	node.SetValue(m_propertyDefFormList->GetName(), GetGuidByID(m_propertyDefFormList->GetValueAsInteger()).str());
 
-	//load data 
-	m_propertyRegisterType->SetValue(dataReader.r_u16());
+	node.SetProperty(m_propertyRegisterType->GetName(), m_propertyRegisterType->GetNodeValue());
 
-	//load object module
-	(*m_propertyObjectModule)->LoadMeta(dataReader);
-	(*m_propertyManagerModule)->LoadMeta(dataReader);
+	node.SetProperty(m_propertyObjectModule->GetName(), m_propertyObjectModule->GetNodeValue());
+	node.SetProperty(m_propertyManagerModule->GetName(), m_propertyManagerModule->GetNodeValue());
 
-	return ibValueMetaObjectRegisterData::LoadData(dataReader);
+	return ibValueMetaObjectRegisterData::WriteData(node);
 }
 
-bool ibValueMetaObjectAccumulationRegister::SaveData(ibWriterMemory& dataWritter)
+bool ibValueMetaObjectAccumulationRegister::ReadData(const ibDataNode& node)
 {
-	//save default attributes:
-	(*m_propertyAttributibRecordType)->SaveMeta(dataWritter);
+	m_propertyAttributibRecordType->ReadNodeValue(node.GetProperty(m_propertyAttributibRecordType->GetName()));
 
-	//save default form 
-	dataWritter.w_stringZ(GetGuidByID(m_propertyDefFormList->GetValueAsInteger()));
+	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormList->GetName())));
 
-	//save data
-	dataWritter.w_u16(m_propertyRegisterType->GetValueAsInteger());
+	m_propertyRegisterType->ReadNodeValue(node.GetProperty(m_propertyRegisterType->GetName()));
 
-	//Save object module
-	(*m_propertyObjectModule)->SaveMeta(dataWritter);
-	(*m_propertyManagerModule)->SaveMeta(dataWritter);
+	m_propertyObjectModule->ReadNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
+	m_propertyManagerModule->ReadNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
 
-	//create or update table:
-	return ibValueMetaObjectRegisterData::SaveData(dataWritter);
+	return ibValueMetaObjectRegisterData::ReadData(node);
 }
 
 //***********************************************************************

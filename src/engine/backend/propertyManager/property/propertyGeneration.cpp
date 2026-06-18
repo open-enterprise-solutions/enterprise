@@ -1,4 +1,5 @@
 #include "propertyGeneration.h"
+#include "backend/serialize/dataBuilder.h"
 #include "backend/propertyManager/property/variant/variantGen.h"
 
 // get property for grid
@@ -37,12 +38,14 @@ bool ibPropertyGeneration::GetDataValue(ibValue& pvarPropVal) const
 	return true;
 }
 
-bool ibPropertyGeneration::LoadData(ibReaderMemory& reader)
+bool ibPropertyGeneration::ReadNodeValue(const ibDataValue& value)
 {
-	return ibMetaDescriptionMemory::LoadData(reader, GetValueAsMetaDesc());
+	const ibPropertyObject* owner = m_owner;
+	return ibMetaDescriptionMemory::ReadNode(value, GetValueAsMetaDesc(), owner->GetMetaData());
 }
 
-bool ibPropertyGeneration::SaveData(ibWriterMemory& writer)
+bool ibPropertyGeneration::WriteNodeValue(ibDataValue& value) const
 {
-	return ibMetaDescriptionMemory::SaveData(writer, GetValueAsMetaDesc());
+	const ibPropertyObject* owner = m_owner;
+	return ibMetaDescriptionMemory::WriteNode(value, GetValueAsMetaDesc(), owner->GetMetaData());
 }

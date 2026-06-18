@@ -14,6 +14,24 @@
 #include <unordered_set>
 
 //**************************************************************************************************
+//*                          copy-aware identity resolve (metaId <-> guid)                          *
+//**************************************************************************************************
+
+ibGuid ibMetaData::GuidByMetaId(const ibMetaID& id) const
+{
+	const ibValueMetaObject* meta = FindAnyObjectByFilter(id, true);
+	return meta != nullptr && meta->IsAllowed() ? meta->GetCommonGuid() : wxNullGuid;
+}
+
+ibMetaID ibMetaData::MetaIdByGuid(const ibGuid& guid) const
+{
+	if (!guid.isValid())
+		return wxNOT_FOUND;
+	const ibValueMetaObject* meta = FindAnyObjectByFilter(guid, true);
+	return meta != nullptr && meta->IsAllowed() ? meta->GetMetaID() : wxNOT_FOUND;
+}
+
+//**************************************************************************************************
 //*                                       ibModuleStorage                                          *
 //**************************************************************************************************
 

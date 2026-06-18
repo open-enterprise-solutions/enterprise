@@ -1,4 +1,5 @@
 #include "toolbar.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "frontend/visualView/visualHostClient.h"
 #ifdef OES_USE_WEB
 #include "frontend/web/webWindow.h"
@@ -140,16 +141,16 @@ void ibValueToolbar::Cleanup(wxObject* obj, ibVisualHost* visualHost)
 //*										 Property                                  *
 //**********************************************************************************
 
-bool ibValueToolbar::LoadData(ibReaderMemory& reader)
+bool ibValueToolbar::ReadData(const ibDataNode& node)
 {
-	m_actSource->LoadData(reader);
-	return ibValueWindow::LoadData(reader);
+	m_actSource->ReadNodeValue(node.GetProperty(m_actSource->GetName()));
+	return ibValueWindow::ReadData(node);
 }
 
-bool ibValueToolbar::SaveData(ibWriterMemory& writer)
+bool ibValueToolbar::WriteData(ibDataNode& node) const
 {
-	m_actSource->SaveData(writer);
-	return ibValueWindow::SaveData(writer);
+	node.SetProperty(m_actSource->GetName(), m_actSource->GetNodeValue());
+	return ibValueWindow::WriteData(node);
 }
 
 //***********************************************************************

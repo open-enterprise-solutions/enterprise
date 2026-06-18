@@ -226,6 +226,7 @@ bool ibMetaDataDataProcessor::CloseDatabase(int flags)
 #include <filesystem>
 
 #include "backend/backend_exception.h"   // catch ibBackendException at the LoadCommonTree boundary
+#include "backend/serialize/dataBuilder.h"  // ibDataBuilder / ibBinaryProvider — top-level structure builder
 
 ibValueMetaObjectDataProcessor* ibMetaDataDataProcessor::BuildFreshRoot()
 {
@@ -392,12 +393,16 @@ bool ibMetaDataDataProcessor::LoadCommonTree(ibValueMetaObjectDataProcessor* roo
 	if (!readerMetaMemory)
 		return true;
 
-	// Load into the caller-provided root (the live tree for the inner case, a
-	// detached fresh root for the external start-from-file swap). LoadSubtree
-	// throws ibBackendException on a malformed chunk / factory miss — catch at this
-	// container boundary and report false (the caller discards the fresh root).
+	// Parse the inner content into the universal structure tree, then apply into
+	// the caller-provided root (the live tree for the inner case, a detached fresh
+	// root for the external start-from-file swap). ApplyDataNode throws
+	// ibBackendException on a factory miss / bad data — catch at this container
+	// boundary and report false (the caller discards the fresh root).
+	ibDataNode rootNode(clsid, (ibMetaID)meta_id);
+	ibBinaryProvider provider;
+	provider.Read(*readerMetaMemory, rootNode);
 	try {
-		root->LoadSubtree(*readerMetaMemory, resetId);
+		root->ApplyDataNode(rootNode, resetId);
 		return true;
 	}
 	catch (const ibBackendException&) {
@@ -416,8 +421,24 @@ bool ibMetaDataDataProcessor::SaveCommonTree(const ibClassID& clsid, ibWriterMem
 		writerData.w_chunk(eHeaderBlock, headerWriter.pointer(), headerWriter.size());
 	}
 
-	// Tree serialization is owned by the node (ibValueMetaObject::SaveSubtree).
-	return m_commonObject->SaveSubtree(clsid, writerData, flags);
+	// Top-level structure builder — BuildDataNode fills the root's clsid/metaId from
+	// the object itself, so the data-processor root is self-describing too.
+	(void)clsid;
+	ibDataBuilder builder;
+	if (!m_commonObject->BuildDataNode(builder.Root(), flags))
+		return false;
+
+	// Provider writes the root's INNER; frame it with the root identity — chunk(clsid){
+	// chunk(metaId){ inner } } — exactly what LoadCommonTree peels above.
+	ibBinaryProvider provider;
+	ibWriterMemory innerWriter;
+	if (!builder.Save(provider, innerWriter))
+		return false;
+
+	ibWriterMemory metaWriter;
+	metaWriter.w_chunk((u64)builder.Root().GetMetaId(), innerWriter.pointer(), innerWriter.size());
+	writerData.w_chunk((u64)builder.Root().GetClsid(), metaWriter.pointer(), metaWriter.size());
+	return true;
 }
 
 bool ibMetaDataDataProcessor::DeleteCommonTree(const ibClassID& clsid)

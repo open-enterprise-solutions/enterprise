@@ -1,4 +1,5 @@
 ﻿#include "widgets.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 
 #ifdef OES_USE_WEB
 #include "frontend/web/webWindow.h"
@@ -311,61 +312,50 @@ bool ibValueTextCtrl::SetControlValue(const ibValue& varControlVal)
 //*                            Data		                            *
 //*******************************************************************
 
-bool ibValueTextCtrl::LoadData(ibReaderMemory& reader)
+bool ibValueTextCtrl::ReadData(const ibDataNode& node)
 {
-	wxString caption; reader.r_stringZ(caption);
-	m_propertyTitle->SetValue(caption);
-
-	m_propertyPasswordMode->SetValue(reader.r_u8());
-	m_propertyMultilineMode->SetValue(reader.r_u8());
-	m_propertyTexteditMode->SetValue(reader.r_u8());
-
-	m_propertySelectButton->SetValue(reader.r_u8());
-	m_propertyOpenButton->SetValue(reader.r_u8());
-	m_propertyClearButton->SetValue(reader.r_u8());
-
-	m_propertyChoiceForm->SetValue(reader.r_s32());
-
-	if (!m_propertySource->LoadData(reader))
-		return false;
+	m_propertyTitle->ReadNodeValue(node.GetProperty(m_propertyTitle->GetName()));
+	m_propertyPasswordMode->ReadNodeValue(node.GetProperty(m_propertyPasswordMode->GetName()));
+	m_propertyMultilineMode->ReadNodeValue(node.GetProperty(m_propertyMultilineMode->GetName()));
+	m_propertyTexteditMode->ReadNodeValue(node.GetProperty(m_propertyTexteditMode->GetName()));
+	m_propertySelectButton->ReadNodeValue(node.GetProperty(m_propertySelectButton->GetName()));
+	m_propertyOpenButton->ReadNodeValue(node.GetProperty(m_propertyOpenButton->GetName()));
+	m_propertyClearButton->ReadNodeValue(node.GetProperty(m_propertyClearButton->GetName()));
+	m_propertyChoiceForm->ReadNodeValue(node.GetProperty(m_propertyChoiceForm->GetName()));
+	m_propertySource->ReadNodeValue(node.GetProperty(m_propertySource->GetName()));
 
 	//events
-	m_eventOnChange->LoadData(reader);
-	m_eventStartChoice->LoadData(reader);
-	m_eventStartListChoice->LoadData(reader);
-	m_eventClearing->LoadData(reader);
-	m_eventOpening->LoadData(reader);
-	m_eventChoiceProcessing->LoadData(reader);
+	m_eventOnChange->ReadNodeValue(node.GetProperty(m_eventOnChange->GetName()));
+	m_eventStartChoice->ReadNodeValue(node.GetProperty(m_eventStartChoice->GetName()));
+	m_eventStartListChoice->ReadNodeValue(node.GetProperty(m_eventStartListChoice->GetName()));
+	m_eventClearing->ReadNodeValue(node.GetProperty(m_eventClearing->GetName()));
+	m_eventOpening->ReadNodeValue(node.GetProperty(m_eventOpening->GetName()));
+	m_eventChoiceProcessing->ReadNodeValue(node.GetProperty(m_eventChoiceProcessing->GetName()));
 
-	return ibValueWindow::LoadData(reader);
+	return ibValueWindow::ReadData(node);
 }
 
-bool ibValueTextCtrl::SaveData(ibWriterMemory& writer)
+bool ibValueTextCtrl::WriteData(ibDataNode& node) const
 {
-	writer.w_stringZ(m_propertyTitle->GetValueAsString());
-
-	writer.w_u8(m_propertyPasswordMode->GetValueAsBoolean());
-	writer.w_u8(m_propertyMultilineMode->GetValueAsBoolean());
-	writer.w_u8(m_propertyTexteditMode->GetValueAsBoolean());
-
-	writer.w_u8(m_propertySelectButton->GetValueAsBoolean());
-	writer.w_u8(m_propertyOpenButton->GetValueAsBoolean());
-	writer.w_u8(m_propertyClearButton->GetValueAsBoolean());
-
-	writer.w_s32(m_propertyChoiceForm->GetValueAsInteger());
-
-	if (!m_propertySource->SaveData(writer))
-		return false;
+	node.SetProperty(m_propertyTitle->GetName(), m_propertyTitle->GetNodeValue());
+	node.SetProperty(m_propertyPasswordMode->GetName(), m_propertyPasswordMode->GetNodeValue());
+	node.SetProperty(m_propertyMultilineMode->GetName(), m_propertyMultilineMode->GetNodeValue());
+	node.SetProperty(m_propertyTexteditMode->GetName(), m_propertyTexteditMode->GetNodeValue());
+	node.SetProperty(m_propertySelectButton->GetName(), m_propertySelectButton->GetNodeValue());
+	node.SetProperty(m_propertyOpenButton->GetName(), m_propertyOpenButton->GetNodeValue());
+	node.SetProperty(m_propertyClearButton->GetName(), m_propertyClearButton->GetNodeValue());
+	node.SetProperty(m_propertyChoiceForm->GetName(), m_propertyChoiceForm->GetNodeValue());
+	node.SetProperty(m_propertySource->GetName(), m_propertySource->GetNodeValue());
 
 	//events
-	m_eventOnChange->SaveData(writer);
-	m_eventStartChoice->SaveData(writer);
-	m_eventStartListChoice->SaveData(writer);
-	m_eventClearing->SaveData(writer);
-	m_eventOpening->SaveData(writer);
-	m_eventChoiceProcessing->SaveData(writer);
+	node.SetProperty(m_eventOnChange->GetName(), m_eventOnChange->GetNodeValue());
+	node.SetProperty(m_eventStartChoice->GetName(), m_eventStartChoice->GetNodeValue());
+	node.SetProperty(m_eventStartListChoice->GetName(), m_eventStartListChoice->GetNodeValue());
+	node.SetProperty(m_eventClearing->GetName(), m_eventClearing->GetNodeValue());
+	node.SetProperty(m_eventOpening->GetName(), m_eventOpening->GetNodeValue());
+	node.SetProperty(m_eventChoiceProcessing->GetName(), m_eventChoiceProcessing->GetNodeValue());
 
-	return ibValueWindow::SaveData(writer);
+	return ibValueWindow::WriteData(node);
 }
 
 //***********************************************************************

@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "metaFormObject.h"
+#include "backend/serialize/dataBuilder.h"
 #include "backend/metaData.h"
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/appData.h"
@@ -147,13 +148,38 @@ ibBackendValueForm* ibValueMetaObjectFormBase::CreateAndBuildForm(const ibValueM
 
 ///////////////////////////////////////////////////////////////////////////
 
-wxMemoryBuffer ibValueMetaObjectFormBase::CopyFormData() const
+// node <-> runtime-blob shim. The form blob IS the binary-provider node format (each
+// control's SaveNode subtree), so the adapter is a straight provider round-trip.
+ibDataValue ibValueMetaObjectFormBase::FormBlobToNode(const wxMemoryBuffer& blob)
+{
+	if (blob.GetDataLen() == 0)
+		return ibDataValue();
+	auto node = std::make_shared<ibDataNode>();
+	ibReaderMemory reader(blob);
+	ibBinaryProvider().Read(reader, *node);
+	return ibDataValue::Child(node);
+}
+
+wxMemoryBuffer ibValueMetaObjectFormBase::FormNodeToBlob(const ibDataValue& formNode)
+{
+	if (formNode.Kind() != ibDataKind::Child)
+		return wxMemoryBuffer();
+	const std::shared_ptr<ibDataNode>& node = formNode.AsChild();
+	if (!node)
+		return wxMemoryBuffer();
+	ibWriterMemory writer;
+	ibBinaryProvider().Write(*node, writer);
+	return writer.buffer();
+}
+
+// The LIVE form's control tree AS a transparent node (Child) — the blob never hits disk.
+ibDataValue ibValueMetaObjectFormBase::CopyFormData() const
 {
 	ibBackendValueForm* valueForm = nullptr;
 	auto* cc = m_metaData->GetCompileCache();
 	if (cc && cc->FindCompileModule(this, valueForm))
-		return valueForm->SaveForm();
-	return wxMemoryBuffer();
+		return FormBlobToNode(valueForm->SaveForm());
+	return ibDataValue();
 }
 
 bool ibValueMetaObjectFormBase::PasteFormData()
@@ -186,16 +212,18 @@ ibValueMetaObjectForm::ibValueMetaObjectForm(const wxString& name, const wxStrin
 {
 }
 
-bool ibValueMetaObjectForm::LoadData(ibReaderMemory& reader)
+bool ibValueMetaObjectForm::ReadData(const ibDataNode& node)
 {
-	m_properyFormType->SetValue(reader.r_s32());
-	return m_propertyForm->LoadData(reader);
+	m_properyFormType->ReadNodeValue(node.GetProperty(m_properyFormType->GetName()));
+	m_propertyForm->ReadNodeValue(node.GetProperty(m_propertyForm->GetName()));
+	return true;
 }
 
-bool ibValueMetaObjectForm::SaveData(ibWriterMemory& writer)
+bool ibValueMetaObjectForm::WriteData(ibDataNode& node)
 {
-	writer.w_s32(m_properyFormType->GetValueAsInteger());
-	return m_propertyForm->SaveData(writer);
+	node.SetProperty(m_properyFormType->GetName(), m_properyFormType->GetNodeValue());
+	node.SetProperty(m_propertyForm->GetName(), m_propertyForm->GetNodeValue());
+	return true;
 }
 
 //***********************************************************************
@@ -331,14 +359,16 @@ bool ibValueMetaObjectForm::OnAfterCloseMetaObject()
 
 ibValueMetaObjectCommonForm::ibValueMetaObjectCommonForm(const wxString& name, const wxString& synonym, const wxString& comment) : ibValueMetaObjectFormBase(name, synonym, comment) {}
 
-bool ibValueMetaObjectCommonForm::LoadData(ibReaderMemory& reader)
+bool ibValueMetaObjectCommonForm::ReadData(const ibDataNode& node)
 {
-	return m_propertyForm->LoadData(reader);
+	m_propertyForm->ReadNodeValue(node.GetProperty(m_propertyForm->GetName()));
+	return true;
 }
 
-bool ibValueMetaObjectCommonForm::SaveData(ibWriterMemory& writer)
+bool ibValueMetaObjectCommonForm::WriteData(ibDataNode& node)
 {
-	return m_propertyForm->SaveData(writer);
+	node.SetProperty(m_propertyForm->GetName(), m_propertyForm->GetNodeValue());
+	return true;
 }
 
 #include "backend/system/systemManager.h"

@@ -1,4 +1,5 @@
 #include "propertyPoint.h"
+#include "backend/serialize/dataBuilder.h"
 #include "backend/system/value/valuePoint.h"
 
 wxObject* (*ibPropertyPoint::ms_propertyPoint)(const wxString&,const wxString&,const wxPoint&) = nullptr;
@@ -19,14 +20,14 @@ bool ibPropertyPoint::GetDataValue(ibValue& pvarPropVal) const
 	return true;
 }
 
-bool ibPropertyPoint::LoadData(ibReaderMemory& reader)
+bool ibPropertyPoint::ReadNodeValue(const ibDataValue& value)
 {
-	ibPropertyPoint::SetValue(reader.r_stringZ());
+	ibPropertyPoint::SetValue(value.AsString());
 	return true;
 }
 
-bool ibPropertyPoint::SaveData(ibWriterMemory& writer)
+bool ibPropertyPoint::WriteNodeValue(ibDataValue& value) const
 {
-	writer.w_stringZ(ibPropertyPoint::GetValueAsString());
+	value = ibDataValue::String(ibPropertyPoint::GetValueAsString());
 	return true;
 }

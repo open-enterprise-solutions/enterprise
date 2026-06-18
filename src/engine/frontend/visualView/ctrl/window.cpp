@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "window.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "form.h"
 
 
@@ -65,55 +66,30 @@ void ibValueWindow::UpdateWindow(ibFrontendWindow* window)
 //*                                    Data										   *
 //**********************************************************************************
 
-bool ibValueWindow::LoadData(ibReaderMemory& reader)
+bool ibValueWindow::ReadData(const ibDataNode& node)
 {
-	wxString propValue = wxEmptyString;
-	reader.r_stringZ(propValue);
-	m_propertyMinSize->SetValue(typeConv::StringToSize(propValue));
-	reader.r_stringZ(propValue);
-	m_propertyMaxSize->SetValue(typeConv::StringToSize(propValue));
-	reader.r_stringZ(propValue);
-	m_propertyFont->SetValue(typeConv::StringToFont(propValue));
-	reader.r_stringZ(propValue);
-	m_propertyFG->SetValue(typeConv::StringToColour(propValue));
-	reader.r_stringZ(propValue);
-	m_propertyBG->SetValue(typeConv::StringToColour(propValue));
+	m_propertyMinSize->ReadNodeValue(node.GetProperty(m_propertyMinSize->GetName()));
+	m_propertyMaxSize->ReadNodeValue(node.GetProperty(m_propertyMaxSize->GetName()));
+	m_propertyFont->ReadNodeValue(node.GetProperty(m_propertyFont->GetName()));
+	m_propertyFG->ReadNodeValue(node.GetProperty(m_propertyFG->GetName()));
+	m_propertyBG->ReadNodeValue(node.GetProperty(m_propertyBG->GetName()));
+	m_propertyTooltip->ReadNodeValue(node.GetProperty(m_propertyTooltip->GetName()));
+	m_propertyEnabled->ReadNodeValue(node.GetProperty(m_propertyEnabled->GetName()));
+	m_propertyVisible->ReadNodeValue(node.GetProperty(m_propertyVisible->GetName()));
 
-	reader.r_stringZ(propValue);
-	m_propertyTooltip->SetValue(propValue);
-
-	m_propertyEnabled->SetValue(reader.r_u8());
-	m_propertyVisible->SetValue(reader.r_u8());
-
-	return ibValueControl::LoadData(reader);
+	return ibValueControl::ReadData(node);
 }
 
-bool ibValueWindow::SaveData(ibWriterMemory& writer)
+bool ibValueWindow::WriteData(ibDataNode& node) const
 {
-	writer.w_stringZ(
-		m_propertyMinSize->GetValueAsString()
-	);
-	writer.w_stringZ(
-		m_propertyMaxSize->GetValueAsString()
-	);
-	writer.w_stringZ(
-		m_propertyFont->GetValueAsString()
-	);
-	writer.w_stringZ(
-		m_propertyFG->GetValueAsString()
-	);
-	writer.w_stringZ(
-		m_propertyBG->GetValueAsString()
-	);
-	writer.w_stringZ(
-		m_propertyTooltip->GetValueAsString()
-	);
-	writer.w_u8(
-		m_propertyEnabled->GetValueAsBoolean()
-	);
-	writer.w_u8(
-		m_propertyVisible->GetValueAsBoolean()
-	);
+	node.SetProperty(m_propertyMinSize->GetName(), m_propertyMinSize->GetNodeValue());
+	node.SetProperty(m_propertyMaxSize->GetName(), m_propertyMaxSize->GetNodeValue());
+	node.SetProperty(m_propertyFont->GetName(), m_propertyFont->GetNodeValue());
+	node.SetProperty(m_propertyFG->GetName(), m_propertyFG->GetNodeValue());
+	node.SetProperty(m_propertyBG->GetName(), m_propertyBG->GetNodeValue());
+	node.SetProperty(m_propertyTooltip->GetName(), m_propertyTooltip->GetNodeValue());
+	node.SetProperty(m_propertyEnabled->GetName(), m_propertyEnabled->GetNodeValue());
+	node.SetProperty(m_propertyVisible->GetName(), m_propertyVisible->GetNodeValue());
 
-	return ibValueControl::SaveData(writer);
+	return ibValueControl::WriteData(node);
 }

@@ -823,9 +823,14 @@ private:
 
 class BACKEND_API ibSpreadsheetDescriptionMemory {
 public:
-	//load & save object in control 
+	//load & save object in control
 	static bool LoadData(class ibReaderMemory& reader, ibSpreadsheetDescription& spreadsheetDesc);
 	static bool SaveData(class ibWriterMemory& writer, const ibSpreadsheetDescription& spreadsheetDesc);
+
+	// node form — a genuine blob (whole sheet): a Binary value, the byte writer is
+	// contained here, not in the property.
+	static bool ReadNode(const class ibDataValue& value, ibSpreadsheetDescription& spreadsheetDesc);
+	static bool WriteNode(class ibDataValue& value, const ibSpreadsheetDescription& spreadsheetDesc);
 };
 
 #endif  
