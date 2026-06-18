@@ -90,30 +90,19 @@ bool ibTypeDescriptionMemory::WriteNode(ibDataValue& value, const ibTypeDescript
 ////////////////////////////////////////////////////////////////////////
 
 // node form: Array[ metaID… ]. One source of truth for the meta-description list.
-bool ibMetaDescriptionMemory::ReadNode(const ibDataValue& value, ibMetaDescription& metaDesc, const ibMetaData* metaData)
+bool ibMetaDescriptionMemory::ReadNode(const ibDataValue& value, ibMetaDescription& metaDesc)
 {
 	metaDesc.ClearMetaType();
-	for (const ibDataValue& item : value.AsArray()) { // empty when absent; throws on wrong kind
-		// a GUID string (copy-aware) resolves to THIS config's live metaId; a raw int is the fallback
-		if (item.Kind() == ibDataKind::String && metaData != nullptr)
-			metaDesc.AppendMetaType(metaData->MetaIdByGuid(ibGuid(item.AsString())));
-		else
-			metaDesc.AppendMetaType((ibMetaID)item.AsInt());
-	}
+	for (const ibDataValue& item : value.AsArray()) // empty when absent; throws on wrong kind
+		metaDesc.AppendMetaType((ibMetaID)item.AsInt());
 	return true;
 }
 
-bool ibMetaDescriptionMemory::WriteNode(ibDataValue& value, const ibMetaDescription& metaDesc, const ibMetaData* metaData)
+bool ibMetaDescriptionMemory::WriteNode(ibDataValue& value, const ibMetaDescription& metaDesc)
 {
-	std::vector<ibDataValue> refs;
-	for (unsigned int idx = 0; idx < metaDesc.GetTypeCount(); idx++) {
-		const ibMetaID id = metaDesc.GetByIdx(idx);
-		// stable GUID when we can resolve it, raw metaId otherwise (same-config fallback)
-		if (metaData != nullptr)
-			refs.push_back(ibDataValue::String(wxString(metaData->GuidByMetaId(id))));
-		else
-			refs.push_back(ibDataValue::Int(id));
-	}
-	value = ibDataValue::Array(refs);
+	std::vector<ibDataValue> ids;
+	for (unsigned int idx = 0; idx < metaDesc.GetTypeCount(); idx++)
+		ids.push_back(ibDataValue::Int(metaDesc.GetByIdx(idx)));
+	value = ibDataValue::Array(ids);
 	return true;
 }

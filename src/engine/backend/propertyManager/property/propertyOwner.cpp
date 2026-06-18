@@ -39,12 +39,10 @@ bool ibPropertyOwner::GetDataValue(ibValue& pvarPropVal) const
 
 bool ibPropertyOwner::ReadNodeValue(const ibDataValue& value)
 {
-	const ibPropertyObject* owner = m_owner;
-	return ibMetaDescriptionMemory::ReadNode(value, GetValueAsMetaDesc(), owner->GetMetaData());
+	return ibMetaDescriptionMemory::ReadNode(value, GetValueAsMetaDesc());
 }
 
 bool ibPropertyOwner::WriteNodeValue(ibDataValue& value) const
 {
-	const ibPropertyObject* owner = m_owner;
-	return ibMetaDescriptionMemory::WriteNode(value, GetValueAsMetaDesc(), owner->GetMetaData());
+	return ibMetaDescriptionMemory::WriteNode(value, GetValueAsMetaDesc());
 }

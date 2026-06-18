@@ -38,6 +38,5 @@ bool ibPropertyChartOfAccounts::ReadNodeValue(const ibDataValue& value)
 
 bool ibPropertyChartOfAccounts::WriteNodeValue(ibDataValue& value) const
 {
-	const ibPropertyObject* owner = m_owner;
-	return ibMetaDescriptionMemory::WriteNode(value, GetValueAsMetaDesc(), owner->GetMetaData());
+	return ibMetaDescriptionMemory::WriteNode(value, GetValueAsMetaDesc());
 }

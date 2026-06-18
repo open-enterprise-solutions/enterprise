@@ -536,13 +536,14 @@ public:
 
 class BACKEND_API ibMetaDescriptionMemory {
 public:
-	// node form: an Array of references. With metaData each is a copy-aware GUID string
-	// (the metaobject's stable id, resolved back to THIS config's live metaId on load);
-	// without it, the raw metaId int — the same-config fallback. Mirrors ibSourceDescription
-	// and ibTypeDescription. Every property holding an ibMetaDescription (Owner, Generation,
-	// Record, ChartOfAccounts, ChartOfCharacteristicTypes) calls this.
-	static bool ReadNode(const ibDataValue& value, ibMetaDescription& metaDesc, const ibMetaData* metaData = nullptr);
-	static bool WriteNode(ibDataValue& value, const ibMetaDescription& metaDesc, const ibMetaData* metaData = nullptr);
+	// node form: an Array of raw metaIds. Every property holding an ibMetaDescription
+	// (Owner, Generation, Record, ChartOfAccounts, ChartOfCharacteristicTypes) calls this.
+	// metaId, NOT guid (unlike ibSourceDescription / ibTypeDescription): a meta-desc lives
+	// INSIDE the metadata tree, so a guid->id resolve at load time hits refs not yet loaded
+	// → NOT_FOUND → broken init. metaId is config-local but consistent across a same-config
+	// save/load. Copy-awareness here would need a DEFERRED (post-tree) pass, not load-time.
+	static bool ReadNode(const ibDataValue& value, ibMetaDescription& metaDesc);
+	static bool WriteNode(ibDataValue& value, const ibMetaDescription& metaDesc);
 };
 
 #endif
