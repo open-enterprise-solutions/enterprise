@@ -105,7 +105,7 @@ bool ibMetaDataConfigurationBase::SaveConfigToFile(const wxString& strFileName)
 //**************************************************************************************************
 
 ibMetaDataConfigurationFile::ibMetaDataConfigurationFile() : ibMetaDataConfigurationBase(),
-m_commonObject(nullptr), m_configOpened(false)
+m_commonObject(nullptr)
 {
 	//create main metaObject
 	m_commonObject = new ibValueMetaObjectConfiguration();
@@ -196,41 +196,31 @@ bool ibMetaDataConfigurationFile::IsFullAccess() const
 bool ibMetaDataConfigurationFile::RunDatabase(int flags)
 {
 
-	wxASSERT(!m_configOpened);
+	wxASSERT(!IsConfigOpen());
 
 	if ((flags & loadConfigFlag) == 0)
 		ibCompileCode::SetCodeStyle(m_commonObject->GetCompileSyntax());
 
-	// Create the lightweight DESIGNER module manager BEFORE RunSubtree — common
-	// modules register themselves into it from their OnBeforeRunMetaObject hook,
-	// which fires inside RunSubtree(true) below. If the manager didn't exist yet,
-	// they'd silently skip registration and the symmetric RemoveCommonModule on
-	// close would assert (empty registry). It binds to the CURRENT common
-	// metaobject; creating it once in the ctor would dangle across a config reload
-	// (the metaobject is freed/rebuilt). Designer-edit configuration only
-	// (ibMetaDataConfigurationStorage owns the compile cache); other modes leave
-	// GetCompileCache() null and skip.
-	if (auto* cc = GetCompileCache())
-		cc->SetModuleManager(new ibValueModuleManagerDesigner(this, GetCommonMetaObject()));
+	// Transactional open as RAII (image presence == open): LoadGuard CREATES the
+	// runtime image — and, for a designer-edit config, its compile cache + designer
+	// module-manager (bound to the common metaobject, via CreateDesignerModuleManager),
+	// so common modules can register into the manager during RunSubtree(true). The
+	// guard's dtor ROLLS BACK on ANY exit that isn't Commit() — a failed RunSubtree
+	// return OR a raised ibBackendException unwinding the stack — by dropping the image,
+	// which frees the half-built ctors + cache + manager, leaving the metadata closed
+	// (the load "never happened"). The run fills the SAME metaobject tree, so the
+	// image's ctors point at live nodes.
+	LoadGuard load(this);
 
 	// RunSubtree fires OnBeforeRun/OnAfterRun on the root itself + every descendant
-	// (top-down). Just drive the two phases in order. On failure, unwind BOTH common-
-	// module registries the run phase fed — the designer manager and the module
-	// storage — since CloseDatabase won't run (m_configOpened stays false) and the
-	// next load rebuilds the tree out from under these registrations.
-	//
-	// A metaobject may also RAISE during the cascade (e.g. a typed-parent mismatch from
-	// ibValueMetaObject::GetParentAsType — a malformed configuration). Treat that the same
-	// as a soft failure: unwind the registries, surface the message, and exit the config run
-	// (return false) so the caller (appData / OnAuthenticated) aborts bring-up cleanly instead
-	// of letting the exception escape onto the worker thread.
+	// (top-down). Drive the two phases; any failure just returns false and the guard
+	// rolls back. A metaobject may also RAISE during the cascade (e.g. a typed-parent
+	// mismatch from ibValueMetaObject::GetParentAsType — a malformed configuration):
+	// exception == rollback (the guard's dtor aborts as the stack unwinds). We still
+	// catch it to log + return false so it doesn't escape onto the worker thread.
 	try {
-		if (!m_commonObject->RunSubtree(flags, true)) {
-			if (auto* cc = GetCompileCache())
-				cc->SetModuleManager(nullptr);
-			GetModuleStorage()->Clear();
+		if (!m_commonObject->RunSubtree(flags, true))
 			return false;
-		}
 
 		// Seed the editor's context (Manager + Catalogs/Documents/Enums + globals)
 		// AFTER RunSubtree(true) — the ctor-context factories register while the
@@ -245,32 +235,31 @@ bool ibMetaDataConfigurationFile::RunDatabase(int flags)
 			return false;
 	}
 	catch (const ibBackendException& err) {
-		if (auto* cc = GetCompileCache())
-			cc->SetModuleManager(nullptr);
-		GetModuleStorage()->Clear();
 		wxLogError(err.GetErrorDescription());
 		return false;
 	}
 
-	m_configOpened = true;
+	// Success — keep the image (LoadGuard.Commit): its presence IS the open state.
+	load.Commit();
 	return true;
 }
 
 bool ibMetaDataConfigurationFile::CloseDatabase(int flags)
 {
 
-	wxASSERT(m_configOpened);
+	wxASSERT(IsConfigOpen());   // image must exist — closing a closed config is a bug
 
 	//if (!ExitMainModule((flags & forceCloseFlag) != 0))
 	//	return false;
 
-	// CloseSubtree closes every descendant then the root's own hook (bottom-up).
+	// CloseSubtree closes every descendant then the root's own hook (bottom-up),
+	// unregistering ctors / queryables per node while the image is still live.
 	if (!m_commonObject->CloseSubtree(true))
 		return false;
 
-	// Symmetric to RunDatabase — tear down the designer manager AND release it.
-	// The metaobject it binds to is about to be reset/freed; dropping the manager
-	// now prevents a dangling reference (the next RunDatabase makes a fresh one).
+	// Tear down the designer manager AND release it BEFORE the after-close phase. The
+	// metaobject it binds to is about to be reset; dropping the manager now prevents a
+	// dangling reference (the next RunDatabase makes a fresh one).
 	if (auto* cc = GetCompileCache()) {
 		if (auto* mgr = cc->GetModuleManager())
 			mgr->DestroyMainModule();
@@ -280,7 +269,9 @@ bool ibMetaDataConfigurationFile::CloseDatabase(int flags)
 	if (!m_commonObject->CloseSubtree(false))
 		return false;
 
-	m_configOpened = false;
+	// Per-node teardown done — drop the runtime image: frees whatever ctors remain +
+	// the module skeleton + the compile cache. Image gone ⇒ closed.
+	m_image.reset();
 	return true;
 }
 
@@ -378,7 +369,7 @@ bool ibMetaDataConfigurationFile::LoadCommonTree(const ibClassID& clsid, ibReade
 	// throw the fresh root is discarded and m_commonObject is untouched
 	// (all-or-nothing). On success, swap it in and release the old root. The caller
 	// has already closed the old tree's run-state (or it was never run), so the
-	// DecrRef below can't leave dangling entries in m_factoryCtors.
+	// DecrRef below can't leave dangling entries in the active image's factory.
 	ibValuePtr<ibValueMetaObjectConfiguration> fresh(BuildFreshRoot()); // adopt (refcount 0 -> 1)
 	if (!fresh)
 		return false;
@@ -521,17 +512,19 @@ bool ibMetaDataConfigurationStorage::OnDestroy()
 ibMetaDataConfigurationStorage::ibMetaDataConfigurationStorage(ib::AppDataCtorToken token) :
 	ibMetaDataConfiguration(token),
 	m_configMetadata(new ibMetaDataConfiguration(token)) {
-	// Designer-edit configuration → allocate compile-value cache so
-	// metadata-collection callsites (Add/Find/RemoveCompileModule) gate
-	// on `if (auto* cc = metaData->GetCompileCache())` instead of the
-	// runtime-mode appData->DesignerMode() check.
-	// Designer-edit configuration → allocate an EMPTY compile-value cache. The
-	// designer module manager is NOT created here: it binds to the common
-	// metaobject, which is reset on every config reload, so a manager built once
-	// in the ctor would dangle. RunDatabase creates a fresh one (bound to the
-	// current metaobject); CloseDatabase tears it down. See the lifetime note in
-	// ibMetaDataConfigurationFile::RunDatabase.
-	m_compileCache = std::make_unique<ibCompileValueCache>();
+	// Designer-edit configuration carries a compile-value cache + its module-manager —
+	// built with the runtime image (CreateDesignerCache below); callsites gate on
+	// `if (auto* cc = metaData->GetCompileCache())` rather than appData->DesignerMode().
+}
+
+// Designer-edit config: compile cache + its module-manager (bound to the common
+// metaobject, rebuilt fresh with the image each run). Built by the image ctor; dropping
+// the image releases the manager (RAII → DestroyMainModule).
+std::unique_ptr<ibCompileValueCache> ibMetaDataConfigurationStorage::CreateDesignerCache()
+{
+	auto cache = std::make_unique<ibCompileValueCache>();
+	cache->SetModuleManager(new ibValueModuleManagerDesigner(this, GetCommonMetaObject()));
+	return cache;
 }
 
 ibMetaDataConfigurationStorage::~ibMetaDataConfigurationStorage() {

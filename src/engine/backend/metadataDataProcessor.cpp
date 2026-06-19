@@ -10,16 +10,12 @@ ibMetaDataDataProcessor::ibMetaDataDataProcessor() : ibMetaData(),
 m_commonObject(nullptr),
 m_moduleManager(nullptr),
 m_ownerMeta(nullptr),
-m_configOpened(false),
 m_version(version_oes_last)
 {
-	// Designer-only: cache backs code-editor / form-preview / metadata-property
-	// lookups via m_metaData->GetCompileCache() (codeEditorInterpreter,
-	// metaFormObject etc.). At runtime cache must stay null — StartMainModule's
-	// "show default form" branch is gated by !cc and would skip ShowForm if the
-	// cache held the deferred entry.
-	if (appData->DesignerMode())
-		m_compileCache = std::make_unique<ibCompileValueCache>();
+	// Compile cache (designer mode only) is built by the image ctor via
+	// CreateCompileCache() below — backs code-editor / form-preview lookups via
+	// GetCompileCache(). At runtime it stays absent, so StartMainModule's "show default
+	// form" branch (gated by !cc) runs.
 
 	//create main metaObject
 	m_commonObject = new ibValueMetaObjectExternalDataProcessor;
@@ -51,7 +47,6 @@ ibMetaDataDataProcessor::ibMetaDataDataProcessor(ibMetaData* metaData, ibValueMe
 m_commonObject(srcDataProcessor),
 m_moduleManager(nullptr),
 m_ownerMeta(nullptr),
-m_configOpened(false),
 m_version(version_oes_last)
 {
 	if (srcDataProcessor == nullptr) {
@@ -138,31 +133,38 @@ wxString ibMetaDataDataProcessor::GetLangCode() const
 
 ////////////////////////////////////////////////////////////////////
 
+std::unique_ptr<ibCompileValueCache> ibMetaDataDataProcessor::CreateDesignerCache()
+{
+	// Designer mode only — the cache backs the code editor / form preview. Only an
+	// external (.epf) DP additionally owns a module-manager (bound to its object
+	// module); an embedded DP runs against the configuration's. Called by the image ctor.
+	if (!appData->DesignerMode())
+		return nullptr;
+	auto cache = std::make_unique<ibCompileValueCache>();
+	if (m_commonObject->IsExternalCreate())
+		cache->SetModuleManager(new ibValueModuleManagerDesigner(this, m_commonObject->GetObjectModule()));
+	return cache;
+}
+
 bool ibMetaDataDataProcessor::RunDatabase(int flags)
 {
 	// RunSubtree fires the root's own OnBeforeRun/OnAfterRun + every descendant.
 	// CreateMainModule/StartMainModule stay interleaved between the two phases.
+	// Transactional like ibMetaDataConfigurationFile::RunDatabase via LoadGuard: it
+	// CREATES the runtime image and drops it on ANY exit that isn't Commit() — a failed
+	// return OR a raised exception (exception == rollback) — so a partial run leaves the
+	// metadata closed (the load "never happened"). StartMainModule runs during the build
+	// (it reads the compile cache through GetCompileCache() = the live image); Commit()
+	// keeps the image only once it has succeeded, so a failed start rolls back cleanly.
+	LoadGuard load(this);
+
 	if (m_commonObject->IsExternalCreate()) {
 
-		// Lightweight DESIGNER module manager for this external DP's own compile
-		// cache — same role as the configuration's, so the code editor inside the
-		// DP's module sees the Manager singleton + ctor-context + common modules.
-		// Created BEFORE RunSubtree so the DP's common modules register into it.
-		if (auto* cc = GetCompileCache())
-			cc->SetModuleManager(new ibValueModuleManagerDesigner(this, m_commonObject->GetObjectModule()));
-
-		// Any failure below leaves CloseDatabase un-called (m_configOpened false), so
-		// drop the designer manager on the bail-out path or its stale common-module
-		// registrations would dangle into the next RunDatabase.
-		auto bail = [this]() -> bool {
-			if (auto* cc = GetCompileCache())
-				cc->SetModuleManager(nullptr);
+		// The designer module-manager (for the DP's own compile cache) was already
+		// built by the image ctor via CreateDesignerModuleManager() — common modules
+		// register into it during RunSubtree(true) below.
+		if (!m_commonObject->RunSubtree(flags, true))
 			return false;
-		};
-
-		if (!m_commonObject->RunSubtree(flags, true)) {
-			return bail();
-		}
 
 		if (auto* cc = GetCompileCache()) {
 			if (auto* mgr = cc->GetModuleManager())
@@ -170,26 +172,23 @@ bool ibMetaDataDataProcessor::RunDatabase(int flags)
 		}
 
 		if (m_moduleManager->CreateMainModule()) {
-			if (!m_commonObject->RunSubtree(flags, false)) {
-				return bail();
-			}
-			m_configOpened = true;
-			if (!m_moduleManager->StartMainModule()) {
-				return bail();
-			}
+			if (!m_commonObject->RunSubtree(flags, false))
+				return false;
+			if (!m_moduleManager->StartMainModule())
+				return false;
+			load.Commit();   // keep the image → DP is now open
 			return true;
 		}
-		return bail();
+		return false;
 	}
 	else if (!m_commonObject->IsExternalCreate()) {
 
-		if (!m_commonObject->RunSubtree(flags, true)) {
+		if (!m_commonObject->RunSubtree(flags, true))
 			return false;
-		}
-		if (!m_commonObject->RunSubtree(flags, false)) {
+		if (!m_commonObject->RunSubtree(flags, false))
 			return false;
-		}
 
+		load.Commit();
 		return true;
 	}
 
@@ -198,7 +197,7 @@ bool ibMetaDataDataProcessor::RunDatabase(int flags)
 
 bool ibMetaDataDataProcessor::CloseDatabase(int flags)
 {
-	wxASSERT(m_configOpened);
+	wxASSERT(IsConfigOpen());
 
 	if (!ExitMainModule((flags & forceCloseFlag) != 0))
 		return false;
@@ -218,7 +217,8 @@ bool ibMetaDataDataProcessor::CloseDatabase(int flags)
 
 	if (!m_commonObject->CloseSubtree(false))
 		return false;
-	m_configOpened = false;
+
+	m_image.reset();   // drop the runtime image ⇒ closed (frees ctors + modules + cache)
 	return true;
 }
 
@@ -298,7 +298,7 @@ bool ibMetaDataDataProcessor::LoadFromFile(const wxString& strFileName)
 	// the old root, and the manager references it via m_objectValue (use-after-free if
 	// the manager outlives the root). Then swap (the assignment releases old + adopts
 	// fresh) and rebuild the manager on the fresh root (mirrors ctor / dtor ordering).
-	if (m_configOpened && !CloseDatabase(forceCloseFlag))
+	if (IsConfigOpen() && !CloseDatabase(forceCloseFlag))
 		return false; // fresh discarded automatically
 
 	// Release the old manager first (its dtor runs DestroyMainModule via RAII) while

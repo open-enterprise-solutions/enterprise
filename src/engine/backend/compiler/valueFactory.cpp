@@ -79,10 +79,12 @@ void ibValue::UnRegisterCtor(ibCtorAbstractType*& typeCtor)
 		if (wxTheApp != NULL)
 			wxLogDebug(wxT("* Unregister class '%s' with clsid '%s:%llu' "), typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()), typeCtor->GetClassType());
 #endif
+		// Registry owns the ctor via shared_ptr — Unregister FREES it; null the caller's
+		// (by-ref) pointer so the now-dangling ctor is never dereferenced (replaces the
+		// old wxDELETE that nulled it; value_register's dtor relies on this).
 		s_registry->Unregister(typeCtor);
-
-		wxDELETE(typeCtor);
 		s_factoryCtorCountChanges++;
+		typeCtor = nullptr;
 	}
 	else if (typeCtor != nullptr) {
 		ibBackendCoreException::Error(_("Object '%s' is not register"), typeCtor->GetClassName());

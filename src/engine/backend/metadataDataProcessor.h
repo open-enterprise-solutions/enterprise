@@ -64,9 +64,13 @@ public:
 	virtual bool SaveDatabase();
 	virtual bool ClearDatabase();
 
-	//run/close 
+	//run/close
 	virtual bool RunDatabase(int flags = defaultFlag);
 	virtual bool CloseDatabase(int flags = defaultFlag);
+
+	// Designer infrastructure (cache + manager) — built by the image ctor; cache in
+	// designer mode, manager only for an external (.epf) DP.
+	virtual std::unique_ptr<ibCompileValueCache> CreateDesignerCache() override;
 
 	//load/save form file
 	bool LoadFromFile(const wxString& strFileName);
@@ -97,7 +101,6 @@ private:
 	ibMetaData* m_ownerMeta; //owner for saving/loading
 	ibValuePtr<ibValueModuleRuntimeManagerExternalDataProcessor> m_moduleManager; // owning handle; dtor runs DestroyMainModule (RAII)
 	ibValuePtr<ibValueMetaObjectDataProcessor> m_commonObject; 	//common meta object — owning handle (ibValuePtr)
-	bool m_configOpened;
-
+	// open flag now lives in ibMetaData's open-image (IsConfigOpen / SetConfigOpened)
 	ibVersionID m_version;
 };

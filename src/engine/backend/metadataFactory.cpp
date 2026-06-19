@@ -1,6 +1,42 @@
 ﻿#include "metaData.h"
 #include "backend/objCtor.h"
 
+// The image's designer infrastructure (compile cache + its module-manager) is built by
+// the owner metadata's CreateDesignerCache() — designer kinds only, nullptr otherwise.
+// Dropping the image later releases the manager (RAII → DestroyMainModule), so there's
+// no separate teardown to mirror.
+ibMetaImage::ibMetaImage(ibMetaData* owner)
+{
+	if (owner != nullptr)
+		m_compileCache = owner->CreateDesignerCache();   // nullptr ⇒ no designer infra
+}
+
+// --- ibMetaImage ctor-factory facade (out of line: these deref ibCtorMetaValueType,
+//     complete here via objCtor.h; the clsid/name lookups + ForEachCtor are inline) ---
+
+void ibMetaImage::RegisterCtor(ibCtorMetaValueType* typeCtor)
+{
+	typeCtor->CallEvent(ibCtorObjectTypeEvent::ibCtorObjectTypeEvent_Register);
+	m_factoryCtors.Register(typeCtor);   // registry takes ownership (shared_ptr)
+}
+
+void ibMetaImage::UnregisterCtor(ibCtorMetaValueType* typeCtor)
+{
+	typeCtor->CallEvent(ibCtorObjectTypeEvent::ibCtorObjectTypeEvent_UnRegister);
+	m_factoryCtors.Unregister(typeCtor);   // registry owns it → freed here; typeCtor dangles after
+}
+
+ibCtorMetaValueType* ibMetaImage::FindCtor(const ibValueMetaObject* metaValue, ibCtorObjectMetaType refType) const
+{
+	// (metaValue, refType) key — metadata-specific, kept linear.
+	ibCtorMetaValueType* result = nullptr;
+	m_factoryCtors.ForEach([&](ibCtorMetaValueType* typeCtor) {
+		if (result == nullptr && refType == typeCtor->GetMetaTypeCtor() && metaValue == typeCtor->GetMetaObject())
+			result = typeCtor;
+	});
+	return result;
+}
+
 ibValue* ibMetaData::CreateObjectRef(const ibClassID& clsid, ibValue** paParams, const long lSizeArray) const
 {
 	const ibCtorMetaValueType* typeCtor = GetTypeCtor(clsid);
@@ -45,10 +81,9 @@ void ibMetaData::RegisterCtor(ibCtorMetaValueType* typeCtor)
 		wxLogDebug("* Register class '%s' with clsid '%s:%llu' ", typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()), typeCtor->GetClassType());
 #endif
 
-		typeCtor->CallEvent(ibCtorObjectTypeEvent::ibCtorObjectTypeEvent_Register);
-
-		m_factoryCtors.Register(typeCtor);
-		m_factoryCtorCountChanges++;
+		wxASSERT(m_image);                 // registration happens only while open (image live)
+		m_image->RegisterCtor(typeCtor);   // facade: CallEvent(Register) + register
+		m_factoryCtorCountChanges++;       // factory changed → advance the invalidation version
 	}
 }
 
@@ -56,18 +91,17 @@ void ibMetaData::UnRegisterCtor(ibCtorMetaValueType*& typeCtor)
 {
 	if (typeCtor != nullptr && ibMetaData::IsRegisterCtor(typeCtor->GetClassType())) {
 
-		typeCtor->CallEvent(ibCtorObjectTypeEvent::ibCtorObjectTypeEvent_UnRegister);
-
 #ifdef DEBUG
 		wxLogDebug("* Unregister class '%s' with clsid '%s:%llu' ", typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()), typeCtor->GetClassType());
 #endif
 
-		// Erase by clsid key (unique per ctor) — no dangling-tail hazard the old
-		// erase(remove(...)) had to guard against.
-		m_factoryCtors.Unregister(typeCtor);
-		m_factoryCtorCountChanges++;
-
-		wxDELETE(typeCtor);
+		// Facade: CallEvent(UnRegister) + unregister. The registry owns the ctor via
+		// shared_ptr, so this FREES it — null the caller's (by-ref) pointer so nobody
+		// dereferences the now-dangling ctor (replaces the old wxDELETE that nulled it).
+		wxASSERT(m_image);                 // unregistration happens only while open
+		m_image->UnregisterCtor(typeCtor);
+		m_factoryCtorCountChanges++;       // factory changed → advance the invalidation version
+		typeCtor = nullptr;
 	}
 	else {
 		ibBackendCoreException::Error(_("Object '%s' is not exist"), typeCtor->GetClassName());
@@ -89,7 +123,7 @@ bool ibMetaData::IsRegisterCtor(const wxString& className) const
 {
 	if (className.IsEmpty())
 		return false;
-	if (m_factoryCtors.Find(className) != nullptr)
+	if (m_image && m_image->HasCtor(className))
 		return true;
 	return ibValue::IsRegisterCtor(className);
 }
@@ -99,7 +133,7 @@ bool ibMetaData::IsRegisterCtor(const wxString& className, ibCtorObjectType obje
 	if (className.IsEmpty())
 		return false;
 	// Names are unique within the factory, so the single name-match decides.
-	const ibCtorMetaValueType* typeCtor = m_factoryCtors.Find(className);
+	const ibCtorMetaValueType* typeCtor = m_image ? m_image->FindCtor(className) : nullptr;
 	if (typeCtor != nullptr && objectType == typeCtor->GetObjectTypeCtor())
 		return true;
 	return ibValue::IsRegisterCtor(className, objectType);
@@ -109,7 +143,7 @@ bool ibMetaData::IsRegisterCtor(const wxString& className, ibCtorObjectType obje
 {
 	if (className.IsEmpty())
 		return false;
-	const ibCtorMetaValueType* typeCtor = m_factoryCtors.Find(className);
+	const ibCtorMetaValueType* typeCtor = m_image ? m_image->FindCtor(className) : nullptr;
 	if (typeCtor != nullptr
 		&& ibCtorObjectType::ibCtorObjectType_object_meta_value == typeCtor->GetObjectTypeCtor()
 		&& refType == typeCtor->GetMetaTypeCtor())
@@ -119,7 +153,7 @@ bool ibMetaData::IsRegisterCtor(const wxString& className, ibCtorObjectType obje
 
 bool ibMetaData::IsRegisterCtor(const ibClassID& clsid) const
 {
-	if (m_factoryCtors.Find(clsid) != nullptr)
+	if (m_image && m_image->HasCtor(clsid))
 		return true;
 	return ibValue::IsRegisterCtor(clsid);
 }
@@ -155,7 +189,7 @@ ibClassID ibMetaData::GetIDByVT(const ibMetaID& valueType, ibCtorObjectMetaType 
 {
 	// (metaID, refType) key — metadata-specific, kept linear (not the hot clsid path).
 	ibClassID result = 0;   // RegisterCtor guarantees GetClassType() > 0, so 0 = not-found
-	m_factoryCtors.ForEach([&](const ibCtorMetaValueType* typeCtor) {
+	if (m_image) m_image->ForEachCtor([&](const ibCtorMetaValueType* typeCtor) {
 		if (result != 0) return;
 		const ibValueMetaObject* metaValue = typeCtor->GetMetaObject();
 		wxASSERT(metaValue);
@@ -169,43 +203,39 @@ ibClassID ibMetaData::GetIDByVT(const ibMetaID& valueType, ibCtorObjectMetaType 
 
 ibCtorMetaValueType* ibMetaData::GetTypeCtor(const wxString& className) const
 {
-	return m_factoryCtors.Find(className);   // linear by name (see ctorRegistry.h)
+	return m_image ? m_image->FindCtor(className) : nullptr;   // linear by name (see ctorRegistry.h)
 }
 
 ibCtorMetaValueType* ibMetaData::GetTypeCtor(const ibClassID& clsid) const
 {
-	return m_factoryCtors.Find(clsid);       // hot — O(1)
+	return m_image ? m_image->FindCtor(clsid) : nullptr;       // hot — O(1)
 }
 
 ibCtorMetaValueType* ibMetaData::GetTypeCtor(const ibValueMetaObject* metaValue, ibCtorObjectMetaType refType) const
 {
-	// (metaValue, refType) key — metadata-specific, kept linear.
-	ibCtorMetaValueType* result = nullptr;
-	m_factoryCtors.ForEach([&](ibCtorMetaValueType* typeCtor) {
-		if (result == nullptr && refType == typeCtor->GetMetaTypeCtor() && metaValue == typeCtor->GetMetaObject())
-			result = typeCtor;
-	});
-	return result;
+	return m_image ? m_image->FindCtor(metaValue, refType) : nullptr;   // linear (metaValue,refType) lookup
 }
 
 ibCtorAbstractType* ibMetaData::GetAvailableCtor(const wxString& className) const
 {
-	if (ibCtorMetaValueType* typeCtor = m_factoryCtors.Find(className))
-		return typeCtor;
+	if (m_image)
+		if (ibCtorMetaValueType* typeCtor = m_image->FindCtor(className))
+			return typeCtor;
 	return ibValue::GetAvailableCtor(className);
 }
 
 ibCtorAbstractType* ibMetaData::GetAvailableCtor(const ibClassID& clsid) const
 {
-	if (ibCtorMetaValueType* typeCtor = m_factoryCtors.Find(clsid))
-		return typeCtor;
+	if (m_image)
+		if (ibCtorMetaValueType* typeCtor = m_image->FindCtor(clsid))
+			return typeCtor;
 	return ibValue::GetAvailableCtor(clsid);
 }
 
 std::vector<ibCtorMetaValueType*> ibMetaData::GetListCtorsByType() const
 {
 	std::vector<ibCtorMetaValueType*> retVector;
-	m_factoryCtors.ForEach([&](ibCtorMetaValueType* t) { retVector.push_back(t); });
+	if (m_image) m_image->ForEachCtor([&](ibCtorMetaValueType* t) { retVector.push_back(t); });
 	std::sort(retVector.begin(), retVector.end(), [](const ibCtorMetaValueType* a, const ibCtorMetaValueType* b) {
 		const ibValueMetaObject* ma = a->GetMetaObject(); const ibValueMetaObject* mb = b->GetMetaObject();
 		// Lexicographic strict-weak-ordering — name first, metaType as tiebreak. The
@@ -226,7 +256,7 @@ std::vector<ibCtorMetaValueType*> ibMetaData::GetListCtorsByType(const ibClassID
 	std::vector<ibCtorMetaValueType*> retVector;
 	// Note: clsid here is the metaObject's id (m->GetClassType()), NOT the ctor's —
 	// shared across refType variants, so it's a separate (non-unique) key kept linear.
-	m_factoryCtors.ForEach([&](ibCtorMetaValueType* t) {
+	if (m_image) m_image->ForEachCtor([&](ibCtorMetaValueType* t) {
 		const ibValueMetaObject* const m = t->GetMetaObject();
 		if (refType == t->GetMetaTypeCtor() && clsid == m->GetClassType())
 			retVector.push_back(t);
@@ -245,7 +275,7 @@ std::vector<ibCtorMetaValueType*> ibMetaData::GetListCtorsByType(const ibClassID
 std::vector<ibCtorMetaValueType*> ibMetaData::GetListCtorsByType(ibCtorObjectMetaType refType) const
 {
 	std::vector<ibCtorMetaValueType*> retVector;
-	m_factoryCtors.ForEach([&](ibCtorMetaValueType* t) {
+	if (m_image) m_image->ForEachCtor([&](ibCtorMetaValueType* t) {
 		if (refType == t->GetMetaTypeCtor()) retVector.push_back(t);
 	});
 	std::sort(retVector.begin(), retVector.end(), [](const ibCtorMetaValueType* a, const ibCtorMetaValueType* b) {

@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <typeindex>
 #include <typeinfo>
+#include <memory>
 
 #include "backend/clsid.h"               // ibClassID
 #include "backend/stringUtils.h"         // stringUtils::CompareString (name lookup)
@@ -34,50 +35,65 @@
 // =============================================================================
 template <class T>
 class ibCtorRegistry {
-	std::unordered_map<ibClassID, T*>       m_byClsid;   // hot — primary store + index
-	std::unordered_map<std::type_index, T*> m_byType;    // hot — live-object self-id index
+	// The registry OWNS its ctors through shared_ptr: one ctor lives in both indices
+	// (same shared_ptr), so it survives while either index holds it and is freed when
+	// both drop it (Unregister, clear, or registry destruction). No manual delete and
+	// no leak on a wholesale drop — destroying the registry frees every ctor. The
+	// deleter is captured at Register (complete T there), so the maps can hold
+	// shared_ptr<T> even where T is only forward-declared.
+	std::unordered_map<ibClassID, std::shared_ptr<T>>       m_byClsid;   // hot — primary store + index
+	std::unordered_map<std::type_index, std::shared_ptr<T>> m_byType;    // hot — live-object self-id index
 
 public:
 	bool   IsEmpty() const { return m_byClsid.empty(); }
 	size_t Size()    const { return m_byClsid.size(); }
 
-	// The ONLY mutators. Both indices are filled / cleared here, with the keys
-	// read off the same ctor, so they stay in lock-step by construction.
+	// The ONLY mutators. Both indices share ONE shared_ptr per ctor, with the keys
+	// read off the same ctor, so they stay in lock-step by construction. Register
+	// takes ownership of the raw ctor (wraps it); Unregister drops both indices'
+	// references (freeing the ctor when the last one goes).
 	void Register(T* ctor) {
-		m_byClsid.emplace(ctor->GetClassType(), ctor);
+		std::shared_ptr<T> owned(ctor);
+		m_byClsid.emplace(ctor->GetClassType(), owned);
 		const std::type_info& typeInfo = ctor->GetTypeInfo();
 		if (typeInfo != typeid(void))   // meta/control ctors carry no concrete C++ type -> no self-id index
-			m_byType.emplace(std::type_index(typeInfo), ctor);
+			m_byType.emplace(std::type_index(typeInfo), owned);
 	}
 	void Unregister(T* ctor) {
-		m_byClsid.erase(ctor->GetClassType());
+		// Read BOTH keys BEFORE erasing: the registry OWNS the ctor via shared_ptr, so
+		// erasing the last index entry drops the last reference and frees *ctor —
+		// touching it afterwards is a use-after-free. (typeInfo is a reference to a
+		// static std::type_info, so it stays valid after the ctor is gone.)
+		const ibClassID       clsid    = ctor->GetClassType();
 		const std::type_info& typeInfo = ctor->GetTypeInfo();
 		if (typeInfo != typeid(void))
 			m_byType.erase(std::type_index(typeInfo));
+		m_byClsid.erase(clsid);
 	}
 
-	// --- lookup: one overload per key ---
+	// --- lookup: one overload per key. Returns a RAW (non-owning) view; callers
+	// observe, they don't own — ownership stays with the registry. ---
 	T* Find(const ibClassID& clsid) const {
 		const auto it = m_byClsid.find(clsid);
-		return it != m_byClsid.end() ? it->second : nullptr;
+		return it != m_byClsid.end() ? it->second.get() : nullptr;
 	}
 	T* Find(const std::type_info& typeInfo) const {
 		const auto it = m_byType.find(std::type_index(typeInfo));
-		return it != m_byType.end() ? it->second : nullptr;
+		return it != m_byType.end() ? it->second.get() : nullptr;
 	}
 	// Linear on purpose — name resolution is compile-time / low-frequency, not a
 	// hot path. Case-insensitive (OES convention).
 	T* Find(const wxString& className) const {
 		for (const auto& entry : m_byClsid)
 			if (stringUtils::CompareString(className, entry.second->GetClassName()))
-				return entry.second;
+				return entry.second.get();
 		return nullptr;
 	}
 
 	// Iterate every registered ctor (order-independent — a caller that needs a
 	// sorted result sorts it itself). For the rare type / category filters.
 	template <typename Fn> void ForEach(Fn&& fn) const {
-		for (const auto& entry : m_byClsid) fn(entry.second);
+		for (const auto& entry : m_byClsid) fn(entry.second.get());
 	}
 };
 

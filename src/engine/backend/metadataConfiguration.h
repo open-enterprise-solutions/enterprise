@@ -67,7 +67,7 @@ public:
 	virtual ibGuid GetConfigGuid() const = 0;
 
 	// if storage save in db
-	virtual bool IsConfigOpen() const { return false; }
+	// (IsConfigOpen lives on ibMetaData now — backed by the open-image flag.)
 	virtual bool IsConfigSave() const { return true; }
 
 	// Restructure ledger — the record of REAL structural changes (CREATE/ALTER/DROP table, add/change/
@@ -143,8 +143,6 @@ public:
 	virtual bool AccessRight_ModeAllFunction() const { return m_commonObject->AccessRight_ModeAllFunction(); }
 #pragma endregion
 
-	virtual bool IsConfigOpen() const { return m_configOpened; }
-
 	// Public ctor — `ibMetaDataConfigurationFile` is NOT the appData-
 	// owned active metadata (those are the leaf subclasses
 	// `ibMetaDataConfiguration` and `ibMetaDataConfigurationStorage`,
@@ -174,7 +172,7 @@ public:
 	//Check is full access 
 	virtual bool IsFullAccess() const;
 
-	//run/close 
+	//run/close
 	virtual bool RunDatabase(int flags = defaultFlag);
 	virtual bool CloseDatabase(int flags = defaultFlag);
 
@@ -210,7 +208,6 @@ protected:
 
 protected:
 
-	bool m_configOpened;
 	wxString m_md5Hash;
 	//common meta object — owning handle (ibValuePtr): bind = IncrRef, rebind / dtor = DecrRef
 	ibValuePtr<ibValueMetaObjectConfiguration> m_commonObject;
@@ -299,13 +296,16 @@ public:
 		return CompareMetadata(m_configMetadata);
 	}
 
-	//metadata  
+	//metadata
 	virtual bool LoadDatabase(int flags = defaultFlag);
 	virtual bool SaveDatabase(int flags = defaultFlag);
 
-	//run/close 
+	// Designer-edit config always carries a compile cache + module-manager (image ctor).
+	virtual std::unique_ptr<ibCompileValueCache> CreateDesignerCache() override;
+
+	//run/close
 	virtual bool RunDatabase(int flags = defaultFlag) {
-		
+
 		if (!ibMetaDataConfiguration::RunDatabase(flags))
 			return false;
 		

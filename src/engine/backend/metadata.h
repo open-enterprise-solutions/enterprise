@@ -20,6 +20,7 @@ class BACKEND_API ibValueMetaObjectGenericData;
 class BACKEND_API ibValueMetaObjectFormBase;
 ///////////////////////////////////////////////////////////////////////////////
 class BACKEND_API ibCtorMetaValueType;
+class BACKEND_API ibMetaData;
 ///////////////////////////////////////////////////////////////////////////////
 
 // Module-storage skeleton — list of common-module descriptors that
@@ -160,6 +161,85 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////////
 
+// Runtime-image — aggregates everything that "opening" a metadata fills and
+// "closing" discards: the metadata-defined type-ctor factory, the common-module
+// skeleton, and the (designer-only) compile cache. Held by shared_ptr on ibMetaData
+// (m_image): its PRESENCE is the open state — a run builds it (LoadGuard) and keeps
+// it on success or drops it on failure ("the load never happened"); close tears the
+// registered objects down per-node, then drops it. The registry OWNS its ctors via
+// shared_ptr, so dropping the image frees them — no manual cleanup. Non-copyable /
+// non-movable: lifetime is managed only through the shared_ptr.
+//
+// m_factoryCtorCountChanges (the monotonic invalidation counter) deliberately stays
+// OUTSIDE the image, on ibMetaData — dropping the image must not reset it.
+class BACKEND_API ibMetaImage {
+public:
+	// The image builds its OWN designer infrastructure on construction (out of line —
+	// see metadataFactory.cpp): it asks the owner metadata for its designer cache via
+	// CreateDesignerCache() (the compile-value cache WITH its module-manager attached;
+	// nullptr for runtime / non-designer kinds). So each metadata kind decides its own
+	// designer setup; the caller (LoadGuard) never pokes the image's internals.
+	// owner==nullptr ⇒ a bare image (the ctor-factory + module skeleton fill during the
+	// run cascade, not here).
+	explicit ibMetaImage(ibMetaData* owner = nullptr);
+	// Default dtor suffices: m_factoryCtors (ibCtorRegistry) OWNS its ctors via
+	// shared_ptr and frees them when destroyed — so dropping the last shared_ptr to
+	// this image frees its ctors automatically, even though ibCtorMetaValueType is
+	// only forward-declared here (the deleter was captured at Register, with the
+	// complete type). Module storage holds non-owning tree pointers; the compile
+	// cache is a unique_ptr (frees itself).
+	~ibMetaImage() = default;
+	// Managed only through shared_ptr (install / swap) — never copied or moved.
+	ibMetaImage(const ibMetaImage&) = delete;
+	ibMetaImage& operator=(const ibMetaImage&) = delete;
+	ibMetaImage(ibMetaImage&&) = delete;
+	ibMetaImage& operator=(ibMetaImage&&) = delete;
+
+	// --- ctor-factory facade ---
+	// The operations on m_factoryCtors, exposed as image methods so ibMetaData (and its
+	// DataProcessor / Report subclasses) call `m_image->X` (guarding m_image for the
+	// closed state) instead of reaching into m_factoryCtors directly. Register/Unregister
+	// Ctor pair the ctor's lifecycle event with the registry mutation; the registry owns
+	// the ctor via shared_ptr (UnregisterCtor frees it). RegisterCtor / UnregisterCtor /
+	// FindCtor(metaValue) deref ibCtorMetaValueType, so they're defined out of line in
+	// metadataFactory.cpp (complete type via objCtor.h). The clsid/name lookups and
+	// ForEachCtor only move pointers, so they stay inline here.
+	void RegisterCtor(ibCtorMetaValueType* typeCtor);     // CallEvent(Register)   + register (takes ownership)
+	void UnregisterCtor(ibCtorMetaValueType* typeCtor);   // CallEvent(UnRegister) + unregister (frees it)
+	ibCtorMetaValueType* FindCtor(const ibValueMetaObject* metaValue, ibCtorObjectMetaType refType) const;
+
+	// One template per single-key lookup — the registry resolves the key overload
+	// (clsid O(1) / type_info O(1) / name linear), so clsid / wxString / std::type_info
+	// all go through one method instead of an overload per key. (Distinct arity from the
+	// two-arg (metaValue, refType) overload above — no ambiguity.)
+	template <typename Key> ibCtorMetaValueType* FindCtor(const Key& key) const { return m_factoryCtors.Find(key); }
+	template <typename Key> bool                 HasCtor(const Key& key)  const { return m_factoryCtors.Find(key) != nullptr; }
+	template <typename Fn>   void                ForEachCtor(Fn&& fn)     const { m_factoryCtors.ForEach(std::forward<Fn>(fn)); }
+
+	// Module-storage + compile-cache accessors. ibMetaData exposes these as a facade
+	// (GetModuleStorage / GetCompileCache), null-checking the image for the closed
+	// state; on a live image module storage is always valid, the compile cache nullptr
+	// unless the metadata's CreateCompileCache() made one (designer kinds).
+	ibModuleStorage*       ModuleStorage()       { return &m_moduleStorage; }
+	const ibModuleStorage* ModuleStorage() const { return &m_moduleStorage; }
+	ibCompileValueCache*   CompileCache()  const { return m_compileCache.get(); }
+
+private:
+
+	// clsid O(1); name / (metaValue,refType) linear (see ctorRegistry.h). type_info
+	// index stays empty (ibCtorMetaValueType has no concrete typeid — metaobjects
+	// self-id via their own GetClassType() override, not typeid).
+	ibCtorRegistry<ibCtorMetaValueType>  m_factoryCtors;
+	// Common-module skeleton — populated by descriptor's OnBeforeRunMetaObject
+	// during RunDatabase. Empty for metadata kinds without init modules.
+	ibModuleStorage                      m_moduleStorage;
+	// Compile-value cache — designer-only. Allocated by ibMetaDataConfigurationStorage's
+	// ctor (and the external DP / report ctors); nullptr on runtime configurations.
+	std::unique_ptr<ibCompileValueCache> m_compileCache;
+};
+
+///////////////////////////////////////////////////////////////////////////////
+
 class BACKEND_API ibMetaData {
 	void DoGenerateNewID(ibMetaID& id, const ibValueMetaObject* top) const;
 public:
@@ -175,8 +255,10 @@ public:
 	// runtime mm reads in CreateMainModule to spawn its own instances.
 	// Always non-null (empty for metadata kinds without init modules,
 	// e.g. external data processor / report).
-	ibModuleStorage* GetModuleStorage() { return &m_moduleStorage; }
-	const ibModuleStorage* GetModuleStorage() const { return &m_moduleStorage; }
+	// Facade over the image; null when closed (no image) — callers touch module
+	// storage only while open (run / close cascades, runtime mm bring-up).
+	ibModuleStorage* GetModuleStorage() { return m_image ? m_image->ModuleStorage() : nullptr; }
+	const ibModuleStorage* GetModuleStorage() const { return m_image ? m_image->ModuleStorage() : nullptr; }
 
 	// Compile-value cache — designer-only storage of compiled ibValue
 	// pointers used by intellisense / metadata-property previews. Created
@@ -185,7 +267,21 @@ public:
 	// configurations leave it nullptr — callers gate by null-check
 	// (`if (auto* cc = metaData->GetCompileCache())`) instead of querying
 	// appData->DesignerMode().
-	ibCompileValueCache* GetCompileCache() const { return m_compileCache.get(); }
+	ibCompileValueCache* GetCompileCache() const { return m_image ? m_image->CompileCache() : nullptr; }
+
+	// Factory for this metadata kind's designer infrastructure — called by the image
+	// ctor, which takes ownership (no bool flag on the metadata). Base returns none
+	// (runtime / non-designer kinds); the designer kinds override to build the
+	// compile-value cache WITH its module-manager already attached (Storage always;
+	// external DP / report in designer mode — manager bound to the common metaobject /
+	// object module). One method ⇒ each kind's whole designer setup lives in one place.
+	virtual std::unique_ptr<ibCompileValueCache> CreateDesignerCache() { return nullptr; }
+
+	// Open state — single source of truth, lives in the open-image (see ibMetaImage).
+	// Replaces the per-subclass m_configOpened on File / DataProcessor / Report; a
+	// metadata that never opens just keeps the default false. Virtual so existing
+	// `activeMetaData->IsConfigOpen()` call sites resolve here unchanged.
+	virtual bool IsConfigOpen() const { return m_image != nullptr; }
 
 	// (The restructure ledger lives on ibMetaDataConfigurationBase, not here — only a CONFIGURATION
 	//  restructures; an external data-processor / report metadata never does. Reach it through the static
@@ -464,20 +560,49 @@ protected:
 
 	bool m_metaModify;
 
-	//custom types — clsid O(1); name / (metaValue,refType) linear (see ctorRegistry.h).
-	// type_info index stays empty here (ibCtorMetaValueType has no concrete typeid —
-	// metaobjects self-id via their own GetClassType() override, not typeid).
-	ibCtorRegistry<ibCtorMetaValueType> m_factoryCtors;
+	// --- the runtime-image IS the open state ---
+	// No image (m_image == nullptr) == CLOSED; a live image == OPEN. A config run
+	// builds the image and either keeps it (success) or drops it (failure ⇒ the load
+	// "never happened"); close tears the registered objects down per-node and then
+	// drops the image. So the presence of the image replaces a separate "opened" flag,
+	// and the registry inside it owns its ctors — dropping the image frees them.
+	//
+	// LoadGuard is the RAII transaction. Its ctor CREATES the image (assert: was
+	// closed — else "run without close") + the compile cache if this metadata wants
+	// one; the dtor DROPS it, rolling the load back, UNLESS Commit() ran.
+	// "exception == rollback": a raised ibBackendException (or any early return)
+	// unwinds through the dtor, the image is dropped, and the state is exactly the
+	// closed state it started from. Dropping the image also releases the designer
+	// module-manager (it lives in the cache, freed by RAII → DestroyMainModule), so
+	// no separate manager teardown is needed.
+	class LoadGuard {
+		ibMetaData* m_meta;
+		bool        m_committed = false;
+	public:
+		explicit LoadGuard(ibMetaData* meta) : m_meta(meta) {
+			wxASSERT(m_meta->m_image == nullptr);   // must be closed first — else a run-without-close
+			// The image ctor builds its own designer infrastructure via the owner's
+			// CreateDesignerCache() (cache + manager; nullptr for non-designer kinds).
+			m_meta->m_image = std::make_shared<ibMetaImage>(m_meta);
+		}
+		~LoadGuard() {
+			if (!m_committed)
+				m_meta->m_image.reset();   // drop → load rolled back (frees ctors + cache + manager)
+		}
+		void Commit() { m_committed = true; }   // keep the image — it is now the live config
+		LoadGuard(const LoadGuard&) = delete;
+		LoadGuard& operator=(const LoadGuard&) = delete;
+	};
+
+	// The runtime image: nullptr == closed, live == open. Built by LoadGuard on a run,
+	// dropped on close / failed run. The registry inside owns its ctors. The factory
+	// methods guard on it directly (closed ⇒ not-found); mutation happens only while open.
+	std::shared_ptr<ibMetaImage> m_image;
+
+	// Factory version — monotonic invalidation counter for compiler caches. Bumped on
+	// each register / unregister; never reset when the image drops, so observers only
+	// ever see it advance.
 	std::atomic<unsigned int> m_factoryCtorCountChanges = 0;
-
-	// Common-module skeleton — populated by descriptor's OnBeforeRunMetaObject
-	// during RunDatabase. Empty for metadata kinds without init modules.
-	ibModuleStorage m_moduleStorage;
-
-	// Compile-value cache — designer-only. Allocated by
-	// ibMetaDataConfigurationStorage's ctor; remains nullptr on runtime
-	// configurations. Lifetime ends with the metadata.
-	std::unique_ptr<ibCompileValueCache> m_compileCache;
 
 private:
 	ibBackendMetadataTree* m_metaTree;

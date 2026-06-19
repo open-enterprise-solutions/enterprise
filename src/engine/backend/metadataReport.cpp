@@ -10,12 +10,10 @@ ibMetaDataReport::ibMetaDataReport() : ibMetaData(),
 m_commonObject(nullptr),
 m_moduleManager(nullptr),
 m_ownerMeta(nullptr),
-m_configOpened(false),
 m_version(version_oes_last)
 {
-	// Designer-only — see ibMetaDataDataProcessor ctor for rationale.
-	if (appData->DesignerMode())
-		m_compileCache = std::make_unique<ibCompileValueCache>();
+	// Compile cache (designer mode only) is built by the image ctor via
+	// CreateCompileCache() below — see ibMetaDataDataProcessor.
 
 	//create main metaObject
 	m_commonObject = new ibValueMetaObjectExternalReport();
@@ -46,7 +44,6 @@ ibMetaDataReport::ibMetaDataReport(ibMetaData* metaData, ibValueMetaObjectReport
 m_commonObject(srcReport),
 m_ownerMeta(nullptr),
 m_moduleManager(nullptr),
-m_configOpened(false),
 m_version(version_oes_last)
 {
 	if (srcReport == nullptr) {
@@ -133,29 +130,37 @@ wxString ibMetaDataReport::GetLangCode() const
 
 ////////////////////////////////////////////////////////////////////
 
+std::unique_ptr<ibCompileValueCache> ibMetaDataReport::CreateDesignerCache()
+{
+	// Designer mode only; an external report additionally owns a module-manager (bound
+	// to its object module). Called by the image ctor.
+	if (!appData->DesignerMode())
+		return nullptr;
+	auto cache = std::make_unique<ibCompileValueCache>();
+	if (m_commonObject->IsExternalCreate())
+		cache->SetModuleManager(new ibValueModuleManagerDesigner(this, m_commonObject->GetObjectModule()));
+	return cache;
+}
+
 bool ibMetaDataReport::RunDatabase(int flags)
 {
 	// RunSubtree fires the root's own OnBeforeRun/OnAfterRun + every descendant.
 	// CreateMainModule/StartMainModule stay interleaved between the two phases.
+	// Transactional like ibMetaDataConfigurationFile::RunDatabase via LoadGuard: it
+	// CREATES the runtime image and drops it on ANY exit that isn't Commit() — a failed
+	// return OR a raised exception (exception == rollback) — so a partial run leaves the
+	// metadata closed (the load "never happened"). StartMainModule runs during the build
+	// (it reads the compile cache through GetCompileCache() = the live image); Commit()
+	// keeps the image only once it has succeeded, so a failed start rolls back cleanly.
+	LoadGuard load(this);
+
 	if (m_commonObject->IsExternalCreate()) {
 
-		// Lightweight DESIGNER module manager for this external report's compile
-		// cache — same role as the configuration's (code editor inside the report's
-		// module). Created BEFORE RunSubtree so the report's common modules register.
-		if (auto* cc = GetCompileCache())
-			cc->SetModuleManager(new ibValueModuleManagerDesigner(this, m_commonObject->GetObjectModule()));
-
-		// Drop the designer manager on any bail-out path (CloseDatabase won't run —
-		// m_configOpened stays false), else stale registrations dangle into the next run.
-		auto bail = [this]() -> bool {
-			if (auto* cc = GetCompileCache())
-				cc->SetModuleManager(nullptr);
+		// The designer module-manager (for the report's compile cache) was already
+		// built by the image ctor via CreateDesignerModuleManager() — common modules
+		// register into it during RunSubtree(true) below.
+		if (!m_commonObject->RunSubtree(flags, true))
 			return false;
-		};
-
-		if (!m_commonObject->RunSubtree(flags, true)) {
-			return bail();
-		}
 
 		if (auto* cc = GetCompileCache()) {
 			if (auto* mgr = cc->GetModuleManager())
@@ -163,28 +168,24 @@ bool ibMetaDataReport::RunDatabase(int flags)
 		}
 
 		if (m_moduleManager->CreateMainModule()) {
-
-			if (!m_commonObject->RunSubtree(flags, false)) {
-				return bail();
-			}
-			m_configOpened = true;
-			if (!m_moduleManager->StartMainModule()) {
-				return bail();
-			}
+			if (!m_commonObject->RunSubtree(flags, false))
+				return false;
+			if (!m_moduleManager->StartMainModule())
+				return false;
+			load.Commit();   // keep the image → report is now open
 			return true;
 		}
-		return bail();
+		return false;
 	}
 	else if (!m_commonObject->IsExternalCreate()) {
 
-		if (!m_commonObject->RunSubtree(flags, true)) {
+		if (!m_commonObject->RunSubtree(flags, true))
 			return false;
-		}
 
-		if (!m_commonObject->RunSubtree(flags, false)) {
+		if (!m_commonObject->RunSubtree(flags, false))
 			return false;
-		}
 
+		load.Commit();
 		return true;
 	}
 
@@ -193,7 +194,7 @@ bool ibMetaDataReport::RunDatabase(int flags)
 
 bool ibMetaDataReport::CloseDatabase(int flags)
 {
-	wxASSERT(m_configOpened);
+	wxASSERT(IsConfigOpen());
 
 	if (!ExitMainModule((flags & forceCloseFlag) != 0))
 		return false;
@@ -212,7 +213,8 @@ bool ibMetaDataReport::CloseDatabase(int flags)
 
 	if (!m_commonObject->CloseSubtree(false))
 		return false;
-	m_configOpened = false;
+
+	m_image.reset();   // drop the runtime image ⇒ closed (frees ctors + modules + cache)
 	return true;
 }
 
@@ -291,7 +293,7 @@ bool ibMetaDataReport::LoadFromFile(const wxString& strFileName)
 	// the old root, and the manager references it via m_objectValue (use-after-free if
 	// the manager outlives the root). Then swap (the assignment releases old + adopts
 	// fresh) and rebuild the manager on the fresh root (mirrors ctor / dtor ordering).
-	if (m_configOpened && !CloseDatabase(forceCloseFlag))
+	if (IsConfigOpen() && !CloseDatabase(forceCloseFlag))
 		return false; // fresh discarded automatically
 
 	// Release the old manager first (its dtor runs DestroyMainModule via RAII) while

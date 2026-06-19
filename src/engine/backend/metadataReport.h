@@ -64,9 +64,13 @@ public:
 	//get language code 
 	virtual wxString GetLangCode() const;
 
-	//run/close 
+	//run/close
 	virtual bool RunDatabase(int flags = defaultFlag);
 	virtual bool CloseDatabase(int flags = defaultFlag);
+
+	// Designer infrastructure (cache + manager) — built by the image ctor; cache in
+	// designer mode, manager only for an external report.
+	virtual std::unique_ptr<ibCompileValueCache> CreateDesignerCache() override;
 
 	//load/save form file
 	bool LoadFromFile(const wxString& strFileName);
@@ -97,7 +101,6 @@ private:
 	ibMetaData* m_ownerMeta; //owner for saving/loading
 	ibValuePtr<ibValueModuleRuntimeManagerExternalReport> m_moduleManager; // owning handle; dtor runs DestroyMainModule (RAII)
 	ibValuePtr<ibValueMetaObjectReport> m_commonObject; 	//common meta object — owning handle (ibValuePtr)
-	bool m_configOpened;
-
+	// open flag now lives in ibMetaData's open-image (IsConfigOpen / SetConfigOpened)
 	ibVersionID m_version;
 };
