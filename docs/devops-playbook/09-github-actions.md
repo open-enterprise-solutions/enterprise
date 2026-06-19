@@ -260,8 +260,11 @@ jobs:
             /m
 
       - name: Run tests before packaging
+        # The gtest suite is the CMake target `oes_tests` (built via
+        # cmake -B build -DBUILD_TESTING=ON), not an MSBuild project. Build
+        # and run it through CTest rather than expecting an exe in bin\.
         run: |
-          .\bin\x64\Release\OES.Tests.exe --gtest_output=xml:test-results.xml
+          ctest --test-dir build -C Release --output-on-failure
         continue-on-error: false
 
       # Sign binaries (requires certificate in Secrets)
@@ -271,7 +274,7 @@ jobs:
           $pfxPath = "$env:TEMP\codesign.pfx"
           [System.IO.File]::WriteAllBytes($pfxPath, [System.Convert]::FromBase64String("${{ secrets.CODE_SIGN_CERT }}"))
           
-          $binaries = Get-ChildItem -Path .\bin\x64\Release -Filter "*.exe","*.dll" -Recurse
+          $binaries = Get-ChildItem -Path .\bin\Win64\Release -Filter "*.exe","*.dll" -Recurse
           foreach ($file in $binaries) {
             signtool sign `
               /f $pfxPath `
@@ -539,7 +542,7 @@ Key classes:
   ibDatabaseLayerPostgres          - PostgreSQL backend
   ibPreparedStatement              - parameterized queries
   ibApplicationData                - application data / session
-  ibApplicationData::AuthenticationAndSetUser()  - authentication
+  ibApplicationData::AuthenticateUser()  - authentication
   ibApplicationDataSessionUpdater  - session update
   ibMetaDataConfiguration          - metadata configuration
   CreateAndUpdateTableDB()         - create/update DB schema

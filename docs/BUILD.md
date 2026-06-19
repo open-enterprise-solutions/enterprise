@@ -24,8 +24,8 @@ This document covers how to build OES on Windows (MSBuild), macOS (CMake), and L
 
 | Requirement | Minimum version | Notes |
 |---|---|---|
-| Visual Studio | 2019 (16.x) | "Desktop development with C++" workload; 2022 also supported |
-| Windows SDK | 10.0.17763 or later | Installed by VS workload |
+| Visual Studio | 2022 (17.x) | "Desktop development with C++" workload; platform toolset is `v143` |
+| Windows SDK | 10.0 (latest) | Installed by VS workload (`WindowsTargetPlatformVersion=10.0`) |
 | Git | Any recent | For submodule initialisation |
 
 MSBuild is the only supported build system on Windows. CMake (`CMakeLists.txt` at repo root) targets macOS / Linux — see the per-platform sections below; bring-up on Windows is in progress.
@@ -70,7 +70,7 @@ For other distributions, install the equivalent packages providing wxWidgets 3.2
 git clone https://github.com/open-enterprise-solutions/enterprise.git
 cd enterprise
 
-# Initialise wxWidgets (located at src/3rdparty/wxWidgets)
+# Initialise wxWidgets (located at src/3rdparty/wxWidgets, pinned to the 3.2 branch)
 git submodule update --init --recursive
 ```
 
@@ -88,11 +88,12 @@ git submodule update --recursive
 
 ### Visual Studio IDE
 
-1. Open `enterprise.sln` in Visual Studio 2019 or 2022.
-2. Select the desired configuration from the toolbar:
-   - `Debug|Win32` — 32-bit debug build
+1. Open `enterprise.sln` in Visual Studio 2022.
+2. Select the desired configuration from the toolbar. The solution exposes four
+   pairs (the `x86` solution platform maps to the `Win32` project platform):
+   - `Debug|x86` — 32-bit debug build
    - `Debug|x64` — 64-bit debug build
-   - `Release|Win32` — 32-bit release build
+   - `Release|x86` — 32-bit release build
    - `Release|x64` — 64-bit release build
 3. Press **Build > Build Solution** (`Ctrl+Shift+B`).
 
@@ -107,45 +108,57 @@ cd C:\path\to\enterprise
 msbuild enterprise.sln /p:Configuration=Release /p:Platform=x64 /m /nologo
 
 # 32-bit debug
-msbuild enterprise.sln /p:Configuration=Debug /p:Platform=Win32 /m /nologo
+msbuild enterprise.sln /p:Configuration=Debug /p:Platform=x86 /m /nologo
 ```
 
-The `/m` flag enables parallel compilation. Add `/v:m` for minimal verbosity or `/v:d` for detailed output.
+Use `/p:Platform=x86` or `/p:Platform=x64` (the solution does not expose a
+`Win32` platform name). The `/m` flag enables parallel compilation; note that
+`MultiProcessorCompilation` is disabled in `Debug` configs (incremental
+linking) and enabled in `Release`. Add `/v:m` for minimal verbosity or `/v:d`
+for detailed output.
 
 ### Build Output (Windows)
 
-After a successful build:
+After a successful build (the `Platform` value `x86`/`x64` maps to the output
+folder `Win32`/`Win64`):
 
 ```
 bin\
-  Win32\
+  Win32\            (Platform=x86)
     Debug\      or  Release\
       backend.dll
       frontend.dll
+      wfrontend.dll
       enterprise.exe
       designer.exe
       launcher.exe
       daemon.exe
       codeRunner.exe
-      simplePlugin.dll
-  Win64\
+      wenterprise-server.exe
+  Win64\            (Platform=x64)
     ...
 ```
 
-Firebird embedded libraries are expected alongside the executables. Copy them from the Firebird installation or the CI artefact package.
+`wfrontend.dll` + `wenterprise-server.exe` are the web runtime (headless
+server + web frontend). `simplePlugin.dll` is the plugin example and is not
+copied into `bin\` by default. Firebird embedded libraries (`fbclient.dll`,
+`ib_util.dll`, ICU) are expected alongside the executables — they ship in the
+repo's prebuilt `_fb` payload and are copied next to the binaries.
 
 ### Build Configurations
 
-The `ConfigurationDefs.props` file defines preprocessor macros per configuration:
+`ConfigurationDefs.props` defines preprocessor macros per configuration
+(keyed on `$(Configuration)` only — platform-independent):
 
 | Configuration | Macros defined |
 |---|---|
-| `Debug\|Win32` | `DEBUG` |
-| `Debug\|x64` | `DEBUG` |
-| `Release\|Win32` | `NDEBUG` |
-| `Release\|x64` | `NDEBUG` |
+| `Debug` (any platform) | `DEBUG` |
+| `Release` (any platform) | `NDEBUG` |
+| `Mixed` / `Mixed_Dedicated` | `DEBUG`, `MIXED` |
 
-> **Known issue:** The `Debug|Win32` configuration in `backend.vcxproj` currently defines `NDEBUG`, which disables assertions. This means `wxASSERT` calls are silently skipped in 32-bit debug builds. This is a build-configuration bug; it does not affect 64-bit debug or any release build.
+The shared `Common.props` adds `USE_TBB_PARALLEL` and the CRT-workaround
+macros to every TU, and a `CopyMsvcCRT` target that copies
+`msvcp140.dll` / `vcruntime140*.dll` next to `Release` binaries.
 
 ---
 
@@ -178,13 +191,17 @@ cmake --build build --parallel 6
 
 | Option | Default | Description |
 |---|---|---|
-| `OES_USE_FIREBIRD` | OFF | Enable Firebird database driver |
-| `OES_USE_POSTGRESQL` | OFF | Enable PostgreSQL database driver |
-| `OES_USE_MYSQL` | OFF | Enable MySQL database driver |
+| `OES_USE_FIREBIRD` | OFF | Enable Firebird database driver (fbclient loaded dynamically at runtime) |
+| `OES_USE_POSTGRESQL` | OFF | Enable PostgreSQL database driver (libpq loaded dynamically at runtime) |
+| `OES_USE_MYSQL` | OFF | Enable MySQL database driver (requires `libmysqlclient` to build) |
 | `OES_USE_ODBC` | OFF | Enable ODBC database driver |
-| `OES_USE_TBB` | OFF | Enable Intel TBB parallelism |
+| `OES_FB_LOCALSERVER` | ON | Firebird out-of-process local server (Phase 6, leader-election); needs `firebird.exe` in `_fb/` at runtime |
+| `OES_USE_TBB` | OFF | Intel TBB parallelism (`USE_TBB_PARALLEL`); consumed by `backend` |
+| `BUILD_TESTING` | OFF | Build the Google Test suite under `tests/` |
 
-SQLite is always enabled (embedded).
+SQLite is always enabled (embedded sources, no option). `OES_USE_FIREBIRD`
+and `OES_USE_POSTGRESQL` link their clients dynamically, so a system library
+is not required to build — CMake locates one only opportunistically.
 
 Example with PostgreSQL:
 ```bash
@@ -193,16 +210,22 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release -DOES_USE_POSTGRESQL=ON
 
 ### Build Targets
 
-| Target | Type | Status |
-|---|---|---|
-| backend | shared lib | Builds |
-| frontend | shared lib | Builds |
-| enterprise | executable | In progress |
-| designer | executable | In progress |
-| launcher | executable | Builds |
-| daemon | executable | Builds |
-| codeRunner | executable | Builds |
-| simplePlugin | shared lib | Builds |
+The root `CMakeLists.txt` adds eight engine subdirectories, each with its own
+`CMakeLists.txt`:
+
+| Target | Type |
+|---|---|
+| backend | shared lib (`BACKEND_EXPORTS`) |
+| frontend | shared lib (`FRONTEND_EXPORTS`, links wx GUI) |
+| daemon | executable (console) |
+| enterprise | executable (GUI) |
+| designer | executable (GUI) |
+| launcher | executable (GUI) |
+| codeRunner | executable (GUI) |
+| simplePlugin | shared lib (plugin example) |
+
+The web runtime targets (`wfrontend`, `wenterprise-server`) build under the
+MSBuild solution only; they are not yet wired into the CMake build.
 
 ### macOS-specific Notes
 
@@ -236,26 +259,25 @@ The same CMake options and build targets apply as described in the [macOS sectio
 
 ## wxWidgets Submodule Details
 
-wxWidgets 3.3.2 is pinned as a git submodule at `src/3rdparty/wxWidgets`.
+wxWidgets 3.3.2 lives as a git submodule at `src/3rdparty/wxWidgets`, tracked
+on the wxWidgets `3.2` maintenance branch.
 
 ```
 .gitmodules entry:
-  path = src/3rdparty/wxWidgets
-  url  = https://github.com/wxWidgets/wxWidgets.git
+  path   = src/3rdparty/wxWidgets
+  url    = https://github.com/wxWidgets/wxWidgets.git
+  branch = 3.2
 ```
 
-On Windows the solution uses the pre-built wxWidgets binaries that should be placed at the path referenced by the `oes3rdParty` MSBuild macro (`$(SolutionDir)src\3rdparty\`). The submodule is used to build wxWidgets from source for macOS and Linux.
-
-To build wxWidgets separately on Linux:
-
-```bash
-cd src/3rdparty/wxWidgets
-./configure --prefix=$(pwd)/install --disable-shared --with-gtk=3
-make -j$(nproc)
-make install
-```
-
-Then point CMake to the install prefix via `-DwxWidgets_ROOT_DIR=src/3rdparty/wxWidgets/install`.
+- **Windows (MSBuild):** the solution links the **pre-built** wxWidgets
+  binaries under `$(oes3rdParty)wxWidgets\lib\vc_dll` (x64) /
+  `vc_dll`+`mswu` includes (`oes3rdParty` = `$(SolutionDir)src\3rdparty\`).
+  The libraries are `wxmsw33u*` / `wxbase33u*` (release) and `wxmsw33ud*`
+  (debug). The submodule source is not compiled by the MSBuild build.
+- **macOS / Linux (CMake):** wxWidgets is built from the submodule via
+  `add_subdirectory()` as **shared** libraries (`wxBUILD_SHARED=ON`,
+  monolithic OFF; tests/samples/demos disabled). No system wxWidgets is
+  needed, and no separate `configure` step is required.
 
 ---
 
@@ -282,11 +304,13 @@ These drivers are compiled in but are intended for secondary/plugin use. No addi
 
 ## Build Output
 
+Paths use the `oesPlatform` macro (`Win32` for `x86`, `Win64` for `x64`):
+
 | Directory | Contents |
 |---|---|
-| `bin\<Platform>\<Configuration>\` | All DLLs and EXEs (Windows) |
-| `lib\<Platform>\<Configuration>\` | Static libraries, if any |
-| `intermediate\<Platform>\<Configuration>\` | Object files and PCH |
+| `bin\Win32\Debug\` (etc.) | DLLs and EXEs (Windows) |
+| `lib\Win32\Debug\` (etc.) | Import / static libraries |
+| `intermediate\Win32\Debug\<ProjectName>\` | Object files and PCH |
 
 ---
 
@@ -308,7 +332,9 @@ These drivers are compiled in but are intended for secondary/plugin use. No addi
 
 **Symptom:** Compilation errors about `std::execution` or structured bindings.
 
-**Fix:** Ensure the **MSVC v142** or **v143** toolset is selected. Go to **Project Properties > General > Platform Toolset**.
+**Fix:** Ensure the **MSVC v143** toolset is selected (the projects set
+`<PlatformToolset>v143</PlatformToolset>`). Go to **Project Properties >
+General > Platform Toolset** and install the VS 2022 C++ toolset if missing.
 
 ### Linker error: unresolved external symbol in `backend.dll`
 
@@ -338,10 +364,9 @@ rm -rf src/3rdparty/wxWidgets
 git submodule update --init --recursive
 ```
 
-### Debug build has assertions disabled (Win32 only)
+### Build of another OES process is running
 
-**Symptom:** `wxASSERT` failures are silently ignored.
+**Symptom:** `LNK1168: cannot open <name>.exe for writing` during link.
 
-**Cause:** `backend.vcxproj` defines `NDEBUG` in the `Debug|Win32` configuration (known bug).
-
-**Workaround:** Manually remove `NDEBUG` from the preprocessor definitions for that configuration, or use `Debug|x64`.
+**Fix:** Close any running OES processes (`enterprise.exe`, `designer.exe`,
+`launcher.exe`, `daemon.exe`) before linking — they hold the output file open.

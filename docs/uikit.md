@@ -16,7 +16,7 @@ dependency anymore.
 
 ```
 ibThemeEngine (theme.h)            — theme registry/factory; lazy default
-  ├── ibRenderer (renderer.h)      — ~80 Draw*/Get* primitives, pure interface
+  ├── ibRenderer (renderer.h)      — ~130 Draw*/Get* primitives, pure interface
   │     └── ibThemeRenderer        — reusable flat implementation base
   │           └── ibLunaRenderer   — the Luna theme (lunaTheme.cpp, private)
   ├── ibColourScheme               — palette roles (docs/ui-palette.md tiers)
@@ -52,8 +52,9 @@ Key mechanics:
 
 ## Controls
 
-Live (in `frontend.vcxproj`, all with per-file `ObjectFileName uikit_*.obj`
-to avoid clashes with `visualView`):
+22 live controls plus the menu pair, all in `frontend.vcxproj` with a per-file
+`ObjectFileName uikit_*.obj` to avoid `.obj` clashes with `visualView`. The
+umbrella header `uikit/uikit.h` lists the revived set:
 
 | Group | Controls |
 |---|---|
@@ -65,8 +66,9 @@ to avoid clashes with `visualView`):
 | misc | ibGauge, ibSlider, ibSpinButton, ibNotebook, ibToolBar, ibScrollBar |
 | menu | ibMenu / ibMenuItem + popup window (context menus) |
 
-Waiting for the univ frame: ibMenuBar, statusBar, dialog/frame/topLevel
-(staged in the tree, gated with `#if 0 // UIKIT-REVIVE`).
+`ibControl` and `ibAnyButton` are bases, not user controls. Not yet in the
+build (file pairs staged in the tree, waiting for the univ frame):
+ibStatusBar, ibMenuBar, ibDialog / ibFrame / ibTopLevel.
 
 Notable designs:
 
@@ -129,8 +131,10 @@ Notable designs:
 ## Files
 
 - `uikit/` — theme.h/.cpp, renderer.h, controlRenderer.cpp, colourScheme.h,
-  inputConsumer, inputHandler, window, menu, menuItem, scrollTimer, uikit.h
-  (umbrella header listing the revived part only)
-- `uikit/ctrl/` — one file pair per control
+  inputConsumer, inputHandler, window, menu, menuItem, scrollTimer.h,
+  settings.cpp, uikit.h (umbrella header listing the revived part only).
+  Staged-but-unbuilt frame layer: app.h, customBgWin.h, dialog, frame,
+  topLevel.
+- `uikit/ctrl/` — one file pair per control (control + anyButton are bases)
 - `uikit/theme/` — themeRenderer (the reusable base), lunaTheme (ours),
   theme_win32.cpp (staged canon reference, not in the build)

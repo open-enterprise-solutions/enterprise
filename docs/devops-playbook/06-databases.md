@@ -97,7 +97,7 @@ QUIT;
 // ibDatabaseLayerPostgres      - PostgreSQL backend
 // ibPreparedStatement          - parameterized queries for all backends
 // ibApplicationData            - application data / connection management
-// ibApplicationData::AuthenticationAndSetUser()  - user authentication against the DB
+// ibApplicationData::AuthenticateUser()  - user authentication against the DB
 // ibApplicationDataSessionUpdater  - user session update and control
 // ibMetaDataConfiguration      - metadata and schema configuration
 // CreateAndUpdateTableDB()     - create / update table schemas at startup

@@ -1,11 +1,17 @@
 # Register totals — trigger-maintained strategy (proposal)
 
-Architecture proposal for OES register storage that moves the
-"totals" maintenance burden from C++ application code into the
-database via triggers, while preserving the same read latency
-profile as the classic denormalized totals table pattern (used by
-OES today, and by similar enterprise platforms). Status: **design discussed 2026-04-30, not yet
-implemented.** Expected first target: PostgreSQL production, with FB
+Architecture proposal for OES register storage that would move the
+"totals" maintenance burden into the database via triggers, while
+preserving the read latency profile of the classic denormalized
+totals-table pattern (as used by comparable enterprise platforms).
+Status: **proposal — design discussed 2026-04-30, NOTHING implemented
+in code** (verified 2026-06-19: no `totals_*`/`mov_*` tables, no
+trigger generation, no `ibRegisterTotalsStrategy`, no totals views, no
+`RebuildTotals`). Registers today persist movement lines only — there
+is no totals/aggregation layer yet, denormalized or otherwise. This
+doc describes the *intended* design for when registers/reporting get
+built; treat every "OES does X" below as "OES would do X under this
+proposal." Expected first target: PostgreSQL production, with FB
 embedded sharing the same pattern at smaller scale.
 
 > **TL;DR** — keep the totals table; let SQL triggers maintain it
@@ -18,9 +24,11 @@ embedded sharing the same pattern at smaller scale.
 
 ## Why move maintenance into the database
 
-Today OES (like other platforms with explicit `mov + totals` tables)
-writes to `mov_X` (the register movements table) and then explicitly
-updates `totals_X` rows from C++. Two problems compound:
+The classic explicit-totals pattern (other platforms with `mov +
+totals` tables — and the shape OES would otherwise grow into) writes
+to `mov_X` (the movements table) and then explicitly updates
+`totals_X` rows from application C++. Two problems compound — and they
+are exactly the trap to avoid when OES builds its totals layer:
 
 1. **Drift.** If the process crashes between the `mov` insert and the
    `totals` update, or if a code path forgets to update `totals`, or
@@ -218,17 +226,19 @@ covers all five engines uniformly.
 
 ---
 
-## What this gives OES
+## What this would give OES
 
-- ✅ `mov_X` ↔ `totals_X` cannot drift; `RebuildTotals` command goes
-  away.
-- ✅ Periodic "totals recalculation" is unnecessary by construction.
-- ✅ Backup / restore: `mov_X` is the source of truth. `totals_X` is
+(All prospective — none of this exists yet; see status note at top.)
+
+- `mov_X` ↔ `totals_X` cannot drift; no `RebuildTotals` command ever
+  needs to be written.
+- Periodic "totals recalculation" is unnecessary by construction.
+- Backup / restore: `mov_X` is the source of truth. `totals_X` is
   cache, regenerable with one SQL statement.
-- ✅ OES C++ register-maintenance code shrinks substantially —
-  `ProcessAttribute`-style ALTER TABLE handling stays, but
-  hand-written totals UPSERT logic in business paths is removed.
-- ✅ Schema changes go through `INSERT INTO totals_X SELECT ... GROUP
+- The totals-maintenance logic never enters business-path C++ — the
+  trigger owns it, so the explicit-totals UPSERT code OES would
+  otherwise hand-write per register kind is avoided up front.
+- Schema changes go through `INSERT INTO totals_X SELECT ... GROUP
   BY ...` — one SQL statement, no per-case rebuild logic per
   register kind.
 
@@ -322,13 +332,16 @@ performance numbers above:
 
 ## Open questions
 
-- **Predefined-record changes via Apply** currently round-trip
-  through `ProcessPredefinedValue` (idempotent probe added
-  2026-04-30). For trigger-maintained registers, the seed pattern
-  changes shape — initial population is `INSERT INTO totals_X
-  SELECT ... GROUP BY ... FROM mov_X` which is naturally
-  idempotent. The two seed paths might unify around a single
-  "regenerate derived state from source-of-truth" idiom.
+- **Seed / predefined data on Apply.** Whatever idempotent seed path
+  the schema-driven data layer settles on (`ContributeTables` is the
+  current single source of DDL + data + seed — see
+  `query-language-arc.md §23`), trigger-maintained registers fit it
+  cleanly: initial population is `INSERT INTO totals_X SELECT ...
+  GROUP BY ... FROM mov_X`, naturally idempotent. The two seed paths
+  could unify around a single "regenerate derived state from
+  source-of-truth" idiom. (The earlier draft cited a
+  `ProcessPredefinedValue` probe — no such symbol exists in code;
+  ignore that reference.)
 - **Multi-level snapshots** (per-month checkpoints + live
   aggregation for current period) is a midpoint between current
   totals + live, useful for very large registers where even

@@ -258,19 +258,16 @@ ibValueMetaObject (root, metaObject.h)
    hoisted to a common ancestor (probably `RecordData` since
    `RegisterData` lives in a parallel branch).
 
-2. **`Wrire` typo in role name** (commonObject.h:738) —
-   `m_roleWrite = ibValueMetaObject::CreateRole(wxT("Wrire"), _("Write"));`
-   The stored name in metadata is `"Wrire"`. User-visible display is
-   correct `_("Write")` (translated). DB-stored bytes carry the typo.
-   Fixing it would migrate stored role definitions — out of scope
-   for a refactor pass but should be tracked.
+2. **`Wrire` typo in role name** — the stored metadata name was
+   `"Wrire"` (display `_("Write")` is correct). **Still present**
+   (verified 2026-06-19, now `commonObject.h:745` via the
+   `IB_DECLARE_RWD_ROLE_TRIPLET("Wrire")` macro) — kept until a
+   migration arc; fixing it migrates stored role definitions.
 
-3. **`Dimention` typo throughout `RegisterData`** —
-   `GetGenericDimentionArrayObject`, `FillArrayObjectByDimention`,
-   `GetDimentionArrayObject` (and likely call sites). Russian-
-   English mis-spelling baked into method names. Wide blast radius
-   for rename; not worth touching alone but worth bundling with any
-   register-side refactor.
+3. **`Dimention` typo throughout `RegisterData`** — **RESOLVED**
+   since this snapshot: the methods are now correctly spelled
+   `GetGenericDimensionArrayObject` (`commonObject.h:1129`) etc. No
+   `Dimention` spelling remains in `commonObject.h`.
 
 4. **`FillArrayObjectByPredefinedAttribute` requires subclass override**
    in catalog/document/chartOf* (we just added DataVersion there

@@ -19,18 +19,26 @@ session.
 
 ## Open() fallback — OnShowAuthenticate
 
-`session->Open(user, password)` is the desktop path. If silent CLI
-authentication fails (bad/empty credentials), the session falls back
-to its own prompt hook:
+`session->Open(user, password)` is the unified entry for **every**
+frontend (desktop, headless, AND web). It submits an `Attach` request
+to the registry and waits on the auth axis; on success it fires
+`NotifyAuthenticated`. If the first Attach fails (bad/empty
+credentials), it falls back to the session's own prompt hook before a
+second Attach:
 
 ```cpp
-// src/engine/backend/session/session.cpp — ibSession::Open
-if (!Authenticate(user, password)) {
-    if (OnShowAuthenticate(user, password))      // virtual override point
-        return Authenticate(GetUserInfo().m_strUserName,
-                            GetSessionRawPassword());
-    return false;
+// src/engine/backend/session/session.cpp — ibSession::Open (condensed)
+ibAuthState res = submitAttach(user, password);   // Submit(Attach) + WaitForAuth
+if (res == ibAuthState::Authenticated) {
+    reg.NotifyAuthenticated(this);
+    return OpenResult::Authenticated;
 }
+// interactive fallback — GUI override shows the login dialog
+{ ibSessionScope scope(this); dlgOk = OnShowAuthenticate(user, password); }
+if (!dlgOk) return OpenResult::Cancelled;
+res = submitAttach(m_userInfo.m_strUserName, m_sessionRawPassword);
+return res == ibAuthState::Authenticated ? OpenResult::Authenticated
+                                         : OpenResult::Failed;
 ```
 
 `OnShowAuthenticate` is a virtual on `ibSession`. The previous
@@ -45,35 +53,38 @@ responsibility. Concrete overrides:
   true so the registry's `Open()` re-runs Authenticate with the
   dialog-filled creds.
 - **Web** (`ibWebSession`): no override yet — base `ibSession::OnShowAuthenticate`
-  returns false, so a failed CLI auth on the web path fails hard.
-  Real web auth comes from the browser via `POST /login`, so this
-  path is essentially never taken in practice.
+  returns false, so a failed Attach on the web path returns
+  `OpenResult::Cancelled`/`Failed` and `Login` returns false (→ 401).
+  There is no server-side dialog; the browser re-shows the login form.
 - **Headless** (daemon / codeRunner): no override —
   base returns false. CLI credentials must be correct; failure
   exits cleanly.
 
-## Why web doesn't hit Open() today
+## Web reaches Open() too
 
 Web credentials come from the browser via `POST /login`, not from the
-server process command line. The flow is:
+server process command line, but the web path still goes through
+`session->Open()` — `ibWebSession::Login` calls
+`m_session->Open(user, password)` (`webSession.cpp:132`). The flow:
 
 ```
-browser → GET / → wfrontendCreateSession → session w/o auth
+browser → GET / → wfrontendCreateSession → anonymous session row
         → POST /login (user, password)
           → wfrontendLogin → ibWebSession::Login
-            → registry.Connect(req) + ticket.Attach(user, pwd)
-              → ProcessAttach → AuthenticateUser → InstallUser
-                → 200 OK (success) or 401 (failure, client re-shows form)
+            → registry anonymous-create → m_session = shared_from_this()
+              → m_session->Open(user, pwd)
+                 → submitAttach → ProcessAttach → AuthenticateUser → InstallUser
+                   → Authenticated: NotifyAuthenticated, app->OnInit → 200 OK
+                   → otherwise: m_session->Close(), return false → 401
 ```
 
-`session->Open()` is the desktop / headless path used by
-`enterprise.exe` / `designer.exe` / `daemon.exe` / `codeRunner.exe`
-startup, not by `wenterprise-server`. The web server binds its DB
-connection without an "IB user" per se — that connection is a
+The only web-specific difference is that `OnShowAuthenticate` has no
+web override, so a failed Attach fails hard (no server dialog) and the
+browser re-shows the form. The web server binds its DB connection as a
 service account configured via `--ibuser=` / `--ibpwd=` flags when
 launcher or designer spawn the server process; `ibWebSession::Login`
-then attaches the real end-user identity on top via the same
-`ProcessAttach` path the desktop session would use.
+attaches the real end-user identity on top via the same `Open()` /
+`ProcessAttach` path the desktop session uses.
 
 ## TODO: interactive re-auth on web
 

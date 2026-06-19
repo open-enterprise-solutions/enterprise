@@ -24,8 +24,8 @@ a topic doc and add a row above once the work is stable.
 
 Decisions to remember (cross-cutting):
 - **Persistence layer** for AOT (`SerializeAOT`/`DeserializeAOT`, `byteCodeAOT.cpp`) landed
-  2026-05-02; format version drifts as opcodes shift — currently v10 after `OPER_CALL_LINQ`.
-  Pending DB schema + Attach batch-load — see `project_bytecode_aot_cache.md`.
+  2026-05-02; format version drifts as opcodes shift — `kAOTFormatVersion = 14` (verify in
+  `byteCodeAOT.cpp`). Pending DB schema + Attach batch-load — see `project_bytecode_aot_cache.md`.
 - **Resolver work** (kind-driven bytecode, no compile-context dep at runtime) — landed 2026-05-02.
   See `eval-scope-refactor.md` "Bytecode resolver" §.
 - **Per-driver NoWait** (PG/MySQL/MSSQL) + `HoldRowLocks`/`TryProbeRowLock` virtuals — concrete

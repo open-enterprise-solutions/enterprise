@@ -1,10 +1,16 @@
 # Query Language — Architecture Arc
 
-> **Status:** **LANDED (experimental working copy) — L1 release, L2 release-candidate,
-> L3 read + write + aggregation + dot-walk realized.** The lower sections (§4–§22) are the
-> design this converged from; the snapshot below is what is actually in the tree.
+> **Status:** **LANDED (experimental working copy) — the full ladder is in the tree.**
+> L1 (drivers ×5) release · L2 (`ibDatabaseQueryBuilder`, structured IR + dialect dictionary)
+> release-candidate · L3 (`ibDataQueryBuilder` source-agnostic door: read + write + aggregation
+> + dot-walk) realized · L4-1 (text query language, `query/queryLexer|Parser|Lowering`) +
+> L4-2 (LINQ push-down via `ibValueQueryable` + the `Data.*` source root) landed · L5
+> (declarative composer, `composition/`) landed — see [data-composer.md](data-composer.md).
+> The lower sections (§4–§22) are the design this converged from; §23–§24 + the dated update
+> blocks below are what is actually in the tree.
 >
-> **Last updated:** 2026-06-11.
+> **Last updated:** 2026-06-16 (§24). The dated update blocks run newest-last; read §23–§24
+> for the realized L4/L5 mechanism.
 >
 > ### Landed snapshot (2026-06-07)
 >
@@ -218,7 +224,8 @@
 > The second front of L4 is in the tree: a lambda chain (and the block form) over a DB source
 > executes as SQL through the same L3 door the text language uses. The two parallel lines —
 > the RAM LINQ surface (`OPER_CALL_LINQ` + `DispatchLinqMethod`) and the backing-blind L3/L4
-> engine — met through a ~250-line adapter; none of the 31 RAM pipeline ops changed.
+> engine — met through a ~250-line adapter; none of the 32 existing RAM pipeline ops
+> changed (this arc added the 33rd, `ToTable`).
 > Realized mechanism in **§23.5**:
 >
 > - **Lambda recorder** (`compiler/lambdaQueryAst.{h,cpp}`) — at compile time the
@@ -826,10 +833,15 @@ spec mandates, as first-class work:
 
 ---
 
-## 14. Level 3 — metadata surface (placeholder, not yet designed)
+## 14. Level 3 — metadata surface (SUPERSEDED — realized in §20–§23)
 
-> Deliberately a stub. There is no point designing L3 before L2 exists. Recorded
-> here only so the shape L2 must serve is not forgotten.
+> **Historical.** This was the original L3 stub (recorded only to fix the shape L2
+> must serve). L3 has since landed as the source-agnostic `ibBackendQueryable` /
+> `ibDataQueryBuilder` door (**§20–§22**); both front-ends landed too — the text
+> query language (**§23**, L4-1) and LINQ push-down (**§23.5**, L4-2). The
+> provisional lean below ("(1) now, evolving toward (3)") is what shipped: option
+> (1), the dual-compile lambda recorder (`compiler/lambdaQueryAst`). Read for
+> rationale; the realized mechanism is in §20+.
 
 L3 is the metadata-aware query surface. **Two front-ends lower into the same
 `ibQueryIR`:**

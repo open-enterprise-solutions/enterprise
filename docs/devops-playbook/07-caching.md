@@ -541,7 +541,7 @@ Invalidation:
 
 ```
 Redis is NOT needed:
-  - Desktop mode (OES.exe + embedded DB)
+  - Desktop mode (enterprise.exe + embedded DB)
   - A single daemon instance with low load
   - When the in-process LRU cache is enough
 

@@ -5,12 +5,28 @@
 > **removed**, not completed. Self-serialization now goes through the node model +
 > pluggable providers (`ibDataNode` / `ibBinaryProvider` / `ibJsonProvider`, per-type
 > `WriteData`/`ReadData`) — see the **LANDED** section of
-> [schema-first-metadata.md](schema-first-metadata.md) for the shipped names. The
-> atomic detached-root load/swap and the two-phase preflight ideas below are the
-> parts that carried over (still valid). Read this file for that design rationale and
-> the apply-flow fixes; ignore the byte-walk specifics.
+> [schema-first-metadata.md](schema-first-metadata.md) for the shipped names.
+>
+> **Name map (this doc's design names → what actually shipped):**
+>
+> | This doc (design) | Shipped (`metaCollection/metaObjectSerialize.cpp`) |
+> |---|---|
+> | `SaveSubtree` (recurse, fill writer) | `BuildDataNode` (own node + recurse children into `ibDataNode`) |
+> | `LoadSubtree` (recurse, throw on error) | `ApplyDataNode` (factory-create children + recurse, throws) |
+> | `SaveMeta` / `SaveData` (own fields) | `SaveNode` → per-type `WriteData(ibDataNode&)` |
+> | `LoadMeta` / `LoadData` (own fields) | `LoadNode` → per-type `ReadData(const ibDataNode&)` |
+> | `RunSubtree` / `CloseSubtree` (lifecycle) | unchanged — `RunSubtree` / `CloseSubtree` |
+> | `DeleteSubtree` | unchanged — `DeleteSubtree` |
+> | container `SaveCommonTree` / `LoadCommonTree` | unchanged (drive `ibDataBuilder` + `ibBinaryProvider`) |
+> | node `DumpTable` / `RestoreTable` (table data) | moved to L3-3 `ibDataMover`; container `DumpDataToBuffer` / `RestoreDataFromBuffer` remain |
+>
+> The atomic detached-root load/swap and the two-phase preflight ideas below are the
+> parts that carried over (still valid, see `metadataConfiguration.cpp`
+> `BuildFreshRoot` / `LoadCommonTree`). Read this file for that design rationale and
+> the apply-flow fixes; ignore the byte-walk specifics and read the design method
+> names through the map above.
 
-Status: **byte path REMOVED; node path landed (schema-first-metadata.md). Below = design history.**
+Status: **byte path REMOVED; node path landed (schema-first-metadata.md). Below = design history; method names superseded per the map above.**
 
 Landed (working copy, unbuilt):
 - Node-owned walk on `ibValueMetaObject`: `SaveSubtree` / `LoadSubtree` / `DeleteSubtree`

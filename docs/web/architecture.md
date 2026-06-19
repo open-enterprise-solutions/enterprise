@@ -11,9 +11,10 @@ ProcUnit is rebuilt on each descriptor for the active session by
 `ibValueModuleManager::AttachRuntime(s)` and torn down by
 `DetachRuntime(s)` — both serialised by `m_runtimeMutex`.
 
-Bring-up sequence (web): `ibWebSession::Login` → `registry.Connect`
-→ `ticket.Attach` → `ibSessionRegistry::NotifyAuthenticated` runs
-the 3 phases (OnFirstConnect → `EnsureRoot` → OnAuthenticated). The
+Bring-up sequence (web): `ibWebSession::Login` → registry
+anonymous-create → `session->Open(user, pwd)` (submits Attach via
+`shared_from_this`, no ticket) → `ibSessionRegistry::NotifyAuthenticated`
+runs the 3 phases (OnFirstConnect → `EnsureRoot` → OnAuthenticated). The
 OnAuthenticated listener drives `RunDatabase` (one-shot per process),
 `session->CompileRoot()`, then `mm->AttachRuntime(session)`.
 `app->OnInit()` runs after that under an `ibSessionScope` bound on

@@ -10,7 +10,7 @@
 | **MySQL / ODBC** | Additional supported sources |
 | **ibDatabaseLayer** | Custom abstract data-access layer |
 | **ibPreparedStatement** | Parameterized queries (mandatory for all data operations) |
-| **ibResultSet** | Iteration over query results |
+| **ibDatabaseResultSet** | Iteration over query results |
 
 ---
 
@@ -160,7 +160,7 @@ bool ibApplicationData::Ping()
     if (!m_db || !m_db->IsOpen()) return false;
     try
     {
-        ibResultSet* rs = m_db->RunQueryWithResults("SELECT 1");
+        ibDatabaseResultSet* rs = m_db->RunQueryWithResults("SELECT 1");
         if (rs) { rs->Close(); return true; }
     }
     catch (...) {}
@@ -198,7 +198,7 @@ bool OesDocumentRepository::FindByName(const wxString& name,
 
     stmt->SetParamString(1, "%" + name + "%");
 
-    ibResultSet* rs = stmt->RunQueryWithResults();
+    ibDatabaseResultSet* rs = stmt->RunQueryWithResults();
     if (!rs)
     {
         err = db->GetErrorMessage();
@@ -235,20 +235,20 @@ db->RunQuery(sql);
 class OesResultSetGuard
 {
 public:
-    explicit OesResultSetGuard(ibResultSet* rs) : m_rs(rs) {}
+    explicit OesResultSetGuard(ibDatabaseResultSet* rs) : m_rs(rs) {}
     ~OesResultSetGuard() { if (m_rs) m_rs->Close(); }
 
-    ibResultSet*       operator->()       { return m_rs; }
-    const ibResultSet* operator->() const { return m_rs; }
-    ibResultSet*       get()              { return m_rs; }
-    const ibResultSet* get()        const { return m_rs; }
+    ibDatabaseResultSet*       operator->()       { return m_rs; }
+    const ibDatabaseResultSet* operator->() const { return m_rs; }
+    ibDatabaseResultSet*       get()              { return m_rs; }
+    const ibDatabaseResultSet* get()        const { return m_rs; }
     bool               ok()         const { return m_rs != nullptr; }
 
     OesResultSetGuard(const OesResultSetGuard&) = delete;
     OesResultSetGuard& operator=(const OesResultSetGuard&) = delete;
 
 private:
-    ibResultSet* m_rs;
+    ibDatabaseResultSet* m_rs;
 };
 
 class OesStatementGuard

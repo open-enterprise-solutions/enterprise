@@ -101,6 +101,14 @@ per-type code.
 
 ---
 
+> **Design sections below = direction history.** They use aspirational names
+> (`ibSchemaWriter` / `ibSchemaNode` / `ibSchemaReader` / `SaveSchema` / `GetSchema`).
+> What actually shipped is in the **LANDED** section above, under different names:
+> `ibFormatProvider` (writer/reader base) / `ibBinaryProvider` / `ibJsonProvider`,
+> the uniform node `ibDataNode` with `ibDataValue`/`ibDataKind`, and the per-type
+> `WriteData`/`ReadData` hook driven by `ibDataBuilder`. Read the design names through
+> that mapping.
+
 ## Why
 
 Today metadata is the owner: `ibMetaData` holds the tree, serializes itself
@@ -226,13 +234,17 @@ truth that drifts). One `Visit(name, value)` per class, backend selects format:
 - **JSON / XML = external** — anything going out: export, AI, exchange; named,
   readable.
 
-**This consolidates an existing triple-duplication.** XML/JSON config export
-already exists (`SaveConfigToXML` / `SaveConfigToJSON`, see
-`metadataConfigurationXML.cpp` / `metadataConfigurationJSON.cpp`) — today binary
-blob + XML + JSON each re-list the same fields in three places, drifting on any
-field change. Folding them into one field-visitor + N backends removes that
-dup as a bonus — we are not adding a 4th serializer, we are collapsing the
-three that already work.
+**This was meant to consolidate a triple-duplication.** Historically XML/JSON
+config export existed (`SaveConfigToXML` / `SaveConfigToJSON` in
+`metadataConfigurationXML.cpp` / `metadataConfigurationJSON.cpp`) and re-listed the
+same fields as the binary blob — a 3-way drift hazard. Those two files were
+**deleted** in the const-meta refactor (they held 10 `const_cast`s on the
+module getters and weren't on the canonical buffer path — see
+[const-meta-refactor.md](const-meta-refactor.md)). So the consolidation is now
+realised the other way: the **single per-type `WriteData`/`ReadData` hook** + N
+providers (`ibBinaryProvider` internal, `ibJsonProvider` export) is the one
+declaration; there is no separate XML/JSON serializer to fold back in — re-add XML
+as a third provider if the use case returns.
 
 ## Node model — recursive, uniform
 

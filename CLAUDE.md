@@ -21,7 +21,7 @@ The runtime executes compiled bytecode, renders forms through wxWidgets, and sto
 | Build (Windows) | MSBuild — `enterprise.sln` (Visual Studio 2019/2022) |
 | Build (cross-platform) | CMake — `CMakeLists.txt` at repo root; macOS / Linux build supported, Windows uses MSBuild |
 | Primary database | Firebird (embedded) |
-| Optional databases | PostgreSQL, SQLite, MySQL, ODBC |
+| Other databases | PostgreSQL, MySQL, ODBC (CMake `OES_USE_*` opt-in); SQLite is always embedded |
 | License | LGPL 2.1 |
 
 ---
@@ -30,7 +30,7 @@ The runtime executes compiled bytecode, renders forms through wxWidgets, and sto
 
 ```
 enterprise/
-├── enterprise.sln           # 9-project MSBuild solution
+├── enterprise.sln           # MSBuild solution (13 projects + a Solution Items folder)
 ├── Common.props             # Shared output paths and macros
 ├── ConfigurationDefs.props  # Per-configuration preprocessor defines
 ├── CLAUDE.md                # This file
@@ -43,11 +43,12 @@ enterprise/
 │   ├── data-composer.md      # L5 — declarative composition over the query language
 │   └── configuration-compare.md  # Compare/Merge feature — walker, model, Apply paths
 └── src/
-    ├── 3rdparty/wxWidgets/  # Submodule
+    ├── 3rdparty/wxWidgets/  # Submodule (wxWidgets 3.3.2)
     └── engine/
         ├── backend/         # backend.dll  — engine, compiler, DB, metadata, debugger
-        ├── frontend/        # frontend.dll — wxWidgets UI, form renderer
-        ├── enterprise/      # enterprise.exe
+        ├── frontend/        # frontend.dll (desktop UI) + wfrontend.dll (web) projects
+        ├── enterprise/      # enterprise.exe (thick client)
+        ├── wenterprise-server/ # web server (wes process)
         ├── designer/        # designer.exe  (IDE)
         ├── launcher/        # launcher.exe  (connection chooser)
         ├── daemon/          # daemon.exe    (background service)
@@ -65,7 +66,7 @@ All database access goes through the abstract `ibDatabaseLayer` interface (`src/
 
 ### 2. ibValue Universal Type
 
-`ibValue` (`src/engine/backend/compiler/value.h`) is the single value type used for all script variables. It is a tagged union covering: `TYPE_UNDEFINED`, `TYPE_BOOLEAN`, `TYPE_NUMBER`, `TYPE_DATE`, `TYPE_STRING`, `TYPE_REFFER` (reference/object). Arithmetic and comparison operations have type-dispatched variants (the `TYPE_DELTA*` opcode offset scheme in `codeDef.h`).
+`ibValue` (`src/engine/backend/compiler/value.h`) is the single value type used for all script variables. The tag is the `ibValueTypes` enum (`backend_core.h`, `: unsigned char`): primitives `TYPE_EMPTY` (=0, the "undefined" value), `TYPE_BOOLEAN`, `TYPE_NUMBER`, `TYPE_DATE`, `TYPE_STRING`, `TYPE_NULL`; references `TYPE_REFFER` (owned, ref-counted) / `TYPE_CONST_REFFER` (non-owned, read-only); object kinds `TYPE_VALUE`, `TYPE_ENUM`, `TYPE_OLE`, `TYPE_FUNCTION` (lambda), `TYPE_ITERATOR`. Arithmetic and comparison operations have type-dispatched variants (the `TYPE_DELTA*` opcode offset scheme in `codeDef.h`).
 
 `ibValueMetaObject` extends `ibValue`, meaning metadata objects (Catalog definitions, Document definitions, etc.) can be stored in and returned from script variables.
 
@@ -79,7 +80,6 @@ All database access goes through the abstract `ibDatabaseLayer` interface (`src/
 - Buffer / wire: `wxMemoryBuffer GetBuffer()` plus `bool GetBuffer(ibWriterMemory&)` / `bool SetBuffer(const ibReaderMemory&)` — chunk-encapsulated I/O with internal `kIbNumberChunk` ID. Compact-zero encoding: zero produces 0-byte buffer, no allocation.
 - 128-bit raw: `To128Bytes(uint8_t[16])` / `From128Bytes` for Firebird SQL_INT128 columns.
 - Tests: `enterprise/tests/test_number.cpp` (gtest). 111/111 pass at landing.
-- See `docs/next-session-plan.md` for the landing summary and known-risks list.
 
 ### 3. ibProcUnit Bytecode Interpreter
 
@@ -121,7 +121,11 @@ propagate the same exception object.
 
 ### 6. Metadata CLSID System
 
-Every class in the metadata and value system is identified by a 7-character string CLSID encoded into a `ibClassID` integer via `string_to_clsid()`. Examples: `"VL_NUMB"` (number value), `"MD_CAT"` (Catalog), `"MD_DOC"` (Document). These appear in serialised configuration files and the database.
+Every class in the metadata and value system is identified by an `ibClassID` (`unsigned wxLongLong_t`, 64-bit) computed as the **FNV-1a 64 hash** of a class-name string — `ib_clsid_hash(name)` in `clsid.h`. `string_to_clsid()` is now a thin wrapper over it. Names of any length are supported (the old 8-byte packed-ASCII limit is gone); the hash is `constexpr`, deterministic across compilers/platforms, and collision-checked (see the `static_assert` drift guards in `clsid.h`). Two naming styles coexist: legacy `XX_YYY` strings (e.g. `g_metaCatalogCLSID = string_to_clsid("MD_CAT")`, `"MD_DOC"`, `"VL_NUMB"`) and PascalCase class names (`"Catalog"`, `"Number"`, `"Button"`). Dynamic per-metaobject CLSIDs use prefix+metaID (e.g. `"R_42"`). CLSIDs appear in serialised configuration files and the DB; changing the hash invalidates the AOT cache (`kAOTFormatVersion`) and persisted CLSID blobs.
+
+### 7. Metadata open/close — `ibMetaImage`
+
+`ibMetaData` (`src/engine/backend/metaData.h`) holds an open configuration as a single runtime image: `std::shared_ptr<ibMetaImage> m_image`. **Its presence is the open state** — `IsConfigOpen()` is just `m_image != nullptr`. A `LoadGuard` RAII transaction creates the image at the start of a run and drops it (rolling the load back) if the run does not complete. The image owns the type-ctor registry (`ibCtorRegistry<ibCtorMetaValueType> m_factoryCtors`, which owns ctors via `shared_ptr`), the module storage, and the compile-value cache built by `CreateDesignerCache()` (designer kinds only; `nullptr` otherwise). Subclass accessors (`GetModuleStorage`, `GetCompileCache`, …) all guard `m_image`.
 
 ---
 
@@ -130,7 +134,7 @@ Every class in the metadata and value system is identified by a 7-character stri
 ### Accessing the Database
 
 ```cpp
-// Global macro — returns ibDatabaseLayer*
+// Global macro — std::shared_ptr<ibDatabaseLayer>
 db_query->RunQuery(wxT("INSERT INTO %s ..."), tableName);
 
 ibPreparedStatement* stmt = db_query->PrepareStatement(wxT("SELECT * FROM %s WHERE id = ?"), table);
@@ -141,10 +145,10 @@ ibDatabaseResultSet* rs = stmt->RunQueryWithResults();
 ### Accessing Application State
 
 ```cpp
-appData->GetRunMode();           // ibRunMode enum
-appData->GetDatabaseLayer();     // ibDatabaseLayer*
-appData->GetUserInfo();          // current logged-in user
-activeMetaData->GetCommonMetaObject();  // root of the metadata tree
+appData->GetAppMode();           // ibRunMode enum (static GetAppMode())
+db_query;                        // std::shared_ptr<ibDatabaseLayer> (macro = GetDatabaseLayer())
+appData->GetUserInfo();          // const ibUserInfo& — current logged-in user
+activeMetaData->GetCommonMetaObject();  // root of the metadata tree (ibValueMetaObjectConfiguration*)
 ```
 
 ### Calling a Script Function from C++
@@ -160,9 +164,10 @@ unit.CallAsFunc(wxT("FunctionName"), result, arg1, arg2);
 
 ```cpp
 ibBackendValueForm* form = ibBackendValueForm::CreateNewForm(
-    metaFormObject,     // ibValueMetaObjectFormBase*
+    metaFormObject,     // const ibValueMetaObjectFormBase* (creator), or nullptr
     ownerControl,       // ibBackendControlFrame* or nullptr
-    sourceObject        // ibSourceDataObject* or nullptr
+    sourceObject,       // ibSourceDataObject* or nullptr
+    formGuid            // const ibUniqueKey& — wxNullUniqueKey to auto-generate
 );
 ```
 
@@ -172,13 +177,13 @@ ibBackendValueForm* form = ibBackendValueForm::CreateNewForm(
 
 ### Password Hashing — PBKDF2-HMAC-SHA256
 
-New passwords are hashed via `ibPasswordHash::Hash` (`src/engine/backend/utils/passwordHash.{hpp,cpp}`) using PBKDF2-HMAC-SHA256 at 600k iterations (OWASP 2023) with a 16-byte system-RNG salt, stored in PHC-style format `$pbkdf2-sha256$<iter>$<saltB64>$<hashB64>`. `Verify` additionally accepts legacy 32-hex MD5 hashes from pre-migration databases; callers use `NeedsRehash` + `Hash` to upgrade silently on successful login (see `ibApplicationData::AuthenticationAndSetUser`). MD5 stays in-tree for metadata integrity (`ibMD5::ComputeMd5`) — **never** reuse it for passwords.
+New passwords are hashed via `ibPasswordHash::Hash` (`src/engine/backend/utils/passwordHash.{hpp,cpp}`) using PBKDF2-HMAC-SHA256 at 600k iterations (OWASP 2023) with a 16-byte system-RNG salt, stored in PHC-style format `$pbkdf2-sha256$<iter>$<saltB64>$<hashB64>`. `Verify` additionally accepts legacy 32-hex MD5 hashes from pre-migration databases; callers use `NeedsRehash` + `Hash` to upgrade silently on successful login (see `ibApplicationData::AuthenticateUser`). MD5 stays in-tree for metadata integrity (`ibMD5::ComputeMd5`) — **never** reuse it for passwords.
 
 Argon2id (OWASP #1, memory-hard) would be the stronger option but requires vendoring an external library; revisit when the threat model calls for it.
 
 ### Empty Catch Blocks
 
-About 24 `catch (...) {}` sites exist in `backend.dll` — they live in
+About 30 `catch (...) {}` sites exist in `backend.dll` — they live in
 RAII destructors, Firebird driver rollback paths, and connection-pool
 cleanup. The pattern is intentional: a destructor that throws is
 worse than a swallowed error during cleanup, and a rollback that
@@ -203,7 +208,8 @@ msbuild enterprise.sln /p:Configuration=Release /p:Platform=x64 /m
 msbuild enterprise.sln /p:Configuration=Debug /p:Platform=x64 /m
 ```
 
-Output lands in `bin\Win64\Release\` or `bin\Win64\Debug\`.
+Output lands in `bin\<Platform>\<Configuration>\` — `Platform` is `Win32` (x86)
+or `Win64` (x64), e.g. `bin\Win64\Release\`, `bin\Win32\Debug\`.
 
 ### CMake (macOS / Linux)
 
@@ -212,8 +218,9 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel 3   # cap parallelism on 16 GB RAM
 ```
 
-See `docs/BUILD.md` for per-platform requirements and the
-`OES_USE_FIREBIRD / POSTGRESQL / MYSQL / ODBC / TBB` options.
+DB driver options (all default OFF; SQLite is always embedded, no flag):
+`OES_USE_FIREBIRD`, `OES_USE_POSTGRESQL`, `OES_USE_MYSQL`, `OES_USE_ODBC`.
+See `docs/BUILD.md` for per-platform requirements.
 
 ---
 
@@ -263,29 +270,32 @@ The 11 business object types and their C++ classes:
 
 ---
 
-## Configuration Text Format
+## Configuration Serialization
 
-OES supports exporting and importing configuration metadata in text formats (XML and JSON), enabling Git VCS, AI-powered configuration generation, and human-readable editing.
+Metadata is serialized through the format-agnostic **`ibDataNode`** tree
+(`src/engine/backend/serialize/dataBuilder.h`). A metaobject contributes its
+state into an `ibDataNode` tree; a pluggable **`ibFormatProvider`** then writes
+that tree to bytes (and reads it back).
 
-### XML (OES-XML-2.0)
-
-- **File:** `src/engine/backend/metadataConfigurationXML.cpp`
-- **Export:** `ibMetaDataConfigurationBase::SaveConfigToXML(const wxString& fileName)`
-- **Import:** `ibMetaDataConfigurationBase::LoadConfigFromXML(const wxString& fileName)`
-- **Designer menu:** Configuration → Export/Import configuration to/from XML
-- **Full round-trip:** Export → Import preserves all metadata
-
-### JSON (OES-JSON-1.0)
-
-- **File:** `src/engine/backend/metadataConfigurationJSON.cpp`
-- **Library:** nlohmann/json v3.11.3 (`src/3rdparty/nlohmann/json.hpp`, MIT, header-only)
-- **Export:** `ibMetaDataConfigurationBase::SaveConfigToJSON(const wxString& fileName)`
-- **Import:** `ibMetaDataConfigurationBase::LoadConfigFromJSON(const wxString& fileName)`
-- **Designer menu:** Configuration → Export/Import configuration to/from JSON
+- **Entry points:** `ibMetaDataConfigurationBase::LoadConfigFromFile(fileName)` /
+  `SaveConfigToFile(fileName)` (`metadataConfiguration.h`).
+- **`ibBinaryProvider`** (`dataBuilder.{h,cpp}`) — the internal, owned binary
+  format. This is the round-trip path (Write + Read).
+- **`ibJsonProvider`** (`serialize/jsonProvider.{h,cpp}`) — JSON, **write-only**:
+  `Write` emits JSON for diff/inspection; `Read` is a no-op (`TODO: JSON -> tree`).
+  Do not rely on JSON import.
+- The old XML/JSON config layer is **gone**: `metadataConfigurationXML.cpp` /
+  `metadataConfigurationJSON.cpp` and the `SaveConfigToXML` / `LoadConfigFromXML`
+  / `SaveConfigToJSON` / `LoadConfigFromJSON` methods no longer exist.
 
 ### What is serialized
 
-All 11 business object types with: attributes (full type qualifiers), tabular sections, forms (base64 + module code), object/manager modules, predefined values, default form assignments, MetaDescription bindings (Owner, Generation, RegisterRecord, ChartOfCharacteristicTypes, ChartOfAccounts), QuickChoice, WriteMode, Periodicity, RegisterType, dimensions, resources, enum values. CLSID stored as u64 numeric values.
+All 11 business object types with: attributes (full type qualifiers), tabular
+sections, forms (control tree + module code), object/manager modules, predefined
+values, default form assignments, MetaDescription bindings (Owner, Generation,
+RegisterRecord, ChartOfCharacteristicTypes, ChartOfAccounts), QuickChoice,
+WriteMode, Periodicity, RegisterType, dimensions, resources, enum values. CLSID
+stored as the 64-bit `ibClassID` hash.
 
 ### ibValue Serialization
 
@@ -297,32 +307,32 @@ All 11 business object types with: attributes (full type qualifiers), tabular se
 
 ## Compiler Quick Reference
 
-- **Opcodes:** defined in `src/engine/backend/compiler/codeDef.h` as `OPER_*` enumerators. Call-family: `OPER_CALL` (stack-frame named call), `OPER_CALL_CLOSURE` (named call with heap-promoted frame — callee has an inner lambda capturing locals), `OPER_CALL_METHOD` (per-class method dispatched by name string), `OPER_CALL_LINQ` (universal pipeline op dispatched by `ibLinqMethod` enum id, no string lookup), `OPER_CALL_LAMBDA` (dynamic call — target read from a slot at runtime, must wrap an `ibValueFunction`). Lambda body fences `OPER_LFUNC` / `OPER_ENDLFUNC`; materialise via `OPER_FUNC_PTR`
-- **Keywords:** 43, defined as `KEY_*` enumerators in the same file
+- **Opcodes:** defined in `src/engine/backend/compiler/codeDef.h` as `OPER_*` enumerators. Call-family: `OPER_CALL` (stack-frame named call), `OPER_CALL_CLOSURE` (named call with heap-promoted frame — callee has an inner lambda capturing locals), `OPER_CALL_METHOD` (per-class method dispatched by name string), `OPER_CALL_LINQ` (universal pipeline op dispatched by `ibLinqMethod` enum id, no string lookup), `OPER_CALL_LAMBDA` (dynamic call — target read from a slot at runtime, must wrap an `ibValueFunction`). Lambda body fences `OPER_LFUNC` (the active materialiser) / `OPER_ENDLFUNC`. (`OPER_FUNC_PTR` is retired — `OPER_LFUNC` materialises the lambda value.)
+- **Keywords:** 60, defined as `KEY_*` enumerators (`KEY_IF`=0 … `KEY_INTO`) in the same file — includes access modifiers (`Public`/`Private`/`Protected`), preprocessor (`#Define`/`#Ifdef`/…) and the LINQ block (`From`/`Where`/`Select`/`Join`/`Group`/…). The matching token strings are `s_listKeyWord[]` in `translateCode.cpp`, in lock-step index order with the enum.
 - **Built-in functions:** ~93, registered in `ibSystemManager` (`src/engine/backend/system/systemManager.cpp`); count drifts as features land — grep `AppendFunc\|AppendProc` for the live total
 - **Syntax modes:** VES (`If…Then…EndIf`, Visual-Basic-style with 1С/BSL mix) and CES (`if (…) { … }`, C-flavoured); both compile to the same bytecode. Mode is process-global on `ibCompileCode::SetCodeStyle()` / `GetCodeStyle()`. **CES is the default** for new configurations (2026-05-10); existing serialised configs preserve their stored Syntax. Wire token in metadata enum still reads `vbs` for back-compat — user-visible label is `ves`.
-- **Anonymous functions:** `Function(args) ... EndFunction` and `Procedure(args) ... EndProcedure` (or CES `Function(args) { … }`) work as expressions — assignable to slots, callable through variables. Backed by `ibValueFunction` (inline class in `procUnit.cpp` near `ibValueIterator`, CLSID `VL_FUNC`). Lambda's compile-context kind is `RETURN_LAMBDA`. Eval-in-lambda resolves outer frames via splice in `CompileExpression` (lambda-shim's `m_pppArrayList[1..]` → eval's `[2..]`). No closure capture yet — outer-function locals fail with "undefined identifier" at compile. See `docs/lambda.md`.
+- **Anonymous functions:** `Function(args) ... EndFunction` and `Procedure(args) ... EndProcedure` (or CES `Function(args) { … }`) work as expressions — assignable to slots, callable through variables. Backed by `ibValueFunction` (inline class in `procUnit.cpp` near `ibValueIterator`, CLSID `VL_FUNC`). Lambda's compile-context return kind is `RETURN_LAMBDA_FUNCTION` / `RETURN_LAMBDA_PROCEDURE` (`compileCode.h`). Eval-in-lambda resolves outer frames via splice in `CompileExpression` (lambda-shim's `m_pppArrayList[1..]` → eval's `[2..]`). No closure capture yet — outer-function locals fail with "undefined identifier" at compile. See `docs/lambda.md`.
 - **Debugger port:** 1650 (`defaultDebuggerPort` in `src/engine/backend/debugger/debugDefs.h`)
 
 ### Bytecode resolver (kind-driven, AOT-ready)
 
 `ibByteCode` carries everything needed for cross-bc resolve, with no runtime dependency on the compile-context.
 
-- `m_listVar`: `std::vector<ibByteCodeVarInfo>` — `ibVarKind` enum: `Local / Export / External / Context / ContextProp`.
-- `m_listFunc`: `std::vector<ibByteFunction>` — `ibFnKind` enum: `Local / Export / ContextMethod / Lambda` (the `Lambda` kind landed with the anonymous-function feature; cross-bc invisible, name-keyed lookups filter via `IsLambda()`).
+- `m_listVar`: `std::vector<ibByteCodeVarInfo>` — `ibVarKind` enum (`byteCode.h`): `Local / Export / External / Context / ContextProp / Protected`.
+- `m_listFunc`: `std::vector<ibByteFunction>` — `ibFnKind` enum: `Local / Export / ContextMethod / Lambda / Protected` (the `Lambda` kind landed with the anonymous-function feature; cross-bc invisible, name-keyed lookups filter via `IsLambda()`).
 - `m_listLocals` (per-function): same vector shape as `m_listVar`.
 - Cross-table refs: `ContextProp / ContextMethod` carry `m_parentRef` indexing back into `m_listVar`.
 - `ibByteBinder` reads `m_listVar` directly and binds slots whose kind ∈ `{External, Context}` (`IsBindRequired()`).
 - Eval / watch expressions use `ibCompileEval` (in `procUnit.cpp`); `ibCompileCode::IsExpressionOnly()` and `GetEvalHostFunction()` are virtual hooks the eval class overrides.
 - Descriptors expose `ExportNamesToHelper(helper, alias)` on `ibRuntimeModuleDataObject` to populate a value's helper from the bc's export entries.
 
-See `docs/eval-scope-refactor.md` for the full architecture and `docs/next-session-aot.md` for the persistence-layer plan that builds on this state.
+See `docs/eval-scope-refactor.md` for the full architecture.
 
 ### Runtime infrastructure (landed)
 
-- **Worker pool** — `ibWorkerPool` (`src/engine/backend/session/workerPool.h`) + headless implementation (`workerPoolHeadless.{h,cpp}`). Per-thread session lease via `tl_currentLease`; sessionless callers get a `thread_local` fallback `ibProcUnitState` in `session.cpp`.
+- **Worker pool** — `ibWorkerPool` (`src/engine/backend/session/workerPool.h`) + headless implementation (`workerPoolHeadless.{h,cpp}`). Each session has a queue + an atomic "leased" flag (`workerPoolHeadless.h`); sessionless callers fall back to a `thread_local ibProcUnitState ts_fallbackPUState` in `session.cpp` (`ibSession::GetPUState`).
 - **AOT bytecode cache** — `byteCodeAOT.cpp` serialises a compiled `ibByteCode` to a memory stream; deserialisation reverses the compile step without re-running the parser. Intended target: `sys_bytecode_cache.blob` keyed by descriptor + source hash + metadata version.
-- **Per-session module manager** — each `ibSession` owns `m_moduleManager : ibValueModuleManager*` and `m_lambdaRuntime : ibProcUnit*`. The configuration-level `m_moduleManager` singleton is accessed only by Designer / codeRunner sandbox.
+- **Per-session runtime image** — each `ibSession` owns `m_root : ibValuePtr<ibValueModuleManagerRuntimeConfiguration>` (built in `CreateRoot`; `GetManagerModule()`) and `m_lambdaRuntime : std::unique_ptr<ibProcUnit>` (wired to `m_root`'s procUnit on first `GetLambdaRuntime()`). Designer / codeRunner edit-time managers come from `GetEditModuleManager(metaData)` / `EditModuleManagerFor(metaData)`, kept separate from the per-session runtime root.
 
 ---
 
@@ -347,7 +357,7 @@ Checks code for vulnerabilities: SQL injection (string concatenation in queries 
 Reviews code against C++17 standards and OES architecture rules: RAII, const-correctness, explicit constructors, cross-platform compatibility (MSVC/Clang/GCC), naming conventions (`ib` prefix, `m_` members), no GUI headers in backend.
 
 ### Test Writer (`oes-test-writer`)
-Generates Google Test tests. Naming: `TEST(ClassName, Method_Condition_Expected)`. Uses MockDatabaseLayer for unit tests, real SQLite for integration tests. Handles throw-by-pointer exceptions.
+Generates Google Test tests. Naming: `TEST(ClassName, Method_Condition_Expected)`. Uses MockDatabaseLayer for unit tests, real SQLite for integration tests. Handles throw-by-value / catch-by-const-ref exceptions (see decision #5).
 
 ### CMake Writer (`oes-cmake-writer`)
 Generates and fixes CMakeLists.txt. Target-based approach, C++17, compatible with MSVC 2019+/Clang/GCC 9+. Handles wxWidgets submodule, optional DB drivers (OES_USE_FIREBIRD, etc.).

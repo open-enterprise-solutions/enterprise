@@ -518,7 +518,7 @@ ls -la bin/
 # In Developer Command Prompt / PowerShell with MSBuild on PATH
 cd C:\build\enterprise
 msbuild enterprise.sln /p:Configuration=Release /p:Platform=x64 /m
-# Artifacts: bin\x64\Release\
+# Artifacts: bin\Win64\Release\  (Platform x64 → "Win64"; x86 → "Win32")
 ```
 
 ## 17. OES Daemon deploy script

@@ -2,8 +2,9 @@
 
 > **Status:** LANDED 2026-05-04. 133 files modified, full solution
 > builds clean Debug|Win32, smoke-tested. 13 legitimate `const_cast`s
-> remain (documented below); one backdoor (`ibMetaData::Find*` family)
-> deferred — tracked in `next-session-metadata-const.md`.
+> remain (documented below); one backdoor (`ibMetaData::Find*` family) was
+> deferred at first landing and **closed 2026-06-03** (see "Landing — backdoor
+> closed" below). One hole remains: `GetAnyArrayObject<T>()`.
 
 ## What
 
@@ -184,8 +185,8 @@ Plugging requires overload pair (Effective C++ Item 3) on each Find/
 FillArray/GetAny method — and on every sibling collection helper like
 `GetInterfaceArrayObject() const → vector<X*>` that calls them.
 
-First attempt cascaded to 4700+ compile errors. Reverted; tracked as
-follow-up in `next-session-metadata-const.md`.
+First attempt cascaded to 4700+ compile errors. Reverted, then re-attempted
+big-bang and **landed 2026-06-03** — see the next section.
 
 ## Landing — backdoor closed (2026-06-03)
 
@@ -204,14 +205,16 @@ runtime (launcher → forms) is verified. The boundary is now const-correct:
   NVI was rejected for exactly this reason: any single shared virtual would force
   a `const_cast` in one of the wrappers. See memory `getmetadata-capability-split`.
 - **`FindAnyObjectByFilter<T>()` ×3** (by id / id+clsid / id+filter) — overload pair
-  (const → `const T*`, non-const → `T*`). metaData.h:338-365.
-- **`GetCommonMetaObject()`** — overload pair. metaData.h:200-201.
+  (const → `const T*`, non-const → `T*`). metaData.h, `#pragma region __filter_h__`.
+- **`GetCommonMetaObject()`** — overload pair (const → `const ibValueMetaObject*`,
+  non-const → `ibValueMetaObject*`). metaData.h.
 - Runtime path `const meta → FindXxx → const T* → mutator()` is now a **compile
   error**, no `const_cast` anywhere in the closure.
 
 ### Still deferred — `GetAnyArrayObject<T>()`
 
-`GetAnyArrayObject<T>(...) const → std::vector<T*>` (metaData.h:306/314/322) still
+`GetAnyArrayObject<T>(...) const → std::vector<T*>` (metaData.h,
+`#pragma region __array_h__`) still
 returns **non-const** element pointers from a const `ibMetaData`. A const metadata
 can therefore still hand out mutable metaobject pointers through it. Left deferred:
 pairing it means `vector<const T*>` and fixing every caller that iterates

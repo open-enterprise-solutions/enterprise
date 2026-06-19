@@ -37,7 +37,7 @@ embedded by default; PostgreSQL / SQLite / MySQL / ODBC also supported).
             │
             │  Catalog / Document / Register definitions
             │  OnPosting handlers, report queries
-            │  → XML / JSON configuration files
+            │  → configuration metadata (serialized via ibDataNode)
             │  → OES script modules
             ▼
    Architect (human) — reviews via Configuration Compare,
@@ -58,10 +58,10 @@ business behaviour. The architect validates by running.
 
 | Allowed | NOT allowed without explicit architect sign-off |
 |---|---|
-| Metadata XML / JSON (`docs/configuration-compare.md`) | C++ source under `src/engine/**` |
-| OES script (`.module` files inside metadata) | `*.vcxproj`, `CMakeLists.txt`, `Common.props` |
-| Form layouts (visual designer XML) | Plugin DLLs (`simplePlugin.dll` pattern) |
-| Spreadsheet templates (`SpreadsheetDocument` XML) | `enterprise.sln` solution structure |
+| Metadata definitions (object types, bindings) | C++ source under `src/engine/**` |
+| OES script modules inside metadata | `*.vcxproj`, `CMakeLists.txt`, `Common.props` |
+| Form layouts (visual designer) | Plugin DLLs (`simplePlugin.dll` pattern) |
+| Spreadsheet templates (`SpreadsheetDocument`) | `enterprise.sln` solution structure |
 | Reference / demo configurations under `examples/` | Build outputs, locale `.mo` / `.po` files |
 | Tests against generated configs (codeRunner scripts) | DB driver code under `databaseLayer/` |
 
@@ -119,27 +119,31 @@ endif
 Never `catch(...)` to swallow business errors. Cleanup `catch(...)` is
 only in destructors and RAII teardown.
 
-### 4.3 Keyword casing — PascalCase, one canonical form
+### 4.3 Keywords — one spelling, mode-gated fences
 
-OES keywords have ONE accepted casing — the one in
-`translateCode.cpp::s_listKeyWord`. The lexer is case-sensitive. If
-you generate `foreach` lowercase or `For Each` two-word, the lexer
-silently treats the token as an identifier and the script breaks at
-runtime, not compile.
+Keyword matching is **case-insensitive** (`IsKeyWord` normalizes via
+`MakeUpper`), so `if` / `IF` / `If` all resolve to the same keyword. But
+each keyword has exactly ONE spelling — the one in
+`translateCode.cpp::s_listKeyWord`. A made-up synonym or a two-word form
+(`For Each`, `End If`) is not a keyword: the lexer treats it as a plain
+identifier and the script breaks at the parser, not at runtime. Use the
+canonical spelling shown below.
 
-| Correct | Wrong |
+| Use | Not a keyword (treated as identifier / rejected) |
 |---|---|
-| `If ... Then ... EndIf` | `if`, `IF`, `If ... Then ... End If` |
-| `Foreach x In coll Do ... EndDo` | `For Each`, `ForEach`, `foreach` |
-| `Procedure F() ... EndProcedure` | `Sub`, `procedure`, `Function` (when no return) |
-| `Function F() ... EndFunction` | `function`, `Procedure` (when there is a return) |
-| `Return` | `return`, `Ret` |
-| `Var` (or implicit) | `var` (in VES); `dim`, `let` |
+| `If ... Then ... Endif` | `End If` (two words) |
+| `Foreach x In coll Do ... EndDo` | `For Each`, `ForEach` |
+| `Procedure F() ... EndProcedure` | `Sub`; `Function` when there is no return |
+| `Function F() ... EndFunction` | `Procedure` when there is a return |
+| `Return` | `Ret` |
+| `Var` (or implicit) | `Dim`, `Let` |
 
-CES (C-style) and VES (Visual-Basic-style) are two surface modes
-that compile to the same bytecode. **CES is the default for new
-configurations** since 2026-05-10. Pick CES unless the existing
-configuration is already VES.
+CES (C-style) and VES (Visual-Basic-style) are two surface modes that
+compile to the same bytecode. **CES is the default for new configurations**
+since 2026-05-10. Pick CES unless the existing configuration is already VES.
+A code-style gate hides VES-only block fences (`Then` / `Do` / `End*`) when
+CES is active — they read as ordinary identifiers there, so do not mix VES
+fences into CES modules.
 
 ```c
 // CES (default for new configs)
@@ -193,8 +197,10 @@ The 11 metaobject types and their script-side namespace:
 | `DataProcessor` | `DataProcessors.<Name>` | Interactive tooling (utilities, batch operations) |
 | `Report` | `Reports.<Name>` | Read-only output (analytics, statements) |
 
-Configuration XML schema: see `docs/configuration-compare.md` +
-sample exports under `examples/`.
+Configuration is serialized through the `ibDataNode` tree (binary via
+`ibBinaryProvider`); JSON output is write-only (diff/inspection). See
+`docs/configuration-compare.md` for the Compare/Merge feature and sample
+configurations under `examples/`.
 
 ---
 
@@ -220,7 +226,7 @@ Mapping common ERP / business-application concepts to their OES form:
 | Built-in query language | LINQ block / chain syntax | `from ... where ... select`; see `docs/linq.md` |
 | Document posting handler | `OnPosting` script in Document module | Writes register movements |
 | Document date | `document.Date` | `ibDateTime` type |
-| Data-composition / pivot system | — | Not present; reports are hand-written today |
+| Data-composition / pivot system | L5 data composer | Declarative filter/sort/grouping rendered into a query; see `docs/data-composer.md` |
 | Form model | Form / VisualHost | Single form layer; same form runs in Desktop and Web |
 | Client tier | Desktop frontend / Web frontend | Two parallel DLLs (`frontend.dll` / `wfrontend.dll`) |
 
@@ -234,7 +240,7 @@ Drill into these only when the task touches the specific area.
 |---|---|
 | Project bootstrap, layers, modules | `docs/ARCHITECTURE.md` |
 | Build / clone / submodules | `docs/BUILD.md` |
-| Configuration text format (XML / JSON) | `docs/configuration-compare.md` |
+| Configuration Compare / Merge (`.mcf`) | `docs/configuration-compare.md` |
 | OES script — full language | `docs/lambda.md`, `docs/closure-capture.md`, `docs/linq.md`, `docs/eval-scope-refactor.md` |
 | Metadata system, CLSIDs, inheritance | `docs/ARCHITECTURE.md` §Metadata System |
 | Sessions, threading, registry | `docs/session-registry.md` |
@@ -261,16 +267,19 @@ Before declaring "done", verify your generated configuration:
        attribute types valid, predefined-attribute subclass lists
        are additive.
 
-2. codeRunner.exe --module <module> --script "<expr>"
-     — execute a script expression against the loaded config.
-       Use this to smoke-test postings, computations, reports.
+2. codeRunner.exe
+     — standalone GUI script runner (NO metadata, NO CLI flags):
+       write a script in the editor and run it to smoke-test pure
+       computations / language constructs. It cannot reference your
+       config's metaobjects.
 
 3. designer.exe <config-path>
      — open in Designer for visual review and live debugging.
-       Press F5 to launch Enterprise mode against the same DB.
+       Press F5 to launch Enterprise mode against the same DB; run
+       postings / reports there against test data.
 
-4. (If accounting touched) — verify Balance / Turnovers via
-   codeRunner before claiming "complete".
+4. (If accounting touched) — verify Balance / Turnovers in
+   Enterprise mode before claiming "complete".
 ```
 
 If any step fails, do not submit — iterate. The architect's review
@@ -315,7 +324,6 @@ When the architect reviews your generated PR, they look for:
 ## 11. One-line summary
 
 > **You are extending a low-code ERP through metadata and script.
-> Generate metadata XML/JSON and OES scripts in CES (preferred) or
-> VES; never touch C++; verify with codeRunner;
-> surface anything that needs C++ change or schema migration to the
-> architect.**
+> Generate metadata and OES scripts in CES (preferred) or VES; never
+> touch C++; verify with codeRunner; surface anything that needs a C++
+> change or schema migration to the architect.**

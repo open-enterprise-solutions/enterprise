@@ -30,6 +30,15 @@ Tests are not bureaucracy — they protect against regressions. OES historically
 
 ## Tools
 
+> **Current reality (OES repo):** Google Test is fetched via CMake
+> `FetchContent` (GIT_TAG v1.14.0), **not** vcpkg or `find_package(GTest)`.
+> Tests are flat files in `enterprise/tests/` (`test_*.cpp` + `bench_*.cpp`),
+> compiled into a single `oes_tests` target — there is no `tests/unit` /
+> `tests/integration` / `tests/mocks` split yet. DB-touching tests use the
+> always-embedded SQLite and the dynamically-loaded Firebird/PG clients (no
+> link-time DB dependency). The examples below show the recommended shape; the
+> directory structure they imply is aspirational, not the current on-disk one.
+
 ### Google Test and Google Mock
 
 ```cmake
@@ -520,7 +529,7 @@ name: Tests
 
 on:
   pull_request:
-    branches: [master, dev]
+    branches: [master, develop]
 
 jobs:
   test-windows:

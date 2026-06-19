@@ -1,5 +1,14 @@
 # 13. Monitoring and Logging
 
+> **Two distinct logging paths exist — don't conflate them:**
+> - **`wxLog*`** (this document) — developer trace output to file / DebugView.
+> - **`ibLogger`** (`backend/logger/`, reached via the `ibLog` macro) — the
+>   structured **audit trail** ("Журнал регистрации"): business events
+>   (login, document write, DDL apply, session open/close) persisted to
+>   per-month SQLite `.olg` files, viewed in-app. See
+>   [`../audit-log.md`](../audit-log.md). Use `ibLog->Audit(...)` for
+>   business events, `wxLog*` for technical traces.
+
 ## Monitoring stack
 
 | Component | Tool | Purpose |
@@ -332,7 +341,7 @@ OesHealthStatus OesApp::CheckHealth()
     // Check the DB connection
     if (m_db && m_db->IsOpen())
     {
-        ibResultSet* rs = m_db->RunQueryWithResults("SELECT 1 FROM RDB$DATABASE");
+        ibDatabaseResultSet* rs = m_db->RunQueryWithResults("SELECT 1 FROM RDB$DATABASE");
         status.databaseOk = (rs != nullptr);
         if (rs) rs->Close();
     }

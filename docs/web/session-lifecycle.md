@@ -1,12 +1,14 @@
 # Session lifecycle
 
-> **2026-04-20:** Classes renamed — `ibSessionContext` → `ibSession`,
-> `SessionManager` → `ibSessionRegistry`. File paths: `backend/session/session.h`
-> and `backend/session/sessionRegistry.h`. Behaviour unchanged; the full
-> refactor (single-consumer thread, priority queue, DB-row pessimistic
-> locks, `ibSessionTicket` RAII handle, unified `Connect(req)` entry) is
-> in progress — see `docs/web/open-issues.md` → "Session registry
-> refactor" and memory note `project_session_registry_refactor.md`.
+> **Status (verified against `backend/session/` + `frontend/web/`):**
+> `ibSession` (`backend/session/session.h`) +
+> `ibSessionRegistry` (`backend/session/sessionRegistry.h`). The session
+> lifecycle is `Open()` / `Close()` driven — `ibSessionTicket` and the
+> DB-row pessimistic-lock liveness model were tried and dropped; the
+> session inherits `enable_shared_from_this` and the registry owns it in
+> `m_own`. Liveness is a heartbeat + 10s stale cutoff. Canonical
+> reference: [`../session-registry.md`](../session-registry.md); see also
+> `docs/web/open-issues.md` → "Session registry refactor".
 
 Two-stage model since the compile/runtime split (2026-04-19):
 
@@ -14,16 +16,20 @@ Two-stage model since the compile/runtime split (2026-04-19):
    all module bytecode into descriptor-owned `ibByteCode` blobs on
    `ibModuleDataObject::m_byteCode` (shared across sessions). No
    `ibProcUnit` is created at this stage.
-2. **Per-session runtime** (`ibWebSession::Login` →
-   `registry.Connect` → `ticket.Attach` → `NotifyAuthenticated` →
-   `mm->AttachRuntime(s)` → `ibWebApplication::OnInit`)
-   allocates the session's `ibProcUnit` instances against the shared
-   bytecode and fires the `OnStart` script on them.
+2. **Per-session runtime** (`ibWebSession::Login` → registry
+   anonymous-create → `session->Open(user, pwd)` →
+   `NotifyAuthenticated` → `mm->AttachRuntime(s)` →
+   `ibWebApplication::OnInit`) allocates the session's `ibProcUnit`
+   instances against the shared bytecode and fires the `OnStart` script
+   on them.
 
 Each session owns its own `ibValueModuleManagerConfiguration` via
 `ibSession::m_root` (`ibValuePtr`-managed). `ibWebApplication` is the
 per-session "app" analogue of `wxTheApp`. It owns the frame, the
 worker thread, and a borrowed pointer to the session's `ibSession`.
+`ibWebSession` holds the strong reference:
+`std::shared_ptr<ibSession> m_session = sessionRaw->shared_from_this()`
+(the registry's `m_own` holds another), and `Close()`s it on teardown.
 
 ## Session kind
 
@@ -61,22 +67,22 @@ session-creation time.
 POST /w/<prefix>/login
     │
     └── ibWebSession::Login(user, password)
-        ├── ibConnectRequest req { computer, eWEB_RUNTIME_MODE,
-        │                          address = wfrontendServerAddress(),
-        │                          presetGuid = tabSid (from cookie/header) }
+        ├── registry anonymous-create (CreateSession) — INSERTs an
+        │     anonymous sys_session row, kind = ibSessionKind::WebClient,
+        │     presetGuid = tabSid (from cookie/header). Throws via
+        │     ibBackendCoreException::Error on registry failure.
         │
-        ├── registry.Connect(req)
-        │     - Submit(Add, Normal), waits state Added
-        │     - Add handler INSERTs anonymous sys_session row under
-        │       row-lock, kind = ibSessionKind::WebClient
-        │     - returns an ibSessionTicket (RAII; dtor submits Remove@Urgent)
+        ├── m_session = sessionRaw->shared_from_this()
+        │     (own strong ref; registry's m_own holds another)
         │
-        ├── ticket.Attach(user, pwd)
-        │     - Submit(Attach, Normal)
+        ├── m_session->Open(user, password)   → ibSession::OpenResult
+        │     - submits Attach through the registry directly
+        │       (shared_from_this — no ticket)
         │     - ProcessAttach calls appData->AuthenticateUser → InstallUser
-        │       (writes user identity onto session->m_userInfo +
-        │       m_sessionRawPassword)
-        │     - registry.NotifyAuthenticated(s) runs the 3 phases:
+        │       (writes identity onto session->m_userInfo +
+        │        m_sessionRawPassword)
+        │     - registry.NotifyAuthenticated(s) → appData::WireSessionEvents
+        │       phases:
         │         1. OnFirstConnect (one-shot per process)
         │         2. session->EnsureRoot() — CreateRoot(activeMetaData)
         │         3. OnAuthenticated → RunDatabase + session->CompileRoot()
@@ -84,25 +90,25 @@ POST /w/<prefix>/login
         │       (creates shared_ptr<ibProcUnit> for main + each non-global
         │        common module on the descriptors, executes bytecode top-
         │        level to populate globals)
+        │     - on != Authenticated: m_session->Close() (submit Remove →
+        │       sys_session row DELETEd), m_session.reset(), return false
         │
-        ├── { ibSessionScope initScope(ticket->Session());
-        │     │
-        │     └── app->OnInit()                    ← ORDER MATTERS
-        │           │                                (see note below)
-        │           ├── new ibWebFrame(this)       ← frame first; scripts
-        │           │                                need it during OnStart
-        │           ├── session->SetFrame(frame)   ← publish to ibSession
-        │           └── StartMainModuleSafe(mgr)
-        │                 │ SEH-wrapped call into:
-        │                 └── ibValueModuleManagerConfiguration::StartMainModule
-        │                     ├── BeforeStart()  → CallAsProc("beforeStart", bCancel)
-        │                     │     (script veto; false ⇒ abort login)
-        │                     └── OnStart()      → CallAsProc("onStart")
-        │                           (script opens default forms via
-        │                            OpenForm(...))
-        │   }
-        │
-        └── m_ticket = move(ticket); m_app = move(app)
+        └── { ibSessionScope scope(m_session.get());
+              │
+              └── app->OnInit()                    ← ORDER MATTERS
+                    │                                (see note below)
+                    ├── new ibWebFrame(this)       ← frame first; scripts
+                    │                                need it during OnStart
+                    ├── session->SetFrame(frame)   ← publish to ibSession
+                    └── StartMainModuleSafe(mgr)
+                          │ SEH-wrapped call into:
+                          └── ibValueModuleManagerConfiguration::StartMainModule
+                              ├── BeforeStart()  → CallAsProc("beforeStart", bCancel)
+                              │     (script veto; false ⇒ abort login)
+                              └── OnStart()      → CallAsProc("onStart")
+                                    (script opens default forms via
+                                     OpenForm(...))
+          }   // on OnInit failure: m_session->Close() + reset
 ```
 
 Script dispatch through `ibModuleDataObject::GetProcUnit()` returns
@@ -154,8 +160,8 @@ ibWebSession::OnExit
     │     │           on the descriptor for the next session.
     │     │   }
     │     └── delete m_frame
-    └── ticket.reset() → Submit(Remove, Urgent)
-            └── ProcessRemove DELETEs sys_session row, releases row-lock
+    └── m_session->Close() → submit Remove → ProcessRemove DELETEs the
+            sys_session row; m_session.reset() drops our strong ref
 ```
 
 Per-session `ibValueModuleManagerConfiguration` (`session->m_root`)
@@ -209,8 +215,9 @@ fallback.
   `ibSession::SetFrame` so backend code can reach it through
   `ibSession::CurrentFrame()`.
 - `m_sessionContext` — borrowed `ibSession*`. Set by the owning
-  `ibWebSession` right after construction; the registry owns the
-  session's lifetime through the ticket.
+  `ibWebSession` right after construction. The session's lifetime is
+  shared between the registry's `m_own` and `ibWebSession::m_session`;
+  `ibWebSession::OnExit` `Close()`s it.
 - Worker-thread state (`m_worker`, `m_workerMtx`, `m_workerCv`,
   `m_workerQueue`, `m_workerStop`).
 - Live-update counter (`m_seq`, `m_seqMtx`, `m_seqCv`) for SSE.

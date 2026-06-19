@@ -18,10 +18,13 @@ documenting before the next scale step.
 > **Naming note:** the historical interface was named
 > `ibBackendDocMDIFrame` (and the singleton accessor `GetDocMDIFrame`),
 > a relic of the old wxWidgets MDI API. The backend-side rename to
-> `ibBackendDocFrame` has landed; the frontend desktop class is still
-> named `ibFrontendDocMDIFrame` (rename pending). New code MUST NOT
-> introduce the "MDI" suffix in new symbols — prefer `Shell`,
-> `HostFrame`, `DocFrame`, `DocParentFrame`, or plain `MainFrame`.
+> `ibBackendDocFrame` has landed, and the frontend desktop class is now
+> `ibFrontendMainFrame` (`frontend/mainFrame/mainFrame.h`) — the old
+> `ibFrontendDocMDIFrame` name is gone from the tree. It still derives
+> from `wxAuiMDIParentFrame`, so the wx-side "MDI" relic survives one
+> level down; new code MUST NOT introduce the "MDI" suffix in new
+> symbols — prefer `Shell`, `HostFrame`, `DocFrame`, `DocParentFrame`,
+> or plain `MainFrame`.
 
 ## How it works today
 
@@ -76,12 +79,12 @@ documenting before the next scale step.
   unbound threads (registry consumer, signal handlers).
 - On **headless** (daemon.exe, codeRunner.exe), the session has no GUI
   frame: `GetFrame()` returns null. The accessors in `backend_form.cpp`
-  test `auto* frame = ibSession::CurrentFrame(); if (frame != nullptr)
-  ...` and otherwise raise
+  guard with `if (ibSession::CurrentFrame() != nullptr) ...` and
+  otherwise raise
   `ibBackendCoreException::Error(_("Context functions are not available!"))`.
 
 The frontend desktop side does keep its own GUI-local singleton:
-`ibFrontendDocMDIFrame::GetFrame()` (via the `mainFrame` macro in
+`ibFrontendMainFrame::GetFrame()` (via the `mainFrame` macro in
 `frontend/mainFrame/mainFrame.h`). That singleton is internal to the
 GUI layer and is NOT what backend code reaches into — it's a wx-side
 implementation detail of where the desktop frame lives. The web side
@@ -116,11 +119,10 @@ has no equivalent.
 
 2. **Headless null-checks scattered.** Every `ibBackendValueForm::Find*`
    / `CreateNewForm` accessor in `backend/backend_form.cpp` hand-checks
-   `auto* frame = ibSession::CurrentFrame(); if (frame != nullptr)
-   ...`. A new method that forgets the check would crash headless
-   silently. A null-object pattern — an `ibNoUIFrame` that throws
-   `ibBackendCoreException::Error` uniformly from every method —
-   would centralise this.
+   `if (ibSession::CurrentFrame() != nullptr) ...`. A new method that
+   forgets the check would crash headless silently. A null-object
+   pattern — an `ibNoUIFrame` that throws `ibBackendCoreException::Error`
+   uniformly from every method — would centralise this.
 
 3. **`AccessMode::Shared` per-thread binding is implicit.** Every
    web worker thread that calls into backend must be bound to its
@@ -133,21 +135,25 @@ has no equivalent.
    `reference_sessionscope_http_handlers`, but it isn't enforced by
    the type system.
 
-4. **MDI naming partially leaked.** Backend rename to
-   `ibBackendDocFrame` is done; frontend desktop class
-   `ibFrontendDocMDIFrame` and its `mainFrame` macro still carry the
-   "MDI" suffix. Web (`ibWebFrame`) uses tabs with no nesting; some
-   of the MDI semantics (z-order, active-child tracking) map awkwardly
-   between the two. Renaming the desktop class to `ibFrontendShell`
-   or similar would close the asymmetry.
+4. **MDI relic one level down.** Backend (`ibBackendDocFrame`) and the
+   frontend desktop class (`ibFrontendMainFrame`) are both rename-clean,
+   but `ibFrontendMainFrame` still derives from `wxAuiMDIParentFrame`,
+   so the wx MDI machinery (z-order, active-child tracking) is still the
+   substrate. Web (`ibWebFrame`) uses tabs with no nesting; some of
+   those MDI semantics map awkwardly between the two. Replacing the
+   `wxAuiMDIParentFrame` base with the uikit shell (see `docs/uikit.md`)
+   would close the asymmetry.
 
-5. **Backend knows frontend concepts via the interface.** `ShowForm`
-   takes `ibBackendMetaDocument*` as the parent — that document is
-   really a `ibFormVisualDocument` (a frontend wxDocument subclass).
-   The abstract interface has to carry enough types to let every
-   frontend's concrete document fit through; if tomorrow a native-UI
-   frontend needs a different document representation, the interface
-   has to grow again.
+5. **Backend knows frontend concepts via the interface.**
+   `ibBackendValueForm::ShowForm(ibBackendMetaDocument* doc, ...)`
+   (`backend/backend_form.h:94`) takes the document as its parent — that
+   document is really a frontend `ibFormVisualDocument`
+   (`: ibDocument`, the in-tree doc/view fork — see
+   [`docview-fork.md`](docview-fork.md), not stock `wxDocument`). The
+   abstract `ibBackendMetaDocument` surface has to carry enough types to
+   let every frontend's concrete document fit through; if tomorrow a
+   native-UI frontend needs a different document representation, the
+   interface has to grow again.
 
 ## Suggested direction (not urgent)
 
@@ -176,8 +182,9 @@ refactors that would pay off later:
   bound to a real implementation or to a throw-only fallback. One
   place, one policy.
 
-- **Rename frontend side.** `ibFrontendDocMDIFrame` → `ibFrontendShell`
-  (or similar). MDI is a desktop-ism leak.
+- **Drop the wx MDI base.** `ibFrontendMainFrame` is rename-clean but
+  still `: public wxAuiMDIParentFrame`. Reseating it on the uikit shell
+  (`docs/uikit.md`) removes the last MDI desktop-ism leak.
 
 None of this blocks current work. It starts paying off when:
 

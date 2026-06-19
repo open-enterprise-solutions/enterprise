@@ -13,7 +13,14 @@ session and the implementation phase plan. Verified against tree on
 > **Verified-in-tree resolution (one map, not two).** Reading "session's
 > ProcUnit map" in earlier drafts of this doc was misleading. The
 > shipped shape is simpler:
-> - Each descriptor (`ibRuntimeModuleDataObject` in `moduleInfo.h:17`)
+> - The session owns its root via `ibValuePtr<ibValueModuleManager
+>   RuntimeConfiguration> m_root` (`session.h:744`); the public accessor
+>   is `ibSession::GetManagerModule()` (NOT the aspirational
+>   `activeMetaData->GetModuleManager(session)` used in the design
+>   narrative below). `AttachRuntime` / `DetachRuntime` live on
+>   `ibValueModuleManager` (`moduleManager.h:360`/`:363`), serialised by
+>   `m_runtimeMutex` (`moduleManager.h:377`).
+> - Each descriptor (`ibRuntimeModuleDataObject` in `moduleInfo.h:26`)
 >   owns a single `std::shared_ptr<ibProcUnit> m_procUnit`.
 > - `ibValueModuleManager::AttachRuntime(session)` walks the
 >   descriptors and (re)builds their `m_procUnit` for that session,
@@ -33,7 +40,7 @@ session and the implementation phase plan. Verified against tree on
 >
 > Done:
 > - **1-2** — descriptors compose `ibRuntimeModuleDataObject`
->   (`backend/moduleInfo.h:17`) with `m_compileModule`, `m_procUnit`
+>   (`backend/moduleInfo.h:26`) with `m_compileModule`, `m_procUnit`
 >   (shared_ptr — pins against fast-F5 UAF), `m_binder`, `m_parent`.
 >   `appData::Connect` / `ibWebSession::Login` route through
 >   `ibSession::EnsureRoot` + `CompileRoot`; `CompileRoot` itself
@@ -50,8 +57,9 @@ session and the implementation phase plan. Verified against tree on
 > - **4** — Start/Stop pair lives on `ibValueModuleManager`; descriptor
 >   subclasses inherit through `ibRuntimeModuleDataObject`.
 > - **5** — Facade is `ExecAsProc` / `ExecAsFunc` on
->   `ibRuntimeModuleDataObject` itself (`moduleInfo.h:18-38` public
->   variadic sugar; `:160-184` protected array form). Mirrors
+>   `ibRuntimeModuleDataObject` itself (variadic sugar at
+>   `moduleInfo.h:38`/`:44`; protected array form at `:246`/`:254`).
+>   Mirrors
 >   `ibProcUnit::CallAsProc/Func` shape — variadic packs into
 >   `ibValue*[]` and forwards. shared_ptr pin against fast-F5 UAF,
 >   null-safety. Better placement than the original `mm->CallAsProc(
@@ -83,10 +91,12 @@ session and the implementation phase plan. Verified against tree on
 > - **11** — extern binder factory (`bc.CreateBinder()`) on bytecode;
 >   per-descriptor `m_binder` with `SetVar` for per-execute binding.
 >   Replaces compile-time `AddContextVariable` staging.
-> - **13-17** — AOT cache pipeline landed (`backend/compiler/cache/
->   byteCodeCache.{h,cpp}`): `SerializeAOT` / `DeserializeAOT`
->   (`kAOTFormatVersion = 12` (was 10 at AOT landing, bumped twice since) after CES + closure-capture + LINQ
->   opcode shifts), `sys_bytecode_cache` table with UPSERT semantics,
+> - **13-17** — AOT cache pipeline landed. The blob (de)serialiser is
+>   `backend/compiler/byteCodeAOT.cpp` (`kAOTFormatVersion = 14`
+>   currently — `byteCodeAOT.cpp:111`; bumped on each opcode-layout
+>   change, e.g. CES + closure-capture + LINQ shifts); the cache-row /
+>   table layer is `backend/compiler/cache/byteCodeCache.{h,cpp}`:
+>   `sys_bytecode_cache` table with UPSERT semantics,
 >   three-arm `Compile` hook (cache-hit / miss / drift via magic +
 >   format-version reject), dependency registry +
 >   `ResolveAndVerifyDependencies`, Designer
@@ -574,7 +584,7 @@ Brief summary:
 > **Progress (verified 2026-05-22).**
 > - **Step 1 — landed (single-slot form, not literal map).**
 >   Descriptors compose `ibRuntimeModuleDataObject`
->   (`backend/moduleInfo.h:17`) — owns `m_compileModule`, `m_procUnit`
+>   (`backend/moduleInfo.h:26`) — owns `m_compileModule`, `m_procUnit`
 >   (shared_ptr, pins against UAF), `m_binder`, `m_parent`. The
 >   descriptor's slot is rebuilt per session by `AttachRuntime(s)` /
 >   `DetachRuntime(s)` under `m_runtimeMutex`. No
@@ -600,9 +610,10 @@ Brief summary:
 >   extracted from designer's GUI tree onto `ibMetaData` (precursor
 >   for step 10 — designer without runtimes); `ibSession::EnsureRoot()`
 >   + 3-phase `NotifyAuthenticated` — root-mm ownership on session.
-> - **Steps 13-17 — AOT cache pipeline landed
->   (`backend/compiler/cache/byteCodeCache.{h,cpp}`).** `kAOTFormat
->   Version = 10`, UPSERT row per descriptor, dependency registry,
+> - **Steps 13-17 — AOT cache pipeline landed** (blob serialiser
+>   `backend/compiler/byteCodeAOT.cpp`, `kAOTFormatVersion = 14`;
+>   cache-row layer `backend/compiler/cache/byteCodeCache.{h,cpp}`).
+>   UPSERT row per descriptor, dependency registry,
 >   Designer Save / Delete cascading invalidate. Only automated
 >   invalidation gtests remain.
 

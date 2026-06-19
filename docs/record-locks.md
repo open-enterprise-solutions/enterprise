@@ -1,80 +1,96 @@
-# Record-write protection — DB row locks + DataVersion
+# Record-write protection — optimistic DataVersion + DB row lock + sys_lock
 
-> **Update 2026-06-16 — row-lock clause unified onto the dialect dictionary; liveness-probe legacy removed.**
-> The per-driver `ibDatabaseLayer::RowLockHint()` / `NoWaitClause()` virtuals (and their 4 driver
-> overrides) are **deleted**. The row-lock clause now lives solely on the dialect dictionary:
-> `m_rowLockSuffix` (` FOR UPDATE` / FB ` WITH LOCK` / SQLite empty) plus the new
-> `m_rowLockNoWaitSuffix` (` NOWAIT` on PG/MySQL; empty on FB/SQLite — their non-blocking acquire rides
-> the TX `noWait`/TPB). A pessimistic SELECT is expressed at L2 as `ibQueryIR::m_lockForUpdate`
-> (+ `m_lockNoWait`); the renderer appends the dialect clause to the top-level SELECT. `ibLockManager`
-> and the Constant row-lock now go through this L2 path (where the old code referenced `RowLockHint()`
-> below, read "the dialect `m_rowLockSuffix`"). Separately, the **pessimistic-row-lock-for-liveness**
-> legacy — `TryProbeRowLock` and `HoldRowLocks` / `ReleaseRowLocks` (virtuals + firebird impl + the
-> registry probe connection) — is **removed**; cluster liveness has long been snapshot +
-> heartbeat-on-`lastActive`. (Part of the L1→L2 tier-hygiene arc — query-language-arc.md §24.)
-
-> **Update 2026-06-09 — `LockAndCheckDataVersion` moved onto the L3 door.**
-> The hand-rolled `ReadDataVersionForUpdate` (raw `SELECT <DataVersion> FROM <tbl>
-> WHERE uuid = ? <RowLockHint>` + `GetResultString`) is **gone**. The version-lock
-> read is now one L3 selection:
-> `From(record).Where(ibRawDBColumn::String("uuid"), guid)` with
-> `ibReadPageRequest::m_lockForUpdate = true` — the renderer appends the dialect
-> `m_rowLockSuffix` (== the per-driver `RowLockHint()`), and the door runs on the
-> session holder (the SAME connection as the open `BeginWriteScope` TX), so the lock
-> is held to commit. The version reads through `sel.GetValue(dvAttr)`.
-> **Why it had to move:** DataVersion's SQL field name is the *composite*
-> `<fld>_TYPE,<fld>_S` (type tag + string), so the old raw `GetResultString(that)`
-> looked up a column literally named with a comma → "field not found" at runtime.
-> The provider's attribute assembly (`GetValueAttribute`, TYPE+S) is the only correct
-> read. Validated on FB (`SELECT … WHERE uuid=? ORDER BY uuid WITH LOCK` is accepted —
-> FB permits `ORDER BY` with `WITH LOCK`). Part of the reference-as-key arc.
+> **Current state (verified against code 2026-06-19).** Three layers, all
+> landed:
 >
-> **Status:** **LANDED** 2026-05-24, smoke-validated on Debug|x86
-> (two enterprise.exe sessions editing the same Catalog item —
-> second Save throws ibBackendLockException::VersionChanged, dialog
-> surfaces "data was changed by another user"). Build clean.
+> 1. **Optimistic `DataVersion` check** — the primary lost-update guard.
+>    Every mutable-ref row (Catalog / Document / ChartOf*) carries a
+>    `DataVersion String(12)` stamp. Read captures it
+>    (`m_loadedDataVersion`); Write re-reads under a row lock and throws
+>    `ibBackendLockException::VersionChanged` on mismatch.
+> 2. **DB-side row lock** during the Write TX — `SELECT … FOR UPDATE`
+>    (PG/MySQL) / `WITH LOCK` (FB); the dialect appends the clause, the
+>    database serializes concurrent writers against the same row.
+>    Auto-released on Commit/Rollback.
+> 3. **`sys_lock` table + `ibLockManager`** — proactive, cross-TX,
+>    cluster-aware "edited by user X" locks (soft model: form opens on
+>    conflict, throws at Save). Acquired on form-open and via script
+>    `obj.Lock()`/`obj.Unlock()`.
 >
-> What landed: phases 1-8 below — `ibDataVersion` stamp generator,
-> `ibBackendLockException`, `RowLockHint()`/`NoWaitClause()` virtuals
-> + 4 driver overrides (FB / PG / MySQL / ODBC), `LockAndCheckData
-> Version` on mutable-ref base wired into Catalog/Document/ChartOf*
-> Write+Delete, `LockByKeys` on register-set base wired into 3
-> register types Write+Delete, inline single-row lock on Constant
-> Write, web HTTP `ExceptionToJson` shape + `OES.handleBackendError`
-> JS dispatcher, desktop `ibBackendLockException` Alert in toolbar +
-> docview save paths, fix to subclass `FillArrayObjectByPredefined
-> Attribute` lists (DataVersion was declared on base but missing
-> from subclass lists — pre-existing bug closed in passing).
+> Liveness of sessions is a **separate** concern — `sys_session`
+> heartbeat on `lastActive`, not a record lock. The earlier
+> pessimistic-row-lock-for-liveness design (`TryProbeRowLock` /
+> `HoldRowLocks`) was **rolled back**; only retirement comments remain
+> (see `ARCHITECTURE.md` → ibSessionRegistry, `session-registry.md §4`).
 >
-> What's deferred (not blocking — alpha audience is 2 users):
-> auto-migration of `fld1042` columns on existing DBs (Designer
-> Apply handles it), HTTP status codes (still 200 even on error —
-> JSON `error` field carries the kind), gtests for parallel-write,
-> localized ru/uk message catalogs. Revisit when audience grows or
-> sys_lock upgrade comes (see "Planned upgrade path" below).
+> ### Where things live in code (authoritative pointers)
 >
-> Original proposal section follows for reference. The `DataVersion`
-> column was already declared on `ibValueMetaObjectRecordDataMutableRef`
-> (`commonObject.h:729`, `String(12)`) before this arc — this design
-> lit it up.
+> | Concern | Symbol | File |
+> |---|---|---|
+> | Version capture on read | `m_loadedDataVersion` set in `ReadData` | `commonObjectRefQuery.cpp:68` |
+> | Lock + version check | `ibValueRecordDataObjectRef::LockAndCheckDataVersion(bump)` | `commonObjectRefQuery.cpp:101` |
+> | Register key lock | `ibValueRecordSetObject::LockByKeys()` | `commonObjectRecordSetQuery.cpp:26` |
+> | Constant singleton lock | inline `ibQueryIR{ m_lockForUpdate }` | `constantObject.cpp:349` |
+> | Stamp generator | `ibDataVersion::NewStamp()` | `utils/dataVersion.hpp` / `.cpp` |
+> | DataVersion attr accessor | `GetDataVersion()` | `commonObject.h:749`; attr declared `commonObject.h:824` |
+> | Exception | `ibBackendLockException` | `backend_exception.{h,cpp}` |
+> | sys_lock coordinator | `ibLockManager` | `lock/lockManager.{h,cpp}` |
+> | Lock RAII handle | `ibLockHandle` | `lock/lockHandle.{h,cpp}` |
+> | Key hash (SHA-256) | `ibLockKeyHash`, `ibLockItem::ForRef`/`ForNamespace` | `lock/lockKeyHash.*`, `lock/lockTypes.h` |
+> | Row-lock dialect clause | `m_rowLockSuffix` / `m_rowLockNoWaitSuffix` | `databaseLayer.h:148,155` |
+> | L2 lock flag | `ibQueryIR::m_lockForUpdate` / `m_lockNoWait` | `databaseQueryBuilder.{h,cpp}` |
 >
-> **TL;DR.** We lean on the database. Two cheap protections layered:
+> ### How the row-lock clause is rendered
 >
-> 1. **DB-side `SELECT ... FOR UPDATE` / `WITH LOCK`** during the Write
->    transaction — the database itself serializes writers against the
->    same row. Auto-released on Commit/Rollback. No app-side table, no
->    sweep, no admin UI.
-> 2. **`DataVersion` stamp check** within the same TX — catches the
->    lost-update window if anything bypasses the row-lock (direct
->    `db_query` SQL, plugins, future schema split). Backup defense.
+> There is **no** `RowLockHint()` / `NoWaitClause()` virtual — those
+> were deleted. The clause lives on the dialect dictionary:
+> `m_rowLockSuffix` (` FOR UPDATE` default / FB ` WITH LOCK` / SQLite
+> empty) plus `m_rowLockNoWaitSuffix` (` NOWAIT` on PG/MySQL; empty on
+> FB/SQLite — their non-blocking acquire rides the TX `noWait`/TPB). A
+> pessimistic SELECT is expressed at L2 as `ibQueryIR::m_lockForUpdate`
+> (+ `m_lockNoWait`); the renderer appends the dialect clause to the
+> top-level SELECT (`databaseQueryBuilder.cpp:451`). Mutable-refs and
+> registers reach it through the L3 door
+> (`ibDataQueryBuilder … ibReadPageRequest::m_lockForUpdate`); the
+> Constant write reaches it through a direct L2 `ibQueryIR`.
 >
-> What this **doesn't** give: proactive "edited by user X" on form-open.
-> Conflicts surface only at Save as *"Object was changed by another
-> user, please reload"*. For 3-30-user shara workloads this is the right
-> tradeoff — the proactive-lock infrastructure (`sys_lock` table,
-> `ibLockManager`, cluster sweep, admin UI) is ~3000 lines of code that
-> only pays off above 100 concurrent editors. Revisit when "lost N
-> minutes of editing" complaints actually accumulate.
+> **Why the version read goes through `GetValue(dvAttr)` and not raw
+> SQL.** DataVersion's SQL field name is the *composite*
+> `<fld>_TYPE,<fld>_S` (type tag + string data), so a raw
+> `GetResultString` on a column literally named with a comma failed
+> "field not found". The provider's attribute assembly is the only
+> correct read.
+>
+> ---
+>
+> ### Arc history (superseded snapshots — kept for the diff trail)
+>
+> The sections below this line are the **original 2026-05-24 proposal
+> and landing notes**. Concrete code shapes in them are **superseded**:
+> they describe `RowLockHint()` / `NoWaitClause()` virtuals, a
+> `ReadDataVersionForUpdate` raw-SQL wrapper, and a separate
+> `m_currentDataVersion` member — **none of which exist in current
+> code**. Read the table above for the live shape; read below only for
+> the design rationale and the phased landing record.
+>
+> - **2026-06-16** — row-lock clause unified onto the dialect
+>   dictionary; per-driver virtuals deleted. Liveness-probe legacy
+>   (`TryProbeRowLock` / `HoldRowLocks` / `ReleaseRowLocks` + registry
+>   probe connection) removed. (L1→L2 tier-hygiene arc —
+>   query-language-arc.md §24.)
+> - **2026-06-09** — `LockAndCheckDataVersion` moved onto the L3 door
+>   (reference-as-key arc); the raw `ReadDataVersionForUpdate` wrapper
+>   retired.
+> - **2026-05-24** — **LANDED**, smoke-validated on Debug|x86 (two
+>   enterprise.exe sessions editing the same Catalog item — second Save
+>   throws `ibBackendLockException::VersionChanged`). Phases 1-8 below.
+>
+> **TL;DR.** Lost updates are caught by the optimistic `DataVersion`
+> stamp; the in-TX `FOR UPDATE`/`WITH LOCK` row lock serializes racing
+> writers so the version re-read is consistent; `sys_lock` adds the
+> proactive "edited by user X" UX on top. Conflicts surface at Save as
+> *"Object was changed by another user, please reload"* — right
+> tradeoff for 3-30-user shara workloads.
 
 ---
 
@@ -104,126 +120,104 @@ Three metaobject bases — confirmed 2026-05-24:
 
 Enumeration is read-only at runtime — out of scope.
 
-## Two-layer protection at Write
+## Lock + version check at Write
 
-The same pattern in every mutating method
-(`WriteObject` / `DeleteObject` / `WriteRecordSet` / constant write):
+The Phase A scaffold (`record-object-refactor.md`) factored the
+designer/eval/access/scope/lock bookkeeping into
+`ibValueRecordDataObjectRef::BeginWriteScope` /
+`CommitWriteScope` (mutable-refs) and
+`ibValueRecordSetObject::BeginRecordSetWriteScope` /
+`CommitRecordSetScope` (registers). `BeginWriteScope` is where the
+lock layers fire (`commonObjectRefQuery.cpp:179`):
 
 ```cpp
-bool ibValueRecordDataObjectXxx::WriteObject()
+bool ibValueRecordDataObjectRef::BeginWriteScope(ibConnectionScope& scope)
 {
-    if (appData->DesignerMode()) return true;
-
-    ibConnectionScope scope = ibConnectionPool::GetFreeConnection();
+    if (appData->DesignerMode())          return false;   // designer skip
     if (!scope || !scope->IsOpen())
         ibBackendCoreException::Error(_("Database is not open!"));
+    if (ibBackendException::IsEvalMode()) return false;   // eval skip
+    if (!m_metaObject->AccessRight_Write()) { ibBackendAccessException::Error(); return false; }
 
-    if (!ibBackendException::IsEvalMode()) {
-        if (!m_metaObject->AccessRight_Write()) {
-            ibBackendAccessException::Error();
-            return false;
-        }
-
-        scope.SafeBeginTransaction();   // counter-based nested TX
-
-        // -------- LAYER 1: DB row lock --------
-        // Pin the row for the rest of this TX. Concurrent writers
-        // block here (or fail-fast under NoWait). Released by Commit.
-        wxString dbVer;
-        if (!ReadDataVersionForUpdate(scope, dbVer)) {
-            scope.SafeRollBackTransaction();
-            ibBackendCoreException::Error(_("Failed to lock object row"));
-            return false;
-        }
-
-        // -------- LAYER 2: DataVersion check --------
-        if (!m_loadedDataVersion.IsEmpty() && dbVer != m_loadedDataVersion) {
-            scope.SafeRollBackTransaction();
-            ibBackendLockException::VersionChangedThrow(
-                m_metaObject->GetSynonym(), m_loadedDataVersion, dbVer);
-        }
-
-        // -------- bump stamp before SaveData --------
-        m_currentDataVersion = ibDataVersion::NewStamp();
-        // SaveData picks up m_currentDataVersion when building UPDATE.
-
-        // -------- existing flow unchanged --------
-        ibValue cancel;
-        m_procUnit->CallAsProc(wxT("BeforeWrite"), cancel);
-        if (cancel.GetBoolean()) { scope.SafeRollBackTransaction(); return false; }
-
-        if (!SaveData()) {
-            scope.SafeRollBackTransaction();
-            ibBackendCoreException::Error(_("Failed to write object in db!"));
-            return false;
-        }
-
-        m_procUnit->CallAsProc(wxT("OnWrite"), cancel);
-        if (cancel.GetBoolean()) { scope.SafeRollBackTransaction(); return false; }
-
-        scope.SafeCommitTransaction();
-        m_loadedDataVersion = m_currentDataVersion;   // next Write compares against this
-    }
+    scope.SafeBeginTransaction();
+    TryAcquireFormLock();                    // sys_lock soft-lock re-attempt
+    LockAndCheckDataVersion(/*bump=*/true);  // row lock + version + bump
     return true;
 }
 ```
 
-`ReadDataVersionForUpdate` is the per-driver wrapper:
+`LockAndCheckDataVersion(bump)` does the row lock and the version
+compare in one L3 selection (`commonObjectRefQuery.cpp:101`):
 
 ```cpp
-bool ReadDataVersionForUpdate(ibConnectionScope& scope, wxString& outVer)
-{
-    const wxString hint = ibSqlDialect::ForCurrent().RowLockHint();
-    // FB: "WITH LOCK", PG: "FOR UPDATE", MSSQL: "WITH (UPDLOCK, ROWLOCK)",
-    // MySQL: "FOR UPDATE", SQLite: "" (single-writer naturally)
+// Existing rows only — new ones have no row to lock, no prior version.
+if (!m_newObject && !m_loadedDataVersion.IsEmpty()) {
+    ibDataQueryBuilder q;
+    q.From(m_metaObject->GetQueryable())
+     .Where(ibRawDBColumn::String(wxT("uuid")), ibValue(wxString(m_objGuid)));
+    ibReadPageRequest page;
+    page.m_count = 1;
+    page.m_lockForUpdate = true;            // dialect appends m_rowLockSuffix
+    ibDataQueryResult sel = q.Execute(page);
 
-    auto stmt = scope->PrepareStatement(wxString::Format(
-        wxT("SELECT %s FROM %s WHERE %s = ? %s"),
-        kDataVersionColumn, m_metaObject->GetTableName(),
-        kPkColumn, hint));
-    stmt->SetParamBlob(1, m_objGuid.ToBytes(), 16);
-    auto rs = stmt->RunQueryWithResults();
-    if (!rs || !rs->Next()) return false;
-    outVer = rs->GetResultString(1);
-    return true;
+    const bool rowFound = sel.Next();
+    const wxString dbVer = rowFound ? sel.GetValue(dvAttr).GetString() : wxString();
+    if (!rowFound)                          // row DELETEd under us — treat as conflict
+        ibBackendLockException::VersionChangedThrow(m_metaObject->GetSynonym(),
+            m_loadedDataVersion, wxT("<deleted>"));
+    if (dbVer != m_loadedDataVersion)
+        ibBackendLockException::VersionChangedThrow(m_metaObject->GetSynonym(),
+            m_loadedDataVersion, dbVer);
+}
+if (bump) {                                  // stamp the row for SaveData's UPSERT
+    const wxString newStamp = ibDataVersion::NewStamp();
+    SetValueByMetaID(dvId, ibValue(newStamp));
+    m_loadedDataVersion = newStamp;          // back-to-back Write stays consistent
 }
 ```
 
-NOWAIT vs wait mode: caller sets `scope.SafeBeginTransaction({.noWait =
-true})` to fail-fast, default is wait (driver's normal lock wait
-behavior — FB has `isc_tpb_lock_timeout = 30s` already plumbed). Most
-business code uses the default.
+The selection runs on the session holder — the SAME connection as the
+open `BeginWriteScope` TX — so the row lock is held until commit.
+Delete calls `LockAndCheckDataVersion(/*bump=*/false)` (the row is
+going away). There is no separate `m_currentDataVersion` member — the
+bumped value is written straight into the attribute slot and mirrored
+into `m_loadedDataVersion`.
+
+NOWAIT vs wait mode: a non-blocking acquire sets `m_lockNoWait`
+(→ ` NOWAIT` on PG/MySQL; FB rides `isc_tpb_nowait`). Default is wait
+(driver's normal lock-timeout — FB `isc_tpb_lock_timeout` plumbed).
 
 ## DataVersion lifecycle
 
-Existing `String(12)` predefined attribute on
-`ibValueMetaObjectRecordDataMutableRef`. Three additions:
+`DataVersion String(12)` predefined attribute declared on
+`ibValueMetaObjectRecordDataMutableRef` (`commonObject.h:824`),
+accessor `GetDataVersion()` (`commonObject.h:749`).
 
-**Capture on Read.** `LoadObject(ref)` already SELECTs all columns
-including `DataVersion`. Add a member `wxString m_loadedDataVersion`
-on `ibValueRecordDataObject`; populate it during LoadObject from the
-result row.
+**Capture on Read.** `ReadData` (`commonObjectRefQuery.cpp:68`) reads
+the loaded row's DataVersion into `wxString m_loadedDataVersion`
+(`commonObject.h:1903`). New objects leave it empty so the first Save
+skips the check.
 
 **Bump before Write.** `ibDataVersion::NewStamp()` returns a fresh
-12-char base-62 string. Format: `[ms_since_epoch][counter]` packed —
-chronologically sortable, collision-safe across cluster (HLC-inspired
-but no need for full HLC since DataVersion isn't read by anyone but
-the version check, ordering doesn't matter — only equality):
+12-char base-62 string. Payload: `(unix_ms_since_epoch << 16) |
+per_process_counter`, base-62 encoded — wall-clock prefix keeps stamps
+roughly chronological for debugging, the 16-bit atomic counter rolls
+per process so two stamps within one millisecond don't collide. Only
+equality matters for the lost-update check, so cluster clock skew is
+harmless. `IsValidStamp()` validates shape.
 
 ```cpp
-// backend/utils/dataVersion.{h,cpp}
+// backend/utils/dataVersion.hpp
 namespace ibDataVersion {
-    BACKEND_API wxString NewStamp();  // 12-char base-62
+    BACKEND_API wxString NewStamp();              // 12-char base-62
+    BACKEND_API bool     IsValidStamp(const wxString&);
 }
 ```
 
-Implementation: `(wxGetUTCTimeMillis() << 16) | nextProcessCounter()`
-encoded base-62. Process counter is `std::atomic<uint16_t>` rolling.
-
 **Check on Write.** Compared against `m_loadedDataVersion`; mismatch →
-`ibBackendLockException::VersionChangedThrow`. New objects start with
-`m_loadedDataVersion = wxEmptyString` so the first Write skips the
-check (no prior version to compare).
+`ibBackendLockException::VersionChangedThrow`. A row that vanished
+between Read and Write (concurrent DELETE) is also treated as a
+version conflict (same reload-and-retry recovery).
 
 **No DataVersion on Registers or Constants.** Register records are
 written atomically by recorder (DELETE-then-INSERT for the whole
@@ -234,39 +228,41 @@ the singleton row covers the only race window.
 
 ## Constants
 
-Stored in a single-row, column-per-constant table (`_const` or
-similar). Write protection:
+Each constant has its own single-row table; `RECORD_KEY = '6'` is the
+singleton row. `ibValueRecordDataObjectConstant::SetConstValue`
+(`constantObject.cpp:342`) takes a row lock via a direct L2 `ibQueryIR`
+(constants don't go through the L3 builder for the lock) before the
+UPSERT:
 
 ```cpp
-bool ibValueConstantDataObject::WriteValue(const wxString& constName,
-                                            const ibValue& val)
+scope.SafeBeginTransaction();
 {
-    ibConnectionScope scope = ibConnectionPool::GetFreeConnection();
-    scope.SafeBeginTransaction();
-
-    // FOR UPDATE on the constants row — serializes all constant writes,
-    // but constant writes are rare so this is fine.
-    auto rs = scope->RunQueryWithResults(wxString::Format(
-        wxT("SELECT 1 FROM %s %s"),
-        kConstTableName, ibSqlDialect::ForCurrent().RowLockHint()));
-    if (!rs) { scope.SafeRollBackTransaction(); return false; }
-
-    auto stmt = scope->PrepareStatement(wxString::Format(
-        wxT("UPDATE %s SET %s = ?"),
-        kConstTableName, GetColumnFor(constName)));
-    BindParam(stmt, 1, val);
-    stmt->RunQuery();
-
-    scope.SafeCommitTransaction();
-    return true;
+    ibDatabaseQueryBuilder q(ibSession::Current()->Holder());
+    ibQueryIR ir(ibProject(
+        ibFilter(ibScan(tableName),
+            ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("RECORD_KEY")),
+                    ibConst(ibValue(wxString(wxT("6")))))),
+        { { ibConst(ibValue(1)), wxEmptyString } }));   // SELECT 1 — lock only
+    ir.m_lockForUpdate = true;
+    ibQueryResult lockRs = q.ExecuteIR(ir);
+    while (lockRs.Next()) {}                              // drain — side effect is the lock
 }
 ```
 
-Concurrent writes to *different* constants serialize on the single
-`_const` row. For shara 3-30 users with rare constant writes (settings
-panel saves), this is invisible. If future profiling shows constant
-writes are hot, schema can split to one-row-per-constant; the call site
-above is unchanged.
+It runs on the session holder, so it joins the TX that the subsequent
+UPSERT commits. Concurrent writes to *different* constants don't
+conflict (separate tables); concurrent writes to the *same* constant
+serialize on its `RECORD_KEY = '6'` row. No DataVersion on constants —
+a single-row UPSERT has no read-edit-write diff cycle to protect; the
+row lock covers the only race window.
+
+The form-open soft-lock is also wired:
+`ibValueRecordDataObjectConstant::TryAcquireFormLock` keys on the
+constant's namespace path via `ibLockItem::ForNamespace`
+(`constantObject.cpp:310`). The `SetConstValue` script path itself
+does not re-take the sys_lock — the DB-side row lock still protects
+against concurrent writes, but a script `Const.X = v` skips the
+proactive notify (flagged in `record-object-audit.md`).
 
 ## Registers
 
@@ -275,37 +271,41 @@ OES registers are owned by recorder Documents:
 - InformationRegister (periodic with recorder): same
 - InformationRegister (non-periodic, dimension-keyed): no recorder
 
-When a Document is posted (`WriteObject` → `OnWrite` cascades register
-movements), the Document's own `FOR UPDATE` on its row protects the
-whole posting:
+Registers have **no DataVersion** — a record set is written atomically
+by DELETE-then-INSERT for the whole bucket, so there is no
+read-edit-write diff cycle on individual lines. Their protection is
+`ibValueRecordSetObject::LockByKeys()` (`commonObjectRecordSetQuery.cpp:26`),
+called from `BeginRecordSetWriteScope` / `BeginRecordSetDeleteScope`.
 
+`LockByKeys()` locks the register's **own** existing lines for the
+bound composite key — it does **not** reach back to a recorder
+Document row. It builds an L3 selection over the queryable, constrains
+by the populated dimensions (`GetGenericDimensionArrayObject` filtered
+by `FindKeyValue` — `{recorder}` for AR/AcR, `{period, dim…}` for
+non-recorder IR), sets `page.m_lockForUpdate = true`, and drains the
+result to hold the lock:
+
+```cpp
+ibDataQueryBuilder q;
+q.From(m_metaObject->GetQueryable());
+for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
+    if (!FindKeyValue(object->GetMetaID())) continue;
+    q.Where(object, m_keyValues.at(object->GetMetaID()));
+}
+ibReadPageRequest page;
+page.m_count = 0;                 // every matching line
+page.m_lockForUpdate = true;      // dialect appends FOR UPDATE / WITH LOCK
+ibDataQueryResult sel = q.Execute(page);
+while (sel.Next()) {}             // drain — side effect is the lock
 ```
-Document.Write begins TX
-  └─ SELECT DataVersion FROM _D_<id> WHERE _R_uuid = ? FOR UPDATE
-       (Layer 1 + Layer 2 of the protection)
-  └─ SaveData() writes the Document row + cascades:
-       └─ AccumulationRegister.Inventory.RecordSet.Write()
-            └─ DELETE FROM _Reg_X WHERE Recorder = ?
-            └─ INSERT INTO _Reg_X (...) VALUES (...)
-  └─ Commit — releases the FOR UPDATE
-```
 
-Register writes don't take their own DB lock in this hot path —
-they're inside the Document's TX, and any concurrent writer trying to
-re-post the same Document blocks on the Document row.
-
-**Direct `RecordSet.Write()` from script** (recorder-keyed register
-without a Document Write in scope — rare administrative path): take
-`SELECT 1 FROM _D_<recorder> WHERE _R_uuid = ? FOR UPDATE` as a
-pessimistic guard on the recorder Document before the DELETE+INSERT.
-Same row, same lock semantics.
-
-**Non-recorder InformationRegister write**: no owning Document.
-Pessimistic guard via `SELECT 1 FROM _InfoReg_X WHERE dim1=? AND
-dim2=? ... FOR UPDATE` over the matching key. Zero rows locked is fine
-(equivalent to "nothing existed yet for this key" — INSERT below will
-not race because any other writer with the same dimensions would hit
-the same composite-unique constraint).
+When a Document posts, the register `WriteRecordSet` runs inside the
+Document's TX, so its `LockByKeys` lock and the Document's
+`LockAndCheckDataVersion` row lock are held to the same commit. Zero
+matching rows is fine (nothing existed yet for this key) — a racing
+INSERT with the same dimensions hits the composite-unique constraint
+regardless of the lock. If no key fields are populated, `LockByKeys`
+skips the lock entirely and relies on the UPSERT's unique constraint.
 
 ## Conflict UX
 
@@ -340,32 +340,33 @@ infrastructure which we explicitly opted out of.
 
 ## Cross-driver dialect
 
-Add one method to `ibSqlDialect` (already has `BuildUpsert`,
-`NextIdSql`, `LimitClause`, `ConcatOp`, `BlobType`, `BoolType`,
-`BuildCreateIndex` — see `firebird-mesh-driver.md` Phase 7):
+The row-lock clause is **data on the dialect dictionary** (two
+`wxString` fields on `ibDatabaseLayer`), not a virtual method. There is
+no `RowLockHint()` / `NoWaitClause()` — those virtuals were deleted in
+the 2026-06-16 L1→L2 cleanup. Each driver sets the fields in its
+dialect init; the L2 renderer
+(`databaseQueryBuilder.cpp:451`) appends them when
+`ir.m_lockForUpdate` (and, for no-wait, `ir.m_lockNoWait`) are set:
 
 ```cpp
-class BACKEND_API ibSqlDialect {
-public:
-    // Per-driver suffix appended to SELECT for row-level pessimistic lock.
-    // Default empty (SQLite). Drivers override.
-    virtual wxString RowLockHint() const { return wxEmptyString; }
-    virtual wxString NoWaitClause() const { return wxEmptyString; }
-};
+// ibDatabaseLayer (databaseLayer.h:148, 155)
+wxString m_rowLockSuffix       = wxT(" FOR UPDATE");   // default
+wxString m_rowLockNoWaitSuffix = wxT(" NOWAIT");       // default
 ```
 
-Per-driver:
+Per-driver values:
 
-| Driver | `RowLockHint()` | `NoWaitClause()` (appended after RowLockHint) | Notes |
+| Driver | `m_rowLockSuffix` | `m_rowLockNoWaitSuffix` | Notes |
 |---|---|---|---|
-| Firebird | `WITH LOCK` | `` (NOWAIT carried by TPB `isc_tpb_nowait`) | TPB-level — already plumbed |
-| PostgreSQL | `FOR UPDATE` | `NOWAIT` | PG raises `SQLSTATE 55P03` on NOWAIT fail |
-| MySQL | `FOR UPDATE` | `NOWAIT` (MySQL 8+) | Pre-8 falls back to `innodb_lock_wait_timeout=1` (already plumbed) |
-| MSSQL (ODBC) | `WITH (UPDLOCK, ROWLOCK)` | `` (NOWAIT carried by `SET LOCK_TIMEOUT 0`) | Already plumbed |
-| SQLite | `` | `` | Single-writer naturally |
+| Firebird | ` WITH LOCK` | `` (empty) | NOWAIT rides the TPB `isc_tpb_nowait` (`ibTxOptions::noWait`) |
+| PostgreSQL | ` FOR UPDATE` (default) | ` NOWAIT` (default) | PG raises `SQLSTATE 55P03` on NOWAIT fail |
+| MySQL | ` FOR UPDATE` (default) | ` NOWAIT` (default) | NOWAIT honoured on MySQL 8+; older rely on `innodb_lock_wait_timeout` |
+| ODBC/MSSQL | ` FOR UPDATE` (default) | ` NOWAIT` (default) | dialect default; not separately tuned |
+| SQLite | `` (empty) | `` (empty) | whole-DB TX lock — no row `FOR UPDATE` |
 
-The acquire SQL string becomes:
-`SELECT DataVersion FROM <tbl> WHERE <pk> = ? <RowLockHint> <NoWaitClause>`.
+The rendered SELECT becomes
+`SELECT … WHERE uuid = ?<m_rowLockSuffix><m_rowLockNoWaitSuffix>`. FB
+permits `ORDER BY` together with `WITH LOCK` (validated).
 
 ## What this design explicitly does NOT do
 
@@ -594,11 +595,11 @@ Per-row column is the wrong shape for this problem.
 
 | Path | Change |
 |---|---|
-| `backend/utils/dataVersion.{h,cpp}` | **New** — `ibDataVersion::NewStamp()` 12-char base-62 generator |
-| `backend/backend_exception.h` / `.cpp` | `ibBackendLockException` + 2 throw helpers |
-| `backend/databaseLayer/sqlDialect.{h,cpp}` | `RowLockHint()` + `NoWaitClause()` virtuals + 5 per-driver overrides |
-| `backend/metaCollection/partial/commonObject.h` | `wxString m_loadedDataVersion` + `wxString m_currentDataVersion` on `ibValueRecordDataObject` |
-| `backend/metaCollection/partial/list/objectList.h` / `.cpp` | `LoadObject` captures `m_loadedDataVersion` from result row |
+| `backend/utils/dataVersion.hpp` / `.cpp` | **New** — `ibDataVersion::NewStamp()` 12-char base-62 generator + `IsValidStamp` |
+| `backend/backend_exception.h` / `.cpp` | `ibBackendLockException` + throw helpers |
+| `backend/databaseLayer/databaseLayer.h` + driver dialect init | `m_rowLockSuffix` / `m_rowLockNoWaitSuffix` dialect fields (replaced the originally-planned `RowLockHint()`/`NoWaitClause()` virtuals) |
+| `backend/metaCollection/partial/commonObject.h` | `wxString m_loadedDataVersion` on `ibValueRecordDataObjectRef` (no separate `m_currentDataVersion` — bump writes the attr slot directly) |
+| `backend/metaCollection/partial/commonObjectRefQuery.cpp` | `ReadData` captures `m_loadedDataVersion`; `LockAndCheckDataVersion` impl |
 | `backend/metaCollection/partial/catalogObject.cpp` | `WriteObject` / `DeleteObject` adds Layer-1 + Layer-2 + bump |
 | `backend/metaCollection/partial/documentObject.cpp` | Same |
 | `backend/metaCollection/partial/chartOfAccountsObject.cpp` | Same |
@@ -623,8 +624,8 @@ Write changes can call into them.
 |---|---|---|
 | 1 | `ibDataVersion::NewStamp()` + gtest | ✅ landed (no gtest yet — alpha tier) |
 | 2 | `ibBackendLockException` + throw helpers | ✅ landed |
-| 3 | `RowLockHint()` + `NoWaitClause()` virtuals on `ibDatabaseLayer` + 4 driver overrides (FB / PG / MySQL / ODBC; SQLite default) | ✅ landed (moved to base virtuals instead of separate `ibSqlDialect` per Phase 7 of mesh doc being reverted) |
-| 4 | `m_loadedDataVersion` capture in `LoadObject` | ✅ landed |
+| 3 | Per-driver row-lock clause | ✅ landed — **later superseded**: started as `RowLockHint()`/`NoWaitClause()` virtuals on `ibDatabaseLayer`; 2026-06-16 these were deleted and the clause moved to the `m_rowLockSuffix`/`m_rowLockNoWaitSuffix` dialect fields (see "Cross-driver dialect" above) |
+| 4 | `m_loadedDataVersion` capture on read | ✅ landed (in `ReadData`, not the originally-named `LoadObject`) |
 | 5 | Mutable-refs (Catalog / Document / ChartOf*) Write/Delete protection | ✅ landed — `LockAndCheckDataVersion()` on `ibValueRecordDataObjectRef` + wired into 4 × 2 = 8 sites |
 | 6 | Register Write/Delete protection (universal `LockByKeys()` — same path for recorder-keyed AR/AcR/IR-Subordinate and dimension-keyed IR; keys live in `m_keyValues`) | ✅ landed — wired into 3 × 2 = 6 sites |
 | 7 | Constants Write protection (single-row guard) | ✅ landed (inline FOR UPDATE in `SetConstValue`) |
@@ -638,10 +639,10 @@ Estimated: ~1 week of focused work.
 
 ## Open questions
 
-1. **`DataVersion` stamp format.** Proposed: `(ms_since_epoch << 16) |
-   counter` base-62 → 12 chars. Alternative: pure random base-62 (no
-   ordering, no clock-skew). Pick when implementing — equality is the
-   only operation we care about, so random works just as well.
+1. **`DataVersion` stamp format.** ✅ Resolved: `(unix_ms_since_epoch
+   << 16) | per_process_counter`, base-62 → 12 chars
+   (`dataVersion.cpp`). Equality is the only operation that matters, so
+   the wall-clock prefix is purely a debugging convenience.
 2. **NoWait by default for `Write`?** Current proposal: wait mode
    (driver-default lock wait, ~30s on FB). Argument for NoWait:
    instant feedback to user. Argument against: legitimate brief
@@ -668,10 +669,8 @@ Estimated: ~1 week of focused work.
 - [`session-registry.md`](session-registry.md) — per-driver NoWait
   status across FB/PG/MySQL/ODBC.
 
-Memory notes that will be created on landing:
-- `reference_data_version_format` — stamp generator, monotonicity
-  guarantees.
-- `reference_row_lock_hint` — per-driver SQL dialect for pessimistic
-  row lock.
-- `project_record_write_protection` — implementation status,
-  open issues.
+Related memory:
+- `project_record_write_protection` — landed status (optimistic +
+  sys_lock), implementation pointers, open issues.
+- `reference_session_pool_web_reality` — confirms the row-lock-for-
+  liveness rollback (verified 2026-06-09).

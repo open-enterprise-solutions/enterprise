@@ -11,8 +11,8 @@
 
 ```cpp
 struct ibByteCode {
-    std::vector<ibByteCodeVarInfo>  m_listVar;    // 5 kinds
-    std::vector<ibByteFunction>     m_listFunc;   // 3 kinds
+    std::vector<ibByteCodeVarInfo>  m_listVar;    // 5 ibVarKind
+    std::vector<ibByteFunction>     m_listFunc;   // ibFnKind (3 at this arc; +Lambda, +Protected since)
     // m_listCode, m_listConst, m_dependencies, m_id, m_version, …
 };
 
@@ -37,6 +37,11 @@ Kinds:
 | Local          | user-private function                                    | OPER_CALL       |
 | Export         | user-declared export function                            | OPER_CALL       |
 | ContextMethod  | method of a Context binding (`GetForm` of `Manager`)     | OPER_CALL_METHOD |
+
+> Two `ibFnKind` values landed after this arc and are NOT covered here:
+> **Lambda** (anonymous function, cross-bc invisible — `docs/lambda.md`) and
+> **Protected** (the `Protected` access modifier — visible to children only).
+> `IsCrossBcVisible()` is `Export || ContextMethod`.
 
 Cross-table: `ContextProp.m_parentRef` and `ContextMethod.m_parentRef`
 index into `m_listVar` (parent Context binding entry).

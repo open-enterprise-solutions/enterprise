@@ -7,9 +7,11 @@
 > it through that direction, not as a standalone storage refactor.
 
 Status: **design detailed; backlog until the size / partial-save triggers fire** (see end).
-Builds directly on the landed node-serialization walk (`metadata-serialization-arc.md`):
-`SaveSubtree`/`LoadSubtree` already (de)serialize one node + its subtree — that is exactly
-"fill / read one container entry".
+Builds directly on the landed node-serialization walk (the node model in
+`schema-first-metadata.md`): `BuildDataNode`/`ApplyDataNode` (per-type
+`WriteData`/`ReadData`) already (de)serialize one node + its subtree — that is exactly
+"fill / read one container entry". (The design text below uses the old arc names
+`SaveSubtree`/`LoadSubtree` — read them as `BuildDataNode`/`ApplyDataNode`.)
 
 ## Core model
 

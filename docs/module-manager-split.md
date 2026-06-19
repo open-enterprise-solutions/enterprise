@@ -48,7 +48,7 @@ ibValueModuleManager                         — LIGHTWEIGHT base
 `SYSTEM_TYPE_REGISTER`: the lightweight base unit (`ibValueModuleUnit`) needs its
 own factory registration `SO_MODB` — the designer puts it into the compile
 module's context, and `PrepareModuleData` calls `GetClassType()` → `GetTypeIDByRef`,
-which asserts on an unregistered `wxClassInfo`. The runtime unit
+which asserts on a type-id missing from the ctor registry. The runtime unit
 (`ibValueRuntimeModuleUnit`) is `SO_MODL`, a distinct type.
 
 ## Designer manager lifetime

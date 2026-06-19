@@ -1,7 +1,7 @@
 # Temp-DB — DB temporary tables as the materialisation / optimisation layer
 
 > **Status (2026-06-11): CORE LANDED, PG live validation pending.** The capability seam, the
-> temp-table manager (`tempTableManager.{h,cpp}` — probe / CREATE+fill via L2 / RAII drop /
+> temp-table manager (`query/tempTableManager.{h,cpp}` — probe / CREATE+fill via L2 / RAII drop /
 > graceful RAM fallback), the DB-temp source adapter, the PostgreSQL dialect, and the
 > server-side join/union promotions (`PromoteComputedLeaf` / `PromoteUnionBranches` in
 > `queryProvider.cpp`, column remap incl. aggregates) are all in the tree. The decision is
@@ -145,7 +145,7 @@ like the L3 abstraction did, because it changes the compose flow. Do not lay it 
 | `ibTempTableDialect` + `GetTempTableDialect()` nullable seam (L1) | **laid** |
 | Planner decision — split in two, each owned where its inputs live: `WorthDbTemp(rowCount)` = the SHOULD size-gate (§7), called at the promote sites with the EXACT materialised row count; the CAN-gate (dialect presence + runtime probe + graceful fallback) inside `ibTempTableManager::Materialise`. The generic RAM-composer `MaterialiseLeaf` seam deliberately stays RAM — temping a RAM-stitched leaf gains nothing (§8); new promotable shapes extend the promote family. | **landed** |
 | `ibDbTempTableQueryable` — DB-temp source adapter (L3, sibling of the RAM `ibTempTableQueryable`); raw columns, inherits the DB provider, read-only scan | **landed** |
-| Temp-table manager (`tempTableManager.{h,cpp}`) — holder-anchored lifetime (pins the connection via an owned `ibConnectionScope`), runtime capability probe, CREATE + fill via L2 DDL/DML (columns in the metadata storage format — references/enums round-trip), RAII DROP, graceful RAM fallback (null on no-dialect / failure). Per-session probe CACHE still TODO (probes per Materialise today). | **landed** |
+| Temp-table manager (`query/tempTableManager.{h,cpp}`) — holder-anchored lifetime (pins the connection via an owned `ibConnectionScope`), runtime capability probe, CREATE + fill via L2 DDL/DML (columns in the metadata storage format — references/enums round-trip), RAII DROP, graceful RAM fallback (null on no-dialect / failure). Per-session probe CACHE still TODO (probes per Materialise today). | **landed** |
 | Per-driver dialects — **PostgreSQL** (`AdHocCreate`, explicit DROP via the pinning scope); MySQL later; Firebird stays `nullptr` (RAM); SQLite N/A (logs-only) | **PG landed** |
 | **Server-side JOIN push-down** — `PromoteComputedLeaf` (computed ⋈ DB: temp the computed side, remap columns incl. aggregates/having, rebuild the join tree → the join runs in the DBMS) and `PromoteUnionBranches` (computed UNION branches temped, the whole union server-side). Generic multi-way / DB⋈DB-cross-connection promotion = future (federation). | **landed (two shapes)** |
 | RAM-composer join ORDER — `ibQueryComposer::PlanInnerJoinOrder`: smallest-first reorder of pure-INNER chains (3+ units) with EXACT materialised counts; tree-order fallback on any anomaly | **landed** |

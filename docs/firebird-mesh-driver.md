@@ -1,6 +1,6 @@
 # Firebird mesh driver — distributed deployment for OES
 
-Design plan for `ibFirebirdDatabaseLayer` as the active coordination
+Design plan for `ibDatabaseLayerFirebird` as the active coordination
 layer for distributed OES deployments. Target sweet spot:
 **3-30 users on a shared LAN, databases up to 100 GB**, accessed
 through a file share or peer-to-peer mesh — the segment between
@@ -151,7 +151,7 @@ administration.
 ## Architectural principle
 
 **All mesh / leader-election / replication / failover logic lives
-inside `ibFirebirdDatabaseLayer`. The OES engine sees only the
+inside `ibDatabaseLayerFirebird`. The OES engine sees only the
 existing `ibDatabaseLayer` abstraction.**
 
 ### What the engine still does
@@ -170,19 +170,27 @@ logic in `backend/metaCollection/` don't know about mesh.
 
 ### What the driver hides
 
-| Concern | Where it's implemented in driver |
-|---|---|
-| Connection mode selection | `firebirdDatabaseLayer.cpp::Open` — picks embedded / local-server / TCP-remote / mesh-peer / leader from config |
-| Peer discovery | `mesh/discovery/` — mDNS on LAN, manifest on shared NAS |
-| Lease coordination | `mesh/lease/` — SMB byte-range lock on `.lease` sidecar |
-| Replication shipping | `mesh/replication/` — FB log producer/consumer per peer |
-| Adaptive subscription | `mesh/subscription/` — per-table policy + on-demand fetch + idle-demote |
-| HLC clock | `mesh/hlc/` — hybrid logical clock + per-session read-your-writes barrier |
-| DDL 2-phase deploy | `mesh/coordinator/` — `isc_que_events` broadcast + ACK protocol |
-| Query routing | `mesh/routing/` — local vs peer vs archive, per-query decision |
-| Failover | shared across the above — lease timeout, replication catch-up via nbackup |
-| Compression of BLOB/TEXT | `firebirdParameterCollection.cpp` — zstd in `SetParamBlob` / `GetResultBlob` (transparent) |
-| Scheduled backup-restore | `mesh/maintenance/` — driver schedules `gbak -B; gbak -R` weekly |
+All FB driver files live **flat** in
+`src/engine/backend/databaseLayer/firebird/` — there is no `mesh/`
+subtree (the per-concern directory layout in earlier drafts of this
+doc was never built). The vendored FB runtime is under
+`firebird/engine/`. Status column: ✅ = in tree, ⏳ = deferred (Phase 5
+mesh, see below).
+
+| Concern | File / class | Status |
+|---|---|---|
+| Connection mode selection | `firebirdDatabaseLayer.cpp` — `ibDatabaseLayerFirebird::Open` picks embedded / local-server / leader from path + config | ✅ |
+| Lease coordination | `firebirdLease.{h,cpp}` — `ibFirebirdLease`, SMB byte-range lock on `.lease` sidecar | ✅ |
+| Leader / follower orchestration | `firebirdLeaderMode.{h,cpp}` — `ibFirebirdLeaderMode` | ✅ |
+| Out-of-process local server | `firebirdLocalServer.{h,cpp}` — `ibFirebirdLocalServer` (opt-in `OES_FB_LOCALSERVER`) | ✅ |
+| HLC clock | `firebirdHlc.{h,cpp}` — `ibHlcClock` | ✅ (skeleton, mesh-only consumer) |
+| Replication config writer | `firebirdReplicationConfig.{h,cpp}` — `ibFirebirdReplicationConfig` | ✅ (skeleton, mesh-only consumer) |
+| BLOB/TEXT compression | `firebirdBlobCompression.{h,cpp}` — `ibFirebirdBlobCompression`, **zlib** (`wxZlibInputStream`/`OutputStream`, not zstd) in the param/result BLOB path (transparent) | ✅ |
+| Scheduled backup-restore / adaptive sweep | `firebirdMaintenance.{h,cpp}` + `firebirdMaintenanceScheduler.{h,cpp}` | partial (primitives ✅, scheduler ⏳) |
+| Peer discovery (mDNS / NAS manifest) | not built | ⏳ |
+| Adaptive subscription | not built | ⏳ |
+| DDL 2-phase deploy across peers | not built | ⏳ |
+| Query routing (local / peer / archive) | not built | ⏳ |
 
 The `ibDatabaseLayer` interface gains at most two optional methods:
 
@@ -204,8 +212,8 @@ only when surfacing distributed status.
 
 ### Why other drivers stay simple
 
-`ibPostgresDatabaseLayer`, `ibMysqlDatabaseLayer`,
-`ibOdbcDatabaseLayer`, `ibSqliteDatabaseLayer` remain thin wrappers.
+`ibDatabaseLayerPostgres`, `ibDatabaseLayerMySQL`,
+`ibDatabaseLayerODBC`, `ibDatabaseLayerSQLite` remain thin wrappers.
 For PG / MySQL / MSSQL the production deployment is standard
 client-server; users at the scale of these RDBMS already have
 dedicated server infrastructure. SQLite is single-process by
@@ -237,10 +245,10 @@ RDBMS, period.
 
 | Scenario | Driver | Notes |
 |---|---|---|
-| Single user, desktop | **FB embedded** (`ibFirebirdDatabaseLayer`) | Works as-is via `fbclient.dll` — no coordination needed |
-| RDP / terminal server (10-30 ops on one box) | **FB Classic + lock table** (`ibFirebirdDatabaseLayer`) | FB's own multi-process coordination via `%TEMP%/fb_lock_*` — works as-is |
-| Small office / clinic / shop, shared LAN, **3-30 users, <100 GB** | **FB mesh or leader-election** (`ibFirebirdDatabaseLayer`) | **The design target of this document** |
-| 30+ users **or** >100 GB | **PostgreSQL** (`ibPostgresDatabaseLayer`) **or MSSQL** (`ibOdbcDatabaseLayer`) | Out of FB driver scope. PG / MSSQL are the right tool here. Migration requires data export from `.fdb` → import to PG/MSSQL schema. |
+| Single user, desktop | **FB embedded** (`ibDatabaseLayerFirebird`) | Works as-is via `fbclient.dll` — no coordination needed |
+| RDP / terminal server (10-30 ops on one box) | **FB Classic + lock table** (`ibDatabaseLayerFirebird`) | FB's own multi-process coordination via `%TEMP%/fb_lock_*` — works as-is |
+| Small office / clinic / shop, shared LAN, **3-30 users, <100 GB** | **FB mesh or leader-election** (`ibDatabaseLayerFirebird`) | **The design target of this document** |
+| 30+ users **or** >100 GB | **PostgreSQL** (`ibDatabaseLayerPostgres`) **or MSSQL** (`ibDatabaseLayerODBC`) | Out of FB driver scope. PG / MSSQL are the right tool here. Migration requires data export from `.fdb` → import to PG/MSSQL schema. |
 
 FB doesn't try to compete with PG/MSSQL at the mid-market /
 enterprise scale. They cover the upper segment, FB covers the
@@ -273,8 +281,8 @@ growth, not an ongoing burden:
 3. Bulk-load data into the new RDBMS.
 4. Update `connect.cfg` connection string — points at PG/MSSQL
    instead of `.fdb`.
-5. Restart OES instances — they pick up `ibPostgresDatabaseLayer`
-   or `ibOdbcDatabaseLayer` automatically based on the connection
+5. Restart OES instances — they pick up `ibDatabaseLayerPostgres`
+   or `ibDatabaseLayerODBC` automatically based on the connection
    string.
 
 **Engine OES sees no difference** — the abstraction over
@@ -341,7 +349,7 @@ already shows up during development.
 Driver autodetects on `Open`:
 
 ```cpp
-ibFirebirdDatabaseLayer::Open(connStr) {
+ibDatabaseLayerFirebird::Open(connStr) {
     if (HasMeshConfig(connStr)) {
         InitMeshMode(connStr);
     } else if (HasLeaseFile(connStr)) {
@@ -427,8 +435,8 @@ never touches it.
 ### Adaptive subscription
 
 ```cpp
-// Driver pseudo-code in firebirdDatabaseLayer::FetchRow
-ibValue ibFirebirdDatabaseLayer::FetchRow(tableId, rowId) {
+// DESIGN pseudo-code (mesh, Phase 5 — deferred; FetchRow does not exist)
+ibValue ibDatabaseLayerFirebird::FetchRow(tableId, rowId) {
     if (IsLocallySubscribed(tableId, rowId)) {
         return ReadLocal(tableId, rowId);
     }
@@ -518,7 +526,8 @@ After a write, subsequent reads from the same session must see
 their own write. Driver maintains per-session `last_write_hlc`:
 
 ```cpp
-ibResultSet* ibFirebirdDatabaseLayer::RunQueryWithResults(...) {
+// DESIGN pseudo-code (mesh, Phase 5 — deferred)
+ibDatabaseResultSet* ibDatabaseLayerFirebird::RunQueryWithResults(...) {
     if (this_session.last_write_hlc.has_value()) {
         // Wait up to N ms for local replica to catch up to this HLC.
         if (!WaitForLocalHlc(this_session.last_write_hlc, 200ms)) {
@@ -571,20 +580,22 @@ struct ibLeaseFileV1 {
 ### Acquisition protocol
 
 ```cpp
-// Actual class in tree: `ibFirebirdLease`
-// (`backend/databaseLayer/firebird/firebirdLease.h:61`).
-// "Lease file" in this section's prose refers to the same class
-// from a different angle.
-ibLeaseAcquireResult ibFirebirdLease::TryAcquireExclusive() {
-    HANDLE h = CreateFileW(L"db.fdb.lease", GENERIC_READ | GENERIC_WRITE,
-                           FILE_SHARE_READ, ...);
+// Class in tree: ibFirebirdLease (firebirdLease.{h,cpp}).
+// Sidecar opened FILE_SHARE_READ | FILE_SHARE_WRITE (so followers can
+// ReadFile it), created OPEN_ALWAYS (never truncates), and the
+// EXCLUSIVE lock is taken on a SENTINEL byte at kLockSentinelOffset
+// (200) — past the content — so the lock doesn't block follower reads.
+// (All three were squashed bugs; see "Regression-prevention" up top.)
+ibFirebirdLease::AcquireResult ibFirebirdLease::TryAcquireExclusive() {
+    m_hFile = CreateFileW(/*…*/, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                          OPEN_ALWAYS, /*…*/);
     OVERLAPPED ov = {};
-    if (LockFileEx(h, LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY,
-                   0, MAXDWORD, MAXDWORD, &ov)) {
-        // We are the leader.
-        return Acquired;
+    ov.Offset = kLockSentinelOffset;            // 200, not 0..MAXDWORD
+    if (LockFileEx(m_hFile, LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY,
+                   0, 1, 0, &ov)) {
+        return AcquireResult::Acquired;          // we are the leader
     }
-    return AnotherLeaderActive;
+    return AcquireResult::AnotherLeaderActive;
 }
 ```
 
@@ -898,36 +909,32 @@ per active week without intervention.
 
 ### Driver-side mitigations (transparent to engine)
 
-#### 1. BLOB/TEXT compression in `SetParamBlob` / `GetResultBlob`
+#### 1. BLOB/TEXT compression (landed) — `ibFirebirdBlobCompression`
+
+The shipped implementation lives in `firebirdBlobCompression.{h,cpp}`
+and is called from the FB param/result BLOB path. It uses **zlib**
+(`wxZlibOutputStream` / `wxZlibInputStream`, default level 6), **not
+zstd**, and an `OESC` 4-byte magic header — *not* the `0x00`/`0x01`
+byte marker the original design sketch below assumed:
+
+- `Wrap(data, size)` — compresses when `size >= kCompressThresholdBytes`
+  (512) **and** the deflated body is smaller than the input; otherwise
+  stores raw with no header. So an uncompressed payload carries **no**
+  prefix byte (legacy DBs read transparently).
+- `HasMagic(data, size)` / `Unwrap(...)` on the read path — magic
+  present ⇒ inflate; absent ⇒ pass through.
+
+The original (pre-implementation) sketch — kept for the design intent
+only, do not treat as current code:
 
 ```cpp
-void ibParameterCollection::SetParamBlob(int idx, const void* data, size_t size) {
-    if (size >= kCompressThreshold) {       // 512 bytes
-        auto compressed = zstd::Compress(data, size);
-        if (compressed.size() < size * 0.85) {
-            // Worth compressing.
-            std::vector<uint8_t> wrapped;
-            wrapped.push_back(0x01);  // marker: zstd-compressed
-            wrapped.insert(wrapped.end(),
-                           compressed.begin(), compressed.end());
-            SetRawBlob(idx, wrapped.data(), wrapped.size());
-            return;
-        }
+// DESIGN SKETCH — superseded by ibFirebirdBlobCompression (zlib + OESC magic)
+wxMemoryBuffer ibFirebirdBlobCompression::Wrap(const void* data, size_t size) {
+    if (size >= kCompressThresholdBytes) {        // 512 bytes
+        // wxZlibOutputStream deflate; keep only if smaller than input.
+        // On keep: OESC magic header + deflated body.
+        // On reject / below threshold: raw bytes, no header.
     }
-    // Raw — prefix 0x00 marker for symmetry on read path.
-    std::vector<uint8_t> wrapped;
-    wrapped.push_back(0x00);
-    wrapped.insert(wrapped.end(), (uint8_t*)data, (uint8_t*)data + size);
-    SetRawBlob(idx, wrapped.data(), wrapped.size());
-}
-
-std::vector<uint8_t> ibResultSet::GetResultBlob(int idx) {
-    auto raw = GetRawBlob(idx);
-    if (raw.empty()) return {};
-    if (raw[0] == 0x01) {
-        return zstd::Decompress(raw.data() + 1, raw.size() - 1);
-    }
-    return std::vector<uint8_t>(raw.begin() + 1, raw.end());
 }
 ```
 
@@ -936,15 +943,18 @@ DataProcessor body, attached files) shrink by 50-80% on disk.
 Engine OES knows nothing about compression — `SetParamBlob` /
 `GetResultBlob` keep their wire-level semantics.
 
-Cost: zstd encode/decode on every BLOB I/O — single-digit
-microseconds for typical sizes. Negligible.
+Cost: zlib deflate/inflate on every BLOB I/O above threshold —
+negligible for typical sizes; the gate skips it below 512 B.
 
 #### 2. Scheduled backup-restore cycle
 
-Driver schedules `gbak -B; gbak -R` weekly during off-hours:
+Driver schedules `gbak -B; gbak -R` (primitives in
+`ibFirebirdMaintenance`; the weekly scheduler
+`ibFirebirdMaintenanceScheduler` is scaffolded but not yet wired):
 
 ```cpp
-class ibMaintenanceScheduler {
+// shape — see ibFirebirdMaintenance / ibFirebirdMaintenanceScheduler
+class ibFirebirdMaintenanceScheduler {
     void OnSundayNight() {
         BroadcastEvent("maintenance_starting", duration_estimate);
         QuiesceAllPeers();
@@ -982,55 +992,47 @@ archive-node.
 ## UX requirements
 
 User expectation: **point at a folder, get a working database. No
-configuration files visible, no `firebird.conf` to edit, no
-plumbing.**
+plumbing in the user's view.** The goal below is "everything FB in one
+hidden `_fb/` folder, nothing next to the exes" — **achieved**. The
+stricter "zero config files even inside `_fb/`" is **not** achieved
+and, for `firebird.conf` (which carries `ServerMode = SuperClassic`),
+not achievable via DPB alone.
 
-### Target directory layout
+### Actual `_fb/` layout (build output, verified 2026-06-19)
 
 ```
 C:\Programs\OES\
-├── enterprise.exe          ← launches
-├── designer.exe
-├── backend.dll
-├── frontend.dll
-├── wfrontend.dll
-└── _fb\                    ← single hidden folder, user never opens
-    ├── fbclient.dll
-    ├── ib_util.dll
-    ├── icudt63.dll, icuin63.dll, icuuc63.dll
-    ├── icudt63l.dat        (27 MB ICU data)
-    ├── plugins\
-    │   └── engine13.dll
-    └── intl\
-        ├── fbintl.dll
-        └── fbintl.conf
+├── enterprise.exe  designer.exe  backend.dll  frontend.dll  wfrontend.dll
+└── _fb\                              ← single hidden folder
+    ├── fbclient_{x64,x86}.dll
+    ├── firebird_{x64,x86}.exe        out-of-process server
+    ├── ib_util_{x64,x86}.dll
+    ├── icudt63_{x64,x86}.dll  icuin63_{x64,x86}.dll  icuuc63_{x64,x86}.dll
+    ├── icudt63l.dat                  (27 MB ICU data)
+    ├── security5.fdb                 (pre-baked security DB)
+    ├── firebird.conf                 (ServerMode = SuperClassic — load-bearing)
+    ├── firebird.msg
+    ├── plugins\                      engine13 / srp / legacy_auth /
+    │                                 legacy_usermanager / chacha /
+    │                                 default_profiler / fbtrace / udr_engine
+    └── intl\  fbintl_{x64,x86}.dll + fbintl.conf
 
-C:\Users\Иванов\Documents\МояБухгалтерия\    ← user-chosen
-└── sys.fdb
-└── mesh.conf               (only if multi-user share scenario)
-└── sys.fdb.lease           (only if leader-election scenario)
+<user-chosen folder>\
+├── sys.fdb
+├── mesh.conf        (only in a multi-user share scenario)
+└── sys.fdb.lease    (only in a leader-election scenario)
 ```
 
-### What gets eliminated
+### What landed vs what was dropped
 
-| File | Currently | After cleanup | How |
-|---|---|---|---|
-| `firebird.conf` | ~43 KB next to fbclient | **Gone** | All settings passed via DPB on `isc_attach_database`. FB 5 supports per-attachment `parallel_workers`, `lc_ctype`, `session_time_zone`, `force_write`, `page_size`, etc. |
-| `firebird.msg` | ~145 KB | **Gone** | FB error codes mapped through `firebirdInterpretError` (already exists in driver); error text in OES's own translation table (Russian + English). |
-| FB DLLs sprawled next to `.exe` | 15 files | **Hidden in `_fb/`** | `Common.props` updates `<PostBuildEvent>` to copy into subfolder. `SetDllDirectory(L"_fb")` in `appData::Init`. |
-
-### What stays (FB fundamental requirements)
-
-| File | Why | Hidden? |
+| File | Goal | Reality |
 |---|---|---|
-| `fbclient.dll` | Y-valve entry point | yes, in `_fb/` |
-| `plugins/engine13.dll` | Pluggable engine architecture; not statically linkable | yes |
-| `icudt63l.dat` (27 MB) | UTF-8 collation data; mandatory for non-ASCII content | yes |
-| `icudt63 / icuin63 / icuuc63.dll` | ICU runtime | yes |
-| `ib_util.dll` | BLOB filter runtime | yes |
-| `intl/fbintl.{dll,conf}` | INTL collations (UNICODE_CI, RUSSIAN, etc.) | yes (one tiny `.conf`, but inside `_fb/intl/`, not next to exe) |
+| FB DLLs / exe / plugins | Hidden in `_fb/`, nothing next to exes | ✅ done — `backend.vcxproj` `CopyFileToFolders` → `_fb/`; `ibFirebirdBootstrap` calls `SetDllDirectory(_fb)` |
+| `firebird.conf` | **Eliminate** (push all via DPB) | ❌ **kept** — it sets `ServerMode = SuperClassic`, which a per-attachment DPB cannot. DPB carries the per-attach knobs (lc_ctype, page_size, force_write, parallel_workers, …); ServerMode is engine-global. |
+| `firebird.msg` | **Eliminate** (driver maps errors) | ❌ **kept** — still copied to `_fb/`. `firebirdInterpretError` covers OES-surfaced GDS codes but the runtime still references the catalogue. |
 
-Net visible-to-user FB footprint: zero files outside `_fb/`.
+Net visible-to-user FB footprint: zero files outside `_fb/`. Inside
+`_fb/`, the config/message files remain.
 
 ### Runtime log redirection
 
@@ -1041,8 +1043,15 @@ FB; invisible to user.
 
 ### Driver bootstrap
 
+The real bootstrap is `ibFirebirdBootstrap`
+(`firebirdBootstrap.{h,cpp}`), idempotent, called once before the
+first `fbclient.dll` symbol resolves. The sketch below shows the
+shape; the live code computes `_fb/` relative to the exe and sets
+`FIREBIRD` + `FIREBIRD_LOG`.
+
 ```cpp
-void ibFirebirdDatabaseLayer::EnsureRuntimeBootstrapped() {
+// shape — see ibFirebirdBootstrap for the live version
+void ibFirebirdBootstrap::EnsureRuntimeBootstrapped() {
     if (g_bootstrapped.exchange(true)) return;
 
     // Tell Windows where to find fbclient.dll dependencies.
@@ -1066,7 +1075,17 @@ resolved.
 
 ### DPB-based connection settings
 
+The live driver builds the DPB **inline** in
+`ibDatabaseLayerFirebird::Open` (a raw `std::vector<char>` of DPB tags,
+not an `ibDPB` helper type) — it pushes `isc_dpb_set_db_charset` +
+`isc_dpb_lc_ctype` (both UTF8), `isc_dpb_force_write`,
+`isc_dpb_session_time_zone` (UTC), `isc_dpb_page_size` (16384, CREATE
+only), `isc_dpb_num_buffers`, and `isc_dpb_parallel_workers` (locally
+`#define`d to 100 — the vendored `consts_pub.h` is FB-4-era). The split
+sketch below is illustrative, not the actual code shape:
+
 ```cpp
+// DESIGN SKETCH — actual DPB is built inline in Open(), not via ibDPB
 ibDPB BuildAttachDpb(const Config& cfg) {
     ibDPB dpb;
     dpb.set(isc_dpb_lc_ctype,             "UTF8");
@@ -1150,7 +1169,7 @@ Driver decides per `mesh.conf` setting `FBHost = Embedded | LocalServer`:
 ### Implementation
 
 ```cpp
-ibFirebirdDatabaseLayer::Open(connStr) {
+ibDatabaseLayerFirebird::Open(connStr) {
     if (config.FBHost == LocalServer) {
         EnsureLocalFbServerStarted();  // idempotent
         InitTcpClientMode("localhost",
@@ -1160,7 +1179,7 @@ ibFirebirdDatabaseLayer::Open(connStr) {
     }
 }
 
-void ibFirebirdDatabaseLayer::EnsureLocalFbServerStarted() {
+void ibDatabaseLayerFirebird::EnsureLocalFbServerStarted() {
     // Lazy spawn child process. Held until enterprise.exe exits.
     // PID + port recorded in lock file for crash cleanup.
 }
@@ -1224,6 +1243,7 @@ Currently in tree under
 ```
 dll/
 ├── fbclient_{x64,x86}.dll          Y-valve client
+├── firebird_{x64,x86}.exe          out-of-process server (local-server / leader mode)
 ├── ib_util_{x64,x86}.dll           BLOB filter / UDF runtime
 ├── icudt63_{x64,x86}.dll           ICU char-class data shim
 ├── icuin63_{x64,x86}.dll           ICU i18n
@@ -1233,9 +1253,17 @@ dll/
 │   ├── fbintl.conf                 INTL config
 │   └── fbintl_{x64,x86}.dll        INTL drivers
 ├── plugins/
-│   └── engine13_{x64,x86}.dll      Database engine
-├── firebird.conf                   (to be eliminated — driver pushes via DPB)
-└── firebird.msg                    (to be eliminated — driver maps errors)
+│   ├── engine13_{x64,x86}.dll      Database engine
+│   ├── srp_{x64,x86}.dll           SRP auth (TCP-incoming)
+│   ├── legacy_auth_{x64,x86}.dll   Legacy_Auth (default-creds fallback)
+│   ├── legacy_usermanager_{x64,x86}.dll
+│   ├── chacha_{x64,x86}.dll        wire crypt
+│   ├── default_profiler_{x64,x86}.dll
+│   ├── fbtrace_{x64,x86}.dll
+│   ├── udr_engine_{x64,x86}.dll + udr_engine.conf
+├── security5.fdb                   security database (pre-baked)
+├── firebird.conf                   ServerMode = SuperClassic (OES override)
+└── firebird.msg                    FB error-message catalogue
 
 ibase.h                             Legacy C API (FB_API_VER 40)
 iberror.h                           Error code constants
@@ -1244,21 +1272,39 @@ firebird/impl/                      Internal C API headers
 gen/iberror.h                       Generated error codes
 ```
 
-`firebird.conf` has `ServerMode = Classic` set, which gives the
-RDP / multi-process-on-one-machine scenario for free without our
-intervention.
+`firebird.conf` sets `ServerMode = SuperClassic` (OES override of the
+FB 5 `Super` default — see `firebird-driver-hardening.md` and the
+memory note `reference_fb_servermode_superclassic`: two OES processes
+on one `.fdb` under `Super` would collide with `isc_io_error`).
+`SuperClassic` gives the RDP / multi-process-on-one-machine scenario
+for free.
 
-### What still needs to be added
+**Correction (verified 2026-06-19):** `firebird.conf` and
+`firebird.msg` are **NOT** eliminated. `backend.vcxproj` copies both
+into `_fb/` at build time (`CopyFileToFolders` entries), alongside the
+bitness-suffixed DLLs, `security5.fdb`, `firebird_{x64,x86}.exe`, and
+the full `plugins/` set. The "push everything via DPB, ship zero
+config files" goal in the UX section below is **aspirational**, not
+the current build output.
+
+### Already vendored (was previously listed as "to add")
+
+`srp_{x64,x86}.dll` (TCP-incoming auth), `firebird_{x64,x86}.exe`
+(local-server / leader mode), `legacy_auth_{x64,x86}.dll` (the
+default-creds fallback the hardening doc relies on), and the
+`replication.conf` writer (`ibFirebirdReplicationConfig`) are all in
+tree. The earlier "what still needs to be added" list is superseded.
+
+### Still genuinely missing
 
 | Item | Purpose | Where to get |
 |---|---|---|
 | **OO API headers** (`firebird/Interface.h`, `firebird/Provider.h`, `firebird/Message.h`) | Modern interface-based API for replication management, parallel attachment work, transparent crypt plugin loading | From FB 5 SDK zip → `include/firebird/` |
-| **`Srp.dll` auth plugin** | Required for TCP-incoming auth (leader-mode listener, mesh peer-to-peer) | From FB 5 SDK zip → `plugins/` |
-| **`firebird.exe`** (optional) | For local-server mode (bitness decoupling) | From FB 5 SDK zip → root |
-| **`replication.conf`** template | FB 4+ replication framework requires this file | Generated by driver on first run; check-in shape skeleton for reference |
 
-`Legacy_Auth.dll` is **not** required for our use cases — embedded
-mode bypasses auth, and TCP-incoming should always use SRP. Skip.
+The driver currently uses only the legacy C API (`ibase.h`,
+`FB_API_VER 40`). Replication-management and parallel-attachment work
+through the OO API is mesh-mode (Phase 5, deferred), so the OO headers
+are not blocking anything shipped.
 
 ---
 
@@ -1312,10 +1358,10 @@ zero-code**.
 | Item | Status |
 |---|---|
 | FB 5.0 client libraries vendored | ✅ x86 + x64 in `engine/dll/` |
-| `firebirdDatabaseLayer` embedded mode | ✅ Working |
-| `firebirdDatabaseLayer` remote TCP mode | ✅ Working |
+| `ibDatabaseLayerFirebird` embedded mode | ✅ Working |
+| `ibDatabaseLayerFirebird` remote TCP mode | ✅ Working |
 | `firebird-driver-hardening` patches (UTF8 DPB, lock_timeout, force_write, page_size, read_consistency) | ✅ Shipped in v1.3.0 |
-| `ServerMode = Classic` in `firebird.conf` (covers RDP) | ✅ Configured |
+| `ServerMode = SuperClassic` in `firebird.conf` (covers RDP + two-OES-on-one-`.fdb`) | ✅ Configured (`firebird.conf:1327`) |
 | `ses_query` / `db_query` macro split | ✅ Done |
 | Session registry + connection pool | ✅ Done |
 | `isc_que_events` infrastructure | partial — used by debug protocol; available for metadata reload |
@@ -1324,26 +1370,26 @@ zero-code**.
 
 | Item | Status | Where |
 |---|---|---|
-| Move FB DLLs from `bin/.../` to `bin/.../_fb/` via `Common.props` | ✅ landed | `Common.props` `<FbVendorDir>` macro |
-| `SetDllDirectory(L"_fb")` bootstrap in `appData::Init` | ✅ landed | `firebird/firebirdBootstrap.{h,cpp}` |
-| Move all settings from `firebird.conf` to DPB in driver | ✅ landed | `firebirdDatabaseLayer::BuildDPB` (UTF8, lock_timeout, force_write, page_size, read_consistency) |
-| Delete `firebird.conf` from vendored + from build output | ✅ landed | not copied into `_fb/` |
-| Audit `firebirdInterpretError`, complete error code table | ✅ landed | `firebirdInterpretError` covers all OES-surfaced GDS codes; falls back to `isc_status` decode for the rest |
-| Delete `firebird.msg` from vendored + from build output | ✅ landed | not copied into `_fb/` |
-| Redirect FB log via `FIREBIRD_LOG` env var | ✅ landed | `firebirdBootstrap::SetEnv` (also sets `FIREBIRD=<appData dir>`) |
+| Move FB DLLs to `bin/.../_fb/` at build | ✅ landed | `backend.vcxproj` `CopyFileToFolders` → `$(OutDir)\_fb` (per-config) |
+| `SetDllDirectory(_fb)` bootstrap (`ibFirebirdBootstrap`) | ✅ landed | `firebird/firebirdBootstrap.{h,cpp}` — computes `_fb/` relative to the exe; also `SetEnv FIREBIRD` / `FIREBIRD_LOG` |
+| DPB-side connection settings in driver | ✅ landed | `ibDatabaseLayerFirebird::Open` builds the DPB inline (UTF8 `lc_ctype` + `set_db_charset`, lock_timeout, force_write, page_size, read_consistency, parallel_workers) |
+| Audit `firebirdInterpretError`, complete error code table | ✅ landed | covers OES-surfaced GDS codes; falls back to `isc_status` decode for the rest |
+| Redirect FB log via `FIREBIRD_LOG` env var | ✅ landed | `ibFirebirdBootstrap` (also sets `FIREBIRD=<_fb dir>`) |
+| ~~Delete `firebird.conf` / `firebird.msg` from build output~~ | ❌ **NOT done** | both are still `CopyFileToFolders`-copied into `_fb/` by `backend.vcxproj` (lines 783, 827). `firebird.conf` is in fact load-bearing — it carries `ServerMode = SuperClassic`, which a pure-DPB attach cannot set. Treat this row as a **dropped goal**, not a landed item. |
 
-After Phase 1, the user-visible footprint is: `enterprise.exe`,
-`backend.dll`, `frontend.dll`, `wfrontend.dll`, `_fb/` hidden
-folder, user-chosen database folder. **No FB-plumbing files visible
-anywhere** — verified via clean install smoke test (2026-05-XX).
+After Phase 1 the FB runtime lives in a single `_fb/` subfolder rather
+than sprawled next to the exes. It is **not** file-free: `_fb/` still
+contains `firebird.conf`, `firebird.msg`, `security5.fdb`, the
+bitness-suffixed DLLs, `firebird_{x64,x86}.exe`, and `plugins/`. The
+"zero config files" target in the UX section is aspirational.
 
 ### Phase 2 — BLOB compression (low risk, high value) — ✅ landed
 
 | Item | Status | Where |
 |---|---|---|
 | Vendor zlib (already in tree) | ✅ landed | via `wx/zstream.h` (`wxZlibInputStream`/`OutputStream`) |
-| `ibParameterCollection::SetParamBlob` — compress > 512 B | ✅ landed | `firebirdBlobCompression::CompressIfWorthwhile` (threshold = 512 B) |
-| `ibResultSet::GetResultBlob` — decompress | ✅ landed | `firebirdBlobCompression::DecompressIfNeeded` |
+| `ibDatatabaseParameterFirebirdCollection::SetParamBlob` — compress > 512 B | ✅ landed | `ibFirebirdBlobCompression::CompressIfWorthwhile` (threshold = 512 B) |
+| `ibDatabaseResultSetFirebird::GetResultBlob` — decompress | ✅ landed | `ibFirebirdBlobCompression::DecompressIfNeeded` |
 | Magic byte (`OESC` header) for forward compatibility | ✅ landed | uncompressed → no header (legacy DBs read transparently); compressed → 4-byte magic + uncompressed size |
 | Unit tests: round-trip large TEXT, mixed-content BLOBs, edge sizes | ✅ landed | `tests/test_blobCompression.cpp` — 16 round-trip tests |
 
@@ -1356,9 +1402,9 @@ migration — the magic-byte gate is one-way.
 
 | Item | Status | Where |
 |---|---|---|
-| Services-API `gbak` BR cycle | ✅ landed | `firebirdMaintenance::RunBackupRestoreCycle` (uses `isc_service_attach` + `isc_service_start`) |
-| Adaptive sweep via `MON$DATABASE` | ✅ landed | `firebirdMaintenance::AdaptiveSweep` (triggers when OAT/OST gap > threshold) |
-| `ibMaintenanceScheduler` background job (weekly cron) | ⏳ pending | scaffolding exists but not wired to scheduler |
+| Services-API `gbak` BR cycle | ✅ landed | `ibFirebirdMaintenance::RunBackupRestoreCycle` (uses `isc_service_attach` + `isc_service_start`) |
+| Adaptive sweep via `MON$DATABASE` | ✅ landed | `ibFirebirdMaintenance::AdaptiveSweep` (triggers when OAT/OST gap > threshold) |
+| `ibFirebirdMaintenanceScheduler` background job (weekly cron) | ⏳ pending | scaffolding exists (`firebirdMaintenanceScheduler.{h,cpp}`) but not wired to scheduler |
 | UI surface in Designer: "DB size X, last maintenance Y" | ⏳ pending | |
 
 Effect once fully landed: file size stays bounded over time without
@@ -1370,17 +1416,17 @@ automatically is still to be wired.
 
 | Item | Status | Where |
 |---|---|---|
-| `ibLeaseFile` — SMB byte-range lock + heartbeat | ✅ landed | `firebirdLease.{h,cpp}` — 96-byte fixed binary layout (magic, owner-id, epoch, heartbeat-ts, addr/port, generation); `LockFileEx` (`#ifdef __WXMSW__`) / `fcntl F_SETLK` (POSIX) |
-| HLC clock | ✅ landed | `firebirdHlc.{h,cpp}` — `[millis 48][counter 12][nodeId 4]` |
-| `firebirdLeaderMode` — leader / follower orchestrator | ✅ landed | `firebirdLeaderMode.{h,cpp}` — heartbeat thread, lease renewal, generation-bump watch |
-| Driver-side wiring in `firebirdDatabaseLayer::Open` | ✅ landed | Calls `InitForDatabase` on every open; uses returned role-aware `connectUrl` (`inet://localhost:<port>/<path>` for self-leader, `inet://leader-host:<port>/<path>` for follower) instead of bare file path |
-| FB 4+ replication.conf writer | ✅ landed | `firebirdReplicationConfig.{h,cpp}` |
+| `ibFirebirdLease` — SMB byte-range lock + heartbeat | ✅ landed | `firebirdLease.{h,cpp}` — fixed binary layout (`magic 'OESL'`, `version`, `generation`, `heartbeat_unix_ms`, leader host/port, leader pid); sentinel-byte `LockFileEx` at offset `kLockSentinelOffset = 200` (`#ifdef __WXMSW__`) / `fcntl F_SETLK` (POSIX) |
+| HLC clock — `ibHlcClock` | ✅ landed | `firebirdHlc.{h,cpp}` — `[millis 48][counter 12][nodeId 4]` |
+| `ibFirebirdLeaderMode` — leader / follower orchestrator | ✅ landed | `firebirdLeaderMode.{h,cpp}` — heartbeat thread, lease renewal, generation-bump watch |
+| Driver-side wiring in `ibDatabaseLayerFirebird::Open` | ✅ landed | Calls `InitForDatabase` on every open; uses returned role-aware `connectUrl` (`inet://localhost:<port>/<path>` for self-leader, `inet://leader-host:<port>/<path>` for follower) instead of bare file path |
+| FB 4+ replication.conf writer — `ibFirebirdReplicationConfig` | ✅ landed | `firebirdReplicationConfig.{h,cpp}` |
 | Generation-bump → URL refresh on follower | ✅ landed | `HeartbeatLoop` detects generation change, rewrites `connectUrl` so next `CurrentConnectUrl()` sees the new leader |
-| Failover — heartbeat-timeout → self-promote | ✅ landed | `HeartbeatLoop` checks `kHeartbeatStaleMs` (60 s) → `PromoteSelfToLeader` tries `TryAcquireExclusive`; on win, spawns local server + `WriteSelfAsLeader`; on race-loss, refreshes cached URL from the winner |
-| Driver reconnect-on-leader-handoff | ✅ landed (BeginTransaction checkpoint) | `firebirdDatabaseLayer::ReconnectIfLeaderChanged` — at every `DoBeginTransaction` compares cached `m_currentConnectUrl` with `ibFirebirdLeaderMode::CurrentConnectUrl()`; on mismatch, closes the FB handle and re-`Open`s against the new URL. Mid-TX connection loss still surfaces as a regular exception; the *next* BeginTransaction triggers the reconnect. Skipped for remote (`server:db`) mode — no leader-mode there. |
+| Failover — heartbeat-timeout → self-promote | ✅ landed | `HeartbeatLoop` checks `ibFirebirdLease::kHeartbeatStaleMs` (**20 s**) → `PromoteSelfToLeader` tries `TryAcquireExclusive`; on win, spawns local server + `WriteSelfAsLeader`; on race-loss, refreshes cached URL from the winner |
+| Driver reconnect-on-leader-handoff | ✅ landed (proactive at every query boundary) | `ibDatabaseLayerFirebird::ReconnectIfLeaderChanged` runs at the top of `DoBeginTransaction`, `DoRunQuery`, `DoRunQueryWithResults`, **and** `DoPrepareStatement` (all four call sites verified) — cached `m_currentConnectUrl` vs `ibFirebirdLeaderMode::CurrentConnectUrl()` compare; on mismatch closes the FB handle and re-`Open`s against the new URL. Mid-TX connection loss still surfaces as a regular exception; the *next* boundary triggers the reconnect. Skipped for remote (`server:db`) mode — no leader-mode there. |
 | Optional local-cache mode — leader copies .fdb to local disk, syncs via nbackup | ⏳ pending (separate roadmap item) |
 | Lease-level unit tests | ✅ landed | `tests/test_firebirdLease.cpp` — 8 tests covering acquire / re-acquire / write/read state round-trip / generation bump / heartbeat refresh / non-holder read / handoff generation persistence / staleness invariant |
-| Orchestrator-level 2-node integration test (self-promote loop) | ⏳ pending | Requires injectable clock or a >60 s real-time wait; deferred. Lease-level coverage above is the foundation any orchestrator test would build on. |
+| Orchestrator-level 2-node integration test (self-promote loop) | ⏳ pending | Requires injectable clock or a >20 s real-time wait (the `kHeartbeatStaleMs` window); deferred. Lease-level coverage above is the foundation any orchestrator test would build on. |
 
 The lease + HLC + leader orchestrator + replication-config writer
 are all in tree and unit-tested in isolation. End-to-end
@@ -1425,7 +1471,7 @@ Remaining ~100 hr (mDNS, query router, conflict resolver, DDL
 | Auto-port selection | ✅ landed | `firebirdLocalServer::PickFreePort` (bind-to-0 + getsockname) |
 | Pid file + lock | ✅ landed | `%TEMP%/oes-fb-localserver.pid` with pid/port/parent fields |
 | Graceful shutdown + PID cleanup | ✅ landed | atexit hook → `wxSIGTERM` (2 s grace) → `wxSIGKILL` |
-| Config switch — `OES_FB_LOCAL_SERVER` env or per-DB flag | ✅ landed | activation hook in `firebirdLeaderMode::Acquire` |
+| Config switch — `OES_FB_LOCAL_SERVER` env or per-DB flag | ✅ landed | activation hook in `ibFirebirdLeaderMode`; spawn via `ibFirebirdLocalServer::EnsureStarted` |
 | Bundle `firebird.exe` under `_fb/` | ⚠️ opt-in by operator | binary **not** vendored; operator drops it in when flag is ON. Driver surfaces clear error if missing. |
 
 **Why opt-in.** Embedded / leader-election / mesh modes don't need
@@ -1436,37 +1482,34 @@ address space — the archive-node case). Keeping it gated saves
 ~5 MB on the distributable and excludes `<windows.h>` / winsock /
 `wxProcess` from default builds.
 
-Callers (`firebirdLeaderMode`) already handle
+Callers (`ibFirebirdLeaderMode`) already handle
 `ibFirebirdLocalServer::EnsureStarted() == 0` as graceful
 degrade-to-embedded — no `#ifdef` leaks past the translation unit
 boundary.
 
-**Not** for scaling FB past 30 users — that scenario still
-graduates to PG/MSSQL via Phase 7.
+**Not** for scaling FB past 30 users — that scenario graduates to
+PG/MSSQL via a manual `gbak` export + schema rebuild (Phase 7 tooling
+is reverted; see below).
 
-### Phase 7 — RDBMS migration tooling (graduation path) — partial
+### Phase 7 — RDBMS migration tooling (graduation path) — REVERTED
 
-| Item | Status | Where |
-|---|---|---|
-| **`ibSqlDialect` helper** — per-driver emit primitives (`BuildUpsert`, `BuildUpsertDynamic`, `MakeExcludedAssignList`, `LimitClause`, `NextIdSql`, `ConcatOp`, `BlobType`, `BoolType`) | ✅ landed | `sqlDialect.{h,cpp}` — 5 driver singletons (FB / PG / SQLite / MySQL / MSSQL); 35 dialect-emission unit tests in `tests/test_sqlDialect.cpp` |
-| **Sweep hand-written SQL — upsert ladders** | ✅ landed | All 4 dynamic-upsert sites routed through `BuildUpsertDynamic`: `commonObjectRecordSetQuery.cpp` (sites A + B), `commonObjectMetaQuery.cpp` (generic-attribute + predefined-update + tombstone), `constantObject.cpp`, `constantMetadataQuery.cpp`. Static-column upsert via `BuildUpsert` in `userInfo.cpp`. |
-| **Sweep hand-written SQL — `CREATE INDEX IF NOT EXISTS`** | ✅ landed | New `ibSqlDialect::BuildCreateIndex` (base + FB + MSSQL overrides). Swept in `appDataQuery.cpp` (3 session-table indexes) and `metadataConfigurationQuery.cpp` (sequence-table index). FB emits bare `CREATE INDEX` (idempotency via outer `TableExists` gate); MSSQL wraps in `sys.indexes` existence check. |
-| DDL transaction wrap (FB-only `BeginTransaction`/`Commit` around DDL) in `metadataConfigurationQuery.cpp` | ⏳ pending | Candidate for a dialect predicate `DDLNeedsExplicitTransaction()`. |
-| Schema converter — OES metadata → PG / MSSQL DDL generator | ⏳ pending |
-| Bulk data exporter — `.fdb` → CSV / native bulk format per target | ⏳ pending |
-| Bulk data importer — push into PG `COPY` / MSSQL `bcp` | ⏳ pending |
-| Sanity-check tool — row counts, key constraints, indexes match | ⏳ pending |
-| Connection-string switch in `connect.cfg` — runtime detect | ⏳ pending |
-| End-to-end migration smoke test on real configurations | ⏳ pending |
+> **Reverted 2026-05-23, off-priority (focus is shara).** An earlier
+> draft of this table marked an `ibSqlDialect` helper + upsert/CREATE-
+> INDEX sweep as "landed". That work was **reverted** — verified
+> 2026-06-19: `sqlDialect.{h,cpp}` does not exist, and none of
+> `BuildUpsert` / `BuildUpsertDynamic` / `BuildCreateIndex` /
+> `MakeExcludedAssignList` are in the tree. Treat the dialect layer as
+> **not started**. The cross-driver SQL-portability analysis under
+> "SQL portability across drivers" above is still the design of record
+> for when this resumes.
 
-The Phase-7 first two items (`ibSqlDialect` + the dynamic-upsert
-sweep) have already paid off independently of any migration — they
-fixed two pre-existing latent bugs surfaced during the sweep
-(`objectSelectorQuery.cpp` PG `LIMIT 1` before `WHERE`,
-`documentManager_impl.cpp` date-vs-number attribute swap in
-`FindByNumber`'s WHERE clause). Schema-converter / bulk-mover items
-land when the first real customer is approaching the 30-user /
-100 GB boundary.
+Nothing in this phase is currently shipped. When migration tooling
+resumes, the build order is: dialect-emission helper → sweep
+hand-written SQL through it (upsert ladders, `CREATE INDEX`) → schema
+converter (OES metadata → PG / MSSQL DDL) → bulk exporter / importer →
+sanity-check tool → `connect.cfg` switch → end-to-end smoke test.
+Until then, graduation past the 30-user / 100 GB boundary is a manual
+`gbak` export + schema rebuild, not an automated path.
 
 ### Estimated remaining effort
 

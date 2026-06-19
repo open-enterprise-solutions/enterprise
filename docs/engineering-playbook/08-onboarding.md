@@ -271,12 +271,13 @@ If something is broken — first check:
 ```
 src/engine/
 ├── backend/                  — Platform core
-│   ├── appData.cpp           — ibApplicationData: authentication, AuthenticationAndSetUser()
+│   ├── appData.cpp           — ibApplicationData: authentication, AuthenticateUser()
 │   ├── appDataQuery.cpp      — Session and user queries
 │   ├── compiler/
 │   │   ├── compileCode.cpp   — ibCompileCode, ibTranslateCode
 │   │   ├── procUnit.cpp      — ibProcUnit: bytecode interpreter
-│   │   └── value.h           — ibValue, ibNumber (ttmath 128-bit), ibValueTypes
+│   │   ├── value.h           — ibValue, ibValueTypes
+│   │   └── fnumber.h         — ibNumber (self-contained exact-decimal, no ttmath)
 │   ├── databaseLayer/        — ibDatabaseLayer + ibDatabaseLayerFirebird, Postgres, etc.
 │   │   └── databaseLayer.h   — ibPreparedStatement, ibDatabaseResultSet
 │   ├── metaCollection/partial/

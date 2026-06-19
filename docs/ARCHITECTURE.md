@@ -83,7 +83,7 @@ Two sibling DLLs share the same form/view/control code paths through `OES_USE_WE
 Shared frontend objects:
 - **`ibValueForm`** — the runtime representation of an open form; holds the control tree and responds to user events. Same class on both builds.
 - **`ibVisualHost` / `ibVisualHostClient`** — render and input routing surface. Desktop = wxWindow; web = `ibWebWindow` tree serialised to JSON.
-- **Doc-view frames** — backend-facing interface `ibBackendDocFrame` (renamed from the historical `ibBackendDocMDIFrame`); concrete implementations are `ibFrontendDocMDIFrame` (desktop, wraps `wxAuiMDIParentFrame` + `wxDocParentFrameAnyBase`) and `ibWebFrame` (web). Children are `CAuiDocChildFrame` / `ibDialogDocChildFrame` on desktop and `ibWebDocChildFrame` on web. The frame is owned by the `ibSession` that created it (no process-level singleton on the backend side); legacy `mainFrame` macro still exists in `frontend/mainFrame/mainFrame.h` as a frontend-local accessor for the GUI singleton, but new backend code reaches the frame through `ibSession::Current()->GetFrame()` or `ibSession::CurrentFrame()`. Template-mixin rewrite to follow `wxDocParentFrameAny` is partial — `ibFrontendDocMDIFrame` keeps the "MDI" suffix until the frontend-side rename lands.
+- **Doc-view frames** — backend-facing interface `ibBackendDocFrame` (`backend/backend_mainFrame.h`); concrete implementations are `ibFrontendMainFrame` (desktop, `frontend/mainFrame/mainFrame.h`: `public ibBackendDocFrame, public wxAuiMDIParentFrame, public ibDocParentFrameAnyBase`) and `ibWebFrame` (web). Child frames are `ibAuiDocChildFrame` / `ibDialogDocChildFrame` on desktop (`frontend/mainFrame/mainFrameChild.h`) and `ibWebDocChildFrame` on web. The frame is owned by the `ibSession` that created it (no process-level singleton on the backend side); the legacy `mainFrame` macro still exists in `frontend/mainFrame/mainFrame.h` as a frontend-local accessor for the GUI singleton, but new backend code reaches the frame through `ibSession::Current()->GetFrame()` or `ibSession::CurrentFrame()`.
 - **`ibCodeEditor`** (`frontend/win/editor/codeEditor/`) — the Scintilla-based script editor. Lives in `frontend.dll` so any GUI host can use it: `designer.exe` (its module/form editors), `codeRunner.exe` (sessionless scratch runner). Highlighter, fold parser, auto-indent on Enter, format / increase / decrease indent, comment add/remove, Ctrl-Space autocomplete, GotoLine + ProceduresAndFunctions dialogs all live here. Debugger integration is a designer-only concern, kept out of the base via six virtual hooks (`IsDebuggerEnterLoop`, `OnEditDebugPoint`, `OnPatchModule`, `OnEvaluateAutocomplete`, `OnEvaluateToolTip`, `RefreshBreakpointMarkers`); designer's `ibCodeEditorDesigner` (`designer/win/editor/codeEditor/codeEditorDesigner.{h,cpp}`) overrides them with `debugClient->…` calls. Document-less / sessionless mode: passing `nullptr` for the `ibMetaDocument*` skips metadata-driven autocomplete and breakpoint markers but keeps everything else functional — codeRunner uses this to embed the same editor without any DB / metadata / debug infrastructure.
 
 ---
@@ -106,15 +106,16 @@ OES runs on a single coordinator — `ibApplicationData` (`backend/appData.h`) �
   ┌─────────────────────────────────────────────────────────────────┐
   │ ibApplicationData ctor — wires every subsystem in init order    │
   │                                                                 │
-  │   m_connectionPool   ◄── primary DB layer, lazy clones          │
-  │   m_pluginManager    ◄── scans plugins/ and loads .dll          │
-  │   m_lockManager      ◄── sys_lock coordinator                   │
-  │   m_logger           ◄── audit + trace sink (.olg)              │
-  │   m_sessionRegistry  ◄── ibSession registry + worker pool       │
-  │   m_helpService      ◄── syntax-helper corpus (.hlk per locale) │
-  │   m_activeMetaData   ◄── per-runMode fabric, populated later    │
+  │   m_connectionPool    ◄── primary DB layer, lazy clones         │
+  │   m_pluginManager     ◄── scans plugins/ and loads .dll         │
+  │   m_lockManager       ◄── sys_lock coordinator                  │
+  │   m_queryableFactory  ◄── L4 query-engine source factory        │
+  │   m_sessionRegistry   ◄── ibSession registry + worker pool      │
+  │   m_logger            ◄── audit+trace sink (.olg); lazy after DB │
+  │   m_helpService       ◄── syntax-helper corpus; lazy in locale  │
+  │   m_activeMetaData    ◄── per-runMode fabric, populated later   │
   │                                                                 │
-  │   (each ctor takes ib::AppDataCtorToken — see below)            │
+  │   (each owned subsystem ctor takes ib::AppDataCtorToken)        │
   └────────────────────────────┬────────────────────────────────────┘
                                │
                                ▼
@@ -135,7 +136,10 @@ The init list is **the** ordering contract. Listed in the order they're construc
 | 1 | `m_connectionPool` | Pool of `ibDatabaseLayer` — master + lazy clones | Everything else needs DB access; this must exist first. |
 | 2 | `m_pluginManager` | Loads `plugins/*.dll` | Plugins may need `db_query` (=pool). |
 | 3 | `m_lockManager` | `sys_lock` table coordinator | Independent — could move; ordered for readability. |
-| 4 | `m_sessionRegistry` | Session registry + worker pool | After pool so first session can already check connections out. `m_logger` is created lazily in `CreateLogger()` after the DB opens; not in init list. |
+| 4 | `m_queryableFactory` | L4 query-engine source factory (`ibQueryableFactory`) | Descriptor contents follow the metadata open/close lifecycle; the object itself lives with appData. |
+| 5 | `m_sessionRegistry` | Session registry + worker pool (`PickWorkerCount(runMode)` workers) | After pool so first session can already check connections out. |
+
+`m_logger` is created lazily in `CreateLogger()` after the DB opens (not in the init list).
 
 `m_helpService` (syntax-helper corpus) is constructed lazily in `InitLocale()` once the platform locale is settled — corpus directory naming depends on the canonicalised locale code, so the service can't come up before locale resolution finishes. See `docs/syntax-helper-design.md` for the loader / `ZipSource` / pack-on-build pipeline.
 
@@ -151,13 +155,15 @@ The destructor does **business actions only** (the explicit hooks each subsystem
     m_sessionRegistry->Stop();          // drain workers, DELETE sys_session
     m_pluginManager->UnloadAll();       // each plugin sees Destroy()
     m_connectionPool->Shutdown();       // invalidate handouts
-    // dtor sweep follows:
-    //   m_activeMetaData    (last declared → destroyed first)
+    // dtor sweep follows, in reverse declaration order:
+    //   m_activeMetaData     (last declared → destroyed first)
+    //   m_helpService
     //   m_sessionRegistry
-    //   m_logger            (own SQLite, no external deps)
+    //   m_logger             (own SQLite, no external deps)
+    //   m_queryableFactory
     //   m_lockManager
     //   m_pluginManager
-    //   m_connectionPool    (first declared → destroyed last)
+    //   m_connectionPool     (first declared → destroyed last)
 }
 ```
 
@@ -243,7 +249,7 @@ Per-driver `ClassifyDatabaseError(int nativeCode)` on each `ibDatabaseErrorRepor
 | `byteCodeAOT.cpp` | `ibByteCode::SerializeAOT/DeserializeAOT` | Binary persistence for the AOT cache (sys_bytecode_cache.blob); host-endian linear format with magic `'PBC1'` + format version |
 | `procUnit.h/cpp` | `ibProcUnit` | Interpreter: executes `ibByteCode` against a variable stack |
 | `procContext.h/cpp` | `ibRunContext` | Execution context: local variable frame, call stack |
-| `value.h/cpp` | `ibValue` | Universal value type (Undefined, Boolean, Number, Date, String, Reference) |
+| `value.h/cpp` | `ibValue` | Universal value type — `TYPE_UNDEFINED`, `TYPE_NULL`, `TYPE_BOOLEAN`, `TYPE_NUMBER` (`ibNumber`), `TYPE_DATE`, `TYPE_STRING`, `TYPE_REFFER` |
 | `codeDef.h` | enums | Opcode (`OPER_*`) and keyword (`KEY_*`) definitions |
 
 ### `src/engine/backend/databaseLayer/`
@@ -253,11 +259,13 @@ Per-driver `ClassifyDatabaseError(int nativeCode)` on each `ibDatabaseErrorRepor
 | `databaseLayer.h/cpp` | `ibDatabaseLayer` | Abstract base: Open/Close/RunQuery/PrepareStatement/Transactions |
 | `databaseResultSet.h/cpp` | `ibDatabaseResultSet` | Abstract result set cursor |
 | `preparedStatement.h` | `ibPreparedStatement` | Abstract prepared statement |
-| `firebird/` | `ibFirebirdDatabaseLayer` | Firebird 3/4 driver |
-| `postgres/` | `ibPostgresDatabaseLayer` | PostgreSQL driver |
-| `sqllite/` | `ibSqliteDatabaseLayer` | SQLite 3 driver (note: directory named `sqllite`) |
-| `mysql/` | `ibMysqlDatabaseLayer` | MySQL driver |
-| `odbc/` | `ibOdbcDatabaseLayer` | ODBC generic driver |
+| `firebird/` | `ibDatabaseLayerFirebird` | Firebird 3/4 driver |
+| `postgres/` | `ibDatabaseLayerPostgres` | PostgreSQL driver |
+| `sqllite/` | `ibDatabaseLayerSQLite` | SQLite 3 driver (note: directory named `sqllite`) |
+| `mysql/` | `ibDatabaseLayerMySQL` | MySQL driver |
+| `odbc/` | `ibDatabaseLayerODBC` | ODBC generic driver |
+
+> Concrete driver classes use the `ib<Base><Vendor>` suffix pattern: `ibDatabaseLayer<Vendor>`, `ibDatabaseResultSet<Vendor>`, `ibPreparedStatement<Vendor>` (e.g. `ibDatabaseResultSetFirebird`, `ibPreparedStatementPostgres`).
 
 ### `src/engine/backend/metaCollection/`
 
@@ -300,22 +308,25 @@ Metadata object hierarchy. Every business object type extends `ibValueMetaObject
 Source text (wxString)
         │
         ▼
- ibTranslateCode::Translate()
-   Lexer: produces vector<ibLexem>
+ ibTranslateCode::Load() → PrepareLexem()
+   Lexer: fills m_listLexem (vector<ibLexem>)
    Each ibLexem: { type, keyword/delimiter number, string data, ibValue, line, position }
         │
         ▼
- ibCompileCode::Compile()
+ ibCompileCode::Compile()       (ibCompileCode : public ibTranslateCode)
    Recursive-descent parser
    Emits ibByteUnit records into ibByteCode
    Resolves forward function references in a second pass
         │
         ▼
  ibByteCode
-   vector<ibByteUnit>   — instruction stream
-   map<wxString, ibByteFunction>  — function table (name → code line)
-   vector<ibValue>      — constant pool
-   vector<ibValue*>     — variable table
+   m_listCode  : vector<ibByteUnit>          — instruction stream
+   m_listConst : vector<ibValue>             — constant pool (primitives)
+   m_listVar   : vector<ibByteCodeVarInfo>   — unified symbol table,
+                 kind-tagged {Local, External, Context, ContextProp}
+   m_listFunc  : vector<ibByteFunction>      — unified function table,
+                 kind-tagged {Local, Export, ContextMethod, Lambda}
+   (names live on m_strRealName; storage is vector — stable order for AOT)
         │
         ▼
  ibProcUnit::Execute()
@@ -350,7 +361,13 @@ Each opcode has type-specialised variants selected by adding `TYPE_DELTA1` (numb
 
 ### Keyword Inventory
 
-44 keywords defined in `KEY_*` enumerators (e.g., `KEY_IF`, `KEY_FOR`, `KEY_FOREACH`, `KEY_PROCEDURE`, `KEY_FUNCTION`, `KEY_TRY`, `KEY_EXCEPT`, `KEY_ENDTRY`, `KEY_RAISE`, `KEY_NEW`, etc.) plus preprocessor keywords (`KEY_DEFINE`, `KEY_UNDEF`, `KEY_IFDEF`, `KEY_IFNDEF`, `KEY_REGION`, `KEY_ENDREGION`). Keywords are English-only — there are no Cyrillic / Russian-language synonyms. Two parallel syntax modes share these keywords and compile to the same bytecode:
+60 keywords defined in `KEY_*` enumerators (`codeDef.h`, `KEY_IF=0` … `LastKeyWord`), in lock-step with `s_listKeyWord[]` in `translateCode.cpp`. Groups:
+- Control / structure — `KEY_IF`, `KEY_FOR`, `KEY_FOREACH`, `KEY_WHILE`, `KEY_PROCEDURE`, `KEY_FUNCTION`, `KEY_TRY`, `KEY_EXCEPT`, `KEY_ENDTRY`, `KEY_RAISE`, `KEY_RETURN`, `KEY_NEW`, …
+- Access modifiers (leading) — `KEY_PUBLIC` (was `Export`), `KEY_PRIVATE`, `KEY_PROTECTED`
+- Preprocessor — `KEY_DEFINE`, `KEY_UNDEF`, `KEY_IFDEF`, `KEY_IFNDEF`, `KEY_ELSEDEF`, `KEY_ENDIFDEF`, `KEY_REGION`, `KEY_ENDREGION`
+- LINQ — `KEY_FROM`, `KEY_WHERE`, `KEY_SELECT`, `KEY_ORDERBY`, `KEY_ASCENDING`, `KEY_DESCENDING`, `KEY_TAKE`, `KEY_SKIP`, `KEY_DISTINCT`, `KEY_JOIN`, `KEY_ON`, `KEY_EQUALS`, `KEY_GROUP`, `KEY_BY`, `KEY_INTO` (`KEY_IN` is reused from `Foreach`)
+
+Keywords are English-only — there are no Cyrillic / Russian-language synonyms. Two parallel syntax modes share these keywords and compile to the same bytecode:
 - **VES** — Visual-Basic-style: `If c Then … EndIf`, `Foreach x In coll Do … EndDo`, `Procedure F() … EndProcedure`. Keyword-fenced blocks.
 - **CES** — C-style: `if (c) { … }`, `Foreach (x In coll) { … }`, `Procedure F() { … }`. Brace-delimited. Default for new configurations since 2026-05-10.
 
@@ -362,7 +379,7 @@ Mode is process-global on `ibCompileCode::SetCodeStyle()`; serialised configurat
 
 ### ibValueMetaObject
 
-`ibValueMetaObject` (defined in `src/engine/backend/metaCollection/metaObject.h`) is the abstract base for all configuration objects. It extends both `ibValue` (so it can be assigned to script variables) and `ibPropertyObjectHelper` (so properties appear in the designer's object inspector).
+`ibValueMetaObject` (defined in `src/engine/backend/metaCollection/metaObject.h`) is the abstract base for all configuration objects. It extends `ibValueDynamicMembers` (which extends `ibValue`, so it can be assigned to script variables) and `ibPropertyObjectHelper<ibValueMetaObject>` (so properties appear in the designer's object inspector), plus `ibAccessObject` / `ibInterfaceObject`.
 
 Key attributes:
 - `ibMetaID m_metaId` — numeric identifier within the configuration
@@ -411,18 +428,30 @@ ibValue
             └─ ibValueMetaObjectEnumeration
 ```
 
-### Configuration Persistence
+### Open/Close — the runtime image (`ibMetaImage`)
 
-`ibMetaDataConfiguration::LoadDatabase()` / `SaveDatabase()` serialise the entire metadata tree to/from the system database using `ibReaderMemory` / `ibWriterMemory` binary streams. Each metadata class registers a `ibClassID` CLSID (e.g. `MD_CAT` for Catalog) used as a type discriminator during loading.
+A metadata's **open state is the presence of its image**, not a separate boolean. `ibMetaData` (`src/engine/backend/metaData.h`) holds `std::shared_ptr<ibMetaImage> m_image`: nullptr = closed, live = open. `IsConfigOpen()` returns `m_image != nullptr`.
 
-### Text Format (XML / JSON)
+- **`ibMetaImage`** aggregates everything a run fills and a close discards: the type-ctor factory (`ibCtorRegistry<ibCtorMetaValueType>`), the common-module skeleton (`ibModuleStorage`), and the designer-only compile-value cache (`ibCompileValueCache`). The registry **owns its ctors via `shared_ptr`**, so dropping the image frees them — no manual cleanup. The image is non-copyable / non-movable; lifetime is managed only through the shared_ptr.
+- **`LoadGuard`** (nested in `ibMetaData`) is the RAII transaction. Its ctor creates the image (asserting the metadata was closed); the dtor drops it — *unless* `Commit()` ran. A raised `ibBackendException` (or any early return) unwinds through the dtor, the image is dropped, and the state is exactly the closed state it started from ("the load never happened").
+- `m_factoryCtorCountChanges` (the monotonic compiler-cache invalidation counter) deliberately lives on `ibMetaData`, *outside* the image, so dropping the image never resets it.
+- Each metadata kind builds its own designer infrastructure via `CreateDesignerCache()` (cache + module-manager for designer kinds; `nullptr` for runtime / external DP / report). The compile cache is `nullptr` on runtime configurations — callers gate with `if (auto* cc = metaData->GetCompileCache())`, not `appData->DesignerMode()`.
 
-Configurations can be exported and imported in text formats for Git VCS, AI generation, and human editing:
+`RunDatabase()` / `CloseDatabase()` (overridden per subclass) drive the run/close cascade under `LoadGuard`. `LoadDatabase()` / `SaveDatabase()` are the buffer-level entry points on `ibMetaDataConfigurationBase`; they reach `LoadConfigFromBuffer` / `SaveConfigToBuffer`.
 
-- **XML** (OES-XML-2.0): `metadataConfigurationXML.cpp` — `SaveConfigToXML()` / `LoadConfigFromXML()`
-- **JSON** (OES-JSON-1.0): `metadataConfigurationJSON.cpp` — `SaveConfigToJSON()` / `LoadConfigFromJSON()` using nlohmann/json
+### Serialization — `ibDataNode` + format providers
 
-Both formats support full round-trip serialization of all 11 metadata types with attributes, type qualifiers, tabular sections, forms, modules, predefined values, and all bindings.
+Metadata serialization runs through a uniform, format-agnostic tree (`src/engine/backend/serialize/dataBuilder.h`):
+
+- **`ibDataNode`** — one self-similar node of the structure tree (clsid + metaId + field bag + property bag + child nodes). A metaobject contributes its data into a node; a composite value can itself *be* a child node (`ibDataKind::Child`).
+- **`ibFormatProvider`** — abstract `Write(node, writer)` / `Read(reader, node)`. Concrete providers:
+  - `ibBinaryProvider` — the internal owned binary format used for DB persistence and form blobs (the `eHeaderBlock` / `eDataBlock` / `eChildBlock` chunk layout). Read + write.
+  - `ibJsonProvider` (`serialize/jsonProvider.{h,cpp}`) — JSON export for Git VCS / AI generation / human reading. **Write-only** (`Read` is a no-op).
+- **`ibDataBuilder`** owns the root node and drives `Save(provider, writer)` / `Load(provider, reader)`.
+
+`ibReaderMemory` / `ibWriterMemory` remain the underlying chunked byte streams; `ibBinaryProvider` emits the node-tree layout into them. Each metadata class registers a `ibClassID` CLSID (e.g. `MD_CAT` for Catalog) used as the per-node type discriminator.
+
+File-level export/import goes through `LoadConfigFromFile()` / `SaveConfigToFile()` on `ibMetaDataConfigurationBase`. (The former separate `metadataConfigurationXML.cpp` / `metadataConfigurationJSON.cpp` and the `SaveConfigToXML/JSON` API have been replaced by the provider model; XML support is currently retired.)
 
 ### Accounting Objects (Work in Progress)
 
@@ -430,9 +459,9 @@ Three metadata types support double-entry bookkeeping. Core classes and designer
 
 | Type | CLSID | Purpose |
 |---|---|---|
-| ChartOfCharacteristicTypes (MD_CHRC) | Subconto type definitions — each element stores `ibTypeDescription` with allowed value types |
-| ChartOfAccounts (MD_CHOA) | Chart of accounts with AccountType (Active/Passive/AP), accounting signs, predefined SubcontoKinds tabular section |
-| AccountingRegister (MD_AREG) | Double-entry register with Account, RecordType (Debit/Credit), Subconto1-3, Balance/Turnovers/DrCrTurnovers |
+| ChartOfCharacteristicTypes | `MD_CHRC` | Subconto type definitions — each element stores `ibTypeDescription` with allowed value types |
+| ChartOfAccounts | `MD_CHOA` | Chart of accounts with AccountType (Active/Passive/AP), accounting signs, predefined SubcontoKinds tabular section |
+| AccountingRegister | `MD_AREG` | Double-entry register with Account, RecordType (Debit/Credit), Subconto1-3, Balance/Turnovers/DrCrTurnovers |
 
 Bindings: AccountingRegister → ChartOfAccounts (via `ibPropertyChartOfAccounts`), ChartOfAccounts → ChartOfCharacteristicTypes (via `ibPropertyChartOfCharacteristicTypes`). Each binding has its own property class and advprop UI handler with CLSID-filtered selection dialog.
 
@@ -472,7 +501,7 @@ Runtime ProcUnits live on per-session descriptors. The session's root `ibValueMo
 `ibSessionRegistry` (`src/engine/backend/session/sessionRegistry.h`) is the process-wide session manager:
 
 - **Single-consumer queue + priority** — one registry thread processes `Add / Attach / Detach / Remove / SetActivity` requests (Urgent → Normal → Low → Background). All DB mutation for `sys_session` happens on this thread.
-- **Row-level pessimistic lock as source of truth** — the registry holds a long-running transaction with `SELECT ... WITH LOCK` over its own-session rows. Process crash → DB rolls back → another process's sweep acquires the lock via `TryProbeRowLock` → zombie row DELETEd. Replaces old heartbeat-UPDATE model.
+- **Liveness via heartbeat on `lastActive`** — each process's `JobHeartbeatOwn` UPDATEs `lastActive` on its own `sys_session` rows every ~1s. Any row trailing `now` by more than `kStaleCutoffSec` (10s, in `sessionRegistry.cpp`) is treated as a zombie and DELETEd by another process's sweep. The earlier row-lock-as-source-of-truth design (a long-running `SELECT ... WITH LOCK` over own-session rows, probed via `TryProbeRowLock`) was **rolled back** — it self-deadlocked (see `session-registry.md §4`); only retirement comments remain in code. Record write protection is a separate concern — optimistic `DataVersion` check + the `sys_lock` table, see [record-locks.md](record-locks.md).
 - **Connect/Disconnect API** — desktop `ibApplicationData::Connect` and web `ibWebSession::Login` both call `registry.Connect(req)` which returns an `ibSessionTicket` (RAII, dtor submits Remove@Urgent).
 - **Single mutator of session state.** `ibSession`'s state-machine mutators (`Transition`, `TransitionAuth`, `SetIdentity`, `SetInserted`, `WaitForState`, `WaitForAuth`) and auth-flow setters (`SetUserInfo`, `EnableDebug`, `SetSessionRawPassword`) are private under `friend ibSessionRegistry`. Public façades `ibSessionRegistry::InstallUser(s, info, pwd)` and `EnableDebugForSession(s)` are the only entry points for auth bring-up — `appData` and login dialogs route through them, never poke session internals directly.
 - **Cluster snapshot** — `ibSessionRegistry::GetClusterSnapshot()` returns `ibSessionSnapshot` (formerly `ibApplicationDataSessionArray` on `appData`), refreshed every ~3s by `JobRefreshSnapshot`. Snapshot now lives in `backend/session/sessionSnapshot.{h,cpp}`.
@@ -481,7 +510,7 @@ The registry supports multiple concurrent sessions (N on web, 1 on desktop) thro
 
 ### Runtime ownership
 
-**Compile state — shared, immutable.** `ibCompileCode` produces an `ibByteCode` that lives on the configuration's compile descriptor (`ibCompileModule` on `ibValueMetaObjectModuleBase`). One bytecode per module is shared across all sessions; rebuilt only on Designer edit or metadata reload. AOT cache (`sys_bytecode_cache` via `ibByteCodeCache`) lets `Compile()` skip the parse+emit on cache hits — see [AOT cache](#ast-cache) below.
+**Compile state — shared, immutable.** `ibCompileCode` produces an `ibByteCode` that lives on the configuration's compile descriptor (`ibCompileModule` on `ibValueMetaObjectModuleBase`). One bytecode per module is shared across all sessions; rebuilt only on Designer edit or metadata reload. AOT cache (`sys_bytecode_cache` via `ibByteCodeCache`) lets `Compile()` skip the parse+emit on cache hits — the cached blob is `ibByteCode::SerializeAOT/DeserializeAOT` (magic `'PBC1'`; see the [compiler module table](#srcenginebackendcompiler)).
 
 **Runtime state — per-session, owned via descriptors.** Each session owns its own runtime tree:
 
@@ -520,30 +549,30 @@ Designer (`eDESIGNER_MODE`) creates sessions without runtime — `AttachRuntime`
 
 ```
 ibDatabaseLayer  (abstract — databaseLayer.h)
-  ├─ ibFirebirdDatabaseLayer   (databaseLayer/firebird/)
-  ├─ ibPostgresDatabaseLayer   (databaseLayer/postgres/)
-  ├─ ibSqliteDatabaseLayer     (databaseLayer/sqllite/)
-  ├─ ibMysqlDatabaseLayer      (databaseLayer/mysql/)
-  └─ ibOdbcDatabaseLayer       (databaseLayer/odbc/)
+  ├─ ibDatabaseLayerFirebird   (databaseLayer/firebird/)
+  ├─ ibDatabaseLayerPostgres   (databaseLayer/postgres/)
+  ├─ ibDatabaseLayerSQLite     (databaseLayer/sqllite/)
+  ├─ ibDatabaseLayerMySQL      (databaseLayer/mysql/)
+  └─ ibDatabaseLayerODBC       (databaseLayer/odbc/)
 
 ibDatabaseResultSet  (abstract)
-  ├─ ibFirebirdResultSet
-  ├─ ibPostgresResultSet
-  ├─ ibSqliteResultSet
-  ├─ ibMysqlPreparedStatementResultSet
-  └─ ibOdbcResultSet
+  ├─ ibDatabaseResultSetFirebird
+  ├─ ibDatabaseResultSetPostgres
+  ├─ ibDatabaseResultSetSQLite
+  ├─ ibDatabaseResultSetMySQL
+  └─ ibDatabaseResultSetODBC
 
 ibPreparedStatement  (abstract)
-  ├─ ibFirebirdPreparedStatement
-  ├─ ibPostgresPreparedStatement
-  ├─ ibSqlitePreparedStatement
-  ├─ ibMysqlPreparedStatement
-  └─ ibOdbcPreparedStatement
+  ├─ ibPreparedStatementFirebird
+  ├─ ibPreparedStatementPostgres
+  ├─ ibPreparedStatementSQLite
+  ├─ ibPreparedStatementMySQL
+  └─ ibPreparedStatementODBC
 ```
 
 ### Access Pattern
 
-All database access goes through the `db_query` macro, which calls `ibApplicationData::GetDatabaseLayer()` and returns the active `ibDatabaseLayer*`. Example:
+All database access goes through the `db_query` macro, which is `ibApplicationData::GetDatabaseLayer()` — it resolves through the connection pool and returns a `std::shared_ptr<ibDatabaseLayer>` (the active checked-out layer). Example:
 
 ```cpp
 ibDatabaseResultSet* rs = db_query->RunQueryWithResults(
@@ -558,13 +587,21 @@ Each driver folder contains an `engine/` subdirectory with the vendored native c
 
 ### ibValueForm Hierarchy
 
+`backend_form.h` declares two sibling backend interfaces, both rooted under `ibBackendValue`:
+
+- `ibBackendControlFrame` — the abstract control interface (any control, including a form root, presents this).
+- `ibBackendValueForm` — the abstract form interface.
+
+The concrete `ibValueForm` (`frontend/visualView/ctrl/form.h`) multiply-inherits both (plus `ibRuntimeModuleDataObject` for its per-instance ProcUnit):
+
 ```
-ibBackendControlFrame  (abstract interface — backend_form.h)
-  └─ ibBackendValueForm  (abstract — backend_form.h)
-       └─ ibValueForm  (concrete — frontend/visualView/ctrl/form.h)
+ibValueForm  (concrete — frontend/visualView/ctrl/form.h)
+  : public ibValueFrame
+  , public ibBackendValueForm        (abstract — backend_form.h)
+  , public ibRuntimeModuleDataObject (per-instance compile module + ProcUnit)
 ```
 
-`ibValueForm` owns the complete control tree for one open form. It is created by `ibBackendValueForm::CreateNewForm()`, which resolves the `ibValueMetaObjectFormBase` descriptor from metadata and instantiates the correct form type.
+`ibValueForm` owns the complete control tree for one open form. The static entry point `ibBackendValueForm::CreateNewForm()` instantiates the form; the higher-level orchestrator is `ibValueMetaObjectFormBase::CreateAndBuildForm()` (`metaCollection/metaFormObject.h`), which resolves the form descriptor from metadata and builds the control tree (see [Form Open](#form-open)).
 
 ### 22 Visual Controls
 
@@ -706,10 +743,10 @@ Script (desktop) / HTTP POST /open?metaID=N (web):
 OpenForm("Catalog.Products.ListForm")
   └─ ibValueMetaObjectFormBase::CreateAndBuildForm(metaForm, owner, srcObj, uniqueKey)
        └─ ibSession::CurrentFrame()->CreateNewForm(metaFormObject, ownerControl, srcObject)
-              # session-owned frame; desktop = ibFrontendDocMDIFrame, web = ibWebFrame
+              # session-owned frame; desktop = ibFrontendMainFrame, web = ibWebFrame
             └─ ibValueForm constructed (per-instance compileModule + ProcUnit)
                  └─ LoadFormData / BuildForm — control tree built from metadata
-                      └─ frame creates the doc-view child (CAuiDocChildFrame / ibWebDocChildFrame)
+                      └─ frame creates the doc-view child (ibAuiDocChildFrame / ibWebDocChildFrame)
                            └─ ibVisualHost created (wxWindow on desktop, ibWebWindow on web)
                                 └─ controls instantiated and laid out
                                      └─ OnOpen() script handler via ibProcUnit::CallAsProc()

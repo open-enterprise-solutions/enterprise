@@ -4,6 +4,12 @@
 `m_methodHelper->AppendProp(...)` half of `PrepareNames` for context handles, scope
 containers, export handles, and a module's own injected locals.
 
+> **Naming note.** The value name-surface helper was renamed
+> `ibValueMethodHelper` → **`ibMemberTable`** (nested in `ibValue`,
+> `compiler/value.h`; members `m_props` / `m_methods` / `m_ctors`). This doc and the
+> `Export*ToHelper` / `FillHelperFromBinds` signatures take `ibValue::ibMemberTable&`
+> in current code — read any `ibValueMethodHelper` below as `ibMemberTable`.
+
 ## The problem it replaces
 
 Every runtime object used to expose its script-visible names twice:

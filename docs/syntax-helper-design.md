@@ -24,7 +24,7 @@ stays out of this PR.
 | 1.1b | `HelpBucketSource` abstraction with `FileSystemSource` (dev) + `ZipSource` (prod, `wxConvUTF8` decode + `./` strip + empty-name skip) | `.hlk` round-trip parses cleanly |
 | 1.1b | Pack-on-build via `[System.IO.Compression.ZipFile]::CreateFromDirectory` (MSBuild) + `cmake -E tar c --format=zip` (CMake); output `<exe>/help/<locale>.hlk` | `bin\Win32\Debug\help\{en,ru,uk}.hlk` produced on every build |
 | 1.2 | `frontend/syntaxHelper/` — 14 view files (PaneView / TreeView / IndexView / SearchView / DetailView / ChooserDialog / DragSource) | panel renders in designer |
-| 1.2 | AUI pane (`wxAUI_PANE_HELP = "syntaxHelperWindow"`); `EnsureHelpPane` / `ToggleHelpPane` lazy lifecycle on `ibFrontendDocMDIFrameDesigner` | Help → Syntax Helper toggles the pane |
+| 1.2 | AUI pane (`wxAUI_PANE_HELP = "syntaxHelperWindow"`); `EnsureHelpPane` / `ToggleHelpPane` lazy lifecycle on `ibFrontendMainFrameDesigner` (`designer/mainFrame/mainFrameDesigner.h:100`) | Help → Syntax Helper toggles the pane |
 | 1.3 | `ibCodeEditor::GetIdentifierUnderCursor` + `OpenHelpForCursor` resolver pipeline + chooser dialog wiring; RawCtrl+Alt+F1 (pane toggle), RawCtrl+F1 (cursor look-up) | live lookup via menu + shortcut |
 | 1.3b | Editor right-click context menu (Cut/Copy/Paste/SelectAll + Look up in Syntax Helper) routing wxEVT_MENU upward through the parent chain | context menu item posts to host designer |
 | 1.3c | Drag target — wxStyledTextCtrl built-in handles `wxTextDataObject` from `helpDragSource` | drag from panel into editor inserts identifier |
@@ -123,25 +123,27 @@ desktop designer.
 
 ### What already exists
 
-* `s_listKeyWord` (**58** entries in
-  `src/engine/backend/compiler/translateCode.cpp:25-99` — 44 core
-  language keywords + 15 LINQ keywords; ordering is load-bearing
-  per the `KEY_FROM..KEY_INTO` comment at translateCode.cpp:82-83).
-  Each row is `ibKeyWords{ wxString m_strKeyWord;
-  wxString m_strShortDescription; }`
-  (`translateCode.h:18-21`). Descriptions are mostly empty today.
+* `s_listKeyWord` (**60** entries in
+  `src/engine/backend/compiler/translateCode.cpp:25-101` — 45 core
+  language keywords (incl. preprocessor) + 15 LINQ keywords; ordering is
+  load-bearing per the `KEY_FROM..KEY_INTO` comment at
+  translateCode.cpp:84-85, and the array is index-locked to the `KEY_*`
+  enum in `codeDef.h`). Each row is `ibKeyWords{ wxString m_strKeyWord;
+  wxString m_strShortDescription; }` (`translateCode.h`); the array
+  initialises only the first field, so descriptions are empty today.
 * `s_listHelpDescription` — file-static
   `std::map<wxString, void*>` at `translateCode.cpp:16`, populated by
   `LoadKeyWords()` at `translateCode.cpp:244-257`. The `void*` value
   is a pointer to the originating `m_strShortDescription`. The map
   has no external accessor; we add one (`GetKeywordHelp`) or refactor
   to `const wxString&` returns during Phase 1.
-* `ibValueSystemFunction::PrepareNames()`
-  (`src/engine/backend/system/systemManager.cpp:113-217`) — registers
-  ~85 built-in functions via `AppendFunc(name, argCount, signature)`
-  / `AppendProc(...)` on an `ibMethods`-derived helper. The CLAUDE.md
-  "88 functions" is approximate — the real number drifts as upstream
-  adds new built-ins. Phase 1 generator pulls live counts.
+* `ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, …)`
+  (`src/engine/backend/system/systemManager.cpp:113`) — registers the
+  built-ins via `helper.AppendFunc(name, argCount, signature)` /
+  `AppendProc(...)` (the bind-in-ctor model, post `PrepareNames → bind`
+  arc). **93** `AppendFunc`/`AppendProc` calls today; the number drifts
+  as built-ins land, so the Phase 1 generator pulls live counts —
+  grep `AppendFunc\|AppendProc` for the current total.
 * `ibValueMetaObject*` hierarchy — 11 business object types
   (Catalog / Document / Register / …). Each subclass declares its
   attribute / method surface via its own
@@ -160,12 +162,13 @@ desktop designer.
   + html detail pane this doc proposes is the next step on top of it.
   The autocomplete dropdown stays; the syntax helper adds a
   "more info" affordance pointing into the help pane (§9).
-* Designer AUI host is `ibFrameManager` (not `ibAuiManager` —
-  earlier doc draft had the wrong name), declared at
-  `src/engine/frontend/mainFrame/mainFrame.h:235,273` and consumed
-  by `ibAuiDocDesignerMDIFrame` at
-  `src/engine/designer/mainFrameDesigner.h:7`. Existing pane-creation
-  call sites at `mainFrameDesignerCmd.cpp:39, 54, 128`.
+* Designer AUI host is `ibFrameManager : wxAuiManager` (not
+  `ibAuiManager` — earlier doc draft had the wrong name), declared at
+  `src/engine/frontend/mainFrame/mainFrame.h:236,274` and consumed by
+  the active designer frame `ibFrontendMainFrameDesigner :
+  ibFrontendMainFrame` (`src/engine/designer/mainFrame/mainFrameDesigner.h:68`).
+  (The legacy `wxAuiDocDesignerMDIFrame` in the root
+  `designer/mainFrameDesigner.h` is dead — do not target it.)
 * Scintilla margins in the editor at
   `src/engine/frontend/win/editor/codeEditor/codeEditor.cpp` —
   `DEF_LINENUMBER_ID=0`, `DEF_BREAKPOINT_ID=1`, `DEF_FOLDING_ID=2`.
@@ -363,16 +366,25 @@ schema change.
 
 ## 3. Backend — help corpus subsystem
 
-New module: `src/engine/backend/help/`.
+> **As built (2026-05-26):** the module landed at
+> `src/engine/backend/syntaxHelper/` (renamed from the `help/` proposed
+> below for consistency with the content root) and adds `helpLoader.h`
+> plus the `ibHelpService` owner pair (`helpService.{h,cpp}`). Ownership
+> is `ibHelpService` on `ibApplicationData`, NOT a bare
+> `GetHelpCorpus()` accessor on `appData` — see the implementation-status
+> block at the top. The rest of this section is the original design.
+
+New module (as proposed): `src/engine/backend/help/`.
 
 ```
-help/
+help/                    // shipped as syntaxHelper/
 ├── helpEntry.h         // ibHelpEntry struct + Kind enum
-├── helpCorpus.h/.cpp   // immutable loaded snapshot + indexes
+├── helpCorpus.h/.cpp   // immutable loaded snapshot + indexes  (ibHelpCorpus final)
 ├── helpCategory.h      // category tree node
-├── helpLoader.cpp      // JSON → ibHelpEntry parse, error collection
-├── helpResolver.h/.cpp // free function — corpus + name + hint → matches
-└── helpLoadError.h     // structured loader-error record
+├── helpLoader.h/.cpp   // JSON → ibHelpEntry parse, error collection
+├── helpResolver.h/.cpp // free function — corpus + name + hint → matches (ResolveByName)
+├── helpLoadError.h     // structured loader-error record
+└── helpService.h/.cpp  // ibHelpService — appData-owned subsystem (as built)
 ```
 
 Backend-only — no `#include <wx/...>` beyond what backend.dll already

@@ -26,7 +26,7 @@ Firebird Embedded:
 ```cpp
 // src/engine/enterprise/startup_backup.cpp
 // Create a quick backup at startup if the previous one is > 24 hours old
-// Called from ibApplicationData::AuthenticationAndSetUser() after successful login
+// Called from ibApplicationData::AuthenticateUser() after successful login
 
 void CreateStartupBackup(const wxString& dbPath) {
     wxString backupDir = GetAppDataPath() + wxFILE_SEP_PATH + "Backups";

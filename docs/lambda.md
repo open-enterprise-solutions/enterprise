@@ -58,11 +58,12 @@ source of truth for frame shape (paramCount / varCount / bCodeRet),
 parameter metadata (`m_listParam` with byref + defaults, `m_listParamRealName`
 with names), and locals (`m_listLocals` for eval).
 
-The lambda **value** at runtime is `ibValueFunction`. At the initial
-lambda landing this was two fields (parent bytecode + func index);
-closure capture (2026-05-11..12, see `docs/closure-capture.md`)
-added the captured-frame chain. The current in-tree shape
-(`backend/compiler/procUnitValues.h`):
+The lambda **value** at runtime is `ibValueFunction` — an `ibValue` of
+tag `TYPE_FUNCTION` (CLSID `VL_FUNC`). At the initial lambda landing this
+was two fields (parent bytecode + func index); closure capture
+(2026-05-11..12, see `docs/closure-capture.md`) added the captured-frame
+chain. The current in-tree shape (`backend/compiler/procUnitValues.h` —
+NOT `procUnit.cpp`; the values split out):
 
 ```cpp
 class ibValueFunction : public ibValue {
@@ -73,6 +74,7 @@ class ibValueFunction : public ibValue {
     std::vector<std::shared_ptr<ibRunContext>> m_capturedFrames;
     bool                                       m_needsHeapFrame = false;
 public:
+    ibValueFunction() : ibValue(ibValueTypes::TYPE_FUNCTION) {}
     const ibByteCode::ibByteFunction* GetFunction() const {
         return &m_parentBc->m_listFunc[m_funcIndex];
     }
@@ -96,13 +98,15 @@ session value transfer (no serialization path for `ibValueFunction`).
 
 ## Bytecode opcodes
 
-Four lambda-related opcodes in `compiler/codeDef.h`:
+Three lambda-related opcodes in `compiler/codeDef.h` (`OPER_LFUNC`,
+`OPER_ENDLFUNC`, `OPER_CALL_LAMBDA`). The earlier `OPER_FUNC_PTR`
+materialise opcode is fully removed — `OPER_LFUNC` itself materialises
+the value; no token survives in `codeDef.h`.
 
 | opcode | role | param layout |
 |---|---|---|
 | `OPER_LFUNC` | lambda body entry; materialises an `ibValueFunction` value at the dest slot. Distinct from `OPER_FUNC` so the containing named-function's module-init skip-through (`while not OPER_ENDFUNC`) doesn't terminate prematurely on a nested lambda's terminator. | `m_param1` = dest slot, `m_param2.m_numIndex` = end IP (matches OPER_ENDLFUNC, used for body skip), `m_param3.m_numIndex` = `funcIndex` into `m_listFunc` |
 | `OPER_ENDLFUNC` | lambda body close — pairs with `OPER_LFUNC`. Falls through to `lCodeLine = lFinish; break` like `OPER_ENDFUNC`. | — |
-| `OPER_FUNC_PTR` | retired — `OPER_LFUNC` itself materialises the value (kept for historical log-message references; runtime case-block was removed) | — |
 | `OPER_CALL_LAMBDA` | dynamic counterpart of `OPER_CALL` — call target is read from a slot at runtime, must wrap an `ibValueFunction`. Caller-supplied arg count is stamped at compile (validated at runtime against the lambda's param count); missing tail filled from `m_listParam[i].m_defaultValue`. | `m_param1` = return-value dest, `m_param2.m_numIndex` = caller-supplied arg count, `m_param4` = source slot holding the callable |
 
 `OPER_CALL_LAMBDA`'s param-bind loop reuses the same inline `OPER_SET` /
@@ -269,9 +273,11 @@ Name-keyed lookups in `m_listFunc` (`FindFunction`, `FindMethod`,
 ## AOT format
 
 Bumped to **v5** (2026-05-10 PM) at the lambda landing; current
-format version in tree is **v12** (`byteCodeAOT.cpp::kAOTFormatVersion`)
-after subsequent bumps for closure capture (v10) and CLSID encoding
-switch (v12). v3→v4 added the `m_param2` arg-count stamp on
+format version in tree is **v14** (`byteCodeAOT.cpp::kAOTFormatVersion`)
+after subsequent bumps for closure capture (v10), a CLSID encoding
+switch (v12), and the LINQ push-down lambda-AST payload (v14). Always
+read the constant from the source file rather than this prose.
+v3→v4 added the `m_param2` arg-count stamp on
 `OPER_CALL_LAMBDA`; v4→v5 swapped the lambda metadata model from
 inline `ibLambdaInfo` (operand-resident: paramCount/varCount/bCodeRet
 on OPER_LFUNC's m_param3/m_param4) to `m_listFunc`-resident
@@ -284,14 +290,15 @@ on OPER_LFUNC's m_param3/m_param4) to `m_listFunc`-resident
 
 Backend / compiler:
 
-- `src/engine/backend/compiler/codeDef.h` — 3 live lambda opcodes (`OPER_LFUNC`, `OPER_ENDLFUNC`, `OPER_CALL_LAMBDA`); `OPER_FUNC_PTR` was the earlier separate materialise opcode, retired when `OPER_LFUNC` absorbed value-materialisation
+- `src/engine/backend/compiler/codeDef.h` — 3 live lambda opcodes (`OPER_LFUNC`, `OPER_ENDLFUNC`, `OPER_CALL_LAMBDA`); the earlier `OPER_FUNC_PTR` materialise opcode is gone (`OPER_LFUNC` absorbed value-materialisation)
 - `src/engine/backend/compiler/byteCode.h` — `ibFnKind::Lambda` enum + `IsLambda()` helper, `IsCrossBcVisible()` filter
-- `src/engine/backend/compiler/byteCodeAOT.cpp` — version v5
+- `src/engine/backend/compiler/byteCodeAOT.cpp` — AOT format (v14 in tree)
 - `src/engine/backend/compiler/compileContext.h` — `RETURN_LAMBDA_FUNCTION` / `RETURN_LAMBDA_PROCEDURE` enum kinds
 - `src/engine/backend/compiler/compileContext.cpp` — lambda body scope discipline + rootCtx fallback for Context bindings
 - `src/engine/backend/compiler/compileCode.h` — split helper decls (`ParseFunctionSignature`, `EmitFunctionBody`, `CompileLambdaExpression`)
 - `src/engine/backend/compiler/compileCode.cpp` — lambda compile + push to `m_listFunc` with kind=Lambda + Variable-callable branch + `OPER_CALL_LAMBDA` emit with arg-count stamp
-- `src/engine/backend/compiler/procUnit.cpp` — runtime cases for `OPER_LFUNC` / `OPER_ENDLFUNC` / `OPER_CALL_LAMBDA` + `ibValueFunction` class
+- `src/engine/backend/compiler/procUnit.cpp` — runtime cases for `OPER_LFUNC` / `OPER_ENDLFUNC` / `OPER_CALL_LAMBDA` (+ `OPER_CALL_CLOSURE`, the heap-frame named-call split)
+- `src/engine/backend/compiler/procUnitValues.h` — `ibValueFunction` class declaration (`TYPE_FUNCTION`, closure `m_capturedFrames`)
 - `src/engine/backend/compiler/procUnitState.h` — `GetLambdaRuntime()` accessor
 - `src/engine/backend/session/session.cpp` — lambda runtime shim setup in `CompileRoot` (parent chain to root + common modules)
 
@@ -299,7 +306,7 @@ Frontend / editor:
 
 - `src/engine/frontend/win/editor/codeEditor/codeEditor.h` — fold parser CES brace support
 - `src/engine/frontend/win/editor/codeEditor/codeEditorParser.{h,cpp}` — `ibContentType::eLambda` + anonymous-lambda body skip + depth-aware body walk
-- `src/engine/frontend/win/editor/codeEditor/codeEditorInterpreter.cpp` — `RETURN_LAMBDA` in precompiler
+- `src/engine/frontend/win/editor/codeEditor/codeEditorInterpreter.cpp` — `RETURN_LAMBDA_FUNCTION` / `RETURN_LAMBDA_PROCEDURE` in precompiler
 
 Host:
 

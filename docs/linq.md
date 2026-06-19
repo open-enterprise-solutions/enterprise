@@ -12,13 +12,15 @@
 >   orderby (asc/desc) / join / group by [into g]` (terminal + non-
 >   terminal — `into g` opens a continuation with `g` bound to
 >   `Structure{Key, Values}`).
-> - Chain: 32 ops — pipeline (Where / Select / Distinct / OrderBy /
->   OrderByDescending / GroupBy / Join / Skip / Take / SkipWhile /
->   TakeWhile / Reverse / Concat / Union / Intersect / Except /
->   WhereIndexed / SelectIndexed), terminals (Count / ToArray /
->   First / FirstOrDefault / Last / LastOrDefault / Single /
->   SingleOrDefault / Any / ElementAt / ElementAtOrDefault /
->   Contains / SequenceEqual / Aggregate).
+> - Chain: 33 ops (`ibValue::ibLinqMethod` enum, `value.h`) — pipeline
+>   (Where / Select / Distinct / OrderBy / OrderByDescending / GroupBy /
+>   Join / Skip / Take / SkipWhile / TakeWhile / Reverse / Concat /
+>   Union / Intersect / Except / WhereIndexed / SelectIndexed),
+>   terminals (Count / ToArray / First / FirstOrDefault / Last /
+>   LastOrDefault / Single / SingleOrDefault / Any / ElementAt /
+>   ElementAtOrDefault / Contains / SequenceEqual / Aggregate / ToTable).
+>   `ToTable` (the 33rd) landed with the L4-2 push-down (data-source →
+>   value table); the original RAM surface was 32.
 > - Aggregations: `Sum / Min / Max / Average` no-arg + lambda-selector
 >   overloads (closure capture works in selectors).
 
@@ -75,8 +77,8 @@ var joined   = customers.Join(sales,
                               Function(c, s) Return c.Name + ": " + s.Amount EndFunction);
 ```
 
-Chain emits `OPER_CALL_LINQ` opcodes — compile-side detects LINQ
-method names via `ibValue::FindLinqMethodByName` at chain-method emit
+Chain emits `OPER_CALL_LINQ` opcodes (`compiler/codeDef.h`) — compile-side
+detects LINQ method names via `ibValue::FindLinqMethodByName` at chain-method emit
 (see `compileCode.cpp` `IsNextDelimeter('.')` branch in
 `PushCallFunction`); the opcode carries the `ibLinqMethod` enum id
 directly in `m_param3.m_numIndex` (NOT a const-pool index), so the
@@ -298,11 +300,13 @@ var q = from o in arr
         select doubled;
 ```
 
-This is the **major advantage of block syntax** over chain syntax —
-chain syntax uses lambdas which don't currently capture outer
-locals (see `lambda.md` "Closure capture — rejected"). For chain
-syntax to do the same, the lambda would need closure support
-(deferred work).
+Block syntax got this for free from day one. Chain syntax reached
+parity once lambda **closure capture** landed (Phase A/B/C/D,
+2026-05-11..12) — `arr.Where(Function(x){ return x > threshold; })`
+now captures `threshold`. See `docs/closure-capture.md`. Block
+syntax keeps its own advantages (the `let` clause, multi-from /
+cartesian product, transparent identifiers); the choice is per use
+case, not a capability gap.
 
 ---
 
@@ -542,7 +546,8 @@ Tests renamed: `test_linq_nested_group.txt`,
   Contains(value) / SequenceEqual(other)`; reducer
   `Aggregate(seed, λ)`; indexed `WhereIndexed(λ) / SelectIndexed(λ)`
   (lambda takes `(elem, index)`). 32 methods total on chain
-  surface. `OrDefault` semantics fix: dispatcher always writes
+  surface at this date (now 33 — `ToTable` added with L4-2 push-down).
+  `OrDefault` semantics fix: dispatcher always writes
   ret (even on empty paths) — `CopyValue(ret, ibValue())` resets
   caller's slot from stale leftover. Smoke
   `test_linq_chain_ops.txt` (10 sections) green.
@@ -623,13 +628,13 @@ Quick reference for LINQ contexts:
 | `src/engine/backend/compiler/compileCode.h` | `CompileLinqExpression / CompileLinqBlock` declarations |
 | `src/engine/backend/compiler/compileCode.cpp` | LINQ compile path — `CompileLinqExpression / CompileLinqBlock`, KEY_FROM hooks in GetExpression + CompileBlock, `GETIdentifier(acceptKeyword)` extension, `ibValue::FindLinqMethodByName` call at chain-method emit site → `OPER_CALL_LINQ` |
 | `src/engine/backend/compiler/procUnit.cpp` | `OPER_CALL_LINQ` runtime case (no `FindMethod` walk, enum id straight from `m_param3.m_numIndex` → `pVariable2->DispatchLinqMethod(...)`) |
-| `src/engine/backend/compiler/procUnitLinq.cpp` | **New file** — split out 2026-05-12. LINQ runtime — 16 distinct state classes (`Where / Select / Distinct / OrderBy / GroupBy / Join / Skip / Take / SkipWhile / TakeWhile / Reverse / Concat / WhereIndexed / SelectIndexed` + templated `ibValueSetOpState<>` aliased to `IntersectState` / `ExceptState`; Union composes Concat + Distinct). `CallLambdaWithArgs` (unified arity-N invocation) + arity-specific shims, `InvokeLambdaWithArg` (BACKEND_API), `ibValueQuery`, `ibValueLinqDispatchImpl` switch, `ibValue::DispatchLinqMethod` default impl, `ibValue::GetLinqMethodTable()`, `ibValue::FindLinqMethodByName`. |
+| `src/engine/backend/compiler/procUnitLinq.cpp` | **New file** — split out 2026-05-12. LINQ runtime — 15 state classes deriving `ibValueIteratorState` (`Where / Select / Distinct / OrderBy / GroupBy / Join / Skip / Take / SkipWhile / TakeWhile / Reverse / Concat / WhereIndexed / SelectIndexed` + templated `ibValueSetOpState<keepIfInOther>` aliased to Intersect / Except; Union composes Concat + Distinct). `CallLambdaWithArgs` (unified arity-N invocation) + arity-specific shims, `InvokeLambdaWithArg` (BACKEND_API), `ibValueQuery`, `ibValueLinqDispatchImpl` switch, `ibValue::DispatchLinqMethod` default impl, `ibValue::GetLinqMethodTable()` (33 entries), `ibValue::FindLinqMethodByName`. |
 | `src/engine/backend/compiler/procUnit.h` | `InvokeLambdaWithArg` declaration (BACKEND_API) |
 | `src/engine/backend/compiler/value.h` | `ibLinqMethod` enum, `ibLinqMethodInfo` struct, `GetLinqMethodTable()` static accessor, `FindLinqMethodByName` static, virtual `DispatchLinqMethod` |
 | `src/engine/backend/compiler/value.cpp` | Per-class method resolver (`FindMethod / GetNParams / HasRetVal / GetMethodName / GetMethodHelper`) — LINQ surface lives entirely on the `OPER_CALL_LINQ` path |
 | `src/engine/backend/system/value/valueArray.h` | `Contains` method + `enContains` enum, aggregation declarations (Sum/Min/Max/Average + selector overloads), `DispatchLinqMethod` override |
-| `src/engine/backend/system/value/valueArray.cpp` | Aggregation impls; selector dispatch in CallAsFunc; `InvokeLambdaWithArg` integration; `DispatchLinqMethod` override (7 short-circuits — Count / ToArray / ElementAt / Contains / Last / First / Any direct on the underlying vector) |
-| `src/engine/backend/compiler/byteCodeAOT.cpp` | `kAOTFormatVersion` was bumped to 10 at the `OPER_CALL_LINQ` insertion; **current in-tree value is 12** after a later CLSID encoding switch — always read the constant from the source file rather than this table |
+| `src/engine/backend/system/value/valueArray.cpp` | Aggregation impls; selector dispatch in CallAsFunc; `InvokeLambdaWithArg` integration; `DispatchLinqMethod` override (10 short-circuits direct on the underlying vector — Count / ToArray / ElementAt / ElementAtOrDefault / Contains / Last / LastOrDefault / First / FirstOrDefault / Any) |
+| `src/engine/backend/compiler/byteCodeAOT.cpp` | `kAOTFormatVersion` was bumped to 10 at the `OPER_CALL_LINQ` insertion; **current in-tree value is 14** (CLSID encoding switch → 12, LINQ push-down lambda-AST → 14) — always read the constant from the source file rather than this table |
 | `src/engine/backend/backend.vcxproj` + `.filters` | New files registered (compileContextLinqData.h, procUnitLinq.cpp, procUnitValues.h) |
 | `src/engine/frontend/win/editor/codeEditor/codeEditor.h` | `FoldLinq` kind in `ibFoldLevelParser`; `KEY_FROM` opens, `KEY_SELECT` / `KEY_GROUP` close |
 | `src/engine/frontend/win/editor/codeEditor/codeEditorLoader.cpp` | `AddKeywordFromObject` lists class-native methods only — LINQ chain surface intentionally hidden from `.`-dropdown (block syntax is the front door for users) |
@@ -714,13 +719,18 @@ verbatim as history.)
 **Remaining gaps — perf:**
 - Lazy block-syntax (#11 above, deferred — chain syntax serves as
   the lazy alternative).
-- SQL pushdown for DB-backed sources (massive separate arc).
+- ~~SQL pushdown for DB-backed sources~~ — **LANDED** as L4-2 v1
+  (2026-06-11) through `ibValueQueryable` + the `Data.*` source root,
+  lowering a lambda chain to SQL via the L3 door. See
+  `query-language-arc.md` §23.5. The RAM surface here is unchanged; the
+  pushed-down path is a separate value (`ibValueQueryable`).
 
 **Remaining gaps — architectural:**
-- Virtual-dispatch refactor (split central switch into 32 per-method
+- Virtual-dispatch refactor (split central switch into 33 per-method
   virtuals on `ibValue`). Discussed 2026-05-12 — deferred until
-  concrete override pressure (≥2 specialising subclasses or SQL
-  pushdown design). Memory note `project_value_dispatch_via_virtual.md`.
+  concrete override pressure (≥2 specialising subclasses; the SQL
+  pushdown that prompted it landed via `ibValueQueryable::DispatchLinqMethod`
+  override instead). Memory note `project_value_dispatch_via_virtual.md`.
 - Lexer-level LINQ token tagging — add `LINQ` to the token-type
   enum in `codeDef.h` so that LINQ keywords / method names get
   tagged at lex time (`lex.m_lexType == LINQ`). Would replace the
@@ -728,7 +738,7 @@ verbatim as history.)
   fold parser / precompile clause loop with a single type test.
   Source-of-truth options: just s_listKeyWord LINQ keywords
   (KEY_FROM..KEY_INTO, 15 names) or extended via
-  `ibLinqMethodInfo` table (32 chain-method names). Discussed
+  `ibLinqMethodInfo` table (33 chain-method names). Discussed
   2026-05-12 — deferred (current code does specific KEY_*
   checks which work fine; lexer change carries naming-conflict
   risk where chain-method names overlap with block-syntax keywords).

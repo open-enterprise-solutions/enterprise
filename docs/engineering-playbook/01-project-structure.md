@@ -68,13 +68,13 @@ enterprise/
 ├── src/                          — Source code
 │   └── engine/                   — Platform engine
 │       ├── backend/              — Platform core (business logic, compiler, DB)
-│       │   ├── appData.cpp       — ibApplicationData: authentication, session (AuthenticationAndSetUser())
+│       │   ├── appData.cpp       — ibApplicationData: authentication, session (AuthenticateUser())
 │       │   ├── appDataQuery.cpp  — Session and user queries
 │       │   ├── metadataConfiguration.cpp — Metadata configuration management
 │       │   ├── compiler/         — Built-in script engine
 │       │   │   ├── compileCode.cpp  — ibCompileCode, ibTranslateCode
 │       │   │   ├── procUnit.cpp     — ibProcUnit: bytecode interpreter
-│       │   │   └── value.h          — ibValue, ibNumber (ttmath 128-bit), ibValueTypes
+│       │   │   └── value.h          — ibValue, ibValueTypes (ibNumber lives in fnumber.h)
 │       │   ├── databaseLayer/    — DBMS abstraction
 │       │   │   ├── databaseLayer.h        — ibDatabaseLayer (base class)
 │       │   │   ├── firebird/              — ibDatabaseLayerFirebird
@@ -233,8 +233,9 @@ and business logic without writing code.
 - src/engine/backend/           — platform core, compiler, DB abstraction
   - compiler/compileCode.cpp    — ibCompileCode, ibTranslateCode
   - compiler/procUnit.cpp       — ibProcUnit (bytecode interpreter)
-  - compiler/value.h            — ibValue, ibNumber (ttmath 128-bit), ibValueTypes
-  - appData.cpp                 — ibApplicationData (authentication, AuthenticationAndSetUser())
+  - compiler/value.h            — ibValue, ibValueTypes
+  - compiler/fnumber.h          — ibNumber (self-contained exact-decimal, no ttmath)
+  - appData.cpp                 — ibApplicationData (authentication, AuthenticateUser())
   - appDataQuery.cpp            — session and user queries
   - databaseLayer/              — ibDatabaseLayer + Firebird/Postgres/SQLite/MySQL/ODBC drivers
   - metaCollection/partial/commonObjectQuery.cpp — CRUD, CreateAndUpdateTableDB()
@@ -409,7 +410,7 @@ local.config
 databaseLayer.h / databaseLayer.cpp         — ibDatabaseLayer (base class)
 databaseLayerFirebird.h / .cpp              — ibDatabaseLayerFirebird
 compileCode.h / compileCode.cpp             — ibCompileCode, ibTranslateCode
-value.h                                     — ibValue, ibValueTypes enum
+value.h                                     — ibValue, ibValueTypes enum (ibNumber in fnumber.h)
 ```
 
 **Utilities and helpers:** `snake_case` or `camelCase` (be consistent within a module).

@@ -2,159 +2,61 @@
 
 ## Active
 
-### Session registry refactor — **skeleton landed 2026-04-20**
+### Session registry refactor — **landed** (canonical: [`../session-registry.md`](../session-registry.md))
 
-Design settled (discussion 2026-04-20): single-consumer registry thread
-with priority queue, DB row-level pessimistic lock as the source of
-truth for liveness (replaces 1Hz heartbeat UPDATE), unified `Connect(req)`
-entry point for desktop / designer / web-server technical / web-cookie,
-`ibSessionTicket` RAII owner, policy-chain for veto (license /
-designer-exclusive / quota), observer-list for script hooks. Events-
-based model rejected — imperative is simpler and priority queue is
-native. See memory note `project_session_registry_refactor.md` for the
-full design; `project_unified_session_architecture.md` holds the prior
-Phase 2 plan and the 2026-04-20 refinement diff.
+The refactor is in tree and the web path runs through it. The full
+architecture, step-by-step landing log, and every gotcha live in the
+canonical doc — this section only records the current shape and what
+the web path still owes.
 
-**Landed 2026-04-20 — skeleton rename:**
-- `ibSessionContext` → `ibSession` (`backend/session/session.{h,cpp}`).
-- `SessionManager` → `ibSessionRegistry` (`backend/session/sessionRegistry.{h,cpp}`).
-- Added types (unused yet, placeholders): `ibSessionIdentity`,
-  `ibSessionState` (Created / Added / Rejected / Stopping / Gone),
-  `ibAuthState` (Anonymous / Authenticated / AuthFailed), `ibPriority`
-  (Urgent / Normal / Low / Background). State fields on `ibSession`
-  (`m_identity`, `m_state`, `m_auth`, `m_activity`, `m_mtx`, `m_cv`) —
-  declared, not wired.
-- `SessionScope` + `ibSession::Current()` retained as legacy shim
-  (deprecated comment). Will be removed after explicit session
-  pointer passing reaches all script call sites.
-- 18 files updated (appData, moduleManager, moduleInfo, webApplication,
-  webSession + docs). Behaviour identical — build green on Debug|Win32.
+**Current shape (verified against `backend/session/`):**
+- `ibSession` (`session.{h,cpp}`) is the lifecycle unit. It inherits
+  `std::enable_shared_from_this<ibSession>`; the registry owns it in
+  `m_own` and removes it on `ibSession::Close(bool force)`. **There is
+  no `ibSessionTicket`** — that RAII owner was part of the early
+  skeleton and was dropped; sessions are driven by `Open()` / `Close()`
+  directly (`session.h:219,298`).
+- `ibSessionRegistry` (`sessionRegistry.{h,cpp}`) keeps the unified
+  `Connect(const ibConnectRequest&) → ibConnectResult` entry point
+  (`sessionRegistry.h:252`). `ibWebSession::Login` connects through it;
+  the desktop / designer paths go through
+  `EnsureStartedForCreateSession`.
+- **Liveness is heartbeat-based, not pessimistic row locks.** The
+  registry owns ONE `sys_session` write connection, `m_writeConn`
+  (`sessionRegistry.h:644`). `JobHeartbeatOwn` UPDATEs `lastActive` on
+  the process's own rows every ~1s; `JobSweepStale` treats any row
+  whose `lastActive` trails `now` by more than `kStaleCutoffSec = 10`
+  seconds as a zombie and deletes it (`sessionRegistry.cpp:1392`).
+- **The row-lock probe scheme is retired.** `HoldRowLocks` /
+  `TryProbeRowLock` / `ibTxOptions::noWait` were tried as a liveness
+  fast path and abandoned (self-deadlock on the registry's own write
+  connection); they survive only as no-op base virtuals and
+  retrospective comments. There is no separate `m_lockConn` /
+  `m_probeConn` and no `ibSessionRegistry::ProbeSessionRowLock`. Do not
+  reintroduce per-driver `HoldRowLocks` / `TryProbeRowLock` impls — see
+  `../session-registry.md` §4 for why the approach was dropped.
+- Per-session user identity (`m_userInfo`, `m_sessionRawPassword`,
+  `m_workDate`) lives on `ibSession`; the singleton `m_userInfo`
+  fallback on `ibApplicationData` is gone. Session-aware accessors on
+  `ibApplicationData` forward to `ibSession::Current()` so legacy
+  callers picked up per-tab behaviour without call-site churn. This
+  closed the web multi-tab "last login wins" bug
+  (`project_web_session_bug.md`).
+- `ibDesignerExclusivePolicy` (`designerExclusivePolicy.{h,cpp}`) vetoes
+  a second designer Add by consulting the cluster snapshot — now via the
+  heartbeat staleness check, not a row-lock probe.
+- `sys_session` carries `pid` / `address` / `currentActivity` columns
+  (added via `MigrateTableSession`).
 
-**Landed 2026-04-20 — DB row-lock API:**
-- `ibDatabaseLayer::HoldRowLocks(table, pkColumn, pkValues)` /
-  `ReleaseRowLocks()` / `TryProbeRowLock(table, pkColumn, pkValue)`
-  virtuals with no-op default impl.
-- `BeginTransaction(const ibTxOptions& opts = {})` — new struct arg
-  carries `bool noWait` (more knobs later: lock timeout, isolation).
-  Default `{}` keeps every existing caller unchanged.
-- FB concrete impl in `firebirdDatabaseLayer.cpp:495+`. `HoldRowLocks`
-  uses default wait-mode TX + `SELECT ... WITH LOCK` on the IN-list;
-  `TryProbeRowLock` starts a separate nowait TX so contention raises a
-  lock conflict exception (caught, treated as "owner alive"); RollBack
-  always — probe never keeps a lock outliving the call.
-- SQLite / MySQL / PG / ODBC accept the new opts arg but ignore
-  `noWait` for now (TODO comments name the per-driver route —
-  `innodb_lock_wait_timeout=0`, `SET LOCAL lock_timeout=0`, ODBC
-  statement attributes).
-
-**Landed 2026-04-20 — Registry thread + priority queue skeleton:**
-- `ibRegistryRequestKind` (Add / Attach / Detach / Remove / SetActivity)
-  + `ibRegistryRequest` payload.
-- `ibSessionRegistry::Start() / Stop()` — explicit lifecycle;
-  `ibApplicationData::Connect / Disconnect` wire here (follow-up).
-- `Submit(req, priority = Normal)` — thread-safe push, strict
-  descending drain (Urgent → Normal → Low → Background, FIFO inside
-  each bin).
-- `ThreadBody` — cv.wait_until next sweep (3s), DrainAll, placeholder
-  Job_Sweep/Refresh, tick counter. Graceful stop final-drains only
-  Remove requests so DELETE row lands before DB closes.
-- Fatal invariant: exception from ThreadBody → `Die(reason)` →
-  log + `std::terminate`. `IsThreadAlive() / IsFatal()` for
-  producers that want to bail instead of waiting.
-
-**Landed 2026-04-20 — wfrontend server address plumbing:**
-- `wfrontendSetServerAddress(host, port)` / `wfrontendServerAddress()` exports. `wenterprise-server/main.cpp` calls the setter right after arg-parse (before `InitBackend`); `ibWebSession::Login` reads it and passes through `ibConnectRequest::m_address` → ends up in `sys_session.address`. Admin / Active-Users tooling can now tell which server instance owns each cookie session when multiple wenterprise-servers share a DB.
-
-**Landed 2026-04-20 — Per-driver NoWait plumbing:**
-- `ibTxOptions::noWait = true` now honoured on PG / MySQL / ODBC in addition to FB:
-  - PG: `SET LOCAL lock_timeout = 0` after BEGIN.
-  - MySQL: `SET SESSION innodb_lock_wait_timeout = 1` (InnoDB minimum).
-  - ODBC (MSSQL): `SET LOCK_TIMEOUT 0`.
-  - SQLite: default no-op (single-process, row-lock concept doesn't apply).
-- Concrete `HoldRowLocks` / `TryProbeRowLock` impls for PG / MySQL / MSSQL still TODO — base class returns false so registry stays in "state-only" mode on those drivers. NoWait groundwork is in place for whoever writes the concrete impls.
-
-**Landed 2026-04-20 — sys_session schema extension (pid / address / currentActivity):**
-- `CreateTableSession` DDL adds three nullable columns: `pid INTEGER`, `address VARCHAR(256)`, `currentActivity VARCHAR(128)`.
-- `MigrateTableSession()` helper called from `CreateFileAppDataEnv` / `CreateServerAppDataEnv` — `ALTER TABLE ADD ...` for pre-refactor DBs, detection via `ibDatabaseLayer::GetColumns`. Each ALTER wrapped in try/catch so drivers without that DDL degrade silently.
-- Registry `InsertSessionRow` now writes all three new columns (pid from `GetCurrentProcessId`, address from `ibConnectRequest::m_address`, currentActivity empty at INSERT).
-- `ProcessSetActivity` is no longer a stub — UPDATEs `currentActivity` for own inserted rows.
-- `ibSessionTicket::SetActivity(wxString)` — public fire-and-forget API; Submit@Low priority so it never preempts Add / Remove / Attach.
-
-**Not in this commit** (follow-up when admin endpoint lands):
+**Web path still owes:**
+- `m_address` populated from wenterprise-server's host:port (currently
+  left blank by the web caller).
+- Snapshot SELECT reading `pid` / `address` / `currentActivity` / `kind`
+  into `ibSessionSnapshot` accessors for the Active Users dialog.
 - `signal` column + admin kick/reload dispatcher.
-- snapshot SELECT reading new columns into `ibApplicationDataSessionArray`.
-- `m_address` populated from wenterprise-server's host:port (currently empty; ibConnectRequest.m_address left blank by caller).
-
-**Landed 2026-04-20 — Session-aware user accessors + DesignerExclusivePolicy:**
-- `ibApplicationData::GetUserName / GetUserInfo / GetUserPassword / GetUserRoleArray / GetUserLanguageGuid / GetUserLanguageCode / ComputeMd5` moved out-of-line and route through `ibSession::Current()` when a SessionScope is active, fall back to the singleton `m_userInfo` otherwise. 25+ existing callers (enterprise/designer event handlers, systemManagerFunc, metaObject, commonObject, debugServer, about.cpp) automatically pick up per-session user data without call-site churn. Closes the web multi-tab "last login wins" issue from `project_web_session_bug.md`.
-- `ibDesignerExclusivePolicy` (`backend/session/designerExclusivePolicy.{h,cpp}`) replaces the old `VerifySessionUpdater` grace-retry. Consults the cluster snapshot for other designer rows; for each, `TryProbeRowLock` decides alive vs zombie — if alive, veto Add with `"Another designer process is already running: ..."`. Wired into `ibApplicationData::StartSession` when `m_runMode == eDESIGNER_MODE` via `reg.AddPolicy(...)` before `reg.Start()`.
-- `ibSessionRegistry::ProbeSessionRowLock(guid)` — public helper for policies (wraps `m_probeConn->TryProbeRowLock`).
-
-**Landed 2026-04-20 — Web wiring + smoke test:**
-- `ibWebSession::Login` now goes through `ibSessionRegistry::Connect(req)` and holds a `std::unique_ptr<ibSessionTicket> m_ticket`. Legacy `registry.Create/Destroy` calls gone from web path. Dtor / `OnExit` drops the ticket → Remove@Urgent → sys_session row DELETEd on the registry thread.
-- Desktop smoke test (`enterprise.exe /file=fb_test251` via `cmd /c start /wait`): login succeeds, main loop runs.
-- Web smoke test (wenterprise-server on port 8091): `GET /` mints cookie, `POST /login` with empty creds (open-access) returns 200 `"ok (<cookie> / )"`, `GET /session` returns `authenticated=true` with `tabCount=2` (OnStart auto-opened both `Common form1` / `Common form2`). End-to-end via HTTP + registry.
-- **Bug fixed — Start/Connect race**: `ibSessionRegistry::Start()` returned before `ThreadBody` flipped `m_threadAlive=true`; a Connect issued immediately after Start saw `!m_threadAlive` and bailed with `RegistryDown`. Fixed by spinning in `Start()` (≤2s) until the thread signals alive.
-- **Bug fixed — Attach-with-empty-creds deadlock**: `ibSessionTicket::Attach` called `TransitionAuth(Anonymous)` then `WaitForAuth(from=Anonymous)`; `ProcessAttach` early-returned to Anonymous (state unchanged) → predicate `state != Anonymous` never flipped → Timeout. Fixed by removing the early-return in ProcessAttach — always call `AuthenticateUser`, transition to `Authenticated` even for open-access pass-through (info.IsOk()=false) so callers see "auth settled".
-
-**Landed 2026-04-20 — Cutover: desktop goes through registry; legacy updater deleted:**
-- `AuthenticationAndSetUser` split into pure `AuthenticateUser(user, pwd, outInfo)` + side-effect `InstallUser(info, rawPassword)`. Legacy wrapper retained for existing callers (web `ibWebSession::Login`, desktop login dialog `authorization.cpp`). `ProcessAttach` calls the pure variant.
-- Registry owns `sys_session` row I/O: `Start()` checks out three dedicated pool connections (lock / write / probe), handlers INSERT row at anonymous Add, UPDATE userName on Attach success, DELETE on Remove. `HoldRowLocks` pins the full own-set per drain batch; `TryProbeRowLock` during `JobSweepStale` removes zombie rows cluster-wide (idempotent).
-- `JobRefreshSnapshot` rebuilds the cluster snapshot every ~3s; `GetClusterSnapshot()` returns a copy under RW mutex. `ibApplicationData::GetSessionArray()` now delegates here — Active Users dialog wires through automatically.
-- `ibApplicationData::StartSession` → `registry.EnableSysSessionOwnership(true)` + `Start()` + `Connect(req)` + `Attach()` (+ `ibSession::OnShowAuthenticate` virtual override on `ibGUISession` for the GUI dialog fallback, re-Attach with dialog-filled creds).
-- `CloseSession` → drop `m_mainTicket` (dtor submits Remove@Urgent), drop `m_mainThreadScope`. `Disconnect` ends with `registry.Stop()`.
-- `ibApplicationDataSessionUpdater` class + all `Job_*` / `VerifySessionUpdater` / `ClearLostSessionUpdater` impl **deleted** from `appData.h` and `appDataQuery.cpp` (~370 lines removed).
-- Full solution builds (backend / frontend / wfrontend / enterprise / designer / launcher / daemon / codeRunner / simplePlugin, Debug|Win32).
-- Still TODO after cutover: `DesignerExclusivePolicy` (port `VerifySessionUpdater` veto semantics into an `ibSessionPolicy`); per-driver `noWait` plumbing for PG/MySQL/MSSQL; extract `m_userInfo / m_sessionGuid / m_sessionRawPassword` out of singleton into `ibSession` proper (closes `project_web_session_bug.md`).
-
-**Landed 2026-04-20 — Ticket + Connect(req) + state machine:**
-- `ibSession::Transition / TransitionAuth / WaitForState / WaitForAuth`
-  — cv-based state machine; registry thread writes, producers wait.
-- `ibSessionPolicy` interface (`session/sessionPolicy.h`) — first-veto-
-  wins chain consulted in ProcessAdd; failed CanAdd fills reason,
-  session → Rejected.
-- `ibSessionTicket` (`session/sessionTicket.{h,cpp}`) — RAII move-only;
-  `.Attach() / .Detach() / .Release()`. Dtor submits Remove@Urgent.
-  `ibAttachResult` (Ok / WrongPassword / Timeout / RegistryDown) —
-  AuthFailed is non-terminal, retry on the same ticket is legal.
-- `ibSessionRegistry::Connect(req, timeout)` — unified entry. Creates
-  session with fresh guid, Submit(Add), WaitForState. On creds-present
-  path submits Attach too; auto-submits Remove@Urgent on Auth
-  failure so orphan sessions don't leak. Returns `ibConnectResult`
-  (Ok / RejectedPolicy / RejectedAuth / Timeout / RegistryDown).
-- ProcessAdd / ProcessAttach / ProcessRemove / ProcessDetach —
-  state transitions wired; DB INSERT / UPDATE / DELETE still TODO
-  (next commit wires them to `appDataQuery`-style SQL + the FB row-
-  lock API).
-- Auth via the existing `ibApplicationData::AuthenticationAndSetUser`
-  split — still TODO; ProcessAttach currently stubs "any non-empty
-  creds → Authenticated".
-
-**Still to do (order matters):**
-1. ~~Smoke test~~ — done for enterprise.exe (desktop) and wenterprise-server (web).
-   Still needed: `designer.exe`, interactive Active Users dialog verification,
-   sys_session row DELETE on clean shutdown verification.
-2. ~~Wire web~~ — done.
-3. ~~Policy migration: DesignerExclusivePolicy~~ — done.
-4. ~~Extract `m_userInfo` / `m_sessionGuid` / `m_sessionRawPassword`~~ —
-   readers migrated via session-aware accessors (landed 2026-04-20);
-   singleton fields kept as fallback for codeRunner / pre-auth paths.
-   Full removal of singleton fields + dual-write can happen in a
-   follow-up once readers are confirmed routed via Current() in all
-   hot paths.
-5. **Remove `SessionScope::Current()`** after migrating `AppUser()`-style
-   built-ins onto explicit session pointers (via `ibProcUnit::GetSession()`
-   delegate). Independent of (4) — this is about removing thread_local
-   plumbing, whereas (4) is about the source of truth for user identity.
-6. ~~Per-driver NoWait plumbing~~ — PG/MySQL/ODBC done; concrete
-   `HoldRowLocks` / `TryProbeRowLock` impls still TODO for those
-   drivers (base class returns false → registry in state-only mode
-   without pessimistic row locks).
-7. ~~sys_session schema extension~~ — pid/address/currentActivity
-   added (2026-04-20). Still todo: `signal` column for admin kick/
-   reload dispatcher; snapshot SELECT reading new columns into
-   `ibApplicationDataSessionArray`; populate `m_address` in
-   `ibWebSession::Login` from wenterprise-server's host:port.
+- Remove the `ibSessionScope::Current()` shim after `AppUser()`-style
+  built-ins move onto explicit session pointers via
+  `ibProcUnit::GetSession()`.
 
 **Related memory notes:** `project_session_registry_refactor.md`,
 `project_unified_session_architecture.md`, `project_web_session_bug.md`.
@@ -739,9 +641,9 @@ refactor. Concrete changes that landed:
   `m_sessionGuid` singletons on `ibApplicationData` are gone — session
   guid lives in `ibSessionIdentity::m_guid`, the heartbeat is run by
   `ibSessionRegistry`'s registry thread.
-- `ibWebSession::Login` goes through `registry.Connect(req)` plus
-  `ticket.Attach(user, pwd)`; `sys_session` sees one row per tab
-  through the registry's INSERT.
+- `ibWebSession::Login` goes through the registry's anonymous-create
+  plus `m_session->Open(user, pwd)` (no ticket); `sys_session` sees one
+  row per tab through the registry's INSERT.
 - Singleton accessors on `ibApplicationData` (`GetUserName`,
   `GetUserInfo`, `GetUserPassword`, …) forward to
   `ibSession::Current()->GetUserInfo()` when a scope is active, so
@@ -763,7 +665,7 @@ in memory.
 
 ### Designer submenu cloning into child frames — landed (2026-04-19)
 
-`CAuiDocChildFrame::SetMenuBar` (in
+`ibAuiDocChildFrame::SetMenuBar` (in
 `src/engine/frontend/mainFrame/mainFrameChild.cpp`) rebuilds the parent
 menu bar for each MDI child (e.g. form editor). Its `ibProcSubMenu::
 ConstructMenu` walker used to call `src->Append(id, label, …)` then

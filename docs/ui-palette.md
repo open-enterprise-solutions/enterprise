@@ -1,8 +1,8 @@
 # UI Palette
 
-The OES Enterprise frontend uses an interior-design palette: a cool dusty-blue dominant chrome around warm-cream content surfaces, with a single warm focal accent (terracotta) for active states. The composition is inspired by classic interiors that pair powder-blue walls with a terracotta ottoman as the room's focal point — a calm field with one warm point of attention.
+The OES Enterprise frontend uses a cool dusty-blue chrome around warm-cream content surfaces, with a single warm accent (terracotta) for active states — modelled on a powder-blue room with a terracotta ottoman as the one focal point.
 
-This document is the source of truth for the colour values used across the codebase. When you change a UI surface, look here first to pick a value that already belongs to the palette rather than introducing a new tone.
+This document is the source of truth for the colour values used across the codebase. When you change a UI surface, pick a value that already belongs to the palette here rather than introducing a new tone.
 
 ## Design principles
 
@@ -53,9 +53,11 @@ Most palette values are duplicated inline at the point of use. The places to sta
 | `src/engine/frontend/mainFrame/settings/fontcolorsettings.cpp` | Code editor — per-style foreground / background, terracotta selection |
 | `src/engine/frontend/mainFrame/mainFrame.cpp` | MDI client window background (powder blue) |
 | `src/engine/frontend/mainFrame/mainFrame.h` | Bottom status bar — chrome-light + caption-active-bottom text |
-| `src/engine/frontend/mainFrame/objinspect/objinspect.{h,cpp}` | Property inspector — per-class tints and propgrid caption / margin colours |
+| `src/engine/frontend/mainFrame/objinspect/objinspect.h` | Property inspector — per-class row tints (`window`/`common`/`sizerItem`) |
+| `src/engine/frontend/mainFrame/objinspect/objinspect.cpp` | Property inspector — propgrid caption / margin colour (`#E6EEF5`) |
 | `src/engine/frontend/visualView/ctrl/frame.h` | `wxDefaultStypeFGColour / BGColour` macros — global defaults used for new form controls, toolbars, dataviews, dialogs |
-| `src/engine/frontend/win/dlgs/{authorization,activeUser,userList,auditLog}.cpp` | Standalone dialogs — powder-blue background |
+| `src/engine/frontend/win/dlgs/{authorization,activeUser,userList}.cpp` | Standalone dialogs — powder-blue background |
+| `src/engine/frontend/docView/templates/docViewAuditLog.cpp` | Audit-log viewer — powder-blue background |
 | `src/engine/designer/mainFrame/metaTree/tree{Configuration,DataProcessor,DataReport}.cpp` | Metadata-tree panel backgrounds (powder) + tree-ctrl backgrounds (cream) |
 | `src/engine/designer/mainFrame/{watch,stack,local}/*.cpp` | Debugger lists — light-cream content tier |
 | `src/engine/designer/win/editor/visualEditor/visualEditor.cpp` | Form-design workspace — palest-powder so the form card pops |

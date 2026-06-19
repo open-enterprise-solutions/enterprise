@@ -5,7 +5,7 @@
 | Environment | Branch | Purpose |
 |-----------|-------|-----------|
 | **Local** | any | Development and debugging on the work machine |
-| **Staging** | `dev` or `release/*` | Testing a release before delivery to a customer |
+| **Staging** | `develop` or `release/*` | Testing a release before delivery to a customer |
 | **Production** | `master` | Release to customers (installer, distribution) |
 
 ### Principle
@@ -120,8 +120,8 @@ isql-fb -user SYSDBA -password masterkey
 # 3. Build the project
 msbuild enterprise.sln /p:Configuration=Debug /p:Platform=x64 /m
 
-# 4. Run
-.\x64\Debug\OES.exe
+# 4. Run (launcher is the connection chooser; enterprise.exe is the thick client)
+.\bin\Win64\Debug\launcher.exe
 ```
 
 ### Why no Docker for local development
@@ -180,7 +180,7 @@ name: Build Staging
 
 on:
   push:
-    branches: [dev]
+    branches: [develop]
 
 jobs:
   build:
@@ -326,7 +326,7 @@ Write-Host "Backup created: $backupFile"
 OES-1.2.0-setup.exe         — Installer (NSIS/WiX)
     ↓ installs into:
 C:\Program Files\OES\
-├── OES.exe                 — Main application
+├── enterprise.exe          — Thick client (also launcher.exe / designer.exe / daemon.exe)
 ├── config.ini.example      — Configuration template
 ├── wxbase33u_vc_custom.dll — wxWidgets runtime
 ├── fbclient.dll            — Firebird client
@@ -358,7 +358,7 @@ param(
 Write-Host "Building OES installer v$Version"
 
 # 1. Make sure Release is built
-if (-not (Test-Path "x64\Release\OES.exe")) {
+if (-not (Test-Path "bin\Win64\Release\enterprise.exe")) {
     throw "Release build not found. Run MSBuild first."
 }
 
@@ -435,7 +435,7 @@ wxLogError("Failed to connect to database: %s", error.c_str());
 // src/engine/designer/mainApp.cpp   (designer entry point)
 //
 // ibApplicationData (appData.cpp) — handles application initialization:
-//   - AuthenticationAndSetUser() — user authentication
+//   - AuthenticateUser() — user authentication
 //   - Connection to the ibDatabaseLayer of the required type (Firebird/Postgres/etc.)
 //   - Metadata loading through ibValueMetaObjectCatalog / ibValueMetaObjectDocument
 
@@ -459,7 +459,7 @@ bool OESApp::OnInit() {
     }
 
     // 3. User authentication
-    if (!appData->AuthenticationAndSetUser(user, password)) {
+    if (!appData->AuthenticateUser(user, password)) {
         wxLogWarning("Authentication failed.");
         return false;
     }

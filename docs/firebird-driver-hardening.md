@@ -5,18 +5,21 @@
 > exercise the changed code in desktop / wenterprise-server smoke
 > runs. Three follow-ups parked (see end-of-doc).
 
-Audit and fix pass on `ibDatabaseLayerFirebird` and the supporting
-`firebird*` files for embedded FB 5.0 deployment. The driver was
-written against legacy ibase.h (`FB_API_VER 40`) and works against
-FB 5.0 client (`fbclient.dll 5.0.3.1683` confirmed via VersionInfo).
-Headers and plugin layout (`engine13`, `icu63`) are correct for FB 5.0
-— legacy C-API and plugin engine version did not bump between 4.x and
-5.x.
+Audit and fix pass on the FB driver — class `ibDatabaseLayerFirebird`
+(`databaseLayer/firebird/firebirdDatabaseLayer.h`) and the supporting
+`firebird*` files — for embedded FB 5.0 deployment. The driver is
+written against legacy `ibase.h` (`FB_API_VER 40`) and works against
+the FB 5.0 client. Headers and plugin layout (`engine13`, `icu63`) are
+correct for FB 5.0 — legacy C-API and plugin engine version did not
+bump between 4.x and 5.x.
 
-> **Status:** landed. Shipped in v1.3.0 (2026-05-12). No known
-> regressions on FB 5.0 embedded; metadata-driven Apply paths
-> exercise the changed code in desktop / wenterprise-server smoke
-> runs.
+> Class-name note: the driver classes use the **suffix** pattern —
+> `ibDatabaseLayerFirebird`, `ibDatabaseResultSetFirebird`,
+> `ibPreparedStatementFirebird`, `ibPreparedStatementFirebirdWrapper`,
+> `ibDatatabaseParameterFirebird` /
+> `ibDatatabaseParameterFirebirdCollection` (the `Datatabase` typo is
+> in the actual type name), `ibInterfaceFirebird`. The `firebird*.cpp`
+> filenames below are file references, not class names.
 
 ---
 

@@ -47,7 +47,7 @@ EV is recommended: immediately gets a high Microsoft SmartScreen reputation
           [System.IO.File]::WriteAllBytes("$env:TEMP\cert.pfx", $pfxBytes)
           
           # Sign all .exe and .dll
-          $files = Get-ChildItem -Path .\bin\x64\Release -Include "*.exe","*.dll" -Recurse
+          $files = Get-ChildItem -Path .\bin\Win64\Release -Include "*.exe","*.dll" -Recurse
           foreach ($f in $files) {
               signtool sign `
                   /f "$env:TEMP\cert.pfx" `

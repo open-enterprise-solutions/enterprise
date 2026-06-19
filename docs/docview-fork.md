@@ -60,10 +60,20 @@ licence — the attribution header stays at the top of `docView.h`.
 | `ibMetaView : ibView` | View paired with `ibMetaDocument` (`OnCreate(ibMetaDocument*, long)`). |
 | `ibMetaDocTemplate : ibDocTemplate` | Metadata template — adds CLSID + per-template GUID + icon for the "choose template" dialog. Registered via the `AddDocTemplate(ibClassID/ibPictureID, …)` overloads; lives in the same `m_templates` list as plain templates, found by iterating + `dynamic_cast`. |
 
-Was previously split as `ibDocView.{h,cpp}` + `docView.{h,cpp}`;
-collapsed into a single `docView.{h,cpp}` pair so both layers review
-side by side. `docViewCmd.cpp` (the old command-processor TU) is
-removed and dropped from `frontend.vcxproj` / `wfrontend.vcxproj`.
+`ibDocTemplate` / `ibMetaDocTemplate` live in `docManager.h`;
+`ibDocManager` and the forked bases live in `docView.h`. `docViewCmd.cpp`
+(the old command-processor TU) is removed and dropped from
+`frontend.vcxproj` / `wfrontend.vcxproj`.
+
+**Concrete shell frame.** The desktop shell is
+`ibFrontendMainFrame : ibBackendDocFrame, wxAuiMDIParentFrame,
+ibDocParentFrameAnyBase` (`frontend/mainFrame/mainFrame.h`) — it
+implements the backend `ibBackendDocFrame` interface
+([`backend-frontend-split.md`](backend-frontend-split.md)) over the
+forked parent-frame mixin. The web shell is
+`ibWebFrame : ibBackendDocFrame, ibWebWindow`
+(`frontend/web/webFrame.h`). Child frames are `ibAuiDocChildFrame`
+(desktop) / `ibWebDocChildFrame` (web).
 
 ---
 
@@ -297,10 +307,10 @@ to be metadata-editing nodes.
   not a hand-written downcast.
 - **View-level desktop wiring lifted to `ibView`** so the plain form view still
   participates: `Activate` (full body in docManager.cpp — it reaches `mainFrame` /
-  `ibFrontendDocMDIFrame`; without it the form view skipped
+  `ibFrontendMainFrame`; without it the form view skipped
   `mainFrame->ActivateView` and deactivation stuck), `CreateMenuBar` /
   `OnCreateToolbar` (no-op defaults — a runtime form contributes neither), and
-  `ibFrontendDocMDIFrame::ActivateView(ibView*)`.
+  `ibFrontendMainFrame::ActivateView(ibView*)` (`frontend/mainFrame/mainFrame.h:224`).
 
 Rule that fell out: **what the form view needs, lift up into `ibView`; do not
 downcast back to `ibMetaView`.** See memory `docview-oncreate-pipeline`.

@@ -22,31 +22,59 @@ The refactor moved runtime ownership from metadata to session:
 - `ibMetaData` keeps only **compile-tree** data (descriptors, source
   text, designer-side compile cache).
 - `ibSession` owns the **runtime root** through `m_root :
-  ibValuePtr<ibValueModuleManagerConfiguration>`.
+  ibValuePtr<ibValueModuleManagerRuntimeConfiguration>`.
 
 ---
 
 ## Current shape (verified in tree)
 
-### `ibMetaData` (`backend/metadata.h`)
+### `ibMetaData` (`backend/metaData.h`)
 
-- No `GetModuleManager` method, no `ibValueModuleManager` reference
-  in the header.
+- No `GetModuleManager` method on `ibMetaData`, no `ibValueModuleManager`
+  reference in the header. (One unrelated `GetModuleManager` survives:
+  `ibCompileValueCache::GetModuleManager()` returns the designer-only
+  `ibValueModuleManagerDesigner` held inside the compile cache — a
+  different concept, see below. So "grep returns 0" no longer holds; what
+  holds is "no runtime-mm getter on the metadata".)
 - `ibCompileValueCache* GetCompileCache() const` — designer-side
-  compile-value cache for autocomplete / property previews. Allocated
-  only on `ibMetaDataConfigurationStorage` (designer-edit
-  configuration); other configurations return nullptr. Callsites use
+  compile-value cache for autocomplete / property previews. Now a facade
+  over the **runtime image** (`m_image->CompileCache()`): null when the
+  metadata is closed (no image) or for runtime-only kinds. The cache is
+  built by `ibMetaData::CreateDesignerCache()` (overridden by designer
+  kinds — `ibMetaDataConfigurationStorage`, external DP/Report in designer
+  mode) and now also owns an `ibValueModuleManagerDesigner` (the
+  pre-session-split config-level mm the Designer lost). Callsites use
   `if (auto* cc = metaData->GetCompileCache()) ...` instead of
   `appData->DesignerMode()`.
-- `ibModuleStorage` — read-only list of init common-module
-  descriptors. Held by value, never null. Iterated by per-session
+- `ibModuleStorage* GetModuleStorage()` — read-only list of init
+  common-module descriptors. Now also a facade over the image
+  (`m_image->ModuleStorage()`): null when closed. Iterated by per-session
   runtime when populating common modules.
+
+### Open state and the runtime image (post-a81bfe9b)
+
+The open/close machinery moved into a single **runtime image**
+(`ibMetaImage`, `metaData.h`) held by `std::shared_ptr<ibMetaImage> m_image`
+on `ibMetaData`. The image aggregates the metadata-defined type-ctor factory
+(`ibCtorRegistry<ibCtorMetaValueType>`), the common-module skeleton
+(`ibModuleStorage`), and the designer compile cache. Its **presence is the
+open state** — `IsConfigOpen() = (m_image != nullptr)`, replacing the
+per-subclass `m_configOpened` flag. `RunDatabase` builds the image through
+the RAII `ibMetaData::LoadGuard` (ctor creates it, dtor drops it unless
+`Commit()` ran — so any exception or early return rolls the load back);
+`CloseDatabase` tears the registered nodes down then `m_image.reset()`. The
+registry **owns its ctors via `shared_ptr`**, so dropping the image frees
+them — there is no manual `wxDELETE` in `UnRegisterCtor` anymore. The
+factory invalidation counter `m_factoryCtorCountChanges` stays on
+`ibMetaData` (outside the image) so it never resets on a drop.
 
 ### `ibSession` (`backend/session/session.{h,cpp}`)
 
-- `m_root : ibValuePtr<ibValueModuleManagerConfiguration>` — the
-  session's own runtime root. Created via `CreateRoot(metaData)`
-  (idempotent) or its façade `EnsureRoot()`. Stays null for sessions
+- `m_root : ibValuePtr<ibValueModuleManagerRuntimeConfiguration>` — the
+  session's own runtime root. Created via
+  `CreateRoot(ibMetaDataConfigurationBase*)` or its idempotent façade
+  `EnsureRoot()` (no-op when `m_root` is set or `activeMetaData` is null).
+  Stays null for sessions
   that never run scripts (Designer, WebServer technical, Launcher).
 - `CompileRoot()` — runs `m_root->CreateMainModule()` then
   `m_root->AttachRuntime(this)`. Also bootstraps the lambda runtime
@@ -87,9 +115,11 @@ new code uses one of:
 - `ibSession::Current()->GetLambdaRuntime()` — lambda dispatch shim.
 - Metadata side: `metaData->GetCompileCache()` — designer-side
   compile cache (replaces every old `if (appData->DesignerMode())
-  metaTree->AddCompileModule(...)` guard).
+  metaTree->AddCompileModule(...)` guard); the designer's own mm is
+  `cc->GetModuleManager()` (`ibValueModuleManagerDesigner`).
 
-Grep over `src/engine` for `GetModuleManager` returns 0 occurrences.
+Grep over `src/engine` for `GetModuleManager` returns only the
+`ibCompileValueCache` getter — none on `ibMetaData`.
 
 ---
 
@@ -127,10 +157,12 @@ Grep over `src/engine` for `GetModuleManager` returns 0 occurrences.
 
 ## How to verify in tree
 
-- `Grep GetModuleManager src/engine` → 0 hits.
-- `Grep "ibValueModuleManager" backend/metadata.h` → 0 hits.
+- `Grep GetModuleManager src/engine` → only `ibCompileValueCache`
+  (designer compile cache), none on `ibMetaData`.
+- `Grep "ibValueModuleManager" backend/metaData.h` → only
+  `ibValueModuleManagerDesigner` (inside the compile cache).
 - `ibSession::m_root` is the only owner of
-  `ibValueModuleManagerConfiguration` in non-codeRunner builds;
+  `ibValueModuleManagerRuntimeConfiguration` in non-codeRunner builds;
   codeRunner uses `ibValueModuleManagerExternal*` directly as its
   root because it's standalone (no session bring-up).
 

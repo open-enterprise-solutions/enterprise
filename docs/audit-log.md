@@ -2,9 +2,14 @@
 
 > **Status:** LANDED 2026-05-25 in commit `37a9808b`. Backend `ibLogger`
 > + own-SQLite sink + monthly file rotation + retention sweep + viewer
-> dialog in enterprise.exe / designer.exe (`Administration → Journal
+> in enterprise.exe / designer.exe (`Administration → Journal
 > registration` menu item). Five gtests in `tests/test_logger.cpp`
 > green. Five adjacent fixes shipped alongside (listed below).
+>
+> **Update:** the modal `ibDialogAuditLog` viewer was later rebased to a
+> doc/view tab — `ibAuditLogDocument` / `ibAuditLogView` in
+> `frontend/docView/templates/docViewAuditLog.{h,cpp}` (paged model over
+> `ibLoggerReader`). The "Viewer" section below reflects the current shape.
 
 ---
 
@@ -41,12 +46,12 @@ script / business code
 │  - level gate (Info/Warn skipped    │
 │    when below threshold; Audit      │
 │    NEVER silenced)                  │
-│  - try/catch around every Push so   │
-│    logger failures never propagate  │
+│  - never throws — errors swallowed  │
+│    inside Emit                      │
 └──────────────┬──────────────────────┘
                ▼
 ┌─────────────────────────────────────┐
-│  ibLogQueue  (MPSC, bounded)        │
+│  ibLoggerQueue  (MPSC, bounded)     │
 │  - std::mutex + std::cv + deque     │
 │  - drop-new on overflow + counter   │
 │  - notify_one only on empty→        │
@@ -55,16 +60,15 @@ script / business code
 └──────────────┬──────────────────────┘
                ▼
 ┌─────────────────────────────────────┐
-│  ibLogWriter  (one drain thread)    │
+│  ibLoggerWriter  (one drain thread) │
 │  - batch up to 256 entries OR       │
 │    100 ms timeout                   │
-│  - final drain in Run()'s tail      │
-│    before thread exits              │
+│  - final drain before thread exits  │
 └──────────────┬──────────────────────┘
                ▼
 ┌─────────────────────────────────────┐
-│  ibLogSink (abstract)               │
-│  ├── ibLogSinkSqlite (concrete)     │
+│  ibLoggerSink (abstract)            │
+│  ├── ibLoggerSinkSqlite (concrete)  │
 │  │   - own ibDatabaseLayerSQLite    │
 │  │     (NOT in main pool, see       │
 │  │     "decisions" below)           │
@@ -81,27 +85,30 @@ Read path (admin viewer):
 
 ```
 ┌─────────────────────────────────────┐
-│  ibLogReader                        │
-│  - ibLogFilter: date range, level,  │
-│    user_name, source, event_type,   │
-│    refGuid, search, limit/offset    │
-│  - Query() pre-filters files by     │
+│  ibLoggerReader → vector<ibLogRow>  │
+│  - ibLogFilter: from_ms/to_ms,      │
+│    min_level, user_name, source,    │
+│    event_type, ref_guid, search,    │
+│    limit/offset                     │
+│  - CollectFiles() pre-filters by    │
 │    oes_YYYY_MM name (skip months    │
-│    outside the filter window)      │
+│    outside the filter window)       │
 │  - opens each file, prepared        │
 │    statement with dynamic WHERE     │
 │  - ORDER BY ts_ms DESC, id DESC     │
 └──────────────┬──────────────────────┘
                ▼
-   frontend/win/dlgs/auditLog.{h,cpp}
-   (ibDialogAuditLog — Luna toolbar +
-    ibDataViewCtrl + filter strip)
+   frontend/docView/templates/docViewAuditLog.{h,cpp}
+   (ibAuditLogDocument owns the reader;
+    ibAuditLogView = filter strip + AUI
+    toolbar + ibDataViewCtrl; paged
+    ibAuditLogModel : ibDataViewModel)
 ```
 
 Retention sweep:
 
 ```
-ibLogSweep::RunOnce(dir, retentionDays)
+ibLoggerSweep::RunOnce(dir, retentionDays)
   parses month from filename
   deletes files (+ .olg-wal / .olg-shm sidecars)
   whose month bucket ends before cutoff
@@ -226,17 +233,31 @@ context.
 
 ---
 
-## Viewer dialog
+## Viewer (doc/view tab)
 
-`ibDialogAuditLog` (`frontend/win/dlgs/auditLog.{h,cpp}`) — Luna
-toolbar style, mirrors `ibDialogUserList`'s layout:
+`ibAuditLogDocument` / `ibAuditLogView`
+(`frontend/docView/templates/docViewAuditLog.{h,cpp}`) — a standalone
+doc/view tab (no metaobject; registered via a plain `ibDocTemplate` with
+no CLSID key). Replaced the original modal `ibDialogAuditLog` so the
+journal stays open alongside form editors. Mirrors `ibDialogUserList`'s
+toolbar layout:
 
-- Filter strip on top: `wxDatePickerCtrl` from/to, level dropdown
-  (default "Audit only"), source dropdown, user/search text.
-- `wxAuiToolBar` (Apply / Clear / Refresh / Open object).
-- `ibDataViewCtrl` with `ibAuditLogModel : ibDataViewIndexListModel`.
-- Live refresh checkbox (3 s `wxTimer`-driven Reload).
-- Double-click row → if `ref_meta_id != 0`,
+- **Document** owns the `ibLoggerReader` (built from
+  `appData->GetLogger()->GetLogDir()`), is read-only (`IsModified()`
+  always false).
+- **View** builds the UI: filter strip + `wxAuiToolBar` + `ibDataViewCtrl`.
+  Filter strip: `wxDatePickerCtrl` from (default −7 days) / to, level
+  dropdown (default "Audit only"), source dropdown, user + search text,
+  tail checkbox.
+- **Model** `ibAuditLogModel : ibDataViewModel` — **paged** (`IsPagedModel()`),
+  `kPageSize = 200`. `GetFirstFetch` loads page 0; scrolling drives
+  `GetNextFetch`, appending pages to the accumulating `m_loadedRows`.
+  Rows wrapped in refcounted `ibAuditLogRowObject` (pins an index past a
+  re-fetch). Columns start at 1 (column 0 is reserved by the
+  `ibDataViewCtrl` fork): Time / Level / User / Source / Event / Message /
+  Ref.
+- Tail checkbox → 3 s `wxTimer` (`OnTimer` → `Reload`).
+- Double-click (`OnItemActivated`) → if `ref_meta_id != 0`,
   `ibValueReferenceDataObject::Create(activeMetaData, ref_meta_id,
   ibGuid(ref_guid))->ShowValue()`; if `ref_meta_id == 0`, open
   `ibDialogUserItem` keyed by guid (sys_user convention).
@@ -438,7 +459,9 @@ Frontend:
   override on `ibDataViewIndexListModel`.
 - `frontend/win/ctrls/dataview/datavgen.cpp` — `m_viewMode` default
   flipped to `ibDataViewList`.
-- `frontend/win/dlgs/auditLog.{h,cpp}` (new) — viewer dialog.
+- `frontend/win/dlgs/auditLog.{h,cpp}` (new at landing) — modal viewer
+  dialog. **Later removed** and replaced by the doc/view tab
+  `frontend/docView/templates/docViewAuditLog.{h,cpp}` (see "Viewer" above).
 
 App shells:
 

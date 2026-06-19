@@ -1,16 +1,25 @@
 # Lambda closure capture
 
 > **Status**: LANDED 2026-05-11..12 — Phase A/B/C/D/F all in working
-> tree. AOT v12. Build clean Debug/x86. Working copy uncommitted
-> (experimental arc per convention).
+> tree. AOT v14 (read `byteCodeAOT.cpp::kAOTFormatVersion`; v10 at the
+> closure landing, bumped since). Build clean Debug/x86. Working copy
+> uncommitted (experimental arc per convention).
 >
 > Mechanism: per-frame heap promotion (v2). v1 used per-slot boxing
 > + `FindOrAddCapture` linear walk — rolled back as wrong shape
 > (violates single-pass + no-search-collections invariants). v2
-> sidesteps by making the capture chain per-frame: lambda holds
-> `vector<shared_ptr<ibRunContext>> m_capturedFrames`, runtime wires
-> `m_pppArrayList[1..N]` per invoke; existing OPER_GET/SET with
-> depth ≥ 1 work unchanged.
+> sidesteps by making the capture chain per-frame: the whole
+> **`ibRunContext`** is heap-promoted (it inherits
+> `enable_shared_from_this`), and the lambda holds
+> `std::vector<std::shared_ptr<ibRunContext>> m_capturedFrames`
+> (`compiler/procUnitValues.h`). Runtime wires `m_pppArrayList[1..N]`
+> from each captured context's `m_pRefLocVars` per invoke; existing
+> OPER_GET/SET with depth ≥ 1 work unchanged.
+>
+> **NB:** there is NO separate `HeapFrame` struct — the design sketch
+> below (a `struct HeapFrame { vector<ibValue> locals; }`) was the early
+> shape; the landed code heap-promotes `ibRunContext` itself. Read the
+> mechanism as "captured = `shared_ptr<ibRunContext>`" throughout.
 >
 > See `docs/lambda.md` for the base lambda machinery this builds on.
 
@@ -54,30 +63,33 @@ var bigOnes = arr.Where(Function(x) { return x > threshold; }).ToArray();
 
 ---
 
-## Mechanism — heap-allocated frame, NOT per-slot boxing
+## Mechanism — heap-promoted run context, NOT per-slot boxing
 
-A function that has any inner lambda gets its **entire local frame
-heap-allocated** (`shared_ptr<HeapFrame>`). The lambda holds a
-shared_ptr to that frame in its `m_capturedFrames` vector. Frame stays
-alive as long as some lambda holds a reference, surviving outer's
-return.
+A function that has any inner lambda gets its **entire `ibRunContext`
+heap-allocated** (`make_shared<ibRunContext>`, the context inherits
+`enable_shared_from_this`). The lambda holds a `shared_ptr` to that
+context in its `m_capturedFrames` vector. The context — and its locals
+array `m_pRefLocVars` — stays alive as long as some lambda holds a
+reference, surviving outer's return.
+
+Landed shape (`compiler/procUnitValues.h`):
 
 ```cpp
-struct HeapFrame {
-    std::vector<ibValue> locals;
-};
-
 class ibValueFunction : public ibValue {
-    ibByteCode* m_parentBc;
-    int         m_funcIndex;
+    const ibByteCode* m_parentBc  = nullptr;
+    long              m_funcIndex = -1;
     // Captured chain — direct enclosing fn at [0], outer-outer at [1],
     // etc. Per-reference append at materialise; no dedup needed
     // because same shared_ptr regardless of how many lambdas capture
     // it. Vector size = nesting depth (≤ 3-5 typical for real code),
     // not per-slot.
-    std::vector<std::shared_ptr<HeapFrame>> m_capturedFrames;
+    std::vector<std::shared_ptr<ibRunContext>> m_capturedFrames;
+    bool m_needsHeapFrame = false;   // cached from this lambda's own ibByteFunction
 };
 ```
+
+(The earlier sketch named a `struct HeapFrame { vector<ibValue> locals; }`;
+no such struct exists — the unit of capture is the whole `ibRunContext`.)
 
 **Why NOT per-slot boxing** (v1's path, rolled back):
 * v1 wanted `m_lambdaCaptures: vector<ibLambdaCapture{outerSlotIdx, captureLevel}>` on each lambda. Required `FindOrAddCapture` to dedup per-reference appends. Linear search on every lambda-body identifier resolution — exactly the "search-collection in single-pass" anti-pattern user flagged.
@@ -172,7 +184,7 @@ Outer function returns:
 | Runtime — OPER_LFUNC | populate lambda's `m_capturedFrames` from enclosing frames |
 | Runtime — OPER_CALL_LAMBDA | wire `m_pppArrayList[1..N]` to captured frames' locals |
 | OPER_GET / OPER_SET | unchanged — already dispatch on `depth` |
-| AOT | `m_needsHeapFrame` per fn serialized (v12 in tree; v10 at closure-capture landing, bumped further by subsequent CLSID encoding switch) |
+| AOT | `m_needsHeapFrame` per fn serialized (v14 in tree — read `byteCodeAOT.cpp::kAOTFormatVersion`; v10 at closure-capture landing, bumped since by a CLSID encoding switch (v12) and the LINQ push-down lambda-AST payload (v14)) |
 | Debugger Locals | walk lambda's `m_capturedFrames`, render with origin fn name |
 
 **Zero new opcodes**. Zero new compile-side `Find*` helpers. Single boolean per fn, single vector per lambda (small).
@@ -185,7 +197,7 @@ Outer function returns:
 * **Phase B** (runtime) — `ibRunContext : enable_shared_from_this` + raw `m_parentRunContext` chain. New `OPER_CALL_CLOSURE` opcode (split from OPER_CALL) for callees with `m_needsHeapFrame`. `OPER_CALL_LAMBDA` temp-swaps shim's `m_pppArrayList`: `[1..N]` from captured frames, `[N+1..]` from shim's root layers. Try/catch restores on exception. Hot OPER_CALL stays probe-free.
 * **Phase C** (nested lambdas) — chain capture works through the same materialise walk; outer lambda's frame is heap-promoted iff it has its own inner lambda.
 * **Phase D** (LINQ chain syntax unlocked) — `arr.Where(Function(x){ return x > threshold; })` captures `threshold`. Validated via `test_closure_linq.txt`.
-* **Phase E** (AOT v12) — `m_needsHeapFrame` per function. Format version bumped from v9.
+* **Phase E** (AOT v10) — `m_needsHeapFrame` per function. Format version bumped from v9 at the closure landing; later raised to v12 (CLSID encoding) and v14 (LINQ push-down lambda-AST).
 * **Phase F** (Debugger Locals) — `SendLocalVariables` walks `m_parentRunContext` chain, labels captured-frame entries `<fn>.<var>`, skips non-heap-promoted ancestors (those belong to stack frames, not Locals).
 
 ## Risks (residual after landing)
@@ -193,7 +205,7 @@ Outer function returns:
 1. **Heap-alloc per function call** for fns with inner lambda. Mitigation deferred: small-object pool / arena.
 2. **Escape analysis** not done — every fn-with-lambda heap-allocates even if lambda doesn't escape. Future optimization: detect non-escaping case, keep stack frame.
 3. **Frame lifetime** — outer's locals live beyond outer's return when lambda holds reference. Matches JS / Python; users manage.
-4. **AOT migration** — v9 → v10 invalidated caches at closure landing; subsequent bumps to v12 invalidate the same way. One-time recompile.
+4. **AOT migration** — v9 → v10 invalidated caches at closure landing; subsequent bumps to v12 / v14 invalidate the same way. One-time recompile.
 
 ---
 
@@ -218,7 +230,7 @@ Outer function returns:
 | `compiler/procContext.h` | `ibRunContext : enable_shared_from_this` + `m_parentRunContext` raw chain |
 | `compiler/procUnit.cpp` | OPER_CALL_CLOSURE handler (split from OPER_CALL); OPER_LFUNC captures via parent-walk; OPER_CALL_LAMBDA wires `m_pppArrayList[1..N]` |
 | `compiler/procUnitValues.h` | `ibValueFunction` with `m_capturedFrames` + cached `m_needsHeapFrame` |
-| `compiler/byteCodeAOT.cpp` | `kAOTFormatVersion = 10` |
+| `compiler/byteCodeAOT.cpp` | `kAOTFormatVersion` bumped to 10 here (now 14 in tree — read the constant) |
 | `backend/debugger/debugServer.cpp` | `SendLocalVariables` walks chain, labels `<fn>.<var>` |
 
 ## v1 rollback (historical)

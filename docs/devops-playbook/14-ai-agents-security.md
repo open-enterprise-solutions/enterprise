@@ -203,7 +203,7 @@ When asking the AI for C++ code, always specify:
 - Code rules: naming conventions, style
 - Build commands: msbuild enterprise.sln /p:Configuration=Release (Windows) / cmake + ninja (macOS/Linux)
 - Documentation path: docs/
-- How to run tests: .\bin\x64\Debug\OES.Tests.exe
+- How to run tests: cmake -B build -DBUILD_TESTING=ON; ctest --test-dir build (CMake target `oes_tests`)
 - How to run cppcheck: cppcheck src/
 ```
 

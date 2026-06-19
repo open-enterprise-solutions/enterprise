@@ -1,27 +1,37 @@
 # Worker pool — thread_local audit
 
-> **Status:** the pool itself shipped in v1.3.0 (`ibWorkerPool` +
-> `ibWorkerPoolHeadless` in `backend/session/`, per-session `ibProc
-> UnitState` lease swap). `ibWebApplication::WorkerLoop` /
-> `StartWorker` / `StopWorker` are gone — web sessions dispatch
-> through `ibSession::Submit` which forwards to the pool. This
-> document remains useful as the **audit record** that decided
-> what gets saved / restored / cleared at session swap; the
-> prescriptions in §"Pool contract" are the contract the shipped
-> pool implements.
+> **Status:** LANDED. The pool shipped (`ibWorkerPool` +
+> `ibWorkerPoolHeadless` in `backend/session/`).
+> `ibWebApplication::WorkerLoop` / `StartWorker` / `StopWorker` are
+> gone — web sessions dispatch through `ibSession::Submit` which
+> forwards to the registry's pool.
+>
+> **What actually shipped differs from the prescription below.** This
+> document's "Migration shape" (a per-session `ibProcUnitState` mirror
+> with explicit *save/restore at the worker boundary*) was the original
+> plan. The implementation went a simpler route: interpreter state is
+> **owned by the session** (`ibSession::m_procUnitState`) and every read
+> goes through `ibSession::GetPUState()` → `ibSession::Current()`. The
+> worker binds the session via `ibSessionScope` + `tl_currentLease`
+> (`workerPoolHeadless.cpp:16`) before draining its queue, so
+> `GetPUState()` transparently resolves to the right session with **no
+> swap step**. The four interpreter thread_locals named in the inventory
+> below (`tl_currentRunModule`, `tl_runContext`, `s_errorPlace`,
+> `s_nRecCount`) **no longer exist in `procUnit.cpp`** — they were moved
+> onto `ibProcUnitState` (`backend/compiler/procUnitState.h`). Treat the
+> inventory as the historical audit that drove the design; the
+> "Verdict" / "Pool contract" invariants still hold.
 
 Prerequisite analysis for the (now-landed) replacement of the
 per-session worker thread (web's former `ibWebApplication::WorkerLoop`)
-with a process-level shared `ibWorkerPool` that swaps sessions on a
-fixed set of worker threads. The same pool is the substrate for the
-future compute server (`oes-server.exe`) and stays in single-worker
-form on desktop GUI (`enterprise.exe`) to keep wxApp's main-loop
-semantics.
+with a process-level shared `ibWorkerPool`. The same pool is the
+substrate for the future compute server (`oes-server.exe`) and a
+`ibWorkerPoolGUI` scaffold exists in `frontend/session/` for desktop.
 
 This document enumerates every `thread_local` (and thread-bound static)
-in our own code, classifies it, and prescribes the migration.
-Connection pool and session registry are not in scope — they're the
-prerequisite stages and are already correct.
+in our own code as of the audit, classifies it, and records the
+migration that landed. Connection pool and session registry are not in
+scope — they're the prerequisite stages and are already correct.
 
 > **Scope note.** Third-party TLS (Firebird `fb_*` thread state, MySQL
 > `pthread_key_*` shims, wxWidgets log target, Win32 `TlsAlloc` etc.)
@@ -45,88 +55,49 @@ prerequisite stages and are already correct.
 
 ## Inventory
 
-### Session-bound script state — must save/restore on swap
+### Session-bound script state — moved onto the session (not swapped)
 
-All four live in `src/engine/backend/compiler/procUnit.cpp`. They form
-the script interpreter's per-thread execution context: which `ibProcUnit`
-is currently running on this thread, the run-context stack (script call
-stack), the current error site, and the recursion counter.
+All four lived in `src/engine/backend/compiler/procUnit.cpp` at audit
+time as thread_locals. They form the script interpreter's execution
+context: which `ibProcUnit` is currently running, the run-context stack
+(script call stack), the current error site, and the recursion counter.
 
-| Symbol | Location | Type | Purpose |
-|---|---|---|---|
-| `tl_currentRunModule` | `procUnit.cpp:48` | `ibProcUnit*` | Currently-executing module on this thread. Read by every opcode dispatch site to resolve "which module's bytecode are we in". |
-| `tl_runContext` | `procUnit.cpp:49` | `std::vector<ibRunContext*>` | Script call stack — pushed by `ibProcStackGuard` ctor on every script frame entry, popped by dtor. Read by error reporting (Raise, stack walk) and by `GetCurrentRunContext`. |
-| `s_errorPlace` | `procUnit.cpp:93` | `ibErrorPlace` (small POD) | Where the most recent script exception was raised; used by ProcessError to format the rethrow. |
-| `s_nRecCount` | `procUnit.cpp:106` | `short` | Recursion-depth counter, gates against runaway scripts (`MAX_REC_COUNT`). |
+| Symbol (audit-era) | Type | Purpose |
+|---|---|---|
+| `tl_currentRunModule` | `ibProcUnit*` | Currently-executing module. Read by every opcode dispatch site to resolve "which module's bytecode are we in". |
+| `tl_runContext` | `std::vector<ibRunContext*>` | Script call stack — pushed on every script frame entry, popped on exit. Read by error reporting (Raise, stack walk). |
+| `s_errorPlace` | `ibErrorPlace` (small POD) | Where the most recent script exception was raised; used by ProcessError to format the rethrow. |
+| `s_nRecCount` | `short` | Recursion-depth counter, gates against runaway scripts. |
 
-**Why save/restore, not "move onto `ibSession`":** every opcode dispatch
-in the interpreter reads `tl_currentRunModule` / `tl_runContext.back()`.
-Replacing those reads with `Current()->m_runContext.back()` adds a
-shared-mutex shared-lock + map lookup per opcode, which is several
-orders of magnitude slower than direct TLS access (low single-digit
-nanoseconds vs hundreds). The hot path must stay TLS-direct.
+**What landed:** all four moved into `struct ibProcUnitState`
+(`backend/compiler/procUnitState.h`), one instance owned by each
+`ibSession` (`ibSession::m_procUnitState`). The interpreter reads them
+through `ibSession::GetPUState()` (`session.cpp:452`), which returns
+`&Current()->m_procUnitState`, or a `thread_local` fallback
+`ibProcUnitState` when no session is bound (codeRunner / CLI ad-hoc
+scripts). The four interpreter thread_locals named above **no longer
+exist in procUnit.cpp** — grep confirms the only references are in
+comments. Methods like `GetLambdaRuntime` / `Raise` / `AddRunContext`
+live on `ibProcUnitState` (out-of-line in procUnit.cpp because they
+need the full `ibRunContext` / `ibByteCode` types).
 
-**Migration shape:**
-
-```cpp
-// New struct on ibSession.
-struct ibProcUnitState {
-    ibProcUnit*                 currentRunModule = nullptr;
-    std::vector<ibRunContext*>  runContext;
-    ibErrorPlace                errorPlace;
-    short                       recCount = 0;
-};
-
-class ibSession {
-    ibProcUnitState m_procUnitState;
-public:
-    ibProcUnitState& ProcUnitState() { return m_procUnitState; }
-};
-```
-
-Worker boundary:
-
-```cpp
-// Inside the worker, just before/after running a task on session S.
-void Worker::EnterTask(ibSession* s) {
-    if (m_pinned) {
-        // Save outgoing TLS into outgoing session.
-        m_pinned->ProcUnitState().currentRunModule = tl_currentRunModule;
-        m_pinned->ProcUnitState().runContext.swap(tl_runContext);
-        m_pinned->ProcUnitState().errorPlace = s_errorPlace;
-        m_pinned->ProcUnitState().recCount   = s_nRecCount;
-    }
-    m_pinned = s;
-    if (s) {
-        // Load incoming TLS from incoming session.
-        tl_currentRunModule = s->ProcUnitState().currentRunModule;
-        tl_runContext.swap(s->ProcUnitState().runContext);
-        s_errorPlace        = s->ProcUnitState().errorPlace;
-        s_nRecCount         = s->ProcUnitState().recCount;
-    }
-}
-```
-
-`std::vector::swap` is two pointer swaps; cost is negligible.
-`ibErrorPlace` is small POD; copy is trivial. `short` is one register.
-The whole swap is O(1) per session boundary.
-
-**When swap happens, when it doesn't:**
-- Worker pulls a task for session A → enters task → drains all queued
-  tasks for A while leased → leaves task. One swap-in + one swap-out
-  per lease, not per task.
-- Subsequent worker re-leases A → restores A's state. Subsequent worker
-  picks B → swaps A out, B in.
-- Single-worker desktop (`enterprise.exe`): only one session ever
-  pinned, swap never fires — TLS stays untouched. Same speed as today.
+**Why session-owned, not boundary-swap (the original plan was swap):**
+because the session is pinned to the worker thread for the whole lease
+(`ibSessionScope` + `tl_currentLease`), `Current()` already resolves to
+the right session inside every task. State lives where the session
+lives, so there is nothing to save or restore at the boundary — the
+swap helpers the original plan called for were never needed. The cost
+moves from "two vector swaps per lease" to "one `Current()` resolve per
+`GetPUState()` call"; in Single access-mode (desktop) `Current()` is a
+single load of the lone session, and in Shared mode (wes) it is a
+shared-lock map lookup keyed by thread id.
 
 **Reentrancy.** A task running on session A that synchronously
-re-dispatches into A (script calls helper that needs to enqueue another
-A task) **must reuse the current worker** — not enqueue and wait. Otherwise
-the worker dispatcher would block on its own queue while holding the
-lease, deadlocking. Solution: `pool->Submit(s, fn)` checks "am I the
-worker currently leasing s?" and if so, runs `fn` inline. No swap
-because state is already correct.
+re-dispatches into A runs **inline** on the current worker rather than
+enqueuing — see `ibWorkerPoolHeadless::Submit`
+(`workerPoolHeadless.cpp:90`, the `tl_currentLease == session` check).
+Otherwise the worker would block on its own queue while holding the
+lease, deadlocking.
 
 ---
 
@@ -139,25 +110,15 @@ Both live in `src/engine/backend/backend_exception.cpp:95`:
 | `gs_evalMode` | Set during debug-watch / Eval evaluation so side-effecting calls (UpdateForm, dialogs, OLE) self-suppress. Read by every potentially-side-effecting builtin. |
 | `gs_processBackendError` | Re-entrancy guard for `ibBackendException::ProcessError` — prevents a logging path from re-throwing into itself. |
 
-These are **not session-bound** semantically — they're per-call-frame
-flags that happen to live as TLS because the call frame == thread today.
-After worker pool, they must reset at task entry so a leftover `gs_evalMode=true`
-from session A's debug-watch doesn't make session B's regular OnWrite
-silently no-op its UpdateForm.
-
-**Migration shape:** clear at the top of `EnterTask` (or equivalently at
-the bottom of `ExitTask`). No save needed — they're meant to be transient
-within a script frame, and a script frame is fully drained before the
-worker leaves the task.
-
-```cpp
-void Worker::EnterTask(ibSession* s) {
-    // Save/restore session-bound state (above).
-    // Then clear transient flags.
-    ibBackendException::SetEvalMode(false);
-    ibBackendException::SetProcessingBackendError(false);
-}
-```
+**What landed:** instead of clearing per-task flags, both moved onto
+`ibSession` as atomics: `m_evalMode` / `m_processingBackendError`, with
+`IsEvalMode` / `SetEvalMode` / `IsProcessingBackendError` /
+`SetProcessingBackendError` accessors (`session.h:431-438`). Per-session
+storage is stricter than the original "reset on task entry" plan — a
+debug-watch on tab 1 setting eval-mode can never leak into tab 2's
+OnWrite, regardless of which worker runs which task. The thread_local
+`gs_evalMode` / `gs_processBackendError` in backend_exception.cpp are
+gone; `ibBackendException::IsEvalMode()` resolves per-session.
 
 **Caveat — debug eval.** When the debugger evaluates a watch expression
 mid-breakpoint, the script thread is parked in `DoDebugLoop`'s CV wait;
@@ -192,36 +153,31 @@ buffer fully before it reads. Migration is **no action**.
 
 ---
 
-### Per-thread DB connection pinning — keep, by design
+### DB connection pinning — holder-keyed, not thread_local
 
-`src/engine/backend/databaseLayer/connectionPool.cpp:16-17`:
+> **Superseded by the holder-keyed pool.** The audit-era plan kept two
+> thread_local conn slots (`s_tlCurrent` / `s_tlActiveTx`). The pool was
+> refactored (2026-04-28) to a holder-keyed model: reservations live in
+> `ibConnectionPool::m_entries` keyed on `ibDatabaseConnectionHolder*`
+> identity, not on the thread. See `connection-pool.md`.
 
-```cpp
-thread_local std::shared_ptr<ibDatabaseLayer> s_tlCurrent;
-thread_local std::shared_ptr<ibDatabaseLayer> s_tlActiveTx;
-```
+A TX is connection-bound, and the binding follows the **holder**
+(an `ibSession` is a holder; non-session work uses the per-thread
+`ThreadHolder` singleton). While the holder's TX is open, every
+`db_query` / `ses_query` for that holder routes back to the same
+connection — across worker-thread crossings, because the key is the
+holder pointer, not the thread.
 
-`s_tlActiveTx` is set when `BeginTransaction` flips `m_txDepth 0→1`, cleared
-when `Commit`/`RollBack` flips `1→0`. `s_tlCurrent` is set by
-`ibConnectionScope` ctor (outermost) and cleared by dtor.
+**Worker pool effect:** the session that owns the conn is pinned to the
+worker for the whole lease, so the holder identity and the executing
+thread agree for the duration of the TX. Per-session single-in-flight
+dispatch guarantees a script completes (and closes its TX) before the
+worker is released. **No migration needed.**
 
-The contract: a TX is connection-bound; while it's open, every
-`db_query` on this thread routes back to the same connection. The TX
-must complete on the same worker that started it.
-
-**Worker pool effect:** as long as a task that opens a TX completes the
-TX before yielding the worker, both TLS slots are empty between tasks
-and the next task on the worker starts clean. Per-session sequential
-dispatch (single-in-flight) guarantees this — a task never gets
-preempted mid-script. **No migration needed.**
-
-The one case to watch: a worker pulling task for session A opens a TX,
-the script *yields* (e.g. waits on an external resource — none in
-current code, but plausible later), pool releases worker, worker picks
-task for B. Now B sees A's TX on TLS. **Mitigation:** the pool MUST NOT
-release a worker while a TX is open. `s_tlActiveTx != nullptr` is a
-hard precondition for "stay leased on this session". This belongs in
-the pool's contract, not in the TLS audit.
+The pool's own remaining thread_local is `ts_holder` in
+`connectionPool.cpp:17` — a per-thread `ibSingleConnectionHolder` that
+backs `ThreadHolder()` (the `db_query` channel for non-session DDL/CLI
+work). It is connection-lifetime infrastructure, not interpreter state.
 
 ---
 
@@ -247,23 +203,28 @@ the worker forgets to unbind — landed 2026-04-27.
 
 ## Pool contract — derived from the audit
 
-The audit settles four hard invariants the pool must enforce:
+The audit settled four hard invariants the pool enforces (how each
+landed in parentheses):
 
-1. **Worker leases a session for a contiguous run.** Save/restore of
-   procUnit state happens once per lease, not per task. Cheap because
-   leases are short (drain queue then release) but tasks within a lease
-   share state.
-2. **A task with an open transaction blocks worker release.** While
-   `s_tlActiveTx != nullptr`, the worker cannot yield to another
-   session. This is a soft constraint — script paths today complete
-   their TX synchronously; future code that wants to keep a TX open
-   across awaits must explicitly use a different mechanism.
-3. **Reentrant `Submit(currentSession, fn)` runs inline.** Avoids the
+1. **Worker leases a session for a contiguous run** — drain its queue
+   under one atomic lease, then release. Because interpreter state is
+   session-owned (`m_procUnitState`), there is nothing to save/restore at
+   the lease boundary; the lease just guarantees single-in-flight per
+   session.
+2. **A task with an open transaction must finish it before the worker
+   yields.** The holder's TX reservation is connection-bound and the
+   session is pinned to the worker for the lease, so a synchronous script
+   completes its TX before release. (No yield-mid-TX path exists in
+   current code; future await-style code would need a different
+   mechanism.)
+3. **Reentrant `Submit(currentSession, fn)` runs inline** — implemented
+   via `tl_currentLease` in `workerPoolHeadless.cpp:90`. Avoids the
    self-deadlock where a worker enqueues into its own active session's
    queue and waits for itself.
-4. **Transient flags clear on task entry.** `gs_evalMode`,
-   `gs_processBackendError` — and any future flag that's per-call
-   semantically.
+4. **Transient flags are session-owned** — `m_evalMode` /
+   `m_processingBackendError` atomics on `ibSession` (stricter than the
+   audit's "clear on task entry" plan; the `gs_*` thread_locals are
+   gone).
 
 ---
 
@@ -284,28 +245,26 @@ The audit settles four hard invariants the pool must enforce:
 
 ---
 
-## Migration order
+## Migration order (as it actually landed)
 
-The pool refactor itself comes after this audit's prescriptions land:
+1. **`ibProcUnitState` on `ibSession`** — interpreter state moved off
+   the four procUnit thread_locals onto a session-owned struct
+   (`backend/compiler/procUnitState.h`), read through
+   `ibSession::GetPUState()` (session-resolved, with a thread_local
+   fallback for sessionless hosts). No boundary swap helpers — the
+   original `EnterTask`/`ExitTask` save/restore plan was dropped because
+   the session is already pinned to the worker for the lease.
+2. **Transient flags onto `ibSession`** — `m_evalMode` /
+   `m_processingBackendError` as atomics; the `gs_*` thread_locals in
+   backend_exception.cpp removed.
+3. **`ibWorkerPool` abstract + `ibWorkerPoolHeadless`** in
+   `backend/session/`. `Submit(session, task)` API, per-session FIFO
+   queue + atomic lease, lazy worker spawn to `maxWorkers`, idle-shrink
+   at 60s, reentrant inline Submit. `ibWorkerPoolGUI` scaffold in
+   `frontend/session/` (not auto-installed).
+4. **`ibWebApplication` migrated** off its dedicated per-session thread
+   onto the registry's pool — `StartWorker`/`StopWorker`/`WorkerLoop`
+   deleted; `PostWork`/`RunOnWorker` forward through `Submit`.
 
-1. **Add `ibProcUnitState` on `ibSession`.** Empty default. No reads
-   from it yet — all hot paths still go to the existing TLS.
-2. **Add `Worker::EnterTask` / `ExitTask` swap helpers** that load/save
-   from `m_session->ProcUnitState()`. Wire them into the existing
-   per-session worker (`ibWebApplication::WorkerLoop`) as a no-op
-   verification — workers today serve a single session for their
-   whole life, so swap is a save/restore pair around a single-element
-   sequence; the test is "behaviour unchanged".
-3. **Audit pass — find any TLS/static this document missed.** Run the
-   full smoke test under both `enterprise.exe` and
-   `wenterprise-server.exe` with verbose logging on TLS save/restore;
-   confirm no orphan TLS in script paths.
-4. **Build `ibWorkerPool`** per `project_worker_pool_plan` memory note —
-   GUI backend, headless backend, `Submit(session, task)` API.
-5. **Swap `ibWebApplication`** off its dedicated thread onto the pool.
-   Per-session FIFO queue + lease semantics enforce single-in-flight.
-6. **Audit pass again** under load (concurrent sessions, mixed
-   long/short scripts, debug attach, metadata reload).
-
-Steps 1-3 are the audit's deliverable. Steps 4-6 are the actual
-worker pool refactor.
+Connection-pool and session-registry were the prerequisite stages and
+were correct before this work started.

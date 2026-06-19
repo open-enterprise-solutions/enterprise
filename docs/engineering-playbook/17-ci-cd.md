@@ -1,5 +1,16 @@
 # 17. CI/CD
 
+> **Reality check (verify against the repo before copying a snippet):**
+> - MSBuild output lands in `bin\<Platform>\<Configuration>\` where `Platform`
+>   is `Win32` (x86) or `Win64` (x64) — e.g. `bin\Win64\Release\`, **not**
+>   `bin\Release\`.
+> - There is **one** solution, `enterprise.sln` (no separate
+>   `enterprise_tests.sln`). The gtest suite is the CMake target **`oes_tests`**,
+>   built via `cmake -B build -DBUILD_TESTING=ON` and run with `ctest`. Google
+>   Test is fetched via `FetchContent`, not vcpkg.
+> - The workflows below are illustrative templates; the on-disk
+>   `.github/workflows/` may differ.
+
 ## Stack
 
 | Component | Purpose |

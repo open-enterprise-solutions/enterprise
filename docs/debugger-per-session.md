@@ -19,8 +19,11 @@ ibSession::ibDebugSession            // session.h, allocated by EnableDebug()
   ibRunContext*     m_runContext;    // frame currently stopped at the breakpoint
   std::condition_variable m_cv;      // per-session — sibling tabs don't cross-wake
   std::mutex        m_mutex;
-  std::map<u64, wxString> m_expressions;  // watch (still process-level on server today)
+  std::map<unsigned long long, wxString> m_expressions;  // per-session watch list
 ```
+
+Breakpoints stay process-level on `ibDebuggerServer` (module bytecode is
+shared across sessions); the watch list (`m_expressions`) is per-session.
 
 Which session is "the one a debug command targets" is resolved two ways, and
 they must agree:

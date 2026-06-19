@@ -5,11 +5,14 @@ clients (GUI + web frontend) talking over a network protocol to a
 dedicated compute server that owns runtime state, worker pool, and
 connection pool. Same shape as other enterprise low-code platforms with a compute-server tier.
 
-> **Status:** aspirational. Phases 1-2 have foundational work
-> landed (connection pool). Phases 3+ require new processes,
-> protocol, and thin-client binary. Current OES runs standalone
-> (GUI + runtime + DB in one process); 3-tier is a scaling option,
-> not a mandatory migration.
+> **Status:** Phase 1 (connection pool) and Phase 2 (in-process worker
+> dispatcher — `ibWorkerPool` + per-session queue/lease) are LANDED.
+> Phase 3+ (transport abstraction `ibIncomingServer`, binary TCP RPC
+> frame, `oes-server.exe`, thin client) are NOT started — confirmed
+> absent in tree (no `ibIncomingServer` / `oes-server` / RPC frame).
+> Current OES runs standalone (GUI + runtime + DB in one process) or as
+> the wes web server; 3-tier is a scaling option, not a mandatory
+> migration.
 
 ---
 
@@ -58,10 +61,10 @@ binary. The compute-server module is shared code, linked into both
 | Nested-TX counter | Atomicity across scopes | ✅ Landed |
 | TX TL pinning | Thread-sticky TX | ✅ Landed |
 | `ibSessionRegistry` | Session lifetime | ✅ Landed (DB-level) |
-| `ibSession` | Session identity + state | ⚠️ Partial (identity yes, runtime state still on per-session worker thread) |
-| **`ibRequestDispatcher`** | Bounded worker pool + queue | 🔲 Missing |
-| **`ibSessionRequestQueue`** | Per-session FIFO | 🔲 Missing |
+| `ibSession` | Session identity + state + runtime root (`m_root`) + interpreter state (`m_procUnitState`) | ✅ Landed |
+| `ibWorkerPool` / `ibWorkerPoolHeadless` | Bounded worker pool + per-session FIFO queue + lease | ✅ Landed (`backend/session/`) |
 | **Binary RPC protocol** | Client ↔ server frame format | 🔲 Missing |
+| **`ibIncomingServer`** | Transport abstraction (TCP accept + frame parse) | 🔲 Missing |
 | **`oes-server.exe`** | Standalone compute-server binary | 🔲 Missing |
 | **`enterprise-thin.exe`** | Thin GUI client | 🔲 Missing |
 

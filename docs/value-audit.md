@@ -1,9 +1,10 @@
 # ibValue audit — footprint & refactor
 
-> **Status:** Phase 0 (probe) + Phase 1 (footprint repack) + **Phase 2
-> (tagged-union collapse via `ibString`)** landed in working tree (builds
-> clean Debug|x86). Phase 3 (wxObject removal, header split) is planned,
-> not started.
+> **Status:** Phase 0 (probe) + Phase 1 (repack) + Phase 2 (tagged-union
+> collapse via `ibString`) + **Phase 3 (wxObject / wxRTTI removal → `typeid`
+> registry)** all LANDED (builds clean Debug|x86). Phase 4 (`ibNumber` into the
+> union) analysed and **rejected by default** — see below. F6 header split
+> deferred / maybe never.
 >
 > Scope note: `ibValue` is the engine's universal value type *by design* —
 > script values, metaobjects, functions, iterators all derive from it. This
@@ -24,40 +25,41 @@
 
 ---
 
-## Measured (x64, VS struct layout)
+## Measured (Debug|x86 probe — `test_value.cpp::SizeofReport`)
 
-| Build state | sizeof | align | note |
-|---|---|---|---|
-| pre-Phase 1 | 80 | 8 | `m_refCount` in the tail (word + pad), `m_typeClass` = int |
-| post-Phase 1 | 72 | 8 | enum→1B + `m_refCount` packed with the scalars at offset 16 |
-| **post-Phase 2** | **landed** | 8 | `m_sData` (wxString) removed; TYPE_STRING now an `ibString*` folded **into the union** + `ibNumber` stays by-value. Debug|x86 probe: **ibValue 96 → 40** ([[project_value_footprint_audit]]). Re-run `test_value.cpp::SizeofReport` for the live x64 figure. |
-| Phase 3 (drop `m_refData`) | ~48 | 8 | projected |
-
-Dominant member: `m_sData` (wxString = `std::wstring`) = 32 of 72 on x64.
-
-## Layout (x64; figures below were the x86 estimate)
-
-`ibValue : public wxObject`, with own intrusive refcount.
-
-| Member | ~bytes | Note |
+| Build state | sizeof | note |
 |---|---|---|
-| vptr (wxObject) | 4 | needed — ibValue has its own virtuals |
-| `wxObject::m_refData` | 4 | **dead** — ibValue uses its own `m_refCount`, never wx COW |
-| `m_typeClass` (enum) | 1 (was 4) | narrowed to `unsigned char` in Phase 1 |
+| pre-Phase 1 | 96 | `m_sData` (wxString) + `m_refCount` in the tail (word + pad), `m_typeClass` = int |
+| post-Phase 1 | ~88 | enum→1B + `m_refCount` packed with the scalars (Debug-x86 padding eats most of the narrowing) |
+| post-Phase 2 | ~56 | `m_sData` (wxString) removed; TYPE_STRING now an `ibString*` folded **into the union**; `ibNumber` stays by-value |
+| **post-Phase 3 (final)** | **40** | dead `wxObject::m_refData` gone, `ibValue` no longer derives `wxObject` ([[project_value_footprint_audit]]) |
+
+Re-run `test_value.cpp::SizeofReport` for the live x64 figure (smaller — no
+Debug iterator-debug bloat in the now-pointer string member).
+
+## Final layout (post-Phase 3)
+
+`ibValue` (no base — `wxObject` dropped in Phase 3), own intrusive
+`std::atomic<unsigned int> m_refCount`, own vptr (ibValue has its own virtuals).
+
+| Member | ~bytes (x64) | Note |
+|---|---|---|
+| vptr | 8 | ibValue has its own virtuals |
+| `m_typeClass` (`ibValueTypes : unsigned char`) | 1 | narrowed in Phase 1 |
 | `m_bReadOnly` (bool) | 1 | |
-| `m_refCount` (uint) | 4 | repacked next to the scalars in Phase 1 |
-| `union {bool/date/ptr/ibString*}` | 8 | post-Phase 2: TYPE_STRING is `ibString* m_pStr` here, aliased with `m_pRef` |
-| ~~`m_sData` (wxString)~~ | ~~28~~ | **removed in Phase 2** — string payload is now the pooled `ibString*` in the union |
-| `m_fData` (ibNumber) | 8 | present even for non-numbers; stays by-value (8B, sharing the union would reinstate the random-delete bug) |
+| `m_refCount` (`std::atomic<uint>`) | 4 | repacked next to the 1-byte scalars (fills the hole before the 8-aligned union) |
+| `union {bool/date/ibValue*/const ibValue*/ibString*}` | 8 | active member selected by `m_typeClass`; `m_pConstRef`/`m_pStr` alias `m_pRef` |
+| `m_fData` (ibNumber) | 8 | present even for non-numbers; stays by-value (8B; sharing the union would reinstate the random-delete bug — see Phase 4) |
 
-`wxUSE_STL_BASED_WXSTRING = 1`, `wxStringImpl = wxStdString` → `wxString`
-is a `std::wstring` wrapper (~28 x86 / ~32 x64, larger in Debug due to
-MSVC iterator-debug). It is the single dominant member.
+`wxUSE_STL_BASED_WXSTRING = 1`, `wxStringImpl = wxStdString` → `wxString` is a
+`std::wstring` wrapper. Pre-Phase-2 it was the single dominant member (inline
+~32B x64); it is now a pooled `ibString*` (8B in the union), so a Number/Bool
+value no longer drags a string buffer.
 
-**Core waste:** the three payload stores — `union (8) + wxString (28) +
-ibNumber (8) = 44 bytes` — are all present simultaneously, though a value
-is exactly one type at a time. ~36 of ~64 bytes is "storage for the other
-types."
+**Historical waste (pre-Phase 2):** the three payload stores —
+`union (8) + wxString (~32) + ibNumber (8)` — were all present simultaneously
+though a value is exactly one type at a time. Phase 2 collapsed the string into
+the union; Phase 4 (folding `ibNumber` too) is rejected by default.
 
 ### The probe
 
@@ -69,7 +71,13 @@ the `[ footprint ]` line.
 
 ---
 
-## Blast radius — direct member access (measured, `src/engine`)
+## Blast radius — direct member access (pre-Phase-2 snapshot, `src/engine`)
+
+> Historical — the numbers below were the input to the Phase 2 write-audit.
+> `m_sData` no longer exists (replaced by the union `ibString* m_pStr`, accessed
+> only via `GetString`/`SetString`); the `m_fData` direct-write sites were the
+> ones routed through a constructed active member during Phase 2.
+
 
 | Member | occurrences | concentration | outside core `value.*` |
 |---|---|---|---|
@@ -120,13 +128,14 @@ those must go through a constructed active member.
   (`GetString` / `GetNumber` / `GetRef`), which F1 forces anyway. Do **not**
   flatten the hierarchy — close the public-field shadow vector instead.
   **→ folds into Phase 2.**
-- **F6 — header bloat (low priority; do NOT un-nest).** `ibValueMethodHelper`
-  + ~40 `AppendProp/Func` overloads are inline in `value.h`; every TU
-  including `value.h` re-parses them. Per-class, not per-instance — zero
-  footprint. **Keep it a nested type of `ibValue` on purpose:** the
-  nesting plus the population pattern (instances handed out via
-  `GetPMethods()`, populated only from inside subclasses' `PrepareNames()`
-  overrides) is the deliberate "only the value family touches this" signal.
+- **F6 — header bloat (low priority; do NOT un-nest).** `ibValue::ibMemberTable`
+  + its ~40 `AppendProp` / `AppendProc` / `AppendMethod` overloads are inline in
+  `value.h`; every TU including `value.h` re-parses them. Per-class, not
+  per-instance — zero footprint. **Keep it a nested type of `ibValue` on
+  purpose:** the nesting plus the population pattern (instances handed out via
+  `GetPMethods()` → virtual `DoGetPMethods()`, populated only from inside
+  subclasses' `PrepareNames()` overrides) is the deliberate "only the value
+  family touches this" signal.
   The *only* separable concern is the inline bodies — if build time ever
   bites, out-line the method bodies to `value.cpp`; that does not change
   the nesting or the access semantics. Otherwise leave as is. **→ defer /

@@ -2,13 +2,18 @@
 
 Side-by-side compare and partial merge of two OES configurations. Reachable from the designer's **Configuration** menu in three flavours: compare with a file, compare with the database baseline, or compare two arbitrary files. Mirrors the standard metadata tree shape (with Common umbrella, per-class groups, per-object property listing) so the diff reads the same way as the normal designer layout.
 
-The feature lives in two places: a backend walker that produces a flat structured diff (`src/engine/backend/metaCollection/metaDiff.{h,cpp}`) and a designer-only UI layer (`src/engine/designer/mainFrame/configCompare/`).
+The feature lives in three places:
+- a backend walker that produces a flat structured diff — `src/engine/backend/metaCollection/metaDiff.{h,cpp}` (`ibMetaDiffWalker`);
+- the designer dataview model — `src/engine/designer/mainFrame/configCompare/configCompareModel.{h,cpp}` (`ibDataViewMetaDiffModel`);
+- the designer doc/view that hosts it — `src/engine/designer/docManager/templates/docViewConfigCompare.{h,cpp}` (`ibConfigCompareDocument` / `ibConfigCompareView`). The compare surface is a doc/view tab, not a modal dialog.
+
+Wiring lives in `src/engine/designer/mainFrame/mainFrameDesignerEvent.cpp` (the three "Compare with…" menu handlers).
 
 ---
 
 ## Entry points
 
-Three items under **Configuration**, each producing the same compare dialog with different roots:
+Three items under **Configuration**, each producing the same compare view with different roots:
 
 | Menu item | Left root | Right root | Push target |
 |---|---|---|---|
@@ -16,7 +21,7 @@ Three items under **Configuration**, each producing the same compare dialog with
 | Compare with database configuration | `activeMetaData` | `ibMetaDataConfigurationStorage::GetConfiguration()` (the in-memory DB baseline) | none (Push hidden — the DB-side mutation has no immediate persistence path) |
 | Compare two files... | transient file A | transient file B | file B (left save callback is a V2 enhancement) |
 
-All three skip any DB round-trip — both sides are already in memory by the time the dialog opens.
+All three skip any DB round-trip — both sides are already in memory by the time the view opens.
 
 ---
 
@@ -86,7 +91,7 @@ The row object is also the only side that overrides `IsContainer` — the model'
 
 ### Filter mode
 
-`ibDataViewMetaDiffModel::FilterMode` (All / Differences / SameOnly) with bottom-up visibility recomputation: pass 1 marks records that match the filter directly; pass 2 walks reverse pre-order and promotes ancestor containers so the tree shape stays navigable. The dialog's filter combobox calls `SetFilterMode` which triggers a `BeforeReset / AfterReset` cycle so the dataview repopulates against the new visibility map.
+`ibDataViewMetaDiffModel::FilterMode` (All / Differences / SameOnly) with bottom-up visibility recomputation: pass 1 marks records that match the filter directly; pass 2 walks reverse pre-order and promotes ancestor containers so the tree shape stays navigable. The view's filter combobox calls `SetFilterMode` which triggers a `BeforeReset / AfterReset` cycle so the dataview repopulates against the new visibility map.
 
 ### Selection cascade
 
@@ -137,9 +142,9 @@ For a selected `OnlyIn*` record, descendants of that record are also selected (c
 
 ### Save callback
 
-The dialog accepts an optional `SetRightSaveCallback(std::function<bool()>)`. After Push, the dialog calls it so the right-side file (or whatever the backing is) gets persisted. When unset, the direction wxChoice hides the Push entry — there'd be nowhere to write the result.
+The view accepts an optional `SetRightSaveCallback(std::function<bool()>)`. After Push, the view calls it so the right-side file (or whatever the backing is) gets persisted. When unset, the direction wxChoice hides the Push entry — there'd be nowhere to write the result.
 
-After Apply returns `wxID_OK`, the designer's menu handler calls `m_metaWindow->Load()` so the metadata tree refreshes against the mutated `activeMetaData`.
+After Apply, the designer refreshes the metadata tree against the mutated `activeMetaData`.
 
 ---
 

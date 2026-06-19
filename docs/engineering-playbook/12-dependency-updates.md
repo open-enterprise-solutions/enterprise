@@ -373,7 +373,7 @@ on:
   schedule:
     - cron: '0 9 * * 1'  # Every Monday at 09:00
   push:
-    branches: [master, dev]
+    branches: [master, develop]
 
 jobs:
   osv-scan:
