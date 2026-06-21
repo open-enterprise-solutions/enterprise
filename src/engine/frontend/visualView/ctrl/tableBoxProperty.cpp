@@ -42,13 +42,19 @@ void ibValueModelTableBox::OnPropertyChanged(ibProperty* property, const wxVaria
 			if (typeCtor != nullptr) {
 				const ibValueMetaObjectCompositeData* metaObject = dynamic_cast<const ibValueMetaObjectCompositeData*>(typeCtor->GetMetaObject());
 				if (metaObject != nullptr) {
+					// Each column binds THROUGH the tablebox's own source path (the attribute gate):
+					// [tablebox path..., field] — e.g. [mainAttr, field] → "List.Field". A bare field
+					// id alone does NOT resolve through the gate (the garbage / no-type symptom).
+					const std::vector<ibSourceId> basePath = m_propertySource->GetValueAsPath();
 					for (const auto object : metaObject->GetGenericAttributeArrayObject()) {
 						ibValueModelTableBoxColumn* tableBoxColumn =
 							dynamic_cast<ibValueModelTableBoxColumn*>(m_formOwner->CreateControl(wxT("TableboxColumn"), this));
 						wxASSERT(tableBoxColumn);
 						tableBoxColumn->SetControlName(GetControlName() + object->GetName());
 						tableBoxColumn->SetCaption(object->GetSynonym());
-						tableBoxColumn->SetSource(object->GetMetaID());
+						std::vector<ibSourceId> colPath = basePath;
+						colPath.push_back(object->GetMetaID());
+						tableBoxColumn->SetSource(colPath);
 						tableBoxColumn->SetVisibleColumn(true);
 						g_visualHostContext->InsertControl(tableBoxColumn, this);
 					}

@@ -109,10 +109,8 @@ public:
 	}
 
 	ibSourceExplorer GetHelper(unsigned int idx) const {
-		
-		if (m_arraySource.size() < idx)
+		if (idx >= m_arraySource.size())
 			return ibSourceExplorer();
-		
 		return m_arraySource[idx];
 	}
 

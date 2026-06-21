@@ -1378,7 +1378,6 @@ public:
 
 	//support source data 
 	virtual ibSourceExplorer GetSourceExplorer() const = 0;
-	virtual bool GetModel(ibValueModel*& tableValue, const ibMetaID& id) = 0;
 
 	//support source set/get data
 	virtual bool SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal) { return false; }
@@ -1390,8 +1389,8 @@ public:
 	// The path is a plain lightweight vector — no property-side description type leaks
 	// into the source. The walker lives on the source so every kind (RAM / list /
 	// object / record set / manager) inherits one traversal — read-only navigation.
-	bool GetValueByPath(const std::vector<ibMetaID>& path, ibValue& pvarMetaVal) const;
-	ibValue GetValueByPath(const std::vector<ibMetaID>& path) const {
+	bool GetValueByPath(const std::vector<ibSourceId>& path, ibValue& pvarMetaVal) const;
+	ibValue GetValueByPath(const std::vector<ibSourceId>& path) const {
 		ibValue retValue;
 		if (GetValueByPath(path, retValue))
 			return retValue;
@@ -1559,7 +1558,6 @@ public:
 
 	//support source data
 	virtual ibSourceExplorer GetSourceExplorer() const override;
-	virtual bool GetModel(ibValueModel*& tableValue, const ibMetaID& id) override;
 
 	//support source set/get data
 	virtual bool SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal) override;
@@ -1754,7 +1752,6 @@ public:
 
 	//support source data 
 	virtual ibSourceExplorer GetSourceExplorer() const;
-	virtual bool GetModel(ibValueModel*& tableValue, const ibMetaID& id);
 
 	//get metaData from object 
 	virtual const ibValueMetaObjectRecordDataMutableRef* GetMetaObject() const { return m_metaObject; }
@@ -1922,7 +1919,6 @@ public:
 
 	//support source data 
 	virtual ibSourceExplorer GetSourceExplorer() const;
-	virtual bool GetModel(ibValueModel*& tableValue, const ibMetaID& id);
 
 	//Get presentation 
 	virtual wxString GetSourceCaption() const {
@@ -2588,7 +2584,6 @@ public:
 
 	//support source data
 	virtual ibSourceExplorer GetSourceExplorer() const override;
-	virtual bool GetModel(ibValueModel*& tableValue, const ibMetaID& id) override;
 
 	//get metaData from object
 	virtual const ibValueMetaObjectRegisterData* GetMetaObject() const {

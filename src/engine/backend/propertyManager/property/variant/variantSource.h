@@ -119,16 +119,13 @@ public:
 	ibMetaID GetIdByGuid(const ibGuid& guid) const;
 	ibGuid GetGuidByID(const ibMetaID& id) const;
 
-	// Resolve hop `idx` of the path: hop 0 is GATED to this binding's own source object
-	// (scoped search), deeper hops are real cross-metaobject references (config-wide). A
-	// copied binding whose source no longer holds the first hop resolves to null here.
-	const class ibValueMetaObject* ResolveHop(unsigned int idx) const;
-
 	//////////////////////////////////////////////////
 
-	// The source object this binding reads from — the owning property's factory already
-	// holds it, so a control never has to pass it in.
-	class ibSourceObject* GetOwnerSource() const { return m_ownerProperty != nullptr ? m_ownerProperty->GetSourceObject() : nullptr; }
+	// Available source attributes from the owning factory (the control). The
+	// property source exposes the picker's choices through this.
+	bool GetSourceList(std::vector<ibBackendFormAttribute*>& out) const {
+		return m_ownerProperty != nullptr ? m_ownerProperty->GetSourceList(out) : false;
+	}
 
 	// Config metadata behind this binding — drives the metaId<->guid resolution at save/load.
 	const class ibMetaData* GetMetaData() const { return m_ownerProperty != nullptr ? m_ownerProperty->GetMetaData() : nullptr; }
@@ -214,4 +211,4 @@ protected:
 	ibVariantDataAttributeSource* m_attributeSource = nullptr;  // live type helper (derived from leaf, not serialised)
 };
 
-#endif // !__TYPE_VARIANT_H__
+#endif // !__SOURCE_DATA_VARIANT_H__

@@ -735,7 +735,7 @@ public:
 	};
 
 	// Capability + state accessors lifted from ibValueModel so the
-	// data-view fork (datavgen.cpp) can query them via GetModel()
+	// data-view fork (datavgen.cpp) can query them via GetTableModel()
 	// directly, without cross-casting through ibDataViewModelProvider.
 	// Default: empty Features / null pointers — non-paged native models
 	// (tree-store, list-store, predefined editor) have no sort or

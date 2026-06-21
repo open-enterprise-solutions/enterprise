@@ -18,6 +18,11 @@ ibSourceObject* ibValueCheckbox::GetSourceObject() const
 		m_formOwner->GetSourceObject() : nullptr;
 }
 
+bool ibValueCheckbox::GetSourceList(std::vector<ibBackendFormAttribute*>& out) const
+{
+	return m_formOwner != nullptr ? m_formOwner->GetSourceList(GetFilterSourceDataType(), out) : false;
+}
+
 //****************************************************************************
 //*                              Checkbox                                    *
 //****************************************************************************
@@ -112,14 +117,14 @@ void ibValueCheckbox::Update(wxObject* wxobject, ibVisualHost* visualHost)
 	if (checkbox != nullptr) {
 		// Source-backed value refresh: hand the source the binding path; it walks it.
 		if (!m_propertySource->IsEmptyProperty() && m_formOwner != nullptr) {
-			ibSourceDataObject* srcObject = m_formOwner->GetSourceObject();
-			if (srcObject != nullptr)
-				m_selValue = srcObject->GetValueByPath(m_propertySource->GetValueAsPath());
+			m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsPath(), m_selValue);
 		}
 
 		checkbox->SetLabel(GetControlTitle());
-		// A dotted reference path is read-only.
-		if (m_propertySource->IsDotWalk())
+		// A dotted reference path is read-only; unbound = editable.
+		const bool writableBinding = m_propertySource->IsEmptyProperty()
+			|| (m_formOwner != nullptr && m_formOwner->IsWritableBinding(m_propertySource->GetValueAsPath()));
+		if (!writableBinding)
 			checkbox->Enable(false);
 #ifdef OES_USE_WEB
 		checkbox->SetValue(m_selValue.GetBoolean());
@@ -154,12 +159,9 @@ void ibValueCheckbox::Cleanup(wxObject* obj, ibVisualHost* visualHost)
 
 bool ibValueCheckbox::GetControlValue(ibValue& pvarControlVal) const
 {
-	if (!m_propertySource->IsEmptyProperty() && m_formOwner->GetSourceObject()) {
-		ibSourceDataObject* srcObject = m_formOwner->GetSourceObject();
-		if (srcObject != nullptr) {
-			pvarControlVal = srcObject->GetValueByPath(m_propertySource->GetValueAsPath());   // dotted path -> read-only walk
-			return true;
-		}
+	if (!m_propertySource->IsEmptyProperty() && m_formOwner != nullptr &&
+		m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsPath(), pvarControlVal)) {
+		return true;   // attribute-table / dotted path -> read-only walk
 	}
 
 	pvarControlVal = ibTypeControlFactory::AdjustValue(m_selValue);
@@ -170,11 +172,10 @@ bool ibValueCheckbox::GetControlValue(ibValue& pvarControlVal) const
 
 bool ibValueCheckbox::SetControlValue(const ibValue& varControlVal)
 {
-	if (!m_propertySource->IsEmptyProperty() && m_formOwner->GetSourceObject()) {
-		ibSourceDataObject* srcObject = m_formOwner->GetSourceObject();
-		// A dotted reference path is read-only — only a single-column binding writes back.
-		if (srcObject != nullptr && !m_propertySource->IsDotWalk())
-			srcObject->SetValueByMetaID(m_propertySource->GetValueAsSource(), varControlVal);
+	if (!m_propertySource->IsEmptyProperty() && m_formOwner != nullptr) {
+		// Form writes only a direct-field binding (head selects the attribute); a
+		// dotted reference path is read-only → no-op.
+		m_formOwner->SetValueByAttributePath(m_propertySource->GetValueAsPath(), varControlVal);
 	}
 
 	m_selValue = varControlVal.GetBoolean();

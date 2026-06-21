@@ -1560,18 +1560,6 @@ ibSourceExplorer ibValueRecordDataObject::GetSourceExplorer() const
 
 #include "backend/metaCollection/partial/tabularSection/tabularSection.h"
 
-bool ibValueRecordDataObject::GetModel(ibValueModel*& tableValue, const ibMetaID& id)
-{
-	auto it = m_listObjectValue.find(id);
-	if (it != m_listObjectValue.end()) {
-		const ibValue& cTabularSection = it->second;
-		return cTabularSection.ConvertToValue(tableValue);
-	};
-
-	tableValue = nullptr;
-	return false;
-}
-
 bool ibValueRecordDataObject::SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal)
 {
 	auto it = m_listObjectValue.find(id);
@@ -2064,17 +2052,6 @@ ibSourceExplorer ibValueRecordDataObjectRef::GetSourceExplorer() const
 	return srcHelper;
 }
 
-bool ibValueRecordDataObjectRef::GetModel(ibValueModel*& tableValue, const ibMetaID& id)
-{
-	auto it = m_listObjectValue.find(id);
-	if (it != m_listObjectValue.end()) {
-		const ibValue& cTabularSection = it->second;
-		return cTabularSection.ConvertToValue(tableValue);
-	};
-	tableValue = nullptr;
-	return false;
-}
-
 void ibValueRecordDataObjectRef::Modify(bool mod)
 {
 	ibBackendValueForm* const foundedForm = ibBackendValueForm::FindFormByUniqueKey(m_objGuid);
@@ -2118,6 +2095,11 @@ bool ibValueRecordDataObjectRef::SetValueByMetaID(const ibMetaID& id, const ibVa
 
 bool ibValueRecordDataObjectRef::GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const
 {
+	if (m_metaObject->IsDataReference(id)) {
+		pvarMetaVal = GetReference();
+		return true; 
+	}
+
 	return ibValueRecordDataObject::GetValueByMetaID(id, pvarMetaVal);
 }
 
@@ -2252,18 +2234,6 @@ ibSourceExplorer ibValueRecordDataObjectHierarchyRef::GetSourceExplorer() const
 	}
 
 	return srcHelper;
-}
-
-bool ibValueRecordDataObjectHierarchyRef::GetModel(ibValueModel*& tableValue, const ibMetaID& id)
-{
-	auto it = m_listObjectValue.find(id);
-	if (it != m_listObjectValue.end()) {
-		const ibValue& cTabularSection = it->second;
-		return cTabularSection.ConvertToValue(tableValue);
-	};
-
-	tableValue = nullptr;
-	return false;
 }
 
 ibValueRecordDataObjectRef* ibValueRecordDataObjectHierarchyRef::CopyObjectValue()
@@ -3049,11 +3019,6 @@ ibSourceExplorer ibValueRecordManagerObject::GetSourceExplorer() const
 	}
 
 	return srcHelper;
-}
-
-bool ibValueRecordManagerObject::GetModel(ibValueModel*& tableValue, const ibMetaID& id)
-{
-	return false;
 }
 
 void ibValueRecordManagerObject::Modify(bool mod)

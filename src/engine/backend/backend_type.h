@@ -1,7 +1,11 @@
 #ifndef __BACKEND_TYPE_H__
 #define __BACKEND_TYPE_H__
 
+#include <vector>
+
 #include "backend/typeDescription.h"
+
+struct ibSourceDescription;   // control's bound source path (GetSourceDesc)
 
 //////////////////////////////////////////////////////////////
 
@@ -106,6 +110,21 @@ enum ibSourceDataType {
 
 //////////////////////////////////////////////////////////////
 
+// Backend-visible view of a form source attribute (the concrete value lives in
+// the frontend ibValueFormAttribute, which implements this). IS-A type-config
+// factory, so it carries the attribute's Type (GetTypeDesc) + metadata directly
+// — backend code (the picker, the binding resolve) reads them with NO cross-cast.
+// Only the gate identity lives here (name + id); the source view / kind are
+// runtime concerns the FORM reads off the concrete attribute, not via this.
+class BACKEND_API ibBackendFormAttribute : public ibBackendTypeConfigFactory {
+public:
+	virtual wxString GetAttributeName() const = 0;
+	virtual ibMetaID GetAttributeId() const = 0;
+	virtual bool IsMainAttribute() const = 0;
+};
+
+//////////////////////////////////////////////////////////////
+
 class BACKEND_API ibBackendTypeSourceFactory :
 	public ibBackendTypeConfigFactory {
 public:
@@ -114,11 +133,22 @@ public:
 		return ibSourceDataType::ibSourceDataType_attribute;
 	}
 
-	//Get source object 
+	//Get source object
 	virtual class ibSourceObject* GetSourceObject() const = 0;
 
-	// filter data 
+	// This control's OWN bound source path (head attribute id + deeper hops). A column
+	// reads its PARENT table's path through this to compose its own (parent path + column
+	// id). Pure — every source factory defines its own path (controls do so via the
+	// control base / their source property).
+	virtual ibSourceDescription GetSourceDesc() const = 0;
+
+	// filter data
 	virtual bool FilterSource(const class ibSourceExplorer& src, const ibMetaID& id) const;
+
+	// Available source attributes of the owning context (default: none — filled
+	// via the out-param). The control's type-factory overrides this to expose its
+	// form's attribute table; the picker / ibPropertySource enumerate these.
+	virtual bool GetSourceList(std::vector<ibBackendFormAttribute*>& out) const { return false; }
 };
 
 #endif

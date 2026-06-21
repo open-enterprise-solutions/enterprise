@@ -59,6 +59,11 @@ ibSourceObject* ibValueTextCtrl::GetSourceObject() const
 		: nullptr;
 }
 
+bool ibValueTextCtrl::GetSourceList(std::vector<ibBackendFormAttribute*>& out) const
+{
+	return m_formOwner != nullptr ? m_formOwner->GetSourceList(GetFilterSourceDataType(), out) : false;
+}
+
 //****************************************************************************
 //*                              TextCtrl                                    *
 //****************************************************************************
@@ -138,9 +143,8 @@ wxObject* ibValueTextCtrl::Create(ibFrontendWindow* wxparent, ibVisualHost* visu
 #endif
 
 	if (!m_propertySource->IsEmptyProperty()) {
-		ibSourceDataObject* srcObject = m_formOwner->GetSourceObject();
-		if (srcObject != nullptr)
-			m_selValue = srcObject->GetValueByPath(m_propertySource->GetValueAsPath());
+		if (m_formOwner != nullptr)
+			m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsPath(), m_selValue);
 	} else {
 		m_selValue = ibTypeControlFactory::AdjustValue(m_selValue);
 	}
@@ -176,9 +180,7 @@ void ibValueTextCtrl::Update(wxObject* wxobject, ibVisualHost* visualHost)
 	// attribute, pull the current source value; otherwise the control
 	// carries its own m_selValue across Update passes.
 	if (!m_propertySource->IsEmptyProperty() && m_formOwner != nullptr) {
-		ibSourceDataObject* srcObject = m_formOwner->GetSourceObject();
-		if (srcObject != nullptr)
-			m_selValue = srcObject->GetValueByPath(m_propertySource->GetValueAsPath());
+		m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsPath(), m_selValue);
 	}
 	else {
 		m_selValue = ibTypeControlFactory::AdjustValue(m_selValue);
@@ -193,8 +195,10 @@ void ibValueTextCtrl::Update(wxObject* wxobject, ibVisualHost* visualHost)
 	textEditor->SetPasswordMode(m_propertyPasswordMode->GetValueAsBoolean());
 	textEditor->SetMultilineMode(m_propertyMultilineMode->GetValueAsBoolean());
 	// A dotted reference path (Source.Ref.Field) is read-only — force edit mode off
-	// regardless of the control's TextEditMode property.
-	textEditor->SetTextEditMode(m_propertyTexteditMode->GetValueAsBoolean() && !m_propertySource->IsDotWalk());
+	// regardless of the control's TextEditMode property. Unbound = editable.
+	const bool writableBinding = m_propertySource->IsEmptyProperty()
+		|| (m_formOwner != nullptr && m_formOwner->IsWritableBinding(m_propertySource->GetValueAsPath()));
+	textEditor->SetTextEditMode(m_propertyTexteditMode->GetValueAsBoolean() && writableBinding);
 	textEditor->ShowSelectButton(m_propertySelectButton->GetValueAsBoolean());
 	textEditor->ShowOpenButton(m_propertyOpenButton->GetValueAsBoolean());
 	textEditor->ShowClearButton(m_propertyClearButton->GetValueAsBoolean());
@@ -253,10 +257,9 @@ void ibValueTextCtrl::Cleanup(wxObject* wxobject, ibVisualHost* visualHost)
 
 bool ibValueTextCtrl::GetControlValue(ibValue& pvarControlVal) const
 {
-	ibSourceDataObject* sourceObject = m_formOwner->GetSourceObject();
-	if (!m_propertySource->IsEmptyProperty() && sourceObject != nullptr) {
-		pvarControlVal = sourceObject->GetValueByPath(m_propertySource->GetValueAsPath());   // dotted path -> read-only walk
-		return true;
+	if (!m_propertySource->IsEmptyProperty() && m_formOwner != nullptr &&
+		m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsPath(), pvarControlVal)) {
+		return true;   // attribute-table / dotted path -> read-only walk
 	}
 
 	pvarControlVal = ibTypeControlFactory::AdjustValue(m_selValue);
@@ -265,13 +268,13 @@ bool ibValueTextCtrl::GetControlValue(ibValue& pvarControlVal) const
 
 bool ibValueTextCtrl::SetControlValue(const ibValue& varControlVal)
 {
-	ibSourceDataObject* sourceObject = m_formOwner->GetSourceObject();
-	const ibValueMetaObjectAttributeBase* metaObject = (!m_propertySource->IsEmptyProperty() && sourceObject != nullptr)
+	const ibValueMetaObjectAttributeBase* metaObject = !m_propertySource->IsEmptyProperty()
 		? m_propertySource->GetSourceAttributeObject() : nullptr;
 	if (metaObject != nullptr) {
-		// A dotted reference path is read-only — only a single-column binding writes back.
-		if (!m_propertySource->IsDotWalk())
-			sourceObject->SetValueByMetaID(m_propertySource->GetValueAsSource(), varControlVal);
+		// The form writes only a direct-field binding (head selects the attribute);
+		// a dotted reference path is read-only → the call is a no-op.
+		if (m_formOwner != nullptr)
+			m_formOwner->SetValueByAttributePath(m_propertySource->GetValueAsPath(), varControlVal);
 		m_selValue = metaObject->AdjustValue(varControlVal);
 	}
 	else {

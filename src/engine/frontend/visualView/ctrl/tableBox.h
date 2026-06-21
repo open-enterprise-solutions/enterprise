@@ -9,6 +9,7 @@
 
 #include "frontend/visualView/ctrl/window.h"
 #include "frontend/visualView/ctrl/typeControl.h"
+#include "backend/sourceDescription.h"   // ibSourceDescription (full [head, field] binding path)
 
 #ifndef OES_USE_WEB
 // Desktop pulls in the full wxDataView-based viewer. Web build keeps
@@ -78,8 +79,13 @@ class ibValueModelTableBox : public ibValueWindow,
 
 	////////////////////////////////////////////////////////////////////////////////////////
 	void SetSource(const ibMetaID& id) { m_propertySource->SetValue(id); ibValueModelTableBox::RefreshModel(true); }
+	// Full binding path [headAttrId, tableSection, ...] — the resolve walks the attribute.
+	void SetSource(const std::vector<ibSourceId>& path) { m_propertySource->SetValue(ibSourceDescription(path)); ibValueModelTableBox::RefreshModel(true); }
 	ibMetaID GetSource() const { return m_propertySource->GetValueAsSource(); }
 	////////////////////////////////////////////////////////////////////////////////////////
+
+	// Available sources = the owning form's attributes of THIS control's kind (table).
+	virtual bool GetSourceList(std::vector<ibBackendFormAttribute*>& out) const override;
 
 	ibValueModelTableBox();
 	virtual ~ibValueModelTableBox() {}
@@ -89,8 +95,12 @@ class ibValueModelTableBox : public ibValueWindow,
 	virtual ibSelectorDataType GetFilterDataType() const { return ibSelectorDataType::ibSelectorDataType_table; }
 	virtual ibSourceDataType GetFilterSourceDataType() const { return ibSourceDataType::ibSourceDataType_table; }
 
-	//Get source object 
+	//Get source object
 	virtual ibSourceObject* GetSourceObject() const;
+
+	// This tablebox's bound path ([headAttr, tableSection] or [headAttr] for a list) —
+	// a child column composes its own path as THIS path + its column id.
+	virtual ibSourceDescription GetSourceDesc() const override { return m_propertySource->GetValueAsSourceDesc(); }
 
 #pragma region _source_data_
 
@@ -107,7 +117,7 @@ class ibValueModelTableBox : public ibValueWindow,
 	virtual ibValueForm* GetOwnerForm() const { return m_formOwner; }
 
 	//get model 
-	ibValueModel* GetModel() const { return m_tableModel; }
+	ibValueModel* GetTableModel() const { return m_tableModel; }
 
 	//get metaData
 	virtual const ibMetaData* GetMetaData() const;
@@ -322,7 +332,9 @@ public:
 
 	////////////////////////////////////////////////////////////////////////////////////////
 
-	void SetSource(const ibMetaID& id) { m_propertySource->SetValue(id); }
+	void SetSource(const ibSourceId& id) { m_propertySource->SetValue(id); }
+	// Full binding path [headAttrId, tableSection, column] — the resolve walks the attribute.
+	void SetSource(const std::vector<ibSourceId>& path) { m_propertySource->SetValue(ibSourceDescription(path)); }
 	ibMetaID GetSource() const { return m_propertySource->GetValueAsSource(); }
 
 	////////////////////////////////////////////////////////////////////////////////////////
@@ -368,13 +380,19 @@ public:
 
 	ibValueModelTableBoxColumn();
 
-	//Get source object 
+	//Get source object
 	virtual ibSourceObject* GetSourceObject() const { return GetOwner(); }
+
+	// Own bound source path ([headAttr, table, column]) — its leaf is this column.
+	virtual ibSourceDescription GetSourceDesc() const override { return m_propertySource->GetValueAsSourceDesc(); }
 
 	//Get source attribute  
 	virtual const ibValueMetaObjectAttributeBase* GetSourceAttributeObject() const { return m_propertySource->GetSourceAttributeObject(); }
 	virtual ibSelectorDataType GetFilterDataType() const { return ibSelectorDataType::ibSelectorDataType_reference; }
 	virtual ibSourceDataType GetFilterSourceDataType() const { return ibSourceDataType::ibSourceDataType_tableColumn; }
+
+	// Available sources = the owning form's attributes of THIS control's kind (table).
+	virtual bool GetSourceList(std::vector<ibBackendFormAttribute*>& out) const override;
 
 	//get form owner 
 	virtual ibValueForm* GetOwnerForm() const { return m_formOwner; }

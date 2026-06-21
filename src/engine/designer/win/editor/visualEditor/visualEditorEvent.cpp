@@ -12,6 +12,8 @@
 void ibVisualEditorNotebook::ibVisualEditor::NotifyEditorLoaded()
 {
 	m_objectTree->OnEditorLoaded();
+	if (m_attributeTree != nullptr)
+		m_attributeTree->OnEditorLoaded();
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::NotifyEditorSaved()
@@ -25,6 +27,8 @@ void ibVisualEditorNotebook::ibVisualEditor::NotifyEditorSaved()
 void ibVisualEditorNotebook::ibVisualEditor::NotifyEditorRefresh()
 {
 	m_objectTree->OnEditorRefresh();
+	if (m_attributeTree != nullptr)
+		m_attributeTree->OnEditorRefresh();
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::NotifyObjectCreated(ibValueFrame* obj)

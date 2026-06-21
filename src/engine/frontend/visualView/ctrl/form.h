@@ -3,6 +3,8 @@
 
 #include "frontend/visualView/ctrl/control.h"
 
+#include <memory>   // std::unique_ptr — owns the form's attribute/value registry entries
+
 #define defaultFormId 1
 #define thisForm wxT("ThisForm")
 
@@ -17,6 +19,10 @@ class FRONTEND_API ibFormVisualEditView;
 
 class BACKEND_API ibValueMetaObjectFormBase;
 class BACKEND_API ibValueMetaObjectGenericData;
+
+class FRONTEND_API ibValueFormAttribute;
+class FRONTEND_API ibFormAttributeValue;   // registry entry: owns an attribute + its managed value
+class BACKEND_API ibBackendFormAttribute;
 
 //********************************************************************************************
 //*                                 define commom clsid									     *
@@ -36,14 +42,15 @@ class FRONTEND_API ibValueForm :
 	// this-adjustment, which the cast to void(ibValue::*) would otherwise drop.
 	public ibValueFrame, public ibBackendValueForm, public ibRuntimeModuleDataObject
 {
-	public:
+public:
 
 private:
 
 	enum {
 		eSystem = eSizerItem + 1,
 		eProcUnit = g_aliasExport,   // module exports go through the descriptor autobind
-		eAttribute
+		eAttribute,                  // controls-with-value: ThisForm.<controlName>
+		eFormAttribute               // form source attributes: ThisForm.<attrName>
 	};
 
 public:
@@ -175,8 +182,82 @@ public:
 		return const_cast<ibValueForm*>(this);
 	}
 
-	virtual ibSourceDataObject* GetSourceObject() const { return m_sourceObject; }
+	// The form's live source = the source assigned into the MAIN attribute
+	// (falls back to m_sourceObject for back-compat / no main attribute).
+	// Controls read it (and dot-walk on it) through here, so routing the source
+	// through the attribute needs no per-control change. Out-of-line: needs the
+	// complete ibValueFormAttribute type.
+	virtual ibSourceDataObject* GetSourceObject() const;
 	virtual const ibValueMetaObjectFormBase* GetFormMetaObject() const { return m_metaFormObject; }
+
+	//****************************************************************************
+	//*           Attribute store — the form's typed source registry            *
+	//****************************************************************************
+	// Externally managed (designer CRUD / build-time defaulting). Each entry is
+	// a typed form-local source; the MAIN one receives the source object passed
+	// on open. Serialized as a separate "Attributes" child node of the form,
+	// read back on load. Each attribute is also a local variable of the form
+	// module (bound by Name).
+
+	// Registry CRUD — every accessor hands out the ENTRY (ibFormAttributeValue): the
+	// entity carrying the attribute (description via GetAttribute()) AND its value. Never
+	// a raw attribute. An attribute is NEVER empty: name + Type + value.
+	ibFormAttributeValue* AddAttribute(const wxString& name, const ibClassID& type, const ibValue& value);
+	// The MAIN entry (the source object lands here) — guards that no other main exists.
+	ibFormAttributeValue* AddMainAttribute(const wxString& name, const ibClassID& type, ibSourceDataObject* value);
+
+	ibFormAttributeValue* GetAttribute(const wxString& name) const;
+	ibFormAttributeValue* GetAttribute(unsigned int idx) const;
+	// Path-head resolve: a binding stores the attribute's id at path[0].
+	ibFormAttributeValue* FindAttributeById(const ibMetaID& id) const;
+	// The main entry — found by the attribute's Main flag (single source of truth).
+	ibFormAttributeValue* GetMainAttribute() const;
+	// Make entry the SOLE main attribute (sets its flag, clears it on all others).
+	void SetMainAttribute(ibFormAttributeValue* entry);
+
+	void DeleteAttribute(const wxString& name);
+	void DeleteAttribute(unsigned int idx);
+	// Bind `entry` into the form module: its value cell as a LOCAL named <attrName>, and —
+	// when it is the MAIN — the exported DataSource too. Self-managed by the attribute's
+	// lifecycle / main flag: add and become-main bind, delete and lose-main unbind, so no
+	// external "is it bound" bookkeeping is needed. Idempotent (binds overwrite by name).
+	void BindAttributeVariable(ibFormAttributeValue* entry);
+	// Remove the form-module binds pointing into `entry` before it is destroyed (its local
+	// name bind, and DataSource if it is the main) — prevents dangling-pointer compiles.
+	void DropAttributeBinds(ibFormAttributeValue* entry);
+
+	// Name uniqueness among the form's attributes (optionally ignoring one entry — for rename).
+	bool IsAttributeNameUnique(const wxString& name, const ibFormAttributeValue* except = nullptr) const;
+	// `base` made unique by appending a counter when it collides.
+	wxString MakeUniqueAttributeName(const wxString& base) const;
+	// Rename `entry` to `newName`, re-binding its module variable. False if empty / not unique.
+	bool RenameAttribute(ibFormAttributeValue* entry, const wxString& newName);
+	// Paste a clipboard-deserialized attribute node as a fresh NON-main entry (unique name + id,
+	// wired into the module). Returns the new entry, or nullptr on failure.
+	ibFormAttributeValue* PasteAttribute(const ibDataNode& node);
+
+	unsigned int GetAttributeCount() const { return (unsigned int)m_attributes.size(); }
+
+	// Serialize the attribute store as its own "Attributes" child node. Called from ReadData / WriteData.
+	void ReadAttributes(const ibDataNode& node);
+	void WriteAttributes(ibDataNode& node) const;
+
+	// Available sources (backend wrappers) for a control of the given kind: the
+	// MAIN attribute is always reachable; auxiliary attributes match by kind;
+	// tableColumn enumerates nothing (a column sources from its parent table).
+	// Filled into out; returns false (empty) when nothing is available.
+	bool GetSourceList(ibSourceDataType kind, std::vector<ibBackendFormAttribute*>& out) const;
+
+	// Resolve a binding path whose HEAD (path[0]) selects an attribute from the table;
+	// the remainder dot-walks that attribute's value/source. A head that matches no
+	// attribute is a stale binding (returns false) — path[0] is always a form-local id.
+	bool GetValueByAttributePath(const std::vector<ibSourceId>& path, ibValue& result) const;
+
+	// Write a value through a binding path (head selects the attribute). Only a DIRECT
+	// field is writable — the attribute itself [attr] or head + one field [attr, field].
+	// A deeper reference dot-walk is READ-ONLY (returns false / no-op).
+	bool SetValueByAttributePath(const std::vector<ibSourceId>& path, const ibValue& value);
+	bool IsWritableBinding(const std::vector<ibSourceId>& path) const;
 
 	const ibValueMetaObjectGenericData* GetMetaObject() const;
 
@@ -359,7 +440,18 @@ private:
 	const ibValueMetaObjectFormBase* m_metaFormObject; // ref to metaData
 
 	ibControlFrame* m_controlOwner;
-	ibSourceDataObject* m_sourceObject;
+
+	// The form's typed source registry: each entry OWNS an attribute (its definition)
+	// and holds, separately, the runtime VALUE that attribute manages. Held by unique_ptr
+	// so a returned entry pointer stays valid across vector growth. The MAIN entry is the
+	// one whose attribute carries the Main flag — no separate pointer (single source of
+	// truth = the flag).
+	std::vector<std::unique_ptr<ibFormAttributeValue>> m_attributes;
+
+	// Shared internals of the Add*/Paste attribute paths (dedup):
+	ibMetaID NextAttributeId() const;                                   // max existing id + 1
+	ibFormAttributeValue* RegisterAttribute(ibValueFormAttribute* attr); // own in m_attributes, return entry
+	void WireAttribute(ibFormAttributeValue* entry);                    // bind (if module live) + InvalidateNames
 
 	// ibFrontendTimer = wxTimer on desktop, ibWebTimer on web. Both
 	// inherit wxEvtHandler + produce wxTimerEvent where GetEventObject()

@@ -9,23 +9,11 @@
 ibValueModelTableBox::ibActionCollection ibValueModelTableBox::GetActionCollection(const ibFormID& formType)
 {
 	if (m_tableModel == nullptr) {
-		//if (m_dataSource.isValid()) {
-		//	if (srcObject != nullptr) {
-		//		ibValueModel* tableModel = nullptr;
-		//		if (srcObject->GetModel(tableModel, GetIdByGuid(m_dataSource))) {
-		//			return tableModel->GetActionCollection(formType);
-		//		}
-		//	}
-		//}
 
-		if (!m_propertySource->IsEmptyProperty()) {
-			ibSourceDataObject* srcObject = m_formOwner->GetSourceObject();
-			if (srcObject != nullptr) {
-				ibValueModel* tableModel = nullptr;
-				if (srcObject->GetModel(tableModel, m_propertySource->GetValueAsSource())) {
-					return tableModel->GetActionCollection(formType);
-				}
-			}
+		ibValuePtr<ibValueModel> pvarControlVal;
+		if (!m_propertySource->IsEmptyProperty() && m_formOwner != nullptr &&
+			m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsPath(), pvarControlVal)) {
+			return pvarControlVal->GetActionCollection(formType);
 		}
 
 		return ibActionCollection();

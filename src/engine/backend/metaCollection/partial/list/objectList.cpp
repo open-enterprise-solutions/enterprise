@@ -15,7 +15,7 @@
 ibValueListDataObject::ibValueListDataObject(const ibValueMetaObjectGenericData* metaObject, const ibFormID& formType, bool choiceMode) :
 	ibSourceDataObject(),
 	m_recordColumnCollection(new ibValueDataObjectListColumnCollection(this, metaObject)),
-	m_objGuid(choiceMode ? ibGuid::newGuid() : metaObject->GetGuid()){
+	m_objGuid(choiceMode ? ibGuid::newGuid() : metaObject->GetGuid()) {
 	for (const auto object : metaObject->GetGenericAttributeArrayObject()) {
 		m_filterRow.AppendFilter(
 			object->GetMetaID(),
@@ -41,7 +41,7 @@ ibValueListDataObject::~ibValueListDataObject()
 ibValueModelTreeDataObject::ibValueModelTreeDataObject(const ibValueMetaObjectGenericData* metaObject, const ibFormID& formType, bool choiceMode) :
 	ibSourceDataObject(),
 	m_recordColumnCollection(new ibValueDataObjectTreeColumnCollection(this, metaObject)),
-	m_objGuid(choiceMode ? ibGuid::newGuid() : metaObject->GetGuid()){
+	m_objGuid(choiceMode ? ibGuid::newGuid() : metaObject->GetGuid()) {
 	for (const auto object : metaObject->GetGenericAttributeArrayObject()) {
 		m_filterRow.AppendFilter(
 			object->GetMetaID(),
@@ -298,10 +298,10 @@ ibSourceExplorer ibValueListDataObjectEnumRef::GetSourceExplorer() const
 	return srcHelper;
 }
 
-bool ibValueListDataObjectEnumRef::GetModel(ibValueModel*& tableValue, const ibMetaID& id)
+bool ibValueListDataObjectEnumRef::GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const
 {
 	if (id == m_metaObject->GetMetaID()) {
-		tableValue = this;
+		pvarMetaVal = ibValue::GetValue(true);
 		return true;
 	}
 	return false;
@@ -412,10 +412,10 @@ ibSourceExplorer ibValueListDataObjectRef::GetSourceExplorer() const
 	return srcHelper;
 }
 
-bool ibValueListDataObjectRef::GetModel(ibValueModel*& tableValue, const ibMetaID& id)
+bool ibValueListDataObjectRef::GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const
 {
 	if (id == m_metaObject->GetMetaID()) {
-		tableValue = this;
+		pvarMetaVal = ibValue::GetValue(true);
 		return true;
 	}
 	return false;
@@ -618,8 +618,8 @@ ibValueModelTreeDataObjectFolderRef::ibValueModelTreeDataObjectFolderRef(const i
 	// predicate stays meaningful even when the user picks a different
 	// column-sort.
 	ibValueModelTreeDataObject::AppendSort(m_metaObject->GetDataReference(),
-	                                       /*ascending=*/true, /*use=*/true,
-	                                       /*system=*/true);
+		/*ascending=*/true, /*use=*/true,
+		/*system=*/true);
 }
 
 ibSourceExplorer ibValueModelTreeDataObjectFolderRef::GetSourceExplorer() const
@@ -649,10 +649,10 @@ ibSourceExplorer ibValueModelTreeDataObjectFolderRef::GetSourceExplorer() const
 	return srcHelper;
 }
 
-bool ibValueModelTreeDataObjectFolderRef::GetModel(ibValueModel*& tableValue, const ibMetaID& id)
+bool ibValueModelTreeDataObjectFolderRef::GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const
 {
 	if (id == m_metaObject->GetMetaID()) {
-		tableValue = this;
+		pvarMetaVal = ibValue::GetValue(true);
 		return true;
 	}
 	return false;
@@ -951,10 +951,10 @@ ibSourceExplorer ibValueListRegisterObject::GetSourceExplorer() const
 	return srcHelper;
 }
 
-bool ibValueListRegisterObject::GetModel(ibValueModel*& tableValue, const ibMetaID& id)
+bool ibValueListRegisterObject::GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const
 {
 	if (id == m_metaObject->GetMetaID()) {
-		tableValue = this;
+		pvarMetaVal = ibValue::GetValue(true);
 		return true;
 	}
 	return false;

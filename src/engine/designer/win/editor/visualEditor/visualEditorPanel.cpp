@@ -35,10 +35,21 @@ void ibVisualEditorNotebook::ibVisualEditor::CreateWideGui()
 	wxASSERT(m_visualEditor == nullptr);
 
 	m_visualEditor = new ibVisualEditorHost(this, m_splitter);
-	m_objectTree = new ibVisualEditorObjectTree(this, m_splitter);
 
-	m_splitter->SplitHorizontally(m_visualEditor, 
-		ibPanelTitle::CreateTitle(m_objectTree, _("Tree elements")), 200);
+	// Bottom pane: the control tree and the source-attribute tree side by side,
+	// separated by their own splitter.
+	m_treeSplitter = new wxSplitterWindow(m_splitter, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSP_THIN_SASH);
+	m_treeSplitter->SetSashGravity(0.5);
+	m_treeSplitter->SetMinimumPaneSize(20);
+
+	m_objectTree = new ibVisualEditorObjectTree(this, m_treeSplitter);
+	m_attributeTree = new ibVisualEditorAttributeTree(this, m_treeSplitter);
+
+	m_treeSplitter->SplitVertically(
+		ibPanelTitle::CreateTitle(m_objectTree, _("Tree elements")),
+		ibPanelTitle::CreateTitle(m_attributeTree, _("Attributes")), 300);
+
+	m_splitter->SplitHorizontally(m_visualEditor, m_treeSplitter, 200);
 
 	SetSizer(sizerMain);
 

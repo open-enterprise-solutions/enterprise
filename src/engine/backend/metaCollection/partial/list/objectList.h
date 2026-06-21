@@ -225,9 +225,11 @@ public:
 	virtual bool SetValueByRow(const wxVariant& variant,
 		const ibDataViewItem& row, unsigned int col) override;
 
+	//support source set/get data
+	virtual bool GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const override;
+
 	//support source data 
 	virtual ibSourceExplorer GetSourceExplorer() const;
-	virtual bool GetModel(ibValueModel*& tableValue, const ibMetaID& id);
 
 	//****************************************************************************
 	//*                              Support methods                             *
@@ -345,9 +347,11 @@ public:
 	virtual bool SetValueByRow(const wxVariant& variant,
 		const ibDataViewItem& row, unsigned int col) override;
 
+	//support source set/get data
+	virtual bool GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const override;
+
 	//support source data 
 	virtual ibSourceExplorer GetSourceExplorer() const;
-	virtual bool GetModel(ibValueModel*& tableValue, const ibMetaID& id);
 
 	//****************************************************************************
 	//*                              Support methods                             *
@@ -495,9 +499,11 @@ public:
 	virtual bool SetValueByRow(const wxVariant& variant,
 		const ibDataViewItem& row, unsigned int col) override;
 
+	//support source set/get data
+	virtual bool GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const override;
+
 	//support source data 
 	virtual ibSourceExplorer GetSourceExplorer() const;
-	virtual bool GetModel(ibValueModel*& tableValue, const ibMetaID& id);
 
 	//****************************************************************************
 	//*                              Support methods                             *
@@ -816,10 +822,12 @@ public:
 	virtual bool GetAttrByRow(const ibDataViewItem& WXUNUSED(row), unsigned int WXUNUSED(col),
 		ibDataViewItemAttr& WXUNUSED(attr)) const override;
 
+	//support source set/get data
+	virtual bool GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const override;
+
 	//support source data
 	virtual ibSourceExplorer GetSourceExplorer() const;
-	virtual bool GetModel(ibValueModel*& tableValue, const ibMetaID& id);
-
+	
 	//****************************************************************************
 	//*                              Support methods                             *
 	//****************************************************************************

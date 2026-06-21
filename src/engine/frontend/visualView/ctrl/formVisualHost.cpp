@@ -14,7 +14,7 @@
 
 //////////////////////////////////////////////////////////////
 
-void ibValueForm::Modify(bool modify) 
+void ibValueForm::Modify(bool modify)
 {
 	if (IsShown()) {
 		GetVisualDocument()->Modify(modify);
@@ -29,8 +29,9 @@ ibFormVisualDocument* ibValueForm::GetVisualDocument() const
 
 const ibValueMetaObjectGenericData* ibValueForm::GetMetaObject() const
 {
-	return m_sourceObject != nullptr ?
-		m_sourceObject->GetSourceMetaObject() : nullptr;
+	const ibSourceDataObject* sourceObject = GetSourceObject();
+	return sourceObject != nullptr ?
+		sourceObject->GetSourceMetaObject() : nullptr;
 }
 
 //////////////////////////////////////////////////////////////

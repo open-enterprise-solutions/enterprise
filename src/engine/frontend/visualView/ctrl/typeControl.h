@@ -3,6 +3,8 @@
 
 #include "frontend/frontend.h"
 
+#include <vector>
+
 ///////////////////////////////////////////////////////////////////////////
 #include "backend/backend_type.h"
 #include "backend/compiler/value.h"
@@ -46,8 +48,16 @@ public:
 	virtual ibValue CreateValue() const;
 	virtual ibValue* CreateValueRef() const;
 
-	//Get data type 
+	//Get data type
 	virtual ibClassID GetDataType() const;
+
+	// Bound source path — PURE: every concrete control returns its own (from its source
+	// property). A column reads its PARENT tablebox's path to prefix its column id.
+	virtual ibSourceDescription GetSourceDesc() const override = 0;
+
+	// GetSourceList is NOT implemented here — each concrete control overrides
+	// ibBackendTypeSourceFactory::GetSourceList(out) using its own GetOwnerForm()
+	// + GetFilterSourceDataType() (no cross-cast). See widgets / tableBox.
 };
 
 #endif

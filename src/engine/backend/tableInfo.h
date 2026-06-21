@@ -270,7 +270,7 @@ protected:
 
 		// Capability + state forwarders — ibDataViewModel virtuals
 		// resolve to the owning ibValueModel's storage.  Lets
-		// datavgen.cpp ask GetModel()->GetFeatures() / GetSortOrder()
+		// datavgen.cpp ask GetTableModel()->GetFeatures() / GetSortOrder()
 		// directly without cross-casting through this provider.
 		virtual ibDataViewModel::Features GetFeatures() const override {
 			return m_ownerModel->GetFeatures();

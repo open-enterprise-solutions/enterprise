@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "form.h"
+#include "formAttribute.h"
 #include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "backend/metaCollection/partial/commonObject.h"
 #ifdef OES_USE_WEB
@@ -26,7 +27,7 @@
 ibValueForm::ibValueForm(const ibValueMetaObjectFormBase* creator, ibControlFrame* ownerControl,
 	ibSourceDataObject* srcObject, const ibUniqueKey& formGuid) : ibValueFrame(),
 	ibRuntimeModuleDataObject(m_members, this),
-	m_controlOwner(nullptr), m_sourceObject(nullptr), m_metaFormObject(nullptr),
+	m_controlOwner(nullptr), m_metaFormObject(nullptr),
 	m_formCollectionControl(new ibValueFormCollectionControl(this)),
 	m_formType(defaultFormType), m_closeOnChoice(true), m_closeOnOwnerClose(true), m_formModified(false)
 {
@@ -44,9 +45,6 @@ ibValueForm::ibValueForm(const ibValueMetaObjectFormBase* creator, ibControlFram
 
 ibValueForm::~ibValueForm()
 {
-#ifdef OES_USE_WEB
-	std::cerr << "[life] ~ibValueForm " << this << std::endl;
-#endif
 	// Idle-handler timers unified via ibFrontendTimer typedef + shared_ptr
 	// ownership (wxTimer on desktop, ibWebTimer on web). Stop + Unbind
 	// synchronously; the shared_ptr's dtor finishes the disposal when
@@ -64,7 +62,7 @@ ibValueForm::~ibValueForm()
 	// the post-member-destruction order is safe; no explicit teardown needed here.
 
 	if (m_controlOwner != nullptr) m_controlOwner->ControlDecrRef();
-	if (m_sourceObject != nullptr) m_sourceObject->SourceDecrRef();
+	// The source's ref is released by the MAIN attribute wrapper's dtor (SourceDecrRef), not here.
 	// sys_lock release intentionally tied to source LIFETIME, not form
 	// lifetime — m_formLockHandle on the source RAII-DELETEs the row
 	// when the source's last ref drops (form's DecrRef above is one
@@ -102,6 +100,8 @@ bool ibValueForm::ReadData(const ibDataNode& node)
 	m_propertyFG->ReadNodeValue(node.GetProperty(m_propertyFG->GetName()));
 	m_propertyBG->ReadNodeValue(node.GetProperty(m_propertyBG->GetName()));
 	m_propertyEnabled->ReadNodeValue(node.GetProperty(m_propertyEnabled->GetName()));
+
+	ReadAttributes(node);
 	return ibValueFrame::ReadData(node);
 }
 
@@ -113,17 +113,35 @@ bool ibValueForm::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyFG->GetName(), m_propertyFG->GetNodeValue());
 	node.SetProperty(m_propertyBG->GetName(), m_propertyBG->GetNodeValue());
 	node.SetProperty(m_propertyEnabled->GetName(), m_propertyEnabled->GetNodeValue());
+
+	WriteAttributes(node);
 	return ibValueFrame::WriteData(node);
 }
+
 
 //**********************************************************************************
 //*                                   Other                                        *
 //**********************************************************************************
 
+ibSourceDataObject* ibValueForm::GetSourceObject() const
+{
+	// Prefer the source held by the MAIN attribute (the owner). The source
+	// object passed on open was assigned into it (InitializeForm); controls and
+	// their dot-walk read it from here. Fall back to the legacy field when no
+	// main attribute holds a source (sourceless / designer / not yet assigned).
+	if (ibFormAttributeValue* mainAttr = GetMainAttribute()) {
+		return mainAttr->GetSourceValue();
+	}
+
+	return nullptr;
+}
+
 const ibMetaData* ibValueForm::GetMetaData() const
 {
-	if (m_sourceObject != nullptr) {
-		const ibValueMetaObject* metaObject = m_sourceObject->GetSourceMetaObject();
+	const ibSourceDataObject* sourceObject = GetSourceObject();
+
+	if (sourceObject != nullptr) {
+		const ibValueMetaObject* metaObject = sourceObject->GetSourceMetaObject();
 		if (metaObject != nullptr)
 			return metaObject->GetMetaData();
 	}
@@ -142,8 +160,10 @@ ibFormID ibValueForm::GetTypeForm() const
 
 bool ibValueForm::IsEditable() const
 {
-	if (m_sourceObject != nullptr) {
-		const ibValueMetaObject* metaObject = m_sourceObject->GetSourceMetaObject();
+	const ibSourceDataObject* sourceObject = GetSourceObject();
+
+	if (sourceObject != nullptr) {
+		const ibValueMetaObject* metaObject = sourceObject->GetSourceMetaObject();
 		if (metaObject != nullptr)
 			return metaObject->IsEditable();
 	}
@@ -220,6 +240,17 @@ void ibValueForm::FillFormMembers(ibMemberTable& helper) const
 			eAttribute
 		);
 	}
+
+	// Form source attributes — ThisForm.<attrName>. Data = the attribute's STABLE id (not the
+	// store index): the index shifts on delete, which would make ThisForm.<attr> resolve to a
+	// different attribute (controls bind by GetControlID for the same reason).
+	for (const auto& av : m_attributes) {
+		helper.AppendProp(
+			av->GetAttributeName(),
+			av->GetAttributeId(),
+			eFormAttribute
+		);
+	}
 }
 
 bool ibValueForm::SetPropVal(const long lPropNum, const ibValue& varPropVal)
@@ -256,6 +287,12 @@ bool ibValueForm::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 		);
 		if (it != list.end())
 			return (*it)->SetControlValue(varPropVal);
+	}
+	else if (lPropAlias == eFormAttribute) {
+		if (ibFormAttributeValue* attr = FindAttributeById(m_members.GetPropData(lPropNum))) {
+			attr->SetValue(varPropVal);
+			return true;
+		}
 	}
 	return false;
 }
@@ -308,6 +345,12 @@ bool ibValueForm::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 		);
 		if (it != list.end())
 			return (*it)->GetControlValue(pvarPropVal);
+	}
+	else if (lPropAlias == eFormAttribute) {
+		if (ibFormAttributeValue* attr = FindAttributeById(m_members.GetPropData(lPropNum))) {
+			attr->GetValue(pvarPropVal);
+			return true;
+		}
 	}
 
 	return false;

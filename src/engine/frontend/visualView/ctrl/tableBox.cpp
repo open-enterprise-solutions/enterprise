@@ -31,15 +31,9 @@ bool ibValueModelTableBox::GetControlValue(ibValue& pvarControlVal) const
 	if (m_tableModel == nullptr) {
 		if (appData->DesignerMode()) {
 			if (!m_propertySource->IsEmptyProperty()) {
-				ibSourceDataObject* srcObject = m_formOwner->GetSourceObject();
-				if (srcObject != nullptr) {
-					ibValueModel* tableModel = nullptr;
-					if (srcObject->GetModel(tableModel, m_propertySource->GetValueAsSource())) {
-						if (tableModel != m_tableModel) {
-							pvarControlVal = tableModel;
-							return true;
-						}
-					}
+				if (!m_propertySource->IsEmptyProperty() && m_formOwner != nullptr &&
+					m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsPath(), pvarControlVal)) {
+					return true;   // attribute-table / dotted path -> read-only walk
 				}
 			}
 		}
@@ -182,13 +176,11 @@ void ibValueModelTableBox::CreateTable(bool recreateModel) {
 void ibValueModelTableBox::CreateModel(bool recreateModel)
 {
 	if (!m_propertySource->IsEmptyProperty()) {
-		ibSourceDataObject* srcObject = m_formOwner->GetSourceObject();
-		if (srcObject != nullptr) {
-			ibValueModel* tableModel = nullptr;
-			if (srcObject->GetModel(tableModel, m_propertySource->GetValueAsSource())) {
-				if (tableModel != m_tableModel) m_tableModel = tableModel;
-			}
+	
+		if (!m_propertySource->IsEmptyProperty() && m_formOwner != nullptr &&
+			m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsPath(), m_tableModel)) {
 		}
+
 		CreateTable(false);
 	}
 	else if (m_tableModel != nullptr && m_propertySource->GetValueAsTypeDesc() != m_tableModel->GetSourceClassType()) {
@@ -250,6 +242,11 @@ void ibValueModelTableBox::ApplyCurrentLine(
 ibSourceObject* ibValueModelTableBox::GetSourceObject() const
 {
 	return m_formOwner ? m_formOwner->GetSourceObject() : nullptr;
+}
+
+bool ibValueModelTableBox::GetSourceList(std::vector<ibBackendFormAttribute*>& out) const
+{
+	return m_formOwner != nullptr ? m_formOwner->GetSourceList(GetFilterSourceDataType(), out) : false;
 }
 
 const ibValueMetaObjectCompositeData* ibValueModelTableBox::GetSourceMetaObject() const
@@ -468,8 +465,6 @@ void ibValueModelTableBox::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxpar
 {
 #ifndef OES_USE_WEB
 	ibTableViewCtrl* dataViewCtrl = dynamic_cast<ibTableViewCtrl*>(wxobject);
-
-
 
 	if (dataViewCtrl != nullptr) {
 

@@ -603,6 +603,14 @@ ibValueForm  (concrete — frontend/visualView/ctrl/form.h)
 
 `ibValueForm` owns the complete control tree for one open form. The static entry point `ibBackendValueForm::CreateNewForm()` instantiates the form; the higher-level orchestrator is `ibValueMetaObjectFormBase::CreateAndBuildForm()` (`metaCollection/metaFormObject.h`), which resolves the form descriptor from metadata and builds the control tree (see [Form Open](#form-open)).
 
+### Attribute binding
+
+A form no longer holds a single hard-wired data object. It owns a registry of typed
+**attributes** (`ibFormAttributeValue` wrapping `ibValueFormAttribute`); controls bind by a
+metaId **PATH** whose head selects an attribute (the gate), resolved through one
+`Get/SetValueByAttributePath` pair. The source object passed on open lands in the MAIN
+attribute. See `docs/form-attribute-binding.md` (Blocker A of the ERP roadmap).
+
 ### 22 Visual Controls
 
 Implemented in `src/engine/frontend/visualView/ctrl/`:

@@ -79,6 +79,11 @@ ibValueModelTableBoxColumn::ibValueModelTableBoxColumn() :
 {
 }
 
+bool ibValueModelTableBoxColumn::GetSourceList(std::vector<ibBackendFormAttribute*>& out) const
+{
+	return GetOwner()->GetSourceList(out);
+}
+
 const ibMetaData* ibValueModelTableBoxColumn::GetMetaData() const
 {
 	return m_formOwner ?
@@ -169,7 +174,7 @@ void ibValueModelTableBoxColumn::OnUpdated(wxObject* wxobject, ibFrontendWindow*
 
 	const ibFormID source_column = GetModelColumn();
 
-	ibValueModel* modelValue = GetOwner()->GetModel();
+	ibValueModel* modelValue = GetOwner()->GetTableModel();
 	ibSortOrder::ibSortData* sort = modelValue != nullptr ? modelValue->GetSortByID(source_column) : nullptr;
 
 	dataViewColumn->SetHidden(!m_propertyVisible->GetValueAsBoolean());

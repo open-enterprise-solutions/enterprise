@@ -24,6 +24,7 @@ extern BACKEND_API unsigned int GetBuildId();
 #define oes_clipboard_interface	wxT("oes_clipboard_interface")
 #define oes_clipboard_role		wxT("oes_clipboard_role")
 #define oes_clipboard_template	wxT("oes_clipboard_template")
+#define oes_clipboard_attribute	wxT("oes_clipboard_attribute")
 
 //*******************************************************************************************
 //*                                 Special structures                                      *
@@ -33,6 +34,10 @@ extern BACKEND_API unsigned int GetBuildId();
 
 typedef int ibRoleID;
 typedef int ibMetaID;
+// A metaId acting as a SOURCE-binding hop (an element of a control's binding
+// path: attribute id, then field / reference / column ids). A distinct name so a
+// binding chain reads as source ids, not as arbitrary metaIds.
+typedef int ibSourceId;
 typedef int ibFormID;
 typedef int ibActionID;
 

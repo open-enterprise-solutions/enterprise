@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "form.h"
+#include "formAttribute.h"
 #include "backend/appData.h"
 #include "backend/metaData.h"
 #include "frontend/docView/docView.h"
@@ -42,7 +43,16 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 	// tablebox/column visuals are pending.
 	m_formType = formType;
 
-	if (m_sourceObject != nullptr) {
+	ibFormAttributeValue* mainAttr = GetMainAttribute();
+	const ibSourceDataObject* sourceObject = mainAttr != nullptr ? mainAttr->GetSourceValue() : nullptr;
+
+	if (sourceObject != nullptr) {
+
+		// Everything binds THROUGH the main attribute (the gate): control source
+		// paths start with its id, then walk the metadata. The incoming source
+		// object is only used to lay the controls out, then copied into the main
+		// attribute (InitializeForm) and forgotten — reads go via the attribute.
+		const ibMetaID mainAttrId = mainAttr->GetAttributeId();
 
 		ibValue* prevSrcData = nullptr;
 
@@ -52,7 +62,7 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 		mainToolBar->SetControlName(wxT("MainToolbar"));
 		mainToolBar->SetActionSrc(FORM_ACTION);
 
-		const ibValueMetaObjectGenericData* metaObjectValue = m_sourceObject->GetSourceMetaObject();
+		const ibValueMetaObjectGenericData* metaObjectValue = sourceObject->GetSourceMetaObject();
 
 		ibValueModelTableBox* mainTableBox = nullptr;
 
@@ -78,14 +88,18 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 			}
 		}
 
-		const ibSourceExplorer& sourceExplorer = m_sourceObject->GetSourceExplorer();
+		const ibSourceExplorer& sourceExplorer = sourceObject->GetSourceExplorer();
+
 		if (sourceExplorer.IsTableSection()) {
 
 			mainTableBox =
 				dynamic_cast<ibValueModelTableBox*>(ibValueForm::CreateControl(wxT("Tablebox")));
 
 			mainTableBox->SetControlName(sourceExplorer.GetSourceName());
-			mainTableBox->SetSource(sourceExplorer.GetSourceId());
+			// The MAIN attribute IS the list (its Type is CatalogList.<X>) — its source is
+			// just the attribute itself, shown as "List". The extra source-id hop (the row
+			// catalog) was redundant here and rendered "List.Catalog1".
+			mainTableBox->SetSource({ mainAttrId });
 		}
 
 		for (unsigned int idx = 0; idx < sourceExplorer.GetHelperCount(); idx++) {
@@ -97,7 +111,9 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 					dynamic_cast<ibValueModelTableBoxColumn*>(ibValueForm::CreateControl(wxT("TableboxColumn"), mainTableBox));
 				tableBoxColumn->SetControlName(mainTableBox->GetControlName() + nextSourceExplorer.GetSourceName());
 				tableBoxColumn->SetVisibleColumn(nextSourceExplorer.IsVisible() || sourceExplorer.GetHelperCount() == 1);
-				tableBoxColumn->SetSource(nextSourceExplorer.GetSourceId());
+				// Column = [mainAttr, field] → "List.Field". The row-type hop (the catalog/document)
+				// is implicit in the list-typed main attribute — no "List.Document1.Field".
+				tableBoxColumn->SetSource({ mainAttrId, nextSourceExplorer.GetSourceId() });
 			}
 			else
 			{
@@ -114,7 +130,7 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 						dynamic_cast<ibValueModelTableBox*>(ibValueForm::CreateControl(wxT("Tablebox")));
 
 					tableBox->SetControlName(nextSourceExplorer.GetSourceName());
-					tableBox->SetSource(nextSourceExplorer.GetSourceId());
+					tableBox->SetSource({ mainAttrId, nextSourceExplorer.GetSourceId() });
 
 					toolBar->SetActionSrc(tableBox->GetControlID());
 
@@ -149,7 +165,7 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 						//tableBoxColumn->SetCaption(colSourceExplorer.GetSourceSynonym());
 						tableBoxColumn->SetVisibleColumn(colSourceExplorer.IsVisible()
 							|| nextSourceExplorer.GetHelperCount() == 1);
-						tableBoxColumn->SetSource(colSourceExplorer.GetSourceId());
+						tableBoxColumn->SetSource({ mainAttrId, nextSourceExplorer.GetSourceId(), colSourceExplorer.GetSourceId() });
 					}
 				}
 				else {
@@ -161,7 +177,7 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 						//checkbox->SetCaption(nextSourceExplorer.GetSourceSynonym());
 						checkbox->EnableWindow(nextSourceExplorer.IsEnabled());
 						checkbox->VisibleWindow(nextSourceExplorer.IsVisible());
-						checkbox->SetSource(nextSourceExplorer.GetSourceId());
+						checkbox->SetSource({ mainAttrId, nextSourceExplorer.GetSourceId() });
 					}
 					else {
 
@@ -179,7 +195,7 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 						//textCtrl->SetCaption(nextSourceExplorer.GetSourceSynonym());
 						textCtrl->EnableWindow(nextSourceExplorer.IsEnabled());
 						textCtrl->VisibleWindow(nextSourceExplorer.IsVisible());
-						textCtrl->SetSource(nextSourceExplorer.GetSourceId());
+						textCtrl->SetSource({ mainAttrId, nextSourceExplorer.GetSourceId() });
 
 						textCtrl->SetSelectButton(selButton);
 						textCtrl->SetOpenButton(false);
@@ -225,11 +241,11 @@ void ibValueForm::InitializeForm(const ibValueMetaObjectFormBase* creator,
 	if (ownerControl != nullptr) ownerControl->ControlIncrRef();
 	if (m_controlOwner != nullptr) m_controlOwner->ControlDecrRef();
 
-	if (srcObject != nullptr) srcObject->SourceIncrRef();
-	if (m_sourceObject != nullptr) m_sourceObject->SourceDecrRef();
-
+	// The source's ref lives in the MAIN attribute wrapper (SetSourceValue → SourceIncrRef, its
+	// dtor → SourceDecrRef); during the build the caller's RAII guard (CreateAndBuildForm) keeps it
+	// alive. The form holds NO separate ref — SourceIncrRef IS ibValue::IncrRef, so an IncrRef here
+	// with no matching DecrRef would just leak.
 	m_controlOwner = ownerControl;
-	m_sourceObject = srcObject;
 	m_metaFormObject = creator;
 
 	m_formKey = CreateFormUniqueKey(ownerControl, srcObject, formGuid);
@@ -246,7 +262,9 @@ void ibValueForm::InitializeForm(const ibValueMetaObjectFormBase* creator,
 	// their compile / procUnit scope chain on creation.
 	ibRuntimeModuleDataObject* sourceDesc =
 		dynamic_cast<ibRuntimeModuleDataObject*>(srcObject);
+
 	ibRuntimeModuleDataObject* descParent = sourceDesc;
+
 	if (descParent == nullptr && creator != nullptr) {
 		// No bound data object → parent under the metadata's module manager.
 		// Through the seam so the Designer (which has no runtime root mm) parents
@@ -254,10 +272,24 @@ void ibValueForm::InitializeForm(const ibValueMetaObjectFormBase* creator,
 		// object. Null-folds for sessionless / no-cache hosts.
 		descParent = ibSession::EditModuleManagerFor(creator->GetMetaData());
 	}
+
 	if (descParent != nullptr)
 		ibRuntimeModuleDataObject::SetParent(descParent);
 
-	//SetReadOnly(readOnly);
+	// The form ALWAYS has a main attribute — declare it here (the ctor path) so
+	// GetMainAttribute() is never null. WITH a source it reflects the source (List/Object
+	// name by kind, the source Type, the seated value); WITHOUT one it is a bare default
+	// (Object / empty Type) that a later load refills from the "MainAttribute" section.
+	if (srcObject != nullptr) {
+		const ibSourceExplorer& sourceExplorer = srcObject->GetSourceExplorer();
+		// Auto-generated form (no designer form): declare the MAIN attribute the
+		// source lands in. With no source the form stays generic (no list/tree
+		// view) — that's why this lives under the source gate. Empty Type accepts
+		// the incoming source; controls / source explorer work off this attribute.
+		(void)AddMainAttribute(
+			sourceExplorer.IsTableSection() ? wxT("List") : wxT("Object"),
+			srcObject->GetSourceClassType(), srcObject);
+	}
 }
 
 #include "backend/system/systemManager.h"
@@ -285,7 +317,12 @@ bool ibValueForm::InitializeFormModule()
 		// flows through the parent chain (descriptor в†’ root в†’ session).
 		BindContextVariable(thisForm, this);                                          // contextual
 		BindExportVariable(wxT("Controls"), m_formCollectionControl);                 // exported
-		BindExportVariable(wxT("DataSource"), dynamic_cast<ibValue*>(m_sourceObject)); // exported — source set-once before this (InitializeForm); null (sourceless/designer) is fine since the pre-flight is lazy
+		// Bind each source attribute as a form-module variable: its value cell as a LOCAL named
+		// <attrName>, and — for the MAIN — the exported DataSource. Same self-managed path that
+		// designer add / become-main reuse (BindAttributeVariable), so the wiring is one place.
+		for (const auto& av : m_attributes)
+			BindAttributeVariable(av.get());
+
 		InitializeRuntime();
 
 		try {
@@ -501,7 +538,7 @@ void ibValueForm::RefreshLockBadge()
 		// another took over) — keep the field in sync so UI surfaces
 		// the current truth.
 		if (err.GetKind() == ibBackendLockException::Kind::LockConflict
-		    && !err.GetBlockingUser().IsEmpty()) {
+			&& !err.GetBlockingUser().IsEmpty()) {
 			m_lockBadgeHolder = err.GetBlockingUser();
 		}
 	}
@@ -532,11 +569,11 @@ void ibValueForm::UpdateForm()
 			// Web build serialises a fresh JSON tree on every request,
 			// so there's no mid-render flicker to hide — call the host
 			// walker directly.
-						visualView->Freeze();
+			visualView->Freeze();
 #endif
-						visualView->UpdateVisualHost();
-			#ifndef OES_USE_WEB
-						visualView->Thaw();
+			visualView->UpdateVisualHost();
+#ifndef OES_USE_WEB
+			visualView->Thaw();
 #endif
 		}
 	}
@@ -575,7 +612,7 @@ bool ibValueForm::CloseForm(bool force)
 		// wxAuiToolBar::OnLeftUp on freed memory в†’ UAF in
 		// wxEvtHandler::TryHereOnly. Defer the deletion through
 		// CallAfter so the click event fully unwinds first.
-		ownerDocForm->CallAfter([doc = ownerDocForm]{ doc->DeleteAllViews(); });
+		ownerDocForm->CallAfter([doc = ownerDocForm] { doc->DeleteAllViews(); });
 		return true;
 #endif
 	}

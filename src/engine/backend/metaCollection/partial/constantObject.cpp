@@ -166,11 +166,6 @@ ibSourceExplorer ibValueRecordDataObjectConstant::GetSourceExplorer() const
 	return srcHelper;
 }
 
-bool ibValueRecordDataObjectConstant::GetModel(ibValueModel*& tableValue, const ibMetaID& id)
-{
-	return false;
-}
-
 #pragma region _form_builder_h_
 void ibValueRecordDataObjectConstant::ShowFormValue()
 {

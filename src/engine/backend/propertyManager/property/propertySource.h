@@ -32,7 +32,7 @@ public:
 	// The binding address as a plain metaId path — the identifier a control hands to
 	// ibSourceDataObject::GetValueByPath. The property only supplies it; it never reads
 	// or writes the value itself.
-	const std::vector<ibMetaID>& GetValueAsPath() const;
+	const std::vector<ibSourceId>& GetValueAsPath() const;
 
 	void SetValue(const ibMetaID& val);
 	void SetValue(const ibGuid& val, bool fillTypeDesc = true);
@@ -46,6 +46,11 @@ public:
 #pragma endregion
 
 	const class ibValueMetaObjectAttributeBase* GetSourceAttributeObject() const;
+
+	// Available source attributes from the owning control's type factory (the
+	// picker enumerates these as roots instead of a single source). An empty
+	// list means the binding has a single fixed source (legacy behaviour).
+	std::vector<class ibBackendFormAttribute*> GetSourceList() const;
 
 	ibPropertySource(ibPropertyCategory* cat, const wxString& name, const ibValueTypes& type = ibValueTypes::TYPE_STRING)
 		: ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject(), type))

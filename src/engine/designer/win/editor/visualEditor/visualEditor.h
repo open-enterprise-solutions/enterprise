@@ -423,6 +423,55 @@ public:
 		ibValueFrame* m_object = nullptr;
 	};
 
+	//////////////////////////////////////////////////////////////////////////////////////////
+	// ibVisualEditorAttributeTree — the form's source-attribute tree (sibling of the control
+	// tree, separated by a splitter). Lists the form's attribute store; all actions (add /
+	// edit / delete / set-main / properties / copy / paste) live on a context menu with icons;
+	// tree items carry the default meta-attribute icon. Selection drives the object inspector.
+	//////////////////////////////////////////////////////////////////////////////////////////
+
+	class ibVisualEditorAttributeTree : public wxPanel {
+	public:
+
+		ibVisualEditorAttributeTree(ibVisualEditor* owner, wxWindow* parent, int id = wxID_ANY);
+		virtual ~ibVisualEditorAttributeTree() override {}
+
+		void OnEditorLoaded() { RebuildTree(); }
+		void OnEditorRefresh() { RebuildTree(); }
+		void RebuildTree();
+
+	protected:
+
+		void OnSelChanged(wxTreeEvent& event);
+		void OnContextMenu(wxContextMenuEvent& event);        // right-click anywhere (incl. empty)
+		void OnActivated(wxTreeEvent& event);                 // double-click → activate properties
+		void OnAddAttribute(wxCommandEvent& event);
+		void OnEditAttribute(wxCommandEvent& event);          // inline rename (EditLabel)
+		void OnRemoveAttribute(wxCommandEvent& event);
+		void OnSetMainAttribute(wxCommandEvent& event);
+		void OnPropertiesAttribute(wxCommandEvent& event);    // show inspector
+		void OnCopyAttribute(wxCommandEvent& event);          // clipboard copy (serialized)
+		void OnPasteAttribute(wxCommandEvent& event);         // clipboard paste (deserialized)
+		void OnEndLabelEdit(wxTreeEvent& event);              // apply / veto a rename (uniqueness)
+
+		ibValueFormAttribute* GetAttributeFromItem(const wxTreeItemId& item) const;
+
+	private:
+
+		ibVisualEditor* m_formHandler = nullptr;
+		wxTreeCtrl* m_tcAttributes = nullptr;
+
+		wxDECLARE_EVENT_TABLE();
+	};
+
+	class ibVisualEditorAttributeTreeItemData : public wxTreeItemData {
+	public:
+		ibVisualEditorAttributeTreeItemData(ibValueFormAttribute* attr) : m_attribute(attr) {}
+		ibValueFormAttribute* GetAttribute() const { return m_attribute; }
+	private:
+		ibValueFormAttribute* m_attribute = nullptr;
+	};
+
 	/**
 	 * Menu popup asociado a cada item del arbol.
 	 *
@@ -601,17 +650,21 @@ private:
 	//Elements form 
 	ibVisualEditorHost* m_visualEditor;
 	ibVisualEditorObjectTree* m_objectTree;
+	ibVisualEditorAttributeTree* m_attributeTree = nullptr;
 
-	//Document & view 
+	//Document & view
 	ibMetaDocument* m_document;
 
-	//Splitter for designer 
+	//Splitter for designer
 	wxSplitterWindow* m_splitter = nullptr;
+	//Splitter between the control tree and the attribute tree
+	wxSplitterWindow* m_treeSplitter = nullptr;
 
-	//access to private object  
+	//access to private object
 	friend class ibVisualEditorNotebook;
 	friend class ibVisualEditorHost;
 	friend class ibVisualEditorObjectTree;
+	friend class ibVisualEditorAttributeTree;
 
 	wxDECLARE_DYNAMIC_CLASS(ibVisualEditor);
 };

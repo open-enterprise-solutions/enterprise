@@ -44,60 +44,28 @@ void ibPGTypeProperty::FillByClsid(const ibSelectorDataType& selectorDataType, c
 		const ibMetaData* metaData = dynamic_cast<const ibBackendTypeConfigFactory*>(m_ownerProperty)->GetMetaData();
 		wxASSERT(metaData);
 		if (metaData != nullptr) {
+			// Every branch adds the metaobject ctors of a kind identically (name + icon → choice,
+			// value→clsid map); only the SET of kinds differs by selector.
+			auto addKind = [&](ibCtorObjectMetaType kind) {
+				for (auto ctor : metaData->GetListCtorsByType(clsid, kind)) {
+					auto choice = m_choices.Add(ctor->GetClassName(), ctor->GetMetaObject()->GetIcon());
+					m_valChoices.insert_or_assign(choice.GetValue(), ctor->GetClassType());
+				}
+			};
 			if (selectorDataType == ibSelectorDataType::ibSelectorDataType_reference) {
-				for (auto so : metaData->GetListCtorsByType(clsid, ibCtorObjectMetaType::ibCtorObjectMetaType_Reference)) {
-					auto metaObject = so->GetMetaObject();
-					auto choice = m_choices.Add(so->GetClassName(), metaObject->GetIcon());
-					m_valChoices.insert_or_assign(
-						choice.GetValue(), so->GetClassType()
-					);
-				}
-				for (auto so : metaData->GetListCtorsByType(clsid, ibCtorObjectMetaType::ibCtorObjectMetaType_Characteristic)) {
-					auto metaObject = so->GetMetaObject();
-					auto choice = m_choices.Add(so->GetClassName(), metaObject->GetIcon());
-					m_valChoices.insert_or_assign(
-						choice.GetValue(), so->GetClassType()
-					);
-				}
+				addKind(ibCtorObjectMetaType::ibCtorObjectMetaType_Reference);
+				addKind(ibCtorObjectMetaType::ibCtorObjectMetaType_Characteristic);
 			}
 			else if (selectorDataType == ibSelectorDataType::ibSelectorDataType_table) {
-				for (auto so : metaData->GetListCtorsByType(clsid, ibCtorObjectMetaType::ibCtorObjectMetaType_List)) {
-					auto metaObject = so->GetMetaObject();
-					auto choice = m_choices.Add(so->GetClassName(), metaObject->GetIcon());
-					m_valChoices.insert_or_assign(
-						choice.GetValue(), so->GetClassType()
-					);
-				}
+				addKind(ibCtorObjectMetaType::ibCtorObjectMetaType_List);
 			}
 			else if (selectorDataType == ibSelectorDataType::ibSelectorDataType_any) {
-				for (auto so : metaData->GetListCtorsByType(clsid, ibCtorObjectMetaType::ibCtorObjectMetaType_Object)) {
-					auto metaObject = so->GetMetaObject();
-					auto choice = m_choices.Add(so->GetClassName(), metaObject->GetIcon());
-					m_valChoices.insert_or_assign(
-						choice.GetValue(), so->GetClassType()
-					);
-				}
-				for (auto so : metaData->GetListCtorsByType(clsid, ibCtorObjectMetaType::ibCtorObjectMetaType_Reference)) {
-					auto metaObject = so->GetMetaObject();
-					auto choice = m_choices.Add(so->GetClassName(), metaObject->GetIcon());
-					m_valChoices.insert_or_assign(
-						choice.GetValue(), so->GetClassType()
-					);
-				}
-				for (auto so : metaData->GetListCtorsByType(clsid, ibCtorObjectMetaType::ibCtorObjectMetaType_RecordManager)) {
-					auto metaObject = so->GetMetaObject();
-					auto choice = m_choices.Add(so->GetClassName(), metaObject->GetIcon());
-					m_valChoices.insert_or_assign(
-						choice.GetValue(), so->GetClassType()
-					);
-				}
-				for (auto so : metaData->GetListCtorsByType(clsid, ibCtorObjectMetaType::ibCtorObjectMetaType_Characteristic)) {
-					auto metaObject = so->GetMetaObject();
-					auto choice = m_choices.Add(so->GetClassName(), metaObject->GetIcon());
-					m_valChoices.insert_or_assign(
-						choice.GetValue(), so->GetClassType()
-					);
-				}
+				// Attributes (filter = any) accept EVERY kind, including list / collection types.
+				addKind(ibCtorObjectMetaType::ibCtorObjectMetaType_List);
+				addKind(ibCtorObjectMetaType::ibCtorObjectMetaType_Object);
+				addKind(ibCtorObjectMetaType::ibCtorObjectMetaType_Reference);
+				addKind(ibCtorObjectMetaType::ibCtorObjectMetaType_RecordManager);
+				addKind(ibCtorObjectMetaType::ibCtorObjectMetaType_Characteristic);
 			}
 		}
 	}
@@ -476,7 +444,34 @@ wxPGEditorDialogAdapter* ibPGTypeProperty::GetEditorDialog() const
 					}
 				}
 				else if (selectorDataType == ibSelectorDataType::ibSelectorDataType_any) {
-					
+
+					// List / collection group (e.g. CatalogList) — attributes (filter = any) accept
+					// list types too, not only the table filter. Mirrors the _table branch above.
+					{
+						const auto listCtors = metaData->GetListCtorsByType(clsid, ibCtorObjectMetaType::ibCtorObjectMetaType_List);
+						if (!listCtors.empty()) {
+							int groupIcon = imageList->Add(so->GetClassIcon());
+							const wxTreeItemId& parentID = tc->AppendItem(tc->GetRootItem(), so->GetClassName() + wxT("List"),
+								groupIcon, groupIcon);
+
+							for (auto so : listCtors) {
+								const ibValueMetaObjectGenericData* registerData = dynamic_cast<const ibValueMetaObjectGenericData*>(so->GetMetaObject());
+								int icon = imageList->Add(registerData->GetIcon());
+								ibTreeItemPropertyData* itemData = new ibTreeItemPropertyData(so);
+								wxTreeItemId newItem = tc->AppendItem(parentID, registerData->GetName(), icon, icon, itemData);
+								if (data != nullptr) {
+									const ibTypeDescription& td = data->GetTypeDesc();
+									tc->SetItemState(newItem, td.ContainType(so->GetClassType()) ? allowEdit ? ibCheckTree::CHECKED : ibCheckTree::CHECKED_DISABLED : allowEdit ? ibCheckTree::UNCHECKED : ibCheckTree::UNCHECKED_DISABLED);
+									tc->Check(newItem, td.ContainType(so->GetClassType()));
+								}
+								else {
+									tc->SetItemState(newItem, allowEdit ? ibCheckTree::UNCHECKED : ibCheckTree::UNCHECKED_DISABLED);
+									tc->Check(newItem, false);
+								}
+							}
+						}
+					}
+
 					if (so->GetClassType() != g_metaEnumerationCLSID) {
 
 						int groupIcon = imageList->Add(so->GetClassIcon());

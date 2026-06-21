@@ -7,6 +7,9 @@
 class BACKEND_API ibBackendValueForm;
 ///////////////////////////////////////////////////
 
+// ibBackendFormAttribute moved to backend_type.h (lives with the type-source
+// factory + ibSourceDataType it depends on).
+
 class BACKEND_API ibBackendMetaDocument {
 public:
 	virtual ~ibBackendMetaDocument() {}

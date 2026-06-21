@@ -15,12 +15,10 @@ void ibValueCheckbox::OnClickedCheckbox(wxCommandEvent& event)
 	// that isn't present in the web build.
 	m_selValue = event.GetInt() != 0;
 
-	if (!m_propertySource->IsEmptyProperty()) {
-		ibSourceDataObject* srcData = m_formOwner->GetSourceObject();
-		wxASSERT(srcData);
-		// A dotted reference path is read-only — only a single-column binding writes back.
-		if (srcData != nullptr && !m_propertySource->IsDotWalk())
-			srcData->SetValueByMetaID(m_propertySource->GetValueAsSource(), m_selValue);
+	if (!m_propertySource->IsEmptyProperty() && m_formOwner != nullptr) {
+		// Form writes only a direct-field binding (head selects the attribute); a
+		// dotted reference path is read-only → no-op.
+		m_formOwner->SetValueByAttributePath(m_propertySource->GetValueAsPath(), m_selValue);
 	}
 
 	m_formOwner->RefreshForm();

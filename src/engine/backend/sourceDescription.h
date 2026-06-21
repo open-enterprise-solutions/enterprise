@@ -13,11 +13,11 @@
 //
 // Mirrors ibMetaDescription (a plain id list with its own *Memory serialiser).
 struct ibSourceDescription {
-	std::vector<ibMetaID> m_listSource;
+	std::vector<ibSourceId> m_listSource;
 public:
 	ibSourceDescription() {}
-	ibSourceDescription(const ibMetaID& id) : m_listSource({ id }) {}
-	ibSourceDescription(const std::vector<ibMetaID>& array) : m_listSource(array) {}
+	ibSourceDescription(const ibSourceId& id) : m_listSource({ id }) {}
+	ibSourceDescription(const std::vector<ibSourceId>& array) : m_listSource(array) {}
 public:
 
 	bool IsOk() const { return m_listSource.size() > 0; }
@@ -26,38 +26,27 @@ public:
 	// as opposed to a plain single-column binding.
 	bool IsDotWalk() const { return m_listSource.size() > 1; }
 
-	void SetDefaultSource(const ibMetaID& id) {
+	void SetDefaultSource(const ibSourceId& id) {
 		ClearSource();
 		AppendSource(id);
 	}
 
-	void SetDefaultSource(const ibSourceDescription& srcDesc) {
-		ClearSource();
-		AppendSource(srcDesc.m_listSource);
-	}
-
-	void AppendSource(const ibMetaID& id) { m_listSource.emplace_back(id); }
-	void AppendSource(const std::vector<ibMetaID>& array) { for (auto& id : array) m_listSource.emplace_back(id); }
+	void AppendSource(const ibSourceId& id) { m_listSource.emplace_back(id); }
+	void AppendSource(const std::vector<ibSourceId>& array) { for (auto& id : array) m_listSource.emplace_back(id); }
 
 	void ClearSource() { m_listSource.clear(); }
-	bool ContainSource(const ibMetaID& id) const {
-		auto iterator = std::find(m_listSource.begin(), m_listSource.end(), id);
-		return iterator != m_listSource.end();
-	}
 
 	// The first hop is the entry point from the source; the leaf is the final value.
-	ibMetaID GetFirst() const { return m_listSource.empty() ? wxNOT_FOUND : m_listSource.front(); }
-	ibMetaID GetLeaf() const { return m_listSource.empty() ? wxNOT_FOUND : m_listSource.back(); }
+	ibSourceId GetFirst() const { return m_listSource.empty() ? wxNOT_FOUND : m_listSource.front(); }
+	ibSourceId GetLeaf() const { return m_listSource.empty() ? wxNOT_FOUND : m_listSource.back(); }
 
-	ibMetaID GetByIdx(unsigned int idx) const {
+	ibSourceId GetByIdx(unsigned int idx) const {
 		if (idx >= m_listSource.size())
 			return wxNOT_FOUND;
 		return m_listSource[idx];
 	}
 
-	const std::vector<ibMetaID>& GetPath() const { return m_listSource; }
-
-	unsigned int GetSourceCount() const { return m_listSource.size(); }
+	const std::vector<ibSourceId>& GetPath() const { return m_listSource; }
 };
 
 // Serialises a source-description path as copy-aware GUIDs — NOT metaIds. Each segment's

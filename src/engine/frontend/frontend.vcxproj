@@ -92,6 +92,7 @@
     <ClCompile Include="visualView\ctrl\control.cpp" />
     <ClCompile Include="visualView\ctrl\controlProperty.cpp" />
     <ClCompile Include="visualView\ctrl\form.cpp" />
+    <ClCompile Include="visualView\ctrl\formAttribute.cpp" />
     <ClCompile Include="visualView\ctrl\formAction.cpp" />
     <ClCompile Include="visualView\ctrl\formControl.cpp" />
     <ClCompile Include="visualView\ctrl\formVisualHost.cpp" />
@@ -513,6 +514,7 @@
     <ClInclude Include="visualView\ctrl\chartBox.h" />
     <ClInclude Include="visualView\ctrl\control.h" />
     <ClInclude Include="visualView\ctrl\form.h" />
+    <ClInclude Include="visualView\ctrl\formAttribute.h" />
     <ClInclude Include="visualView\ctrl\frame.h" />
     <ClInclude Include="visualView\ctrl\gridBox.h" />
     <ClInclude Include="visualView\ctrl\htmlBox.h" />

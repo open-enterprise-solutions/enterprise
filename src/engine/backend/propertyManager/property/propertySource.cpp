@@ -61,7 +61,7 @@ void ibPropertySource::SetValue(const ibSourceDescription& val) { m_propValue = 
 ////////////////////////////////////////////////////////////////////////
 
 ibSourceDescription& ibPropertySource::GetValueAsSourceDesc() const { return get_cell_variant<ibVariantDataSource>()->GetSourceDesc(); }
-const std::vector<ibMetaID>& ibPropertySource::GetValueAsPath() const { return get_cell_variant<ibVariantDataSource>()->GetSourceDesc().GetPath(); }
+const std::vector<ibSourceId>& ibPropertySource::GetValueAsPath() const { return get_cell_variant<ibVariantDataSource>()->GetSourceDesc().GetPath(); }
 ////////////////////////////////////////////////////////////////////////
 
 bool ibPropertySource::IsDotWalk() const
@@ -73,6 +73,14 @@ bool ibPropertySource::IsDotWalk() const
 
 const ibValueMetaObjectAttributeBase* ibPropertySource::GetSourceAttributeObject() const {
 	return get_cell_variant<ibVariantDataSource>()->GetSourceAttributeObject();
+}
+
+std::vector<ibBackendFormAttribute*> ibPropertySource::GetSourceList() const {
+	// Via the variant (which holds the owning control's type factory) — same path
+	// as GetSourceAttributeObject; no dependency on the frontend control type.
+	std::vector<ibBackendFormAttribute*> out;
+	get_cell_variant<ibVariantDataSource>()->GetSourceList(out);
+	return out;
 }
 
 ////////////////////////////////////////////////////////////////////////

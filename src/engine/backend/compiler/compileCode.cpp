@@ -679,6 +679,7 @@ void ibCompileCode::RemoveVariable(const wxString& strVarName)
 
 	m_listExternValue.erase(strVarName);
 	m_listContextValue.erase(strVarName);
+	m_listLocalValue.erase(strVarName);   // local binds (e.g. form attribute cells) too
 
 	//set the flag for recompilation
 	m_changedCode = true;

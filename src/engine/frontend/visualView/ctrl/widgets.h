@@ -3,6 +3,7 @@
 
 #include "window.h"
 #include "typeControl.h"
+#include "backend/sourceDescription.h"   // ibSourceDescription (full [head, field] binding path)
 
 /////////////////////////////////////////////////////////////////////////////////////
 //                                 COMMON ELEMENTS                                 //
@@ -90,8 +91,14 @@ class ibValueTextCtrl : public ibValueWindow,
 
 	////////////////////////////////////////////////////////////////////////////////////////
 	void SetSource(const ibMetaID& id) { m_propertySource->SetValue(id); }
+	// Full binding path [headAttrId, field, ...] — the resolve walks the attribute (gate)
+	// then the metadata, so auto-built controls must carry the attribute head.
+	void SetSource(const std::vector<ibSourceId>& path) { m_propertySource->SetValue(ibSourceDescription(path)); }
 	ibMetaID GetSource(const ibMetaID& id) { return m_propertySource->GetValueAsSource(); }
 	////////////////////////////////////////////////////////////////////////////////////////
+
+	// Available sources = the owning form's attributes of THIS control's kind.
+	virtual bool GetSourceList(std::vector<ibBackendFormAttribute*>& out) const override;
 
 	void SetCaption(const wxString& caption) { return m_propertyTitle->SetValue(caption); }
 	wxString GetCaption() const { return m_propertyTitle->GetValueAsTranslateString(); }
@@ -107,10 +114,13 @@ class ibValueTextCtrl : public ibValueWindow,
 
 	ibValueTextCtrl();
 
-	//Get source object 
+	//Get source object
 	virtual ibSourceObject* GetSourceObject() const;
 
-	//Get source attribute  
+	// Own bound source path ([headAttr, field]).
+	virtual ibSourceDescription GetSourceDesc() const override { return m_propertySource->GetValueAsSourceDesc(); }
+
+	//Get source attribute
 	virtual const ibValueMetaObjectAttributeBase* GetSourceAttributeObject() const {
 		return m_propertySource->GetSourceAttributeObject();
 	}
@@ -291,18 +301,26 @@ class ibValueCheckbox : public ibValueWindow,
 
 	////////////////////////////////////////////////////////////////////////////////////////
 	void SetSource(const ibMetaID& id) { m_propertySource->SetValue(id); }
+	// Full binding path [headAttrId, field, ...] — see ibValueModelText::SetSource.
+	void SetSource(const std::vector<ibSourceId>& path) { m_propertySource->SetValue(ibSourceDescription(path)); }
 	ibMetaID GetSource() const { return m_propertySource->GetValueAsSource(); }
 	////////////////////////////////////////////////////////////////////////////////////////
+
+	// Available sources = the owning form's attributes of THIS control's kind.
+	virtual bool GetSourceList(std::vector<ibBackendFormAttribute*>& out) const override;
 
 	void SetCaption(const wxString& caption) { return m_propertyTitle->SetValue(caption); }
 	wxString GetCaption() const { return m_propertyTitle->GetValueAsTranslateString(); }
 
 	ibValueCheckbox();
 
-	//get source object 
+	//get source object
 	virtual ibSourceObject* GetSourceObject() const;
 
-	//get source attribute  
+	// Own bound source path ([headAttr, field]).
+	virtual ibSourceDescription GetSourceDesc() const override { return m_propertySource->GetValueAsSourceDesc(); }
+
+	//get source attribute
 	virtual const ibValueMetaObjectAttributeBase* GetSourceAttributeObject() const {
 		return m_propertySource->GetSourceAttributeObject();
 	}

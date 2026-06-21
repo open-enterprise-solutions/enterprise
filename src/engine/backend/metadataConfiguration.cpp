@@ -376,7 +376,7 @@ bool ibMetaDataConfigurationFile::LoadCommonTree(const ibClassID& clsid, ibReade
 	try {
 		fresh->ApplyDataNode(rootNode);
 	}
-	catch (const ibBackendException& err) {
+	catch (const ibBackendException&) {
 		return false; // fresh (ibValuePtr) discards the root automatically
 	}
 

@@ -259,7 +259,11 @@ void ibPrecompileCode::PrepareModuleData()
 				variable.m_realName = kv.first;
 				variable.m_isContext = true;
 				variable.m_isExport = true;
-				variable.m_valContext = kv.second.m_value;
+				// NON-owning capture (const → TYPE_CONST_REFFER): the bound cell may be a
+				// MEMBER ibValue (refCount 0, e.g. a form attribute's m_value). An owning
+				// reffer would IncrRef it here and DecrRef it to 0 on Clear → delete of a
+				// member cell. Autocomplete only reads the type, so a const view suffices.
+				variable.m_valContext = static_cast<const ibValue*>(kv.second.m_value);
 				GetContext()->m_variables[stringUtils::MakeUpper(kv.first)] = variable;
 			}
 
@@ -275,7 +279,10 @@ void ibPrecompileCode::PrepareModuleData()
 				variable.m_realName = kv.first;
 				variable.m_isContext = true;
 				variable.m_isExport = true;
-				variable.m_valContext = kv.second;
+				// NON-owning (const → TYPE_CONST_REFFER) — see the context loop above. DataSource
+				// binds to the MAIN attribute's m_value MEMBER cell (refCount 0); an owning reffer
+				// deletes it on the next Clear (the original designer-keydown double-free).
+				variable.m_valContext = static_cast<const ibValue*>(kv.second);
 				GetContext()->m_variables[stringUtils::MakeUpper(kv.first)] = variable;
 			}
 
