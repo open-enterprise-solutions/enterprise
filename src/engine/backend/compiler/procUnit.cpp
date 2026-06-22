@@ -564,14 +564,31 @@ start_label:
 			case OPER_MULT: MultValue(variable1, cvariable2, cvariable3); break;
 			case OPER_LET: CopyValue(variable1, cvariable2); break;
 			case OPER_INVERT: SetTypeNumber(variable1, -cvariable2.GetNumber()); break;
-			case OPER_NOT: SetTypeBoolean(variable1, IsEmptyValue(cvariable2)); break;
-			case OPER_AND: if (IsHasValue(cvariable2) && IsHasValue(cvariable3))
-				SetTypeBoolean(variable1, true); else SetTypeBoolean(variable1, false);
+			case OPER_NOT:
+				// Kleene NOT(UNKNOWN)=UNKNOWN under the LINQ three-valued flag; else two-valued.
+				if (ts_threeValuedNullCompare && IsNullOperand(cvariable2)) variable1.m_typeClass = ibValueTypes::TYPE_EMPTY;
+				else SetTypeBoolean(variable1, IsEmptyValue(cvariable2));
+				break;
+			case OPER_AND:
+				if (ts_threeValuedNullCompare) {            // FALSE dominates; else UNKNOWN if any; else TRUE
+					const bool aF = !IsHasValue(cvariable2) && !IsNullOperand(cvariable2);
+					const bool bF = !IsHasValue(cvariable3) && !IsNullOperand(cvariable3);
+					if (aF || bF) SetTypeBoolean(variable1, false);
+					else if (IsNullOperand(cvariable2) || IsNullOperand(cvariable3)) variable1.m_typeClass = ibValueTypes::TYPE_EMPTY;
+					else SetTypeBoolean(variable1, true);
+				}
+				else if (IsHasValue(cvariable2) && IsHasValue(cvariable3)) SetTypeBoolean(variable1, true);
+				else SetTypeBoolean(variable1, false);
 				break;
 			case OPER_OR:
-				if (IsHasValue(cvariable2) || IsHasValue(cvariable3))
-					SetTypeBoolean(variable1, true);
-				else SetTypeBoolean(variable1, false); break;
+				if (ts_threeValuedNullCompare) {            // TRUE dominates; else UNKNOWN if any; else FALSE
+					if (IsHasValue(cvariable2) || IsHasValue(cvariable3)) SetTypeBoolean(variable1, true);
+					else if (IsNullOperand(cvariable2) || IsNullOperand(cvariable3)) variable1.m_typeClass = ibValueTypes::TYPE_EMPTY;
+					else SetTypeBoolean(variable1, false);
+				}
+				else if (IsHasValue(cvariable2) || IsHasValue(cvariable3)) SetTypeBoolean(variable1, true);
+				else SetTypeBoolean(variable1, false);
+				break;
 			case OPER_EQ: CompareValueEQ(variable1, cvariable2, cvariable3); break;
 			case OPER_NE: CompareValueNE(variable1, cvariable2, cvariable3); break;
 			case OPER_GT: CompareValueGT(variable1, cvariable2, cvariable3); break;
@@ -1255,7 +1272,13 @@ start_label:
 				//BOOLEAN
 			case OPER_ADD + TYPE_DELTA4: variable1.m_bData = cvariable2.m_bData + cvariable3.m_bData; break;
 			case OPER_LET + TYPE_DELTA4: variable1.m_bData = cvariable2.m_bData; break;
-			case OPER_NOT + TYPE_DELTA4: variable1.m_bData = !cvariable2.m_bData; break;
+			case OPER_NOT + TYPE_DELTA4:
+				// Boolean-tier NOT — the typed path a `Not (comparison)` lambda hits. Kleene
+				// NOT(UNKNOWN)=UNKNOWN under the LINQ three-valued flag (the comparison left an
+				// empty/UNKNOWN operand); else the usual two-valued boolean NOT.
+				if (ts_threeValuedNullCompare && IsNullOperand(cvariable2)) variable1.m_typeClass = ibValueTypes::TYPE_EMPTY;
+				else variable1.m_bData = !cvariable2.m_bData;
+				break;
 			case OPER_INVERT + TYPE_DELTA4: variable1.m_bData = !cvariable2.m_bData; break;
 			case OPER_EQ + TYPE_DELTA4: variable1.m_bData = (cvariable2.m_bData == cvariable3.m_bData); break;
 			case OPER_NE + TYPE_DELTA4: variable1.m_bData = (cvariable2.m_bData != cvariable3.m_bData); break;

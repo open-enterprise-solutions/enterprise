@@ -320,13 +320,11 @@ TEST(RuntimeTest, LinqWhere_AndNullThreeValuedLogic) {
 	EXPECT_EQ(ret.GetInteger(), 1);   // South only; Undefined branches are UNKNOWN -> dropped
 }
 
-// `Not` inside a lambda no longer CRASHES — it emits a typed BOOLEAN temp (OPER_SET_TYPE)
-// whose slot indexes the lambda frame; the module-init pass used to apply it to the module
-// frame -> out-of-range -> AV (fixed: that pass now skips OPER_LFUNC/OPER_ENDLFUNC fences).
-// NOTE the count is 2, not 1: NOT(UNKNOWN) here stays two-valued (NOT(empty) -> true keeps the
-// Undefined row), because OPER_NOT over a comparison result is the TYPED tier and bypasses the
-// three-valued comparison path. Full Kleene NOT is the remaining edge (needs typed-OPER_NOT).
-TEST(RuntimeTest, LinqWhere_NotInLambda_NoCrash) {
+// Kleene NOT: NOT(UNKNOWN) = UNKNOWN -> dropped. `Not (Undefined = "North")` drops the Undefined
+// row (two-valued NOT(false)=true would keep it -> Count 2). Also exercises the fence fix: `Not`
+// in a lambda used to crash module-init (typed BOOLEAN temp's OPER_SET_TYPE applied to the module
+// frame). The boolean-tier OPER_NOT+TYPE_DELTA4 carries the three-valued result.
+TEST(RuntimeTest, LinqWhere_NotNullThreeValuedLogic) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	const wxString src =
 		wxT("Function CountNotEqNorth() Public\n")
@@ -339,10 +337,31 @@ TEST(RuntimeTest, LinqWhere_NotInLambda_NoCrash) {
 		wxT("EndFunction\n");
 	ASSERT_TRUE(TryCompile(cc, src));
 	ibProcUnit pu;
-	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));   // was an access violation before the fence fix
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
 	ibValue ret;
 	pu.CallAsFunc(wxT("CountNotEqNorth"), ret);
-	EXPECT_EQ(ret.GetInteger(), 2);   // South + Undefined (NOT(unknown) two-valued — documented edge)
+	EXPECT_EQ(ret.GetInteger(), 1);   // South only; NOT(Undefined = "North") is UNKNOWN -> dropped
+}
+
+// Kleene NOT over AND of unknowns: NOT(UNKNOWN AND UNKNOWN) = NOT(UNKNOWN) = UNKNOWN -> dropped.
+// Needs both Kleene AND (UNKNOWN propagates, not collapses to false) and three-valued NOT.
+TEST(RuntimeTest, LinqWhere_NotAndNullThreeValuedLogic) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Function CountKept() Public\n")
+		wxT("  var arr;\n")
+		wxT("  arr = New Array;\n")
+		wxT("  arr.Add(\"North\");\n")
+		wxT("  arr.Add(\"South\");\n")
+		wxT("  arr.Add(Undefined);\n")
+		wxT("  Return arr.Where(Function(x) Return Not (x = \"North\" And x <> \"East\") EndFunction).Count();\n")
+		wxT("EndFunction\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+	ibValue ret;
+	pu.CallAsFunc(wxT("CountKept"), ret);
+	EXPECT_EQ(ret.GetInteger(), 1);   // South only; Undefined -> NOT(UNKNOWN AND UNKNOWN) = UNKNOWN -> dropped
 }
 
 // ===========================================================================
