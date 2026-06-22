@@ -155,7 +155,13 @@ public:
 		long rowIdx = 0;
 		while (m_upstream->MoveNext(current)) {
 			ibValue result;
-			CallLambdaWithArg(m_predicate, current, result);
+			{
+				// SQL three-valued NULL for the filter predicate: a comparison with a NULL
+				// operand yields UNKNOWN, and IsHasValue (keep-on-TRUE) drops it — so the RAM
+				// floor agrees with the SQL push-down / L3 fold. See ts_threeValuedNullCompare.
+				ScopedThreeValuedNull tv;
+				CallLambdaWithArg(m_predicate, current, result);
+			}
 			const bool keep = IsHasValue(result);
 			++rowIdx;
 			if (keep) return true;
@@ -550,7 +556,7 @@ public:
 		while (!m_passed) {
 			if (!m_upstream->MoveNext(current)) return false;
 			ibValue r;
-			CallLambdaWithArg(m_pred, current, r);
+			{ ScopedThreeValuedNull tv; CallLambdaWithArg(m_pred, current, r); }
 			if (!IsHasValue(r)) { m_passed = true; return true; }
 		}
 		return m_upstream->MoveNext(current);
@@ -571,7 +577,7 @@ public:
 		if (!m_upstream || m_done) return false;
 		if (!m_upstream->MoveNext(current)) return false;
 		ibValue r;
-		CallLambdaWithArg(m_pred, current, r);
+		{ ScopedThreeValuedNull tv; CallLambdaWithArg(m_pred, current, r); }
 		if (!IsHasValue(r)) { m_done = true; return false; }
 		return true;
 	}
@@ -697,7 +703,7 @@ public:
 			SetTypeNumber(idx, m_idx);
 			++m_idx;
 			ibValue r;
-			CallLambdaWith2Args(m_pred, current, idx, r);
+			{ ScopedThreeValuedNull tv; CallLambdaWith2Args(m_pred, current, idx, r); }
 			if (IsHasValue(r)) return true;
 		}
 		return false;

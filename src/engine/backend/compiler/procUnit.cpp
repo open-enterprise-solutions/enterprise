@@ -342,10 +342,24 @@ inline void ModValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cV
 	}
 }
 
+// Definition of the LINQ-filter three-valued NULL flag (declared in procUnitValues.h).
+thread_local bool ts_threeValuedNullCompare = false;
+
+// SQL three-valued NULL: under the flag, a comparison with a NULL operand yields UNKNOWN
+// (empty) instead of a Boolean. Returns true when it set the result to UNKNOWN (caller skips).
+inline bool CompareYieldsUnknown(ibValue& out, const ibValue& a, const ibValue& b)
+{
+	if (!ts_threeValuedNullCompare) return false;
+	if (!IsNullOperand(a) && !IsNullOperand(b)) return false;
+	out.m_typeClass = ibValueTypes::TYPE_EMPTY;
+	return true;
+}
+
 //Implementation of comparison operators
 inline void CompareValueGT(ibValue& cValue1, const ibValue& cValue2, const ibValue& cValue3)
 {
 	CHECK_READONLY(CompareValueGT);
+	if (CompareYieldsUnknown(cValue1, cValue2, cValue3)) return;
 	cValue1.m_typeClass = ibValueTypes::TYPE_BOOLEAN;
 	cValue1.m_bData = cValue2.CompareValueGT(cValue3);
 }
@@ -353,6 +367,7 @@ inline void CompareValueGT(ibValue& cValue1, const ibValue& cValue2, const ibVal
 inline void CompareValueGE(ibValue& cValue1, const ibValue& cValue2, const ibValue& cValue3)
 {
 	CHECK_READONLY(CompareValueGE);
+	if (CompareYieldsUnknown(cValue1, cValue2, cValue3)) return;
 	cValue1.m_typeClass = ibValueTypes::TYPE_BOOLEAN;
 	cValue1.m_bData = cValue2.CompareValueGE(cValue3);
 }
@@ -360,6 +375,7 @@ inline void CompareValueGE(ibValue& cValue1, const ibValue& cValue2, const ibVal
 inline void CompareValueLS(ibValue& cValue1, const ibValue& cValue2, const ibValue& cValue3)
 {
 	CHECK_READONLY(CompareValueLS);
+	if (CompareYieldsUnknown(cValue1, cValue2, cValue3)) return;
 	cValue1.m_typeClass = ibValueTypes::TYPE_BOOLEAN;
 	cValue1.m_bData = cValue2.CompareValueLS(cValue3);
 }
@@ -367,6 +383,7 @@ inline void CompareValueLS(ibValue& cValue1, const ibValue& cValue2, const ibVal
 inline void CompareValueLE(ibValue& cValue1, const ibValue& cValue2, const ibValue& cValue3)
 {
 	CHECK_READONLY(CompareValueLE);
+	if (CompareYieldsUnknown(cValue1, cValue2, cValue3)) return;
 	cValue1.m_typeClass = ibValueTypes::TYPE_BOOLEAN;
 	cValue1.m_bData = cValue2.CompareValueLE(cValue3);
 }
@@ -374,6 +391,7 @@ inline void CompareValueLE(ibValue& cValue1, const ibValue& cValue2, const ibVal
 inline void CompareValueEQ(ibValue& cValue1, const ibValue& cValue2, const ibValue& cValue3)
 {
 	CHECK_READONLY(CompareValueEQ);
+	if (CompareYieldsUnknown(cValue1, cValue2, cValue3)) return;
 	cValue1.m_typeClass = ibValueTypes::TYPE_BOOLEAN;
 	cValue1.m_bData = cValue2.CompareValueEQ(cValue3);
 }
@@ -381,6 +399,7 @@ inline void CompareValueEQ(ibValue& cValue1, const ibValue& cValue2, const ibVal
 inline void CompareValueNE(ibValue& cValue1, const ibValue& cValue2, const ibValue& cValue3)
 {
 	CHECK_READONLY(CompareValueNE);
+	if (CompareYieldsUnknown(cValue1, cValue2, cValue3)) return;
 	cValue1.m_typeClass = ibValueTypes::TYPE_BOOLEAN;
 	cValue1.m_bData = cValue2.CompareValueNE(cValue3);
 }
@@ -1432,10 +1451,20 @@ void ibProcUnit::Execute(const ibByteCode& cByteCode, ibByteBinder& br, ibValue*
 	unsigned int lFinish = m_pByteCode->m_listCode.size();
 	ibValue** pRefLocVars = m_cCurContext.m_pRefLocVars;
 
+	// Only MODULE-level OPER_SET_TYPE is initialised here. A lambda body is inlined into the
+	// parent bc between OPER_LFUNC / OPER_ENDLFUNC and carries its OWN OPER_SET_TYPE whose slots
+	// index the LAMBDA frame, not this module frame — skip those (the main interpreter skips the
+	// whole fence on module-init too, see codeDef.h). A typed lambda temp (e.g. `Not (...)` emits
+	// a BOOLEAN temp) otherwise resolved a lambda slot against the module frame -> out of range -> AV.
+	// Resolve from THIS opcode (`byte`), not the stale main-loop `curCode` the variable1/array2 macros read.
+	int lambdaDepth = 0;
 	for (unsigned int lCodeLine = 0; lCodeLine < lFinish; lCodeLine++) {
 		const ibByteUnit& byte = m_pByteCode->m_listCode[lCodeLine];
-		if (byte.m_numOper == OPER_SET_TYPE) {
-			variable1.SetType(ibValue::GetVTByID(array2));
+		if (byte.m_numOper == OPER_LFUNC) { ++lambdaDepth; continue; }
+		if (byte.m_numOper == OPER_ENDLFUNC) { if (lambdaDepth > 0) --lambdaDepth; continue; }
+		if (lambdaDepth == 0 && byte.m_numOper == OPER_SET_TYPE) {
+			ResolveWrite(byte.m_param1.m_numArray, byte.m_param1.m_numIndex, pRefLocVars, m_pppArrayList, bDelta)
+				.SetType(ibValue::GetVTByID(byte.m_param2.m_numArray));
 		}
 	}
 

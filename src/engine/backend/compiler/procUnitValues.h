@@ -404,6 +404,27 @@ inline bool IsEmptyValue(const ibValue& cValue1)
 
 #define IsHasValue(cValue1) (!IsEmptyValue(cValue1))
 
+// --- SQL three-valued (Kleene) NULL mode for LINQ-filter predicate eval ------------
+// When set (by ibValueWhereState around the predicate lambda) a comparison with a NULL
+// operand yields UNKNOWN (empty) instead of a Boolean, so the Where keeps the row only
+// on a definite TRUE — matching the SQL push-down (LowerLambdaPredicate) and the L3 RAM
+// fold (RamEvalPredicate). Scoped + restored so GENERAL script comparisons stay two-valued.
+// SPIKE: covers single comparisons / `<>` / AND / OR (AND/OR fall out of IsHasValue);
+// NOT(unknown) still diverges (a follow-up needs Kleene NOT). See test_queryParity.
+extern thread_local bool ts_threeValuedNullCompare;
+
+struct ScopedThreeValuedNull {
+	bool m_prev;
+	ScopedThreeValuedNull() : m_prev(ts_threeValuedNullCompare) { ts_threeValuedNullCompare = true; }
+	~ScopedThreeValuedNull() { ts_threeValuedNullCompare = m_prev; }
+};
+
+// A genuine NULL operand (unset / explicit Null) — distinct from IsEmptyValue, which
+// also reports Boolean-false as "empty".
+inline bool IsNullOperand(const ibValue& v) {
+	return v.GetType() == ibValueTypes::TYPE_EMPTY || v.GetType() == ibValueTypes::TYPE_NULL;
+}
+
 inline void SetTypeBoolean(ibValue& cValue1, bool bValue)
 {
 	//check variable availability and reference check

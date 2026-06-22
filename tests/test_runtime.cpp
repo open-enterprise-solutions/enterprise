@@ -272,6 +272,80 @@ TEST(RuntimeTest, RecursiveFactorial) {
 }
 
 // ===========================================================================
+// LINQ Where over a NULL — SQL three-valued (Kleene) semantics in the RAM floor.
+// `Undefined <> "North"` is UNKNOWN, so the row is dropped (not kept) — the script
+// RAM pipeline now agrees with the SQL push-down / the L3 RAM fold. Without the
+// three-valued mode the two-valued `<>` keeps Undefined and Count would be 2.
+// ===========================================================================
+
+TEST(RuntimeTest, LinqWhere_NullThreeValuedLogic) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Function CountNotNorth() Public\n")
+		wxT("  var arr;\n")
+		wxT("  arr = New Array;\n")
+		wxT("  arr.Add(\"North\");\n")
+		wxT("  arr.Add(\"South\");\n")
+		wxT("  arr.Add(Undefined);\n")
+		wxT("  Return arr.Where(Function(x) Return x <> \"North\" EndFunction).Count();\n")
+		wxT("EndFunction\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue ret;
+	pu.CallAsFunc(wxT("CountNotNorth"), ret);
+	EXPECT_EQ(ret.GetInteger(), 1);   // only "South"; Undefined <> "North" is UNKNOWN -> dropped
+}
+
+// AND with a NULL operand: UNKNOWN branches drop the row (comparison three-valued +
+// keep-on-TRUE). Two-valued would keep Undefined -> Count 2.
+TEST(RuntimeTest, LinqWhere_AndNullThreeValuedLogic) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Function CountNeither() Public\n")
+		wxT("  var arr;\n")
+		wxT("  arr = New Array;\n")
+		wxT("  arr.Add(\"North\");\n")
+		wxT("  arr.Add(\"South\");\n")
+		wxT("  arr.Add(Undefined);\n")
+		wxT("  Return arr.Where(Function(x) Return x <> \"North\" And x <> \"East\" EndFunction).Count();\n")
+		wxT("EndFunction\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+	ibValue ret;
+	pu.CallAsFunc(wxT("CountNeither"), ret);
+	EXPECT_EQ(ret.GetInteger(), 1);   // South only; Undefined branches are UNKNOWN -> dropped
+}
+
+// `Not` inside a lambda no longer CRASHES — it emits a typed BOOLEAN temp (OPER_SET_TYPE)
+// whose slot indexes the lambda frame; the module-init pass used to apply it to the module
+// frame -> out-of-range -> AV (fixed: that pass now skips OPER_LFUNC/OPER_ENDLFUNC fences).
+// NOTE the count is 2, not 1: NOT(UNKNOWN) here stays two-valued (NOT(empty) -> true keeps the
+// Undefined row), because OPER_NOT over a comparison result is the TYPED tier and bypasses the
+// three-valued comparison path. Full Kleene NOT is the remaining edge (needs typed-OPER_NOT).
+TEST(RuntimeTest, LinqWhere_NotInLambda_NoCrash) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Function CountNotEqNorth() Public\n")
+		wxT("  var arr;\n")
+		wxT("  arr = New Array;\n")
+		wxT("  arr.Add(\"North\");\n")
+		wxT("  arr.Add(\"South\");\n")
+		wxT("  arr.Add(Undefined);\n")
+		wxT("  Return arr.Where(Function(x) Return Not (x = \"North\") EndFunction).Count();\n")
+		wxT("EndFunction\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));   // was an access violation before the fence fix
+	ibValue ret;
+	pu.CallAsFunc(wxT("CountNotEqNorth"), ret);
+	EXPECT_EQ(ret.GetInteger(), 2);   // South + Undefined (NOT(unknown) two-valued — documented edge)
+}
+
+// ===========================================================================
 // Module-level state survives across calls — global variable mutated by
 // procedure persists into the next call.
 // ===========================================================================
