@@ -975,13 +975,20 @@ std::vector<const ibBackendQueryColumn*> AggregateRefCols(const ibDataQuerySpec&
 ibValue AggregateOne(const ibDataQueryBuilder::AggregateItem& a, const ibQueryRamTable& TC, const std::vector<long>& idx)
 {
 	using Fn = ibDataQueryBuilder::AggregateFn;
-	if (a.m_fn == Fn::Count || a.m_col == nullptr)
+	// COUNT(*) — no source column — counts every row in the bucket.
+	if (a.m_col == nullptr)
 		return ibValue(ibNumber(static_cast<long>(idx.size())));
 
+	// Every column aggregate IGNORES NULL operands (SQL semantics): COUNT(col) counts
+	// non-null rows, SUM/AVG fold only non-null (AVG divides by the non-null count),
+	// MIN/MAX skip NULL. A NULL row no longer inflates the result or wins MIN.
 	ibNumber sum(0); long n = 0; ibValue best; bool have = false;
 	for (long i : idx) {
 		const ibValue v = RamCell(TC, i, a.m_col);
+		if (RamIsNullValue(v))
+			continue;
 		switch (a.m_fn) {
+		case Fn::Count:             ++n; break;
 		case Fn::Sum: case Fn::Avg: sum = sum + v.GetNumber(); ++n; break;
 		case Fn::Min: if (!have || v < best) { best = v; have = true; } break;
 		case Fn::Max: if (!have || v > best) { best = v; have = true; } break;
@@ -989,6 +996,7 @@ ibValue AggregateOne(const ibDataQueryBuilder::AggregateItem& a, const ibQueryRa
 		}
 	}
 	switch (a.m_fn) {
+	case Fn::Count: return ibValue(ibNumber(static_cast<long>(n)));
 	case Fn::Sum: return ibValue(sum);
 	case Fn::Avg: return n > 0 ? ibValue(sum / ibNumber(static_cast<long>(n))) : ibValue();
 	case Fn::Min: case Fn::Max: return best;

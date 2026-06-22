@@ -25,9 +25,11 @@
 #include <gtest/gtest.h>
 
 #include "backend/compiler/value.h"          // ibValue / ibNumber
-#include "backend/query/queryProvider.h"     // ibQueryComposer + ibQueryRamTable
+#include "backend/query/queryProvider.h"     // ibQueryComposer + ibQueryRamTable + BuildHierarchyTree
 #include "backend/query/queryable.h"         // ibQueryPredicate / ibQueryCondition
 #include "backend/query/queryColumn.h"       // ibBackendQueryColumn / ibTypeDescription
+#include "backend/query/querySelector.h"     // ibSelectorTree / ibDimensionKind
+#include "backend/query/dataQueryBuilder.h"  // ibDataQueryBuilder::AggregateItem / AggregateFn
 
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/databaseLayer/databaseResultSet.h"
@@ -210,4 +212,55 @@ TEST_F(ParityFix, Like_NullDropped)
 {
 	EXPECT_EQ(RamCount(ram, Like(&region, wxT("Nor%")).get()),
 	          SqlCount(db, wxT("region LIKE 'Nor%'")));          // North -> 1 == 1
+}
+
+// ---- aggregate NULL semantics: SQL ignores NULL operands ---------------------
+//
+// The RAM fold (ibQueryComposer / AggregateOne) used to count NULL rows — COUNT(col)
+// = bucket size, AVG denominator inflated, MIN/MAX could pick the empty cell. SQL
+// excludes NULL from every aggregate except COUNT(*). AVG is omitted here: exact
+// decimal vs SQLite float differ in representation (a separate numeric-tolerance concern).
+TEST(QueryParityAgg, AggregatesIgnoreNull)
+{
+	const ibMetaID KEY = 10, PARENT = 11, BONUS = 12;
+	TestCol key(wxT("k"), KEY), parent(wxT("p"), PARENT), bonus(wxT("bonus"), BONUS);
+
+	// 4 rows, one with a NULL bonus; parent left empty -> flat (all under the root).
+	ibQueryRamTable ram;
+	ram.AddColumn(KEY,    wxT("k"),     kNoType);
+	ram.AddColumn(PARENT, wxT("p"),     kNoType);
+	ram.AddColumn(BONUS,  wxT("bonus"), kNoType);
+	auto row = [&](long k, long b, bool bNull) {
+		const long r = ram.AppendRow();
+		ram.SetCell(r, KEY, ibValue(ibNumber(k)));
+		if (!bNull) ram.SetCell(r, BONUS, ibValue(ibNumber(b)));
+	};
+	row(1, 10, false); row(2, 0, true); row(3, 30, false); row(4, 40, false);
+
+	ibDatabaseLayerSQLite db;
+	ASSERT_TRUE(db.Open(wxT(":memory:")));
+	db.RunQuery(wxT("CREATE TABLE a (bonus INTEGER)"));
+	db.RunQuery(wxT("INSERT INTO a (bonus) VALUES (10)"));
+	db.RunQuery(wxT("INSERT INTO a (bonus) VALUES (NULL)"));
+	db.RunQuery(wxT("INSERT INTO a (bonus) VALUES (30)"));
+	db.RunQuery(wxT("INSERT INTO a (bonus) VALUES (40)"));
+
+	using Fn = ibDataQueryBuilder::AggregateFn;
+	auto ramAgg = [&](Fn fn) -> long {
+		ibDataQueryBuilder::AggregateItem a; a.m_fn = fn; a.m_col = &bonus; a.m_alias = wxT("agg");
+		const ibSelectorTree tree = ibQueryComposer::BuildHierarchyTree(
+			ram, &key, &parent, { a }, ibDimensionKind::Elements);
+		return tree.Root().m_values.at(BONUS).GetInteger();   // grand aggregate rolls into the column id
+	};
+	auto sqlAgg = [&](const wxString& expr) -> long {
+		ibDatabaseResultSet* rs = db.RunQueryWithResults(wxT("%s"), wxT("SELECT ") + expr + wxT(" AS v FROM a"));
+		const long n = (rs && rs->Next()) ? rs->GetResultInt(wxT("v")) : -1;
+		if (rs) db.CloseResultSet(rs);
+		return n;
+	};
+
+	EXPECT_EQ(ramAgg(Fn::Sum),   sqlAgg(wxT("SUM(bonus)")));     // 80 == 80
+	EXPECT_EQ(ramAgg(Fn::Count), sqlAgg(wxT("COUNT(bonus)")));   // 3 == 3 (NULL excluded)
+	EXPECT_EQ(ramAgg(Fn::Min),   sqlAgg(wxT("MIN(bonus)")));     // 10 == 10
+	EXPECT_EQ(ramAgg(Fn::Max),   sqlAgg(wxT("MAX(bonus)")));     // 40 == 40
 }
