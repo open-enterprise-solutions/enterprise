@@ -216,6 +216,40 @@ TEST(QueryComposerCore, JoinRamTables_OuterKinds)
 	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, &lk, &rk, outc, side, JK::Full ).RowCount(), 4);   // + both
 }
 
+// A NULL-VALUED join key (key column present, but the cell is unset/empty) is distinct from a
+// keyless cross (null key COLUMN). SQL `NULL = NULL` is UNKNOWN -> such rows never match: INNER
+// drops them, an OUTER join keeps them unmatched on their OWN side (never paired with the other
+// side's NULL). Before the fix the empty hash key paired NULL-left with NULL-right.
+TEST(QueryComposerCore, JoinRamTables_NullKeyValueDoesNotMatch)
+{
+	const ibMetaID LK = 1, LV = 2, RK = 4, RV = 3;
+	TestCol lk(wxT("lk"), LK), lv(wxT("lv"), LV), rk(wxT("rk"), RK), rv(wxT("rv"), RV);
+
+	ibQueryRamTable left;  left.AddColumn(LK, wxT("lk"), kNoType); left.AddColumn(LV, wxT("lv"), kNoType);
+	auto L = [&](long k, long v, bool kNull = false) {
+		const long r = left.AppendRow();
+		if (!kNull) left.SetCell(r, LK, ibValue(ibNumber(k)));   // unset key cell == NULL
+		left.SetCell(r, LV, ibValue(ibNumber(v)));
+	};
+	L(1, 11); L(0, 99, /*null key*/ true); L(2, 12);
+
+	ibQueryRamTable right; right.AddColumn(RK, wxT("rk"), kNoType); right.AddColumn(RV, wxT("rv"), kNoType);
+	auto R = [&](long k, long v, bool kNull = false) {
+		const long r = right.AppendRow();
+		if (!kNull) right.SetCell(r, RK, ibValue(ibNumber(k)));
+		right.SetCell(r, RV, ibValue(ibNumber(v)));
+	};
+	R(1, 21); R(0, 98, /*null key*/ true); R(2, 22);
+
+	const std::vector<const ibBackendQueryColumn*> outc = { &lv, &rv };
+	const std::vector<bool> side = { true, false };
+	using JK = ibQueryJoinKind;
+	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, &lk, &rk, outc, side, JK::Inner).RowCount(), 2);   // 1-1, 2-2; NULLs unpaired
+	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, &lk, &rk, outc, side, JK::Left ).RowCount(), 3);   // + NULL-key left, unmatched
+	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, &lk, &rk, outc, side, JK::Right).RowCount(), 3);   // + NULL-key right, unmatched
+	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, &lk, &rk, outc, side, JK::Full ).RowCount(), 4);   // matched 2 + both NULLs
+}
+
 // ===========================================================================
 // RAM post-filter — FilterRows (boolean WHERE TREE over a composed JOIN: OR / NOT / IS NULL)
 // ===========================================================================

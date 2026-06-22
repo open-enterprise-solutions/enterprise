@@ -1864,29 +1864,41 @@ ibQueryRamTable ibQueryComposer::JoinRamTables(const ibQueryRamTable& left, cons
 	};
 
 	// Hash-join by the join key's IDENTITY key (GetHashKey — guid for refs): index the right side once,
-	// probe per left row. O(n+m). Null join column -> empty key on both sides -> cartesian (keyless cross).
-	// INNER: matched pairs only. LEFT/FULL: also unmatched-left (right NULL). RIGHT/FULL: also unmatched-right.
+	// probe per left row. O(n+m).
+	//   - No join key column (onLeft/onRight == nullptr) -> keyless CROSS: empty key both sides -> cartesian.
+	//   - Key column present but the VALUE is NULL/empty -> SQL `NULL = NULL` is UNKNOWN -> never matches.
+	//     The row is left unindexed/unprobed: INNER drops it; an OUTER join keeps it unmatched on its own
+	//     side (LEFT -> emit(i,-1); RIGHT -> the trailing rightMatched pass emits it).
+	// INNER: matched pairs only. LEFT/FULL: also unmatched-left. RIGHT/FULL: also unmatched-right.
 	const bool keepLeft  = (kind == ibQueryJoinKind::Left  || kind == ibQueryJoinKind::Full);
 	const bool keepRight = (kind == ibQueryJoinKind::Right || kind == ibQueryJoinKind::Full);
 
 	std::map<wxString, std::vector<long>> rightByKey;
 	for (long j = 0; j < right.RowCount(); ++j) {
-		const ibValue keyR = (onRight != nullptr) ? right.GetCell(j, onRight->GetColumnId()) : ibValue();
-		rightByKey[keyR.GetHashKey()].push_back(j);
+		if (onRight != nullptr) {
+			const ibValue keyR = right.GetCell(j, onRight->GetColumnId());
+			if (RamIsNullValue(keyR)) continue;   // NULL key: unmatchable (RIGHT/FULL emit it below as unmatched)
+			rightByKey[keyR.GetHashKey()].push_back(j);
+		}
+		else rightByKey[ibValue().GetHashKey()].push_back(j);   // keyless cross
 	}
 	std::vector<char> rightMatched(static_cast<size_t>(right.RowCount()), 0);
 	for (long i = 0; i < left.RowCount(); ++i) {
-		const ibValue keyL = (onLeft != nullptr) ? left.GetCell(i, onLeft->GetColumnId()) : ibValue();
-		const auto it = rightByKey.find(keyL.GetHashKey());
+		std::map<wxString, std::vector<long>>::const_iterator it = rightByKey.end();
+		if (onLeft != nullptr) {
+			const ibValue keyL = left.GetCell(i, onLeft->GetColumnId());
+			if (!RamIsNullValue(keyL)) it = rightByKey.find(keyL.GetHashKey());   // NULL key -> stays end() -> no match
+		}
+		else it = rightByKey.find(ibValue().GetHashKey());   // keyless cross
 		if (it == rightByKey.end()) {
-			if (keepLeft) emit(i, -1);   // unmatched left row (LEFT / FULL)
+			if (keepLeft) emit(i, -1);   // unmatched left (LEFT / FULL), including a NULL-key left row
 			continue;
 		}
 		for (const long j : it->second) { emit(i, j); rightMatched[static_cast<size_t>(j)] = 1; }
 	}
 	if (keepRight)
 		for (long j = 0; j < right.RowCount(); ++j)
-			if (!rightMatched[static_cast<size_t>(j)]) emit(-1, j);   // unmatched right row (RIGHT / FULL)
+			if (!rightMatched[static_cast<size_t>(j)]) emit(-1, j);   // unmatched right (incl. NULL-key right)
 	return out;
 }
 
