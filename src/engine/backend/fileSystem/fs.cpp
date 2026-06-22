@@ -149,21 +149,24 @@ void	ibReader::close()
 
 u64 ibReader::find_chunk(u64 ID, bool* bCompressed) const
 {
-	u64	dwSize, dwType;
+	u64	dwSize = 0, dwType = 0;
 	bool success = false;
 
+	// A chunk header is 2x u64 (type + size); never read it without that many bytes left,
+	// or a malformed / truncated buffer drives r() past the end (access violation).
 	if (m_last_pos != 0) {
 		seek(m_last_pos);
-		dwType = r_u64();
-		dwSize = r_u64();
-
-		if (dwType == ID)
-			success = true;
+		if (elapsed() >= 16) {
+			dwType = r_u64();
+			dwSize = r_u64();
+			if (dwType == ID)
+				success = true;
+		}
 	}
 
 	if (!success) {
 		rewind();
-		while (!eof())
+		while (elapsed() >= 16)
 		{
 			dwType = r_u64();
 			dwSize = r_u64();
@@ -185,7 +188,13 @@ u64 ibReader::find_chunk(u64 ID, bool* bCompressed) const
 		}
 	}
 
-	wxASSERT((u64)tell() + dwSize <= (u64)length());
+	// The found chunk must fit in the buffer — a corrupt size would otherwise build an
+	// over-sized sub-reader that reads past the allocation.
+	if ((u64)tell() + dwSize > (u64)length())
+	{
+		m_last_pos = 0;
+		return 0;
+	}
 	if (bCompressed) *bCompressed = false;
 
 	const int dwPos = tell();

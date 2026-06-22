@@ -34,8 +34,16 @@ ibDataNode MakeTree() {
 }
 
 wxMemoryBuffer WriteFull(const ibDataNode& root) {
+	// Frame the root with its clsid/metaId identity (what the config container adds),
+	// then the provider writes the INNER content — symmetric with ReadFull, which peels
+	// the same two frames before handing the inner to Read. (Provider.Write is content
+	// only: "Root CONTENT only — symmetric with Read".)
+	ibWriterMemory inner;
+	ibBinaryProvider().Write(root, inner);
+	ibWriterMemory meta;
+	meta.w_chunk((u64)root.GetMetaId(), inner.pointer(), inner.size());
 	ibWriterMemory w;
-	ibBinaryProvider().Write(root, w);
+	w.w_chunk((u64)root.GetClsid(), meta.pointer(), meta.size());
 	return w.buffer();
 }
 
