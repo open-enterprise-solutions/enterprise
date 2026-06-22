@@ -107,7 +107,9 @@ enum
 	enGetCommonTemplate,
 	enBeginTransaction,
 	enCommitTransaction,
-	enRollBackTransaction
+	enRollBackTransaction,
+	enIsNull,
+	enValueIsFilled
 };
 
 void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
@@ -213,6 +215,8 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	helper.AppendProc(wxT("BeginTransaction"), wxT("BeginTransaction()"));
 	helper.AppendProc(wxT("CommitTransaction"), wxT("CommitTransaction()"));
 	helper.AppendProc(wxT("RollBackTransaction"), wxT("RollBackTransaction()"));
+	helper.AppendFunc(wxT("IsNull"), 1, wxT("IsNull(value : any)"));
+	helper.AppendFunc(wxT("ValueIsFilled"), 1, wxT("ValueIsFilled(value : any)"));
 };
 
 #include "backend/compiler/enumUnit.h"
@@ -305,6 +309,8 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 		case enRaise: Raise(paParams[0]->GetString()); return true;
 		case enErrorDescription: pvarRetValue = ErrorDescription(); return true;
 		case enIsEmptyValue: pvarRetValue = IsEmptyValue(*paParams[0]); return true;
+		case enIsNull: pvarRetValue = IsNull(*paParams[0]); return true;
+		case enValueIsFilled: pvarRetValue = ValueIsFilled(*paParams[0]); return true;
 		case enEvaluate: pvarRetValue = Evaluate(paParams[0]->GetString()); return true;
 		case enExecute: Execute(paParams[0]->GetString()); return true;
 		case enFormat: pvarRetValue = Format(*paParams[0], paParams[1]->GetString()); return true;

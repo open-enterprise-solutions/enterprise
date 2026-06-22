@@ -3273,17 +3273,18 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 					GETDelimeter(':');
 				}
 				else if (IsNextDelimeter(wxT('+')) || IsNextDelimeter(wxT('-'))
-				      || IsNextDelimeter(wxT('*')) || IsNextDelimeter(wxT('/'))) {
+				      || IsNextDelimeter(wxT('*')) || IsNextDelimeter(wxT('/')) || IsNextDelimeter(wxT('%'))) {
 					// Compound assignment / increment on a BARE variable. Reached only when the
 					// identifier is IMMEDIATELY followed by an arithmetic op (no '.' / '[' / '('
 					// between), so a member/array GET-temp can never be silently mutated:
-					//   x++ / x--                          -> x = x +/- 1
-					//   x += e / x -= e / x *= e / x /= e  -> x = x <op> e
+					//   x++ / x--                                   -> x = x +/- 1
+					//   x += e / x -= e / x *= e / x /= e / x %= e  -> x = x <op> e
 					// At statement level the result is unused, so postfix == prefix store. All emit
 					// the in-place shape (param1 == param2 == variable) the `x = x <op> e` fold makes.
 					const wxUniChar op = IsNextDelimeter(wxT('+')) ? wxT('+')
 					                   : IsNextDelimeter(wxT('-')) ? wxT('-')
-					                   : IsNextDelimeter(wxT('*')) ? wxT('*') : wxT('/');
+					                   : IsNextDelimeter(wxT('*')) ? wxT('*')
+					                   : IsNextDelimeter(wxT('/')) ? wxT('/') : wxT('%');
 					const wxString strRealName = nextLexem.m_valData.GetString();
 					GETDelimeter(op); // consume the operator
 
@@ -3301,12 +3302,13 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 						code.m_param3 = FindConst(oneVal);
 					}
 					else if (IsNextDelimeter(wxT('='))) {
-						// += / -= / *= / /= : right operand = expression
+						// += / -= / *= / /= / %= : right operand = expression
 						GETDelimeter(wxT('='));
 						code.m_param3 = GetExpression(context);
 						code.m_numOper = (op == wxT('+')) ? OPER_ADD
 						               : (op == wxT('-')) ? OPER_SUB
-						               : (op == wxT('*')) ? OPER_MULT : OPER_DIV;
+						               : (op == wxT('*')) ? OPER_MULT
+						               : (op == wxT('/')) ? OPER_DIV : OPER_MOD;
 					}
 					else { // a lone +/-/*// after a bare identifier — not valid here
 						SetError(ERROR_CODE);

@@ -17,6 +17,7 @@
 #include "backend/compiler/procUnit.h"
 #include "backend/compiler/byteCode.h"
 #include "backend/compiler/value.h"
+#include "backend/system/systemManager.h"   // ibValueSystemFunction — IsNull / ValueIsFilled impls
 
 namespace {
 
@@ -379,6 +380,7 @@ TEST(RuntimeTest, CompoundAssignmentOperators) {
 		wxT("  x++;\n")           // 7
 		wxT("  x--;\n")           // 6
 		wxT("  x += 2 * 3;\n")    // 12 — op= takes a full expression
+		wxT("  x %= 5;\n")        // 2  — 12 % 5
 		wxT("  Return x;\n")
 		wxT("EndFunction\n");
 	ASSERT_TRUE(TryCompile(cc, src));
@@ -386,7 +388,23 @@ TEST(RuntimeTest, CompoundAssignmentOperators) {
 	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
 	ibValue ret;
 	pu.CallAsFunc(wxT("Calc"), ret);
-	EXPECT_EQ(ret.GetInteger(), 12);
+	EXPECT_EQ(ret.GetInteger(), 2);
+}
+
+// Runtime impls behind the IsNull / ValueIsFilled script builtins. IsNull = TYPE_NULL only;
+// ValueIsFilled = !IsEmpty (false for Undefined / NULL / "" / 0). An empty reference is "not filled"
+// but NOT IsNull (the composite value model — covered at the query layer; here the primitives).
+TEST(RuntimeTest, NullAndFilledBuiltins) {
+	const ibValue nul(ibValueTypes::TYPE_NULL), undef, str(wxString(wxT("x"))), emptyStr(wxString(wxT("")));
+
+	EXPECT_TRUE (ibValueSystemFunction::IsNull(nul));
+	EXPECT_FALSE(ibValueSystemFunction::IsNull(undef));   // Undefined (TYPE_EMPTY) is NOT a SQL NULL
+	EXPECT_FALSE(ibValueSystemFunction::IsNull(str));
+
+	EXPECT_TRUE (ibValueSystemFunction::ValueIsFilled(str));
+	EXPECT_FALSE(ibValueSystemFunction::ValueIsFilled(nul));
+	EXPECT_FALSE(ibValueSystemFunction::ValueIsFilled(undef));
+	EXPECT_FALSE(ibValueSystemFunction::ValueIsFilled(emptyStr));
 }
 
 // `+=` on a string concatenates (bare OPER_ADD over strings), same as `s = s + ...`.

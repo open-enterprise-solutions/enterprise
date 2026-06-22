@@ -605,6 +605,21 @@ bool ibValueSystemFunction::IsEmptyValue(const ibValue& cData)
 	return cData.IsEmpty();
 }
 
+// SQL / explicit NULL test (TYPE_NULL only). Distinct from IsEmptyValue / ValueIsFilled: an EMPTY
+// reference or Undefined is NOT a NULL.
+bool ibValueSystemFunction::IsNull(const ibValue& cData)
+{
+	return cData.IsNull();
+}
+
+// "Filled" = carries a real value: false for Undefined, NULL, an EMPTY reference (type chosen, no
+// guid), "", 0, empty date (the 1C ЗначениеЗаполнено predicate). An empty reference is "not filled"
+// yet NOT IsNull — it stays a typed empty reference, matching the composite value model.
+bool ibValueSystemFunction::ValueIsFilled(const ibValue& cData)
+{
+	return !cData.IsEmpty();
+}
+
 ibValue ibValueSystemFunction::Evaluate(const wxString& strExpression)
 {
 	auto* puState = ibSession::GetPUState();

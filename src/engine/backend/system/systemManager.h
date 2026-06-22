@@ -97,6 +97,8 @@ public:
 	static void Raise(const wxString& strError);
 	static wxString ErrorDescription();
 	static bool IsEmptyValue(const ibValue& cData);
+	static bool IsNull(const ibValue& cData);
+	static bool ValueIsFilled(const ibValue& cData);
 	static ibValue Evaluate(const wxString& expression);
 	static void Execute(const wxString& sCode);
 	static wxString Format(ibValue& cData, const wxString& fmt = wxEmptyString);
