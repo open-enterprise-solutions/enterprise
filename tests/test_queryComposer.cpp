@@ -15,6 +15,7 @@
 
 #include <memory>
 #include <vector>
+#include <algorithm>   // stable_sort — RamSortCompareKey null-placement test
 
 #include "backend/query/queryProvider.h"     // ibQueryComposer + ibQueryRamTable
 #include "backend/query/querySelector.h"     // ibSelector — traversal façade over a snapshot
@@ -248,6 +249,54 @@ TEST(QueryComposerCore, JoinRamTables_NullKeyValueDoesNotMatch)
 	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, &lk, &rk, outc, side, JK::Left ).RowCount(), 3);   // + NULL-key left, unmatched
 	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, &lk, &rk, outc, side, JK::Right).RowCount(), 3);   // + NULL-key right, unmatched
 	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, &lk, &rk, outc, side, JK::Full ).RowCount(), 4);   // matched 2 + both NULLs
+}
+
+// ===========================================================================
+// RAM ORDER BY — RamSortCompareKey (NULL = smallest: NULLS FIRST asc / NULLS LAST desc)
+// ===========================================================================
+
+TEST(QueryComposerCore, RamSortCompareKey_NullOrdering)
+{
+	const ibValue nul;                                            // TYPE_EMPTY == NULL for sort
+	const ibValue a(wxString(wxT("A"))), b(wxString(wxT("B")));
+
+	// non-NULL total order, both directions; equal keys fall through (0)
+	EXPECT_LT(ibQueryComposer::RamSortCompareKey(a, b, true ), 0);   // A before B (asc)
+	EXPECT_GT(ibQueryComposer::RamSortCompareKey(a, b, false), 0);   // B before A (desc)
+	EXPECT_EQ(ibQueryComposer::RamSortCompareKey(a, a, true ), 0);   // equal -> next key
+
+	// NULL is the smallest value
+	EXPECT_LT(ibQueryComposer::RamSortCompareKey(nul, a, true ), 0); // ASC -> NULL first
+	EXPECT_GT(ibQueryComposer::RamSortCompareKey(a, nul, true ), 0);
+	EXPECT_GT(ibQueryComposer::RamSortCompareKey(nul, a, false), 0); // DESC -> NULL last
+	EXPECT_LT(ibQueryComposer::RamSortCompareKey(a, nul, false), 0);
+
+	EXPECT_EQ(ibQueryComposer::RamSortCompareKey(nul, nul, true ), 0); // both NULL -> equal
+	EXPECT_EQ(ibQueryComposer::RamSortCompareKey(nul, nul, false), 0);
+}
+
+// Drive a stable_sort with the comparator: NULLs cluster first (ASC) / last (DESC) deterministically,
+// instead of floating at their input position (the pre-fix behaviour, where operator< returned false
+// both ways for a NULL so it compared "equal" to every non-NULL).
+TEST(QueryComposerCore, RamSortCompareKey_StableSortPlacesNulls)
+{
+	const std::vector<ibValue> v = { ibValue(wxString(wxT("B"))), ibValue(), ibValue(wxString(wxT("A"))), ibValue() };
+
+	std::vector<ibValue> asc = v;
+	std::stable_sort(asc.begin(), asc.end(),
+		[](const ibValue& x, const ibValue& y) { return ibQueryComposer::RamSortCompareKey(x, y, true) < 0; });
+	EXPECT_EQ(asc[0].GetType(), ibValueTypes::TYPE_EMPTY);        // NULLs first
+	EXPECT_EQ(asc[1].GetType(), ibValueTypes::TYPE_EMPTY);
+	EXPECT_EQ(asc[2].GetString().ToStdString(), "A");
+	EXPECT_EQ(asc[3].GetString().ToStdString(), "B");
+
+	std::vector<ibValue> desc = v;
+	std::stable_sort(desc.begin(), desc.end(),
+		[](const ibValue& x, const ibValue& y) { return ibQueryComposer::RamSortCompareKey(x, y, false) < 0; });
+	EXPECT_EQ(desc[0].GetString().ToStdString(), "B");           // NULLs last
+	EXPECT_EQ(desc[1].GetString().ToStdString(), "A");
+	EXPECT_EQ(desc[2].GetType(), ibValueTypes::TYPE_EMPTY);
+	EXPECT_EQ(desc[3].GetType(), ibValueTypes::TYPE_EMPTY);
 }
 
 // ===========================================================================

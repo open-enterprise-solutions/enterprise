@@ -50,9 +50,8 @@ ibDataQueryResult ibComputedProvider::ExecuteRead(const ibDataQuerySpec& spec, c
 				if (s.m_col == nullptr) continue;
 				const ibValue va = rows.GetCell(a, s.m_col->GetColumnId());
 				const ibValue vb = rows.GetCell(b, s.m_col->GetColumnId());
-				if (va == vb) continue;
-				const bool lt = (va < vb);
-				return s.m_ascending ? lt : !lt;
+				const int c = ibQueryComposer::RamSortCompareKey(va, vb, s.m_ascending);
+				if (c != 0) return c < 0;
 			}
 			return false;
 		});
@@ -857,9 +856,8 @@ ibDataQueryResult ProjectToAliases(const ibQueryRamTable& TC, const ibDataQueryS
 				if (s.m_col == nullptr) continue;
 				const ibValue va = RamCell(TC, a, s.m_col);
 				const ibValue vb = RamCell(TC, b, s.m_col);
-				if (va == vb) continue;
-				const bool lt = (va < vb);
-				return s.m_ascending ? lt : !lt;
+				const int c = ibQueryComposer::RamSortCompareKey(va, vb, s.m_ascending);
+				if (c != 0) return c < 0;
 			}
 			return false;
 		});
@@ -2085,4 +2083,20 @@ ibSelector ibDataQueryResult::Select(ibSelectKind mode)
 std::shared_ptr<ibRenderedPageCache> ibDataQueryBuilder::NewPageCache()
 {
 	return std::make_shared<ibRenderedPageCache>();
+}
+
+// One ORDER BY key compared for the RAM sort floor. NULL is treated as the smallest value
+// (SQLite / MySQL convention, the embedded reference dialect) -> NULLS FIRST on ASC, NULLS LAST
+// on DESC, deterministically. Without this, ibValue::operator< returns false for an empty/NULL
+// operand both ways, so a NULL and a non-NULL compare "equal" and the NULL floats at its input
+// position (non-deterministic, diverging from any SQL ORDER BY). Defined here (file scope, past
+// the RAM-helper anonymous namespace) so it can be a member yet still call RamIsNullValue.
+//   return <0: a orders before b ; >0: b before a ; 0: equal on this key (try the next key).
+int ibQueryComposer::RamSortCompareKey(const ibValue& va, const ibValue& vb, bool ascending)
+{
+	const bool aNull = RamIsNullValue(va), bNull = RamIsNullValue(vb);
+	if (aNull && bNull) return 0;
+	if (aNull != bNull) return (ascending ? aNull : bNull) ? -1 : 1;   // NULL = smallest
+	if (va == vb) return 0;
+	return ((va < vb) == ascending) ? -1 : 1;
 }

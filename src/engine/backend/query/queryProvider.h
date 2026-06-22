@@ -155,6 +155,10 @@ public:
 	// Keep only the rows of `src` that satisfy the boolean WHERE TREE (And/Or/Not/IsNull/Leaf) — the
 	// post-compose RAM filter for an OR / IS NULL spanning a non-co-located JOIN. Pure — unit-testable.
 	static ibQueryRamTable   FilterRows(const ibQueryRamTable& src, const ibQueryPredicate* predicate);
+	// Compare one ORDER BY key for the RAM sort floor: NULL = smallest (SQLite / MySQL convention)
+	// -> NULLS FIRST on ASC, NULLS LAST on DESC, deterministically. <0: a before b; >0: b before a;
+	// 0: equal on this key. Pure — unit-testable; shared by both RAM ORDER BY comparators.
+	static int               RamSortCompareKey(const ibValue& a, const ibValue& b, bool ascending);
 	// Evaluate a computed output column (Column / Const / Arith / Case) against one composed row — the
 	// per-row eval for a computed column over a JOIN (single source pushes it to SQL). Pure — unit-testable.
 	static ibValue           EvalColumnExpr(const ibQueryColumnExpr* expr, const ibQueryRamTable& table, long row);
