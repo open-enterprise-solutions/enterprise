@@ -645,6 +645,12 @@ void ibNumber::StoreBig(const BigImpl& src)
 
 ibNumber& ibNumber::operator+=(const ibNumber& rhs)
 {
+	// 47-bit + 47-bit can't overflow int64; store if the sum fits immediate.
+	int64_t am, bm;
+	if (TryImmInts(rhs, am, bm)) {
+		const int64_t r = am + bm;
+		if (CanBeImmediate(r, 0)) { StoreImmediate(r, 0); return *this; }
+	}
 	BigImpl a, b;
 	LoadBig(a);
 	rhs.LoadBig(b);
@@ -656,6 +662,11 @@ ibNumber& ibNumber::operator+=(const ibNumber& rhs)
 
 ibNumber& ibNumber::operator-=(const ibNumber& rhs)
 {
+	int64_t am, bm;
+	if (TryImmInts(rhs, am, bm)) {
+		const int64_t r = am - bm;
+		if (CanBeImmediate(r, 0)) { StoreImmediate(r, 0); return *this; }
+	}
 	BigImpl a, b;
 	LoadBig(a);
 	rhs.LoadBig(b);
@@ -667,6 +678,14 @@ ibNumber& ibNumber::operator-=(const ibNumber& rhs)
 
 ibNumber& ibNumber::operator*=(const ibNumber& rhs)
 {
+	// int32-range operands keep the product below 2^62 (no int64 overflow);
+	// anything wider falls through to the BigImpl multiply.
+	int64_t am, bm;
+	if (TryImmInts(rhs, am, bm)
+		&& am >= INT32_MIN && am <= INT32_MAX && bm >= INT32_MIN && bm <= INT32_MAX) {
+		const int64_t r = am * bm;
+		if (CanBeImmediate(r, 0)) { StoreImmediate(r, 0); return *this; }
+	}
 	BigImpl a, b;
 	LoadBig(a);
 	rhs.LoadBig(b);
@@ -678,6 +697,17 @@ ibNumber& ibNumber::operator*=(const ibNumber& rhs)
 
 ibNumber& ibNumber::operator/=(const ibNumber& rhs)
 {
+	// Exact integer division only: a single int64 divide when the remainder is
+	// zero and the quotient fits immediate (the common "divide evenly" case —
+	// split a total, halve, scale). Non-exact divisions (proportions /
+	// percentages) and any non-integer operand fall through to the exact-decimal
+	// long division below; the result is bit-identical either way.
+	int64_t am, bm;
+	if (TryImmInts(rhs, am, bm) && bm != 0 && am % bm == 0) {
+		const int64_t q = am / bm;
+		if (CanBeImmediate(q, 0)) { StoreImmediate(q, 0); return *this; }
+	}
+
 	BigImpl a, b;
 	LoadBig(a);
 	rhs.LoadBig(b);
@@ -704,6 +734,11 @@ ibNumber ibNumber::operator-() const
 
 int ibNumber::Compare(const ibNumber& rhs) const
 {
+	// Fast path: both immediate integers — a direct int64 three-way compare, no
+	// BigImpl. Every loop condition (`i < n`) and integer comparison hits this.
+	int64_t am, bm;
+	if (TryImmInts(rhs, am, bm))
+		return (am > bm) - (am < bm);
 	BigImpl a, b;
 	LoadBig(a);
 	rhs.LoadBig(b);

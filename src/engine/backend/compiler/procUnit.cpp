@@ -251,16 +251,26 @@ if(cValue1.m_typeClass==ibValueTypes::TYPE_REFFER)\
 inline void AddValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cValue3)
 {
 	CHECK_READONLY(AddValue);
-	cValue1.m_typeClass = cValue2.GetType();
-	if (cValue1.m_typeClass == ibValueTypes::TYPE_NUMBER) {
+	// Dispatch on the SOURCE type — do NOT pre-stamp cValue1.m_typeClass.
+	// The string branch goes through SetString(), which Reset()s cValue1 on
+	// its CURRENT type and frees the correct union member. Pre-stamping
+	// TYPE_STRING (the old code) made Reset() treat a stale NON-string union
+	// value (m_pStr aliases m_pRef) as an ibString* and delete it -> AV.
+	// It only bit when the result slot already held a non-string value (a
+	// reused temp inside a loop), so a single `s = s + "x"` was fine but the
+	// same line in a While loop access-violated.
+	const ibValueTypes resultType = cValue2.GetType();
+	if (resultType == ibValueTypes::TYPE_NUMBER) {
+		cValue1.m_typeClass = ibValueTypes::TYPE_NUMBER;
 		cValue1.m_fData = cValue2.GetNumber() + cValue3.GetNumber();
 	}
-	else if (cValue1.m_typeClass == ibValueTypes::TYPE_DATE) {
+	else if (resultType == ibValueTypes::TYPE_DATE) {
 		if (cValue3.m_typeClass == ibValueTypes::TYPE_DATE) { //date + date -> number
 			cValue1.m_typeClass = ibValueTypes::TYPE_NUMBER;
 			cValue1.m_fData = cValue2.GetDate() + cValue3.GetDate();
 		}
 		else {
+			cValue1.m_typeClass = ibValueTypes::TYPE_DATE;
 			cValue1.m_dData = cValue2.m_dData + cValue3.GetDate();
 		}
 	}

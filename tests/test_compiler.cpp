@@ -163,8 +163,8 @@ TEST(CompilerTest, FunctionDeclarationRegistersInListFunc) {
 		if (fn.m_strRealName.IsSameAs(wxT("Add"), false)) {
 			foundAdd = true;
 			EXPECT_TRUE(fn.m_bCodeRet) << "Function (not Procedure) expected";
-			EXPECT_EQ(fn.m_lCodeParamCount, 2);
-			EXPECT_EQ(fn.m_listParamRealName.size(), 2u);
+			EXPECT_EQ(fn.m_listParam.size(), 2u);
+			EXPECT_EQ(fn.m_listParam[0].m_strName, wxT("x"));
 			EXPECT_TRUE(fn.IsLocal() || fn.IsExport());
 			break;
 		}
@@ -287,7 +287,7 @@ TEST(CompilerAOT, RealCompileOutputRoundTrips) {
 	for (const auto& fn : dst.m_listFunc)
 		if (fn.m_strRealName.IsSameAs(wxT("Increment"), false)) {
 			foundIncrement = true;
-			EXPECT_EQ(fn.m_lCodeParamCount, 1);
+			EXPECT_EQ(fn.m_listParam.size(), 1u);
 			break;
 		}
 	EXPECT_TRUE(foundCounter)   << "exported 'counter' lost in AOT round-trip";

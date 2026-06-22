@@ -35,6 +35,7 @@ add_executable(oes_tests
     test_byteCodeAOT.cpp
     test_compiler.cpp
     test_runtime.cpp
+    bench_runtime.cpp
     test_connectionPool.cpp
     test_session.cpp
     test_module_manager_split.cpp

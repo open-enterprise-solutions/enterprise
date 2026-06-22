@@ -358,7 +358,6 @@ TEST(ByteCodeAOT, ListFuncWithLocalsAndParams) {
 	src.m_version = MakeGuid(13);
 
 	ibByteCode::ibByteFunction fn;
-	fn.m_lCodeParamCount = 2;
 	fn.m_lCodeLine       = 100;
 	fn.m_bCodeRet        = true;
 	fn.m_lVarCount       = 5;
@@ -374,8 +373,8 @@ TEST(ByteCodeAOT, ListFuncWithLocalsAndParams) {
 		p.m_defaultValue.m_numArray = -1;
 		p.m_defaultValue.m_numIndex = -1;
 		p.m_defaultValue.m_strType  = wxT("Number");
+		p.m_strName = wxT("a");
 		fn.m_listParam.push_back(p);
-		fn.m_listParamRealName.push_back(wxT("a"));
 	}
 	{
 		ibByteCode::ibByteParam p;
@@ -384,8 +383,8 @@ TEST(ByteCodeAOT, ListFuncWithLocalsAndParams) {
 		p.m_defaultValue.m_numArray = 5;
 		p.m_defaultValue.m_numIndex = 7;
 		p.m_defaultValue.m_strType  = wxT("String");
+		p.m_strName = wxT("b");
 		fn.m_listParam.push_back(p);
-		fn.m_listParamRealName.push_back(wxT("b"));
 	}
 
 	fn.m_listLocals.push_back(MakeVar(wxT("temp"), ibVarKind::Local, 0));
@@ -394,7 +393,6 @@ TEST(ByteCodeAOT, ListFuncWithLocalsAndParams) {
 
 	// Context-method entry — different kind, with parent reference.
 	ibByteCode::ibByteFunction ctxFn;
-	ctxFn.m_lCodeParamCount = 0;
 	ctxFn.m_lCodeLine       = -1;
 	ctxFn.m_bCodeRet        = true;
 	ctxFn.m_kind            = ibFnKind::ContextMethod;
@@ -408,7 +406,7 @@ TEST(ByteCodeAOT, ListFuncWithLocalsAndParams) {
 	ASSERT_EQ(dst.m_listFunc.size(), 2u);
 
 	const auto& a = dst.m_listFunc[0];
-	EXPECT_EQ(a.m_lCodeParamCount, 2);
+	EXPECT_EQ(a.m_listParam.size(), 2u);
 	EXPECT_EQ(a.m_lCodeLine,       100);
 	EXPECT_TRUE(a.m_bCodeRet);
 	EXPECT_EQ(a.m_lVarCount,       5);
@@ -417,15 +415,14 @@ TEST(ByteCodeAOT, ListFuncWithLocalsAndParams) {
 	EXPECT_EQ(a.m_strRealName,     wxT("Calculate"));
 
 	ASSERT_EQ(a.m_listParam.size(),         2u);
-	ASSERT_EQ(a.m_listParamRealName.size(), 2u);
 	EXPECT_FALSE(a.m_listParam[0].m_bByRef);
 	EXPECT_TRUE(a.m_listParam[1].m_bByRef);
 	EXPECT_EQ(a.m_listParam[0].m_clsid, (ibClassID)0x111);
 	EXPECT_EQ(a.m_listParam[0].m_defaultValue.m_strType, wxT("Number"));
 	EXPECT_EQ(a.m_listParam[1].m_defaultValue.m_numArray, 5);
 	EXPECT_EQ(a.m_listParam[1].m_defaultValue.m_numIndex, 7);
-	EXPECT_EQ(a.m_listParamRealName[0], wxT("a"));
-	EXPECT_EQ(a.m_listParamRealName[1], wxT("b"));
+	EXPECT_EQ(a.m_listParam[0].m_strName, wxT("a"));
+	EXPECT_EQ(a.m_listParam[1].m_strName, wxT("b"));
 
 	ASSERT_EQ(a.m_listLocals.size(), 2u);
 	EXPECT_EQ(a.m_listLocals[0].m_strRealName, wxT("temp"));

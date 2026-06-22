@@ -197,6 +197,18 @@ private:
 	int      ImmExp()      const;
 	BigImpl* HeapPtr()     const;
 
+	// Both operands inline integers (exp10 == 0)? Returns their mantissas in
+	// (a, b). Shared gate for the immediate-integer fast paths in the
+	// arithmetic / comparison operators (operator+=, *=, /=, Compare, ...).
+	bool TryImmInts(const ibNumber& rhs, int64_t& a, int64_t& b) const {
+		if (IsImmediate() && rhs.IsImmediate() && ImmExp() == 0 && rhs.ImmExp() == 0) {
+			a = ImmMantissa();
+			b = rhs.ImmMantissa();
+			return true;
+		}
+		return false;
+	}
+
 	static bool     CanBeImmediate(int64_t mant, int32_t exp10) noexcept;
 	static uint64_t PackImmediate(int64_t mant, int32_t exp10) noexcept;
 
