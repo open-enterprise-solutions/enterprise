@@ -11,13 +11,13 @@
 //   RAM  = ibQueryComposer::FilterRows(table, predicate).RowCount()
 //   SQL  = SELECT COUNT(*) FROM t WHERE <equivalent clause>
 //
-// Cases that already agree are LOCKED (regression guard). The known divergence —
-// `NOT (region = 'North')`: SQL three-valued logic drops the NULL-region row, the
-// RAM core keeps it — is a DISABLED_ parity test that documents the gap. Enable it
-// (drop the DISABLED_ prefix, run) to drive the fix: the RAM evaluator of a pushable
-// predicate must adopt SQL NULL semantics. See docs/query-language-arc.md (§22) and
-// the form-attribute-binding / DynamicList note: the same settings feed both paths,
-// so DB≡RAM parity is load-bearing for lists AND reports.
+// Every case here is LOCKED (regression guard). The former divergence —
+// `NOT (region = 'North')`: SQL three-valued logic drops the NULL-region row, the RAM core used to
+// keep it — is FIXED: the RAM evaluator adopted SQL NULL semantics (three-valued / Kleene), so
+// NotEq_NullThreeValuedLogic and the IS NULL / AND / LIKE / aggregate cases all assert parity.
+// A SQL NULL is modelled as ibValue(TYPE_NULL) (what the driver yields), NOT an unset/Undefined
+// (TYPE_EMPTY) cell. See docs/query-language-arc.md and the form-attribute-binding / DynamicList
+// note: the same settings feed both paths, so DB≡RAM parity is load-bearing for lists AND reports.
 //
 // Pure + self-contained: SQLite is always embedded; no appData session bring-up.
 // =============================================================================

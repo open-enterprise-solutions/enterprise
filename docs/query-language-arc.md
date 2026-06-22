@@ -9,8 +9,9 @@
 > The lower sections (§4–§22) are the design this converged from; §23–§24 + the dated update
 > blocks below are what is actually in the tree.
 >
-> **Last updated:** 2026-06-16 (§24). The dated update blocks run newest-last; read §23–§24
-> for the realized L4/L5 mechanism.
+> **Last updated:** 2026-06-22 (DB/RAM NULL parity + comparison/identity aligned to SQL — see the
+> final dated-update block). The dated update blocks run newest-last; read §23–§24 for the realized
+> L4/L5 mechanism.
 >
 > ### Landed snapshot (2026-06-07)
 >
@@ -2361,3 +2362,48 @@ replaced long ago by snapshot + heartbeat-on-`lastActive` liveness; only comment
 ### Remaining (by-demand)
 `UPDATE … RETURNING` (the FB/PG sequence counter) — needs a DML-with-result-set execution path + a
 dialect `RETURNING` clause. The accounting register read/write is the L3 lift target (still `#if 0`).
+
+## Update 2026-06-22 — DB/RAM NULL parity + comparison/identity aligned to SQL
+
+The RAM floor and the SQL push-down now agree on NULL, ordering and reference identity, so one set of
+semantics serves both paths (the DB/RAM-boundary LINQ trap, closed for these axes). 471/471.
+
+### NULL parity (three-valued / Kleene)
+- **Filter** — a comparison with a NULL operand yields UNKNOWN; the WHERE keeps a row only on a definite
+  TRUE. `NOT(UNKNOWN)=UNKNOWN`, `AND`/`OR` propagate UNKNOWN. Covered in both the L3 RAM fold
+  (`RamEvalPredicate`/`FilterRows`) and the script LINQ-to-objects floor (under a scoped flag so general
+  script comparisons stay two-valued). UNKNOWN is represented as **TYPE_NULL** (SQL: unknown ≡ null).
+- **Aggregates** — `AggregateOne` skips NULL operands (`SUM`/`AVG`/`COUNT(col)`), as SQL does.
+- **Join** — a NULL-valued join key never matches (`NULL = NULL` is unknown): INNER drops it, an OUTER
+  join keeps it unmatched on its own side. A keyless cross (no key column) is still cartesian.
+- **Sort** — `ibQueryComposer::RamSortCompareKey` (both RAM ORDER BY comparators) places NULL as the
+  smallest value → NULLS FIRST on ASC / NULLS LAST on DESC, deterministically.
+- Parity harness (`tests/test_queryParity.cpp`) locks every case RAM-vs-real-SQLite. A SQL NULL is
+  modelled as `ibValue(TYPE_NULL)` — what the driver yields — NOT an unset/Undefined (TYPE_EMPTY) cell.
+
+### ibValue comparison — one three-way ordering primitive
+`CompareValueLS` is now the single three-way ordering primitive (`int`: <0 / 0 / >0); `CompareValueGT`
+is the second int hook (the `>` direction). `operator<` / `operator>` and `GE`/`LE` derive from them;
+`GT/GE/LE` stay virtual so a class can retune one operator, but normally a class overrides only
+`CompareValueLS` (references do — four overrides collapsed to one). A value with NO scalar payload
+(TYPE_NULL or TYPE_EMPTY) sorts to the bottom → a TOTAL order, so `std::sort` / `std::set` / `std::map`
+over `ibValue` (OrderBy / GroupBy / Distinct / Array.Sort / the RAM ORDER BY) are correct for NULL,
+where the old two-valued `<` returned false both ways and left them unordered. (Ordering consequence:
+`Undefined < 5` is true — distinct from the three-valued filter logic.)
+
+### SQL NULL = TYPE_NULL strictly
+`TYPE_NULL` is the SQL/explicit null (the `Null` literal; a NULL DB column → `ibValue(TYPE_NULL)`).
+`ibValue::IsNull()` added. `TYPE_EMPTY` (Undefined) is the no-type default of a composite value, NOT a
+SQL null; an empty reference (type chosen, no guid) is "not filled" yet NOT a null. `RamIsNullValue`,
+`IsNullOperand` and the UNKNOWN sentinel all key on TYPE_NULL. Script builtins `IsNull(value)` and
+`ValueIsFilled(value)` (the latter = `!IsEmpty`, the 1С "filled" predicate) expose this.
+
+### Reference identity = the DB key
+A reference's `GetHashKey` is now `metaID + guid` (the `_RRRef` key), not the guid alone — a reference
+column can target several types, so the metaID disambiguates. Runtime grouping / join / dedup over a
+reference now match the database key.
+
+### Remaining
+- **cross-dialect parity** — the harness tests vs SQLite only; FB/PG/MySQL/ODBC need a live stand.
+- **two LINQ paths** — the L3 composer (push-down + temp-db) and the script `.Join()` RAM floor share
+  value semantics now, but are still structurally separate; merging them is the remaining debt.

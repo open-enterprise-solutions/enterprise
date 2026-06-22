@@ -300,6 +300,20 @@ TEST(QueryComposerCore, RamSortCompareKey_StableSortPlacesNulls)
 	EXPECT_EQ(desc[3].GetType(), ibValueTypes::TYPE_NULL);
 }
 
+// Total-order decision (deliberate): a value with NO scalar payload — TYPE_NULL or TYPE_EMPTY
+// (Undefined) — is the SMALLEST, so operator< is a valid total order for std::sort / set / map.
+// Consequence: `Undefined < 5` is true. That is ORDERING, not SQL-null logic — the three-valued
+// flag governs NULL comparison in filters; this bare operator< must stay totally ordered.
+TEST(QueryComposerCore, ValueOrder_NoValueIsSmallest) {
+	const ibValue five(ibNumber(5)), nul(ibValueTypes::TYPE_NULL), undef;
+	EXPECT_TRUE (undef < five);   // Undefined sorts before a real value
+	EXPECT_FALSE(five  < undef);
+	EXPECT_TRUE (nul   < five);   // NULL sorts before a real value
+	EXPECT_FALSE(five  < nul);
+	EXPECT_FALSE(undef < nul);    // both "no value" -> equal-order (neither is < the other)
+	EXPECT_FALSE(nul   < undef);
+}
+
 // ===========================================================================
 // RAM post-filter — FilterRows (boolean WHERE TREE over a composed JOIN: OR / NOT / IS NULL)
 // ===========================================================================
