@@ -364,6 +364,50 @@ TEST(RuntimeTest, LinqWhere_NotAndNullThreeValuedLogic) {
 	EXPECT_EQ(ret.GetInteger(), 1);   // South only; Undefined -> NOT(UNKNOWN AND UNKNOWN) = UNKNOWN -> dropped
 }
 
+// Compound assignment + increment/decrement on a bare variable: x++ / x-- / x += / -= / *= / /=.
+// Each is sugar for `x = x <op> rhs` (in-place store). The op= form takes a full expression RHS.
+TEST(RuntimeTest, CompoundAssignmentOperators) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Function Calc() Public\n")
+		wxT("  var x;\n")
+		wxT("  x = 10;\n")
+		wxT("  x += 5;\n")        // 15
+		wxT("  x -= 3;\n")        // 12
+		wxT("  x *= 2;\n")        // 24
+		wxT("  x /= 4;\n")        // 6
+		wxT("  x++;\n")           // 7
+		wxT("  x--;\n")           // 6
+		wxT("  x += 2 * 3;\n")    // 12 — op= takes a full expression
+		wxT("  Return x;\n")
+		wxT("EndFunction\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+	ibValue ret;
+	pu.CallAsFunc(wxT("Calc"), ret);
+	EXPECT_EQ(ret.GetInteger(), 12);
+}
+
+// `+=` on a string concatenates (bare OPER_ADD over strings), same as `s = s + ...`.
+TEST(RuntimeTest, CompoundAssignmentStringConcat) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Function Cat() Public\n")
+		wxT("  var s;\n")
+		wxT("  s = \"a\";\n")
+		wxT("  s += \"b\";\n")
+		wxT("  s += \"c\";\n")
+		wxT("  Return s;\n")
+		wxT("EndFunction\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+	ibValue ret;
+	pu.CallAsFunc(wxT("Cat"), ret);
+	EXPECT_EQ(ret.GetString().ToStdString(), "abc");
+}
+
 // ===========================================================================
 // Module-level state survives across calls — global variable mutated by
 // procedure persists into the next call.

@@ -3272,29 +3272,46 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 					context->m_listLabelDef[nextLexem.m_strData] = m_cByteCode.m_listCode.size() - 1;
 					GETDelimeter(':');
 				}
-				else if (IsNextDelimeter(wxT('+')) || IsNextDelimeter(wxT('-'))) {
-					// postfix ++ / -- on a bare variable: `x++;` / `x--;`  is sugar for
-					// `x = x +/- 1`. Reached only when the identifier is IMMEDIATELY
-					// followed by +/- (no '.' / '[' / '(' between), so a member/array
-					// GET-temp can never be silently incremented. At statement level the
-					// value is unused, so prefix and postfix collapse to the same store.
-					const wxUniChar incOp = IsNextDelimeter(wxT('+')) ? wxT('+') : wxT('-');
+				else if (IsNextDelimeter(wxT('+')) || IsNextDelimeter(wxT('-'))
+				      || IsNextDelimeter(wxT('*')) || IsNextDelimeter(wxT('/'))) {
+					// Compound assignment / increment on a BARE variable. Reached only when the
+					// identifier is IMMEDIATELY followed by an arithmetic op (no '.' / '[' / '('
+					// between), so a member/array GET-temp can never be silently mutated:
+					//   x++ / x--                          -> x = x +/- 1
+					//   x += e / x -= e / x *= e / x /= e  -> x = x <op> e
+					// At statement level the result is unused, so postfix == prefix store. All emit
+					// the in-place shape (param1 == param2 == variable) the `x = x <op> e` fold makes.
+					const wxUniChar op = IsNextDelimeter(wxT('+')) ? wxT('+')
+					                   : IsNextDelimeter(wxT('-')) ? wxT('-')
+					                   : IsNextDelimeter(wxT('*')) ? wxT('*') : wxT('/');
 					const wxString strRealName = nextLexem.m_valData.GetString();
-					GETDelimeter(incOp);
-					if (!IsNextDelimeter(incOp)) { // a lone +/- after a bare identifier — not valid here
-						SetError(ERROR_CODE);
-						return false;
-					}
-					GETDelimeter(incOp);
+					GETDelimeter(op); // consume the operator
 
 					ibParamUnit variable = context->GetVariable(strRealName, true, true); // must already exist
 					ibByteUnit code;
 					AddLineInfo(code);
-					code.m_numOper = (incOp == wxT('+')) ? OPER_ADD : OPER_SUB;
-					ibValue oneVal; oneVal.SetNumber(wxT("1"));
-					code.m_param1 = variable;          // dest in place — same shape the bShortLet fold of `x = x + 1` produces
-					code.m_param2 = variable;          // left operand
-					code.m_param3 = FindConst(oneVal); // right operand = 1
+					code.m_param1 = variable; // dest in place
+					code.m_param2 = variable; // left operand
+
+					if ((op == wxT('+') || op == wxT('-')) && IsNextDelimeter(op)) {
+						// ++ / -- : right operand = 1
+						GETDelimeter(op);
+						code.m_numOper = (op == wxT('+')) ? OPER_ADD : OPER_SUB;
+						ibValue oneVal; oneVal.SetNumber(wxT("1"));
+						code.m_param3 = FindConst(oneVal);
+					}
+					else if (IsNextDelimeter(wxT('='))) {
+						// += / -= / *= / /= : right operand = expression
+						GETDelimeter(wxT('='));
+						code.m_param3 = GetExpression(context);
+						code.m_numOper = (op == wxT('+')) ? OPER_ADD
+						               : (op == wxT('-')) ? OPER_SUB
+						               : (op == wxT('*')) ? OPER_MULT : OPER_DIV;
+					}
+					else { // a lone +/-/*// after a bare identifier — not valid here
+						SetError(ERROR_CODE);
+						return false;
+					}
 					m_cByteCode.m_listCode.emplace_back(std::move(code));
 				}
 				else { //function and method calls, expression assignments are processed here
