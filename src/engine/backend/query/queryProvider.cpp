@@ -482,40 +482,81 @@ bool RamLike(const wxString& s, const wxString& pat)
 	return m(0, 0);
 }
 
-bool RamEvalLeaf(const ibQueryCondition& c, const ibQueryRamTable& t, long row)
+// SQL three-valued (Kleene) logic: a comparison with a NULL operand is UNKNOWN, and a
+// WHERE keeps a row ONLY on a definite TRUE. This is what makes the RAM filter agree with
+// the database — e.g. NOT(col = x) DROPS a NULL-col row (it does not keep it), and the same
+// settings feed the DB push-down and the RAM fallback alike. See tests/test_queryParity.cpp.
+enum class RamTri { False = 0, True = 1, Unknown = 2 };
+
+RamTri RamTriNot(RamTri a)
 {
-	if (c.m_col == nullptr) return false;
-	const ibValue cell = t.GetCell(row, c.m_col->GetColumnId());
-	if (c.m_explicitOp) {
-		switch (c.m_op) {
-			case ibQueryFilterOp::Less:         return cell.CompareValueLS(c.m_value);
-			case ibQueryFilterOp::LessEqual:    return cell.CompareValueLE(c.m_value);
-			case ibQueryFilterOp::Greater:      return cell.CompareValueGT(c.m_value);
-			case ibQueryFilterOp::GreaterEqual: return cell.CompareValueGE(c.m_value);
-			case ibQueryFilterOp::Like:         return RamLike(cell.GetString(), c.m_value.GetString());
-		}
-		return false;
-	}
-	const bool eq = cell.CompareValueEQ(c.m_value);
-	return c.m_comparison == ibComparisonType::ibComparisonType_NotEqual ? !eq : eq;
+	return a == RamTri::Unknown ? RamTri::Unknown : (a == RamTri::True ? RamTri::False : RamTri::True);
 }
 
-bool RamEvalPredicate(const ibQueryPredicate* p, const ibQueryRamTable& t, long row)
+bool RamIsNullValue(const ibValue& v)
 {
-	if (p == nullptr) return true;
-	switch (p->m_kind) {
-		case ibQueryPredicateKind::Leaf: return RamEvalLeaf(p->m_leaf, t, row);
-		case ibQueryPredicateKind::And:  for (const auto& c : p->m_children) if (!RamEvalPredicate(c.get(), t, row)) return false; return true;
-		case ibQueryPredicateKind::Or:   for (const auto& c : p->m_children) if ( RamEvalPredicate(c.get(), t, row)) return true;  return false;
-		case ibQueryPredicateKind::Not:  return p->m_children.empty() ? true : !RamEvalPredicate(p->m_children.front().get(), t, row);
-		case ibQueryPredicateKind::IsNull: {
-			if (p->m_col == nullptr) return false;
-			const ibValue cell = t.GetCell(row, p->m_col->GetColumnId());
-			const bool isNull = cell.GetType() == ibValueTypes::TYPE_NULL || cell.GetType() == ibValueTypes::TYPE_EMPTY;
-			return p->m_negated ? !isNull : isNull;
+	return v.GetType() == ibValueTypes::TYPE_NULL || v.GetType() == ibValueTypes::TYPE_EMPTY;
+}
+
+RamTri RamEvalLeaf(const ibQueryCondition& c, const ibQueryRamTable& t, long row)
+{
+	if (c.m_col == nullptr) return RamTri::False;
+	const ibValue cell = t.GetCell(row, c.m_col->GetColumnId());
+	// Any NULL operand -> UNKNOWN (the row survives only on a definite TRUE below).
+	if (RamIsNullValue(cell) || RamIsNullValue(c.m_value))
+		return RamTri::Unknown;
+	bool res = false;
+	if (c.m_explicitOp) {
+		switch (c.m_op) {
+			case ibQueryFilterOp::Less:         res = cell.CompareValueLS(c.m_value); break;
+			case ibQueryFilterOp::LessEqual:    res = cell.CompareValueLE(c.m_value); break;
+			case ibQueryFilterOp::Greater:      res = cell.CompareValueGT(c.m_value); break;
+			case ibQueryFilterOp::GreaterEqual: res = cell.CompareValueGE(c.m_value); break;
+			case ibQueryFilterOp::Like:         res = RamLike(cell.GetString(), c.m_value.GetString()); break;
 		}
 	}
-	return true;
+	else {
+		const bool eq = cell.CompareValueEQ(c.m_value);
+		res = c.m_comparison == ibComparisonType::ibComparisonType_NotEqual ? !eq : eq;
+	}
+	return res ? RamTri::True : RamTri::False;
+}
+
+RamTri RamEvalPredicate(const ibQueryPredicate* p, const ibQueryRamTable& t, long row)
+{
+	if (p == nullptr) return RamTri::True;
+	switch (p->m_kind) {
+		case ibQueryPredicateKind::Leaf:
+			return RamEvalLeaf(p->m_leaf, t, row);
+		case ibQueryPredicateKind::And: {
+			RamTri acc = RamTri::True;                          // FALSE dominates; else UNKNOWN if any
+			for (const auto& c : p->m_children) {
+				const RamTri r = RamEvalPredicate(c.get(), t, row);
+				if (r == RamTri::False)   return RamTri::False;
+				if (r == RamTri::Unknown) acc = RamTri::Unknown;
+			}
+			return acc;
+		}
+		case ibQueryPredicateKind::Or: {
+			RamTri acc = RamTri::False;                         // TRUE dominates; else UNKNOWN if any
+			for (const auto& c : p->m_children) {
+				const RamTri r = RamEvalPredicate(c.get(), t, row);
+				if (r == RamTri::True)    return RamTri::True;
+				if (r == RamTri::Unknown) acc = RamTri::Unknown;
+			}
+			return acc;
+		}
+		case ibQueryPredicateKind::Not:
+			return p->m_children.empty() ? RamTri::True
+			                             : RamTriNot(RamEvalPredicate(p->m_children.front().get(), t, row));
+		case ibQueryPredicateKind::IsNull: {
+			// IS NULL / IS NOT NULL are DEFINITE (never UNKNOWN).
+			if (p->m_col == nullptr) return RamTri::False;
+			const bool isNull = RamIsNullValue(t.GetCell(row, p->m_col->GetColumnId()));
+			return (p->m_negated ? !isNull : isNull) ? RamTri::True : RamTri::False;
+		}
+	}
+	return RamTri::True;
 }
 
 // RAM-filterable = every leaf is a PLAIN column (no dot-walk path). A dot-walk leaf needs a join the
@@ -551,7 +592,7 @@ ibQueryRamTable RamFilter(const ibQueryRamTable& src, const ibQueryPredicate* pr
 	ibQueryRamTable out;
 	for (const ibQueryRamColumn& c : src.Columns()) out.AddColumn(c.m_id, c.m_name, c.m_type);
 	for (long r = 0; r < src.RowCount(); ++r) {
-		if (!RamEvalPredicate(pred, src, r)) continue;
+		if (RamEvalPredicate(pred, src, r) != RamTri::True) continue;
 		const long nr = out.AppendRow();
 		for (const ibQueryRamColumn& c : src.Columns()) out.SetCell(nr, c.m_id, src.GetCell(r, c.m_id));
 	}
@@ -582,7 +623,7 @@ ibValue EvalColumnExprRow(const ibQueryColumnExpr* e, const ibQueryRamTable& t, 
 		}
 		case ibQueryColumnExprKind::Case: {
 			for (const auto& wt : e->m_cases)
-				if (RamEvalPredicate(wt.first.get(), t, row)) return EvalColumnExprRow(wt.second.get(), t, row);
+				if (RamEvalPredicate(wt.first.get(), t, row) == RamTri::True) return EvalColumnExprRow(wt.second.get(), t, row);
 			return e->m_else ? EvalColumnExprRow(e->m_else.get(), t, row) : ibValue();
 		}
 	}

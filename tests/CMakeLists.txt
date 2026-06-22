@@ -51,6 +51,7 @@ add_executable(oes_tests
     test_queryTotals.cpp
     test_queryL2.cpp
     test_queryComposer.cpp
+    test_queryParity.cpp
     test_queryL3Vocab.cpp
     test_queryL4Lexer.cpp
     test_queryL4Parser.cpp
@@ -163,3 +164,36 @@ set_target_properties(oes_query_totals_test PROPERTIES
 )
 
 gtest_discover_tests(oes_query_totals_test)
+
+# ---------------------------------------------------------------------------
+# Standalone DB/RAM parity test — backend + gtest only (isolated, like the
+# ИТОГИ-tree target above). Real in-memory SQLite vs the RAM filter core:
+#   cmake --build build --target oes_query_parity_test --config Debug
+#   ./bin/oes_query_parity_test
+#   ./bin/oes_query_parity_test --gtest_also_run_disabled_tests   # show the gap
+# ---------------------------------------------------------------------------
+add_executable(oes_query_parity_test test_queryParity.cpp)
+
+target_link_libraries(oes_query_parity_test
+    PRIVATE
+        backend
+        GTest::gtest
+        GTest::gtest_main
+)
+
+target_compile_definitions(oes_query_parity_test PRIVATE OES_TESTING)
+
+target_include_directories(oes_query_parity_test PRIVATE
+    "${CMAKE_SOURCE_DIR}/src"
+    "${CMAKE_SOURCE_DIR}/src/engine"
+    "${CMAKE_SOURCE_DIR}/src/engine/backend"
+)
+
+set_target_properties(oes_query_parity_test PROPERTIES
+    CXX_STANDARD          17
+    CXX_STANDARD_REQUIRED ON
+    BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
+    INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
+)
+
+gtest_discover_tests(oes_query_parity_test)

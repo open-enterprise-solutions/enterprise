@@ -251,9 +251,10 @@ TEST(QueryComposerCore, FilterRows_OrIsNullNot)
 	ASSERT_EQ(f2.RowCount(), 1);
 	EXPECT_EQ(f2.GetCell(0, QTY).GetString().ToStdString(), "3");
 
-	// NOT (region = 'North')  -> South, East, null-region row
+	// NOT (region = 'North')  -> South, East. The null-region row is UNKNOWN under SQL
+	// three-valued logic (NULL = 'North' is unknown, NOT unknown is unknown) -> dropped.
 	const ibQueryRamTable f3 = ibQueryComposer::FilterRows(t, ibQueryPredicate::Not(eq(&region, wxT("North"))).get());
-	EXPECT_EQ(f3.RowCount(), 3);
+	EXPECT_EQ(f3.RowCount(), 2);
 }
 
 // ===========================================================================
