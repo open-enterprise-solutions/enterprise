@@ -92,6 +92,15 @@ m_metaObject(metaObject), m_initializedRef(false), m_reference_impl(nullptr), m_
 	//gs_references.emplace_back(this);
 }
 
+// Identity key = the DB reference key (metaID + guid), aligning runtime grouping / join / dedup
+// over a reference with the database. See the declaration in reference.h.
+wxString ibValueReferenceDataObject::GetHashKey() const
+{
+	return m_metaObject != nullptr
+		? wxString::Format(wxT("%i:%s"), m_metaObject->GetMetaID(), wxString(GetGuid()))
+		: wxString(GetGuid());
+}
+
 ibValueReferenceDataObject::~ibValueReferenceDataObject()
 {
 	wxDELETE(m_reference_impl);

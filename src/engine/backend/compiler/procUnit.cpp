@@ -346,12 +346,14 @@ inline void ModValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cV
 thread_local bool ts_threeValuedNullCompare = false;
 
 // SQL three-valued NULL: under the flag, a comparison with a NULL operand yields UNKNOWN
-// (empty) instead of a Boolean. Returns true when it set the result to UNKNOWN (caller skips).
+// instead of a Boolean. UNKNOWN is represented as TYPE_NULL (SQL: unknown ≡ null), so it both
+// reads as "null" to the Kleene NOT/AND/OR (IsNullOperand) and drops in the WHERE (IsHasValue is
+// false for TYPE_NULL). Returns true when it set the result to UNKNOWN (caller skips).
 inline bool CompareYieldsUnknown(ibValue& out, const ibValue& a, const ibValue& b)
 {
 	if (!ts_threeValuedNullCompare) return false;
 	if (!IsNullOperand(a) && !IsNullOperand(b)) return false;
-	out.m_typeClass = ibValueTypes::TYPE_EMPTY;
+	out.m_typeClass = ibValueTypes::TYPE_NULL;
 	return true;
 }
 
@@ -361,7 +363,7 @@ inline void CompareValueGT(ibValue& cValue1, const ibValue& cValue2, const ibVal
 	CHECK_READONLY(CompareValueGT);
 	if (CompareYieldsUnknown(cValue1, cValue2, cValue3)) return;
 	cValue1.m_typeClass = ibValueTypes::TYPE_BOOLEAN;
-	cValue1.m_bData = cValue2.CompareValueGT(cValue3);
+	cValue1.m_bData = cValue2.CompareValueGT(cValue3) > 0;   // three-way int -> boolean '>'
 }
 
 inline void CompareValueGE(ibValue& cValue1, const ibValue& cValue2, const ibValue& cValue3)
@@ -377,7 +379,7 @@ inline void CompareValueLS(ibValue& cValue1, const ibValue& cValue2, const ibVal
 	CHECK_READONLY(CompareValueLS);
 	if (CompareYieldsUnknown(cValue1, cValue2, cValue3)) return;
 	cValue1.m_typeClass = ibValueTypes::TYPE_BOOLEAN;
-	cValue1.m_bData = cValue2.CompareValueLS(cValue3);
+	cValue1.m_bData = cValue2.CompareValueLS(cValue3) < 0;   // three-way int -> boolean '<'
 }
 
 inline void CompareValueLE(ibValue& cValue1, const ibValue& cValue2, const ibValue& cValue3)
@@ -566,7 +568,7 @@ start_label:
 			case OPER_INVERT: SetTypeNumber(variable1, -cvariable2.GetNumber()); break;
 			case OPER_NOT:
 				// Kleene NOT(UNKNOWN)=UNKNOWN under the LINQ three-valued flag; else two-valued.
-				if (ts_threeValuedNullCompare && IsNullOperand(cvariable2)) variable1.m_typeClass = ibValueTypes::TYPE_EMPTY;
+				if (ts_threeValuedNullCompare && IsNullOperand(cvariable2)) variable1.m_typeClass = ibValueTypes::TYPE_NULL;   // UNKNOWN == SQL NULL (IsNullOperand keys on TYPE_NULL)
 				else SetTypeBoolean(variable1, IsEmptyValue(cvariable2));
 				break;
 			case OPER_AND:
@@ -574,7 +576,7 @@ start_label:
 					const bool aF = !IsHasValue(cvariable2) && !IsNullOperand(cvariable2);
 					const bool bF = !IsHasValue(cvariable3) && !IsNullOperand(cvariable3);
 					if (aF || bF) SetTypeBoolean(variable1, false);
-					else if (IsNullOperand(cvariable2) || IsNullOperand(cvariable3)) variable1.m_typeClass = ibValueTypes::TYPE_EMPTY;
+					else if (IsNullOperand(cvariable2) || IsNullOperand(cvariable3)) variable1.m_typeClass = ibValueTypes::TYPE_NULL;   // UNKNOWN == SQL NULL (IsNullOperand keys on TYPE_NULL)
 					else SetTypeBoolean(variable1, true);
 				}
 				else if (IsHasValue(cvariable2) && IsHasValue(cvariable3)) SetTypeBoolean(variable1, true);
@@ -583,7 +585,7 @@ start_label:
 			case OPER_OR:
 				if (ts_threeValuedNullCompare) {            // TRUE dominates; else UNKNOWN if any; else FALSE
 					if (IsHasValue(cvariable2) || IsHasValue(cvariable3)) SetTypeBoolean(variable1, true);
-					else if (IsNullOperand(cvariable2) || IsNullOperand(cvariable3)) variable1.m_typeClass = ibValueTypes::TYPE_EMPTY;
+					else if (IsNullOperand(cvariable2) || IsNullOperand(cvariable3)) variable1.m_typeClass = ibValueTypes::TYPE_NULL;   // UNKNOWN == SQL NULL (IsNullOperand keys on TYPE_NULL)
 					else SetTypeBoolean(variable1, false);
 				}
 				else if (IsHasValue(cvariable2) || IsHasValue(cvariable3)) SetTypeBoolean(variable1, true);
@@ -1276,7 +1278,7 @@ start_label:
 				// Boolean-tier NOT — the typed path a `Not (comparison)` lambda hits. Kleene
 				// NOT(UNKNOWN)=UNKNOWN under the LINQ three-valued flag (the comparison left an
 				// empty/UNKNOWN operand); else the usual two-valued boolean NOT.
-				if (ts_threeValuedNullCompare && IsNullOperand(cvariable2)) variable1.m_typeClass = ibValueTypes::TYPE_EMPTY;
+				if (ts_threeValuedNullCompare && IsNullOperand(cvariable2)) variable1.m_typeClass = ibValueTypes::TYPE_NULL;   // UNKNOWN == SQL NULL (IsNullOperand keys on TYPE_NULL)
 				else variable1.m_bData = !cvariable2.m_bData;
 				break;
 			case OPER_INVERT + TYPE_DELTA4: variable1.m_bData = !cvariable2.m_bData; break;

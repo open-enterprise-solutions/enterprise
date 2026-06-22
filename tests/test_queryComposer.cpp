@@ -229,7 +229,7 @@ TEST(QueryComposerCore, JoinRamTables_NullKeyValueDoesNotMatch)
 	ibQueryRamTable left;  left.AddColumn(LK, wxT("lk"), kNoType); left.AddColumn(LV, wxT("lv"), kNoType);
 	auto L = [&](long k, long v, bool kNull = false) {
 		const long r = left.AppendRow();
-		if (!kNull) left.SetCell(r, LK, ibValue(ibNumber(k)));   // unset key cell == NULL
+		left.SetCell(r, LK, kNull ? ibValue(ibValueTypes::TYPE_NULL) : ibValue(ibNumber(k)));   // SQL NULL key
 		left.SetCell(r, LV, ibValue(ibNumber(v)));
 	};
 	L(1, 11); L(0, 99, /*null key*/ true); L(2, 12);
@@ -237,7 +237,7 @@ TEST(QueryComposerCore, JoinRamTables_NullKeyValueDoesNotMatch)
 	ibQueryRamTable right; right.AddColumn(RK, wxT("rk"), kNoType); right.AddColumn(RV, wxT("rv"), kNoType);
 	auto R = [&](long k, long v, bool kNull = false) {
 		const long r = right.AppendRow();
-		if (!kNull) right.SetCell(r, RK, ibValue(ibNumber(k)));
+		right.SetCell(r, RK, kNull ? ibValue(ibValueTypes::TYPE_NULL) : ibValue(ibNumber(k)));   // SQL NULL key
 		right.SetCell(r, RV, ibValue(ibNumber(v)));
 	};
 	R(1, 21); R(0, 98, /*null key*/ true); R(2, 22);
@@ -257,7 +257,7 @@ TEST(QueryComposerCore, JoinRamTables_NullKeyValueDoesNotMatch)
 
 TEST(QueryComposerCore, RamSortCompareKey_NullOrdering)
 {
-	const ibValue nul;                                            // TYPE_EMPTY == NULL for sort
+	const ibValue nul(ibValueTypes::TYPE_NULL);                   // SQL NULL
 	const ibValue a(wxString(wxT("A"))), b(wxString(wxT("B")));
 
 	// non-NULL total order, both directions; equal keys fall through (0)
@@ -280,13 +280,14 @@ TEST(QueryComposerCore, RamSortCompareKey_NullOrdering)
 // both ways for a NULL so it compared "equal" to every non-NULL).
 TEST(QueryComposerCore, RamSortCompareKey_StableSortPlacesNulls)
 {
-	const std::vector<ibValue> v = { ibValue(wxString(wxT("B"))), ibValue(), ibValue(wxString(wxT("A"))), ibValue() };
+	const ibValue N(ibValueTypes::TYPE_NULL);
+	const std::vector<ibValue> v = { ibValue(wxString(wxT("B"))), N, ibValue(wxString(wxT("A"))), N };
 
 	std::vector<ibValue> asc = v;
 	std::stable_sort(asc.begin(), asc.end(),
 		[](const ibValue& x, const ibValue& y) { return ibQueryComposer::RamSortCompareKey(x, y, true) < 0; });
-	EXPECT_EQ(asc[0].GetType(), ibValueTypes::TYPE_EMPTY);        // NULLs first
-	EXPECT_EQ(asc[1].GetType(), ibValueTypes::TYPE_EMPTY);
+	EXPECT_EQ(asc[0].GetType(), ibValueTypes::TYPE_NULL);         // NULLs first
+	EXPECT_EQ(asc[1].GetType(), ibValueTypes::TYPE_NULL);
 	EXPECT_EQ(asc[2].GetString().ToStdString(), "A");
 	EXPECT_EQ(asc[3].GetString().ToStdString(), "B");
 
@@ -295,8 +296,8 @@ TEST(QueryComposerCore, RamSortCompareKey_StableSortPlacesNulls)
 		[](const ibValue& x, const ibValue& y) { return ibQueryComposer::RamSortCompareKey(x, y, false) < 0; });
 	EXPECT_EQ(desc[0].GetString().ToStdString(), "B");           // NULLs last
 	EXPECT_EQ(desc[1].GetString().ToStdString(), "A");
-	EXPECT_EQ(desc[2].GetType(), ibValueTypes::TYPE_EMPTY);
-	EXPECT_EQ(desc[3].GetType(), ibValueTypes::TYPE_EMPTY);
+	EXPECT_EQ(desc[2].GetType(), ibValueTypes::TYPE_NULL);
+	EXPECT_EQ(desc[3].GetType(), ibValueTypes::TYPE_NULL);
 }
 
 // ===========================================================================
@@ -313,7 +314,7 @@ TEST(QueryComposerCore, FilterRows_OrIsNullNot)
 	t.AddColumn(QTY,    wxT("qty"),    kNoType);
 	auto row = [&](const wxString& reg, long q, bool regNull = false) {
 		const long r = t.AppendRow();
-		if (!regNull) t.SetCell(r, REGION, ibValue(reg));
+		t.SetCell(r, REGION, regNull ? ibValue(ibValueTypes::TYPE_NULL) : ibValue(reg));   // SQL NULL
 		t.SetCell(r, QTY, ibValue(ibNumber(q)));
 	};
 	row(wxT("North"), 10); row(wxT("South"), 5); row(wxT("East"), 7); row(wxT(""), 3, /*null*/ true);

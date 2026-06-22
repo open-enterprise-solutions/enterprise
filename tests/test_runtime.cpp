@@ -286,7 +286,7 @@ TEST(RuntimeTest, LinqWhere_NullThreeValuedLogic) {
 		wxT("  arr = New Array;\n")
 		wxT("  arr.Add(\"North\");\n")
 		wxT("  arr.Add(\"South\");\n")
-		wxT("  arr.Add(Undefined);\n")
+		wxT("  arr.Add(Null);\n")
 		wxT("  Return arr.Where(Function(x) Return x <> \"North\" EndFunction).Count();\n")
 		wxT("EndFunction\n");
 	ASSERT_TRUE(TryCompile(cc, src));
@@ -309,7 +309,7 @@ TEST(RuntimeTest, LinqWhere_AndNullThreeValuedLogic) {
 		wxT("  arr = New Array;\n")
 		wxT("  arr.Add(\"North\");\n")
 		wxT("  arr.Add(\"South\");\n")
-		wxT("  arr.Add(Undefined);\n")
+		wxT("  arr.Add(Null);\n")
 		wxT("  Return arr.Where(Function(x) Return x <> \"North\" And x <> \"East\" EndFunction).Count();\n")
 		wxT("EndFunction\n");
 	ASSERT_TRUE(TryCompile(cc, src));
@@ -332,7 +332,7 @@ TEST(RuntimeTest, LinqWhere_NotNullThreeValuedLogic) {
 		wxT("  arr = New Array;\n")
 		wxT("  arr.Add(\"North\");\n")
 		wxT("  arr.Add(\"South\");\n")
-		wxT("  arr.Add(Undefined);\n")
+		wxT("  arr.Add(Null);\n")
 		wxT("  Return arr.Where(Function(x) Return Not (x = \"North\") EndFunction).Count();\n")
 		wxT("EndFunction\n");
 	ASSERT_TRUE(TryCompile(cc, src));
@@ -353,7 +353,7 @@ TEST(RuntimeTest, LinqWhere_NotAndNullThreeValuedLogic) {
 		wxT("  arr = New Array;\n")
 		wxT("  arr.Add(\"North\");\n")
 		wxT("  arr.Add(\"South\");\n")
-		wxT("  arr.Add(Undefined);\n")
+		wxT("  arr.Add(Null);\n")
 		wxT("  Return arr.Where(Function(x) Return Not (x = \"North\" And x <> \"East\") EndFunction).Count();\n")
 		wxT("EndFunction\n");
 	ASSERT_TRUE(TryCompile(cc, src));

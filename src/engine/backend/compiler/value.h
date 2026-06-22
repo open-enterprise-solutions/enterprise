@@ -781,9 +781,9 @@ public:
 	void operator = (const ibValue* pParam);
 
 	//Implementation of comparison operators:
-	bool operator > (const ibValue& cParam) const { return CompareValueGT(cParam); }
+	bool operator > (const ibValue& cParam) const { return CompareValueGT(cParam) > 0; }
 	bool operator >= (const ibValue& cParam) const { return CompareValueGE(cParam); }
-	bool operator < (const ibValue& cParam) const { return CompareValueLS(cParam); }
+	bool operator < (const ibValue& cParam) const { return CompareValueLS(cParam) < 0; }
 	bool operator <= (const ibValue& cParam) const { return CompareValueLE(cParam); }
 	bool operator == (const ibValue& cParam) const { return CompareValueEQ(cParam); }
 	bool operator != (const ibValue& cParam) const { return CompareValueNE(cParam); }
@@ -791,10 +791,14 @@ public:
 	const ibValue& operator+(const ibValue& cParam);
 	const ibValue& operator-(const ibValue& cParam);
 
-	//Implementation of comparison operators:
-	virtual bool CompareValueGT(const ibValue& cParam) const;
+	// Comparison. CompareValueLS / CompareValueGT are the two three-way ordering primitives (<0 / 0 / >0,
+	// NULL = smallest, SQL-aligned — see value.cpp): one hook per direction so a class can retune `<` and
+	// `>` independently. By default GT follows LS (same total order), GE derives from GT and LE from LS, so
+	// a class normally overrides ONE method (CompareValueLS) to change the whole order, yet can still tune
+	// an individual operator. EQ/NE stay separate (type-strict equality, distinct from order-equal).
+	virtual int  CompareValueLS(const ibValue& cParam) const;
+	virtual int  CompareValueGT(const ibValue& cParam) const;
 	virtual bool CompareValueGE(const ibValue& cParam) const;
-	virtual bool CompareValueLS(const ibValue& cParam) const;
 	virtual bool CompareValueLE(const ibValue& cParam) const;
 	virtual bool CompareValueEQ(const ibValue& cParam) const;
 	virtual bool CompareValueNE(const ibValue& cParam) const;
@@ -985,6 +989,12 @@ public:
 	virtual ibValueTypes GetType() const;
 
 	virtual bool IsEmpty() const;
+
+	// SQL / explicit NULL: the `Null` literal, and a NULL DB column (the driver yields ibValue(TYPE_NULL)).
+	// Distinct from IsEmpty (TYPE_EMPTY = Undefined — a COMPOSITE value with no type chosen yet). Only
+	// this is the SQL null the query layer keys on (three-valued filter, null ordering, join-key skip);
+	// an empty reference (type chosen, no guid) and Undefined are NOT it.
+	bool IsNull() const { return GetType() == ibValueTypes::TYPE_NULL; }
 
 	virtual wxString GetClassName() const;
 	virtual ibClassID GetClassType() const;

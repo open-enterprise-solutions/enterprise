@@ -64,7 +64,9 @@ ibQueryRamTable MakeRamFixture()
 	t.AddColumn(QTY,    wxT("qty"),    kNoType);
 	auto row = [&](const wxString& reg, long q, bool regNull) {
 		const long r = t.AppendRow();
-		if (!regNull) t.SetCell(r, REGION, ibValue(reg));
+		// A DB NULL column materialises as ibValue(TYPE_NULL) (the driver) — model that, not an
+		// unset/Undefined (TYPE_EMPTY) cell, which is a runtime placeholder and not a SQL null.
+		t.SetCell(r, REGION, regNull ? ibValue(ibValueTypes::TYPE_NULL) : ibValue(reg));
 		t.SetCell(r, QTY, ibValue(ibNumber(q)));
 	};
 	row(wxT("North"), 10, false);
@@ -233,7 +235,7 @@ TEST(QueryParityAgg, AggregatesIgnoreNull)
 	auto row = [&](long k, long b, bool bNull) {
 		const long r = ram.AppendRow();
 		ram.SetCell(r, KEY, ibValue(ibNumber(k)));
-		if (!bNull) ram.SetCell(r, BONUS, ibValue(ibNumber(b)));
+		ram.SetCell(r, BONUS, bNull ? ibValue(ibValueTypes::TYPE_NULL) : ibValue(ibNumber(b)));   // SQL NULL bonus
 	};
 	row(1, 10, false); row(2, 0, true); row(3, 30, false); row(4, 40, false);
 

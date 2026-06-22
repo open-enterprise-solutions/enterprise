@@ -419,10 +419,11 @@ struct ScopedThreeValuedNull {
 	~ScopedThreeValuedNull() { ts_threeValuedNullCompare = m_prev; }
 };
 
-// A genuine NULL operand (unset / explicit Null) — distinct from IsEmptyValue, which
-// also reports Boolean-false as "empty".
+// A genuine SQL NULL operand — the `Null` literal / a NULL DB column (TYPE_NULL). NOT TYPE_EMPTY
+// (Undefined = a composite with no type chosen) and NOT IsEmptyValue (which also reports Boolean
+// false). This is what the three-valued (Kleene) comparison path keys on, matching the DB.
 inline bool IsNullOperand(const ibValue& v) {
-	return v.GetType() == ibValueTypes::TYPE_EMPTY || v.GetType() == ibValueTypes::TYPE_NULL;
+	return v.IsNull();
 }
 
 inline void SetTypeBoolean(ibValue& cValue1, bool bValue)

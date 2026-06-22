@@ -965,129 +965,46 @@ std::shared_ptr<ibValueIteratorState> ibValue::CreateIterator()
 //*                    compare support                        *
 //*************************************************************
 
-// compare '>'
-bool ibValue::CompareValueGT(const ibValue& cParam) const
+// Three-way ordering primitive: <0 this orders before cParam, >0 after, 0 equal. operator< and the
+// derived GT/GE/LE all route through this, so ordering lives in ONE place per type and a subclass
+// overrides it once (see ibValueReferenceDataObject). A value with NO scalar payload (TYPE_NULL = SQL
+// null, OR TYPE_EMPTY = Undefined) sorts to the BOTTOM — SQL-aligned (NULLS FIRST asc / LAST desc) and,
+// crucially, a TOTAL order, so std::sort / std::set / std::map keys over ibValue are well-defined (the
+// old two-valued < returned false BOTH ways for such an operand, leaving it unordered). The SQL-null
+// SEMANTICS (three-valued filter / join-key skip) key strictly on TYPE_NULL via IsNull(); ordering is
+// the one place both "no value" tags share a position.
+int ibValue::CompareValueLS(const ibValue& cParam) const
 {
+	const bool aNull = (m_typeClass == ibValueTypes::TYPE_EMPTY || m_typeClass == ibValueTypes::TYPE_NULL);
+	const bool bNull = (cParam.GetType() == ibValueTypes::TYPE_EMPTY || cParam.GetType() == ibValueTypes::TYPE_NULL);
+	if (aNull || bNull)
+		return aNull == bNull ? 0 : (aNull ? -1 : 1);   // no scalar payload = smallest; both -> equal
+
 	switch (m_typeClass)
 	{
-	case ibValueTypes::TYPE_EMPTY:
-		return false;
-	case ibValueTypes::TYPE_NULL:
-		return false;
-	case ibValueTypes::TYPE_BOOLEAN:
-		return GetBoolean() > cParam.GetBoolean();
-	case ibValueTypes::TYPE_NUMBER:
-		return GetNumber() > cParam.GetNumber();
-	case ibValueTypes::TYPE_DATE:
-		return GetDate() > cParam.GetDate();
+	case ibValueTypes::TYPE_BOOLEAN: { const bool a = GetBoolean(), b = cParam.GetBoolean(); return a == b ? 0 : (!a ? -1 : 1); }
+	case ibValueTypes::TYPE_NUMBER:  { const ibNumber a = GetNumber(), b = cParam.GetNumber(); return a < b ? -1 : (b < a ? 1 : 0); }
+	case ibValueTypes::TYPE_DATE:    { const wxLongLong_t a = GetDate(), b = cParam.GetDate(); return a < b ? -1 : (a > b ? 1 : 0); }
 	case ibValueTypes::TYPE_STRING:
-		return GetString() > cParam.GetString();
 	case ibValueTypes::TYPE_ENUM:
 	case ibValueTypes::TYPE_OLE:
 	case ibValueTypes::TYPE_VALUE:
 	case ibValueTypes::TYPE_FUNCTION:
-	case ibValueTypes::TYPE_ITERATOR:
-		return GetString() > cParam.GetString();
+	case ibValueTypes::TYPE_ITERATOR: { const wxString a = GetString(), b = cParam.GetString(); return a < b ? -1 : (b < a ? 1 : 0); }
 	case ibValueTypes::TYPE_CONST_REFFER:
-	case ibValueTypes::TYPE_REFFER:
-		return m_pRef->CompareValueGT(cParam);
+	case ibValueTypes::TYPE_REFFER:   return m_pRef->CompareValueLS(cParam);
 	};
 
-	return false;
+	return 0;
 }
 
-// compare '>='
-bool ibValue::CompareValueGE(const ibValue& cParam) const
-{
-	switch (m_typeClass)
-	{
-	case ibValueTypes::TYPE_EMPTY:
-		return false;
-	case ibValueTypes::TYPE_NULL:
-		return false;
-	case ibValueTypes::TYPE_BOOLEAN:
-		return GetBoolean() >= cParam.GetBoolean();
-	case ibValueTypes::TYPE_NUMBER:
-		return GetNumber() >= cParam.GetNumber();
-	case ibValueTypes::TYPE_DATE:
-		return GetDate() >= cParam.GetDate();
-	case ibValueTypes::TYPE_STRING:
-		return GetString() >= cParam.GetString();
-	case ibValueTypes::TYPE_ENUM:
-	case ibValueTypes::TYPE_OLE:
-	case ibValueTypes::TYPE_VALUE:
-	case ibValueTypes::TYPE_FUNCTION:
-	case ibValueTypes::TYPE_ITERATOR:
-		return GetString() >= cParam.GetString();
-	case ibValueTypes::TYPE_CONST_REFFER:
-	case ibValueTypes::TYPE_REFFER:
-		return m_pRef->CompareValueGE(cParam);
-	};
-
-	return false;
-}
-
-// compare '<'
-bool ibValue::CompareValueLS(const ibValue& cParam) const
-{
-	switch (m_typeClass)
-	{
-	case ibValueTypes::TYPE_EMPTY:
-		return false;
-	case ibValueTypes::TYPE_NULL:
-		return false;
-	case ibValueTypes::TYPE_BOOLEAN:
-		return GetBoolean() < cParam.GetBoolean();
-	case ibValueTypes::TYPE_NUMBER:
-		return GetNumber() < cParam.GetNumber();
-	case ibValueTypes::TYPE_DATE:
-		return GetDate() < cParam.GetDate();
-	case ibValueTypes::TYPE_STRING:
-		return GetString() < cParam.GetString();
-	case ibValueTypes::TYPE_ENUM:
-	case ibValueTypes::TYPE_OLE:
-	case ibValueTypes::TYPE_VALUE:
-	case ibValueTypes::TYPE_FUNCTION:
-	case ibValueTypes::TYPE_ITERATOR:
-		return GetString() < cParam.GetString();
-	case ibValueTypes::TYPE_CONST_REFFER:
-	case ibValueTypes::TYPE_REFFER:
-		return m_pRef->CompareValueLS(cParam);
-	};
-
-	return false;
-}
-
-// compare '<='
-bool ibValue::CompareValueLE(const ibValue& cParam) const
-{
-	switch (m_typeClass)
-	{
-	case ibValueTypes::TYPE_EMPTY:
-		return false;
-	case ibValueTypes::TYPE_NULL:
-		return false;
-	case ibValueTypes::TYPE_BOOLEAN:
-		return GetBoolean() <= cParam.GetBoolean();
-	case ibValueTypes::TYPE_NUMBER:
-		return GetNumber() <= cParam.GetNumber();
-	case ibValueTypes::TYPE_DATE:
-		return GetDate() <= cParam.GetDate();
-	case ibValueTypes::TYPE_STRING:
-		return GetString() <= cParam.GetString();
-	case ibValueTypes::TYPE_ENUM:
-	case ibValueTypes::TYPE_OLE:
-	case ibValueTypes::TYPE_VALUE:
-	case ibValueTypes::TYPE_FUNCTION:
-	case ibValueTypes::TYPE_ITERATOR:
-		return GetString() <= cParam.GetString();
-	case ibValueTypes::TYPE_CONST_REFFER:
-	case ibValueTypes::TYPE_REFFER:
-		return m_pRef->CompareValueLE(cParam);
-	};
-
-	return false;
-}
+// '>' is the second three-way primitive: by default the SAME total order as '<' (a > b iff LS > 0),
+// but a virtual hook of its own so a class can retune the `>` direction independently. '>=' / '<='
+// are boolean and pair with their family ('>=' with GT, '<=' with LS), all going through the virtual
+// calls so overriding LS (or GT) flows through. A class normally overrides only CompareValueLS.
+int  ibValue::CompareValueGT(const ibValue& cParam) const { return CompareValueLS(cParam); }
+bool ibValue::CompareValueGE(const ibValue& cParam) const { return CompareValueGT(cParam) >= 0; }
+bool ibValue::CompareValueLE(const ibValue& cParam) const { return CompareValueLS(cParam) <= 0; }
 
 // compare '=='
 bool ibValue::CompareValueEQ(const ibValue& cParam) const

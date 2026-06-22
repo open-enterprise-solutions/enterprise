@@ -492,9 +492,11 @@ RamTri RamTriNot(RamTri a)
 	return a == RamTri::Unknown ? RamTri::Unknown : (a == RamTri::True ? RamTri::False : RamTri::True);
 }
 
+// SQL NULL only (TYPE_NULL — what the DB driver yields for a NULL column). NOT TYPE_EMPTY
+// (Undefined = composite with no type chosen): that is a runtime placeholder, never a DB null.
 bool RamIsNullValue(const ibValue& v)
 {
-	return v.GetType() == ibValueTypes::TYPE_NULL || v.GetType() == ibValueTypes::TYPE_EMPTY;
+	return v.IsNull();
 }
 
 RamTri RamEvalLeaf(const ibQueryCondition& c, const ibQueryRamTable& t, long row)
@@ -507,9 +509,9 @@ RamTri RamEvalLeaf(const ibQueryCondition& c, const ibQueryRamTable& t, long row
 	bool res = false;
 	if (c.m_explicitOp) {
 		switch (c.m_op) {
-			case ibQueryFilterOp::Less:         res = cell.CompareValueLS(c.m_value); break;
+			case ibQueryFilterOp::Less:         res = cell.CompareValueLS(c.m_value) < 0; break;   // three-way int -> '<'
 			case ibQueryFilterOp::LessEqual:    res = cell.CompareValueLE(c.m_value); break;
-			case ibQueryFilterOp::Greater:      res = cell.CompareValueGT(c.m_value); break;
+			case ibQueryFilterOp::Greater:      res = cell.CompareValueGT(c.m_value) > 0; break;   // three-way int -> '>'
 			case ibQueryFilterOp::GreaterEqual: res = cell.CompareValueGE(c.m_value); break;
 			case ibQueryFilterOp::Like:         res = RamLike(cell.GetString(), c.m_value.GetString()); break;
 		}
@@ -2085,18 +2087,13 @@ std::shared_ptr<ibRenderedPageCache> ibDataQueryBuilder::NewPageCache()
 	return std::make_shared<ibRenderedPageCache>();
 }
 
-// One ORDER BY key compared for the RAM sort floor. NULL is treated as the smallest value
-// (SQLite / MySQL convention, the embedded reference dialect) -> NULLS FIRST on ASC, NULLS LAST
-// on DESC, deterministically. Without this, ibValue::operator< returns false for an empty/NULL
-// operand both ways, so a NULL and a non-NULL compare "equal" and the NULL floats at its input
-// position (non-deterministic, diverging from any SQL ORDER BY). Defined here (file scope, past
-// the RAM-helper anonymous namespace) so it can be a member yet still call RamIsNullValue.
+// One ORDER BY key compared for the RAM sort floor. Delegates to ibValue::CompareValueLS — the
+// SQL-aligned three-way total order (NULL = smallest) — then applies the sort direction, giving
+// NULLS FIRST on ASC / NULLS LAST on DESC deterministically. The NULL rule lives in ONE place
+// (ibValue) now, shared with operator< / std::sort / set / map.
 //   return <0: a orders before b ; >0: b before a ; 0: equal on this key (try the next key).
 int ibQueryComposer::RamSortCompareKey(const ibValue& va, const ibValue& vb, bool ascending)
 {
-	const bool aNull = RamIsNullValue(va), bNull = RamIsNullValue(vb);
-	if (aNull && bNull) return 0;
-	if (aNull != bNull) return (ascending ? aNull : bNull) ? -1 : 1;   // NULL = smallest
-	if (va == vb) return 0;
-	return ((va < vb) == ascending) ? -1 : 1;
+	const int c = va.CompareValueLS(vb);
+	return ascending ? c : -c;
 }
