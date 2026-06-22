@@ -1085,7 +1085,7 @@ start_label:
 					ibBackendCoreException::Error(_("Cannot call: value is not a callable function"));
 
 				const ibByteCode* pLocalByteCode = fn->GetParentBc();
-				const long lambdaParamCount = bfn->m_lCodeParamCount;
+				const long lambdaParamCount = (long)bfn->m_listParam.size();
 				const long lambdaVarCount   = bfn->m_lVarCount;
 				const long lambdaEntryIp    = bfn->m_lCodeLine;
 
@@ -1169,8 +1169,8 @@ start_label:
 					}
 					const ibParamUnit& puDef = bfn->m_listParam[i].m_defaultValue;
 					if (puDef.m_numArray == DEF_VAR_SKIP) {
-						const wxString& nm = (i < (long)bfn->m_listParamRealName.size())
-							? bfn->m_listParamRealName[i]
+						const wxString& nm = (i < (long)bfn->m_listParam.size())
+							? bfn->m_listParam[i].m_strName
 							: wxString::Format(wxT("p%ld"), i);
 						ibBackendCoreException::Error(
 							_("Missing required argument '%s' to function value"),
@@ -1764,15 +1764,12 @@ bool ibProcUnit::GetPropVal(const wxString& strPropName, ibValue& pvarPropVal) /
 class ibCompileEval : public ibCompileCode {
 public:
 	// Construct from a runtime context — pulls host bc + host fn out
-	// of pRunContext. Used by Evaluate / CompileExpression.
+	// of pRunContext, then delegates to the (host bc, host fn) ctor
+	// below (the single setup site).
 	explicit ibCompileEval(ibRunContext* pRunContext)
-		: ibCompileCode(),
-		  m_evalHostFunction(pRunContext ? pRunContext->m_currentFunction : nullptr)
+		: ibCompileEval(pRunContext ? pRunContext->GetByteCode() : nullptr,
+		                pRunContext ? pRunContext->m_currentFunction : nullptr)
 	{
-		m_cByteCode.m_bExpressionOnly = true;
-		m_cByteCode.m_parent = pRunContext ? pRunContext->GetByteCode() : nullptr;
-		m_rootContext->m_numFindLocalInParent = 2;
-
 	}
 
 	// Construct from a (host bc, host fn) pair — for paths where

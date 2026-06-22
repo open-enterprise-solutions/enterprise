@@ -75,7 +75,7 @@ extern BACKEND_API const ibClassID g_valueIterator;
 // Storage: pointer into parentBc->m_listFunc + the funcIndex at
 // which the lambda's ibByteFunction sits. Single source of truth —
 // frame shape (paramCount / varCount / bCodeRet), m_listParam (with
-// defaults), m_listParamRealName (param names), m_listLocals (locals
+// defaults + param names), m_listLocals (locals
 // by name for eval), and the entry IP (m_lCodeLine) all live on
 // ibByteFunction itself, the same path named functions use.
 //

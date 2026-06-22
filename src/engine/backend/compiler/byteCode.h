@@ -119,6 +119,11 @@ struct ibByteCode {
 		bool        m_bByRef       = false;
 		ibClassID   m_clsid        = 0;        // 0 = dynamic; for CHECK_TYPE
 		ibParamUnit m_defaultValue;             // m_numArray = DEF_VAR_SKIP if none
+		// Original-cased parameter name. Folded in from the former
+		// parallel ibByteFunction::m_listParamRealName vector — the name
+		// now travels with the param's own data (debugger SendStack +
+		// lambda missing-arg diagnostics read it).
+		wxString    m_strName;
 	};
 
 	// Symbol entry in m_listVar / ibByteFunction::m_listLocals (both
@@ -200,8 +205,8 @@ struct ibByteCode {
 		// Construct from compile-side ibVariable. Templated to keep
 		// byteCode.h free of compileContext.h — instantiated at the
 		// mirror site (compileCode.cpp, which includes both headers).
-		// CompileVar must expose: m_numVariable, m_strType, m_bExport,
-		// m_bContext, m_bExternal, m_bScoped, m_strRealName, m_strContext.
+		// CompileVar must expose: m_numVariable, m_strType, m_kind,
+		// m_bScoped, m_strRealName, m_strContext, m_scopeDepth, m_clsid.
 		// Temps are filtered out at the mirror site — they never reach
 		// bc-level structs.
 		template<typename CompileVar>
@@ -215,24 +220,11 @@ struct ibByteCode {
 			  m_strContext(v.m_strContext),
 			  m_scopeDepth(v.m_scopeDepth)
 		{
-			// Derive m_kind from the compile-side flags:
-			//   m_strContext non-empty  → ContextProp  (prop of binding)
-			//   m_bExternal             → External     (bound by binder, no helper)
-			//   m_bContext              → Context      (bound by binder, exposes helper)
-			//   m_bExport               → Export       (user-declared cross-bc export)
-			//   else                    → Local        (user-declared private)
-			if (!v.m_strContext.IsEmpty())
-				m_kind = ibVarKind::ContextProp;
-			else if (v.m_bExternal)
-				m_kind = ibVarKind::External;
-			else if (v.m_bContext)
-				m_kind = ibVarKind::Context;
-			else if (v.m_bExport)
-				m_kind = ibVarKind::Export;
-			else if (v.IsProtected())
-				m_kind = ibVarKind::Protected;
-			else
-				m_kind = ibVarKind::Local;
+			// Compile-side ibVariable now carries the authoritative kind in
+			// the SAME ibVarKind enum (set at PushVariable + the extern /
+			// access stamps), so the mirror is a straight copy — no more
+			// boolean-cascade derivation here.
+			m_kind = v.m_kind;
 		}
 	};
 
@@ -240,7 +232,6 @@ struct ibByteCode {
 
 		operator long() const { return m_lCodeLine; }
 
-		long m_lCodeParamCount = 0;
 		long m_lCodeLine = -1;       // entry IP into m_listCode
 		bool m_bCodeRet = false;     // true → function (returns); false → procedure
 
@@ -251,7 +242,7 @@ struct ibByteCode {
 		// PushCallFunction's null/size checks still cover that case.
 		long      m_lVarCount    = 0;          // # of locals; for frame allocation
 		ibClassID m_returnClsid  = 0;          // 0 = dynamic; for return-value CHECK_TYPE
-		std::vector<ibByteParam> m_listParam;   // size == m_lCodeParamCount
+		std::vector<ibByteParam> m_listParam;   // params (count = size(); name on each ibByteParam)
 
 		// Discriminator — sole "what is this entry" tag. m_bContext /
 		// m_bExport legacy mirrors are gone; readers derive via the
@@ -295,10 +286,6 @@ struct ibByteCode {
 		// caller emits OPER_CALL_METHOD on the parent context — analogous
 		// to ibByteCodeVarInfo::m_strContext for context-props.
 		wxString  m_strContext;
-		// Param-name list parallel to m_listParam — separate vector
-		// so the runtime ibByteParam struct stays POD-light. Used by
-		// debugger SendStack to render `Foo(arg1 = 42, arg2 = "x")`.
-		std::vector<wxString> m_listParamRealName;
 
 		// Function-scope symbol table — all named variables visible
 		// inside this function's frame (params + locals + temps).
@@ -335,27 +322,22 @@ struct ibByteCode {
 		// byteCode.h free of compileContext.h — instantiated at the
 		// CompileFunction finalize site (compileCode.cpp). CompileFn
 		// must expose: m_listParam (each with .m_bByRef, .m_strType,
-		// .m_puValue, .m_strName), m_lVarCount, m_bExport, m_bContext,
+		// .m_puValue, .m_strName), m_lVarCount, m_kind,
 		// m_bCodeRet, m_strType, m_strRealName, m_strContext.
 		template<typename CompileFn>
 		ibByteFunction(long lAddress, const CompileFn& src)
-			: m_lCodeParamCount((long)src.m_listParam.size()),
-			  m_lCodeLine(lAddress),
+			: m_lCodeLine(lAddress),
 			  m_bCodeRet(src.m_bCodeRet),
 			  m_lVarCount(src.m_lVarCount),
 			  m_returnClsid(src.m_strType.IsEmpty()
 				? 0
 				: ibValue::GetIDObjectFromString(src.m_strType)),
-			  m_kind(!src.m_strContext.IsEmpty() ? ibFnKind::ContextMethod
-			        : src.m_bExport              ? ibFnKind::Export
-			        : src.IsProtected()          ? ibFnKind::Protected
-			                                     : ibFnKind::Local),
+			  m_kind(src.m_kind),
 			  m_needsHeapFrame(src.m_needsHeapFrame),
 			  m_strRealName(src.m_strRealName),
 			  m_strContext(src.m_strContext)
 		{
 			m_listParam.reserve(src.m_listParam.size());
-			m_listParamRealName.reserve(src.m_listParam.size());
 			for (const auto& p : src.m_listParam) {
 				ibByteParam bp;
 				bp.m_bByRef       = p.m_bByRef;
@@ -363,8 +345,8 @@ struct ibByteCode {
 					? 0
 					: ibValue::GetIDObjectFromString(p.m_strType);
 				bp.m_defaultValue = p.m_puValue;
+				bp.m_strName      = p.m_strName;
 				m_listParam.push_back(bp);
-				m_listParamRealName.push_back(p.m_strName);
 			}
 		}
 	};
@@ -476,7 +458,7 @@ public:
 		auto iterator = std::find_if(m_listFunc.begin(), m_listFunc.end(),
 			[lCodeLine](const auto& fn) { return lCodeLine == (long)fn; });
 		if (iterator != m_listFunc.end())
-			return iterator->m_lCodeParamCount;
+			return (long)iterator->m_listParam.size();
 		return 0;
 	}
 

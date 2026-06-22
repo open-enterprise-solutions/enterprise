@@ -39,7 +39,7 @@ ibParamUnit ibCompileContext::AddVariable(const wxString& strVarName,
 	// (parent module entries), which is wrong: declaring `Var X` here
 	// is allowed even if a parent module exports an X.
 	auto existing = std::find_if(m_listVariable.begin(), m_listVariable.end(),
-		[&strVarName](const auto& pair) { return stringUtils::CompareString(strVarName, pair.first); });
+		[&strVarName](const auto& v) { return v && stringUtils::CompareString(strVarName, v->m_strRealName); });
 	if (existing != m_listVariable.end()) {
 		m_compileModule->SetError(ERROR_IDENTIFIER_DUPLICATE, strVarName);
 		return ibParamUnit();
@@ -255,7 +255,7 @@ ibParamUnit ibCompileContext::GetVariable(const wxString& strVarName, bool bFind
 				if (rootCtx != nullptr && rootCtx != this) {
 					std::shared_ptr<ibVariable> rootVar = nullptr;
 					if (rootCtx->FindVariable(strVarName, rootVar)
-						&& rootVar && rootVar->m_bContext)
+						&& rootVar && rootVar->IsContextRelated())
 					{
 						ibParamUnit variable;
 						variable.m_numArray = 1;
@@ -304,21 +304,26 @@ ibParamUnit ibCompileContext::GetVariable(const wxString& strVarName, bool bFind
 void ibCompileContext::PushVariable(const wxString& strVarName, const wxString& strContextVar, unsigned int numVariable,
 	const wxString& typeVar, bool exportVar, bool contextVar, bool tempVar)
 {
-	// Map key is the original-cased name — lookups go through
-	// std::find_if + stringUtils::CompareString (case-insensitive),
-	// so there's no need to upper-normalize storage. Renderers
-	// (debugger / catalog object PrepareNames) read the key directly
-	// and now show the user's source casing instead of UPPERCASE.
+	// Entries are keyed by m_strRealName via case-insensitive find_if (no
+	// upper-normalization). Renderers (debugger / PrepareNames) show the
+	// user's source casing.
 	std::shared_ptr<ibVariable> currentVariable(new ibVariable(strVarName));
 
 	currentVariable->m_strRealName = strVarName;
-	currentVariable->m_bExport = exportVar;
-	// Keep m_access in lock-step with the export flag for the parent-chain gate
-	// (which now reads m_access, not m_bExport): every exported var — user Public
-	// AND system extern/context bindings — reads as Public. Protected is stamped
-	// separately by CompileDeclaration after the variable is created.
+	// Kind from the declaration shape: a prop of a binding (strContextVar set)
+	// is ContextProp; a self-ref binding is Context; an exported name is Export;
+	// otherwise a plain Local. PrepareModuleData Pass 1 overrides Export→External
+	// for externs; CompileDeclaration's access stamp overrides →Protected.
+	currentVariable->m_kind =
+		  !strContextVar.IsEmpty() ? ibVarKind::ContextProp
+		: contextVar               ? ibVarKind::Context
+		: exportVar                ? ibVarKind::Export
+		                           : ibVarKind::Local;
+	// m_access stays in lock-step with the export flag for the parent-chain
+	// visibility gate: every exported var — user Public AND system extern /
+	// context bindings — reads as Public. Protected is stamped separately by
+	// CompileDeclaration after the variable is created.
 	currentVariable->m_access = exportVar ? ACCESS_PUBLIC : ACCESS_PRIVATE;
-	currentVariable->m_bContext = contextVar;
 
 	currentVariable->m_strContext = strContextVar;  //variable for which the attribute is called
 
@@ -333,9 +338,14 @@ void ibCompileContext::PushVariable(const wxString& strVarName, const wxString& 
 		? m_compileModule->m_compileScopeDepth
 		: 0;
 
-	m_listVariable.insert_or_assign(
-		currentVariable->m_strName, std::move(currentVariable)
-	);
+	// Vector storage with map-like upsert semantics: replace an existing
+	// same-named entry (was insert_or_assign's last-wins), else append.
+	auto itVar = std::find_if(m_listVariable.begin(), m_listVariable.end(),
+		[&](const auto& v) { return v && stringUtils::CompareString(currentVariable->m_strRealName, v->m_strRealName); });
+	if (itVar != m_listVariable.end())
+		*itVar = std::move(currentVariable);
+	else
+		m_listVariable.push_back(std::move(currentVariable));
 }
 
 void ibCompileContext::PushFunction(const wxString& strFuncName, const wxString& strContextVar, const wxString& strShortDescription, unsigned int numFunction, bool hasRetVal, int argCount)
@@ -345,8 +355,7 @@ void ibCompileContext::PushFunction(const wxString& strFuncName, const wxString&
 	);
 
 	contextFunction->m_nStart = numFunction;
-	contextFunction->m_bContext = true;
-	contextFunction->m_bExport = true;
+	contextFunction->m_kind = ibFnKind::ContextMethod;
 	// The (name, compileContext) ctor wires the back-pointer but does NOT
 	// stamp m_bCodeRet (defaults false). Context methods have no compile
 	// finalize that runs IsReturnFunction(m_numReturn), so set it straight
@@ -369,9 +378,13 @@ void ibCompileContext::PushFunction(const wxString& strFuncName, const wxString&
 	contextFunction->m_strRealName = strFuncName;
 	contextFunction->m_strShortDescription = strShortDescription;
 
-	m_listFunction.insert_or_assign(
-		contextFunction->m_strName, std::move(contextFunction)
-	);
+	// Vector storage with map-like upsert semantics (see PushVariable).
+	auto itFunc = std::find_if(m_listFunction.begin(), m_listFunction.end(),
+		[&](const auto& f) { return f && stringUtils::CompareString(contextFunction->m_strRealName, f->m_strRealName); });
+	if (itFunc != m_listFunction.end())
+		*itFunc = std::move(contextFunction);
+	else
+		m_listFunction.push_back(std::move(contextFunction));
 }
 
 /**
@@ -382,13 +395,13 @@ void ibCompileContext::PushFunction(const wxString& strFuncName, const wxString&
 bool ibCompileContext::FindVariable(const wxString& strVarName, std::shared_ptr<ibVariable>& foundedVar, bool contextVar)
 {
 	auto it = std::find_if(m_listVariable.begin(), m_listVariable.end(),
-		[strVarName](const auto pair) {return stringUtils::CompareString(strVarName, pair.first); });
+		[strVarName](const auto& v) {return v && stringUtils::CompareString(strVarName, v->m_strRealName); });
 
 	if (contextVar) {
 
 		if (it != m_listVariable.end()) {
-			foundedVar = it->second;
-			return it->second->m_bContext;
+			foundedVar = *it;
+			return (*it)->IsContextRelated();
 		}
 
 		if (m_parentContext && m_parentContext->FindVariable(strVarName, foundedVar, contextVar))
@@ -413,7 +426,7 @@ bool ibCompileContext::FindVariable(const wxString& strVarName, std::shared_ptr<
 		return false;
 	}
 	else if (it != m_listVariable.end()) {
-		foundedVar = it->second;
+		foundedVar = *it;
 		return true;
 	}
 
@@ -433,12 +446,12 @@ bool ibCompileContext::FindVariable(const wxString& strVarName, std::shared_ptr<
 bool ibCompileContext::FindFunction(const wxString& strFuncName, std::shared_ptr<ibFunction>& foundedFunc, bool contextVar)
 {
 	auto it = std::find_if(m_listFunction.begin(), m_listFunction.end(),
-		[strFuncName](const auto pair) { return stringUtils::CompareString(strFuncName, pair.first); });
+		[strFuncName](const auto& f) { return f && stringUtils::CompareString(strFuncName, f->m_strRealName); });
 
 	if (contextVar) {
-		if (it != m_listFunction.end() && it->second) {
-			foundedFunc = it->second;
-			return it->second->m_bContext;
+		if (it != m_listFunction.end() && *it) {
+			foundedFunc = *it;
+			return (*it)->IsContextMethod();
 		}
 
 		if (m_parentContext && m_parentContext->FindFunction(strFuncName, foundedFunc, contextVar))
@@ -459,8 +472,8 @@ bool ibCompileContext::FindFunction(const wxString& strFuncName, std::shared_ptr
 		foundedFunc = nullptr;
 		return false;
 	}
-	else if (it != m_listFunction.end() && it->second) {
-		foundedFunc = it->second;
+	else if (it != m_listFunction.end() && *it) {
+		foundedFunc = *it;
 		return true;
 	}
 

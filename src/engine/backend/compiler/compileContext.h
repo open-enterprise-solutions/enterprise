@@ -69,22 +69,21 @@ struct ibCompileContext {
 	//variable definition
 	struct ibVariable
 	{
-		ibVariable() : m_bExport(false), m_bContext(false), m_bExternal(false), m_bTempVar(false), m_bScoped(false), m_numVariable(0), m_clsid(0) {}
-		ibVariable(const wxString& strVariableName) : m_bExport(false), m_bContext(false), m_bExternal(false), m_bTempVar(false), m_bScoped(false), m_numVariable(0), m_clsid(0), m_strName(strVariableName) {}
+		ibVariable() : m_kind(ibVarKind::Local), m_bTempVar(false), m_bScoped(false), m_numVariable(0), m_clsid(0) {}
+		ibVariable(const wxString& strVariableName) : m_kind(ibVarKind::Local), m_bTempVar(false), m_bScoped(false), m_numVariable(0), m_clsid(0), m_strRealName(strVariableName) {}
 
 		// Construct from bytecode-side info — used by FindVariable's
 		// bytecode fallback so eval scopes (no parent compile-context
 		// chain) still produce a transient ibVariable for the caller's
 		// emission path.
 		ibVariable(const wxString& strVariableName, const ibByteCode::ibByteCodeVarInfo& info)
-			// m_bExport on compile-side = "cross-bc visible". For
-			// synth-from-bc entries that's any non-private kind:
-			// Export / External / Context / ContextProp. Plain
-			// kind=Local entries are private — never reach this ctor
-			// (FindVariable filters them).
-			: m_bExport(!info.IsLocal()),
-			  m_bContext(info.IsContext() || info.IsContextProp()),
-			  m_bExternal(info.IsExternal()),
+			// Kind copied straight from the bc entry (same ibVarKind enum).
+			// Plain kind=Local entries are private — never reach this ctor
+			// (FindVariable filters them). m_access stays Private (default):
+			// the synth var's visibility was already decided by the bc-walk
+			// that found it, and tryEmit historically read m_access (default
+			// Private) on these — preserve that.
+			: m_kind(info.m_kind),
 			  // Temps are filtered out at bc-mirror sites — synth from
 			  // bc-info is never a temp.
 			  m_bTempVar(false),
@@ -92,24 +91,23 @@ struct ibCompileContext {
 			  m_scopeDepth(info.m_scopeDepth),
 			  m_numVariable(info.m_slotIndex),
 			  m_clsid(info.m_clsid),
-			  m_strName(strVariableName),
 			  m_strRealName(info.m_strRealName.IsEmpty() ? strVariableName : info.m_strRealName),
 			  m_strContext(info.m_strContext)
 		{
 		}
 
-		bool m_bExport;
+		// Kind discriminator (reuses the bc-side ibVarKind). Sole "what is
+		// this entry" tag — replaces the m_bExport / m_bContext / m_bExternal
+		// booleans. Set at PushVariable from (m_strContext / context / export);
+		// PrepareModuleData Pass 1 flips an extern's kind to External, the
+		// access stamp flips a Protected decl to Protected. The bc mirror
+		// copies it verbatim.
+		ibVarKind m_kind = ibVarKind::Local;
 		// Access modifier (ibAccessModifier): Private(0) / Public / Protected,
-		// default Private. m_bExport is kept as the derived "== Public".
+		// default Private. Drives the parent-chain visibility gate. Kept as a
+		// SEPARATE axis from m_kind: a system binding (External / Context /
+		// ContextProp) is Public-visible yet is NOT kind=Export.
 		int  m_access = 0;
-		bool m_bContext;
-		// Set in PrepareModuleData Pass 1 for entries declared via
-		// AddExternalValue. Distinct from m_bContext: externs are bound
-		// by the binder but expose no helper props; contexts (self-ref)
-		// expose props/methods through PrepareNames. Drives kind=External
-		// on the bc mirror so the binder treats them as required-to-bind
-		// alongside Context entries.
-		bool m_bExternal;
 		bool m_bTempVar;
 		// Scope-local marker (e.g. ThisObject / ThisForm) — invisible
 		// to children through cross-bc resolution. Mirrored to
@@ -129,19 +127,23 @@ struct ibCompileContext {
 		// extern / context value's GetClassType(). 0 for plain Locals
 		// (no static type).
 		ibClassID m_clsid;
-		wxString m_strName; // Variable name
 		wxString m_strType; // Value type
-		wxString m_strRealName; // Real variable name
+		wxString m_strRealName; // Real variable name (canonical identifier)
 		wxString m_strContext; //name of the context variable
 
+		// Kind predicates — mirror the bc-side ibByteCodeVarInfo helpers.
+		bool IsExport()      const { return m_kind == ibVarKind::Export; }
+		bool IsContext()     const { return m_kind == ibVarKind::Context; }
+		bool IsExternal()    const { return m_kind == ibVarKind::External; }
+		bool IsContextProp() const { return m_kind == ibVarKind::ContextProp; }
+
 		// "Is this a context-related entry?" — bare context binding
-		// (Manager / ThisForm, m_bContext=true with empty m_strContext)
-		// or a Pass-3 prop of a binding (Catalogs of Manager, m_strContext
-		// set). Used by the identifier-path emitter to decide between
+		// (Manager / ThisForm) or a Pass-3 prop of a binding (Catalogs of
+		// Manager). Used by the identifier-path emitter to decide between
 		// OPER_GET (bare binding → frame slot) and OPER_GET_A (prop on
 		// parent var) — see compileCode.cpp's isContextProp gate.
 		bool IsContextRelated() const {
-			return m_bContext || !m_strContext.IsEmpty();
+			return IsContext() || IsContextProp();
 		}
 
 		// Access predicates over m_access (Private default). Mirror the
@@ -162,7 +164,8 @@ struct ibCompileContext {
 			}
 
 			// Construct from bytecode-side ibByteParam + the param's
-			// real-cased name (stored separately on ibByteFunction).
+			// real-cased name (now carried on ibByteParam::m_strName,
+			// passed in by the caller).
 			ibParamVariable(const wxString& strParamName, const ibByteCode::ibByteParam& bp)
 				: m_bByRef(bp.m_bByRef),
 				  m_strName(strParamName),
@@ -177,9 +180,8 @@ struct ibCompileContext {
 		};
 
 		ibFunction(const wxString& strFuncName, ibCompileContext* compileContext = nullptr) :
-			m_bExport(false),
-			m_bContext(false),
-			m_strName(strFuncName),
+			m_kind(ibFnKind::Local),
+			m_strRealName(strFuncName),
 			m_lVarCount(0), m_nStart(0), m_nFinish(0), m_numLine(0)
 		{
 			// Wire the back-pointer (functionContext->m_functionContext = this)
@@ -195,10 +197,8 @@ struct ibCompileContext {
 		// FindFunction's bytecode fallback. No compile-context to
 		// wire (eval / synthesized path); back-pointer stays null.
 		ibFunction(const wxString& strFuncName, const ibByteCode::ibByteFunction& fn)
-			: m_bExport(fn.IsExport() || fn.IsContextMethod()),
-			  m_bContext(fn.IsContextMethod()),
+			: m_kind(fn.m_kind),
 			  m_strRealName(fn.m_strRealName.IsEmpty() ? strFuncName : fn.m_strRealName),
-			  m_strName(strFuncName),
 			  m_strContext(fn.m_strContext),
 			  m_bCodeRet(fn.m_bCodeRet),
 			  // Same class of bug as the context-method m_bCodeRet gap:
@@ -213,10 +213,7 @@ struct ibCompileContext {
 		{
 			m_listParam.reserve(fn.m_listParam.size());
 			for (size_t i = 0; i < fn.m_listParam.size(); i++) {
-				const wxString& realName = (i < fn.m_listParamRealName.size())
-					? fn.m_listParamRealName[i]
-					: wxString();
-				m_listParam.emplace_back(realName, fn.m_listParam[i]);
+				m_listParam.emplace_back(fn.m_listParam[i].m_strName, fn.m_listParam[i]);
 			}
 		}
 
@@ -228,9 +225,15 @@ struct ibCompileContext {
 		bool IsPublic()    const { return m_access == ACCESS_PUBLIC; }
 		bool IsPrivate()   const { return m_access == ACCESS_PRIVATE; }
 
-		bool m_bExport, m_bContext;
+		// Kind discriminator (reuses the bc-side ibFnKind). Replaces the
+		// m_bExport / m_bContext booleans. ContextMethod = a binding's method
+		// (m_strContext set); Export / Protected = user-declared with that
+		// access; Local = private. The bc mirror copies it directly (Lambda
+		// kind is stamped bc-side only, after the mirror).
+		ibFnKind m_kind = ibFnKind::Local;
 		// Access modifier (ibAccessModifier): Private(0) / Public / Protected,
-		// default Private. m_bExport is kept as the derived "== Public".
+		// default Private. Separate axis from m_kind (a ContextMethod is
+		// cross-bc visible yet not kind=Export).
 		int  m_access = 0;
 
 		// Mirror of bytecode-side m_bCodeRet — true for FUNCTION (returns
@@ -254,8 +257,7 @@ struct ibCompileContext {
 		// whose body has its own inner-lambda capture chain.
 		bool m_needsHeapFrame = false;
 
-		wxString m_strRealName; //Function name
-		wxString m_strName; //Function name in uppercase
+		wxString m_strRealName; //Function name (canonical)
 		wxString m_strType; //type (in English notation), if it is a typed function
 		wxString m_strContext; //name of the context variable
 
@@ -271,13 +273,19 @@ struct ibCompileContext {
 
 		std::vector<ibParamVariable> m_listParam;
 
-		// "Is this a context-related entry?" — context-method (bound
-		// to a binding's helper, m_bContext=true with m_strContext set)
-		// or any function with a parent context. Used by the call-path
-		// emitter to decide OPER_CALL vs OPER_CALL_METHOD; mirrors
-		// ibVariable::IsContextRelated().
+		// Kind predicates — mirror the bc-side ibByteFunction helpers.
+		bool IsExport()         const { return m_kind == ibFnKind::Export; }
+		bool IsContextMethod()  const { return m_kind == ibFnKind::ContextMethod; }
+		// Cross-bc visible: Export or ContextMethod (privates / protected /
+		// lambdas are not). Replaces the old "m_bExport" sense at the dedup
+		// and call sites.
+		bool IsCrossBcVisible() const { return m_kind == ibFnKind::Export || m_kind == ibFnKind::ContextMethod; }
+
+		// "Is this a context-related entry?" — a context-method (bound to a
+		// binding's helper, m_strContext set). Used by the call-path emitter
+		// to decide OPER_CALL vs OPER_CALL_METHOD; mirrors ibVariable's.
 		bool IsContextRelated() const {
-			return m_bContext || !m_strContext.IsEmpty();
+			return IsContextMethod();
 		}
 	};
 
@@ -389,13 +397,17 @@ struct ibCompileContext {
 	ibFunction* m_functionContext;
 
 	//VARIABLES
-	std::map<wxString, std::shared_ptr<ibVariable>> m_listVariable;
+	// Storage is a vector keyed by m_strRealName via case-insensitive
+	// find_if (symmetric with the bc-side m_listVar flip). Declaration
+	// order is preserved; lookups are linear scans (small N per context).
+	std::vector<std::shared_ptr<ibVariable>> m_listVariable;
 
 	int m_numTempVar;//current temporary variable number
 	int m_numFindLocalInParent;//flag for searching variables in the parent (one level up), in other cases only export variables are searched in parents)
 
 	//FUNCTIONS AND PROCEDURES
-	std::map<wxString, std::shared_ptr<ibFunction>> m_listFunction; //list of encountered function definitions
+	// Vector keyed by m_strRealName via case-insensitive find_if (see m_listVariable).
+	std::vector<std::shared_ptr<ibFunction>> m_listFunction; //list of encountered function definitions
 
 	short m_numReturn;//RETURN operator processing mode: RETURN_NONE,RETURN_PROCEDURE,RETURN_FUNCTION
 

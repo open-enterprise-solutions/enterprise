@@ -108,7 +108,13 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 // hits are the production norm, so an unserialised AST would silently kill the
 // pushdown on every cached module. v13 blobs lack the trailing presence byte →
 // bump rejects them → safe recompile + repopulate.
-constexpr uint16_t kAOTFormatVersion = 14;
+// v15 (2026-06-22): ibByteFunction shed two redundant fields — m_lCodeParamCount
+// (a pure mirror of m_listParam.size()) and the parallel m_listParamRealName
+// vector (folded into ibByteParam::m_strName). The function record no longer
+// writes the leading param-count s32 nor the separate name block; each param's
+// name now rides inline in WriteParam/ReadParam. v14 blobs mis-align on the
+// dropped fields → bump rejects them → safe recompile + repopulate.
+constexpr uint16_t kAOTFormatVersion = 15;
 constexpr uint16_t kAOTFlagPortable  = 0x0001;       // unused — host-endian today
 
 // Sentinel for an over-large collection — guards Deserialize against
@@ -285,6 +291,7 @@ bool WriteParam(ibWriterMemory& w, const ibByteCode::ibByteParam& p) {
 	w.w_u64((uint64_t)p.m_clsid);
 	WriteParamRun(w, p.m_defaultValue);
 	w.w_stringZ(p.m_defaultValue.m_strType);
+	w.w_stringZ(p.m_strName);
 	return true;
 }
 
@@ -293,6 +300,7 @@ void ReadParam(const ibReaderMemory& r, ibByteCode::ibByteParam& p) {
 	p.m_clsid  = (ibClassID)r.r_u64();
 	ReadParamRun(r, p.m_defaultValue);
 	r.r_stringZ(p.m_defaultValue.m_strType);
+	r.r_stringZ(p.m_strName);
 }
 
 // --- m_lambdaExprAst (L4-2) — the recorded lambda body as the L4 query AST.
@@ -414,7 +422,6 @@ ibQueryAstExprPtr ReadLambdaAst(const ibReaderMemory& r, uint32_t depth = 0)
 }
 
 bool WriteFunction(ibWriterMemory& w, const ibByteCode::ibByteFunction& f) {
-	w.w_s32((int32_t)f.m_lCodeParamCount);
 	w.w_s32((int32_t)f.m_lCodeLine);
 	w.w_u8(f.m_bCodeRet ? 1 : 0);
 	w.w_s32((int32_t)f.m_lVarCount);
@@ -424,16 +431,11 @@ bool WriteFunction(ibWriterMemory& w, const ibByteCode::ibByteFunction& f) {
 	w.w_stringZ(f.m_strRealName);
 	w.w_stringZ(f.m_strContext);
 
-	// m_listParam — count must equal m_lCodeParamCount, but writer
-	// doesn't enforce: reader rebuilds from the count it sees.
+	// m_listParam — count is the single source of truth (m_lCodeParamCount
+	// is gone). Each entry carries its own name via WriteParam.
 	w.w_u32((uint32_t)f.m_listParam.size());
 	for (const auto& p : f.m_listParam)
 		WriteParam(w, p);
-
-	// m_listParamRealName — parallel to m_listParam.
-	w.w_u32((uint32_t)f.m_listParamRealName.size());
-	for (const auto& s : f.m_listParamRealName)
-		w.w_stringZ(s);
 
 	// m_listLocals — function-frame symbol table.
 	w.w_u32((uint32_t)f.m_listLocals.size());
@@ -452,7 +454,6 @@ bool WriteFunction(ibWriterMemory& w, const ibByteCode::ibByteFunction& f) {
 }
 
 bool ReadFunction(const ibReaderMemory& r, ibByteCode::ibByteFunction& f) {
-	f.m_lCodeParamCount = (long)r.r_s32();
 	f.m_lCodeLine       = (long)r.r_s32();
 	f.m_bCodeRet        = (r.r_u8() != 0);
 	f.m_lVarCount       = (long)r.r_s32();
@@ -467,12 +468,6 @@ bool ReadFunction(const ibReaderMemory& r, ibByteCode::ibByteFunction& f) {
 	f.m_listParam.resize(paramCount);
 	for (uint32_t i = 0; i < paramCount; ++i)
 		ReadParam(r, f.m_listParam[i]);
-
-	uint32_t paramNameCount = r.r_u32();
-	if (paramNameCount > kAOTSanityMax) return false;
-	f.m_listParamRealName.resize(paramNameCount);
-	for (uint32_t i = 0; i < paramNameCount; ++i)
-		r.r_stringZ(f.m_listParamRealName[i]);
 
 	uint32_t localsCount = r.r_u32();
 	if (localsCount > kAOTSanityMax) return false;

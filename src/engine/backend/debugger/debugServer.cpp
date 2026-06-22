@@ -690,7 +690,7 @@ void ibDebuggerServer::SendStack()
 
 		// Function name + parameters from bytecode-side m_currentFunction.
 		// nullptr = module-body (initializer); otherwise render fn signature
-		// using m_strRealName + m_listParamRealName + m_listParam.
+		// using m_strRealName + m_listParam (name on each ibByteParam).
 		const ibByteCode::ibByteFunction* fn = runContext->m_currentFunction;
 		if (fn != nullptr) {
 			strFullName += fn->m_strRealName.IsEmpty()
@@ -700,8 +700,8 @@ void ibDebuggerServer::SendStack()
 			const size_t paramCount = fn->m_listParam.size();
 			const long frameVarCount = runContext->GetLocalCount();
 			for (size_t j = 0; j < paramCount; j++) {
-				const wxString& paramName = (j < fn->m_listParamRealName.size())
-					? fn->m_listParamRealName[j]
+				const wxString& paramName = (j < fn->m_listParam.size())
+					? fn->m_listParam[j].m_strName
 					: wxString::Format(wxT("p%zu"), j);
 				// Params occupy slots [0, paramCount) — defended via
 				// frameVarCount in case a half-initialised frame races

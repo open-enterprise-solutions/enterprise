@@ -138,7 +138,21 @@ if (stringUtils::CompareString(propName, pair.first))
 
 ## What still feels redundant (next-session candidates)
 
-### Compile-side `ibVariable` / `ibFunction` — kind enum
+> **Status (2026-06-22): 6 of 7 landed** (`Debug|x86` green). Done — the compile-side
+> kind enum on `ibVariable` / `ibFunction` (the three `m_bExport` / `m_bContext` /
+> `m_bExternal` booleans collapse to a single `ibVarKind` / `ibFnKind m_kind`, reusing
+> the bc-side enum; `m_access` stays a **separate** visibility axis so the parent-chain
+> gate is untouched, and the bc-mirror ctors become a straight `m_kind` copy);
+> `m_strName` / `m_strRealName` redundancy (dead field dropped, `m_strRealName` is the
+> sole name); `ibCompileContext::m_listVariable` / `m_listFunction` map → vector (keyed
+> by `m_strRealName` via case-insensitive `find_if`, map upsert preserved as
+> find-or-replace); `ibByteFunction::m_lCodeParamCount` (→ `m_listParam.size()`);
+> `ibByteFunction::m_listParamRealName` (folded into `ibByteParam::m_strName`, **AOT
+> format v14 → v15**); `ibCompileEval` ctor delegation. **Still open:** the registry
+> `clsid → ibValueMethodHelper*` (blocked by helper-template lifecycle — AOT persistence
+> lands first). Subsections below kept as the design record.
+
+### Compile-side `ibVariable` / `ibFunction` — kind enum  *(landed 2026-06-22)*
 
 Compile-side still holds 5 booleans per ibVariable
 (`m_bExport / m_bContext / m_bExternal / m_bTempVar / m_bScoped`).

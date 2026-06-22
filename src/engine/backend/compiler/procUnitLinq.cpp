@@ -66,7 +66,7 @@ static void CallLambdaWithArgs(ibValueFunction& fn, ibValue** argPtrs,
 		ibBackendCoreException::Error(_("LINQ: lambda value is not initialised"));
 	}
 
-	const long lambdaParamCount = bfn->m_lCodeParamCount;
+	const long lambdaParamCount = (long)bfn->m_listParam.size();
 	const long lambdaVarCount   = bfn->m_lVarCount;
 
 	if (lambdaParamCount < argCount) {
@@ -93,8 +93,8 @@ static void CallLambdaWithArgs(ibValueFunction& fn, ibValue** argPtrs,
 		}
 		const ibParamUnit& puDef = bfn->m_listParam[i].m_defaultValue;
 		if (puDef.m_numArray == DEF_VAR_SKIP) {
-			const wxString& nm = (i < (long)bfn->m_listParamRealName.size())
-				? bfn->m_listParamRealName[i]
+			const wxString& nm = (i < (long)bfn->m_listParam.size())
+				? bfn->m_listParam[i].m_strName
 				: wxString::Format(wxT("p%ld"), i);
 			ibBackendCoreException::Error(
 				_("LINQ: lambda missing required argument '%s'"), nm);

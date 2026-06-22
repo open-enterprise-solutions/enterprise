@@ -151,9 +151,9 @@ void ibCompileCode::PrepareModuleData()
 	// to stamp post-AddVariable flags (External / clsid / scoped).
 	auto stampOnContext = [&](const wxString& name, auto&& mutate) {
 		auto it = std::find_if(m_rootContext->m_listVariable.begin(), m_rootContext->m_listVariable.end(),
-			[&](const auto& kv) { return stringUtils::CompareString(name, kv.first); });
-		if (it != m_rootContext->m_listVariable.end() && it->second)
-			mutate(*it->second);
+			[&](const auto& v) { return v && stringUtils::CompareString(name, v->m_strRealName); });
+		if (it != m_rootContext->m_listVariable.end() && *it)
+			mutate(**it);
 	};
 
 	// Pass 1: external values — kind=External on the bc mirror. Binder
@@ -162,8 +162,8 @@ void ibCompileCode::PrepareModuleData()
 		m_rootContext->AddVariable(externValue.first, wxEmptyString, true);
 		const ibClassID clsid = externValue.second ? externValue.second->GetClassType() : ibClassID(0);
 		stampOnContext(externValue.first, [&](ibCompileContext::ibVariable& v) {
-			v.m_bExternal = true;
-			v.m_clsid     = clsid;
+			v.m_kind  = ibVarKind::External;
+			v.m_clsid = clsid;
 		});
 	}
 
@@ -225,9 +225,9 @@ void ibCompileCode::PrepareModuleData()
 			// document is EXPORTED, not scoped — see documentObject.cpp.)
 			if (contextValue->IsPropScoped(i)) {
 				auto pushed = std::find_if(mainContext->m_listVariable.begin(), mainContext->m_listVariable.end(),
-					[&propName](const auto& kv) { return stringUtils::CompareString(propName, kv.first); });
-				if (pushed != mainContext->m_listVariable.end() && pushed->second)
-					pushed->second->m_bScoped = true;
+					[&propName](const auto& v) { return v && stringUtils::CompareString(propName, v->m_strRealName); });
+				if (pushed != mainContext->m_listVariable.end() && *pushed)
+					(*pushed)->m_bScoped = true;
 			}
 		}
 
@@ -846,10 +846,10 @@ bool ibCompileCode::CompileDeclaration(ibCompileContext* context)
 			// compile-context doesn't (i.e. the parent module isn't
 			// re-compiled along with this one).
 			auto existing = std::find_if(pCurContext->m_listVariable.begin(), pCurContext->m_listVariable.end(),
-				[&strName](const auto& pair) { return stringUtils::CompareString(strName, pair.first); });
+				[&strName](const auto& v) { return v && stringUtils::CompareString(strName, v->m_strRealName); });
 			if (existing != pCurContext->m_listVariable.end()) {
-				const auto& currentVariable = existing->second;
-				if (currentVariable->m_bExport ||
+				const auto& currentVariable = *existing;
+				if (currentVariable->IsPublic() ||
 					pCurContext->m_compileModule == this) {
 					SetError(ERROR_DEF_VARIABLE, strRealName);
 					return false;
@@ -895,11 +895,17 @@ bool ibCompileCode::CompileDeclaration(ibCompileContext* context)
 		// Stamp the access enum onto the just-created variable so Protected is
 		// distinguishable from Private at resolve time. The parent-chain
 		// visibility gate honours Protected (visible to children, not config-
-		// wide); Public already rides m_bExport.
+		// wide); Public already carries kind=Export + m_access=Public.
 		if (varAccess != ACCESS_PRIVATE) {
 			std::shared_ptr<ibCompileContext::ibVariable> declVar;
-			if (context->FindVariable(strRealName, declVar) && declVar)
+			if (context->FindVariable(strRealName, declVar) && declVar) {
 				declVar->m_access = varAccess;
+				// Protected is also a kind (the var was created kind=Local —
+				// only Public sets bExport at AddVariable). Public already
+				// carries kind=Export from creation, so only Protected flips.
+				if (varAccess == ACCESS_PROTECTED)
+					declVar->m_kind = ibVarKind::Protected;
+			}
 		}
 
 		// Tape declarator at the natural source position of the
@@ -1042,15 +1048,9 @@ bool ibCompileCode::CompileModule()
 	// which is what AOT serialization needs. Frame slots
 	// (m_slotIndex) preserve declaration-order assignment from
 	// AddVariable; vector position is just iteration order.
-	for (auto it : mainContext->m_listVariable) {
-		if (it.second->m_bTempVar) continue;
-		ibByteCode::ibByteCodeVarInfo info(*it.second);
-		// m_strRealName is the canonical name on the vector entry —
-		// the historical map key. Ctor copies from compile-side
-		// m_strRealName; if that was empty for some legacy path, fall
-		// back to the map key so lookups still match by name.
-		if (info.m_strRealName.IsEmpty())
-			info.m_strRealName = it.first;
+	for (const auto& v : mainContext->m_listVariable) {
+		if (!v || v->m_bTempVar) continue;
+		ibByteCode::ibByteCodeVarInfo info(*v);
 		m_cByteCode.m_listVar.push_back(std::move(info));
 	}
 
@@ -1081,14 +1081,14 @@ bool ibCompileCode::CompileModule()
 	// "User funcs win" — skip the push if a function with the same
 	// name already exists in m_listFunc (was achieved by try_emplace
 	// when storage was a map; replicated here via find_if).
-	for (auto it : mainContext->m_listFunction) {
-		if (!it.second) continue;
-		if (it.second->m_strContext.IsEmpty()) continue;  // own user-defined func
-		const wxString& nameKey = it.first;
+	for (const auto& fnPtr : mainContext->m_listFunction) {
+		if (!fnPtr) continue;
+		if (fnPtr->m_strContext.IsEmpty()) continue;  // own user-defined func
+		const wxString& nameKey = fnPtr->m_strRealName;
 		auto existing = std::find_if(m_cByteCode.m_listFunc.begin(), m_cByteCode.m_listFunc.end(),
 			[&](const auto& fn) { return stringUtils::CompareString(nameKey, fn.m_strRealName); });
 		if (existing != m_cByteCode.m_listFunc.end()) continue;
-		m_cByteCode.m_listFunc.emplace_back(/*lAddress=*/-1, *it.second);
+		m_cByteCode.m_listFunc.emplace_back(/*lAddress=*/-1, *fnPtr);
 	}
 
 	// Second pass: resolve m_parentRef on ContextMethod entries —
@@ -1191,7 +1191,7 @@ bool ibCompileCode::PushCallFunction(const std::shared_ptr<ibCallFunction>& call
 	code.m_numLine = callFunction->m_numLine;
 	code.m_strModuleName = callFunction->m_strModuleName;
 
-	if (foundedFunc->m_bContext) { // virtual function - calling replacements with the construct Context.FunctionName(...)
+	if (foundedFunc->IsContextMethod()) { // virtual function - calling replacements with the construct Context.FunctionName(...)
 		code.m_numOper = OPER_CALL_METHOD;
 		code.m_param1 = callFunction->m_puRetValue;		// variable into which the value is returned
 		code.m_param2 = callFunction->m_puContextVal;	// variable on which the method is called
@@ -1280,7 +1280,7 @@ bool ibCompileCode::CompileFunction(ibCompileContext* context)
 		return false;
 
 	ibCompileContext* functionContext = functionContextOwner.get();
-	const wxString& strFuncName = createdFunction->m_strName;
+	const wxString& strFuncName = createdFunction->m_strRealName;
 	const wxString& strFuncRealName = createdFunction->m_strRealName;
 
 	// Ancestor-chain dedup: declaration cannot collide with an
@@ -1301,7 +1301,7 @@ bool ibCompileCode::CompileFunction(ibCompileContext* context)
 
 		std::shared_ptr<ibCompileContext::ibFunction> foundedFunc = nullptr;
 		if (pCurContext->FindFunction(strFuncName, foundedFunc)) { // found
-			if (foundedFunc != createdFunction && foundedFunc->m_bExport) {
+			if (foundedFunc != createdFunction && foundedFunc->IsCrossBcVisible()) {
 				m_numCurrentCompile = errorPlace;
 				SetError(ERROR_DEF_FUNCTION, strFuncRealName);
 				return false;
@@ -1311,7 +1311,14 @@ bool ibCompileCode::CompileFunction(ibCompileContext* context)
 		pCurContext = pCurContext->m_parentContext;
 	}
 
-	context->m_listFunction[strFuncName] = createdFunction;
+	// Upsert into the vector (was map subscript assign): replace a same-named
+	// entry, else append.
+	auto fit = std::find_if(context->m_listFunction.begin(), context->m_listFunction.end(),
+		[&](const auto& f) { return f && stringUtils::CompareString(strFuncName, f->m_strRealName); });
+	if (fit != context->m_listFunction.end())
+		*fit = createdFunction;
+	else
+		context->m_listFunction.push_back(createdFunction);
 
 	return EmitFunctionBody(context, createdFunction, functionContext);
 }
@@ -1466,7 +1473,11 @@ bool ibCompileCode::ParseFunctionSignature(ibCompileContext* context,
 		SetError(ERROR_CODE); // only one access modifier (Public / Private / Protected) is allowed
 		return false;
 	}
-	outFunction->m_bExport = (outFunction->m_access == ACCESS_PUBLIC);
+	// Kind from the access modifier — user-declared functions only (a context
+	// method's kind is set by PushFunction). Public→Export, Protected→Protected.
+	outFunction->m_kind = (outFunction->m_access == ACCESS_PUBLIC)    ? ibFnKind::Export
+	                    : (outFunction->m_access == ACCESS_PROTECTED) ? ibFnKind::Protected
+	                                                                  : ibFnKind::Local;
 
 	return true;
 }
@@ -1536,7 +1547,7 @@ bool ibCompileCode::EmitFunctionBody(ibCompileContext* /*context*/,
 	// inside a function body) so plain set+clear was safe; with lambdas
 	// as expressions the inner emit can fire while outer is still open.
 	const wxString savedCurFuncName = m_strCurFuncName;
-	m_strCurFuncName                = createdFunction->m_strName;
+	m_strCurFuncName                = createdFunction->m_strRealName;
 
 	CompileBlock(functionContext);
 
@@ -1585,18 +1596,16 @@ bool ibCompileCode::EmitFunctionBody(ibCompileContext* /*context*/,
 	// Compile-side ibFunction was lazily stamped by GetVariable when
 	// an inner lambda captured a local from this frame.
 	ibByteCode::ibByteFunction byteFn(lAddress, *createdFunction);
-	for (auto it : functionContext->m_listVariable) {
-		if (it.second->m_bTempVar) continue;
-		ibByteCode::ibByteCodeVarInfo info(*it.second);
-		if (info.m_strRealName.IsEmpty())
-			info.m_strRealName = it.first;
+	for (const auto& v : functionContext->m_listVariable) {
+		if (!v || v->m_bTempVar) continue;
+		ibByteCode::ibByteCodeVarInfo info(*v);
 		byteFn.m_listLocals.push_back(std::move(info));
 	}
 	if (isLambda) {
 		byteFn.m_kind        = ibFnKind::Lambda;
 		byteFn.m_strRealName = wxString::Format(wxT("<lambda@%ld>"), lAddress);
 	} else if (byteFn.m_strRealName.IsEmpty()) {
-		byteFn.m_strRealName = createdFunction->m_strName;
+		byteFn.m_strRealName = createdFunction->m_strRealName;
 	}
 
 	m_cByteCode.m_listFunc.push_back(std::move(byteFn));
@@ -3661,8 +3670,8 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 			const bool isCallableVar = foundCallable
 				&& foundedCallableVar
 				&& foundedCallableVar->m_strContext.IsEmpty()
-				&& !foundedCallableVar->m_bExternal
-				&& (!foundedCallableVar->m_bContext || foundInBlockScope);
+				&& !foundedCallableVar->IsExternal()
+				&& (!foundedCallableVar->IsContext() || foundInBlockScope);
 
 			if (isCallableVar) {
 				std::vector<ibParamUnit> listParam;
@@ -3729,9 +3738,9 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 		//     OPER_SET_CONTEXT on the handle's slot.
 		//   - regular var / not found → GetVariable's frame-slot emission.
 		m_rootContext->FindVariable(strRealName, foundedVar, true);
-		const bool isScope   = foundedVar && !foundedVar->m_strContext.IsEmpty();
-		const bool isExtern  = foundedVar && foundedVar->m_strContext.IsEmpty() && foundedVar->m_bExternal;
-		const bool isContext = foundedVar && foundedVar->m_strContext.IsEmpty() && foundedVar->m_bContext && !foundedVar->m_bExternal;
+		const bool isScope   = foundedVar && foundedVar->IsContextProp();
+		const bool isExtern  = foundedVar && foundedVar->IsExternal();
+		const bool isContext = foundedVar && foundedVar->IsContext();
 
 		if (isScope) {
 			ibByteUnit code;
