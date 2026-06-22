@@ -138,7 +138,7 @@ TEST(CompilerTest, AssignmentRegistersVariable) {
 
 TEST(CompilerTest, ExportVariableMarkedAsExport) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
-	ASSERT_TRUE(TryCompile(cc, wxT("var publicVar export;")));
+	ASSERT_TRUE(TryCompile(cc, wxT("var publicVar public;")));
 	bool found = false;
 	for (const auto& v : cc.m_cByteCode.m_listVar) {
 		if (v.m_strRealName.IsSameAs(wxT("publicVar"), false)) {
@@ -175,7 +175,7 @@ TEST(CompilerTest, FunctionDeclarationRegistersInListFunc) {
 TEST(CompilerTest, ExportFunctionFlagged) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	const wxString src =
-		wxT("Function PublicFn() Export\n")
+		wxT("Function PublicFn() Public\n")
 		wxT("  Return 1;\n")
 		wxT("EndFunction\n");
 	ASSERT_TRUE(TryCompile(cc, src));
@@ -254,7 +254,7 @@ TEST(CompilerAOT, RealCompileOutputRoundTrips) {
 	// `delta`, not `by` — `By` is a reserved LINQ keyword (group/order ... by),
 	// so using it as an identifier fails to lex ("Identifier expected").
 	const wxString src =
-		wxT("var counter export;\n")
+		wxT("var counter public;\n")
 		wxT("Function Increment(delta)\n")
 		wxT("  counter = counter + delta;\n")
 		wxT("  Return counter;\n")

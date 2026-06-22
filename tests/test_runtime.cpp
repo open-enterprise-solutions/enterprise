@@ -58,7 +58,7 @@ TEST(RuntimeTest, EmptyBytecodeNoop) {
 
 TEST(RuntimeTest, ConstantAssignment) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
-	ASSERT_TRUE(TryCompile(cc, wxT("var a export; a = 42;")));
+	ASSERT_TRUE(TryCompile(cc, wxT("var a public; a = 42;")));
 
 	ibProcUnit pu;
 	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
@@ -71,7 +71,7 @@ TEST(RuntimeTest, ConstantAssignment) {
 
 TEST(RuntimeTest, ArithmeticAddition) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
-	ASSERT_TRUE(TryCompile(cc, wxT("var a export; a = 1 + 2;")));
+	ASSERT_TRUE(TryCompile(cc, wxT("var a public; a = 1 + 2;")));
 
 	ibProcUnit pu;
 	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
@@ -84,10 +84,10 @@ TEST(RuntimeTest, ArithmeticAddition) {
 TEST(RuntimeTest, ArithmeticAllOps) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	const wxString src =
-		wxT("var sum    export;\n")
-		wxT("var diff   export;\n")
-		wxT("var prod   export;\n")
-		wxT("var quot   export;\n")
+		wxT("var sum    public;\n")
+		wxT("var diff   public;\n")
+		wxT("var prod   public;\n")
+		wxT("var quot   public;\n")
 		wxT("sum    = 10 + 4;\n")
 		wxT("diff   = 10 - 4;\n")
 		wxT("prod   = 10 * 4;\n")
@@ -108,7 +108,7 @@ TEST(RuntimeTest, ArithmeticAllOps) {
 
 TEST(RuntimeTest, StringConcatenation) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
-	ASSERT_TRUE(TryCompile(cc, wxT("var s export; s = \"hello, \" + \"world\";")));
+	ASSERT_TRUE(TryCompile(cc, wxT("var s public; s = \"hello, \" + \"world\";")));
 
 	ibProcUnit pu;
 	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
@@ -122,7 +122,7 @@ TEST(RuntimeTest, StringConcatenation) {
 TEST(RuntimeTest, BooleanComparison) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	const wxString src =
-		wxT("var lt export; var gt export; var eq export;\n")
+		wxT("var lt public; var gt public; var eq public;\n")
 		wxT("lt = 3 < 5;\n")
 		wxT("gt = 7 > 2;\n")
 		wxT("eq = 4 = 4;\n");
@@ -144,7 +144,7 @@ TEST(RuntimeTest, BooleanComparison) {
 TEST(RuntimeTest, IfStatementTakesTrueBranch) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	const wxString src =
-		wxT("var a export;\n")
+		wxT("var a public;\n")
 		wxT("a = 0;\n")
 		wxT("If 1 = 1 Then\n")
 		wxT("  a = 100;\n")
@@ -162,7 +162,7 @@ TEST(RuntimeTest, IfStatementTakesTrueBranch) {
 TEST(RuntimeTest, IfStatementSkipsFalseBranch) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	const wxString src =
-		wxT("var a export;\n")
+		wxT("var a public;\n")
 		wxT("a = 7;\n")
 		wxT("If 1 = 2 Then\n")
 		wxT("  a = 100;\n")
@@ -180,7 +180,7 @@ TEST(RuntimeTest, IfStatementSkipsFalseBranch) {
 TEST(RuntimeTest, IfElseTakesElseBranch) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	const wxString src =
-		wxT("var a export;\n")
+		wxT("var a public;\n")
 		wxT("If 1 = 2 Then\n")
 		wxT("  a = 1;\n")
 		wxT("Else\n")
@@ -199,7 +199,7 @@ TEST(RuntimeTest, IfElseTakesElseBranch) {
 TEST(RuntimeTest, WhileLoopCountsToTen) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	const wxString src =
-		wxT("var i export;\n")
+		wxT("var i public;\n")
 		wxT("i = 0;\n")
 		wxT("While i < 10 Do\n")
 		wxT("  i = i + 1;\n")
@@ -221,7 +221,7 @@ TEST(RuntimeTest, WhileLoopCountsToTen) {
 TEST(RuntimeTest, CallFunctionByName) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	const wxString src =
-		wxT("Function Square(x) Export\n")
+		wxT("Function Square(x) Public\n")
 		wxT("  Return x * x;\n")
 		wxT("EndFunction\n");
 	ASSERT_TRUE(TryCompile(cc, src));
@@ -239,7 +239,7 @@ TEST(RuntimeTest, CallFunctionByName) {
 TEST(RuntimeTest, CallFunctionWithMultipleParams) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	const wxString src =
-		wxT("Function Add3(a, b, c) Export\n")
+		wxT("Function Add3(a, b, c) Public\n")
 		wxT("  Return a + b + c;\n")
 		wxT("EndFunction\n");
 	ASSERT_TRUE(TryCompile(cc, src));
@@ -255,7 +255,7 @@ TEST(RuntimeTest, CallFunctionWithMultipleParams) {
 TEST(RuntimeTest, RecursiveFactorial) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	const wxString src =
-		wxT("Function Fact(n) Export\n")
+		wxT("Function Fact(n) Public\n")
 		wxT("  If n <= 1 Then\n")
 		wxT("    Return 1;\n")
 		wxT("  EndIf;\n")
@@ -282,8 +282,8 @@ TEST(RuntimeTest, ModuleVariablePersistsAcrossCalls) {
 	// then the module body operator. (A body statement before a declaration is
 	// rejected under VES — "Expected program operators".)
 	const wxString src =
-		wxT("var counter export;\n")
-		wxT("Procedure Bump() Export\n")
+		wxT("var counter public;\n")
+		wxT("Procedure Bump() Public\n")
 		wxT("  counter = counter + 1;\n")
 		wxT("EndProcedure\n")
 		wxT("counter = 0;\n");
