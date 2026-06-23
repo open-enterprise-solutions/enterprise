@@ -39,7 +39,7 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 		d.m_typeBoolean       = wxT("SMALLINT");
 		d.m_typeDate          = wxT("TIMESTAMP");
 		d.m_typeBlob          = wxT("BLOB");
-		d.m_typeGuid          = wxT("CHAR(36)");
+		d.m_typeGuid          = wxT("VARCHAR(36)");   // VARCHAR (not CHAR): carries vary_length, so a guid reads back exact — no charset-padded CHAR tail
 		// NUMERIC holds a wider range than DECIMAL (INT128-backed) — matches ibNumber.
 		d.m_typeNumberPattern = wxT("NUMERIC(%d,%d)");
 		d.m_rowLockSuffix     = wxT(" WITH LOCK");     // FB pessimistic row lock (not FOR UPDATE)
