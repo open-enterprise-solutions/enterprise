@@ -9,9 +9,10 @@
 > The lower sections (§4–§22) are the design this converged from; §23–§24 + the dated update
 > blocks below are what is actually in the tree.
 >
-> **Last updated:** 2026-06-22 (DB/RAM NULL parity + comparison/identity aligned to SQL — see the
-> final dated-update block). The dated update blocks run newest-last; read §23–§24 for the realized
-> L4/L5 mechanism.
+> **Last updated:** 2026-06-23 (L4-2 JOIN push-down — the two-paths merge started: script `.Join()`
+> with a `Data.*` source now lowers into the L3 door / temp-promote; + SQLite temp dialect + ANALYZE
+> as an L2 statement — see the final dated-update block). The dated update blocks run newest-last;
+> read §23–§24 for the realized L4/L5 mechanism.
 >
 > ### Landed snapshot (2026-06-07)
 >
@@ -2407,3 +2408,46 @@ reference now match the database key.
 - **cross-dialect parity** — the harness tests vs SQLite only; FB/PG/MySQL/ODBC need a live stand.
 - **two LINQ paths** — the L3 composer (push-down + temp-db) and the script `.Join()` RAM floor share
   value semantics now, but are still structurally separate; merging them is the remaining debt.
+
+## Update 2026-06-23 — L4-2 JOIN push-down (the two-paths merge, started) + SQLite temp dialect + ANALYZE
+
+The headline operator of the "two LINQ paths" debt — `Join` — now lowers into the L3 door instead of
+always RAM-joining. A script `.Join()` where a `Data.*` queryable participates runs server-side
+(co-located / temp-promoted / RAM-stitched — the composer decides); the RAM hash-join
+(`ibValueJoinState`) stays the explicit fallback for everything outside the slice.
+
+- **`ibValueQueryable::JoinPushDown`** (`system/value/valueQueryable.cpp`) — the new `case M::Join` on a
+  queryable receiver. Reduces inner to a leaf (another queryable, OR a RAM value table wrapped as
+  `ibTempTableQueryable`), lowers both key selectors to one column each (the same recorded-lambda AST as
+  Where/OrderBy, via `LowerLambdaColumnPath`), builds `m_builder.Join(...).Select(...)`, and runs the
+  (outer, inner) result-selector in RAM over the reconstructed rows (a reference for a single-key source,
+  a structure of columns otherwise — matching `RowValue`). Read back BY ALIAS, robust across the
+  co-located / temp-promoted / RAM-stitch paths.
+- **`ibValueQueryable::TryJoinThroughL3`** (static) — the RAM-receiver entry, called from the base LINQ
+  dispatch (`procUnitLinq.cpp`, `case M::Join`) BEFORE `ibValueJoinState`: when `.Join()` is dispatched
+  on a value table but the inner argument is a real DB queryable, the receiver is wrapped as a computed
+  leaf and re-uses `JoinPushDown`. So BOTH directions (`Data.X.Join(table)` and `table.Join(Data.X)`)
+  reach the one L3 join executor; `procUnitLinq` already depends on `system/value`, so no layering break.
+- **Host API** — `InvokeLambda(callable, argPtrs, n, retVal)` (one array form; `InvokeLambdaWithArg`
+  forwards). Type-probes use the canonical non-throwing `ibValue::ConvertToValue(T*&)` (a type mismatch
+  is a legitimate RAM-fallback, not an error — `ConvertToType`/`CastValue` throw under
+  `_USE_CONTROL_VALUECAST` and are wrong for a gate).
+- **SQLite temp dialect + ANALYZE** — see [temp-db.md](temp-db.md) (2026-06-23). The SQLite driver now
+  vends `GetTempTableDialect()`, so a heterogeneous join (RAM ⋈ DB) temp-promotes server-side on the
+  embedded DB; ANALYZE became a first-class L2 statement (`ibDdlKind::Analyze` / `ibAnalyzeTable`).
+- **`ibTempTableQueryable::IsComputedInRam()` fixed to `true`** — it vends the computed provider but
+  reported `false`, so a multi-source join with it mis-routed in the co-location gate (empty table name).
+  Now consistent with `ibSubqueryQueryable`.
+- **Tests** — `tests/test_queryJoinParity.cpp` (RAM join core vs live SQLite JOIN: inner / left /
+  NULL-key / multi-match) + `tests/test_tempDbSqlite.cpp` (temp-promote round-trip + ANALYZE-ran, via an
+  appData + SQLite-pool fixture brought up with `wxInitializer`). Full `oes_tests` 476/477 (the one red,
+  `QueryDdlRenderer.Firebird_CreateTable`, is a pre-existing FB type-map CHAR-vs-VARCHAR mismatch,
+  unrelated to this work).
+
+### Open (after this)
+- **the rest of the merge** — only `Join` is lowered; `Select` / `GroupBy` / `Skip` on a queryable still
+  hit the RAM floor (`GroupBy` push-down is the most valuable next, for reports). The full single-lowering
+  for all ops (and the reentrancy / snapshot-vs-guard semantics) is the larger Layer-3 arc.
+- **join harden** — composite (multi-column) join keys, outer `OrderBy` / `Take` before the join,
+  projection push-down to SQL (needs a two-arg lambda recorder), a lazy iterator instead of the eager
+  Array, end-to-end parity (script push-down == RAM) once a script-level DB test harness exists.

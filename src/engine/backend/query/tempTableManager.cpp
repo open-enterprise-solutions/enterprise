@@ -195,6 +195,16 @@ std::unique_ptr<ibTempTableManager> ibTempTableManager::Materialise(ibDatabaseCo
 		return nullptr;
 	}
 
+	// Refresh optimiser statistics on the freshly-filled temp (ANALYZE) so the DBMS plans any
+	// JOIN against the temp's REAL cardinality, not a default estimate — the actual optimisation
+	// the materialisation exists to enable (docs/temp-db.md). Goes through the L2 door as a
+	// first-class statement (ibDdlKind::Analyze, dialect-rendered) so it is reusable beyond temp
+	// and carries NO per-driver fork here; a driver with no ANALYZE renders empty and no-ops. The
+	// nested builder inherits this scope's pinned connection (the temp lives on it). Best-effort:
+	// a failure leaves default estimates — the temp is still correct, only the plan is less informed.
+	try { ibDatabaseQueryBuilder qAnalyze(holder); qAnalyze.Execute(ibAnalyzeTable(tableName)); }
+	catch (...) {}
+
 	auto queryable = std::make_unique<ibDbTempTableQueryable>(tableName, std::move(tempCols), metaData);
 	return std::unique_ptr<ibTempTableManager>(
 		new ibTempTableManager(std::move(scope), holder, *dialect, tableName, std::move(queryable)));

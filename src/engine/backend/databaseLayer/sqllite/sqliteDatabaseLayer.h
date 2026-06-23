@@ -63,6 +63,12 @@ public:
 	static const ibDialectDictionary& Dialect();                       // SQLite dialect (no instance needed)
 	virtual const ibDialectDictionary& GetDialect() const override;    // polymorphic access for L2
 
+	// DB temp-table capability (temp-db foundation): SQLite does ad-hoc CREATE TEMPORARY
+	// TABLE of any shape, connection-scoped. Its PRESENCE flips SQLite off the RAM floor
+	// onto the server-side temp path (heterogeneous JOIN promote works on the embedded DB).
+	static const ibTempTableDialect& TempDialect();                    // SQLite temp dialect (no instance needed)
+	virtual const ibTempTableDialect* GetTempTableDialect() const override;
+
 	static int TranslateErrorCode(int nCode);
 
 	// SQLite has no SQLSTATE — classification reads its single-int

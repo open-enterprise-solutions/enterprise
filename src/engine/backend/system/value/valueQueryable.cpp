@@ -13,7 +13,9 @@
 #include "backend/query/queryable.h"             // ibBackendQueryable / ibBackendQueryColumn
 #include "backend/query/queryAst.h"              // ibQueryAstExpr — the recorded lambda body
 #include "backend/query/queryLowering.h"         // LowerLambdaPredicate / LowerLambdaColumnPath
+#include "backend/query/tempTableQueryable.h"    // ibTempTableQueryable — wrap a RAM value-table Join argument
 #include "backend/compiler/procUnitValues.h"     // ibValueFunction (the lambda value)
+#include "backend/compiler/procUnit.h"           // InvokeLambdaWith2Args — run the Join result-selector in RAM
 #include "backend/compiler/procContext.h"        // ibRunContext — captured-frame name lookup
 #include "backend/compiler/typeCtor.h"           // SYSTEM_TYPE_REGISTER
 #include "backend/backend_exception.h"
@@ -206,6 +208,171 @@ void ibValueQueryable::MaterialiseThenRam(ibLinqMethod method, ibValue& ret, ibV
 	host.DispatchLinqMethod(method, ret, args, n);
 }
 
+bool ibValueQueryable::JoinPushDown(ibValue& ret, ibValue** args, long n)
+{
+	// --- arg shape: Join(inner, leftKey, rightKey, projection) -------------------
+	if (n < 4 || args == nullptr)
+		return false;
+	for (long i = 0; i < 4; ++i)
+		if (args[i] == nullptr) return false;
+
+	ibValueFunction* leftKeyFn  = nullptr; args[1]->ConvertToValue(leftKeyFn);
+	ibValueFunction* rightKeyFn = nullptr; args[2]->ConvertToValue(rightKeyFn);
+	ibValueFunction* projFn     = nullptr; args[3]->ConvertToValue(projFn);
+	// a non-lambda key / projection -> the RAM floor.
+	if (leftKeyFn == nullptr || rightKeyFn == nullptr || projFn == nullptr)
+		return false;
+
+	// --- resolve the inner source to a queryable leaf ----------------------------
+	// inner is either ANOTHER queryable (taken BARE — its own folds aren't transferred into
+	// the join node, so a folded inner would silently lose them) OR a RAM value table, which
+	// we wrap as a computed leaf (ibTempTableQueryable, exactly like Data.From) so the
+	// composer temp-promotes it into a DB temp table and joins server-side. Anything else
+	// (an arbitrary collection / a folded queryable) -> the RAM floor (ibValueJoinState).
+	const ibBackendQueryable*                 innerQ   = nullptr;
+	const ibBackendQueryColumn*               innerRef = nullptr;   // single row reference, or null = structure rows
+	std::shared_ptr<const ibBackendQueryable> innerWrap;            // keeps a wrapped RAM table alive for this scope
+	ibValueQueryable* iq = nullptr;
+	if (args[0]->ConvertToValue(iq)) {
+		if (iq->m_queryable == nullptr)            return false;
+		if (iq->m_take != 0 || !iq->m_ops.empty()) return false;   // bare only
+		innerQ   = iq->m_queryable;
+		innerRef = iq->RowReferenceColumn();
+	} else {
+		ibValueModelTable* tbl = nullptr;
+		if (!args[0]->ConvertToValue(tbl) || tbl == nullptr)
+			return false;                                          // not a queryable, not a value table -> RAM
+		innerWrap = std::make_shared<ibTempTableQueryable>(*args[0]);   // RAM table as a computed leaf
+		innerQ    = innerWrap.get();                               // innerRef stays null -> structure rows
+	}
+
+	// --- source gates ------------------------------------------------------------
+	// Self-join is ambiguous in the column model (same leaf) -> RAM. Either side may be
+	// reference-keyed (catalog / document) OR structure-shaped (register / Data.From / a
+	// wrapped table): the row is reconstructed per side below, so no single-PK requirement.
+	if (m_queryable == nullptr || innerQ == nullptr) return false;
+	if (m_queryable == innerQ)                       return false;
+
+	// --- outer folded-state gate -------------------------------------------------
+	// Outer may carry a Where (co-locates as a per-leaf filter); NOT OrderBy / Take — those
+	// reshape the order / row set BEFORE the join, which this path does not reproduce
+	// server-side.
+	if (m_take != 0)                                 return false;
+	for (const wxString& op : m_ops)
+		if (op.StartsWith(wxT("OrderBy")))           return false;
+
+	// --- key selectors -> ONE join column each -----------------------------------
+	// Same recorded AST the text language lowers; a computed / multi-segment key
+	// lowers to != 1 column -> the RAM floor.
+	std::shared_ptr<ibQueryAstExpr> leftAst  = AstOf(leftKeyFn);
+	std::shared_ptr<ibQueryAstExpr> rightAst = AstOf(rightKeyFn);
+	if (!leftAst || !rightAst) return false;
+	const std::vector<const ibBackendQueryColumn*> lcols =
+		ibQueryLowering::LowerLambdaColumnPath(m_queryable, *leftAst);
+	const std::vector<const ibBackendQueryColumn*> rcols =
+		ibQueryLowering::LowerLambdaColumnPath(innerQ, *rightAst);
+	if (lcols.size() != 1 || rcols.size() != 1 || lcols.front() == nullptr || rcols.front() == nullptr)
+		return false;
+
+	// --- per-side projection plan -------------------------------------------------
+	// A reference-keyed side projects JUST its row-reference column (the projection reads
+	// attributes through the rehydrated reference, lazily); a structure-shaped side
+	// projects ALL its columns (the row is a structure of them) — exactly the two shapes
+	// an ibValueQueryable row takes (RowValue). Distinct alias prefixes ("o"/"i") keep the
+	// two sides apart in the select list; read back BY ALIAS, robust across the co-located,
+	// temp-promoted AND RAM-stitch paths.
+	const ibBackendQueryColumn* outerRef = RowReferenceColumn();
+
+	ibValueQueryable* link = CloneLink();          // carries outer From + folded Where
+	ibValue           linkOwner(link);             // own the transient link for this scope
+	link->m_builder.Join(innerQ, lcols.front(), rcols.front(), ibQueryJoinKind::Inner);
+
+	std::vector<const ibBackendQueryColumn*> outerCols, innerCols;
+	std::vector<wxString>                    outerAlias, innerAlias;
+	auto plan = [](const ibBackendQueryColumn* refCol, const ibBackendQueryable* q, const wxString& pfx,
+	               std::vector<const ibBackendQueryColumn*>& cols, std::vector<wxString>& alias) {
+		if (refCol != nullptr) {
+			cols.push_back(refCol);
+			alias.push_back(pfx + wxT("ref"));
+			return;
+		}
+		const std::vector<const ibBackendQueryColumn*> all = q->GetColumns();
+		for (size_t i = 0; i < all.size(); ++i) {
+			if (all[i] == nullptr) continue;
+			cols.push_back(all[i]);
+			alias.push_back(pfx + wxString::Format(wxT("%lu"), (unsigned long) i));
+		}
+	};
+	plan(outerRef, m_queryable,        wxT("o"), outerCols, outerAlias);
+	plan(innerRef, innerQ, wxT("i"), innerCols, innerAlias);
+	if (outerCols.empty() || innerCols.empty())
+		return false;   // a source with no projectable columns -> RAM
+	for (size_t i = 0; i < outerCols.size(); ++i) link->m_builder.Select(outerCols[i], outerAlias[i]);
+	for (size_t i = 0; i < innerCols.size(); ++i) link->m_builder.Select(innerCols[i], innerAlias[i]);
+
+	// --- execute (co-located / temp-promoted / RAM-stitched — the composer decides) --
+	ibReadPageRequest page;                        // outer Take gated out -> all joined rows
+	ibDataQueryResult sel = link->m_builder.Execute(page);
+
+	// --- result-selector in RAM over the reconstructed (outer, inner) rows -------
+	// One row per side: the rehydrated reference cell (reference-keyed source) OR a
+	// structure of the side's projected columns — matching RowValue, so the projection
+	// lambda sees the same shapes it would on the RAM floor.
+	auto rowOf = [&sel](const ibBackendQueryColumn* refCol,
+	                    const std::vector<const ibBackendQueryColumn*>& cols,
+	                    const std::vector<wxString>& alias) -> ibValue {
+		if (refCol != nullptr)
+			return sel.GetColumn(alias.front());   // the rehydrated reference cell
+		ibValueStructure* st = new ibValueStructure();
+		for (size_t i = 0; i < cols.size(); ++i)
+			st->Insert(cols[i]->GetName(), sel.GetColumn(alias[i]));
+		return ibValue(st);
+	};
+
+	ibValueArray* out = new ibValueArray();
+	ibValue       result(out);                     // own immediately (exception-safe)
+	while (sel.Next()) {
+		ibValue  outerRow = rowOf(outerRef, outerCols, outerAlias);
+		ibValue  innerRow = rowOf(innerRef, innerCols, innerAlias);
+		ibValue  projected;
+		ibValue* projArgs[2] = { &outerRow, &innerRow };
+		if (!InvokeLambda(*args[3], projArgs, 2, projected))
+			return false;                          // gated unreachable; RAM floor re-runs if hit
+		out->Add(projected);
+	}
+	ret = result;
+	return true;
+}
+
+bool ibValueQueryable::TryJoinThroughL3(ibValue& receiver, ibValue& ret, ibValue** args, long n)
+{
+	// Layer 2 — the RAM-receiver entry, dispatched from the base LINQ switch when `.Join()`
+	// is called on a value table (a non-queryable receiver). It is worth routing to L3 ONLY
+	// when the INNER argument is a REAL DB queryable: that is the leaf the RAM receiver is
+	// temp-promoted INTO. (A RAM ⋈ RAM join gains nothing server-side -> stay on the RAM
+	// hash-join.)
+	if (n < 4 || args == nullptr || args[0] == nullptr)
+		return false;
+	ibValueQueryable* innerQV = nullptr;
+	if (!args[0]->ConvertToValue(innerQV) || innerQV->GetQueryable() == nullptr)
+		return false;
+	if (innerQV->GetQueryable()->IsComputedInRam())
+		return false;   // inner also computed -> no DB leaf to promote into -> RAM hash-join
+
+	// The receiver must be a value table we can wrap as a computed leaf (an arbitrary RAM
+	// collection — array of structures / references — stays on the RAM hash-join).
+	ibValueModelTable* tbl = nullptr;
+	if (!receiver.ConvertToValue(tbl) || tbl == nullptr)
+		return false;
+
+	// Wrap the receiver as a queryable and REUSE the queryable-side push-down: the wrapped
+	// RAM table is the OUTER (computed) leaf, the inner DB queryable is args[0]. The composer
+	// temp-promotes the computed outer and runs the join server-side. leftKey / rightKey /
+	// projection map 1:1 onto JoinPushDown's outer / inner / result-selector.
+	ibValueQueryable wrapped(std::make_shared<ibTempTableQueryable>(ibValue(&receiver)), wxT("Join"));
+	return wrapped.JoinPushDown(ret, args, n);
+}
+
 void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibValue** args, long n)
 {
 	using M = ibLinqMethod;
@@ -333,6 +500,15 @@ void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibV
 			wxDELETE(line);
 		}
 		ret = table;
+		return;
+	}
+
+	case M::Join: {
+		// Try the L3 push-down (DB⋈DB through the door); on anything outside the v1
+		// slice fall to the RAM floor — the unchanged ibValueJoinState path.
+		if (JoinPushDown(ret, args, n))
+			return;
+		MaterialiseThenRam(method, ret, args, n);
 		return;
 	}
 

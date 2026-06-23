@@ -53,6 +53,7 @@ add_executable(oes_tests
     test_queryL2.cpp
     test_queryComposer.cpp
     test_queryParity.cpp
+    test_queryJoinParity.cpp
     test_queryL3Vocab.cpp
     test_queryL4Lexer.cpp
     test_queryL4Parser.cpp
@@ -198,3 +199,70 @@ set_target_properties(oes_query_parity_test PROPERTIES
 )
 
 gtest_discover_tests(oes_query_parity_test)
+
+# ---------------------------------------------------------------------------
+# Standalone JOIN parity test — RAM join core vs a live in-memory SQLite JOIN
+# (isolated, like the parity target above). No appData / pool:
+#   cmake --build build --target oes_query_join_parity_test --config Debug
+#   ./bin/oes_query_join_parity_test
+# ---------------------------------------------------------------------------
+add_executable(oes_query_join_parity_test test_queryJoinParity.cpp)
+
+target_link_libraries(oes_query_join_parity_test
+    PRIVATE
+        backend
+        GTest::gtest
+        GTest::gtest_main
+)
+
+target_compile_definitions(oes_query_join_parity_test PRIVATE OES_TESTING)
+
+target_include_directories(oes_query_join_parity_test PRIVATE
+    "${CMAKE_SOURCE_DIR}/src"
+    "${CMAKE_SOURCE_DIR}/src/engine"
+    "${CMAKE_SOURCE_DIR}/src/engine/backend"
+)
+
+set_target_properties(oes_query_join_parity_test PROPERTIES
+    CXX_STANDARD          17
+    CXX_STANDARD_REQUIRED ON
+    BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
+    INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
+)
+
+gtest_discover_tests(oes_query_join_parity_test)
+
+# ---------------------------------------------------------------------------
+# Temp-DB round-trip on the embedded SQLite driver (INTEGRATION scope). Brings
+# up the global appData env + a SQLite-only pool (the temp manager pins a
+# holder's connection), so it is a STANDALONE target — kept out of the main
+# oes_tests list so its appData bring-up can't affect that run. Skips if the
+# headless env can't come up.
+#   cmake --build build --target oes_temp_db_sqlite_test --config Debug
+#   ./bin/oes_temp_db_sqlite_test
+# ---------------------------------------------------------------------------
+add_executable(oes_temp_db_sqlite_test test_tempDbSqlite.cpp)
+
+target_link_libraries(oes_temp_db_sqlite_test
+    PRIVATE
+        backend
+        GTest::gtest
+        GTest::gtest_main
+)
+
+target_compile_definitions(oes_temp_db_sqlite_test PRIVATE OES_TESTING)
+
+target_include_directories(oes_temp_db_sqlite_test PRIVATE
+    "${CMAKE_SOURCE_DIR}/src"
+    "${CMAKE_SOURCE_DIR}/src/engine"
+    "${CMAKE_SOURCE_DIR}/src/engine/backend"
+)
+
+set_target_properties(oes_temp_db_sqlite_test PROPERTIES
+    CXX_STANDARD          17
+    CXX_STANDARD_REQUIRED ON
+    BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
+    INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
+)
+
+gtest_discover_tests(oes_temp_db_sqlite_test)

@@ -11,6 +11,28 @@
 > is the agreed contract. Builds on [reference-as-key](#) +
 > [column-based lowering](query-language-arc.md) (L3 is source-agnostic, which is what makes all
 > of this nearly free).
+>
+> ### Update 2026-06-23 — SQLite temp dialect + ANALYZE as an L2 statement + script-join consumer
+>
+> - **SQLite now vends `GetTempTableDialect()`** (`AdHocCreate`, `CREATE TEMPORARY TABLE`, explicit
+>   DROP via the pinning scope). It is no longer "logs-only / ignore" (§5 corrected): SQLite is the
+>   **embedded correctness-validation stand** for the temp path — `oes_temp_db_sqlite_test` runs the
+>   whole pipeline (CREATE TEMP → chunked fill → ANALYZE → read-back) in a gtest with a SQLite-only
+>   pool. FB still stays `nullptr` (RAM) by design; PG remains the **performance** stand.
+> - **ANALYZE is now a first-class L2 statement** — `ibDdlKind::Analyze` + `ibAnalyzeTable(name)`,
+>   rendered from the MAIN `ibDialectDictionary::m_analyzePrefix` (PG / SQLite `"ANALYZE"`; Firebird
+>   empty ⇒ renders empty ⇒ `Execute` no-ops). `Materialise` runs it after the fill so the optimiser
+>   plans the JOIN against the temp's REAL cardinality, not a default estimate (the missing half of
+>   "temp tables ARE the optimiser", §1). Because it is a general L2 verb (not a temp-only string), it
+>   is **reusable**: the regular-table refresh after a restructure / bulk load is the same call.
+> - **Script `.Join` now feeds the promotions.** The L4-2 join unification (a RAM value table joined
+>   with a `Data.*` queryable, EITHER direction) lowers into the L3 join node and reaches
+>   `PromoteComputedLeaf` — so a heterogeneous join temp-promotes server-side on the embedded DB too.
+>   See [query-language-arc.md](query-language-arc.md) (L4-2 join push-down).
+> - **Still open:** an INDEX on the temp's join key (situational — helps index-nested-loop, wasted for
+>   a hash-join; build it only with a PG stand to measure); the regular-table ANALYZE seam
+>   (restructure / scheduled); the live-PG performance run (SQLite proves correctness, not plans —
+>   its data is too small for timing to mean anything).
 
 ## 1. Why — temp tables ARE the optimiser
 
@@ -81,14 +103,17 @@ Counter-intuitively the primary dev DB is the **hard** case here, and that is co
   gain on a small deployment. Vend the dialect only where it pays.
 - **PostgreSQL** — ad-hoc any-shape `CREATE TEMPORARY TABLE`; production / scale ⇒ the temp lever
   matters. **This is the first (and primary) real temp target.**
-- **SQLite** — has ad-hoc temp, but in OES it is **logs-only** (the logger's own-SQLite sink); the
-  application query layer never runs on it, so it is **not a temp-table target**. Ignore it here.
+- **SQLite** — has ad-hoc temp and **now vends the dialect** (`AdHocCreate`). In production it is
+  logs-only (the logger's own-SQLite sink), so it is not a *deployment* temp target — but it is the
+  **embedded correctness-validation stand**: a gtest stands up a SQLite-only pool and runs the whole
+  temp pipeline (CREATE TEMP → fill → ANALYZE → server-side read) without a live server
+  (`oes_temp_db_sqlite_test`). SQLite proves the path is **correct**; it cannot prove the **plan** (its
+  data is too small and its optimiser simple — timing is noise). That is still PG's job.
 
 So **FB sits on RAM, PostgreSQL balances with temp** — the capability lands where the data scale
 needs it, not where development is habitual. **Validation wrinkle:** the dev DB (FB) ⇒ RAM, so the
-temp path is **never exercised in the normal dev cycle** — the temp code lives only on PG. It is
-therefore a **PG-targeted optimisation**, developed / validated against a PostgreSQL instance, not
-the habitual FB dev default. Two good consequences hold: (a) RAM stays a **first-class warm path**
+temp path is **not exercised on the FB dev default** — its **correctness** is now exercised on SQLite
+in gtest, and its **performance** is validated against a live PostgreSQL instance. Two good consequences hold: (a) RAM stays a **first-class warm path**
 on FB (the floor / insurance never bit-rots); (b) FB is immune to any temp regression by
 construction (it never takes the path). Crack the FB GTT-shape problem **separately, later, if ever**
 — for small FB deployments it is likely never worth it.
@@ -146,7 +171,9 @@ like the L3 abstraction did, because it changes the compose flow. Do not lay it 
 | Planner decision — split in two, each owned where its inputs live: `WorthDbTemp(rowCount)` = the SHOULD size-gate (§7), called at the promote sites with the EXACT materialised row count; the CAN-gate (dialect presence + runtime probe + graceful fallback) inside `ibTempTableManager::Materialise`. The generic RAM-composer `MaterialiseLeaf` seam deliberately stays RAM — temping a RAM-stitched leaf gains nothing (§8); new promotable shapes extend the promote family. | **landed** |
 | `ibDbTempTableQueryable` — DB-temp source adapter (L3, sibling of the RAM `ibTempTableQueryable`); raw columns, inherits the DB provider, read-only scan | **landed** |
 | Temp-table manager (`query/tempTableManager.{h,cpp}`) — holder-anchored lifetime (pins the connection via an owned `ibConnectionScope`), runtime capability probe, CREATE + fill via L2 DDL/DML (columns in the metadata storage format — references/enums round-trip), RAII DROP, graceful RAM fallback (null on no-dialect / failure). Per-session probe CACHE still TODO (probes per Materialise today). | **landed** |
-| Per-driver dialects — **PostgreSQL** (`AdHocCreate`, explicit DROP via the pinning scope); MySQL later; Firebird stays `nullptr` (RAM); SQLite N/A (logs-only) | **PG landed** |
+| Per-driver dialects — **PostgreSQL** (`AdHocCreate`, explicit DROP via the pinning scope) + **SQLite** (`AdHocCreate`; the embedded correctness-validation stand, `oes_temp_db_sqlite_test`); MySQL later; Firebird stays `nullptr` (RAM) | **PG + SQLite landed** |
+| **ANALYZE after fill** — `ibDdlKind::Analyze` + `ibAnalyzeTable(name)`, rendered from the main `ibDialectDictionary::m_analyzePrefix` (PG / SQLite `"ANALYZE"`; FB empty ⇒ `Execute` no-ops). `Materialise` runs it so the planner has the temp's REAL cardinality (not a default estimate). A general L2 verb — reusable for regular-table refresh after a restructure / bulk load. | **landed** |
+| Temp-key INDEX (index-nested-loop) — situational; build only with a PG stand to measure (wasted for a hash-join) | pending |
 | **Server-side JOIN push-down** — `PromoteComputedLeaf` (computed ⋈ DB: temp the computed side, remap columns incl. aggregates/having, rebuild the join tree → the join runs in the DBMS) and `PromoteUnionBranches` (computed UNION branches temped, the whole union server-side). Generic multi-way / DB⋈DB-cross-connection promotion = future (federation). | **landed (two shapes)** |
 | RAM-composer join ORDER — `ibQueryComposer::PlanInnerJoinOrder`: smallest-first reorder of pure-INNER chains (3+ units) with EXACT materialised counts; tree-order fallback on any anomaly | **landed** |
 | L4 surface — a "materialise-into-temp" query construct | pending (with L4) |

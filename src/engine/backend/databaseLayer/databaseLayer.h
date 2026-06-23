@@ -140,6 +140,12 @@ struct ibDialectDictionary
 	// DropColumn and the multi-clause ALTER fold.
 	wxString m_dropColumnClause = wxT("DROP COLUMN ");
 
+	// ANALYZE spelling — the renderer emits `<prefix> <table>` for an ibDdlKind::Analyze. Refreshes
+	// the optimiser's statistics so it plans against real cardinality (after a temp materialise / bulk
+	// load / restructure). PG / SQLite: "ANALYZE"; MySQL: "ANALYZE TABLE"; Firebird: EMPTY (no portable
+	// ANALYZE — it tunes per-index stats differently), which renders empty → Execute no-ops.
+	wxString m_analyzePrefix;   // empty = the driver has no ANALYZE statement
+
 	// Row-lock clause APPENDED to a top-level SELECT for a pessimistic read-for-update (the
 	// register set lock). Default = PG / MySQL " FOR UPDATE"; Firebird overrides to " WITH
 	// LOCK"; SQLite leaves it EMPTY (it locks the whole DB per transaction — the open TX IS
@@ -202,6 +208,8 @@ struct ibTempTableDialect
 	bool     m_autoDrops      = true;
 	// DROP statement prefix (used only when !m_autoDrops) — the manager appends the name.
 	wxString m_dropPrefix     = wxT("DROP TABLE");
+	// (ANALYZE is NOT here — it is a general L2 statement, ibDdlKind::Analyze, rendered from the
+	//  main ibDialectDictionary::m_analyzePrefix, so any caller can refresh stats, not just temp.)
 };
 
 WX_DECLARE_HASH_SET(ibDatabaseResultSet*, wxPointerHash, wxPointerEqual, DatabaseResultSetHashSet);

@@ -85,6 +85,12 @@ public:
 		return out;
 	}
 
+	// A RAM-held relation: computed-in-RAM, like ibSubqueryQueryable. The composer's
+	// co-location gate keys on this (a temp source has no physical table name, so it must
+	// NOT be treated as a co-locatable DB leaf); when joined with a DB source it is
+	// temp-promoted (PromoteComputedLeaf) instead. Single-source reads use GetProvider().
+	bool IsComputedInRam() const override { return true; }
+
 	// --- the temp table VENDS the computed (RAM) provider; rows = the held table ----
 	ibBackendQueryProvider& GetProvider() const override
 	{

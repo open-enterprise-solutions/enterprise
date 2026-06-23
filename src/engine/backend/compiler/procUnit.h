@@ -12,13 +12,17 @@ struct ibProcUnitState;   // procUnitState.h — forward decl; full type via ibS
 class ibValueFunction;
 class ibSession;
 
-// Invoke a lambda value with one argument from host (C++) code.
-// `callable` must wrap (directly or through TYPE_REFFER) an
-// ibValueFunction value; returns true on success, false if the
-// value is not a lambda. Used by host-side aggregation helpers
-// (ibValueArray::Sum/Min/Max/Average with selector λ) and other
-// callsites that need to fire a script lambda from C++ without
-// going through OPER_CALL_LAMBDA bytecode.
+// Invoke a lambda value with N positional arguments from host (C++) code.
+// `callable` must wrap (directly or through TYPE_REFFER) an ibValueFunction;
+// argPtrs[0..n) are the arguments. Returns true on success, false if the value
+// is not a lambda. The one place the arity matters is the call site: aggregation
+// selectors pass one (ibValueArray::Sum/Min/Max/Average), the L4-2 Queryable.Join
+// push-down passes two (the outer,inner result-selector). One entry, not a family
+// of arity-specific wrappers — fire a script lambda from C++ without going through
+// OPER_CALL_LAMBDA bytecode.
+BACKEND_API bool InvokeLambda(ibValue& callable, ibValue** argPtrs, long n, ibValue& retVal);
+
+// Convenience over InvokeLambda for the common single-argument call (argPtrs = { &arg }).
 BACKEND_API bool InvokeLambdaWithArg(ibValue& callable, ibValue& arg, ibValue& retVal);
 
 class BACKEND_API ibProcUnit {

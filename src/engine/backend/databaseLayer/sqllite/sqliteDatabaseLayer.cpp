@@ -33,6 +33,7 @@ const ibDialectDictionary& ibDatabaseLayerSQLite::Dialect()
 		d.m_typeBlob          = wxT("BLOB");
 		d.m_typeBinaryPattern = wxT("BLOB");      // SQLite has no fixed-width binary
 		d.m_typeGuid          = wxT("TEXT");
+		d.m_analyzePrefix     = wxT("ANALYZE");   // ANALYZE <t> — refresh planner stats (SQLite has no auto-analyze)
 		return d;
 	}();
 	return s_dialect;
@@ -41,6 +42,30 @@ const ibDialectDictionary& ibDatabaseLayerSQLite::Dialect()
 const ibDialectDictionary& ibDatabaseLayerSQLite::GetDialect() const
 {
 	return Dialect();
+}
+
+// SQLite temp tables: ad-hoc `CREATE TEMPORARY TABLE` of any shape, connection-scoped
+// (auto-dropped on disconnect). Like PostgreSQL we DROP explicitly via the manager's
+// pinning scope rather than lean on disconnect — a pooled connection is long-lived and
+// reused, so explicit DROP keeps it tidy and deterministic (m_autoDrops=false). Its mere
+// PRESENCE flips SQLite off the RAM floor onto the server-side temp path. (docs/temp-db.md)
+const ibTempTableDialect& ibDatabaseLayerSQLite::TempDialect()
+{
+	static const ibTempTableDialect s_temp = [] {
+		ibTempTableDialect t;
+		t.m_strategy       = ibTempTableDialect::Strategy::AdHocCreate;
+		t.m_createPrefix   = wxT("CREATE TEMPORARY TABLE");
+		t.m_onCommitClause = wxEmptyString;     // session-scoped; the manager drops it explicitly
+		t.m_autoDrops      = false;             // explicit DROP via the pinning scope (RAII, leak-free)
+		t.m_dropPrefix     = wxT("DROP TABLE");
+		return t;
+	}();
+	return s_temp;
+}
+
+const ibTempTableDialect* ibDatabaseLayerSQLite::GetTempTableDialect() const
+{
+	return &TempDialect();
 }
 
 // ctor()

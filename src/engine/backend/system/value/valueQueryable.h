@@ -74,6 +74,20 @@ class BACKEND_API ibValueQueryable : public ibValue
 	// The RAM floor: materialise into an Array of references and re-dispatch.
 	void MaterialiseThenRam(ibLinqMethod method, ibValue& ret, ibValue** args, long n);
 
+	// L4-2 JOIN push-down: when the inner argument is ALSO a queryable and the two key
+	// selectors each lower to one column, build the JOIN on the L3 door and run the
+	// (outer, inner) result-selector in RAM over the reconstructed rows. The door decides
+	// HOW the join runs — co-located in one server-side SELECT (DB ⋈ DB), temp-promoted
+	// (a computed inner, e.g. Data.From, materialised into a DB temp table), or RAM-
+	// stitched — all transparent here. Each side's row is reconstructed to match the RAM
+	// path's shape: a reference object for a single-reference-keyed source (catalog /
+	// document), a structure of columns otherwise (register / Data.From) — so no single-PK
+	// requirement. Returns true when it handled the op; false on anything outside the slice
+	// (the caller then falls to MaterialiseThenRam — the RAM floor / ibValueJoinState,
+	// always correct). Unifies the two LINQ join paths from the queryable side without
+	// removing the RAM fallback. (docs/query-language-arc.md)
+	bool JoinPushDown(ibValue& ret, ibValue** args, long n);
+
 public:
 	ibValueQueryable() : ibValue(ibValueTypes::TYPE_VALUE) {}
 	ibValueQueryable(const ibBackendQueryable* queryable, const wxString& sourceName);
@@ -82,6 +96,15 @@ public:
 
 	const ibBackendQueryable* GetQueryable()  const { return m_queryable; }
 	const wxString&           GetSourceName() const { return m_sourceName; }
+
+	// L4-2 JOIN unification (Layer 2) — the RAM-side entry. When `.Join()` is dispatched
+	// on a NON-queryable receiver (a value table) but the inner argument IS a real DB
+	// queryable, wrap the receiver as a computed leaf and run server-side through
+	// JoinPushDown (the composer temp-promotes the RAM side into a DB temp table). Returns
+	// true when handled; false -> the caller stays on the RAM hash-join (ibValueJoinState),
+	// always correct. Called from the base LINQ dispatch (procUnitLinq.cpp, case Join), so
+	// BOTH receiver kinds (queryable / RAM table) reach the one L3 join executor.
+	static bool TryJoinThroughL3(ibValue& receiver, ibValue& ret, ibValue** args, long n);
 
 	virtual bool IsEmpty() const override { return m_queryable == nullptr; }
 

@@ -489,7 +489,7 @@ struct ibAlterClause
 	ibDdlColumn m_column;   // Add: the full column; Drop: only m_column.m_name is used
 };
 
-enum class ibDdlKind { CreateTable, DropTable, AddColumn, DropColumn, AlterColumn, AlterTable, CreateIndex, DropIndex };
+enum class ibDdlKind { CreateTable, DropTable, AddColumn, DropColumn, AlterColumn, AlterTable, CreateIndex, DropIndex, Analyze };
 
 struct ibDdlStatement
 {
@@ -536,6 +536,17 @@ inline ibDdlStatement ibDropTable(const wxString& table, bool ifExists = false)
 	ibDdlStatement s(ibDdlKind::DropTable);
 	s.m_table     = table;
 	s.m_ifExists  = ifExists;
+	return s;
+}
+
+// ANALYZE a table — refresh the optimiser's statistics so it plans against real cardinality
+// (after a temp materialise, a bulk load, or a restructure). The per-driver form lives in the
+// dialect (m_analyzePrefix: PG/SQLite "ANALYZE", MySQL "ANALYZE TABLE", FB empty); a driver with
+// no ANALYZE renders to empty and Execute no-ops. (docs/temp-db.md)
+inline ibDdlStatement ibAnalyzeTable(const wxString& table)
+{
+	ibDdlStatement s(ibDdlKind::Analyze);
+	s.m_table = table;
 	return s;
 }
 

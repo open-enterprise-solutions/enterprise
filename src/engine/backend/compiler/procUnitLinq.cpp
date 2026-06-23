@@ -37,6 +37,7 @@
 
 #include "system/value/valueArray.h"  // ToArray() materialiser
 #include "system/value/valueMap.h"    // ibValueStructure / ibValueContainer (GroupBy)
+#include "system/value/valueQueryable.h"  // ibValueQueryable::TryJoinThroughL3 — RAM-receiver join push-down (Layer 2)
 
 #include <algorithm>
 #include <map>
@@ -129,12 +130,18 @@ static inline void CallLambdaWith2Args(ibValueFunction& fn, ibValue& arg0,
 // Returns true on successful invoke (retVal populated with lambda's
 // return value); false if `callable` isn't a callable lambda value
 // (caller falls back to no-selector path).
-bool InvokeLambdaWithArg(ibValue& callable, ibValue& arg, ibValue& retVal) {
+bool InvokeLambda(ibValue& callable, ibValue** argPtrs, long n, ibValue& retVal) {
 	ibValueFunction* fn = AsFunction(&callable);
 	if (fn == nullptr)
 		return false;
-	CallLambdaWithArg(*fn, arg, retVal);
+	CallLambdaWithArgs(*fn, argPtrs, n, retVal);
 	return true;
+}
+
+// Single-argument convenience — the array form with one element.
+bool InvokeLambdaWithArg(ibValue& callable, ibValue& arg, ibValue& retVal) {
+	ibValue* p = &arg;
+	return InvokeLambda(callable, &p, 1, retVal);
 }
 
 // Where node — filters upstream by a boolean lambda. Element
@@ -921,6 +928,11 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 		}
 		case M::Join: // Join(inner, leftKey, rightKey, projection)
 		{
+			// Layer 2 — RAM receiver ⋈ a DB queryable argument: wrap the receiver as a leaf
+			// and run server-side through the L3 door (the composer temp-promotes the RAM
+			// side), instead of the RAM hash-join below. Falls through on any other shape.
+			if (ibValueQueryable::TryJoinThroughL3(*self, ret, args, n))
+				break;
 			if (n < 4 || args == nullptr || args[0] == nullptr || args[1] == nullptr
 				|| args[2] == nullptr || args[3] == nullptr)
 				ibBackendCoreException::Error(
