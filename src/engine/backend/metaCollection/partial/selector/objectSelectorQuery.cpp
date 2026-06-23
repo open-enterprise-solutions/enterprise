@@ -4,139 +4,139 @@
 
 #include "backend/appData.h"
 #include "backend/session/session.h"
-#include "backend/query/dataQueryBuilder.h"   // L3 door — selector reads / scans
+#include "backend/query/dataQueryBuilder.h"   // L3 door — selector reads
 
+/////////////////////////////////////////////////////////////////////////
+// Shared keyset-cursor step — see ibValueSelectorDataObject. The statement
+// is built ONCE; each call fetches the single row after the anchor.
+/////////////////////////////////////////////////////////////////////////
+
+bool ibValueSelectorDataObject::FetchNext()
+{
+	if (!m_query) {
+		// Build the statement once: From the source + the effective ORDER BY (identity
+		// tail). Reused across every Next() — only the anchor (a bound param) changes.
+		m_query = std::make_unique<ibDataQueryBuilder>();
+		m_query->From(GetQueryable());
+		m_effective = ibDataQueryBuilder::EffectiveSort(GetQueryable(),
+			std::vector<ibQuerySortItem>());
+	}
+
+	ibReadPageRequest page;
+	page.m_direction = ibFetchDirection::Forward;
+	page.m_count     = 1;
+	ApplyAnchor(page);   // sets the keyset anchor (no-op on the first row)
+
+	ibDataQueryResult selection = m_query->Execute(page);
+	if (!selection.Next())
+		return false;   // exhausted / empty — anchor untouched
+
+	CaptureAnchor(selection);    // re-anchor on the fetched row (before MaterialiseRow uses the key)
+	MaterialiseRow(selection);
+	return true;
+}
+
+/////////////////////////////////////////////////////////////////////////
+// Record selector (catalog / document / chart) — anchor = m_objGuid.
 /////////////////////////////////////////////////////////////////////////
 
 void ibValueSelectorRecordDataObject::Reset()
 {
+	// Anchor = the start (m_objGuid invalid). The statement / page cache persist.
 	m_objGuid.reset(); m_newObject = false;
-	if (!appData->DesignerMode()) {
-		m_currentValues.clear();
-		// Full key scan through the L3 door — row keys from the L3 selection.
-		ibDataQueryBuilder q;
-		q.From(m_metaObject->GetQueryable());
-		ibReadPageRequest page;
-		page.m_count = 0;   // unbounded
-		ibDataQueryResult selection = q.Execute(page);
-		const ibBackendQueryColumn* keyCol = m_metaObject->GetQueryable()->GetIdentitySort().back().m_col;   // uuid identity column
-		while (selection.Next())
-			m_currentValues.push_back(selection.GetValue(keyCol).GetString());
-	}
-	for (const auto object : m_metaObject->GetAttributeArrayObject()) {
-		if (!appData->DesignerMode()) {
-			m_listObjectValue.insert_or_assign(object->GetMetaID(), ibValueTypes::TYPE_NULL);
-		}
-		else {
+	m_listObjectValue.clear();
+	// Designer mode never iterates (Next() returns false); GetPropVal reads these
+	// designer values directly, so populate them up front.
+	if (appData->DesignerMode()) {
+		for (const auto object : m_metaObject->GetAttributeArrayObject())
 			m_listObjectValue.insert_or_assign(object->GetMetaID(), object->CreateValue());
-		}
-	}
-	for (const auto object : m_metaObject->GetTableArrayObject()) {
-		if (!appData->DesignerMode()) {
-			m_listObjectValue.insert_or_assign(object->GetMetaID(), ibValueTypes::TYPE_NULL);
-		}
-		else {
+		for (const auto object : m_metaObject->GetTableArrayObject())
 			m_listObjectValue.insert_or_assign(object->GetMetaID(), new ibValueTabularSectionDataObjectRef(this, object));
-		}
 	}
 }
 
-bool ibValueSelectorRecordDataObject::Read()
+bool ibValueSelectorRecordDataObject::ApplyAnchor(ibReadPageRequest& page) const
 {
 	if (!m_objGuid.isValid())
-		return false;
-
-	m_listObjectValue.clear();
-
-	// Read the row by key through the L3 door; every value (incl. the self
-	// reference) comes from the L3 selection as a ready ibValue — no raw result.
-	try {
-		ibDataQueryBuilder q;
-		q.From(m_metaObject->GetQueryable()).WhereKey(m_objGuid);
-		ibReadPageRequest page;
-		page.m_count = 1;
-		ibDataQueryResult selection = q.Execute(page);
-		if (selection.Next()) {
-			m_listObjectValue.insert_or_assign(m_metaObject->GetMetaID(),
-				selection.GetValue(m_metaObject->GetDataReference()));
-			for (const auto object : m_metaObject->GetAttributeArrayObject())
-				if (!m_metaObject->IsDataReference(object->GetMetaID()))
-					m_listObjectValue[object->GetMetaID()] = selection.GetValue(object);
-			for (const auto object : m_metaObject->GetTableArrayObject()) {
-				ibValueTabularSectionDataObjectRef* tabularSection = new ibValueTabularSectionDataObjectRef(this, object);
-				tabularSection->LoadData(m_objGuid);
-				m_listObjectValue.insert_or_assign(object->GetMetaID(), tabularSection);
-			}
-			return true;
-		}
-	}
-	catch (...) {}
-	return false;
+		return false;   // first row — no keyset clause
+	page.m_hasAnchor  = true;
+	page.m_anchorGuid = wxString(m_objGuid);   // catalog row-key tiebreaker
+	return true;
 }
 
+void ibValueSelectorRecordDataObject::CaptureAnchor(const ibDataQueryResult& selection)
+{
+	// The anchor IS the row's uuid — the identity tail's last (unique) column. The
+	// driver trims the CHAR pad tail now, so the uuid reads back clean (no padded-guid).
+	m_objGuid = ibGuid(selection.GetValue(m_effective.back().m_col).GetString());
+}
+
+void ibValueSelectorRecordDataObject::MaterialiseRow(const ibDataQueryResult& selection)
+{
+	// Self reference (keyed by the object's metaID, the way GetPropVal expects) + every
+	// non-reference attribute + the row's tabular sections.
+	m_listObjectValue.clear();
+	m_listObjectValue.insert_or_assign(m_metaObject->GetMetaID(),
+		selection.GetValue(m_metaObject->GetDataReference()));
+	for (const auto object : m_metaObject->GetAttributeArrayObject())
+		if (!m_metaObject->IsDataReference(object->GetMetaID()))
+			m_listObjectValue[object->GetMetaID()] = selection.GetValue(object);
+	for (const auto object : m_metaObject->GetTableArrayObject()) {
+		ibValueTabularSectionDataObjectRef* tabularSection = new ibValueTabularSectionDataObjectRef(this, object);
+		tabularSection->LoadData(m_objGuid);
+		m_listObjectValue.insert_or_assign(object->GetMetaID(), tabularSection);
+	}
+}
+
+/////////////////////////////////////////////////////////////////////////
+// Register selector (info / accum / accounting) — anchor = effective-sort values.
 /////////////////////////////////////////////////////////////////////////
 
 void ibValueSelectorRegisterDataObject::Reset()
 {
+	// Anchor = the start. No buffer, no key->row map — just the current row + anchor.
 	m_keyValues.clear();
-	if (!appData->DesignerMode()) {
-		m_currentValues.clear();
-		// Full scan through the L3 door; key columns come from the L3 selection.
-		ibDataQueryBuilder q;
-		q.From(m_metaObject->GetQueryable());
-		ibReadPageRequest page;
-		page.m_count = 0;   // unbounded
-		ibDataQueryResult selection = q.Execute(page);
-		while (selection.Next()) {
-			ibRowMetaValues keyRow;
-			if (m_metaObject->HasRecorder()) {
-				ibValueMetaObjectAttributePredefined* attributeRecorder = m_metaObject->GetRegisterRecorder();
-				wxASSERT(attributeRecorder);
-				keyRow[attributeRecorder->GetMetaID()] = selection.GetValue(attributeRecorder);
-				ibValueMetaObjectAttributePredefined* attributeNumberLine = m_metaObject->GetRegisterLineNumber();
-				wxASSERT(attributeNumberLine);
-				keyRow[attributeNumberLine->GetMetaID()] = selection.GetValue(attributeNumberLine);
-			}
-			else {
-				for (const auto object : m_metaObject->GetGenericDimensionArrayObject())
-					keyRow[object->GetMetaID()] = selection.GetValue(object);
-			}
-			m_currentValues.push_back(keyRow);
-		}
-	}
+	m_current.clear();
+	m_anchorSort.clear();
 }
 
-bool ibValueSelectorRegisterDataObject::Read()
+bool ibValueSelectorRegisterDataObject::ApplyAnchor(ibReadPageRequest& page) const
 {
-	if (m_keyValues.empty())
-		return false;
+	if (m_anchorSort.empty())
+		return false;   // first row — no keyset clause
+	page.m_hasAnchor        = true;
+	page.m_anchorSortValues = m_anchorSort;   // effective-sort order; no row-key guid
+	return true;
+}
 
-	m_listObjectValue.clear();
+void ibValueSelectorRegisterDataObject::CaptureAnchor(const ibDataQueryResult& selection)
+{
+	// A register has no single row-key — anchor on every effective-sort column, bound
+	// in EXACTLY this order by the door's BuildAnchorPredicate.
+	m_anchorSort.clear();
+	m_anchorSort.reserve(m_effective.size());
+	for (const auto& c : m_effective)
+		if (c.m_col != nullptr)
+			m_anchorSort.push_back(selection.GetValue(c.m_col));
+}
 
-	// Composite-key read through the L3 door: each dimension is an Eq condition,
-	// decomposed inside L3 across ALL its physical fields (the FB FIRST / others
-	// LIMIT fork, the GetCompositeSQLFieldName concat and the positional binding
-	// all move into the door). Values come from the L3 selection (GetValue) — no
-	// raw result set, no prepared statement at this call site.
-	try {
-		ibDataQueryBuilder q;
-		q.From(m_metaObject->GetQueryable());
-		for (const auto object : m_metaObject->GetGenericDimensionArrayObject())
-			q.Where(object, ibComparisonType::ibComparisonType_Equal,
-				m_keyValues.at(object->GetMetaID()));
-		ibReadPageRequest page;
-		page.m_count = 1;
-		ibDataQueryResult selection = q.Execute(page);
-		if (selection.Next()) {
-			ibRowMetaValues keyTable, rowTable;
-			for (const auto object : m_metaObject->GetGenericDimensionArrayObject())
-				keyTable[object->GetMetaID()] = selection.GetValue(object);
-			for (const auto object : m_metaObject->GetGenericAttributeArrayObject())
-				rowTable[object->GetMetaID()] = selection.GetValue(object);
-			m_listObjectValue.insert_or_assign(keyTable, rowTable);
-			return true;
-		}
+void ibValueSelectorRegisterDataObject::MaterialiseRow(const ibDataQueryResult& selection)
+{
+	// Identity (the shape GetRecordManager / GetPropVal expect) + the row's attributes.
+	m_keyValues.clear();
+	if (m_metaObject->HasRecorder()) {
+		ibValueMetaObjectAttributePredefined* attrRecorder = m_metaObject->GetRegisterRecorder();
+		ibValueMetaObjectAttributePredefined* attrLine     = m_metaObject->GetRegisterLineNumber();
+		wxASSERT(attrRecorder && attrLine);
+		m_keyValues[attrRecorder->GetMetaID()] = selection.GetValue(attrRecorder);
+		m_keyValues[attrLine->GetMetaID()]     = selection.GetValue(attrLine);
 	}
-	catch (...) {}
-	return false;
+	else {
+		for (const auto object : m_metaObject->GetGenericDimensionArrayObject())
+			m_keyValues[object->GetMetaID()] = selection.GetValue(object);
+	}
+
+	m_current.clear();
+	for (const auto object : m_metaObject->GetGenericAttributeArrayObject())
+		m_current[object->GetMetaID()] = selection.GetValue(object);
 }

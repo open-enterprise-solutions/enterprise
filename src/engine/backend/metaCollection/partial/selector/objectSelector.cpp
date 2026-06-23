@@ -10,6 +10,15 @@ ibValueSelectorDataObject::~ibValueSelectorDataObject()
 {
 }
 
+bool ibValueSelectorDataObject::Next()
+{
+	// Universal cursor drive: designer mode never iterates; otherwise advance one row
+	// past the anchor through the shared keyset step.
+	if (appData->DesignerMode())
+		return false;
+	return FetchNext();
+}
+
 #include "backend/objCtor.h"
 
 ibClassID ibValueSelectorDataObject::GetClassType() const
@@ -47,34 +56,6 @@ ibValueSelectorRecordDataObject::ibValueSelectorRecordDataObject(const ibValueMe
 	Reset();
 }
 
-bool ibValueSelectorRecordDataObject::Next()
-{
-	if (appData->DesignerMode()) {
-		return false;
-	}
-
-	if (!m_objGuid.isValid()) {
-		if (m_currentValues.size() > 0) {
-			auto itStart = m_currentValues.begin();
-			m_objGuid = *itStart;
-			return Read();
-		}
-	}
-	else {
-		auto it = std::find(m_currentValues.begin(), m_currentValues.end(), m_objGuid);
-		ptrdiff_t pos =
-			std::distance(m_currentValues.begin(), it);
-		if (pos == m_currentValues.size() - 1) {
-			return false;
-		}
-		std::advance(it, 1);
-		m_objGuid = *it;
-		return Read();
-	}
-
-	return false;
-}
-
 ibValueRecordDataObjectRef* ibValueSelectorRecordDataObject::GetObject(const ibGuid& guid) const
 {
 	if (appData->DesignerMode()) {
@@ -96,34 +77,6 @@ ibValueSelectorRegisterDataObject::ibValueSelectorRegisterDataObject(const ibVal
 {
 	m_members.Bind(this, &ibValueSelectorRegisterDataObject::FillMembers);
 	Reset();
-}
-
-bool ibValueSelectorRegisterDataObject::Next()
-{
-	if (appData->DesignerMode()) {
-		return false;
-	}
-
-	if (m_keyValues.empty()) {
-		if (m_currentValues.size() > 0) {
-			auto itStart = m_currentValues.begin();
-			m_keyValues = *itStart;
-			return Read();
-		}
-	}
-	else {
-		auto it = std::find(m_currentValues.begin(), m_currentValues.end(), m_keyValues);
-		ptrdiff_t pos =
-			std::distance(m_currentValues.begin(), it);
-		if (pos == m_currentValues.size() - 1) {
-			return false;
-		}
-		std::advance(it, 1);
-		m_keyValues = *it;
-		return Read();
-	}
-
-	return false;
 }
 
 ibValueRecordManagerObject* ibValueSelectorRegisterDataObject::GetRecordManager(const ibRowMetaValues& keyValues) const
@@ -283,6 +236,6 @@ bool ibValueSelectorRegisterDataObject::GetPropVal(const long lPropNum, ibValue&
 			return true;
 		}
 	}
-	pvarPropVal = m_listObjectValue[m_keyValues][id];
+	pvarPropVal = m_current[id];
 	return true;
 }
