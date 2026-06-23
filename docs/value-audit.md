@@ -557,3 +557,13 @@ exposes a mutable key (nothing mutates it). API kept lowercase/std::map-shaped o
 purpose (range-for needs `begin`/`end`; it is used like a map) — see
 [[reference_flat_map_over_stdmap]]. Reusable sibling from the same arc:
 `ibCtorRegistry` (the type-ctor registry above).
+
+> **Wider memory strategy.** `ibFStringPool` (the per-thread size-classed
+> free-list behind `ibString`, above) and `ibRowValues` here are the first two
+> bricks of a memory subsystem, each isolated to its own type. Whether to lift
+> that into a unified allocator seam (`IMemoryManager`), drop-in mimalloc, pools,
+> a query-scope arena, or per-session memory accounting — and the motives that
+> would justify each — is captured in [memory-allocator.md](memory-allocator.md).
+> Short version: the cross-DLL *correctness* motive is already closed by `/MD`, so
+> the seam is a placeholder-when-convenient, with machinery grown by motive
+> (governance / debug-heap), never by precedent.
