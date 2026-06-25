@@ -347,7 +347,7 @@ bool ibValueRecordDataObjectConstant::SetConstValue(const ibValue& cValue)
 		ibQueryIR ir(ibProject(
 			ibFilter(ibScan(tableName),
 				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("RECORD_KEY")), ibConst(ibValue(wxString(wxT("6")))))),
-			{ { ibConst(ibValue(1)), wxEmptyString } }));   // SELECT 1 — only the row lock matters
+			{ { ibCol(wxT("RECORD_KEY")), wxEmptyString } }));   // project the TYPED key column, not a bare const (SELECT ? = FB -804); only the row lock matters
 		ir.m_lockForUpdate = true;
 		ibQueryResult lockRs = q.ExecuteIR(ir);
 		while (lockRs.Next()) {}   // drain — only the lock side effect matters
