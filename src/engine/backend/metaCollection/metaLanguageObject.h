@@ -31,7 +31,7 @@ class BACKEND_API ibValueMetaObjectLanguage : public ibValueMetaObject {
 protected:
 
 	virtual bool ReadData(const ibDataNode& node) override;
-	virtual bool WriteData(ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
 
 	bool IsValidCode(const wxString& strLangCode);
 

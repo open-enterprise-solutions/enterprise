@@ -45,8 +45,8 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::AddChildr
 			AddChildren(obj->GetChild(0), parent);
 		}
 		else {
-			// Si hemos llegado aquí ha sido porque el arbol no está bien formado
-			// y habrá que revisar cómo se ha creado.
+			// If we reached here it is because the tree is malformed
+			// and how it was built needs to be reviewed.
 			wxString msg;
 			ibValueFrame* itemParent = obj->GetParent();
 			assert(parent);

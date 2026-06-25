@@ -462,8 +462,13 @@ void ibTypeControlFactory::QuickChoice(ibControlFrame* controlValue, ibValue& ne
 
 ibSelectMode ibTypeControlFactory::GetSelectMode() const
 {
-	const ibValueMetaObjectAttributeBase* sourceObject = GetSourceAttributeObject();
-	if (sourceObject != nullptr) return sourceObject->GetSelectMode();
+	// Select mode is a metaobject-attribute concern — a single reference to a HIERARCHICAL catalog
+	// carries Items / Folders / FoldersAndItems. Resolve the bound leaf and, WHEN it is a metadata
+	// attribute, read its mode; a plain column (a dynamic list's queryable column) has none →
+	// default to item selection.
+	const ibValueMetaObjectAttributeBase* attr =
+		dynamic_cast<const ibValueMetaObjectAttributeBase*>(GetSourceAttributeObject());
+	if (attr != nullptr) return attr->GetSelectMode();
 	return ibSelectMode::ibSelectMode_Items;
 }
 
@@ -474,15 +479,15 @@ ibValue ibTypeControlFactory::CreateValue() const
 
 ibValue* ibTypeControlFactory::CreateValueRef() const
 {
-	const ibValueMetaObjectAttributeBase* sourceObject = GetSourceAttributeObject();
-	if (sourceObject != nullptr) return sourceObject->CreateValueRef();
+	// Value creation is the FACTORY's job — it knows its bound Type (GetTypeDesc); delegating to
+	// the source attribute was a duplicate of exactly this.
 	return ibBackendTypeSourceFactory::CreateValueRef();
 }
 
 ibClassID ibTypeControlFactory::GetDataType() const
 {
-	const ibValueMetaObjectAttributeBase* sourceObject = GetSourceAttributeObject();
-	if (sourceObject != nullptr) return ShowSelectType(sourceObject->GetMetaData(), sourceObject->GetTypeDesc());
+	// Type + metadata come from the factory itself — its bound source property already reflects
+	// the resolved field's Type.
 	return ShowSelectType(GetMetaData(), GetTypeDesc());
 }
 

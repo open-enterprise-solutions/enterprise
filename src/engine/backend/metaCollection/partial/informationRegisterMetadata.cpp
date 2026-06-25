@@ -63,7 +63,7 @@ ibBackendValueForm* ibValueMetaObjectInformationRegister::GetListForm(const wxSt
 //*                       Save & load metaData                              *
 //***************************************************************************
 
-bool ibValueMetaObjectInformationRegister::WriteData(ibDataNode& node)
+bool ibValueMetaObjectInformationRegister::WriteData(ibDataNode& node) const
 {
 	node.SetValue(m_propertyDefFormRecord->GetName(), GetGuidByID(m_propertyDefFormRecord->GetValueAsInteger()).str());
 	node.SetValue(m_propertyDefFormList->GetName(), GetGuidByID(m_propertyDefFormList->GetValueAsInteger()).str());

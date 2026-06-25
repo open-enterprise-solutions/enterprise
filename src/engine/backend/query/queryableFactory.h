@@ -27,6 +27,7 @@
 
 #include <wx/string.h>
 #include <map>
+#include <vector>
 
 class ibBackendQueryable;
 class ibBackendQueryableHolder;
@@ -100,6 +101,14 @@ public:
 	// descriptor and ask it to CREATE the queryable. Null when unknown.
 	const ibBackendQueryable* Resolve(const wxString& ns, const wxString& objectName,
 	                                  ibValue** paParams = nullptr, long lSizeArray = 0) const;
+
+	// Enumerate registered source descriptors — the dynamic-list source picker lists
+	// them by GetNamespace()/GetName(). Non-owning pointers, valid for owners' life.
+	std::vector<ibQueryableSourceDescriptor*> GetDescriptors() const;
+
+	// Resolve a source by its table id (queryable->GetQueryTableId()) — the stable id the
+	// dynamic-source property serializes. Null when none matches.
+	const ibBackendQueryable* ResolveById(ibMetaID tableId) const;
 
 private:
 	ibQueryableFactory(const ibQueryableFactory&) = delete;

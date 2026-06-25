@@ -54,7 +54,7 @@ bool ibValueMetaObjectAccountingRegister::ReadData(const ibDataNode& node)
 	return ibValueMetaObjectRegisterData::ReadData(node);
 }
 
-bool ibValueMetaObjectAccountingRegister::WriteData(ibDataNode& node)
+bool ibValueMetaObjectAccountingRegister::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyAttributeRecordType->GetName(), m_propertyAttributeRecordType->GetNodeValue());
 	node.SetProperty(m_propertyAttributeAccount->GetName(), m_propertyAttributeAccount->GetNodeValue());

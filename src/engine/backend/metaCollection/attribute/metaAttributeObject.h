@@ -66,6 +66,12 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 	// the column's.
 	virtual ibTypeDescription& GetTypeDesc() const override = 0;
 	virtual wxString GetName() const override         { return ibValueMetaObject::GetName(); }
+	// GetSynonym is now ALSO declared by ibBackendSourceColumn (the column base) — same single-
+	// overrider trick as GetName: the column synonym IS the metaobject synonym (the UI caption).
+	virtual wxString GetSynonym() const override      { return ibValueMetaObject::GetSynonym(); }
+	// IsAllowed (column base) routes to the metaobject's (IsEnabled && !IsDeleted) — so the source
+	// explorer skips deleted / disabled fields without touching the metaobject.
+	virtual bool IsAllowed() const override           { return ibValueMetaObject::IsAllowed(); }
 	virtual wxString GetPhysicalName() const override { return wxString::Format(wxT("fld%i"), m_metaId); }
 	// The column's model/read id — for a DB attribute it IS the metaID (RAM tables key
 	// their rows by it; the DB path keys its fields off the same id via GetPhysicalName).
@@ -138,7 +144,7 @@ protected:
 	// per-type values: FillCheck/ItemMode/Select readable, Type (composite) binary
 	// for now → becomes a Child sub-node later. Separate save/load (const on read).
 	virtual bool ReadData(const ibDataNode& node) override;
-	virtual bool WriteData(ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
 
 private:
 
@@ -237,7 +243,7 @@ protected:
 
 
 	virtual bool ReadData(const ibDataNode& node) override;
-	virtual bool WriteData(ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
 
 private:
 

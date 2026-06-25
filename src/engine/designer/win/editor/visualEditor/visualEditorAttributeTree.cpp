@@ -23,6 +23,7 @@ enum {
 	ID_ATTR_SETMAIN,
 	ID_ATTR_PROPERTIES,
 	ID_ATTR_COPY,
+	ID_ATTR_CUT,
 	ID_ATTR_PASTE,
 };
 
@@ -37,6 +38,7 @@ wxBEGIN_EVENT_TABLE(ibAttributeTree, wxPanel)
 	EVT_MENU(ID_ATTR_SETMAIN, ibAttributeTree::OnSetMainAttribute)
 	EVT_MENU(ID_ATTR_PROPERTIES, ibAttributeTree::OnPropertiesAttribute)
 	EVT_MENU(ID_ATTR_COPY, ibAttributeTree::OnCopyAttribute)
+	EVT_MENU(ID_ATTR_CUT, ibAttributeTree::OnCutAttribute)
 	EVT_MENU(ID_ATTR_PASTE, ibAttributeTree::OnPasteAttribute)
 wxEND_EVENT_TABLE()
 
@@ -74,29 +76,29 @@ void ibAttributeTree::RebuildTree()
 		ibFormAttributeValue* entry = form->GetAttribute(idx);
 		const wxTreeItemId id = m_tcAttributes->AppendItem(
 			root, entry->GetAttributeName(), 0, 0,
-			new ibAttributeTreeItemData(entry->GetAttribute()));
+			new ibAttributeTreeItemData(entry));   // carry the holder (facade) — the selectable
 		if (entry->IsMainAttribute())
 			m_tcAttributes->SetItemBold(id);
 	}
 }
 
-ibValueFormAttribute* ibAttributeTree::GetAttributeFromItem(const wxTreeItemId& item) const
+ibFormAttributeValue* ibAttributeTree::GetEntryFromItem(const wxTreeItemId& item) const
 {
-	if (item.IsOk()) {
+	if (item.IsOk())
 		if (wxTreeItemData* data = m_tcAttributes->GetItemData(item))
-			return ((ibAttributeTreeItemData*)data)->GetAttribute();
-	}
+			return ((ibAttributeTreeItemData*)data)->GetEntry();
 	return nullptr;
 }
 
 void ibAttributeTree::OnSelChanged(wxTreeEvent& event)
 {
-	if (ibValueFormAttribute* attr = GetAttributeFromItem(event.GetItem())) {
+	if (ibFormAttributeValue* entry = GetEntryFromItem(event.GetItem())) {
 		// Ensure the inspector is up — SelectObject is a no-op while hidden;
-		// force a rebuild so the attribute's properties are shown.
+		// force a rebuild so the attribute's properties are shown. Select the HOLDER (facade):
+		// it surfaces the attribute's + the value's properties and intercepts their changes.
 		if (!objectInspector->IsShownInspector())
 			objectInspector->ShowInspector();
-		objectInspector->SelectObject(attr, true);
+		objectInspector->SelectObject(entry, true);
 	}
 }
 
@@ -125,6 +127,7 @@ void ibAttributeTree::OnContextMenu(wxContextMenuEvent& event)
 	appendItem(ID_ATTR_EDIT, _("Edit"), wxART_EDIT, hasItem);
 	appendItem(ID_ATTR_REMOVE, _("Delete"), wxART_DELETE, hasItem);
 	menu.AppendSeparator();
+	appendItem(ID_ATTR_CUT, _("Cut"), wxART_CUT, hasItem);
 	appendItem(ID_ATTR_COPY, _("Copy"), wxART_COPY, hasItem);
 	appendItem(ID_ATTR_PASTE, _("Paste"), wxART_PASTE, true);        // always available
 	menu.AppendSeparator();
@@ -138,10 +141,10 @@ void ibAttributeTree::OnActivated(wxTreeEvent& event)
 {
 	// Double-click / Enter on an item → activate its properties in the inspector, even when it is
 	// already the selected item (OnSelChanged would not re-fire). "Activate the property."
-	if (ibValueFormAttribute* attr = GetAttributeFromItem(event.GetItem())) {
+	if (ibFormAttributeValue* entry = GetEntryFromItem(event.GetItem())) {
 		if (!objectInspector->IsShownInspector())
 			objectInspector->ShowInspector();
-		objectInspector->SelectObject(attr, true);
+		objectInspector->SelectObject(entry, true);   // select the HOLDER (facade)
 	}
 }
 
@@ -151,17 +154,14 @@ void ibAttributeTree::OnAddAttribute(wxCommandEvent& WXUNUSED(event))
 	if (form == nullptr)
 		return;
 
-	// A new attribute is never empty: a UNIQUE name and a default Type (String). The user
-	// changes the Type via the inspector afterwards.
-	ibFormAttributeValue* entry = form->AddAttribute(
-		form->MakeUniqueAttributeName(wxT("Attribute")),
-		ibValue::GetIDByVT(ibValueTypes::TYPE_STRING), ibValue());
-
-	m_formHandler->Modify(true);
-	RebuildTree();
+	// A new attribute is never empty: a UNIQUE name and a default Type (String) — the user changes
+	// the Type via the inspector afterwards. Build it UNOWNED and run it through the command
+	// processor so the add is UNDOABLE; the command attaches it, refreshes the editor (this tree
+	// re-reads the form's attribute set) and selects the new entry.
 	if (!objectInspector->IsShownInspector())
 		objectInspector->ShowInspector();
-	objectInspector->SelectObject(entry->GetAttribute(), true);
+
+	m_formHandler->InsertAttribute(form->MakeAttribute(form->MakeUniqueAttributeName()));
 }
 
 void ibAttributeTree::OnEditAttribute(wxCommandEvent& WXUNUSED(event))
@@ -178,60 +178,67 @@ void ibAttributeTree::OnEndLabelEdit(wxTreeEvent& event)
 		return;
 
 	ibValueForm* form = m_formHandler != nullptr ? m_formHandler->GetValueForm() : nullptr;
-	ibValueFormAttribute* attr = GetAttributeFromItem(event.GetItem());
-	if (form == nullptr || attr == nullptr) { event.Veto(); return; }
+	ibFormAttributeValue* entry = GetEntryFromItem(event.GetItem());
+	if (form == nullptr || entry == nullptr) { event.Veto(); return; }
 
-	ibFormAttributeValue* entry = form->FindAttributeById(attr->GetAttributeId());
 	// Reject an empty or duplicate name — RenameAttribute re-binds the module variable on success.
-	if (entry == nullptr || !form->RenameAttribute(entry, event.GetLabel())) {
+	if (!form->RenameAttribute(entry, event.GetLabel())) {
 		event.Veto();
 		return;
 	}
 	m_formHandler->Modify(true);
-	objectInspector->SelectObject(attr, true);
+	m_formHandler->NotifyEditorSaved();
+
+	objectInspector->SelectObject(entry, true);
 }
 
 void ibAttributeTree::OnRemoveAttribute(wxCommandEvent& WXUNUSED(event))
 {
-	ibValueForm* form = m_formHandler != nullptr ? m_formHandler->GetValueForm() : nullptr;
-	ibValueFormAttribute* attr = GetAttributeFromItem(m_tcAttributes->GetSelection());
-	if (form == nullptr || attr == nullptr)
-		return;
-
-	form->DeleteAttribute(attr->GetAttributeName());
-	m_formHandler->Modify(true);
-	RebuildTree();
-	m_formHandler->RefreshEditor();   // controls bound to the deleted attribute now render broken/empty
+	// Through the command processor (undoable). The command detaches the entry from the form,
+	// marks the editor modified and refreshes it — this tree (and controls bound to the deleted
+	// attribute, which now render broken/empty) re-read along with the rest.
+	if (ibFormAttributeValue* entry = GetEntryFromItem(m_tcAttributes->GetSelection()))
+		m_formHandler->RemoveAttribute(entry);
 }
 
 void ibAttributeTree::OnSetMainAttribute(wxCommandEvent& WXUNUSED(event))
 {
 	ibValueForm* form = m_formHandler != nullptr ? m_formHandler->GetValueForm() : nullptr;
-	ibValueFormAttribute* attr = GetAttributeFromItem(m_tcAttributes->GetSelection());
-	if (form == nullptr || attr == nullptr)
+	ibFormAttributeValue* entry = GetEntryFromItem(m_tcAttributes->GetSelection());
+	if (form == nullptr || entry == nullptr)
 		return;
 
-	if (ibFormAttributeValue* entry = form->FindAttributeById(attr->GetAttributeId()))
-		form->SetMainAttribute(entry);   // sole-main invariant + source flows to it
+	form->SetMainAttribute(entry);   // sole-main invariant + source flows to it
 	m_formHandler->Modify(true);
+	m_formHandler->NotifyEditorSaved();
 	RebuildTree();
 	m_formHandler->RefreshEditor();   // source moved to the new main → controls re-render accordingly
 }
 
 void ibAttributeTree::OnPropertiesAttribute(wxCommandEvent& WXUNUSED(event))
 {
-	if (ibValueFormAttribute* attr = GetAttributeFromItem(m_tcAttributes->GetSelection())) {
+	if (ibFormAttributeValue* entry = GetEntryFromItem(m_tcAttributes->GetSelection())) {
 		if (!objectInspector->IsShownInspector())
 			objectInspector->ShowInspector();
-		objectInspector->SelectObject(attr, true);
+		objectInspector->SelectObject(entry, true);
 	}
 }
 
 void ibAttributeTree::OnCopyAttribute(wxCommandEvent& WXUNUSED(event))
 {
-	// Clipboard copy lives on the attribute wrapper (serialization-based, own format id).
-	if (ibValueFormAttribute* attr = GetAttributeFromItem(m_tcAttributes->GetSelection()))
-		ibFormAttributeValue::CopyToClipboard(attr);
+	// Clipboard copy lives on the holder (serialization-based, own format id).
+	if (ibFormAttributeValue* entry = GetEntryFromItem(m_tcAttributes->GetSelection()))
+		ibFormAttributeValue::CopyToClipboard(entry);
+}
+
+void ibAttributeTree::OnCutAttribute(wxCommandEvent& WXUNUSED(event))
+{
+	// Cut = copy to the clipboard, then remove through the command processor (the removal is undoable).
+	ibFormAttributeValue* entry = GetEntryFromItem(m_tcAttributes->GetSelection());
+	if (entry == nullptr)
+		return;
+	ibFormAttributeValue::CopyToClipboard(entry);
+	m_formHandler->RemoveAttribute(entry);
 }
 
 void ibAttributeTree::OnPasteAttribute(wxCommandEvent& WXUNUSED(event))
@@ -245,6 +252,6 @@ void ibAttributeTree::OnPasteAttribute(wxCommandEvent& WXUNUSED(event))
 		RebuildTree();
 		if (!objectInspector->IsShownInspector())
 			objectInspector->ShowInspector();
-		objectInspector->SelectObject(entry->GetAttribute(), true);
+		objectInspector->SelectObject(entry, true);
 	}
 }

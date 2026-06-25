@@ -329,7 +329,7 @@ public:
 	// header (guid/id/deleted/help -> fields, name/synonym/comment -> props, interface/
 	// roles) then delegate the per-type data to ReadData / WriteData.
 	bool LoadNode(const ibDataNode& node);
-	bool SaveNode(ibDataNode& node);
+	bool SaveNode(ibDataNode& node) const;
 
 	// A NESTED metaobject (module, predefined attribute, …) is embedded by its holder
 	// PROPERTY like any value — m_propertyObjectModule->WriteNodeValue/ReadNodeValue
@@ -465,7 +465,7 @@ protected:
 	// per-type data hook: a type reads/writes its OWN data — props / fields / Child.
 	// The base has none; a type overrides. Driven only by SaveNode / LoadNode.
 	virtual bool ReadData(const ibDataNode& node);
-	virtual bool WriteData(ibDataNode& node);
+	virtual bool WriteData(ibDataNode& node) const;
 
 protected:
 

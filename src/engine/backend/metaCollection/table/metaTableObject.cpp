@@ -76,7 +76,7 @@ bool ibValueMetaObjectTableData::ReadData(const ibDataNode& node)
 	return true;
 }
 
-bool ibValueMetaObjectTableData::WriteData(ibDataNode& node)
+bool ibValueMetaObjectTableData::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyUse->GetName(), m_propertyUse->GetNodeValue());
 	node.SetProperty(m_propertyNumberLine->GetName(), m_propertyNumberLine->GetNodeValue());

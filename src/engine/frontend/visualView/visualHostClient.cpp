@@ -145,7 +145,12 @@ void ibVisualHostClient::SetCaption(const wxString& strCaption)
 		if (srcObject != nullptr && !m_document->IsVisualDemonstrationDoc()) {
 			m_document->SetTitle(srcObject->GetSourceCaption());
 			const ibValueMetaObjectGenericData* genericObject = srcObject->GetSourceMetaObject();
-			m_document->SetFilename(genericObject->GetFileName(), true);
+			if (genericObject != nullptr) {
+				m_document->SetFilename(genericObject->GetFileName(), true);
+			}
+			else {
+				m_document->SetFilename(srcObject->GetSourceCaption(), true);
+			}
 		}
 		else {
 			const ibValueMetaObjectFormBase* creator = handler->GetFormMetaObject();

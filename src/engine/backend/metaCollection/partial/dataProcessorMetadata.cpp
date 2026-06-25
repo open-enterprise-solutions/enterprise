@@ -88,7 +88,7 @@ ibBackendValueForm* ibValueMetaObjectDataProcessor::GetObjectForm(const wxString
 //*                       Save & load metaData                              *
 //***************************************************************************
 
-bool ibValueMetaObjectDataProcessor::WriteData(ibDataNode& node)
+bool ibValueMetaObjectDataProcessor::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyObjectModule->GetName(), m_propertyObjectModule->GetNodeValue());
 	node.SetProperty(m_propertyManagerModule->GetName(), m_propertyManagerModule->GetNodeValue());

@@ -146,7 +146,7 @@ bool ibValueMetaObjectAttribute::ReadData(const ibDataNode& node)
 	m_propertySelectMode->ReadNodeValue(node.GetProperty(m_propertySelectMode->GetName()));
 	return true;
 }
-bool ibValueMetaObjectAttribute::WriteData(ibDataNode& node)
+bool ibValueMetaObjectAttribute::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyType->GetName(),       m_propertyType->GetNodeValue());
 	node.SetProperty(m_propertyFillCheck->GetName(),  m_propertyFillCheck->GetNodeValue());
@@ -158,7 +158,7 @@ bool ibValueMetaObjectAttribute::WriteData(ibDataNode& node)
 
 // Node form: the type descriptor as a Child (same readable shape as ibPropertyType,
 // via the shared ibTypeDescriptionMemory::WriteNode) + the fill flag.
-bool ibValueMetaObjectAttributePredefined::WriteData(ibDataNode& node)
+bool ibValueMetaObjectAttributePredefined::WriteData(ibDataNode& node) const
 {
 	ibDataValue typeValue;
 	ibTypeDescriptionMemory::WriteNode(typeValue, m_typeDesc, GetMetaData());

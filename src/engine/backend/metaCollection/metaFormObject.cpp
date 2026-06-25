@@ -66,15 +66,18 @@ bool ibValueMetaObjectFormBase::LoadFormData(ibBackendValueForm* valueForm) cons
 }
 
 bool ibValueMetaObjectFormBase::SaveFormData(ibBackendValueForm* valueForm) {
-	const wxMemoryBuffer& memoryBuffer = valueForm->SaveForm();
-	SetFormData(memoryBuffer);
-	// Designer's form-edit commit — invalidate this form's compile-cache
-	// entry so the next FindCompileModule rebuilds the form value via the
-	// stored ibDeferredForm rebuilder. Caller is always the visual form
-	// editor; runtime never reaches here.
-	if (auto* cc = m_metaData ? m_metaData->GetCompileCache() : nullptr)
-		cc->InvalidateCompileModule(this);
-	return !memoryBuffer.IsEmpty();
+	wxMemoryBuffer memoryBuffer;
+	if (valueForm->SaveForm(memoryBuffer)) {
+		SetFormData(memoryBuffer);
+		// Designer's form-edit commit — invalidate this form's compile-cache
+		// entry so the next FindCompileModule rebuilds the form value via the
+		// stored ibDeferredForm rebuilder. Caller is always the visual form
+		// editor; runtime never reaches here.
+		if (auto* cc = m_metaData ? m_metaData->GetCompileCache() : nullptr)
+			cc->InvalidateCompileModule(this);
+		return !memoryBuffer.IsEmpty();
+	}
+	return false;   // form refused to serialize (e.g. a dynamic list with no queryable source) — don't commit
 }
 
 //***********************************************************************
@@ -177,8 +180,11 @@ ibDataValue ibValueMetaObjectFormBase::CopyFormData() const
 {
 	ibBackendValueForm* valueForm = nullptr;
 	auto* cc = m_metaData->GetCompileCache();
-	if (cc && cc->FindCompileModule(this, valueForm))
-		return FormBlobToNode(valueForm->SaveForm());
+	if (cc && cc->FindCompileModule(this, valueForm)) {
+		wxMemoryBuffer blob;
+		if (valueForm->SaveForm(blob))
+			return FormBlobToNode(blob);
+	}
 	return ibDataValue();
 }
 
@@ -219,7 +225,7 @@ bool ibValueMetaObjectForm::ReadData(const ibDataNode& node)
 	return true;
 }
 
-bool ibValueMetaObjectForm::WriteData(ibDataNode& node)
+bool ibValueMetaObjectForm::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_properyFormType->GetName(), m_properyFormType->GetNodeValue());
 	node.SetProperty(m_propertyForm->GetName(), m_propertyForm->GetNodeValue());
@@ -330,7 +336,7 @@ bool ibValueMetaObjectForm::OnAfterRunMetaObject(int flags)
 		// and materializes it on first FindCompileModule lookup.
 		return cc->AddCompileModule(this, [deferred = ibDeferredForm(metaObject, this)]() -> ibValue* {
 			return deferred.Construct();
-		});
+			});
 	}
 
 	return ibValueMetaObjectFormBase::OnAfterRunMetaObject(flags);
@@ -365,7 +371,7 @@ bool ibValueMetaObjectCommonForm::ReadData(const ibDataNode& node)
 	return true;
 }
 
-bool ibValueMetaObjectCommonForm::WriteData(ibDataNode& node)
+bool ibValueMetaObjectCommonForm::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyForm->GetName(), m_propertyForm->GetNodeValue());
 	return true;

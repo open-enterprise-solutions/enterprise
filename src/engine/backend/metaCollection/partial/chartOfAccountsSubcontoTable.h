@@ -32,7 +32,7 @@ class ibValueMetaObjectSubcontoKindsTable : public ibValueMetaObjectTableData {
 	virtual bool OnAfterCloseMetaObject();
 
 	virtual bool ReadData(const ibDataNode& node) override;
-	virtual bool WriteData(ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
 
 protected:
 

@@ -28,6 +28,24 @@ public:
 
 	virtual ibCtorObjectMetaType GetMetaTypeCtor() const = 0;
 	virtual const ibValueMetaObject* GetMetaObject() const = 0;
+
+	// Table trait for metadata types — derived from the meta-kind the metaobject already
+	// declares (no per-object flag): a List / TabularSection / RecordSet is a tabular source;
+	// a Reference / Object / Manager / Characteristic / RecordKey is a scalar (a table is
+	// never a reference). Lets the class factory answer "is this a table" by CLSID for
+	// metaobjects too, alongside the value-type ctors' T::IsTableValue.
+	virtual bool IsTableValue() const override {
+		switch (GetMetaTypeCtor()) {
+		case ibCtorObjectMetaType::ibCtorObjectMetaType_List:
+		case ibCtorObjectMetaType::ibCtorObjectMetaType_TabularSection:
+		case ibCtorObjectMetaType::ibCtorObjectMetaType_TabularSection_String:
+		case ibCtorObjectMetaType::ibCtorObjectMetaType_RecordSet:
+		case ibCtorObjectMetaType::ibCtorObjectMetaType_RecordSet_String:
+			return true;
+		default:
+			return false;
+		}
+	}
 };
 
 //reference class 

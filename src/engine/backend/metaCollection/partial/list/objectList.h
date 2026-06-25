@@ -149,6 +149,8 @@ public:
 
 	//get metaData from object 
 	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const final { return GetMetaObject(); }
+	// Metadata via THIS source's metaobject (it has one here).
+	virtual const ibMetaData* GetSourceMetaData() const override { const auto* mo = GetMetaObject(); return mo != nullptr ? mo->GetMetaData() : nullptr; }
 
 	//Get ref class 
 	virtual ibClassID GetSourceClassType() const final { return GetClassType(); }
@@ -710,6 +712,8 @@ public:
 
 	//get metaData from object 
 	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const final { return GetMetaObject(); }
+	// Metadata via THIS source's metaobject (it has one here).
+	virtual const ibMetaData* GetSourceMetaData() const override { const auto* mo = GetMetaObject(); return mo != nullptr ? mo->GetMetaData() : nullptr; }
 
 	//Get ref class 
 	virtual ibClassID GetSourceClassType() const final { return GetClassType(); }

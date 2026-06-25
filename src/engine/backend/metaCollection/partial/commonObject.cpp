@@ -29,6 +29,22 @@
 // previous reference value by attribute name: the source's metadata resolves the
 // id to its name (config-wide, so a nested reference's field is found) and member
 // access reads it off the value. Read-only navigation.
+
+bool ibSourceDataObject::IsTableSource() const
+{
+	// Resolve the source's class ctor by its CLSID — metaobject registry first (catalog /
+	// document lists, register record sets), else the global value registry (the dynamic
+	// list and ibValueModelTable). ibMetaData::GetAvailableCtor already falls back to the
+	// global registry, so one lookup covers both; the table answer is the ctor's IsTableValue.
+	const ibClassID clsid = GetSourceClassType();
+	const ibValueMetaObjectGenericData* generic = GetSourceMetaObject();
+	const ibMetaData* metaData = generic != nullptr ? generic->GetMetaData() : nullptr;
+	const ibCtorAbstractType* ctor = metaData != nullptr
+		? metaData->GetAvailableCtor(clsid)
+		: ibValue::GetAvailableCtor(clsid);
+	return ctor != nullptr && ctor->IsTableValue();
+}
+
 bool ibSourceDataObject::GetValueByPath(const std::vector<ibMetaID>& path, ibValue& pvarMetaVal) const
 {
 	if (path.empty())
@@ -285,7 +301,7 @@ bool ibValueMetaObjectRecordDataRef::ReadData(const ibDataNode& node)
 	return true;
 }
 
-bool ibValueMetaObjectRecordDataRef::WriteData(ibDataNode& node)
+bool ibValueMetaObjectRecordDataRef::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyQuickChoice->GetName(), m_propertyQuickChoice->GetNodeValue());
 	node.SetProperty(m_propertyAttributeReference->GetName(), m_propertyAttributeReference->GetNodeValue());
@@ -422,7 +438,7 @@ ibValueMetaObjectRecordDataEnumRef::~ibValueMetaObjectRecordDataEnumRef()
 //*                       Save & load metaData                              *
 //***************************************************************************
 
-bool ibValueMetaObjectRecordDataEnumRef::WriteData(ibDataNode& node)
+bool ibValueMetaObjectRecordDataEnumRef::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyAttributeOrder->GetName(), m_propertyAttributeOrder->GetNodeValue());
 	return ibValueMetaObjectRecordDataRef::WriteData(node);
@@ -518,7 +534,7 @@ ibValueMetaObjectRecordDataMutableRef::~ibValueMetaObjectRecordDataMutableRef()
 //*                       Save & load metaData                              *
 //***************************************************************************
 
-bool ibValueMetaObjectRecordDataMutableRef::WriteData(ibDataNode& node)
+bool ibValueMetaObjectRecordDataMutableRef::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyAttributeDataVersion->GetName(), m_propertyAttributeDataVersion->GetNodeValue());
 	node.SetProperty(m_propertyAttributeDeletionMark->GetName(), m_propertyAttributeDeletionMark->GetNodeValue());
@@ -796,7 +812,7 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::DeletePredefinedValue(const
 //*                       Save & load metaData                              *
 //***************************************************************************
 
-bool ibValueMetaObjectRecordDataHierarchyMutableRef::WriteData(ibDataNode& node)
+bool ibValueMetaObjectRecordDataHierarchyMutableRef::WriteData(ibDataNode& node) const
 {
 	// predefined values -> an Array of Child{ guid, name, code, description, isFolder }
 	std::vector<ibDataValue> predefined;
@@ -1056,21 +1072,21 @@ ibValueMetaObjectRegisterData::~ibValueMetaObjectRegisterData()
 //***************************************************************************
 
 // Base ibValueMetaObjectGenericData has no data of its own — chain bottoms here.
-bool ibValueMetaObjectRegisterData::WriteData(ibDataNode& node)
-{
-	node.SetProperty(m_propertyAttributeLineActive->GetName(), m_propertyAttributeLineActive->GetNodeValue());
-	node.SetProperty(m_propertyAttributePeriod->GetName(), m_propertyAttributePeriod->GetNodeValue());
-	node.SetProperty(m_propertyAttributeRecorder->GetName(), m_propertyAttributeRecorder->GetNodeValue());
-	node.SetProperty(m_propertyAttributeLineNumber->GetName(), m_propertyAttributeLineNumber->GetNodeValue());
-	return true;
-}
-
 bool ibValueMetaObjectRegisterData::ReadData(const ibDataNode& node)
 {
 	m_propertyAttributeLineActive->ReadNodeValue(node.GetProperty(m_propertyAttributeLineActive->GetName()));
 	m_propertyAttributePeriod->ReadNodeValue(node.GetProperty(m_propertyAttributePeriod->GetName()));
 	m_propertyAttributeRecorder->ReadNodeValue(node.GetProperty(m_propertyAttributeRecorder->GetName()));
 	m_propertyAttributeLineNumber->ReadNodeValue(node.GetProperty(m_propertyAttributeLineNumber->GetName()));
+	return true;
+}
+
+bool ibValueMetaObjectRegisterData::WriteData(ibDataNode& node) const
+{
+	node.SetProperty(m_propertyAttributeLineActive->GetName(), m_propertyAttributeLineActive->GetNodeValue());
+	node.SetProperty(m_propertyAttributePeriod->GetName(), m_propertyAttributePeriod->GetNodeValue());
+	node.SetProperty(m_propertyAttributeRecorder->GetName(), m_propertyAttributeRecorder->GetNodeValue());
+	node.SetProperty(m_propertyAttributeLineNumber->GetName(), m_propertyAttributeLineNumber->GetNodeValue());
 	return true;
 }
 
@@ -1543,16 +1559,20 @@ ibSourceExplorer ibValueRecordDataObject::GetSourceExplorer() const
 	const ibValueMetaObjectRecordData* metaObject = GetMetaObject();
 
 	ibSourceExplorer srcHelper(
-		metaObject, GetClassType(),
-		false
+		wxT("ref"), _("Ref"), metaObject->GetMetaID(), GetClassType(),
+		false, false
 	);
 
 	for (const auto object : metaObject->GetGenericAttributeArrayObject()) {
-		srcHelper.AppendSource(object);
+		srcHelper.AppendColumn(object);
 	}
 
 	for (const auto object : metaObject->GetGenericTableArrayObject()) {
-		srcHelper.AppendSource(object);
+		if (object != nullptr && !object->IsDeleted()) {
+			ibSourceExplorer& tblNode = srcHelper.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
+			std::vector<ibValueMetaObjectAttributeBase*> tblCols;
+			for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject(tblCols)) tblNode.AppendColumn(tblCol);
+		}
 	}
 
 	return srcHelper;
@@ -2033,20 +2053,24 @@ wxString ibValueRecordDataObjectRef::GetString() const
 ibSourceExplorer ibValueRecordDataObjectRef::GetSourceExplorer() const
 {
 	ibSourceExplorer srcHelper(
-		m_metaObject, GetClassType(),
-		false
+		wxT("ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
+		false, false
 	);
 
 	ibValueMetaObjectAttributeBase* attribute = m_metaObject->GetAttributeForCode();
 
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 		if (!m_metaObject->IsDataReference(object->GetMetaID())) {
-			srcHelper.AppendSource(object, object != attribute);
+			srcHelper.AppendColumn(object, object != attribute);
 		}
 	}
 
 	for (const auto object : m_metaObject->GetGenericTableArrayObject()) {
-		srcHelper.AppendSource(object);
+		if (object != nullptr && !object->IsDeleted()) {
+			ibSourceExplorer& tblNode = srcHelper.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
+			std::vector<ibValueMetaObjectAttributeBase*> tblCols;
+			for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject(tblCols)) tblNode.AppendColumn(tblCol);
+		}
 	}
 
 	return srcHelper;
@@ -2193,8 +2217,8 @@ ibValueRecordDataObjectHierarchyRef::~ibValueRecordDataObjectHierarchyRef()
 ibSourceExplorer ibValueRecordDataObjectHierarchyRef::GetSourceExplorer() const
 {
 	ibSourceExplorer srcHelper(
-		m_metaObject, GetClassType(),
-		false
+		wxT("ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
+		false, false
 	);
 	ibValueMetaObjectAttributeBase* attribute = m_metaObject->GetAttributeForCode();
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
@@ -2203,7 +2227,7 @@ ibSourceExplorer ibValueRecordDataObjectHierarchyRef::GetSourceExplorer() const
 			if (attrUse == ibItemMode::ibItemMode_Item
 				|| attrUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (!m_metaObject->IsDataReference(object->GetMetaID())) {
-					srcHelper.AppendSource(object, object != attribute);
+					srcHelper.AppendColumn(object, object != attribute);
 				}
 			}
 		}
@@ -2211,7 +2235,7 @@ ibSourceExplorer ibValueRecordDataObjectHierarchyRef::GetSourceExplorer() const
 			if (attrUse == ibItemMode::ibItemMode_Folder ||
 				attrUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (!m_metaObject->IsDataReference(object->GetMetaID())) {
-					srcHelper.AppendSource(object, object != attribute);
+					srcHelper.AppendColumn(object, object != attribute);
 				}
 			}
 		}
@@ -2222,13 +2246,21 @@ ibSourceExplorer ibValueRecordDataObjectHierarchyRef::GetSourceExplorer() const
 		if (m_objMode == ibObjectMode::OBJECT_ITEM) {
 			if (tableUse == ibItemMode::ibItemMode_Item
 				|| tableUse == ibItemMode::ibItemMode_Folder_Item) {
-				srcHelper.AppendSource(object);
+				if (object != nullptr && !object->IsDeleted()) {
+					ibSourceExplorer& tblNode = srcHelper.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
+					std::vector<ibValueMetaObjectAttributeBase*> tblCols;
+					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject(tblCols)) tblNode.AppendColumn(tblCol);
+				}
 			}
 		}
 		else {
 			if (tableUse == ibItemMode::ibItemMode_Folder ||
 				tableUse == ibItemMode::ibItemMode_Folder_Item) {
-				srcHelper.AppendSource(object);
+				if (object != nullptr && !object->IsDeleted()) {
+					ibSourceExplorer& tblNode = srcHelper.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
+					std::vector<ibValueMetaObjectAttributeBase*> tblCols;
+					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject(tblCols)) tblNode.AppendColumn(tblCol);
+				}
 			}
 		}
 	}
@@ -3011,11 +3043,11 @@ bool ibValueRecordManagerObject::IsEmpty() const
 ibSourceExplorer ibValueRecordManagerObject::GetSourceExplorer() const
 {
 	ibSourceExplorer srcHelper(
-		m_metaObject, GetClassType(), false
+		wxT("ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(), false, false
 	);
 
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
-		srcHelper.AppendSource(object);
+		srcHelper.AppendColumn(object);
 	}
 
 	return srcHelper;

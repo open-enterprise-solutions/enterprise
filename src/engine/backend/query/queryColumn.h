@@ -39,23 +39,41 @@ enum ibFieldTypes {
 //  column-layout tier: DescribeColumnLayout (slots) / ColumnFieldNames / ColumnFieldList. The enum
 //  ibFieldTypes above stays — it is the persisted _TYPE discriminator value, used by the codec.)
 
-class BACKEND_API ibBackendQueryColumn
+// ibBackendSourceColumn — the SOURCE/UI face of a column: name, synonym, type. The minimal
+// "column, like a DB column". It is the BASE of ibBackendQueryColumn (every query/DB column IS a
+// source column) and, through it, of the attribute metaobject — so the source-binding dot-walk
+// (ibBackendTypeSourceFactory) returns THIS, blind to the concrete class: a metaobject attribute
+// OR a dynamic list's queryable column, both already ARE an ibBackendSourceColumn, no adapter.
+class BACKEND_API ibBackendSourceColumn
 {
 public:
-	virtual ~ibBackendQueryColumn() = default;
+	virtual ~ibBackendSourceColumn() = default;
 
 	// Logical column name — what a script / the L4 parser refers to.
 	virtual wxString GetName() const = 0;
 
+	// Display name (UI caption). Defaults to the logical name; a metaobject column overrides it
+	// with its synonym.
+	virtual wxString GetSynonym() const { return GetName(); }
+
+	// The column's L3 type — CLSIDs + number / string / date qualifiers. The single source of
+	// "what this column holds". The SAME accessor the attribute already exposes — free.
+	virtual ibTypeDescription& GetTypeDesc() const = 0;
+
+	// Is the column usable / shown? A plain (queryable) column always is; a metaobject attribute
+	// overrides — a deleted or access-denied field is not. The metadata-agnostic source explorer
+	// gates on THIS instead of poking the metaobject.
+	virtual bool IsAllowed() const { return true; }
+};
+
+class BACKEND_API ibBackendQueryColumn : public ibBackendSourceColumn
+{
+public:
+	virtual ~ibBackendQueryColumn() = default;
+
 	// Base physical column (db field name). The lowering derives the actual
 	// per-type physical columns from this plus the type description.
 	virtual wxString GetPhysicalName() const = 0;
-
-	// The column's L3 type — CLSIDs + number / string / date qualifiers. The single
-	// source of "what this column holds"; the physical layout is a function of it.
-	// This is the SAME accessor the attribute already exposes, so an attribute
-	// implements it for free — no separate method, no copy.
-	virtual ibTypeDescription& GetTypeDesc() const = 0;
 
 	// The column's id WITHIN its source/model — the key its source reads a value by.
 	// For a DB / attribute column this IS the metaID; for a computed / temp column it

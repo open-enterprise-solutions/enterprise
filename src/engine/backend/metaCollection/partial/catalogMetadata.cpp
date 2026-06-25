@@ -165,7 +165,7 @@ wxString ibValueMetaObjectCatalog::GetDataPresentation(const ibValueDataObject* 
 //*                       Save & load metaData                              *
 //***************************************************************************
 
-bool ibValueMetaObjectCatalog::WriteData(ibDataNode& node)
+bool ibValueMetaObjectCatalog::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyAttributeOwner->GetName(), m_propertyAttributeOwner->GetNodeValue());
 

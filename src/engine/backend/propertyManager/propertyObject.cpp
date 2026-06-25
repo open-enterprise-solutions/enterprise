@@ -104,9 +104,11 @@ ibProperty* ibPropertyObject::GetProperty(const wxString& nameParam) const
 	if (it != m_properties.end())
 		return it->second;
 
-	//LogDebug(wxT("[ibPropertyObject::GetProperty] ibProperty %s not found!"),name.c_str());
-	  // este aserto falla siempre que se crea un sizerItem
-	  // assert(false);
+	// Route to an attached object — its properties appear as part of ours in the
+	// inspector, but the property (its owner, its OnPropertyChanged) lives on IT.
+	for (ibPropertyObject* other : m_attachedObjects)
+		if (ibProperty* p = other->GetProperty(nameParam))
+			return p;
 
 	return nullptr;
 }
@@ -163,6 +165,34 @@ void ibPropertyObject::AddProperty(ibProperty* prop)
 void ibPropertyObject::AddEvent(ibEvent* event)
 {
 	m_events.emplace(std::map<wxString, ibEvent*>::value_type(event->GetName(), event));
+}
+
+void ibPropertyObject::AttachPropertyObject(ibPropertyObject* other)
+{
+	if (other == nullptr || other == this)
+		return;
+	m_attachedObjects.push_back(other);
+}
+
+void ibPropertyObject::DetachAllPropertyObjects()
+{
+	m_attachedObjects.clear();
+}
+
+bool ibPropertyObject::ReadProperty(const ibDataNode& node)
+{
+	// Base default: route through attached objects — their data is part of us. A type
+	// with own data overrides, does its own, then calls this base to include attached.
+	for (ibPropertyObject* other : m_attachedObjects)
+		other->ReadProperty(node);
+	return true;
+}
+
+bool ibPropertyObject::WriteProperty(ibDataNode& node) const
+{
+	for (ibPropertyObject* other : m_attachedObjects)
+		other->WriteProperty(node);
+	return true;
 }
 
 unsigned int ibPropertyObject::GetPropertyIndex(const wxString& nameParam) const {
@@ -238,6 +268,32 @@ bool ibPropertyObject::PasteProperty(ibReaderMemory& reader)
 void ibPropertyCategory::AddProperty(ibProperty* property)
 {
 	m_properties.emplace_back(property->GetName());
+}
+
+ibPropertyCategory* ibPropertyCategory::GetCategory(unsigned int index) const
+{
+	if (index < m_categories.size()) return m_categories[index];
+	index -= m_categories.size();
+	// Attached: flatten the attached objects' OWN sub-categories straight in (skip their
+	// hidden "property and event" root), so they show under us without that wrapper.
+	if (this == m_owner->GetCategory()) {
+		for (ibPropertyObject* other : m_owner->GetAttachedObjects()) {
+			ibPropertyCategory* root = other->GetCategory();
+			const unsigned int cnt = root->GetCategoryCount();
+			if (index < cnt) return root->GetCategory(index);
+			index -= cnt;
+		}
+	}
+	return new ibPropertyCategory(m_owner);
+}
+
+unsigned int ibPropertyCategory::GetCategoryCount() const
+{
+	unsigned int n = (unsigned int)m_categories.size();
+	if (this == m_owner->GetCategory())
+		for (ibPropertyObject* other : m_owner->GetAttachedObjects())
+			n += other->GetCategory()->GetCategoryCount();
+	return n;
 }
 
 void ibPropertyCategory::AddEvent(ibEvent* event)

@@ -23,9 +23,9 @@ bool ibValueTextCtrl::GetChoiceForm(ibPropertyList* property)
 			// Resolve the bound attribute config-wide — a dotted path's leaf lives in a
 			// referenced type, not the form's own metaobject (so the source-scoped lookup
 			// here would miss it and assert). GetSourceAttributeObject handles both.
-			const ibValueMetaObjectAttributeBase* attribute = m_propertySource->GetSourceAttributeObject();
+			const ibBackendSourceColumn* attribute = m_propertySource->GetSourceAttributeObject();
 			if (attribute != nullptr) {
-				const ibCtorMetaValueType* so = metaData->GetTypeCtor(attribute->GetFirstClsid());
+				const ibCtorMetaValueType* so = metaData->GetTypeCtor(attribute->GetTypeDesc().GetFirstClsid());
 				if (so != nullptr) {
 					metaObject = dynamic_cast<const ibValueMetaObjectRecordDataRef*>(so->GetMetaObject());
 				}
@@ -59,7 +59,7 @@ ibSourceObject* ibValueTextCtrl::GetSourceObject() const
 		: nullptr;
 }
 
-bool ibValueTextCtrl::GetSourceList(std::vector<ibBackendFormAttribute*>& out) const
+bool ibValueTextCtrl::GetSourceList(std::vector<ibBackendFormAttributeValue*>& out) const
 {
 	return m_formOwner != nullptr ? m_formOwner->GetSourceList(GetFilterSourceDataType(), out) : false;
 }
@@ -122,9 +122,9 @@ wxString ibValueTextCtrl::GetControlTitle() const
 		return m_propertyTitle->GetValueAsTranslateString();
 	}
 	else if (!m_propertySource->IsEmptyProperty()) {
-		const ibValueMetaObject* metaObject = m_propertySource->GetSourceAttributeObject();
-		if (metaObject != nullptr)   // null when the bound attribute was just removed
-			return metaObject->GetSynonym();
+		const ibBackendSourceColumn* column = m_propertySource->GetSourceAttributeObject();
+		if (column != nullptr)   // null when the bound field is gone / whole-attribute binding
+			return column->GetSynonym();
 	}
 	return wxEmptyString;
 }
@@ -268,18 +268,14 @@ bool ibValueTextCtrl::GetControlValue(ibValue& pvarControlVal) const
 
 bool ibValueTextCtrl::SetControlValue(const ibValue& varControlVal)
 {
-	const ibValueMetaObjectAttributeBase* metaObject = !m_propertySource->IsEmptyProperty()
+	// A bound DIRECT-FIELD source writes back through the form (the head selects the attribute; a
+	// dotted reference path is read-only → no-op). Adjusting the value to the bound Type is the
+	// factory's job in EVERY case (bound or not), so it is unconditional.
+	const ibBackendSourceColumn* column = !m_propertySource->IsEmptyProperty()
 		? m_propertySource->GetSourceAttributeObject() : nullptr;
-	if (metaObject != nullptr) {
-		// The form writes only a direct-field binding (head selects the attribute);
-		// a dotted reference path is read-only → the call is a no-op.
-		if (m_formOwner != nullptr)
-			m_formOwner->SetValueByAttributePath(m_propertySource->GetValueAsPath(), varControlVal);
-		m_selValue = metaObject->AdjustValue(varControlVal);
-	}
-	else {
-		m_selValue = ibTypeControlFactory::AdjustValue(varControlVal);
-	}
+	if (column != nullptr && m_formOwner != nullptr)
+		m_formOwner->SetValueByAttributePath(m_propertySource->GetValueAsPath(), varControlVal);
+	m_selValue = ibTypeControlFactory::AdjustValue(varControlVal);
 
 	m_formOwner->RefreshForm();
 

@@ -95,7 +95,7 @@ wxString ibValueMetaObjectEnumeration::GetDataPresentation(const ibValueDataObje
 //*                       Save & load metaData                              *
 //***************************************************************************
 
-bool ibValueMetaObjectEnumeration::WriteData(ibDataNode& node)
+bool ibValueMetaObjectEnumeration::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyManagerModule->GetName(), m_propertyManagerModule->GetNodeValue());
 

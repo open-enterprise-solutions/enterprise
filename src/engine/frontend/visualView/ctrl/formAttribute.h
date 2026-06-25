@@ -39,128 +39,134 @@ class BACKEND_API ibDataNode;
 class BACKEND_API ibMetaData;
 class FRONTEND_API ibValueForm;
 
-class FRONTEND_API ibValueFormAttribute :
-	// ibValueDynamicMembers FIRST keeps ibValue at offset 0 (member-pmf
-	// binds need no MI this-adjustment — see reference_ibvalue_first_base_pmf).
+
+// -----------------------------------------------------------------------
+// ibFormAttributeValue — the form's per-attribute registry entry AND the runtime VALUE the
+// attribute manages. It CREATES its own description (ibValueFormAttribute: the amorphous
+// name / type / id) internally — outside the form only holders exist, never a bare description.
+// Being a runtime value it is ref-counted; the form keeps these by ibValuePtr.
+// -----------------------------------------------------------------------
+class FRONTEND_API ibFormAttributeValue :
+	// ibValueDynamicMembers FIRST keeps ibValue at offset 0 (see reference_ibvalue_first_base_pmf).
 	public ibValueDynamicMembers,
-	public ibPropertyObject,
-	// Backend wrapper — IS-A ibBackendTypeConfigFactory (carries the attribute's
-	// Type + metadata), which the Type property (ibPropertyType) requires and the
-	// picker / property source read without any cross-cast.
-	public ibBackendFormAttribute {
+	public ibBackendFormAttributeValue,
+	public ibPropertyObject {
+
+	friend class ibValueForm;   // the form builds / configures the nested description via the holder
+
+	// ── ibFormAttribute — PRIVATE nested Impl ────────────────────────────────────────────────
+	// The amorphous description (Name / Type / FillCheck) — the holder's OWN entity, invisible
+	// outside (like ibValueModelColumnInfo / ibVariantDataValueImpl). A no-register internal value
+	// type: never handed out bare, never serialized by its own clsid; the holder owns and drives it.
+	class ibFormAttribute :
+		public ibValueDynamicMembers,
+		public ibPropertyObject,
+		public ibBackendTypeConfigFactory {
+	public:
+
+		ibFormAttribute(ibValueForm* ownerForm = nullptr);
+		virtual ~ibFormAttribute();
+
+		virtual wxString GetClassName() const override { return ibValue::GetClassName(); }
+		virtual wxString GetObjectTypeName() const override { return GetAttributeName(); }
+		virtual bool IsEditable() const override { return true; }
+
+		// ibBackendTypeConfigFactory = the Type-config factory the Type property's variant resolves
+		// through (internal — the holder's FAÇADE re-exposes name / id / type, never this object):
+		virtual ibTypeDescription& GetTypeDesc() const override { return m_propertyType->GetValueAsTypeDesc(); }
+		virtual ibSelectorDataType GetFilterDataType() const override { return ibSelectorDataType::ibSelectorDataType_any; }
+		virtual const ibMetaData* GetMetaData() const override;
+
+		// the description's OWN name / id / main — the holder's facade forwards to these:
+		wxString GetAttributeName() const { return m_propertyName->GetValueAsString(); }
+		bool     IsMainAttribute() const { return m_isMain; }
+		ibMetaID GetAttributeId() const { return m_attributeId; }
+
+		// Holder-only (NOT on the interface) — reached through friendship from the holder / form:
+		ibSourceDataType GetSourceDataType() const; // table (List type) / attribute
+		bool IsTypeProperty(const ibProperty* prop) const { return prop == m_propertyType; }
+		void SetAttributeName(const wxString& name) { m_propertyName->SetValue(name); }
+		void SetMainAttribute(bool main) { m_isMain = main; }
+		ibValueForm* GetOwnerForm() const { return m_ownerForm; }
+		void SetOwnerForm(ibValueForm* ownerForm) { m_ownerForm = ownerForm; }
+		void FillMembers(ibMemberTable& helper) const;   // bound in ctor
+		virtual bool ReadProperty(const ibDataNode& node) override;
+		virtual bool WriteProperty(ibDataNode& node) const override;
+		void SetAttributeId(const ibMetaID& id) { m_attributeId = id; }
+		int  GetFillCheck() const { return m_propertyFillCheck->GetValueAsInteger(); }
+
+	protected:
+
+		bool FillFillCheck(ibPropertyList* prop);
+
+		ibValueForm* m_ownerForm;
+		bool         m_isMain = false;
+		ibMetaID     m_attributeId = wxNOT_FOUND;
+
+		ibPropertyCategory* m_categoryCommon = ibPropertyObject::CreatePropertyCategory(wxT("Common"), _("General"));
+		ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_categoryCommon, wxT("Name"), _("Name"), _("Attribute name"), wxT(""));
+		ibPropertyType* m_propertyType = ibPropertyObject::CreateProperty<ibPropertyType>(m_categoryCommon, wxT("Type"), _("Type"), ibValueTypes::TYPE_STRING);
+		ibPropertyList* m_propertyFillCheck = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryCommon, wxT("FillCheck"), _("Fill check"), &ibFormAttribute::FillFillCheck, 0);
+	};
+
 public:
 
-	ibValueFormAttribute(ibValueForm* ownerForm = nullptr);
-	virtual ~ibValueFormAttribute();
-
-	// ---- identity / property-object surface ------------------------------
-	// ibPropertyObject declares GetClassName pure; resolve it (and the clsid)
-	// through the value-type registry — the type is registered via
-	// SYSTEM_TYPE_REGISTER in the .cpp, so no hand-rolled clsid here.
-	virtual wxString GetClassName() const override { return ibValue::GetClassName(); }
-	virtual wxString GetObjectTypeName() const override { return GetAttributeName(); }
-	virtual bool IsEditable() const override { return true; }
-
-	// ---- ibBackendFormAttribute (backend wrapper) ------------------------
-	virtual wxString GetAttributeName() const override { return m_propertyName->GetValueAsString(); }
-	// ibBackendTypeConfigFactory: the type description (from the Type property) +
-	// metadata (via the owner form) — the Type property's variant resolves the
-	// selector through these.
-	virtual ibTypeDescription& GetTypeDesc() const override { return m_propertyType->GetValueAsTypeDesc(); }
-	// A form attribute accepts ANY type (primitive / reference / table / dynamic
-	// list), not just references like the default config factory.
-	virtual ibSelectorDataType GetFilterDataType() const override { return ibSelectorDataType::ibSelectorDataType_any; }
-	// "Main attribute" — the form owner. The source object passed on open is
-	// assigned into THE main attribute; only one is main per form. A plain
-	// flag (not shown in the property grid), set by the registry / build.
-	virtual bool IsMainAttribute() const override { return m_isMain; }
-
-	// Kind of source this attribute represents (table when its Type is a list /
-	// collection, attribute otherwise) — the form filters its attributes by this.
-	// NOT on the backend interface: only the FORM (which holds concrete attributes)
-	// uses it.
-	ibSourceDataType GetSourceDataType() const; // table (List type) / attribute
-
-	void SetAttributeName(const wxString& name) { m_propertyName->SetValue(name); }
-	void SetMainAttribute(bool main) { m_isMain = main; }
-
-	ibValueForm* GetOwnerForm() const { return m_ownerForm; }
-	void SetOwnerForm(ibValueForm* ownerForm) { m_ownerForm = ownerForm; }
-
-	// Metadata via the owner form — needed to materialise a reference / object
-	// Type value (and by the Type property's variant).
-	virtual const ibMetaData* GetMetaData() const override;
-
-	// Property events. The attribute is pure DEFINITION — it has NO runtime value; the
-	// value (and AssignSource / GetValue / IsReferenceValue / bind) lives on the owning
-	// ibFormAttributeValue wrapper.
-	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
-
-	// ---- runtime member surface (export-bound into the form module) ------
-	void FillMembers(ibMemberTable& helper) const;   // bound in ctor
-
-	// ---- serialization (packed alongside the control tree) ---------------
-	bool ReadData(const ibDataNode& node);
-	bool WriteData(ibDataNode& node) const;
-
-	// the attribute's own id — addresses the simple-type value cell.
-	virtual ibMetaID GetAttributeId() const override { return m_attributeId; }
-	void     SetAttributeId(const ibMetaID& id) { m_attributeId = id; }
-
-	// "Fill check" — how the attribute's value is validated on save:
-	// 0 = don't check, 1 = show error.
-	int GetFillCheck() const { return m_propertyFillCheck->GetValueAsInteger(); }
-
-protected:
-
-	bool FillFillCheck(ibPropertyList* prop);   // list options for the Fill check property
-
-	ibValueForm* m_ownerForm;
-
-	bool     m_isMain = false;
-	ibMetaID m_attributeId = wxNOT_FOUND;
-
-	ibPropertyCategory* m_categoryCommon = ibPropertyObject::CreatePropertyCategory(wxT("Common"), _("General"));
-	ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_categoryCommon, wxT("Name"), _("Name"), _("Attribute name"), wxT(""));
-	ibPropertyType* m_propertyType = ibPropertyObject::CreateProperty<ibPropertyType>(m_categoryCommon, wxT("Type"), _("Type"), ibValueTypes::TYPE_EMPTY);
-	ibPropertyList* m_propertyFillCheck = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryCommon, wxT("FillCheck"), _("Fill check"), &ibValueFormAttribute::FillFillCheck, 0);
-};
-
-// -----------------------------------------------------------------------
-// ibFormAttributeValue — the form's per-attribute registry entry: OWNS the attribute
-// (its DEFINITION: name / type / id) and HOLDS, separately, the runtime VALUE the
-// attribute manages, plus the value behaviour (assign / read / reference test). The
-// attribute itself is pure definition. Non-copyable; the form keeps these by unique_ptr
-// so a held pointer stays valid across vector growth.
-// -----------------------------------------------------------------------
-class FRONTEND_API ibFormAttributeValue {
-public:
-
-	explicit ibFormAttributeValue(ibValueFormAttribute* attr) : m_attribute(attr) {}
+	// The holder IS the inspector's property-object — a pure ACCUMULATOR. It owns no properties
+	// of its own; it attaches the attribute (its standard Name/Type/FillCheck) and, if the held
+	// value supports properties (a dynamic list → Source/Settings), that value too — both show
+	// as a single whole. The attribute stays amorphous; the value lives here. The description is
+	// BUILT internally from the owner form (no external attribute object is ever passed in).
+	explicit ibFormAttributeValue(ibValueForm* ownerForm = nullptr);
 	ibFormAttributeValue(const ibFormAttributeValue&) = delete;
 	ibFormAttributeValue& operator=(const ibFormAttributeValue&) = delete;
-	~ibFormAttributeValue();   // releases the held source (SourceDecrRef)
+	~ibFormAttributeValue();   // source is not held separately (lives in m_value) — trivial
 
-	ibValueFormAttribute* GetAttribute() const { return m_attribute; }
+	// --- ibPropertyObject (accumulator: attaches attribute + value) ---------
+	virtual wxString GetClassName() const override { return ibValue::GetClassName(); }   // registered value type
+	virtual wxString GetObjectTypeName() const override { return m_attribute->GetObjectTypeName(); }
+	virtual bool IsEditable() const override { return true; }
+	// Single interception point (the holder is what the inspector selects): forward the change
+	// to the property's REAL owner (attribute / value — each reacts to its own), and on the
+	// attribute's Type change re-materialise the value + re-accumulate.
+	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
+	// Serialization: the attribute's own set, then the held value's own (its clsid's Source /
+	// Settings). The attribute is read FIRST so its Type is known before the value materialises.
+	virtual bool ReadProperty(const ibDataNode& node) override;
+	virtual bool WriteProperty(ibDataNode& node) const override;
 
-	// Facades over the wrapped attribute's description — avoid GetAttribute()->X chains.
-	wxString GetAttributeName() const { return m_attribute->GetAttributeName(); }
-	bool     IsMainAttribute() const { return m_attribute->IsMainAttribute(); }
-	ibMetaID GetAttributeId() const { return m_attribute->GetAttributeId(); }
+	// Re-accumulate: detach all, attach the attribute, then the held value (if it is a
+	// property-object). Called on construction and whenever the value / Type changes.
+	void Refresh();
 
-	// The runtime value this entry manages.
-	bool GetValue(ibValue& value) const { value = m_value; return true; }
-	bool SetValue(const ibValue& value) { m_value = value; return true; }
+	// ibBackendFormAttributeValue FAÇADE — outside code reads name / id / type through the HOLDER;
+	// the concrete description (ibFormAttribute) is never exposed. The holder forwards internally.
+	wxString GetAttributeName() const override { return m_attribute->GetAttributeName(); }
+	ibMetaID GetAttributeId() const override { return m_attribute->GetAttributeId(); }
+	bool     IsMainAttribute() const override { return m_attribute->IsMainAttribute(); }
+	const ibTypeDescription& GetTypeDesc() const override { return m_attribute->GetTypeDesc(); }
+
+	// The value this entry manages — kept in sync with the attribute's Type on every get/set
+	// via AdjustValue (it carries the metadata): a value whose type still matches is kept; a
+	// stale one (Type changed) comes back EMPTY of the new type. The attribute is amorphous —
+	// the value lives HERE, not on it.
+	bool GetValue(ibValue& value) const { m_value = m_attribute->AdjustValue(m_value); value = m_value; return true; }
+	// PLAIN set — the source must seat as-is (AddMainAttribute seats it BEFORE the Type is set;
+	// adjusting against the still-empty Type would drop it). The sync to the Type happens in
+	// Refresh (after the Type is known / on a Type change).
+	bool SetHeldValue(const ibValue& value) { m_value = value; return true; }   // not SetValue: ibValue::SetValue clashes
 
 	// Backing cell for the form-module local bind (the script variable's value) — the
 	// LIVE slot address (BindLocalVariable stores the pointer; must stay valid).
 	ibValue* GetBindValue() { return &m_value; }
 
-	// The form's data source. Held as a refcounted owner (SourceIncrRef) in m_sourceData,
-	// SEPARATELY from m_value, so it survives even if the script reassigns the bound value
-	// cell. SetSourceValue also seats it into m_value (for the bind / dot-walk). nullptr
-	// clears it (the attribute goes empty — e.g. when it stops being the main).
-	ibSourceDataObject* GetSourceValue() const;
+	// The held value CONVERTED to a property-object / source — NOT stored separately; the value
+	// (m_value) IS the source, kept alive by its own refcount. Both sync to the attribute's Type
+	// first (AdjustValue). Null when the value is not that kind.
+	ibPropertyObject*   GetValueAsProperty() const;   // → Source / Settings (a dynamic list)
+	ibSourceDataObject* GetValueAsSource()   const;   // → the form's data source
+
+	// ibBackendFormAttributeValue — the source is just the value as a source (not a stored field).
+	ibSourceDataObject* GetSourceValue() const override { return GetValueAsSource(); }
 	void SetSourceValue(ibSourceDataObject* source);
 
 	// True when the value is a REFERENCE (everything read THROUGH it is read-only).
@@ -175,13 +181,12 @@ public:
 	// Clipboard copy / paste of a form attribute through OUR serialization (own clipboard
 	// format id) — designer-only (no-op on web). Copy serializes the attribute's description;
 	// Paste deserializes it as a fresh NON-main entry on `form` (via ibValueForm::PasteAttribute).
-	static bool CopyToClipboard(const ibValueFormAttribute* attr);
+	static bool CopyToClipboard(const ibFormAttributeValue* entry);
 	static ibFormAttributeValue* PasteFromClipboard(ibValueForm* form);
 
 private:
-	ibValuePtr<ibValueFormAttribute> m_attribute;   // owns the attribute (definition)
-	ibValue m_value;                                 // the value the attribute manages (bound cell)
-	ibSourceDataObject* m_sourceData = nullptr;      // the source, held via SourceIncrRef (stable owner)
+	ibValuePtr<ibFormAttribute> m_attribute;   // the nested description (private Impl), created in the ctor
+	mutable ibValue m_value;                         // the value the holder manages — IS the source/property; synced to Type via AdjustValue
 };
 
 #endif

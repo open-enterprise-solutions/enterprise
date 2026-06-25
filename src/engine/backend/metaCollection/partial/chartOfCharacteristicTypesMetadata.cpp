@@ -161,7 +161,7 @@ wxString ibValueMetaObjectChartOfCharacteristicTypes::GetDataPresentation(const 
 //*                       Save & load metaData                              *
 //***************************************************************************
 
-bool ibValueMetaObjectChartOfCharacteristicTypes::WriteData(ibDataNode& node)
+bool ibValueMetaObjectChartOfCharacteristicTypes::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyAttributeType->GetName(), m_propertyAttributeType->GetNodeValue());
 

@@ -6,6 +6,7 @@
 #include "backend/typeDescription.h"
 
 struct ibSourceDescription;   // control's bound source path (GetSourceDesc)
+class BACKEND_API ibBackendSourceColumn;   // queryColumn.h — neutral leaf column the dot returns
 
 //////////////////////////////////////////////////////////////
 
@@ -110,17 +111,26 @@ enum ibSourceDataType {
 
 //////////////////////////////////////////////////////////////
 
-// Backend-visible view of a form source attribute (the concrete value lives in
-// the frontend ibValueFormAttribute, which implements this). IS-A type-config
-// factory, so it carries the attribute's Type (GetTypeDesc) + metadata directly
-// — backend code (the picker, the binding resolve) reads them with NO cross-cast.
-// Only the gate identity lives here (name + id); the source view / kind are
-// runtime concerns the FORM reads off the concrete attribute, not via this.
-class BACKEND_API ibBackendFormAttribute : public ibBackendTypeConfigFactory {
+// The form's per-attribute HOLDER as a backend interface — it pairs an attribute
+// (its DEFINITION, name/type/id) with the VALUE/source that attribute manages. Inherits
+// nothing; implemented on the frontend (ibFormAttributeValue), where all the logic lives.
+// GetSourceList vends THESE — attribute + value together — not bare attributes: a source
+// picker reads the columns through GetSourceValue()->GetSourceExplorer(), never the concrete
+// value type. The source is produced by the holder (it materialises the value from the
+// attribute's Type), so the attribute itself stays value-free.
+class BACKEND_API ibBackendFormAttributeValue {
 public:
+	virtual ~ibBackendFormAttributeValue() = default;
+	// FAÇADE — the holder answers for its (private, internal) attribute directly; the concrete
+	// description is NEVER handed out. Outside code reads name / id / type / source through here.
+	
 	virtual wxString GetAttributeName() const = 0;
 	virtual ibMetaID GetAttributeId() const = 0;
+	
 	virtual bool IsMainAttribute() const = 0;
+	
+	virtual const ibTypeDescription& GetTypeDesc() const = 0;
+	virtual class ibSourceDataObject* GetSourceValue() const = 0;
 };
 
 //////////////////////////////////////////////////////////////
@@ -145,10 +155,24 @@ public:
 	// filter data
 	virtual bool FilterSource(const class ibSourceExplorer& src, const ibMetaID& id) const;
 
-	// Available source attributes of the owning context (default: none — filled
-	// via the out-param). The control's type-factory overrides this to expose its
-	// form's attribute table; the picker / ibPropertySource enumerate these.
-	virtual bool GetSourceList(std::vector<ibBackendFormAttribute*>& out) const { return false; }
+	// Available source HOLDERS of the owning context (default: none — filled via the out-param).
+	// Each holder pairs the attribute (definition) with its value/source, so the picker reads
+	// columns through GetSourceValue()->GetSourceExplorer() without the concrete value type.
+	virtual bool GetSourceList(std::vector<ibBackendFormAttributeValue*>& out) const { return false; }
+
+	// The "dot": feed a source-id PATH, get back the leaf COLUMN. path[0] gates to one of THIS
+	// context's source attributes (GetSourceList); deeper hops are resolved as its fields. The
+	// result is the neutral ibBackendSourceColumn (a metaobject attribute OR a queryable column),
+	// so the caller never sees the concrete class. Null = a whole-attribute binding (length 1) or
+	// a BROKEN path (a hop no longer resolves). `valid`/`outText` (optional) report resolvability
+	// and the dotted display "Attr.Field.Sub".
+	const ibBackendSourceColumn* WalkSource(const std::vector<ibSourceId>& path,
+		bool* valid = nullptr, wxString* outText = nullptr) const;
+
+	// The source HOLDER whose attribute id matches — the ONE lookup shared by the dot-walk and the
+	// path / type resolvers (instead of re-scanning GetSourceList at every site). Null = no such
+	// attribute in this context.
+	ibBackendFormAttributeValue* FindSourceHolder(const ibMetaID& id) const;
 };
 
 #endif

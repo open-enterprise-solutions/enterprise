@@ -90,7 +90,14 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 
 		const ibSourceExplorer& sourceExplorer = sourceObject->GetSourceExplorer();
 
-		if (sourceExplorer.IsTableSection()) {
+		// List vs object is decided by the SOURCE class via the class factory (IsTableSource —
+		// CLSID → ctor → IsTableValue), not the source explorer's flag. Every ibValueModel
+		// (list / tree / table / dynamic list) is a tabular source, a record object is not.
+		// The explorer is now only the column/field TEMPLATE — a queryable-based dynamic list,
+		// which carries no tableSection flag, renders as a tablebox just the same.
+		const bool isTableSource = sourceObject->IsTableSource();
+
+		if (isTableSource) {
 
 			mainTableBox =
 				dynamic_cast<ibValueModelTableBox*>(ibValueForm::CreateControl(wxT("Tablebox")));
@@ -106,7 +113,7 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 
 			const ibSourceExplorer& nextSourceExplorer = sourceExplorer.GetHelper(idx);
 
-			if (sourceExplorer.IsTableSection()) {
+			if (isTableSource) {
 				ibValueModelTableBoxColumn* tableBoxColumn =
 					dynamic_cast<ibValueModelTableBoxColumn*>(ibValueForm::CreateControl(wxT("TableboxColumn"), mainTableBox));
 				tableBoxColumn->SetControlName(mainTableBox->GetControlName() + nextSourceExplorer.GetSourceName());
@@ -281,13 +288,14 @@ void ibValueForm::InitializeForm(const ibValueMetaObjectFormBase* creator,
 	// name by kind, the source Type, the seated value); WITHOUT one it is a bare default
 	// (Object / empty Type) that a later load refills from the "MainAttribute" section.
 	if (srcObject != nullptr) {
-		const ibSourceExplorer& sourceExplorer = srcObject->GetSourceExplorer();
 		// Auto-generated form (no designer form): declare the MAIN attribute the
 		// source lands in. With no source the form stays generic (no list/tree
 		// view) — that's why this lives under the source gate. Empty Type accepts
 		// the incoming source; controls / source explorer work off this attribute.
+		// List vs object = the source-class table fact via the factory (IsTableSource), not the
+		// explorer flag.
 		(void)AddMainAttribute(
-			sourceExplorer.IsTableSection() ? wxT("List") : wxT("Object"),
+			srcObject->IsTableSource() ? wxT("List") : wxT("Object"),
 			srcObject->GetSourceClassType(), srcObject);
 	}
 }
@@ -314,14 +322,14 @@ bool ibValueForm::InitializeFormModule()
 		// InitializeRuntime lazily create compile module / ProcUnit
 		// and pick up the parent's scope chain on creation. Run is
 		// Designer-guarded; Compile internally too. Session linkage
-		// flows through the parent chain (descriptor в†’ root в†’ session).
+		// flows through the parent chain (descriptor → root → session).
 		BindContextVariable(thisForm, this);                                          // contextual
 		BindExportVariable(wxT("Controls"), m_formCollectionControl);                 // exported
 		// Bind each source attribute as a form-module variable: its value cell as a LOCAL named
 		// <attrName>, and — for the MAIN — the exported DataSource. Same self-managed path that
 		// designer add / become-main reuse (BindAttributeVariable), so the wiring is one place.
 		for (const auto& av : m_attributes)
-			BindAttributeVariable(av.get());
+			BindAttributeVariable(av);
 
 		InitializeRuntime();
 
@@ -609,7 +617,7 @@ bool ibValueForm::CloseForm(bool force)
 		// the view (a wxEvtHandler) plus every control synchronously.
 		// If CloseForm was invoked from within the toolbar's tool
 		// event (Save-and-close command), control returns to
-		// wxAuiToolBar::OnLeftUp on freed memory в†’ UAF in
+		// wxAuiToolBar::OnLeftUp on freed memory → UAF in
 		// wxEvtHandler::TryHereOnly. Defer the deletion through
 		// CallAfter so the click event fully unwinds first.
 		ownerDocForm->CallAfter([doc = ownerDocForm] { doc->DeleteAllViews(); });
@@ -696,7 +704,7 @@ ibValueFrame* ibValueForm::CreateControl(const wxString& clsControl, ibValueFram
 	else
 		parentControl = this;
 
-	// ademas, el objeto se insertara a continuacion del objeto seleccionado
+	// furthermore, the object is inserted right after the selected object
 	ibValueFrame* newControl = ibValueForm::CreateObject(clsControl, parentControl);
 	wxASSERT(newControl);
 	// Live-tree insertion: feed the new ibValueFrame into the host.

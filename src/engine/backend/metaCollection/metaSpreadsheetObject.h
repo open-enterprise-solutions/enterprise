@@ -37,7 +37,7 @@ class BACKEND_API ibValueMetaObjectSpreadsheet : public ibValueMetaObjectSpreads
 	virtual ibSpreadsheetDescription& GetSpreadsheetDesc() const { return m_propertyTemplate->GetValueAsSpreadsheetDesc(); }
 
 	virtual bool ReadData(const ibDataNode& node) override;
-	virtual bool WriteData(ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
 protected:
 private:
 	ibPropertyCategory* m_categoryTemplate = ibPropertyObject::CreatePropertyCategory(wxT("Template"), _("Template"));
@@ -51,7 +51,7 @@ class BACKEND_API ibValueMetaObjectCommonSpreadsheet : public ibValueMetaObjectS
 	virtual ibSpreadsheetDescription& GetSpreadsheetDesc() const { return m_propertyTemplate->GetValueAsSpreadsheetDesc(); }
 
 	virtual bool ReadData(const ibDataNode& node) override;
-	virtual bool WriteData(ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
 protected:
 private:
 	ibPropertyCategory* m_categoryTemplate = ibPropertyObject::CreatePropertyCategory(wxT("CommonTemplate"), _("Common template"));

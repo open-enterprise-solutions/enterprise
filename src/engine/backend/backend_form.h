@@ -67,8 +67,8 @@ public:
 	virtual ~ibBackendValueForm() {}
 	///////////////////////////////////////////////////////////////////////////
 
-	virtual bool LoadForm(const wxMemoryBuffer& formData) = 0;
-	virtual wxMemoryBuffer SaveForm() = 0;
+	virtual bool LoadForm(const wxMemoryBuffer& data) = 0;
+	virtual bool SaveForm(wxMemoryBuffer &data) const = 0;
 
 	///////////////////////////////////////////////////////////////////////////
 

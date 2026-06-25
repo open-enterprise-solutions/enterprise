@@ -15,8 +15,11 @@ class ibSourceObject {
 public:
 
 	virtual ~ibSourceObject() {}
+
+	//get metadata
+	virtual const ibMetaData* GetSourceMetaData() const = 0;
 	
-	//get metaData from object 
+	//get meta object 
 	virtual const ibValueMetaObjectCompositeData* GetSourceMetaObject() const = 0;
 	
 	//Get ref class 

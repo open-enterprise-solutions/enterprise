@@ -156,7 +156,7 @@ protected:
 	//load & save metaData from DB
 
 	virtual bool ReadData(const ibDataNode& node) override;
-	virtual bool WriteData(ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
 
 	//prepare menu for item
 	virtual bool PrepareContextMenu(wxMenu* defaultMenu);

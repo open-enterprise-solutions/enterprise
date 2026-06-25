@@ -85,13 +85,13 @@ class ibValueModelTableBox : public ibValueWindow,
 	////////////////////////////////////////////////////////////////////////////////////////
 
 	// Available sources = the owning form's attributes of THIS control's kind (table).
-	virtual bool GetSourceList(std::vector<ibBackendFormAttribute*>& out) const override;
+	virtual bool GetSourceList(std::vector<ibBackendFormAttributeValue*>& out) const override;
 
 	ibValueModelTableBox();
 	virtual ~ibValueModelTableBox() {}
 
 	//Get source attribute  
-	virtual const ibValueMetaObjectAttributeBase* GetSourceAttributeObject() const { return m_propertySource->GetSourceAttributeObject(); }
+	virtual const class ibBackendSourceColumn* GetSourceAttributeObject() const { return m_propertySource->GetSourceAttributeObject(); }
 	virtual ibSelectorDataType GetFilterDataType() const { return ibSelectorDataType::ibSelectorDataType_table; }
 	virtual ibSourceDataType GetFilterSourceDataType() const { return ibSourceDataType::ibSourceDataType_table; }
 
@@ -104,9 +104,11 @@ class ibValueModelTableBox : public ibValueWindow,
 
 #pragma region _source_data_
 
-	//get metaData from object 
+	//get metaData from object
 	virtual const ibValueMetaObjectCompositeData* GetSourceMetaObject() const;
-	//get ref class 
+	// ibSourceObject's source metadata — same context this control already exposes via GetMetaData.
+	virtual const ibMetaData* GetSourceMetaData() const override { return GetMetaData(); }
+	//get ref class
 	virtual ibClassID GetSourceClassType() const;
 	//Get presentation 
 	virtual wxString GetSourceCaption() const { return GetString(); }
@@ -387,12 +389,12 @@ public:
 	virtual ibSourceDescription GetSourceDesc() const override { return m_propertySource->GetValueAsSourceDesc(); }
 
 	//Get source attribute  
-	virtual const ibValueMetaObjectAttributeBase* GetSourceAttributeObject() const { return m_propertySource->GetSourceAttributeObject(); }
+	virtual const class ibBackendSourceColumn* GetSourceAttributeObject() const { return m_propertySource->GetSourceAttributeObject(); }
 	virtual ibSelectorDataType GetFilterDataType() const { return ibSelectorDataType::ibSelectorDataType_reference; }
 	virtual ibSourceDataType GetFilterSourceDataType() const { return ibSourceDataType::ibSourceDataType_tableColumn; }
 
 	// Available sources = the owning form's attributes of THIS control's kind (table).
-	virtual bool GetSourceList(std::vector<ibBackendFormAttribute*>& out) const override;
+	virtual bool GetSourceList(std::vector<ibBackendFormAttributeValue*>& out) const override;
 
 	//get form owner 
 	virtual ibValueForm* GetOwnerForm() const { return m_formOwner; }

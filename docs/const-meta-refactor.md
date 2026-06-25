@@ -97,7 +97,8 @@ All hold `const ibValueMetaObjectXxx*` as `m_metaObject`. Constructors take
 
 - `ibCompileModule(const ibValueMetaObjectModuleBase*)` — was already const,
   removed dead `const_cast` at one caller (moduleInfo.cpp)
-- `srcExplorer.h::AppendSource(...)` — accepts `const T*` for all 3 overloads
+- `srcExplorer.h::AppendColumn(const ibBackendQueryColumn*)` — accepts a `const` neutral column
+  (was `AppendSource(const T*)` over 3 metaobject overloads; since reworked metadata-free)
 - `metaData::FindCommonModule(const ibValueMetaObjectCommonModule*)`
 
 ## Designer mutation paths

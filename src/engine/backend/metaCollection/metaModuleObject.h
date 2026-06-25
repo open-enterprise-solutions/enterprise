@@ -165,7 +165,7 @@ class BACKEND_API ibValueMetaObjectModule : public ibValueMetaObjectModuleBase {
 protected:
 
 	virtual bool ReadData(const ibDataNode& node) override;
-	virtual bool WriteData(ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
 
 private:
 	ibPropertyModule* m_propertyModule = ibPropertyObject::CreateProperty<ibPropertyModule>(m_categoryContext, wxT("Module"), _("Module"));
@@ -232,7 +232,7 @@ public:
 protected:
 
 	virtual bool ReadData(const ibDataNode& node) override;
-	virtual bool WriteData(ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
 
 private:
 	ibPropertyModule* m_propertyModule = ibPropertyObject::CreateProperty<ibPropertyModule>(m_categoryContext, wxT("Module"), _("Module"));

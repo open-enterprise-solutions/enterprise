@@ -77,8 +77,8 @@ void ibDialogFormEditor::AddChildren(ibValueFrame* obj, const wxTreeItemId& pare
 			AddChildren(obj->GetChild(0), parent);
 		}
 		else {
-			// Si hemos llegado aquí ha sido porque el arbol no está bien formado
-			// y habrá que revisar cómo se ha creado.
+			// If we reached here it is because the tree is malformed
+			// and how it was built needs to be reviewed.
 			wxString msg;
 			ibValueFrame* itemParent = obj->GetParent();
 			assert(parent);
@@ -485,8 +485,8 @@ void ibDialogFormEditor::MovePosition(ibValueFrame* move_obj, bool right, unsign
 
 		if (parent != nullptr) {
 
-			// Si el objeto está incluido dentro de un item hay que desplazar
-			// el item
+			// If the object is contained within an item, the item must be
+			// shifted
 			ibValueFrame* object = move_obj;
 
 			while (parent && parent->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {

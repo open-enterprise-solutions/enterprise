@@ -59,16 +59,13 @@ public:
 		return wxEmptyString;
 	}
 
-	ibPropertyCategory* GetCategory(unsigned int index) const {
-		if (index < m_categories.size()) return m_categories[index];
-		return new ibPropertyCategory(m_owner);
-	}
+	ibPropertyCategory* GetCategory(unsigned int index) const;
 
 	ibPropertyObject* GetPropertyObject() const { return m_owner; }
 
 	unsigned int GetPropertyCount() const { return m_properties.size(); }
 	unsigned int GetEventCount() const { return m_events.size(); }
-	unsigned int GetCategoryCount() const { return m_categories.size(); }
+	unsigned int GetCategoryCount() const;
 
 	friend class ibPropertyObject;
 
@@ -300,7 +297,7 @@ protected:
 
 protected:
 
-	wxString GetIndentString(int indent) const; // obtiene la cadena con el indentado
+	wxString GetIndentString(int indent) const; // gets the string with the indentation
 
 	ibPropertyObject() /*: m_parent(nullptr)*/ { m_category = new ibPropertyCategory(this); }
 
@@ -308,11 +305,11 @@ protected:
 	friend class ibEvent;
 
 	/**
-	* Añade una propiedad al objeto.
+	* Adds a property to the object.
 	*
-	* Este método será usado por el registro de descriptores para crear la
-	* instancia del objeto.
-	* Los objetos siempre se crearán a través del registro de descriptores.
+	* This method is used by the descriptor registry to create the
+	* instance of the object.
+	* Objects are always created through the descriptor registry.
 	*/
 	void AddProperty(ibProperty* property);
 	void AddEvent(ibEvent* event);
@@ -322,11 +319,11 @@ public:
 	virtual ~ibPropertyObject();
 
 	/**
-	* Obtiene el nombre del objeto.
+	* Gets the name of the object.
 	*
-	* @note No confundir con la propiedad nombre que tienen algunos objetos.
-	*       Cada objeto tiene un nombre, el cual será el mismo que el usado
-	*       como clave en el registro de descriptores.
+	* @note Not to be confused with the name property that some objects have.
+	*       Every object has a name, which is the same as the one used
+	*       as the key in the descriptor registry.
 	*/
 	virtual wxString GetClassName() const = 0;
 
@@ -354,16 +351,16 @@ public:
 	}
 
 	/**
-	* Obtiene la propiedad identificada por el nombre.
+	* Gets the property identified by name.
 	*
-	* @note Notar que no existe el método SetProperty, ya que la modificación
-	*       se hace a través de la referencia.
+	* @note Note that there is no SetProperty method, since modification
+	*       is done through the reference.
 	*/
 	ibProperty* GetProperty(const wxString& nameParam) const;
 	ibEvent* GetEvent(const wxString& nameParam) const;
 
 	/**
-	* Obtiene el número de propiedades del objeto.
+	* Gets the number of properties of the object.
 	*/
 	unsigned int GetPropertyCount() const { return (unsigned int)m_properties.size(); }
 	unsigned int GetEventCount() const { return m_events.size(); }
@@ -372,7 +369,7 @@ public:
 	ibEvent* GetEvent(unsigned int idx) const; // throws ...;
 
 	/**
-	* Obtiene el número de hijos del objeto.
+	* Gets the number of children of the object.
 	*/
 	unsigned int GetPropertyIndex(const wxString& nameParam) const;
 
@@ -385,16 +382,31 @@ public:
 	}
 
 	/**
-	* Devuelve el tipo de objeto.
+	* Returns the type of the object.
 	*
-	* Deberá ser redefinida en cada clase derivada.
+	* Must be overridden in each derived class.
 	*/
 	virtual wxString GetObjectTypeName() const = 0;
 
 	/**
-	* Devuelve la profundidad  del objeto en el arbol.
+	* Returns the depth of the object in the tree.
 	*/
 	virtual int GetComponentType() const { return COMPONENT_TYPE_ABSTRACT; }
+
+	// Attach ANOTHER property-object so ITS properties appear as part of THIS one in
+	// the inspector (a single whole), while GetProperty routes them back to it — edits
+	// and OnPropertyChanged fire on the REAL owner (the attached object), not us.
+	// Non-owning: the other object lives elsewhere (e.g. an attribute's value).
+	void AttachPropertyObject(ibPropertyObject* other);
+	void DetachAllPropertyObjects();
+
+	// Central VIRTUAL entry for object-level node save/load. A type OVERRIDES it to do its
+	// OWN data: meta / controls call their LoadNode/SaveNode inside (their per-type
+	// ReadData/WriteData stays THEIR method, NOT on this base); the dynamic list writes
+	// its Source + settings. Base default routes through attached objects (their data is
+	// part of us) — an override calls the base to include attached.
+	virtual bool ReadProperty(const ibDataNode& node);
+	virtual bool WriteProperty(ibDataNode& node) const;
 
 	/**
 	* ibProperty events
@@ -417,10 +429,11 @@ public:
 	virtual void OnEventChanged(ibEvent* property, const wxVariant& oldValue, const wxVariant& newValue) {}
 
 	/**
-	* Comprueba si el tipo es derivado del que se pasa como parámetro.
+	* Checks whether the type is derived from the one passed as a parameter.
 	*/
 
 	ibPropertyCategory* GetCategory() const { return m_category; }
+	const std::vector<ibPropertyObject*>& GetAttachedObjects() const { return m_attachedObjects; }
 	virtual bool IsEditable() const = 0;
 
 protected:
@@ -435,6 +448,7 @@ private:
 
 	std::map<wxString, ibProperty*> m_properties;
 	std::map<wxString, ibEvent*> m_events;
+	std::vector<ibPropertyObject*> m_attachedObjects;   // non-owning — GetProperty routes to them
 };
 
 template <typename T>
@@ -484,7 +498,7 @@ public:
 	void SetParent(propertyType* parent) { m_parent = parent; }
 
 	/**
-	* Devuelve la posicion del hijo o GetParentPosition() en caso de no encontrarlo
+	* Returns the position of the child, or GetParentPosition() if not found
 	*/
 	unsigned int GetParentPosition() const {
 		if (m_parent == nullptr)
@@ -497,10 +511,10 @@ public:
 	}
 
 	/**
-	* Devuelve el primer antecesor cuyo tipo coincida con el que se pasa
-	* como parámetro.
+	* Returns the first ancestor whose type matches the one passed
+	* as a parameter.
 	*
-	* Será útil para encontrar el widget padre.
+	* Useful for finding the parent widget.
 	*/
 	propertyType* FindNearAncestor(const wxString& type) const {
 		propertyType* result = nullptr;
@@ -529,11 +543,11 @@ public:
 	}
 
 	/**
-	* Añade un hijo al objeto.
-	* Esta función es virtual, debido a que puede variar el comportamiento
-	* según el tipo de objeto.
+	* Adds a child to the object.
+	* This function is virtual, since the behaviour may vary
+	* depending on the type of object.
 	*
-	* @return true si se añadió el hijo con éxito y false en caso contrario.
+	* @return true if the child was added successfully and false otherwise.
 	*/
 	bool AddChild(propertyType* obj) {
 		m_children.emplace_back(obj);
@@ -546,7 +560,7 @@ public:
 	}
 
 	/**
-	* Devuelve la posicion del hijo o GetChildCount() en caso de no encontrarlo
+	* Returns the position of the child, or GetChildCount() if not found
 	*/
 	unsigned int GetChildPosition(propertyType* obj) const {
 		unsigned int pos = 0;
@@ -565,7 +579,7 @@ public:
 		if (pos == obj_pos)
 			return true;
 
-		// Procesamos el cambio de posición. Anchor a ref across remove→re-add:
+		// Process the position change. Anchor a ref across remove→re-add:
 		// RemoveChild drops the owning handle, which would destroy a sole-owned
 		// child before AddChild can re-insert it.
 		ibValuePtr<propertyType> keep(obj);
@@ -575,7 +589,7 @@ public:
 	}
 
 	/**
-	* Elimina un hijo del objeto.
+	* Removes a child from the object.
 	*/
 	void RemoveChild(propertyType* obj) { RemovePropertyObject(obj); }
 	void RemoveChild(unsigned int idx) {
@@ -615,7 +629,7 @@ public:
 	}
 
 	/**
-	* Obtiene un hijo del objeto.
+	* Gets a child of the object.
 	*/
 	propertyType* GetChild(unsigned int idx) const {
 		assert(idx < m_children.size());
@@ -623,12 +637,12 @@ public:
 	}
 
 	/**
-	* Obtiene el número de hijos del objeto.
+	* Gets the number of children of the object.
 	*/
 	unsigned int GetChildCount() const { return (unsigned int)m_children.size(); }
 
 	/**
-	* Comprueba si el tipo es derivado del que se pasa como parámetro.
+	* Checks whether the type is derived from the one passed as a parameter.
 	*/
 
 	bool IsSubclassOf(const wxString& className) const {

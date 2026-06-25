@@ -71,14 +71,14 @@ bool ibPropertySource::IsDotWalk() const
 }
 ////////////////////////////////////////////////////////////////////////
 
-const ibValueMetaObjectAttributeBase* ibPropertySource::GetSourceAttributeObject() const {
+const ibBackendSourceColumn* ibPropertySource::GetSourceAttributeObject() const {
 	return get_cell_variant<ibVariantDataSource>()->GetSourceAttributeObject();
 }
 
-std::vector<ibBackendFormAttribute*> ibPropertySource::GetSourceList() const {
+std::vector<ibBackendFormAttributeValue*> ibPropertySource::GetSourceList() const {
 	// Via the variant (which holds the owning control's type factory) — same path
 	// as GetSourceAttributeObject; no dependency on the frontend control type.
-	std::vector<ibBackendFormAttribute*> out;
+	std::vector<ibBackendFormAttributeValue*> out;
 	get_cell_variant<ibVariantDataSource>()->GetSourceList(out);
 	return out;
 }

@@ -50,7 +50,7 @@ public:
 	wxPGProperty* GetProperty(ibProperty* prop) const;
 	wxPGProperty* GetEvent(ibEvent* event) const;
 
-	// Servicios para los observadores
+	// Services for the observers
 	void SelectObject(ibPropertyObject* selobj, bool force = false) {
 
 		if (IsShownInspector() && (force || m_currentSel != selobj)) {

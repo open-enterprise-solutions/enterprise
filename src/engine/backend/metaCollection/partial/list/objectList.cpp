@@ -291,10 +291,10 @@ ibValueListDataObjectEnumRef::ibValueListDataObjectEnumRef(const ibValueMetaObje
 ibSourceExplorer ibValueListDataObjectEnumRef::GetSourceExplorer() const
 {
 	ibSourceExplorer srcHelper(
-		m_metaObject, GetClassType(),
-		true, true
+		m_metaObject->GetName(), m_metaObject->GetSynonym(), m_metaObject->GetMetaID(),
+		GetClassType(), true, true
 	);
-	srcHelper.AppendSource(m_metaObject->GetDataReference(), true, true);
+	srcHelper.AppendColumn(m_metaObject->GetDataReference(), true, true);
 	return srcHelper;
 }
 
@@ -394,19 +394,19 @@ ibValueListDataObjectRef::ibValueListDataObjectRef(const ibValueMetaObjectRecord
 ibSourceExplorer ibValueListDataObjectRef::GetSourceExplorer() const
 {
 	ibSourceExplorer srcHelper(
-		m_metaObject, GetClassType(),
-		true, true
+		m_metaObject->GetName(), m_metaObject->GetSynonym(), m_metaObject->GetMetaID(),
+		GetClassType(), true, true
 	);
 
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 		if (m_metaObject->IsDataReference(object->GetMetaID()))
-			srcHelper.AppendSource(object, true, false);
+			srcHelper.AppendColumn(object, true, false);
 		else if (m_metaObject->IsDataDeletionMark(object->GetMetaID()))
-			srcHelper.AppendSource(object, true, false);
+			srcHelper.AppendColumn(object, true, false);
 		else if (m_metaObject->IsDataVersion(object->GetMetaID()))
-			srcHelper.AppendSource(object, true, false);
+			srcHelper.AppendColumn(object, true, false);
 		else
-			srcHelper.AppendSource(object, true, true);
+			srcHelper.AppendColumn(object, true, true);
 	}
 
 	return srcHelper;
@@ -625,25 +625,25 @@ ibValueModelTreeDataObjectFolderRef::ibValueModelTreeDataObjectFolderRef(const i
 ibSourceExplorer ibValueModelTreeDataObjectFolderRef::GetSourceExplorer() const
 {
 	ibSourceExplorer srcHelper(
-		m_metaObject, GetClassType(),
-		true, true
+		m_metaObject->GetName(), m_metaObject->GetSynonym(), m_metaObject->GetMetaID(),
+		GetClassType(), true, true
 	);
 
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 		if (m_metaObject->IsDataReference(object->GetMetaID()))
-			srcHelper.AppendSource(object, true, false);
+			srcHelper.AppendColumn(object, true, false);
 		else if (m_metaObject->IsDataDeletionMark(object->GetMetaID()))
-			srcHelper.AppendSource(object, true, false);
+			srcHelper.AppendColumn(object, true, false);
 		else if (m_metaObject->IsDataPredefinedName(object->GetMetaID()))
-			srcHelper.AppendSource(object, true, false);
+			srcHelper.AppendColumn(object, true, false);
 		else if (m_metaObject->IsDataVersion(object->GetMetaID()))
-			srcHelper.AppendSource(object, true, false);
+			srcHelper.AppendColumn(object, true, false);
 		else if (m_metaObject->IsDataParent(object->GetMetaID()))
-			srcHelper.AppendSource(object, true, false);
+			srcHelper.AppendColumn(object, true, false);
 		else if (m_metaObject->IsDataFolder(object->GetMetaID()))
-			srcHelper.AppendSource(object, true, false);
+			srcHelper.AppendColumn(object, true, false);
 		else
-			srcHelper.AppendSource(object, true, true);
+			srcHelper.AppendColumn(object, true, true);
 	}
 
 	return srcHelper;
@@ -940,12 +940,12 @@ ibValueListRegisterObject::ibValueListRegisterObject(const ibValueMetaObjectRegi
 ibSourceExplorer ibValueListRegisterObject::GetSourceExplorer() const
 {
 	ibSourceExplorer srcHelper(
-		m_metaObject, GetClassType(),
-		true, true
+		m_metaObject->GetName(), m_metaObject->GetSynonym(), m_metaObject->GetMetaID(),
+		GetClassType(), true, true
 	);
 
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
-		srcHelper.AppendSource(object);
+		srcHelper.AppendColumn(object);
 	}
 
 	return srcHelper;

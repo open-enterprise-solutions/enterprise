@@ -2,9 +2,9 @@
 #include "backend/metaData.h"
 #include "backend/metaCollection/partial/commonObject.h"        // ibValueMetaObjectCompositeData
 #include "backend/metaCollection/attribute/metaAttributeObject.h" // ibValueMetaObjectAttributeBase
+#include "backend/objCtor.h"                                       // ibCtorMetaValueType (DoRefreshTypeDesc tabular-section check)
 
-// Defined further down; forward-declared so the type refresh (above them) can use them.
-static ibBackendFormAttribute* HeadAttribute(const ibBackendTypeSourceFactory* owner, const ibMetaID& id);
+// Defined further down; forward-declared so the type refresh (above them) can use it.
 static const ibValueMetaObject* ResolveGateMeta(const ibBackendTypeSourceFactory* owner, const ibSourceDescription& srcDesc);
 
 ////////////////////////////////////////////////////////////////////////////
@@ -16,20 +16,15 @@ void ibVariantDataAttributeSource::DoSetFromMetaId(const ibMetaID& id)
 	// form-local id), so without this the Type cannot resolve and falls back to a generic Table.
 	// Deeper field-id leaves fall through to the base metadata resolve below.
 	if (m_ownerSrcProperty != nullptr && id != wxNOT_FOUND) {
-		std::vector<ibBackendFormAttribute*> attrs;
-		m_ownerSrcProperty->GetSourceList(attrs);
-		for (ibBackendFormAttribute* attr : attrs) {
-			if (attr != nullptr && attr->GetAttributeId() == id) {
-				m_typeDesc = attr->GetTypeDesc();
-				return;
-			}
+		ibBackendFormAttributeValue* holder = m_ownerSrcProperty->FindSourceHolder(id);
+		if (holder != nullptr) {
+			m_typeDesc = holder->GetTypeDesc();
+			return;
 		}
 	}
 
 	ibVariantDataAttribute::DoSetFromMetaId(id);
 }
-
-#include "backend/objCtor.h"
 
 void ibVariantDataAttributeSource::DoRefreshTypeDesc()
 {
@@ -84,18 +79,6 @@ static const ibValueMetaObject* ResolveMetaWide(const ibBackendTypeSourceFactory
 // (copy-guids), so a metaobject COPY remaps the deeper hops here WITHOUT relying
 // on the attribute's stored Type (which a copy does not remap).
 
-// The form attribute at the path head, via the owner's source list.
-static ibBackendFormAttribute* HeadAttribute(const ibBackendTypeSourceFactory* owner, const ibMetaID& id)
-{
-	if (owner == nullptr) return nullptr;
-	std::vector<ibBackendFormAttribute*> attrs;
-	owner->GetSourceList(attrs);
-	for (ibBackendFormAttribute* attr : attrs)
-		if (attr != nullptr && attr->GetAttributeId() == id)
-			return attr;
-	return nullptr;
-}
-
 // The binding's GATE metaobject = the START attribute's TYPE metaobject (the object whose tabular
 // sections a section-binding references). Used to validate section types per BINDING attribute
 // (main OR custom object) rather than a single runtime source object — and it resolves at designer
@@ -104,47 +87,24 @@ static const ibValueMetaObject* ResolveGateMeta(const ibBackendTypeSourceFactory
 	const ibSourceDescription& srcDesc)
 {
 	if (owner == nullptr || !srcDesc.IsOk()) return nullptr;
-	ibBackendFormAttribute* attr = HeadAttribute(owner, srcDesc.GetFirst());
-	const ibMetaData* metaData = owner->GetMetaData();
-	if (attr == nullptr || metaData == nullptr) return nullptr;
-	const ibCtorMetaValueType* ctor = metaData->GetTypeCtor(attr->GetTypeDesc().GetFirstClsid());
-	if (ctor == nullptr) return nullptr;
-	const ibValueMetaObjectCompositeData* meta = nullptr;
-	return ctor->ConvertToMetaValue(meta) ? meta : nullptr;
+	// FAMILY-BLIND gate: the head attribute's LIVE source value hands out its metaobject directly —
+	// a metaobject source (catalog / document list) yields its composite, a queryable dynamic list
+	// yields null (no metaobject → no tabular section to validate). Replaces the old
+	// clsid → GetTypeCtor → ConvertToMetaValue gate, which assumed every source IS a metaobject.
+	ibBackendFormAttributeValue* holder = owner->FindSourceHolder(srcDesc.GetFirst());
+	ibSourceDataObject* source = holder != nullptr ? holder->GetSourceValue() : nullptr;
+	return source != nullptr ? source->GetSourceMetaObject() : nullptr;
 }
 
-// Walk the path: gate the head attribute, then resolve each deeper hop config-wide.
-// Returns the LEAF field metaobject (or nullptr for a whole-attribute binding).
-// `valid` is false when the gate fails (head not an attribute, or a deeper hop is
-// unresolved). outText (optional) collects the dotted display "Attr.Field.Sub".
-static const ibValueMetaObjectAttributeBase* WalkPath(const ibBackendTypeSourceFactory* owner,
-	const std::vector<ibSourceId>& path, bool& valid, wxString* outText)
-{
-	valid = false;
-	if (path.empty() || owner == nullptr) return nullptr;
-
-	// Entry GATE: path[0] must be one of THIS form's attributes (form-local, copy-safe).
-	ibBackendFormAttribute* attr = HeadAttribute(owner, path[0]);
-	if (attr == nullptr) return nullptr;
-	if (outText) *outText = attr->GetAttributeName();
-	valid = true;   // a whole-attribute binding (length 1) is valid
-
-	// Deeper hops: config-wide field / reference metaIds (the canonical dot-walk).
-	const ibValueMetaObjectAttributeBase* leaf = nullptr;
-	for (size_t i = 1; i < path.size(); ++i) {
-		const ibValueMetaObject* field = ResolveMetaWide(owner, path[i]);
-		if (field == nullptr || !field->IsAllowed()) { valid = false; return nullptr; }
-		if (outText) { *outText += wxT("."); *outText += field->GetName(); }
-		leaf = dynamic_cast<const ibValueMetaObjectAttributeBase*>(field);
-	}
-	return leaf;
-}
+// The dot-walk lives on the OWNER factory (ibBackendTypeSourceFactory::WalkSource) — it owns the
+// source list + metadata. These accessors just hand it the source-id path.
 
 wxString ibVariantDataSource::MakeString() const
 {
 	bool valid = false;
 	wxString text;
-	WalkPath(m_ownerProperty, m_sourceDesc.GetPath(), valid, &text);
+	if (m_ownerProperty != nullptr)
+		m_ownerProperty->WalkSource(m_sourceDesc.GetPath(), &valid, &text);
 	return valid ? text : _("<not selected>");
 }
 
@@ -169,15 +129,16 @@ ibGuid ibVariantDataSource::GetGuidByID(const ibMetaID& id) const
 bool ibVariantDataSource::IsEmptySource() const
 {
 	bool valid = false;
-	WalkPath(m_ownerProperty, m_sourceDesc.GetPath(), valid, nullptr);
+	if (m_ownerProperty != nullptr)
+		m_ownerProperty->WalkSource(m_sourceDesc.GetPath(), &valid, nullptr);
 	return !valid;
 }
 
-const ibValueMetaObjectAttributeBase* ibVariantDataSource::GetSourceAttributeObject() const
+const ibBackendSourceColumn* ibVariantDataSource::GetSourceAttributeObject() const
 {
-	bool valid = false;
-	const ibValueMetaObjectAttributeBase* leaf = WalkPath(m_ownerProperty, m_sourceDesc.GetPath(), valid, nullptr);
-	return valid ? leaf : nullptr;   // null for a whole-attribute (length-1) binding
+	// Just hand the source-id path to the OWNER factory's dot — it resolves the leaf column
+	// (null for a whole-attribute binding or a broken path).
+	return m_ownerProperty != nullptr ? m_ownerProperty->WalkSource(m_sourceDesc.GetPath()) : nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////
@@ -237,10 +198,9 @@ void ibVariantDataSource::ResetSource()
 
 bool ibVariantDataSource::IsPropAllowed() const
 {
-	const ibMetaID leaf = m_sourceDesc.GetLeaf();
-	if (leaf == wxNOT_FOUND) return true;
-	const ibValueMetaObject* metaObject = ResolveMetaWide(m_ownerProperty, leaf);
-	if (metaObject != nullptr)
-		return !metaObject->IsAllowed();
-	return true;
+	// The Type is editable ONLY while NO source is chosen — asked through the SAME source-backend dot
+	// (WalkSource) the rest of this variant resolves through. Richer than a raw leaf peek: it also
+	// reports a leaf that no longer resolves (a DELETED source) as empty, so the Type frees up again.
+	// A resolvable source locks the Type selector (RefreshChildren sets ReadOnly = !IsPropAllowed).
+	return IsEmptySource();
 }

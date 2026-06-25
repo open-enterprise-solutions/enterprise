@@ -1,111 +1,76 @@
 #ifndef __SRC_EXPLORER_H__
 #define __SRC_EXPLORER_H__
 
+#include "backend/query/queryColumn.h"   // ibBackendQueryColumn / ibBackendSourceColumn — neutral column
+
+// ibSourceExplorer — a source's column/field TEMPLATE (one-time form generation + the picker).
+// METADATA-FREE: a node holds plain values (name / synonym / id / type) + UI flags, and a column is
+// appended from the neutral ibBackendQueryColumn (a metaobject attribute IS one, a queryable column
+// IS one) — never a metaobject pointer. The flags that used to be read off the metaobject (allowed /
+// visible / table-section) are now explicit on the node; the allowed-judgement lives on the column
+// (ibBackendSourceColumn::IsAllowed). One root + its children; a table-section child carries its own
+// columns (the only two-level case the form builder consumes).
 class BACKEND_API ibSourceExplorer {
 
 	struct ibSourceInfo {
-
-		wxString m_srcName;
-		wxString m_srcSynonym;
-
-		ibMetaID m_mid;
-
-		bool m_enabled = true;
-		bool m_visible = true;
-		bool m_tableSection = false;
-		bool m_select = true;
-
+		wxString          m_srcName;
+		wxString          m_srcSynonym;
+		ibMetaID          m_mid = wxNOT_FOUND;
 		ibTypeDescription m_typeDesc;
-
-		const ibValueMetaObject* m_metaObject = nullptr;
+		bool              m_enabled = true;
+		bool              m_visible = true;
+		bool              m_tableSection = false;
+		bool              m_select = true;
 	};
-
-private:
-
-	ibSourceExplorer() {}
-
-	ibSourceExplorer(const ibValueMetaObjectCompositeData* object, const ibClassID& cid) {
-
-		m_sourceInfo = {
-			wxT("ref"), _("Ref"), object->GetMetaID(), true, false, false, true, { cid }, object
-		};
-
-		std::vector<ibValueMetaObjectAttributeBase*> genArray1;
-		for (const auto child : object->GetGenericAttributeArrayObject(genArray1)) ibSourceExplorer::AppendSource(child);
-	}
-
-	ibSourceExplorer(const ibValueMetaObjectAttributeBase* object, bool enabled = true, bool visible = true) {
-
-		m_sourceInfo = {
-			object->GetName(), object->GetSynonym(), object->GetMetaID(), enabled, visible, false, true, object->GetTypeDesc(), object
-		};
-	}
-
-	ibSourceExplorer(const ibValueMetaObjectTableData* object) {
-
-		m_sourceInfo = {
-			object->GetName(), object->GetSynonym(), object->GetMetaID(), true, true, true, true,  object->GetTypeDesc(), object
-		};
-
-		std::vector<ibValueMetaObjectAttributeBase*> genArray2;
-		for (const auto child : object->GetGenericAttributeArrayObject(genArray2)) ibSourceExplorer::AppendSource(child);
-	}
 
 public:
 
-	ibSourceExplorer(const ibValueMetaObject* object, const ibClassID& cid, bool tableSection, bool select = false) {
+	ibSourceExplorer() {}
 
-		m_sourceInfo = {
-			wxT("ref"), _("Ref"), object->GetMetaID(), true, true, tableSection, select, cid, object
-		};
+	// The one value ctor — every node is built from plain values + flags, no metaobject.
+	ibSourceExplorer(const wxString& name, const wxString& synonym, const ibMetaID& id,
+		const ibTypeDescription& typeDesc, bool tableSection = false, bool select = true,
+		bool enabled = true, bool visible = true) {
+		m_sourceInfo = { name, synonym, id, typeDesc, enabled, visible, tableSection, select };
 	}
 
-	// this object 
-	ibSourceExplorer(const ibValueMetaObjectGenericData* object, const ibClassID& cid, bool tableSection, bool select = false) {
+	// Queryable-style node: the name doubles as the synonym.
+	ibSourceExplorer(const wxString& name, const ibMetaID& id, const ibTypeDescription& typeDesc)
+		: ibSourceExplorer(name, name, id, typeDesc) {}
 
-		if (object->IsDeleted())
-			return;
-
-		m_sourceInfo = {
-			object->GetName(), object->GetSynonym(), object->GetMetaID(), true, true, tableSection, select, cid, object
-		};
-	}
-
-	wxString GetSourceName() const { return m_sourceInfo.m_srcName; }
+	wxString GetSourceName()    const { return m_sourceInfo.m_srcName; }
 	wxString GetSourceSynonym() const { return m_sourceInfo.m_srcSynonym; }
+	ibMetaID GetSourceId()      const { return m_sourceInfo.m_mid; }
 
-	ibMetaID GetSourceId() const { return m_sourceInfo.m_mid; }
-
-	bool IsEnabled() const { return m_sourceInfo.m_enabled; }
-	bool IsVisible() const { return m_sourceInfo.m_visible; }
+	bool IsEnabled()      const { return m_sourceInfo.m_enabled; }
+	bool IsVisible()      const { return m_sourceInfo.m_visible; }
 	bool IsTableSection() const { return m_sourceInfo.m_tableSection; }
-	bool IsSelect() const { return m_sourceInfo.m_select && IsAllowed(); }
-	bool IsAllowed() const { return GetMetaObject()->IsAllowed(); }
+	bool IsSelect()       const { return m_sourceInfo.m_select; }
 
-	const ibValueMetaObject* GetMetaObject() const { return m_sourceInfo.m_metaObject; }
 	const std::vector<ibClassID>& GetClsidList() const { return m_sourceInfo.m_typeDesc.GetClsidList(); }
-
 	bool ContainType(const ibValueTypes& valType) const { return m_sourceInfo.m_typeDesc.ContainType(valType); }
 	bool ContainType(const ibClassID& cid) const { return m_sourceInfo.m_typeDesc.ContainType(cid); }
 
-	void AppendSource(const ibValueMetaObjectGenericData* refData, const ibClassID& cid) {
-		if (refData->IsDeleted())
-			return;
-		m_arraySource.emplace_back(ibSourceExplorer{ refData, cid });
+	// Append a COLUMN from its neutral descriptor (an attribute / a queryable column — both
+	// ibBackendQueryColumn). Skipped when the column is not allowed (a deleted / disabled field):
+	// the metadata judgement lives on the column, not here.
+	void AppendColumn(const ibBackendQueryColumn* col, bool enabled = true, bool visible = true) {
+		if (col == nullptr || !col->IsAllowed()) return;
+		m_arraySource.emplace_back(ibSourceExplorer{ col->GetName(), col->GetSynonym(), col->GetColumnId(),
+			col->GetTypeDesc(), /*tableSection*/false, /*select*/true, enabled, visible });
 	}
 
-	void AppendSource(const ibValueMetaObjectAttributeBase* attribute, bool enabled = true, bool visible = true) {
-		if (attribute->IsDeleted())
-			return;
-		m_arraySource.emplace_back(ibSourceExplorer{ attribute, enabled , visible });
+	// Append a COLUMN by plain values (a queryable column with no descriptor object).
+	void AppendColumn(const wxString& name, const ibMetaID& id, const ibTypeDescription& typeDesc) {
+		m_arraySource.emplace_back(ibSourceExplorer{ name, id, typeDesc });
 	}
 
-	void AppendSource(const ibValueMetaObjectTableData* tableSection) {
-
-		if (tableSection->IsDeleted())
-			return;
-
-		m_arraySource.emplace_back(ibSourceExplorer{ tableSection });
+	// Append a TABLE-SECTION node (tableSection = true). Returns a reference so the caller adds the
+	// section's own columns to it via AppendColumn (the form builder reads them as a sub-tablebox).
+	ibSourceExplorer& AppendTable(const wxString& name, const wxString& synonym, const ibMetaID& id,
+		const ibTypeDescription& typeDesc) {
+		m_arraySource.emplace_back(ibSourceExplorer{ name, synonym, id, typeDesc, /*tableSection*/true });
+		return m_arraySource.back();
 	}
 
 	ibSourceExplorer GetHelper(unsigned int idx) const {
@@ -114,15 +79,14 @@ public:
 		return m_arraySource[idx];
 	}
 
-	unsigned int GetHelperCount() const { return m_arraySource.size(); }
+	unsigned int GetHelperCount() const { return static_cast<unsigned int>(m_arraySource.size()); }
 
 protected:
 
 	ibSourceInfo m_sourceInfo;
-
 	std::vector<ibSourceExplorer> m_arraySource;
 };
 
 #include "backend/srcObject.h"
 
-#endif 
+#endif

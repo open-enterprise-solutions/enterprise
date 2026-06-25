@@ -32,17 +32,17 @@ ibValueRecordDataObjectChartOfCharacteristicTypes::ibValueRecordDataObjectChartO
 ibSourceExplorer ibValueRecordDataObjectChartOfCharacteristicTypes::GetSourceExplorer() const
 {
 	ibSourceExplorer srcHelper(
-		m_metaObject, GetClassType(),
+		wxT("ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
 		false
 	);
 
 	ibValueMetaObjectChartOfCharacteristicTypes* metaRef = nullptr;
 
 	if (m_metaObject->ConvertToValue(metaRef)) {
-		srcHelper.AppendSource(metaRef->GetDataCode(), false);
-		srcHelper.AppendSource(metaRef->GetDataDescription());
-		srcHelper.AppendSource(metaRef->GetDataParent());
-		srcHelper.AppendSource(metaRef->GetDataType(), false);
+		srcHelper.AppendColumn(metaRef->GetDataCode(), false);
+		srcHelper.AppendColumn(metaRef->GetDataDescription());
+		srcHelper.AppendColumn(metaRef->GetDataParent());
+		srcHelper.AppendColumn(metaRef->GetDataType(), false);
 	}
 
 	for (const auto object : m_metaObject->GetAttributeArrayObject()) {
@@ -51,7 +51,7 @@ ibSourceExplorer ibValueRecordDataObjectChartOfCharacteristicTypes::GetSourceExp
 			if (attrUse == ibItemMode::ibItemMode_Item
 				|| attrUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (!m_metaObject->IsDataReference(object->GetMetaID())) {
-					srcHelper.AppendSource(object);
+					srcHelper.AppendColumn(object);
 				}
 			}
 		}
@@ -59,7 +59,7 @@ ibSourceExplorer ibValueRecordDataObjectChartOfCharacteristicTypes::GetSourceExp
 			if (attrUse == ibItemMode::ibItemMode_Folder ||
 				attrUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (!m_metaObject->IsDataReference(object->GetMetaID())) {
-					srcHelper.AppendSource(object);
+					srcHelper.AppendColumn(object);
 				}
 			}
 		}
@@ -70,13 +70,21 @@ ibSourceExplorer ibValueRecordDataObjectChartOfCharacteristicTypes::GetSourceExp
 		if (m_objMode == ibObjectMode::OBJECT_ITEM) {
 			if (tableUse == ibItemMode::ibItemMode_Item
 				|| tableUse == ibItemMode::ibItemMode_Folder_Item) {
-				srcHelper.AppendSource(object);
+				if (object != nullptr && !object->IsDeleted()) {
+					ibSourceExplorer& tblNode = srcHelper.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
+					std::vector<ibValueMetaObjectAttributeBase*> tblCols;
+					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject(tblCols)) tblNode.AppendColumn(tblCol);
+				}
 			}
 		}
 		else {
 			if (tableUse == ibItemMode::ibItemMode_Folder ||
 				tableUse == ibItemMode::ibItemMode_Folder_Item) {
-				srcHelper.AppendSource(object);
+				if (object != nullptr && !object->IsDeleted()) {
+					ibSourceExplorer& tblNode = srcHelper.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
+					std::vector<ibValueMetaObjectAttributeBase*> tblCols;
+					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject(tblCols)) tblNode.AppendColumn(tblCol);
+				}
 			}
 		}
 	}

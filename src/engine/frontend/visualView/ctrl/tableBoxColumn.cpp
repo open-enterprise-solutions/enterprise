@@ -79,7 +79,7 @@ ibValueModelTableBoxColumn::ibValueModelTableBoxColumn() :
 {
 }
 
-bool ibValueModelTableBoxColumn::GetSourceList(std::vector<ibBackendFormAttribute*>& out) const
+bool ibValueModelTableBoxColumn::GetSourceList(std::vector<ibBackendFormAttributeValue*>& out) const
 {
 	return GetOwner()->GetSourceList(out);
 }
@@ -96,9 +96,9 @@ wxString ibValueModelTableBoxColumn::GetControlTitle() const
 		return m_propertyTitle->GetValueAsTranslateString();
 	}
 	else if (!m_propertySource->IsEmptyProperty()) {
-		const ibValueMetaObject* metaObject = m_propertySource->GetSourceAttributeObject();
-		if (metaObject != nullptr)   // null when the bound attribute was just removed
-			return metaObject->GetSynonym();
+		const ibBackendSourceColumn* column = m_propertySource->GetSourceAttributeObject();
+		if (column != nullptr)   // null when the bound field is gone / whole-attribute binding
+			return column->GetSynonym();
 	}
 
 	return m_propertyName->GetValueAsString();

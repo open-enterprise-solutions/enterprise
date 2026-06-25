@@ -447,13 +447,13 @@ public:
 
 	// (de)serialize the whole control through the binary provider (form-blob entry)
 	bool LoadControl(const ibValueMetaObjectFormBase* metaForm, ibReaderMemory& dataReader);
-	bool SaveControl(const ibValueMetaObjectFormBase* metaForm, ibWriterMemory& dataWritter, bool copy_form = false);
+	bool SaveControl(const ibValueMetaObjectFormBase* metaForm, ibWriterMemory& dataWritter, bool copy_form = false) const;
 
 	// Node form, mirrors the metaobject path. Load/SaveNode add the header
 	// (id / name / expanded) then delegate the per-type data to Read/WriteData — the
 	// base has none, a control overrides. (Read/Load before Write/Save in every pair.)
 	bool LoadNode(const ibDataNode& node);
-	bool SaveNode(ibDataNode& node);
+	bool SaveNode(ibDataNode& node) const;
 
 protected:
 

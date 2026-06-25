@@ -39,14 +39,13 @@ const ibMetaData* ibValueControl::GetMetaData() const
 
 	//for form buider
 	if (metaFormObject == nullptr) {
+
 		ibSourceDataObject* srcValue = m_formOwner ?
 			m_formOwner->GetSourceObject() :
 			nullptr;
-		if (srcValue != nullptr) {
-			const ibValueMetaObjectGenericData* metaValue = srcValue->GetSourceMetaObject();
-			wxASSERT(metaValue);
-			return metaValue->GetMetaData();
-		}
+		
+		if (srcValue != nullptr)
+			return srcValue->GetSourceMetaData();
 	}
 
 	return metaFormObject ?
@@ -64,7 +63,7 @@ ibFormID ibValueControl::GetTypeForm() const
 	}
 
 	const ibValueMetaObjectFormBase* creator = m_formOwner->GetFormMetaObject();
- 	if (creator != nullptr) 
+	if (creator != nullptr)
 		return creator->GetTypeForm();
 	return m_formOwner->GetTypeForm();
 }

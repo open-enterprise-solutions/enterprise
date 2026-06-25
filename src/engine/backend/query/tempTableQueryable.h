@@ -124,6 +124,7 @@ public:
 	// (No attribute resolution / DB-row materialisation here — a temp source is computed
 	//  in RAM, so those concerns do not exist; the base interface names none of them.)
 	wxString GetQueryTableName() const override { return wxEmptyString; }
+	ibGuid GetQueryTableGuid() const override { return wxNullGuid; }
 	ibMetaID GetQueryTableId()    const override { return 0; }
 	std::vector<ibQuerySortItem> GetIdentitySort() const override { return {}; }
 
@@ -151,9 +152,10 @@ class ibDbTempTableQueryable : public ibBackendQueryable
 {
 public:
 	ibDbTempTableQueryable(wxString tableName, std::vector<ibTempColumn> columns, const ibMetaData* metaData = nullptr)
-		: m_tableName(std::move(tableName)), m_columns(std::move(columns)), m_metaData(metaData) {}
+		: m_tableName(std::move(tableName)), m_tableGuid(wxNewUniqueGuid), m_columns(std::move(columns)), m_metaData(metaData) {}
 
 	wxString          GetQueryTableName() const override { return m_tableName; }
+	ibGuid          GetQueryTableGuid() const override { return m_tableGuid; }
 	ibMetaID          GetQueryTableId()    const override { return 0; }                 // not a metaobject
 	const ibMetaData* GetMetaData()       const override { return m_metaData; }        // reference / enum reconstruction context
 	std::vector<ibQuerySortItem> GetIdentitySort() const override { return {}; }       // scan source — no keyset
@@ -182,6 +184,7 @@ public:
 
 private:
 	wxString                  m_tableName;   // the real temp table name (the manager owns its DB lifetime)
+	ibGuid					  m_tableGuid;   // the real temp table GUID (the manager owns its DB lifetime)	
 	std::vector<ibTempColumn> m_columns;     // metadata-format columns (real type), read via the DB spread
 	const ibMetaData*         m_metaData;    // reference / enum reconstruction context
 };

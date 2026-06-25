@@ -42,7 +42,7 @@ bool ibValueMetaObjectInterface::ReadData(const ibDataNode& node)
 }
 
 
-bool ibValueMetaObjectInterface::WriteData(ibDataNode& node)
+bool ibValueMetaObjectInterface::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyPicture->GetName(), m_propertyPicture->GetNodeValue());
 	return true;

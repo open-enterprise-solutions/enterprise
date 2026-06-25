@@ -33,7 +33,7 @@ bool ibValueMetaObjectSpreadsheet::ReadData(const ibDataNode& node)
 	return true;
 }
 
-bool ibValueMetaObjectSpreadsheet::WriteData(ibDataNode& node)
+bool ibValueMetaObjectSpreadsheet::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyTemplate->GetName(), m_propertyTemplate->GetNodeValue());
 	return true;
@@ -49,7 +49,7 @@ bool ibValueMetaObjectCommonSpreadsheet::ReadData(const ibDataNode& node)
 	return true;
 }
 
-bool ibValueMetaObjectCommonSpreadsheet::WriteData(ibDataNode& node)
+bool ibValueMetaObjectCommonSpreadsheet::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyTemplate->GetName(), m_propertyTemplate->GetNodeValue());
 	return true;

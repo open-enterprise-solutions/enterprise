@@ -53,23 +53,27 @@ bool ibValueRecordDataObjectDocument::IsPosted() const
 ibSourceExplorer ibValueRecordDataObjectDocument::GetSourceExplorer() const
 {
 	ibSourceExplorer srcHelper(
-		m_metaObject, GetClassType(),
-		false
+		wxT("ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
+		false, false
 	);
 
 	ibValueMetaObjectDocument* metaRef = nullptr;
 
 	if (m_metaObject->ConvertToValue(metaRef)) {
-		srcHelper.AppendSource(metaRef->GetDocumentNumber(), false);
-		srcHelper.AppendSource(metaRef->GetDocumentDate());
+		srcHelper.AppendColumn(metaRef->GetDocumentNumber(), false);
+		srcHelper.AppendColumn(metaRef->GetDocumentDate());
 	}
 
 	for (const auto object : m_metaObject->GetAttributeArrayObject()) {
-		srcHelper.AppendSource(object);
+		srcHelper.AppendColumn(object);
 	}
 
 	for (const auto object : m_metaObject->GetTableArrayObject()) {
-		srcHelper.AppendSource(object);
+		if (object != nullptr && !object->IsDeleted()) {
+			ibSourceExplorer& tblNode = srcHelper.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
+			std::vector<ibValueMetaObjectAttributeBase*> tblCols;
+			for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject(tblCols)) tblNode.AppendColumn(tblCol);
+		}
 	}
 
 	return srcHelper;

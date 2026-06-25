@@ -49,7 +49,7 @@ ibBackendValueForm* ibValueMetaObjectAccumulationRegister::GetListForm(const wxS
 //*                       Save & load metaData                              *
 //***************************************************************************
 
-bool ibValueMetaObjectAccumulationRegister::WriteData(ibDataNode& node)
+bool ibValueMetaObjectAccumulationRegister::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyAttributibRecordType->GetName(), m_propertyAttributibRecordType->GetNodeValue());
 

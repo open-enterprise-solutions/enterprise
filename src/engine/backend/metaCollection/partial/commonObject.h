@@ -64,6 +64,7 @@ class BACKEND_API ibValueMetaObjectRecordDataRef;
 class BACKEND_API ibValueMetaObjectRegisterData;
 
 class BACKEND_API ibSourceDataObject;
+class BACKEND_API ibBackendSourceColumn;   // queryColumn.h — neutral source column (GetSourceColumn)
 
 class BACKEND_API ibValueManagerDataObject;
 
@@ -484,6 +485,7 @@ public:
 	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override;   // attribute-by-name AS a column
 	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override;   // all attributes (SELECT *)
 	virtual wxString GetQueryTableName() const override;
+	virtual ibGuid GetQueryTableGuid() const override;
 	virtual wxString GetQueryName() const override;   // the metaobject's user-facing name (change ledger)
 	virtual ibMetaID GetQueryTableId() const override;
 	virtual const ibMetaData* GetMetaData() const override;                      // metadata context for column-based value reads
@@ -607,7 +609,7 @@ protected:
 
 	//load & save metaData from DB 
 	virtual bool ReadData(const ibDataNode& node) override;
-	virtual bool WriteData(ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
 
 protected:
 
@@ -704,7 +706,7 @@ protected:
 
 	//load & save metaData from DB
 	virtual bool ReadData(const ibDataNode& node) override;
-	virtual bool WriteData(ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
 
 private:
 
@@ -813,7 +815,7 @@ protected:
 
 	//load & save metaData from DB
 	virtual bool ReadData(const ibDataNode& node) override;
-	virtual bool WriteData(ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
 
 	//create empty object
 	virtual ibValueRecordDataObjectRef* CreateObjectRefValue(const ibGuid& objGuid = wxNullGuid) const = 0; //create object and read by guid
@@ -1012,7 +1014,7 @@ protected:
 
 	//load & save metaData from DB 
 	virtual bool ReadData(const ibDataNode& node) override;
-	virtual bool WriteData(ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
 
 	//create empty object
 	virtual ibValueRecordDataObjectHierarchyRef* CreateObjectRefValue(ibObjectMode mode, const ibGuid& objGuid = wxNullGuid) const = 0; //create object and read by guid
@@ -1065,6 +1067,7 @@ public:
 	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override;   // attribute-by-name AS a column
 	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override;   // identity (recorder+line / period) ++ dims ++ generic attrs
 	virtual wxString GetQueryTableName() const override;
+	virtual ibGuid GetQueryTableGuid() const override;
 	virtual wxString GetQueryName() const override;   // the metaobject's user-facing name (change ledger)
 	virtual ibMetaID GetQueryTableId() const override;
 	virtual const ibMetaData* GetMetaData() const override;                      // metadata context for column-based value reads
@@ -1307,7 +1310,7 @@ protected:
 
 	//load & save metaData from DB
 	virtual bool ReadData(const ibDataNode& node) override;
-	virtual bool WriteData(ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
 
 protected:
 
@@ -1373,15 +1376,32 @@ public:
 	//get unique identifier 
 	virtual ibUniqueKey GetGuid() const = 0;
 
-	//get metaData from object 
+	//get metaData from object
 	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const = 0;
 
-	//support source data 
+	//support source data
 	virtual ibSourceExplorer GetSourceExplorer() const = 0;
+
+	// Resolve a column id within THIS source's OWN columns — metadata-blind: the dynamic list maps
+	// it to a LIVE queryable column (an ibBackendQueryColumn IS-A ibBackendSourceColumn). Null = not
+	// one of this source's columns. The path-walker (ibBackendTypeSourceFactory::WalkSource) uses
+	// this for the deep hops; HasOwnColumns() tells a MISS apart: a CLOSED source (a queryable list)
+	// → the binding is BROKEN; an open metaobject source → resolve config-wide (a dotted reference
+	// walks into ANOTHER type, not this source's own columns).
+	virtual const ibBackendSourceColumn* GetSourceColumn(const ibMetaID& id) const { return nullptr; }
+	virtual bool HasOwnColumns() const { return false; }
 
 	//support source set/get data
 	virtual bool SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal) { return false; }
 	virtual bool GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const { return false; }
+
+	// Is this source a TABLE (renders as a tablebox) or a scalar object? A pure TYPE fact,
+	// answered by the class factory through the source's own CLSID — the metaobject ctor
+	// registry first (a metatype List / TabularSection / RecordSet), else the global value
+	// registry (any ibValueModel, incl. the queryable-based dynamic list, which carries no
+	// metaobject). No dynamic_cast, and no dependence on the source's data / queryable being
+	// populated — a dynamic list with no source picked yet still reports a table.
+	bool IsTableSource() const;
 
 	// Path access: the same source fed an ordered metaId path instead of a single id.
 	// The first id is read off the source itself (GetValueByMetaID); each further id
@@ -1547,6 +1567,8 @@ public:
 
 	//get metaData from object 
 	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const final { return GetMetaObject(); }
+	// Metadata via THIS source's metaobject (it has one here).
+	virtual const ibMetaData* GetSourceMetaData() const override { const auto* mo = GetMetaObject(); return mo != nullptr ? mo->GetMetaData() : nullptr; }
 
 	//Get ref class 
 	virtual ibClassID GetSourceClassType() const final { return GetClassType(); }
@@ -2530,6 +2552,8 @@ public:
 
 	//get metaData from object
 	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const final { return GetMetaObject(); }
+	// Metadata via THIS source's metaobject (it has one here).
+	virtual const ibMetaData* GetSourceMetaData() const override { const auto* mo = GetMetaObject(); return mo != nullptr ? mo->GetMetaData() : nullptr; }
 
 	//Get ref class
 	virtual ibClassID GetSourceClassType() const final { return GetClassType(); }

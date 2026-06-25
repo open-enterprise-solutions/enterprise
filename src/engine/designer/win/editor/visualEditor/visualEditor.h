@@ -78,12 +78,12 @@ class ibVisualEditorCmd {
 protected:
 
 	/**
-	 * Ejecuta el comando.
+	 * Executes the command.
 	 */
 	virtual void DoExecute() = 0;
 
 	/**
-	 * Restaura el estado previo a la ejecución del comando.
+	 * Restores the state prior to the command's execution.
 	 */
 	virtual void DoRestore() = 0;
 
@@ -301,7 +301,7 @@ public:
 	class ibVisualEditorObjectTree : public wxPanel {
 
 		/**
-		 * Crea el arbol completamente.
+		 * Builds the tree completely.
 		 */
 		void CreateTree();
 		void RebuildTree();
@@ -317,13 +317,13 @@ public:
 
 		void UpdateItem(const wxTreeItemId& id, ibValueFrame* obj) {
 
-			// mostramos el nombre
+			// show the name
 			wxString class_name(obj->GetClassName());
 			wxString obj_name(obj->GetControlName());
 
 			wxString text = obj_name + wxT(" : ") + class_name;
 
-			// actualizamos el item
+			// update the item
 			m_tcObjects->SetItemText(id, text);
 
 			if (m_formHandler != nullptr &&
@@ -411,9 +411,9 @@ public:
 	};
 
 	/**
-	 * Gracias a que podemos asociar un objeto a cada item, esta clase nos va
-	 * a facilitar obtener el objeto (ibValueFrame) asociado a un item para
-	 * seleccionarlo pinchando en el item.
+	 * Since we can associate an object with each item, this class makes it
+	 * easy to get the object (ibValueFrame) associated with an item so it
+	 * can be selected by clicking on the item.
 	 */
 	class ibVisualEditorObjectTreeItemData : public wxTreeItemData {
 	public:
@@ -451,10 +451,13 @@ public:
 		void OnSetMainAttribute(wxCommandEvent& event);
 		void OnPropertiesAttribute(wxCommandEvent& event);    // show inspector
 		void OnCopyAttribute(wxCommandEvent& event);          // clipboard copy (serialized)
+		void OnCutAttribute(wxCommandEvent& event);           // clipboard copy + remove (undoable)
 		void OnPasteAttribute(wxCommandEvent& event);         // clipboard paste (deserialized)
 		void OnEndLabelEdit(wxTreeEvent& event);              // apply / veto a rename (uniqueness)
 
-		ibValueFormAttribute* GetAttributeFromItem(const wxTreeItemId& item) const;
+		// The HOLDER (facade) the tree item carries — what the inspector selects (it owns the
+		// attribute + the generated value and intercepts their property changes).
+		class ibFormAttributeValue* GetEntryFromItem(const wxTreeItemId& item) const;
 
 	private:
 
@@ -466,17 +469,17 @@ public:
 
 	class ibVisualEditorAttributeTreeItemData : public wxTreeItemData {
 	public:
-		ibVisualEditorAttributeTreeItemData(ibValueFormAttribute* attr) : m_attribute(attr) {}
-		ibValueFormAttribute* GetAttribute() const { return m_attribute; }
+		// Carries the HOLDER (facade) — the selectable; the attribute is reached via it.
+		ibVisualEditorAttributeTreeItemData(class ibFormAttributeValue* entry) : m_entry(entry) {}
+		ibFormAttributeValue* GetEntry() const { return m_entry; }
 	private:
-		ibValueFormAttribute* m_attribute = nullptr;
+		ibFormAttributeValue* m_entry = nullptr;
 	};
 
 	/**
-	 * Menu popup asociado a cada item del arbol.
+	 * Popup menu associated with each tree item.
 	 *
-	 * Este objeto ejecuta los comandos incluidos en el menu referentes al objeto
-	 * seleccionado.
+	 * This object executes the menu commands related to the selected object.
 	 */
 	class ibVisualEditorItemPopupMenu : public wxMenu {
 	public:
@@ -515,7 +518,7 @@ public:
 
 protected:
 
-	// Notifican a cada observador el evento correspondiente
+	// Notify every observer of the corresponding event
 	void NotifyEditorLoaded();
 	void NotifyEditorSaved();
 
@@ -538,7 +541,7 @@ protected:
 	void PropagateExpansion(ibValueFrame* obj, bool expand, bool up);
 
 	/**
-	* Eliminar un objeto.
+	* Remove an object.
 	*/
 	void DoRemoveObject(ibValueFrame* object, bool cutObject, bool force = false);
 
@@ -560,6 +563,11 @@ public:
 	void ModifyProperty(ibProperty* prop, const wxVariant& oldValue, const wxVariant& newValue);
 	void ModifyEvent(ibEvent* evt, const wxVariant& oldValue, const wxVariant& newValue);
 
+	// Add / delete a form attribute through the command processor (undoable) — the holder is built
+	// UNOWNED via ibValueForm::MakeAttribute; the command attaches / detaches it on the form.
+	void InsertAttribute(ibValuePtr<ibFormAttributeValue> holder);
+	void RemoveAttribute(ibFormAttributeValue* entry);
+
 	void CreateWideGui();
 
 	void DetermineObjectToSelect(ibValueFrame* parent, unsigned int pos);
@@ -573,7 +581,7 @@ public:
 
 	void ScrollToObject(ibValueFrame* obj);
 
-	// Servicios para los observadores
+	// Services for the observers
 	ibValueFrame* GetSelectedObject() const {
 		return m_selObj != nullptr ? m_selObj : m_valueForm;
 	}
@@ -616,19 +624,19 @@ public:
 	}
 
 	/**
-	* Calcula la posición donde deberá ser insertado el objeto.
+	* Calculates the position where the object should be inserted.
 	*
-	* Dado un objeto "padre" y un objeto "seleccionado", esta rutina calcula la
-	* posición de inserción de un objeto debajo de "parent" de forma que el objeto
-	* quede a continuación del objeto "seleccionado".
+	* Given a "parent" object and a "selected" object, this routine calculates the
+	* insertion position of an object under "parent" so that the object ends up
+	* right after the "selected" object.
 	*
-	* El algoritmo consiste ir subiendo en el arbol desde el objeto "selected"
-	* hasta encontrar un objeto cuyo padre sea el mismo que "parent" en cuyo
-	* caso se toma la posición siguiente a ese objeto.
+	* The algorithm walks up the tree from the "selected" object until it finds an
+	* object whose parent is the same as "parent", in which case the position right
+	* after that object is taken.
 	*
-	* @param parent objeto "padre"
-	* @param selected objeto "seleccionado".
-	* @return posición de insercción (-1 si no se puede insertar).
+	* @param parent the "parent" object
+	* @param selected the "selected" object.
+	* @return insertion position (-1 if it cannot be inserted).
 	*/
 	int CalcPositionOfInsertion(ibValueFrame* selected, ibValueFrame* parent);
 
@@ -639,9 +647,9 @@ public:
 
 private:
 
-	ibValueFrame* m_selObj = nullptr;     // Objeto seleccionado
+	ibValueFrame* m_selObj = nullptr;     // selected object
 
-	// Procesador de comandos Undo/Redo
+	// Undo/Redo command processor
 	ibCommandProcessor* m_cmdProc;
 
 	//Form handler 

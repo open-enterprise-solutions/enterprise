@@ -15,28 +15,28 @@
 ibSourceExplorer ibValueRecordManagerObjectInformationRegister::GetSourceExplorer() const
 {
 	ibSourceExplorer srcHelper(
-		m_metaObject, GetClassType(),
-		false
+		wxT("ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
+		false, false
 	);
 
 	ibValueMetaObjectInformationRegister* metaRef = nullptr;
 
 	if (m_metaObject->ConvertToValue(metaRef)) {
 		if (metaRef->GetPeriodicity() != ibPeriodicity::eNonPeriodic) {
-			srcHelper.AppendSource(metaRef->GetRegisterPeriod());
+			srcHelper.AppendColumn(metaRef->GetRegisterPeriod());
 		}
 	}
 
 	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
-		srcHelper.AppendSource(object);
+		srcHelper.AppendColumn(object);
 	}
 
 	for (const auto object : m_metaObject->GetResourceArrayObject()) {
-		srcHelper.AppendSource(object);
+		srcHelper.AppendColumn(object);
 	}
 
 	for (const auto object : m_metaObject->GetAttributeArrayObject()) {
-		srcHelper.AppendSource(object);
+		srcHelper.AppendColumn(object);
 	}
 
 	return srcHelper;

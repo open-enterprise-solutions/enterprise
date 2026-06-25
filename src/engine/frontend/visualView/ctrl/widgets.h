@@ -98,7 +98,7 @@ class ibValueTextCtrl : public ibValueWindow,
 	////////////////////////////////////////////////////////////////////////////////////////
 
 	// Available sources = the owning form's attributes of THIS control's kind.
-	virtual bool GetSourceList(std::vector<ibBackendFormAttribute*>& out) const override;
+	virtual bool GetSourceList(std::vector<ibBackendFormAttributeValue*>& out) const override;
 
 	void SetCaption(const wxString& caption) { return m_propertyTitle->SetValue(caption); }
 	wxString GetCaption() const { return m_propertyTitle->GetValueAsTranslateString(); }
@@ -121,7 +121,7 @@ class ibValueTextCtrl : public ibValueWindow,
 	virtual ibSourceDescription GetSourceDesc() const override { return m_propertySource->GetValueAsSourceDesc(); }
 
 	//Get source attribute
-	virtual const ibValueMetaObjectAttributeBase* GetSourceAttributeObject() const {
+	virtual const ibBackendSourceColumn* GetSourceAttributeObject() const {
 		return m_propertySource->GetSourceAttributeObject();
 	}
 
@@ -307,7 +307,7 @@ class ibValueCheckbox : public ibValueWindow,
 	////////////////////////////////////////////////////////////////////////////////////////
 
 	// Available sources = the owning form's attributes of THIS control's kind.
-	virtual bool GetSourceList(std::vector<ibBackendFormAttribute*>& out) const override;
+	virtual bool GetSourceList(std::vector<ibBackendFormAttributeValue*>& out) const override;
 
 	void SetCaption(const wxString& caption) { return m_propertyTitle->SetValue(caption); }
 	wxString GetCaption() const { return m_propertyTitle->GetValueAsTranslateString(); }
@@ -321,7 +321,7 @@ class ibValueCheckbox : public ibValueWindow,
 	virtual ibSourceDescription GetSourceDesc() const override { return m_propertySource->GetValueAsSourceDesc(); }
 
 	//get source attribute
-	virtual const ibValueMetaObjectAttributeBase* GetSourceAttributeObject() const {
+	virtual const ibBackendSourceColumn* GetSourceAttributeObject() const {
 		return m_propertySource->GetSourceAttributeObject();
 	}
 

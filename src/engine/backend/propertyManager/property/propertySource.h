@@ -45,12 +45,12 @@ public:
 	bool IsDotWalk() const;
 #pragma endregion
 
-	const class ibValueMetaObjectAttributeBase* GetSourceAttributeObject() const;
+	const class ibBackendSourceColumn* GetSourceAttributeObject() const;
 
-	// Available source attributes from the owning control's type factory (the
-	// picker enumerates these as roots instead of a single source). An empty
-	// list means the binding has a single fixed source (legacy behaviour).
-	std::vector<class ibBackendFormAttribute*> GetSourceList() const;
+	// Available source HOLDERS from the owning control's type factory (the picker enumerates
+	// these as roots instead of a single source). An empty list means the binding has a single
+	// fixed source (legacy behaviour).
+	std::vector<class ibBackendFormAttributeValue*> GetSourceList() const;
 
 	ibPropertySource(ibPropertyCategory* cat, const wxString& name, const ibValueTypes& type = ibValueTypes::TYPE_STRING)
 		: ibProperty(cat, name, CreateVariantData(cat->GetPropertyObject(), type))

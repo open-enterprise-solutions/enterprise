@@ -3,7 +3,7 @@
 #include "fnumber.h"
 #include "fontcontainer.h"
 
-// macros para la conversión entre wxString <-> wxString
+// macros for converting between wxString <-> std::string
 #define _WXSTR(x)  typeConv::_StringToWxString(x)
 #define _STDSTR(x) typeConv::_WxStringToString(x)
 #define _ANSISTR(x) typeConv::_WxStringToAnsiString(x)
@@ -617,27 +617,27 @@ namespace typeConv
 			wxChar c = str[i];
 			switch (state)
 			{
-			case 0: // esperando (') de comienzo de cadena
+			case 0: // waiting for (') at the start of the string
 				if (c == wxT('\''))
 					state = 1;
 				break;
-			case 1: // guardando cadena
+			case 1: // storing the string
 				if (c == wxT('\''))
 				{
 					if (i + 1 < size && str[i + 1] == wxT('\''))
 					{
-						substr = substr + wxT('\'');  // sustitución ('') por (') y seguimos
+						substr = substr + wxT('\'');  // replace ('') with (') and continue
 						i++;
 					}
 					else
 					{
-						result.Add(substr); // fin de cadena
+						result.Add(substr); // end of string
 						substr.Clear();
 						state = 0;
 					}
 				}
 				else
-					substr = substr + c; // seguimos guardado la cadena
+					substr = substr + c; // keep storing the string
 
 				break;
 			}
@@ -669,14 +669,14 @@ namespace typeConv
 		}
 	}
 
-	// Obtiene la ruta absoluta de un archivo
+	// Gets the absolute path of a file
 	inline wxString MakeAbsolutePath(const wxString& filename, const wxString& basePath) {
 		wxFileName fnFile(filename);
 		wxFileName noChanges = fnFile;
 		if (fnFile.IsRelative())
 		{
-			// Es una ruta relativa, por tanto hemos de obtener la ruta completa
-			// a partir de basePath
+			// It is a relative path, so we have to obtain the full path
+			// from basePath
 			wxFileName fnBasePath(basePath);
 			if (fnBasePath.IsAbsolute())
 			{
@@ -699,7 +699,7 @@ namespace typeConv
 		return protocol + MakeAbsolutePath(path, basePath) + anchor;
 	}
 
-	// Obtiene la ruta relativa de un archivo
+	// Gets the relative path of a file
 	inline wxString MakeRelativePath(const wxString& filename, const wxString& basePath) {
 		wxFileName fnFile(filename);
 		wxFileName noChanges = fnFile;
@@ -733,8 +733,8 @@ namespace typeConv
 		return protocol + MakeRelativePath(path, basePath) + anchor;
 	}
 
-	// dada una cadena de caracteres obtiene otra transformando los caracteres
-	// especiales denotados al estilo C ('\n' '\\' '\t')
+	// given a string, produces another one transforming the special
+	// characters denoted in C style ('\n' '\\' '\t')
 	inline wxString StringToText(const wxString& str) {
 		wxString result;
 		for (unsigned int i = 0; i < str.length(); i++)

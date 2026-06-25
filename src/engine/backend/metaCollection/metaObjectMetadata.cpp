@@ -59,7 +59,7 @@ bool ibValueMetaObjectConfiguration::ReadData(const ibDataNode& node)
 	return true;
 }
 
-bool ibValueMetaObjectConfiguration::WriteData(ibDataNode& node)
+bool ibValueMetaObjectConfiguration::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyVersion->GetName(), m_propertyVersion->GetNodeValue());
 

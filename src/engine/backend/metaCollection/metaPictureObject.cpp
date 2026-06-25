@@ -21,7 +21,7 @@ bool ibValueMetaObjectPicture::ReadData(const ibDataNode& node)
 	return true;
 }
 
-bool ibValueMetaObjectPicture::WriteData(ibDataNode& node)
+bool ibValueMetaObjectPicture::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyPicture->GetName(), m_propertyPicture->GetNodeValue());
 	return true;

@@ -108,7 +108,7 @@ wxString ibValueMetaObjectChartOfAccounts::GetDataPresentation(const ibValueData
 	return wxEmptyString;
 }
 
-bool ibValueMetaObjectChartOfAccounts::WriteData(ibDataNode& node)
+bool ibValueMetaObjectChartOfAccounts::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyObjectModule->GetName(), m_propertyObjectModule->GetNodeValue());
 	node.SetProperty(m_propertyManagerModule->GetName(), m_propertyManagerModule->GetNodeValue());

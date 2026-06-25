@@ -89,7 +89,7 @@ bool ibValueMetaObjectLanguage::ReadData(const ibDataNode& node)
 	return true;
 }
 
-bool ibValueMetaObjectLanguage::WriteData(ibDataNode& node)
+bool ibValueMetaObjectLanguage::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyCode->GetName(), m_propertyCode->GetNodeValue());
 	return true;

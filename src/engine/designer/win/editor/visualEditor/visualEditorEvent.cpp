@@ -20,6 +20,7 @@ void ibVisualEditorNotebook::ibVisualEditor::NotifyEditorSaved()
 {
 	ibValueMetaObjectFormBase* creator = m_document->ConvertMetaObjectToType<ibValueMetaObjectFormBase>();
 	wxASSERT(creator);
+	
 	// Create a std::string and copy your document data in to the string
 	if (creator != nullptr) creator->SaveFormData(m_valueForm);
 }
@@ -27,6 +28,7 @@ void ibVisualEditorNotebook::ibVisualEditor::NotifyEditorSaved()
 void ibVisualEditorNotebook::ibVisualEditor::NotifyEditorRefresh()
 {
 	m_objectTree->OnEditorRefresh();
+
 	if (m_attributeTree != nullptr)
 		m_attributeTree->OnEditorRefresh();
 }

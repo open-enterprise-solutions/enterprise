@@ -74,6 +74,12 @@ public:
 	virtual ibCtorObjectType GetObjectTypeCtor() const = 0;
 	virtual void CallEvent(ibCtorObjectTypeEvent event) {}
 	virtual ibValue* CreateObject() const = 0;
+
+	// Class-factory table trait (see ibValue::IsTableValue): does this TYPE create tabular
+	// sources? Answered by CLSID, no instance needed. Default = false; value-type ctors
+	// forward to their T, metadata ctors derive it from their meta-kind (List / TabularSection
+	// / RecordSet). Lets selection / form-build ask the factory instead of a source explorer.
+	virtual bool IsTableValue() const { return false; }
 };
 
 class ibCtorValueTypeBase : public ibCtorAbstractType {
@@ -151,6 +157,10 @@ public:
 
 	virtual wxIcon GetClassIcon() const { return T::GetIconGroup(); }
 	virtual ibCtorObjectType GetObjectTypeCtor() const { return ibCtorObjectType::ibCtorObjectType_object_value; }
+	// Forward the table trait to the concrete type — T::IsTableValue() resolves (via name
+	// lookup) to ibValueModel's gate for models, to ibValue's default otherwise. Pure
+	// compile-time: a non-model T never needs ibValueModel visible in its TU.
+	virtual bool IsTableValue() const override { return T::IsTableValue(); }
 	virtual void CallEvent(ibCtorObjectTypeEvent event) {
 		if (event == ibCtorObjectTypeEvent::ibCtorObjectTypeEvent_Register)
 			T::OnRegisterObject(GetClassName(), this);

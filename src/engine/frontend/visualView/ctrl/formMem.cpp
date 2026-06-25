@@ -7,9 +7,9 @@
 // provider owns the on-wire layout (kMetaBlock / kChildBlock per node), so an
 // unregistered child clsid is skipped by NewObject == nullptr inside LoadNode.
 
-bool ibValueForm::LoadForm(const wxMemoryBuffer& formData)
+bool ibValueForm::LoadForm(const wxMemoryBuffer& data)
 {
-	if (formData.GetDataLen() == 0)
+	if (data.GetDataLen() == 0)
 		return false;
 
 	// Drop the current control tree before repopulating it from the blob.
@@ -19,7 +19,7 @@ bool ibValueForm::LoadForm(const wxMemoryBuffer& formData)
 			RemoveControl(controlChild);
 	}
 
-	ibReaderMemory readerData(formData);
+	ibReaderMemory readerData(data);
 	if (!LoadControl(m_metaFormObject, readerData))   // LoadNode recurses the whole subtree
 		return false;
 
@@ -28,10 +28,11 @@ bool ibValueForm::LoadForm(const wxMemoryBuffer& formData)
 	return true;
 }
 
-wxMemoryBuffer ibValueForm::SaveForm()
+bool ibValueForm::SaveForm(wxMemoryBuffer& data) const
 {
 	ibWriterMemory writerData;
 	if (!SaveControl(m_metaFormObject, writerData))   // SaveNode recurses the whole subtree
-		return wxMemoryBuffer();
-	return writerData.buffer();
+		return false;
+	data = writerData.buffer();
+	return true;
 }

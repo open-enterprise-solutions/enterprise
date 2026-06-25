@@ -27,20 +27,20 @@ ibValueMetaObjectSubcontoKindsTable::~ibValueMetaObjectSubcontoKindsTable()
 }
 
 // predefined columns as Child sub-nodes + the base table data (NumberLine + Use).
-bool ibValueMetaObjectSubcontoKindsTable::WriteData(ibDataNode& node)
-{
-	node.SetProperty(m_propertySubcontoKind->GetName(), m_propertySubcontoKind->GetNodeValue());
-	node.SetProperty(m_propertyOrder->GetName(),        m_propertyOrder->GetNodeValue());
-	node.SetProperty(m_propertySummaryOnly->GetName(),  m_propertySummaryOnly->GetNodeValue());
-	return ibValueMetaObjectTableData::WriteData(node);
-}
-
 bool ibValueMetaObjectSubcontoKindsTable::ReadData(const ibDataNode& node)
 {
 	m_propertySubcontoKind->ReadNodeValue(node.GetProperty(m_propertySubcontoKind->GetName()));
 	m_propertyOrder->ReadNodeValue(node.GetProperty(m_propertyOrder->GetName()));
 	m_propertySummaryOnly->ReadNodeValue(node.GetProperty(m_propertySummaryOnly->GetName()));
 	return ibValueMetaObjectTableData::ReadData(node);
+}
+
+bool ibValueMetaObjectSubcontoKindsTable::WriteData(ibDataNode& node) const
+{
+	node.SetProperty(m_propertySubcontoKind->GetName(), m_propertySubcontoKind->GetNodeValue());
+	node.SetProperty(m_propertyOrder->GetName(),        m_propertyOrder->GetNodeValue());
+	node.SetProperty(m_propertySummaryOnly->GetName(),  m_propertySummaryOnly->GetNodeValue());
+	return ibValueMetaObjectTableData::WriteData(node);
 }
 
 bool ibValueMetaObjectSubcontoKindsTable::OnCreateMetaObject(ibMetaData* metaData, int flags)

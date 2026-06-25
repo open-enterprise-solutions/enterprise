@@ -35,7 +35,7 @@ public:
 protected:
 
 	/**
-	 * Ejecuta el comando.
+	 * Executes the command.
 	 */
 	virtual void DoExecute() = 0;
 };
@@ -52,9 +52,9 @@ protected:
 	ibValueFrame* GetSelectedObject() const { return m_selectedControl; }
 
 	/**
-	* Gracias a que podemos asociar un objeto a cada item, esta clase nos va
-	* a facilitar obtener el objeto (ibValueFrame) asociado a un item para
-	* seleccionarlo pinchando en el item.
+	* Since we can associate an object with each item, this class makes it
+	* easy to get the object (ibValueFrame) associated with an item so it
+	* can be selected by clicking on the item.
 	 */
 	class ibDialogFormEditorObjectTreeItemData : public wxTreeItemData {
 	public:
@@ -65,10 +65,9 @@ protected:
 	};
 
 	/**
-	* Menu popup asociado a cada item del arbol.
+	* Popup menu associated with each tree item.
 	*
-	* Este objeto ejecuta los comandos incluidos en el menu referentes al objeto
-	* seleccionado.
+	* This object executes the menu commands related to the selected object.
 	*/
 	class ibDialogFormEditorItemPopupMenu : public wxMenu {
 	public:
@@ -90,7 +89,7 @@ protected:
 	};
 
 	/**
-	 * Crea el arbol completamente.
+	 * Builds the tree completely.
 	 */
 	void CreateTree();
 	void RebuildTree() {
@@ -125,10 +124,10 @@ protected:
 
 	void UpdateItem(const wxTreeItemId& id, ibValueFrame* obj) {
 
-		// mostramos el nombre
+		// show the name
 		const wxString& caption = obj->GetControlTitle();
 
-		// actualizamos el item
+		// update the item
 		if (caption.IsEmpty()) {
 			m_treeControl->SetItemText(id, _("<empty caption>"));
 		}

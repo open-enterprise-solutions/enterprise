@@ -101,7 +101,8 @@ bool ibValueForm::ReadData(const ibDataNode& node)
 	m_propertyBG->ReadNodeValue(node.GetProperty(m_propertyBG->GetName()));
 	m_propertyEnabled->ReadNodeValue(node.GetProperty(m_propertyEnabled->GetName()));
 
-	ReadAttributes(node);
+	if (!ReadAttributes(node))
+		return false;
 	return ibValueFrame::ReadData(node);
 }
 
@@ -114,7 +115,8 @@ bool ibValueForm::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyBG->GetName(), m_propertyBG->GetNodeValue());
 	node.SetProperty(m_propertyEnabled->GetName(), m_propertyEnabled->GetNodeValue());
 
-	WriteAttributes(node);
+	if (!WriteAttributes(node))
+		return false;
 	return ibValueFrame::WriteData(node);
 }
 
@@ -139,12 +141,8 @@ ibSourceDataObject* ibValueForm::GetSourceObject() const
 const ibMetaData* ibValueForm::GetMetaData() const
 {
 	const ibSourceDataObject* sourceObject = GetSourceObject();
-
-	if (sourceObject != nullptr) {
-		const ibValueMetaObject* metaObject = sourceObject->GetSourceMetaObject();
-		if (metaObject != nullptr)
-			return metaObject->GetMetaData();
-	}
+	if (sourceObject != nullptr)
+		return sourceObject->GetSourceMetaData();
 
 	return m_metaFormObject != nullptr ?
 		m_metaFormObject->GetMetaData() :

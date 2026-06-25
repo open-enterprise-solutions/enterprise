@@ -237,10 +237,12 @@
     <ClInclude Include="query\queryableHooks.h" />
     <ClInclude Include="composition\dataComposer.h" />
     <ClInclude Include="composition\listFetchDriver.h" />
+    <ClInclude Include="composition\listFilter.h" />
     <ClInclude Include="system\value\valueComposer.h" />
     <ClInclude Include="system\value\valueQuery.h" />
     <ClInclude Include="system\value\valueQueryable.h" />
     <ClInclude Include="metaCollection\partial\list\objectList.h" />
+    <ClInclude Include="metaCollection\partial\list\dynamicList.h" />
     <ClInclude Include="metaCollection\partial\commonObject.h" />
     <ClInclude Include="metaCollection\partial\reference\reference.h" />
     <ClInclude Include="metaCollection\partial\selector\objectSelector.h" />
@@ -270,6 +272,8 @@
     <ClInclude Include="propertyManager\property\propertyEnum.h" />
     <ClInclude Include="propertyManager\property\propertyFont.h" />
     <ClInclude Include="propertyManager\property\propertyForm.h" />
+    <ClInclude Include="propertyManager\property\propertyDynamicList.h" />
+    <ClInclude Include="propertyManager\property\propertyDynamicSource.h" />
     <ClInclude Include="propertyManager\property\propertyGeneration.h" />
     <ClInclude Include="propertyManager\property\propertyModule.h" />
     <ClInclude Include="propertyManager\property\propertyNumber.h" />
@@ -286,6 +290,7 @@
     <ClInclude Include="propertyManager\property\propertySpreadsheet.h" />
     <ClInclude Include="propertyManager\property\propertyType.h" />
     <ClInclude Include="propertyManager\property\variant\variantAction.h" />
+    <ClInclude Include="propertyManager\property\variant\variantDynamicSource.h" />
     <ClInclude Include="propertyManager\property\variant\variantForm.h" />
     <ClInclude Include="propertyManager\property\variant\variantGen.h" />
     <ClInclude Include="propertyManager\property\variant\variantModule.h" />
@@ -592,6 +597,7 @@
     <ClCompile Include="compiler\lambdaQueryAst.cpp" />
     <ClCompile Include="query\queryableFactory.cpp" />
     <ClCompile Include="composition\dataComposer.cpp" />
+    <ClCompile Include="composition\listFilter.cpp" />
     <ClCompile Include="system\value\valueComposer.cpp" />
     <ClCompile Include="system\value\valueQuery.cpp" />
     <ClCompile Include="system\value\valueQueryable.cpp" />
@@ -605,6 +611,7 @@
     <ClCompile Include="query\structureBuilder.cpp" />
     <ClCompile Include="query\tempTableManager.cpp" />
     <ClCompile Include="metaCollection\partial\list\objectList.cpp" />
+    <ClCompile Include="metaCollection\partial\list\dynamicList.cpp" />
     <ClCompile Include="metaCollection\partial\list\objectListAction.cpp" />
     <ClCompile Include="metaCollection\partial\list\objectListModel.cpp" />
     <ClCompile Include="metaCollection\partial\list\objectListQuery.cpp" />
@@ -654,6 +661,8 @@
     <ClCompile Include="propertyManager\property\propertyEnum.cpp" />
     <ClCompile Include="propertyManager\property\propertyFont.cpp" />
     <ClCompile Include="propertyManager\property\propertyForm.cpp" />
+    <ClCompile Include="propertyManager\property\propertyDynamicList.cpp" />
+    <ClCompile Include="propertyManager\property\propertyDynamicSource.cpp" />
     <ClCompile Include="propertyManager\property\propertyGeneration.cpp" />
     <ClCompile Include="propertyManager\property\propertyModule.cpp" />
     <ClCompile Include="propertyManager\property\propertyNumber.cpp" />
@@ -672,6 +681,7 @@
     <ClCompile Include="propertyManager\property\propertySpreadsheet.cpp" />
     <ClCompile Include="propertyManager\property\propertyType.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantAction.cpp" />
+    <ClCompile Include="propertyManager\property\variant\variantDynamicSource.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantForm.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantGen.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantModule.cpp" />

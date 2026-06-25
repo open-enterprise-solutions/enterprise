@@ -15,6 +15,7 @@
 // and a transient (data-processor / report) parent simply never queries it.
 const ibBackendQueryColumn* ibTabularQueryable::ResolveColumnByName(const wxString& name) const { return m_meta->FindAnyAttributeObjectByFilter(name); }
 wxString ibTabularQueryable::GetQueryTableName() const { return m_meta->GetPhysicalTableName(); }
+ibGuid ibTabularQueryable::GetQueryTableGuid() const { return m_meta->GetGuid(); }
 wxString ibTabularQueryable::GetQueryName()      const { return m_meta->GetName(); }
 ibMetaID ibTabularQueryable::GetQueryTableId() const { return m_meta->GetMetaID(); }
 const ibMetaData* ibTabularQueryable::GetMetaData() const { return m_meta->GetMetaData(); }
@@ -70,7 +71,7 @@ bool ibValueTabularSectionDataObjectRef::SaveData()
 	if (m_readOnly)
 		return true;
 
-	
+
 
 	bool hasError = false;
 	//check fill attributes
@@ -104,7 +105,7 @@ bool ibValueTabularSectionDataObjectRef::SaveData()
 	for (long row = 0; row < GetRowCount() && !hasError; row++) {
 		ibDataQueryBuilder q;
 		q.From(m_metaTable->GetQueryable())
-		 .SetValue(ibRawDBColumn::String(wxT("uuid")), ibValue(m_objectValue->GetGuid()));
+			.SetValue(ibRawDBColumn::String(wxT("uuid")), ibValue(m_objectValue->GetGuid()));
 		for (const auto object : m_metaTable->GetGenericAttributeArrayObject()) {
 			if (!m_metaTable->IsNumberLine(object->GetMetaID())) {
 				ibValueTableRow* node = GetViewData<ibValueTableRow>(GetItem(row));

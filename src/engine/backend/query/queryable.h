@@ -56,7 +56,7 @@ enum class ibQueryFilterOp { Like, Less, LessEqual, Greater, GreaterEqual };
 
 struct ibQueryCondition
 {
-	const ibBackendQueryColumn* m_col        = nullptr;   // null = the row-key column; with m_path = the path LEAF
+	const ibBackendQueryColumn* m_col = nullptr;   // null = the row-key column; with m_path = the path LEAF
 	ibComparisonType            m_comparison = ibComparisonType::ibComparisonType_Equal;
 	ibValue                     m_value;
 
@@ -64,7 +64,7 @@ struct ibQueryCondition
 	// m_comparison is ignored. Filled by WhereLike / WhereCompare; the plain
 	// Where(col, comparison, value) path leaves it false (Eq / Ne).
 	bool            m_explicitOp = false;
-	ibQueryFilterOp m_op         = ibQueryFilterOp::Like;
+	ibQueryFilterOp m_op = ibQueryFilterOp::Like;
 
 	// Reference DOT-WALK: when non-empty, this condition filters the LEAF attribute of a reference
 	// path (Producer.Region -> {Producer, Region}). Every non-leaf segment is a single-target
@@ -84,7 +84,7 @@ struct ibQueryCondition
 // reference dot-walk path (== m_col), joined like a dot-walk filter / projection.
 struct ibQuerySortItem
 {
-	const ibBackendQueryColumn* m_col       = nullptr;   // null = row-key (reference/PK) sort; with m_path = the path LEAF
+	const ibBackendQueryColumn* m_col = nullptr;   // null = row-key (reference/PK) sort; with m_path = the path LEAF
 	bool                        m_ascending = true;
 	std::vector<const ibBackendQueryColumn*> m_path;     // reference dot-walk path (empty = plain column)
 };
@@ -106,7 +106,7 @@ struct ibQueryPredicate
 	ibQueryPredicateKind m_kind = ibQueryPredicateKind::Leaf;
 
 	ibQueryCondition            m_leaf;                 // Leaf — one col / op / value (Eq/Ne/ordered/LIKE)
-	const ibBackendQueryColumn* m_col     = nullptr;    // IsNull — the column (the path LEAF when m_path set)
+	const ibBackendQueryColumn* m_col = nullptr;    // IsNull — the column (the path LEAF when m_path set)
 	bool                        m_negated = false;      // IsNull — IS NOT NULL
 	std::vector<const ibBackendQueryColumn*> m_path;    // IsNull — reference dot-walk path (empty = plain column)
 
@@ -125,7 +125,7 @@ struct ibQueryPredicate
 		p->m_kind = ibQueryPredicateKind::Not; p->m_children = { a }; return p;
 	}
 	static ibQueryPredicatePtr Null(const ibBackendQueryColumn* col, bool negated,
-	                                const std::vector<const ibBackendQueryColumn*>& path = {}) {
+		const std::vector<const ibBackendQueryColumn*>& path = {}) {
 		auto p = std::make_shared<ibQueryPredicate>();
 		p->m_kind = ibQueryPredicateKind::IsNull; p->m_col = col; p->m_negated = negated;
 		if (path.size() > 1) p->m_path = path;
@@ -141,7 +141,7 @@ struct ibQueryPredicate
 // door stays L2-blind. WHEN conditions reuse the ibQueryPredicate tree. (docs §23 — computed columns.)
 // ==========================================================================
 enum class ibQueryColumnExprKind { Column, Const, Arith, Case };
-enum class ibQueryColumnArithOp  { Add, Sub, Mul, Div, Mod };
+enum class ibQueryColumnArithOp { Add, Sub, Mul, Div, Mod };
 
 struct ibQueryColumnExpr;
 using ibQueryColumnExprPtr = std::shared_ptr<ibQueryColumnExpr>;
@@ -186,6 +186,7 @@ struct ibQueryColumnSelect
 class BACKEND_API ibBackendQueryable
 {
 public:
+
 	virtual ~ibBackendQueryable() = default;
 
 	// --- the queryable VENDS its provider ('the table generates its engine') ----
@@ -243,10 +244,13 @@ public:
 	// --- physical layout -------------------------------------------------
 	// The real backing table for the main row scan.
 	virtual wxString GetQueryTableName() const = 0;
+	virtual ibGuid GetQueryTableGuid() const = 0;
+
 	// The USER-facing name (as in the metadata tree, e.g. "Enumeration3") — for the restructure change
 	// ledger, NOT for SQL. A metaobject-backed source returns its metaobject's name; the default is the
 	// physical table name (a temp / computed source has no friendlier name).
 	virtual wxString GetQueryName() const { return GetQueryTableName(); }
+
 	// This queryable's metaID — the parent-reference blob (tree filter) needs it.
 	virtual ibMetaID GetQueryTableId() const = 0;
 	// The metadata context the DB provider needs to reconstruct a column's value WITHOUT the
@@ -255,6 +259,7 @@ public:
 	// returns its own metadata; a temp / subquery / computed source has none (column-based reads
 	// over them are raw / primitive, no reference reconstruction). (docs/query-language-arc.md §22.4b)
 	virtual const ibMetaData* GetMetaData() const { return nullptr; }
+
 	// --- row identity / keyset tail --------------------------------------
 	// Identity columns that give a cursor a TOTAL order; L3 appends them after
 	// the user sort. The LAST one is unique. ALL real columns now — no null sentinel:
@@ -281,7 +286,7 @@ public:
 	virtual std::vector<const ibBackendQueryable*> ResolveReferenceTargets(const ibBackendQueryColumn* refColumn) const {
 		const ibBackendQueryable* one = ResolveReferenceTarget(refColumn);
 		return one != nullptr ? std::vector<const ibBackendQueryable*>{ one }
-		                      : std::vector<const ibBackendQueryable*>{};
+		: std::vector<const ibBackendQueryable*>{};
 	}
 
 	// The PARENT-reference column of a hierarchical record source (the parent attribute) — paired with
@@ -317,6 +322,7 @@ public:
 	// further door conditions to compose on top (post-filter); empty for now.
 	// Default: physical. (docs/query-language-arc.md §22.4d, §22.6 — RAM-set.)
 	virtual bool IsComputedInRam() const { return false; }
+	
 	// Produces the computed rows as L3's OWN table (ibQueryRamTable) — NOT a runtime
 	// ibValueModelTable. The register's Compute* builds it directly; a runtime-sourced temp
 	// table converts its model into one at this boundary. (docs/query-language-arc.md §22.6)
@@ -335,7 +341,18 @@ class BACKEND_API ibBackendQueryableHolder
 {
 public:
 	virtual ~ibBackendQueryableHolder() = default;
+	// The MAIN TABLE — the source the dynamic list builds on (composer.FromSource,
+	// columns / identity / parent all come from it; family-blind, register ≡ ref).
 	virtual const ibBackendQueryable* GetQueryable() const = 0;
+
+	// --- dynamic-list source configuration (the "Запрос" surface). A plain holder
+	// is a fixed main-table source; a custom-query holder overrides these.
+	//   UseCustomQuery → read from QueryText instead of the main table directly.
+	//   KeyFields      → the keyset columns when the query has no natural PK
+	//                    (empty = Auto: derive from the main table's GetPrimaryKeyColumns).
+	virtual bool UseCustomQuery() const { return false; }
+	virtual wxString GetQueryText() const { return wxEmptyString; }
+	virtual std::vector<wxString> GetKeyFields() const { return {}; }
 };
 
 // ==========================================================================
@@ -379,8 +396,10 @@ public:
 	bool IsComputedInRam() const override { return true; }
 	ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override;   // out-of-line — runs the inner query
 
-	// trivial L3 surface for a non-metaobject (derived) source
+	// trivial L3 surface for a non-metaobject (derived) source — no metadata, so no
+	// metadata guid (matches the RAM temp-table queryable).
 	wxString GetQueryTableName() const override { return wxEmptyString; }
+	ibGuid   GetQueryTableGuid() const override { return wxNullGuid; }
 	ibMetaID GetQueryTableId()    const override { return 0; }
 	std::vector<ibQuerySortItem> GetIdentitySort() const override { return {}; }
 
@@ -391,7 +410,7 @@ private:
 	// unique model ids), the mode flag, and the optional row limit (SELECT TOP n in the branch).
 	std::vector<std::shared_ptr<ibBackendQueryColumn>> m_ownedColumns;
 	bool m_aggregate = false;
-	long m_top       = 0;
+	long m_top = 0;
 };
 
 // ibBackendQueryColumn — the column counterpart, lives in queryColumn.h (included
@@ -429,6 +448,7 @@ public:
 	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override { return m_reg->GetQueryable()->ResolveColumnByName(name); }
 	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_reg->GetQueryable()->GetColumns(); }
 	virtual wxString GetQueryTableName() const override { return m_reg->GetQueryable()->GetQueryTableName(); }
+	virtual ibGuid GetQueryTableGuid() const override { return m_reg->GetQueryable()->GetQueryTableGuid(); }
 	virtual wxString GetQueryName()       const override { return m_reg->GetQueryable()->GetQueryName(); }
 	virtual ibMetaID GetQueryTableId()    const override { return m_reg->GetQueryable()->GetQueryTableId(); }
 	virtual const ibMetaData* GetMetaData() const override { return m_reg->GetQueryable()->GetMetaData(); }

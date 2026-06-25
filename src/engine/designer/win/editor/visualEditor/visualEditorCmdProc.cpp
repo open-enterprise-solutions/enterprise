@@ -10,14 +10,18 @@
 
 #include "backend/propertyManager/propertyManager.h"
 
+#include "frontend/visualView/ctrl/formAttribute.h"   // ibFormAttributeValue (form attribute add command)
+
 void ibVisualEditorNotebook::ibVisualEditor::Execute(ibVisualEditorCmd* cmd)
 {
-	if (m_cmdProc != nullptr) m_cmdProc->Execute(cmd);
+	if (m_cmdProc != nullptr)
+		m_cmdProc->Execute(cmd);
+
 	NotifyEditorSaved();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// Comandos
+// Commands
 ///////////////////////////////////////////////////////////////////////////////
 
 /** Command for expanding an object in the object tree */
@@ -39,7 +43,7 @@ private:
 };
 
 /**
-* Comando para insertar un objeto en el arbol.
+* Command for inserting an object into the tree.
 */
 
 class ibVisualEditorInsertObjectCmd :
@@ -66,7 +70,7 @@ private:
 };
 
 /**
-* Comando para borrar un objeto.
+* Command for deleting an object.
 */
 
 class ibVisualEditorRemoveObjectCmd :
@@ -97,7 +101,7 @@ private:
 };
 
 /**
-* Comando para modificar una propiedad.
+* Command for modifying a property.
 */
 
 class ibVisualEditorModifyPropertyCmd :
@@ -107,7 +111,7 @@ public:
 	ibVisualEditorModifyPropertyCmd(ibVisualEditorNotebook::ibVisualEditor* visualEditor, ibProperty* prop, const wxVariant& oldValue, const wxVariant& newValue);
 
 protected:
-	
+
 	virtual void DoExecute() override;
 	virtual void DoRestore() override;
 
@@ -128,7 +132,7 @@ public:
 	ibVisualEditorModifyEventCmd(ibVisualEditorNotebook::ibVisualEditor* visualEditor, ibEvent* event, const wxVariant& oldValue, const wxVariant& newValue);
 
 protected:
-	
+
 	virtual void DoExecute() override;
 	virtual void DoRestore() override;
 
@@ -140,10 +144,10 @@ private:
 };
 
 /**
-* Comando para mover de posicion un objeto.
+* Command for moving an object to another position.
 */
 
-class ibVisualEditorShiftChildCmd : 
+class ibVisualEditorShiftChildCmd :
 	public ibVisualEditorCmd
 {
 public:
@@ -151,7 +155,7 @@ public:
 	ibVisualEditorShiftChildCmd(ibVisualEditorNotebook::ibVisualEditor* visualEditor, ibValueFrame* object, int pos);
 
 protected:
-	
+
 	virtual void DoExecute() override;
 	virtual void DoRestore() override;
 
@@ -163,8 +167,8 @@ private:
 };
 
 /**
-* ibVisualEditorCutObjectCmd ademas de eliminar el objeto del arbol se asegura
-* de eliminar la referencia "clipboard" deshacer el cambio.
+* ibVisualEditorCutObjectCmd, besides removing the object from the tree, makes sure
+* to clear the "clipboard" reference when the change is undone.
 */
 
 class ibVisualEditorCutObjectCmd :
@@ -188,7 +192,7 @@ private:
 
 	ibVisualEditorNotebook::ibVisualEditor* m_visualEditor;
 
-	// necesario para consultar/modificar el objeto "clipboard"
+	// needed to query/modify the "clipboard" object
 	ibValueFrame* m_parent = nullptr;
 	ibValuePtr<ibValueFrame> m_object; // owns the in-flight control (RAII +1/-1)
 	int m_oldPos;
@@ -197,8 +201,58 @@ private:
 	bool m_needEvent;
 };
 
+/**
+* Command for inserting an attribute into the form. The attribute is created DETACHED
+* (ibValueForm::MakeAttribute); the command attaches it to the form on execute / redo
+* and detaches it (reclaiming the property) on undo, so the exact entry the user
+* configured survives in the undo stack.
+*/
+
+class ibVisualEditorInsertAttributeCmd :
+	public ibVisualEditorCmd {
+public:
+
+	ibVisualEditorInsertAttributeCmd(ibVisualEditorNotebook::ibVisualEditor* visualEditor, ibValueForm* form, ibValuePtr<ibFormAttributeValue> holder);
+
+protected:
+
+	virtual void DoExecute() override;
+	virtual void DoRestore() override;
+
+private:
+	ibVisualEditorNotebook::ibVisualEditor* m_visualEditor;
+
+	ibValueForm* m_form;
+	ibFormAttributeValue* m_entry = nullptr;            // valid while attached to the form
+	ibValuePtr<ibFormAttributeValue> m_detached;        // owns it while detached (undone)
+};
+
+/**
+* Command to remove a form attribute. Mirror of the insert command: on execute it detaches
+* the attribute (keeping it for redo); on undo it re-attaches it.
+*/
+
+class ibVisualEditorRemoveAttributeCmd :
+	public ibVisualEditorCmd {
+public:
+
+	ibVisualEditorRemoveAttributeCmd(ibVisualEditorNotebook::ibVisualEditor* visualEditor, ibValueForm* form, ibFormAttributeValue* entry);
+
+protected:
+
+	virtual void DoExecute() override;
+	virtual void DoRestore() override;
+
+private:
+	ibVisualEditorNotebook::ibVisualEditor* m_visualEditor;
+
+	ibValueForm* m_form;
+	ibFormAttributeValue* m_entry = nullptr;            // valid while attached to the form
+	ibValuePtr<ibFormAttributeValue> m_detached;        // owns it while detached (removed)
+};
+
 ///////////////////////////////////////////////////////////////////////////////
-// Implementacion de los Comandos
+// Command implementations
 ///////////////////////////////////////////////////////////////////////////////
 
 ibVisualEditorExpandObjectCmd::ibVisualEditorExpandObjectCmd(ibVisualEditorNotebook::ibVisualEditor* visualEditor, ibValueFrame* object, bool expand) : m_visualEditor(visualEditor),
@@ -424,7 +478,7 @@ void ibVisualEditorRemoveObjectCmd::DoRestore()
 
 	GenerateId();
 
-	// restauramos la posicion
+	// restore the position
 	m_parent->ChangeChildPosition(m_object, m_oldPos);
 	m_visualEditor->SelectObject(m_oldSelected, true, false);
 
@@ -450,17 +504,24 @@ void ibVisualEditorModifyPropertyCmd::DoExecute()
 	ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost* visualEditor = m_visualEditor->GetVisualEditor();
 
 	// Get the ibValueFrame from the event
-	ibValueFrame* control = dynamic_cast<ibValueFrame*>(m_property->GetPropertyObject());
-	wxASSERT(control);
+	ibValueFrame* control =
+		dynamic_cast<ibValueFrame*>(m_property->GetPropertyObject());
 
 	m_property->SetValue(m_newValue);
 	m_visualEditor->Modify(true);
 
-	if (g_controlFormCLSID == control->GetClassType()) {
-		visualEditor->UpdateVisualHost();
+	if (control != nullptr) {
+		if (g_controlFormCLSID == control->GetClassType()) {
+			visualEditor->UpdateVisualHost();
+		}
+		else {
+			visualEditor->UpdateControl(control);
+		}
 	}
 	else {
-		visualEditor->UpdateControl(control);
+		// Non-control owner (a form ATTRIBUTE / its held value): rebuild the WHOLE editor — its
+		// RefreshEditor fans out NotifyEditorRefresh, which re-reads the attribute tree too.
+		m_visualEditor->RefreshEditor();
 	}
 }
 
@@ -469,20 +530,24 @@ void ibVisualEditorModifyPropertyCmd::DoRestore()
 	ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost* visualEditor = m_visualEditor->GetVisualEditor();
 
 	// Get the ibValueFrame from the event
-	ibValueFrame* control = dynamic_cast<ibValueFrame*>(m_property->GetPropertyObject());
-	wxASSERT(control);
+	ibValueFrame* control =
+		dynamic_cast<ibValueFrame*>(m_property->GetPropertyObject());
 
 	m_property->SetValue(m_oldValue);
 
-	if (g_controlFormCLSID == control->GetClassType()) {
-		visualEditor->UpdateVisualHost();
+	if (control != nullptr) {
+		if (g_controlFormCLSID == control->GetClassType()) {
+			visualEditor->UpdateVisualHost();
+		}
+		else {
+			visualEditor->UpdateControl(control);
+		}
 	}
 	else {
-		visualEditor->UpdateControl(control);
+		m_visualEditor->RefreshEditor();   // attribute owner — rebuild the whole editor (attr tree included)
 	}
 
 	m_visualEditor->Modify(true);
-
 	objectInspector->SelectObject(control);
 }
 
@@ -498,17 +563,22 @@ void ibVisualEditorModifyEventCmd::DoExecute()
 	ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost* visualEditor = m_visualEditor->GetVisualEditor();
 
 	// Get the ibValueFrame from the event
-	ibValueFrame* control = dynamic_cast<ibValueFrame*>(m_event->GetPropertyObject());
-	wxASSERT(control);
+	ibValueFrame* control =
+		dynamic_cast<ibValueFrame*>(m_event->GetPropertyObject());
 
 	m_event->SetValue(m_newValue);
 	m_visualEditor->Modify(true);
 
-	if (g_controlFormCLSID == control->GetClassType()) {
-		visualEditor->UpdateVisualHost();
+	if (control != nullptr) {
+		if (g_controlFormCLSID == control->GetClassType()) {
+			visualEditor->UpdateVisualHost();
+		}
+		else {
+			visualEditor->UpdateControl(control);
+		}
 	}
 	else {
-		visualEditor->UpdateControl(control);
+		visualEditor->UpdateVisualHost();
 	}
 }
 
@@ -517,17 +587,22 @@ void ibVisualEditorModifyEventCmd::DoRestore()
 	ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost* visualEditor = m_visualEditor->GetVisualEditor();
 
 	// Get the ibValueFrame from the event
-	ibValueFrame* control = dynamic_cast<ibValueFrame*>(m_event->GetPropertyObject());
-	wxASSERT(control);
+	ibValueFrame* control =
+		dynamic_cast<ibValueFrame*>(m_event->GetPropertyObject());
 
 	m_event->SetValue(m_oldValue);
 	m_visualEditor->Modify(true);
 
-	if (g_controlFormCLSID == control->GetClassType()) {
-		visualEditor->UpdateVisualHost();
+	if (control != nullptr) {
+		if (g_controlFormCLSID == control->GetClassType()) {
+			visualEditor->UpdateVisualHost();
+		}
+		else {
+			visualEditor->UpdateControl(control);
+		}
 	}
 	else {
-		visualEditor->UpdateControl(control);
+		visualEditor->UpdateVisualHost();
 	}
 }
 
@@ -673,7 +748,7 @@ void ibVisualEditorCutObjectCmd::DoRestore()
 {
 	m_visualEditor->Modify(true);
 
-	// reubicamos el objeto donde estaba
+	// move the object back to where it was
 	m_parent->AddChild(m_object);
 	m_object->SetParent(m_parent);
 
@@ -691,7 +766,7 @@ void ibVisualEditorCutObjectCmd::DoRestore()
 	//change child position
 	m_parent->ChangeChildPosition(m_object, m_oldPos);
 
-	// restauramos el clipboard
+	// restore the clipboard
 	//m_visualEditor->SetClipboardObject(nullptr);
 	m_visualEditor->SelectObject(m_oldSelected, true, false);
 
@@ -700,6 +775,65 @@ void ibVisualEditorCutObjectCmd::DoRestore()
 		m_visualEditor->GetVisualEditor();
 
 	visualEditor->CreateControl(m_object, m_parent);
+}
+
+//-----------------------------------------------------------------------------
+
+ibVisualEditorInsertAttributeCmd::ibVisualEditorInsertAttributeCmd(ibVisualEditorNotebook::ibVisualEditor* visualEditor, ibValueForm* form, ibValuePtr<ibFormAttributeValue> holder) : m_visualEditor(visualEditor),
+m_form(form), m_detached(std::move(holder))
+{
+}
+
+void ibVisualEditorInsertAttributeCmd::DoExecute()
+{
+	m_visualEditor->Modify(true);
+
+	//attach the held entry to the form (execute + redo)
+	m_entry = m_form->AttachAttribute(std::move(m_detached));
+
+	m_visualEditor->RefreshEditor();
+	if (m_entry != nullptr)
+		objectInspector->SelectObject(m_entry, true);
+}
+
+void ibVisualEditorInsertAttributeCmd::DoRestore()
+{
+	m_visualEditor->Modify(true);
+
+	//detach, taking ownership back so redo re-attaches the same entry
+	m_detached = m_form->DetachAttribute(m_entry);
+	m_entry = nullptr;
+
+	m_visualEditor->RefreshEditor();
+}
+
+//-----------------------------------------------------------------------------
+
+ibVisualEditorRemoveAttributeCmd::ibVisualEditorRemoveAttributeCmd(ibVisualEditorNotebook::ibVisualEditor* visualEditor, ibValueForm* form, ibFormAttributeValue* entry) : m_visualEditor(visualEditor),
+m_form(form), m_entry(entry)
+{
+}
+
+void ibVisualEditorRemoveAttributeCmd::DoExecute()
+{
+	m_visualEditor->Modify(true);
+
+	//detach the entry, keeping it alive for redo
+	m_detached = m_form->DetachAttribute(m_entry);
+
+	m_visualEditor->RefreshEditor();
+}
+
+void ibVisualEditorRemoveAttributeCmd::DoRestore()
+{
+	m_visualEditor->Modify(true);
+
+	//re-attach the same entry on undo
+	m_entry = m_form->AttachAttribute(std::move(m_detached));
+
+	m_visualEditor->RefreshEditor();
+	if (m_entry != nullptr)
+		objectInspector->SelectObject(m_entry, true);
 }
 
 //-----------------------------------------------------------------------------
@@ -718,13 +852,13 @@ ibValueFrame* ibVisualEditorNotebook::ibVisualEditor::CreateObject(const wxStrin
 		{
 			bool created = false;
 
-			// Para que sea mas practico, si el objeto no se puede crear debajo
-			// del objeto seleccionado vamos a intentarlo en el padre del seleccionado
-			// y seguiremos subiendo hasta que ya no podamos crear el objeto.
+			// For convenience: if the object cannot be created under the selected object,
+			// try the selected object's parent, and keep walking up until we either
+			// create the object or run out of parents.
 
 			while (parent && !created)
 			{
-				// ademas, el objeto se insertara a continuacion del objeto seleccionado
+				// the object is inserted right after the selected object
 				obj = m_valueForm->CreateObject(_STDSTR(name), parent);
 
 				if (obj)
@@ -736,8 +870,7 @@ ibValueFrame* ibVisualEditorNotebook::ibVisualEditor::CreateObject(const wxStrin
 				}
 				else
 				{
-					// lo vamos a seguir intentando con el padre, pero cuidado, el padre
-					// no puede ser un item!
+					// keep trying with the parent — but careful, the parent cannot be an item!
 					parent = parent->GetParent();
 
 					while (parent && parent->GetComponentType() == COMPONENT_TYPE_SIZERITEM)
@@ -746,8 +879,8 @@ ibValueFrame* ibVisualEditorNotebook::ibVisualEditor::CreateObject(const wxStrin
 			}
 		}
 
-		// Seleccionamos el objeto, si este es un item entonces se selecciona
-		// el objeto contenido. ?Tiene sentido tener un item debajo de un item?
+		// Select the object; if it is an item, select the object it contains.
+		// (Does it ever make sense to have an item under an item?)
 		while (obj && obj->GetComponentType() == COMPONENT_TYPE_SIZERITEM)
 			obj = (obj->GetChildCount() > 0 ? obj->GetChild(0) : nullptr);
 
@@ -800,9 +933,8 @@ bool ibVisualEditorNotebook::ibVisualEditor::PasteObject(ibValueFrame* dstObject
 
 	try {
 
-		// si no se ha podido crear el objeto vamos a intentar crearlo colgado
-		// del padre de "parent" y ademas vamos a insertarlo en la posicion
-		// siguiente a "parent"
+		// if the object could not be created, hang it off "parent"'s parent
+		// and insert it at the position right after "parent"
 		ibValueFrame* objParent =
 			dstObject != nullptr && dstObject->GetComponentType() == COMPONENT_TYPE_SIZERITEM ? dstObject->GetParent() : dstObject;
 
@@ -823,9 +955,8 @@ bool ibVisualEditorNotebook::ibVisualEditor::PasteObject(ibValueFrame* dstObject
 			clipboard->SetParent(nullptr);
 		}
 
-		// si no se ha podido crear el objeto vamos a intentar crearlo colgado
-		// del padre de "parent" y ademas vamos a insertarlo en la posicion
-		// siguiente a "parent"
+		// if the object could not be created, hang it off "parent"'s parent
+		// and insert it at the position right after "parent"
 		ibValueFrame* parentObject = dstObject;
 		if (parentObject->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
 			parentObject = parentObject->GetParent();
@@ -872,7 +1003,7 @@ bool ibVisualEditorNotebook::ibVisualEditor::PasteObject(ibValueFrame* dstObject
 		int pos = CalcPositionOfInsertion(dstObject, parentObject);
 
 		if (aux && aux != obj) {
-			// sustituimos aux por clipboard
+			// replace aux with clipboard
 			ibValueFrame* auxParent = aux->GetParent();
 			auxParent->RemoveChild(aux);
 			aux->SetParent(nullptr);
@@ -884,13 +1015,12 @@ bool ibVisualEditorNotebook::ibVisualEditor::PasteObject(ibValueFrame* dstObject
 			obj = clipboard;
 		}
 
-		// y finalmente insertamos en el arbol
+		// and finally insert into the tree
 		Execute(new ibVisualEditorInsertObjectCmd(this, obj, parentObject, pos));
 		NotifyObjectCreated(obj);
 
-		// vamos a mantener seleccionado el nuevo objeto creado
-		// pero hay que tener en cuenta que es muy probable que el objeto creado
-		// sea un "item"
+		// keep the newly created object selected — but note it is very likely the
+		// created object is an "item"
 		while (obj && obj->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
 			assert(obj->GetChildCount() > 0);
 			obj = obj->GetChild(0);
@@ -963,8 +1093,8 @@ void ibVisualEditorNotebook::ibVisualEditor::MovePosition(ibValueFrame* obj, boo
 	ibValueFrame* parent = obj->GetParent();
 
 	if (parent != nullptr) {
-		// Si el objeto está incluido dentro de un item hay que desplazar
-		// el item
+		// If the object is contained within an item, the item must be
+		// shifted
 
 		while (parent && parent->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
 			obj = parent;
@@ -973,7 +1103,7 @@ void ibVisualEditorNotebook::ibVisualEditor::MovePosition(ibValueFrame* obj, boo
 
 		unsigned int pos = parent->GetChildPosition(obj);
 
-		// nos aseguramos de que los límites son correctos
+		// make sure the bounds are correct
 		unsigned int children_count = parent->GetChildCount();
 
 		if ((right && num + pos < children_count) ||
@@ -1009,6 +1139,21 @@ void ibVisualEditorNotebook::ibVisualEditor::ModifyEvent(ibEvent* evt, const wxV
 		Execute(new ibVisualEditorModifyEventCmd(this, evt, oldValue, newValue));
 		NotifyEventModified(evt);
 	}
+}
+
+//Attributes
+void ibVisualEditorNotebook::ibVisualEditor::InsertAttribute(ibValuePtr<ibFormAttributeValue> holder)
+{
+	ibValueForm* form = GetValueForm();
+	if (form != nullptr && holder != nullptr)
+		Execute(new ibVisualEditorInsertAttributeCmd(this, form, std::move(holder)));
+}
+
+void ibVisualEditorNotebook::ibVisualEditor::RemoveAttribute(ibFormAttributeValue* entry)
+{
+	ibValueForm* form = GetValueForm();
+	if (form != nullptr && entry != nullptr)
+		Execute(new ibVisualEditorRemoveAttributeCmd(this, form, entry));
 }
 
 /////////////////////////////////////////////////////////////////////////////////////

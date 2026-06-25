@@ -18,6 +18,7 @@ public:
 	explicit ibTabularQueryable(const ibValueMetaObjectTableDataRef* meta) : m_meta(meta) {}
 	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override;   // attribute-by-name AS a column
 	virtual wxString GetQueryTableName() const override;
+	virtual ibGuid GetQueryTableGuid() const override;
 	virtual wxString GetQueryName() const override;   // the section's user-facing name (change ledger)
 	virtual ibMetaID GetQueryTableId() const override;
 	virtual const ibMetaData* GetMetaData() const override;                  // metadata context for column-based value reads
@@ -161,7 +162,7 @@ protected:
 
 
 	virtual bool ReadData(const ibDataNode& node) override;
-	virtual bool WriteData(ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
 
 private:
 

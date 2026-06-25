@@ -8,8 +8,13 @@
 #include "backend/metaCollection/partial/commonObject.h"   // ibSourceDataObject
 #include "backend/serialize/dataBuilder.h"
 #include "backend/system/value/valueType.h"                 // ibValueTypeDescription::AdjustValue
+#include "backend/composition/listFilter.h"                 // ibValueListSettings (list settings form)
+#include "backend/tableInfo.h"                               // ibValueModel (table-source check)
+#include "backend/typeDescription.h"                          // ibTypeDescription::GetFirstClsid (value materialise)
 #include "backend/metaData.h"                                // GetTypeCtor
 #include "backend/objCtor.h"                                 // ibCtorMetaValueType / ibCtorObjectMetaType
+#include "backend/appData.h"                                 // ibApplicationData::GetActiveMetaData (metadata fallback)
+#include "backend/metadataConfiguration.h"                   // ibMetaDataConfigurationBase : ibMetaData (upcast)
 #include "backend/clsid.h"
 #include "backend/backend_core.h"                            // oes_clipboard_attribute
 #include "backend/fileSystem/fs.h"                           // ibWriterMemory / ibReaderMemory (clipboard serialize)
@@ -23,7 +28,7 @@
 //*   ibValueForm attribute store / path resolve (relocated here from form.cpp)              *
 //*********************************************************************************************
 
-void ibValueForm::ReadAttributes(const ibDataNode& node)
+bool ibValueForm::ReadAttributes(const ibDataNode& node)
 {
 	// The MAIN attribute is NEVER serialized — it is always reconstructed from the form's
 	// source in the ctor (its name List/Object and Type derive from the source; its id is
@@ -32,22 +37,24 @@ void ibValueForm::ReadAttributes(const ibDataNode& node)
 	// entry from an old blob (the ctor's main wins — never a second "Object").
 	for (auto it = m_attributes.begin(); it != m_attributes.end(); ) {
 		if ((*it)->IsMainAttribute()) ++it;
-		else { DropAttributeBinds(it->get()); it = m_attributes.erase(it); }
+		else { DropAttributeBinds(*it); it = m_attributes.erase(it); }
 	}
 
 	if (const ibDataNode* attrsNode = node.FindChild(wxT("Attributes"))) {
 		for (const ibDataNode& attrNode : attrsNode->Children()) {
 			if (attrNode.GetValue<bool>(wxT("Main")))
 				continue;   // the main belongs to the ctor — never load one from the blob
-			ibValueFormAttribute* attr = new ibValueFormAttribute(this);
-			attr->ReadData(attrNode);
-			attr->SetMainAttribute(false);
-			m_attributes.emplace_back(std::make_unique<ibFormAttributeValue>(attr));
+			ibValuePtr<ibFormAttributeValue> holder(new ibFormAttributeValue(this));   // builds its description
+			holder->m_attribute->SetMainAttribute(false);
+			if (!holder->ReadProperty(attrNode))   // facade: reads the attribute + the generated value
+				return false;
+			m_attributes.emplace_back(std::move(holder));
 		}
 	}
+	return true;
 }
 
-void ibValueForm::WriteAttributes(ibDataNode& node) const
+bool ibValueForm::WriteAttributes(ibDataNode& node) const
 {
 	// Persist ONLY the user-added (non-main) attributes. The MAIN is reconstructed from the
 	// source in the ctor, so writing it would just produce a duplicate main on copy / load.
@@ -55,10 +62,14 @@ void ibValueForm::WriteAttributes(ibDataNode& node) const
 	for (const auto& av : m_attributes) {
 		if (av->IsMainAttribute())
 			continue;
-		ibValueFormAttribute* attr = av->GetAttribute();
-		ibDataNode& attrNode = attrsNode.AddChild(attr->GetClassType(), attr->GetAttributeId());
-		attr->WriteData(attrNode);
+		ibDataNode& attrNode = attrsNode.AddChild(av->GetClassType(), av->GetAttributeId());
+		// WriteProperty returns false when the attribute is INCOMPLETE (a dynamic list with no
+		// source picked) — FAIL the whole write so a broken definition is never persisted (the
+		// form's save is refused, not silently partial).
+		if (!av->WriteProperty(attrNode))
+			return false;
 	}
+	return true;
 }
 
 ibMetaID ibValueForm::NextAttributeId() const
@@ -70,13 +81,6 @@ ibMetaID ibValueForm::NextAttributeId() const
 	return nextId;
 }
 
-ibFormAttributeValue* ibValueForm::RegisterAttribute(ibValueFormAttribute* attr)
-{
-	// The wrapper OWNS the attribute; unique_ptr keeps the returned pointer stable across growth.
-	m_attributes.emplace_back(std::make_unique<ibFormAttributeValue>(attr));
-	return m_attributes.back().get();
-}
-
 void ibValueForm::WireAttribute(ibFormAttributeValue* entry)
 {
 	// Designer-time add (module already live) wires the variable immediately so script/editor see
@@ -84,21 +88,53 @@ void ibValueForm::WireAttribute(ibFormAttributeValue* entry)
 	// The member surface (ThisForm.<attr>) is refreshed either way.
 	if (GetCompileModule() != nullptr)
 		BindAttributeVariable(entry);
+
 	InvalidateNames();
 }
 
 ibFormAttributeValue* ibValueForm::AddAttribute(const wxString& name, const ibClassID& type, const ibValue& value)
 {
-	// Name + Type are mandatory — an attribute is never empty.
-	ibValueFormAttribute* attr = new ibValueFormAttribute(this);
-	attr->SetAttributeId(NextAttributeId());
-	attr->SetAttributeName(name);
-	attr->SetDefaultMetaType(type);
+	// Name + Type are mandatory — an attribute is never empty. Make + attach in one step.
+	return AttachAttribute(MakeAttribute(name, type, value));
+}
 
-	ibFormAttributeValue* entry = RegisterAttribute(attr);
-	entry->SetValue(value);
-	WireAttribute(entry);
+ibValuePtr<ibFormAttributeValue> ibValueForm::MakeAttribute(const wxString& name, const ibClassID& type, const ibValue& value)
+{
+	// Build a holder UNOWNED by the form (no registry slot, no module bind yet) — the caller (the
+	// visual-editor InsertAttribute command) decides when to attach it. The holder builds its own
+	// description; we just configure it.
+	ibValuePtr<ibFormAttributeValue> holder(new ibFormAttributeValue(this));
+	holder->m_attribute->SetAttributeName(name);   // friend access to the private description
+	if (type != 0)   // empty → keep the attribute's own default (String); the variant resolves it
+		holder->m_attribute->SetDefaultMetaType(type);
+
+	holder->SetHeldValue(value);
+	holder->Refresh();   // facade accumulates the value's own properties (if it has any)
+	return holder;
+}
+
+ibFormAttributeValue* ibValueForm::AttachAttribute(ibValuePtr<ibFormAttributeValue> holder)
+{
+	if (holder == nullptr)
+		return nullptr;
+	ibFormAttributeValue* entry = holder;
+	m_attributes.emplace_back(std::move(holder));   // form co-owns it (ref-counted)
+	WireAttribute(entry);                            // module bind (if live) + InvalidateNames
 	return entry;
+}
+
+ibValuePtr<ibFormAttributeValue> ibValueForm::DetachAttribute(ibFormAttributeValue* entry)
+{
+	for (auto it = m_attributes.begin(); it != m_attributes.end(); ++it) {
+		if (*it == entry) {
+			DropAttributeBinds(*it);                          // unbind before it leaves the form
+			ibValuePtr<ibFormAttributeValue> holder = std::move(*it);
+			m_attributes.erase(it);
+			InvalidateNames();
+			return holder;                                          // ref handed to the caller (undo stack co-owns)
+		}
+	}
+	return nullptr;
 }
 
 ibFormAttributeValue* ibValueForm::AddMainAttribute(const wxString& name, const ibClassID& type, ibSourceDataObject* value)
@@ -109,23 +145,21 @@ ibFormAttributeValue* ibValueForm::AddMainAttribute(const wxString& name, const 
 	// A form with no creator (auto-built list form) resolves its metadata THROUGH the source object;
 	// SetDefaultMetaType triggers a Type refresh that needs it, so seating the source AFTER it would
 	// be too late → null metadata → crash in DoRefreshTypeDesc.
-	ibValueFormAttribute* attr = new ibValueFormAttribute(this);
-	attr->SetAttributeId(NextAttributeId());
-	attr->SetAttributeName(name);
-	attr->SetMainAttribute(true);
+	ibValuePtr<ibFormAttributeValue> holder(new ibFormAttributeValue(this));   // builds its description
+	holder->m_attribute->SetAttributeName(name);   // friend access to the private description
+	holder->m_attribute->SetMainAttribute(true);
 
-	ibFormAttributeValue* entry = RegisterAttribute(attr);
-	entry->SetSourceValue(value);     // metadata now reachable via GetSourceObject()
-	attr->SetDefaultMetaType(type);   // safe — the Type refresh sees the source's metadata
-	WireAttribute(entry);
-	return entry;
+	holder->SetSourceValue(value);                 // seat the source BEFORE the Type (metadata flows through it)
+	holder->m_attribute->SetDefaultMetaType(type); // safe — the Type refresh sees the source's metadata
+	holder->Refresh();                             // facade accumulates the value's own properties (if any)
+	return AttachAttribute(std::move(holder));     // registers + wires
 }
 
 void ibValueForm::DeleteAttribute(const wxString& name)
 {
 	for (auto it = m_attributes.begin(); it != m_attributes.end(); ++it)
 		if ((*it)->GetAttributeName() == name) {
-			DropAttributeBinds(it->get());
+			DropAttributeBinds(*it);
 			m_attributes.erase(it);
 			InvalidateNames();
 			return;
@@ -135,7 +169,7 @@ void ibValueForm::DeleteAttribute(const wxString& name)
 void ibValueForm::DeleteAttribute(unsigned int idx)
 {
 	if (idx < m_attributes.size()) {
-		DropAttributeBinds(m_attributes[idx].get());
+		DropAttributeBinds(m_attributes[idx]);
 		m_attributes.erase(m_attributes.begin() + idx);
 		InvalidateNames();
 	}
@@ -170,7 +204,7 @@ void ibValueForm::DropAttributeBinds(ibFormAttributeValue* entry)
 bool ibValueForm::IsAttributeNameUnique(const wxString& name, const ibFormAttributeValue* except) const
 {
 	for (const auto& av : m_attributes)
-		if (av.get() != except && av->GetAttributeName() == name)
+		if (av != except && av->GetAttributeName() == name)
 			return false;
 	return true;
 }
@@ -193,29 +227,27 @@ bool ibValueForm::RenameAttribute(ibFormAttributeValue* entry, const wxString& n
 		return false;
 	// Re-bind under the new name: drop the old local (and DataSource if main), rename, re-wire.
 	DropAttributeBinds(entry);
-	entry->GetAttribute()->SetAttributeName(newName);
+	entry->m_attribute->SetAttributeName(newName);
 	WireAttribute(entry);
 	return true;
 }
 
 ibFormAttributeValue* ibValueForm::PasteAttribute(const ibDataNode& node)
 {
-	ibValueFormAttribute* attr = new ibValueFormAttribute(this);
-	attr->ReadData(node);
-	attr->SetMainAttribute(false);   // a paste is never the main — only one main per form
-	attr->SetAttributeId(NextAttributeId());   // fresh id so its bindings never collide
-	attr->SetAttributeName(MakeUniqueAttributeName(attr->GetAttributeName()));
-
-	ibFormAttributeValue* entry = RegisterAttribute(attr);
-	WireAttribute(entry);
-	return entry;
+	ibValuePtr<ibFormAttributeValue> holder(new ibFormAttributeValue(this));   // builds its description
+	auto& attr = *holder->m_attribute;   // friend access to the private description
+	attr.ReadProperty(node);
+	attr.SetMainAttribute(false);   // a paste is never the main — only one main per form
+	attr.SetAttributeId(NextAttributeId());   // fresh id so its bindings never collide
+	attr.SetAttributeName(MakeUniqueAttributeName(attr.GetAttributeName()));
+	return AttachAttribute(std::move(holder));
 }
 
 ibFormAttributeValue* ibValueForm::GetAttribute(const wxString& name) const
 {
 	for (const auto& av : m_attributes)
 		if (av->GetAttributeName() == name)
-			return av.get();
+			return av;
 	return nullptr;
 }
 
@@ -223,14 +255,14 @@ ibFormAttributeValue* ibValueForm::GetAttribute(unsigned int idx) const
 {
 	if (idx >= m_attributes.size())
 		return nullptr;
-	return m_attributes[idx].get();
+	return m_attributes[idx];
 }
 
 ibFormAttributeValue* ibValueForm::GetMainAttribute() const
 {
 	for (const auto& av : m_attributes)
 		if (av->IsMainAttribute())
-			return av.get();
+			return av;
 	return nullptr;
 }
 
@@ -246,8 +278,8 @@ void ibValueForm::SetMainAttribute(ibFormAttributeValue* entry)
 	// Sole-main invariant: entry becomes main; every other loses main AND its source (goes
 	// empty — its controls render nothing until activity returns to it).
 	for (const auto& av : m_attributes) {
-		const bool isMain = (av.get() == entry);
-		av->GetAttribute()->SetMainAttribute(isMain);
+		const bool isMain = (av == entry);
+		av->m_attribute->SetMainAttribute(isMain);
 		if (!isMain)
 			av->SetSourceValue(nullptr);
 	}
@@ -262,11 +294,11 @@ ibFormAttributeValue* ibValueForm::FindAttributeById(const ibMetaID& id) const
 {
 	for (const auto& av : m_attributes)
 		if (av->GetAttributeId() == id)
-			return av.get();
+			return av;
 	return nullptr;
 }
 
-bool ibValueForm::GetSourceList(ibSourceDataType kind, std::vector<ibBackendFormAttribute*>& out) const
+bool ibValueForm::GetSourceList(ibSourceDataType kind, std::vector<ibBackendFormAttributeValue*>& out) const
 {
 	// tableColumn sources from its parent table, not the form's attributes.
 	if (kind == ibSourceDataType::ibSourceDataType_tableColumn)
@@ -279,10 +311,10 @@ bool ibValueForm::GetSourceList(ibSourceDataType kind, std::vector<ibBackendForm
 	// kind is scalar). Auxiliary attributes always match by kind. The binding resolve
 	// walks from the attribute (path[0] = its id, the gate) — see WalkPath.
 	for (const auto& av : m_attributes) {
-		ibValueFormAttribute* a = av->GetAttribute();
-		const bool mainForTable = (kind == ibSourceDataType::ibSourceDataType_table) && a->IsMainAttribute();
-		if (mainForTable || a->GetSourceDataType() == kind)
-			out.push_back(a);   // ibValueFormAttribute IS-A ibBackendFormAttribute (no cast)
+		auto& a = *av->m_attribute;   // friend access to the private description
+		const bool mainForTable = (kind == ibSourceDataType::ibSourceDataType_table) && a.IsMainAttribute();
+		if (mainForTable || a.GetSourceDataType() == kind)
+			out.push_back((ibFormAttributeValue*)av);   // the HOLDER (IS-A ibBackendFormAttributeValue)
 	}
 	return !out.empty();
 }
@@ -335,72 +367,136 @@ bool ibValueForm::SetValueByAttributePath(const std::vector<ibSourceId>& path, c
 //*                                   construction                                          *
 //*********************************************************************************************
 
-ibValueFormAttribute::ibValueFormAttribute(ibValueForm* ownerForm)
-	: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE), m_ownerForm(ownerForm)
+ibFormAttributeValue::ibFormAttribute::ibFormAttribute(ibValueForm* ownerForm)
+	: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true), m_ownerForm(ownerForm), m_attributeId(ownerForm ? ownerForm->NextAttributeId() : 0)   // true = no-register internal value
 {
-	m_members.Bind(this, &ibValueFormAttribute::FillMembers);
+	m_members.Bind(this, &ibFormAttributeValue::ibFormAttribute::FillMembers);
 }
 
-ibValueFormAttribute::~ibValueFormAttribute()
+ibFormAttributeValue::ibFormAttribute::~ibFormAttribute()
 {
 }
 
-const ibMetaData* ibValueFormAttribute::GetMetaData() const
+const ibMetaData* ibFormAttributeValue::ibFormAttribute::GetMetaData() const
 {
-	return m_ownerForm != nullptr ? m_ownerForm->GetMetaData() : nullptr;
-}
-
-//*********************************************************************************************
-//*    value — the attribute stores only a Type; a source is ASSIGNED at runtime (adjusted)  *
-//*********************************************************************************************
-
-void ibValueFormAttribute::OnPropertyChanged(ibProperty* property, const wxVariant& /*oldValue*/, const wxVariant& /*newValue*/)
-{
-	// The attribute holds only its Type; nothing to materialise here. But a Type change can
-	// invalidate the control bindings that walk this attribute (their path leaf type no longer
-	// matches), so refresh the form editor — the broken links then render as empty/invalid
-	// instead of looking connected. Designer-only (no editor on web).
-#ifndef OES_USE_WEB
-	if (property == m_propertyType) {
-		// FindVisualEditor() (g_visualHostContext) is an ibValueFrame member — the attribute is
-		// not a control, so reach the editor by the owner form instead.
-		if (ibFrontendVisualEditorNotebook* editor = ibFrontendVisualEditorNotebook::FindEditorByForm(m_ownerForm))
-			editor->RefreshEditor();
-	}
-#endif
+	const ibMetaData* md = m_ownerForm != nullptr ? m_ownerForm->GetMetaData() : nullptr;
+	// A queryable-based source (a dynamic list) carries NO metaobject and an auto-built form has
+	// no creator → the form yields null; fall back to the ACTIVE configuration metadata so the
+	// Type property still resolves (was a null-deref crash in DoRefreshTypeDesc).
+	return md != nullptr ? md : ibApplicationData::GetActiveMetaData();
 }
 
 //*********************************************************************************************
 //*  value entity — the wrapper holds the value; the attribute only describes its Type        *
 //*********************************************************************************************
 
-ibFormAttributeValue::~ibFormAttributeValue()
+ibFormAttributeValue::ibFormAttributeValue(ibValueForm* ownerForm)
+	: ibValueDynamicMembers(ibValueTypes::TYPE_VALUE), m_attribute(new ibFormAttribute(ownerForm))
 {
-	// Release the held source (paired with the SourceIncrRef in SetSourceValue).
-	if (m_sourceData != nullptr)
-		m_sourceData->SourceDecrRef();
+	// The holder BUILDS and owns its description (the amorphous Name / Type / FillCheck shell): attach
+	// it so those standard properties surface through the holder. The generated value is attached by
+	// Refresh (when it is set, or its Type changes).
+	AttachPropertyObject(m_attribute);
 }
 
-ibSourceDataObject* ibFormAttributeValue::GetSourceValue() const
+ibFormAttributeValue::~ibFormAttributeValue()
 {
-	return m_sourceData;
+	// The source is NOT held separately — it lives in m_value (released with it). Nothing to do.
+}
+
+void ibFormAttributeValue::Refresh()
+{
+	// Sync the value to the CURRENT Type here (the single sync point — the converters stay pure
+	// to avoid the GetMetaData recursion). A stale value (Type changed) becomes empty of the new
+	// type / a fresh instance.
+	m_value = m_attribute->AdjustValue(m_value);
+	// Re-accumulate: the attribute (always) + the held value if it supports properties (a
+	// dynamic list surfaces Source / Settings). Detach first so a Type change drops the old
+	// value's properties.
+	DetachAllPropertyObjects();
+	AttachPropertyObject(m_attribute);
+	if (ibPropertyObject* po = GetValueAsProperty())
+		AttachPropertyObject(po);
+}
+
+void ibFormAttributeValue::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
+{
+	// The holder is what the inspector selects — forward the change to the property's REAL
+	// owner (the hidden attribute, or the held value) so each reacts to its own.
+	ibPropertyObject* owner = property != nullptr ? property->GetPropertyObject() : nullptr;
+	if (owner != nullptr && owner != this)
+		owner->OnPropertyChanged(property, oldValue, newValue);
+
+	// The attribute's Type drives the value's type: re-materialise + re-accumulate, so the
+	// inspector shows the new type's properties.
+	if (owner == static_cast<ibPropertyObject*>(&*m_attribute) && m_attribute->IsTypeProperty(property))
+		Refresh();
+
+#ifndef OES_USE_WEB
+
+	// g_visualHostContext = designer's editor notebook; web has no
+	// designer context, so property changes just update the backing
+	// ibProperty model without notifying a live editor.
+	if (ibFrontendVisualEditorNotebook* editor = ibFrontendVisualEditorNotebook::FindEditorByForm(m_attribute->GetOwnerForm())) {
+		editor->ModifyProperty(property, oldValue, newValue);
+		editor->RefreshEditor();
+	}
+
+#else
+	(void)property; (void)oldValue; (void)newValue;
+#endif
+}
+
+bool ibFormAttributeValue::WriteProperty(ibDataNode& node) const
+{
+	// The facade saves BOTH: the hidden attribute (Name / Type / FillCheck / id) and the value
+	// it generates (its clsid's own data — a dynamic list's Source / Settings). The value's
+	// verdict PROPAGATES: a value that refuses (a dynamic list with no source picked) makes the
+	// whole attribute non-serializable — type-agnostic, the holder asks the value, not "is it a
+	// dynamic list". On false the caller (WriteAttributes → WriteData) FAILS the whole form write.
+	m_attribute->WriteProperty(node);
+	if (ibPropertyObject* po = GetValueAsProperty())
+		return po->WriteProperty(node);
+	return true;
+}
+
+bool ibFormAttributeValue::ReadProperty(const ibDataNode& node)
+{
+	// Attribute FIRST — its Type must be known before the value materialises.
+	m_attribute->ReadProperty(node);
+	Refresh();   // materialises the value of the loaded Type and re-accumulates
+	if (ibPropertyObject* po = GetValueAsProperty())
+		po->ReadProperty(node);   // the value reads its own Source / Settings
+	return true;
+}
+
+ibPropertyObject* ibFormAttributeValue::GetValueAsProperty() const
+{
+	ibPropertyObject* ptr = nullptr;;
+
+	// PURE convert — NO AdjustValue here. GetSourceValue → GetValueAsSource is reached during
+	// metadata resolution (form GetMetaData → GetSourceObject → GetSourceValue), and AdjustValue
+	// needs that metadata → infinite recursion. The value is synced at set / Refresh time.
+	m_value.ConvertToValue<ibPropertyObject>(ptr);
+	return ptr;
+}
+
+ibSourceDataObject* ibFormAttributeValue::GetValueAsSource() const
+{
+	ibSourceDataObject* ptr = nullptr;
+
+	// PURE convert — see GetValueAsProperty: syncing here recurses through GetMetaData.
+	m_value.ConvertToValue<ibSourceDataObject>(ptr);
+	return ptr;
 }
 
 void ibFormAttributeValue::SetSourceValue(ibSourceDataObject* source)
 {
-	if (m_sourceData == source)
-		return;
-	// Refcount the new source BEFORE releasing the old, so a move between attributes
-	// (main switch) never drops the object to zero in between.
-	if (source != nullptr)
-		source->SourceIncrRef();
-	if (m_sourceData != nullptr)
-		m_sourceData->SourceDecrRef();
-	m_sourceData = source;
-	// Seat it into the bound value cell (the source IS an ibValue); nullptr → empty, so the
-	// attribute reads as empty and its controls render nothing until a source is set again.
-	ibValue* srcVal = m_sourceData != nullptr ? dynamic_cast<ibValue*>(m_sourceData) : nullptr;
-	m_value = srcVal != nullptr ? *srcVal : ibValue();
+	// The source is NOT stored separately — it IS the held value. Seat it into the value cell
+	// (the source is an ibValue, kept alive by the value's own refcount); GetValueAsSource
+	// converts it back. nullptr → empty.
+	ibValue* srcVal = source != nullptr ? dynamic_cast<ibValue*>(source) : nullptr;
+	SetHeldValue(srcVal != nullptr ? *srcVal : ibValue());
 }
 
 bool ibFormAttributeValue::IsReferenceValue() const
@@ -452,15 +548,23 @@ bool ibFormAttributeValue::SetValueByPath(const std::vector<ibSourceId>& tail, c
 	return propNum != wxNOT_FOUND && m_value.SetPropVal(propNum, value);
 }
 
-ibSourceDataType ibValueFormAttribute::GetSourceDataType() const
+ibSourceDataType ibFormAttributeValue::ibFormAttribute::GetSourceDataType() const
 {
-	// A list / collection Type → table; everything else (object, reference,
-	// primitive) → attribute. (Column kind is parent-derived, not a form attr.)
-	const ibMetaData* metaData = GetMetaData();
+	// A table-kind Type → table; everything else (object, reference, primitive) → attribute.
+	// (Column kind is parent-derived, not a form attr.) Answered by the class factory's
+	// IsTableValue through the Type's CLSID — the metaobject ctor registry first, then the
+	// global value registry (ibMetaData::GetAvailableCtor's own fallback). One gate covers
+	// both a metatype List and a system-registered ibValueModel (the dynamic list), with no
+	// dynamic_cast and no value materialisation — the same answer ibSourceDataObject::
+	// IsTableSource gives a live source.
 	const ibTypeDescription& typeDesc = GetTypeDesc();
-	if (metaData != nullptr && typeDesc.GetClsidCount() == 1) {
-		const ibCtorMetaValueType* typeCtor = metaData->GetTypeCtor(typeDesc.GetFirstClsid());
-		if (typeCtor != nullptr && typeCtor->GetMetaTypeCtor() == ibCtorObjectMetaType::ibCtorObjectMetaType_List)
+	if (typeDesc.GetClsidCount() == 1) {
+		const ibMetaData* metaData = GetMetaData();
+		const ibClassID clsid = typeDesc.GetFirstClsid();
+		const ibCtorAbstractType* typeCtor = metaData != nullptr
+			? metaData->GetAvailableCtor(clsid)
+			: ibValue::GetAvailableCtor(clsid);
+		if (typeCtor != nullptr && typeCtor->IsTableValue())
 			return ibSourceDataType::ibSourceDataType_table;
 	}
 	return ibSourceDataType::ibSourceDataType_attribute;
@@ -470,14 +574,14 @@ ibSourceDataType ibValueFormAttribute::GetSourceDataType() const
 //*                              runtime member surface                                      *
 //*********************************************************************************************
 
-bool ibValueFormAttribute::FillFillCheck(ibPropertyList* prop)
+bool ibFormAttributeValue::ibFormAttribute::FillFillCheck(ibPropertyList* prop)
 {
 	prop->AppendItem(_("Don't check"), 0, wxBitmap());
 	prop->AppendItem(_("Show error"), 1, wxBitmap());
 	return true;
 }
 
-void ibValueFormAttribute::FillMembers(ibMemberTable& helper) const
+void ibFormAttributeValue::ibFormAttribute::FillMembers(ibMemberTable& helper) const
 {
 	// A simple-type attribute surfaces its own value; an assigned source
 	// surfaces the source's members. Member dispatch is staged with the
@@ -488,52 +592,43 @@ void ibValueFormAttribute::FillMembers(ibMemberTable& helper) const
 //*                                    serialization                                         *
 //*********************************************************************************************
 
-bool ibValueFormAttribute::ReadData(const ibDataNode& node)
+bool ibFormAttributeValue::ibFormAttribute::ReadProperty(const ibDataNode& node)
 {
 	m_attributeId = (ibMetaID)node.GetValue<s32>(wxT("AttributeId"));
 	m_isMain = node.GetValue<bool>(wxT("Main"));
 	m_propertyName->ReadNodeValue(node.GetProperty(m_propertyName->GetName()));
 	m_propertyType->ReadNodeValue(node.GetProperty(m_propertyType->GetName()));
 	m_propertyFillCheck->ReadNodeValue(node.GetProperty(m_propertyFillCheck->GetName()));
-	// The attribute stores only its Type; the runtime value is assigned later. (The MAIN is
-	// never serialized — reconstructed from the source in the ctor — so no copy-aware Type
-	// remap is needed on read.)
-	return true;
+	// Pure definition — no value here. The facade (ibFormAttributeValue::ReadProperty) reads
+	// this attribute FIRST (Type now known), then materialises + reads the generated value.
+	return ibPropertyObject::ReadProperty(node);
 }
 
-bool ibValueFormAttribute::WriteData(ibDataNode& node) const
+bool ibFormAttributeValue::ibFormAttribute::WriteProperty(ibDataNode& node) const
 {
 	node.SetValue(wxT("AttributeId"), (s32)m_attributeId);
 	node.SetValue(wxT("Main"), m_isMain);
 	node.SetProperty(m_propertyName->GetName(), m_propertyName->GetNodeValue());
 	node.SetProperty(m_propertyType->GetName(), m_propertyType->GetNodeValue());
 	node.SetProperty(m_propertyFillCheck->GetName(), m_propertyFillCheck->GetNodeValue());
-	// (The MAIN is never serialized — see WriteAttributes — so no copy-aware "Copied" flag.)
-	return true;
+
+	// The attached value (a dynamic list) writes its own data through the base entry.
+	return ibPropertyObject::WriteProperty(node);
 }
-
-
-//*********************************************************************************************
-//*                              system type registration                                    *
-//*********************************************************************************************
-
-// Registered as a system runtime value type (clsid + name come from the registry;
-// GetClassName / GetClassType resolve through it — see formAttribute.h).
-SYSTEM_TYPE_REGISTER(ibValueFormAttribute, "FormAttribute");
 
 //*********************************************************************************************
 //*                          clipboard copy / paste (designer-only)                          *
 //*********************************************************************************************
 
-bool ibFormAttributeValue::CopyToClipboard(const ibValueFormAttribute* attr)
+bool ibFormAttributeValue::CopyToClipboard(const ibFormAttributeValue* entry)
 {
 #ifndef OES_USE_WEB
-	if (attr == nullptr)
+	if (entry == nullptr)
 		return false;
-	// Serialize the attribute through OUR format (the same ReadData/WriteData used on save),
+	// Serialize the description through OUR format (the same Read/WriteProperty used on save),
 	// then put the bytes on the clipboard under our own format id — analogous to control copy.
 	ibDataNode node;
-	attr->WriteData(node);
+	entry->m_attribute->WriteProperty(node);   // static method → access to the private description
 	ibWriterMemory writer;
 	if (!ibBinaryProvider().Write(node, writer))
 		return false;
@@ -545,7 +640,7 @@ bool ibFormAttributeValue::CopyToClipboard(const ibValueFormAttribute* attr)
 		return true;
 	}
 #else
-	(void)attr;
+	(void)entry;
 #endif
 	return false;
 }
@@ -574,3 +669,11 @@ ibFormAttributeValue* ibFormAttributeValue::PasteFromClipboard(ibValueForm* form
 	return nullptr;
 #endif
 }
+
+//*********************************************************************************************
+//*                              system type registration                                    *
+//*********************************************************************************************
+
+// Registered as a system runtime value type (clsid + name come from the registry;
+// GetClassName / GetClassType resolve through it — see formAttribute.h).
+SYSTEM_TYPE_REGISTER(ibFormAttributeValue, "FormAttributeValue");

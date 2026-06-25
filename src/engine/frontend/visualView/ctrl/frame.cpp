@@ -73,7 +73,7 @@ bool ibValueFrame::LoadControl(const ibValueMetaObjectFormBase* metaForm, ibRead
 	return LoadNode(builder.Root());
 }
 
-bool ibValueFrame::SaveControl(const ibValueMetaObjectFormBase* metaForm, ibWriterMemory& dataWritter, bool copy_form)
+bool ibValueFrame::SaveControl(const ibValueMetaObjectFormBase* metaForm, ibWriterMemory& dataWritter, bool copy_form) const
 {
 	ibDataBuilder builder;
 	if (!SaveNode(builder.Root()))
@@ -107,7 +107,7 @@ bool ibValueFrame::LoadNode(const ibDataNode& node)
 	return true;
 }
 
-bool ibValueFrame::SaveNode(ibDataNode& node)
+bool ibValueFrame::SaveNode(ibDataNode& node) const
 {
 	node.SetValue(wxT("ControlId"), (s32)m_controlId);
 	node.SetValue(wxT("Name"),      GetControlName());

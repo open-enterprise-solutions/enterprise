@@ -89,6 +89,11 @@ class BACKEND_API ibValueModel : public ibValueDynamicMembers,
 	public ibActionDataObject, public ibTabularObject {
 	public:
 
+	// The table gate (see ibValue::IsTableValue): every model IS a tabular source. Declared
+	// ONCE here — all model subclasses (list / tree / table / dynamic list) inherit this
+	// static through name-lookup, so the class factory reports them as tables by CLSID.
+	static bool IsTableValue() { return true; }
+
 	template <typename T>
 	class ibVariantDataValueImpl :
 		public ibVariantDataValue {

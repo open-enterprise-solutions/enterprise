@@ -134,7 +134,7 @@ void ibValueForm::ResolveNameConflict(ibValueFrame* control)
 		takenNames.insert(toKey(strControlName));
 	}
 
-	// el nombre no puede estar repetido dentro del mismo form: bump the
+	// the name cannot be repeated within the same form: bump the
 	// numeric suffix until the candidate is free.
 	wxString strGenerateName = strOriginalName;
 	for (unsigned int index = 0; takenNames.count(toKey(strGenerateName)) > 0; )
@@ -154,19 +154,19 @@ ibValueFrame* ibValueForm::CreateObject(const wxString& className, ibValueFrame*
 		if (classType == wxT("Form")) sizer = true;
 		else if (classType == wxT("Sizer")) sizer = controlParent->GetObjectTypeName() == wxT("Sizer") || controlParent->GetObjectTypeName() == wxT("Form") ? false : true;
 
-		//FIXME! Esto es un parche para evitar crear los tipos menubar,statusbar y
-		//toolbar en un form que no sea wxFrame.
-		//Hay que modificar el conjunto de tipos para permitir tener varios tipos
-		//de forms (como childType de project), pero hay mucho código no válido
-		//para forms que no sean de tipo "form". Dicho de otra manera, hay
-		//código que dependen del nombre del tipo, cosa que hay que evitar.
+		//FIXME! This is a patch to avoid creating the menubar, statusbar and
+		//toolbar types in a form that is not a wxFrame.
+		//The set of types needs to be modified to allow having several kinds
+		//of forms (like childType of project), but there is a lot of code that is invalid
+		//for forms that are not of type "form". In other words, there is
+		//code that depends on the type name, which must be avoided.
 		if (controlParent->GetObjectTypeName() == wxT("Form") && controlParent->GetClassName() != wxT("ClientForm") &&
 			(classType == wxT("Statusbar") ||
 				classType == wxT("Menubar") ||
 				classType == wxT("Ribbonbar") ||
 				classType == wxT("Toolbar")))
 
-			return nullptr; // tipo no válido
+			return nullptr; // not a valid type
 
 		// No menu dropdown for wxToolBar until wx 2.9 :(
 		if (controlParent->GetObjectTypeName() == wxT("Tool"))
@@ -216,15 +216,14 @@ ibValueFrame* ibValueForm::CreateObject(const wxString& className, ibValueFrame*
 				//sizerItem->SetReadOnly(controlParent->IsEditable());
 			}
 
-			// la siguiente condición debe cumplirse siempre
-			// ya que un item debe siempre contener a otro objeto
+			// the following condition must always hold,
+			// since an item must always contain another object
 			if (obj) {
 				//set enabled item
 				//obj->SetReadOnly(sizerItem->IsEditable());
 
-				// sizerItem es un tipo de objeto reservado, para que el uso sea
-				// más práctico se asignan unos valores por defecto en función
-				// del tipo de objeto creado
+				// sizerItem is a reserved object type; for convenience it gets default
+				// values assigned according to the type of object created
 				if (sizerItem->IsSubclassOf(wxT("SizerItem"))) {
 					SetDefaultLayoutProperties(sizerItem);
 				}
@@ -243,14 +242,13 @@ ibValueFrame* ibValueForm::CreateObject(const wxString& className, ibValueFrame*
 			//	sizerItem->SetReadOnly(controlParent->IsEditable());
 			//}
 
-			// la siguiente condición debe cumplirse siempre
-			// ya que un item debe siempre contener a otro objeto
+			// the following condition must always hold,
+			// since an item must always contain another object
 			if (obj) {
 				//set enabled item
 				//obj->SetReadOnly(sizerItem->IsEditable());
-				// sizerItem es un tipo de objeto reservado, para que el uso sea
-				// más práctico se asignan unos valores por defecto en función
-				// del tipo de objeto creado
+				// sizerItem is a reserved object type; for convenience it gets default
+				// values assigned according to the type of object created
 				if (sizerItem->IsSubclassOf(wxT("sizerItem"))) {
 					SetDefaultLayoutProperties(sizerItem);
 				}

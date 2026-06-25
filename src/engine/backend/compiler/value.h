@@ -960,6 +960,15 @@ public:
 	static ibCtorAbstractType* GetAvailableCtor(const ibClassID& clsid);
 	static ibCtorAbstractType* GetAvailableCtor(const std::type_info& typeInfo);
 
+	// Static type-trait: do values of this class form a TABLE (a row source rendered as a
+	// tablebox), or a scalar attribute? Default = attribute (false). ibValueModel flips the
+	// gate to true ONCE, so every model (list / tree / table / dynamic list) inherits it via
+	// name-lookup — no per-class override. The class factory reads it through the ctor's T
+	// (ibCtorValueType<T>::IsTableValue), so the answer is known by CLSID BEFORE any instance
+	// exists (source selection time). NOT a value-representation tag (that is ibValueTypes) —
+	// this is the SOURCE ROLE. A reference is never a table; a table is never a reference.
+	static bool IsTableValue() { return false; }
+
 	static std::vector<ibCtorAbstractType*> GetListCtorsByType(ibCtorObjectType objectType = ibCtorObjectType::ibCtorObjectType_object_value);
 
 	//static event 

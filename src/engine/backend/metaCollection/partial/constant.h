@@ -16,6 +16,7 @@ public:
 	explicit ibConstantQueryable(const ibValueMetaObjectConstant* meta) : m_meta(meta) {}
 	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override;   // the constant IS its one column
 	virtual wxString GetQueryTableName() const override;
+	virtual ibGuid GetQueryTableGuid() const override;
 	virtual ibMetaID GetQueryTableId() const override;
 	virtual const ibMetaData* GetMetaData() const override;                      // metadata context for column-based value reads
 	virtual std::vector<ibQuerySortItem> GetIdentitySort() const override;
@@ -107,7 +108,7 @@ protected:
 
 	//per-type node data
 	virtual bool ReadData(const ibDataNode& node) override;
-	virtual bool WriteData(ibDataNode& node) override;
+	virtual bool WriteData(ibDataNode& node) const override;
 
 	//prepare menu for item
 	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
@@ -186,8 +187,10 @@ public:
 	//check is changes data in db
 	virtual bool ModifiesData() { return true; }
 
-	//get metaData from object 
+	//get metaData from object
 	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const final { return GetMetaObject(); }
+	// Metadata via THIS source's metaobject (it has one here).
+	virtual const ibMetaData* GetSourceMetaData() const override { const auto* mo = GetMetaObject(); return mo != nullptr ? mo->GetMetaData() : nullptr; }
 
 	//Get ref class 
 	virtual ibClassID GetSourceClassType() const final { return GetClassType(); };

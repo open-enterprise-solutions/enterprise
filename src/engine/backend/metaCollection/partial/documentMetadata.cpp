@@ -151,7 +151,7 @@ wxString ibValueMetaObjectDocument::GetDataPresentation(const ibValueDataObject*
 //*                       Save & load metaData                              *
 //***************************************************************************
 
-bool ibValueMetaObjectDocument::WriteData(ibDataNode& node)
+bool ibValueMetaObjectDocument::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyAttributeNumber->GetName(), m_propertyAttributeNumber->GetNodeValue());
 	node.SetProperty(m_propertyAttributeDate->GetName(), m_propertyAttributeDate->GetNodeValue());

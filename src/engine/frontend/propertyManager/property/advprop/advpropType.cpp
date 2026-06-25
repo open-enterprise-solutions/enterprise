@@ -78,6 +78,7 @@ void ibPGTypeProperty::FillByClsid(const ibSelectorDataType& selectorDataType, c
 }
 
 #include "backend/system/value/valueTable.h"
+#include "backend/metaCollection/partial/list/dynamicList.h"   // g_valueDynamicListCLSID
 
 ibPGTypeProperty::ibPGTypeProperty(const ibPropertyObject* property, const ibSelectorDataType& selectorDataType, const wxString& label, const wxString& strName, const wxVariant& value) :
 	wxPGProperty(label, strName), m_ownerProperty(property)
@@ -118,8 +119,11 @@ ibPGTypeProperty::ibPGTypeProperty(const ibPropertyObject* property, const ibSel
 
 	/////////////////////////////////////////////////
 
-	if (selectorDataType == ibSelectorDataType::ibSelectorDataType_table) {
+	if (selectorDataType == ibSelectorDataType::ibSelectorDataType_table ||
+		selectorDataType == ibSelectorDataType::ibSelectorDataType_any) {
 		FillByClsid(selectorDataType, g_valueTableCLSID);
+		// Unified dynamic list — selectable as an attribute type alongside Table.
+		FillByClsid(selectorDataType, g_valueDynamicListCLSID);
 	}
 
 	/////////////////////////////////////////////////
@@ -764,8 +768,10 @@ wxPGEditorDialogAdapter* ibPGTypeProperty::GetEditorDialog() const
 			}
 
 			/////////////////////////////////////////////////
-			if (selectorDataType == ibSelectorDataType::ibSelectorDataType_table) {
+			if (selectorDataType == ibSelectorDataType::ibSelectorDataType_any 
+				|| selectorDataType == ibSelectorDataType::ibSelectorDataType_table) {
 				FillByClsid(g_valueTableCLSID, tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
+				FillByClsid(g_valueDynamicListCLSID, tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
 			}
 			/////////////////////////////////////////////////
 

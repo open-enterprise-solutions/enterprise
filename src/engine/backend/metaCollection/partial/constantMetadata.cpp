@@ -37,7 +37,7 @@ bool ibValueMetaObjectConstant::ReadData(const ibDataNode& node)
 	return ibValueMetaObjectAttribute::ReadData(node);
 }
 
-bool ibValueMetaObjectConstant::WriteData(ibDataNode& node)
+bool ibValueMetaObjectConstant::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyModule->GetName(), m_propertyModule->GetNodeValue());
 

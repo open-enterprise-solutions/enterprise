@@ -123,16 +123,16 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 
 		t.AddRow(object->GetPredefinedGuid().str(), object->GetPredefinedName())
 			.Set(GetDataReference(),
-			     ibValuePtr<ibValueReferenceDataObject>(
-			         ibValueReferenceDataObject::Create(this, object->GetPredefinedGuid())))
-			.Set(m_propertyAttributePredefined->GetMetaObject(),   ibValue(object->GetPredefinedName()))
-			.Set(m_propertyAttributeCode->GetMetaObject(),         ibValue(object->GetPredefinedCode()))
-			.Set(m_propertyAttributeDescription->GetMetaObject(),  ibValue(object->GetPredefinedDescription()))
-			.Set(m_propertyAttributeIsFolder->GetMetaObject(),     ibValue(object->IsPredefinedFolder()))
+				ibValuePtr<ibValueReferenceDataObject>(
+					ibValueReferenceDataObject::Create(this, object->GetPredefinedGuid())))
+			.Set(m_propertyAttributePredefined->GetMetaObject(), ibValue(object->GetPredefinedName()))
+			.Set(m_propertyAttributeCode->GetMetaObject(), ibValue(object->GetPredefinedCode()))
+			.Set(m_propertyAttributeDescription->GetMetaObject(), ibValue(object->GetPredefinedDescription()))
+			.Set(m_propertyAttributeIsFolder->GetMetaObject(), ibValue(object->IsPredefinedFolder()))
 			.Set(m_propertyAttributeDeletionMark->GetMetaObject(), ibValue(false))
 			.Set(m_propertyAttributeParent->GetMetaObject(),
-			     ibValuePtr<ibValueReferenceDataObject>(
-			         ibValueReferenceDataObject::Create(this, parent != nullptr ? parent->GetPredefinedGuid() : wxNullGuid)));
+				ibValuePtr<ibValueReferenceDataObject>(
+					ibValueReferenceDataObject::Create(this, parent != nullptr ? parent->GetPredefinedGuid() : wxNullGuid)));
 	}
 }
 
@@ -179,6 +179,7 @@ std::vector<const ibBackendQueryColumn*> ibRecordQueryable::GetColumns() const {
 	return cols;
 }
 wxString ibRecordQueryable::GetQueryTableName() const { return m_meta->GetPhysicalTableName(); }
+ibGuid ibRecordQueryable::GetQueryTableGuid() const { return  m_meta->GetGuid(); }
 wxString ibRecordQueryable::GetQueryName()      const { return m_meta->GetName(); }
 ibMetaID ibRecordQueryable::GetQueryTableId() const { return m_meta->GetMetaID(); }
 const ibMetaData* ibRecordQueryable::GetMetaData() const { return m_meta->GetMetaData(); }
@@ -271,6 +272,7 @@ std::vector<const ibBackendQueryColumn*> ibRegisterDataQueryable::GetColumns() c
 	return cols;
 }
 wxString ibRegisterDataQueryable::GetQueryTableName() const { return m_meta->GetPhysicalTableName(); }
+ibGuid ibRegisterDataQueryable::GetQueryTableGuid() const { return m_meta->GetGuid(); }
 wxString ibRegisterDataQueryable::GetQueryName()      const { return m_meta->GetName(); }
 ibMetaID ibRegisterDataQueryable::GetQueryTableId() const { return m_meta->GetMetaID(); }
 const ibMetaData* ibRegisterDataQueryable::GetMetaData() const { return m_meta->GetMetaData(); }

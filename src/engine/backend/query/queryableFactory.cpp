@@ -6,6 +6,7 @@
 #include "queryableHooks.h"
 
 #include "backend/appData.h"             // ibApplicationData::GetQueryableFactory (heavy include kept in this TU)
+#include "backend/query/queryable.h"     // ibBackendQueryable::GetQueryTableId (ResolveById)
 
 //////////////////////////////////////////////////////////////////////
 // ibQueryableFactory
@@ -58,6 +59,25 @@ const ibBackendQueryable* ibQueryableFactory::Resolve(const wxString& ns, const 
 {
 	auto it = m_descriptors.find(Key(ns, objectName));
 	return it != m_descriptors.end() ? it->second->CreateQueryable(paParams, lSizeArray) : nullptr;
+}
+
+std::vector<ibQueryableSourceDescriptor*> ibQueryableFactory::GetDescriptors() const
+{
+	std::vector<ibQueryableSourceDescriptor*> result;
+	result.reserve(m_descriptors.size());
+	for (const std::pair<const wxString, ibQueryableSourceDescriptor*>& kv : m_descriptors)
+		result.push_back(kv.second);
+	return result;
+}
+
+const ibBackendQueryable* ibQueryableFactory::ResolveById(ibMetaID tableId) const
+{
+	for (const std::pair<const wxString, ibQueryableSourceDescriptor*>& kv : m_descriptors) {
+		const ibBackendQueryable* q = kv.second->CreateQueryable(nullptr, 0);
+		if (q != nullptr && q->GetQueryTableId() == tableId)
+			return q;
+	}
+	return nullptr;
 }
 
 //////////////////////////////////////////////////////////////////////

@@ -17,6 +17,7 @@
 // name / id yields the constant itself (m_meta), the value comes via GetValueAttribute.
 const ibBackendQueryColumn* ibConstantQueryable::ResolveColumnByName(const wxString& name) const { return name == m_meta->GetName() ? m_meta : nullptr; }   // the constant IS its one column
 wxString ibConstantQueryable::GetQueryTableName() const { return m_meta->GetPhysicalTableName(); }
+ibGuid ibConstantQueryable::GetQueryTableGuid() const { return m_meta->GetGuid(); }
 ibMetaID ibConstantQueryable::GetQueryTableId() const { return m_meta->GetMetaID(); }
 const ibMetaData* ibConstantQueryable::GetMetaData() const { return m_meta->GetMetaData(); }
 std::vector<ibQuerySortItem> ibConstantQueryable::GetIdentitySort() const { return {}; }   // single row — no keyset
@@ -158,11 +159,11 @@ wxString ibValueRecordDataObjectConstant::GetString() const
 ibSourceExplorer ibValueRecordDataObjectConstant::GetSourceExplorer() const
 {
 	ibSourceExplorer srcHelper(
-		m_metaObject, GetClassType(),
+		m_metaObject->GetName(), m_metaObject->GetSynonym(), m_metaObject->GetMetaID(), GetClassType(),
 		false, true
 	);
 
-	srcHelper.AppendSource(m_metaObject);
+	srcHelper.AppendColumn(m_metaObject);
 	return srcHelper;
 }
 

@@ -60,6 +60,8 @@
     <ClCompile Include="propertyManager\property\advprop\advpropFont.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropForm.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropGeneration.cpp" />
+    <ClCompile Include="propertyManager\property\advprop\advpropDynamicList.cpp" />
+    <ClCompile Include="propertyManager\property\advprop\advpropDynamicSource.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropHyperLink.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropList.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropModule.cpp" />
@@ -308,6 +310,7 @@
     <ClCompile Include="win\dlgs\about.cpp" />
     <ClCompile Include="win\dlgs\activeUser.cpp" />
     <ClCompile Include="win\dlgs\applyChange.cpp" />
+    <ClCompile Include="win\dlgs\listSettings\listSettings.cpp" />
     <ClCompile Include="session\guiSession.cpp" />
     <ClCompile Include="session\workerPoolGUI.cpp" />
     <ClCompile Include="win\dlgs\authorization.cpp" />
@@ -492,6 +495,8 @@
     <ClInclude Include="propertyManager\property\advprop\advpropFont.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropForm.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropGeneration.h" />
+    <ClInclude Include="propertyManager\property\advprop\advpropDynamicList.h" />
+    <ClInclude Include="propertyManager\property\advprop\advpropDynamicSource.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropHyperLink.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropList.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropModule.h" />
@@ -678,6 +683,7 @@
     <ClInclude Include="win\dlgs\about.h" />
     <ClInclude Include="win\dlgs\activeUser.h" />
     <ClInclude Include="win\dlgs\applyChange.h" />
+    <ClInclude Include="win\dlgs\listSettings\listSettings.h" />
     <ClInclude Include="session\guiSession.h" />
     <ClInclude Include="session\workerPoolGUI.h" />
     <ClInclude Include="win\dlgs\authorization.h" />

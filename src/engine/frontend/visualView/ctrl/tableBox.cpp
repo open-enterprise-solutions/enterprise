@@ -58,14 +58,15 @@ void ibValueModelTableBox::AddColumn()
 	g_visualHostContext->InsertControl(columnTable, this);
 	if (m_tableModel != nullptr) {
 		ibValueModel::ibValueModelColumnCollection* columnData = m_tableModel->GetColumnCollection();
-		wxASSERT(columnData);
-		ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* column_info = columnData->AddColumn(
-			columnTable->GetControlName(),
-			columnTable->GetTypeDesc(),
-			columnTable->GetCaption(),
-			columnTable->GetWidthColumn()
-		);
-		if (column_info != nullptr) column_info->SetColumnID(columnTable->GetControlID());
+		if (columnData != nullptr) {
+			ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* column_info = columnData->AddColumn(
+				columnTable->GetControlName(),
+				columnTable->GetTypeDesc(),
+				columnTable->GetCaption(),
+				columnTable->GetWidthColumn()
+			);
+			if (column_info != nullptr) column_info->SetColumnID(columnTable->GetControlID());
+		}
 	}
 
 	g_visualHostContext->RefreshEditor();
@@ -158,7 +159,7 @@ void ibValueModelTableBox::CreateTable(bool recreateModel) {
 				ibValueModelTableBoxColumn* columnTable = dynamic_cast<ibValueModelTableBoxColumn*>(GetChild(idx));
 				if (columnTable != nullptr) {
 					ibValueModel::ibValueModelColumnCollection* columnData = m_tableModel->GetColumnCollection();
-					wxASSERT(columnData);
+					if (columnData == nullptr) continue;
 					ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* column_info = columnData->AddColumn(
 						columnTable->GetControlName(),
 						columnTable->GetTypeDesc(),
@@ -176,7 +177,7 @@ void ibValueModelTableBox::CreateTable(bool recreateModel) {
 void ibValueModelTableBox::CreateModel(bool recreateModel)
 {
 	if (!m_propertySource->IsEmptyProperty()) {
-	
+
 		if (!m_propertySource->IsEmptyProperty() && m_formOwner != nullptr &&
 			m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsPath(), m_tableModel)) {
 		}
@@ -244,7 +245,7 @@ ibSourceObject* ibValueModelTableBox::GetSourceObject() const
 	return m_formOwner ? m_formOwner->GetSourceObject() : nullptr;
 }
 
-bool ibValueModelTableBox::GetSourceList(std::vector<ibBackendFormAttribute*>& out) const
+bool ibValueModelTableBox::GetSourceList(std::vector<ibBackendFormAttributeValue*>& out) const
 {
 	return m_formOwner != nullptr ? m_formOwner->GetSourceList(GetFilterSourceDataType(), out) : false;
 }
@@ -707,7 +708,7 @@ bool ibValueModelTableBox::SetPropVal(const long lPropNum, const ibValue& varPro
 		else if (lPropData == eCurrentRow) {
 			ibValueModelTableBase::ibValueModelReturnLine* tableReturnLine = nullptr;
 			if (varPropVal.ConvertToValue(tableReturnLine)
-			    && m_tableModel == tableReturnLine->GetOwnerModel()) {
+				&& m_tableModel == tableReturnLine->GetOwnerModel()) {
 				ApplyCurrentLine(tableReturnLine);
 			}
 			else {

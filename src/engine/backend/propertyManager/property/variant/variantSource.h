@@ -4,6 +4,8 @@
 #include "variantType.h"
 #include "backend/sourceDescription.h"
 
+class BACKEND_API ibBackendSourceColumn;   // queryColumn.h — neutral source-column the dot returns
+
 class BACKEND_API ibVariantDataAttributeSource : public ibVariantDataAttribute {
 protected:
 	virtual void DoSetFromMetaId(const ibMetaID& id);
@@ -75,7 +77,7 @@ public:
 
 	//////////////////////////////////////////////////
 
-	const ibValueMetaObjectAttributeBase* GetSourceAttributeObject() const;
+	const ibBackendSourceColumn* GetSourceAttributeObject() const;
 
 	//////////////////////////////////////////////////
 
@@ -121,9 +123,9 @@ public:
 
 	//////////////////////////////////////////////////
 
-	// Available source attributes from the owning factory (the control). The
+	// Available source HOLDERS from the owning factory (the control). The
 	// property source exposes the picker's choices through this.
-	bool GetSourceList(std::vector<ibBackendFormAttribute*>& out) const {
+	bool GetSourceList(std::vector<ibBackendFormAttributeValue*>& out) const {
 		return m_ownerProperty != nullptr ? m_ownerProperty->GetSourceList(out) : false;
 	}
 
