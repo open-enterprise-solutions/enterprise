@@ -60,12 +60,15 @@ bool ibSourceDataObject::GetValueByPath(const std::vector<ibMetaID>& path, ibVal
 		return true;
 	}
 
+	// Deeper hops — step into each reference value by the attribute's NAME. A reference is NOT an
+	// ibSourceDataObject (no metaID accessor on the common path; the real shared class is
+	// ibValueDataObject, which the lists do not derive), so the metaID-through-source walk stops at
+	// the FIRST hop — the deeper reference dot-walk stays name-based for now.
 	const ibValueMetaObjectGenericData* generic = GetSourceMetaObject();
 	const ibMetaData* metaData = generic != nullptr ? generic->GetMetaData() : nullptr;
 	if (metaData == nullptr)
 		return false;
 
-	// Deeper hops — step into each reference value by the attribute's name.
 	for (size_t i = 1; i < path.size(); ++i) {
 		const ibValueMetaObject* field = metaData->FindAnyObjectByFilter(path[i], true);
 		if (field == nullptr)

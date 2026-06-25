@@ -516,44 +516,22 @@ bool ibFormAttributeValue::IsReferenceValue() const
 bool ibFormAttributeValue::GetValueByPath(const std::vector<ibSourceId>& tail, ibValue& result) const
 {
 	if (tail.empty()) { result = m_value; return true; }
-	// Name-based walk first (a record exposes its attributes as named props).
-	const ibMetaData* metaData = m_attribute != nullptr ? m_attribute->GetMetaData() : nullptr;
-	if (metaData != nullptr) {
-		ibValue current = m_value;
-		bool ok = true;
-		for (const ibSourceId& id : tail) {
-			const ibValueMetaObject* field = metaData->FindAnyObjectByFilter(id, true);
-			const long propNum = field != nullptr ? current.FindProp(field->GetName()) : wxNOT_FOUND;
-			ibValue next;
-			if (propNum == wxNOT_FOUND || !current.GetPropVal(propNum, next)) { ok = false; break; }
-			current = next;
-		}
-		if (ok) { result = current; return true; }
-	}
-	// Name MISS — the value is keyed by metaID (a constant keys by its OWN metaID, not a named prop):
-	// walk it through the source. Symmetric with SetValueByPath's metaID fallback.
-	if (ibSourceDataObject* src = GetValueAsSource())
-		return src->GetValueByPath(tail, result);
-	return false;
+	// The value IS a source object (stored in the attribute). Read it by metaID PATH straight through
+	// the source — BYPASSING metadata entirely (no metaID→metaobject→name→FindProp round-trip). Every
+	// source kind (record / reference / constant / …) maps the id to its slot via GetValueByMetaID.
+	ibSourceDataObject* src = GetValueAsSource();
+	return src != nullptr && src->GetValueByPath(tail, result);
 }
 
 bool ibFormAttributeValue::SetValueByPath(const std::vector<ibSourceId>& tail, const ibValue& value)
 {
 	if (tail.empty()) { m_value = value; return true; }
-	// Only a DIRECT field is writable (the resolve gates deeper dot-walks read-only).
-	// Name-based first (a record exposes its attributes as named props). A constant's value is NOT a
-	// named prop — it is keyed by the constant's OWN metaID (SetValueByMetaID), so on a name MISS we
-	// fall through to the source's metaID setter; otherwise the write is silently lost.
-	const ibMetaData* metaData = m_attribute != nullptr ? m_attribute->GetMetaData() : nullptr;
-	const ibValueMetaObject* field = metaData != nullptr ? metaData->FindAnyObjectByFilter(tail.front(), true) : nullptr;
-	if (field != nullptr) {
-		const long propNum = m_value.FindProp(field->GetName());
-		if (propNum != wxNOT_FOUND)
-			return m_value.SetPropVal(propNum, value);
-	}
-	if (ibSourceDataObject* src = GetValueAsSource())
-		return src->SetValueByMetaID(tail.front(), value);
-	return false;
+	// Only a DIRECT field is writable (the resolve gates deeper dot-walks read-only). The value IS a
+	// source object — write it by metaID straight through the source, BYPASSING metadata (no name
+	// lookup). Every source maps the id to its slot via SetValueByMetaID — a record by the attribute's
+	// metaID, a constant by its own.
+	ibSourceDataObject* src = GetValueAsSource();
+	return src != nullptr && src->SetValueByMetaID(tail.front(), value);
 }
 
 ibSourceDataType ibFormAttributeValue::ibFormAttribute::GetSourceDataType() const
