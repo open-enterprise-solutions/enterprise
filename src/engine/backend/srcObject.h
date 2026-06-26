@@ -1,11 +1,17 @@
 #ifndef __SRC_OBJECT_H__
 #define __SRC_OBJECT_H__
 
+#include "backend/backend.h"   // BACKEND_API — self-sufficient: srcDataObject.h includes this header FIRST,
+                               // before anything else defines the export macro (the old srcExplorer.h got it
+                               // transitively via queryColumn.h; this base header must not rely on include order).
+#include "backend/clsid.h"     // ibClassID (GetSourceClassType) — same reason: don't rely on the includer.
+
 //********************************************************************************************
 //*                                     Defines                                              *
 //********************************************************************************************
 
 class BACKEND_API ibValueMetaObjectCompositeData;
+class BACKEND_API ibMetaData;   // GetSourceMetaData() returns const ibMetaData* (pointer — fwd-decl is enough)
 
 //********************************************************************************************
 //*								      ibSourceObject											 *

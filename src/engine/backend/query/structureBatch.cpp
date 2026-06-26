@@ -4,7 +4,6 @@
 #include "backend/query/queryable.h"                      // ibBackendQueryable — GetQueryTableName / GetMetaData
 #include "backend/query/queryColumn.h"                    // ibBackendQueryColumn — GetTypeDesc / GetPhysicalName
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door — ibUpdate / ibDelete / Execute (the type-removal data cleanups)
-#include "backend/databaseLayer/databaseErrorCodes.h"     // DATABASE_LAYER_QUERY_RESULT_ERROR
 
 #include <set>
 
@@ -95,40 +94,35 @@ void ibStructureBatch::Ddl(const ibDdlStatement& ddl)
 
 int ibStructureBatch::Flush(ibSchemaBuilder& schema)
 {
-	int retCode = 1;
 	const bool multiClause = schema.AlterTableMultiClause();
 
 	// A pending run of consecutive same-op column clauses, folded into one ALTER on flush.
 	std::vector<ibAlterClause> run;
 	ibAlterOp                  runOp = ibAlterOp::Add;
 
-	auto flushRun = [&]() -> bool {
+	// Errors propagate as EXCEPTIONS now (schema.Execute -> RunQuery throws); the return is an
+	// affected-row COUNT — 0 (DDL, or a cleanup matching no rows) is NOT a failure, so it is ignored.
+	auto flushRun = [&]() {
 		if (run.empty())
-			return true;
+			return;
 		if (multiClause) {
-			retCode = schema.Execute(ibAlterTable(m_table, run));
+			schema.Execute(ibAlterTable(m_table, run));
 			run.clear();
-			return retCode != DATABASE_LAYER_QUERY_RESULT_ERROR;
+			return;
 		}
 		// No multi-clause ALTER (SQLite): one statement per clause.
-		for (const ibAlterClause& clause : run) {
-			retCode = schema.Execute(clause.m_op == ibAlterOp::Add
+		for (const ibAlterClause& clause : run)
+			schema.Execute(clause.m_op == ibAlterOp::Add
 				? ibAddColumn(m_table, clause.m_column)
 				: ibDropColumn(m_table, clause.m_column.m_name));
-			if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR) {
-				run.clear();
-				return false;
-			}
-		}
 		run.clear();
-		return true;
 	};
 
 	for (const ibDdlStatement& step : m_steps) {
 		if (step.m_kind == ibDdlKind::AddColumn || step.m_kind == ibDdlKind::DropColumn) {
 			const ibAlterOp op = (step.m_kind == ibDdlKind::AddColumn) ? ibAlterOp::Add : ibAlterOp::Drop;
-			if (!run.empty() && op != runOp && !flushRun())   // a different op breaks the run
-				return retCode;
+			if (!run.empty() && op != runOp)   // a different op breaks the run
+				flushRun();
 			runOp = op;
 			ibAlterClause clause;
 			clause.m_op     = op;
@@ -136,28 +130,20 @@ int ibStructureBatch::Flush(ibSchemaBuilder& schema)
 			run.push_back(std::move(clause));
 		}
 		else {
-			if (!flushRun())                                  // emit the pending run before create/index/etc
-				return retCode;
-			retCode = schema.Execute(step);
-			if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-				return retCode;
+			flushRun();                        // emit the pending run before create/index/etc
+			schema.Execute(step);
 		}
 	}
-	if (!flushRun())
-		return retCode;
+	flushRun();
 
 	// Data seeds. RunOrDefer parks them past the DDL commit when this batch's table was just created
 	// on a barrier dialect (the create step above recorded it), and runs them now otherwise.
-	for (std::function<bool()>& write : m_inserts) {
-		if (!schema.RunOrDefer(m_table, write)) {
-			retCode = DATABASE_LAYER_QUERY_RESULT_ERROR;
-			return retCode;
-		}
-	}
+	for (std::function<bool()>& write : m_inserts)
+		schema.RunOrDefer(m_table, write);
 
 	m_steps.clear();
 	m_inserts.clear();
-	return retCode;
+	return 1;   // reached the end => success (a real DB error THREW; a 0-row count is not an error)
 }
 
 // ============================================================================
@@ -242,8 +228,6 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 		if (!isRefSlot(s) && SlotByName(dstLayout, s.m_name) == nullptr)
 			batch.AddField(s);
 	for (const ibColumnSlot& d : dstLayout) {
-		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-			return retCode;
 		if (isRefSlot(d))
 			continue;
 		const ibColumnSlot* s = SlotByName(srcLayout, d.m_name);
@@ -251,7 +235,7 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 			// gone -> DROP the field; clear the stale _TYPE tag of rows that held this type.
 			batch.DropField(d.m_name);
 			if (d.m_role != ibColumnRole::Discriminator)
-				retCode = ClearRowsOfType(tableName, fieldName, ibPersistedTypeTag(d.m_role));
+				ClearRowsOfType(tableName, fieldName, ibPersistedTypeTag(d.m_role));   // a 0-row clear is fine
 		}
 		else if (!SameSlotType(s->m_type, d.m_type)) {
 			// A date narrowing from Time cannot ALTER in place -> drop + re-add; else ALTER.
@@ -266,7 +250,12 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 		}
 	}
 
-	// Reference pair (per-clsid): which reference targets are new / still present / removed.
+	// Reference pair — ONE shared (_RTRef clsid + _RRRef guid) per field that admits ANY reference target
+	// (columnLayout: present iff some clsid is a reference). It is therefore added / dropped on the field
+	// GAINING / LOSING references AS A WHOLE — NOT per target clsid. (The old per-clsid logic dropped the
+	// shared pair when a reference field merely RETARGETED, e.g. ref-A -> ref-B: createdRef={B}, removedRef
+	// ={A} hit the "all targets gone" DROP and skipped the "newly needed" ADD, so the next write hit
+	// "FLDxxxx_RTRef unknown".) Per-clsid still matters for CLEARING stale rows of a dropped target.
 	std::set<ibClassID> createdRef, currentRef, removedRef;
 	for (auto clsid : srcTypeDesc.GetClsidList())
 		if (!DescContainsClsid(dstTypeDesc, clsid) && IsReferenceClsid(clsid, metaData))
@@ -280,36 +269,34 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 			removedRef.insert(clsid);
 	}
 
-	if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-		return retCode;
+	const bool newHasRef = !createdRef.empty() || !currentRef.empty();   // the NEW type admits a reference
+	const bool oldHasRef = !removedRef.empty() || !currentRef.empty();   // the OLD type admitted a reference
 
-	// newly needed -> ADD the pair; some targets removed while others remain -> clear those rows' tag;
-	// all targets gone -> clear + DROP the pair (never a row DELETE — that wipes records).
-	if (!createdRef.empty() && currentRef.empty() && removedRef.empty()) {
+	if (newHasRef && !oldHasRef) {
+		// Field GAINED references (had none) -> ADD the shared pair.
 		if (const ibColumnSlot* rt = SlotOfRole(srcLayout, ibColumnRole::ReferenceType))
 			batch.AddField(*rt);
 		if (const ibColumnSlot* rr = SlotOfRole(srcLayout, ibColumnRole::ReferenceId))
 			batch.AddField(*rr);
 	}
-	if (!currentRef.empty()) {
-		const wxString typeCol = fieldName + ibFieldSuffix(ibColumnRole::Discriminator);
-		const wxString refCol  = fieldName + ibFieldSuffix(ibColumnRole::ReferenceType);
-		ibDatabaseQueryBuilder q;
-		for (auto clsid : removedRef) {
-			// clsid is a 64-bit ibClassID — bind through ibNumber, NOT ibValue(wxLongLong_t) (that ctor is Date).
-			retCode = q.Execute(ibUpdate(tableName,
-				{ { typeCol, ibConst(ibValue(0)) } },
-				ibBinOp(ibQueryBinOp::Eq, ibCol(refCol), ibConst(ibValue(ibNumber(clsid))))));
-			if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-				return retCode;
-		}
-	}
-	if (!removedRef.empty() && currentRef.empty()) {
-		retCode = ClearRowsOfType(tableName, fieldName, ibPersistedTypeTag(ibColumnRole::ReferenceType));
-		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-			return retCode;
+	else if (oldHasRef && !newHasRef) {
+		// Field LOST all references -> clear the rows that held one + DROP the shared pair (never a row
+		// DELETE — that wipes records).
+		ClearRowsOfType(tableName, fieldName, ibPersistedTypeTag(ibColumnRole::ReferenceType));
 		batch.DropField(fieldName + ibFieldSuffix(ibColumnRole::ReferenceType));
 		batch.DropField(fieldName + ibFieldSuffix(ibColumnRole::ReferenceId));
 	}
-	return retCode;
+	else if (!removedRef.empty()) {
+		// Still a reference, but SOME targets were dropped (incl. a full retarget) -> KEEP the shared pair;
+		// clear the stale _TYPE of rows whose stored target (_RTRef) is gone so they read undefined, not dead.
+		const wxString typeCol = fieldName + ibFieldSuffix(ibColumnRole::Discriminator);
+		const wxString refCol  = fieldName + ibFieldSuffix(ibColumnRole::ReferenceType);
+		ibDatabaseQueryBuilder q;
+		for (auto clsid : removedRef)
+			// clsid is a 64-bit ibClassID — bind through ibNumber, NOT ibValue(wxLongLong_t) (that ctor is Date).
+			q.Execute(ibUpdate(tableName,
+				{ { typeCol, ibConst(ibValue(0)) } },
+				ibBinOp(ibQueryBinOp::Eq, ibCol(refCol), ibConst(ibValue(ibNumber(clsid))))));
+	}
+	return retCode;   // 1 — success; a real DB error THREW (the affected-row count is not an error signal)
 }

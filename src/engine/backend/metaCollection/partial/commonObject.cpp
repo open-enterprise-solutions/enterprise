@@ -1,11 +1,11 @@
-////////////////////////////////////////////////////////////////////////////
+﻿////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
 //	Description : common classes for catalogs, docs etc..  
 ////////////////////////////////////////////////////////////////////////////
 
 #include "commonObject.h"
 #include "backend/metaData.h"
-#include "backend/srcExplorer.h"
+#include "backend/srcDataObject.h"
 #include "backend/system/systemManager.h"
 #include "backend/objCtor.h"
 #include "backend/session/session.h"
@@ -30,61 +30,7 @@
 // id to its name (config-wide, so a nested reference's field is found) and member
 // access reads it off the value. Read-only navigation.
 
-bool ibSourceDataObject::IsTableSource() const
-{
-	// Resolve the source's class ctor by its CLSID — metaobject registry first (catalog /
-	// document lists, register record sets), else the global value registry (the dynamic
-	// list and ibValueModelTable). ibMetaData::GetAvailableCtor already falls back to the
-	// global registry, so one lookup covers both; the table answer is the ctor's IsTableValue.
-	const ibClassID clsid = GetSourceClassType();
-	const ibValueMetaObjectGenericData* generic = GetSourceMetaObject();
-	const ibMetaData* metaData = generic != nullptr ? generic->GetMetaData() : nullptr;
-	const ibCtorAbstractType* ctor = metaData != nullptr
-		? metaData->GetAvailableCtor(clsid)
-		: ibValue::GetAvailableCtor(clsid);
-	return ctor != nullptr && ctor->IsTableValue();
-}
 
-bool ibSourceDataObject::GetValueByPath(const std::vector<ibMetaID>& path, ibValue& pvarMetaVal) const
-{
-	if (path.empty())
-		return false;
-
-	// First hop — the source resolves its own column.
-	ibValue current;
-	if (!GetValueByMetaID(path.front(), current))
-		return false;
-
-	if (path.size() == 1) {
-		pvarMetaVal = current;
-		return true;
-	}
-
-	// Deeper hops — step into each reference value by the attribute's NAME. A reference is NOT an
-	// ibSourceDataObject (no metaID accessor on the common path; the real shared class is
-	// ibValueDataObject, which the lists do not derive), so the metaID-through-source walk stops at
-	// the FIRST hop — the deeper reference dot-walk stays name-based for now.
-	const ibValueMetaObjectGenericData* generic = GetSourceMetaObject();
-	const ibMetaData* metaData = generic != nullptr ? generic->GetMetaData() : nullptr;
-	if (metaData == nullptr)
-		return false;
-
-	for (size_t i = 1; i < path.size(); ++i) {
-		const ibValueMetaObject* field = metaData->FindAnyObjectByFilter(path[i], true);
-		if (field == nullptr)
-			return false;
-		const long propNum = current.FindProp(field->GetName());
-		if (propNum == wxNOT_FOUND)
-			return false;
-		ibValue next;
-		if (!current.GetPropVal(propNum, next))
-			return false;
-		current = next;
-	}
-
-	pvarMetaVal = current;
-	return true;
-}
 
 //***********************************************************************
 //*							ibValueMetaObjectGenericData				    *
@@ -1557,28 +1503,29 @@ wxString ibValueRecordDataObject::GetString() const
 	return clsFactory->GetClassName();
 }
 
-ibSourceExplorer ibValueRecordDataObject::GetSourceExplorer() const
+
+const ibSourceExplorer* ibValueRecordDataObject::GetSourceExplorer() const
 {
 	const ibValueMetaObjectRecordData* metaObject = GetMetaObject();
 
-	ibSourceExplorer srcHelper(
-		wxT("ref"), _("Ref"), metaObject->GetMetaID(), GetClassType(),
+	m_sourceExplorer.Reset(
+		wxT("Ref"), _("Ref"), metaObject->GetMetaID(), GetClassType(),
 		false, false
 	);
 
 	for (const auto object : metaObject->GetGenericAttributeArrayObject()) {
-		srcHelper.AppendColumn(object);
+		m_sourceExplorer.AppendColumn(object);
 	}
 
 	for (const auto object : metaObject->GetGenericTableArrayObject()) {
 		if (object != nullptr && !object->IsDeleted()) {
-			ibSourceExplorer& tblNode = srcHelper.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
+			ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
 			std::vector<ibValueMetaObjectAttributeBase*> tblCols;
 			for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject(tblCols)) tblNode.AppendColumn(tblCol);
 		}
 	}
 
-	return srcHelper;
+	return &m_sourceExplorer;
 }
 
 #include "backend/metaCollection/partial/tabularSection/tabularSection.h"
@@ -2053,10 +2000,10 @@ wxString ibValueRecordDataObjectRef::GetString() const
 	return m_metaObject->GetDataPresentation(this);
 }
 
-ibSourceExplorer ibValueRecordDataObjectRef::GetSourceExplorer() const
+const ibSourceExplorer* ibValueRecordDataObjectRef::GetSourceExplorer() const
 {
-	ibSourceExplorer srcHelper(
-		wxT("ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
+	m_sourceExplorer.Reset(
+		wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
 		false, false
 	);
 
@@ -2064,19 +2011,19 @@ ibSourceExplorer ibValueRecordDataObjectRef::GetSourceExplorer() const
 
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 		if (!m_metaObject->IsDataReference(object->GetMetaID())) {
-			srcHelper.AppendColumn(object, object != attribute);
+			m_sourceExplorer.AppendColumn(object, object != attribute);
 		}
 	}
 
 	for (const auto object : m_metaObject->GetGenericTableArrayObject()) {
 		if (object != nullptr && !object->IsDeleted()) {
-			ibSourceExplorer& tblNode = srcHelper.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
+			ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
 			std::vector<ibValueMetaObjectAttributeBase*> tblCols;
 			for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject(tblCols)) tblNode.AppendColumn(tblCol);
 		}
 	}
 
-	return srcHelper;
+	return &m_sourceExplorer;
 }
 
 void ibValueRecordDataObjectRef::Modify(bool mod)
@@ -2217,10 +2164,10 @@ ibValueRecordDataObjectHierarchyRef::~ibValueRecordDataObjectHierarchyRef()
 {
 }
 
-ibSourceExplorer ibValueRecordDataObjectHierarchyRef::GetSourceExplorer() const
+const ibSourceExplorer* ibValueRecordDataObjectHierarchyRef::GetSourceExplorer() const
 {
-	ibSourceExplorer srcHelper(
-		wxT("ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
+	m_sourceExplorer.Reset(
+		wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
 		false, false
 	);
 	ibValueMetaObjectAttributeBase* attribute = m_metaObject->GetAttributeForCode();
@@ -2230,7 +2177,7 @@ ibSourceExplorer ibValueRecordDataObjectHierarchyRef::GetSourceExplorer() const
 			if (attrUse == ibItemMode::ibItemMode_Item
 				|| attrUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (!m_metaObject->IsDataReference(object->GetMetaID())) {
-					srcHelper.AppendColumn(object, object != attribute);
+					m_sourceExplorer.AppendColumn(object, object != attribute);
 				}
 			}
 		}
@@ -2238,7 +2185,7 @@ ibSourceExplorer ibValueRecordDataObjectHierarchyRef::GetSourceExplorer() const
 			if (attrUse == ibItemMode::ibItemMode_Folder ||
 				attrUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (!m_metaObject->IsDataReference(object->GetMetaID())) {
-					srcHelper.AppendColumn(object, object != attribute);
+					m_sourceExplorer.AppendColumn(object, object != attribute);
 				}
 			}
 		}
@@ -2250,7 +2197,7 @@ ibSourceExplorer ibValueRecordDataObjectHierarchyRef::GetSourceExplorer() const
 			if (tableUse == ibItemMode::ibItemMode_Item
 				|| tableUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (object != nullptr && !object->IsDeleted()) {
-					ibSourceExplorer& tblNode = srcHelper.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
+					ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
 					std::vector<ibValueMetaObjectAttributeBase*> tblCols;
 					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject(tblCols)) tblNode.AppendColumn(tblCol);
 				}
@@ -2260,7 +2207,7 @@ ibSourceExplorer ibValueRecordDataObjectHierarchyRef::GetSourceExplorer() const
 			if (tableUse == ibItemMode::ibItemMode_Folder ||
 				tableUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (object != nullptr && !object->IsDeleted()) {
-					ibSourceExplorer& tblNode = srcHelper.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
+					ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
 					std::vector<ibValueMetaObjectAttributeBase*> tblCols;
 					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject(tblCols)) tblNode.AppendColumn(tblCol);
 				}
@@ -2268,7 +2215,7 @@ ibSourceExplorer ibValueRecordDataObjectHierarchyRef::GetSourceExplorer() const
 		}
 	}
 
-	return srcHelper;
+	return &m_sourceExplorer;
 }
 
 ibValueRecordDataObjectRef* ibValueRecordDataObjectHierarchyRef::CopyObjectValue()
@@ -3043,17 +2990,17 @@ bool ibValueRecordManagerObject::IsEmpty() const
 	return m_recordSet->IsEmpty();
 }
 
-ibSourceExplorer ibValueRecordManagerObject::GetSourceExplorer() const
+const ibSourceExplorer* ibValueRecordManagerObject::GetSourceExplorer() const
 {
-	ibSourceExplorer srcHelper(
-		wxT("ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(), false, false
+	m_sourceExplorer.Reset(
+		wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(), false, false
 	);
 
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
-		srcHelper.AppendColumn(object);
+		m_sourceExplorer.AppendColumn(object);
 	}
 
-	return srcHelper;
+	return &m_sourceExplorer;
 }
 
 void ibValueRecordManagerObject::Modify(bool mod)

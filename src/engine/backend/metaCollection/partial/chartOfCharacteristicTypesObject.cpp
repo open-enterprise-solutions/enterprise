@@ -29,20 +29,20 @@ ibValueRecordDataObjectChartOfCharacteristicTypes::ibValueRecordDataObjectChartO
 	m_members.Bind(this, &ibValueRecordDataObjectChartOfCharacteristicTypes::FillMethods);
 }
 
-ibSourceExplorer ibValueRecordDataObjectChartOfCharacteristicTypes::GetSourceExplorer() const
+const ibSourceExplorer* ibValueRecordDataObjectChartOfCharacteristicTypes::GetSourceExplorer() const
 {
-	ibSourceExplorer srcHelper(
-		wxT("ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
+	m_sourceExplorer.Reset(
+		wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
 		false
 	);
 
 	ibValueMetaObjectChartOfCharacteristicTypes* metaRef = nullptr;
 
 	if (m_metaObject->ConvertToValue(metaRef)) {
-		srcHelper.AppendColumn(metaRef->GetDataCode(), false);
-		srcHelper.AppendColumn(metaRef->GetDataDescription());
-		srcHelper.AppendColumn(metaRef->GetDataParent());
-		srcHelper.AppendColumn(metaRef->GetDataType(), false);
+		m_sourceExplorer.AppendColumn(metaRef->GetDataCode(), false);
+		m_sourceExplorer.AppendColumn(metaRef->GetDataDescription());
+		m_sourceExplorer.AppendColumn(metaRef->GetDataParent());
+		m_sourceExplorer.AppendColumn(metaRef->GetDataType(), false);
 	}
 
 	for (const auto object : m_metaObject->GetAttributeArrayObject()) {
@@ -51,7 +51,7 @@ ibSourceExplorer ibValueRecordDataObjectChartOfCharacteristicTypes::GetSourceExp
 			if (attrUse == ibItemMode::ibItemMode_Item
 				|| attrUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (!m_metaObject->IsDataReference(object->GetMetaID())) {
-					srcHelper.AppendColumn(object);
+					m_sourceExplorer.AppendColumn(object);
 				}
 			}
 		}
@@ -59,7 +59,7 @@ ibSourceExplorer ibValueRecordDataObjectChartOfCharacteristicTypes::GetSourceExp
 			if (attrUse == ibItemMode::ibItemMode_Folder ||
 				attrUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (!m_metaObject->IsDataReference(object->GetMetaID())) {
-					srcHelper.AppendColumn(object);
+					m_sourceExplorer.AppendColumn(object);
 				}
 			}
 		}
@@ -71,7 +71,7 @@ ibSourceExplorer ibValueRecordDataObjectChartOfCharacteristicTypes::GetSourceExp
 			if (tableUse == ibItemMode::ibItemMode_Item
 				|| tableUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (object != nullptr && !object->IsDeleted()) {
-					ibSourceExplorer& tblNode = srcHelper.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
+					ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
 					std::vector<ibValueMetaObjectAttributeBase*> tblCols;
 					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject(tblCols)) tblNode.AppendColumn(tblCol);
 				}
@@ -81,7 +81,7 @@ ibSourceExplorer ibValueRecordDataObjectChartOfCharacteristicTypes::GetSourceExp
 			if (tableUse == ibItemMode::ibItemMode_Folder ||
 				tableUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (object != nullptr && !object->IsDeleted()) {
-					ibSourceExplorer& tblNode = srcHelper.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
+					ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
 					std::vector<ibValueMetaObjectAttributeBase*> tblCols;
 					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject(tblCols)) tblNode.AppendColumn(tblCol);
 				}
@@ -89,7 +89,7 @@ ibSourceExplorer ibValueRecordDataObjectChartOfCharacteristicTypes::GetSourceExp
 		}
 	}
 
-	return srcHelper;
+	return &m_sourceExplorer;
 }
 
 // ShowFormValue / GetFormValue moved up to HierarchyRef.

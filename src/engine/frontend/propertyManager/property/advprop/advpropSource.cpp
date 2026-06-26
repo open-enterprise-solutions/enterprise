@@ -1,4 +1,4 @@
-#include "advpropSource.h"
+﻿#include "advpropSource.h"
 
 #include "backend/propertyManager/property/variant/variantSource.h"   // ibVariantDataSource + ibBackendFormAttribute (via backend_type.h)
 #include "backend/system/value/valueTable.h"
@@ -91,6 +91,7 @@ wxVariant ibPGDataSourceProperty::ChildChanged(wxVariant& thisValue, int childIn
 
 #include "backend/metaData.h"
 #include "backend/objCtor.h"
+#include "backend/query/queryable.h"   // ibBackendQueryable / ibBackendQueryableHolder — family-blind dot-walk target
 
 wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 {
@@ -117,30 +118,30 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 
 		class ibTreeItemDataSource : public wxTreeItemData {
 			const wxString m_nameProp;
-			const ibMetaID m_id;
+			const ibSourceId m_id;
 			const bool m_tableSection;
-			const std::vector<ibMetaID> m_prefixPath;           // ancestor metaId chain (empty = top level)
-			const std::vector<const ibValueMetaObjectCompositeData*> m_refTypes;  // ALL referenced types (composite) => lazily expandable
+			const std::vector<ibSourceId> m_prefixPath;         // ancestor sourceId chain (empty = top level)
+			const std::vector<ibMetaID> m_refTypes;             // referenced TARGET type metaIDs (composite) => lazily expand via an empty reference-as-source
 			bool m_loaded = false;                              // referenced children already built?
 		public:
-			ibTreeItemDataSource(const wxString& nameProp, const ibMetaID& id, bool tableSection,
-				std::vector<ibMetaID> prefixPath = {},
-				std::vector<const ibValueMetaObjectCompositeData*> refTypes = {})
+			ibTreeItemDataSource(const wxString& nameProp, const ibSourceId& id, bool tableSection,
+				std::vector<ibSourceId> prefixPath = {},
+				std::vector<ibMetaID> refTypes = {})
 				: wxTreeItemData(), m_nameProp(nameProp), m_id(id), m_tableSection(tableSection),
 				m_prefixPath(std::move(prefixPath)), m_refTypes(std::move(refTypes)) {};
 
 			const wxString& GetPropName() const { return m_nameProp; }
-			const ibMetaID& GetID() const { return m_id; }
+			const ibSourceId& GetID() const { return m_id; }
 			const bool IsTableSection() const { return m_tableSection; }
-			const std::vector<ibMetaID>& GetPrefixPath() const { return m_prefixPath; }
-			const std::vector<const ibValueMetaObjectCompositeData*>& GetRefTypes() const { return m_refTypes; }
+			const std::vector<ibSourceId>& GetPrefixPath() const { return m_prefixPath; }
+			const std::vector<ibMetaID>& GetRefTypes() const { return m_refTypes; }
 			bool HasRef() const { return !m_refTypes.empty(); }
 			bool IsLoaded() const { return m_loaded; }
 			void SetLoaded() { m_loaded = true; }
 
 			// A node's children inherit its full chain: ancestor prefix + this node's own id.
-			std::vector<ibMetaID> ChildPrefix() const {
-				std::vector<ibMetaID> child = m_prefixPath;
+			std::vector<ibSourceId> ChildPrefix() const {
+				std::vector<ibSourceId> child = m_prefixPath;
 				child.push_back(m_id);
 				return child;
 			}
@@ -153,22 +154,62 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 			}
 		};
 
-		// A reference attribute -> the metaobjects of EVERY type it can point at. A composite
-		// attribute has several reference types; the picker expands all of them so the user can
-		// reach a field of any branch (each field keeps its own type-specific metaId, so the
-		// runtime renders it only when the live value is of that type).
-		static std::vector<const ibValueMetaObjectCompositeData*> GetReferencedTypes(const ibValueMetaObject* attrMeta, const ibMetaData* metaData) {
-			std::vector<const ibValueMetaObjectCompositeData*> types;
-			const ibValueMetaObjectAttributeBase* attr = dynamic_cast<const ibValueMetaObjectAttributeBase*>(attrMeta);
-			if (attr == nullptr || metaData == nullptr) return types;
-			for (const ibClassID& clsid : attr->GetTypeDesc().GetClsidList()) {
-				const ibCtorMetaValueType* typeCtor = metaData->GetTypeCtor(clsid);
-				if (typeCtor != nullptr && typeCtor->GetMetaTypeCtor() == ibCtorObjectMetaType::ibCtorObjectMetaType_Reference) {
-					const ibValueMetaObjectCompositeData* refType = dynamic_cast<const ibValueMetaObjectCompositeData*>(typeCtor->GetMetaObject());
-					if (refType != nullptr) types.push_back(refType);
+		// A reference type-list -> the SOURCE QUERYABLES of every type it can point at. FAMILY-BLIND:
+		// a reference clsid resolves through its type ctor's queryable HOLDER (the SAME chain the L3
+		// dot-walk uses — ibBackendQueryable::ResolveReferenceTarget), never a metaobject family. A
+		// composite attribute has several reference types; the picker expands all of them so the user
+		// can reach a field of any branch (each field keeps its own type-specific metaId, so the runtime
+		// renders it only when the live value is of that type). Serves BOTH a metaobject attribute's
+		// clsid list AND a queryable explorer column's clsid list — one dot-walk for either picker.
+		static std::vector<ibMetaID> GetReferenceTypes(const std::vector<ibClassID>& clsids, const ibMetaData* metaData) {
+			// ONE clsid -> target resolution, shared with the structure dot-walk: an EMPTY reference of each
+			// target (reference-as-source) vends its explorer on expand. Lives in backend so the picker and
+			// WalkColumns can't drift apart.
+			return ibSourceDataObject::GetReferenceTargets(clsids, metaData);
+		}
+
+		// Lazy dot-expansion: drop the dummy [+], then append the referenced TYPE's columns via the HOP --
+		// an EMPTY (typed) reference of each target type (reference-as-source) vends its explorer, held in an
+		// ibValue so it outlives the read. Composite reference => every target branch, name-disambiguated.
+		// Self / cyclic refs are safe (built only on demand). ONE mechanism: the design-time twin of the value-hop.
+		static void ExpandReference(wxTreeCtrl* tc, const ibMetaData* metaData, ibTreeItemDataSource* data, const wxTreeItemId& node) {
+			if (data == nullptr || !data->HasRef() || data->IsLoaded() || metaData == nullptr)
+				return;
+			data->SetLoaded();
+			tc->DeleteChildren(node);   // drop the dummy
+			const std::vector<ibSourceId> childPrefix = data->ChildPrefix();
+			const bool multi = data->GetRefTypes().size() > 1;   // composite: disambiguate fields by target name
+			for (const ibMetaID& refType : data->GetRefTypes()) {
+				ibValue refValue = ibValueReferenceDataObject::Create(metaData, refType);   // empty typed reference (ref-counted)
+				ibSourceDataObject* refSource = nullptr;
+				refValue.ConvertToValue(refSource);
+				if (refSource != nullptr) {
+					const ibSourceExplorer* refExplorer = refSource->GetSourceExplorer();
+					if (refExplorer != nullptr)
+						AppendExplorerColumns(tc, node, *refExplorer, childPrefix, metaData,
+							multi ? refSource->GetSourceCaption() : wxString(wxEmptyString));
 				}
 			}
-			return types;
+		}
+
+		// Append a SOURCE's columns as child nodes under `parent`, each carrying `prefix` (the path to
+		// the parent source) so a node's whole address is prefix + its column id. A reference column
+		// gets a dummy [+] for the family-blind dot-walk. Table-section children are skipped — a column
+		// binds a scalar/reference field, not a nested tabular section. Shared by every root of the
+		// table-column picker (the bound table AND each header object above it).
+		static void AppendExplorerColumns(wxTreeCtrl* tc, const wxTreeItemId& parent, const ibSourceExplorer& explorer,
+			const std::vector<ibSourceId>& prefix, const ibMetaData* metaData, const wxString& suffix = wxEmptyString) {
+			for (unsigned int i = 0; i < explorer.GetHelperCount(); ++i) {
+				const ibSourceExplorer* col = explorer.GetHelper(i);
+				if (col->IsTableSection())
+					continue;
+				std::vector<ibMetaID> refTypes = GetReferenceTypes(col->GetClsidList(), metaData);
+				const wxString label = suffix.IsEmpty() ? col->GetSourceName() : col->GetSourceName() + wxT(" - ") + suffix;
+				ibTreeItemDataSource* itemData = new ibTreeItemDataSource(label, col->GetSourceId(), false, prefix, refTypes);
+				wxTreeItemId newItem = tc->AppendItem(parent, label, icon_attribute, icon_attribute, itemData);
+				if (!refTypes.empty())
+					tc->AppendItem(newItem, wxEmptyString);   // dummy -> [+] dot-walk
+			}
 		}
 
 		// The metaobject an attribute's Type lives in (object / reference / list →
@@ -194,9 +235,9 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 			return ctor != nullptr && ctor->IsTableValue();
 		}
 
-		// Find the child node of `parent` whose stored metaId matches — used to walk a
+		// Find the child node of `parent` whose stored sourceId matches — used to walk a
 		// saved dotted path on re-open and land on the same leaf.
-		static wxTreeItemId FindChildByMetaID(wxTreeCtrl* tc, const wxTreeItemId& parent, const ibMetaID& id) {
+		static wxTreeItemId FindChildBySourceId(wxTreeCtrl* tc, const wxTreeItemId& parent, const ibSourceId& id) {
 			wxTreeItemIdValue cookie;
 			for (wxTreeItemId child = tc->GetFirstChild(parent, cookie); child.IsOk(); child = tc->GetNextChild(parent, cookie)) {
 				ibTreeItemDataSource* data = dynamic_cast<ibTreeItemDataSource*>(tc->GetItemData(child));
@@ -261,10 +302,11 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 
 			tc->SetFocus();
 
-			// Each form attribute is the GATE: path[0] = attribute id, then the binding
-			// walks the attribute's TYPE METADATA (clsid → metaobject) — NO transient
-			// source object (GetSourceExplorer is only for default-control layout, not
-			// for picking sources). Display uses the attribute's REAL name + Type.
+			// Each form attribute is the GATE: path[0] = attribute id, then the binding walks the
+			// attribute's TYPE. The FIRST level is metaobject-walked because it must be UNIVERSAL —
+			// it covers DataProcessors / Reports, which have NO queryable (queryables are DB-only). The
+			// dot-walk DEEPER is family-blind via queryable (reference targets are always DB objects).
+			// Display uses the attribute's REAL name + Type.
 			struct PickEntry { ibSourceId head; ibBackendFormAttributeValue* holder; wxString name; };
 			std::vector<PickEntry> entries;
 			std::vector<ibBackendFormAttributeValue*> holders;
@@ -308,86 +350,66 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 				rootItem = tc->AppendItem(hiddenRoot, rootLabel, icon_attribute, icon_attribute, rootData);
 				if (headAttrId == dataSource) tc->SelectItem(rootItem);
 
-				if (is_tableBox) {
-					// TABLEBOX: the type's tabular sections, each a selectable table
-					// (path [attr, table]). Columns are picked separately (tableColumn).
-					// Tabular sections live on a RECORD metaobject (object types), not on
-					// the plain composite — a metadata-kind downcast, like GetReferencedTypes.
-					if (const ibValueMetaObjectRecordData* record = dynamic_cast<const ibValueMetaObjectRecordData*>(metaObject)) {
-						for (ibValueMetaObjectTableData* table : record->GetGenericTableArrayObject()) {
-							if (table->IsDeleted()) continue;
-							const wxString tableLabel = table->GetSynonym();
-							ibTreeItemDataSource* tableData = new ibTreeItemDataSource(tableLabel, table->GetMetaID(), true, basePrefix);
-							wxTreeItemId tableItem = tc->AppendItem(rootItem, tableLabel, icon_table, icon_table, tableData);
-							tc->SetItemBold(tableItem);
-							if (table->GetMetaID() == dataSource) tc->SelectItem(tableItem);
-						}
+				// The attribute's fields/sections come from its SOURCE EXPLORER -- the same self-describing structure
+				// WalkSource + the runtime value-hop walk, UNIVERSAL (covers DataProcessors / Reports with no queryable).
+				// No metaobject walk: is_tableBox picks the tabular-section nodes, a scalar control the field nodes; a
+				// reference field expands lazily (ExpandReference). ONE mechanism, end to end.
+				ibSourceDataObject* attrSource = entry.holder->GetSourceValue();
+				// This is the COMPOSITE branch (metaObject != nullptr) — the source should be a materialised
+				// typed object. A null here means the holder was not Refresh()'d before the picker enumerated
+				// it, so the composite root would render CHILDLESS. Catch it in debug; skip safely in release.
+				wxASSERT_MSG(attrSource != nullptr, wxT("composite picker attribute has no materialised source (holder not Refresh()'d?)"));
+				if (attrSource == nullptr)
+					continue;
+				const ibSourceExplorer* explorerPtr = attrSource->GetSourceExplorer();
+				if (explorerPtr == nullptr)
+					continue;
+				const ibSourceExplorer& explorer = *explorerPtr;
+				for (unsigned int i = 0; i < explorer.GetHelperCount(); ++i) {
+					const ibSourceExplorer* col = explorer.GetHelper(i);
+					if (is_tableBox != col->IsTableSection())
+						continue;   // tablebox -> only tabular sections; scalar control -> only fields
+					const ibSourceId colId = col->GetSourceId();
+					if (is_tableBox) {
+						const wxString tableLabel = col->GetSourceSynonym();
+						ibTreeItemDataSource* tableData = new ibTreeItemDataSource(tableLabel, colId, true, basePrefix);
+						wxTreeItemId tableItem = tc->AppendItem(rootItem, tableLabel, icon_table, icon_table, tableData);
+						tc->SetItemBold(tableItem);
+						if (colId == dataSource) tc->SelectItem(tableItem);
 					}
-				}
-				else {
-					// SCALAR control: the type's attributes; a reference expands lazily
-					// into the referenced type's fields (read-only by the dot rule). Each field is
-					// SEPARATED into table vs attribute by the class factory (IsTableValue on its
-					// Type's ctor) — a table-typed field (list / dynamic list) gets the table icon
-					// and the tableSection flag, a scalar field the attribute icon.
-					for (ibValueMetaObjectAttributeBase* field : metaObject->GetGenericAttributeArrayObject()) {
-						if (field->IsDeleted()) continue;
-						const wxString label = field->GetSynonym() + wxT(" (") + MakeTypeString(metaData, field->GetTypeDesc()) + wxT(")");
-						std::vector<const ibValueMetaObjectCompositeData*> refTypes = GetReferencedTypes(field, metaData);
-						const bool fieldIsTable = IsTableType(metaData, field->GetTypeDesc());
+					else {
+						const wxString label = col->GetSourceSynonym() + wxT(" (") + MakeTypeString(metaData, col->GetTypeDesc()) + wxT(")");
+						std::vector<ibMetaID> refTypes = GetReferenceTypes(col->GetClsidList(), metaData);
+						const bool fieldIsTable = IsTableType(metaData, col->GetTypeDesc());
 						const int fieldIcon = fieldIsTable ? icon_table : icon_attribute;
-						ibTreeItemDataSource* fieldData = new ibTreeItemDataSource(label, field->GetMetaID(), fieldIsTable, basePrefix, refTypes);
+						ibTreeItemDataSource* fieldData = new ibTreeItemDataSource(label, colId, fieldIsTable, basePrefix, refTypes);
 						wxTreeItemId fieldItem = tc->AppendItem(rootItem, label, fieldIcon, fieldIcon, fieldData);
 						if (fieldIsTable) tc->SetItemBold(fieldItem);
-						if (!refTypes.empty()) tc->AppendItem(fieldItem, wxEmptyString);   // dummy child → [+]; built lazily on expand
-						if (field->GetMetaID() == dataSource) tc->SelectItem(fieldItem);
+						if (!refTypes.empty()) tc->AppendItem(fieldItem, wxEmptyString);
+						if (colId == dataSource) tc->SelectItem(fieldItem);
 					}
 				}
 				tc->Expand(rootItem);
 			}
 
-			// Lazy dot-expansion. A reference node carries a single dummy child (the [+]);
-			// on its first expand we drop the dummy and build the referenced type's fields,
-			// each carrying the accumulated guid chain. NEVER expand references eagerly — a
-			// self / cyclic reference (A.B.A...) would otherwise blow the stack (hence no
-			// ExpandAll: only the root level is shown up front, the rest opens on demand).
+			// Lazy dot-expansion: a reference node carries a single dummy [+]; on first expand
+			// ExpandReference drops it and builds the referenced type's fields. NEVER eager — a
+			// self/cyclic reference (A.B.A...) would blow the stack (so only the root is shown up
+			// front, the rest opens on demand). The SAME handler the table-column picker uses.
 			tc->Bind(wxEVT_TREE_ITEM_EXPANDING, [tc, metaData](wxTreeEvent& evt) {
-				wxTreeItemId node = evt.GetItem();
-				ibTreeItemDataSource* data = dynamic_cast<ibTreeItemDataSource*>(tc->GetItemData(node));
-				if (data == nullptr || !data->HasRef() || data->IsLoaded())
-					return;
-				data->SetLoaded();
-				tc->DeleteChildren(node);                          // drop the dummy
-
-				const std::vector<ibMetaID> childPrefix = data->ChildPrefix();
-				const bool multi = data->GetRefTypes().size() > 1;            // composite: disambiguate fields by type
-					for (const ibValueMetaObjectCompositeData* refType : data->GetRefTypes()) {
-						if (refType == nullptr)
-							continue;
-						for (ibValueMetaObjectAttributeBase* attr : refType->GetGenericAttributeArrayObject()) {
-					if (attr->IsDeleted())
-						continue;
-					const wxString label = multi ? attr->GetSynonym() + wxT(" - ") + refType->GetSynonym() : attr->GetSynonym();
-						std::vector<const ibValueMetaObjectCompositeData*> childRefTypes = GetReferencedTypes(attr, metaData);
-					ibTreeItemDataSource* childData = new ibTreeItemDataSource(
-						label, attr->GetMetaID(), false, childPrefix, childRefTypes);
-					wxTreeItemId childItem = tc->AppendItem(node, label, icon_attribute, icon_attribute, childData);
-					if (!childRefTypes.empty())
-						tc->AppendItem(childItem, wxEmptyString);   // dummy -> [+] for the next level
-						} // close inner attr loop (outer refType loop closed by the next brace)
-				}
+				ExpandReference(tc, metaData, dynamic_cast<ibTreeItemDataSource*>(tc->GetItemData(evt.GetItem())), evt.GetItem());
 			});
 
-			// Re-open positioning: walk the saved metaId path (first hop .. leaf), expanding
+			// Re-open positioning: walk the saved sourceId path (first hop .. leaf), expanding
 			// each reference node (programmatic Expand fires the lazy build above) and
 			// selecting the leaf — the user lands on it. A length-1 path lands on a top field.
 			if (srcData != nullptr && hiddenRoot.IsOk()) {
-				const std::vector<ibMetaID>& chain = srcData->GetSourceDesc().GetPath();
+				const std::vector<ibSourceId>& chain = srcData->GetSourceDesc().GetPath();
 				// Walk from the hidden root: chain[0] (head attribute id) selects the
 				// source node, the rest descends into its fields.
 				wxTreeItemId node = hiddenRoot;
 				for (size_t i = 0; i < chain.size(); ++i) {
-					wxTreeItemId child = FindChildByMetaID(tc, node, chain[i]);
+					wxTreeItemId child = FindChildBySourceId(tc, node, chain[i]);
 					if (!child.IsOk())
 						break;
 					if (i + 1 < chain.size()) {
@@ -432,8 +454,6 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 
 		bool ProcessTableColumn(wxPropertyGrid* pg, wxPGProperty* dlgProp, const ibBackendTypeSourceFactory* typeFactory, ibVariantDataSource* srcData) {
 
-			const ibMetaID& dataSource = srcData != nullptr ? srcData->GetSource() : wxNOT_FOUND;
-
 			const ibMetaData* metaData = typeFactory->GetMetaData();
 			if (metaData == nullptr) return false;
 			const ibSourceObject* typeSrc = typeFactory->GetSourceObject();
@@ -459,7 +479,7 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 			wxBoxSizer* rowsizer = new wxBoxSizer(wxHORIZONTAL);
 
 			wxTreeCtrl* tc = new wxTreeCtrl(dlg, wxID_ANY,
-				wxDefaultPosition, wxDefaultSize, wxTR_HAS_BUTTONS | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxSUNKEN_BORDER);
+				wxDefaultPosition, wxDefaultSize, wxTR_HIDE_ROOT | wxTR_HAS_BUTTONS | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxSUNKEN_BORDER);
 
 			tc->AssignImageList(GetSourceImageList());
 
@@ -483,40 +503,125 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 			tc->SetFocus();
 
 			const ibCtorAbstractType* typeCtor = metaData->GetAvailableCtor(clsid);
+			// HIDE_ROOT: a hidden root holds one TOP node per source — the bound table AND each header
+			// object above it (Mode 2). A tree has a single real root, so sources are its children.
+			const wxTreeItemId hiddenRoot = tc->AddRoot(wxEmptyString);
+			std::vector<ibSourceId> parentPath;     // the tablebox's own bound path [head, table]
 			if (typeCtor != nullptr && typeCtor->IsTableValue()) {
-				// Columns come from the bound table's SOURCE, reached through the holder
-				// — attribute + value together. The source vends its own columns
-				// (GetSourceExplorer), uniform across catalog / register / data-processor table /
-				// dynamic list: no metaobject-vs-queryable branching here. The parent tablebox
-				// binds ONE of the form's table sources — its source-desc head selects it.
+				// GetSourceList vends (per #3) the current table AND the form's object attributes: the
+				// BOUND table (its columns, row-relative) PLUS the HEADER object(s) above it (their
+				// fields, constant per row — resolved on the front via the form, Mode 2). Each becomes a
+				// root; both build their children from the source explorer (GetSourceExplorer). Table-vs-
+				// object is told by clsid (IsTableType) — never a metaobject. The dot-walk is family-blind.
 				std::vector<ibBackendFormAttributeValue*> holders;
 				typeFactory->GetSourceList(holders);
 
-				const std::vector<ibMetaID> parentPath = parentFactory != nullptr ? parentFactory->GetSourceDesc().GetPath() : std::vector<ibMetaID>{};
-				const ibMetaID boundHead = !parentPath.empty() ? parentPath.front() : wxNOT_FOUND;
+				parentPath = parentFactory != nullptr ? parentFactory->GetSourceDesc().GetPath() : std::vector<ibSourceId>{};
+				const ibSourceId boundHead = !parentPath.empty() ? parentPath.front() : wxNOT_FOUND;
+
+					// The BOUND table the column lives in may be a NESTED tabular section (parentPath =
+					// {head, ..., section}) — never a top-level form attribute, so it is absent from `holders`.
+					// Walk the head holder's explorer down parentPath to that node and root its columns directly
+					// (the row-relative fields this picker is FOR). Top-level list/section tables (size 1) are
+					// rooted by the loop below via boundHead.
+					if (parentPath.size() >= 2) {
+						ibBackendFormAttributeValue* headHolder = typeFactory->FindSourceHolder(parentPath.front());
+						ibSourceDataObject* headSrc = headHolder != nullptr ? headHolder->GetSourceValue() : nullptr;
+						const ibSourceExplorer* boundNode = headSrc != nullptr ? headSrc->GetSourceExplorer() : nullptr;
+						for (size_t i = 1; i < parentPath.size() && boundNode != nullptr; ++i)
+							boundNode = boundNode->FindById(parentPath[i]);
+						if (boundNode != nullptr) {
+							ibTreeItemDataSource* tableData = new ibTreeItemDataSource(boundNode->GetSourceSynonym(), wxNOT_FOUND, true);
+							wxTreeItemId tableItem = tc->AppendItem(hiddenRoot, boundNode->GetSourceSynonym(), icon_table, icon_table, tableData);
+							tc->SetItemBold(tableItem);
+							AppendExplorerColumns(tc, tableItem, *boundNode, parentPath, metaData);
+						}
+					}
+
+					std::vector<ibSourceId> seenRoots;   // GetSourceList is queried under two filters -> dedupe roots by attribute id
 
 				for (ibBackendFormAttributeValue* holder : holders) {
 					if (holder == nullptr)
 						continue;
-					if (boundHead != wxNOT_FOUND && holder->GetAttributeId() != boundHead)
-						continue;   // only the table this column's tablebox is bound to
-					ibSourceDataObject* source = holder->GetSourceValue();
+					bool alreadyRooted = false;
+						for (const ibSourceId seen : seenRoots)
+							if (seen == holder->GetAttributeId()) { alreadyRooted = true; break; }
+						if (alreadyRooted)
+							continue;   // GetSourceList vended this attribute under both filters
+						seenRoots.push_back(holder->GetAttributeId());
+
+						ibSourceDataObject* source = holder->GetSourceValue();
 					if (source == nullptr)
-						continue;
-					const ibSourceExplorer explorer = source->GetSourceExplorer();
-					ibTreeItemDataSource* srcItemData = new ibTreeItemDataSource(holder->GetAttributeName(), wxNOT_FOUND, true);
-					const wxTreeItemId& rootItem = tc->AddRoot(holder->GetAttributeName(), icon_table, icon_table, srcItemData);
-					for (unsigned int i = 0; i < explorer.GetHelperCount(); ++i) {
-						const ibSourceExplorer col = explorer.GetHelper(i);
-						ibTreeItemDataSource* itemData = new ibTreeItemDataSource(col.GetSourceName(), col.GetSourceId(), false);
-						const wxTreeItemId& newItem = tc->AppendItem(rootItem, col.GetSourceName(), icon_attribute, icon_attribute, itemData);
-						if (dataSource == col.GetSourceId()) tc->SelectItem(newItem);
+						continue;   // a primitive form attribute materialises no source — nothing to pick under it
+					const ibSourceExplorer* explorerPtr = source->GetSourceExplorer();
+						if (explorerPtr == nullptr)
+							continue;
+						const ibSourceExplorer& explorer = *explorerPtr;
+
+					if (IsTableType(metaData, holder->GetTypeDesc())) {
+						// The BOUND table (the one this column's tablebox reads). Its columns are row-
+						// relative, prefixed by the tablebox's own bound path. Skip any OTHER table.
+						if (boundHead != wxNOT_FOUND && holder->GetAttributeId() != boundHead)
+							continue;
+						ibTreeItemDataSource* tableData = new ibTreeItemDataSource(holder->GetAttributeName(), wxNOT_FOUND, true);
+						wxTreeItemId tableItem = tc->AppendItem(hiddenRoot, holder->GetAttributeName(), icon_table, icon_table, tableData);
+						tc->SetItemBold(tableItem);
+						AppendExplorerColumns(tc, tableItem, explorer, parentPath, metaData);
 					}
-					break;   // one table (usually one source)
+					else {
+						// A HEADER object ABOVE the table (Mode 2). Its fields are constant across the
+						// table's rows; the column path roots at the header attribute id, and the renderer
+						// resolves it through the form. The object node itself is not a column (id NOT_FOUND).
+						ibTreeItemDataSource* headData = new ibTreeItemDataSource(holder->GetAttributeName(), wxNOT_FOUND, false);
+						wxTreeItemId headItem = tc->AppendItem(hiddenRoot, holder->GetAttributeName(), icon_attribute, icon_attribute, headData);
+						AppendExplorerColumns(tc, headItem, explorer, std::vector<ibSourceId>{ holder->GetAttributeId() }, metaData);
+					}
+				}
+
+				// Lazy reference expansion — the SAME handler as the scalar picker.
+				tc->Bind(wxEVT_TREE_ITEM_EXPANDING, [tc, metaData](wxTreeEvent& evt) {
+					ExpandReference(tc, metaData, dynamic_cast<ibTreeItemDataSource*>(tc->GetItemData(evt.GetItem())), evt.GetItem());
+				});
+			}
+
+			// Expand every source root so its columns show; references stay collapsed ([+]) so a cyclic
+			// ref can't blow the stack (no ExpandAll).
+			wxTreeItemIdValue expandCookie;
+			for (wxTreeItemId top = tc->GetFirstChild(hiddenRoot, expandCookie); top.IsOk(); top = tc->GetNextChild(hiddenRoot, expandCookie))
+				tc->Expand(top);
+
+			// Re-open: find the root whose prefix matches the saved path and descend to the leaf. The
+			// tail start = that root's children-prefix length (read off a child — the bound table's bound
+			// path, or a header object's single attribute id), so both root kinds re-open uniformly.
+			if (srcData != nullptr && hiddenRoot.IsOk()) {
+				const std::vector<ibSourceId> chain = srcData->GetSourceDesc().GetPath();
+				wxTreeItemIdValue rootCookie;
+				for (wxTreeItemId top = tc->GetFirstChild(hiddenRoot, rootCookie); top.IsOk(); top = tc->GetNextChild(hiddenRoot, rootCookie)) {
+					wxTreeItemIdValue childCookie;
+					wxTreeItemId firstChild = tc->GetFirstChild(top, childCookie);
+					ibTreeItemDataSource* fcData = firstChild.IsOk() ? dynamic_cast<ibTreeItemDataSource*>(tc->GetItemData(firstChild)) : nullptr;
+					if (fcData == nullptr)
+						continue;
+					const std::vector<ibSourceId>& rootPrefix = fcData->GetPrefixPath();   // path TO this root's columns
+					if (chain.size() <= rootPrefix.size())
+						continue;
+					bool prefixMatch = true;
+					for (size_t k = 0; k < rootPrefix.size(); ++k)
+						if (chain[k] != rootPrefix[k]) { prefixMatch = false; break; }
+					if (!prefixMatch)
+						continue;
+					wxTreeItemId node = top;
+					for (size_t i = rootPrefix.size(); i < chain.size(); ++i) {
+						wxTreeItemId child = FindChildBySourceId(tc, node, chain[i]);
+						if (!child.IsOk())
+							break;
+						if (i + 1 < chain.size()) { tc->Expand(child); node = child; }
+						else { tc->SelectItem(child); tc->EnsureVisible(child); }
+					}
+					break;   // matched root
 				}
 			}
 
-			tc->ExpandAll();
 			int res = dlg->ShowModal();
 
 			wxTreeItemId selItem = tc->GetSelection();
@@ -532,12 +637,11 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 						dlg->Destroy();
 						return false;
 					}
-					// Column path = the PARENT tablebox's own bound path + this column id,
-					// so the runtime walks [head, table, column] (the parent owns [head, table]).
-					ibSourceDescription desc = parentFactory != nullptr ? parentFactory->GetSourceDesc() : ibSourceDescription();
-					desc.AppendSource(item->GetID());
+					// The node carries its FULL accumulated path — the tablebox prefix + the column +
+					// any dot-walk hops: [head, table, column] for a plain column, [head, table,
+					// column, field] for a reference field. Save it verbatim (the runtime resolves it).
 					ibVariantDataSource* variant = new ibVariantDataSource(typeFactory, item->GetID());
-					variant->SetSourceDesc(desc);
+					variant->SetSourceDesc(item->GetSourceDesc());
 					SetValue(variant);
 				}
 				else if (dataItem == nullptr) {

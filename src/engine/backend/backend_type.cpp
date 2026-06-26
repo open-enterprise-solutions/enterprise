@@ -104,13 +104,6 @@ ibValue ibBackendTypeConfigFactory::AdjustValue(const ibValue& varValue) const
 
 /////////////////////////////////////////////////////////////////////////////////////
 
-bool ibBackendTypeSourceFactory::FilterSource(const ibSourceExplorer& src, const ibMetaID& id) const
-{
-	return !src.IsTableSection();
-}
-
-#include "backend/metaCollection/metaObject.h"             // ibValueMetaObject — deep-hop field resolve
-#include "backend/metaCollection/partial/commonObject.h"   // ibSourceDataObject — the live source on the holder
 #include "backend/query/queryColumn.h"                      // ibBackendSourceColumn — the leaf the dot returns
 
 const ibBackendSourceColumn* ibBackendTypeSourceFactory::WalkSource(
@@ -123,33 +116,19 @@ const ibBackendSourceColumn* ibBackendTypeSourceFactory::WalkSource(
 	ibBackendFormAttributeValue* headHolder = FindSourceHolder(path[0]);
 	if (headHolder == nullptr) return nullptr;
 	if (outText != nullptr) *outText = headHolder->GetAttributeName();
-	if (valid != nullptr) *valid = true;   // a whole-attribute binding (length 1) is valid
+	// A whole-attribute binding (length 1) is valid with no column leaf.
+	if (path.size() == 1) { if (valid != nullptr) *valid = true; return nullptr; }
 
-	// The head attribute's LIVE source (now on the attribute side) resolves a hop to one of its
-	// OWN columns, metadata-blind (a dynamic list → a queryable column). A CLOSED source
-	// (HasOwnColumns) makes a MISS a BROKEN binding — the column was dropped by a Type/source
-	// change; an OPEN metaobject source falls through to the config-wide reference dot-walk (a
-	// dotted path's deeper hop lives in ANOTHER type, not this source's own columns).
+	// Deeper hops delegate to THE shared structure-resolve hop — it walks each source's EXPLORER (the same
+	// self-describing structure the runtime value-hop steps), descending into each reference's OWN columns.
+	// No metaID -> name -> FindAnyObjectByFilter fallback: the reference-as-source explorer already holds the
+	// target's columns, so a miss is a genuinely broken binding. ONE resolve path, the design-time twin of
+	// ContinueHops (which the tablebox renderer + GetValueByPath fetch values through).
 	ibSourceDataObject* source = headHolder->GetSourceValue();
-	const ibMetaData* metaData = GetMetaData();
-
 	const ibBackendSourceColumn* leaf = nullptr;
-	for (size_t i = 1; i < path.size(); ++i) {
-		const ibBackendSourceColumn* col = source != nullptr ? source->GetSourceColumn(path[i]) : nullptr;
-		if (col != nullptr) {
-			if (outText != nullptr) { *outText += wxT("."); *outText += col->GetName(); }   // NAME, not synonym — match the head / field hops
-			leaf = col;
-			source = nullptr;   // descended past this source's own columns → reference territory
-			continue;
-		}
-		// The live source did not resolve it: a CLOSED source → broken; else config-wide.
-		if (source != nullptr && source->HasOwnColumns()) { if (valid != nullptr) *valid = false; return nullptr; }
-		const ibValueMetaObject* field = metaData != nullptr ? metaData->FindAnyObjectByFilter(path[i], true) : nullptr;
-		if (field == nullptr || !field->IsAllowed()) { if (valid != nullptr) *valid = false; return nullptr; }
-		if (outText != nullptr) { *outText += wxT("."); *outText += field->GetName(); }
-		leaf = dynamic_cast<const ibBackendSourceColumn*>(field);
-	}
-	return leaf;
+	const bool resolved = (source != nullptr) && source->WalkColumns(path, 1, leaf, outText);
+	if (valid != nullptr) *valid = resolved;
+	return resolved ? leaf : nullptr;
 }
 
 ibBackendFormAttributeValue* ibBackendTypeSourceFactory::FindSourceHolder(const ibMetaID& id) const

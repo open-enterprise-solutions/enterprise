@@ -52,7 +52,6 @@ bool ibFormVisualDocument::OnCreate(const wxString& path, long flags)
 			ibFormVisualDocument::SetFilename(creator->GetFileName());
 		}
 	}
-
 	ibFormVisualDocument::SetTitle(m_valueForm->GetCaption());
 
 	return ibDocument::OnCreate(path, flags);

@@ -156,15 +156,15 @@ wxString ibValueRecordDataObjectConstant::GetString() const
 	return clsFactory->GetClassName();
 }
 
-ibSourceExplorer ibValueRecordDataObjectConstant::GetSourceExplorer() const
+const ibSourceExplorer* ibValueRecordDataObjectConstant::GetSourceExplorer() const
 {
-	ibSourceExplorer srcHelper(
+	m_sourceExplorer.Reset(
 		m_metaObject->GetName(), m_metaObject->GetSynonym(), m_metaObject->GetMetaID(), GetClassType(),
 		false, true
 	);
 
-	srcHelper.AppendColumn(m_metaObject);
-	return srcHelper;
+	m_sourceExplorer.AppendColumn(m_metaObject);
+	return &m_sourceExplorer;
 }
 
 #pragma region _form_builder_h_

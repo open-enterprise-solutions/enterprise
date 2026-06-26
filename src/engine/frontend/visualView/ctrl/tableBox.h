@@ -82,6 +82,9 @@ class ibValueModelTableBox : public ibValueWindow,
 	// Full binding path [headAttrId, tableSection, ...] — the resolve walks the attribute.
 	void SetSource(const std::vector<ibSourceId>& path) { m_propertySource->SetValue(ibSourceDescription(path)); ibValueModelTableBox::RefreshModel(true); }
 	ibMetaID GetSource() const { return m_propertySource->GetValueAsSource(); }
+	// This tablebox's own bound path ([headAttr, tableSection] or [headAttr]) — a child column's
+	// path is this prefix + its own field id(s); the row-relative tail is what the resolve walks.
+	const std::vector<ibSourceId>& GetSourcePath() const { return m_propertySource->GetValueAsPath(); }
 	////////////////////////////////////////////////////////////////////////////////////////
 
 	// Available sources = the owning form's attributes of THIS control's kind (table).
@@ -118,8 +121,23 @@ class ibValueModelTableBox : public ibValueWindow,
 	//get form owner 
 	virtual ibValueForm* GetOwnerForm() const { return m_formOwner; }
 
-	//get model 
+	//get model
 	ibValueModel* GetTableModel() const { return m_tableModel; }
+
+	// Single point: resolve a dot-path column's value for ONE row (called per visible cell from the
+	// column renderer's CheckedGetValue). First hop via the DUMB model (GetValueByMetaID), deeper
+	// hops walk the reference on the front. Returns false for a plain column (model resolves it).
+	bool ResolveCellValue(const ibDataViewItem& item, const class ibValueModelTableBoxColumn* column, wxVariant& out) const;
+
+	// A dot-path column — its binding reaches PAST the tablebox prefix + one row column. Such a
+	// column is resolved through the dot (read-only): the renderer suppresses inline editing.
+	bool IsPathColumn(const class ibValueModelTableBoxColumn* column) const;
+
+	// A FOREIGN-root column — its path is NOT under this tablebox's own bound prefix, so it is rooted
+	// at a different form source: the object ABOVE the table (its header). Such a column lives in the
+	// tablebox alongside the real columns but reads from the form, CONSTANT across every row of the
+	// tabular section (the header doesn't vary per line). Read-only, like a dot-path column. (Mode 2)
+	bool IsForeignColumn(const class ibValueModelTableBoxColumn* column) const;
 
 	//get metaData
 	virtual const ibMetaData* GetMetaData() const;
@@ -188,9 +206,6 @@ class ibValueModelTableBox : public ibValueWindow,
 	*/
 	virtual void PrepareDefaultMenu(wxMenu* m_menu);
 	virtual void ExecuteMenu(ibVisualHost* visualHost, int id);
-
-	// filter data 
-	virtual bool FilterSource(const ibSourceExplorer& src, const ibMetaID& id) const;
 
 	//contol value
 	virtual bool HasValueInControl() const {
@@ -335,9 +350,12 @@ public:
 	////////////////////////////////////////////////////////////////////////////////////////
 
 	void SetSource(const ibSourceId& id) { m_propertySource->SetValue(id); }
-	// Full binding path [headAttrId, tableSection, column] — the resolve walks the attribute.
+	// Full binding path [headAttrId, tableSection, column, ...] — the resolve walks the attribute.
 	void SetSource(const std::vector<ibSourceId>& path) { m_propertySource->SetValue(ibSourceDescription(path)); }
 	ibMetaID GetSource() const { return m_propertySource->GetValueAsSource(); }
+	// The column's FULL binding path (tablebox prefix + the column's own field id(s)); the
+	// tablebox strips its own prefix to get the row-relative tail it walks per row.
+	const std::vector<ibSourceId>& GetSourcePath() const { return m_propertySource->GetValueAsPath(); }
 
 	////////////////////////////////////////////////////////////////////////////////////////
 
@@ -435,9 +453,6 @@ public:
 	virtual bool WriteData(ibDataNode& node) const;
 
 public:
-
-	//filter source
-	virtual bool FilterSource(const ibSourceExplorer& src, const ibMetaID& id) const;
 
 	//get control value
 	virtual bool SetControlValue(const ibValue& varControlVal = ibValue());

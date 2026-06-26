@@ -12,10 +12,10 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-ibSourceExplorer ibValueRecordManagerObjectInformationRegister::GetSourceExplorer() const
+const ibSourceExplorer* ibValueRecordManagerObjectInformationRegister::GetSourceExplorer() const
 {
-	ibSourceExplorer srcHelper(
-		wxT("ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
+	m_sourceExplorer.Reset(
+		wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
 		false, false
 	);
 
@@ -23,23 +23,23 @@ ibSourceExplorer ibValueRecordManagerObjectInformationRegister::GetSourceExplore
 
 	if (m_metaObject->ConvertToValue(metaRef)) {
 		if (metaRef->GetPeriodicity() != ibPeriodicity::eNonPeriodic) {
-			srcHelper.AppendColumn(metaRef->GetRegisterPeriod());
+			m_sourceExplorer.AppendColumn(metaRef->GetRegisterPeriod());
 		}
 	}
 
 	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
-		srcHelper.AppendColumn(object);
+		m_sourceExplorer.AppendColumn(object);
 	}
 
 	for (const auto object : m_metaObject->GetResourceArrayObject()) {
-		srcHelper.AppendColumn(object);
+		m_sourceExplorer.AppendColumn(object);
 	}
 
 	for (const auto object : m_metaObject->GetAttributeArrayObject()) {
-		srcHelper.AppendColumn(object);
+		m_sourceExplorer.AppendColumn(object);
 	}
 
-	return srcHelper;
+	return &m_sourceExplorer;
 }
 
 #pragma region _form_builder_h_

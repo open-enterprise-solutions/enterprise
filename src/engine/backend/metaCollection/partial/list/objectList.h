@@ -231,7 +231,7 @@ public:
 	virtual bool GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const override;
 
 	//support source data 
-	virtual ibSourceExplorer GetSourceExplorer() const;
+	virtual const ibSourceExplorer* GetSourceExplorer() const;
 
 	//****************************************************************************
 	//*                              Support methods                             *
@@ -353,7 +353,7 @@ public:
 	virtual bool GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const override;
 
 	//support source data 
-	virtual ibSourceExplorer GetSourceExplorer() const;
+	virtual const ibSourceExplorer* GetSourceExplorer() const;
 
 	//****************************************************************************
 	//*                              Support methods                             *
@@ -505,7 +505,7 @@ public:
 	virtual bool GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const override;
 
 	//support source data 
-	virtual ibSourceExplorer GetSourceExplorer() const;
+	virtual const ibSourceExplorer* GetSourceExplorer() const;
 
 	//****************************************************************************
 	//*                              Support methods                             *
@@ -830,7 +830,7 @@ public:
 	virtual bool GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const override;
 
 	//support source data
-	virtual ibSourceExplorer GetSourceExplorer() const;
+	virtual const ibSourceExplorer* GetSourceExplorer() const;
 	
 	//****************************************************************************
 	//*                              Support methods                             *

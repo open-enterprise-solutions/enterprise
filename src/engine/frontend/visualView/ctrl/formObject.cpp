@@ -8,7 +8,7 @@
 #include "backend/appData.h"
 #include "backend/metaData.h"
 #include "frontend/docView/docView.h"
-#include "backend/srcExplorer.h"
+#include "backend/srcDataObject.h"
 #include "backend/moduleManager/moduleManager.h"
 #include "backend/session/session.h"
 #include "frontend/visualView/visualHostClient.h"
@@ -62,8 +62,6 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 		mainToolBar->SetControlName(wxT("MainToolbar"));
 		mainToolBar->SetActionSrc(FORM_ACTION);
 
-		const ibValueMetaObjectGenericData* metaObjectValue = sourceObject->GetSourceMetaObject();
-
 		ibValueModelTableBox* mainTableBox = nullptr;
 
 		const ibActionCollection& actionData = ibValueForm::GetActionCollection(formType);
@@ -88,7 +86,9 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 			}
 		}
 
-		const ibSourceExplorer& sourceExplorer = sourceObject->GetSourceExplorer();
+		const ibSourceExplorer* sourceExplorerPtr = sourceObject->GetSourceExplorer();
+		static const ibSourceExplorer s_emptyExplorer;
+		const ibSourceExplorer& sourceExplorer = sourceExplorerPtr != nullptr ? *sourceExplorerPtr : s_emptyExplorer;
 
 		// List vs object is decided by the SOURCE class via the class factory (IsTableSource —
 		// CLSID → ctor → IsTableValue), not the source explorer's flag. Every ibValueModel
@@ -111,7 +111,10 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 
 		for (unsigned int idx = 0; idx < sourceExplorer.GetHelperCount(); idx++) {
 
-			const ibSourceExplorer& nextSourceExplorer = sourceExplorer.GetHelper(idx);
+			const ibSourceExplorer* nextPtr = sourceExplorer.GetHelper(idx);
+			if (nextPtr == nullptr)
+				continue;
+			const ibSourceExplorer& nextSourceExplorer = *nextPtr;
 
 			if (isTableSource) {
 				ibValueModelTableBoxColumn* tableBoxColumn =
@@ -164,7 +167,10 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 					}
 
 					for (unsigned int col = 0; col < nextSourceExplorer.GetHelperCount(); col++) {
-						const ibSourceExplorer& colSourceExplorer = nextSourceExplorer.GetHelper(col);
+						const ibSourceExplorer* colExplorerPtr = nextSourceExplorer.GetHelper(col);
+						if (colExplorerPtr == nullptr)
+							continue;
+						const ibSourceExplorer& colSourceExplorer = *colExplorerPtr;
 
 						ibValueModelTableBoxColumn* tableBoxColumn =
 							dynamic_cast<ibValueModelTableBoxColumn*>(ibValueForm::CreateControl(wxT("TableboxColumn"), tableBox));

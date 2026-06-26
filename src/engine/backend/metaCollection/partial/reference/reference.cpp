@@ -243,6 +243,31 @@ ibClassID ibValueReferenceDataObject::GetClassType() const
 	return clsFactory->GetClassType();
 }
 
+const ibValueMetaObjectGenericData* ibValueReferenceDataObject::GetSourceMetaObject() const
+{
+	return GetMetaObject();   // RecordData* -> GenericData* (RecordData : GenericData; complete types in this TU)
+}
+
+const ibMetaData* ibValueReferenceDataObject::GetSourceMetaData() const
+{
+	const ibValueMetaObjectRecordData* mo = GetMetaObject();
+	return mo != nullptr ? mo->GetMetaData() : nullptr;
+}
+
+// A reference vends its TARGET type's columns into the inherited owner-bound m_sourceExplorer — the
+// recursion FUEL: hop into a reference VALUE, get THIS explorer, descend by id. Built from the
+// referenced metaobject (no DB read; the referenced record's own attributes — scalar dot-walk targets).
+const ibSourceExplorer* ibValueReferenceDataObject::GetSourceExplorer() const
+{
+	const ibValueMetaObjectRecordData* metaObject = GetMetaObject();
+	if (metaObject == nullptr)
+		return nullptr;   // unresolved / empty reference — no target type to describe, so the hop stops here
+	m_sourceExplorer.Reset(wxT("Ref"), _("Ref"), metaObject->GetMetaID(), GetClassType(), false, false);
+	for (const auto object : metaObject->GetGenericAttributeArrayObject())
+		m_sourceExplorer.AppendColumn(object);
+	return &m_sourceExplorer;
+}
+
 wxString ibValueReferenceDataObject::GetString() const
 {
 	if (m_newObject)

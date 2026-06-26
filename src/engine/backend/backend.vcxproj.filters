@@ -76,7 +76,6 @@
     <ClInclude Include="logger\loggerWriter.h">
       <Filter>logger</Filter>
     </ClInclude>
-    <ClInclude Include="srcExplorer.h" />
     <ClInclude Include="databaseLayer\databaseErrorCodes.h">
       <Filter>databaseLayer</Filter>
     </ClInclude>

@@ -1,11 +1,11 @@
-#include "backend/metaCollection/partial/list/dynamicList.h"
+﻿#include "backend/metaCollection/partial/list/dynamicList.h"
 #include "backend/composition/listFetchDriver.h"
 #include "backend/appData.h"                         // appData / GetActiveMetaData
 #include "backend/session/session.h"                 // ses_query
 #include "backend/tableView.h"                       // s_constIgnoreParent
 #include "backend/query/queryable.h"                 // ibBackendQueryable
 #include "backend/query/queryColumn.h"               // ibBackendQueryColumn::GetColumnId
-#include "backend/srcExplorer.h"                      // ibSourceExplorer
+#include "backend/srcDataObject.h"                      // ibSourceExplorer
 #include "backend/serialize/dataBuilder.h"            // ibDataNode (object-level save/load)
 #include "backend/metadataConfiguration.h"            // ibMetaDataConfigurationBase (GetSourceMetaData)
 
@@ -202,29 +202,19 @@ ibUniqueKey ibValueDynamicList::GetGuid() const
 	return wxNullGuid;
 }
 
-ibSourceExplorer ibValueDynamicList::GetSourceExplorer() const
+const ibSourceExplorer* ibValueDynamicList::GetSourceExplorer() const
 {
-	// The explorer's columns come from the QUERYABLE (name / id / type), not a
-	// metaobject - the dynamic list is queryable-based.
-	ibSourceExplorer root(GetObjectTypeName(), wxNOT_FOUND, g_valueDynamicListCLSID);
+	// The explorer's columns come from the QUERYABLE, not a metaobject - the dynamic list is
+	// queryable-based. Use the COLUMN-overload (a queryable column IS-A ibBackendSourceColumn): it
+	// carries the descriptor on the node (m_col -> GetSourceAttributeObject, so the binding resolves and
+	// the header shows the real SYNONYM, not the control name) — the 3-arg plain-value overload set
+	// neither m_col nor the synonym (synonym defaulted to the name). null / !IsAllowed are skipped inside.
+	m_sourceExplorer.Reset(GetObjectTypeName(), GetObjectTypeName(), wxNOT_FOUND, g_valueDynamicListCLSID);
 	const ibBackendQueryable* q = GetSourceQueryable();
 	if (q != nullptr)
 		for (const ibBackendQueryColumn* col : q->GetColumns())
-			if (col != nullptr)
-				root.AppendColumn(col->GetName(), col->GetColumnId(), col->GetTypeDesc());
-	return root;
-}
-
-const ibBackendSourceColumn* ibValueDynamicList::GetSourceColumn(const ibMetaID& id) const
-{
-	// Resolve the id against the LIVE queryable columns — an ibBackendQueryColumn IS-A
-	// ibBackendSourceColumn, so it returns directly (no adapter). Miss = the column was dropped
-	// (a Type/source change) → the walker reports the binding BROKEN (HasOwnColumns() == true).
-	if (const ibBackendQueryable* q = GetSourceQueryable())
-		for (const ibBackendQueryColumn* col : q->GetColumns())
-			if (col != nullptr && col->GetColumnId() == id)
-				return col;
-	return nullptr;
+			m_sourceExplorer.AppendColumn(col);
+	return &m_sourceExplorer;
 }
 
 wxString ibValueDynamicList::GetSourceCaption() const

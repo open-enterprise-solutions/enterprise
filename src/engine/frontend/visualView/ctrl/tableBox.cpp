@@ -11,6 +11,7 @@
 #include "frontend/visualView/visualHostClient.h"
 #include "backend/system/value/valueTable.h"
 #include "backend/metaCollection/partial/commonObject.h"
+#include "backend/metaData.h"                 // FindAnyObjectByFilter (dot-path metaID -> name)
 #include "backend/appData.h"
 //***********************************************************************************
 //*                           IMPLEMENT_DYNAMIC_CLASS                               *
@@ -25,6 +26,72 @@
 //***********************************************************************************
 //*                                 Special tablebox func                           *
 //***********************************************************************************
+
+// Single point: resolve a dot-path column's value for ONE row (called per visible cell from the
+// column renderer's CheckedGetValue). The model stays a plain id->value source: the FIRST hop is
+// a real row column it resolves; the deeper hops walk the reference on the front by attribute name.
+// A plain column (row-relative tail <= 1) returns false — the renderer falls through to the model.
+// A dot-path column reaches past the tablebox prefix + one row column (>= 2 row-relative hops).
+bool ibValueModelTableBox::IsPathColumn(const ibValueModelTableBoxColumn* column) const
+{
+	return column != nullptr && column->GetSourcePath().size() > GetSourcePath().size() + 1;
+}
+
+// A column whose path does NOT lie under this tablebox's own bound prefix is rooted at a DIFFERENT
+// form source — the object ABOVE the table (its header). A normal column shares the tablebox's whole
+// prefix, then diverges into its own column id / dot-walk; a foreign column diverges WITHIN the
+// prefix (or is shorter than it). (Mode 2 — column from the header object.)
+bool ibValueModelTableBox::IsForeignColumn(const ibValueModelTableBoxColumn* column) const
+{
+	if (column == nullptr)
+		return false;
+	const std::vector<ibSourceId>& colPath = column->GetSourcePath();
+	const std::vector<ibSourceId>& myPath = GetSourcePath();
+	if (colPath.empty())
+		return false;
+	for (size_t i = 0; i < myPath.size(); ++i) {
+		if (i >= colPath.size() || colPath[i] != myPath[i])
+			return true;   // diverges from (or is shorter than) the tablebox prefix -> foreign root
+	}
+	return false;
+}
+
+bool ibValueModelTableBox::ResolveCellValue(const ibDataViewItem& item,
+	const ibValueModelTableBoxColumn* column, wxVariant& out) const
+{
+	// FOREIGN-root column (Mode 2): pulls from a form source ABOVE this tablebox (the header object),
+	// not from a row of the bound table. Resolve it ONCE through the form — the value is the same for
+	// every row of the tabular section (the header is constant across the lines). Read-only. The
+	// primitive is the same the designer/web read uses (GetControlValue's dotted-path branch).
+	if (IsForeignColumn(column)) {
+		ibValue current;
+		if (m_formOwner == nullptr || !m_formOwner->GetValueByAttributePath(column->GetSourcePath(), current))
+			return false;
+		ibValueModel::ValueToVariant(out, current);
+		return true;
+	}
+
+	// One hop past the prefix = a plain row column (the dumb model has it) — not ours.
+	if (m_tableModel == nullptr || !IsPathColumn(column))
+		return false;
+
+	const std::vector<ibSourceId>& colPath = column->GetSourcePath();
+	const size_t prefix = GetSourcePath().size();   // row-relative tail starts here
+
+	// First hop — a column of the row (a reference cell), via the DUMB model.
+	ibValue current;
+	if (!m_tableModel->GetValueByMetaID(item, colPath[prefix], current))
+		return false;
+
+	// Deeper hops — the SHARED source walk (the very ibSourceDataObject::ContinueHops that GetValueByPath
+	// uses): each reference cell IS a source object, so it self-describes the next id. No metaID -> name
+	// -> FindProp round-trip — ONE data-fetch path for both the renderer and the path resolver.
+	if (!ibSourceDataObject::ContinueHops(current, colPath, prefix + 1, current))
+		return false;
+
+	ibValueModel::ValueToVariant(out, current);
+	return true;
+}
 
 bool ibValueModelTableBox::GetControlValue(ibValue& pvarControlVal) const
 {
@@ -262,11 +329,6 @@ ibClassID ibValueModelTableBox::GetSourceClassType() const
 	wxASSERT(m_tableModel);
 	if (m_tableModel == nullptr) return 0;
 	return m_tableModel->GetSourceClassType();
-}
-
-bool ibValueModelTableBox::FilterSource(const ibSourceExplorer& src, const ibMetaID& id) const
-{
-	return src.IsTableSection();
 }
 
 //***********************************************************************************

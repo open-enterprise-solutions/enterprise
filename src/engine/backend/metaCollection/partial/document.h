@@ -242,8 +242,8 @@ class ibValueRecordDataObjectDocument : public ibValueRecordDataObjectRecorderRe
 
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
 
-	//support source data 
-	virtual ibSourceExplorer GetSourceExplorer() const;
+	//support source data
+	virtual const ibSourceExplorer* GetSourceExplorer() const;
 
 	// ShowFormValue / GetFormValue inherited from base. Document has
 	// a single form-id (no folder/item branching) — hook below.

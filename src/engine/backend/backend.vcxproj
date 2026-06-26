@@ -303,8 +303,8 @@
     <ClInclude Include="propertyManager\property\variant\variantType.h" />
     <ClInclude Include="res\resource.h" />
     <ClInclude Include="roleHelper.h" />
-    <ClInclude Include="srcExplorer.h" />
     <ClInclude Include="srcObject.h" />
+    <ClInclude Include="srcDataObject.h" />
     <ClInclude Include="stringUtils.h" />
     <ClInclude Include="interfaceHelper.h" />
     <ClInclude Include="system\systemEnum.h" />
@@ -651,6 +651,7 @@
     <ClCompile Include="moduleManager\moduleManagerDataUnit.cpp" />
     <ClCompile Include="moduleManager\moduleManagerUnit.cpp" />
     <ClCompile Include="objCtor.cpp" />
+    <ClCompile Include="srcDataObject.cpp" />
     <ClCompile Include="picturePredefined.cpp" />
     <ClCompile Include="propertyManager\propertyObject.cpp" />
     <ClCompile Include="propertyManager\property\eventControl.cpp" />

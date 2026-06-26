@@ -3,6 +3,7 @@
 
 #include "backend/compiler/value.h"
 #include "backend/valueInfo.h"
+#include "backend/srcDataObject.h"   // ibSourceDataObject base — a reference IS a source object (vends its target's explorer)
 
 //********************************************************************************************
 //*                                     Defines                                              *
@@ -18,7 +19,7 @@ class BACKEND_API ibValueRecordDataObjectRef;
 //********************************************************************************************
 
 class BACKEND_API ibValueReferenceDataObject : public ibValueDynamicMembers,
-	public ibValueDataObject {
+	public ibValueDataObject, public ibSourceDataObject {
 	public:
 private:
 	enum helperAlias {
@@ -100,6 +101,22 @@ public:
 	virtual const ibValueMetaObjectRecordData* GetMetaObject() const {
 		return (const ibValueMetaObjectRecordData *)m_metaObject;
 	}
+
+	// --- ibSourceDataObject: a reference IS a source object. It vends its TARGET type's explorer,
+	// fueling the recursive dot-walk hop (value -> ConvertToValue<ibSourceDataObject> -> next explorer).
+	// GetValueByMetaID / SetValueByMetaID above already satisfy both bases; these resolve the rest.
+	// GetGuid overrides BOTH ibValueDataObject's (concrete) and ibSourceDataObject's (pure).
+	virtual ibUniqueKey GetGuid() const override { return m_objGuid; }
+	virtual ibClassID GetSourceClassType() const override { return GetClassType(); }
+	virtual wxString GetSourceCaption() const override { return GetString(); }
+	virtual void SourceIncrRef() override { ibValue::IncrRef(); }
+	virtual void SourceDecrRef() override { ibValue::DecrRef(); }
+	// Out-of-line (reference.cpp): the explorer build needs the COMPLETE metaobject types. Covariant
+	// GenericData* (matching ibSourceDataObject — the precise type, no cast): GenericData is complete via
+	// genericData.h, pulled in through srcDataObject.h.
+	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const override;
+	virtual const ibMetaData* GetSourceMetaData() const override;
+	virtual const ibSourceExplorer* GetSourceExplorer() const override;
 
 	//support show 
 	virtual void ShowValue();

@@ -22,19 +22,19 @@ ibValueRecordDataObjectChartOfAccounts::ibValueRecordDataObjectChartOfAccounts(c
 	m_members.Bind(this, &ibValueRecordDataObjectChartOfAccounts::FillMethods);
 }
 
-ibSourceExplorer ibValueRecordDataObjectChartOfAccounts::GetSourceExplorer() const
+const ibSourceExplorer* ibValueRecordDataObjectChartOfAccounts::GetSourceExplorer() const
 {
-	ibSourceExplorer srcHelper(wxT("ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(), false);
+	m_sourceExplorer.Reset(wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(), false);
 	ibValueMetaObjectChartOfAccounts* metaRef = nullptr;
 
 	if (m_metaObject->ConvertToValue(metaRef)) {
-		srcHelper.AppendColumn(metaRef->GetDataCode(), false);
-		srcHelper.AppendColumn(metaRef->GetDataDescription());
-		srcHelper.AppendColumn(metaRef->GetDataParent());
+		m_sourceExplorer.AppendColumn(metaRef->GetDataCode(), false);
+		m_sourceExplorer.AppendColumn(metaRef->GetDataDescription());
+		m_sourceExplorer.AppendColumn(metaRef->GetDataParent());
 		{
 			ibValueMetaObjectTableData* subTbl = metaRef->GetSubcontoKindsTable();
 			if (subTbl != nullptr && !subTbl->IsDeleted()) {
-				ibSourceExplorer& tblNode = srcHelper.AppendTable(subTbl->GetName(), subTbl->GetSynonym(), subTbl->GetMetaID(), subTbl->GetTypeDesc());
+				ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(subTbl->GetName(), subTbl->GetSynonym(), subTbl->GetMetaID(), subTbl->GetTypeDesc());
 				std::vector<ibValueMetaObjectAttributeBase*> tblCols;
 				for (ibValueMetaObjectAttributeBase* tblCol : subTbl->GetGenericAttributeArrayObject(tblCols)) tblNode.AppendColumn(tblCol);
 			}
@@ -45,11 +45,11 @@ ibSourceExplorer ibValueRecordDataObjectChartOfAccounts::GetSourceExplorer() con
 		ibItemMode attrUse = object->GetItemMode();
 		if (m_objMode == ibObjectMode::OBJECT_ITEM) {
 			if (attrUse == ibItemMode::ibItemMode_Item || attrUse == ibItemMode::ibItemMode_Folder_Item) {
-				if (!m_metaObject->IsDataReference(object->GetMetaID())) srcHelper.AppendColumn(object);
+				if (!m_metaObject->IsDataReference(object->GetMetaID())) m_sourceExplorer.AppendColumn(object);
 			}
 		} else {
 			if (attrUse == ibItemMode::ibItemMode_Folder || attrUse == ibItemMode::ibItemMode_Folder_Item) {
-				if (!m_metaObject->IsDataReference(object->GetMetaID())) srcHelper.AppendColumn(object);
+				if (!m_metaObject->IsDataReference(object->GetMetaID())) m_sourceExplorer.AppendColumn(object);
 			}
 		}
 	}
@@ -59,7 +59,7 @@ ibSourceExplorer ibValueRecordDataObjectChartOfAccounts::GetSourceExplorer() con
 		if (m_objMode == ibObjectMode::OBJECT_ITEM) {
 			if (tableUse == ibItemMode::ibItemMode_Item || tableUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (object != nullptr && !object->IsDeleted()) {
-					ibSourceExplorer& tblNode = srcHelper.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
+					ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
 					std::vector<ibValueMetaObjectAttributeBase*> tblCols;
 					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject(tblCols)) tblNode.AppendColumn(tblCol);
 				}
@@ -67,7 +67,7 @@ ibSourceExplorer ibValueRecordDataObjectChartOfAccounts::GetSourceExplorer() con
 		} else {
 			if (tableUse == ibItemMode::ibItemMode_Folder || tableUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (object != nullptr && !object->IsDeleted()) {
-					ibSourceExplorer& tblNode = srcHelper.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
+					ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
 					std::vector<ibValueMetaObjectAttributeBase*> tblCols;
 					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject(tblCols)) tblNode.AppendColumn(tblCol);
 				}
@@ -75,7 +75,7 @@ ibSourceExplorer ibValueRecordDataObjectChartOfAccounts::GetSourceExplorer() con
 		}
 	}
 	
-	return srcHelper;
+	return &m_sourceExplorer;
 }
 
 // ShowFormValue / GetFormValue moved up to HierarchyRef.

@@ -200,8 +200,8 @@ public:
 		return GetMetaObject() ? stringUtils::GenerateSynonym(GetMetaObject()->GetClassName()) + wxT(": ") + GetMetaObject()->GetSynonym() : GetString();
 	}
 
-	//support source data 
-	virtual ibSourceExplorer GetSourceExplorer() const;
+	//support source data
+	virtual const ibSourceExplorer* GetSourceExplorer() const;
 
 	//support source set/get data 
 	virtual bool SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal);

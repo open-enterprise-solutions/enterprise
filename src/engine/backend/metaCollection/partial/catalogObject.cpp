@@ -29,23 +29,23 @@ ibValueRecordDataObjectCatalog::ibValueRecordDataObjectCatalog(const ibValueReco
 	m_members.Bind(this, &ibValueRecordDataObjectCatalog::FillMethods);
 }
 
-ibSourceExplorer ibValueRecordDataObjectCatalog::GetSourceExplorer() const
+const ibSourceExplorer* ibValueRecordDataObjectCatalog::GetSourceExplorer() const
 {
-	ibSourceExplorer srcHelper(
-		wxT("ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
+	m_sourceExplorer.Reset(
+		wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
 		false
 	);
 
 	ibValueMetaObjectCatalog* metaRef = nullptr;
 
 	if (m_metaObject->ConvertToValue(metaRef)) {
-		srcHelper.AppendColumn(metaRef->GetDataCode(), false);
-		srcHelper.AppendColumn(metaRef->GetDataDescription());
+		m_sourceExplorer.AppendColumn(metaRef->GetDataCode(), false);
+		m_sourceExplorer.AppendColumn(metaRef->GetDataDescription());
 		ibValueMetaObjectAttributePredefined* defOwner = metaRef->GetCatalogOwner();
 		if (defOwner != nullptr && defOwner->GetClsidCount() > 0) {
-			srcHelper.AppendColumn(metaRef->GetCatalogOwner());
+			m_sourceExplorer.AppendColumn(metaRef->GetCatalogOwner());
 		}
-		srcHelper.AppendColumn(metaRef->GetDataParent());
+		m_sourceExplorer.AppendColumn(metaRef->GetDataParent());
 	}
 
 	for (const auto object : m_metaObject->GetAttributeArrayObject()) {
@@ -54,7 +54,7 @@ ibSourceExplorer ibValueRecordDataObjectCatalog::GetSourceExplorer() const
 			if (attrUse == ibItemMode::ibItemMode_Item
 				|| attrUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (!m_metaObject->IsDataReference(object->GetMetaID())) {
-					srcHelper.AppendColumn(object);
+					m_sourceExplorer.AppendColumn(object);
 				}
 			}
 		}
@@ -62,7 +62,7 @@ ibSourceExplorer ibValueRecordDataObjectCatalog::GetSourceExplorer() const
 			if (attrUse == ibItemMode::ibItemMode_Folder ||
 				attrUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (!m_metaObject->IsDataReference(object->GetMetaID())) {
-					srcHelper.AppendColumn(object);
+					m_sourceExplorer.AppendColumn(object);
 				}
 			}
 		}
@@ -74,7 +74,7 @@ ibSourceExplorer ibValueRecordDataObjectCatalog::GetSourceExplorer() const
 			if (tableUse == ibItemMode::ibItemMode_Item
 				|| tableUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (object != nullptr && !object->IsDeleted()) {
-					ibSourceExplorer& tblNode = srcHelper.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
+					ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
 					std::vector<ibValueMetaObjectAttributeBase*> tblCols;
 					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject(tblCols)) tblNode.AppendColumn(tblCol);
 				}
@@ -84,7 +84,7 @@ ibSourceExplorer ibValueRecordDataObjectCatalog::GetSourceExplorer() const
 			if (tableUse == ibItemMode::ibItemMode_Folder ||
 				tableUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (object != nullptr && !object->IsDeleted()) {
-					ibSourceExplorer& tblNode = srcHelper.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
+					ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
 					std::vector<ibValueMetaObjectAttributeBase*> tblCols;
 					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject(tblCols)) tblNode.AppendColumn(tblCol);
 				}
@@ -92,7 +92,7 @@ ibSourceExplorer ibValueRecordDataObjectCatalog::GetSourceExplorer() const
 		}
 	}
 
-	return srcHelper;
+	return &m_sourceExplorer;
 }
 
 // ShowFormValue / GetFormValue moved up to HierarchyRef — see

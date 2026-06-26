@@ -417,8 +417,8 @@ class ibValueRecordManagerObjectInformationRegister : public ibValueRecordManage
 
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
 
-	//support source data 
-	virtual ibSourceExplorer GetSourceExplorer() const;
+	//support source data
+	virtual const ibSourceExplorer* GetSourceExplorer() const;
 
 #pragma region _form_builder_h_
 	//support show 

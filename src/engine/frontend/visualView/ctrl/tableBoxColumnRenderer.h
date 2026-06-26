@@ -61,6 +61,18 @@ public:
 		return ibDataViewCustomRenderer::FinishEditing();
 	}
 
+	// A dot-path OR a foreign-root (header) column is read-only — its value is resolved through the
+	// dot / the form, not stored, so it can't be written back. Suppress inline editing (the cell
+	// still renders the resolved text).
+	virtual bool StartEditing(const ibDataViewItem& item, wxRect labelRect) override {
+		if (m_tableBoxColumn != nullptr) {
+			ibValueModelTableBox* owner = m_tableBoxColumn->GetOwner();
+			if (owner != nullptr && (owner->IsPathColumn(m_tableBoxColumn) || owner->IsForeignColumn(m_tableBoxColumn)))
+				return false;
+		}
+		return ibDataViewCustomRenderer::StartEditing(item, labelRect);
+	}
+
 	// This renderer can be either activatable or editable, for demonstration
 	// purposes. In real programs, you should select whether the user should be
 	// able to activate or edit the cell and it doesn't make sense to switch
@@ -116,6 +128,21 @@ public:
 	virtual bool GetValue(wxVariant& WXUNUSED(value)) const override
 	{
 		return true;
+	}
+
+	// Fork power: the per-cell value fetch resolves THROUGH this column's binding. A dot-path
+	// column ("Контрагент.Поставщик") is resolved per row on the front — first hop via the dumb
+	// model, deeper hops walk the reference. A plain column falls through to the base (model).
+	virtual wxVariant CheckedGetValue(const ibDataViewModel* model,
+		const ibDataViewItem& item, unsigned column) const override
+	{
+		if (m_tableBoxColumn != nullptr) {
+			ibValueModelTableBox* owner = m_tableBoxColumn->GetOwner();
+			wxVariant resolved;
+			if (owner != nullptr && owner->ResolveCellValue(item, m_tableBoxColumn, resolved))
+				return resolved;
+		}
+		return ibDataViewRendererBase::CheckedGetValue(model, item, column);
 	}
 
 #if wxUSE_ACCESSIBILITY

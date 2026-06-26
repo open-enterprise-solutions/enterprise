@@ -81,7 +81,14 @@ ibValueModelTableBoxColumn::ibValueModelTableBoxColumn() :
 
 bool ibValueModelTableBoxColumn::GetSourceList(std::vector<ibBackendFormAttributeValue*>& out) const
 {
-	return GetOwner()->GetSourceList(out);
+	// #3 — the table-COLUMN source list = the current table (what the parent tablebox offers: the
+	// tabular sections; the picker roots the bound one and lists its columns) PLUS the form's object
+	// attributes (exactly what the ATTRIBUTE picker returns) — so a column can also bind a value from
+	// the object ABOVE the table (its header), living alongside the table's own columns (Mode 2).
+	bool ok = GetOwner()->GetSourceList(out);                       // current table
+	if (m_formOwner != nullptr)
+		ok = m_formOwner->GetSourceList(ibSourceDataType::ibSourceDataType_attribute, out) || ok;   // + header object
+	return ok;
 }
 
 const ibMetaData* ibValueModelTableBoxColumn::GetMetaData() const
@@ -211,11 +218,6 @@ bool ibValueModelTableBoxColumn::CanDeleteControl() const
 //*******************************************************************
 //*							 Control value	                        *
 //*******************************************************************
-
-bool ibValueModelTableBoxColumn::FilterSource(const ibSourceExplorer& src, const ibMetaID& id) const
-{
-	return id == GetOwner()->GetSource();
-}
 
 #ifndef OES_USE_WEB
 #include "frontend/win/ctrls/controlTextEditor.h"

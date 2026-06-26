@@ -125,12 +125,8 @@ public:
 	virtual void SourceDecrRef() override { ibValue::DecrRef(); }
 	virtual bool IsEmpty() const override { return false; }
 	virtual ibUniqueKey GetGuid() const override;
-	virtual ibSourceExplorer GetSourceExplorer() const override;
+	virtual const ibSourceExplorer* GetSourceExplorer() const override;
 	virtual wxString GetSourceCaption() const override;
-	// The walk-tree's columns come from the QUERYABLE — a CLOSED set (a column not in it is a
-	// broken binding, not a config-wide re-find).
-	virtual const ibBackendSourceColumn* GetSourceColumn(const ibMetaID& id) const override;
-	virtual bool HasOwnColumns() const override { return true; }
 
 	virtual const ibMetaData* GetSourceMetaData() const override;
 

@@ -115,18 +115,24 @@ int ibStructureBuilder::Recreate(const ibSchemaSnapshot& target)
 	Conn()->BeginTransaction();
 #endif
 
-	int ret = DiffSnapshots(&target, ibSchemaSnapshot(), m_holder, &m_changes);   // target -> empty: DROP every table
-	if (ret != DATABASE_LAYER_QUERY_RESULT_ERROR)
-		ret = DiffSnapshots(nullptr, target, m_holder, &m_changes);               // empty -> target: CREATE + SEED every table
-
+	// Errors propagate as EXCEPTIONS now — on any failure roll the rebuild back and rethrow (mirrors the
+	// storage's OnSaveDatabase). A successful diff returns a non-error sentinel; affected-row counts (0 on
+	// DDL or an empty cleanup) are NOT failures.
+	try {
+		DiffSnapshots(&target, ibSchemaSnapshot(), m_holder, &m_changes);   // target -> empty: DROP every table
+		DiffSnapshots(nullptr, target, m_holder, &m_changes);              // empty -> target: CREATE + SEED every table
+	}
+	catch (...) {
 #if _USE_SAVE_METADATA_IN_TRANSACTION == 1
-	if (ret == DATABASE_LAYER_QUERY_RESULT_ERROR) {
 		if (Conn()->IsActiveTransaction())
 			Conn()->RollBack();
-		return ret;
+#endif
+		throw;
 	}
+
+#if _USE_SAVE_METADATA_IN_TRANSACTION == 1
 	Conn()->Commit();
 	return FlushDeferredFirebird();   // FB: drain the deferred seeds in their own TX
 #endif
-	return ret;
+	return 1;
 }

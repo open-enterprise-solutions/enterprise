@@ -319,6 +319,17 @@ protected:
 
 public:
 
+	// Wrap an ibValue into a dataview wxVariant for a FRONT-side resolver (a dot-path column's
+	// CheckedGetValue). Public so the front produces a cell value without reaching the protected
+	// nested types; the model itself stays a plain id→value source.
+	//
+	// Holds a COPY, NOT a reference. A row node uses ibVariantDataValueModel (a const-ref variant)
+	// because its value lives IN the node and outlives the variant. The resolver instead passes a
+	// TEMPORARY (the per-row resolved value) that dies when its scope ends — a ref variant would
+	// dangle and crash in GetType() on the next render (AV on 0xcccccccc). The owning instantiation
+	// keeps the value alive for the variant's lifetime.
+	static void ValueToVariant(wxVariant& variant, const ibValue& value) { variant = new ibVariantDataValueImpl<ibValue>(ibValue(value)); }
+
 	class BACKEND_API ibValueModelColumnCollection : public ibValueDynamicMembers {
 	public:
 		class ibValueModelColumnInfo : public ibValueDynamicMembers {

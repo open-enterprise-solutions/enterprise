@@ -152,9 +152,6 @@ public:
 	// control base / their source property).
 	virtual ibSourceDescription GetSourceDesc() const = 0;
 
-	// filter data
-	virtual bool FilterSource(const class ibSourceExplorer& src, const ibMetaID& id) const;
-
 	// Available source HOLDERS of the owning context (default: none — filled via the out-param).
 	// Each holder pairs the attribute (definition) with its value/source, so the picker reads
 	// columns through GetSourceValue()->GetSourceExplorer() without the concrete value type.

@@ -134,13 +134,13 @@ a node is a metaobject attribute or a queryable column is hidden behind one neut
   BOTH an `ibBackendSourceColumn` with no adapter. `WalkSource` / `GetSourceAttributeObject` return
   THIS — the consumer (a column caption, a control's type) never sees the concrete class.
 - **Gate 1** — `path[0]` is gated to a form attribute (`FindSourceHolder`, form-local, copy-safe).
-- **Gate 2 — the live source.** The head holder's `GetSourceValue()` resolves each deeper hop via
-  `ibSourceDataObject::GetSourceColumn(id)` (metadata-blind: a dynamic list maps it to a live
-  queryable column). A **closed** source (`HasOwnColumns()` true — a queryable list) makes a MISS a
-  BROKEN binding (a column dropped by a Type/source change reads back broken, not silently
-  re-found); an **open** metaobject source falls through to the config-wide reference dot-walk
-  (`FindAnyObjectByFilter`) — a dotted reference's deeper hop lives in ANOTHER type. After the first
-  hit the walk leaves the source's own columns and continues config-wide (reference territory).
+- **Gate 2 — the live source.** The head holder's `GetSourceValue()` resolves each deeper hop by
+  walking its `ibSourceExplorer` tree (`WalkColumns`, below) — metadata-blind: a dynamic list maps an
+  id to a live queryable column, a record to its attribute, all behind one neutral node. A miss at any
+  hop (`FindById` returns null) is a BROKEN binding. A reference field descends into the referenced
+  type's columns IN PLACE — the node's own typed-empty value is a reference-as-source — so a dotted
+  reference of ANY depth resolves through the same tree, with **no** config-wide `FindAnyObjectByFilter`
+  re-scan (the former `GetSourceColumn` / `HasOwnColumns` open/closed split is gone).
 
 `GetSelectMode` (hierarchical-catalog Items / Folders / FoldersAndItems) is a metaobject-attribute
 concern, so the control resolves it by `dynamic_cast`-ing the walked leaf to
@@ -150,15 +150,48 @@ creation / type / metadata are the FACTORY's own (`CreateValueRef` / `GetDataTyp
 
 ## Source explorer — metadata-free column template
 
-`ibSourceExplorer` (`srcExplorer.h`) is the source's column/field TEMPLATE for one-time form
-generation + the picker. It is **metadata-free**: a node holds plain values + flags, columns are
-appended from the neutral `ibBackendQueryColumn` (`AppendColumn(col)` — deleted/disabled skipped
-via `col->IsAllowed()`), tabular sections via `AppendTable(...)`. No `ibValueMetaObject*` member,
-no metaobject constructors. Every `GetSourceExplorer()` builder (catalog / document / chart /
-record / register / dynamic list) builds it from its own data; `srcExplorer.h` depends only on the
-light `queryColumn.h`. List-vs-object is a TYPE fact answered by the class factory —
-`ibSourceDataObject::IsTableSource()` → `ibCtorAbstractType::IsTableValue()` by CLSID (no
-`dynamic_cast`, works before a source is even picked).
+`ibSourceExplorer` (a public NESTED class of `ibSourceDataObject`, `srcDataObject.h` — the old
+`srcExplorer.h` is gone) is the source's column/field TEMPLATE for form generation, the picker, and
+the structure dot-walk. It is **metadata-free**: a node holds plain values + flags + the neutral
+descriptor it was built from (`m_col`, an `ibBackendSourceColumn`); columns are appended via
+`AppendColumn(col)` (deleted/disabled skipped through `col->IsAllowed()`; a queryable column IS-A
+source column, so the node carries its real synonym), tabular sections via `AppendTable(...)`. No
+`ibValueMetaObject*` member. Every `GetSourceExplorer()` builder (catalog / document / chart / record /
+register / dynamic list) builds it from its own data. List-vs-object is a TYPE fact answered by the
+class factory — `IsTableSource()` → `ibCtorAbstractType::IsTableValue()` by CLSID (no `dynamic_cast`,
+works before a source is even picked).
+
+It is a **nullable-pointer API**, so a degenerate source signals "nothing to describe" instead of a
+sentinel:
+
+- `const ibSourceExplorer* GetSourceExplorer()` — the source's root template; **nullptr** when the
+  source can't describe itself (an unresolved / empty reference with a null target metaobject).
+- `const ibSourceExplorer* FindById(id)` / `const ibSourceExplorer* GetHelper(idx)` — per-node
+  navigation; **nullptr** on miss / out-of-range (no shared empty-node sentinel any more).
+- `void GetReferenceSources(std::vector<ibValue>&)` — the node's TYPED-EMPTY reference source(s): a
+  reference column yields an empty **reference-as-source** PER target type (a composite reference => one
+  each), built from the node's OWN type through the owner source's metaData (the node borrows it — it
+  still stores no metaobject). Type-derived, not a live row read, so it resolves for a collection source
+  (list / section) with no current row. The clsid→target resolution is the shared backend
+  `ibSourceDataObject::GetReferenceTargets` (the picker calls the same).
+
+### `WalkColumns` — the structure-resolve hop
+
+`WalkColumns(path, from, leaf&, outText)` is the design-time twin of the runtime `ContinueHops`
+value-walk — one mechanism, differing only in typed-empty vs live value. It steps `path[from..]`
+through the explorer tree:
+
+- a **section** node (`GetHelperCount() > 0`) descends into its children in the SAME explorer
+  (`explorer = node`) — a section is an `ibTabularObject`, not a source, so its value can't be hopped;
+- a **reference** node descends into its target's columns: `node->GetReferenceSources()` materialises an
+  empty reference-as-source per target type, and the walk picks the type whose explorer carries the next
+  hop (`FindById(path[i+1])`) — so a COMPOSITE reference resolves to whichever branch owns the field, and
+  a dotted reference of ANY depth resolves (`List.Ref.Sub…`); the chosen reference is parked so its
+  explorer outlives the step;
+- the leaf is `node->GetColumn()` — the neutral `ibBackendSourceColumn` the binding (caption / type)
+  reads, pointing into the owning metaobject.
+
+`WalkSource` (backend) gates `path[0]` to a holder, then delegates to `WalkColumns(path, 1, …)`.
 
 ## Dynamic list as a form attribute
 
@@ -184,9 +217,10 @@ data) through the family-blind seams above; three points are specific to it:
 - **TableBox column refill is family-blind.** `ibValueModelTableBox::OnPropertyChanged` refills its
   columns from the bound source's `GetSourceExplorer()` (the head attribute's `GetSourceValue()`),
   NOT a clsid → metaobject gate — so a queryable dynamic list yields its query columns just as a
-  catalog yields its attributes (mirrors the form builder in `formObject.cpp`). The dotted display
-  uses each column's `GetName()` (consistent with the head attribute and the metadata-field hops),
-  e.g. `List.DeletionMark`.
+  catalog yields its attributes (mirrors the form builder in `formObject.cpp`). Columns are appended
+  via `AppendColumn(col)`, so each node carries its descriptor (`m_col`) and the column's real SYNONYM;
+  the header caption resolves through `GetControlTitle()` → `GetSourceAttributeObject()->GetSynonym()`,
+  not the control name.
 
 ## Source ownership (NB)
 
@@ -226,11 +260,13 @@ attribute description through `ibBinaryProvider` (clipboard id `oes_clipboard_at
 
 - **Multi-source** — today it is one main + auxiliary attributes; true N-sources and the
   main-switch semantics ("old main goes empty") are pragmatic, not yet a principled model.
-- **table-dot** — dot-walk through references inside a tabular/queryable column (`List.Ref.Field`)
-  is still partial. `WalkSource` resolves the first hop against the live source and reference
-  hops config-wide, but a reference dot-walk THROUGH a dynamic-list (closed) column is not modelled
-  — after the first queryable hop the walk leaves the source's columns, so a length-3 list path
-  reads broken. Fine today (no such binding); needs a per-column reference descent when it lands.
+- **table-dot** — LANDED (including composite). A dotted reference of any depth (`List.Ref.Field`,
+  `Object.Section.Ref.Field`) resolves through `WalkColumns`: each reference hop materialises the node's
+  typed-empty reference-as-source per target type (`GetReferenceSources`) and descends into whichever
+  branch owns the next field — so a COMPOSITE reference (a field of any target type) resolves too. The
+  picker's nested-section column source resolves likewise — the bound table is walked down `parentPath`
+  to the section node and its columns rooted directly (`ProcessTableColumn`). The clsid→target resolution
+  is one shared backend helper (`GetReferenceTargets`), used by both the walk and the picker.
 - **Blocker B (compute server)** — binding is necessary but not sufficient; registers /
   reporting on top need the compute tier.
 - **No test harness** — every form binds through this; the member-cell-reffer hazard above

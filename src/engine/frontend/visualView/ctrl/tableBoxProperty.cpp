@@ -4,7 +4,7 @@
 
 #include "backend/metaData.h"
 #include "backend/objCtor.h"
-#include "backend/srcExplorer.h"   // ibSourceExplorer — family-blind column template (refill)
+#include "backend/srcDataObject.h"   // ibSourceExplorer — family-blind column template (refill)
 
 void ibValueModelTableBox::OnPropertyCreated(ibProperty* property)
 {
@@ -44,9 +44,14 @@ void ibValueModelTableBox::OnPropertyChanged(ibProperty* property, const wxVaria
 			ibBackendFormAttributeValue* holder = !basePath.empty() ? FindSourceHolder(basePath.front()) : nullptr;
 			ibSourceDataObject* source = holder != nullptr ? holder->GetSourceValue() : nullptr;
 			if (source != nullptr) {
-				const ibSourceExplorer sourceExplorer = source->GetSourceExplorer();
+				const ibSourceExplorer* sourceExplorerPtr = source->GetSourceExplorer();
+				static const ibSourceExplorer s_emptyExplorer;
+				const ibSourceExplorer& sourceExplorer = sourceExplorerPtr != nullptr ? *sourceExplorerPtr : s_emptyExplorer;
 				for (unsigned int idx = 0; idx < sourceExplorer.GetHelperCount(); idx++) {
-					const ibSourceExplorer& column = sourceExplorer.GetHelper(idx);
+					const ibSourceExplorer* columnPtr = sourceExplorer.GetHelper(idx);
+					if (columnPtr == nullptr)
+						continue;
+					const ibSourceExplorer& column = *columnPtr;
 					ibValueModelTableBoxColumn* tableBoxColumn =
 						dynamic_cast<ibValueModelTableBoxColumn*>(m_formOwner->CreateControl(wxT("TableboxColumn"), this));
 					wxASSERT(tableBoxColumn);

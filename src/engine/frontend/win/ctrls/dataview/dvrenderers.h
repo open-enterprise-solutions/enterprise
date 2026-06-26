@@ -263,7 +263,12 @@ protected:
 
 	// Helper of PrepareForItem() also used in StartEditing(): returns the
 	// value checking that its type matches our GetVariantType().
-	wxVariant CheckedGetValue(const ibDataViewModel* model,
+	//
+	// VIRTUAL (fork power): the per-cell value fetch is the single front-side choke point that
+	// still carries (model, item, column). A renderer overrides it to resolve a dot-path column
+	// THROUGH the column's own binding — first hop via the (dumb) model, deeper hops on the front —
+	// without the model knowing about paths and without touching the provider / notifier.
+	virtual wxVariant CheckedGetValue(const ibDataViewModel* model,
 		const ibDataViewItem& item,
 		unsigned column) const;
 

@@ -4,7 +4,6 @@
 #include "backend/query/schemaBuilder.h"                   // ibSchemaBuilder — the DDL door + FB barrier
 #include "backend/query/columnLayout.h"                    // ColumnFieldNames + ibColumnCodec::WriteValue (seed cell spread)
 #include "backend/databaseLayer/databaseQueryBuilder.h"    // ibDropIndex / ibQueryStatement (the seed upsert + uuid delete)
-#include "backend/databaseLayer/databaseErrorCodes.h"      // DATABASE_LAYER_QUERY_RESULT_ERROR
 #include "backend/restructureInfo.h"                        // ibRestructureInfo — the apply-change ledger
 #include "backend/query/queryColumn.h"                     // ibBackendQueryColumn::GetName (friendly column name)
 #include "backend/query/queryable.h"                        // ibBackendQueryable::GetQueryName / GetQueryTableName
@@ -143,7 +142,8 @@ void WriteSeedRow(ibStructureBatch& batch, const ibSchemaTable& t, const ibSchem
 			stmt.SetParamString(position++, uuid);
 		for (const auto& cell : cells)
 			ibColumnCodec::WriteValue(cell.first, metaData, cell.second, &stmt, position);
-		return stmt.RunQuery() != DATABASE_LAYER_QUERY_RESULT_ERROR;
+		stmt.RunQuery();   // a real failure THROWS; the affected-row count (0 = no change) is not an error
+		return true;
 	});
 }
 
@@ -155,7 +155,8 @@ void EraseSeedRow(ibStructureBatch& batch, const ibSchemaTable& t, const wxStrin
 	batch.Insert([table, uuid, h]() -> bool {
 		ibQueryStatement del(ibQueryStatement::Kind::Delete, table, { wxT("uuid") }, {}, h);
 		del.SetParamString(1, uuid);
-		return del.RunQuery() != DATABASE_LAYER_QUERY_RESULT_ERROR;
+		del.RunQuery();    // a real failure THROWS; deleting a row that isn't there (0 rows) is not an error
+		return true;
 	});
 }
 
@@ -229,9 +230,7 @@ int AlterTable(ibStructureBatch& batch, const ibSchemaTable& old, const ibSchema
 	for (const ibSchemaColumn& c : cur.m_columns) {
 		const ibSchemaColumn* o = FindColumn(old.m_columns, c.m_id);
 		const size_t before = batch.StepCount();
-		retCode = DiffColumnInto(batch, c.m_column, o != nullptr ? o->m_column : nullptr);
-		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-			return retCode;
+		DiffColumnInto(batch, c.m_column, o != nullptr ? o->m_column : nullptr);   // errors THROW now
 		if (report != nullptr && batch.StepCount() != before) {   // a step was emitted -> a real change
 			if (o == nullptr)
 				report->AppendInfo(_("Add ") + ColName(c.m_column) + _(" to ") + LedgerName(cur));
@@ -241,9 +240,7 @@ int AlterTable(ibStructureBatch& batch, const ibSchemaTable& old, const ibSchema
 	}
 	for (const ibSchemaColumn& o : old.m_columns) {
 		if (FindColumn(cur.m_columns, o.m_id) == nullptr) {
-			retCode = DiffColumnInto(batch, nullptr, o.m_column);   // gone -> drop the whole column
-			if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-				return retCode;
+			DiffColumnInto(batch, nullptr, o.m_column);   // gone -> drop the whole column (errors THROW)
 			if (report != nullptr)
 				report->AppendWarning(_("Remove ") + ColName(o.m_column) + _(" from ") + LedgerName(cur));
 		}
@@ -283,9 +280,7 @@ int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& targ
 			batch.DropTable();
 			if (report != nullptr)
 				report->AppendWarning(_("Drop table ") + LedgerName(old));
-			retCode = batch.Flush(schema);
-			if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-				return retCode;
+			batch.Flush(schema);   // errors THROW (caught by the storage's apply try/catch)
 		}
 	}
 
@@ -294,20 +289,17 @@ int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& targ
 		const ibSchemaTable* old = baseline != nullptr ? baseline->Find(cur.m_id) : nullptr;
 
 		ibStructureBatch batch(cur.m_queryable);   // the queryable vends the metadata the field diff needs
-		retCode = (old == nullptr) ? CreateTable(batch, cur, report) : AlterTable(batch, *old, cur, report);
-		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-			return retCode;
+		if (old == nullptr)
+			CreateTable(batch, cur, report);
+		else
+			AlterTable(batch, *old, cur, report);
 
 		// DATA after structure, SAME batch: rows into a just-created table defer past the DDL commit on
 		// Firebird; other dialects fill them inside the transaction (ibStructureBatch::Flush -> RunOrDefer).
-		retCode = DiffSeedInto(batch, old, cur, report, holder);
-		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-			return retCode;
+		DiffSeedInto(batch, old, cur, report, holder);
 
-		retCode = batch.Flush(schema);
-		if (retCode == DATABASE_LAYER_QUERY_RESULT_ERROR)
-			return retCode;
+		batch.Flush(schema);   // errors THROW; a 0-row (DDL / no-change) result is not a failure
 	}
 
-	return retCode;
+	return retCode;   // 1 — success; a real DB error THREW (no return-code error signal in the apply path)
 }

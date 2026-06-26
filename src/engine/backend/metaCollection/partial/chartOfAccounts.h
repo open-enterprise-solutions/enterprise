@@ -283,7 +283,7 @@ public:
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);
 
 	//support source data
-	virtual ibSourceExplorer GetSourceExplorer() const;
+	virtual const ibSourceExplorer* GetSourceExplorer() const;
 
 	// ShowFormValue / GetFormValue inherited from HierarchyRef.
 protected:

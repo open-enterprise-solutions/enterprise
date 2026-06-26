@@ -50,33 +50,33 @@ bool ibValueRecordDataObjectDocument::IsPosted() const
 // SetDeletionMark moved up to ibValueRecordDataObjectRecorderRef —
 // common recorder-flavour algorithm. See top of this file.
 
-ibSourceExplorer ibValueRecordDataObjectDocument::GetSourceExplorer() const
+const ibSourceExplorer* ibValueRecordDataObjectDocument::GetSourceExplorer() const
 {
-	ibSourceExplorer srcHelper(
-		wxT("ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
+	m_sourceExplorer.Reset(
+		wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(),
 		false, false
 	);
 
 	ibValueMetaObjectDocument* metaRef = nullptr;
 
 	if (m_metaObject->ConvertToValue(metaRef)) {
-		srcHelper.AppendColumn(metaRef->GetDocumentNumber(), false);
-		srcHelper.AppendColumn(metaRef->GetDocumentDate());
+		m_sourceExplorer.AppendColumn(metaRef->GetDocumentNumber(), false);
+		m_sourceExplorer.AppendColumn(metaRef->GetDocumentDate());
 	}
 
 	for (const auto object : m_metaObject->GetAttributeArrayObject()) {
-		srcHelper.AppendColumn(object);
+		m_sourceExplorer.AppendColumn(object);
 	}
 
 	for (const auto object : m_metaObject->GetTableArrayObject()) {
 		if (object != nullptr && !object->IsDeleted()) {
-			ibSourceExplorer& tblNode = srcHelper.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
+			ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
 			std::vector<ibValueMetaObjectAttributeBase*> tblCols;
 			for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject(tblCols)) tblNode.AppendColumn(tblCol);
 		}
 	}
 
-	return srcHelper;
+	return &m_sourceExplorer;
 }
 
 // ShowFormValue / GetFormValue inherited from ibValueRecordDataObject;
