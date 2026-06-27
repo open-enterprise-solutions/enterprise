@@ -48,9 +48,13 @@ int ibLoggerSweep::RunOnce(const wxString& dir, int retentionDays)
             if (bucketEnd <= cutoff) {
                 const wxString path = dir + wxFileName::GetPathSeparator() + name;
                 if (wxRemoveFile(path)) ++removed;
-                // Also clean up the WAL sidecar files SQLite leaves behind.
-                wxRemoveFile(path + wxT("-wal"));
-                wxRemoveFile(path + wxT("-shm"));
+                // Also clean up the WAL sidecar files SQLite leaves behind. They
+                // are transient — SQLite removes them on a clean close, so their
+                // absence is the NORMAL case. Only remove when present: a
+                // wxRemoveFile on a missing file raises wxLogError, which a GUI
+                // host turns into a modal "couldn't be removed" dialog.
+                if (wxFileExists(path + wxT("-wal"))) wxRemoveFile(path + wxT("-wal"));
+                if (wxFileExists(path + wxT("-shm"))) wxRemoveFile(path + wxT("-shm"));
             }
         }
         more = d.GetNext(&name);

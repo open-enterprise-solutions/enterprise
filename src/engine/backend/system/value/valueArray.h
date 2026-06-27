@@ -143,9 +143,10 @@ public:
 
 	void Remove(unsigned int index) {
 		CheckIndex(index);
-		auto it = std::find(m_listValue.begin(), m_listValue.end(), index);
-		if (it != m_listValue.end())
-			m_listValue.erase(it);
+		// Erase the element AT `index` (CheckIndex validated it). The previous
+		// std::find(..., index) erased the first element whose VALUE equalled
+		// `index` — a remove-by-value bug under a remove-by-index name.
+		m_listValue.erase(m_listValue.begin() + index);
 	}
 
 	void Clear() {

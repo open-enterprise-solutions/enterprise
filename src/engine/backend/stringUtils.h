@@ -60,7 +60,7 @@ namespace stringUtils
 		if (pos == result.Length())
 			return result;
 		result.erase(pos, result.Length() - pos);
-		return strSource;
+		return result;
 	}
 
 	inline wxString TrimRight(wxString& strSource, const wxUniChar& c = wxT(' ')) {
