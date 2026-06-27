@@ -334,8 +334,9 @@ TEST(QueryRenderer, UnionAll_OrderedViaSubqueryWrap)
 
 // ===========================================================================
 // DDL — one CreateTable IR, three dialects. The type-map closes the column-type
-// forks (Guid: CHAR(36)/TEXT/UUID, boolean: SMALLINT/INTEGER/BOOLEAN,
-// number: DECIMAL/NUMERIC).
+// forks (Guid: VARCHAR(36)/TEXT/UUID, boolean: SMALLINT/INTEGER/BOOLEAN,
+// number: DECIMAL/NUMERIC). Firebird uses VARCHAR(36) (not CHAR(36)) so a guid
+// reads back without a charset-padded CHAR tail — see firebirdDatabaseLayer.cpp.
 // ===========================================================================
 
 namespace {
@@ -356,7 +357,7 @@ TEST(QueryDdlRenderer, Firebird_CreateTable)
 {
 	ibQueryRenderer r(FbDialect());
 	EXPECT_EQ(r.RenderDDL(SampleCreateTable()).ToStdString(),
-		"CREATE TABLE Reference17 (Ref CHAR(36) PRIMARY KEY, Code_S VARCHAR(50) NOT NULL, "
+		"CREATE TABLE Reference17 (Ref VARCHAR(36) PRIMARY KEY, Code_S VARCHAR(50) NOT NULL, "
 		"Price_N NUMERIC(18,2), Active_B SMALLINT)");
 }
 

@@ -294,3 +294,61 @@ TEST(ValueConstRef, CopyIsWeakAndReadOnly) {
     EXPECT_EQ(copy.GetRef(), &probe);
     EXPECT_FALSE(deleted);
 }
+
+// ===========================================================================
+// NULL vs EMPTY — TYPE_NULL is a SQL null (the driver yields it); TYPE_EMPTY is
+// Undefined (a composite with no type chosen yet). They are DISTINCT, and the
+// query NULL semantics (test_queryParity) rely on the distinction.
+// ===========================================================================
+
+TEST(ValueNull, EmptyIsNotNull) {
+    ibValue v;
+    EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_EMPTY);
+    EXPECT_TRUE(v.IsEmpty());
+    EXPECT_FALSE(v.IsNull());
+}
+
+TEST(ValueNull, SqlNullIsNull) {
+    ibValue v(ibValueTypes::TYPE_NULL);
+    EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_NULL);
+    EXPECT_TRUE(v.IsNull());
+}
+
+TEST(ValueNull, EmptyAndNullAreDistinctTypes) {
+    EXPECT_NE(ibValue().GetType(), ibValue(ibValueTypes::TYPE_NULL).GetType());
+}
+
+// ===========================================================================
+// Primitive value accessors (typed reads)
+// ===========================================================================
+
+TEST(ValueAccess, NumberReadsBack) {
+    ibValue v(ibNumber(42));
+    EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_NUMBER);
+    EXPECT_EQ(v.GetInteger(), 42);
+    EXPECT_EQ(v.GetNumber(), ibNumber(42));
+}
+
+TEST(ValueAccess, BooleanReadsBack) {
+    EXPECT_TRUE(ibValue(true).GetBoolean());
+    EXPECT_FALSE(ibValue(false).GetBoolean());
+}
+
+TEST(ValueAccess, StringReadsBack) {
+    EXPECT_EQ(ibValue(wxString(wxT("hi"))).GetString(), wxT("hi"));
+}
+
+// ===========================================================================
+// GetHashKey — deterministic per value (used as a map key); distinct values
+// must not collide on the obvious cases.
+// ===========================================================================
+
+TEST(ValueHash, DeterministicForSameValue) {
+    EXPECT_EQ(ibValue(ibNumber(7)).GetHashKey(), ibValue(ibNumber(7)).GetHashKey());
+    EXPECT_EQ(ibValue(wxString(wxT("k"))).GetHashKey(),
+              ibValue(wxString(wxT("k"))).GetHashKey());
+}
+
+TEST(ValueHash, DiffersForDifferentNumbers) {
+    EXPECT_NE(ibValue(ibNumber(1)).GetHashKey(), ibValue(ibNumber(2)).GetHashKey());
+}

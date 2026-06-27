@@ -61,6 +61,26 @@ add_executable(oes_tests
     test_lambdaRecorder.cpp
     test_queryValueMembers.cpp
     test_columnCodec.cpp
+    test_queryPredicate.cpp
+    test_queryColumnExpr.cpp
+    test_linqMethod.cpp
+    test_typeDescription.cpp
+    test_dialectDictionary.cpp
+    test_uniqueKey.cpp
+    test_valueArray.cpp
+    test_valueContainer.cpp
+    test_valueStructure.cpp
+    test_valueGeometry.cpp
+    test_metaDescription.cpp
+    test_rawDBColumn.cpp
+    test_rowValues.cpp
+    test_readerWriterMemory.cpp
+    test_passwordHash.cpp
+    test_md5.cpp
+    test_sha256.cpp
+    test_stringUtils.cpp
+    test_guid.cpp
+    test_dbTransaction.cpp
 )
 
 target_link_libraries(oes_tests

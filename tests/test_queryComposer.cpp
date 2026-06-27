@@ -54,6 +54,15 @@ public:
 
 	wxString GetQueryTableName() const override { return m_table; }
 	ibMetaID GetQueryTableId()    const override { return m_metaId; }
+	// New pure-virtual on ibBackendQueryable (queryable.h) the test source had not
+	// caught up with — abstract-class drift, not a logic change. Synthesise a
+	// stable, table-distinct guid from the id so identity/colocation logic still
+	// tells the two tables apart.
+	ibGuid   GetQueryTableGuid()  const override {
+		ibGuidImpl impl{};
+		impl.m_data1 = static_cast<unsigned long>(m_metaId);
+		return ibGuid(impl);
+	}
 	bool     IsComputedInRam()   const override { return m_computed; }
 	const ibMetaData* GetMetaData() const override { return nullptr; }
 	std::vector<ibQuerySortItem> GetIdentitySort() const override { return {}; }
