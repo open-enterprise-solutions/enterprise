@@ -113,6 +113,39 @@ TEST(MetadataSerialize, EveryBusinessObjectType_RoundTrip_BytesEqual) {
 	}
 }
 
+// One level deeper: a Catalog that OWNS an attribute. Exercises the child-walk
+// (SaveSubtree/LoadSubtree) plus the attribute's own field list (type descriptor
+// + qualifiers), still DB-free.
+TEST(MetadataSerialize, CatalogWithAttribute_RoundTrip_BytesEqual) {
+	ibMetaDataConfigurationFile cfg1;
+	ibValueMetaObjectConfiguration* root = cfg1.GetCommonMetaObject();
+	ASSERT_NE(root, nullptr);
+
+	ibValueMetaObject* cat =
+		cfg1.CreateMetaObject(string_to_clsid(wxT("MD_CAT")), root, /*runObject*/ false);
+	ASSERT_NE(cat, nullptr);
+	cfg1.RenameMetaObject(cat, wxT("Products"));
+
+	ibValueMetaObject* attr =
+		cfg1.CreateMetaObject(string_to_clsid(wxT("MD_ATTR")), cat, /*runObject*/ false);
+	ASSERT_NE(attr, nullptr) << "CreateMetaObject(MD_ATTR) under a catalog returned null";
+	cfg1.RenameMetaObject(attr, wxT("Price"));
+
+	wxMemoryBuffer buf1;
+	ASSERT_TRUE(cfg1.SaveConfigToBuffer(buf1));
+
+	ibMetaDataConfigurationFile cfg2;
+	ASSERT_TRUE(cfg2.LoadConfigFromBuffer(buf1));
+
+	wxMemoryBuffer buf2;
+	ASSERT_TRUE(cfg2.SaveConfigToBuffer(buf2));
+
+	ASSERT_EQ(buf1.GetDataLen(), buf2.GetDataLen())
+		<< "Catalog+attribute re-serialized to a different length";
+	EXPECT_TRUE(BuffersEqual(buf1, buf2))
+		<< "Catalog+attribute re-serialized differently byte-for-byte";
+}
+
 // Reloading the same blob a second time must reproduce it again — the format is
 // a stable fixed point, not merely equal on the first pass (guards against a
 // load that consumes more/less than save wrote and only diverges on re-entry).
