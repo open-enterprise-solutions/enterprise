@@ -32,6 +32,7 @@
 #include <wx/filefn.h>     // wxRemoveFile
 
 #include "backend/metadataConfiguration.h"
+#include "backend/clsid.h"   // string_to_clsid("MD_CAT")
 
 namespace {
 
@@ -66,6 +67,50 @@ TEST(MetadataSerialize, DefaultConfig_RoundTrip_BytesEqual) {
 		<< "re-serialized blob has a different length — a Save/Load mirror drifted";
 	EXPECT_TRUE(BuffersEqual(buf1, buf2))
 		<< "re-serialized blob differs byte-for-byte — Save/Load mirror drift";
+}
+
+// Same round-trip guard, now with a REAL business object in the tree for EVERY
+// business metaobject type, added under the configuration root (DB-free —
+// runObject=false, never run). Extends the Save/Load mirror coverage from the
+// default Configuration + Language nodes to each type's own field list, so a
+// Save/Load drift in any one type's SaveData/LoadData body is caught.
+TEST(MetadataSerialize, EveryBusinessObjectType_RoundTrip_BytesEqual) {
+	struct Case { const char* clsid; const wxChar* name; };
+	const Case cases[] = {
+		{ "MD_CAT",  wxT("Cat1")   },   // Catalog
+		{ "MD_DOC",  wxT("Doc1")   },   // Document
+		{ "MD_ENM",  wxT("Enum1")  },   // Enumeration
+		{ "MD_CONS", wxT("Const1") },   // Constant
+		{ "MD_INFR", wxT("Info1")  },   // InformationRegister
+		{ "MD_ACCR", wxT("Accum1") },   // AccumulationRegister
+		{ "MD_DPR",  wxT("Proc1")  },   // DataProcessor
+		{ "MD_RPT",  wxT("Rep1")   },   // Report
+		{ "MD_CHRC", wxT("Char1")  },   // ChartOfCharacteristicTypes
+		{ "MD_CHOA", wxT("Acco1")  },   // ChartOfAccounts
+	};
+
+	for (const Case& c : cases) {
+		ibMetaDataConfigurationFile cfg1;
+		ibValueMetaObjectConfiguration* root = cfg1.GetCommonMetaObject();
+		ASSERT_NE(root, nullptr) << "fresh config has no root for " << c.clsid;
+
+		ibValueMetaObject* obj = cfg1.CreateMetaObject(
+			string_to_clsid(wxString::FromAscii(c.clsid)), root, /*runObject*/ false);
+		ASSERT_NE(obj, nullptr) << "CreateMetaObject failed for " << c.clsid;
+		cfg1.RenameMetaObject(obj, wxString(c.name));
+
+		wxMemoryBuffer buf1;
+		ASSERT_TRUE(cfg1.SaveConfigToBuffer(buf1)) << "save failed for " << c.clsid;
+
+		ibMetaDataConfigurationFile cfg2;
+		ASSERT_TRUE(cfg2.LoadConfigFromBuffer(buf1)) << "load failed for " << c.clsid;
+
+		wxMemoryBuffer buf2;
+		ASSERT_TRUE(cfg2.SaveConfigToBuffer(buf2)) << "re-save failed for " << c.clsid;
+
+		ASSERT_EQ(buf1.GetDataLen(), buf2.GetDataLen()) << "length drift for " << c.clsid;
+		EXPECT_TRUE(BuffersEqual(buf1, buf2))           << "byte drift for "   << c.clsid;
+	}
 }
 
 // Reloading the same blob a second time must reproduce it again — the format is
