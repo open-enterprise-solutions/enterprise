@@ -44,6 +44,20 @@ bool BuffersEqual(const wxMemoryBuffer& a, const wxMemoryBuffer& b) {
 	return std::memcmp(a.GetData(), b.GetData(), a.GetDataLen()) == 0;
 }
 
+// Save -> load (into a fresh holder) -> save again; true iff the two blobs are
+// byte-identical (the serialization fixed-point property).
+::testing::AssertionResult RoundTripsByteEqual(ibMetaDataConfigurationFile& cfg) {
+	wxMemoryBuffer b1;
+	if (!cfg.SaveConfigToBuffer(b1))            return ::testing::AssertionFailure() << "first save failed";
+	ibMetaDataConfigurationFile cfg2;
+	if (!cfg2.LoadConfigFromBuffer(b1))         return ::testing::AssertionFailure() << "load failed";
+	wxMemoryBuffer b2;
+	if (!cfg2.SaveConfigToBuffer(b2))           return ::testing::AssertionFailure() << "re-save failed";
+	if (b1.GetDataLen() != b2.GetDataLen())     return ::testing::AssertionFailure() << "length drift";
+	if (!BuffersEqual(b1, b2))                  return ::testing::AssertionFailure() << "byte drift";
+	return ::testing::AssertionSuccess();
+}
+
 } // namespace
 
 // The default config (Configuration root + English Language) saved by a fresh
@@ -144,6 +158,43 @@ TEST(MetadataSerialize, CatalogWithAttribute_RoundTrip_BytesEqual) {
 		<< "Catalog+attribute re-serialized to a different length";
 	EXPECT_TRUE(BuffersEqual(buf1, buf2))
 		<< "Catalog+attribute re-serialized differently byte-for-byte";
+}
+
+// A Document that owns a (DB-backed) tabular section.
+TEST(MetadataSerialize, DocumentWithTabularSection_RoundTrip_BytesEqual) {
+	ibMetaDataConfigurationFile cfg;
+	ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+	ASSERT_NE(root, nullptr);
+
+	ibValueMetaObject* doc = cfg.CreateMetaObject(string_to_clsid(wxT("MD_DOC")), root, false);
+	ASSERT_NE(doc, nullptr);
+	cfg.RenameMetaObject(doc, wxT("Invoice"));
+
+	ibValueMetaObject* tab = cfg.CreateMetaObject(string_to_clsid(wxT("MD_TBLR")), doc, false);
+	ASSERT_NE(tab, nullptr) << "CreateMetaObject(MD_TBLR) under a document returned null";
+	cfg.RenameMetaObject(tab, wxT("Lines"));
+
+	EXPECT_TRUE(RoundTripsByteEqual(cfg));
+}
+
+// Several sibling business objects in one config — exercises the sibling subtree
+// walk, not just a single object.
+TEST(MetadataSerialize, MultipleSiblingObjects_RoundTrip_BytesEqual) {
+	ibMetaDataConfigurationFile cfg;
+	ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+	ASSERT_NE(root, nullptr);
+
+	ibValueMetaObject* cat = cfg.CreateMetaObject(string_to_clsid(wxT("MD_CAT")), root, false);
+	ibValueMetaObject* doc = cfg.CreateMetaObject(string_to_clsid(wxT("MD_DOC")), root, false);
+	ibValueMetaObject* enm = cfg.CreateMetaObject(string_to_clsid(wxT("MD_ENM")), root, false);
+	ASSERT_NE(cat, nullptr);
+	ASSERT_NE(doc, nullptr);
+	ASSERT_NE(enm, nullptr);
+	cfg.RenameMetaObject(cat, wxT("Products"));
+	cfg.RenameMetaObject(doc, wxT("Orders"));
+	cfg.RenameMetaObject(enm, wxT("Status"));
+
+	EXPECT_TRUE(RoundTripsByteEqual(cfg));
 }
 
 // Reloading the same blob a second time must reproduce it again — the format is
