@@ -45,6 +45,7 @@ add_executable(oes_tests
     test_logger.cpp
     test_dbTaxonomy.cpp
     test_metadataSerialize.cpp
+    test_metadataTree.cpp
     test_dataNode.cpp
     test_queryRenderer.cpp
     test_queryLifecycle.cpp
