@@ -8,6 +8,94 @@ Tests are not bureaucracy — they protect against regressions. OES historically
 
 ---
 
+## Current test suite (as built)
+
+> This section is **ground truth** — it describes the suite that actually exists
+> in `enterprise/tests/`. The rest of this document is guidance and templates
+> (some examples reference illustrative classes, not real OES code).
+
+Google Test, fetched via CMake `FetchContent` (v1.14.0), gated behind
+`option(BUILD_TESTING)`. ~650 tests across one main target plus a few isolated
+targets. Tests are flat `test_*.cpp` files compiled into the targets below;
+there is no `unit/` / `integration/` / `mocks/` directory split.
+
+### Build & run (Windows)
+
+`cmake` is not on `PATH` — use the copy bundled with Visual Studio 2022 (locate
+the VS install with `vswhere -latest -property installationPath`):
+
+```powershell
+$cmake = "C:\Program Files\Microsoft Visual Studio\2022\Professional\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
+# the build dir is already configured at enterprise/build (VS17 2022, BUILD_TESTING=ON; gtest already fetched)
+& $cmake --build enterprise/build --config Debug --target oes_tests
+& "enterprise/build/bin/Debug/oes_tests.exe"                       # run all
+& "enterprise/build/bin/Debug/oes_tests.exe" --gtest_filter=Md5*   # one suite
+```
+
+Editing a backend header recompiles backend (slow); editing a single test file
+relinks fast. Tests define `OES_TESTING`, which opens `ib::AppDataCtorToken` so a
+test can build app-owned subsystems directly without a full `ibApplicationData`
+bring-up.
+
+### Targets
+
+| Target | Scope |
+|---|---|
+| `oes_tests` | the main suite (unit + in-process integration) |
+| `oes_temp_db_sqlite_test` | L3-door integration on embedded SQLite (brings up appData + a SQLite `:memory:` pool; `GTEST_SKIP`s if the headless env can't start) |
+| `oes_query_parity_test` / `oes_query_join_parity_test` | RAM-core vs live SQLite parity (NULL three-valued logic, joins) |
+| `oes_query_totals_test` | TOTALS-tree fold, RAM-only |
+| `oes_string_tests` | `ibString`/`fstring` only (links wxBase, not backend) |
+
+The isolated targets are kept out of `oes_tests` so an appData bring-up (or an
+optional driver being OFF) can't break the main run.
+
+### What is covered
+
+- **Crypto / auth:** PBKDF2 password hashing (+ legacy-MD5 upgrade), MD5 and
+  SHA-256 known vectors.
+- **Core value system:** `ibNumber` (exact decimal, 60+ cases), `ibValue`
+  (primitives, NULL vs EMPTY, coercion, hash key, const-ref), `ibValueArray` /
+  `ibValueContainer` (Map) / `ibValueStructure`, the geometric value types.
+- **Utilities / types:** `stringUtils`, `ibGuid`, `ibUniqueKey`, `clsid` (FNV-1a),
+  `ibRowValues` (flat map), the binary wire codec (`ibReaderMemory`/`ibWriterMemory`),
+  `ibTypeDescription` / `ibMetaDescription`, the dialect dictionary,
+  `ibRawDBColumn` / column layout.
+- **Query stack:** L2 renderer, L4 lexer/parser/rewrite, predicate / column-expr
+  tree construction, the LINQ method table (name <-> enum lock-step), TOTALS, the
+  composer, DB/RAM parity, the lambda recorder, the column codec.
+- **DB / transactions:** the cross-driver transaction contract on embedded SQLite
+  (read-your-writes, nested commit, inner-rollback-poison); the connection-pool
+  lifecycle; the metadata-serialization byte-for-byte round trip; the audit
+  logger; the Firebird lease.
+- **L3-door integration (SQLite):** write-door round trip (Insert -> read ->
+  Delete, with read-your-writes), value fidelity through the read door,
+  `WhereLike` / `Where` / `WhereCompare` filters, and `Sum`/`Min`/`Max`/`Count`
+  aggregates.
+
+### Fixtures & doubles actually in use
+
+- `MockDatabaseLayer` (`tests/mock_database_layer.h`) — minimal `ibDatabaseLayer`
+  for connection-pool lifecycle tests.
+- `TempDbSqliteFix` (in `test_tempDbSqlite.cpp`) — brings up the global appData
+  env + a SQLite `:memory:` pool (maxSize=1) so the L3 door / temp-table manager
+  runs end-to-end; `GTEST_SKIP`s when the headless env is unavailable.
+- `TestCol` / `TestQueryable` — minimal `ibBackendQueryColumn` /
+  `ibBackendQueryable` for the RAM-core and routing-gate tests (no metadata).
+
+### Not yet covered (next)
+
+- The write-door **Upsert** + **reference-as-key** (`_RTRef`/`_RRRef`) round trip
+  needs a real metaobject (a queryable with a primary key and a reference
+  column) — i.e. a small metadata fixture on SQLite; the temp-table harness has
+  neither a PK nor reference columns.
+- Multi-holder pool TX isolation (needs a file-backed DB; `:memory:` clones are
+  separate databases).
+- Sorted + paged reads through the door (the keyset cursor needs an identity
+  sort the temp table does not provide).
+
+---
+
 ## Test levels
 
 ```
