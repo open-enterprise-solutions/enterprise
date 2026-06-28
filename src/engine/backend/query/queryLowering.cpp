@@ -407,7 +407,7 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
 
 	case ibQueryAstExprKind::Column: {
 		// A BARE column / dot-walk used as a predicate is a TRUTHY test on a Boolean column:
-		// `WHERE Поле.Продавец`  ==  `WHERE Поле.Продавец = TRUE`. (`= ИСТИНА` lowers as a plain Compare above.)
+		// `WHERE Field.Seller`  ==  `WHERE Field.Seller = TRUE`. (`= TRUE` lowers as a plain Compare above.)
 		const std::vector<const ibBackendQueryColumn*> cols = ResolveWhereTarget(sources, e, allowDotWalk);
 		return ibQueryPredicate::Leaf(CondEq(cols, ibValue(true)));
 	}
@@ -1053,7 +1053,7 @@ ibDataQueryResult ibQueryLowering::ExecuteImpl(const ibQuerySelect& astIn,
 }
 
 //////////////////////////////////////////////////////////////////////
-// ibQueryLowering::ExecuteTotals — hierarchical subtotals (ИТОГИ … ПО …)
+// ibQueryLowering::ExecuteTotals — hierarchical subtotals (TOTALS … BY …)
 //////////////////////////////////////////////////////////////////////
 
 ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
@@ -1067,8 +1067,8 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 
 	if (ast.m_totalsBy.empty())
 		Fail(0, 0, _("TOTALS needs at least one BY dimension"));
-	if (ast.m_top > 0)
-		Fail(0, 0, _("TOP with TOTALS is not yet supported (the subtotal tree is not row-limited)"));
+	// TOP + TOTALS — the limit caps the DETAIL rows the fold runs over (the first n by ORDER BY), NOT the
+	// subtotal tree. Applied as the page count on the detail read at the terminal below.
 
 	ibSubqueryOwner owner;
 
@@ -1154,29 +1154,31 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			b.TotalBy(leaf, dim);            // plain dimension — group by the column's own metaID
 			oc.m_col = leaf;
 		}
-		else if (multiSource) {
-			// MULTI-SOURCE dot-walk dimension — the single-source `ibRefJoinChain` (SQL) does not apply.
-			// Expand the reference path into explicit LEFT-join leaves (ExpandDotWalkJoins) and group by the
-			// qualified leaf column; the RAM stitch carries it like any joined column (the fold groups by the
-			// leaf's value — scalar OR reference). UNION output columns are not reference-aware, so a dot-walk
-			// there fails inside the expand (no single-target reference) — qualify against a branch column.
-			const ibBackendQueryColumn* dwLeaf =
-				ExpandDotWalkJoins(b, RootForPath(sources, *d.m_expr), pathCols, dwJoined, dwAliasSeq, *d.m_expr);
-			b.TotalBy(dwLeaf, dim);
-			oc.m_col = dwLeaf;
-		}
 		else {
-			// DOT-WALK dimension (Parent.Code): a self-referential leaf shares a metaID with the row's own
-			// attribute, so the provider projects it under a DISTINCT alias and the fold groups by a SYNTHETIC
-			// column's unique id — no clash with the main table's same-metaID column. Scalar leaves only.
+			// DOT-WALK dimension — two strategies by source shape / leaf kind:
+			//  - single-source SCALAR leaf (Parent.Code): SQL ROLLUP via a synthetic scalar projection
+			//    (TotalByDotWalk) — the DBMS folds, efficient. The synthetic's DISTINCT id avoids a
+			//    self-reference metaID clash with the main table's same-named field.
+			//  - multi-source OR a NON-scalar leaf (reference / composite): expand the ref path into explicit
+			//    LEFT-join leaves (ExpandDotWalkJoins) and group by the leaf in the RAM fold (by the leaf's
+			//    VALUE — scalar OR reference). A non-scalar single-source leaf rides this too: adding the
+			//    ref-join makes it multi-source / RAM-folded, grouping by the reference value the scalar
+			//    synthetic could not carry. (A composite MID-segment still fails inside the expand — that path
+			//    is not a single-target reference; same edge as projection.)
 			ibRawDBColumn::RawType rt;
-			if (!ScalarRawType(leaf, rt))
-				Fail(d.m_expr->m_line, d.m_expr->m_col,
-					_("TOTALS BY a reference / composite dot-walk leaf is not supported yet (use a scalar attribute)"));
-			const wxString alias = wxString::Format(wxT("dim%u"), static_cast<unsigned>(nextSynthId - kSyntheticColumnBase));
-			auto synth = std::make_shared<ibSyntheticScalarColumn>(alias, nextSynthId++, rt);
-			b.TotalByDotWalk(pathCols, synth.get(), alias, dim);   // provider joins path, projects leaf scalar AS alias
-			oc.m_col = synth.get(); oc.m_ownedCol = synth;
+			const bool scalarLeaf = ScalarRawType(leaf, rt);
+			if (multiSource || !scalarLeaf) {
+				const ibBackendQueryColumn* dwLeaf =
+					ExpandDotWalkJoins(b, RootForPath(sources, *d.m_expr), pathCols, dwJoined, dwAliasSeq, *d.m_expr);
+				b.TotalBy(dwLeaf, dim);
+				oc.m_col = dwLeaf;
+			}
+			else {
+				const wxString alias = wxString::Format(wxT("dim%u"), static_cast<unsigned>(nextSynthId - kSyntheticColumnBase));
+				auto synth = std::make_shared<ibSyntheticScalarColumn>(alias, nextSynthId++, rt);
+				b.TotalByDotWalk(pathCols, synth.get(), alias, dim);   // provider joins path, projects leaf scalar AS alias
+				oc.m_col = synth.get(); oc.m_ownedCol = synth;
+			}
 		}
 		outSchema.push_back(oc);
 	}
@@ -1254,5 +1256,10 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	// QueryResult.Select() folds it (ByGroupsHierarchy) — no second query, so detail and subtotal
 	// cannot skew. The synthetic measure columns live in outSchema (m_ownedCol), which travels with the
 	// selection — so the result's stamped raw pointers into them stay valid through Select(). (docs §22.1b)
-	return b.Execute(ibReadPageRequest{});
+	//
+	// TOP n caps the DETAIL rows the fold runs over — the first n (0 = all); the subtotals then roll over
+	// exactly those rows. The tree itself is not row-limited (a subtotal is not a detail row).
+	ibReadPageRequest page;
+	if (ast.m_top > 0) page.m_count = ast.m_top;
+	return b.Execute(page);
 }

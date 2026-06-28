@@ -186,9 +186,21 @@
 > dot-walk over a UNION (union output is not reference-aware), a dot-walk aggregate input (`SUM(c.Owner.Weight)`)
 > / `SelectAggregate` GROUP BY, CROSS / non-equi JOIN, and server-side ROLLUP push-down for multi-source
 > (RAM-fold today — the perf, not correctness, tail).]**
-> TOTALS BY a reference / composite dot-walk leaf (scalar today), UNION branches carrying JOIN / TOTALS,
-> RAM DISTINCT over the stitch (DedupeRows is ready — needs the door wiring), and WHERE / ORDER on a composite
-> non-scalar leaf (projection works; the predicate needs per-branch DecomposeEquality OR-folded).
+> ~~TOTALS BY a reference / composite dot-walk leaf (scalar today)~~ **[non-scalar leaf landed 2026-06-28: a
+> single-target dot-walk path whose LEAF is a reference / composite now rides `ExpandDotWalkJoins` (single-source
+> too — adding the ref-join makes it RAM-folded, grouping by the leaf's reference VALUE the scalar synthetic
+> could not carry); a composite MID-segment still fails (not a single-target reference)]**, UNION branches
+> carrying JOIN / TOTALS, RAM DISTINCT over the stitch (DedupeRows is ready — needs the door wiring), and
+> WHERE / ORDER on a composite non-scalar leaf (projection works; the predicate needs per-branch
+> DecomposeEquality OR-folded).
+>
+> ### Update 2026-06-28 (2) — TOP + TOTALS (landed, builds clean Debug|x86, launcher pending)
+>
+> `SELECT TOP n … TOTALS …` no longer fails. TOP caps the DETAIL rows the fold runs over (the first n,
+> 0 = all), applied as the page count on the totals terminal read — the subtotal tree itself is not
+> row-limited (a subtotal is not a detail row). The prior `Fail("TOP with TOTALS is not yet supported")` is gone.
+> Still open: a non-equi / theta JOIN (`ON a.x > b.y`) — needs an ON-expression on the join node + a RAM
+> nested-loop (today's stitch is a hash-join on equi keys) + the co-located SQL render; its own arc.
 >
 > ### Update 2026-06-11 — L4 optimizer pass (landed, 420/420 green, runtime-validated)
 >
