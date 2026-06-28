@@ -10,10 +10,10 @@ class ibDataNode;
 
 // ---------------------------------------------------------------------------
 // Dynamic-list settings — runtime (script-visible) objects mirroring the
-// reference "Настройка списка": Filter (Отбор), Order (Сортировка), Group
-// (Группировка), held by a ListSettings container (≈ SettingsComposer).
+// reference "List settings": Filter, Order (Sort), Group, held by a
+// ListSettings container (≈ SettingsComposer).
 //
-// Everything is a runtime value: the "вид сравнения" / "направление" are
+// Everything is a runtime value: the comparison kind / sort direction are
 // runtime enumerations; the filter / sort / group lines and collections are
 // runtime values. The fetch path reads them and feeds ibDataComposer
 // (.Filter / .Sort / .TotalBy). Field is a PATH (dot-walk like "Ref.Owner"
@@ -23,7 +23,7 @@ class ibDataNode;
 
 // ============================ enumerations =================================
 
-// The "вид сравнения". PLAIN enum (not enum class): ibValueEnumeration<T> uses
+// The comparison kind. PLAIN enum (not enum class): ibValueEnumeration<T> uses
 // T as a map key AND converts it to ibNumber (enum→int→ibNumber).
 enum ibComparisonKind {
 	ibComparisonKind_Equal = 0,
@@ -49,13 +49,13 @@ inline wxString ComparisonKindToOp(ibComparisonKind kind) {
 	return wxT("=");
 }
 
-// The "направление сортировки".
+// The sort direction.
 enum ibSortDirection {
 	ibSortDirection_Ascending = 0,
 	ibSortDirection_Descending,
 };
 
-// Runtime enumeration "ComparisonKind" (вид сравнения).
+// Runtime enumeration "ComparisonKind".
 class BACKEND_API ibValueEnumComparisonKind : public ibValueEnumeration<ibComparisonKind> {
 public:
 	ibValueEnumComparisonKind() : ibValueEnumeration() {}
@@ -70,7 +70,7 @@ public:
 	}
 };
 
-// Runtime enumeration "SortDirection" (направление сортировки).
+// Runtime enumeration "SortDirection".
 class BACKEND_API ibValueEnumSortDirection : public ibValueEnumeration<ibSortDirection> {
 public:
 	ibValueEnumSortDirection() : ibValueEnumeration() {}
@@ -80,7 +80,7 @@ public:
 	}
 };
 
-// ============================ Filter (Отбор) ===============================
+// ============================ Filter =======================================
 
 // One filter line — { Use, Field, Comparison, Value }.
 //   New FilterItem(field, comparison, value [, use])
@@ -123,7 +123,7 @@ private:
 	ibTypeDescription m_typeDescription;       // the field's type — for AdjustValue / choice
 };
 
-// The "Отбор" — an ordered collection of FilterItem.
+// The Filter — an ordered collection of FilterItem.
 //   list.Filter.Add(field, comparison, value) / .Count() / .Get(i) / .Clear()
 class BACKEND_API ibValueFilterList : public ibValueDynamicMembers {
 public:
@@ -149,7 +149,7 @@ private:
 	std::vector<ibValuePtr<ibValueFilterItem>> m_items;
 };
 
-// ========================= Sort (Сортировка) ===============================
+// ========================= Sort ============================================
 
 // One sort line — { Field, Direction }.
 //   New SortItem(field [, direction])
@@ -177,7 +177,7 @@ private:
 	ibSortDirection m_direction;
 };
 
-// The "Сортировка" — an ordered collection of SortItem.
+// The Sort — an ordered collection of SortItem.
 class BACKEND_API ibValueSortList : public ibValueDynamicMembers {
 public:
 	enum Method { enAdd = 0, enCount, enGet, enClear };
@@ -202,10 +202,10 @@ private:
 	std::vector<ibValuePtr<ibValueSortItem>> m_items;
 };
 
-// ======================== Group (Группировка) ==============================
+// ======================== Group ============================================
 
-// The "Группировка" — an ordered list of grouping field paths (плоский список
-// полей). Items are strings (the field path).
+// The Group — an ordered list of grouping field paths (a flat list of
+// fields). Items are strings (the field path).
 //   list.Group.Add("Producer") / .Count() / .Get(i) / .Clear()
 class BACKEND_API ibValueGroupList : public ibValueDynamicMembers {
 public:
@@ -265,10 +265,17 @@ private:
 	ibValuePtr<ibValueGroupList>  m_group;
 };
 
-// Apply the dynamic-list settings to a composer: Отбор→Filter, Сортировка→Sort,
-// Группировка→TotalBy. Dot-walk fields ("Ref.Owner") resolve to auto-JOINs on the
+// Apply the dynamic-list settings to a composer: Filter, Sort, Group→TotalBy.
+// Dot-walk fields ("Ref.Owner") resolve to auto-JOINs on the
 // door. Shared by the legacy list fetch path (objectListQuery) AND the unified
 // ibValueDynamicList — one source of truth.
+//
+// The per-aspect forms let a caller apply only part of the settings — e.g. a grouping
+// drill applies Filters + Sorts onto a scoped composer but supplies its OWN per-level
+// TotalBy instead of the full Group set. ibApplyDynamicSettings = all three in order.
+BACKEND_API void ibApplyDynamicFilters(ibDataComposer& composer, const ibValueListSettings* settings);
+BACKEND_API void ibApplyDynamicSorts  (ibDataComposer& composer, const ibValueListSettings* settings);
+BACKEND_API void ibApplyDynamicGroups (ibDataComposer& composer, const ibValueListSettings* settings);
 BACKEND_API void ibApplyDynamicSettings(ibDataComposer& composer, const ibValueListSettings* settings);
 
 #endif // __LIST_FILTER_H__

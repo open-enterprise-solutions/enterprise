@@ -1421,7 +1421,7 @@ class BACKEND_API ibValueModelTreeBase : public ibValueModel {
 		// still pinned by an ibDataViewItem.
 		virtual bool IsAttached() const override { return m_valueTree != nullptr; }
 
-		ibValueTreeNode(ibValueModelTreeBase* valueTree) :
+		ibValueTreeNode(const ibValueModelTreeBase* valueTree) :
 			m_parent(nullptr), m_valueTree(valueTree) {
 		}
 
@@ -1626,7 +1626,10 @@ class BACKEND_API ibValueModelTreeBase : public ibValueModel {
 		ibValueTreeNode* m_parent;
 		std::vector<ibValueTreeNode*> m_children;
 	protected:
-		ibValueModelTreeBase* m_valueTree;
+		// const: a node only READS its model link (IsAttached) and pokes the notifier
+		// (RowValueChanged / m_modelProvider — both non-mutating). The node never mutates
+		// the model through it, so a const-fetch path can hand a node the model with no cast.
+		const ibValueModelTreeBase* m_valueTree;
 		ibRowMetaValues m_nodeValues;
 	};
 
@@ -1642,7 +1645,10 @@ public:
 		/* wxDataViewModel:: */ m_modelProvider->ItemChanged(ibDataViewItem(item));
 	}
 
-	void RowValueChanged(ibValueTreeNode* item, unsigned int col) {
+	// const: a value-changed notification does not mutate the model — it pokes the
+	// view provider. Lets a node hold a `const` model link (the node mutates ITS OWN
+	// cell, then notifies; the model itself is untouched).
+	void RowValueChanged(ibValueTreeNode* item, unsigned int col) const {
 		/* wxDataViewModel:: */ m_modelProvider->ValueChanged(ibDataViewItem(item), col);
 	}
 

@@ -43,18 +43,31 @@ class BACKEND_API ibValueDynamicList : public ibValueModelTreeBase, public ibSou
 public:
 
 	// Row node — identity is the primary-key column VALUES (keyset). No guid/ref.
+	// A GROUP node (grouping drill) has no row key; its identity is the chain of
+	// dimension values from the root (m_groupPath) — used to re-fetch its children
+	// with a filter dim==value (the group becomes a filter as you drill deeper).
 	struct ibDynamicListNode : public ibValueTreeNode {
-		ibDynamicListNode(ibValueModelTreeBase* tree, const std::vector<ibValue>& key, bool container = false)
-			: ibValueTreeNode(tree), m_key(key), m_container(container) {}
+		ibDynamicListNode(const ibValueModelTreeBase* tree, const std::vector<ibValue>& key, bool container = false,
+			const std::vector<ibValue>& groupPath = {}, bool isGroup = false)
+			: ibValueTreeNode(tree), m_key(key), m_container(container),
+			  m_groupPath(groupPath), m_isGroup(isGroup) {}
 		const std::vector<ibValue>& GetKey() const { return m_key; }
+		const std::vector<ibValue>& GetGroupPath() const { return m_groupPath; }
+		bool IsGroup() const { return m_isGroup; }
 		virtual bool IsContainer() const override { return m_container; }
 		virtual bool IsEqualTo(const ibDataViewObject& other) const override {
 			const auto* o = dynamic_cast<const ibDynamicListNode*>(&other);
-			return o != nullptr && m_key == o->m_key;
+			if (o == nullptr) return false;
+			// A group node identifies by its dimension-value path; a detail row by its keyset.
+			if (m_isGroup || o->m_isGroup)
+				return m_isGroup == o->m_isGroup && m_groupPath == o->m_groupPath;
+			return m_key == o->m_key;
 		}
 	private:
 		std::vector<ibValue> m_key;
 		bool                 m_container;
+		std::vector<ibValue> m_groupPath;   // dimension values root→this (grouping drill); empty for a plain row
+		bool                 m_isGroup = false;
 	};
 
 	// The source may be passed here too — null means "set it later" (SetSource).
@@ -63,63 +76,43 @@ public:
 		ibDynamicListView view = ibDynamicListView_Normal);
 	virtual ~ibValueDynamicList();
 
+	// --- kind ---------------------------------------------------------------
 	ibDynamicListView GetView() const { return m_view; }
 	bool IsChoice() const { return m_view == ibDynamicListView_Choice; }
 
-	// --- source (the list starts empty) -------------------------------------
+	// --- source & query (L5) ------------------------------------------------
+	// The list starts EMPTY; SetSource/SetSourceQueryable install the queryable,
+	// SetCustomQuery an arbitrary query. The source variable itself lives in the
+	// Source property (read via the GetSourceQueryable facade), not on the list.
 	void SetSource(const wxString& ns, const wxString& name);
 	void SetSourceQueryable(const ibBackendQueryable* queryable);
 	void SetCustomQuery(const wxString& queryText);
-	// Facade — the source variable lives in the Source property, not on the list.
 	const ibBackendQueryable* GetSourceQueryable() const { return m_propertySource->GetVariable(); }
-
-	// L5 — the list's query layer (reads the queryable, pages the data).
-	ibDataComposer& GetComposer() const { return m_composer; }
-	ibValueListSettings* GetListSettings() const { return m_settings; }
-
-	// --- ibPropertyObject — the dynamic list IS a property object; its properties (source /
-	// settings) surface onto the form attribute. OnPropertyChanged catches an edit and stores it
-	// here — the real "hook", instead of a backend function-pointer. ----------
-	virtual wxString GetClassName() const override;
-	virtual wxString GetObjectTypeName() const override { return wxT("DynamicList"); }
-	virtual bool IsEditable() const override { return true; }
-	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
-	
-	// Central save/load entry override: the Source property PLUS the settings
-	// (Filter/Order/Group) held on m_settings, outside the property set. The form
-	// attribute serializes the dynamic list through this — it is the attached object.
-	virtual bool ReadProperty(const ibDataNode& node) override;
-	virtual bool WriteProperty(ibDataNode& node) const override;
-
-	// Re-apply the settings onto the composer (call on settings change, NOT per
-	// fetch). Replaces — does not clear-then-rebuild every read.
+	ibDataComposer& GetComposer() const { return m_composer; }          // the visible query layer
+	ibValueListSettings* GetListSettings() const { return m_settings; } // never null (built in the ctor)
+	// Re-apply Filter/Order/Group onto the composer — call on a settings change, NOT per
+	// fetch (replaces; does not clear-then-rebuild every read).
 	void RefreshComposerSettings();
 
-	virtual bool AutoCreateColumn() const { return false; }
-	virtual bool EditableLine(const ibDataViewItem& item, unsigned int col) const { return false; }
-
-	//events:
-	virtual void AddValue(unsigned int before = 0) override;
-	virtual void CopyValue() override;
-	virtual void EditValue() override;
-	virtual void DeleteValue() override;
-
-	// --- ibValueModelTreeBase ----------------------------------------------
+	// --- ibValueModel / ibValueModelTreeBase --------------------------------
 	virtual void GetValueByRow(wxVariant& variant, const ibDataViewItem& item, unsigned col) const override;
 	virtual bool SetValueByRow(const wxVariant& variant, const ibDataViewItem& item, unsigned col) override;
-	virtual ibValueModelColumnCollection* GetColumnCollection() const override { return m_columns; }
-	virtual ibValueModelReturnLine* GetRowAt(const ibDataViewItem& line) override;
 	virtual bool GetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, ibValue& pvarMetaVal) const override;
 	virtual bool SetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, const ibValue& varMetaVal) override { return false; }
+	virtual ibValueModelColumnCollection* GetColumnCollection() const override { return m_columns; }
+	virtual ibValueModelReturnLine* GetRowAt(const ibDataViewItem& line) override;
 	virtual Features GetFeatures() const override;
+	virtual bool EditableLine(const ibDataViewItem& item, unsigned int col) const override { return false; }
+	// Add/Copy/Edit/Delete: NOT overridden — the base no-ops. List mutation goes through the
+	// choice/keyset path (separate design). AutoCreateColumn also keeps the base default (false).
 
-	// Thin fetch — all the work is in the L5 provider (RunPage).
+	// Thin paged fetch — all the work is in the L5 provider (RunPage).
 	virtual unsigned int GetFirstFetch(const ibDataViewItem& parent, const ibDataViewItem& anchor, int count, ibDataViewItemArray& out) const override;
 	virtual unsigned int GetNextFetch(const ibDataViewItem& parent, const ibDataViewItem& anchor, int count, ibDataViewItemArray& out) const override;
 	virtual unsigned int GetPrevFetch(const ibDataViewItem& parent, const ibDataViewItem& anchor, int count, ibDataViewItemArray& out) const override;
 
-	// --- ibSourceDataObject -------------------------------------------------
-	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const override;
+	// --- ibSourceDataObject (the list IS a form data source) ----------------
+	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const override { return nullptr; }
 	virtual ibClassID GetSourceClassType() const override { return g_valueDynamicListCLSID; }
 	virtual void SourceIncrRef() override { ibValue::IncrRef(); }
 	virtual void SourceDecrRef() override { ibValue::DecrRef(); }
@@ -127,17 +120,38 @@ public:
 	virtual ibUniqueKey GetGuid() const override;
 	virtual const ibSourceExplorer* GetSourceExplorer() const override;
 	virtual wxString GetSourceCaption() const override;
-
 	virtual const ibMetaData* GetSourceMetaData() const override;
 
-	// settings surface (Filter/Order/Group/Settings + Refresh/EditSettings)
+	// --- ibPropertyObject + serialization -----------------------------------
+	// The list IS a property object: its Source / Settings properties surface onto the form
+	// attribute (like ibValueSizerItem) — the attribute just casts the runtime value to
+	// ibPropertyObject, knowing nothing about "a dynamic list". OnPropertyChanged is the real
+	// hook (a virtual, not a backend function-pointer). Read/WriteProperty persist the Source
+	// property PLUS the settings held on m_settings (outside the property set).
+	// Name comes from the FACTORY: ibValue::GetClassName() resolves it by the object's own clsid
+	// (GetClassType → the registered name); no hardcoded literal, it stays only in VALUE_TYPE_REGISTER.
+	// ibPropertyObject declares GetClassName PURE on a base UNRELATED to ibValue — so it MUST be
+	// overridden here (this both closes that pure slot and disambiguates the two same-name bases;
+	// dropping it gives C2385 at the GetClassName() call in GetSourceCaption). Same as ibValueMetaObject.
+	virtual wxString GetClassName() const override { return ibValue::GetClassName(); }
+	virtual wxString GetObjectTypeName() const override { return GetClassName(); }
+	virtual bool IsEditable() const override { return true; }
+	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
+	virtual bool ReadProperty(const ibDataNode& node) override;
+	virtual bool WriteProperty(ibDataNode& node) const override;
+
+	// --- script member surface (Filter/Order/Group/Settings + Refresh) ------
 	void FillMembers(ibMemberTable& helper) const;
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;
 	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray) override;
 
 private:
 	
-	// THIN — build the provider, run the composer onto it, adopt its rows.
+	// THIN — build the provider, run the composer onto it, adopt its rows. When the
+	// settings carry groupings, this pages the GROUP tree instead (scoped per parent —
+	// the group becomes a filter as you drill; see the body), NOT the native parent
+	// hierarchy: the grouping field is ANY field of the query result, not the table's
+	// parent column.
 	unsigned int RunPage(const ibDataViewItem& parent, const ibDataViewItem& anchor,
 		int count, ibFetchDirection dir, ibDataViewItemArray& out) const;
 

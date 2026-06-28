@@ -17,8 +17,8 @@
 class BACKEND_API ibValueDynamicList;
 
 // ---------------------------------------------------------------------------
-// Visual "Настройка списка" — a modal dialog with three tabs (Отбор /
-// Сортировка / Группировка) editing an ibValueListSettings. Registered as
+// Visual "List settings" — a modal dialog with three tabs (Filter /
+// Sort / Group) editing an ibValueListSettings. Registered as
 // ibValueListSettings::ms_showDialog at frontend load, so the backend
 // (list.EditSettings()) opens it without a frontend dependency.
 // First slice of the dynamic-list designer/runtime UI.
@@ -44,11 +44,26 @@ private:
 	class ibFilterModel;
 	class ibFilterValueRenderer;
 
+	// One selectable filter field: its dot-path technical name (what the composer
+	// dot-walks) plus the leaf's id/type (so the Value column edits through the
+	// runtime). Built by BuildFilterFields() from the list's source explorer.
+	struct ibFilterFieldInfo {
+		wxString          m_path;
+		ibMetaID          m_leafId = wxNOT_FOUND;
+		ibTypeDescription m_type;
+	};
+
 	wxWindow* BuildFilterPage(wxWindow* parent);
 	wxWindow* BuildOrderPage(wxWindow* parent);
 	wxWindow* BuildGroupPage(wxWindow* parent);
 
 	void FillFieldChoice(wxComboBox* choice);
+	// Build the filter's selectable fields from the list's source explorer: every
+	// root column PLUS one hop into each reference column (Supplier.Region). The
+	// stored path is a dot-walk technical name — ibDataComposer::Filter dot-walks it
+	// (auto-JOIN). TODO(unify): a full recursive tree picker like the one in
+	// advpropSource — collapse the two into one shared source-field picker.
+	void BuildFilterFields();
 	void LoadFromSettings();
 	void ApplyToSettings();
 
@@ -67,15 +82,16 @@ private:
 	ibValueDynamicList*  m_list;       // the list this dialog edits (source + settings)
 	ibValueListSettings* m_settings;   // = m_list->GetListSettings()
 
-	// Отбор — runtime-driven dataview (Use / Field / Comparison / Value).
+	// Filter — runtime-driven dataview (Use / Field / Comparison / Value).
 	ibDataViewCtrl* m_filterView   = nullptr;
 	ibFilterModel*  m_filterModel  = nullptr;
 	wxComboBox*     m_filterAddField = nullptr;   // only for "Add" — picks the new row's field
-	// Сортировка
+	std::vector<ibFilterFieldInfo> m_filterFields;   // BuildFilterFields() output — dot-path fields for the "Add" picker
+	// Sort
 	wxListCtrl* m_orderList  = nullptr;
 	wxComboBox* m_orderField = nullptr;
 	wxChoice*   m_orderDir   = nullptr;
-	// Группировка
+	// Group
 	wxListCtrl* m_groupList  = nullptr;
 	wxComboBox* m_groupField = nullptr;
 };

@@ -118,8 +118,8 @@ wxString ibDataComposer::RenderText() const
 		ibBackendCoreException::Error(_("Composer: no source is set"));
 	if (!m_totals.empty() && m_totalBy.empty())
 		ibBackendCoreException::Error(_("Composer: totals need at least one TotalBy dimension"));
-	if (m_totals.empty() && !m_totalBy.empty())
-		ibBackendCoreException::Error(_("Composer: TotalBy needs at least one Total aggregate"));
+	// NB: TotalBy WITHOUT an aggregate is valid — "TOTALS BY <dim>" is a pure grouping
+	// / hierarchy with no rolled aggregate (a list grouped by a field).
 
 	// --- the projection -------------------------------------------------------
 	wxString proj;
@@ -178,9 +178,13 @@ wxString ibDataComposer::RenderText() const
 			text += wxT(" DESC");
 	}
 
-	if (!m_totals.empty()) {
+	// TOTALS [agg(path), …] BY dim [HIERARCHY], … — the aggregate list may be empty
+	// (pure grouping / hierarchy), so emit the block whenever there is either an
+	// aggregate OR a BY dimension.
+	if (!m_totals.empty() || !m_totalBy.empty()) {
+		text += wxT(" TOTALS");
 		for (size_t i = 0; i < m_totals.size(); ++i) {
-			text += (i == 0 ? wxT(" TOTALS ") : wxT(", "));
+			text += (i == 0 ? wxT(" ") : wxT(", "));
 			text += m_totals[i].m_func + wxT("(") + m_totals[i].m_path + wxT(")");
 		}
 		for (size_t i = 0; i < m_totalBy.size(); ++i) {

@@ -321,12 +321,11 @@ bool ibValueListSettings::WriteData(ibDataNode& /*node*/) const
 //  ibApplyDynamicSettings — settings → composer (one source of truth)
 // ===========================================================================
 
-void ibApplyDynamicSettings(ibDataComposer& composer, const ibValueListSettings* settings)
+// Filter → WHERE (value travels as an auto-&parameter; dot-walk → auto-JOIN).
+void ibApplyDynamicFilters(ibDataComposer& composer, const ibValueListSettings* settings)
 {
 	if (settings == nullptr)
 		return;
-
-	// Отбор → WHERE (value travels as an auto-&parameter; dot-walk → auto-JOIN).
 	if (const ibValueFilterList* filter = settings->GetFilter()) {
 		for (size_t i = 0; i < filter->Count(); ++i) {
 			const ibValueFilterItem* item = filter->GetItem(i);
@@ -337,8 +336,13 @@ void ibApplyDynamicSettings(ibDataComposer& composer, const ibValueListSettings*
 				item->GetFilterValue());
 		}
 	}
+}
 
-	// Сортировка → ORDER BY (call order).
+// Sort → ORDER BY (call order).
+void ibApplyDynamicSorts(ibDataComposer& composer, const ibValueListSettings* settings)
+{
+	if (settings == nullptr)
+		return;
 	if (const ibValueSortList* order = settings->GetOrder()) {
 		for (size_t i = 0; i < order->Count(); ++i) {
 			const ibValueSortItem* item = order->GetItem(i);
@@ -347,8 +351,13 @@ void ibApplyDynamicSettings(ibDataComposer& composer, const ibValueListSettings*
 			composer.Sort(item->GetField(), item->IsAscending());
 		}
 	}
+}
 
-	// Группировка → TOTALS BY (row groups; full grouped display needs the tree model).
+// Group → TOTALS BY (row groups; full grouped display needs the tree model).
+void ibApplyDynamicGroups(ibDataComposer& composer, const ibValueListSettings* settings)
+{
+	if (settings == nullptr)
+		return;
 	if (const ibValueGroupList* group = settings->GetGroup()) {
 		for (size_t i = 0; i < group->Count(); ++i) {
 			const wxString field = group->GetField(i);
@@ -357,6 +366,13 @@ void ibApplyDynamicSettings(ibDataComposer& composer, const ibValueListSettings*
 			composer.TotalBy(field);
 		}
 	}
+}
+
+void ibApplyDynamicSettings(ibDataComposer& composer, const ibValueListSettings* settings)
+{
+	ibApplyDynamicFilters(composer, settings);
+	ibApplyDynamicSorts(composer, settings);
+	ibApplyDynamicGroups(composer, settings);
 }
 
 // ===========================================================================

@@ -1,8 +1,10 @@
 # Dynamic list — the universal list/tree
 
-> **Status (2026-06-23): arc in progress.** Designer surface + runtime settings +
-> form LANDED; the unified `ibValueDynamicList` class is being assembled (clean
-> queryable rewrite). Reference memory: `project_dynamic_list_unification`.
+> **Status (2026-06-28): arc in progress.** Designer surface + runtime settings +
+> form LANDED; the unified `ibValueDynamicList` is assembled and builds green.
+> Settings application split into per-aspect helpers; grouping drill (incl. aggregate-free
+> `TOTALS BY`) landed; the fetch path is const-correct (no `const_cast`). Reference
+> memory: `project_dynamic_list_unification`, `project_totals_by_without_aggregate`.
 
 ## What it is
 
@@ -23,13 +25,21 @@ per-family models (`ibValueListDataObjectEnumRef` / `…Ref` / `…RefDocument` 
 ## The class
 
 ```
-ibValueDynamicList : public ibValueModelTreeBase, public ibSourceDataObject
+ibValueDynamicList : public ibValueModelTreeBase, public ibSourceDataObject, public ibPropertyObject
 ```
 
 A tree base understands a flat list too (one root, the parent is the root), so the
 single class carries both forms. It is **not** `ibValueModelTreeDataObject` — that
 one is metaobject-bound (its column collection comes from the metaobject and its
 ctor needs one). The dynamic list owns its own queryable-derived column collection.
+
+It is also an `ibPropertyObject`: the list's own **Source** and **Settings** properties
+surface onto the form attribute (like `ibValueSizerItem`) — the attribute just casts the
+runtime value to `ibPropertyObject`, knowing nothing about "a dynamic list". `OnPropertyChanged`
+is the hook (a virtual, not a backend function-pointer); `Read/WriteProperty` persist the Source
+property plus the settings. The class/type name reported to the runtime comes from the **factory**
+(`ibValue::GetClassName()` → the `VALUE_TYPE_REGISTER` name resolved by clsid), not a hardcoded
+literal — the literal `"DynamicList"` lives only in the registration.
 
 ### Empty + SetSource
 
@@ -75,6 +85,14 @@ void OnRow(int level, bool hasChildren, const std::vector<ibValue>& values) over
 **No hand-rolled row loop in the model.** `ibListFetchDriver::ibTreeScope` carries
 flat-scan vs parent scope (front-end List view = `s_constIgnoreParent` → flat).
 
+**Fetch is `const`.** `Get*Fetch` / `RunPage` only READ the source and RETURN rows — they
+never mutate the model. A returned row node *is* mutable later (write-back / change-notify),
+so the node holds the model link as `const ibValueModelTreeBase*` (`ibValueTreeNode::m_valueTree`):
+the node only reads it (`IsAttached`) or pokes the notifier (`RowValueChanged` / `m_modelProvider`,
+both non-mutating). So the const fetch hands the provider a plain `this` — **no `const_cast`**.
+The const link says "the row may notify the model", not "fetch mutates"; it also removed the
+two pre-existing casts in `objectListQuery.cpp`.
+
 ## Settings (Filter / Order / Group)
 
 `ibValueListSettings` (`backend/composition/listFilter.h`) is the runtime, script-
@@ -87,10 +105,27 @@ visible settings container (≈ a SettingsComposer):
 - **Group** — `ibValueGroupList` (field paths).
 - **Source config** — `MainTable` / `UseCustomQuery` / `QueryText` / `KeyFields`.
 
-Applied to the composer through `ibApplyDynamicSettings(composer, settings)` — one
-source of truth, shared with the legacy list path. **Applied on change, not cleared
-and rebuilt every fetch.** Fields are paths: dot-walk (`"Ref.Owner"`) resolves to an
-auto-JOIN on the door.
+Applied to the composer through `ibApplyDynamicSettings(composer, settings)` — one source
+of truth, shared with the legacy list path. It splits into per-aspect helpers
+`ibApplyDynamicFilters` / `ibApplyDynamicSorts` / `ibApplyDynamicGroups` (the combined call
+runs all three) so a caller can apply only part — the grouping drill applies Filters + Sorts
+onto a scoped composer but supplies its OWN per-level grouping. **Applied on change, not cleared
+and rebuilt every fetch.** Fields are paths: dot-walk (`"Ref.Owner"`) resolves to an auto-JOIN
+on the door.
+
+### Grouping & drill
+
+A non-empty **Group** turns the list into a drillable group tree — the native parent hierarchy
+is bypassed, and the grouping field is ANY query-result field, not the table's parent column:
+
+- Each level is a `TOTALS BY <dim>` read, **including aggregate-free pure grouping**
+  (`TOTALS BY <dim>` with no aggregate is a valid query — the parser and composer allow it;
+  see `project_totals_by_without_aggregate`).
+- Drill is lazy and **scoped per parent**: expanding a group RE-FETCHES with `dim == value`
+  for every already-drilled dimension (the group becomes a filter), grouped by the NEXT
+  dimension — or, past the last dimension, the plain detail rows. Generic over N levels.
+- Detail rows page in portions (the shared `ibReadPageRequest`); a whole group level loads at
+  once for now (group-level paging is a follow-up).
 
 `ibBackendQueryableHolder` (`query/queryable.h`) carries the source config
 (`UseCustomQuery` / `GetQueryText` / `GetKeyFields`) for the holder model.

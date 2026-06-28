@@ -776,7 +776,7 @@ class BACKEND_API ibValueModelTreeDataObjectFolderRef : public ibValueModelTreeD
 		LoadState GetLoadState() const  { return m_loadState; }
 		void SetLoadState(LoadState s)  { m_loadState = s; }
 
-		ibValueTreeListNode(ibValueTreeNode* parent, const ibGuid& guid, ibValueModelTreeDataObject* treeValue = nullptr, bool container = false) :
+		ibValueTreeListNode(ibValueTreeNode* parent, const ibGuid& guid, const ibValueModelTreeDataObject* treeValue = nullptr, bool container = false) :
 			ibValueTreeNode(parent), m_objGuid(guid), m_container(container) {
 			m_valueTree = treeValue;
 		}

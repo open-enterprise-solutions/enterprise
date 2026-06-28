@@ -14,6 +14,8 @@
 #include "backend/metaCollection/partial/list/dynamicList.h"   // ibValueDynamicList — the dialog is built on it
 #include "backend/query/queryable.h"                            // ibBackendQueryable::GetColumns
 #include "backend/query/queryColumn.h"                          // ibBackendQueryColumn
+#include "backend/srcDataObject.h"                              // ibSourceDataObject::ibSourceExplorer + GetReferenceTargets (dot-walk)
+#include "backend/metaCollection/partial/reference/reference.h" // ibValueReferenceDataObject::Create (reference-as-source)
 
 #include <wx/notebook.h>
 #include <wx/panel.h>
@@ -466,7 +468,12 @@ wxWindow* ibDialogListSettings::BuildFilterPage(wxWindow* parent)
 	// then edited inside the row).
 	wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
 	m_filterAddField = new wxComboBox(panel, wxID_ANY);
-	FillFieldChoice(m_filterAddField);
+	// The LEFT value is a dot-path field picker now: root columns PLUS one hop into
+	// each reference column (Supplier.Region). m_filterFields carries each field's
+	// leaf type so the Value column edits through the runtime.
+	BuildFilterFields();
+	for (const ibFilterFieldInfo& f : m_filterFields)
+		m_filterAddField->Append(f.m_path);
 	wxButton* addBtn = new wxButton(panel, wxID_ANY, _("Add"));
 	wxButton* delBtn = new wxButton(panel, wxID_ANY, _("Remove"));
 
@@ -563,6 +570,56 @@ void ibDialogListSettings::FillFieldChoice(wxComboBox* choice)
 	}
 }
 
+void ibDialogListSettings::BuildFilterFields()
+{
+	m_filterFields.clear();
+
+	// Root = the list's own columns via its source explorer (the SAME structure the
+	// dot-walk resolves). Descend ONE hop into each reference column through its
+	// reference-as-source explorer (Supplier.Region). The stored path is a dot-walk
+	// technical name; ibDataComposer::Filter dot-walks it (auto-JOIN). The leaf's
+	// type/id let the Value column edit through the runtime.
+	const auto* root = (m_list != nullptr) ? m_list->GetSourceExplorer() : nullptr;
+	if (root == nullptr)
+		return;
+	const ibMetaData* metaData = m_list->GetSourceMetaData();
+
+	for (unsigned int i = 0; i < root->GetHelperCount(); ++i) {
+		const auto* col = root->GetHelper(i);
+		if (col == nullptr || col->IsTableSection())
+			continue;
+
+		m_filterFields.push_back({ col->GetSourceName(), col->GetSourceId(), col->GetTypeDesc() });
+
+		// One hop into a reference column: each TARGET type vends an empty
+		// reference-as-source whose explorer carries the target's columns. The SAME
+		// family-blind, cross-DLL-exported path advpropSource's picker uses
+		// (GetReferenceTargets + reference-as-source). Non-reference columns yield none.
+		if (metaData == nullptr)
+			continue;
+		const std::vector<ibMetaID> refTargets =
+			ibSourceDataObject::GetReferenceTargets(col->GetClsidList(), metaData);
+		for (const ibMetaID& target : refTargets) {
+			ibValue refValue = ibValueReferenceDataObject::Create(metaData, target);
+			ibSourceDataObject* refObject = nullptr;
+			refValue.ConvertToValue(refObject);
+			if (refObject == nullptr)
+				continue;
+			const auto* refExplorer = refObject->GetSourceExplorer();
+			if (refExplorer == nullptr)
+				continue;
+			for (unsigned int j = 0; j < refExplorer->GetHelperCount(); ++j) {
+				const auto* sub = refExplorer->GetHelper(j);
+				if (sub == nullptr || sub->IsTableSection())
+					continue;
+				m_filterFields.push_back({
+					col->GetSourceName() + wxT(".") + sub->GetSourceName(),
+					sub->GetSourceId(), sub->GetTypeDesc() });
+			}
+		}
+	}
+}
+
 // ---------------------------------------------------------------------------
 //  Load / Apply (between the dialog and the runtime ibValueListSettings)
 //
@@ -636,11 +693,13 @@ void ibDialogListSettings::OnFilterAdd(wxCommandEvent&)
 	// can edit through the runtime (AdjustValue / choice need the type + model).
 	ibValueFilterItem* newItem = filter->Add(field, ibComparisonKind_Equal, ibValue(), true);
 
-	const ibBackendQueryable* q = (m_list != nullptr) ? m_list->GetSourceQueryable() : nullptr;
-	if (newItem != nullptr && q != nullptr) {
-		for (const ibBackendQueryColumn* col : q->GetColumns()) {
-			if (col != nullptr && col->GetName() == field) {
-				newItem->SetTypeInfo(col->GetColumnId(), col->GetTypeDesc());
+	// Resolve the chosen field (possibly a dot-path like "Supplier.Region") to its
+	// leaf type so the Value column edits through the runtime. m_filterFields was
+	// built from the source explorer (root columns + one hop into each reference).
+	if (newItem != nullptr) {
+		for (const ibFilterFieldInfo& f : m_filterFields) {
+			if (f.m_path == field) {
+				newItem->SetTypeInfo(f.m_leafId, f.m_type);
 				break;
 			}
 		}

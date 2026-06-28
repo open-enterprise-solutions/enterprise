@@ -50,6 +50,10 @@ ibCompositionDriver — the passive output sink ("where the data goes"):
   streams rows at level 0; a TOTALS result arrives as the folded tree's
   pre-order walk (`ibSelector::Next()` covers every node — drivers never
   recurse), subtotals in-place on group nodes.
+- **`TotalBy` without a `Total` is valid** — pure grouping / hierarchy with no
+  aggregate to roll (`TOTALS BY <dim>` alone). The parser and composer allow zero
+  aggregates; the selector folds the dimension levels and emits group nodes only.
+  Used by the dynamic list's grouping drill (see `dynamic-list.md`).
 - **The composer owns its caches**, consumers stay dumb:
   - *parse cache*: one AST per rendered text — a scroll tick re-renders the
     same text → no re-parse; a settings change renders different text → the

@@ -249,16 +249,21 @@ void ibQueryParser::ParseOrderBy(ibQuerySelect& sel)
 
 void ibQueryParser::ParseTotals(ibQuerySelect& sel)
 {
-	// TOTALS aggregate {',' aggregate} BY totalDim {',' totalDim}
+	// TOTALS [aggregate {',' aggregate}] BY totalDim {',' totalDim}
+	// The aggregate list is OPTIONAL — "TOTALS BY dim" is a pure grouping / hierarchy
+	// with no rolled aggregate (a dynamic list grouped by a field). If BY follows
+	// TOTALS immediately, there are no aggregates.
 	sel.m_hasTotals = true;
 
-	do {
-		if (!IsAggregateKw(Cur()))
-			Fail(Cur(), _("expected an aggregate function (SUM/COUNT/MIN/MAX/AVG) in TOTALS"));
-		sel.m_totalsAggregates.push_back(ParseAggregate());
-	} while (AcceptPunct(wxT(',')));
+	if (!AcceptKw(ibQueryKeyword::By)) {
+		do {
+			if (!IsAggregateKw(Cur()))
+				Fail(Cur(), _("expected an aggregate function (SUM/COUNT/MIN/MAX/AVG) or BY in TOTALS"));
+			sel.m_totalsAggregates.push_back(ParseAggregate());
+		} while (AcceptPunct(wxT(',')));
 
-	ExpectKw(ibQueryKeyword::By, wxT("BY in TOTALS"));
+		ExpectKw(ibQueryKeyword::By, wxT("BY in TOTALS"));
+	}
 
 	do {
 		ibQueryTotalDim d;

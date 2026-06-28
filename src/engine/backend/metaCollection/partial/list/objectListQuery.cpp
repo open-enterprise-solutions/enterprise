@@ -620,7 +620,7 @@ BuildTreeRowFromSelection(
 	auto* row = new ibValueModelTreeDataObjectFolderRef::ibValueTreeListNode(
 		nullptr,
 		sel.GetValue(keyCol).GetString(),
-		const_cast<ibValueModelTreeDataObjectFolderRef*>(owner),
+		owner,
 		isFolderVal.GetBoolean());
 	for (auto& attribute : vec_attr) {
 		if (meta->IsDataReference(attribute->GetMetaID())) continue;
@@ -651,7 +651,7 @@ BuildTreeRowFromComposed(
 	auto* row = new ibValueModelTreeDataObjectFolderRef::ibValueTreeListNode(
 		nullptr,
 		refObj->GetGuid(),
-		const_cast<ibValueModelTreeDataObjectFolderRef*>(owner),
+		owner,
 		src.GetValue(metaIsFolder->GetMetaID()).GetBoolean());
 	for (auto& attribute : meta->GetGenericAttributeArrayObject()) {
 		if (meta->IsDataReference(attribute->GetMetaID())) continue;
