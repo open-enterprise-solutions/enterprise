@@ -45,12 +45,13 @@
 >   `ibComputedRegisterQueryable<TReg>` forwarding base (`query/computedRegisterQueryable.h`)
 >   and one lowering header (`metaCollection/partial/registerQueryLowering.h`:
 >   `ibRegFieldsOf`/`ibRegValueField`/`ibRegCompositeIR`).
-> - **Open (next arcs):** the L3 door's read path still trafficks in
->   `ibValueMetaObjectAttributeBase`, not `ibBackendQueryColumn` — the coupling is via the
->   attribute's **metaID** (materialize / RAM read / sort-dedup / value-binding spread),
->   which the column deliberately lacks (§22.4b). Fully decoupling = the **column-based
->   lowering** arc (identity metaID→`GetPhysicalName`, materialization + binding derived from
->   `(physical, type)`). Also pending: balances/turnovers as DB-backed virtual tables (no RAM
+> - **Open (next arcs):** ~~the L3 door's read path still trafficks in
+>   `ibValueMetaObjectAttributeBase`, not `ibBackendQueryColumn`~~ — **[SUPERSEDED: the
+>   column-based lowering arc LANDED 2026-06-09 (see the Update below). The provider read
+>   path carries NO `static_cast` to `ibValueMetaObjectAttributeBase`; materialization +
+>   binding derive from `(physical, type)` via `ibColumnCodec::Read/WriteValue`. Thin
+>   `Set/GetValueAttribute` adapters remain only for register-lowering callers — not a
+>   coupling.]** Still pending: balances/turnovers as DB-backed virtual tables (no RAM
 >   round-trip) with role-columns = the **totals-table** arc; the accounting register (subconto
 >   unfinished); running the golden tests on the CMake side.
 >
@@ -171,11 +172,18 @@
 >   could not reassemble — is gone. A dot-walk WHERE / ORDER BY on such a leaf now THROWS
 >   (previously the condition / sort key silently DROPPED — wrong rows / wrong order).
 >
-> **Still open (the deep tail, each its own arc):** TOTALS over a JOIN / UNION (two totals mechanisms
-> + snapshot seq-keying), TOTALS BY a reference / composite dot-walk leaf (scalar today), UNION
-> branches carrying JOIN / TOTALS, RAM DISTINCT over the stitch (DedupeRows is ready — needs the
-> door wiring), and WHERE / ORDER on a composite non-scalar leaf (projection works; the predicate
-> needs per-branch DecomposeEquality OR-folded).
+> **Still open (the deep tail, each its own arc):** ~~TOTALS over a JOIN / UNION (two totals mechanisms
+> + snapshot seq-keying)~~ — **[landed 2026-06-28 for the TEXT query language: `ibQueryLowering::ExecuteTotals`
+> now builds the JOIN chain / UNION stack exactly like `ExecuteImpl`; the flat `b.Execute` → `ExecuteRead`
+> realizes the source (RAM-composed for multi-source), `StampResult` stamps TotalBy, and the runtime folds the
+> ONE snapshot — no second totals mechanism. Builds clean (Debug|x86, 2026-06-28); launcher / runtime
+> validation pending. Worked example: `SELECT o.Amount, c.Region FROM Document.Sales AS o INNER JOIN
+> Catalog.Clients AS c ON o.Client = c.Ref TOTALS SUM(o.Amount) BY c.Region`. Remaining edges,
+> each an honest `Fail`: a dot-walk dimension over a JOIN/UNION (qualified `a.col` works), CROSS / non-equi
+> JOIN, and server-side ROLLUP push-down for multi-source (RAM-fold today — the perf, not correctness, tail).]**
+> TOTALS BY a reference / composite dot-walk leaf (scalar today), UNION branches carrying JOIN / TOTALS,
+> RAM DISTINCT over the stitch (DedupeRows is ready — needs the door wiring), and WHERE / ORDER on a composite
+> non-scalar leaf (projection works; the predicate needs per-branch DecomposeEquality OR-folded).
 >
 > ### Update 2026-06-11 — L4 optimizer pass (landed, 420/420 green, runtime-validated)
 >

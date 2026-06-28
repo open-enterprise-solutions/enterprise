@@ -1005,19 +1005,74 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	const ibQuerySelectPtr astOpt = ibQueryRewrite::Rewrite(astIn);
 	const ibQuerySelect& ast = *astOpt;
 
-	if (!ast.m_joins.empty() || !ast.m_unions.empty())
-		Fail(0, 0, _("TOTALS over a JOIN / UNION is not yet supported (use a single source)"));
 	if (ast.m_totalsBy.empty())
 		Fail(0, 0, _("TOTALS needs at least one BY dimension"));
 	if (ast.m_top > 0)
 		Fail(0, 0, _("TOP with TOTALS is not yet supported (the subtotal tree is not row-limited)"));
 
 	ibSubqueryOwner owner;
-	const ibBackendQueryable* q = ResolveFrom(ast.m_from, params, owner);
-	const std::vector<ibSourceBinding> sources{ { ast.m_from.m_alias, q } };
 
+	// FROM — single source, a JOIN chain, or a UNION stack. In every case the flat read
+	// (b.Execute -> ExecuteRead) realizes the source (server-side or RAM-composed), the TotalBy config is
+	// stamped on the result, and the runtime folds the ONE snapshot — no separate totals terminal. The
+	// dimension / aggregate resolution below reads through `sources`. (docs/query-language-arc.md §22.1b)
+	std::vector<ibSourceBinding> sources;
 	ibDataQueryBuilder b;
-	b.From(q, ast.m_from.m_alias);
+
+	if (!ast.m_unions.empty()) {
+		// UNION — stack the branches vertically (mirrors LowerUnion). The whole-union output = the FIRST
+		// branch's columns (by name); dimensions / aggregates resolve against that branch, like the plain
+		// union's trailing ORDER BY. The composer realizes the stack into one RAM snapshot the fold reads.
+		ibQuerySelect core0 = ast;
+		core0.m_orderBy.clear();
+		core0.m_unions.clear();
+		core0.m_totalsBy.clear();
+		core0.m_totalsAggregates.clear();
+		core0.m_hasTotals = false;
+		core0.m_top = 0;
+
+		const ibBackendQueryable* b0 = WrapSelectAsQueryable(core0, params, owner);
+		b.From(b0);
+		for (const ibBackendQueryColumn* c : b0->GetColumns())   // carry every union-output column into the snapshot
+			if (c != nullptr) b.Select(c, c->GetName());
+		for (const std::shared_ptr<ibQuerySelect>& u : ast.m_unions)
+			b.Union(WrapSelectAsQueryable(*u, params, owner), wxEmptyString, /*keepDuplicates*/ u->m_unionAll);
+
+		sources.push_back({ wxEmptyString, b0 });
+	}
+	else {
+		// FROM + JOINs — same lowering as the non-totals path: ON a.x = b.y joins on explicit columns,
+		// ON TRUE is a cross join, no ON is an auto-join by reference. The dimension / aggregate resolution
+		// below reads through the multi-binding `sources`, so it qualifies a.col across leaves unchanged.
+		const ibBackendQueryable* q = ResolveFrom(ast.m_from, params, owner);
+		sources.push_back({ ast.m_from.m_alias, q });
+		b.From(q, ast.m_from.m_alias);
+
+		for (const ibQueryAstJoin& j : ast.m_joins) {
+			const ibBackendQueryable* qi = ResolveFrom(j.m_source, params, owner);
+			const wxString alias = j.m_source.m_alias;
+			sources.push_back({ alias, qi });
+
+			const ibQueryJoinKind kind =
+				  j.m_kind == ibQueryJoinKindAst::Left  ? ibQueryJoinKind::Left
+				: j.m_kind == ibQueryJoinKindAst::Right ? ibQueryJoinKind::Right
+				: j.m_kind == ibQueryJoinKindAst::Full  ? ibQueryJoinKind::Full
+				                                        : ibQueryJoinKind::Inner;
+			if (j.m_on && j.m_on->m_kind == ibQueryAstExprKind::Literal && j.m_on->m_literal.GetBoolean()) {
+				b.CrossJoin(qi, kind, alias);   // ON TRUE -> cross join (cartesian)
+			}
+			else if (j.m_on) {
+				if (j.m_on->m_kind != ibQueryAstExprKind::Compare || j.m_on->m_cmp != ibQueryCompareOp::Eq)
+					Fail(j.m_on->m_line, j.m_on->m_col, _("a JOIN ON clause must be a single equality (a.x = b.y) or TRUE (cross join)"));
+				const ibBackendQueryColumn* lc = ResolveColumnSingle(sources, *j.m_on->m_lhs);
+				const ibBackendQueryColumn* rc = ResolveColumnSingle(sources, *j.m_on->m_rhs);
+				b.Join(qi, lc, rc, kind, alias);
+			}
+			else {
+				b.Join(qi, kind, alias);   // auto-join by reference
+			}
+		}
+	}
 
 	outSchema.clear();
 	ibMetaID nextSynthId = kSyntheticColumnBase;   // shared id pool for synthetic dimension + measure columns
@@ -1041,6 +1096,15 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			// DOT-WALK dimension (Parent.Code): a self-referential leaf shares a metaID with the row's own
 			// attribute, so the provider projects it under a DISTINCT alias and the fold groups by a SYNTHETIC
 			// column's unique id — no clash with the main table's same-metaID column. Scalar leaves only.
+			//
+			// Over a JOIN / UNION there is no server-side door to ride: the source is RAM-composed, so the
+			// dot-walk leaf's own join cannot be appended. Honest-fail instead of silently dropping the leaf —
+			// a qualified column (a.field, resolved to size 1 above) works across leaves; the dot-walk leaf does
+			// not yet. (follow-up: materialise the path-target leaf into the stitch.)
+			if (!ast.m_joins.empty() || !ast.m_unions.empty())
+				Fail(d.m_expr->m_line, d.m_expr->m_col,
+					_("TOTALS BY a dot-walk dimension over a JOIN / UNION is not yet supported "
+					  "(use a qualified column, e.g. a.field)"));
 			ibRawDBColumn::RawType rt;
 			if (!ScalarRawType(leaf, rt))
 				Fail(d.m_expr->m_line, d.m_expr->m_col,
