@@ -178,9 +178,14 @@
 > realizes the source (RAM-composed for multi-source), `StampResult` stamps TotalBy, and the runtime folds the
 > ONE snapshot — no second totals mechanism. Builds clean (Debug|x86, 2026-06-28); launcher / runtime
 > validation pending. Worked example: `SELECT o.Amount, c.Region FROM Document.Sales AS o INNER JOIN
-> Catalog.Clients AS c ON o.Client = c.Ref TOTALS SUM(o.Amount) BY c.Region`. Remaining edges,
-> each an honest `Fail`: a dot-walk dimension over a JOIN/UNION (qualified `a.col` works), CROSS / non-equi
-> JOIN, and server-side ROLLUP push-down for multi-source (RAM-fold today — the perf, not correctness, tail).]**
+> Catalog.Clients AS c ON o.Client = c.Ref TOTALS SUM(o.Amount) BY c.Region`. **Dot-walk over a JOIN landed
+> 2026-06-28** — both the TOTALS dimension (`BY c.Owner.Region`) AND the projection (`SELECT c.Owner.Region`,
+> which was silently broken over a JOIN too): `ExpandDotWalkJoins` expands the reference path into explicit
+> LEFT-join leaves keyed on `(segment ref col, target self-reference)` — N segments, prefix-deduped (one join
+> per shared prefix), shared by `ExecuteTotals` and `PopulateBuilder`. Remaining edges, each an honest `Fail`:
+> dot-walk over a UNION (union output is not reference-aware), a dot-walk aggregate input (`SUM(c.Owner.Weight)`)
+> / `SelectAggregate` GROUP BY, CROSS / non-equi JOIN, and server-side ROLLUP push-down for multi-source
+> (RAM-fold today — the perf, not correctness, tail).]**
 > TOTALS BY a reference / composite dot-walk leaf (scalar today), UNION branches carrying JOIN / TOTALS,
 > RAM DISTINCT over the stitch (DedupeRows is ready — needs the door wiring), and WHERE / ORDER on a composite
 > non-scalar leaf (projection works; the predicate needs per-branch DecomposeEquality OR-folded).

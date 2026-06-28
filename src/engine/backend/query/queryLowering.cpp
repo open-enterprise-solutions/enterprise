@@ -163,6 +163,54 @@ std::vector<const ibBackendQueryColumn*> ResolvePath(const std::vector<ibSourceB
 	return cols;
 }
 
+// The queryable that owns the FIRST segment of a path — the dot-walk root. Mirrors ResolvePath's
+// start: a qualified `alias.col…` starts on the aliased source, an unqualified one on the source
+// that owns the first segment. (Used to expand a dot-walk over a multi-source builder.)
+const ibBackendQueryable* RootForPath(const std::vector<ibSourceBinding>& sources, const ibQueryAstExpr& e)
+{
+	const std::vector<wxString>& path = e.m_path;
+	if (path.size() >= 2) {
+		const ibBackendQueryable* aliased = SourceForAlias(sources, path[0]);
+		if (aliased != nullptr) return aliased;
+	}
+	for (const ibSourceBinding& s : sources)
+		if (s.m_q->ResolveColumnByName(path[0]) != nullptr) return s.m_q;
+	return sources.empty() ? nullptr : sources[0].m_q;
+}
+
+// Expand a reference dot-walk path (size > 1) over a MULTI-SOURCE builder. `ibRefJoinChain` builds
+// SQL joins for the single-source door; the RAM stitch has none, so here each NON-leaf segment's
+// reference target becomes an explicit LEFT-join leaf, keyed EXACTLY on (segment ref column, target
+// self-reference = GetPrimaryKeyColumns().front()) — no `ReferenceColumnTo` ambiguity when a leaf has
+// two references to the same target. Joins are deduped by path prefix (`joined`: prefix-key -> target),
+// so `c.Owner.Region` and `c.Owner.Code` share ONE Owner join. Returns the leaf column (pathCols.back(),
+// owned by the final target) to group / project by — a plain qualified column in the composed snapshot.
+const ibBackendQueryColumn* ExpandDotWalkJoins(
+	ibDataQueryBuilder& b, const ibBackendQueryable* rootQ,
+	const std::vector<const ibBackendQueryColumn*>& pathCols,
+	std::map<wxString, const ibBackendQueryable*>& joined, int& aliasSeq, const ibQueryAstExpr& e)
+{
+	const ibBackendQueryable* curQ = rootQ;
+	wxString prefixKey;
+	for (size_t i = 0; i + 1 < pathCols.size(); ++i) {
+		const ibBackendQueryColumn* refCol = pathCols[i];
+		const ibBackendQueryable* tgtQ = (curQ != nullptr) ? curQ->ResolveReferenceTarget(refCol) : nullptr;
+		const std::vector<const ibBackendQueryColumn*> tgtKeys = (tgtQ != nullptr) ? tgtQ->GetPrimaryKeyColumns()
+		                                                                           : std::vector<const ibBackendQueryColumn*>{};
+		if (tgtQ == nullptr || tgtKeys.empty())
+			Fail(e.m_line, e.m_col,
+				_("a dot-walk segment over a JOIN/UNION must be a single-target catalog/document reference"));
+		prefixKey += wxString::Format(wxT("%p|"), (const void*)refCol);
+		if (joined.find(prefixKey) == joined.end()) {
+			const wxString alias = wxString::Format(wxT("_dw%d"), aliasSeq++);
+			b.Join(tgtQ, refCol, tgtKeys.front(), ibQueryJoinKind::Left, alias);   // explicit keys — no ambiguity
+			joined[prefixKey] = tgtQ;
+		}
+		curQ = tgtQ;
+	}
+	return pathCols.back();   // owned by the final target — a plain qualified column in the snapshot
+}
+
 const ibValue* FindParam(const std::map<wxString, ibValue>& params, const wxString& name)
 {
 	for (const auto& kv : params)
@@ -608,6 +656,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 	// push a path leaf as a plain column (silently wrong rows).
 	const bool computedPrimary  = sources.size() == 1 && sources[0].m_q != nullptr
 	                              && sources[0].m_q->IsComputedInRam();
+	std::map<wxString, const ibBackendQueryable*> dwJoined; int dwAliasSeq = 0;   // dot-walk join dedup (multi-source projection)
 
 	bool aggregate = !ast.m_groupBy.empty();
 	for (const ibQueryProjection& p : ast.m_projections)
@@ -668,6 +717,17 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 				}
 				else if (pathCols.size() == 1) {
 					b.Select(pathCols[0], alias);   // explicit: project the plain column under its alias
+					oc.m_alias = alias;
+					oc.m_byAlias = true;
+				}
+				else if (multiSource) {
+					// MULTI-SOURCE dot-walk projection — `SelectPath` is the single-source door's join; the RAM
+					// stitch has none. Expand the path into explicit LEFT-join leaves (ExpandDotWalkJoins) and
+					// project the qualified leaf column, read back by alias (a scalar value or a whole reference
+					// cell). Paths sharing a prefix reuse one join via dwJoined.
+					const ibBackendQueryColumn* dwLeaf =
+						ExpandDotWalkJoins(b, RootForPath(sources, e), pathCols, dwJoined, dwAliasSeq, e);
+					b.Select(dwLeaf, alias);
 					oc.m_alias = alias;
 					oc.m_byAlias = true;
 				}
@@ -1076,6 +1136,8 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 
 	outSchema.clear();
 	ibMetaID nextSynthId = kSyntheticColumnBase;   // shared id pool for synthetic dimension + measure columns
+	const bool multiSource = !ast.m_joins.empty() || !ast.m_unions.empty();
+	std::map<wxString, const ibBackendQueryable*> dwJoined; int dwAliasSeq = 0;   // dot-walk join dedup (multi-source)
 
 	// The dimension levels, IN ORDER (each yields a subtotal node; the root is the grand total). They
 	// are the leading output columns (their group key at each node — read by GetValue(col)).
@@ -1092,19 +1154,21 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			b.TotalBy(leaf, dim);            // plain dimension — group by the column's own metaID
 			oc.m_col = leaf;
 		}
+		else if (multiSource) {
+			// MULTI-SOURCE dot-walk dimension — the single-source `ibRefJoinChain` (SQL) does not apply.
+			// Expand the reference path into explicit LEFT-join leaves (ExpandDotWalkJoins) and group by the
+			// qualified leaf column; the RAM stitch carries it like any joined column (the fold groups by the
+			// leaf's value — scalar OR reference). UNION output columns are not reference-aware, so a dot-walk
+			// there fails inside the expand (no single-target reference) — qualify against a branch column.
+			const ibBackendQueryColumn* dwLeaf =
+				ExpandDotWalkJoins(b, RootForPath(sources, *d.m_expr), pathCols, dwJoined, dwAliasSeq, *d.m_expr);
+			b.TotalBy(dwLeaf, dim);
+			oc.m_col = dwLeaf;
+		}
 		else {
 			// DOT-WALK dimension (Parent.Code): a self-referential leaf shares a metaID with the row's own
 			// attribute, so the provider projects it under a DISTINCT alias and the fold groups by a SYNTHETIC
 			// column's unique id — no clash with the main table's same-metaID column. Scalar leaves only.
-			//
-			// Over a JOIN / UNION there is no server-side door to ride: the source is RAM-composed, so the
-			// dot-walk leaf's own join cannot be appended. Honest-fail instead of silently dropping the leaf —
-			// a qualified column (a.field, resolved to size 1 above) works across leaves; the dot-walk leaf does
-			// not yet. (follow-up: materialise the path-target leaf into the stitch.)
-			if (!ast.m_joins.empty() || !ast.m_unions.empty())
-				Fail(d.m_expr->m_line, d.m_expr->m_col,
-					_("TOTALS BY a dot-walk dimension over a JOIN / UNION is not yet supported "
-					  "(use a qualified column, e.g. a.field)"));
 			ibRawDBColumn::RawType rt;
 			if (!ScalarRawType(leaf, rt))
 				Fail(d.m_expr->m_line, d.m_expr->m_col,
