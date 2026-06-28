@@ -311,10 +311,10 @@ logger after that would emit rows with empty session_id / user_name.
 1. **`ViewAuditLog` access right** — currently gated by
    `AccessRight_ActiveUsers()`; splitting into a dedicated right is
    metadata work (new role, designer UI, predefined entries).
-2. **`details` BLOB serialisation** — column reserved for serialised
-   `ibValue` details (script-side `Audit(..., extras)` where `extras`
-   is a Structure). Implementation needs `metadataSerialization.h`
-   in logger; deferred to keep logger backend-self-contained.
+2. ~~**`details` BLOB serialisation**~~ — **LANDED** (verified 2026-06-28):
+   the `details` column is a live `wxMemoryBuffer` on `ibLoggerEntry`
+   (`loggerEntry.h`) and the logger accepts an `ibValue&` overload
+   (`logger.h`) — serialised `ibValue` details are written, not reserved.
 3. **Retention via worker pool** — sweep runs daily in-process via a
    dedicated CV thread. Optional: drive via `ibWorkerPool` so
    headless modes share the primitive. Not blocking.

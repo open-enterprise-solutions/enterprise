@@ -717,21 +717,24 @@ verbatim as history.)
 - Pascal-style `with`-clause for implicit prop scope.
 
 **Remaining gaps — perf:**
-- Lazy block-syntax (#11 above, deferred — chain syntax serves as
-  the lazy alternative).
+- Lazy block-syntax (#11 above) — **won't-do (resolved by alternative):**
+  chain syntax is already lazy and serves the use case. Revisit only under
+  concrete RAM pressure on block-form queries; not an outstanding tail.
 - ~~SQL pushdown for DB-backed sources~~ — **LANDED** as L4-2 v1
   (2026-06-11) through `ibValueQueryable` + the `Data.*` source root,
   lowering a lambda chain to SQL via the L3 door. See
   `query-language-arc.md` §23.5. The RAM surface here is unchanged; the
   pushed-down path is a separate value (`ibValueQueryable`).
 
-**Remaining gaps — architectural:**
+**Won't-do unless pressure (resolved by alternative / risk > payoff):**
 - Virtual-dispatch refactor (split central switch into 33 per-method
-  virtuals on `ibValue`). Discussed 2026-05-12 — deferred until
+  virtuals on `ibValue`). Discussed 2026-05-12 — **won't-do** until
   concrete override pressure (≥2 specialising subclasses; the SQL
-  pushdown that prompted it landed via `ibValueQueryable::DispatchLinqMethod`
-  override instead). Memory note `project_value_dispatch_via_virtual.md`.
-- Lexer-level LINQ token tagging — add `LINQ` to the token-type
+  pushdown that prompted it already landed via
+  `ibValueQueryable::DispatchLinqMethod` override, so the one central
+  switch is fine). Pure cosmetics, zero functional payoff today. Memory
+  note `project_value_dispatch_via_virtual.md`.
+- Lexer-level LINQ token tagging — **won't-do (risk > payoff):** add `LINQ` to the token-type
   enum in `codeDef.h` so that LINQ keywords / method names get
   tagged at lex time (`lex.m_lexType == LINQ`). Would replace the
   `lex.m_numData == KEY_FROM || KEY_WHERE || ...` enumeration in
