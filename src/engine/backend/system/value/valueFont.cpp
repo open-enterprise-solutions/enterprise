@@ -112,4 +112,4 @@ bool ibValueFont::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 //*                       Runtime register                             *
 //**********************************************************************
 
-VALUE_TYPE_REGISTER(ibValueFont, "Font", string_to_clsid("VL_FONT"));
+VALUE_TYPE_REGISTER(ibValueFont, "Font", value_to_clsid("VL_FONT"));

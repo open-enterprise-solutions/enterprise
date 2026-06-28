@@ -130,4 +130,4 @@ bool ibValueGridBox::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 //*                       Register in runtime                           *
 //***********************************************************************
 
-CONTROL_TYPE_REGISTER(ibValueGridBox, "Gridbox", "Container", string_to_clsid("CT_GRID"));
+CONTROL_TYPE_REGISTER(ibValueGridBox, "Gridbox", "Container", control_to_clsid("CT_GRID"));

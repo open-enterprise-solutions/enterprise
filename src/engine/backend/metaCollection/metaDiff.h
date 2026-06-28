@@ -28,14 +28,14 @@
 // generic folder art (wxART_COMMON_FOLDER) instead of looking up a
 // per-class glyph. Mirrors the m_treeCOMMON umbrella in
 // treeConfiguration_impl.cpp (line 1473).
-BACKEND_API extern const ibClassID g_diffCommonUmbrellaClsid;
+inline constexpr ibClassID g_diffCommonUmbrellaClsid = make_clsid("UI_COMN", ibClassKind_None);   // header-defined: constexpr + ODR-safe
 
 // Sentinel CLSID for the synthetic "Properties" group node the walker
 // inserts under every paired metadata object. Contains one child row
 // per property (m_propertyName / m_leftValue / m_rightValue on the
 // child record); the comparison itself is property-by-property via
 // CompareObject, so this group makes the property-level delta visible.
-BACKEND_API extern const ibClassID g_diffPropertiesGroupClsid;
+inline constexpr ibClassID g_diffPropertiesGroupClsid = make_clsid("UI_PROP", ibClassKind_None);   // header-defined: constexpr + ODR-safe
 
 enum class ibMetaDiffStatus {
 	// CompareObject returned true and recursive children match: identical.

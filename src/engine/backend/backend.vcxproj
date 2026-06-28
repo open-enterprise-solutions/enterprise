@@ -472,7 +472,6 @@
     <ClCompile Include="metaCollection\attribute\metaAttributeObject.cpp" />
     <ClCompile Include="metaCollection\attribute\metaAttributeObjectEnum.cpp" />
     <ClCompile Include="metaCollection\attribute\metaAttributeObjectProperty.cpp" />
-    <ClCompile Include="metaCollection\attribute\metaAttributeObjectQuery.cpp" />
     <ClCompile Include="metaCollection\attribute\metaAttributeObject_res.cpp" />
     <ClCompile Include="metaCollection\dimension\metaDimensionObject.cpp" />
     <ClCompile Include="metaCollection\dimension\metaDimensionObject_res.cpp" />

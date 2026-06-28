@@ -493,5 +493,5 @@ void ibValueTabularSectionDataObjectBase::FillMembers(ibMemberTable& helper) con
 //*                       Runtime register                             *
 //**********************************************************************
 
-SYSTEM_TYPE_REGISTER(ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollection, "TabularSectionColumn", string_to_clsid("VL_TSCL"));
-SYSTEM_TYPE_REGISTER(ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollection::ibValueTabularSectionColumnInfo, "TabularSectionColumnInfo", string_to_clsid("VL_CI"));
+SYSTEM_TYPE_REGISTER(ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollection, "TabularSectionColumn", system_to_clsid("VL_TSCL"));
+SYSTEM_TYPE_REGISTER(ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollection::ibValueTabularSectionColumnInfo, "TabularSectionColumnInfo", system_to_clsid("VL_CI"));

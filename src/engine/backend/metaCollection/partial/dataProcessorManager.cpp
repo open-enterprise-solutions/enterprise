@@ -1,4 +1,4 @@
-﻿////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
 //	Description : dataProcessor - manager
 ////////////////////////////////////////////////////////////////////////////
@@ -84,4 +84,4 @@ bool ibValueManagerDataObjectExternalDataProcessor::CallAsFunc(const long lMetho
 //*                       Register in runtime                           *
 //***********************************************************************
 
-SYSTEM_TYPE_REGISTER(ibValueManagerDataObjectExternalDataProcessor, "externalManagerDataProcessor", string_to_clsid("MG_EXTD"));
+SYSTEM_TYPE_REGISTER(ibValueManagerDataObjectExternalDataProcessor, "externalManagerDataProcessor", system_to_clsid("MG_EXTD"));

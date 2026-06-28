@@ -69,4 +69,4 @@ bool ibValueBoxSizer::WriteData(ibDataNode& node) const
 //*                       Register in runtime                           *
 //***********************************************************************
 
-CONTROL_TYPE_REGISTER(ibValueBoxSizer, "Boxsizer", "Sizer", string_to_clsid("CT_BSZR"));
+CONTROL_TYPE_REGISTER(ibValueBoxSizer, "Boxsizer", "Sizer", control_to_clsid("CT_BSZR"));

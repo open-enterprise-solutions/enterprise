@@ -81,4 +81,4 @@ bool ibValueGauge::WriteData(ibDataNode& node) const
 //*                       Register in runtime                           *
 //***********************************************************************
 
-CONTROL_TYPE_REGISTER(ibValueGauge, "Gauge", "Widget", string_to_clsid("CT_GAUG"));
+CONTROL_TYPE_REGISTER(ibValueGauge, "Gauge", "Widget", control_to_clsid("CT_GAUG"));

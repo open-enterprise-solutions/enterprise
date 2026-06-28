@@ -1,4 +1,4 @@
-﻿////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
 //	Description : common classes for catalogs, docs etc..  
 ////////////////////////////////////////////////////////////////////////////
@@ -3791,10 +3791,10 @@ bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::ibValueReco
 //*                       Runtime register                             *
 //**********************************************************************
 
-SYSTEM_TYPE_REGISTER(ibValueRecordDataObjectRecorderRef::ibRecorderRegister, "RecordRegister", string_to_clsid("VL_RECR"));
+SYSTEM_TYPE_REGISTER(ibValueRecordDataObjectRecorderRef::ibRecorderRegister, "RecordRegister", system_to_clsid("VL_RECR"));
 
-SYSTEM_TYPE_REGISTER(ibValueRecordSetObject::ibValueRecordSetObjectRegisterColumnCollection, "RecordSetRegisterColumn", string_to_clsid("VL_RSCL"));
-SYSTEM_TYPE_REGISTER(ibValueRecordSetObject::ibValueRecordSetObjectRegisterColumnCollection::ibValueRecordSetRegisterColumnInfo, "RecordSetRegisterColumnInfo", string_to_clsid("VL_RSCI"));
+SYSTEM_TYPE_REGISTER(ibValueRecordSetObject::ibValueRecordSetObjectRegisterColumnCollection, "RecordSetRegisterColumn", system_to_clsid("VL_RSCL"));
+SYSTEM_TYPE_REGISTER(ibValueRecordSetObject::ibValueRecordSetObjectRegisterColumnCollection::ibValueRecordSetRegisterColumnInfo, "RecordSetRegisterColumnInfo", system_to_clsid("VL_RSCI"));
 
-SYSTEM_TYPE_REGISTER(ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue, "RecordSetRegisterKey", string_to_clsid("VL_RSCK"));
-SYSTEM_TYPE_REGISTER(ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::ibValueRecordSetObjectRegisterKeyDescriptionValue, "RecordSetRegisterKeyDescription", string_to_clsid("VL_RDVL"));
+SYSTEM_TYPE_REGISTER(ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue, "RecordSetRegisterKey", system_to_clsid("VL_RSCK"));
+SYSTEM_TYPE_REGISTER(ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::ibValueRecordSetObjectRegisterKeyDescriptionValue, "RecordSetRegisterKeyDescription", system_to_clsid("VL_RDVL"));

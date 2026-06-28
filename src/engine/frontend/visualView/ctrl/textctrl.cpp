@@ -1,4 +1,4 @@
-﻿#include "widgets.h"
+#include "widgets.h"
 #include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 
 #ifdef OES_USE_WEB
@@ -361,4 +361,4 @@ bool ibValueTextCtrl::WriteData(ibDataNode& node) const
 //*                       Register in runtime                           *
 //***********************************************************************
 
-CONTROL_TYPE_REGISTER(ibValueTextCtrl, "Textctrl", "Widget", string_to_clsid("CT_TXTC"));
+CONTROL_TYPE_REGISTER(ibValueTextCtrl, "Textctrl", "Widget", control_to_clsid("CT_TXTC"));

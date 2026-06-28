@@ -503,11 +503,10 @@ bool ibFormAttributeValue::IsReferenceValue() const
 {
 	// Read from the ALREADY-ASSIGNED value's actual type — not the declared Type. For a
 	// COMPOSITE Type only the concrete value tells which one it is. No value → not a ref.
-	const ibMetaData* metaData = m_attribute != nullptr ? m_attribute->GetMetaData() : nullptr;
-	if (metaData == nullptr || m_value.IsEmpty())
+	// The kind is read straight from the value's clsid (clsid.h) — no metadata lookup.
+	if (m_value.IsEmpty())
 		return false;
-	const ibCtorMetaValueType* typeCtor = metaData->GetTypeCtor(m_value.GetClassType());
-	return typeCtor != nullptr && typeCtor->GetMetaTypeCtor() == ibCtorObjectMetaType::ibCtorObjectMetaType_Reference;
+	return ::IsReference(m_value.GetClassType());
 }
 
 // Walk the tail through the VALUE's runtime members (FindProp / GetPropVal) — the same

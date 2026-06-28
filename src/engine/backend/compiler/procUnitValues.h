@@ -16,8 +16,9 @@
 // Declared here (not inline in procUnit.cpp anymore) so other TUs in
 // the same DLL — currently procUnitLinq.cpp — can hold these by value
 // (state classes embed an ibValueFunction predicate / projection).
-// wxIMPLEMENT_DYNAMIC_CLASS + the g_value{Iterator,Function} CLSID
-// statics still live in procUnit.cpp (one TU, no ODR collision).
+// The g_value{Iterator,Function} CLSIDs are header-defined inline constexpr
+// below (constexpr + ODR-safe across DLLs); wxIMPLEMENT_DYNAMIC_CLASS still
+// lives in procUnit.cpp.
 
 #include "compileCode.h"
 #include "procUnit.h"          // class ibProcUnit (friend grant for ibValueFunction)
@@ -26,6 +27,9 @@
 // ibBackendCoreException reaches us transitively via compileCode.h's chain.
 
 #pragma region iterator_support
+
+inline constexpr ibClassID g_valueIterator = system_to_clsid("SO_ITER");   // header-defined: constexpr + ODR-safe across DLLs
+
 // Runtime holder for the @it_ slot. Wraps a shared_ptr to the
 // state and tracks whether the most recent transition into
 // OPER_FOREACH came via OPER_NEXT_ITER (the "hot" flag): NEXT_ITER
@@ -62,10 +66,12 @@ private:
 	bool m_hotFromNextIter;
 };
 
-extern BACKEND_API const ibClassID g_valueIterator;
 #pragma endregion
 
 #pragma region function_value_support
+
+inline constexpr ibClassID g_valueFunction = system_to_clsid("VL_FUNC");   // header-defined: constexpr + ODR-safe across DLLs
+
 // First-class callable value. Backs OES anonymous functions (lambdas).
 // Lives heap-allocated; regular ibValue holders carry it via TYPE_REFFER
 // + m_pRef. Mirrors the inline ibValueIterator pattern above —
@@ -200,8 +206,6 @@ private:
 	const ibByteCode* m_parentBc  = nullptr;
 	long              m_funcIndex = -1;
 };
-
-extern BACKEND_API const ibClassID g_valueFunction;
 
 // Typed-tag fast casts — replace RTTI walk (ConvertToType<T>() →
 // dynamic_cast through wxClassInfo) with a single m_typeClass compare

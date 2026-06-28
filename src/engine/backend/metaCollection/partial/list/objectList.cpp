@@ -1,4 +1,4 @@
-﻿////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
 //	Description : list data 
 ////////////////////////////////////////////////////////////////////////////
@@ -1220,10 +1220,10 @@ bool ibValueListRegisterObject::GetPropVal(const long lPropNum, ibValue& pvarPro
 //*                       Runtime register                             *
 //**********************************************************************
 
-SYSTEM_TYPE_REGISTER(ibValueListDataObject::ibValueDataObjectListColumnCollection, "ListColumn", string_to_clsid("VL_LVC"));
-SYSTEM_TYPE_REGISTER(ibValueListDataObject::ibValueDataObjectListColumnCollection::ibValueDataObjectListColumnInfo, "ListColumnInfo", string_to_clsid("VL_LCI"));
-SYSTEM_TYPE_REGISTER(ibValueListDataObject::ibValueDataObjectListReturnLine, "ListValueRow", string_to_clsid("VL_LVR"));
+SYSTEM_TYPE_REGISTER(ibValueListDataObject::ibValueDataObjectListColumnCollection, "ListColumn", system_to_clsid("VL_LVC"));
+SYSTEM_TYPE_REGISTER(ibValueListDataObject::ibValueDataObjectListColumnCollection::ibValueDataObjectListColumnInfo, "ListColumnInfo", system_to_clsid("VL_LCI"));
+SYSTEM_TYPE_REGISTER(ibValueListDataObject::ibValueDataObjectListReturnLine, "ListValueRow", system_to_clsid("VL_LVR"));
 
-SYSTEM_TYPE_REGISTER(ibValueModelTreeDataObject::ibValueDataObjectTreeColumnCollection, "TreeColumn", string_to_clsid("VL_TVC"));
-SYSTEM_TYPE_REGISTER(ibValueModelTreeDataObject::ibValueDataObjectTreeColumnCollection::ibValueDataObjectTreeColumnInfo, "TreeColumnInfo", string_to_clsid("VL_TCI"));
-SYSTEM_TYPE_REGISTER(ibValueModelTreeDataObject::ibValueDataObjectTreeReturnLine, "TreeValueRow", string_to_clsid("VL_TVR"));
+SYSTEM_TYPE_REGISTER(ibValueModelTreeDataObject::ibValueDataObjectTreeColumnCollection, "TreeColumn", system_to_clsid("VL_TVC"));
+SYSTEM_TYPE_REGISTER(ibValueModelTreeDataObject::ibValueDataObjectTreeColumnCollection::ibValueDataObjectTreeColumnInfo, "TreeColumnInfo", system_to_clsid("VL_TCI"));
+SYSTEM_TYPE_REGISTER(ibValueModelTreeDataObject::ibValueDataObjectTreeReturnLine, "TreeValueRow", system_to_clsid("VL_TVR"));

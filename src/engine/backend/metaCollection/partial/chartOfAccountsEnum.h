@@ -23,7 +23,7 @@ class ibValueEnumAccountType : public ibValueEnumeration<ibAccountType> {
 		AddEnumeration(ibAccountType::eActivePassive, wxT("ActivePassive"), _("Active/Passive"));
 	}
 };
-const ibClassID g_enumAccountTypeCLSID = string_to_clsid("EN_ACTP");
+constexpr ibClassID g_enumAccountTypeCLSID = enum_to_clsid("EN_ACTP");
 #pragma endregion
 
 #endif

@@ -98,4 +98,4 @@ bool ibValueHTMLBox::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ib
 //*                       Register in runtime                           *
 //***********************************************************************
 
-CONTROL_TYPE_REGISTER(ibValueHTMLBox, "Htmlbox", "Container", string_to_clsid("CT_HTML"));
+CONTROL_TYPE_REGISTER(ibValueHTMLBox, "Htmlbox", "Container", control_to_clsid("CT_HTML"));

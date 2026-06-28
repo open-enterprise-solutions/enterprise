@@ -6,4 +6,4 @@
 #include "chartOfAccountsEnum.h"
 
 
-ENUM_TYPE_REGISTER(ibValueEnumAccountType, "AccountType", string_to_clsid("EN_ACTP"));
+ENUM_TYPE_REGISTER(ibValueEnumAccountType, "AccountType", enum_to_clsid("EN_ACTP"));

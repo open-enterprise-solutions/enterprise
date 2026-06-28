@@ -90,4 +90,4 @@ bool ibValuePreparedStatement::CallAsProc(const long lMethodNum, ibValue** paPar
 //*                       Runtime register                             *
 //**********************************************************************
 
-SYSTEM_TYPE_REGISTER(ibValuePreparedStatement, "DatabasePreparedStatement", string_to_clsid("VL_DBPS"));
+SYSTEM_TYPE_REGISTER(ibValuePreparedStatement, "DatabasePreparedStatement", system_to_clsid("VL_DBPS"));

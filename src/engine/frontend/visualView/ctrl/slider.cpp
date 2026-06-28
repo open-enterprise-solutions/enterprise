@@ -89,4 +89,4 @@ bool ibValueSlider::WriteData(ibDataNode& node) const
 //*                       Register in runtime                           *
 //***********************************************************************
 
-CONTROL_TYPE_REGISTER(ibValueSlider, "Slider", "Widget", string_to_clsid("CT_SLID"));
+CONTROL_TYPE_REGISTER(ibValueSlider, "Slider", "Widget", control_to_clsid("CT_SLID"));

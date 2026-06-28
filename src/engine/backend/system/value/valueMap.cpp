@@ -328,7 +328,7 @@ bool ibValueStructure::Property(const ibValue& varKeyValue, ibValue& cValueFound
 //*                       Runtime register                             *
 //**********************************************************************
 
-VALUE_TYPE_REGISTER(ibValueContainer, "Container", string_to_clsid("VL_CONTR"));
-VALUE_TYPE_REGISTER(ibValueStructure, "Structure", string_to_clsid("VL_STRUT"));
+VALUE_TYPE_REGISTER(ibValueContainer, "Container", value_to_clsid("VL_CONTR"));
+VALUE_TYPE_REGISTER(ibValueStructure, "Structure", value_to_clsid("VL_STRUT"));
 
-SYSTEM_TYPE_REGISTER(ibValueContainer::ibValueReturnContainer, "KeyValue", string_to_clsid("VL_KEVAL"));
+SYSTEM_TYPE_REGISTER(ibValueContainer::ibValueReturnContainer, "KeyValue", system_to_clsid("VL_KEVAL"));

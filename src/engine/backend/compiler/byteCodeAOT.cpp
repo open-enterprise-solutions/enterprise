@@ -114,7 +114,11 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 // writes the leading param-count s32 nor the separate name block; each param's
 // name now rides inline in WriteParam/ReadParam. v14 blobs mis-align on the
 // dropped fields → bump rejects them → safe recompile + repopulate.
-constexpr uint16_t kAOTFormatVersion = 15;
+// v16 (2026-06-28): ibClassID now carries a KIND in its high byte (clsid.h). Dynamic
+// metaobject ids changed from FNV("R_<metaID>"/…) to constructive (kind<<56 | metaID),
+// so every persisted/cached CLSID differs from v15. Bump rejects v15 → safe recompile +
+// repopulate (DB/config blobs holding old CLSIDs regenerate too).
+constexpr uint16_t kAOTFormatVersion = 16;
 constexpr uint16_t kAOTFlagPortable  = 0x0001;       // unused — host-endian today
 
 // Sentinel for an over-large collection — guards Deserialize against

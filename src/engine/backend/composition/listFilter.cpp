@@ -379,12 +379,12 @@ void ibApplyDynamicSettings(ibDataComposer& composer, const ibValueListSettings*
 //  Registration
 // ===========================================================================
 
-ENUM_TYPE_REGISTER(ibValueEnumComparisonKind, "ComparisonKind", string_to_clsid("EN_CMPK"));
-ENUM_TYPE_REGISTER(ibValueEnumSortDirection,  "SortDirection",  string_to_clsid("EN_SDIR"));
+ENUM_TYPE_REGISTER(ibValueEnumComparisonKind, "ComparisonKind", enum_to_clsid("EN_CMPK"));
+ENUM_TYPE_REGISTER(ibValueEnumSortDirection,  "SortDirection",  enum_to_clsid("EN_SDIR"));
 
-VALUE_TYPE_REGISTER(ibValueFilterItem,    "FilterItem",   string_to_clsid("VL_FILTI"));
-VALUE_TYPE_REGISTER(ibValueFilterList,    "FilterList",   string_to_clsid("VL_FILTL"));
-VALUE_TYPE_REGISTER(ibValueSortItem,      "SortItem",     string_to_clsid("VL_SORTI"));
-VALUE_TYPE_REGISTER(ibValueSortList,      "SortList",     string_to_clsid("VL_SORTL"));
-VALUE_TYPE_REGISTER(ibValueGroupList,     "GroupList",    string_to_clsid("VL_GRPL"));
-VALUE_TYPE_REGISTER(ibValueListSettings,  "ListSettings", string_to_clsid("VL_LSET"));
+VALUE_TYPE_REGISTER(ibValueFilterItem,    "FilterItem",   value_to_clsid("VL_FILTI"));
+VALUE_TYPE_REGISTER(ibValueFilterList,    "FilterList",   value_to_clsid("VL_FILTL"));
+VALUE_TYPE_REGISTER(ibValueSortItem,      "SortItem",     value_to_clsid("VL_SORTI"));
+VALUE_TYPE_REGISTER(ibValueSortList,      "SortList",     value_to_clsid("VL_SORTL"));
+VALUE_TYPE_REGISTER(ibValueGroupList,     "GroupList",    value_to_clsid("VL_GRPL"));
+VALUE_TYPE_REGISTER(ibValueListSettings,  "ListSettings", value_to_clsid("VL_LSET"));

@@ -6,7 +6,7 @@
 
 #include "backend/tableInfo.h"
 
-const ibClassID g_valueTableCLSID = string_to_clsid("VL_TABL");
+constexpr ibClassID g_valueTableCLSID = value_to_clsid("VL_TABL");
 
 //Table support
 class BACKEND_API ibValueModelTable : public ibValueModelRamTableBase {

@@ -34,4 +34,4 @@ bool ibValueGuid::Init(ibValue** paParams, const long lSizeArray)
 //*                       Runtime register                             *
 //**********************************************************************
 
-VALUE_TYPE_REGISTER(ibValueGuid, "Guid", string_to_clsid("VL_GUID"));
+VALUE_TYPE_REGISTER(ibValueGuid, "Guid", value_to_clsid("VL_GUID"));

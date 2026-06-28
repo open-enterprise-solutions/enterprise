@@ -341,6 +341,6 @@ void ibValueModelTable::Clear()
 
 VALUE_TYPE_REGISTER(ibValueModelTable, "Table", g_valueTableCLSID);
 
-SYSTEM_TYPE_REGISTER(ibValueModelTable::ibValueModelTableColumnCollection, "TableValueColumn", string_to_clsid("VL_TVCLM"));
-SYSTEM_TYPE_REGISTER(ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColumnInfo, "TableValueColumnInfo", string_to_clsid("VL_TVCLI"));
-SYSTEM_TYPE_REGISTER(ibValueModelTable::ibValueModelTableReturnLine, "TableValueRow", string_to_clsid("VL_TVROW"));
+SYSTEM_TYPE_REGISTER(ibValueModelTable::ibValueModelTableColumnCollection, "TableValueColumn", system_to_clsid("VL_TVCLM"));
+SYSTEM_TYPE_REGISTER(ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColumnInfo, "TableValueColumnInfo", system_to_clsid("VL_TVCLI"));
+SYSTEM_TYPE_REGISTER(ibValueModelTable::ibValueModelTableReturnLine, "TableValueRow", system_to_clsid("VL_TVROW"));

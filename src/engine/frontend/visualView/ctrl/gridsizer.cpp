@@ -73,4 +73,4 @@ bool ibValueGridSizer::WriteData(ibDataNode& node) const
 //*                       Register in runtime                           *
 //***********************************************************************
 
-CONTROL_TYPE_REGISTER(ibValueGridSizer, "Gridsizer", "Sizer", string_to_clsid("CT_GSZR"));
+CONTROL_TYPE_REGISTER(ibValueGridSizer, "Gridsizer", "Sizer", control_to_clsid("CT_GSZR"));

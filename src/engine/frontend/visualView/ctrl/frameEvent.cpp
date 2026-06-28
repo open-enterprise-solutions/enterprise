@@ -178,4 +178,4 @@ bool ibValueFrame::ibValueEventContainer::CallAsFunc(const long lMethodNum, ibVa
 //*                       Runtime register                             *
 //**********************************************************************
 
-SYSTEM_TYPE_REGISTER(ibValueFrame::ibValueEventContainer, "EventContainer", string_to_clsid("VL_EVCT"));
+SYSTEM_TYPE_REGISTER(ibValueFrame::ibValueEventContainer, "EventContainer", system_to_clsid("VL_EVCT"));

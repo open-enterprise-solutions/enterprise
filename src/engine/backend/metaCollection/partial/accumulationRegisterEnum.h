@@ -37,7 +37,7 @@ class ibValueEnumAccumulationRegisterRecordType : public ibValueEnumeration<ibRe
 		AddEnumeration(eReceipt, wxT("Receipt"), _("Receipt"));
 	}
 };
-const ibClassID g_enumRecordTypeCLSID = string_to_clsid("EN_RETP");
+constexpr ibClassID g_enumRecordTypeCLSID = enum_to_clsid("EN_RETP");
 #pragma endregion 
 
 #endif

@@ -53,7 +53,7 @@ inline void BindAbsentPrimitive(ibQueryStatement* st, ibColumnRole role, int& po
 // gate is exactly the one DescribeColumnLayout uses, so the field SET and ORDER are byte-identical to
 // the layout (and thus to the DDL).
 template <class BindActive, class BindRef>
-void DriveSpread(const ibBackendQueryColumn* col, const ibMetaData* metaData, int tag,
+void DriveSpread(const ibBackendQueryColumn* col, int tag,
                  ibQueryStatement* st, int& pos, BindActive bindActive, BindRef bindRef)
 {
 	const ibTypeDescription& td = col->GetTypeDesc();
@@ -71,7 +71,7 @@ void DriveSpread(const ibBackendQueryColumn* col, const ibMetaData* metaData, in
 	primitive(ibValueTypes::TYPE_STRING,  ibColumnRole::String);
 	primitive(ibValueTypes::TYPE_ENUM,    ibColumnRole::Enum);
 
-	if (ibColumnCodec::HasReference(col, metaData)) {
+	if (ibColumnCodec::HasReference(col)) {
 		bindRef(ibColumnRole::ReferenceType, pos);
 		bindRef(ibColumnRole::ReferenceId,   pos);
 	}

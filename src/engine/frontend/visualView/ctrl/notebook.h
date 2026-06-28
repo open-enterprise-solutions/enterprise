@@ -11,8 +11,8 @@ class ibValueNotebookPage;
 //********************************************************************************************
 
 //COMMON FORM
-const ibClassID g_controlNotebookCLSID = string_to_clsid("CT_NTBK");
-const ibClassID g_controlNotebookPageCLSID = string_to_clsid("CT_NTPG");
+constexpr ibClassID g_controlNotebookCLSID = control_to_clsid("CT_NTBK");
+constexpr ibClassID g_controlNotebookPageCLSID = control_to_clsid("CT_NTPG");
 
 //********************************************************************************************
 //*                                 Value Notebook                                           *

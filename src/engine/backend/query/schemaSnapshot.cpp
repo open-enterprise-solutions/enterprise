@@ -132,7 +132,7 @@ void WriteSeedRow(ibStructureBatch& batch, const ibSchemaTable& t, const ibSchem
 		if (hasKey)
 			columns.push_back(keyName);
 		for (const auto& cell : cells)
-			for (const wxString& f : ColumnFieldNames(cell.first, metaData))
+			for (const wxString& f : ColumnFieldNames(cell.first))
 				columns.push_back(f);
 
 		ibQueryStatement stmt(ibQueryStatement::Kind::Upsert, table, columns,

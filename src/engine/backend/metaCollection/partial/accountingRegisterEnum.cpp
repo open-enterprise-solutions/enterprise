@@ -6,4 +6,4 @@
 #include "accountingRegisterEnum.h"
 
 
-ENUM_TYPE_REGISTER(ibValueEnumAccountingRegisterRecordType, "AccountingRecordType", string_to_clsid("EN_ARTP"));
+ENUM_TYPE_REGISTER(ibValueEnumAccountingRegisterRecordType, "AccountingRecordType", enum_to_clsid("EN_ARTP"));

@@ -530,4 +530,4 @@ std::shared_ptr<ibValueIteratorState> ibValueQueryable::CreateIterator()
 }
 
 // System type — vended only (the Data global / future Data.From), never New'ed.
-SYSTEM_TYPE_REGISTER(ibValueQueryable, "Queryable", string_to_clsid("VL_QRBL"));
+SYSTEM_TYPE_REGISTER(ibValueQueryable, "Queryable", system_to_clsid("VL_QRBL"));

@@ -32,7 +32,7 @@
 #include <wx/filefn.h>     // wxRemoveFile
 
 #include "backend/metadataConfiguration.h"
-#include "backend/clsid.h"   // string_to_clsid("MD_CAT")
+#include "backend/clsid.h"   // metadata_to_clsid("MD_CAT")
 
 namespace {
 
@@ -109,7 +109,7 @@ TEST(MetadataSerialize, EveryBusinessObjectType_RoundTrip_BytesEqual) {
 		ASSERT_NE(root, nullptr) << "fresh config has no root for " << c.clsid;
 
 		ibValueMetaObject* obj = cfg1.CreateMetaObject(
-			string_to_clsid(wxString::FromAscii(c.clsid)), root, /*runObject*/ false);
+			metadata_to_clsid(wxString::FromAscii(c.clsid)), root, /*runObject*/ false);
 		ASSERT_NE(obj, nullptr) << "CreateMetaObject failed for " << c.clsid;
 		cfg1.RenameMetaObject(obj, wxString(c.name));
 
@@ -136,12 +136,12 @@ TEST(MetadataSerialize, CatalogWithAttribute_RoundTrip_BytesEqual) {
 	ASSERT_NE(root, nullptr);
 
 	ibValueMetaObject* cat =
-		cfg1.CreateMetaObject(string_to_clsid(wxT("MD_CAT")), root, /*runObject*/ false);
+		cfg1.CreateMetaObject(metadata_to_clsid(wxT("MD_CAT")), root, /*runObject*/ false);
 	ASSERT_NE(cat, nullptr);
 	cfg1.RenameMetaObject(cat, wxT("Products"));
 
 	ibValueMetaObject* attr =
-		cfg1.CreateMetaObject(string_to_clsid(wxT("MD_ATTR")), cat, /*runObject*/ false);
+		cfg1.CreateMetaObject(metadata_to_clsid(wxT("MD_ATTR")), cat, /*runObject*/ false);
 	ASSERT_NE(attr, nullptr) << "CreateMetaObject(MD_ATTR) under a catalog returned null";
 	cfg1.RenameMetaObject(attr, wxT("Price"));
 
@@ -166,11 +166,11 @@ TEST(MetadataSerialize, DocumentWithTabularSection_RoundTrip_BytesEqual) {
 	ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
 	ASSERT_NE(root, nullptr);
 
-	ibValueMetaObject* doc = cfg.CreateMetaObject(string_to_clsid(wxT("MD_DOC")), root, false);
+	ibValueMetaObject* doc = cfg.CreateMetaObject(metadata_to_clsid(wxT("MD_DOC")), root, false);
 	ASSERT_NE(doc, nullptr);
 	cfg.RenameMetaObject(doc, wxT("Invoice"));
 
-	ibValueMetaObject* tab = cfg.CreateMetaObject(string_to_clsid(wxT("MD_TBLR")), doc, false);
+	ibValueMetaObject* tab = cfg.CreateMetaObject(metadata_to_clsid(wxT("MD_TBLR")), doc, false);
 	ASSERT_NE(tab, nullptr) << "CreateMetaObject(MD_TBLR) under a document returned null";
 	cfg.RenameMetaObject(tab, wxT("Lines"));
 
@@ -184,9 +184,9 @@ TEST(MetadataSerialize, MultipleSiblingObjects_RoundTrip_BytesEqual) {
 	ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
 	ASSERT_NE(root, nullptr);
 
-	ibValueMetaObject* cat = cfg.CreateMetaObject(string_to_clsid(wxT("MD_CAT")), root, false);
-	ibValueMetaObject* doc = cfg.CreateMetaObject(string_to_clsid(wxT("MD_DOC")), root, false);
-	ibValueMetaObject* enm = cfg.CreateMetaObject(string_to_clsid(wxT("MD_ENM")), root, false);
+	ibValueMetaObject* cat = cfg.CreateMetaObject(metadata_to_clsid(wxT("MD_CAT")), root, false);
+	ibValueMetaObject* doc = cfg.CreateMetaObject(metadata_to_clsid(wxT("MD_DOC")), root, false);
+	ibValueMetaObject* enm = cfg.CreateMetaObject(metadata_to_clsid(wxT("MD_ENM")), root, false);
 	ASSERT_NE(cat, nullptr);
 	ASSERT_NE(doc, nullptr);
 	ASSERT_NE(enm, nullptr);

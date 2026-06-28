@@ -102,4 +102,4 @@ bool ibValueDataComposer::CallAsFunc(const long lMethodNum, ibValue& pvarRetValu
 //*                       Runtime register                             *
 //**********************************************************************
 
-VALUE_TYPE_REGISTER(ibValueDataComposer, "DataComposer", string_to_clsid("VL_CMPS"));
+VALUE_TYPE_REGISTER(ibValueDataComposer, "DataComposer", value_to_clsid("VL_CMPS"));

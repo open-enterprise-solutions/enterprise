@@ -254,7 +254,7 @@ bool ibValueQuerySelect::SetPropVal(const long /*lPropNum*/, const ibValue& /*va
 //*                       Runtime register                             *
 //**********************************************************************
 
-VALUE_TYPE_REGISTER(ibValueQueryExec, "Query", string_to_clsid("VL_QURY"));
-SYSTEM_TYPE_REGISTER(ibValueQueryResult, "QueryResult", string_to_clsid("VL_QRES"));
-SYSTEM_TYPE_REGISTER(ibValueQuerySelect, "QuerySelect", string_to_clsid("VL_QSEL"));
-ENUM_TYPE_REGISTER(ibValueEnumQuerySelectKind, "QueryResultIteration", string_to_clsid("EN_QSEL"));
+VALUE_TYPE_REGISTER(ibValueQueryExec, "Query", value_to_clsid("VL_QURY"));
+SYSTEM_TYPE_REGISTER(ibValueQueryResult, "QueryResult", system_to_clsid("VL_QRES"));
+SYSTEM_TYPE_REGISTER(ibValueQuerySelect, "QuerySelect", system_to_clsid("VL_QSEL"));
+ENUM_TYPE_REGISTER(ibValueEnumQuerySelectKind, "QueryResultIteration", enum_to_clsid("EN_QSEL"));

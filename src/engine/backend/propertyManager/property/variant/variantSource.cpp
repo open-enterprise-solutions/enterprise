@@ -43,7 +43,7 @@ void ibVariantDataAttributeSource::DoRefreshTypeDesc()
 		if (gateMeta != nullptr) {
 			for (auto clsid : m_typeDesc.GetClsidList()) {
 				const ibCtorMetaValueType* typeCtor = metaData->GetTypeCtor(clsid);
-				if (typeCtor != nullptr && typeCtor->GetMetaTypeCtor() == ibCtorObjectMetaType_TabularSection) {
+				if (typeCtor != nullptr && ::IsTabularSection(clsid)) {
 					const ibValueMetaObject* metaTable = typeCtor->GetMetaObject();
 					if (metaTable == nullptr || metaTable->GetParent() != gateMeta)
 						clear_list.insert(clsid);

@@ -19,4 +19,4 @@ bool ibValueOutput::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibV
 	return false;
 }
 
-CONTEXT_TYPE_REGISTER(ibValueOutput, "ValueOutput", string_to_clsid("IN_OUTP"))
+CONTEXT_TYPE_REGISTER(ibValueOutput, "ValueOutput", context_to_clsid("IN_OUTP"))

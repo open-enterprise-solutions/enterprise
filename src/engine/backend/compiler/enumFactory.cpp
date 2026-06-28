@@ -39,4 +39,4 @@ bool ibValueEnumFactory::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 //*                       Runtime register                             *
 //**********************************************************************
 
-CONTEXT_TYPE_REGISTER(ibValueEnumFactory, "EnumManager", string_to_clsid("CO_ENMR"));
+CONTEXT_TYPE_REGISTER(ibValueEnumFactory, "EnumManager", context_to_clsid("CO_ENMR"));

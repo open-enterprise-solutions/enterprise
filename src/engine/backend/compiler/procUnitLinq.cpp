@@ -777,7 +777,7 @@ private:
 };
 
 
-const ibClassID g_valueQuery = string_to_clsid("VL_QRY");
+constexpr ibClassID g_valueQuery = system_to_clsid("VL_QRY");
 
 SYSTEM_TYPE_REGISTER(ibValueQuery, "LinqQuery", g_valueQuery);
 

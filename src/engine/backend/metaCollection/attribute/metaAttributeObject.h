@@ -77,10 +77,8 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 	// their rows by it; the DB path keys its fields off the same id via GetPhysicalName).
 	virtual ibMetaID GetColumnId() const override      { return GetMetaID(); }
 
-	// Authoritative physical-field list — the data fields the DB IR builder (sort / group-by) reads
-	// straight off the column: the per-type primitives + the reference's _RRRef, skipping the _TYPE
-	// tag and the _RTRef. Defined in metaAttributeObjectQuery.cpp over the column-layout tier.
-	virtual std::vector<wxString> GetValueFields() const override;
+	// (No GetValueFields here — the attribute is just a column; its value-field split is the tier free
+	//  function ColumnValueFields(col) over DescribeColumnLayout, metadata-free, asked by the provider.)
 
 	//check if attribute is fill
 	virtual bool FillCheck() const = 0;

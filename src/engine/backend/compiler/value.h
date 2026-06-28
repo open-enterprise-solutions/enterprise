@@ -55,14 +55,14 @@ public:
 	virtual ibValue* GetImplValueRef() const = 0;
 };
 
-const ibClassID g_valueUndefinedCLSID = string_to_clsid("VL_UNDF");
+constexpr ibClassID g_valueUndefinedCLSID = primitive_to_clsid("VL_UNDF");
 
-const ibClassID g_valueBooleanCLSID = string_to_clsid("VL_BOOL");
-const ibClassID g_valueNumberCLSID = string_to_clsid("VL_NUMB");
-const ibClassID g_valueDateCLSID = string_to_clsid("VL_DATE");
-const ibClassID g_valueStringCLSID = string_to_clsid("VL_STRI");
+constexpr ibClassID g_valueBooleanCLSID = primitive_to_clsid("VL_BOOL");
+constexpr ibClassID g_valueNumberCLSID = primitive_to_clsid("VL_NUMB");
+constexpr ibClassID g_valueDateCLSID = primitive_to_clsid("VL_DATE");
+constexpr ibClassID g_valueStringCLSID = primitive_to_clsid("VL_STRI");
 
-const ibClassID g_valueNullCLSID = string_to_clsid("VL_NULL");
+constexpr ibClassID g_valueNullCLSID = primitive_to_clsid("VL_NULL");
 
 //simple type date
 class BACKEND_API ibValue {

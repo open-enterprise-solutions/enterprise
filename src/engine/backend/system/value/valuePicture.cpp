@@ -26,4 +26,4 @@ bool ibValuePicture::Init(ibValue** paParams, const long lSizeArray)
 //*                       Runtime register                             *
 //**********************************************************************
 
-VALUE_TYPE_REGISTER(ibValuePicture, "StoragePicture", string_to_clsid("SY_PICTR"));
+VALUE_TYPE_REGISTER(ibValuePicture, "StoragePicture", value_to_clsid("SY_PICTR"));

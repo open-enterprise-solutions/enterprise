@@ -74,4 +74,4 @@ bool ibValuePoint::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 //*                       Runtime register                             *
 //**********************************************************************
 
-VALUE_TYPE_REGISTER(ibValuePoint, "Point", string_to_clsid("VL_PONT"));
+VALUE_TYPE_REGISTER(ibValuePoint, "Point", value_to_clsid("VL_PONT"));

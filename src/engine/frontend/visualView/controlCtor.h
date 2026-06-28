@@ -66,7 +66,7 @@ public:
 GENERATE_REGISTER(wxT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_c_), new ibCtorControlType<class_info>(wxT(class_name), wxT(class_type), clsid))
 // 3-arg (new): clsid = ib_clsid_hash(class_name).
 #define CONTROL_TYPE_REGISTER_3(class_info, class_name, class_type)\
-CONTROL_TYPE_REGISTER_4(class_info, class_name, class_type, ib_clsid_hash(class_name))
+CONTROL_TYPE_REGISTER_4(class_info, class_name, class_type, control_to_clsid(class_name))
 #define CONTROL_TYPE_REGISTER(...) IB_DISPATCH(CONTROL_TYPE_REGISTER_, __VA_ARGS__)
 
 // 4-arg (legacy): explicit clsid.
@@ -74,7 +74,7 @@ CONTROL_TYPE_REGISTER_4(class_info, class_name, class_type, ib_clsid_hash(class_
 GENERATE_REGISTER(wxT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_sc_), new ibCtorSystemControlType<class_info>(wxT(class_name), wxT(class_type), clsid))
 // 3-arg (new): clsid = ib_clsid_hash(class_name).
 #define S_CONTROL_TYPE_REGISTER_3(class_info, class_name, class_type)\
-S_CONTROL_TYPE_REGISTER_4(class_info, class_name, class_type, ib_clsid_hash(class_name))
+S_CONTROL_TYPE_REGISTER_4(class_info, class_name, class_type, control_to_clsid(class_name))
 #define S_CONTROL_TYPE_REGISTER(...) IB_DISPATCH(S_CONTROL_TYPE_REGISTER_, __VA_ARGS__)
 
 #endif 

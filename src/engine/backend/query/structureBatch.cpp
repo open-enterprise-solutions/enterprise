@@ -34,13 +34,13 @@ ibDdlColumn ColumnOf(const ibColumnSlot& slot)
 
 void ibStructureBatch::AddColumn(const ibBackendQueryColumn* column)
 {
-	for (const ibColumnSlot& slot : DescribeColumnLayout(column, GetMetaData()))
+	for (const ibColumnSlot& slot : DescribeColumnLayout(column))
 		AddField(slot);
 }
 
 void ibStructureBatch::DropColumn(const ibBackendQueryColumn* column)
 {
-	for (const ibColumnSlot& slot : DescribeColumnLayout(column, GetMetaData()))
+	for (const ibColumnSlot& slot : DescribeColumnLayout(column))
 		DropField(slot.m_name);
 }
 
@@ -65,7 +65,7 @@ void ibStructureBatch::CreateTable(std::vector<const ibBackendQueryColumn*> colu
 	// No table-level PRIMARY KEY — identity is an index concern (see CreateIndex).
 	std::vector<ibDdlColumn> ddlCols;
 	for (const ibBackendQueryColumn* col : columns)
-		for (const ibColumnSlot& slot : DescribeColumnLayout(col, GetMetaData()))
+		for (const ibColumnSlot& slot : DescribeColumnLayout(col))
 			ddlCols.push_back(ColumnOf(slot));
 	m_steps.push_back(ibCreateTable(m_table, std::move(ddlCols)));
 }
@@ -80,7 +80,7 @@ void ibStructureBatch::CreateIndex(const wxString& indexName, std::vector<const 
 	// Expand every logical column to its physical field names — the index covers those.
 	std::vector<wxString> fields;
 	for (const ibBackendQueryColumn* col : columns)
-		for (const wxString& f : ColumnFieldNames(col, GetMetaData()))
+		for (const wxString& f : ColumnFieldNames(col))
 			fields.push_back(f);
 	if (fields.empty())   // a column with no physical fields => no index (the old explicit guard)
 		return;
@@ -212,12 +212,11 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 		return retCode;
 
 	const wxString&    tableName = batch.GetTable();
-	const ibMetaData*  metaData  = batch.GetMetaData();
 	const ibTypeDescription& srcTypeDesc = srcCol->GetTypeDesc();
 	const ibTypeDescription& dstTypeDesc = dstCol->GetTypeDesc();
 	const wxString fieldName = srcCol->GetPhysicalName();
-	const std::vector<ibColumnSlot> srcLayout = DescribeColumnLayout(srcCol, metaData);
-	const std::vector<ibColumnSlot> dstLayout = DescribeColumnLayout(dstCol, metaData);
+	const std::vector<ibColumnSlot> srcLayout = DescribeColumnLayout(srcCol);
+	const std::vector<ibColumnSlot> dstLayout = DescribeColumnLayout(dstCol);
 
 	// Primitive / discriminator fields: a pure SLOT diff by name. _TYPE is always present, so it is
 	// never added/dropped; only the per-type data columns move. The reference pair is per-clsid below.
@@ -258,10 +257,10 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 	// "FLDxxxx_RTRef unknown".) Per-clsid still matters for CLEARING stale rows of a dropped target.
 	std::set<ibClassID> createdRef, currentRef, removedRef;
 	for (auto clsid : srcTypeDesc.GetClsidList())
-		if (!DescContainsClsid(dstTypeDesc, clsid) && IsReferenceClsid(clsid, metaData))
+		if (!DescContainsClsid(dstTypeDesc, clsid) && IsReference(clsid))
 			createdRef.insert(clsid);
 	for (auto clsid : dstTypeDesc.GetClsidList()) {
-		if (!IsReferenceClsid(clsid, metaData))
+		if (!IsReference(clsid))
 			continue;
 		if (DescContainsClsid(srcTypeDesc, clsid))
 			currentRef.insert(clsid);

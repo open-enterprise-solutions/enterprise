@@ -81,11 +81,8 @@ wxString RowKeyField(const ibBackendQueryable* queryable)
 // field search, now off the one key authority.
 wxString ReferenceFieldOf(const ibBackendQueryColumn* refKeyColumn)
 {
-	const auto* attr = dynamic_cast<const ibValueMetaObjectAttributeBase*>(refKeyColumn);
-	if (attr == nullptr)
-		return wxString();
 	// The reference's _RRRef field = the ReferenceId slot in the column's physical layout.
-	for (const ibColumnSlot& slot : DescribeColumnLayout(attr, attr->GetMetaData()))
+	for (const ibColumnSlot& slot : DescribeColumnLayout(refKeyColumn))
 		if (slot.m_role == ibColumnRole::ReferenceId)
 			return slot.m_name;
 	return wxString();
@@ -137,7 +134,7 @@ ibQueryExprPtr OrFold(ibQueryExprPtr a, ibQueryExprPtr b)
 ibQueryExprPtr DecomposeEquality(const ibBackendQueryColumn* col, const ibMetaData* metaData, const ibValue& value,
                                  const wxString& mainQual = wxEmptyString)
 {
-	std::vector<wxString> fields = ColumnFieldNames(col, metaData);
+	std::vector<wxString> fields = ColumnFieldNames(col);
 	ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
 	int position = 1;
 	ibColumnCodec::WriteValue(col, metaData, value, &capture, position);
@@ -358,9 +355,7 @@ bool ScalarReadable(const ibBackendQueryColumn* col, const ColocatedLeaves& leav
 {
 	if (col == nullptr)     return false;
 	if (col->IsRawColumn()) return true;
-	const ibBackendQueryable* q = ColocatedOwner(leaves, col);
-	const ibMetaData* m = q != nullptr ? q->GetMetaData() : nullptr;
-	if (ibColumnCodec::HasReference(col, m))                                  return false;   // reference -> rehydration needed
+	if (ibColumnCodec::HasReference(col))                            return false;   // reference -> rehydration needed
 	if (col->GetTypeDesc().ContainType(ibValueTypes::TYPE_ENUM))     return false;   // enum -> variant reconstruction
 	return true;
 }
@@ -382,8 +377,6 @@ bool SingleFieldJoinable(const ibBackendQueryColumn* col, const ColocatedLeaves&
 {
 	if (col == nullptr)     return false;
 	if (col->IsRawColumn()) return true;
-	const ibBackendQueryable* q = ColocatedOwner(leaves, col);
-	const ibMetaData* m = q != nullptr ? q->GetMetaData() : nullptr;
 	const ibTypeDescription& td = col->GetTypeDesc();
 	int fields = 0;
 	if (td.ContainType(ibValueTypes::TYPE_BOOLEAN)) ++fields;
@@ -391,7 +384,7 @@ bool SingleFieldJoinable(const ibBackendQueryColumn* col, const ColocatedLeaves&
 	if (td.ContainType(ibValueTypes::TYPE_DATE))    ++fields;
 	if (td.ContainType(ibValueTypes::TYPE_STRING))  ++fields;
 	if (td.ContainType(ibValueTypes::TYPE_ENUM))    ++fields;
-	if (ibColumnCodec::HasReference(col, m))                 ++fields;
+	if (ibColumnCodec::HasReference(col))           ++fields;
 	return fields == 1;
 }
 
@@ -473,7 +466,7 @@ ibQueryExprPtr BuildColocatedPredicate(const ibQueryPredicatePtr& p, const Coloc
 		if (owner == nullptr)
 			throw std::logic_error("ColocatedWhere: an IS NULL references no joined leaf column");
 		ibQueryExprPtr allNull;
-		for (const wxString& f : p->m_col->GetValueFields())
+		for (const wxString& f : ColumnValueFields(p->m_col))
 			allNull = AndFold(allNull, ibIsNull(ibColQ(owner->GetQueryTableName(), f), false));
 		if (!allNull) return nullptr;
 		return p->m_negated ? ibNot(allNull) : allNull;
@@ -580,7 +573,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildPredicateExpr(const ibBackendQueryable* que
 		const ibBackendQueryColumn* col = predicate->m_col;
 		ibQueryExprPtr allNull;
 		if (col != nullptr) {
-			for (const wxString& f : col->GetValueFields())
+			for (const wxString& f : ColumnValueFields(col))
 				allNull = AndFold(allNull, ibIsNull(ibColQ(mainQual, f), false));
 		}
 		if (!allNull)   // defensive: a column with no physical fields — no constraint
@@ -671,7 +664,7 @@ std::vector<ibQuerySortKey> ibMetaIRBuilder::BuildSortKeys(const ibBackendQuerya
 		if (s.m_col == nullptr) continue;
 		if (!s.m_path.empty()) continue;   // dot-walk sort — emitted inline by BuildPageIR (qualified by its join alias)
 		const bool asc = reverse ? !s.m_ascending : s.m_ascending;
-		for (const wxString& name : s.m_col->GetValueFields()) {
+		for (const wxString& name : ColumnValueFields(s.m_col)) {
 			ibQuerySortKey k;
 			k.m_expr = ibColQ(mainQual, name);
 			k.m_dir  = asc ? ibQuerySortDir::Asc : ibQuerySortDir::Desc;
@@ -895,7 +888,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteAggregate(const ibDataQuerySpec& spe
 			const std::vector<const ibBackendQueryColumn*>& path = (gi < groupPaths.size()) ? groupPaths[gi]
 			                                                      : std::vector<const ibBackendQueryColumn*>{};
 			const wxString qual = path.empty() ? mainQual : joinLeaf(path);   // dot-walk leaf -> join alias
-			for (const wxString& field : gcol->GetValueFields()) {   // column self-describes its fields — no ResolveAttribute
+			for (const wxString& field : ColumnValueFields(gcol)) {   // tier derives its fields — no ResolveAttribute
 				const ibQueryExprPtr gexpr = qualCol(qual, field);
 				q.GroupBy(gexpr);
 				projection.push_back(ibQueryProjItem{ gexpr, field });   // AS its physname -> GetValue(gcol) reads it back
@@ -994,7 +987,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedJoin(const ibDataQuerySpec&
 			else {
 				const wxString prefix = wxString::Format(wxT("ocol%d"), oi);
 				const wxString base   = col->GetPhysicalName();
-				for (const wxString& f : ColumnFieldNames(col, meta))
+				for (const wxString& f : ColumnFieldNames(col))
 					projection.push_back(ibQueryProjItem{ ibCol(qual, f), prefix + f.Mid(base.length()) });   // <field> AS <prefix><suffix>
 				plans.push_back({ col, sc.second, prefix, meta, false });
 			}
@@ -1100,7 +1093,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedAggregate(const ibDataQuery
 			else {
 				const wxString prefix = wxString::Format(wxT("gcol%d"), gi);
 				const wxString base   = g->GetPhysicalName();
-				for (const wxString& f : ColumnFieldNames(g, meta)) {
+				for (const wxString& f : ColumnFieldNames(g)) {
 					const ibQueryExprPtr fexpr = ibCol(qual(g), f);
 					q.GroupBy(fexpr);
 					projection.push_back(ibQueryProjItem{ fexpr, prefix + f.Mid(base.length()) });
@@ -1436,7 +1429,7 @@ bool ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 			std::vector<wxString> whereCols;
 			for (const ibQueryCondition& c : *spec.m_conditions) {
 				if (c.m_col == nullptr) { if (!keyColumn.empty()) whereCols.push_back(keyColumn); }
-				else for (const wxString& f : ColumnFieldNames(c.m_col, metaData)) whereCols.push_back(f);
+				else for (const wxString& f : ColumnFieldNames(c.m_col)) whereCols.push_back(f);
 			}
 			ibQueryStatement statement(ibQueryStatement::Kind::Delete, table, whereCols, {}, spec.m_holder);
 			int position = 1;
@@ -1454,7 +1447,7 @@ bool ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 
 		std::vector<wxString> columns;
 		for (const auto& wv : *spec.m_writeValues)
-			for (const wxString& f : ColumnFieldNames(wv.first, metaData)) columns.push_back(f);
+			for (const wxString& f : ColumnFieldNames(wv.first)) columns.push_back(f);
 
 		// UPSERT match keys = the source's uniqueness key, OWNED by the queryable through
 		// GetPrimaryKeyColumns: a record's data-reference (_RTRef+_RRRef — _RTRef is constant for
@@ -1465,7 +1458,7 @@ bool ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 		std::vector<wxString> matchKeys;
 		if (kind == WriteKind::Upsert)
 			for (const ibBackendQueryColumn* col : spec.m_queryable->GetPrimaryKeyColumns())
-				for (const wxString& f : ColumnFieldNames(col, metaData)) matchKeys.push_back(f);
+				for (const wxString& f : ColumnFieldNames(col)) matchKeys.push_back(f);
 
 		ibQueryStatement statement(l2kind, table, columns, matchKeys, spec.m_holder);
 		int position = 1;
@@ -1609,9 +1602,8 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 							projection.push_back(ibQueryProjItem{ ibCase({ { ibIsNull(colE), empty } }, colE), dw.m_alias });
 						}
 						else {
-							const ibMetaData* meta = tq->GetMetaData();
 							const wxString    base = leaf->GetPhysicalName();
-							for (const wxString& f : ColumnFieldNames(leaf, meta))
+							for (const wxString& f : ColumnFieldNames(leaf))
 								projection.push_back(ibQueryProjItem{ ibCol(a, f), dw.m_alias + f.Mid(base.length()) });
 						}
 						continue;
@@ -1666,7 +1658,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 					std::vector<std::vector<wxString>> occFields;
 					occFields.reserve(occs.size());
 					for (const LeafOcc& o : occs)
-						occFields.push_back(ColumnFieldNames(o.m_col, o.m_q->GetMetaData()));
+						occFields.push_back(ColumnFieldNames(o.m_col));
 
 					const wxString repBase = occs.front().m_col->GetPhysicalName();
 					for (const wxString& repField : occFields.front()) {
@@ -1776,7 +1768,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 					}
 					ibQueryExprPtr allNull;
 					if (p->m_col != nullptr)
-						for (const wxString& f : p->m_col->GetValueFields())
+						for (const wxString& f : ColumnValueFields(p->m_col))
 							allNull = AndFold(allNull, ibIsNull(ibColQ(qual, f), false));
 					if (!allNull) return nullptr;
 					return p->m_negated ? ibNot(allNull) : allNull;
@@ -1840,7 +1832,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 					q.AddSortKey(std::move(k));
 				}
 				else {
-					for (const wxString& name : s.m_col->GetValueFields()) {
+					for (const wxString& name : ColumnValueFields(s.m_col)) {
 						ibQuerySortKey k;
 						k.m_expr = ibCol(mainQual, name);
 						k.m_dir  = asc ? ibQuerySortDir::Asc : ibQuerySortDir::Desc;

@@ -1121,9 +1121,6 @@
     <ClCompile Include="metaCollection\metaObjectMetadataMenu.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\attribute\metaAttributeObjectQuery.cpp">
-      <Filter>metaCollection\attribute</Filter>
-    </ClCompile>
     <ClCompile Include="metaCollection\attribute\metaAttributeObject.cpp">
       <Filter>metaCollection\attribute</Filter>
     </ClCompile>

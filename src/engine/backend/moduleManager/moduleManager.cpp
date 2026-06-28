@@ -650,14 +650,14 @@ bool ibValueModuleManagerDesigner::RemoveCommonModule(ibValueMetaObjectCommonMod
 //*                       Runtime register                             *
 //**********************************************************************
 
-SYSTEM_TYPE_REGISTER(ibValueModuleManagerRuntimeConfiguration, "ConfigModuleManager", string_to_clsid("SO_COMM"));
+SYSTEM_TYPE_REGISTER(ibValueModuleManagerRuntimeConfiguration, "ConfigModuleManager", system_to_clsid("SO_COMM"));
 
 // The lightweight base unit (designer's compiled common-module value) needs its
 // OWN factory registration: the designer puts it into the compile module's
 // context, and PrepareModuleData calls GetClassType() on it → GetTypeIDByRef
 // asserts on an unregistered wxClassInfo. The runtime unit (SO_MODL) derives from
 // it but is a distinct type.
-SYSTEM_TYPE_REGISTER(ibValueModuleManager::ibValueModuleUnit, "ModuleUnit", string_to_clsid("SO_MODB"));
-SYSTEM_TYPE_REGISTER(ibValueModuleRuntimeManager::ibValueRuntimeModuleUnit, "ModuleManager", string_to_clsid("SO_MODL"));
-SYSTEM_TYPE_REGISTER(ibValueModuleManager::ibValueMetadataUnit, "Metadata", string_to_clsid("SO_METD"));
-SYSTEM_TYPE_REGISTER(ibValueModuleManager::ibValueDataUnit, "Data", string_to_clsid("SO_DATA"));
+SYSTEM_TYPE_REGISTER(ibValueModuleManager::ibValueModuleUnit, "ModuleUnit", system_to_clsid("SO_MODB"));
+SYSTEM_TYPE_REGISTER(ibValueModuleRuntimeManager::ibValueRuntimeModuleUnit, "ModuleManager", system_to_clsid("SO_MODL"));
+SYSTEM_TYPE_REGISTER(ibValueModuleManager::ibValueMetadataUnit, "Metadata", system_to_clsid("SO_METD"));
+SYSTEM_TYPE_REGISTER(ibValueModuleManager::ibValueDataUnit, "Data", system_to_clsid("SO_DATA"));

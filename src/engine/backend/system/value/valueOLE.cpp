@@ -933,4 +933,4 @@ bool ibValueOLE::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValu
 //*                       Runtime register                             *
 //**********************************************************************
 
-VALUE_TYPE_REGISTER(ibValueOLE, "ComObject", string_to_clsid("VL_OLE"));
+VALUE_TYPE_REGISTER(ibValueOLE, "ComObject", value_to_clsid("VL_OLE"));

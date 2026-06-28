@@ -43,8 +43,8 @@ enum ibDataViewViewMode {
 //********************************************************************************************
 
 //COMMON TABLE & COLUMN
-const ibClassID g_controlTableBoxCLSID = string_to_clsid("CT_TABL");
-const ibClassID g_controlTableBoxColumnCLSID = string_to_clsid("CT_TBLC");
+constexpr ibClassID g_controlTableBoxCLSID = control_to_clsid("CT_TABL");
+constexpr ibClassID g_controlTableBoxColumnCLSID = control_to_clsid("CT_TBLC");
 
 //********************************************************************************************
 //*                                 Value TableBox                                           *

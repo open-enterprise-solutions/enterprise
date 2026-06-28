@@ -72,4 +72,4 @@ bool ibValueSize::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 //*                       Runtime register                             *
 //**********************************************************************
 
-VALUE_TYPE_REGISTER(ibValueSize, "Size", string_to_clsid("VL_SIZE"));
+VALUE_TYPE_REGISTER(ibValueSize, "Size", value_to_clsid("VL_SIZE"));

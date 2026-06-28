@@ -1,4 +1,4 @@
-﻿////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
 //	Description : report - manager
 ////////////////////////////////////////////////////////////////////////////
@@ -85,4 +85,4 @@ bool ibValueManagerDataObjectExternalReport::CallAsFunc(const long lMethodNum, i
 //*                       Register in runtime                           *
 //***********************************************************************
 
-SYSTEM_TYPE_REGISTER(ibValueManagerDataObjectExternalReport, "ExternalManagerReport", string_to_clsid("MG_EXTR"));
+SYSTEM_TYPE_REGISTER(ibValueManagerDataObjectExternalReport, "ExternalManagerReport", system_to_clsid("MG_EXTR"));

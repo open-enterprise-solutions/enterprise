@@ -17,20 +17,20 @@
 // wrappers derive the metadata from the attribute so register lowering reads cleanly — the SQL-field
 // machinery lives in the tier, NOT on the attribute. The structured ibSQLField is GONE: a register
 // builds the comma-joined field list with ibRegFieldList, or picks the _TYPE tag / first value field.
-inline wxString       ibRegFieldList (const ibValueMetaObjectAttributeBase* a, const wxString& aggr = wxEmptyString) { return ColumnFieldList(a, a->GetMetaData(), aggr); }
-inline wxString       ibRegComposite (const ibValueMetaObjectAttributeBase* a, const wxString& cmp = wxT("=")) { return ColumnComparePredicate(a, a->GetMetaData(), cmp); }
+inline wxString       ibRegFieldList (const ibValueMetaObjectAttributeBase* a, const wxString& aggr = wxEmptyString) { return ColumnFieldList(a, aggr); }
+inline wxString       ibRegComposite (const ibValueMetaObjectAttributeBase* a, const wxString& cmp = wxT("=")) { return ColumnComparePredicate(a, cmp); }
 
 // All physical fields of an attribute (the TYPE tag + per-type fields; a reference
 // expands to _RTRef + _RRRef), in the order SetValueAttribute binds them.
 inline std::vector<wxString> ibRegFieldsOf(const ibValueMetaObjectAttributeBase* a)
 {
-	return ColumnFieldNames(a, a->GetMetaData());
+	return ColumnFieldNames(a);
 }
 
 // The _TYPE discriminator field name (the first physical field of a composite column).
 inline wxString ibRegTypeField(const ibValueMetaObjectAttributeBase* a)
 {
-	const std::vector<wxString> fields = ColumnFieldNames(a, a->GetMetaData());
+	const std::vector<wxString> fields = ColumnFieldNames(a);
 	return fields.empty() ? wxString() : fields[0];   // [0] is always the _TYPE tag
 }
 
@@ -38,7 +38,7 @@ inline wxString ibRegTypeField(const ibValueMetaObjectAttributeBase* a)
 // register resource / record-type aggregate operates on (res_N, recordType_N / _E).
 inline wxString ibRegValueField(const ibValueMetaObjectAttributeBase* a)
 {
-	const std::vector<wxString> fields = ColumnFieldNames(a, a->GetMetaData());
+	const std::vector<wxString> fields = ColumnFieldNames(a);
 	return fields.size() > 1 ? fields[1] : wxString();   // [0] is the _TYPE tag; [1] is the first value field
 }
 
@@ -90,7 +90,7 @@ inline wxString ibRegQualifiedEqParams(const ibValueMetaObjectAttributeBase* a, 
 inline ibQueryExprPtr ibRegCompositeIR(const ibValueMetaObjectAttributeBase* a, const ibValue& v,
                                        ibQueryBinOp op, const wxString& qualifier = wxEmptyString)
 {
-	const std::vector<wxString> fields = ColumnFieldNames(a, a->GetMetaData());
+	const std::vector<wxString> fields = ColumnFieldNames(a);
 
 	ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
 	int pos = 1;

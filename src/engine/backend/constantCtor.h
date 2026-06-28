@@ -9,8 +9,7 @@ class ibCtorMetaValueTypeConstantObject :
 public:
 
 	ibCtorMetaValueTypeConstantObject(ibValueMetaObjectConstant* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
-		m_classType = string_to_clsid(wxT("C_") +
-			stringUtils::IntToStr(m_metaObject->GetMetaID()));
+		m_classType = object_to_clsid(m_metaObject->GetMetaID());
 	}
 
 	wxString GetClassName() const {
@@ -39,8 +38,7 @@ class ibCtorMetaValueTypeConstantManager :
 public:
 
 	ibCtorMetaValueTypeConstantManager(class ibValueMetaObjectConstant* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
-		m_classType = string_to_clsid(wxT("G_") +
-			stringUtils::IntToStr(m_metaObject->GetMetaID()));
+		m_classType = manager_to_clsid(m_metaObject->GetMetaID());
 	}
 
 	virtual wxString GetClassName() const {

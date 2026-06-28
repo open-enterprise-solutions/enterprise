@@ -21,7 +21,7 @@
 
 #include <functional>
 
-const ibClassID g_toolConfigCompareCLSID = string_to_clsid("TL_CCMP");
+constexpr ibClassID g_toolConfigCompareCLSID = make_clsid("TL_CCMP", ibClassKind_None);   // tool/doc id — not a registered type
 
 class wxAuiToolBar;
 class wxButton;

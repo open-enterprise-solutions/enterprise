@@ -90,4 +90,4 @@ bool ibValueTextBox::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 //*                       Register in runtime                           *
 //***********************************************************************
 
-CONTROL_TYPE_REGISTER(ibValueTextBox, "Textbox", "Container", string_to_clsid("CT_TEXT"));
+CONTROL_TYPE_REGISTER(ibValueTextBox, "Textbox", "Container", control_to_clsid("CT_TEXT"));

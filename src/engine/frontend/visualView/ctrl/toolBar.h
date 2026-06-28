@@ -17,9 +17,9 @@ class ibValueToolBarSeparator;
 //********************************************************************************************
 
 //COMMON FORM
-const ibClassID g_controlToolBarCLSID = string_to_clsid("CT_TLBR");
-const ibClassID g_controlToolBarItemCLSID = string_to_clsid("CT_TLIT");
-const ibClassID g_controlToolBarSeparatorCLSID = string_to_clsid("CT_TLIS");
+constexpr ibClassID g_controlToolBarCLSID = control_to_clsid("CT_TLBR");
+constexpr ibClassID g_controlToolBarItemCLSID = control_to_clsid("CT_TLIT");
+constexpr ibClassID g_controlToolBarSeparatorCLSID = control_to_clsid("CT_TLIS");
 
 //********************************************************************************************
 //*                                 Value Toolbar                                            *

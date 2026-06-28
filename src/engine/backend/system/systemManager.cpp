@@ -452,4 +452,4 @@ private:
 //*                       Runtime register                             *
 //**********************************************************************
 
-CONTEXT_TYPE_REGISTER(ibValueSystemFunction, "SystemManager", string_to_clsid("CO_SYSM"));
+CONTEXT_TYPE_REGISTER(ibValueSystemFunction, "SystemManager", context_to_clsid("CO_SYSM"));

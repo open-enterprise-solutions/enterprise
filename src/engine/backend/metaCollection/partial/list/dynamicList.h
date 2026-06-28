@@ -11,7 +11,7 @@
 
 class ibBackendQueryable;
 
-const ibClassID g_valueDynamicListCLSID = string_to_clsid("VL_DLST");
+constexpr ibClassID g_valueDynamicListCLSID = value_to_clsid("VL_DLST");
 
 // View kind of the dynamic list — a regular list, or a selection (choice) list
 // where activating a row picks the value into the owner.

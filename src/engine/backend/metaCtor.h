@@ -29,7 +29,7 @@ public:
 GENERATE_REGISTER(wxT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_m_), new ibCtorMetaType<class_info>(wxT(class_name), clsid))
 // 2-arg (new): clsid = ib_clsid_hash(class_name).
 #define METADATA_TYPE_REGISTER_2(class_info, class_name)\
-METADATA_TYPE_REGISTER_3(class_info, class_name, ib_clsid_hash(class_name))
+METADATA_TYPE_REGISTER_3(class_info, class_name, metadata_to_clsid(class_name))
 #define METADATA_TYPE_REGISTER(...) IB_DISPATCH(METADATA_TYPE_REGISTER_, __VA_ARGS__)
 
 #endif

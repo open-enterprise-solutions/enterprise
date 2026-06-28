@@ -76,4 +76,4 @@ bool ibValueStaticLine::WriteData(ibDataNode& node) const
 //*                       Register in runtime                           *
 //***********************************************************************
 
-CONTROL_TYPE_REGISTER(ibValueStaticLine, "Staticline", "Widget", string_to_clsid("CT_STLI"));
+CONTROL_TYPE_REGISTER(ibValueStaticLine, "Staticline", "Widget", control_to_clsid("CT_STLI"));

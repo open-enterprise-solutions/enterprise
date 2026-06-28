@@ -1,4 +1,4 @@
-﻿#include "informationRegister.h"
+#include "informationRegister.h"
 #include "backend/serialize/dataBuilder.h"
 #include "list/objectList.h"
 #include "backend/metaData.h"
@@ -340,5 +340,5 @@ ibSourceDataObject* ibValueMetaObjectInformationRegister::CreateSourceObject(con
 //*                       Register in runtime                           *
 //***********************************************************************
 
-SYSTEM_TYPE_REGISTER(ibValueMetaObjectInformationRegister::ibValueMetaObjectRecordManager, "InformationRecordManager", string_to_clsid("MT_RCMG"));
+SYSTEM_TYPE_REGISTER(ibValueMetaObjectInformationRegister::ibValueMetaObjectRecordManager, "InformationRecordManager", system_to_clsid("MT_RCMG"));
 METADATA_TYPE_REGISTER(ibValueMetaObjectInformationRegister, "InformationRegister", g_metaInformationRegisterCLSID);

@@ -56,20 +56,20 @@ struct ibColumnSlot {
 BACKEND_API const wxString& ibFieldSuffix(ibColumnRole role);
 
 // The authority. Decompose a logical column into its physical fields, derived purely
-// from (physical name, type descriptor) + metadata context. Order: TYPE, B, N, D, S,
-// E, RTRef, RRRef — the same fixed order the write / read codec binds in. A raw column
-// = one slot as-is.
-BACKEND_API std::vector<ibColumnSlot> DescribeColumnLayout(const ibBackendQueryColumn* col,
-                                                           const ibMetaData* metaData);
+// from (physical name, type descriptor) — NO metadata: the reference slot is gated by the
+// clsid KIND (IsReference), not a metadata lookup. Order: TYPE, B, N, D, S, E, RTRef, RRRef
+// — the same fixed order the write / read codec binds in. A raw column = one slot as-is.
+BACKEND_API std::vector<ibColumnSlot> DescribeColumnLayout(const ibBackendQueryColumn* col);
+
+// A column's VALUE field names — its layout slots minus the _TYPE discriminator and the reference
+// TYPE id (the value-carrying roles). Metadata-free, derived over DescribeColumnLayout. The DB
+// provider asks this for sort / group-by / key field expansion; the column stays a pure descriptor.
+BACKEND_API std::vector<wxString> ColumnValueFields(const ibBackendQueryColumn* col);
 
 // The persisted _TYPE discriminator value a layout role stores (the ibFieldTypes tag — the wire
 // format, kept here in the tier, not on the attribute). Used to clear rows whose stored type was
 // just dropped. Returns ibFieldTypes_Empty for roles that carry no tag (Raw / Discriminator).
 BACKEND_API int ibPersistedTypeTag(ibColumnRole role);
-
-// Does this clsid lower to the reference pair (_RTRef/_RRRef)? The ONE reference-target check the
-// layout / codec / DDL diff share (typeCtor's meta-type is Reference) — no re-implementing it.
-BACKEND_API bool IsReferenceClsid(const ibClassID& clsid, const ibMetaData* metaData);
 
 // SQL fragment builders over a column's physical layout — the ONE source for the field
 // spellings the hand-written query/upsert SQL used to assemble per-attribute. All derive
@@ -77,9 +77,9 @@ BACKEND_API bool IsReferenceClsid(const ibClassID& clsid, const ibMetaData* meta
 //   ColumnFieldNames        : the physical field NAMES in bind order (index columns / statement list)
 //   ColumnFieldList         : "f_TYPE,f_B,f_N,…"  (SELECT list; aggr wraps the N/D measures)
 //   ColumnComparePredicate  : "f_TYPE = ? AND f_B <cmp> ? AND …"  (WHERE by value)
-BACKEND_API std::vector<wxString> ColumnFieldNames(const ibBackendQueryColumn* col, const ibMetaData* metaData);
-BACKEND_API wxString       ColumnFieldList(const ibBackendQueryColumn* col, const ibMetaData* metaData, const wxString& aggr = wxEmptyString);
-BACKEND_API wxString       ColumnComparePredicate(const ibBackendQueryColumn* col, const ibMetaData* metaData, const wxString& cmp = wxT("="));
+BACKEND_API std::vector<wxString> ColumnFieldNames(const ibBackendQueryColumn* col);
+BACKEND_API wxString       ColumnFieldList(const ibBackendQueryColumn* col, const wxString& aggr = wxEmptyString);
+BACKEND_API wxString       ColumnComparePredicate(const ibBackendQueryColumn* col, const wxString& cmp = wxT("="));
 
 
 // ==========================================================================
@@ -120,7 +120,8 @@ public:
 	                      const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData = true);
 
 	// Does the column's type admit a reference value — its spread carries _RTRef/_RRRef?
-	static bool HasReference(const ibBackendQueryColumn* col, const ibMetaData* metaData);
+	// Pure clsid-kind gate (IsReference), no metadata.
+	static bool HasReference(const ibBackendQueryColumn* col);
 
 	// (The BINARY-WIRE codec — BinaryToStatement / BinaryFromResult — is the L3-3 dump / restore
 	//  PRIMITIVE; it lives with its consumer in query/dataMover.h (ibDataMover), not here. It reuses

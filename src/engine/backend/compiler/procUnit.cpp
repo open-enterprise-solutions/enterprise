@@ -468,9 +468,7 @@ inline ibValue GetValue(const ibValue& cValue1)
 // wxIMPLEMENT_DYNAMIC_CLASS + the CLSID statics + ibValueFunction's
 // out-of-line bits — stay in this TU.
 
-const ibClassID g_valueIterator = string_to_clsid("SO_ITER");
-
-const ibClassID g_valueFunction = string_to_clsid("VL_FUNC");
+// g_valueIterator / g_valueFunction are now header-defined inline constexpr (procUnitValues.h).
 
 // LINQ machinery — CallLambdaWithArg / CallLambdaWith2Args /
 // InvokeLambdaWithArg, the iterator-state classes, ibValueQuery,

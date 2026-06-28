@@ -28,7 +28,7 @@ class BACKEND_API ibBackendFormAttribute;
 //********************************************************************************************
 
 //COMMON FORM
-const ibClassID g_controlFormCLSID = string_to_clsid("CT_FRME");
+constexpr ibClassID g_controlFormCLSID = control_to_clsid("CT_FRME");
 
 //********************************************************************************************
 //*                                      Value Frame                                         *

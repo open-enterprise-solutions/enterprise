@@ -1,4 +1,4 @@
-﻿#ifndef __CHART_OF_CHARACTERISTIC_TYPES_H__
+#ifndef __CHART_OF_CHARACTERISTIC_TYPES_H__
 #define __CHART_OF_CHARACTERISTIC_TYPES_H__
 
 #include "commonObject.h"
@@ -214,7 +214,7 @@ private:
 	ibPropertyList* m_propertyDefFormFolderSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormFolderSelect"), _("Default Folder Select Form"), &ibValueMetaObjectChartOfCharacteristicTypes::FillFormFolderSelect);
 
 	//default array 
-	ibPropertyContainer<>* m_propertyAttributeType = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateSpecialType(wxT("Type"), _("Type"), wxEmptyString, string_to_clsid("VL_TYPED"), ibItemMode::ibItemMode_Item));
+	ibPropertyContainer<>* m_propertyAttributeType = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateSpecialType(wxT("Type"), _("Type"), wxEmptyString, value_to_clsid("VL_TYPED"), ibItemMode::ibItemMode_Item));
 
 	friend class ibValueRecordDataObjectChartOfCharacteristicTypes;
 	friend class ibMetaData;

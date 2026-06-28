@@ -224,4 +224,4 @@ bool ibValueCheckbox::WriteData(ibDataNode& node) const
 //*                       Register in runtime                           *
 //***********************************************************************
 
-CONTROL_TYPE_REGISTER(ibValueCheckbox, "Checkbox", "Widget", string_to_clsid("CT_CHKB"));
+CONTROL_TYPE_REGISTER(ibValueCheckbox, "Checkbox", "Widget", control_to_clsid("CT_CHKB"));

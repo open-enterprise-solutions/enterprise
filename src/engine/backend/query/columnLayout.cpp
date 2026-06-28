@@ -35,15 +35,6 @@ const wxString& ibFieldSuffix(ibColumnRole role)
 	return it != s_suffix.end() ? it->second : s_empty;
 }
 
-bool IsReferenceClsid(const ibClassID& clsid, const ibMetaData* metaData)
-{
-	if (metaData == nullptr)
-		return false;
-	const ibCtorMetaValueType* typeCtor = metaData->GetTypeCtor(clsid);
-	return typeCtor != nullptr
-	    && typeCtor->GetMetaTypeCtor() == ibCtorObjectMetaType::ibCtorObjectMetaType_Reference;
-}
-
 int ibPersistedTypeTag(ibColumnRole role)
 {
 	switch (role) {
@@ -108,7 +99,7 @@ ibColumnType RawType(const ibBackendQueryColumn* col)
 
 } // namespace
 
-std::vector<ibColumnSlot> DescribeColumnLayout(const ibBackendQueryColumn* col, const ibMetaData* metaData)
+std::vector<ibColumnSlot> DescribeColumnLayout(const ibBackendQueryColumn* col)
 {
 	std::vector<ibColumnSlot> slots;
 
@@ -156,7 +147,7 @@ std::vector<ibColumnSlot> DescribeColumnLayout(const ibBackendQueryColumn* col, 
 	// is a reference target.
 	bool hasReference = false;
 	for (const auto& clsid : td.GetClsidList())
-		if (IsReferenceClsid(clsid, metaData)) { hasReference = true; break; }
+		if (IsReference(clsid)) { hasReference = true; break; }
 	if (hasReference) {
 		slots.push_back(makeSlot(ibColumnRole::ReferenceType, ibTypeBigInt(),                wxString(), false));
 		slots.push_back(makeSlot(ibColumnRole::ReferenceId,   ibTypeBinary(reference_size_t), wxString(), false));
@@ -165,24 +156,41 @@ std::vector<ibColumnSlot> DescribeColumnLayout(const ibBackendQueryColumn* col, 
 	return slots;
 }
 
+// A column's VALUE fields — its layout's value-role slots (every role EXCEPT the _TYPE discriminator
+// and the reference TYPE id). The ONE metadata-free authority for "which fields carry this column's
+// value", derived over DescribeColumnLayout — it replaces the former per-class GetValueFields
+// overrides (raw -> its one field; an attribute / temp column -> its composite spread): the role
+// model already encodes each column's storage shape. A free TIER helper, not a column method — only
+// the DB provider asks it (sort / group-by / key field expansion); the column stays a pure descriptor.
+std::vector<wxString> ColumnValueFields(const ibBackendQueryColumn* col)
+{
+	std::vector<wxString> out;
+	for (const ibColumnSlot& slot : DescribeColumnLayout(col))
+		if (slot.m_role != ibColumnRole::Discriminator && slot.m_role != ibColumnRole::ReferenceType)
+			out.push_back(slot.m_name);
+	return out;
+}
+
 // ==========================================================================
 // ibColumnCodec — the value <-> physical-fields codec (was ibDbTableProvider::Set/GetValueColumn).
 // Lives here, next to the layout, so the field SHAPE (DescribeColumnLayout) and the field VALUES
 // (this codec) share one home. The persisted variant tag (ibFieldTypes) stays local to this TU.
 // ==========================================================================
 
-bool ibColumnCodec::HasReference(const ibBackendQueryColumn* col, const ibMetaData* metaData)
+bool ibColumnCodec::HasReference(const ibBackendQueryColumn* col)
 {
 	for (const auto& clsid : col->GetTypeDesc().GetClsidList())
-		if (IsReferenceClsid(clsid, metaData))
+		if (IsReference(clsid))
 			return true;
 	return false;
 }
 
-void ibColumnCodec::WriteValue(const ibBackendQueryColumn* col, const ibMetaData* metaData,
+void ibColumnCodec::WriteValue(const ibBackendQueryColumn* col, const ibMetaData* /*metaData*/,
 	const ibValue& cValue, ibQueryStatement* statement, int& position)
 {
 	// (the codec's variant tags are the global ibFieldTypes_* names — query/queryColumn.h)
+	// WRITE needs NO metadata: the reference slot is gated by the clsid KIND (IsReference) and the
+	// blob comes off the value itself. metaData stays on the signature only to mirror ReadValue.
 	const int tag = ibColumnSpread::TagForValueType(cValue.GetType());
 
 	// Reference payload — resolved once, bound at the _RTRef/_RRRef slots. A non-reference value
@@ -192,19 +200,15 @@ void ibColumnCodec::WriteValue(const ibBackendQueryColumn* col, const ibMetaData
 	if (tag == ibFieldTypes_Reference) {
 		const ibClassID& clsid = cValue.GetClassType();
 		wxASSERT(clsid > 0);
-		wxASSERT(metaData);
-		const ibCtorMetaValueType* typeCtor = metaData != nullptr ? metaData->GetTypeCtor(clsid) : nullptr;
-		wxASSERT(typeCtor);
+		// Kind read straight from the clsid — no metadata lookup on this per-value hot path.
 		ibValueReferenceDataObject* refData = nullptr;
-		if (typeCtor != nullptr
-		    && typeCtor->GetMetaTypeCtor() == ibCtorObjectMetaType::ibCtorObjectMetaType_Reference
-		    && cValue.ConvertToValue(refData)) {
+		if (IsReference(clsid) && cValue.ConvertToValue(refData)) {
 			refClsid = clsid;
 			refBlob  = refData->GetReferenceData();
 		}
 	}
 
-	ibColumnSpread::DriveSpread(col, metaData, tag, statement, position,
+	ibColumnSpread::DriveSpread(col, tag, statement, position,
 		[&](ibColumnRole role, int& p) {   // ACTIVE primitive — the real value off the ibValue
 			switch (role) {
 			case ibColumnRole::Boolean: statement->SetParamBool(p++, cValue.GetBoolean()); break;
@@ -379,18 +383,18 @@ bool ibColumnCodec::ReadValue(const ibBackendQueryColumn* col, const ibMetaData*
 // assemble per-attribute, now derived once from the layout (same field SET + ORDER as the codec).
 // ==========================================================================
 
-std::vector<wxString> ColumnFieldNames(const ibBackendQueryColumn* col, const ibMetaData* metaData)
+std::vector<wxString> ColumnFieldNames(const ibBackendQueryColumn* col)
 {
 	std::vector<wxString> out;
-	for (const ibColumnSlot& slot : DescribeColumnLayout(col, metaData))
+	for (const ibColumnSlot& slot : DescribeColumnLayout(col))
 		out.push_back(slot.m_name);
 	return out;
 }
 
-wxString ColumnFieldList(const ibBackendQueryColumn* col, const ibMetaData* metaData, const wxString& aggr)
+wxString ColumnFieldList(const ibBackendQueryColumn* col, const wxString& aggr)
 {
 	wxString out;
-	for (const ibColumnSlot& slot : DescribeColumnLayout(col, metaData)) {
+	for (const ibColumnSlot& slot : DescribeColumnLayout(col)) {
 		// The numeric / date MEASURES carry the aggregate wrapper (SUM(f_N) AS f_N); the tag /
 		// dimension fields stay bare — mirrors the former GetSQLFieldName.
 		const bool measure = (slot.m_role == ibColumnRole::Number || slot.m_role == ibColumnRole::Date);
@@ -402,10 +406,10 @@ wxString ColumnFieldList(const ibBackendQueryColumn* col, const ibMetaData* meta
 	return out;
 }
 
-wxString ColumnComparePredicate(const ibBackendQueryColumn* col, const ibMetaData* metaData, const wxString& cmp)
+wxString ColumnComparePredicate(const ibBackendQueryColumn* col, const wxString& cmp)
 {
 	wxString out;
-	for (const ibColumnSlot& slot : DescribeColumnLayout(col, metaData)) {
+	for (const ibColumnSlot& slot : DescribeColumnLayout(col)) {
 		// The discriminator and the reference TYPE id always match by equality; the value fields
 		// (and the reference blob) use the caller's comparator — mirrors GetCompositeSQLFieldName.
 		const bool eq = (slot.m_role == ibColumnRole::Discriminator || slot.m_role == ibColumnRole::ReferenceType);

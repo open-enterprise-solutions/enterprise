@@ -126,7 +126,7 @@ bool RunRestore(const wxString& tableName, const ibMetaData* metaData,
 	std::map<ibMetaID, const ibBackendQueryColumn*> columnOf;
 	int position = withKey ? 2 : 1;
 	for (const ibBackendQueryColumn* col : columns) {
-		const std::vector<wxString> fields = ColumnFieldNames(col, metaData);
+		const std::vector<wxString> fields = ColumnFieldNames(col);
 		positionOf.insert_or_assign(col->GetColumnId(), position);
 		columnOf.insert_or_assign(col->GetColumnId(), col);
 		position += static_cast<int>(fields.size());
@@ -205,12 +205,13 @@ bool ibDataMover::Restore(const ibSchemaTable& table, const ibReaderMemory& rows
 // dumped cell restores byte-identically; only the value SOURCE differs (the wire, not an ibValue).
 // ==========================================================================
 
-void ibDataMover::BinaryToStatement(const ibBackendQueryColumn* col, const ibMetaData* metaData,
+void ibDataMover::BinaryToStatement(const ibBackendQueryColumn* col, const ibMetaData* /*metaData*/,
 	const ibReaderMemory& reader, ibQueryStatement* statement, int& position)
 {
 	const int tag = reader.r_s32();
 
-	ibColumnSpread::DriveSpread(col, metaData, tag, statement, position,
+	// No metadata: the reference slot is gated by the clsid KIND (inside DriveSpread → HasReference).
+	ibColumnSpread::DriveSpread(col, tag, statement, position,
 		[&](ibColumnRole role, int& p) {   // ACTIVE primitive — the real value off the wire
 			switch (role) {
 			case ibColumnRole::Boolean: statement->SetParamBool(p++, reader.r_u8()); break;
@@ -251,7 +252,7 @@ void ibDataMover::BinaryToStatement(const ibBackendQueryColumn* col, const ibMet
 	BinaryToStatement(col, metaData, reader, statement, position);
 }
 
-void ibDataMover::BinaryFromResult(const ibBackendQueryColumn* col, const ibMetaData* metaData,
+void ibDataMover::BinaryFromResult(const ibBackendQueryColumn* col, const ibMetaData* /*metaData*/,
 	ibWriterMemory& writer, ibQueryResult& result)
 {
 	const ibTypeDescription& td = col->GetTypeDesc();
@@ -290,7 +291,7 @@ void ibDataMover::BinaryFromResult(const ibBackendQueryColumn* col, const ibMeta
 		             ? result.GetResultInt(f + ibFieldSuffix(ibColumnRole::Enum)) : wxNOT_FOUND);
 		break;
 	case ibFieldTypes_Reference:
-		if (ibColumnCodec::HasReference(col, metaData)) {
+		if (ibColumnCodec::HasReference(col)) {
 			wxMemoryBuffer bufferData;
 			result.GetResultBlob(f + ibFieldSuffix(ibColumnRole::ReferenceId), bufferData);
 			writer.w_u64(result.GetResultLong(f + ibFieldSuffix(ibColumnRole::ReferenceType)));

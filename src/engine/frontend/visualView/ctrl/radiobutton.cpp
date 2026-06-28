@@ -60,4 +60,4 @@ bool ibValueRadioButton::WriteData(ibDataNode& node) const
 //*                       Register in runtime                           *
 //***********************************************************************
 
-CONTROL_TYPE_REGISTER(ibValueRadioButton, "Radiobutton", "Widget", string_to_clsid("CT_RDBT"));
+CONTROL_TYPE_REGISTER(ibValueRadioButton, "Radiobutton", "Widget", control_to_clsid("CT_RDBT"));

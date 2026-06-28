@@ -116,4 +116,4 @@ bool ibValueFile::Init(ibValue** paParams, const long lSizeArray)
 //*                       Runtime register                             *
 //**********************************************************************
 
-VALUE_TYPE_REGISTER(ibValueFile, "File", string_to_clsid("VL_FILE"));
+VALUE_TYPE_REGISTER(ibValueFile, "File", value_to_clsid("VL_FILE"));

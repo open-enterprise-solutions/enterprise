@@ -232,5 +232,5 @@ bool ibValueSpreadsheetDocumentArea::CallAsProc(const long lMethodNum, ibValue**
 //*                       Runtime register                             *
 //**********************************************************************
 
-SYSTEM_TYPE_REGISTER(ibValueSpreadsheetDocumentArea, "SpreadsheetArea", string_to_clsid("VL_SPSTA"));
-VALUE_TYPE_REGISTER(ibValueSpreadsheetDocumentBorder, "SpreadsheetBorderRow", string_to_clsid("VL_SPSBO"));
+SYSTEM_TYPE_REGISTER(ibValueSpreadsheetDocumentArea, "SpreadsheetArea", system_to_clsid("VL_SPSTA"));
+VALUE_TYPE_REGISTER(ibValueSpreadsheetDocumentBorder, "SpreadsheetBorderRow", value_to_clsid("VL_SPSBO"));

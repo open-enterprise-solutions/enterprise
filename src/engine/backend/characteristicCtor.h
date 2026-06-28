@@ -9,8 +9,7 @@ class ibCtorMetaValueTypeCharacteristic :
 public:
 
 	ibCtorMetaValueTypeCharacteristic(ibValueMetaObjectChartOfCharacteristicTypes* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
-		m_classType = string_to_clsid(wxT("C_") +
-			stringUtils::IntToStr(GetMetaObject()->GetMetaID()));
+		m_classType = characteristic_to_clsid(GetMetaObject()->GetMetaID());
 	}
 
 	virtual wxString GetClassName() const {

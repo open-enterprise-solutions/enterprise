@@ -88,4 +88,4 @@ bool ibValueColour::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 //*                       Runtime register                             *
 //**********************************************************************
 
-VALUE_TYPE_REGISTER(ibValueColour, "Colour", string_to_clsid("VL_COLOR"));
+VALUE_TYPE_REGISTER(ibValueColour, "Colour", value_to_clsid("VL_COLOR"));

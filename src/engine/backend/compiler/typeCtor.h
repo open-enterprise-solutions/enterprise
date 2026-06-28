@@ -142,7 +142,7 @@ public:
 GENERATE_REGISTER(wxT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_s_), new ibCtorPrimitiveType<class_info>(wxT(class_name), class_type, clsid))
 // 3-arg (new): clsid = ib_clsid_hash(class_name).
 #define PRIMITIVE_TYPE_REGISTER_3(class_info, class_name, class_type)\
-PRIMITIVE_TYPE_REGISTER_4(class_info, class_name, class_type, ib_clsid_hash(class_name))
+PRIMITIVE_TYPE_REGISTER_4(class_info, class_name, class_type, primitive_to_clsid(class_name))
 #define PRIMITIVE_TYPE_REGISTER(...) IB_DISPATCH(PRIMITIVE_TYPE_REGISTER_, __VA_ARGS__)
 
 // object value register - array, struct, etc.. 
@@ -176,7 +176,7 @@ public:
 GENERATE_REGISTER(wxT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_val_), new ibCtorValueType<class_info>(wxT(class_name), clsid))
 // 2-arg (new): clsid = ib_clsid_hash(class_name).
 #define VALUE_TYPE_REGISTER_2(class_info, class_name)\
-VALUE_TYPE_REGISTER_3(class_info, class_name, ib_clsid_hash(class_name))
+VALUE_TYPE_REGISTER_3(class_info, class_name, value_to_clsid(class_name))
 #define VALUE_TYPE_REGISTER(...) IB_DISPATCH(VALUE_TYPE_REGISTER_, __VA_ARGS__)
 
 // object with non-create object
@@ -206,7 +206,7 @@ public:
 GENERATE_REGISTER(wxT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_so_), new ibCtorSystemType<class_info>(wxT(class_name), clsid))
 // 2-arg (new): clsid = ib_clsid_hash(class_name).
 #define SYSTEM_TYPE_REGISTER_2(class_info, class_name)\
-SYSTEM_TYPE_REGISTER_3(class_info, class_name, ib_clsid_hash(class_name))
+SYSTEM_TYPE_REGISTER_3(class_info, class_name, system_to_clsid(class_name))
 #define SYSTEM_TYPE_REGISTER(...) IB_DISPATCH(SYSTEM_TYPE_REGISTER_, __VA_ARGS__)
 
 //enumeration register - windowOrient, etc...
@@ -240,7 +240,7 @@ public:
 GENERATE_REGISTER(wxT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_e_), new ibCtorEnumType<class_info>(wxT(class_name), clsid))
 // 2-arg (new): clsid = ib_clsid_hash(class_name).
 #define ENUM_TYPE_REGISTER_2(class_info, class_name)\
-ENUM_TYPE_REGISTER_3(class_info, class_name, ib_clsid_hash(class_name))
+ENUM_TYPE_REGISTER_3(class_info, class_name, enum_to_clsid(class_name))
 #define ENUM_TYPE_REGISTER(...) IB_DISPATCH(ENUM_TYPE_REGISTER_, __VA_ARGS__)
 
 template <class T>
@@ -277,7 +277,7 @@ public:
 GENERATE_REGISTER(wxT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_ctx_), new ibCtorContextType<class_info>(wxT(class_name), clsid))
 // 2-arg (new): clsid = ib_clsid_hash(class_name).
 #define CONTEXT_TYPE_REGISTER_2(class_info, class_name)\
-CONTEXT_TYPE_REGISTER_3(class_info, class_name, ib_clsid_hash(class_name))
+CONTEXT_TYPE_REGISTER_3(class_info, class_name, context_to_clsid(class_name))
 #define CONTEXT_TYPE_REGISTER(...) IB_DISPATCH(CONTEXT_TYPE_REGISTER_, __VA_ARGS__)
 
 #endif // !_SINGLE_OBJECT_H__

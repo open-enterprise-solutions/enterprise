@@ -189,4 +189,4 @@ bool ibValueForm::ibValueFormCollectionControl::CallAsFunc(const long lMethodNum
 //*                       Runtime register                             *
 //**********************************************************************
 
-SYSTEM_TYPE_REGISTER(ibValueForm::ibValueFormCollectionControl, "FormControl", string_to_clsid("VL_CNTR"));
+SYSTEM_TYPE_REGISTER(ibValueForm::ibValueFormCollectionControl, "FormControl", system_to_clsid("VL_CNTR"));

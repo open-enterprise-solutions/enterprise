@@ -303,9 +303,9 @@ bool ibValueTypeDescription::CallAsFunc(const long lMethodNum, ibValue& pvarRetV
 //*                       Runtime register                             *
 //**********************************************************************
 
-VALUE_TYPE_REGISTER(ibValueType, "Type", string_to_clsid("VL_TYPE"));
-VALUE_TYPE_REGISTER(ibValueTypeDescription, "TypeDescription", string_to_clsid("VL_TYPED"));
+VALUE_TYPE_REGISTER(ibValueType, "Type", value_to_clsid("VL_TYPE"));
+VALUE_TYPE_REGISTER(ibValueTypeDescription, "TypeDescription", value_to_clsid("VL_TYPED"));
 
-VALUE_TYPE_REGISTER(ibValueQualifierNumber, "QualifierNumber", string_to_clsid("VL_QNUM"));
-VALUE_TYPE_REGISTER(ibValueQualifierDate, "QualifierDate", string_to_clsid("VL_QDAT"));
-VALUE_TYPE_REGISTER(ibValueQualifierString, "QualifierString", string_to_clsid("VL_QSTR"));
+VALUE_TYPE_REGISTER(ibValueQualifierNumber, "QualifierNumber", value_to_clsid("VL_QNUM"));
+VALUE_TYPE_REGISTER(ibValueQualifierDate, "QualifierDate", value_to_clsid("VL_QDAT"));
+VALUE_TYPE_REGISTER(ibValueQualifierString, "QualifierString", value_to_clsid("VL_QSTR"));

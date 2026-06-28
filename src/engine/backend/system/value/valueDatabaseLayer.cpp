@@ -88,4 +88,4 @@ bool ibValueDatabaseLayer::CallAsProc(const long lMethodNum, ibValue** paParams,
 //*                       Runtime register                             *
 //**********************************************************************
 
-VALUE_TYPE_REGISTER(ibValueDatabaseLayer, "DatabaseLayer", string_to_clsid("VL_DBLY"));
+VALUE_TYPE_REGISTER(ibValueDatabaseLayer, "DatabaseLayer", value_to_clsid("VL_DBLY"));

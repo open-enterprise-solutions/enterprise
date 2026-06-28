@@ -78,15 +78,8 @@ bool IsSkippedSubGroupClsid(ibClassID clsid) {
 }
 }
 
-// Synthetic CLSID for the Common umbrella row. "UI_COMN" is unused by
-// any real metadata class — see CLAUDE.md CLSID conventions (MD_xxx /
-// VL_xxx). Walker emits this in place of m_groupClsid for the umbrella.
-const ibClassID g_diffCommonUmbrellaClsid = string_to_clsid("UI_COMN");
-
-// Synthetic CLSID for the Properties group row. Hangs off every
-// paired metadata object; children are one ibMetaDiffRecord per
-// property carrying name + left/right value strings.
-const ibClassID g_diffPropertiesGroupClsid = string_to_clsid("UI_PROP");
+// g_diffCommonUmbrellaClsid / g_diffPropertiesGroupClsid are now header-defined
+// inline constexpr (metaDiff.h) — constexpr + ODR-safe across DLLs.
 
 // --- Group labels -----------------------------------------------------
 

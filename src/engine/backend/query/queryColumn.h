@@ -84,16 +84,11 @@ public:
 	// resource's Balance vs Turnover have distinct model ids, though one metaID).
 	virtual ibMetaID GetColumnId() const = 0;
 
-	// The column's PHYSICAL SQL fields — the multi-column split a DB lowering needs (a
-	// composite / variant / reference column expands to several: _B / _N / _D / _S / _E /
-	// _RRRef). This is the column-based replacement for resolving back to an attribute and
-	// calling its GetSQLFieldData: the DB IR builder asks the COLUMN for its fields (sort /
-	// group-by), no ResolveAttribute. The attribute metaobject OVERRIDES this authoritatively
-	// (its own field machinery — byte-identical to the former path); the light default here
-	// is the bare physical name (a single untyped field), enough for a plain temp column.
-	// Value materialization / binding (reference reconstruction) still needs metadata context
-	// and stays on the queryable. (docs/query-language-arc.md §22.4b)
-	virtual std::vector<wxString> GetValueFields() const { return std::vector<wxString>{ GetPhysicalName() }; }
+	// (The column's value-field split — a composite / variant / reference column expands to several
+	// physical fields — is NOT a column method: it is the tier free function ColumnValueFields(col)
+	// over DescribeColumnLayout (columnLayout.h), metadata-free, asked only by the DB provider. The
+	// column stays a pure descriptor; value materialization / binding stays on the queryable.
+	// docs/query-language-arc.md §22.4b)
 
 	// (No per-column primary-key flag: a source's uniqueness key is owned by the QUERYABLE —
 	// ibBackendQueryable::GetPrimaryKeyColumns is the ONE authority for both the write UPSERT
@@ -133,7 +128,6 @@ public:
 	wxString              GetPhysicalName() const override { return m_field; }
 	ibTypeDescription&    GetTypeDesc()     const override { return m_typeDesc; }   // interface returns a non-const ref
 	ibMetaID              GetColumnId()      const override { return 0; }            // no model — raw field
-	std::vector<wxString> GetValueFields()    const override { return std::vector<wxString>{ m_field }; }
 	bool                  IsRawColumn()     const override { return true; }
 
 	RawType               GetRawType()      const { return m_type; }   // the provider's bind selector

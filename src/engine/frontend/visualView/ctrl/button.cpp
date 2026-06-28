@@ -125,4 +125,4 @@ bool ibValueButton::WriteData(ibDataNode& node) const
 //*                       Register in runtime                           *
 //***********************************************************************
 
-CONTROL_TYPE_REGISTER(ibValueButton, "Button", "Widget", string_to_clsid("CT_BUTN"));
+CONTROL_TYPE_REGISTER(ibValueButton, "Button", "Widget", control_to_clsid("CT_BUTN"));

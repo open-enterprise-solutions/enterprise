@@ -830,6 +830,6 @@ void ibValueModelTableBox::ExecuteMenu(ibVisualHost* /*visualHost*/, int /*id*/)
 //*                       Register in runtime                           *
 //***********************************************************************
 
-ENUM_TYPE_REGISTER(ibValueEnumTableBoxSelectionMode, "TableboxRowSelectionMode", string_to_clsid("EN_TBXSL"));
-ENUM_TYPE_REGISTER(ibValueEnumTableBoxViewMode, "TableboxViewMode", string_to_clsid("EN_TBXVM"));
+ENUM_TYPE_REGISTER(ibValueEnumTableBoxSelectionMode, "TableboxRowSelectionMode", enum_to_clsid("EN_TBXSL"));
+ENUM_TYPE_REGISTER(ibValueEnumTableBoxViewMode, "TableboxViewMode", enum_to_clsid("EN_TBXVM"));
 CONTROL_TYPE_REGISTER(ibValueModelTableBox, "Tablebox", "Container", g_controlTableBoxCLSID);

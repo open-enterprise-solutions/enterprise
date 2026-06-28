@@ -6,5 +6,5 @@
 //***********************************************************************
 
 //add new enumeration
-ENUM_TYPE_REGISTER(ibValueEnumDocumentWriteMode, "DocumentWriteMode", string_to_clsid("EN_WRMO"));
-ENUM_TYPE_REGISTER(ibValueEnumDocumentPostingMode, "DocumentPostingMode", string_to_clsid("EN_POMO"));
+ENUM_TYPE_REGISTER(ibValueEnumDocumentWriteMode, "DocumentWriteMode", enum_to_clsid("EN_WRMO"));
+ENUM_TYPE_REGISTER(ibValueEnumDocumentPostingMode, "DocumentPostingMode", enum_to_clsid("EN_POMO"));

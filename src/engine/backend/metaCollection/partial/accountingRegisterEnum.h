@@ -21,7 +21,7 @@ class ibValueEnumAccountingRegisterRecordType : public ibValueEnumeration<ibAcco
 		AddEnumeration(eCredit, wxT("Credit"), _("Credit"));
 	}
 };
-const ibClassID g_enumAccountingRecordTypeCLSID = string_to_clsid("EN_ARTP");
+constexpr ibClassID g_enumAccountingRecordTypeCLSID = enum_to_clsid("EN_ARTP");
 #pragma endregion
 
 #endif

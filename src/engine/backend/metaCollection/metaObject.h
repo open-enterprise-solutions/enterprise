@@ -20,52 +20,52 @@ class BACKEND_API ibDataValue;  // serialize/dataBuilder.h — a node value (Chi
 //*******************************************************************************
 
 //COMMON METADATA
-const ibClassID g_metaCommonMetadataCLSID = string_to_clsid("MD_MTD");
+constexpr ibClassID g_metaCommonMetadataCLSID = metadata_to_clsid("MD_MTD");
 
 //COMMON OBJECTS
-const ibClassID g_metaCommonModuleCLSID = string_to_clsid("MD_CMOD");
-const ibClassID g_metaCommonFormCLSID = string_to_clsid("MD_CFRM");
-const ibClassID g_metaCommonTemplateCLSID = string_to_clsid("MD_CTMP");
+constexpr ibClassID g_metaCommonModuleCLSID = metadata_to_clsid("MD_CMOD");
+constexpr ibClassID g_metaCommonFormCLSID = metadata_to_clsid("MD_CFRM");
+constexpr ibClassID g_metaCommonTemplateCLSID = metadata_to_clsid("MD_CTMP");
 
-const ibClassID g_metaRoleCLSID = string_to_clsid("MD_ROLE");
-const ibClassID g_metaInterfaceCLSID = string_to_clsid("MD_SSYST");
-const ibClassID g_metaPictureCLSID = string_to_clsid("MD_PICTR");
-const ibClassID g_metaLanguageCLSID = string_to_clsid("MD_LANG");
+constexpr ibClassID g_metaRoleCLSID = metadata_to_clsid("MD_ROLE");
+constexpr ibClassID g_metaInterfaceCLSID = metadata_to_clsid("MD_SSYST");
+constexpr ibClassID g_metaPictureCLSID = metadata_to_clsid("MD_PICTR");
+constexpr ibClassID g_metaLanguageCLSID = metadata_to_clsid("MD_LANG");
 
 //ADVANCED OBJECTS
-const ibClassID g_metaAttributeCLSID = string_to_clsid("MD_ATTR");
-const ibClassID g_metaFormCLSID = string_to_clsid("MD_FRM");
-const ibClassID g_metaTemplateCLSID = string_to_clsid("MD_TMPL");
-const ibClassID g_metaModuleCLSID = string_to_clsid("MD_MOD");
-const ibClassID g_metaManagerCLSID = string_to_clsid("MD_MNGR");
-const ibClassID g_metaTableCLSID = string_to_clsid("MD_TBL");
-const ibClassID g_metaTableRefCLSID = string_to_clsid("MD_TBLR");   // DB-backed tabular section (reference owner); MD_TBL stays RAM-only (processors/reports)
-const ibClassID g_metaSubcontoKindsTableCLSID = string_to_clsid("MD_SKTB");
-const ibClassID g_metaEnumCLSID = string_to_clsid("MD_ENUM");
-const ibClassID g_metaDimensionCLSID = string_to_clsid("MD_DMNT");
-const ibClassID g_metaResourceCLSID = string_to_clsid("MD_RESS");
+constexpr ibClassID g_metaAttributeCLSID = metadata_to_clsid("MD_ATTR");
+constexpr ibClassID g_metaFormCLSID = metadata_to_clsid("MD_FRM");
+constexpr ibClassID g_metaTemplateCLSID = metadata_to_clsid("MD_TMPL");
+constexpr ibClassID g_metaModuleCLSID = metadata_to_clsid("MD_MOD");
+constexpr ibClassID g_metaManagerCLSID = metadata_to_clsid("MD_MNGR");
+constexpr ibClassID g_metaTableCLSID = metadata_to_clsid("MD_TBL");
+constexpr ibClassID g_metaTableRefCLSID = metadata_to_clsid("MD_TBLR");   // DB-backed tabular section (reference owner); MD_TBL stays RAM-only (processors/reports)
+constexpr ibClassID g_metaSubcontoKindsTableCLSID = metadata_to_clsid("MD_SKTB");
+constexpr ibClassID g_metaEnumCLSID = metadata_to_clsid("MD_ENUM");
+constexpr ibClassID g_metaDimensionCLSID = metadata_to_clsid("MD_DMNT");
+constexpr ibClassID g_metaResourceCLSID = metadata_to_clsid("MD_RESS");
 
 //SPECIAL OBJECTS
-const ibClassID g_metaPredefinedAttributeCLSID = string_to_clsid("MD_DATT");
+constexpr ibClassID g_metaPredefinedAttributeCLSID = metadata_to_clsid("MD_DATT");
 
 //MAIN OBJECTS
-const ibClassID g_metaConstantCLSID = string_to_clsid("MD_CONS");
-const ibClassID g_metaCatalogCLSID = string_to_clsid("MD_CAT");
-const ibClassID g_metaDocumentCLSID = string_to_clsid("MD_DOC");
-const ibClassID g_metaEnumerationCLSID = string_to_clsid("MD_ENM");
-const ibClassID g_metaDataProcessorCLSID = string_to_clsid("MD_DPR");
-const ibClassID g_metaReportCLSID = string_to_clsid("MD_RPT");
-const ibClassID g_metaInformationRegisterCLSID = string_to_clsid("MD_INFR");
-const ibClassID g_metaAccumulationRegisterCLSID = string_to_clsid("MD_ACCR");
+constexpr ibClassID g_metaConstantCLSID = metadata_to_clsid("MD_CONS");
+constexpr ibClassID g_metaCatalogCLSID = metadata_to_clsid("MD_CAT");
+constexpr ibClassID g_metaDocumentCLSID = metadata_to_clsid("MD_DOC");
+constexpr ibClassID g_metaEnumerationCLSID = metadata_to_clsid("MD_ENM");
+constexpr ibClassID g_metaDataProcessorCLSID = metadata_to_clsid("MD_DPR");
+constexpr ibClassID g_metaReportCLSID = metadata_to_clsid("MD_RPT");
+constexpr ibClassID g_metaInformationRegisterCLSID = metadata_to_clsid("MD_INFR");
+constexpr ibClassID g_metaAccumulationRegisterCLSID = metadata_to_clsid("MD_ACCR");
 
 //ACCOUNTING OBJECTS
-const ibClassID g_metaChartOfCharacteristicTypesCLSID = string_to_clsid("MD_CHRC");
-const ibClassID g_metaChartOfAccountsCLSID = string_to_clsid("MD_CHOA");
-const ibClassID g_metaAccountingRegisterCLSID = string_to_clsid("MD_AREG");
+constexpr ibClassID g_metaChartOfCharacteristicTypesCLSID = metadata_to_clsid("MD_CHRC");
+constexpr ibClassID g_metaChartOfAccountsCLSID = metadata_to_clsid("MD_CHOA");
+constexpr ibClassID g_metaAccountingRegisterCLSID = metadata_to_clsid("MD_AREG");
 
 // EXTERNAL
-const ibClassID g_metaExternalDataProcessorCLSID = string_to_clsid("MD_EDPR");
-const ibClassID g_metaExternalReportCLSID = string_to_clsid("MD_ERPT");
+constexpr ibClassID g_metaExternalDataProcessorCLSID = metadata_to_clsid("MD_EDPR");
+constexpr ibClassID g_metaExternalReportCLSID = metadata_to_clsid("MD_ERPT");
 
 //*******************************************************************************
 //*                             ibValueMetaObject                                *

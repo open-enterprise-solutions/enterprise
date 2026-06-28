@@ -293,4 +293,4 @@ bool ibValueArray::SetAt(const ibValue& varKeyValue, const ibValue& varValue)//a
 //*                       Runtime register                             *
 //**********************************************************************
 
-VALUE_TYPE_REGISTER(ibValueArray, "Array", string_to_clsid("VL_ARR"));
+VALUE_TYPE_REGISTER(ibValueArray, "Array", value_to_clsid("VL_ARR"));

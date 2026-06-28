@@ -54,8 +54,7 @@ class ibCtorMetaValueTypeReference :
 public:
 
 	ibCtorMetaValueTypeReference(ibValueMetaObjectRecordDataRef* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
-		m_classType = string_to_clsid(wxT("R_") +
-			stringUtils::IntToStr(m_metaObject->GetMetaID()));
+		m_classType = reference_to_clsid(m_metaObject->GetMetaID());
 	}
 
 	virtual wxString GetClassName() const {
@@ -83,8 +82,7 @@ class ibCtorMetaValueTypeReferenceList :
 public:
 
 	ibCtorMetaValueTypeReferenceList(ibValueMetaObjectRecordDataRef* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
-		m_classType = string_to_clsid(wxT("L_") +
-			stringUtils::IntToStr(m_metaObject->GetMetaID()));
+		m_classType = list_to_clsid(m_metaObject->GetMetaID());
 	}
 
 	virtual wxString GetClassName() const {
@@ -112,8 +110,7 @@ class ibCtorMetaValueTypeRegisterList :
 public:
 
 	ibCtorMetaValueTypeRegisterList(ibValueMetaObjectRegisterData* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
-		m_classType = string_to_clsid(wxT("J_") +
-			stringUtils::IntToStr(m_metaObject->GetMetaID()));
+		m_classType = list_to_clsid(m_metaObject->GetMetaID());
 	}
 
 	virtual wxString GetClassName() const {
@@ -141,8 +138,7 @@ class ibCtorMetaValueTypeObject :
 public:
 
 	ibCtorMetaValueTypeObject(ibValueMetaObjectRecordData* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
-		m_classType = string_to_clsid(wxT("O_") +
-			stringUtils::IntToStr(m_metaObject->GetMetaID()));
+		m_classType = object_to_clsid(m_metaObject->GetMetaID());
 	}
 
 	virtual wxString GetClassName() const {
@@ -165,8 +161,7 @@ class ibCtorMetaValueTypeExternalObject :
 public:
 
 	ibCtorMetaValueTypeExternalObject(ibValueMetaObjectRecordData* recordRef) : ibCtorMetaValueTypeObject(recordRef) {
-		m_classType = string_to_clsid(wxT("EO_") +
-			stringUtils::IntToStr(recordRef->GetMetaID()));
+		m_classType = externalObject_to_clsid(recordRef->GetMetaID());
 	}
 
 	virtual ibClassID GetClassType() const { return m_classType; }
@@ -189,8 +184,7 @@ class ibCtorMetaValueTypeManager :
 public:
 
 	ibCtorMetaValueTypeManager(ibValueMetaObjectGenericData* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
-		m_classType = string_to_clsid(wxT("M_") +
-			stringUtils::IntToStr(m_metaObject->GetMetaID()));
+		m_classType = manager_to_clsid(m_metaObject->GetMetaID());
 	}
 
 	virtual wxString GetClassName() const {
@@ -211,8 +205,7 @@ class ibCtorMetaValueTypeExternalManager : public ibCtorMetaValueTypeManager {
 public:
 
 	ibCtorMetaValueTypeExternalManager(ibValueMetaObjectGenericData* recordRef) :ibCtorMetaValueTypeManager(recordRef) {
-		m_classType = string_to_clsid(wxT("EM_") +
-			stringUtils::IntToStr(recordRef->GetMetaID()));
+		m_classType = externalManager_to_clsid(recordRef->GetMetaID());
 	}
 
 	virtual ibClassID GetClassType() const { return m_classType; }
@@ -231,8 +224,7 @@ class ibCtorMetaValueTypeSelection :
 public:
 
 	ibCtorMetaValueTypeSelection(ibValueMetaObjectGenericData* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
-		m_classType = string_to_clsid(wxT("S_") +
-			stringUtils::IntToStr(m_metaObject->GetMetaID()));
+		m_classType = selection_to_clsid(m_metaObject->GetMetaID());
 	}
 
 	virtual wxString GetClassName() const {
@@ -260,8 +252,7 @@ class ibCtorMetaValueTypeTabularSection :
 public:
 
 	ibCtorMetaValueTypeTabularSection(ibValueMetaObjectRecordData* recordRef, ibValueMetaObjectTableData* recordTable) : ibCtorMetaValueType(), m_metaObject(recordRef), m_metaTable(recordTable) {
-		m_classType = string_to_clsid(wxT("T_") +
-			stringUtils::IntToStr(m_metaTable->GetMetaID()));
+		m_classType = tabularSection_to_clsid(m_metaTable->GetMetaID());
 	}
 
 	virtual wxString GetClassName() const {
@@ -307,8 +298,7 @@ class ibCtorMetaValueTypeTabularSectionString :
 public:
 
 	ibCtorMetaValueTypeTabularSectionString(ibValueMetaObjectRecordData* recordRef, ibValueMetaObjectTableData* recordTable) : ibCtorMetaValueType(), m_metaObject(recordRef), m_metaTable(recordTable) {
-		m_classType = string_to_clsid(wxT("B_") +
-			stringUtils::IntToStr(m_metaTable->GetMetaID()));
+		m_classType = tabularSectionString_to_clsid(m_metaTable->GetMetaID());
 	}
 
 	virtual wxString GetClassName() const {
@@ -337,8 +327,7 @@ class ibCtorMetaValueTypeRecord :
 public:
 
 	ibCtorMetaValueTypeRecord(ibValueMetaObjectRegisterData* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
-		m_classType = string_to_clsid(wxT("A_") +
-			stringUtils::IntToStr(m_metaObject->GetMetaID()));
+		m_classType = recordKey_to_clsid(m_metaObject->GetMetaID());
 	}
 
 	virtual wxString GetClassName() const {
@@ -366,8 +355,7 @@ class ibCtorMetaValueTypeRecordManager :
 public:
 
 	ibCtorMetaValueTypeRecordManager(ibValueMetaObjectRegisterData* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
-		m_classType = string_to_clsid(wxT("D_") +
-			stringUtils::IntToStr(m_metaObject->GetMetaID()));
+		m_classType = recordManager_to_clsid(m_metaObject->GetMetaID());
 	}
 
 	virtual wxString GetClassName() const {
@@ -395,8 +383,7 @@ class ibCtorMetaValueTypeRecordSet :
 public:
 
 	ibCtorMetaValueTypeRecordSet(ibValueMetaObjectRegisterData* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
-		m_classType = string_to_clsid(wxT("H_") +
-			stringUtils::IntToStr(m_metaObject->GetMetaID()));
+		m_classType = recordSet_to_clsid(m_metaObject->GetMetaID());
 	}
 
 	virtual wxString GetClassName() const {
@@ -424,8 +411,7 @@ class ibCtorMetaValueTypeRecordSetString :
 public:
 
 	ibCtorMetaValueTypeRecordSetString(ibValueMetaObjectRegisterData* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
-		m_classType = string_to_clsid(wxT("P_") +
-			stringUtils::IntToStr(m_metaObject->GetMetaID()));
+		m_classType = recordSetString_to_clsid(m_metaObject->GetMetaID());
 	}
 
 	virtual wxString GetClassName() const {

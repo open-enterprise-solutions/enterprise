@@ -633,5 +633,5 @@ long ibValueModuleRuntimeManagerExternalReport::FindProp(const wxString& strName
 //*                       Runtime register                             *
 //**********************************************************************
 
-SYSTEM_TYPE_REGISTER(ibValueModuleRuntimeManagerExternalDataProcessor, "ExternalDataProcessorModuleManager", string_to_clsid("SO_EDMM"));
-SYSTEM_TYPE_REGISTER(ibValueModuleRuntimeManagerExternalReport, "ExternalReportModuleManager", string_to_clsid("SO_ERMM"));
+SYSTEM_TYPE_REGISTER(ibValueModuleRuntimeManagerExternalDataProcessor, "ExternalDataProcessorModuleManager", system_to_clsid("SO_EDMM"));
+SYSTEM_TYPE_REGISTER(ibValueModuleRuntimeManagerExternalReport, "ExternalReportModuleManager", system_to_clsid("SO_ERMM"));

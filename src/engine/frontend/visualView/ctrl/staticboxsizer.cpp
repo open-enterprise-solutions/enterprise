@@ -134,4 +134,4 @@ bool ibValueStaticBoxSizer::WriteData(ibDataNode& node) const
 //*                       Register in runtime                           *
 //***********************************************************************
 
-CONTROL_TYPE_REGISTER(ibValueStaticBoxSizer, "Staticboxsizer", "Sizer", string_to_clsid("CT_SSZER"));
+CONTROL_TYPE_REGISTER(ibValueStaticBoxSizer, "Staticboxsizer", "Sizer", control_to_clsid("CT_SSZER"));

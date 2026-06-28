@@ -215,4 +215,4 @@ bool ibValueSizerItem::WriteData(ibDataNode& node) const
 //*                       Register in runtime                           *
 //***********************************************************************
 
-S_CONTROL_TYPE_REGISTER(ibValueSizerItem, "SizerItem", "Sizer", string_to_clsid("CT_SIZR"));
+S_CONTROL_TYPE_REGISTER(ibValueSizerItem, "SizerItem", "Sizer", control_to_clsid("CT_SIZR"));

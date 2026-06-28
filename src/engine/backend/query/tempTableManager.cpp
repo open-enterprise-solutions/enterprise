@@ -48,7 +48,7 @@ ibColumnType WidenForTemp(ibColumnRole role)
 // the DB write decomposition (a capture-only ibQueryStatement records each SetParam* as an IR node).
 std::vector<ibQueryExprPtr> DecomposeCell(const ibBackendQueryColumn* col, const ibMetaData* meta, const ibValue& cell)
 {
-	const std::vector<wxString> fields = ColumnFieldNames(col, meta);
+	const std::vector<wxString> fields = ColumnFieldNames(col);
 	ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
 	int pos = 1;
 	ibColumnCodec::WriteValue(col, meta, cell, &capture, pos);
@@ -135,7 +135,7 @@ std::unique_ptr<ibTempTableManager> ibTempTableManager::Materialise(ibDatabaseCo
 
 	std::vector<ibColumnSlot> slots;   // flattened spread over all columns
 	for (const ibTempColumn& tc : tempCols)
-		for (const ibColumnSlot& s : DescribeColumnLayout(&tc, metaData))
+		for (const ibColumnSlot& s : DescribeColumnLayout(&tc))
 			slots.push_back(s);
 
 	std::vector<wxString> allFields;   // slot names — the INSERT column order

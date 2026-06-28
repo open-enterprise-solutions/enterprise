@@ -83,4 +83,4 @@ bool ibValueResultSet::CallAsProc(const long lMethodNum, ibValue** paParams, con
 //*                       Runtime register                             *
 //**********************************************************************
 
-SYSTEM_TYPE_REGISTER(ibValueResultSet, "DatabaseResultSet", string_to_clsid("VL_DBRS"));
+SYSTEM_TYPE_REGISTER(ibValueResultSet, "DatabaseResultSet", system_to_clsid("VL_DBRS"));

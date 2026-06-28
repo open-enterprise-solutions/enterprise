@@ -39,5 +39,5 @@ ibValueActionEvent::ibValueActionEvent(const wxString& eventName, ibActionID eve
 //*                       Runtime register                             *
 //**********************************************************************
 
-VALUE_TYPE_REGISTER(ibValueEvent, "Event", string_to_clsid("SY_EVENT"));
-SYSTEM_TYPE_REGISTER(ibValueActionEvent, "ActionEvent", string_to_clsid("SY_ATEVT"));
+VALUE_TYPE_REGISTER(ibValueEvent, "Event", value_to_clsid("SY_EVENT"));
+SYSTEM_TYPE_REGISTER(ibValueActionEvent, "ActionEvent", system_to_clsid("SY_ATEVT"));

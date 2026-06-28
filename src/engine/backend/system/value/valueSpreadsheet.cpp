@@ -524,14 +524,14 @@ bool ibValueSpreadsheetDocument::CallAsProc(const long lMethodNum, ibValue** paP
 //*                       Runtime register                             *
 //**********************************************************************
 
-VALUE_TYPE_REGISTER(ibValueSpreadsheetDocument, "SpreadsheetDocument", string_to_clsid("VL_SPSTD"));
-SYSTEM_TYPE_REGISTER(ibValueSpreadsheetDocumentRange, "SpreadsheetAreaRange", string_to_clsid("SY_SPPRA"));
-SYSTEM_TYPE_REGISTER(ibValueSpreadsheetDocumentAreaCollection, "SpreadsheetAreaCollection", string_to_clsid("SY_SPAEA"));
-SYSTEM_TYPE_REGISTER(ibValueSpreadsheetDocumentParameterCollection, "SpreadsheetParameterCollection", string_to_clsid("SY_SPPRM"));
-ENUM_TYPE_REGISTER(ibValueEnumSpreadsheetOrient, "SpreadsheetOrient", string_to_clsid("EN_SORNT"));
-ENUM_TYPE_REGISTER(ibValueEnumSpreadsheetHorizontalAlignment, "SpreadsheetHorizontalAlignment", string_to_clsid("EN_SHOAL"));
-ENUM_TYPE_REGISTER(ibValueEnumSpreadsheetVerticalAlignment, "SpreadsheetVerticalAlignment", string_to_clsid("EN_SVEAL"));
-ENUM_TYPE_REGISTER(ibValueEnumSpreadsheetBorder, "SpreadsheetBorder", string_to_clsid("EN_SBORD"));
-ENUM_TYPE_REGISTER(ibValueEnumSpreadsheetFitMode, "SpreadsheetFitMode", string_to_clsid("EN_SFTMD"));
-ENUM_TYPE_REGISTER(ibValueEnumSpreadsheetFillType, "SpreadsheetTemplate", string_to_clsid("EN_SFTMP"));
+VALUE_TYPE_REGISTER(ibValueSpreadsheetDocument, "SpreadsheetDocument", value_to_clsid("VL_SPSTD"));
+SYSTEM_TYPE_REGISTER(ibValueSpreadsheetDocumentRange, "SpreadsheetAreaRange", system_to_clsid("SY_SPPRA"));
+SYSTEM_TYPE_REGISTER(ibValueSpreadsheetDocumentAreaCollection, "SpreadsheetAreaCollection", system_to_clsid("SY_SPAEA"));
+SYSTEM_TYPE_REGISTER(ibValueSpreadsheetDocumentParameterCollection, "SpreadsheetParameterCollection", system_to_clsid("SY_SPPRM"));
+ENUM_TYPE_REGISTER(ibValueEnumSpreadsheetOrient, "SpreadsheetOrient", enum_to_clsid("EN_SORNT"));
+ENUM_TYPE_REGISTER(ibValueEnumSpreadsheetHorizontalAlignment, "SpreadsheetHorizontalAlignment", enum_to_clsid("EN_SHOAL"));
+ENUM_TYPE_REGISTER(ibValueEnumSpreadsheetVerticalAlignment, "SpreadsheetVerticalAlignment", enum_to_clsid("EN_SVEAL"));
+ENUM_TYPE_REGISTER(ibValueEnumSpreadsheetBorder, "SpreadsheetBorder", enum_to_clsid("EN_SBORD"));
+ENUM_TYPE_REGISTER(ibValueEnumSpreadsheetFitMode, "SpreadsheetFitMode", enum_to_clsid("EN_SFTMD"));
+ENUM_TYPE_REGISTER(ibValueEnumSpreadsheetFillType, "SpreadsheetTemplate", enum_to_clsid("EN_SFTMP"));
 
