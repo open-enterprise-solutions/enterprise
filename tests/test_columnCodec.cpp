@@ -51,12 +51,12 @@ TEST(ColumnLayout, RawColumn_SingleSlot)
 {
 	const ibRawDBColumn col = ibRawDBColumn::Guid(wxT("uuid"));
 
-	const std::vector<ibColumnSlot> layout = DescribeColumnLayout(&col, nullptr);
+	const std::vector<ibColumnSlot> layout = DescribeColumnLayout(&col);
 	ASSERT_EQ(layout.size(), 1u);
 	EXPECT_EQ(layout[0].m_name, wxT("uuid"));
 	EXPECT_EQ(layout[0].m_role, ibColumnRole::Raw);
 
-	const std::vector<wxString> fields = ColumnFieldNames(&col, nullptr);
+	const std::vector<wxString> fields = ColumnFieldNames(&col);
 	ASSERT_EQ(fields.size(), 1u);
 	EXPECT_EQ(fields[0], wxT("uuid"));
 }

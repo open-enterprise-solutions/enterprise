@@ -21,14 +21,14 @@ TEST(RawDBColumn, FactoryCarriesFieldName) {
 
 TEST(RawDBColumn, RawLowersToOneFieldNamedAfterItself) {
     const ibRawDBColumn col = ibRawDBColumn::String(wxT("name"));
-    const std::vector<wxString> fields = ColumnFieldNames(&col, nullptr);
+    const std::vector<wxString> fields = ColumnFieldNames(&col);
     ASSERT_EQ(fields.size(), 1u);
     EXPECT_EQ(fields[0], wxT("name"));
 }
 
 TEST(RawDBColumn, RawLayoutSlotIsRoleRaw) {
     const ibRawDBColumn col = ibRawDBColumn::Number(wxT("qty"));
-    const std::vector<ibColumnSlot> layout = DescribeColumnLayout(&col, nullptr);
+    const std::vector<ibColumnSlot> layout = DescribeColumnLayout(&col);
     ASSERT_EQ(layout.size(), 1u);
     EXPECT_EQ(layout[0].m_name, wxT("qty"));
     EXPECT_EQ(layout[0].m_role, ibColumnRole::Raw);
