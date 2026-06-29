@@ -215,6 +215,22 @@
 > everywhere, but not pushed down on the same-DB co-located case); the ON is column-to-column only (a computed
 > `a.x + 1 > b.y` honest-fails in `ResolveColumnSingle`).
 >
+> ### Update 2026-06-28 (4) — named ref-join `JOIN o.Customer AS Cust1` (landed, builds clean Debug|x86, launcher pending)
+>
+> A reference dot-walk can now be DECLARED once and reused: `JOIN rootAlias.refA[.refB…] AS alias` auto-joins
+> the reference chain off an existing source and binds the FINAL target to `alias`, so later `alias.field AS x`
+> is a clean qualified column — no more the ugly auto-name a dotted projection produces (`Cust1.Region` →
+> `Cust1Region`), and one join shared by every `alias.*`. NO parser change: the grammar already accepts
+> `JOIN <dottedName> AS <alias>` with no ON; the lowering disambiguates — if the first segment is a LIVE
+> source alias (not a metaobject namespace) and there is no ON, it is a ref-path join. New helper
+> `ExpandRefJoinAlias` (queryLowering anon ns) walks the segments (each a single-target reference), LEFT-joins
+> each target keyed on `(segment ref col, target self-reference)` — intermediate targets get synthetic
+> aliases, the last gets the user's — and pushes the final target into `sources`. Wired into BOTH join loops
+> (`ExecuteImpl` + `ExecuteTotals`); `MapJoinKind` extracted to kill the duplicated kind ternary. Example:
+> `SELECT Cust1.Region AS reg1 FROM Document.Sales AS o JOIN o.Customer AS Cust1 TOTALS SUM(o.Amount) BY Cust1.City`.
+> Edge: a composite (multi-type) reference segment fails inside the expand (not a single-target reference);
+> the alias must be explicit (`AS`).
+>
 > ### Update 2026-06-11 — L4 optimizer pass (landed, 420/420 green, runtime-validated)
 >
 > The optimizer ladder's first two rungs are in the tree. The stance stays: **no cost-based

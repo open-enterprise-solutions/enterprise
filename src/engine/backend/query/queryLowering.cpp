@@ -211,6 +211,41 @@ const ibBackendQueryColumn* ExpandDotWalkJoins(
 	return pathCols.back();   // owned by the final target — a plain qualified column in the snapshot
 }
 
+// Map the L4 AST join kind to the L3 join kind.
+ibQueryJoinKind MapJoinKind(ibQueryJoinKindAst k)
+{
+	switch (k) {
+		case ibQueryJoinKindAst::Left:  return ibQueryJoinKind::Left;
+		case ibQueryJoinKindAst::Right: return ibQueryJoinKind::Right;
+		case ibQueryJoinKindAst::Full:  return ibQueryJoinKind::Full;
+		default:                        return ibQueryJoinKind::Inner;
+	}
+}
+
+// Declare a NAMED ref-join: `JOIN root.refA[.refB…] AS alias` auto-joins the reference chain off `root` and
+// binds the FINAL target to `alias` in `sources`, so a later `alias.field` resolves as a clean qualified
+// column. Every segment is a single-target reference; intermediate targets get synthetic aliases, the last
+// gets the user's alias. Reuses ExpandDotWalkJoins' key derivation (segment ref col, target self-reference).
+void ExpandRefJoinAlias(ibDataQueryBuilder& b, std::vector<ibSourceBinding>& sources,
+	const ibBackendQueryable* rootQ, const std::vector<wxString>& segs,
+	const wxString& finalAlias, ibQueryJoinKind kind, int& aliasSeq)
+{
+	const ibBackendQueryable* curQ = rootQ;
+	for (size_t i = 0; i < segs.size(); ++i) {
+		const ibBackendQueryColumn* refCol = (curQ != nullptr) ? curQ->ResolveColumnByName(segs[i]) : nullptr;
+		const ibBackendQueryable*   tgtQ   = (curQ != nullptr && refCol != nullptr) ? curQ->ResolveReferenceTarget(refCol) : nullptr;
+		const std::vector<const ibBackendQueryColumn*> tgtKeys = (tgtQ != nullptr) ? tgtQ->GetPrimaryKeyColumns()
+		                                                                           : std::vector<const ibBackendQueryColumn*>{};
+		if (refCol == nullptr || tgtQ == nullptr || tgtKeys.empty())
+			Fail(0, 0, wxString::Format(_("'%s' is not a single-target reference for a named ref-join (AS)"), segs[i]));
+		const bool last = (i + 1 == segs.size());
+		const wxString alias = last ? finalAlias : wxString::Format(wxT("_rj%d"), aliasSeq++);
+		b.Join(tgtQ, refCol, tgtKeys.front(), last ? kind : ibQueryJoinKind::Left, alias);
+		sources.push_back({ alias, tgtQ });
+		curQ = tgtQ;
+	}
+}
+
 // Map the L4 AST comparison op to the L3 join op (the join node carries the L3 enum so L3 stays L4-agnostic).
 ibJoinCompareOp MapJoinOp(ibQueryCompareOp op)
 {
@@ -1021,16 +1056,28 @@ ibDataQueryResult ibQueryLowering::ExecuteImpl(const ibQuerySelect& astIn,
 
 	// JOINs — each adds a source; ON a.x = b.y joins on explicit columns (the provider qualifies each
 	// key by its owning leaf, so the operand order is free), no ON = auto-join by reference.
+	int refJoinSeq = 0;   // synthetic aliases for the intermediate segments of a named ref-join
 	for (const ibQueryAstJoin& j : ast.m_joins) {
+		const ibQueryJoinKind kind = MapJoinKind(j.m_kind);
+
+		// Named ref-join: `JOIN rootAlias.refA[.refB…] AS alias` — the source is a REFERENCE PATH off an
+		// existing source (not a metaobject), no ON. Auto-join the chain and bind the FINAL target to `alias`,
+		// so a later `alias.field AS x` resolves as a clean qualified column (no ugly auto-name from a dotted
+		// path). Sugar over ExpandDotWalkJoins; the first segment must be a live source alias.
+		const ibBackendQueryable* refRoot = nullptr;
+		if (!j.m_source.m_subquery && !j.m_on && j.m_source.m_name.size() >= 2
+		    && (refRoot = SourceForAlias(sources, j.m_source.m_name[0])) != nullptr) {
+			if (j.m_source.m_alias.empty())
+				Fail(0, 0, _("a reference-path JOIN (alias.field) needs an explicit alias (AS)"));
+			ExpandRefJoinAlias(b, sources, refRoot,
+				std::vector<wxString>(j.m_source.m_name.begin() + 1, j.m_source.m_name.end()),
+				j.m_source.m_alias, kind, refJoinSeq);
+			continue;
+		}
+
 		const ibBackendQueryable* qi = ResolveFrom(j.m_source, params, subOwners);
 		const wxString alias = j.m_source.m_alias;
 		sources.push_back({ alias, qi });
-
-		const ibQueryJoinKind kind =
-			  j.m_kind == ibQueryJoinKindAst::Left  ? ibQueryJoinKind::Left
-			: j.m_kind == ibQueryJoinKindAst::Right ? ibQueryJoinKind::Right
-			: j.m_kind == ibQueryJoinKindAst::Full  ? ibQueryJoinKind::Full
-			                                        : ibQueryJoinKind::Inner;
 		if (j.m_on && j.m_on->m_kind == ibQueryAstExprKind::Literal && j.m_on->m_literal.GetBoolean()) {
 			b.CrossJoin(qi, kind, alias);   // ON TRUE -> cross join (cartesian)
 		}
@@ -1121,7 +1168,21 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 		sources.push_back({ ast.m_from.m_alias, q });
 		b.From(q, ast.m_from.m_alias);
 
+		int refJoinSeq = 0;   // synthetic aliases for the intermediate segments of a named ref-join
 		for (const ibQueryAstJoin& j : ast.m_joins) {
+			// Named ref-join: `JOIN rootAlias.refA[.refB…] AS alias` — a reference PATH off an existing source,
+			// no ON; auto-join the chain and bind the FINAL target to `alias` (sugar over ExpandDotWalkJoins).
+			// The first segment must be a live source alias. (Mirrors the non-totals ExecuteImpl path.)
+			const ibBackendQueryable* refRoot = nullptr;
+			if (!j.m_source.m_subquery && !j.m_on && j.m_source.m_name.size() >= 2
+			    && (refRoot = SourceForAlias(sources, j.m_source.m_name[0])) != nullptr) {
+				if (j.m_source.m_alias.empty())
+					Fail(0, 0, _("a reference-path JOIN (alias.field) needs an explicit alias (AS)"));
+				ExpandRefJoinAlias(b, sources, refRoot,
+					std::vector<wxString>(j.m_source.m_name.begin() + 1, j.m_source.m_name.end()),
+					j.m_source.m_alias, MapJoinKind(j.m_kind), refJoinSeq);
+				continue;
+			}
 			const ibBackendQueryable* qi = ResolveFrom(j.m_source, params, owner);
 			const wxString alias = j.m_source.m_alias;
 			sources.push_back({ alias, qi });
