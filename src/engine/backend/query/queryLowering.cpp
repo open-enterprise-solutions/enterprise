@@ -87,9 +87,37 @@ const ibBackendQueryable* SourceForAlias(const std::vector<ibSourceBinding>& sou
 	return nullptr;
 }
 
+// The single source that OWNS a bare (unqualified) column. Fails on AMBIGUITY — a bare column that
+// exists in more than one joined source must be qualified with an alias (SQL "ambiguous column"). Returns
+// null only when no source owns it (the caller reports "unknown attribute") or sources is empty.
+const ibBackendQueryable* OwnerOfBareColumn(const std::vector<ibSourceBinding>& sources, const wxString& name,
+                                            int line, int col)
+{
+	const ibBackendQueryable* owner = nullptr;
+	for (const ibSourceBinding& s : sources)
+		if (s.m_q->ResolveColumnByName(name) != nullptr) {
+			if (owner != nullptr)
+				Fail(line, col, wxString::Format(
+					_("ambiguous attribute '%s': it is in more than one source — qualify it with an alias (e.g. a.%s)"),
+					name, name));
+			owner = s.m_q;
+		}
+	return owner;
+}
+
+// Reject a DUPLICATE source alias — the same alias on two FROM/JOIN sources makes every `alias.col`
+// reference ambiguous (SQL "table name specified more than once"). Synthetic dot-walk / ref-join aliases
+// are unique by construction, so only user-written aliases can collide here.
+void RequireAliasFree(const std::vector<ibSourceBinding>& sources, const wxString& alias, int line, int col)
+{
+	if (!alias.empty() && SourceForAlias(sources, alias) != nullptr)
+		Fail(line, col, wxString::Format(
+			_("duplicate source alias '%s': each FROM / JOIN source needs a distinct alias"), alias));
+}
+
 // A SINGLE column (for WHERE / ORDER / aggregate arg / GROUP BY): `alias.col` -> the aliased
-// source's column; bare `col` -> the first source that owns it (primary first). Dot-walk paths
-// are rejected here (only the projection resolves them, via ResolvePath).
+// source's column; bare `col` -> the one source that owns it (ambiguous across sources -> error). Dot-walk
+// paths are rejected here (only the projection resolves them, via ResolvePath).
 const ibBackendQueryColumn* ResolveColumnSingle(const std::vector<ibSourceBinding>& sources, const ibQueryAstExpr& e)
 {
 	const std::vector<wxString>& path = e.m_path;
@@ -105,12 +133,10 @@ const ibBackendQueryColumn* ResolveColumnSingle(const std::vector<ibSourceBindin
 		// path[0] is not an alias -> a dot-walk (Producer.Name), not allowed in this clause yet.
 	}
 	else if (path.size() == 1) {
-		for (const ibSourceBinding& s : sources) {
-			const ibBackendQueryColumn* col = s.m_q->ResolveColumnByName(path[0]);
-			if (col != nullptr) return col;
-		}
-		Fail(e.m_line, e.m_col, wxString::Format(_("unknown attribute '%s'"), path[0]));
-		return nullptr;
+		const ibBackendQueryable* q = OwnerOfBareColumn(sources, path[0], e.m_line, e.m_col);   // ambiguous -> Fail
+		if (q == nullptr)
+			Fail(e.m_line, e.m_col, wxString::Format(_("unknown attribute '%s'"), path[0]));
+		return q->ResolveColumnByName(path[0]);
 	}
 
 	Fail(e.m_line, e.m_col, _("dot-walk columns are not supported in this clause yet"));
@@ -131,8 +157,7 @@ std::vector<const ibBackendQueryColumn*> ResolvePath(const std::vector<ibSourceB
 		if (aliased != nullptr) { cur = aliased; i = 1; }
 	}
 	if (i == 0)   // unqualified — start on the source that owns the first segment
-		for (const ibSourceBinding& s : sources)
-			if (s.m_q->ResolveColumnByName(path[0]) != nullptr) { cur = s.m_q; break; }
+		if (const ibBackendQueryable* q = OwnerOfBareColumn(sources, path[0], e.m_line, e.m_col)) cur = q;   // ambiguous -> Fail
 
 	std::vector<const ibBackendQueryColumn*> cols;
 	for (size_t k = i; k < path.size(); ++k) {
@@ -173,8 +198,7 @@ const ibBackendQueryable* RootForPath(const std::vector<ibSourceBinding>& source
 		const ibBackendQueryable* aliased = SourceForAlias(sources, path[0]);
 		if (aliased != nullptr) return aliased;
 	}
-	for (const ibSourceBinding& s : sources)
-		if (s.m_q->ResolveColumnByName(path[0]) != nullptr) return s.m_q;
+	if (const ibBackendQueryable* q = OwnerOfBareColumn(sources, path[0], e.m_line, e.m_col)) return q;   // ambiguous -> Fail
 	return sources.empty() ? nullptr : sources[0].m_q;
 }
 
@@ -1090,6 +1114,7 @@ ibDataQueryResult ibQueryLowering::ExecuteImpl(const ibQuerySelect& astIn,
 
 		const ibBackendQueryable* qi = ResolveFrom(j.m_source, params, subOwners);
 		const wxString alias = j.m_source.m_alias;
+		RequireAliasFree(sources, alias, 0, 0);   // duplicate alias -> Fail
 		sources.push_back({ alias, qi });
 		if (j.m_on && j.m_on->m_kind == ibQueryAstExprKind::Literal && j.m_on->m_literal.GetBoolean()) {
 			b.CrossJoin(qi, kind, alias);   // ON TRUE -> cross join (cartesian)
@@ -1207,6 +1232,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			}
 			const ibBackendQueryable* qi = ResolveFrom(j.m_source, params, owner);
 			const wxString alias = j.m_source.m_alias;
+			RequireAliasFree(sources, alias, 0, 0);   // duplicate alias -> Fail
 			sources.push_back({ alias, qi });
 
 			const ibQueryJoinKind kind =

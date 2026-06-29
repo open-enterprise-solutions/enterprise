@@ -256,6 +256,17 @@
 > render). Edges: the comparison is `leftExpr <op> rightExpr` (single comparison), no dot-walk inside the
 > expression (`BuildColumnExprFromAst` takes plain columns), and the natural lhs→left / rhs→right side order.
 >
+> ### Update 2026-06-28 (7) — ambiguous-column / duplicate-alias diagnostics (landed, builds clean Debug|x86, launcher pending)
+>
+> A bare (unqualified) column over a JOIN used to silently resolve to the FIRST source that owned it — a
+> silent wrong-source pick. `OwnerOfBareColumn` now walks ALL sources and Fails on ambiguity
+> (`ambiguous attribute 'x': it is in more than one source — qualify it with an alias`), wired into the three
+> bare-name resolvers (`ResolveColumnSingle`, `ResolvePath`, `RootForPath`); a qualified `a.col` stays
+> unambiguous via `SourceForAlias`. `RequireAliasFree` rejects a duplicate FROM/JOIN alias
+> (`duplicate source alias 'x'`) in both join loops — synthetic dot-walk / ref-join aliases (`_dw`, `_rj`) are
+> unique by construction, so only user aliases collide. Behaviour change: a query that relied on the implicit
+> first-source pick now errors (correct SQL semantics).
+>
 > ### Update 2026-06-11 — L4 optimizer pass (landed, 420/420 green, runtime-validated)
 >
 > The optimizer ladder's first two rungs are in the tree. The stance stays: **no cost-based
