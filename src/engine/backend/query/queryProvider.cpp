@@ -718,7 +718,7 @@ bool FlattenInnerChain(const ibQueryNode* node, std::vector<const ibQueryNode*>&
 	if (node == nullptr) return false;
 	if (node->m_kind == ibQueryNode::Kind::Join
 		&& node->m_joinKind == ibQueryJoinKind::Inner && !node->m_cross
-		&& node->m_onOp == ibJoinCompareOp::Eq) {   // equi only — the smallest-first reorder hash-joins on keys
+		&& node->m_onOp == ibJoinCompareOp::Eq && !node->m_onExprL) {   // equi KEY only — the reorder hash-joins on key columns
 		const ibBackendQueryColumn* onL = nullptr; const ibBackendQueryColumn* onR = nullptr;
 		if (!ResolveJoinKeys(node, onL, onR)) return false;
 		keyPairs.emplace_back(onL, onR);
@@ -860,7 +860,8 @@ ibQueryRamTable MaterialiseNode(const ibQueryNode* node, const std::vector<const
 	const ibBackendQueryColumn* onL = nullptr; const ibBackendQueryColumn* onR = nullptr;
 	ResolveJoinKeys(node, onL, onR);   // explicit or derived (the tree was validated resolvable)
 
-	return ibQueryComposer::JoinRamTables(TL, TR, onL, onR, outCols, fromLeft, node->m_joinKind, node->m_onOp);
+	return ibQueryComposer::JoinRamTables(TL, TR, onL, onR, outCols, fromLeft, node->m_joinKind, node->m_onOp,
+	                                      node->m_onExprL.get(), node->m_onExprR.get());
 }
 
 // Finalise a GetColumnId-keyed combined table into the result: ORDER BY (RAM stable
@@ -974,6 +975,9 @@ ibQueryRamTable RamUnion(const ibDataQuerySpec& spec, const ibQueryNode* unionNo
 bool AllJoinsHaveKeys(const ibQueryNode* node)
 {
 	if (node == nullptr || node->m_kind != ibQueryNode::Kind::Join) return true;
+	// A computed-ON join (a.x+1 <op> b.y) has no key columns but is a valid theta join (RAM nested-loop).
+	if (node->m_onExprL && node->m_onExprR)
+		return AllJoinsHaveKeys(node->m_left.get()) && AllJoinsHaveKeys(node->m_right.get());
 	const ibBackendQueryColumn* onL = nullptr; const ibBackendQueryColumn* onR = nullptr;
 	return ResolveJoinKeys(node, onL, onR) &&
 	       AllJoinsHaveKeys(node->m_left.get()) && AllJoinsHaveKeys(node->m_right.get());
@@ -1882,7 +1886,7 @@ std::vector<size_t> ibQueryComposer::PlanInnerJoinOrder(const std::vector<long>&
 ibQueryRamTable ibQueryComposer::JoinRamTables(const ibQueryRamTable& left, const ibQueryRamTable& right,
 		const ibBackendQueryColumn* onLeft, const ibBackendQueryColumn* onRight,
 		const std::vector<const ibBackendQueryColumn*>& outCols, const std::vector<bool>& fromLeft,
-		ibQueryJoinKind kind, ibJoinCompareOp onOp)
+		ibQueryJoinKind kind, ibJoinCompareOp onOp, const ibQueryColumnExpr* onExprL, const ibQueryColumnExpr* onExprR)
 {
 	ibQueryRamTable out;
 	for (const ibBackendQueryColumn* c : outCols)
@@ -1909,10 +1913,13 @@ ibQueryRamTable ibQueryComposer::JoinRamTables(const ibQueryRamTable& left, cons
 	const bool keepLeft  = (kind == ibQueryJoinKind::Left  || kind == ibQueryJoinKind::Full);
 	const bool keepRight = (kind == ibQueryJoinKind::Right || kind == ibQueryJoinKind::Full);
 
-	// THETA (non-equi) join — a nested loop over every (left, right) pair, the ON comparison evaluated per
-	// pair with SQL three-valued logic (a NULL operand is UNKNOWN -> never matches). O(n*m); the hash index
-	// below is equi-only. A keyless CROSS (onLeft/onRight == nullptr) and the equi path stay on the hash route.
-	if (onOp != ibJoinCompareOp::Eq && onLeft != nullptr && onRight != nullptr) {
+	// THETA join — a nested loop over every (left, right) pair, the ON comparison evaluated per pair with SQL
+	// three-valued logic (a NULL operand is UNKNOWN -> never matches). O(n*m); the hash index below is equi-only.
+	// Taken for a non-equi comparison on key columns OR a COMPUTED ON (a.x+1 <op> b.y): each side is then an
+	// expression evaluated against ITS OWN table per row (lhs over left, rhs over right). A keyless CROSS and a
+	// plain-equi key join stay on the hash route.
+	const bool computedOn = (onExprL != nullptr && onExprR != nullptr);
+	if (computedOn || (onOp != ibJoinCompareOp::Eq && onLeft != nullptr && onRight != nullptr)) {
 		auto thetaMatch = [](const ibValue& a, const ibValue& b, ibJoinCompareOp op) -> bool {
 			switch (op) {
 				case ibJoinCompareOp::Ne: return !a.CompareValueEQ(b);
@@ -1925,11 +1932,11 @@ ibQueryRamTable ibQueryComposer::JoinRamTables(const ibQueryRamTable& left, cons
 		};
 		std::vector<char> rMatched(static_cast<size_t>(right.RowCount()), 0);
 		for (long i = 0; i < left.RowCount(); ++i) {
-			const ibValue keyL = left.GetCell(i, onLeft->GetColumnId());
+			const ibValue keyL = onExprL ? EvalColumnExprRow(onExprL, left, i) : left.GetCell(i, onLeft->GetColumnId());
 			bool matched = false;
 			if (!RamIsNullValue(keyL))
 				for (long j = 0; j < right.RowCount(); ++j) {
-					const ibValue keyR = right.GetCell(j, onRight->GetColumnId());
+					const ibValue keyR = onExprR ? EvalColumnExprRow(onExprR, right, j) : right.GetCell(j, onRight->GetColumnId());
 					if (RamIsNullValue(keyR)) continue;        // NULL operand -> UNKNOWN -> no match
 					if (thetaMatch(keyL, keyR, onOp)) { emit(i, j); rMatched[static_cast<size_t>(j)] = 1; matched = true; }
 				}

@@ -244,6 +244,18 @@
 >   and aggregate / group by the qualified leaf, shared dedup across the projection, the aggregate input and the
 >   GROUP BY clause. A computed source (subquery / slice) still honest-fails (no DB table to ref-join).
 >
+> ### Update 2026-06-28 (6) — computed ON in a JOIN (`a.x + 1 > b.y`) (landed, builds clean Debug|x86, launcher pending)
+>
+> A JOIN ON was restricted to a column-to-column comparison; now either side may be a COMPUTED expression
+> (arithmetic / CASE). The join node carries `ibQueryColumnExprPtr m_onExprL/R`; the lowering builds them via
+> `BuildColumnExprFromAst` when either side `IsComputedExprAst`. `JoinRamTables` evaluates each side per pair
+> in the theta nested-loop via `EvalColumnExprRow` — the LHS over the left table, the RHS over the right
+> (lhs→left / rhs→right ordering assumed; SQL three-valued NULL = never matches). A computed ON always RAM-folds
+> (the equi hash route is only for plain key columns) — `AllJoinsHaveKeys` accepts an expr-ON node as keyed,
+> `FlattenInnerChain` excludes it from the equi reorder, and `ColocatableJoinTree` rejects it (no server-side
+> render). Edges: the comparison is `leftExpr <op> rightExpr` (single comparison), no dot-walk inside the
+> expression (`BuildColumnExprFromAst` takes plain columns), and the natural lhs→left / rhs→right side order.
+>
 > ### Update 2026-06-11 — L4 optimizer pass (landed, 420/420 green, runtime-validated)
 >
 > The optimizer ladder's first two rungs are in the tree. The stance stays: **no cost-based

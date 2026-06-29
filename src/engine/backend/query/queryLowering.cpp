@@ -1097,9 +1097,18 @@ ibDataQueryResult ibQueryLowering::ExecuteImpl(const ibQuerySelect& astIn,
 		else if (j.m_on) {
 			if (j.m_on->m_kind != ibQueryAstExprKind::Compare)
 				Fail(j.m_on->m_line, j.m_on->m_col, _("a JOIN ON clause must be a single comparison (a.x <op> b.y) or TRUE (cross join)"));
-			const ibBackendQueryColumn* lc = ResolveColumnSingle(sources, *j.m_on->m_lhs);
-			const ibBackendQueryColumn* rc = ResolveColumnSingle(sources, *j.m_on->m_rhs);
-			b.Join(qi, lc, rc, MapJoinOp(j.m_on->m_cmp), kind, alias);   // = -> hash; <,<=,>,>=,<> -> RAM theta
+			if (IsComputedExprAst(*j.m_on->m_lhs) || IsComputedExprAst(*j.m_on->m_rhs)) {
+				// Computed ON (a.x+1 <op> b.y) — lower both sides to column exprs, evaluated per pair in the RAM
+				// theta loop (lhs over the left table, rhs over the right). No dot-walk inside the expression.
+				b.Join(qi, BuildColumnExprFromAst(sources, *j.m_on->m_lhs, params),
+				           BuildColumnExprFromAst(sources, *j.m_on->m_rhs, params),
+				           MapJoinOp(j.m_on->m_cmp), kind, alias);
+			}
+			else {
+				const ibBackendQueryColumn* lc = ResolveColumnSingle(sources, *j.m_on->m_lhs);
+				const ibBackendQueryColumn* rc = ResolveColumnSingle(sources, *j.m_on->m_rhs);
+				b.Join(qi, lc, rc, MapJoinOp(j.m_on->m_cmp), kind, alias);   // = -> hash; <,<=,>,>=,<> -> RAM theta
+			}
 		}
 		else {
 			b.Join(qi, kind, alias);   // auto-join by reference
@@ -1211,9 +1220,18 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			else if (j.m_on) {
 				if (j.m_on->m_kind != ibQueryAstExprKind::Compare)
 					Fail(j.m_on->m_line, j.m_on->m_col, _("a JOIN ON clause must be a single comparison (a.x <op> b.y) or TRUE (cross join)"));
-				const ibBackendQueryColumn* lc = ResolveColumnSingle(sources, *j.m_on->m_lhs);
-				const ibBackendQueryColumn* rc = ResolveColumnSingle(sources, *j.m_on->m_rhs);
-				b.Join(qi, lc, rc, MapJoinOp(j.m_on->m_cmp), kind, alias);   // = -> hash; <,<=,>,>=,<> -> RAM theta
+				if (IsComputedExprAst(*j.m_on->m_lhs) || IsComputedExprAst(*j.m_on->m_rhs)) {
+					// Computed ON (a.x+1 <op> b.y) — both sides become column exprs, evaluated per pair in the RAM
+					// theta loop (lhs over left, rhs over right). No dot-walk inside the expression.
+					b.Join(qi, BuildColumnExprFromAst(sources, *j.m_on->m_lhs, params),
+					           BuildColumnExprFromAst(sources, *j.m_on->m_rhs, params),
+					           MapJoinOp(j.m_on->m_cmp), kind, alias);
+				}
+				else {
+					const ibBackendQueryColumn* lc = ResolveColumnSingle(sources, *j.m_on->m_lhs);
+					const ibBackendQueryColumn* rc = ResolveColumnSingle(sources, *j.m_on->m_rhs);
+					b.Join(qi, lc, rc, MapJoinOp(j.m_on->m_cmp), kind, alias);   // = -> hash; <,<=,>,>=,<> -> RAM theta
+				}
 			}
 			else {
 				b.Join(qi, kind, alias);   // auto-join by reference

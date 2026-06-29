@@ -248,6 +248,8 @@ struct ibQueryNode
 	ibQueryJoinKind              m_joinKind = ibQueryJoinKind::Inner;
 	bool                         m_cross    = false;   // CROSS / ON TRUE — no keys, cartesian product (RAM only)
 	ibJoinCompareOp              m_onOp     = ibJoinCompareOp::Eq;   // ON comparison; non-Eq -> RAM nested-loop theta
+	ibQueryColumnExprPtr         m_onExprL;                         // computed ON: LEFT-side expr (a.x+1), evaluated per pair
+	ibQueryColumnExprPtr         m_onExprR;                         // computed ON: RIGHT-side expr (b.y); presence -> theta nested-loop
 
 	// --- Union (vertical): N branches of one shape ----------------------
 	std::vector<std::shared_ptr<ibQueryNode>> m_parts;
@@ -299,6 +301,11 @@ public:
 	                         ibJoinCompareOp onOp,
 	                         ibQueryJoinKind kind = ibQueryJoinKind::Inner,
 	                         const wxString& alias = wxEmptyString);                            // explicit on-cols + comparison (theta when != Eq)
+	ibDataQueryBuilder& Join(const ibBackendQueryable* queryable,
+	                         const ibQueryColumnExprPtr& onExprL, const ibQueryColumnExprPtr& onExprR,
+	                         ibJoinCompareOp onOp,
+	                         ibQueryJoinKind kind = ibQueryJoinKind::Inner,
+	                         const wxString& alias = wxEmptyString);                            // computed ON (a.x+1 <op> b.y) — always RAM theta
 	ibDataQueryBuilder& CrossJoin(const ibBackendQueryable* queryable,
 	                              ibQueryJoinKind kind = ibQueryJoinKind::Inner,
 	                              const wxString& alias = wxEmptyString);                        // CROSS / ON TRUE — cartesian

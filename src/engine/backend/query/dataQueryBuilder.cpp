@@ -69,6 +69,24 @@ ibDataQueryBuilder& ibDataQueryBuilder::Join(const ibBackendQueryable* queryable
 	return *this;
 }
 
+ibDataQueryBuilder& ibDataQueryBuilder::Join(const ibBackendQueryable* queryable,
+	const ibQueryColumnExprPtr& onExprL, const ibQueryColumnExprPtr& onExprR,
+	ibJoinCompareOp onOp, ibQueryJoinKind kind, const wxString& alias)
+{
+	// Computed ON (a.x+1 <op> b.y): no key columns — both sides are expressions evaluated per pair in the
+	// RAM theta loop. m_onLeft/m_onRight stay null; the expr presence forces the nested-loop path.
+	auto node = std::make_shared<ibQueryNode>();
+	node->m_kind     = ibQueryNode::Kind::Join;
+	node->m_left     = m_root;
+	node->m_right    = ibQueryNode::Source(queryable, alias);
+	node->m_onExprL  = onExprL;
+	node->m_onExprR  = onExprR;
+	node->m_onOp     = onOp;
+	node->m_joinKind = kind;
+	m_root = node;
+	return *this;
+}
+
 ibDataQueryBuilder& ibDataQueryBuilder::CrossJoin(const ibBackendQueryable* queryable, ibQueryJoinKind kind, const wxString& alias)
 {
 	// CROSS / ON TRUE — no join key, cartesian product. Built like a join but flagged m_cross so the

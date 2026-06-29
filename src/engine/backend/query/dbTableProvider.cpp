@@ -347,7 +347,7 @@ bool ColocatableJoinTree(const ibDataQuerySpec& spec, ColocatedLeaves& leaves)
 	// union all call this gate) falls back to RAM for a theta join.
 	std::function<bool(const ibQueryNode*)> allEqui = [&](const ibQueryNode* n) -> bool {
 		if (n == nullptr || n->m_kind != ibQueryNode::Kind::Join) return true;
-		if (n->m_onOp != ibJoinCompareOp::Eq) return false;
+		if (n->m_onOp != ibJoinCompareOp::Eq || n->m_onExprL != nullptr) return false;   // theta / computed ON -> RAM
 		return allEqui(n->m_left.get()) && allEqui(n->m_right.get());
 	};
 	if (!allEqui(root))                        return false;
