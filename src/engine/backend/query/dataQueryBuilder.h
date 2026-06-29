@@ -214,6 +214,11 @@ private:
 // L3 join kind — the door's own (NOT L2's ibQueryJoinType; the door is L2-blind).
 enum class ibQueryJoinKind { Inner, Left, Right, Full };   // Right / Full -> RAM stitch only (co-located does Inner/Left)
 
+// Join ON comparison operator. Independent of the L4 AST's ibQueryCompareOp (L3 must not depend on the L4
+// parser). Eq is the hash-join fast path; the inequalities drive a RAM nested-loop theta join — a non-equi
+// join always folds in the RAM stitch (the co-located SQL path rejects it).
+enum class ibJoinCompareOp { Eq, Ne, Lt, Le, Gt, Ge };
+
 // (ibSelectKind / ibDimensionKind — defined at namespace scope above, before ibDataQueryResult.)
 
 // ==========================================================================
@@ -242,6 +247,7 @@ struct ibQueryNode
 	const ibBackendQueryColumn*  m_onRight = nullptr;
 	ibQueryJoinKind              m_joinKind = ibQueryJoinKind::Inner;
 	bool                         m_cross    = false;   // CROSS / ON TRUE — no keys, cartesian product (RAM only)
+	ibJoinCompareOp              m_onOp     = ibJoinCompareOp::Eq;   // ON comparison; non-Eq -> RAM nested-loop theta
 
 	// --- Union (vertical): N branches of one shape ----------------------
 	std::vector<std::shared_ptr<ibQueryNode>> m_parts;
@@ -287,7 +293,12 @@ public:
 	ibDataQueryBuilder& Join(const ibBackendQueryable* queryable,
 	                         const ibBackendQueryColumn* onLeft, const ibBackendQueryColumn* onRight,
 	                         ibQueryJoinKind kind = ibQueryJoinKind::Inner,
-	                         const wxString& alias = wxEmptyString);                            // explicit on-columns
+	                         const wxString& alias = wxEmptyString);                            // explicit on-columns (equality)
+	ibDataQueryBuilder& Join(const ibBackendQueryable* queryable,
+	                         const ibBackendQueryColumn* onLeft, const ibBackendQueryColumn* onRight,
+	                         ibJoinCompareOp onOp,
+	                         ibQueryJoinKind kind = ibQueryJoinKind::Inner,
+	                         const wxString& alias = wxEmptyString);                            // explicit on-cols + comparison (theta when != Eq)
 	ibDataQueryBuilder& CrossJoin(const ibBackendQueryable* queryable,
 	                              ibQueryJoinKind kind = ibQueryJoinKind::Inner,
 	                              const wxString& alias = wxEmptyString);                        // CROSS / ON TRUE — cartesian

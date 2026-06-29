@@ -211,6 +211,19 @@ const ibBackendQueryColumn* ExpandDotWalkJoins(
 	return pathCols.back();   // owned by the final target — a plain qualified column in the snapshot
 }
 
+// Map the L4 AST comparison op to the L3 join op (the join node carries the L3 enum so L3 stays L4-agnostic).
+ibJoinCompareOp MapJoinOp(ibQueryCompareOp op)
+{
+	switch (op) {
+		case ibQueryCompareOp::Ne: return ibJoinCompareOp::Ne;
+		case ibQueryCompareOp::Lt: return ibJoinCompareOp::Lt;
+		case ibQueryCompareOp::Le: return ibJoinCompareOp::Le;
+		case ibQueryCompareOp::Gt: return ibJoinCompareOp::Gt;
+		case ibQueryCompareOp::Ge: return ibJoinCompareOp::Ge;
+		default:                   return ibJoinCompareOp::Eq;
+	}
+}
+
 const ibValue* FindParam(const std::map<wxString, ibValue>& params, const wxString& name)
 {
 	for (const auto& kv : params)
@@ -1022,11 +1035,11 @@ ibDataQueryResult ibQueryLowering::ExecuteImpl(const ibQuerySelect& astIn,
 			b.CrossJoin(qi, kind, alias);   // ON TRUE -> cross join (cartesian)
 		}
 		else if (j.m_on) {
-			if (j.m_on->m_kind != ibQueryAstExprKind::Compare || j.m_on->m_cmp != ibQueryCompareOp::Eq)
-				Fail(j.m_on->m_line, j.m_on->m_col, _("a JOIN ON clause must be a single equality (a.x = b.y) or TRUE (cross join)"));
+			if (j.m_on->m_kind != ibQueryAstExprKind::Compare)
+				Fail(j.m_on->m_line, j.m_on->m_col, _("a JOIN ON clause must be a single comparison (a.x <op> b.y) or TRUE (cross join)"));
 			const ibBackendQueryColumn* lc = ResolveColumnSingle(sources, *j.m_on->m_lhs);
 			const ibBackendQueryColumn* rc = ResolveColumnSingle(sources, *j.m_on->m_rhs);
-			b.Join(qi, lc, rc, kind, alias);
+			b.Join(qi, lc, rc, MapJoinOp(j.m_on->m_cmp), kind, alias);   // = -> hash; <,<=,>,>=,<> -> RAM theta
 		}
 		else {
 			b.Join(qi, kind, alias);   // auto-join by reference
@@ -1122,11 +1135,11 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 				b.CrossJoin(qi, kind, alias);   // ON TRUE -> cross join (cartesian)
 			}
 			else if (j.m_on) {
-				if (j.m_on->m_kind != ibQueryAstExprKind::Compare || j.m_on->m_cmp != ibQueryCompareOp::Eq)
-					Fail(j.m_on->m_line, j.m_on->m_col, _("a JOIN ON clause must be a single equality (a.x = b.y) or TRUE (cross join)"));
+				if (j.m_on->m_kind != ibQueryAstExprKind::Compare)
+					Fail(j.m_on->m_line, j.m_on->m_col, _("a JOIN ON clause must be a single comparison (a.x <op> b.y) or TRUE (cross join)"));
 				const ibBackendQueryColumn* lc = ResolveColumnSingle(sources, *j.m_on->m_lhs);
 				const ibBackendQueryColumn* rc = ResolveColumnSingle(sources, *j.m_on->m_rhs);
-				b.Join(qi, lc, rc, kind, alias);
+				b.Join(qi, lc, rc, MapJoinOp(j.m_on->m_cmp), kind, alias);   // = -> hash; <,<=,>,>=,<> -> RAM theta
 			}
 			else {
 				b.Join(qi, kind, alias);   // auto-join by reference

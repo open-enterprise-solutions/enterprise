@@ -698,7 +698,8 @@ bool FlattenInnerChain(const ibQueryNode* node, std::vector<const ibQueryNode*>&
 {
 	if (node == nullptr) return false;
 	if (node->m_kind == ibQueryNode::Kind::Join
-		&& node->m_joinKind == ibQueryJoinKind::Inner && !node->m_cross) {
+		&& node->m_joinKind == ibQueryJoinKind::Inner && !node->m_cross
+		&& node->m_onOp == ibJoinCompareOp::Eq) {   // equi only — the smallest-first reorder hash-joins on keys
 		const ibBackendQueryColumn* onL = nullptr; const ibBackendQueryColumn* onR = nullptr;
 		if (!ResolveJoinKeys(node, onL, onR)) return false;
 		keyPairs.emplace_back(onL, onR);
@@ -840,7 +841,7 @@ ibQueryRamTable MaterialiseNode(const ibQueryNode* node, const std::vector<const
 	const ibBackendQueryColumn* onL = nullptr; const ibBackendQueryColumn* onR = nullptr;
 	ResolveJoinKeys(node, onL, onR);   // explicit or derived (the tree was validated resolvable)
 
-	return ibQueryComposer::JoinRamTables(TL, TR, onL, onR, outCols, fromLeft, node->m_joinKind);
+	return ibQueryComposer::JoinRamTables(TL, TR, onL, onR, outCols, fromLeft, node->m_joinKind, node->m_onOp);
 }
 
 // Finalise a GetColumnId-keyed combined table into the result: ORDER BY (RAM stable
@@ -1846,7 +1847,7 @@ std::vector<size_t> ibQueryComposer::PlanInnerJoinOrder(const std::vector<long>&
 ibQueryRamTable ibQueryComposer::JoinRamTables(const ibQueryRamTable& left, const ibQueryRamTable& right,
 		const ibBackendQueryColumn* onLeft, const ibBackendQueryColumn* onRight,
 		const std::vector<const ibBackendQueryColumn*>& outCols, const std::vector<bool>& fromLeft,
-		ibQueryJoinKind kind)
+		ibQueryJoinKind kind, ibJoinCompareOp onOp)
 {
 	ibQueryRamTable out;
 	for (const ibBackendQueryColumn* c : outCols)
@@ -1872,6 +1873,38 @@ ibQueryRamTable ibQueryComposer::JoinRamTables(const ibQueryRamTable& left, cons
 	// INNER: matched pairs only. LEFT/FULL: also unmatched-left. RIGHT/FULL: also unmatched-right.
 	const bool keepLeft  = (kind == ibQueryJoinKind::Left  || kind == ibQueryJoinKind::Full);
 	const bool keepRight = (kind == ibQueryJoinKind::Right || kind == ibQueryJoinKind::Full);
+
+	// THETA (non-equi) join — a nested loop over every (left, right) pair, the ON comparison evaluated per
+	// pair with SQL three-valued logic (a NULL operand is UNKNOWN -> never matches). O(n*m); the hash index
+	// below is equi-only. A keyless CROSS (onLeft/onRight == nullptr) and the equi path stay on the hash route.
+	if (onOp != ibJoinCompareOp::Eq && onLeft != nullptr && onRight != nullptr) {
+		auto thetaMatch = [](const ibValue& a, const ibValue& b, ibJoinCompareOp op) -> bool {
+			switch (op) {
+				case ibJoinCompareOp::Ne: return !a.CompareValueEQ(b);
+				case ibJoinCompareOp::Lt: return a.CompareValueLS(b) < 0;
+				case ibJoinCompareOp::Le: return a.CompareValueLE(b);
+				case ibJoinCompareOp::Gt: return a.CompareValueGT(b) > 0;
+				case ibJoinCompareOp::Ge: return a.CompareValueGE(b);
+				default:                  return a.CompareValueEQ(b);
+			}
+		};
+		std::vector<char> rMatched(static_cast<size_t>(right.RowCount()), 0);
+		for (long i = 0; i < left.RowCount(); ++i) {
+			const ibValue keyL = left.GetCell(i, onLeft->GetColumnId());
+			bool matched = false;
+			if (!RamIsNullValue(keyL))
+				for (long j = 0; j < right.RowCount(); ++j) {
+					const ibValue keyR = right.GetCell(j, onRight->GetColumnId());
+					if (RamIsNullValue(keyR)) continue;        // NULL operand -> UNKNOWN -> no match
+					if (thetaMatch(keyL, keyR, onOp)) { emit(i, j); rMatched[static_cast<size_t>(j)] = 1; matched = true; }
+				}
+			if (!matched && keepLeft) emit(i, -1);             // unmatched left (LEFT / FULL)
+		}
+		if (keepRight)
+			for (long j = 0; j < right.RowCount(); ++j)
+				if (!rMatched[static_cast<size_t>(j)]) emit(-1, j);   // unmatched right (RIGHT / FULL)
+		return out;
+	}
 
 	std::map<wxString, std::vector<long>> rightByKey;
 	for (long j = 0; j < right.RowCount(); ++j) {

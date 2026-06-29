@@ -342,6 +342,15 @@ bool ColocatableJoinTree(const ibDataQuerySpec& spec, ColocatedLeaves& leaves)
 		return innerOrLeftOnly(n->m_left.get()) && innerOrLeftOnly(n->m_right.get());
 	};
 	if (!innerOrLeftOnly(root))                return false;
+	// A non-equi (theta) join has no equi key the co-located ON can render (BuildColocatedFrom emits `=`);
+	// it folds in the RAM stitch (nested-loop). Reject here so EVERY co-located decider (join / aggregate /
+	// union all call this gate) falls back to RAM for a theta join.
+	std::function<bool(const ibQueryNode*)> allEqui = [&](const ibQueryNode* n) -> bool {
+		if (n == nullptr || n->m_kind != ibQueryNode::Kind::Join) return true;
+		if (n->m_onOp != ibJoinCompareOp::Eq) return false;
+		return allEqui(n->m_left.get()) && allEqui(n->m_right.get());
+	};
+	if (!allEqui(root))                        return false;
 	for (const ibQueryCondition& c : *spec.m_conditions) {
 		if (c.m_col == nullptr)                                return false;   // row-key cond ambiguous in a join
 		if (ColocatedOwner(leaves, c.m_col) == nullptr)        return false;

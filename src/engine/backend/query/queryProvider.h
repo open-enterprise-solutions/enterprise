@@ -124,13 +124,15 @@ public:
 	                                             const std::vector<ibDataQueryBuilder::AggregateItem>& aggregates,
 	                                             ibDatabaseConnectionHolder* holder,
 	                                             const ibBackendQueryable* source);
-	// Inner-join two materialised tables on (onLeft == onRight), emitting outCols (each
-	// tagged by side in fromLeft). The RAM JOIN core, pure (no DB) — unit-testable.
+	// Join two materialised tables on (onLeft <onOp> onRight), emitting outCols (each tagged by side in
+	// fromLeft). onOp == Eq is the hash-join fast path; any other op is a nested-loop theta join. The RAM
+	// JOIN core, pure (no DB) — unit-testable.
 	static ibQueryRamTable   JoinRamTables(const ibQueryRamTable& left, const ibQueryRamTable& right,
 	                                       const ibBackendQueryColumn* onLeft, const ibBackendQueryColumn* onRight,
 	                                       const std::vector<const ibBackendQueryColumn*>& outCols,
 	                                       const std::vector<bool>& fromLeft,
-	                                       ibQueryJoinKind kind = ibQueryJoinKind::Inner);   // Inner / Left / Right / Full
+	                                       ibQueryJoinKind kind = ibQueryJoinKind::Inner,    // Inner / Left / Right / Full
+	                                       ibJoinCompareOp onOp = ibJoinCompareOp::Eq);      // Eq = hash; else theta
 	// Greedy smallest-first join ORDER for a flattened pure-INNER chain. Inputs: each
 	// unit's EXACT materialised row count + the join edges (unit-index pairs, one per
 	// inner Join node). order[0] starts; every next unit is edge-connected to the

@@ -199,8 +199,21 @@
 > `SELECT TOP n … TOTALS …` no longer fails. TOP caps the DETAIL rows the fold runs over (the first n,
 > 0 = all), applied as the page count on the totals terminal read — the subtotal tree itself is not
 > row-limited (a subtotal is not a detail row). The prior `Fail("TOP with TOTALS is not yet supported")` is gone.
-> Still open: a non-equi / theta JOIN (`ON a.x > b.y`) — needs an ON-expression on the join node + a RAM
-> nested-loop (today's stitch is a hash-join on equi keys) + the co-located SQL render; its own arc.
+>
+> ### Update 2026-06-28 (3) — non-equi / theta JOIN (landed, builds clean Debug|x86, launcher pending)
+>
+> `INNER JOIN … ON a.x > b.y` (and `>= < <= <>`) executes. The L4 join ON, restricted to a single
+> comparison `leftCol <op> rightCol`, no longer needs the operator to be `=`. The join node carries an L3
+> `ibJoinCompareOp m_onOp` (independent of the L4 AST's `ibQueryCompareOp` — L3 stays L4-agnostic); the
+> lowering maps the AST op via `MapJoinOp`. `Eq` keeps the **hash-join** fast path; any inequality runs a
+> **RAM nested-loop theta** in `JoinRamTables` (per-pair compare via the same `CompareValue*` as `RamEvalLeaf`,
+> SQL three-valued NULL = never matches; OUTER keeps unmatched rows). `FlattenInnerChain` excludes non-equi
+> from the smallest-first equi-reorder, and `ColocatableJoinTree` rejects a theta join so EVERY co-located
+> decider (join / aggregate / union) folds it in the RAM stitch — no silent `=` render. TOTALS over a theta
+> JOIN rides it too (the multi-source totals gate already accepts any keyed join). Still open as a perf
+> follow-up: a co-located **server-side** SQL non-equi render (today a theta join always RAM-folds — correct
+> everywhere, but not pushed down on the same-DB co-located case); the ON is column-to-column only (a computed
+> `a.x + 1 > b.y` honest-fails in `ResolveColumnSingle`).
 >
 > ### Update 2026-06-11 — L4 optimizer pass (landed, 420/420 green, runtime-validated)
 >

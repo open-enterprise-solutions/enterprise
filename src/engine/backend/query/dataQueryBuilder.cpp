@@ -49,13 +49,21 @@ ibDataQueryBuilder& ibDataQueryBuilder::Join(const ibBackendQueryable* queryable
 	const ibBackendQueryColumn* onLeft, const ibBackendQueryColumn* onRight,
 	ibQueryJoinKind kind, const wxString& alias)
 {
-	// Left-deep accumulation: (prior tree) ⋈ new source.
+	return Join(queryable, onLeft, onRight, ibJoinCompareOp::Eq, kind, alias);   // equality -> hash-join fast path
+}
+
+ibDataQueryBuilder& ibDataQueryBuilder::Join(const ibBackendQueryable* queryable,
+	const ibBackendQueryColumn* onLeft, const ibBackendQueryColumn* onRight,
+	ibJoinCompareOp onOp, ibQueryJoinKind kind, const wxString& alias)
+{
+	// Left-deep accumulation: (prior tree) ⋈ new source. onOp != Eq marks a theta join (RAM nested-loop).
 	auto node = std::make_shared<ibQueryNode>();
 	node->m_kind     = ibQueryNode::Kind::Join;
 	node->m_left     = m_root;
 	node->m_right    = ibQueryNode::Source(queryable, alias);
 	node->m_onLeft   = onLeft;
 	node->m_onRight  = onRight;
+	node->m_onOp     = onOp;
 	node->m_joinKind = kind;
 	m_root = node;
 	return *this;
