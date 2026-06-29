@@ -280,10 +280,16 @@
 > - **`ibDataQueryBuilder::JoinNode`** — the per-overload node-building dance (3 bodies) folded into one
 >   private point; the public `Join` / `CrossJoin` overloads are thin adapters that assemble an `ibJoinOn`.
 >
-> Evaluated but DEFERRED (cost > benefit on inspection, not done): bundling `JoinRamTables`' ON params into
-> `ibJoinOn` (awkward — the core takes resolved keys separately), an `ibJoinOn` kind-enum, and folding the
-> parallel `m_groupBy`/`m_groupPaths` + `ibAggregateItem` col/path/expr — most readers touch only ONE field,
-> so consolidating churns ~14 sites for a single sync-risk site. The duplication that was worth removing is
+> Follow-up (landed): **`JoinRamTables`** now takes the ON op + computed exprs as one `const ibJoinOn& on`
+> (the resolved keys still ride `onLeft`/`onRight`), and **`RamTableOf` / `AppendRowByCols`** fold the
+> structure-init + row-copy idiom that `ibComputedProvider::ExecuteRead` repeated three times (DISTINCT / sort
+> / limit).
+>
+> Evaluated and DELIBERATELY NOT done (churn >> benefit on implementation inspection): an `ibJoinOn` kind-enum
+> (pure gilding — the field inference already works, an enum adds zero behaviour/safety), and folding the
+> parallel `m_groupBy`/`m_groupPaths` + `ibAggregateItem` `m_col/m_path/m_expr` into structs — the latter needs
+> ~15-20 context-sensitive edits (a blind `.m_col` rename is unsafe: `.m_col` lives on ibQueryCondition /
+> HavingItem / sort items too) for a single contained sync-risk site. The duplication worth removing is
 > removed; the rest is left as-is.
 >
 > ### Update 2026-06-11 — L4 optimizer pass (landed, 420/420 green, runtime-validated)

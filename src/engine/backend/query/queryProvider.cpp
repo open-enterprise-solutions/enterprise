@@ -30,6 +30,25 @@
 #include <algorithm>                                                  // stable_sort — RAM ORDER BY over a composed result
 #include <set>                                                        // DedupeRows — seen-row identity keys (plain UNION)
 
+namespace {
+// Build an empty RAM table with the given metadata columns (id / name / type), and append a src row to dst
+// copying those columns by id — the structure-init + row-copy idiom the RAM cores repeat. (Pure helpers.)
+ibQueryRamTable RamTableOf(const std::vector<const ibBackendQueryColumn*>& cols)
+{
+	ibQueryRamTable t;
+	for (const ibBackendQueryColumn* c : cols)
+		if (c != nullptr) t.AddColumn(c->GetColumnId(), c->GetName(), c->GetTypeDesc());
+	return t;
+}
+void AppendRowByCols(const ibQueryRamTable& src, long srcRow, ibQueryRamTable& dst,
+                     const std::vector<const ibBackendQueryColumn*>& cols)
+{
+	const long r = dst.AppendRow();
+	for (const ibBackendQueryColumn* c : cols)
+		if (c != nullptr) dst.SetCell(r, c->GetColumnId(), src.GetCell(srcRow, c->GetColumnId()));
+}
+} // namespace
+
 // ibComputedProvider — the RAM-computed virtual table (register slice / balance /
 // turnover / subquery). Stateless: computes the rows from the spec, no physical scan, no
 // L2. The flat conditions push into ComputeRows; the boolean predicate TREE, the ORDER BY
@@ -42,21 +61,18 @@ ibDataQueryResult ibComputedProvider::ExecuteRead(const ibDataQuerySpec& spec, c
 	if (spec.m_predicate)
 		rows = ibQueryComposer::FilterRows(rows, spec.m_predicate.get());
 
-	// SELECT DISTINCT over a computed source (subquery / slice) — dedup by the output columns while keeping
+	// SELECT DISTINCT over a computed source (subquery / slice) -- dedup by the output columns while keeping
 	// ALL columns (the sort below may key on one not in the select list). First occurrence wins.
+	const std::vector<const ibBackendQueryColumn*> cols = spec.m_queryable->GetColumns();
 	if (spec.m_distinct && spec.m_selectCols != nullptr && !spec.m_selectCols->empty()) {
-		ibQueryRamTable deduped;
-		for (const ibBackendQueryColumn* c : spec.m_queryable->GetColumns())
-			if (c != nullptr) deduped.AddColumn(c->GetColumnId(), c->GetName(), c->GetTypeDesc());
+		ibQueryRamTable deduped = RamTableOf(cols);
 		std::set<wxString> seen;
 		for (long i = 0; i < rows.RowCount(); ++i) {
 			wxString key;
 			for (const auto& sc : *spec.m_selectCols)
 				key += rows.GetCell(i, sc.first->GetColumnId()).GetHashKey() + wxT("\x1f");
 			if (!seen.insert(key).second) continue;
-			const long r = deduped.AppendRow();
-			for (const ibBackendQueryColumn* c : spec.m_queryable->GetColumns())
-				if (c != nullptr) deduped.SetCell(r, c->GetColumnId(), rows.GetCell(i, c->GetColumnId()));
+			AppendRowByCols(rows, i, deduped, cols);
 		}
 		rows = std::move(deduped);
 	}
@@ -74,28 +90,17 @@ ibDataQueryResult ibComputedProvider::ExecuteRead(const ibDataQuerySpec& spec, c
 			}
 			return false;
 		});
-		ibQueryRamTable sorted;
-		for (const ibBackendQueryColumn* c : spec.m_queryable->GetColumns())
-			if (c != nullptr) sorted.AddColumn(c->GetColumnId(), c->GetName(), c->GetTypeDesc());
+		ibQueryRamTable sorted = RamTableOf(cols);
 		const long limit = (req.m_count > 0 && req.m_count < rows.RowCount()) ? req.m_count : rows.RowCount();
-		for (long oi = 0; oi < limit; ++oi) {
-			const long i = order[static_cast<size_t>(oi)];
-			const long r = sorted.AppendRow();
-			for (const ibBackendQueryColumn* c : spec.m_queryable->GetColumns())
-				if (c != nullptr) sorted.SetCell(r, c->GetColumnId(), rows.GetCell(i, c->GetColumnId()));
-		}
+		for (long oi = 0; oi < limit; ++oi)
+			AppendRowByCols(rows, order[static_cast<size_t>(oi)], sorted, cols);
 		return ibDataQueryResult(std::move(sorted), spec.m_queryable);
 	}
 
 	if (req.m_count > 0 && req.m_count < rows.RowCount()) {
-		ibQueryRamTable limited;
-		for (const ibBackendQueryColumn* c : spec.m_queryable->GetColumns())
-			if (c != nullptr) limited.AddColumn(c->GetColumnId(), c->GetName(), c->GetTypeDesc());
-		for (long i = 0; i < req.m_count; ++i) {
-			const long r = limited.AppendRow();
-			for (const ibBackendQueryColumn* c : spec.m_queryable->GetColumns())
-				if (c != nullptr) limited.SetCell(r, c->GetColumnId(), rows.GetCell(i, c->GetColumnId()));
-		}
+		ibQueryRamTable limited = RamTableOf(cols);
+		for (long i = 0; i < req.m_count; ++i)
+			AppendRowByCols(rows, i, limited, cols);
 		return ibDataQueryResult(std::move(limited), spec.m_queryable);
 	}
 
@@ -860,8 +865,7 @@ ibQueryRamTable MaterialiseNode(const ibQueryNode* node, const std::vector<const
 	const ibBackendQueryColumn* onL = nullptr; const ibBackendQueryColumn* onR = nullptr;
 	ResolveJoinKeys(node, onL, onR);   // explicit or derived (the tree was validated resolvable)
 
-	return ibQueryComposer::JoinRamTables(TL, TR, onL, onR, outCols, fromLeft, node->m_joinKind, node->m_on.m_op,
-	                                      node->m_on.m_exprL.get(), node->m_on.m_exprR.get());
+	return ibQueryComposer::JoinRamTables(TL, TR, onL, onR, outCols, fromLeft, node->m_joinKind, node->m_on);
 }
 
 // Finalise a GetColumnId-keyed combined table into the result: ORDER BY (RAM stable
@@ -1886,7 +1890,7 @@ std::vector<size_t> ibQueryComposer::PlanInnerJoinOrder(const std::vector<long>&
 ibQueryRamTable ibQueryComposer::JoinRamTables(const ibQueryRamTable& left, const ibQueryRamTable& right,
 		const ibBackendQueryColumn* onLeft, const ibBackendQueryColumn* onRight,
 		const std::vector<const ibBackendQueryColumn*>& outCols, const std::vector<bool>& fromLeft,
-		ibQueryJoinKind kind, ibJoinCompareOp onOp, const ibQueryColumnExpr* onExprL, const ibQueryColumnExpr* onExprR)
+		ibQueryJoinKind kind, const ibJoinOn& on)
 {
 	ibQueryRamTable out;
 	for (const ibBackendQueryColumn* c : outCols)
@@ -1918,8 +1922,8 @@ ibQueryRamTable ibQueryComposer::JoinRamTables(const ibQueryRamTable& left, cons
 	// Taken for a non-equi comparison on key columns OR a COMPUTED ON (a.x+1 <op> b.y): each side is then an
 	// expression evaluated against ITS OWN table per row (lhs over left, rhs over right). A keyless CROSS and a
 	// plain-equi key join stay on the hash route.
-	const bool computedOn = (onExprL != nullptr && onExprR != nullptr);
-	if (computedOn || (onOp != ibJoinCompareOp::Eq && onLeft != nullptr && onRight != nullptr)) {
+	const bool computedOn = (on.m_exprL != nullptr && on.m_exprR != nullptr);
+	if (computedOn || (on.m_op != ibJoinCompareOp::Eq && onLeft != nullptr && onRight != nullptr)) {
 		auto thetaMatch = [](const ibValue& a, const ibValue& b, ibJoinCompareOp op) -> bool {
 			switch (op) {
 				case ibJoinCompareOp::Ne: return !a.CompareValueEQ(b);
@@ -1932,13 +1936,13 @@ ibQueryRamTable ibQueryComposer::JoinRamTables(const ibQueryRamTable& left, cons
 		};
 		std::vector<char> rMatched(static_cast<size_t>(right.RowCount()), 0);
 		for (long i = 0; i < left.RowCount(); ++i) {
-			const ibValue keyL = onExprL ? EvalColumnExprRow(onExprL, left, i) : left.GetCell(i, onLeft->GetColumnId());
+			const ibValue keyL = on.m_exprL ? EvalColumnExprRow(on.m_exprL.get(), left, i) : left.GetCell(i, onLeft->GetColumnId());
 			bool matched = false;
 			if (!RamIsNullValue(keyL))
 				for (long j = 0; j < right.RowCount(); ++j) {
-					const ibValue keyR = onExprR ? EvalColumnExprRow(onExprR, right, j) : right.GetCell(j, onRight->GetColumnId());
+					const ibValue keyR = on.m_exprR ? EvalColumnExprRow(on.m_exprR.get(), right, j) : right.GetCell(j, onRight->GetColumnId());
 					if (RamIsNullValue(keyR)) continue;        // NULL operand -> UNKNOWN -> no match
-					if (thetaMatch(keyL, keyR, onOp)) { emit(i, j); rMatched[static_cast<size_t>(j)] = 1; matched = true; }
+					if (thetaMatch(keyL, keyR, on.m_op)) { emit(i, j); rMatched[static_cast<size_t>(j)] = 1; matched = true; }
 				}
 			if (!matched && keepLeft) emit(i, -1);             // unmatched left (LEFT / FULL)
 		}

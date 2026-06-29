@@ -131,10 +131,8 @@ public:
 	                                       const ibBackendQueryColumn* onLeft, const ibBackendQueryColumn* onRight,
 	                                       const std::vector<const ibBackendQueryColumn*>& outCols,
 	                                       const std::vector<bool>& fromLeft,
-	                                       ibQueryJoinKind kind = ibQueryJoinKind::Inner,    // Inner / Left / Right / Full
-	                                       ibJoinCompareOp onOp = ibJoinCompareOp::Eq,       // Eq = hash; else theta
-	                                       const ibQueryColumnExpr* onExprL = nullptr,       // computed ON: eval per pair (presence
-	                                       const ibQueryColumnExpr* onExprR = nullptr);      // -> theta nested-loop over both sides)
+	                                       ibQueryJoinKind kind = ibQueryJoinKind::Inner,   // Inner / Left / Right / Full
+	                                       const ibJoinOn& on = {});                        // ON op + computed exprs (keys: onLeft/onRight)
 	// Greedy smallest-first join ORDER for a flattened pure-INNER chain. Inputs: each
 	// unit's EXACT materialised row count + the join edges (unit-index pairs, one per
 	// inner Join node). order[0] starts; every next unit is edge-connected to the
