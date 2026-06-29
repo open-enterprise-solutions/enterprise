@@ -111,7 +111,7 @@ std::shared_ptr<ibQueryNode> Join2(const ibBackendQueryable* l, const ibBackendQ
 	auto root = std::make_shared<ibQueryNode>();
 	root->m_kind = ibQueryNode::Kind::Join;
 	root->m_left = ibQueryNode::Source(l); root->m_right = ibQueryNode::Source(r);
-	root->m_onLeft = onL; root->m_onRight = onR;
+	root->m_on.m_colL = onL; root->m_on.m_colR = onR;
 	return root;
 }
 
@@ -258,6 +258,69 @@ TEST(QueryComposerCore, JoinRamTables_NullKeyValueDoesNotMatch)
 	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, &lk, &rk, outc, side, JK::Left ).RowCount(), 3);   // + NULL-key left, unmatched
 	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, &lk, &rk, outc, side, JK::Right).RowCount(), 3);   // + NULL-key right, unmatched
 	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, &lk, &rk, outc, side, JK::Full ).RowCount(), 4);   // matched 2 + both NULLs
+}
+
+// ===========================================================================
+// THETA JOIN — JoinRamTables with a NON-EQUI op (ibJoinOn::m_op): a nested loop
+// over every (L,R) pair compared by the op; a NULL operand never matches. The
+// equi tests above never exercise this branch (the D feature).
+// ===========================================================================
+
+TEST(QueryComposerCore, JoinRamTables_ThetaNonEqui)
+{
+	const ibMetaID LVAL = 1, RTHR = 2;
+	TestCol lval(wxT("lval"), LVAL), rthr(wxT("rthr"), RTHR);
+
+	ibQueryRamTable left;  left.AddColumn(LVAL, wxT("lval"), kNoType);
+	for (long v : { 10, 20, 30 }) { const long r = left.AppendRow();  left.SetCell(r, LVAL, ibValue(ibNumber(v))); }
+	ibQueryRamTable right; right.AddColumn(RTHR, wxT("rthr"), kNoType);
+	for (long v : { 15, 25 })     { const long r = right.AppendRow(); right.SetCell(r, RTHR, ibValue(ibNumber(v))); }
+
+	const std::vector<const ibBackendQueryColumn*> outc = { &lval, &rthr };
+	const std::vector<bool> side = { true, false };
+	auto theta = [&](ibJoinCompareOp op) {
+		ibJoinOn on; on.m_op = op;
+		return ibQueryComposer::JoinRamTables(left, right, &lval, &rthr, outc, side, ibQueryJoinKind::Inner, on).RowCount();
+	};
+	EXPECT_EQ(theta(ibJoinCompareOp::Gt), 3);   // 20>15 | 30>15 | 30>25
+	EXPECT_EQ(theta(ibJoinCompareOp::Ge), 3);   // same (no L equals a threshold)
+	EXPECT_EQ(theta(ibJoinCompareOp::Lt), 3);   // 10<15 | 10<25 | 20<25
+	EXPECT_EQ(theta(ibJoinCompareOp::Ne), 6);   // all distinct -> every pair (3x2)
+}
+
+TEST(QueryComposerCore, JoinRamTables_ThetaOuterKeepsUnmatched)
+{
+	const ibMetaID LVAL = 1, RTHR = 2;
+	TestCol lval(wxT("lval"), LVAL), rthr(wxT("rthr"), RTHR);
+	ibQueryRamTable left;  left.AddColumn(LVAL, wxT("lval"), kNoType);
+	for (long v : { 5, 30 })  { const long r = left.AppendRow();  left.SetCell(r, LVAL, ibValue(ibNumber(v))); }   // 5 > nothing
+	ibQueryRamTable right; right.AddColumn(RTHR, wxT("rthr"), kNoType);
+	for (long v : { 15, 25 }) { const long r = right.AppendRow(); right.SetCell(r, RTHR, ibValue(ibNumber(v))); }
+
+	const std::vector<const ibBackendQueryColumn*> outc = { &lval, &rthr };
+	const std::vector<bool> side = { true, false };
+	ibJoinOn gt; gt.m_op = ibJoinCompareOp::Gt;
+	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, &lval, &rthr, outc, side, ibQueryJoinKind::Inner, gt).RowCount(), 2);  // (30,15)(30,25)
+	EXPECT_EQ(ibQueryComposer::JoinRamTables(left, right, &lval, &rthr, outc, side, ibQueryJoinKind::Left,  gt).RowCount(), 3);  // + unmatched 5
+}
+
+// ===========================================================================
+// RAM DISTINCT — DedupeRows folds duplicate output rows by cell identity
+// (first occurrence wins, order preserved). The #6 SELECT DISTINCT core.
+// ===========================================================================
+
+TEST(QueryComposerCore, DedupeRows_FirstOfEachInOrder)
+{
+	const ibMetaID REGION = 1;
+	TestCol region(wxT("region"), REGION);
+	ibQueryRamTable t; t.AddColumn(REGION, wxT("region"), kNoType);
+	for (const wxChar* v : { wxT("North"), wxT("South"), wxT("North"), wxT("North"), wxT("South") }) {
+		const long r = t.AppendRow(); t.SetCell(r, REGION, ibValue(wxString(v)));
+	}
+	const ibQueryRamTable out = ibQueryComposer::DedupeRows(t, { &region });
+	ASSERT_EQ(out.RowCount(), 2);
+	EXPECT_EQ(out.GetCell(0, REGION).GetString().ToStdString(), "North");
+	EXPECT_EQ(out.GetCell(1, REGION).GetString().ToStdString(), "South");
 }
 
 // ===========================================================================
