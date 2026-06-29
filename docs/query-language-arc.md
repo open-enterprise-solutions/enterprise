@@ -231,6 +231,19 @@
 > Edge: a composite (multi-type) reference segment fails inside the expand (not a single-target reference);
 > the alias must be explicit (`AS`).
 >
+> ### Update 2026-06-28 (5) — DISTINCT over the stitch + dot-walk aggregate / GROUP BY over a JOIN (landed, builds clean Debug|x86, launcher pending)
+>
+> Two remaining functional edges closed:
+> - **SELECT DISTINCT over a multi-source compose** — the single-DB path renders SQL `DISTINCT`, but the RAM
+>   stitch had none. `ProjectToAliases` now dedups by the FULL output row (selectCols + computed exprs) BEFORE
+>   the page limit (so it yields up to `limit` DISTINCT rows); `ibComputedProvider::ExecuteRead` dedups by the
+>   output columns while keeping all columns (the sort may key on one outside the select list). UNION DISTINCT
+>   stays its own fold at the UNION operator.
+> - **dot-walk in an aggregate input (`SUM(c.Owner.Weight)`) and a GROUP BY key (`c.Owner.Region`) over a JOIN**
+>   — reuse `ExpandDotWalkJoins` (as the TOTALS dimension does): expand the reference path into LEFT-join leaves
+>   and aggregate / group by the qualified leaf, shared dedup across the projection, the aggregate input and the
+>   GROUP BY clause. A computed source (subquery / slice) still honest-fails (no DB table to ref-join).
+>
 > ### Update 2026-06-11 — L4 optimizer pass (landed, 420/420 green, runtime-validated)
 >
 > The optimizer ladder's first two rungs are in the tree. The stance stays: **no cost-based

@@ -42,6 +42,25 @@ ibDataQueryResult ibComputedProvider::ExecuteRead(const ibDataQuerySpec& spec, c
 	if (spec.m_predicate)
 		rows = ibQueryComposer::FilterRows(rows, spec.m_predicate.get());
 
+	// SELECT DISTINCT over a computed source (subquery / slice) — dedup by the output columns while keeping
+	// ALL columns (the sort below may key on one not in the select list). First occurrence wins.
+	if (spec.m_distinct && spec.m_selectCols != nullptr && !spec.m_selectCols->empty()) {
+		ibQueryRamTable deduped;
+		for (const ibBackendQueryColumn* c : spec.m_queryable->GetColumns())
+			if (c != nullptr) deduped.AddColumn(c->GetColumnId(), c->GetName(), c->GetTypeDesc());
+		std::set<wxString> seen;
+		for (long i = 0; i < rows.RowCount(); ++i) {
+			wxString key;
+			for (const auto& sc : *spec.m_selectCols)
+				key += rows.GetCell(i, sc.first->GetColumnId()).GetHashKey() + wxT("\x1f");
+			if (!seen.insert(key).second) continue;
+			const long r = deduped.AppendRow();
+			for (const ibBackendQueryColumn* c : spec.m_queryable->GetColumns())
+				if (c != nullptr) deduped.SetCell(r, c->GetColumnId(), rows.GetCell(i, c->GetColumnId()));
+		}
+		rows = std::move(deduped);
+	}
+
 	if (spec.m_sorts != nullptr && !spec.m_sorts->empty()) {
 		std::vector<long> order(static_cast<size_t>(rows.RowCount()));
 		for (long i = 0; i < rows.RowCount(); ++i) order[static_cast<size_t>(i)] = i;
@@ -880,14 +899,30 @@ ibDataQueryResult ProjectToAliases(const ibQueryRamTable& TC, const ibDataQueryS
 		TO.AddColumn(seq, sc.m_alias, ibTypeDescription());
 		exprIds.push_back(seq++);
 	}
+	// SELECT DISTINCT over the RAM stitch — dedup by the FULL output row (selectCols + computed exprs),
+	// first occurrence wins, BEFORE the page limit so it yields up to `limit` DISTINCT rows. The single-DB
+	// path renders SQL DISTINCT; the multi-source stitch has none, so it folds here. (UNION DISTINCT is a
+	// separate fold at the UNION operator; this is DISTINCT over a JOIN / computed compose.)
 	const long limit = (page.m_count > 0) ? page.m_count : rows;
-	for (long oi = 0; oi < rows && oi < limit; ++oi) {
+	std::set<wxString> seenDistinct;
+	long emitted = 0;
+	for (long oi = 0; oi < rows && emitted < limit; ++oi) {
 		const long i = order[static_cast<size_t>(oi)];
+		std::vector<ibValue> outCells;
+		outCells.reserve(spec.m_selectCols->size() + exprs.size());
+		for (const auto& sc : *spec.m_selectCols)
+			outCells.push_back(RamCell(TC, i, sc.first));
+		for (const ibQueryColumnSelect& sc : exprs)
+			outCells.push_back(EvalColumnExprRow(sc.m_expr.get(), TC, i));
+		if (spec.m_distinct) {
+			wxString key;
+			for (const ibValue& v : outCells) key += v.GetHashKey() + wxT("\x1f");
+			if (!seenDistinct.insert(key).second) continue;   // duplicate output row -> drop
+		}
 		const long r = TO.AppendRow();
-		for (size_t k = 0; k < spec.m_selectCols->size(); ++k)
-			TO.SetCell(r, outIds[k], RamCell(TC, i, (*spec.m_selectCols)[k].first));
-		for (size_t k = 0; k < exprs.size(); ++k)
-			TO.SetCell(r, exprIds[k], EvalColumnExprRow(exprs[k].m_expr.get(), TC, i));
+		for (size_t k = 0; k < outIds.size();  ++k) TO.SetCell(r, outIds[k],  outCells[k]);
+		for (size_t k = 0; k < exprIds.size(); ++k) TO.SetCell(r, exprIds[k], outCells[outIds.size() + k]);
+		++emitted;
 	}
 	return ibDataQueryResult(std::move(TO), spec.m_queryable);
 }

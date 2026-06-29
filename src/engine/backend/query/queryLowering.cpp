@@ -743,9 +743,17 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 				}
 				else {
 					const std::vector<const ibBackendQueryColumn*> argCols = ResolvePath(sources, *e.m_arg);
-					if (argCols.size() > 1 && (multiSource || computedPrimary))
-						Fail(e.m_line, e.m_col, _("a dot-walk aggregate input over a JOIN / computed source is not yet supported"));
-					b.Aggregate(AggFn(e.m_func), argCols, alias);
+					if (argCols.size() > 1 && computedPrimary)
+						Fail(e.m_line, e.m_col, _("a dot-walk aggregate input over a computed source is not yet supported"));
+					if (argCols.size() > 1 && multiSource) {
+						// dot-walk aggregate input over a JOIN — expand the ref path into LEFT-join leaves and
+						// aggregate the qualified leaf (same mechanism as the TOTALS dimension / projection).
+						const ibBackendQueryColumn* dwLeaf =
+							ExpandDotWalkJoins(b, RootForPath(sources, *e.m_arg), argCols, dwJoined, dwAliasSeq, *e.m_arg);
+						b.Aggregate(AggFn(e.m_func), dwLeaf, alias);
+					}
+					else
+						b.Aggregate(AggFn(e.m_func), argCols, alias);
 				}
 				oc.m_alias = alias;
 				oc.m_byAlias = true;
@@ -756,9 +764,11 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 					// AGGREGATE mode: a projected column is a GROUP BY key (a non-aggregate output must be
 					// grouped). The provider GROUPS BY + projects it (plain or dot-walk leaf) and the result is
 					// read back by the leaf column — NOT via SelectPath (the read-path machinery).
-					if (pathCols.size() > 1 && multiSource)
-						Fail(e.m_line, e.m_col, _("a dot-walk GROUP BY column over a JOIN is not yet supported"));
-					oc.m_col = pathCols.back();
+					if (pathCols.size() > 1 && computedPrimary)
+						Fail(e.m_line, e.m_col, _("a dot-walk GROUP BY column over a computed source is not yet supported"));
+					oc.m_col = (pathCols.size() > 1 && multiSource)
+						? ExpandDotWalkJoins(b, RootForPath(sources, e), pathCols, dwJoined, dwAliasSeq, e)   // JOIN -> expand ref path
+						: pathCols.back();
 				}
 				else if (pathCols.size() == 1 && !explicitProjection) {
 					oc.m_col = pathCols[0];
@@ -820,9 +830,12 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 	// routes size-1 to a plain key; the provider joins a longer path (single source only — JOIN is A1).
 	for (const ibQueryAstExprPtr& g : ast.m_groupBy) {
 		const std::vector<const ibBackendQueryColumn*> gcols = ResolvePath(sources, *g);
-		if (gcols.size() > 1 && (multiSource || computedPrimary))
-			Fail(g->m_line, g->m_col, _("a dot-walk GROUP BY over a JOIN / computed source is not yet supported"));
-		b.GroupBy(gcols);
+		if (gcols.size() > 1 && computedPrimary)
+			Fail(g->m_line, g->m_col, _("a dot-walk GROUP BY over a computed source is not yet supported"));
+		if (gcols.size() > 1 && multiSource)
+			b.GroupBy(ExpandDotWalkJoins(b, RootForPath(sources, *g), gcols, dwJoined, dwAliasSeq, *g));   // JOIN -> expand ref path
+		else
+			b.GroupBy(gcols);
 	}
 
 	// HAVING — aggregate <op> value (ordered ops only; the door's filter-op set has no = / <>)
