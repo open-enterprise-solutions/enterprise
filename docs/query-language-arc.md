@@ -267,6 +267,25 @@
 > unique by construction, so only user aliases collide. Behaviour change: a query that relied on the implicit
 > first-source pick now errors (correct SQL semantics).
 >
+> ### Update 2026-06-28 (8) — L3/L4 unification pass (refactor, no behavior change, builds clean Debug|x86)
+>
+> After the JOIN / TOTALS feature run, a refactor sweep folded the accumulated duplication:
+> - **`BuildSourceTree`** (queryLowering anon ns) — the FROM + JOIN source-tree build (named ref-join / cross /
+>   comparison ON / computed ON / auto-join) was duplicated nearly line-for-line in `ExecuteImpl` and
+>   `ExecuteTotals`; now ONE helper both call (~85 lines gone — a new JOIN feature lands in one place).
+> - **`CanColocateBase`** (dbTableProvider) — the shared co-location preconditions (colocatable join tree, no
+>   dot-walk / key-in, single-field keys) factored out of `CanColocateJoin` / `CanColocateAggregate`.
+> - **`ibJoinOn`** (dataQueryBuilder.h) — the six scattered join-ON fields on `ibQueryNode`
+>   (`m_onLeft/m_onRight/m_onOp/m_onExprL/m_onExprR/m_cross`) grouped into one cohesive struct `m_on`.
+> - **`ibDataQueryBuilder::JoinNode`** — the per-overload node-building dance (3 bodies) folded into one
+>   private point; the public `Join` / `CrossJoin` overloads are thin adapters that assemble an `ibJoinOn`.
+>
+> Evaluated but DEFERRED (cost > benefit on inspection, not done): bundling `JoinRamTables`' ON params into
+> `ibJoinOn` (awkward — the core takes resolved keys separately), an `ibJoinOn` kind-enum, and folding the
+> parallel `m_groupBy`/`m_groupPaths` + `ibAggregateItem` col/path/expr — most readers touch only ONE field,
+> so consolidating churns ~14 sites for a single sync-risk site. The duplication that was worth removing is
+> removed; the rest is left as-is.
+>
 > ### Update 2026-06-11 — L4 optimizer pass (landed, 420/420 green, runtime-validated)
 >
 > The optimizer ladder's first two rungs are in the tree. The stance stays: **no cost-based

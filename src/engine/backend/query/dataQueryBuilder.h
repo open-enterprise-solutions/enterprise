@@ -219,6 +219,19 @@ enum class ibQueryJoinKind { Inner, Left, Right, Full };   // Right / Full -> RA
 // join always folds in the RAM stitch (the co-located SQL path rejects it).
 enum class ibJoinCompareOp { Eq, Ne, Lt, Le, Gt, Ge };
 
+// A JOIN's ON condition — grouped (was six scattered fields on ibQueryNode) so the mutually-exclusive ways to
+// express it live in one cohesive place. By convention: m_cross = cartesian (ON TRUE); else m_exprL/m_exprR
+// set = a COMPUTED theta join (a.x+1 <op> b.y), always RAM nested-loop; else m_colL/m_colR = explicit key
+// columns (Eq -> hash, other m_op -> theta); all null and not cross = an auto-join by reference (dot-walk style).
+struct ibJoinOn {
+	const ibBackendQueryColumn*  m_colL  = nullptr;   // explicit key columns (both null + !cross = auto-join by reference)
+	const ibBackendQueryColumn*  m_colR  = nullptr;
+	ibJoinCompareOp              m_op    = ibJoinCompareOp::Eq;   // Eq -> hash; non-Eq -> RAM nested-loop theta
+	ibQueryColumnExprPtr         m_exprL;                         // computed ON: LEFT-side expr (presence -> theta)
+	ibQueryColumnExprPtr         m_exprR;                         // computed ON: RIGHT-side expr
+	bool                         m_cross = false;                 // CROSS / ON TRUE — keyless cartesian (RAM only)
+};
+
 // (ibSelectKind / ibDimensionKind — defined at namespace scope above, before ibDataQueryResult.)
 
 // ==========================================================================
@@ -243,13 +256,8 @@ struct ibQueryNode
 	// --- Join (horizontal): m_left ⋈ m_right ----------------------------
 	std::shared_ptr<ibQueryNode> m_left;
 	std::shared_ptr<ibQueryNode> m_right;
-	const ibBackendQueryColumn*  m_onLeft  = nullptr;  // explicit on-cols; both null = auto by reference (dot-walk style)
-	const ibBackendQueryColumn*  m_onRight = nullptr;
 	ibQueryJoinKind              m_joinKind = ibQueryJoinKind::Inner;
-	bool                         m_cross    = false;   // CROSS / ON TRUE — no keys, cartesian product (RAM only)
-	ibJoinCompareOp              m_onOp     = ibJoinCompareOp::Eq;   // ON comparison; non-Eq -> RAM nested-loop theta
-	ibQueryColumnExprPtr         m_onExprL;                         // computed ON: LEFT-side expr (a.x+1), evaluated per pair
-	ibQueryColumnExprPtr         m_onExprR;                         // computed ON: RIGHT-side expr (b.y); presence -> theta nested-loop
+	ibJoinOn                     m_on;       // the ON condition: keys / op / computed exprs / cross — see ibJoinOn
 
 	// --- Union (vertical): N branches of one shape ----------------------
 	std::vector<std::shared_ptr<ibQueryNode>> m_parts;
@@ -524,6 +532,11 @@ public:
 	enum class WriteKind { Insert, Upsert, Delete };
 
 private:
+	// The ONE point that appends a left-deep JOIN node carrying `on`; the public Join / CrossJoin overloads
+	// assemble an ibJoinOn and route here (no per-overload node-building dance).
+	ibDataQueryBuilder& JoinNode(const ibBackendQueryable* queryable, ibQueryJoinKind kind,
+	                             const wxString& alias, const ibJoinOn& on);
+
 	// The read lowering (IR build + anchor binds) lives in the DB provider now
 	// (ibDbTableProvider in the .cpp), built from this state per Select. The
 	// querybuilder holds only the metadata query; see docs/query-language-arc.md §22.

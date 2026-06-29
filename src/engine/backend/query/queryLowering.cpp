@@ -993,6 +993,65 @@ ibDataQueryResult LowerUnion(const ibQuerySelect& ast, const std::map<wxString, 
 	return b.Execute(page);
 }
 
+// Build the FROM + JOIN source tree into `b` and the `sources` bindings: the primary source, then each JOIN —
+// a named ref-join (`JOIN a.ref AS x`), a CROSS (`ON TRUE`), a comparison ON (`a.x <op> b.y` — plain columns
+// hash/theta, a computed side -> RAM theta), or an auto-join by reference (no ON). Shared by the read
+// (ExecuteImpl) and the totals (ExecuteTotals) single-/JOIN-source paths, so every JOIN feature lives in ONE
+// place. The caller has already taken the UNION path (its own vertical stack) before calling this.
+void BuildSourceTree(const ibQuerySelect& ast, const std::map<wxString, ibValue>& params,
+                     ibSubqueryOwner& owner, std::vector<ibSourceBinding>& sources, ibDataQueryBuilder& b)
+{
+	const ibBackendQueryable* q0 = ResolveFrom(ast.m_from, params, owner);
+	sources.push_back({ ast.m_from.m_alias, q0 });
+	b.From(q0, ast.m_from.m_alias);
+
+	int refJoinSeq = 0;   // synthetic aliases for the intermediate segments of a named ref-join
+	for (const ibQueryAstJoin& j : ast.m_joins) {
+		const ibQueryJoinKind kind = MapJoinKind(j.m_kind);
+
+		// Named ref-join: `JOIN rootAlias.refA[.refB…] AS alias` — a reference PATH off an existing source
+		// (not a metaobject), no ON. Auto-join the chain and bind the FINAL target to `alias`, so a later
+		// `alias.field AS x` is a clean qualified column. The first segment must be a live source alias.
+		const ibBackendQueryable* refRoot = nullptr;
+		if (!j.m_source.m_subquery && !j.m_on && j.m_source.m_name.size() >= 2
+		    && (refRoot = SourceForAlias(sources, j.m_source.m_name[0])) != nullptr) {
+			if (j.m_source.m_alias.empty())
+				Fail(0, 0, _("a reference-path JOIN (alias.field) needs an explicit alias (AS)"));
+			ExpandRefJoinAlias(b, sources, refRoot,
+				std::vector<wxString>(j.m_source.m_name.begin() + 1, j.m_source.m_name.end()),
+				j.m_source.m_alias, kind, refJoinSeq);
+			continue;
+		}
+
+		const ibBackendQueryable* qi = ResolveFrom(j.m_source, params, owner);
+		const wxString alias = j.m_source.m_alias;
+		RequireAliasFree(sources, alias, 0, 0);   // duplicate alias -> Fail
+		sources.push_back({ alias, qi });
+		if (j.m_on && j.m_on->m_kind == ibQueryAstExprKind::Literal && j.m_on->m_literal.GetBoolean()) {
+			b.CrossJoin(qi, kind, alias);   // ON TRUE -> cross join (cartesian)
+		}
+		else if (j.m_on) {
+			if (j.m_on->m_kind != ibQueryAstExprKind::Compare)
+				Fail(j.m_on->m_line, j.m_on->m_col, _("a JOIN ON clause must be a single comparison (a.x <op> b.y) or TRUE (cross join)"));
+			if (IsComputedExprAst(*j.m_on->m_lhs) || IsComputedExprAst(*j.m_on->m_rhs)) {
+				// Computed ON (a.x+1 <op> b.y) — both sides become column exprs, evaluated per pair in the RAM
+				// theta loop (lhs over left, rhs over right). No dot-walk inside the expression.
+				b.Join(qi, BuildColumnExprFromAst(sources, *j.m_on->m_lhs, params),
+				           BuildColumnExprFromAst(sources, *j.m_on->m_rhs, params),
+				           MapJoinOp(j.m_on->m_cmp), kind, alias);
+			}
+			else {
+				const ibBackendQueryColumn* lc = ResolveColumnSingle(sources, *j.m_on->m_lhs);
+				const ibBackendQueryColumn* rc = ResolveColumnSingle(sources, *j.m_on->m_rhs);
+				b.Join(qi, lc, rc, MapJoinOp(j.m_on->m_cmp), kind, alias);   // = -> hash; <,<=,>,>=,<> -> RAM theta
+			}
+		}
+		else {
+			b.Join(qi, kind, alias);   // auto-join by reference
+		}
+	}
+}
+
 } // namespace
 
 //////////////////////////////////////////////////////////////////////
@@ -1085,60 +1144,8 @@ ibDataQueryResult ibQueryLowering::ExecuteImpl(const ibQuerySelect& astIn,
 		return LowerUnion(ast, params, outSchema, subOwners);
 
 	std::vector<ibSourceBinding> sources;
-	const ibBackendQueryable* q0 = ResolveFrom(ast.m_from, params, subOwners);
-	sources.push_back({ ast.m_from.m_alias, q0 });
-
 	ibDataQueryBuilder b;
-	b.From(q0, ast.m_from.m_alias);
-
-	// JOINs — each adds a source; ON a.x = b.y joins on explicit columns (the provider qualifies each
-	// key by its owning leaf, so the operand order is free), no ON = auto-join by reference.
-	int refJoinSeq = 0;   // synthetic aliases for the intermediate segments of a named ref-join
-	for (const ibQueryAstJoin& j : ast.m_joins) {
-		const ibQueryJoinKind kind = MapJoinKind(j.m_kind);
-
-		// Named ref-join: `JOIN rootAlias.refA[.refB…] AS alias` — the source is a REFERENCE PATH off an
-		// existing source (not a metaobject), no ON. Auto-join the chain and bind the FINAL target to `alias`,
-		// so a later `alias.field AS x` resolves as a clean qualified column (no ugly auto-name from a dotted
-		// path). Sugar over ExpandDotWalkJoins; the first segment must be a live source alias.
-		const ibBackendQueryable* refRoot = nullptr;
-		if (!j.m_source.m_subquery && !j.m_on && j.m_source.m_name.size() >= 2
-		    && (refRoot = SourceForAlias(sources, j.m_source.m_name[0])) != nullptr) {
-			if (j.m_source.m_alias.empty())
-				Fail(0, 0, _("a reference-path JOIN (alias.field) needs an explicit alias (AS)"));
-			ExpandRefJoinAlias(b, sources, refRoot,
-				std::vector<wxString>(j.m_source.m_name.begin() + 1, j.m_source.m_name.end()),
-				j.m_source.m_alias, kind, refJoinSeq);
-			continue;
-		}
-
-		const ibBackendQueryable* qi = ResolveFrom(j.m_source, params, subOwners);
-		const wxString alias = j.m_source.m_alias;
-		RequireAliasFree(sources, alias, 0, 0);   // duplicate alias -> Fail
-		sources.push_back({ alias, qi });
-		if (j.m_on && j.m_on->m_kind == ibQueryAstExprKind::Literal && j.m_on->m_literal.GetBoolean()) {
-			b.CrossJoin(qi, kind, alias);   // ON TRUE -> cross join (cartesian)
-		}
-		else if (j.m_on) {
-			if (j.m_on->m_kind != ibQueryAstExprKind::Compare)
-				Fail(j.m_on->m_line, j.m_on->m_col, _("a JOIN ON clause must be a single comparison (a.x <op> b.y) or TRUE (cross join)"));
-			if (IsComputedExprAst(*j.m_on->m_lhs) || IsComputedExprAst(*j.m_on->m_rhs)) {
-				// Computed ON (a.x+1 <op> b.y) — lower both sides to column exprs, evaluated per pair in the RAM
-				// theta loop (lhs over the left table, rhs over the right). No dot-walk inside the expression.
-				b.Join(qi, BuildColumnExprFromAst(sources, *j.m_on->m_lhs, params),
-				           BuildColumnExprFromAst(sources, *j.m_on->m_rhs, params),
-				           MapJoinOp(j.m_on->m_cmp), kind, alias);
-			}
-			else {
-				const ibBackendQueryColumn* lc = ResolveColumnSingle(sources, *j.m_on->m_lhs);
-				const ibBackendQueryColumn* rc = ResolveColumnSingle(sources, *j.m_on->m_rhs);
-				b.Join(qi, lc, rc, MapJoinOp(j.m_on->m_cmp), kind, alias);   // = -> hash; <,<=,>,>=,<> -> RAM theta
-			}
-		}
-		else {
-			b.Join(qi, kind, alias);   // auto-join by reference
-		}
-	}
+	BuildSourceTree(ast, params, subOwners, sources, b);
 
 	const bool aggregate = PopulateBuilder(ast, params, sources, b, outSchema, /*asSubquery*/false);
 
@@ -1208,61 +1215,8 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 		sources.push_back({ wxEmptyString, b0 });
 	}
 	else {
-		// FROM + JOINs — same lowering as the non-totals path: ON a.x = b.y joins on explicit columns,
-		// ON TRUE is a cross join, no ON is an auto-join by reference. The dimension / aggregate resolution
-		// below reads through the multi-binding `sources`, so it qualifies a.col across leaves unchanged.
-		const ibBackendQueryable* q = ResolveFrom(ast.m_from, params, owner);
-		sources.push_back({ ast.m_from.m_alias, q });
-		b.From(q, ast.m_from.m_alias);
-
-		int refJoinSeq = 0;   // synthetic aliases for the intermediate segments of a named ref-join
-		for (const ibQueryAstJoin& j : ast.m_joins) {
-			// Named ref-join: `JOIN rootAlias.refA[.refB…] AS alias` — a reference PATH off an existing source,
-			// no ON; auto-join the chain and bind the FINAL target to `alias` (sugar over ExpandDotWalkJoins).
-			// The first segment must be a live source alias. (Mirrors the non-totals ExecuteImpl path.)
-			const ibBackendQueryable* refRoot = nullptr;
-			if (!j.m_source.m_subquery && !j.m_on && j.m_source.m_name.size() >= 2
-			    && (refRoot = SourceForAlias(sources, j.m_source.m_name[0])) != nullptr) {
-				if (j.m_source.m_alias.empty())
-					Fail(0, 0, _("a reference-path JOIN (alias.field) needs an explicit alias (AS)"));
-				ExpandRefJoinAlias(b, sources, refRoot,
-					std::vector<wxString>(j.m_source.m_name.begin() + 1, j.m_source.m_name.end()),
-					j.m_source.m_alias, MapJoinKind(j.m_kind), refJoinSeq);
-				continue;
-			}
-			const ibBackendQueryable* qi = ResolveFrom(j.m_source, params, owner);
-			const wxString alias = j.m_source.m_alias;
-			RequireAliasFree(sources, alias, 0, 0);   // duplicate alias -> Fail
-			sources.push_back({ alias, qi });
-
-			const ibQueryJoinKind kind =
-				  j.m_kind == ibQueryJoinKindAst::Left  ? ibQueryJoinKind::Left
-				: j.m_kind == ibQueryJoinKindAst::Right ? ibQueryJoinKind::Right
-				: j.m_kind == ibQueryJoinKindAst::Full  ? ibQueryJoinKind::Full
-				                                        : ibQueryJoinKind::Inner;
-			if (j.m_on && j.m_on->m_kind == ibQueryAstExprKind::Literal && j.m_on->m_literal.GetBoolean()) {
-				b.CrossJoin(qi, kind, alias);   // ON TRUE -> cross join (cartesian)
-			}
-			else if (j.m_on) {
-				if (j.m_on->m_kind != ibQueryAstExprKind::Compare)
-					Fail(j.m_on->m_line, j.m_on->m_col, _("a JOIN ON clause must be a single comparison (a.x <op> b.y) or TRUE (cross join)"));
-				if (IsComputedExprAst(*j.m_on->m_lhs) || IsComputedExprAst(*j.m_on->m_rhs)) {
-					// Computed ON (a.x+1 <op> b.y) — both sides become column exprs, evaluated per pair in the RAM
-					// theta loop (lhs over left, rhs over right). No dot-walk inside the expression.
-					b.Join(qi, BuildColumnExprFromAst(sources, *j.m_on->m_lhs, params),
-					           BuildColumnExprFromAst(sources, *j.m_on->m_rhs, params),
-					           MapJoinOp(j.m_on->m_cmp), kind, alias);
-				}
-				else {
-					const ibBackendQueryColumn* lc = ResolveColumnSingle(sources, *j.m_on->m_lhs);
-					const ibBackendQueryColumn* rc = ResolveColumnSingle(sources, *j.m_on->m_rhs);
-					b.Join(qi, lc, rc, MapJoinOp(j.m_on->m_cmp), kind, alias);   // = -> hash; <,<=,>,>=,<> -> RAM theta
-				}
-			}
-			else {
-				b.Join(qi, kind, alias);   // auto-join by reference
-			}
-		}
+		// FROM + JOINs / single source -- shared with the non-totals read path (BuildSourceTree).
+		BuildSourceTree(ast, params, owner, sources, b);
 	}
 
 	outSchema.clear();

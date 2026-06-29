@@ -269,7 +269,7 @@ const ibBackendQueryColumn* ColocatedRefColumnTo(const ibBackendQueryable* from,
 // node with a sub-join child needs explicit keys. False when neither given nor derivable.
 bool ResolveNodeKeys(const ibQueryNode* node, const ibBackendQueryColumn*& onL, const ibBackendQueryColumn*& onR)
 {
-	onL = node->m_onLeft; onR = node->m_onRight;
+	onL = node->m_on.m_colL; onR = node->m_on.m_colR;
 	if (onL != nullptr && onR != nullptr) return true;
 	const ibQueryNode* nL = node->m_left.get();
 	const ibQueryNode* nR = node->m_right.get();
@@ -338,7 +338,7 @@ bool ColocatableJoinTree(const ibDataQuerySpec& spec, ColocatedLeaves& leaves)
 	// Co-located SQL emits only INNER / LEFT; a RIGHT / FULL (or cross / ON TRUE) join folds in the RAM stitch.
 	std::function<bool(const ibQueryNode*)> innerOrLeftOnly = [&](const ibQueryNode* n) -> bool {
 		if (n == nullptr || n->m_kind != ibQueryNode::Kind::Join) return true;
-		if (n->m_cross || n->m_joinKind == ibQueryJoinKind::Right || n->m_joinKind == ibQueryJoinKind::Full) return false;
+		if (n->m_on.m_cross || n->m_joinKind == ibQueryJoinKind::Right || n->m_joinKind == ibQueryJoinKind::Full) return false;
 		return innerOrLeftOnly(n->m_left.get()) && innerOrLeftOnly(n->m_right.get());
 	};
 	if (!innerOrLeftOnly(root))                return false;
@@ -347,7 +347,7 @@ bool ColocatableJoinTree(const ibDataQuerySpec& spec, ColocatedLeaves& leaves)
 	// union all call this gate) falls back to RAM for a theta join.
 	std::function<bool(const ibQueryNode*)> allEqui = [&](const ibQueryNode* n) -> bool {
 		if (n == nullptr || n->m_kind != ibQueryNode::Kind::Join) return true;
-		if (n->m_onOp != ibJoinCompareOp::Eq || n->m_onExprL != nullptr) return false;   // theta / computed ON -> RAM
+		if (n->m_on.m_op != ibJoinCompareOp::Eq || n->m_on.m_exprL != nullptr) return false;   // theta / computed ON -> RAM
 		return allEqui(n->m_left.get()) && allEqui(n->m_right.get());
 	};
 	if (!allEqui(root))                        return false;
@@ -942,16 +942,26 @@ ibDataQueryResult ibDbTableProvider::ExecuteAggregate(const ibDataQuerySpec& spe
 // server-side SELECT here, on a no it keeps its materialise-to-RAM + C++ stitch. So this
 // is purely additive: a narrow shape goes server-side, everything else is unchanged.
 // ==========================================================================
+// Shared co-location preconditions for a JOIN-tree terminal (read OR aggregate): a colocatable join
+// tree of real DB leaves, no dot-walk / key-in (their own paths), every join key a single field.
+// The terminal gates (CanColocateJoin / CanColocateAggregate) add their output / aggregate checks.
+static bool CanColocateBase(const ibDataQuerySpec& spec, ColocatedLeaves& leaves)
+{
+	if (!ColocatableJoinTree(spec, leaves)) return false;
+	if (!spec.m_dotWalks->empty() || !spec.m_keyIn->empty()) return false;
+	if (!AllNodeKeysSingleField(spec.m_root, leaves)) return false;
+	return true;
+}
+
 bool ibDbTableProvider::CanColocateJoin(const ibDataQuerySpec& spec)
 	{
 		ColocatedLeaves leaves;
-		if (!ColocatableJoinTree(spec, leaves))
+		if (!CanColocateBase(spec, leaves))
 			return false;
 
 		// This is the plain READ terminal: not an aggregate, no dot-walk / key-in (those have their
 		// own paths). The multi-source output IS the explicit select list — non-empty.
 		if (!spec.m_groupBy->empty() || !spec.m_aggregates->empty()) return false;
-		if (!spec.m_dotWalks->empty() || !spec.m_keyIn->empty())     return false;
 		// COMPUTED output columns (arithmetic / CASE) are evaluated per joined row by the RAM composer —
 		// the co-located server-side projection cannot, so a computed JOIN must take the RAM stitch path.
 		if (spec.m_selectExprs != nullptr && !spec.m_selectExprs->empty()) return false;
@@ -962,9 +972,6 @@ bool ibDbTableProvider::CanColocateJoin(const ibDataQuerySpec& spec)
 		// owned by a leaf (so it qualifies).
 		for (const auto& sc : *spec.m_selectCols)
 			if (sc.first == nullptr || ColocatedOwner(leaves, sc.first) == nullptr) return false;
-		// Every JOIN node's KEYS single-field (reference / enum ok — one comparable field).
-		if (!AllNodeKeysSingleField(spec.m_root, leaves))
-			return false;
 		return true;
 	}
 
@@ -1050,14 +1057,11 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedJoin(const ibDataQuerySpec&
 bool ibDbTableProvider::CanColocateAggregate(const ibDataQuerySpec& spec)
 	{
 		ColocatedLeaves leaves;
-		if (!ColocatableJoinTree(spec, leaves))
+		if (!CanColocateBase(spec, leaves))
 			return false;
 
 		if (spec.m_groupBy->empty() && spec.m_aggregates->empty()) return false;   // not an aggregate terminal
-		if (!spec.m_dotWalks->empty() || !spec.m_keyIn->empty())   return false;
 
-		if (!AllNodeKeysSingleField(spec.m_root, leaves))
-			return false;
 		for (const ibBackendQueryColumn* g : *spec.m_groupBy)
 			if (g == nullptr || ColocatedOwner(leaves, g) == nullptr) return false;   // group key owned by a leaf (scalar OR reference spread)
 		for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates) {

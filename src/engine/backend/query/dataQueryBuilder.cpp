@@ -52,54 +52,42 @@ ibDataQueryBuilder& ibDataQueryBuilder::Join(const ibBackendQueryable* queryable
 	return Join(queryable, onLeft, onRight, ibJoinCompareOp::Eq, kind, alias);   // equality -> hash-join fast path
 }
 
+// The single point that appends a left-deep JOIN node (new source on the right) carrying the ON condition.
+ibDataQueryBuilder& ibDataQueryBuilder::JoinNode(const ibBackendQueryable* queryable, ibQueryJoinKind kind,
+	const wxString& alias, const ibJoinOn& on)
+{
+	auto node = std::make_shared<ibQueryNode>();   // left-deep accumulation: (prior tree) joined with the new source
+	node->m_kind     = ibQueryNode::Kind::Join;
+	node->m_left     = m_root;
+	node->m_right    = ibQueryNode::Source(queryable, alias);
+	node->m_joinKind = kind;
+	node->m_on       = on;
+	m_root = node;
+	return *this;
+}
+
 ibDataQueryBuilder& ibDataQueryBuilder::Join(const ibBackendQueryable* queryable,
 	const ibBackendQueryColumn* onLeft, const ibBackendQueryColumn* onRight,
 	ibJoinCompareOp onOp, ibQueryJoinKind kind, const wxString& alias)
 {
-	// Left-deep accumulation: (prior tree) ⋈ new source. onOp != Eq marks a theta join (RAM nested-loop).
-	auto node = std::make_shared<ibQueryNode>();
-	node->m_kind     = ibQueryNode::Kind::Join;
-	node->m_left     = m_root;
-	node->m_right    = ibQueryNode::Source(queryable, alias);
-	node->m_onLeft   = onLeft;
-	node->m_onRight  = onRight;
-	node->m_onOp     = onOp;
-	node->m_joinKind = kind;
-	m_root = node;
-	return *this;
+	ibJoinOn on; on.m_colL = onLeft; on.m_colR = onRight; on.m_op = onOp;   // onOp != Eq -> theta (RAM nested-loop)
+	return JoinNode(queryable, kind, alias, on);
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::Join(const ibBackendQueryable* queryable,
 	const ibQueryColumnExprPtr& onExprL, const ibQueryColumnExprPtr& onExprR,
 	ibJoinCompareOp onOp, ibQueryJoinKind kind, const wxString& alias)
 {
-	// Computed ON (a.x+1 <op> b.y): no key columns — both sides are expressions evaluated per pair in the
-	// RAM theta loop. m_onLeft/m_onRight stay null; the expr presence forces the nested-loop path.
-	auto node = std::make_shared<ibQueryNode>();
-	node->m_kind     = ibQueryNode::Kind::Join;
-	node->m_left     = m_root;
-	node->m_right    = ibQueryNode::Source(queryable, alias);
-	node->m_onExprL  = onExprL;
-	node->m_onExprR  = onExprR;
-	node->m_onOp     = onOp;
-	node->m_joinKind = kind;
-	m_root = node;
-	return *this;
+	// Computed ON (a.x+1 <op> b.y): no key columns -- both sides are exprs evaluated per pair (RAM theta).
+	ibJoinOn on; on.m_exprL = onExprL; on.m_exprR = onExprR; on.m_op = onOp;
+	return JoinNode(queryable, kind, alias, on);
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::CrossJoin(const ibBackendQueryable* queryable, ibQueryJoinKind kind, const wxString& alias)
 {
-	// CROSS / ON TRUE — no join key, cartesian product. Built like a join but flagged m_cross so the
-	// composer takes the keyless RAM stitch (JoinRamTables already does cartesian on a null key) instead
-	// of trying to derive/require a key. Co-location is skipped (no single-field key).
-	auto node = std::make_shared<ibQueryNode>();
-	node->m_kind     = ibQueryNode::Kind::Join;
-	node->m_left     = m_root;
-	node->m_right    = ibQueryNode::Source(queryable, alias);
-	node->m_joinKind = kind;
-	node->m_cross    = true;
-	m_root = node;
-	return *this;
+	// CROSS / ON TRUE -- keyless cartesian; the composer's RAM stitch does the product on a null key.
+	ibJoinOn on; on.m_cross = true;
+	return JoinNode(queryable, kind, alias, on);
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::Union(const ibBackendQueryable* queryable, const wxString& alias,

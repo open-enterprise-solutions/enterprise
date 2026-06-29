@@ -323,8 +323,8 @@ std::vector<const ibBackendQueryColumn*> LeafColumns(const ibDataQuerySpec& spec
 	};
 	for (const auto& s : *spec.m_selectCols) add(s.first);
 	for (const ibQueryCondition& c : *spec.m_conditions) add(c.m_col);
-	add(join->m_onLeft);
-	add(join->m_onRight);
+	add(join->m_on.m_colL);
+	add(join->m_on.m_colR);
 	return cols;
 }
 
@@ -459,8 +459,8 @@ const ibBackendQueryColumn* ReferenceColumnTo(const ibBackendQueryable* from, co
 // Returns false when neither given nor derivable. (docs §22.1)
 bool ResolveJoinKeys(const ibQueryNode* join, const ibBackendQueryColumn*& onL, const ibBackendQueryColumn*& onR)
 {
-	if (join->m_cross) { onL = nullptr; onR = nullptr; return true; }   // CROSS / ON TRUE — valid keyless join (cartesian)
-	onL = join->m_onLeft; onR = join->m_onRight;
+	if (join->m_on.m_cross) { onL = nullptr; onR = nullptr; return true; }   // CROSS / ON TRUE — valid keyless join (cartesian)
+	onL = join->m_on.m_colL; onR = join->m_on.m_colR;
 	if (onL != nullptr && onR != nullptr) return true;
 	const ibBackendQueryable* qL = (join->m_left  && join->m_left->m_kind  == ibQueryNode::Kind::Source) ? join->m_left->m_queryable  : nullptr;
 	const ibBackendQueryable* qR = (join->m_right && join->m_right->m_kind == ibQueryNode::Kind::Source) ? join->m_right->m_queryable : nullptr;
@@ -717,8 +717,8 @@ bool FlattenInnerChain(const ibQueryNode* node, std::vector<const ibQueryNode*>&
 {
 	if (node == nullptr) return false;
 	if (node->m_kind == ibQueryNode::Kind::Join
-		&& node->m_joinKind == ibQueryJoinKind::Inner && !node->m_cross
-		&& node->m_onOp == ibJoinCompareOp::Eq && !node->m_onExprL) {   // equi KEY only — the reorder hash-joins on key columns
+		&& node->m_joinKind == ibQueryJoinKind::Inner && !node->m_on.m_cross
+		&& node->m_on.m_op == ibJoinCompareOp::Eq && !node->m_on.m_exprL) {   // equi KEY only — the reorder hash-joins on key columns
 		const ibBackendQueryColumn* onL = nullptr; const ibBackendQueryColumn* onR = nullptr;
 		if (!ResolveJoinKeys(node, onL, onR)) return false;
 		keyPairs.emplace_back(onL, onR);
@@ -836,7 +836,7 @@ ibQueryRamTable MaterialiseNode(const ibQueryNode* node, const std::vector<const
 	// Optimizer: a pure-INNER chain of 3+ units re-joins smallest-first with the EXACT
 	// materialised row counts (PlanInnerJoinOrder) — smaller intermediates for free.
 	// Any anomaly falls through to the tree order below; correctness never depends on it.
-	if (node->m_joinKind == ibQueryJoinKind::Inner && !node->m_cross) {
+	if (node->m_joinKind == ibQueryJoinKind::Inner && !node->m_on.m_cross) {
 		std::vector<const ibQueryNode*> units;
 		std::vector<std::pair<const ibBackendQueryColumn*, const ibBackendQueryColumn*>> keyPairs;
 		if (FlattenInnerChain(node, units, keyPairs) && units.size() >= 3) {
@@ -860,8 +860,8 @@ ibQueryRamTable MaterialiseNode(const ibQueryNode* node, const std::vector<const
 	const ibBackendQueryColumn* onL = nullptr; const ibBackendQueryColumn* onR = nullptr;
 	ResolveJoinKeys(node, onL, onR);   // explicit or derived (the tree was validated resolvable)
 
-	return ibQueryComposer::JoinRamTables(TL, TR, onL, onR, outCols, fromLeft, node->m_joinKind, node->m_onOp,
-	                                      node->m_onExprL.get(), node->m_onExprR.get());
+	return ibQueryComposer::JoinRamTables(TL, TR, onL, onR, outCols, fromLeft, node->m_joinKind, node->m_on.m_op,
+	                                      node->m_on.m_exprL.get(), node->m_on.m_exprR.get());
 }
 
 // Finalise a GetColumnId-keyed combined table into the result: ORDER BY (RAM stable
@@ -976,7 +976,7 @@ bool AllJoinsHaveKeys(const ibQueryNode* node)
 {
 	if (node == nullptr || node->m_kind != ibQueryNode::Kind::Join) return true;
 	// A computed-ON join (a.x+1 <op> b.y) has no key columns but is a valid theta join (RAM nested-loop).
-	if (node->m_onExprL && node->m_onExprR)
+	if (node->m_on.m_exprL && node->m_on.m_exprR)
 		return AllJoinsHaveKeys(node->m_left.get()) && AllJoinsHaveKeys(node->m_right.get());
 	const ibBackendQueryColumn* onL = nullptr; const ibBackendQueryColumn* onR = nullptr;
 	return ResolveJoinKeys(node, onL, onR) &&
@@ -1234,7 +1234,7 @@ std::unique_ptr<ibTempTableManager> PromoteComputedLeaf(
 	const ibBackendQueryable* qR = nR->m_queryable;
 	if (qL == nullptr || qR == nullptr)                                  return nullptr;
 	if (root->m_joinKind != ibQueryJoinKind::Inner)                      return nullptr;
-	if (root->m_onLeft == nullptr || root->m_onRight == nullptr)         return nullptr;   // explicit keys only
+	if (root->m_on.m_colL == nullptr || root->m_on.m_colR == nullptr)         return nullptr;   // explicit keys only
 	if (!spec.m_dotWalks->empty() || !spec.m_keyIn->empty())             return nullptr;
 
 	// Exactly ONE computed leaf + one real DB leaf (both-DB is the plain co-located path; both-computed
@@ -1300,8 +1300,8 @@ std::unique_ptr<ibTempTableManager> PromoteComputedLeaf(
 	outRoot->m_joinKind = ibQueryJoinKind::Inner;
 	outRoot->m_left     = lRam ? tempNode : root->m_left;
 	outRoot->m_right    = rRam ? tempNode : root->m_right;
-	outRoot->m_onLeft   = remap(root->m_onLeft);
-	outRoot->m_onRight  = remap(root->m_onRight);
+	outRoot->m_on.m_colL   = remap(root->m_on.m_colL);
+	outRoot->m_on.m_colR  = remap(root->m_on.m_colR);
 	outPrimary = (spec.m_queryable == computed) ? static_cast<const ibBackendQueryable*>(temp) : spec.m_queryable;
 
 	if (!remapOk)
