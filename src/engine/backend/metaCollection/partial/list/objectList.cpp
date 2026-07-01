@@ -9,27 +9,15 @@
 
 #include "backend/appData.h"
 
-
-
-
-ibValueListDataObject::ibValueListDataObject(const ibValueMetaObjectGenericData* metaObject, const ibFormID& formType, bool choiceMode) :
+ibValueListDataObject::ibValueListDataObject(const ibValueMetaObjectGenericData* metaObject, const ibBackendQueryable* queryable, const ibFormID& formType, bool choiceMode) :
 	ibSourceDataObject(),
 	m_recordColumnCollection(new ibValueDataObjectListColumnCollection(this, metaObject)),
 	m_objGuid(choiceMode ? ibGuid::newGuid() : metaObject->GetGuid()) {
-	for (const auto object : metaObject->GetGenericAttributeArrayObject()) {
-		m_filterRow.AppendFilter(
-			object->GetMetaID(),
-			object->GetName(),
-			object->GetSynonym(),
-			ibComparisonType_Equal,
-			object->GetTypeDesc(),
-			object->CreateValue(),
-			false
-		);
-	}
-	// L5 — wire the composer's source once: the list IS metaobject-bound, and the
-	// metaobject is its own language identity (Kind.Name). Settings come per fetch.
-	m_composer.FromSource(ibValue::GetNameObjectFromID(metaObject->GetClassType()), metaObject->GetName());
+	// L5 — wire the composer's source ONCE here on the base. The queryable (the source HOLDER) is vended by the
+	// SUBCLASS metaobject — the generic base (ibValueMetaObjectGenericData) has no GetQueryable, so the subclass
+	// passes it in. This is what lets the source init live on the base instead of per-subclass (Max).
+	if (queryable != nullptr)
+		m_composer.FromSource(queryable);   // the subclass's own DB composer (protected member, direct)
 }
 
 ibValueListDataObject::~ibValueListDataObject()
@@ -38,21 +26,13 @@ ibValueListDataObject::~ibValueListDataObject()
 
 ///////////////////////////////////////////////////////////////////////////////
 
-ibValueModelTreeDataObject::ibValueModelTreeDataObject(const ibValueMetaObjectGenericData* metaObject, const ibFormID& formType, bool choiceMode) :
+ibValueModelTreeDataObject::ibValueModelTreeDataObject(const ibValueMetaObjectGenericData* metaObject, const ibBackendQueryable* queryable, const ibFormID& formType, bool choiceMode) :
 	ibSourceDataObject(),
 	m_recordColumnCollection(new ibValueDataObjectTreeColumnCollection(this, metaObject)),
 	m_objGuid(choiceMode ? ibGuid::newGuid() : metaObject->GetGuid()) {
-	for (const auto object : metaObject->GetGenericAttributeArrayObject()) {
-		m_filterRow.AppendFilter(
-			object->GetMetaID(),
-			object->GetName(),
-			object->GetSynonym(),
-			object->GetTypeDesc(),
-			object->CreateValue()
-		);
-	}
-	// L5 — wire the composer's source once (see the list base ctor above).
-	m_composer.FromSource(ibValue::GetNameObjectFromID(metaObject->GetClassType()), metaObject->GetName());
+	// L5 — source init on the base; the queryable HOLDER is passed by the subclass (see the list base ctor).
+	if (queryable != nullptr)
+		m_composer.FromSource(queryable);   // the subclass's own DB composer (protected member, direct)
 }
 
 ibValueModelTreeDataObject::~ibValueModelTreeDataObject()
@@ -83,12 +63,12 @@ ibValueListDataObject::ibValueDataObjectListColumnCollection::~ibValueDataObject
 {
 }
 
-bool ibValueListDataObject::ibValueDataObjectListColumnCollection::SetAt(const ibValue& varKeyValue, const ibValue& varValue)//пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ 0
+bool ibValueListDataObject::ibValueDataObjectListColumnCollection::SetAt(const ibValue& varKeyValue, const ibValue& varValue) // read-only column collection - no-op (writes are not supported)
 {
 	return false;
 }
 
-bool ibValueListDataObject::ibValueDataObjectListColumnCollection::GetAt(const ibValue& varKeyValue, ibValue& pvarValue) //пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ 0
+bool ibValueListDataObject::ibValueDataObjectListColumnCollection::GetAt(const ibValue& varKeyValue, ibValue& pvarValue) // read a column-info entry by its index
 {
 	unsigned int index = varKeyValue.GetUInteger();
 
@@ -125,12 +105,12 @@ ibValueModelTreeDataObject::ibValueDataObjectTreeColumnCollection::~ibValueDataO
 {
 }
 
-bool ibValueModelTreeDataObject::ibValueDataObjectTreeColumnCollection::SetAt(const ibValue& varKeyValue, const ibValue& varValue)//пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ 0
+bool ibValueModelTreeDataObject::ibValueDataObjectTreeColumnCollection::SetAt(const ibValue& varKeyValue, const ibValue& varValue) // read-only column collection - no-op (writes are not supported)
 {
 	return false;
 }
 
-bool ibValueModelTreeDataObject::ibValueDataObjectTreeColumnCollection::GetAt(const ibValue& varKeyValue, ibValue& pvarValue) //пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ 0
+bool ibValueModelTreeDataObject::ibValueDataObjectTreeColumnCollection::GetAt(const ibValue& varKeyValue, ibValue& pvarValue) // read a column-info entry by its index
 {
 	unsigned int index = varKeyValue.GetUInteger();
 	if ((index < 0 || index >= m_listColumnInfo.size() && !appData->DesignerMode())) {
@@ -214,7 +194,7 @@ bool ibValueListDataObject::ibValueDataObjectListReturnLine::GetPropVal(const lo
 	if (appData->DesignerMode())
 		return false;
 	const ibMetaID& id = m_members.GetPropData(lPropNum);
-	ibValueTableRow* node = m_ownerTable->GetViewData<ibValueTableRow>(m_lineItem);
+	ibComposerNode* node = m_ownerTable->GetViewData<ibComposerNode>(m_lineItem);
 	if (node == nullptr)
 		return false;
 	return node->GetValue(id, pvarPropVal);
@@ -260,32 +240,14 @@ bool ibValueModelTreeDataObject::ibValueDataObjectTreeReturnLine::GetPropVal(con
 	return false;
 }
 
-/////////////////////////////////////////////////////////////////////////////////////////////
-
-ibDataViewItem ibValueListDataObjectEnumRef::FindRowValue(const ibValue& varValue, const wxString& colName) const
-{
-	// Paged model: rows live in the control's deque, not on the model
-	// (m_nodeValues stays empty).  Build a stub row carrying just
-	// m_objGuid; ibValueTableEnumRow::IsEqualTo lets PagedBootstrap's
-	// freshly-fetched row match it on key, restoring focus without
-	// requiring the rest of the row to be populated here.
-	ibValueReferenceDataObject* pRefData = nullptr;
-	if (!varValue.ConvertToValue(pRefData) || pRefData == nullptr)
-		return ibDataViewItem();
-	if (!pRefData->GetGuid().isValid())
-		return ibDataViewItem();
-	auto* stub = new ibValueTableEnumRow(pRefData->GetGuid());
-	ibDataViewItem item(stub);
-	stub->DecRef();
-	return item;
-}
-
 ibValueListDataObjectEnumRef::ibValueListDataObjectEnumRef(const ibValueMetaObjectRecordDataEnumRef* metaObject, const ibFormID& formType, bool choiceMode) :
-	ibValueListDataObject(metaObject, formType, choiceMode), m_metaObject(metaObject), m_choiceMode(choiceMode)
+	ibValueListDataObject(metaObject, metaObject->GetQueryable(), formType, choiceMode), m_metaObject(metaObject), m_choiceMode(choiceMode)
 {
 	m_members.Bind(this, &ibValueListDataObjectEnumRef::FillMembers);
-	ibValueListDataObject::AppendSort(m_metaObject->GetDataOrder(), true, true, true);
-	ibValueListDataObject::AppendSort(m_metaObject->GetDataReference(), true, true, true);
+	// Default order by the enum's POSITION attribute, set STRAIGHT on the composer (the store). RunComposerPage's
+	// ORDER BY over the enum's queryable yields definition order — no own Fetch / in-memory parent-position sort.
+	if (ibValueMetaObjectAttributePredefined* order = m_metaObject->GetDataOrder())
+		m_composer.Sort(order->GetName());
 }
 
 const ibSourceExplorer* ibValueListDataObjectEnumRef::GetSourceExplorer() const
@@ -310,11 +272,11 @@ bool ibValueListDataObjectEnumRef::GetValueByMetaID(const ibMetaID& id, ibValue&
 //events 
 void ibValueListDataObjectEnumRef::ChooseValue(ibBackendValueForm* srcForm)
 {
-	ibValueTableEnumRow* node = GetViewData<ibValueTableEnumRow>(GetSelection());
-	if (node == nullptr)
+	const ibUniqueKey key = GetItemKey(GetSelection());
+	if (!key.IsOk())
 		return;
 	wxASSERT(srcForm);
-	ibValueReferenceDataObject* dataValueRef = m_metaObject->FindObjectValue(node->GetGuid());
+	ibValueReferenceDataObject* dataValueRef = m_metaObject->FindObjectValue(key);
 	if (dataValueRef != nullptr) {
 		ibValue selectedValue = dataValueRef->GetValue();
 		srcForm->NotifyChoice(selectedValue);
@@ -347,46 +309,8 @@ wxString ibValueListDataObjectEnumRef::GetString() const
 	return clsFactory->GetClassName();
 }
 
-/////////////////////////////////////////////////////////////////////////////////////////////
-
-ibDataViewItem ibValueListDataObjectRef::FindRowValue(const ibValue& varValue, const wxString& colName) const
-{
-	// Paged model: rows live in the control's deque, not on the model.
-	// Build a stub row carrying:
-	//   * m_objGuid               — drives IsEqualTo against a freshly-
-	//                                fetched row, restoring focus after
-	//                                refetch.
-	//   * m_nodeValues sort cols  — drive BuildRefAnchor's cursor
-	//                                predicate.  Empty values would
-	//                                bind as NULL in the SQL composite
-	//                                predicate (`(c1,c2,...) >= (?,?,...)`)
-	//                                and exclude all rows → empty table.
-	//                                Pull real values for each enabled
-	//                                non-reference sort column from the
-	//                                reference (lazy DB load via
-	//                                GetValueByMetaID) so the cursor
-	//                                positions on the new row's sort
-	//                                tuple.
-	ibValueReferenceDataObject* pRefData = nullptr;
-	if (!varValue.ConvertToValue(pRefData) || pRefData == nullptr)
-		return ibDataViewItem();
-	if (!pRefData->GetGuid().isValid())
-		return ibDataViewItem();
-	auto* stub = new ibValueTableListRow(pRefData->GetGuid());
-	for (const auto& s : m_sortOrder.m_sorts) {
-		if (!s.m_sortEnable) continue;
-		if (m_metaObject->IsDataReference(s.m_sortModel)) continue;
-		ibValue v;
-		if (pRefData->GetValueByMetaID(s.m_sortModel, v))
-			stub->AppendTableValue(s.m_sortModel, v);
-	}
-	ibDataViewItem item(stub);   // IncRef → 2
-	stub->DecRef();              // refcount=1, owned by item
-	return item;
-}
-
 ibValueListDataObjectRef::ibValueListDataObjectRef(const ibValueMetaObjectRecordDataMutableRef* metaObject, const ibFormID& formType, bool choiceMode) :
-	ibValueListDataObject(metaObject, formType, choiceMode), m_metaObject(metaObject), m_choiceMode(choiceMode)
+	ibValueListDataObject(metaObject, metaObject->GetQueryable(), formType, choiceMode), m_metaObject(metaObject), m_choiceMode(choiceMode)
 {
 	m_members.Bind(this, &ibValueListDataObjectRef::FillMembers);
 }
@@ -441,112 +365,77 @@ void ibValueListDataObjectRef::AddValue(unsigned int before)
 	}
 }
 
+// The selection ops open the object straight FROM THE KEY — GetItemKey(GetSelection()) IS the open handle (it
+// converts to the guid CopyObjectValue / CreateObjectValue want). Inline guard + try/catch, same shape as the
+// register ops — no file-static selection-helper indirection.
 void ibValueListDataObjectRef::CopyValue()
 {
 	ibValueMetaObjectRecordDataMutableRef* metaObject = nullptr;
-	if (m_metaObject->ConvertToValue(metaObject)) {
-
-		ibValueTableListRow* node = GetViewData<ibValueTableListRow>(GetSelection());
-		if (node == nullptr)
-			return;
-
-		try {
-			ibValuePtr<ibValueRecordDataObjectRef> dataValueObject(metaObject->CopyObjectValue(node->GetGuid()));
-			if (dataValueObject != nullptr) dataValueObject->ShowFormValue(wxEmptyString, dynamic_cast<ibBackendControlFrame*>(ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid)));
-		}
-		catch (const ibBackendCoreException& err) {
-			ibValueSystemFunction::Alert(err.GetErrorDescription());
-		}
-		catch (...) {
-			wxLogError(wxT("objectList: unhandled non-ibBackend exception swallowed"));
-		}
+	if (!m_metaObject->ConvertToValue(metaObject)) return;
+	const ibUniqueKey key = GetItemKey(GetSelection());
+	if (!key.IsOk()) return;
+	try {
+		ibValuePtr<ibValueRecordDataObjectRef> obj(metaObject->CopyObjectValue(key));
+		if (obj != nullptr) obj->ShowFormValue(wxEmptyString, dynamic_cast<ibBackendControlFrame*>(ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid)));
 	}
+	catch (const ibBackendCoreException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
+	catch (...) { wxLogError(wxT("objectList: unhandled non-ibBackend exception swallowed")); }
 }
 
 void ibValueListDataObjectRef::EditValue()
 {
 	ibValueMetaObjectRecordDataMutableRef* metaObject = nullptr;
-	if (m_metaObject->ConvertToValue(metaObject)) {
-
-		ibValueTableListRow* node = GetViewData<ibValueTableListRow>(GetSelection());
-		if (node == nullptr)
-			return;
-
-		try {
-			ibValueRecordDataObjectRef* dataValueObject(metaObject->CreateObjectValue(node->GetGuid()));
-			if (dataValueObject != nullptr) dataValueObject->ShowFormValue(wxEmptyString, dynamic_cast<ibBackendControlFrame*>(ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid)));
-		}
-		catch (const ibBackendCoreException& err) {
-			ibValueSystemFunction::Alert(err.GetErrorDescription());
-		}
-		catch (...) {
-			wxLogError(wxT("objectList: unhandled non-ibBackend exception swallowed"));
-		}
+	if (!m_metaObject->ConvertToValue(metaObject)) return;
+	const ibUniqueKey key = GetItemKey(GetSelection());
+	if (!key.IsOk()) return;
+	try {
+		ibValueRecordDataObjectRef* obj(metaObject->CreateObjectValue(key));
+		if (obj != nullptr) obj->ShowFormValue(wxEmptyString, dynamic_cast<ibBackendControlFrame*>(ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid)));
 	}
+	catch (const ibBackendCoreException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
+	catch (...) { wxLogError(wxT("objectList: unhandled non-ibBackend exception swallowed")); }
 }
 
 void ibValueListDataObjectRef::DeleteValue()
 {
 	ibValueMetaObjectRecordDataMutableRef* metaObject = nullptr;
-	if (m_metaObject->ConvertToValue(metaObject)) {
-
-		ibValueTableListRow* node = GetViewData<ibValueTableListRow>(GetSelection());
-		if (node == nullptr)
-			return;
-
-		try {
-			ibValuePtr<ibValueRecordDataObjectRef> dataValueObject(metaObject->CreateObjectValue(node->GetGuid()));
-			if (dataValueObject != nullptr)
-				dataValueObject->DeleteObject();
-			ibBackendValueForm* valueListForm = ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid);
-			if (valueListForm != nullptr)
-				valueListForm->UpdateForm();
-		}
-		catch (const ibBackendCoreException& err) {
-			ibValueSystemFunction::Alert(err.GetErrorDescription());
-		}
-		catch (...) {
-			wxLogError(wxT("objectList: unhandled non-ibBackend exception swallowed"));
-		}
+	if (!m_metaObject->ConvertToValue(metaObject)) return;
+	const ibUniqueKey key = GetItemKey(GetSelection());
+	if (!key.IsOk()) return;
+	try {
+		ibValuePtr<ibValueRecordDataObjectRef> obj(metaObject->CreateObjectValue(key));
+		if (obj != nullptr) obj->DeleteObject();
+		if (ibBackendValueForm* ownerForm = ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid)) ownerForm->UpdateForm();
 	}
+	catch (const ibBackendCoreException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
+	catch (...) { wxLogError(wxT("objectList: unhandled non-ibBackend exception swallowed")); }
 }
 
 void ibValueListDataObjectRef::MarkAsDeleteValue()
 {
 	ibValueMetaObjectRecordDataMutableRef* metaObject = nullptr;
-	if (m_metaObject->ConvertToValue(metaObject)) {
-
-		ibValueTableListRow* node = GetViewData<ibValueTableListRow>(GetSelection());
-		if (node == nullptr)
-			return;
-
-		try {
-			ibValuePtr<ibValueRecordDataObjectRef> dataValueObject(metaObject->CreateObjectValue(node->GetGuid()));
-			if (dataValueObject != nullptr)
-				dataValueObject->SetDeletionMark(true);
-			ibBackendValueForm* valueListForm = ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid);
-			if (valueListForm != nullptr)
-				valueListForm->UpdateForm();
-		}
-		catch (const ibBackendCoreException& err) {
-			ibValueSystemFunction::Alert(err.GetErrorDescription());
-		}
-		catch (...) {
-			wxLogError(wxT("objectList: unhandled non-ibBackend exception swallowed"));
-		}
+	if (!m_metaObject->ConvertToValue(metaObject)) return;
+	const ibUniqueKey key = GetItemKey(GetSelection());
+	if (!key.IsOk()) return;
+	try {
+		ibValuePtr<ibValueRecordDataObjectRef> obj(metaObject->CreateObjectValue(key));
+		if (obj != nullptr) obj->SetDeletionMark(true);
+		if (ibBackendValueForm* ownerForm = ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid)) ownerForm->UpdateForm();
 	}
+	catch (const ibBackendCoreException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
+	catch (...) { wxLogError(wxT("objectList: unhandled non-ibBackend exception swallowed")); }
 }
 
 void ibValueListDataObjectRef::ChooseValue(ibBackendValueForm* srcForm)
 {
-	ibValueTableListRow* node = GetViewData<ibValueTableListRow>(GetSelection());
-	if (node == nullptr)
+	const ibUniqueKey key = GetItemKey(GetSelection());
+	if (!key.IsOk())
 		return;
 
 	wxASSERT(srcForm);
 
 	try {
-		ibValuePtr<ibValueReferenceDataObject> dataValueRef(m_metaObject->FindObjectValue(node->GetGuid()));
+		ibValuePtr<ibValueReferenceDataObject> dataValueRef(m_metaObject->FindObjectValue(key));
 		if (dataValueRef != nullptr) {
 			ibValue selectedValue = dataValueRef->GetValue();
 			srcForm->NotifyChoice(selectedValue);
@@ -583,43 +472,22 @@ wxString ibValueListDataObjectRef::GetString() const
 	return clsFactory->GetClassName();
 }
 
-/////////////////////////////////////////////////////////////////////////////////////////////
-
-ibDataViewItem ibValueModelTreeDataObjectFolderRef::FindRowValue(const ibValue& varValue, const wxString& /*colName*/) const
-{
-	// Paged tree: rows aren't materialized in-memory, but we can
-	// resolve a reference-typed value to its row by GUID via the
-	// same one-SQL `WHERE uuid IN (?)` path used for ancestor
-	// breadcrumb construction.  Used by the post-Save selection-
-	// restore cascade in tableBox::OnIdle.  Non-reference values
-	// (column-value lookup) aren't supported on the paged path.
-	ibValueReferenceDataObject* refData = nullptr;
-	if (!varValue.ConvertToValue(refData) || refData == nullptr)
-		return ibDataViewItem();
-	const ibGuid g = refData->GetGuid();
-	if (!g.isValid()) return ibDataViewItem();
-	auto rows = LoadRowsByGuids({ g });
-	if (rows.empty()) return ibDataViewItem();
-	auto* row = rows[0];
-	ibDataViewItem item(row);   // IncRef → 2
-	row->DecRef();               // refcount=1, owned by item
-	return item;
-}
-
 ibValueModelTreeDataObjectFolderRef::ibValueModelTreeDataObjectFolderRef(const ibValueMetaObjectRecordDataHierarchyMutableRef* metaObject, const ibFormID& formType,
-	int listMode, bool choiceMode) : ibValueModelTreeDataObject(metaObject, formType, choiceMode),
+	int listMode, bool choiceMode) : ibValueModelTreeDataObject(metaObject, metaObject->GetQueryable(), formType, choiceMode),
 	m_metaObject(metaObject), m_listMode(listMode), m_choiceMode(choiceMode)
 {
 	m_members.Bind(this, &ibValueModelTreeDataObjectFolderRef::FillMembers);
-	ibValueModelTreeDataObject::AppendSort(m_metaObject->GetDataCode(), true, false);
-	ibValueModelTreeDataObject::AppendSort(m_metaObject->GetDataDescription(), true);
-	// Reference (uuid PK) sort = system: always enabled, OnSortColumnChanged
-	// preserves it as the cursor tiebreaker so the `uuid > ? / uuid < ?`
-	// predicate stays meaningful even when the user picks a different
-	// column-sort.
-	ibValueModelTreeDataObject::AppendSort(m_metaObject->GetDataReference(),
-		/*ascending=*/true, /*use=*/true,
-		/*system=*/true);
+	// FOLDERS ON TOP, then by Description. A folder-first sub-sort (IsFolder DESC — the boolean's TRUE
+	// sorts before FALSE) goes BEFORE the name sort so each level shows folders above items — restoring the
+	// pre-split order. The HIERARCHY itself is NOT a grouping any more — it is INHERENT in the queryable
+	// (GetHierarchyColumn): RunComposerPage drives the parent-tree scope off it, so no "Parent" grouping is
+	// injected here (it used to pollute the user's Group settings). A user may still add Elements groupings.
+	// TEMP: folder-first sort OFF — the folder-flag column materializes as a TYPE_VALUE object (its guid-visible
+	// value), NOT a boolean, so as a keyset column it makes `_B < <object>` degenerate → the page returns the
+	// whole list and jumps to the top. Restore once the folder flag is read as a real boolean for the cursor.
+	if (ibValueMetaObjectAttributePredefined* isFolder = m_metaObject->GetDataIsFolder())
+		m_composer.Sort(isFolder->GetName(), /*ascending*/false);
+	m_composer.Sort(m_metaObject->GetDataDescription()->GetName());
 }
 
 const ibSourceExplorer* ibValueModelTreeDataObjectFolderRef::GetSourceExplorer() const
@@ -668,7 +536,7 @@ void ibValueModelTreeDataObjectFolderRef::ResolveParentForNew(ibValue& outParent
 	//      the deepest crumb is the folder we're inside — use it as
 	//      parent so a fresh item lands here, not at the root.
 	//   3. Fallback empty: top-level catalog root.
-	ibValueTreeListNode* node = GetViewData<ibValueTreeListNode>(GetSelection());
+	ibValueModel::ibComposerNode* node = GetViewData<ibValueModel::ibComposerNode>(GetSelection());
 	if (node != nullptr) {
 		ibValue isFolder = true;
 		node->GetValue(*m_metaObject->GetDataIsFolder(), isFolder);
@@ -678,7 +546,7 @@ void ibValueModelTreeDataObjectFolderRef::ResolveParentForNew(ibValue& outParent
 			node->GetValue(*m_metaObject->GetDataReference(), outParent);
 		return;
 	}
-	ibValueTreeListNode* drillNode = GetViewData<ibValueTreeListNode>(GetDrillParent());
+	ibValueModel::ibComposerNode* drillNode = GetViewData<ibValueModel::ibComposerNode>(GetDrillParent());
 	if (drillNode != nullptr)
 		drillNode->GetValue(*m_metaObject->GetDataReference(), outParent);
 }
@@ -715,101 +583,82 @@ void ibValueModelTreeDataObjectFolderRef::AddFolderValue(unsigned int before)
 	}
 }
 
+// Folder ops mirror the catalog ones — open FROM THE KEY (GetItemKey(sel) → the guid) — plus the folder/item MODE
+// read off the selected row (isFolder), since the hierarchy CreateObjectValue/CopyObjectValue take it.
 void ibValueModelTreeDataObjectFolderRef::CopyValue()
 {
-	ibValueTreeListNode* node = GetViewData<ibValueTreeListNode>(GetSelection());
-	if (node == nullptr)
-		return;
-
-	ibValue isFolder = false;
-	node->GetValue(*m_metaObject->GetDataIsFolder(), isFolder);
-
+	const ibDataViewItem sel = GetSelection();
+	const ibUniqueKey key = GetItemKey(sel);
+	if (!key.IsOk()) return;
+	ibValue cIsFolder = false;
+	if (auto* node = GetViewData<ibValueModel::ibComposerNode>(sel))
+		node->GetValue(*m_metaObject->GetDataIsFolder(), cIsFolder);
+	const ibObjectMode mode = cIsFolder.GetBoolean() ? ibObjectMode::OBJECT_FOLDER : ibObjectMode::OBJECT_ITEM;
 	try {
-		ibValuePtr<ibValueRecordDataObjectHierarchyRef> dataValueFolderObject(m_metaObject->CopyObjectValue(isFolder.GetBoolean() ? ibObjectMode::OBJECT_FOLDER : ibObjectMode::OBJECT_ITEM, node->GetGuid()));
-		if (dataValueFolderObject != nullptr)
-			dataValueFolderObject->ShowFormValue(wxEmptyString, dynamic_cast<ibBackendControlFrame*>(ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid)));
+		ibValuePtr<ibValueRecordDataObjectHierarchyRef> obj(m_metaObject->CopyObjectValue(mode, key));
+		if (obj != nullptr) obj->ShowFormValue(wxEmptyString, dynamic_cast<ibBackendControlFrame*>(ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid)));
 	}
-	catch (const ibBackendCoreException& err) {
-		ibValueSystemFunction::Alert(err.GetErrorDescription());
-	}
-	catch (...) {
-	}
+	catch (const ibBackendCoreException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
+	catch (...) { wxLogError(wxT("objectList: unhandled non-ibBackend exception swallowed")); }
 }
 
 void ibValueModelTreeDataObjectFolderRef::EditValue()
 {
-	ibValueTreeListNode* node = GetViewData<ibValueTreeListNode>(GetSelection());
-	if (node == nullptr)
-		return;
-
-	ibValue isFolder = false;
-	node->GetValue(*m_metaObject->GetDataIsFolder(), isFolder);
-
+	const ibDataViewItem sel = GetSelection();
+	const ibUniqueKey key = GetItemKey(sel);
+	if (!key.IsOk()) return;
+	ibValue cIsFolder = false;
+	if (auto* node = GetViewData<ibValueModel::ibComposerNode>(sel))
+		node->GetValue(*m_metaObject->GetDataIsFolder(), cIsFolder);
+	const ibObjectMode mode = cIsFolder.GetBoolean() ? ibObjectMode::OBJECT_FOLDER : ibObjectMode::OBJECT_ITEM;
 	try {
-		ibValuePtr<ibValueRecordDataObjectHierarchyRef> dataValueFolderObject(m_metaObject->CreateObjectValue(isFolder.GetBoolean() ? ibObjectMode::OBJECT_FOLDER : ibObjectMode::OBJECT_ITEM, node->GetGuid()));
-		if (dataValueFolderObject != nullptr) dataValueFolderObject->ShowFormValue(wxEmptyString, dynamic_cast<ibBackendControlFrame*>(ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid)));
+		ibValuePtr<ibValueRecordDataObjectHierarchyRef> obj(m_metaObject->CreateObjectValue(mode, key));
+		if (obj != nullptr) obj->ShowFormValue(wxEmptyString, dynamic_cast<ibBackendControlFrame*>(ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid)));
 	}
-	catch (const ibBackendCoreException& err) {
-		ibValueSystemFunction::Alert(err.GetErrorDescription());
-	}
-	catch (...) {
-	}
+	catch (const ibBackendCoreException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
+	catch (...) { wxLogError(wxT("objectList: unhandled non-ibBackend exception swallowed")); }
 }
 
 void ibValueModelTreeDataObjectFolderRef::DeleteValue()
 {
-	ibValueTreeListNode* node = GetViewData<ibValueTreeListNode>(GetSelection());
-	if (node == nullptr)
-		return;
-
-	ibValue isFolder = false;
-	node->GetValue(*m_metaObject->GetDataIsFolder(), isFolder);
-
+	const ibDataViewItem sel = GetSelection();
+	const ibUniqueKey key = GetItemKey(sel);
+	if (!key.IsOk()) return;
+	ibValue cIsFolder = false;
+	if (auto* node = GetViewData<ibValueModel::ibComposerNode>(sel))
+		node->GetValue(*m_metaObject->GetDataIsFolder(), cIsFolder);
+	const ibObjectMode mode = cIsFolder.GetBoolean() ? ibObjectMode::OBJECT_FOLDER : ibObjectMode::OBJECT_ITEM;
 	try {
-		ibValuePtr<ibValueRecordDataObjectHierarchyRef> dataValueFolderObject(m_metaObject->CreateObjectValue(isFolder.GetBoolean() ? ibObjectMode::OBJECT_FOLDER : ibObjectMode::OBJECT_ITEM, node->GetGuid()));
-		if (dataValueFolderObject != nullptr)
-			dataValueFolderObject->DeleteObject();
-		ibBackendValueForm* valueListForm = ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid);
-		if (valueListForm != nullptr) valueListForm->UpdateForm();
+		ibValuePtr<ibValueRecordDataObjectHierarchyRef> obj(m_metaObject->CreateObjectValue(mode, key));
+		if (obj != nullptr) obj->DeleteObject();
+		if (ibBackendValueForm* ownerForm = ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid)) ownerForm->UpdateForm();
 	}
-	catch (const ibBackendCoreException& err) {
-		ibValueSystemFunction::Alert(err.GetErrorDescription());
-	}
-	catch (...) {
-	}
+	catch (const ibBackendCoreException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
+	catch (...) { wxLogError(wxT("objectList: unhandled non-ibBackend exception swallowed")); }
 }
 
 void ibValueModelTreeDataObjectFolderRef::MarkAsDeleteValue()
 {
-	ibValueMetaObjectRecordDataHierarchyMutableRef* metaObject = nullptr;
-	if (m_metaObject->ConvertToValue(metaObject)) {
-
-		ibValueTreeListNode* node = GetViewData<ibValueTreeListNode>(GetSelection());
-		if (node == nullptr)
-			return;
-
-		ibValue isFolder = false;
-		node->GetValue(*m_metaObject->GetDataIsFolder(), isFolder);
-
-		try {
-			ibValuePtr<ibValueRecordDataObjectHierarchyRef> dataValueFolderObject(metaObject->CreateObjectValue(isFolder.GetBoolean() ? ibObjectMode::OBJECT_FOLDER : ibObjectMode::OBJECT_ITEM, node->GetGuid()));
-			if (dataValueFolderObject != nullptr)
-				dataValueFolderObject->SetDeletionMark(true);
-			ibBackendValueForm* valueListForm = ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid);
-			if (valueListForm != nullptr) valueListForm->UpdateForm();
-		}
-		catch (const ibBackendCoreException& err) {
-			ibValueSystemFunction::Alert(err.GetErrorDescription());
-		}
-		catch (...) {
-			wxLogError(wxT("objectList: unhandled non-ibBackend exception swallowed"));
-		}
+	const ibDataViewItem sel = GetSelection();
+	const ibUniqueKey key = GetItemKey(sel);
+	if (!key.IsOk()) return;
+	ibValue cIsFolder = false;
+	if (auto* node = GetViewData<ibValueModel::ibComposerNode>(sel))
+		node->GetValue(*m_metaObject->GetDataIsFolder(), cIsFolder);
+	const ibObjectMode mode = cIsFolder.GetBoolean() ? ibObjectMode::OBJECT_FOLDER : ibObjectMode::OBJECT_ITEM;
+	try {
+		ibValuePtr<ibValueRecordDataObjectHierarchyRef> obj(m_metaObject->CreateObjectValue(mode, key));
+		if (obj != nullptr) obj->SetDeletionMark(true);
+		if (ibBackendValueForm* ownerForm = ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid)) ownerForm->UpdateForm();
 	}
+	catch (const ibBackendCoreException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
+	catch (...) { wxLogError(wxT("objectList: unhandled non-ibBackend exception swallowed")); }
 }
 
 void ibValueModelTreeDataObjectFolderRef::ChooseValue(ibBackendValueForm* srcForm)
 {
-	ibValueTreeListNode* node = GetViewData<ibValueTreeListNode>(GetSelection());
+	const ibDataViewItem sel = GetSelection();
+	ibValueModel::ibComposerNode* node = GetViewData<ibValueModel::ibComposerNode>(sel);
 	if (node == nullptr)
 		return;
 
@@ -819,7 +668,7 @@ void ibValueModelTreeDataObjectFolderRef::ChooseValue(ibBackendValueForm* srcFor
 	node->GetValue(*m_metaObject->GetDataIsFolder(), cIsFolder);
 
 	try {
-		ibValuePtr<ibValueReferenceDataObject> dataValueFolderRef(m_metaObject->FindObjectValue(node->GetGuid()));
+		ibValuePtr<ibValueReferenceDataObject> dataValueFolderRef(m_metaObject->FindObjectValue(GetItemKey(sel)));
 		ibValue selectedValue = dataValueFolderRef != nullptr ? dataValueFolderRef->GetValue() : ibValue();
 		if (m_listMode == LIST_FOLDER && cIsFolder.GetBoolean())
 			srcForm->NotifyChoice(selectedValue);
@@ -865,75 +714,41 @@ wxString ibValueModelTreeDataObjectFolderRef::GetString() const
 
 ibDataViewItem ibValueListRegisterObject::FindRowValue(const ibValue& varValue, const wxString& colName) const
 {
-	// Paged model: rows live in the control's deque, not on the model.
-	// Build a stub key-row carrying:
-	//   * m_nodeKeys                  — identity (recorder + line for
-	//                                    HasRecorder, dimensions
-	//                                    otherwise).  Drives
-	//                                    ibValueTableKeyRow::IsEqualTo
-	//                                    against the freshly-fetched
-	//                                    row, restoring focus.
-	//   * m_nodeValues effective cols — drive BuildRegisterAnchor's
-	//                                    cursor predicate.  Empty
-	//                                    values bind as NULL in the
-	//                                    composite predicate and
-	//                                    exclude all rows → empty
-	//                                    table.  Pull real values for
-	//                                    each effective sort column
-	//                                    (user sort + identity tail)
-	//                                    from the record manager so
-	//                                    the cursor positions on the
-	//                                    new row's tuple.
+	// The ONLY list whose row-key is NOT the value itself: a register row is keyed by its PRIMARY-KEY columns
+	// (recorder+line, or the dimensions) read off the record manager — the SAME GetPrimaryKeyColumns() the
+	// fetched composer node stamps, so it matches by m_rowKey. (Reference lists inherit the base FindRowValue,
+	// whose key is just {value}. The dead sort-anchor is gone — restore matches by KEY within the fetched batch.)
 	ibValueRecordManagerObject* pRefData = nullptr;
 	if (!varValue.ConvertToValue(pRefData) || pRefData == nullptr)
 		return ibDataViewItem();
-
-	auto* stub = new ibValueTableKeyRow;
-	// Identity columns → m_nodeKeys.
-	if (m_metaObject->HasRecorder()) {
-		if (auto* attrRec = m_metaObject->GetRegisterRecorder())
-			stub->AppendNodeValue(attrRec->GetMetaID(),
-				pRefData->GetValueByMetaID(attrRec->GetMetaID()));
-		if (auto* attrLine = m_metaObject->GetRegisterLineNumber())
-			stub->AppendNodeValue(attrLine->GetMetaID(),
-				pRefData->GetValueByMetaID(attrLine->GetMetaID()));
-	}
-	else {
-		for (auto& dim : m_metaObject->GetGenericDimensionArrayObject())
-			stub->AppendNodeValue(dim->GetMetaID(),
-				pRefData->GetValueByMetaID(dim->GetMetaID()));
-	}
-	// Effective sort columns → m_nodeValues (read by BuildRegisterAnchor). The sort item
-	// carries a COLUMN, and a column self-describes its read key (GetColumnId == the metaID
-	// for an attribute column) — no ResolveAttribute, no downcast.
-	for (const auto& c : EffectiveSortOrder()) {
-		if (c.m_col == nullptr) continue;
-		const ibMetaID metaID = c.m_col->GetColumnId();
-		ibValue v;
-		if (pRefData->GetValueByMetaID(metaID, v))
-			stub->AppendTableValue(metaID, v);
-	}
-
+	std::vector<ibValue> rowKey;
+	if (const ibBackendQueryable* q = GetSourceQueryable())
+		for (const ibBackendQueryColumn* kc : q->GetPrimaryKeyColumns()) {
+			if (kc == nullptr) continue;
+			ibValue v;
+			pRefData->GetValueByMetaID(kc->GetColumnId(), v);
+			rowKey.push_back(v);
+		}
+	auto* stub = new ibComposerNode(std::move(rowKey));
 	ibDataViewItem item(stub);   // IncRef → 2
 	stub->DecRef();              // refcount=1, owned by item
 	return item;
 }
 
 ibValueListRegisterObject::ibValueListRegisterObject(const ibValueMetaObjectRegisterData* metaObject, const ibFormID& formType) :
-	ibValueListDataObject(metaObject, formType), m_metaObject(metaObject)
+	ibValueListDataObject(metaObject, metaObject->GetQueryable(), formType), m_metaObject(metaObject)
 {
 	m_members.Bind(this, &ibValueListRegisterObject::FillMembers);
+	// Default sort goes STRAIGHT to the composer (the store) — no helper. Recorder registers order by
+	// period? + recorder + line; a plain periodic register by period. (Dimensions are NOT a default sort; the
+	// recorder/period/line order + the queryable's GetIdentitySort tiebreaker are the whole sort.)
 	if (m_metaObject->HasRecorder()) {
-		if (m_metaObject->HasPeriod()) ibValueListDataObject::AppendSort(metaObject->GetRegisterPeriod());
-		ibValueListDataObject::AppendSort(metaObject->GetRegisterRecorder());
-		ibValueListDataObject::AppendSort(metaObject->GetRegisterLineNumber());
+		if (m_metaObject->HasPeriod()) m_composer.Sort(metaObject->GetRegisterPeriod()->GetName());
+		m_composer.Sort(metaObject->GetRegisterRecorder()->GetName());
+		m_composer.Sort(metaObject->GetRegisterLineNumber()->GetName());
 	}
 	else if (m_metaObject->HasPeriod()) {
-		ibValueListDataObject::AppendSort(metaObject->GetRegisterPeriod());
-	}
-
-	for (auto& dimension : m_metaObject->GetGenericDimensionArrayObject()) {
-		ibValueListDataObject::AppendSort(dimension, true, true, true);
+		m_composer.Sort(metaObject->GetRegisterPeriod()->GetName());
 	}
 }
 
@@ -978,14 +793,77 @@ void ibValueListRegisterObject::AddValue(unsigned int before)
 	}
 }
 
+// ibValueListDataObject::GetItemKey — a regular list's row key = its primary-key REFERENCE (guid). Read the item's
+// node, take the first PK column's value (the row's own-reference cell) and pull its guid. Empty when there is no
+// node / no keyed source / the cell is not a reference. The key IS the open handle — it converts to guid on use.
+ibUniqueKey ibValueListDataObject::GetItemKey(const ibDataViewItem& item) const
+{
+	ibValueModel::ibComposerNode* node = GetViewData<ibValueModel::ibComposerNode>(item);
+	if (node == nullptr) return ibUniqueKey();
+	const ibBackendQueryable* q = GetSourceQueryable();
+	if (q == nullptr) return ibUniqueKey();
+	const std::vector<const ibBackendQueryColumn*> keyCols = q->GetPrimaryKeyColumns();
+	if (keyCols.empty() || keyCols.front() == nullptr) return ibUniqueKey();
+	ibValue refVal;
+	if (node->GetValue(keyCols.front()->GetColumnId(), refVal)) {
+		ibValueReferenceDataObject* refObj = nullptr;
+		if (refVal.ConvertToValue(refObj) && refObj != nullptr)
+			return ibUniqueKey(refObj->GetGuid());
+	}
+	return ibUniqueKey();
+}
+
+// ibValueModelTreeDataObject::GetItemKey — a folder tree's row key = its primary-key REFERENCE (guid), same shape
+// as a flat list (a tree is a list too; it just derives the ibValueModelCursor via the tree base, not the list one).
+ibUniqueKey ibValueModelTreeDataObject::GetItemKey(const ibDataViewItem& item) const
+{
+	ibValueModel::ibComposerNode* node = GetViewData<ibValueModel::ibComposerNode>(item);
+	if (node == nullptr) return ibUniqueKey();
+	const ibBackendQueryable* q = GetSourceQueryable();
+	if (q == nullptr) return ibUniqueKey();
+	const std::vector<const ibBackendQueryColumn*> keyCols = q->GetPrimaryKeyColumns();
+	if (keyCols.empty() || keyCols.front() == nullptr) return ibUniqueKey();
+	ibValue refVal;
+	if (node->GetValue(keyCols.front()->GetColumnId(), refVal)) {
+		ibValueReferenceDataObject* refObj = nullptr;
+		if (refVal.ConvertToValue(refObj) && refObj != nullptr)
+			return ibUniqueKey(refObj->GetGuid());
+	}
+	return ibUniqueKey();
+}
+
+// ibValueListRegisterObject::GetItemKey — the register row key is a COMPOSITE (dimensions), not a single guid, so
+// it overrides the regular-list default. Reads the recorder+line (HasRecorder) or the dimension values off the
+// item's node and hands them to CreateUniqueKeyPair; the resulting Pair slices to the ibUniqueKey return WITHOUT
+// losing the composite (it lives in the base). Empty (invalid) when there is no node, so the selection op no-ops.
+ibUniqueKey ibValueListRegisterObject::GetItemKey(const ibDataViewItem& item) const
+{
+	if (m_metaObject == nullptr) return ibUniqueKey();
+	ibValueModel::ibComposerNode* node = GetViewData<ibValueModel::ibComposerNode>(item);
+	if (node == nullptr) return ibUniqueKey();
+	ibRowMetaValues keys;
+	auto take = [&](const ibValueMetaObjectAttributePredefined* attr) {
+		if (attr == nullptr) return;
+		ibValue v; node->GetValue(attr->GetMetaID(), v); keys.insert_or_assign(attr->GetMetaID(), v);
+	};
+	if (m_metaObject->HasRecorder()) {
+		take(m_metaObject->GetRegisterRecorder());
+		take(m_metaObject->GetRegisterLineNumber());
+	}
+	else {
+		for (auto& dim : m_metaObject->GetGenericDimensionArrayObject()) {
+			ibValue v; node->GetValue(dim->GetMetaID(), v); keys.insert_or_assign(dim->GetMetaID(), v);
+		}
+	}
+	return m_metaObject->CreateUniqueKeyPair(keys);
+}
+
 void ibValueListRegisterObject::CopyValue()
 {
-	if (m_metaObject != nullptr) {
-		ibValueTableKeyRow* node = GetViewData<ibValueTableKeyRow>(GetSelection());
-		if (node == nullptr) return;
+	if (m_metaObject != nullptr && GetSelection().IsOk()) {
 		if (m_metaObject->HasRecordManager()) {
 			try {
-				ibValuePtr<ibValueRecordManagerObject> dataValueObject(m_metaObject->CopyRecordManagerObjectValue(node->GetUniquePairKey(m_metaObject)));
+				ibValuePtr<ibValueRecordManagerObject> dataValueObject(m_metaObject->CopyRecordManagerObjectValue(ibUniqueKeyPair(GetItemKey(GetSelection()).GetKeyValues())));
 				if (dataValueObject != nullptr)
 					dataValueObject->ShowFormValue(wxEmptyString, dynamic_cast<ibBackendControlFrame*>(ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid)));
 			}
@@ -1000,12 +878,10 @@ void ibValueListRegisterObject::CopyValue()
 
 void ibValueListRegisterObject::EditValue()
 {
-	if (m_metaObject != nullptr) {
-		ibValueTableKeyRow* node = GetViewData<ibValueTableKeyRow>(GetSelection());
-		if (node == nullptr) return;
+	if (m_metaObject != nullptr && GetSelection().IsOk()) {
 		if (m_metaObject->HasRecordManager()) {
 			try {
-				ibValuePtr<ibValueRecordManagerObject> dataValueObject(m_metaObject->CreateRecordManagerObjectValue(node->GetUniquePairKey(m_metaObject)));
+				ibValuePtr<ibValueRecordManagerObject> dataValueObject(m_metaObject->CreateRecordManagerObjectValue(ibUniqueKeyPair(GetItemKey(GetSelection()).GetKeyValues())));
 				if (dataValueObject != nullptr)
 					dataValueObject->ShowFormValue(wxEmptyString, dynamic_cast<ibBackendControlFrame*>(ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid)));
 			}
@@ -1018,10 +894,11 @@ void ibValueListRegisterObject::EditValue()
 		else {
 			try {
 				const ibValueMetaObjectAttributePredefined* metaRecorder = m_metaObject->GetRegisterRecorder();
-				if (metaRecorder != nullptr) {
-					ibValue recorderVal = node->GetTableValue(metaRecorder->GetMetaID());
-					recorderVal.ShowValue();
-				}
+				if (metaRecorder != nullptr)
+					if (auto* node = GetViewData<ibValueModel::ibComposerNode>(GetSelection())) {
+						ibValue recorderVal; node->GetValue(metaRecorder->GetMetaID(), recorderVal);
+						recorderVal.ShowValue();
+					}
 			}
 			catch (const ibBackendCoreException& err) {
 				ibValueSystemFunction::Alert(err.GetErrorDescription());
@@ -1034,12 +911,10 @@ void ibValueListRegisterObject::EditValue()
 
 void ibValueListRegisterObject::DeleteValue()
 {
-	if (m_metaObject != nullptr) {
-		ibValueTableKeyRow* node = GetViewData<ibValueTableKeyRow>(GetSelection());
-		if (node == nullptr) return;
+	if (m_metaObject != nullptr && GetSelection().IsOk()) {
 		if (m_metaObject->HasRecordManager()) {
 			try {
-				ibValuePtr<ibValueRecordManagerObject> dataValueObject(m_metaObject->CreateRecordManagerObjectValue(node->GetUniquePairKey(m_metaObject)));
+				ibValuePtr<ibValueRecordManagerObject> dataValueObject(m_metaObject->CreateRecordManagerObjectValue(ibUniqueKeyPair(GetItemKey(GetSelection()).GetKeyValues())));
 				if (dataValueObject != nullptr)
 					dataValueObject->DeleteRegister();
 				ibBackendValueForm* valueListForm = ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid);

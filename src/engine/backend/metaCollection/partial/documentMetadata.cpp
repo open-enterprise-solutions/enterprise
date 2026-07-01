@@ -17,9 +17,9 @@ class ibValueListDataObjectRefDocument : public ibValueListDataObjectRef {
 	ibValueListDataObjectRefDocument(const ibValueMetaObjectDocument* metaObject = nullptr, const ibFormID& formType = wxNOT_FOUND, bool choiceMode = false) :
 		ibValueListDataObjectRef(metaObject, formType, choiceMode)
 	{
-		ibValueListDataObject::AppendSort(metaObject->GetDocumentNumber(), true, false);
-		ibValueListDataObject::AppendSort(metaObject->GetDocumentDate(), true, true);
-		ibValueListDataObject::AppendSort(metaObject->GetDataReference(), true, true, true);
+		// Default sort by Date goes STRAIGHT to the composer (the store) — no helper. (Number was a disabled
+		// default; the uuid identity tiebreaker comes from the queryable's GetIdentitySort.)
+		m_composer.Sort(metaObject->GetDocumentDate()->GetName());
 	}
 };
 

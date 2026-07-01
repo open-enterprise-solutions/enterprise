@@ -107,7 +107,7 @@ public:
 	bool IsPagedModel() const override { return true; }
 	Features GetFeatures() const override {
 		Features f;
-		f.flags = Features::DbFetch | Features::Filters;
+		f.flags = Features::Filters;   // keyed DB paging is the default (HasKeyedRows() == true); fetch is uniform
 		return f;
 	}
 

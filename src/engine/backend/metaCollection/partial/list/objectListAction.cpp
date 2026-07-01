@@ -20,7 +20,7 @@ ibValueListDataObjectEnumRef::ibActionCollection ibValueListDataObjectEnumRef::G
 		actionData.AddAction(wxT("Select"), _("Select"), g_picSelectCLSID, true, eChooseValue);
 
 	const ibActionCollection& data =
-		ibValueModelTableBase::GetActionCollection(formType);
+		ibValueModel::GetActionCollection(formType);
 
 	for (unsigned int idx = 0; idx < data.GetCount(); idx++) {
 		const ibActionID& id = data.GetID(idx);
@@ -49,7 +49,7 @@ void ibValueListDataObjectEnumRef::ExecuteAction(const ibActionID& lNumAction, i
 			ChooseValue(srcForm);
 			break;
 		default:
-			ibValueModelTableBase::ExecuteAction(lNumAction, srcForm);
+			ibValueModel::ExecuteAction(lNumAction, srcForm);
 	}
 }
 
@@ -66,7 +66,7 @@ ibValueListDataObjectRef::ibActionCollection ibValueListDataObjectRef::GetAction
 		actionData.AddSeparator();
 
 	const ibActionCollection& data =
-		ibValueModelTableBase::GetActionCollection(formType);
+		ibValueModel::GetActionCollection(formType);
 
 	for (unsigned int idx = 0; idx < data.GetCount(); idx++) {
 		const ibActionID& id = data.GetID(idx);
@@ -100,7 +100,7 @@ void ibValueListDataObjectRef::ExecuteAction(const ibActionID& lNumAction, ibBac
 			ChooseValue(srcForm);
 			break;
 		default:
-			ibValueModelTableBase::ExecuteAction(lNumAction, srcForm);
+			ibValueModel::ExecuteAction(lNumAction, srcForm);
 			break;
 	}
 }
@@ -121,7 +121,7 @@ ibValueListDataObjectRef::ibActionCollection ibValueModelTreeDataObjectFolderRef
 	}
 
 	ibActionCollection data =
-		ibValueModelTreeBase::GetActionCollection(formType);
+		ibValueModelCursor::GetActionCollection(formType);
 
 	if (m_listMode == LIST_FOLDER)
 		data.RemoveAction(eAddValue); //add
@@ -166,7 +166,7 @@ void ibValueModelTreeDataObjectFolderRef::ExecuteAction(const ibActionID& lNumAc
 			ChooseValue(srcForm);
 			break;
 		default:
-			ibValueModelTreeBase::ExecuteAction(lNumAction, srcForm);
+			ibValueModelCursor::ExecuteAction(lNumAction, srcForm);
 	}
 }
 
@@ -174,10 +174,10 @@ void ibValueModelTreeDataObjectFolderRef::ExecuteAction(const ibActionID& lNumAc
 
 ibValueListRegisterObject::ibActionCollection ibValueListRegisterObject::GetActionCollection(const ibFormID& formType)
 {
-	return ibValueModelTableBase::GetActionCollection(formType);
+	return ibValueModel::GetActionCollection(formType);
 }
 
 void ibValueListRegisterObject::ExecuteAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm)
 {
-	ibValueModelTableBase::ExecuteAction(lNumAction, srcForm);
+	ibValueModel::ExecuteAction(lNumAction, srcForm);
 }

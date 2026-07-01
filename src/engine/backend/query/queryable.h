@@ -19,17 +19,53 @@
 //
 // See docs/query-language-arc.md §18 (name substitution) / §20 (this interface).
 
-#include "backend/tableInfo.h"          // ibComparisonType, ibMetaID
+#include "backend/tableView.h"          // ibMetaID (via backend.h) — NOT tableInfo.h, so tableInfo.h can hold
+                                        // ibDataDBComposer BY VALUE (breaks the dataComposer→queryLowering→queryable→
+                                        // tableInfo include cycle). (ibComparisonType is no longer used here — the
+                                        // L3 condition op is ibQueryFilterOp now, defined below.)
 #include "backend/compiler/value.h"     // ibValue
 #include "queryColumn.h"                // ibBackendQueryColumn (the column counterpart)
 #include "queryRamTable.h"              // ibQueryRamTable — ComputeRows produces the L3 table (no runtime type)
 
+#include <map>
 #include <memory>
 #include <vector>
 
 class ibBackendQueryProvider;   // the engine the queryable vends — defined in queryProvider.h; it IS the whole L3<->L2 layer
 class ibDataQueryBuilder;       // the inner query a system subquery-queryable wraps (defined below) — full type only in its .cpp
 class ibMetaData;               // the metadata context — the provider needs it to reconstruct reference / enum values column-based
+class ibBackendQueryable;       // defined below — ibTempSourceScope references it by pointer only
+
+// ==========================================================================
+// ibTempSourceScope — the AUXILIARY, per-query queryable registry (the L4 seam).
+//
+// The MAIN source factory resolves metaobjects BY NAME. A transient queryable —
+// a RAM table (value table / tabular section) or a temp table — carries no
+// metaobject and no registered name, so it cannot be re-resolved that way. The
+// composer registers such a queryable HERE under a unique local name (t0, t1, …)
+// and renders "FROM Temp.<name>"; ResolveSource consults this registry BEFORE the
+// factory and returns the queryable directly. The L3 door then runs it unchanged —
+// it already IS a complete L3 queryable, so nothing is registered down at L3.
+//
+// The registry is THREAD-LOCAL and RAII-scoped to ONE query execution: the composer
+// installs it around Execute, and it vanishes when the query finishes — no trace
+// left behind (the queryable stays owned by its model). This is the temp-table
+// feature: L5 registers at L4, L4 resolves directly, L3 needs nothing.
+class BACKEND_API ibTempSourceScope
+{
+public:
+	explicit ibTempSourceScope(const std::map<wxString, const ibBackendQueryable*>& sources);
+	~ibTempSourceScope();
+
+	// The active scope's queryable for `name`, or null (no scope / not a temp source).
+	static const ibBackendQueryable* Find(const wxString& name);
+
+	ibTempSourceScope(const ibTempSourceScope&) = delete;
+	ibTempSourceScope& operator=(const ibTempSourceScope&) = delete;
+
+private:
+	const std::map<wxString, const ibBackendQueryable*>* m_prev;
+};
 
 // The shared stateless computed (RAM) provider, as a base reference — so a computed queryable
 // here can vend it WITHOUT this header naming the concrete ibComputedProvider (which lives in
@@ -52,19 +88,20 @@ BACKEND_API ibBackendQueryProvider& ibComputedProviderInstance();
 // list layer's Equal / NotEqual. Kept here (not L2's ibQueryBinOp) so the metadata
 // side carries no L2 dependency — the query builder translates these to physical IR
 // operators. (L3 doesn't pull L2 includes; see docs/query-language-arc.md §20, §22.4b.)
-enum class ibQueryFilterOp { Like, Less, LessEqual, Greater, GreaterEqual };
+// The L3 comparison/filter operator — ONE L3-native enum covering equality AND the ordered/LIKE ops, so the
+// crippled 2-value ibComparisonType (Eq/Ne, a leftover from the legacy ibFilterRow) is GONE from the query
+// path. Equal/NotEqual are the common case; the rest are the former WhereCompare/WhereLike ops. (Max: "зачем
+// каличный ibComparisonType везде тащишь".)
+enum class ibQueryFilterOp { Equal, NotEqual, Like, Less, LessEqual, Greater, GreaterEqual };
 
 struct ibQueryCondition
 {
 	const ibBackendQueryColumn* m_col = nullptr;   // null = the row-key column; with m_path = the path LEAF
-	ibComparisonType            m_comparison = ibComparisonType::ibComparisonType_Equal;
+	// THE comparison/filter operator — ONE field now (the former m_comparison Eq/Ne + the m_explicitOp toggle
+	// + the m_op Like/Less/... are collapsed). Equal is the default; Where/WhereCompare/WhereLike all just set
+	// this. Providers read it directly (FilterOpToBinOp / the RAM switch); no branch.
+	ibQueryFilterOp             m_op = ibQueryFilterOp::Equal;
 	ibValue                     m_value;
-
-	// When m_explicitOp is set, m_op is the operator (LIKE / <= / < / > / >=) and
-	// m_comparison is ignored. Filled by WhereLike / WhereCompare; the plain
-	// Where(col, comparison, value) path leaves it false (Eq / Ne).
-	bool            m_explicitOp = false;
-	ibQueryFilterOp m_op = ibQueryFilterOp::Like;
 
 	// Reference DOT-WALK: when non-empty, this condition filters the LEAF attribute of a reference
 	// path (Producer.Region -> {Producer, Region}). Every non-leaf segment is a single-target
@@ -292,8 +329,13 @@ public:
 	// The PARENT-reference column of a hierarchical record source (the parent attribute) — paired with
 	// GetPrimaryKeyColumns().front() (the self-reference) it gives the source's own parent-ref hierarchy.
 	// Null for a flat / non-record source. Used to unfold a TotalBy(refField, Hierarchy) dimension: the
-	// target catalog's parent-map is read through ITS GetParentColumn. (docs/query-language-arc.md §22.1b)
-	virtual const ibBackendQueryColumn* GetParentColumn() const { return nullptr; }
+	// target catalog's parent-map is read through ITS GetHierarchyColumn. (docs/query-language-arc.md §22.1b)
+	virtual const ibBackendQueryColumn* GetHierarchyColumn() const { return nullptr; }
+
+	// The FOLDER-flag column of a folders+items hierarchical source (catalog "IsFolder" / ЭтоГруппа). A row
+	// with it set is a CONTAINER — shown as a folder (icon + expander), drillable even when empty — vs a leaf
+	// item. Null for an item-only hierarchy (every row may have children) or a flat source. (queryable property)
+	virtual const ibBackendQueryColumn* GetFolderColumn() const { return nullptr; }
 
 	// Auto-join support (Join(b) without explicit columns) needs NO dedicated virtuals: the
 	// composer derives a null-key join from the COLUMNS — a referencing column (one whose
@@ -327,6 +369,8 @@ public:
 	// ibValueModelTable. The register's Compute* builds it directly; a runtime-sourced temp
 	// table converts its model into one at this boundary. (docs/query-language-arc.md §22.6)
 	virtual ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& /*extra*/) const { return ibQueryRamTable(); }
+	// (The cell-UPSERT write path was removed: a RAM list now edits its LIVE storage rows directly — the node
+	// IS the storage row — so there is no display-copy to write back through the queryable. See ibDataRamComposer.)
 };
 
 // ==========================================================================

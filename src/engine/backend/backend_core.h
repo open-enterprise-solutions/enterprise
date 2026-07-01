@@ -127,7 +127,7 @@ enum ibProgramVersion {
 };
 
 enum ibProgramSyntax {
-	syntax_ves,    // Visual Basic-style ES + 1С/BSL mix — keyword-fenced (Then/Do/EndIf/...).
+	syntax_ves,    // Visual Basic-style ES, a legacy business-scripting dialect — keyword-fenced (Then/Do/EndIf/...).
 	syntax_ces,    // C-style ES — paren conditions, brace bodies, `;` terminators (default).
 };
 

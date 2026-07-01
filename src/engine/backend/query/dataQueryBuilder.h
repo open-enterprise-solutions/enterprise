@@ -322,7 +322,7 @@ public:
 	ibDataQueryBuilder& Union(const ibBackendQueryable* queryable, const wxString& alias = wxEmptyString,
 	                          bool keepDuplicates = true);
 	ibDataQueryBuilder& Where(const ibBackendQueryColumn* col,
-	                          ibComparisonType comparison, const ibValue& value);            // condition -> predicate
+	                          ibQueryFilterOp comparison, const ibValue& value);             // condition -> predicate (Equal/NotEqual)
 	ibDataQueryBuilder& Where(const ibBackendQueryColumn* col, const ibValue& value);        // 2-arg = equality (meta column)
 	ibDataQueryBuilder& Where(const ibRawDBColumn& rawColumn, const ibValue& value);         // direct field = value (door owns a copy)
 	ibDataQueryBuilder& WhereLike(const ibBackendQueryColumn* col,
@@ -337,14 +337,14 @@ public:
 	// lowers the expression via BuildColumnExpr. Single-source DB reads / aggregates only (the L4
 	// lowering gates it: the RAM stitch and computed sources do not evaluate condition expressions).
 	ibDataQueryBuilder& WhereExpr(const ibQueryColumnExprPtr& expr,
-	                              ibComparisonType comparison, const ibValue& value);   // = / <>
+	                              ibQueryFilterOp comparison, const ibValue& value);   // = / <> (Equal/NotEqual)
 	ibDataQueryBuilder& WhereExprCompare(const ibQueryColumnExprPtr& expr,
 	                                     ibQueryFilterOp op, const ibValue& value);     // ordered / LIKE
 	// Reference DOT-WALK filter / compare — filter the LEAF attribute of a reference path
 	// (Producer.Region = value). The provider auto-joins the path (the same join SelectPath builds) and
 	// compares on the joined leaf. Single-source read path only. (docs §23 — dot-walk in WHERE.)
 	ibDataQueryBuilder& Where(const std::vector<const ibBackendQueryColumn*>& path,
-	                          ibComparisonType comparison, const ibValue& value);
+	                          ibQueryFilterOp comparison, const ibValue& value);
 	ibDataQueryBuilder& WhereCompare(const std::vector<const ibBackendQueryColumn*>& path,
 	                                 ibQueryFilterOp op, const ibValue& value);
 	ibDataQueryBuilder& OrderBy(const ibBackendQueryColumn* col, bool ascending);            // col (null = row-key) -> sort

@@ -85,7 +85,7 @@ public:
 			// ROW-keyed (each catalog row is a node) — that is BuildHierarchyTree, rowKey from the
 			// queryable (already in the snapshot), NO extra query.
 			if (m_totalLevels.size() == 1 && m_totalLevels[0].m_dim != ibDimensionKind::Elements && m_queryable != nullptr
-			    && m_totalLevels[0].m_col == m_queryable->GetParentColumn()) {
+			    && m_totalLevels[0].m_col == m_queryable->GetHierarchyColumn()) {
 				const std::vector<const ibBackendQueryColumn*> keys = m_queryable->GetPrimaryKeyColumns();
 				if (!keys.empty() && keys.front() != nullptr)
 					return ibQueryComposer::BuildHierarchyTree(m_snapshot, keys.front(), m_totalLevels[0].m_col,
@@ -239,8 +239,7 @@ inline ibSelector ibSelector::MakeChild(const ibValue& parentKeyValue, int child
 	ibDataQueryBuilder q(m_holder);
 	q.From(m_queryable);
 	for (const ibQueryCondition& c : m_conditions)                 // inherited filter re-applied
-		if (c.m_explicitOp) q.WhereCompare(c.m_col, c.m_op, c.m_value);
-		else                q.Where(c.m_col, c.m_comparison, c.m_value);
+		q.Where(c.m_col, c.m_op, c.m_value);                        // ONE op — Where carries any ibQueryFilterOp now
 	q.Where(m_parentKeyCol, parentKeyValue);                       // direct children of this node
 	for (const auto& sc : m_selectCols) q.Select(sc.first, sc.second);
 	for (const ibDataQueryBuilder::AggregateItem& a : m_aggregates) q.Aggregate(a.m_fn, a.m_col, a.m_alias);

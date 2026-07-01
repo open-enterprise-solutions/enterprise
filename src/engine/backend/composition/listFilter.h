@@ -3,10 +3,22 @@
 
 #include "backend/compiler/enumUnit.h"
 #include "backend/typeDescription.h"   // ibTypeDescription (filter field typing)
+#include "backend/query/queryAst.h"    // ibQueryDimUnfold — the grouping VID (Elements / Hierarchy / HierarchyOnly), lifted to L5
+
+#include <functional>                  // std::function — the FACADE-mode refresh callback (model owns the refresh)
 
 class ibValueMetaObjectGenericData;
+class ibDataDBComposer;
 class ibDataComposer;
+class ibValueModel;
 class ibDataNode;
+
+// Filter / Order / Group come in TWO MODES (Max: "the form is transactional; the runtime wrapper mutates
+// immediately; refresh lives in the model"):
+//   * BUFFER  — own storage, edited transactionally; the settings DIALOG's copy (load on open, commit on OK).
+//   * FACADE  — a live view over the composer (the store): Add/Clear write the composer IMMEDIATELY and fire the
+//               model's refresh callback; the script's `list.Settings` is this. Default-ctor = buffer; the
+//               (composer, onChange) ctor = facade.
 
 // ---------------------------------------------------------------------------
 // Dynamic-list settings — runtime (script-visible) objects mirroring the
@@ -15,7 +27,7 @@ class ibDataNode;
 //
 // Everything is a runtime value: the comparison kind / sort direction are
 // runtime enumerations; the filter / sort / group lines and collections are
-// runtime values. The fetch path reads them and feeds ibDataComposer
+// runtime values. The fetch path reads them and feeds ibDataDBComposer
 // (.Filter / .Sort / .TotalBy). Field is a PATH (dot-walk like "Ref.Owner"
 // resolves to an auto-JOIN on the door). Source stays the main table for now;
 // the named DynamicList class and the designer settings form come next.
@@ -47,6 +59,18 @@ inline wxString ComparisonKindToOp(ibComparisonKind kind) {
 	case ibComparisonKind_Contains:     return wxT("LIKE");
 	}
 	return wxT("=");
+}
+
+// Inverse — the composer's stored operator spelling back to the comparison kind (for loading the dialog
+// buffer FROM the composer: composer.GetFilterAt yields the op string, the FilterItem wants the kind).
+inline ibComparisonKind OpToComparisonKind(const wxString& op) {
+	if (op == wxT("<>"))   return ibComparisonKind_NotEqual;
+	if (op == wxT(">"))    return ibComparisonKind_Greater;
+	if (op == wxT("<"))    return ibComparisonKind_Less;
+	if (op == wxT(">="))   return ibComparisonKind_GreaterEqual;
+	if (op == wxT("<="))   return ibComparisonKind_LessEqual;
+	if (op == wxT("LIKE")) return ibComparisonKind_Contains;
+	return ibComparisonKind_Equal;
 }
 
 // The sort direction.
@@ -102,15 +126,16 @@ public:
 	bool GetUse() const { return m_use; }
 	const wxString& GetField() const { return m_field; }
 	ibComparisonKind GetComparison() const { return m_comparison; }
+	void SetComparison(ibComparisonKind comparison) { m_comparison = comparison; }
 	const ibValue& GetFilterValue() const { return m_value; }
 
-	// Runtime field typing — like ibFilterData. The form edits the value THROUGH
-	// the runtime (AdjustValue / CreateObject / QuickChoice / ProcessChoice) using
-	// this type, not a plain text box. Set from the queryable column when the
-	// filter row is built off a source.
-	ibMetaID GetModel() const { return m_model; }
+	// Runtime field typing. The form edits the value THROUGH the runtime
+	// (AdjustValue / CreateObject / QuickChoice / ProcessChoice) using this type,
+	// not a plain text box. Set from the queryable column when the filter row is
+	// built off a source.
+	ibMetaID GetLeafId() const { return m_leafId; }
 	const ibTypeDescription& GetTypeDescription() const { return m_typeDescription; }
-	void SetTypeInfo(const ibMetaID& model, const ibTypeDescription& typeDesc) { m_model = model; m_typeDescription = typeDesc; }
+	void SetTypeInfo(const ibMetaID& leafId, const ibTypeDescription& typeDesc) { m_leafId = leafId; m_typeDescription = typeDesc; }
 	void SetUse(bool use) { m_use = use; }
 	void SetFilterValue(const ibValue& value) { m_value = value; }
 
@@ -119,7 +144,7 @@ private:
 	wxString          m_field;
 	ibComparisonKind  m_comparison;
 	ibValue           m_value;
-	ibMetaID          m_model = wxNOT_FOUND;   // the field's id (queryable column id)
+	ibMetaID          m_leafId = wxNOT_FOUND;   // the field's id (queryable column id)
 	ibTypeDescription m_typeDescription;       // the field's type — for AdjustValue / choice
 };
 
@@ -129,24 +154,28 @@ class BACKEND_API ibValueFilterList : public ibValueDynamicMembers {
 public:
 	enum Method { enAdd = 0, enCount, enGet, enClear };
 
-	ibValueFilterList();
+	ibValueFilterList();                                                    // BUFFER mode (own storage)
+	ibValueFilterList(ibValueModel& model, std::function<void()> onChange);   // FACADE mode (live over the model's composer)
 	virtual ~ibValueFilterList() {}
 
 	void FillMembers(ibMemberTable& helper) const;
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) override;
 	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray) override;
-	virtual bool IsEmpty() const override { return m_items.empty(); }
+	virtual bool IsEmpty() const override;
 	virtual wxString GetString() const override;
 
-	size_t Count() const { return m_items.size(); }
-	ibValueFilterItem* GetItem(size_t idx) const {
-		return idx < m_items.size() ? static_cast<ibValueFilterItem*>(m_items[idx]) : nullptr;
-	}
+	size_t Count() const;
+	ibValueFilterItem* GetItem(size_t idx) const;
 	ibValueFilterItem* Add(const wxString& field, ibComparisonKind comparison, const ibValue& value, bool use = true);
-	void Clear() { m_items.clear(); }
+	void Clear();
 
 private:
-	std::vector<ibValuePtr<ibValueFilterItem>> m_items;
+	// FACADE: resolve the model's composer LAZILY (it is polymorphic + lazily created, so it does not exist
+	// when the model's ctor builds this facade — by first USE the model is fully constructed). null = BUFFER mode.
+	ibDataComposer*   Composer() const;
+	ibValueModel*         m_model = nullptr;       // FACADE target (the model); null = BUFFER mode
+	std::function<void()> m_onChange;             // FACADE: fire the model's refresh after a mutation
+	std::vector<ibValuePtr<ibValueFilterItem>> m_items;   // BUFFER storage (unused in facade mode)
 };
 
 // ========================= Sort ============================================
@@ -182,51 +211,65 @@ class BACKEND_API ibValueSortList : public ibValueDynamicMembers {
 public:
 	enum Method { enAdd = 0, enCount, enGet, enClear };
 
-	ibValueSortList();
+	ibValueSortList();                                                      // BUFFER mode (own storage)
+	ibValueSortList(ibValueModel& model, std::function<void()> onChange);     // FACADE mode (live over the model's composer)
 	virtual ~ibValueSortList() {}
 
 	void FillMembers(ibMemberTable& helper) const;
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) override;
 	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray) override;
-	virtual bool IsEmpty() const override { return m_items.empty(); }
+	virtual bool IsEmpty() const override;
 	virtual wxString GetString() const override;
 
-	size_t Count() const { return m_items.size(); }
-	ibValueSortItem* GetItem(size_t idx) const {
-		return idx < m_items.size() ? static_cast<ibValueSortItem*>(m_items[idx]) : nullptr;
-	}
+	size_t Count() const;
+	ibValueSortItem* GetItem(size_t idx) const;
 	ibValueSortItem* Add(const wxString& field, ibSortDirection direction = ibSortDirection_Ascending);
-	void Clear() { m_items.clear(); }
+	void Clear();
 
 private:
-	std::vector<ibValuePtr<ibValueSortItem>> m_items;
+	ibDataComposer*   Composer() const;        // FACADE: lazily resolve the model's composer; null = BUFFER mode
+	ibValueModel*         m_model = nullptr;       // FACADE target (the model); null = BUFFER mode
+	std::function<void()> m_onChange;             // FACADE: fire the model's refresh after a mutation
+	std::vector<ibValuePtr<ibValueSortItem>> m_items;   // BUFFER storage (unused in facade mode)
 };
 
 // ======================== Group ============================================
 
-// The Group — an ordered list of grouping field paths (a flat list of
-// fields). Items are strings (the field path).
+// The Group — an ordered list of grouping items, each a { field path, KIND }. The KIND is the grouping
+// VID: a plain DIMENSION group (group rows by the field's value) or a HIERARCHY group (the field is a
+// reference whose own parent chain is unfolded into a tree — a hierarchical catalog). Hierarchy is just a grouping
+// kind: add a hierarchy-group on a reference → the list becomes a tree; remove it → it falls back to flat.
 //   list.Group.Add("Producer") / .Count() / .Get(i) / .Clear()
 class BACKEND_API ibValueGroupList : public ibValueDynamicMembers {
 public:
 	enum Method { enAdd = 0, enCount, enGet, enClear };
 
-	ibValueGroupList();
+	// One group line — { field path, KIND }. KIND = the grouping VID (Elements / Hierarchy / HierarchyOnly),
+	// lifted from the L3/L4 TOTALS BY. A HIERARCHY kind on a reference field IS what makes the list a tree.
+	struct Item { wxString m_field; ibQueryDimUnfold m_kind = ibQueryDimUnfold::Elements; };
+
+	ibValueGroupList();                                                     // BUFFER mode (own storage)
+	ibValueGroupList(ibValueModel& model, std::function<void()> onChange);    // FACADE mode (live over the model's composer)
 	virtual ~ibValueGroupList() {}
 
 	void FillMembers(ibMemberTable& helper) const;
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) override;
 	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray) override;
-	virtual bool IsEmpty() const override { return m_fields.empty(); }
+	virtual bool IsEmpty() const override;
 	virtual wxString GetString() const override;
 
-	size_t Count() const { return m_fields.size(); }
-	wxString GetField(size_t idx) const { return idx < m_fields.size() ? m_fields[idx] : wxString(); }
-	void Add(const wxString& field) { m_fields.push_back(field); }
-	void Clear() { m_fields.clear(); }
+	size_t Count() const;
+	wxString GetField(size_t idx) const;
+	ibQueryDimUnfold GetKind(size_t idx) const;
+	bool IsHierarchy(size_t idx) const { return GetKind(idx) != ibQueryDimUnfold::Elements; }
+	void Add(const wxString& field, ibQueryDimUnfold kind = ibQueryDimUnfold::Elements);
+	void Clear();
 
 private:
-	std::vector<wxString> m_fields;
+	ibDataComposer*   Composer() const;        // FACADE: lazily resolve the model's composer; null = BUFFER mode
+	ibValueModel*         m_model = nullptr;       // FACADE target (the model); null = BUFFER mode
+	std::function<void()> m_onChange;             // FACADE: fire the model's refresh after a mutation
+	std::vector<Item>     m_items;                // BUFFER storage (unused in facade mode)
 };
 
 // ====================== ListSettings (SettingsComposer) ====================
@@ -238,7 +281,15 @@ class BACKEND_API ibValueListSettings : public ibValueDynamicMembers {
 public:
 	enum Prop { enFilter = 0, enOrder, enGroup };
 
+	// Filter / Order / Group container, in TWO MODES (see the file header):
+	//   * FACADE  (composer, onChange) — a thin wrapper OVER the composer (the store). The MODEL owns ONE of
+	//     these as its live runtime/script settings; a script's list.Settings.Filter.Add writes the composer
+	//     immediately + fires the model refresh. (Max: "this is a system type that lives inside the model; the
+	//     composer is handed to it; add a filter and it forwards it immediately.") This is the canonical owner.
+	//   * BUFFER  (default ctor) — own storage, the settings DIALOG's transactional copy (load FROM the composer
+	//     on open via ibLoadSettingsFromComposer, commit BACK on OK via ibCommitSettingsToComposer; Cancel = discard).
 	ibValueListSettings();
+	ibValueListSettings(ibValueModel& model, std::function<void()> onChange);
 	virtual ~ibValueListSettings() {}
 
 	void FillMembers(ibMemberTable& helper) const;
@@ -255,27 +306,20 @@ public:
 	bool ReadData(const ibDataNode& node);
 	bool WriteData(ibDataNode& node) const;
 
-	// (Source / query config and the ms_showDialog hook are GONE: the source is now a
-	// property ON the dynamic list — m_propertySource — and the settings form is opened
-	// from the frontend property action, not a backend function pointer.)
-
 private:
 	ibValuePtr<ibValueFilterList> m_filter;
 	ibValuePtr<ibValueSortList>   m_order;
 	ibValuePtr<ibValueGroupList>  m_group;
 };
 
-// Apply the dynamic-list settings to a composer: Filter, Sort, Group→TotalBy.
-// Dot-walk fields ("Ref.Owner") resolve to auto-JOINs on the
-// door. Shared by the legacy list fetch path (objectListQuery) AND the unified
-// ibValueDynamicList — one source of truth.
-//
-// The per-aspect forms let a caller apply only part of the settings — e.g. a grouping
-// drill applies Filters + Sorts onto a scoped composer but supplies its OWN per-level
-// TotalBy instead of the full Group set. ibApplyDynamicSettings = all three in order.
-BACKEND_API void ibApplyDynamicFilters(ibDataComposer& composer, const ibValueListSettings* settings);
-BACKEND_API void ibApplyDynamicSorts  (ibDataComposer& composer, const ibValueListSettings* settings);
-BACKEND_API void ibApplyDynamicGroups (ibDataComposer& composer, const ibValueListSettings* settings);
-BACKEND_API void ibApplyDynamicSettings(ibDataComposer& composer, const ibValueListSettings* settings);
+// Transactional bridge between the composer (the committed settings STORE) and an ibValueListSettings (the
+// settings DIALOG's edit BUFFER). The composer is never read+rebuilt every fetch any more — instead:
+//   * the dialog OPENS  → ibLoadSettingsFromComposer (composer → buffer: show the current state for editing),
+//   * the user EDITS the buffer (Filter / Order / Group items) transactionally,
+//   * the dialog OKs    → ibCommitSettingsToComposer (buffer → composer: CLEAR then re-apply = the commit).
+// Dot-walk fields ("Ref.Owner") resolve to auto-JOINs on the door. Cancel = do nothing (the composer, the
+// truth, is untouched). Field is a PATH; the value travels as an auto-&parameter.
+BACKEND_API void ibLoadSettingsFromComposer (ibValueListSettings* settings, const ibDataComposer& composer);
+BACKEND_API void ibCommitSettingsToComposer (ibDataComposer& composer, const ibValueListSettings* settings);
 
 #endif // __LIST_FILTER_H__

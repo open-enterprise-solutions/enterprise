@@ -1,41 +1,76 @@
 ////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
-//	Description : table model information
+//	Description : value-model base (shared) + the composer node
 ////////////////////////////////////////////////////////////////////////////
+//
+// The SHARED half of the value-model: the ibValueModel base (settings / selection / actions / iteration /
+// column collection) + the ibComposerNode out-of-line members. The two paged-fetch realisations live in their
+// own translation units — the DB fetch in tableInfoDb.cpp (ibValueModelCursor::RunComposerPage), the in-place RAM
+// fetch + composer in tableInfoRam.cpp (ibValueModelStorage::RunComposerPage / ibDataRamComposer).
 
 #include "tableInfo.h"
 
-#include "backend/session/session.h"
-#include "backend/query/querySelectorTree.h"   // ibSelectorTree — PopulateFromTree mirror source
+#include "backend/session/session.h"            // ibSession — SubmitFetchAsync
+#include "backend/tableView.h"                  // ibDataViewModel / ibDataViewItem — the base view types
+#include "backend/composition/listFilter.h"    // ibValueListSettings (dialog buffer) + ibLoad/CommitSettings — settings live on the composer
+#include "backend/composition/dataComposer.h"  // ibDataComposer — GetSortArrows reads the sort store off the base composer
+#include "backend/uniqueKey.h"                  // ibUniqueKey — GetItemKey return (base default = no key)
 
-namespace {
-	// Recursively mirror an L3 Selector-tree subtree under `dst`. No per-node notification —
-	// PopulateFromTree fires one reset after the whole tree is in place.
-	void MirrorQueryNodes(ibValueModelTreeBase::ibValueTreeNode* dst,
-		const ibSelectorTree::Node& src)
-	{
-		for (const auto& childPtr : src.m_children) {
-			const ibSelectorTree::Node& s = *childPtr;
-			ibValueModelTreeBase::ibValueTreeNode* node = dst->AddChildNode();
-			for (const auto& kv : s.m_values)
-				node->AppendTableValue(kv.first, kv.second);
-			MirrorQueryNodes(node, s);
-		}
-	}
-}
+// (ibValueModelRamTreeBase::PopulateFromTree + its MirrorQueryNodes helper were DELETED with the dead
+// RamTreeBase class — the in-memory mirror tree is superseded by hierarchy GROUPING over the composer.)
 
-void ibValueModelRamTreeBase::PopulateFromTree(const ibSelectorTree& tree, bool notify)
+
+// ---------------------------------------------------------------------------
+// ibComposerNode composer-fetch ctors + SetValue (in-memory source unification). ibComposerNode
+// collapsed into the universal row (Max: "collapse …"); these out-of-line members are non-trivial, so they
+// live here rather than in the header.
+
+// DETAIL row (a DB-list fetch copy): copy the L5 driver row's values + keep the primary-key row-key as the
+// re-fetch selection identity. NO write-back source / backing index any more — a DB grid is READ-ONLY (editing
+// is via the object form), and a RAM list edits its LIVE storage rows directly (it never makes these copies).
+ibValueModel::ibComposerNode::ibComposerNode(const std::map<ibMetaID, ibValue>& values,
+	bool container, std::vector<ibValue> rowKey)
+	: m_valueTable(nullptr), m_rowKey(std::move(rowKey)),
+	  m_container(container), m_selfContained(true)
 {
-	Clear(/*notify*/ false);                  // drop the old children silently
-	MirrorQueryNodes(m_root, tree.Root());    // mirror the whole Node tree in one shot
-	if (notify && m_modelProvider != nullptr) {
-		// Full-shape change — the paged tree rebuilds on Before/AfterReset (see the
-		// HasDefaultCompare note in tableInfo.h); the control re-fetches via GetFirstFetch.
-		m_modelProvider->BeforeReset();
-		m_modelProvider->AfterReset();
-	}
+	for (const auto& kv : values)
+		AppendTableValue(kv.first, kv.second);
 }
 
+// STUB row (FindRowValue selection-restore): only the row-key the caller navigates to.
+ibValueModel::ibComposerNode::ibComposerNode(std::vector<ibValue> rowKey)
+	: m_valueTable(nullptr), m_rowKey(std::move(rowKey)), m_selfContained(true)
+{
+}
+
+// GROUP-drill row: the dimension-value path root->this + the drillable container flag.
+ibValueModel::ibComposerNode::ibComposerNode(const std::map<ibMetaID, ibValue>& values,
+	const std::vector<ibValue>& groupPath, bool container)
+	: m_valueTable(nullptr), m_groupPath(groupPath), m_container(container), m_selfContained(true)
+{
+	for (const auto& kv : values)
+		AppendTableValue(kv.first, kv.second);
+}
+
+// THE node mirrors an edited cell into its own value map and notifies the owning model. A RAM list edits its
+// LIVE storage rows THROUGH this (m_valueTable set → the storage IS updated + the model refreshes); a DB-list
+// COPY node (m_valueTable null, self-contained) just mirrors into the copy for the inline editor (the grid is
+// read-only — a real edit goes through the object form). No write-back source / backing index any more.
+bool ibValueModel::ibComposerNode::SetValue(const ibMetaID& id, const ibValue& variant, bool notify)
+{
+	auto iterator = m_nodeValues.find(id);
+	if (iterator == m_nodeValues.end())
+		return false;
+	ibValue& cValue = m_nodeValues.at(id);
+	if (notify && m_valueTable != nullptr && cValue != variant)
+		m_valueTable->RowValueChanged(this, id);
+	cValue = variant;
+	return true;
+}
+
+// Out-of-line (declared in tableInfo.h): the ibValuePtr<ibValueListSettings> -> ibValueListSettings* conversion
+// needs the COMPLETE ibValueListSettings type (listFilter.h, included here), not the header's forward decl.
+ibValueListSettings* ibValueModel::GetListSettings() const { return m_listSettings; }
 
 
 ibValueModel::ibValueModel()
@@ -43,12 +78,59 @@ ibValueModel::ibValueModel()
 	m_modelProvider(nullptr)
 {
 	m_modelProvider = new ibDataViewModelProviderImpl(this);
-	//m_modelProvider->IncRef(); // always one
+
+	// The model's RUNTIME/script settings — a FACADE (thin live wrapper) over the composer (the store): a
+	// script's list.Settings.Filter.Add(...) writes the composer IMMEDIATELY and fires this model's refresh
+	// (NotifyReset). It is a SYSTEM type owned by the model, NOT created standalone (Max: "this is a system type,
+	// lives inside the model, the composer is passed to it"). The settings DIALOG uses its OWN separate BUFFER copy
+	// (load on open, commit on OK) so the form stays transactional. Held via ibValuePtr (DecrRef on dtor).
+	m_listSettings = new ibValueListSettings(*this, [this] { NotifyReset(); });
+
+	// (m_composer is POLYMORPHIC + lazily created — the facade resolves GetModelComposer() on first use, by
+	// which time the full subclass exists so CreateComposer picks ibDataDBComposer (DB) / ibDataRamComposer (RAM).
+	// Subclasses set their source + default sort/grouping STRAIGHT on it in their ctor —
+	// GetModelComposer().FromSource(q).Sort(...) — the persistent settings store the fetch reads.)
 }
 
 ibValueModel::~ibValueModel()
 {
+	// The RAM node storage (ibRamValueStorage) is a member of ibValueModelStorage — its dtor DecRefs the nodes; the
+	// base just drops the view provider. (A DB model has no node storage.)
 	m_modelProvider->DecRef();
+}
+
+// Column header click — single-column sort. Writes STRAIGHT to the composer (the single settings store;
+// ListSettings is only the dialog's edit buffer now, m_sortOrder abolished); the composer renders ORDER BY by
+// FIELD NAME, so resolve the clicked column id → its name.
+void ibValueModel::OnSortColumnChanged(unsigned int col, bool ascending)
+{
+	// Replace the composer's sort with the clicked column, then reset. The reset IS the whole trigger — no
+	// observer needed: change the composer → BeforeReset/AfterReset → the next fetch reads the new sort.
+	ibDataComposer& composer = GetModelComposer();
+	composer.ClearSorts();
+	const wxString field = GetColumnNameByID(col);
+	if (!field.IsEmpty())
+		composer.Sort(field, ascending);
+
+	BumpViewGeneration();
+	if (m_modelProvider != nullptr) {
+		m_modelProvider->BeforeReset();
+		m_modelProvider->AfterReset();
+	}
+}
+
+// (GetSortModels DELETED — ibSortModel is gone. The sort is L5 (the composer, by field NAME); the few
+//  consumers that needed a {col-id, asc} pair — the keyset anchor + the frontend header arrows — now read
+//  m_composer.GetSortAt + GetColumnIDByName inline, each at the point of use. Max: "ibSortModel is either part
+//  of L5, or removed entirely" — L5 is name-based, so it was removed.)
+
+// Any active filter? Reads the COMPOSER (the single settings store; m_filterRow abolished). The composer only
+// ever holds ACTIVE filters (a disabled dialog line is dropped on commit), so a non-empty filter list = active.
+bool ibValueModel::UseListSettings() const
+{
+	// CAPABILITY: does this table expose the settings affordance (Filter / Sort / Group)? Drives the toolbar
+	// "Filter" (= open List-Settings) button group. NOT "is a filter active" — that is m_composer.FilterCount().
+	return GetFeatures().Has(Features::Filters);
 }
 
 ibDataViewItem ibValueModel::GetSelection() const
@@ -154,17 +236,52 @@ private:
 	bool m_exhausted;
 };
 
-inline bool IsFlatPagedModel(const ibValueModel::Features& f) {
-	const uint32_t paged = ibValueModel::Features::RamFetch
-		| ibValueModel::Features::DbFetch;
-	return (f.flags & paged) != 0
-		&& (f.flags & ibValueModel::Features::Tree) == 0;
-}
 } // namespace
+
+// RAM-backed models have NO source primary key (RunComposerPage stamps an EMPTY row-key for them) → restore by
+// index; a DB list / register has a PK → restore by key. Replaces the retired RamFetch flag, derived from source.
+bool ibValueModel::HasKeyedRows() const
+{
+	const ibBackendQueryable* q = GetSourceQueryable();
+	return q != nullptr && !q->GetPrimaryKeyColumns().empty();
+}
+
+// Grouped when the composer carries at least one grouping dimension (the display is then a tree). The control
+// uses this to route a grouped model's row mutations through the re-fetch + selection-restore path.
+bool ibValueModel::IsGroupedModel() const
+{
+	return GetModelComposer().GroupCount() > 0;
+}
+
+// Base default: no key. A RAM / in-memory model has no DB identity; the DB cursor + register subclasses override
+// to build the row's reference (guid) or dimensions (composite) from the item.
+ibUniqueKey ibValueModel::GetItemKey(const ibDataViewItem& /*item*/) const
+{
+	return ibUniqueKey();
+}
+
+// The active USER sorts → (model column id, ascending) for the header arrows. Reads the L5 composer (the sort
+// store) by FIELD NAME and resolves each to its column id; the control draws an arrow on the matching column.
+std::vector<ibDataViewModel::ibSortArrow> ibValueModel::GetSortArrows() const
+{
+	std::vector<ibDataViewModel::ibSortArrow> arrows;
+	const ibDataComposer& comp = GetModelComposer();
+	for (size_t i = 0; i < comp.SortCount(); ++i) {
+		wxString field; bool asc;
+		if (!comp.GetSortAt(i, field, asc)) continue;
+		const ibMetaID col = GetColumnIDByName(field);
+		if (col != wxNOT_FOUND)
+			arrows.push_back({ static_cast<unsigned int>(col), asc });
+	}
+	return arrows;
+}
 
 std::shared_ptr<ibValueIteratorState> ibValueModel::CreateIterator()
 {
-	if (IsFlatPagedModel(GetFeatures()))
+	// Every ibValueModel is paged (fetch is uniform through RunComposerPage), so iteration drives the Get*Fetch
+	// cursor — UNLESS the composer currently GROUPS, in which case it is shaped as a TREE (ANY list with grouping
+	// is a tree — Max) and the flat iterator would walk only one level.
+	if (GetModelComposer().GroupCount() == 0)
 		return std::make_shared<ibValueModelPagedIteratorState>(this);
 	return ibValue::CreateIterator();
 }
@@ -188,7 +305,10 @@ ibValueModel::ibActionCollection ibValueModel::GetActionCollection(const ibFormI
 		action.AddAction(wxT("Delete"), _("Delete"), g_picDeleteCLSID, false, eDeleteValue);
 	}
 
-	if (UseFilter()) {
+	// The settings command GROUP appears when the table HAS settings (UseListSettings = the Filters capability),
+	// NOT when a filter is already active — otherwise you could never open the dialog to ADD the first filter
+	// (chicken-and-egg). The "Filter" button opens the List-Settings window (Filter / Sort / Group tabs).
+	if (UseListSettings()) {
 		if (UseStandartCommand()) action.AddSeparator();
 		action.AddAction(wxT("Filter"), _("Filter"), g_picFilterCLSID, false, eFilter);
 		action.AddAction(wxT("FilterByColumn"), _("Filter by column"), g_picFilterSetCLSID, false, eFilterByColumn);
@@ -196,7 +316,7 @@ ibValueModel::ibActionCollection ibValueModel::GetActionCollection(const ibFormI
 	}
 
 	if (UseViewMode()) {
-		if (UseStandartCommand() || UseFilter()) action.AddSeparator();
+		if (UseStandartCommand() || UseListSettings()) action.AddSeparator();
 		action.AddAction(wxT("ViewMode"), _("View mode"), g_picHierarchyCLSID, false, eViewMode);
 	}
 
@@ -220,9 +340,10 @@ void ibValueModel::ExecuteAction(const ibActionID& lNumAction, ibBackendValueFor
 		DeleteValue();
 		break;
 	case eFilter:
-		if (ShowFilter()) {
-			RefetchAll();
-		}
+		// The "Filter" button opens the List-Settings window (Filter / Sort / Group tabs). It edits this
+		// model's GetListSettings() in place and RefetchAll()s on apply — the composer IS the fetch path
+		// now. (eFilterByColumn / eFilterClear below write the SAME ListSettings->Filter directly.)
+		ShowListSettings();
 		break;
 	case eFilterByColumn:
 	{
@@ -230,14 +351,18 @@ void ibValueModel::ExecuteAction(const ibActionID& lNumAction, ibBackendValueFor
 		if (!item.IsOk())
 			break;
 		if (m_modelProvider != nullptr) {
-			ibValue retValue; GetValueByMetaID(item, m_modelProvider->GetCurrentModelColumn(), retValue);
-			m_filterRow.SetFilterByID(m_modelProvider->GetCurrentModelColumn(), retValue);
+			const unsigned int colId = m_modelProvider->GetCurrentModelColumn();
+			ibValue retValue; GetValueByMetaID(item, colId, retValue);
+			const wxString colName = GetColumnNameByID(colId);
+			if (!colName.empty() && GetListSettings() != nullptr)
+				GetListSettings()->GetFilter()->Add(colName, ibComparisonKind_Equal, retValue);
 		}
 		RefetchAll();
 		break;
 	}
 	case eFilterClear:
-		m_filterRow.ResetFilter();
+		if (GetListSettings() != nullptr)
+			GetListSettings()->GetFilter()->Clear();
 		RefetchAll();
 		break;
 	case eViewMode:
@@ -248,11 +373,18 @@ void ibValueModel::ExecuteAction(const ibActionID& lNumAction, ibBackendValueFor
 
 ///////////////////////////////////////////////////////////////////////////////////////
 
-bool ibValueModel::ShowFilter()
+bool ibValueModel::ShowListSettings()
 {
 	if (m_modelProvider == nullptr)
 		return false;
-	return m_modelProvider->ShowFilter(m_filterRow);
+	// The settings window edits GetListSettings() (Filter / Order / Group) IN PLACE and returns
+	// synchronously (modal). On a confirmed edit, RefetchAll() signals the control (Before/AfterReset)
+	// to re-dispatch GetFirstFetch, so the table re-reads the L5 settings and visibly filters / sorts.
+	// (This reset IS the whole trigger — change ListSettings → RefetchAll → new portion.)
+	const bool applied = m_modelProvider->ShowListSettings(this);
+	if (applied)
+		RefetchAll();
+	return applied;
 }
 
 bool ibValueModel::ShowViewMode()

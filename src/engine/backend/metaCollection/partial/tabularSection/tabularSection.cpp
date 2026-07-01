@@ -7,6 +7,7 @@
 
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/metaCollection/partial/reference/reference.h"
+#include "backend/composition/dataComposer.h"   // GetModelComposer().GroupCount/GetGroupAt — grouped-add dim seeding
 
 #include "backend/appData.h"
 
@@ -23,7 +24,7 @@ ibDataViewItem ibValueTabularSectionDataObjectBase::FindRowValue(const ibValue& 
 	if (colInfo != nullptr) {
 		for (long row = 0; row < GetRowCount(); row++) {
 			const ibDataViewItem& item = GetItem(row);
-			ibValueTableRow* node = GetViewData<ibValueTableRow>(item);
+			ibComposerNode* node = GetViewData<ibComposerNode>(item);
 			if (node != nullptr &&
 				varValue == node->GetTableValue(colInfo->GetColumnID())) {
 				return item;
@@ -90,7 +91,7 @@ bool ibValueTabularSectionDataObjectBase::SetValueByMetaID(const ibDataViewItem&
 		return false;
 
 	if (!appData->DesignerMode()) {
-		ibValueTableRow* node = GetViewData<ibValueTableRow>(item);
+		ibComposerNode* node = GetViewData<ibComposerNode>(item);
 		
 		if (node != nullptr) {
 			const ibValueMetaObjectAttributeBase* attribute = m_metaTable->FindAnyAttributeObjectByFilter(id);
@@ -110,6 +111,10 @@ bool ibValueTabularSectionDataObjectBase::SetValueByMetaID(const ibDataViewItem&
 bool ibValueTabularSectionDataObjectBase::GetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, ibValue& pvarMetaVal) const
 {
 	if (m_metaTable->IsNumberLine(id)) {
+		// A GROUP header carries no storage line number (it is synthetic, not in the storage) — leave the N
+		// column blank rather than a bogus "0" (GetRow → wxNOT_FOUND). Its dimension value shows in the grouped column.
+		const ibComposerNode* numNode = GetViewData<ibComposerNode>(item);
+		if (numNode != nullptr && numNode->IsGroup()) { pvarMetaVal = ibValue(); return true; }
 		pvarMetaVal = ibValue(ibNumber(static_cast<int>(GetRow(item) + 1)));
 		return true;
 	}
@@ -121,7 +126,7 @@ bool ibValueTabularSectionDataObjectBase::GetValueByMetaID(const ibDataViewItem&
 		return true;
 	}
 
-	ibValueTableRow* node = GetViewData<ibValueTableRow>(item);
+	ibComposerNode* node = GetViewData<ibComposerNode>(item);
 	if (node != nullptr)
 		return node->GetValue(id, pvarMetaVal);
 
@@ -152,15 +157,15 @@ bool ibValueTabularSectionDataObjectBase::CallAsFunc(const long lMethodNum, ibVa
 	case enDelete: {
 		ibValueTabularSectionDataObjectReturnLine* retLine = nullptr;
 		if (paParams[0]->ConvertToValue(retLine)) {
-			ibValueTableRow* node = GetViewData<ibValueTableRow>(retLine->GetLineItem());
+			ibComposerNode* node = GetViewData<ibComposerNode>(retLine->GetLineItem());
 			if (node != nullptr)
-				ibValueModelRamTableBase::Remove(node);
+				ibValueModelStorage::Remove(node);
 		}
 		else {
 			const ibNumber& number = paParams[0]->GetNumber();
-			ibValueTableRow* node = GetViewData<ibValueTableRow>(GetItem(number.ToInt()));
+			ibComposerNode* node = GetViewData<ibComposerNode>(GetItem(number.ToInt()));
 			if (node != nullptr)
-				ibValueModelRamTableBase::Remove(node);
+				ibValueModelStorage::Remove(node);
 		}
 		return true;
 	}
@@ -168,7 +173,7 @@ bool ibValueTabularSectionDataObjectBase::CallAsFunc(const long lMethodNum, ibVa
 		Clear();
 		return true;
 	case enLoad:
-		ibValueTabularSectionDataObjectBase::LoadDataFromTable(paParams[0]->ConvertToType<ibValueModelTableBase>());
+		ibValueTabularSectionDataObjectBase::LoadDataFromTable(paParams[0]->ConvertToType<ibValueModel>());
 		return true;
 	case enUnload:
 		pvarRetValue = SaveDataToTable();
@@ -215,7 +220,7 @@ ibValueTabularSectionDataObjectRef::ibValueTabularSectionDataObjectRef(ibValueSe
 
 #include "backend/system/value/valueTable.h"
 
-bool ibValueTabularSectionDataObjectBase::LoadDataFromTable(ibValueModelTableBase* srcTable)
+bool ibValueTabularSectionDataObjectBase::LoadDataFromTable(ibValueModel* srcTable)
 {
 	if (m_readOnly)
 		return false;
@@ -251,7 +256,7 @@ bool ibValueTabularSectionDataObjectBase::LoadDataFromTable(ibValueModelTableBas
 	return true;
 }
 
-ibValueModelTableBase* ibValueTabularSectionDataObjectBase::SaveDataToTable() const
+ibValueModel* ibValueTabularSectionDataObjectBase::SaveDataToTable() const
 {
 	ibValueModelTable* valueTable = new ibValueModelTable();
 	ibValueModelColumnCollection* colData = valueTable->GetColumnCollection();
@@ -407,12 +412,12 @@ ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollec
 {
 }
 
-bool ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollection::SetAt(const ibValue& varKeyValue, const ibValue& varValue)//������ ������� ������ ���������� � 0
+bool ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollection::SetAt(const ibValue& varKeyValue, const ibValue& varValue) // read-only column collection - no-op (writes are not supported)
 {
 	return false;
 }
 
-bool ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollection::GetAt(const ibValue& varKeyValue, ibValue& pvarValue) //������ ������� ������ ���������� � 0
+bool ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollection::GetAt(const ibValue& varKeyValue, ibValue& pvarValue) // read a column-info entry by its index
 {
 	unsigned int index = varKeyValue.GetUInteger();
 	if ((index < 0 || index >= m_listColumnInfo.size() && !appData->DesignerMode())) {
@@ -446,16 +451,29 @@ ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollec
 
 long ibValueTabularSectionDataObjectBase::AppendRow(unsigned int before)
 {
-	ibValueTableRow* rowData = new ibValueTableRow();
+	ibComposerNode* rowData = new ibComposerNode();
 	for (const auto object : m_metaTable->GetGenericAttributeArrayObject()) {
 		if (!m_metaTable->IsNumberLine(object->GetMetaID()))
 			rowData->AppendTableValue(object->GetMetaID(), object->CreateValue());
 	}
 
-	if (before > 0)
-		return ibValueModelRamTableBase::Insert(rowData, before, !ibBackendException::IsEvalMode());
+	// Grouped add: the new row inherits the current group's dimension values (read each grouping dim off the
+	// selected row), so it lands INSIDE the group instead of losing the grouping value. Ungrouped view → no dims
+	// → no-op; a dotted (reference-walk) dim has no single storage column and is skipped.
+	if (ibComposerNode* ctx = GetViewData<ibComposerNode>(GetSelection())) {
+		for (size_t i = 0; i < GetModelComposer().GroupCount(); ++i) {
+			wxString field; ibQueryDimUnfold kind = ibQueryDimUnfold::Elements;
+			if (!GetModelComposer().GetGroupAt(i, field, kind) || field.IsEmpty()) continue;
+			const ibMetaID col = GetColumnIDByName(field);
+			if (col != wxNOT_FOUND)
+				rowData->AppendTableValue(col, ctx->GetTableValue(col));
+		}
+	}
 
-	return ibValueModelRamTableBase::Append(rowData, !ibBackendException::IsEvalMode());
+	if (before > 0)
+		return ibValueModelStorage::Insert(rowData, before, !ibBackendException::IsEvalMode());
+
+	return ibValueModelStorage::Append(rowData, !ibBackendException::IsEvalMode());
 }
 
 long ibValueTabularSectionDataObjectRef::AppendRow(unsigned int before)

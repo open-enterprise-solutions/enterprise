@@ -156,7 +156,7 @@ void ibValueModelTableBox::OnItemStartAdding(ibDataViewEvent& event)
 
 	// GUI-driven Add → fire script OnAddRow with the just-appended row.
 	// Programmatic createdValue path (OnIdle) goes through
-	// ibValueModelRamTableBase::Append too, so listeners observe creation
+	// ibValueModelStorage::Append too, so listeners observe creation
 	// regardless of origin.
 	const ibDataViewItem& item = event.GetItem();
 	if (item.IsOk() && m_eventOnAddRow != nullptr && m_tableModel != nullptr) {

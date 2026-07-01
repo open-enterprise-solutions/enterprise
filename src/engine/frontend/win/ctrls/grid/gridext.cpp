@@ -3772,7 +3772,7 @@ void ibGrid::CalcWindowSizes()
 	const int rowLabelW = ibCalcGridScale(m_rowLabelWidth, GetGridZoom());
 	const int colLabelH = ibCalcGridScale(m_colLabelHeight, GetGridZoom());
 
-	// Outline sits LEFT of area (matching Excel/1C convention). Order left-to-right
+	// Outline sits LEFT of area (matching the spreadsheet convention). Order left-to-right
 	// for rows: [outline][area][label][frozen][grid]; for cols analogously top-down.
 	const int xAfterChrome = rowOutlineW + rowAreaWidth + rowLabelW;
 	const int yAfterChrome = colOutlineH + colAreaHeight + colLabelH;

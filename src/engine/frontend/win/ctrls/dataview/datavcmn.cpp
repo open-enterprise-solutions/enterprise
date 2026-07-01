@@ -382,7 +382,7 @@ bool ibDataViewRendererBase::StartEditing(const ibDataViewItem& item, wxRect lab
 	wxWindow* parent = (wxWindow*)dv_ctrl->CellToDataViewWindow(item, column);
 	const wxSize parentSize = parent ? parent->GetClientSize() : wxSize(-1, -1);
 	const wxPoint parentScreen = parent ? parent->ClientToScreen(wxPoint(0, 0)) : wxPoint(-1, -1);
-	
+
 
 	m_editorCtrl = CreateEditorCtrl(parent, labelRect, value);
 

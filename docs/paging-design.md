@@ -728,3 +728,113 @@ re-fetches via `Get*Fetch`.
   «submit lands before bump completes» is impossible on a single
   thread; multi-session load test from `next-session-plan.md`
   «verify under load» covers it observationally.
+
+## 9. Grouping, selection restore, and the L5-2 identity/navigation layer (2026-07)
+
+This section records the arc that made **grouping** and **cross-view-mode
+selection restore** work on DB (cursor) *and* RAM (storage) lists, and named the
+layer it exercised.
+
+### 9.1 DB list grouping composition
+
+DB grouping had **never** produced output. Three defects, all in
+`ibValueModelCursor::RunComposerPage` (`tableInfoDb.cpp`) / its display path, now
+fixed:
+
+* **Group headers were dropped by the level filter.** A `TOTALS BY` result is a
+  tree; `BuildDimensionTree` (`queryProvider.cpp` `FoldDimLevel`) folds from the
+  Root (`m_level == 0`) so the first grouping level's headers sit at
+  **`m_level == 1`** (`AddChild(node->m_level + 1)`), and `FlattenPreOrder` never
+  visits the root. The fetch kept `if (r.m_level != 0) continue`, dropping every
+  header → 0 rows → the list "disappeared". A flat / DETAIL fetch (no `TotalBy`
+  → `hasTotals == false`) emits every row at level 0. Fix:
+  `if (r.m_level != (groupLevel ? 1 : 0)) continue`.
+
+* **Grouping-replaces-tree.** For a hierarchical source (catalog with a parent
+  column) a user grouping now **replaces** the inherent folder tree rather than
+  nesting inside it: `hierarchy = GetHierarchyColumn() != nullptr && !flatView &&
+  !grouping`. With a grouping configured, hierarchy is OFF and `groupLevel` drives
+  the same flat-scan + `TotalBy` a non-hierarchical document takes. The folder
+  tree shows *only* when no grouping is configured. (This superseded an earlier
+  "hierarchy outer, groups inner" plan.)
+
+* **Two display traps.** (a) `ibValueModelTreeDataObjectFolderRef::GetAttrByRow`
+  read `node->GetTableValue(GetDataIsFolder())` — `m_nodeValues.at()`, which
+  **throws** `std::out_of_range`; a GROUP node carries only its dimension cell, no
+  IsFolder → the throw aborted every group row's paint (blank + glitchy headers).
+  Fixed with the safe `node->GetValue(id, out)` (catches the miss). (b) A grouped
+  DETAIL row that happened to be a folder kept `isContainer =
+  folderCol.GetBoolean()` → drilling it re-entered `RunComposerPage` with an empty
+  group path (depth 0) → `groupLevel` fired again → the whole grouping tree nested
+  under the folder ("infinite" re-grouping). Fix: under grouping a DETAIL row is
+  always a LEAF (`isContainer = grouping ? false : …`).
+
+`flatView` gates `dims` exactly as RAM does (`tableInfoRam.cpp`): a flat List view
+passes the ignore-parent sentinel → grouping OFF; Tree/Hierarchical → ON. Note the
+view-mode enum order (`dataview.h`): `ibDataViewTree = 0`,
+`ibDataViewHierarchical = 1`, `ibDataViewList = 2` — only List(2) yields the
+flat-scan sentinel.
+
+### 9.2 Selection restore across a view-mode switch — `BuildAncestorBreadcrumb`
+
+Switching view mode with a selection **inside a sub-level** (a sub-folder, or a
+row inside a group) lost the selection: the top-level fetch returns folder/group
+*headers*, not the row, so `PagedBootstrap`'s restore-scan found no match.
+`ibValueModel::BuildAncestorBreadcrumb` was a **stub** — the model built no
+ancestor chain, so the Hierarchical/Tree restore drilled to the roots, not the
+level the row lived in.
+
+Implemented per source, two shapes:
+
+* **DB cursor** (`ibValueModelCursor::BuildAncestorBreadcrumb`, `tableInfoDb.cpp`):
+  * *Folder* (no grouping): read the row's parent reference (the queryable's
+    hierarchy column) and walk UP — one point lookup (`ResolveAnchorByKey` by the
+    parent ref = the folder's own PK) per level, each yielding the folder's values
+    and its own parent ref.
+  * *Grouped*: the ancestors are GROUP levels, not folders — one crumb per grouping
+    dimension, keyed by the row's own value for that dim, carrying the group PATH
+    `root→this`.
+* **RAM storage** (`ibValueModelStorage::BuildAncestorBreadcrumb`,
+  `tableInfoRam.cpp`): group branch only (a plain RAM list is flat), dim values via
+  `m_storage.SplitField` / `ResolveField(StorageIndexOf(row), head, tail)`.
+
+Contract: `out[0]` = the immediate (innermost) parent — the scope
+`GetEffectiveFetchParent` returns; `out.back()` = the root. Each crumb is a
+CONTAINER node whose key / `m_groupPath` `IsEqualTo`-matches the fetched
+folder/group node, so the drill scopes into it and the restore-scan lands.
+
+### 9.3 The L5-2 identity/navigation layer (named)
+
+The above crystallised a layer that was implicit: **identity + navigation over a
+source**, distinct from data production.
+
+* **L3 / queryable** — data production (columns → keyset predicate → SQL/RAM scan).
+* **L5-1** — the fetch (`RunComposerPage` + composer + driver): settings → a page of
+  rows.
+* **L5-2** — identity + navigation: `GetItemKey` (row identity), `ResolveAnchorByKey`
+  (point lookup by key), `BuildAncestorBreadcrumb` (ancestor chain), `SetItemParent`
+  (display parent). All source-agnostic virtuals on `ibValueModel`, dispatched to
+  cursor/storage. This is what lets the frontend page, drill, restore and identify
+  rows through **one** model interface without learning whether a cursor or storage
+  backs it — the same unification L5-1 gave to the fetch, now for navigation.
+
+**Not yet a designed contract — a scatter of virtuals.** Consolidation debt:
+`ibValueModelCursor::GetItemKey` still returns empty (stub); the frontend restore
+still has **two** paths (RAM pointer-identity vs DB value-compare — the pointer
+shortcut breaks if a RAM node is re-created on reload). Direction: define the L5-2
+contract, make every source implement it fully (key everything, retire the RAM
+pointer-identity shortcut), shrink the frontend restore to
+`key → ResolveAnchorByKey → BuildAncestorBreadcrumb → drill → match by key`, so the
+restore SSOT becomes the KEY rather than the branchy `PagedBootstrap`.
+
+### 9.4 Minor UI fixes landed alongside
+
+* **Default view mode** `ibDataViewHierarchical` (was `ibDataViewTree`) —
+  `tableBox.h` `m_propertyViewMode` default.
+* **Tabular-section line number right-aligns again.** The value is a `"number"`
+  variant and the renderer right-aligns numbers in `SetValue`, but the paint loop
+  forced the EXPANDER column (column 0 in a non-List view) to
+  `SetAlignment(wxALIGN_CENTER_VERTICAL)`, dropping the horizontal flag. Fixed to
+  preserve the horizontal component: `SetAlignment((align & (wxALIGN_RIGHT |
+  wxALIGN_CENTER_HORIZONTAL)) | wxALIGN_CENTER_VERTICAL)` (`datavgen.cpp` cell
+  paint).

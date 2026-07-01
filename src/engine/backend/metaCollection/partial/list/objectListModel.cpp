@@ -12,7 +12,7 @@
 void ibValueListDataObjectEnumRef::GetValueByRow(wxVariant& variant,
 	const ibDataViewItem& row, unsigned int col) const
 {
-	ibValueTableRow* node = GetViewData<ibValueTableRow>(row);
+	ibComposerNode* node = GetViewData<ibComposerNode>(row);
 	if (node == nullptr)
 		return;
 	node->GetValue(col, variant);
@@ -21,7 +21,7 @@ void ibValueListDataObjectEnumRef::GetValueByRow(wxVariant& variant,
 bool ibValueListDataObjectEnumRef::SetValueByRow(const wxVariant& variant,
 	const ibDataViewItem& row, unsigned int col)
 {
-	ibValueTableRow* node = GetViewData<ibValueTableRow>(row);
+	ibComposerNode* node = GetViewData<ibComposerNode>(row);
 	if (node == nullptr)
 		return false;
 	return node->SetValue(col, variant);
@@ -32,7 +32,7 @@ bool ibValueListDataObjectEnumRef::SetValueByRow(const wxVariant& variant,
 void ibValueListDataObjectRef::GetValueByRow(wxVariant& variant,
 	const ibDataViewItem& row, unsigned int col) const
 {
-	ibValueTableRow* node = GetViewData<ibValueTableRow>(row);
+	ibComposerNode* node = GetViewData<ibComposerNode>(row);
 	if (node == nullptr)
 		return;
 	node->GetValue(col, variant);
@@ -41,7 +41,7 @@ void ibValueListDataObjectRef::GetValueByRow(wxVariant& variant,
 bool ibValueListDataObjectRef::SetValueByRow(const wxVariant& variant,
 	const ibDataViewItem& row, unsigned int col)
 {
-	ibValueTableRow* node = GetViewData<ibValueTableRow>(row);
+	ibComposerNode* node = GetViewData<ibComposerNode>(row);
 	if (node == nullptr)
 		return false;
 	return node->SetValue(col, variant);
@@ -75,9 +75,13 @@ bool ibValueModelTreeDataObjectFolderRef::GetAttrByRow(const ibDataViewItem& ite
 	ibValueTreeNode* node = GetViewData<ibValueTreeNode>(item);
 	if (node == nullptr)
 		return false;
-	const ibValue& isFolder =
-		node->GetTableValue(*m_metaObject->GetDataIsFolder());
-	if (isFolder.GetBoolean())
+	// A GROUP node (grouping replaces the folder tree) carries ONLY its dimension value — it has
+	// NO IsFolder cell. GetTableValue is m_nodeValues.at(), which THROWS std::out_of_range on a missing key; that
+	// threw here per group ROW during paint → the folder-highlight probe aborted the row render, leaving the
+	// group headers blank and glitchy. Use the safe GetValue (returns false on a missing cell) so a group node
+	// simply gets no folder background.
+	ibValue isFolder;
+	if (node->GetValue(*m_metaObject->GetDataIsFolder(), isFolder) && isFolder.GetBoolean())
 		attr.SetBackgroundColour(wxColour(214, 239, 252));
 	return true;
 }
@@ -87,7 +91,7 @@ bool ibValueModelTreeDataObjectFolderRef::GetAttrByRow(const ibDataViewItem& ite
 void ibValueListRegisterObject::GetValueByRow(wxVariant& variant,
 	const ibDataViewItem& row, unsigned int col) const
 {
-	ibValueTableRow* node = GetViewData<ibValueTableRow>(row);
+	ibComposerNode* node = GetViewData<ibComposerNode>(row);
 	if (node == nullptr)
 		return;
 	node->GetValue(col, variant);
@@ -96,7 +100,7 @@ void ibValueListRegisterObject::GetValueByRow(wxVariant& variant,
 bool ibValueListRegisterObject::SetValueByRow(const wxVariant& variant,
 	const ibDataViewItem& row, unsigned int col)
 {
-	ibValueTableRow* node = GetViewData<ibValueTableRow>(row);
+	ibComposerNode* node = GetViewData<ibComposerNode>(row);
 	if (node == nullptr)
 		return false;
 	return node->SetValue(col, variant);

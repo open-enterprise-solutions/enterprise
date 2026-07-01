@@ -34,9 +34,9 @@
 
 namespace {
 
-// ibValueTableRow is now a nested type of ibValueModelTableBase; this alias
+// ibComposerNode is now a nested type of ibValueModelTableBase; this alias
 // keeps the test body terse after the nesting refactor.
-using ibValueTableRow = ibValueModelTableBase::ibValueTableRow;
+using ibComposerNode = ibValueModelTableBase::ibComposerNode;
 
 // ---------------------------------------------------------------------------
 // Minimal test subclass.  ibValueModelRamTableBase has many pure virtuals
@@ -48,13 +48,13 @@ using ibValueTableRow = ibValueModelTableBase::ibValueTableRow;
 //
 // `GetValueByMetaID` IS exercised by BuildVisibleView's filter+sort
 // comparator — we read each row's stored ibValue out of its own
-// m_nodeValues map directly (which is exactly how ibValueTableRow is
+// m_nodeValues map directly (which is exactly how ibComposerNode is
 // already laid out), so the stub forwards through the row.
 // ---------------------------------------------------------------------------
 class TestRamModel : public ibValueModelRamTableBase {
 public:
 	// Expose protected m_nodeValues for tests to inspect ordering.
-	const std::vector<ibValueTableRow*>& Nodes() const { return m_nodeValues; }
+	const std::vector<ibComposerNode*>& Nodes() const { return m_nodeValues; }
 
 	// === pure virtuals on ibValueModel ============================
 	virtual ibValueModelReturnLine* GetRowAt(const ibDataViewItem&) override {
@@ -66,14 +66,14 @@ public:
 	virtual bool SetValueByMetaID(const ibDataViewItem& item,
 	                              const ibMetaID& id,
 	                              const ibValue& value) override {
-		auto* node = GetViewData<ibValueTableRow>(item);
+		auto* node = GetViewData<ibComposerNode>(item);
 		if (node == nullptr) return false;
 		return node->SetValue(id, value, /*notify*/false);
 	}
 	virtual bool GetValueByMetaID(const ibDataViewItem& item,
 	                              const ibMetaID& id,
 	                              ibValue& out) const override {
-		auto* node = GetViewData<ibValueTableRow>(item);
+		auto* node = GetViewData<ibComposerNode>(item);
 		if (node == nullptr) return false;
 		if (!node->HasColumnValue(id)) return false;
 		out = node->GetTableValue(id);
@@ -84,14 +84,14 @@ public:
 	virtual void GetValueByRow(wxVariant& variant,
 	                           const ibDataViewItem& item,
 	                           unsigned int col) const override {
-		auto* node = GetViewData<ibValueTableRow>(item);
+		auto* node = GetViewData<ibComposerNode>(item);
 		if (node == nullptr) return;
 		if (node->HasColumnValue(col)) node->GetValue(col, variant);
 	}
 	virtual bool SetValueByRow(const wxVariant& variant,
 	                           const ibDataViewItem& item,
 	                           unsigned int col) override {
-		auto* node = GetViewData<ibValueTableRow>(item);
+		auto* node = GetViewData<ibComposerNode>(item);
 		if (node == nullptr) return false;
 		return node->SetValue(col, variant, /*notify*/false);
 	}
@@ -110,8 +110,8 @@ public:
 // Build a row with a single (col, value) pair — enough to exercise filter
 // and sort comparators.  Caller transfers ownership to the model via
 // Insert / Append (notify=false to skip m_modelProvider chain).
-ibValueTableRow* MakeRow(const ibMetaID& col, const ibValue& v) {
-	auto* row = new ibValueTableRow();
+ibComposerNode* MakeRow(const ibMetaID& col, const ibValue& v) {
+	auto* row = new ibComposerNode();
 	row->AppendTableValue(col, v);
 	return row;
 }

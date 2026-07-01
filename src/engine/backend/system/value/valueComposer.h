@@ -2,7 +2,7 @@
 #define __VALUE_COMPOSER_H__
 
 // L5-1 — the runtime script value object "DataComposer": the script face of
-// ibDataComposer (backend/composition/dataComposer.h). The validation surface of
+// ibDataDBComposer (backend/composition/dataComposer.h). The validation surface of
 // the simplified first slice — both composer moves are visible from script:
 //
 //   c = New DataComposer("Catalog.Goods");      // a registered source — the query is RENDERED
@@ -20,7 +20,7 @@ class BACKEND_API ibValueDataComposer : public ibValueStaticMembers<&ibValueData
 {
 	enum { enSetParameter = 0, enExecute = 1, enQueryText = 2 };   // unified method index space (proc + func)
 
-	ibDataComposer m_composer;
+	ibDataDBComposer m_composer;
 
 public:
 	ibValueDataComposer() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE) {}

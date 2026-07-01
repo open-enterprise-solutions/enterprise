@@ -1570,7 +1570,7 @@ while (s.Next()) {                                   // cursor — pre-order
   (a catalog's OWN row-keyed hierarchy: row = node, parent-ref), `BuildReferenceHierarchy` (a single
   cross-catalog reference dimension), and the GENERAL value-keyed combiner `BuildDimensionTree`
   (N levels in order; a `Hierarchy` level unfolds the field's target-catalog parent-map — read
-  through the door — and the next level recurses inside each value). `GetParentColumn()` on the
+  through the door — and the next level recurses inside each value). `GetHierarchyColumn()` on the
   queryable vends the parent attribute. The DB push-down stays `GROUP BY ROLLUP` (`ExecuteRollupTotals`).
 - **Lazy navigation.** `s.Select()` (no fold needed) re-Executes one node's direct children with the
   inherited filter — the recursion `selection -> sub-selection`. A plain hierarchical list (no totals)

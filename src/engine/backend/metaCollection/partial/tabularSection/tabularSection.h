@@ -5,7 +5,7 @@
 
 #include "backend/metaCollection/table/metaTableObject.h"
 
-class BACKEND_API ibValueTabularSectionDataObjectBase : public ibValueModelRamTableBase {
+class BACKEND_API ibValueTabularSectionDataObjectBase : public ibValueModelStorage {
 	public:
 private:
 
@@ -49,8 +49,8 @@ public:
 	// m_filterRow / m_sortOrder so the GUI's filter/sort affordances
 	// drive Get*Fetch slicing automatically.
 	virtual Features GetFeatures() const override {
-		auto f = ibValueModelRamTableBase::GetFeatures();
-		f.flags |= Features::Filters | Features::Sorting;
+		auto f = ibValueModelStorage::GetFeatures();
+		f.flags |= Features::Filters | Features::Sorting | Features::Grouping;
 		return f;
 	}
 
@@ -67,9 +67,9 @@ public:
 		return ibValue();
 	}
 
-	class ibValueTabularSectionDataObjectColumnCollection : public ibValueModelTableBase::ibValueModelColumnCollection {
+	class ibValueTabularSectionDataObjectColumnCollection : public ibValueModel::ibValueModelColumnCollection {
 	public:
-		class ibValueTabularSectionColumnInfo : public ibValueModelTableBase::ibValueModelColumnCollection::ibValueModelColumnInfo {
+		class ibValueTabularSectionColumnInfo : public ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo {
 	public:
 
 			virtual unsigned int GetColumnID() const { return m_metaAttribute->GetMetaID(); }
@@ -124,7 +124,7 @@ public:
 		ibValueTabularSectionDataObjectReturnLine(ibValueTabularSectionDataObjectBase* ownerTable = nullptr, const ibDataViewItem& line = ibDataViewItem(nullptr));
 		virtual ~ibValueTabularSectionDataObjectReturnLine();
 
-		virtual ibValueModelTableBase* GetOwnerModel() const { return m_ownerTable; }
+		virtual ibValueModel* GetOwnerModel() const { return m_ownerTable; }
 
 		void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
@@ -167,17 +167,10 @@ public:
 		m_recordColumnCollection(new ibValueTabularSectionDataObjectColumnCollection(this)),
 		m_readOnly(readOnly) {
 		m_members.Bind(this, &ibValueTabularSectionDataObjectBase::FillMembers);
-		for (const auto object : tableObject->GetGenericAttributeArrayObject()) {
-			m_filterRow.AppendFilter(
-				object->GetMetaID(),
-				object->GetName(),
-				object->GetSynonym(),
-				ibComparisonType_Equal,
-				object->GetTypeDesc(),
-				object->CreateValue(),
-				false
-			);
-		}
+		// (The RAM composer is auto-bound to this model's value-storage in ibValueModelStorage's ctor — no manual
+		// source binding needed; ibDataRamComposer reads the storage's nodes in place.)
+		// (No m_filterRow template population — the filter lives in L5 (ListSettings->Filter) now; the
+		// filter dialog offers the columns from the metadata / column collection directly.)
 	}
 
 	virtual ~ibValueTabularSectionDataObjectBase() {}
@@ -189,12 +182,12 @@ public:
 
 	virtual bool AutoCreateColumn() const { return false; }
 	virtual bool EditableLine(const ibDataViewItem& item, unsigned int col) const {
-		return !m_metaTable->IsNumberLine(col);
+		return ibValueModel::EditableLine(item, col) && !m_metaTable->IsNumberLine(col);
 	}
 
 	virtual void ActivateItem(ibBackendValueForm* formOwner,
 		const ibDataViewItem& item, unsigned int col) {
-		ibValueModelTableBase::RowValueStartEdit(item, col);
+		ibValueModel::RowValueStartEdit(item, col);
 	}
 
 	virtual void AddValue(unsigned int before = 0);
@@ -209,8 +202,8 @@ public:
 	virtual bool SaveData() { return true; }
 	virtual bool DeleteData() { return true; }
 
-	virtual bool LoadDataFromTable(ibValueModelTableBase* srcTable);
-	virtual ibValueModelTableBase* SaveDataToTable() const;
+	virtual bool LoadDataFromTable(ibValueModel* srcTable);
+	virtual ibValueModel* SaveDataToTable() const;
 
 	//****************************************************************************
 	//*                              Support methods                             *

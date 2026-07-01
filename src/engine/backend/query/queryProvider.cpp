@@ -167,23 +167,21 @@ private:
 // semantics, so it cannot ride the inner WHERE). LIKE translates % / _ to wx wildcards.
 bool MatchRamCondition(const ibValue& cell, const ibQueryCondition& c)
 {
-	if (c.m_explicitOp) {
-		switch (c.m_op) {
-		case ibQueryFilterOp::Like: {
-			wxString p = c.m_value.GetString();
-			p.Replace(wxT("%"), wxT("*"));
-			p.Replace(wxT("_"), wxT("?"));
-			return cell.GetString().Matches(p);
-		}
-		case ibQueryFilterOp::Less:         return cell < c.m_value;
-		case ibQueryFilterOp::LessEqual:    return cell < c.m_value || cell == c.m_value;
-		case ibQueryFilterOp::Greater:      return !(cell < c.m_value) && !(cell == c.m_value);
-		case ibQueryFilterOp::GreaterEqual: return !(cell < c.m_value);
-		}
-		return false;
+	switch (c.m_op) {   // ONE op now (m_comparison + m_explicitOp collapsed into m_op)
+	case ibQueryFilterOp::Equal:    return  (cell == c.m_value);
+	case ibQueryFilterOp::NotEqual: return !(cell == c.m_value);
+	case ibQueryFilterOp::Like: {
+		wxString p = c.m_value.GetString();
+		p.Replace(wxT("%"), wxT("*"));
+		p.Replace(wxT("_"), wxT("?"));
+		return cell.GetString().Matches(p);
 	}
-	const bool eq = (cell == c.m_value);
-	return c.m_comparison == ibComparisonType::ibComparisonType_Equal ? eq : !eq;
+	case ibQueryFilterOp::Less:         return cell < c.m_value;
+	case ibQueryFilterOp::LessEqual:    return cell < c.m_value || cell == c.m_value;
+	case ibQueryFilterOp::Greater:      return !(cell < c.m_value) && !(cell == c.m_value);
+	case ibQueryFilterOp::GreaterEqual: return !(cell < c.m_value);
+	}
+	return false;
 }
 } // namespace
 
@@ -272,8 +270,7 @@ ibQueryRamTable ibSubqueryQueryable::ComputeRows(const std::vector<ibQueryCondit
 	ibDataQueryBuilder q(*m_inner);
 	for (const ibQueryCondition& c : extra) {
 		if (c.m_col == nullptr) continue;
-		if (c.m_explicitOp) q.WhereCompare(c.m_col, c.m_op, c.m_value);
-		else                q.Where(c.m_col, c.m_comparison, c.m_value);
+		q.Where(c.m_col, c.m_op, c.m_value);   // ONE op — Where carries any ibQueryFilterOp now
 	}
 
 	ibReadPageRequest page; page.m_count = m_top;   // 0 = all rows; TOP n = the branch limit
@@ -385,8 +382,7 @@ ibQueryRamTable MaterialiseLeafToRam(const ibBackendQueryable* leaf, ibDatabaseC
 	ibDataQueryBuilder q(holder);
 	q.From(leaf);
 	for (const ibQueryCondition& c : conds) {
-		if (c.m_explicitOp) q.WhereCompare(c.m_col, c.m_op, c.m_value);
-		else                q.Where(c.m_col, c.m_comparison, c.m_value);
+		q.Where(c.m_col, c.m_op, c.m_value);   // ONE op — Where carries any ibQueryFilterOp now
 	}
 	ibReadPageRequest page; page.m_count = 0;   // every matching row
 	ibDataQueryResult sel = q.Execute(page);     // reads through the cursor — never names a runtime table
@@ -531,18 +527,14 @@ RamTri RamEvalLeaf(const ibQueryCondition& c, const ibQueryRamTable& t, long row
 	if (RamIsNullValue(cell) || RamIsNullValue(c.m_value))
 		return RamTri::Unknown;
 	bool res = false;
-	if (c.m_explicitOp) {
-		switch (c.m_op) {
-			case ibQueryFilterOp::Less:         res = cell.CompareValueLS(c.m_value) < 0; break;   // three-way int -> '<'
-			case ibQueryFilterOp::LessEqual:    res = cell.CompareValueLE(c.m_value); break;
-			case ibQueryFilterOp::Greater:      res = cell.CompareValueGT(c.m_value) > 0; break;   // three-way int -> '>'
-			case ibQueryFilterOp::GreaterEqual: res = cell.CompareValueGE(c.m_value); break;
-			case ibQueryFilterOp::Like:         res = RamLike(cell.GetString(), c.m_value.GetString()); break;
-		}
-	}
-	else {
-		const bool eq = cell.CompareValueEQ(c.m_value);
-		res = c.m_comparison == ibComparisonType::ibComparisonType_NotEqual ? !eq : eq;
+	switch (c.m_op) {   // ONE op now (m_comparison + m_explicitOp collapsed into m_op)
+		case ibQueryFilterOp::Equal:        res =  cell.CompareValueEQ(c.m_value); break;
+		case ibQueryFilterOp::NotEqual:     res = !cell.CompareValueEQ(c.m_value); break;
+		case ibQueryFilterOp::Less:         res = cell.CompareValueLS(c.m_value) < 0; break;   // three-way int -> '<'
+		case ibQueryFilterOp::LessEqual:    res = cell.CompareValueLE(c.m_value); break;
+		case ibQueryFilterOp::Greater:      res = cell.CompareValueGT(c.m_value) > 0; break;   // three-way int -> '>'
+		case ibQueryFilterOp::GreaterEqual: res = cell.CompareValueGE(c.m_value); break;
+		case ibQueryFilterOp::Like:         res = RamLike(cell.GetString(), c.m_value.GetString()); break;
 	}
 	return res ? RamTri::True : RamTri::False;
 }
@@ -1650,7 +1642,7 @@ ibSelectorTree ibQueryComposer::BuildReferenceHierarchy(const ibQueryRamTable& s
 	const ibBackendQueryable* target = (source != nullptr) ? source->ResolveReferenceTarget(refCol) : nullptr;
 	const ibBackendQueryColumn* tRowKey = (target != nullptr && !target->GetPrimaryKeyColumns().empty())
 	                                       ? target->GetPrimaryKeyColumns().front() : nullptr;
-	const ibBackendQueryColumn* tParent = (target != nullptr) ? target->GetParentColumn() : nullptr;
+	const ibBackendQueryColumn* tParent = (target != nullptr) ? target->GetHierarchyColumn() : nullptr;
 
 	// No target / no holder / no parent column → flat group by the value (degrade, not crash).
 	if (target == nullptr || holder == nullptr || tRowKey == nullptr || tParent == nullptr)
@@ -1725,12 +1717,12 @@ std::map<wxString, wxString> ParentMapForField(const DimCtx& ctx, const ibBacken
 {
 	std::map<wxString, wxString> pm;
 	const ibBackendQueryable* target = (ctx.source != nullptr) ? ctx.source->ResolveReferenceTarget(field) : nullptr;
-	if (target == nullptr && ctx.source != nullptr && field == ctx.source->GetParentColumn())
+	if (target == nullptr && ctx.source != nullptr && field == ctx.source->GetHierarchyColumn())
 		target = ctx.source;
 	if (target == nullptr || ctx.holder == nullptr) return pm;
 	const std::vector<const ibBackendQueryColumn*> keys = target->GetPrimaryKeyColumns();
 	const ibBackendQueryColumn* rk = keys.empty() ? nullptr : keys.front();
-	const ibBackendQueryColumn* pk = target->GetParentColumn();
+	const ibBackendQueryColumn* pk = target->GetHierarchyColumn();
 	if (rk == nullptr || pk == nullptr) return pm;
 	ibDataQueryBuilder q(ctx.holder);
 	q.From(target).Select(rk, wxEmptyString).Select(pk, wxEmptyString);

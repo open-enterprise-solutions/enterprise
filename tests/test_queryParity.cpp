@@ -117,18 +117,17 @@ ibQueryPredicatePtr Eq(const ibBackendQueryColumn* c, const wxString& v)
 
 ibQueryPredicatePtr Ne(const ibBackendQueryColumn* c, const wxString& v)
 {
-	ibQueryCondition cond;   // `<>` via the comparison flag (the m_comparison leaf path)
+	ibQueryCondition cond;   // `<>` — the ONE op field (m_comparison/m_explicitOp collapsed into m_op)
 	cond.m_col = c;
 	cond.m_value = ibValue(v);
-	cond.m_comparison = ibComparisonType_NotEqual;
+	cond.m_op = ibQueryFilterOp::NotEqual;
 	return ibQueryPredicate::Leaf(cond);
 }
 
 ibQueryPredicatePtr Like(const ibBackendQueryColumn* c, const wxString& pat)
 {
-	ibQueryCondition cond;   // explicit LIKE op
+	ibQueryCondition cond;   // LIKE op
 	cond.m_col = c;
-	cond.m_explicitOp = true;
 	cond.m_op = ibQueryFilterOp::Like;
 	cond.m_value = ibValue(pat);
 	return ibQueryPredicate::Leaf(cond);

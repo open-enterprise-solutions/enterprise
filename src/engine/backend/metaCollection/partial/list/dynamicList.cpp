@@ -1,78 +1,22 @@
 ﻿#include "backend/metaCollection/partial/list/dynamicList.h"
-#include "backend/composition/listFetchDriver.h"
 #include "backend/appData.h"                         // appData / GetActiveMetaData
-#include "backend/session/session.h"                 // ses_query
-#include "backend/tableView.h"                       // s_constIgnoreParent
 #include "backend/query/queryable.h"                 // ibBackendQueryable
+// (listFetchDriver.h / session.h(ses_query) / tableView.h(s_constIgnoreParent) includes removed — they were
+//  only for the deleted RunPage/ibDynamicListProvider; the fetch lives in the base RunComposerPage now.)
 #include "backend/query/queryColumn.h"               // ibBackendQueryColumn::GetColumnId
 #include "backend/srcDataObject.h"                      // ibSourceExplorer
+#include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject — GetItemKey row guid
 #include "backend/serialize/dataBuilder.h"            // ibDataNode (object-level save/load)
 #include "backend/metadataConfiguration.h"            // ibMetaDataConfigurationBase (GetSourceMetaData)
 
-// ===========================================================================
-//  L5 fetch provider — composer.Run(this) → OnRow builds rows straight into the
-//  table (the model). All fetch work lives HERE; Get*Fetch stays thin.
-// ===========================================================================
 namespace {
-class ibDynamicListProvider : public ibCompositionDriver {
-public:
-	ibDynamicListProvider(const ibValueModelTreeBase* tree, const ibReadPageRequest& page,
-		const std::vector<const ibBackendQueryColumn*>& keyCols,
-		bool groupMode = false, const std::vector<ibValue>& parentPath = {})
-		: m_tree(tree), m_page(page), m_keyCols(keyCols),
-		  m_groupMode(groupMode), m_parentPath(parentPath) {}
-
-	bool GetPageRequest(ibReadPageRequest& request) const override { request = m_page; return true; }
-
-	// Schema arrives BEFORE the rows — map the key columns to their positions.
-	void OnColumns(const std::vector<ibQueryLowering::OutputColumn>& schema) override {
-		m_schema = schema;
-		m_keyIdx.clear();
-		for (const ibBackendQueryColumn* kc : m_keyCols)
-			for (size_t i = 0; i < m_schema.size(); ++i)
-				if (m_schema[i].m_col == kc) { m_keyIdx.push_back(i); break; }
-	}
-
-	// Build the node straight into the table.
-	//   GROUP mode (a grouping level): the row is a TOTALS-BY group; its dimension value
-	//   is the first output column. The node is a CONTAINER (always drillable — deeper
-	//   groups or detail rows) and its identity is the parent path + this value.
-	//   DETAIL mode (the leaf level / a flat list): keyset identity (no guid) + all columns.
-	void OnRow(int /*level*/, bool hasChildren, const std::vector<ibValue>& values) override {
-		ibValueDynamicList::ibDynamicListNode* node = nullptr;
-		if (m_groupMode) {
-			std::vector<ibValue> groupPath = m_parentPath;
-			if (!values.empty()) groupPath.push_back(values.front());   // the single TotalBy dim
-			node = new ibValueDynamicList::ibDynamicListNode(m_tree, {}, /*container*/true, groupPath, /*isGroup*/true);
-		}
-		else {
-			std::vector<ibValue> key;
-			for (size_t i : m_keyIdx)
-				if (i < values.size()) key.push_back(values[i]);
-			node = new ibValueDynamicList::ibDynamicListNode(m_tree, key, hasChildren, m_parentPath, /*isGroup*/false);
-		}
-		for (size_t i = 0; i < m_schema.size() && i < values.size(); ++i)
-			if (m_schema[i].m_col != nullptr)
-				node->AppendTableValue(m_schema[i].m_col->GetColumnId(), values[i]);
-		m_rows.push_back(node);
-	}
-
-	std::vector<ibValueDynamicList::ibDynamicListNode*> TakeRows() { return std::move(m_rows); }
-
-private:
-	const ibValueModelTreeBase*                          m_tree;   // row-owner link (nodes hold it const)
-	ibReadPageRequest                                    m_page;
-	std::vector<const ibBackendQueryColumn*>             m_keyCols;
-	std::vector<ibQueryLowering::OutputColumn>           m_schema;
-	std::vector<size_t>                                  m_keyIdx;
-	std::vector<ibValueDynamicList::ibDynamicListNode*>  m_rows;
-	bool                                                 m_groupMode = false;   // build group nodes (vs detail rows)
-	std::vector<ibValue>                                 m_parentPath;          // drilled dimension values (the scope)
-};
+// (ibDynamicListProvider DELETED — the dynamic list fetches through the base ibValueModel::RunComposerPage now,
+//  like every other model: ONE fetch in the parent. Its keyset provider + ibDynamicListNode are gone;
+//  RunComposerPage yields ibComposerNode, read through the base GetViewData<ibValueTreeNode>.)
 
 // Column collection straight off the queryable — columns are the queryable's
 // columns (GetColumnId / GetName), NOT metaobject attributes.
-class ibDynamicListColumns : public ibValueModelTreeBase::ibValueModelColumnCollection {
+class ibDynamicListColumns : public ibValueModelCursor::ibValueModelColumnCollection {
 public:
 	class ColInfo : public ibValueModelColumnInfo {
 	public:
@@ -105,7 +49,7 @@ private:
 
 // Script return-line over a row node — owner link (column-value Get/SetPropVal
 // mapping the node's values is harden).
-class ibDynamicListReturnLine : public ibValueModelTreeBase::ibValueModelReturnLine {
+class ibDynamicListReturnLine : public ibValueModelCursor::ibValueModelReturnLine {
 public:
 	ibDynamicListReturnLine(ibValueDynamicList* owner, const ibDataViewItem& line)
 		: ibValueModelReturnLine(line), m_owner(owner) {}
@@ -120,10 +64,10 @@ private:
 // ===========================================================================
 
 ibValueDynamicList::ibValueDynamicList(const ibBackendQueryable* queryable, ibDynamicListView view)
-	: ibValueModelTreeBase(), ibSourceDataObject(),
+	: ibValueModelCursor(), ibSourceDataObject(),
 	  m_columns(nullptr), m_view(view)
 {
-	m_settings = new ibValueListSettings();
+	// (No own settings buffer — the BASE model already built m_listSettings; use GetListSettings().)
 	if (queryable != nullptr)
 		SetSourceQueryable(queryable);   // null → set later via SetSource
 }
@@ -154,30 +98,33 @@ void ibValueDynamicList::RebuildSource()
 	const ibBackendQueryable* queryable = GetSourceQueryable();
 	m_columns = (queryable != nullptr) ? new ibDynamicListColumns(queryable) : nullptr;   // ibValuePtr owns
 	if (queryable != nullptr) {
-		m_composer.FromSource(queryable);   // L5 reads off the queryable
-		// FromSource resets the composer — re-apply the (surviving) settings so a source
-		// change does NOT silently drop the Filter/Order/Group the user configured. The
-		// settings DATA lives on m_settings (untouched here); only the composer was rebuilt.
+		// A dynamic list is a DB model — rebind the source on its own ibDataDBComposer (m_composer, keeping settings).
+		m_composer.FromSource(queryable);
+		// FromSource rebinds the source — re-commit the settings buffer onto the composer so a source
+		// change does NOT silently drop the Filter/Order/Group the user configured. The settings DATA
+		// lives on the base buffer GetListSettings() (untouched here); only the composer source changed.
 		RefreshComposerSettings();
 	}
 }
 
 void ibValueDynamicList::SetCustomQuery(const wxString& queryText)
 {
-	m_composer.FromText(queryText);
+	m_composer.FromText(queryText);   // the dynamic list's own DB composer (FromText is DB-only)
 }
 
 void ibValueDynamicList::RefreshComposerSettings()
 {
-	// Replace the settings ON the composer (call on settings change, NOT per fetch).
-	m_composer.ClearSettings();
-	ibApplyDynamicSettings(m_composer, GetListSettings());
+	// Nothing to re-apply: GetListSettings() is now a live FACADE that writes the composer directly, and the
+	// settings DIALOG commits its own buffer onto the composer on OK. A settings/source change just refetches.
+	NotifyReset();
 }
 
 ibValueModel::Features ibValueDynamicList::GetFeatures() const
 {
 	Features f;
-	f.flags |= Features::DbFetch | Features::Tree | Features::Filters | Features::Sorting;
+	f.flags |= Features::Filters | Features::Sorting | Features::Grouping;   // tree-ness = grouping (GroupCount)
+	if (m_composer.HasCustomText())
+		f.flags |= Features::CustomQuery;   // "custom query" installed via SetCustomQuery → FromText
 	return f;
 }
 
@@ -217,6 +164,28 @@ ibUniqueKey ibValueDynamicList::GetGuid() const
 	return wxNullGuid;
 }
 
+// The dynamic list creates its own row key (the cursor base makes none): the row's primary-key REFERENCE (guid),
+// read off the item's node — the same shape a regular list uses, since a dynamic list row references an object.
+ibUniqueKey ibValueDynamicList::GetItemKey(const ibDataViewItem& item) const
+{
+	ibValueModel::ibComposerNode* node = GetViewData<ibValueModel::ibComposerNode>(item);
+	if (node == nullptr)
+		return ibUniqueKey();
+	const ibBackendQueryable* q = GetSourceQueryable();
+	if (q == nullptr)
+		return ibUniqueKey();
+	const std::vector<const ibBackendQueryColumn*> keyCols = q->GetPrimaryKeyColumns();
+	if (keyCols.empty() || keyCols.front() == nullptr)
+		return ibUniqueKey();
+	ibValue refVal;
+	if (node->GetValue(keyCols.front()->GetColumnId(), refVal)) {
+		ibValueReferenceDataObject* refObj = nullptr;
+		if (refVal.ConvertToValue(refObj) && refObj != nullptr)
+			return ibUniqueKey(refObj->GetGuid());
+	}
+	return ibUniqueKey();
+}
+
 const ibSourceExplorer* ibValueDynamicList::GetSourceExplorer() const
 {
 	// The explorer's columns come from the QUERYABLE, not a metaobject - the dynamic list is
@@ -248,133 +217,15 @@ const ibMetaData* ibValueDynamicList::GetSourceMetaData() const
 	return ibApplicationData::GetActiveMetaData();
 }
 
-// --- THIN fetch — all the work is in the L5 provider ------------------------
-
-unsigned int ibValueDynamicList::RunPage(const ibDataViewItem& parent, const ibDataViewItem& anchor,
-	int count, ibFetchDirection dir, ibDataViewItemArray& out) const
-{
-	const ibBackendQueryable* q = GetSourceQueryable();
-	if (q == nullptr)
-		return 0;
-	auto db = ses_query;
-	if (db == nullptr || !db->IsOpen())
-		return 0;
-
-	// Grouping drill: when the settings carry groupings the view is the GROUP tree
-	// (the native parent-hierarchy is bypassed). The top level renders the first
-	// dimension's groups; expanding a group RE-FETCHES scoped to it — a filter
-	// dim==value for every drilled dimension (the group becomes a filter) + grouping by
-	// the NEXT dimension, or, past the last dimension, the plain detail rows. Lazy:
-	// only the expanded node's children load.
-	std::vector<wxString> dims;
-	if (const ibValueGroupList* g = GetListSettings()->GetGroup())
-		for (size_t i = 0; i < g->Count(); ++i)
-			if (!g->GetField(i).IsEmpty())
-				dims.push_back(g->GetField(i));
-
-	std::vector<ibValue> parentPath;   // dimension values already drilled (the scope)
-	if (!dims.empty() && parent.IsOk() && parent != s_constIgnoreParent)
-		if (const ibDynamicListNode* pnode = GetViewData<ibDynamicListNode>(parent))
-			parentPath = pnode->GetGroupPath();
-	const size_t depth      = parentPath.size();
-	const bool   grouping   = !dims.empty();
-	const bool   groupLevel = grouping && depth < dims.size();
-
-	ibReadPageRequest page;
-	page.m_direction   = dir;
-	page.m_count       = (count > 0 ? count : 21) + 1;   // +1 probe row → hasMore
-	page.m_reverseSort = (dir == ibFetchDirection::Backward);
-	if (anchor.IsOk()) {
-		page.m_hasAnchor = true;
-		ibValueTreeNode* a = GetViewData<ibValueTreeNode>(anchor);
-		for (const auto& s : m_sortOrder.m_sorts) {
-			if (!s.m_sortEnable) continue;
-			ibValue v;
-			if (a != nullptr) a->GetValue(s.m_sortModel, v);
-			page.m_anchorSortValues.push_back(v);
-		}
-	}
-
-	// Group-level paging within ONE level is a follow-up: the TOTALS read returns the
-	// whole level at once, so a continuation (anchored) fetch returns nothing rather
-	// than re-emitting it (which would duplicate rows). Detail rows page normally below.
-	if (groupLevel && anchor.IsOk())
-		return 0;
-
-	if (!grouping) {
-		// Tree scope lives IN the page (the composer reads it via GetPageRequest):
-		// List view passes s_constIgnoreParent → flat; Tree view passes a real parent.
-		// A source with no parent column (document / register) is always flat.
-		const ibBackendQueryColumn* parentCol = q->GetParentColumn();
-		page.m_parentFilter = true;
-		page.m_parentCol    = parentCol;
-		page.m_flatScan     = (parent == s_constIgnoreParent) || (parentCol == nullptr);
-		page.m_isTopLevel   = !parent.IsOk() || page.m_flatScan;
-		// (page.m_parentGuid — harden: derive the parent scope guid from the parent
-		//  node's keyset; flat path doesn't need it.)
-	}
-
-	// The composer for THIS fetch: the persistent one for a flat list, or a transient
-	// SCOPED one for a grouping level — base Filter/Sort, PLUS dim==value for every
-	// drilled dimension, then group by the NEXT dimension (or, at the leaf, no grouping
-	// → the detail rows page through the SAME page request: chunked, portion by portion).
-	ibDataComposer scoped;
-	ibDataComposer* composer = &m_composer;
-	if (grouping) {
-		scoped.FromSource(q);
-		// Base filters + sorts (shared with the flat path), but NOT the group set —
-		// the scope below supplies its own per-level grouping instead.
-		ibApplyDynamicFilters(scoped, GetListSettings());
-		ibApplyDynamicSorts(scoped, GetListSettings());
-		// Every already-drilled dimension becomes an equality filter (the group is the scope),
-		// then group by the NEXT dimension — or, past the last one, emit plain detail rows.
-		for (size_t k = 0; k < depth && k < dims.size(); ++k)
-			scoped.Filter(dims[k], wxT("="), parentPath[k]);
-		if (groupLevel)
-			scoped.TotalBy(dims[depth]);
-		composer = &scoped;
-	}
-
-	// `this` is const here (fetch is const — it READS + returns rows). The provider takes
-	// the model as a const row-owner link; the nodes hold it const too. No const_cast.
-	ibDynamicListProvider provider(this, page,
-		q->GetPrimaryKeyColumns(), groupLevel, parentPath);
-	composer->Run(provider);   // L5 fills the provider — chunked by the page request
-
-	std::vector<ibDynamicListNode*> rows = provider.TakeRows();
-	if (static_cast<int>(rows.size()) > count && count > 0) {
-		delete rows.back();
-		rows.pop_back();
-	}
-	if (dir == ibFetchDirection::Backward)
-		std::reverse(rows.begin(), rows.end());
-
-	const unsigned int fetched = static_cast<unsigned int>(rows.size());
-	AdoptRowsToItems(rows, out);
-	return fetched;
-}
-
-unsigned int ibValueDynamicList::GetFirstFetch(const ibDataViewItem& parent, const ibDataViewItem& anchor,
-	int count, ibDataViewItemArray& out) const
-{
-	return RunPage(parent, anchor, count, ibFetchDirection::Reset, out);
-}
-
-unsigned int ibValueDynamicList::GetNextFetch(const ibDataViewItem& parent, const ibDataViewItem& anchor,
-	int count, ibDataViewItemArray& out) const
-{
-	if (!anchor.IsOk())
-		return RunPage(parent, ibDataViewItem(), count, ibFetchDirection::Reset, out);
-	return RunPage(parent, anchor, count, ibFetchDirection::Forward, out);
-}
-
-unsigned int ibValueDynamicList::GetPrevFetch(const ibDataViewItem& parent, const ibDataViewItem& anchor,
-	int count, ibDataViewItemArray& out) const
-{
-	if (!anchor.IsOk())
-		return 0;
-	return RunPage(parent, anchor, count, ibFetchDirection::Backward, out);
-}
+// FETCH lives ONLY in the parent now (Max: "fetch lives only in the parent"). The dynamic list NO LONGER overrides
+// Get*Fetch / RunPage — it inherits ibValueModel::Get*Fetch → RunComposerPage, exactly like the catalog /
+// register / RAM models. RunComposerPage reads through GetSourceQueryable() (the configured source) + the ONE
+// base composer + the persistent ListSettings; its grouping branch does the same group-drill RunPage did
+// (Filter dim==value per drilled level + TotalBy the next), and its hierarchy branch the self-hierarchy tree.
+// The old per-list keyset provider + ibDynamicListNode + the native page.m_parentCol tree are gone — a tree is
+// a hierarchy GROUPING over the composer now, not a parent-column page scope.
+// ⚠ FromText (SetCustomQuery): RunComposerPage requires GetSourceQueryable() != null, so a custom-text source
+//   must vend a queryable to page through here (the computed-source frontier) — FromSource sources work today.
 
 // --- settings surface -------------------------------------------------------
 
@@ -418,7 +269,7 @@ void ibValueDynamicList::OnPropertyChanged(ibProperty* property, const wxVariant
 	// Source picked: the property already holds the new queryable; rebuild off it.
 	if (m_propertySource == property)
 		RebuildSource();
-	// The settings form edited m_settings in place; re-apply onto the composer (L5).
+	// The source/settings changed; re-commit the settings buffer onto the composer (L5).
 	RefreshComposerSettings();
 }
 
@@ -430,7 +281,7 @@ bool ibValueDynamicList::ReadProperty(const ibDataNode& node)
 	m_propertySource->ReadNodeValue(node.GetProperty(m_propertySource->GetName()));
 	RebuildSource();
 
-	m_settings->ReadData(node);   // settings (Filter/Order/Group) live outside the property set
+	GetListSettings()->ReadData(node);   // node → buffer; then commit buffer → composer (the store)
 	RefreshComposerSettings();
 	return true;
 }
@@ -446,7 +297,9 @@ bool ibValueDynamicList::WriteProperty(ibDataNode& node) const
 		return false;
 	node.SetProperty(m_propertySource->GetName(), value);
 
-	m_settings->WriteData(node);   // settings (Filter/Order/Group) live outside the property set
+	// GetListSettings() is the live FACADE over the composer (the store), so this serialises the composer's
+	// current Filter/Order/Group directly. (WriteData/ReadData item round-trip is still a TODO stub.)
+	GetListSettings()->WriteData(node);
 	return true;
 }
 

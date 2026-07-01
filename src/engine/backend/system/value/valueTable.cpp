@@ -6,6 +6,10 @@
 #include "valueTable.h"
 #include "backend/backend_exception.h"
 
+// L5-1 composer — full type to bind the base m_composer to this table's source in the ctor (the RAM
+// queryable itself now lives in tableInfo.cpp, generalised onto ibValueModelStorage).
+#include "backend/composition/dataComposer.h"   // ibDataDBComposer — m_composer.FromSource(...)
+
 //////////////////////////////////////////////////////////////////////
 
 
@@ -17,7 +21,7 @@ ibDataViewItem ibValueModelTable::FindRowValue(const ibValue& varValue, const wx
 	if (colInfo != nullptr) {
 		for (long row = 0; row < GetRowCount(); row++) {
 			const ibDataViewItem& item = GetItem(row);
-			ibValueTableRow* node = GetViewData<ibValueTableRow>(item);
+			ibComposerNode* node = GetViewData<ibComposerNode>(item);
 			if (node != nullptr &&
 				varValue == node->GetTableValue((ibMetaID)colInfo->GetColumnID())) {
 				return item;
@@ -27,21 +31,27 @@ ibDataViewItem ibValueModelTable::FindRowValue(const ibValue& varValue, const wx
 	return ibDataViewItem(nullptr);
 }
 
-ibValueModelTable::ibValueModelTable() : ibValueModelRamTableBase(),
+ibValueModelTable::ibValueModelTable() : ibValueModelStorage(),
 m_tableColumnCollection(new ibValueModelTableColumnCollection(this))
 {
 	m_members.Bind(this, &ibValueModelTable::FillMembers);
+	// (The RAM composer is auto-bound to this model's value-storage in ibValueModelStorage's ctor — no manual bind.)
 }
 
-ibValueModelTable::ibValueModelTable(const ibValueModelTable& valueTable) : ibValueModelRamTableBase(),
+ibValueModelTable::ibValueModelTable(const ibValueModelTable& valueTable) : ibValueModelStorage(),
 m_tableColumnCollection(valueTable.m_tableColumnCollection)
 {
 	m_members.Bind(this, &ibValueModelTable::FillMembers);
+	// (RAM composer auto-bound in ibValueModelStorage's ctor.)
 }
 
 ibValueModelTable::~ibValueModelTable()
 {
 }
+
+// NOTE: a table-of-values is a RAM model — it has NO source queryable. The RAM composer (ibDataRamComposer)
+// filters/sorts/groups ibValueModelStorage's ibRamValueStorage (the live nodes) IN PLACE. There is no RAM
+// query-text / SQL / ibRamTableQueryable door any more.
 
 void ibValueModelTable::FillMembers(ibMemberTable& helper) const
 {
@@ -92,26 +102,31 @@ bool ibValueModelTable::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 	{
 		ibValueModelTableReturnLine* retLine = nullptr;
 		if (paParams[0]->ConvertToValue(retLine)) {
-			ibValueTableRow* node = GetViewData<ibValueTableRow>(retLine->GetLineItem());
+			ibComposerNode* node = GetViewData<ibComposerNode>(retLine->GetLineItem());
 			if (node != nullptr)
-				ibValueModelRamTableBase::Remove(node);
+				ibValueModelStorage::Remove(node);
 		}
 		else {
-			ibValueTableRow* node = GetViewData<ibValueTableRow>(GetItem(paParams[0]->GetInteger()));
-			if (node != nullptr) ibValueModelRamTableBase::Remove(node);
+			ibComposerNode* node = GetViewData<ibComposerNode>(GetItem(paParams[0]->GetInteger()));
+			if (node != nullptr) ibValueModelStorage::Remove(node);
 		}
 		return true;
 	}
 	case enClear:
 		Clear();
 		return true;
-	case enSort:
-		ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo = m_tableColumnCollection->GetColumnByName(paParams[0]->GetString());
-		if (colInfo != nullptr) {
-			ibValueModelRamTableBase::Sort(colInfo->GetColumnID(), lSizeArray > 0 ? paParams[1]->GetBoolean() : true);
-			return true;
-		}
-		return false;
+	case enSort: {
+		// Sort goes through L5 — NOT an in-memory CompareRow loop (Max: sorting must live on L5, not a loop).
+		// Set the composer's ORDER BY (over this table's RAM queryable) by column NAME, then refetch; the
+		// composer renders the sorted view. m_sortOrder / RamTableBase::Sort are gone.
+		const wxString colName = paParams[0]->GetString();
+		if (m_tableColumnCollection->GetColumnByName(colName) == nullptr)
+			return false;
+		m_composer.ClearSorts();
+		m_composer.Sort(colName, lSizeArray > 0 ? paParams[1]->GetBoolean() : true);
+		NotifyReset();
+		return true;
+	}
 	}
 
 	return false;
@@ -197,12 +212,12 @@ bool ibValueModelTable::ibValueModelTableColumnCollection::CallAsFunc(const long
 	return false;
 }
 
-bool ibValueModelTable::ibValueModelTableColumnCollection::SetAt(const ibValue& varKeyValue, const ibValue& varValue)//������ ������� ������ ���������� � 0
+bool ibValueModelTable::ibValueModelTableColumnCollection::SetAt(const ibValue& varKeyValue, const ibValue& varValue) // read-only column collection - no-op (writes are not supported)
 {
 	return false;
 }
 
-bool ibValueModelTable::ibValueModelTableColumnCollection::GetAt(const ibValue& varKeyValue, ibValue& pvarValue) //������ ������� ������ ���������� � 0
+bool ibValueModelTable::ibValueModelTableColumnCollection::GetAt(const ibValue& varKeyValue, ibValue& pvarValue) // read a column-info entry by its index
 {
 	unsigned int index = varKeyValue.GetUInteger();
 	if ((index < 0 || index >= m_listColumnInfo.size() && !appData->DesignerMode())) {
@@ -278,19 +293,32 @@ bool ibValueModelTable::ibValueModelTableReturnLine::GetPropVal(const long lProp
 
 long ibValueModelTable::AppendRow(unsigned int before)
 {
-	ibValueTableRow* rowData = new ibValueTableRow();
+	ibComposerNode* rowData = new ibComposerNode();
 	for (auto& colData : m_tableColumnCollection->m_listColumnInfo) {
 		rowData->AppendTableValue(colData->GetColumnID(),
 			ibValueTypeDescription::AdjustValue(m_tableColumnCollection->GetColumnType(colData->GetColumnID()))
 		);
 	}
 
-	return ibValueModelRamTableBase::Append(rowData, !ibBackendException::IsEvalMode());
+	// Grouped add: the new row inherits the current group's dimension values (read each grouping dim off the
+	// selected row), so it lands INSIDE the group instead of losing the grouping value. Ungrouped → no dims →
+	// no-op; a dotted (reference-walk) dim has no single storage column and is skipped. (Grouping is NOT ТЧ-only.)
+	if (ibComposerNode* ctx = GetViewData<ibComposerNode>(GetSelection())) {
+		for (size_t i = 0; i < GetModelComposer().GroupCount(); ++i) {
+			wxString field; ibQueryDimUnfold kind = ibQueryDimUnfold::Elements;
+			if (!GetModelComposer().GetGroupAt(i, field, kind) || field.IsEmpty()) continue;
+			const ibMetaID col = GetColumnIDByName(field);
+			if (col != wxNOT_FOUND)
+				rowData->AppendTableValue(col, ctx->GetTableValue(col));
+		}
+	}
+
+	return ibValueModelStorage::Append(rowData, !ibBackendException::IsEvalMode());
 }
 
 void ibValueModelTable::EditRow()
 {
-	ibValueModelRamTableBase::RowValueStartEdit(GetSelection());
+	ibValueModelStorage::RowValueStartEdit(GetSelection());
 }
 
 void ibValueModelTable::CopyRow()
@@ -298,21 +326,22 @@ void ibValueModelTable::CopyRow()
 	ibDataViewItem currentItem = GetSelection();
 	if (!currentItem.IsOk())
 		return;
-	ibValueTableRow* node = GetViewData<ibValueTableRow>(currentItem);
+	// The displayed item is a composer COPY — resolve the REAL storage row (+ index) via the bridge.
+	ibComposerNode* node = StorageRowOf(currentItem);
 	if (node == nullptr)
 		return;
-	ibValueTableRow* rowData = new ibValueTableRow();
+	ibComposerNode* rowData = new ibComposerNode();
 	for (auto& colData : m_tableColumnCollection->m_listColumnInfo) {
 		rowData->AppendTableValue(
 			colData->GetColumnID(), node->GetTableValue(colData->GetColumnID())
 		);
 	}
-	const long& currentLine = GetRow(currentItem);
+	const long currentLine = StorageIndexOf(currentItem);
 	if (currentLine != wxNOT_FOUND) {
-		ibValueModelRamTableBase::Insert(rowData, currentLine, !ibBackendException::IsEvalMode());
+		ibValueModelStorage::Insert(rowData, currentLine, !ibBackendException::IsEvalMode());
 	}
 	else {
-		ibValueModelRamTableBase::Append(rowData, !ibBackendException::IsEvalMode());
+		ibValueModelStorage::Append(rowData, !ibBackendException::IsEvalMode());
 	}
 }
 
@@ -321,18 +350,19 @@ void ibValueModelTable::DeleteRow()
 	ibDataViewItem currentItem = GetSelection();
 	if (!currentItem.IsOk())
 		return;
-	ibValueTableRow* node = GetViewData<ibValueTableRow>(currentItem);
+	// The displayed item is a composer COPY — Remove needs the REAL storage row (resolved via the bridge).
+	ibComposerNode* node = StorageRowOf(currentItem);
 	if (node == nullptr)
 		return;
 	if (!ibBackendException::IsEvalMode())
-		ibValueModelRamTableBase::Remove(node);
+		ibValueModelStorage::Remove(node);
 }
 
 void ibValueModelTable::Clear()
 {
 	if (ibBackendException::IsEvalMode())
 		return;
-	ibValueModelRamTableBase::Clear();
+	ibValueModelStorage::Clear();
 }
 
 //**********************************************************************

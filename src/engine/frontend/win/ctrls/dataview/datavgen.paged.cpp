@@ -49,16 +49,6 @@ ibDataViewTreeNode* MakeChildNode(ibDataViewTreeNode* parent,
 		node->SetHasChildren(true);
 	return node;
 }
-
-const char* ViewModeStr(ibDataViewViewMode mode)
-{
-	switch (mode) {
-	case ibDataViewViewMode::ibDataViewList:         return "List";
-	case ibDataViewViewMode::ibDataViewTree:         return "Tree";
-	case ibDataViewViewMode::ibDataViewHierarchical: return "Hier";
-	default: return "?";
-	}
-}
 }
 
 int ibDataViewCtrl::FindVisibleRowInTree(const ibDataViewItem& target) const
@@ -115,7 +105,7 @@ void ibDataViewCtrl::SetPagedRestoreSelection(const ibDataViewItem& item)
 
 void ibDataViewCtrl::SchedulePagedRefresh(const ibDataViewItem& preferSelection)
 {
-			// Latest-selection-wins: a series of ItemInserted'ов (e.g. LoadData
+			// Latest-selection-wins: a series of ItemInserted events (e.g. LoadData
 	// repopulating the table) produces successive items; the last one
 	// is the most reasonable focus anchor for the user.
 	if (preferSelection.IsOk())
@@ -189,7 +179,6 @@ void ibDataViewCtrl::PagedRefresh(const ibDataViewItem& preferSelection)
 		if (preferSelection.IsOk())
 			explicitTarget = preferSelection;
 	}
-	const char* viewModeStr = ViewModeStr(m_viewMode);
 	const int  preSy = m_tableAreaWin ?
 		CalcUnscrolledPosition(wxPoint(0, 0)).y : 0;
 	const int topRow   = topItem.IsOk()      ? (int)GetRowByItem(topItem)      : -1;
@@ -302,10 +291,13 @@ void ibDataViewCtrl::PagedBootstrap()
 		// not called mid-wipe — chrome must not see the zero-row state.
 			}
 
-	// Initial / refresh batch == visible viewport size only.  Extra
-	// rows beyond it come in via scroll-driven PagedFetchForward.
+	// Initial / refresh batch == the visible viewport PLUS one slack buffer, fetched in ONE go — so the buffer
+	// has room to scroll into (a viewport-exact batch leaves nothing below the fold: the wheel can't scroll, so
+	// the scroll-driven forward fetch never fires and rows "don't load until resize"). The extra beyond the
+	// buffer still comes in via scroll-driven PagedFetchForward. Loading it here (not via an async idle-fill)
+	// also kills the two-step "rows keep getting added on refresh".
 	const int viewport = GetCountPerPage();
-	const int batch    = viewport > 0 ? viewport : 100;
+	const int batch    = (viewport > 0 ? viewport : 100) + static_cast<int>(kBufferSlack);
 
 	const bool restoreFromSelection = m_pagedRestoreSelection.IsOk();
 	const bool isTreeMode = (m_viewMode == ibDataViewViewMode::ibDataViewTree);
@@ -406,24 +398,14 @@ void ibDataViewCtrl::PagedBootstrap()
 			? m_pagedRestoreAnchor
 			: m_pagedRestoreFocus);
 
-	const char* viewModeStr2 = ViewModeStr(m_viewMode);
-	const char* cursorMode =
-		restoreFromSelection
-			? (isTreeMode
-				? (treeChainHead.IsOk()
-					? "chainHead-cursor (tree+selection)"
-					: "empty-cursor (tree+selection no chain)")
-				: "selection-cursor (explicit prefer)")
-		: (isTreeMode ? "empty-cursor (tree top-level)" :
-		   (m_pagedRestoreAnchor.IsOk() ? "anchor-cursor (saved top)" :
-		                                  "empty-cursor (cold)"));
 	const int preBootstrapSy = m_tableAreaWin ?
 		CalcUnscrolledPosition(wxPoint(0, 0)).y : 0;
 	
 	ibDataViewItemArray items;
-	// Drill chain front in Hierarchical mode; sentinel
-	// s_constIgnoreParent in flat List of a hierarchical model;
-	// empty (= top-level) in Tree / non-hierarchical.
+	// Drill chain front in Hierarchical mode; empty (= top-level) in
+	// List, Tree, and non-hierarchical models. A List view passes an
+	// empty parent because the composer only scopes by parent when it
+	// groups, which a List view never does.
 	const ibDataViewItem effectiveParent = GetEffectiveFetchParent();
 	unsigned int n = model->GetFirstFetch(effectiveParent, restore, batch, items);
 		// Empty-fetch fallback: a cursor-mode fetch (selection / anchor /
@@ -436,6 +418,11 @@ void ibDataViewCtrl::PagedBootstrap()
 		items.Clear();
 		n = model->GetFirstFetch(effectiveParent, ibDataViewItem(), batch, items);
 			}
+	if (restore.IsOk()) {
+		int anchorIdx = -1;
+		for (unsigned i = 0; i < n; ++i)
+			if (items[i] == restore) { anchorIdx = (int)i; break; }
+	}
 	// Heuristic: model returning fewer rows than the batch size means
 	// it has nothing more to give in that direction.  Saves a wasted
 	// round-trip that would otherwise return 0 just to discover this.
@@ -449,7 +436,7 @@ void ibDataViewCtrl::PagedBootstrap()
 	m_pagedNeedsBootstrap = false;
 	m_pagedFwdAnchor        = (n > 0) ? items[n - 1] : ibDataViewItem();
 	m_pagedBwdAnchor        = (n > 0) ? items[0]     : ibDataViewItem();
-		m_pagedRestoreAnchor    = ibDataViewItem();
+	m_pagedRestoreAnchor    = ibDataViewItem();
 	m_pagedRestoreSelection = ibDataViewItem();
 	// m_pagedRestoreFocus is intentionally NOT cleared here.  When
 	// focus sits OUTSIDE the initial Reset batch (focus row < topRow,
@@ -560,7 +547,7 @@ void ibDataViewCtrl::PagedBootstrap()
 	// If the user had a focused / selected row before the refresh,
 	// find the same business row in the new ordering by data-compare
 	// (ibDataViewItem::operator== now dispatches to ibDataViewObject's
-	// IsEqualTo virtual, which ibValueTableRow overrides to compare
+	// IsEqualTo virtual, which ibComposerNode overrides to compare
 	// row values).  Restore focus + selection on the matching index.
 	// Tree-mode auto-expand above already handled deep selection; skip
 	// the top-level scan when it succeeded.
@@ -583,26 +570,31 @@ void ibDataViewCtrl::PagedBootstrap()
 		bool found = false;
 		// RAM-backed paged models preserve row order across refresh
 		// (m_nodeValues survives, save/reload writes by line number),
-		// and IsEqualTo on ibValueTableRow value-compares m_nodeValues
+		// and IsEqualTo on ibComposerNode value-compares m_nodeValues
 		// → for default-valued TabularSection rows that returns true
 		// across unrelated rows.  Restore focus by raw row index
 		// instead.  DB-backed paged keeps the value-eq scan because
 		// rows there have unique GUIDs.
-		const bool ramFetch = model->GetFeatures()
-			.Has(ibDataViewModel::Features::RamFetch);
-		if (ramFetch && m_pagedRestoreFocusRow >= 0
-		    && m_pagedRestoreFocusRow < static_cast<long>(n)) {
-			const unsigned int idx = static_cast<unsigned int>(m_pagedRestoreFocusRow);
-			const unsigned int row = crumbCount + idx;
-			ChangeCurrentRow(row);
-			if (m_pagedRestoreFocusWasSelected)
-				m_selection.SelectItem(row, true);
-			found = true;
-					}
+		const bool ramFetch = !model->HasKeyedRows();
+		if (ramFetch) {
+			// RAM: match by the live storage node's IDENTITY — its pointer IS the stable row id (RAM RunComposerPage
+			// returns the same storage nodes). Value-compare mismatches non-unique / default-valued rows (the jump);
+			// raw index breaks when the focus sits past the window. The batch was widened above to include the focus
+			// node, so it is present here — found wherever it now sits, robust to re-order.
+			for (unsigned int i = 0; i < n && !found; ++i) {
+				if (items[i].GetID() == savedFocus.GetID()) {
+					const unsigned int row = crumbCount + i;
+					ChangeCurrentRow(row);
+					if (m_pagedRestoreFocusWasSelected)
+						m_selection.SelectItem(row, true);
+					found = true;
+				}
+			}
+		}
 		else {
-						for (unsigned int i = 0; i < n && !found; ++i) {
-				const bool eq = (items[i] == savedFocus);
-								if (eq) {
+			// DB (keyed): value-compare scan — rows carry unique guids so IsEqualTo re-locates the same business row.
+			for (unsigned int i = 0; i < n && !found; ++i) {
+				if (items[i] == savedFocus) {
 					const unsigned int row = crumbCount + i;
 					ChangeCurrentRow(row);
 					if (m_pagedRestoreFocusWasSelected)
@@ -623,7 +615,7 @@ void ibDataViewCtrl::PagedBootstrap()
 		CalcUnscrolledPosition(wxPoint(0, 0)).y : 0;
 	const wxSize vsz = m_tableAreaWin ? m_tableAreaWin->GetVirtualSize() : wxSize(0,0);
 	
-	// Reflect the model's m_sortOrder onto column header arrows.
+	// Reflect the composer's active sort onto the column header arrows.
 	// ibValueModelTableBox::OnColumnClick consumes the column-click
 	// event without going through the fork's standard SetSortOrder
 	// on the column, so the arrow only gets updated via this Sync
@@ -870,8 +862,12 @@ void ibDataViewCtrl::OnPagedFetchForwardResult(ibDataViewItemArray& items,
 		const long crumbCountFR = static_cast<long>(m_topParentChain.GetCount());
 		const long dataInsertOffset = static_cast<long>(insertParent->GetChildNodes().size())
 		                              - static_cast<long>(n);
+		// RAM matches the off-screen focus by its live node IDENTITY (pointer) — value-compare drops a selection
+		// that scrolled out of the fetched batch when rows are non-unique. Keyed DB keeps the value-eq scan.
+		const bool keyedFR = GetModel() && GetModel()->HasKeyedRows();
 		for (unsigned int i = 0; i < n; ++i) {
-			if (items[i] == m_pagedRestoreFocus) {
+			if (keyedFR ? (items[i] == m_pagedRestoreFocus)
+			            : (items[i].GetID() == m_pagedRestoreFocus.GetID())) {
 				const unsigned row =
 					static_cast<unsigned>(crumbCountFR + dataInsertOffset)
 					+ i;
@@ -953,8 +949,12 @@ void ibDataViewCtrl::OnPagedFetchBackwardResult(ibDataViewItemArray& items,
 	// Skipped if the user already has a selection (don't override).
 	if (m_pagedRestoreFocus.IsOk() && m_currentRow == (unsigned)-1
 	    && m_selection.IsEmpty()) {
+		// RAM matches the off-screen focus by live node IDENTITY (value-compare drops a non-unique row); keyed DB
+		// keeps the value-eq scan on its unique guids.
+		const bool keyedBR = GetModel() && GetModel()->HasKeyedRows();
 		for (unsigned int i = 0; i < n; ++i) {
-			if (items[i] == m_pagedRestoreFocus) {
+			if (keyedBR ? (items[i] == m_pagedRestoreFocus)
+			            : (items[i].GetID() == m_pagedRestoreFocus.GetID())) {
 				const unsigned row = static_cast<unsigned>(crumbCount) + i;
 				ChangeCurrentRow(row);
 				if (m_pagedRestoreFocusWasSelected)

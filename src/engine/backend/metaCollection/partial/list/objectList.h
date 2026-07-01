@@ -4,11 +4,13 @@
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/metaCollection/partial/reference/reference.h"
 #include "backend/composition/dataComposer.h"
+#include "backend/composition/listFilter.h"   // ibValueListSettings / ibValueSortList — the DEFAULT sort goes here (m_sortOrder abolished)
 
 #include <memory>
 
+
 //base list class
-class BACKEND_API ibValueListDataObject : public ibValueModelTableBase,
+class BACKEND_API ibValueListDataObject : public ibValueModelCursor,
 	public ibSourceDataObject {
 	public:
 protected:
@@ -39,9 +41,9 @@ public:
 		return 0;
 	}
 
-	class ibValueDataObjectListColumnCollection : public ibValueModelTableBase::ibValueModelColumnCollection {
+	class ibValueDataObjectListColumnCollection : public ibValueModel::ibValueModelColumnCollection {
 	public:
-		class ibValueDataObjectListColumnInfo : public ibValueModelTableBase::ibValueModelColumnCollection::ibValueModelColumnInfo {
+		class ibValueDataObjectListColumnInfo : public ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo {
 	public:
 
 			virtual unsigned int GetColumnID() const { return m_metaAttribute->GetMetaID(); }
@@ -100,7 +102,7 @@ public:
 		ibValueDataObjectListReturnLine(ibValueListDataObject* ownerTable = nullptr, const ibDataViewItem& line = ibDataViewItem(nullptr));
 		virtual ~ibValueDataObjectListReturnLine();
 
-		virtual ibValueModelTableBase* GetOwnerModel() const {
+		virtual ibValueModel* GetOwnerModel() const {
 			return m_ownerTable;
 		}
 
@@ -116,32 +118,27 @@ public:
 
 public:
 
-	void AppendSort(ibValueMetaObject* metaObject, bool ascending = true, bool use = true, bool system = false) {
-		if (metaObject == nullptr)
-			return;
-		m_sortOrder.AppendSort(
-			metaObject->GetMetaID(),
-			metaObject->GetName(),
-			metaObject->GetSynonym(),
-			ascending, use, system
-		);
-	}
-
 	virtual bool AutoCreateColumn() const { return false; }
 	virtual bool EditableLine(const ibDataViewItem& item, unsigned int col) const { return false; }
 
 	//set meta/get meta
 	virtual bool SetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, const ibValue& varMetaVal) { return false; }
 	virtual bool GetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, ibValue& pvarMetaVal) const {
-		ibValueTableRow* node = GetViewData<ibValueTableRow>(item);
+		ibComposerNode* node = GetViewData<ibComposerNode>(item);
 		if (node == nullptr)
 			return false;
 		return node->GetValue(id, pvarMetaVal);
 	}
 
 	//ctor
-	ibValueListDataObject(const ibValueMetaObjectGenericData* metaObject = nullptr, const ibFormID& formType = wxNOT_FOUND, bool choiceMode = false);
+	// `queryable` is the source HOLDER — vended by the SUBCLASS metaobject (the generic base has no GetQueryable);
+	// the subclass passes metaObject->GetQueryable() so the composer source is wired ONCE on the base.
+	ibValueListDataObject(const ibValueMetaObjectGenericData* metaObject = nullptr, const ibBackendQueryable* queryable = nullptr, const ibFormID& formType = wxNOT_FOUND, bool choiceMode = false);
 	virtual ~ibValueListDataObject();
+
+	// Key CREATION lives on the LIST (the base model / cursor produce NO key). A regular list's row key = its
+	// primary-key REFERENCE (guid); the register subclass overrides to build its dimension composite instead.
+	ibUniqueKey GetItemKey(const ibDataViewItem& item) const override;
 
 	//****************************************************************************
 	//*                               Support model                              *
@@ -186,41 +183,28 @@ protected:
 	ibGuid m_objGuid;
 	ibValuePtr<ibValueDataObjectListColumnCollection> m_recordColumnCollection;
 
-	// L5 — the list's data composer. The source is wired ONCE in the ctor (a
-	// list IS metaobject-bound); the settings (user filters / sorts) are
-	// re-applied per fetch; the fetch driver carries the page envelope. The
-	// build-once page cache (Lever 1) lives INSIDE the composer now.
-	mutable ibDataComposer m_composer;
+	// L5 — the list uses the ONE base composer (GetModelComposer(), points 7+8: no subclass holds its
+	// own). Source wired ONCE in the ctor; settings re-applied per fetch; the fetch driver carries the
+	// page envelope; the build-once page cache (Lever 1) lives inside that composer.
 };
 
 // list enumeration
 class BACKEND_API ibValueListDataObjectEnumRef : public ibValueListDataObject {
 	public:
-	struct ibValueTableEnumRow : public ibValueTableRow {
-		ibValueTableEnumRow(const ibGuid& guid) :
-			ibValueTableRow(), m_objGuid(guid) {
-		}
-		ibGuid GetGuid() const {
-			return m_objGuid;
-		}
-		// Logical equality by m_objGuid - see ibValueTableListRow.
-		virtual bool IsEqualTo(const ibDataViewObject& other) const override {
-			const auto* o = dynamic_cast<const ibValueTableEnumRow*>(&other);
-			return o != nullptr && m_objGuid == o->m_objGuid;
-		}
-	private:
-		ibGuid m_objGuid;
-	};
-public:
+	// (ibValueTableEnumRow DELETED — the enum fetches through RunComposerPage like every other list now; its
+	//  rows come back as ibComposerNode, keyed by the reference row-key.)
 
 	virtual bool UseStandartCommand() const {
 		return false;
 	}
 
-	virtual ibDataViewItem FindRowValue(const ibValue& varValue, const wxString& colName = wxEmptyString) const;
-
 	//Constructor
 	ibValueListDataObjectEnumRef(const ibValueMetaObjectRecordDataEnumRef* metaObject = nullptr, const ibFormID& formType = wxNOT_FOUND, bool choiceMode = false);
+
+	// Enum source = the metaobject's queryable. An enumeration is just a DB source whose data is a single
+	// STATIC set defined in the configurator (Max) — accessed exactly like catalog/register, so the universal
+	// RunComposerPage reads it through this with no special handling.
+	virtual const ibBackendQueryable* GetSourceQueryable() const override { return m_metaObject->GetQueryable(); }
 
 	virtual void GetValueByRow(wxVariant& variant,
 		const ibDataViewItem& row, unsigned int col) const;
@@ -272,41 +256,15 @@ public:
 	//events:
 	virtual void ChooseValue(ibBackendValueForm* srcForm);
 
-	//****************************************************************************
-	//*                               Paging                                     *
-	//****************************************************************************
-
-	// Single-batch paging - enums are tiny and the parent-position
-	// CASE/WHEN order doesn't support stable cursoring.
-
-	// Advertise DbFetch so script-side `For Each` routes through the
-	// universal cursor iterator. Filters / Sorting omitted because the
-	// CASE/WHEN order is fixed.
+	// (Paging GONE — the enum reads through the base ibValueModel::RunComposerPage over GetSourceQueryable()
+	//  (its metaobject's queryable); GetFirstFetch/Next/Prev + the SQL Fetch are deleted; the ctor sets the
+	//  position sort on the composer.) An enum is a normal keyed L5 list now — same features as a catalog list:
+	//  Filters + Sorting + Grouping (all driven by the one composer; paging + keyed-ness are derived, not flags).
 	virtual Features GetFeatures() const override {
 		Features f;
-		f.flags |= Features::DbFetch;
+		f.flags |= Features::Filters | Features::Sorting | Features::Grouping;
 		return f;
 	}
-
-	// Universal Get*Fetch - frontend (ibDataViewCtrl) holds the deque,
-	// calls these to refill ahead/behind windows. Stateless: each call
-	// builds an ibFetchRequest and runs SQL through Fetch() below.
-	virtual unsigned int GetFirstFetch(const ibDataViewItem& parent,
-		const ibDataViewItem& anchor, int count, ibDataViewItemArray& out) const override;
-	virtual unsigned int GetNextFetch(const ibDataViewItem& parent,
-		const ibDataViewItem& anchor, int count, ibDataViewItemArray& out) const override;
-	virtual unsigned int GetPrevFetch(const ibDataViewItem& parent,
-		const ibDataViewItem& anchor, int count, ibDataViewItemArray& out) const override;
-
-private:
-
-	//****************************************************************************
-	//*                               Support model                              *
-	//****************************************************************************
-
-
-	ibFetchResponse<ibGuid, ibValueTableEnumRow>
-		Fetch(const ibFetchRequest<ibGuid>& req) const;
 
 private:
 
@@ -314,32 +272,12 @@ private:
 	const ibValueMetaObjectRecordDataEnumRef* m_metaObject;
 };
 
-// list without parent  
+// list without parent
 class BACKEND_API ibValueListDataObjectRef : public ibValueListDataObject {
-	public:
-	struct ibValueTableListRow : public ibValueTableRow {
-		ibValueTableListRow(const ibGuid& guid) :
-			ibValueTableRow(), m_objGuid(guid) {
-		}
-		ibGuid GetGuid() const {
-			return m_objGuid;
-		}
-		// Logical equality by business GUID - mirrors
-		// ibValueTreeListNode.  Lets a stub row carrying only m_objGuid
-		// (as built by FindRowValue's SQL-fallback for the post-Save
-		// focus-restore path) match fully-materialised rows from
-		// PagedBootstrap's fetch under operator== / IsEqualTo without
-		// requiring m_nodeValues to be populated.
-		virtual bool IsEqualTo(const ibDataViewObject& other) const override {
-			const auto* o = dynamic_cast<const ibValueTableListRow*>(&other);
-			return o != nullptr && m_objGuid == o->m_objGuid;
-		}
-	private:
-		ibGuid m_objGuid;
-	};
 public:
-
-	virtual ibDataViewItem FindRowValue(const ibValue& varValue, const wxString& colName = wxEmptyString) const;
+	// (No FindRowValue override — the catalog's rows are ibComposerNode keyed by m_rowKey = the
+	//  reference value, which is exactly the base ibValueModel::FindRowValue key-stub. Same for the enum and
+	//  the folder tree; only the register, whose key is its PK columns, still overrides.)
 
 	//Constructor
 	ibValueListDataObjectRef(const ibValueMetaObjectRecordDataMutableRef* metaObject = nullptr, const ibFormID& formType = wxNOT_FOUND, bool choiceMode = false);
@@ -403,7 +341,7 @@ public:
 	virtual void ChooseValue(ibBackendValueForm* srcForm);
 
 	//****************************************************************************
-	//*                               Paging                                     *
+	//*                              Fetch / features                            *
 	//****************************************************************************
 
 
@@ -412,30 +350,20 @@ public:
 	// FolderRef tree); list view is always flat.
 	virtual Features GetFeatures() const override {
 		Features f;
-		f.flags |= Features::DbFetch | Features::Filters | Features::Sorting;
+		f.flags |= Features::Filters | Features::Sorting | Features::Grouping;
 		return f;
 	}
 
-	// Universal Get*Fetch - see header at the Enum class declaration.
-	virtual unsigned int GetFirstFetch(const ibDataViewItem& parent,
-		const ibDataViewItem& anchor, int count, ibDataViewItemArray& out) const override;
-	virtual unsigned int GetNextFetch(const ibDataViewItem& parent,
-		const ibDataViewItem& anchor, int count, ibDataViewItemArray& out) const override;
-	virtual unsigned int GetPrevFetch(const ibDataViewItem& parent,
-		const ibDataViewItem& anchor, int count, ibDataViewItemArray& out) const override;
+	// FOLD (#2): the catalog list reads THROUGH the universal base fetch (ibValueModel::RunComposerPage)
+	// now — it vends its metaobject's queryable and lets the base page it via the L5 composer + the keyset
+	// cursor (the anchor carries the user sort values + the source's GetIdentitySort tail). The per-list
+	// Get*Fetch / Fetch / BuildRefAnchor are GONE (base code now); the rows come back as ibComposerNode
+	// (value-map identity, the reference column rides in the values → selection survives).
+	virtual const ibBackendQueryable* GetSourceQueryable() const override { return m_metaObject->GetQueryable(); }
 
 private:
 
-	//****************************************************************************
-	//*                               Support model                              *
-	//****************************************************************************
-
-
-	// Cursor-paginated fetch - single SQL point used by Get*Fetch.
-	ibFetchResponse<ibGuid, ibValueTableListRow>
-		Fetch(const ibFetchRequest<ibGuid>& req) const;
-
-private:
+	// (The per-list cursor Fetch is GONE — folded into ibValueModel::RunComposerPage, see tableInfo.cpp.)
 
 	bool m_choiceMode;
 
@@ -445,53 +373,18 @@ private:
 // list register
 class BACKEND_API ibValueListRegisterObject : public ibValueListDataObject {
 	public:
-	// Register row carries TWO maps:
-	//  * m_nodeKeys   - identity columns (recorder + line for HasRecorder
-	//                   registers, dimensions otherwise).  Stable PK for
-	//                   row equality across paged refetch.
-	//  * m_nodeValues - resources, inherited from ibValueTableRow.  Set
-	//                   from fetch via AppendTableValue, displayed in
-	//                   the table.  Empty on a stub built by
-	//                   FindRowValue for post-Save focus restore.
-	struct ibValueTableKeyRow : public ibValueTableRow {
-		ibValueTableKeyRow() :
-			ibValueTableRow(), m_nodeKeys() {
-		}
-		void AppendNodeValue(const ibMetaID& id, const ibValue& variant) { m_nodeKeys.insert_or_assign(id, variant); }
-		ibValue& AppendNodeValue(const ibMetaID& id) { return m_nodeKeys[id]; }
-
-		const ibRowMetaValues& GetNodeKeys() const { return m_nodeKeys; }
-
-		ibUniqueKeyPair GetUniquePairKey(const ibValueMetaObjectRegisterData* metaObject) const {
-			return metaObject->CreateUniqueKeyPair(m_nodeKeys);
-		}
-
-		// Logical equality by identity keys - mirrors Catalog/Enum's
-		// IsEqualTo by m_objGuid.  Default ibValueTableRow::IsEqualTo
-		// compares m_nodeValues (resources) which would never match a
-		// stub built by FindRowValue (resources empty).  Override to
-		// compare on m_nodeKeys so PagedBootstrap's IsEqualTo locates
-		// the freshly-fetched row by its identity, not by resource
-		// payload.
-		virtual bool IsEqualTo(const ibDataViewObject& other) const override {
-			const auto* o = dynamic_cast<const ibValueTableKeyRow*>(&other);
-			return o != nullptr && m_nodeKeys == o->m_nodeKeys;
-		}
-
-	private:
-		ibRowMetaValues m_nodeKeys;
-	};
+	// (ibValueTableKeyRow DELETED — the register's rows are ibComposerNode now; its composite
+	//  identity is the composer node's m_rowKey = the primary-key (recorder+line / dimensions) values that
+	//  RunComposerPage stamps. FindRowValue builds a composer stub with that row-key; GetItemKey (override below)
+	//  reads the item's dimensions into the key the selection ops feed the record manager.)
 public:
 
 	virtual bool UseStandartCommand() const { return !m_metaObject->HasRecorder(); }
 
-	virtual ibDataViewItem FindRowValue(const ibValue& varValue, const wxString& colName = wxEmptyString) const;
+	// The register row key = its DIMENSIONS (composite), not a single reference guid — override the cursor default.
+	ibUniqueKey GetItemKey(const ibDataViewItem& item) const override;
 
-	// Effective cursor order = enabled user sort ++ the register's identity tail
-	// (recorder+line / period?+dimensions), via the L3 door. The keyset anchor is
-	// built by iterating this so its per-column values line up with the order the
-	// door's anchor predicate binds them.
-	std::vector<ibQuerySortItem> EffectiveSortOrder() const;
+	virtual ibDataViewItem FindRowValue(const ibValue& varValue, const wxString& colName = wxEmptyString) const;
 
 	//Constructor
 	ibValueListRegisterObject(const ibValueMetaObjectRegisterData* metaObject = nullptr, const ibFormID& formType = wxNOT_FOUND);
@@ -548,42 +441,32 @@ public:
 	virtual void DeleteValue() override;
 
 	//****************************************************************************
-	//*                               Paging                                     *
+	//*                              Fetch / features                            *
 	//****************************************************************************
 
 	// Cursor-paginated.  Effective ORDER BY = [user sorts] ++ [identity
 	// tail], so the anchor (ibUniqueKeyPair + sort values tuple) gives
 	// stable forward / backward cursoring even when the user has
-	// disabled every column-sort.  See EffectiveSortOrder / the L5 fetch.
+	// disabled every column-sort.  See GetIdentitySort / RunComposerPage.
 	virtual Features GetFeatures() const override {
 		Features f;
-		f.flags |= Features::DbFetch | Features::Filters | Features::Sorting;
+		f.flags |= Features::Filters | Features::Sorting | Features::Grouping;
 		return f;
 	}
 
-	virtual unsigned int GetFirstFetch(const ibDataViewItem& parent,
-		const ibDataViewItem& anchor, int count, ibDataViewItemArray& out) const override;
-	virtual unsigned int GetNextFetch(const ibDataViewItem& parent,
-		const ibDataViewItem& anchor, int count, ibDataViewItemArray& out) const override;
-	virtual unsigned int GetPrevFetch(const ibDataViewItem& parent,
-		const ibDataViewItem& anchor, int count, ibDataViewItemArray& out) const override;
-
-private:
-
-	//****************************************************************************
-	//*                               Support model                              *
-	//****************************************************************************
-
-
-	ibFetchResponse<ibUniqueKeyPair, ibValueTableKeyRow>
-		Fetch(const ibFetchRequest<ibUniqueKeyPair>& req) const;
+	// FOLD (#2): the register reads THROUGH the base RunComposerPage now — it vends its metaobject's
+	// queryable; the base keyset cursor carries the user sort values + the register's identity tail
+	// (recorder+line / period?+dimensions) via GetIdentitySort. The per-list Get*Fetch / Fetch /
+	// BuildRegisterAnchor / EffectiveSortOrder are GONE (base code); rows come back as ibComposerNode
+	// (value-map identity over the composite key columns, which ride in the row values).
+	virtual const ibBackendQueryable* GetSourceQueryable() const override { return m_metaObject->GetQueryable(); }
 
 private:
 	const ibValueMetaObjectRegisterData* m_metaObject;
 };
 
 //base tree class 
-class BACKEND_API ibValueModelTreeDataObject : public ibValueModelTreeBase,
+class BACKEND_API ibValueModelTreeDataObject : public ibValueModelCursor,
 	public ibSourceDataObject {
 	public:
 protected:
@@ -602,9 +485,13 @@ private:
 
 public:
 
-	class ibValueDataObjectTreeColumnCollection : public ibValueModelTreeBase::ibValueModelColumnCollection {
+	// Key CREATION lives on the tree LIST (the model / cursor produce NO key): a folder row's key = its
+	// primary-key REFERENCE (guid), same shape as a flat list.
+	ibUniqueKey GetItemKey(const ibDataViewItem& item) const override;
+
+	class ibValueDataObjectTreeColumnCollection : public ibValueModelCursor::ibValueModelColumnCollection {
 	public:
-		class ibValueDataObjectTreeColumnInfo : public ibValueModelTreeBase::ibValueModelColumnCollection::ibValueModelColumnInfo {
+		class ibValueDataObjectTreeColumnInfo : public ibValueModelCursor::ibValueModelColumnCollection::ibValueModelColumnInfo {
 	public:
 
 			virtual unsigned int GetColumnID() const { return m_metaAttribute->GetMetaID(); }
@@ -663,7 +550,7 @@ public:
 		ibValueDataObjectTreeReturnLine(ibValueModelTreeDataObject* ownerTable = nullptr, const ibDataViewItem& line = ibDataViewItem(nullptr));
 		virtual ~ibValueDataObjectTreeReturnLine();
 
-		virtual ibValueModelTreeBase* GetOwnerModel() const {
+		virtual ibValueModelCursor* GetOwnerModel() const {
 			return m_ownerTable;
 		}
 
@@ -679,17 +566,6 @@ public:
 
 public:
 
-	void AppendSort(ibValueMetaObject* metaObject, bool ascending = true, bool use = true, bool system = false) {
-		if (metaObject == nullptr)
-			return;
-		m_sortOrder.AppendSort(
-			metaObject->GetMetaID(),
-			metaObject->GetName(),
-			metaObject->GetSynonym(),
-			ascending, use, system
-		);
-	}
-
 	virtual bool AutoCreateColumn() const { return false; }
 	virtual bool EditableLine(const ibDataViewItem& item, unsigned int col) const { return false; }
 
@@ -703,7 +579,7 @@ public:
 	}
 
 	//ctor
-	ibValueModelTreeDataObject(const ibValueMetaObjectGenericData* metaObject = nullptr, const ibFormID& formType = wxNOT_FOUND, bool choiceMode = false);
+	ibValueModelTreeDataObject(const ibValueMetaObjectGenericData* metaObject = nullptr, const ibBackendQueryable* queryable = nullptr, const ibFormID& formType = wxNOT_FOUND, bool choiceMode = false);
 	virtual ~ibValueModelTreeDataObject();
 
 	//****************************************************************************
@@ -750,9 +626,8 @@ protected:
 	ibGuid m_objGuid;
 	ibValuePtr<ibValueDataObjectTreeColumnCollection> m_recordColumnCollection;
 
-	// L5 — the tree's data composer (see the list base above): source once in
-	// the ctor, settings per fetch, the envelope on the fetch driver.
-	mutable ibDataComposer m_composer;
+	// L5 — the tree uses the ONE base composer (GetModelComposer(), points 7+8): source once in the
+	// ctor, settings per fetch, the envelope on the fetch driver. No subclass holds its own composer.
 };
 
 // tree with parent or only parent 
@@ -765,44 +640,10 @@ class BACKEND_API ibValueModelTreeDataObjectFolderRef : public ibValueModelTreeD
 		LIST_ITEM,
 	};
 
-	struct ibValueTreeListNode : public ibValueTreeNode {
-		// Lazy-load state for the node's own children - set Loaded once
-		// FetchChildrenForNode has populated m_children at least once.
-		// mutable so const GetChildren() can drive the fetch on first
-		// expand without const_cast'ing the whole node.
-		enum class LoadState : uint8_t { NotLoaded, Loading, Loaded };
-
-		ibGuid GetGuid() const { return m_objGuid; }
-		LoadState GetLoadState() const  { return m_loadState; }
-		void SetLoadState(LoadState s)  { m_loadState = s; }
-
-		ibValueTreeListNode(ibValueTreeNode* parent, const ibGuid& guid, const ibValueModelTreeDataObject* treeValue = nullptr, bool container = false) :
-			ibValueTreeNode(parent), m_objGuid(guid), m_container(container) {
-			m_valueTree = treeValue;
-		}
-		// Folder flag wins over the base "has children loaded" check -
-		// a paged FolderRef row knows it CAN contain children even
-		// when m_children isn't populated yet.
-		virtual bool IsContainer() const override { return m_container; }
-
-		// Logical equality across re-fetches: a fresh node carrying the
-		// same business GUID matches the previously-selected one even
-		// when behind a different pointer.  Lets selection / breadcrumb
-		// survive PagedRefresh wipes.  Comparison against a non-tree
-		// row falls through to false (different shapes never match).
-		virtual bool IsEqualTo(const ibDataViewObject& other) const override {
-			const auto* o = dynamic_cast<const ibValueTreeListNode*>(&other);
-			return o != nullptr && m_objGuid == o->m_objGuid;
-		}
-	private:
-		ibGuid m_objGuid;
-		bool m_container;
-		mutable LoadState m_loadState = LoadState::NotLoaded;
-	};
+	// (ibValueTreeListNode DELETED — the folder catalog's rows are ibComposerNode now, built by the
+	//  base RunComposerPage; nothing needs a typed guid-keyed tree node any more.)
 
 public:
-
-	virtual ibDataViewItem FindRowValue(const ibValue& varValue, const wxString& colName = wxEmptyString) const;
 
 	// Folder-first sort: containers (folders) bubble to the top of
 	// every group regardless of column-sort direction.  Falls back to
@@ -812,7 +653,7 @@ public:
 		const bool c1 = item1.IsContainer();
 		const bool c2 = item2.IsContainer();
 		if (c1 != c2) return c1 ? -1 : 1;
-		return ibValueModelTreeBase::Compare(item1, item2, col, ascending);
+		return ibValueModelCursor::Compare(item1, item2, col, ascending);
 	}
 
 	//Constructor
@@ -831,7 +672,12 @@ public:
 
 	//support source data
 	virtual const ibSourceExplorer* GetSourceExplorer() const;
-	
+
+	// The catalog's metaobject queryable IS the source: it carries the HIERARCHY (GetHierarchyColumn) and
+	// FOLDER (GetFolderColumn) columns the base RunComposerPage reads for the parent-tree scope + the folder
+	// container flag. Without this override the base returned the RAM queryable (none of those) → no tree.
+	virtual const ibBackendQueryable* GetSourceQueryable() const override { return m_metaObject->GetQueryable(); }
+
 	//****************************************************************************
 	//*                              Support methods                             *
 	//****************************************************************************
@@ -886,118 +732,25 @@ public:
 	virtual void MarkAsDeleteValue();
 	virtual void ChooseValue(ibBackendValueForm* srcForm);
 
-	// FolderRef - DB-backed tree with folder concept plus user
-	// filters and column sorting.  isFolder ID lets the GUI emit
-	// folder-first ORDER BY when rendering as a tree / hierarchy.
+	// FolderRef — same user-facing features as any catalog list (Filters / Sorting / Grouping). Its tree shape is
+	// the DEFAULT Hierarchy grouping set in the ctor (tree-ness = composer grouping, not a flag); folder-first
+	// ORDER is a composer-grouping concern, so there is no Folders flag here any more.
 	virtual Features GetFeatures() const override {
 		Features f;
-		f.flags |= Features::DbFetch | Features::Tree
-		        |  Features::Filters | Features::Sorting;
-		if (auto* mf = m_metaObject->GetDataIsFolder()) {
-			f.flags |= Features::Folders;
-			f.folderSortID = static_cast<int>(mf->GetMetaID());
-		}
+		f.flags |= Features::Filters | Features::Sorting | Features::Grouping;
 		return f;
 	}
 
-	//****************************************************************************
-	//*                               Hierarchy navigation                       *
-	//****************************************************************************
-
-	// Walk parent chain from `fromGuid` upward.  Returns the chain
-	// ordered [fromGuid, parent, grandparent, ..., top-most ancestor].
-	// Empty result if fromGuid is invalid (root) or no rows match.
-	// Used by the breadcrumb / drill-up UI on hierarchical view.
-	std::vector<ibGuid> GetAncestorChain(const ibGuid& fromGuid) const;
-
-	// Materialise ibValueTreeListNode objects for each guid in `guids`,
-	// in input order.  One SELECT with WHERE uuid IN (.), so the cost
-	// is one round-trip regardless of chain depth.  Caller takes
-	// ownership of the returned pointers (refcount=1).  Used by the
-	// view-mode switch path to populate m_topParentChain when entering
-	// Hierarchical from List/Tree (the selected row's ancestors weren't
-	// loaded as nodes by the flat fetch - we need their full data here
-	// for crumb labels).
-	std::vector<ibValueTreeListNode*>
-	    LoadRowsByGuids(const std::vector<ibGuid>& guids) const;
-
-	// Universal breadcrumb override - chain GUIDs via GetAncestorChain
-	// (cached), materialise rows via LoadRowsByGuids, transfer
-	// ownership to ibDataViewItem with the standard adopt dance.
-	virtual void BuildAncestorBreadcrumb(const ibDataViewItem& fromRow,
-	                                     ibDataViewItemArray& out) const override;
-
-	//****************************************************************************
-	//*                               Paged tree fetch                           *
-	//****************************************************************************
-
-	// Args for NextFetch / PrevFetch.  All row references are opaque
-	// ibDataViewItem (control-side identity); model decodes internally
-	// to its row type when needed.  Selection and viewport are
-	// distinct - user can scroll without changing the selected row.
-	//   m_parent          - scope (invalid item == top-level).
-	//   m_currentRow      - user selection; preserved across fetch so
-	//                       GUI can re-focus it after the buffer
-	//                       updates (positioning target).
-	//   m_viewportAnchor  - last (Next) / first (Prev) visible row;
-	//                       the SQL cursor.
-	//   m_count           - batch size (default 1 for tape-like scroll
-	//                       tick; viewport-size for initial open).
-	struct ibTreeFetchArgs {
-		ibDataViewItem m_parent;
-		ibDataViewItem m_currentRow;
-		ibDataViewItem m_viewportAnchor;
-		int            m_count = 1;
-	};
-
-	struct ibTreeFetchResponse {
-		std::vector<ibValueTreeListNode*> m_rows;
-		bool m_hasMore = false;   // more rows past this batch in the same direction
-	};
-
-	// First batch.  Two cases:
-	//   * empty m_viewportAnchor - cold open, fetch top of dataset;
-	//   * non-empty m_viewportAnchor - restoration fetch (paged Refresh
-	//     / sort change), anchor row lands in items[0] via INCLUSIVE
-	//     cursor (Reset direction).  Call GetNextFetch (Forward, strict)
-	//     for plain forward-scroll page.
-	ibTreeFetchResponse GetFirstFetch(const ibTreeFetchArgs& args) const;
-
-	// Next portion forward - rows STRICTLY after m_viewportAnchor under m_parent.
-	ibTreeFetchResponse GetNextFetch(const ibTreeFetchArgs& args) const;
-
-	// Previous portion backward - rows before m_viewportAnchor.
-	ibTreeFetchResponse GetPrevFetch(const ibTreeFetchArgs& args) const;
-
-private:
-	// The ONE fetch body for First (Reset = inclusive >=) / Next (Forward =
-	// strict >) / Prev (Backward = inverse scan + buffer reverse) — the
-	// direction is envelope state, the composed query decides the rest.
-	ibTreeFetchResponse FetchWithDirection(const ibTreeFetchArgs& args,
-		ibFetchDirection direction) const;
-public:
-
-	// Universal Get*Fetch overrides - adapt the typed ibTreeFetchArgs
-	// API above to the non-templated virtual on ibValueModel base so
-	// generic frontend (BuildXxxHelper, Walker) reaches the paged path.
-	virtual unsigned int GetFirstFetch(const ibDataViewItem& parent,
-		const ibDataViewItem& anchor, int count, ibDataViewItemArray& out) const override;
-	virtual unsigned int GetNextFetch(const ibDataViewItem& parent,
-		const ibDataViewItem& anchor, int count, ibDataViewItemArray& out) const override;
-	virtual unsigned int GetPrevFetch(const ibDataViewItem& parent,
-		const ibDataViewItem& anchor, int count, ibDataViewItemArray& out) const override;
+	// (Hierarchy navigation + paged-tree-fetch args GONE — no GetAncestorChain / LoadRowsByGuids /
+	//  ibTreeFetchArgs / ancestor cache, and there is no breadcrumb any more. The folder catalog is JUST the
+	//  composer's Hierarchy grouping; the base ibValueModel::RunComposerPage builds the tree, and "you are here"
+	//  is the one mechanism rebuilding flat ↔ grouping ↔ hierarchy by the composer's value, not a separate
+	//  ancestor walk. Max: "breadcrumbs aren't needed — it already works that way".)
 
 private:
 
 	bool m_choiceMode; int m_listMode;
 	const ibValueMetaObjectRecordDataHierarchyMutableRef* m_metaObject;
-
-	// Ancestor-chain cache.  Control may fire GetAncestorChain
-	// repeatedly on the same fromGuid (breadcrumb redraw, drill
-	// re-entry) - re-walking the parent chain each time would hit
-	// the DB N+1 times for nothing.  Cache is keyed by fromGuid.
-	mutable ibGuid              m_chainCachedFor;
-	mutable std::vector<ibGuid> m_chainCache;
 };
 
 #endif 

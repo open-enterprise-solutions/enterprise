@@ -32,7 +32,7 @@ bool ibValueTabularSectionDataObjectRef::LoadData(const ibGuid& srcGuid, bool cr
 		return false;
 	}
 
-	ibValueModelRamTableBase::Clear();
+	ibValueModelStorage::Clear();
 
 	// Read every line for the parent uuid through the L3 door. The persistent
 	// data-object supplies the queryable view (uuid key + line-number order); the
@@ -47,13 +47,13 @@ bool ibValueTabularSectionDataObjectRef::LoadData(const ibGuid& srcGuid, bool cr
 		page.m_count = 0;   // all lines
 		ibDataQueryResult selection = q.Execute(page);
 		while (selection.Next()) {
-			ibValueTableRow* rowData = new ibValueTableRow();
+			ibComposerNode* rowData = new ibComposerNode();
 			for (const auto object : m_metaTable->GetGenericAttributeArrayObject()) {
 				if (m_metaTable->IsNumberLine(object->GetMetaID()))
 					continue;
 				rowData->AppendTableValue(object->GetMetaID()) = selection.GetValue(object);
 			}
-			ibValueModelRamTableBase::Append(rowData, !ibBackendException::IsEvalMode());
+			ibValueModelStorage::Append(rowData, !ibBackendException::IsEvalMode());
 		}
 	}
 	catch (...) { return false; }
@@ -71,15 +71,13 @@ bool ibValueTabularSectionDataObjectRef::SaveData()
 	if (m_readOnly)
 		return true;
 
-
-
 	bool hasError = false;
 	//check fill attributes
 	bool fillCheck = true; long currLine = 1;
 	for (long row = 0; row < GetRowCount(); row++) {
 		for (const auto object : m_metaTable->GetGenericAttributeArrayObject()) {
 			if (object->FillCheck()) {
-				ibValueTableRow* node = GetViewData<ibValueTableRow>(GetItem(row));
+				ibComposerNode* node = GetViewData<ibComposerNode>(GetItem(row));
 				wxASSERT(node);
 				if (node->IsEmptyValue(object->GetMetaID())) {
 					wxString fillError =
@@ -108,7 +106,7 @@ bool ibValueTabularSectionDataObjectRef::SaveData()
 			.SetValue(ibRawDBColumn::String(wxT("uuid")), ibValue(m_objectValue->GetGuid()));
 		for (const auto object : m_metaTable->GetGenericAttributeArrayObject()) {
 			if (!m_metaTable->IsNumberLine(object->GetMetaID())) {
-				ibValueTableRow* node = GetViewData<ibValueTableRow>(GetItem(row));
+				ibComposerNode* node = GetViewData<ibComposerNode>(GetItem(row));
 				wxASSERT(node);
 				q.SetValue(object, node->GetTableValue(object->GetMetaID()));
 			}

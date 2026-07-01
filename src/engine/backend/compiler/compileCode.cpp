@@ -22,8 +22,8 @@ static std::array<int, 256> gs_operPriority = { 0 };
 
 // set code style by file extension
 // CES is the default — modern brace/paren syntax with `;` terminators.
-// VES (Visual Basic-style ES + 1С/BSL mix) remains supported for legacy ES
-// configurations migrated from 1С / BSL; loading a VES module flips this
+// VES (Visual Basic-style ES, a legacy business-scripting dialect) remains supported for legacy ES
+// configurations migrated from a legacy business-scripting platform; loading a VES module flips this
 // via SetCodeStyle().
 static short gs_codeStyle = CODE_CES;
 

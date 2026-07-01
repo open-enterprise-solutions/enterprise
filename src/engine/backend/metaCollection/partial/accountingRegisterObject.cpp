@@ -74,10 +74,10 @@ bool ibValueRecordSetObjectAccountingRegister::CallAsFunc(const long lMethodNum,
 		pvarRetValue = (unsigned int)GetRowCount();
 		return true;
 	case func::eClear:
-		ibValueModelRamTableBase::Clear();
+		ibValueModelStorage::Clear();
 		return true;
 	case func::eLoad:
-		LoadDataFromTable(paParams[0]->ConvertToType<ibValueModelTableBase>());
+		LoadDataFromTable(paParams[0]->ConvertToType<ibValueModel>());
 		return true;
 	case func::eUnload:
 		pvarRetValue = SaveDataToTable();

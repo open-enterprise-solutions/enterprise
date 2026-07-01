@@ -269,8 +269,9 @@ void ibQueryParser::ParseTotals(ibQuerySelect& sel)
 		ibQueryTotalDim d;
 		d.m_expr = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
 		d.m_expr->m_path = ParseDottedName();
-		if (AcceptKw(ibQueryKeyword::Hierarchy))     d.m_unfold = ibQueryDimUnfold::Hierarchy;
-		else if (AcceptKw(ibQueryKeyword::Elements)) d.m_unfold = ibQueryDimUnfold::Elements;
+		if (AcceptKw(ibQueryKeyword::HierarchyOnly))     d.m_unfold = ibQueryDimUnfold::HierarchyOnly;
+		else if (AcceptKw(ibQueryKeyword::Hierarchy))    d.m_unfold = ibQueryDimUnfold::Hierarchy;
+		else if (AcceptKw(ibQueryKeyword::Elements))     d.m_unfold = ibQueryDimUnfold::Elements;
 		sel.m_totalsBy.push_back(std::move(d));
 	} while (AcceptPunct(wxT(',')));
 }

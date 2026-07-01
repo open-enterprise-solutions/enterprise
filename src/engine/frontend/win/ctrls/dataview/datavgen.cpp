@@ -45,6 +45,7 @@
 #include <wx/weakref.h>
 
 #include <wx/generic/private/markuptext.h>
+
 #include <wx/generic/private/rowheightcache.h>
 #include <wx/generic/private/widthcalc.h>
 
@@ -372,9 +373,9 @@ private:
 			// capture so PagedRefresh starts a fresh fetch from the top
 			// of the new ordering.
 			owner->SetPagedSkipRestoreCapture();
-			// Direct integration: paged models use this hook to update
-			// m_sortOrder and refetch; legacy non-paged models forward
-			// to Resort() through the default implementation.
+			// Direct integration: the paged override rewrites the composer
+			// sort and refetches; legacy non-paged models forward to
+			// Resort() through the default implementation.
 			model->OnSortColumnChanged(
 				col->GetModelColumn(), col->IsSortOrderAscending());
 		}
@@ -612,10 +613,10 @@ public:
 		}
 	}
 
-	virtual bool ShowFilter(struct ibFilterRow& filter)
+	virtual bool ShowListSettings(class ibValueModel* model) wxOVERRIDE
 	{
 		wxASSERT(m_tableAreaWin);
-		return m_tableAreaWin->ShowFilter(filter);
+		return m_tableAreaWin->ShowListSettings(model);
 	}
 
 	virtual bool ShowViewMode()
@@ -1807,7 +1808,11 @@ bool ibDataViewCtrl::DoItemInserted(const ibDataViewItem& parent, const ibDataVi
 	// off: avoids a full tree wipe + bootstrap on every cell-edit
 	// derived ItemInserted (the user-visible flicker).
 	if (GetModel() != nullptr && GetModel()->IsPagedModel()
-	    && !GetModel()->GetFeatures().Has(ibDataViewModel::Features::RamFetch)) {
+	    && (GetModel()->HasKeyedRows() || GetModel()->IsGroupedModel())) {   // keyed DB, OR grouped RAM (re-place into group)
+		// A grouped RAM model (TabularSection / value-table with grouping) has no keyed rows, but its new row must
+		// still re-fetch to land in the right group — the plain tree-insert below matches siblings in the loaded
+		// buffer and mis-places a grouped row, snapping the current row away. Route it through the same refresh +
+		// m_pagedRestoreSelection path the keyed DB list uses, so the added row keeps focus in its group.
 		SchedulePagedRefresh(item);
 		return true;
 	}
@@ -1960,9 +1965,10 @@ bool ibDataViewCtrl::ItemDeleted(const ibDataViewItem& parent,
 	// resynchronisation against SQL.  RAM-backed paged: the row is
 	// already gone from m_nodeValues, falling through to the
 	// non-paged remove-from-tree path is correct and avoids the
-	// flicker.
+	// flicker — UNLESS the model groups, where the row's group may now
+	// be empty (its header must drop) so a re-fetch is required too.
 	if (GetModel() != nullptr && GetModel()->IsPagedModel()
-	    && !GetModel()->GetFeatures().Has(ibDataViewModel::Features::RamFetch)) {
+	    && (GetModel()->HasKeyedRows() || GetModel()->IsGroupedModel())) {   // keyed DB, OR grouped RAM
 		SchedulePagedRefresh();
 		return true;
 	}
@@ -2185,11 +2191,14 @@ bool ibDataViewCtrl::Cleared()
 {
 		// Paged path: routed through SchedulePagedRefresh so a series of
 	// reset signals (BeforeReset/AfterReset → Cleared, plus following
-	// ItemInserted'ов от bulk-mutation) coalesce into one PagedRefresh on
+	// ItemInserted events from bulk-mutation) coalesce into one PagedRefresh on
 	// the next idle.  Refcount-aware ibDataViewItem keeps row pointers
 	// the control holds alive past the model-side Clear(), so the
 	// asynchronous wipe inside PagedRefresh is safe.
 	if (GetModel() != nullptr && GetModel()->IsPagedModel()) {
+		// Plain refresh: keep the TOP ANCHOR (viewport top), NOT the selection — passing the current row as a
+		// prefer-selection would anchor the fetch on the SELECTED row and jump the viewport onto it. The bootstrap
+		// re-fetches from m_pagedRestoreAnchor (>= it) so the top row stays put.
 		SchedulePagedRefresh();
 		return true;
 	}
@@ -2428,8 +2437,6 @@ unsigned int ibDataViewCtrl::GetRowCount() const
 
 void ibDataViewCtrl::ChangeCurrentRow(unsigned int row)
 {
-	if (m_currentRow != row) {
-			}
 	m_currentRow = row;
 
 	// send event
@@ -3263,7 +3270,7 @@ namespace
 			// Compare by pointer identity (GetID), NOT by value-equality
 			// (operator==).  After the refcount-aware ibDataViewItem
 			// refactor, operator== dispatches to ibDataViewObject::
-			// IsEqualTo, which on ibValueTableRow compares m_nodeValues.
+			// IsEqualTo, which on ibComposerNode compares m_nodeValues.
 			// For TabularSection rows that share defaults / empty values
 			// across multiple rows that's a false positive — the walker
 			// would stop at the first row with matching values instead
@@ -4765,12 +4772,8 @@ bool ibDataViewCtrl::AssociateModel(ibDataViewModel* model)
 		InvalidateCount();
 	}
 
-	// Sync folder-first sort with current view mode — fresh model
-	// needs the matching system-sort entry before its first fetch.
-	ApplyFolderSortForViewMode();
-
-	// Reflect the model's default m_sortOrder onto header arrows so
-	// the user sees the same column / direction the SQL will use.
+	// Reflect the composer's default sort onto the header arrows so the user sees the same column / direction the
+	// SQL will use (folder-first ORDER is a composer-grouping concern now, not a separate system-sort pass).
 	SyncColumnArrowsFromModel();
 
 	UpdateDisplay();
@@ -5557,7 +5560,12 @@ void ibDataViewCtrl::OnInternalIdle()
 	if (m_tableAreaWin != nullptr && !m_pagedNeedsBootstrap) {
 		const int cpp = GetCountPerPage();
 		const int loaded = (m_root != nullptr) ? GetRowCount() : 0;
-		if (cpp > 0 && loaded < cpp + (int)kBufferSlack
+		// Fill ONLY to the visible viewport, never a slack over-fetch: a refresh that already filled the
+		// viewport must NOT eagerly pull the rest of the list down (that is what looked like "rows keep
+		// getting ADDED on refresh" instead of loading on scroll). The tail loads on a real scroll-down
+		// (OnScroll: dir>0 && marginFwd<slack -> PagedFetchForward). This still fills a resize / partial
+		// bootstrap where the buffer is genuinely shorter than the viewport.
+		if (cpp > 0 && loaded < cpp
 		    && m_pagedHasMoreFwd && m_pagedFetchingFwd == 0
 		    && m_pagedFetchingBwd == 0) {
 			// Skip if a backward fetch is in flight: anchor-cursor
@@ -5571,7 +5579,7 @@ void ibDataViewCtrl::OnInternalIdle()
 			// saved top.
 			const int sy = m_tableAreaWin ?
 				CalcUnscrolledPosition(wxPoint(0, 0)).y : 0;
-						const int batch = cpp + (int)kBufferSlack - loaded;
+						const int batch = cpp - loaded;   // fill to the viewport exactly — no slack over-fetch
 			PagedFetchForward(batch);
 			const int sy2 = m_tableAreaWin ?
 				CalcUnscrolledPosition(wxPoint(0, 0)).y : 0;
@@ -5868,39 +5876,29 @@ ibDataViewSelectionMode ibDataViewCtrl::GetSelectionMode() const
 	return m_selectionMode;
 }
 
-// Folder-first ordering toggle for paged hierarchical models.
-// List view keeps the user's column sort intact; Tree / Hierarchical
-// prepend a system sort entry on the model's isFolder column so the
-// next fetch returns folders ahead of items.  Models without the
-// Folders feature flag (Enum, Register, plain Catalog without
-// isFolder) silently skip.  Called both from SetViewMode (any path,
-// including no-op same-mode) and from AssociateModel so the model
-// always sees its folder-sort matching the control's current mode.
+// Reflect the composer's active sort onto the column-header arrows.
+// First drops every current header arrow (ResetAllSortColumns), then
+// re-applies the column + direction from the composer's GetSortAt for
+// each active sort entry.  System / folder sorts are an internal
+// cursor concern and never carry an arrow.  Called after
+// AssociateModel and on each PagedBootstrap so the visible UI matches
+// what the next fetch will actually order by.
 void ibDataViewCtrl::SyncColumnArrowsFromModel()
 {
 	const ibDataViewModel* model = GetModel();
 	if (model == nullptr) return;
-	const ibSortOrder* sort = model->GetSortOrder();
-	if (sort == nullptr) return;
 
 	// Drop any current header arrows — we'll re-apply from the model.
 	ResetAllSortColumns();
 
-	// System-sort entries (folder-first, reference uuid tiebreaker)
-	// are an internal cursor concern; users don't pick them and we
-	// don't show them in the column header.  Only the user-driven
-	// (non-system) enabled sorts get an arrow.
-	//
-	// ibValueModelTableBoxColumn::OnUpdated calls SetColumnModel with
-	// the bound attribute's metaID, so col->GetModelColumn() and
-	// s.m_sortModel live in the same number space — direct compare.
-	for (const auto& s : sort->m_sorts) {
-		if (!s.m_sortEnable || s.m_sortSystem) continue;
+	// USER sorts only, read from L5 through the model (GetSortArrows resolves the composer's GetSortAt to
+	// model column ids). System / folder sorts are an internal cursor concern and never carry an arrow.
+	for (const ibDataViewModel::ibSortArrow& arrow : model->GetSortArrows()) {
 		for (unsigned int idx = 0; idx < GetColumnCount(); ++idx) {
 			ibDataViewColumn* col = GetColumn(idx);
-			if (col != nullptr && col->GetModelColumn() == s.m_sortModel) {
-				col->SetSortOrder(s.m_sortAscending);
-								break;
+			if (col != nullptr && col->GetModelColumn() == arrow.m_modelColumn) {
+				col->SetSortOrder(arrow.m_ascending);
+				break;
 			}
 		}
 	}
@@ -5914,46 +5912,19 @@ ibDataViewItem ibDataViewCtrl::GetEffectiveFetchParent() const
 	if (!m_topParentChain.IsEmpty())
 		return m_topParentChain[0];
 
-	// Flat List view of a hierarchical (folder-aware) model — pass
-	// the sentinel so the model drops its parent filter at SQL.  Mirror
-	// the same Folders-feature gate used by ApplyFolderSortForViewMode.
-	if (m_viewMode == ibDataViewViewMode::ibDataViewList) {
-		const ibDataViewModel* model = GetModel();
-		if (model != nullptr
-		    && model->GetFeatures().Has(ibDataViewModel::Features::Folders))
-			return s_constIgnoreParent;
-	}
-
-	// Tree view, or non-hierarchical model — empty parent means
-	// "top-level rows" to the model.
-	return ibDataViewItem();
-}
-
-void ibDataViewCtrl::ApplyFolderSortForViewMode()
-{
-	ibDataViewModel* model = GetModel();
-	if (model == nullptr) return;
-	const auto feat = model->GetFeatures();
-	if (!feat.Has(ibDataViewModel::Features::Folders)) return;
-	ibSortOrder* sort = model->GetSortOrder();
-	if (sort == nullptr) return;
-	const auto folderIDu = static_cast<unsigned int>(feat.folderSortID);
+	// A FLAT List view passes the ignore-parent SENTINEL → the model walks the WHOLE table (every row, no
+	// parent scope) in one ORDER BY. A Tree view passes an EMPTY parent → the model returns top-level rows
+	// only (the roots), and the expand walk fetches each folder's children. This is how the FRONTEND view
+	// mode tells the model flat-vs-tree — the hierarchy itself is the queryable's inherent property.
 	if (m_viewMode == ibDataViewViewMode::ibDataViewList)
-		sort->DisableSystemSort(folderIDu);
-	else
-		sort->EnableSystemSort(folderIDu, /*ascending=*/false);
+		return s_constIgnoreParent;
+	return ibDataViewItem();
 }
 
 void ibDataViewCtrl::SetViewMode(ibDataViewViewMode viewMode)
 {
-	// Always reapply folder-sort — initial form load can call SetViewMode
-	// with the same mode the control was constructed in (default = Tree),
-	// which previously skipped the toggle entirely and left m_sortOrder
-	// without the system isFolder entry.
 	const bool modeChanged = (m_viewMode != viewMode);
 	m_viewMode = viewMode;
-
-	ApplyFolderSortForViewMode();
 
 	if (modeChanged)
 	{
@@ -6881,8 +6852,15 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 
 				indent += expSize.GetWidth();
 
-				// force the expander column to left-center align
-				cell->SetAlignment(wxALIGN_CENTER_VERTICAL);
+				// force the expander column to VERTICAL-center, but PRESERVE the renderer's HORIZONTAL
+				// alignment: SetValue picks it per value type (a numeric line-number column right-aligns),
+				// and a bare SetAlignment(wxALIGN_CENTER_VERTICAL) dropped the horizontal flag → every
+				// expander-column cell fell back to LEFT, so the tabular-section line number stopped
+				// indenting right in Tree/Hierarchical view ("флаг не доходит").
+				int expAlign = cell->GetAlignment();
+				if (expAlign == wxDVR_DEFAULT_ALIGNMENT)
+					expAlign = wxALIGN_LEFT;
+				cell->SetAlignment((expAlign & (wxALIGN_RIGHT | wxALIGN_CENTER_HORIZONTAL)) | wxALIGN_CENTER_VERTICAL);
 
 #if wxUSE_DRAG_AND_DROP
 				if (item == m_dropItemInfo.m_row)

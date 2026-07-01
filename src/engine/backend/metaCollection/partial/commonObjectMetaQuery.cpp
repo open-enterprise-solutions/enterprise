@@ -202,10 +202,16 @@ std::vector<const ibBackendQueryColumn*> ibRecordQueryable::GetPrimaryKeyColumns
 		return {};
 	return { refAttr };
 }
-const ibBackendQueryColumn* ibRecordQueryable::GetParentColumn() const {
+const ibBackendQueryColumn* ibRecordQueryable::GetHierarchyColumn() const {
 	// Only a HIERARCHICAL record (catalog / chart) has a parent attribute — the base ref does not.
 	if (auto* h = dynamic_cast<const ibValueMetaObjectRecordDataHierarchyMutableRef*>(m_meta))
 		return h->GetDataParent();   // the parent attribute (predefined) IS-A ibBackendQueryColumn
+	return nullptr;
+}
+const ibBackendQueryColumn* ibRecordQueryable::GetFolderColumn() const {
+	// A folders+items hierarchical record carries the predefined IsFolder flag (item-only hierarchy has none).
+	if (auto* h = dynamic_cast<const ibValueMetaObjectRecordDataHierarchyMutableRef*>(m_meta))
+		return h->GetDataIsFolder();   // the IsFolder attribute (predefined) IS-A ibBackendQueryColumn
 	return nullptr;
 }
 const ibBackendQueryable* ibRecordQueryable::ResolveReferenceTarget(const ibBackendQueryColumn* refColumn) const {

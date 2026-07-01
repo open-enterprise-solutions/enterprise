@@ -6,10 +6,18 @@
 
 #include "backend/tableInfo.h"
 
+#include <memory>
+#include <vector>
+
 constexpr ibClassID g_valueTableCLSID = value_to_clsid("VL_TABL");
 
+class ibValueModelTable;
+
+// NOTE: a table-of-values is a RAM model (ibValueModelStorage). It has NO source queryable — the RAM composer
+// filters/sorts ibRamValueStorage (the live nodes) in place. There is no RAM query-text / SQL door any more.
+
 //Table support
-class BACKEND_API ibValueModelTable : public ibValueModelRamTableBase {
+class BACKEND_API ibValueModelTable : public ibValueModelStorage {
 	public:
 private:
 	// methods:
@@ -27,7 +35,7 @@ private:
 		enColumns = 0,
 	};
 public:
-	class ibValueModelTableColumnCollection : public ibValueModelTableBase::ibValueModelColumnCollection {
+	class ibValueModelTableColumnCollection : public ibValueModel::ibValueModelColumnCollection {
 	public:
 	private:
 		enum Func {
@@ -36,7 +44,7 @@ public:
 		};
 	public:
 
-		class ibValueModelTableColumnInfo : public ibValueModelTableBase::ibValueModelColumnCollection::ibValueModelColumnInfo {
+		class ibValueModelTableColumnInfo : public ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo {
 	public:
 		private:
 
@@ -85,7 +93,7 @@ public:
 			}
 
 			for (long row = 0; row < m_ownerTable->GetRowCount(); row++) {
-				ibValueTableRow* node = m_ownerTable->GetViewData<ibValueTableRow>(m_ownerTable->GetItem(row));
+				ibComposerNode* node = m_ownerTable->GetViewData<ibComposerNode>(m_ownerTable->GetItem(row));
 				wxASSERT(node);
 				node->SetValue(max_id + 1, ibValueTypeDescription::AdjustValue(typeData));
 			}
@@ -106,7 +114,7 @@ public:
 		virtual void RemoveColumn(unsigned int col) {
 
 			for (long row = 0; row < m_ownerTable->GetRowCount(); row++) {
-				ibValueTableRow* node = m_ownerTable->GetViewData<ibValueTableRow>(m_ownerTable->GetItem(row));
+				ibComposerNode* node = m_ownerTable->GetViewData<ibComposerNode>(m_ownerTable->GetItem(row));
 				wxASSERT(node);
 				node->EraseValue(col);
 			}
@@ -154,7 +162,7 @@ public:
 		ibValueModelTableReturnLine(ibValueModelTable* ownerTable = nullptr, const ibDataViewItem& line = ibDataViewItem(nullptr));
 		virtual ~ibValueModelTableReturnLine();
 
-		virtual ibValueModelTableBase* GetOwnerModel() const { return m_ownerTable; }
+		virtual ibValueModel* GetOwnerModel() const { return m_ownerTable; }
 
 		void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
@@ -187,14 +195,14 @@ public:
 
 	//set meta/get meta
 	virtual bool SetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, const ibValue& varMetaVal) {
-		ibValueTableRow* node = GetViewData<ibValueTableRow>(item);
+		ibComposerNode* node = GetViewData<ibComposerNode>(item);
 		if (node == nullptr)
 			return false;
 		return node->SetValue(id, ibValueTypeDescription::AdjustValue(m_tableColumnCollection->GetColumnType(id), varMetaVal), true);
 	}
 
 	virtual bool GetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, ibValue& pvarMetaVal) const {
-		ibValueTableRow* node = GetViewData<ibValueTableRow>(item);
+		ibComposerNode* node = GetViewData<ibComposerNode>(item);
 		if (node == nullptr)
 			return false;
 		return node->GetValue(id, pvarMetaVal);
@@ -205,7 +213,7 @@ public:
 	virtual ~ibValueModelTable();
 
 	virtual void AddValue(unsigned int before = 0) {
-		long row = GetRow(GetSelection());
+		long row = StorageIndexOf(GetSelection());   // displayed item is a composer copy → storage index via bridge
 		if (row > 0)
 			AppendRow(row);
 		else AppendRow();
@@ -221,6 +229,14 @@ public:
 	//check is empty
 	virtual bool IsEmpty() const { return GetRowCount() == 0; }
 
+	// A table-of-values is fully composer-driven (filter / sort / group live on the RAM composer), so it exposes
+	// the whole List-settings affordance — including GROUP, which folds the flat ТЗ into a tree "лёгким движением".
+	virtual Features GetFeatures() const override {
+		Features f;
+		f.flags |= Features::Filters | Features::Sorting | Features::Grouping;
+		return f;
+	}
+
 	void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal); // attribute value
@@ -231,6 +247,11 @@ public:
 		const ibDataViewItem& row, unsigned int col) const override;
 	virtual bool SetValueByRow(const wxVariant& variant,
 		const ibDataViewItem& row, unsigned int col) override;
+
+	// FETCH: the value-table no longer overrides Get*Fetch. The thin wrappers existed ONLY to bypass the (now
+	// removed) ibValueModelStorage::BuildVisibleView fetch override; with that gone, the value-table inherits
+	// ibValueModel::GetFirstFetch/Next/Prev → RunComposerPage directly (byte-for-byte the same routing the
+	// wrappers did). RunComposerPage runs the RAM composer over ibRamValueStorage (the live nodes) in place.
 
 	//support def. methods (in runtime)
 	long AppendRow(unsigned int before = 0);
@@ -260,6 +281,9 @@ public:
 	virtual ibValue GetEmptyRow() override {
 		return new ibValueModelTableReturnLine(this, ibDataViewItem(nullptr));
 	}
+
+	// No source-hook: a RAM model has no queryable. The RAM composer reads ibRamValueStorage (the live
+	// nodes) directly — no per-table override / member here.
 
 private:
 

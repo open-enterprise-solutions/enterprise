@@ -16,7 +16,7 @@ per-family models (`ibValueListDataObjectEnumRef` / `…Ref` / `…RefDocument` 
   front-end's call (`SetViewMode` → parent scope), **not** the class type.
 - **Works through a QUERYABLE, never metadata.** Columns / identity / parent all
   come from `ibBackendQueryable` (`GetColumns` / `GetPrimaryKeyColumns` /
-  `GetParentColumn`), family-blind — catalog ≡ register ≡ document ≡ custom query.
+  `GetHierarchyColumn`), family-blind — catalog ≡ register ≡ document ≡ custom query.
   No `GetDataReference`, no `GetGenericAttributeArrayObject`, no metaobject in fetch.
 - **Clean system — no raw guids.** Row identity is the **keyset** (primary-key
   column *values*); the cursor anchor is the sort-column values. `register ≡ ref`

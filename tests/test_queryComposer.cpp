@@ -449,7 +449,7 @@ TEST(QueryComposerCore, EvalColumnExpr_ArithAndCase)
 	EXPECT_EQ(ibQueryComposer::EvalColumnExpr(mul.get(), t, r).GetString().ToStdString(), "20");
 
 	// CASE WHEN qty > 3 THEN 'bulk' ELSE 'unit' END -> 'bulk'
-	ibQueryCondition gt; gt.m_col = &qty; gt.m_explicitOp = true; gt.m_op = ibQueryFilterOp::Greater; gt.m_value = ibValue(ibNumber(3));
+	ibQueryCondition gt; gt.m_col = &qty; gt.m_op = ibQueryFilterOp::Greater; gt.m_value = ibValue(ibNumber(3));
 	auto caseE = std::make_shared<ibQueryColumnExpr>();
 	caseE->m_kind  = ibQueryColumnExprKind::Case;
 	caseE->m_cases = { { ibQueryPredicate::Leaf(gt), ibQueryColumnExpr::Const(ibValue(wxString(wxT("bulk")))) } };

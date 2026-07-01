@@ -9,8 +9,6 @@
 #include "backend/query/queryableFactory.h"   // the source factory — the column dictionary
 #include "backend/query/dataQueryBuilder.h"   // ibDataQueryResult / ibSelectKind
 #include "backend/query/querySelector.h"      // ibSelector — the TOTALS pre-order walk
-#include "backend/metaData.h"                 // ibMetaData::FindAnyObjectByFilter — queryable -> metaobject
-#include "backend/metaCollection/metaObject.h"// ibValueMetaObject — GetClassType / GetName
 #include "backend/appData.h"                  // ibApplicationData::GetQueryableFactory
 #include "backend/backend_exception.h"        // ibBackendCoreException
 
@@ -18,27 +16,55 @@
 // sources
 //////////////////////////////////////////////////////////////////////
 
-ibDataComposer& ibDataComposer::FromSource(const wxString& ns, const wxString& name)
+// The marker namespace any FromSource(queryable) source renders under ("Temp.t0"). Not a real
+// metaobject kind — the factory never resolves it; the auxiliary registry (ibTempSourceScope) catches
+// the name first and returns the registered queryable directly. Kept opaque on purpose: the value is
+// irrelevant to resolution (ResolveSource keys on the name alone), it only has to parse as <ns>.<name>.
+static const wxChar* const s_tempSourceNamespace = wxT("Temp");
+
+ibDataDBComposer& ibDataDBComposer::FromSource(const wxString& ns, const wxString& name)
 {
+	// SET the single FROM source (symmetric with FromText, which clears too). Append-WITHOUT-clear made the
+	// persistent model composer ACCUMULATE one duplicate source per fetch — RunComposerPage rebinds the source
+	// every page over the SAME composer, and ClearSettings does not touch m_sources — which renders as a growing
+	// self-JOIN (m_sources: [0]=FROM, [1..]=JOIN). Multi-source JOINs are built on the query BUILDER (.Join),
+	// not by repeated FromSource, so resetting here is safe.
 	m_sourceText.Clear();
+	m_sources.clear();
+	m_directSources.clear();   // a transient registry belongs to ONE source set — reset it in lock-step
 	m_sources.push_back({ ns, name });
 	return *this;
 }
 
-ibDataComposer& ibDataComposer::FromSource(const ibBackendQueryable* queryable)
+ibDataDBComposer& ibDataDBComposer::FromSource(const ibBackendQueryable* queryable)
 {
-	// Identity through the metadata context only — the queryable itself never flows
-	// downward (the rendered NAME does, and the lowering re-resolves it).
-	const ibMetaData* metaData = queryable != nullptr ? queryable->GetMetaData() : nullptr;
-	const ibValueMetaObject* meta = metaData != nullptr
-		? metaData->FindAnyObjectByFilter<ibValueMetaObject>(queryable->GetQueryTableId())
-		: nullptr;
-	if (meta == nullptr)
-		ibBackendCoreException::Error(_("Composer: the queryable carries no metadata identity"));
-	return FromSource(ibValue::GetNameObjectFromID(meta->GetClassType()), meta->GetName());
+	if (queryable == nullptr)
+		ibBackendCoreException::Error(_("Composer: a null queryable was given as the source"));
+
+	// FROM resets the source set — the verbatim text, the factory sources, AND the transient registry.
+	m_sourceText.Clear();
+	m_sources.clear();
+	m_directSources.clear();
+
+	// Source the LIVE queryable DIRECTLY through the auxiliary per-query registry: register it under an
+	// auto-numbered per-query name (t0, t1, …) and render "FROM Temp.t0"; ResolveSource hands it straight
+	// back, unchanged. The NUMBER is how the query tells transient sources apart — a future JOIN of a second
+	// temp table just takes the next slot (t1, t2) over the same registry.
+	//
+	// NO metadata round-trip. The caller was JUST handed a complete L3 queryable — it carries its own
+	// columns + provider + reconstruction context — so the composer has no business searching the metadata
+	// to recover a metaobject identity for it, then converting that to a "kind.name" the lowering only
+	// re-resolves to the very same queryable. Worse, the old recovery used ibValue::GetNameObjectFromID, a
+	// STATIC-registry lookup that returns nothing for a class registered in the METADATA (every dynamic
+	// catalog / document) — so it was outright broken for those. A named metaobject source, when one is
+	// genuinely wanted (readable text), is requested via FromSource(ns, name).
+	const wxString name = wxString::Format(wxT("t%u"), static_cast<unsigned int>(m_directSources.size()));
+	m_directSources[name] = queryable;
+	m_sources.push_back({ s_tempSourceNamespace, name });
+	return *this;
 }
 
-ibDataComposer& ibDataComposer::FromText(const wxString& text)
+ibDataDBComposer& ibDataDBComposer::FromText(const wxString& text)
 {
 	m_sourceText = text;
 	m_sources.clear();
@@ -77,9 +103,9 @@ ibDataComposer& ibDataComposer::Total(const wxString& func, const wxString& path
 	return *this;
 }
 
-ibDataComposer& ibDataComposer::TotalBy(const wxString& path, bool hierarchy)
+ibDataComposer& ibDataComposer::TotalBy(const wxString& path, ibQueryDimUnfold kind)
 {
-	m_totalBy.push_back({ path, hierarchy });
+	m_totalBy.push_back({ path, kind });
 	return *this;
 }
 
@@ -103,7 +129,7 @@ ibDataComposer& ibDataComposer::ClearSettings()
 // render
 //////////////////////////////////////////////////////////////////////
 
-wxString ibDataComposer::RenderText() const
+wxString ibDataDBComposer::RenderText() const
 {
 	if (!m_sourceText.IsEmpty()) {
 		// The author's text — verbatim, never edited. Settings over an author's query
@@ -136,12 +162,21 @@ wxString ibDataComposer::RenderText() const
 		if (m_sources.size() > 1)
 			ibBackendCoreException::Error(_("Composer: joined sources need an explicit Select list"));
 
-		ibQueryableFactory* factory = ibApplicationData::GetQueryableFactory();
-		if (factory == nullptr)
-			ibBackendCoreException::Error(_("Composer: the query engine is not available (no application data)"));
-
 		const Source& s0 = m_sources.front();
-		const ibBackendQueryable* src = factory->Resolve(s0.m_namespace, s0.m_name);
+
+		// A TRANSIENT (RAM / temp) source registered via FromSource(queryable) — reflect its
+		// columns straight off the live queryable (the factory carries no descriptor for it).
+		// Otherwise the factory resolves the metaobject source by name (READ-ONLY dictionary).
+		const ibBackendQueryable* src = nullptr;
+		const auto dit = m_directSources.find(s0.m_name);
+		if (dit != m_directSources.end())
+			src = dit->second;
+		else {
+			ibQueryableFactory* factory = ibApplicationData::GetQueryableFactory();
+			if (factory == nullptr)
+				ibBackendCoreException::Error(_("Composer: the query engine is not available (no application data)"));
+			src = factory->Resolve(s0.m_namespace, s0.m_name);
+		}
 		if (src == nullptr)
 			ibBackendCoreException::Error(_("Composer: unknown source '%s.%s'"), s0.m_namespace, s0.m_name);
 
@@ -190,8 +225,10 @@ wxString ibDataComposer::RenderText() const
 		for (size_t i = 0; i < m_totalBy.size(); ++i) {
 			text += (i == 0 ? wxT(" BY ") : wxT(", "));
 			text += m_totalBy[i].m_path;
-			if (m_totalBy[i].m_hierarchy)
+			if (m_totalBy[i].m_kind == ibQueryDimUnfold::Hierarchy)
 				text += wxT(" HIERARCHY");
+			else if (m_totalBy[i].m_kind == ibQueryDimUnfold::HierarchyOnly)
+				text += wxT(" HIERARCHYONLY");
 		}
 	}
 
@@ -230,7 +267,7 @@ wxString ValueSig(const ibValue& v)
 
 } // namespace
 
-void ibDataComposer::EnsureAst() const
+void ibDataDBComposer::EnsureAst() const
 {
 	const wxString text = RenderText();
 	if (m_ast != nullptr && text == m_renderedText)
@@ -242,12 +279,14 @@ void ibDataComposer::EnsureAst() const
 	m_renderedText = text;
 }
 
-bool ibDataComposer::BuildPageSignature(const ibReadPageRequest& page, wxString& signature) const
+bool ibDataDBComposer::BuildPageSignature(const ibReadPageRequest& page, wxString& signature) const
 {
 	// Cache the paged hot path only; the tree's parent filter is excluded (its
-	// reference blob is not signable). Anchor VALUES are deliberately not signed —
-	// the cached render rebinds the anchor as a parameter (that is the lever).
-	if (page.m_count <= 0 || page.m_parentFilter)
+	// reference blob is not signable). An ANCHORED page is NOT cached: the anchor
+	// keyset EMBEDS its values (a reference key renders as its _RRRef blob, not an
+	// ibParam), so the SQL is per-anchor — a shared cached render would replay a
+	// stale anchor. The unanchored first page still caches.
+	if (page.m_count <= 0 || page.m_parentFilter || page.m_hasAnchor)
 		return false;
 	for (const auto& p : m_params)
 		if (!ValueSignable(p.second))
@@ -263,15 +302,21 @@ bool ibDataComposer::BuildPageSignature(const ibReadPageRequest& page, wxString&
 	return true;
 }
 
-ibDataQueryResult ibDataComposer::Execute(std::vector<ibQueryLowering::OutputColumn>& schema, bool& hasTotals) const
+ibDataQueryResult ibDataDBComposer::Execute(std::vector<ibQueryLowering::OutputColumn>& schema, bool& hasTotals) const
 {
 	return Execute(schema, hasTotals, ibReadPageRequest{});
 }
 
-ibDataQueryResult ibDataComposer::Execute(std::vector<ibQueryLowering::OutputColumn>& schema, bool& hasTotals,
+ibDataQueryResult ibDataDBComposer::Execute(std::vector<ibQueryLowering::OutputColumn>& schema, bool& hasTotals,
                                           const ibReadPageRequest& page) const
 {
 	EnsureAst();
+
+	// The auxiliary registry of transient (RAM / temp) sources is live for THIS execution: the
+	// lowering resolves the rendered "FROM Temp.t0" directly to the registered queryable. Source
+	// resolution happens entirely inside the lowering call below, so this scope covers it; the
+	// returned result holds the queryable already bound (no re-resolution during the row walk).
+	ibTempSourceScope tempScope(m_directSources);
 
 	hasTotals = m_ast->m_hasTotals;
 	if (hasTotals)
@@ -286,14 +331,7 @@ ibDataQueryResult ibDataComposer::Execute(std::vector<ibQueryLowering::OutputCol
 	return ibQueryLowering::Execute(*m_ast, m_params, schema, page);
 }
 
-bool ibDataComposer::Run()
-{
-	if (m_driver == nullptr)
-		return false;
-	return Run(*m_driver);
-}
-
-bool ibDataComposer::Run(ibCompositionDriver& driver)
+bool ibDataDBComposer::Run(ibCompositionDriver& driver)
 {
 	// The driver IS the envelope: a paged driver (the list fetch) vends the page
 	// request; a plain driver reads everything.

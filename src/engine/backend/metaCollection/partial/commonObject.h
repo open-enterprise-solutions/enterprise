@@ -303,7 +303,8 @@ public:
 	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;   // { data-reference } — key authority
 	virtual const ibBackendQueryable* ResolveReferenceTarget(const ibBackendQueryColumn* refColumn) const override;
 	virtual std::vector<const ibBackendQueryable*> ResolveReferenceTargets(const ibBackendQueryColumn* refColumn) const override;   // composite: one per type
-	virtual const ibBackendQueryColumn* GetParentColumn() const override;   // the parent attribute (hierarchy key)
+	virtual const ibBackendQueryColumn* GetHierarchyColumn() const override;   // the parent attribute (hierarchy key)
+	virtual const ibBackendQueryColumn* GetFolderColumn() const override;   // the IsFolder attribute (folders+items)
 private:
 	const ibValueMetaObjectRecordDataRef* m_meta;
 };
@@ -1310,7 +1311,7 @@ public:
 	}
 
 	//support tabular section
-	virtual ibValueModelTableBase* GetTableByMetaID(const ibMetaID& id) const;
+	virtual ibValueModel* GetTableByMetaID(const ibMetaID& id) const;
 
 	//counter
 	virtual void SourceIncrRef() override { ibValue::IncrRef(); }
@@ -1730,7 +1731,7 @@ protected:
 // descendant (ibValueRecordDataObjectDocument), but the class is a
 // structural placeholder + actual scaffold owner so that:
 //   • a second postable type (business process, task object, custom
-//     1С-style document) can slot in without touching the leaf
+//     a header-and-lines document) can slot in without touching the leaf
 //     hierarchy;
 //   • cross-cutting concerns scoped to "ref with movements" land in
 //     one place instead of being scattered across N leaf cpps.
@@ -1898,7 +1899,7 @@ protected:
 	ibRowMetaValues m_keyValues;
 };
 
-class BACKEND_API ibValueRecordSetObject : public ibValueModelRamTableBase, public ibRuntimeModuleDataObject {
+class BACKEND_API ibValueRecordSetObject : public ibValueModelStorage, public ibRuntimeModuleDataObject {
 	public:
 
 	virtual ibValueModelColumnCollection* GetColumnCollection() const override { return m_recordColumnCollection; }
@@ -1908,10 +1909,10 @@ class BACKEND_API ibValueRecordSetObject : public ibValueModelRamTableBase, publ
 		return new ibValueRecordSetObjectRegisterReturnLine(this, line);
 	}
 
-	class ibValueRecordSetObjectRegisterColumnCollection : public ibValueModelTableBase::ibValueModelColumnCollection {
+	class ibValueRecordSetObjectRegisterColumnCollection : public ibValueModel::ibValueModelColumnCollection {
 	public:
 
-		class ibValueRecordSetRegisterColumnInfo : public ibValueModelTableBase::ibValueModelColumnCollection::ibValueModelColumnInfo {
+		class ibValueRecordSetRegisterColumnInfo : public ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo {
 	public:
 
 			ibValueRecordSetRegisterColumnInfo();
@@ -1975,7 +1976,7 @@ class BACKEND_API ibValueRecordSetObject : public ibValueModelRamTableBase, publ
 			const ibDataViewItem& line = ibDataViewItem());
 		virtual ~ibValueRecordSetObjectRegisterReturnLine();
 
-		virtual ibValueModelTableBase* GetOwnerModel() const { return m_ownerTable; }
+		virtual ibValueModel* GetOwnerModel() const { return m_ownerTable; }
 
 		void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
@@ -2114,7 +2115,7 @@ public:
 
 	virtual void ActivateItem(ibBackendValueForm* formOwner,
 		const ibDataViewItem& item, unsigned int col) {
-		ibValueModelTableBase::RowValueStartEdit(item, col);
+		ibValueModel::RowValueStartEdit(item, col);
 	}
 
 	virtual void AddValue(unsigned int before = 0) {}
@@ -2131,8 +2132,8 @@ public:
 	//support def. methods (in runtime)
 	virtual long AppendRow(unsigned int before = 0);
 
-	virtual bool LoadDataFromTable(ibValueModelTableBase* srcTable);
-	virtual ibValueModelTableBase* SaveDataToTable() const;
+	virtual bool LoadDataFromTable(ibValueModel* srcTable);
+	virtual ibValueModel* SaveDataToTable() const;
 
 	// Phase B template-method scaffolds. The 3 register-set leaves
 	// (Accumulation / Accounting / Information) have byte-identical
@@ -2153,9 +2154,8 @@ public:
 	virtual wxString GetClassName() const override;
 	virtual wxString GetString() const override;
 
-	// Iterator runtime path lives on ibValueModel (RamFetch cursor over
-	// BuildVisibleView). GetEmptyRow yields the typed skeleton that
-	// the iterator state surfaces as IntelliSense type hint.
+	// Iterator runtime path lives on ibValueModel (the paged Get*Fetch cursor over RunComposerPage).
+	// GetEmptyRow yields the typed skeleton that the iterator state surfaces as IntelliSense type hint.
 	virtual ibValue GetEmptyRow() override {
 		return new ibValueRecordSetObjectRegisterReturnLine(this, ibDataViewItem());
 	}
@@ -2390,7 +2390,7 @@ protected:
 	const ibValueMetaObjectRegisterData* m_metaObject;
 
 	ibValuePtr<ibValueRecordSetObject> m_recordSet;
-	ibValuePtr<ibValueModelTableBase::ibValueModelReturnLine> m_recordLine;
+	ibValuePtr<ibValueModel::ibValueModelReturnLine> m_recordLine;
 };
 #pragma endregion
 

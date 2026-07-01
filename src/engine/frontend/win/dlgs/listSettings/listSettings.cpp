@@ -11,6 +11,7 @@
 #include "frontend/visualView/ctrl/frame.h"
 
 #include "backend/system/value/valueType.h"
+#include "backend/tableInfo.h"                                  // ibValueModel + ibValueModelColumnCollection (PATH A field source)
 #include "backend/metaCollection/partial/list/dynamicList.h"   // ibValueDynamicList — the dialog is built on it
 #include "backend/query/queryable.h"                            // ibBackendQueryable::GetColumns
 #include "backend/query/queryColumn.h"                          // ibBackendQueryColumn
@@ -24,8 +25,8 @@
 #include <wx/stattext.h>
 #include <wx/app.h>
 
-// Filter-tab column ids (model columns). Mirrors wxFilterDialog's enum in
-// tableView.cpp: Use / Name / Comparison / Value.
+// Filter-tab column ids (model columns): Use / Field / Comparison / Value
+// (historically ported from the old filter dialog's column enum).
 enum {
 	eFilterUse = 0,
 	eFilterField,
@@ -34,12 +35,12 @@ enum {
 };
 
 // ---------------------------------------------------------------------------
-//  Filter model — virtual-list over the runtime ibValueFilterList.
+//  Filter model — virtual-list over the dialog's BUFFER ibValueFilterList.
 //
-//  Same shape as wxDataViewFilterModel (tableView.cpp), but instead of a copied
-//  ibFilterRow it edits the LIVE ibValueFilterList held by the dialog's
-//  ibValueListSettings. GetValueByRow / SetValueByRow walk Count()/GetItem(i)
-//  and the FilterItem getters/setters. Row tag is 1-based (GetID()).
+//  Edits the ibValueFilterList held by the dialog's ibValueListSettings buffer
+//  (historically ported from the old filter dialog's model). GetValueByRow /
+//  SetValueByRow walk Count()/GetItem(i) and the FilterItem getters/setters.
+//  Row tag is 1-based (GetID()).
 // ---------------------------------------------------------------------------
 class ibDialogListSettings::ibFilterModel : public ibDataViewVirtualListModel {
 	ibDialogListSettings* m_dialog;
@@ -91,16 +92,14 @@ public:
 			return true;
 		}
 		else if (col == eFilterComparison) {
-			// NB: ibValueFilterItem has no SetComparison() — it is set at Add
-			// time. Editing the comparison in-place would need a setter on the
-			// backend FilterItem.
-			// TODO(spike): add ibValueFilterItem::SetComparison(ibComparisonKind)
-			// and dispatch here so the comparison column becomes editable.
-			return false;
+			// The Comparison choice column carries the ibComparisonKind as a long (GetValueByRow returns
+			// (long)GetComparison; the choice editor's index IS that enum). Dispatch it to the filter item so
+			// the picked comparison sticks instead of snapping back to Equal.
+			item->SetComparison(static_cast<ibComparisonKind>(variant.GetLong()));
+			return true;
 		}
 		else if (col == eFilterValue) {
-			// Value editing goes THROUGH the runtime — same path as
-			// wxDataViewFilterModel::SetValueByRow. The text typed into the
+			// Value editing goes THROUGH the runtime. The text typed into the
 			// editor is resolved against a freshly created value of the row's
 			// class, then coerced to the field's type via AdjustValue.
 			const ibValue& selValue = item->GetFilterValue();
@@ -132,11 +131,11 @@ public:
 // ---------------------------------------------------------------------------
 //  Filter value renderer — the runtime editor for the Value column.
 //
-//  1:1 port of wxValueViewRenderer (tableView.cpp), retargeted from
-//  ibFilterRow::ibFilterData onto our ibValueFilterItem. It is both a
-//  ibDataViewCustomRenderer (draws the value string, hosts the editor) and an
-//  ibControlFrame (so QuickChoice / ProcessChoice can push the chosen value
-//  back through GetControlValue / SetControlValue / ChoiceProcessing).
+//  Edits the ibValueFilterItem (historically ported from the old filter
+//  dialog's value renderer). It is both a ibDataViewCustomRenderer (draws the
+//  value string, hosts the editor) and an ibControlFrame (so QuickChoice /
+//  ProcessChoice can push the chosen value back through GetControlValue /
+//  SetControlValue / ChoiceProcessing).
 //
 //  The editor is an ibControlTextEditor with a Select ("...") and Clear button.
 //  Pressing Select:
@@ -348,7 +347,7 @@ private:
 			if (singleValue != nullptr) {
 				const ibValueMetaObject* metaObject = singleValue->GetMetaObject();
 				wxASSERT(metaObject);
-				const ibValueMetaObjectAttributeBase* attribute = activeMetaData->FindAnyObjectByFilter<ibValueMetaObjectAttributeBase>(item->GetModel(), true);
+				const ibValueMetaObjectAttributeBase* attribute = activeMetaData->FindAnyObjectByFilter<ibValueMetaObjectAttributeBase>(item->GetLeafId(), true);
 
 				ibSelectMode selMode = ibSelectMode::ibSelectMode_Items;
 				if (attribute != nullptr)
@@ -384,23 +383,71 @@ private:
 //  Construction
 // ---------------------------------------------------------------------------
 
+// The two public ctors differ ONLY in how they bind the field source (m_list set or
+// not). Everything else — the three tabs, load, OK binding — is identical; the field
+// source is read once, in BuildFilterFields(), which dispatches on m_list.
+
 ibDialogListSettings::ibDialogListSettings(wxWindow* parent, ibValueDynamicList* list)
 	: wxDialog(parent, wxID_ANY, _("List settings"), wxDefaultPosition, wxSize(540, 440),
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
-	  m_list(list), m_settings(list != nullptr ? list->GetListSettings() : nullptr)
+	  m_model(list), m_list(list), m_settings(new ibValueListSettings())
 {
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
 	wxNotebook* notebook = new wxNotebook(this, wxID_ANY);
-	notebook->AddPage(BuildFilterPage(notebook), _("Filter"), true);
-	notebook->AddPage(BuildOrderPage(notebook),  _("Sort"));
-	notebook->AddPage(BuildGroupPage(notebook),  _("Group"));
+	// Tabs are GATED by the model's Features (Max: "turn the flag off → the tab is hidden; the default
+	// parameters still change"). Default = all on. The first available tab is the selected one.
+	const ibValueModel::Features feats = (m_model != nullptr) ? m_model->GetFeatures() : ibValueModel::Features{};
+	if (feats.Has(ibValueModel::Features::Filters))  notebook->AddPage(BuildFilterPage(notebook), _("Filter"), notebook->GetPageCount() == 0);
+	if (feats.Has(ibValueModel::Features::Sorting))  notebook->AddPage(BuildOrderPage(notebook),  _("Sort"),   notebook->GetPageCount() == 0);
+	if (feats.Has(ibValueModel::Features::Grouping)) notebook->AddPage(BuildGroupPage(notebook),  _("Group"),  notebook->GetPageCount() == 0);
 	mainSizer->Add(notebook, 1, wxALL | wxEXPAND, FromDIP(6));
 
 	wxStdDialogButtonSizer* btns = CreateStdDialogButtonSizer(wxOK | wxCANCEL);
 	mainSizer->Add(btns, 0, wxLEFT | wxRIGHT | wxBOTTOM | wxALIGN_RIGHT, FromDIP(6));
 
 	SetSizer(mainSizer);
+
+	// Transactional open: load the dialog's BUFFER from the composer (the store) so it shows the current state.
+	if (m_model != nullptr && m_settings != nullptr)
+		ibLoadSettingsFromComposer(m_settings, m_model->GetModelComposer());
+
+	LoadFromSettings();
+
+	Bind(wxEVT_BUTTON, &ibDialogListSettings::OnOk, this, wxID_OK);
+}
+
+// General-model ctor — same body as the dynamic-list ctor, but m_list stays null
+// (no source explorer / no composer). The Filter "Add" picker's fields come from the
+// model's columns (PATH A — BuildFilterFieldsFromColumns). m_list-specific code below
+// (FillFieldChoice, the source-explorer field builder, RefreshComposerSettings) is
+// guarded on m_list != nullptr, so the dialog runs correctly with m_list == null.
+ibDialogListSettings::ibDialogListSettings(wxWindow* parent, ibValueModel* model)
+	: wxDialog(parent, wxID_ANY, _("List settings"), wxDefaultPosition, wxSize(540, 440),
+		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
+	  m_model(model), m_list(nullptr), m_settings(new ibValueListSettings())
+{
+	wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
+
+	wxNotebook* notebook = new wxNotebook(this, wxID_ANY);
+	// Tabs are GATED by the model's Features (Max: "turn the flag off → the tab is hidden; the default
+	// parameters still change"). Default = all on. The first available tab is the selected one.
+	const ibValueModel::Features feats = (m_model != nullptr) ? m_model->GetFeatures() : ibValueModel::Features{};
+	if (feats.Has(ibValueModel::Features::Filters))  notebook->AddPage(BuildFilterPage(notebook), _("Filter"), notebook->GetPageCount() == 0);
+	if (feats.Has(ibValueModel::Features::Sorting))  notebook->AddPage(BuildOrderPage(notebook),  _("Sort"),   notebook->GetPageCount() == 0);
+	if (feats.Has(ibValueModel::Features::Grouping)) notebook->AddPage(BuildGroupPage(notebook),  _("Group"),  notebook->GetPageCount() == 0);
+	mainSizer->Add(notebook, 1, wxALL | wxEXPAND, FromDIP(6));
+
+	wxStdDialogButtonSizer* btns = CreateStdDialogButtonSizer(wxOK | wxCANCEL);
+	mainSizer->Add(btns, 0, wxLEFT | wxRIGHT | wxBOTTOM | wxALIGN_RIGHT, FromDIP(6));
+
+	SetSizer(mainSizer);
+
+	// Transactional open: load the dialog's edit BUFFER (m_settings) FROM the composer (the committed store)
+	// so it shows the current Filter / Sort / Group; the user edits the buffer; OK commits it back
+	// (ShowListSettingsDialog), Cancel discards. The fetch reads the composer, never this buffer.
+	if (m_model != nullptr && m_settings != nullptr)
+		ibLoadSettingsFromComposer(m_settings, m_model->GetModelComposer());
 
 	LoadFromSettings();
 
@@ -422,7 +469,7 @@ wxWindow* ibDialogListSettings::BuildFilterPage(wxWindow* parent)
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 
 	// Runtime-driven dataview: Use (toggle) / Field / Comparison (choice) /
-	// Value (custom runtime renderer). Same column set as wxFilterDialog.
+	// Value (custom runtime renderer).
 	m_filterView = new ibDataViewCtrl(panel, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxDV_ROW_LINES | wxDV_SINGLE);
 	m_filterView->SetBackgroundColour(panel->GetBackgroundColour());
@@ -485,7 +532,8 @@ wxWindow* ibDialogListSettings::BuildFilterPage(wxWindow* parent)
 	addBtn->Bind(wxEVT_BUTTON, &ibDialogListSettings::OnFilterAdd, this);
 	delBtn->Bind(wxEVT_BUTTON, &ibDialogListSettings::OnFilterRemove, this);
 
-	// Model edits the live ibValueFilterList directly (no separate apply).
+	// Model edits the dialog's BUFFER ibValueFilterList directly (committed to
+	// the composer on OK).
 	m_filterModel = new ibFilterModel(this);
 	m_filterView->AssociateModel(m_filterModel);
 
@@ -560,24 +608,74 @@ wxWindow* ibDialogListSettings::BuildGroupPage(wxWindow* parent)
 
 void ibDialogListSettings::FillFieldChoice(wxComboBox* choice)
 {
-	const ibBackendQueryable* q = (m_list != nullptr) ? m_list->GetSourceQueryable() : nullptr;
-	if (q == nullptr || choice == nullptr)
+	if (choice == nullptr)
 		return;
-	// Available fields = the SOURCE QUERYABLE's columns (NOT metaobject attributes).
-	for (const ibBackendQueryColumn* col : q->GetColumns()) {
-		if (col != nullptr)
-			choice->Append(col->GetName());
-	}
+	// The Sort / Group field pickers use the SAME field source as the Filter page — m_filterFields (PATH A =
+	// the model's columns for a plain model like a tabular section / ТЗ, PATH B = the source explorer for a
+	// dynamic list). The old code sourced only m_list->GetSourceQueryable()->GetColumns(), so for any non-dynamic-
+	// list model (and now every RAM model, whose queryable is gone) the combo came up EMPTY — you could only type
+	// a field by hand, and a typo silently produced no sort/grouping. Build the fields on demand if not yet built.
+	if (m_filterFields.empty())
+		BuildFilterFields();
+	for (const auto& f : m_filterFields)
+		choice->Append(f.m_path);
 }
 
+// =====================================================================
+//  FIELD SOURCE dispatch — the dialog's ONE entry to "what can be filtered".
+//
+//  PATH A (model columns) is used whenever there is no dynamic-list source.
+//  PATH B (source explorer) is used for a dynamic list. To move the general
+//  (model) path onto a queryable-based field source later, change ONLY
+//  BuildFilterFieldsFromColumns — see the header note next to its declaration.
+// =====================================================================
 void ibDialogListSettings::BuildFilterFields()
 {
 	m_filterFields.clear();
 
+	if (m_list != nullptr) {
+		// PATH B — dynamic list: dot-walk source explorer (root + one ref hop).
+		BuildFilterFieldsFromSource();
+	}
+	else {
+		// PATH A — plain model: the model's columns.
+		BuildFilterFieldsFromColumns();
+	}
+}
+
+// PATH A — model columns. THIS is the single function to replace when switching the
+// general field source to a queryable (PATH B): build each ibFilterFieldInfo from the
+// queryable's columns instead of the model's column collection. Nothing else in the
+// dialog reads the field source; the rest consumes m_filterFields uniformly.
+void ibDialogListSettings::BuildFilterFieldsFromColumns()
+{
+	if (m_model == nullptr)
+		return;
+	ibValueModel::ibValueModelColumnCollection* columns = m_model->GetColumnCollection();
+	if (columns == nullptr)
+		return;
+
+	for (unsigned int i = 0; i < columns->GetColumnCount(); ++i) {
+		const ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* col = columns->GetColumnInfo(i);
+		if (col == nullptr)
+			continue;
+		// m_path = column name (the technical field the filter stores),
+		// m_leafId = column id (so the Value column edits through the runtime),
+		// m_type = column type descriptor.
+		m_filterFields.push_back({ col->GetColumnName(),
+			static_cast<ibMetaID>(col->GetColumnID()),
+			col->GetColumnType() });
+	}
+}
+
+// PATH B — dynamic list source explorer (unchanged behaviour; the original
+// BuildFilterFields body). Only reachable when m_list != nullptr.
+void ibDialogListSettings::BuildFilterFieldsFromSource()
+{
 	// Root = the list's own columns via its source explorer (the SAME structure the
 	// dot-walk resolves). Descend ONE hop into each reference column through its
 	// reference-as-source explorer (Supplier.Region). The stored path is a dot-walk
-	// technical name; ibDataComposer::Filter dot-walks it (auto-JOIN). The leaf's
+	// technical name; ibDataDBComposer::Filter dot-walks it (auto-JOIN). The leaf's
 	// type/id let the Value column edit through the runtime.
 	const auto* root = (m_list != nullptr) ? m_list->GetSourceExplorer() : nullptr;
 	if (root == nullptr)
@@ -621,11 +719,12 @@ void ibDialogListSettings::BuildFilterFields()
 }
 
 // ---------------------------------------------------------------------------
-//  Load / Apply (between the dialog and the runtime ibValueListSettings)
+//  Load / Apply (between the dialog UI and the dialog's BUFFER ibValueListSettings)
 //
-//  The Filter tab edits the runtime ibValueFilterList in place (the model is
-//  the single source of truth), so it has no load/apply step here — only the
-//  Sort / Group tabs (still wxListCtrl-based) do.
+//  The Filter tab edits the buffer's ibValueFilterList in place (the dataview
+//  binds straight to it), so it has no load/apply step here — only the Sort /
+//  Group tabs (still wxListCtrl-based) do. The buffer is committed to the
+//  composer on OK.
 // ---------------------------------------------------------------------------
 
 void ibDialogListSettings::LoadFromSettings()
@@ -633,23 +732,25 @@ void ibDialogListSettings::LoadFromSettings()
 	if (m_settings == nullptr)
 		return;
 
-	// Filter: just sync the model row count to the live list.
+	// Filter: just sync the model row count to the buffer list.
 	if (m_filterModel != nullptr)
 		m_filterModel->ResetFromList();
 
-	if (ibValueSortList* o = m_settings->GetOrder()) {
-		for (size_t i = 0; i < o->Count(); ++i) {
-			ibValueSortItem* it = o->GetItem(i);
-			if (it == nullptr) continue;
-			const long row = m_orderList->InsertItem(m_orderList->GetItemCount(), it->GetField());
-			m_orderList->SetItem(row, 1, m_orderDir->GetString(static_cast<int>(it->GetDirection())));
-			m_orderList->SetItemData(row, static_cast<long>(it->GetDirection()));
+	if (m_orderList != nullptr)   // null when the Sort tab is gated off by Features
+		if (ibValueSortList* o = m_settings->GetOrder()) {
+			for (size_t i = 0; i < o->Count(); ++i) {
+				ibValueSortItem* it = o->GetItem(i);
+				if (it == nullptr) continue;
+				const long row = m_orderList->InsertItem(m_orderList->GetItemCount(), it->GetField());
+				m_orderList->SetItem(row, 1, m_orderDir->GetString(static_cast<int>(it->GetDirection())));
+				m_orderList->SetItemData(row, static_cast<long>(it->GetDirection()));
+			}
 		}
-	}
-	if (ibValueGroupList* g = m_settings->GetGroup()) {
-		for (size_t i = 0; i < g->Count(); ++i)
-			m_groupList->InsertItem(m_groupList->GetItemCount(), g->GetField(i));
-	}
+	if (m_groupList != nullptr)   // null when the Group tab is gated off
+		if (ibValueGroupList* g = m_settings->GetGroup()) {
+			for (size_t i = 0; i < g->Count(); ++i)
+				m_groupList->InsertItem(m_groupList->GetItemCount(), g->GetField(i));
+		}
 }
 
 void ibDialogListSettings::ApplyToSettings()
@@ -657,21 +758,23 @@ void ibDialogListSettings::ApplyToSettings()
 	if (m_settings == nullptr)
 		return;
 
-	// Filter is already applied to the runtime list by the model — nothing to do.
+	// Filter is edited directly in the buffer list by the model — nothing to do.
 
-	if (ibValueSortList* o = m_settings->GetOrder()) {
-		o->Clear();
-		for (long i = 0; i < m_orderList->GetItemCount(); ++i) {
-			const wxString field = m_orderList->GetItemText(i, 0);
-			const ibSortDirection dir = static_cast<ibSortDirection>(m_orderList->GetItemData(i));
-			o->Add(field, dir);
+	if (m_orderList != nullptr)   // null when the Sort tab is gated off by Features (don't wipe the committed sort)
+		if (ibValueSortList* o = m_settings->GetOrder()) {
+			o->Clear();
+			for (long i = 0; i < m_orderList->GetItemCount(); ++i) {
+				const wxString field = m_orderList->GetItemText(i, 0);
+				const ibSortDirection dir = static_cast<ibSortDirection>(m_orderList->GetItemData(i));
+				o->Add(field, dir);
+			}
 		}
-	}
-	if (ibValueGroupList* g = m_settings->GetGroup()) {
-		g->Clear();
-		for (long i = 0; i < m_groupList->GetItemCount(); ++i)
-			g->Add(m_groupList->GetItemText(i, 0));
-	}
+	if (m_groupList != nullptr)   // null when the Group tab is gated off
+		if (ibValueGroupList* g = m_settings->GetGroup()) {
+			g->Clear();
+			for (long i = 0; i < m_groupList->GetItemCount(); ++i)
+				g->Add(m_groupList->GetItemText(i, 0));
+		}
 }
 
 // ---------------------------------------------------------------------------
@@ -705,8 +808,8 @@ void ibDialogListSettings::OnFilterAdd(wxCommandEvent&)
 		}
 	}
 	// Leave the value TYPE_EMPTY: the Value-column Select button then routes
-	// through ShowSelectType (pick the type) before QuickChoice / ProcessChoice,
-	// exactly like wxFilterDialog. (Add() seeded it with ibValue() == EMPTY.)
+	// through ShowSelectType (pick the type) before QuickChoice / ProcessChoice.
+	// (Add() seeded it with ibValue() == EMPTY.)
 
 	if (m_filterModel != nullptr)
 		m_filterModel->ResetFromList();
@@ -734,18 +837,18 @@ void ibDialogListSettings::OnFilterRemove(wxCommandEvent&)
 		keep.push_back(filter->GetItem(i));
 	}
 	// Snapshot the survivors before Clear() drops the owning refs.
-	struct Saved { wxString field; ibComparisonKind cmp; ibValue value; bool use; ibMetaID model; ibTypeDescription type; };
+	struct Saved { wxString field; ibComparisonKind cmp; ibValue value; bool use; ibMetaID leafId; ibTypeDescription type; };
 	std::vector<Saved> saved;
 	for (ibValueFilterItem* it : keep) {
 		if (it == nullptr) continue;
 		saved.push_back({ it->GetField(), it->GetComparison(), it->GetFilterValue(),
-			it->GetUse(), it->GetModel(), it->GetTypeDescription() });
+			it->GetUse(), it->GetLeafId(), it->GetTypeDescription() });
 	}
 	filter->Clear();
 	for (const Saved& s : saved) {
 		ibValueFilterItem* added = filter->Add(s.field, s.cmp, s.value, s.use);
 		if (added != nullptr)
-			added->SetTypeInfo(s.model, s.type);
+			added->SetTypeInfo(s.leafId, s.type);
 	}
 
 	if (m_filterModel != nullptr)
@@ -794,7 +897,13 @@ void ibDialogListSettings::OnGroupRemove(wxCommandEvent&)
 
 void ibDialogListSettings::OnOk(wxCommandEvent&)
 {
-	ApplyToSettings();
+	ApplyToSettings();   // UI → buffer
+	// COMMIT the buffer onto the composer (the store) + refresh — the whole transaction lands atomically on OK.
+	// Cancel never reaches here, so the composer stays untouched.
+	if (m_model != nullptr && m_settings != nullptr) {
+		ibCommitSettingsToComposer(m_model->GetModelComposer(), m_settings);
+		m_model->NotifyReset();
+	}
 	EndModal(wxID_OK);
 }
 
@@ -813,4 +922,21 @@ bool ibDialogListSettings::ShowListSettingsDialog(ibValueDynamicList* list)
 		return true;
 	}
 	return false;
+}
+
+bool ibDialogListSettings::ShowListSettingsDialog(ibValueModel* model)
+{
+	if (model == nullptr)
+		return false;
+	// A dynamic list IS-A ibValueModel: route it through the list overload so it keeps
+	// its source-explorer field picker (PATH B) and composer refresh. Any other model
+	// uses the column-based field source (PATH A); OnOk commits the dialog's buffer onto
+	// the model's composer (ibCommitSettingsToComposer + NotifyReset).
+	if (ibValueDynamicList* list = dynamic_cast<ibValueDynamicList*>(model))
+		return ShowListSettingsDialog(list);
+
+	wxWindow* top = (wxTheApp != nullptr) ? wxTheApp->GetTopWindow() : nullptr;
+	ibDialogListSettings dlg(top, model);
+	// OK commits the dialog's buffer onto the composer + refreshes (OnOk); Cancel leaves the composer untouched.
+	return dlg.ShowModal() == wxID_OK;
 }

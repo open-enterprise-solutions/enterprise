@@ -42,7 +42,7 @@ public:
 	};
 
 	// Tree scope — "the tree is just a grouping by the parent dimension": the
-	// model passes the parent COLUMN (the queryable's GetParentColumn()) and the
+	// model passes the parent COLUMN (the queryable's GetHierarchyColumn()) and the
 	// node it browses; the driver assembles the hierarchy envelope itself, and
 	// the provider derives the physical field. The model knows no field names.
 	struct ibTreeScope

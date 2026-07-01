@@ -11,21 +11,15 @@
 void ibValueTabularSectionDataObjectBase::GetValueByRow(wxVariant& variant,
 	const ibDataViewItem& row, unsigned int col) const
 {
-	ibValueTableRow* node = GetViewData<ibValueTableRow>(row);
+	ibComposerNode* node = GetViewData<ibComposerNode>(row);
 	if (node == nullptr) return;
 
 	if (m_metaTable->IsNumberLine(col)) {
-		// Sequential display number = position in the filter+sort
-		// view, not raw m_nodeValues index — so user-visible
-		// numbering stays 1..N regardless of insertion order or
-		// filter state.  GetRow() returns the raw index (consumed
-		// by save / iteration); we re-resolve through the view
-		// here for rendering only.
-		auto view = BuildVisibleView();
-		auto it = std::find(view.begin(), view.end(), node);
-		long pos = (it != view.end())
-			? std::distance(view.begin(), it) : 0;
-		variant = new ibVariantDataValueNumberLine(pos + 1);
+		// Display line number = the row's STORAGE index (+1). The composer fetch wraps each storage row in
+		// a COPY node, so the old BuildVisibleView pointer-find of the copy would fail (always row 1); read
+		// the stable storage index off the node's backing identity via the RamTableBase bridge.
+		const long pos = StorageIndexOf(row);
+		variant = new ibVariantDataValueNumberLine((pos >= 0 ? pos : 0) + 1);
 	}
 	else if (node->HasColumnValue(col))
 		node->GetValue(col, variant);
@@ -36,7 +30,7 @@ void ibValueTabularSectionDataObjectBase::GetValueByRow(wxVariant& variant,
 bool ibValueTabularSectionDataObjectBase::SetValueByRow(const wxVariant& variant,
 	const ibDataViewItem& row, unsigned int col)
 {
-	ibValueTableRow* node = GetViewData<ibValueTableRow>(row);
+	ibComposerNode* node = GetViewData<ibComposerNode>(row);
 	
 	if (node == nullptr) return false;
 
@@ -88,7 +82,7 @@ void ibValueTabularSectionDataObjectBase::AddValue(unsigned int before)
 	// row 3 + Add → new row at position 4, focus moves there via
 	// the ItemInserted handler's Select(item)).  No active row →
 	// append at the bottom.
-	const long row = GetRow(GetSelection());
+	const long row = StorageIndexOf(GetSelection());   // displayed item is a composer copy → storage index via bridge
 	if (row >= 0) AppendRow(row + 1);
 	else          AppendRow();
 }
@@ -98,10 +92,11 @@ void ibValueTabularSectionDataObjectBase::CopyValue()
 	const ibDataViewItem& currentItem = GetSelection();
 	if (!currentItem.IsOk())
 		return;
-	ibValueTableRow* node = GetViewData<ibValueTableRow>(currentItem);
+	// The displayed item is a composer COPY — resolve the REAL storage row (and its index) via the bridge.
+	ibComposerNode* node = StorageRowOf(currentItem);
 	if (node == nullptr)
 		return;
-	ibValueTableRow* rowData = new ibValueTableRow();
+	ibComposerNode* rowData = new ibComposerNode();
 	for (const auto object : m_metaTable->GetAttributeArrayObject()) {
 		if (!m_metaTable->IsNumberLine(object->GetMetaID())) {
 			rowData->AppendTableValue(object->GetMetaID(), node->GetTableValue(object->GetMetaID()));
@@ -113,12 +108,12 @@ void ibValueTabularSectionDataObjectBase::CopyValue()
 	// Copy goes AFTER the source row so the original keeps its
 	// position; the new row lands at currentLine+1 and ItemInserted
 	// pushes focus onto it via Select.
-	long currentLine = GetRow(currentItem);
+	long currentLine = StorageIndexOf(currentItem);
 	if (currentLine != wxNOT_FOUND) {
-		ibValueModelRamTableBase::Insert(rowData, currentLine + 1, !ibBackendException::IsEvalMode());
+		ibValueModelStorage::Insert(rowData, currentLine + 1, !ibBackendException::IsEvalMode());
 	}
 	else {
-		ibValueModelRamTableBase::Append(rowData, !ibBackendException::IsEvalMode());
+		ibValueModelStorage::Append(rowData, !ibBackendException::IsEvalMode());
 	}
 }
 
@@ -133,10 +128,10 @@ void ibValueTabularSectionDataObjectBase::EditValue()
 		if (m_metaTable->IsNumberLine(m_modelProvider->GetCurrentModelColumn()))
 			return;
 
-		ibValueModelRamTableBase::RowValueStartEdit(currentItem, m_modelProvider->GetCurrentModelColumn());
+		ibValueModelStorage::RowValueStartEdit(currentItem, m_modelProvider->GetCurrentModelColumn());
 	}
 	else {
-		ibValueModelRamTableBase::RowValueStartEdit(currentItem);
+		ibValueModelStorage::RowValueStartEdit(currentItem);
 	}
 }
 
@@ -145,12 +140,14 @@ void ibValueTabularSectionDataObjectBase::DeleteValue()
 	const ibDataViewItem& currentItem = GetSelection();
 	if (!currentItem.IsOk())
 		return;
-	ibValueTableRow* node = GetViewData<ibValueTableRow>(currentItem);
+	// The displayed item is a composer COPY — Remove needs the REAL storage row (a pointer-find of the
+	// copy in m_nodeValues would miss), resolved via the bridge.
+	ibComposerNode* node = StorageRowOf(currentItem);
 	if (node == nullptr)
 		return;
 
 	if (!ibBackendException::IsEvalMode()) {
-		ibValueModelRamTableBase::Remove(node);
+		ibValueModelStorage::Remove(node);
 	}
 }
 

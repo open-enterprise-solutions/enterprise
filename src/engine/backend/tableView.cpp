@@ -1,15 +1,16 @@
 #include "tableView.h"
 
 // ---------------------------------------------------------
-// s_constIgnoreParent — flat-scan sentinel
+// s_constIgnoreParent — flat-scan sentinel (RESTORED)
 // ---------------------------------------------------------
+// The control passes this as `parent` when a FLAT List view of a hierarchical (folder-aware) source wants the
+// WHOLE table in one ORDER BY — NOT the parent-scoped tree. Distinct from ibDataViewItem() (empty = "top-level
+// rows only", the Tree view's root). RunComposerPage tests `parent == s_constIgnoreParent` to drop the parent
+// scope. (The arc removed it betting tree-ness = grouping; but the hierarchy is an inherent queryable property
+// now — GetHierarchyColumn — so the FRONTEND view mode is what says flat-vs-tree, exactly the old role.)
 //
-// Marker is a wxRefCounter that we never destroy (process-lifetime
-// static).  `s_constIgnoreParent` IncRefs it to 2; copies bump and
-// drop further but the static itself keeps refcount > 0 forever, so
-// no double-free at process exit even when subordinate copies dtor
-// out of order.  Same translation unit guarantees the marker is
-// constructed before the const item that captures its address.
+// Marker is a process-lifetime static ibDataViewObject; the const item captures its address (pointer-identity
+// compare). Same TU so the marker is constructed before the item.
 namespace {
 	ibDataViewObject g_ignoreParentMarker;
 }
@@ -236,10 +237,10 @@ void ibDataViewModel::StartEditing(const ibDataViewItem& item, unsigned int col,
 		m_notifiers[view_id]->StartEditing(item, col);
 }
 
-bool ibDataViewModel::ShowFilter(ibFilterRow& filter, int view_id)
+bool ibDataViewModel::ShowListSettings(ibValueModel* model, int view_id)
 {
 	if (m_notifiers.size() > 0)
-		return m_notifiers[view_id]->ShowFilter(filter);
+		return m_notifiers[view_id]->ShowListSettings(model);
 	return false;
 }
 

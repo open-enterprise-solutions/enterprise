@@ -270,7 +270,7 @@ ibFrameCodeRunner::ibFrameCodeRunner(wxWindow* parent, wxWindowID id, const wxSt
 
 	wxBoxSizer* bSizerButton = new wxBoxSizer(wxHORIZONTAL);
 
-	// Syntax-mode dropdown — VES (1С-like with EndProcedure /
+	// Syntax-mode dropdown — VES (legacy-dialect, with EndProcedure /
 	// EndFunction keyword fences) vs CES (C-like, brace-fenced blocks,
 	// default). Selection writes through to ibCompileCode::SetCodeStyle
 	// so the compiler picks up the mode on the next Compile call.

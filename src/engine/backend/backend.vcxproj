@@ -596,6 +596,7 @@
     <ClCompile Include="compiler\lambdaQueryAst.cpp" />
     <ClCompile Include="query\queryableFactory.cpp" />
     <ClCompile Include="composition\dataComposer.cpp" />
+    <ClCompile Include="composition\ramComposer.cpp" />
     <ClCompile Include="composition\listFilter.cpp" />
     <ClCompile Include="system\value\valueComposer.cpp" />
     <ClCompile Include="system\value\valueQuery.cpp" />
@@ -613,7 +614,6 @@
     <ClCompile Include="metaCollection\partial\list\dynamicList.cpp" />
     <ClCompile Include="metaCollection\partial\list\objectListAction.cpp" />
     <ClCompile Include="metaCollection\partial\list\objectListModel.cpp" />
-    <ClCompile Include="metaCollection\partial\list\objectListQuery.cpp" />
     <ClCompile Include="metaCollection\partial\commonObject.cpp" />
     <ClCompile Include="metaCollection\partial\commonObjectModel.cpp" />
     <ClCompile Include="metaCollection\partial\commonObjectProperty.cpp" />
@@ -718,6 +718,8 @@
     <ClCompile Include="system\value\valueTable_res.cpp" />
     <ClCompile Include="system\value\valueType.cpp" />
     <ClCompile Include="tableInfo.cpp" />
+    <ClCompile Include="tableInfoDb.cpp" />
+    <ClCompile Include="tableInfoRam.cpp" />
     <ClCompile Include="sourceDescription.cpp" />
     <ClCompile Include="tableView.cpp" />
     <ClCompile Include="typeDescription.cpp" />

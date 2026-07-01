@@ -50,7 +50,7 @@ ibValue ibValueManagerDataObjectInformationRegister::Get(const ibValue& cFilter)
 		ibDataQueryBuilder q;
 		q.From(m_metaObject->GetQueryable());
 		for (auto filter : selFilter)
-			q.Where(filter.first, ibComparisonType::ibComparisonType_Equal, filter.second);
+			q.Where(filter.first, ibQueryFilterOp::Equal, filter.second);
 		ibReadPageRequest page;
 		page.m_count = 0;   // every matching record
 		ibDataQueryResult selection = q.Execute(page);
@@ -108,9 +108,9 @@ ibValue ibValueManagerDataObjectInformationRegister::Get(const ibValue& cPeriod,
 		try {
 			ibDataQueryBuilder q;
 			q.From(m_metaObject->GetQueryable());
-			q.Where(m_metaObject->GetRegisterPeriod(), ibComparisonType::ibComparisonType_Equal, cPeriod);
+			q.Where(m_metaObject->GetRegisterPeriod(), ibQueryFilterOp::Equal, cPeriod);
 			for (auto filter : selFilter)
-				q.Where(filter.first, ibComparisonType::ibComparisonType_Equal, filter.second);
+				q.Where(filter.first, ibQueryFilterOp::Equal, filter.second);
 			ibReadPageRequest page;
 			page.m_count = 0;   // every matching record
 			ibDataQueryResult selection = q.Execute(page);

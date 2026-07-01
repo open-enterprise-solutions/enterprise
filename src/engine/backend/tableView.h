@@ -11,7 +11,7 @@
 #include <wx/font.h>
 
 #include "backend/backend.h"
-#include "backend/system/value/valueType.h"   // ibValue, ibTypeDescription, ibGuid for ibFilterRow
+#include "backend/system/value/valueType.h"   // ibValue, ibTypeDescription, ibGuid
 
 // ----------------------------------------------------------------------------
 // ibDataViewCtrl globals
@@ -19,190 +19,19 @@
 
 class BACKEND_API ibDataViewModel;
 
-// Sort + filter descriptors live at the view layer — used by
-// ibDataViewModel's header-arrow / folder-sort virtuals and by paged
-// Fetch SQL builders.  Storage (the per-model m_sortOrder /
-// m_filterRow members) still lives on ibValueModel in tableInfo.h.
+// (ibComparisonType / ibFilterRow / ibSortOrder / ibSortData / ibSortModel + the in-memory RAM CompareRow are
+//  ALL DELETED — the legacy view-layer filter/sort descriptors + per-model m_filterRow / m_sortOrder store.
+//  Filter / sort / group is L5 now: the composer holds them and controls the order by the PORTIONS it issues
+//  (add a sort → different page → different order). Any consumer that needs a column id resolves the composer's
+//  name-sort inline (GetSortAt + GetColumnIDByName) at its point of use.)
 
-enum ibComparisonType {
-	ibComparisonType_Equal, // ==
-	ibComparisonType_NotEqual, // !=
-};
-
-struct ibFilterRow {
-
-	struct ibFilterData {
-		unsigned int m_filterModel;
-		ibGuid m_filterGuid;
-		wxString m_filterName;
-		wxString m_filterPresentation;
-		ibComparisonType m_filterComparison;
-		ibTypeDescription m_filterTypeDescription;
-		ibValue m_filterValue;
-		bool m_filterUse;
-	public:
-		ibFilterData(unsigned int filterModel, const wxString& filterName, const wxString& filterPresentation,
-			ibComparisonType comparisonType, const ibTypeDescription& filterTypeDescription, const ibValue& filterValue,
-			bool filterUse = false) :
-			m_filterModel(filterModel),
-			m_filterGuid(ibGuid::newGuid()),
-			m_filterName(filterName),
-			m_filterPresentation(filterPresentation),
-			m_filterComparison(comparisonType),
-			m_filterTypeDescription(filterTypeDescription),
-			m_filterValue(filterValue),
-			m_filterUse(filterUse) {
-		}
-	};
-
-	std::vector< ibFilterData> m_filters;
-
-public:
-
-	void AppendFilter(unsigned int filterModel, const wxString& filterName,
-		const ibTypeDescription& filterTypeDescription, const ibValue& filterValue) {
-		m_filters.emplace_back(filterModel, filterName, filterName,
-			ibComparisonType::ibComparisonType_Equal, filterTypeDescription, filterValue, false
-		);
-	}
-
-	void AppendFilter(unsigned int filterModel, const wxString& filterName, const wxString& filterPresentation,
-		const ibTypeDescription& filterTypeDescription, const ibValue& filterValue) {
-		m_filters.emplace_back(filterModel, filterName, filterPresentation,
-			ibComparisonType::ibComparisonType_Equal, filterTypeDescription, filterValue, false
-		);
-	}
-
-	void AppendFilter(unsigned int filterModel, const wxString& filterName, const wxString& filterPresentation,
-		ibComparisonType comparisonType, const ibTypeDescription& filterTypeDescription, const ibValue& filterValue,
-		bool filterUse = false) {
-		m_filters.emplace_back(filterModel, filterName, filterPresentation,
-			comparisonType, filterTypeDescription, filterValue, filterUse
-		);
-	}
-
-	ibFilterData* GetFilterByID(unsigned int filterModel) {
-		auto iterator = std::find_if(m_filters.begin(), m_filters.end(), [filterModel](const ibFilterData& data) {
-			return filterModel == data.m_filterModel; });
-		if (iterator != m_filters.end())
-			return &*iterator;
-		return nullptr;
-	}
-
-	ibFilterData* GetFilterByName(const wxString& filterName) {
-		auto iterator = std::find_if(m_filters.begin(), m_filters.end(), [filterName](const ibFilterData& data) {
-			return filterName == data.m_filterName; });
-		if (iterator != m_filters.end())
-			return &*iterator;
-		return nullptr;
-	}
-
-	void SetFilterByID(unsigned int filterModel, const ibValue& filterValue) {
-		ibFilterData* data = GetFilterByID(filterModel);
-		if (data != nullptr) {
-			data->m_filterValue = filterValue;
-			data->m_filterUse = true;
-		}
-	}
-
-	void SetFilterByName(const wxString& filterName, const ibValue& filterValue) {
-		ibFilterData* data = GetFilterByName(filterName);
-		if (data != nullptr) {
-			data->m_filterValue = filterValue;
-			data->m_filterUse = true;
-		}
-	}
-
-	bool UseFilter() const {
-		return m_filters.size() > 0;
-	}
-
-	void ResetFilter() {
-		for (auto& filter : m_filters) {
-			filter.m_filterUse = false;
-		}
-	}
-};
-
-struct ibSortOrder {
-
-	struct ibSortData {
-		unsigned int m_sortModel;
-		wxString m_sortName;
-		wxString m_sortPresentation;
-		bool m_sortAscending;
-		bool m_sortEnable;
-		bool m_sortSystem;
-	public:
-		ibSortData(unsigned int sortModel, const wxString& sortName, const wxString& sortPresentation = wxEmptyString, bool sortAscending = true, bool sortEnable = true, bool sortSystem = false) :
-			m_sortModel(sortModel),
-			m_sortName(sortName),
-			m_sortPresentation(sortPresentation),
-			m_sortAscending(sortAscending),
-			m_sortEnable(sortEnable),
-			m_sortSystem(sortSystem)
-		{
-		}
-	};
-	std::vector< ibSortData> m_sorts;
-public:
-
-	void AppendSort(unsigned int col_id, const wxString& name, bool ascending = true, bool use = true, bool system = false) {
-		AppendSort(col_id, name, wxEmptyString, ascending, use, system);
-	}
-
-	void AppendSort(unsigned int col_id, const wxString& name, const wxString& presentation, bool ascending = true, bool use = true, bool system = false) {
-		if (GetSortByID(col_id) == nullptr) m_sorts.emplace_back(col_id, name, presentation, ascending, use, system);
-	}
-
-	ibSortData* GetSortByID(unsigned int col_id) const {
-		auto iterator = std::find_if(m_sorts.begin(), m_sorts.end(),
-			[col_id](const ibSortData& data) {return col_id == data.m_sortModel; });
-		if (iterator != m_sorts.end()) return const_cast<ibSortData*>(&*iterator);
-		return nullptr;
-	}
-
-	unsigned int GetSortCount() const {
-		return m_sorts.size();
-	}
-
-	// Insert (or re-enable) a system-sort entry at the front of
-	// m_sorts so BuildOrderBy emits this column ahead of any user
-	// column sort.  Idempotent — repeated calls just toggle the
-	// existing entry's enable + ascending flags.  Used by the GUI
-	// to opt a model into folder-first ordering on Tree /
-	// Hierarchical view modes (sortID = ibValueModel::GetIsFolderSortID).
-	void EnableSystemSort(unsigned int sortID, bool ascending) {
-		auto it = std::find_if(m_sorts.begin(), m_sorts.end(),
-			[sortID](const ibSortData& s) {
-				return s.m_sortSystem && s.m_sortModel == sortID;
-			});
-		if (it == m_sorts.end()) {
-			m_sorts.insert(m_sorts.begin(),
-				ibSortData(sortID, wxEmptyString, wxEmptyString,
-				           ascending, /*enable=*/true, /*system=*/true));
-		} else {
-			it->m_sortEnable    = true;
-			it->m_sortAscending = ascending;
-		}
-	}
-
-	// Disable (but keep) the system-sort entry for sortID.  Disabled
-	// entries are skipped by BuildOrderBy.  Removal is intentional —
-	// re-enabling later just flips the flag without re-inserting.
-	void DisableSystemSort(unsigned int sortID) {
-		auto it = std::find_if(m_sorts.begin(), m_sorts.end(),
-			[sortID](const ibSortData& s) {
-				return s.m_sortSystem && s.m_sortModel == sortID;
-			});
-		if (it != m_sorts.end())
-			it->m_sortEnable = false;
-	}
-};
-
-struct ibSortModel {
-	unsigned int m_sortModel;
-	bool m_sortAscending;
+// Page DIRECTION for the universal paged fetch — shared by ibValueModel::RunComposerPage (the model layer) AND
+// ibReadPageRequest (the query layer, dataQueryBuilder.h). It lives HERE, the shared view/query-neutral header,
+// so the query layer sees it without including tableInfo.h (which would re-introduce the include cycle).
+enum class ibFetchDirection : int8_t {
+	Reset    = 0,   // discard buffer, fetch initial window at anchor
+	Forward  = 1,   // append after anchor
+	Backward = -1   // prepend before anchor
 };
 
 // ----------------------------------------------------------------------------
@@ -231,7 +60,7 @@ struct ibSortModel {
 
 // Make it a class and not a typedef to allow forward declaring it.
 //
-// Refcount-aware: rows in OES (ibValueTreeNode, ibValueTableRow, ...)
+// Refcount-aware: rows in OES (ibValueTreeNode, ibComposerNode, ...)
 // inherit from wxRefCounter.  Storing the underlying pointer with
 // auto-IncRef/DecRef means a row stays alive as long as any
 // ibDataViewItem references it — solves selection-holds-evicted-row,
@@ -276,7 +105,7 @@ public:
 	// so script paths that try to read or mutate through a pinned-
 	// but-detached row (e.g. ReturnLine cached on the form) need
 	// this check to fail safely instead of dereferencing a dead
-	// model.  Default: attached.  ibValueTableRow / ibValueTreeNode
+	// model.  Default: attached.  ibComposerNode / ibValueTreeNode
 	// override to report based on m_valueTable / m_valueTree.
 	virtual bool IsAttached() const { return true; }
 };
@@ -417,16 +246,11 @@ inline ibDataViewItem ibDataViewItem::GetParentItem() const {
 	return (m_mode == Mode::Refcounted) ? m_id->GetParentItem() : ibDataViewItem();
 }
 
-// Sentinel passed by the control as `parent` when it wants the model
-// to ignore parent semantics altogether — every row in the dataset,
-// regardless of hierarchy depth.  Used by the flat List view of a
-// hierarchical catalog (FolderRef): the cursor walks the whole table
-// in one ORDER BY instead of recursing per folder.  Distinct from
-// `ibDataViewItem()` which means "top-level rows only".
-//
-// Compare via `parent == s_constIgnoreParent` (operator== short-
-// circuits on pointer match — both sides hold the same marker
-// instance).
+// Sentinel passed by the control as `parent` when a FLAT List view of a hierarchical (folder-aware) source
+// wants EVERY row in one ORDER BY (the cursor walks the whole table instead of recursing per folder). Distinct
+// from `ibDataViewItem()` which means "top-level rows only" (the Tree view's root). Compare via
+// `parent == s_constIgnoreParent` (operator== short-circuits on the shared marker pointer). (RESTORED — the
+// hierarchy is an inherent queryable property now, so the FRONTEND view mode is what signals flat-vs-tree.)
 BACKEND_API extern const ibDataViewItem s_constIgnoreParent;
 
 WX_DEFINE_USER_EXPORTED_ARRAY(ibDataViewItem, ibDataViewItemArray, BACKEND_API);
@@ -461,7 +285,10 @@ public:
 	virtual unsigned int GetCurrentModelColumn() const = 0;
 	virtual void StartEditing(const ibDataViewItem& item, unsigned int col) const = 0;
 
-	virtual bool ShowFilter(struct ibFilterRow& filter) = 0;
+	// Open the List-Settings window (Filter / Sort / Group tabs) for ANY model. Backend stays GUI-free — the
+	// frontend notifier impl opens ibDialogListSettings. Default returns false (notifiers that don't host a
+	// control ignore it). (The legacy ShowFilter(ibFilterRow&) notifier hook is gone — filter is L5 now.)
+	virtual bool ShowListSettings(class ibValueModel* model) { return false; }
 	virtual bool ShowViewMode() = 0;
 
 	virtual void Select(const ibDataViewItem& item) const = 0;
@@ -641,7 +468,8 @@ public:
 	unsigned int GetCurrentModelColumn(int view_id = 0) const;
 	void StartEditing(const ibDataViewItem& item, unsigned int col, int view_id = 0) const;
 
-	bool ShowFilter(struct ibFilterRow& filterm, int view_id = 0);
+	// Forward to the notifier; opens the List-Settings window (Filter / Sort / Group).
+	bool ShowListSettings(class ibValueModel* model, int view_id = 0);
 	bool ShowViewMode(int view_id = 0);
 
 	void Select(const ibDataViewItem& item, int view_id = 0) const;
@@ -699,37 +527,45 @@ public:
 	// deque via Get*Fetch or treat the row store as fully loaded.
 	virtual bool IsPagedModel() const                                   { return false; }
 
-	// Capabilities the GUI may query to drive its rendering choices
-	// (sort prefix, breadcrumb support, batch ops…) without having to
-	// know the concrete model class.  `flags` is a bitset of boolean
-	// capabilities; the rest are auxiliary values the matching
-	// capability depends on (e.g. Folders → folderSortID).  Defaults
-	// mean "feature absent".
-	//
-	// Wiring status (today):
-	// * Folders + folderSortID — read by ibDataViewCtrl
-	//   (GetEffectiveFetchParent + ApplyFolderSortForViewMode) to
-	//   route List view of a hierarchical model through the
-	//   s_constIgnoreParent sentinel and to manage the folders-on-top
-	//   system sort.
-	// * Tree / RamFetch / DbFetch / Filters / Sorting — written by
-	//   concrete models, not yet read by GUI.  Reserved for future
-	//   gating of: tree-expand arrows, fetch progress UX, filter /
-	//   sort UI visibility.  Today the equivalent legacy checks
-	//   (UseFilter / IsListModel / column->IsSortable) live alongside
-	//   them; consolidate when migrating those callsites.
+	// Do this model's rows carry a stable primary KEY (restore selection by key) or only a positional index
+	// (restore by row index)? Keyed by default; RAM-backed ibValueModels (value table / tabular section — their
+	// source queryable has no primary key) override to false. Replaces the retired RamFetch / DbFetch flags.
+	virtual bool HasKeyedRows() const                                   { return true; }
+
+	// Does this model currently GROUP (produce a tree)? False by default (a flat list / native store). A grouped
+	// model's row mutations must re-fetch to re-place the row into its group, so the control routes them through
+	// the paged refresh + selection-restore path instead of the cheap in-place tree-insert.
+	virtual bool IsGroupedModel() const                                 { return false; }
+
+	// One active sort entry as the GUI needs it for a column-header arrow: the model column id + direction.
+	struct ibSortArrow { unsigned int m_modelColumn; bool m_ascending; };
+	// The active USER sorts, resolved to (model column id, ascending) — for drawing the column-header arrows.
+	// Default empty; ibValueModel's provider forwards to the owner model, which reads the L5 composer (GetSortAt)
+	// and resolves each sort field NAME to its column id. The control never reaches into the composer itself.
+	// (Replaces the deleted GetSortModels() / ibSortModel.)
+	virtual std::vector<ibSortArrow> GetSortArrows() const              { return {}; }
+
+	// USER-FACING capabilities the settings dialog / GUI query to drive rendering without knowing the concrete
+	// model class. `flags` is a bitset; defaults mean "feature absent". Wiring (today, all READ):
+	// * Filters / Sorting / Grouping — the list-settings dialog shows/hides its tabs by these; Sorting also lets
+	//   the column header click-sort.
+	// * CustomQuery — capability marker; the query is edited in the DESIGNER, not the runtime dialog.
+	// What this struct deliberately does NOT carry — all DERIVED now (Max: "a single fetch through RunComposerPage;
+	// tree-ness is determined by grouping"):
+	// * Tree — tree-ness is whether the composer GROUPS (GetModelComposer().GroupCount() > 0).
+	// * RamFetch / DbFetch — fetch is uniform (IsPagedModel() true for every ibValueModel); the RAM-vs-keyed
+	//   distinction (restore by index vs by key) is HasKeyedRows(), derived from the source's primary key.
+	// * Folders / folderSortID — a List view already ignores the parent (it never groups, so RunComposerPage
+	//   does not scope by it); folder-first ORDER is a composer-grouping concern. Both retired.
 	struct Features {
 		enum Flag : uint32_t {
-			Tree      = 1u << 0,   // tree-shaped (parent/child rows); flat list otherwise
-			Folders   = 1u << 1,   // has isFolder column → folderSortID is valid
-			RamFetch  = 1u << 2,   // Get*Fetch slices an in-memory vector/map
-			DbFetch   = 1u << 3,   // Get*Fetch hits the DB cursor
-			Filters   = 1u << 4,   // user filter row is meaningful — show filter UI
-			Sorting   = 1u << 5,   // user column-sort is meaningful — header click reorders
-			// add new flags above; keep bit positions stable
+			Filters   = 1u << 4,   // user filter is meaningful — show the Filter tab
+			Sorting   = 1u << 5,   // user column-sort is meaningful — header click reorders + show the Sort tab
+			Grouping  = 1u << 6,   // user grouping is meaningful — show the Group tab
+			CustomQuery = 1u << 7, // runs a verbatim author query ("custom query"); edited in the DESIGNER
+			// (bits 0-3 intentionally free — retired Tree / Folders / RamFetch / DbFetch; keep positions stable)
 		};
-		uint32_t flags         = 0;
-		int      folderSortID  = -1;   // valid iff (flags & Folders)
+		uint32_t flags = 0;
 
 		bool Has(Flag f) const { return (flags & f) != 0; }
 	};
@@ -742,10 +578,9 @@ public:
 	// filter state.  ibValueModel's provider impl forwards each to
 	// the owning model.
 	virtual Features           GetFeatures()  const { return Features{}; }
-	virtual ibSortOrder*       GetSortOrder()       { return nullptr; }
-	virtual const ibSortOrder* GetSortOrder() const { return nullptr; }
-	virtual ibFilterRow*       GetFilterRow()       { return nullptr; }
-	virtual const ibFilterRow* GetFilterRow() const { return nullptr; }
+
+	// (GetSortModels DELETED — the header arrows read the model's composer (GetModelComposer().GetSortAt +
+	//  GetColumnIDByName) directly now; sort is L5, by name. ibSortModel is gone.)
 
 	// Build a breadcrumb chain of ancestor items above `fromRow`,
 	// ordered [direct parent, …, topmost ancestor].  Empty out when

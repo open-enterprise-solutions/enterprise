@@ -23,7 +23,7 @@
 // the report), keeps the attached driver, and re-runs on demand. The verbs are
 // FLUENT (mirroring the L3 door's style, one tier up):
 //
-//   ibDataComposer comp;
+//   ibDataDBComposer comp;
 //   comp.FromSource(GetQueryable())              // or FromSource("Catalog", "Goods")
 //       .Filter(wxT("Producer.Region"), wxT("="), regionRef)
 //       .Sort(wxT("Description"))
@@ -44,6 +44,8 @@
 class ibDataQueryResult;
 struct ibReadPageRequest;
 struct ibRenderedPageCache;
+class ibBackendQueryable;
+class ibBackendQueryColumn;
 
 // The OUTPUT DRIVER — the passive sink the composer writes the walked result into.
 // Flat result: every row arrives as (level=0, hasChildren=false). A TOTALS result
@@ -97,108 +99,126 @@ private:
 	std::vector<Row>                           m_rows;
 };
 
-// The composer — the schema verbs + render + the driver walk. NO execution of its
-// own: everything below the rendered text is the standard L4-1 pipeline.
+// ibDataComposer — the L5-1 SETTINGS store + the polymorphic Run seam. The settings vocabulary
+// (select / filter / sort / total / group) is identical for every source; only the SOURCE binding and
+// the EXECUTION differ. Two realisations:
+//   * ibDataDBComposer (DB)  — renders the settings into L4-1 query TEXT and runs the query (parse → lower
+//                            → walk). Source = a factory namespace.name, an author's verbatim text, or a
+//                            live queryable registered through the per-query temp registry.
+//   * ibDataRamComposer  (RAM) — filters + sorts the source's LIVE rows IN PLACE (no text, no SQL), then walks
+//                            them to the driver. Source = the RAM value-storage queryable (ComputeRows).
+// The model holds the base via GetModelComposer() and never cares which — list/table/tree is decided by
+// the settings, DB-vs-RAM by the realisation. (See docs/ram-composer-decoupling.md.)
 class BACKEND_API ibDataComposer
 {
 public:
-	// --- sources ------------------------------------------------------------------
+	virtual ~ibDataComposer() = default;
 
-	// A registered source family (the factory's namespace.name — a metaobject, a
-	// virtual table, an external source). A SECOND FromSource adds a joined source:
-	// the render emits `JOIN ns.name` with the language's auto-join-by-reference
-	// (explicit link conditions arrive on this seam next).
-	ibDataComposer& FromSource(const wxString& ns, const wxString& name);
+	// --- source ---------------------------------------------------------------------
+	// Source binding is REALISATION-specific (NOT on the base): ibDataDBComposer.FromSource(queryable/ns.name)/
+	// FromText bind a queryable/text; ibDataRamComposer.FromModel binds the live model's rows. The model's
+	// subclass ctor calls the right one on its own concrete composer — the base only needs HasSource + Run.
+	virtual bool HasSource() const = 0;
 
-	// The queryable itself — the typed face for a C++ consumer (the list model holds
-	// it via GetQueryable()). Holding a queryable IS the proof the source is
-	// queryable — a metaobject overload would not be (reports / data processors
-	// vend none). The language identity is recovered through the queryable's
-	// metadata context (GetMetaData + GetQueryTableId -> the owning metaobject);
-	// READ-ONLY — the queryable is never handed to the door, only its NAME flows
-	// into the text. A virtual-table companion reports its register — name such a
-	// source explicitly via FromSource(ns, name).
-	ibDataComposer& FromSource(const ibBackendQueryable* queryable);
+	// --- settings (the user vocabulary — SHARED; stored as paths, applied by the realisation) ----------
 
-	// The author's verbatim L4-1 query — used as is, never edited. Mutually
-	// exclusive with FromSource (the last call wins).
-	ibDataComposer& FromText(const wxString& text);
-
-	// --- settings (the user vocabulary — rendered, not executed) -------------------
-
-	// The projection (factory sources only; the author's text keeps its own SELECT
-	// list). No Select = ALL the first source's columns. A name may be a dot-walk
-	// path. The typed overload pulls the name out of the column object.
+	// The projection (no Select = ALL the first source's columns). A name may be a dot-walk path; the typed
+	// overload pulls the name out of the column object.
 	ibDataComposer& Select(const wxString& nameOrPath);
 	ibDataComposer& Select(const ibBackendQueryColumn* col) {
 		return col != nullptr ? Select(col->GetName()) : *this;
 	}
 
-	// A filter line: `path op value` — AND-folded into WHERE. The value travels as
-	// an auto-named &parameter (never inlined into the text). `op` is the language
-	// comparison spelling (`=`, `<>`, `>`, `LIKE`, …) — the parser validates it.
+	// A filter line: `path op value`. The value travels as an auto-named &parameter (DB never inlines it;
+	// RAM resolves the path to a column and compares the row's value). `op` is the comparison spelling.
 	ibDataComposer& Filter(const wxString& path, const wxString& op, const ibValue& value);
 
-	// A sort line — rendered into ORDER BY, in call order.
+	// A sort line — DB → ORDER BY; RAM → an in-place multi-key compare, in call order.
 	ibDataComposer& Sort(const wxString& path, bool ascending = true);
 
-	// Totals: aggregates + dimension levels — rendered into `TOTALS agg… BY dim…`,
-	// the result arrives at the driver as the folded tree. `func` is the language
-	// aggregate spelling (SUM / MIN / MAX / AVG / COUNT).
+	// Totals: aggregates + dimension levels (DB → `TOTALS agg… BY dim…`, the folded tree). RAM grouping is a
+	// deferred follow-up; the срез1 RAM composer ignores totals (filter + sort only).
 	ibDataComposer& Total(const wxString& func, const wxString& path);
-	ibDataComposer& TotalBy(const wxString& path, bool hierarchy = false);
+	// The grouping VID (kind): Elements / Hierarchy / HierarchyOnly — the ONE switch between a flat and a
+	// hierarchical view (lifted to L5 — the list settings carry it).
+	ibDataComposer& TotalBy(const wxString& path, ibQueryDimUnfold kind = ibQueryDimUnfold::Elements);
 
-	// An explicit &parameter of the author's text (the schema's deep variability
-	// point: a filter mapped INTO the query — virtual-table args included).
+	// An explicit &parameter (DB: a filter mapped INTO an author's text — virtual-table args included).
 	ibDataComposer& Parameter(const wxString& name, const ibValue& value);
 
 	ibDataComposer& ClearSettings();   // drop select/filter/sort/totals (the source stays)
 
+	// --- facade access -------------------------------------------------------------
+	// ibValueListSettings (Filter / Order / Group) is a THIN VIEW over these — the composer is the SINGLE
+	// settings store (Max: "the composer is the store; the external-caller wrapper writes into it; the fetch
+	// does not clear it"). The list model sets defaults in its ctor (FromSource + Sort), the UI mutates through
+	// the facade, and the fetch reads a page WITHOUT clearing — a settings change just triggers a refetch that
+	// sees the new state.
+	void   ClearFilters() { m_filters.clear(); }
+	size_t FilterCount() const { return m_filters.size(); }
+	bool   GetFilterAt(size_t i, wxString& path, wxString& op, ibValue& value) const {
+		if (i >= m_filters.size()) return false;
+		path = m_filters[i].m_path; op = m_filters[i].m_op;
+		const auto it = m_params.find(m_filters[i].m_param);
+		value = (it != m_params.end()) ? it->second : ibValue();
+		return true;
+	}
+	void   ClearSorts() { m_sorts.clear(); }
+	size_t SortCount() const { return m_sorts.size(); }
+	bool   GetSortAt(size_t i, wxString& path, bool& ascending) const {
+		if (i >= m_sorts.size()) return false;
+		path = m_sorts[i].m_path; ascending = m_sorts[i].m_ascending; return true;
+	}
+	void   ClearGroups() { m_totalBy.clear(); }
+	size_t GroupCount() const { return m_totalBy.size(); }
+	bool   GetGroupAt(size_t i, wxString& path, ibQueryDimUnfold& kind) const {
+		if (i >= m_totalBy.size()) return false;
+		path = m_totalBy[i].m_path; kind = m_totalBy[i].m_kind; return true;
+	}
+
+	// --- transient scope (per-fetch drill overlay) ---------------------------------
+	// The ONE genuinely per-fetch thing is the drill of the browsed parent (each expand fetches ITS children,
+	// so the scope can't be a persistent setting). RunComposerPage marks the scope, adds the scope Filter(s) +
+	// the level's TotalBy, runs, then restores — so the transient drill never pollutes the persistent settings.
+	struct SettingsScope { size_t sel = 0, flt = 0, srt = 0, tot = 0, tby = 0; };
+	SettingsScope MarkScope() const {
+		return { m_selected.size(), m_filters.size(), m_sorts.size(), m_totals.size(), m_totalBy.size() };
+	}
+	void RestoreScope(const SettingsScope& s) {
+		if (m_selected.size() > s.sel) m_selected.resize(s.sel);
+		if (m_filters.size()  > s.flt) m_filters.resize(s.flt);
+		if (m_sorts.size()    > s.srt) m_sorts.resize(s.srt);
+		if (m_totals.size()   > s.tot) m_totals.resize(s.tot);
+		if (m_totalBy.size()  > s.tby) m_totalBy.resize(s.tby);
+	}
+
+	// Grouping is the one setting whose RENDER is per-fetch (the browsed level), while its CONFIG (all dims)
+	// is persistent. RunComposerPage takes the config out, renders just the level's TotalBy for the fetch,
+	// then puts the config back — so the persistent grouping is never lost and the fetch sees only its level.
+	std::vector<std::pair<wxString, ibQueryDimUnfold>> TakeGroups() {
+		std::vector<std::pair<wxString, ibQueryDimUnfold>> out;
+		out.reserve(m_totalBy.size());
+		for (const TotalByItem& t : m_totalBy) out.emplace_back(t.m_path, t.m_kind);
+		m_totalBy.clear();
+		return out;
+	}
+	void PutGroups(const std::vector<std::pair<wxString, ibQueryDimUnfold>>& saved) {
+		m_totalBy.clear();
+		for (const auto& g : saved) m_totalBy.push_back({ g.first, g.second });
+	}
+
 	// --- output -------------------------------------------------------------------
 
-	// The attached output place — non-owning; a long-lived consumer wires it once
-	// and calls Run() on every refresh.
+	// The attached output place — non-owning; a long-lived consumer wires it once and calls Run() on refresh.
 	ibDataComposer& SetDriver(ibCompositionDriver* driver) { m_driver = driver; return *this; }
 
-	bool HasSource() const { return !m_sourceText.IsEmpty() || !m_sources.empty(); }
+	// The driver-walk seam — the DB composer renders + walks the query to the driver. The RAM composer does NOT
+	// use it (the list display calls ComputeOrder + returns the LIVE nodes), so the base default is a no-op and
+	// ibDataRamComposer does not override it — L5-2 is self-contained, NO tie to L5-1 (SQL) / L4-1 (text).
+	virtual bool Run(ibCompositionDriver& /*driver*/) { return false; }
+	bool Run() { return m_driver != nullptr && Run(*m_driver); }
 
-	// Render the schema into L4-1 text (the debug view / the AI seam). Throws
-	// ibBackendCoreException when the schema does not render (no source, an
-	// unresolvable source, totals without aggregates, …).
-	wxString RenderText() const;
-
-	// Render -> parse -> lower -> run. Fills the output schema; `hasTotals` reports
-	// a folded (TOTALS) result. Used by Run and by the runtime value wrapper.
-	ibDataQueryResult Execute(std::vector<ibQueryLowering::OutputColumn>& schema, bool& hasTotals) const;
-
-	// The PAGED read — the driver's envelope threaded into the lowering's paged
-	// terminal (a TOTALS query ignores the envelope: it folds the whole snapshot).
-	ibDataQueryResult Execute(std::vector<ibQueryLowering::OutputColumn>& schema, bool& hasTotals,
-	                          const ibReadPageRequest& page) const;
-
-	// The full cycle into the given / attached driver.
-	bool Run(ibCompositionDriver& driver);
-	bool Run();
-
-private:
-	// The composer owns its CACHES — the consumer stays dumb:
-	//  * the parse: one AST per rendered text (a scroll tick re-renders the SAME
-	//    text → no re-parse; a settings change renders a different text →
-	//    re-parse, the natural invalidation);
-	//  * the page render (Lever 1): the door's build-once SQL keyed by the
-	//    signature = rendered text + page shape + the parameter values (a
-	//    non-signable value — a reference — disables it for correctness).
-	void EnsureAst() const;
-	bool BuildPageSignature(const ibReadPageRequest& page, wxString& signature) const;
-
-	mutable wxString                             m_renderedText;   // the AST's key
-	mutable ibQuerySelectPtr                     m_ast;
-	mutable std::shared_ptr<ibRenderedPageCache> m_pageCache;
-	struct Source
-	{
-		wxString m_namespace;
-		wxString m_name;        // composite for a virtual table (`Goods.Balance`)
-	};
+protected:
 	struct FilterItem
 	{
 		wxString m_path;
@@ -217,12 +237,9 @@ private:
 	};
 	struct TotalByItem
 	{
-		wxString m_path;
-		bool     m_hierarchy = false;
+		wxString         m_path;
+		ibQueryDimUnfold m_kind = ibQueryDimUnfold::Elements;   // the grouping VID (Elements / Hierarchy / HierarchyOnly)
 	};
-
-	wxString            m_sourceText;   // the author's verbatim query — wins when set
-	std::vector<Source> m_sources;      // factory sources (first = FROM, rest = JOIN)
 
 	std::vector<wxString>    m_selected;   // projection (names / dot-walk paths); empty = all
 	std::vector<FilterItem>  m_filters;
@@ -234,6 +251,68 @@ private:
 	int                         m_autoParam = 0;   // auto-name counter for filter values
 
 	ibCompositionDriver* m_driver = nullptr;
+};
+
+// The DB composer — the schema verbs render into L4-1 query TEXT, then the standard parse → lower → walk
+// pipeline. NO execution of its own below the rendered text. (Was the only composer; the RAM realisation
+// and the shared settings moved up to ibDataComposer.)
+class BACKEND_API ibDataDBComposer : public ibDataComposer
+{
+public:
+	// --- sources ------------------------------------------------------------------
+
+	// A registered source family (the factory's namespace.name — a metaobject, a virtual table, an external
+	// source). A SECOND FromSource adds a joined source: the render emits `JOIN ns.name`.
+	ibDataDBComposer& FromSource(const wxString& ns, const wxString& name);
+
+	// The queryable itself — registered through the auxiliary per-query temp registry, rendered as "FROM
+	// Temp.t0"; the lowering resolves the name straight back to the live queryable (NO metadata round-trip).
+	ibDataDBComposer& FromSource(const ibBackendQueryable* queryable);
+
+	// The author's verbatim L4-1 query — used as is, never edited. Mutually exclusive with FromSource.
+	ibDataDBComposer& FromText(const wxString& text);
+
+	// True iff a verbatim author query was installed via FromText. The dynamic list reads this to advertise
+	// the CustomQuery feature.
+	bool HasCustomText() const { return !m_sourceText.IsEmpty(); }
+
+	bool HasSource() const override { return !m_sourceText.IsEmpty() || !m_sources.empty(); }
+
+	// Render the schema into L4-1 text (the debug view / the AI seam). Throws when it does not render.
+	wxString RenderText() const;
+
+	// Render -> parse -> lower -> run. Fills the output schema; `hasTotals` reports a folded (TOTALS) result.
+	ibDataQueryResult Execute(std::vector<ibQueryLowering::OutputColumn>& schema, bool& hasTotals) const;
+
+	// The PAGED read — the driver's envelope threaded into the lowering's paged terminal.
+	ibDataQueryResult Execute(std::vector<ibQueryLowering::OutputColumn>& schema, bool& hasTotals,
+	                          const ibReadPageRequest& page) const;
+
+	// The full cycle into the given driver.
+	bool Run(ibCompositionDriver& driver) override;
+
+private:
+	// The composer owns its CACHES — the consumer stays dumb:
+	//  * the parse: one AST per rendered text;
+	//  * the page render (Lever 1): the door's build-once SQL keyed by the signature.
+	void EnsureAst() const;
+	bool BuildPageSignature(const ibReadPageRequest& page, wxString& signature) const;
+
+	mutable wxString                             m_renderedText;   // the AST's key
+	mutable ibQuerySelectPtr                     m_ast;
+	mutable std::shared_ptr<ibRenderedPageCache> m_pageCache;
+	struct Source
+	{
+		wxString m_namespace;
+		wxString m_name;        // composite for a virtual table (`Goods.Balance`)
+	};
+
+	wxString            m_sourceText;   // the author's verbatim query — wins when set
+	std::vector<Source> m_sources;      // factory sources (first = FROM, rest = JOIN)
+
+	// Transient (RAM / temp) sources registered via FromSource(queryable) without a metaobject identity —
+	// keyed by the unique local name rendered into the text (t0, t1, …). NON-OWNING.
+	std::map<wxString, const ibBackendQueryable*> m_directSources;
 };
 
 #endif

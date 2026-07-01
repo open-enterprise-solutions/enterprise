@@ -613,7 +613,7 @@ bool ibValueSystemFunction::IsNull(const ibValue& cData)
 }
 
 // "Filled" = carries a real value: false for Undefined, NULL, an EMPTY reference (type chosen, no
-// guid), "", 0, empty date (the 1C ЗначениеЗаполнено predicate). An empty reference is "not filled"
+// guid), "", 0, empty date (the value-is-filled predicate). An empty reference is "not filled"
 // yet NOT IsNull — it stays a typed empty reference, matching the composite value model.
 bool ibValueSystemFunction::ValueIsFilled(const ibValue& cData)
 {

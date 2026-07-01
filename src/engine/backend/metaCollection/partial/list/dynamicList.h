@@ -1,9 +1,9 @@
 #ifndef __DYNAMIC_LIST_H__
 #define __DYNAMIC_LIST_H__
 
-#include "backend/tableInfo.h"                       // ibValueModelTreeBase
+#include "backend/tableInfo.h"                       // ibValueModelCursor
 #include "backend/metaCollection/partial/commonObject.h"   // ibSourceDataObject
-#include "backend/composition/dataComposer.h"        // L5 — ibDataComposer
+#include "backend/composition/dataComposer.h"        // L5 — ibDataDBComposer
 #include "backend/composition/listFilter.h"          // ibValueListSettings
 #include "backend/propertyManager/propertyObject.h"  // ibPropertyObject — the dynamic list IS a property object
 #include "backend/propertyManager/property/propertyDynamicSource.h"  // ibPropertyDynamicSource — the "Source" property
@@ -27,7 +27,7 @@ enum ibDynamicListView {
 //   * Created EMPTY — SetSource(ns,name) adds the queryable (a register / a
 //     reference / anything in the queryable factory). SetCustomQuery for an
 //     arbitrary query.
-//   * Base = ibValueModelTreeBase (a tree understands a flat list — one root).
+//   * Base = ibValueModelCursor (a tree understands a flat list — one root).
 //   * L5 (m_composer) is the visible query layer; it pulls data off the queryable.
 //   * Fetch is THIN: it runs the composer onto a special driver/provider that
 //     emits rows straight into the table (OnRow → node). All work lives there.
@@ -39,36 +39,12 @@ enum ibDynamicListView {
 // object (like ibValueSizerItem): its properties surface onto the form attribute. The attribute
 // merely casts its runtime value to ibPropertyObject and shows that object's properties — it
 // knows nothing about "a dynamic list" (anything property-bearing can sit there).
-class BACKEND_API ibValueDynamicList : public ibValueModelTreeBase, public ibSourceDataObject, public ibPropertyObject {
+class BACKEND_API ibValueDynamicList : public ibValueModelCursor, public ibSourceDataObject, public ibPropertyObject {
 public:
 
-	// Row node — identity is the primary-key column VALUES (keyset). No guid/ref.
-	// A GROUP node (grouping drill) has no row key; its identity is the chain of
-	// dimension values from the root (m_groupPath) — used to re-fetch its children
-	// with a filter dim==value (the group becomes a filter as you drill deeper).
-	struct ibDynamicListNode : public ibValueTreeNode {
-		ibDynamicListNode(const ibValueModelTreeBase* tree, const std::vector<ibValue>& key, bool container = false,
-			const std::vector<ibValue>& groupPath = {}, bool isGroup = false)
-			: ibValueTreeNode(tree), m_key(key), m_container(container),
-			  m_groupPath(groupPath), m_isGroup(isGroup) {}
-		const std::vector<ibValue>& GetKey() const { return m_key; }
-		const std::vector<ibValue>& GetGroupPath() const { return m_groupPath; }
-		bool IsGroup() const { return m_isGroup; }
-		virtual bool IsContainer() const override { return m_container; }
-		virtual bool IsEqualTo(const ibDataViewObject& other) const override {
-			const auto* o = dynamic_cast<const ibDynamicListNode*>(&other);
-			if (o == nullptr) return false;
-			// A group node identifies by its dimension-value path; a detail row by its keyset.
-			if (m_isGroup || o->m_isGroup)
-				return m_isGroup == o->m_isGroup && m_groupPath == o->m_groupPath;
-			return m_key == o->m_key;
-		}
-	private:
-		std::vector<ibValue> m_key;
-		bool                 m_container;
-		std::vector<ibValue> m_groupPath;   // dimension values root→this (grouping drill); empty for a plain row
-		bool                 m_isGroup = false;
-	};
+	// (ibDynamicListNode REMOVED — the dynamic list's rows are ibComposerNode now, produced by the
+	//  base RunComposerPage. The keyset / group-path identity it carried is the composer node's backing-index /
+	//  group-path; the read path uses the base GetViewData<ibValueTreeNode>.)
 
 	// The source may be passed here too — null means "set it later" (SetSource).
 	// View: a normal list or a choice (selection) list.
@@ -88,13 +64,13 @@ public:
 	void SetSourceQueryable(const ibBackendQueryable* queryable);
 	void SetCustomQuery(const wxString& queryText);
 	const ibBackendQueryable* GetSourceQueryable() const { return m_propertySource->GetVariable(); }
-	ibDataComposer& GetComposer() const { return m_composer; }          // the visible query layer
-	ibValueListSettings* GetListSettings() const { return m_settings; } // never null (built in the ctor)
-	// Re-apply Filter/Order/Group onto the composer — call on a settings change, NOT per
-	// fetch (replaces; does not clear-then-rebuild every read).
+	// (GetComposer() removed — it just forwarded to the inherited GetModelComposer(); use that directly.)
+	// (GetListSettings() removed — the settings buffer lives on the BASE model now (m_listSettings); the
+	//  duplicate m_settings is gone. Max: "doesn't this live on the base model now?".)
+	// Commit Filter/Order/Group from the buffer ONTO the composer — call on a settings change, NOT per fetch.
 	void RefreshComposerSettings();
 
-	// --- ibValueModel / ibValueModelTreeBase --------------------------------
+	// --- ibValueModel / ibValueModelCursor --------------------------------
 	virtual void GetValueByRow(wxVariant& variant, const ibDataViewItem& item, unsigned col) const override;
 	virtual bool SetValueByRow(const wxVariant& variant, const ibDataViewItem& item, unsigned col) override;
 	virtual bool GetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, ibValue& pvarMetaVal) const override;
@@ -106,10 +82,8 @@ public:
 	// Add/Copy/Edit/Delete: NOT overridden — the base no-ops. List mutation goes through the
 	// choice/keyset path (separate design). AutoCreateColumn also keeps the base default (false).
 
-	// Thin paged fetch — all the work is in the L5 provider (RunPage).
-	virtual unsigned int GetFirstFetch(const ibDataViewItem& parent, const ibDataViewItem& anchor, int count, ibDataViewItemArray& out) const override;
-	virtual unsigned int GetNextFetch(const ibDataViewItem& parent, const ibDataViewItem& anchor, int count, ibDataViewItemArray& out) const override;
-	virtual unsigned int GetPrevFetch(const ibDataViewItem& parent, const ibDataViewItem& anchor, int count, ibDataViewItemArray& out) const override;
+	// (No Get*Fetch override — the dynamic list inherits ibValueModel::Get*Fetch → RunComposerPage. Fetch
+	//  lives ONLY in the parent; the source is GetSourceQueryable(), the composer + ListSettings do the rest.)
 
 	// --- ibSourceDataObject (the list IS a form data source) ----------------
 	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const override { return nullptr; }
@@ -118,6 +92,12 @@ public:
 	virtual void SourceDecrRef() override { ibValue::DecrRef(); }
 	virtual bool IsEmpty() const override { return false; }
 	virtual ibUniqueKey GetGuid() const override;
+
+	// Key CREATION on the dynamic LIST (the cursor base makes none): a row's key = its primary-key REFERENCE
+	// (guid), the handle the command layer opens the underlying object with. GetGuid() above is the LIST's own
+	// query-table identity — a different thing.
+	ibUniqueKey GetItemKey(const ibDataViewItem& item) const override;
+
 	virtual const ibSourceExplorer* GetSourceExplorer() const override;
 	virtual wxString GetSourceCaption() const override;
 	virtual const ibMetaData* GetSourceMetaData() const override;
@@ -127,7 +107,7 @@ public:
 	// attribute (like ibValueSizerItem) — the attribute just casts the runtime value to
 	// ibPropertyObject, knowing nothing about "a dynamic list". OnPropertyChanged is the real
 	// hook (a virtual, not a backend function-pointer). Read/WriteProperty persist the Source
-	// property PLUS the settings held on m_settings (outside the property set).
+	// property PLUS the settings held on the base buffer GetListSettings() (outside the property set).
 	// Name comes from the FACTORY: ibValue::GetClassName() resolves it by the object's own clsid
 	// (GetClassType → the registered name); no hardcoded literal, it stays only in VALUE_TYPE_REGISTER.
 	// ibPropertyObject declares GetClassName PURE on a base UNRELATED to ibValue — so it MUST be
@@ -147,20 +127,15 @@ public:
 
 private:
 	
-	// THIN — build the provider, run the composer onto it, adopt its rows. When the
-	// settings carry groupings, this pages the GROUP tree instead (scoped per parent —
-	// the group becomes a filter as you drill; see the body), NOT the native parent
-	// hierarchy: the grouping field is ANY field of the query result, not the table's
-	// parent column.
-	unsigned int RunPage(const ibDataViewItem& parent, const ibDataViewItem& anchor,
-		int count, ibFetchDirection dir, ibDataViewItemArray& out) const;
+	// (RunPage REMOVED — the dynamic list fetches through the base ibValueModel::RunComposerPage; its grouping
+	//  drill + self-hierarchy live there now, over GetSourceQueryable() + the one base composer.)
 
 	// Rebuild the columns + composer from the current source (the Source property's
 	// queryable). Called when the source is (re)set / picked / loaded.
 	void RebuildSource();
 
-	mutable ibDataComposer            m_composer;    // L5 — the visible query layer
-	ibValuePtr<ibValueListSettings>   m_settings;    // Filter / Order / Group (applied onto the composer)
+	// The dynamic list uses the ONE base composer (GetModelComposer()) AND the ONE base settings buffer
+	// (GetListSettings() → m_listSettings) — no subclass holds its own. (The duplicate m_settings was removed.)
 	ibValuePtr<ibValueModelColumnCollection> m_columns;   // queryable-derived columns
 	ibDynamicListView                 m_view;        // normal / choice
 

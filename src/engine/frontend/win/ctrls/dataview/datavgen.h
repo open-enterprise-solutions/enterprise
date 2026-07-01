@@ -755,8 +755,9 @@ public:
 	// and may be overridden by the user
 	virtual void DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindow);
 
-	//show data filter
-	virtual bool ShowFilter(struct ibFilterRow& filter) { return false; }
+	// Open the List-Settings window (Filter / Sort / Group) for the model. Default
+	// returns false; ibTableViewCtrl overrides it to open ibDialogListSettings.
+	virtual bool ShowListSettings(class ibValueModel* model) { return false; }
 	virtual bool ShowViewMode() { return false; }
 
 	virtual bool AllowMultiColumnSort(bool allow) wxOVERRIDE;
@@ -869,17 +870,12 @@ protected:
 	// exhausted.
 	void PagedBootstrap();
 
-	// Toggle the model's folder-first system-sort entry to match
-	// m_viewMode (Tree / Hierarchical → enabled, List → disabled).
-	// Invoked from SetViewMode (always, even on no-op same-mode) and
-	// AssociateModel so a fresh model picks up the right sort layout.
-	void ApplyFolderSortForViewMode();
-
-	// Reflect the model's m_sortOrder onto column-header sort arrows.
-	// Walks enabled non-system entries and toggles each matching
-	// ibDataViewColumn's sort state.  Run after AssociateModel and on
-	// each PagedBootstrap so the visible UI matches what BuildOrderBy
-	// will actually emit (system folder / reference sorts stay hidden).
+	// Reflect the composer's active sort onto column-header sort arrows.
+	// Resets every header arrow, then re-applies the column + direction
+	// from the composer's GetSortAt for each active sort entry.  Run
+	// after AssociateModel and on each PagedBootstrap so the visible UI
+	// matches what the next fetch will order by (system folder /
+	// reference sorts stay hidden).
 	void SyncColumnArrowsFromModel();
 public:
 	// Hierarchical drill context (control-owned, model-stateless).
@@ -894,9 +890,9 @@ public:
 	// Parent item passed to the model on fetch dispatch.  Three cases:
 	//   * Hierarchical drill — front of m_topParentChain (the folder
 	//     the user is currently inside).
-	//   * List view of a hierarchical model (Folders feature) —
-	//     s_constIgnoreParent sentinel: model drops the parent filter
-	//     and walks the whole table flat.
+	//   * List view of a hierarchical model — empty item: a List view
+	//     never groups, so the composer ignores the parent and walks
+	//     the whole table flat.
 	//   * Otherwise (Tree, or non-hierarchical model) — empty item:
 	//     model returns top-level rows.
 	ibDataViewItem GetEffectiveFetchParent() const;
@@ -1493,7 +1489,7 @@ private:
 	// ibDataViewMainWindow::OnSetFocus to skip the default
 	// "ChangeCurrentRow(0) on focus-in" — without this, clicking the
 	// empty space below the rows gives the control focus → wx upstream
-	// auto-set currentRow=0 → focus-rect (dotted "гриппер") paints on
+	// auto-set currentRow=0 → focus-rect (dotted "gripper") paints on
 	// row 0 and the user thinks the click selected something.
 	bool m_skipFocusRowOnNextSetFocus = false;
 

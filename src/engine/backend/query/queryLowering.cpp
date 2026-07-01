@@ -11,6 +11,31 @@
 #include "backend/tableInfo.h"            // ibComparisonType
 #include "backend/backend_exception.h"    // ibBackendCoreException
 
+// --- the AUXILIARY per-query temp-source registry (decl in queryable.h) ------------
+// Thread-local so concurrent sessions don't see each other's transient sources; RAII so a
+// query leaves no trace once it finishes. ResolveSource consults it before the metaobject
+// factory, returning a registered RAM / temp queryable directly. (Max: L5 registers at L4.)
+static thread_local const std::map<wxString, const ibBackendQueryable*>* t_tempSources = nullptr;
+
+ibTempSourceScope::ibTempSourceScope(const std::map<wxString, const ibBackendQueryable*>& sources)
+	: m_prev(t_tempSources)
+{
+	t_tempSources = &sources;
+}
+
+ibTempSourceScope::~ibTempSourceScope()
+{
+	t_tempSources = m_prev;
+}
+
+const ibBackendQueryable* ibTempSourceScope::Find(const wxString& name)
+{
+	if (t_tempSources == nullptr)
+		return nullptr;
+	const auto it = t_tempSources->find(name);
+	return it != t_tempSources->end() ? it->second : nullptr;
+}
+
 namespace {
 
 // The output-column descriptor the runtime reads back — used unqualified throughout this namespace.
@@ -40,6 +65,12 @@ const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map
 	wxString name = src.m_name[1];
 	for (size_t i = 2; i < src.m_name.size(); ++i)
 		name += wxT(".") + src.m_name[i];
+
+	// The AUXILIARY per-query registry FIRST: a transient (RAM / temp) source the composer
+	// registered under a unique local name. It IS a complete L3 queryable — return it directly,
+	// bypassing the metaobject factory (which carries no descriptor for it). (temp-table feature)
+	if (const ibBackendQueryable* tmp = ibTempSourceScope::Find(name))
+		return tmp;
 
 	ibQueryableFactory* factory = ibApplicationData::GetQueryableFactory();
 	if (factory == nullptr) {
@@ -327,17 +358,16 @@ const ibBackendQueryable* WrapSelectAsQueryable(const ibQuerySelect& sel,
 ibQueryCondition CondEq(const std::vector<const ibBackendQueryColumn*>& path, const ibValue& v, bool notEqual = false)
 {
 	ibQueryCondition c;
-	c.m_col        = path.back();
-	c.m_value      = v;
-	c.m_comparison = notEqual ? ibComparisonType::ibComparisonType_NotEqual
-	                          : ibComparisonType::ibComparisonType_Equal;   // m_explicitOp stays false
+	c.m_col   = path.back();
+	c.m_value = v;
+	c.m_op    = notEqual ? ibQueryFilterOp::NotEqual : ibQueryFilterOp::Equal;
 	if (path.size() > 1) c.m_path = path;
 	return c;
 }
 ibQueryCondition CondOp(const std::vector<const ibBackendQueryColumn*>& path, ibQueryFilterOp op, const ibValue& v)
 {
 	ibQueryCondition c;
-	c.m_col = path.back(); c.m_value = v; c.m_explicitOp = true; c.m_op = op;
+	c.m_col = path.back(); c.m_value = v; c.m_op = op;
 	if (path.size() > 1) c.m_path = path;
 	return c;
 }
@@ -394,12 +424,12 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
 			c.m_value = EvalValue(*e.m_rhs, params);
 			c.m_expr  = BuildColumnExprFromAst(sources, *e.m_lhs, params);
 			switch (e.m_cmp) {
-			case ibQueryCompareOp::Eq:                                                            break;
-			case ibQueryCompareOp::Ne: c.m_comparison = ibComparisonType::ibComparisonType_NotEqual; break;
-			case ibQueryCompareOp::Lt: c.m_explicitOp = true; c.m_op = ibQueryFilterOp::Less;         break;
-			case ibQueryCompareOp::Le: c.m_explicitOp = true; c.m_op = ibQueryFilterOp::LessEqual;    break;
-			case ibQueryCompareOp::Gt: c.m_explicitOp = true; c.m_op = ibQueryFilterOp::Greater;      break;
-			case ibQueryCompareOp::Ge: c.m_explicitOp = true; c.m_op = ibQueryFilterOp::GreaterEqual; break;
+			case ibQueryCompareOp::Eq:                                       break;   // m_op defaults to Equal
+			case ibQueryCompareOp::Ne: c.m_op = ibQueryFilterOp::NotEqual;     break;
+			case ibQueryCompareOp::Lt: c.m_op = ibQueryFilterOp::Less;         break;
+			case ibQueryCompareOp::Le: c.m_op = ibQueryFilterOp::LessEqual;    break;
+			case ibQueryCompareOp::Gt: c.m_op = ibQueryFilterOp::Greater;      break;
+			case ibQueryCompareOp::Ge: c.m_op = ibQueryFilterOp::GreaterEqual; break;
 			}
 			return ibQueryPredicate::Leaf(c);
 		}
@@ -532,8 +562,8 @@ void LowerFlatWhere(ibDataQueryBuilder& b, const std::vector<ibSourceBinding>& s
 			const ibQueryColumnExprPtr lhs = BuildColumnExprFromAst(sources, *e.m_lhs, params);
 			const ibValue val = EvalValue(*e.m_rhs, params);
 			switch (e.m_cmp) {
-			case ibQueryCompareOp::Eq: b.WhereExpr(lhs, ibComparisonType::ibComparisonType_Equal,    val); break;
-			case ibQueryCompareOp::Ne: b.WhereExpr(lhs, ibComparisonType::ibComparisonType_NotEqual, val); break;
+			case ibQueryCompareOp::Eq: b.WhereExpr(lhs, ibQueryFilterOp::Equal,    val); break;
+			case ibQueryCompareOp::Ne: b.WhereExpr(lhs, ibQueryFilterOp::NotEqual, val); break;
 			case ibQueryCompareOp::Lt: b.WhereExprCompare(lhs, ibQueryFilterOp::Less,         val); break;
 			case ibQueryCompareOp::Le: b.WhereExprCompare(lhs, ibQueryFilterOp::LessEqual,    val); break;
 			case ibQueryCompareOp::Gt: b.WhereExprCompare(lhs, ibQueryFilterOp::Greater,      val); break;
@@ -545,10 +575,10 @@ void LowerFlatWhere(ibDataQueryBuilder& b, const std::vector<ibSourceBinding>& s
 		const ibValue val = EvalValue(*e.m_rhs, params);
 		const bool walk = cols.size() > 1;
 		switch (e.m_cmp) {
-		case ibQueryCompareOp::Eq: walk ? b.Where(cols, ibComparisonType::ibComparisonType_Equal,    val)
-		                                : b.Where(cols[0], ibComparisonType::ibComparisonType_Equal,    val); break;
-		case ibQueryCompareOp::Ne: walk ? b.Where(cols, ibComparisonType::ibComparisonType_NotEqual, val)
-		                                : b.Where(cols[0], ibComparisonType::ibComparisonType_NotEqual, val); break;
+		case ibQueryCompareOp::Eq: walk ? b.Where(cols, ibQueryFilterOp::Equal,    val)
+		                                : b.Where(cols[0], ibQueryFilterOp::Equal,    val); break;
+		case ibQueryCompareOp::Ne: walk ? b.Where(cols, ibQueryFilterOp::NotEqual, val)
+		                                : b.Where(cols[0], ibQueryFilterOp::NotEqual, val); break;
 		case ibQueryCompareOp::Lt: walk ? b.WhereCompare(cols, ibQueryFilterOp::Less,         val) : b.WhereCompare(cols[0], ibQueryFilterOp::Less,         val); break;
 		case ibQueryCompareOp::Le: walk ? b.WhereCompare(cols, ibQueryFilterOp::LessEqual,    val) : b.WhereCompare(cols[0], ibQueryFilterOp::LessEqual,    val); break;
 		case ibQueryCompareOp::Gt: walk ? b.WhereCompare(cols, ibQueryFilterOp::Greater,      val) : b.WhereCompare(cols[0], ibQueryFilterOp::Greater,      val); break;

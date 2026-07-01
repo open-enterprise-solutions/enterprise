@@ -1433,9 +1433,6 @@
     <ClCompile Include="metaCollection\partial\list\objectListModel.cpp">
       <Filter>metaCollection\partial\list</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\partial\list\objectListQuery.cpp">
-      <Filter>metaCollection\partial\list</Filter>
-    </ClCompile>
     <ClCompile Include="metaCollection\partial\reference\referenceQuery.cpp">
       <Filter>metaCollection\partial\reference</Filter>
     </ClCompile>
@@ -1531,6 +1528,8 @@
       <Filter>metaCollection</Filter>
     </ClCompile>
     <ClCompile Include="tableInfo.cpp" />
+    <ClCompile Include="tableInfoDb.cpp" />
+    <ClCompile Include="tableInfoRam.cpp" />
     <ClCompile Include="moduleInfo.cpp" />
     <ClCompile Include="fnumber.cpp" />
     <ClCompile Include="compiler\value_res.cpp">
@@ -2062,6 +2061,9 @@
       <Filter>query</Filter>
     </ClCompile>
     <ClCompile Include="composition\dataComposer.cpp">
+      <Filter>composition</Filter>
+    </ClCompile>
+    <ClCompile Include="composition\ramComposer.cpp">
       <Filter>composition</Filter>
     </ClCompile>
     <ClCompile Include="system\value\valueComposer.cpp">

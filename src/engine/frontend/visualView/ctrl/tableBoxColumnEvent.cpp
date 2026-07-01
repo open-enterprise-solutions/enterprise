@@ -40,7 +40,7 @@ void ibValueModelTableBoxColumn::ChoiceProcessing(ibValue& vSelected)
 	ibValueControl::CallAsEvent(m_eventChoiceProcessing, GetValue(), vSelected, standartProcessing);
 	if (standartProcessing.GetBoolean()) {
 		
-		ibValueModelTableBase::ibValueModelReturnLine* currentLine = GetCurrentLine();
+		ibValueModel::ibValueModelReturnLine* currentLine = GetCurrentLine();
 		
 		if (currentLine != nullptr) {
 			currentLine->SetValueByMetaID(

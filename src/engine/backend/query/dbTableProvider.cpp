@@ -148,10 +148,45 @@ ibQueryExprPtr DecomposeEquality(const ibBackendQueryColumn* col, const ibMetaDa
 	return pred;
 }
 
-// Ordered / LIKE filter op -> IR binary operator.
+// Decompose a COLUMN ordered compare (>=, <=, >, <) LEXICOGRAPHICALLY over its physical fields, reusing the
+// SAME write-spread as DecomposeEquality so the constants are the column's real stored bytes (a reference's
+// _RRRef blob, correctly encoded — NOT a mis-rendered ibConst). A single-field key (a plain reference = one
+// _RRRef field) is just `field OP const`; a multi-field key compares strict on the leading fields and OP on
+// the last. Ordering references this way is consistent with an ORDER BY on the SAME field(s) — the keyset the
+// paged cursor needs. Matches the runtime's ibValue reference ordering (same metaObject -> by guid). L3/DB half.
+ibQueryExprPtr DecomposeOrdered(const ibBackendQueryColumn* col, const ibMetaData* metaData, const ibValue& value,
+                                ibQueryBinOp op, const wxString& mainQual = wxEmptyString)
+{
+	std::vector<wxString> fields = ColumnFieldNames(col);
+	ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
+	int position = 1;
+	ibColumnCodec::WriteValue(col, metaData, value, &capture, position);
+	const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
+
+	auto constAt = [&](size_t i) -> ibQueryExprPtr {
+		return (i < consts.size() && consts[i]) ? consts[i] : ibConst(ibValue());
+	};
+	const ibQueryBinOp strictOp =
+		(op == ibQueryBinOp::Ge || op == ibQueryBinOp::Gt) ? ibQueryBinOp::Gt : ibQueryBinOp::Lt;
+
+	ibQueryExprPtr pred;
+	for (size_t i = 0; i < fields.size(); ++i) {
+		const bool isLast = (i + 1 == fields.size());
+		ibQueryExprPtr eq;
+		for (size_t j = 0; j < i; ++j)
+			eq = AndFold(eq, ibBinOp(ibQueryBinOp::Eq, ibColQ(mainQual, fields[j]), constAt(j)));
+		pred = OrFold(pred, AndFold(eq, ibBinOp(isLast ? op : strictOp, ibColQ(mainQual, fields[i]), constAt(i))));
+	}
+	return pred;
+}
+
+// L3 filter op -> IR binary operator. Now the ONE op enum (Equal/NotEqual folded in from the retired
+// ibComparisonType), so this maps the full set — no separate Eq/Ne path needed.
 ibQueryBinOp FilterOpToBinOp(ibQueryFilterOp op)
 {
 	switch (op) {
+	case ibQueryFilterOp::Equal:        return ibQueryBinOp::Eq;
+	case ibQueryFilterOp::NotEqual:     return ibQueryBinOp::Ne;
 	case ibQueryFilterOp::Like:         return ibQueryBinOp::Like;
 	case ibQueryFilterOp::Less:         return ibQueryBinOp::Lt;
 	case ibQueryFilterOp::LessEqual:    return ibQueryBinOp::Le;
@@ -208,6 +243,7 @@ public:
 	                                                 const wxString& mainQual = wxEmptyString);
 	static ibQueryExprPtr BuildAnchorPredicate(const ibBackendQueryable* queryable,
 	                                           const std::vector<ibQuerySortItem>& sorts,
+	                                           const std::vector<ibValue>& values,
 	                                           ibFetchDirection direction,
 	                                           const wxString& mainQual = wxEmptyString);
 	static ibQueryExprPtr BuildParentRefPredicate(const ibBackendQueryable* queryable,
@@ -507,10 +543,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildConditionExpr(const ibBackendQueryable* que
                                                    const ibQueryCondition& c,
                                                    const wxString& mainQual)
 {
-	const ibQueryBinOp op =
-		c.m_explicitOp ? FilterOpToBinOp(c.m_op)
-		               : (c.m_comparison == ibComparisonType::ibComparisonType_Equal
-		                  ? ibQueryBinOp::Eq : ibQueryBinOp::Ne);
+	const ibQueryBinOp op = FilterOpToBinOp(c.m_op);   // ONE op (m_comparison + m_explicitOp collapsed into m_op)
 
 	if (c.m_expr) {
 		// COMPUTED left-hand side (WHERE Qty * Price > value) — lower the expression tree and
@@ -529,6 +562,14 @@ ibQueryExprPtr ibMetaIRBuilder::BuildConditionExpr(const ibBackendQueryable* que
 		// tabular parent uuid filter) has a single field and falls to the single-field branch
 		// below. Column-based: the spread comes off the column + metadata, no attribute cast.
 		return DecomposeEquality(c.m_col, queryable->GetMetaData(), c.m_value, mainQual);
+	}
+	if ((op == ibQueryBinOp::Ge || op == ibQueryBinOp::Le || op == ibQueryBinOp::Gt || op == ibQueryBinOp::Lt)
+	    && !c.m_col->IsRawColumn()) {
+		// METADATA-column ORDERED compare (a reference / composite key with >=, <=, >, <) — decompose
+		// LEXICOGRAPHICALLY over its physical fields with the SAME correctly-encoded write-spread as the
+		// equality path. A plain reference is one _RRRef field, so this is `_RRRef OP <blob>` — the guid
+		// order the paged anchor cursor needs (and the runtime's ibValue reference order mirrors it).
+		return DecomposeOrdered(c.m_col, queryable->GetMetaData(), c.m_value, op, mainQual);
 	}
 	// RAW column (direct single physical field) OR ordered / inequality / LIKE compare —
 	// the field name derives from the column itself (physical, type), no attribute needed.
@@ -684,8 +725,30 @@ std::vector<ibQuerySortKey> ibMetaIRBuilder::BuildSortKeys(const ibBackendQuerya
 	return keys;
 }
 
+// Encode a REFERENCE value into its physical _RRRef blob for a keyset compare — SELF-CONTAINED, no metadata:
+// the target metaID is the clsid BODY (dynamic reference clsid = kind|metaID), the guid comes off the value's
+// own reference object, laid out + byte-swapped EXACTLY as the stored _RRRef (mirrors BuildParentRefPredicate).
+// So `_RRRef OP <blob>` is a real BINARY compare — same bytes the column stores, same order ORDER BY _RRRef
+// sorts. Returns nullptr when v is not a reference (a scalar rides inline).
+static ibQueryExprPtr ReferenceKeyBlob(const ibValue& v)
+{
+	ibValueReferenceDataObject* refObj = nullptr;
+	if (!v.ConvertToValue(refObj) || refObj == nullptr)
+		return nullptr;
+	const ibMetaID metaID = static_cast<ibMetaID>(refObj->GetClassType() & kIbClsidBodyMask);
+	ibReference ref{ metaID, ibGuidImpl{} };
+	const auto& be = refObj->GetGuid().GetGuid().bytes();
+	auto* p = reinterpret_cast<unsigned char*>(&ref.m_guid);
+	p[0] = be[3]; p[1] = be[2]; p[2] = be[1]; p[3] = be[0];
+	p[4] = be[5]; p[5] = be[4];
+	p[6] = be[7]; p[7] = be[6];
+	for (int i = 8; i < 16; ++i) p[i] = be[i];
+	return ibConstBlob(&ref, sizeof(ibReference));
+}
+
 ibQueryExprPtr ibMetaIRBuilder::BuildAnchorPredicate(const ibBackendQueryable* /*queryable*/,
                                                      const std::vector<ibQuerySortItem>& sorts,
+                                                     const std::vector<ibValue>& values,
                                                      ibFetchDirection direction,
                                                      const wxString& mainQual)
 {
@@ -697,8 +760,10 @@ ibQueryExprPtr ibMetaIRBuilder::BuildAnchorPredicate(const ibBackendQueryable* /
 		const ibBackendQueryColumn* col;
 		bool asc;
 	};
-	// Every identity column is REAL now (the catalog's uuid included) — the LAST one is the
-	// unique tiebreaker, so the keyset tail is just the last col, no null-sentinel branch.
+	// The keyset compares by FirstSqlFieldOfColumn — the SAME field ColumnValueFields drives the ORDER BY with,
+	// so the keyset and the sort agree (a divergent field set re-reads the page head = duplicates). The anchor
+	// value is EMBEDDED: a REFERENCE encodes to its real _RRRef BLOB (ReferenceKeyBlob — binary, so `_RRRef OP
+	// blob` is a true reference compare, NOT a stringified guid); a scalar rides inline as ibConst.
 	std::vector<SortCol> cols;
 	for (const ibQuerySortItem& s : sorts) {
 		if (s.m_col == nullptr) continue;
@@ -709,12 +774,18 @@ ibQueryExprPtr ibMetaIRBuilder::BuildAnchorPredicate(const ibBackendQueryable* /
 	auto strictOp    = [&](bool asc) { return (forward == asc) ? ibQueryBinOp::Gt : ibQueryBinOp::Lt; };
 	auto inclusiveOp = [&](bool asc) { return (forward == asc) ? ibQueryBinOp::Ge : ibQueryBinOp::Le; };
 
+	auto valueAt = [&](size_t i) -> ibValue { return i < values.size() ? values[i] : ibValue(); };
+	auto operand = [&](const ibValue& v) -> ibQueryExprPtr {
+		if (ibQueryExprPtr blob = ReferenceKeyBlob(v)) return blob;   // reference -> real _RRRef binary blob
+		return ibConst(v);                                            // scalar (uuid string / number / date / bool)
+	};
+
 	auto eqUpTo = [&](size_t kExclusive) -> ibQueryExprPtr {
 		ibQueryExprPtr eq;
 		for (size_t j = 0; j < kExclusive; ++j)
 			eq = AndFold(eq, ibBinOp(ibQueryBinOp::Eq,
 			                         ibColQ(mainQual, FirstSqlFieldOfColumn(cols[j].col)),
-			                         ibParam(static_cast<int>(j))));
+			                         operand(valueAt(j))));
 		return eq;
 	};
 
@@ -725,7 +796,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildAnchorPredicate(const ibBackendQueryable* /
 			(inclusiveTail && isLast) ? inclusiveOp(cols[i].asc) : strictOp(cols[i].asc);
 		ibQueryExprPtr clause = AndFold(
 			eqUpTo(i),
-			ibBinOp(op, ibColQ(mainQual, FirstSqlFieldOfColumn(cols[i].col)), ibParam(static_cast<int>(i))));
+			ibBinOp(op, ibColQ(mainQual, FirstSqlFieldOfColumn(cols[i].col)), operand(valueAt(i))));
 		predicate = OrFold(predicate, clause);
 	}
 
@@ -1584,10 +1655,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 				out.push_back(empty);
 				return out.size() == 1 ? out.front() : ibFunc(wxT("COALESCE"), out);
 			};
-			auto condOp = [](const ibQueryCondition& c) {
-				return c.m_explicitOp ? FilterOpToBinOp(c.m_op)
-					: (c.m_comparison == ibComparisonType::ibComparisonType_Equal ? ibQueryBinOp::Eq : ibQueryBinOp::Ne);
-			};
+			auto condOp = [](const ibQueryCondition& c) { return FilterOpToBinOp(c.m_op); };
 
 			std::vector<ibQueryProjItem> projection;
 			projection.push_back(ibQueryProjItem{ ibCol(mainTable, wxT("*")), wxString() });
@@ -1823,7 +1891,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 				q.Where(keyPred);
 
 		if (hasAnchor)
-			q.Where(ibMetaIRBuilder::BuildAnchorPredicate(queryable, effective, req.m_direction, mainQual));
+			q.Where(ibMetaIRBuilder::BuildAnchorPredicate(queryable, effective, req.m_anchorSortValues, req.m_direction, mainQual));
 
 		if (hasDotWalk) {
 			// Emit sort keys in effective ORDER, interleaving plain (main-table) and dot-walk (joined) sorts.
@@ -1867,22 +1935,13 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 		return ir;
 	}
 
-// External binds for the anchor Params: [ sortValue_0 .. sortValue_{K-1}, rowKeyValue? ].
-std::vector<ibValue> ibDbTableProvider::BuildExternal(const ibReadPageRequest& req,
-	                                          const std::vector<ibQuerySortItem>& effective)
+// External binds — EMPTY. The anchor keyset EMBEDS its values (ibConst for scalars, ibConstBlob for a reference
+// key's real _RRRef blob) so a reference compares by BINARY, not a stringified param. Nothing rides a positional
+// external param; the page is anchored entirely by the embedded predicate.
+std::vector<ibValue> ibDbTableProvider::BuildExternal(const ibReadPageRequest& /*req*/,
+	                                          const std::vector<ibQuerySortItem>& /*effective*/)
 	{
-		const bool hasAnchor = req.m_hasAnchor && !effective.empty();
-
-		std::vector<ibValue> params;
-		if (hasAnchor) {
-			params = req.m_anchorSortValues;
-			// A single-key source (catalog) captures its identity tail (uuid) SEPARATELY as the
-			// anchor guid; a register folds its composite identity into m_anchorSortValues and
-			// leaves the guid empty. The non-empty guid IS the tail signal — no null sentinel.
-			if (!req.m_anchorGuid.empty())
-				params.push_back(ibValue(req.m_anchorGuid));
-		}
-		return params;
+		return std::vector<ibValue>();
 	}
 
 // --- attribute convenience adapters — the attribute IS a column, metaData is its own. The value

@@ -112,7 +112,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::Union(const ibBackendQueryable* queryabl
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::Where(const ibBackendQueryColumn* col,
-                                              ibComparisonType comparison, const ibValue& value)
+                                              ibQueryFilterOp comparison, const ibValue& value)
 {
 	m_conditions.push_back(ibQueryCondition{ col, comparison, value });
 	return *this;
@@ -120,7 +120,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::Where(const ibBackendQueryColumn* col,
 
 ibDataQueryBuilder& ibDataQueryBuilder::Where(const ibBackendQueryColumn* col, const ibValue& value)
 {
-	m_conditions.push_back(ibQueryCondition{ col, ibComparisonType::ibComparisonType_Equal, value });
+	m_conditions.push_back(ibQueryCondition{ col, ibQueryFilterOp::Equal, value });
 	return *this;
 }
 
@@ -128,20 +128,14 @@ ibDataQueryBuilder& ibDataQueryBuilder::Where(const ibRawDBColumn& rawColumn, co
 {
 	// Own a copy of the caller's temporary raw column; the condition holds a stable pointer.
 	m_ownedRawColumns.push_back(std::make_shared<ibRawDBColumn>(rawColumn));
-	m_conditions.push_back(ibQueryCondition{ m_ownedRawColumns.back().get(), ibComparisonType::ibComparisonType_Equal, value });
+	m_conditions.push_back(ibQueryCondition{ m_ownedRawColumns.back().get(), ibQueryFilterOp::Equal, value });
 	return *this;
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::WhereCompare(const ibBackendQueryColumn* col,
                                                      ibQueryFilterOp op, const ibValue& value)
 {
-	ibQueryCondition c;
-	c.m_col        = col;
-	c.m_value      = value;
-	c.m_explicitOp = true;
-	c.m_op         = op;
-	m_conditions.push_back(c);
-	return *this;
+	return Where(col, op, value);   // identical now (one m_op) — kept as a named alias for ordered/LIKE callers
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::WhereLike(const ibBackendQueryColumn* col, const ibValue& pattern)
@@ -150,12 +144,12 @@ ibDataQueryBuilder& ibDataQueryBuilder::WhereLike(const ibBackendQueryColumn* co
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::WhereExpr(const ibQueryColumnExprPtr& expr,
-                                                  ibComparisonType comparison, const ibValue& value)
+                                                  ibQueryFilterOp comparison, const ibValue& value)
 {
 	if (!expr)
 		return *this;
 	ibQueryCondition c;
-	c.m_comparison = comparison;
+	c.m_op         = comparison;
 	c.m_value      = value;
 	c.m_expr       = expr;
 	m_conditions.push_back(std::move(c));
@@ -165,15 +159,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::WhereExpr(const ibQueryColumnExprPtr& ex
 ibDataQueryBuilder& ibDataQueryBuilder::WhereExprCompare(const ibQueryColumnExprPtr& expr,
                                                          ibQueryFilterOp op, const ibValue& value)
 {
-	if (!expr)
-		return *this;
-	ibQueryCondition c;
-	c.m_value      = value;
-	c.m_explicitOp = true;
-	c.m_op         = op;
-	c.m_expr       = expr;
-	m_conditions.push_back(std::move(c));
-	return *this;
+	return WhereExpr(expr, op, value);   // identical now (one m_op) — kept as a named alias for ordered/LIKE callers
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::Where(const ibQueryPredicatePtr& predicate)
@@ -189,13 +175,13 @@ ibDataQueryBuilder& ibDataQueryBuilder::Where(const ibQueryPredicatePtr& predica
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::Where(const std::vector<const ibBackendQueryColumn*>& path,
-	ibComparisonType comparison, const ibValue& value)
+	ibQueryFilterOp comparison, const ibValue& value)
 {
 	if (path.empty())
 		return *this;
 	ibQueryCondition c;
 	c.m_col        = path.back();   // the leaf — carries the type for the provider's compare
-	c.m_comparison = comparison;
+	c.m_op         = comparison;
 	c.m_value      = value;
 	c.m_path       = path;
 	m_conditions.push_back(std::move(c));
@@ -205,16 +191,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::Where(const std::vector<const ibBackendQ
 ibDataQueryBuilder& ibDataQueryBuilder::WhereCompare(const std::vector<const ibBackendQueryColumn*>& path,
 	ibQueryFilterOp op, const ibValue& value)
 {
-	if (path.empty())
-		return *this;
-	ibQueryCondition c;
-	c.m_col        = path.back();
-	c.m_value      = value;
-	c.m_explicitOp = true;
-	c.m_op         = op;
-	c.m_path       = path;
-	m_conditions.push_back(std::move(c));
-	return *this;
+	return Where(path, op, value);   // identical now (one m_op) — kept as a named alias for ordered/LIKE callers
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::OrderBy(const ibBackendQueryColumn* col, bool ascending)
@@ -337,7 +314,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::WhereKey(const ibGuid& rowGuid)
 {
 	// Row-key equality — m_col == nullptr means the row-key column in the IR builder.
 	m_conditions.push_back(ibQueryCondition{
-		nullptr, ibComparisonType::ibComparisonType_Equal, ibValue(wxString(rowGuid)) });
+		nullptr, ibQueryFilterOp::Equal, ibValue(wxString(rowGuid)) });
 	return *this;
 }
 
@@ -365,20 +342,19 @@ ibDataQueryBuilder& ibDataQueryBuilder::SetValue(const ibRawDBColumn& rawColumn,
 std::vector<ibQuerySortItem> ibDataQueryBuilder::EffectiveSort(
 	const ibBackendQueryable* queryable, const std::vector<ibQuerySortItem>& userSorts)
 {
-	// Effective order = user sort ++ the queryable's identity tail (recorder+line
-	// / period?+dims for registers; the uuid column for catalogs — a REAL column now,
-	// no null sentinel). The queryable decides its identity; L3 just appends what is not
-	// already in the user sort, so the cursor has a TOTAL order with no family fork. Pure
-	// (no L2, no field-machinery) — that is why it stays on the door.
+	// Effective order = user sort ++ the queryable's PRIMARY KEY (a catalog/document's data-reference; a
+	// register's recorder+line+period / period+dimensions). The primary key IS the cursor tie-breaker — the
+	// same key the anchor node carries as its row-key — and a reference key now compares by its real _RRRef
+	// BLOB (BuildAnchorPredicate::ReferenceKeyBlob), so `_RRRef OP blob` agrees with `ORDER BY _RRRef`. L3 just
+	// appends what the user sort does not already cover, for a TOTAL order. GetIdentitySort (the uuid string)
+	// stays the row-key field for delete-by-key / key-in restore — a different concern.
 	std::vector<ibQuerySortItem> effective = userSorts;
-	for (const ibQuerySortItem& id : queryable->GetIdentitySort()) {
+	for (const ibBackendQueryColumn* pk : queryable->GetPrimaryKeyColumns()) {
+		if (pk == nullptr) continue;
 		bool dup = false;
 		for (const ibQuerySortItem& e : effective)
-			// Column descriptors are stable singletons (an attribute upcast yields one
-			// deterministic column pointer), so pointer equality == the former metaID
-			// equality — no resolve needed for the identity-tail dedup.
-			if (e.m_col == id.m_col) { dup = true; break; }
-		if (!dup) effective.push_back(id);
+			if (e.m_col == pk) { dup = true; break; }
+		if (!dup) effective.push_back(ibQuerySortItem{ pk, true });
 	}
 	return effective;
 }

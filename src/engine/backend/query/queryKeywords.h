@@ -32,7 +32,8 @@ enum class ibQueryKeyword
 	Top,   // SELECT TOP n — row-count limit on the SELECT core
 
 	// hierarchical TOTALS (subtotal rows per level + grand total — door SelectTotals)
-	Totals, Hierarchy, Elements,
+	// the dimension VID: Hierarchy (folders + items) / HierarchyOnly (folders only) / Elements (flat, default)
+	Totals, Hierarchy, HierarchyOnly, Elements,
 
 	// joins
 	Join, Inner, Left, Right, Full, Outer, On,

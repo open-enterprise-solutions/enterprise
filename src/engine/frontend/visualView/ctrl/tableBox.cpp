@@ -763,12 +763,12 @@ bool ibValueModelTableBox::SetPropVal(const long lPropNum, const ibValue& varPro
 	if (lPropAlias == eControl) {
 		const long lPropData = m_members.GetPropData(lPropNum);
 		if (lPropData == eTableValue) {
-			m_tableModel = varPropVal.ConvertToType<ibValueModelTableBase>();
+			m_tableModel = varPropVal.ConvertToType<ibValueModel>();
 			m_tableCurrentLine.Reset();
 			refreshColumn = true;
 		}
 		else if (lPropData == eCurrentRow) {
-			ibValueModelTableBase::ibValueModelReturnLine* tableReturnLine = nullptr;
+			ibValueModel::ibValueModelReturnLine* tableReturnLine = nullptr;
 			if (varPropVal.ConvertToValue(tableReturnLine)
 				&& m_tableModel == tableReturnLine->GetOwnerModel()) {
 				ApplyCurrentLine(tableReturnLine);

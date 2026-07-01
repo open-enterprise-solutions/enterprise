@@ -18,7 +18,18 @@ void ibUniqueKey::reset()
 
 bool ibUniqueKey::IsOk() const
 {
-	return m_objGuid.isValid();
+	return m_objGuid.isValid() || !m_keyValues.empty();
+}
+
+bool ibUniqueKey::FindKey(const ibMetaID& id) const
+{
+	return m_keyValues.find(id) != m_keyValues.end();
+}
+
+ibValue ibUniqueKey::GetKey(const ibMetaID& id) const
+{
+	const auto it = m_keyValues.find(id);
+	return (it != m_keyValues.end()) ? it->second : ibValue();
 }
 
 bool ibUniqueKey::operator<(const ibUniqueKey& other) const
@@ -63,42 +74,30 @@ bool ibUniqueKey::operator!=(const ibGuid& other) const
 
 bool ibUniqueKey::EqualsImpl(const ibUniqueKey& other) const
 {
+	// Composite when either side carries one (a reference key's composite is empty → won't match a real one),
+	// else the guid. Subsumes the old Pair-only compare — the composite now lives in the base.
+	if (!m_keyValues.empty() || !other.m_keyValues.empty())
+		return m_keyValues == other.m_keyValues;
 	return m_objGuid == other.m_objGuid;
 }
 
 //////////////////////////////////////////////////////////////////////////////
 
+// A register key: a fresh per-instance guid (the stable form-instance identity) + the composite dimensions.
+// The data + accessors are the base's; the ctors only seed them.
 ibUniqueKeyPair::ibUniqueKeyPair() : ibUniqueKey(wxNewUniqueGuid)
 {
 }
 
 ibUniqueKeyPair::ibUniqueKeyPair(const ibRowMetaValues& keyValues)
 	: ibUniqueKey(wxNewUniqueGuid)
-	, m_keyValues(keyValues)
 {
+	SetKeyValues(keyValues);
 }
 
 ibUniqueKeyPair::~ibUniqueKeyPair() = default;
 
 bool ibUniqueKeyPair::IsOk() const
 {
-	return !m_keyValues.empty();
-}
-
-bool ibUniqueKeyPair::FindKey(const ibMetaID& id) const
-{
-	return m_keyValues.find(id) != m_keyValues.end();
-}
-
-ibValue ibUniqueKeyPair::GetKey(const ibMetaID& id) const
-{
-	const auto it = m_keyValues.find(id);
-	return (it != m_keyValues.end()) ? it->second : ibValue();
-}
-
-bool ibUniqueKeyPair::EqualsImpl(const ibUniqueKey& other) const
-{
-	if (const auto* o = dynamic_cast<const ibUniqueKeyPair*>(&other))
-		return m_keyValues == o->m_keyValues;
-	return ibUniqueKey::EqualsImpl(other);
+	return !GetKeyValues().empty();
 }

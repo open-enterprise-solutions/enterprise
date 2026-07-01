@@ -12,7 +12,7 @@
 void ibValueModelTable::GetValueByRow(wxVariant& variant,
 	const ibDataViewItem& row, unsigned int col) const
 {
-	ibValueTableRow* node = GetViewData<ibValueTableRow>(row);
+	ibComposerNode* node = GetViewData<ibComposerNode>(row);
 	if (node == nullptr)
 		return;
 	node->GetValue(col, variant);
@@ -22,7 +22,7 @@ bool ibValueModelTable::SetValueByRow(const wxVariant& variant,
 	const ibDataViewItem& row, unsigned int col)
 {
 	const wxString& strData = variant.GetString();
-	ibValueTableRow* node = GetViewData<ibValueTableRow>(row);
+	ibComposerNode* node = GetViewData<ibComposerNode>(row);
 	if (node == nullptr)
 		return false;
 	const ibTypeDescription& typeDescription =

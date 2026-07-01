@@ -182,14 +182,26 @@ void ibValueModelTableBoxColumn::OnUpdated(wxObject* wxobject, ibFrontendWindow*
 	const ibFormID source_column = GetModelColumn();
 
 	ibValueModel* modelValue = GetOwner()->GetTableModel();
-	ibSortOrder::ibSortData* sort = modelValue != nullptr ? modelValue->GetSortByID(source_column) : nullptr;
+
+	// Sortability is gated by the model's Sorting FEATURE (when the flag is turned off, sorting
+	// cannot be used). The ACTIVE sort + direction come from L5 (the composer, read via GetSortAt below).
+	const bool sortable = modelValue != nullptr && !appData->DesignerMode()
+		&& modelValue->GetFeatures().Has(ibValueModel::Features::Sorting);
 
 	dataViewColumn->SetHidden(!m_propertyVisible->GetValueAsBoolean());
-	dataViewColumn->SetSortable(sort != nullptr && !appData->DesignerMode());
+	dataViewColumn->SetSortable(sortable);
 	dataViewColumn->SetResizeable(m_propertyResizable->GetValueAsBoolean());
 
-	if (sort != nullptr && sort->m_sortEnable && !sort->m_sortSystem && !appData->DesignerMode())
-		dataViewColumn->SetSortOrder(sort->m_sortAscending);
+	if (sortable) {
+		for (size_t i = 0; i < modelValue->GetModelComposer().SortCount(); ++i) {
+			wxString field; bool asc;
+			if (!modelValue->GetModelComposer().GetSortAt(i, field, asc)) continue;
+			if (modelValue->GetColumnIDByName(field) == static_cast<ibMetaID>(source_column)) {
+				dataViewColumn->SetSortOrder(asc);
+				break;
+			}
+		}
+	}
 
 	dataViewColumn->SetColumnModel(source_column);
 #endif
@@ -225,7 +237,7 @@ bool ibValueModelTableBoxColumn::CanDeleteControl() const
 
 bool ibValueModelTableBoxColumn::SetControlValue(const ibValue& varControlVal)
 {
-	ibValueModelTableBase::ibValueModelReturnLine* currentLine = GetCurrentLine();
+	ibValueModel::ibValueModelReturnLine* currentLine = GetCurrentLine();
 	if (currentLine != nullptr) {
 		currentLine->SetValueByMetaID(
 			GetModelColumn(), varControlVal
@@ -256,7 +268,7 @@ bool ibValueModelTableBoxColumn::SetControlValue(const ibValue& varControlVal)
 
 bool ibValueModelTableBoxColumn::GetControlValue(ibValue& pvarControlVal) const
 {
-	ibValueModelTableBase::ibValueModelReturnLine* currentLine = GetCurrentLine();
+	ibValueModel::ibValueModelReturnLine* currentLine = GetCurrentLine();
 	if (currentLine != nullptr) {
 		return currentLine->GetValueByMetaID(
 			GetModelColumn(), pvarControlVal

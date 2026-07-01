@@ -390,7 +390,7 @@ public:
 
 	ibValueModelTableBox* GetOwner() const { return m_parent->ConvertToType<ibValueModelTableBox>(); }
 
-	ibValueModelTableBase::ibValueModelReturnLine* GetCurrentLine() const {
+	ibValueModel::ibValueModelReturnLine* GetCurrentLine() const {
 		const ibValueModelTableBox* tableBox = GetOwner();
 		return tableBox != nullptr ?
 			tableBox->GetCurrentLine() : nullptr;

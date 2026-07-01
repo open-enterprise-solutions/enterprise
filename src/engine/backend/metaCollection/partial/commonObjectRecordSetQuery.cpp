@@ -118,7 +118,7 @@ bool ibValueRecordSetObject::ExistData()
 		for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 			if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
 				continue;
-			q.Where(object, ibComparisonType::ibComparisonType_Equal,
+			q.Where(object, ibQueryFilterOp::Equal,
 				m_keyValues.at(object->GetMetaID()));
 		}
 		ibReadPageRequest page;
@@ -160,7 +160,7 @@ bool ibValueRecordSetObject::ExistData(ibNumber& lastNum)
 
 bool ibValueRecordSetObject::ReadData(const ibUniqueKeyPair& key)
 {
-	ibValueModelRamTableBase::Clear();
+	ibValueModelStorage::Clear();
 
 	// Composite-key read through the L3 door — only the bound dimensions (key.FindKey)
 	// constrain, decomposed inside L3. Each row's dimensions AND resources come from
@@ -171,19 +171,19 @@ bool ibValueRecordSetObject::ReadData(const ibUniqueKeyPair& key)
 		for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 			if (!key.FindKey(object->GetMetaID()))
 				continue;
-			q.Where(object, ibComparisonType::ibComparisonType_Equal,
+			q.Where(object, ibQueryFilterOp::Equal,
 				key.GetKey(object->GetMetaID()));
 		}
 		ibReadPageRequest page;
 		page.m_count = 0;   // every matching line
 		ibDataQueryResult selection = q.Execute(page);
 		while (selection.Next()) {
-			ibValueTableRow* rowData = new ibValueTableRow();
+			ibComposerNode* rowData = new ibComposerNode();
 			for (const auto object : m_metaObject->GetGenericDimensionArrayObject())
 				rowData->AppendTableValue(object->GetMetaID()) = selection.GetValue(object);
 			for (const auto object : m_metaObject->GetGenericAttributeArrayObject())
 				rowData->AppendTableValue(object->GetMetaID()) = selection.GetValue(object);
-			ibValueModelRamTableBase::Append(rowData, !ibBackendException::IsEvalMode());
+			ibValueModelStorage::Append(rowData, !ibBackendException::IsEvalMode());
 			m_selected = true;
 		}
 	}
@@ -194,7 +194,7 @@ bool ibValueRecordSetObject::ReadData(const ibUniqueKeyPair& key)
 
 bool ibValueRecordSetObject::ReadData()
 {
-	ibValueModelRamTableBase::Clear();
+	ibValueModelStorage::Clear();
 
 	// As ReadData(key) but scoped by the current m_keyValues (FindKeyValue filter).
 	try {
@@ -203,19 +203,19 @@ bool ibValueRecordSetObject::ReadData()
 		for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 			if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
 				continue;
-			q.Where(object, ibComparisonType::ibComparisonType_Equal,
+			q.Where(object, ibQueryFilterOp::Equal,
 				m_keyValues.at(object->GetMetaID()));
 		}
 		ibReadPageRequest page;
 		page.m_count = 0;   // every matching line
 		ibDataQueryResult selection = q.Execute(page);
 		while (selection.Next()) {
-			ibValueTableRow* rowData = new ibValueTableRow();
+			ibComposerNode* rowData = new ibComposerNode();
 			for (const auto object : m_metaObject->GetGenericDimensionArrayObject())
 				rowData->AppendTableValue(object->GetMetaID()) = selection.GetValue(object);
 			for (const auto object : m_metaObject->GetGenericAttributeArrayObject())
 				rowData->AppendTableValue(object->GetMetaID()) = selection.GetValue(object);
-			ibValueModelRamTableBase::Append(rowData, !ibBackendException::IsEvalMode());
+			ibValueModelStorage::Append(rowData, !ibBackendException::IsEvalMode());
 			m_selected = true;
 		}
 	}
@@ -231,7 +231,7 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 	for (long row = 0; row < GetRowCount(); row++) {
 		for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 			if (object->FillCheck()) {
-				ibValueTableRow* node = GetViewData<ibValueTableRow>(GetItem(row));
+				ibComposerNode* node = GetViewData<ibComposerNode>(GetItem(row));
 				wxASSERT(node);
 				if (node->IsEmptyValue(object->GetMetaID())) {
 					wxString fillError =
@@ -283,7 +283,7 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 			else if (m_metaObject->IsRegisterLineNumber(object->GetMetaID()))
 				q.SetValue(object, ibValue(numberLine++));
 			else {
-				ibValueTableRow* node = GetViewData<ibValueTableRow>(GetItem(row));
+				ibComposerNode* node = GetViewData<ibComposerNode>(GetItem(row));
 				wxASSERT(node);
 				q.SetValue(object, node->GetTableValue(object->GetMetaID()));
 			}
@@ -302,7 +302,7 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 		// written; append → those plus whatever already existed.
 		const long savedRows = GetRowCount();
 		if (clearTable)
-			ibValueModelRamTableBase::Clear();
+			ibValueModelStorage::Clear();
 		m_selected = (savedRows > 0) || (!replace && m_selected);
 	}
 

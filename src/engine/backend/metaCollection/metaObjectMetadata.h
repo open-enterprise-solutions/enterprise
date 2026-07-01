@@ -149,7 +149,7 @@ private:
 	ibPropertyCategory* m_compatibilityCategory = ibPropertyObject::CreatePropertyCategory(wxT("Compatibility"), _("Compatibility"));
 	ibPropertyEnum<ibValueEnumVersion>* m_propertyVersion = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumVersion>>(m_compatibilityCategory, wxT("Version"), _("Version"), version_oes_last);
 	// CES is the default for new configurations. VES (Visual Basic-style
-	// ES + 1С/BSL mix) is kept available for legacy / 1С-migrated
+	// ES, a legacy business-scripting dialect) is kept available for legacy / migrated
 	// configurations and acts as a "please migrate" signal in the
 	// metadata UI.
 	ibPropertyEnum<ibValueEnumSyntax>* m_propertySyntax = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumSyntax>>(m_compatibilityCategory, wxT("Syntax"), _("Syntax"), syntax_ces);

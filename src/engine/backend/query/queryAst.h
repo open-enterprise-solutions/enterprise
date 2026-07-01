@@ -157,7 +157,7 @@ struct ibQuerySelect
 	ibQueryAstExprPtr                 m_having;                // null = none
 	std::vector<ibQueryOrderItem>  m_orderBy;
 
-	// TOTALS — hierarchical subtotals (1С-style "ИТОГИ … ПО …"). When m_hasTotals,
+	// TOTALS — hierarchical subtotals (report-style "TOTALS … BY …"). When m_hasTotals,
 	// the result is a TREE (door SelectTotals): m_totalsAggregates roll IN-PLACE at
 	// every level, m_totalsBy are the dimension levels in order. Distinct from the
 	// flat GROUP BY above. (docs/query-language-arc.md §22.1b)

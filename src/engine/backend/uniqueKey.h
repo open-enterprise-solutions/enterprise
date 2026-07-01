@@ -5,30 +5,28 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
 //
-// ibUniqueKey      — GUID-based identity.  One field (m_objGuid) covers
-//                    Catalogs, Documents, Charts, Enums and any other
-//                    object whose row is keyed by a single GUID.
-//                    Also serves as the FORM-INSTANCE identity for any
-//                    open form (each form holds exactly one).
+// ibUniqueKey      — the ONE key object.  It holds EITHER a reference (a
+//                    single m_objGuid — Catalogs, Documents, Charts, Enums,
+//                    and the FORM-INSTANCE identity of any open form) OR a
+//                    composite (m_keyValues, a metaID → ibValue map — a
+//                    register's recorder+line / period+dimensions).  A
+//                    model's GetItemKey(item) fills whichever fits its kind;
+//                    the caller reads GetGuid() or GetKeyValues() as needed.
+//                    Because the composite lives in the base, a GetItemKey
+//                    that returns ibUniqueKey BY VALUE carries it intact.
 //
-// ibUniqueKeyPair  — composite-key identity.  State is `m_keyValues`
-//                    (a metaID → ibValue map); the schema is implicit
-//                    in the metaIDs used as map keys.  This class is
-//                    metadata-agnostic by design — the keys can be
-//                    constructed by any source.  Metadata-side helpers
-//                    (e.g. ibValueMetaObjectRegisterData::CreateUniqueKeyPair)
-//                    seed the map from a register's dimension list and
-//                    hand the resulting Pair to the caller.
+// ibUniqueKeyPair  — a thin convenience subclass: a ibUniqueKey seeded with
+//                    a fresh per-instance m_objGuid (the STABLE form-instance
+//                    identity used by FindFormBySourceUniqueKey /
+//                    UpdateFormUniqueKey after a save mutates m_keyValues)
+//                    plus the composite.  All state + accessors are the
+//                    base's; the subclass adds only the register-key ctors
+//                    and the stricter composite IsOk.  Seeded by helpers like
+//                    ibValueMetaObjectRegisterData::CreateUniqueKeyPair.
 //
-//                    Inherited m_objGuid is set to wxNewUniqueGuid per
-//                    Pair instance and is used by FindFormBySourceUniqueKey
-//                    / UpdateFormUniqueKey as the STABLE form-instance
-//                    identity (so the form can be located after a save
-//                    mutates m_keyValues).
-//
-// Equality is virtual via the EqualsImpl hook — base compares m_objGuid;
-// Pair extends to compare m_keyValues when both sides are Pair, and falls
-// back to the GUID compare otherwise.  Ordering operators stay GUID-based.
+// Equality is virtual via the EqualsImpl hook — the base compares m_keyValues
+// when either side carries a composite, else m_objGuid.  Ordering operators
+// stay GUID-based.
 //
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -44,8 +42,15 @@ public:
 
 	ibGuid GetGuid() const { return m_objGuid; }
 
-	// Default validity check is "GUID is non-zero".  Pair overrides to
-	// require a populated composite key instead.
+	// Composite key-values (register recorder+line / period+dimensions). Empty for a plain reference (guid) key.
+	// A ibUniqueKey holds EITHER a reference (guid) OR dimensions (composite) — GetItemKey fills whichever fits
+	// the model's kind. Accessors live in the base so both key shapes share them.
+	const ibRowMetaValues& GetKeyValues() const { return m_keyValues; }
+	void SetKeyValues(const ibRowMetaValues& keys) { m_keyValues = keys; }
+	bool FindKey(const ibMetaID& id) const;
+	ibValue GetKey(const ibMetaID& id) const;
+
+	// Valid when the guid is non-zero OR the composite is populated. Pair overrides to require the composite.
 	virtual bool IsOk() const;
 
 	bool operator < (const ibUniqueKey& other) const;
@@ -58,17 +63,19 @@ public:
 	bool operator==(const ibGuid& other) const;
 	bool operator!=(const ibGuid& other) const;
 
-	operator wxString()   const { return m_objGuid.str(); }
-	operator ibGuid()     const { return m_objGuid; }
-	operator ibGuidImpl() const { return m_objGuid; }
+	operator wxString()      const { return m_objGuid.str(); }
+	operator ibGuid()        const { return m_objGuid; }
+	operator ibGuidImpl()    const { return m_objGuid; }
+	operator ibRowMetaValues() const { return m_keyValues; }
 
 protected:
 
-	// Equality hook.  Override in subclasses to extend semantics; the
-	// public operator== / != funnel through this single virtual.
+	// Equality hook.  The public operator== / != funnel through this single virtual.  The base compares the
+	// composite when either side carries one, else the guid — subsuming the old Pair-only composite compare.
 	virtual bool EqualsImpl(const ibUniqueKey& other) const;
 
-	ibGuid m_objGuid;
+	ibGuid          m_objGuid;
+	ibRowMetaValues m_keyValues;   // register dimensions; empty for a reference key. In the BASE so a by-value key carries it.
 };
 
 class BACKEND_API ibUniqueKeyPair : public ibUniqueKey {
@@ -78,28 +85,8 @@ public:
 	explicit ibUniqueKeyPair(const ibRowMetaValues& keyValues);
 	virtual ~ibUniqueKeyPair();
 
+	// A register key is valid only with populated dimensions (the base also accepts a bare guid).
 	bool IsOk() const override;
-
-	const ibRowMetaValues& GetKeyValues() const { return m_keyValues; }
-	void SetKeyValues(const ibRowMetaValues& keys) { m_keyValues = keys; }
-
-	bool FindKey(const ibMetaID& id) const;
-	ibValue GetKey(const ibMetaID& id) const;
-
-	operator ibRowMetaValues() const { return m_keyValues; }
-
-protected:
-
-	// Composite-key compare when both sides are Pair; fall through to
-	// base GUID compare otherwise.  Note: comparing a Pair against a
-	// plain GUID-key almost never matches because Pair's m_objGuid is a
-	// fresh wxNewUniqueGuid per instance — that's intentional, mixing
-	// the two is a programming error.
-	bool EqualsImpl(const ibUniqueKey& other) const override;
-
-private:
-
-	ibRowMetaValues m_keyValues;
 };
 
 #define wxNullUniqueKey     ibUniqueKey()

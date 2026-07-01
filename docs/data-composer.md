@@ -108,7 +108,7 @@ the **FolderRef tree**, and the **register** list. The pattern:
   call: the envelope in (direction/anchor/count), meta-keyed rows out
   (`map<metaID, ibValue>` off `OutputColumn::GetColumnId()`).
 - the tree passes an **`ibTreeScope`** (the parent COLUMN — the queryable's
-  `GetParentColumn()` — plus the browsed node): the driver assembles the
+  `GetHierarchyColumn()` — plus the browsed node): the driver assembles the
   hierarchy envelope, and the PROVIDER derives the physical field
   (`ibReadPageRequest::m_parentCol`; the model knows no field names). The
   whole First/Next/Prev triple is ONE fetch body — direction is envelope
