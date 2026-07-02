@@ -357,6 +357,19 @@ public:
 	// tablebox strips its own prefix to get the row-relative tail it walks per row.
 	const std::vector<ibSourceId>& GetSourcePath() const { return m_propertySource->GetValueAsPath(); }
 
+	// The column's bound source as a composer FIELD — its dotted NAME (e.g. "Товар.Артикул"), row-relative to
+	// the bound table. Universal: whatever addresses a column by field (sort, filter, group) uses it. Straight
+	// off m_propertySource. MakeString renders the FULL form-rooted path; the composer's queryable is the bound
+	// TABLE, so drop the tablebox's own prefix (one name segment per prefix id) to make it row-relative — the
+	// same seam ResolveCellValue uses. prefix 0 (model bound directly) drops nothing.
+	wxString GetSourceFieldName() const {
+		wxString name = m_propertySource->GetValueAsString();
+		const ibValueModelTableBox* owner = GetOwner();
+		for (size_t prefix = owner != nullptr ? owner->GetSourcePath().size() : 0; prefix > 0; --prefix)
+			name = name.AfterFirst(wxT('.'));
+		return name;
+	}
+
 	////////////////////////////////////////////////////////////////////////////////////////
 
 	void SetCaption(const wxString& caption) { return m_propertyTitle->SetValue(caption); }

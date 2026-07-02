@@ -215,6 +215,12 @@ unsigned int ibValueModelStorage::RunComposerPage(const ibDataViewItem& parent, 
 	for (const long pos : win) {
 		const ibValue& gv = groupValues[pos];
 		std::map<ibMetaID, ibValue> vals;
+		// Inherit the ANCESTOR grouping fields (Max): a subgroup carries the dim values from the levels above, so
+		// a column grouped higher (Attribute1) still renders in this subgroup's rows (Attribute2's level) — the
+		// parent path holds each ancestor value keyed positionally, dims[k] is its column. (Mirrors the DB
+		// FoldDimLevel inherit.)
+		for (size_t k = 0; k < depth && k < dims.size() && k < parentPath.size(); ++k)
+			vals[dims[k].first] = parentPath[k];
 		vals[dimCol] = gv;                                  // stamp the group's own dim value (the group label cell)
 		std::vector<ibValue> groupPath = parentPath;
 		groupPath.push_back(gv);

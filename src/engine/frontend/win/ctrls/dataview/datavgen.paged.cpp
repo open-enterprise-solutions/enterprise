@@ -615,12 +615,14 @@ void ibDataViewCtrl::PagedBootstrap()
 		CalcUnscrolledPosition(wxPoint(0, 0)).y : 0;
 	const wxSize vsz = m_tableAreaWin ? m_tableAreaWin->GetVirtualSize() : wxSize(0,0);
 	
-	// Reflect the composer's active sort onto the column header arrows.
-	// ibValueModelTableBox::OnColumnClick consumes the column-click
-	// event without going through the fork's standard SetSortOrder
-	// on the column, so the arrow only gets updated via this Sync
-	// after the post-click refresh fires.
-	SyncColumnArrowsFromModel();
+	// Reflect the composer's active sort onto the column-header arrows after the refresh. A header CLICK sets
+	// the clicked column's arrow directly (OnColumnClick), but a SETTINGS-DIALOG Filter/Sort/Group commit reaches
+	// the columns only here (it just mutates the composer + NotifyReset). Drop every arrow, then let each column
+	// re-apply its own from the composer (matching by its bound field — no model-side sort-arrow bridge).
+	ResetAllSortColumns();
+	for (unsigned int ci = 0; ci < GetColumnCount(); ++ci)
+		if (ibDataViewColumn* c = GetColumn(ci))
+			c->SyncSortArrowFromModel();
 
 	// Backward fetch only in selection-cursor mode (post-Save new row,
 	// SetViewMode switch).  We want the explicit-prefer row in the

@@ -849,8 +849,11 @@ protected:
 	// Return true if the given column is sorted
 	bool IsColumnSorted(int idx) const;
 
-	// Reset all columns currently used for sorting.
+	// Reset all columns currently used for sorting. PUBLIC: the OES tablebox (ibValueModelTableBox::OnColumnClick)
+	// clears the header arrows before setting the clicked column's, committing the sort straight on the composer.
+public:
 	void ResetAllSortColumns();
+protected:
 
 	virtual void DoEnableSystemTheme(bool enable, wxWindow* window) wxOVERRIDE;
 
@@ -870,13 +873,8 @@ protected:
 	// exhausted.
 	void PagedBootstrap();
 
-	// Reflect the composer's active sort onto column-header sort arrows.
-	// Resets every header arrow, then re-applies the column + direction
-	// from the composer's GetSortAt for each active sort entry.  Run
-	// after AssociateModel and on each PagedBootstrap so the visible UI
-	// matches what the next fetch will order by (system folder /
-	// reference sorts stay hidden).
-	void SyncColumnArrowsFromModel();
+	// (SyncColumnArrowsFromModel removed — header arrows are set on the front per column: the tablebox sets the
+	//  clicked column's arrow in OnColumnClick and re-reads the composer's active sort on column rebuild.)
 public:
 	// Hierarchical drill context (control-owned, model-stateless).
 	// Empty in List / Tree mode; non-empty when the user has drilled

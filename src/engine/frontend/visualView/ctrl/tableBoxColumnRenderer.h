@@ -202,6 +202,11 @@ public:
 
 	void SetColumnModel(unsigned int col_model) { m_model_column = col_model; }
 
+	// Re-apply this column's header sort arrow from the composer's active sort (out-of-line — needs the
+	// tablebox model + composer). Called by the control on a data refresh so a settings-dialog sort updates
+	// the arrow without a full column rebuild.
+	void SyncSortArrowFromModel() override;
+
 private:
 
 	ibValueModelTableBoxColumn* m_tableBoxColumn;

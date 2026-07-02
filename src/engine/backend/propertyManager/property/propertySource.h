@@ -34,6 +34,10 @@ public:
 	// or writes the value itself.
 	const std::vector<ibSourceId>& GetValueAsPath() const;
 
+	// The binding rendered as its dotted NAME (e.g. "Товар.Артикул") — the variant's own MakeString, the
+	// same string the designer shows and the composer's ORDER BY / Filter dot-walks. "<not selected>" when unbound.
+	wxString GetValueAsString() const;
+
 	void SetValue(const ibMetaID& val);
 	void SetValue(const ibGuid& val, bool fillTypeDesc = true);
 	void SetValue(const ibTypeDescription& val);

@@ -270,6 +270,12 @@ public:
 	ibDataViewCtrl* GetOwner() const { return m_owner; }
 	ibDataViewRenderer* GetRenderer() const { return m_renderer; }
 
+	// Re-apply THIS column's header sort arrow from the model's active sort (the L5 composer). The control calls
+	// it after a data refresh (a settings-dialog Filter/Sort/Group commit reaches the columns only through this,
+	// NOT a header click). Default no-op; an OES tablebox column overrides it to match its bound field against
+	// the composer's active sort. (A header CLICK sets the arrow directly in OnColumnClick.)
+	virtual void SyncSortArrowFromModel() {}
+
 	// implement some of base class pure virtuals (the rest is port-dependent
 	// and done differently in generic and native versions)
 	virtual void SetBitmap(const wxBitmapBundle& bitmap) wxOVERRIDE { m_bitmap = bitmap; }

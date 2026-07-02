@@ -375,9 +375,12 @@ private:
 			owner->SetPagedSkipRestoreCapture();
 			// Direct integration: the paged override rewrites the composer
 			// sort and refetches; legacy non-paged models forward to
-			// Resort() through the default implementation.
-			model->OnSortColumnChanged(
-				col->GetModelColumn(), col->IsSortOrderAscending());
+			// Resort() through the default implementation. NOTE: an OES
+			// tablebox consumes wxEVT_DATAVIEW_COLUMN_HEADER_CLICK first
+			// (ibValueModelTableBox::OnColumnClick) and commits the sort
+			// straight on its concrete model's composer — so this generic
+			// path only runs for native (non-tablebox) models.
+			(void)model;   // native wx model: header SortOrder state above drives the re-sort; no model sort call
 		}
 
 		owner->OnColumnChange(idx);
@@ -4772,9 +4775,7 @@ bool ibDataViewCtrl::AssociateModel(ibDataViewModel* model)
 		InvalidateCount();
 	}
 
-	// Reflect the composer's default sort onto the header arrows so the user sees the same column / direction the
-	// SQL will use (folder-first ORDER is a composer-grouping concern now, not a separate system-sort pass).
-	SyncColumnArrowsFromModel();
+	// (Header arrows are set per column from the composer on column rebuild — tablebox OnUpdated — and on click.)
 
 	UpdateDisplay();
 
@@ -5876,33 +5877,9 @@ ibDataViewSelectionMode ibDataViewCtrl::GetSelectionMode() const
 	return m_selectionMode;
 }
 
-// Reflect the composer's active sort onto the column-header arrows.
-// First drops every current header arrow (ResetAllSortColumns), then
-// re-applies the column + direction from the composer's GetSortAt for
-// each active sort entry.  System / folder sorts are an internal
-// cursor concern and never carry an arrow.  Called after
-// AssociateModel and on each PagedBootstrap so the visible UI matches
-// what the next fetch will actually order by.
-void ibDataViewCtrl::SyncColumnArrowsFromModel()
-{
-	const ibDataViewModel* model = GetModel();
-	if (model == nullptr) return;
-
-	// Drop any current header arrows — we'll re-apply from the model.
-	ResetAllSortColumns();
-
-	// USER sorts only, read from L5 through the model (GetSortArrows resolves the composer's GetSortAt to
-	// model column ids). System / folder sorts are an internal cursor concern and never carry an arrow.
-	for (const ibDataViewModel::ibSortArrow& arrow : model->GetSortArrows()) {
-		for (unsigned int idx = 0; idx < GetColumnCount(); ++idx) {
-			ibDataViewColumn* col = GetColumn(idx);
-			if (col != nullptr && col->GetModelColumn() == arrow.m_modelColumn) {
-				col->SetSortOrder(arrow.m_ascending);
-				break;
-			}
-		}
-	}
-}
+// (SyncColumnArrowsFromModel DELETED — the header arrow is a pure FRONT concern now. The OES tablebox sets it
+//  on the clicked column in OnColumnClick, and each tablebox column re-reads the composer's active sort on
+//  rebuild (ibValueModelTableBoxColumn OnUpdated), matching by its OWN bound field name. No model-side bridge.)
 
 ibDataViewItem ibDataViewCtrl::GetEffectiveFetchParent() const
 {

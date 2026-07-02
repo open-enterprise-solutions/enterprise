@@ -1746,6 +1746,7 @@ std::vector<long> AttachDimValue(const DimCtx& ctx, ibSelectorTree::Node* parent
 	const ibTotalLevel& level = (*ctx.levels)[levelIdx];
 
 	ibSelectorTree::Node* node = parent->AddChild(parent->m_level + 1);
+	node->m_values = parent->m_values;   // inherit the grouping fields available from the levels above (same rule as the Elements branch)
 	const auto vit = valOf.find(valueKey);
 	if (vit != valOf.end()) node->m_values[level.m_col->GetColumnId()] = vit->second;
 
@@ -1786,6 +1787,12 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 	if (level.m_dim == ibDimensionKind::Elements) {
 		for (const wxString& k : order) {
 			ibSelectorTree::Node* child = node->AddChild(node->m_level + 1);
+			// A SUBGROUP inherits the grouping fields AVAILABLE from the levels above (Max) — copy the parent
+			// group's stamped dimension values down, then add this level's own. So a display column that
+			// dot-walks an ANCESTOR dimension's reference (e.g. the parent grouped by Reference, this level by
+			// Reference.DataVersion) resolves against the inherited value in the subgroup header, not just at the
+			// top level. Aggregates are (re)stamped by ApplyAggregates below, so inheriting them is harmless.
+			child->m_values = node->m_values;
 			child->m_values[level.m_col->GetColumnId()] = valOf[k];
 			FoldDimLevel(ctx, child, byVal[k], levelIdx + 1);   // next level inside
 			child->m_hasChildren = !child->m_children.empty();

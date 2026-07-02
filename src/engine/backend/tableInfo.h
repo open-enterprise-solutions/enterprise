@@ -217,11 +217,8 @@ protected:
 
 		virtual bool HasDefaultCompare() const { return false; }
 
-		// Header-click sort change — forward to ibValueModel so paged
-		// concrete models can update m_sortOrder and trigger refresh.
-		virtual void OnSortColumnChanged(unsigned int col, bool ascending) override {
-			m_ownerModel->OnSortColumnChanged(col, ascending);
-		}
+		// (Header-click sort is committed entirely on the FRONT now — ibValueModelTableBox::OnColumnClick pokes
+		//  the concrete model's composer + RefetchAll. No SortBy / GetSortArrows dispatch on the model.)
 
 		// Universal Get*Fetch — forward to owner so concrete model's
 		// override drives the paged source (DB or RAM).
@@ -274,10 +271,6 @@ protected:
 		// the way a keyed DB model already does; a flat model keeps the cheap in-place tree-insert.
 		virtual bool IsGroupedModel() const override {
 			return m_ownerModel->IsGroupedModel();
-		}
-
-		virtual std::vector<ibSortArrow> GetSortArrows() const override {
-			return m_ownerModel->GetSortArrows();
 		}
 
 		virtual void BuildAncestorBreadcrumb(const ibDataViewItem& fromRow,
@@ -519,10 +512,6 @@ public:
 	// composer's full type). The provider impl forwards IsGroupedModel() here.
 	virtual bool IsGroupedModel() const;
 
-	// The active USER sorts as (model column id, ascending) — reads the L5 composer (GetSortAt) and resolves
-	// each sort field name to its column id. The provider forwards GetSortArrows() here for the header arrows.
-	virtual std::vector<ibDataViewModel::ibSortArrow> GetSortArrows() const;
-
 	// Script-side iteration. Every ibValueModel is paged (IsPagedModel() == true) and fetches through
 	// RunComposerPage, so iteration drives Get*Fetch in batches — UNLESS the composer currently GROUPS (a tree;
 	// a flat walk over a grouped model would surprise users), which falls through to the base (no iteration).
@@ -557,11 +546,8 @@ public:
 		}
 	}
 
-	// Column header click — single-column sort. Writes the composer's sort (the ONE sort store; the legacy
-	// m_sortOrder is abolished); every fetch reads the composer directly via RunComposerPage.
-	// Then resets the view so the control re-dispatches GetFirstFetch with the new ORDER BY. Out-of-line —
-	// needs listFilter.h (ListSettings).
-	virtual void OnSortColumnChanged(unsigned int col, bool ascending);
+	// (Header-click sort is committed on the FRONT — ibValueModelTableBox::OnColumnClick pokes this model's
+	//  composer directly + RefetchAll, the same shape the settings dialog uses. No sort method on the model.)
 
 	// Hierarchical-breadcrumb hook (see ibDataViewModel virtual for
 	// semantics).  Mirrored here so concrete ibValueModel-derived
@@ -704,7 +690,7 @@ public:
 
 	// Sortability is no longer gated by a per-column m_sortOrder entry (retired) — in the L5 world every
 	// bound data column is sortable; the data-view column carries its OWN IsSortable() gate (datavgen.cpp),
-	// and the header click drives ListSettings->Order via OnSortColumnChanged. (col unused now.)
+	// and the header click drives the composer ORDER BY on the front (tablebox OnColumnClick). (col unused now.)
 	virtual bool IsSortable(unsigned int col) const { (void)col; return true; }
 
 	virtual void AddValue(unsigned int before = 0) {}
@@ -1145,6 +1131,32 @@ public:
 		m_modelProvider->ValueChanged(ibDataViewItem(item), col);
 	}
 
+	// Narrow structural notifies for a SINGLE top-level row mutation — the RAM value-storage's
+	// Add / Insert / Remove drive these. Fire the SPECIFIC ItemAppended / ItemInserted / ItemDeleted event
+	// (NOT the heavy NotifyReset) so the view positions AND selects the mutated row in place: the desktop
+	// control's DoItemInserted ends with Select(item), and its grouped / keyed path re-fetches with the row
+	// as the restore anchor — either way focus lands on the new row. NotifyReset re-fetches the page without
+	// moving the selection onto the new row, so Add / Copy / Insert left the highlight on the source row.
+	// The storage rows are the root's DIRECT children (top-level), so the parent item is the invisible root =
+	// an empty ibDataViewItem — the same convention the wx index / virtual-list models use
+	// (ItemInserted(ibDataViewItem(), item)). notify=false (silent batch build / LoadData) just bumps the
+	// view generation, matching the old NotifyStructuralChange(false) branch.
+	void NotifyRowAppended(ibComposerNode* item, bool notify) {
+		BumpViewGeneration();
+		if (notify && m_modelProvider != nullptr)
+			m_modelProvider->ItemAppended(ibDataViewItem(), ibDataViewItem(item));
+	}
+	void NotifyRowInserted(ibComposerNode* item, bool notify) {
+		BumpViewGeneration();
+		if (notify && m_modelProvider != nullptr)
+			m_modelProvider->ItemInserted(ibDataViewItem(), ibDataViewItem(item));
+	}
+	void NotifyRowDeleted(ibComposerNode* item, bool notify) {
+		BumpViewGeneration();
+		if (notify && m_modelProvider != nullptr)
+			m_modelProvider->ItemDeleted(ibDataViewItem(), ibDataViewItem(item));
+	}
+
 	/////////////////////////////////////////////////////////
 
 		// derived classes should override these methods instead of
@@ -1362,19 +1374,21 @@ public:
 	// --- mutation (the RAM model's ops; take the model for the view notify) — target the root's children ---
 	long AddValue(ibValueModel* model, Row* node, bool notify = true) {
 		wxASSERT(node); node->m_valueTable = model; m_root.m_children.emplace_back(node);
-		model->NotifyStructuralChange(notify); return RowCount() - 1;
+		model->NotifyRowAppended(node, notify); return RowCount() - 1;
 	}
 	long InsertValue(ibValueModel* model, Row* node, unsigned int row, bool notify = true) {
 		wxASSERT(node); node->m_valueTable = model;
 		m_root.m_children.insert(m_root.m_children.begin() + row, node);
-		model->NotifyStructuralChange(notify); return row + 1;
+		model->NotifyRowInserted(node, notify); return row + 1;
 	}
 	bool RemoveValue(ibValueModel* model, Row* node, bool notify = true) {
 		std::vector<Row*>& kids = m_root.m_children;
 		auto it = std::find(kids.begin(), kids.end(), node);
 		if (it == kids.end()) return false;
-		kids.erase(it); node->m_valueTable = nullptr; node->DecRef();
-		model->NotifyStructuralChange(notify); return true;
+		// Notify BEFORE erase + DecRef — the view's ItemDeleted handler needs the item live to locate + drop
+		// its tree node (the node is still in the storage here, refcount held by kids).
+		model->NotifyRowDeleted(node, notify);
+		kids.erase(it); node->m_valueTable = nullptr; node->DecRef(); return true;
 	}
 	void Clear(ibValueModel* model, bool notify = true) {
 		std::vector<Row*>& kids = m_root.m_children;

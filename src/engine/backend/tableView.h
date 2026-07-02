@@ -488,12 +488,8 @@ public:
 	// delegated action
 	virtual void Resort();
 
-	// Column-header click on a paged model means "rebuild the result
-	// set with new ORDER BY", not "re-sort the loaded window".
-	// Default implementation forwards to Resort() (legacy non-paged
-	// behaviour); paged concrete models override to update their
-	// sort state and trigger ResetForFilterOrSort.
-	virtual void OnSortColumnChanged(unsigned int col, bool ascending);
+	// (Header-click sort has NO model-side hook — an OES tablebox commits it entirely on the front
+	//  (ibValueModelTableBox::OnColumnClick pokes the concrete model's composer + RefetchAll).)
 
 	// Universal paged-fetch API — wxTreeCtrl iteration cookie pattern.
 	// `parent` is the scope (invalid item == top-level / root).
@@ -537,13 +533,9 @@ public:
 	// the paged refresh + selection-restore path instead of the cheap in-place tree-insert.
 	virtual bool IsGroupedModel() const                                 { return false; }
 
-	// One active sort entry as the GUI needs it for a column-header arrow: the model column id + direction.
-	struct ibSortArrow { unsigned int m_modelColumn; bool m_ascending; };
-	// The active USER sorts, resolved to (model column id, ascending) — for drawing the column-header arrows.
-	// Default empty; ibValueModel's provider forwards to the owner model, which reads the L5 composer (GetSortAt)
-	// and resolves each sort field NAME to its column id. The control never reaches into the composer itself.
-	// (Replaces the deleted GetSortModels() / ibSortModel.)
-	virtual std::vector<ibSortArrow> GetSortArrows() const              { return {}; }
+	// (No GetSortArrows / ibSortArrow — the column-header arrow is a pure FRONT concern now: the OES tablebox
+	//  sets it on click and re-reads the composer's active sort per column on rebuild, matching by the column's
+	//  own bound field name. The model never bridges a {col-id, asc} pair to the control.)
 
 	// USER-FACING capabilities the settings dialog / GUI query to drive rendering without knowing the concrete
 	// model class. `flags` is a bitset; defaults mean "feature absent". Wiring (today, all READ):

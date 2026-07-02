@@ -13,7 +13,7 @@
 #include "backend/session/session.h"            // ibSession — SubmitFetchAsync
 #include "backend/tableView.h"                  // ibDataViewModel / ibDataViewItem — the base view types
 #include "backend/composition/listFilter.h"    // ibValueListSettings (dialog buffer) + ibLoad/CommitSettings — settings live on the composer
-#include "backend/composition/dataComposer.h"  // ibDataComposer — GetSortArrows reads the sort store off the base composer
+#include "backend/composition/dataComposer.h"  // ibDataComposer — IsGroupedModel reads GroupCount() off the composer
 #include "backend/uniqueKey.h"                  // ibUniqueKey — GetItemKey return (base default = no key)
 
 // (ibValueModelRamTreeBase::PopulateFromTree + its MirrorQueryNodes helper were DELETED with the dead
@@ -99,25 +99,8 @@ ibValueModel::~ibValueModel()
 	m_modelProvider->DecRef();
 }
 
-// Column header click — single-column sort. Writes STRAIGHT to the composer (the single settings store;
-// ListSettings is only the dialog's edit buffer now, m_sortOrder abolished); the composer renders ORDER BY by
-// FIELD NAME, so resolve the clicked column id → its name.
-void ibValueModel::OnSortColumnChanged(unsigned int col, bool ascending)
-{
-	// Replace the composer's sort with the clicked column, then reset. The reset IS the whole trigger — no
-	// observer needed: change the composer → BeforeReset/AfterReset → the next fetch reads the new sort.
-	ibDataComposer& composer = GetModelComposer();
-	composer.ClearSorts();
-	const wxString field = GetColumnNameByID(col);
-	if (!field.IsEmpty())
-		composer.Sort(field, ascending);
-
-	BumpViewGeneration();
-	if (m_modelProvider != nullptr) {
-		m_modelProvider->BeforeReset();
-		m_modelProvider->AfterReset();
-	}
-}
+// (Header-click sort lives on the FRONT — ibValueModelTableBox::OnColumnClick pokes this model's composer
+//  directly (ClearSorts + Sort by the column's own bound field name) + RefetchAll. No SortBy on the model.)
 
 // (GetSortModels DELETED — ibSortModel is gone. The sort is L5 (the composer, by field NAME); the few
 //  consumers that needed a {col-id, asc} pair — the keyset anchor + the frontend header arrows — now read
@@ -260,21 +243,9 @@ ibUniqueKey ibValueModel::GetItemKey(const ibDataViewItem& /*item*/) const
 	return ibUniqueKey();
 }
 
-// The active USER sorts → (model column id, ascending) for the header arrows. Reads the L5 composer (the sort
-// store) by FIELD NAME and resolves each to its column id; the control draws an arrow on the matching column.
-std::vector<ibDataViewModel::ibSortArrow> ibValueModel::GetSortArrows() const
-{
-	std::vector<ibDataViewModel::ibSortArrow> arrows;
-	const ibDataComposer& comp = GetModelComposer();
-	for (size_t i = 0; i < comp.SortCount(); ++i) {
-		wxString field; bool asc;
-		if (!comp.GetSortAt(i, field, asc)) continue;
-		const ibMetaID col = GetColumnIDByName(field);
-		if (col != wxNOT_FOUND)
-			arrows.push_back({ static_cast<unsigned int>(col), asc });
-	}
-	return arrows;
-}
+// (GetSortArrows DELETED — the header arrow is set on the FRONT: OnColumnClick sets it on the clicked column,
+//  and each tablebox column re-reads the composer's active sort on rebuild (OnUpdated), matching by its OWN
+//  bound field name. No {col-id, asc} bridge on the model.)
 
 std::shared_ptr<ibValueIteratorState> ibValueModel::CreateIterator()
 {

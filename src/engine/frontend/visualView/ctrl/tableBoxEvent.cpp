@@ -9,19 +9,50 @@ void ibValueModelTableBox::OnColumnClick(ibDataViewEvent& event)
 		dynamic_cast<ibDataViewColumnObject*>(event.GetDataViewColumn());
 	wxASSERT(dataViewColumn);
 
-	// Designer-side: hand keyboard / property-grid focus to the column
-	// control in the visual editor.  Runtime ignores this branch.
+	// Designer-side: hand keyboard / property-grid focus to the column control in the visual editor. No
+	// sorting (no data) — let the default header handler run.
 	if (g_visualHostContext != nullptr) {
 		ibValueModelTableBoxColumn* columnControl = dataViewColumn->GetControl();
 		wxASSERT(columnControl);
 		g_visualHostContext->SelectControl(columnControl);
+		event.Skip();
+		return;
 	}
 
-	// Sort decision (toggle / refetch / system-sort veto) lives in
-	// the fork's default header handler — datavgen.cpp::OnClick now
-	// consults model->IsSortable(col) which returns false for system
-	// sorts and missing entries.  We just propagate.
-	event.Skip();
+	// Runtime: everything on the FRONT. Get this control's model, poke its composer, RefetchAll — the backend
+	// stays blind (no sort method / no dispatch). This is the same shape the settings dialog uses
+	// (ibCommitSettingsToComposer + refresh); the column already knows its OWN bound field (GetSourceFieldName),
+	// and the composer dot-walks it exactly as the renderer resolves the cell value.
+	ibValueModelTableBoxColumn* col = dataViewColumn->GetControl();
+	if (m_tableModel == nullptr || col == nullptr
+		|| !m_tableModel->GetFeatures().Has(ibValueModel::Features::Sorting)) {
+		event.Skip();
+		return;
+	}
+
+	const wxString field = col->GetSourceFieldName();
+	if (field.IsEmpty()) {
+		event.Skip();   // whole-attribute / foreign / unresolvable column — nothing to sort by
+		return;
+	}
+
+	ibDataComposer& composer = m_tableModel->GetModelComposer();
+	// Single-column toggle read off the composer (the SSOT): already the sole sort on this field → flip; else asc.
+	bool ascending = true;
+	wxString curField; bool curAsc = true;
+	if (composer.SortCount() == 1 && composer.GetSortAt(0, curField, curAsc) && curField == field)
+		ascending = !curAsc;
+
+	composer.ClearSorts();
+	composer.Sort(field, ascending);
+
+	// Reflect the header arrow now (the columns also re-read the composer on rebuild via OnUpdated).
+	dataViewColumn->GetOwner()->ResetAllSortColumns();
+	dataViewColumn->SetSortOrder(ascending);
+	// A sort change invalidates the paged keyset anchor (built for the OLD ORDER BY) — fetch fresh from the top.
+	dataViewColumn->GetOwner()->SetPagedSkipRestoreCapture();
+	m_tableModel->RefetchAll();
+	// Handled — do NOT Skip: the generic default sort in datavgen must not also run.
 }
 
 void ibValueModelTableBox::OnColumnReordered(ibDataViewEvent& event)

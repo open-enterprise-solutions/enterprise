@@ -838,3 +838,95 @@ restore SSOT becomes the KEY rather than the branchy `PagedBootstrap`.
   preserve the horizontal component: `SetAlignment((align & (wxALIGN_RIGHT |
   wxALIGN_CENTER_HORIZONTAL)) | wxALIGN_CENTER_VERTICAL)` (`datavgen.cpp` cell
   paint).
+
+### 9.5 Dot-path column sort / grouping through the composer (2026-07)
+
+A form-table column whose Source is a **dot path** (`Table.RefAttr.Field` — a
+value reached by walking a reference) is a frontend-only projection: the model's
+column collection holds only real attributes, and the cell is resolved per row by
+`ibValueModelTableBox::ResolveCellValue` (`tableBox.cpp`), which walks the row's
+reference. Sorting and grouping by such a column had never reached the composer;
+this arc wired it end to end. All landed BUILD GREEN Debug|x86 2026-07-02.
+
+**Header-click sort commits straight to the composer.** The click formerly sent
+`model->OnSortColumnChanged(leaf-metaID)`, which `GetColumnNameByID` could not find
+in a tabular section's column collection, so nothing sorted and the arrow never
+round-tripped. Now that a composer backs every list, the frontend writes it
+directly: `ibValueModelTableBox::OnColumnClick` (`tableBoxEvent.cpp`,
+`wxEVT_DATAVIEW_COLUMN_HEADER_CLICK`) does `composer.ClearSorts();
+composer.Sort(field, asc); m_tableModel->RefetchAll()`, sets the arrow itself
+(`ResetAllSortColumns()` + `dataViewColumn->SetSortOrder(asc)`) and takes
+`SetPagedSkipRestoreCapture()`. The backend model is blind to it — the same shape
+the filter dialog already used. `field = col->GetSourceFieldName()` (`tableBox.h`)
+= the column's `m_propertySource` string (`ibVariantDataSource::Write` → the public
+`GetValueAsString()`, **not** a metaID round-trip) with the tablebox prefix stripped
+(a string strip of `GetOwner()->GetSourcePath().size()` segments, because `Write`
+yields the full form-rooted path while the composer's queryable is table-rooted and
+wants a row-relative name). The same name is universal across sort / filter / group.
+
+**Deleted machinery** (the old front↔back sort relay, obsolete now the composer is
+the single store): `ibValueModel::SortBy` (both overloads) + `ibDataViewModel::SortBy`
++ the provider forwarders, `GetSortArrows` + `ibSortArrow`, `SyncColumnArrowsFromModel`,
+`GetColumnSortField` (tablebox), `GetSortField` / `m_sortField` (dataview column).
+Added: `ibPropertySource::GetValueAsString()` (thin, over `ibVariantDataSource::Write`).
+
+**Dot-walk sort duplicated rows — keyset is incompatible with a JOIN sort.**
+Sorting a DB list by a dot-walk field repeated the window. `BuildAnchorPredicate`
+(`dbTableProvider.cpp`) deliberately excludes dot-walk sorts from the keyset
+predicate (`if (!s.m_path.empty()) continue` — the joined column is not on the main
+scan), but the rendered ORDER BY *includes* it, so the keyset advances by PK while
+the order is by the joined value → the next page overlaps rows already shown. The
+dot-walk value is not even marshalled into the anchor row (it is resolved per row on
+the frontend, absent from the SELECT), so a full keyset fix is large (marshal the
+join value + predicate over the alias). Low-risk fix instead: `RunComposerPage`
+(`tableInfoDb.cpp`) detects a dot-walk sort (`GetColumnIDByName(field) == NOT_FOUND`)
+and fetches the whole ordered result in ONE unbounded snapshot (`page.m_count = 0`,
+`dir = Reset`), returning 0 on any anchored continuation. Non-dot-walk paging is
+untouched. Trade: a dot-walk sort loads all rows at once (user-chosen, acceptable).
+
+**Dot-walk grouping showed empty headers.** Deeper, two layers. (1) Totals lowering
+projects a dot-walk dimension under a **synthetic** model id `kSyntheticColumnBase =
+0x50000000` (`queryLowering.cpp`) — outside real metaIDs so a self-referencing walk
+(a `DataVersion` leaf sharing a metaID with the row's own attribute) cannot clash
+with the main table — and `FoldDimLevel` stamps the group value under that synthetic
+id. So `GetColumnIDByName(dim)` (and the leaf id) never find it. (2) The header's
+display path is the dot-path column, which resolves `Ref.Field` through the *row's*
+reference — a group header has no row reference → blank. Fix (Max's framing: "the
+group value comes FROM the composer — just render it, don't re-resolve the dot per
+row"): in `RunComposerPage`, when `GetColumnIDByName` misses, walk the path through
+the queryable (`ResolveColumnByName` + `ResolveReferenceTarget`) to the leaf id (=
+the dot-path column's model id) and flag `dotWalkDim`; when building the group node,
+scan `r.m_values` for the key `>= 0x50000000` (the one synthetic dimension cell on
+the group row) and re-key it under the leaf id + push it onto `groupPath`. The header
+then renders the composer's value directly, and drilling filters `Ref.Field = value`.
+Regular grouping is untouched (`dotWalkDim == false`). ⚠️ The scan assumes one
+synthetic key per row — unambiguous for single-level dot-walk; a multi-level dot-walk
+grouping (several synthetic keys) is not yet disambiguated. Note: `ibListFetchDriver::OnRow`
+(`listFetchDriver.h`) keys a driver row by SCHEMA columns only, so a value stamped
+under a non-schema column is discarded — the synthetic id survives because it *is* in
+the schema (an earlier attempt to stamp under a display column via `FoldDimLevel` was
+dropped here and reverted).
+
+**Subgroups inherit ancestor dimensions.** A subgroup should show the fields grouped
+above it (group 2 shows group 1; group 3 shows 1 and 2). DB: `FoldDimLevel`
+(`queryProvider.cpp`) seeds the child node with `child->m_values = node->m_values`
+(the parent's cells) before stamping its own dimension — both branches; the cascade
+carries every ancestor down. RAM parity (`tableInfoRam.cpp` `RunComposerPage`
+group-level): the node stamped only its own dimension; fixed with a loop over the
+ancestors — `for (k < depth) vals[dims[k].first] = parentPath[k]` — seeding ancestor
+dimension cells under their own head-column ids before the node's own. (RAM detail
+rows are live storage nodes and already carry every attribute — only the synthetic
+subgroup headers needed it.) Regular multi-level grouping is unaffected.
+
+**Sort arrow re-syncs after a dialog commit.** With `SyncColumnArrowsFromModel`
+deleted, a sort committed through the "List settings…" dialog (not a header click)
+updated the header arrow only after a full column refresh — `OnColumnClick` sets the
+arrow only on a click, while the dialog commits the composer + `NotifyReset` without
+reaching the columns. Fix without resurrecting `GetSortArrows`: a virtual
+`ibDataViewColumnBase::SyncSortArrowFromModel()` (`dataview.h`, base no-op), overridden
+by `ibDataViewColumnObject` (`tableBoxColumn.cpp`) to read the composer via
+`GetControl()->GetSourceFieldName()` and `SetSortOrder` on a match; called from the
+column's `OnUpdated` (form build) and from `datavgen` `PagedBootstrap`
+(`ResetAllSortColumns()` + per column) after a refresh. ⚠️ The whole override is under
+`#ifndef OES_USE_WEB` — `ibDataViewColumnObject` is desktop-only, so leaving it visible
+breaks the `wfrontend.dll` compile (C2653).

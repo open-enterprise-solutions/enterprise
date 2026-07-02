@@ -327,14 +327,6 @@ void ibDataViewModel::Resort()
 	}
 }
 
-void ibDataViewModel::OnSortColumnChanged(unsigned int /*col*/, bool /*ascending*/)
-{
-	// Default: legacy behaviour — let notifiers re-sort the existing
-	// rendered window. Paged models override this to update their own
-	// sort state and trigger a fresh DB fetch.
-	Resort();
-}
-
 void ibDataViewModel::AddNotifier(ibDataViewModelNotifier* notifier)
 {
 	m_notifiers.push_back(notifier);

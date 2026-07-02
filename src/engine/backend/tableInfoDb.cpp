@@ -86,12 +86,29 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 			}
 		}
 
+	// KEYSET-vs-DOT-WALK-SORT incompatibility: when a sort field is a dot-walk (reference) path — e.g.
+	// "Reference.DataVersion" — the ORDER BY rides the JOINED column, but the keyset predicate rides the main-
+	// table PK (BuildAnchorPredicate deliberately skips a joined column, dbTableProvider.cpp) → the two diverge,
+	// so `PK > anchorPk` returns rows already shown under the ORDER BY → the page windows OVERLAP (duplicate
+	// rows). A joined column can't be a keyset key, so we fetch the WHOLE ordered result in ONE shot: unbounded
+	// on the initial (unanchored) read, nothing on any keyset continuation. (Detail-level only — a grouped read
+	// runs the TOTALS path.) The trade: a dot-walk sort loads all rows up front (user-chosen, so acceptable).
+	bool dotWalkSort = false;
+	if (!groupLevel) {
+		for (size_t i = 0; i < m_composer.SortCount(); ++i) {
+			wxString f; bool a;
+			if (m_composer.GetSortAt(i, f, a) && GetColumnIDByName(f) == wxNOT_FOUND) { dotWalkSort = true; break; }
+		}
+	}
+	if (dotWalkSort && anchor.IsOk())
+		return 0;   // the one-shot initial read already served the whole ordered result
+
 	// Build the page envelope from (anchor, count, direction) — same shape the
 	// dynamic list builds. +1 probe row -> the buffer learns there is more.
 	ibReadPageRequest page;
-	page.m_direction   = dir;
-	page.m_count       = (count > 0 ? count : defaultCountPerPage) + 1;   // +1 probe row
-	page.m_reverseSort = (dir == ibFetchDirection::Backward);
+	page.m_direction   = dotWalkSort ? ibFetchDirection::Reset : dir;
+	page.m_count       = dotWalkSort ? 0 : ((count > 0 ? count : defaultCountPerPage) + 1);   // 0 = unbounded; else +1 probe
+	page.m_reverseSort = (page.m_direction == ibFetchDirection::Backward);
 	page.m_flatScan   = true;
 	page.m_isTopLevel = true;
 	// HIERARCHY = a property of the QUERYABLE: a source with a parent column (GetHierarchyColumn — the default,
@@ -207,10 +224,39 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	if (dir == ibFetchDirection::Backward)
 		std::reverse(rows.begin(), rows.end());
 
-	// At a GROUP level the dimension being grouped is dims[depth]; its value rides in the row under
-	// that field's column id. Resolve it ONCE up front (name → column id) to stamp each group node's
-	// own dimension value onto its path. wxNOT_FOUND → the group still drills, just without a path leaf.
-	const ibMetaID groupDimCol = groupLevel ? GetColumnIDByName(dims[depth]) : ibMetaID(wxNOT_FOUND);
+	// At a GROUP level the dimension being grouped is dims[depth]; the DISPLAY column that renders the group
+	// header + the drill scope key by its column id. A PLAIN dimension resolves through the model column
+	// collection AND the totals result carries its value under that same id — read straight off the row. A
+	// DOT-WALK dimension ("Reference.DataVersion") does NOT: the totals lowering groups it under a SYNTHETIC id
+	// (so its leaf can't clash with the main table on a self-reference), so the value rides under that synthetic
+	// id, NOT the display leaf's real id. So (a) resolve the REAL leaf id by walking the path through the
+	// queryable's references (this is the dot-path display column's own model id), and (b) flag it so we re-key
+	// the value from the synthetic id to the leaf id per group row below (the composer computed the value; we
+	// just route it to where the display + drill read it — no per-row dot re-resolution on a group header).
+	ibMetaID groupDimCol   = ibMetaID(wxNOT_FOUND);
+	bool     dotWalkDim    = false;
+	if (groupLevel) {
+		groupDimCol = GetColumnIDByName(dims[depth]);
+		if (groupDimCol == wxNOT_FOUND) {
+			const ibBackendQueryable* walk = q;
+			wxString rest = dims[depth];
+			const ibBackendQueryColumn* leaf = nullptr;
+			while (walk != nullptr && !rest.IsEmpty()) {
+				leaf = walk->ResolveColumnByName(rest.BeforeFirst(wxT('.')));
+				rest = rest.AfterFirst(wxT('.'));
+				if (leaf == nullptr) break;
+				if (!rest.IsEmpty()) walk = walk->ResolveReferenceTarget(leaf);   // hop into the reference target
+			}
+			if (leaf != nullptr && rest.IsEmpty()) {
+				groupDimCol = leaf->GetColumnId();
+				dotWalkDim  = true;
+			}
+		}
+	}
+	// A dot-walk dimension's grouped value rides under a totals-lowering SYNTHETIC column id (queryLowering.cpp
+	// kSyntheticColumnBase). Keep in sync: dim synthetics sit at/above this base (aggregate synthetics sit lower,
+	// at 0x40000000), so a single dot-walk group row carries exactly one key here = its dimension value.
+	const ibMetaID kDimSyntheticBase = 0x50000000;
 
 	// The source's PRIMARY-KEY columns — stamp each DB-list DETAIL copy's stable identity (m_rowKey) so it
 	// survives re-fetch selection AND a guid-keyed FindRowValue stub matches a fetched row by it. (RAM never
@@ -238,12 +284,25 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 			continue;
 		ibComposerNode* node = nullptr;
 		if (groupLevel) {
-			// A GROUP node: its identity / scope is the parent path + THIS group's own dimension value,
-			// and it is a container (its children re-fetch one dimension deeper, or the detail rows).
+			// A GROUP node: its identity / scope is the parent path + THIS group's own dimension value, and it
+			// drills one dimension deeper (or into the detail rows). DRILLABLE container only when the dimension
+			// value was stamped into the path (else a drill re-enters at depth 0 → groupLevel fires again →
+			// infinite re-grouping).
+			std::map<ibMetaID, ibValue> values = r.m_values;
+			ibValue dimValue = (groupDimCol != wxNOT_FOUND) ? values[groupDimCol] : ibValue();
+			if (dotWalkDim) {
+				// The value rides under the synthetic dim id, not the leaf id the display + drill key by. Pull it
+				// (the sole synthetic-range key on a group row) and RE-KEY it under the real leaf id, so
+				// GetValueByRow(group, dot-path column) reads the composer's grouped value directly.
+				for (const auto& kv : r.m_values)
+					if (kv.first >= kDimSyntheticBase) { dimValue = kv.second; break; }
+				if (groupDimCol != wxNOT_FOUND)
+					values[groupDimCol] = dimValue;
+			}
 			std::vector<ibValue> groupPath = parentPath;
 			if (groupDimCol != wxNOT_FOUND)
-				groupPath.push_back(r.GetValue(groupDimCol));
-			node = new ibComposerNode(r.m_values, groupPath, /*container*/true);
+				groupPath.push_back(dimValue);
+			node = new ibComposerNode(values, groupPath, /*container*/ groupDimCol != wxNOT_FOUND);
 		}
 		else {
 			// A DETAIL row (DB-list copy): keeps its PRIMARY-KEY row-key (re-fetch selection survival + FindRowValue
