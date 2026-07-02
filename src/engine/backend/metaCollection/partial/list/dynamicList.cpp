@@ -222,7 +222,7 @@ const ibMetaData* ibValueDynamicList::GetSourceMetaData() const
 // register / RAM models. RunComposerPage reads through GetSourceQueryable() (the configured source) + the ONE
 // base composer + the persistent ListSettings; its grouping branch does the same group-drill RunPage did
 // (Filter dim==value per drilled level + TotalBy the next), and its hierarchy branch the self-hierarchy tree.
-// The old per-list keyset provider + ibDynamicListNode + the native page.m_parentCol tree are gone — a tree is
+// The old per-list keyset provider + ibDynamicListNode + the native page.m_hierarchyCol tree are gone — a tree is
 // a hierarchy GROUPING over the composer now, not a parent-column page scope.
 // ⚠ FromText (SetCustomQuery): RunComposerPage requires GetSourceQueryable() != null, so a custom-text source
 //   must vend a queryable to page through here (the computed-source frontier) — FromSource sources work today.

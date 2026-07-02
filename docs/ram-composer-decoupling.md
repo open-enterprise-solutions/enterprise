@@ -109,7 +109,7 @@ Settings form: ONE dialog, talks to `ibDataComposerBase` polymorphically (DB/RAM
 - **Selection survival is a DB-only problem.** RAM nodes are stable storage rows → selection survives
   trivially (same pointer). DB nodes are transient per-page snapshots → survive by rowKey / `IsEqualTo`.
   (The view-mode-switch selection-restore pain we hit is legitimately DB-side and stays there.)
-- **Hierarchy (parent-ref tree) is DB-only.** `GetHierarchyColumn` / `GetFolderColumn` / `page.m_parentCol`
+- **Hierarchy (parent-ref tree) is DB-only.** `GetHierarchyColumn` / `GetFolderColumn` / `page.m_hierarchyCol`
   / the drill / the `s_constIgnoreParent` flat-vs-tree sentinel all live in `ibValueModelDb`. RAM is flat
   (only a user grouping could make it a tree — see deferral below).
 - **`ibRamTableQueryable` + `ibTempSourceScope` stay — but ONLY for EXPLICit querying** (a ТЗ deliberately

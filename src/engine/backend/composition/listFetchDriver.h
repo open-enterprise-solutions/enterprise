@@ -41,33 +41,12 @@ public:
 		}
 	};
 
-	// Tree scope — "the tree is just a grouping by the parent dimension": the
-	// model passes the parent COLUMN (the queryable's GetHierarchyColumn()) and the
-	// node it browses; the driver assembles the hierarchy envelope itself, and
-	// the provider derives the physical field. The model knows no field names.
-	struct ibTreeScope
-	{
-		const ibBackendQueryColumn* m_parentCol = nullptr;   // the parent-ref attribute AS a column
-		ibGuid                      m_parentGuid;            // scope node; invalid = top level
-		bool                        m_flatScan = false;      // ignore hierarchy (whole-table walk)
-	};
-
 	// Full (single-batch) read — an enum list.
 	ibListFetchDriver() = default;
 
-	// Paged read — the envelope the model built (anchor / direction / count).
+	// Paged read — the envelope the model built (anchor / direction / count + the hierarchy scope, if any).
+	// The model fills m_hierarchy* on the request directly (RunComposerPage); there is no separate scope object.
 	explicit ibListFetchDriver(const ibReadPageRequest& page) : m_paged(true), m_page(page) {}
-
-	// Paged TREE read — the page envelope + the hierarchy scope.
-	ibListFetchDriver(const ibReadPageRequest& page, const ibTreeScope& scope)
-		: m_paged(true), m_page(page)
-	{
-		m_page.m_parentFilter = true;
-		m_page.m_parentCol    = scope.m_parentCol;
-		m_page.m_parentGuid   = scope.m_parentGuid;
-		m_page.m_isTopLevel   = !scope.m_parentGuid.isValid();
-		m_page.m_flatScan     = scope.m_flatScan;
-	}
 
 	bool GetPageRequest(ibReadPageRequest& request) const override {
 		if (!m_paged)

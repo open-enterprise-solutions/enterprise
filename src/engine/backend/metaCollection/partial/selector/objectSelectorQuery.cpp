@@ -59,8 +59,7 @@ bool ibValueSelectorRecordDataObject::ApplyAnchor(ibReadPageRequest& page) const
 {
 	if (!m_objGuid.isValid())
 		return false;   // first row — no keyset clause
-	page.m_hasAnchor  = true;
-	page.m_anchorGuid = wxString(m_objGuid);   // catalog row-key tiebreaker
+	page.m_hasAnchor  = true;   // the keyset cursor rides in m_anchorSortValues (the selector's effective sort)
 	return true;
 }
 

@@ -107,12 +107,15 @@ the **FolderRef tree**, and the **register** list. The pattern:
   (`composition/listFetchDriver.h`) — a stack object built per `Get*Fetch`
   call: the envelope in (direction/anchor/count), meta-keyed rows out
   (`map<metaID, ibValue>` off `OutputColumn::GetColumnId()`).
-- the tree passes an **`ibTreeScope`** (the parent COLUMN — the queryable's
-  `GetHierarchyColumn()` — plus the browsed node): the driver assembles the
-  hierarchy envelope, and the PROVIDER derives the physical field
-  (`ibReadPageRequest::m_parentCol`; the model knows no field names). The
-  whole First/Next/Prev triple is ONE fetch body — direction is envelope
-  state (Backward = inverse scan + buffer reverse).
+- the tree scope rides on the request itself: the model fills
+  `ibReadPageRequest::m_hierarchyCol` (the parent COLUMN — the queryable's
+  `GetHierarchyColumn()`; the model knows no field names) and
+  `m_hierarchyKey` (the browsed parent node's KEY — the parent reference
+  VALUE, empty = roots). The PROVIDER derives the physical field and encodes
+  the key like any keyset key (a reference → its `_RRRef` blob, self-describing;
+  no bare guid, no same-table assumption). The whole First/Next/Prev triple is
+  ONE fetch body — direction is envelope state (Backward = inverse scan +
+  buffer reverse).
 
 Row identity: the uuid identity column is a RAW DB column **outside the query
 language** by design. The row key is the data-reference attribute (named,

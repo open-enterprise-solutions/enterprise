@@ -561,7 +561,8 @@ Existing ctor signature `(void*)` preserved for ABI; cast to
 `ibDataViewItem(ibDataViewObject*)` ctor IncRefs to 2, then `r->DecRef()`
 drops the initial allocation reference so `out` owns exactly one ref per
 row. Every typed→universal bridge routes through it (objectListQuery, register
-fetch). The `.get()` paths (auditLog `m_rowObjects`, predefinedEditor) borrow
+fetch). *(Superseded 2026-07 — §9.6: the typed bridge was retired; `RunComposerPage`
+emits `ibComposerNode` directly and the template was removed.)* The `.get()` paths (auditLog `m_rowObjects`, predefinedEditor) borrow
 model-owned rows — item IncRef/DecRef is balanced, model keeps the row alive.
 No leak path remains. (Chose option 2's adopt-semantics, kept the existing
 IncRef'ing copy ctor for the borrow paths.)
@@ -648,7 +649,7 @@ re-fetches via `Get*Fetch`.
 | ⚠ OPEN: vertical scrollbar flashes on the right while a list/document form opens | NOT FIXED 2026-06-06 — **not the dataview** (proven: `ibDataViewCtrl::HasScrollbar(wxVERTICAL)` is never true; its `SetScrollbar(wxVERTICAL,…)` range is always 0). The flash is the **form host `ibVisualHost` (`wxScrolledWindow`)**: `UpdateVirtualSize()` runs during the form build while the host client is a tiny placeholder (~16px) and sets virtual = content panel **+50px** (~70px) → virtual ≫ client → native scrollbars appear, then hide once the host grows to its real size. `Freeze()` does NOT suppress them (Win32 native scrollbars are non-client). Tried & reverted (didn't help): freezing the host itself during build; skipping `UpdateVirtualSize` while frozen + recomputing on a host `wxEVT_SIZE`. Real fix needs a form-host lifecycle change (defer scroll setup until the host has its final size / rework the `+50` margin / build hidden then show) — touches every form's scrolling, needs its own focused PR + testing. Constructor sets `SetScrollRate(5,5)` (`visualHost.h`); virtual size set in `ibVisualHost::UpdateVirtualSize` (`visualHost.cpp`) |
 | Hierarchical drill chain pin | ✅ landed 2026-05-06 — `m_topParentChain` (refcount-pinned `ibDataViewItem` array) survives `Cleared() / DestroyTree`; replaces a single anchor that was wiped on re-fetch |
 | wxDVC sort suppression for paged | ✅ landed 2026-05-06 — `ibDataViewMainWindow::GetSortOrder()` returns empty `SortOrder()` when the model `IsPagedModel()` so the fork's `InsertChild` appends in fetch order rather than scattering rows via binary-search insertion |
-| Ownership-transport convention (`AdoptRowsToItems` / Append / Insert) | ✅ landed 2026-05-05 — `ibValueModel::AdoptRowsToItems` template; FolderRef bridges use it; tape-buffer Apply path already adopts via `Append`/`Insert` |
+| Ownership-transport convention (`AdoptRowsToItems` / Append / Insert) | ✅ landed 2026-05-05 — `ibValueModel::AdoptRowsToItems` template; FolderRef bridges use it; tape-buffer Apply path already adopts via `Append`/`Insert`. **Retired 2026-07 (§9.6):** the typed-Fetch→universal bridge is gone (all families emit `ibComposerNode` from `RunComposerPage` directly), so the template had no callers and was removed |
 | Selection re-locate by stable key | covered by existing `FindRowValue` + new `IsEqualTo` virtual on row — current-row check inside loaded buffer; no separate `FindRowByKey` API (request from 2026-05-05 plan superseded by the `IsEqualTo` path) |
 | `ibPredefinedValueObject` shared_ptr/refcount mixing | ✅ closed 2026-05-06 — audit confirmed no callsite passes the object through `ibDataViewItem` (ctor takes only model/view rows), so the original mixing concern doesn't apply. Base stays `wxRefCounter` — `ibPredefinedValueObject` is not part of the data-view hierarchy |
 | RAM-backed `Get*Fetch` for TabularSection / ibValueTable | ✅ landed — new intermediate base `ibValueModelRamTableBase` (`tableInfo.h:1100`) hosts a `GetFirstFetch` override (`tableInfo.h:1324`) slicing `m_nodeValues` by anchor+count. Inherited by `ibValueTabularSectionDataObjectBase`, `ibValueModelTable` (`system/value/valueTable.h`), and `ibValueRecordSetObject` for registers. `Features::RamFetch` flag advertised via `GetFeatures()` override |
@@ -896,12 +897,16 @@ group value comes FROM the composer — just render it, don't re-resolve the dot
 row"): in `RunComposerPage`, when `GetColumnIDByName` misses, walk the path through
 the queryable (`ResolveColumnByName` + `ResolveReferenceTarget`) to the leaf id (=
 the dot-path column's model id) and flag `dotWalkDim`; when building the group node,
-scan `r.m_values` for the key `>= 0x50000000` (the one synthetic dimension cell on
-the group row) and re-key it under the leaf id + push it onto `groupPath`. The header
+scan `r.m_values` for the synthetic keys `>= 0x50000000` and pick the `dwOrdinal`-th
+(the synthetic ids ascend in lowering order — dim0, dim1, … then measures — so the Nth
+dot-walk dimension takes the Nth synthetic; `dwOrdinal` = the count of dot-walk dimensions
+before this level), re-key it under the leaf id + push it onto `groupPath`. The header
 then renders the composer's value directly, and drilling filters `Ref.Field = value`.
-Regular grouping is untouched (`dotWalkDim == false`). ⚠️ The scan assumes one
-synthetic key per row — unambiguous for single-level dot-walk; a multi-level dot-walk
-grouping (several synthetic keys) is not yet disambiguated. Note: `ibListFetchDriver::OnRow`
+Regular grouping is untouched (`dotWalkDim == false`). Multi-level dot-walk grouping works
+(each subgroup reads its own synthetic key by ordinal); the one residual edge is MIXING
+scalar-synthetic and expanded-LEFT-join dot-walk dimensions in one grouping — the expanded
+ones take no synthetic id, skewing the ordinal — but pure single-source scalar dot-walk
+dimensions, the common case, map 1:1. Note: `ibListFetchDriver::OnRow`
 (`listFetchDriver.h`) keys a driver row by SCHEMA columns only, so a value stamped
 under a non-schema column is discarded — the synthetic id survives because it *is* in
 the schema (an earlier attempt to stamp under a display column via `FoldDimLevel` was
@@ -930,3 +935,67 @@ column's `OnUpdated` (form build) and from `datavgen` `PagedBootstrap`
 (`ResetAllSortColumns()` + per column) after a refresh. ⚠️ The whole override is under
 `#ifndef OES_USE_WEB` — `ibDataViewColumnObject` is desktop-only, so leaving it visible
 breaks the `wfrontend.dll` compile (C2653).
+
+### 9.6 Generic row — unification confirmed complete, vestige retired (2026-07)
+
+The "generic row" goal (one row class replaces the four per-family list row classes; the
+driver emits final model rows; the conversion loops + refcount dance retire) was mostly
+**already landed** — a re-audit found no per-family rows left. `ibValueTableEnumRow`,
+`ibValueTreeListNode`, and `ibValueTableKeyRow` are gone (deletion comments in
+`objectList.h`); **`ibComposerNode`** (`tableInfo.h`) is the single row for every family —
+enum / catalog / FolderRef tree / register — carrying the values map (`m_nodeValues`), the
+identity (`m_rowKey` PK values, `m_groupPath` dimension path, or live-node pointer), and the
+container flag (`m_container`). `RunComposerPage` (DB + RAM) wraps the driver's
+`ibListFetchDriver::Row` into an `ibComposerNode` per row — one unified path, not four.
+
+Remaining cleanup done here: the vestigial `ibValueModel::AdoptRowsToItems` template
+(the old typed-Fetch→universal ownership-transport bridge) had **zero callers** and was
+removed. What was *not* done, deliberately: pushing node construction down into the
+driver's `OnRow` so the driver emits `ibComposerNode` directly. `ibListFetchDriver` is a
+generic `ibCompositionDriver` in `composition/`; `ibComposerNode` is a model concept
+(`m_rowKey` / `m_groupPath` / container semantics the driver has no business knowing).
+Coupling them would regress a deliberate layer split for no functional gain — the
+per-row wrap in `RunComposerPage` stays. Row identity still uses `m_rowKey` / `m_groupPath`
+/ pointer rather than `ibValue::GetHashKey()`; unifying that belongs to the L5-2 identity
+consolidation (§9.3), a separate arc.
+
+### 9.7 `ibReadPageRequest` cleanup + hierarchy scope as a KEY, not a bare guid (2026-07)
+
+**Dead fields removed.** `m_anchorGuid` (`wxString`) was WRITE-only — the selector set it
+(`objectSelectorQuery.cpp`) but nothing read it; the keyset cursor is `m_anchorSortValues`,
+which already carries the row PK as a reference VALUE (its own tail, encoded by
+`ReferenceKeyBlob`). `m_parentRefField` (the "legacy physical name" seam) was READ-only —
+never written anywhere, so its ternary always fell through to `ReferenceFieldOf(m_parentCol)`.
+Both removed. Also removed: the dead `ibListFetchDriver::ibTreeScope` struct + the driver's
+2-arg tree ctor — nothing ever constructed a scope; the live path fills the request directly
+in `RunComposerPage`.
+
+**Rename.** The hierarchy block (`m_parentFilter` / `m_parentCol` / `m_parentGuid`) is set
+ONLY on a tree drill (`tableInfoDb.cpp` under `if (hierarchy …)`) and read only by the
+parent-ref predicate + the cache guard — a hierarchy-only concern — so `m_parent*` →
+`m_hierarchy*`. (`ibTreeScope`'s own `m_parent*` would have stayed as "the browsed parent
+node", but the struct is gone.)
+
+**The scope is a KEY value now, not a bare guid.** `m_hierarchyGuid : ibGuid` →
+`m_hierarchyKey : ibValue` (the browsed parent's own PK reference; empty = roots).
+`BuildParentRefPredicate` used to take a bare `ibGuid` and rebuild the parent `_RRRef` blob
+from `queryable->GetQueryTableId()` — baking in **two assumptions**: (a) the hierarchy is
+keyed by a guid, and (b) the parent is the same table (self-hierarchy), since the metaID came
+from the queryable, not the parent. Both are crutches: a hierarchical queryable could be keyed
+by anything (a string code), and the parent reference already self-describes its metaID. Fix:
+pass the parent KEY value whole and encode it the SAME way the keyset anchor does — a reference
+→ `ReferenceKeyBlob` (self-describing metaID, no same-table assumption), a non-reference key →
+`ibConst`. Byte-identical for a self-hierarchy (the only source shape today: `ReferenceKeyBlob`
+reads the ref's own metaID, which == `GetQueryTableId()` there), so no behavior change — just
+the two assumptions gone. One residual: the empty-ROOT sentinel still derives the empty-ref type
+from `GetQueryTableId()`; correct for self-hierarchy, and a fully non-reference hierarchy would
+additionally need the root case + `GetHierarchyColumn` generalized — future work, no such source
+exists yet.
+
+**Audit — is the anti-pattern elsewhere?** No. The "decompose a reference to a bare guid, rebuild
+the blob with a same-table assumption" shape was unique to `BuildParentRefPredicate`.
+`WhereKey(ibGuid)` / `WhereKeyIn` look similar but filter the **uuid identity column** (which IS
+a guid, not a reference — no metaID half to reconstruct), so a bare guid is the natural key there.
+`ReferenceKeyBlob` is the correct canonical encoder. `GetQueryTableGuid()` returns the queryable's
+own table-identity guid (the dynamic list's `GetGuid()`), not a decomposed row reference. All
+legitimate.

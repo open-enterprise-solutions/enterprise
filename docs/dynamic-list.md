@@ -81,9 +81,10 @@ void OnRow(int level, bool hasChildren, const std::vector<ibValue>& values) over
 }
 ```
 
-`Get*Fetch` is then ~3 lines (build provider, `composer.Run`, `AdoptRowsToItems`).
-**No hand-rolled row loop in the model.** `ibListFetchDriver::ibTreeScope` carries
-flat-scan vs parent scope (front-end List view = `s_constIgnoreParent` → flat).
+`Get*Fetch` is then ~3 lines (build provider, `composer.Run`, wrap the driver rows).
+**No hand-rolled row loop in the model.** The hierarchy scope (flat-scan vs parent
+scope) rides on `ibReadPageRequest` (`m_flatScan` / `m_hierarchyCol` + `m_hierarchyKey`),
+filled by the model directly (front-end List view = `s_constIgnoreParent` → flat).
 
 **Fetch is `const`.** `Get*Fetch` / `RunPage` only READ the source and RETURN rows — they
 never mutate the model. A returned row node *is* mutable later (write-back / change-notify),

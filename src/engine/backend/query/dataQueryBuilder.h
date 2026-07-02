@@ -95,22 +95,22 @@ struct ibReadPageRequest
 {
 	ibFetchDirection     m_direction = ibFetchDirection::Forward;
 	bool                 m_hasAnchor = false;       // cursor present? (first page = false)
-	std::vector<ibValue> m_anchorSortValues;        // anchor value per sort column, in order
-	wxString             m_anchorGuid;              // anchor row guid — ONLY for a guidName tiebreaker
-	                                                // (catalog); register identity is in the sort cols
+	std::vector<ibValue> m_anchorSortValues;        // anchor value per sort column, in order (the keyset cursor —
+	                                                // the row PK rides here as a reference value, its own tail)
 	int                  m_count = 0;               // batch size (caller adds its own +1 probe)
 	bool                 m_reverseSort = false;     // backward-walk flips ASC/DESC
 	bool                 m_lockForUpdate = false;   // pessimistic read-for-update (register set lock) — adds the dialect's row-lock clause
 
 	// --- hierarchy (tree) — optional -------------------------------------
-	bool      m_parentFilter = false;   // filter by parent reference (tree mode)
-	// The parent-ref COLUMN (preferred — the provider derives the physical field
-	// itself); m_parentRefField is the legacy physical name, used when set.
-	const ibBackendQueryColumn* m_parentCol = nullptr;
-	wxString  m_parentRefField;         // physical reference column (legacy seam)
-	ibGuid    m_parentGuid;             // parent row guid (empty/invalid + isTopLevel = top)
-	bool      m_isTopLevel  = false;    // top-level rows (empty parent)
-	bool      m_flatScan    = false;    // flat-list view of a tree: skip the parent filter
+	// Set ONLY on a hierarchy (tree) drill — a scope filter that fetches the children of
+	// the browsed parent node. No non-hierarchy read touches these.
+	bool      m_hierarchyFilter = false;   // filter by the parent reference (tree mode)
+	const ibBackendQueryColumn* m_hierarchyCol = nullptr;   // the parent-ref attribute AS a column (provider derives the physical field)
+	ibValue   m_hierarchyKey;              // browsed parent node KEY — the parent reference VALUE (empty = top level).
+	                                       // A value, NOT a bare guid: the provider encodes it like any keyset key
+	                                       // (a reference self-describes its metaID; a non-reference hierarchy rides inline)
+	bool      m_isTopLevel  = false;       // top-level rows (empty parent)
+	bool      m_flatScan    = false;       // flat-list view of a tree: skip the hierarchy filter
 };
 
 // ibDataQueryResult — the L3 selection. Wraps the L2 cursor and yields READY

@@ -118,18 +118,16 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// at L3 (no empty reference to construct). This is the mechanism the dynamic list used before the arc; a
 	// user grouping (Elements) still layers ON TOP through the composer below; a flat view keeps m_flatScan.
 	if (hierarchy && q->GetHierarchyColumn() != nullptr) {
-		page.m_parentFilter = true;
-		page.m_parentCol    = q->GetHierarchyColumn();
-		page.m_flatScan     = false;
-		page.m_isTopLevel   = !hierHasParent;
-		// DRILL: the browsed folder's OWN guid is the scope — its children = rows whose parent == it. Without
-		// it (top level → invalid guid) the provider returns the ROOTS again under every expanded folder (the
-		// "doubling"). hierParentKey is the folder's PK self-reference; pull the guid off it.
-		if (hierHasParent) {
-			ibValueReferenceDataObject* refObj = nullptr;
-			if (hierParentKey.ConvertToValue(refObj) && refObj != nullptr)
-				page.m_parentGuid = refObj->GetGuid();
-		}
+		page.m_hierarchyFilter = true;
+		page.m_hierarchyCol    = q->GetHierarchyColumn();
+		page.m_flatScan        = false;
+		page.m_isTopLevel      = !hierHasParent;
+		// DRILL scope = the browsed folder's own PK reference (its children = rows whose parent == it). Pass the
+		// KEY value WHOLE — the provider encodes it (a reference → its _RRRef blob, self-describing metaID). Empty
+		// when top-level → the provider filters the empty-parent roots. (Was: decompose to a bare guid + rebuild
+		// the blob from the queryable's table id — a crutch that assumed guid-keying AND a self-hierarchy.)
+		if (hierHasParent)
+			page.m_hierarchyKey = hierParentKey;
 	}
 	if (anchor.IsOk()) {
 		page.m_hasAnchor = true;
@@ -233,29 +231,45 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// queryable's references (this is the dot-path display column's own model id), and (b) flag it so we re-key
 	// the value from the synthetic id to the leaf id per group row below (the composer computed the value; we
 	// just route it to where the display + drill read it — no per-row dot re-resolution on a group header).
+	// Resolve a possibly-dotted dimension field NAME to its leaf column id by walking the queryable's references;
+	// wxNOT_FOUND when it is not a resolvable dot-walk path. (A plain field is resolved by GetColumnIDByName.)
+	auto resolveDotWalkLeaf = [&](const wxString& field) -> ibMetaID {
+		const ibBackendQueryable* walk = q;
+		wxString rest = field;
+		const ibBackendQueryColumn* leaf = nullptr;
+		while (walk != nullptr && !rest.IsEmpty()) {
+			leaf = walk->ResolveColumnByName(rest.BeforeFirst(wxT('.')));
+			rest = rest.AfterFirst(wxT('.'));
+			if (leaf == nullptr) break;
+			if (!rest.IsEmpty()) walk = walk->ResolveReferenceTarget(leaf);   // hop into the reference target
+		}
+		return (leaf != nullptr && rest.IsEmpty()) ? leaf->GetColumnId() : ibMetaID(wxNOT_FOUND);
+	};
+
 	ibMetaID groupDimCol   = ibMetaID(wxNOT_FOUND);
 	bool     dotWalkDim    = false;
+	int      dwOrdinal     = 0;   // index of dims[depth] among the dot-walk dimensions — selects the matching synthetic key
 	if (groupLevel) {
+		// Each single-source scalar dot-walk dimension consumed one synthetic id in lowering order (queryLowering
+		// nextSynthId++, in m_totalsBy order), so dims[depth]'s grouped value rides under the dwOrdinal-th synthetic
+		// key on the row — NOT simply the lowest. Count the dot-walk dimensions strictly before this level.
+		for (size_t k = 0; k < depth && k < dims.size(); ++k)
+			if (GetColumnIDByName(dims[k]) == wxNOT_FOUND && resolveDotWalkLeaf(dims[k]) != ibMetaID(wxNOT_FOUND))
+				++dwOrdinal;
+
 		groupDimCol = GetColumnIDByName(dims[depth]);
 		if (groupDimCol == wxNOT_FOUND) {
-			const ibBackendQueryable* walk = q;
-			wxString rest = dims[depth];
-			const ibBackendQueryColumn* leaf = nullptr;
-			while (walk != nullptr && !rest.IsEmpty()) {
-				leaf = walk->ResolveColumnByName(rest.BeforeFirst(wxT('.')));
-				rest = rest.AfterFirst(wxT('.'));
-				if (leaf == nullptr) break;
-				if (!rest.IsEmpty()) walk = walk->ResolveReferenceTarget(leaf);   // hop into the reference target
-			}
-			if (leaf != nullptr && rest.IsEmpty()) {
-				groupDimCol = leaf->GetColumnId();
+			const ibMetaID leafId = resolveDotWalkLeaf(dims[depth]);
+			if (leafId != ibMetaID(wxNOT_FOUND)) {
+				groupDimCol = leafId;
 				dotWalkDim  = true;
 			}
 		}
 	}
 	// A dot-walk dimension's grouped value rides under a totals-lowering SYNTHETIC column id (queryLowering.cpp
 	// kSyntheticColumnBase). Keep in sync: dim synthetics sit at/above this base (aggregate synthetics sit lower,
-	// at 0x40000000), so a single dot-walk group row carries exactly one key here = its dimension value.
+	// at 0x40000000). Several dot-walk dimensions each take their OWN synthetic id, ASCENDING in lowering order
+	// (dim0, dim1, … then measures), so a group row at depth D reads the dwOrdinal-th synthetic key (below).
 	const ibMetaID kDimSyntheticBase = 0x50000000;
 
 	// The source's PRIMARY-KEY columns — stamp each DB-list DETAIL copy's stable identity (m_rowKey) so it
@@ -291,11 +305,18 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 			std::map<ibMetaID, ibValue> values = r.m_values;
 			ibValue dimValue = (groupDimCol != wxNOT_FOUND) ? values[groupDimCol] : ibValue();
 			if (dotWalkDim) {
-				// The value rides under the synthetic dim id, not the leaf id the display + drill key by. Pull it
-				// (the sole synthetic-range key on a group row) and RE-KEY it under the real leaf id, so
-				// GetValueByRow(group, dot-path column) reads the composer's grouped value directly.
-				for (const auto& kv : r.m_values)
-					if (kv.first >= kDimSyntheticBase) { dimValue = kv.second; break; }
+				// The value rides under a synthetic dim id, not the leaf id the display + drill key by. The synthetic
+				// keys iterate in ASCENDING order (dim0, dim1, … then measures); this level's value is the
+				// dwOrdinal-th one (each earlier dot-walk dimension consumed one). RE-KEY it under the real leaf id,
+				// so GetValueByRow(group, dot-path column) reads the composer's grouped value directly. (A dot-walk
+				// dimension that lowered to an expanded LEFT-join instead of a scalar synthetic — multi-source or a
+				// non-scalar leaf — takes no synthetic id; a mix of the two on one grouping would skew this ordinal.
+				// Pure single-source scalar dot-walk dimensions, the common case, map 1:1 to the leading synthetics.)
+				int seen = 0;
+				for (const auto& kv : r.m_values) {
+					if (kv.first < kDimSyntheticBase) continue;
+					if (seen++ == dwOrdinal) { dimValue = kv.second; break; }
+				}
 				if (groupDimCol != wxNOT_FOUND)
 					values[groupDimCol] = dimValue;
 			}

@@ -635,22 +635,6 @@ public:
 	// frontend coupling.
 	std::future<void> SubmitFetchAsync(std::function<void()> work);
 
-	// Adopt rows returned by a typed Get*Fetch into ibDataViewItemArray.
-	// Typed Fetch hands out new'd rows with refcount=1; ibDataViewItem's
-	// ctor IncRefs to 2; we DecRef the initial allocation reference so
-	// `out` owns exactly one reference per row. Use this at every
-	// typed → universal Get*Fetch bridge to avoid leaking the initial
-	// reference on long-running paged use.
-	template <class TRow>
-	static void AdoptRowsToItems(std::vector<TRow*>& rows,
-		ibDataViewItemArray& out) {
-		for (auto* r : rows) {
-			out.Add(ibDataViewItem(r));
-			r->DecRef();
-		}
-		rows.clear();
-	}
-
 	//////////////////////////////////////////////////////////////////////////////////////////////////
 
 	// L5 selection-restore: a row's identity IS its row-key (the value). Build ONE stub composer node carrying

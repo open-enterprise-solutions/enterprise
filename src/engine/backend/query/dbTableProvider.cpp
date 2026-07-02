@@ -248,7 +248,7 @@ public:
 	                                           const wxString& mainQual = wxEmptyString);
 	static ibQueryExprPtr BuildParentRefPredicate(const ibBackendQueryable* queryable,
 	                                              const wxString& refDataField,
-	                                              const ibGuid& parentGuid,
+	                                              const ibValue& parentKey,
 	                                              bool isTopLevel,
 	                                              const wxString& mainQual = wxEmptyString);
 	static ibQueryExprPtr BuildKeyInPredicate(const ibBackendQueryable* queryable,
@@ -805,19 +805,21 @@ ibQueryExprPtr ibMetaIRBuilder::BuildAnchorPredicate(const ibBackendQueryable* /
 
 ibQueryExprPtr ibMetaIRBuilder::BuildParentRefPredicate(const ibBackendQueryable* queryable,
                                                         const wxString& refDataField,
-                                                        const ibGuid& parentGuid,
+                                                        const ibValue& parentKey,
                                                         bool isTopLevel,
                                                         const wxString& mainQual)
 {
-	ibReference ref{ queryable->GetQueryTableId(), ibGuidImpl{} };
+	// Non-root: compare the hierarchy column against the parent KEY value itself. A reference encodes to its own
+	// _RRRef blob (ReferenceKeyBlob — self-describing metaID, so NO same-table assumption); a non-reference key
+	// rides inline (ibConst). This is the SAME encoding the keyset anchor uses, not a bare-guid special case.
 	if (!isTopLevel) {
-		const auto& be = parentGuid.bytes();
-		auto* p = reinterpret_cast<unsigned char*>(&ref.m_guid);
-		p[0] = be[3]; p[1] = be[2]; p[2] = be[1]; p[3] = be[0];
-		p[4] = be[5]; p[5] = be[4];
-		p[6] = be[7]; p[7] = be[6];
-		for (int i = 8; i < 16; ++i) p[i] = be[i];
+		if (ibQueryExprPtr blob = ReferenceKeyBlob(parentKey))
+			return ibBinOp(ibQueryBinOp::Eq, ibColQ(mainQual, refDataField), blob);
+		return ibBinOp(ibQueryBinOp::Eq, ibColQ(mainQual, refDataField), ibConst(parentKey));
 	}
+	// Root level: the EMPTY parent reference — the table's own type + a zero guid, the sentinel stored for a
+	// parentless row. (A non-reference hierarchy's roots would compare inline; none exist yet.)
+	ibReference ref{ queryable->GetQueryTableId(), ibGuidImpl{} };
 	return ibBinOp(ibQueryBinOp::Eq, ibColQ(mainQual, refDataField),
 	               ibConstBlob(&ref, sizeof(ibReference)));
 }
@@ -1866,15 +1868,12 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 			q.From(mainTable);
 		}
 
-		if (req.m_parentFilter && !req.m_flatScan) {
-			// The envelope carries the parent COLUMN (preferred); the physical field
-			// derives HERE — the field machinery is the provider's job, not the
-			// consumer's. The legacy physical name wins when explicitly set.
-			const wxString parentField = !req.m_parentRefField.IsEmpty()
-				? req.m_parentRefField
-				: ReferenceFieldOf(req.m_parentCol);
+		if (req.m_hierarchyFilter && !req.m_flatScan) {
+			// The envelope carries the parent COLUMN; the physical field derives HERE
+			// — the field machinery is the provider's job, not the consumer's.
+			const wxString parentField = ReferenceFieldOf(req.m_hierarchyCol);
 			q.Where(ibMetaIRBuilder::BuildParentRefPredicate(
-				queryable, parentField, req.m_parentGuid, req.m_isTopLevel, mainQual));
+				queryable, parentField, req.m_hierarchyKey, req.m_isTopLevel, mainQual));
 		}
 
 		// WHERE = flat plain conditions  AND  the boolean tree  AND  the flat dot-walk conditions.

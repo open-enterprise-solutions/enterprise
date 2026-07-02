@@ -286,7 +286,7 @@ bool ibDataDBComposer::BuildPageSignature(const ibReadPageRequest& page, wxStrin
 	// keyset EMBEDS its values (a reference key renders as its _RRRef blob, not an
 	// ibParam), so the SQL is per-anchor — a shared cached render would replay a
 	// stale anchor. The unanchored first page still caches.
-	if (page.m_count <= 0 || page.m_parentFilter || page.m_hasAnchor)
+	if (page.m_count <= 0 || page.m_hierarchyFilter || page.m_hasAnchor)
 		return false;
 	for (const auto& p : m_params)
 		if (!ValueSignable(p.second))
