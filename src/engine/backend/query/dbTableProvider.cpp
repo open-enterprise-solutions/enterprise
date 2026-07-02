@@ -563,6 +563,15 @@ ibQueryExprPtr ibMetaIRBuilder::BuildConditionExpr(const ibBackendQueryable* que
 		// below. Column-based: the spread comes off the column + metadata, no attribute cast.
 		return DecomposeEquality(c.m_col, queryable->GetMetaData(), c.m_value, mainQual);
 	}
+	if (op == ibQueryBinOp::Ne && !c.m_col->IsRawColumn()) {
+		// METADATA-column inequality = NOT of the composite equality. A reference / variant / composite key
+		// spreads across SEVERAL physical fields (and even a single-field reference needs the correctly-encoded
+		// write-spread, NOT a bare ibConst). "Not equal" means NOT(all fields equal) — a naive first-field
+		// `<>` would ignore the other fields AND mis-encode the value, so the filter would drop nothing.
+		// Mirror the Eq branch, negated (De Morgan: differs when ANY field differs).
+		ibQueryExprPtr eq = DecomposeEquality(c.m_col, queryable->GetMetaData(), c.m_value, mainQual);
+		return eq ? ibNot(eq) : nullptr;
+	}
 	if ((op == ibQueryBinOp::Ge || op == ibQueryBinOp::Le || op == ibQueryBinOp::Gt || op == ibQueryBinOp::Lt)
 	    && !c.m_col->IsRawColumn()) {
 		// METADATA-column ORDERED compare (a reference / composite key with >=, <=, >, <) — decompose
