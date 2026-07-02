@@ -56,6 +56,12 @@ class BACKEND_API ibValueQueryable : public ibValue
 	wxString                  m_sourceName;          // "Catalogs.Номенклатура" — watch / diagnostics
 	ibDataQueryBuilder        m_builder;             // accumulated door verbs (From set at vend)
 	long                      m_take = 0;            // Take(n) — page limit at execute (0 = all)
+	// Select(x => x.Field) — a single-column SCALAR projection: the read yields THIS column's
+	// value per row instead of the whole row. null = full row (reference / structure).
+	// A plain column reads by pointer (m_projectCol); a DOT-WALK leaf (x => x.Ref.Field) is
+	// projected onto the builder as SelectPath(...) AS m_projectAlias and read back by that name.
+	const ibBackendQueryColumn* m_projectCol = nullptr;
+	wxString                    m_projectAlias;
 	std::vector<wxString>     m_ops;                 // folded-op labels — the watch string only
 	// Owned wrapper for a NON-metaobject source (Data.From over a value table) —
 	// shared across chain links (every link reads the same materialised relation).

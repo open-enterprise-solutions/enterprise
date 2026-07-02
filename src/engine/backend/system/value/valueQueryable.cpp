@@ -94,8 +94,14 @@ std::shared_ptr<ibQueryAstExpr> AstOf(const ibValueFunction* fn)
 // STRUCTURE of every column (registers / Data.From collections) — same chain,
 // different row shape.
 ibValue RowValue(ibDataQueryResult& sel, const ibBackendQueryColumn* refCol,
-                 const std::vector<const ibBackendQueryColumn*>& cols)
+                 const std::vector<const ibBackendQueryColumn*>& cols,
+                 const ibBackendQueryColumn* projectCol = nullptr,
+                 const wxString& projectAlias = wxEmptyString)
 {
+	if (!projectAlias.IsEmpty())
+		return sel.GetColumn(projectAlias);   // Select(x => x.Ref.Field) — the dot-walk leaf projected AS this alias
+	if (projectCol != nullptr)
+		return sel.GetValue(projectCol);   // Select(x => x.Field) — the projected scalar, not the whole row
 	if (refCol != nullptr)
 		return sel.GetValue(refCol);
 	ibValueStructure* row = new ibValueStructure();
@@ -112,13 +118,16 @@ public:
 	ibQueryableIteratorState(const ibDataQueryBuilder& builder, long take,
 	                         const ibBackendQueryColumn* refCol,
 	                         std::vector<const ibBackendQueryColumn*> cols,
-	                         std::shared_ptr<const ibBackendQueryable> ownedSource)
+	                         std::shared_ptr<const ibBackendQueryable> ownedSource,
+	                         const ibBackendQueryColumn* projectCol = nullptr,
+	                         const wxString& projectAlias = wxEmptyString)
 		: m_builder(builder), m_take(take), m_refCol(refCol), m_cols(std::move(cols)),
-		  m_ownedSource(std::move(ownedSource)), m_sel(Run(builder, take)) {}
+		  m_ownedSource(std::move(ownedSource)), m_projectCol(projectCol), m_projectAlias(projectAlias),
+		  m_sel(Run(builder, take)) {}
 
 	bool MoveNext(ibValue& current) override {
 		if (!m_sel.Next()) return false;
-		current = RowValue(m_sel, m_refCol, m_cols);
+		current = RowValue(m_sel, m_refCol, m_cols, m_projectCol, m_projectAlias);
 		return true;
 	}
 	void Reset() override { m_sel = Run(m_builder, m_take); }
@@ -134,6 +143,8 @@ private:
 	const ibBackendQueryColumn* m_refCol;
 	std::vector<const ibBackendQueryColumn*>  m_cols;          // structure-row column set
 	std::shared_ptr<const ibBackendQueryable> m_ownedSource;   // keeps a Data.From wrapper alive
+	const ibBackendQueryColumn* m_projectCol;                  // single-column scalar projection (null = full row)
+	wxString                    m_projectAlias;                // dot-walk scalar projection, read by alias
 	ibDataQueryResult           m_sel;
 };
 
@@ -162,8 +173,10 @@ ibValueQueryable* ibValueQueryable::CloneLink() const
 	link->m_queryable   = m_queryable;
 	link->m_sourceName  = m_sourceName;
 	link->m_builder     = m_builder;
-	link->m_take        = m_take;
-	link->m_ops         = m_ops;
+	link->m_take         = m_take;
+	link->m_projectCol   = m_projectCol;
+	link->m_projectAlias = m_projectAlias;
+	link->m_ops          = m_ops;
 	link->m_ownedSource = m_ownedSource;   // shared — every chain link keeps the From wrapper alive
 	return link;
 }
@@ -204,7 +217,7 @@ void ibValueQueryable::MaterialiseThenRam(ibLinqMethod method, ibValue& ret, ibV
 	ibValue host(arr);   // owns via TYPE_REFFER for the dispatch below
 	ibDataQueryResult sel = ExecuteAccumulated();
 	while (sel.Next())
-		arr->Add(RowValue(sel, refCol, cols));
+		arr->Add(RowValue(sel, refCol, cols, m_projectCol, m_projectAlias));
 	host.DispatchLinqMethod(method, ret, args, n);
 }
 
@@ -463,7 +476,7 @@ void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibV
 		ibReadPageRequest page;
 		page.m_count = 1;
 		ibDataQueryResult sel = m_builder.Execute(page);
-		if (sel.Next()) ret = RowValue(sel, RowReferenceColumn(), m_queryable->GetColumns());
+		if (sel.Next()) ret = RowValue(sel, RowReferenceColumn(), m_queryable->GetColumns(), m_projectCol, m_projectAlias);
 		else            ret = ibValue();   // empty selection -> Undefined (both variants, v1)
 		return;
 	}
@@ -474,7 +487,7 @@ void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibV
 		ibValueArray* arr = new ibValueArray();
 		ibDataQueryResult sel = ExecuteAccumulated();
 		while (sel.Next())
-			arr->Add(RowValue(sel, refCol, cols));
+			arr->Add(RowValue(sel, refCol, cols, m_projectCol, m_projectAlias));
 		ret = arr;
 		return;
 	}
@@ -512,8 +525,46 @@ void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibV
 		return;
 	}
 
+	case M::Select: {
+		// v1: a scalar projection lowers server-side — the read then yields the projected value
+		// per row instead of the whole row. A plain column (x => x.Field) reads by pointer
+		// (m_projectCol); a DOT-WALK leaf (x => x.Ref.Field) is projected onto the door via
+		// SelectPath AS an alias (m_projectAlias) and read back by name. A structure
+		// (x => new {A, B}), an arithmetic projection (x => x.A * 2), or a projection CHAINED
+		// onto an existing scalar projection (the lambda would run over the scalar, not the row)
+		// is not yet lowerable -> the RAM floor.
+		const bool alreadyProjected = (m_projectCol != nullptr) || !m_projectAlias.IsEmpty();
+		if (!alreadyProjected) {
+			ibValueFunction* fn = LambdaOf(args, n);
+			if (fn != nullptr) {
+				if (std::shared_ptr<ibQueryAstExpr> ast = AstOf(fn)) {
+					const std::vector<const ibBackendQueryColumn*> cols =
+						ibQueryLowering::LowerLambdaColumnPath(m_queryable, *ast);
+					if (cols.size() == 1 && cols.front() != nullptr) {
+						ibValueQueryable* link = CloneLink();
+						link->m_projectCol = cols.front();       // plain column — read by pointer
+						link->m_ops.push_back(wxT("Select"));
+						ret = link;
+						return;
+					}
+					if (cols.size() > 1) {                        // dot-walk leaf — project through the door
+						ibValueQueryable* link = CloneLink();
+						const wxString alias = wxT("__proj");
+						link->m_builder.SelectPath(cols, alias);
+						link->m_projectAlias = alias;
+						link->m_ops.push_back(wxT("Select"));
+						ret = link;
+						return;
+					}
+				}
+			}
+		}
+		MaterialiseThenRam(method, ret, args, n);
+		return;
+	}
+
 	default:
-		// Select / GroupBy / Skip / Contains / ... — the RAM floor: the folded
+		// GroupBy / Skip / Distinct / Contains / ... — the RAM floor: the folded
 		// prefix still runs server-side, the rest runs over the materialised refs.
 		MaterialiseThenRam(method, ret, args, n);
 		return;
@@ -526,7 +577,7 @@ std::shared_ptr<ibValueIteratorState> ibValueQueryable::CreateIterator()
 		return nullptr;
 	// References for single-key sources, structure rows otherwise (registers / Data.From).
 	return std::make_shared<ibQueryableIteratorState>(
-		m_builder, m_take, RowReferenceColumn(), m_queryable->GetColumns(), m_ownedSource);
+		m_builder, m_take, RowReferenceColumn(), m_queryable->GetColumns(), m_ownedSource, m_projectCol, m_projectAlias);
 }
 
 // System type — vended only (the Data global / future Data.From), never New'ed.

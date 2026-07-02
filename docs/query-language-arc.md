@@ -2560,9 +2560,42 @@ always RAM-joining. A script `.Join()` where a `Data.*` queryable participates r
   unrelated to this work).
 
 ### Open (after this)
-- **the rest of the merge** — only `Join` is lowered; `Select` / `GroupBy` / `Skip` on a queryable still
-  hit the RAM floor (`GroupBy` push-down is the most valuable next, for reports). The full single-lowering
-  for all ops (and the reentrancy / snapshot-vs-guard semantics) is the larger Layer-3 arc.
+- **the rest of the merge** — `Where` / `OrderBy` / `Take` / terminals / `Join` / **`Select`** (2026-07-02,
+  the dated block below) now lower; `GroupBy` / `Distinct` / `Skip` / set-ops stay on the RAM floor and the
+  boundary is now VERIFIED by code (they can't lower correctly in v1 — not merely unimplemented). The full
+  single-lowering (array-of-structures receiver, reentrancy / snapshot-vs-guard) is the larger Layer-3 arc.
 - **join harden** — composite (multi-column) join keys, outer `OrderBy` / `Take` before the join,
   projection push-down to SQL (needs a two-arg lambda recorder), a lazy iterator instead of the eager
   Array, end-to-end parity (script push-down == RAM) once a script-level DB test harness exists.
+
+## Update 2026-07-02 — Layer-3: `Select` projection lowered on a queryable + the safe-lowering boundary verified
+
+`Data.X.Select(x => x.Field)` and `Data.X.Select(x => x.Ref.Field)` now lower server-side instead of pulling
+the whole source into RAM. `ibValueQueryable` gained a scalar-projection state — `m_projectCol` (a plain
+column, read by pointer via `sel.GetValue`) and `m_projectAlias` (a dot-walk leaf projected onto the door as
+`SelectPath(path) AS alias`, read via `sel.GetColumn(alias)`). The shared `RowValue` helper, when a projection
+is set, yields that scalar per row instead of the whole reference / structure — threaded through every read
+path (`ToArray` / `First` / the iterator / `MaterialiseThenRam` / `CreateIterator` / `CloneLink`). The
+`case M::Select` in `DispatchLinqMethod` reduces the lambda via `LowerLambdaColumnPath`: one plain column →
+`m_projectCol`; a dot-walk path → `SelectPath` + `m_projectAlias`; a structure (`x => new {A, B}`), an
+arithmetic projection (`x => x.A * 2`), a computed-source dot-walk, or a projection chained onto an existing
+scalar projection → the RAM floor (unchanged, correct). Zero regression for un-projected reads (the projection
+defaults to none → the prior full-row path).
+
+**The safe-lowering boundary is now VERIFIED by code (not guessed) — the remaining RAM-floor ops stay there
+on purpose, they cannot lower correctly in v1:**
+- **`Union` / `Concat`** — `RamUnion` (`queryProvider.cpp`) materialises each branch with `condsByName = true`,
+  so a folded outer `Where` is applied to EVERY branch by name; LINQ `X.Where(a).Concat(Y)` = `(X where a) ∪ Y`,
+  which diverges. The only safe case (both sides bare + same source) is `X ∪ X` — useless. Plus a heterogeneous
+  union would mis-reconstruct references (`RowValue` keys off the OUTER's reference column). → RAM.
+- **`Distinct`** — a server-side `SELECT DISTINCT` is only meaningful over a RESTRICTED projection, but a
+  single-source read ignores an explicit select-list (it projects all columns), so the v1 projection cannot
+  restrict the SELECT → `DISTINCT` would dedupe by the whole row (the unique uuid makes it a no-op). → RAM.
+- **`Skip`** (keyset has no offset), **`Reverse` / `Last`** (need a preceding `OrderBy`), **`Aggregate`-fold /
+  `Intersect` / `Except` / `*Indexed`** — RAM by nature, not gaps.
+
+So the cleanly-lowerable queryable ops are now exhausted (`Select` was the last meaningful one). The remaining
+Layer-3 scope is the harder structural work — an array-of-structures receiver (the Join path accepts only an
+`ibValueModelTable` today) and the join key-selector reentrancy semantics (`EnsureIndexed` builds the hash
+inline, no snapshot-before-lambda guard) — separate arcs that need a script-level test harness. (Built green
+Debug|x86 2026-07-02; the script path has no gtest, so runtime behaviour is live-run verified.)
