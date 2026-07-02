@@ -63,16 +63,22 @@ public:
 	static ibValueReferenceDataObject* Create(const ibMetaData* metaData, void* ptr);
 	static ibValueReferenceDataObject* CreateFromPtr(const ibMetaData* metaData, void* ptr);
 
-	// Ordering primitive (three-way) — the base virtual GT/GE/LE and operator< all derive from this,
-	// so overriding just CompareValueLS retunes all four for references. NULL is handled by the base
-	// before dispatch here, so both operands are real references. Same metaObject: order by guid;
-	// different type / non-reference: order-incomparable -> 0 (the legacy per-op overrides returned
-	// false for every order op on such a compare).
+	// Ordering primitive (three-way) — the base virtual GT/GE/LE and operator< all derive from this, so this
+	// ONE method tunes all four for references. Orders by GUID first (value order, via ibGuid's operators),
+	// then by the type's metaID — so a mixed-type (variant) reference stream forms a deterministic sequence,
+	// mirroring the physical _RRRef blob's [guid][metaID] layout. A mixed stream carries distinct guids, so the
+	// guid already fully orders it; metaID is the tiebreak keeping the order total. metaID comes from
+	// GetClassType() & kIbClsidBodyMask — the SAME source the DB _RRRef codec uses, and it sidesteps the
+	// incomplete m_metaObject here (a non-reference operand is order-incomparable -> 0).
 	virtual int CompareValueLS(const ibValue& cParam) const {
 		ibValueReferenceDataObject* rhs = dynamic_cast<ibValueReferenceDataObject*>(cParam.GetRef());
-		if (rhs != nullptr && m_metaObject == rhs->m_metaObject)
-			return m_objGuid < rhs->m_objGuid ? -1 : (rhs->m_objGuid < m_objGuid ? 1 : 0);
-		return 0;
+		if (rhs == nullptr)
+			return 0;
+		if (m_objGuid < rhs->m_objGuid) return -1;
+		if (rhs->m_objGuid < m_objGuid) return 1;
+		const ibMetaID l = static_cast<ibMetaID>(GetClassType()      & kIbClsidBodyMask);
+		const ibMetaID r = static_cast<ibMetaID>(rhs->GetClassType() & kIbClsidBodyMask);
+		return l < r ? -1 : (r < l ? 1 : 0);
 	}
 
 	//operator '=='

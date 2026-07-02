@@ -307,24 +307,42 @@ void ibGuid::zeroify()
 	std::fill(_bytes.begin(), _bytes.end(), static_cast<unsigned char>(0));
 }
 
+namespace {
+// Compare two guids by their VALUE order — "is this guid greater or smaller". A GUID's first three fields
+// (Data1 / Data2 / Data3) are stored little-endian, so a plain memcmp weighs their LOW byte first and gives a
+// meaningless order. Compare byte-wise in the field-normalized (big-endian) sequence [3,2,1,0, 5,4, 7,6, 8..15]
+// — the SAME byte order the stored _RRRef reference blob uses (identical field-swap), so an in-memory
+// guid/reference sort matches server-side ORDER BY _RRRef. Fast: no copies/allocation, early-out on the first
+// differing byte (Data1 usually decides in the first compare); the fixed Data4 tail rides one memcmp.
+inline int guidValueCompare(const std::array<unsigned char, 16>& x, const std::array<unsigned char, 16>& y)
+{
+	static const unsigned char idx[8] = { 3, 2, 1, 0, 5, 4, 7, 6 };
+	for (int i = 0; i < 8; ++i) {
+		const unsigned char a = x[idx[i]], b = y[idx[i]];
+		if (a != b) return a < b ? -1 : 1;
+	}
+	return std::memcmp(&x[8], &y[8], 8);   // Data4 (node) is already in byte order
+}
+}
+
 bool ibGuid::operator > (const ibGuid& other) const
 {
-	return _bytes > other._bytes;
+	return guidValueCompare(_bytes, other._bytes) > 0;
 }
 
 bool ibGuid::operator >= (const ibGuid& other) const
 {
-	return _bytes >= other._bytes;
+	return guidValueCompare(_bytes, other._bytes) >= 0;
 }
 
 bool ibGuid::operator < (const ibGuid& other) const
 {
-	return _bytes < other._bytes;
+	return guidValueCompare(_bytes, other._bytes) < 0;
 }
 
 bool ibGuid::operator <= (const ibGuid& other) const
 {
-	return _bytes <= other._bytes;
+	return guidValueCompare(_bytes, other._bytes) <= 0;
 }
 
 // overload equality operator
