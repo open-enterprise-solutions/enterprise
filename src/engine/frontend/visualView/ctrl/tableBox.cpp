@@ -147,7 +147,7 @@ void ibValueModelTableBox::CreateColumnCollection(ibDataViewCtrl* dataViewCtrl)
 		return;
 
 	ibDataViewCtrl* tc = dataViewCtrl ?
-		dataViewCtrl : dynamic_cast<ibDataViewCtrl*>(GetWxObject());
+		dataViewCtrl : dynamic_cast<ibDataViewCtrl*>(GetInnerWx());
 	wxASSERT(tc);
 
 	ibFormVisualDocument* visualDocument = m_formOwner->GetVisualDocument();
@@ -270,7 +270,7 @@ void ibValueModelTableBox::ApplyCurrentLine(
 	m_tableCurrentLine = line;
 
 #ifndef OES_USE_WEB
-	auto* dataViewCtrl = dynamic_cast<ibTableViewCtrl*>(GetWxObject());
+	auto* dataViewCtrl = dynamic_cast<ibTableViewCtrl*>(GetInnerWx());
 	if (dataViewCtrl != nullptr) {
 		if (line == nullptr) {
 			dataViewCtrl->UnselectAllRows();
@@ -312,6 +312,19 @@ ibSourceObject* ibValueModelTableBox::GetSourceObject() const
 	return m_formOwner ? m_formOwner->GetSourceObject() : nullptr;
 }
 
+bool ibValueModelTableBox::HasCommandBar() const
+{
+	// No bar when this table IS the form's main source — its binding head attribute is the MAIN
+	// one, and the form toolbar already serves those commands (a table bar would just duplicate).
+	const std::vector<ibSourceId>& path = GetSourcePath();
+	if (!path.empty()) {
+		ibBackendFormAttributeValue* holder = FindSourceHolder(path.front());
+		if (holder != nullptr && holder->IsMainAttribute())
+			return false;
+	}
+	return ibValueFrame::HasCommandBar();
+}
+
 bool ibValueModelTableBox::GetSourceList(std::vector<ibBackendFormAttributeValue*>& out) const
 {
 	return m_formOwner != nullptr ? m_formOwner->GetSourceList(GetFilterSourceDataType(), out) : false;
@@ -335,12 +348,14 @@ ibClassID ibValueModelTableBox::GetSourceClassType() const
 //*                              ibValueModelTableBox                                     *
 //***********************************************************************************
 
-ibValueModelTableBox::ibValueModelTableBox() : ibValueWindow(), ibTypeControlFactory(),
+ibValueModelTableBox::ibValueModelTableBox() : ibValueWindowComposite(), ibTypeControlFactory(),
 m_tableModel(nullptr), m_tableCurrentLine(nullptr),
 m_dataViewCreated(false), m_dataViewSelected(false),
 m_need_calculate_pos(false)
 {
 	m_members.Bind(this, &ibValueModelTableBox::FillControlMembers);
+
+	// Command bar is created by the ibValueWindowComposite base ctor.
 
 	m_propertySource->SetValue(ibTypeDescription(g_valueTableCLSID));
 
@@ -367,7 +382,7 @@ ResolveLineByValue(ibValueModel* model, const ibValue& value)
 void ibValueModelTableBox::CalculateColumnPos()
 {
 #ifndef OES_USE_WEB
-	ibTableViewCtrl* dataViewCtrl = dynamic_cast<ibTableViewCtrl*>(GetWxObject());
+	ibTableViewCtrl* dataViewCtrl = dynamic_cast<ibTableViewCtrl*>(GetInnerWx());
 	if (dataViewCtrl != nullptr) {
 
 		dataViewCtrl->SetExpanderColumn(nullptr);
@@ -494,7 +509,7 @@ wxObject* ibValueModelTableBox::Create(ibFrontendWindow* wxparent, ibVisualHost*
 #endif // OES_USE_WEB
 }
 
-void ibValueModelTableBox::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueModelTableBox::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
 #ifndef OES_USE_WEB
 	ibTableViewCtrl* dataViewCtrl = dynamic_cast<ibTableViewCtrl*>(wxobject);
@@ -502,7 +517,7 @@ void ibValueModelTableBox::OnCreated(wxObject* wxobject, ibFrontendWindow* wxpar
 	if (dataViewCtrl != nullptr) ibValueModelTableBox::CreateModel();
 
 	if (visualHost->IsDesignerHost() && GetChildCount() == 0
-		&& firstСreated) {
+		&& firstCreated) {
 		ibValueModelTableBox::AddColumn();
 	}
 #endif
@@ -601,6 +616,7 @@ void ibValueModelTableBox::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxpar
 		dataViewCtrl->SetHeaderAttr(attr);
 
 		if (!appData->DesignerMode()) {
+			
 			m_dataViewCreated = true;
 
 			// Force-refetch flag on the control.  All UpdateForm
@@ -622,7 +638,6 @@ void ibValueModelTableBox::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxpar
 			// catalogs/documents) and lands focus on the new row.
 			// If the row no longer exists, selection drops silently.
 			if (m_tableModel != nullptr && m_formOwner != nullptr) {
-
 
 				dataViewCtrl->SchedulePagedRefresh();
 
@@ -710,7 +725,8 @@ bool ibValueModelTableBox::ReadData(const ibDataNode& node)
 	m_eventOnAddRow->ReadNodeValue(node.GetProperty(m_eventOnAddRow->GetName()));
 	m_eventOnDeleteRow->ReadNodeValue(node.GetProperty(m_eventOnDeleteRow->GetName()));
 
-	return ibValueWindow::ReadData(node);
+	// Chain to the composite base (reads the "Layers" block) → ibValueWindow.
+	return ibValueWindowComposite::ReadData(node);
 }
 
 bool ibValueModelTableBox::WriteData(ibDataNode& node) const
@@ -735,7 +751,8 @@ bool ibValueModelTableBox::WriteData(ibDataNode& node) const
 	node.SetProperty(m_eventOnAddRow->GetName(), m_eventOnAddRow->GetNodeValue());
 	node.SetProperty(m_eventOnDeleteRow->GetName(), m_eventOnDeleteRow->GetNodeValue());
 
-	return ibValueWindow::WriteData(node);
+	// Chain to the composite base (writes the "Layers" block) → ibValueWindow.
+	return ibValueWindowComposite::WriteData(node);
 }
 
 //***********************************************************************************

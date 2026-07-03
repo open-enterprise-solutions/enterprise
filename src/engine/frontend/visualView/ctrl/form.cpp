@@ -36,6 +36,11 @@ ibValueForm::ibValueForm(const ibValueMetaObjectFormBase* creator, ibControlFram
 	// exports autobind as the helper's tail (ibRuntimeModuleDataObject ctor).
 	m_members.Bind(this, &ibValueForm::FillFormMembers);
 
+	// This control carries a command bar — the frame owns its STORE and points it
+	// back at itself; the visual host reads it to render the toolbar separately.
+	m_commandBar = new ibValueCommandBar();
+	m_commandBar->SetOwner(this);
+
 	//init default params
 	ibValueForm::InitializeForm(creator, ownerControl, srcObject, formGuid);
 

@@ -26,7 +26,6 @@
 // BuildForm now runs on both builds — both control families are needed.
 // tableBox.h compiles cleanly under OES_USE_WEB (wx-heavy includes are
 // already ifdef'd inside it).
-#include "toolBar.h"
 #include "tableBox.h"
 #ifdef OES_USE_WEB
 #include "frontend/web/webApplication.h"
@@ -54,37 +53,9 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 		// attribute (InitializeForm) and forgotten — reads go via the attribute.
 		const ibMetaID mainAttrId = mainAttr->GetAttributeId();
 
-		ibValue* prevSrcData = nullptr;
-
-		ibValueToolbar* mainToolBar =
-			dynamic_cast<ibValueToolbar*>(ibValueForm::CreateControl(wxT("Toolbar")));
-
-		mainToolBar->SetControlName(wxT("MainToolbar"));
-		mainToolBar->SetActionSrc(FORM_ACTION);
-
+		// Form-level toolbar is now the form's command-bar chrome (m_commandBar,
+		// AutoFill from the same action collection) — no explicit MainToolbar.
 		ibValueModelTableBox* mainTableBox = nullptr;
-
-		const ibActionCollection& actionData = ibValueForm::GetActionCollection(formType);
-		for (unsigned int idx = 0; idx < actionData.GetCount(); idx++) {
-			const ibActionID& action_id = actionData.GetID(idx);
-			if (action_id != wxNOT_FOUND) {
-				ibValue* currSrcData = actionData.GetSourceDataByID(action_id);
-				if (currSrcData != prevSrcData
-					&& prevSrcData != nullptr) {
-					ibValueForm::CreateControl(wxT("ToolSeparator"), mainToolBar);
-				}
-				ibValueToolBarItem* toolBarItem =
-					dynamic_cast<ibValueToolBarItem*>(ibValueForm::CreateControl(wxT("Tool"), mainToolBar));
-				toolBarItem->SetControlName(mainToolBar->GetControlName() + actionData.GetNameByID(action_id));
-				//toolBarItem->SetCaption(actionData.GetCaptionByID(action_id));
-				//toolBarItem->SetToolTip(actionData.GetCaptionByID(action_id));
-				toolBarItem->SetAction(action_id);
-				prevSrcData = currSrcData;
-			}
-			else {
-				ibValueForm::CreateControl(wxT("ToolSeparator"), mainToolBar);
-			}
-		}
 
 		const ibSourceExplorer* sourceExplorerPtr = sourceObject->GetSourceExplorer();
 		static const ibSourceExplorer s_emptyExplorer;
@@ -127,44 +98,13 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 			}
 			else
 			{
-				prevSrcData = nullptr;
-
 				if (nextSourceExplorer.IsTableSection()) {
-
-					ibValueToolbar* toolBar =
-						dynamic_cast<ibValueToolbar*>(ibValueForm::CreateControl(wxT("Toolbar")));
-
-					toolBar->SetControlName(wxT("Toolbar") + nextSourceExplorer.GetSourceName());
 
 					ibValueModelTableBox* tableBox =
 						dynamic_cast<ibValueModelTableBox*>(ibValueForm::CreateControl(wxT("Tablebox")));
 
 					tableBox->SetControlName(nextSourceExplorer.GetSourceName());
 					tableBox->SetSource({ mainAttrId, nextSourceExplorer.GetSourceId() });
-
-					toolBar->SetActionSrc(tableBox->GetControlID());
-
-					ibActionCollection actionData = tableBox->GetActionCollection(formType);
-					for (unsigned int idx = 0; idx < actionData.GetCount(); idx++) {
-						const ibActionID& action_id = actionData.GetID(idx);
-						if (action_id != wxNOT_FOUND) {
-							ibValue* currSrcData = actionData.GetSourceDataByID(action_id);
-							if (currSrcData != prevSrcData
-								&& prevSrcData != nullptr) {
-								ibValueForm::CreateControl(wxT("ToolSeparator"), toolBar);
-							}
-							ibValueToolBarItem* toolBarItem =
-								dynamic_cast<ibValueToolBarItem*>(ibValueForm::CreateControl(wxT("Tool"), toolBar));
-							toolBarItem->SetControlName(toolBar->GetControlName() + actionData.GetNameByID(action_id));
-							//toolBarItem->SetCaption(actionData.GetCaptionByID(action_id));
-							//toolBarItem->SetToolTip(actionData.GetCaptionByID(action_id));
-							toolBarItem->SetAction(action_id);
-							prevSrcData = currSrcData;
-						}
-						else {
-							ibValueForm::CreateControl(wxT("ToolSeparator"), toolBar);
-						}
-					}
 
 					for (unsigned int col = 0; col < nextSourceExplorer.GetHelperCount(); col++) {
 						const ibSourceExplorer* colExplorerPtr = nextSourceExplorer.GetHelper(col);
@@ -219,32 +159,7 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 		}
 	}
 	else {
-
-		ibValueToolbar* mainToolBar =
-			dynamic_cast<ibValueToolbar*>(ibValueForm::CreateControl(wxT("Toolbar")));
-
-		mainToolBar->SetControlName(wxT("MainToolbar"));
-		mainToolBar->SetActionSrc(FORM_ACTION);
-
-		ibValueModelTableBox* mainTableBox = nullptr;
-
-		const ibActionCollection& actionData = ibValueForm::GetActionCollection(formType);
-		for (unsigned int idx = 0; idx < actionData.GetCount(); idx++) {
-
-			const ibActionID& id = actionData.GetID(idx);
-
-			if (id != wxNOT_FOUND) {
-				ibValueToolBarItem* toolBarItem =
-					dynamic_cast<ibValueToolBarItem*>(ibValueForm::CreateControl(wxT("Tool"), mainToolBar));
-				toolBarItem->SetControlName(mainToolBar->GetControlName() + actionData.GetNameByID(id));
-				//toolBarItem->SetCaption(actionData.GetCaptionByID(id));
-				//toolBarItem->SetToolTip(actionData.GetCaptionByID(id));
-				toolBarItem->SetAction(id);
-			}
-			else {
-				ibValueForm::CreateControl(wxT("ToolSeparator"), mainToolBar);
-			}
-		}
+		// Form-level toolbar is the form's command-bar chrome (m_commandBar).
 	}
 }
 

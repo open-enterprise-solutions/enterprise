@@ -58,6 +58,9 @@ ibVisualHostClient::ibVisualHostClient(ibFormVisualDocument* document, ibValueFo
 	m_dataViewSize(wxDefaultSize),
 	m_dataViewSizeChanged(false)
 {
+	// Default MAIN sizer (m_mainSizer) up front — CreateVisualHost hangs the
+	// chrome layers + content sub-sizer onto it (it lives its own parallel life).
+	InitMainSizer();
 	ibVisualHostClient::Bind(wxEVT_SIZE, &ibVisualHostClient::OnSize, this);
 	ibVisualHostClient::Bind(wxEVT_IDLE, &ibVisualHostClient::OnIdle, this);
 }
@@ -168,11 +171,7 @@ void ibVisualHostClient::SetCaption(const wxString& strCaption)
 
 void ibVisualHostClient::SetOrientation(int orient)
 {
-	const wxWindow* backgroundWindow = GetBackgroundWindow();
-	wxASSERT(backgroundWindow);
-	wxBoxSizer* createdBoxSizer = dynamic_cast<wxBoxSizer*>(backgroundWindow->GetSizer());
-	if (createdBoxSizer != nullptr) createdBoxSizer->SetOrientation(orient);
-	wxASSERT(createdBoxSizer);
+	ApplyContentOrientation(orient);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////

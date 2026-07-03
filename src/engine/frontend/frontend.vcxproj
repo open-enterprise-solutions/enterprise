@@ -150,6 +150,9 @@
     <ClCompile Include="visualView\ctrl\textctrlEvent.cpp" />
     <ClCompile Include="visualView\ctrl\textctrlProperty.cpp" />
     <ClCompile Include="visualView\ctrl\textctrl_res.cpp" />
+    <ClCompile Include="visualView\layers\commandBar.cpp" />
+    <ClCompile Include="visualView\layerObject.cpp" />
+    <ClCompile Include="visualView\canvasWindow.cpp" />
     <ClCompile Include="visualView\ctrl\toolBar.cpp" />
     <ClCompile Include="visualView\ctrl\toolBarAction.cpp" />
     <ClCompile Include="visualView\ctrl\toolBarEvent.cpp" />
@@ -528,6 +531,9 @@
     <ClInclude Include="visualView\ctrl\tableBox.h" />
     <ClInclude Include="visualView\ctrl\tableBoxColumnRenderer.h" />
     <ClInclude Include="visualView\ctrl\textBox.h" />
+    <ClInclude Include="visualView\layers\commandBar.h" />
+    <ClInclude Include="visualView\layerObject.h" />
+    <ClInclude Include="visualView\canvasWindow.h" />
     <ClInclude Include="visualView\ctrl\toolBar.h" />
     <ClInclude Include="visualView\ctrl\typeControl.h" />
     <ClInclude Include="visualView\ctrl\widgets.h" />

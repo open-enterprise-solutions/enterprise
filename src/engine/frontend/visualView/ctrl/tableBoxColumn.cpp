@@ -125,13 +125,20 @@ wxObject* ibValueModelTableBoxColumn::Create(ibFrontendWindow* wxparent, ibVisua
 #endif
 }
 
-void ibValueModelTableBoxColumn::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueModelTableBoxColumn::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
 #ifndef OES_USE_WEB
-	ibDataViewCtrl* dataViewCtrl = dynamic_cast<ibDataViewCtrl*>(wxparent);
-	wxASSERT(dataViewCtrl);
+	// Pull the real dataview from the COMPOSITE owner (unwraps the chrome
+	// wrapper) — the raw wxparent is the ibChromeWindow, not the dataview.
+	ibDataViewCtrl* dataViewCtrl = dynamic_cast<ibDataViewCtrl*>(GetOwner()->GetInnerWx());
+	// Composite inner may be gone during host/form teardown (GetInnerWx resolves
+	// through form→visualDoc→view→host, which is being destroyed) or not yet
+	// built — skip gracefully instead of asserting.
+	if (dataViewCtrl == nullptr)
+		return;
 	ibDataViewColumnObject* dataViewColumn = dynamic_cast<ibDataViewColumnObject*>(wxobject);
-	wxASSERT(dataViewColumn);
+	if (dataViewColumn == nullptr)
+		return;
 
 	dataViewCtrl->AppendColumn(dataViewColumn);
 	GetOwner()->SetCalculateColumnPos();
@@ -143,10 +150,11 @@ void ibValueModelTableBoxColumn::OnCreated(wxObject* wxobject, ibFrontendWindow*
 void ibValueModelTableBoxColumn::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost)
 {
 #ifndef OES_USE_WEB
-	ibDataViewCtrl* dataViewCtrl = dynamic_cast<ibDataViewCtrl*>(wxparent);
-	wxASSERT(dataViewCtrl);
+	// OnUpdated only touches the column itself (wxobject) — no need to resolve
+	// the parent dataview through the teardown-fragile composite owner.
 	ibDataViewColumnObject* dataViewColumn = dynamic_cast<ibDataViewColumnObject*>(wxobject);
-	wxASSERT(dataViewColumn);
+	if (dataViewColumn == nullptr)
+		return;
 
 	const unsigned int order_position = GetParentPosition();
 
@@ -228,13 +236,21 @@ void ibDataViewColumnObject::SyncSortArrowFromModel()
 void ibValueModelTableBoxColumn::Cleanup(wxObject* obj, ibVisualHost* visualHost)
 {
 #ifndef OES_USE_WEB
-	ibDataViewCtrl* dataViewCtrl = dynamic_cast<ibDataViewCtrl*>(visualHost->GetWxObject(GetOwner()));
-	wxASSERT(dataViewCtrl);
 	ibDataViewColumnObject* dataViewColumn = dynamic_cast<ibDataViewColumnObject*>(obj);
-	wxASSERT(dataViewColumn);
+	if (dataViewColumn == nullptr)
+		return;
+	// Take the OWNING dataview straight from the column (SetOwner at AppendColumn)
+	// — reliable during teardown, unlike GetOwner()->GetInnerWx() which resolves
+	// through the dying host and returns null. Must DETACH the column from the
+	// dataview's m_cols here; otherwise its dtor (DoClearColumns) double-frees it
+	// after ClearControl's wxDELETE (crash: DoClearColumns over freed memory).
+	ibDataViewCtrl* dataViewCtrl = dataViewColumn->GetOwner();
+	if (dataViewCtrl == nullptr)
+		return;
 
 	dataViewCtrl->DeleteColumn(dataViewColumn);
-	GetOwner()->SetCalculateColumnPos();
+	if (ibValueModelTableBox* owner = GetOwner())
+		owner->SetCalculateColumnPos();
 #endif
 }
 

@@ -31,6 +31,7 @@ class FRONTEND_API ibVisualHostClient;
 
 #include "backend/actionInfo.h"
 #include "backend/moduleInfo.h"
+#include "frontend/visualView/layers/commandBar.h"   // ibValueCommandBar (command STORE the frame owns)
 
 // Default foreground / background for designer-created form controls,
 // toolbars, dataviews, dialogs. Aligned with interior palette: deep
@@ -225,6 +226,34 @@ public:
 		return new ibNoObject;
 	}
 
+	//*********************************************************
+	//*   Chrome — auxiliary UI around a control (unified)     *
+	//*                                                        *
+	// The visual host drives EVERY lifecycle stage through these *WithLayers wrappers
+	// instead of the plain Create/OnCreated/… below. The base just forwards to the
+	// plain method — a control with no chrome is unaffected. A control that carries
+	// chrome (ibValueControl: a command-bar toolbar today, a status bar / search box
+	// later) overrides them to build its chrome as one grouped unit and to route each
+	// stage to its OWN inner window. The plain methods stay untouched.
+	virtual wxObject* CreateWithLayers(ibFrontendWindow* wndParent, ibVisualHost* visualHost) {
+		return Create(wndParent, visualHost);
+	}
+	virtual void OnCreatedWithLayers(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated) {
+		OnCreated(wxobject, wxparent, visualHost, firstCreated);
+	}
+	virtual void OnSelectedWithLayers(wxObject* wxobject) {
+		OnSelected(wxobject);
+	}
+	virtual void UpdateWithLayers(wxObject* wxobject, ibVisualHost* visualHost) {
+		Update(wxobject, visualHost);
+	}
+	virtual void OnUpdatedWithLayers(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost) {
+		OnUpdated(wxobject, wxparent, visualHost);
+	}
+	virtual void CleanupWithLayers(wxObject* wxobject, ibVisualHost* visualHost) {
+		Cleanup(wxobject, visualHost);
+	}
+
 	/**
 	* Allows components to do something after they have been created.
 	* For example, Abstract components like NotebookPage and SizerItem can
@@ -330,9 +359,17 @@ public:
 
 public:
 
-	//support actionData 
+	//support actionData
 	virtual ibActionCollection GetActionCollection(const ibFormID& formType) override { return ibActionCollection(); }
 	virtual void ExecuteAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm) override {}
+
+	// Command bar STORE, owned by this frame (created in the ctor of controls that
+	// carry one — form/table). HasCommandBar = it exists; the visual host reads it
+	// to form the toolbar around this control. Virtual so a control can suppress its
+	// own bar (e.g. a table that IS the form's main source — the form toolbar covers it).
+	virtual bool HasCommandBar() const { return m_commandBar != nullptr; }
+	ibValueCommandBar* GetCommandBar() const { return m_commandBar; }
+	ibValuePtr<ibValueCommandBar> m_commandBar;
 
 	class ibValueEventContainer : public ibValueDynamicMembers {
 	public:

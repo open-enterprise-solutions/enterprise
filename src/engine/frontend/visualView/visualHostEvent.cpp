@@ -10,32 +10,37 @@
 // ibValueFrame::Create / OnCreated / Update / OnUpdated / Cleanup virtuals
 // already take ibFrontendWindow*, so the host hooks just relay the call.
 
+// Every lifecycle stage is driven through the control's *WithLayers wrapper. The base
+// (ibValueFrame) just forwards to the plain method, so plain controls are unaffected;
+// a control with chrome (ibValueControl) builds/updates/tears down its toolbar +
+// status bar + search as one grouped unit and routes each stage to its inner window.
+
 wxObject* ibVisualHost::Create(ibValueFrame* control, ibFrontendWindow* wndParent)
 {
-	return control->Create(wndParent, this);
+	return control->CreateWithLayers(wndParent, this);
 }
 
-void ibVisualHost::OnCreated(ibValueFrame* control, wxObject* obj, ibFrontendWindow* wndParent, bool firstСreated)
+void ibVisualHost::OnCreated(ibValueFrame* control, wxObject* obj, ibFrontendWindow* wndParent, bool firstCreated)
 {
-	control->OnCreated(obj, wndParent, this, firstСreated);
+	control->OnCreatedWithLayers(obj, wndParent, this, firstCreated);
 }
 
 void ibVisualHost::OnSelected(ibValueFrame* control, wxObject* obj)
 {
-	control->OnSelected(obj);
+	control->OnSelectedWithLayers(obj);
 }
 
 void ibVisualHost::Update(ibValueFrame* control, wxObject* obj)
 {
-	control->Update(obj, this);
+	control->UpdateWithLayers(obj, this);
 }
 
 void ibVisualHost::OnUpdated(ibValueFrame* control, wxObject* obj, ibFrontendWindow* wndParent)
 {
-	control->OnUpdated(obj, wndParent, this);
+	control->OnUpdatedWithLayers(obj, wndParent, this);
 }
 
 void ibVisualHost::Cleanup(ibValueFrame* control, wxObject* obj)
 {
-	control->Cleanup(obj, this);
+	control->CleanupWithLayers(obj, this);
 }

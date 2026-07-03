@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "visualHost.h"
+#include "ctrl/window.h"                          // ibValueWindowComposite::BuildLayerParts
 #ifdef OES_USE_WEB
 
 #include "ctrl/frame.h"
@@ -316,6 +317,9 @@ void ibVisualHost::ClearControl(ibValueFrame*, bool)                 {}
 
 #include "ctrl/control.h"
 #include "ctrl/form.h"
+#include "frontend/win/ctrls/toolBar.h"        // ibAuiToolBar (host-rendered command bar)
+#include "frontend/win/theme/luna_toolbarart.h"
+#include "backend/backend_picture.h"           // ibBackendPicture / ibPictureDescription
 
 #include "pageWindow.h"
 
@@ -356,6 +360,54 @@ private:
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
+// The form's LAYERS — a command-bar toolbar today, a search row / status bar later —
+// stacked at the TOP of the form sizer, ABOVE the form's content. It follows the control
+// lifecycle — CREATED once (CreateVisualHost), REFRESHED in place on update (UpdateVisualHost),
+// torn down with the host (DestroyChildren). Both stages call the SAME ibValueWindowComposite
+// statics; only WHERE the layers are placed is host-specific (named children of the bg window).
+static void CreateFormLayers(wxWindow* bgWindow, wxSizer* mainSizer, ibValueForm* form, std::vector<ibFrontendWindow*>& outParts)
+{
+	outParts.clear();
+	if (bgWindow == nullptr || mainSizer == nullptr || form == nullptr)
+		return;
+	ibValueCommandBar* cbar = form->GetCommandBar();
+	if (cbar == nullptr)
+		return;
+	// Layers (toolbar, search, …) are parallel items at the TOP of the main sizer, in order,
+	// ahead of the content sub-sizer (already at the end). Remember them EXPLICITLY (outParts)
+	// so the update refreshes the SAME parts without re-deriving them from the sizer.
+	size_t pos = 0;
+	for (ibFrontendWindow* part : ibValueWindowComposite::BuildLayerParts(bgWindow, cbar, form)) {
+		mainSizer->Insert(pos++, part, 0, wxEXPAND);
+		outParts.push_back(part);
+	}
+	bgWindow->Layout();
+}
+
+static void UpdateFormLayers(ibValueForm* form, const std::vector<ibFrontendWindow*>& parts)
+{
+	if (form == nullptr)
+		return;
+	ibValueCommandBar* cbar = form->GetCommandBar();
+	if (cbar == nullptr)
+		return;
+	// Refresh the tracked parts in place — the SAME static the composite uses, over the parts
+	// CreateFormLayers remembered (no sizer walk).
+	ibValueWindowComposite::UpdateLayerParts(parts, cbar, form);
+}
+
+void ibVisualHost::InitMainSizer()
+{
+	m_mainSizer = new wxBoxSizer(wxVERTICAL);
+	GetBackgroundWindow()->SetSizer(m_mainSizer);
+}
+
+void ibVisualHost::ApplyContentOrientation(int orient)
+{
+	if (wxBoxSizer* content = dynamic_cast<wxBoxSizer*>(GetFrameSizer()))
+		content->SetOrientation(orient);
+}
+
 bool ibVisualHost::CreateVisualHost()
 {
 	const ibValueForm* valueForm = GetValueForm();
@@ -364,10 +416,25 @@ bool ibVisualHost::CreateVisualHost()
 
 	if (valueForm != nullptr && IsShownHost()) {
 
-		// --- [1] Create sizer
-		GetBackgroundWindow()->SetSizer(new wxBoxSizer(wxVERTICAL));
+		// --- [1] MAIN sizer — the ctor-owned attribute m_mainSizer. It holds
+		// PARALLEL layers: the chrome layers (toolbar, search, …) at the top and a
+		// CONTENT sub-sizer (the "children layer") below. Children never go into
+		// the main sizer directly — they fill the content sub-sizer, so their
+		// index-based inserts never fight the toolbar layer. Clear it for a fresh
+		// build; recreate only defensively (a concrete host always makes one).
+		if (m_mainSizer == nullptr)
+			InitMainSizer();
+		else
+			m_mainSizer->Clear(false);   // drop prior layers / content sub-sizer, keep the sizer
 
-		// --- [2] Show form 
+		// Content sub-sizer — GetFrameSizer() targets THIS from here on, so every
+		// child-attach path (create / refresh / runtime-add) lands under the
+		// chrome. The chrome layers are Inserted ahead of it in [6].
+		wxBoxSizer* contentSizer = new wxBoxSizer(wxVERTICAL);
+		m_mainSizer->Add(contentSizer, 1, wxEXPAND);
+		m_frameContentSizer = contentSizer;
+
+		// --- [2] Show form
 		GetParentBackgroundWindow()->Show(true);
 
 		// --- [3] Set the color of the form -------------------------------
@@ -377,12 +444,19 @@ bool ibVisualHost::CreateVisualHost()
 		// --- [4] Title bar Setup
 		SetCaption(valueForm->GetCaption());
 
-		// --- [5] Default sizer Setup 
+		// --- [5] Default sizer Setup — orientation drives the CONTENT sub-sizer
+		// (GetFrameSizer); the main sizer stays vertical so the chrome layers
+		// always sit above the content.
 		SetOrientation(valueForm->GetOrient());
 
-		// --- [6] Create the components of the form -------------------------
-		// Used to save valueForm objects for later display
+		// --- [6] Chrome layers on the MAIN sizer, inserted as parallel items
+		// AHEAD of the content sub-sizer, in order (toolbar, search, …). Same
+		// shared BuildLayerParts the composite controls use.
+		CreateFormLayers(GetBackgroundWindow(), m_mainSizer, GetValueForm(), m_formLayerParts);
 
+		// --- [7] Create the content components of the form, INTO the content
+		// sub-sizer (GetFrameSizer), under the chrome.
+		// Used to save valueForm objects for later display
 		for (unsigned int i = 0; i < valueForm->GetChildCount(); i++) {
 			ibValueFrame* child = valueForm->GetChild(i);
 			// Recursively generate the ObjectTree
@@ -431,6 +505,10 @@ bool ibVisualHost::UpdateVisualHost()
 		// --- [4] Default sizer Setup 
 		SetOrientation(valueForm->GetOrient());
 
+		// The form's command bar was CREATED in CreateVisualHost — here we only REFRESH the
+		// existing bar in place (no rebuild), matching the control update lifecycle.
+		UpdateFormLayers(GetValueForm(), m_formLayerParts);
+
 		// --- [5] Update the components of the form -------------------------
 		// Used to save valueForm objects for later display
 		for (unsigned int i = 0; i < valueForm->GetChildCount(); i++) {
@@ -448,7 +526,7 @@ bool ibVisualHost::UpdateVisualHost()
 			}
 		}
 
-		// --- [6] Calculate label size 
+		// --- [6] Calculate label size
 		CalculateLabelSize();
 
 		// --- [7] Set sizer properties
@@ -477,8 +555,15 @@ bool ibVisualHost::ClearVisualHost()
 	ibValueForm* valueForm = GetValueForm();
 	if (valueForm != nullptr) ClearControl(valueForm, true);
 
+	// The form's command bar (chrome) is a child of the background window — DestroyChildren
+	// tears it down here; no separate command-bar cleanup needed.
 	GetParentBackgroundWindow()->DestroyChildren();
 	GetParentBackgroundWindow()->SetSizer(nullptr); // *!*
+	// Drop the cached sizer attributes; CreateVisualHost recovers m_mainSizer
+	// from the window (or recreates it) and rebuilds the content sub-sizer.
+	m_mainSizer = nullptr;
+	m_frameContentSizer = nullptr;
+	m_formLayerParts.clear();   // parts died with DestroyChildren; CreateFormLayers refills
 
 	return true;
 }
@@ -746,7 +831,9 @@ void ibVisualHost::ClearControl(ibValueFrame* control, bool force)
 	case COMPONENT_TYPE_WINDOW:
 	{
 		// control's component type says WINDOW → the wxObject stored
-		// by Create is a wxWindow. static_cast is invariant-safe.
+		// by Create is a wxWindow. static_cast is invariant-safe. For a chrome-wrapped
+		// control this is the wrapper PANEL; destroying it takes the toolbar + inner
+		// control, and Cleanup routes through CleanupWithLayers to tear down the inner.
 		wxWindow* controlWnd = static_cast<wxWindow*>(GetWxObject(control));
 		if (controlWnd == nullptr)
 			return;

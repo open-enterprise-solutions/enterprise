@@ -24,6 +24,9 @@ ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::ibVisualEditorHost(i
 	SetOwnBackgroundColour(wxColour(0xD8, 0xE2, 0xEB));  // #D8E2EB palest powder — light background so form card pops
 
 	m_back = new ibDesignerWindow(this, wxID_ANY, wxPoint(10, 10));
+	// Default MAIN sizer (m_mainSizer) on the designer card's content panel —
+	// same model as runtime (GetBackgroundWindow() == the content panel here).
+	InitMainSizer();
 	m_back->GetEventHandler()->Connect(wxID_ANY, wxEVT_LEFT_DOWN, wxMouseEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnClickBackPanel), nullptr, this);
 }
 
@@ -413,11 +416,7 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::SetCaption(cons
 
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::SetOrientation(int orient)
 {
-	const wxWindow* backgroundWindow = GetBackgroundWindow();
-	wxASSERT(backgroundWindow);
-	wxBoxSizer* createdBoxSizer = dynamic_cast<wxBoxSizer*>(backgroundWindow->GetSizer());
-	if (createdBoxSizer != nullptr) createdBoxSizer->SetOrientation(orient);
-	wxASSERT(createdBoxSizer);
+	ApplyContentOrientation(orient);
 }
 
 /////////////////////////////////////////////////////////////////////////////////

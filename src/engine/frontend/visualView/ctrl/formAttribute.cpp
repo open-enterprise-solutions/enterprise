@@ -268,25 +268,33 @@ ibFormAttributeValue* ibValueForm::GetMainAttribute() const
 
 void ibValueForm::SetMainAttribute(ibFormAttributeValue* entry)
 {
-	if (entry == nullptr)
-		return;
-	// The source flows to whoever is main: take it off the current main and seat it into
-	// `entry` (SetSourceValue IncrRefs the new before the old releases, so it never drops to
-	// zero mid-move). Re-selecting the same main is a no-op (SetSourceValue self-guards).
+	// The source flows to whoever is main. entry == nullptr CLEARS main entirely (no attribute is
+	// the data source) — the toggle-off path. SetSourceValue IncrRefs the new before the old
+	// releases, so it never drops to zero mid-move; re-selecting the same main is a no-op.
 	ibFormAttributeValue* oldMain = GetMainAttribute();
-	entry->SetSourceValue(oldMain != nullptr ? oldMain->GetSourceValue() : nullptr);
-	// Sole-main invariant: entry becomes main; every other loses main AND its source (goes
-	// empty — its controls render nothing until activity returns to it).
+	if (entry != nullptr && entry != oldMain)
+		entry->SetSourceValue(oldMain != nullptr ? oldMain->GetSourceValue() : nullptr);
+
+	// Sole-main invariant: `entry` becomes main; every other loses it. A demoted holder first drops
+	// any seated (runtime) source, and THEN every holder RE-MATERIALISES its value from its own
+	// Type via Refresh(). Merely clearing the value and stopping there (the old
+	// SetSourceValue(nullptr)) left the holder TYPE_EMPTY — its source was gone with no way back, so
+	// the picker asserted on a null source and column autofill produced nothing; and re-setting an
+	// attribute as main never rebuilt its source (with no old main to inherit from, entry cleared
+	// ITSELF), so the "set-main doesn't re-render" bug. Refresh keeps a correctly-typed seated
+	// source and rebuilds an emptied one, so it is right for the new main and the demoted ones alike.
 	for (const auto& av : m_attributes) {
-		const bool isMain = (av == entry);
+		const bool isMain = (entry != nullptr && av == entry);
 		av->m_attribute->SetMainAttribute(isMain);
 		if (!isMain)
-			av->SetSourceValue(nullptr);
+			av->SetSourceValue(nullptr);   // drop any seated runtime source before re-materialising
+		av->Refresh();                     // rebuild the Type value (kept intact for a matching seated source)
 	}
 	// Re-point the exported DataSource at the new main's cell (BindExport overwrites the single
 	// "DataSource" slot, so the old main's ownership is dropped — no per-old unbind). Only when
-	// the module is already live; the initial bind in InitializeFormModule reads the main flag.
-	if (GetCompileModule() != nullptr)
+	// the module is already live AND there is a main; toggle-off leaves the last bind harmless
+	// (its cell is now empty).
+	if (GetCompileModule() != nullptr && entry != nullptr)
 		BindExportVariable(wxT("DataSource"), entry->GetBindValue());
 }
 

@@ -115,7 +115,17 @@ public:
 	virtual ibFrontendWindow* GetBackgroundWindow() const = 0;
 
 #ifndef OES_USE_WEB
-	wxSizer* GetFrameSizer() const { return GetBackgroundWindow()->GetSizer(); }
+	// The form's content sub-sizer when built (m_frameContentSizer) — children
+	// attach HERE, under the chrome layers at the top of the window's main sizer;
+	// falls back to the window's own sizer before the first build.
+	wxSizer* GetFrameSizer() const { return m_frameContentSizer != nullptr ? m_frameContentSizer : GetBackgroundWindow()->GetSizer(); }
+
+	// Create the default MAIN sizer (m_mainSizer) on the background window — call
+	// from a concrete host's ctor once its background window exists.
+	void InitMainSizer();
+	// Apply the form's orientation to the CONTENT sub-sizer (main sizer stays
+	// vertical so chrome layers sit above the content) — shared by both hosts.
+	void ApplyContentOrientation(int orient);
 
 	virtual void OnClickFromApp(wxWindow* currentWindow, wxMouseEvent& event) {}
 #endif
@@ -149,7 +159,7 @@ protected:
 	// / OnCreated / Update / OnUpdated / Cleanup virtuals      *
 	// already take ibFrontendWindow*.
 	virtual wxObject* Create(ibValueFrame* control, ibFrontendWindow* wndParent);
-	virtual void OnCreated(ibValueFrame* control, wxObject* obj, ibFrontendWindow* wndParent, bool firstСreated = false);
+	virtual void OnCreated(ibValueFrame* control, wxObject* obj, ibFrontendWindow* wndParent, bool firstCreated = false);
 	virtual void OnSelected(ibValueFrame* control, wxObject* obj);
 	virtual void Update(ibValueFrame* control, wxObject* obj);
 	virtual void OnUpdated(ibValueFrame* control, wxObject* obj, ibFrontendWindow* wndParent);
@@ -198,6 +208,24 @@ protected:
 	// builds; queried by GetWxObject / dispatchers. See the public
 	// accessors above.
 	std::unordered_map<ibValueFrame*, wxObject* > m_baseObjects;
+#ifndef OES_USE_WEB
+	// The host's MAIN sizer — a stable ATTRIBUTE created in the concrete host's
+	// ctor and set on the background window. Everything hangs on it: the chrome
+	// layers (toolbar, search, …) at the top and the content sub-sizer below.
+	// It lives its own life across rebuilds — CreateVisualHost clears and
+	// re-populates it rather than recreating it.
+	wxSizer* m_mainSizer = nullptr;
+	// The form's CONTENT sub-sizer (the "children layer"): every child attaches
+	// here via GetFrameSizer, UNDER the chrome layers on the main sizer. Null
+	// before the first CreateVisualHost / after ClearVisualHost — GetFrameSizer
+	// then falls back to the window's own sizer.
+	wxSizer* m_frameContentSizer = nullptr;
+	// The form's layer parts (toolbar today, search later), tracked EXPLICITLY — same as the
+	// composite's canvas remembers its own (ibCanvasWindow::GetLayerParts). Filled by
+	// CreateFormLayers, refreshed in place by UpdateFormLayers, cleared by ClearVisualHost. Lets
+	// the update read its parts directly instead of re-deriving them by walking the sizer.
+	std::vector<ibFrontendWindow*> m_formLayerParts;
+#endif
 };
 
 #include "frontend/docView/docView.h"
@@ -221,6 +249,9 @@ public:
 	virtual void InsertControl(ibValueFrame* obj, ibValueFrame* parent) = 0;
 	virtual void ExpandControl(ibValueFrame* obj, bool expand) = 0;
 	virtual void SelectControl(ibValueFrame* obj) = 0;
+	// Select any property object (not a control) in the inspector — e.g. a command-bar tool
+	// clicked in the designer. Goes through the common ibPropertyObject the inspector speaks.
+	virtual void SelectPropertyObject(class ibPropertyObject* obj) = 0;
 
 	virtual void ModifyEvent(class ibEvent* event, const wxVariant& oldValue, const wxVariant& newValue) = 0;
 	virtual void ModifyProperty(class ibProperty* prop, const wxVariant& oldValue, const wxVariant& newValue) = 0;

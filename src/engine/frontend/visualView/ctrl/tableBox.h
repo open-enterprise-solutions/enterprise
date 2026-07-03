@@ -73,7 +73,7 @@ class ibValueEnumTableBoxViewMode :
 private:
 };
 
-class ibValueModelTableBox : public ibValueWindow,
+class ibValueModelTableBox : public ibValueWindowComposite,
 	public ibTypeControlFactory, public ibSourceObject {
 	public:
 
@@ -170,13 +170,18 @@ class ibValueModelTableBox : public ibValueWindow,
 
 	//control factory
 	virtual wxObject* Create(ibFrontendWindow* wxparent, ibVisualHost* visualHost) override;
-	virtual void OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstСreated) override;
+	virtual void OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated) override;
 	virtual void Update(wxObject* wxobject, ibVisualHost* visualHost) override;
 	virtual void OnUpdated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost) override;
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
 
-	//get component type 
+	//get component type
 	virtual int GetComponentType() const { return COMPONENT_TYPE_WINDOW; }
+
+	// A table bound to the form's MAIN attribute doesn't carry its own command bar — the form's
+	// toolbar already serves those commands, so a table bar would just duplicate them (Add / Mark
+	// as delete twice). Suppress it: no toolbar layer, no "Command interface" node, no AutoFill.
+	virtual bool HasCommandBar() const override;
 
 	//support icons
 	virtual wxIcon GetIcon() const;
@@ -357,7 +362,7 @@ public:
 	// tablebox strips its own prefix to get the row-relative tail it walks per row.
 	const std::vector<ibSourceId>& GetSourcePath() const { return m_propertySource->GetValueAsPath(); }
 
-	// The column's bound source as a composer FIELD — its dotted NAME (e.g. "Товар.Артикул"), row-relative to
+	// The column's bound source as a composer FIELD — its dotted NAME (e.g. "Product.SKU"), row-relative to
 	// the bound table. Universal: whatever addresses a column by field (sort, filter, group) uses it. Straight
 	// off m_propertySource. MakeString renders the FULL form-rooted path; the composer's queryable is the bound
 	// TABLE, so drop the tablebox's own prefix (one name segment per prefix id) to make it row-relative — the

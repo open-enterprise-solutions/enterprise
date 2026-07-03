@@ -189,6 +189,8 @@
          toolbar render the toolbar as a stub block; child CT_TLITM
          / CT_TLSP still log "unregistered clsid" until iteration
          follow-up. -->
+    <ClCompile Include="visualView\layers\commandBar.cpp" />
+    <ClCompile Include="visualView\layerObject.cpp" />
     <ClCompile Include="visualView\ctrl\toolBar.cpp" />
     <ClCompile Include="visualView\ctrl\toolBar_res.cpp" />
     <ClCompile Include="visualView\ctrl\toolBarItem.cpp" />

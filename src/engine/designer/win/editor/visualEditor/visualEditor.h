@@ -10,6 +10,10 @@
 
 #include "frontend/visualView/visualHost.h"
 
+class ibValueLayerObject;      // common base for a layer node (the bar OR one command)
+class ibValueCommandBar;       // command-interface layer — tree-node payload
+class ibValueCommandBarItem;   // one child command — tree-node payload
+
 //////////////////////////////////////////////////////////////////////////////////////////
 
 #define wxNOTEBOOK_PAGE_DESIGNER 0
@@ -217,7 +221,7 @@ public:
 		* @param wxobject The object which was just created.
 		* @param wxparent The wxWidgets parent - the wxObject that the created object was added to.
 		*/
-		virtual void OnCreated(ibValueFrame* control, wxObject* obj, wxWindow* wxparent, bool firstСreated = false);
+		virtual void OnCreated(ibValueFrame* control, wxObject* obj, wxWindow* wxparent, bool firstCreated = false);
 
 		/**
 		* Allows components to do something after they have been updated.
@@ -338,6 +342,15 @@ public:
 		}
 
 		void RestoreItemStatus(ibValueFrame* obj);
+	public:
+		// Select (and scroll to) a command-bar child after a rebuild — looks it up in
+		// m_commandItemMap. No-op if the item isn't in the current tree (e.g. after delete).
+		// Public: the notebook's SelectPropertyObject calls it to reveal on a toolbar click.
+		void SelectCommandItem(ibValueCommandBarItem* citem);
+	private:
+		// Decode a tree item's payload and select it: a layer node (bar/command) → the inspector;
+		// a control node → the visual editor. Shared by click-reselect and selection-changed.
+		void SelectItemData(wxTreeItemData* item_data);
 		void AddItem(ibValueFrame* item, ibValueFrame* parent);
 		void RemoveItem(ibValueFrame* item) {
 			// remove affected object tree items only
@@ -400,6 +413,9 @@ public:
 		wxImageList* m_iconList = nullptr;
 
 		std::map<ibValueFrame*, wxTreeItemId> m_listItem;
+		// Parallel map for command-bar children — they are not ibValueFrame, so they can't live
+		// in m_listItem; used to re-select a command after add / reorder rebuilds the tree.
+		std::map<ibValueCommandBarItem*, wxTreeItemId> m_commandItemMap;
 		std::map<wxString, int> m_iconIdx;
 
 		wxTreeCtrl* m_tcObjects = nullptr;
@@ -418,9 +434,15 @@ public:
 	class ibVisualEditorObjectTreeItemData : public wxTreeItemData {
 	public:
 		ibVisualEditorObjectTreeItemData(ibValueFrame* obj) : m_object(obj) {}
+		// A LAYER node — the command-interface (the bar) OR one command (an item). Both are
+		// ibValueLayerObject, so the tree keeps ONE pointer and never branches per kind:
+		// selection, context menu and expand-state are all virtual on the base.
+		ibVisualEditorObjectTreeItemData(ibValueLayerObject* layer) : m_layerObject(layer) {}
 		ibValueFrame* GetObject() { return m_object; }
+		ibValueLayerObject* GetLayerObject() { return m_layerObject; }
 	private:
 		ibValueFrame* m_object = nullptr;
+		ibValueLayerObject* m_layerObject = nullptr;
 	};
 
 	//////////////////////////////////////////////////////////////////////////////////////////
@@ -459,10 +481,25 @@ public:
 		// attribute + the generated value and intercepts their property changes).
 		class ibFormAttributeValue* GetEntryFromItem(const wxTreeItemId& item) const;
 
+		// Select the tree item carrying this attribute holder (nullptr = none), BY IDENTITY — the
+		// form owns the holders in m_attributes and RebuildTree recreates only the tree items, so a
+		// survivor's pointer is stable. Mirrors the object tree keying m_listItem by ibValueFrame*.
+		// Used after an add to land on the new attribute and by RebuildTree to keep the selection.
+		void SelectEntry(class ibFormAttributeValue* entry);
+
+		// The single decode-and-select point — surfaces an attribute holder in the object inspector.
+		// Shared by the click-reselect, selection-changed, activate and menu paths, the way the
+		// object tree funnels every path through SelectItemData.
+		void SelectInInspector(class ibFormAttributeValue* entry);
+
 	private:
 
 		ibVisualEditor* m_formHandler = nullptr;
 		wxTreeCtrl* m_tcAttributes = nullptr;
+		// True while RebuildTree tears the tree down and re-appends — suppresses OnSelChanged so a
+		// selection-changed event fired mid-rebuild never touches a stale/freed holder (the object
+		// tree guards the same way with m_notifySelecting).
+		bool m_rebuilding = false;
 
 		wxDECLARE_EVENT_TABLE();
 	};
@@ -770,6 +807,9 @@ public:
 		if (wxAuiNotebook::GetSelection() != wxNOTEBOOK_PAGE_DESIGNER)
 			wxAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_DESIGNER);
 	}
+
+	// Hand any property object straight to the inspector (defined in the .cpp — needs objinspect).
+	void SelectPropertyObject(ibPropertyObject* obj) override;
 
 	void ModifyEvent(ibEvent* event, const wxVariant& oldValue, const wxVariant& newValue);
 	void ModifyProperty(ibProperty* prop, const wxVariant& oldValue, const wxVariant& newValue) {

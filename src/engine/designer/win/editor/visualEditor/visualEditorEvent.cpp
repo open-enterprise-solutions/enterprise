@@ -64,27 +64,31 @@ void ibVisualEditorNotebook::ibVisualEditor::NotifyEventModified(ibEvent* event)
 
 //////////////////////////////////////////////////////////////////////////////////////
 
+// Route EVERY lifecycle stage through the control's *WithLayers wrapper — same as
+// the runtime host. A plain control forwards to its plain method (no change); a
+// composite control (tableBox) builds/updates/tears down its chrome layer (the
+// command-bar toolbar) around its inner widget, so the designer shows it too.
 wxObject* ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::Create(ibValueFrame* control, wxWindow* wxparent)
 {
-	return control->Create(wxparent, this);
+	return control->CreateWithLayers(wxparent, this);
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnCreated(ibValueFrame* control, wxObject* obj, wxWindow* wndParent, bool firstCreated)
 {
-	control->OnCreated(obj, wndParent, this, firstCreated);
+	control->OnCreatedWithLayers(obj, wndParent, this, firstCreated);
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::Update(ibValueFrame* control, wxObject* obj)
 {
-	control->Update(obj, this);
+	control->UpdateWithLayers(obj, this);
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnUpdated(ibValueFrame* control, wxObject* obj, wxWindow* wndParent)
 {
-	control->OnUpdated(obj, wndParent, this);
+	control->OnUpdatedWithLayers(obj, wndParent, this);
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::Cleanup(ibValueFrame* control, wxObject* obj)
 {
-	control->Cleanup(obj, this);
+	control->CleanupWithLayers(obj, this);
 }

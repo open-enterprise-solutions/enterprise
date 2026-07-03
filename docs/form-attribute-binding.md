@@ -79,6 +79,14 @@ form on open lands.
   skip the main, so copy/paste never produces a duplicate "Object".
 - A column path is `{mainAttrId, field}` ("List.Field"), NOT a row-type hop
   ("List.Document1.Field").
+- **`SetMainAttribute` re-materialises, never just clears.** Flipping the sole-main flag
+  (the designer toggle) drops the demoted holders' seated runtime source and then `Refresh()`es
+  EVERY holder so its value rebuilds from its own Type. Clearing the value and stopping there
+  (`SetSourceValue(nullptr)` alone) left the holder `TYPE_EMPTY` — the picker then asserted on a
+  null source and column autofill produced nothing, and re-setting main never rebuilt the source
+  (with no old main to inherit from, the new main cleared itself). `Refresh` keeps a
+  correctly-typed seated source and rebuilds an emptied one, so the new main and the demoted ones
+  are both correct; a source-typed holder is never left without its materialised source.
 
 ## Bind lifecycle
 
@@ -251,10 +259,66 @@ the LOCAL capture already snapshotted via `GetValue()` for the same reason.
 
 `ibVisualEditorAttributeTree` (`designer/.../visualEditorAttributeTree.cpp`): no toolbar;
 a context menu (Add / Edit-rename / Delete / Copy / Paste / SetMain / Properties) with
-icons; tree-item icon from the meta-attribute; name uniqueness enforced; double-click
-activates the inspector; `RefreshEditor` on type-change / delete / set-main. Copy/paste are
-STATIC methods (`ibFormAttributeValue::CopyToClipboard/PasteFromClipboard`) serialising the
-attribute description through `ibBinaryProvider` (clipboard id `oes_clipboard_attribute`).
+icons; tree-item icon from the meta-attribute; name uniqueness enforced; `RefreshEditor` on
+type-change / delete / set-main. Copy/paste are STATIC methods
+(`ibFormAttributeValue::CopyToClipboard/PasteFromClipboard`) serialising the attribute
+description through `ibBinaryProvider` (clipboard id `oes_clipboard_attribute`).
+
+Selection is modelled exactly like the object tree — **by identity, not by name**:
+
+- **`SelectInInspector(entry)`** is the single decode-and-select point (the mirror of the
+  object tree's `SelectItemData`): raises the inspector and `SelectObject`s the HOLDER (façade).
+  Every path funnels through it — the single-click reselect (a `wxEVT_LEFT_DOWN` that
+  re-surfaces the ALREADY-selected item, since `OnSelChanged` only fires on a CHANGE),
+  `OnSelChanged`, activate, and Properties. One click surfaces the attribute, like a control.
+- **`SelectEntry(entry)`** lands the tree row on a holder by pointer identity
+  (`GetEntryFromItem(id) == entry`) — the form owns the holders in `m_attributes`
+  (ref-counted, stable across a rebuild), so the pointer is a valid key, the way the object
+  tree keys `m_listItem` by `ibValueFrame*`. `RebuildTree` remembers the selection as the
+  holder pointer and restores it after re-append; Add / Paste land the row on the NEW holder
+  (its ref-counted pointer survives being handed to the undo command).
+- **`RebuildTree`** wraps the tear-down in `Freeze`/`Thaw` (the tree is `SetDoubleBuffered`)
+  and sets `m_rebuilding` to suppress `OnSelChanged` while items churn — a selection event
+  fired mid-rebuild must not touch a stale/freed holder (the object tree guards the same way
+  with `m_notifySelecting`).
+- **Set-main is a toggle:** clicking the current main clears it
+  (`SetMainAttribute(entry->IsMainAttribute() ? nullptr : entry)`) — no main → the control's
+  own command bar comes back (below).
+
+## Command interface — a chrome LAYER over a control
+
+A frame's toolbar/search/… are not children in the content sizer — they are **layers** stacked
+ABOVE the content. The subsystem lives in `frontend/visualView/` (`layerObject.{h,cpp}`,
+`canvasWindow.{h,cpp}`, `layers/commandBar.{h,cpp}`).
+
+- **`ibValueLayerObject`** (`layerObject.h`, `FRONTEND_API`, abstract) — the common base a layer
+  and a frame both present to the DESIGNER TREE, so one tree pointer drives both without casting
+  per kind. `: ibValueDynamicMembers, ibPropertyObject`. Pure `GetOwnerFrame()` /
+  `IsLayerContainer()`; virtual `IsTreeExpanded`/`SetTreeExpanded` (open-state kept on the object,
+  restored across a rebuild); `PrepareDefaultMenu(wxMenu*)` / `ExecuteMenu(editor, id)` (the
+  canonical menu hooks, named like `ibValueFrame`'s) — the object fills its own menu and runs the
+  choice, the tree never branches per kind (see the object tree's `SelectItemData` / `OnRightClick`).
+- **`ibValueCommandBar` / `ibValueCommandBarItem`** (`layers/commandBar.h`) — both
+  `: ibValueLayerObject`. The bar carries an AutoFill flag + manual command items; an item mirrors
+  the toolbar item (Name / Caption / Representation / Picture / Tooltip / Enabled / Visible +
+  an `ibEventAction` Action). AutoFill entries use the real (small) action id; **manual items use a
+  synthetic id `>= 32000`** — it must stay `< 32767` or the overflow dropdown's `wxMenuItem`
+  asserts. `ExecuteCommand` is id-aware (synthetic → the item's own action). A tool click in the
+  designer routes to the inspector (`FindItemByCommandId` → `SelectPropertyObject`), at runtime to
+  `ExecuteCommand`. Copy/paste of commands goes through a static `ibDataNode` clipboard.
+- **`ibCanvasWindow`** (`canvasWindow.h`, ex-`ibChromeWindow`) — `wxCompositeWindow<wxPanel>`; a
+  vertical stack of `[layer parts][inner]`. Used by the COMPOSITE render path (`window.cpp`
+  `CreateWithLayers` wraps the control's inner window). The FORM path builds the same layer parts
+  straight into the host's main sizer (`visualHost.cpp` `CreateFormLayers`), tracked explicitly in
+  `m_formLayerParts`. Both share the statics `ibValueWindowComposite::BuildLayerParts` /
+  `UpdateLayerParts`, so the two renderers agree on one layer model.
+- **Serialization** — the composite window writes a `"Layers"` block (first entry = `"CommandBar"`,
+  extensible), read back symmetrically; the command bar round-trips through the layer object's
+  `WriteData`/`ReadData`.
+- **No duplicate bar on the main.** A control bound to the form's MAIN attribute suppresses its own
+  command bar (`ibValueModelTableBox::HasCommandBar()` returns false when
+  `FindSourceHolder(path.front())->IsMainAttribute()`) — the form already carries the command
+  interface for the main source, so the tablebox would otherwise render a second, redundant bar.
 
 ## Open edges
 

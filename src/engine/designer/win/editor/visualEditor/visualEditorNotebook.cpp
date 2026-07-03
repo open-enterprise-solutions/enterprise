@@ -4,6 +4,8 @@
 
 #include "frontend/win/editor/codeEditor/codeEditor.h"
 #include "frontend/win/editor/codeEditor/codeEditorParser.h"
+#include "frontend/mainFrame/objinspect/objinspect.h"   // objectInspector (SelectPropertyObject)
+#include "frontend/visualView/layers/commandBar.h"       // ibValueCommandBarItem (tree reveal)
 
 void ibVisualEditorNotebook::CreateVisualEditor(ibMetaDocument* document, wxWindow* parent, wxWindowID id, long flags)
 {
@@ -140,6 +142,24 @@ void ibVisualEditorNotebook::ModifyEvent(ibEvent* event, const wxVariant& oldVal
 	}
 
 	m_visualEditor->ModifyEvent(event, oldValue, newValue);
+}
+
+void ibVisualEditorNotebook::SelectPropertyObject(ibPropertyObject* obj)
+{
+	if (obj == nullptr)
+		return;
+	if (!objectInspector->IsShownInspector())
+		objectInspector->ShowInspector();
+	objectInspector->SelectObject(obj, true);
+	// Reveal a command in the object tree too (EnsureVisible + SelectItem) — so a click on the
+	// rendered toolbar / an add-move from the menu also highlights the node. Bar nodes and plain
+	// property objects aren't in the command map; SelectCommandItem no-ops for them.
+	if (m_visualEditor != nullptr && m_visualEditor->GetObjectTree() != nullptr) {
+		if (ibValueCommandBarItem* citem = dynamic_cast<ibValueCommandBarItem*>(obj))
+			m_visualEditor->GetObjectTree()->SelectCommandItem(citem);
+	}
+	if (wxAuiNotebook::GetSelection() != wxNOTEBOOK_PAGE_DESIGNER)
+		wxAuiNotebook::SetSelection(wxNOTEBOOK_PAGE_DESIGNER);
 }
 
 void ibVisualEditorNotebook::ActivateEditor()

@@ -49,11 +49,22 @@ ibAttributeTree::ibVisualEditorAttributeTree(ibVisualEditor* owner, wxWindow* pa
 	// rename used by "Edit".
 	m_tcAttributes = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTR_DEFAULT_STYLE | wxTR_HIDE_ROOT | wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_FULL_ROW_HIGHLIGHT | wxTR_EDIT_LABELS);
+	m_tcAttributes->SetDoubleBuffered(true);   // no flicker on RebuildTree (add / set-main), like the object tree
 
 	// Every entry carries the default meta-attribute icon (index 0).
 	wxImageList* images = new wxImageList(16, 16);
 	images->Add(ibValueMetaObjectAttribute::GetIconGroup());
 	m_tcAttributes->AssignImageList(images);
+
+	// Single click always (re)selects — even the already-selected item — so ONE click surfaces the
+	// attribute in the inspector (OnSelChanged fires only on CHANGE). Same as the object tree, which
+	// routes its click-reselect through SelectItemData.
+	m_tcAttributes->Bind(wxEVT_LEFT_DOWN, [this](wxMouseEvent& event) {
+		const wxTreeItemId id = m_tcAttributes->HitTest(event.GetPosition());
+		if (id.IsOk() && id == m_tcAttributes->GetSelection())
+			SelectInInspector(GetEntryFromItem(id));   // re-surface the already-selected attribute
+		event.Skip();
+	});
 
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 	sizer->Add(m_tcAttributes, 1, wxEXPAND);
@@ -65,21 +76,31 @@ void ibAttributeTree::RebuildTree()
 	if (m_tcAttributes == nullptr)
 		return;
 
+	// Remember the selected attribute BY IDENTITY (the holder pointer). The form owns the holders in
+	// m_attributes; RebuildTree recreates only the tree items, so a survivor's pointer is stable —
+	// the same key the object tree uses (m_listItem keyed by ibValueFrame*). A just-removed entry is
+	// held alive by the undo command, so the compare below is safe and simply matches nothing.
+	ibFormAttributeValue* keep = GetEntryFromItem(m_tcAttributes->GetSelection());
+
+	m_rebuilding = true;        // suppress OnSelChanged while items churn (stale/freed holders)
+	m_tcAttributes->Freeze();   // no flicker while the tree is torn down and re-appended
 	m_tcAttributes->DeleteAllItems();
 	const wxTreeItemId root = m_tcAttributes->AddRoot(wxT("Attributes"));
 
-	ibValueForm* form = m_formHandler != nullptr ? m_formHandler->GetValueForm() : nullptr;
-	if (form == nullptr)
-		return;
-
-	for (unsigned int idx = 0; idx < form->GetAttributeCount(); idx++) {
-		ibFormAttributeValue* entry = form->GetAttribute(idx);
-		const wxTreeItemId id = m_tcAttributes->AppendItem(
-			root, entry->GetAttributeName(), 0, 0,
-			new ibAttributeTreeItemData(entry));   // carry the holder (facade) — the selectable
-		if (entry->IsMainAttribute())
-			m_tcAttributes->SetItemBold(id);
+	if (ibValueForm* form = m_formHandler != nullptr ? m_formHandler->GetValueForm() : nullptr) {
+		for (unsigned int idx = 0; idx < form->GetAttributeCount(); idx++) {
+			ibFormAttributeValue* entry = form->GetAttribute(idx);
+			const wxTreeItemId id = m_tcAttributes->AppendItem(
+				root, entry->GetAttributeName(), 0, 0,
+				new ibAttributeTreeItemData(entry));   // carry the holder (facade) — the selectable
+			if (entry->IsMainAttribute())
+				m_tcAttributes->SetItemBold(id);
+		}
 	}
+	m_tcAttributes->Thaw();
+	m_rebuilding = false;
+
+	SelectEntry(keep);   // restore by identity — now fires OnSelChanged with a LIVE holder
 }
 
 ibFormAttributeValue* ibAttributeTree::GetEntryFromItem(const wxTreeItemId& item) const
@@ -90,16 +111,41 @@ ibFormAttributeValue* ibAttributeTree::GetEntryFromItem(const wxTreeItemId& item
 	return nullptr;
 }
 
+void ibAttributeTree::SelectEntry(ibFormAttributeValue* entry)
+{
+	if (entry == nullptr || m_tcAttributes == nullptr)
+		return;
+	const wxTreeItemId root = m_tcAttributes->GetRootItem();
+	if (!root.IsOk())
+		return;
+	wxTreeItemIdValue cookie;
+	for (wxTreeItemId id = m_tcAttributes->GetFirstChild(root, cookie); id.IsOk();
+		id = m_tcAttributes->GetNextChild(root, cookie)) {
+		if (GetEntryFromItem(id) == entry) {   // match BY IDENTITY, like m_listItem.find(obj)
+			m_tcAttributes->SelectItem(id);    // fires OnSelChanged → inspector shows it
+			m_tcAttributes->EnsureVisible(id);
+			return;
+		}
+	}
+}
+
+void ibAttributeTree::SelectInInspector(ibFormAttributeValue* entry)
+{
+	// The single decode-and-select point. Select the HOLDER (facade): it surfaces the attribute's +
+	// the generated value's properties and intercepts their changes. SelectObject is a no-op while
+	// the inspector is hidden, so raise it first.
+	if (entry == nullptr)
+		return;
+	if (!objectInspector->IsShownInspector())
+		objectInspector->ShowInspector();
+	objectInspector->SelectObject(entry, true);
+}
+
 void ibAttributeTree::OnSelChanged(wxTreeEvent& event)
 {
-	if (ibFormAttributeValue* entry = GetEntryFromItem(event.GetItem())) {
-		// Ensure the inspector is up — SelectObject is a no-op while hidden;
-		// force a rebuild so the attribute's properties are shown. Select the HOLDER (facade):
-		// it surfaces the attribute's + the value's properties and intercepts their changes.
-		if (!objectInspector->IsShownInspector())
-			objectInspector->ShowInspector();
-		objectInspector->SelectObject(entry, true);
-	}
+	if (m_rebuilding)
+		return;   // mid-rebuild: the item's holder may be stale/freed — don't touch the inspector
+	SelectInInspector(GetEntryFromItem(event.GetItem()));
 }
 
 void ibAttributeTree::OnContextMenu(wxContextMenuEvent& event)
@@ -114,6 +160,8 @@ void ibAttributeTree::OnContextMenu(wxContextMenuEvent& event)
 			m_tcAttributes->SelectItem(hit);
 	}
 	const bool hasItem = m_tcAttributes->GetSelection().IsOk();
+	ibFormAttributeValue* selEntry = GetEntryFromItem(m_tcAttributes->GetSelection());
+	const bool isMain = selEntry != nullptr && selEntry->IsMainAttribute();
 
 	wxMenu menu;
 	auto appendItem = [&menu](int menuId, const wxString& label, const wxArtID& art, bool enabled) {
@@ -131,7 +179,7 @@ void ibAttributeTree::OnContextMenu(wxContextMenuEvent& event)
 	appendItem(ID_ATTR_COPY, _("Copy"), wxART_COPY, hasItem);
 	appendItem(ID_ATTR_PASTE, _("Paste"), wxART_PASTE, true);        // always available
 	menu.AppendSeparator();
-	appendItem(ID_ATTR_SETMAIN, _("Set as main"), wxART_TICK_MARK, hasItem);
+	appendItem(ID_ATTR_SETMAIN, isMain ? _("Unset main") : _("Set as main"), wxART_TICK_MARK, hasItem);
 	appendItem(ID_ATTR_PROPERTIES, _("Properties"), wxART_LIST_VIEW, hasItem);
 
 	PopupMenu(&menu);
@@ -141,11 +189,7 @@ void ibAttributeTree::OnActivated(wxTreeEvent& event)
 {
 	// Double-click / Enter on an item → activate its properties in the inspector, even when it is
 	// already the selected item (OnSelChanged would not re-fire). "Activate the property."
-	if (ibFormAttributeValue* entry = GetEntryFromItem(event.GetItem())) {
-		if (!objectInspector->IsShownInspector())
-			objectInspector->ShowInspector();
-		objectInspector->SelectObject(entry, true);   // select the HOLDER (facade)
-	}
+	SelectInInspector(GetEntryFromItem(event.GetItem()));
 }
 
 void ibAttributeTree::OnAddAttribute(wxCommandEvent& WXUNUSED(event))
@@ -156,12 +200,13 @@ void ibAttributeTree::OnAddAttribute(wxCommandEvent& WXUNUSED(event))
 
 	// A new attribute is never empty: a UNIQUE name and a default Type (String) — the user changes
 	// the Type via the inspector afterwards. Build it UNOWNED and run it through the command
-	// processor so the add is UNDOABLE; the command attaches it, refreshes the editor (this tree
-	// re-reads the form's attribute set) and selects the new entry.
-	if (!objectInspector->IsShownInspector())
-		objectInspector->ShowInspector();
-
-	m_formHandler->InsertAttribute(form->MakeAttribute(form->MakeUniqueAttributeName()));
+	// processor so the add is UNDOABLE; the command attaches it and refreshes the editor (this tree
+	// re-reads the form's attribute set). Then land the current row on the new entry BY IDENTITY —
+	// the holder is ref-counted, so the raw pointer survives being handed to the command.
+	ibValuePtr<ibFormAttributeValue> holder = form->MakeAttribute(form->MakeUniqueAttributeName());
+	ibFormAttributeValue* added = holder;
+	m_formHandler->InsertAttribute(holder);   // attach + RefreshEditor → RebuildTree
+	SelectEntry(added);                        // select the new attribute (drives OnSelChanged → inspector)
 }
 
 void ibAttributeTree::OnEditAttribute(wxCommandEvent& WXUNUSED(event))
@@ -189,7 +234,7 @@ void ibAttributeTree::OnEndLabelEdit(wxTreeEvent& event)
 	m_formHandler->Modify(true);
 	m_formHandler->NotifyEditorSaved();
 
-	objectInspector->SelectObject(entry, true);
+	SelectInInspector(entry);
 }
 
 void ibAttributeTree::OnRemoveAttribute(wxCommandEvent& WXUNUSED(event))
@@ -208,7 +253,9 @@ void ibAttributeTree::OnSetMainAttribute(wxCommandEvent& WXUNUSED(event))
 	if (form == nullptr || entry == nullptr)
 		return;
 
-	form->SetMainAttribute(entry);   // sole-main invariant + source flows to it
+	// Toggle: clicking on the CURRENT main clears it (no main → its controls get their own command
+	// bar back); otherwise make it main. SetMainAttribute keeps the sole-main invariant.
+	form->SetMainAttribute(entry->IsMainAttribute() ? nullptr : entry);
 	m_formHandler->Modify(true);
 	m_formHandler->NotifyEditorSaved();
 	RebuildTree();
@@ -217,11 +264,7 @@ void ibAttributeTree::OnSetMainAttribute(wxCommandEvent& WXUNUSED(event))
 
 void ibAttributeTree::OnPropertiesAttribute(wxCommandEvent& WXUNUSED(event))
 {
-	if (ibFormAttributeValue* entry = GetEntryFromItem(m_tcAttributes->GetSelection())) {
-		if (!objectInspector->IsShownInspector())
-			objectInspector->ShowInspector();
-		objectInspector->SelectObject(entry, true);
-	}
+	SelectInInspector(GetEntryFromItem(m_tcAttributes->GetSelection()));
 }
 
 void ibAttributeTree::OnCopyAttribute(wxCommandEvent& WXUNUSED(event))
@@ -250,8 +293,6 @@ void ibAttributeTree::OnPasteAttribute(wxCommandEvent& WXUNUSED(event))
 	if (ibFormAttributeValue* entry = ibFormAttributeValue::PasteFromClipboard(form)) {
 		m_formHandler->Modify(true);
 		RebuildTree();
-		if (!objectInspector->IsShownInspector())
-			objectInspector->ShowInspector();
-		objectInspector->SelectObject(entry, true);
+		SelectEntry(entry);   // land on the pasted attribute BY IDENTITY (drives OnSelChanged → inspector)
 	}
 }

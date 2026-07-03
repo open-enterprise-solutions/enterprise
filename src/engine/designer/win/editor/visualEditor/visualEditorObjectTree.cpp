@@ -5,6 +5,8 @@
 
 #include "visualEditor.h"
 #include "backend/propertyManager/propertyManager.h"
+#include "frontend/visualView/layers/commandBar.h"      // ibValueCommandBar (command-interface node)
+#include "frontend/mainFrame/objinspect/objinspect.h"   // objectInspector
 
 #include <wx/imaglist.h>
 
@@ -21,6 +23,7 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::RebuildTr
 	// Clear the old tree and map
 	m_tcObjects->DeleteAllItems();
 	m_listItem.clear();
+	m_commandItemMap.clear();
 
 	if (valueForm != nullptr) {
 		wxTreeItemId dummy;
@@ -104,6 +107,30 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::AddChildr
 		// Set the name
 		UpdateItem(new_parent, obj);
 
+		// Command interface (a chrome LAYER the frame carries): a static sub-node
+		// added FIRST, so it sits above the content like the rendered toolbar.
+		// Selecting it edits the bar's settings (AutoFill). Icon = the toolbar's.
+		if (obj->HasCommandBar()) {
+			ibValueCommandBar* cbar = obj->GetCommandBar();
+			wxTreeItemId cmdNode = m_tcObjects->AppendItem(new_parent, _("Command interface"),
+				GetImageIndex(wxT("Toolbar")), wxNOT_FOUND,
+				new ibVisualEditorObjectTreeItemData(cbar));
+			// Its child COMMANDS (runtime items) as sub-nodes — remembered in m_commandItemMap
+			// so a just-added / moved command can be re-selected after the rebuild.
+			for (unsigned int c = 0; c < cbar->GetCommandItemCount(); c++) {
+				ibValueCommandBarItem* citem = cbar->GetCommandItem(c);
+				if (citem != nullptr) {
+					wxTreeItemId itemNode = m_tcObjects->AppendItem(cmdNode, citem->GetName(),
+						GetImageIndex(wxT("Tool")), wxNOT_FOUND,
+						new ibVisualEditorObjectTreeItemData(citem));
+					m_commandItemMap[citem] = itemNode;
+				}
+			}
+			// Restore the node's open-state (kept on the bar, like a control's expand flag).
+			if (cbar->GetCommandItemCount() > 0 && cbar->IsTreeExpanded())
+				m_tcObjects->Expand(cmdNode);
+		}
+
 		// Add the rest of the children
 		unsigned int count = obj->GetChildCount();
 
@@ -154,6 +181,15 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::RestoreIt
 	for (i = 0; i < count; i++) {
 		RestoreItemStatus(obj->GetChild(i));
 	}
+}
+
+void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::SelectCommandItem(ibValueCommandBarItem* citem)
+{
+	auto it = m_commandItemMap.find(citem);
+	if (it == m_commandItemMap.end() || !it->second.IsOk())
+		return;
+	m_tcObjects->EnsureVisible(it->second);   // expands ancestor nodes so the item shows
+	m_tcObjects->SelectItem(it->second);      // drives OnSelChanged -> inspector shows its props
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::AddItem(ibValueFrame* item, ibValueFrame* parent)
@@ -274,37 +310,14 @@ ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::ibVisualEditor
 	Connect(wxID_ANY, wxEVT_COMMAND_TREE_ITEM_EXPANDED, wxTreeEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnExpansionChange));
 	Connect(wxID_ANY, wxEVT_COMMAND_TREE_ITEM_COLLAPSED, wxTreeEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnExpansionChange));
 
-	m_tcObjects->Bind(wxEVT_LEFT_DOWN,
-		[&](wxMouseEvent& event) {
-			const wxTreeItemId& id = m_tcObjects->HitTest(event.GetPosition());
-			if (id.IsOk() && id == m_tcObjects->GetSelection()) {
-				wxTreeItemData* item_data = m_tcObjects->GetItemData(id);
-				if (item_data != nullptr) {
-					ibValueFrame* obj(((ibVisualEditorObjectTreeItemData*)item_data)->GetObject());
-					assert(obj);
-					m_formHandler->SelectObject(obj);
-					m_formHandler->ScrollToObject(obj);
-				}
-			}
-			event.Skip();
-		}
-	);
-
-	m_tcObjects->Bind(wxEVT_RIGHT_DOWN,
-		[&](wxMouseEvent& event) {
-			const wxTreeItemId& id = m_tcObjects->HitTest(event.GetPosition());
-			if (id.IsOk() && id == m_tcObjects->GetSelection()) {
-				wxTreeItemData* item_data = m_tcObjects->GetItemData(id);
-				if (item_data != nullptr) {
-					ibValueFrame* obj(((ibVisualEditorObjectTreeItemData*)item_data)->GetObject());
-					assert(obj);
-					m_formHandler->SelectObject(obj);
-					m_formHandler->ScrollToObject(obj);
-				}
-			}
-			event.Skip();
-		}
-	);
+	auto reselectOnClick = [this](wxMouseEvent& event) {
+		const wxTreeItemId& id = m_tcObjects->HitTest(event.GetPosition());
+		if (id.IsOk() && id == m_tcObjects->GetSelection())
+			SelectItemData(m_tcObjects->GetItemData(id));
+		event.Skip();
+	};
+	m_tcObjects->Bind(wxEVT_LEFT_DOWN, reselectOnClick);
+	m_tcObjects->Bind(wxEVT_RIGHT_DOWN, reselectOnClick);
 
 	m_altKeyIsDown = false;
 	m_notifySelecting = false;
@@ -357,22 +370,47 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnSelChan
 	if (m_notifySelecting)
 		return;
 
-	if (item_data != nullptr) {
-		ibValueFrame* obj(((ibVisualEditorObjectTreeItemData*)item_data)->GetObject());
-		assert(obj);
-		m_formHandler->SelectObject(obj);
-		m_formHandler->ScrollToObject(obj);
-	}
+	SelectItemData(item_data);
 }
 
-#include "frontend/mainFrame/objinspect/objinspect.h"
+// Decode a tree item's payload and select it — one place for the click-reselect and the
+// selection-changed handlers. A layer node (bar/command) goes to the inspector; a control node
+// goes to the visual editor (which also scrolls to it).
+void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::SelectItemData(wxTreeItemData* item_data)
+{
+	if (item_data == nullptr)
+		return;
+	auto* data = (ibVisualEditorObjectTreeItemData*)item_data;
+	if (ibValueLayerObject* layer = data->GetLayerObject()) {
+		if (!objectInspector->IsShownInspector()) objectInspector->ShowInspector();
+		objectInspector->SelectObject(layer, true);
+		return;
+	}
+	ibValueFrame* obj(data->GetObject());
+	assert(obj);
+	m_formHandler->SelectObject(obj);
+	m_formHandler->ScrollToObject(obj);
+}
 
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnRightClick(wxTreeEvent& event)
 {
 	wxTreeItemId id = event.GetItem();
 	wxTreeItemData* item_data = m_tcObjects->GetItemData(id);
 	if (item_data != nullptr) {
-		ibValueFrame* obj(((ibVisualEditorObjectTreeItemData*)item_data)->GetObject());
+		auto* data = (ibVisualEditorObjectTreeItemData*)item_data;
+		if (ibValueLayerObject* layer = data->GetLayerObject()) {
+			// Layer node (bar OR command) — the object fills its own menu and runs the choice;
+			// the tree never branches per kind. Routing goes through the owner frame's editor.
+			wxMenu menu;
+			layer->PrepareDefaultMenu(&menu);
+			const int sel = GetPopupMenuSelectionFromUser(menu, event.GetPoint());
+			ibValueFrame* owner = layer->GetOwnerFrame();
+			ibFrontendVisualEditorNotebook* editor = owner != nullptr ? owner->FindVisualEditor() : nullptr;
+			if (sel != wxID_NONE && editor != nullptr)
+				layer->ExecuteMenu(editor, sel);
+			return;
+		}
+		ibValueFrame* obj(data->GetObject());
 		assert(obj);
 		m_formHandler->SelectObject(obj);
 		wxMenu* menu = new ibVisualEditorItemPopupMenu(m_formHandler, this, obj);
@@ -435,8 +473,14 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnExpansi
 	wxTreeItemData* item_data = m_tcObjects->GetItemData(id);
 
 	if (item_data != nullptr) {
-		ibValueFrame* obj(((ibVisualEditorObjectTreeItemData*)item_data)->GetObject());
-		assert(obj);
+		auto* data = (ibVisualEditorObjectTreeItemData*)item_data;
+		ibValueFrame* obj(data->GetObject());
+		if (obj == nullptr) {
+			// layer node — keep its open-state on the object so RebuildTree restores it (leaf = no-op).
+			if (ibValueLayerObject* layer = data->GetLayerObject())
+				layer->SetTreeExpanded(m_tcObjects->IsExpanded(id));
+			return;
+		}
 		Disconnect(wxID_ANY, wxEVT_COMMAND_TREE_ITEM_EXPANDED, wxTreeEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnExpansionChange));
 		m_formHandler->ExpandObject(obj, m_tcObjects->IsExpanded(id));
 		Connect(wxID_ANY, wxEVT_COMMAND_TREE_ITEM_EXPANDED, wxTreeEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnExpansionChange));

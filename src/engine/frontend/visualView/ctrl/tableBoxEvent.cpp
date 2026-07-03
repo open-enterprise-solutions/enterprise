@@ -239,7 +239,7 @@ void ibValueModelTableBox::OnViewSet(ibDataViewEvent& event)
 
 void ibValueModelTableBox::OnHeaderResizing(ibHeaderGenericCtrlEvent& event)
 {
-	ibTableViewCtrl* dataViewCtrl = dynamic_cast<ibTableViewCtrl*>(GetWxObject());
+	ibTableViewCtrl* dataViewCtrl = dynamic_cast<ibTableViewCtrl*>(GetInnerWx());
 	if (dataViewCtrl != nullptr) {
 		ibDataViewColumnObject* dataViewColumn =
 			dynamic_cast<ibDataViewColumnObject*>(dataViewCtrl->GetColumn(event.GetColumn()));
