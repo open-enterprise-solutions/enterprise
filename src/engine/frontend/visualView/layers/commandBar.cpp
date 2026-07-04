@@ -1,6 +1,7 @@
 #include "commandBar.h"
 #include "frontend/visualView/ctrl/frame.h"   // ibValueFrame — the owner's action collection + ExecuteAction
 #include "backend/serialize/dataBuilder.h"     // ibDataNode (layer -> node)
+#include "backend/compiler/procUnit.h"         // ibProcUnit::CallAsProc — full type for the CallAsEvent instantiation below (run a command's custom-action procedure)
 #ifndef OES_USE_WEB
 #include <wx/menu.h>                           // wxMenu (designer layer menu)
 #include <wx/artprov.h>                         // menu icons (same art as the control menu)
@@ -95,13 +96,18 @@ void ibValueCommandBar::ExecuteCommand(const ibActionID& id, ibBackendValueForm*
 {
 	if (m_owner == nullptr)
 		return;
-	// A manual command carries a synthetic tool-id -> run the action bound to its item.
-	// An AutoFill command has no item (FindItemByCommandId == null) -> the tool-id IS the action.
+	// A manual command carries a synthetic tool-id -> run its bound Action. The Action is EITHER a
+	// SYSTEM action (a built-in id, dispatched through the owner's ExecuteAction) OR a CUSTOM action
+	// (a form-module handler name, run as a procedure via CallAsEvent) — the same ExecuteAction-vs-
+	// CallAsEvent split a toolbar item uses (see ibValueToolbar::OnTool). The clicked command item is
+	// passed to the handler as its `Command` argument. An AutoFill command has no item
+	// (FindItemByCommandId == null) -> the tool-id IS the system action.
 	if (ibValueCommandBarItem* item = FindItemByCommandId(id)) {
-		const ibActionID actId = item->GetActionId();
-		if (actId != wxNOT_FOUND)
-			m_owner->ExecuteAction(actId, form);
-		// else: no action bound yet — nothing to run (the item's own handler is a TODO).
+		const ibActionDescription& actionDesc = item->GetAction();
+		if (actionDesc.GetSystemAction() != wxNOT_FOUND)
+			m_owner->ExecuteAction(actionDesc.GetSystemAction(), form);
+		else if (!actionDesc.GetCustomAction().IsEmpty())
+			m_owner->CallAsEvent(actionDesc.GetCustomAction(), ibValue(static_cast<ibValue*>(item)));
 	}
 	else
 		m_owner->ExecuteAction(id, form);
