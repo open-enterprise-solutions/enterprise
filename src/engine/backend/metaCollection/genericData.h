@@ -59,20 +59,11 @@ class BACKEND_API ibFormTypeList {
 	};
 
 	ibFormTypeItem GetItemAt(const unsigned int idx) const {
-		if (idx > m_listTypeForm.size())
+		if (idx >= m_listTypeForm.size())
 			return ibFormTypeItem();
 		auto it = m_listTypeForm.begin();
 		std::advance(it, idx);
 		return *it;
-	};
-
-	ibFormTypeItem GetItemById(const long& id) const {
-		auto it = std::find_if(m_listTypeForm.begin(), m_listTypeForm.end(),
-			[id](const ibFormTypeItem& p) { return id == p.m_id; }
-		);
-		if (it != m_listTypeForm.end())
-			return *it;
-		return ibFormTypeItem();
 	};
 
 public:
@@ -82,8 +73,6 @@ public:
 	void AppendItem(const wxString& name, const int& l) { (void)m_listTypeForm.emplace_back(name, l); }
 	void AppendItem(const wxString& name, const wxString& label, const int& l) { (void)m_listTypeForm.emplace_back(name, label, l); }
 	void AppendItem(const wxString& name, const wxString& label, const wxString& help, const int& l) { (void)m_listTypeForm.emplace_back(label, help, l); }
-
-	bool HasValue(const long& l) const { return GetItemById(l); }
 
 	wxString GetItemName(const unsigned int idx) const { return GetItemAt(idx).m_strName; }
 	wxString GetItemLabel(const unsigned int idx) const { return GetItemAt(idx).m_strLabel; }

@@ -12,12 +12,6 @@ struct ibActionDescription {
 	wxString GetCustomAction() const { return m_strAction; }
 	ibActionID GetSystemAction() const { return m_lAction; }
 
-	bool IsEmptyAction() const {
-		if (m_lAction == wxNOT_FOUND)
-			return m_strAction.IsEmpty();
-		return true;
-	}
-
 	bool operator == (const ibActionDescription& rhs) const {
 		if (m_lAction == wxNOT_FOUND)
 			return m_strAction == rhs.m_strAction;
@@ -52,250 +46,148 @@ protected:
 			bool m_createDef;
 			ibValue* m_srcData;
 
-			ibActionItem() : m_act_id(wxNOT_FOUND), m_name(wxEmptyString), m_caption(wxEmptyString), m_pictureDescription(), m_pictureAndText(false), m_createDef(false) {}
-			ibActionItem(const ibActionID& act_id, const wxString& name, const wxString& description, bool createDef, ibValue* srcData) : m_act_id(act_id), m_name(name), m_caption(description), m_pictureDescription(), m_pictureAndText(false), m_createDef(createDef), m_srcData(srcData) {}
-			ibActionItem(const ibActionID& act_id, const wxString& name, const wxString& description, const ibPictureDescription& pictureDescription, bool pictureAndText, bool createDef, ibValue* srcData) : m_act_id(act_id), m_name(name), m_caption(description), m_pictureDescription(pictureDescription), m_pictureAndText(pictureAndText), m_createDef(createDef), m_srcData(srcData) {}
+			ibActionItem() : m_act_id(wxNOT_FOUND), m_pictureAndText(false), m_createDef(false), m_srcData(nullptr) {}
+			ibActionItem(const ibActionID& act_id, const wxString& name, const wxString& caption, const ibPictureDescription& pictureDescription, bool pictureAndText, bool createDef, ibValue* srcData)
+				: m_act_id(act_id), m_name(name), m_caption(caption), m_pictureDescription(pictureDescription), m_pictureAndText(pictureAndText), m_createDef(createDef), m_srcData(srcData) {}
 		};
 
 		std::vector<ibActionItem> m_vecAction;
 
 	private:
 
-		bool IsExistAction(const ibActionID& lNumAction) const {
+		// The single lookup primitive — every id-keyed accessor routes through here (nullptr on miss).
+		const ibActionItem* FindByID(const ibActionID& lNumAction) const {
 			auto iterator = std::find_if(m_vecAction.begin(), m_vecAction.end(), [lNumAction](const ibActionItem& act) {
 				return lNumAction == act.m_act_id; });
-			return iterator == m_vecAction.end();
+			return iterator != m_vecAction.end() ? &*iterator : nullptr;
+		}
+
+		bool ExistsAction(const ibActionID& lNumAction) const { return FindByID(lNumAction) != nullptr; }
+
+		// The single construction/placement primitive — index < 0 appends at the end, otherwise inserts at
+		// index. All AddAction / InsertAction wrappers funnel through here so the item field order is defined
+		// in ONE place (the ibActionItem ctor), which structurally removes the class of "swapped argument" bugs.
+		void EmplaceAction(int index, const ibActionID& lNumAction, const wxString& name, const wxString& caption,
+			const ibPictureDescription& pictureDescription, bool pictureAndText, bool createDef, ibValue* srcData) {
+			wxASSERT(!ExistsAction(lNumAction));
+			ibValue* src = srcData ? srcData : m_srcData;
+			if (index < 0)
+				m_vecAction.emplace_back(lNumAction, name, caption, pictureDescription, pictureAndText, createDef, src);
+			else
+				m_vecAction.insert(m_vecAction.begin() + index,
+					ibActionItem(lNumAction, name, caption, pictureDescription, pictureAndText, createDef, src));
 		}
 
 	public:
 
-		ibValue* GetSourceData() const { return m_srcData; }
 		ibActionCollection(ibValue* srcData = nullptr) : m_srcData(srcData) {}
 
+		// ---- append at the end ------------------------------------------------
+
 		void AddAction(const wxString& name, const ibActionID& lNumAction, bool createDef = true, ibValue* srcData = nullptr) {
-			wxASSERT(IsExistAction(lNumAction));
-			m_vecAction.emplace_back(
-				lNumAction,
-				name,
-				wxEmptyString,
-				ibPictureDescription(),
-				false,
-				createDef,
-				srcData ? srcData : m_srcData
-			);
+			EmplaceAction(-1, lNumAction, name, wxEmptyString, ibPictureDescription(), false, createDef, srcData);
 		}
 
 		void AddAction(const wxString& name, const wxString& caption, const ibActionID& lNumAction, bool createDef = true, ibValue* srcData = nullptr) {
-			wxASSERT(IsExistAction(lNumAction));
-			m_vecAction.emplace_back(
-				lNumAction,
-				name,
-				caption,
-				ibPictureDescription(),
-				false,
-				createDef,
-				srcData ? srcData : m_srcData
-			);
+			EmplaceAction(-1, lNumAction, name, caption, ibPictureDescription(), false, createDef, srcData);
 		}
 
 		void AddAction(const wxString& name, const wxString& caption, const ibPictureDescription& pictureDescription, const ibActionID& lNumAction, bool createDef = true, ibValue* srcData = nullptr) {
-			wxASSERT(IsExistAction(lNumAction));
-			m_vecAction.emplace_back(
-				lNumAction,
-				name,
-				caption,
-				pictureDescription,
-				false,
-				createDef,
-				srcData ? srcData : m_srcData
-			);
+			EmplaceAction(-1, lNumAction, name, caption, pictureDescription, false, createDef, srcData);
 		}
 
 		void AddAction(const wxString& name, const wxString& caption, const ibPictureDescription& pictureDescription, bool pictureAndText, const ibActionID& lNumAction, bool createDef = true, ibValue* srcData = nullptr) {
-			wxASSERT(IsExistAction(lNumAction));
-			m_vecAction.emplace_back(
-				lNumAction,
-				name,
-				caption,
-				pictureDescription,
-				pictureAndText,
-				createDef,
-				srcData ? srcData : m_srcData
-			);
+			EmplaceAction(-1, lNumAction, name, caption, pictureDescription, pictureAndText, createDef, srcData);
 		}
 
 		void AddSeparator() { m_vecAction.emplace_back(); }
 
+		// ---- insert at index --------------------------------------------------
+
 		void InsertAction(unsigned int index, const wxString& name, const ibActionID& lNumAction, bool createDef = true, ibValue* srcData = nullptr) {
-			wxASSERT(IsExistAction(lNumAction));
-			m_vecAction.insert(m_vecAction.begin() + index, {
-				lNumAction,
-				name,
-				wxEmptyString,
-				ibPictureDescription(),
-				false,
-				createDef,
-				srcData ? srcData : m_srcData
-				}
-			);
+			EmplaceAction((int)index, lNumAction, name, wxEmptyString, ibPictureDescription(), false, createDef, srcData);
 		}
 
 		void InsertAction(unsigned int index, const wxString& name, const wxString& caption, const ibActionID& lNumAction, bool createDef = true, ibValue* srcData = nullptr) {
-			wxASSERT(IsExistAction(lNumAction));
-			m_vecAction.insert(m_vecAction.begin() + index, {
-				lNumAction,
-				name,
-				caption,
-				ibPictureDescription(),
-				false,
-				createDef,
-				srcData ? srcData : m_srcData
-				}
-			);
+			EmplaceAction((int)index, lNumAction, name, caption, ibPictureDescription(), false, createDef, srcData);
 		}
 
 		void InsertAction(unsigned int index, const wxString& name, const wxString& caption, const ibPictureDescription& pictureDescription, const ibActionID& lNumAction, bool createDef = true, ibValue* srcData = nullptr) {
-			wxASSERT(IsExistAction(lNumAction));
-			m_vecAction.insert(m_vecAction.begin() + index, {
-				lNumAction,
-				name,
-				caption,
-				pictureDescription,
-				createDef,
-								false,
-				srcData ? srcData : m_srcData
-				}
-			);
+			EmplaceAction((int)index, lNumAction, name, caption, pictureDescription, false, createDef, srcData);
 		}
 
 		void InsertAction(unsigned int index, const wxString& name, const wxString& caption, const ibPictureDescription& pictureDescription, bool pictureAndText, const ibActionID& lNumAction, bool createDef = true, ibValue* srcData = nullptr) {
-			wxASSERT(IsExistAction(lNumAction));
-			m_vecAction.insert(m_vecAction.begin() + index, {
-				lNumAction,
-				name,
-				caption,
-				pictureDescription,
-				createDef,
-				pictureAndText,
-				srcData ? srcData : m_srcData
-				}
-			);
+			EmplaceAction((int)index, lNumAction, name, caption, pictureDescription, pictureAndText, createDef, srcData);
 		}
 
 		void InsertSeparator(unsigned int index) { m_vecAction.insert(m_vecAction.begin() + index, {}); }
 
 		void RemoveAction(const ibActionID& lNumAction) {
-
 			auto iterator = std::find_if(m_vecAction.begin(), m_vecAction.end(), [lNumAction](const ibActionItem& act) {
 				return lNumAction == act.m_act_id; });
-
 			if (iterator != m_vecAction.end()) m_vecAction.erase(iterator);
 		}
 
+		// Append every entry (separators included) of another collection onto this one. The reusable copy
+		// primitive both the base AppendActionCollection and the list-model GetActionCollection overrides route
+		// through, instead of each re-implementing the same id-by-id copy loop.
+		void AppendFrom(const ibActionCollection& data) {
+			m_vecAction.insert(m_vecAction.end(), data.m_vecAction.begin(), data.m_vecAction.end());
+		}
+
+		// ---- id-keyed accessors ----------------------------------------------
+
 		wxString GetNameByID(const ibActionID& lNumAction) const {
-
-			auto iterator = std::find_if(m_vecAction.begin(), m_vecAction.end(), [lNumAction](const ibActionItem& act) {
-				return lNumAction == act.m_act_id; });
-
-			if (iterator != m_vecAction.end())
-				return iterator->m_name;
-
-			return wxEmptyString;
+			const ibActionItem* act = FindByID(lNumAction);
+			return act != nullptr ? act->m_name : wxEmptyString;
 		}
 
 		wxString GetCaptionByID(const ibActionID& lNumAction) const {
-
-			auto iterator = std::find_if(m_vecAction.begin(), m_vecAction.end(), [lNumAction](const ibActionItem& act) {
-				return lNumAction == act.m_act_id; });
-
-			if (iterator != m_vecAction.end()) {
-				wxString caption = iterator->m_caption;
-				return caption.Length() > 0 ?
-					caption : iterator->m_name;
-			}
-
-			return wxEmptyString;
+			const ibActionItem* act = FindByID(lNumAction);
+			if (act == nullptr)
+				return wxEmptyString;
+			return act->m_caption.Length() > 0 ? act->m_caption : act->m_name;
 		}
 
 		ibPictureDescription GetPictureByID(const ibActionID& lNumAction) const {
-
-			auto iterator = std::find_if(m_vecAction.begin(), m_vecAction.end(), [lNumAction](const ibActionItem& act) {
-				return lNumAction == act.m_act_id; });
-
-			if (iterator != m_vecAction.end())
-				return iterator->m_pictureDescription;
-
-			return ibPictureDescription();
+			const ibActionItem* act = FindByID(lNumAction);
+			return act != nullptr ? act->m_pictureDescription : ibPictureDescription();
 		}
 
 		bool IsCreatePictureAndText(const ibActionID& lNumAction) const {
-
-			auto iterator = std::find_if(m_vecAction.begin(), m_vecAction.end(), [lNumAction](const ibActionItem& act) {
-				return lNumAction == act.m_act_id; });
-
-			if (iterator != m_vecAction.end())
-				return iterator->m_pictureAndText;
-
-			return true;
+			const ibActionItem* act = FindByID(lNumAction);
+			return act != nullptr ? act->m_pictureAndText : true;
 		}
 
 		bool IsCreateInForm(const ibActionID& lNumAction) const {
-
-			auto iterator = std::find_if(m_vecAction.begin(), m_vecAction.end(), [lNumAction](const ibActionItem& act) {
-				return lNumAction == act.m_act_id; });
-
-			if (iterator != m_vecAction.end())
-				return iterator->m_createDef;
-
-			return true;
+			const ibActionItem* act = FindByID(lNumAction);
+			return act != nullptr ? act->m_createDef : true;
 		}
 
 		ibValue* GetSourceDataByID(const ibActionID& lNumAction) const {
-
-			auto iterator = std::find_if(m_vecAction.begin(), m_vecAction.end(), [lNumAction](const ibActionItem& act) {
-				return lNumAction == act.m_act_id; });
-
-			if (iterator != m_vecAction.end())
-				return iterator->m_srcData;
-			return nullptr;
+			const ibActionItem* act = FindByID(lNumAction);
+			return act != nullptr ? act->m_srcData : nullptr;
 		}
 
 		ibActionID GetID(unsigned int idx) const {
-			if (idx > GetCount())
+			if (idx >= GetCount())
 				return wxNOT_FOUND;
 			return m_vecAction[idx].m_act_id;
 		}
 
-		unsigned int GetCount() const { return m_vecAction.size(); }
+		unsigned int GetCount() const { return (unsigned int)m_vecAction.size(); }
 	};
 
 public:
 
-	//support action 
+	//support action
 	virtual ibActionCollection GetActionCollection(const ibFormID& formType) = 0;
 	virtual void AppendActionCollection(ibActionCollection& actionData, const ibFormID& formType) {
-		const ibActionCollection& data = GetActionCollection(formType);
-		for (unsigned int i = 0; i < data.GetCount(); i++) {
-			const ibActionID& id = data.GetID(i);
-			if (id != wxNOT_FOUND) {
-				actionData.AddAction(
-					data.GetNameByID(id),
-					data.GetCaptionByID(id),
-					data.GetPictureByID(id),
-					data.IsCreatePictureAndText(id),
-					id,
-					data.IsCreateInForm(id),
-					data.GetSourceDataByID(id)
-				);
-			}
-			else {
-				actionData.AddSeparator();
-			}
-		}
+		actionData.AppendFrom(GetActionCollection(formType));
 	}
 
-	// execute action 
+	// execute action
 	virtual void ExecuteAction(const ibActionID& lNumAction, class ibBackendValueForm* srcForm) = 0;
 };
 
-#endif 
+#endif

@@ -107,20 +107,11 @@ class BACKEND_API ibPropertyList : public ibProperty {
 		};
 
 		ibPropertyOptionItem GetItemAt(const unsigned int idx) const {
-			if (idx > m_listValue.size())
+			if (idx >= m_listValue.size())
 				return ibPropertyOptionItem();
 			auto it = m_listValue.begin();
 			std::advance(it, idx);
 			return *it;
-		};
-
-		ibPropertyOptionItem GetItemById(const long& id) const {
-			auto it = std::find_if(m_listValue.begin(), m_listValue.end(),
-				[id](const ibPropertyOptionItem& p) { return id == p.m_id; }
-			);
-			if (it != m_listValue.end())
-				return *it;
-			return ibPropertyOptionItem();
 		};
 
 	public:
@@ -130,8 +121,6 @@ class BACKEND_API ibPropertyList : public ibProperty {
 		void AppendItem(const wxString& name, const int& l, const wxBitmap& b, const ibPropertyOptionValue& v) { (void)m_listValue.emplace_back(name, name, l, b, v); }
 		void AppendItem(const wxString& name, const wxString& label, const int& l, const wxBitmap& b, const ibPropertyOptionValue& v) { (void)m_listValue.emplace_back(name, label, l, b, v); }
 		void AppendItem(const wxString& name, const wxString& label, const wxString& help, const int& l, const wxBitmap& b, const ibPropertyOptionValue& v) { (void)m_listValue.emplace_back(name, label, help, l, b, v); }
-
-		bool HasValue(const long& l) const { return GetItemById(l); }
 
 		wxString GetItemName(const unsigned int idx) const { return GetItemAt(idx).m_strName; }
 		wxString GetItemLabel(const unsigned int idx) const { return GetItemAt(idx).m_strLabel; }

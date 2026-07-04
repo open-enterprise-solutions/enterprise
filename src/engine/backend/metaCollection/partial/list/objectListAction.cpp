@@ -19,24 +19,7 @@ ibValueListDataObjectEnumRef::ibActionCollection ibValueListDataObjectEnumRef::G
 	if (m_choiceMode)
 		actionData.AddAction(wxT("Select"), _("Select"), g_picSelectCLSID, true, eChooseValue);
 
-	const ibActionCollection& data =
-		ibValueModel::GetActionCollection(formType);
-
-	for (unsigned int idx = 0; idx < data.GetCount(); idx++) {
-		const ibActionID& id = data.GetID(idx);
-		if (id > 0) {
-			actionData.AddAction(
-				data.GetNameByID(id),
-				data.GetCaptionByID(id),
-				data.GetPictureByID(id),
-				data.IsCreatePictureAndText(id),
-				id
-			);
-		}
-		else {
-			actionData.AddSeparator();
-		}
-	}
+	actionData.AppendFrom(ibValueModel::GetActionCollection(formType));
 
 	return actionData;
 }
@@ -65,24 +48,7 @@ ibValueListDataObjectRef::ibActionCollection ibValueListDataObjectRef::GetAction
 	if (m_choiceMode)
 		actionData.AddSeparator();
 
-	const ibActionCollection& data =
-		ibValueModel::GetActionCollection(formType);
-
-	for (unsigned int idx = 0; idx < data.GetCount(); idx++) {
-		const ibActionID& id = data.GetID(idx);
-		if (id > 0) {
-			actionData.AddAction(
-				data.GetNameByID(id),
-				data.GetCaptionByID(id),
-				data.GetPictureByID(id), 
-				data.IsCreatePictureAndText(id),
-				id
-			);
-		}
-		else {
-			actionData.AddSeparator();
-		}
-	}
+	actionData.AppendFrom(ibValueModel::GetActionCollection(formType));
 
 	actionData.InsertAction(3, wxT("MarkAsDelete"), _("Mark as delete"), g_picMarkAsDeleteCLSID, true, eMarkAsDelete);
 
@@ -126,21 +92,7 @@ ibValueListDataObjectRef::ibActionCollection ibValueModelTreeDataObjectFolderRef
 	if (m_listMode == LIST_FOLDER)
 		data.RemoveAction(eAddValue); //add
 
-	for (unsigned int idx = 0; idx < data.GetCount(); idx++) {
-		const ibActionID& id = data.GetID(idx);
-		if (id > 0) {
-			actionData.AddAction(
-				data.GetNameByID(id),
-				data.GetCaptionByID(id),
-				data.GetPictureByID(id),
-				data.IsCreatePictureAndText(id),
-				id
-			);
-		}
-		else {
-			actionData.AddSeparator();
-		}
-	}
+	actionData.AppendFrom(data);
 
 	if (m_choiceMode) {
 		actionData.InsertAction(5, wxT("MarkAsDelete"), _("Mark as delete"), g_picMarkAsDeleteCLSID, true, eMarkAsDelete);
