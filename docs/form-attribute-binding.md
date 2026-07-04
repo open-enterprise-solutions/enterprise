@@ -315,10 +315,13 @@ ABOVE the content. The subsystem lives in `frontend/visualView/` (`layerObject.{
 - **Serialization** — the composite window writes a `"Layers"` block (first entry = `"CommandBar"`,
   extensible), read back symmetrically; the command bar round-trips through the layer object's
   `WriteData`/`ReadData`.
-- **No duplicate bar on the main.** A control bound to the form's MAIN attribute suppresses its own
-  command bar (`ibValueModelTableBox::HasCommandBar()` returns false when
-  `FindSourceHolder(path.front())->IsMainAttribute()`) — the form already carries the command
-  interface for the main source, so the tablebox would otherwise render a second, redundant bar.
+- **No duplicate bar on the main.** A control whose WHOLE source IS the form's MAIN attribute (a
+  single-hop path) suppresses its own command bar (`ibValueModelTableBox::HasCommandBar()` returns
+  false when `path.size() == 1 && FindSourceHolder(path.front())->IsMainAttribute()`) — the form
+  already carries the command interface for the main source, so the tablebox would otherwise render a
+  second, redundant bar. A NESTED source (a tabular section — path `[mainAttr, section]`) keeps its own
+  bar: the main attribute is only its HEAD, not its own source. Gating on `!path.empty()` (head-only)
+  instead of `size() == 1` was the bug that hid a tabular section's command panel.
 
 ## Open edges
 

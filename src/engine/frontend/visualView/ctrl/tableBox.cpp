@@ -314,10 +314,12 @@ ibSourceObject* ibValueModelTableBox::GetSourceObject() const
 
 bool ibValueModelTableBox::HasCommandBar() const
 {
-	// No bar when this table IS the form's main source — its binding head attribute is the MAIN
-	// one, and the form toolbar already serves those commands (a table bar would just duplicate).
+	// No bar when this table IS the form's main source — its WHOLE binding path is the main attribute
+	// (a single hop), so the form toolbar already serves those commands and a table bar would duplicate.
+	// A NESTED source (a tabular section — path [mainAttr, section]) only has the main attribute as its
+	// HEAD, not as its own source; it is a distinct list and keeps its own bar (Add/Copy/Edit/Delete).
 	const std::vector<ibSourceId>& path = GetSourcePath();
-	if (!path.empty()) {
+	if (path.size() == 1) {
 		ibBackendFormAttributeValue* holder = FindSourceHolder(path.front());
 		if (holder != nullptr && holder->IsMainAttribute())
 			return false;
