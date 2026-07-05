@@ -5,8 +5,12 @@ exercised through the designer on the hard cases (copy/paste, delete-main, autoc
 custom objects) rather than a test harness. The **metadata-agnostic path resolver** landed on
 top: the holder (`ibBackendFormAttributeValue`) materialises the value/source, the dot-walk
 (`WalkSource`) returns a neutral `ibBackendSourceColumn`, and `ibSourceExplorer` is now
-metadata-free (see the two sections below). Uncommitted churn expected; the *model* below is
-stable, the surface is not yet spec'd or tested.
+metadata-free (see the two sections below). On top of that: a bound path now SERIALIZES the way it
+RESOLVES — as **raw ids the source explorer walks**, no metadata/guid (see *Path serialization*);
+**drag-to-create** rides that same serializer (drop resolves the control class from the path); the
+**value-table** rides the composite-attribute serialization as the dynamic list (and retypes cells
+lazily on read); and `GetSourceDesc` was brought to the same mutable-ref-plus-setter shape as
+`GetTypeDesc`. Uncommitted churn expected; the *model* below is stable, the surface is not yet spec'd or tested.
 
 ## What it replaces
 
@@ -50,13 +54,18 @@ is resolved through the form's attribute **gate**. The form no longer knows abou
     the new type. As an `ibPropertyObject` accumulator the holder is what the inspector SELECTS — it
     surfaces the attribute's own props PLUS the materialised value's props (e.g. a dynamic list's
     Source / Settings).
-  - **Façade methods** (the only outside surface — there is NO `GetAttribute()`): `GetAttributeName`
-    / `GetAttributeId` / `IsMainAttribute` / `const ibTypeDescription& GetTypeDesc()` /
+  - **Façade methods** (the only outside surface — there is NO `GetAttribute()`): `GetName`
+    / `GetId` / `IsMain` / `const ibTypeDescription& GetTypeDesc()` /
     `ibSourceDataObject* GetSourceValue()`, each forwarding to the private `m_attribute` or to the
     value. `GetBindValue()` returns `&m_value` (the live slot — `BindLocalVariable` stores the
     pointer); `SetSourceValue` seats the source into `m_value` (owned via the value's own refcount).
+  - **Synonym is surfaced as "Caption".** The holder's inspector property for the human label is
+    keyed/labelled `Caption` (`m_propertyCaption`) — but it is still read out through `GetSynonym()`,
+    so the abstract-column trio (`GetName` / `GetSynonym` / `GetComment`) stays uniform with the
+    metaclass and every neutral consumer keeps working. `GetComment()` is empty — the Comment
+    property was removed from both the attribute and the value-table column (unused noise).
 - **`ibBackendFormAttributeValue`** (`backend_type.h`) — the holder as a backend INTERFACE: exactly
-  the façade above (`GetAttributeName` / `GetAttributeId` / `IsMainAttribute` / `GetTypeDesc` /
+  the façade above (`GetName` / `GetId` / `IsMain` / `GetTypeDesc` /
   `GetSourceValue`), no concrete description leaked. `GetSourceList` vends THESE (attribute + value
   together), so a backend resolver / the picker reads columns through `GetSourceValue()` —
   `GetSourceExplorer()` — without the concrete value type. (The former separate `ibBackendFormAttribute`
@@ -65,7 +74,7 @@ is resolved through the form's attribute **gate**. The form no longer knows abou
 
 ## The MAIN attribute
 
-Exactly one attribute carries the Main flag — found by `IsMainAttribute()`, no separate
+Exactly one attribute carries the Main flag — found by `IsMain()`, no separate
 pointer (single source of truth = the flag). It is where the source object passed to the
 form on open lands.
 
@@ -125,12 +134,34 @@ ONE shared site used by the dot-walk and the type/gate resolvers (no per-call re
 
 All source controls override `ibBackendTypeSourceFactory::GetSourceDesc()` (returning
 `m_propertySource->GetValueAsSourceDesc()`), so the gate descriptor comes straight from the
-control with no temporaries.
+control with no temporaries. **`GetSourceDesc` is the exact twin of `GetTypeDesc`**: a single
+MUTABLE-ref getter that is both read AND write, plus the non-virtual setter family layered over
+it — `SetDefaultSourceType(id)` / `SetDefaultSourceType(const ibSourceDescription&)` / `ClearSourceType()`
+(mirroring `ibBackendTypeFactory::SetDefaultMetaType` / `ClearMetaType` over `GetTypeDesc`). One virtual
+per control (the ref), no per-control setter; a caller binds a single hop or a whole DESCRIPTION through the
+shared helpers. `SetBoundSource` (the drop) and `AutoBindNewSource` (auto-created control) both
+seat the path this way.
+
+**A binding path is passed as `ibSourceDescription` (the wrapper), not a bare `std::vector<ibSourceId>`.**
+`ibSourceDescription` is to a source path what `ibTypeDescription` is to a composite type's clsid array — it
+carries the whole address and the callers hand it straight through. Since resolution is source-explorer-driven
+(below), the path-taking APIs take the wrapper: `WalkSource(const ibSourceDescription&)`,
+`SetDefaultSourceType(const ibSourceDescription&)`, the designer drop chain (`DropBoundControl` /
+`CreateBoundControl` / `ResolveDropControlClass` / `SetBoundSource`), and the form's binding API
+(`GetValueByAttributePath` / `SetValueByAttributePath` / `IsWritableBinding`). Only the offset-walk primitives
+(`ContinueHops` / `WalkColumns`, which walk a path SUFFIX from an index) and the RAM-hot raw getters
+(`GetSourcePath`) keep the bare vector — the wrapper models a whole address, not an offset.
+
+**One default-type map — `ibBackendTypeConfigFactory::GetDefaultTypeByFilter(filterKind)`.** The
+default value type (clsid) for a filter kind — `_boolean` → Boolean, `_resource` → Number, `_table`
+→ value-table, `_reference` / else → String — is a STATIC on the config factory, keyed on the kind.
+It is the ONE mapping shared by `ibVariantDataAttribute::DoSetDefaultMetaType` (a fresh attribute's
+Type) and `ibValueControl::AutoBindNewSource` (an auto-bound control's Type), so the two cannot drift.
 
 ## Path resolution — the metadata-agnostic dot-walk (`WalkSource`)
 
-The dot-walk that turns a bound `path` into a leaf (its caption / type / validity) lives on the
-factory: `ibBackendTypeSourceFactory::WalkSource(path, valid, outText)` (`backend_type.cpp`). The
+The dot-walk that turns a bound path into a leaf (its caption / type / validity) lives on the
+factory: `ibBackendTypeSourceFactory::WalkSource(const ibSourceDescription&, valid, outText)` (`backend_type.cpp`). The
 property layer just forwards to it — `ibVariantDataSource::GetSourceAttributeObject` /
 `IsEmptySource` / `MakeString` are one-liners over `m_ownerProperty->WalkSource(...)`. **The
 walker knows no metadata**: it steps ids and asks the source for columns; whether the data behind
@@ -138,9 +169,12 @@ a node is a metaobject attribute or a queryable column is hidden behind one neut
 
 - **`ibBackendSourceColumn`** (`query/queryColumn.h`) — the neutral "column, like a DB column":
   `GetName` / `GetSynonym` / `GetTypeDesc` / `IsAllowed`. It is the **base of
-  `ibBackendQueryColumn`**, so a metaobject attribute AND a dynamic list's queryable column are
-  BOTH an `ibBackendSourceColumn` with no adapter. `WalkSource` / `GetSourceAttributeObject` return
-  THIS — the consumer (a column caption, a control's type) never sees the concrete class.
+  `ibBackendQueryColumn`** (which ADDS the DB-only `GetColumnId` / `GetPhysicalName` / `IsRawColumn`),
+  so a metaobject attribute AND a dynamic list's queryable column are BOTH an `ibBackendSourceColumn`
+  with no adapter. A value-table column (RAM, not a DB query) is a `ibBackendSourceColumn` **directly**
+  — NOT a `ibBackendQueryColumn`: it pulls from memory, so the physical-name / raw-column DB semantics
+  don't apply. `WalkSource` / `GetSourceAttributeObject` return THIS — the consumer (a column caption,
+  a control's type) never sees the concrete class.
 - **Gate 1** — `path[0]` is gated to a form attribute (`FindSourceHolder`, form-local, copy-safe).
 - **Gate 2 — the live source.** The head holder's `GetSourceValue()` resolves each deeper hop by
   walking its `ibSourceExplorer` tree (`WalkColumns`, below) — metadata-blind: a dynamic list maps an
@@ -201,6 +235,22 @@ through the explorer tree:
 
 `WalkSource` (backend) gates `path[0]` to a holder, then delegates to `WalkColumns(path, 1, …)`.
 
+### Path serialization is RAW — metadata-agnostic, mirroring the walk
+
+Because a bound path RESOLVES purely by walking the source explorer (`FindById` per hop; each hop's
+value yields the next explorer — see `ContinueHops` / `WalkColumns`), it also SERIALIZES that way:
+`ibSourceDescriptionMemory` writes the path as **raw ids** and reads them verbatim — the explorer
+resolves each on load. It consults **no metadata**: no `metaData` parameter, no metaId→guid mapping.
+This is the point of the redesign — the walk never cares whether (or which) metadata backs a hop
+(value-table columns are RAM-local ids, dynamic-list columns are query ids, catalog fields are config
+metaIds — all just ids the explorer resolves), so the serializer must not reintroduce that coupling.
+An earlier writer round-tripped the tail hops as copy-aware GUIDs (`GuidByMetaId` / `MetaIdByGuid`);
+that dropped RAM-local ids (a value-table column has no config guid → the binding read back as
+`<not selected>`) and is gone. A leading sentinel word marks the raw layout; a legacy guid-tail blob
+recovers only its head (a whole-attribute binding) and re-save rewrites it raw. **Rule of thumb: a
+binding path is a sequence of ids the source explorer walks — resolve AND serialize it through the
+explorer, never through a metadata lookup.**
+
 ## Dynamic list as a form attribute
 
 A form attribute whose Type is `DynamicList` materialises an `ibValueDynamicList` as its value — a
@@ -222,6 +272,11 @@ data) through the family-blind seams above; three points are specific to it:
   (`ibPGDataSourceProperty::RefreshChildren` → `SetFlagRecursively(ReadOnly, !IsPropAllowed())`); a
   deleted/unbound source frees it again. The Type follows the source. Using the dot (not a raw
   `m_sourceDesc.GetLeaf()` peek) is what lets a DELETED source unlock the Type instead of crashing.
+- **The picker's displayed type is PULL-ON-GET.** `CloneSourceAttribute()` self-refreshes through the
+  source explorer (`RefreshTypeFromSource`) BEFORE cloning — the exact mirror of the Type side, where
+  `ibVariantDataAttribute::GetTypeDesc` self-refreshes via `DoRefreshTypeDesc`. So `RefreshChildren`
+  just clones (no separate `GetSourceTypeDesc()` priming step) and always shows the leaf's current type;
+  a value-table column retyped in place keeps its leaf id, so the walk re-resolves it on the next get.
 - **TableBox column refill is family-blind.** `ibValueModelTableBox::OnPropertyChanged` refills its
   columns from the bound source's `GetSourceExplorer()` (the head attribute's `GetSourceValue()`),
   NOT a clsid → metaobject gate — so a queryable dynamic list yields its query columns just as a
@@ -229,6 +284,51 @@ data) through the family-blind seams above; three points are specific to it:
   via `AppendColumn(col)`, so each node carries its descriptor (`m_col`) and the column's real SYNONYM;
   the header caption resolves through `GetControlTitle()` → `GetSourceAttributeObject()->GetSynonym()`,
   not the control name.
+
+## Value-table as a form attribute
+
+A form attribute whose Type is a value-table materialises an `ibValueModelTable` as its value — an
+in-RAM (`ibValueModelStorage`) source, NOT a queryable/DB one. Like the dynamic list it works through
+the family-blind seams above; the specific points:
+
+- **Columns serialize IN the composite attribute, exactly like the dynamic list's Source/Settings —
+  through the property mechanism, no bespoke format.** The holder's `WriteProperty` / `ReadProperty`
+  (`ibFormAttributeValue`) already writes BOTH `m_attribute->WriteProperty(node)` (the amorphous Name /
+  Type / id) AND `GetValueAsProperty()->WriteProperty(node)` (the materialised value's own props). The
+  value-table IS an `ibPropertyObject`, so its column collection round-trips through THAT one call — the
+  same unified path the dynamic list rides. Nothing hand-rolls a column blob.
+- **Column-info is a variant-SSOT property object.** `ibValueModelTableColumnInfo` is
+  `ibValueModelColumnInfo + ibPropertyObject + ibBackendTypeConfigFactory + ibBackendSourceColumn`. Its
+  Name / Caption / Type are read THROUGH its properties (`m_propertyName` / `m_propertyCaption` /
+  `m_propertyType`) — a single source of truth, no parallel member cache shadowing the properties (the
+  "two federations" trap). Only the column id + width stay plain members. As an `ibBackendSourceColumn`
+  it answers `GetName` (→ the Name property) / `GetSynonym` (→ Caption, falling back to Name) /
+  `GetTypeDesc` (shared with the type factory) — so the value-table's columns walk and caption through
+  the SAME neutral interface as a metaobject attribute or a query column.
+- **The explorer carries the real descriptor.** `ibValueModelTable::GetSourceExplorer` appends each
+  column via `AppendColumn(const ibBackendSourceColumn*, id)` (the source-column overload) — the node
+  keeps the column-info as its `m_col`, so its synonym / type resolve live off the descriptor.
+- **`GetGuid` is stable-by-construction** — generated once in the ctor (`wxNewUniqueGuid`, in-class
+  initializer) and always returned, so a column's identity survives rebuilds and serialization.
+- **A column Type change retypes cells LAZILY on read.** The column-info edits its Type in place (the
+  property variant IS the storage), so existing row cells are NOT swept on the edit — its
+  `OnPropertyChanged` is a no-op. Instead `GetValueByMetaID` / `GetValueByRow` coerce each cell to the
+  column's CURRENT type on read (`ibValueTypeDescription::AdjustValue(GetColumnType(id), cell)`): a
+  stale-typed cell reads back retyped, an absent one as the typed empty ("nothing there" reads cleanly).
+  No eager row loop, no owner back-pointer — and there are no rows at design time anyway.
+- **A retyped cell's variant must OWN the value.** `AdjustValue(...)` returns a TEMPORARY `ibValue` by
+  value, so `GetValueByRow` wraps it with the OWNING `ibValueModel::ValueToVariant`
+  (`ibVariantDataValueImpl<ibValue>`, a copy) — NOT the const-ref `ibVariantDataValueModel`. The ref
+  variant is reserved for a value living IN the node (`GetTableValue()` returns `const ibValue&`);
+  binding it to the retyped temporary dangled → access violation in `wxVariant::GetType()` on the next
+  render (adding a row selects it and re-renders the fresh cell).
+- **The current line syncs to the VISIBLE selection.** Programmatic selection — the top row
+  auto-highlighted on form open, and the Select of a freshly-Added row — fires no
+  `wxEVT_DATAVIEW_SELECTION_CHANGED`, so `m_tableCurrentLine` stayed null; a cell's "…" choice (which
+  needs the current row to read the cell's real reference type) then fell back to a primitive type and
+  silently no-op'd. Two seams close it: the `OnUpdated` seed-chain adopts the ctrl's actual active row
+  (`GetSelections()`, else `GetTopItem()`) when no line is set, and `OnItemStartAdding` applies the
+  just-added row as current (covering the first row added to an empty table).
 
 ## Source ownership (NB)
 
@@ -282,8 +382,38 @@ Selection is modelled exactly like the object tree — **by identity, not by nam
   fired mid-rebuild must not touch a stale/freed holder (the object tree guards the same way
   with `m_notifySelecting`).
 - **Set-main is a toggle:** clicking the current main clears it
-  (`SetMainAttribute(entry->IsMainAttribute() ? nullptr : entry)`) — no main → the control's
+  (`SetMainAttribute(entry->IsMain() ? nullptr : entry)`) — no main → the control's
   own command bar comes back (below).
+
+### Drag to create — a bound control from a tree node
+
+Dragging a draggable tree node onto the form canvas creates a control already bound to that node.
+
+- **The drag payload is the source PATH (raw ids), serialized through the engine's UNIFIED
+  serializer — not bespoke byte-packing.** `OnBeginDrag` writes the node's `ibSourceDescription(path)`
+  with `ibSourceDescriptionMemory::SaveData(writer, srcDesc)` into an `ibWriterMemory` buffer under the
+  `oes_source_drag` data format; `ibFormEditorDropTarget::OnData` reads it back with
+  `ibSourceDescriptionMemory::LoadData(reader, srcDesc)`. Metadata-agnostic (no `metaData` — the drop
+  resolves each hop through the source explorer, see *Path serialization* above). **Canon: the drag
+  carries the type/path; the DROP resolves the control class** — the payload holds no class name (the
+  earlier hand-rolled `EncodeSourceDrag` / `DecodeSourceDrag` are gone).
+- **Draggability gate = a non-zero control CLSID.** A node is draggable iff
+  `DropControlClass(isTable, refTypes, typeDesc)` returns a non-zero `ibClassID` — the kind-typed
+  control clsid the node maps to: table / section → `g_controlTableBoxCLSID`, boolean →
+  `g_controlCheckboxCLSID`, scalar / reference → `g_controlTextCtrlCLSID`, a composite object
+  container → `0` (drag its fields instead). The clsid is stored on the tree item purely as the
+  draggable signal; it returns a **clsid, not a class-name string** (identity by clsid, per the
+  project rule). The three control clsids are GLOBAL constants (`g_control*CLSID`, mirroring the
+  existing `g_controlTableBoxCLSID` in `tableBox.h`; the widget pair lives in `widgets.h` and the
+  control registrations key off the same constants).
+- **The drop resolves the class from the path and records an undoable command.** `OnData` →
+  `ibFormEditorDropTarget`'s host `DropBoundControl(x, y, desc)` → `CreateBoundControl(parentHint,
+  desc)`. `ResolveDropControlClass(form, desc)` gates the head to the head attribute, walks the
+  deeper hops through its source explorer, and picks Tablebox / Checkbox / Textctrl by the leaf's
+  view + type — the SAME choice `BuildForm` makes per field. Creation runs through the command
+  processor, so drag-to-create is undo/redo-able like any property edit. The whole chain passes the
+  `ibSourceDescription` wrapper (the wrapper is born in `OnData` and seated verbatim by
+  `SetDefaultSourceType(const ibSourceDescription&)`) — no decompose-to-vector and re-wrap round-trip.
 
 ## Command interface — a chrome LAYER over a control
 
@@ -317,7 +447,7 @@ ABOVE the content. The subsystem lives in `frontend/visualView/` (`layerObject.{
   `WriteData`/`ReadData`.
 - **No duplicate bar on the main.** A control whose WHOLE source IS the form's MAIN attribute (a
   single-hop path) suppresses its own command bar (`ibValueModelTableBox::HasCommandBar()` returns
-  false when `path.size() == 1 && FindSourceHolder(path.front())->IsMainAttribute()`) — the form
+  false when `path.size() == 1 && FindSourceHolder(path.front())->IsMain()`) — the form
   already carries the command interface for the main source, so the tablebox would otherwise render a
   second, redundant bar. A NESTED source (a tabular section — path `[mainAttr, section]`) keeps its own
   bar: the main attribute is only its HEAD, not its own source. Gating on `!path.empty()` (head-only)

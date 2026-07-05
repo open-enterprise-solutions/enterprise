@@ -11,6 +11,8 @@
 #include "backend/propertyManager/propertyManager.h"
 
 #include "frontend/visualView/ctrl/formAttribute.h"   // ibFormAttributeValue (form attribute add command)
+#include "backend/query/queryColumn.h"                 // ibBackendSourceColumn::GetName (name a dropped control after its field)
+#include "backend/srcDataObject.h"                     // ibSourceExplorer — resolve a dropped path's leaf type -> control class
 
 void ibVisualEditorNotebook::ibVisualEditor::Execute(ibVisualEditorCmd* cmd)
 {
@@ -901,6 +903,135 @@ ibValueFrame* ibVisualEditorNotebook::ibVisualEditor::CreateObject(const wxStrin
 	}
 
 	return obj;
+}
+
+// Bind a just-created control to a source path — the drop counterpart of BuildForm's per-control
+// SetSource. Goes through the COMMON source factory: SetDefaultSourceType is a non-virtual helper over the
+// mutable GetSourceDesc (twin of SetDefaultMetaType over GetTypeDesc), so the designer needs no concrete-
+// control header and the virtual GetSourceDesc dispatch keeps the resolve inside frontend.dll.
+static void SetBoundSource(ibValueFrame* control, const ibSourceDescription& desc)
+{
+	ibTypeControlFactory* factory = dynamic_cast<ibTypeControlFactory*>(control);
+	if (factory == nullptr)
+		return;
+	factory->SetDefaultSourceType(desc);
+
+	// Give the dropped control a NAME (identifier), like BuildForm, so it isn't a bare "Textctrl1".
+	// A NESTED binding (a NON-main head attribute + a deeper leaf, e.g. Catalog1.Section) CONCATENATES
+	// its segments — the dotted path becomes one joined identifier ("Catalog1Section"), never a literal
+	// dot. A direct field on the (implicit) MAIN attribute keeps just the field name; a BARE attribute
+	// (no leaf column) falls back to the attribute name. The TITLE (form label) is NOT assigned here —
+	// the control DERIVES it on render from the binding (GetControlTitle: Title -> field synonym ->
+	// attribute Synonym/Name).
+	wxString name;
+	ibBackendFormAttributeValue* head = !desc.IsOk() ? nullptr : factory->FindSourceHolder(desc.GetFirst());
+	if (head != nullptr && !head->IsMain())
+		name = head->GetName();
+	if (const ibBackendSourceColumn* leaf = factory->GetSourceAttributeObject())
+		name += leaf->GetName();
+	if (name.IsEmpty() && head != nullptr)
+		name = head->GetName();
+
+	if (!name.IsEmpty()) {
+		control->SetControlName(name);
+		// Make it UNIQUE on the form through the SAME conflict-resolver a normal create / paste runs
+		// (frame.cpp Init / PasteObject) — otherwise a second drop of the same field yields two
+		// identically-named controls. The control is already attached (CreateObject added it), so the
+		// resolver sees every sibling name and bumps the numeric suffix if the base is taken.
+		if (ibValueForm* form = control->GetOwnerForm())
+			form->ResolveNameConflict(control);
+	}
+}
+
+// Resolve the control class for a dropped source path — the DROP side's type->control choice (the canon:
+// the drag carries the path, the drop picks the class from the type AT the leaf). Mirrors BuildForm's
+// per-field choice: a list / table-section leaf -> Tablebox, a single-clsid boolean -> Checkbox, everything
+// else (scalar / reference / multi-type) -> Textctrl. Empty = nothing to create (a bad path).
+static wxString ResolveDropControlClass(ibValueForm* form, const ibSourceDescription& desc)
+{
+	const std::vector<ibSourceId>& path = desc.GetPath();
+	if (form == nullptr || path.empty())
+		return wxEmptyString;
+	ibFormAttributeValue* head = form->FindAttributeById(path.front());
+	if (head == nullptr)
+		return wxEmptyString;
+	ibSourceDataObject* source = head->GetSourceValue();
+
+	// The leaf is either the whole attribute (a 1-hop path) or a node reached by walking the head's source
+	// explorer down the remaining hops (a table section is a CHILD of the object's explorer; a list IS the head).
+	bool isTable = false;
+	ibTypeDescription typeDesc;
+	if (path.size() == 1) {
+		isTable = source != nullptr && source->IsTableSource();
+		typeDesc = head->GetTypeDesc();
+	}
+	else {
+		const ibSourceExplorer* explorer = source != nullptr ? source->GetSourceExplorer() : nullptr;
+		for (size_t i = 1; i < path.size() && explorer != nullptr; i++)
+			explorer = explorer->FindById(path[i]);
+		if (explorer == nullptr)
+			return wxEmptyString;
+		isTable = explorer->IsTableSection();
+		typeDesc = explorer->GetTypeDesc();
+	}
+
+	if (isTable)
+		return wxT("Tablebox");
+	if (typeDesc.GetClsidCount() == 1 && typeDesc.ContainType(ibValueTypes::TYPE_BOOLEAN))
+		return wxT("Checkbox");
+	return wxT("Textctrl");
+}
+
+ibValueFrame* ibVisualEditorNotebook::ibVisualEditor::CreateBoundControl(
+	ibValueFrame* parentHint, const ibSourceDescription& desc)
+{
+	wxASSERT(m_valueForm);
+	const wxString className = ResolveDropControlClass(m_valueForm, desc);
+	if (className.IsEmpty())
+		return nullptr;
+	ibValueFrame* obj = nullptr;
+	ibValueFrame* parent = (parentHint != nullptr) ? parentHint : m_valueForm;
+
+	// Walk up until a parent that can hold the control (same convenience as CreateObject: an item /
+	// leaf can't be a parent, so climb to its container).
+	while (parent != nullptr && obj == nullptr) {
+		obj = m_valueForm->CreateObject(_STDSTR(className), parent);
+		if (obj == nullptr) {
+			parent = parent->GetParent();
+			while (parent != nullptr && parent->GetComponentType() == COMPONENT_TYPE_SIZERITEM)
+				parent = parent->GetParent();
+		}
+	}
+	if (obj == nullptr)
+		return nullptr;
+
+	// Insert right after the dropped-on sibling when it shares the resolved parent, else append (-1).
+	// Unwrap the sizer-item wrapper to the real control and bind it BEFORE the widget is built, so the
+	// widget is created ALREADY bound: the source shows immediately and a tablebox refills its columns
+	// from the source. Binding AFTER the build left the control stale until a manual reselect / reopen.
+	ibValueFrame* control = obj;
+	while (control != nullptr && control->GetComponentType() == COMPONENT_TYPE_SIZERITEM)
+		control = control->GetChildCount() > 0 ? control->GetChild(0) : nullptr;
+	if (control != nullptr)
+		SetBoundSource(control, desc);
+
+	// The bind is set on the object ABOVE, BEFORE this: InsertObjectCmd -> ibVisualHost::CreateControl
+	// runs the control's own pipeline (Create -> Update -> OnCreated -> OnUpdated), and Update reads the
+	// source — a textctrl shows its value, a tablebox refills its columns (CreateColumnCollection). So the
+	// drop renders through the SAME event flow as any created control; no extra editor refresh is needed.
+	const int pos = CalcPositionOfInsertion(parentHint, parent);
+	Execute(new ibVisualEditorInsertObjectCmd(this, obj, parent, pos));   // builds the widget (already bound)
+	NotifyObjectCreated(obj);
+
+	// A tablebox fills its DEFAULT columns from the bound source explorer now that its widget exists
+	// (the runtime CreateColumnCollection is designer-gated; this is the designer twin, the SAME fill the
+	// inspector's Source-change refill uses). No-op for scalar controls.
+	if (ibTypeControlFactory* factory = dynamic_cast<ibTypeControlFactory*>(control))
+		factory->RefillFromSource();
+
+	if (control != nullptr)
+		SelectObject(control, true, true);
+	return control;
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::InsertObject(ibValueFrame* obj, ibValueFrame* parent)

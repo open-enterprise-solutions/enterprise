@@ -47,9 +47,18 @@ void ibValueWindow::UpdateWindow(ibFrontendWindow* window)
 		window->SetMinSize(m_propertyMinSize->GetValueAsSize());
 	if (m_propertyMaxSize->GetValueAsSize() != wxDefaultSize)
 		window->SetMaxSize(m_propertyMaxSize->GetValueAsSize());
+	
 	ApplyLook(window);   // font / colours (shared with the layer look sync)
+	
 	window->Enable(m_propertyEnabled->GetValueAsBoolean() && formEnabled);
-	window->Show(m_propertyVisible->GetValueAsBoolean());
+	
+	// A source-bound control with NO source picked is never rendered — in the DESIGNER too, so it is
+	// plainly visible (by its absence on the canvas) that such a control is unusable until bound; it is
+	// still reachable through the object tree + inspector to pick a source. IsSourceMissing is a base
+	// virtual — false for plain windows, overridden by the source controls — so no cross-cast is needed.
+	// For a composite (tablebox) the SAME gate hides the whole chrome wrapper in UpdateWithLayers; here it
+	// hides a plain control's widget.
+	window->Show(m_propertyVisible->GetValueAsBoolean() && !IsSourceMissing());
 	window->SetToolTip(m_propertyTooltip->GetValueAsTranslateString());
 
 #ifndef OES_USE_WEB
@@ -228,6 +237,11 @@ void ibValueWindowComposite::UpdateWithLayers(wxObject* wxobject, ibVisualHost* 
 		// NOT UpdateWindow, whose MinSize/MaxSize would wreck the toolbar layout).
 		for (ibFrontendWindow* part : chrome->GetLayerParts())
 			ApplyLook(part);
+		
+		// A source-bound composite (tablebox) with NO source hides its WHOLE chrome wrapper — the inner
+		// widget + toolbar fold in with the parent (the inner's own UpdateWindow only hid the inner,
+		// leaving an empty chrome). Hidden in the designer too, so an unbound tablebox is plainly unusable.
+		chrome->Show(!IsSourceMissing());
 		return;
 	}
 #else 

@@ -1024,7 +1024,10 @@ private:
 
 public:
 
-	bool IsList() const { return GetModel()->IsListModel(); }
+	// A DESIGN-TIME control can carry columns with NO associated model yet (e.g. a just-dropped tablebox
+	// whose columns are added before any data model is bound). Guard the null model so a column-width
+	// auto-fit (header separator double-click → GetBestColumnWidth) can't NULL-deref here.
+	bool IsList() const { const ibDataViewModel* model = GetModel(); return model != NULL && model->IsListModel(); }
 	bool IsVirtualList() const { return m_root == NULL; }
 
 	// notifications from ibDataViewModel

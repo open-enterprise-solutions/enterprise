@@ -12,7 +12,7 @@ ibValueModelTableBox::ibActionCollection ibValueModelTableBox::GetActionCollecti
 
 		ibValuePtr<ibValueModel> pvarControlVal;
 		if (!m_propertySource->IsEmptyProperty() && m_formOwner != nullptr &&
-			m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsPath(), pvarControlVal)) {
+			m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsSourceDesc(), pvarControlVal)) {
 			return pvarControlVal->GetActionCollection(formType);
 		}
 

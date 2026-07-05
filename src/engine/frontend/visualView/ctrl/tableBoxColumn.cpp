@@ -26,26 +26,14 @@ bool ibValueModelTableBoxColumn::GetChoiceForm(ibPropertyList* property)
 	if (metaData != nullptr) {
 		const ibValueMetaObjectRecordDataRef* metaObjectRefValue = nullptr;
 		if (!m_propertySource->IsEmptyProperty()) {
-
-			const ibValueMetaObjectGenericData* metaObjectValue =
-				m_formOwner->GetMetaObject();
-
-			if (metaObjectValue != nullptr) {
-				ibValueMetaObject* metaobject =
-					metaObjectValue->FindAnyObjectByFilter(m_propertySource->GetValueAsSource());
-
-				ibValueMetaObjectAttributeBase* attribute = dynamic_cast<ibValueMetaObjectAttributeBase*>(metaobject);
-				if (attribute != nullptr) {
-
-					const ibCtorMetaValueType* so = metaData->GetTypeCtor(attribute->GetFirstClsid());
-					if (so != nullptr) {
-						metaObjectRefValue = dynamic_cast<const ibValueMetaObjectRecordDataRef*>(so->GetMetaObject());
-					}
-				}
-				else
-				{
-					metaObjectRefValue = dynamic_cast<ibValueMetaObjectRecordDataRef*>(metaobject);
-				}
+			// Resolve the bound field through the source explorer (WalkSource), NOT the form's own metaobject:
+			// a dotted path's leaf — or a value-table / dynamic-list column with NO backing metaobject — is
+			// missed by a source-scoped FindAnyObjectByFilter (and asserts). Mirror ibValueTextCtrl::GetChoiceForm.
+			const ibBackendSourceColumn* column = m_propertySource->GetSourceAttributeObject();
+			if (column != nullptr) {
+				const ibCtorMetaValueType* so = metaData->GetTypeCtor(column->GetTypeDesc().GetFirstClsid());
+				if (so != nullptr)
+					metaObjectRefValue = dynamic_cast<const ibValueMetaObjectRecordDataRef*>(so->GetMetaObject());
 			}
 		}
 		else {
@@ -99,11 +87,13 @@ const ibMetaData* ibValueModelTableBoxColumn::GetMetaData() const
 
 wxString ibValueModelTableBoxColumn::GetControlTitle() const
 {
+	// Explicit Title wins; otherwise the binding's presentation synonym (field synonym | form-attribute
+	// Synonym/Name), resolved once via GetSourceAbstractColumn; else fall back to the control's own name.
 	if (!m_propertyTitle->IsEmptyProperty()) {
 		return m_propertyTitle->GetValueAsTranslateString();
 	}
 	else if (!m_propertySource->IsEmptyProperty()) {
-		const ibBackendSourceColumn* column = m_propertySource->GetSourceAttributeObject();
+		const ibBackendAbstractColumn* column = GetSourceAbstractColumn();
 		if (column != nullptr)   // null when the bound field is gone / whole-attribute binding
 			return column->GetSynonym();
 	}
@@ -156,8 +146,6 @@ void ibValueModelTableBoxColumn::OnUpdated(wxObject* wxobject, ibFrontendWindow*
 	if (dataViewColumn == nullptr)
 		return;
 
-	const unsigned int order_position = GetParentPosition();
-
 	if (m_propertyRepresentation->GetValueAsEnum() == ibRepresentation::ibRepresentation_Auto) {
 		dataViewColumn->SetTitle(GetControlTitle());
 		dataViewColumn->SetBitmap(m_propertyHeaderPicture->GetValueAsBitmap());
@@ -196,7 +184,12 @@ void ibValueModelTableBoxColumn::OnUpdated(wxObject* wxobject, ibFrontendWindow*
 	const bool sortable = modelValue != nullptr && !appData->DesignerMode()
 		&& modelValue->GetFeatures().Has(ibValueModel::Features::Sorting);
 
-	dataViewColumn->SetHidden(!m_propertyVisible->GetValueAsBoolean());
+	// A source-less column is not shown — no binding PATH (m_propertySource) and no explicit model column
+	// (m_model_id). It appears once the user binds a source (a field, or a dotted path), mirroring the
+	// unbound-source-control visibility gate. It stays selectable via the object tree while hidden, so its
+	// Source picker is reachable. (GetModelColumn can't gate this — it falls back to the control id.)
+	const bool sourceMissing = m_propertySource->IsEmptyProperty() && m_model_id == wxNOT_FOUND;
+	dataViewColumn->SetHidden(!m_propertyVisible->GetValueAsBoolean() || sourceMissing);
 	dataViewColumn->SetSortable(sortable);
 	dataViewColumn->SetResizeable(m_propertyResizable->GetValueAsBoolean());
 

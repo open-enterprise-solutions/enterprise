@@ -64,9 +64,15 @@ void ibPGDataSourceProperty::RefreshChildren()
 {
 	const ibVariantDataSource* dataSource = property_cast(m_value, ibVariantDataSource);
 	if (dataSource != nullptr) {
-		const ibMetaID& id = dataSource->GetSource();
-		if (id != wxNOT_FOUND) m_typeSelector->SetValue(dataSource->CloneSourceAttribute(id));
-		else m_typeSelector->SetValue(dataSource->CloneSourceAttribute());
+		// No source picked -> show NO Type at all: the control's type now comes FROM the source, so an
+		// unset source has no meaningful type to display. A bound source shows its resolved leaf type.
+		const bool hasSource = !dataSource->IsEmptySource();
+		m_typeSelector->Hide(!hasSource);
+		// The clone self-resolves the leaf type through the source EXPLORER (CloneSourceAttribute ->
+		// RefreshTypeFromSource, pull-on-get like the Type side) — no separate priming call. Cloning from the bare
+		// leaf id (CloneSourceAttribute(leafId)) would instead rebuild the type config-wide via metadata
+		// (FindAnyObjectByFilter) and mis-type a value-table / dynamic-list column, whose RAM id has no metaobject.
+		m_typeSelector->SetValue(dataSource->CloneSourceAttribute());
 	}
 	m_typeSelector->SetFlagRecursively(wxPGFlags::ReadOnly, dataSource != nullptr ? !dataSource->IsPropAllowed() : false);
 	ibPGDataSourceProperty::SetExpanded(true);
@@ -313,7 +319,7 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 			typeFactory->GetSourceList(holders);
 			for (ibBackendFormAttributeValue* holder : holders) {
 				if (holder != nullptr)
-					entries.push_back({ holder->GetAttributeId(), holder, holder->GetAttributeName() });
+					entries.push_back({ holder->GetId(), holder, holder->GetName() });
 			}
 
 			const wxTreeItemId hiddenRoot = tc->AddRoot(wxEmptyString);   // one hidden root; sources are its children
@@ -545,10 +551,10 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 						continue;
 					bool alreadyRooted = false;
 						for (const ibSourceId seen : seenRoots)
-							if (seen == holder->GetAttributeId()) { alreadyRooted = true; break; }
+							if (seen == holder->GetId()) { alreadyRooted = true; break; }
 						if (alreadyRooted)
 							continue;   // GetSourceList vended this attribute under both filters
-						seenRoots.push_back(holder->GetAttributeId());
+						seenRoots.push_back(holder->GetId());
 
 						ibSourceDataObject* source = holder->GetSourceValue();
 					if (source == nullptr)
@@ -561,10 +567,10 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 					if (IsTableType(metaData, holder->GetTypeDesc())) {
 						// The BOUND table (the one this column's tablebox reads). Its columns are row-
 						// relative, prefixed by the tablebox's own bound path. Skip any OTHER table.
-						if (boundHead != wxNOT_FOUND && holder->GetAttributeId() != boundHead)
+						if (boundHead != wxNOT_FOUND && holder->GetId() != boundHead)
 							continue;
-						ibTreeItemDataSource* tableData = new ibTreeItemDataSource(holder->GetAttributeName(), wxNOT_FOUND, true);
-						wxTreeItemId tableItem = tc->AppendItem(hiddenRoot, holder->GetAttributeName(), icon_table, icon_table, tableData);
+						ibTreeItemDataSource* tableData = new ibTreeItemDataSource(holder->GetName(), wxNOT_FOUND, true);
+						wxTreeItemId tableItem = tc->AppendItem(hiddenRoot, holder->GetName(), icon_table, icon_table, tableData);
 						tc->SetItemBold(tableItem);
 						AppendExplorerColumns(tc, tableItem, explorer, parentPath, metaData);
 					}
@@ -572,9 +578,9 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 						// A HEADER object ABOVE the table (Mode 2). Its fields are constant across the
 						// table's rows; the column path roots at the header attribute id, and the renderer
 						// resolves it through the form. The object node itself is not a column (id NOT_FOUND).
-						ibTreeItemDataSource* headData = new ibTreeItemDataSource(holder->GetAttributeName(), wxNOT_FOUND, false);
-						wxTreeItemId headItem = tc->AppendItem(hiddenRoot, holder->GetAttributeName(), icon_attribute, icon_attribute, headData);
-						AppendExplorerColumns(tc, headItem, explorer, std::vector<ibSourceId>{ holder->GetAttributeId() }, metaData);
+						ibTreeItemDataSource* headData = new ibTreeItemDataSource(holder->GetName(), wxNOT_FOUND, false);
+						wxTreeItemId headItem = tc->AppendItem(hiddenRoot, holder->GetName(), icon_attribute, icon_attribute, headData);
+						AppendExplorerColumns(tc, headItem, explorer, std::vector<ibSourceId>{ holder->GetId() }, metaData);
 					}
 				}
 

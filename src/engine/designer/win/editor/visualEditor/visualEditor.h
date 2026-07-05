@@ -271,6 +271,10 @@ public:
 		void SetObjectSelect(ibValueFrame* obj);
 		void ScrollToObject(ibValueFrame* obj);
 
+		// A node dropped from the attribute tree: hit-test the point to the owning object, then create the
+		// control (class resolved from the type at the path) there and bind it. Called by ibFormEditorDropTarget.
+		void DropBoundControl(wxCoord x, wxCoord y, const ibSourceDescription& desc);
+
 	protected:
 
 		virtual void SetCaption(const wxString& strCaption);
@@ -467,14 +471,17 @@ public:
 		void OnSelChanged(wxTreeEvent& event);
 		void OnContextMenu(wxContextMenuEvent& event);        // right-click anywhere (incl. empty)
 		void OnActivated(wxTreeEvent& event);                 // double-click → activate properties
-		void OnAddAttribute(wxCommandEvent& event);
-		void OnEditAttribute(wxCommandEvent& event);          // inline rename (EditLabel)
-		void OnRemoveAttribute(wxCommandEvent& event);
-		void OnSetMainAttribute(wxCommandEvent& event);
-		void OnPropertiesAttribute(wxCommandEvent& event);    // show inspector
-		void OnCopyAttribute(wxCommandEvent& event);          // clipboard copy (serialized)
-		void OnCutAttribute(wxCommandEvent& event);           // clipboard copy + remove (undoable)
-		void OnPasteAttribute(wxCommandEvent& event);         // clipboard paste (deserialized)
+		void OnItemExpanding(wxTreeEvent& event);             // lazy: build a node's composition on first expand
+		void OnBeginDrag(wxTreeEvent& event);                 // drag a node onto the form -> create + bind a control
+		void OnAdd(wxCommandEvent& event);
+		void OnAddColumn(wxCommandEvent& event);              // add a column to a value-table attribute
+		void OnEdit(wxCommandEvent& event);                   // inline rename (EditLabel)
+		void OnRemove(wxCommandEvent& event);
+		void OnSetMain(wxCommandEvent& event);
+		void OnProperties(wxCommandEvent& event);             // show inspector
+		void OnCopy(wxCommandEvent& event);                   // clipboard copy (serialized)
+		void OnCut(wxCommandEvent& event);                    // clipboard copy + remove (undoable)
+		void OnPaste(wxCommandEvent& event);                  // clipboard paste (deserialized)
 		void OnEndLabelEdit(wxTreeEvent& event);              // apply / veto a rename (uniqueness)
 
 		// The HOLDER (facade) the tree item carries — what the inspector selects (it owns the
@@ -492,6 +499,12 @@ public:
 		// object tree funnels every path through SelectItemData.
 		void SelectInInspector(class ibFormAttributeValue* entry);
 
+		// A composition node UNDER a value-table attribute carries no holder — resolve its column-info
+		// (which IS an editable property object: Name + Type) from the binding path [attrId, columnId]
+		// and surface THAT in the inspector. Returns true when it handled the item (the caller then
+		// skips the holder path); false leaves the current attribute-holder behaviour untouched.
+		bool SelectColumnInInspector(const wxTreeItemId& item);
+
 	private:
 
 		ibVisualEditor* m_formHandler = nullptr;
@@ -506,11 +519,38 @@ public:
 
 	class ibVisualEditorAttributeTreeItemData : public wxTreeItemData {
 	public:
-		// Carries the HOLDER (facade) — the selectable; the attribute is reached via it.
-		ibVisualEditorAttributeTreeItemData(class ibFormAttributeValue* entry) : m_entry(entry) {}
+		// A ROOT node carries the attribute HOLDER (facade) — the selectable; the attribute is reached
+		// via it. A COMPOSITION node (a field / table section / reference target built lazily on expand)
+		// passes entry == nullptr and carries the binding PATH (head = attribute id) + view flags. A
+		// non-empty refTypes list means "expand me through a reference-as-source" (the design-time value
+		// hop); m_loaded guards the one-time build so references stay lazy — no cyclic-reference blow-up.
+		ibVisualEditorAttributeTreeItemData(class ibFormAttributeValue* entry, const std::vector<ibMetaID>& path,
+			const std::vector<ibMetaID>& refTypes = {}, bool tableSection = false, ibClassID dropControl = 0,
+			bool underList = false)
+			: m_entry(entry), m_path(path), m_refTypes(refTypes), m_tableSection(tableSection), m_dropControl(dropControl),
+			m_underList(underList) {}
 		ibFormAttributeValue* GetEntry() const { return m_entry; }
+		const std::vector<ibMetaID>& GetPath() const { return m_path; }
+		const std::vector<ibMetaID>& GetRefTypes() const { return m_refTypes; }
+		bool HasRef() const { return !m_refTypes.empty(); }
+		bool IsTableSection() const { return m_tableSection; }
+		bool IsLoaded() const { return m_loaded; }
+		void SetLoaded() { m_loaded = true; }
+		// The control-class CLSID this node maps to (0 = not draggable — an object container with no single
+		// control; drag its fields instead). Computed at build time from the node's view + type. Used only as
+		// the draggable gate now: the drag payload carries the PATH, and the drop side resolves the class.
+		ibClassID GetDropControl() const { return m_dropControl; }
+		// This node is INSIDE a list / table section → its own fields are COLUMNS, not standalone form
+		// sources; a reference under it propagates the flag so its dot-walk fields stay non-draggable.
+		bool IsUnderList() const { return m_underList; }
 	private:
-		ibFormAttributeValue* m_entry = nullptr;
+		ibFormAttributeValue* m_entry = nullptr;    // holder (root) or nullptr (composition node)
+		std::vector<ibMetaID> m_path;               // sourceId path from the attribute (head = attribute id)
+		std::vector<ibMetaID> m_refTypes;           // reference TARGET metaIDs (empty = not a reference)
+		bool m_tableSection = false;                // view flag: this node is a table / section
+		bool m_loaded = false;                      // composition already built? (lazy one-shot)
+		ibClassID m_dropControl = 0;                // control-class CLSID this node maps to (0 = not draggable)
+		bool m_underList = false;                   // inside a list/section (fields are columns, not sources)
 	};
 
 	/**
@@ -588,8 +628,12 @@ public:
 	ibVisualEditor(ibMetaDocument* document, wxWindow* parent, int id = wxID_ANY);
 	virtual ~ibVisualEditor();
 
-	//Objects 
+	//Objects
 	ibValueFrame* CreateObject(const wxString& name);
+	// Like CreateObject, but under an explicit parent (walking up if it can't hold the control) and bound to
+	// a source path — the drop counterpart of the palette's CreateObject. The control CLASS is resolved from
+	// the type AT the path (the drop side owns the choice). Returns the created control (unwrapped) or nullptr.
+	ibValueFrame* CreateBoundControl(ibValueFrame* parentHint, const ibSourceDescription& desc);
 	void RemoveObject(ibValueFrame* obj);
 	void CutObject(ibValueFrame* obj, bool force = false);
 	void CopyObject(ibValueFrame* obj);

@@ -78,7 +78,7 @@ wxString ibValueCheckbox::GetControlTitle() const
 		return m_propertyTitle->GetValueAsTranslateString();
 	}
 	else if (!m_propertySource->IsEmptyProperty()) {
-		const ibBackendSourceColumn* column = m_propertySource->GetSourceAttributeObject();
+		const ibBackendAbstractColumn* column = GetSourceAbstractColumn();
 		if (column != nullptr)   // null when the bound field is gone / whole-attribute binding
 			return column->GetSynonym();
 	}
@@ -99,8 +99,12 @@ wxObject* ibValueCheckbox::Create(ibFrontendWindow* wxparent, ibVisualHost* visu
 	return checkbox;
 }
 
-void ibValueCheckbox::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueCheckbox::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
+	// A just-dropped checkbox with no source auto-binds to a fresh attribute (control-side helper) so it
+	// renders bound, not hidden. firstCreated is set ONLY by the designer's add, never on a form open.
+	if (firstCreated)
+		AutoBindNewSource(this);   // `this` upcasts to ibTypeControlFactory* — the source-set side
 }
 
 #include "backend/appData.h"
@@ -117,13 +121,13 @@ void ibValueCheckbox::Update(wxObject* wxobject, ibVisualHost* visualHost)
 	if (checkbox != nullptr) {
 		// Source-backed value refresh: hand the source the binding path; it walks it.
 		if (!m_propertySource->IsEmptyProperty() && m_formOwner != nullptr) {
-			m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsPath(), m_selValue);
+			m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsSourceDesc(), m_selValue);
 		}
 
 		checkbox->SetLabel(GetControlTitle());
 		// A dotted reference path is read-only; unbound = editable.
 		const bool writableBinding = m_propertySource->IsEmptyProperty()
-			|| (m_formOwner != nullptr && m_formOwner->IsWritableBinding(m_propertySource->GetValueAsPath()));
+			|| (m_formOwner != nullptr && m_formOwner->IsWritableBinding(m_propertySource->GetValueAsSourceDesc()));
 		if (!writableBinding)
 			checkbox->Enable(false);
 #ifdef OES_USE_WEB
@@ -160,7 +164,7 @@ void ibValueCheckbox::Cleanup(wxObject* obj, ibVisualHost* visualHost)
 bool ibValueCheckbox::GetControlValue(ibValue& pvarControlVal) const
 {
 	if (!m_propertySource->IsEmptyProperty() && m_formOwner != nullptr &&
-		m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsPath(), pvarControlVal)) {
+		m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsSourceDesc(), pvarControlVal)) {
 		return true;   // attribute-table / dotted path -> read-only walk
 	}
 
@@ -175,7 +179,7 @@ bool ibValueCheckbox::SetControlValue(const ibValue& varControlVal)
 	if (!m_propertySource->IsEmptyProperty() && m_formOwner != nullptr) {
 		// Form writes only a direct-field binding (head selects the attribute); a
 		// dotted reference path is read-only → no-op.
-		m_formOwner->SetValueByAttributePath(m_propertySource->GetValueAsPath(), varControlVal);
+		m_formOwner->SetValueByAttributePath(m_propertySource->GetValueAsSourceDesc(), varControlVal);
 	}
 
 	m_selValue = varControlVal.GetBoolean();
@@ -224,4 +228,4 @@ bool ibValueCheckbox::WriteData(ibDataNode& node) const
 //*                       Register in runtime                           *
 //***********************************************************************
 
-CONTROL_TYPE_REGISTER(ibValueCheckbox, "Checkbox", "Widget", control_to_clsid("CT_CHKB"));
+CONTROL_TYPE_REGISTER(ibValueCheckbox, "Checkbox", "Widget", g_controlCheckboxCLSID);

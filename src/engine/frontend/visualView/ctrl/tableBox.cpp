@@ -65,7 +65,7 @@ bool ibValueModelTableBox::ResolveCellValue(const ibDataViewItem& item,
 	// primitive is the same the designer/web read uses (GetControlValue's dotted-path branch).
 	if (IsForeignColumn(column)) {
 		ibValue current;
-		if (m_formOwner == nullptr || !m_formOwner->GetValueByAttributePath(column->GetSourcePath(), current))
+		if (m_formOwner == nullptr || !m_formOwner->GetValueByAttributePath(column->GetSourceDesc(), current))
 			return false;
 		ibValueModel::ValueToVariant(out, current);
 		return true;
@@ -99,7 +99,7 @@ bool ibValueModelTableBox::GetControlValue(ibValue& pvarControlVal) const
 		if (appData->DesignerMode()) {
 			if (!m_propertySource->IsEmptyProperty()) {
 				if (!m_propertySource->IsEmptyProperty() && m_formOwner != nullptr &&
-					m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsPath(), pvarControlVal)) {
+					m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsSourceDesc(), pvarControlVal)) {
 					return true;   // attribute-table / dotted path -> read-only walk
 				}
 			}
@@ -121,21 +121,15 @@ void ibValueModelTableBox::AddColumn()
 #ifndef OES_USE_WEB
 	wxASSERT(m_formOwner);
 
+	// Create a BARE view column — NO source, and NO storage column injected into the bound value-table.
+	// A tablebox column on the form is a VIEW that BINDS (through its Source, which may be a dotted path to
+	// another / composite field) to a field the user picks; it must not silently add a fourth column to the
+	// value-table's schema (that schema is edited via the attribute's own "Add column"). Auto-adding one both
+	// duplicated the schema and froze the value-table column id to the CONTROL id (a different id space) — a
+	// serialization hazard. Source-less, the new column stays hidden until the user binds it (visibility gate
+	// in ibValueModelTableBoxColumn::OnUpdated), exactly like any other unbound source control.
 	ibValueModelTableBoxColumn* columnTable = dynamic_cast<ibValueModelTableBoxColumn*>(m_formOwner->NewObject(g_controlTableBoxColumnCLSID, this));
 	g_visualHostContext->InsertControl(columnTable, this);
-	if (m_tableModel != nullptr) {
-		ibValueModel::ibValueModelColumnCollection* columnData = m_tableModel->GetColumnCollection();
-		if (columnData != nullptr) {
-			ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* column_info = columnData->AddColumn(
-				columnTable->GetControlName(),
-				columnTable->GetTypeDesc(),
-				columnTable->GetCaption(),
-				columnTable->GetWidthColumn()
-			);
-			if (column_info != nullptr) column_info->SetColumnID(columnTable->GetControlID());
-		}
-	}
-
 	g_visualHostContext->RefreshEditor();
 #endif
 }
@@ -246,7 +240,7 @@ void ibValueModelTableBox::CreateModel(bool recreateModel)
 	if (!m_propertySource->IsEmptyProperty()) {
 
 		if (!m_propertySource->IsEmptyProperty() && m_formOwner != nullptr &&
-			m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsPath(), m_tableModel)) {
+			m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsSourceDesc(), m_tableModel)) {
 		}
 
 		CreateTable(false);
@@ -321,7 +315,7 @@ bool ibValueModelTableBox::HasCommandBar() const
 	const std::vector<ibSourceId>& path = GetSourcePath();
 	if (path.size() == 1) {
 		ibBackendFormAttributeValue* holder = FindSourceHolder(path.front());
-		if (holder != nullptr && holder->IsMainAttribute())
+		if (holder != nullptr && holder->IsMain())
 			return false;
 	}
 	return ibValueFrame::HasCommandBar();
@@ -385,62 +379,26 @@ void ibValueModelTableBox::CalculateColumnPos()
 {
 #ifndef OES_USE_WEB
 	ibTableViewCtrl* dataViewCtrl = dynamic_cast<ibTableViewCtrl*>(GetInnerWx());
-	if (dataViewCtrl != nullptr) {
+	if (dataViewCtrl == nullptr)
+		return;
 
-		dataViewCtrl->SetExpanderColumn(nullptr);
+	// Columns render in child (append) order — the generic dataview honours the order columns are appended /
+	// inserted in, so there is nothing to force here. This used to DeleteColumn+InsertColumn every column to
+	// match GetParentPosition(): a workaround for the NATIVE (pre-generic) header, which threw a logic error
+	// when columns were moved and had to be re-synced. The generic header made that dead weight — and its
+	// reorder decision read the header's DISPLAY order (GetColumnPos), transiently stale during a drop/refill,
+	// which reshuffled freshly-dropped columns out of order. User header drag-reorder still persists through
+	// OnColumnReordered -> ChangeChildPosition (the generic dataview has already moved the column visually).
+	// All that remains is dropping the anchor: the tree-expander column = the first shown column.
+	dataViewCtrl->SetExpanderColumn(nullptr);
+	for (unsigned int idx = 0; idx < GetChildCount(); idx++) {
 
-		ibHeaderGenericCtrl* headerCtrl = dataViewCtrl->GenericGetHeader();
-		if (headerCtrl != nullptr) {
+		const ibValueFrame* valueFrame = GetChild(idx);
+		wxASSERT(valueFrame);
 
-			bool need_reset_columns_order = false;
-
-			for (unsigned int idx = 0; idx < GetChildCount(); idx++) {
-
-				const ibValueFrame* valueFrame = GetChild(idx);
-				wxASSERT(valueFrame);
-
-				ibDataViewColumn* column = dynamic_cast<ibDataViewColumn*>(valueFrame->GetWxObject());
-
-				const unsigned int column_model_index = dataViewCtrl->GetColumnIndex(column);
-				const unsigned int column_index = headerCtrl->GetColumnPos(column_model_index);
-
-				const unsigned int real_column_index = valueFrame->GetParentPosition();
-
-				if (column_index != real_column_index) {
-					dataViewCtrl->DeleteColumn(column);
-					dataViewCtrl->InsertColumn(real_column_index, column);
-					need_reset_columns_order = true;
-				}
-
-				if (column->IsShown() && dataViewCtrl->GetExpanderColumn() == nullptr) {
-					dataViewCtrl->SetExpanderColumn(column);
-				}
-			}
-
-			if (need_reset_columns_order) headerCtrl->ResetColumnsOrder();
-		}
-		else
-		{
-			for (unsigned int idx = 0; idx < GetChildCount(); idx++) {
-
-				const ibValueFrame* valueFrame = GetChild(idx);
-				wxASSERT(valueFrame);
-
-				ibDataViewColumn* column = dynamic_cast<ibDataViewColumn*>(valueFrame->GetWxObject());
-
-				const unsigned int column_model_index = dataViewCtrl->GetColumnIndex(column);
-				const unsigned int real_column_index = valueFrame->GetParentPosition();
-
-				if (column_model_index != real_column_index) {
-					dataViewCtrl->DeleteColumn(column);
-					dataViewCtrl->InsertColumn(real_column_index, column);
-				}
-
-				if (column->IsShown() && dataViewCtrl->GetExpanderColumn() == nullptr) {
-					dataViewCtrl->SetExpanderColumn(column);
-				}
-			}
-		}
+		ibDataViewColumn* column = dynamic_cast<ibDataViewColumn*>(valueFrame->GetWxObject());
+		if (column != nullptr && column->IsShown() && dataViewCtrl->GetExpanderColumn() == nullptr)
+			dataViewCtrl->SetExpanderColumn(column);
 	}
 #endif // !OES_USE_WEB
 }
@@ -516,12 +474,19 @@ void ibValueModelTableBox::OnCreated(wxObject* wxobject, ibFrontendWindow* wxpar
 #ifndef OES_USE_WEB
 	ibTableViewCtrl* dataViewCtrl = dynamic_cast<ibTableViewCtrl*>(wxobject);
 
+	// Bind the source FIRST (a just-dropped tablebox auto-binds a fresh value-table attribute — control-side
+	// helper — so it renders bound, not hidden; its type comes from the source-type generator, _table ->
+	// value table). Then CreateModel reads that bound value-table into m_tableModel. The value-table starts
+	// with NO columns — they come from the bound source or the user's explicit "Add column", never auto-added.
+	if (firstCreated)
+		AutoBindNewSource(this);
+
 	if (dataViewCtrl != nullptr) ibValueModelTableBox::CreateModel();
 
-	if (visualHost->IsDesignerHost() && GetChildCount() == 0
-		&& firstCreated) {
-		ibValueModelTableBox::AddColumn();
-	}
+	// NO auto-first-column here. AddColumn() injects a column INTO the bound value-table (m_tableModel's
+	// collection), so auto-calling it on every designer create/drop polluted the value-table attribute with a
+	// spurious column each time (Column, Column1, Column2, …). Columns now come only from the bound source or
+	// the user's explicit "Add column".
 #endif
 }
 
@@ -676,6 +641,22 @@ void ibValueModelTableBox::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxpar
 					if (!changedValue.IsEmpty()) {
 						line = ResolveLineByValue(m_tableModel, changedValue);
 					}
+				}
+
+				// Initial-open sync. On first populate the ctrl highlights the top row VISUALLY, but that
+				// programmatic selection fires no wxEVT_DATAVIEW_SELECTION_CHANGED, so m_tableCurrentLine
+				// stays null and the engine is out of sync with the row the user sees active. Downstream a
+				// cell choice ("…") then finds no current row, cannot read the cell's real (reference) type,
+				// falls back to a primitive (string is treated as a leaf), and silently skips the choice
+				// form. When nothing above resolved a line and we have none, adopt whatever the ctrl actually
+				// has active: its selection if any, else the top visible row.
+				if (line == nullptr && m_tableCurrentLine == nullptr) {
+					ibDataViewItemArray sel;
+					const int selCount = dataViewCtrl->GetSelections(sel);
+					const ibDataViewItem active =
+						(selCount > 0 && sel[0].IsOk()) ? sel[0] : dataViewCtrl->GetTopItem();
+					if (active.IsOk())
+						line = m_tableModel->GetRowAt(active);
 				}
 
 				if (line != nullptr) {
@@ -843,6 +824,10 @@ void ibValueModelTableBox::ExecuteAction(const ibActionID& /*lNumAction*/, ibBac
 
 void ibValueModelTableBox::PrepareDefaultMenu(wxMenu* /*m_menu*/) {}
 void ibValueModelTableBox::ExecuteMenu(ibVisualHost* /*visualHost*/, int /*id*/) {}
+
+// Column refill lives in the desktop-only tableBoxProperty.cpp. Web still needs the vtable symbol:
+// RefillFromSource is a no-op (web rebuilds columns through its own stateless pass).
+void ibValueModelTableBox::RefillFromSource() {}
 #endif // OES_USE_WEB
 
 //***********************************************************************

@@ -3,6 +3,8 @@
 
 #include "frame.h"
 
+class FRONTEND_API ibTypeControlFactory;   // AutoBindNewSource binds through the caller's factory subobject
+
 class FRONTEND_API ibValueControl : public ibValueFrame {
 	public:
 
@@ -44,9 +46,7 @@ class FRONTEND_API ibValueControl : public ibValueFrame {
 	* Get/set value in control
 	*/
 	virtual bool SetControlValue(const ibValue& varControlVal = ibValue()) { return false; }
-	virtual bool GetControlValue(ibValue& pvarControlVal) const {
-		return false;
-	}
+	virtual bool GetControlValue(ibValue& pvarControlVal) const { return false; }
 
 	//get metaData
 	virtual const ibMetaData* GetMetaData() const override;
@@ -54,9 +54,7 @@ class FRONTEND_API ibValueControl : public ibValueFrame {
 	/**
 	* Can delete object
 	*/
-	virtual bool CanDeleteControl() const {
-		return true;
-	}
+	virtual bool CanDeleteControl() const { return true; }
 
 	/**
 	* Get type form
@@ -64,7 +62,21 @@ class FRONTEND_API ibValueControl : public ibValueFrame {
 	virtual ibFormID GetTypeForm() const;
 
 protected:
+
+	// Source controls (checkbox / textbox) call this from their CREATION event when the first-created flag
+	// is set: a just-added control with no source provisions a form attribute NAMED after it, TYPED by its
+	// own value, and binds. The caller passes its OWN factory subobject (`this` — implicit upcast, NOT a
+	// cross-cast); the source-set lives there.
+	void AutoBindNewSource(ibTypeControlFactory* factory);
 	
+	// A control that BINDS to a source (textbox / checkbox / tablebox — an ibTypeControlFactory) with NO
+	// source picked is INCOMPLETE: the runtime never renders it, so a dangling unbound control can neither
+	// reach the user nor later try to read a source it hasn't got. Default false — a control with no source
+	// requirement (label, sizer, button …) always renders. Source controls OVERRIDE this to test their own
+	// bound path. The gate is applied once per window family: ibValueWindow (plain widget) hides itself,
+	// ibValueWindowComposite (tablebox) hides its whole chrome wrapper — so children fold in with the parent.
+	virtual bool IsSourceMissing() const { return false; }
+
 	//frame owner 
 	ibValueForm* m_formOwner;
 

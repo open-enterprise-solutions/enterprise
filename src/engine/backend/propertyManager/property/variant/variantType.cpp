@@ -20,26 +20,9 @@ wxString ibVariantDataAttribute::MakeString() const
 	return strDescr;
 }
 
-#include "backend/system/value/valueTable.h"
-
 void ibVariantDataAttribute::DoSetDefaultMetaType() {
-	if (m_ownerProperty != nullptr) {
-		if (ibSelectorDataType::ibSelectorDataType_boolean == m_ownerProperty->GetFilterDataType()) {
-			m_typeDesc.SetDefaultMetaType(g_valueBooleanCLSID);
-		}
-		else if (ibSelectorDataType::ibSelectorDataType_reference == m_ownerProperty->GetFilterDataType()) {
-			m_typeDesc.SetDefaultMetaType(g_valueStringCLSID);
-		}
-		else if (ibSelectorDataType::ibSelectorDataType_resource == m_ownerProperty->GetFilterDataType()) {
-			m_typeDesc.SetDefaultMetaType(g_valueNumberCLSID);
-		}
-		else if (ibSelectorDataType::ibSelectorDataType_table == m_ownerProperty->GetFilterDataType()) {
-			m_typeDesc.SetDefaultMetaType(g_valueTableCLSID);
-		}
-		else {
-			m_typeDesc.SetDefaultMetaType(g_valueStringCLSID);
-		}
-	}
+	if (m_ownerProperty != nullptr)
+		m_typeDesc.SetDefaultMetaType(ibBackendTypeConfigFactory::GetDefaultTypeByFilter(m_ownerProperty->GetFilterDataType()));
 }
 
 void ibVariantDataAttribute::DoSetFromMetaId(const ibMetaID& id)

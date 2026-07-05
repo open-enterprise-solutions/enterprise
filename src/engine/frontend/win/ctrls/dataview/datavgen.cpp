@@ -5359,7 +5359,7 @@ public:
 			item = m_dvc->GetItemByRow(row);
 		}
 
-		if (m_model->HasValue(item, GetColumn()))
+		if (m_model != NULL && m_model->HasValue(item, GetColumn()))
 		{
 			if (m_renderer->PrepareForItem(m_model, item, GetColumn()))
 				width += m_renderer->GetSize().x;

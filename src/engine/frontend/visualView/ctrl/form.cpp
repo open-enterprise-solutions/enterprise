@@ -249,8 +249,8 @@ void ibValueForm::FillFormMembers(ibMemberTable& helper) const
 	// different attribute (controls bind by GetControlID for the same reason).
 	for (const auto& av : m_attributes) {
 		helper.AppendProp(
-			av->GetAttributeName(),
-			av->GetAttributeId(),
+			av->GetName(),
+			av->GetId(),
 			eFormAttribute
 		);
 	}

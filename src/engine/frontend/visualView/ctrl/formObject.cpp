@@ -51,7 +51,7 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 		// paths start with its id, then walk the metadata. The incoming source
 		// object is only used to lay the controls out, then copied into the main
 		// attribute (InitializeForm) and forgotten — reads go via the attribute.
-		const ibMetaID mainAttrId = mainAttr->GetAttributeId();
+		const ibMetaID mainAttrId = mainAttr->GetId();
 
 		// Form-level toolbar is now the form's command-bar chrome (m_commandBar,
 		// AutoFill from the same action collection) — no explicit MainToolbar.

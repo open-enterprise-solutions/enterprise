@@ -185,15 +185,22 @@ void ibValueModelTableBox::OnItemStartAdding(ibDataViewEvent& event)
 {
 	m_formOwner->RefreshForm();
 
-	// GUI-driven Add → fire script OnAddRow with the just-appended row.
-	// Programmatic createdValue path (OnIdle) goes through
-	// ibValueModelStorage::Append too, so listeners observe creation
-	// regardless of origin.
 	const ibDataViewItem& item = event.GetItem();
-	if (item.IsOk() && m_eventOnAddRow != nullptr && m_tableModel != nullptr) {
-		CallAsEvent(m_eventOnAddRow,
-			GetValue(),
-			ibValue(m_tableModel->GetRowAt(item)));
+	if (item.IsOk() && m_tableModel != nullptr) {
+		// The just-added row becomes the current line. The ctrl selects it visually, but that programmatic
+		// selection fires no wxEVT_DATAVIEW_SELECTION_CHANGED, so sync the engine here — otherwise a choice
+		// ("…") on the fresh row (notably the FIRST row added to an empty table, where there is no top row
+		// to seed from) would find no current line and silently no-op.
+		ApplyCurrentLine(m_tableModel->GetRowAt(item));
+
+		// GUI-driven Add → fire script OnAddRow with the just-appended row.
+		// Programmatic createdValue path (OnIdle) goes through
+		// ibValueModelStorage::Append too, so listeners observe creation
+		// regardless of origin.
+		if (m_eventOnAddRow != nullptr)
+			CallAsEvent(m_eventOnAddRow,
+				GetValue(),
+				ibValue(m_tableModel->GetRowAt(item)));
 	}
 
 	event.Skip();

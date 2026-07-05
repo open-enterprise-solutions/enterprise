@@ -122,7 +122,7 @@ wxString ibValueTextCtrl::GetControlTitle() const
 		return m_propertyTitle->GetValueAsTranslateString();
 	}
 	else if (!m_propertySource->IsEmptyProperty()) {
-		const ibBackendSourceColumn* column = m_propertySource->GetSourceAttributeObject();
+		const ibBackendAbstractColumn* column = GetSourceAbstractColumn();
 		if (column != nullptr)   // null when the bound field is gone / whole-attribute binding
 			return column->GetSynonym();
 	}
@@ -144,7 +144,7 @@ wxObject* ibValueTextCtrl::Create(ibFrontendWindow* wxparent, ibVisualHost* visu
 
 	if (!m_propertySource->IsEmptyProperty()) {
 		if (m_formOwner != nullptr)
-			m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsPath(), m_selValue);
+			m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsSourceDesc(), m_selValue);
 	} else {
 		m_selValue = ibTypeControlFactory::AdjustValue(m_selValue);
 	}
@@ -152,8 +152,12 @@ wxObject* ibValueTextCtrl::Create(ibFrontendWindow* wxparent, ibVisualHost* visu
 	return textEditor;
 }
 
-void ibValueTextCtrl::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueTextCtrl::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
+	// A just-dropped textbox with no source auto-binds to a fresh attribute (control-side helper) so it
+	// renders bound, not hidden. firstCreated is set ONLY by the designer's add, never on a form open.
+	if (firstCreated)
+		AutoBindNewSource(this);   // `this` upcasts to ibTypeControlFactory* — the source-set side
 }
 
 #include "backend/appData.h"
@@ -180,7 +184,7 @@ void ibValueTextCtrl::Update(wxObject* wxobject, ibVisualHost* visualHost)
 	// attribute, pull the current source value; otherwise the control
 	// carries its own m_selValue across Update passes.
 	if (!m_propertySource->IsEmptyProperty() && m_formOwner != nullptr) {
-		m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsPath(), m_selValue);
+		m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsSourceDesc(), m_selValue);
 	}
 	else {
 		m_selValue = ibTypeControlFactory::AdjustValue(m_selValue);
@@ -197,7 +201,7 @@ void ibValueTextCtrl::Update(wxObject* wxobject, ibVisualHost* visualHost)
 	// A dotted reference path (Source.Ref.Field) is read-only — force edit mode off
 	// regardless of the control's TextEditMode property. Unbound = editable.
 	const bool writableBinding = m_propertySource->IsEmptyProperty()
-		|| (m_formOwner != nullptr && m_formOwner->IsWritableBinding(m_propertySource->GetValueAsPath()));
+		|| (m_formOwner != nullptr && m_formOwner->IsWritableBinding(m_propertySource->GetValueAsSourceDesc()));
 	textEditor->SetTextEditMode(m_propertyTexteditMode->GetValueAsBoolean() && writableBinding);
 	textEditor->ShowSelectButton(m_propertySelectButton->GetValueAsBoolean());
 	textEditor->ShowOpenButton(m_propertyOpenButton->GetValueAsBoolean());
@@ -258,7 +262,7 @@ void ibValueTextCtrl::Cleanup(wxObject* wxobject, ibVisualHost* visualHost)
 bool ibValueTextCtrl::GetControlValue(ibValue& pvarControlVal) const
 {
 	if (!m_propertySource->IsEmptyProperty() && m_formOwner != nullptr &&
-		m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsPath(), pvarControlVal)) {
+		m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsSourceDesc(), pvarControlVal)) {
 		return true;   // attribute-table / dotted path -> read-only walk
 	}
 
@@ -274,7 +278,7 @@ bool ibValueTextCtrl::SetControlValue(const ibValue& varControlVal)
 	const ibBackendSourceColumn* column = !m_propertySource->IsEmptyProperty()
 		? m_propertySource->GetSourceAttributeObject() : nullptr;
 	if (column != nullptr && m_formOwner != nullptr)
-		m_formOwner->SetValueByAttributePath(m_propertySource->GetValueAsPath(), varControlVal);
+		m_formOwner->SetValueByAttributePath(m_propertySource->GetValueAsSourceDesc(), varControlVal);
 	m_selValue = ibTypeControlFactory::AdjustValue(varControlVal);
 
 	m_formOwner->RefreshForm();
@@ -361,4 +365,4 @@ bool ibValueTextCtrl::WriteData(ibDataNode& node) const
 //*                       Register in runtime                           *
 //***********************************************************************
 
-CONTROL_TYPE_REGISTER(ibValueTextCtrl, "Textctrl", "Widget", control_to_clsid("CT_TXTC"));
+CONTROL_TYPE_REGISTER(ibValueTextCtrl, "Textctrl", "Widget", g_controlTextCtrlCLSID);

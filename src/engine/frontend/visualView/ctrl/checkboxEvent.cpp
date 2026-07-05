@@ -18,7 +18,7 @@ void ibValueCheckbox::OnClickedCheckbox(wxCommandEvent& event)
 	if (!m_propertySource->IsEmptyProperty() && m_formOwner != nullptr) {
 		// Form writes only a direct-field binding (head selects the attribute); a
 		// dotted reference path is read-only → no-op.
-		m_formOwner->SetValueByAttributePath(m_propertySource->GetValueAsPath(), m_selValue);
+		m_formOwner->SetValueByAttributePath(m_propertySource->GetValueAsSourceDesc(), m_selValue);
 	}
 
 	m_formOwner->RefreshForm();

@@ -85,6 +85,8 @@ protected:
 
 #include <wx/textctrl.h>
 
+constexpr ibClassID g_controlTextCtrlCLSID = control_to_clsid("CT_TXTC");
+
 class ibValueTextCtrl : public ibValueWindow,
 	public ibTypeControlFactory {
 	public:
@@ -117,8 +119,13 @@ class ibValueTextCtrl : public ibValueWindow,
 	//Get source object
 	virtual ibSourceObject* GetSourceObject() const;
 
-	// Own bound source path ([headAttr, field]).
-	virtual ibSourceDescription GetSourceDesc() const override { return m_propertySource->GetValueAsSourceDesc(); }
+	// Own bound source path ([headAttr, field]) — MUTABLE ref (like GetTypeDesc): read it, or assign to
+	// bind (GetSourceDesc() = desc). No separate setter.
+	virtual ibSourceDescription& GetSourceDesc() const override { return m_propertySource->GetValueAsSourceDesc(); }
+	// Unbound (no source picked) -> not rendered (ibValueWindow::UpdateWindow gate). Ask the PROPERTY
+	// directly (IsEmptyProperty), NOT GetSourceDesc — the latter resolves / walks the source and can be
+	// broken (a dangling binding); the flag on the stored property is cheap and always safe.
+	virtual bool IsSourceMissing() const override { return m_propertySource->IsEmptyProperty(); }
 
 	//Get source attribute
 	virtual const ibBackendSourceColumn* GetSourceAttributeObject() const {
@@ -295,6 +302,8 @@ public:
 
 #include <wx/checkbox.h>
 
+constexpr ibClassID g_controlCheckboxCLSID = control_to_clsid("CT_CHKB");
+
 class ibValueCheckbox : public ibValueWindow,
 	public ibTypeControlFactory {
 	public:
@@ -317,8 +326,12 @@ class ibValueCheckbox : public ibValueWindow,
 	//get source object
 	virtual ibSourceObject* GetSourceObject() const;
 
-	// Own bound source path ([headAttr, field]).
-	virtual ibSourceDescription GetSourceDesc() const override { return m_propertySource->GetValueAsSourceDesc(); }
+	// Own bound source path ([headAttr, field]) — MUTABLE ref (like GetTypeDesc): read it, or assign to
+	// bind (GetSourceDesc() = desc). No separate setter.
+	virtual ibSourceDescription& GetSourceDesc() const override { return m_propertySource->GetValueAsSourceDesc(); }
+	// Unbound (no source picked) -> not rendered. Ask the PROPERTY (IsEmptyProperty), NOT GetSourceDesc —
+	// the latter walks the source and can be broken; the property flag is cheap and always safe.
+	virtual bool IsSourceMissing() const override { return m_propertySource->IsEmptyProperty(); }
 
 	//get source attribute
 	virtual const ibBackendSourceColumn* GetSourceAttributeObject() const {

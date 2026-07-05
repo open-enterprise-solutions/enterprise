@@ -36,7 +36,7 @@ bool ibValueForm::ReadAttributes(const ibDataNode& node)
 	// main, REPLACE the non-main set from the "Attributes" section, and DROP any main-flagged
 	// entry from an old blob (the ctor's main wins — never a second "Object").
 	for (auto it = m_attributes.begin(); it != m_attributes.end(); ) {
-		if ((*it)->IsMainAttribute()) ++it;
+		if ((*it)->IsMain()) ++it;
 		else { DropAttributeBinds(*it); it = m_attributes.erase(it); }
 	}
 
@@ -60,9 +60,9 @@ bool ibValueForm::WriteAttributes(ibDataNode& node) const
 	// source in the ctor, so writing it would just produce a duplicate main on copy / load.
 	ibDataNode& attrsNode = node.Child(wxT("Attributes"));
 	for (const auto& av : m_attributes) {
-		if (av->IsMainAttribute())
+		if (av->IsMain())
 			continue;
-		ibDataNode& attrNode = attrsNode.AddChild(av->GetClassType(), av->GetAttributeId());
+		ibDataNode& attrNode = attrsNode.AddChild(av->GetClassType(), av->GetId());
 		// WriteProperty returns false when the attribute is INCOMPLETE (a dynamic list with no
 		// source picked) — FAIL the whole write so a broken definition is never persisted (the
 		// form's save is refused, not silently partial).
@@ -76,8 +76,8 @@ ibMetaID ibValueForm::NextAttributeId() const
 {
 	ibMetaID nextId = 1;   // form-unique = max existing + 1
 	for (const auto& av : m_attributes)
-		if (av->GetAttributeId() >= nextId)
-			nextId = av->GetAttributeId() + 1;
+		if (av->GetId() >= nextId)
+			nextId = av->GetId() + 1;
 	return nextId;
 }
 
@@ -96,6 +96,18 @@ ibFormAttributeValue* ibValueForm::AddAttribute(const wxString& name, const ibCl
 {
 	// Name + Type are mandatory — an attribute is never empty. Make + attach in one step.
 	return AttachAttribute(MakeAttribute(name, type, value));
+}
+
+ibMetaID ibValueForm::AddAutoAttribute(const wxString& name, const ibTypeDescription& typeDesc)
+{
+	// Attribute name = the control's name, made UNIQUE among the form's attributes (a pre-existing
+	// same-named attribute gets a numeric suffix). Type = the control's default type desc (already
+	// produced by the source-type generator — checkbox Boolean, tablebox value table, else String).
+	wxString uniqueName = name;
+	for (unsigned int index = 0; GetAttribute(uniqueName) != nullptr; )
+		uniqueName = wxString::Format(wxT("%s%u"), name, ++index);
+	ibFormAttributeValue* entry = AddAttribute(uniqueName, typeDesc.GetFirstClsid(), ibValue());
+	return entry != nullptr ? entry->GetId() : ibMetaID(wxNOT_FOUND);
 }
 
 ibValuePtr<ibFormAttributeValue> ibValueForm::MakeAttribute(const wxString& name, const ibClassID& type, const ibValue& value)
@@ -158,7 +170,7 @@ ibFormAttributeValue* ibValueForm::AddMainAttribute(const wxString& name, const 
 void ibValueForm::DeleteAttribute(const wxString& name)
 {
 	for (auto it = m_attributes.begin(); it != m_attributes.end(); ++it)
-		if ((*it)->GetAttributeName() == name) {
+		if ((*it)->GetName() == name) {
 			DropAttributeBinds(*it);
 			m_attributes.erase(it);
 			InvalidateNames();
@@ -179,11 +191,11 @@ void ibValueForm::BindAttributeVariable(ibFormAttributeValue* entry)
 {
 	if (entry == nullptr)
 		return;
-	const wxString name = entry->GetAttributeName();
+	const wxString name = entry->GetName();
 	if (!name.IsEmpty())
 		BindLocalVariable(name, entry->GetBindValue());   // <name> / ThisForm.<name>
 	// The MAIN attribute additionally drives the exported DataSource (the form's source).
-	if (entry->IsMainAttribute())
+	if (entry->IsMain())
 		BindExportVariable(wxT("DataSource"), entry->GetBindValue());
 }
 
@@ -196,15 +208,15 @@ void ibValueForm::DropAttributeBinds(ibFormAttributeValue* entry)
 	// released by its dtor (SourceDecrRef); nothing else owns it, which is fine.
 	if (entry == nullptr)
 		return;
-	UnbindVariable(entry->GetAttributeName());
-	if (entry->IsMainAttribute())
+	UnbindVariable(entry->GetName());
+	if (entry->IsMain())
 		UnbindVariable(wxT("DataSource"));
 }
 
 bool ibValueForm::IsAttributeNameUnique(const wxString& name, const ibFormAttributeValue* except) const
 {
 	for (const auto& av : m_attributes)
-		if (av != except && av->GetAttributeName() == name)
+		if (av != except && av->GetName() == name)
 			return false;
 	return true;
 }
@@ -239,14 +251,14 @@ ibFormAttributeValue* ibValueForm::PasteAttribute(const ibDataNode& node)
 	attr.ReadProperty(node);
 	attr.SetMainAttribute(false);   // a paste is never the main — only one main per form
 	attr.SetAttributeId(NextAttributeId());   // fresh id so its bindings never collide
-	attr.SetAttributeName(MakeUniqueAttributeName(attr.GetAttributeName()));
+	attr.SetAttributeName(MakeUniqueAttributeName(attr.GetName()));
 	return AttachAttribute(std::move(holder));
 }
 
 ibFormAttributeValue* ibValueForm::GetAttribute(const wxString& name) const
 {
 	for (const auto& av : m_attributes)
-		if (av->GetAttributeName() == name)
+		if (av->GetName() == name)
 			return av;
 	return nullptr;
 }
@@ -261,7 +273,7 @@ ibFormAttributeValue* ibValueForm::GetAttribute(unsigned int idx) const
 ibFormAttributeValue* ibValueForm::GetMainAttribute() const
 {
 	for (const auto& av : m_attributes)
-		if (av->IsMainAttribute())
+		if (av->IsMain())
 			return av;
 	return nullptr;
 }
@@ -301,7 +313,7 @@ void ibValueForm::SetMainAttribute(ibFormAttributeValue* entry)
 ibFormAttributeValue* ibValueForm::FindAttributeById(const ibMetaID& id) const
 {
 	for (const auto& av : m_attributes)
-		if (av->GetAttributeId() == id)
+		if (av->GetId() == id)
 			return av;
 	return nullptr;
 }
@@ -320,15 +332,26 @@ bool ibValueForm::GetSourceList(ibSourceDataType kind, std::vector<ibBackendForm
 	// walks from the attribute (path[0] = its id, the gate) — see WalkPath.
 	for (const auto& av : m_attributes) {
 		auto& a = *av->m_attribute;   // friend access to the private description
-		const bool mainForTable = (kind == ibSourceDataType::ibSourceDataType_table) && a.IsMainAttribute();
-		if (mainForTable || a.GetSourceDataType() == kind)
+		bool include = (a.GetSourceDataType() == kind);
+		if (kind == ibSourceDataType::ibSourceDataType_table && !include) {
+			// A TABLE control also reaches the MAIN (any kind) AND any COMPOSITE attribute (an object /
+			// reference — NOT a scalar primitive), so the picker can DESCEND into its tabular sections.
+			// Before, only the MAIN object descended; a plain object attribute on a common form was
+			// invisible to the tablebox picker (and its section-path head wouldn't resolve).
+			const ibTypeDescription& td = a.GetTypeDesc();
+			const bool scalar = td.ContainType(ibValueTypes::TYPE_STRING) || td.ContainType(ibValueTypes::TYPE_NUMBER)
+				|| td.ContainType(ibValueTypes::TYPE_DATE) || td.ContainType(ibValueTypes::TYPE_BOOLEAN);
+			include = a.IsMain() || !scalar;
+		}
+		if (include)
 			out.push_back((ibFormAttributeValue*)av);   // the HOLDER (IS-A ibBackendFormAttributeValue)
 	}
 	return !out.empty();
 }
 
-bool ibValueForm::GetValueByAttributePath(const std::vector<ibSourceId>& path, ibValue& result) const
+bool ibValueForm::GetValueByAttributePath(const ibSourceDescription& desc, ibValue& result) const
 {
+	const std::vector<ibSourceId>& path = desc.GetPath();
 	if (path.empty())
 		return false;
 
@@ -344,8 +367,9 @@ bool ibValueForm::GetValueByAttributePath(const std::vector<ibSourceId>& path, i
 	return false;
 }
 
-bool ibValueForm::IsWritableBinding(const std::vector<ibSourceId>& path) const
+bool ibValueForm::IsWritableBinding(const ibSourceDescription& desc) const
 {
+	const std::vector<ibSourceId>& path = desc.GetPath();
 	if (path.empty())
 		return false;
 	if (ibFormAttributeValue* attr = FindAttributeById(path.front())) {
@@ -357,11 +381,12 @@ bool ibValueForm::IsWritableBinding(const std::vector<ibSourceId>& path) const
 	return false;
 }
 
-bool ibValueForm::SetValueByAttributePath(const std::vector<ibSourceId>& path, const ibValue& value)
+bool ibValueForm::SetValueByAttributePath(const ibSourceDescription& desc, const ibValue& value)
 {
-	if (!IsWritableBinding(path))
+	if (!IsWritableBinding(desc))
 		return false;   // dot-walk binding is read-only
 
+	const std::vector<ibSourceId>& path = desc.GetPath();
 	if (ibFormAttributeValue* attr = FindAttributeById(path.front())) {
 		const std::vector<ibSourceId> tail(path.begin() + 1, path.end());
 		return attr->SetValueByPath(tail, value);
@@ -590,6 +615,7 @@ bool ibFormAttributeValue::ibFormAttribute::ReadProperty(const ibDataNode& node)
 	m_attributeId = (ibMetaID)node.GetValue<s32>(wxT("AttributeId"));
 	m_isMain = node.GetValue<bool>(wxT("Main"));
 	m_propertyName->ReadNodeValue(node.GetProperty(m_propertyName->GetName()));
+	m_propertyCaption->ReadNodeValue(node.GetProperty(m_propertyCaption->GetName()));
 	m_propertyType->ReadNodeValue(node.GetProperty(m_propertyType->GetName()));
 	m_propertyFillCheck->ReadNodeValue(node.GetProperty(m_propertyFillCheck->GetName()));
 	// Pure definition — no value here. The facade (ibFormAttributeValue::ReadProperty) reads
@@ -602,6 +628,7 @@ bool ibFormAttributeValue::ibFormAttribute::WriteProperty(ibDataNode& node) cons
 	node.SetValue(wxT("AttributeId"), (s32)m_attributeId);
 	node.SetValue(wxT("Main"), m_isMain);
 	node.SetProperty(m_propertyName->GetName(), m_propertyName->GetNodeValue());
+	node.SetProperty(m_propertyCaption->GetName(), m_propertyCaption->GetNodeValue());
 	node.SetProperty(m_propertyType->GetName(), m_propertyType->GetNodeValue());
 	node.SetProperty(m_propertyFillCheck->GetName(), m_propertyFillCheck->GetNodeValue());
 

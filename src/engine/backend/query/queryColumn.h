@@ -44,17 +44,32 @@ enum ibFieldTypes {
 // source column) and, through it, of the attribute metaobject — so the source-binding dot-walk
 // (ibBackendTypeSourceFactory) returns THIS, blind to the concrete class: a metaobject attribute
 // OR a dynamic list's queryable column, both already ARE an ibBackendSourceColumn, no adapter.
-class BACKEND_API ibBackendSourceColumn
+// ibBackendAbstractColumn — the NAME / SYNONYM / COMMENT face shared by a metadata source column
+// AND a form attribute (the "связующее звено"): a control reads the caption / comment from it without
+// knowing which it is. Both ibBackendSourceColumn (metadata / query column) and the form attribute
+// (ibBackendFormAttributeValue) derive it, so ONE resolver returns either, uniformly.
+class BACKEND_API ibBackendAbstractColumn
+{
+public:
+	virtual ~ibBackendAbstractColumn() = default;
+
+	// Logical identifier — what a script / the L4 parser refers to.
+	virtual wxString GetName() const = 0;
+
+	// Display caption. Defaults to the logical name; a metaobject column / a form attribute override
+	// it with their synonym.
+	virtual wxString GetSynonym() const { return GetName(); }
+
+	// Tooltip / comment. Empty by default; a metaobject column / a form attribute override it.
+	virtual wxString GetComment() const { return wxEmptyString; }
+};
+
+class BACKEND_API ibBackendSourceColumn : public ibBackendAbstractColumn
 {
 public:
 	virtual ~ibBackendSourceColumn() = default;
 
-	// Logical column name — what a script / the L4 parser refers to.
-	virtual wxString GetName() const = 0;
-
-	// Display name (UI caption). Defaults to the logical name; a metaobject column overrides it
-	// with its synonym.
-	virtual wxString GetSynonym() const { return GetName(); }
+	// GetName / GetSynonym / GetComment come from ibBackendAbstractColumn.
 
 	// The column's L3 type — CLSIDs + number / string / date qualifiers. The single source of
 	// "what this column holds". The SAME accessor the attribute already exposes — free.

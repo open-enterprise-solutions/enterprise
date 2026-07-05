@@ -146,6 +146,79 @@ bool ibValueModelTable::GetAt(const ibValue& varKeyValue, ibValue& pvarValue)
 }
 
 //////////////////////////////////////////////////////////////////////
+//   ibValueModelTable as a form data source + property object       //
+//////////////////////////////////////////////////////////////////////
+
+#include "backend/srcDataObject.h"           // ibSourceExplorer::AppendColumn (already via valueTable.h; explicit)
+#include "backend/serialize/dataBuilder.h"   // ibDataNode — column collection round-trip
+#include "backend/typeDescription.h"         // ibTypeDescriptionMemory — column type node round-trip
+#include "backend/metadataConfiguration.h"   // ibMetaDataConfigurationBase : ibMetaData — GetActiveMetaData() base cast
+
+const ibMetaData* ibValueModelTable::GetSourceMetaData() const
+{
+	// A RAM table has no metaobject of its own; expose the active config so reference-typed columns
+	// still resolve their targets through the source explorer / on (de)serialization.
+	return ibApplicationData::GetActiveMetaData();
+}
+
+ibUniqueKey ibValueModelTable::GetGuid() const
+{
+	// Minted once in the ctor (m_guid, in-class initializer) — stable + unique per RAM-table instance.
+	return m_guid;
+}
+
+const ibSourceDataObject::ibSourceExplorer* ibValueModelTable::GetSourceExplorer() const
+{
+	// The columns come from the value-table's OWN column collection. Each column-info IS its own source-
+	// column descriptor (ibBackendSourceColumn), so vend it through the descriptor-carrying AppendColumn —
+	// the SAME path metadata / dynamic-list columns use. That descriptor (m_col) is what WalkColumns returns
+	// as the leaf, so the bound tablebox resolves the header (GetSynonym = Caption) and type LIVE, per-render.
+	m_sourceExplorer.Reset(GetObjectTypeName(), GetObjectTypeName(), wxNOT_FOUND, g_valueTableCLSID);
+	for (auto& col : m_tableColumnCollection->m_listColumnInfo) {
+		if (col == nullptr)
+			continue;
+		// The column-info IS the source-column descriptor: col (ibValuePtr) -> the column-info* (operator T*)
+		// -> its ibBackendSourceColumn base. id passed explicitly (a RAM source column has no query id of its own).
+		const ibBackendSourceColumn* descriptor = col;
+		m_sourceExplorer.AppendColumn(descriptor, col->GetColumnID());
+	}
+	return &m_sourceExplorer;
+}
+
+// The value-table exposes no editable ibProperty of its own (its config IS its columns, edited through the
+// tablebox) — nothing to recompute when a property changes.
+void ibValueModelTable::OnPropertyChanged(ibProperty* /*property*/, const wxVariant& /*oldValue*/, const wxVariant& /*newValue*/)
+{
+}
+
+bool ibValueModelTable::WriteProperty(ibDataNode& node) const
+{
+	// One child node per column; the column-info serializes ITSELF through the unified property mechanism
+	// (its own WriteProperty — Name / Caption / Type via each property's GetNodeValue, + id / width). No
+	// hand-rolled field writing / ibTypeDescriptionMemory here — the same path ibFormAttribute uses.
+	for (auto& col : m_tableColumnCollection->m_listColumnInfo) {
+		if (col == nullptr)
+			continue;
+		ibDataNode& colNode = node.AddChild(g_valueTableCLSID, col->GetColumnID());
+		col->WriteProperty(colNode);
+	}
+	return true;
+}
+
+bool ibValueModelTable::ReadProperty(const ibDataNode& node)
+{
+	// Rebuild the column collection from the serialized child nodes. Clear first so a re-read stays
+	// idempotent; add an empty column, then let it read ITSELF back through its property serialization (no
+	// rows exist yet, so AddColumn's per-row cell-fill is a no-op).
+	m_tableColumnCollection->m_listColumnInfo.clear();
+	for (const ibDataNode& colNode : node.Children()) {
+		if (m_tableColumnCollection->AddColumn(wxEmptyString, ibTypeDescription(), wxEmptyString, wxDVC_DEFAULT_WIDTH) != nullptr)
+			m_tableColumnCollection->m_listColumnInfo.back()->ReadProperty(colNode);
+	}
+	return true;
+}
+
+//////////////////////////////////////////////////////////////////////
 //               ibValueModelTableColumnCollection                        //
 //////////////////////////////////////////////////////////////////////
 
@@ -239,10 +312,53 @@ ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColumnInf
 }
 
 ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColumnInfo::ibValueModelTableColumnInfo(unsigned int colID, const wxString& colName, const ibTypeDescription& typeDescription, const wxString& caption, int width) :
-	ibValueModelColumnInfo(), m_columnID(colID), m_columnName(colName), m_columnType(typeDescription), m_columnCaption(caption), m_columnWidth(width) {
+	ibValueModelColumnInfo(), m_columnID(colID), m_columnWidth(width) {
+	// The property variants ARE the storage (no parallel members) — seed them from the ctor args.
+	m_propertyName->SetValue(colName);
+	m_propertyCaption->SetValue(caption);
+	m_propertyType->SetValue(typeDescription);
 }
 
 ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColumnInfo::~ibValueModelTableColumnInfo() {
+}
+
+const ibMetaData* ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColumnInfo::GetMetaData() const
+{
+	// The column has no metaobject of its own — expose the active configuration so a reference-typed
+	// column resolves its targets (mirror ibValueModelTable::GetSourceMetaData / ibFormAttribute).
+	return ibApplicationData::GetActiveMetaData();
+}
+
+void ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColumnInfo::OnPropertyChanged(ibProperty* /*property*/, const wxVariant& /*oldValue*/, const wxVariant& /*newValue*/)
+{
+	// Nothing to sync: the property variants ARE the storage, so an inspector edit is already the live value
+	// every reader (GetColumnType / GetTypeDesc / GetSynonym / the source explorer) returns. A TYPE change is
+	// NOT swept over the rows here — the value-table coerces each cell to the column's CURRENT type LAZILY on
+	// read (ibValueModelTable::GetValueByMetaID / GetValueByRow), so a stale-typed cell reads back retyped with
+	// no eager loop (there are usually no rows at design time anyway).
+}
+
+bool ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColumnInfo::WriteProperty(ibDataNode& node) const
+{
+	// Serialize through the UNIFIED property mechanism (each property writes itself via GetNodeValue —
+	// the same path ibFormAttribute uses, so the Type round-trips through ibPropertyType, not a hand-rolled
+	// ibTypeDescriptionMemory), plus the non-property id / width.
+	node.SetValue<s32>(wxT("id"), (s32)m_columnID);
+	node.SetValue<s32>(wxT("width"), m_columnWidth);
+	node.SetProperty(m_propertyName->GetName(), m_propertyName->GetNodeValue());
+	node.SetProperty(m_propertyCaption->GetName(), m_propertyCaption->GetNodeValue());
+	node.SetProperty(m_propertyType->GetName(), m_propertyType->GetNodeValue());
+	return ibPropertyObject::WriteProperty(node);
+}
+
+bool ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColumnInfo::ReadProperty(const ibDataNode& node)
+{
+	m_columnID = (unsigned int)node.GetValue<s32>(wxT("id"));
+	m_columnWidth = node.GetValue<s32>(wxT("width"));
+	m_propertyName->ReadNodeValue(node.GetProperty(m_propertyName->GetName()));
+	m_propertyCaption->ReadNodeValue(node.GetProperty(m_propertyCaption->GetName()));
+	m_propertyType->ReadNodeValue(node.GetProperty(m_propertyType->GetName()));
+	return ibPropertyObject::ReadProperty(node);
 }
 
 //////////////////////////////////////////////////////////////////////

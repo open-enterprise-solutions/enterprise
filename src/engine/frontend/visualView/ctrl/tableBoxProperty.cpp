@@ -29,79 +29,81 @@ void ibValueModelTableBox::OnPropertyChanged(ibProperty* property, const wxVaria
 			_("TableBox"), wxYES_NO
 		);
 
-		if (answer == wxYES) {
-
-			while (GetChildCount() != 0) {
-				g_visualHostContext->CutControl(GetChild(0), true);
-			}
-
-			// Columns come FAMILY-BLIND from the bound source's explorer — a metaobject source yields
-			// its attributes, a queryable dynamic list yields its query columns — NOT a clsid→metaobject
-			// gate (a dynamic list carries no metaobject, so the old gate refilled nothing). The source
-			// is the head attribute's live value (the gate); each column binds THROUGH the tablebox's
-			// own path: [tablebox path..., field] → "List.Field".
-			const std::vector<ibSourceId> basePath = m_propertySource->GetValueAsPath();
-			if (basePath.empty()) {
-				// TYPE-ONLY source (Source = <not selected>, only a Type is set, e.g. CatalogList.Catalog1):
-				// there is no head-holder path, so materialize the model straight from the Type and mirror
-				// its columns — the SAME set the runtime CreateColumnCollection builds (that path is
-				// designer-gated, so the designer needs this twin). Each column binds by its own metaID —
-				// a 1-hop path (== the attribute), exactly the id GetModelColumn falls back to.
-				ibValuePtr<ibValueModel> typeModel = ibTypeControlFactory::CreateAndConvertValueRef<ibValueModel>();
-				ibValueModel::ibValueModelColumnCollection* cols = typeModel != nullptr ? typeModel->GetColumnCollection() : nullptr;
-				if (cols != nullptr) {
-					for (unsigned int idx = 0; idx < cols->GetColumnCount(); idx++) {
-						ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo = cols->GetColumnInfo(idx);
-						if (colInfo == nullptr)
-							continue;
-						ibValueModelTableBoxColumn* tableBoxColumn =
-							dynamic_cast<ibValueModelTableBoxColumn*>(m_formOwner->CreateControl(wxT("TableboxColumn"), this));
-						wxASSERT(tableBoxColumn);
-						const ibTypeDescription columnType = colInfo->GetColumnType();
-						if (columnType.IsOk())
-							tableBoxColumn->SetDefaultMetaType(columnType);
-						else
-							tableBoxColumn->SetDefaultMetaType(ibValueTypes::TYPE_STRING);
-						tableBoxColumn->SetCaption(colInfo->GetColumnCaption());
-						tableBoxColumn->SetWidthColumn(colInfo->GetColumnWidth());
-						tableBoxColumn->SetSource(std::vector<ibSourceId>{ (ibSourceId)colInfo->GetColumnID() });
-						g_visualHostContext->InsertControl(tableBoxColumn, this);
-					}
-				}
-			}
-			else {
-				ibBackendFormAttributeValue* holder = FindSourceHolder(basePath.front());
-				ibSourceDataObject* source = holder != nullptr ? holder->GetSourceValue() : nullptr;
-				if (source != nullptr) {
-					const ibSourceExplorer* sourceExplorerPtr = source->GetSourceExplorer();
-					static const ibSourceExplorer s_emptyExplorer;
-					const ibSourceExplorer& sourceExplorer = sourceExplorerPtr != nullptr ? *sourceExplorerPtr : s_emptyExplorer;
-					for (unsigned int idx = 0; idx < sourceExplorer.GetHelperCount(); idx++) {
-						const ibSourceExplorer* columnPtr = sourceExplorer.GetHelper(idx);
-						if (columnPtr == nullptr)
-							continue;
-						const ibSourceExplorer& column = *columnPtr;
-						ibValueModelTableBoxColumn* tableBoxColumn =
-							dynamic_cast<ibValueModelTableBoxColumn*>(m_formOwner->CreateControl(wxT("TableboxColumn"), this));
-						wxASSERT(tableBoxColumn);
-						tableBoxColumn->SetControlName(GetControlName() + column.GetSourceName());
-						tableBoxColumn->SetCaption(column.GetSourceSynonym());
-						std::vector<ibSourceId> colPath = basePath;
-						colPath.push_back(column.GetSourceId());
-						tableBoxColumn->SetSource(colPath);
-						tableBoxColumn->SetVisibleColumn(column.IsVisible() || sourceExplorer.GetHelperCount() == 1);
-						g_visualHostContext->InsertControl(tableBoxColumn, this);
-					}
-				}
-			}
-
-			if (GetChildCount() == 0) {
-				ibValueModelTableBox::AddColumn();
-			}
-
-			g_visualHostContext->RefreshEditor();
-		}
+		if (answer == wxYES)
+			RefillFromSource();
 	}
 
 	ibValueWindow::OnPropertyChanged(property, oldValue, newValue);
+}
+
+void ibValueModelTableBox::RefillFromSource()
+{
+	// Designer twin of the runtime CreateColumnCollection (which is DesignerMode-gated): (re)build the
+	// tablebox's DEFAULT columns from its bound source explorer. ONE traversal, shared by the inspector's
+	// Source-change refill AND the drag-to-create drop.
+	while (GetChildCount() != 0)
+		g_visualHostContext->CutControl(GetChild(0), true);
+
+	// Columns come FAMILY-BLIND from the bound source's explorer — a metaobject source yields its
+	// attributes, a queryable dynamic list its query columns — NOT a clsid->metaobject gate. Each column
+	// binds THROUGH the tablebox's own path: [tablebox path..., field] -> "List.Field".
+	const std::vector<ibSourceId> basePath = m_propertySource->GetValueAsPath();
+	if (basePath.empty()) {
+		// TYPE-ONLY source (only a Type is set, e.g. CatalogList.Catalog1): materialize the model straight
+		// from the Type and mirror its columns — the SAME set the runtime CreateColumnCollection builds.
+		// Each column binds by its own metaID (a 1-hop path == the attribute).
+		ibValuePtr<ibValueModel> typeModel = ibTypeControlFactory::CreateAndConvertValueRef<ibValueModel>();
+		ibValueModel::ibValueModelColumnCollection* cols = typeModel != nullptr ? typeModel->GetColumnCollection() : nullptr;
+		if (cols != nullptr) {
+			for (unsigned int idx = 0; idx < cols->GetColumnCount(); idx++) {
+				ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo = cols->GetColumnInfo(idx);
+				if (colInfo == nullptr)
+					continue;
+				ibValueModelTableBoxColumn* tableBoxColumn =
+					dynamic_cast<ibValueModelTableBoxColumn*>(m_formOwner->CreateControl(wxT("TableboxColumn"), this));
+				wxASSERT(tableBoxColumn);
+				const ibTypeDescription columnType = colInfo->GetColumnType();
+				if (columnType.IsOk())
+					tableBoxColumn->SetDefaultMetaType(columnType);
+				else
+					tableBoxColumn->SetDefaultMetaType(ibValueTypes::TYPE_STRING);
+				tableBoxColumn->SetCaption(colInfo->GetColumnCaption());
+				tableBoxColumn->SetWidthColumn(colInfo->GetColumnWidth());
+				tableBoxColumn->SetSource(std::vector<ibSourceId>{ (ibSourceId)colInfo->GetColumnID() });
+				g_visualHostContext->InsertControl(tableBoxColumn, this);
+			}
+		}
+	}
+	else {
+		ibBackendFormAttributeValue* holder = FindSourceHolder(basePath.front());
+		ibSourceDataObject* source = holder != nullptr ? holder->GetSourceValue() : nullptr;
+		const ibSourceExplorer* explorer = source != nullptr ? source->GetSourceExplorer() : nullptr;
+		// WALK the path from the head attribute DOWN to the LEAF source node: a tabular section is a CHILD
+		// of the object's explorer (its own helpers are the columns); a list attribute IS the head. Head-
+		// only resolution filled an object's fields for a section-bound tablebox — the old bug.
+		for (size_t i = 1; i < basePath.size() && explorer != nullptr; i++)
+			explorer = explorer->FindById(basePath[i]);
+		if (explorer != nullptr) {
+			for (unsigned int idx = 0; idx < explorer->GetHelperCount(); idx++) {
+				const ibSourceExplorer* columnPtr = explorer->GetHelper(idx);
+				if (columnPtr == nullptr)
+					continue;
+				const ibSourceExplorer& column = *columnPtr;
+				ibValueModelTableBoxColumn* tableBoxColumn =
+					dynamic_cast<ibValueModelTableBoxColumn*>(m_formOwner->CreateControl(wxT("TableboxColumn"), this));
+				wxASSERT(tableBoxColumn);
+				tableBoxColumn->SetControlName(GetControlName() + column.GetSourceName());
+				tableBoxColumn->SetCaption(column.GetSourceSynonym());
+				std::vector<ibSourceId> colPath = basePath;
+				colPath.push_back(column.GetSourceId());
+				tableBoxColumn->SetSource(colPath);
+				tableBoxColumn->SetVisibleColumn(column.IsVisible() || explorer->GetHelperCount() == 1);
+				g_visualHostContext->InsertControl(tableBoxColumn, this);
+			}
+		}
+	}
+
+	// No empty-fallback column: if the bound source yields no columns the tablebox stays empty (the user adds
+	// them explicitly) — auto-adding one injected a spurious column INTO the value-table (see OnCreated).
+	g_visualHostContext->RefreshEditor();
 }

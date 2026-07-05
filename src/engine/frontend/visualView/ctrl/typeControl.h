@@ -7,6 +7,7 @@
 
 ///////////////////////////////////////////////////////////////////////////
 #include "backend/backend_type.h"
+#include "backend/sourceDescription.h"   // ibSourceDescription::GetPath (GetSourceAbstractColumn inline)
 #include "backend/compiler/value.h"
 #include "backend/metaCollection/attribute/metaAttributeObjectEnum.h"
 ///////////////////////////////////////////////////////////////////////////
@@ -51,9 +52,22 @@ public:
 	//Get data type
 	virtual ibClassID GetDataType() const;
 
-	// Bound source path — PURE: every concrete control returns its own (from its source
-	// property). A column reads its PARENT tablebox's path to prefix its column id.
-	virtual ibSourceDescription GetSourceDesc() const override = 0;
+	// The bound source's PRESENTATION (name / synonym / comment), resolved ONCE: a metadata FIELD -> its
+	// column (is-a presentation); a whole FORM ATTRIBUTE (no field column) -> the head attribute (also a
+	// presentation). Controls read GetSynonym/GetName/GetComment off it, blind to metadata vs attribute.
+	// Inline so it lives in BOTH the desktop and web builds (typeControl.cpp is desktop-only).
+	const ibBackendAbstractColumn* GetSourceAbstractColumn() const {
+		if (const ibBackendSourceColumn* column = GetSourceAttributeObject())
+			return column;
+		const ibSourceDescription& desc = GetSourceDesc();
+		return desc.IsOk() ? FindSourceHolder(desc.GetFirst()) : nullptr;   // whole-attribute → the head holder
+	}
+
+	// Designer: (re)build the control's DEFAULT child controls from its bound source explorer — a
+	// tablebox fills its columns (the runtime CreateColumnCollection is DesignerMode-gated, so the
+	// designer needs this twin). Default no-op; called after a drag-to-create drop AND by the inspector's
+	// Source-change refill — ONE source-explorer traversal point, no duplication.
+	virtual void RefillFromSource() { }
 
 	// GetSourceList is NOT implemented here — each concrete control overrides
 	// ibBackendTypeSourceFactory::GetSourceList(out) using its own GetOwnerForm()

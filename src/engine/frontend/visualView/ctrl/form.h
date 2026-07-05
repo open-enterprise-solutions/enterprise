@@ -2,6 +2,7 @@
 #define __FORM_VALUE_H__
 
 #include "frontend/visualView/ctrl/control.h"
+#include "backend/sourceDescription.h"   // ibSourceDescription — the binding-path wrapper (Get/SetValueByAttributePath)
 
 #include <memory>   // std::unique_ptr — owns the form's attribute/value registry entries
 
@@ -205,6 +206,12 @@ public:
 	// The MAIN entry (the source object lands here) — guards that no other main exists.
 	ibFormAttributeValue* AddMainAttribute(const wxString& name, const ibClassID& type, ibSourceDataObject* value);
 
+	// Provision a fresh attribute — name = `name` made UNIQUE among the form's attributes, typed from
+	// `typeDesc` (the control's default type, already produced by the source-type generator) — and return
+	// its id. The auto-source the source controls' creation helper (ibValueControl::AutoBindNewSource)
+	// binds to. wxNOT_FOUND on failure.
+	ibMetaID AddAutoAttribute(const wxString& name, const ibTypeDescription& typeDesc);
+
 	// Command-friendly split of AddAttribute (lets the visual-editor undo stack co-own the exact
 	// entry across undo/redo — the holder is a ref-counted runtime value, held by ibValuePtr like a
 	// control):
@@ -261,16 +268,16 @@ public:
 	// Filled into out; returns false (empty) when nothing is available.
 	bool GetSourceList(ibSourceDataType kind, std::vector<ibBackendFormAttributeValue*>& out) const;
 
-	// Resolve a binding path whose HEAD (path[0]) selects an attribute from the table;
+	// Resolve a binding DESCRIPTION whose HEAD (path[0]) selects an attribute from the table;
 	// the remainder dot-walks that attribute's value/source. A head that matches no
 	// attribute is a stale binding (returns false) — path[0] is always a form-local id.
-	bool GetValueByAttributePath(const std::vector<ibSourceId>& path, ibValue& result) const;
+	bool GetValueByAttributePath(const ibSourceDescription& desc, ibValue& result) const;
 
-	// Write a value through a binding path (head selects the attribute). Only a DIRECT
+	// Write a value through a binding description (head selects the attribute). Only a DIRECT
 	// field is writable — the attribute itself [attr] or head + one field [attr, field].
 	// A deeper reference dot-walk is READ-ONLY (returns false / no-op).
-	bool SetValueByAttributePath(const std::vector<ibSourceId>& path, const ibValue& value);
-	bool IsWritableBinding(const std::vector<ibSourceId>& path) const;
+	bool SetValueByAttributePath(const ibSourceDescription& desc, const ibValue& value);
+	bool IsWritableBinding(const ibSourceDescription& desc) const;
 
 	const ibValueMetaObjectGenericData* GetMetaObject() const;
 

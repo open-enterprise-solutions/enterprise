@@ -49,22 +49,19 @@ public:
 	const std::vector<ibSourceId>& GetPath() const { return m_listSource; }
 };
 
-// Serialises a source-description path as copy-aware GUIDs — NOT metaIds. Each segment's
-// metaId is resolved (through metaData) to its metaobject's GetCommonGuid(), which returns
-// the COPY-guid during a metadata copy (ibControlCopyGuard stamps every copied object with a
-// fresh m_metaCopyGuid). So a binding INSIDE a copied object serialises a reference to the
-// COPY, not the original — and on paste it resolves to the copy. A metaId would not remap on
-// copy (it points at the original), which is why the binding must go through GUIDs here. Load
-// resolves each GUID back to the live metaId for the in-memory walk path.
+// Serialises a source-description path as RAW ids — the head is a FORM-LOCAL attribute id, each deeper hop a
+// source-column id. Resolution is METADATA-AGNOSTIC: the source explorer WALKS the path (FindById per hop,
+// each hop's value yielding the next explorer), so the serializer never touches metadata — no guid, no
+// metaData param. Load takes the ids verbatim; the explorer resolves them. A legacy guid-tail blob (old
+// metadata-coupled writer) recovers only its head — re-save rewrites it raw. See the .cpp for the format.
 class BACKEND_API ibSourceDescriptionMemory {
 public:
-	static bool LoadData(class ibReaderMemory& reader, ibSourceDescription& srcDesc, const class ibMetaData* metaData);
-	static bool SaveData(class ibWriterMemory& writer, ibSourceDescription& srcDesc, const class ibMetaData* metaData);
+	static bool LoadData(class ibReaderMemory& reader, ibSourceDescription& srcDesc);
+	static bool SaveData(class ibWriterMemory& writer, ibSourceDescription& srcDesc);
 
-	// node form — kept as a Binary blob (the copy-aware GUID round-trip stays in the
-	// byte path); the byte writer is contained here, not in the property.
-	static bool ReadNode(const class ibDataValue& value, ibSourceDescription& srcDesc, const class ibMetaData* metaData);
-	static bool WriteNode(class ibDataValue& value, ibSourceDescription& srcDesc, const class ibMetaData* metaData);
+	// node form — a Binary blob of the raw id path; the byte reader / writer is contained here, not the property.
+	static bool ReadNode(const class ibDataValue& value, ibSourceDescription& srcDesc);
+	static bool WriteNode(class ibDataValue& value, ibSourceDescription& srcDesc);
 };
 
 #endif // !__SOURCE_DESCRIPTION_H__

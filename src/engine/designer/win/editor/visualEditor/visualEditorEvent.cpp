@@ -36,6 +36,10 @@ void ibVisualEditorNotebook::ibVisualEditor::NotifyEditorRefresh()
 void ibVisualEditorNotebook::ibVisualEditor::NotifyObjectCreated(ibValueFrame* obj)
 {
 	m_objectTree->OnObjectCreated(obj);
+	// A just-dropped source control auto-provisions its form attribute (ibValueControl::AutoBindNewSource),
+	// so the attribute tree must rebuild too — the object tree alone would miss the new attribute.
+	if (m_attributeTree != nullptr)
+		m_attributeTree->OnEditorRefresh();
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::NotifyObjectSelected(ibValueFrame* obj, bool force)

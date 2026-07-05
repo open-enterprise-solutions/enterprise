@@ -1,9 +1,11 @@
 #include "backend_type.h"
 #include "backend/compiler/enumUnit.h"
+#include "backend/system/value/valueTable.h"   // g_valueTableCLSID (the _table default); the primitive value clsids come via value.h
 
 //***********************************************************************
-//*                         Type factory                                * 
+//*                         Type factory                                *
 //***********************************************************************
+
 
 ibValue ibBackendTypeFactory::CreateValue() const
 {
@@ -102,20 +104,34 @@ ibValue ibBackendTypeConfigFactory::AdjustValue(const ibValue& varValue) const
 	);
 }
 
+// The one filter-kind -> default value clsid mapping. Static so both ibVariantDataAttribute::DoSetDefault-
+// MetaType and ibValueControl::AutoBindNewSource resolve the SAME default type for a given filter kind.
+ibClassID ibBackendTypeConfigFactory::GetDefaultTypeByFilter(ibSelectorDataType filterDataType)
+{
+	switch (filterDataType) {
+	case ibSelectorDataType::ibSelectorDataType_boolean:  return g_valueBooleanCLSID;
+	case ibSelectorDataType::ibSelectorDataType_resource: return g_valueNumberCLSID;
+	case ibSelectorDataType::ibSelectorDataType_table:    return g_valueTableCLSID;
+	case ibSelectorDataType::ibSelectorDataType_reference:
+	default:                                              return g_valueStringCLSID;
+	}
+}
+
 /////////////////////////////////////////////////////////////////////////////////////
 
 #include "backend/query/queryColumn.h"                      // ibBackendSourceColumn — the leaf the dot returns
 
 const ibBackendSourceColumn* ibBackendTypeSourceFactory::WalkSource(
-	const std::vector<ibSourceId>& path, bool* valid, wxString* outText) const
+	const ibSourceDescription& desc, bool* valid, wxString* outText) const
 {
 	if (valid != nullptr) *valid = false;
+	const std::vector<ibSourceId>& path = desc.GetPath();
 	if (path.empty()) return nullptr;
 
 	// Gate 1: path[0] must be one of THIS context's source attributes (form-local).
 	ibBackendFormAttributeValue* headHolder = FindSourceHolder(path[0]);
 	if (headHolder == nullptr) return nullptr;
-	if (outText != nullptr) *outText = headHolder->GetAttributeName();
+	if (outText != nullptr) *outText = headHolder->GetName();
 	// A whole-attribute binding (length 1) is valid with no column leaf.
 	if (path.size() == 1) { if (valid != nullptr) *valid = true; return nullptr; }
 
@@ -136,7 +152,7 @@ ibBackendFormAttributeValue* ibBackendTypeSourceFactory::FindSourceHolder(const 
 	std::vector<ibBackendFormAttributeValue*> holders;
 	GetSourceList(holders);
 	for (ibBackendFormAttributeValue* holder : holders)
-		if (holder != nullptr && holder->GetAttributeId() == id)
+		if (holder != nullptr && id == holder->GetId())
 			return holder;
 	return nullptr;
 }

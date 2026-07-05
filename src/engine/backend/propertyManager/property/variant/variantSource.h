@@ -64,7 +64,11 @@ public:
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	ibVariantDataAttributeSource* CloneSourceAttribute(const ibMetaID& id) const { return new ibVariantDataAttributeSource(m_ownerProperty, id); }
-	ibVariantDataAttributeSource* CloneSourceAttribute() const { return new ibVariantDataAttributeSource(*m_attributeSource); }
+	// Pull-on-get, exactly like the Type side (ibVariantDataAttribute::GetTypeDesc self-refreshes via
+	// DoRefreshTypeDesc): re-resolve the leaf type through the source explorer BEFORE cloning, so the clone
+	// carries the CURRENT type (a value-table column retyped in place keeps its leaf id). Folding the refresh
+	// in here means callers just clone — no separate GetSourceTypeDesc() priming step.
+	ibVariantDataAttributeSource* CloneSourceAttribute() const { RefreshTypeFromSource(); return new ibVariantDataAttributeSource(*m_attributeSource); }
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -91,10 +95,8 @@ public:
 	// the live type helper from the new leaf.
 	void SetSourceDesc(const ibSourceDescription& desc, bool fillTypeDesc = true) {
 		m_sourceDesc = desc;
-		if (fillTypeDesc) {
-			m_attributeSource->SetFromMetaDesc(m_sourceDesc.GetLeaf());
-			m_typeDescLeaf = m_sourceDesc.GetLeaf();
-		}
+		if (fillTypeDesc)
+			RefreshTypeFromSource();
 	}
 
 	//////////////////////////////////////////////////
@@ -162,8 +164,8 @@ public:
 	ibVariantDataSource(const ibBackendTypeSourceFactory* prop, const ibSourceDescription& desc) : wxVariantData(),
 		m_attributeSource(nullptr), m_ownerProperty(prop), m_sourceDesc(desc) {
 
-		m_attributeSource = new ibVariantDataAttributeSource(prop, m_sourceDesc.GetLeaf());
-		m_typeDescLeaf = m_sourceDesc.GetLeaf();
+		m_attributeSource = new ibVariantDataAttributeSource(prop, wxNOT_FOUND);
+		RefreshTypeFromSource();   // resolve the leaf type from the explorer (not the metadata-seeded leaf id)
 	}
 
 	ibVariantDataSource(const ibVariantDataSource& srcData) : wxVariantData(),
@@ -207,8 +209,12 @@ public:
 
 protected:
 
+	// Refresh the type helper FROM THE SOURCE via the explorer walk (metadata-agnostic; this variant holds the
+	// path, so it is correct for the control's own variant AND a picker temp/clone). Called inside the getter
+	// (GetSourceTypeDesc) + on every source set — refresh-on-read, so no notification mesh is needed.
+	void RefreshTypeFromSource() const;
+
 	ibSourceDescription m_sourceDesc;          // binding address: [first hop .. leaf], metaIds
-	mutable ibMetaID m_typeDescLeaf = wxNOT_FOUND;   // leaf the type helper is currently synced to
 	const ibBackendTypeSourceFactory* m_ownerProperty = nullptr;
 	ibVariantDataAttributeSource* m_attributeSource = nullptr;  // live type helper (derived from leaf, not serialised)
 };

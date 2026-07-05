@@ -33,6 +33,7 @@
 #include "backend/propertyManager/propertyManager.h"
 #include "backend/backend_type.h"       // ibBackendFormAttribute (backend wrapper)
 #include "backend/uniqueKey.h"
+#include "backend/stringUtils.h"         // stringUtils::GenerateSynonym (Synonym fallback, mirrors metaObject)
 
 class BACKEND_API ibSourceDataObject;
 class BACKEND_API ibDataNode;
@@ -68,7 +69,7 @@ class FRONTEND_API ibFormAttributeValue :
 		virtual ~ibFormAttribute();
 
 		virtual wxString GetClassName() const override { return ibValue::GetClassName(); }
-		virtual wxString GetObjectTypeName() const override { return GetAttributeName(); }
+		virtual wxString GetObjectTypeName() const override { return GetName(); }
 		virtual bool IsEditable() const override { return true; }
 
 		// ibBackendTypeConfigFactory = the Type-config factory the Type property's variant resolves
@@ -78,9 +79,20 @@ class FRONTEND_API ibFormAttributeValue :
 		virtual const ibMetaData* GetMetaData() const override;
 
 		// the description's OWN name / id / main — the holder's facade forwards to these:
-		wxString GetAttributeName() const { return m_propertyName->GetValueAsString(); }
-		bool     IsMainAttribute() const { return m_isMain; }
-		ibMetaID GetAttributeId() const { return m_attributeId; }
+		wxString GetName() const { return m_propertyName->GetValueAsString(); }
+		// The inspector field is labelled "Caption", but the abstract-column base returns it as GetSynonym —
+		// SAME Name / Synonym / Comment trio as ibValueMetaObject, so a control reads the header uniformly.
+		// Caption is a TRANSLATE string (read the RESOLVED current-language text, not the raw loc container);
+		// empty -> derive from the Name, exactly as ibValueMetaObject::GetSynonym does.
+		wxString GetSynonym() const {
+			return !m_propertyCaption->IsEmptyProperty() ?
+				m_propertyCaption->GetValueAsTranslateString() : stringUtils::GenerateSynonym(GetName());
+		}
+		// A form attribute carries NO comment — the abstract-column presentation returns empty (a control's
+		// tooltip comes from the field synonym, not a per-attribute comment). Its header IS the Synonym.
+		wxString GetComment() const { return wxEmptyString; }
+		bool     IsMain() const { return m_isMain; }
+		ibMetaID GetId() const { return m_attributeId; }
 
 		// Holder-only (NOT on the interface) — reached through friendship from the holder / form:
 		ibSourceDataType GetSourceDataType() const; // table (List type) / attribute
@@ -105,6 +117,7 @@ class FRONTEND_API ibFormAttributeValue :
 
 		ibPropertyCategory* m_categoryCommon = ibPropertyObject::CreatePropertyCategory(wxT("Common"), _("General"));
 		ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_categoryCommon, wxT("Name"), _("Name"), _("Attribute name"), wxT(""));
+		ibPropertyTString* m_propertyCaption = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryCommon, wxT("Caption"), _("Caption"), _("Attribute caption (form label)"), wxT(""));
 		ibPropertyType* m_propertyType = ibPropertyObject::CreateProperty<ibPropertyType>(m_categoryCommon, wxT("Type"), _("Type"), ibValueTypes::TYPE_STRING);
 		ibPropertyList* m_propertyFillCheck = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryCommon, wxT("FillCheck"), _("Fill check"), &ibFormAttribute::FillFillCheck, 0);
 	};
@@ -140,9 +153,11 @@ public:
 
 	// ibBackendFormAttributeValue FAÇADE — outside code reads name / id / type through the HOLDER;
 	// the concrete description (ibFormAttribute) is never exposed. The holder forwards internally.
-	wxString GetAttributeName() const override { return m_attribute->GetAttributeName(); }
-	ibMetaID GetAttributeId() const override { return m_attribute->GetAttributeId(); }
-	bool     IsMainAttribute() const override { return m_attribute->IsMainAttribute(); }
+	wxString GetName() const override { return m_attribute->GetName(); }
+	wxString GetSynonym() const override { return m_attribute->GetSynonym(); }
+	wxString GetComment() const override { return m_attribute->GetComment(); }
+	ibMetaID GetId() const override { return m_attribute->GetId(); }
+	bool     IsMain() const override { return m_attribute->IsMain(); }
 	const ibTypeDescription& GetTypeDesc() const override { return m_attribute->GetTypeDesc(); }
 
 	// The value this entry manages — kept in sync with the attribute's Type on every get/set

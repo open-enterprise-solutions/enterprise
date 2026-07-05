@@ -83,9 +83,18 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::AddChildr
 				pos = parent_obj->GetChildPosition(obj);
 			}
 
-			// insert tree item to proper position
-			if (pos > 0) {
-				new_parent = m_tcObjects->InsertItem(parent, pos, wxT(""), wxNOT_FOUND, wxNOT_FOUND, item_data);
+			// The parent tree node may carry a leading STATIC sub-node before the object children: a
+			// "Command interface" node is prepended when the parent HasCommandBar (added just below). It
+			// occupies tree slot 0, so every model child sits one slot lower than GetChildPosition() (which
+			// counts only m_children). Offset by it — otherwise the pos-0 child fell into the AppendItem
+			// branch and landed LAST, behind its siblings, in a command-bar container (a dropped tablebox's
+			// columns showed as Column1, Column2, Column instead of Column, Column1, Column2).
+			const unsigned int lead = (parent_obj != nullptr && parent_obj->HasCommandBar()) ? 1u : 0u;
+			const unsigned int treePos = pos + lead;
+
+			// insert tree item to proper position (append once we are past the existing children)
+			if (treePos < m_tcObjects->GetChildrenCount(parent, false)) {
+				new_parent = m_tcObjects->InsertItem(parent, treePos, wxT(""), wxNOT_FOUND, wxNOT_FOUND, item_data);
 			}
 			else {
 				new_parent = m_tcObjects->AppendItem(parent, wxT(""), wxNOT_FOUND, wxNOT_FOUND, item_data);

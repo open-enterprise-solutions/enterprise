@@ -4,9 +4,8 @@
 #include <vector>
 
 #include "backend/typeDescription.h"
-
-struct ibSourceDescription;   // control's bound source path (GetSourceDesc)
-class BACKEND_API ibBackendSourceColumn;   // queryColumn.h — neutral leaf column the dot returns
+#include "backend/query/queryColumn.h"     // ibBackendAbstractColumn (name/synonym/comment) + ibBackendSourceColumn
+#include "backend/sourceDescription.h"     // ibSourceDescription — control's bound source path (GetSourceDesc / SetDefaultSourceType)
 
 //////////////////////////////////////////////////////////////
 
@@ -76,6 +75,11 @@ public:
 		return ibSelectorDataType::ibSelectorDataType_reference;
 	}
 
+	// The default value type (clsid) for a filter kind: _boolean -> Boolean, _resource -> Number,
+	// _table -> value-table, _reference / else -> String. Static, keyed on the kind — the ONE mapping both
+	// ibVariantDataAttribute::DoSetDefaultMetaType and ibValueControl::AutoBindNewSource use, so they cannot drift.
+	static ibClassID GetDefaultTypeByFilter(ibSelectorDataType filterDataType);
+
 	//Create value by selected type
 	virtual ibValue CreateValue() const;
 	virtual ibValue* CreateValueRef() const;
@@ -118,17 +122,21 @@ enum ibSourceDataType {
 // picker reads the columns through GetSourceValue()->GetSourceExplorer(), never the concrete
 // value type. The source is produced by the holder (it materialises the value from the
 // attribute's Type), so the attribute itself stays value-free.
-class BACKEND_API ibBackendFormAttributeValue {
+class BACKEND_API ibBackendFormAttributeValue : public ibBackendAbstractColumn {
 public:
 	virtual ~ibBackendFormAttributeValue() = default;
 	// FAÇADE — the holder answers for its (private, internal) attribute directly; the concrete
 	// description is NEVER handed out. Outside code reads name / id / type / source through here.
-	
-	virtual wxString GetAttributeName() const = 0;
-	virtual ibMetaID GetAttributeId() const = 0;
-	
-	virtual bool IsMainAttribute() const = 0;
-	
+
+	// ibBackendAbstractColumn — the attribute answers Name / Synonym / Comment like a metadata
+	// column, so ONE resolver returns either. The class IS an attribute, so the accessors carry no
+	// "Attribute" noise: GetName / GetId / IsMain. GetName IS the attribute's name (the abstract
+	// column's); GetSynonym / GetComment are overridden by the concrete holder from its properties.
+	virtual wxString GetName() const override = 0;
+	virtual ibMetaID GetId() const = 0;
+
+	virtual bool IsMain() const = 0;
+
 	virtual const ibTypeDescription& GetTypeDesc() const = 0;
 	virtual class ibSourceDataObject* GetSourceValue() const = 0;
 };
@@ -146,24 +154,31 @@ public:
 	//Get source object
 	virtual class ibSourceObject* GetSourceObject() const = 0;
 
-	// This control's OWN bound source path (head attribute id + deeper hops). A column
-	// reads its PARENT table's path through this to compose its own (parent path + column
-	// id). Pure — every source factory defines its own path (controls do so via the
-	// control base / their source property).
-	virtual ibSourceDescription GetSourceDesc() const = 0;
+	// This control's OWN bound source path (head attribute id + deeper hops). A column reads its PARENT
+	// table's path through this to compose its own (parent path + column id). Pure MUTABLE ref — the getter
+	// AND (via the SetDefaultSourceType / ClearSourceType helpers below) the setter, exactly like GetTypeDesc.
+	virtual ibSourceDescription& GetSourceDesc() const = 0;
+
+	// Source-path setter family — the twin of ibBackendTypeFactory's SetDefaultMetaType / ClearMetaType over
+	// GetTypeDesc: bind THROUGH the mutable getter. Overloads for one hop or a ready DESCRIPTION (the wrapper
+	// carries the whole path). Non-virtual — shared via each control's GetSourceDesc.
+	void SetDefaultSourceType(const ibSourceId& id) { GetSourceDesc() = ibSourceDescription(id); }
+	void SetDefaultSourceType(const ibSourceDescription& desc) { GetSourceDesc() = desc; }
+
+	void ClearSourceType() { GetSourceDesc() = ibSourceDescription(); }
 
 	// Available source HOLDERS of the owning context (default: none — filled via the out-param).
 	// Each holder pairs the attribute (definition) with its value/source, so the picker reads
 	// columns through GetSourceValue()->GetSourceExplorer() without the concrete value type.
 	virtual bool GetSourceList(std::vector<ibBackendFormAttributeValue*>& out) const { return false; }
 
-	// The "dot": feed a source-id PATH, get back the leaf COLUMN. path[0] gates to one of THIS
-	// context's source attributes (GetSourceList); deeper hops are resolved as its fields. The
-	// result is the neutral ibBackendSourceColumn (a metaobject attribute OR a queryable column),
-	// so the caller never sees the concrete class. Null = a whole-attribute binding (length 1) or
-	// a BROKEN path (a hop no longer resolves). `valid`/`outText` (optional) report resolvability
-	// and the dotted display "Attr.Field.Sub".
-	const ibBackendSourceColumn* WalkSource(const std::vector<ibSourceId>& path,
+	// The "dot": feed a source DESCRIPTION (the binding path wrapper), get back the leaf COLUMN. Its head
+	// (path[0]) gates to one of THIS context's source attributes (GetSourceList); deeper hops resolve as its
+	// fields. The result is the neutral ibBackendSourceColumn (a metaobject attribute OR a queryable column),
+	// so the caller never sees the concrete class. Null = a whole-attribute binding (length 1) or a BROKEN
+	// path (a hop no longer resolves). `valid`/`outText` (optional) report resolvability and the dotted
+	// display "Attr.Field.Sub". Takes the wrapper (not a bare vector) — resolution is source-explorer-driven.
+	const ibBackendSourceColumn* WalkSource(const ibSourceDescription& desc,
 		bool* valid = nullptr, wxString* outText = nullptr) const;
 
 	// The source HOLDER whose attribute id matches — the ONE lookup shared by the dot-walk and the

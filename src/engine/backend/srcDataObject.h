@@ -115,6 +115,18 @@ public:
 			m_arraySource.back().m_sourceInfo.m_owner = m_sourceInfo.m_owner;
 		}
 
+		// Append a COLUMN from an ABSTRACT source-column descriptor + its id. Unlike the ibBackendQueryColumn
+		// overload (a DB / queryable column that carries its own GetColumnId), a plain source column (e.g. a
+		// RAM value-table column) has no query identity, so the id is passed explicitly. The descriptor is
+		// KEPT (m_col) so WalkColumns returns it as the leaf — the header / type resolve through it.
+		void AppendColumn(const ibBackendSourceColumn* col, const ibMetaID& id, bool enabled = true, bool visible = true) {
+			if (col == nullptr || !col->IsAllowed()) return;
+			m_arraySource.emplace_back(ibSourceExplorer{ col->GetName(), col->GetSynonym(), id,
+				col->GetTypeDesc(), /*tableSection*/false, /*select*/true, enabled, visible });
+			m_arraySource.back().m_sourceInfo.m_owner = m_sourceInfo.m_owner;
+			m_arraySource.back().m_sourceInfo.m_col = col;
+		}
+
 		// Append a TABLE-SECTION node (tableSection = true). Returns a reference so the caller adds the
 		// section's own columns to it via AppendColumn (the form builder reads them as a sub-tablebox).
 		ibSourceExplorer& AppendTable(const wxString& name, const wxString& synonym, const ibMetaID& id,

@@ -81,6 +81,9 @@ class ibValueModelTableBox : public ibValueWindowComposite,
 	void SetSource(const ibMetaID& id) { m_propertySource->SetValue(id); ibValueModelTableBox::RefreshModel(true); }
 	// Full binding path [headAttrId, tableSection, ...] — the resolve walks the attribute.
 	void SetSource(const std::vector<ibSourceId>& path) { m_propertySource->SetValue(ibSourceDescription(path)); ibValueModelTableBox::RefreshModel(true); }
+	// Designer: rebuild the DEFAULT columns from the bound source explorer (walks the path to the leaf
+	// section / list). Shared by the drag-to-create drop and the inspector's Source-change refill.
+	void RefillFromSource() override;
 	ibMetaID GetSource() const { return m_propertySource->GetValueAsSource(); }
 	// This tablebox's own bound path ([headAttr, tableSection] or [headAttr]) — a child column's
 	// path is this prefix + its own field id(s); the row-relative tail is what the resolve walks.
@@ -93,17 +96,22 @@ class ibValueModelTableBox : public ibValueWindowComposite,
 	ibValueModelTableBox();
 	virtual ~ibValueModelTableBox() {}
 
-	//Get source attribute  
+	//Get source attribute
 	virtual const class ibBackendSourceColumn* GetSourceAttributeObject() const { return m_propertySource->GetSourceAttributeObject(); }
+	// Unbound (no source picked) -> the whole composite (chrome + inner) is not rendered
+	// (ibValueWindowComposite::UpdateWithLayers gate). Ask the PROPERTY (IsEmptyProperty), NOT
+	// GetSourceDesc — the latter walks the source and can be broken; the property flag is cheap and safe.
+	virtual bool IsSourceMissing() const override { return m_propertySource->IsEmptyProperty(); }
 	virtual ibSelectorDataType GetFilterDataType() const { return ibSelectorDataType::ibSelectorDataType_table; }
 	virtual ibSourceDataType GetFilterSourceDataType() const { return ibSourceDataType::ibSourceDataType_table; }
 
 	//Get source object
 	virtual ibSourceObject* GetSourceObject() const;
 
-	// This tablebox's bound path ([headAttr, tableSection] or [headAttr] for a list) —
-	// a child column composes its own path as THIS path + its column id.
-	virtual ibSourceDescription GetSourceDesc() const override { return m_propertySource->GetValueAsSourceDesc(); }
+	// This tablebox's bound path ([headAttr, tableSection] or [headAttr] for a list) — MUTABLE ref (like
+	// GetTypeDesc): read it, or assign to bind (GetSourceDesc() = desc). A child column composes its own
+	// path as THIS path + its column id.
+	virtual ibSourceDescription& GetSourceDesc() const override { return m_propertySource->GetValueAsSourceDesc(); }
 
 #pragma region _source_data_
 
@@ -421,10 +429,11 @@ public:
 	//Get source object
 	virtual ibSourceObject* GetSourceObject() const { return GetOwner(); }
 
-	// Own bound source path ([headAttr, table, column]) — its leaf is this column.
-	virtual ibSourceDescription GetSourceDesc() const override { return m_propertySource->GetValueAsSourceDesc(); }
+	// Own bound source path ([headAttr, table, column]) — its leaf is this column. MUTABLE ref (like
+	// GetTypeDesc): read it, or assign to bind (GetSourceDesc() = desc). No separate setter.
+	virtual ibSourceDescription& GetSourceDesc() const override { return m_propertySource->GetValueAsSourceDesc(); }
 
-	//Get source attribute  
+	//Get source attribute
 	virtual const class ibBackendSourceColumn* GetSourceAttributeObject() const { return m_propertySource->GetSourceAttributeObject(); }
 	virtual ibSelectorDataType GetFilterDataType() const { return ibSelectorDataType::ibSelectorDataType_reference; }
 	virtual ibSourceDataType GetFilterSourceDataType() const { return ibSourceDataType::ibSourceDataType_tableColumn; }
