@@ -55,8 +55,6 @@ public:
 	virtual ibValue* GetImplValueRef() const = 0;
 };
 
-constexpr ibClassID g_valueUndefinedCLSID = primitive_to_clsid("VL_UNDF");
-
 constexpr ibClassID g_valueBooleanCLSID = primitive_to_clsid("VL_BOOL");
 constexpr ibClassID g_valueNumberCLSID = primitive_to_clsid("VL_NUMB");
 constexpr ibClassID g_valueDateCLSID = primitive_to_clsid("VL_DATE");

@@ -12,7 +12,7 @@
 #include "backend/system/value/valueType.h"
 
 #include "backend/actionInfo.h"
-#include "backend/srcObject.h"
+#include "backend/tabularDataObject.h"   // ibTabularDataObject — ibValueModel IS one (the table hop gate)
 
 // L5-1 declarative composer — held BY VALUE (mutable ibDataDBComposer m_composer). The cycle that used to
 // force a forward-decl + unique_ptr (dataComposer.h → queryLowering.h → queryable.h → tableInfo.h) is
@@ -68,9 +68,9 @@ protected:
 	ibVariantDataValue() : wxVariantData() {}
 };
 
-//Common entity for tables, list, table trees 
+//Common entity for tables, list, table trees
 class BACKEND_API ibValueModel : public ibValueDynamicMembers,
-	public ibActionDataObject, public ibTabularObject {
+	public ibActionDataObject, public ibTabularDataObject {
 	public:
 
 	// The table gate (see ibValue::IsTableValue): every model IS a tabular source. Declared
@@ -444,6 +444,18 @@ public:
 			return GetOwnerModel()->GetValueByMetaID(m_lineItem, id, pvarMetaVal);
 		}
 
+		//set hop/get hop — the row's SCALAR hop gate. A table cell reached mid dot-walk hops THROUGH the line:
+		//the line already pins the row, so it re-expresses the scalar {id,type} hop as the owner model's ROW
+		//hop (m_lineItem). Twin/composite handling stays on the model side. Mirrors Get/SetValueByMetaID above.
+		virtual bool SetValueBySourceHop(const ibSourceHop& hop, const ibValue& value) {
+			if (!IsLineAttached()) return false;
+			return GetOwnerModel()->SetValueBySourceHop(m_lineItem, hop, value);
+		}
+
+		virtual bool GetValueBySourceHop(const ibSourceHop& hop, ibValue& pvarMetaVal) const {
+			return GetOwnerModel()->GetValueBySourceHop(m_lineItem, hop, pvarMetaVal);
+		}
+
 		//operator '=='
 		virtual bool CompareValueEQ(const ibValue& cParam) const override {
 			ibValueModelReturnLine* tableReturnLine = nullptr;
@@ -714,6 +726,12 @@ public:
 
 	virtual bool SetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, const ibValue& varMetaVal) = 0;
 	virtual bool GetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, ibValue& cVa) const = 0;
+
+	// THE table hop gate (ibTabularDataObject override) — a DIRECT translation: read the row cell by the hop's id.
+	// It only GETS the value; it does NOT hop. The transition tabular-object -> source-object (and the walk on)
+	// lives in GetValueByPath -> the source's own ResolvePath. Mirrors the scalar objectList gate.
+	virtual bool GetValueBySourceHop(const ibDataViewItem& item, const ibSourceHop& hop, ibValue& out) const override { return GetValueByMetaID(item, hop.m_id, out); }
+	virtual bool SetValueBySourceHop(const ibDataViewItem& item, const ibSourceHop& hop, const ibValue& value) override { return SetValueByMetaID(item, hop.m_id, value); }
 
 	// Open the List-Settings window (Filter / Sort / Group) for THIS model via the provider bridge.
 	// Edits GetListSettings() in place. (The legacy ShowFilter()/ibFilterRow dialog is gone — filter is L5.)

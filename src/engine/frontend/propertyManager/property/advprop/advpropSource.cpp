@@ -126,12 +126,12 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 			const wxString m_nameProp;
 			const ibSourceId m_id;
 			const bool m_tableSection;
-			const std::vector<ibSourceId> m_prefixPath;         // ancestor sourceId chain (empty = top level)
+			const std::vector<ibSourceHop> m_prefixPath;        // ancestor hop chain (id + pinned type; empty = top level)
 			const std::vector<ibMetaID> m_refTypes;             // referenced TARGET type metaIDs (composite) => lazily expand via an empty reference-as-source
 			bool m_loaded = false;                              // referenced children already built?
 		public:
 			ibTreeItemDataSource(const wxString& nameProp, const ibSourceId& id, bool tableSection,
-				std::vector<ibSourceId> prefixPath = {},
+				std::vector<ibSourceHop> prefixPath = {},
 				std::vector<ibMetaID> refTypes = {})
 				: wxTreeItemData(), m_nameProp(nameProp), m_id(id), m_tableSection(tableSection),
 				m_prefixPath(std::move(prefixPath)), m_refTypes(std::move(refTypes)) {};
@@ -139,23 +139,25 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 			const wxString& GetPropName() const { return m_nameProp; }
 			const ibSourceId& GetID() const { return m_id; }
 			const bool IsTableSection() const { return m_tableSection; }
-			const std::vector<ibSourceId>& GetPrefixPath() const { return m_prefixPath; }
+			const std::vector<ibSourceHop>& GetPrefixPath() const { return m_prefixPath; }
 			const std::vector<ibMetaID>& GetRefTypes() const { return m_refTypes; }
 			bool HasRef() const { return !m_refTypes.empty(); }
 			bool IsLoaded() const { return m_loaded; }
 			void SetLoaded() { m_loaded = true; }
 
-			// A node's children inherit its full chain: ancestor prefix + this node's own id.
-			std::vector<ibSourceId> ChildPrefix() const {
-				std::vector<ibSourceId> child = m_prefixPath;
-				child.push_back(m_id);
+			// A node's children inherit its full chain: ancestor prefix + this node's own hop, TYPED. `hopType`
+			// PINS a reference to the target branch descended into (undefined for a plain container hop).
+			std::vector<ibSourceHop> ChildPrefix(const ibClassID& hopType) const {
+				std::vector<ibSourceHop> child = m_prefixPath;
+				child.push_back({ m_id, hopType });
 				return child;
 			}
 
 			// The whole binding address for this node: ancestor prefix + this node (leaf).
 			ibSourceDescription GetSourceDesc() const {
-				ibSourceDescription desc(m_prefixPath);
-				desc.AppendSource(m_id);
+				ibSourceDescription desc;
+				for (const ibSourceHop& hop : m_prefixPath) desc.AppendSource(hop.m_id, hop.m_type);
+				desc.AppendSource(m_id);   // leaf column — a scalar imposes no type
 				return desc;
 			}
 		};
@@ -171,7 +173,7 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 			// ONE clsid -> target resolution, shared with the structure dot-walk: an EMPTY reference of each
 			// target (reference-as-source) vends its explorer on expand. Lives in backend so the picker and
 			// WalkColumns can't drift apart.
-			return ibSourceDataObject::GetReferenceTargets(clsids, metaData);
+			return ibValueReferenceDataObject::ConvertToMetaIds(clsids, metaData);   // the static lives on the reference now
 		}
 
 		// Lazy dot-expansion: drop the dummy [+], then append the referenced TYPE's columns via the HOP --
@@ -183,9 +185,12 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 				return;
 			data->SetLoaded();
 			tc->DeleteChildren(node);   // drop the dummy
-			const std::vector<ibSourceId> childPrefix = data->ChildPrefix();
 			const bool multi = data->GetRefTypes().size() > 1;   // composite: disambiguate fields by target name
 			for (const ibMetaID& refType : data->GetRefTypes()) {
+				// PIN this reference hop to the target we descend into — the child fields carry it, so a later
+				// walk coerces the composite reference to THIS branch instead of guessing. Recorded ALWAYS (even
+				// single-target): the reference could be widened to composite later without re-picking.
+				const std::vector<ibSourceHop> childPrefix = data->ChildPrefix(reference_to_clsid(refType));
 				ibValue refValue = ibValueReferenceDataObject::Create(metaData, refType);   // empty typed reference (ref-counted)
 				ibSourceDataObject* refSource = nullptr;
 				refValue.ConvertToValue(refSource);
@@ -204,7 +209,7 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 		// binds a scalar/reference field, not a nested tabular section. Shared by every root of the
 		// table-column picker (the bound table AND each header object above it).
 		static void AppendExplorerColumns(wxTreeCtrl* tc, const wxTreeItemId& parent, const ibSourceExplorer& explorer,
-			const std::vector<ibSourceId>& prefix, const ibMetaData* metaData, const wxString& suffix = wxEmptyString) {
+			const std::vector<ibSourceHop>& prefix, const ibMetaData* metaData, const wxString& suffix = wxEmptyString) {
 			for (unsigned int i = 0; i < explorer.GetHelperCount(); ++i) {
 				const ibSourceExplorer* col = explorer.GetHelper(i);
 				if (col->IsTableSection())
@@ -326,7 +331,7 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 			wxTreeItemId rootItem;   // hoisted: re-open positioning (below) walks the saved path from it
 			for (const auto& entry : entries) {
 				const ibSourceId headAttrId = entry.head;
-				const std::vector<ibSourceId> basePrefix{ headAttrId };   // every hop under this attribute leads with its id
+				const std::vector<ibSourceHop> basePrefix{ { headAttrId } };   // every hop under this attribute leads with its id (type undefined)
 				const wxString rootLabel = entry.name + wxT(" (") + MakeTypeString(metaData, entry.holder->GetTypeDesc()) + wxT(")");
 
 				// The attribute's TYPE metaobject — where its fields live. Null for a PRIMITIVE
@@ -410,12 +415,12 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 			// each reference node (programmatic Expand fires the lazy build above) and
 			// selecting the leaf — the user lands on it. A length-1 path lands on a top field.
 			if (srcData != nullptr && hiddenRoot.IsOk()) {
-				const std::vector<ibSourceId>& chain = srcData->GetSourceDesc().GetPath();
+				const std::vector<ibSourceHop>& chain = srcData->GetSourceDesc().GetPath();
 				// Walk from the hidden root: chain[0] (head attribute id) selects the
 				// source node, the rest descends into its fields.
 				wxTreeItemId node = hiddenRoot;
 				for (size_t i = 0; i < chain.size(); ++i) {
-					wxTreeItemId child = FindChildBySourceId(tc, node, chain[i]);
+					wxTreeItemId child = FindChildBySourceId(tc, node, chain[i].m_id);
 					if (!child.IsOk())
 						break;
 					if (i + 1 < chain.size()) {
@@ -512,7 +517,7 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 			// HIDE_ROOT: a hidden root holds one TOP node per source — the bound table AND each header
 			// object above it (Mode 2). A tree has a single real root, so sources are its children.
 			const wxTreeItemId hiddenRoot = tc->AddRoot(wxEmptyString);
-			std::vector<ibSourceId> parentPath;     // the tablebox's own bound path [head, table]
+			std::vector<ibSourceHop> parentPath;    // the tablebox's own bound path [head, table]
 			if (typeCtor != nullptr && typeCtor->IsTableValue()) {
 				// GetSourceList vends (per #3) the current table AND the form's object attributes: the
 				// BOUND table (its columns, row-relative) PLUS the HEADER object(s) above it (their
@@ -522,8 +527,8 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 				std::vector<ibBackendFormAttributeValue*> holders;
 				typeFactory->GetSourceList(holders);
 
-				parentPath = parentFactory != nullptr ? parentFactory->GetSourceDesc().GetPath() : std::vector<ibSourceId>{};
-				const ibSourceId boundHead = !parentPath.empty() ? parentPath.front() : wxNOT_FOUND;
+				parentPath = parentFactory != nullptr ? parentFactory->GetSourceDesc().GetPath() : std::vector<ibSourceHop>{};
+				const ibSourceId boundHead = parentFactory != nullptr ? parentFactory->GetSourceDesc().GetFirst() : wxNOT_FOUND;
 
 					// The BOUND table the column lives in may be a NESTED tabular section (parentPath =
 					// {head, ..., section}) — never a top-level form attribute, so it is absent from `holders`.
@@ -531,11 +536,11 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 					// (the row-relative fields this picker is FOR). Top-level list/section tables (size 1) are
 					// rooted by the loop below via boundHead.
 					if (parentPath.size() >= 2) {
-						ibBackendFormAttributeValue* headHolder = typeFactory->FindSourceHolder(parentPath.front());
+						ibBackendFormAttributeValue* headHolder = typeFactory->FindSourceHolder(boundHead);
 						ibSourceDataObject* headSrc = headHolder != nullptr ? headHolder->GetSourceValue() : nullptr;
 						const ibSourceExplorer* boundNode = headSrc != nullptr ? headSrc->GetSourceExplorer() : nullptr;
 						for (size_t i = 1; i < parentPath.size() && boundNode != nullptr; ++i)
-							boundNode = boundNode->FindById(parentPath[i]);
+							boundNode = boundNode->FindById(parentPath[i].m_id);
 						if (boundNode != nullptr) {
 							ibTreeItemDataSource* tableData = new ibTreeItemDataSource(boundNode->GetSourceSynonym(), wxNOT_FOUND, true);
 							wxTreeItemId tableItem = tc->AppendItem(hiddenRoot, boundNode->GetSourceSynonym(), icon_table, icon_table, tableData);
@@ -557,8 +562,14 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 						seenRoots.push_back(holder->GetId());
 
 						ibSourceDataObject* source = holder->GetSourceValue();
-					if (source == nullptr)
-						continue;   // a primitive form attribute materialises no source — nothing to pick under it
+					if (source == nullptr) {
+						// A PRIMITIVE form attribute (string / number / …) materialises no source, so it has no
+						// sub-fields — but it IS selectable as a Mode-2 column: its whole value is constant per row.
+						// Add it as a LEAF (its own id, no children) — the degenerate header-object case.
+						ibTreeItemDataSource* leafData = new ibTreeItemDataSource(holder->GetName(), holder->GetId(), false);
+						tc->AppendItem(hiddenRoot, holder->GetName(), icon_attribute, icon_attribute, leafData);
+						continue;
+					}
 					const ibSourceExplorer* explorerPtr = source->GetSourceExplorer();
 						if (explorerPtr == nullptr)
 							continue;
@@ -580,7 +591,7 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 						// resolves it through the form. The object node itself is not a column (id NOT_FOUND).
 						ibTreeItemDataSource* headData = new ibTreeItemDataSource(holder->GetName(), wxNOT_FOUND, false);
 						wxTreeItemId headItem = tc->AppendItem(hiddenRoot, holder->GetName(), icon_attribute, icon_attribute, headData);
-						AppendExplorerColumns(tc, headItem, explorer, std::vector<ibSourceId>{ holder->GetId() }, metaData);
+						AppendExplorerColumns(tc, headItem, explorer, std::vector<ibSourceHop>{ { holder->GetId() } }, metaData);
 					}
 				}
 
@@ -600,25 +611,36 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 			// tail start = that root's children-prefix length (read off a child — the bound table's bound
 			// path, or a header object's single attribute id), so both root kinds re-open uniformly.
 			if (srcData != nullptr && hiddenRoot.IsOk()) {
-				const std::vector<ibSourceId> chain = srcData->GetSourceDesc().GetPath();
+				const std::vector<ibSourceHop> chain = srcData->GetSourceDesc().GetPath();
 				wxTreeItemIdValue rootCookie;
 				for (wxTreeItemId top = tc->GetFirstChild(hiddenRoot, rootCookie); top.IsOk(); top = tc->GetNextChild(hiddenRoot, rootCookie)) {
 					wxTreeItemIdValue childCookie;
 					wxTreeItemId firstChild = tc->GetFirstChild(top, childCookie);
-					ibTreeItemDataSource* fcData = firstChild.IsOk() ? dynamic_cast<ibTreeItemDataSource*>(tc->GetItemData(firstChild)) : nullptr;
+					// A top-level LEAF (a primitive attribute — no children): the node ITSELF is the source, its
+						// own path is [id]. Select it when the saved chain matches (container roots descend below).
+						if (!firstChild.IsOk()) {
+							ibTreeItemDataSource* topData = dynamic_cast<ibTreeItemDataSource*>(tc->GetItemData(top));
+							if (topData != nullptr && chain.size() == 1 && chain[0].m_id == topData->GetID()) {
+								tc->SelectItem(top);
+								tc->EnsureVisible(top);
+								break;
+							}
+							continue;
+						}
+						ibTreeItemDataSource* fcData = dynamic_cast<ibTreeItemDataSource*>(tc->GetItemData(firstChild));
 					if (fcData == nullptr)
 						continue;
-					const std::vector<ibSourceId>& rootPrefix = fcData->GetPrefixPath();   // path TO this root's columns
+					const std::vector<ibSourceHop>& rootPrefix = fcData->GetPrefixPath();   // path TO this root's columns
 					if (chain.size() <= rootPrefix.size())
 						continue;
 					bool prefixMatch = true;
 					for (size_t k = 0; k < rootPrefix.size(); ++k)
-						if (chain[k] != rootPrefix[k]) { prefixMatch = false; break; }
+						if (chain[k].m_id != rootPrefix[k].m_id) { prefixMatch = false; break; }
 					if (!prefixMatch)
 						continue;
 					wxTreeItemId node = top;
 					for (size_t i = rootPrefix.size(); i < chain.size(); ++i) {
-						wxTreeItemId child = FindChildBySourceId(tc, node, chain[i]);
+						wxTreeItemId child = FindChildBySourceId(tc, node, chain[i].m_id);
 						if (!child.IsOk())
 							break;
 						if (i + 1 < chain.size()) { tc->Expand(child); node = child; }

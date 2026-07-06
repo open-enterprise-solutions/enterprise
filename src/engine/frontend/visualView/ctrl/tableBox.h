@@ -87,7 +87,7 @@ class ibValueModelTableBox : public ibValueWindowComposite,
 	ibMetaID GetSource() const { return m_propertySource->GetValueAsSource(); }
 	// This tablebox's own bound path ([headAttr, tableSection] or [headAttr]) — a child column's
 	// path is this prefix + its own field id(s); the row-relative tail is what the resolve walks.
-	const std::vector<ibSourceId>& GetSourcePath() const { return m_propertySource->GetValueAsPath(); }
+	const std::vector<ibSourceHop>& GetSourcePath() const { return m_propertySource->GetValueAsPath(); }
 	////////////////////////////////////////////////////////////////////////////////////////
 
 	// Available sources = the owning form's attributes of THIS control's kind (table).
@@ -365,10 +365,12 @@ public:
 	void SetSource(const ibSourceId& id) { m_propertySource->SetValue(id); }
 	// Full binding path [headAttrId, tableSection, column, ...] — the resolve walks the attribute.
 	void SetSource(const std::vector<ibSourceId>& path) { m_propertySource->SetValue(ibSourceDescription(path)); }
+	// Type-carrying entry: the hops (with any pinned composite types) go in as-is — no id-stripping.
+	void SetSource(const ibSourceDescription& desc) { m_propertySource->SetValue(desc); }
 	ibMetaID GetSource() const { return m_propertySource->GetValueAsSource(); }
 	// The column's FULL binding path (tablebox prefix + the column's own field id(s)); the
 	// tablebox strips its own prefix to get the row-relative tail it walks per row.
-	const std::vector<ibSourceId>& GetSourcePath() const { return m_propertySource->GetValueAsPath(); }
+	const std::vector<ibSourceHop>& GetSourcePath() const { return m_propertySource->GetValueAsPath(); }
 
 	// The column's bound source as a composer FIELD — its dotted NAME (e.g. "Product.SKU"), row-relative to
 	// the bound table. Universal: whatever addresses a column by field (sort, filter, group) uses it. Straight

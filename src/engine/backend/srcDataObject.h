@@ -9,6 +9,7 @@
 #include "backend/lock/lockHandle.h"    // ibLockHandle (m_formLockHandle)
 #include "backend/lock/lockTypes.h"     // ibLockMode (TryAcquireFormLock)
 #include "backend/compiler/value.h"     // ibValue (inline GetValueByPath default-constructs one)
+#include "backend/sourceDescription.h"  // ibSourceHop — a binding path is {id, expected type} per hop
 
 #include "backend/metaCollection/genericData.h"   // ibValueMetaObjectGenericData COMPLETE -> the covariant GetSourceMetaObject() -> GenericData* compiles (no casts). genericData.h fwd-declares ibSourceDataObject, so no cycle.
 
@@ -79,13 +80,6 @@ public:
 		const ibTypeDescription& GetTypeDesc() const { return m_sourceInfo.m_typeDesc; }   // node's Type (structure-hop reads the reference target)
 		const ibBackendSourceColumn* GetColumn() const { return m_sourceInfo.m_col; }      // descriptor (the leaf WalkSource returns); null for a plain-value node
 
-		// The node's candidate reference SOURCES — one empty reference-as-source per TARGET type of a
-		// reference column (a COMPOSITE reference has several => several sources), the design-time twin of a
-		// live value. Built from the node's own type through the owner source's metaData (the node borrows
-		// it; it stores no metaobject), never a live row read, so it resolves for a collection source
-		// (list / section) with no current row. Empty for a non-reference / unresolved node. Out-of-line:
-		// needs the full ibSourceDataObject.
-		void GetReferenceSources(std::vector<ibValue>& out) const;
 
 		bool IsEnabled()      const { return (m_sourceInfo.m_flags & eSrcEnabled) != 0; }
 		bool IsVisible()      const { return (m_sourceInfo.m_flags & eSrcVisible) != 0; }
@@ -248,9 +242,18 @@ public:
 	//support source data
 	virtual const ibSourceExplorer* GetSourceExplorer() const = 0;
 
-	//support source set/get data
-	virtual bool SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal) { return false; }
-	virtual bool GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const { return false; }
+	// THE hop gate — read/write a value addressed by a HOP (id + the type the path pinned) instead of a bare
+	// id. The dot-walk fetches THROUGH these; every other caller (runtime, object-to-object value copy) still
+	// uses the id-only primitives above, which these sit on. A hop is really {metaID, clsid}: the id-only call
+	// never knew the target type, so it could not tell a COMPOSITE reference apart — this can. Gateway bool =
+	// did the hop RESOLVE, independent of whether `out` ends up undefined: true + undefined `out` means
+	// "resolved, legitimately empty, contract met" (a composite fork with no live value and no usable pin);
+	// false means the id is not a field here. Where the field yields a value of a DIFFERENT branch than the
+	// pin (or empty), the gate hands back an EMPTY TYPED twin of the pin so the hop steps into the right
+	// branch — generated INSIDE the value (this virtual), from the source's own metaData, so the walk stays
+	// metadata-free. A live value already of the pinned type is returned AS IS (never fabricated over).
+	virtual bool GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const { return false; }
+	virtual bool SetValueBySourceHop(const ibSourceHop& hop, const ibValue& value) { return false; }
 
 	// Is this source a TABLE (renders as a tablebox) or a scalar object? A pure TYPE fact,
 	// answered by the class factory through the source's own CLSID — the metaobject ctor
@@ -266,7 +269,7 @@ public:
 	// The path is a plain lightweight vector — no property-side description type leaks
 	// into the source. The walker lives on the source so every kind (RAM / list /
 	// object / record set / manager) inherits one traversal — read-only navigation.
-	bool GetValueByPath(const std::vector<ibSourceId>& path, ibValue& pvarMetaVal) const;
+	bool GetValueByPath(const std::vector<ibSourceHop>& path, ibValue& pvarMetaVal) const;
 
 	// THE shared deep-hop — ONE code path for fetching data along a dotted source path. Each step's
 	// value IS a source object (a reference now inherits ibSourceDataObject), so it self-describes the
@@ -275,23 +278,20 @@ public:
 	// reference cell (resolved through its dumb model), GetValueByPath feeds its own first hop. Gateway
 	// boolean: false = a hop hit a non-source (a primitive mid-path) or a missing id; `out` is the final
 	// value only on true. Metadata-free — no metaID -> name -> FindProp round-trip.
-	static bool ContinueHops(const ibValue& start, const std::vector<ibSourceId>& path, size_t from, ibValue& out);
+	static bool ResolvePath(const ibValue& start, const std::vector<ibSourceHop>& path, size_t from, ibValue& out);
 
-	// Resolve a reference type-list to its TARGET metaobject ids: clsid -> type ctor -> (Reference) ->
-	// metaObject id. THE single clsid->target resolution, shared by the node's reference-as-source
-	// (GetReferenceSources) and the picker's lazy expansion. A COMPOSITE reference yields several.
-	static std::vector<ibMetaID> GetReferenceTargets(const std::vector<ibClassID>& clsids, const ibMetaData* metaData);
 
-	// THE structure-resolve hop — the design-time twin of ContinueHops, the ONE gate WalkSource and the
+	// THE structure-resolve hop — the design-time twin of ResolvePath, the ONE gate WalkSource and the
 	// picker resolve a dotted path through. Walks path[from..] through the source EXPLORERS: this source's
 	// explorer -> node by id -> the node's value (an empty-but-TYPED reference at design time) is the next
 	// source -> repeat. The SAME mechanism as the runtime value-hop, only it collects the leaf column +
 	// dotted name instead of a value. Gateway boolean: true iff every hop resolved (a plain-value leaf with
 	// no column is still a VALID binding); `leaf` is the last node's descriptor (may be null), `outText`
 	// (optional) accumulates the dotted display name.
-	bool WalkColumns(const std::vector<ibSourceId>& path, size_t from, const ibBackendSourceColumn*& leaf, wxString* outText = nullptr) const;
+	bool WalkColumns(const std::vector<ibSourceHop>& path, size_t from, const ibBackendSourceColumn*& leaf, wxString* outText = nullptr) const;
 
 protected:
+	
 	// Storage for TryAcquireFormLock / ReleaseFormLock. RAII-released
 	// on source destruction (form holds source via refcount; source
 	// dies when form closes → handle dtor DELETEs sys_lock row).

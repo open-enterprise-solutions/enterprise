@@ -10,6 +10,8 @@
 
 #include "frontend/visualView/visualHost.h"
 
+#include "backend/sourceDescription.h"   // ibSourceHop — the attribute-tree node path carries the pinned reference type per hop
+
 #include <wx/dnd.h>
 #include <functional>
 
@@ -544,14 +546,21 @@ public:
 		// passes entry == nullptr and carries the binding PATH (head = attribute id) + view flags. A
 		// non-empty refTypes list means "expand me through a reference-as-source" (the design-time value
 		// hop); m_loaded guards the one-time build so references stay lazy — no cyclic-reference blow-up.
-		ibVisualEditorAttributeTreeItemData(class ibFormAttributeValue* entry, const std::vector<ibMetaID>& path,
+		ibVisualEditorAttributeTreeItemData(class ibFormAttributeValue* entry, const std::vector<ibSourceHop>& path,
 			const std::vector<ibMetaID>& refTypes = {}, bool tableSection = false, ibClassID dropControl = 0,
 			bool underList = false)
 			: m_entry(entry), m_path(path), m_refTypes(refTypes), m_tableSection(tableSection), m_dropControl(dropControl),
 			m_underList(underList) {}
 		ibFormAttributeValue* GetEntry() const { return m_entry; }
-		const std::vector<ibMetaID>& GetPath() const { return m_path; }
+		const std::vector<ibSourceHop>& GetPath() const { return m_path; }
 		const std::vector<ibMetaID>& GetRefTypes() const { return m_refTypes; }
+		// Child's prefix when descending THROUGH this node into a reference TARGET: this node's OWN hop takes the
+		// pinned branch type, so the drag / serialized path carries it (a composite reference resolves the branch).
+		std::vector<ibSourceHop> ChildPrefix(const ibClassID& hopType) const {
+			std::vector<ibSourceHop> child = m_path;
+			if (!child.empty()) child.back().m_type = hopType;
+			return child;
+		}
 		bool HasRef() const { return !m_refTypes.empty(); }
 		bool IsTableSection() const { return m_tableSection; }
 		bool IsLoaded() const { return m_loaded; }
@@ -565,7 +574,7 @@ public:
 		bool IsUnderList() const { return m_underList; }
 	private:
 		ibFormAttributeValue* m_entry = nullptr;    // holder (root) or nullptr (composition node)
-		std::vector<ibMetaID> m_path;               // sourceId path from the attribute (head = attribute id)
+		std::vector<ibSourceHop> m_path;            // hop path from the attribute (head = attribute id); reference hops carry the pinned branch type
 		std::vector<ibMetaID> m_refTypes;           // reference TARGET metaIDs (empty = not a reference)
 		bool m_tableSection = false;                // view flag: this node is a table / section
 		bool m_loaded = false;                      // composition already built? (lazy one-shot)

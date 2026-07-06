@@ -125,11 +125,11 @@ const ibBackendSourceColumn* ibBackendTypeSourceFactory::WalkSource(
 	const ibSourceDescription& desc, bool* valid, wxString* outText) const
 {
 	if (valid != nullptr) *valid = false;
-	const std::vector<ibSourceId>& path = desc.GetPath();
+	const std::vector<ibSourceHop>& path = desc.GetPath();
 	if (path.empty()) return nullptr;
 
 	// Gate 1: path[0] must be one of THIS context's source attributes (form-local).
-	ibBackendFormAttributeValue* headHolder = FindSourceHolder(path[0]);
+	ibBackendFormAttributeValue* headHolder = FindSourceHolder(desc.GetFirst());
 	if (headHolder == nullptr) return nullptr;
 	if (outText != nullptr) *outText = headHolder->GetName();
 	// A whole-attribute binding (length 1) is valid with no column leaf.
@@ -139,7 +139,7 @@ const ibBackendSourceColumn* ibBackendTypeSourceFactory::WalkSource(
 	// self-describing structure the runtime value-hop steps), descending into each reference's OWN columns.
 	// No metaID -> name -> FindAnyObjectByFilter fallback: the reference-as-source explorer already holds the
 	// target's columns, so a miss is a genuinely broken binding. ONE resolve path, the design-time twin of
-	// ContinueHops (which the tablebox renderer + GetValueByPath fetch values through).
+	// ResolvePath (which the tablebox renderer + GetValueByPath fetch values through).
 	ibSourceDataObject* source = headHolder->GetSourceValue();
 	const ibBackendSourceColumn* leaf = nullptr;
 	const bool resolved = (source != nullptr) && source->WalkColumns(path, 1, leaf, outText);

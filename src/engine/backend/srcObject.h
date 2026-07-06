@@ -44,6 +44,9 @@ public:
 
 	virtual ~ibTabularObject() {}
 
+	//get metadata
+	virtual const ibMetaData* GetSourceMetaData() const = 0;
+
 	//get metaData from object 
 	virtual const ibValueMetaObjectCompositeData* GetSourceMetaObject() const = 0;
 

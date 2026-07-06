@@ -147,10 +147,17 @@ public:
 
 #pragma region _source_data_
 
-	//get metaData from object 
+	//get metaData from object
 	virtual const ibValueMetaObjectCompositeData* GetSourceMetaObject() const { return m_metaTable; }
 
-	//Get ref class 
+	//get metaData: the section's own config via its meta object; no object -> the active config, so reference-
+	//typed columns still resolve their targets. Mirrors ibValueModelTable / the object list.
+	virtual const ibMetaData* GetSourceMetaData() const override {
+		const ibValueMetaObjectCompositeData* mo = GetSourceMetaObject();
+		return mo != nullptr ? mo->GetMetaData() : nullptr;
+	}
+
+	//Get ref class
 	virtual ibClassID GetSourceClassType() const { return GetClassType(); }
 
 #pragma endregion 

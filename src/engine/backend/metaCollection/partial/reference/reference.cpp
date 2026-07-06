@@ -5,6 +5,7 @@
 
 #include "reference.h"
 #include "backend/metaData.h"
+#include "backend/objCtor.h"   // ibCtorMetaValueType::GetMetaTypeCtor / ibCtorObjectMetaType_Reference — ConvertToMetaIds
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/metaCollection/partial/tabularSection/tabularSection.h"
 
@@ -207,6 +208,48 @@ bool ibValueReferenceDataObject::GetValueByMetaID(const ibMetaID& id, ibValue& p
 	}
 	return false;
 }
+
+// The pinned-type twin materialiser — STATIC (see the header). `metaData` comes from the CALLER's own source
+// (GetSourceMetaData), so ibSourceDataObject stays metadata-free; the reference — already metadata-bound —
+// owns the creation. A live value already of the pinned type passes through untouched.
+bool ibValueReferenceDataObject::CoerceHopType(const ibSourceHop& hop, ibValue& out, const ibMetaData* metaData)
+{
+	if (!::IsReference(hop.m_type))
+		return false;   // no pinned reference branch — keep whatever the id primitive gave
+	ibSourceDataObject* live = nullptr;
+	out.ConvertToValue<ibSourceDataObject>(live);
+	if (live != nullptr && live->GetSourceClassType() == hop.m_type)
+		return false;   // already the pinned type — never fabricate over a real value
+	ibValue twin = ibValueReferenceDataObject::Create(metaData, static_cast<ibMetaID>(hop.m_type & kIbClsidBodyMask));
+	ibSourceDataObject* tw = nullptr;
+	twin.ConvertToValue<ibSourceDataObject>(tw);
+	if (tw == nullptr)
+		return false;   // couldn't build (no metaData / bad pin)
+	out = twin;
+	return true;
+}
+
+// Reference clsids → their TARGET metaobject ids, resolved through the class factory: a clsid's type ctor must
+// be a REFERENCE ctor (GetMetaTypeCtor == _Reference); its metaobject's metaID is the target. metaData-driven —
+// the kind-byte shortcut mis-classified composite branches (a clsid that is not a constructive reference id).
+// Non-reference clsids (a list / object / primitive branch) are skipped. Pickers call it to enumerate a
+// COMPOSITE reference's branches.
+std::vector<ibMetaID> ibValueReferenceDataObject::ConvertToMetaIds(const std::vector<ibClassID>& clsids, const ibMetaData* metaData)
+{
+	std::vector<ibMetaID> targets;
+	if (metaData == nullptr)
+		return targets;
+	for (const ibClassID& clsid : clsids) {
+		const ibCtorMetaValueType* typeCtor = metaData->GetTypeCtor(clsid);
+		if (typeCtor == nullptr || typeCtor->GetMetaTypeCtor() != ibCtorObjectMetaType::ibCtorObjectMetaType_Reference)
+			continue;
+		const ibValueMetaObject* metaObj = typeCtor->GetMetaObject();
+		if (metaObj != nullptr)
+			targets.push_back(metaObj->GetMetaID());
+	}
+	return targets;
+}
+
 
 void ibValueReferenceDataObject::ShowValue()
 {

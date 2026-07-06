@@ -951,10 +951,10 @@ static void SetBoundSource(ibValueFrame* control, const ibSourceDescription& des
 // else (scalar / reference / multi-type) -> Textctrl. Empty = nothing to create (a bad path).
 static wxString ResolveDropControlClass(ibValueForm* form, const ibSourceDescription& desc)
 {
-	const std::vector<ibSourceId>& path = desc.GetPath();
+	const std::vector<ibSourceHop>& path = desc.GetPath();
 	if (form == nullptr || path.empty())
 		return wxEmptyString;
-	ibFormAttributeValue* head = form->FindAttributeById(path.front());
+	ibFormAttributeValue* head = form->FindAttributeById(desc.GetFirst());
 	if (head == nullptr)
 		return wxEmptyString;
 	ibSourceDataObject* source = head->GetSourceValue();
@@ -975,10 +975,10 @@ static wxString ResolveDropControlClass(ibValueForm* form, const ibSourceDescrip
 		bool containerIsList = source != nullptr && source->IsTableSource();   // head itself a value-table
 		const ibSourceExplorer* explorer = source != nullptr ? source->GetSourceExplorer() : nullptr;
 		for (size_t i = 1; i + 1 < path.size() && explorer != nullptr; i++) {
-			explorer = explorer->FindById(path[i]);
+			explorer = explorer->FindById(path[i].m_id);
 			containerIsList = explorer != nullptr && explorer->IsTableSection();
 		}
-		const ibSourceExplorer* leaf = explorer != nullptr ? explorer->FindById(path.back()) : nullptr;
+		const ibSourceExplorer* leaf = explorer != nullptr ? explorer->FindById(desc.GetLeaf()) : nullptr;
 		if (leaf == nullptr)
 			return wxEmptyString;
 		if (containerIsList)
@@ -1010,14 +1010,14 @@ ibValueFrame* ibVisualEditorNotebook::ibVisualEditor::CreateBoundControl(
 		const ibTypeControlFactory* boxFactory = dynamic_cast<const ibTypeControlFactory*>(box);
 		if (boxFactory == nullptr)
 			break;
-		const std::vector<ibSourceId>& boxPath = boxFactory->GetSourceDesc().GetPath();
-		const std::vector<ibSourceId>& fieldPath = desc.GetPath();
+		const std::vector<ibSourceHop>& boxPath = boxFactory->GetSourceDesc().GetPath();
+		const std::vector<ibSourceHop>& fieldPath = desc.GetPath();
 		if (fieldPath.empty() || fieldPath == boxPath)
 			break;                                             // the table's own bare source -> nothing to add
 		bool underTable = fieldPath.size() > boxPath.size();   // a field PAST the table's own source
 		for (size_t i = 0; underTable && i < boxPath.size(); i++)
-			if (fieldPath[i] != boxPath[i])
-				underTable = false;                            // diverges from the table's source
+			if (fieldPath[i].m_id != boxPath[i].m_id)
+				underTable = false;                            // diverges from the table's source (structural, by id)
 		if (!underTable) {
 			// Not a column of THIS table's source. Allow a SINGLE-value source (a scalar / reference
 			// attribute or object field) as a FOREIGN / object column (Mode 2 — one value per row); a column

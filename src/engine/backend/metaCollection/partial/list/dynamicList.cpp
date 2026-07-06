@@ -193,7 +193,9 @@ const ibSourceExplorer* ibValueDynamicList::GetSourceExplorer() const
 	// carries the descriptor on the node (m_col -> GetSourceAttributeObject, so the binding resolves and
 	// the header shows the real SYNONYM, not the control name) — the 3-arg plain-value overload set
 	// neither m_col nor the synonym (synonym defaulted to the name). null / !IsAllowed are skipped inside.
-	m_sourceExplorer.Reset(GetObjectTypeName(), GetObjectTypeName(), wxNOT_FOUND, g_valueDynamicListCLSID);
+	// Root flagged a TABLE SECTION — a dynamic list IS a table, so IsTableSource() reports true and the
+	// attribute drags as a tablebox (metadata-free, same as the value-table / object lists).
+	m_sourceExplorer.Reset(GetObjectTypeName(), GetObjectTypeName(), wxNOT_FOUND, g_valueDynamicListCLSID, /*tableSection*/true);
 	const ibBackendQueryable* q = GetSourceQueryable();
 	if (q != nullptr)
 		for (const ibBackendQueryColumn* col : q->GetColumns())

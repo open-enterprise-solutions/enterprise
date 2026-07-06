@@ -75,6 +75,8 @@ public:
 	virtual bool SetValueByRow(const wxVariant& variant, const ibDataViewItem& item, unsigned col) override;
 	virtual bool GetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, ibValue& pvarMetaVal) const override;
 	virtual bool SetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, const ibValue& varMetaVal) override { return false; }
+	
+	
 	virtual ibValueModelColumnCollection* GetColumnCollection() const override { return m_columns; }
 	virtual ibValueModelReturnLine* GetRowAt(const ibDataViewItem& line) override;
 	virtual Features GetFeatures() const override;

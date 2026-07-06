@@ -27,8 +27,12 @@ is resolved through the form's attribute **gate**. The form no longer knows abou
 - The form owns `std::vector<ibValuePtr<ibFormAttributeValue>> m_attributes` (`form.h`).
   `ibValuePtr` (ref-counted — the holder IS a runtime value) keeps a returned entry valid across
   vector growth and lets the undo stack hold a detached entry alive.
-- A binding is a `std::vector<ibSourceId>` (a metaId path). `path[0]` selects a
-  **form-local attribute** (the gate); the remainder dot-walks that attribute's value.
+- A binding is a **hop vector** — `std::vector<ibSourceHop>`, each hop `{id, expected type}`
+  (`sourceDescription.h`). `path[0]` selects a **form-local attribute** (the gate); the remainder
+  dot-walks that attribute's value. The `id` is WHERE to step; the `expected type` rides ALONG so a
+  composite-reference hop keeps the branch the picker pinned (undefined where none is imposed).
+  `ibSourceDescription` wraps the vector and answers `GetHopCount()` / `GetFirst()` / `GetLeaf()` /
+  `GetByIdx()` / `GetExpectedType(idx)` / `IsDotWalk()`.
 - One resolver pair on the form — `GetValueByAttributePath` / `SetValueByAttributePath`
   (`formAttribute.cpp`) — does `FindAttributeById(path[0])` then delegates the tail to the
   wrapper's `GetValueByPath` / `SetValueByPath`. Controls (tablebox, column, textctrl,
@@ -148,9 +152,10 @@ carries the whole address and the callers hand it straight through. Since resolu
 (below), the path-taking APIs take the wrapper: `WalkSource(const ibSourceDescription&)`,
 `SetDefaultSourceType(const ibSourceDescription&)`, the designer drop chain (`DropBoundControl` /
 `CreateBoundControl` / `ResolveDropControlClass` / `SetBoundSource`), and the form's binding API
-(`GetValueByAttributePath` / `SetValueByAttributePath` / `IsWritableBinding`). Only the offset-walk primitives
-(`ContinueHops` / `WalkColumns`, which walk a path SUFFIX from an index) and the RAM-hot raw getters
-(`GetSourcePath`) keep the bare vector — the wrapper models a whole address, not an offset.
+(`GetValueByAttributePath` / `SetValueByAttributePath` / `IsWritableBinding`). The offset-walk primitives
+(`ResolvePath` / `WalkColumns`, which walk a path SUFFIX from an index) and the RAM-hot raw getters
+(`GetSourcePath`) take the bare `std::vector<ibSourceHop>` — the wrapper models a whole address, the
+primitives step an offset of the same hops.
 
 **One default-type map — `ibBackendTypeConfigFactory::GetDefaultTypeByFilter(filterKind)`.** The
 default value type (clsid) for a filter kind — `_boolean` → Boolean, `_resource` → Number, `_table`
@@ -199,9 +204,12 @@ descriptor it was built from (`m_col`, an `ibBackendSourceColumn`); columns are 
 `AppendColumn(col)` (deleted/disabled skipped through `col->IsAllowed()`; a queryable column IS-A
 source column, so the node carries its real synonym), tabular sections via `AppendTable(...)`. No
 `ibValueMetaObject*` member. Every `GetSourceExplorer()` builder (catalog / document / chart / record /
-register / dynamic list) builds it from its own data. List-vs-object is a TYPE fact answered by the
-class factory — `IsTableSource()` → `ibCtorAbstractType::IsTableValue()` by CLSID (no `dynamic_cast`,
-works before a source is even picked).
+register / dynamic list) builds it from its own data. List-vs-object is answered by the source's OWN
+explorer — `IsTableSource()` → `GetSourceExplorer()->IsTableSection()` (metadata-free). **Invariant:** every
+table source (value-table, dynamic list, object list, register list) FLAGS its explorer ROOT as a table
+section — `m_sourceExplorer.Reset(..., /*tableSection*/true)` — so it self-declares "I am a table"; a scalar
+object / reference does not. A source that forgets this won't drag as a tablebox and its columns resolve as
+standalone textboxes. A table can be EMPTY, so "has columns?" is not a reliable test — the flag is.
 
 It is a **nullable-pointer API**, so a degenerate source signals "nothing to describe" instead of a
 sentinel:
@@ -215,11 +223,11 @@ sentinel:
   each), built from the node's OWN type through the owner source's metaData (the node borrows it — it
   still stores no metaobject). Type-derived, not a live row read, so it resolves for a collection source
   (list / section) with no current row. The clsid→target resolution is the shared backend
-  `ibSourceDataObject::GetReferenceTargets` (the picker calls the same).
+  `ibSourceDataObject::ConvertToMetaIds` (the picker calls the same).
 
 ### `WalkColumns` — the structure-resolve hop
 
-`WalkColumns(path, from, leaf&, outText)` is the design-time twin of the runtime `ContinueHops`
+`WalkColumns(path, from, leaf&, outText)` is the design-time twin of the runtime `ResolvePath`
 value-walk — one mechanism, differing only in typed-empty vs live value. It steps `path[from..]`
 through the explorer tree:
 
@@ -235,10 +243,41 @@ through the explorer tree:
 
 `WalkSource` (backend) gates `path[0]` to a holder, then delegates to `WalkColumns(path, 1, …)`.
 
+### The runtime hop-walk — the gate, `ResolvePath`, and the table side
+
+`WalkColumns` above is the DESIGN-TIME twin (typed-empty values over the explorer); at RUNTIME the same
+hop vector fetches the LIVE value through ONE virtual gate, so the walk hops — it never steps via
+`GetValueByMetaID`.
+
+- **`GetValueBySourceHop(hop, out)`** — THE scalar gate on `ibSourceDataObject` (`srcDataObject.h`).
+  Reference / record / list override it. The reference honours the PINNED type
+  (`hop.m_type`): if the composite cell is undefined it hands back an empty typed TWIN of the pin
+  (`ibValueReferenceDataObject::CoerceHopType`) — so a composite reference NEVER returns undefined and a
+  hop can always step on. The twin / decode statics live ON the reference side, so `srcDataObject` itself
+  stays metadata-free. A **value-table does NOT override the scalar gate** — see the debt note in Open
+  edges: at design time a dot-walk INTO a value-table column (`Attribute.Column1.Ref`) does not resolve.
+- **`ResolvePath(start, path, from, out)`** — the shared deep walk (static, `srcDataObject.cpp`). At each
+  hop it converts the current value to `ibSourceDataObject` (a non-source value ends the walk — you cannot
+  dot into a primitive) and calls its gate. `GetValueByPath` off a source feeds its own first hop, then
+  delegates here.
+
+**The table side — `ibTabularDataObject` (`tabularDataObject.h`).** A table value is PER-ROW, so its gate
+carries the row: `GetValueBySourceHop(item, hop, out)`, a DIRECT translation `GetValueByMetaID(item,
+hop.m_id, out)` on `ibValueModel` — a pure cell read, NO twin / reference checks. The walk lives in
+`GetValueByPath(item, path, from, out)`: the table only STARTS the walk (the first hop off the row yields a
+source cell) and TRANSFERS the deeper hops to the scalar `ibSourceDataObject::ResolvePath`. ONE hop vector,
+the computation locus switches TABLE → SOURCE OBJECT. The tablebox renderer calls this single entry per
+dotted cell (`ibValueModelTableBox::ResolveCellValue`), exactly as a control resolves an attribute path off
+the form. `GetSourceMetaData` joins the tabular contract (`ibTabularObject`, by analogy with
+`ibSourceObject`): a table WITH a meta object yields its config, one WITHOUT (a dynamic list) falls back to
+the active config, so a reference cell still resolves its target. The gate being virtual is the extension
+point — a table can override how a specific id resolves, and the walk still switches to the source object
+unchanged.
+
 ### Path serialization is RAW — metadata-agnostic, mirroring the walk
 
 Because a bound path RESOLVES purely by walking the source explorer (`FindById` per hop; each hop's
-value yields the next explorer — see `ContinueHops` / `WalkColumns`), it also SERIALIZES that way:
+value yields the next explorer — see `ResolvePath` / `WalkColumns`), it also SERIALIZES that way:
 `ibSourceDescriptionMemory` writes the path as **raw ids** and reads them verbatim — the explorer
 resolves each on load. It consults **no metadata**: no `metaData` parameter, no metaId→guid mapping.
 This is the point of the redesign — the walk never cares whether (or which) metadata backs a hop
@@ -507,12 +546,27 @@ attribute, so the attribute tree must not rebuild and lose the user's expansion 
   branch owns the next field — so a COMPOSITE reference (a field of any target type) resolves too. The
   picker's nested-section column source resolves likewise — the bound table is walked down `parentPath`
   to the section node and its columns rooted directly (`ProcessTableColumn`). The clsid→target resolution
-  is one shared backend helper (`GetReferenceTargets`), used by both the walk and the picker.
+  is one shared backend helper (`ConvertToMetaIds`), used by both the walk and the picker. **Caveat:** this
+  holds for METADATA-backed table sources (catalog / document lists, tabular sections). A dot-walk INTO a
+  **value-table** column is the exception — it does not resolve at design time (see the value-table debt note).
+- **DEBT — value-table column dot-walk (design-time) does NOT resolve.** A value-table is per-ROW: its
+  RUNTIME gate is the item translation `GetValueByMetaID(item, hop.m_id, out)` and works. But the DESIGN-TIME
+  walk (`WalkColumns`) has no row, so at a reference column it asks the owner's SCALAR gate
+  (`owner->GetValueBySourceHop(hop, next)`) — and a value-table does not override it, so the base returns
+  false and a deeper path like `Attribute.Column1.Ref.Field` reads back `<not selected>` in the designer.
+  Several attempts to plug this on the TABLE side (a pinned `CoerceHopType` twin; a `ConvertToMetaIds` drift
+  guard; an `AdjustValue`-typed redirect) were all rejected as wrong-locus: the table must just REDIRECT to
+  the column's reference-VALUE and let the reference's OWN source explorer drive the step — reference logic
+  lives ONLY in the reference object, never manufactured on the table. Correct fix is deferred: give the
+  value-table a scalar gate that hands back the column's reference-as-source (off its CURRENT type, so a
+  retype to String naturally ends the walk) with no reference/twin logic on the table. Runtime is unaffected.
 - **Blocker B (compute server)** — binding is necessary but not sufficient; registers /
   reporting on top need the compute tier.
-- **No test harness** — every form binds through this; the member-cell-reffer hazard above
-  was statically detectable and should have been caught before runtime. A path-resolver
-  harness is the cheapest insurance before building higher.
+- **Test harness — first slice landed.** `test_sourceDescription.cpp` (the hop-vector passport +
+  metadata-free serialize round-trip), `test_tabularHop.cpp` (the table `GetValueByPath` walk via a mock
+  table), and `test_sourceExplorer.cpp` (design-time `WalkColumns`) are gtest / CMake (`oes_tests`). Still
+  uncovered: the full RUNTIME reference chain (table → reference → field), which needs a value-wrapped
+  source, and the member-cell-reffer hazard above (statically detectable).
 
 This is Blocker A of the ERP roadmap — the binding foundation under registers → reporting →
 period-close → web / thin client.

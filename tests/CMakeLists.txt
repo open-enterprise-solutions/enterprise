@@ -84,6 +84,8 @@ add_executable(oes_tests
     test_dbTransaction.cpp
     test_propertyObject.cpp
     test_sourceExplorer.cpp
+    test_sourceDescription.cpp
+    test_tabularHop.cpp
 )
 
 target_link_libraries(oes_tests

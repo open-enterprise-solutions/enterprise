@@ -6,6 +6,8 @@
 #include "control.h"
 #include "typeControl.h"   // ibTypeControlFactory + ibBackendTypeConfigFactory::GetDefaultTypeByFilter (AutoBindNewSource)
 #include "form.h"
+#include "backend/appData.h"                 // ibApplicationData::GetActiveMetaData — GetMetaData fallback (common form / metadata-free source)
+#include "backend/metadataConfiguration.h"   // ibMetaDataConfigurationBase : ibMetaData — the GetActiveMetaData() base cast
 
 
 //*************************************************************************

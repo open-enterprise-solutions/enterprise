@@ -45,7 +45,7 @@ bool ibRamValueStorage::SplitField(const wxString& path, ibMetaID& headCol, std:
 // tail (the "simple implementation up to references", Max). The HEAD is the row's own cell; each further TAIL
 // segment hops into the previous value AS A SOURCE — a reference cell IS an ibSourceDataObject, so it self-
 // describes its columns through GetSourceExplorer (name → id) and fetches the next value by that id
-// (GetValueByMetaID, the very hop ContinueHops runs). A primitive mid-path / unknown segment ends the walk with
+// (GetValueByMetaID, the very hop ResolvePath runs). A primitive mid-path / unknown segment ends the walk with
 // an empty value (an unevaluable filter passes; an unevaluable sort key sorts as empty — never a crash).
 ibValue ibRamValueStorage::ResolveField(long row, ibMetaID headCol, const std::vector<wxString>& tail) const
 {
@@ -64,7 +64,7 @@ ibValue ibRamValueStorage::ResolveField(long row, ibMetaID headCol, const std::v
 			if (child != nullptr && child->GetSourceName() == seg) { segId = child->GetSourceId(); break; }
 		}
 		ibValue next;
-		if (segId == wxNOT_FOUND || !source->GetValueByMetaID(segId, next))
+		if (segId == wxNOT_FOUND || !source->GetValueBySourceHop(ibSourceHop{ segId }, next))
 			return ibValue();
 		current = next;
 	}

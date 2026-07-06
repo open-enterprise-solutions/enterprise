@@ -203,9 +203,13 @@ public:
 	//support source data
 	virtual const ibSourceExplorer* GetSourceExplorer() const;
 
-	//support source set/get data 
+	//support source set/get data
 	virtual bool SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal);
 	virtual bool GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const;
+	
+	// ibSourceDataObject hop gate — delegates to the id primitive above.
+	virtual bool SetValueBySourceHop(const ibSourceHop& hop, const ibValue& value) override { return SetValueByMetaID(hop.m_id, value); }
+	virtual bool GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const override { return GetValueByMetaID(hop.m_id, out); }
 
 	//counter
 	virtual void SourceIncrRef() { ibValue::IncrRef(); }

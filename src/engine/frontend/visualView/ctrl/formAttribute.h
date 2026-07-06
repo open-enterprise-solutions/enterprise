@@ -200,8 +200,8 @@ public:
 	// Read down a binding tail (relative to this entry): empty → the value itself;
 	// deeper → step into the value (as a source object) and walk. Encapsulates the
 	// source cross-cast so the form just delegates.
-	bool GetValueByPath(const std::vector<ibSourceId>& tail, ibValue& result) const;
-	bool SetValueByPath(const std::vector<ibSourceId>& tail, const ibValue& value);
+	bool GetValueByPath(const std::vector<ibSourceHop>& tail, ibValue& result) const;
+	bool SetValueByPath(const std::vector<ibSourceHop>& tail, const ibValue& value);
 
 	// Clipboard copy / paste of a form attribute through OUR serialization (own clipboard
 	// format id) — designer-only (no-op on web). Copy serializes the attribute's description;

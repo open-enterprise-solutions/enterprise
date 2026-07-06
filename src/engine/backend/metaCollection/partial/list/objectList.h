@@ -130,6 +130,14 @@ public:
 		return node->GetValue(id, pvarMetaVal);
 	}
 
+	// Scalar id primitive — leaf list objects override.
+	virtual bool SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal) { return false; }
+	virtual bool GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const { return false; }
+	
+	// ibSourceDataObject hop gate — delegates to the id primitive above.
+	virtual bool SetValueBySourceHop(const ibSourceHop& hop, const ibValue& value) override { return SetValueByMetaID(hop.m_id, value); }
+	virtual bool GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const override { return GetValueByMetaID(hop.m_id, out); }
+
 	//ctor
 	// `queryable` is the source HOLDER — vended by the SUBCLASS metaobject (the generic base has no GetQueryable);
 	// the subclass passes metaObject->GetQueryable() so the composer source is wired ONCE on the base.
@@ -577,6 +585,14 @@ public:
 			return false;
 		return node->GetValue(id, pvarMetaVal);
 	}
+
+	// Scalar id primitive — leaf tree objects override.
+	virtual bool SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal) { return false; }
+	virtual bool GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const { return false; }
+
+	// ibSourceDataObject hop gate — delegates to the id primitive above.
+	virtual bool SetValueBySourceHop(const ibSourceHop& hop, const ibValue& value) override { return SetValueByMetaID(hop.m_id, value); }
+	virtual bool GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const override { return GetValueByMetaID(hop.m_id, out); }
 
 	//ctor
 	ibValueModelTreeDataObject(const ibValueMetaObjectGenericData* metaObject = nullptr, const ibBackendQueryable* queryable = nullptr, const ibFormID& formType = wxNOT_FOUND, bool choiceMode = false);

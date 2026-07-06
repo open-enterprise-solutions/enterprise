@@ -156,8 +156,9 @@ bool ibValueModelTable::GetAt(const ibValue& varKeyValue, ibValue& pvarValue)
 
 const ibMetaData* ibValueModelTable::GetSourceMetaData() const
 {
-	// A RAM table has no metaobject of its own; expose the active config so reference-typed columns
-	// still resolve their targets through the source explorer / on (de)serialization.
+	// A RAM table has no metaobject of its own → expose the ACTIVE config, so reference-typed columns resolve
+	// their targets. Mirrors the dynamic list, which gets real config metaData from its queryable; a value-table
+	// has none of its own, so it falls to active.
 	return ibApplicationData::GetActiveMetaData();
 }
 
@@ -173,7 +174,10 @@ const ibSourceDataObject::ibSourceExplorer* ibValueModelTable::GetSourceExplorer
 	// column descriptor (ibBackendSourceColumn), so vend it through the descriptor-carrying AppendColumn —
 	// the SAME path metadata / dynamic-list columns use. That descriptor (m_col) is what WalkColumns returns
 	// as the leaf, so the bound tablebox resolves the header (GetSynonym = Caption) and type LIVE, per-render.
-	m_sourceExplorer.Reset(GetObjectTypeName(), GetObjectTypeName(), wxNOT_FOUND, g_valueTableCLSID);
+	// Root flagged a TABLE SECTION so the metadata-free IsTableSource() (GetSourceExplorer()->IsTableSection())
+	// reports true — a value-table attribute is then draggable AS a tablebox and its columns resolve as table
+	// columns, not standalone textboxes.
+	m_sourceExplorer.Reset(GetObjectTypeName(), GetObjectTypeName(), wxNOT_FOUND, g_valueTableCLSID, /*tableSection*/true);
 	for (auto& col : m_tableColumnCollection->m_listColumnInfo) {
 		if (col == nullptr)
 			continue;

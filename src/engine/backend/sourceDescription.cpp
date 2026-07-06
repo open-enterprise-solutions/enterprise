@@ -11,31 +11,47 @@
 // old metadata-dependent model and is gone). A leading sentinel marks this raw layout; a blob WITHOUT it is
 // a legacy guid-tail form from the old writer — a metadata-free load recovers only its head (re-save rewrites
 // it raw), the deprecated guid tail is skipped, never resolved back through metadata.
-static const unsigned int kSourceDescRawMarker = 0xFFFFFFFFu;   // impossible path count -> unambiguous marker
+static const unsigned int kSourceDescRawMarker   = 0xFFFFFFFFu;   // v1: impossible path count -> raw id-only layout
+static const unsigned int kSourceDescRawMarkerV2 = 0xFFFFFFFEu;   // v2: raw {id, expected type} per hop — the correspondence
 bool ibSourceDescriptionMemory::LoadData(ibReaderMemory& reader, ibSourceDescription& srcDesc)
 {
 	srcDesc.ClearSource();
 	const unsigned int lead = reader.r_u32();
-	if (lead != kSourceDescRawMarker) {
-		// Legacy guid-tail blob: a metadata-free load can't resolve its tail (that WAS the metadata coupling
-		// we dropped), so recover the head only — `lead` was the legacy path count, the raw head follows.
-		if (lead > 0)
+	if (lead == kSourceDescRawMarkerV2) {
+		// v2: each hop is {id, expected type}. The type rides ALONG so a composite-reference hop keeps the
+		// branch the picker pinned — the walk coerces to it instead of guessing.
+		const unsigned int count = reader.r_u32();
+		for (unsigned int i = 0; i < count; i++) {
+			const ibSourceId id = (ibSourceId)reader.r_u32();
+			const ibClassID type = (ibClassID)reader.r_u64();
+			srcDesc.AppendSource(id, type);
+		}
+		return true;
+	}
+	if (lead == kSourceDescRawMarker) {
+		// v1: raw id-only (type defaults to undefined = accept as is). Forward-compatible: an old blob loads,
+		// its hops just carry no pinned type — the walk falls back to the legacy branch guess.
+		const unsigned int count = reader.r_u32();
+		for (unsigned int i = 0; i < count; i++)
 			srcDesc.AppendSource((ibSourceId)reader.r_u32());
 		return true;
 	}
-	const unsigned int count = reader.r_u32();
-	for (unsigned int i = 0; i < count; i++)
-		srcDesc.AppendSource((ibSourceId)reader.r_u32());   // raw id — the source explorer resolves it on the walk
+	// Legacy guid-tail blob: a metadata-free load can't resolve its tail (that WAS the metadata coupling we
+	// dropped), so recover the head only — `lead` was the legacy path count, the raw head follows.
+	if (lead > 0)
+		srcDesc.AppendSource((ibSourceId)reader.r_u32());
 	return true;
 }
 
 bool ibSourceDescriptionMemory::SaveData(ibWriterMemory& writer, ibSourceDescription& srcDesc)
 {
-	const std::vector<ibSourceId>& path = srcDesc.GetPath();
-	writer.w_u32(kSourceDescRawMarker);          // raw-layout marker (see LoadData)
+	const std::vector<ibSourceHop>& path = srcDesc.GetPath();
+	writer.w_u32(kSourceDescRawMarkerV2);         // v2 raw-layout marker (see LoadData)
 	writer.w_u32((unsigned int)path.size());
-	for (size_t i = 0; i < path.size(); i++)
-		writer.w_u32((unsigned int)path[i]);     // every hop raw — resolution is via the source explorer, not metadata
+	for (const ibSourceHop& hop : path) {
+		writer.w_u32((unsigned int)hop.m_id);     // hop id — resolution is via the source explorer, not metadata
+		writer.w_u64((unsigned wxLongLong_t)hop.m_type);   // expected type (undefined where the hop imposes none)
+	}
 	return true;
 }
 

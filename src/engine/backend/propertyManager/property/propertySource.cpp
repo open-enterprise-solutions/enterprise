@@ -60,7 +60,7 @@ void ibPropertySource::SetValue(const ibSourceDescription& val) { m_propValue = 
 ////////////////////////////////////////////////////////////////////////
 
 ibSourceDescription& ibPropertySource::GetValueAsSourceDesc() const { return get_cell_variant<ibVariantDataSource>()->GetSourceDesc(); }
-const std::vector<ibSourceId>& ibPropertySource::GetValueAsPath() const { return get_cell_variant<ibVariantDataSource>()->GetSourceDesc().GetPath(); }
+const std::vector<ibSourceHop>& ibPropertySource::GetValueAsPath() const { return get_cell_variant<ibVariantDataSource>()->GetSourceDesc().GetPath(); }
 wxString ibPropertySource::GetValueAsString() const { wxString s; get_cell_variant<ibVariantDataSource>()->Write(s); return s; }
 ////////////////////////////////////////////////////////////////////////
 

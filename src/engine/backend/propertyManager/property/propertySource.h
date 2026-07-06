@@ -7,6 +7,7 @@
 //////////////////////////////////////////////////////////////////
 struct ibTypeDescription;
 struct ibSourceDescription;
+struct ibSourceHop;   // {id, expected type} — GetValueAsPath returns the hop vector by ref (full type in sourceDescription.h)
 //////////////////////////////////////////////////////////////////
 
 //base property for "source"
@@ -32,7 +33,7 @@ public:
 	// The binding address as a plain metaId path — the identifier a control hands to
 	// ibSourceDataObject::GetValueByPath. The property only supplies it; it never reads
 	// or writes the value itself.
-	const std::vector<ibSourceId>& GetValueAsPath() const;
+	const std::vector<ibSourceHop>& GetValueAsPath() const;   // the {id, expected type} hop path — id + type per hop
 
 	// The binding rendered as its dotted NAME (e.g. "Товар.Артикул") — the variant's own MakeString, the
 	// same string the designer shows and the composer's ORDER BY / Filter dot-walks. "<not selected>" when unbound.

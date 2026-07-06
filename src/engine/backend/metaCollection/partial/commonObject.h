@@ -1299,9 +1299,14 @@ public:
 	//support source data
 	virtual const ibSourceExplorer* GetSourceExplorer() const override;
 
-	//support source set/get data
+	//support source set/get data — id primitive
 	virtual bool SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal) override;
 	virtual bool GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const override;
+
+	// ibSourceDataObject hop gate — resolve the id, then honour the pinned TYPE (CoerceHopType): a composite
+	// reference FIELD of this object seeds UNDEFINED, so the shared helper hands back an empty typed twin.
+	virtual bool SetValueBySourceHop(const ibSourceHop& hop, const ibValue& value) override { return SetValueByMetaID(hop.m_id, value); }
+	virtual bool GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const override { const bool got = GetValueByMetaID(hop.m_id, out); return ibValueReferenceDataObject::CoerceHopType(hop, out, GetSourceMetaData()) || got; }
 
 	ibValue GetValueByMetaID(const ibMetaID& id) const {
 		ibValue retValue;
@@ -2104,6 +2109,13 @@ public:
 	//get metaData from object
 	virtual const ibValueMetaObjectCompositeData* GetSourceMetaObject() const { return GetMetaObject(); }
 
+	//get metaData: the record set's own config via its meta object; no object -> the active config, so reference-
+	//typed columns still resolve their targets. Mirrors ibValueModelTable / the object list.
+	virtual const ibMetaData* GetSourceMetaData() const override {
+		const ibValueMetaObjectCompositeData* mo = GetSourceMetaObject();
+		return mo != nullptr ? mo->GetMetaData() : nullptr;
+	}
+
 	//Get ref class
 	virtual ibClassID GetSourceClassType() const { return GetClassType(); }
 #pragma endregion
@@ -2312,9 +2324,14 @@ public:
 	//is modified
 	virtual bool IsModified() const override;
 
-	//support source set/get data
-	virtual bool SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal) override;
-	virtual bool GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const override;
+	//support source set/get data — id primitive
+	virtual bool SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal);
+	virtual bool GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const;
+	
+	// ibSourceDataObject hop gate — resolve the id, then honour the pinned TYPE (CoerceHopType): a composite
+	// reference FIELD of this object seeds UNDEFINED, so the shared helper hands back an empty typed twin.
+	virtual bool SetValueBySourceHop(const ibSourceHop& hop, const ibValue& value) override { return SetValueByMetaID(hop.m_id, value); }
+	virtual bool GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const override { const bool got = GetValueByMetaID(hop.m_id, out); return ibValueReferenceDataObject::CoerceHopType(hop, out, GetSourceMetaData()) || got; }
 
 	ibValue GetValueByMetaID(const ibMetaID& id) const {
 		ibValue retValue;

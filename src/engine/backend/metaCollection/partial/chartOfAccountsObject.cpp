@@ -35,8 +35,7 @@ const ibSourceExplorer* ibValueRecordDataObjectChartOfAccounts::GetSourceExplore
 			ibValueMetaObjectTableData* subTbl = metaRef->GetSubcontoKindsTable();
 			if (subTbl != nullptr && !subTbl->IsDeleted()) {
 				ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(subTbl->GetName(), subTbl->GetSynonym(), subTbl->GetMetaID(), subTbl->GetTypeDesc());
-				std::vector<ibValueMetaObjectAttributeBase*> tblCols;
-				for (ibValueMetaObjectAttributeBase* tblCol : subTbl->GetGenericAttributeArrayObject(tblCols)) tblNode.AppendColumn(tblCol);
+				for (ibValueMetaObjectAttributeBase* tblCol : subTbl->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol);
 			}
 		}
 	}
@@ -60,16 +59,14 @@ const ibSourceExplorer* ibValueRecordDataObjectChartOfAccounts::GetSourceExplore
 			if (tableUse == ibItemMode::ibItemMode_Item || tableUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (object != nullptr && !object->IsDeleted()) {
 					ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
-					std::vector<ibValueMetaObjectAttributeBase*> tblCols;
-					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject(tblCols)) tblNode.AppendColumn(tblCol);
+					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol);
 				}
 			}
 		} else {
 			if (tableUse == ibItemMode::ibItemMode_Folder || tableUse == ibItemMode::ibItemMode_Folder_Item) {
 				if (object != nullptr && !object->IsDeleted()) {
 					ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
-					std::vector<ibValueMetaObjectAttributeBase*> tblCols;
-					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject(tblCols)) tblNode.AppendColumn(tblCol);
+					for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol);
 				}
 			}
 		}

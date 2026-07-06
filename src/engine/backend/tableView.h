@@ -72,7 +72,6 @@ enum class ibFetchDirection : int8_t {
 // subclass in all real usages), we cast internally.  GetID() returns
 // void* for legacy code.
 class BACKEND_API ibDataViewItem;
-class BACKEND_API ibDataViewObject;
 
 // Common base for any object held inside an ibDataViewItem.  Concrete
 // row / node classes override the virtual hooks below; the data-view

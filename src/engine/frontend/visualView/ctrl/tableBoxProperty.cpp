@@ -47,7 +47,7 @@ void ibValueModelTableBox::RefillFromSource()
 	// Columns come FAMILY-BLIND from the bound source's explorer — a metaobject source yields its
 	// attributes, a queryable dynamic list its query columns — NOT a clsid->metaobject gate. Each column
 	// binds THROUGH the tablebox's own path: [tablebox path..., field] -> "List.Field".
-	const std::vector<ibSourceId> basePath = m_propertySource->GetValueAsPath();
+	const std::vector<ibSourceHop>& basePath = m_propertySource->GetValueAsPath();
 	if (basePath.empty()) {
 		// TYPE-ONLY source (only a Type is set, e.g. CatalogList.Catalog1): materialize the model straight
 		// from the Type and mirror its columns — the SAME set the runtime CreateColumnCollection builds.
@@ -75,29 +75,39 @@ void ibValueModelTableBox::RefillFromSource()
 		}
 	}
 	else {
-		ibBackendFormAttributeValue* holder = FindSourceHolder(basePath.front());
+		ibBackendFormAttributeValue* holder = FindSourceHolder(m_propertySource->GetValueAsSourceDesc().GetFirst());
 		ibSourceDataObject* source = holder != nullptr ? holder->GetSourceValue() : nullptr;
 		const ibSourceExplorer* explorer = source != nullptr ? source->GetSourceExplorer() : nullptr;
 		// WALK the path from the head attribute DOWN to the LEAF source node: a tabular section is a CHILD
 		// of the object's explorer (its own helpers are the columns); a list attribute IS the head. Head-
 		// only resolution filled an object's fields for a section-bound tablebox — the old bug.
 		for (size_t i = 1; i < basePath.size() && explorer != nullptr; i++)
-			explorer = explorer->FindById(basePath[i]);
+			explorer = explorer->FindById(basePath[i].m_id);
 		if (explorer != nullptr) {
+			// SNAPSHOT the columns BEFORE creating any control: SetSource() below re-materialises the holder's
+			// source, whose GetSourceExplorer()->Reset() CLEARS the helper vector this loop reads through
+			// (GetHelper returns &m_arraySource[idx]) -> the live nodes dangle mid-loop (freed, 0xDD fill), so
+			// only the FIRST column reads real data. Read the explorer ONCE while stable, then build from the copy.
+			struct ColumnSnap { ibSourceId id; wxString name; wxString synonym; bool visible; };
+			std::vector<ColumnSnap> snaps;
 			for (unsigned int idx = 0; idx < explorer->GetHelperCount(); idx++) {
 				const ibSourceExplorer* columnPtr = explorer->GetHelper(idx);
 				if (columnPtr == nullptr)
 					continue;
-				const ibSourceExplorer& column = *columnPtr;
+				snaps.push_back({ columnPtr->GetSourceId(), columnPtr->GetSourceName(),
+					columnPtr->GetSourceSynonym(), columnPtr->IsVisible() });
+			}
+			for (const ColumnSnap& snap : snaps) {
 				ibValueModelTableBoxColumn* tableBoxColumn =
 					dynamic_cast<ibValueModelTableBoxColumn*>(m_formOwner->CreateControl(wxT("TableboxColumn"), this));
 				wxASSERT(tableBoxColumn);
-				tableBoxColumn->SetControlName(GetControlName() + column.GetSourceName());
-				tableBoxColumn->SetCaption(column.GetSourceSynonym());
-				std::vector<ibSourceId> colPath = basePath;
-				colPath.push_back(column.GetSourceId());
-				tableBoxColumn->SetSource(colPath);
-				tableBoxColumn->SetVisibleColumn(column.IsVisible() || explorer->GetHelperCount() == 1);
+				tableBoxColumn->SetControlName(GetControlName() + snap.name);
+				tableBoxColumn->SetCaption(snap.synonym);
+				ibSourceDescription colDesc;   // inherit the tablebox's own hops (with any pinned types), then this column
+				for (const ibSourceHop& hop : basePath) colDesc.AppendSource(hop.m_id, hop.m_type);
+				colDesc.AppendSource(snap.id);
+				tableBoxColumn->SetSource(colDesc);
+				tableBoxColumn->SetVisibleColumn(snap.visible);
 				g_visualHostContext->InsertControl(tableBoxColumn, this);
 			}
 		}

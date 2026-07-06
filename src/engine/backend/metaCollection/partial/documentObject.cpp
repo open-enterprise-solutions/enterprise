@@ -71,8 +71,8 @@ const ibSourceExplorer* ibValueRecordDataObjectDocument::GetSourceExplorer() con
 	for (const auto object : m_metaObject->GetTableArrayObject()) {
 		if (object != nullptr && !object->IsDeleted()) {
 			ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(object->GetName(), object->GetSynonym(), object->GetMetaID(), object->GetTypeDesc());
-			std::vector<ibValueMetaObjectAttributeBase*> tblCols;
-			for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject(tblCols)) tblNode.AppendColumn(tblCol);
+			for (ibValueMetaObjectAttributeBase* tblCol : object->GetGenericAttributeArrayObject()) 
+				tblNode.AppendColumn(tblCol);
 		}
 	}
 

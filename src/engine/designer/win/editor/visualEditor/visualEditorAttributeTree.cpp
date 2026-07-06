@@ -9,7 +9,7 @@
 #include "frontend/visualView/ctrl/tableBox.h"                          // g_controlTableBoxCLSID
 #include "frontend/mainFrame/objinspect/objinspect.h"                  // objectInspector
 #include "backend/metaCollection/attribute/metaAttributeObject.h"      // GetIconGroup (default attribute icon)
-#include "backend/srcDataObject.h"                                      // ibSourceDataObject / ibSourceExplorer / GetReferenceTargets
+#include "backend/srcDataObject.h"                                      // ibSourceDataObject / ibSourceExplorer / ConvertToMetaIds
 #include "backend/sourceDescription.h"                                   // ibSourceDescription / ibSourceDescriptionMemory (drag payload = the source path, unified serialize)
 #include "backend/fileSystem/fs.h"                                       // ibWriterMemory (drag payload buffer)
 #include "backend/metaCollection/partial/reference/reference.h"        // ibValueReferenceDataObject::Create (reference-as-source)
@@ -128,7 +128,7 @@ static bool HasComposition(ibFormAttributeValue* entry, const std::vector<ibMeta
 // is finite / non-cyclic, so its columns are built inline in this same pass (a reference column INSIDE
 // it still expands lazily). `metaData` resolves reference targets; `suffix` disambiguates composite-
 // reference branches by target name.
-static void AppendComposition(wxTreeCtrl* tc, const wxTreeItemId& parent, const std::vector<ibMetaID>& prefix,
+static void AppendComposition(wxTreeCtrl* tc, const wxTreeItemId& parent, const std::vector<ibSourceHop>& prefix,
 	const ibSourceExplorer& explorer, const ibMetaData* metaData, const wxString& suffix = wxEmptyString,
 	bool parentIsList = false)
 {
@@ -136,9 +136,9 @@ static void AppendComposition(wxTreeCtrl* tc, const wxTreeItemId& parent, const 
 		const ibSourceExplorer* col = explorer.GetHelper(i);
 		if (col == nullptr)
 			continue;
-		std::vector<ibMetaID> childPath = prefix;
-		childPath.push_back(col->GetSourceId());
-		const std::vector<ibMetaID> refTypes = ibSourceDataObject::GetReferenceTargets(col->GetClsidList(), metaData);
+		std::vector<ibSourceHop> childPath = prefix;
+		childPath.push_back({ col->GetSourceId() });   // this column's hop (scalar — a reference pins its branch when ITS children descend)
+		const std::vector<ibMetaID> refTypes = ibValueReferenceDataObject::ConvertToMetaIds(col->GetClsidList(), metaData);
 		// The tree node is the column's IDENTITY — show its NAME, not its Caption/synonym (a control's
 		// header takes the synonym; the attribute tree stays name-keyed so a column is findable by name).
 		const wxString base = col->GetSourceName();
@@ -185,15 +185,13 @@ void ibAttributeTree::RebuildTree()
 			const ibMetaID attrId = entry->GetId();
 			// A reference-typed attribute expands metadata-only (through a reference-as-source); an
 			// object / list attribute expands through its live source's explorer (when materialised).
-			const std::vector<ibMetaID> refTypes = metaData != nullptr
-				? ibSourceDataObject::GetReferenceTargets(entry->GetTypeDesc().GetClsidList(), metaData)
-				: std::vector<ibMetaID>{};
+			const std::vector<ibMetaID> refTypes = ibValueReferenceDataObject::ConvertToMetaIds(entry->GetTypeDesc().GetClsidList(), metaData);
 			ibSourceDataObject* src = entry->GetSourceValue();
 			const bool isTable = src != nullptr && src->IsTableSource();   // list-typed attribute -> a tablebox
 			const ibClassID dropControl = DropControlClass(isTable, refTypes, entry->GetTypeDesc());
 			const wxTreeItemId id = m_tcAttributes->AppendItem(
 				root, entry->GetName(), 0, 0,
-				new ibAttributeTreeItemData(entry, { attrId }, refTypes, isTable, dropControl));   // ROOT: holder + head-of-path
+				new ibAttributeTreeItemData(entry, std::vector<ibSourceHop>{ { attrId } }, refTypes, isTable, dropControl));   // ROOT: holder + head-of-path
 			if (entry->IsMain())
 				m_tcAttributes->SetItemBold(id);
 			if (HasComposition(entry, refTypes))
@@ -254,14 +252,14 @@ bool ibAttributeTree::SelectColumnInInspector(const wxTreeItemId& item)
 	ibAttributeTreeItemData* data = (ibAttributeTreeItemData*)m_tcAttributes->GetItemData(item);
 	if (data == nullptr || data->GetEntry() != nullptr)   // a root holder is handled by SelectInInspector
 		return false;
-	const std::vector<ibMetaID>& path = data->GetPath();
+	const std::vector<ibSourceHop>& path = data->GetPath();
 	if (path.size() < 2)                                   // [attrId, columnId] — shallower can't name a column
 		return false;
 
 	ibValueForm* form = m_formHandler != nullptr ? m_formHandler->GetValueForm() : nullptr;
 	if (form == nullptr)
 		return false;
-	ibFormAttributeValue* head = form->FindAttributeById(path.front());
+	ibFormAttributeValue* head = form->FindAttributeById(path.front().m_id);
 	if (head == nullptr || head->GetBindValue() == nullptr)
 		return false;
 
@@ -272,7 +270,7 @@ bool ibAttributeTree::SelectColumnInInspector(const wxTreeItemId& item)
 	if (cols == nullptr)
 		return false;
 
-	const ibMetaID leaf = path.back();
+	const ibMetaID leaf = path.back().m_id;
 	for (unsigned int i = 0; i < cols->GetColumnCount(); i++) {
 		ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* ci = cols->GetColumnInfo(i);
 		if (ci == nullptr || (ibMetaID)ci->GetColumnID() != leaf)
@@ -370,7 +368,7 @@ void ibAttributeTree::OnItemExpanding(wxTreeEvent& event)
 		return;
 
 	m_tcAttributes->DeleteChildren(event.GetItem());   // drop the dummy [+]
-	const std::vector<ibMetaID>& childPrefix = data->GetPath();
+	const std::vector<ibSourceHop>& childPrefix = data->GetPath();
 
 	if (data->HasRef()) {
 		// Reference node: descend into each TARGET type via an empty reference-as-source (metadata-only,
@@ -383,8 +381,10 @@ void ibAttributeTree::OnItemExpanding(wxTreeEvent& event)
 			refValue.ConvertToValue(refSource);
 			if (refSource == nullptr)
 				continue;
+			// PIN this reference hop to the branch we descend into — the child fields carry it, so the DRAG /
+			// serialized path coerces the composite reference to THIS target (else it read back <not selected>).
 			if (const ibSourceExplorer* explorer = refSource->GetSourceExplorer())
-				AppendComposition(m_tcAttributes, event.GetItem(), childPrefix, *explorer, metaData,
+				AppendComposition(m_tcAttributes, event.GetItem(), data->ChildPrefix(reference_to_clsid(target)), *explorer, metaData,
 					multi ? refSource->GetSourceCaption() : wxString(wxEmptyString), data->IsUnderList());
 		}
 	}
@@ -411,7 +411,9 @@ void ibAttributeTree::OnBeginDrag(wxTreeEvent& event)
 
 	// Payload = the binding PATH as RAW ids — resolution is via the source explorer (metadata-agnostic), so
 	// the serializer needs no metaData. The drop loads it and resolves the control class from the path.
-	ibSourceDescription srcDesc(data->GetPath());
+	ibSourceDescription srcDesc;   // build from the HOP path — reference hops carry the pinned branch type (composite)
+	for (const ibSourceHop& hop : data->GetPath())
+		srcDesc.AppendSource(hop.m_id, hop.m_type);
 	ibWriterMemory writer;
 	ibSourceDescriptionMemory::SaveData(writer, srcDesc);
 	const wxMemoryBuffer buf = writer.buffer();
@@ -488,7 +490,7 @@ void ibAttributeTree::OnAddColumn(wxCommandEvent& WXUNUSED(event))
 		for (wxTreeItemId col = m_tcAttributes->GetFirstChild(attrItem, childCookie); col.IsOk();
 			col = m_tcAttributes->GetNextChild(attrItem, childCookie)) {
 			const ibAttributeTreeItemData* colData = (ibAttributeTreeItemData*)m_tcAttributes->GetItemData(col);
-			if (colData != nullptr && !colData->GetPath().empty() && colData->GetPath().back() == newColId) {
+			if (colData != nullptr && !colData->GetPath().empty() && colData->GetPath().back().m_id == newColId) {
 				m_tcAttributes->SelectItem(col);
 				m_tcAttributes->EnsureVisible(col);
 				return;

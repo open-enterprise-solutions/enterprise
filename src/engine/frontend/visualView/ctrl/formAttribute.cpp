@@ -353,13 +353,13 @@ bool ibValueForm::GetSourceList(ibSourceDataType kind, std::vector<ibBackendForm
 
 bool ibValueForm::GetValueByAttributePath(const ibSourceDescription& desc, ibValue& result) const
 {
-	const std::vector<ibSourceId>& path = desc.GetPath();
+	const std::vector<ibSourceHop>& path = desc.GetPath();
 	if (path.empty())
 		return false;
 
 	// Head selects an entry from the registry → it reads the rest of the path itself.
-	if (ibFormAttributeValue* attr = FindAttributeById(path.front())) {
-		const std::vector<ibSourceId> tail(path.begin() + 1, path.end());
+	if (ibFormAttributeValue* attr = FindAttributeById(desc.GetFirst())) {
+		const std::vector<ibSourceHop> tail(path.begin() + 1, path.end());
 		return attr->GetValueByPath(tail, result);
 	}
 
@@ -371,10 +371,10 @@ bool ibValueForm::GetValueByAttributePath(const ibSourceDescription& desc, ibVal
 
 bool ibValueForm::IsWritableBinding(const ibSourceDescription& desc) const
 {
-	const std::vector<ibSourceId>& path = desc.GetPath();
+	const std::vector<ibSourceHop>& path = desc.GetPath();
 	if (path.empty())
 		return false;
-	if (ibFormAttributeValue* attr = FindAttributeById(path.front())) {
+	if (ibFormAttributeValue* attr = FindAttributeById(desc.GetFirst())) {
 		if (attr->IsReferenceValue())
 			return false;            // anything read through a reference is read-only
 		return path.size() <= 2;     // [attr] or [attr, directField]
@@ -388,9 +388,9 @@ bool ibValueForm::SetValueByAttributePath(const ibSourceDescription& desc, const
 	if (!IsWritableBinding(desc))
 		return false;   // dot-walk binding is read-only
 
-	const std::vector<ibSourceId>& path = desc.GetPath();
-	if (ibFormAttributeValue* attr = FindAttributeById(path.front())) {
-		const std::vector<ibSourceId> tail(path.begin() + 1, path.end());
+	const std::vector<ibSourceHop>& path = desc.GetPath();
+	if (ibFormAttributeValue* attr = FindAttributeById(desc.GetFirst())) {
+		const std::vector<ibSourceHop> tail(path.begin() + 1, path.end());
 		return attr->SetValueByPath(tail, value);
 	}
 
@@ -560,17 +560,15 @@ bool ibFormAttributeValue::IsReferenceValue() const
 // Walk the tail through the VALUE's runtime members (FindProp / GetPropVal) — the same
 // member dispatch the script uses — instead of a source-object cross-cast. Each hop id is
 // resolved to a field name via metadata, then read off the live value.
-bool ibFormAttributeValue::GetValueByPath(const std::vector<ibSourceId>& tail, ibValue& result) const
+bool ibFormAttributeValue::GetValueByPath(const std::vector<ibSourceHop>& tail, ibValue& result) const
 {
 	if (tail.empty()) { result = m_value; return true; }
-	// The value IS a source object (stored in the attribute). Read it by metaID PATH straight through
-	// the source — BYPASSING metadata entirely (no metaID→metaobject→name→FindProp round-trip). Every
-	// source kind (record / reference / constant / …) maps the id to its slot via GetValueByMetaID.
+	// The value IS a source object — walk the tail hops through it.
 	ibSourceDataObject* src = GetValueAsSource();
 	return src != nullptr && src->GetValueByPath(tail, result);
 }
 
-bool ibFormAttributeValue::SetValueByPath(const std::vector<ibSourceId>& tail, const ibValue& value)
+bool ibFormAttributeValue::SetValueByPath(const std::vector<ibSourceHop>& tail, const ibValue& value)
 {
 	if (tail.empty()) { m_value = value; return true; }
 	// Only a DIRECT field is writable (the resolve gates deeper dot-walks read-only). The value IS a
@@ -578,7 +576,7 @@ bool ibFormAttributeValue::SetValueByPath(const std::vector<ibSourceId>& tail, c
 	// lookup). Every source maps the id to its slot via SetValueByMetaID — a record by the attribute's
 	// metaID, a constant by its own.
 	ibSourceDataObject* src = GetValueAsSource();
-	return src != nullptr && src->SetValueByMetaID(tail.front(), value);
+	return src != nullptr && src->SetValueBySourceHop(tail.front(), value);
 }
 
 ibSourceDataType ibFormAttributeValue::ibFormAttribute::GetSourceDataType() const

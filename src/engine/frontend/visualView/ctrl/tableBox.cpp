@@ -45,13 +45,13 @@ bool ibValueModelTableBox::IsForeignColumn(const ibValueModelTableBoxColumn* col
 {
 	if (column == nullptr)
 		return false;
-	const std::vector<ibSourceId>& colPath = column->GetSourcePath();
-	const std::vector<ibSourceId>& myPath = GetSourcePath();
+	const std::vector<ibSourceHop>& colPath = column->GetSourcePath();
+	const std::vector<ibSourceHop>& myPath = GetSourcePath();
 	if (colPath.empty())
 		return false;
 	for (size_t i = 0; i < myPath.size(); ++i) {
-		if (i >= colPath.size() || colPath[i] != myPath[i])
-			return true;   // diverges from (or is shorter than) the tablebox prefix -> foreign root
+		if (i >= colPath.size() || colPath[i].m_id != myPath[i].m_id)
+			return true;   // diverges from (or is shorter than) the tablebox prefix -> foreign root (structural, by id)
 	}
 	return false;
 }
@@ -75,18 +75,13 @@ bool ibValueModelTableBox::ResolveCellValue(const ibDataViewItem& item,
 	if (m_tableModel == nullptr || !IsPathColumn(column))
 		return false;
 
-	const std::vector<ibSourceId>& colPath = column->GetSourcePath();
+	const std::vector<ibSourceHop>& colPath = column->GetSourcePath();
 	const size_t prefix = GetSourcePath().size();   // row-relative tail starts here
 
-	// First hop — a column of the row (a reference cell), via the DUMB model.
+	// The table STARTS the walk at the row (the first row-relative hop yields a source cell) and TRANSFERS the
+	// deeper hops to that source object — ONE entry, like a control resolving an attribute path off the form.
 	ibValue current;
-	if (!m_tableModel->GetValueByMetaID(item, colPath[prefix], current))
-		return false;
-
-	// Deeper hops — the SHARED source walk (the very ibSourceDataObject::ContinueHops that GetValueByPath
-	// uses): each reference cell IS a source object, so it self-describes the next id. No metaID -> name
-	// -> FindProp round-trip — ONE data-fetch path for both the renderer and the path resolver.
-	if (!ibSourceDataObject::ContinueHops(current, colPath, prefix + 1, current))
+	if (!m_tableModel->GetValueByPath(item, colPath, prefix, current))
 		return false;
 
 	ibValueModel::ValueToVariant(out, current);
@@ -312,9 +307,9 @@ bool ibValueModelTableBox::HasCommandBar() const
 	// (a single hop), so the form toolbar already serves those commands and a table bar would duplicate.
 	// A NESTED source (a tabular section — path [mainAttr, section]) only has the main attribute as its
 	// HEAD, not as its own source; it is a distinct list and keeps its own bar (Add/Copy/Edit/Delete).
-	const std::vector<ibSourceId>& path = GetSourcePath();
-	if (path.size() == 1) {
-		ibBackendFormAttributeValue* holder = FindSourceHolder(path.front());
+	const ibSourceDescription& desc = m_propertySource->GetValueAsSourceDesc();
+	if (desc.GetHopCount() == 1) {
+		ibBackendFormAttributeValue* holder = FindSourceHolder(desc.GetFirst());
 		if (holder != nullptr && holder->IsMain())
 			return false;
 	}

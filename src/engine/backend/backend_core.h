@@ -17,6 +17,9 @@ extern BACKEND_API unsigned int GetBuildId();
 #include "typeconv.h"
 #include "stringUtils.h"
 
+// The UNDEFINED value type's clsid — the canonical "no concrete type"; base-level so low-level code can name it.
+constexpr ibClassID g_valueUndefinedCLSID = primitive_to_clsid("VL_UNDF");
+
 //*******************************************************************************************
 
 #define oes_clipboard_metadata	wxT("oes_clipboard_metadata")

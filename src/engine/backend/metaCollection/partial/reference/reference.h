@@ -63,6 +63,19 @@ public:
 	static ibValueReferenceDataObject* Create(const ibMetaData* metaData, void* ptr);
 	static ibValueReferenceDataObject* CreateFromPtr(const ibMetaData* metaData, void* ptr);
 
+	// The pinned-type twin materialiser for the dot-walk — STATIC, on the REFERENCE (the side that knows how to
+	// build one, and where the metaData coupling BELONGS). If `out` is not already the pinned reference type (a
+	// composite field's UNDEFINED, or a different target), replace it with an empty typed twin of the pin, built
+	// from `metaData`. Returns true iff a twin was substituted. A source's own GetValueBySourceHop calls this
+	// with its GetSourceMetaData() — so ibSourceDataObject itself stays free of metadata / reference creation.
+	static bool CoerceHopType(const ibSourceHop& hop, ibValue& out, const ibMetaData* metaData);
+
+	// Reference clsids → their TARGET metaobject ids, resolved through the class factory (each clsid's type
+	// ctor must be a REFERENCE ctor; its metaobject's metaID is the target). metaData-driven — the kind-byte
+	// shortcut mis-classified composite branches. Non-reference clsids are skipped. Pickers call it to
+	// enumerate a COMPOSITE reference's branches.
+	static std::vector<ibMetaID> ConvertToMetaIds(const std::vector<ibClassID>& clsids, const ibMetaData* metaData);
+
 	// Ordering primitive (three-way) — the base virtual GT/GE/LE and operator< all derive from this, so this
 	// ONE method tunes all four for references. Orders by GUID first (value order, via ibGuid's operators),
 	// then by the type's metaID — so a mixed-type (variant) reference stream forms a deterministic sequence,
@@ -99,9 +112,15 @@ public:
 
 	virtual bool FindValue(const wxString& findData, std::vector<ibValue>& listValue) const;
 
-	//support source set/get data 
-	virtual bool SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal);
-	virtual bool GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const;
+	//support source set/get data — ibValueDataObject value primitive (presentation + runtime read/copy)
+	virtual bool SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal) override;
+	virtual bool GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const override;
+	
+	// ibSourceDataObject hop gate. Set just writes the id slot. Get honours the PINNED type via CoerceHopType:
+	// a COMPOSITE reference field resolves to UNDEFINED, so the shared helper hands back an empty typed TWIN of
+	// the pin (this reference's own metaData) — a reference returns a TYPE, not undefined, so the hop steps on.
+	virtual bool SetValueBySourceHop(const ibSourceHop& hop, const ibValue& value) override { return SetValueByMetaID(hop.m_id, value); }
+	virtual bool GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const override { const bool got = GetValueByMetaID(hop.m_id, out); return CoerceHopType(hop, out, GetSourceMetaData()) || got; }
 
 	//get metaData from object
 	virtual const ibValueMetaObjectRecordData* GetMetaObject() const {

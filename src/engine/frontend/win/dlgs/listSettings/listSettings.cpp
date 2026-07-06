@@ -15,7 +15,7 @@
 #include "backend/metaCollection/partial/list/dynamicList.h"   // ibValueDynamicList — the dialog is built on it
 #include "backend/query/queryable.h"                            // ibBackendQueryable::GetColumns
 #include "backend/query/queryColumn.h"                          // ibBackendQueryColumn
-#include "backend/srcDataObject.h"                              // ibSourceDataObject::ibSourceExplorer + GetReferenceTargets (dot-walk)
+#include "backend/srcDataObject.h"                              // ibSourceDataObject::ibSourceExplorer + ConvertToMetaIds (dot-walk)
 #include "backend/metaCollection/partial/reference/reference.h" // ibValueReferenceDataObject::Create (reference-as-source)
 
 #include <wx/notebook.h>
@@ -692,11 +692,10 @@ void ibDialogListSettings::BuildFilterFieldsFromSource()
 		// One hop into a reference column: each TARGET type vends an empty
 		// reference-as-source whose explorer carries the target's columns. The SAME
 		// family-blind, cross-DLL-exported path advpropSource's picker uses
-		// (GetReferenceTargets + reference-as-source). Non-reference columns yield none.
+		// (ConvertToMetaIds + reference-as-source). Non-reference columns yield none.
 		if (metaData == nullptr)
 			continue;
-		const std::vector<ibMetaID> refTargets =
-			ibSourceDataObject::GetReferenceTargets(col->GetClsidList(), metaData);
+		const std::vector<ibMetaID> refTargets = ibValueReferenceDataObject::ConvertToMetaIds(col->GetClsidList(), metaData);
 		for (const ibMetaID& target : refTargets) {
 			ibValue refValue = ibValueReferenceDataObject::Create(metaData, target);
 			ibSourceDataObject* refObject = nullptr;

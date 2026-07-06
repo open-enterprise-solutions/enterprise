@@ -58,6 +58,32 @@ bool ibValueModelTableBoxColumn::GetChoiceForm(ibPropertyList* property)
 	return true;
 }
 
+#ifndef OES_USE_WEB
+// Re-apply the header sort arrow from the composer's ACTIVE sort — match the column's OWN bound field
+// (GetSourceFieldName, off m_propertySource, the same string OnColumnClick commits) against the composer's
+// sorts; no model column-id resolution (a reference dot-path field is not a model column id). Called from
+// OnUpdated (form build) AND from the control's post-refresh sync (a settings-dialog sort reaches the columns
+// only here, not through a header click). (ibDataViewColumnObject is a desktop-only type — web has no wxDVC.)
+void ibDataViewColumnObject::SyncSortArrowFromModel()
+{
+	ibValueModelTableBoxColumn* col = GetControl();
+	if (col == nullptr) return;
+	ibValueModelTableBox* owner = col->GetOwner();
+	ibValueModel* modelValue = owner != nullptr ? owner->GetTableModel() : nullptr;
+	if (modelValue == nullptr || appData->DesignerMode()
+		|| !modelValue->GetFeatures().Has(ibValueModel::Features::Sorting))
+		return;
+	const wxString field = col->GetSourceFieldName();
+	for (size_t i = 0; !field.IsEmpty() && i < modelValue->GetModelComposer().SortCount(); ++i) {
+		wxString sortField; bool asc;
+		if (modelValue->GetModelComposer().GetSortAt(i, sortField, asc) && sortField == field) {
+			SetSortOrder(asc);
+			break;
+		}
+	}
+}
+#endif
+
 //***********************************************************************************
 //*                            ibValueModelTableBoxColumn                                 *
 //***********************************************************************************
@@ -199,32 +225,6 @@ void ibValueModelTableBoxColumn::OnUpdated(wxObject* wxobject, ibFrontendWindow*
 	dataViewColumn->SetColumnModel(source_column);
 #endif
 }
-
-#ifndef OES_USE_WEB
-// Re-apply the header sort arrow from the composer's ACTIVE sort — match the column's OWN bound field
-// (GetSourceFieldName, off m_propertySource, the same string OnColumnClick commits) against the composer's
-// sorts; no model column-id resolution (a reference dot-path field is not a model column id). Called from
-// OnUpdated (form build) AND from the control's post-refresh sync (a settings-dialog sort reaches the columns
-// only here, not through a header click). (ibDataViewColumnObject is a desktop-only type — web has no wxDVC.)
-void ibDataViewColumnObject::SyncSortArrowFromModel()
-{
-	ibValueModelTableBoxColumn* col = GetControl();
-	if (col == nullptr) return;
-	ibValueModelTableBox* owner = col->GetOwner();
-	ibValueModel* modelValue = owner != nullptr ? owner->GetTableModel() : nullptr;
-	if (modelValue == nullptr || appData->DesignerMode()
-		|| !modelValue->GetFeatures().Has(ibValueModel::Features::Sorting))
-		return;
-	const wxString field = col->GetSourceFieldName();
-	for (size_t i = 0; !field.IsEmpty() && i < modelValue->GetModelComposer().SortCount(); ++i) {
-		wxString sortField; bool asc;
-		if (modelValue->GetModelComposer().GetSortAt(i, sortField, asc) && sortField == field) {
-			SetSortOrder(asc);
-			break;
-		}
-	}
-}
-#endif
 
 void ibValueModelTableBoxColumn::Cleanup(wxObject* obj, ibVisualHost* visualHost)
 {

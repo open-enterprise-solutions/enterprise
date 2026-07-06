@@ -137,12 +137,12 @@ TEST(SourceExplorer, WalkColumnsStepsDotPath) {
     const ibBackendSourceColumn* leaf = nullptr;
     wxString text;
 
-    EXPECT_TRUE(src.WalkColumns(std::vector<ibSourceId>{ 20, 22 }, 0, leaf, &text));
+    EXPECT_TRUE(src.WalkColumns(std::vector<ibSourceHop>{ {20}, {22} }, 0, leaf, &text));
     EXPECT_TRUE(text == wxT(".Line.Price"));
 
     text.clear();
-    EXPECT_FALSE(src.WalkColumns(std::vector<ibSourceId>{ 20, 999 }, 0, leaf, &text));   // no such field in the type
+    EXPECT_FALSE(src.WalkColumns(std::vector<ibSourceHop>{ {20}, {999} }, 0, leaf, &text));   // no such field in the type
 
     text.clear();
-    EXPECT_FALSE(src.WalkColumns(std::vector<ibSourceId>{ 999, 22 }, 0, leaf, &text));   // no such type at the root
+    EXPECT_FALSE(src.WalkColumns(std::vector<ibSourceHop>{ {999}, {22} }, 0, leaf, &text));   // no such type at the root
 }
