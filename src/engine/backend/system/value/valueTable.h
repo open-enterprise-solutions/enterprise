@@ -8,6 +8,7 @@
 #include "backend/srcDataObject.h"                    // ibSourceDataObject / ibSourceExplorer — the table IS a form data source
 #include "backend/query/queryColumn.h"                 // ibBackendSourceColumn — a RAM column IS its own source-column presentation (header/type via the explorer)
 #include "backend/propertyManager/propertyManager.h"  // ibPropertyObject / ibPropertyUString / ibPropertyType — columns surface / persist AND edit with the form attribute
+#include "backend/stringUtils.h"                       // stringUtils::GenerateSynonym — Caption-empty header fallback (mirror ibFormAttribute)
 
 #include <memory>
 #include <vector>
@@ -103,9 +104,10 @@ public:
 			// type through the same WalkColumns / GetSourceAbstractColumn seam a metadata field uses. GetComment
 			// stays the base default (empty) — a column carries no comment. ------------------------------------
 			virtual wxString GetName() const override { return m_propertyName->GetValueAsString(); }
-			// Header = the Caption; empty Caption falls back to the Name (mirror ibFormAttribute::GetSynonym).
+			// Header = the Caption; empty Caption falls back to the auto-generated synonym of the Name — the
+			// last priority level (Caption > metadata > auto-name), now truly mirroring ibFormAttribute::GetSynonym.
 			virtual wxString GetSynonym() const override {
-				return !m_propertyCaption->IsEmptyProperty() ? m_propertyCaption->GetValueAsTranslateString() : m_propertyName->GetValueAsString();
+				return !m_propertyCaption->IsEmptyProperty() ? m_propertyCaption->GetValueAsTranslateString() : stringUtils::GenerateSynonym(GetColumnName());
 			}
 
 			// --- Property events (fired by the inspector on an edit) — grouped last, per convention. Nothing
@@ -159,8 +161,13 @@ public:
 				node->SetValue(max_id + 1, ibValueTypeDescription::AdjustValue(typeData));
 			}
 
-			return m_listColumnInfo.emplace_back(
-				new ibValueModelTableColumnInfo(max_id + 1, colName, typeData, caption, width));
+			ibValueModelTableColumnInfo* colInfo =
+				new ibValueModelTableColumnInfo(max_id + 1, colName, typeData, caption, width);
+			// Structural attach-owner (NOT AttachPropertyObject — we don't want the column's props to
+			// flatten into the table's inspector): the notify chain column -> value-table -> holder, so a
+			// Caption / Name / Type edit bubbles up and the bound control re-renders live.
+			colInfo->SetAttachOwner(static_cast<ibPropertyObject*>(m_ownerTable));
+			return m_listColumnInfo.emplace_back(colInfo);
 		}
 
 		const ibTypeDescription GetColumnType(unsigned int col) const {

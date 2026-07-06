@@ -335,6 +335,9 @@ public:
 	/// Default false; ibValueMetaObject pins predefined children.
 	virtual bool IsPinnedToParent() const { return false; }
 
+	/// Check is enabled property?
+	virtual bool IsEditable() const = 0;
+
 	/// Gets the metadata object. The CONST overload is the one types actually implement
 	/// (a control resolves it through its owning form; ibValueMetaObject returns m_metaData).
 	virtual const ibMetaData* GetMetaData() const { return nullptr; }
@@ -393,13 +396,6 @@ public:
 	*/
 	virtual int GetComponentType() const { return COMPONENT_TYPE_ABSTRACT; }
 
-	// Attach ANOTHER property-object so ITS properties appear as part of THIS one in
-	// the inspector (a single whole), while GetProperty routes them back to it — edits
-	// and OnPropertyChanged fire on the REAL owner (the attached object), not us.
-	// Non-owning: the other object lives elsewhere (e.g. an attribute's value).
-	void AttachPropertyObject(ibPropertyObject* other);
-	void DetachAllPropertyObjects();
-
 	// Central VIRTUAL entry for object-level node save/load. A type OVERRIDES it to do its
 	// OWN data: meta / controls call their LoadNode/SaveNode inside (their per-type
 	// ReadData/WriteData stays THEIR method, NOT on this base); the dynamic list writes
@@ -428,13 +424,36 @@ public:
 	virtual bool OnEventChanging(ibEvent* event, const wxVariant& newValue) { return true; }
 	virtual void OnEventChanged(ibEvent* property, const wxVariant& oldValue, const wxVariant& newValue) {}
 
+	// A CHILD changed (an attached object, or one that named us its attach-owner). Mirrors wxPGProperty's
+	// ChildChanged: the parent hears it and passes it up — default bubbles along the attach-owner chain;
+	// a frontend holder overrides to refresh its editor. Deliberately carries NO payload — a refresh
+	// signal, not the property event: reusing OnPropertyChanged here would make a holder re-forward to
+	// the property's owner and fire the child's handler a second time.
+	virtual void OnChildChanged() { if (m_attachOwner != nullptr) m_attachOwner->OnChildChanged(); }
+
 	/**
 	* Checks whether the type is derived from the one passed as a parameter.
 	*/
 
 	ibPropertyCategory* GetCategory() const { return m_category; }
 	const std::vector<ibPropertyObject*>& GetAttachedObjects() const { return m_attachedObjects; }
-	virtual bool IsEditable() const = 0;
+
+	// Attach ANOTHER property-object so ITS properties appear as part of THIS one in
+	// the inspector (a single whole), while GetProperty routes them back to it — edits
+	// and OnPropertyChanged fire on the REAL owner (the attached object), not us.
+	// Non-owning: the other object lives elsewhere (e.g. an attribute's value).
+	void AttachPropertyObject(ibPropertyObject* other);
+	void DetachAllPropertyObjects();
+
+	// The attach graph's UPWARD edge — distinct from the tree m_parent on ibPropertyObjectHelper
+	// (that is the children hierarchy). This is "who attached me", set on AttachPropertyObject or by
+	// a structural owner (a value-table sets it on its column-infos). Null when standalone. A change
+	// here bubbles up via OnChildChanged until a holder that can react is reached.
+	ibPropertyObject* GetAttachOwner() const { return m_attachOwner; }
+	
+	void SetAttachOwner(ibPropertyObject* owner) { m_attachOwner = owner; }
+	void RemoveAttachedObject(ibPropertyObject* other);
+
 
 protected:
 
@@ -449,6 +468,7 @@ private:
 	std::map<wxString, ibProperty*> m_properties;
 	std::map<wxString, ibEvent*> m_events;
 	std::vector<ibPropertyObject*> m_attachedObjects;   // non-owning — GetProperty routes to them
+	ibPropertyObject* m_attachOwner = nullptr;          // upward back-link to whoever attached us (see GetAttachOwner)
 };
 
 template <typename T>

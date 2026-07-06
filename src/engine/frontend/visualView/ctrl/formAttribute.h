@@ -142,6 +142,9 @@ public:
 	// to the property's REAL owner (attribute / value — each reacts to its own), and on the
 	// attribute's Type change re-materialise the value + re-accumulate.
 	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
+	// A nested value (a value-table column-info) changed — the holder is the frontend end of the attach
+	// chain, so it re-renders the bound control live.
+	virtual void OnChildChanged() override;
 	// Serialization: the attribute's own set, then the held value's own (its clsid's Source /
 	// Settings). The attribute is read FIRST so its Type is known before the value materialises.
 	virtual bool ReadProperty(const ibDataNode& node) override;
@@ -169,6 +172,13 @@ public:
 	// adjusting against the still-empty Type would drop it). The sync to the Type happens in
 	// Refresh (after the Type is known / on a Type change).
 	bool SetHeldValue(const ibValue& value) { m_value = value; return true; }   // not SetValue: ibValue::SetValue clashes
+
+	// True when the attribute holds a MATERIALISED value of its own (a value-table WITH its designed
+	// columns — even at zero rows, an object, a seated source) vs an unset slot. Set-main's source
+	// shuffle must NOT overwrite such a value; only an unset slot inherits / drops a source (Refresh/
+	// AdjustValue is the sole type-sync). Gate on the value TYPE, NOT IsEmpty(): a value-table's
+	// IsEmpty() means "no rows", so a columns-only table would wrongly read as empty and get wiped.
+	bool HasHeldValue() const { return m_value.GetType() != ibValueTypes::TYPE_EMPTY; }
 
 	// Backing cell for the form-module local bind (the script variable's value) — the
 	// LIVE slot address (BindLocalVariable stores the pointer; must stay valid).

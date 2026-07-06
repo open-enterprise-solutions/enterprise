@@ -239,6 +239,13 @@ bool ibObjectInspector::ModifyProperty(ibProperty* prop, const wxVariant& newVal
 	if (m_currentSel->OnPropertyChanging(prop, newValue)) {
 		prop->SetValue(newValue);
 		m_currentSel->OnPropertyChanged(prop, oldValue, newValue);
+		// If the edited object is ATTACHED to an owner (a value-table column-info sits under its
+		// value-table, which sits under the form-attribute holder), tell that owner its children
+		// changed — the signal bubbles up the attach-owner chain until a frontend holder re-renders.
+		// Objects that self-refresh (controls, the holder itself) have no attach-owner, so this is a
+		// no-op for them, and it never re-fires the edited object's own OnPropertyChanged.
+		if (ibPropertyObject* attachOwner = m_currentSel->GetAttachOwner())
+			attachOwner->OnChildChanged();
 		return true;
 	}
 	return false;
@@ -250,6 +257,10 @@ bool ibObjectInspector::ModifyEvent(ibEvent* event, const wxVariant& newValue)
 	if (m_currentSel->OnEventChanging(event, newValue)) {
 		event->SetValue(newValue);
 		m_currentSel->OnEventChanged(event, oldValue, newValue);
+		// Same as a property edit: if the object is attached, bubble the change up the attach-owner
+		// chain so a frontend holder re-renders (an event edit on a nested backend object counts too).
+		if (ibPropertyObject* attachOwner = m_currentSel->GetAttachOwner())
+			attachOwner->OnChildChanged();
 		return true;
 	}
 	return false;

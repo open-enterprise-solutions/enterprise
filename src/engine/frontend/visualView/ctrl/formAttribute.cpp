@@ -284,23 +284,25 @@ void ibValueForm::SetMainAttribute(ibFormAttributeValue* entry)
 	// the data source) — the toggle-off path. SetSourceValue IncrRefs the new before the old
 	// releases, so it never drops to zero mid-move; re-selecting the same main is a no-op.
 	ibFormAttributeValue* oldMain = GetMainAttribute();
-	if (entry != nullptr && entry != oldMain)
+	// Hand the demoted main's seated source to the new main — but ONLY into an EMPTY slot. An attribute
+	// that already holds its own value (a value-table with its designed columns) keeps it: promoting it
+	// to main must NOT overwrite that value with the inherited source (which is empty at design time, so
+	// the columns silently vanished — the reported bug). Refresh/AdjustValue below is the sole type-sync.
+	if (entry != nullptr && entry != oldMain && !entry->HasHeldValue())
 		entry->SetSourceValue(oldMain != nullptr ? oldMain->GetSourceValue() : nullptr);
 
-	// Sole-main invariant: `entry` becomes main; every other loses it. A demoted holder first drops
-	// any seated (runtime) source, and THEN every holder RE-MATERIALISES its value from its own
-	// Type via Refresh(). Merely clearing the value and stopping there (the old
-	// SetSourceValue(nullptr)) left the holder TYPE_EMPTY — its source was gone with no way back, so
-	// the picker asserted on a null source and column autofill produced nothing; and re-setting an
-	// attribute as main never rebuilt its source (with no old main to inherit from, entry cleared
-	// ITSELF), so the "set-main doesn't re-render" bug. Refresh keeps a correctly-typed seated
-	// source and rebuilds an emptied one, so it is right for the new main and the demoted ones alike.
+	// Sole-main invariant: `entry` becomes main; every other loses it. Each holder RE-MATERIALISES its
+	// value from its own Type via Refresh(), whose AdjustValue KEEPS a value whose Type still matches and
+	// empties a stale one — so it is the sole type-sync. A holder that owns its value (a value-table with
+	// its designed columns) keeps it; only a genuinely EMPTY slot has its seated source cleared before the
+	// re-materialise. Forcing SetSourceValue(nullptr) on an owned value was what silently dropped a
+	// value-table's columns on set/unset-main; AdjustValue already handles the stale case without it.
 	for (const auto& av : m_attributes) {
 		const bool isMain = (entry != nullptr && av == entry);
 		av->m_attribute->SetMainAttribute(isMain);
-		if (!isMain)
-			av->SetSourceValue(nullptr);   // drop any seated runtime source before re-materialising
-		av->Refresh();                     // rebuild the Type value (kept intact for a matching seated source)
+		if (!isMain && !av->HasHeldValue())
+			av->SetSourceValue(nullptr);   // clear ONLY an empty slot; an owned value (value-table columns) survives
+		av->Refresh();                     // AdjustValue keeps a type-matching value, empties a stale one
 	}
 	// Re-point the exported DataSource at the new main's cell (BindExport overwrites the single
 	// "DataSource" slot, so the old main's ownership is dropped — no per-old unbind). Only when
@@ -477,6 +479,19 @@ void ibFormAttributeValue::OnPropertyChanged(ibProperty* property, const wxVaria
 
 #else
 	(void)property; (void)oldValue; (void)newValue;
+#endif
+}
+
+void ibFormAttributeValue::OnChildChanged()
+{
+	// A nested value changed (a value-table column-info edited in the inspector). The holder is the
+	// frontend end of the attach chain — re-render the bound control live. Keep bubbling up too (the
+	// base is a no-op once there is no further owner).
+	ibPropertyObject::OnChildChanged();
+
+#ifndef OES_USE_WEB
+	if (ibFrontendVisualEditorNotebook* editor = ibFrontendVisualEditorNotebook::FindEditorByForm(m_attribute->GetOwnerForm()))
+		editor->RefreshEditor();
 #endif
 }
 

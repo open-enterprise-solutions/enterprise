@@ -66,6 +66,12 @@ ibDataValue ibBackendProperty::GetNodeValue() const
 
 ibPropertyObject::~ibPropertyObject()
 {
+	// Sever the attach graph both ways so no back-link outlives us: our attached children drop their
+	// upward owner-link, and if we were attached to an owner, we leave its downward list.
+	DetachAllPropertyObjects();
+	if (m_attachOwner != nullptr)
+		m_attachOwner->RemoveAttachedObject(this);
+
 	wxDELETE(m_category);
 
 	for (auto& property : m_properties)
@@ -172,11 +178,26 @@ void ibPropertyObject::AttachPropertyObject(ibPropertyObject* other)
 	if (other == nullptr || other == this)
 		return;
 	m_attachedObjects.push_back(other);
+	other->m_attachOwner = this;   // upward back-link: a change in the attached object bubbles up to us
 }
 
 void ibPropertyObject::DetachAllPropertyObjects()
 {
+	for (ibPropertyObject* other : m_attachedObjects)
+		if (other != nullptr && other->m_attachOwner == this)
+			other->m_attachOwner = nullptr;   // drop the back-link so it never dangles past us
 	m_attachedObjects.clear();
+}
+
+void ibPropertyObject::RemoveAttachedObject(ibPropertyObject* other)
+{
+	if (other == nullptr)
+		return;
+	m_attachedObjects.erase(
+		std::remove(m_attachedObjects.begin(), m_attachedObjects.end(), other),
+		m_attachedObjects.end());
+	if (other->m_attachOwner == this)
+		other->m_attachOwner = nullptr;
 }
 
 bool ibPropertyObject::ReadProperty(const ibDataNode& node)
