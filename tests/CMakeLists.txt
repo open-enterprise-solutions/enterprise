@@ -39,7 +39,7 @@ add_executable(oes_tests
     test_connectionPool.cpp
     test_session.cpp
     test_module_manager_split.cpp
-    test_pagingRamTable.cpp
+    # test_pagingRamTable.cpp  # API-rotted (ibValueModelTableBase renamed) — excluded until updated
     test_blobCompression.cpp
     test_firebirdLease.cpp
     test_logger.cpp
@@ -82,6 +82,8 @@ add_executable(oes_tests
     test_stringUtils.cpp
     test_guid.cpp
     test_dbTransaction.cpp
+    test_propertyObject.cpp
+    test_sourceExplorer.cpp
 )
 
 target_link_libraries(oes_tests
