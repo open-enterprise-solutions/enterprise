@@ -10,9 +10,25 @@
 
 #include "frontend/visualView/visualHost.h"
 
+#include <wx/dnd.h>
+#include <functional>
+
 class ibValueLayerObject;      // common base for a layer node (the bar OR one command)
 class ibValueCommandBar;       // command-interface layer — tree-node payload
 class ibValueCommandBarItem;   // one child command — tree-node payload
+class ibSourceDescription;     // "oes_source_drag" drop payload — a binding source path (raw ids)
+
+// wxDropTarget for the "oes_source_drag" payload (a node dragged from the attribute tree). Shared by the
+// form CANVAS and the OBJECT TREE — each supplies a handler that maps the drop point (x,y) to a parent and
+// creates the bound control there. The payload (raw source-path ids) is decoded once, in one place.
+class ibSourceDragDropTarget : public wxDropTarget {
+public:
+	using Handler = std::function<void(wxCoord, wxCoord, const ibSourceDescription&)>;
+	explicit ibSourceDragDropTarget(Handler handler);
+	wxDragResult OnData(wxCoord x, wxCoord y, wxDragResult def) override;
+private:
+	Handler m_handler;
+};
 
 //////////////////////////////////////////////////////////////////////////////////////////
 
@@ -398,6 +414,10 @@ public:
 
 		void OnPropertyModified(ibProperty* prop);
 
+		// A node dragged from the attribute tree, dropped ONTO a tree node → create + bind the control
+		// under that node (its container). Mirrors the canvas host's DropBoundControl.
+		void DropBoundControl(wxCoord x, wxCoord y, const ibSourceDescription& desc);
+
 		ibVisualEditorObjectTree(ibVisualEditor* owner, wxWindow* parent, int id = wxID_ANY);
 		virtual ~ibVisualEditorObjectTree() override {}
 
@@ -634,6 +654,9 @@ public:
 	// a source path — the drop counterpart of the palette's CreateObject. The control CLASS is resolved from
 	// the type AT the path (the drop side owns the choice). Returns the created control (unwrapped) or nullptr.
 	ibValueFrame* CreateBoundControl(ibValueFrame* parentHint, const ibSourceDescription& desc);
+	// (Re)attach a drop target to every tablebox's own grid — a native grid swallows the OS drop before the
+	// form-canvas target sees it, so drops over the rows need the grid's own target. Called on editor refresh.
+	void WireTableboxDrops(ibValueFrame* obj);
 	void RemoveObject(ibValueFrame* obj);
 	void CutObject(ibValueFrame* obj, bool force = false);
 	void CopyObject(ibValueFrame* obj);

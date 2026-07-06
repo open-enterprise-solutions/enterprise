@@ -35,6 +35,12 @@ public:
 	// The inner control the wrapped control casts to its concrete widget type.
 	wxWindow* GetGenericControl() const { return m_inner; }
 
+	// A drop target set on this chrome is FORWARDED to the inner content window — the real control a body
+	// drop must hit (the toolbar layer sits over the form canvas, which catches drops there). A wxDropTarget
+	// is single-owner, so it can't be shared across the sibling parts; the composite hands it to its content
+	// child, the same way wxCompositeWindow forwards colour / font / focus to its parts.
+	virtual void SetDropTarget(wxDropTarget* dt) override;
+
 	// The chrome parts (stable refs) — iterated on UPDATE to refresh them in place. Teardown
 	// is automatic: destroying this window destroys the parts (and the inner) with it.
 	const std::vector<wxWindow*>& GetLayerParts() const { return m_layers; }

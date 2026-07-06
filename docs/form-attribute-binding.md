@@ -453,6 +453,50 @@ ABOVE the content. The subsystem lives in `frontend/visualView/` (`layerObject.{
   bar: the main attribute is only its HEAD, not its own source. Gating on `!path.empty()` (head-only)
   instead of `size() == 1` was the bug that hid a tabular section's command panel.
 
+## Designer: live column edits & drag-to-column
+
+### Live-refresh a value-table column edit (property-object child-change notify)
+
+A value-table's `ibValueModelTableColumnInfo` is a BACKEND property object edited through the generic
+object inspector; it cannot reach the frontend designer to re-render when its Caption / Name / Type changes
+(two-DLL). Rather than an ad-hoc inspector hook, the property-object graph gained an UPWARD edge:
+
+- `ibPropertyObject::m_attachOwner` — "who attached me", DISTINCT from the tree `m_parent` on
+  `ibPropertyObjectHelper` (that is the children hierarchy). Set by `AttachPropertyObject` (the accumulator
+  owns the attached) and structurally by a value-table on its column-infos (`AddColumn`). Severed both ways in
+  the destructor (`DetachAllPropertyObjects` + `RemoveAttachedObject`), so no back-link dangles.
+- `virtual void OnChildChanged()` — default bubbles up the attach-owner chain; a frontend holder
+  (`ibFormAttributeValue`) overrides it to `RefreshEditor`. It carries NO payload — a refresh signal, not the
+  property event: reusing `OnPropertyChanged` would make the holder re-forward to the property's owner and fire
+  the child's handler twice. Mirrors `wxPGProperty::ChildChanged`.
+- The inspector (`ModifyProperty` AND `ModifyEvent`) calls `GetAttachOwner()->OnChildChanged()` after an edit —
+  from the OWNER, not self, so the edited object's handler isn't re-run. Chain:
+  column-info → value-table → holder → refresh. Controls / the holder itself have no attach-owner → no-op.
+
+The attribute tree shows a column node by its NAME (its identity), not its Caption/synonym — the control's
+header takes the synonym, the tree stays name-keyed so a column is findable by name.
+
+### Drag a source column / attribute onto a tablebox → append a bound column
+
+Dropping a node dragged from the attribute tree onto a **tablebox** appends a bound view column instead of
+creating a standalone control (`CreateBoundControl`): climb `parentHint` to the nearest tablebox (by clsid). A
+field UNDER the table's own bound source (its path a strict prefix of the field's) becomes a ROW column; a
+single-value source from elsewhere (a scalar / reference attribute) becomes a FOREIGN / object column (Mode 2,
+one value per row). Column source = the dragged absolute path — the same the renderer resolves. Enabling drag:
+`AppendComposition` no longer zeroes a list/section field's drop-class, so its columns are draggable;
+`ResolveDropControlClass` DECLINES a column whose container is a list, so an off-table drop makes nothing
+rather than a broken `<not selected>` scalar.
+
+**Drop over the grid.** A tablebox is a composite — `ibCanvasWindow` (a `wxCompositeWindow<wxPanel>`) stacks a
+toolbar layer over the inner grid. The native grid swallows the OS drop, so the form-canvas drop target only
+caught the toolbar strip. `ibCanvasWindow` OVERRIDES `SetDropTarget` to FORWARD it to its inner content window
+— as `wxCompositeWindow` forwards colour / font / focus to its parts — so the designer sets ONE target on the
+composite and it propagates (a `wxDropTarget` is single-owner, so it goes to the content child, the window a
+body drop hits). The drop handler DEFERS the append via `CallAfter`: it runs on the tablebox's own grid, and
+adding a column rebuilds / re-wires that grid — doing it inside the OS drop callback frees the very target
+mid-call (a use-after-free crash). The append refreshes only the object tree — a column provisions no new form
+attribute, so the attribute tree must not rebuild and lose the user's expansion / selection mid-drag.
+
 ## Open edges
 
 - **Multi-source** — today it is one main + auxiliary attributes; true N-sources and the

@@ -31,6 +31,8 @@ void ibVisualEditorNotebook::ibVisualEditor::NotifyEditorRefresh()
 
 	if (m_attributeTree != nullptr)
 		m_attributeTree->OnEditorRefresh();
+
+	WireTableboxDrops(m_valueForm);   // (re)attach per-grid drop targets after the widgets rebuild
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::NotifyObjectCreated(ibValueFrame* obj)

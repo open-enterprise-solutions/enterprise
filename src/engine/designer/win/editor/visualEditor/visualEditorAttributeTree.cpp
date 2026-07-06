@@ -139,15 +139,15 @@ static void AppendComposition(wxTreeCtrl* tc, const wxTreeItemId& parent, const 
 		std::vector<ibMetaID> childPath = prefix;
 		childPath.push_back(col->GetSourceId());
 		const std::vector<ibMetaID> refTypes = ibSourceDataObject::GetReferenceTargets(col->GetClsidList(), metaData);
-		const wxString base = col->GetSourceSynonym().IsEmpty() ? col->GetSourceName() : col->GetSourceSynonym();
+		// The tree node is the column's IDENTITY — show its NAME, not its Caption/synonym (a control's
+		// header takes the synonym; the attribute tree stays name-keyed so a column is findable by name).
+		const wxString base = col->GetSourceName();
 		const wxString label = suffix.IsEmpty() ? base : base + wxT(" - ") + suffix;
-		// A field UNDER a list / table section is a COLUMN of that table, not a standalone form source —
-		// its path gates on a table attribute and won't resolve for a scalar control (shows <not
-		// selected>). So list/section fields are NOT draggable; only the list itself drops (as a Tablebox).
-		// Object / reference fields (parentIsList == false) drop as scalar controls.
-		const ibClassID dropControl = parentIsList
-			? ibClassID(0)
-			: DropControlClass(col->IsTableSection(), refTypes, col->GetTypeDesc());
+		// A field UNDER a list / table section is a COLUMN of that table. It IS draggable: dropped onto a
+		// tablebox bound to the SAME source it appends a bound column (CreateBoundControl's tablebox branch);
+		// dropped anywhere else it is declined (ResolveDropControlClass rejects a table column) so no broken
+		// scalar is created. Object / reference fields (parentIsList == false) still drop as scalar controls.
+		const ibClassID dropControl = DropControlClass(col->IsTableSection(), refTypes, col->GetTypeDesc());
 		ibAttributeTreeItemData* itemData = new ibAttributeTreeItemData(nullptr, childPath, refTypes, col->IsTableSection(), dropControl, parentIsList);
 		const wxTreeItemId child = tc->AppendItem(parent, label, 0, 0, itemData);
 		if (!refTypes.empty()) {

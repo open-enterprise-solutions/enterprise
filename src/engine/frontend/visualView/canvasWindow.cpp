@@ -39,3 +39,13 @@ wxWindowList ibCanvasWindow::GetCompositeWindowParts() const
 		parts.Append(m_inner);
 	return parts;
 }
+
+void ibCanvasWindow::SetDropTarget(wxDropTarget* dt)
+{
+	// Forward to the inner content window — the real control (a grid) is what a body drop must hit. The
+	// chrome's toolbar layer sits over the form canvas, which catches drops there.
+	if (m_inner != nullptr)
+		m_inner->SetDropTarget(dt);
+	else
+		wxCompositeWindow<wxPanel>::SetDropTarget(dt);
+}

@@ -11,8 +11,10 @@
 #include "backend/propertyManager/propertyManager.h"
 
 #include "frontend/visualView/ctrl/formAttribute.h"   // ibFormAttributeValue (form attribute add command)
+#include "frontend/visualView/ctrl/tableBox.h"         // g_controlTableBoxCLSID — a drop onto a tablebox appends a column
 #include "backend/query/queryColumn.h"                 // ibBackendSourceColumn::GetName (name a dropped control after its field)
 #include "backend/srcDataObject.h"                     // ibSourceExplorer — resolve a dropped path's leaf type -> control class
+#include <wx/app.h>                                     // wxTheApp->CallAfter — defer a grid drop out of the OS drop callback
 
 void ibVisualEditorNotebook::ibVisualEditor::Execute(ibVisualEditorCmd* cmd)
 {
@@ -966,13 +968,23 @@ static wxString ResolveDropControlClass(ibValueForm* form, const ibSourceDescrip
 		typeDesc = head->GetTypeDesc();
 	}
 	else {
+		// Walk to the leaf, tracking whether its CONTAINER is a list / table section. A field inside one is
+		// a COLUMN, bindable only INTO that table (a standalone scalar's path gates on the table row and
+		// shows <not selected>). Such a column is served by the drop's tablebox branch; here we decline, so a
+		// canvas / non-table drop creates nothing instead of a broken control.
+		bool containerIsList = source != nullptr && source->IsTableSource();   // head itself a value-table
 		const ibSourceExplorer* explorer = source != nullptr ? source->GetSourceExplorer() : nullptr;
-		for (size_t i = 1; i < path.size() && explorer != nullptr; i++)
+		for (size_t i = 1; i + 1 < path.size() && explorer != nullptr; i++) {
 			explorer = explorer->FindById(path[i]);
-		if (explorer == nullptr)
+			containerIsList = explorer != nullptr && explorer->IsTableSection();
+		}
+		const ibSourceExplorer* leaf = explorer != nullptr ? explorer->FindById(path.back()) : nullptr;
+		if (leaf == nullptr)
 			return wxEmptyString;
-		isTable = explorer->IsTableSection();
-		typeDesc = explorer->GetTypeDesc();
+		if (containerIsList)
+			return wxEmptyString;   // a table column -> table-only (the tablebox branch handles the valid drop)
+		isTable = leaf->IsTableSection();
+		typeDesc = leaf->GetTypeDesc();
 	}
 
 	if (isTable)
@@ -986,6 +998,49 @@ ibValueFrame* ibVisualEditorNotebook::ibVisualEditor::CreateBoundControl(
 	ibValueFrame* parentHint, const ibSourceDescription& desc)
 {
 	wxASSERT(m_valueForm);
+
+	// A drop onto a TABLEBOX means "add a column", not "create a control". Climb from the hit-tested target
+	// to the nearest tablebox (type by clsid). A field UNDER the table's own bound source (its path a strict
+	// prefix of the field's) becomes a ROW column; a single-value source from elsewhere (an attribute /
+	// object field) becomes a FOREIGN / object column (Mode 2). Either way append a view column bound to the
+	// field — added at the END and bound in ONE step. Bind BEFORE the widget builds so it renders visible.
+	for (ibValueFrame* box = parentHint; box != nullptr; box = box->GetParent()) {
+		if (box->GetClassType() != g_controlTableBoxCLSID)
+			continue;
+		const ibTypeControlFactory* boxFactory = dynamic_cast<const ibTypeControlFactory*>(box);
+		if (boxFactory == nullptr)
+			break;
+		const std::vector<ibSourceId>& boxPath = boxFactory->GetSourceDesc().GetPath();
+		const std::vector<ibSourceId>& fieldPath = desc.GetPath();
+		if (fieldPath.empty() || fieldPath == boxPath)
+			break;                                             // the table's own bare source -> nothing to add
+		bool underTable = fieldPath.size() > boxPath.size();   // a field PAST the table's own source
+		for (size_t i = 0; underTable && i < boxPath.size(); i++)
+			if (fieldPath[i] != boxPath[i])
+				underTable = false;                            // diverges from the table's source
+		if (!underTable) {
+			// Not a column of THIS table's source. Allow a SINGLE-value source (a scalar / reference
+			// attribute or object field) as a FOREIGN / object column (Mode 2 — one value per row); a column
+			// of a DIFFERENT table (ResolveDropControlClass declines it) has no per-row value here.
+			const wxString foreignClass = ResolveDropControlClass(m_valueForm, desc);
+			if (foreignClass != wxT("Textctrl") && foreignClass != wxT("Checkbox"))
+				break;
+		}
+
+		const wxString colClass = wxT("TableboxColumn");
+		ibValueFrame* column = m_valueForm->CreateObject(_STDSTR(colClass), box);
+		if (column == nullptr)
+			break;
+		SetBoundSource(column, desc);                                    // bind BEFORE build -> renders visible
+		Execute(new ibVisualEditorInsertObjectCmd(this, column, box));   // append at the end (undoable)
+		// Refresh ONLY the object tree — a table column provisions NO new form attribute, so the attribute
+		// tree must NOT rebuild: that would collapse the expanded source and drop the user's selection right
+		// as they finish the drag. (This is why we don't call the full NotifyObjectCreated here.)
+		m_objectTree->OnObjectCreated(column);
+		SelectObject(column, true, true);
+		return column;
+	}
+
 	const wxString className = ResolveDropControlClass(m_valueForm, desc);
 	if (className.IsEmpty())
 		return nullptr;
@@ -1032,6 +1087,27 @@ ibValueFrame* ibVisualEditorNotebook::ibVisualEditor::CreateBoundControl(
 	if (control != nullptr)
 		SelectObject(control, true, true);
 	return control;
+}
+
+void ibVisualEditorNotebook::ibVisualEditor::WireTableboxDrops(ibValueFrame* obj)
+{
+	if (obj == nullptr)
+		return;
+	// Set ONE drop target on the tablebox's composite chrome; the composite forwards it to its inner grid
+	// (ibCanvasWindow::SetDropTarget) — no reaching past the composite into the grid's windows. Re-wired on
+	// every editor refresh, since the widgets rebuild and take their drop targets with them.
+	if (obj->GetClassType() == g_controlTableBoxCLSID) {
+		ibValueFrame* box = obj;
+		if (wxWindow* chrome = wxDynamicCast(obj->GetWxObject(), wxWindow))
+			chrome->SetDropTarget(new ibSourceDragDropTarget([this, box](wxCoord, wxCoord, const ibSourceDescription& d) {
+				// DEFER out of the OS drop callback: this target lives ON the tablebox's grid, and adding a
+				// column rebuilds / re-wires that grid — freeing THIS very target mid-callback (use-after-free
+				// crash). Run the add after the drag-drop unwinds. desc is copied into the deferred call.
+				wxTheApp->CallAfter([this, box, d]() { CreateBoundControl(box, d); });
+			}));
+	}
+	for (unsigned int i = 0; i < obj->GetChildCount(); i++)
+		WireTableboxDrops(obj->GetChild(i));
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::InsertObject(ibValueFrame* obj, ibValueFrame* parent)

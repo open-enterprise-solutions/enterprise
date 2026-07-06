@@ -8,6 +8,7 @@
 #include "backend/propertyManager/propertyManager.h"
 #include "backend/sourceDescription.h"   // ibSourceDescription / ibSourceDescriptionMemory (load the drag payload)
 #include "backend/fileSystem/fs.h"       // ibReaderMemory (drag payload buffer)
+#include "frontend/win/ctrls/toolBar.h"  // ibAuiToolBar — a command-bar toolbar right-click is served by the bar's own menu
 
 #include <wx/dnd.h>       // wxDropTarget / wxCustomDataObject — form-canvas accepts a dragged attribute node
 #include <wx/utils.h>     // wxFindWindowAtPoint (point -> widget hit-test)
@@ -17,30 +18,26 @@ static const int ID_TIMER_SCAN = wxScrolledWindow::NewControlId();
 // Form-canvas drop target: receives a node dragged from the attribute tree (oes_source_drag format) and
 // creates a control at the drop point, bound to the node's PATH. The payload is the source path, serialized
 // by the engine's ibSourceDescriptionMemory (the tree's OnBeginDrag) — loaded back the same way here; the
-// control class is resolved from the type AT the path on THIS (drop) side. ONE target on the content panel —
-// child controls don't intercept the drop (the designer's mouse filter special-cases only mouse-down, not
-// DnD), so the point is hit-tested to an object manually in DropBoundControl.
-class ibFormEditorDropTarget : public wxDropTarget {
-public:
-	explicit ibFormEditorDropTarget(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost* host)
-		: wxDropTarget(new wxCustomDataObject(wxDataFormat(wxT("oes_source_drag")))), m_host(host) {}
+// control class is resolved from the type AT the path on THIS (drop) side. ONE target per surface (the form
+// content panel AND the object tree); child controls don't intercept — the point is hit-tested to an object
+// manually in each surface's handler (its own DropBoundControl). Payload decode lives here, in one place.
+ibSourceDragDropTarget::ibSourceDragDropTarget(Handler handler)
+	: wxDropTarget(new wxCustomDataObject(wxDataFormat(wxT("oes_source_drag")))), m_handler(std::move(handler)) {}
 
-	wxDragResult OnData(wxCoord x, wxCoord y, wxDragResult def) override {
-		if (!GetData())
-			return wxDragNone;
-		wxCustomDataObject* obj = static_cast<wxCustomDataObject*>(GetDataObject());
-		if (obj != nullptr && obj->GetSize() > 0) {
-			ibReaderMemory reader(obj->GetData(), (int)obj->GetSize());
-			ibSourceDescription srcDesc;
-			ibSourceDescriptionMemory::LoadData(reader, srcDesc);   // raw id path — metadata-agnostic
-			if (srcDesc.IsOk())
-				m_host->DropBoundControl(x, y, srcDesc);   // pass the WRAPPER through (no decompose/rewrap)
-		}
-		return def;
+wxDragResult ibSourceDragDropTarget::OnData(wxCoord x, wxCoord y, wxDragResult def)
+{
+	if (!GetData())
+		return wxDragNone;
+	wxCustomDataObject* obj = static_cast<wxCustomDataObject*>(GetDataObject());
+	if (obj != nullptr && obj->GetSize() > 0) {
+		ibReaderMemory reader(obj->GetData(), (int)obj->GetSize());
+		ibSourceDescription srcDesc;
+		ibSourceDescriptionMemory::LoadData(reader, srcDesc);   // raw id path — metadata-agnostic
+		if (srcDesc.IsOk() && m_handler)
+			m_handler(x, y, srcDesc);   // pass the WRAPPER through (no decompose/rewrap)
 	}
-private:
-	ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost* m_host;
-};
+	return def;
+}
 
 wxBEGIN_EVENT_TABLE(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost, wxScrolledWindow)
 EVT_INNER_FRAME_RESIZED(wxID_ANY, ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnResizeBackPanel)
@@ -62,8 +59,10 @@ ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::ibVisualEditorHost(i
 	InitMainSizer();
 	m_back->GetEventHandler()->Connect(wxID_ANY, wxEVT_LEFT_DOWN, wxMouseEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnClickBackPanel), nullptr, this);
 
-	// The form canvas accepts a node dragged from the attribute tree → create + bind a control there.
-	m_back->GetFrameContentPanel()->SetDropTarget(new ibFormEditorDropTarget(this));
+	// The form canvas accepts a node dragged from the attribute tree → create + bind a control at the drop
+	// point (hit-tested in DropBoundControl). Same shared target the object tree uses, with our handler.
+	m_back->GetFrameContentPanel()->SetDropTarget(
+		new ibSourceDragDropTarget([this](wxCoord x, wxCoord y, const ibSourceDescription& d) { DropBoundControl(x, y, d); }));
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::DropBoundControl(
@@ -167,6 +166,14 @@ bool ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnLeftClickFrom
 
 bool ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnRightClickFromApp(wxWindow* currentWindow, wxMouseEvent& event)
 {
+	// A right-click on a control's command-bar TOOLBAR is served by the toolbar's OWN handler
+	// (BuildCommandBarToolBar binds wxEVT_RIGHT_DOWN -> the bar's "Add command" menu). Don't pop the
+	// owning control's menu (e.g. a table's "Add column") over it — return so the app filter's Skip lets
+	// that handler run. Body of the table -> the control's own menu (Add column); toolbar -> Add command.
+	for (wxWindow* w = currentWindow; w != nullptr && !w->IsKindOf(CLASSINFO(ibVisualHost)); w = w->GetParent())
+		if (dynamic_cast<ibAuiToolBar*>(w) != nullptr)
+			return true;
+
 	wxWindow* wnd = currentWindow;
 	while (wnd != nullptr) {
 		ibValueFrame* founded = GetObjectBase(wnd);

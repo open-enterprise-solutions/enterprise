@@ -316,6 +316,12 @@ ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::ibVisualEditor
 
 	m_tcObjects->SetDoubleBuffered(true);
 
+	// Accept a node dragged from the attribute tree, dropped ONTO a tree node → create + bind the control
+	// under that node (its container). The tree's own EVT_TREE_BEGIN/END_DRAG (reparent) is a separate
+	// mechanism and keeps working. DropBoundControl hit-tests the item under the drop point.
+	m_tcObjects->SetDropTarget(
+		new ibSourceDragDropTarget([this](wxCoord x, wxCoord y, const ibSourceDescription& d) { DropBoundControl(x, y, d); }));
+
 	Connect(wxID_ANY, wxEVT_COMMAND_TREE_ITEM_EXPANDED, wxTreeEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnExpansionChange));
 	Connect(wxID_ANY, wxEVT_COMMAND_TREE_ITEM_COLLAPSED, wxTreeEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnExpansionChange));
 
@@ -332,6 +338,43 @@ ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::ibVisualEditor
 	m_notifySelecting = false;
 
 	CreateTree();
+}
+
+// Decode a tree item's payload and select it — one place for the click-reselect and the
+// selection-changed handlers. A layer node (bar/command) goes to the inspector; a control node
+// goes to the visual editor (which also scrolls to it).
+void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::SelectItemData(wxTreeItemData* item_data)
+{
+	if (item_data == nullptr)
+		return;
+	auto* data = (ibVisualEditorObjectTreeItemData*)item_data;
+	if (ibValueLayerObject* layer = data->GetLayerObject()) {
+		if (!objectInspector->IsShownInspector()) objectInspector->ShowInspector();
+		objectInspector->SelectObject(layer, true);
+		return;
+	}
+	ibValueFrame* obj(data->GetObject());
+	assert(obj);
+	m_formHandler->SelectObject(obj);
+	m_formHandler->ScrollToObject(obj);
+}
+
+void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::DropBoundControl(
+	wxCoord x, wxCoord y, const ibSourceDescription& desc)
+{
+	// A node dragged from the attribute tree, dropped onto an object-tree node → create + bind the control
+	// UNDER that node (its container). HitTest maps the drop point to the tree item; a LAYER node (command
+	// bar / command) resolves to its owner frame; an empty area → nullptr, and CreateBoundControl falls back
+	// to the form root and climbs to a legal parent (the same insert path the canvas drop uses).
+	int flags = 0;
+	const wxTreeItemId item = m_tcObjects->HitTest(wxPoint(x, y), flags);
+	ibValueFrame* target = GetObjectFromTreeItem(item);
+	if (target == nullptr && item.IsOk()) {
+		if (wxTreeItemData* itemData = m_tcObjects->GetItemData(item))
+			if (ibValueLayerObject* layer = ((ibVisualEditorObjectTreeItemData*)itemData)->GetLayerObject())
+				target = layer->GetOwnerFrame();
+	}
+	m_formHandler->CreateBoundControl(target, desc);
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnKeyDown(wxTreeEvent& event)
@@ -382,24 +425,6 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnSelChan
 	SelectItemData(item_data);
 }
 
-// Decode a tree item's payload and select it — one place for the click-reselect and the
-// selection-changed handlers. A layer node (bar/command) goes to the inspector; a control node
-// goes to the visual editor (which also scrolls to it).
-void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::SelectItemData(wxTreeItemData* item_data)
-{
-	if (item_data == nullptr)
-		return;
-	auto* data = (ibVisualEditorObjectTreeItemData*)item_data;
-	if (ibValueLayerObject* layer = data->GetLayerObject()) {
-		if (!objectInspector->IsShownInspector()) objectInspector->ShowInspector();
-		objectInspector->SelectObject(layer, true);
-		return;
-	}
-	ibValueFrame* obj(data->GetObject());
-	assert(obj);
-	m_formHandler->SelectObject(obj);
-	m_formHandler->ScrollToObject(obj);
-}
 
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnRightClick(wxTreeEvent& event)
 {
