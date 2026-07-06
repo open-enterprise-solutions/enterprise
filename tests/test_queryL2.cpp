@@ -189,8 +189,8 @@ TEST(QueryL2_Expr, CaseAndCast)
 	EXPECT_EQ(Lite(ibQueryIR(ibProject(ibScan(wxT("T")), { { c, wxT("x") } }))),
 		"SELECT (CASE WHEN (t = ?) THEN ? ELSE ? END) AS x FROM T");
 	EXPECT_EQ(Lite(ibQueryIR(ibProject(ibScan(wxT("Reg")),
-		{ { ibCast(ibFunc(wxT("SUM"), { ibCol(wxT("q_N")) }), wxT("NUMERIC")), wxT("s") } }))),
-		"SELECT CAST(SUM(q_N) AS NUMERIC) AS s FROM Reg");
+		{ { ibCast(ibFunc(wxT("SUM"), { ibCol(wxT("q_N")) }), ibTypeNumber(18, 6)), wxT("s") } }))),
+		"SELECT CAST(SUM(q_N) AS DECIMAL(18,6)) AS s FROM Reg");
 }
 
 TEST(QueryL2_Expr, Arithmetic)

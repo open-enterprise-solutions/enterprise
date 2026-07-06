@@ -29,6 +29,7 @@
 #include "backend/databaseLayer/connectionScope.h"
 #include "backend/databaseLayer/databaseLayer.h"      // ibDatabaseLayer + ibDialectDictionary (merged in)
 #include "backend/databaseLayer/preparedStatement.h" // ibPreparedStatement (ibQueryStatement base)
+#include "backend/databaseLayer/columnType.h"        // ibColumnType — Cast target + ibDdlColumn type (dialect TYPE-MAP renders it)
 
 #include <memory>
 #include <vector>
@@ -61,7 +62,7 @@ enum class ibQueryExprKind
 	In,       // m_lhs [NOT m_negated] IN ( m_args... )
 	IsNull,   // m_lhs IS [NOT m_negated] NULL
 	Not,      // NOT m_lhs
-	Cast      // CAST( m_lhs AS m_name )  — pin an expression's SQL type (aggregate results)
+	Cast      // CAST( m_lhs AS <m_castType, spelled per-DBMS via the dialect TYPE-MAP> ) — pin an expr's type
 };
 
 enum class ibQueryBinOp
@@ -109,6 +110,10 @@ struct ibQueryExpr
 	// Case: searched WHEN -> THEN pairs, in order, + optional ELSE (m_else).
 	std::vector<std::pair<std::shared_ptr<ibQueryExpr>, std::shared_ptr<ibQueryExpr>>> m_cases;
 	std::shared_ptr<ibQueryExpr> m_else;
+
+	// Cast: the CANONICAL target type. The renderer spells it per-DBMS through the dialect TYPE-MAP
+	// (ibQueryRenderer::MapType) — the IR bakes no SQL type string, so it stays dialect-neutral.
+	ibColumnType m_castType;
 
 	// In / IsNull: negation (NOT IN / IS NOT NULL).
 	bool m_negated = false;
@@ -220,14 +225,16 @@ inline ibQueryExprPtr ibNot(ibQueryExprPtr operand)
 	return e;
 }
 
-// CAST(expr AS sqlType). `sqlType` is a raw SQL type keyword (e.g. "NUMERIC") — used
-// where an aggregate's result type must be pinned (register balances / turnovers, whose
-// SUM(CASE …) the driver may otherwise type loosely).
-inline ibQueryExprPtr ibCast(ibQueryExprPtr expr, const wxString& sqlType)
+// CAST(expr AS <type>). `castType` is the CANONICAL target type; the renderer spells it per-DBMS
+// through the dialect TYPE-MAP (ibQueryRenderer::MapType), so the IR bakes no dialect SQL string.
+// Used where an expression's result type must be pinned (aggregate results — register balances /
+// turnovers, whose SUM(CASE …) the driver may otherwise type loosely or too narrow: FB / MySQL
+// default a bare NUMERIC / DECIMAL to (9,0) / (10,0) and truncate the fraction).
+inline ibQueryExprPtr ibCast(ibQueryExprPtr expr, const ibColumnType& castType)
 {
 	auto e = std::make_shared<ibQueryExpr>(ibQueryExprKind::Cast);
-	e->m_lhs  = std::move(expr);
-	e->m_name = sqlType;
+	e->m_lhs      = std::move(expr);
+	e->m_castType = castType;
 	return e;
 }
 
@@ -465,8 +472,7 @@ struct ibQueryIR
 // ==========================================================================
 
 // The canonical column type + factories (ibColumnType / ibTypeNumber / …) live in a shared low-tier
-// vocabulary used by both L2 and the L3 layout tier. ibDdlColumn below carries an ibColumnType.
-#include "backend/databaseLayer/columnType.h"
+// vocabulary used by both L2 and the L3 layout tier (included at the top). ibDdlColumn below carries one.
 
 struct ibDdlColumn
 {

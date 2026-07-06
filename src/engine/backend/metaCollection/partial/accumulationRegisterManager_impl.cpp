@@ -55,7 +55,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalance(const ibVa
 		ibQueryExprPtr cond = ibBinOp(ibQueryBinOp::Eq, ibCol(recordTypeField), zero);
 		ibQueryExprPtr neg  = ibBinOp(ibQueryBinOp::Sub, zero, ibCol(resField));
 		ibQueryExprPtr body = ibCase({ { cond, neg } }, ibCol(resField));
-		return ibCast(ibFunc(wxT("SUM"), { body }), wxT("NUMERIC"));
+		return ibCast(ibFunc(wxT("SUM"), { body }), ibTypeNumber(18, 6));   // pin as generous DECIMAL — bare NUMERIC narrows to (9,0)/(10,0) on FB/MySQL and truncates
 	};
 
 	std::vector<ibQueryProjItem> proj;
@@ -184,17 +184,17 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibV
 	auto turnoverExpr = [&](const ibValueMetaObjectAttributeBase* res) -> ibQueryExprPtr {
 		const wxString resField = ibRegValueField(res);
 		if (!withSign)
-			return ibCast(ibFunc(wxT("SUM"), { ibCol(resField) }), wxT("NUMERIC"));
+			return ibCast(ibFunc(wxT("SUM"), { ibCol(resField) }), ibTypeNumber(18, 6));   // pin as generous DECIMAL — bare NUMERIC narrows to (9,0)/(10,0) on FB/MySQL and truncates
 		ibQueryExprPtr neg = ibBinOp(ibQueryBinOp::Sub, zero, ibCol(resField));
-		return ibCast(ibFunc(wxT("SUM"), { ibCase({ { isReceipt(), ibCol(resField) } }, neg) }), wxT("NUMERIC"));
+		return ibCast(ibFunc(wxT("SUM"), { ibCase({ { isReceipt(), ibCol(resField) } }, neg) }), ibTypeNumber(18, 6));   // pin as generous DECIMAL — bare NUMERIC narrows to (9,0)/(10,0) on FB/MySQL and truncates
 	};
 	auto receiptExpr = [&](const ibValueMetaObjectAttributeBase* res) -> ibQueryExprPtr {
 		const wxString resField = ibRegValueField(res);
-		return ibCast(ibFunc(wxT("SUM"), { ibCase({ { isReceipt(), ibCol(resField) } }, zero) }), wxT("NUMERIC"));
+		return ibCast(ibFunc(wxT("SUM"), { ibCase({ { isReceipt(), ibCol(resField) } }, zero) }), ibTypeNumber(18, 6));   // pin as generous DECIMAL — bare NUMERIC narrows to (9,0)/(10,0) on FB/MySQL and truncates
 	};
 	auto expenseExpr = [&](const ibValueMetaObjectAttributeBase* res) -> ibQueryExprPtr {
 		const wxString resField = ibRegValueField(res);
-		return ibCast(ibFunc(wxT("SUM"), { ibCase({ { isReceipt(), zero } }, ibCol(resField)) }), wxT("NUMERIC"));
+		return ibCast(ibFunc(wxT("SUM"), { ibCase({ { isReceipt(), zero } }, ibCol(resField)) }), ibTypeNumber(18, 6));   // pin as generous DECIMAL — bare NUMERIC narrows to (9,0)/(10,0) on FB/MySQL and truncates
 	};
 
 	std::vector<ibQueryProjItem> proj;

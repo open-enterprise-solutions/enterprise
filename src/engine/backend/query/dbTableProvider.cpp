@@ -654,20 +654,20 @@ ibQueryExprPtr ibMetaIRBuilder::BuildWhere(const ibBackendQueryable* queryable,
 
 // A bare constant projected into a SELECT list (or a CASE branch) reaches the DB as an UNTYPED
 // placeholder (SELECT ? AS x) — Firebird and other strict engines cannot infer its type and reject the
-// statement (FB -804 "Data type unknown"). Pin the type with a CAST derived from the value. The keyword
-// is broadly portable (FB / PG / MySQL); a bare NUMERIC on FB is NUMERIC(9,0) — would truncate a decimal
-// literal — so a generous precision is spelled out. NOTE: a fully dialect-correct spelling (esp. SQLite
-// date affinity) belongs in the L1 Dialect Dictionary — TODO when this widens past Firebird-dev.
-static wxString SqlCastTypeForConst(const ibValue& v)
+// statement (FB -804 "Data type unknown"). Pin the type with a CAST derived from the value. The target is
+// a CANONICAL ibColumnType, NOT a SQL string: the L2 renderer spells it per-DBMS through the dialect
+// TYPE-MAP (ibQueryRenderer::MapType), so the SQLite date-affinity (TEXT), boolean (INTEGER) and FB /
+// MySQL narrow-DECIMAL forks are all closed at render time — the one place that owns the dialect.
+static ibColumnType CastTypeForConst(const ibValue& v)
 {
 	switch (v.GetType()) {
 	case ibValueTypes::TYPE_STRING: {
 		const size_t n = v.GetString().length();
-		return wxString::Format(wxT("VARCHAR(%u)"), static_cast<unsigned>(n > 0 ? n : 1));
+		return ibTypeString(static_cast<int>(n > 0 ? n : 1));
 	}
-	case ibValueTypes::TYPE_DATE:    return wxT("TIMESTAMP");
-	case ibValueTypes::TYPE_BOOLEAN: return wxT("BOOLEAN");
-	default:                         return wxT("NUMERIC(18,6)");   // TYPE_NUMBER (and any other) -> numeric
+	case ibValueTypes::TYPE_DATE:    return ibTypeDate();          // dialect: TIMESTAMP (FB / PG) / TEXT (SQLite)
+	case ibValueTypes::TYPE_BOOLEAN: return ibTypeBoolean();       // dialect: BOOLEAN (FB / PG) / INTEGER (SQLite)
+	default:                         return ibTypeNumber(18, 6);   // TYPE_NUMBER (and any other) — generous, no truncation
 	}
 }
 
@@ -684,7 +684,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildColumnExpr(const ibBackendQueryable* querya
 	case ibQueryColumnExprKind::Const:
 		// CAST the placeholder so a bare projected constant carries a type (FB -804 otherwise). Harmless
 		// inside arithmetic / CASE, where the type was already inferable.
-		return ibCast(ibConst(expr->m_const), SqlCastTypeForConst(expr->m_const));
+		return ibCast(ibConst(expr->m_const), CastTypeForConst(expr->m_const));
 
 	case ibQueryColumnExprKind::Arith: {
 		const ibQueryBinOp op =

@@ -705,7 +705,9 @@ wxString ibQueryRenderer::RenderExpr(const ibQueryExprPtr& expr)
 	}
 
 	case ibQueryExprKind::Cast:
-		return wxT("CAST(") + RenderExpr(expr->m_lhs) + wxT(" AS ") + expr->m_name + wxT(")");
+		// Spell the canonical target type through the dialect TYPE-MAP (SQLite date=TEXT, bool=INTEGER,
+		// FB / MySQL DECIMAL widened) — the same speller the DDL path uses. No dialect fork here.
+		return wxT("CAST(") + RenderExpr(expr->m_lhs) + wxT(" AS ") + MapType(expr->m_castType) + wxT(")");
 	}
 
 	return wxString();
