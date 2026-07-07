@@ -96,7 +96,7 @@ public:
 			// ibFormAttribute). GetTypeDesc's signature ALSO closes ibBackendSourceColumn::GetTypeDesc (one
 			// final overrider). The column carries no metaobject → GetMetaData yields the active config. ------
 			virtual ibTypeDescription& GetTypeDesc() const override { return m_propertyType->GetValueAsTypeDesc(); }
-			virtual ibSelectorDataType GetFilterDataType() const override { return ibSelectorDataType::ibSelectorDataType_any; }
+			virtual ibSelectorDataType GetFilterDataType() const override { return ibSelectorDataType::ibSelectorDataType_reference; }
 			virtual const ibMetaData* GetMetaData() const override;
 
 			// --- ibBackendSourceColumn — SOURCE-COLUMN presentation. The value-table's explorer vends THIS as
@@ -260,6 +260,12 @@ public:
 			return nullptr;
 		return GetRowAt(GetRow(line));
 	}
+
+	// ibSourceDataObject hop gate. Set: many rows, no single cell -> no-op. Get: the DESIGN-TIME dot-walk steps
+	// by TYPE not value (a value-table has 0..N rows) -> the pinned branch's empty typed twin; out-of-line
+	// because it needs reference.h (CoerceHopType). See valueTable.cpp.
+	virtual bool SetValueBySourceHop(const ibSourceHop& hop, const ibValue& value) override { return false; }
+	virtual bool GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const override;
 
 	//set meta/get meta
 	virtual bool SetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, const ibValue& varMetaVal) {

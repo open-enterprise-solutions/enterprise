@@ -4,6 +4,7 @@
 #include "backend/compiler/value.h"
 #include "backend/valueInfo.h"
 #include "backend/srcDataObject.h"   // ibSourceDataObject base — a reference IS a source object (vends its target's explorer)
+#include "backend/typeDescription.h"   // ibTypeDescription — CoerceHopType validates the pin against a field's CURRENT type filter
 
 //********************************************************************************************
 //*                                     Defines                                              *
@@ -68,7 +69,11 @@ public:
 	// composite field's UNDEFINED, or a different target), replace it with an empty typed twin of the pin, built
 	// from `metaData`. Returns true iff a twin was substituted. A source's own GetValueBySourceHop calls this
 	// with its GetSourceMetaData() — so ibSourceDataObject itself stays free of metadata / reference creation.
-	static bool CoerceHopType(const ibSourceHop& hop, ibValue& out, const ibMetaData* metaData);
+	// `filter`: the field's CURRENT declared type. If non-empty, the pin must be among its clsids (ContainType) —
+	// a value-table column RETYPED in the designer leaves a stale pin, and CoerceHopType must NOT fabricate the
+	// old twin over a now-dead path. A METADATA-fixed field (record / reference gate — its type cannot be
+	// retyped at runtime) passes an EMPTY filter and skips the check.
+	static bool CoerceHopType(const ibSourceHop& hop, ibValue& out, const ibTypeDescription& filter, const ibMetaData* metaData);
 
 	// Reference clsids → their TARGET metaobject ids, resolved through the class factory (each clsid's type
 	// ctor must be a REFERENCE ctor; its metaobject's metaID is the target). metaData-driven — the kind-byte
@@ -120,7 +125,7 @@ public:
 	// a COMPOSITE reference field resolves to UNDEFINED, so the shared helper hands back an empty typed TWIN of
 	// the pin (this reference's own metaData) — a reference returns a TYPE, not undefined, so the hop steps on.
 	virtual bool SetValueBySourceHop(const ibSourceHop& hop, const ibValue& value) override { return SetValueByMetaID(hop.m_id, value); }
-	virtual bool GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const override { const bool got = GetValueByMetaID(hop.m_id, out); return CoerceHopType(hop, out, GetSourceMetaData()) || got; }
+	virtual bool GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const override;   // out-of-line (reference.cpp): needs the referenced metaobject COMPLETE to filter the pin by the field's live type
 
 	//get metaData from object
 	virtual const ibValueMetaObjectRecordData* GetMetaObject() const {

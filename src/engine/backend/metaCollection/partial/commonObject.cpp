@@ -1557,6 +1557,16 @@ bool ibValueRecordDataObject::GetValueByMetaID(const ibMetaID& id, ibValue& pvar
 	return false;
 }
 
+// ibSourceDataObject hop gate — reads the id, then filters the pin by the field's LIVE declared type
+// (FindAnyAttributeObjectByFilter -> GetTypeDesc): a composite field's UNDEFINED resolves to the pinned twin,
+// a field retyped away from the pin does not. Empty type (attribute not found) skips the check.
+bool ibValueRecordDataObject::GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const
+{
+	const bool got = GetValueByMetaID(hop.m_id, out);
+	const ibValueMetaObjectAttributeBase* attribute = GetMetaObject()->FindAnyAttributeObjectByFilter(hop.m_id);
+	return ibValueReferenceDataObject::CoerceHopType(hop, out, attribute != nullptr ? attribute->GetTypeDesc() : ibTypeDescription(), GetSourceMetaData()) || got;
+}
+
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ibValueModel* ibValueRecordDataObject::GetTableByMetaID(const ibMetaID& id) const
@@ -3012,6 +3022,16 @@ bool ibValueRecordManagerObject::IsModified() const
 	return m_recordSet->IsModified();
 }
 
+// ibSourceDataObject hop gate — reads the id, then filters the pin by the field's LIVE declared type
+// (FindAnyAttributeObjectByFilter -> GetTypeDesc): a composite field's UNDEFINED resolves to the pinned twin,
+// a field retyped away from the pin does not. Empty type (attribute not found) skips the check.
+bool ibValueRecordManagerObject::GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const
+{
+	const bool got = GetValueByMetaID(hop.m_id, out);
+	const ibValueMetaObjectAttributeBase* attribute = GetMetaObject()->FindAnyAttributeObjectByFilter(hop.m_id);
+	return ibValueReferenceDataObject::CoerceHopType(hop, out, attribute != nullptr ? attribute->GetTypeDesc() : ibTypeDescription(), GetSourceMetaData()) || got;
+}
+
 bool ibValueRecordManagerObject::SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal)
 {
 	if (varMetaVal != ibValueRecordManagerObject::GetValueByMetaID(id)) {
@@ -3385,8 +3405,6 @@ bool ibValueRecordSetObject::GetValueByMetaID(const ibDataViewItem& item, const 
 //////////////////////////////////////////////////////////////////////
 //					ibValueRecordSetObjectRegisterColumnCollection				//
 //////////////////////////////////////////////////////////////////////
-
-
 
 
 ibValueRecordSetObject::ibValueRecordSetObjectRegisterColumnCollection::ibValueRecordSetObjectRegisterColumnCollection() :

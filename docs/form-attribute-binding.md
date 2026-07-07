@@ -254,8 +254,14 @@ hop vector fetches the LIVE value through ONE virtual gate, so the walk hops —
   (`hop.m_type`): if the composite cell is undefined it hands back an empty typed TWIN of the pin
   (`ibValueReferenceDataObject::CoerceHopType`) — so a composite reference NEVER returns undefined and a
   hop can always step on. The twin / decode statics live ON the reference side, so `srcDataObject` itself
-  stays metadata-free. A **value-table does NOT override the scalar gate** — see the debt note in Open
-  edges: at design time a dot-walk INTO a value-table column (`Attribute.Column1.Ref`) does not resolve.
+  stays metadata-free. `CoerceHopType(hop, out, filter, metaData)` takes the field's CURRENT type as a `filter`
+  (`ibTypeDescription`) and validates the pin against it (`filter.ContainType(hop.m_type)`): a field RETYPED
+  away from the pin (a value-table column changed in the designer) drops the stale pin instead of resolving a
+  phantom twin; an EMPTY filter skips the check. The twin's target is decoded via `ConvertToMetaIds` (metadata,
+  NOT a clsid body-mask). Every overriding gate is **out-of-line** and hands the field's live type: a
+  record / manager via `GetMetaObject()->FindAnyAttributeObjectByFilter(id)->GetTypeDesc()`, a value-table via
+  its column's `GetColumnType()`. A **value-table steps by TYPE, not value** — 0..N rows, no single cell, so its
+  gate is JUST the twin (the record's `read-field || twin` degenerates to `twin` alone).
 - **`ResolvePath(start, path, from, out)`** — the shared deep walk (static, `srcDataObject.cpp`). At each
   hop it converts the current value to `ibSourceDataObject` (a non-source value ends the walk — you cannot
   dot into a primitive) and calls its gate. `GetValueByPath` off a source feeds its own first hop, then
@@ -546,20 +552,26 @@ attribute, so the attribute tree must not rebuild and lose the user's expansion 
   branch owns the next field — so a COMPOSITE reference (a field of any target type) resolves too. The
   picker's nested-section column source resolves likewise — the bound table is walked down `parentPath`
   to the section node and its columns rooted directly (`ProcessTableColumn`). The clsid→target resolution
-  is one shared backend helper (`ConvertToMetaIds`), used by both the walk and the picker. **Caveat:** this
-  holds for METADATA-backed table sources (catalog / document lists, tabular sections). A dot-walk INTO a
-  **value-table** column is the exception — it does not resolve at design time (see the value-table debt note).
-- **DEBT — value-table column dot-walk (design-time) does NOT resolve.** A value-table is per-ROW: its
-  RUNTIME gate is the item translation `GetValueByMetaID(item, hop.m_id, out)` and works. But the DESIGN-TIME
-  walk (`WalkColumns`) has no row, so at a reference column it asks the owner's SCALAR gate
-  (`owner->GetValueBySourceHop(hop, next)`) — and a value-table does not override it, so the base returns
-  false and a deeper path like `Attribute.Column1.Ref.Field` reads back `<not selected>` in the designer.
-  Several attempts to plug this on the TABLE side (a pinned `CoerceHopType` twin; a `ConvertToMetaIds` drift
-  guard; an `AdjustValue`-typed redirect) were all rejected as wrong-locus: the table must just REDIRECT to
-  the column's reference-VALUE and let the reference's OWN source explorer drive the step — reference logic
-  lives ONLY in the reference object, never manufactured on the table. Correct fix is deferred: give the
-  value-table a scalar gate that hands back the column's reference-as-source (off its CURRENT type, so a
-  retype to String naturally ends the walk) with no reference/twin logic on the table. Runtime is unaffected.
+  is one shared backend helper (`ConvertToMetaIds`), used by both the walk and the picker. A dot-walk INTO a
+  **value-table** column resolves too — its scalar gate steps by TYPE (the pinned twin), since a RAM table has
+  no single row value at design time (see the value-table section). Composite enumeration is **REFERENCE-only**
+  (`ConvertToMetaIds` filters `_Reference`): an OBJECT branch in a composite (e.g. `DocumentObject.X` alongside
+  `CatalogRef.Y`) is intentionally NOT dot-walked — only the reference branches expand. This is by design, not
+  a bug (no demand for object-branch dotting; references cover the case). Confirmed with a live composite column.
+- **Value-table design-time dot-walk — LANDED (steps by TYPE).** A value-table has 0..N rows, so the
+  DESIGN-TIME walk (`WalkColumns`, which has no row) cannot step by VALUE. Its scalar gate
+  `GetValueBySourceHop` returns just the pinned branch's empty typed twin via
+  `ibValueReferenceDataObject::CoerceHopType` — the reference's OWN static, so the table asks the reference to
+  build itself, never fabricating reference logic on the table side. The record gate is `read-field || twin`;
+  a value-table never has a readable single field, so it is JUST the twin. Row count is irrelevant — the twin
+  is type-only. (Earlier this read `<not selected>` because `GetSourceMetaData` was null; it now yields the
+  active config.) **Stale-pin — HANDLED:** the gate passes `CoerceHopType` the column's CURRENT type as a
+  `filter` (`GetColumnByID(hop.m_id)->GetColumnType()`), and the reference validates the pin against it
+  (`filter.ContainType(hop.m_type)`). A retyped column no longer lists the pin, so the dead path reads back
+  `<not selected>` instead of a phantom twin. The check lives in `CoerceHopType` (the reference side), not the
+  table — the table only supplies its column's type. A metadata-fixed field (record / manager / reference gate)
+  hands ITS field's live type the same way (`FindAnyAttributeObjectByFilter(id)->GetTypeDesc()`); an EMPTY
+  filter skips the check.
 - **Blocker B (compute server)** — binding is necessary but not sufficient; registers /
   reporting on top need the compute tier.
 - **Test harness — first slice landed.** `test_sourceDescription.cpp` (the hop-vector passport +

@@ -209,22 +209,40 @@ bool ibValueReferenceDataObject::GetValueByMetaID(const ibMetaID& id, ibValue& p
 	return false;
 }
 
+// The reference's own hop gate — OUT-OF-LINE because it needs the referenced metaobject COMPLETE to look up the
+// field's live type. Reads the id, then validates the pin against that type via CoerceHopType — a composite
+// field's UNDEFINED resolves to the pinned twin, a field retyped away from the pin would not.
+bool ibValueReferenceDataObject::GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const
+{
+	const bool got = GetValueByMetaID(hop.m_id, out);
+	const ibValueMetaObjectAttributeBase* attribute = GetMetaObject()->FindAnyAttributeObjectByFilter(hop.m_id);
+	return CoerceHopType(hop, out, attribute != nullptr ? attribute->GetTypeDesc() : ibTypeDescription(), GetSourceMetaData()) || got;
+}
+
 // The pinned-type twin materialiser — STATIC (see the header). `metaData` comes from the CALLER's own source
 // (GetSourceMetaData), so ibSourceDataObject stays metadata-free; the reference — already metadata-bound —
 // owns the creation. A live value already of the pinned type passes through untouched.
-bool ibValueReferenceDataObject::CoerceHopType(const ibSourceHop& hop, ibValue& out, const ibMetaData* metaData)
+bool ibValueReferenceDataObject::CoerceHopType(const ibSourceHop& hop, ibValue& out, const ibTypeDescription& filter, const ibMetaData* metaData)
 {
 	if (!::IsReference(hop.m_type))
 		return false;   // no pinned reference branch — keep whatever the id primitive gave
+	// STALE-pin guard: if the field carries a type filter, the pin must be among its clsids. A value-table
+	// column RETYPED in the designer leaves an OLD pin on a bound path — do NOT fabricate the old twin (else the
+	// dead path keeps resolving as a phantom reference). An EMPTY filter (metadata-fixed field) skips the check.
+	if (filter.GetClsidCount() > 0 && !filter.ContainType(hop.m_type))
+		return false;
 	ibSourceDataObject* live = nullptr;
 	out.ConvertToValue<ibSourceDataObject>(live);
 	if (live != nullptr && live->GetSourceClassType() == hop.m_type)
 		return false;   // already the pinned type — never fabricate over a real value
-	ibValue twin = ibValueReferenceDataObject::Create(metaData, static_cast<ibMetaID>(hop.m_type & kIbClsidBodyMask));
+	const std::vector<ibMetaID> pin = ConvertToMetaIds({ hop.m_type }, metaData);   // metadata decode, NOT a body-mask
+	if (pin.empty())
+		return false;   // pin is not a resolvable reference (no metaData / bad pin)
+	ibValue twin = ibValueReferenceDataObject::Create(metaData, pin.front());
 	ibSourceDataObject* tw = nullptr;
 	twin.ConvertToValue<ibSourceDataObject>(tw);
 	if (tw == nullptr)
-		return false;   // couldn't build (no metaData / bad pin)
+		return false;   // couldn't build the twin
 	out = twin;
 	return true;
 }

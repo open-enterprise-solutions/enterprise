@@ -1306,7 +1306,7 @@ public:
 	// ibSourceDataObject hop gate — resolve the id, then honour the pinned TYPE (CoerceHopType): a composite
 	// reference FIELD of this object seeds UNDEFINED, so the shared helper hands back an empty typed twin.
 	virtual bool SetValueBySourceHop(const ibSourceHop& hop, const ibValue& value) override { return SetValueByMetaID(hop.m_id, value); }
-	virtual bool GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const override { const bool got = GetValueByMetaID(hop.m_id, out); return ibValueReferenceDataObject::CoerceHopType(hop, out, GetSourceMetaData()) || got; }
+	virtual bool GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const override;   // out-of-line (commonObject.cpp): filters the pin by the field's live declared type
 
 	ibValue GetValueByMetaID(const ibMetaID& id) const {
 		ibValue retValue;
@@ -2331,7 +2331,7 @@ public:
 	// ibSourceDataObject hop gate — resolve the id, then honour the pinned TYPE (CoerceHopType): a composite
 	// reference FIELD of this object seeds UNDEFINED, so the shared helper hands back an empty typed twin.
 	virtual bool SetValueBySourceHop(const ibSourceHop& hop, const ibValue& value) override { return SetValueByMetaID(hop.m_id, value); }
-	virtual bool GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const override { const bool got = GetValueByMetaID(hop.m_id, out); return ibValueReferenceDataObject::CoerceHopType(hop, out, GetSourceMetaData()) || got; }
+	virtual bool GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const override;   // out-of-line (commonObject.cpp): filters the pin by the field's live declared type
 
 	ibValue GetValueByMetaID(const ibMetaID& id) const {
 		ibValue retValue;
