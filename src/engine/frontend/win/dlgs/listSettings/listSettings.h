@@ -3,6 +3,7 @@
 
 #include <wx/dialog.h>
 #include <wx/listctrl.h>
+#include <wx/treectrl.h>
 #include <wx/combobox.h>
 #include <wx/choice.h>
 #include <wx/textctrl.h>
@@ -15,6 +16,7 @@
 
 class BACKEND_API ibValueModel;
 class BACKEND_API ibValueDynamicList;
+class BACKEND_API ibMetaData;
 
 // ---------------------------------------------------------------------------
 // Visual "List settings" — a modal dialog with three tabs (Filter /
@@ -47,6 +49,8 @@ public:
 	// The renderer reaches back into the dialog for the buffer filter list and
 	// the dataview selection (historically ported from the old filter dialog).
 	ibValueFilterList* GetFilterList() const;
+	ibValueSortList*   GetOrderList() const;
+	ibValueGroupList*  GetGroupList() const;
 	ibDataViewCtrl*    GetFilterView() const { return m_filterView; }
 
 private:
@@ -54,61 +58,38 @@ private:
 	// there, historically ported from the old filter dialog's model/renderer).
 	class ibFilterModel;
 	class ibFilterValueRenderer;
-
-	// One selectable filter field: its technical name / dot-path (what the composer
-	// dot-walks) plus the leaf's id/type (so the Value column edits through the
-	// runtime). Built by BuildFilterFields() — from the model's columns (PATH A) or
-	// the list's source explorer (PATH B).
-	struct ibFilterFieldInfo {
-		wxString          m_path;
-		ibMetaID          m_leafId = wxNOT_FOUND;
-		ibTypeDescription m_type;
-	};
+	class ibOrderModel;   // Sort tab dataview model (over the buffer sort list)
+	class ibGroupModel;   // Group tab dataview model (over the buffer group list)
 
 	wxWindow* BuildFilterPage(wxWindow* parent);
 	wxWindow* BuildOrderPage(wxWindow* parent);
 	wxWindow* BuildGroupPage(wxWindow* parent);
 
-	void FillFieldChoice(wxComboBox* choice);
-
-	// =====================================================================
-	//  FIELD SOURCE — the single replaceable point for "what can be filtered".
-	//
-	//  BuildFilterFields() dispatches to ONE field-source builder:
-	//    * PATH A (current): BuildFilterFieldsFromColumns() — the MODEL'S COLUMNS.
-	//    * PATH B (future, dynamic list): BuildFilterFieldsFromSource() — the
-	//      source explorer (root columns + one hop into each reference).
-	//
-	//  To swap the general (model) path onto a queryable-based field source later,
-	//  change exactly ONE function (BuildFilterFieldsFromColumns) — nothing else in
-	//  the dialog reads the field source directly; it only consumes m_filterFields.
-	// =====================================================================
-	void BuildFilterFields();
-
-	// PATH A — fill m_filterFields from the model's ibValueModelColumnCollection:
-	// one ibFilterFieldInfo per column { m_path = column name, m_leafId = column id,
-	// m_type = column type }. This is the SINGLE function to replace when switching
-	// the field source to a queryable (PATH B) — see BuildFilterFields() above.
-	void BuildFilterFieldsFromColumns();
-
-	// PATH B — fill m_filterFields from the dynamic list's source explorer: every
-	// root column PLUS one hop into each reference column (Supplier.Region). The
-	// stored path is a dot-walk technical name — ibDataDBComposer::Filter dot-walks it
-	// (auto-JOIN). TODO(unify): a full recursive tree picker like the one in
-	// advpropSource — collapse the two into one shared source-field picker.
-	void BuildFilterFieldsFromSource();
 	void LoadFromSettings();
 	void ApplyToSettings();
 
-	// Filter row add / remove mutate the dialog's BUFFER ibValueFilterList
-	// directly and refresh the dataview; field/comparison/value are edited
-	// INSIDE the row (the buffer is committed to the composer on OK).
-	void OnFilterAdd(wxCommandEvent&);
+	// Available-fields tree — the LEFT pane of each tab lists the source's fields (a reference
+	// field expands into its target's fields). Shared across Filter / Sort / Group; double-click
+	// or Add puts the field into that tab's list on the right.
+	const ibMetaData* SourceMetaData() const;   // config that resolves reference targets (list's, else active)
+	void PopulateFieldTree(wxTreeCtrl* tree);
+	void OnFieldTreeExpanding(wxTreeEvent&);
+	void OnFieldTreeBeginDrag(wxTreeEvent&);   // drag a field out of a tree -> dropping on the right panel adds it
+	void OnListContextMenu(ibDataViewEvent&);   // right-click a composition list row -> Add/Remove command menu
+
+	void AddFilterForField(const wxTreeItemId& item);
+	void OnFilterFieldActivated(wxTreeEvent&);
+	void OnFilterAdd(wxCommandEvent&);   // add the SELECTED available-field as a filter row
 	void OnFilterRemove(wxCommandEvent&);
 	void OnFilterItemActivated(ibDataViewEvent&);
 
+	void AddOrderForField(const wxTreeItemId& item);
+	void OnOrderFieldActivated(wxTreeEvent&);
 	void OnOrderAdd(wxCommandEvent&);
 	void OnOrderRemove(wxCommandEvent&);
+
+	void AddGroupForField(const wxTreeItemId& item);
+	void OnGroupFieldActivated(wxTreeEvent&);
 	void OnGroupAdd(wxCommandEvent&);
 	void OnGroupRemove(wxCommandEvent&);
 	void OnOk(wxCommandEvent&);
@@ -123,15 +104,16 @@ private:
 	// Filter — runtime-driven dataview (Use / Field / Comparison / Value).
 	ibDataViewCtrl* m_filterView   = nullptr;
 	ibFilterModel*  m_filterModel  = nullptr;
-	wxComboBox*     m_filterAddField = nullptr;   // only for "Add" — picks the new row's field
-	std::vector<ibFilterFieldInfo> m_filterFields;   // BuildFilterFields() output — dot-path fields for the "Add" picker
-	// Sort
-	wxListCtrl* m_orderList  = nullptr;
-	wxComboBox* m_orderField = nullptr;
-	wxChoice*   m_orderDir   = nullptr;
-	// Group
-	wxListCtrl* m_groupList  = nullptr;
-	wxComboBox* m_groupField = nullptr;
+	wxTreeCtrl*     m_filterFieldTree = nullptr;   // Filter tab — available fields (left pane), dot-walkable
+	wxTreeItemId    m_dragItem;                    // field being dragged from a left tree (drop on the right adds it)
+	// Sort — Field + editable Direction, model-driven (like Filter).
+	ibDataViewCtrl* m_orderView      = nullptr;
+	ibOrderModel*   m_orderModel     = nullptr;
+	wxTreeCtrl*     m_orderFieldTree = nullptr;   // Sort tab — available fields (left pane)
+	// Group — Field, model-driven.
+	ibDataViewCtrl* m_groupView      = nullptr;
+	ibGroupModel*   m_groupModel     = nullptr;
+	wxTreeCtrl*     m_groupFieldTree = nullptr;   // Group tab — available fields (left pane)
 };
 
 #endif // __LIST_SETTINGS_DLG_H__

@@ -22,6 +22,11 @@
 #include <wx/panel.h>
 #include <wx/sizer.h>
 #include <wx/button.h>
+#include <wx/treectrl.h>
+#include <wx/splitter.h>
+#include <wx/dnd.h>
+#include <wx/menu.h>
+#include <wx/imaglist.h>
 #include <wx/stattext.h>
 #include <wx/app.h>
 
@@ -32,6 +37,82 @@ enum {
 	eFilterField,
 	eFilterComparison,
 	eFilterValue
+};
+
+// Sort / Group tab dataview columns.
+enum { eOrderField = 0, eOrderDir };
+enum { eGroupField = 0 };
+
+// ---------------------------------------------------------------------------
+//  Available-fields tree — the LEFT panel of a settings tab lists the
+//  source's fields; a reference field lazily expands into its target's fields
+//  (Supplier.Region.Country...). Double-clicking (or Add) puts the field into the
+//  tab's list on the right. Modelled on advpropSource's source picker, embedded
+//  rather than modal (the header TODO to unify the two into one picker stands).
+// ---------------------------------------------------------------------------
+
+// Tree-item payload for one source field: its dot-path (technical names), the leaf
+// id + type (so a filter row edits its value through the runtime), and the referenced
+// target ids for lazy expansion.
+struct ibSourceFieldNode : public wxTreeItemData {
+	wxString              m_path;
+	ibMetaID              m_leafId = wxNOT_FOUND;
+	ibTypeDescription     m_type;
+	std::vector<ibMetaID> m_refTypes;   // non-empty => reference field, lazy-expand
+	bool                  m_loaded = false;
+};
+
+// Append each field of `explorer` under `parent`, carrying the accumulated dot-path.
+// A reference field gets a dummy [+] and expands lazily (ExpandSourceFieldNode); a
+// tabular section is skipped (a setting binds a scalar / reference field, not a section).
+static void AppendSourceFields(wxTreeCtrl* tree, const wxTreeItemId& parent,
+	const ibSourceDataObject::ibSourceExplorer& explorer, const wxString& prefix, const ibMetaData* metaData)
+{
+	for (unsigned int i = 0; i < explorer.GetHelperCount(); ++i) {
+		const auto* col = explorer.GetHelper(i);
+		if (col == nullptr || col->IsTableSection())
+			continue;
+		ibSourceFieldNode* data = new ibSourceFieldNode();
+		data->m_path     = prefix.IsEmpty() ? col->GetSourceName() : prefix + wxT(".") + col->GetSourceName();
+		data->m_leafId   = static_cast<ibMetaID>(col->GetSourceId());
+		data->m_type     = col->GetTypeDesc();
+		data->m_refTypes = ibValueReferenceDataObject::ConvertToMetaIds(col->GetClsidList(), metaData);
+		const wxTreeItemId item = tree->AppendItem(parent, col->GetSourceName(), 0, 0, data);   // icon 0 = attribute
+		if (!data->m_refTypes.empty())
+			tree->AppendItem(item, wxEmptyString);   // dummy -> [+] (a reference expands into its target's fields)
+	}
+}
+
+// Lazily build a reference field node's children (its target's fields). An EMPTY typed
+// reference-as-source vends the target's explorer; its fields are copied into tree nodes
+// synchronously, so the temporary reference can die after.
+static void ExpandSourceFieldNode(wxTreeCtrl* tree, const wxTreeItemId& item, const ibMetaData* metaData)
+{
+	ibSourceFieldNode* data = dynamic_cast<ibSourceFieldNode*>(tree->GetItemData(item));
+	if (data == nullptr || data->m_refTypes.empty() || data->m_loaded || metaData == nullptr)
+		return;
+	data->m_loaded = true;
+	tree->DeleteChildren(item);   // drop the dummy [+]
+	for (const ibMetaID& target : data->m_refTypes) {
+		ibValue refValue = ibValueReferenceDataObject::Create(metaData, target);
+		ibSourceDataObject* refObj = nullptr;
+		refValue.ConvertToValue(refObj);
+		if (refObj == nullptr)
+			continue;
+		if (const auto* refExplorer = refObj->GetSourceExplorer())
+			AppendSourceFields(tree, item, *refExplorer, data->m_path, metaData);
+	}
+}
+
+// Drop target for a tab's right-hand composition panel: a field dragged from the LEFT
+// tree (remembered as m_dragItem) is added to that tab's list on drop. The text payload
+// only exists to enable DnD; the field itself comes from m_dragItem (same-process drag).
+class ibFieldDropTarget : public wxTextDropTarget {
+public:
+	explicit ibFieldDropTarget(std::function<void()> onDrop) : m_onDrop(std::move(onDrop)) {}
+	bool OnDropText(wxCoord, wxCoord, const wxString&) override { if (m_onDrop) m_onDrop(); return true; }
+private:
+	std::function<void()> m_onDrop;
 };
 
 // ---------------------------------------------------------------------------
@@ -388,7 +469,7 @@ private:
 // source is read once, in BuildFilterFields(), which dispatches on m_list.
 
 ibDialogListSettings::ibDialogListSettings(wxWindow* parent, ibValueDynamicList* list)
-	: wxDialog(parent, wxID_ANY, _("List settings"), wxDefaultPosition, wxSize(540, 440),
+	: wxDialog(parent, wxID_ANY, _("List settings"), wxDefaultPosition, wxSize(660, 450),
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
 	  m_model(list), m_list(list), m_settings(new ibValueListSettings())
 {
@@ -423,7 +504,7 @@ ibDialogListSettings::ibDialogListSettings(wxWindow* parent, ibValueDynamicList*
 // (FillFieldChoice, the source-explorer field builder, RefreshComposerSettings) is
 // guarded on m_list != nullptr, so the dialog runs correctly with m_list == null.
 ibDialogListSettings::ibDialogListSettings(wxWindow* parent, ibValueModel* model)
-	: wxDialog(parent, wxID_ANY, _("List settings"), wxDefaultPosition, wxSize(540, 440),
+	: wxDialog(parent, wxID_ANY, _("List settings"), wxDefaultPosition, wxSize(660, 450),
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
 	  m_model(model), m_list(nullptr), m_settings(new ibValueListSettings())
 {
@@ -459,6 +540,16 @@ ibValueFilterList* ibDialogListSettings::GetFilterList() const
 	return m_settings != nullptr ? m_settings->GetFilter() : nullptr;
 }
 
+ibValueSortList* ibDialogListSettings::GetOrderList() const
+{
+	return m_settings != nullptr ? m_settings->GetOrder() : nullptr;
+}
+
+ibValueGroupList* ibDialogListSettings::GetGroupList() const
+{
+	return m_settings != nullptr ? m_settings->GetGroup() : nullptr;
+}
+
 // ---------------------------------------------------------------------------
 //  Pages
 // ---------------------------------------------------------------------------
@@ -466,15 +557,27 @@ ibValueFilterList* ibDialogListSettings::GetFilterList() const
 wxWindow* ibDialogListSettings::BuildFilterPage(wxWindow* parent)
 {
 	wxPanel* panel = new wxPanel(parent);
-	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+	// Draggable split: LEFT = available-fields tree (dot-walkable), RIGHT = the composed filter.
+	wxSplitterWindow* splitter = new wxSplitterWindow(panel, wxID_ANY,
+		wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
+	splitter->SetMinimumPaneSize(FromDIP(120));
 
-	// Runtime-driven dataview: Use (toggle) / Field / Comparison (choice) /
-	// Value (custom runtime renderer).
-	m_filterView = new ibDataViewCtrl(panel, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+	// ---- LEFT pane: available fields (a reference field expands into its target's fields) ----
+	wxPanel* leftPane = new wxPanel(splitter);
+	wxBoxSizer* leftSizer = new wxBoxSizer(wxVERTICAL);
+	leftSizer->Add(new wxStaticText(leftPane, wxID_ANY, _("Available fields")), 0, wxALL, FromDIP(4));
+	m_filterFieldTree = new wxTreeCtrl(leftPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+		wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_HIDE_ROOT | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxTR_TWIST_BUTTONS);
+	leftSizer->Add(m_filterFieldTree, 1, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, FromDIP(4));
+	leftPane->SetSizer(leftSizer);
+
+	// ---- RIGHT pane: composed filter — Use (toggle) / Field / Comparison (choice) / Value ----
+	wxPanel* rightPane = new wxPanel(splitter);
+	wxBoxSizer* rightSizer = new wxBoxSizer(wxVERTICAL);
+	m_filterView = new ibDataViewCtrl(rightPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxDV_ROW_LINES | wxDV_SINGLE);
-	m_filterView->SetBackgroundColour(panel->GetBackgroundColour());
-	m_filterView->SetForegroundColour(panel->GetForegroundColour());
-
+	m_filterView->SetBackgroundColour(rightPane->GetBackgroundColour());
+	m_filterView->SetForegroundColour(rightPane->GetForegroundColour());
 	m_filterView->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED, &ibDialogListSettings::OnFilterItemActivated, this);
 
 	// Comparison choices — order MUST match enum ibComparisonKind.
@@ -491,44 +594,38 @@ wxWindow* ibDialogListSettings::BuildFilterPage(wxWindow* parent)
 		wxDATAVIEW_CELL_ACTIVATABLE, wxNOT_FOUND, wxAlignment::wxALIGN_LEFT);
 	m_filterView->AppendTextColumn(_("Field"), eFilterField,
 		wxDATAVIEW_CELL_INERT, wxNOT_FOUND, wxAlignment::wxALIGN_LEFT);
-
 	ibDataViewColumn* cmpColumn = new ibDataViewColumn(_("Comparison"),
 		new ibDataViewChoiceByIndexRenderer(cmpChoices, wxDATAVIEW_CELL_EDITABLE, wxAlignment::wxALIGN_LEFT),
-		eFilterComparison,
-		wxNOT_FOUND,
-		wxAlignment::wxALIGN_LEFT
-	);
+		eFilterComparison, wxNOT_FOUND, wxAlignment::wxALIGN_LEFT);
 	m_filterView->AppendColumn(cmpColumn);
-
 	ibDataViewColumn* valColumn = new ibDataViewColumn(_("Value"),
-		new ibFilterValueRenderer(this),
-		eFilterValue,
-		wxNOT_FOUND,
-		wxAlignment::wxALIGN_LEFT
-	);
+		new ibFilterValueRenderer(this), eFilterValue, wxNOT_FOUND, wxAlignment::wxALIGN_LEFT);
 	m_filterView->AppendColumn(valColumn);
+	rightSizer->Add(m_filterView, 1, wxALL | wxEXPAND, FromDIP(4));
 
-	sizer->Add(m_filterView, 1, wxALL | wxEXPAND, FromDIP(4));
+	// Add (from the selected field) / Remove a filter row; double-clicking a field on the
+	// LEFT adds it too. Selecting the field fixes the row's type — Use / Comparison / Value
+	// are then edited inside the row.
+	wxBoxSizer* btnRow = new wxBoxSizer(wxHORIZONTAL);
+	wxButton* addBtn = new wxButton(rightPane, wxID_ANY, _("Add"));
+	wxButton* delBtn = new wxButton(rightPane, wxID_ANY, _("Remove"));
+	btnRow->AddStretchSpacer(1);
+	btnRow->Add(addBtn, 0, wxALL, FromDIP(2));
+	btnRow->Add(delBtn, 0, wxALL, FromDIP(2));
+	rightSizer->Add(btnRow, 0, wxEXPAND);
+	rightPane->SetSizer(rightSizer);
 
-	// Add / Remove a filter row. The new row's FIELD is picked here (selecting
-	// the field is what fixes the row's type — Use / Comparison / Value are
-	// then edited inside the row).
-	wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
-	m_filterAddField = new wxComboBox(panel, wxID_ANY);
-	// The LEFT value is a dot-path field picker now: root columns PLUS one hop into
-	// each reference column (Supplier.Region). m_filterFields carries each field's
-	// leaf type so the Value column edits through the runtime.
-	BuildFilterFields();
-	for (const ibFilterFieldInfo& f : m_filterFields)
-		m_filterAddField->Append(f.m_path);
-	wxButton* addBtn = new wxButton(panel, wxID_ANY, _("Add"));
-	wxButton* delBtn = new wxButton(panel, wxID_ANY, _("Remove"));
+	splitter->SplitVertically(leftPane, rightPane, FromDIP(180));
+	wxBoxSizer* panelSizer = new wxBoxSizer(wxVERTICAL);
+	panelSizer->Add(splitter, 1, wxEXPAND);
+	panel->SetSizer(panelSizer);
 
-	row->Add(m_filterAddField, 1, wxALL | wxALIGN_CENTER_VERTICAL, FromDIP(2));
-	row->Add(addBtn,           0, wxALL, FromDIP(2));
-	row->Add(delBtn,           0, wxALL, FromDIP(2));
-	sizer->Add(row, 0, wxEXPAND);
-
+	// Populate the available-fields tree + wire it: references expand lazily, double-click adds.
+	PopulateFieldTree(m_filterFieldTree);
+	m_filterFieldTree->Bind(wxEVT_TREE_ITEM_EXPANDING, &ibDialogListSettings::OnFieldTreeExpanding, this);
+	m_filterFieldTree->Bind(wxEVT_TREE_ITEM_ACTIVATED, &ibDialogListSettings::OnFilterFieldActivated, this);
+	m_filterFieldTree->Bind(wxEVT_TREE_BEGIN_DRAG, &ibDialogListSettings::OnFieldTreeBeginDrag, this);
+	rightPane->SetDropTarget(new ibFieldDropTarget([this]{ AddFilterForField(m_dragItem); }));
 	addBtn->Bind(wxEVT_BUTTON, &ibDialogListSettings::OnFilterAdd, this);
 	delBtn->Bind(wxEVT_BUTTON, &ibDialogListSettings::OnFilterRemove, this);
 
@@ -536,283 +633,337 @@ wxWindow* ibDialogListSettings::BuildFilterPage(wxWindow* parent)
 	// the composer on OK).
 	m_filterModel = new ibFilterModel(this);
 	m_filterView->AssociateModel(m_filterModel);
+	m_filterView->Bind(wxEVT_DATAVIEW_ITEM_CONTEXT_MENU, &ibDialogListSettings::OnListContextMenu, this);
 
-	panel->SetSizer(sizer);
 	return panel;
 }
+
+// ---- Sort model — virtual list over the dialog's BUFFER sort list (Field + editable Direction). ----
+class ibDialogListSettings::ibOrderModel : public ibDataViewVirtualListModel {
+	ibDialogListSettings* m_dialog;
+public:
+	explicit ibOrderModel(ibDialogListSettings* dialog) : ibDataViewVirtualListModel(), m_dialog(dialog) {}
+	ibValueSortList* GetOrder() const { return m_dialog->GetOrderList(); }
+	void ResetFromList() { ibValueSortList* o = GetOrder(); Reset(o != nullptr ? (unsigned int)o->Count() : 0u); }
+	virtual void GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const override {
+		ibValueSortList* o = GetOrder();
+		if (o == nullptr) return;
+		ibValueSortItem* it = o->GetItem(row);
+		if (it == nullptr) return;
+		if (col == eOrderField)    variant = it->GetField();
+		else if (col == eOrderDir) variant = (long)it->GetDirection();
+	}
+	virtual bool SetValueByRow(const wxVariant& variant, unsigned row, unsigned col) override {
+		ibValueSortList* o = GetOrder();
+		if (o == nullptr) return false;
+		ibValueSortItem* it = o->GetItem(row);
+		if (it == nullptr) return false;
+		if (col == eOrderDir) {   // the Direction choice carries the ibSortDirection as its index
+			it->SetDirection(static_cast<ibSortDirection>(variant.GetLong()));
+			return true;
+		}
+		return false;
+	}
+};
+
+// ---- Group model — virtual list over the dialog's BUFFER group list (Field). ----
+class ibDialogListSettings::ibGroupModel : public ibDataViewVirtualListModel {
+	ibDialogListSettings* m_dialog;
+public:
+	explicit ibGroupModel(ibDialogListSettings* dialog) : ibDataViewVirtualListModel(), m_dialog(dialog) {}
+	ibValueGroupList* GetGroup() const { return m_dialog->GetGroupList(); }
+	void ResetFromList() { ibValueGroupList* g = GetGroup(); Reset(g != nullptr ? (unsigned int)g->Count() : 0u); }
+	virtual void GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const override {
+		ibValueGroupList* g = GetGroup();
+		if (g == nullptr) return;
+		if (col == eGroupField) variant = g->GetField(row);
+	}
+	virtual bool SetValueByRow(const wxVariant&, unsigned, unsigned) override { return false; }
+};
 
 wxWindow* ibDialogListSettings::BuildOrderPage(wxWindow* parent)
 {
 	wxPanel* panel = new wxPanel(parent);
-	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+	wxSplitterWindow* splitter = new wxSplitterWindow(panel, wxID_ANY,
+		wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
+	splitter->SetMinimumPaneSize(FromDIP(120));
 
-	m_orderList = new wxListCtrl(panel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_REPORT | wxLC_SINGLE_SEL);
-	m_orderList->AppendColumn(_("Field"),     wxLIST_FORMAT_LEFT, FromDIP(260));
-	m_orderList->AppendColumn(_("Direction"), wxLIST_FORMAT_LEFT, FromDIP(150));
-	sizer->Add(m_orderList, 1, wxALL | wxEXPAND, FromDIP(4));
+	// ---- LEFT pane: available fields (dot-walkable) ----
+	wxPanel* leftPane = new wxPanel(splitter);
+	wxBoxSizer* leftSizer = new wxBoxSizer(wxVERTICAL);
+	leftSizer->Add(new wxStaticText(leftPane, wxID_ANY, _("Available fields")), 0, wxALL, FromDIP(4));
+	m_orderFieldTree = new wxTreeCtrl(leftPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+		wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_HIDE_ROOT | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxTR_TWIST_BUTTONS);
+	leftSizer->Add(m_orderFieldTree, 1, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, FromDIP(4));
+	leftPane->SetSizer(leftSizer);
+
+	// ---- RIGHT pane: the sort list — Field + editable Direction (choice), model-driven ----
+	wxPanel* rightPane = new wxPanel(splitter);
+	wxBoxSizer* rightSizer = new wxBoxSizer(wxVERTICAL);
+	m_orderView = new ibDataViewCtrl(rightPane, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxDV_ROW_LINES | wxDV_SINGLE);
+	m_orderView->SetBackgroundColour(rightPane->GetBackgroundColour());
+	m_orderView->SetForegroundColour(rightPane->GetForegroundColour());
+	m_orderView->AppendTextColumn(_("Field"), eOrderField, wxDATAVIEW_CELL_INERT, wxNOT_FOUND, wxAlignment::wxALIGN_LEFT);
+	wxArrayString dirChoices;
+	dirChoices.push_back(_("Ascending"));    // order MUST match enum ibSortDirection
+	dirChoices.push_back(_("Descending"));
+	ibDataViewColumn* dirColumn = new ibDataViewColumn(_("Direction"),
+		new ibDataViewChoiceByIndexRenderer(dirChoices, wxDATAVIEW_CELL_EDITABLE, wxAlignment::wxALIGN_LEFT),
+		eOrderDir, wxNOT_FOUND, wxAlignment::wxALIGN_LEFT);
+	m_orderView->AppendColumn(dirColumn);
+	rightSizer->Add(m_orderView, 1, wxALL | wxEXPAND, FromDIP(4));
 
 	wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
-	m_orderField = new wxComboBox(panel, wxID_ANY);
-	FillFieldChoice(m_orderField);
-	m_orderDir = new wxChoice(panel, wxID_ANY);
-	// Order MUST match enum ibSortDirection.
-	m_orderDir->Append(_("Ascending"));
-	m_orderDir->Append(_("Descending"));
-	m_orderDir->SetSelection(0);
-	wxButton* addBtn = new wxButton(panel, wxID_ANY, _("Add"));
-	wxButton* delBtn = new wxButton(panel, wxID_ANY, _("Remove"));
+	wxButton* addBtn = new wxButton(rightPane, wxID_ANY, _("Add"));
+	wxButton* delBtn = new wxButton(rightPane, wxID_ANY, _("Remove"));
+	row->AddStretchSpacer(1);
+	row->Add(addBtn, 0, wxALL, FromDIP(2));
+	row->Add(delBtn, 0, wxALL, FromDIP(2));
+	rightSizer->Add(row, 0, wxEXPAND);
+	rightPane->SetSizer(rightSizer);
 
-	row->Add(m_orderField, 1, wxALL | wxALIGN_CENTER_VERTICAL, FromDIP(2));
-	row->Add(m_orderDir,   0, wxALL | wxALIGN_CENTER_VERTICAL, FromDIP(2));
-	row->Add(addBtn,       0, wxALL, FromDIP(2));
-	row->Add(delBtn,       0, wxALL, FromDIP(2));
-	sizer->Add(row, 0, wxEXPAND);
+	splitter->SplitVertically(leftPane, rightPane, FromDIP(180));
+	wxBoxSizer* panelSizer = new wxBoxSizer(wxVERTICAL);
+	panelSizer->Add(splitter, 1, wxEXPAND);
+	panel->SetSizer(panelSizer);
 
+	PopulateFieldTree(m_orderFieldTree);
+	m_orderFieldTree->Bind(wxEVT_TREE_ITEM_EXPANDING, &ibDialogListSettings::OnFieldTreeExpanding, this);
+	m_orderFieldTree->Bind(wxEVT_TREE_ITEM_ACTIVATED, &ibDialogListSettings::OnOrderFieldActivated, this);
+	m_orderFieldTree->Bind(wxEVT_TREE_BEGIN_DRAG, &ibDialogListSettings::OnFieldTreeBeginDrag, this);
+	rightPane->SetDropTarget(new ibFieldDropTarget([this]{ AddOrderForField(m_dragItem); }));
 	addBtn->Bind(wxEVT_BUTTON, &ibDialogListSettings::OnOrderAdd, this);
 	delBtn->Bind(wxEVT_BUTTON, &ibDialogListSettings::OnOrderRemove, this);
 
-	panel->SetSizer(sizer);
+	m_orderModel = new ibOrderModel(this);
+	m_orderView->AssociateModel(m_orderModel);
+	m_orderView->Bind(wxEVT_DATAVIEW_ITEM_CONTEXT_MENU, &ibDialogListSettings::OnListContextMenu, this);
+	m_orderModel->ResetFromList();
+
 	return panel;
 }
 
 wxWindow* ibDialogListSettings::BuildGroupPage(wxWindow* parent)
 {
 	wxPanel* panel = new wxPanel(parent);
-	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+	wxSplitterWindow* splitter = new wxSplitterWindow(panel, wxID_ANY,
+		wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
+	splitter->SetMinimumPaneSize(FromDIP(120));
 
-	m_groupList = new wxListCtrl(panel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_REPORT | wxLC_SINGLE_SEL);
-	m_groupList->AppendColumn(_("Field"), wxLIST_FORMAT_LEFT, FromDIP(420));
-	sizer->Add(m_groupList, 1, wxALL | wxEXPAND, FromDIP(4));
+	// ---- LEFT pane: available fields (dot-walkable) ----
+	wxPanel* leftPane = new wxPanel(splitter);
+	wxBoxSizer* leftSizer = new wxBoxSizer(wxVERTICAL);
+	leftSizer->Add(new wxStaticText(leftPane, wxID_ANY, _("Available fields")), 0, wxALL, FromDIP(4));
+	m_groupFieldTree = new wxTreeCtrl(leftPane, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+		wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_HIDE_ROOT | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxTR_TWIST_BUTTONS);
+	leftSizer->Add(m_groupFieldTree, 1, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, FromDIP(4));
+	leftPane->SetSizer(leftSizer);
+
+	// ---- RIGHT pane: the grouping list ----
+	wxPanel* rightPane = new wxPanel(splitter);
+	wxBoxSizer* rightSizer = new wxBoxSizer(wxVERTICAL);
+	m_groupView = new ibDataViewCtrl(rightPane, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxDV_ROW_LINES | wxDV_SINGLE);
+	m_groupView->SetBackgroundColour(rightPane->GetBackgroundColour());
+	m_groupView->SetForegroundColour(rightPane->GetForegroundColour());
+	m_groupView->AppendTextColumn(_("Field"), eGroupField, wxDATAVIEW_CELL_INERT, wxNOT_FOUND, wxAlignment::wxALIGN_LEFT);
+	rightSizer->Add(m_groupView, 1, wxALL | wxEXPAND, FromDIP(4));
 
 	wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
-	m_groupField = new wxComboBox(panel, wxID_ANY);
-	FillFieldChoice(m_groupField);
-	wxButton* addBtn = new wxButton(panel, wxID_ANY, _("Add"));
-	wxButton* delBtn = new wxButton(panel, wxID_ANY, _("Remove"));
+	wxButton* addBtn = new wxButton(rightPane, wxID_ANY, _("Add"));
+	wxButton* delBtn = new wxButton(rightPane, wxID_ANY, _("Remove"));
+	row->AddStretchSpacer(1);
+	row->Add(addBtn, 0, wxALL, FromDIP(2));
+	row->Add(delBtn, 0, wxALL, FromDIP(2));
+	rightSizer->Add(row, 0, wxEXPAND);
+	rightPane->SetSizer(rightSizer);
 
-	row->Add(m_groupField, 1, wxALL | wxALIGN_CENTER_VERTICAL, FromDIP(2));
-	row->Add(addBtn,       0, wxALL, FromDIP(2));
-	row->Add(delBtn,       0, wxALL, FromDIP(2));
-	sizer->Add(row, 0, wxEXPAND);
+	splitter->SplitVertically(leftPane, rightPane, FromDIP(180));
+	wxBoxSizer* panelSizer = new wxBoxSizer(wxVERTICAL);
+	panelSizer->Add(splitter, 1, wxEXPAND);
+	panel->SetSizer(panelSizer);
 
+	PopulateFieldTree(m_groupFieldTree);
+	m_groupFieldTree->Bind(wxEVT_TREE_ITEM_EXPANDING, &ibDialogListSettings::OnFieldTreeExpanding, this);
+	m_groupFieldTree->Bind(wxEVT_TREE_ITEM_ACTIVATED, &ibDialogListSettings::OnGroupFieldActivated, this);
+	m_groupFieldTree->Bind(wxEVT_TREE_BEGIN_DRAG, &ibDialogListSettings::OnFieldTreeBeginDrag, this);
+	rightPane->SetDropTarget(new ibFieldDropTarget([this]{ AddGroupForField(m_dragItem); }));
 	addBtn->Bind(wxEVT_BUTTON, &ibDialogListSettings::OnGroupAdd, this);
 	delBtn->Bind(wxEVT_BUTTON, &ibDialogListSettings::OnGroupRemove, this);
 
-	panel->SetSizer(sizer);
+	m_groupModel = new ibGroupModel(this);
+	m_groupView->AssociateModel(m_groupModel);
+	m_groupView->Bind(wxEVT_DATAVIEW_ITEM_CONTEXT_MENU, &ibDialogListSettings::OnListContextMenu, this);
+	m_groupModel->ResetFromList();
+
 	return panel;
-}
-
-// ---------------------------------------------------------------------------
-//  Available fields (from the source metaobject)
-// ---------------------------------------------------------------------------
-
-void ibDialogListSettings::FillFieldChoice(wxComboBox* choice)
-{
-	if (choice == nullptr)
-		return;
-	// The Sort / Group field pickers use the SAME field source as the Filter page — m_filterFields (PATH A =
-	// the model's columns for a plain model like a tabular section / ТЗ, PATH B = the source explorer for a
-	// dynamic list). The old code sourced only m_list->GetSourceQueryable()->GetColumns(), so for any non-dynamic-
-	// list model (and now every RAM model, whose queryable is gone) the combo came up EMPTY — you could only type
-	// a field by hand, and a typo silently produced no sort/grouping. Build the fields on demand if not yet built.
-	if (m_filterFields.empty())
-		BuildFilterFields();
-	for (const auto& f : m_filterFields)
-		choice->Append(f.m_path);
-}
-
-// =====================================================================
-//  FIELD SOURCE dispatch — the dialog's ONE entry to "what can be filtered".
-//
-//  PATH A (model columns) is used whenever there is no dynamic-list source.
-//  PATH B (source explorer) is used for a dynamic list. To move the general
-//  (model) path onto a queryable-based field source later, change ONLY
-//  BuildFilterFieldsFromColumns — see the header note next to its declaration.
-// =====================================================================
-void ibDialogListSettings::BuildFilterFields()
-{
-	m_filterFields.clear();
-
-	if (m_list != nullptr) {
-		// PATH B — dynamic list: dot-walk source explorer (root + one ref hop).
-		BuildFilterFieldsFromSource();
-	}
-	else {
-		// PATH A — plain model: the model's columns.
-		BuildFilterFieldsFromColumns();
-	}
-}
-
-// PATH A — model columns. THIS is the single function to replace when switching the
-// general field source to a queryable (PATH B): build each ibFilterFieldInfo from the
-// queryable's columns instead of the model's column collection. Nothing else in the
-// dialog reads the field source; the rest consumes m_filterFields uniformly.
-void ibDialogListSettings::BuildFilterFieldsFromColumns()
-{
-	if (m_model == nullptr)
-		return;
-	ibValueModel::ibValueModelColumnCollection* columns = m_model->GetColumnCollection();
-	if (columns == nullptr)
-		return;
-
-	for (unsigned int i = 0; i < columns->GetColumnCount(); ++i) {
-		const ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* col = columns->GetColumnInfo(i);
-		if (col == nullptr)
-			continue;
-		// m_path = column name (the technical field the filter stores),
-		// m_leafId = column id (so the Value column edits through the runtime),
-		// m_type = column type descriptor.
-		m_filterFields.push_back({ col->GetColumnName(),
-			static_cast<ibMetaID>(col->GetColumnID()),
-			col->GetColumnType() });
-	}
-}
-
-// PATH B — dynamic list source explorer (unchanged behaviour; the original
-// BuildFilterFields body). Only reachable when m_list != nullptr.
-void ibDialogListSettings::BuildFilterFieldsFromSource()
-{
-	// Root = the list's own columns via its source explorer (the SAME structure the
-	// dot-walk resolves). Descend ONE hop into each reference column through its
-	// reference-as-source explorer (Supplier.Region). The stored path is a dot-walk
-	// technical name; ibDataDBComposer::Filter dot-walks it (auto-JOIN). The leaf's
-	// type/id let the Value column edit through the runtime.
-	const auto* root = (m_list != nullptr) ? m_list->GetSourceExplorer() : nullptr;
-	if (root == nullptr)
-		return;
-	const ibMetaData* metaData = m_list->GetSourceMetaData();
-
-	for (unsigned int i = 0; i < root->GetHelperCount(); ++i) {
-		const auto* col = root->GetHelper(i);
-		if (col == nullptr || col->IsTableSection())
-			continue;
-
-		m_filterFields.push_back({ col->GetSourceName(), col->GetSourceId(), col->GetTypeDesc() });
-
-		// One hop into a reference column: each TARGET type vends an empty
-		// reference-as-source whose explorer carries the target's columns. The SAME
-		// family-blind, cross-DLL-exported path advpropSource's picker uses
-		// (ConvertToMetaIds + reference-as-source). Non-reference columns yield none.
-		if (metaData == nullptr)
-			continue;
-		const std::vector<ibMetaID> refTargets = ibValueReferenceDataObject::ConvertToMetaIds(col->GetClsidList(), metaData);
-		for (const ibMetaID& target : refTargets) {
-			ibValue refValue = ibValueReferenceDataObject::Create(metaData, target);
-			ibSourceDataObject* refObject = nullptr;
-			refValue.ConvertToValue(refObject);
-			if (refObject == nullptr)
-				continue;
-			const auto* refExplorer = refObject->GetSourceExplorer();
-			if (refExplorer == nullptr)
-				continue;
-			for (unsigned int j = 0; j < refExplorer->GetHelperCount(); ++j) {
-				const auto* sub = refExplorer->GetHelper(j);
-				if (sub == nullptr || sub->IsTableSection())
-					continue;
-				m_filterFields.push_back({
-					col->GetSourceName() + wxT(".") + sub->GetSourceName(),
-					sub->GetSourceId(), sub->GetTypeDesc() });
-			}
-		}
-	}
 }
 
 // ---------------------------------------------------------------------------
 //  Load / Apply (between the dialog UI and the dialog's BUFFER ibValueListSettings)
 //
-//  The Filter tab edits the buffer's ibValueFilterList in place (the dataview
-//  binds straight to it), so it has no load/apply step here — only the Sort /
-//  Group tabs (still wxListCtrl-based) do. The buffer is committed to the
-//  composer on OK.
+//  Every tab (Filter / Sort / Group) is model-driven and edits its buffer list in
+//  place, so there is no per-tab copy step — Load just syncs the model row counts,
+//  Apply is a no-op. The buffer is committed to the composer on OK.
 // ---------------------------------------------------------------------------
 
 void ibDialogListSettings::LoadFromSettings()
 {
 	if (m_settings == nullptr)
 		return;
-
-	// Filter: just sync the model row count to the buffer list.
+	// Every tab's model binds straight to its buffer list (Filter / Order / Group) — just
+	// sync the row counts to what ibLoadSettingsFromComposer put in the buffer.
 	if (m_filterModel != nullptr)
 		m_filterModel->ResetFromList();
-
-	if (m_orderList != nullptr)   // null when the Sort tab is gated off by Features
-		if (ibValueSortList* o = m_settings->GetOrder()) {
-			for (size_t i = 0; i < o->Count(); ++i) {
-				ibValueSortItem* it = o->GetItem(i);
-				if (it == nullptr) continue;
-				const long row = m_orderList->InsertItem(m_orderList->GetItemCount(), it->GetField());
-				m_orderList->SetItem(row, 1, m_orderDir->GetString(static_cast<int>(it->GetDirection())));
-				m_orderList->SetItemData(row, static_cast<long>(it->GetDirection()));
-			}
-		}
-	if (m_groupList != nullptr)   // null when the Group tab is gated off
-		if (ibValueGroupList* g = m_settings->GetGroup()) {
-			for (size_t i = 0; i < g->Count(); ++i)
-				m_groupList->InsertItem(m_groupList->GetItemCount(), g->GetField(i));
-		}
+	if (m_orderModel != nullptr)
+		m_orderModel->ResetFromList();
+	if (m_groupModel != nullptr)
+		m_groupModel->ResetFromList();
 }
 
 void ibDialogListSettings::ApplyToSettings()
 {
-	if (m_settings == nullptr)
-		return;
-
-	// Filter is edited directly in the buffer list by the model — nothing to do.
-
-	if (m_orderList != nullptr)   // null when the Sort tab is gated off by Features (don't wipe the committed sort)
-		if (ibValueSortList* o = m_settings->GetOrder()) {
-			o->Clear();
-			for (long i = 0; i < m_orderList->GetItemCount(); ++i) {
-				const wxString field = m_orderList->GetItemText(i, 0);
-				const ibSortDirection dir = static_cast<ibSortDirection>(m_orderList->GetItemData(i));
-				o->Add(field, dir);
-			}
-		}
-	if (m_groupList != nullptr)   // null when the Group tab is gated off
-		if (ibValueGroupList* g = m_settings->GetGroup()) {
-			g->Clear();
-			for (long i = 0; i < m_groupList->GetItemCount(); ++i)
-				g->Add(m_groupList->GetItemText(i, 0));
-		}
+	// Every tab edits its buffer list IN PLACE through its model — nothing to copy back here.
+	// The buffer is committed to the composer on OK (ibCommitSettingsToComposer).
 }
 
 // ---------------------------------------------------------------------------
 //  Add / Remove handlers
 // ---------------------------------------------------------------------------
 
-void ibDialogListSettings::OnFilterAdd(wxCommandEvent&)
+// The config metaData that resolves reference targets — the dynamic list's own, else the ACTIVE
+// config. Without a valid metaData, ConvertToMetaIds returns nothing and every field looks like a
+// leaf (no [+]) — which is exactly the "flat list" bug.
+const ibMetaData* ibDialogListSettings::SourceMetaData() const
 {
-	ibValueFilterList* filter = GetFilterList();
-	if (filter == nullptr || m_filterAddField == nullptr)
+	if (m_list != nullptr)
+		if (const ibMetaData* md = m_list->GetSourceMetaData())
+			return md;
+	return activeMetaData;
+}
+
+// Root an available-fields tree (shared by all three tabs). ALWAYS via a source EXPLORER when the
+// thing IS a source (dynamic list OR a source-model like a value-table), so a REFERENCE column gets
+// a [+] and expands into its target's fields — exactly like advpropSource's picker. Only a
+// non-source model falls back to flat columns (and even those get a [+] when their type is a reference).
+void ibDialogListSettings::PopulateFieldTree(wxTreeCtrl* tree)
+{
+	if (tree == nullptr)
 		return;
+	// Attribute icon (index 0) on every field — same icon the source-explorer picker uses.
+	wxImageList* imgs = new wxImageList(16, 16);
+	imgs->Add(ibValue::GetIconGroup());
+	tree->AssignImageList(imgs);
 
-	const wxString field = m_filterAddField->GetValue();
-	if (field.IsEmpty())
+	const ibMetaData* metaData = SourceMetaData();
+	const wxTreeItemId root = tree->AddRoot(wxEmptyString);
+
+	if (m_list != nullptr) {
+		if (const auto* explorer = m_list->GetSourceExplorer())
+			AppendSourceFields(tree, root, *explorer, wxEmptyString, metaData);
 		return;
-
-	// New row: default comparison Equal, empty typed value. The field choice
-	// fixes the row's type — look the attribute up by name so the value column
-	// can edit through the runtime (AdjustValue / choice need the type + model).
-	ibValueFilterItem* newItem = filter->Add(field, ibComparisonKind_Equal, ibValue(), true);
-
-	// Resolve the chosen field (possibly a dot-path like "Supplier.Region") to its
-	// leaf type so the Value column edits through the runtime. m_filterFields was
-	// built from the source explorer (root columns + one hop into each reference).
-	if (newItem != nullptr) {
-		for (const ibFilterFieldInfo& f : m_filterFields) {
-			if (f.m_path == field) {
-				newItem->SetTypeInfo(f.m_leafId, f.m_type);
-				break;
+	}
+	if (m_model != nullptr) {
+		// A model that IS a source (value-table, …) vends a self-describing explorer — use it so
+		// its reference columns expand, just like the dynamic-list path above.
+		if (ibSourceDataObject* src = dynamic_cast<ibSourceDataObject*>(m_model)) {
+			if (const auto* explorer = src->GetSourceExplorer()) {
+				AppendSourceFields(tree, root, *explorer, wxEmptyString, metaData);
+				return;
 			}
 		}
+		// Non-source model — flat columns, but a reference-typed column still gets its [+].
+		ibValueModel::ibValueModelColumnCollection* columns = m_model->GetColumnCollection();
+		if (columns == nullptr)
+			return;
+		for (unsigned int i = 0; i < columns->GetColumnCount(); ++i) {
+			const auto* col = columns->GetColumnInfo(i);
+			if (col == nullptr)
+				continue;
+			ibSourceFieldNode* data = new ibSourceFieldNode();
+			data->m_path     = col->GetColumnName();
+			data->m_leafId   = static_cast<ibMetaID>(col->GetColumnID());
+			data->m_type     = col->GetColumnType();
+			data->m_refTypes = ibValueReferenceDataObject::ConvertToMetaIds(col->GetColumnType().GetClsidList(), metaData);
+			const wxTreeItemId item = tree->AppendItem(root, col->GetColumnName(), 0, 0, data);
+			if (!data->m_refTypes.empty())
+				tree->AppendItem(item, wxEmptyString);   // dummy -> [+]
+		}
 	}
-	// Leave the value TYPE_EMPTY: the Value-column Select button then routes
-	// through ShowSelectType (pick the type) before QuickChoice / ProcessChoice.
-	// (Add() seeded it with ibValue() == EMPTY.)
+}
 
+// Lazily expand a reference field — shared by all three tabs' field trees (the tree that fired the
+// event is the one to expand); metaData = the config that resolves reference targets.
+void ibDialogListSettings::OnFieldTreeExpanding(wxTreeEvent& evt)
+{
+	wxTreeCtrl* tree = wxDynamicCast(evt.GetEventObject(), wxTreeCtrl);
+	if (tree != nullptr)
+		ExpandSourceFieldNode(tree, evt.GetItem(), SourceMetaData());
+}
+
+// Start dragging a field out of the LEFT tree; dropping on the tab's right panel adds it
+// (the dropped field is the remembered m_dragItem — same-process drag, text payload is a stub).
+void ibDialogListSettings::OnFieldTreeBeginDrag(wxTreeEvent& evt)
+{
+	wxTreeCtrl* tree = wxDynamicCast(evt.GetEventObject(), wxTreeCtrl);
+	if (tree == nullptr)
+		return;
+	ibSourceFieldNode* node = dynamic_cast<ibSourceFieldNode*>(tree->GetItemData(evt.GetItem()));
+	if (node == nullptr || node->m_leafId == wxNOT_FOUND)
+		return;   // only a real field is draggable
+	m_dragItem = evt.GetItem();
+	wxTextDataObject data(node->m_path);
+	wxDropSource source(tree);
+	source.SetData(data);
+	source.DoDragDrop(wxDrag_CopyOnly);
+}
+
+// Right-click on a composition list (Filter / Sort / Group) — a command menu to add the
+// currently-selected available field or remove the selected row, routed by which view fired.
+void ibDialogListSettings::OnListContextMenu(ibDataViewEvent& evt)
+{
+	const wxObject* src = evt.GetEventObject();
+	wxMenu menu;
+	menu.Append(wxID_ADD, _("New element"));
+	menu.Append(wxID_REMOVE, _("Remove"));
+	if (src == m_filterView) {
+		menu.Bind(wxEVT_MENU, [this](wxCommandEvent&)  { AddFilterForField(m_filterFieldTree->GetSelection()); }, wxID_ADD);
+		menu.Bind(wxEVT_MENU, [this](wxCommandEvent& e) { OnFilterRemove(e); }, wxID_REMOVE);
+	}
+	else if (src == m_orderView) {
+		menu.Bind(wxEVT_MENU, [this](wxCommandEvent&)  { AddOrderForField(m_orderFieldTree->GetSelection()); }, wxID_ADD);
+		menu.Bind(wxEVT_MENU, [this](wxCommandEvent& e) { OnOrderRemove(e); }, wxID_REMOVE);
+	}
+	else if (src == m_groupView) {
+		menu.Bind(wxEVT_MENU, [this](wxCommandEvent&)  { AddGroupForField(m_groupFieldTree->GetSelection()); }, wxID_ADD);
+		menu.Bind(wxEVT_MENU, [this](wxCommandEvent& e) { OnGroupRemove(e); }, wxID_REMOVE);
+	}
+	else
+		return;
+	PopupMenu(&menu);
+}
+
+// Add a filter row on the chosen field-tree node — its dot-path + leaf id/type come
+// straight from the node, so even a DEEP path (Supplier.Region.Country) resolves its
+// value editor. New row: default comparison Equal, empty typed value (the Value-column
+// Select button then routes through ShowSelectType before QuickChoice / ProcessChoice).
+void ibDialogListSettings::AddFilterForField(const wxTreeItemId& item)
+{
+	ibSourceFieldNode* node = item.IsOk()
+		? dynamic_cast<ibSourceFieldNode*>(m_filterFieldTree->GetItemData(item)) : nullptr;
+	if (node == nullptr || node->m_leafId == wxNOT_FOUND)
+		return;
+	ibValueFilterList* filter = GetFilterList();
+	if (filter == nullptr)
+		return;
+	ibValueFilterItem* newItem = filter->Add(node->m_path, ibComparisonKind_Equal, ibValue(), true);
+	if (newItem != nullptr)
+		newItem->SetTypeInfo(node->m_leafId, node->m_type);
 	if (m_filterModel != nullptr)
 		m_filterModel->ResetFromList();
 }
+
+void ibDialogListSettings::OnFilterAdd(wxCommandEvent&)           { AddFilterForField(m_filterFieldTree->GetSelection()); }
+void ibDialogListSettings::OnFilterFieldActivated(wxTreeEvent& e) { AddFilterForField(e.GetItem()); }
 
 void ibDialogListSettings::OnFilterRemove(wxCommandEvent&)
 {
@@ -861,37 +1012,92 @@ void ibDialogListSettings::OnFilterItemActivated(ibDataViewEvent& event)
 	event.Skip();
 }
 
-void ibDialogListSettings::OnOrderAdd(wxCommandEvent&)
+// Add the chosen available field to the sort list (default Ascending; direction is edited
+// inline in the Direction column). Mutates the dialog's BUFFER list, then refreshes the model.
+void ibDialogListSettings::AddOrderForField(const wxTreeItemId& item)
 {
-	const wxString field = m_orderField->GetValue();
-	if (field.IsEmpty())
+	ibSourceFieldNode* node = item.IsOk()
+		? dynamic_cast<ibSourceFieldNode*>(m_orderFieldTree->GetItemData(item)) : nullptr;
+	if (node == nullptr || node->m_leafId == wxNOT_FOUND)
 		return;
-	const int dir = m_orderDir->GetSelection();
-	const long row = m_orderList->InsertItem(m_orderList->GetItemCount(), field);
-	m_orderList->SetItem(row, 1, m_orderDir->GetString(dir));
-	m_orderList->SetItemData(row, dir);    // ibSortDirection
+	ibValueSortList* o = GetOrderList();
+	if (o == nullptr)
+		return;
+	o->Add(node->m_path);
+	if (m_orderModel != nullptr)
+		m_orderModel->ResetFromList();
 }
+
+void ibDialogListSettings::OnOrderAdd(wxCommandEvent&)           { AddOrderForField(m_orderFieldTree->GetSelection()); }
+void ibDialogListSettings::OnOrderFieldActivated(wxTreeEvent& e) { AddOrderForField(e.GetItem()); }
 
 void ibDialogListSettings::OnOrderRemove(wxCommandEvent&)
 {
-	const long sel = m_orderList->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
-	if (sel != -1)
-		m_orderList->DeleteItem(sel);
+	ibValueSortList* o = GetOrderList();
+	if (o == nullptr || m_orderView == nullptr)
+		return;
+	const ibDataViewItem& sel = m_orderView->GetSelection();
+	if (!sel.IsOk())
+		return;
+	const size_t index = reinterpret_cast<size_t>(sel.GetID());   // 1-based
+	if (index == 0 || index > o->Count())
+		return;
+	// No RemoveAt on the sort list — rebuild without the removed row.
+	struct Saved { wxString field; ibSortDirection dir; };
+	std::vector<Saved> keep;
+	for (size_t i = 0; i < o->Count(); ++i) {
+		if (i == index - 1) continue;
+		if (ibValueSortItem* it = o->GetItem(i))
+			keep.push_back({ it->GetField(), it->GetDirection() });
+	}
+	o->Clear();
+	for (const Saved& s : keep)
+		o->Add(s.field, s.dir);
+	if (m_orderModel != nullptr)
+		m_orderModel->ResetFromList();
 }
 
-void ibDialogListSettings::OnGroupAdd(wxCommandEvent&)
+// Add the chosen available field to the grouping list (BUFFER + model refresh).
+void ibDialogListSettings::AddGroupForField(const wxTreeItemId& item)
 {
-	const wxString field = m_groupField->GetValue();
-	if (field.IsEmpty())
+	ibSourceFieldNode* node = item.IsOk()
+		? dynamic_cast<ibSourceFieldNode*>(m_groupFieldTree->GetItemData(item)) : nullptr;
+	if (node == nullptr || node->m_leafId == wxNOT_FOUND)
 		return;
-	m_groupList->InsertItem(m_groupList->GetItemCount(), field);
+	ibValueGroupList* g = GetGroupList();
+	if (g == nullptr)
+		return;
+	g->Add(node->m_path);
+	if (m_groupModel != nullptr)
+		m_groupModel->ResetFromList();
 }
+
+void ibDialogListSettings::OnGroupAdd(wxCommandEvent&)           { AddGroupForField(m_groupFieldTree->GetSelection()); }
+void ibDialogListSettings::OnGroupFieldActivated(wxTreeEvent& e) { AddGroupForField(e.GetItem()); }
 
 void ibDialogListSettings::OnGroupRemove(wxCommandEvent&)
 {
-	const long sel = m_groupList->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
-	if (sel != -1)
-		m_groupList->DeleteItem(sel);
+	ibValueGroupList* g = GetGroupList();
+	if (g == nullptr || m_groupView == nullptr)
+		return;
+	const ibDataViewItem& sel = m_groupView->GetSelection();
+	if (!sel.IsOk())
+		return;
+	const size_t index = reinterpret_cast<size_t>(sel.GetID());   // 1-based
+	if (index == 0 || index > g->Count())
+		return;
+	// No RemoveAt on the group list — rebuild without the removed row.
+	struct Saved { wxString field; ibQueryDimUnfold kind; };
+	std::vector<Saved> keep;
+	for (size_t i = 0; i < g->Count(); ++i) {
+		if (i == index - 1) continue;
+		keep.push_back({ g->GetField(i), g->GetKind(i) });
+	}
+	g->Clear();
+	for (const Saved& s : keep)
+		g->Add(s.field, s.kind);
+	if (m_groupModel != nullptr)
+		m_groupModel->ResetFromList();
 }
 
 void ibDialogListSettings::OnOk(wxCommandEvent&)

@@ -3,7 +3,8 @@
 > **Status (2026-06-28): arc in progress.** Designer surface + runtime settings +
 > form LANDED; the unified `ibValueDynamicList` is assembled and builds green.
 > Settings application split into per-aspect helpers; grouping drill (incl. aggregate-free
-> `TOTALS BY`) landed; the fetch path is const-correct (no `const_cast`). Reference
+> `TOTALS BY`) landed; the fetch path is const-correct (no `const_cast`). The List-settings
+> field picker (dot-walk reference expansion, drag-to-add) landed 2026-07-07. Reference
 > memory: `project_dynamic_list_unification`, `project_totals_by_without_aggregate`.
 
 ## What it is
@@ -145,6 +146,29 @@ is bypassed, and the grouping field is ANY query-result field, not the table's p
   Source tab is where the **main table / custom query** is chosen. Backend→frontend
   bridge: the frontend registers `ms_showDialog` at load; the backend never links
   the frontend.
+
+### The field picker (Filter / Sort / Group)
+
+Each of the Filter / Sort / Group tabs is a **two-pane picker**, not a bare list — the same
+shape across all three, so a field reaches any composition list the same way:
+
+- **Left — an available-fields tree.** Rooted on the source's explorer
+  (`GetSourceExplorer()`), it lists the source's fields with attribute icons. A **reference**
+  field carries a `[+]` and **lazily expands** into its target's fields on demand
+  (`OnFieldTreeExpanding` → `ExpandSourceFieldNode`), so a path is dot-walked arbitrarily deep
+  (`Ref.Owner.Code`). The metaData that resolves a reference's target is `SourceMetaData()` —
+  the dynamic list's own (`GetSourceMetaData()`), else the ACTIVE config; without a valid
+  metaData `ConvertToMetaIds` yields nothing and every field reads as a leaf (a flat tree, no
+  `[+]`). A plain (non-source) model with no explorer falls back to its flat columns, and even
+  those get a `[+]` when the column's declared type is a reference.
+- **Right — the composition list**, an `ibDataViewCtrl` (the same control the Filter tab uses)
+  editing the settings buffer in place. Sort's **Direction** is an inline choice column
+  (`ibValueSortItem::SetDirection`), edited like the Filter's Comparison; Group is field-only.
+- **Add a field** by double-click, by **dragging** a tree node onto the list
+  (`OnFieldTreeBeginDrag` → a `wxTextDataObject` path dropped on `ibFieldDropTarget`), or via
+  the **Add / Remove** context menu — which fires on the clicked ROW
+  (`wxEVT_DATAVIEW_ITEM_CONTEXT_MENU`, not the empty-area `wxEVT_CONTEXT_MENU`).
+- The two panes split on a **draggable sash** (`wxSplitterWindow`).
 
 ## Source binding — as a metadata-agnostic source
 

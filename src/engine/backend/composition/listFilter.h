@@ -199,6 +199,7 @@ public:
 
 	const wxString& GetField() const { return m_field; }
 	ibSortDirection GetDirection() const { return m_direction; }
+	void SetDirection(ibSortDirection direction) { m_direction = direction; }   // inline edit from the settings dialog
 	bool IsAscending() const { return m_direction == ibSortDirection_Ascending; }
 
 private:
