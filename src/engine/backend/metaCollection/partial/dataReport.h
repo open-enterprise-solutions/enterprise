@@ -153,7 +153,7 @@ public:
 
 	//support actionData
 	virtual ibActionCollection GetActionCollection(const ibFormID& formType);
-	virtual void ExecuteAction(const ibActionID& action, ibBackendValueForm* srcForm);
+	virtual void CallAsAction(const ibActionID& action, ibBackendValueForm* srcForm);
 
 protected:
 	friend class ibValue;

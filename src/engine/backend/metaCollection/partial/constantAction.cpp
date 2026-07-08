@@ -15,7 +15,7 @@ ibValueRecordDataObjectConstant::ibActionCollection ibValueRecordDataObjectConst
 	return catalogActions;
 }
 
-void ibValueRecordDataObjectConstant::ExecuteAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm)
+void ibValueRecordDataObjectConstant::CallAsAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm)
 {
 	switch (lNumAction)
 	{

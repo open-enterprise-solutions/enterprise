@@ -5,7 +5,8 @@
 
 #include "form.h"
 #include "backend/appData.h"
-#include "backend/metaCollection/partial/commonObject.h"
+#include "backend/srcDataObject.h"        // ibSourceDataObject COMPLETE — the dynamic_cast<ibActionDataObject*>(GetSourceObject())
+#include "backend/picturePredefined.h"    // g_pic*FormCLSID — the form-level chrome commands
 
 enum
 {
@@ -20,12 +21,41 @@ enum
 //*                              actionData                                     *
 //****************************************************************************
 
+// Find WHERE the form's MAIN attribute currently lives — the control that reports IsMainSourceBound (its WHOLE
+// binding IS the main attribute). Asks the BASE virtual ibValueFrame::IsMainSourceBound (false by default; a view
+// bound single-hop to the main attribute overrides it) — no per-type cast. "Search by source": move the main
+// attribute from table-1 to table-2 and the very next walk finds table-2, because IsMainSourceBound re-reads the
+// holder's Main flag live. Never cached — nothing to go stale in the designer. null on an object form.
+static ibValueFrame* FindMainCommandView(ibValueFrame* top)
+{
+	if (top->IsMainSourceBound())
+		return top;
+	for (unsigned int idx = 0; idx < top->GetChildCount(); idx++)
+		if (ibValueFrame* found = FindMainCommandView(top->GetChild(idx)))
+			return found;
+	return nullptr;
+}
+
+// The form's command provider — ALWAYS an ibActionDataObject: the main data VIEW (a control that IS-A
+// ibActionDataObject via ibValueFrame, adapting its dumb ibTabularCommandDataObject model — view-state band + current
+// row + dispatch), or — an object form — the self-commanding source object itself (both ibSourceDataObject and
+// ibActionDataObject). The form NEVER touches the dumb ibTabularCommandDataObject directly: composing/dispatching
+// table commands is the view's own job.
+ibActionDataObject* ibValueForm::GetCommandProvider()
+{
+	if (ibValueFrame* mainView = FindMainCommandView(this))
+		return mainView;   // ibValueFrame IS-A ibActionDataObject
+	return dynamic_cast<ibActionDataObject*>(ibValueForm::GetSourceObject());
+}
+
 ibValueForm::ibActionCollection ibValueForm::GetActionCollection(const ibFormID& formType)
 {
 	ibActionCollection actionData(this);
 
-	ibActionDataObject* srcAction = dynamic_cast<ibActionDataObject*>(ibValueForm::GetSourceObject());
-	if (srcAction != nullptr) srcAction->AppendActionCollection(actionData, formType);
+	// The form is a WRAPPER: it surfaces its command provider's set, then adds the form-level chrome. The
+	// provider distributes internally (a tablebox: its own view-state band vs its model's object commands).
+	if (ibActionDataObject* provider = GetCommandProvider())
+		provider->AppendActionCollection(actionData, formType);
 
 	actionData.AddAction(wxT("Close"), _("Close"), g_picCloseFormCLSID, false, enClose);
 	actionData.AddAction(wxT("Update"), _("Update"), g_picUpdateFormCLSID, false, enUpdate);
@@ -37,7 +67,7 @@ ibValueForm::ibActionCollection ibValueForm::GetActionCollection(const ibFormID&
 	return actionData;
 }
 
-void ibValueForm::ExecuteAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm)
+void ibValueForm::CallAsAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm)
 {
 	if (appData->DesignerMode()) {
 		return;
@@ -58,12 +88,11 @@ void ibValueForm::ExecuteAction(const ibActionID& lNumAction, ibBackendValueForm
 		ChangeForm();
 		break;
 	default:
-	{
-		ibActionDataObject* srcAction = 
-			dynamic_cast<ibActionDataObject*>(ibValueForm::GetSourceObject());
-		if (srcAction != nullptr)
-			srcAction->ExecuteAction(lNumAction, srcForm);	
+		// Not a form-level id — hand it to the command provider. A tablebox routes it internally (a view-state
+		// Command_* or down to its model's CallAsCommand with the front-owned row); an object source runs its
+		// own object command.
+		if (ibActionDataObject* provider = GetCommandProvider())
+			provider->CallAsAction(lNumAction, srcForm);
 		break;
-	}
 	}
 }

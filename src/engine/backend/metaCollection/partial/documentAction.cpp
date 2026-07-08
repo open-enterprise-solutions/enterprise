@@ -28,7 +28,7 @@ ibValueRecordDataObjectDocument::ibActionCollection ibValueRecordDataObjectDocum
 	return documentActions;
 }
 
-void ibValueRecordDataObjectDocument::ExecuteAction(const ibActionID &action, ibBackendValueForm* srcForm)
+void ibValueRecordDataObjectDocument::CallAsAction(const ibActionID &action, ibBackendValueForm* srcForm)
 {
 	switch (action)
 	{

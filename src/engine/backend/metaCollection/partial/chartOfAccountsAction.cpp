@@ -19,7 +19,7 @@ ibValueRecordDataObjectChartOfAccounts::ibActionCollection ibValueRecordDataObje
 	return actions;
 }
 
-void ibValueRecordDataObjectChartOfAccounts::ExecuteAction(const ibActionID& action, ibBackendValueForm* srcForm)
+void ibValueRecordDataObjectChartOfAccounts::CallAsAction(const ibActionID& action, ibBackendValueForm* srcForm)
 {
 	switch (action) {
 	case eDefActionAndClose: if (WriteObject()) srcForm->CloseForm(); break;

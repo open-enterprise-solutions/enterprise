@@ -26,7 +26,7 @@ ibValueRecordDataObjectChartOfCharacteristicTypes::ibActionCollection ibValueRec
 	return actions;
 }
 
-void ibValueRecordDataObjectChartOfCharacteristicTypes::ExecuteAction(const ibActionID& action, ibBackendValueForm* srcForm)
+void ibValueRecordDataObjectChartOfCharacteristicTypes::CallAsAction(const ibActionID& action, ibBackendValueForm* srcForm)
 {
 	switch (action)
 	{

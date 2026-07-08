@@ -3,16 +3,6 @@
 #include "backend/backend_mainFrame.h"
 #include "backend/session/session.h"
 
-#if !wxUSE_EXTENDED_RTTI
-wxClassInfo ibBackendControlFrame::ms_classInfo(wxT("ibBackendControlFrame"), 0, 0,
-	(int)sizeof(wxObject),
-	(wxObjectConstructorFn)nullptr);
-
-wxClassInfo* ibBackendControlFrame::GetClassInfo() const {
-	return &ibBackendControlFrame::ms_classInfo;
-}
-#endif
-
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ibBackendValueForm* ibBackendValueForm::CreateNewForm(

@@ -279,32 +279,11 @@ public:
 	virtual bool ValueChanged(const ibDataViewItem& item, unsigned int col) = 0;
 	virtual bool Cleared() = 0;
 
-#pragma region __table_notifier__h__
-
-	virtual unsigned int GetCurrentModelColumn() const = 0;
-	virtual void StartEditing(const ibDataViewItem& item, unsigned int col) const = 0;
-
-	// Open the List-Settings window (Filter / Sort / Group tabs) for ANY model. Backend stays GUI-free — the
-	// frontend notifier impl opens ibDialogListSettings. Default returns false (notifiers that don't host a
-	// control ignore it). (The legacy ShowFilter(ibFilterRow&) notifier hook is gone — filter is L5 now.)
-	virtual bool ShowListSettings(class ibValueModel* model) { return false; }
-	virtual bool ShowViewMode() = 0;
-
-	virtual void Select(const ibDataViewItem& item) const = 0;
-	virtual int GetCountPerPage() const = 0;
-
-	virtual ibDataViewItem GetSelection() const = 0;
-	virtual int GetSelections(ibDataViewItemArray& sel) const = 0;
-
-	// Drill context: in Hierarchical view-mode the control keeps a
-	// breadcrumb chain (m_topParentChain) of the folders the user drilled
-	// into.  Returns the deepest crumb (== the currently shown folder)
-	// or an empty item when not drilled (top-level view, non-hierarchical
-	// mode).  Used by AddValue paths to inherit parent for new items even
-	// when nothing is selected inside the folder.
-	virtual ibDataViewItem GetDrillParent() const { return ibDataViewItem(); }
-
-#pragma endregion
+	// The notifier is PURE PUSH now — the model tells the front WHAT CHANGED (Item* / ValueChanged / Before &
+	// AfterReset / Cleared / Resort) and nothing else. Everything it used to pull or trigger (GetSelection /
+	// GetSelections / GetDrillParent / GetCurrentModelColumn / StartEditing / ShowListSettings / ShowViewMode /
+	// Select / GetCountPerPage) is GONE: the TableBox reads the control directly (Command_* / OnItemActivated) and
+	// the control itself owns selection + page size. Commands receive the front's selection as an argument.
 
 	// some platforms, such as GTK+, may need a two step procedure for ::Reset()
 	virtual bool BeforeReset() { return true; }
@@ -461,24 +440,6 @@ public:
 	bool ItemsChanged(const ibDataViewItemArray& items);
 	bool ValueChanged(const ibDataViewItem& item, unsigned int col);
 	bool Cleared();
-
-#pragma region __table_notifier__h__
-
-	unsigned int GetCurrentModelColumn(int view_id = 0) const;
-	void StartEditing(const ibDataViewItem& item, unsigned int col, int view_id = 0) const;
-
-	// Forward to the notifier; opens the List-Settings window (Filter / Sort / Group).
-	bool ShowListSettings(class ibValueModel* model, int view_id = 0);
-	bool ShowViewMode(int view_id = 0);
-
-	void Select(const ibDataViewItem& item, int view_id = 0) const;
-	int GetCountPerPage(int view_id = 0) const;
-
-	ibDataViewItem GetSelection(int view_id = 0) const;
-	int GetSelections(ibDataViewItemArray& sel, int view_id = 0) const;
-	ibDataViewItem GetDrillParent(int view_id = 0) const;
-
-#pragma endregion
 
 	// some platforms, such as GTK+, may need a two step procedure for ::Reset()
 	bool BeforeReset();

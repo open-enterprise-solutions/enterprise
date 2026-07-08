@@ -576,88 +576,6 @@ public:
 		return r;
 	}
 
-#pragma region __table_notifier__h__
-
-	virtual unsigned int GetCurrentModelColumn() const
-	{
-		wxASSERT(m_tableAreaWin);
-		ibDataViewColumn* column = m_tableAreaWin->GetCurrentColumn();
-		if (column != nullptr)
-			return column->GetModelColumn();
-		return 0;
-	}
-
-	virtual void StartEditing(const ibDataViewItem& item, unsigned int col) const
-	{
-		if (!item.IsOk())
-			return;
-
-		wxASSERT(m_tableAreaWin);
-
-		int viewColumn = m_tableAreaWin->GetModelColumnIndex(col);
-		if (viewColumn != wxNOT_FOUND) {
-			m_tableAreaWin->EditItem(item,
-				m_tableAreaWin->GetColumn(viewColumn)
-			);
-		}
-		else if (col == 0) {
-
-			ibDataViewColumn* currentColumn = m_tableAreaWin->GetCurrentColumn();
-			if (currentColumn != nullptr) {
-				m_tableAreaWin->EditItem(item,
-					currentColumn
-				);
-			}
-			else if (m_tableAreaWin->GetColumnCount() > 0) {
-				m_tableAreaWin->EditItem(item,
-					m_tableAreaWin->GetColumnAt(0)
-				);
-			}
-		}
-	}
-
-	virtual bool ShowListSettings(class ibValueModel* model) wxOVERRIDE
-	{
-		wxASSERT(m_tableAreaWin);
-		return m_tableAreaWin->ShowListSettings(model);
-	}
-
-	virtual bool ShowViewMode()
-	{
-		wxASSERT(m_tableAreaWin);
-		return m_tableAreaWin->ShowViewMode();
-	}
-
-	virtual void Select(const ibDataViewItem& item) const
-	{
-		wxASSERT(m_tableAreaWin);
-		m_tableAreaWin->Select(item);
-	}
-
-	virtual int GetCountPerPage() const
-	{
-		return m_tableAreaWin->GetCountPerPage();
-	}
-
-	virtual ibDataViewItem GetSelection() const
-	{
-		return m_tableAreaWin->GetSelection();
-	}
-
-	virtual int GetSelections(ibDataViewItemArray& sel) const
-	{
-		return m_tableAreaWin->GetSelections(sel);
-	}
-
-	virtual ibDataViewItem GetDrillParent() const wxOVERRIDE
-	{
-		// Deepest crumb — the folder the user is currently inside;
-		// empty in List / Tree mode.
-		return m_tableAreaWin->GetTopParentItem();
-	}
-
-#pragma endregion
-
 	virtual void Resort() wxOVERRIDE
 	{
 		m_tableAreaWin->Resort();
@@ -1810,12 +1728,14 @@ bool ibDataViewCtrl::DoItemInserted(const ibDataViewItem& parent, const ibDataVi
 	// visual position; corrected on next scroll / refresh.  Trade-
 	// off: avoids a full tree wipe + bootstrap on every cell-edit
 	// derived ItemInserted (the user-visible flicker).
-	if (GetModel() != nullptr && GetModel()->IsPagedModel()
-	    && (GetModel()->HasKeyedRows() || GetModel()->IsGroupedModel())) {   // keyed DB, OR grouped RAM (re-place into group)
-		// A grouped RAM model (TabularSection / value-table with grouping) has no keyed rows, but its new row must
-		// still re-fetch to land in the right group — the plain tree-insert below matches siblings in the loaded
-		// buffer and mis-places a grouped row, snapping the current row away. Route it through the same refresh +
-		// m_pagedRestoreSelection path the keyed DB list uses, so the added row keeps focus in its group.
+	if (GetModel() != nullptr && GetModel()->IsPagedModel()) {
+		// EVERY paged model re-fetches around the new row and lets PagedBootstrap position + select it (centred via
+		// the backward fetch), using m_pagedRestoreSelection (stamped by the _START_* handlers' ApplyCurrentLine →
+		// Select) as the anchor. Keyed DB and grouped RAM always needed this (SQL ORDER BY / group placement); a
+		// PLAIN RAM table (TabularSection / value-table) needs it too — the tree-insert path below can only place a
+		// row ADJACENT to the loaded buffer, so a row appended PAST the buffer landed at an approximate position and
+		// the standard EnsureVisible left it half-clipped at the fold. Row inserts are discrete (Add / Copy), not
+		// per-keystroke, so there is no cell-edit flicker here (those fire ValueChanged → the narrow DoItemChanged).
 		SchedulePagedRefresh(item);
 		return true;
 	}

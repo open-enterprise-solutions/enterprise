@@ -1,5 +1,5 @@
 #include "commandBar.h"
-#include "frontend/visualView/ctrl/frame.h"   // ibValueFrame — the owner's action collection + ExecuteAction
+#include "frontend/visualView/ctrl/frame.h"   // ibValueFrame — the owner's action collection + CallAsAction
 #include "backend/serialize/dataBuilder.h"     // ibDataNode (layer -> node)
 #include "backend/compiler/procUnit.h"         // ibProcUnit::CallAsProc — full type for the CallAsEvent instantiation below (run a command's custom-action procedure)
 #ifndef OES_USE_WEB
@@ -71,7 +71,7 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 		}
 	}
 	// Manual commands — each maps to its bound Action's id when one is set (click dispatches through
-	// the owner's ExecuteAction), else a synthetic id. Caption / picture fall back to the action's
+	// the owner's CallAsAction), else a synthetic id. Caption / picture fall back to the action's
 	// when the item leaves them empty. Hidden item (Visible off) dropped; disabled (Enabled off)
 	// kept but greyed. Synthetic id stays < 32767 — the overflow dropdown builds a wxMenuItem from
 	// it and wxMenuItemBase asserts outside [0, 32767); sit under the ceiling, above any real id.
@@ -97,20 +97,20 @@ void ibValueCommandBar::ExecuteCommand(const ibActionID& id, ibBackendValueForm*
 	if (m_owner == nullptr)
 		return;
 	// A manual command carries a synthetic tool-id -> run its bound Action. The Action is EITHER a
-	// SYSTEM action (a built-in id, dispatched through the owner's ExecuteAction) OR a CUSTOM action
-	// (a form-module handler name, run as a procedure via CallAsEvent) — the same ExecuteAction-vs-
+	// SYSTEM action (a built-in id, dispatched through the owner's CallAsAction) OR a CUSTOM action
+	// (a form-module handler name, run as a procedure via CallAsEvent) — the same CallAsAction-vs-
 	// CallAsEvent split a toolbar item uses (see ibValueToolbar::OnTool). The clicked command item is
 	// passed to the handler as its `Command` argument. An AutoFill command has no item
 	// (FindItemByCommandId == null) -> the tool-id IS the system action.
 	if (ibValueCommandBarItem* item = FindItemByCommandId(id)) {
 		const ibActionDescription& actionDesc = item->GetAction();
 		if (actionDesc.GetSystemAction() != wxNOT_FOUND)
-			m_owner->ExecuteAction(actionDesc.GetSystemAction(), form);
+			m_owner->CallAsAction(actionDesc.GetSystemAction(), form);
 		else if (!actionDesc.GetCustomAction().IsEmpty())
 			m_owner->CallAsEvent(actionDesc.GetCustomAction(), ibValue(static_cast<ibValue*>(item)));
 	}
 	else
-		m_owner->ExecuteAction(id, form);
+		m_owner->CallAsAction(id, form);
 }
 
 // Designer menu — a container adds a child command (and pastes one when the clipboard is set).
@@ -315,7 +315,7 @@ ibFrontendWindow* BuildCommandBarToolBar(ibFrontendWindow* parent, ibValueComman
 	// toolbar appear. Hidden now, RefreshCommandBarToolBar shows it the moment a command lands.
 	if (!FillCommandBarToolBar(bar, cbar, form))
 		bar->Hide();
-	bar->Bind(wxEVT_TOOL, [cbar, form](wxCommandEvent& e) {
+	bar->Bind(wxEVT_TOOL, [cbar, form, bar](wxCommandEvent& e) {
 		// In the DESIGNER a tool click selects the underlying command in the inspector (edit it);
 		// at RUNTIME it dispatches the action. FindVisualEditor() is non-null only in the designer.
 		ibValueFrame* owner = cbar->GetOwnerFrame();
@@ -324,8 +324,14 @@ ibFrontendWindow* BuildCommandBarToolBar(ibFrontendWindow* parent, ibValueComman
 			if (ibValueCommandBarItem* item = cbar->FindItemByCommandId(e.GetId()))
 				editor->SelectPropertyObject(item);   // ibValueCommandBarItem is-a ibPropertyObject
 		}
-		else
+		else {
+			// Pull focus onto the toolbar first (mirrors ibValueToolbar::OnTool) so the field being
+			// edited fires its OnKillFocus and commits the pending value into the source BEFORE the
+			// command runs. A custom-drawn tool does not steal focus on its own, so without this a
+			// Write reads a stale source (the register write then false-positived "already exists").
+			bar->SetFocus();
 			cbar->ExecuteCommand(e.GetId(), form);
+		}
 	});
 	if (designer) {
 		// Right-click anywhere on the bar shows the bar's OWN designer menu (Add command / Paste) —

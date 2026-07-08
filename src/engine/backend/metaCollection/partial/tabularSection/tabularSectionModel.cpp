@@ -76,20 +76,20 @@ bool ibValueTabularSectionDataObjectBase::SetValueByRow(const wxVariant& variant
 	return true;
 }
 
-void ibValueTabularSectionDataObjectBase::AddValue(unsigned int before)
+void ibValueTabularSectionDataObjectBase::AddValue(const ibDataViewItem& row)
 {
 	// Insert AFTER the active row when there is one (so user on
 	// row 3 + Add → new row at position 4, focus moves there via
 	// the ItemInserted handler's Select(item)).  No active row →
 	// append at the bottom.
-	const long row = StorageIndexOf(GetSelection());   // displayed item is a composer copy → storage index via bridge
-	if (row >= 0) AppendRow(row + 1);
-	else          AppendRow();
+	const long idx = StorageIndexOf(row);   // displayed item is a composer copy → storage index via bridge
+	if (idx >= 0) AppendRow(idx + 1, row);
+	else          AppendRow(0, row);
 }
 
-void ibValueTabularSectionDataObjectBase::CopyValue()
+void ibValueTabularSectionDataObjectBase::CopyValue(const ibDataViewItem& row)
 {
-	const ibDataViewItem& currentItem = GetSelection();
+	const ibDataViewItem& currentItem = row;
 	if (!currentItem.IsOk())
 		return;
 	// The displayed item is a composer COPY — resolve the REAL storage row (and its index) via the bridge.
@@ -117,27 +117,16 @@ void ibValueTabularSectionDataObjectBase::CopyValue()
 	}
 }
 
-void ibValueTabularSectionDataObjectBase::EditValue()
+void ibValueTabularSectionDataObjectBase::EditValue(const ibDataViewItem& row)
 {
-	const ibDataViewItem& currentItem = GetSelection();
-	if (!currentItem.IsOk())
-		return;
-
-	if (m_modelProvider != nullptr) {
-
-		if (m_metaTable->IsNumberLine(m_modelProvider->GetCurrentModelColumn()))
-			return;
-
-		ibValueModelStorage::RowValueStartEdit(currentItem, m_modelProvider->GetCurrentModelColumn());
-	}
-	else {
-		ibValueModelStorage::RowValueStartEdit(currentItem);
-	}
+	// Inline editing is opened by the TableBox on the control (front, OnItemActivated → EditItem) — the model no
+	// longer tells the control to start editing. (Was RowValueStartEdit → notifier StartEditing, now gone.)
+	(void)row;
 }
 
-void ibValueTabularSectionDataObjectBase::DeleteValue()
+void ibValueTabularSectionDataObjectBase::DeleteValue(const ibDataViewItem& row)
 {
-	const ibDataViewItem& currentItem = GetSelection();
+	const ibDataViewItem& currentItem = row;
 	if (!currentItem.IsOk())
 		return;
 	// The displayed item is a composer COPY — Remove needs the REAL storage row (a pointer-find of the
@@ -151,9 +140,9 @@ void ibValueTabularSectionDataObjectBase::DeleteValue()
 	}
 }
 
-void ibValueTabularSectionDataObjectRef::CopyValue()
+void ibValueTabularSectionDataObjectRef::CopyValue(const ibDataViewItem& row)
 {
-	ibValueTabularSectionDataObjectBase::CopyValue();
+	ibValueTabularSectionDataObjectBase::CopyValue(row);
 
 	if (!ibBackendException::IsEvalMode()) {
 		ibBackendValueForm* const foundedForm = ibBackendValueForm::FindFormByUniqueKey(
@@ -165,9 +154,9 @@ void ibValueTabularSectionDataObjectRef::CopyValue()
 	}
 }
 
-void ibValueTabularSectionDataObjectRef::DeleteValue()
+void ibValueTabularSectionDataObjectRef::DeleteValue(const ibDataViewItem& row)
 {
-	ibValueTabularSectionDataObjectBase::DeleteValue();
+	ibValueTabularSectionDataObjectBase::DeleteValue(row);
 
 	if (!ibBackendException::IsEvalMode()) {
 		ibBackendValueForm* const foundedForm = ibBackendValueForm::FindFormByUniqueKey(m_objectValue->GetGuid());

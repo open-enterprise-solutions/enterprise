@@ -107,29 +107,6 @@ ibValueModel::~ibValueModel()
 //  m_composer.GetSortAt + GetColumnIDByName inline, each at the point of use. Max: "ibSortModel is either part
 //  of L5, or removed entirely" — L5 is name-based, so it was removed.)
 
-// Any active filter? Reads the COMPOSER (the single settings store; m_filterRow abolished). The composer only
-// ever holds ACTIVE filters (a disabled dialog line is dropped on commit), so a non-empty filter list = active.
-bool ibValueModel::UseListSettings() const
-{
-	// CAPABILITY: does this table expose the settings affordance (Filter / Sort / Group)? Drives the toolbar
-	// "Filter" (= open List-Settings) button group. NOT "is a filter active" — that is m_composer.FilterCount().
-	return GetFeatures().Has(Features::Filters);
-}
-
-ibDataViewItem ibValueModel::GetSelection() const
-{
-	if (m_modelProvider == nullptr)
-		return ibDataViewItem(nullptr);
-	return m_modelProvider->GetSelection();
-}
-
-ibDataViewItem ibValueModel::GetDrillParent() const
-{
-	if (m_modelProvider == nullptr)
-		return ibDataViewItem();
-	return m_modelProvider->GetDrillParent();
-}
-
 std::future<void> ibValueModel::SubmitFetchAsync(std::function<void()> work)
 {
 	auto* sess = ibSession::Current();
@@ -257,113 +234,7 @@ std::shared_ptr<ibValueIteratorState> ibValueModel::CreateIterator()
 	return ibValue::CreateIterator();
 }
 
-
-void ibValueModel::RowValueStartEdit(const ibDataViewItem& item, unsigned int col)
-{
-	if (m_modelProvider == nullptr)
-		return;
-	m_modelProvider->StartEditing(item, col);
-}
-
-ibValueModel::ibActionCollection ibValueModel::GetActionCollection(const ibFormID& formType)
-{
-	ibActionCollection action(this);
-
-	if (UseStandartCommand()) {
-		action.AddAction(wxT("Add"), _("Add"), g_picAddCLSID, true, eAddValue);
-		action.AddAction(wxT("Copy"), _("Copy"), g_picCopyCLSID, false, eCopyValue);
-		action.AddAction(wxT("Edit"), _("Edit"), g_picEditCLSID, false, eEditValue);
-		action.AddAction(wxT("Delete"), _("Delete"), g_picDeleteCLSID, false, eDeleteValue);
-	}
-
-	// The settings command GROUP appears when the table HAS settings (UseListSettings = the Filters capability),
-	// NOT when a filter is already active — otherwise you could never open the dialog to ADD the first filter
-	// (chicken-and-egg). The "Filter" button opens the List-Settings window (Filter / Sort / Group tabs).
-	if (UseListSettings()) {
-		if (UseStandartCommand()) action.AddSeparator();
-		action.AddAction(wxT("Filter"), _("Filter"), g_picFilterCLSID, false, eFilter);
-		action.AddAction(wxT("FilterByColumn"), _("Filter by column"), g_picFilterSetCLSID, false, eFilterByColumn);
-		action.AddAction(wxT("FilterClear"), _("Filter clear"), g_picFilterClearCLSID, false, eFilterClear);
-	}
-
-	if (UseViewMode()) {
-		if (UseStandartCommand() || UseListSettings()) action.AddSeparator();
-		action.AddAction(wxT("ViewMode"), _("View mode"), g_picHierarchyCLSID, false, eViewMode);
-	}
-
-	return action;
-}
-
-void ibValueModel::ExecuteAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm)
-{
-	switch (lNumAction)
-	{
-	case eAddValue:
-		AddValue();
-		break;
-	case eCopyValue:
-		CopyValue();
-		break;
-	case eEditValue:
-		EditValue();
-		break;
-	case eDeleteValue:
-		DeleteValue();
-		break;
-	case eFilter:
-		// The "Filter" button opens the List-Settings window (Filter / Sort / Group tabs). It edits this
-		// model's GetListSettings() in place and RefetchAll()s on apply — the composer IS the fetch path
-		// now. (eFilterByColumn / eFilterClear below write the SAME ListSettings->Filter directly.)
-		ShowListSettings();
-		break;
-	case eFilterByColumn:
-	{
-		const ibDataViewItem& item = GetSelection();
-		if (!item.IsOk())
-			break;
-		if (m_modelProvider != nullptr) {
-			const unsigned int colId = m_modelProvider->GetCurrentModelColumn();
-			ibValue retValue; GetValueByMetaID(item, colId, retValue);
-			const wxString colName = GetColumnNameByID(colId);
-			if (!colName.empty() && GetListSettings() != nullptr)
-				GetListSettings()->GetFilter()->Add(colName, ibComparisonKind_Equal, retValue);
-		}
-		RefetchAll();
-		break;
-	}
-	case eFilterClear:
-		if (GetListSettings() != nullptr)
-			GetListSettings()->GetFilter()->Clear();
-		RefetchAll();
-		break;
-	case eViewMode:
-		ShowViewMode();
-		break;
-	}
-}
-
-///////////////////////////////////////////////////////////////////////////////////////
-
-bool ibValueModel::ShowListSettings()
-{
-	if (m_modelProvider == nullptr)
-		return false;
-	// The settings window edits GetListSettings() (Filter / Order / Group) IN PLACE and returns
-	// synchronously (modal). On a confirmed edit, RefetchAll() signals the control (Before/AfterReset)
-	// to re-dispatch GetFirstFetch, so the table re-reads the L5 settings and visibly filters / sorts.
-	// (This reset IS the whole trigger — change ListSettings → RefetchAll → new portion.)
-	const bool applied = m_modelProvider->ShowListSettings(this);
-	if (applied)
-		RefetchAll();
-	return applied;
-}
-
-bool ibValueModel::ShowViewMode()
-{
-	if (m_modelProvider == nullptr)
-		return false;
-	return m_modelProvider->ShowViewMode();
-}
+#include "backend/picturePredefined.h"   // g_pic*CLSID — the standard command icons
 
 ///////////////////////////////////////////////////////////////////////////////////////
 

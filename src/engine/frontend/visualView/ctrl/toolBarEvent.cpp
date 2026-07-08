@@ -67,7 +67,7 @@ void ibValueToolbar::OnTool(wxCommandEvent& event)
 
 #ifndef OES_USE_WEB
 	// Snapshot the visual-editor pointer BEFORE the action. Both
-	// ExecuteAction (eDefActionAndClose → CloseForm) and CallAsEvent
+	// CallAsAction (eDefActionAndClose → CloseForm) and CallAsEvent
 	// (arbitrary user script) can close the owner form, which destroys
 	// every child control including this toolbar — `this` becomes
 	// dangling. The old post-action `g_visualHostContext` check
@@ -89,7 +89,7 @@ void ibValueToolbar::OnTool(wxCommandEvent& event)
 
 	if (sourceElement != nullptr && actionDesc.GetSystemAction() != wxNOT_FOUND) {
 		try {
-			sourceElement->ExecuteAction(
+			sourceElement->CallAsAction(
 				actionDesc.GetSystemAction(),
 				GetOwnerForm()
 			);

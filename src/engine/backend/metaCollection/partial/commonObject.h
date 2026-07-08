@@ -1038,6 +1038,8 @@ public:
 	virtual bool HasRecorder() const { return true; }
 
 	ibValueRecordKeyObject* CreateRecordKeyObjectValue() const;
+	// Build a record key POPULATED from a set of dimension values (a register-list row → its key).
+	ibValueRecordKeyObject* CreateRecordKeyObjectValue(const ibRowMetaValues& keyValues) const;
 
 	ibValueRecordSetObject* CreateRecordSetObjectValue(bool needInitialize = true) const;
 	ibValueRecordSetObject* CreateRecordSetObjectValue(const ibUniqueKeyPair& uniqueKey, bool needInitialize = true) const;
@@ -1245,7 +1247,7 @@ public:
 
 	//support actionData
 	virtual ibActionCollection GetActionCollection(const ibFormID& formType) override { return ibActionCollection(); }
-	virtual void ExecuteAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm) override {}
+	virtual void CallAsAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm) override {}
 
 	// Feed the record's data-object module into ibRuntimeModuleDataObject's
 	// lazy compile-module creation. Every record-data subclass has
@@ -1851,6 +1853,8 @@ protected:
 class BACKEND_API ibValueRecordKeyObject : public ibValueDynamicMembers {
 	public:
 	ibValueRecordKeyObject(const ibValueMetaObjectRegisterData* metaObject);
+	// Built directly FROM a set of dimension / key values (a register-list row → its record key).
+	ibValueRecordKeyObject(const ibValueMetaObjectRegisterData* metaObject, const ibRowMetaValues& keyValues);
 	virtual ~ibValueRecordKeyObject();
 
 	// Helper + NVI DoGetPMethods come from ibValueDynamicMembers; FillMembers
@@ -2123,11 +2127,6 @@ public:
 	virtual bool AutoCreateColumn() const { return false; }
 	virtual bool EditableLine(const ibDataViewItem& item, unsigned int col) const {
 		return false;
-	}
-
-	virtual void ActivateItem(ibBackendValueForm* formOwner,
-		const ibDataViewItem& item, unsigned int col) {
-		ibValueModel::RowValueStartEdit(item, col);
 	}
 
 	virtual void AddValue(unsigned int before = 0) {}

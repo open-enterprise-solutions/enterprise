@@ -10,6 +10,6 @@ ibValueRecordDataObjectDataProcessor::ibActionCollection ibValueRecordDataObject
 	return ibActionCollection(this);
 }
 
-void ibValueRecordDataObjectDataProcessor::ExecuteAction(const ibActionID &action, ibBackendValueForm *srcForm)
+void ibValueRecordDataObjectDataProcessor::CallAsAction(const ibActionID &action, ibBackendValueForm *srcForm)
 {
 }

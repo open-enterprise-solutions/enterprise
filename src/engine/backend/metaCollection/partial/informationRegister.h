@@ -428,7 +428,7 @@ class ibValueRecordManagerObjectInformationRegister : public ibValueRecordManage
 
 	//support actionData
 	virtual ibActionCollection GetActionCollection(const ibFormID& formType);
-	virtual void ExecuteAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm);
+	virtual void CallAsAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm);
 
 protected:
 	friend class ibValue;

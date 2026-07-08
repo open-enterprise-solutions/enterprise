@@ -23,7 +23,7 @@ ibValueRecordManagerObjectInformationRegister::ibActionCollection ibValueRecordM
 	return registerActions;
 }
 
-void ibValueRecordManagerObjectInformationRegister::ExecuteAction(const ibActionID &action, ibBackendValueForm* srcForm)
+void ibValueRecordManagerObjectInformationRegister::CallAsAction(const ibActionID &action, ibBackendValueForm* srcForm)
 {
 	switch (action)
 	{

@@ -39,6 +39,7 @@ public:
 			eSrcTableSection = 1 << 2,
 			eSrcSelect = 1 << 3,
 			eSrcDefault = 1 << 4,
+			eSrcChoiceMode = 1 << 5,   // a TABLE node is a value PICKER (choice mode): the tablebox shows Select first
 		};
 
 	private:
@@ -87,6 +88,11 @@ public:
 		bool IsSelect()       const { return (m_sourceInfo.m_flags & eSrcSelect) != 0; }
 		bool IsDefault()      const { return (m_sourceInfo.m_flags & eSrcDefault) != 0; }
 		void SetDefault(bool on = true) { if (on) m_sourceInfo.m_flags |= eSrcDefault; else m_sourceInfo.m_flags &= ~eSrcDefault; }
+
+		// Choice mode — this table node is a value PICKER (opened to return a selection). Set by the open-as-choice
+		// path; the form builder / tablebox reads it to show the Select command first.
+		bool IsChoiceMode()   const { return (m_sourceInfo.m_flags & eSrcChoiceMode) != 0; }
+		void SetChoiceMode(bool on = true) { if (on) m_sourceInfo.m_flags |= eSrcChoiceMode; else m_sourceInfo.m_flags &= ~eSrcChoiceMode; }
 
 		const std::vector<ibClassID>& GetClsidList() const { return m_sourceInfo.m_typeDesc.GetClsidList(); }
 		bool ContainType(const ibValueTypes& valType) const { return m_sourceInfo.m_typeDesc.ContainType(valType); }

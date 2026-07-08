@@ -70,7 +70,7 @@ protected:
 
 //Common entity for tables, list, table trees
 class BACKEND_API ibValueModel : public ibValueDynamicMembers,
-	public ibActionDataObject, public ibTabularDataObject {
+	public ibTabularCommandDataObject, public ibTabularDataObject {
 	public:
 
 	// The table gate (see ibValue::IsTableValue): every model IS a tabular source. Declared
@@ -131,19 +131,6 @@ class BACKEND_API ibValueModel : public ibValueDynamicMembers,
 		T m_cValue;
 	};
 
-protected:
-
-	//def actionData
-	enum Func {
-		eAddValue = 1,
-		eCopyValue,
-		eEditValue,
-		eDeleteValue,
-		eFilter,
-		eFilterByColumn,
-		eFilterClear,
-		eViewMode,
-	};
 
 #pragma region _data_model_h_
 
@@ -434,6 +421,15 @@ public:
 
 		virtual ibValueModel* GetOwnerModel() const = 0;
 
+		// The value this row hands back when the table is a PICKER (the TableBox's Command_Choose → NotifyChoice):
+		// a reference / key / current row. Done ONCE here — the line REDIRECTS to its owner MODEL, which defines the
+		// select value PER TABLE KIND (a list / tree → its reference, a register → its record key). A model with no
+		// special one leaves it empty, so the row falls back to its OWN value (current row: value table / tabular).
+		virtual ibValue GetSelectValue() const {
+			const ibValue selectValue = GetOwnerModel()->GetItemSelectValue(m_lineItem);
+			return selectValue.IsEmpty() ? GetValue() : selectValue;
+		}
+
 		//set meta/get meta
 		virtual bool SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal) {
 			if (!IsLineAttached()) return false;
@@ -622,12 +618,9 @@ public:
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////
 
-	virtual ibDataViewItem GetSelection() const;
-	// Hierarchical drill-context — empty when not drilled / non-hierarchical
-	// view; otherwise the deepest crumb (the folder the user is inside).
-	// Used by AddValue paths to inherit parent for new items.
-	virtual ibDataViewItem GetDrillParent() const;
-	virtual void RowValueStartEdit(const ibDataViewItem& item, unsigned int col = 0);
+	// (GetSelection / GetDrillParent / RowValueStartEdit removed — the model no longer reads the current row / drill
+	// from the control, nor tells it to start editing. Every command receives the front's selection as an argument;
+	// inline editing is opened DIRECTLY on the control by the TableBox (OnItemActivated → EditItem).)
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////
 	// Paging hooks — backend is stateless: model exposes Get*Fetch
@@ -667,32 +660,42 @@ public:
 
 	virtual bool AutoCreateColumn() const { return false; }
 
-	virtual bool UseStandartCommand() const { return true; }
-	// CAPABILITY: does this table expose the settings affordance (Filter / Sort / Group)? Drives the toolbar
-	// "Filter" button GROUP (which opens the List-Settings window). = GetFeatures().Has(Features::Filters).
-	// Renamed from the misleading UseFilter() — it is the table-settings capability, not "is a filter active".
-	virtual bool UseListSettings() const;
-	virtual bool UseViewMode() const { return !IsListModel(); }
 
 	// A CONTAINER row (a grouping header — its cell is the group's own dimension value, not a real data row) is
 	// never inline-editable; only a leaf row is. Subclasses compose this (AND their own rule). The one place the
 	// "you can't edit a group cell" rule lives.
 	virtual bool EditableLine(const ibDataViewItem& item, unsigned int col) const { return !IsContainer(item); }
 
-	virtual void ActivateItem(ibBackendValueForm* formOwner,
-		const ibDataViewItem& item, unsigned int col) {
-		ibValueModel::RowValueStartEdit(item, col);
-	}
+	// (ActivateItem removed — the double-click is fully a FRONT concern now: the TableBox DECIDES choice → select /
+	// editable → edit the cell / read-only → ActivateRow. The model only EXECUTES the read-only open (per type),
+	// reusing its CallAsCommand dispatch — it never decides the double-click.)
 
 	// Sortability is no longer gated by a per-column m_sortOrder entry (retired) — in the L5 world every
 	// bound data column is sortable; the data-view column carries its OWN IsSortable() gate (datavgen.cpp),
 	// and the header click drives the composer ORDER BY on the front (tablebox OnColumnClick). (col unused now.)
 	virtual bool IsSortable(unsigned int col) const { (void)col; return true; }
 
-	virtual void AddValue(unsigned int before = 0) {}
-	virtual void CopyValue() {}
-	virtual void EditValue() {}
-	virtual void DeleteValue() {}
+	// --- Command store (ibTabularCommandDataObject) ---------------------------------------------------------------
+	// The model is a STORE of commands: it lists its OWN set (GetCommandCollection) and executes one by id against the
+	// FRONT-passed current row (CallAsCommand). No action composition, no widget pull — the TableBox merges the
+	// set into the real action it hands the command bar and passes the current row on execute. Base = nothing;
+	// concrete models ship their own (value table: Add/Copy/Edit/Delete; list: + MarkAsDelete; folder: + AddFolder).
+
+public:
+	virtual void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const override {}
+	virtual void CallAsCommand(const ibDataViewItem& row, const ibActionID& lNumAction, class ibBackendValueForm* srcForm) override {}
+
+	// Double-click on a READ-ONLY row (a list) opens the row's OWN form — delegated here so each model opens it
+	// PER TYPE (object / folder / register recorder) through its existing CallAsCommand path (the SAME the Edit
+	// command runs). A public NAMED intent over the protected eEditValue id — the front says "activate this row",
+	// not a raw command id. (value.ShowValue on the row value was unreliable: it needs an owned-reffer the models
+	// don't uniformly return, and a register opens its recorder, not a reference.)
+	virtual void ActivateItem(const ibDataViewItem& row, class ibBackendValueForm* srcForm) {}
+
+	// The row's picker SELECT value, chosen PER MODEL KIND. Base = empty → the ReturnLine falls back to the row's
+	// own value (the current row: value table / tabular). A concrete list overrides — a catalog / document / folder
+	// → its reference (its metaobject's data-reference cell), a register → its record key.
+	virtual ibValue GetItemSelectValue(const ibDataViewItem& item) const { return ibValue(); }
 
 	virtual ibValueModelReturnLine* GetRowAt(const ibDataViewItem& line) = 0;
 	virtual ibValueModelColumnCollection* GetColumnCollection() const = 0;
@@ -732,18 +735,6 @@ public:
 	// lives in GetValueByPath -> the source's own ResolvePath. Mirrors the scalar objectList gate.
 	virtual bool GetValueBySourceHop(const ibDataViewItem& item, const ibSourceHop& hop, ibValue& out) const override { return GetValueByMetaID(item, hop.m_id, out); }
 	virtual bool SetValueBySourceHop(const ibDataViewItem& item, const ibSourceHop& hop, const ibValue& value) override { return SetValueByMetaID(item, hop.m_id, value); }
-
-	// Open the List-Settings window (Filter / Sort / Group) for THIS model via the provider bridge.
-	// Edits GetListSettings() in place. (The legacy ShowFilter()/ibFilterRow dialog is gone — filter is L5.)
-	virtual bool ShowListSettings();
-	virtual bool ShowViewMode();
-
-	/**
-	* Override actionData
-	*/
-
-	virtual ibActionCollection GetActionCollection(const ibFormID& formType);
-	virtual void ExecuteAction(const ibActionID& lNumAction, class ibBackendValueForm* srcForm);
 
 #pragma region _data_model_h_
 

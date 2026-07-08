@@ -1,33 +1,184 @@
 #include "tableBox.h"
 #include "backend/metaCollection/partial/commonObject.h"
+#include "backend/picturePredefined.h"          // g_pic*CLSID — the TableBox composes the standard command band
+#include "backend/composition/listFilter.h"     // ibValueListSettings::GetFilter()->Add / Clear + ibComparisonKind
+#include "backend/appData.h"
 #include "form.h"
 
 //****************************************************************************
-//*                              actionData                                     *
+//*                              actionData                                  *
 //****************************************************************************
+
+// The TableBox composes its command interface the way a form does (formAction.cpp): it MERGES the bound model's
+// OWN narrow command set and DECORATES it with the standard, table-generic band — Select (choice), Filter /
+// FilterByColumn / FilterClear, ViewMode. The ids are the TableBox's own (high base, like the form's enClose)
+// so they never collide with a model's object-command ids; unknown ids are OBJECT commands and go to the model.
+enum
+{
+	enTableSelect = 20000,
+	enTableFilter,
+	enTableFilterByColumn,
+	enTableFilterClear,
+	enTableViewMode,
+};
 
 ibValueModelTableBox::ibActionCollection ibValueModelTableBox::GetActionCollection(const ibFormID& formType)
 {
-	if (m_tableModel == nullptr) {
+	// Resolve the model: the created one, or (unbound path) the bound form-attribute's model.
+	ibValuePtr<ibValueModel> resolved;
+	ibValueModel* model = m_tableModel;
+	if (model == nullptr && !m_propertySource->IsEmptyProperty() && m_formOwner != nullptr &&
+		m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsSourceDesc(), resolved))
+		model = resolved;
 
-		ibValuePtr<ibValueModel> pvarControlVal;
-		if (!m_propertySource->IsEmptyProperty() && m_formOwner != nullptr &&
-			m_formOwner->GetValueByAttributePath(m_propertySource->GetValueAsSourceDesc(), pvarControlVal)) {
-			return pvarControlVal->GetActionCollection(formType);
-		}
-
+	if (model == nullptr)
 		return ibActionCollection();
+
+	ibActionCollection actionData(this);
+
+	// 1) Select — always FIRST, only when this table is a picker (the TableBox's own affordance).
+	if (IsChoiceMode())
+		actionData.AddAction(wxT("Select"), _("Select"), g_picSelectCLSID, true, enTableSelect);
+
+	// 2) The model's OWN command set, merged in — the model is just a command STORE (GetCommandCollection), the TableBox
+	//    lays it out into the real action (name / caption / picture / separators).
+	std::vector<ibCommandItem> commands;
+	model->GetCommandCollection(formType, commands);
+
+	for (const ibCommandItem& c : commands) {
+		if (c.m_act_id == wxNOT_FOUND)
+			actionData.AddSeparator();
+		else
+			actionData.AddAction(c.m_name, c.m_caption, c.m_pictureDescription, c.m_pictureAndText, c.m_act_id);
 	}
 
-	return m_tableModel->GetActionCollection(formType);
+	// 3) The standard view-state band, poured in on the FRONT.
+	actionData.AddSeparator();
+	actionData.AddAction(wxT("Filter"), _("Filter"), g_picFilterCLSID, false, enTableFilter);
+	actionData.AddAction(wxT("FilterByColumn"), _("Filter by column"), g_picFilterSetCLSID, false, enTableFilterByColumn);
+	actionData.AddAction(wxT("FilterClear"), _("Filter clear"), g_picFilterClearCLSID, false, enTableFilterClear);
+
+	actionData.AddSeparator();
+	actionData.AddAction(wxT("ViewMode"), _("View mode"), g_picHierarchyCLSID, false, enTableViewMode);
+
+	return actionData;
 }
 
-#include "backend/appData.h"
-
-void ibValueModelTableBox::ExecuteAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm)
+void ibValueModelTableBox::CallAsAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm)
 {
-	if (m_tableModel == nullptr) return;
-	if (!appData->DesignerMode()) {
-		m_tableModel->ExecuteAction(lNumAction, srcForm);
+	if (m_tableModel == nullptr || appData->DesignerMode())
+		return;
+
+	// The FRONT owns the current row — read it once here and pass it wherever the command needs it.
+	const ibDataViewItem row = m_tableCurrentLine != nullptr ?
+		m_tableCurrentLine->GetLineItem() : ibDataViewItem();
+
+	switch (lNumAction)
+	{
+	case enTableSelect:         Command_Choose(srcForm);             break;   // returns the current ReturnLine
+	case enTableFilter:         Command_ShowListSettings();          break;   // direct → control
+	case enTableFilterByColumn: Command_FilterByCurrentColumn();     break;   // direct → control + L5
+	case enTableFilterClear:    Command_ClearFilter();               break;   // direct → L5
+	case enTableViewMode:       Command_ShowViewMode();              break;   // direct → control
+	default:
+		// The model runs its command against the current ROW as-is (its Edit id has the eStartEditingFlag bit baked
+		// in, so its own `case eEditValue` matches — a list opens the object form, a value-table does nothing there).
+		// Then, if that bit is set, the FRONT ALSO forces the row's inline editor: a value-table / tabular row edits
+		// inline (EditCurrentRow), a list row no-ops (not inline-editable — its form already opened). Tested per id.
+		m_tableModel->CallAsCommand(row, lNumAction, srcForm);
+		if (lNumAction & eStartEditingFlag)
+			EditCurrentRow(row);
+		break;
 	}
+}
+
+// Open the inline cell editor on `item`'s first editable cell (FRONT). Prefer the column the user is on; else the
+// first editable column (skips a read-only one like the tabular line-number). false if no cell is editable (a list
+// row — the caller opens the object form instead). Shared by double-click AND the Edit command's eStartEditingFlag
+// intercept in CallAsAction.
+bool ibValueModelTableBox::EditCurrentRow(const ibDataViewItem& item)
+{
+	if (!item.IsOk() || m_tableModel == nullptr)
+		return false;
+
+	auto* ctrl = dynamic_cast<ibDataViewCtrl*>(GetInnerWx());
+	if (ctrl == nullptr)
+		return false;
+
+	ibDataViewColumn* editCol = nullptr;
+	ibDataViewColumn* cur = ctrl->GetCurrentColumn();
+	if (cur != nullptr && m_tableModel->EditableLine(item, cur->GetModelColumn()))
+		editCol = cur;
+	else
+		for (unsigned int i = 0; i < ctrl->GetColumnCount(); ++i) {
+			ibDataViewColumn* c = ctrl->GetColumnAt(i);
+			if (c != nullptr && m_tableModel->EditableLine(item, c->GetModelColumn())) { editCol = c; break; }
+		}
+
+	if (editCol == nullptr)
+		return false;
+
+	ctrl->EditItem(item, editCol);
+	return true;
+}
+
+
+//****************************************************************************
+//*   Command handlers — the view-state band, driven DIRECTLY on the control *
+//****************************************************************************
+
+void ibValueModelTableBox::Command_Choose(ibBackendValueForm* srcForm)
+{
+	// Choice returns the CURRENT ROW as a value — the ReturnLine, which itself pins the model alive for as long
+	// as the caller (the opener) holds it. NotifyChoice hands it over; no reference re-resolution on the model.
+	ibValueModel::ibValueModelReturnLine* line = GetCurrentLine();
+	if (line == nullptr || srcForm == nullptr)
+		return;
+
+	// The picker returns the row's SELECT value — a reference / key, defined PER LINE TYPE (GetSelectValue),
+	// not the generic row value.
+	ibValue selectValue = line->GetSelectValue();
+	srcForm->NotifyChoice(selectValue);
+}
+
+void ibValueModelTableBox::Command_ShowListSettings()
+{
+	if (auto* ctrl = dynamic_cast<ibTableViewCtrl*>(GetInnerWx()))
+		ctrl->ShowListSettings(m_tableModel);
+}
+
+void ibValueModelTableBox::Command_FilterByCurrentColumn()
+{
+	auto* ctrl = dynamic_cast<ibTableViewCtrl*>(GetInnerWx());
+	if (ctrl == nullptr || m_tableModel == nullptr || m_tableModel->GetListSettings() == nullptr)
+		return;
+
+	// Current row + current column come straight off the live control — the model never pulls them.
+	const ibDataViewItem sel = ctrl->GetSelection();
+	ibDataViewColumn* col = ctrl->GetCurrentColumn();
+	if (!sel.IsOk() || col == nullptr)
+		return;
+
+	const unsigned int colId = col->GetModelColumn();
+	ibValue value;
+	m_tableModel->GetValueByMetaID(sel, colId, value);      // reading a cell value is a plain data op
+	const wxString name = m_tableModel->GetColumnNameByID(colId);
+	if (!name.empty()) {
+		m_tableModel->GetListSettings()->GetFilter()->Add(name, ibComparisonKind_Equal, value);
+		m_tableModel->RefetchAll();
+	}
+}
+
+void ibValueModelTableBox::Command_ClearFilter()
+{
+	if (m_tableModel == nullptr || m_tableModel->GetListSettings() == nullptr)
+		return;
+	m_tableModel->GetListSettings()->GetFilter()->Clear();
+	m_tableModel->RefetchAll();
+}
+
+void ibValueModelTableBox::Command_ShowViewMode()
+{
+	if (auto* ctrl = dynamic_cast<ibTableViewCtrl*>(GetInnerWx()))
+		ctrl->ShowViewMode();
 }

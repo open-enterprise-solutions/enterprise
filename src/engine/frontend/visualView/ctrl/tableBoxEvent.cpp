@@ -102,17 +102,29 @@ void ibValueModelTableBox::OnItemActivated(ibDataViewEvent& event)
 	const ibDataViewItem& item = event.GetItem();
 	if (!item.IsOk())
 		return;
-	if (m_tableModel != nullptr) {
-		m_tableModel->ActivateItem(m_formOwner,
-			item, event.GetColumn()
-		);
-	}
+	ActivateRow(item);
 
 	CallAsEvent(m_eventOnActivateRow,
 		GetValue() // control
 	);
 
 	event.Skip();
+}
+
+// Double-click / Enter dispatch: choice → SELECT; a row with an editable cell → inline editor (FRONT); a read-only
+// row → open its VALUE (the model's ActivateItem raises the object form on the BACKEND — a list / register recorder).
+void ibValueModelTableBox::ActivateRow(const ibDataViewItem& item)
+{
+	if (!item.IsOk() || m_tableModel == nullptr)
+		return;
+
+	if (IsChoiceMode()) {
+		Command_Choose(m_formOwner);
+		return;
+	}
+
+	if (!EditCurrentRow(item))                          // editable cell → inline editor started
+		m_tableModel->ActivateItem(item, m_formOwner);  // none → open the row's value (a list opens its object form)
 }
 
 void ibValueModelTableBox::OnItemCollapsed(ibDataViewEvent& event)
@@ -150,7 +162,8 @@ void ibValueModelTableBox::OnItemStartEditing(ibDataViewEvent& event)
 		}
 	}
 	if (!m_tableModel->EditableLine(item, event.GetColumn())) {
-		if (m_tableModel != nullptr) m_tableModel->EditValue();
+		// A non-editable line (a list row) has no inline editor — veto the edit start. Opening the row's value
+		// (its object form) is the double-click concern (OnItemActivated: read-only → ShowValue), not this path.
 		event.Veto(); /*!!!*/
 	}
 	else
@@ -172,26 +185,50 @@ void ibValueModelTableBox::OnItemValueChanged(ibDataViewEvent& event)
 	event.Skip();
 }
 
-void ibValueModelTableBox::OnItemStartInserting(ibDataViewEvent& event)
-{
-	// Insert / Copy semantics — the row is cloned at a position. No
-	// OnAddRow callback for this path; OnAddRow lives on the dedicated
-	// _START_ADDING event below.
-	m_formOwner->RefreshForm();
-	event.Skip();
-}
-
 void ibValueModelTableBox::OnItemStartAdding(ibDataViewEvent& event)
 {
 	m_formOwner->RefreshForm();
 
 	const ibDataViewItem& item = event.GetItem();
 	if (item.IsOk() && m_tableModel != nullptr) {
-		// The just-added row becomes the current line. The ctrl selects it visually, but that programmatic
-		// selection fires no wxEVT_DATAVIEW_SELECTION_CHANGED, so sync the engine here — otherwise a choice
-		// ("…") on the fresh row (notably the FIRST row added to an empty table, where there is no top row
-		// to seed from) would find no current line and silently no-op.
-		ApplyCurrentLine(m_tableModel->GetRowAt(item));
+		// Record the new row as the current line WITHOUT touching the visual selection. The one actual select is
+		// done by the ctrl — the paged bootstrap that re-fetches around the row (or, non-paged, the tree-insert
+		// Select) — neither of which fires wxEVT_DATAVIEW_SELECTION_CHANGED, so we sync the engine here (otherwise a
+		// choice "…" on the fresh row, notably the FIRST row of an empty table, finds no current line and no-ops).
+		// A visual Select/Unselect here too would BLINK the highlight off before the bootstrap puts it back.
+		m_tableCurrentLine = m_tableModel->GetRowAt(item);
+
+		// GUI-driven Add → fire script OnAddRow with the just-appended row.
+		// Programmatic createdValue path (OnIdle) goes through
+		// ibValueModelStorage::Append too, so listeners observe creation
+		// regardless of origin.
+		if (m_eventOnAddRow != nullptr)
+			CallAsEvent(m_eventOnAddRow,
+				GetValue(),
+				ibValue(m_tableModel->GetRowAt(item)));
+	}
+
+	event.Skip();
+}
+
+void ibValueModelTableBox::OnItemStartInserting(ibDataViewEvent& event)
+{
+	// Insert / Copy semantics — the row is cloned at a position. No OnAddRow callback for this path (Copy / Insert
+	// ≠ Add); OnAddRow lives on the dedicated _START_ADDING event below.
+	m_formOwner->RefreshForm();
+
+	// The just-inserted row STILL becomes the current line — same reason as _START_ADDING: the ctrl selects it
+	// visually, but that programmatic selection fires no wxEVT_DATAVIEW_SELECTION_CHANGED, so without this the
+	// current line would stay on the OLD row and the next Insert / Add would keep landing at the same spot (the
+	// cursor looks frozen — "after the second row it stops moving"). Only the OnAddRow SCRIPT event is withheld.
+	const ibDataViewItem& item = event.GetItem();
+	if (item.IsOk() && m_tableModel != nullptr) {
+		// Record the new row as the current line WITHOUT touching the visual selection. The one actual select is
+		// done by the ctrl — the paged bootstrap that re-fetches around the row (or, non-paged, the tree-insert
+		// Select) — neither of which fires wxEVT_DATAVIEW_SELECTION_CHANGED, so we sync the engine here (otherwise a
+		// choice "…" on the fresh row, notably the FIRST row of an empty table, finds no current line and no-ops).
+		// A visual Select/Unselect here too would BLINK the highlight off before the bootstrap puts it back.
+		m_tableCurrentLine = m_tableModel->GetRowAt(item);
 
 		// GUI-driven Add → fire script OnAddRow with the just-appended row.
 		// Programmatic createdValue path (OnIdle) goes through
@@ -292,7 +329,7 @@ void ibValueModelTableBox::OnItemDrop(ibDataViewEvent& event)
 
 void ibValueModelTableBox::OnCommandMenu(wxCommandEvent& event)
 {
-	ibValueModelTableBox::ExecuteAction(event.GetId(), m_formOwner);
+	ibValueModelTableBox::CallAsAction(event.GetId(), m_formOwner);
 }
 
 void ibValueModelTableBox::OnContextMenu(ibDataViewEvent& event)

@@ -490,13 +490,86 @@ ABOVE the content. The subsystem lives in `frontend/visualView/` (`layerObject.{
 - **Serialization** — the composite window writes a `"Layers"` block (first entry = `"CommandBar"`,
   extensible), read back symmetrically; the command bar round-trips through the layer object's
   `WriteData`/`ReadData`.
-- **No duplicate bar on the main.** A control whose WHOLE source IS the form's MAIN attribute (a
-  single-hop path) suppresses its own command bar (`ibValueModelTableBox::HasCommandBar()` returns
-  false when `path.size() == 1 && FindSourceHolder(path.front())->IsMain()`) — the form
-  already carries the command interface for the main source, so the tablebox would otherwise render a
-  second, redundant bar. A NESTED source (a tabular section — path `[mainAttr, section]`) keeps its own
-  bar: the main attribute is only its HEAD, not its own source. Gating on `!path.empty()` (head-only)
-  instead of `size() == 1` was the bug that hid a tabular section's command panel.
+- **No duplicate bar on the main.** A control whose WHOLE source IS the form's MAIN attribute
+  (`IsMainSourceBound()` — a single-hop path whose head holder `IsMain()`) suppresses its own command bar
+  (`ibValueModelTableBox::HasCommandBar()` returns false when `IsMainSourceBound()`) — the form already
+  carries the command interface for the main source, so the tablebox would otherwise render a second,
+  redundant bar. A NESTED source (a tabular section — path `[mainAttr, section]`) keeps its own bar: the
+  main attribute is only its HEAD, not its own source. Gating on `!path.empty()` (head-only) instead of
+  the single-hop check was the bug that hid a tabular section's command panel.
+
+### Command provider — the model stores, the view adapts, the form wraps
+
+The toolbar's commands flow through ONE interface — `ibActionDataObject` (`GetActionCollection` +
+`CallAsAction`, `actionInfo.h`) — and `ibValueFrame` IS-A one, so every control and the form itself
+already carry the pair. Three roles compose it:
+
+- **The model is a dumb command STORE** — `ibTabularCommandDataObject` (`GetCommandCollection(formType, out)` +
+  `CallAsCommand(row, id, form)`, `actionInfo.h`). It lists its OWN narrow set as `ibCommandItem`
+  records (the SAME record the action collection lays out — a default item, `m_act_id == wxNOT_FOUND`, is
+  a separator) and runs one by id against the FRONT-passed current row. No action composition, no widget
+  pull. There is NO shared base command enum — each model class defines its OWN commands (a value-table /
+  tabular section its Add / Copy / Edit / Delete inline; the list family a file-local enum in
+  `objectListAction.cpp`, adding MarkAsDelete / AddFolder; an enum list nothing).
+- **The tablebox is the ADAPTER** — it turns the dumb model into a full `ibActionDataObject`.
+  `GetActionCollection` composes Select (choice mode, first) + the model's `GetCommandCollection` + the
+  view-state band (Filter / FilterByColumn / FilterClear / ViewMode — the TableBox's own high-base ids,
+  `20000+`). `CallAsAction` reads its OWN current row off the live control (`m_tableCurrentLine`) and
+  routes: a band id → `Command_*` (driven straight on the widget); any other id →
+  `model->CallAsCommand(row, id, form)` (the object commands). The model never sees the widget; the view
+  never composes what the model owns.
+- **The form is a WRAPPER** — `GetActionCollection` surfaces its command PROVIDER's set + the form chrome
+  (Close / Update / Help / Change); `CallAsAction` handles the chrome ids, else forwards to the provider.
+  `GetCommandProvider()` (`formAction.cpp`) resolves it: a **list form** — the control that reports
+  `IsMainSourceBound()`, found by `FindMainCommandView` (a recursive walk asking the BASE
+  `ibValueFrame::IsMainSourceBound` virtual — `false` by default, the tablebox overrides it, so no
+  per-type cast); an **object form** — the source object itself
+  (`dynamic_cast<ibActionDataObject*>(GetSourceObject())`: a catalog element / document IS both the data
+  source and its own command interface). The form never touches the dumb `ibTabularCommandDataObject`.
+
+**Edit = a front-intercepted command (a flag bit baked into the id).** Inline editing is a pure FRONT
+operation, so the Edit command is not round-tripped through the backend to call back. A model bakes a flag
+bit into its Edit id in the enum — `constexpr ibActionID eStartEditingFlag = 0x1000` (`actionInfo.h`), so
+`eEditValue = <n> | eStartEditingFlag`; for the MODEL it is just an ordinary command value (it emits
+`eEditValue` and dispatches `case eEditValue` unaware of the flag). The tablebox's `CallAsAction` tests the bit
+on EVERY id it forwards to `CallAsCommand` AS-IS (the model's Edit case carries the flag too — a list opens its
+object form, a value-table does nothing there), and — if the bit is set — ALSO runs `EditCurrentRow(row)`, the
+inline cell editor on the row's first editable column. So a value-table / tabular row edits inline (front), a
+list opens its form (backend), nothing else changes. Tested per id (`id & FLAG`), no lookup table. The id (flag
+included) MUST stay a valid **wxMenuItem** id (`< 32767`): the tablebox appends its command ids STRAIGHT as
+context-menu item ids (`OnContextMenu`), so a high flag bit trips wx's `itemid < 32767` assert. `0x1000` is a
+FREE bit no real band sets — model ids `1..27`, form chrome `10000..10003`, band ids `20000..20004` all leave
+bit 12 clear — so `eEditValue = 3 | 0x1000 = 4099` stays valid. (Rejected en route: `0x40000000` — a "high bit
+above every range" that broke the context menu; a reserved specific id `-100000` and a flag OR'd only at emit + stripped on the
+front — both superseded by baking the flag into the enum value; a notifier `StartEditing` push; a front-only
+`enTableEdit` command that broke the model's command order; and an `ibBackendTableFrame` callback that looped
+front → back → front for a pure-front action.)
+
+**Select value (a picker's return).** `ibValueModelReturnLine::GetSelectValue()` (Command_Choose →
+`NotifyChoice`) redirects ONCE to the owner model — `GetOwnerModel()->GetItemSelectValue(m_lineItem)` —
+and falls back to the row's own value when empty. `ibValueModel::GetItemSelectValue` defaults to empty (a
+value-table / tabular / dynamic-list row selects itself — the current row); a concrete leaf overrides it —
+a catalog / document / folder returns its REFERENCE (read off the row by the metaobject's data-reference
+metaID), a register returns its record KEY (`CreateRecordKeyObjectValue`).
+
+**Resolved LIVE, never cached.** `GetCommandProvider` re-derives every query. A stored back-pointer
+(prototyped both ways — a push-attach from the main view, and an attribute-side subscriber list) goes
+stale the moment the designer re-points the MAIN attribute (table-1 → table-2 fires no re-bind on the
+demoted view) or the bound type is deleted externally (the link dangles). The walk keys on the
+authoritative `IsMainSourceBound` — which re-reads `holder->IsMain()` live — so the next walk simply finds
+the new main (or nothing); nothing to keep in sync. It is cheap (a few controls, only on toolbar
+(re)build / command click), so the walk beats the state. An "invert ownership" variant (the main
+composite owns the top bar and pulls the form chrome UP via `GetOwnerForm`) was prototyped and rejected —
+it relocates WHERE the bar renders for no correctness gain.
+
+**Commit the edited field before the command runs.** A text control pushes its typed value to the source
+only on kill-focus / Enter (`ibValueTextCtrl::OnKillFocus`, `m_textModified`). A custom-drawn tool does not
+steal focus on click, so the chrome command bar (`ibValueCommandBar`, an `ibAuiToolBar`) must `SetFocus`
+itself before dispatching — mirroring the metaobject toolbar's `ibValueToolbar::OnTool` — so the field being
+edited fires its kill-focus and commits FIRST. Without it a Write ran against a stale source (a register
+record wrote an empty key and the manager false-positived "This entry already exists" — succeeded only on the
+second click, once the error dialog had stolen focus). Fix: one `bar->SetFocus()` before `ExecuteCommand`,
+reusing the existing commit path — no parallel "flush every control" mechanism.
 
 ## Designer: live column edits & drag-to-column
 

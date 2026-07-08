@@ -255,7 +255,7 @@ public:
 
 	//support actionData
 	virtual ibActionCollection GetActionCollection(const ibFormID& formType);
-	virtual void ExecuteAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm);
+	virtual void CallAsAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm);
 
 	// SetDeletionMark inherited from ibValueRecordDataObjectRecorderRef
 	// (un-post then base SetDeletionMark) — common algorithm across

@@ -1,6 +1,7 @@
 #ifndef _VALUETABLEPART_H__
 
 #include "backend/tableInfo.h"
+#include "backend/picturePredefined.h"                 // g_pic*CLSID — this model emits its own standard command icons
 #include "backend/valueInfo.h"
 
 #include "backend/metaCollection/table/metaTableObject.h"
@@ -192,18 +193,32 @@ public:
 		return ibValueModel::EditableLine(item, col) && !m_metaTable->IsNumberLine(col);
 	}
 
-	virtual void ActivateItem(ibBackendValueForm* formOwner,
-		const ibDataViewItem& item, unsigned int col) {
-		ibValueModel::RowValueStartEdit(item, col);
+
+	void AddValue(const ibDataViewItem& row);
+	virtual void CopyValue(const ibDataViewItem& row);
+	void EditValue(const ibDataViewItem& row);
+	virtual void DeleteValue(const ibDataViewItem& row);
+
+	// Command store (ibTabularCommandDataObject): a tabular section defines its OWN Add / Copy / Edit / Delete and runs
+	// them by id on the front-passed row (no shared base set — each model ships its own).
+	enum { eAddValue = 1, eCopyValue, eEditValue = 3 | eStartEditingFlag, eDeleteValue = 4 };   // Edit's id carries the front-edit flag
+	virtual void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const override {
+		commands.emplace_back(eAddValue,    wxT("Add"),    _("Add"),    g_picAddCLSID,    true);
+		commands.emplace_back(eCopyValue,    wxT("Copy"),   _("Copy"),   g_picCopyCLSID);
+		commands.emplace_back(eEditValue,    wxT("Edit"),   _("Edit"),   g_picEditCLSID);
+		commands.emplace_back(eDeleteValue,  wxT("Delete"), _("Delete"), g_picDeleteCLSID);
+	}
+	virtual void CallAsCommand(const ibDataViewItem& row, const ibActionID& lNumAction, ibBackendValueForm* srcForm) override {
+		switch (lNumAction) {
+		case eAddValue:    AddValue(row);    break;
+		case eCopyValue:   CopyValue(row);   break;
+		case eEditValue:   EditValue(row);   break;   // no-op on the backend; Edit's id carries eStartEditingFlag → the FRONT opens the real inline editor
+		case eDeleteValue: DeleteValue(row); break;
+		}
 	}
 
-	virtual void AddValue(unsigned int before = 0);
-	virtual void CopyValue();
-	virtual void EditValue();
-	virtual void DeleteValue();
-
 	//append new row
-	virtual long AppendRow(unsigned int before = 0);
+	virtual long AppendRow(unsigned int before = 0, const ibDataViewItem& contextRow = ibDataViewItem());
 
 	virtual bool LoadData(const ibGuid& srcGuid, bool createData = true) { return true; }
 	virtual bool SaveData() { return true; }
@@ -265,11 +280,11 @@ class BACKEND_API ibValueTabularSectionDataObjectRef : public ibValueTabularSect
 
 	virtual ~ibValueTabularSectionDataObjectRef() {}
 
-	virtual void CopyValue();
-	virtual void DeleteValue();
+	virtual void CopyValue(const ibDataViewItem& row);
+	virtual void DeleteValue(const ibDataViewItem& row);
 
 	//append new row
-	virtual long AppendRow(unsigned int before = 0);
+	virtual long AppendRow(unsigned int before = 0, const ibDataViewItem& contextRow = ibDataViewItem());
 
 	//load/save/delete data
 	virtual bool LoadData(const ibGuid& srcGuid, bool createData = true);

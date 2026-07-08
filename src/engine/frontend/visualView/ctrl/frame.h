@@ -361,7 +361,7 @@ public:
 
 	//support actionData
 	virtual ibActionCollection GetActionCollection(const ibFormID& formType) override { return ibActionCollection(); }
-	virtual void ExecuteAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm) override {}
+	virtual void CallAsAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm) override {}
 
 	// Command bar STORE, owned by this frame (created in the ctor of controls that
 	// carry one — form/table). HasCommandBar = it exists; the visual host reads it
@@ -369,7 +369,11 @@ public:
 	// own bar (e.g. a table that IS the form's main source — the form toolbar covers it).
 	virtual bool HasCommandBar() const { return m_commandBar != nullptr; }
 	ibValueCommandBar* GetCommandBar() const { return m_commandBar; }
-	ibValuePtr<ibValueCommandBar> m_commandBar;
+
+	// Does THIS control's binding reference the form's MAIN attribute (i.e. it IS the form's main data view)?
+	// Base: no. A view bound single-hop to the main attribute overrides (ibValueModelTableBox::IsMainSourceBound);
+	// the form's command-provider walk asks every control this base virtual — no per-type cast.
+	virtual bool IsMainSourceBound() const { return false; }
 
 	class ibValueEventContainer : public ibValueDynamicMembers {
 	public:
@@ -507,6 +511,7 @@ protected:
 	ibGuid				 m_controlGuid;
 
 	ibValuePtr<ibValueEventContainer> m_valEventContainer;
+	ibValuePtr<ibValueCommandBar> m_commandBar;
 };
 
 #endif // !_BASE_H_

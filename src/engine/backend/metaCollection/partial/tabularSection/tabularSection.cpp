@@ -449,7 +449,7 @@ ibValueTabularSectionDataObjectBase::ibValueTabularSectionDataObjectColumnCollec
 {
 }
 
-long ibValueTabularSectionDataObjectBase::AppendRow(unsigned int before)
+long ibValueTabularSectionDataObjectBase::AppendRow(unsigned int before, const ibDataViewItem& contextRow)
 {
 	ibComposerNode* rowData = new ibComposerNode();
 	for (const auto object : m_metaTable->GetGenericAttributeArrayObject()) {
@@ -458,9 +458,9 @@ long ibValueTabularSectionDataObjectBase::AppendRow(unsigned int before)
 	}
 
 	// Grouped add: the new row inherits the current group's dimension values (read each grouping dim off the
-	// selected row), so it lands INSIDE the group instead of losing the grouping value. Ungrouped view → no dims
-	// → no-op; a dotted (reference-walk) dim has no single storage column and is skipped.
-	if (ibComposerNode* ctx = GetViewData<ibComposerNode>(GetSelection())) {
+	// FRONT-passed context row — the selected row), so it lands INSIDE the group instead of losing the grouping
+	// value. No context / ungrouped → no dims → no-op; a dotted (reference-walk) dim is skipped.
+	if (ibComposerNode* ctx = GetViewData<ibComposerNode>(contextRow)) {
 		for (size_t i = 0; i < GetModelComposer().GroupCount(); ++i) {
 			wxString field; ibQueryDimUnfold kind = ibQueryDimUnfold::Elements;
 			if (!GetModelComposer().GetGroupAt(i, field, kind) || field.IsEmpty()) continue;
@@ -476,11 +476,11 @@ long ibValueTabularSectionDataObjectBase::AppendRow(unsigned int before)
 	return ibValueModelStorage::Append(rowData, !ibBackendException::IsEvalMode());
 }
 
-long ibValueTabularSectionDataObjectRef::AppendRow(unsigned int before)
+long ibValueTabularSectionDataObjectRef::AppendRow(unsigned int before, const ibDataViewItem& contextRow)
 {
 	if (!ibBackendException::IsEvalMode())
 		m_objectValue->Modify(true);
-	return ibValueTabularSectionDataObjectBase::AppendRow(before);
+	return ibValueTabularSectionDataObjectBase::AppendRow(before, contextRow);
 }
 
 //****************************************************************************

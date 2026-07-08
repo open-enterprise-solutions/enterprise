@@ -256,6 +256,7 @@ const ibSourceExplorer* ibValueListDataObjectEnumRef::GetSourceExplorer() const
 		m_metaObject->GetName(), m_metaObject->GetSynonym(), m_metaObject->GetMetaID(),
 		GetClassType(), true, true
 	);
+	m_sourceExplorer.SetChoiceMode(m_choiceMode);   // picker → the main table node carries choice mode
 	m_sourceExplorer.AppendColumn(m_metaObject->GetDataReference(), true, true);
 	return &m_sourceExplorer;
 }
@@ -270,18 +271,6 @@ bool ibValueListDataObjectEnumRef::GetValueByMetaID(const ibMetaID& id, ibValue&
 }
 
 //events 
-void ibValueListDataObjectEnumRef::ChooseValue(ibBackendValueForm* srcForm)
-{
-	const ibUniqueKey key = GetItemKey(GetSelection());
-	if (!key.IsOk())
-		return;
-	wxASSERT(srcForm);
-	ibValueReferenceDataObject* dataValueRef = m_metaObject->FindObjectValue(key);
-	if (dataValueRef != nullptr) {
-		ibValue selectedValue = dataValueRef->GetValue();
-		srcForm->NotifyChoice(selectedValue);
-	}
-}
 
 #include "backend/objCtor.h"
 
@@ -321,6 +310,7 @@ const ibSourceExplorer* ibValueListDataObjectRef::GetSourceExplorer() const
 		m_metaObject->GetName(), m_metaObject->GetSynonym(), m_metaObject->GetMetaID(),
 		GetClassType(), true, true
 	);
+	m_sourceExplorer.SetChoiceMode(m_choiceMode);   // picker → the main table node carries choice mode
 
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 		if (m_metaObject->IsDataReference(object->GetMetaID()))
@@ -346,7 +336,7 @@ bool ibValueListDataObjectRef::GetValueByMetaID(const ibMetaID& id, ibValue& pva
 }
 
 //events 
-void ibValueListDataObjectRef::AddValue(unsigned int before)
+void ibValueListDataObjectRef::AddValue(const ibDataViewItem& /*row*/)
 {
 	ibValueMetaObjectRecordDataMutableRef* metaObject = nullptr;
 	if (m_metaObject->ConvertToValue(metaObject)) {
@@ -368,11 +358,11 @@ void ibValueListDataObjectRef::AddValue(unsigned int before)
 // The selection ops open the object straight FROM THE KEY — GetItemKey(GetSelection()) IS the open handle (it
 // converts to the guid CopyObjectValue / CreateObjectValue want). Inline guard + try/catch, same shape as the
 // register ops — no file-static selection-helper indirection.
-void ibValueListDataObjectRef::CopyValue()
+void ibValueListDataObjectRef::CopyValue(const ibDataViewItem& row)
 {
 	ibValueMetaObjectRecordDataMutableRef* metaObject = nullptr;
 	if (!m_metaObject->ConvertToValue(metaObject)) return;
-	const ibUniqueKey key = GetItemKey(GetSelection());
+	const ibUniqueKey key = GetItemKey(row);
 	if (!key.IsOk()) return;
 	try {
 		ibValuePtr<ibValueRecordDataObjectRef> obj(metaObject->CopyObjectValue(key));
@@ -382,11 +372,11 @@ void ibValueListDataObjectRef::CopyValue()
 	catch (...) { wxLogError(wxT("objectList: unhandled non-ibBackend exception swallowed")); }
 }
 
-void ibValueListDataObjectRef::EditValue()
+void ibValueListDataObjectRef::EditValue(const ibDataViewItem& row)
 {
 	ibValueMetaObjectRecordDataMutableRef* metaObject = nullptr;
 	if (!m_metaObject->ConvertToValue(metaObject)) return;
-	const ibUniqueKey key = GetItemKey(GetSelection());
+	const ibUniqueKey key = GetItemKey(row);
 	if (!key.IsOk()) return;
 	try {
 		ibValueRecordDataObjectRef* obj(metaObject->CreateObjectValue(key));
@@ -396,11 +386,11 @@ void ibValueListDataObjectRef::EditValue()
 	catch (...) { wxLogError(wxT("objectList: unhandled non-ibBackend exception swallowed")); }
 }
 
-void ibValueListDataObjectRef::DeleteValue()
+void ibValueListDataObjectRef::DeleteValue(const ibDataViewItem& row)
 {
 	ibValueMetaObjectRecordDataMutableRef* metaObject = nullptr;
 	if (!m_metaObject->ConvertToValue(metaObject)) return;
-	const ibUniqueKey key = GetItemKey(GetSelection());
+	const ibUniqueKey key = GetItemKey(row);
 	if (!key.IsOk()) return;
 	try {
 		ibValuePtr<ibValueRecordDataObjectRef> obj(metaObject->CreateObjectValue(key));
@@ -411,11 +401,11 @@ void ibValueListDataObjectRef::DeleteValue()
 	catch (...) { wxLogError(wxT("objectList: unhandled non-ibBackend exception swallowed")); }
 }
 
-void ibValueListDataObjectRef::MarkAsDeleteValue()
+void ibValueListDataObjectRef::MarkAsDeleteValue(const ibDataViewItem& row)
 {
 	ibValueMetaObjectRecordDataMutableRef* metaObject = nullptr;
 	if (!m_metaObject->ConvertToValue(metaObject)) return;
-	const ibUniqueKey key = GetItemKey(GetSelection());
+	const ibUniqueKey key = GetItemKey(row);
 	if (!key.IsOk()) return;
 	try {
 		ibValuePtr<ibValueRecordDataObjectRef> obj(metaObject->CreateObjectValue(key));
@@ -426,27 +416,6 @@ void ibValueListDataObjectRef::MarkAsDeleteValue()
 	catch (...) { wxLogError(wxT("objectList: unhandled non-ibBackend exception swallowed")); }
 }
 
-void ibValueListDataObjectRef::ChooseValue(ibBackendValueForm* srcForm)
-{
-	const ibUniqueKey key = GetItemKey(GetSelection());
-	if (!key.IsOk())
-		return;
-
-	wxASSERT(srcForm);
-
-	try {
-		ibValuePtr<ibValueReferenceDataObject> dataValueRef(m_metaObject->FindObjectValue(key));
-		if (dataValueRef != nullptr) {
-			ibValue selectedValue = dataValueRef->GetValue();
-			srcForm->NotifyChoice(selectedValue);
-		}
-	}
-	catch (const ibBackendCoreException& err) {
-		ibValueSystemFunction::Alert(err.GetErrorDescription());
-	}
-	catch (...) {
-	}
-}
 
 ibClassID ibValueListDataObjectRef::GetClassType() const
 {
@@ -496,6 +465,7 @@ const ibSourceExplorer* ibValueModelTreeDataObjectFolderRef::GetSourceExplorer()
 		m_metaObject->GetName(), m_metaObject->GetSynonym(), m_metaObject->GetMetaID(),
 		GetClassType(), true, true
 	);
+	m_sourceExplorer.SetChoiceMode(m_choiceMode);   // picker → the main table node carries choice mode
 
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 		if (m_metaObject->IsDataReference(object->GetMetaID()))
@@ -527,16 +497,14 @@ bool ibValueModelTreeDataObjectFolderRef::GetValueByMetaID(const ibMetaID& id, i
 }
 
 //events 
-void ibValueModelTreeDataObjectFolderRef::ResolveParentForNew(ibValue& outParent) const
+void ibValueModelTreeDataObjectFolderRef::ResolveParentForNew(const ibDataViewItem& row, ibValue& outParent) const
 {
-	// Parent inheritance — three sources, in order:
-	//   1. Current selection (Tree mode + List with row selected): use
-	//      selected folder itself, or selected item's parent.
-	//   2. Drill chain (Hierarchical drill, no selection inside folder):
-	//      the deepest crumb is the folder we're inside — use it as
-	//      parent so a fresh item lands here, not at the root.
-	//   3. Fallback empty: top-level catalog root.
-	ibValueModel::ibComposerNode* node = GetViewData<ibValueModel::ibComposerNode>(GetSelection());
+	// Parent inheritance — ALL from the FRONT-passed row (the selection handed down on the button press):
+	//   * row is an item   → its parent;
+	//   * row is a folder  → itself (a new item lands inside it — the front passes the drilled folder AS the row);
+	//   * no row           → top-level catalog root (empty parent).
+	// The old drill-chain pull (GetDrillParent) is gone — the front conveys the folder through the row.
+	ibValueModel::ibComposerNode* node = GetViewData<ibValueModel::ibComposerNode>(row);
 	if (node != nullptr) {
 		ibValue isFolder = true;
 		node->GetValue(*m_metaObject->GetDataIsFolder(), isFolder);
@@ -544,17 +512,13 @@ void ibValueModelTreeDataObjectFolderRef::ResolveParentForNew(ibValue& outParent
 			node->GetValue(*m_metaObject->GetDataParent(), outParent);
 		else
 			node->GetValue(*m_metaObject->GetDataReference(), outParent);
-		return;
 	}
-	ibValueModel::ibComposerNode* drillNode = GetViewData<ibValueModel::ibComposerNode>(GetDrillParent());
-	if (drillNode != nullptr)
-		drillNode->GetValue(*m_metaObject->GetDataReference(), outParent);
 }
 
-void ibValueModelTreeDataObjectFolderRef::AddValue(unsigned int before)
+void ibValueModelTreeDataObjectFolderRef::AddValue(const ibDataViewItem& row)
 {
 	ibValue cParent;
-	ResolveParentForNew(cParent);
+	ResolveParentForNew(row, cParent);
 
 	ibValuePtr<ibValueRecordDataObjectHierarchyRef> dataValueFolderObject(m_metaObject->CreateObjectValue(ibObjectMode::OBJECT_ITEM));
 
@@ -564,10 +528,10 @@ void ibValueModelTreeDataObjectFolderRef::AddValue(unsigned int before)
 	}
 }
 
-void ibValueModelTreeDataObjectFolderRef::AddFolderValue(unsigned int before)
+void ibValueModelTreeDataObjectFolderRef::AddFolderValue(const ibDataViewItem& row)
 {
 	ibValue cParent;
-	ResolveParentForNew(cParent);
+	ResolveParentForNew(row, cParent);
 
 	try {
 		ibValuePtr<ibValueRecordDataObjectHierarchyRef> dataValueFolderObject(m_metaObject->CreateObjectValue(ibObjectMode::OBJECT_FOLDER));
@@ -585,9 +549,9 @@ void ibValueModelTreeDataObjectFolderRef::AddFolderValue(unsigned int before)
 
 // Folder ops mirror the catalog ones — open FROM THE KEY (GetItemKey(sel) → the guid) — plus the folder/item MODE
 // read off the selected row (isFolder), since the hierarchy CreateObjectValue/CopyObjectValue take it.
-void ibValueModelTreeDataObjectFolderRef::CopyValue()
+void ibValueModelTreeDataObjectFolderRef::CopyValue(const ibDataViewItem& row)
 {
-	const ibDataViewItem sel = GetSelection();
+	const ibDataViewItem sel = row;
 	const ibUniqueKey key = GetItemKey(sel);
 	if (!key.IsOk()) return;
 	ibValue cIsFolder = false;
@@ -602,9 +566,9 @@ void ibValueModelTreeDataObjectFolderRef::CopyValue()
 	catch (...) { wxLogError(wxT("objectList: unhandled non-ibBackend exception swallowed")); }
 }
 
-void ibValueModelTreeDataObjectFolderRef::EditValue()
+void ibValueModelTreeDataObjectFolderRef::EditValue(const ibDataViewItem& row)
 {
-	const ibDataViewItem sel = GetSelection();
+	const ibDataViewItem sel = row;
 	const ibUniqueKey key = GetItemKey(sel);
 	if (!key.IsOk()) return;
 	ibValue cIsFolder = false;
@@ -619,9 +583,9 @@ void ibValueModelTreeDataObjectFolderRef::EditValue()
 	catch (...) { wxLogError(wxT("objectList: unhandled non-ibBackend exception swallowed")); }
 }
 
-void ibValueModelTreeDataObjectFolderRef::DeleteValue()
+void ibValueModelTreeDataObjectFolderRef::DeleteValue(const ibDataViewItem& row)
 {
-	const ibDataViewItem sel = GetSelection();
+	const ibDataViewItem sel = row;
 	const ibUniqueKey key = GetItemKey(sel);
 	if (!key.IsOk()) return;
 	ibValue cIsFolder = false;
@@ -637,9 +601,9 @@ void ibValueModelTreeDataObjectFolderRef::DeleteValue()
 	catch (...) { wxLogError(wxT("objectList: unhandled non-ibBackend exception swallowed")); }
 }
 
-void ibValueModelTreeDataObjectFolderRef::MarkAsDeleteValue()
+void ibValueModelTreeDataObjectFolderRef::MarkAsDeleteValue(const ibDataViewItem& row)
 {
-	const ibDataViewItem sel = GetSelection();
+	const ibDataViewItem sel = row;
 	const ibUniqueKey key = GetItemKey(sel);
 	if (!key.IsOk()) return;
 	ibValue cIsFolder = false;
@@ -655,34 +619,6 @@ void ibValueModelTreeDataObjectFolderRef::MarkAsDeleteValue()
 	catch (...) { wxLogError(wxT("objectList: unhandled non-ibBackend exception swallowed")); }
 }
 
-void ibValueModelTreeDataObjectFolderRef::ChooseValue(ibBackendValueForm* srcForm)
-{
-	const ibDataViewItem sel = GetSelection();
-	ibValueModel::ibComposerNode* node = GetViewData<ibValueModel::ibComposerNode>(sel);
-	if (node == nullptr)
-		return;
-
-	wxASSERT(srcForm);
-
-	ibValue cIsFolder = false;
-	node->GetValue(*m_metaObject->GetDataIsFolder(), cIsFolder);
-
-	try {
-		ibValuePtr<ibValueReferenceDataObject> dataValueFolderRef(m_metaObject->FindObjectValue(GetItemKey(sel)));
-		ibValue selectedValue = dataValueFolderRef != nullptr ? dataValueFolderRef->GetValue() : ibValue();
-		if (m_listMode == LIST_FOLDER && cIsFolder.GetBoolean())
-			srcForm->NotifyChoice(selectedValue);
-		else if (m_listMode == LIST_ITEM && !cIsFolder.GetBoolean())
-			srcForm->NotifyChoice(selectedValue);
-		else if (m_listMode == LIST_ITEM_FOLDER)
-			srcForm->NotifyChoice(selectedValue);
-	}
-	catch (const ibBackendCoreException& err) {
-		ibValueSystemFunction::Alert(err.GetErrorDescription());
-	}
-	catch (...) {
-	}
-}
 
 #include "backend/objCtor.h"
 
@@ -776,7 +712,7 @@ bool ibValueListRegisterObject::GetValueByMetaID(const ibMetaID& id, ibValue& pv
 }
 
 //events 
-void ibValueListRegisterObject::AddValue(unsigned int before)
+void ibValueListRegisterObject::AddValue(const ibDataViewItem& /*row*/)
 {
 	if (m_metaObject != nullptr && m_metaObject->HasRecordManager()) {
 		try {
@@ -813,6 +749,17 @@ ibUniqueKey ibValueListDataObject::GetItemKey(const ibDataViewItem& item) const
 	return ibUniqueKey();
 }
 
+// The catalog / document's picker SELECT value = its row's REFERENCE — read straight off the row by the metaobject's
+// data-reference metaID (no queryable / primary-key detour: the metaobject KNOWS its reference cell).
+ibValue ibValueListDataObjectRef::GetItemSelectValue(const ibDataViewItem& item) const
+{
+	ibValue refVal;
+	ibValueModel::ibComposerNode* node = GetViewData<ibValueModel::ibComposerNode>(item);
+	if (node != nullptr)
+		node->GetValue(GetMetaObject()->GetDataReference()->GetMetaID(), refVal);
+	return refVal;
+}
+
 // ibValueModelTreeDataObject::GetItemKey — a folder tree's row key = its primary-key REFERENCE (guid), same shape
 // as a flat list (a tree is a list too; it just derives the ibValueModelCursor via the tree base, not the list one).
 ibUniqueKey ibValueModelTreeDataObject::GetItemKey(const ibDataViewItem& item) const
@@ -832,16 +779,26 @@ ibUniqueKey ibValueModelTreeDataObject::GetItemKey(const ibDataViewItem& item) c
 	return ibUniqueKey();
 }
 
-// ibValueListRegisterObject::GetItemKey — the register row key is a COMPOSITE (dimensions), not a single guid, so
-// it overrides the regular-list default. Reads the recorder+line (HasRecorder) or the dimension values off the
-// item's node and hands them to CreateUniqueKeyPair; the resulting Pair slices to the ibUniqueKey return WITHOUT
-// losing the composite (it lives in the base). Empty (invalid) when there is no node, so the selection op no-ops.
-ibUniqueKey ibValueListRegisterObject::GetItemKey(const ibDataViewItem& item) const
+// The folder tree's picker SELECT value = its row's REFERENCE — read off the row by the metaobject's data-reference
+// metaID (same shape as a flat catalog; a folder is a catalog row too).
+ibValue ibValueModelTreeDataObjectFolderRef::GetItemSelectValue(const ibDataViewItem& item) const
 {
-	if (m_metaObject == nullptr) return ibUniqueKey();
+	ibValue refVal;
 	ibValueModel::ibComposerNode* node = GetViewData<ibValueModel::ibComposerNode>(item);
-	if (node == nullptr) return ibUniqueKey();
+	if (node != nullptr)
+		node->GetValue(GetMetaObject()->GetDataReference()->GetMetaID(), refVal);
+	return refVal;
+}
+
+// ibValueListRegisterObject::GetRowKeyValues — read the register row's dimension values (recorder+line when
+// HasRecorder, else the dimensions) off the item's node. Feeds GetItemKey → CreateUniqueKeyPair. Empty when there
+// is no node.
+ibRowMetaValues ibValueListRegisterObject::GetRowKeyValues(const ibDataViewItem& item) const
+{
 	ibRowMetaValues keys;
+	if (m_metaObject == nullptr) return keys;
+	ibValueModel::ibComposerNode* node = GetViewData<ibValueModel::ibComposerNode>(item);
+	if (node == nullptr) return keys;
 	auto take = [&](const ibValueMetaObjectAttributePredefined* attr) {
 		if (attr == nullptr) return;
 		ibValue v; node->GetValue(attr->GetMetaID(), v); keys.insert_or_assign(attr->GetMetaID(), v);
@@ -855,15 +812,35 @@ ibUniqueKey ibValueListRegisterObject::GetItemKey(const ibDataViewItem& item) co
 			ibValue v; node->GetValue(dim->GetMetaID(), v); keys.insert_or_assign(dim->GetMetaID(), v);
 		}
 	}
+	return keys;
+}
+
+ibUniqueKey ibValueListRegisterObject::GetItemKey(const ibDataViewItem& item) const
+{
+	const ibRowMetaValues keys = GetRowKeyValues(item);
+	if (m_metaObject == nullptr || keys.empty()) return ibUniqueKey();
 	return m_metaObject->CreateUniqueKeyPair(keys);
 }
 
-void ibValueListRegisterObject::CopyValue()
+// Picker SELECT value → the record KEY: hand the row's WHOLE value map (GetTableValues) to the register, which
+// builds an ibValueRecordKeyObject and FILLS any missing dimension itself (a register row has a COMPOSITE key,
+// not a single reference).
+ibValue ibValueListRegisterObject::GetItemSelectValue(const ibDataViewItem& item) const
 {
-	if (m_metaObject != nullptr && GetSelection().IsOk()) {
+	ibValue result;
+	if (m_metaObject == nullptr) return result;
+	ibValueModel::ibComposerNode* node = GetViewData<ibValueModel::ibComposerNode>(item);
+	if (node == nullptr) return result;
+	result = m_metaObject->CreateRecordKeyObjectValue(node->GetTableValues());
+	return result;
+}
+
+void ibValueListRegisterObject::CopyValue(const ibDataViewItem& row)
+{
+	if (m_metaObject != nullptr && row.IsOk()) {
 		if (m_metaObject->HasRecordManager()) {
 			try {
-				ibValuePtr<ibValueRecordManagerObject> dataValueObject(m_metaObject->CopyRecordManagerObjectValue(ibUniqueKeyPair(GetItemKey(GetSelection()).GetKeyValues())));
+				ibValuePtr<ibValueRecordManagerObject> dataValueObject(m_metaObject->CopyRecordManagerObjectValue(ibUniqueKeyPair(GetItemKey(row).GetKeyValues())));
 				if (dataValueObject != nullptr)
 					dataValueObject->ShowFormValue(wxEmptyString, dynamic_cast<ibBackendControlFrame*>(ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid)));
 			}
@@ -876,12 +853,12 @@ void ibValueListRegisterObject::CopyValue()
 	}
 }
 
-void ibValueListRegisterObject::EditValue()
+void ibValueListRegisterObject::EditValue(const ibDataViewItem& row)
 {
-	if (m_metaObject != nullptr && GetSelection().IsOk()) {
+	if (m_metaObject != nullptr && row.IsOk()) {
 		if (m_metaObject->HasRecordManager()) {
 			try {
-				ibValuePtr<ibValueRecordManagerObject> dataValueObject(m_metaObject->CreateRecordManagerObjectValue(ibUniqueKeyPair(GetItemKey(GetSelection()).GetKeyValues())));
+				ibValuePtr<ibValueRecordManagerObject> dataValueObject(m_metaObject->CreateRecordManagerObjectValue(ibUniqueKeyPair(GetItemKey(row).GetKeyValues())));
 				if (dataValueObject != nullptr)
 					dataValueObject->ShowFormValue(wxEmptyString, dynamic_cast<ibBackendControlFrame*>(ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid)));
 			}
@@ -895,7 +872,7 @@ void ibValueListRegisterObject::EditValue()
 			try {
 				const ibValueMetaObjectAttributePredefined* metaRecorder = m_metaObject->GetRegisterRecorder();
 				if (metaRecorder != nullptr)
-					if (auto* node = GetViewData<ibValueModel::ibComposerNode>(GetSelection())) {
+					if (auto* node = GetViewData<ibValueModel::ibComposerNode>(row)) {
 						ibValue recorderVal; node->GetValue(metaRecorder->GetMetaID(), recorderVal);
 						recorderVal.ShowValue();
 					}
@@ -909,12 +886,12 @@ void ibValueListRegisterObject::EditValue()
 	}
 }
 
-void ibValueListRegisterObject::DeleteValue()
+void ibValueListRegisterObject::DeleteValue(const ibDataViewItem& row)
 {
-	if (m_metaObject != nullptr && GetSelection().IsOk()) {
+	if (m_metaObject != nullptr && row.IsOk()) {
 		if (m_metaObject->HasRecordManager()) {
 			try {
-				ibValuePtr<ibValueRecordManagerObject> dataValueObject(m_metaObject->CreateRecordManagerObjectValue(ibUniqueKeyPair(GetItemKey(GetSelection()).GetKeyValues())));
+				ibValuePtr<ibValueRecordManagerObject> dataValueObject(m_metaObject->CreateRecordManagerObjectValue(ibUniqueKeyPair(GetItemKey(row).GetKeyValues())));
 				if (dataValueObject != nullptr)
 					dataValueObject->DeleteRegister();
 				ibBackendValueForm* valueListForm = ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid);

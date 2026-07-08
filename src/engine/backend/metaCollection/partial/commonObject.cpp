@@ -1182,6 +1182,11 @@ ibValueRecordKeyObject* ibValueMetaObjectRegisterData::CreateRecordKeyObjectValu
 	return new ibValueRecordKeyObject(this);
 }
 
+ibValueRecordKeyObject* ibValueMetaObjectRegisterData::CreateRecordKeyObjectValue(const ibRowMetaValues& keyValues) const
+{
+	return new ibValueRecordKeyObject(this, keyValues);
+}
+
 ibValueRecordSetObject* ibValueMetaObjectRegisterData::CreateRecordSetObjectValue(bool needInitialize) const
 {
 	ibValueRecordSetObject* createdValue = CreateRecordSetObjectRegValue();
@@ -2862,6 +2867,21 @@ ibValueRecordKeyObject::ibValueRecordKeyObject(const ibValueMetaObjectRegisterDa
 m_metaObject(metaObject)
 {
 	m_members.Bind(this, &ibValueRecordKeyObject::FillMembers);
+}
+
+ibValueRecordKeyObject::ibValueRecordKeyObject(const ibValueMetaObjectRegisterData* metaObject, const ibRowMetaValues& keyValues) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE),
+m_metaObject(metaObject)
+{
+	m_members.Bind(this, &ibValueRecordKeyObject::FillMembers);
+	// VERIFY completeness against the register's OWN dimensions: take each from the supplied row values, and FILL
+	// a missing one with its typed-empty default (mirrors CreateUniqueKeyPair). So the caller can hand a WHOLE row
+	// map — the key keeps only its dimensions and is always COMPLETE, whatever the row carried.
+	if (metaObject != nullptr) {
+		for (const auto* attr : metaObject->GetGenericDimensionArrayObject()) {
+			const auto it = keyValues.find(attr->GetMetaID());
+			m_keyValues.insert_or_assign(attr->GetMetaID(), it != keyValues.end() ? it->second : attr->CreateValue());
+		}
+	}
 }
 
 ibValueRecordKeyObject::~ibValueRecordKeyObject()

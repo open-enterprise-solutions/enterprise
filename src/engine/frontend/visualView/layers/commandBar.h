@@ -169,7 +169,7 @@ public:
 	// action collection; otherwise returns the manually-stored ones.
 	const std::vector<ibCommandEntry>& BuildCommands();
 
-	// Dispatch a command (by id) — routed to the owner's ExecuteAction. This is the
+	// Dispatch a command (by id) — routed to the owner's CallAsAction. This is the
 	// bar's OWN event hook, so the toolbar need not know about the control.
 	void ExecuteCommand(const ibActionID& id, class ibBackendValueForm* form);
 

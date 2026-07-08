@@ -74,6 +74,11 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 				dynamic_cast<ibValueModelTableBox*>(ibValueForm::CreateControl(wxT("Tablebox")));
 
 			mainTableBox->SetControlName(sourceExplorer.GetSourceName());
+			
+			// A picker source stamps its main table node with choice mode — carry it onto the table so it shows
+			// Select first (the runtime open-as-choice path; the designer property is the alternative source).
+			mainTableBox->SetChoiceMode(sourceExplorer.IsChoiceMode());
+
 			// The MAIN attribute IS the list (its Type is CatalogList.<X>) — its source is
 			// just the attribute itself, shown as "List". The extra source-id hop (the row
 			// catalog) was redundant here and rendered "List.Catalog1".

@@ -18,13 +18,7 @@ public:
 
 class BACKEND_API ibBackendControlFrame {
 public:
-#if !wxUSE_EXTENDED_RTTI
-	virtual wxClassInfo* GetClassInfo() const;
-	// RTTI information, usually declared by wxDECLARE_DYNAMIC_CLASS() or
-	// similar, but done manually for the hierarchy root. Note that it's public
-	// for compatibility reasons, but shouldn't be accessed directly.
-	static wxClassInfo ms_classInfo;
-#endif
+
 	virtual ~ibBackendControlFrame() {}
 
 	virtual bool GetControlValue(ibValue& pvarControlVal) const = 0;
@@ -32,7 +26,7 @@ public:
 
 	virtual ibBackendValueForm* GetBackendForm() const { return nullptr; }
 
-	// Get reference class 
+	// Get reference class
 	virtual ibClassID GetClassType() const = 0;
 
 	// Counter reference

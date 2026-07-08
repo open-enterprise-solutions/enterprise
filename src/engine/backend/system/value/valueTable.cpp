@@ -426,7 +426,7 @@ bool ibValueModelTable::ibValueModelTableReturnLine::GetPropVal(const long lProp
 
 //**********************************************************************
 
-long ibValueModelTable::AppendRow(unsigned int before)
+long ibValueModelTable::AppendRow(unsigned int before, const ibDataViewItem& contextRow)
 {
 	ibComposerNode* rowData = new ibComposerNode();
 	for (auto& colData : m_tableColumnCollection->m_listColumnInfo) {
@@ -436,9 +436,9 @@ long ibValueModelTable::AppendRow(unsigned int before)
 	}
 
 	// Grouped add: the new row inherits the current group's dimension values (read each grouping dim off the
-	// selected row), so it lands INSIDE the group instead of losing the grouping value. Ungrouped → no dims →
-	// no-op; a dotted (reference-walk) dim has no single storage column and is skipped. (Grouping is NOT ТЧ-only.)
-	if (ibComposerNode* ctx = GetViewData<ibComposerNode>(GetSelection())) {
+	// FRONT-passed context row — the selected row), so it lands INSIDE the group instead of losing the grouping
+	// value. No context / ungrouped → no dims → no-op; a dotted (reference-walk) dim is skipped. (NOT ТЧ-only.)
+	if (ibComposerNode* ctx = GetViewData<ibComposerNode>(contextRow)) {
 		for (size_t i = 0; i < GetModelComposer().GroupCount(); ++i) {
 			wxString field; ibQueryDimUnfold kind = ibQueryDimUnfold::Elements;
 			if (!GetModelComposer().GetGroupAt(i, field, kind) || field.IsEmpty()) continue;
@@ -448,17 +448,23 @@ long ibValueModelTable::AppendRow(unsigned int before)
 		}
 	}
 
+	// Insert AFTER the active row when AddValue passes a position (before > 0); before == 0 → append at the bottom
+	// (the script Add() path). Mirrors the tabular section so both editable tables place a new row the same way.
+	if (before > 0)
+		return ibValueModelStorage::Insert(rowData, before, !ibBackendException::IsEvalMode());
 	return ibValueModelStorage::Append(rowData, !ibBackendException::IsEvalMode());
 }
 
-void ibValueModelTable::EditRow()
+void ibValueModelTable::EditRow(const ibDataViewItem& row)
 {
-	ibValueModelStorage::RowValueStartEdit(GetSelection());
+	// Inline editing is opened by the TableBox on the control (front, OnItemActivated → EditItem) — the model no
+	// longer tells the control to start editing. (Was RowValueStartEdit → notifier StartEditing, now gone.)
+	(void)row;
 }
 
-void ibValueModelTable::CopyRow()
+void ibValueModelTable::CopyRow(const ibDataViewItem& row)
 {
-	ibDataViewItem currentItem = GetSelection();
+	ibDataViewItem currentItem = row;
 	if (!currentItem.IsOk())
 		return;
 	// The displayed item is a composer COPY — resolve the REAL storage row (+ index) via the bridge.
@@ -471,18 +477,20 @@ void ibValueModelTable::CopyRow()
 			colData->GetColumnID(), node->GetTableValue(colData->GetColumnID())
 		);
 	}
+	// Copy goes AFTER the source row so the original keeps its position; the new row lands at currentLine + 1 and
+	// the ItemInserted handler moves focus onto it via Select. (Mirrors the tabular section.)
 	const long currentLine = StorageIndexOf(currentItem);
 	if (currentLine != wxNOT_FOUND) {
-		ibValueModelStorage::Insert(rowData, currentLine, !ibBackendException::IsEvalMode());
+		ibValueModelStorage::Insert(rowData, currentLine + 1, !ibBackendException::IsEvalMode());
 	}
 	else {
 		ibValueModelStorage::Append(rowData, !ibBackendException::IsEvalMode());
 	}
 }
 
-void ibValueModelTable::DeleteRow()
+void ibValueModelTable::DeleteRow(const ibDataViewItem& row)
 {
-	ibDataViewItem currentItem = GetSelection();
+	ibDataViewItem currentItem = row;
 	if (!currentItem.IsOk())
 		return;
 	// The displayed item is a composer COPY — Remove needs the REAL storage row (resolved via the bridge).

@@ -301,18 +301,25 @@ ibSourceObject* ibValueModelTableBox::GetSourceObject() const
 	return m_formOwner ? m_formOwner->GetSourceObject() : nullptr;
 }
 
+bool ibValueModelTableBox::IsMainSourceBound() const
+{
+	// This table IS the form's main source when its WHOLE binding path is the main attribute (a single hop).
+	// A NESTED source (a tabular section — path [mainAttr, section]) only has the main attribute as its HEAD,
+	// not as its own source; it is a distinct list.
+	const ibSourceDescription& desc = m_propertySource->GetValueAsSourceDesc();
+	if (desc.GetHopCount() != 1)
+		return false;
+	ibBackendFormAttributeValue* holder = FindSourceHolder(desc.GetFirst());
+	return holder != nullptr && holder->IsMain();
+}
+
 bool ibValueModelTableBox::HasCommandBar() const
 {
-	// No bar when this table IS the form's main source — its WHOLE binding path is the main attribute
-	// (a single hop), so the form toolbar already serves those commands and a table bar would duplicate.
-	// A NESTED source (a tabular section — path [mainAttr, section]) only has the main attribute as its
-	// HEAD, not as its own source; it is a distinct list and keeps its own bar (Add/Copy/Edit/Delete).
-	const ibSourceDescription& desc = m_propertySource->GetValueAsSourceDesc();
-	if (desc.GetHopCount() == 1) {
-		ibBackendFormAttributeValue* holder = FindSourceHolder(desc.GetFirst());
-		if (holder != nullptr && holder->IsMain())
-			return false;
-	}
+	// No bar when this table is the form's main source — the form toolbar already serves those commands (its
+	// command provider resolves to this view) and a table bar would duplicate. A nested source keeps its own
+	// bar (Add/Copy/Edit/Delete).
+	if (IsMainSourceBound())
+		return false;
 	return ibValueFrame::HasCommandBar();
 }
 
@@ -694,6 +701,7 @@ bool ibValueModelTableBox::ReadData(const ibDataNode& node)
 	m_propertyFreezeCol->ReadNodeValue(node.GetProperty(m_propertyFreezeCol->GetName()));
 
 	m_propertyRowSelectionMode->ReadNodeValue(node.GetProperty(m_propertyRowSelectionMode->GetName()));
+	m_propertyChoiceMode->ReadNodeValue(node.GetProperty(m_propertyChoiceMode->GetName()));
 
 	//events
 	m_eventSelection->ReadNodeValue(node.GetProperty(m_eventSelection->GetName()));
@@ -720,6 +728,7 @@ bool ibValueModelTableBox::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyFreezeCol->GetName(), m_propertyFreezeCol->GetNodeValue());
 
 	node.SetProperty(m_propertyRowSelectionMode->GetName(), m_propertyRowSelectionMode->GetNodeValue());
+	node.SetProperty(m_propertyChoiceMode->GetName(), m_propertyChoiceMode->GetNodeValue());
 
 	//events
 	node.SetProperty(m_eventSelection->GetName(), m_eventSelection->GetNodeValue());
@@ -815,7 +824,7 @@ ibValueModelTableBox::ibActionCollection ibValueModelTableBox::GetActionCollecti
 {
 	return ibActionCollection();
 }
-void ibValueModelTableBox::ExecuteAction(const ibActionID& /*lNumAction*/, ibBackendValueForm* /*srcForm*/) {}
+void ibValueModelTableBox::CallAsAction(const ibActionID& /*lNumAction*/, ibBackendValueForm* /*srcForm*/) {}
 
 void ibValueModelTableBox::PrepareDefaultMenu(wxMenu* /*m_menu*/) {}
 void ibValueModelTableBox::ExecuteMenu(ibVisualHost* /*visualHost*/, int /*id*/) {}

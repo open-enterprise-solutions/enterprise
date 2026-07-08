@@ -106,7 +106,6 @@ public:
 			return m_ownerTable;
 		}
 
-
 		void FillMembers(ibMemberTable& helper) const;
 
 		virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal); //setting attribute
@@ -239,14 +238,7 @@ class BACKEND_API ibValueListDataObjectEnumRef : public ibValueListDataObject {
 
 	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray);       // method call
 
-	//on activate item
-	virtual void ActivateItem(ibBackendValueForm* srcForm,
-		const ibDataViewItem& item, unsigned int col) {
-		if (m_choiceMode)
-			ChooseValue(srcForm);
-	}
-
-	//get metaData from object 
+	//get metaData from object
 	virtual const ibValueMetaObjectRecordDataEnumRef* GetMetaObject() const {
 		return m_metaObject;
 	};
@@ -257,13 +249,9 @@ class BACKEND_API ibValueListDataObjectEnumRef : public ibValueListDataObject {
 	virtual wxString GetClassName() const;
 	virtual wxString GetString() const;
 
-	//support actionData
-	virtual ibActionCollection GetActionCollection(const ibFormID& formType);
-	virtual void ExecuteAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm);
+	// (No commands of its own — an enum list uses the base empty GetCommandCollection/CallAsCommand.)
 
 	//events:
-	virtual void ChooseValue(ibBackendValueForm* srcForm);
-
 	// (Paging GONE — the enum reads through the base ibValueModel::RunComposerPage over GetSourceQueryable()
 	//  (its metaobject's queryable); GetFirstFetch/Next/Prev + the SQL Fetch are deleted; the ctor sets the
 	//  position sort on the composer.) An enum is a normal keyed L5 list now — same features as a catalog list:
@@ -315,19 +303,12 @@ public:
 
 	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray);       // method call
 
-	//on activate item
-	virtual void ActivateItem(ibBackendValueForm* srcForm,
-		const ibDataViewItem& item, unsigned int col) {
-		if (m_choiceMode) {
-			ChooseValue(srcForm);
-		}
-		else {
-			EditValue();
-		}
-	}
-
-	//get metaData from object 
+	//get metaData from object
 	virtual const ibValueMetaObjectRecordDataRef* GetMetaObject() const { return m_metaObject; }
+
+	// Picker SELECT value → this catalog / document's REFERENCE: the metaobject's data-reference cell off the row.
+	// (Out-of-line in objectList.cpp.)
+	virtual ibValue GetItemSelectValue(const ibDataViewItem& item) const override;
 
 	//Get ref class 
 	virtual ibClassID GetClassType() const;
@@ -335,19 +316,19 @@ public:
 	virtual wxString GetClassName() const;
 	virtual wxString GetString() const;
 
-	//support actionData
-	virtual ibActionCollection GetActionCollection(const ibFormID& formType);
-	virtual void ExecuteAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm);
+	//support commands
+	virtual void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const override;
+	virtual void CallAsCommand(const ibDataViewItem& row, const ibActionID& lNumAction, ibBackendValueForm* srcForm) override;
+	// Read-only double-click → open the row's own form (the front decides read-only; the model opens per type).
+	virtual void ActivateItem(const ibDataViewItem& row, ibBackendValueForm* srcForm) override { EditValue(row); }
 
-	//events:
-	virtual void AddValue(unsigned int before = 0) override;
-	virtual void CopyValue() override;
-	virtual void EditValue() override;
-	virtual void DeleteValue() override;
+	//events (the model's OWN object commands — run by CallAsCommand on the front-passed row):
+	void AddValue(const ibDataViewItem& row);
+	void CopyValue(const ibDataViewItem& row);
+	void EditValue(const ibDataViewItem& row);
+	void DeleteValue(const ibDataViewItem& row);
 
-	virtual void MarkAsDeleteValue();
-	virtual void ChooseValue(ibBackendValueForm* srcForm);
-
+	void MarkAsDeleteValue(const ibDataViewItem& row);
 	//****************************************************************************
 	//*                              Fetch / features                            *
 	//****************************************************************************
@@ -391,6 +372,12 @@ public:
 
 	// The register row key = its DIMENSIONS (composite), not a single reference guid — override the cursor default.
 	ibUniqueKey GetItemKey(const ibDataViewItem& item) const override;
+	// Picker SELECT value → the record KEY (ibValueRecordKeyObject): OVERRIDES the base (empty), handing the row's
+	// whole value map to CreateRecordKeyObjectValue (which fills any missing dimension). A register has no single
+	// reference — its select IS the composite key.
+	virtual ibValue GetItemSelectValue(const ibDataViewItem& item) const override;
+	// The row's dimension values (recorder+line / dimensions) — used by GetItemKey.
+	ibRowMetaValues GetRowKeyValues(const ibDataViewItem& item) const;
 
 	virtual ibDataViewItem FindRowValue(const ibValue& varValue, const wxString& colName = wxEmptyString) const;
 
@@ -421,13 +408,7 @@ public:
 	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);        //setting attribute
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);                   //attribute value
 
-	//on activate item
-	virtual void ActivateItem(ibBackendValueForm* srcForm,
-		const ibDataViewItem& item, unsigned int col) {
-		EditValue();
-	}
-
-	//get metaData from object 
+	//get metaData from object
 	virtual const ibValueMetaObjectRegisterData* GetMetaObject() const {
 		return m_metaObject;
 	};
@@ -438,15 +419,17 @@ public:
 	virtual wxString GetClassName() const;
 	virtual wxString GetString() const;
 
-	//support actionData
-	virtual ibActionCollection GetActionCollection(const ibFormID& formType);
-	virtual void ExecuteAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm);
+	//support commands
+	virtual void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const override;
+	virtual void CallAsCommand(const ibDataViewItem& row, const ibActionID& lNumAction, ibBackendValueForm* srcForm) override;
+	// Read-only double-click → open the row's own form (the front decides read-only; the model opens per type).
+	virtual void ActivateItem(const ibDataViewItem& row, ibBackendValueForm* srcForm) override { EditValue(row); }
 
-	//events:
-	virtual void AddValue(unsigned int before = 0) override;
-	virtual void CopyValue() override;
-	virtual void EditValue() override;
-	virtual void DeleteValue() override;
+	//events (the model's OWN object commands — run by CallAsCommand on the front-passed row):
+	void AddValue(const ibDataViewItem& row);
+	void CopyValue(const ibDataViewItem& row);
+	void EditValue(const ibDataViewItem& row);
+	void DeleteValue(const ibDataViewItem& row);
 
 	//****************************************************************************
 	//*                              Fetch / features                            *
@@ -561,7 +544,6 @@ public:
 		virtual ibValueModelCursor* GetOwnerModel() const {
 			return m_ownerTable;
 		}
-
 
 		void FillMembers(ibMemberTable& helper) const;
 
@@ -707,19 +689,12 @@ public:
 
 	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray);
 
-	//on activate item
-	virtual void ActivateItem(ibBackendValueForm* srcForm,
-		const ibDataViewItem& item, unsigned int col) {
-		if (m_choiceMode) {
-			ChooseValue(srcForm);
-		}
-		else {
-			EditValue();
-		}
-	}
-
-	//get metaData from object 
+	//get metaData from object
 	virtual const ibValueMetaObjectRecordDataHierarchyMutableRef* GetMetaObject() const { return m_metaObject; }
+
+	// Picker SELECT value → this folder's REFERENCE: the metaobject's data-reference cell off the row.
+	// (Out-of-line in objectList.cpp.)
+	virtual ibValue GetItemSelectValue(const ibDataViewItem& item) const override;
 
 	//Get ref class 
 	virtual ibClassID GetClassType() const;
@@ -727,26 +702,27 @@ public:
 	virtual wxString GetClassName() const;
 	virtual wxString GetString() const;
 
-	//support actionData
-	virtual ibActionCollection GetActionCollection(const ibFormID& formType);
-	virtual void ExecuteAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm);
+	//support commands
+	virtual void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const override;
+	virtual void CallAsCommand(const ibDataViewItem& row, const ibActionID& lNumAction, ibBackendValueForm* srcForm) override;
+	// Read-only double-click → open the row's recorder document (the front decides read-only; the model opens per type).
+	virtual void ActivateItem(const ibDataViewItem& row, ibBackendValueForm* srcForm) override { EditValue(row); }
 
-	//events:
-	virtual void AddValue(unsigned int before = 0) override;
-	virtual void AddFolderValue(unsigned int before = 0);
-	virtual void CopyValue() override;
-	virtual void EditValue() override;
-	virtual void DeleteValue() override;
+	//events (the model's OWN object commands — run by CallAsCommand on the front-passed row):
+	void AddValue(const ibDataViewItem& row);
+	void AddFolderValue(const ibDataViewItem& row);
+	void CopyValue(const ibDataViewItem& row);
+	void EditValue(const ibDataViewItem& row);
+	void DeleteValue(const ibDataViewItem& row);
 
 private:
 	// Three-source parent resolution shared by AddValue / AddFolderValue:
 	// selected node's parent (item) or self (folder) ? drill-chain head ?
 	// empty (catalog root).  Returns the resolved parent value into outParent.
-	void ResolveParentForNew(ibValue& outParent) const;
+	void ResolveParentForNew(const ibDataViewItem& row, ibValue& outParent) const;
 public:
 
-	virtual void MarkAsDeleteValue();
-	virtual void ChooseValue(ibBackendValueForm* srcForm);
+	void MarkAsDeleteValue(const ibDataViewItem& row);
 
 	// FolderRef — same user-facing features as any catalog list (Filters / Sorting / Grouping). Its tree shape is
 	// the DEFAULT Hierarchy grouping set in the ctor (tree-ness = composer grouping, not a flag); folder-first

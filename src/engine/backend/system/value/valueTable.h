@@ -5,6 +5,7 @@
 #include "valueMap.h"
 
 #include "backend/tableInfo.h"
+#include "backend/picturePredefined.h"                 // g_pic*CLSID — this model emits its own standard command icons
 #include "backend/srcDataObject.h"                    // ibSourceDataObject / ibSourceExplorer — the table IS a form data source
 #include "backend/query/queryColumn.h"                 // ibBackendSourceColumn — a RAM column IS its own source-column presentation (header/type via the explorer)
 #include "backend/propertyManager/propertyManager.h"  // ibPropertyObject / ibPropertyUString / ibPropertyType — columns surface / persist AND edit with the form attribute
@@ -291,16 +292,36 @@ public:
 	ibValueModelTable(const ibValueModelTable& val);
 	virtual ~ibValueModelTable();
 
-	virtual void AddValue(unsigned int before = 0) {
-		long row = StorageIndexOf(GetSelection());   // displayed item is a composer copy → storage index via bridge
-		if (row > 0)
-			AppendRow(row);
-		else AppendRow();
+	void AddValue(const ibDataViewItem& row) {
+		// Insert AFTER the active row (user on row 3 + Add → new row at 4, focus follows via the ItemInserted
+		// handler's Select). No active row → append at the bottom. (Mirrors the tabular section.)
+		const long idx = StorageIndexOf(row);   // displayed item is a composer copy → storage index via bridge
+		if (idx >= 0) AppendRow(idx + 1, row);
+		else          AppendRow(0, row);
 	}
 
-	virtual void CopyValue() { CopyRow(); }
-	virtual void EditValue() { EditRow(); }
-	virtual void DeleteValue() { DeleteRow(); }
+	void CopyValue(const ibDataViewItem& row) { CopyRow(row); }
+	void EditValue(const ibDataViewItem& row) { EditRow(row); }
+	void DeleteValue(const ibDataViewItem& row) { DeleteRow(row); }
+
+	// Command store (ibTabularCommandDataObject): a table of values defines its OWN Add / Copy / Edit / Delete and runs
+	// them by id on the front-passed row (no shared base set — each model ships its own).
+	enum { eAddValue = 1, eCopyValue, eEditValue = 3 | eStartEditingFlag, eDeleteValue = 4 };   // Edit's id carries the front-edit flag
+	virtual void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const override {
+		commands.emplace_back(eAddValue,    wxT("Add"),    _("Add"),    g_picAddCLSID,    true);
+		commands.emplace_back(eCopyValue,    wxT("Copy"),   _("Copy"),   g_picCopyCLSID);
+		commands.emplace_back(eEditValue,    wxT("Edit"),   _("Edit"),   g_picEditCLSID);
+		commands.emplace_back(eDeleteValue,  wxT("Delete"), _("Delete"), g_picDeleteCLSID);
+	}
+
+	virtual void CallAsCommand(const ibDataViewItem& row, const ibActionID& lNumAction, ibBackendValueForm* srcForm) override {
+		switch (lNumAction) {
+		case eAddValue:    AddValue(row);    break;
+		case eCopyValue:   CopyValue(row);   break;
+		case eEditValue:   EditValue(row);   break;   // no-op on the backend; Edit's id carries eStartEditingFlag → the FRONT opens the real inline editor
+		case eDeleteValue: DeleteValue(row); break;
+		}
+	}
 
 	//array
 	virtual bool GetAt(const ibValue& varKeyValue, ibValue& pvarValue);
@@ -333,10 +354,10 @@ public:
 	// wrappers did). RunComposerPage runs the RAM composer over ibRamValueStorage (the live nodes) in place.
 
 	//support def. methods (in runtime)
-	long AppendRow(unsigned int before = 0);
-	void CopyRow();
-	void EditRow();
-	void DeleteRow();
+	long AppendRow(unsigned int before = 0, const ibDataViewItem& contextRow = ibDataViewItem());
+	void CopyRow(const ibDataViewItem& row);
+	void EditRow(const ibDataViewItem& row);
+	void DeleteRow(const ibDataViewItem& row);
 
 	ibValueModelTable* Clone() { return new ibValueModelTable(*this); }
 	unsigned int Count() { return GetRowCount(); }

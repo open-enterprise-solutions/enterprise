@@ -10,6 +10,6 @@ ibValueRecordDataObjectReport::ibActionCollection ibValueRecordDataObjectReport:
 	return ibActionCollection(this);
 }
 
-void ibValueRecordDataObjectReport::ExecuteAction(const ibActionID &action, ibBackendValueForm *srcForm)
+void ibValueRecordDataObjectReport::CallAsAction(const ibActionID &action, ibBackendValueForm *srcForm)
 {
 }

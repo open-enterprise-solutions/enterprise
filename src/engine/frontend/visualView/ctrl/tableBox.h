@@ -132,6 +132,15 @@ class ibValueModelTableBox : public ibValueWindowComposite,
 	//get model
 	ibValueModel* GetTableModel() const { return m_tableModel; }
 
+	// Choice mode = this table is a VALUE PICKER (opened to return a selection to a caller). The TableBox owns
+	// this affordance (like a form owns Close / Update): when on, GetActionCollection composes Select FIRST.
+	// The front-owned property is the SOLE source of truth — set at form-build from the source explorer's choice
+	// flag (autobuild) or by the runtime open-as-choice path (SetChoiceMode). The dumb model carries no choice.
+	bool IsChoiceMode() const { return m_propertyChoiceMode->GetValueAsBoolean(); }
+	// Set at FORM-BUILD time from the source explorer (a picker source stamps its main table node — see
+	// ibSourceExplorer::IsChoiceMode); this is the source-of-truth for the runtime open-as-choice path.
+	void SetChoiceMode(bool on = true) { m_propertyChoiceMode->SetValue(on); }
+
 	// Single point: resolve a dot-path column's value for ONE row (called per visible cell from the
 	// column renderer's CheckedGetValue). First hop via the DUMB model (GetValueByMetaID), deeper
 	// hops walk the reference on the front. Returns false for a plain column (model resolves it).
@@ -191,6 +200,13 @@ class ibValueModelTableBox : public ibValueWindowComposite,
 	// as delete twice). Suppress it: no toolbar layer, no "Command interface" node, no AutoFill.
 	virtual bool HasCommandBar() const override;
 
+	// This table IS the form's main source — its WHOLE binding path is the main attribute (a single hop). THE
+	// authoritative "am I the main view" fact: HasCommandBar reads it (a main view shows no bar of its own —
+	// the form toolbar serves it), and the form's command-provider resolve finds it by this (formAction.cpp).
+	// A nested source (a tabular section, path [mainAttr, section]) has the main attribute only as its HEAD —
+	// not main-bound; it keeps its own bar.
+	virtual bool IsMainSourceBound() const override;
+
 	//support icons
 	virtual wxIcon GetIcon() const;
 	static wxIcon GetIconGroup();
@@ -212,7 +228,11 @@ class ibValueModelTableBox : public ibValueWindowComposite,
 	*/
 
 	virtual ibActionCollection GetActionCollection(const ibFormID& formType);
-	virtual void ExecuteAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm);
+	// The command bar calls this (generic id, form). The TableBox reads its OWN current row and either runs a
+	// view-state command DIRECTLY against the control (Command_*), or forwards the OBJECT command to the model
+	// as CallAsCommand(row, id, form) — the ibTabularCommandDataObject contract (table command = current row + id + form).
+	virtual void CallAsAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm);
+
 
 	/**
 	* Support default menu
@@ -268,6 +288,16 @@ protected:
 
 	void CalculateColumnPos();
 
+	// The TableBox's OWN command handlers — the view-state band it composes runs DIRECTLY against the live control
+	// runtime (no model → notifier shim). Desktop-only bodies (the web front runs its own command path).
+	void Command_Choose(ibBackendValueForm* srcForm);
+	
+	void Command_FilterByCurrentColumn();
+	void Command_ShowListSettings();
+	void Command_ClearFilter();
+
+	void Command_ShowViewMode();
+
 #ifndef OES_USE_WEB
 	//events — wxDataView-bound, desktop only
 	void OnColumnClick(ibDataViewEvent& event);
@@ -276,6 +306,14 @@ protected:
 	void OnSelectionChanged(ibDataViewEvent& event);
 
 	void OnItemActivated(ibDataViewEvent& event);
+
+	// Double-click / Enter dispatch: choice → select; editable cell → inline editor (front); read-only row → open
+	// its value (model's ActivateItem, backend). The Edit COMMAND reaches inline editing via the eStartEditingFlag
+	// bit on its id (intercepted in CallAsAction) instead.
+	void ActivateRow(const ibDataViewItem& item);
+	// Open the inline cell editor on `item`'s first editable cell (front). false if no cell is editable (a list).
+	// Called by double-click's ActivateRow AND by CallAsAction when the executed id carries the eStartEditingFlag bit.
+	bool EditCurrentRow(const ibDataViewItem& item);
 	void OnItemCollapsed(ibDataViewEvent& event);
 	void OnItemExpanded(ibDataViewEvent& event);
 	void OnItemCollapsing(ibDataViewEvent& event);
@@ -319,6 +357,8 @@ private:
 	ibPropertySource* m_propertySource = ibPropertyObject::CreateProperty<ibPropertySource>(m_categoryData, wxT("Source"), _("Source"));
 	ibPropertyEnum<ibValueEnumTableBoxSelectionMode>* m_propertyRowSelectionMode = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumTableBoxSelectionMode>>(m_categoryData, wxT("RowSelectionMode"), _("Row selection mode"), ibDataViewSelectionMode::ibDataViewSelectCell);
 	ibPropertyEnum<ibValueEnumTableBoxViewMode>* m_propertyViewMode = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumTableBoxViewMode>>(m_categoryData, wxT("ViewMode"), _("View mode"), ibDataViewViewMode::ibDataViewHierarchical);
+	// Value-picker flag: when set (or when the bound list-model is a picker), the Select command is composed FIRST.
+	ibPropertyBoolean* m_propertyChoiceMode = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, wxT("ChoiceMode"), _("Choice mode"), wxT(""), false);
 	ibPropertyCategory* m_categoryEvent = ibPropertyObject::CreatePropertyCategory(wxT("Event"), _("Event"));
 	ibEventControl* m_eventSelection = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, wxT("Selection"), _("Selection"), _("On double mouse click or pressing of Enter."), wxArrayString{ wxT("Control"), wxT("RowSelected"), wxT("StandardProcessing") });
 	ibEventControl* m_eventOnActivateRow = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, wxT("OnActivateRow"), _("Activate row"), _("When row is activated"), wxArrayString{ {wxT("Control")} });
