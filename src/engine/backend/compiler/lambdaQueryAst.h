@@ -44,8 +44,18 @@ struct ibQueryAstExpr;   // backend/query/queryAst.h — fwd only (the .cpp incl
 // query AST. rowParamName = the lambda's first parameter (the row variable);
 // its member chains become Column paths. Returns null when the body is
 // outside the translatable subset (never throws on shape — shape is data).
+// The LINQ lambda body `[ '{' ] Return expr [ ';' ] [ '}' | EndFunction ]` -> the L4 pushdown AST
+// (single row parameter).
 BACKEND_API std::shared_ptr<ibQueryAstExpr> ibBuildLambdaQueryAst(
 	const std::vector<ibLexem>& lexems, size_t from, size_t to,
 	const wxString& rowParamName);
+
+// A `restrict` clause — a BARE `expr` span (no `Return`, no braces; the compiler emits
+// `Return <span>` itself, only the span feeds the AST). rowParamName2 (optional) is a SECOND alias:
+// a join-ON predicate `(s, a) => s.k <op> a.k` where the comparison operator comes from the shared
+// parser (no hand-read op) and both `s.*` / `a.*` deref to Column paths.
+BACKEND_API std::shared_ptr<ibQueryAstExpr> ibBuildRestrictedQueryAst(
+	const std::vector<ibLexem>& lexems, size_t from, size_t to,
+	const wxString& rowParamName, const wxString& rowParamName2 = wxEmptyString);
 
 #endif

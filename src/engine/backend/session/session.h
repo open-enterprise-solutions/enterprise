@@ -44,6 +44,7 @@ class ibProcUnit;
 struct ibRunContext;
 class ibMetaData;
 class ibValueMetaObjectConfiguration;
+class ibAccessPolicy;   // RLS — the L3 door pulls it opaquely; concrete impl is session-side
 class BACKEND_API ibBackendDocFrame;
 
 // ------------------------------------------------------------------
@@ -243,6 +244,12 @@ public:
 	// stays nullptr for sessions that never run scripts (Designer,
 	// WebServer technical session, Launcher).
 	ibValueModuleManagerRuntimeConfiguration* GetManagerModule() const;
+
+	// The RLS access policy for this session. The L3 door (ibDataQueryBuilder)
+	// pulls it opaquely in its ctor and applies it to every read/write. Null on
+	// Designer / technical sessions (no enforcement). Created at authentication
+	// (EnsureRoot) for runtime sessions; the concrete impl lives in session.cpp.
+	const ibAccessPolicy* GetAccessPolicy() const;
 
 	// The module manager whose context (Manager / Catalogs / Documents / globals)
 	// an object/record/module compiled against `metaData` should parent to. One
@@ -733,15 +740,17 @@ private:
 	// reservations (TX pin / scope binding). Const-mutable not needed:
 	// every method that touches m_dbHolder is non-const.
 	ibDatabaseConnectionHolder m_dbHolder;
-
-	// nullptr unless the session was created with debug attached.
-	std::unique_ptr<ibDebugSession> m_debug;
-
 	// Root runtime — intrusive-refcounted owner (ibValuePtr is the
 	// project convention for ibValue-derived types). Nested descriptors
 	// (common modules, object instances, forms) parent up through
 	// m_parent chain. See project_runtime_facade_plan.md.
 	ibValuePtr<ibValueModuleManagerRuntimeConfiguration> m_root;
+	
+	// nullptr unless the session was created with debug attached.
+	std::unique_ptr<ibDebugSession> m_debug;
+
+	// RLS — the concrete session-side policy (created at auth)
+	std::unique_ptr<ibAccessPolicy> m_accessPolicy;   
 
 	// Lambda executor — see GetLambdaRuntime() for semantics. Allocated
 	// in CreateRoot; SetParent(m_root's procUnit) is wired lazily on
@@ -776,8 +785,8 @@ private:
 	// checks. m_sessionRawPassword caches the plain-text for Designer
 	// "Start debugging" — handed to spawned child processes so they can
 	// re-authenticate without prompting.
-	ibUserInfo m_userInfo;
 	wxString                  m_sessionRawPassword;
+	ibUserInfo 				  m_userInfo;
 
 	// Script-visible "working date" — see GetWorkDate/SetWorkDate.
 	// Initialized to the session-creation wall-clock in the ctor.

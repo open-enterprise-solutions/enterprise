@@ -258,10 +258,10 @@ ibDialogUserItem::ibDialogUserItem(wxWindow* parent, wxWindowID id, const wxStri
 					entry.m_strRoleGuid = info.m_strRoleGuid;
 					entry.m_strRoleName = info.m_strRoleName;
 					entry.m_miRoleId = info.m_miRoleId;
-					access_right = commonObject->AccessRight_Administration(info.m_miRoleId) &&
+					access_right = access_right || commonObject->AccessRight_Administration(info.m_miRoleId) &&
 						commonObject->AccessRight_DataAdministration(info.m_miRoleId);
 				}
-				item = m_choiceRole->GetNextChild(item, coockie);
+				item = m_choiceRole->GetNextChild(root, coockie);
 			}
 
 			if (!access_right) {

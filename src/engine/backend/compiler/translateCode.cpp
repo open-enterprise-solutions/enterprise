@@ -81,7 +81,7 @@ struct ibKeyWords s_listKeyWord[] =
 	{"#EndRegion"},
 
 	// === LINQ keywords ===
-	// Order MUST match codeDef.h's KEY_FROM..KEY_INTO enum block —
+	// Order MUST match codeDef.h's KEY_FROM..KEY_RESTRICT enum block —
 	// translator lookup is by index into s_listKeyWord.
 	{"From"},
 	{"Where"},
@@ -98,6 +98,7 @@ struct ibKeyWords s_listKeyWord[] =
 	{"Group"},
 	{"By"},
 	{"Into"},
+	{"Restrict"},
 };
 
 //////////////////////////////////////////////////////////////////////

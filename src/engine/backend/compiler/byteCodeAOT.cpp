@@ -118,7 +118,14 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 // metaobject ids changed from FNV("R_<metaID>"/…) to constructive (kind<<56 | metaID),
 // so every persisted/cached CLSID differs from v15. Bump rejects v15 → safe recompile +
 // repopulate (DB/config blobs holding old CLSIDs regenerate too).
-constexpr uint16_t kAOTFormatVersion = 16;
+// v17 (2026-07-10): the `restrict` clause (KEY_RESTRICT) now records a pushdown AST for its
+// where / join-ON lambda (EmitRestrictBody span fix). This is a COMPILER-OUTPUT change, not a
+// format change — the payload layout is identical to v16 — but Load() keys only on descriptor_id
+// and ignores bytecode_version, so a v16 blob compiled by the pre-fix compiler (restrict lambda
+// with an ABSENT AST → hasAst = 0) is served unchanged and the cached restrict silently loses the
+// pushdown (Where/Join throws "cannot be lowered", swallowed by the module's try/except → no
+// restriction). Bump rejects those v16 blobs → recompile records the AST → the filter applies.
+constexpr uint16_t kAOTFormatVersion = 17;
 constexpr uint16_t kAOTFlagPortable  = 0x0001;       // unused — host-endian today
 
 // Sentinel for an over-large collection — guards Deserialize against

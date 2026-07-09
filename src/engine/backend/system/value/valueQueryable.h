@@ -103,6 +103,12 @@ public:
 	const ibBackendQueryable* GetQueryable()  const { return m_queryable; }
 	const wxString&           GetSourceName() const { return m_sourceName; }
 
+	// RLS — present this queryable's ACCUMULATED chain (From / Join / Where) as an ibBackendQueryable
+	// SOURCE (a subquery over the restricted rows). A role's restriction (From(source).Join(ACL).Where(…))
+	// is grafted by making the query read FROM this — it carries ALL the source's columns, so the
+	// downstream query needs no key. Owns the wrapped builder.
+	std::shared_ptr<const ibBackendQueryable> AsSource() const;
+
 	// L4-2 JOIN unification (Layer 2) — the RAM-side entry. When `.Join()` is dispatched
 	// on a NON-queryable receiver (a value table) but the inner argument IS a real DB
 	// queryable, wrap the receiver as a computed leaf and run server-side through
@@ -132,6 +138,38 @@ public:
 	virtual bool CompareValueNE(const ibValue& cParam) const override {
 		return !CompareValueEQ(cParam);
 	}
+};
+
+// ibValueQueryDecorator — the universal query DECORATOR (the base type). A policy hands THIS to a
+// handler module, which folds Join / Where DIRECTLY into the query being executed — ONE builder, no
+// separate template, no copy-merge. RLS (ibRuntimeAccessPolicy running role modules) is the FIRST
+// user; multi-company / soft-delete / audit are other policies over the SAME decorator — so RLS is a
+// policy, NOT a decorator subtype. Join and Where are the ONLY surface (a decorator NARROWS / shapes,
+// nothing else) and write straight into the target ibDataQueryBuilder, so the composer runs ONE final
+// SELECT with the real source kept (it PAGES and PUSHES DOWN). The target already had its policy nulled
+// by copy-apply-execute, so folding + executing does NOT re-enter the policy. Constructed ONLY by a
+// policy — unreachable elsewhere.
+class BACKEND_API ibValueQueryDecorator : public ibValue
+{
+	ibDataQueryBuilder*       m_target = nullptr;   // the query being decorated — Join/Where fold IN HERE
+	const ibBackendQueryable* m_source = nullptr;   // the table being decorated (the .From leaf)
+	wxString                  m_sourceName;
+
+public:
+	ibValueQueryDecorator() : ibValue(ibValueTypes::TYPE_VALUE) {}
+	ibValueQueryDecorator(ibDataQueryBuilder* target, const ibBackendQueryable* source, const wxString& sourceName);
+
+	virtual bool     IsEmpty()   const override { return m_source == nullptr; }
+	virtual wxString GetString() const override;
+
+	// The ONLY surface: Join(innerQueryable, leftKey, rightKey [, op]) and Where(predicate) — both fold
+	// straight into the target query (never a separate builder).
+	virtual void DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibValue** args, long n) override;
+
+	// Type branch in a handler: `Source = "Document.Поступление"` compares the decorated source to its
+	// canonical full-name STRING ("<ClassName>.<Name>"), so a module can shape per source.
+	virtual bool CompareValueEQ(const ibValue& cParam) const override;
+	virtual bool CompareValueNE(const ibValue& cParam) const override { return !CompareValueEQ(cParam); }
 };
 
 #endif

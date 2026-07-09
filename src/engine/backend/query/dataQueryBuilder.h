@@ -273,6 +273,27 @@ struct ibQueryNode
 	}
 };
 
+// --- Access policy (RLS) — the L3-side INTERFACE only ----------------------
+// The door is metadata- AND runtime-blind: access enforcement is injected as an
+// OPAQUE policy. The runtime builds the concrete implementation on the SESSION
+// side; the default ctor pulls it via session->GetAccessPolicy() (same place it
+// pulls the holder — no new runtime include leaks into L3). The door only CALLS
+// it — it never resolves roles / modules / metadata itself. Null = no
+// enforcement (migration-safe; trusted / internal read paths pass none).
+class BACKEND_API ibAccessPolicy
+{
+public:
+	virtual ~ibAccessPolicy() = default;
+	// Read: the policy may ADD restricting conditions / joins to `query` (LINQ-style,
+	// through the builder's fluent verbs — e.g. a semi-join to the user's allowed set)
+	// AND/OR throw ibBackendAccessException on a hard deny. The thrown case is just the
+	// extreme of the SAME mechanism: a condition that admits no rows / forbids the table.
+	virtual void ApplyReadAccess(class ibDataQueryBuilder& query) const = 0;
+	// Write: same, for a write of the given per-type variety ("Write" / "Delete" /
+	// "Post" / …).
+	virtual void ApplyWriteAccess(class ibDataQueryBuilder& query, const wxString& operation) const = 0;
+};
+
 class BACKEND_API ibDataQueryBuilder
 {
 public:
@@ -505,6 +526,29 @@ public:
 	// list when given, else the primary source's full column set. (docs §22 nested subquery)
 	const std::vector<std::pair<const ibBackendQueryColumn*, wxString>>& GetSelectColumns() const { return m_selectCols; }
 	const ibBackendQueryable* GetPrimarySource() const { return m_queryable; }
+
+	// Every source LEAF the query reads — the primary From plus every Join / Union branch,
+	// in tree order. Access enforcement (RLS) restricts each of them, so the walk must see
+	// them all, not just GetPrimarySource(). Fills `sources` (cleared first) and returns
+	// whether any were found. (walks the ibQueryNode tree)
+	bool GetSources(std::vector<const ibBackendQueryable*>& sources) const;
+
+	// The accumulated WHERE as ONE predicate tree — the .Where(col,op,val) conditions AND-folded with
+	// the .Where(tree) predicate (null = no WHERE). Lets a policy OR several roles' restrictions.
+	ibQueryPredicatePtr GetWherePredicate() const;
+
+	// Take shared ownership of an on-the-fly source (a subquery / temp wrapper the query references
+	// by RAW pointer via From / Join) so it outlives Execute — owned WITH the builder, not on some
+	// external value. Returns the raw pointer to hand to From / Join. This is what keeps a subquery
+	// SELF-CONTAINED: copying the builder (into ibSubqueryQueryable) carries the ownership, so the
+	// subquery's own control block manages everything it references — no raw dependency on the value
+	// that produced it (which would dangle if that value died first).
+	const ibBackendQueryable* AdoptOwnedSource(std::shared_ptr<const ibBackendQueryable> src);
+
+	// Override the RLS policy (the default ctor already pulls it from the session).
+	// Pass nullptr for a TRUSTED / internal read that must bypass enforcement — e.g.
+	// a policy's own set-computation query (this is what dissolves re-entrancy).
+	ibDataQueryBuilder& WithAccessPolicy(const ibAccessPolicy* policy) { m_policy = policy; return *this; }
 	// Aggregate-shape introspection — an AGGREGATE subquery (FROM (SELECT …, SUM(x) … GROUP BY …))
 	// derives its exposed columns from these: the GROUP BY keys + one synthetic column per aggregate
 	// alias; its ComputeRows runs SelectAggregate instead of a plain read. (docs §23 — agg subquery)
@@ -541,7 +585,9 @@ private:
 	// (ibDbTableProvider in the .cpp), built from this state per Select. The
 	// querybuilder holds only the metadata query; see docs/query-language-arc.md §22.
 	ibDatabaseConnectionHolder*  m_holder;          // threaded down — L2 borrows it per fetch
+	const ibAccessPolicy*        m_policy = nullptr; // RLS — pulled from the session in the default ctor; null = no enforcement
 	const ibBackendQueryable*    m_queryable = nullptr;  // .From() — the PRIMARY source (single-source fast path)
+	std::vector<std::shared_ptr<const ibBackendQueryable>> m_ownedSources;   // on-the-fly join inners (decorator subquery) kept alive through Execute
 	std::shared_ptr<ibQueryNode> m_root;            // the relational TREE (.From / .Join / .Union) — the composer executes it
 	std::vector<ibQueryCondition> m_conditions;     // .Where() (+ .WhereKey: null-attr = row-key)
 	ibQueryPredicatePtr           m_predicate;      // .Where(tree) — full boolean WHERE (OR/NOT/IS NULL); AND-folded with m_conditions

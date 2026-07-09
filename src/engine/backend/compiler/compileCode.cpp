@@ -1484,7 +1484,7 @@ bool ibCompileCode::ParseFunctionSignature(ibCompileContext* context,
 
 bool ibCompileCode::EmitFunctionBody(ibCompileContext* /*context*/,
 	const std::shared_ptr<ibCompileContext::ibFunction>& createdFunction,
-	ibCompileContext* functionContext)
+	ibCompileContext* functionContext, bool bareExprBody)
 {
 	// Discriminator lives on the context — RETURN_LAMBDA_FUNCTION /
 	// RETURN_LAMBDA_PROCEDURE stamped by ParseFunctionSignature for
@@ -1549,13 +1549,25 @@ bool ibCompileCode::EmitFunctionBody(ibCompileContext* /*context*/,
 	const wxString savedCurFuncName = m_strCurFuncName;
 	m_strCurFuncName                = createdFunction->m_strRealName;
 
-	CompileBlock(functionContext);
+	if (bareExprBody) {
+		// A `restrict` clause body: a bare `Return <expr>` (no `{ … }` block, no closing keyword).
+		// The whole clause expression is read — the join ON is one `s.k <op> a.k` Compare the
+		// decorator later splits, so nothing needs to stop early.
+		ibByteUnit ret;
+		AddLineInfo(ret);
+		ret.m_numOper = OPER_RET;
+		ret.m_param1 = GetExpression(functionContext);
+		m_cByteCode.m_listCode.emplace_back(std::move(ret));
+	}
+	else {
+		CompileBlock(functionContext);
+	}
 
 	functionContext->CreateLabels();
 
 	m_strCurFuncName = savedCurFuncName;
 
-	if (gs_codeStyle == CODE_VES) {
+	if (!bareExprBody && gs_codeStyle == CODE_VES) {
 		// Closer keyword matches the OPENING keyword — derived from
 		// m_bCodeRet, which IsReturnFunction(m_numReturn) populated at
 		// signature parse. Both named and anonymous bodies dispatch
@@ -2050,6 +2062,128 @@ ibParamUnit ibCompileCode::CompileLinqExpression(ibCompileContext* context)
 
 	const ibParamUnit resultSlot = data.m_resultArray;   // capture before scope ends
 	return resultSlot;
+}
+
+// Access-policy restriction (RLS query patch) —
+//     restrict <s> in <source> [ join <a> in <T> on <lk> <op> <rk> ]* [ where <cond> ]
+// Each join / where FOLDS INTO the <source> query via the decorator's Join / Where
+// (OPER_CALL_LINQ -> ibValueQueryDecorator::DispatchLinqMethod -> the database), so the source
+// comes back narrowed — nothing is materialised. There is no `select`: a restriction carries
+// conditions only. Keys / conditions are real expressions recorded as pushdown ASTs. Returns
+// the patched source (the chained decorator). Entered on its own `restrict` keyword, by
+// analogy with KEY_FROM -> CompileLinqExpression.
+ibParamUnit ibCompileCode::CompileRestrictExpression(ibCompileContext* context)
+{
+	GETKeyWord(KEY_RESTRICT);
+	const wxString srcAlias = GETIdentifier(true);   // the source row alias (`s`)
+	GETKeyWord(KEY_IN);
+	ibParamUnit receiver = GetExpression(context);    // the source query — a decorator to patch
+
+	// Emit `<target>.<method>(args…)` as OPER_CALL_LINQ + one OPER_SET per argument — the Join and
+	// Where folds below both go through it (only used here, so it lives here).
+	const auto emitLinqCall = [&](ibParamUnit target, const wxString& method,
+	                              const std::vector<ibParamUnit>& args) -> ibParamUnit {
+		ibByteUnit code;
+		AddLineInfo(code);
+		code.m_numOper = OPER_CALL_LINQ;
+		code.m_param2 = target;
+		code.m_param3.m_numIndex = ibValue::FindLinqMethodByName(method);
+		code.m_param3.m_numArray = (long)args.size();
+		const ibParamUnit result = context->CreateVariable();
+		code.m_param1 = result;
+		m_cByteCode.m_listCode.emplace_back(std::move(code));
+		for (const ibParamUnit& arg : args) {
+			ibByteUnit set;
+			AddLineInfo(set);
+			set.m_numOper = OPER_SET;
+			set.m_param1 = arg;
+			m_cByteCode.m_listCode.emplace_back(std::move(set));
+		}
+		return result;
+	};
+
+	// joins: `join <a> in <T> on <s.k> <op> <a.k>` -> receiver.Join(T, (s, a) => s.k <op> a.k),
+	// folding the join into the query. The ON is ONE predicate — the operator comes from the shared
+	// expression grammar (no hand-read), and the decorator's Join splits the Compare into the
+	// left / right key column + op. The inner `<T>` may be a Data source OR a computed value table.
+	while (IsNextKeyWord(KEY_JOIN)) {
+		GETKeyWord(KEY_JOIN);
+		const wxString joinAlias = GETIdentifier(true);          // the joined-table alias (`a`)
+		GETKeyWord(KEY_IN);
+		const ibParamUnit inner = GetExpression(context);        // the joined table
+		GETKeyWord(KEY_ON);
+		const ibParamUnit onCond = EmitRestrictBody(context, srcAlias, joinAlias);   // (s, a) => s.k <op> a.k
+
+		std::vector<ibParamUnit> args{ inner, onCond };
+		receiver = emitLinqCall(receiver, wxT("Join"), args);
+	}
+
+	// where: `where <cond>` -> receiver.Where(s => cond), folding the filter into the query.
+	if (IsNextKeyWord(KEY_WHERE)) {
+		GETKeyWord(KEY_WHERE);
+		const ibParamUnit pred = EmitRestrictBody(context, srcAlias, wxEmptyString);   // s => cond
+		std::vector<ibParamUnit> args{ pred };
+		receiver = emitLinqCall(receiver, wxT("Where"), args);
+	}
+
+	return receiver;
+}
+
+ibParamUnit ibCompileCode::EmitRestrictBody(ibCompileContext* context,
+	const wxString& paramName, const wxString& paramName2)
+{
+	// A synthetic lambda `Function(<param> [, <param2>]){ Return <expr>; }` for the clause at the
+	// cursor: ONE param = a where predicate (`s => cond`), TWO params = a join ON predicate
+	// (`(s, a) => s.k <op> a.k`; captured locals -> Param). There is no `Function(param)` in the
+	// source, so the signature is built by hand — then EmitFunctionBody emits the OPER_LFUNC frame +
+	// bare `Return <expr>` body + m_listFunc entry + capture, and the pushdown AST is recorded,
+	// exactly as CompileLambdaExpression does for a real lambda. No hand-rolled frame.
+	const bool twoParams = !paramName2.IsEmpty();
+	std::unique_ptr<ibCompileContext> fnCtxOwner(context->CreateContext(RETURN_LAMBDA_FUNCTION));
+	ibCompileContext* fnCtx = fnCtxOwner.get();
+	fnCtx->m_parentContext = context;
+
+	auto createdFunction = std::make_shared<ibCompileContext::ibFunction>(
+		wxString::Format(wxT("<restrict@%d>"), m_numCurrentCompile), fnCtx);
+	createdFunction->m_bCodeRet = true;
+	{
+		ibCompileContext::ibFunction::ibParamVariable param;
+		param.m_strName = paramName;
+		createdFunction->m_listParam.emplace_back(std::move(param));
+	}
+	fnCtx->AddVariable(paramName);                    // slot 0 — first row parameter
+	if (twoParams) {
+		ibCompileContext::ibFunction::ibParamVariable param;
+		param.m_strName = paramName2;
+		createdFunction->m_listParam.emplace_back(std::move(param));
+		fnCtx->AddVariable(paramName2);               // slot 1 — second row parameter (join ON)
+	}
+
+	// Body span [bodyFrom, bodyTo) — the bare clause expression EmitFunctionBody consumes; it
+	// feeds the pushdown AST. m_numCurrentCompile points at the LAST consumed token, so the first
+	// body token is +1 (identical to CompileLambdaExpression's lambdaBodyFrom / to bounds); without
+	// it the span would start on the clause keyword (`where` / `on`) and the AST recorder bails.
+	const size_t bodyFrom = (size_t)m_numCurrentCompile + 1;
+	if (!EmitFunctionBody(context, createdFunction, fnCtx, /*bareExprBody*/true))
+		return ibParamUnit();
+	const size_t bodyTo = (size_t)m_numCurrentCompile + 1;
+
+	// The same tail CompileLambdaExpression runs after EmitFunctionBody: back-patch OPER_LFUNC
+	// (dest slot / end IP / func index) + record the L4 pushdown AST on the new m_listFunc entry.
+	const long lfuncIp    = (long)createdFunction->m_nStart;
+	const long endlfuncIp = (long)createdFunction->m_nFinish;
+	const long funcIndex  = (long)m_cByteCode.m_listFunc.size() - 1;
+
+	const ibParamUnit target = context->CreateVariable();
+	ibByteUnit& lfunc = m_cByteCode.m_listCode[lfuncIp];
+	lfunc.m_param1 = target;
+	lfunc.m_param2.m_numIndex = endlfuncIp;
+	lfunc.m_param3.m_numIndex = funcIndex;
+
+	if (funcIndex >= 0)
+		m_cByteCode.m_listFunc[funcIndex].m_lambdaExprAst =
+			ibBuildRestrictedQueryAst(m_listLexem, bodyFrom, bodyTo, paramName, paramName2);
+	return target;
 }
 
 // Recursive worker — one `from <id> in <expr>` clause plus either
@@ -3142,6 +3276,9 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 				// RHS where the result is captured. CompileLinqExpression
 				// consumes KEY_FROM itself.
 				CompileLinqExpression(context);
+				break;
+			case KEY_RESTRICT:
+				CompileRestrictExpression(context);
 				break;
 			case KEY_IF:
 				CompileIf(context);
@@ -4488,6 +4625,14 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 		// array build).
 		m_numCurrentCompile--;
 		variable = CompileLinqExpression(context);
+	}
+	else if (lex.m_lexType == KEYWORD && lex.m_numData == KEY_RESTRICT) {
+		// Access-policy restriction — `restrict <id> in <src> [join ...] [where ...]`.
+		// Step back so CompileRestrictExpression's own GETKeyWord(KEY_RESTRICT)
+		// re-consumes the keyword via its standard path (mirrors the KEY_FROM ->
+		// CompileLinqExpression idiom above).
+		m_numCurrentCompile--;
+		variable = CompileRestrictExpression(context);
 	}
 	else if (lex.m_lexType == KEYWORD &&
 		(lex.m_numData == KEY_FUNCTION || lex.m_numData == KEY_PROCEDURE)) {

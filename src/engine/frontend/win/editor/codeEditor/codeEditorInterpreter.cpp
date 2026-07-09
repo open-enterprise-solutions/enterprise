@@ -1281,6 +1281,13 @@ bool ibPrecompileCode::CompileBlock(bool allowSingleStmt)
 				CompileLinqExpression();
 				break;
 
+			case KEY_RESTRICT:
+				// Statement-level access-policy restriction. Walker registers
+				// the source / join aliases so caret-inside-clause autocomplete
+				// works; result discarded here (usually a `Return restrict …`).
+				CompileRestrictExpression();
+				break;
+
 			case KEY_FUNCTION:
 			case KEY_PROCEDURE:
 			{
@@ -1801,6 +1808,58 @@ done:
 	return result;
 }
 
+ibParamValue ibPrecompileCode::CompileRestrictExpression()
+{
+	const int nStartPos = (m_cursor + 1 < (int)m_listLexem.size())
+		? m_listLexem[m_cursor + 1].m_numString
+		: 0;
+
+	std::vector<wxString> introducedBindings;
+	auto registerBinding = [&](const wxString& realName) {
+		if (realName.IsEmpty()) return;
+		m_activeContext->AddVariable(realName, wxEmptyString, false, false, ibValue());
+		introducedBindings.push_back(realName);
+		};
+
+	ExpectKeyword(KEY_RESTRICT);
+	const wxString srcAlias = ExpectIdentifier(true);   // the source row alias (`s`)
+	if (IsNextKeyWord(KEY_IN)) ExpectKeyword(KEY_IN);
+	GetExpression();                                    // the source query
+	registerBinding(srcAlias);                          // visible in every on / where below
+
+	// joins: `join <a> in <T> on <s.k> <op> <a.k>` — register the alias BEFORE the `on`
+	// so both `s.*` and `a.*` autocomplete inside the ON predicate.
+	while (IsNextKeyWord(KEY_JOIN)) {
+		ExpectKeyword(KEY_JOIN);
+		const wxString joinAlias = ExpectIdentifier(true);   // the joined-table alias (`a`)
+		if (IsNextKeyWord(KEY_IN)) ExpectKeyword(KEY_IN);
+		GetExpression();                                     // the joined table
+		registerBinding(joinAlias);
+		if (IsNextKeyWord(KEY_ON)) ExpectKeyword(KEY_ON);
+		GetExpression();                                     // s.k <op> a.k
+	}
+
+	// where: `where <cond>` — one predicate over the source alias.
+	if (IsNextKeyWord(KEY_WHERE)) {
+		ExpectKeyword(KEY_WHERE);
+		GetExpression();
+	}
+
+	// Bindings stay visible only if the caret landed inside the clause's lex range;
+	// otherwise drop them so they do not leak into surrounding statements (mirrors
+	// CompileLinqExpression).
+	const int nEndPos = (m_cursor < (int)m_listLexem.size())
+		? m_listLexem[m_cursor].m_numString
+		: 0;
+	const bool caretInsideBlock = (nStartPos < (int)m_caretPos && nEndPos > (int)m_caretPos);
+	if (!caretInsideBlock) {
+		for (const wxString& name : introducedBindings)
+			m_activeContext->RemoveVariable(name);
+	}
+
+	return ibParamValue();   // patched source — a queryable; element type unknown
+}
+
 //////////////////////////////////////////////////////////////////////
 // Compiling
 //////////////////////////////////////////////////////////////////////
@@ -2114,6 +2173,13 @@ ibParamValue ibPrecompileCode::GetExpression(int priority)
 		// (or after .Add via __r at the runtime end).
 		m_cursor--;   // step back so the walker sees KEY_FROM
 		return CompileLinqExpression();
+	}
+	else if (lex.m_lexType == KEYWORD && lex.m_numData == KEY_RESTRICT) {
+		// Access-policy restriction expression entry (`restrict <s> in <src>
+		// [join …] [where …]`). Walker consumes the whole clause and registers
+		// the source / join aliases so caret-inside autocomplete sees them.
+		m_cursor--;   // step back so the walker sees KEY_RESTRICT
+		return CompileRestrictExpression();
 	}
 	else if ((lex.m_lexType == KEYWORD && lex.m_numData == KEY_NEW)) {
 

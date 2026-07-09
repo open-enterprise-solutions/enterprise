@@ -24,7 +24,11 @@
 // ==========================================================================
 
 ibDataQueryBuilder::ibDataQueryBuilder()
-	: m_holder(ibSession::Current() != nullptr ? ibSession::Current()->Holder() : nullptr)
+	: 
+	m_holder(ibSession::Current() != nullptr ? ibSession::Current()->Holder() : nullptr),
+	// Pull the RLS policy from the SAME session the holder came from — no new
+	// runtime include; the door still sees only the ibAccessPolicy interface.
+	m_policy(ibSession::Current() != nullptr ? ibSession::Current()->GetAccessPolicy() : nullptr)
 {
 }
 
@@ -109,6 +113,57 @@ ibDataQueryBuilder& ibDataQueryBuilder::Union(const ibBackendQueryable* queryabl
 		m_root = node;
 	}
 	return *this;
+}
+
+// Depth-first collect of every Source leaf under a node (Join -> both sides; Union -> all parts).
+static void CollectQueryableSources(const std::shared_ptr<ibQueryNode>& node,
+                                    std::vector<const ibBackendQueryable*>& out)
+{
+	if (!node)
+		return;
+	switch (node->m_kind) {
+	case ibQueryNode::Kind::Source:
+		if (node->m_queryable != nullptr)
+			out.push_back(node->m_queryable);
+		break;
+	case ibQueryNode::Kind::Join:
+		CollectQueryableSources(node->m_left,  out);
+		CollectQueryableSources(node->m_right, out);
+		break;
+	case ibQueryNode::Kind::Union:
+		for (const auto& part : node->m_parts)
+			CollectQueryableSources(part, out);
+		break;
+	}
+}
+
+bool ibDataQueryBuilder::GetSources(std::vector<const ibBackendQueryable*>& sources) const
+{
+	sources.clear();
+	if (m_root)
+		CollectQueryableSources(m_root, sources);
+	else if (m_queryable != nullptr)
+		sources.push_back(m_queryable);   // single-source builder set via ctor, no tree yet
+	return !sources.empty();
+}
+
+ibQueryPredicatePtr ibDataQueryBuilder::GetWherePredicate() const
+{
+	// The .Where(tree) predicate, then every .Where(col,op,val) condition AND-folded onto it — one tree
+	// (null = no WHERE at all). Mirrors how the SQL builder AND-combines m_predicate with m_conditions.
+	ibQueryPredicatePtr result = m_predicate;
+	for (const ibQueryCondition& c : m_conditions) {
+		ibQueryPredicatePtr leaf = ibQueryPredicate::Leaf(c);
+		result = result ? ibQueryPredicate::Compose(ibQueryPredicateKind::And, result, leaf) : leaf;
+	}
+	return result;
+}
+
+const ibBackendQueryable* ibDataQueryBuilder::AdoptOwnedSource(std::shared_ptr<const ibBackendQueryable> src)
+{
+	const ibBackendQueryable* raw = src.get();
+	if (src) m_ownedSources.push_back(std::move(src));   // owned WITH the builder -> travels into any copy / subquery
+	return raw;
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::Where(const ibBackendQueryColumn* col,
@@ -421,6 +476,12 @@ void ibDataQueryBuilder::StampResult(ibDataQueryResult& r) const
 
 ibDataQueryResult ibDataQueryBuilder::Execute(const ibReadPageRequest& req) const
 {
+	if (m_policy != nullptr) {
+		ibDataQueryBuilder guarded(*this);
+		guarded.m_policy = nullptr;                   // the restricted query carries no policy (no re-entrancy)
+		m_policy->ApplyReadAccess(guarded);           // policy adds RLS joins/conditions, or throws on hard deny
+		return guarded.Execute(req);                  // L4-1 + L4-2 both land here
+	}
 	ibDataQueryResult r = ibQueryComposer::ExecuteRead(BuildSpec(), req);
 	StampResult(r);
 	return r;
@@ -430,6 +491,12 @@ ibDataQueryResult ibDataQueryBuilder::Execute(const ibReadPageRequest& req,
                                              ibRenderedPageCache& cache,
                                              const wxString& signature) const
 {
+	if (m_policy != nullptr) {
+		ibDataQueryBuilder guarded(*this);
+		guarded.m_policy = nullptr;
+		m_policy->ApplyReadAccess(guarded);           // the list / paging path lands here too
+		return guarded.Execute(req, cache, signature);
+	}
 	ibDataQueryResult r = ibQueryComposer::ExecuteReadCached(BuildSpec(), req, cache, signature);
 	StampResult(r);
 	return r;
@@ -447,15 +514,33 @@ ibSelectorTree ibDataQueryBuilder::SelectTotals() const
 
 bool ibDataQueryBuilder::Insert() const
 {
+	if (m_policy != nullptr) {
+		ibDataQueryBuilder guarded(*this);
+		guarded.m_policy = nullptr;
+		m_policy->ApplyWriteAccess(guarded, wxT("Write"));
+		return guarded.Insert();
+	}
 	return ibQueryComposer::ExecuteWrite(BuildSpec(), WriteKind::Insert);
 }
 
 bool ibDataQueryBuilder::Upsert() const
 {
+	if (m_policy != nullptr) {
+		ibDataQueryBuilder guarded(*this);
+		guarded.m_policy = nullptr;
+		m_policy->ApplyWriteAccess(guarded, wxT("Write"));
+		return guarded.Upsert();
+	}
 	return ibQueryComposer::ExecuteWrite(BuildSpec(), WriteKind::Upsert);
 }
 
 bool ibDataQueryBuilder::Delete() const
 {
+	if (m_policy != nullptr) {
+		ibDataQueryBuilder guarded(*this);
+		guarded.m_policy = nullptr;
+		m_policy->ApplyWriteAccess(guarded, wxT("Delete"));
+		return guarded.Delete();
+	}
 	return ibQueryComposer::ExecuteWrite(BuildSpec(), WriteKind::Delete);
 }

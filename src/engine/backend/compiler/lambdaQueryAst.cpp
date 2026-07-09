@@ -18,6 +18,15 @@ struct Cur
 	size_t pos;
 	size_t end;
 	const wxString& rowParam;
+	// Optional second row parameter — set ONLY by the `restrict` join-ON builder
+	// (`(s, a) => s.k = a.k`), so both `s.*` and `a.*` deref to Column paths. Empty for the
+	// LINQ lambda builder (single parameter).
+	const wxString& rowParam2;
+
+	bool IsRowParam(const wxString& name) const {
+		return name.CmpNoCase(rowParam) == 0
+		    || (!rowParam2.IsEmpty() && name.CmpNoCase(rowParam2) == 0);
+	}
 
 	bool AtEnd() const { return pos >= end; }
 	const ibLexem& Peek(size_t ahead = 0) const {
@@ -114,7 +123,7 @@ ibQueryAstExprPtr ParsePrimary(Cur& c)
 	}
 
 	if (t.m_lexType == IDENTIFIER) {
-		const bool isRowParam = RealName(t).CmpNoCase(c.rowParam) == 0;
+		const bool isRowParam = c.IsRowParam(RealName(t));
 		++c.pos;
 		if (isRowParam) {
 			// the row parameter MUST be dereferenced — a bare row value has no
@@ -191,6 +200,36 @@ ibQueryAstExprPtr ParseComparison(Cur& c)
 	ibQueryAstExprPtr lhs = ParseAddSub(c);
 	if (!lhs) return nullptr;
 
+	// [NOT] IN — `lhs IN (v1, v2, …)` (a value / expr list) or `lhs IN <value>` (a captured
+	// array / set). Mirrors the text query parser's In node (m_lhs, m_list, m_negated); the
+	// lowering expands `col IN (a, b, …)` to Or(col=a, …). Shared, so it also gives regular LINQ
+	// `.Where(x => x.f in …)`.
+	if (c.IsKey(KEY_IN) || (c.IsKey(KEY_NOT) && c.IsKey(KEY_IN, 1))) {
+		const bool negated = c.IsKey(KEY_NOT);
+		c.pos += negated ? 2 : 1;
+		auto n = ibQueryAstExpr::Make(ibQueryAstExprKind::In);
+		n->m_lhs = lhs;
+		n->m_negated = negated;
+		if (c.IsDelim(wxT('('))) {
+			++c.pos;
+			while (!c.IsDelim(wxT(')'))) {
+				ibQueryAstExprPtr item = ParseOr(c);
+				if (!item) return nullptr;
+				n->m_list.push_back(item);
+				if (c.IsDelim(wxT(','))) ++c.pos;
+				else break;
+			}
+			if (!c.IsDelim(wxT(')'))) return nullptr;
+			++c.pos;
+		}
+		else {
+			ibQueryAstExprPtr val = ParseAddSub(c);   // IN <captured array / value>
+			if (!val) return nullptr;
+			n->m_list.push_back(val);
+		}
+		return n;
+	}
+
 	ibQueryCompareOp op;
 	size_t opLen = 0;
 	if      (c.DelimPair(wxT('<'), wxT('='))) { op = ibQueryCompareOp::Le; opLen = 2; }
@@ -266,7 +305,7 @@ std::shared_ptr<ibQueryAstExpr> ibBuildLambdaQueryAst(
 	if (rowParamName.IsEmpty() || from >= to || to > lexems.size())
 		return nullptr;
 
-	Cur c{ lexems, from, to, rowParamName };
+	Cur c{ lexems, from, to, rowParamName, wxEmptyString };
 
 	// body := [ '{' ] Return expr [ ';' ] [ '}' | EndFunction ]  — nothing else
 	if (c.IsDelim(wxT('{'))) ++c.pos;
@@ -281,6 +320,29 @@ std::shared_ptr<ibQueryAstExpr> ibBuildLambdaQueryAst(
 	else if (c.IsKey(KEY_ENDFUNCTION)) ++c.pos;
 
 	// any trailing lexeme = a second statement / unconsumed operator — bail
+	if (!c.AtEnd()) return nullptr;
+
+	return expr;
+}
+
+std::shared_ptr<ibQueryAstExpr> ibBuildRestrictedQueryAst(
+	const std::vector<ibLexem>& lexems, size_t from, size_t to,
+	const wxString& rowParamName, const wxString& rowParamName2)
+{
+	// A `restrict` clause — a BARE expression span (no `Return`, no braces; the compiler emits
+	// `Return <span>` itself, only the span feeds the AST). One alias = a where predicate; two
+	// aliases = a join ON predicate `(s, a) => s.k <op> a.k`, where the comparison operator comes
+	// from the shared parser (no hand-read op) and both `s.*` / `a.*` deref to Column paths.
+	if (rowParamName.IsEmpty() || from >= to || to > lexems.size())
+		return nullptr;
+
+	Cur c{ lexems, from, to, rowParamName, rowParamName2 };
+
+	ibQueryAstExprPtr expr = ParseOr(c);
+	if (!expr) return nullptr;
+
+	if (c.IsDelim(wxT(';'))) ++c.pos;   // tolerate a trailing statement terminator
+
 	if (!c.AtEnd()) return nullptr;
 
 	return expr;

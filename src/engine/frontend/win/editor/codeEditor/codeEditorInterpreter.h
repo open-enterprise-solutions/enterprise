@@ -220,6 +220,14 @@ protected:
 	// shape; see docs/linq.md "Editor integration".
 	ibParamValue CompileLinqExpression();
 
+	// Access-policy restriction walker — mirror of backend
+	// ibCompileCode::CompileRestrictExpression. Parses
+	// `restrict <s> in <src> [ join <a> in <T> on <cond> ]* [ where <cond> ]`
+	// and registers the source / join aliases in m_activeContext so `s.` and
+	// `a.` inside the on / where clauses autocomplete. Entered on KEY_RESTRICT
+	// so the walker does not bail on the keyword.
+	ibParamValue CompileRestrictExpression();
+
 protected:
 
 	bool CompileModule();

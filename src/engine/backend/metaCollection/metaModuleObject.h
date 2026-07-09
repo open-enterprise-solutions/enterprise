@@ -104,8 +104,12 @@ class BACKEND_API ibValueMetaObjectModuleBase : public ibValueMetaObject {
 	virtual void SetModuleText(const wxString& moduleText) = 0;
 	virtual wxString GetModuleText() const = 0;
 
-	//set default procedures 
+	//set default procedures
 	void SetDefaultProcedure(const wxString& procName, const ibContentHelper& contentHelper, std::vector<wxString> args = {});
+
+	// Register a default FUNCTION-shaped handler (helper kind eFunctionHelper, so the handler may
+	// `Return` a value) — the function-side sibling of SetDefaultProcedure.
+	void SetDefaultFunction(const wxString& funcName, std::vector<wxString> args = {});
 
 	size_t GetDefaultProcedureCount() const {
 		return m_contentHelper.size();

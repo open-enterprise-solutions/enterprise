@@ -112,14 +112,17 @@ void FillFromRow(ibQueryResult& row, ibUserInfo& info)
 	row.GetResultBlob(wxT("binaryData"), buffer);
 	ibReaderMemory reader(buffer);
 
-	wxMemoryBuffer chunk;
+	wxMemoryBuffer chunkPswd, chunkRole, chunkLang;
+	
 	// Each chunk reader is wrapped so a malformed / version-mismatched
 	// section (e.g. role chunk for a metadata version that has moved on)
 	// doesn't bring down the whole sys_user Read — login still gets
 	// identity + password and the affected chunk's fields stay default.
-	try { if (reader.r_chunk(eBlockPswd, chunk)) ReadPasswordChunk(chunk, info); } catch (...) {}
-	try { if (reader.r_chunk(eBlockRole, chunk)) ReadRoleChunk    (chunk, info); } catch (...) {}
-	try { if (reader.r_chunk(eBlockLang, chunk)) ReadLanguageChunk(chunk, info); } catch (...) {}
+	// r_chunk APPENDS into the buffer (GetAppendBuf), so reset before each read — otherwise chunk N
+	// is prefixed with chunk N-1's bytes and its first field (e.g. the role count) reads as garbage.
+	try { if (reader.r_chunk(eBlockPswd, chunkPswd)) ReadPasswordChunk(chunkPswd, info); } catch (...) {}
+	try { if (reader.r_chunk(eBlockRole, chunkRole)) ReadRoleChunk    (chunkRole, info); } catch (...) {}
+	try { if (reader.r_chunk(eBlockLang, chunkLang)) ReadLanguageChunk(chunkLang, info); } catch (...) {}
 }
 
 } // namespace
@@ -263,8 +266,9 @@ ibUserInfo ibUserInfo::Deserialize(ibReaderMemory& reader)
 	info.m_strUserFullName = reader.r_stringZ();
 
 	wxMemoryBuffer chunk;
-	if (reader.r_chunk(eBlockPswd, chunk)) ReadPasswordChunk(chunk, info);
-	if (reader.r_chunk(eBlockRole, chunk)) ReadRoleChunk    (chunk, info);
-	if (reader.r_chunk(eBlockLang, chunk)) ReadLanguageChunk(chunk, info);
+	// r_chunk APPENDS into the buffer — reset before each read so chunk N is not prefixed with N-1.
+	chunk.SetDataLen(0); if (reader.r_chunk(eBlockPswd, chunk)) ReadPasswordChunk(chunk, info);
+	chunk.SetDataLen(0); if (reader.r_chunk(eBlockRole, chunk)) ReadRoleChunk    (chunk, info);
+	chunk.SetDataLen(0); if (reader.r_chunk(eBlockLang, chunk)) ReadLanguageChunk(chunk, info);
 	return info;
 }

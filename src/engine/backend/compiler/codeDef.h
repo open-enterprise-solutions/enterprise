@@ -224,6 +224,7 @@ enum { // numbers of keywords (in strict sequence as the values ​​themselves
 	KEY_GROUP,          // `group <expr> by <key> [into <id>]`
 	KEY_BY,             // group-by / orderby key separator
 	KEY_INTO,           // `group ... into <id>`             — group binding
+	KEY_RESTRICT,       // `restrict <id> in <src> join ... where ...` — access-policy filter
 	LastKeyWord
 };
 

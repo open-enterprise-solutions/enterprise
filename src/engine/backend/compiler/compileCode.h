@@ -230,9 +230,11 @@ protected:
 	// doesn't terminate prematurely on a nested lambda's terminator.
 	// Lambdas additionally skip the m_listFunc push (their identity
 	// lives entirely in OPER_LFUNC's operands).
+	// bareExprBody = the body is a single `Return <expr>` (a `restrict` clause) instead of a
+	// `{ … }` / VES block. Default = a normal block.
 	bool EmitFunctionBody(ibCompileContext* context,
 		const std::shared_ptr<ibCompileContext::ibFunction>& createdFunction,
-		ibCompileContext* functionContext);
+		ibCompileContext* functionContext, bool bareExprBody = false);
 
 	// Compiles an anonymous Function/Procedure expression. Parses the
 	// signature into a context whose parent is nullptr (lambda body
@@ -268,6 +270,19 @@ protected:
 	// CompileLinqExpression). CompileLinqBlock reads from the linq
 	// context's m_linqData — no extra parameter needed.
 	ibParamUnit CompileLinqExpression(ibCompileContext* context);
+
+	// Access-policy restriction (RLS query patch) —
+	//     restrict <s> in <source> [ join <a> in <T> on <lk> <op> <rk> ]* [ where <cond> ]
+	// Folds each join / where INTO the <source> query via the decorator's Join / Where
+	// (OPER_CALL_LINQ → ibValueQueryDecorator::DispatchLinqMethod → the database), returning the
+	// patched source — nothing is materialised. Entered on its own `restrict` keyword, by
+	// analogy with KEY_FROM -> CompileLinqExpression.
+	ibParamUnit CompileRestrictExpression(ibCompileContext* context);
+	// Emit a field lambda `Function(<param> [, <param2>]){ Return <expr>; }` for the clause at the
+	// cursor and record its L4 pushdown AST from the same span. One param = a where predicate
+	// (`s => cond`); a non-empty param2 = a join ON predicate (`(s, a) => s.k <op> a.k`).
+	ibParamUnit EmitRestrictBody(ibCompileContext* context,
+	                             const wxString& paramName, const wxString& paramName2);
 
 	// CompileLinqBlock — outer entry: parses `<id> in <expr>` from
 	// source, emits OPER_LET + OPER_FOREACH, dives into the leaf

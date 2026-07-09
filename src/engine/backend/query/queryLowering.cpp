@@ -483,8 +483,20 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
 				values.push_back(r.GetColumn(wxT("v")));
 		}
 		else {
-			for (const ibQueryAstExprPtr& item : e.m_list)
-				values.push_back(EvalValue(*item, params));
+			// Each list item contributes its value; a COLLECTION item — `col IN arrayVar` with a
+			// captured array / value table / computed set — expands into its elements, so a runtime
+			// array works as an IN set. A scalar / literal goes in as-is (CreateIterator == null).
+			for (const ibQueryAstExprPtr& item : e.m_list) {
+				ibValue v = EvalValue(*item, params);
+				if (std::shared_ptr<ibValueIteratorState> it = v.CreateIterator()) {
+					ibValue elem;
+					while (it->MoveNext(elem))
+						values.push_back(elem);
+				}
+				else {
+					values.push_back(v);
+				}
+			}
 		}
 
 		ibQueryPredicatePtr acc;

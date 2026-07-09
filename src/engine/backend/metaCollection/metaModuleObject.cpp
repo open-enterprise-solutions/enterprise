@@ -91,6 +91,11 @@ void ibValueMetaObjectModuleBase::SetDefaultProcedure(const wxString& procname, 
 	m_contentHelper.insert_or_assign(procname, CContentData{ contentHelper , args });
 }
 
+void ibValueMetaObjectModuleBase::SetDefaultFunction(const wxString& funcname, std::vector<wxString> args)
+{
+	m_contentHelper.insert_or_assign(funcname, CContentData{ eFunctionHelper, args });
+}
+
 //***********************************************************************
 //*                           Metamodule                                *
 //***********************************************************************

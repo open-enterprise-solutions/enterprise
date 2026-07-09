@@ -16,6 +16,189 @@
 #include <thread>
 #include <unordered_map>
 
+// RLS — the concrete access policy lives here (session side); the L3 door sees
+// only the ibAccessPolicy interface.
+#include "backend/query/dataQueryBuilder.h"          // ibAccessPolicy / ibDataQueryBuilder
+#include "backend/query/queryable.h"                 // ibBackendQueryable — GetMetaData / GetQueryName / GetPrimaryKeyColumns
+#include "backend/system/value/valueQueryable.h"     // ibValueQueryable — a role-module restriction returned as a set
+#include "backend/metaCollection/metaRoleObject.h"   // ibValueMetaObjectRole — GetRoleModule()
+#include "backend/backend_exception.h"               // ibBackendAccessException
+
+namespace {
+
+// ---------------------------------------------------------------------------
+// ibRuntimeAccessPolicy — the SESSION-side concrete RLS policy the L3 door
+// consults opaquely. For a metadata-backed source it walks the current user's
+// role modules and lets each AUGMENT the query: the module's handler runs at
+// POLICY time (breakpointable). First slice — the handler returns a Boolean
+// gate (False DENIES → throw; absent / non-False = allow). Next slice — it
+// receives a query handle and ADDS a restricting semi-join so the query returns
+// only the rows the role's keys permit (the row filter, on the SUBD side).
+//
+// FIRST BLIND PASS: `// TODO(build)` lines are best-guess accessor names to be
+// confirmed by the compiler.
+// ---------------------------------------------------------------------------
+class ibRuntimeAccessPolicy : public ibAccessPolicy
+{
+public:
+	ibRuntimeAccessPolicy(ibSession* session, const ibMetaData* metaData)
+		: m_session(session), m_metaData(metaData)
+	{
+		// Resolve the current user's role-module procUnits ONCE, right here. The policy is built in
+		// CompileRoot right AFTER AttachRuntime, so the role modules are attached (as common modules) and
+		// their procUnits are LIVE — yet no query has fired yet, so the policy is in place before anything
+		// it must guard. Roles are fixed while the session lives, so this vector is valid for the whole
+		// life; re-resolving it per query would only cost (hot path) and risk a desync. Empty = no
+		// restricting role (default-allow); a role with no module adds no restriction.
+		ibValueModuleManagerRuntimeConfiguration* mm = m_session != nullptr ? m_session->GetManagerModule() : nullptr;
+		if (mm == nullptr || m_metaData == nullptr)
+			return;
+		for (const ibUserInfo::ibUserRole& userRole : appData->GetUserRoleArray()) {
+			const ibValueMetaObjectRole* role =
+				m_metaData->FindAnyObjectByFilter<ibValueMetaObjectRole>(userRole.m_miRoleId);
+			if (role == nullptr)
+				continue;
+			const ibValueMetaObjectManagerModule* roleModule = role->GetRoleModule();
+			if (roleModule == nullptr)
+				continue;                                 // no RLS module on this role
+			ibValueModuleManager::ibValueModuleUnit* unit = mm->FindCommonModule(roleModule);
+			if (unit == nullptr)
+				continue;
+			if (const std::shared_ptr<ibProcUnit> proc = unit->GetProcUnit())
+				m_roleProcs.push_back(proc);
+		}
+	}
+
+	void ApplyReadAccess(ibDataQueryBuilder& query) const override                        { Apply(query, wxT("Read")); }
+	void ApplyWriteAccess(ibDataQueryBuilder& query, const wxString& operation) const override { Apply(query, operation); }
+
+private:
+	// Tier 0: full-access user -> skip. Otherwise restrict the query's PRIMARY source. The
+	// restriction is re-woven on EVERY query (NO cache): the role module runs each time, reading
+	// the CURRENT settings / flags, so a changed constant sends the module down a different branch
+	// and the query gets a different join (or none) — real-time, the reason the restriction must
+	// live INSIDE the query. The module runs ONCE PER QUERY to build the join, NEVER per row: the
+	// DB applies the join and filters the rows, so there is no per-row Runtime (no "billion calls").
+	void Apply(ibDataQueryBuilder& query, const wxString& operation) const
+	{
+		if (m_roleProcs.empty())
+			return;                                   // no restricting role (or Designer) -> default-allow
+
+		if (m_metaData != nullptr && m_metaData->IsFullAccess())
+			return;                                   // Tier 0 — full-access user, nothing restricted
+
+		const ibBackendQueryable* primary = query.GetPrimarySource();
+		if (primary == nullptr || primary->GetMetaData() == nullptr)
+			return;                                   // custom / temp / computed — no RLS
+		ApplyToSource(query, primary, operation);
+	}
+
+	// One table, EVERY query (no cache — real-time). We hand the module the SOURCE as a queryable —
+	// it BRANCHES on its type ("is this Document Поступление?") and CHAINS off it (Источник.Join(…)).
+	// RLS is a RESTRICTION, not a gate: a role's module returns its restricted-source chain to narrow
+	// access (we read the query FROM it), or nothing to leave the role alone. No booleans, no throw.
+	// Graft = the module folds Join/Where STRAIGHT INTO this query via a base ibValueQueryDecorator we
+	// hand it over &query — ONE builder, no subquery wrap, no copy-merge. The real source stays the
+	// query's From, so downstream projections / filters see its columns already narrowed, the query
+	// still PAGES and PUSHES DOWN, and register aggregates auto-restrict. The join lands DB-side; the DB
+	// filters the rows — the module runs ONCE per query to BUILD the join (breakpointable), NEVER per row.
+	// Multi-role = OR: one role folds straight in; several roles' restrictions are OR-combined into the
+	// main query (a user sees a row allowed by ANY of their roles). A WHERE-only role contributes its
+	// predicate; a JOIN-based role is reduced by materialising the source keys it admits into `key = v …
+	// OR` (the SQL IR has no IN-subquery). Real source stays -> the query still pages.
+	// TODO(perf): the module is a per-query template — JIT-compile it (hot path) so the Runtime
+	// digests it fast; do NOT cache its RESULT (that freezes it and breaks real-time).
+	void ApplyToSource(ibDataQueryBuilder& query, const ibBackendQueryable* source,
+	                   const wxString& operation) const
+	{
+		// The module identifies the source by its canonical FULL NAME ("Document.X" / "Catalog.X"),
+		// so pass GetFullName() (not the short GetQueryName()); fall back to the short name if the
+		// metaobject cannot be resolved.
+		const ibValueMetaObject* srcMeta = m_metaData->FindAnyObjectByFilter<ibValueMetaObject>(source->GetQueryTableId());
+		const wxString sourceName = srcMeta != nullptr ? srcMeta->GetFullName() : source->GetQueryName();
+		const wxString handler = (operation == wxT("Read")) ? wxT("OnAccessRead") : wxT("OnAccessWrite");
+
+		// The restricting roles' module procUnits were resolved ONCE in the ctor (post-compile, pre-run)
+		// and cached for the session's life; Apply already returned when the list is empty, so at least one
+		// role restricts here. DEFAULT = ALLOW: a hard deny is just a restriction that admits no rows.
+		const std::vector<std::shared_ptr<ibProcUnit>>& procs = m_roleProcs;
+
+		// Run one role's handler with a base decorator over `target` — its Source.Join(…) / Source.Where(…)
+		// fold the restriction straight into `target` (Source FIRST — the decorator; then Operation).
+		const auto runRole = [&](const std::shared_ptr<ibProcUnit>& proc, ibDataQueryBuilder& target) {
+			ibValue src(new ibValueQueryDecorator(&target, source, sourceName));
+			ibValue op(operation);
+			ibValue result;
+			proc->CallAsFunc(handler, result, src, op);   // runs EACH query -> current settings / flags (result unused)
+		};
+
+		if (procs.size() == 1) {
+			// ONE restricting role — fold straight into the query (real source: pages + pushes down).
+			runRole(procs.front(), query);
+			return;
+		}
+
+		// SEVERAL restricting roles — a user gains access via ANY of them, so their restrictions OR (not
+		// AND). Each role folds into a per-role scratch; we OR the roles' restrictions into the main query,
+		// keeping the real source (still pages). A WHERE-only role contributes its predicate directly; a
+		// role that JOINs a table is reduced by MATERIALISING the source keys it admits into `key = v … OR`
+		// (the SQL IR has no IN-subquery, so we run the join once and fold its admitted keys).
+		std::vector<ibQueryPredicatePtr> rolePredicates;
+		for (const std::shared_ptr<ibProcUnit>& proc : procs) {
+			ibDataQueryBuilder scratch;
+			scratch.From(source);
+			scratch.WithAccessPolicy(nullptr);            // trusted: the scratch is only mined for its predicate
+			runRole(proc, scratch);
+
+			std::vector<const ibBackendQueryable*> scratchSources;
+			scratch.GetSources(scratchSources);
+			if (scratchSources.size() > 1) {
+				// JOIN-based role — a join can't be OR-folded as SQL, so MATERIALISE the rows it admits:
+				// project the source key of the joined result and OR-fold `key = v` over those keys (mirrors
+				// the query language's `key IN (subquery)` lowering). The main source stays real -> pages.
+				const std::vector<const ibBackendQueryColumn*> keyCols = source->GetPrimaryKeyColumns();
+				if (keyCols.empty() || keyCols.front() == nullptr) {   // no key to reduce onto -> fail closed
+					for (const std::shared_ptr<ibProcUnit>& p : procs) runRole(p, query);
+					return;
+				}
+				const ibBackendQueryColumn* keyCol = keyCols.front();
+				scratch.Select(keyCol, wxT("v"));
+				ibDataQueryResult r = scratch.Execute(ibReadPageRequest{});
+				ibQueryPredicatePtr admitted;
+				while (r.Next()) {
+					ibQueryCondition c;
+					c.m_col = keyCol; c.m_value = r.GetColumn(wxT("v")); c.m_op = ibQueryFilterOp::Equal;
+					ibQueryPredicatePtr eq = ibQueryPredicate::Leaf(c);
+					admitted = admitted ? ibQueryPredicate::Compose(ibQueryPredicateKind::Or, admitted, eq) : eq;
+				}
+				if (!admitted)   // the role admits NO rows -> a contradiction, so its OR branch is FALSE
+					admitted = ibQueryPredicate::Compose(ibQueryPredicateKind::And,
+						ibQueryPredicate::Null(keyCol, false), ibQueryPredicate::Null(keyCol, true));
+				rolePredicates.push_back(admitted);
+				continue;
+			}
+			ibQueryPredicatePtr pred = scratch.GetWherePredicate();
+			if (!pred)
+				return;   // this role added NO Join and NO Where -> it grants FULL access -> the OR is unrestricted
+			rolePredicates.push_back(pred);
+		}
+		if (!rolePredicates.empty()) {
+			ibQueryPredicatePtr orPred = rolePredicates.front();
+			for (size_t i = 1; i < rolePredicates.size(); ++i)
+				orPred = ibQueryPredicate::Compose(ibQueryPredicateKind::Or, orPred, rolePredicates[i]);
+			query.Where(orPred);                          // (role1 WHERE) OR (role2 WHERE) OR …
+		}
+	}
+
+	ibSession*        m_session;
+	const ibMetaData* m_metaData;   // the session's config metadata — resolves role metaobjects (config-level)
+	// The current user's role-module procUnits — resolved ONCE in the ctor (built post-compile, pre-run)
+	// and held for the session's whole life (roles are fixed while it lives). Empty = no restricting role.
+	std::vector<std::shared_ptr<ibProcUnit>> m_roleProcs;
+};
+
+} // namespace
+
 namespace {
 // Per-thread current-session map. Lookup semantics depend on the
 // access mode owned by ibSessionRegistry — see ibSession::Current.
@@ -207,6 +390,14 @@ bool ibSession::CompileRoot()
 	// short-circuit), so no external wantsRuntime check is needed.
 	m_root->AttachRuntime(this);
 
+	// RLS — build the session's access policy HERE, right AFTER runtime bring-up: the role modules
+	// attach as common modules DURING AttachRuntime, so their procUnits (FindCommonModule -> GetProcUnit)
+	// are only live NOW — the policy ctor resolves + caches them once. Still before the session serves
+	// any user query (CompileRoot finishes first), so it is in place before anything it must guard.
+	// Designer never enforces (it runs off the edit-time manager, not this runtime root).
+	if (!m_accessPolicy && !appData->DesignerMode())
+		m_accessPolicy = std::make_unique<ibRuntimeAccessPolicy>(this, activeMetaData);
+
 	// Lambda executor — m_root's procUnit is live after AttachRuntime,
 	// so SetParent target is valid. ibValueFunction's Execute resolves
 	// this through ibSession::GetLambdaRuntime().
@@ -250,6 +441,9 @@ bool ibSession::DestroyRoot()
 	// the SetParent target stays valid right up to the moment we
 	// release it.
 	m_lambdaRuntime.reset();
+	// The access policy caches the role-module procUnits resolved at CompileRoot; drop it so a later
+	// CompileRoot rebuilds it against the recompiled modules (no stale procUnits after a reload).
+	m_accessPolicy.reset();
 	// Symmetric to CompileRoot: detach runtime before destroying the
 	// main module so common-module ProcUnits drop in order. Formerly
 	// an explicit mm->DetachRuntime(s) call from webSession.
@@ -262,6 +456,7 @@ void ibSession::ClearRoot()
 	// Lambda runtime depends on m_root's procUnit (SetParent target);
 	// drop it before m_root itself goes away.
 	m_lambdaRuntime.reset();
+	m_accessPolicy.reset();   // rebuilt by the next CompileRoot (cached role procUnits go stale here)
 
 	if (m_root) {
 		m_root->DetachRuntime(this);
@@ -284,7 +479,16 @@ void ibSession::EnsureRoot()
 	// per-session runtime root mm is created; designer-path consumers read the
 	// manager module from the compile cache instead of session->GetManagerModule().
 	if (appData->DesignerMode()) return;
+
+	// RLS — the access policy is NOT built here: it is built in CompileRoot, between module compile and
+	// run, so its ctor can resolve the user's role-module procUnits (see there). The L3 door pulls it via
+	// GetAccessPolicy(); no query fires before CompileRoot, so it is always in place when needed.
 	CreateRoot(activeMetaData);
+}
+
+const ibAccessPolicy* ibSession::GetAccessPolicy() const
+{
+	return m_accessPolicy.get();
 }
 
 ibSession* ibSession::Current()

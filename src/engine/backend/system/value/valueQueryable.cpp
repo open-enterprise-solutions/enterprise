@@ -196,6 +196,20 @@ ibDataQueryResult ibValueQueryable::ExecuteAccumulated() const
 	return m_builder.Execute(page);
 }
 
+std::shared_ptr<const ibBackendQueryable> ibValueQueryable::AsSource() const
+{
+	// Wrap the accumulated builder (From / Join / Where — SELECT * over the restricted rows) as a
+	// subquery source the L3 door can read FROM. Copy the builder and let the COPY own the Data.From
+	// source (if any) so the subquery is SELF-CONTAINED: its control block manages everything it
+	// references — no raw pointer back into THIS value's m_ownedSource (which would dangle if the
+	// value died before the subquery). For a metadata source m_ownedSource is null (nothing to adopt).
+	ibDataQueryBuilder inner = m_builder;
+	if (m_ownedSource)
+		inner.AdoptOwnedSource(m_ownedSource);
+	inner.WithAccessPolicy(nullptr);   // a subquery inside an already-enforced query — no RLS re-entry
+	return std::make_shared<ibSubqueryQueryable>(inner, m_take);
+}
+
 wxString ibValueQueryable::GetString() const
 {
 	if (m_ops.empty())
@@ -580,5 +594,152 @@ std::shared_ptr<ibValueIteratorState> ibValueQueryable::CreateIterator()
 		m_builder, m_take, RowReferenceColumn(), m_queryable->GetColumns(), m_ownedSource, m_projectCol, m_projectAlias);
 }
 
+//////////////////////////////////////////////////////////////////////
+// ibValueQueryDecorator — universal query decorator (Join / Where fold straight into the target)
+//////////////////////////////////////////////////////////////////////
+
+// Optional ON comparison for a decorator Join — default equality; a theta ON (s.Date >= a.From).
+static ibJoinCompareOp JoinOpFromString(const wxString& s)
+{
+	if (s == wxT("<>") || s == wxT("!=")) return ibJoinCompareOp::Ne;
+	if (s == wxT("<"))                    return ibJoinCompareOp::Lt;
+	if (s == wxT("<="))                   return ibJoinCompareOp::Le;
+	if (s == wxT(">"))                    return ibJoinCompareOp::Gt;
+	if (s == wxT(">="))                   return ibJoinCompareOp::Ge;
+	return ibJoinCompareOp::Eq;   // "=" / anything else
+}
+
+// Map a `restrict` ON predicate's Compare op (from its AST) to the join's ON comparison.
+static ibJoinCompareOp JoinOpFromCompare(ibQueryCompareOp c)
+{
+	switch (c) {
+	case ibQueryCompareOp::Ne: return ibJoinCompareOp::Ne;
+	case ibQueryCompareOp::Lt: return ibJoinCompareOp::Lt;
+	case ibQueryCompareOp::Le: return ibJoinCompareOp::Le;
+	case ibQueryCompareOp::Gt: return ibJoinCompareOp::Gt;
+	case ibQueryCompareOp::Ge: return ibJoinCompareOp::Ge;
+	default:                   return ibJoinCompareOp::Eq;
+	}
+}
+
+ibValueQueryDecorator::ibValueQueryDecorator(ibDataQueryBuilder* target, const ibBackendQueryable* source, const wxString& sourceName)
+	: ibValue(ibValueTypes::TYPE_VALUE), m_target(target), m_source(source), m_sourceName(sourceName)
+{
+	// No own builder, no policy dance: the target IS the (already policy-nulled) main query, so folding
+	// Join/Where in here and running it does NOT re-enter the policy — no recursion.
+}
+
+wxString ibValueQueryDecorator::GetString() const
+{
+	return wxString::Format(wxT("QueryDecorator(%s)"), m_sourceName);
+}
+
+void ibValueQueryDecorator::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibValue** args, long n)
+{
+	using M = ibLinqMethod;
+	if (m_source == nullptr || m_target == nullptr)
+		ibBackendCoreException::Error(_("QueryDecorator: not initialised"));
+
+	switch (method) {
+
+	case M::Where: {
+		// Where(predicate) — folds a filter straight into the TARGET query (lazy). The predicate lowers
+		// against the decorated SOURCE (its columns), same as the classic queryable's Where.
+		ibValueFunction* fn = LambdaOf(args, n);
+		if (fn == nullptr)
+			ibBackendCoreException::Error(_("QueryDecorator.Where: a function argument is required"));
+		std::shared_ptr<ibQueryAstExpr> ast = AstOf(fn);
+		std::map<wxString, ibValue> captured;
+		if (ast && CollectCaptured(*ast, fn, captured)) {
+			if (ibQueryPredicatePtr pred = ibQueryLowering::LowerLambdaPredicate(m_source, *ast, captured)) {
+				m_target->Where(pred);
+				ret = new ibValueQueryDecorator(m_target, m_source, m_sourceName);   // chain: same target
+				return;
+			}
+		}
+		ibBackendCoreException::Error(_("QueryDecorator.Where: the condition cannot be lowered to SQL"));
+		return;
+	}
+
+	case M::Join: {
+		// Join(inner, onCond)                        — the `restrict` form: ONE `(s, a) => s.k <op> a.k`
+		//   lambda; its Compare AST splits into left key (vs source) + right key (vs inner) + op.
+		// Join(inner, leftKey, rightKey [, opString]) — the explicit LINQ form: separate key selectors,
+		//   op as a string 4th arg.
+		// inner is a FULL classic ibValueQueryable (Data.Catalogs.X / Data.Registers.Y — its own
+		// Where/folds ride along) OR a computed value table (a pre-selected set: "execute a query
+		// then join its data"), temp-promoted. The main source stays real, so the query still pages.
+		if (n < 2 || args == nullptr || args[0] == nullptr || args[1] == nullptr)
+			ibBackendCoreException::Error(_("QueryDecorator.Join: expects (source, onCond) or (source, leftKey, rightKey [, op])"));
+
+		const ibBackendQueryable*                 innerBase = nullptr;   // right-key lowers against this
+		std::shared_ptr<const ibBackendQueryable> innerSource;           // the source we join + own
+		ibValueQueryable* innerQ = nullptr;
+		if (args[0]->ConvertToValue(innerQ) && innerQ != nullptr && innerQ->GetQueryable() != nullptr) {
+			innerBase   = innerQ->GetQueryable();
+			innerSource = innerQ->AsSource();                            // carries the inner's OWN Where / folds
+		} else {
+			ibValueModelTable* tbl = nullptr;
+			if (!args[0]->ConvertToValue(tbl) || tbl == nullptr)
+				ibBackendCoreException::Error(_("QueryDecorator.Join: the first argument must be a Data source or a value table"));
+			innerSource = std::make_shared<ibTempTableQueryable>(*args[0]);   // computed set -> DB temp table
+			innerBase   = innerSource.get();
+		}
+
+		// Resolve the join to left key (vs source) + right key (vs inner) + op — from ONE ON predicate
+		// (the `restrict` form) or from the explicit key-selector arguments.
+		std::shared_ptr<ibQueryAstExpr> leftAst, rightAst;
+		ibJoinCompareOp op = ibJoinCompareOp::Eq;
+		if (n == 2) {
+			ibValueFunction* onFn = nullptr; args[1]->ConvertToValue(onFn);
+			std::shared_ptr<ibQueryAstExpr> onAst = onFn ? AstOf(onFn) : nullptr;
+			if (!onAst || onAst->m_kind != ibQueryAstExprKind::Compare || !onAst->m_lhs || !onAst->m_rhs)
+				ibBackendCoreException::Error(_("QueryDecorator.Join: the ON must be an `s.k <op> a.k` comparison"));
+			leftAst  = onAst->m_lhs;                                     // s.k  — lowers vs source
+			rightAst = onAst->m_rhs;                                     // a.k  — lowers vs inner
+			op       = JoinOpFromCompare(onAst->m_cmp);
+		} else {
+			if (args[2] == nullptr)
+				ibBackendCoreException::Error(_("QueryDecorator.Join: expects (source, leftKey, rightKey [, op])"));
+			ibValueFunction* leftFn  = nullptr; args[1]->ConvertToValue(leftFn);
+			ibValueFunction* rightFn = nullptr; args[2]->ConvertToValue(rightFn);
+			leftAst  = leftFn  ? AstOf(leftFn)  : nullptr;
+			rightAst = rightFn ? AstOf(rightFn) : nullptr;
+			if (!leftAst || !rightAst)
+				ibBackendCoreException::Error(_("QueryDecorator.Join: key selectors must be simple field lambdas"));
+			op = (n >= 4 && args[3] != nullptr && !args[3]->IsEmpty())
+				? JoinOpFromString(args[3]->GetString()) : ibJoinCompareOp::Eq;
+		}
+
+		const std::vector<const ibBackendQueryColumn*> lcols = ibQueryLowering::LowerLambdaColumnPath(m_source, *leftAst);
+		const std::vector<const ibBackendQueryColumn*> rcols = ibQueryLowering::LowerLambdaColumnPath(innerBase, *rightAst);
+		if (lcols.size() != 1 || rcols.size() != 1 || lcols.front() == nullptr || rcols.front() == nullptr)
+			ibBackendCoreException::Error(_("QueryDecorator.Join: each key must be exactly one column — for a multi-hop key restrict with Where(x => x.Ref.Field = …) instead"));
+
+		// The target owns the join inner (self-contained subquery) and gains the join in place.
+		const ibBackendQueryable* raw = m_target->AdoptOwnedSource(std::move(innerSource));
+		m_target->Join(raw, lcols.front(), rcols.front(), op, ibQueryJoinKind::Inner);
+		ret = new ibValueQueryDecorator(m_target, m_source, m_sourceName);   // chain: same target
+		return;
+	}
+
+	default:
+		ibBackendCoreException::Error(_("QueryDecorator: only Join and Where are available on a decorator"));
+		return;
+	}
+}
+
+bool ibValueQueryDecorator::CompareValueEQ(const ibValue& cParam) const
+{
+	// Source = "Document.Поступление" — a module identifies the source by its canonical FULL NAME
+	// string ("<ClassName>.<Name>", GetFullName), which the policy passes as m_sourceName.
+	if (cParam.m_typeClass == ibValueTypes::TYPE_STRING)
+		return m_sourceName == cParam.GetString();
+	return false;
+}
+
 // System type — vended only (the Data global / future Data.From), never New'ed.
 SYSTEM_TYPE_REGISTER(ibValueQueryable, "Queryable", system_to_clsid("VL_QRBL"));
+
+// System type — constructed ONLY by a policy (never vended, never New'ed).
+SYSTEM_TYPE_REGISTER(ibValueQueryDecorator, "QueryDecorator", system_to_clsid("VL_QDEC"));
