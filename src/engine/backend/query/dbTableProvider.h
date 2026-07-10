@@ -35,7 +35,7 @@ public:
 	ibDataQueryResult ExecuteReadCached(const ibDataQuerySpec& spec, const ibReadPageRequest& req,
 	                                    ibRenderedPageCache& cache, const wxString& signature) override;
 	ibDataQueryResult ExecuteAggregate(const ibDataQuerySpec& spec) override;
-	bool ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBuilder::WriteKind kind) override;
+	long ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBuilder::WriteKind kind) override;
 
 	// --- multi-source: co-located server-side JOIN (docs/query-language-arc.md §22.1a) -------
 	// CanColocateJoin — is the spec's relational tree an N-way INNER/LEFT join of DISTINCT real DB

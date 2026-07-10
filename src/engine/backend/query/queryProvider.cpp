@@ -2059,7 +2059,7 @@ ibSelectorTree ibQueryComposer::ExecuteTotals(const ibDataQuerySpec& spec)
 	return BuildTotalsTree(combined, *spec.m_groupBy, *spec.m_aggregates);
 }
 
-bool ibQueryComposer::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBuilder::WriteKind kind)
+long ibQueryComposer::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBuilder::WriteKind kind)
 {
 	// Writes always target a single real table — there is no multi-source write.
 	return spec.m_queryable->GetProvider().ExecuteWrite(spec, kind);

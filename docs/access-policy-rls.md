@@ -57,8 +57,11 @@ decorator. Multi-company / soft-delete / audit are other policies over the same 
 - `Join(inner, leftKey, rightKey [, op])` — folds a join to `inner` (a full classic
   `Data.Catalogs.X` / `Data.Registers.Y`, its own `.Where(user=me)` riding along, or a computed value
   table temp-promoted) into the query. Optional comparison op → theta ON.
-- The module **side-effects** the query through these; its **return value is ignored** (the fold
-  already happened). A role whose module adds nothing leaves the query unrestricted (default-allow).
+- The module **side-effects** the query through these (the fold happens as it runs); it then signals a
+  clean completion by setting its by-ref **`Allowed`** verdict to `True`. The door reads `Allowed` — a
+  handler that folds a restriction and sets `Allowed = True` narrows the query; one that only sets
+  `Allowed = True` (no fold) grants full access; one that never sets it (threw / swallowed / fell
+  through) is a **fail-closed deny**. See *The handler*.
 
 > **Why direct-fold, not a source swap.** Wrapping the source in a subquery (the earlier
 > `ReplaceSource`) made it a RAM-computed source: it materialised the whole table, broke keyset paging
@@ -80,34 +83,52 @@ of their roles):
   admitted keys, fold `key = v OR …` (mirrors the query language's `key IN (subquery)` lowering). The
   materialisation runs during `ApplyReadAccess`, before the main query executes — sequential, not
   nested.
-- A role that adds **no restriction** grants full access → the whole OR is left unrestricted.
+- A role that **succeeds** (sets `Allowed = True`) with **no restriction**, or a role with **no handler**,
+  grants full access → the whole OR is left unrestricted.
+- A **failed** role (threw / swallowed / never set `Allowed`) contributes **nothing** — it does *not*
+  widen the OR (a failed role must not read as "allow all"), and if **every** role fails the door denies
+  outright. The `Allowed` verdict is what distinguishes "grant full access" from "failed" — without it a
+  failed role in an OR would silently open everything.
 
 ---
 
 ## The handler
 
-Named `OnAccessRead` / `OnAccessWrite`, `Source` first, `Operation` second. Default = **allow**: a role
-with no module (or a module that adds nothing) adds no restriction, so existing configs keep working.
-A hard deny is just a restriction that admits no rows.
+`OnAccessRead` / `OnAccessWrite` are **procedures** (the OES idiom — the verdict comes back through a
+by-ref out-param, like `BeforeOpen`'s `Cancel`, not a Function return). Params: `Source` (the source as a
+queryable), `Operation` (a per-type string — `"Read"` / `"Post"` / `"Delete"` / …), and **`Allowed`** (a
+by-ref verdict). The handler **folds** its restriction into `Source` — a side effect (`Source.Where(…)`
+/ `Source.Join(…)` / the `restrict` keyword) — and then **sets `Allowed = True`** to grant access under
+that restriction.
+
+**Fail-closed at the door** — the door owns the safe default, NOT the handler's error handling:
+- Handler **absent** (a role with no such procedure) → this role imposes no restriction → **ALLOW**
+  (migration-safe; existing configs keep working). Detected by lookup — `CallAsProc` returns *false*
+  without throwing and without running anything — not by an exception.
+- Handler present but does **not** set `Allowed = True` (it fell through, swallowed its own exception, or
+  set `False`) OR it **throws** → the role **FAILED** → **DENY**. A mistake thus over-restricts
+  (visible), never exposes. `Allowed` is a grant-flag (default `False`): more informative than a
+  deny/cancel one — the positive `Allowed = True` says exactly what happened.
 
 ```c
-Function OnAccessRead(Source, Operation)
+Procedure OnAccessRead(Source, Operation, Allowed)
 {
     // simplest — a Where on the source (dot-walk paths work: Source.Where(x => x.Contract.Company = …))
-    Return Source.Where(Function(x) { Return x.Code = "13"; });
+    Source = Source.Where(Function(x) { Return x.Code = "13"; });
+    Allowed = True;
 }
 ```
 
-Join form (attach an ACL table):
+Join form via the concise `restrict` keyword (assign back to `Source` so the intent to narrow is
+visible — a bare `restrict …;` statement folds too, but reads like an orphan):
 
 ```c
-Function OnAccessRead(Source, Operation)
+Procedure OnAccessRead(Source, Operation, Allowed)
 {
-    Var myWarehouses = Data.Registers.WarehouseAccess
-                        .Where(Function(a) { Return a.User = CurrentUser(); });
-    Return Source.Join(myWarehouses,
-                       Function(s) { Return s.Warehouse; },
-                       Function(a) { Return a.Warehouse; });
+    Source = restrict s in Source
+                 join a in Data.Registers.WarehouseAccess.Where(Function(a) { Return a.User = CurrentUser(); })
+                     on s.Warehouse = a.Warehouse;
+    Allowed = True;
 }
 ```
 
@@ -172,18 +193,38 @@ Function OnAccessRead(Source, Operation)
 
 `Insert` / `Upsert` / `Delete` on the builder call `ApplyWriteAccess(guarded, "Write" / "Delete")` →
 the same decorator mechanism with the `OnAccessWrite` handler. Object writes route through those
-builder writes (`commonObjectRefQuery`, tabular section, record set, constant), so writes are gated by
-the same restriction. Open: `Insert` has no `WHERE`, so a WITH-CHECK of the post-image is a separate
-semantic (a refinement); functional verification of Delete/Update pending.
+builder writes (`commonObjectRefQuery`, tabular section, record set, constant), so the handler runs on
+every write.
+
+**DELETE is enforced by row count.** `ExecuteWrite` returns the number of rows affected (lifted from
+the driver's `RunQuery`). A restricted `DELETE` folds the RLS `Where` into its conditions, so a delete
+of a row the user may not touch matches **0 rows** — and under an **active policy** `0 affected` means
+"no accessible row" → `ibBackendAccessException` (fail-closed, loud — mirrors the read door). No extra
+existence query. (With no policy, `0 affected` is a normal no-op — no throw.)
+
+**Save (INSERT / UPSERT) is NOT yet restricted** — a known gap. The upsert SQL is built from a dialect
+template (`{table}{columns}{values}{keys}{update}`) that has **no `WHERE`**; Firebird's
+`UPDATE OR INSERT … MATCHING` cannot carry a condition on its update. So the folded `Where` is dropped
+for INSERT/UPSERT and the write lands unrestricted (always 1 row → the count gate can't fire). Two ways
+to close it: **(a)** rewrite the upsert to `MERGE … WHEN MATCHED AND <rls> THEN UPDATE WHEN NOT MATCHED
+THEN INSERT` (count-based deny, cross-driver template work) — **planned next**; **(b)** a `WITH CHECK`
+of the post-image (uniform for insert + update; a join-based restriction needs one probe). A brand-new
+`INSERT` can never be a 0-row count (it adds 1 by nature) → it inherently needs `WITH CHECK`, not a count.
 
 ---
 
 ## Current state & limitations
 
 Read-restriction **confirmed working live** — both the explicit `Source.Where(…)` form and the
-concise `restrict … where` keyword form filter the query (single role). The `restrict` join path
-compiles; the write path (`OnAccessWrite`) is reached at runtime, functional verification pending.
+concise `restrict … where` keyword form filter the query (single role). **Fail-closed contract landed**
+(see *The handler*): handlers are procedures with a by-ref `Allowed` verdict (default deny),
+presence-gated (absent → allow), and a handler that throws / swallows / never grants → deny; multi-role
+OR is fail-closed (a failed role never widens; all failing → deny). **DELETE write-restriction landed**
+— the 0-affected-row gate under an active policy throws access-denied. Functional verification of the
+fail-closed paths and the `restrict` join path pending.
 
+- **Save (INSERT / UPSERT) not restricted yet** — the folded `Where` is dropped by the upsert template
+  (no `WHERE`); MERGE-based enforcement is planned, `WITH CHECK` the alternative. See *Write path*.
 - **AOT bytecode cache must be invalidated after a compiler change.** The role module's compiled
   bytecode is cached in `sys_bytecode_cache` (a DB table; `Load` keys on `descriptor_id` and the AOT
   `kAOTFormatVersion`, NOT the compiler version or the stored `bytecode_version`). A `restrict` module
@@ -215,13 +256,15 @@ compiles; the write path (`OnAccessWrite`) is reached at runtime, functional ver
 
 | File | Role |
 |---|---|
-| `metaCollection/metaRoleObject.{h,cpp}` + `metaRoleObjectMenu.cpp` | Role is module-bearing; `OnAccessRead`/`OnAccessWrite` default handlers; "Open role module" tree menu |
-| `query/dataQueryBuilder.{h,cpp}` | `ibAccessPolicy` interface; policy injection; copy-apply-execute; `AdoptOwnedSource` / `GetSources` / `GetWherePredicate` |
-| `session/session.{h,cpp}` | `GetAccessPolicy`; concrete `ibRuntimeAccessPolicy` (ctor-cached role procUnits, default-allow, single-role fold / multi-role OR / join materialisation); policy built in `CompileRoot` |
+| `metaCollection/metaRoleObject.{h,cpp}` + `metaRoleObjectMenu.cpp` | Role is module-bearing; `OnAccessRead`/`OnAccessWrite` default **procedures** (args `Source`, `Operation`, by-ref `Allowed`); "Open role module" tree menu |
+| `query/dataQueryBuilder.{h,cpp}` | `ibAccessPolicy` interface; policy injection; copy-apply-execute; **DELETE write-deny** (policy active + `ExecuteWrite` returns 0 affected → `ibBackendAccessException`); `AdoptOwnedSource` / `GetSources` / `GetWherePredicate` |
+| `session/session.{h,cpp}` | `GetAccessPolicy`; concrete `ibRuntimeAccessPolicy` — **fail-closed** contract (`RoleOutcome` NoHandler/Failed/Succeeded via `CallAsProc` + by-ref `Allowed`, exception→deny, multi-role OR where a failed role never widens); ctor-cached role procUnits; policy built in `CompileRoot` |
 | `system/value/valueQueryable.{h,cpp}` | `ibValueQueryDecorator` — Join/Where fold straight into the target query; `Join` accepts a single ON predicate (splits the `Compare` AST) or explicit key selectors |
 | `compiler/codeDef.h` + `compiler/translateCode.cpp` | `KEY_RESTRICT` / `"Restrict"` keyword (lock-step) |
 | `compiler/compileCode.{h,cpp}` | `CompileRestrictExpression` (the `restrict` block) + `EmitRestrictBody` (a clause → a 1-or-2-param lambda via `EmitFunctionBody`); triggered on `KEY_RESTRICT` in `GetExpression` and the statement switch |
 | `compiler/lambdaQueryAst.{h,cpp}` | body → L4 pushdown AST — `ibBuildLambdaQueryAst` (LINQ, single alias) / `ibBuildRestrictedQueryAst` (`restrict`, bare span, 2-alias join ON); `in (list)` / `in <array>` parsing shared by both |
 | `query/queryLowering.cpp` | `In` lowering — expands a captured array / collection item into its elements |
 | `compiler/byteCodeAOT.cpp` + `compiler/cache/byteCodeCache.{h,cpp}` | AOT (de)serialisation of the pushdown AST (`m_lambdaExprAst`, v14) + the `sys_bytecode_cache` DB DAO; `kAOTFormatVersion` bump invalidates stale AST-less blobs |
+| `compiler/procUnit.h` | `CallAsProc` / `CallAsFunc` comma-args variadics return **bool** (found?) — the presence gate the door uses without a separate lookup |
+| `query/queryProvider.{h,cpp}` + `query/dbTableProvider.{h,cpp}` | `ExecuteWrite` returns the **affected-row count** (lifted from `RunQuery`); the door reads 0-under-policy as a write-deny |
 | `frontend/.../codeEditor/codeEditorInterpreter.{h,cpp}` | `ibPrecompileCode::CompileRestrictExpression` — the intellisense-side walker (aliases → autocomplete, no bail on `restrict`) |

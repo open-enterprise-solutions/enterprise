@@ -108,16 +108,18 @@ public:
 	long FindFunction(const wxString& strMethodName, bool bError = false, int bExportOnly = 0) const;
 	long FindProcedure(const wxString& strMethodName, bool bError = false, int bExportOnly = 0) const;
 
+	// Comma-separated-args wrappers over the ppParams array forms below. Return TRUE if the named method
+	// was found and run, FALSE if there is no such method (nothing ran) — same contract as the array forms.
 	template <typename ...Types>
-	inline void CallAsProc(const wxString& funcName, Types&&... args) {
+	inline bool CallAsProc(const wxString& funcName, Types&&... args) {
 		ibValue* ppParams[] = { &args..., nullptr };
-		CallAsProc(funcName, ppParams, (const long)sizeof ...(args));
+		return CallAsProc(funcName, ppParams, (const long)sizeof ...(args));
 	}
 
 	template <typename ...Types>
-	inline void CallAsFunc(const wxString& funcName, ibValue& pvarRetValue, Types&&... args) {
+	inline bool CallAsFunc(const wxString& funcName, ibValue& pvarRetValue, Types&&... args) {
 		ibValue* ppParams[] = { &args..., nullptr };
-		CallAsFunc(funcName, pvarRetValue, ppParams, (const long)sizeof ...(args));
+		return CallAsFunc(funcName, pvarRetValue, ppParams, (const long)sizeof ...(args));
 	}
 
 	bool CallAsProc(const wxString& funcName, ibValue** ppParams, const long lSizeArray);

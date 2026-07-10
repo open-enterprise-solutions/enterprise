@@ -1512,7 +1512,7 @@ static void BindWriteValue(ibQueryStatement& stmt, const ibBackendQueryColumn* c
 // IsPrimaryKey, so it both inserts and matches; a register's composite key is several columns).
 // Each column expands + binds through WriteFieldsOf / BindWriteValue (raw direct vs attribute
 // decomposition). One ibQueryStatement, run once.
-bool ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBuilder::WriteKind kind)
+long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBuilder::WriteKind kind)
 	{
 		using WriteKind = ibDataQueryBuilder::WriteKind;
 		const wxString table     = spec.m_queryable->GetQueryTableName();
@@ -1532,8 +1532,8 @@ bool ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 				if (c.m_col == nullptr) { if (!keyColumn.empty()) statement.SetParamString(position++, c.m_value.GetString()); }
 				else BindWriteValue(statement, c.m_col, metaData, c.m_value, position);
 			}
-			try { statement.RunQuery(); return true; }
-			catch (...) { return false; }
+			try { return statement.RunQuery(); }        // rows deleted; 0 = nothing matched (under a policy: no access)
+			catch (...) { return -1; }
 		}
 
 		// INSERT / UPSERT — columns = every SetValue() assignment; UPSERT matches the IsPrimaryKey ones.
@@ -1560,8 +1560,8 @@ bool ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 		for (const auto& wv : *spec.m_writeValues)
 			BindWriteValue(statement, wv.first, metaData, wv.second, position);
 
-		try { statement.RunQuery(); return true; }
-		catch (...) { return false; }
+		try { return statement.RunQuery(); }        // rows inserted / upserted
+		catch (...) { return -1; }
 	}
 
 // Generate L2 by substituting names — all read from the spec; Build() is connection-free.

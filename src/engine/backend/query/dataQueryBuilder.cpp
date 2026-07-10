@@ -13,6 +13,7 @@
 #include "queryProvider.h"                                           // ibBackendQueryProvider abstraction (NO L2 — the door runs through it)
 #include "backend/session/session.h"                                 // ibSession::Current()->Holder()
 #include "backend/guid.h"                                            // ibGuid -> wxString (WhereKey / WhereKeyIn)
+#include "backend/backend_exception.h"                               // ibBackendAccessException (write-deny on 0 rows)
 
 // NOTE: this TU intentionally includes NO L2 (databaseQueryBuilder.h) and NO
 // field-machinery (metaAttributeObject.h) — the door speaks columns + the provider
@@ -520,7 +521,7 @@ bool ibDataQueryBuilder::Insert() const
 		m_policy->ApplyWriteAccess(guarded, wxT("Write"));
 		return guarded.Insert();
 	}
-	return ibQueryComposer::ExecuteWrite(BuildSpec(), WriteKind::Insert);
+	return ibQueryComposer::ExecuteWrite(BuildSpec(), WriteKind::Insert) >= 0;   // no WHERE -> no 0-row gate
 }
 
 bool ibDataQueryBuilder::Upsert() const
@@ -531,7 +532,7 @@ bool ibDataQueryBuilder::Upsert() const
 		m_policy->ApplyWriteAccess(guarded, wxT("Write"));
 		return guarded.Upsert();
 	}
-	return ibQueryComposer::ExecuteWrite(BuildSpec(), WriteKind::Upsert);
+	return ibQueryComposer::ExecuteWrite(BuildSpec(), WriteKind::Upsert) >= 0;
 }
 
 bool ibDataQueryBuilder::Delete() const
@@ -540,7 +541,14 @@ bool ibDataQueryBuilder::Delete() const
 		ibDataQueryBuilder guarded(*this);
 		guarded.m_policy = nullptr;
 		m_policy->ApplyWriteAccess(guarded, wxT("Delete"));
-		return guarded.Delete();
+		// Policy active: the restricted DELETE folds the RLS Where into its conditions. If it matches
+		// 0 rows, the row is not one we may touch (RLS filtered it out) -> ACCESS DENIED. No extra
+		// existence query — 0 affected UNDER A POLICY is the signal (fail-closed, mirrors the read door).
+		// -1 = the write itself threw (a DB error, not a denial) -> propagate as failure, not a deny.
+		const long affected = ibQueryComposer::ExecuteWrite(guarded.BuildSpec(), WriteKind::Delete);
+		if (affected == 0)
+			ibBackendAccessException::Error();
+		return affected > 0;
 	}
-	return ibQueryComposer::ExecuteWrite(BuildSpec(), WriteKind::Delete);
+	return ibQueryComposer::ExecuteWrite(BuildSpec(), WriteKind::Delete) >= 0;
 }

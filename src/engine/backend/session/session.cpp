@@ -73,6 +73,14 @@ public:
 	void ApplyWriteAccess(ibDataQueryBuilder& query, const wxString& operation) const override { Apply(query, operation); }
 
 private:
+	// Outcome of running ONE role's OnAccess* handler. The door owns the safe default (fail-closed),
+	// NOT the module's error handling: a handler that does not explicitly signal success is DENIED.
+	enum class RoleOutcome {
+		NoHandler,   // CallAsFunc found no such handler -> this role imposes no restriction -> ALLOW
+		Failed,      // handler threw / swallowed / did not set Allowed=True -> DENY (fail-closed)
+		Succeeded,   // handler set Allowed=True -> trust what it folded (restriction or full-allow)
+	};
+
 	// Tier 0: full-access user -> skip. Otherwise restrict the query's PRIMARY source. The
 	// restriction is re-woven on EVERY query (NO cache): the role module runs each time, reading
 	// the CURRENT settings / flags, so a changed constant sends the module down a different branch
@@ -93,21 +101,21 @@ private:
 		ApplyToSource(query, primary, operation);
 	}
 
-	// One table, EVERY query (no cache — real-time). We hand the module the SOURCE as a queryable —
-	// it BRANCHES on its type ("is this Document Поступление?") and CHAINS off it (Источник.Join(…)).
-	// RLS is a RESTRICTION, not a gate: a role's module returns its restricted-source chain to narrow
-	// access (we read the query FROM it), or nothing to leave the role alone. No booleans, no throw.
-	// Graft = the module folds Join/Where STRAIGHT INTO this query via a base ibValueQueryDecorator we
-	// hand it over &query — ONE builder, no subquery wrap, no copy-merge. The real source stays the
-	// query's From, so downstream projections / filters see its columns already narrowed, the query
-	// still PAGES and PUSHES DOWN, and register aggregates auto-restrict. The join lands DB-side; the DB
-	// filters the rows — the module runs ONCE per query to BUILD the join (breakpointable), NEVER per row.
-	// Multi-role = OR: one role folds straight in; several roles' restrictions are OR-combined into the
-	// main query (a user sees a row allowed by ANY of their roles). A WHERE-only role contributes its
-	// predicate; a JOIN-based role is reduced by materialising the source keys it admits into `key = v …
-	// OR` (the SQL IR has no IN-subquery). Real source stays -> the query still pages.
-	// TODO(perf): the module is a per-query template — JIT-compile it (hot path) so the Runtime
-	// digests it fast; do NOT cache its RESULT (that freezes it and breaks real-time).
+	// One table, EVERY query (no cache — real-time). The module gets the SOURCE as a base decorator over
+	// `target`; its Source.Join(…) / Source.Where(…) (or the `restrict` keyword) fold the restriction
+	// STRAIGHT into `target` as a SIDE EFFECT — one builder, no subquery wrap. The real source stays the
+	// query's From, so the query still PAGES and PUSHES DOWN and register aggregates auto-restrict. The
+	// module runs ONCE per query to BUILD the join (breakpointable), NEVER per row.
+	//
+	// FAIL-CLOSED: the door owns the safe default, NOT the module's error handling. The handler must set
+	// its by-ref `Allowed` arg to True to be trusted; if it does not (fell through, swallowed its own
+	// exception, or Allowed=False) OR it throws, the role FAILED -> DENY. A handler that is ABSENT
+	// (CallAsFunc returns false) is different — that role simply imposes no restriction -> ALLOW
+	// (migration-safe). A mistake thus over-restricts (visible), never exposes.
+	// Multi-role = OR (a user sees a row allowed by ANY role): a role granting full access (no handler, or
+	// succeeded with no restriction) opens the whole OR; a restricting role contributes its predicate; a
+	// FAILED role contributes NOTHING (does not widen); EVERY role failing -> the door denies outright.
+	// TODO(perf): the module is a per-query template — JIT-compile it (hot path); do NOT cache its RESULT.
 	void ApplyToSource(ibDataQueryBuilder& query, const ibBackendQueryable* source,
 	                   const wxString& operation) const
 	{
@@ -120,47 +128,72 @@ private:
 
 		// The restricting roles' module procUnits were resolved ONCE in the ctor (post-compile, pre-run)
 		// and cached for the session's life; Apply already returned when the list is empty, so at least one
-		// role restricts here. DEFAULT = ALLOW: a hard deny is just a restriction that admits no rows.
+		// role restricts here.
 		const std::vector<std::shared_ptr<ibProcUnit>>& procs = m_roleProcs;
 
-		// Run one role's handler with a base decorator over `target` — its Source.Join(…) / Source.Where(…)
-		// fold the restriction straight into `target` (Source FIRST — the decorator; then Operation).
-		const auto runRole = [&](const std::shared_ptr<ibProcUnit>& proc, ibDataQueryBuilder& target) {
+		// Run one role's handler over a base decorator on `target`. The decorator folds Join/Where into
+		// `target` as a SIDE EFFECT; the handler signals its verdict by setting the by-ref `Allowed` arg to
+		// True. Args (by-ref): Source (the decorator), Operation, Allowed (default False = deny).
+		const auto runRole = [&](const std::shared_ptr<ibProcUnit>& proc, ibDataQueryBuilder& target) -> RoleOutcome {
 			ibValue src(new ibValueQueryDecorator(&target, source, sourceName));
 			ibValue op(operation);
-			ibValue result;
-			proc->CallAsFunc(handler, result, src, op);   // runs EACH query -> current settings / flags (result unused)
+			ibValue allowed(false);            // the handler's VERDICT — a by-ref out-param (the OES idiom, like
+			                                   // BeforeOpen's `Cancel`); default DENY, the handler sets it True.
+			                                   // A grant-flag is more informative than a deny/cancel one — the
+			                                   // positive `Allowed = True` says exactly what happened.
+			try {
+				// CallAsProc (comma-separated args) returns TRUE only if the procedure was FOUND and RAN; it
+				// returns FALSE — WITHOUT throwing and WITHOUT running anything — when there is no such handler.
+				// So absence is the bool, not an exception: no handler -> this role imposes no restriction ->
+				// ALLOW. Only a PRESENT handler is held to the fail-closed verdict below.
+				if (!proc->CallAsProc(handler, src, op, allowed))
+					return RoleOutcome::NoHandler;
+			}
+			catch (const ibBackendException&) {
+				return RoleOutcome::Failed;    // the handler body threw (e.g. "cannot be lowered") -> deny
+			}
+			return (allowed.GetType() == ibValueTypes::TYPE_BOOLEAN && allowed.GetBoolean())
+				? RoleOutcome::Succeeded
+				: RoleOutcome::Failed;         // ran but did not grant (swallowed / forgot / Allowed=False) -> deny
 		};
 
 		if (procs.size() == 1) {
-			// ONE restricting role — fold straight into the query (real source: pages + pushes down).
-			runRole(procs.front(), query);
+			// ONE restricting role — folds straight into the query (real source: pages + pushes down).
+			switch (runRole(procs.front(), query)) {
+			case RoleOutcome::Failed:    ibBackendAccessException::Error();  // loud fail-closed deny
+			case RoleOutcome::NoHandler:                                     // no restriction -> allow
+			case RoleOutcome::Succeeded: return;                            // fold (if any) already applied
+			}
 			return;
 		}
 
 		// SEVERAL restricting roles — a user gains access via ANY of them, so their restrictions OR (not
-		// AND). Each role folds into a per-role scratch; we OR the roles' restrictions into the main query,
-		// keeping the real source (still pages). A WHERE-only role contributes its predicate directly; a
+		// AND). Each role folds into a per-role scratch; we OR the succeeding roles' restrictions into the
+		// main query, keeping the real source (still pages). A WHERE-only role contributes its predicate; a
 		// role that JOINs a table is reduced by MATERIALISING the source keys it admits into `key = v … OR`
-		// (the SQL IR has no IN-subquery, so we run the join once and fold its admitted keys).
+		// (the SQL IR has no IN-subquery). A FAILED role contributes nothing (does not widen the OR).
 		std::vector<ibQueryPredicatePtr> rolePredicates;
 		for (const std::shared_ptr<ibProcUnit>& proc : procs) {
 			ibDataQueryBuilder scratch;
 			scratch.From(source);
 			scratch.WithAccessPolicy(nullptr);            // trusted: the scratch is only mined for its predicate
-			runRole(proc, scratch);
+			const RoleOutcome outcome = runRole(proc, scratch);
 
+			if (outcome == RoleOutcome::NoHandler)
+				return;   // this role imposes no row-restriction -> grants full access -> the OR is unrestricted
+			if (outcome == RoleOutcome::Failed)
+				continue; // fail-closed: a failed role admits no rows -> contributes NOTHING to the OR
+
+			// Succeeded — fold its restriction into the OR.
 			std::vector<const ibBackendQueryable*> scratchSources;
 			scratch.GetSources(scratchSources);
 			if (scratchSources.size() > 1) {
 				// JOIN-based role — a join can't be OR-folded as SQL, so MATERIALISE the rows it admits:
 				// project the source key of the joined result and OR-fold `key = v` over those keys (mirrors
-				// the query language's `key IN (subquery)` lowering). The main source stays real -> pages.
+				// the query language's `key IN (subquery)` lowering). No key to reduce onto -> fail closed.
 				const std::vector<const ibBackendQueryColumn*> keyCols = source->GetPrimaryKeyColumns();
-				if (keyCols.empty() || keyCols.front() == nullptr) {   // no key to reduce onto -> fail closed
-					for (const std::shared_ptr<ibProcUnit>& p : procs) runRole(p, query);
-					return;
-				}
+				if (keyCols.empty() || keyCols.front() == nullptr)
+					ibBackendAccessException::Error();
 				const ibBackendQueryColumn* keyCol = keyCols.front();
 				scratch.Select(keyCol, wxT("v"));
 				ibDataQueryResult r = scratch.Execute(ibReadPageRequest{});
@@ -179,15 +212,17 @@ private:
 			}
 			ibQueryPredicatePtr pred = scratch.GetWherePredicate();
 			if (!pred)
-				return;   // this role added NO Join and NO Where -> it grants FULL access -> the OR is unrestricted
+				return;   // succeeded with NO Join and NO Where -> grants FULL access -> the OR is unrestricted
 			rolePredicates.push_back(pred);
 		}
-		if (!rolePredicates.empty()) {
-			ibQueryPredicatePtr orPred = rolePredicates.front();
-			for (size_t i = 1; i < rolePredicates.size(); ++i)
-				orPred = ibQueryPredicate::Compose(ibQueryPredicateKind::Or, orPred, rolePredicates[i]);
-			query.Where(orPred);                          // (role1 WHERE) OR (role2 WHERE) OR …
-		}
+
+		if (rolePredicates.empty())
+			ibBackendAccessException::Error();            // every role FAILED -> loud fail-closed (nothing to OR)
+
+		ibQueryPredicatePtr orPred = rolePredicates.front();
+		for (size_t i = 1; i < rolePredicates.size(); ++i)
+			orPred = ibQueryPredicate::Compose(ibQueryPredicateKind::Or, orPred, rolePredicates[i]);
+		query.Where(orPred);                              // (role1 WHERE) OR (role2 WHERE) OR …
 	}
 
 	ibSession*        m_session;

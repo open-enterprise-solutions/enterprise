@@ -51,9 +51,12 @@ public:
 	// queryable's uniqueness key — GetPrimaryKeyColumns); DELETE by the Where() conditions
 	// (a null-col condition keys off the uuid identity column). Only the DB-table provider
 	// implements it; computed/temp is read-only.
-	virtual bool ExecuteWrite(const ibDataQuerySpec& /*spec*/, ibDataQueryBuilder::WriteKind /*kind*/)
+	// Returns the number of rows written / deleted (>= 0), or -1 when the source is not writable
+	// (computed / temp) or the write threw. A restricted DELETE that matches 0 rows returns 0 — the
+	// caller reads that (under an active policy) as "no accessible row -> access denied".
+	virtual long ExecuteWrite(const ibDataQuerySpec& /*spec*/, ibDataQueryBuilder::WriteKind /*kind*/)
 	{
-		return false;
+		return -1;
 	}
 };
 
@@ -164,7 +167,7 @@ public:
 	// Evaluate a computed output column (Column / Const / Arith / Case) against one composed row — the
 	// per-row eval for a computed column over a JOIN (single source pushes it to SQL). Pure — unit-testable.
 	static ibValue           EvalColumnExpr(const ibQueryColumnExpr* expr, const ibQueryRamTable& table, long row);
-	static bool ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBuilder::WriteKind kind);
+	static long ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBuilder::WriteKind kind);   // rows affected; -1 = error
 };
 
 #endif

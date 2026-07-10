@@ -12,13 +12,16 @@
 ibValueMetaObjectRole::ibValueMetaObjectRole(const wxString& name, const wxString& synonym, const wxString& comment) :
 	ibValueMetaObject(name, synonym, comment)
 {
-	// RLS contract: OnAccessRead / OnAccessWrite are FUNCTIONS that return the RESTRICTED source —
-	// From(Source).Join(ACL).Where(…) — to narrow access, or nothing to leave this role alone. RLS is
-	// a RESTRICTION, not a boolean gate (no True / False; a hard deny is a restriction that admits no
-	// rows). Source (FIRST arg) is the source as a QUERYABLE — the module branches on its type and
-	// chains off it; Operation is a per-type string ("Read" / "Post" / "Delete" / …).
-	(*m_propertyRoleModule)->SetDefaultFunction(wxT("OnAccessRead"),  { wxT("Source"), wxT("Operation") });
-	(*m_propertyRoleModule)->SetDefaultFunction(wxT("OnAccessWrite"), { wxT("Source"), wxT("Operation") });
+	// RLS contract: OnAccessRead / OnAccessWrite are PROCEDURES (the OES idiom — a verdict is returned via
+	// a by-ref out-param, like BeforeOpen's `Cancel`, not via a Function return). They FOLD a restriction
+	// into `Source` — Source.Where(…) / Source.Join(…) or the `restrict` keyword, a SIDE EFFECT on the
+	// source — and then set the by-ref `Allowed` param to True to grant access under that restriction.
+	// FAIL-CLOSED at the door: if the handler does NOT set Allowed = True (it fell through, swallowed an
+	// exception, or set False), the query is DENIED — a mistake over-restricts (visible), never exposes. A
+	// role with NO handler leaves this source alone (allow). Source (FIRST) is the source as a QUERYABLE;
+	// Operation is a per-type string ("Read" / "Post" / "Delete" / …); Allowed (THIRD, by-ref) = the verdict.
+	(*m_propertyRoleModule)->SetDefaultProcedure(wxT("OnAccessRead"),  ibContentHelper::eProcedureHelper, { wxT("Source"), wxT("Operation"), wxT("Allowed") });
+	(*m_propertyRoleModule)->SetDefaultProcedure(wxT("OnAccessWrite"), ibContentHelper::eProcedureHelper, { wxT("Source"), wxT("Operation"), wxT("Allowed") });
 }
 
 //***********************************************************************
