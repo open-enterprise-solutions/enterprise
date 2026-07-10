@@ -1633,6 +1633,16 @@ protected:
 protected:
 	virtual void PrepareEmptyObject();
 	virtual void PrepareEmptyObject(const ibValueRecordDataObjectRef* source);
+
+	// Mirror the row's DataVersion (held in the DataVersion attribute slot)
+	// into m_loadedDataVersion. Called at the ONLY two points where the
+	// in-memory marker legitimately equals the committed DB row: after a
+	// successful ReadData, and after CommitWriteScope's durable commit. The
+	// bump in LockAndCheckDataVersion deliberately does NOT advance the
+	// marker — a rolled-back Write (RLS deny, SaveData failure, BeforeWrite/
+	// OnWrite cancel) must leave it matching the unchanged row so the next
+	// Save retries instead of raising a false "changed by another user".
+	void CaptureLoadedDataVersion();
 protected:
 
 	friend class ibValueTabularSectionDataObjectRef;

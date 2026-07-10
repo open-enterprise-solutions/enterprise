@@ -27,7 +27,7 @@
 >
 > | Concern | Symbol | File |
 > |---|---|---|
-> | Version capture on read | `m_loadedDataVersion` set in `ReadData` | `commonObjectRefQuery.cpp:68` |
+> | Version capture (read + post-commit) | `CaptureLoadedDataVersion()` — sets `m_loadedDataVersion`; called from `ReadData` and `CommitWriteScope` (never from the bump) | `commonObjectRefQuery.cpp` |
 > | Lock + version check | `ibValueRecordDataObjectRef::LockAndCheckDataVersion(bump)` | `commonObjectRefQuery.cpp:101` |
 > | Register key lock | `ibValueRecordSetObject::LockByKeys()` | `commonObjectRecordSetQuery.cpp:26` |
 > | Constant singleton lock | inline `ibQueryIR{ m_lockForUpdate }` | `constantObject.cpp:349` |
@@ -172,7 +172,7 @@ if (!m_newObject && !m_loadedDataVersion.IsEmpty()) {
 if (bump) {                                  // stamp the row for SaveData's UPSERT
     const wxString newStamp = ibDataVersion::NewStamp();
     SetValueByMetaID(dvId, ibValue(newStamp));
-    m_loadedDataVersion = newStamp;          // back-to-back Write stays consistent
+    // NOTE: m_loadedDataVersion is NOT advanced here — see below.
 }
 ```
 
@@ -180,8 +180,29 @@ The selection runs on the session holder — the SAME connection as the
 open `BeginWriteScope` TX — so the row lock is held until commit.
 Delete calls `LockAndCheckDataVersion(/*bump=*/false)` (the row is
 going away). There is no separate `m_currentDataVersion` member — the
-bumped value is written straight into the attribute slot and mirrored
-into `m_loadedDataVersion`.
+bumped value is written straight into the attribute slot.
+
+**Marker advances only on commit (rollback-safe).** The bump writes the
+new stamp into the DataVersion *attribute* so SaveData's UPSERT persists
+it, but it deliberately does **not** touch `m_loadedDataVersion`. That
+marker — the "version I loaded from the DB" — is advanced at exactly one
+point: `CommitWriteScope`, after `SafeCommitTransaction()` makes the row
+durable (via `CaptureLoadedDataVersion()`, which mirrors the committed
+attribute value back into the marker). ReadData uses the same helper.
+
+Why this matters: a Write can fail *after* the bump — RLS write-deny
+(guarded UPDATE affects 0 rows → throw), a `SaveData` error, or a
+`BeforeWrite`/`OnWrite` script cancel — and the surrounding
+`ibConnectionScope` rolls the TX back. The DB row keeps its old version.
+If the bump had advanced `m_loadedDataVersion` (as it once did), the next
+Save on the same still-open form would re-read the unchanged DB version,
+compare it against the *new* marker, and raise a false *"changed by
+another user, reopen the form"* — even though nothing was ever committed.
+Advancing the marker only on durable commit keeps it equal to the row's
+last committed version, so a rolled-back Write leaves it retry-clean. The
+back-to-back script case (`obj.Write(); obj.Write();`) still stays
+consistent: the first Write's commit syncs the marker before the second
+Write's check runs.
 
 NOWAIT vs wait mode: a non-blocking acquire sets `m_lockNoWait`
 (→ ` NOWAIT` on PG/MySQL; FB rides `isc_tpb_nowait`). Default is wait

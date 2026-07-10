@@ -70,14 +70,8 @@ bool ibValueRecordDataObjectRef::ReadData(const ibGuid& srcGuid)
 	// version to detect concurrent updates. New objects (no row yet)
 	// leave m_loadedDataVersion empty so the check is skipped on first
 	// Save. See docs/record-locks.md.
-	if (succes && !m_newObject) {
-		const auto dvAttr = m_metaObject->GetDataVersion();
-		if (dvAttr != nullptr) {
-			const auto it = m_listObjectValue.find(dvAttr->GetMetaID());
-			if (it != m_listObjectValue.end())
-				m_loadedDataVersion = it->second.GetString();
-		}
-	}
+	if (succes && !m_newObject)
+		CaptureLoadedDataVersion();
 	return succes;
 }
 
@@ -154,18 +148,32 @@ bool ibValueRecordDataObjectRef::LockAndCheckDataVersion(bool bump)
 	}
 
 	// Bump for Write paths so SaveData's UPSERT stamps the row with a
-	// fresh version. Skipped on Delete (the row is going away).
+	// fresh version. Skipped on Delete (the row is going away). The new
+	// stamp goes into the ATTRIBUTE slot only — m_loadedDataVersion is
+	// advanced later by CommitWriteScope, once the row is durable. If we
+	// advanced the marker here and the Write then rolled back (RLS deny,
+	// SaveData failure, BeforeWrite/OnWrite cancel), the DB row would keep
+	// its old version while the marker held the new one, so the very next
+	// Save would read a mismatch and wrongly demand "reopen the form".
+	// The back-to-back script-Write case (obj.Write(); obj.Write();) stays
+	// consistent because the first Write's commit syncs the marker before
+	// the second Write's check runs.
 	if (bump) {
 		const wxString newStamp = ibDataVersion::NewStamp();
 		SetValueByMetaID(dvId, ibValue(newStamp));
-		// Future ReadData→Write cycles on the same in-memory object
-		// (e.g. script that calls Write twice in a row without
-		// reloading) compare against the newly-stamped value, so the
-		// second Write sees consistency.
-		m_loadedDataVersion = newStamp;
 	}
 
 	return true;
+}
+
+void ibValueRecordDataObjectRef::CaptureLoadedDataVersion()
+{
+	const auto dvAttr = m_metaObject != nullptr ? m_metaObject->GetDataVersion() : nullptr;
+	if (dvAttr == nullptr)
+		return;
+	const auto it = m_listObjectValue.find(dvAttr->GetMetaID());
+	if (it != m_listObjectValue.end())
+		m_loadedDataVersion = it->second.GetString();
 }
 
 //----------------------------------------------------------------------
@@ -218,6 +226,14 @@ void ibValueRecordDataObjectRef::CommitWriteScope(ibConnectionScope& scope,
                                                    bool newObject)
 {
 	scope.SafeCommitTransaction();
+
+	// The row is durable — NOW advance the in-memory version marker to the
+	// stamp we just committed (LockAndCheckDataVersion wrote it into the
+	// DataVersion attribute before SaveData). This is the ONLY place the
+	// marker moves forward, so a failed/rolled-back write leaves it matching
+	// the unchanged DB row and the next Save retries cleanly instead of
+	// demanding a form reopen. See docs/record-locks.md.
+	CaptureLoadedDataVersion();
 
 	// Audit AFTER SafeCommitTransaction — the row is durable. If the
 	// commit threw, RAII rollback fires and we never get here. Source
