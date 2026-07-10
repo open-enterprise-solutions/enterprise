@@ -166,6 +166,11 @@ struct ibDialectDictionary
 	wxString m_rollupPrefix = wxT("ROLLUP(");
 	wxString m_rollupSuffix = wxT(")");
 
+	// A source-less SELECT (SELECT <consts> with no FROM — the derived one-row VALUES relation the
+	// write-time WITH CHECK builds). Most engines allow a bare FROM-less SELECT (empty here); Firebird
+	// requires a one-row dummy table -> "RDB$DATABASE". Set per driver; empty = emit no FROM at all.
+	wxString m_selectFromDual = wxEmptyString;
+
 	// --- behaviour slots (the small tail data cannot express) -------------
 	// Reserved for emulation rewrites (FULL OUTER -> LEFT UNION RIGHT, window ->
 	// correlated subquery) as strategy callbacks, so L2 still reads only the dictionary.

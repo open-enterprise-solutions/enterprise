@@ -51,6 +51,8 @@ struct ibQuerySpan
 	int m_col  = 0;
 };
 
+struct ibQueryRel;   // fwd — the EXISTS subquery source (relation tree, defined below)
+
 enum class ibQueryExprKind
 {
 	Column,   // a physical column reference (m_name)
@@ -62,7 +64,9 @@ enum class ibQueryExprKind
 	In,       // m_lhs [NOT m_negated] IN ( m_args... )
 	IsNull,   // m_lhs IS [NOT m_negated] NULL
 	Not,      // NOT m_lhs
-	Cast      // CAST( m_lhs AS <m_castType, spelled per-DBMS via the dialect TYPE-MAP> ) — pin an expr's type
+	Cast,     // CAST( m_lhs AS <m_castType, spelled per-DBMS via the dialect TYPE-MAP> ) — pin an expr's type
+	Exists    // [NOT m_negated] EXISTS ( m_subquery ) — a CORRELATED subquery test; the write-path lowering of a
+	          // dot-walk RLS predicate (a write cannot JOIN, so the reference path rides as a correlated EXISTS)
 };
 
 enum class ibQueryBinOp
@@ -115,8 +119,12 @@ struct ibQueryExpr
 	// (ibQueryRenderer::MapType) — the IR bakes no SQL type string, so it stays dialect-neutral.
 	ibColumnType m_castType;
 
-	// In / IsNull: negation (NOT IN / IS NOT NULL).
+	// In / IsNull / Exists: negation (NOT IN / IS NOT NULL / NOT EXISTS).
 	bool m_negated = false;
+
+	// Exists: the correlated subquery. A shared_ptr to the (fwd-declared) relation tree — the subquery
+	// references the OUTER write row's columns, so it renders as a self-contained `EXISTS ( SELECT … )`.
+	std::shared_ptr<ibQueryRel> m_subquery;
 
 	ibQuerySpan m_span;
 
@@ -448,6 +456,17 @@ inline ibQueryRelPtr ibAggregate(ibQueryRelPtr input,
 	r->m_having     = std::move(having);
 	r->m_rollup     = rollup;
 	return r;
+}
+
+// EXISTS ( <subquery> ) as an ibQueryExpr (not a relation). The write path lowers a dot-walk RLS predicate
+// to this: the subquery scans the referenced target(s) and correlates back to the OUTER write row's
+// reference column (a write cannot JOIN). `negated` -> NOT EXISTS. Defined here — needs ibQueryRelPtr.
+inline ibQueryExprPtr ibExists(ibQueryRelPtr subquery, bool negated = false)
+{
+	auto e = std::make_shared<ibQueryExpr>(ibQueryExprKind::Exists);
+	e->m_subquery = std::move(subquery);
+	e->m_negated  = negated;
+	return e;
 }
 
 struct ibQueryIR

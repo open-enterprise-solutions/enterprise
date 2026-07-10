@@ -96,13 +96,16 @@ bool ibValueTabularSectionDataObjectRef::SaveData()
 	if (!ibValueTabularSectionDataObjectRef::DeleteData())
 		return false;
 
-	// Tabular section = plain INSERT per line (DeleteData above cleared the old rows) through
-	// the L3 write door. uuid is the parent's row-key — a RAW primary string column (no
-	// translation); the attributes are the metadata data columns. No fields, no positions.
+	// Per line: ALWAYS a plain INSERT. DeleteData above wiped any old rows for an EXISTING object (and was a
+	// no-op for a new one), so every line here is a fresh row — never an in-place update. A native UPSERT is
+	// both wrong and impossible here: a tabular row has NO primary-key column, so MATCHING would be empty
+	// (`MATCHING ()` -> FB -104), and post-wipe there is nothing to match anyway. The owner's write is the
+	// gated event; these lines inherit it (the builder is de-policied). uuid is the parent's raw row-key.
 	ibNumber numberLine = 1;
 	for (long row = 0; row < GetRowCount() && !hasError; row++) {
 		ibDataQueryBuilder q;
-		q.From(m_metaTable->GetQueryable())
+		q.WithAccessPolicy(nullptr)
+			.From(m_metaTable->GetQueryable())
 			.SetValue(ibRawDBColumn::String(wxT("uuid")), ibValue(m_objectValue->GetGuid()));
 		for (const auto object : m_metaTable->GetGenericAttributeArrayObject()) {
 			if (!m_metaTable->IsNumberLine(object->GetMetaID())) {
@@ -125,8 +128,12 @@ bool ibValueTabularSectionDataObjectRef::DeleteData()
 	if (m_readOnly || m_objectValue->IsNewObject())
 		return true;
 
-	// DELETE ... WHERE uuid = <parent guid> through the L3 write door (uuid = raw row-key).
+	// DELETE ... WHERE uuid = <parent guid> through the L3 write door (uuid = raw row-key). The tabular
+	// section inherits the owner's access (WithAccessPolicy(nullptr)): the owner's OnAccessWrite already
+	// gated this save, and an EMPTY section legitimately deletes 0 rows — under a policy that 0 is misread
+	// as an access denial (fail-closed), which would wrongly block saving a document that has no lines.
 	ibDataQueryBuilder()
+		.WithAccessPolicy(nullptr)
 		.From(m_metaTable->GetQueryable())
 		.Where(ibRawDBColumn::String(wxT("uuid")), ibValue(m_objectValue->GetGuid()))
 		.Delete();

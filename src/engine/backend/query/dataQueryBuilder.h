@@ -569,11 +569,12 @@ public:
 	//   Delete — DELETE the row(s) WHERE the primary key matches (row-key value / key attrs).
 	bool Insert() const;
 	bool Upsert() const;
+	bool Update() const;
 	bool Delete() const;
 
 	// L3-native write kind — the public surface never names the L2 statement
 	// (ibQueryStatement::Kind is translated to this only inside the .cpp).
-	enum class WriteKind { Insert, Upsert, Delete };
+	enum class WriteKind { Insert, Upsert, Update, Delete };
 
 private:
 	// The ONE point that appends a left-deep JOIN node carrying `on`; the public Join / CrossJoin overloads

@@ -124,8 +124,9 @@ bool ibValueRecordDataObjectRef::LockAndCheckDataVersion(bool bump)
 		// GetResultString(that) failed "field not found" — the provider's attribute assembly is the
 		// only correct read. (docs/record-locks.md)
 		ibDataQueryBuilder q;
-		q.From(m_metaObject->GetQueryable())
-		 .Where(ibRawDBColumn::String(wxT("uuid")), ibValue(wxString(m_objGuid)));
+		q.WithAccessPolicy(nullptr)   // row LOCK + version read is a physical concurrency op, not a user read:
+		 .From(m_metaObject->GetQueryable())   // lock the RAW row regardless of RLS visibility (RLS is enforced by
+		 .Where(ibRawDBColumn::String(wxT("uuid")), ibValue(wxString(m_objGuid)));   // the guarded UPDATE below)
 		ibReadPageRequest page;
 		page.m_count         = 1;
 		page.m_lockForUpdate = true;
@@ -286,8 +287,8 @@ bool ibValueRecordDataObjectRef::SaveData()
 
 	m_objGuid = m_reference_impl->m_guid;
 
-	// UPSERT the main row through the L3 door — BY COLUMN, no statement, no positions visible
-	// here: From(meta) + SetValue(col, value)* + Upsert(). uuid is the row-key — a RAW primary
+	// WRITE the main row through the L3 door — BY COLUMN, no statement, no positions visible
+	// here: From(meta) + SetValue(col, value)* + Insert()/Update(). uuid is the row-key — a RAW primary
 	// string column (the guid bound straight, no translation); the attributes are metadata
 	// columns. The provider decomposes each attribute into its physical columns and binds into
 	// a hidden L2 statement; the per-DBMS UPSERT spelling is closed by the dialect template;
@@ -313,7 +314,11 @@ bool ibValueRecordDataObjectRef::SaveData()
 		}
 		writer.SetValue(object, value);
 	}
-	bool hasError = !writer.Upsert();
+	// The object already knows the event: a NEW object is a CREATE — plain INSERT; an EXISTING object is a
+	// REWRITE — a guarded UPDATE (WHERE key AND the folded RLS predicate), so a write Restrict actually bites
+	// (a plain UPSERT has no WHERE and would ignore the folded predicate). new=true -> Insert, new=false ->
+	// Update; creation and write stay separate events, and the rewrite enforces the row filter.
+	bool hasError = m_newObject ? !writer.Insert() : !writer.Update();
 
 	//table parts
 	if (!hasError) {

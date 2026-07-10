@@ -515,29 +515,53 @@ ibSelectorTree ibDataQueryBuilder::SelectTotals() const
 
 bool ibDataQueryBuilder::Insert() const
 {
+	// CREATE. Under a policy the handler may fold a WITH CHECK predicate (a Restrict on op="Create"); the
+	// provider then inserts the row IFF it satisfies the restriction, so 0 rows affected = the new row is
+	// outside this role's scope -> ACCESS DENIED (fail-closed, like Update/Delete). With NO folded predicate
+	// it is a plain INSERT (always 1 row) -> creation stays unrestricted for that source.
 	if (m_policy != nullptr) {
 		ibDataQueryBuilder guarded(*this);
 		guarded.m_policy = nullptr;
-		m_policy->ApplyWriteAccess(guarded, wxT("Write"));
-		return guarded.Insert();
+		m_policy->ApplyWriteAccess(guarded, wxT("Create"));
+		const long affected = ibQueryComposer::ExecuteWrite(guarded.BuildSpec(), WriteKind::Insert);
+		if (affected == 0)
+			ibBackendAccessException::Error();
+		return affected > 0;
 	}
 	return ibQueryComposer::ExecuteWrite(BuildSpec(), WriteKind::Insert) >= 0;   // no WHERE -> no 0-row gate
 }
 
 bool ibDataQueryBuilder::Upsert() const
 {
+	// UPSERT — a "don't know if it exists" write, kept only for callers that do not (yet) emit an explicit
+	// create-vs-rewrite event (constants). Row-restricted objects / documents / registers use Insert
+	// (create) or Update (rewrite), so this path never carries an RLS predicate to enforce. One native
+	// UPDATE-OR-INSERT statement, closed by the dialect.
 	if (m_policy != nullptr) {
 		ibDataQueryBuilder guarded(*this);
 		guarded.m_policy = nullptr;
 		m_policy->ApplyWriteAccess(guarded, wxT("Write"));
-		// Restricted save: ExecuteWrite runs UPDATE(rls) then INSERT-on-0. -2 = the row exists but the
-		// restriction excludes it (the INSERT hit the unique key) -> access denied.
-		const long affected = ibQueryComposer::ExecuteWrite(guarded.BuildSpec(), WriteKind::Upsert);
-		if (affected == -2)
-			ibBackendAccessException::Error();
-		return affected >= 0;
+		return ibQueryComposer::ExecuteWrite(guarded.BuildSpec(), WriteKind::Upsert) >= 0;
 	}
 	return ibQueryComposer::ExecuteWrite(BuildSpec(), WriteKind::Upsert) >= 0;
+}
+
+bool ibDataQueryBuilder::Update() const
+{
+	// REWRITE of an existing row — ONE guarded UPDATE: SET the columns, WHERE the key AND the folded RLS
+	// predicate. Under a policy 0 rows affected = the row is not one this role may write (the row filter
+	// excluded it) -> ACCESS DENIED (fail-closed, mirrors Delete). This is what makes a write Restrict BITE
+	// on the object main row — a plain UPSERT (UPDATE OR INSERT, no WHERE) folds the predicate but ignores it.
+	if (m_policy != nullptr) {
+		ibDataQueryBuilder guarded(*this);
+		guarded.m_policy = nullptr;
+		m_policy->ApplyWriteAccess(guarded, wxT("Write"));
+		const long affected = ibQueryComposer::ExecuteWrite(guarded.BuildSpec(), WriteKind::Update);
+		if (affected == 0)
+			ibBackendAccessException::Error();
+		return affected > 0;
+	}
+	return ibQueryComposer::ExecuteWrite(BuildSpec(), WriteKind::Update) >= 0;
 }
 
 bool ibDataQueryBuilder::Delete() const

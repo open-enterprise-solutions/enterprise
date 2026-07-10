@@ -558,7 +558,13 @@ wxString ibQueryRenderer::RenderSelect(const ibQueryRel* root)
 		}
 	}
 
-	sql += wxT(" FROM ") + RenderSource(source);
+	// A source-less SELECT (the WITH-CHECK derived one-row VALUES relation: a Project with no input) has
+	// no Scan/Join/Subquery -> `source` stays null. Emit the dialect's dummy table (FB "RDB$DATABASE") or,
+	// where a bare FROM-less SELECT is legal (PG/SQLite/MySQL), no FROM at all.
+	if (source)
+		sql += wxT(" FROM ") + RenderSource(source);
+	else if (!m_dialect.m_selectFromDual.empty())
+		sql += wxT(" FROM ") + m_dialect.m_selectFromDual;
 
 	if (!predicates.empty()) {
 		sql += wxT(" WHERE ");
@@ -708,6 +714,12 @@ wxString ibQueryRenderer::RenderExpr(const ibQueryExprPtr& expr)
 		// Spell the canonical target type through the dialect TYPE-MAP (SQLite date=TEXT, bool=INTEGER,
 		// FB / MySQL DECIMAL widened) — the same speller the DDL path uses. No dialect fork here.
 		return wxT("CAST(") + RenderExpr(expr->m_lhs) + wxT(" AS ") + MapType(expr->m_castType) + wxT(")");
+
+	case ibQueryExprKind::Exists:
+		// A CORRELATED subquery test: the subquery renders its own SELECT (its binds land in placeholder
+		// order right here) and references the outer write row's columns. `[NOT] EXISTS ( … )`.
+		return (expr->m_negated ? wxT("(NOT EXISTS (") : wxT("(EXISTS ("))
+		     + RenderSelect(expr->m_subquery.get()) + wxT("))");
 	}
 
 	return wxString();

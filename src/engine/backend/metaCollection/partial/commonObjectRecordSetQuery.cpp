@@ -36,7 +36,9 @@ bool ibValueRecordSetObject::LockByKeys()
 	// the selection holds the lock. No statement, no SetValueAttribute. (docs/record-locks.md)
 	try {
 		ibDataQueryBuilder q;
-		q.From(m_metaObject->GetQueryable());
+		q.WithAccessPolicy(nullptr);   // a row LOCK is a physical concurrency op, NOT a user read: it must see
+		q.From(m_metaObject->GetQueryable());   // and lock the RAW rows regardless of RLS visibility (like ExistData).
+		                                        // RLS is enforced at the write itself (guarded DELETE/UPDATE + Allowed).
 		bool anyKey = false;
 		for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 			if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
@@ -110,10 +112,14 @@ void ibValueRecordSetObject::CommitRecordSetScope(ibConnectionScope& scope)
 bool ibValueRecordSetObject::ExistData()
 {
 	// Composite-key existence probe through the L3 door: only the BOUND dimensions
-	// constrain (FindKeyValue filter), each decomposed inside L3 across its physical
-	// fields. The FB FIRST / others LIMIT fork and the statement are gone.
+	// constrain (FindKeyValue filter), each decomposed inside L3 across its physical fields.
+	// UNGUARDED (WithAccessPolicy(nullptr)): this decides whether a replace must DELETE the old set, so it
+	// must see the RAW physical rows, not the RLS-filtered view. Otherwise records the role cannot read are
+	// invisible here -> DeleteData is skipped -> the insert DUPLICATES them (or hits a unique key). Seeing
+	// them raw lets DeleteData run -> the guarded DELETE affects 0 -> a clean "cannot delete" access-deny.
 	try {
 		ibDataQueryBuilder q;
+		q.WithAccessPolicy(nullptr);
 		q.From(m_metaObject->GetQueryable());
 		for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 			if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
@@ -135,9 +141,11 @@ bool ibValueRecordSetObject::ExistData(ibNumber& lastNum)
 	// MAX(line number) over the bound composite key, through the L3 door's aggregate terminal —
 	// the DB uses any index on (recorder, line_number) instead of streaming the rowset. Only the
 	// BOUND dimensions constrain (FindKeyValue filter), each decomposed inside L3. No statement.
+	// UNGUARDED like the plain ExistData() above — a raw physical-existence probe for the replace-decision.
 	lastNum = 1;
 	try {
 		ibDataQueryBuilder q;
+		q.WithAccessPolicy(nullptr);
 		q.From(m_metaObject->GetQueryable());
 		for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 			if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
@@ -265,10 +273,10 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 		}
 	}
 
-	// UPSERT each line through the L3 write door. The match keys are the register's identity
-	// columns, AUTO-detected by IsPrimaryKey — recorder + line number for a recorder-based
-	// register, period + dimensions for an information register — so there is no explicit match
-	// list and no FB/PG fork (the dialect closes the UPSERT spelling).
+	// Per line, keyed off the record set's event: a NEW set (not selected) -> plain INSERT (create); an
+	// EXISTING set (selected) -> UPSERT (rewrite event; DeleteData above already wiped it under replace).
+	// m_selected (selected = the set already exists in the DB) picks the event, so create and write stay
+	// distinct — same split as the owning object. Under a policy that DeleteData is the guarded rewrite gate.
 	bool hasError = false;
 
 	for (long row = 0; row < GetRowCount() && !hasError; row++) {
@@ -288,7 +296,7 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 				q.SetValue(object, node->GetTableValue(object->GetMetaID()));
 			}
 		}
-		hasError = !q.Upsert();
+		hasError = m_selected ? !q.Upsert() : !q.Insert();   // selected = exists -> rewrite (Upsert); not selected = new -> create (Insert)
 	}
 
 	if (!hasError && !SaveVirtualTable())

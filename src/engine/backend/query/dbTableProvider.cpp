@@ -16,7 +16,6 @@
 
 #include "backend/databaseLayer/databaseResultSet.h"
 #include "backend/databaseLayer/databaseLayer.h"
-#include "backend/databaseLayer/databaseLayerException.h"          // ibBackendDatabaseException (Constraint = write-deny on restricted save)
 #include "backend/valueInfo.h"                                    // ibReference (physical reference blob, GetQueryTableId source)
 #include "backend/metaData.h"                                     // ibMetaData (threaded through reads/writes)
 #include "backend/system/value/valueType.h"                      // ibValueTypeDescription::AdjustValue (dot-walk typed empty)
@@ -217,17 +216,27 @@ wxString AggregateFnName(ibDataQueryBuilder::AggregateFn fn)
 // when a dot-walk join is present. (Declared here, before the co-located helpers that call it.)
 class ibMetaIRBuilder {
 public:
+	// pathAsExists (WRITE path only): a dot-walk condition (m_path) becomes a correlated EXISTS instead of
+	// being skipped. Reads pre-resolve the path to a JOIN in BuildPageIR, so they leave it false.
 	static ibQueryExprPtr BuildFilterPredicate(const ibBackendQueryable* queryable,
 	                                           const std::vector<ibQueryCondition>& conditions,
-	                                           const wxString& mainQual = wxEmptyString);
+	                                           const wxString& mainQual = wxEmptyString,
+	                                           bool pathAsExists = false);
 	// One door condition -> L2 expr (the per-leaf body shared by the AND-fold above and the tree below).
 	static ibQueryExprPtr BuildConditionExpr(const ibBackendQueryable* queryable,
 	                                         const ibQueryCondition& c,
-	                                         const wxString& mainQual = wxEmptyString);
+	                                         const wxString& mainQual = wxEmptyString,
+	                                         bool pathAsExists = false);
 	// The full boolean WHERE TREE -> L2 expr (And/Or/Not/IsNull; leaves via BuildConditionExpr).
 	static ibQueryExprPtr BuildPredicateExpr(const ibBackendQueryable* queryable,
 	                                         const ibQueryPredicatePtr& predicate,
-	                                         const wxString& mainQual = wxEmptyString);
+	                                         const wxString& mainQual = wxEmptyString,
+	                                         bool pathAsExists = false);
+	// A dot-walk RLS condition on the WRITE path -> a CORRELATED EXISTS (a write cannot JOIN). Scans the
+	// reference-target chain, correlates the first hop back to the outer write row, and folds the leaf.
+	static ibQueryExprPtr BuildDotWalkExists(const ibBackendQueryable* queryable,
+	                                         const ibQueryCondition& c,
+	                                         const wxString& mainQual);
 	// A COMPUTED-COLUMN expression (arithmetic / CASE) -> L2 expr (ibBinOp / ibCase; columns qualified
 	// by mainQual, WHEN predicates via BuildPredicateExpr). For a projected computed column.
 	static ibQueryExprPtr BuildColumnExpr(const ibBackendQueryable* queryable,
@@ -237,7 +246,8 @@ public:
 	static ibQueryExprPtr BuildWhere(const ibBackendQueryable* queryable,
 	                                 const std::vector<ibQueryCondition>& conditions,
 	                                 const ibQueryPredicatePtr& predicate,
-	                                 const wxString& mainQual = wxEmptyString);
+	                                 const wxString& mainQual = wxEmptyString,
+	                                 bool pathAsExists = false);
 	static std::vector<ibQuerySortKey> BuildSortKeys(const ibBackendQueryable* queryable,
 	                                                 const std::vector<ibQuerySortItem>& sorts,
 	                                                 bool reverse,
@@ -542,8 +552,15 @@ ibQueryExprPtr ColocatedWhere(const ibDataQuerySpec& spec, const ColocatedLeaves
 
 ibQueryExprPtr ibMetaIRBuilder::BuildConditionExpr(const ibBackendQueryable* queryable,
                                                    const ibQueryCondition& c,
-                                                   const wxString& mainQual)
+                                                   const wxString& mainQual,
+                                                   bool pathAsExists)
 {
+	// WRITE-path dot-walk: a condition through a reference path (s.Ref.Field) cannot lower to a JOIN in a
+	// DELETE / UPDATE / INSERT WHERE, so it rides as a CORRELATED EXISTS. Reads leave pathAsExists false —
+	// they pre-resolve the path to a JOIN in BuildPageIR and pass the already-qualified leaf here.
+	if (pathAsExists && !c.m_path.empty())
+		return BuildDotWalkExists(queryable, c, mainQual);
+
 	const ibQueryBinOp op = FilterOpToBinOp(c.m_op);   // ONE op (m_comparison + m_explicitOp collapsed into m_op)
 
 	if (c.m_expr) {
@@ -588,42 +605,44 @@ ibQueryExprPtr ibMetaIRBuilder::BuildConditionExpr(const ibBackendQueryable* que
 
 ibQueryExprPtr ibMetaIRBuilder::BuildFilterPredicate(const ibBackendQueryable* queryable,
                                                      const std::vector<ibQueryCondition>& conditions,
-                                                     const wxString& mainQual)
+                                                     const wxString& mainQual,
+                                                     bool pathAsExists)
 {
 	ibQueryExprPtr pred;
 	for (const ibQueryCondition& c : conditions) {
-		if (!c.m_path.empty()) continue;   // dot-walk filter — built inline by BuildPageIR (qualified by its join alias)
-		pred = AndFold(pred, BuildConditionExpr(queryable, c, mainQual));
+		if (!c.m_path.empty() && !pathAsExists) continue;   // read: dot-walk built inline by BuildPageIR (join alias)
+		pred = AndFold(pred, BuildConditionExpr(queryable, c, mainQual, pathAsExists));
 	}
 	return pred;
 }
 
 ibQueryExprPtr ibMetaIRBuilder::BuildPredicateExpr(const ibBackendQueryable* queryable,
                                                    const ibQueryPredicatePtr& predicate,
-                                                   const wxString& mainQual)
+                                                   const wxString& mainQual,
+                                                   bool pathAsExists)
 {
 	if (!predicate)
 		return nullptr;
 
 	switch (predicate->m_kind) {
 	case ibQueryPredicateKind::Leaf:
-		return BuildConditionExpr(queryable, predicate->m_leaf, mainQual);
+		return BuildConditionExpr(queryable, predicate->m_leaf, mainQual, pathAsExists);
 
 	case ibQueryPredicateKind::And: {
 		ibQueryExprPtr acc;
 		for (const ibQueryPredicatePtr& child : predicate->m_children)
-			acc = AndFold(acc, BuildPredicateExpr(queryable, child, mainQual));
+			acc = AndFold(acc, BuildPredicateExpr(queryable, child, mainQual, pathAsExists));
 		return acc;
 	}
 	case ibQueryPredicateKind::Or: {
 		ibQueryExprPtr acc;
 		for (const ibQueryPredicatePtr& child : predicate->m_children)
-			acc = OrFold(acc, BuildPredicateExpr(queryable, child, mainQual));
+			acc = OrFold(acc, BuildPredicateExpr(queryable, child, mainQual, pathAsExists));
 		return acc;
 	}
 	case ibQueryPredicateKind::Not: {
 		ibQueryExprPtr inner = predicate->m_children.empty()
-			? nullptr : BuildPredicateExpr(queryable, predicate->m_children.front(), mainQual);
+			? nullptr : BuildPredicateExpr(queryable, predicate->m_children.front(), mainQual, pathAsExists);
 		return inner ? ibNot(inner) : nullptr;
 	}
 	case ibQueryPredicateKind::IsNull: {
@@ -647,10 +666,67 @@ ibQueryExprPtr ibMetaIRBuilder::BuildPredicateExpr(const ibBackendQueryable* que
 ibQueryExprPtr ibMetaIRBuilder::BuildWhere(const ibBackendQueryable* queryable,
                                            const std::vector<ibQueryCondition>& conditions,
                                            const ibQueryPredicatePtr& predicate,
-                                           const wxString& mainQual)
+                                           const wxString& mainQual,
+                                           bool pathAsExists)
 {
-	return AndFold(BuildFilterPredicate(queryable, conditions, mainQual),
-	               BuildPredicateExpr(queryable, predicate, mainQual));
+	return AndFold(BuildFilterPredicate(queryable, conditions, mainQual, pathAsExists),
+	               BuildPredicateExpr(queryable, predicate, mainQual, pathAsExists));
+}
+
+// A dot-walk RLS condition on the WRITE path -> a CORRELATED EXISTS (a write cannot JOIN). c.m_path is the
+// reference chain [ref0, ref1, …, leafCol]: ref0 is a reference column on the outer (write) source, each
+// further segment a reference on the prior target, and the last element the leaf attribute being compared.
+//   EXISTS ( SELECT 1 FROM <t0> ex0 [JOIN <t1> ex1 ON ex0.<ref1> = ex1.<selfref> …]
+//            WHERE ex0.<selfref> = <outer>.<ref0>            -- correlation back to the write row
+//              AND <leaf condition on the last target> )
+// Single-hop (s.Ref.Field) is the common case: one Scan, one correlation, the leaf. A path that cannot
+// resolve a reference target / self-reference field THROWS (dropping it would widen the filter -> wrong rows).
+ibQueryExprPtr ibMetaIRBuilder::BuildDotWalkExists(const ibBackendQueryable* queryable,
+                                                   const ibQueryCondition& c,
+                                                   const wxString& mainQual)
+{
+	const std::vector<const ibBackendQueryColumn*>& path = c.m_path;
+	if (path.size() < 2)
+		throw std::logic_error("BuildDotWalkExists: a dot-walk write condition needs at least ref + leaf");
+
+	// First hop: ref0 on the outer source -> target t0, correlated to the outer write row.
+	const ibBackendQueryColumn* ref0 = queryable->ResolveColumnByName(path[0]->GetName());
+	const ibBackendQueryable*   t0   = ref0 ? queryable->ResolveReferenceTarget(ref0) : nullptr;
+	if (ref0 == nullptr || t0 == nullptr || SelfReferenceField(t0).empty())
+		throw std::logic_error("BuildDotWalkExists: unresolved first reference hop on the write path");
+
+	ibQueryRelPtr    from  = ibScan(t0->GetQueryTableName(), wxT("ex0"));
+	const ibBackendQueryable* owner = t0;
+	wxString ownerAlias = wxT("ex0");
+
+	// Middle hops: each further reference joins its target into the subquery.
+	for (size_t i = 1; i + 1 < path.size(); ++i) {
+		const ibBackendQueryColumn* refI = owner->ResolveColumnByName(path[i]->GetName());
+		const ibBackendQueryable*   tI   = refI ? owner->ResolveReferenceTarget(refI) : nullptr;
+		if (refI == nullptr || tI == nullptr || SelfReferenceField(tI).empty())
+			throw std::logic_error("BuildDotWalkExists: unresolved reference hop on the write path (composite mid-path not supported)");
+		const wxString alias = wxString::Format(wxT("ex%d"), static_cast<int>(i));
+		from = ibJoin(from, ibScan(tI->GetQueryTableName(), alias),
+		              ibBinOp(ibQueryBinOp::Eq, ibColQ(ownerAlias, FirstSqlFieldOfColumn(refI)),
+		                                        ibColQ(alias, SelfReferenceField(tI))),
+		              ibQueryJoinType::Inner);
+		owner = tI; ownerAlias = alias;
+	}
+
+	// Correlation back to the OUTER write row: ex0.<selfref> = <outer>.<ref0 field>. The outer is the write
+	// TABLE itself (DELETE / UPDATE — mainQual empty) or the derived-row alias "src" (guarded INSERT create).
+	// A bare name would ambiguously bind INSIDE the subquery, so qualify the outer column explicitly.
+	const wxString outerQual = mainQual.IsEmpty() ? queryable->GetQueryTableName() : mainQual;
+	ibQueryExprPtr correlation = ibBinOp(ibQueryBinOp::Eq,
+		ibColQ(wxT("ex0"), SelfReferenceField(t0)),
+		ibColQ(outerQual, FirstSqlFieldOfColumn(ref0)));
+
+	// Leaf condition on the last target (c.m_col is the leaf column) — qualified by its alias, flat (no path).
+	ibQueryExprPtr leaf = BuildConditionExpr(owner, c, ownerAlias, /*pathAsExists*/ false);
+
+	// EXISTS only tests row presence -> SELECT * (a bare ibFilter renders as SELECT *; no projected const,
+	// which sidesteps FB's untyped-placeholder -804). Correlation AND leaf as the subquery WHERE.
+	return ibExists(ibFilter(from, AndFold(correlation, leaf)));
 }
 
 // A bare constant projected into a SELECT list (or a CASE branch) reaches the DB as an UNTYPED
@@ -1526,7 +1602,7 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 			// m_predicate, so the restriction never reached the DELETE and was silently unenforced.
 			// Unqualified columns (single-table DELETE, no alias).
 			ibQueryExprPtr where = ibMetaIRBuilder::BuildWhere(spec.m_queryable, *spec.m_conditions,
-			                                                   spec.m_predicate, wxEmptyString);
+			                                                   spec.m_predicate, wxEmptyString, /*pathAsExists*/ true);
 			ibDatabaseQueryBuilder q(spec.m_holder);
 			try { return q.Execute(ibDelete(table, where)); }   // rows deleted; 0 under a policy = no accessible row
 			catch (...) { return -1; }
@@ -1547,40 +1623,49 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 		// keyset / DELETE key, a second link key until cleaned). The conflict target needs a unique
 		// index on these fields — see CreateAndUpdateTableDB. Not scanned off the values.
 		std::vector<wxString> matchKeys;
-		if (kind == WriteKind::Upsert)
+		if (kind == WriteKind::Upsert || kind == WriteKind::Update)
 			for (const ibBackendQueryColumn* col : spec.m_queryable->GetPrimaryKeyColumns())
 				for (const wxString& f : ColumnFieldNames(col)) matchKeys.push_back(f);
 
-		// RLS-restricted SAVE (upsert under an active policy): the plain UPDATE OR INSERT ignores the
-		// folded restriction, so do a restricted UPDATE (SET non-key, WHERE key AND <rls>) first. If it
-		// affects a row, we were allowed to touch it -> done. If 0 rows, the row is either NEW (INSERT it)
-		// or exists-but-denied; attempt the INSERT — a constraint (PK) violation means the row IS there and
-		// we could not update it -> ACCESS DENIED (-2), no extra existence query. A genuinely new row
-		// inserts unrestricted for now (WITH CHECK of its values is a separate refinement).
-		if (kind == WriteKind::Upsert && spec.m_predicate) {
+		if (kind == WriteKind::Update) {
+			// REWRITE — ONE guarded UPDATE: SET the columns, WHERE the primary key AND the folded RLS
+			// predicate. 0 rows affected under a policy -> the builder denies (the row filter excluded this
+			// row). This is what enforces a write Restrict on the object main row; a plain UPSERT has no
+			// WHERE and would ignore the folded predicate. One statement, the row count is the answer.
 			ibQueryStatement upd(ibQueryStatement::Kind::Update, table, columns, matchKeys, spec.m_holder);
 			int p = 1;
 			for (const auto& wv : *spec.m_writeValues)
 				BindWriteValue(upd, wv.first, metaData, wv.second, p);
-			upd.SetWherePredicate(ibMetaIRBuilder::BuildPredicateExpr(spec.m_queryable, spec.m_predicate, wxEmptyString));
-			const long updated = upd.RunQuery();   // 0 = no accessible/existing row matched
-			if (updated > 0)
-				return updated;
+			if (spec.m_predicate)
+				upd.SetWherePredicate(ibMetaIRBuilder::BuildPredicateExpr(spec.m_queryable, spec.m_predicate, wxEmptyString, /*pathAsExists*/ true));
+			return upd.RunQuery();
+		}
 
-			ibQueryStatement ins(ibQueryStatement::Kind::Insert, table, columns, {}, spec.m_holder);
-			p = 1;
-			for (const auto& wv : *spec.m_writeValues)
-				BindWriteValue(ins, wv.first, metaData, wv.second, p);
-			try { return ins.RunQuery(); }   // inserted -> a genuinely new row
-			catch (const ibBackendDatabaseException& e) {
-				// A CONSTRAINT fault (the unique / PK the restricted UPDATE could not match) means the row
-				// IS there and we may not touch it -> ACCESS DENIED (-2). Any other DB fault (connection,
-				// syntax, deadlock, …) propagates unchanged. NOT NULL / CHECK on a pre-validated new row
-				// does not occur on this path, so treating Constraint as "row exists" is safe here.
-				if (e.GetKind() == ibBackendDatabaseException::Kind::Constraint)
-					return -2;
-				throw;
+		// WITH CHECK on CREATE — a restricted INSERT. The folded RLS predicate rides on a derived ONE-ROW
+		// relation of this row's own values: INSERT INTO t (cols) SELECT * FROM (SELECT val AS f, …
+		// [FROM dual]) src WHERE <rls over src>. The row is inserted IFF it satisfies the restriction; 0
+		// rows -> the new row is outside this role's scope -> the builder denies. One statement, entirely in
+		// the DB. Reuses the write value-spread (Const capture) exactly as DecomposeEquality, so the
+		// projected bytes match what the predicate compares against; the src alias qualifies the predicate.
+		if (kind == WriteKind::Insert && spec.m_predicate) {
+			std::vector<ibQueryProjItem> projItems;
+			for (const auto& wv : *spec.m_writeValues) {
+				const std::vector<wxString> fields = ColumnFieldNames(wv.first);
+				ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
+				int cp = 1;
+				ibColumnCodec::WriteValue(wv.first, metaData, wv.second, &capture, cp);
+				const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
+				for (size_t i = 0; i < fields.size(); ++i) {
+					ibQueryExprPtr c = (i < consts.size() && consts[i]) ? consts[i] : ibConst(ibValue());
+					projItems.push_back(ibQueryProjItem{ c, fields[i] });   // this row's value AS <field>
+				}
 			}
+			ibQueryRelPtr valuesRow = ibProject(nullptr, std::move(projItems));               // SELECT val AS f… [FROM dual]
+			ibQueryExprPtr rls = ibMetaIRBuilder::BuildPredicateExpr(spec.m_queryable, spec.m_predicate, wxT("src"), /*pathAsExists*/ true);
+			ibQueryRelPtr checked = ibFilter(ibSubquery(valuesRow, wxT("src")), rls);          // SELECT * FROM (…) src WHERE rls
+			ibDatabaseQueryBuilder q(spec.m_holder);
+			try { return q.Execute(ibInsertSelect(table, columns, checked)); }                 // 0 inserted -> WITH CHECK denied
+			catch (...) { return -1; }
 		}
 
 		ibQueryStatement statement(l2kind, table, columns, matchKeys, spec.m_holder);

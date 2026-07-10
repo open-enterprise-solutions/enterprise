@@ -30,6 +30,7 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 		d.m_paramStyle  = ibParamStyle::QuestionMark;
 		d.m_pagination  = ibPagination::FirstSkip;    // SELECT FIRST n SKIP m
 		d.m_boolForm    = ibBoolForm::Smallint;       // no native boolean pre-FB3
+		d.m_selectFromDual = wxT("RDB$DATABASE");     // FB has no bare FROM-less SELECT — the WITH-CHECK one-row source needs a dummy table
 		// UPDATE OR INSERT … MATCHING (pk) — no separate update body.
 		d.m_upsertTemplate   = wxT("UPDATE OR INSERT INTO {table} ({columns}) VALUES ({values}) MATCHING ({keys})");
 		d.m_upsertUpdateItem = wxEmptyString;
