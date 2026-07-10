@@ -16,6 +16,7 @@
 
 #include "backend/databaseLayer/databaseResultSet.h"
 #include "backend/databaseLayer/databaseLayer.h"
+#include "backend/databaseLayer/databaseLayerException.h"          // ibBackendDatabaseException (Constraint = write-deny on restricted save)
 #include "backend/valueInfo.h"                                    // ibReference (physical reference blob, GetQueryTableId source)
 #include "backend/metaData.h"                                     // ibMetaData (threaded through reads/writes)
 #include "backend/system/value/valueType.h"                      // ibValueTypeDescription::AdjustValue (dot-walk typed empty)
@@ -1516,23 +1517,18 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 	{
 		using WriteKind = ibDataQueryBuilder::WriteKind;
 		const wxString table     = spec.m_queryable->GetQueryTableName();
-		const wxString keyColumn = RowKeyField(spec.m_queryable);   // uuid — the single-key DELETE-by-key column (read off the identity tail)
 		const ibMetaData* metaData = spec.m_queryable->GetMetaData();   // context for the column-based field spread / bind
 
 		if (kind == WriteKind::Delete) {
-			// DELETE ... WHERE <each condition column> = value.
-			std::vector<wxString> whereCols;
-			for (const ibQueryCondition& c : *spec.m_conditions) {
-				if (c.m_col == nullptr) { if (!keyColumn.empty()) whereCols.push_back(keyColumn); }
-				else for (const wxString& f : ColumnFieldNames(c.m_col)) whereCols.push_back(f);
-			}
-			ibQueryStatement statement(ibQueryStatement::Kind::Delete, table, whereCols, {}, spec.m_holder);
-			int position = 1;
-			for (const ibQueryCondition& c : *spec.m_conditions) {
-				if (c.m_col == nullptr) { if (!keyColumn.empty()) statement.SetParamString(position++, c.m_value.GetString()); }
-				else BindWriteValue(statement, c.m_col, metaData, c.m_value, position);
-			}
-			try { return statement.RunQuery(); }        // rows deleted; 0 = nothing matched (under a policy: no access)
+			// DELETE ... WHERE <row-key conditions> AND <folded RLS predicate>. BuildWhere lowers BOTH
+			// m_conditions (the row-key — a null-col condition maps to RowKeyField) AND m_predicate (where
+			// the RLS Where folds). The flat loop we used before read only m_conditions and IGNORED
+			// m_predicate, so the restriction never reached the DELETE and was silently unenforced.
+			// Unqualified columns (single-table DELETE, no alias).
+			ibQueryExprPtr where = ibMetaIRBuilder::BuildWhere(spec.m_queryable, *spec.m_conditions,
+			                                                   spec.m_predicate, wxEmptyString);
+			ibDatabaseQueryBuilder q(spec.m_holder);
+			try { return q.Execute(ibDelete(table, where)); }   // rows deleted; 0 under a policy = no accessible row
 			catch (...) { return -1; }
 		}
 
@@ -1554,6 +1550,38 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 		if (kind == WriteKind::Upsert)
 			for (const ibBackendQueryColumn* col : spec.m_queryable->GetPrimaryKeyColumns())
 				for (const wxString& f : ColumnFieldNames(col)) matchKeys.push_back(f);
+
+		// RLS-restricted SAVE (upsert under an active policy): the plain UPDATE OR INSERT ignores the
+		// folded restriction, so do a restricted UPDATE (SET non-key, WHERE key AND <rls>) first. If it
+		// affects a row, we were allowed to touch it -> done. If 0 rows, the row is either NEW (INSERT it)
+		// or exists-but-denied; attempt the INSERT — a constraint (PK) violation means the row IS there and
+		// we could not update it -> ACCESS DENIED (-2), no extra existence query. A genuinely new row
+		// inserts unrestricted for now (WITH CHECK of its values is a separate refinement).
+		if (kind == WriteKind::Upsert && spec.m_predicate) {
+			ibQueryStatement upd(ibQueryStatement::Kind::Update, table, columns, matchKeys, spec.m_holder);
+			int p = 1;
+			for (const auto& wv : *spec.m_writeValues)
+				BindWriteValue(upd, wv.first, metaData, wv.second, p);
+			upd.SetWherePredicate(ibMetaIRBuilder::BuildPredicateExpr(spec.m_queryable, spec.m_predicate, wxEmptyString));
+			const long updated = upd.RunQuery();   // 0 = no accessible/existing row matched
+			if (updated > 0)
+				return updated;
+
+			ibQueryStatement ins(ibQueryStatement::Kind::Insert, table, columns, {}, spec.m_holder);
+			p = 1;
+			for (const auto& wv : *spec.m_writeValues)
+				BindWriteValue(ins, wv.first, metaData, wv.second, p);
+			try { return ins.RunQuery(); }   // inserted -> a genuinely new row
+			catch (const ibBackendDatabaseException& e) {
+				// A CONSTRAINT fault (the unique / PK the restricted UPDATE could not match) means the row
+				// IS there and we may not touch it -> ACCESS DENIED (-2). Any other DB fault (connection,
+				// syntax, deadlock, …) propagates unchanged. NOT NULL / CHECK on a pre-validated new row
+				// does not occur on this path, so treating Constraint as "row exists" is safe here.
+				if (e.GetKind() == ibBackendDatabaseException::Kind::Constraint)
+					return -2;
+				throw;
+			}
+		}
 
 		ibQueryStatement statement(l2kind, table, columns, matchKeys, spec.m_holder);
 		int position = 1;

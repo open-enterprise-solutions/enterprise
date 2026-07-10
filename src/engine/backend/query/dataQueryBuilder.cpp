@@ -530,7 +530,12 @@ bool ibDataQueryBuilder::Upsert() const
 		ibDataQueryBuilder guarded(*this);
 		guarded.m_policy = nullptr;
 		m_policy->ApplyWriteAccess(guarded, wxT("Write"));
-		return guarded.Upsert();
+		// Restricted save: ExecuteWrite runs UPDATE(rls) then INSERT-on-0. -2 = the row exists but the
+		// restriction excludes it (the INSERT hit the unique key) -> access denied.
+		const long affected = ibQueryComposer::ExecuteWrite(guarded.BuildSpec(), WriteKind::Upsert);
+		if (affected == -2)
+			ibBackendAccessException::Error();
+		return affected >= 0;
 	}
 	return ibQueryComposer::ExecuteWrite(BuildSpec(), WriteKind::Upsert) >= 0;
 }

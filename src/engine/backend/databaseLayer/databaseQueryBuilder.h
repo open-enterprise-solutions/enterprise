@@ -966,7 +966,7 @@ private:
 class BACKEND_API ibQueryStatement : public ibPreparedStatement
 {
 public:
-	enum class Kind { Insert, Upsert, Delete };
+	enum class Kind { Insert, Upsert, Delete, Update };
 
 	// `columns` are the physical column names in bind order. For Insert/Upsert
 	// they are the assignment columns; for Delete they are the WHERE-equality
@@ -1003,6 +1003,10 @@ public:
 	// reuses the write decomposition to build a composite-key read predicate.
 	const std::vector<ibQueryExprPtr>& CapturedValues() const { return m_values; }
 
+	// Update-only: an extra WHERE predicate AND-folded with the match-key equality — the
+	// RLS-restricted save uses it to fold the access predicate into the UPDATE. Ignored by other kinds.
+	void SetWherePredicate(ibQueryExprPtr where) { m_wherePredicate = std::move(where); }
+
 private:
 	void           Put(int position, ibQueryExprPtr expr);   // 1-based -> m_values[pos-1]
 	ibDmlStatement BuildDml() const;
@@ -1013,6 +1017,7 @@ private:
 	std::vector<wxString>       m_matchKeys;
 	std::vector<ibQueryExprPtr> m_values;     // one expr per column, in column order
 	ibDatabaseConnectionHolder* m_holder;
+	ibQueryExprPtr              m_wherePredicate;   // Update only: extra WHERE (RLS), AND-folded with the key match
 };
 
 #endif  // __IB_DATABASE_QUERY_BUILDER_H__

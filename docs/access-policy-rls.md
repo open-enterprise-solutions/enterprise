@@ -196,20 +196,31 @@ the same decorator mechanism with the `OnAccessWrite` handler. Object writes rou
 builder writes (`commonObjectRefQuery`, tabular section, record set, constant), so the handler runs on
 every write.
 
-**DELETE is enforced by row count.** `ExecuteWrite` returns the number of rows affected (lifted from
-the driver's `RunQuery`). A restricted `DELETE` folds the RLS `Where` into its conditions, so a delete
-of a row the user may not touch matches **0 rows** — and under an **active policy** `0 affected` means
-"no accessible row" → `ibBackendAccessException` (fail-closed, loud — mirrors the read door). No extra
-existence query. (With no policy, `0 affected` is a normal no-op — no throw.)
+**DELETE is enforced.** `ExecuteWrite` returns the affected-row count (lifted from the driver's
+`RunQuery`) up to the L3 door, and the restricted `DELETE` builds its WHERE via `ibMetaIRBuilder::
+BuildWhere` — BOTH the row-key conditions AND **`m_predicate`** (where the folded RLS `Where` lives).
+This was the real fix: an earlier flat loop read only `m_conditions` and IGNORED `m_predicate`, so the
+restriction silently never reached the DELETE (a no-op). Now a delete of a row the user may not touch
+matches **0 rows** — and under an **active policy** `0 affected` means "no accessible row" →
+`ibBackendAccessException` (fail-closed, no extra existence query). With no policy `0 affected` is a
+normal no-op. DB errors THROW, so `0` is unambiguously "0 rows", never a hidden error.
 
-**Save (INSERT / UPSERT) is NOT yet restricted** — a known gap. The upsert SQL is built from a dialect
-template (`{table}{columns}{values}{keys}{update}`) that has **no `WHERE`**; Firebird's
-`UPDATE OR INSERT … MATCHING` cannot carry a condition on its update. So the folded `Where` is dropped
-for INSERT/UPSERT and the write lands unrestricted (always 1 row → the count gate can't fire). Two ways
-to close it: **(a)** rewrite the upsert to `MERGE … WHEN MATCHED AND <rls> THEN UPDATE WHEN NOT MATCHED
-THEN INSERT` (count-based deny, cross-driver template work) — **planned next**; **(b)** a `WITH CHECK`
-of the post-image (uniform for insert + update; a join-based restriction needs one probe). A brand-new
-`INSERT` can never be a 0-row count (it adds 1 by nature) → it inherently needs `WITH CHECK`, not a count.
+**Save (UPSERT) is enforced — no MERGE needed.** The plain `UPDATE OR INSERT` template has no `WHERE`,
+so under an active policy the save runs as: a restricted `UPDATE` (`ibQueryStatement::Kind::Update` — SET
+the non-key columns, WHERE the primary-key match AND the folded RLS predicate). If it affects a row, the
+save was allowed → done. If **0 rows**, the row is either NEW (→ `INSERT` it) or exists-but-denied; the
+`INSERT` attempt decides — a **`Kind::Constraint`** fault (the unique/PK the UPDATE could not match)
+means the row IS there and we could not touch it → **access denied**; any other DB fault propagates
+unchanged. No extra existence query — Firebird's `ROW_COUNT` (via `isc_info_sql_records`) makes the
+UPDATE count exact. This is the same shape as the FB idiom `UPDATE …; IF ROW_COUNT = 0 THEN INSERT`, done
+in the app so it is driver-agnostic.
+
+Open on the write path:
+- **Creating a NEW row is unrestricted** — a brand-new `INSERT` can never be a 0-row count (it adds 1),
+  so restricting *creation* needs a `WITH CHECK` of the row's post-image values (a separate refinement).
+- **Flat predicates only** — a dot-walk RLS condition (`x.Ref.Field = v`) can't be a plain WHERE on a
+  DELETE / UPDATE (writes can't JOIN) → it needs an `EXISTS` subquery, also separate. A simple
+  `x.Field = v` condition lowers directly.
 
 ---
 
@@ -219,12 +230,18 @@ Read-restriction **confirmed working live** — both the explicit `Source.Where(
 concise `restrict … where` keyword form filter the query (single role). **Fail-closed contract landed**
 (see *The handler*): handlers are procedures with a by-ref `Allowed` verdict (default deny),
 presence-gated (absent → allow), and a handler that throws / swallows / never grants → deny; multi-role
-OR is fail-closed (a failed role never widens; all failing → deny). **DELETE write-restriction landed**
-— the 0-affected-row gate under an active policy throws access-denied. Functional verification of the
-fail-closed paths and the `restrict` join path pending.
+OR is fail-closed (a failed role never widens; all failing → deny). **Write-restriction landed for
+DELETE and SAVE** — DELETE applies `m_predicate` via `BuildWhere` (fixing an earlier no-op where it was
+dropped) and denies on `0 affected`; SAVE runs a restricted `UPDATE` then `INSERT`, denying on a
+`Kind::Constraint` (see *Write path*). Functional verification of the write paths and the `restrict`
+join path pending.
 
-- **Save (INSERT / UPSERT) not restricted yet** — the folded `Where` is dropped by the upsert template
-  (no `WHERE`); MERGE-based enforcement is planned, `WITH CHECK` the alternative. See *Write path*.
+- **Creating a NEW row is not restricted** — the restricted save enforces on *existing* rows (UPDATE
+  count / INSERT-conflict); a brand-new INSERT lands unrestricted. Restricting creation needs a
+  `WITH CHECK` of the post-image — a separate refinement. See *Write path*.
+- **Write predicates are flat** — a dot-walk RLS condition (`x.Ref.Field = v`) can't lower to a plain
+  DELETE / UPDATE WHERE (writes can't JOIN); a simple `x.Field = v` does. `EXISTS`-subquery lowering is a
+  separate change. See *Write path*.
 - **AOT bytecode cache must be invalidated after a compiler change.** The role module's compiled
   bytecode is cached in `sys_bytecode_cache` (a DB table; `Load` keys on `descriptor_id` and the AOT
   `kAOTFormatVersion`, NOT the compiler version or the stored `bytecode_version`). A `restrict` module
@@ -257,7 +274,7 @@ fail-closed paths and the `restrict` join path pending.
 | File | Role |
 |---|---|
 | `metaCollection/metaRoleObject.{h,cpp}` + `metaRoleObjectMenu.cpp` | Role is module-bearing; `OnAccessRead`/`OnAccessWrite` default **procedures** (args `Source`, `Operation`, by-ref `Allowed`); "Open role module" tree menu |
-| `query/dataQueryBuilder.{h,cpp}` | `ibAccessPolicy` interface; policy injection; copy-apply-execute; **DELETE write-deny** (policy active + `ExecuteWrite` returns 0 affected → `ibBackendAccessException`); `AdoptOwnedSource` / `GetSources` / `GetWherePredicate` |
+| `query/dataQueryBuilder.{h,cpp}` | `ibAccessPolicy` interface; policy injection; copy-apply-execute; **write-deny** at the door (DELETE: `ExecuteWrite` 0 affected; SAVE: `-2` from the restricted UPDATE→INSERT) → `ibBackendAccessException`; `AdoptOwnedSource` / `GetSources` / `GetWherePredicate` |
 | `session/session.{h,cpp}` | `GetAccessPolicy`; concrete `ibRuntimeAccessPolicy` — **fail-closed** contract (`RoleOutcome` NoHandler/Failed/Succeeded via `CallAsProc` + by-ref `Allowed`, exception→deny, multi-role OR where a failed role never widens); ctor-cached role procUnits; policy built in `CompileRoot` |
 | `system/value/valueQueryable.{h,cpp}` | `ibValueQueryDecorator` — Join/Where fold straight into the target query; `Join` accepts a single ON predicate (splits the `Compare` AST) or explicit key selectors |
 | `compiler/codeDef.h` + `compiler/translateCode.cpp` | `KEY_RESTRICT` / `"Restrict"` keyword (lock-step) |
@@ -266,5 +283,6 @@ fail-closed paths and the `restrict` join path pending.
 | `query/queryLowering.cpp` | `In` lowering — expands a captured array / collection item into its elements |
 | `compiler/byteCodeAOT.cpp` + `compiler/cache/byteCodeCache.{h,cpp}` | AOT (de)serialisation of the pushdown AST (`m_lambdaExprAst`, v14) + the `sys_bytecode_cache` DB DAO; `kAOTFormatVersion` bump invalidates stale AST-less blobs |
 | `compiler/procUnit.h` | `CallAsProc` / `CallAsFunc` comma-args variadics return **bool** (found?) — the presence gate the door uses without a separate lookup |
-| `query/queryProvider.{h,cpp}` + `query/dbTableProvider.{h,cpp}` | `ExecuteWrite` returns the **affected-row count** (lifted from `RunQuery`); the door reads 0-under-policy as a write-deny |
+| `query/queryProvider.{h,cpp}` + `query/dbTableProvider.{h,cpp}` | `ExecuteWrite` returns the **affected-row count** (lifted from `RunQuery`); DELETE builds its WHERE via `BuildWhere` (applies `m_predicate`); the restricted SAVE does UPDATE→INSERT and returns `-2` on a `Kind::Constraint` (row exists but denied) |
+| `databaseLayer/databaseQueryBuilder.{h,cpp}` | `ibQueryStatement::Kind::Update` (+ `SetWherePredicate`) — SET non-key, WHERE key-match AND the RLS predicate; used by the restricted save |
 | `frontend/.../codeEditor/codeEditorInterpreter.{h,cpp}` | `ibPrecompileCode::CompileRestrictExpression` — the intellisense-side walker (aliases → autocomplete, no bail on `restrict`) |

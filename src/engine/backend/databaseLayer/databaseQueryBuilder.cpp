@@ -1083,6 +1083,30 @@ ibDmlStatement ibQueryStatement::BuildDml() const
 		return ibDelete(m_table, pred);
 	}
 
+	if (m_kind == Kind::Update) {
+		// UPDATE table SET <non-key cols> WHERE <key cols = value> [AND <extra predicate>]. A match-key
+		// column identifies the row (WHERE); every other column is a SET assignment. The extra predicate
+		// (RLS) is AND-folded in, so a restricted save that may not touch the row matches 0 rows.
+		auto isMatchKey = [&](const wxString& col) {
+			for (const wxString& k : m_matchKeys) if (k == col) return true;
+			return false;
+		};
+		std::vector<ibDmlAssign> setAssigns;
+		ibQueryExprPtr where;
+		for (size_t i = 0; i < m_columns.size(); ++i) {
+			const ibQueryExprPtr val = m_values[i] ? m_values[i] : ibConst(ibValue());
+			if (isMatchKey(m_columns[i])) {
+				ibQueryExprPtr eq = ibBinOp(ibQueryBinOp::Eq, ibCol(m_columns[i]), val);
+				where = where ? ibBinOp(ibQueryBinOp::And, where, eq) : eq;
+			}
+			else
+				setAssigns.push_back({ m_columns[i], val });
+		}
+		if (m_wherePredicate)
+			where = where ? ibBinOp(ibQueryBinOp::And, where, m_wherePredicate) : m_wherePredicate;
+		return ibUpdate(m_table, std::move(setAssigns), where);
+	}
+
 	std::vector<ibDmlAssign> assigns;
 	assigns.reserve(m_columns.size());
 	for (size_t i = 0; i < m_columns.size(); ++i)
