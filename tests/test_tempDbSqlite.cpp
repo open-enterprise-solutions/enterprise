@@ -24,7 +24,9 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <memory>
+#include <vector>
 
 #include <wx/init.h>                                       // wxInitializer — bring up wxBase (locale / std paths appData touches)
 
@@ -399,4 +401,175 @@ TEST_F(TempDbSqliteFix, DoorMultipleAggregatesInOneRow)
 	ASSERT_TRUE(sel.Next());
 	EXPECT_EQ(sel.GetColumn(wxT("s")).GetInteger(), 60);    // 30+10+20
 	EXPECT_EQ(sel.GetColumn(wxT("c")).GetInteger(), 3);
+}
+
+// ===========================================================================
+// RLS semi-join (⋉) as a correlated EXISTS — the behavioural proof on real SQLite.
+//
+// The access-policy decorator folds `restrict s join perm on s.k = perm.k` into the
+// query's WHERE predicate as an ibSemiJoinExists (ibDataQueryBuilder::AddSemiJoin);
+// the provider renders it EXISTS(SELECT * FROM perm sj WHERE sj.k = s.k) — the SAME
+// render the register-direct path AND the temp-promoted value-table / multi-source path
+// both funnel through (BuildSemiJoinExists). RLS lives or dies on two properties, both
+// asserted here by RUNNING the render against SQLite:
+//   * it FILTERS — a row passes iff a permitting row EXISTS (no permission → not visible);
+//   * it NEVER MULTIPLIES — a row permitted by N rows appears ONCE, not N times (an INNER
+//     JOIN would duplicate; the filter-not-JOIN principle, docs/access-policy-rls.md).
+// Both sources are SQLite temp tables (the vehicle), so the correlation runs server-side
+// exactly like a temp-promoted inner — the outer key qualifies by the source's own table
+// name (BuildConditionExpr's empty-mainQual fallback), so it never binds inside the EXISTS.
+// ===========================================================================
+namespace {
+// Materialise a one-column NUMBER-"k" temp table from a key list (DUPLICATES allowed — a
+// permission source can grant the same key more than once). false (skip) if no temp dialect.
+struct KeyTable {
+	std::unique_ptr<ibTempTableManager> mgr;
+	const ibBackendQueryable*   temp = nullptr;
+	const ibBackendQueryColumn* k    = nullptr;
+	bool Build(ibDatabaseConnectionHolder* holder, ibMetaID keyId, const std::vector<long>& keys) {
+		ibQueryRamTable ram;
+		ram.AddColumn(keyId, wxT("k"), ibTypeDescription(g_valueNumberCLSID));
+		for (long v : keys) { const long r = ram.AppendRow(); ram.SetCell(r, keyId, ibValue(ibNumber(v))); }
+		mgr = ibTempTableManager::Materialise(holder, ram, /*metaData*/ nullptr);
+		if (!mgr) return false;
+		temp = mgr->Queryable();
+		if (temp == nullptr) return false;
+		for (const ibBackendQueryColumn* c : temp->GetColumns())
+			if (c->GetColumnId() == keyId) k = c;
+		return k != nullptr;
+	}
+};
+
+// `SELECT * FROM outer WHERE [NOT] EXISTS(perm correlated on k)` — the semi-join is the ONLY
+// restriction. Returns the surviving outer keys (dups in the result would prove multiplication).
+std::vector<int> SemiJoinSurvivors(ibDatabaseConnectionHolder* holder,
+                                   const KeyTable& outer, const KeyTable& perm, bool negated = false) {
+	ibSemiJoinExists sj;
+	sj.m_inner    = perm.temp;    // the permission source — EXISTS scans it
+	sj.m_outerKey = outer.k;      // s.k
+	sj.m_innerKey = perm.k;       // a.k
+	sj.m_op       = ibQueryFilterOp::Equal;
+	sj.m_negated  = negated;      // NOT EXISTS — the anti-join / deny-if-present rule
+
+	ibDataQueryBuilder q(holder);
+	q.From(outer.temp);
+	q.AddSemiJoin(sj);
+	ibReadPageRequest page;                 // count 0 -> all rows
+	ibDataQueryResult sel = q.Execute(page);
+	std::vector<int> keys;
+	while (sel.Next()) keys.push_back(sel.GetValue(outer.k).GetInteger());
+	return keys;
+}
+} // namespace
+
+TEST_F(TempDbSqliteFix, RlsSemiJoin_FiltersByExistence)
+{
+	if (!ready) GTEST_SKIP();
+	ibDatabaseConnectionHolder* holder = ibConnectionPool::ThreadHolder();
+	KeyTable sales, perm;
+	ASSERT_TRUE(sales.Build(holder, 601, {1, 2, 3, 4}));
+	ASSERT_TRUE(perm .Build(holder, 602, {2, 4}));
+
+	std::vector<int> got = SemiJoinSurvivors(holder, sales, perm);
+	std::sort(got.begin(), got.end());
+	EXPECT_EQ(got, (std::vector<int>{2, 4})) << "only rows whose key EXISTS in the permission set survive";
+}
+
+TEST_F(TempDbSqliteFix, RlsSemiJoin_DoesNotMultiply)
+{
+	if (!ready) GTEST_SKIP();
+	ibDatabaseConnectionHolder* holder = ibConnectionPool::ThreadHolder();
+	KeyTable sales, perm;
+	ASSERT_TRUE(sales.Build(holder, 611, {1, 2}));
+	ASSERT_TRUE(perm .Build(holder, 612, {2, 2, 2}));   // key 2 permitted THREE times
+
+	// An INNER JOIN would yield key 2 THREE times (one per permission match). The semi-join
+	// FILTERS: key 2 appears exactly ONCE. This is the whole point — a restriction must not
+	// duplicate rows (docs/access-policy-rls.md — RLS join = FILTER, not JOIN).
+	EXPECT_EQ(SemiJoinSurvivors(holder, sales, perm), (std::vector<int>{2}))
+		<< "a row permitted by N rows appears ONCE, not N times";
+}
+
+TEST_F(TempDbSqliteFix, RlsSemiJoin_NoMatchDeniesAll)
+{
+	if (!ready) GTEST_SKIP();
+	ibDatabaseConnectionHolder* holder = ibConnectionPool::ThreadHolder();
+	KeyTable sales, perm;
+	ASSERT_TRUE(sales.Build(holder, 621, {1, 2, 3}));
+	ASSERT_TRUE(perm .Build(holder, 622, {99}));        // grants nothing that matches
+
+	EXPECT_TRUE(SemiJoinSurvivors(holder, sales, perm).empty())
+		<< "no permitting row -> zero visible rows (fail-closed)";
+}
+
+TEST_F(TempDbSqliteFix, RlsSemiJoin_NegatedIsAntiJoin)
+{
+	if (!ready) GTEST_SKIP();
+	ibDatabaseConnectionHolder* holder = ibConnectionPool::ThreadHolder();
+	KeyTable sales, perm;
+	ASSERT_TRUE(sales.Build(holder, 631, {1, 2, 3, 4}));
+	ASSERT_TRUE(perm .Build(holder, 632, {2, 4}));
+
+	std::vector<int> got = SemiJoinSurvivors(holder, sales, perm, /*negated*/ true);
+	std::sort(got.begin(), got.end());
+	EXPECT_EQ(got, (std::vector<int>{1, 3})) << "NOT EXISTS: only the rows with NO permitting row (anti-join)";
+}
+
+// The WRITE half: an RLS semi-join rides m_predicate, and the DELETE path lowers m_predicate
+// through BuildWhere (the earlier flat loop read only m_conditions and left writes UNENFORCED —
+// a silent leak). So a blanket DELETE under the restriction scopes to PERMITTED rows only; an
+// unpermitted row cannot be deleted. (docs/access-policy-rls.md — Write path)
+TEST_F(TempDbSqliteFix, RlsSemiJoin_RestrictsDelete)
+{
+	if (!ready) GTEST_SKIP();
+	ibDatabaseConnectionHolder* holder = ibConnectionPool::ThreadHolder();
+	KeyTable data, perm;
+	ASSERT_TRUE(data.Build(holder, 641, {1, 2, 3}));
+	ASSERT_TRUE(perm.Build(holder, 642, {2}));          // only key 2 is permitted
+
+	ibSemiJoinExists sj;
+	sj.m_inner = perm.temp; sj.m_outerKey = data.k; sj.m_innerKey = perm.k; sj.m_op = ibQueryFilterOp::Equal;
+	ibDataQueryBuilder del(holder);       // AddSemiJoin returns void — not chainable, so build in steps
+	del.From(data.temp);
+	del.AddSemiJoin(sj);
+	del.Delete();
+
+	ibDataQueryBuilder q(holder);
+	q.From(data.temp);
+	ibReadPageRequest page;
+	ibDataQueryResult sel = q.Execute(page);
+	std::vector<int> left;
+	while (sel.Next()) left.push_back(sel.GetValue(data.k).GetInteger());
+	std::sort(left.begin(), left.end());
+	EXPECT_EQ(left, (std::vector<int>{1, 3}))
+		<< "the RLS semi-join scoped the DELETE to permitted rows — unpermitted rows survive (write-enforced)";
+}
+
+// Several joins on one restriction (Max: "а несколько джоинов переваривать будет?"). Each AddSemiJoin
+// AND-folds its EXISTS into m_predicate, so a row must satisfy EVERY semi-join — and each is still a
+// FILTER, so the intersection never multiplies. (docs/access-policy-rls.md — the tree rides every path)
+TEST_F(TempDbSqliteFix, RlsSemiJoin_MultipleJoinsCompose)
+{
+	if (!ready) GTEST_SKIP();
+	ibDatabaseConnectionHolder* holder = ibConnectionPool::ThreadHolder();
+	KeyTable sales, permA, permB;
+	ASSERT_TRUE(sales.Build(holder, 651, {1, 2, 3, 4}));
+	ASSERT_TRUE(permA.Build(holder, 652, {2, 3, 4}));
+	ASSERT_TRUE(permB.Build(holder, 653, {3, 4, 5}));
+
+	auto mk = [](const KeyTable& out, const KeyTable& perm) {
+		ibSemiJoinExists sj;
+		sj.m_inner = perm.temp; sj.m_outerKey = out.k; sj.m_innerKey = perm.k; sj.m_op = ibQueryFilterOp::Equal;
+		return sj;
+	};
+	ibDataQueryBuilder q(holder);
+	q.From(sales.temp);
+	q.AddSemiJoin(mk(sales, permA));    // EXISTS(permA) AND …
+	q.AddSemiJoin(mk(sales, permB));    // … EXISTS(permB)
+	ibReadPageRequest page;
+	ibDataQueryResult sel = q.Execute(page);
+	std::vector<int> got;
+	while (sel.Next()) got.push_back(sel.GetValue(sales.k).GetInteger());
+	std::sort(got.begin(), got.end());
+	EXPECT_EQ(got, (std::vector<int>{3, 4})) << "two semi-joins AND-compose: only keys present in BOTH permission sets";
 }

@@ -14,6 +14,7 @@
 #include "backend/query/queryAst.h"              // ibQueryAstExpr — the recorded lambda body
 #include "backend/query/queryLowering.h"         // LowerLambdaPredicate / LowerLambdaColumnPath
 #include "backend/query/tempTableQueryable.h"    // ibTempTableQueryable — wrap a RAM value-table Join argument
+#include "backend/query/tempTableManager.h"      // ibTempTableManager — materialise a computed RLS inner to a DB temp (semi-join server-side)
 #include "backend/compiler/procUnitValues.h"     // ibValueFunction (the lambda value)
 #include "backend/compiler/procUnit.h"           // InvokeLambdaWith2Args — run the Join result-selector in RAM
 #include "backend/compiler/procContext.h"        // ibRunContext — captured-frame name lookup
@@ -634,6 +635,35 @@ wxString ibValueQueryDecorator::GetString() const
 	return wxString::Format(wxT("QueryDecorator(%s)"), m_sourceName);
 }
 
+// RLS folds ONLY dot-walk conditions; mark each lowered LEAF so the provider renders it as a correlated
+// EXISTS (a semi-join that FILTERS once/zero per row, never multiplies) on READS too — matching the write
+// path — instead of a projection JOIN. Behavioural tag on the condition (ibQueryCondition::m_asExists);
+// takes effect only for a dot-walk leaf (the provider gates on `!m_path.empty()`), a plain leaf is inert.
+static void ibMarkRestrictExists(const ibQueryPredicatePtr& pred)
+{
+	if (!pred)
+		return;
+	if (pred->m_kind == ibQueryPredicateKind::Leaf)
+		pred->m_leaf.m_asExists = true;
+	for (const ibQueryPredicatePtr& child : pred->m_children)
+		ibMarkRestrictExists(child);
+}
+
+// The join ON operator (ibJoinCompareOp) as a filter operator (ibQueryFilterOp) — the semi-join correlation
+// stores the latter (the provider's FilterOpToBinOp renders it), so a `restrict … join … on s.k <op> a.k`
+// carries its comparison into the EXISTS correlation, not just Eq.
+static ibQueryFilterOp ibJoinCompareToFilterOp(ibJoinCompareOp op)
+{
+	switch (op) {
+	case ibJoinCompareOp::Ne: return ibQueryFilterOp::NotEqual;
+	case ibJoinCompareOp::Lt: return ibQueryFilterOp::Less;
+	case ibJoinCompareOp::Le: return ibQueryFilterOp::LessEqual;
+	case ibJoinCompareOp::Gt: return ibQueryFilterOp::Greater;
+	case ibJoinCompareOp::Ge: return ibQueryFilterOp::GreaterEqual;
+	default:                   return ibQueryFilterOp::Equal;
+	}
+}
+
 void ibValueQueryDecorator::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibValue** args, long n)
 {
 	using M = ibLinqMethod;
@@ -652,6 +682,7 @@ void ibValueQueryDecorator::DispatchLinqMethod(ibLinqMethod method, ibValue& ret
 		std::map<wxString, ibValue> captured;
 		if (ast && CollectCaptured(*ast, fn, captured)) {
 			if (ibQueryPredicatePtr pred = ibQueryLowering::LowerLambdaPredicate(m_source, *ast, captured)) {
+				ibMarkRestrictExists(pred);   // RLS dot-walk lowers as a correlated EXISTS on reads too — filter, not JOIN
 				m_target->Where(pred);
 				ret = new ibValueQueryDecorator(m_target, m_source, m_sourceName);   // chain: same target
 				return;
@@ -716,9 +747,52 @@ void ibValueQueryDecorator::DispatchLinqMethod(ibLinqMethod method, ibValue& ret
 		if (lcols.size() != 1 || rcols.size() != 1 || lcols.front() == nullptr || rcols.front() == nullptr)
 			ibBackendCoreException::Error(_("QueryDecorator.Join: each key must be exactly one column — for a multi-hop key restrict with Where(x => x.Ref.Field = …) instead"));
 
-		// The target owns the join inner (self-contained subquery) and gains the join in place.
-		const ibBackendQueryable* raw = m_target->AdoptOwnedSource(std::move(innerSource));
-		m_target->Join(raw, lcols.front(), rcols.front(), op, ibQueryJoinKind::Inner);
+		// DISPATCH by inner kind (docs/access-policy-rls.md — semi-join):
+		if (innerQ != nullptr && innerQ->IsSingleSource()) {
+			// A REAL, SINGLE-source source (a permission REGISTER / catalog) → a correlated EXISTS (semi-join):
+			// the outer row passes iff a permitting row EXISTS in the inner. FILTERS once/zero per row — never
+			// multiplies — and runs SERVER-SIDE in the one statement. The inner's OWN conditions (its .Where —
+			// incl. dot-walk and captured runtime Params) ride along via GetWherePredicate; the base is metadata
+			// (stable for the config's life), the leaf columns are its attributes, so the spec has no on-the-fly
+			// ownership. A MULTI-source inner (its own Join/Union — NOT in GetWherePredicate) falls to the full
+			// subquery path below, so its inner joins are not silently dropped (which would weaken the filter).
+			ibSemiJoinExists sj;
+			sj.m_inner    = innerBase;                     // the real register/table
+			sj.m_where    = innerQ->GetWherePredicate();   // the inner's own conditions (lowered vs innerBase)
+			sj.m_outerKey = lcols.front();                 // s.k
+			sj.m_innerKey = rcols.front();                 // a.k
+			sj.m_op       = ibJoinCompareToFilterOp(op);
+			m_target->AddSemiJoin(sj);
+		}
+		else {
+			// A COMPUTED inner — a value table / JSON-built set, OR a MULTI-source register whose own Join/Union
+			// can't collapse into GetWherePredicate (so the register-direct fast path above would drop those inner
+			// joins and WEAKEN the filter). To semi-join it (FILTER once/zero — never multiply) it must be a REAL
+			// server-side table: a computed-in-RAM leaf has no name for EXISTS to scan. So MATERIALISE it onto the
+			// session connection — the inner's own Where/folds are already baked into its rows (AsSource carried
+			// them; a value table has none) — and semi-join over the temp: the EXISTS then runs SERVER-SIDE in the
+			// one statement, exactly like the register-direct path. On Firebird (no temp dialect) Materialise
+			// returns null and we fall back to the RAM-composer INNER JOIN (multiplies — the known FB gap until the
+			// pure-SQL-subquery-EXISTS lands; docs/access-policy-rls.md).
+			ibQueryRamTable rows = innerSource->ComputeRows({});
+			std::shared_ptr<ibTempTableManager> mgr =
+				ibTempTableManager::Materialise(m_target->GetHolder(), rows, innerSource->GetMetaData());
+			const ibDbTempTableQueryable* temp     = mgr ? mgr->Queryable() : nullptr;
+			const ibBackendQueryColumn*   innerKey = temp ? temp->ResolveColumnByName(rcols.front()->GetName()) : nullptr;
+			if (temp != nullptr && innerKey != nullptr) {
+				ibSemiJoinExists sj;
+				sj.m_inner    = temp;                          // the materialised permission rows (a real DB temp)
+				sj.m_where    = nullptr;                       // the inner's conditions are already baked into the rows
+				sj.m_outerKey = lcols.front();                 // s.k
+				sj.m_innerKey = innerKey;                      // a.k — remapped onto the temp's same-named column
+				sj.m_op       = ibJoinCompareToFilterOp(op);
+				m_target->AddSemiJoin(sj);
+				m_target->AdoptTempManager(std::move(mgr));    // temp lives across Execute/pages; DROP on builder death
+			} else {
+				const ibBackendQueryable* raw = m_target->AdoptOwnedSource(std::move(innerSource));
+				m_target->Join(raw, lcols.front(), rcols.front(), op, ibQueryJoinKind::Inner);
+			}
+		}
 		ret = new ibValueQueryDecorator(m_target, m_source, m_sourceName);   // chain: same target
 		return;
 	}

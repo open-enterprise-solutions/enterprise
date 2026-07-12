@@ -237,6 +237,11 @@ public:
 	static ibQueryExprPtr BuildDotWalkExists(const ibBackendQueryable* queryable,
 	                                         const ibQueryCondition& c,
 	                                         const wxString& mainQual);
+	// An RLS `restrict … join …` SEMI-JOIN -> a CORRELATED EXISTS over the inner permission source: the outer
+	// row passes iff a permitting row exists. `EXISTS(SELECT * FROM <inner> sj WHERE <inner Where over sj>
+	// AND sj.<innerKey> <op> outer.<outerKey>)`. The inner's own conditions (incl. inner dot-walk -> nested
+	// EXISTS via pathAsExists) ride along; `outerQual` qualifies the main-source correlation column.
+	static ibQueryExprPtr BuildSemiJoinExists(const ibSemiJoinExists& sj, const wxString& outerQual);
 	// A COMPUTED-COLUMN expression (arithmetic / CASE) -> L2 expr (ibBinOp / ibCase; columns qualified
 	// by mainQual, WHEN predicates via BuildPredicateExpr). For a projected computed column.
 	static ibQueryExprPtr BuildColumnExpr(const ibBackendQueryable* queryable,
@@ -497,6 +502,13 @@ ibQueryExprPtr BuildColocatedPredicate(const ibQueryPredicatePtr& p, const Coloc
 	if (!p) return nullptr;
 	switch (p->m_kind) {
 	case ibQueryPredicateKind::Leaf: {
+		if (p->m_leaf.m_semiJoin) {
+			// RLS semi-join — a correlated EXISTS; the outer correlation column lives on the MAIN (protected)
+			// leaf, so qualify by whichever co-located leaf owns m_outerKey.
+			const ibBackendQueryable* outerOwner = ColocatedOwner(leaves, p->m_leaf.m_semiJoin->m_outerKey);
+			return ibMetaIRBuilder::BuildSemiJoinExists(*p->m_leaf.m_semiJoin,
+				outerOwner != nullptr ? outerOwner->GetQueryTableName() : wxString());
+		}
 		const ibBackendQueryColumn* col = p->m_leaf.m_col;
 		const ibBackendQueryable* owner = col != nullptr ? ColocatedOwner(leaves, col) : nullptr;
 		if (owner == nullptr)
@@ -555,10 +567,22 @@ ibQueryExprPtr ibMetaIRBuilder::BuildConditionExpr(const ibBackendQueryable* que
                                                    const wxString& mainQual,
                                                    bool pathAsExists)
 {
-	// WRITE-path dot-walk: a condition through a reference path (s.Ref.Field) cannot lower to a JOIN in a
-	// DELETE / UPDATE / INSERT WHERE, so it rides as a CORRELATED EXISTS. Reads leave pathAsExists false —
-	// they pre-resolve the path to a JOIN in BuildPageIR and pass the already-qualified leaf here.
-	if (pathAsExists && !c.m_path.empty())
+	// RLS `restrict … join …` SEMI-JOIN payload — this condition IS a correlated EXISTS over the inner
+	// permission source (m_col / m_value / m_path unused). Checked FIRST, so it renders on EVERY WHERE path
+	// (read single / co-located / write / aggregate all reach BuildConditionExpr) — no missed site can leave a
+	// write or a join-query unrestricted. The OUTER correlation column must be QUALIFIED (an empty mainQual —
+	// the single-table write path — would bind ambiguously INSIDE the EXISTS subquery), so fall back to the
+	// source's own table name, exactly as BuildDotWalkExists does for writes.
+	if (c.m_semiJoin)
+		return BuildSemiJoinExists(*c.m_semiJoin,
+			!mainQual.IsEmpty() ? mainQual : (queryable != nullptr ? queryable->GetQueryTableName() : wxString()));
+
+	// SEMI-JOIN dot-walk: a condition through a reference path (s.Ref.Field) rides as a CORRELATED EXISTS
+	// instead of a JOIN — mandatory on WRITES (a DELETE/UPDATE/INSERT WHERE cannot JOIN), and now also on
+	// READS for an RLS-folded condition (c.m_asExists), so the policy FILTERS without multiplying. A user's
+	// own read dot-walk stays a JOIN (pathAsExists false, m_asExists false): pre-resolved in BuildPageIR,
+	// the already-qualified leaf reaches here as a plain column.
+	if ((pathAsExists || c.m_asExists) && !c.m_path.empty())
 		return BuildDotWalkExists(queryable, c, mainQual);
 
 	const ibQueryBinOp op = FilterOpToBinOp(c.m_op);   // ONE op (m_comparison + m_explicitOp collapsed into m_op)
@@ -610,7 +634,9 @@ ibQueryExprPtr ibMetaIRBuilder::BuildFilterPredicate(const ibBackendQueryable* q
 {
 	ibQueryExprPtr pred;
 	for (const ibQueryCondition& c : conditions) {
-		if (!c.m_path.empty() && !pathAsExists) continue;   // read: dot-walk built inline by BuildPageIR (join alias)
+		// A user's read dot-walk is skipped here (BuildPageIR builds it as a JOIN alias). A WRITE (pathAsExists)
+		// or an RLS-flagged (m_asExists) dot-walk is NOT skipped — it lowers to an EXISTS via BuildConditionExpr.
+		if (!c.m_path.empty() && !pathAsExists && !c.m_asExists) continue;
 		pred = AndFold(pred, BuildConditionExpr(queryable, c, mainQual, pathAsExists));
 	}
 	return pred;
@@ -727,6 +753,29 @@ ibQueryExprPtr ibMetaIRBuilder::BuildDotWalkExists(const ibBackendQueryable* que
 	// EXISTS only tests row presence -> SELECT * (a bare ibFilter renders as SELECT *; no projected const,
 	// which sidesteps FB's untyped-placeholder -804). Correlation AND leaf as the subquery WHERE.
 	return ibExists(ibFilter(from, AndFold(correlation, leaf)));
+}
+
+ibQueryExprPtr ibMetaIRBuilder::BuildSemiJoinExists(const ibSemiJoinExists& sj, const wxString& outerQual)
+{
+	if (sj.m_inner == nullptr || sj.m_outerKey == nullptr || sj.m_innerKey == nullptr)
+		return nullptr;
+
+	const wxString sjAlias = wxT("sj");
+
+	// The inner's OWN conditions over the subquery alias — an inner dot-walk lowers to a NESTED EXISTS
+	// (pathAsExists = true), so the inner's full richness (Where + dot-walk + captured runtime Params) rides
+	// along, still never multiplying. Null predicate = the semi-join is presence-by-correlation only.
+	ibQueryExprPtr innerWhere = BuildPredicateExpr(sj.m_inner, sj.m_where, sjAlias, /*pathAsExists*/ true);
+
+	// Correlation: sj.<innerKey> <op> outer.<outerKey>. A reference key compares on its _RRRef field
+	// (byte-identical), a scalar on its physical field — FirstSqlFieldOfColumn picks the single field either way.
+	ibQueryExprPtr correlation = ibBinOp(FilterOpToBinOp(sj.m_op),
+		ibColQ(sjAlias,  FirstSqlFieldOfColumn(sj.m_innerKey)),
+		ibColQ(outerQual, FirstSqlFieldOfColumn(sj.m_outerKey)));
+
+	// SELECT * (a bare ibFilter → SELECT *); inner Where AND the correlation as the subquery WHERE.
+	return ibExists(ibFilter(ibScan(sj.m_inner->GetQueryTableName(), sjAlias), AndFold(innerWhere, correlation)),
+	                sj.m_negated);
 }
 
 // A bare constant projected into a SELECT list (or a CASE branch) reaches the DB as an UNTYPED
@@ -1907,6 +1956,10 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 			// silently dropping the condition would widen the filter (wrong rows).
 			for (const ibQueryCondition& c : *spec.m_conditions) {
 				if (c.m_path.empty()) continue;
+				if (c.m_asExists) {   // RLS semi-join: a correlated EXISTS (filters once/zero per row) — NOT a JOIN alias, so it cannot multiply
+					dotWalkWhere = AndFold(dotWalkWhere, ibMetaIRBuilder::BuildConditionExpr(queryable, c, mainQual));
+					continue;
+				}
 				if (ibQueryExprPtr lhs = pathCompositeScalarExpr(c.m_path)) {   // composite scalar leaf -> COALESCE <op> value
 					dotWalkWhere = AndFold(dotWalkWhere, ibBinOp(condOp(c), lhs, ibConst(c.m_value)));
 					continue;
@@ -1940,6 +1993,8 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 				switch (p->m_kind) {
 				case ibQueryPredicateKind::Leaf: {
 					if (!p->m_leaf.m_path.empty()) {
+						if (p->m_leaf.m_asExists)   // RLS semi-join: correlated EXISTS (filters, no multiply) — NOT a JOIN alias
+							return ibMetaIRBuilder::BuildConditionExpr(queryable, p->m_leaf, mainQual);
 						if (ibQueryExprPtr lhs = pathCompositeScalarExpr(p->m_leaf.m_path))   // composite scalar leaf
 							return ibBinOp(condOp(p->m_leaf), lhs, ibConst(p->m_leaf.m_value));
 						wxString a; const ibBackendQueryable* tq = nullptr;
@@ -2004,6 +2059,8 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 		where = AndFold(where, hasDotWalk ? treeWhere
 		                                  : ibMetaIRBuilder::BuildPredicateExpr(queryable, spec.m_predicate, mainQual));
 		where = AndFold(where, dotWalkWhere);
+		// (An RLS semi-join rides as a payload CONDITION in spec.m_conditions → BuildFilterPredicate above →
+		//  BuildConditionExpr renders it as a correlated EXISTS. No per-site append — it covers every WHERE path.)
 		if (where)
 			q.Where(where);
 

@@ -103,6 +103,22 @@ public:
 	const ibBackendQueryable* GetQueryable()  const { return m_queryable; }
 	const wxString&           GetSourceName() const { return m_sourceName; }
 
+	// RLS semi-join — the inner's ACCUMULATED WHERE (its own .Where() folds, incl. dot-walk + captured
+	// runtime Params). Lets `restrict s in Source join a in Data.Registers.X.Where(…) on …` render as a
+	// correlated EXISTS that carries the inner register's conditions (see valueQueryable.cpp Join). The base
+	// table is GetQueryable(); the correlation keys come from the ON.
+	ibQueryPredicatePtr GetWherePredicate() const { return m_builder.GetWherePredicate(); }
+
+	// SINGLE source (just From + Where — no folded Join / Union)? The RLS register-direct semi-join fast path
+	// (GetQueryable() + GetWherePredicate()) captures ONLY the primary + its Where — a MULTI-source inner's
+	// own Join/Union is NOT in GetWherePredicate, so dropping to that path would WEAKEN the restriction (a
+	// leak). A multi-source inner must go the full-subquery / temp path instead. (GetSources walks the tree.)
+	bool IsSingleSource() const {
+		std::vector<const ibBackendQueryable*> s;
+		m_builder.GetSources(s);
+		return s.size() <= 1;
+	}
+
 	// RLS — present this queryable's ACCUMULATED chain (From / Join / Where) as an ibBackendQueryable
 	// SOURCE (a subquery over the restricted rows). A role's restriction (From(source).Join(ACL).Where(…))
 	// is grafted by making the query read FROM this — it carries ALL the source's columns, so the

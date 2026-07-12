@@ -46,6 +46,7 @@
 
 class ibValueMetaObjectAttributeBase;
 class ibDatabaseConnectionHolder;
+class ibTempTableManager;   // RLS temp-promote — a computed inner (value table / multi-source register) materialised to a DB temp table (non-FB), owned WITH the builder
 class ibQueryResult;        // L2 cursor — consumed by the DB result source
 class ibDataResultSource;   // the selection's backing (DB scan OR RAM table) — pimpl, defined in the .cpp
 class ibSelector;           // the traversal a result hands out: result.Select(mode) — defined in querySelector.h
@@ -537,6 +538,20 @@ public:
 	// the .Where(tree) predicate (null = no WHERE). Lets a policy OR several roles' restrictions.
 	ibQueryPredicatePtr GetWherePredicate() const;
 
+	// RLS `restrict … join …` — attach a SEMI-JOIN restriction (the row passes iff a permitting row EXISTS
+	// in the inner). Folded into the WHERE PREDICATE TREE as a payload-carrying leaf — NOT m_conditions —
+	// because the write UPDATE / CREATE paths render only m_predicate; the tree rides EVERY WHERE path (read
+	// single / co-located / DELETE / UPDATE / CREATE / aggregate) through BuildConditionExpr, so no site can
+	// leave a write or a join-query unrestricted. Never a multiplying JOIN, never a separate pre-query.
+	void AddSemiJoin(const ibSemiJoinExists& spec) {
+		ibQueryCondition c;
+		c.m_semiJoin = std::make_shared<ibSemiJoinExists>(spec);
+		ibQueryPredicatePtr leaf = ibQueryPredicate::Leaf(c);
+		m_predicate = m_predicate
+			? ibQueryPredicate::Compose(ibQueryPredicateKind::And, m_predicate, leaf)
+			: leaf;
+	}
+
 	// Take shared ownership of an on-the-fly source (a subquery / temp wrapper the query references
 	// by RAW pointer via From / Join) so it outlives Execute — owned WITH the builder, not on some
 	// external value. Returns the raw pointer to hand to From / Join. This is what keeps a subquery
@@ -544,6 +559,15 @@ public:
 	// subquery's own control block manages everything it references — no raw dependency on the value
 	// that produced it (which would dangle if that value died first).
 	const ibBackendQueryable* AdoptOwnedSource(std::shared_ptr<const ibBackendQueryable> src);
+
+	// The session connection this builder executes on (default ctor pulls it from ibSession::Current).
+	// RLS temp-promote reads it to materialise a computed inner onto THIS connection, so the main
+	// SELECT (same connection) sees the temp table — the semi-join then renders server-side.
+	ibDatabaseConnectionHolder* GetHolder() const { return m_holder; }
+	// Own a temp-table manager for the builder's lifetime (its DROP fires when the builder dies). Kept
+	// as shared_ptr so the builder stays COPYABLE (ibSubqueryQueryable copies it) — copies share the temp,
+	// and the type-erased deleter means callers destroying a copy never need the complete manager type.
+	void AdoptTempManager(std::shared_ptr<ibTempTableManager> mgr) { m_ownedTemps.push_back(std::move(mgr)); }
 
 	// Override the RLS policy (the default ctor already pulls it from the session).
 	// Pass nullptr for a TRUSTED / internal read that must bypass enforcement — e.g.
@@ -589,8 +613,9 @@ private:
 	const ibAccessPolicy*        m_policy = nullptr; // RLS — pulled from the session in the default ctor; null = no enforcement
 	const ibBackendQueryable*    m_queryable = nullptr;  // .From() — the PRIMARY source (single-source fast path)
 	std::vector<std::shared_ptr<const ibBackendQueryable>> m_ownedSources;   // on-the-fly join inners (decorator subquery) kept alive through Execute
+	std::vector<std::shared_ptr<ibTempTableManager>>       m_ownedTemps;     // RLS temp-promote — materialised computed inners; DROP on builder death
 	std::shared_ptr<ibQueryNode> m_root;            // the relational TREE (.From / .Join / .Union) — the composer executes it
-	std::vector<ibQueryCondition> m_conditions;     // .Where() (+ .WhereKey: null-attr = row-key)
+	std::vector<ibQueryCondition> m_conditions;     // .Where() (+ .WhereKey: null-attr = row-key) (+ RLS semi-join payload conditions)
 	ibQueryPredicatePtr           m_predicate;      // .Where(tree) — full boolean WHERE (OR/NOT/IS NULL); AND-folded with m_conditions
 	std::vector<ibQuerySortItem>  m_sorts;          // .OrderBy() — USER sort; identity tail appended in Select
 	std::vector<const ibBackendQueryColumn*> m_groupBy;   // .GroupBy()

@@ -130,11 +130,24 @@ struct ibQueryCondition
 	// the leaf (== m_col) is compared on the joined target. Empty = a plain column on the main source.
 	std::vector<const ibBackendQueryColumn*> m_path;
 
+	// SEMI-JOIN render tag (behavioural, like m_path — NOT provenance): render this dot-walk condition as a
+	// correlated EXISTS instead of a projection JOIN, so it FILTERS (once/zero per row) without multiplying.
+	// Raised by the RLS decorator (ibValueQueryDecorator) on every condition it folds — so an RLS restriction
+	// is a semi-join on READS too, not just writes; a user's own dot-walk stays a JOIN. The provider ORs it
+	// with the call-level pathAsExists: (pathAsExists || m_asExists). See access-policy-rls.md (read→EXISTS).
+	bool m_asExists = false;
+
 	// COMPUTED left-hand side (WHERE Qty * Price > value, a CASE …): when set, the provider lowers
 	// the expression via BuildColumnExpr and compares it to m_value — m_col stays null, m_path empty.
 	// Single-source DB reads / aggregates only (the lowering gates it); the RAM stitch and computed
 	// sources do not evaluate it. Declared after m_path so the flat struct stays POD-ordered.
 	std::shared_ptr<struct ibQueryColumnExpr> m_expr;
+
+	// RLS `restrict … join …` SEMI-JOIN payload: when set, this condition IS a correlated EXISTS over the
+	// inner permission source (m_col / m_value / m_path all unused). The provider renders it FIRST in
+	// BuildConditionExpr, so it rides EVERY WHERE path (read single / co-located / write / aggregate) — no
+	// missed site can leave a write or a join-query unrestricted. See ibSemiJoinExists + access-policy-rls.md.
+	std::shared_ptr<struct ibSemiJoinExists> m_semiJoin;
 };
 
 // A query-native ORDER BY item: a COLUMN (null = the row-identity / reference
@@ -189,6 +202,22 @@ struct ibQueryPredicate
 		if (path.size() > 1) p->m_path = path;
 		return p;
 	}
+};
+
+// A SEMI-JOIN restriction — RLS `restrict s in Source join a in Inner on s.k <op> a.k`: the outer row
+// passes IFF a permitting row EXISTS in the inner. Rendered as a CORRELATED EXISTS (a FILTER — once/zero
+// per row — never a multiplying JOIN). The inner is a FULL query: its own WHERE / dot-walk / captured
+// runtime Params ride along via m_where (lowered vs m_inner). The outer+inner key columns + op form the
+// correlation. Held on the builder (parallel to the flat conditions) and appended to the WHERE by the
+// provider, so it goes SERVER-SIDE in the one main statement. (docs/access-policy-rls.md — semi-join.)
+struct ibSemiJoinExists
+{
+	const ibBackendQueryable*   m_inner    = nullptr;   // the permission source (a real register / table)
+	ibQueryPredicatePtr         m_where;                // the inner's OWN conditions, lowered vs m_inner (null = none)
+	const ibBackendQueryColumn* m_outerKey = nullptr;   // s.k — correlation column on the OUTER (main) source
+	const ibBackendQueryColumn* m_innerKey = nullptr;   // a.k — correlation column on the INNER
+	ibQueryFilterOp             m_op = ibQueryFilterOp::Equal;   // correlation comparison (Equal default; FilterOpToBinOp at render)
+	bool                        m_negated  = false;      // NOT EXISTS — a deny-if-present rule (future)
 };
 
 // ==========================================================================
