@@ -1,15 +1,21 @@
 ﻿#include "metaData.h"
 #include "backend/objCtor.h"
+#include "backend/query/queryableFactory.h"   // ibMetaQueryableFactory — the per-config source factory (complete here)
 
-// The image's designer infrastructure (compile cache + its module-manager) is built by
-// the owner metadata's CreateDesignerCache() — designer kinds only, nullptr otherwise.
-// Dropping the image later releases the manager (RAII → DestroyMainModule), so there's
-// no separate teardown to mirror.
+// The image's designer infrastructure (compile cache + its module-manager) is built by the owner metadata's
+// CreateDesignerCache() — each kind decides (designer-only, nullptr otherwise). Dropping the image later releases
+// the manager (RAII → DestroyMainModule), so there's no separate teardown to mirror.
 ibMetaImage::ibMetaImage(ibMetaData* owner)
 {
 	if (owner != nullptr)
-		m_compileCache = owner->CreateDesignerCache();   // nullptr ⇒ no designer infra
+		m_compileCache = owner->CreateDesignerCache();   // nullptr ⇒ no designer infra for this kind
+	// Every open snapshot gets its OWN source factory — metadata-backed queryables register into it, and resolve
+	// descends to the global factory on a miss. Dropping the image frees it (RAII), same lifecycle as the compile cache.
+	m_sourceFactory = std::make_unique<ibMetaQueryableFactory>();
 }
+
+// Out of line (see the header): m_sourceFactory's unique_ptr deleter needs the complete ibQueryableFactory, present here.
+ibMetaImage::~ibMetaImage() = default;
 
 // --- ibMetaImage ctor-factory facade (out of line: these deref ibCtorMetaValueType,
 //     complete here via objCtor.h; the clsid/name lookups + ForEachCtor are inline) ---

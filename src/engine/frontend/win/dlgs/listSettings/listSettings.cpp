@@ -12,7 +12,7 @@
 
 #include "backend/system/value/valueType.h"
 #include "backend/tableInfo.h"                                  // ibValueModel + ibValueModelColumnCollection (PATH A field source)
-#include "backend/metaCollection/partial/list/dynamicList.h"   // ibValueDynamicList — the dialog is built on it
+#include "backend/system/value/valueDynamicList.h"   // ibValueDynamicList — the dialog is built on it
 #include "backend/query/queryable.h"                            // ibBackendQueryable::GetColumns
 #include "backend/query/queryColumn.h"                          // ibBackendQueryColumn
 #include "backend/srcDataObject.h"                              // ibSourceDataObject::ibSourceExplorer + ConvertToMetaIds (dot-walk)
@@ -479,6 +479,7 @@ ibDialogListSettings::ibDialogListSettings(wxWindow* parent, ibValueDynamicList*
 	// Tabs are GATED by the model's Features (Max: "turn the flag off → the tab is hidden; the default
 	// parameters still change"). Default = all on. The first available tab is the selected one.
 	const ibValueModel::Features feats = (m_model != nullptr) ? m_model->GetFeatures() : ibValueModel::Features{};
+	notebook->AddPage(BuildQueryPage(notebook), _("Query"), true);   // FIRST tab — arbitrary-query source (dynamic-list ctor only)
 	if (feats.Has(ibValueModel::Features::Filters))  notebook->AddPage(BuildFilterPage(notebook), _("Filter"), notebook->GetPageCount() == 0);
 	if (feats.Has(ibValueModel::Features::Sorting))  notebook->AddPage(BuildOrderPage(notebook),  _("Sort"),   notebook->GetPageCount() == 0);
 	if (feats.Has(ibValueModel::Features::Grouping)) notebook->AddPage(BuildGroupPage(notebook),  _("Group"),  notebook->GetPageCount() == 0);
@@ -553,6 +554,29 @@ ibValueGroupList* ibDialogListSettings::GetGroupList() const
 // ---------------------------------------------------------------------------
 //  Pages
 // ---------------------------------------------------------------------------
+
+// The FIRST tab (dynamic-list only) — arbitrary-query source: an enable flag + the query text. When off, the list
+// takes its picked metaobject source; when on, this TEXT is the source (composer.FromText). Edits the list's OWN
+// UseCustomQuery / CustomQuery properties (serialised), NOT the settings buffer; applied to the list on OK.
+wxWindow* ibDialogListSettings::BuildQueryPage(wxWindow* parent)
+{
+	wxPanel* page = new wxPanel(parent, wxID_ANY);
+	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+
+	m_queryUseCheck = new wxCheckBox(page, wxID_ANY, _("Arbitrary query"));
+	sizer->Add(m_queryUseCheck, 0, wxALL, FromDIP(6));
+
+	m_queryText = new wxTextCtrl(page, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE | wxHSCROLL);
+	m_queryText->Enable(false);   // meaningful only when the flag is on
+	sizer->Add(m_queryText, 1, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, FromDIP(6));
+
+	m_queryUseCheck->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent& e) {
+		if (m_queryText != nullptr) m_queryText->Enable(e.IsChecked());
+	});
+
+	page->SetSizer(sizer);
+	return page;
+}
 
 wxWindow* ibDialogListSettings::BuildFilterPage(wxWindow* parent)
 {
@@ -808,6 +832,14 @@ wxWindow* ibDialogListSettings::BuildGroupPage(wxWindow* parent)
 
 void ibDialogListSettings::LoadFromSettings()
 {
+	// Query tab (dynamic-list only) — load the list's arbitrary-query flag + text into the controls.
+	if (m_list != nullptr && m_queryUseCheck != nullptr) {
+		m_queryUseCheck->SetValue(m_list->IsArbitraryQuery());
+		if (m_queryText != nullptr) {
+			m_queryText->SetValue(m_list->GetArbitraryQueryText());
+			m_queryText->Enable(m_list->IsArbitraryQuery());
+		}
+	}
 	if (m_settings == nullptr)
 		return;
 	// Every tab's model binds straight to its buffer list (Filter / Order / Group) — just
@@ -822,6 +854,13 @@ void ibDialogListSettings::LoadFromSettings()
 
 void ibDialogListSettings::ApplyToSettings()
 {
+	// Query tab (dynamic-list only) — apply the arbitrary-query flag + text onto the list, then re-apply the source.
+	if (m_list != nullptr && m_queryUseCheck != nullptr) {
+		m_list->SetArbitraryQuery(m_queryUseCheck->GetValue());
+		if (m_queryText != nullptr)
+			m_list->SetArbitraryQueryText(m_queryText->GetValue());
+		m_list->ApplySource();
+	}
 	// Every tab edits its buffer list IN PLACE through its model — nothing to copy back here.
 	// The buffer is committed to the composer on OK (ibCommitSettingsToComposer).
 }

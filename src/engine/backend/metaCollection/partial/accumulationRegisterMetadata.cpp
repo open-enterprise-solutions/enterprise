@@ -1,9 +1,9 @@
 ﻿#include "accumulationRegister.h"
 #include "backend/serialize/dataBuilder.h"
-#include "list/objectList.h"
+#include "backend/system/value/valueDynamicList.h"   // ibValueDynamicList — the standard list migrates onto the universal dynamic list
 #include "backend/metadataConfiguration.h"
 #include "backend/moduleManager/moduleManager.h"
-#include "backend/query/queryableHooks.h"   // light L4 source registration hooks (balance / turnover descriptors)
+#include "backend/metaData.h"   // ibMetaData::RegisterSource — the register registers its balance / turnover into its OWN config
 
 //***********************************************************************
 //*                         metaData                                    * 
@@ -39,7 +39,7 @@ ibBackendValueForm* ibValueMetaObjectAccumulationRegister::GetListForm(const wxS
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		strFormName,
 		ibValueMetaObjectAccumulationRegister::eFormList,
-		ownerControl, new ibValueListRegisterObject(this, ibValueMetaObjectAccumulationRegister::eFormList),
+		ownerControl, ibCreateList(GetQueryable(), GetRegisterPeriod()),   // migrated onto the universal dynamic list
 		formGuid
 	);
 }
@@ -185,12 +185,11 @@ bool ibValueMetaObjectAccumulationRegister::OnAfterRunMetaObject(int flags)
 	if (!(*m_propertyObjectModule)->OnAfterRunMetaObject(flags))
 		return false;
 
-	// Custom virtual-table descriptors (balances / turnovers). The base records descriptor is
-	// registered by ibValueMetaObjectRegisterData::OnAfterRunMetaObject below. Skip onlyLoadFlag.
-	if (!(flags & onlyLoadFlag)) {
-		ibRegisterQueryableSource(&m_balance);
-		ibRegisterQueryableSource(&m_turnover);
-	}
+	// Custom virtual-table descriptors (balances / turnovers). The base records descriptor is registered by
+	// ibValueMetaObjectRegisterData::OnAfterRunMetaObject below. Register ALWAYS — the factory is PER-CONFIG
+	// (in the metadata), so a read-only DB load (onlyLoadFlag) still registers its OWN sources into its OWN factory.
+	m_metaData->RegisterSource(&m_balance);
+	m_metaData->RegisterSource(&m_turnover);
 
 	if (auto* cc = m_metaData->GetCompileCache()) {
 
@@ -208,8 +207,8 @@ bool ibValueMetaObjectAccumulationRegister::OnAfterRunMetaObject(int flags)
 
 bool ibValueMetaObjectAccumulationRegister::OnBeforeCloseMetaObject()
 {
-	ibUnregisterQueryableSource(&m_balance);
-	ibUnregisterQueryableSource(&m_turnover);
+	m_metaData->UnregisterSource(&m_balance);
+	m_metaData->UnregisterSource(&m_turnover);
 
 	if (!(*m_propertyAttributibRecordType)->OnBeforeCloseMetaObject())
 		return false;
@@ -296,7 +295,7 @@ ibSourceDataObject* ibValueMetaObjectAccumulationRegister::CreateSourceObject(co
 	switch (metaObject->GetTypeForm())
 	{
 	case eFormList:
-		return new ibValueListRegisterObject(this, metaObject->GetTypeForm());
+		return ibCreateList(GetQueryable(), GetRegisterPeriod());   // migrated onto the universal dynamic list
 	}
 
 	return nullptr;

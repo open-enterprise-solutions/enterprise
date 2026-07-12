@@ -7,6 +7,7 @@
 
 #include "backend/metaCollection/metaModuleObject.h"
 #include "backend/metaCollection/metaFormObject.h"
+#include "backend/query/queryableFactory.h"   // ibQueryableFactory::Register/Unregister — the per-config source registry
 
 #include <algorithm>
 #include <cwctype>
@@ -29,6 +30,20 @@ ibMetaID ibMetaData::MetaIdByGuid(const ibGuid& guid) const
 		return wxNOT_FOUND;
 	const ibValueMetaObject* meta = FindAnyObjectByFilter(guid, true);
 	return meta != nullptr && meta->IsAllowed() ? meta->GetMetaID() : wxNOT_FOUND;
+}
+
+// Register the source into THIS config's OWN factory (the metaobject calls it on run: GetMetaData()->RegisterSource).
+// Only metadata-backed sources register now; each config keeps its own set. No factory (closed) → no-op.
+void ibMetaData::RegisterSource(ibQueryableSourceDescriptor* descriptor) const
+{
+	if (ibQueryableFactory* factory = GetSourceFactory())
+		factory->Register(descriptor);
+}
+
+void ibMetaData::UnregisterSource(ibQueryableSourceDescriptor* descriptor) const
+{
+	if (ibQueryableFactory* factory = GetSourceFactory())
+		factory->Unregister(descriptor);
 }
 
 //**************************************************************************************************

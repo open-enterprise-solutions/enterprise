@@ -243,8 +243,16 @@ public:
 	//metaData 
 	virtual bool LoadDatabase(int flags = defaultFlag);
 
-	//get config type 
+	//get config type
 	virtual ibConfigType GetConfigType() const { return ibConfigType::ibConfigType_Load; };
+
+	// The compile-value cache lives on EVERY designer-side config — not only the designer's active edit config
+	// (Storage) but also a config browsed read-only from the DB / file (which is THIS inner baseline). Its
+	// metaobjects need the cache to build their forms: the owner + the seated source object come THROUGH it, so
+	// without it an object form (catalog / document / list / choice) opens sourceless and crashes. Enterprise
+	// runtime never opens the metadata tree (only objects execute) → nullptr. Regression from the per-config
+	// image (ibMetaImage): the cache had narrowed to Storage only.
+	virtual std::unique_ptr<ibCompileValueCache> CreateDesignerCache() override;
 
 protected:
 
@@ -299,9 +307,6 @@ public:
 	//metadata
 	virtual bool LoadDatabase(int flags = defaultFlag);
 	virtual bool SaveDatabase(int flags = defaultFlag);
-
-	// Designer-edit config always carries a compile cache + module-manager (image ctor).
-	virtual std::unique_ptr<ibCompileValueCache> CreateDesignerCache() override;
 
 	//run/close
 	virtual bool RunDatabase(int flags = defaultFlag) {

@@ -212,6 +212,12 @@ public:
 	// The attached output place — non-owning; a long-lived consumer wires it once and calls Run() on refresh.
 	ibDataComposer& SetDriver(ibCompositionDriver* driver) { m_driver = driver; return *this; }
 
+	// The config this query runs ON BEHALF OF — threaded into the lowering so a by-name metaobject source resolves
+	// through THIS config's factory (sources register per-config). Set by whoever binds the source (the dynamic list
+	// from its own config; the script query from the running one). Null = a sourceless / transient-only composer.
+	ibDataComposer& SetMetaData(const class ibMetaData* metaData) { m_metaData = metaData; return *this; }
+	const class ibMetaData* GetMetaData() const { return m_metaData; }
+
 	// The driver-walk seam — the DB composer renders + walks the query to the driver. The RAM composer does NOT
 	// use it (the list display calls ComputeOrder + returns the LIVE nodes), so the base default is a no-op and
 	// ibDataRamComposer does not override it — L5-2 is self-contained, NO tie to L5-1 (SQL) / L4-1 (text).
@@ -251,6 +257,7 @@ protected:
 	int                         m_autoParam = 0;   // auto-name counter for filter values
 
 	ibCompositionDriver* m_driver = nullptr;
+	const class ibMetaData* m_metaData = nullptr;   // config the query resolves by-name sources against (SetMetaData)
 };
 
 // The DB composer — the schema verbs render into L4-1 query TEXT, then the standard parse → lower → walk

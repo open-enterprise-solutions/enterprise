@@ -121,7 +121,7 @@ public:
 	//////////////////////////////////////////////////
 
 	ibMetaID GetIdByGuid(const ibGuid& guid) const;
-	ibGuid GetGuidByID(const ibMetaID& id) const;
+	ibGuid GetGuidByID(const ibMetaID& id) const;   // == the metaobject's GetCommonGuid (its copy-guid while a copy is live)
 
 	//////////////////////////////////////////////////
 

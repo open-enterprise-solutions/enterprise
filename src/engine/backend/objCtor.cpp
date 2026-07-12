@@ -1,5 +1,4 @@
 #include "backend/metaCollection/partial/reference/reference.h"
-#include "backend/metaCollection/partial/list/objectList.h"
 
 #include "objCtor.h"
 
@@ -13,27 +12,6 @@
 ibValue* ibCtorMetaValueTypeReference::CreateObject() const
 {
 	return ibValueReferenceDataObject::CreateRaw(m_metaObject);
-}
-
-//list class
-ibValue* ibCtorMetaValueTypeReferenceList::CreateObject() const
-{
-	ibValueMetaObjectRecordDataHierarchyMutableRef* folderRef = nullptr;
-	ibValueMetaObjectRecordDataEnumRef* enumRef = nullptr;
-
-	if (m_metaObject->ConvertToValue(folderRef)) {
-		return new ibValueModelTreeDataObjectFolderRef(folderRef);
-	}
-	else if (m_metaObject->ConvertToValue(enumRef)) {
-		return new ibValueListDataObjectEnumRef(enumRef);
-	}
-
-	return new ibValueListDataObjectRef((ibValueMetaObjectRecordDataMutableRef*)m_metaObject);
-}
-
-ibValue* ibCtorMetaValueTypeRegisterList::CreateObject() const
-{
-	return new ibValueListRegisterObject(m_metaObject);
 }
 
 //object class

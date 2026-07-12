@@ -6,7 +6,7 @@
 #include "accountingRegister.h"
 #include "backend/serialize/dataBuilder.h"
 #include "chartOfAccounts.h"
-#include "list/objectList.h"
+#include "backend/system/value/valueDynamicList.h"   // ibValueDynamicList — the standard list migrates onto the universal dynamic list
 #include "backend/metadataConfiguration.h"
 #include "backend/moduleManager/moduleManager.h"
 
@@ -32,7 +32,7 @@ ibValueMetaObjectFormBase* ibValueMetaObjectAccountingRegister::GetDefaultFormBy
 ibBackendValueForm* ibValueMetaObjectAccountingRegister::GetListForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
 {
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(strFormName, eFormList, ownerControl,
-		new ibValueListRegisterObject(this, eFormList), formGuid);
+		ibCreateList(GetQueryable(), GetRegisterPeriod()), formGuid);   // migrated onto the universal dynamic list
 }
 #pragma endregion
 
@@ -282,7 +282,7 @@ ibValueRecordSetObject* ibValueMetaObjectAccountingRegister::CreateRecordSetObje
 ibSourceDataObject* ibValueMetaObjectAccountingRegister::CreateSourceObject(const ibValueMetaObjectFormBase* metaObject) const
 {
 	switch (metaObject->GetTypeForm()) {
-	case eFormList: return new ibValueListRegisterObject(this, metaObject->GetTypeForm());
+	case eFormList: return ibCreateList(GetQueryable(), GetRegisterPeriod());   // migrated onto the universal dynamic list
 	}
 	return nullptr;
 }

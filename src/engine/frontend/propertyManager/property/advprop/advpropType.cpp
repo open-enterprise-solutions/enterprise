@@ -78,7 +78,7 @@ void ibPGTypeProperty::FillByClsid(const ibSelectorDataType& selectorDataType, c
 }
 
 #include "backend/system/value/valueTable.h"
-#include "backend/metaCollection/partial/list/dynamicList.h"   // g_valueDynamicListCLSID
+#include "backend/system/value/valueDynamicList.h"   // g_valueDynamicListCLSID
 
 ibPGTypeProperty::ibPGTypeProperty(const ibPropertyObject* property, const ibSelectorDataType& selectorDataType, const wxString& label, const wxString& strName, const wxVariant& value) :
 	wxPGProperty(label, strName), m_ownerProperty(property)

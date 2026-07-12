@@ -2187,9 +2187,11 @@ fails to resolve.
   `CreateQueryable` (the factory path) returns the same; `GetNamespace`/`GetName` come from the
   metaobject.
 - **Base descriptor registration (wired):** the family base registers its descriptor field in
-  `OnAfterRunMetaObject` — `ibRegisterQueryableSource(&m_queryable)` (a light hook) after checking
+  `OnAfterRunMetaObject` — `m_metaData->RegisterSource(&m_queryable)`, a **facade on the metaobject's
+  OWN config** (registration is per-config, into `ibMetaData`'s own `ibMetaQueryableFactory`, NOT one
+  global registry — see "Per-config source factory" in `dynamic-list.md`) — after checking
   `!(flags & onlyLoadFlag)` (the designer's saved baseline loads its objects load-only — skip) —
-  and `ibUnregisterQueryableSource(&m_queryable)` in `OnBeforeCloseMetaObject`. Wired in the
+  and `m_metaData->UnregisterSource(&m_queryable)` in `OnBeforeCloseMetaObject`. Wired in the
   bases: `ibValueMetaObjectRecordDataRef` (catalogs / documents / charts / enums chain up here),
   `ibValueMetaObjectRegisterData`, `ibValueMetaObjectConstant`, and **`ibValueMetaObjectTableData`
   (tabular sections)** via the custom `ibTabularSourceDescriptor` — a tabular is a sub-object, so

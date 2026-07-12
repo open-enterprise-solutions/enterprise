@@ -1,11 +1,15 @@
 # Dynamic list — the universal list/tree
 
-> **Status (2026-06-28): arc in progress.** Designer surface + runtime settings +
-> form LANDED; the unified `ibValueDynamicList` is assembled and builds green.
-> Settings application split into per-aspect helpers; grouping drill (incl. aggregate-free
-> `TOTALS BY`) landed; the fetch path is const-correct (no `const_cast`). The List-settings
-> field picker (dot-walk reference expansion, drag-to-add) landed 2026-07-07. Reference
-> memory: `project_dynamic_list_unification`, `project_totals_by_without_aggregate`.
+> **Status (2026-07-11): the migration is DONE.** `ibValueDynamicList` is now THE list
+> for every standard metadata list/select (catalog / hierarchy / document / register /
+> enumeration / charts) — the per-family model classes and their registrars are DELETED,
+> not merely bypassed. The **source-command layer** (below) is the bridge that let a
+> metadata-blind list act on a metadata row: commands, open, select, key, columns, and the
+> source metaobject all forward from a per-metaobject descriptor. Folder / select / default
+> sort became creation-time **settings** on the composer, not subtypes. Designer supports an
+> arbitrary-query first tab (runtime rendering of the result is the remaining "потом").
+> Reference memory: `reference_source_command_layer`, `project_dynamic_list_unification`,
+> `project_totals_by_without_aggregate`.
 
 ## What it is
 
@@ -26,19 +30,19 @@ per-family models (`ibValueListDataObjectEnumRef` / `…Ref` / `…RefDocument` 
 ## The class
 
 ```
-ibValueDynamicList : public ibValueModelTreeBase, public ibSourceDataObject, public ibPropertyObject
+ibValueDynamicList : public ibValueModelCursor, public ibSourceDataObject, public ibPropertyObject
 ```
 
-A tree base understands a flat list too (one root, the parent is the root), so the
-single class carries both forms. It is **not** `ibValueModelTreeDataObject` — that
-one is metaobject-bound (its column collection comes from the metaobject and its
-ctor needs one). The dynamic list owns its own queryable-derived column collection.
+`ibValueModelCursor` (a cursor tree base) understands a flat list too (one root, the parent is the
+root), so the single class carries both forms. It is **not** `ibValueModelTreeDataObject` — that one
+is metaobject-bound (its column collection comes from the metaobject and its ctor needs one). The
+dynamic list owns its own queryable-derived column collection.
 
 It is also an `ibPropertyObject`: the list's own **Source** and **Settings** properties
 surface onto the form attribute (like `ibValueSizerItem`) — the attribute just casts the
 runtime value to `ibPropertyObject`, knowing nothing about "a dynamic list". `OnPropertyChanged`
 is the hook (a virtual, not a backend function-pointer); `Read/WriteProperty` persist the Source
-property plus the settings. The class/type name reported to the runtime comes from the **factory**
+property, the settings, plus the default **view** (see *Choice mode* below). The class/type name reported to the runtime comes from the **factory**
 (`ibValue::GetClassName()` → the `VALUE_TYPE_REGISTER` name resolved by clsid), not a hardcoded
 literal — the literal `"DynamicList"` lives only in the registration.
 
@@ -61,39 +65,24 @@ ibValueDynamicList* list2 = new ibValueDynamicList(queryable);
 queryable registered there (register / reference / …) is selectable. The front-end
 exposes a **source picker** built from the factory's registered `(ns, name)` set.
 
-### L5 composer + the fetch provider
+### L5 composer + the fetch
 
-The list carries the **L5 composer** (`m_composer`, visible via `GetComposer()`).
-`SetSource` wires it onto the queryable (`composer.FromSource(queryable)`); a custom
-query uses `composer.FromText(text)`.
+The list carries the **L5 composer** (`m_composer`, the inherited `GetModelComposer()`).
+`SetSource` wires it onto the queryable (`composer.FromSource(queryable)`); a custom query uses
+`composer.FromText(text)`.
 
-Fetch is **thin** — the composer does the work through a **special driver/provider**
-(a `ibCompositionDriver` subclass). `composer.Run(provider)` calls `provider.OnRow`
-per row; the provider builds the row node **straight into the table**:
+Fetch is **thin and NOT the list's own** — the dynamic list has no per-list fetch provider anymore
+(the old `ibDynamicListProvider` + `ibDynamicListNode` are deleted). It fetches through the BASE
+`ibValueModel::RunComposerPage`, exactly like every other model: ONE fetch in the parent, yielding
+`ibComposerNode` rows read through the base `GetViewData<ibValueTreeNode>`. Row identity is the
+**keyset** (primary-key column values), the cursor anchor is the sort-column values. The hierarchy
+scope (flat-scan vs parent scope) rides on `ibReadPageRequest` (`m_flatScan` / `m_hierarchyCol` +
+`m_hierarchyKey`), filled by the model directly (front-end List view = `s_constIgnoreParent` → flat).
 
-```cpp
-void OnRow(int level, bool hasChildren, const std::vector<ibValue>& values) override {
-    // keyset identity = the primary-key column positions
-    std::vector<ibValue> key;  for (size_t i : m_keyIdx) key.push_back(values[i]);
-    auto* node = new ibValueDynamicList::ibDynamicListNode(m_tree, key, hasChildren);
-    for (size_t c = 0; c < m_cols.size(); ++c)
-        node->AppendTableValue(m_cols[c]->GetColumnId(), values[c]);
-    m_rows.push_back(node);
-}
-```
-
-`Get*Fetch` is then ~3 lines (build provider, `composer.Run`, wrap the driver rows).
-**No hand-rolled row loop in the model.** The hierarchy scope (flat-scan vs parent
-scope) rides on `ibReadPageRequest` (`m_flatScan` / `m_hierarchyCol` + `m_hierarchyKey`),
-filled by the model directly (front-end List view = `s_constIgnoreParent` → flat).
-
-**Fetch is `const`.** `Get*Fetch` / `RunPage` only READ the source and RETURN rows — they
-never mutate the model. A returned row node *is* mutable later (write-back / change-notify),
-so the node holds the model link as `const ibValueModelTreeBase*` (`ibValueTreeNode::m_valueTree`):
-the node only reads it (`IsAttached`) or pokes the notifier (`RowValueChanged` / `m_modelProvider`,
-both non-mutating). So the const fetch hands the provider a plain `this` — **no `const_cast`**.
-The const link says "the row may notify the model", not "fetch mutates"; it also removed the
-two pre-existing casts in `objectListQuery.cpp`.
+**Fetch is `const`.** `RunComposerPage` only READS the source and RETURNS copied row nodes — it never
+mutates the model, so it hands the provider a plain `this`, **no `const_cast`**. A returned node is
+mutable later (write-back / change-notify) but holds the model link as a const pointer it only reads
+(`IsAttached`) or pokes the notifier through.
 
 ## Settings (Filter / Order / Group)
 
@@ -190,10 +179,160 @@ through the neutral source-column seam, not a metaobject:
 - **Table fact without a source.** `IsTableSource()` answers list-vs-object by CLSID through the
   class factory (`IsTableValue()`), so the list reports a table before a source is even picked.
 
+## Source-command layer
+
+The list is metadata-blind, yet a standard list must **act on a metadata row** — list and run
+commands (Add / Copy / Edit / Delete / Post / AddFolder …), open a row, resolve a picker's select
+value, build the row's key, fill the columns, show the source's icon. All of that is metadata
+behaviour. The bridge is a per-metaobject **descriptor** the list talks to WITHOUT knowing the
+metaobject (`reference_source_command_layer`).
+
+- **`ibQueryableSourceDescriptor`** (`query/queryableFactory.h`) — the base, held PARALLEL to the
+  queryable (queryable = data; the descriptor = behaviour). Copy is `= delete` (it is `this`-bound
+  to its metaobject; a copy would keep the ORIGINAL's ids — so a metaobject holding one is
+  non-copy-constructible, which forces the paste-via-factory path with fresh ids). The surface is
+  three neutral-default groups:
+  - **ROW DATA / presentation** — `GetSelectValue(rowValues)` (picker value: a record → its
+    reference cell, a register → its composite record key), `GetItemKey(rowValues)` (row identity:
+    a record → its reference guid, a register → its COMPOSITE record key — registers have several
+    key columns), `GetRowKeyByValue(value)` (the INVERSE of the fetch's row-key: an identity VALUE →
+    its primary-key column values, for the FindRowValue selection-restore — see below),
+    `FillSourceExplorer(explorer)` (the column set, system columns hidden).
+  - **COMMAND INTERFACE** — `GetCommandCollection(formType, out)` (the command band),
+    `CallAsCommand(key, id, srcForm)` (run one by id).
+  - **ENTRY** — `ShowValueByKey(key, srcForm)` (open a row's value directly — the double-click /
+    "enter" affordance, no command id).
+- **Two templates, so a pure query source is not forced to carry the command surface:**
+  - **`ibMetaQueryDescriptor<TQueryable, TMeta>`** — the query-identity HALF only
+    (`GetNamespace` / `GetName` / `CreateQueryable` / `GetQueryable`, `m_meta` + `m_queryable`) PLUS the
+    UNIVERSAL `GetRowKeyByValue` (it reads the PK columns off the value through its own `m_queryable`, so
+    a record and a register share ONE implementation — no per-family override). A **constant** uses this:
+    it is registered only so `From(constant)` resolves, never shown as a list, so it leaves the whole
+    row+command surface at the base's neutral defaults and carries none of it.
+  - **`ibMetaCommandDescriptor<TQueryable, TMeta> : ibMetaQueryDescriptor`** — adds the row +
+    command surface, each call FORWARDED to `this->m_meta`. **Records and registers** use this. The
+    metaobject carries the real behaviour, polymorphic down its OWN inheritance (`RecordDataRef` →
+    `MutableRef` → `HierarchyMutableRef`; `Document : MutableRef` adds Post; `RegisterData` its
+    record-manager set; enum → the neutral ref base, silent). No mixin, no separate command
+    interface — `TMeta` must have the methods or the template won't compile (a compile-time contract).
+- **The list is a mirror.** `GetSourceDescriptor()` re-resolves the descriptor LIVE by table id
+  (parallel to `GetSourceQueryable()`, never cached). `ActivateItem` → `holder->ShowValueByKey`,
+  the command band → `holder->GetCommandCollection` / `CallAsCommand`, choose → `holder->GetSelectValue`,
+  `GetItemKey` → `holder->GetItemKey`, the explorer → `holder->FillSourceExplorer`. Bodies live in
+  `commonObjectAction.cpp` (record/register) + `documentAction.cpp` (Post), with the metaobject they
+  implement — NOT in a list TU.
+
+### Selection restore — FindRowValue keys by the PK, through the descriptor
+
+After a child-form save changes / creates a row, the TableBox re-finds the current row: `ResolveLineByValue`
+→ `model->FindRowValue(changedValue)`. The dynamic list is metadata-blind, so it FORWARDS the key build to
+the source descriptor — `GetSourceDescriptor()->GetRowKeyByValue(value)` — and wraps the result in a key-only
+`ibComposerNode` stub; the freshly-fetched batch matches it by `m_rowKey` (`IsEqualTo`) and lands the focus.
+
+`ibMetaQueryDescriptor::GetRowKeyByValue` reads the source's `GetPrimaryKeyColumns()` off the identity value
+through the `ibSourceDataObject` hop gate — the SAME columns the fetch stamps into a node's `m_rowKey`. It is
+UNIVERSAL: a record's reference yields its self-reference (one guid), a register's record-manager decomposes
+into its COMPOSITE key. A custom-query source (no descriptor) falls back to the base `{value}` stub.
+
+This restores the per-list "find by key" the deleted family models did. The generic single-value stub matched
+a catalog / document row (one guid) but never a register row (multi-column key) — which is why a register list
+dropped its selection on a value change until the key build moved onto the descriptor.
+
+### Source metaobject + icon / caption (via the queryable)
+
+The list vends `GetSourceMetaObject()` (its `ibSourceDataObject` override) THROUGH the queryable —
+`GetSourceQueryable()->GetSourceMetaObject()` returns the metaobject behind a metadata source
+(`ibRecordQueryable` / `ibRegisterDataQueryable` return their `m_meta`; a custom-query source has
+none → null). This is the ONE path the front reads the source's **icon** (`GetSourceMetaObject()->GetIcon()`)
+and **caption** (`"Type: Synonym"` from `GetClassName()` + `GetSynonym()`) off, exactly as every
+other source object does. (A blind list returning null here is what made a migrated catalog show no
+row icon — the fix was to forward the metaobject, NOT to add a per-row icon method to the model.)
+
+### Per-config source factory (copy-safe resolution)
+
+Metadata-backed sources are **per-config**, not global. Each open configuration's snapshot
+(`ibMetaImage`) owns its own `ibMetaQueryableFactory` (`ibMetaData::GetSourceFactory()`); a metaobject
+registers its descriptor into **its own** config via the facade `m_metaData->RegisterSource(&m_queryable)`
+(on run) / `UnregisterSource` (on close) — not a free hook against one global registry. So a **copied**
+Document (or a second open config) keeps its OWN set of queryables; the old single global factory, keyed
+by `(namespace, name)`, would collide or leak the original's descriptor into the copy — which is exactly
+why a copied dynamic list resolved the original's columns.
+
+Resolution always goes **through the metadata the query runs ON BEHALF OF**, never `appData` /
+active-metadata directly:
+
+- The list / its `Source` property / its variant resolve via the owner's config —
+  `owner->GetMetaData()->GetSourceFactory()` (the list bridges `GetMetaData()` → `GetSourceMetaData()`,
+  which reaches the owner form's config through the attach owner). The picker
+  (`ibPGDynamicSourceProperty`) lists that same config's descriptors.
+- The **query language** (`From Catalog.X` by name, `valueComposer` → `dataComposer` → `queryLowering`)
+  threads the config down: `ibDataComposer` holds `m_metaData` (set from the list's `GetSourceMetaData()`,
+  or from the running config for a script query) and installs an `ibSourceMetaDataScope` before
+  `Execute` — **parallel to `ibTempSourceScope`** — which `ResolveSource` reads to pick the config's factory.
+
+A per-config factory **descends to the global base factory on a resolve miss**, and every call site falls
+back to it when there is no metadata in scope — the global factory is the future plugin / system seam
+(empty today). The metaobject-coupled descriptor templates (`ibMetaQueryDescriptor` /
+`ibMetaCommandDescriptor`) live in `commonObject.h`, keeping the L4 `queryableFactory.h` metadata-agnostic
+(base descriptor + factory only).
+
+### Folder container + creation-time settings
+
+Folders are **settings**, not a subtype. A hierarchical list is built by a small factory that sets
+the defaults at CREATION (serialised on the composer, so a user can remove them):
+
+- `ibCreateList(q, presCol, view)` — a flat list + one default presentation sort.
+- `ibCreateHierarchyList(q, folderCol, presCol, view)` — folder-first sort + presentation sort; the
+  TREE comes from the queryable's hierarchy (parent) column.
+- `ibCreateFolderList(q, folderCol, presCol, view)` — presentation sort + a fixed `IsFolder = true`
+  filter (a folder-select form is just the list with that predicate, added by the backend at form
+  generation; selection itself moved to the FRONT).
+
+`view` (default `ibDynamicListView_Normal`) seeds the list's default view; a SELECT / FOLDER-SELECT
+form passes `ibDynamicListView_Choice` — all three factories take it uniformly. See *Choice mode* below.
+
+A **folder row renders as a drillable container even when empty** (the folder convention). The DB
+level-fetch reports `hasChildren = false` for every row (dataComposer's flat path), so the folder
+flag is the ONLY signal the tree has. The folder column is the LIST's display column
+(`GetFolderDisplayColumn`, handed in by `ibCreateHierarchyList`, read by `RunComposerPage`) — a
+DISPLAY concern of the hierarchical list, **not** a `queryable` accessor (there is no
+`GetFolderColumn`). `GetPresentationSortColumn` / `GetFolderColumn` are gone; the hierarchical fetch (`GetHierarchyColumn`)
+stays — it is the one structural tree mechanism. (`ibDynamicListView` came BACK — but in a new role: a
+serialised default **view**, not a structural subtype/column; see *Choice mode* below.)
+
+### Choice mode — the serialised default view
+
+`ibDynamicListView { Normal, Choice }` is the list's **default view kind**, held on `m_view` and
+serialised **implicitly** — a hidden intrinsic field (`"View"`) written/read by `WriteProperty` /
+`ReadProperty`, NOT a user-facing property. It is the list's *default behaviour*, not a runtime mode:
+
+- **Seeded at creation.** A metaobject's SELECT / FOLDER-SELECT form creates the list with
+  `ibDynamicListView_Choice` (the `view` arg on the `ibCreate*` factories); a plain LIST form leaves it
+  `Normal`. A folder-select is inherently a choice, so `ibCreateFolderList` is only ever called `Choice`.
+- **One propagation seam — the explorer.** `GetSourceExplorer()` stamps the flag onto the explorer
+  (`SetChoiceMode(m_view == Choice)`, after `FillSourceExplorer`). The form auto-build copies the
+  explorer's flag onto the main **TableBox** (`mainTableBox->SetChoiceMode(...)`), where it serialises
+  **per-form** (the TableBox's own `ChoiceMode` property). So BOTH carry it: the LIST value is the
+  default a fresh form inherits; the TABLEBOX copy is the per-form override the user can clear.
+- **Why both.** Dropping a dynamic list onto a form (designer drag) makes it stamp `select` by default —
+  the list is the *source of the default*. If a form should not be a picker, the user clears choice on
+  that form's TableBox; the list's default is untouched. Selection itself stays front-driven (a choice
+  TableBox raises the pick affordance) — the flag only says *which behaviour the form defaults to*.
+
+This is why the view is serialised on the list and not left transient: it is the default that flows to
+every form built from the source, editable at each form.
+
 ## Migration
 
-Old per-family classes are **not deleted**. Sources are moved onto the dynamic list
-incrementally — documents and catalog list/select first (`CreateSourceObject` →
-`new ibValueDynamicList(); list->SetSource(ns,name)`), the rest after it proves out.
-`LIST_FOLDER`/`LIST_ITEM` modes are gone — folder vs item is a **filter**, not a
-class type; flat vs tree is the **view**.
+**Done (2026-07-11).** Every standard metadata list/select now creates an `ibValueDynamicList`
+through the `ibCreate*` factories (`CreateSourceObject` / `GetListForm` / `GetSelectForm`). The
+per-family model classes (`ibValueListDataObjectEnumRef` / `…Ref` / `…RefDocument` /
+`ibValueListRegisterObject` / `ibValueModelTreeDataObjectFolderRef`) and their list-value-type
+registrars are **DELETED**. `LIST_FOLDER` / `LIST_ITEM` modes are gone — folder vs item is a
+creation-time **filter/sort** setting, not a class type; flat vs tree is the **view**. `valueDynamicList.{h,cpp}`
+(renamed from `dynamicList.{h,cpp}` for the `value*` convention) lives in `backend/system/value/` (it is
+metadata-independent, a sibling of `valueTable`).
+
+A copied metaobject registers its queryable on paste: `PasteAndRunObject` runs the object with
+`pasteObjectFlag` (not `onlyLoadFlag`), so `OnAfterRunMetaObject` registers the source descriptor —
+a copy is a NEW object and its source must be resolvable.

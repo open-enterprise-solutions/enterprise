@@ -3,9 +3,8 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "queryableFactory.h"
-#include "queryableHooks.h"
 
-#include "backend/appData.h"             // ibApplicationData::GetQueryableFactory (heavy include kept in this TU)
+#include "backend/appData.h"             // ibApplicationData::GetQueryableFactory (the global fallback the per-config factory descends to)
 #include "backend/query/queryable.h"     // ibBackendQueryable::GetQueryTableId (ResolveById)
 
 //////////////////////////////////////////////////////////////////////
@@ -70,29 +69,50 @@ std::vector<ibQueryableSourceDescriptor*> ibQueryableFactory::GetDescriptors() c
 	return result;
 }
 
-const ibBackendQueryable* ibQueryableFactory::ResolveById(ibMetaID tableId) const
+ibQueryableSourceDescriptor* ibQueryableFactory::ResolveDescriptorById(ibMetaID tableId) const
 {
 	for (const std::pair<const wxString, ibQueryableSourceDescriptor*>& kv : m_descriptors) {
 		const ibBackendQueryable* q = kv.second->CreateQueryable(nullptr, 0);
 		if (q != nullptr && q->GetQueryTableId() == tableId)
-			return q;
+			return kv.second;
 	}
 	return nullptr;
 }
 
-//////////////////////////////////////////////////////////////////////
-// Light registration hooks (queryableHooks.h) — keep appData / factory out of the
-// metadata TUs. The family checks onlyLoadFlag BEFORE calling register.
-//////////////////////////////////////////////////////////////////////
-
-void ibRegisterQueryableSource(ibQueryableSourceDescriptor* descriptor)
+const ibBackendQueryable* ibQueryableFactory::ResolveById(ibMetaID tableId) const
 {
-	if (ibQueryableFactory* factory = ibApplicationData::GetQueryableFactory())
-		factory->Register(descriptor);
+	ibQueryableSourceDescriptor* descriptor = ResolveDescriptorById(tableId);
+	return descriptor != nullptr ? descriptor->CreateQueryable(nullptr, 0) : nullptr;
 }
 
-void ibUnregisterQueryableSource(ibQueryableSourceDescriptor* descriptor)
+//////////////////////////////////////////////////////////////////////
+// ibMetaQueryableFactory — per-config: own registry FIRST, then DESCEND to the global factory on a miss.
+//////////////////////////////////////////////////////////////////////
+
+const ibBackendQueryable* ibMetaQueryableFactory::Resolve(const wxString& ns, const wxString& objectName,
+                                                          ibValue** paParams, long lSizeArray) const
 {
-	if (ibQueryableFactory* factory = ibApplicationData::GetQueryableFactory())
-		factory->Unregister(descriptor);
+	if (const ibBackendQueryable* q = ibQueryableFactory::Resolve(ns, objectName, paParams, lSizeArray))
+		return q;
+	const ibQueryableFactory* global = ibApplicationData::GetQueryableFactory();
+	return global != nullptr ? global->Resolve(ns, objectName, paParams, lSizeArray) : nullptr;
 }
+
+const ibBackendQueryable* ibMetaQueryableFactory::ResolveById(ibMetaID tableId) const
+{
+	if (const ibBackendQueryable* q = ibQueryableFactory::ResolveById(tableId))
+		return q;
+	const ibQueryableFactory* global = ibApplicationData::GetQueryableFactory();
+	return global != nullptr ? global->ResolveById(tableId) : nullptr;
+}
+
+ibQueryableSourceDescriptor* ibMetaQueryableFactory::ResolveDescriptorById(ibMetaID tableId) const
+{
+	if (ibQueryableSourceDescriptor* d = ibQueryableFactory::ResolveDescriptorById(tableId))
+		return d;
+	const ibQueryableFactory* global = ibApplicationData::GetQueryableFactory();
+	return global != nullptr ? global->ResolveDescriptorById(tableId) : nullptr;
+}
+
+// (Registration moved to ibMetaData::RegisterSource / UnregisterSource — the metadata is the facade over its own
+//  per-config factory; a metaobject registers via m_metaData->RegisterSource(&m_queryable). See metaData.cpp.)

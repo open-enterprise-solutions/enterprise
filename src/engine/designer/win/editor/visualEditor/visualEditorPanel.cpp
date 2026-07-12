@@ -93,8 +93,17 @@ bool ibVisualEditorNotebook::ibVisualEditor::LoadForm()
 		m_valueForm = new ibValueForm(creator, nullptr);
 		if (!creator->LoadFormData(m_valueForm)) {
 			wxDELETE(m_valueForm);
+			wxLogWarning(_("Form editor: the form \"%s\" could not be loaded (its stored data is missing or unreadable)."),
+				creator->GetName().c_str());
 			return false;
 		}
+	}
+
+	// Do not proceed with a null form — the visual host / AUI teardown asserts on a half-created view.
+	// Warn instead of silently failing so the user knows the editor could not open the form.
+	if (m_valueForm == nullptr) {
+		wxLogWarning(_("Form editor: the form \"%s\" could not be opened."), creator->GetName().c_str());
+		return false;
 	}
 
 	m_valueForm->IncrRef();

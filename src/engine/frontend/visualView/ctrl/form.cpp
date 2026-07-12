@@ -145,13 +145,17 @@ ibSourceDataObject* ibValueForm::GetSourceObject() const
 
 const ibMetaData* ibValueForm::GetMetaData() const
 {
-	const ibSourceDataObject* sourceObject = GetSourceObject();
-	if (sourceObject != nullptr)
-		return sourceObject->GetSourceMetaData();
+	// The form metaobject (creator) is the SKELETON — its config is authoritative, so consult it FIRST. The
+	// SOURCE object provides the metadata ONLY as a fallback, when the form has NO metaobject (a dynamically-
+	// built form with no skeleton). Order matters: asking the SOURCE first recursed — a form-local dynamic-list
+	// source resolves its OWN metadata back THROUGH this form (attach-owner holder → attribute → owner form →
+	// here), so source-first looped GetMetaData → GetSourceMetaData → … → stack overflow. Metaobject-first
+	// short-circuits that for every form that has a creator (which is all metadata-defined forms).
+	if (m_metaFormObject != nullptr)
+		return m_metaFormObject->GetMetaData();
 
-	return m_metaFormObject != nullptr ?
-		m_metaFormObject->GetMetaData() :
-		nullptr;
+	const ibSourceDataObject* sourceObject = GetSourceObject();
+	return sourceObject != nullptr ? sourceObject->GetSourceMetaData() : nullptr;
 }
 
 ibFormID ibValueForm::GetTypeForm() const

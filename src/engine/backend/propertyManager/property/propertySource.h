@@ -100,9 +100,14 @@ public:
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
 
-	//load & save object in control 
+	// Load & save — the DUMB raw id path (normal on-disk format).
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
 	virtual bool WriteNodeValue(ibDataValue& value) const override;
+
+	// Copy & paste — their OWN binary: each metaobject hop rides its GUID so a paste re-homes the binding onto the
+	// pasted object (marked with that guid), not the original. Transient — the first normal save re-emits raw.
+	virtual bool CopyNodeValue(ibDataValue& value) const override;
+	virtual bool PasteNodeValue(const ibDataValue& value) override;
 
 public:
 

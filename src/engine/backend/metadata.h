@@ -48,30 +48,8 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////////
 
-// Lazy form-construction marker stored in the compile-value cache.
-// Eager form-build at OnAfterRunMetaObject time would assert on a null
-// mm (form's compile module needs to be parented to the session root,
-// which isn't compiled yet at that point). Instead the cache registers
-// this deferred descriptor; cache materializes the form value on first
-// FindCompileModule lookup, when mm is fully ready.
-class BACKEND_API ibDeferredForm {
-public:
-	ibDeferredForm(ibValueMetaObjectGenericData* parent,
-	               ibValueMetaObjectFormBase* form) noexcept
-		: m_parent(parent), m_form(form) {}
-
-	// Builds the form value. Calls parent->CreateObjectForm(form) and
-	// wraps via formWrapper::inl::cast_value into a ibValue*. Returns
-	// nullptr if either pointer isn't set.
-	class ibValue* Construct() const;
-
-	ibValueMetaObjectGenericData* Parent() const { return m_parent; }
-	ibValueMetaObjectFormBase*    Form()   const { return m_form; }
-
-private:
-	ibValueMetaObjectGenericData* m_parent;
-	ibValueMetaObjectFormBase*    m_form;
-};
+// ibDeferredForm (the lazy form-construction marker stored in the compile-value cache) now lives in
+// metaFormObject.h — it is only used there, and its constructor reads IsPasteMode off the complete form type.
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -172,6 +150,9 @@ private:
 //
 // m_factoryCtorCountChanges (the monotonic invalidation counter) deliberately stays
 // OUTSIDE the image, on ibMetaData — dropping the image must not reset it.
+class ibQueryableFactory;         // per-config source factory lives on the snapshot (forward-decl: unique_ptr member)
+class ibMetaQueryableFactory;     // the concrete per-config factory (own registry → global fallback), allocated out of line
+
 class BACKEND_API ibMetaImage {
 public:
 	// The image builds its OWN designer infrastructure on construction (out of line —
@@ -182,13 +163,11 @@ public:
 	// owner==nullptr ⇒ a bare image (the ctor-factory + module skeleton fill during the
 	// run cascade, not here).
 	explicit ibMetaImage(ibMetaData* owner = nullptr);
-	// Default dtor suffices: m_factoryCtors (ibCtorRegistry) OWNS its ctors via
-	// shared_ptr and frees them when destroyed — so dropping the last shared_ptr to
-	// this image frees its ctors automatically, even though ibCtorMetaValueType is
-	// only forward-declared here (the deleter was captured at Register, with the
-	// complete type). Module storage holds non-owning tree pointers; the compile
-	// cache is a unique_ptr (frees itself).
-	~ibMetaImage() = default;
+	// Dtor is OUT OF LINE (metadataFactory.cpp): m_sourceFactory is a unique_ptr to a forward-declared
+	// ibQueryableFactory, so its deleter needs the complete type there, not in this header. m_factoryCtors
+	// (ibCtorRegistry) frees its ctors via type-erased shared_ptr deleters; module storage is non-owning; the
+	// compile cache + source factory are unique_ptrs (free themselves).
+	~ibMetaImage();
 	// Managed only through shared_ptr (install / swap) — never copied or moved.
 	ibMetaImage(const ibMetaImage&) = delete;
 	ibMetaImage& operator=(const ibMetaImage&) = delete;
@@ -224,6 +203,11 @@ public:
 	const ibModuleStorage* ModuleStorage() const { return &m_moduleStorage; }
 	ibCompileValueCache*   CompileCache()  const { return m_compileCache.get(); }
 
+	// This config's OWN source factory (metadata-backed queryables register here; resolve descends to the global
+	// factory on a miss). Allocated in the image ctor. The base ptr is enough for callers (they use the virtual
+	// Resolve*). See ibMetaData::GetSourceFactory facade.
+	ibQueryableFactory*    SourceFactory() const { return m_sourceFactory.get(); }
+
 private:
 
 	// clsid O(1); name / (metaValue,refType) linear (see ctorRegistry.h). type_info
@@ -236,6 +220,9 @@ private:
 	// Compile-value cache — designer-only. Allocated by ibMetaDataConfigurationStorage's
 	// ctor (and the external DP / report ctors); nullptr on runtime configurations.
 	std::unique_ptr<ibCompileValueCache> m_compileCache;
+	// Per-config source factory (ibMetaQueryableFactory) — this snapshot's OWN metadata-backed queryable descriptors;
+	// resolve descends to the global factory on a miss. Allocated in the image ctor (out of line).
+	std::unique_ptr<ibQueryableFactory> m_sourceFactory;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -268,6 +255,19 @@ public:
 	// (`if (auto* cc = metaData->GetCompileCache())`) instead of querying
 	// appData->DesignerMode().
 	ibCompileValueCache* GetCompileCache() const { return m_image ? m_image->CompileCache() : nullptr; }
+
+	// This config's OWN source factory (on the snapshot; null when closed). ONLY metadata-backed sources register here
+	// now — the global (application-data) factory is empty and is a FUTURE plugin seam (the per-config factory descends
+	// to it on a resolve miss). Every entry goes THROUGH metadata: registration via RegisterSource below, resolve via
+	// this factory. Callers get the factory from the metadata they run on behalf of — never appData / active metadata.
+	class ibQueryableFactory* GetSourceFactory() const { return m_image ? m_image->SourceFactory() : nullptr; }
+
+	// Register / unregister a metadata-backed source descriptor into THIS config's OWN factory. The metaobject calls it
+	// on run / close (GetMetaData()->RegisterSource(&m_queryable)) — each config keeps its own set of queryables. Out
+	// of line (metaData.cpp): keeps ibQueryableFactory out of the metaobject TUs. const — the factory, not the metadata,
+	// is mutated (the metadata is a stable identity; its snapshot holds the mutable registry).
+	void RegisterSource(class ibQueryableSourceDescriptor* descriptor) const;
+	void UnregisterSource(class ibQueryableSourceDescriptor* descriptor) const;
 
 	// Factory for this metadata kind's designer infrastructure — called by the image
 	// ctor, which takes ownership (no bool flag on the metadata). Base returns none

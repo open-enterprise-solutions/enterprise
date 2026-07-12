@@ -89,6 +89,10 @@ public:
 	//get command section
 	virtual ibInterfaceCommandSection GetCommandSection() const { return ibInterfaceCommandSection::ibInterfaceCommandSection_Create; }
 
+	// (NO source-command surface — a constant is a single global value, never a list. Its descriptor is the
+	// query-only ibMetaQueryDescriptor, which does NOT forward select / key / columns / commands, so the constant
+	// is not required to carry them. It registers only so From(constant) resolves to its one row.)
+
 	// (no dump & restore override — sys_const is dumped generically off the snapshot, L3-3 EXTERNAL mode)
 
 protected:
@@ -120,7 +124,7 @@ private:
 
 	// the L4 source descriptor — CONTAINS the vended queryable (stable for this constant's
 	// life) and is registered with the factory on run / close; GetQueryable() forwards to it.
-	ibMetaSourceDescriptor<ibConstantQueryable, ibValueMetaObjectConstant> m_queryable{ this };
+	ibMetaQueryDescriptor<ibConstantQueryable, ibValueMetaObjectConstant> m_queryable{ this };
 
 #pragma region role 
 	ibRole* m_roleRead = ibValueMetaObject::CreateRole(wxT("Read"), _("Read"));

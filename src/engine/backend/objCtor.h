@@ -76,62 +76,6 @@ protected:
 #define unregisterReference()\
 	m_metaData->UnRegisterCtor(generate_class_name(prefixReference))
 
-//list object class 
-class ibCtorMetaValueTypeReferenceList :
-	public ibCtorMetaValueType {
-public:
-
-	ibCtorMetaValueTypeReferenceList(ibValueMetaObjectRecordDataRef* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
-		m_classType = list_to_clsid(m_metaObject->GetMetaID());
-	}
-
-	virtual wxString GetClassName() const {
-		return m_metaObject->GetClassName() + prefixList + m_metaObject->GetName();
-	}
-
-	virtual ibClassID GetClassType() const { return m_classType; }
-	virtual ibValue* CreateObject() const;
-	virtual const ibValueMetaObject* GetMetaObject() const { return m_metaObject; }
-	virtual ibCtorObjectMetaType GetMetaTypeCtor() const { return ibCtorObjectMetaType::ibCtorObjectMetaType_List; }
-
-protected:
-	ibClassID m_classType;
-	ibValueMetaObjectRecordDataRef* m_metaObject;
-};
-
-#define registerRefList()\
-	m_metaData->RegisterCtor(new ibCtorMetaValueTypeReferenceList(this))
-#define unregisteRefList()\
-	m_metaData->UnRegisterCtor(generate_class_name(prefixList))
-
-//list register class
-class ibCtorMetaValueTypeRegisterList :
-	public ibCtorMetaValueType {
-public:
-
-	ibCtorMetaValueTypeRegisterList(ibValueMetaObjectRegisterData* recordRef) : ibCtorMetaValueType(), m_metaObject(recordRef) {
-		m_classType = list_to_clsid(m_metaObject->GetMetaID());
-	}
-
-	virtual wxString GetClassName() const {
-		return m_metaObject->GetClassName() + prefixList + m_metaObject->GetName();
-	}
-
-	virtual ibClassID GetClassType() const { return m_classType; }
-	virtual ibValue* CreateObject() const;
-	virtual const ibValueMetaObject* GetMetaObject() const { return m_metaObject; }
-	virtual ibCtorObjectMetaType GetMetaTypeCtor() const { return ibCtorObjectMetaType::ibCtorObjectMetaType_List; }
-
-protected:
-	ibClassID m_classType;
-	ibValueMetaObjectRegisterData* m_metaObject;
-};
-
-#define registerRegList()\
-	m_metaData->RegisterCtor(new ibCtorMetaValueTypeRegisterList(this))
-#define unregisterRegList()\
-	m_metaData->UnRegisterCtor(generate_class_name(prefixList))
-
 //object class
 class ibCtorMetaValueTypeObject :
 	public ibCtorMetaValueType {

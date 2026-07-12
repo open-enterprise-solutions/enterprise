@@ -3,6 +3,7 @@
 
 #include "backend/backend.h"                              // BACKEND_API (base header, not includer-order dependent)
 #include "backend/uniqueKey.h"                            // ibUniqueKey (form guid)
+#include "backend/actionInfo.h"                           // ibCommandItem / ibFormID / ibActionID — the metaobject's command contract
 #include "backend/metaCollection/metaObjectComposite.h"   // ibValueMetaObjectCompositeData (base) + FillArrayObjectByFilter templates
 #include "backend/metaCollection/metaFormObject.h"        // ibValueMetaObjectFormBase + ibBackendCommandItem (bases), ibBackendValueForm, defaultFormType (ibSelectorDataType comes transitively via backend_type.h)
 #include "backend/metaCollection/metaSpreadsheetObject.h" // ibValueMetaObjectSpreadsheetBase
@@ -94,6 +95,9 @@ public:
 #pragma region access_generic
 	virtual bool AccessRight_Show() const { return true; }
 #pragma endregion
+
+	// (Source list COMMANDS live as plain virtuals on the record / register / constant metaobjects, forwarded by the
+	//  templated source descriptor — NOT here: GenericData carries no such surface, so nothing is pushed onto it.)
 
 	virtual ibClassID ResolveChild(const ibClassID& clsid) const {
 		if (clsid == g_metaFormCLSID ||

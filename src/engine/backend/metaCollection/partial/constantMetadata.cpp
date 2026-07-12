@@ -5,8 +5,7 @@
 
 #include "constant.h"
 #include "backend/serialize/dataBuilder.h"
-#include "backend/metaData.h"
-#include "backend/query/queryableHooks.h"   // light L4 source registration hooks (no appData / factory include here)
+#include "backend/metaData.h"   // ibMetaData::RegisterSource — the constant registers its source into its OWN config
 
 #define objectModule wxT("objectModule")
 
@@ -101,10 +100,10 @@ bool ibValueMetaObjectConstant::OnAfterRunMetaObject(int flags)
 	if (!m_propertyModule->GetMetaObject()->OnAfterRunMetaObject(flags))
 		return false;
 
-	// Register the constant as an L4 query source (its descriptor field, holding the single-row
-	// sys_const queryable). Check the flag BEFORE registering — skip the onlyLoadFlag pass.
-	if (!(flags & onlyLoadFlag))
-		ibRegisterQueryableSource(&m_queryable);
+	// Register the constant as an L4 query source (its descriptor field, holding the single-row sys_const
+	// queryable). Register ALWAYS — the factory is PER-CONFIG (in the metadata), so a read-only DB load
+	// (onlyLoadFlag) must still register its OWN source into its OWN factory or its forms can't resolve it.
+	m_metaData->RegisterSource(&m_queryable);
 
 	if (auto* cc = m_metaData->GetCompileCache()) {
 
@@ -119,7 +118,7 @@ bool ibValueMetaObjectConstant::OnAfterRunMetaObject(int flags)
 
 bool ibValueMetaObjectConstant::OnBeforeCloseMetaObject()
 {
-	ibUnregisterQueryableSource(&m_queryable);
+	m_metaData->UnregisterSource(&m_queryable);
 
 	if (!m_propertyModule->GetMetaObject()->OnBeforeCloseMetaObject())
 		return false;

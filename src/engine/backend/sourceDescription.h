@@ -11,7 +11,6 @@
 // longer path is Ref.Ref.Field navigation. The whole description is what a source
 // object is fed instead of a bare metaId — the source walks it against itself.
 //
-// Mirrors ibMetaDescription (a plain id list with its own *Memory serialiser).
 // One hop of a binding path: WHERE to go (id) and the type EXPECTED there (recorded at path-construction).
 // The type is g_valueUndefinedCLSID where the source imposes no constraint (the common case), or a concrete
 // clsid where a COMPOSITE reference was pinned to one branch in the picker. The walk's gate compares it to
@@ -67,17 +66,16 @@ public:
 	const std::vector<ibSourceHop>& GetPath() const { return m_listSource; }
 };
 
-// Serialises a source-description path as RAW ids — the head is a FORM-LOCAL attribute id, each deeper hop a
-// source-column id. Resolution is METADATA-AGNOSTIC: the source explorer WALKS the path (FindById per hop,
-// each hop's value yielding the next explorer), so the serializer never touches metadata — no guid, no
-// metaData param. Load takes the ids verbatim; the explorer resolves them. A legacy guid-tail blob (old
-// metadata-coupled writer) recovers only its head — re-save rewrites it raw. See the .cpp for the format.
+// A DUMB serializer for a source-description path — the head is a FORM-LOCAL attribute id, each deeper hop a
+// source-column id. It writes / reads the ids VERBATIM and knows nothing else: no metadata, no copy awareness.
+// What the ids mean and how a paste transforms them is the OWNER's contract (ibPropertySource copy/paste hooks),
+// which processes the path before writing / after reading. See the .cpp for the format.
 class BACKEND_API ibSourceDescriptionMemory {
 public:
 	static bool LoadData(class ibReaderMemory& reader, ibSourceDescription& srcDesc);
 	static bool SaveData(class ibWriterMemory& writer, ibSourceDescription& srcDesc);
 
-	// node form — a Binary blob of the raw id path; the byte reader / writer is contained here, not the property.
+	// node form — a Binary blob of the id path; the byte reader / writer is contained here, not the property.
 	static bool ReadNode(const class ibDataValue& value, ibSourceDescription& srcDesc);
 	static bool WriteNode(class ibDataValue& value, ibSourceDescription& srcDesc);
 };

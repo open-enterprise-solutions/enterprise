@@ -5,7 +5,7 @@
 
 #include "chartOfCharacteristicTypes.h"
 #include "backend/serialize/dataBuilder.h"
-#include "list/objectList.h"
+#include "backend/system/value/valueDynamicList.h"   // ibValueDynamicList — the standard list migrates onto the universal dynamic list
 #include "backend/metaData.h"
 #include "backend/moduleManager/moduleManager.h"
 
@@ -87,11 +87,11 @@ ibSourceDataObject* ibValueMetaObjectChartOfCharacteristicTypes::CreateSourceObj
 	case eFormFolder:
 		return CreateObjectValue(ibObjectMode::OBJECT_FOLDER);
 	case eFormList:
-		return new ibValueModelTreeDataObjectFolderRef(this, metaObject->GetTypeForm(), ibValueModelTreeDataObjectFolderRef::LIST_ITEM_FOLDER);
+		return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder(), GetDataDescription());   // migrated onto the universal dynamic list (hierarchy via queryable)
 	case eFormSelect:
-		return new ibValueModelTreeDataObjectFolderRef(this, metaObject->GetTypeForm(), ibValueModelTreeDataObjectFolderRef::LIST_ITEM_FOLDER, true);
+		return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder(), GetDataDescription(), ibDynamicListView_Choice);   // select front-driven — choice mode
 	case eFormFolderSelect:
-		return new ibValueModelTreeDataObjectFolderRef(this, metaObject->GetTypeForm(), ibValueModelTreeDataObjectFolderRef::LIST_FOLDER, true);
+		return ibCreateFolderList(GetQueryable(), GetDataIsFolder(), GetDataDescription(), ibDynamicListView_Choice);   // folder-select = choice + IsFolder = true
 	}
 
 	return nullptr;
@@ -123,7 +123,7 @@ ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetListForm(con
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		strFormName,
 		ibValueMetaObjectChartOfCharacteristicTypes::eFormList,
-		ownerControl, new ibValueModelTreeDataObjectFolderRef(this, ibValueMetaObjectChartOfCharacteristicTypes::eFormList, ibValueModelTreeDataObjectFolderRef::LIST_ITEM_FOLDER),
+		ownerControl, ibCreateHierarchyList(GetQueryable(), GetDataIsFolder(), GetDataDescription()),   // migrated onto the universal dynamic list (hierarchy via queryable)
 		formGuid
 	);
 }
@@ -133,7 +133,7 @@ ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetSelectForm(c
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		strFormName,
 		ibValueMetaObjectChartOfCharacteristicTypes::eFormSelect,
-		ownerControl, new ibValueModelTreeDataObjectFolderRef(this, ibValueMetaObjectChartOfCharacteristicTypes::eFormSelect, ibValueModelTreeDataObjectFolderRef::LIST_ITEM, true),
+		ownerControl, ibCreateHierarchyList(GetQueryable(), GetDataIsFolder(), GetDataDescription(), ibDynamicListView_Choice),   // select front-driven — choice mode
 		formGuid
 	);
 }
@@ -143,7 +143,7 @@ ibBackendValueForm* ibValueMetaObjectChartOfCharacteristicTypes::GetFolderSelect
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		strFormName,
 		ibValueMetaObjectChartOfCharacteristicTypes::eFormFolderSelect,
-		ownerControl, new ibValueModelTreeDataObjectFolderRef(this, ibValueMetaObjectChartOfCharacteristicTypes::eFormFolderSelect, ibValueModelTreeDataObjectFolderRef::LIST_FOLDER, true),
+		ownerControl, ibCreateFolderList(GetQueryable(), GetDataIsFolder(), GetDataDescription(), ibDynamicListView_Choice),   // folder-select = choice + IsFolder = true
 		formGuid
 	);
 }

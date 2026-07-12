@@ -8,6 +8,7 @@
 #include "queryable.h"                    // ibBackendQueryColumn / ibQueryFilterOp
 #include "queryableFactory.h"             // ibQueryableFactory — source-namespace resolution
 #include "backend/appData.h"              // ibApplicationData::GetQueryableFactory
+#include "backend/metaData.h"             // ibMetaData::GetSourceFactory — resolve through the query's OWN config
 #include "backend/tableInfo.h"            // ibComparisonType
 #include "backend/backend_exception.h"    // ibBackendCoreException
 
@@ -34,6 +35,26 @@ const ibBackendQueryable* ibTempSourceScope::Find(const wxString& name)
 		return nullptr;
 	const auto it = t_tempSources->find(name);
 	return it != t_tempSources->end() ? it->second : nullptr;
+}
+
+// The config a query runs on behalf of, for one execution — the composer threads its metadata in through here (parallel
+// to the temp-source scope), so ResolveSource resolves by-name metaobject sources against THIS config's factory.
+static thread_local const ibMetaData* t_sourceMetaData = nullptr;
+
+ibSourceMetaDataScope::ibSourceMetaDataScope(const ibMetaData* metaData)
+	: m_prev(t_sourceMetaData)
+{
+	t_sourceMetaData = metaData;
+}
+
+ibSourceMetaDataScope::~ibSourceMetaDataScope()
+{
+	t_sourceMetaData = m_prev;
+}
+
+const ibMetaData* ibSourceMetaDataScope::Get()
+{
+	return t_sourceMetaData;
 }
 
 namespace {
@@ -72,7 +93,13 @@ const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map
 	if (const ibBackendQueryable* tmp = ibTempSourceScope::Find(name))
 		return tmp;
 
-	ibQueryableFactory* factory = ibApplicationData::GetQueryableFactory();
+	// Resolve through the config the query runs ON BEHALF OF (threaded in by the composer) — metaobject sources
+	// register per-config now, and that factory descends to the global one internally (future plugin sources). No
+	// config in scope → knock on the global base factory directly (the common/plugin one).
+	const ibMetaData* md = ibSourceMetaDataScope::Get();
+	ibQueryableFactory* factory = md != nullptr ? md->GetSourceFactory() : nullptr;
+	if (factory == nullptr)
+		factory = ibApplicationData::GetQueryableFactory();
 	if (factory == nullptr) {
 		Fail(0, 0, _("the query engine is not available (no application data)"));
 		return nullptr;

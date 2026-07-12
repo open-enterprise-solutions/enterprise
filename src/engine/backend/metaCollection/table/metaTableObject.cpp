@@ -14,7 +14,6 @@
 
 #include "backend/objCtor.h"
 #include "backend/metaCollection/partial/commonObject.h"
-#include "backend/query/queryableHooks.h"   // light L4 source registration hooks
 
 //***********************************************************************
 //*                  ibTabularSourceDescriptor                          *
@@ -215,15 +214,16 @@ bool ibValueMetaObjectTableDataRef::OnBeforeRunMetaObject(int flags)
 
 bool ibValueMetaObjectTableDataRef::OnAfterRunMetaObject(int flags)
 {
-	// Register the tabular section as an L4 query source (parent-qualified "<Parent>.<Section>").
-	if (!(flags & onlyLoadFlag))
-		ibRegisterQueryableSource(&m_queryable);
+	// Register the tabular section as an L4 query source (parent-qualified "<Parent>.<Section>"). Register
+	// ALWAYS — the factory is PER-CONFIG (in the metadata), so a read-only DB load (onlyLoadFlag) still
+	// registers its OWN sources into its OWN factory or the section can't resolve on that config's forms.
+	m_metaData->RegisterSource(&m_queryable);
 	return ibValueMetaObjectTableData::OnAfterRunMetaObject(flags);
 }
 
 bool ibValueMetaObjectTableDataRef::OnBeforeCloseMetaObject()
 {
-	ibUnregisterQueryableSource(&m_queryable);
+	m_metaData->UnregisterSource(&m_queryable);
 	return ibValueMetaObjectTableData::OnBeforeCloseMetaObject();
 }
 

@@ -271,6 +271,11 @@ public:
 
 	void SetCopyGuid(const ibGuid& guid) const { m_metaCopyGuid = guid; }
 
+	// Re-arm / disarm the paste mark. A pasted OBJECT form materialises LAZILY (ibDeferredForm) — long after
+	// PasteObject cleared the guard — so the deferred build re-stamps the SAME guid here for the duration of the
+	// load, and clears it right after; LoadControl then sees IsPasteMode and routes the controls to PasteNode.
+	void SetPasteGuid(const ibGuid& guid) const { m_metaPasteGuid = guid; }
+
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	wxString GetFileName() const;

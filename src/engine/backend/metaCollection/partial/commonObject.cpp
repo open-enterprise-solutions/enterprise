@@ -4,14 +4,12 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "commonObject.h"
-#include "backend/metaData.h"
+#include "backend/metaData.h"   // ibMetaData::RegisterSource — the metaobject registers its source into its OWN config
 #include "backend/srcDataObject.h"
 #include "backend/system/systemManager.h"
 #include "backend/objCtor.h"
 #include "backend/session/session.h"
 #include "backend/serialize/dataBuilder.h"   // node serialization (WriteData / ReadData)
-
-#include "backend/query/queryableHooks.h"   // light L4 source registration hooks (no appData / factory include here)
 
 #include "backend/metaCollection/partial/reference/reference.h"
 
@@ -303,7 +301,6 @@ bool ibValueMetaObjectRecordDataRef::OnBeforeRunMetaObject(int flags)
 		return false;
 
 	registerReference();
-	registerRefList();
 	registerManager();
 
 	const ibCtorMetaValueType* typeCtor = m_metaData->GetTypeCtor(this, ibCtorObjectMetaType::ibCtorObjectMetaType_Reference);
@@ -318,16 +315,16 @@ bool ibValueMetaObjectRecordDataRef::OnAfterRunMetaObject(int flags)
 	if (!ibValueMetaObjectRecordData::OnAfterRunMetaObject(flags))
 		return false;
 	// Register this record (catalog / document / charts / enum — subtypes chain up here) as
-	// an L4 query source: it OWNS its descriptor field m_sourceDescriptor. Check the flag
-	// BEFORE registering — skip the onlyLoadFlag (load-only) pass.
-	if (!(flags & onlyLoadFlag))
-		ibRegisterQueryableSource(&m_queryable);
+	// an L4 query source: it OWNS its descriptor field m_sourceDescriptor. Register ALWAYS — the factory
+	// lives PER-CONFIG in the metadata (not the old global singleton), so EVERY config, incl. a read-only DB
+	// load (onlyLoadFlag), must register its OWN sources into its OWN factory or its forms can't resolve them.
+	m_metaData->RegisterSource(&m_queryable);
 	return true;
 }
 
 bool ibValueMetaObjectRecordDataRef::OnBeforeCloseMetaObject()
 {
-	ibUnregisterQueryableSource(&m_queryable);
+	m_metaData->UnregisterSource(&m_queryable);
 	return ibValueMetaObjectRecordData::OnBeforeCloseMetaObject();
 }
 
@@ -340,7 +337,6 @@ bool ibValueMetaObjectRecordDataRef::OnAfterCloseMetaObject()
 		(*m_propertyAttributeReference)->SetDefaultMetaType(ibValueTypes::TYPE_EMPTY);
 
 	unregisterReference();
-	unregisteRefList();
 	unregisterManager();
 
 	return ibValueMetaObjectRecordData::OnAfterCloseMetaObject();
@@ -1120,7 +1116,6 @@ bool ibValueMetaObjectRegisterData::OnBeforeRunMetaObject(int flags)
 		return false;
 
 	registerManager();
-	registerRegList();
 	registerRecordKey();
 	registerRecordSet();
 	registerRecordSet_String();
@@ -1136,15 +1131,15 @@ bool ibValueMetaObjectRegisterData::OnAfterRunMetaObject(int flags)
 		return false;
 	// The register OWNS its main (records) descriptor field. On load it ADDITIONALLY registers
 	// its balance / turnover / slice descriptors (separate parameterized descriptors — TODO),
-	// and drops them on unload. Check the flag BEFORE registering — skip the onlyLoadFlag pass.
-	if (!(flags & onlyLoadFlag))
-		ibRegisterQueryableSource(&m_queryable);
+	// and drops them on unload. Register ALWAYS — the factory is PER-CONFIG (in the metadata), so a
+	// read-only DB load (onlyLoadFlag) must still register its OWN sources into its OWN factory.
+	m_metaData->RegisterSource(&m_queryable);
 	return true;
 }
 
 bool ibValueMetaObjectRegisterData::OnBeforeCloseMetaObject()
 {
-	ibUnregisterQueryableSource(&m_queryable);
+	m_metaData->UnregisterSource(&m_queryable);
 	return ibValueMetaObjectGenericData::OnBeforeCloseMetaObject();
 }
 
@@ -1163,7 +1158,6 @@ bool ibValueMetaObjectRegisterData::OnAfterCloseMetaObject()
 		return false;
 
 	unregisterManager();
-	unregisterRegList();
 	unregisterRecordKey();
 	unregisterRecordSet();
 	unregisterRecordSet_String();

@@ -66,7 +66,7 @@ public:
 	virtual wxString GetModuleText() const = 0;
 
 	//set form data 
-	virtual void SetFormData(const wxMemoryBuffer& formData) = 0;
+	virtual void SetFormData(const wxMemoryBuffer& formData) const = 0;   // const: only mutates *m_propertyForm, not `this`
 	virtual wxMemoryBuffer GetFormData() const = 0;
 
 	// copy form data — the LIVE form's control tree AS a transparent node (Child), not a
@@ -89,6 +89,34 @@ public:
 	//prepare menu for item
 	virtual bool PrepareContextMenu(wxMenu* defaultMenu);
 	virtual void ProcessCommand(unsigned int id);
+};
+
+// -----------------------------------------------------------------------
+// ibDeferredForm — lazy form-construction marker stored in the compile-value cache.
+// -----------------------------------------------------------------------
+// Eager form-build at OnAfterRunMetaObject time would assert on a null mm (the form's compile module must parent to
+// the session root, which isn't compiled yet). The cache registers this descriptor instead and materializes the form
+// on first FindCompileModule lookup. Lives HERE (not metaData.h): the form type is complete, so the constructor reads
+// IsPasteMode inline — recording whether the form is being pasted right now, while the mark is still live.
+
+class BACKEND_API ibValueMetaObjectGenericData;
+
+class BACKEND_API ibDeferredForm {
+public:
+	ibDeferredForm(ibValueMetaObjectGenericData* parent, ibValueMetaObjectFormBase* form) noexcept
+		: m_parent(parent), m_form(form), m_paste(form != nullptr && form->IsPasteMode()) {}
+
+	// parent->CreateObjectForm(form), wrapped into an ibValue* (out-of-line — needs formWrapper / GenericData
+	// complete). When the recorded paste flag is set, re-arms the SAME guid so the build re-homes as a paste.
+	ibValue* Construct() const;
+
+	ibValueMetaObjectGenericData* Parent() const { return m_parent; }
+	ibValueMetaObjectFormBase*    Form()   const { return m_form; }
+
+private:
+	ibValueMetaObjectGenericData* m_parent;
+	ibValueMetaObjectFormBase*    m_form;
+	bool                          m_paste;
 };
 
 // -----------------------------------------------------------------------
@@ -134,7 +162,7 @@ public:
 	virtual wxString GetModuleText() const { return m_propertyForm->GetValueAsString(); }
 
 	//set form data 
-	virtual void SetFormData(const wxMemoryBuffer& formData) { m_propertyForm->SetValue(formData); }
+	virtual void SetFormData(const wxMemoryBuffer& formData) const { m_propertyForm->SetValue(formData); }
 	virtual wxMemoryBuffer GetFormData() const { return m_propertyForm->GetValueAsMemoryBuffer(); }
 
 	/**
@@ -202,7 +230,7 @@ class BACKEND_API ibValueMetaObjectCommonForm :
 	virtual wxString GetModuleText() const { return m_propertyForm->GetValueAsString(); }
 
 	//set form data 
-	virtual void SetFormData(const wxMemoryBuffer& formData) { m_propertyForm->SetValue(formData); }
+	virtual void SetFormData(const wxMemoryBuffer& formData) const { m_propertyForm->SetValue(formData); }
 	virtual wxMemoryBuffer GetFormData() const { return m_propertyForm->GetValueAsMemoryBuffer(); }
 
 	/**

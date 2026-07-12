@@ -7,6 +7,7 @@
 #include "valueQuery.h"                  // ibValueQueryResult — Execute returns the standard L4-1 result
 #include "backend/compiler/typeCtor.h"   // VALUE_TYPE_REGISTER
 #include "backend/appData.h"             // appData->DesignerMode()
+#include "backend/metadataConfiguration.h"  // ibMetaDataConfigurationBase — full def for the GetActiveMetaData() -> const ibMetaData* upcast
 
 void ibValueDataComposer_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
@@ -24,6 +25,11 @@ bool ibValueDataComposer::Init(ibValue** paParams, const long lSizeArray)
 	// method chain reachable); Execute() on it yields an empty QueryResult.
 	if (source.IsEmpty())
 		return true;
+
+	// The query runs ON BEHALF OF the config the script executes in — resolve its by-name source there (per-config),
+	// not the global factory. A script value has no owner metadata of its own, so the running (active) config IS the
+	// query's config; the composer threads it into the lowering at Execute.
+	m_composer.SetMetaData(ibApplicationData::GetActiveMetaData());
 
 	// Any whitespace => the author's verbatim query text; otherwise a registered source
 	// `Kind.Name` (the name may be composite — a register's virtual table). A dot-less

@@ -317,6 +317,11 @@ void ibAttributeTree::OnContextMenu(wxContextMenuEvent& event)
 	// a cast (the cast is reserved for OnAddColumn, which must operate on the table).
 	const bool isTable = selEntry != nullptr && selEntry->GetBindValue() != nullptr
 		&& selEntry->GetBindValue()->GetClassType() == g_valueTableCLSID;
+	// A LOCKED form (over read-only metadata — a config opened from a DB / file) can be VIEWED but not
+	// restructured: every MUTATING action is disabled; the read-only-safe ones (Copy, Properties) stay live.
+	// The gate is the form's own IsEditable — the SAME one the form attributes read (metaObject->IsEditable).
+	ibValueForm* form = m_formHandler != nullptr ? m_formHandler->GetValueForm() : nullptr;
+	const bool editable = form == nullptr || form->IsEditable();
 
 	wxMenu menu;
 	auto appendItem = [&menu](int menuId, const wxString& label, const wxArtID& art, bool enabled) {
@@ -326,18 +331,18 @@ void ibAttributeTree::OnContextMenu(wxContextMenuEvent& event)
 		item->Enable(enabled);
 	};
 
-	appendItem(ID_ATTR_ADD, _("Add"), wxART_NEW, true);              // always available
+	appendItem(ID_ATTR_ADD, _("Add"), wxART_NEW, editable);          // mutates → locked when read-only
 	if (isTable)
-		appendItem(ID_ATTR_ADD_COLUMN, _("Add column"), wxART_NEW, true);   // value-table only
-	appendItem(ID_ATTR_EDIT, _("Edit"), wxART_EDIT, hasAttr);
-	appendItem(ID_ATTR_REMOVE, _("Delete"), wxART_DELETE, hasAttr);
+		appendItem(ID_ATTR_ADD_COLUMN, _("Add column"), wxART_NEW, editable);   // value-table only
+	appendItem(ID_ATTR_EDIT, _("Edit"), wxART_EDIT, hasAttr && editable);
+	appendItem(ID_ATTR_REMOVE, _("Delete"), wxART_DELETE, hasAttr && editable);
 	menu.AppendSeparator();
-	appendItem(ID_ATTR_CUT, _("Cut"), wxART_CUT, hasAttr);
-	appendItem(ID_ATTR_COPY, _("Copy"), wxART_COPY, hasAttr);
-	appendItem(ID_ATTR_PASTE, _("Paste"), wxART_PASTE, true);        // always available
+	appendItem(ID_ATTR_CUT, _("Cut"), wxART_CUT, hasAttr && editable);
+	appendItem(ID_ATTR_COPY, _("Copy"), wxART_COPY, hasAttr);        // read-only safe
+	appendItem(ID_ATTR_PASTE, _("Paste"), wxART_PASTE, editable);
 	menu.AppendSeparator();
-	appendItem(ID_ATTR_SETMAIN, isMain ? _("Unset main") : _("Set as main"), wxART_TICK_MARK, hasAttr);
-	appendItem(ID_ATTR_PROPERTIES, _("Properties"), wxART_LIST_VIEW, hasAttr);
+	appendItem(ID_ATTR_SETMAIN, isMain ? _("Unset main") : _("Set as main"), wxART_TICK_MARK, hasAttr && editable);
+	appendItem(ID_ATTR_PROPERTIES, _("Properties"), wxART_LIST_VIEW, hasAttr);   // read-only safe
 
 	PopupMenu(&menu);
 }

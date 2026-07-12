@@ -5,7 +5,7 @@
 
 #include "catalog.h"
 #include "backend/serialize/dataBuilder.h"
-#include "list/objectList.h"
+#include "backend/system/value/valueDynamicList.h"   // ibValueDynamicList — the catalog list is migrating onto the universal dynamic list
 #include "backend/metaData.h"
 #include "backend/moduleManager/moduleManager.h"
 
@@ -91,11 +91,15 @@ ibSourceDataObject* ibValueMetaObjectCatalog::CreateSourceObject(const ibValueMe
 	case eFormFolder:
 		return CreateObjectValue(ibObjectMode::OBJECT_FOLDER);
 	case eFormList:
-		return new ibValueModelTreeDataObjectFolderRef(this, metaObject->GetTypeForm(), ibValueModelTreeDataObjectFolderRef::LIST_ITEM_FOLDER);
+		// Every catalog form is the universal dynamic list over the catalog's queryable + source descriptor
+		// (columns / commands / open / select). The TREE comes from the queryable's hierarchy (parent) column;
+		// folders are ordinary creation-time settings — folder-first sort here, an IsFolder = true filter for
+		// the folder-select variant — not a structural column.
+		return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder(), GetDataDescription());
 	case eFormSelect:
-		return new ibValueModelTreeDataObjectFolderRef(this, metaObject->GetTypeForm(), ibValueModelTreeDataObjectFolderRef::LIST_ITEM_FOLDER, true);
+		return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder(), GetDataDescription(), ibDynamicListView_Choice);   // select is front-driven — the list is the dynamic list in choice mode
 	case eFormFolderSelect:
-		return new ibValueModelTreeDataObjectFolderRef(this, metaObject->GetTypeForm(), ibValueModelTreeDataObjectFolderRef::LIST_FOLDER, true);
+		return ibCreateFolderList(GetQueryable(), GetDataIsFolder(), GetDataDescription(), ibDynamicListView_Choice);   // folder-select = choice list + fixed IsFolder = true predicate (added at generation)
 	}
 
 	return nullptr;
@@ -127,7 +131,7 @@ ibBackendValueForm* ibValueMetaObjectCatalog::GetListForm(const wxString& strFor
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		strFormName,
 		ibValueMetaObjectCatalog::eFormList,
-		ownerControl, new ibValueModelTreeDataObjectFolderRef(this, ibValueMetaObjectCatalog::eFormList, ibValueModelTreeDataObjectFolderRef::LIST_ITEM_FOLDER),
+		ownerControl, ibCreateHierarchyList(GetQueryable(), GetDataIsFolder(), GetDataDescription()),   // PILOT — catalog main list on the universal dynamic list
 		formGuid
 	);
 }
@@ -137,7 +141,7 @@ ibBackendValueForm* ibValueMetaObjectCatalog::GetSelectForm(const wxString& strF
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		strFormName,
 		ibValueMetaObjectCatalog::eFormSelect,
-		ownerControl, new ibValueModelTreeDataObjectFolderRef(this, ibValueMetaObjectCatalog::eFormSelect, ibValueModelTreeDataObjectFolderRef::LIST_ITEM, true),
+		ownerControl, ibCreateHierarchyList(GetQueryable(), GetDataIsFolder(), GetDataDescription(), ibDynamicListView_Choice),   // select front-driven — dynamic list, choice mode
 		formGuid
 	);
 }
@@ -147,7 +151,7 @@ ibBackendValueForm* ibValueMetaObjectCatalog::GetFolderSelectForm(const wxString
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		strFormName,
 		ibValueMetaObjectCatalog::eFormFolderSelect,
-		ownerControl, new ibValueModelTreeDataObjectFolderRef(this, ibValueMetaObjectCatalog::eFormSelect, ibValueModelTreeDataObjectFolderRef::LIST_FOLDER, true),
+		ownerControl, ibCreateFolderList(GetQueryable(), GetDataIsFolder(), GetDataDescription(), ibDynamicListView_Choice),   // folder-select = choice list + fixed IsFolder = true predicate
 		formGuid
 	);
 }

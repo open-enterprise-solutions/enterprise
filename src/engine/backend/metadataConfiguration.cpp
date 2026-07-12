@@ -520,8 +520,16 @@ ibMetaDataConfigurationStorage::ibMetaDataConfigurationStorage(ib::AppDataCtorTo
 // Designer-edit config: compile cache + its module-manager (bound to the common
 // metaobject, rebuilt fresh with the image each run). Built by the image ctor; dropping
 // the image releases the manager (RAII → DestroyMainModule).
-std::unique_ptr<ibCompileValueCache> ibMetaDataConfigurationStorage::CreateDesignerCache()
+// Designer mode only (Enterprise runtime never opens the metadata tree — only objects execute). A config ALWAYS
+// carries the cache in the designer: the active edit config AND one browsed read-only from the DB (this inner
+// baseline, reached via activeMetaData->GetConfiguration()). A metaobject's form is built THROUGH the cache (its
+// owner + the seated source object come from it), so without it an object form opens sourceless and crashes.
+// Storage inherits this (its own identical override is gone). Regression from the per-config image (ibMetaImage):
+// the cache had narrowed to Storage only. Mode-gated inside, by analogy with the external report / data processor.
+std::unique_ptr<ibCompileValueCache> ibMetaDataConfiguration::CreateDesignerCache()
 {
+	if (!appData->DesignerMode())
+		return nullptr;
 	auto cache = std::make_unique<ibCompileValueCache>();
 	cache->SetModuleManager(new ibValueModuleManagerDesigner(this, GetCommonMetaObject()));
 	return cache;

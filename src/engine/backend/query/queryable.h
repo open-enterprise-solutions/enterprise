@@ -67,6 +67,27 @@ private:
 	const std::map<wxString, const ibBackendQueryable*>* m_prev;
 };
 
+class ibMetaData;   // the config a query runs on behalf of — its factory resolves by-name metaobject sources
+
+// ibSourceMetaDataScope — the CONFIG a query runs ON BEHALF OF, for the duration of one execution. The composer sets
+// it (from its metadata) before lowering; ResolveSource resolves a by-name metaobject source through THIS config's
+// factory (sources register per-config), never the global one. Parallel to ibTempSourceScope; null outside a scope.
+class BACKEND_API ibSourceMetaDataScope
+{
+public:
+	explicit ibSourceMetaDataScope(const ibMetaData* metaData);
+	~ibSourceMetaDataScope();
+
+	// The config in force for THIS execution, or null (no scope / a sourceless composer).
+	static const ibMetaData* Get();
+
+	ibSourceMetaDataScope(const ibSourceMetaDataScope&) = delete;
+	ibSourceMetaDataScope& operator=(const ibSourceMetaDataScope&) = delete;
+
+private:
+	const ibMetaData* m_prev;
+};
+
 // The shared stateless computed (RAM) provider, as a base reference — so a computed queryable
 // here can vend it WITHOUT this header naming the concrete ibComputedProvider (which lives in
 // the L2-aware queryProvider.h). Defined in queryProvider.cpp. (breaks the include cycle.)
@@ -297,6 +318,11 @@ public:
 	// over them are raw / primitive, no reference reconstruction). (docs/query-language-arc.md §22.4b)
 	virtual const ibMetaData* GetMetaData() const { return nullptr; }
 
+	// The metaobject BEHIND this queryable (a catalog / document / register …) — a metadata-backed queryable holds
+	// it; a temp / subquery / computed source has none. The dynamic list forwards its GetSourceMetaObject THROUGH
+	// here so the front reads the source's icon / presentation off the metaobject (as every source object does).
+	virtual const class ibValueMetaObjectGenericData* GetSourceMetaObject() const { return nullptr; }
+
 	// --- row identity / keyset tail --------------------------------------
 	// Identity columns that give a cursor a TOTAL order; L3 appends them after
 	// the user sort. The LAST one is unique. ALL real columns now — no null sentinel:
@@ -331,11 +357,8 @@ public:
 	// Null for a flat / non-record source. Used to unfold a TotalBy(refField, Hierarchy) dimension: the
 	// target catalog's parent-map is read through ITS GetHierarchyColumn. (docs/query-language-arc.md §22.1b)
 	virtual const ibBackendQueryColumn* GetHierarchyColumn() const { return nullptr; }
-
-	// The FOLDER-flag column of a folders+items hierarchical source (catalog "IsFolder" / ЭтоГруппа). A row
-	// with it set is a CONTAINER — shown as a folder (icon + expander), drillable even when empty — vs a leaf
-	// item. Null for an item-only hierarchy (every row may have children) or a flat source. (queryable property)
-	virtual const ibBackendQueryColumn* GetFolderColumn() const { return nullptr; }
+	// (GetFolderColumn REMOVED — folders are a folder-first SORT / IsFolder FILTER set at list creation, not a
+	//  structural queryable column; the special engine mechanism kept is the HIERARCHY, not folders. — Max.)
 
 	// Auto-join support (Join(b) without explicit columns) needs NO dedicated virtuals: the
 	// composer derives a null-key join from the COLUMNS — a referencing column (one whose

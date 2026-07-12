@@ -5,7 +5,7 @@
 
 #include "chartOfAccounts.h"
 #include "backend/serialize/dataBuilder.h"
-#include "list/objectList.h"
+#include "backend/system/value/valueDynamicList.h"   // ibValueDynamicList — the standard list migrates onto the universal dynamic list
 #include "backend/metaData.h"
 #include "backend/moduleManager/moduleManager.h"
 
@@ -63,9 +63,9 @@ ibSourceDataObject* ibValueMetaObjectChartOfAccounts::CreateSourceObject(const i
 	{
 	case eFormObject: return CreateObjectValue(ibObjectMode::OBJECT_ITEM);
 	case eFormFolder: return CreateObjectValue(ibObjectMode::OBJECT_FOLDER);
-	case eFormList: return new ibValueModelTreeDataObjectFolderRef(this, metaObject->GetTypeForm(), ibValueModelTreeDataObjectFolderRef::LIST_ITEM_FOLDER);
-	case eFormSelect: return new ibValueModelTreeDataObjectFolderRef(this, metaObject->GetTypeForm(), ibValueModelTreeDataObjectFolderRef::LIST_ITEM_FOLDER, true);
-	case eFormFolderSelect: return new ibValueModelTreeDataObjectFolderRef(this, metaObject->GetTypeForm(), ibValueModelTreeDataObjectFolderRef::LIST_FOLDER, true);
+	case eFormList: return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder(), GetDataDescription());   // migrated onto the universal dynamic list (hierarchy via queryable)
+	case eFormSelect: return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder(), GetDataDescription(), ibDynamicListView_Choice);   // select front-driven — choice mode
+	case eFormFolderSelect: return ibCreateFolderList(GetQueryable(), GetDataIsFolder(), GetDataDescription(), ibDynamicListView_Choice);   // folder-select = choice + IsFolder = true
 	}
 	return nullptr;
 }
@@ -84,19 +84,19 @@ ibBackendValueForm* ibValueMetaObjectChartOfAccounts::GetFolderForm(const wxStri
 ibBackendValueForm* ibValueMetaObjectChartOfAccounts::GetListForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
 {
 	return CreateAndBuildForm(strFormName, eFormList, ownerControl,
-		new ibValueModelTreeDataObjectFolderRef(this, eFormList, ibValueModelTreeDataObjectFolderRef::LIST_ITEM_FOLDER), formGuid);
+		ibCreateHierarchyList(GetQueryable(), GetDataIsFolder(), GetDataDescription()), formGuid);   // migrated onto the universal dynamic list (hierarchy via queryable)
 }
 
 ibBackendValueForm* ibValueMetaObjectChartOfAccounts::GetSelectForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
 {
 	return CreateAndBuildForm(strFormName, eFormSelect, ownerControl,
-		new ibValueModelTreeDataObjectFolderRef(this, eFormSelect, ibValueModelTreeDataObjectFolderRef::LIST_ITEM, true), formGuid);
+		ibCreateHierarchyList(GetQueryable(), GetDataIsFolder(), GetDataDescription(), ibDynamicListView_Choice), formGuid);   // select front-driven — choice mode
 }
 
 ibBackendValueForm* ibValueMetaObjectChartOfAccounts::GetFolderSelectForm(const wxString& strFormName, ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
 {
 	return CreateAndBuildForm(strFormName, eFormFolderSelect, ownerControl,
-		new ibValueModelTreeDataObjectFolderRef(this, eFormFolderSelect, ibValueModelTreeDataObjectFolderRef::LIST_FOLDER, true), formGuid);
+		ibCreateFolderList(GetQueryable(), GetDataIsFolder(), GetDataDescription(), ibDynamicListView_Choice), formGuid);   // folder-select = choice + IsFolder = true
 }
 #pragma endregion
 

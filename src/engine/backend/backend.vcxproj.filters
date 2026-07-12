@@ -462,9 +462,6 @@
     <ClInclude Include="metaCollection\table\metaTableObject.h">
       <Filter>metaCollection\table</Filter>
     </ClInclude>
-    <ClInclude Include="metaCollection\partial\list\objectList.h">
-      <Filter>metaCollection\partial\list</Filter>
-    </ClInclude>
     <ClInclude Include="metaCollection\partial\reference\reference.h">
       <Filter>metaCollection\partial\reference</Filter>
     </ClInclude>
@@ -1145,6 +1142,9 @@
     <ClCompile Include="metaCollection\partial\commonObject.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
+    <ClCompile Include="metaCollection\partial\commonObjectAction.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
     <ClCompile Include="metaCollection\partial\commonObjectModel.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
@@ -1423,15 +1423,6 @@
     </ClCompile>
     <ClCompile Include="metaCollection\table\metaTableObject.cpp">
       <Filter>metaCollection\table</Filter>
-    </ClCompile>
-    <ClCompile Include="metaCollection\partial\list\objectList.cpp">
-      <Filter>metaCollection\partial\list</Filter>
-    </ClCompile>
-    <ClCompile Include="metaCollection\partial\list\objectListAction.cpp">
-      <Filter>metaCollection\partial\list</Filter>
-    </ClCompile>
-    <ClCompile Include="metaCollection\partial\list\objectListModel.cpp">
-      <Filter>metaCollection\partial\list</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\reference\referenceQuery.cpp">
       <Filter>metaCollection\partial\reference</Filter>
@@ -2172,9 +2163,6 @@
       <Filter>compiler</Filter>
     </ClInclude>
     <ClInclude Include="query\queryableFactory.h">
-      <Filter>query</Filter>
-    </ClInclude>
-    <ClInclude Include="query\queryableHooks.h">
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="composition\dataComposer.h">

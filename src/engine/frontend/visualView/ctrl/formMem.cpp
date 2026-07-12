@@ -20,7 +20,7 @@ bool ibValueForm::LoadForm(const wxMemoryBuffer& data)
 	}
 
 	ibReaderMemory readerData(data);
-	if (!LoadControl(m_metaFormObject, readerData))   // LoadNode recurses the whole subtree
+	if (!LoadControl(m_metaFormObject, readerData))   // LoadNode / PasteNode recurses the whole subtree
 		return false;
 
 	// Controls loaded from memory → the form's attribute surface is stale.

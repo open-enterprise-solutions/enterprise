@@ -5,9 +5,10 @@
 
 #include "backend/propertyManager/property/propertyDynamicSource.h"            // ms_propertyDynamicSource slot
 #include "backend/propertyManager/property/variant/variantDynamicSource.h"     // ibVariantDataDynamicSource
-#include "backend/metaCollection/partial/list/dynamicList.h"                   // ibValueDynamicList (the owner)
+#include "backend/system/value/valueDynamicList.h"                   // ibValueDynamicList (the owner) — its GetSourceMetaData
 #include "backend/appData.h"
 #include "backend/query/queryableFactory.h"
+#include "backend/metaData.h"   // ibMetaData full def — owner->GetMetaData() gives a bare pointer without it, but ->GetSourceFactory() dereferences it
 
 #include <wx/dialog.h>
 #include <wx/listbox.h>
@@ -41,7 +42,14 @@ ibPGDynamicSourceProperty::ibPGDynamicSourceProperty(ibPropertyObject* property,
 
 	// Fill the drop-down with every registered source (namespace.name) — straight from the
 	// factory. m_sources is kept index-aligned so IntToValue maps the pick back to identity.
-	if (ibQueryableFactory* factory = ibApplicationData::GetQueryableFactory()) {
+	// List THIS config's sources — through the owner's metadata (it knows its config), not the global factory. CONST
+	// pointer: the const GetMetaData overload is the one implemented (the non-const one wxFAILs). Null → empty drop-down.
+	const ibPropertyObject* owner = m_ownerProperty;
+	const ibMetaData* md = owner != nullptr ? owner->GetMetaData() : nullptr;
+	ibQueryableFactory* factory = md != nullptr ? md->GetSourceFactory() : nullptr;
+	if (factory == nullptr)
+		factory = ibApplicationData::GetQueryableFactory();   // no config → the global base (common/plugin)
+	if (factory != nullptr) {
 		for (ibQueryableSourceDescriptor* d : factory->GetDescriptors()) {
 			if (d == nullptr)
 				continue;
@@ -93,7 +101,12 @@ wxPGEditorDialogAdapter* ibPGDynamicSourceProperty::GetEditorDialog() const
 			ibValueDynamicList* list = dynamic_cast<ibValueDynamicList*>(dlgProp->GetOwnerProperty());
 			if (list == nullptr)
 				return false;
-			ibQueryableFactory* factory = ibApplicationData::GetQueryableFactory();
+			// Resolve through the OWNER's OWN config (const → the const GetMetaData overload); no config → the global base.
+			const ibPropertyObject* owner = dlgProp->GetOwnerProperty();
+			const ibMetaData* md = owner != nullptr ? owner->GetMetaData() : nullptr;
+			ibQueryableFactory* factory = md != nullptr ? md->GetSourceFactory() : nullptr;
+			if (factory == nullptr)
+				factory = ibApplicationData::GetQueryableFactory();
 			if (factory == nullptr)
 				return false;
 

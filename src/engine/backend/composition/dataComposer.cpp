@@ -10,6 +10,7 @@
 #include "backend/query/dataQueryBuilder.h"   // ibDataQueryResult / ibSelectKind
 #include "backend/query/querySelector.h"      // ibSelector — the TOTALS pre-order walk
 #include "backend/appData.h"                  // ibApplicationData::GetQueryableFactory
+#include "backend/metaData.h"                 // ibMetaData::GetSourceFactory — resolve by-name sources per-config
 #include "backend/backend_exception.h"        // ibBackendCoreException
 
 //////////////////////////////////////////////////////////////////////
@@ -172,7 +173,10 @@ wxString ibDataDBComposer::RenderText() const
 		if (dit != m_directSources.end())
 			src = dit->second;
 		else {
-			ibQueryableFactory* factory = ibApplicationData::GetQueryableFactory();
+			// Resolve through THIS query's OWN config factory (per-config sources); no config → the global base.
+			ibQueryableFactory* factory = m_metaData != nullptr ? m_metaData->GetSourceFactory() : nullptr;
+			if (factory == nullptr)
+				factory = ibApplicationData::GetQueryableFactory();
 			if (factory == nullptr)
 				ibBackendCoreException::Error(_("Composer: the query engine is not available (no application data)"));
 			src = factory->Resolve(s0.m_namespace, s0.m_name);
@@ -317,6 +321,9 @@ ibDataQueryResult ibDataDBComposer::Execute(std::vector<ibQueryLowering::OutputC
 	// resolution happens entirely inside the lowering call below, so this scope covers it; the
 	// returned result holds the queryable already bound (no re-resolution during the row walk).
 	ibTempSourceScope tempScope(m_directSources);
+	// Thread THIS query's config into the lowering (parallel to the temp-source scope) — ResolveSource resolves a
+	// by-name metaobject source against it, not the global factory.
+	ibSourceMetaDataScope mdScope(m_metaData);
 
 	hasTotals = m_ast->m_hasTotals;
 	if (hasTotals)

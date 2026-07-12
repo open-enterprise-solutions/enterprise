@@ -121,6 +121,8 @@ ibGuid ibVariantDataSource::GetGuidByID(const ibMetaID& id) const
 {
 	if (id == wxNOT_FOUND) return wxNullGuid;
 	const ibValueMetaObject* metaObject = ResolveMetaWide(m_ownerProperty, id);
+	// GetCommonGuid auto-selects the right guid: the copy-guid while the metaobject is in copy mode, its plain guid
+	// otherwise — so a hop keyed on it round-trips on a normal reopen and re-homes to the copy after a paste.
 	return metaObject != nullptr && metaObject->IsAllowed() ? metaObject->GetCommonGuid() : wxNullGuid;
 }
 

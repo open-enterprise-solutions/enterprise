@@ -17,7 +17,7 @@
 // visible transitively via metaFormObject.h below.
 #include "backend/databaseLayer/connectionScope.h"
 
-#include "backend/query/queryableFactory.h"   // ibMetaSourceDescriptor (the L4 source descriptor field)
+#include "backend/query/queryableFactory.h"   // ibMetaCommandDescriptor (the L4 source descriptor field + its command surface)
 
 //special object
 #include "backend/metaCollection/metaModuleObject.h"
@@ -89,6 +89,74 @@ class BACKEND_API ibValueRecordSetObject;
 
 #include "backend/metaCollection/genericData.h"   // ibFormTypeList + ibValueMetaObjectGenericData (extracted so srcDataObject.h gets the covariant GenericData* return)
 
+// The metaobject-coupled SOURCE-DESCRIPTOR templates — moved here from queryableFactory.h so the L4 factory header
+// stays metadata-agnostic (base descriptor + factory only) and these live WITH the metaobjects that instantiate them.
+// The base ibQueryableSourceDescriptor + ibValue / ibBackendQueryable / ibSourceExplorer / command signatures come in
+// via queryableFactory.h (included above).
+
+// The QUERY descriptor — the query-identity HALF, TEMPLATED on the queryable type TQueryable + the metaobject type
+// TMeta. It CONTAINS the metaobject's queryable (built from it) AND carries the L4 source identity (GetNamespace /
+// GetName / CreateQueryable). This is ALL a pure QUERY source needs — a constant is registered only so From(constant)
+// resolves; it is NEVER shown as a list, so it leaves the command + row surface at the base's neutral defaults.
+template <typename TQueryable, typename TMeta>
+class ibMetaQueryDescriptor : public ibQueryableSourceDescriptor
+{
+public:
+	explicit ibMetaQueryDescriptor(TMeta* meta) : m_meta(meta), m_queryable(meta) {}
+
+	wxString GetNamespace() const override { return ibValue::GetNameObjectFromID(m_meta->GetClassType()); }
+	wxString GetName() const override { return m_meta->GetName(); }
+	const ibBackendQueryable* CreateQueryable(ibValue** /*paParams*/, long /*lSizeArray*/) override { return &m_queryable; }
+
+	// The contained queryable — the metaobject's GetQueryable() forwards here (stable for the object's life).
+	const ibBackendQueryable* GetQueryable() const { return &m_queryable; }
+
+	// Restore ROW-KEY from a row's identity VALUE — read the source's PRIMARY-KEY columns off it (the SAME columns
+	// the fetch stamps into a node's m_rowKey, so the restore stub matches). UNIVERSAL via the source hop gate: a
+	// record's reference yields its self-reference, a register's record-manager decomposes into its composite key.
+	// Empty value / no PK columns → the base fallback (the value IS the key).
+	std::vector<ibValue> GetRowKeyByValue(const ibValue& value) const override {
+		ibSourceDataObject* src = nullptr;
+		if (value.IsEmpty() || !value.ConvertToValue(src) || src == nullptr)
+			return ibQueryableSourceDescriptor::GetRowKeyByValue(value);
+		std::vector<ibValue> rowKey;
+		for (const ibBackendQueryColumn* kc : m_queryable.GetPrimaryKeyColumns()) {
+			if (kc == nullptr) continue;
+			ibValue v;
+			src->GetValueBySourceHop(ibSourceHop{ kc->GetColumnId() }, v);
+			rowKey.push_back(v);
+		}
+		return rowKey.empty() ? ibQueryableSourceDescriptor::GetRowKeyByValue(value) : rowKey;
+	}
+
+protected:
+	TMeta*     m_meta;        // for name / clsid + to build the queryable (non-const, like the old `this`)
+	TQueryable m_queryable;   // the contained queryable (ibRecordQueryable / ibRegisterDataQueryable / ibConstantQueryable / …)
+};
+
+// The full SOURCE descriptor — a LIST source (record / register): the query descriptor PLUS the command + row surface,
+// each call FORWARDED to the metaobject (which the descriptor knows by type). The metaobject carries the real
+// behaviour, polymorphic down its OWN inheritance. No mixin, no interface — TMeta must have these methods or the
+// template won't compile. A pure query source (constant) uses ibMetaQueryDescriptor instead. (m_meta is inherited —
+// `this->` reaches the dependent base member.)
+template <typename TQueryable, typename TMeta>
+class ibMetaCommandDescriptor : public ibMetaQueryDescriptor<TQueryable, TMeta>
+{
+public:
+	explicit ibMetaCommandDescriptor(TMeta* meta) : ibMetaQueryDescriptor<TQueryable, TMeta>(meta) {}
+
+	// ROW DATA / presentation
+	ibValue GetSelectValue(const ibRowMetaValues& rowValues) const override { return this->m_meta->GetSelectValue(rowValues); }
+	ibUniqueKey GetItemKey(const ibRowMetaValues& rowValues) const override { return this->m_meta->GetItemKey(rowValues); }
+	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override { this->m_meta->FillSourceExplorer(explorer); }
+	// COMMAND INTERFACE
+	void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const override { this->m_meta->GetCommandCollection(formType, commands); }
+	void CallAsCommand(const ibUniqueKey& key, ibActionID id, ibBackendValueForm* srcForm) const override { this->m_meta->CallAsCommand(key, id, srcForm); }
+	// ENTRY
+	void ShowValueByKey(const ibUniqueKey& key, ibBackendValueForm* srcForm) const override { this->m_meta->ShowValueByKey(key, srcForm); }
+};
+
+//meta object 
 class BACKEND_API ibValueMetaObjectRecordData
 	: public ibValueMetaObjectGenericData {
 	public:
@@ -304,10 +372,14 @@ public:
 	virtual const ibBackendQueryable* ResolveReferenceTarget(const ibBackendQueryColumn* refColumn) const override;
 	virtual std::vector<const ibBackendQueryable*> ResolveReferenceTargets(const ibBackendQueryColumn* refColumn) const override;   // composite: one per type
 	virtual const ibBackendQueryColumn* GetHierarchyColumn() const override;   // the parent attribute (hierarchy key)
-	virtual const ibBackendQueryColumn* GetFolderColumn() const override;   // the IsFolder attribute (folders+items)
+	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const override;   // = m_meta (body in .cpp — the metaobject type is complete there)
 private:
 	const ibValueMetaObjectRecordDataRef* m_meta;
 };
+
+// The source's COMMAND surface lives on the metaobjects below (record / register / constant), as plain virtual
+// methods polymorphic down their OWN inheritance. The templated source descriptor (queryableFactory.h) FORWARDS
+// each call to its metaobject — no mixin, no separate command interface, nothing on the generic metaobject base.
 
 //meta object with reference
 class BACKEND_API ibValueMetaObjectRecordDataRef : public ibValueMetaObjectRecordData, public ibBackendQueryableHolder {
@@ -327,7 +399,29 @@ public:
 	friend class ibRecordQueryable;
 
 	virtual ibValueMetaObjectAttributePredefined* GetDataReference() const { return m_propertyAttributeReference->GetMetaObject(); }
+
 	virtual bool IsDataReference(const ibMetaID& id) const override { return id == (*m_propertyAttributeReference)->GetMetaID(); }
+
+	// ---- Source surface (the descriptor forwards each call here). The reference-record BASE = the ENUM variant:
+	// it selects by the reference cell, fills the list showing ONLY the reference visible (an enum's value IS its
+	// reference), and lists no commands (an enum shows none — the writeable levels override to add them). The
+	// writeable / hierarchy levels OVERRIDE FillSourceExplorer with their own column set. Bodies in commonObjectAction.cpp.
+	//
+	// ROW DATA / presentation — what a row IS and how it shows:
+	virtual ibValue GetSelectValue(const ibRowMetaValues& rowValues) const;                        // the row's REFERENCE cell
+	virtual ibUniqueKey GetItemKey(const ibRowMetaValues& rowValues) const;                        // the row's REFERENCE guid
+	virtual void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const;         // enum: reference VISIBLE, rest hidden
+	// COMMAND INTERFACE — the command band (the writeable levels override to fill these):
+	virtual void GetCommandCollection(const ibFormID& /*formType*/, std::vector<ibCommandItem>& /*commands*/) const {}
+	virtual void CallAsCommand(const ibUniqueKey& /*key*/, ibActionID /*id*/, ibBackendValueForm* /*srcForm*/) const {}
+	// ENTRY — open a row's value directly (writeable levels override):
+	virtual void ShowValueByKey(const ibUniqueKey& /*key*/, ibBackendValueForm* /*srcForm*/) const {}
+
+	// The hierarchy (parent) column — a metadata source's OWN structural signal, reached by the record queryable
+	// through VIRTUAL dispatch (no cast: the metaobject's CLASS is the "hierarchical" indicator — a catalog / chart
+	// IS hierarchical by being one). Null on a flat reference; a HIERARCHY overrides it with its parent attribute.
+	// (Folder column removed — folders are a creation-time sort/filter setting, not a structural column.)
+	virtual const ibBackendQueryColumn* GetHierarchyColumn() const { return nullptr; }
 
 	virtual bool HasQuickChoice() const {
 		return m_propertyQuickChoice->GetValueAsBoolean();
@@ -431,7 +525,7 @@ protected:
 
 	// the L4 source descriptor — CONTAINS the vended queryable (stable for this metaobject's
 	// life) and is registered with the factory on run / close. GetQueryable() forwards to it.
-	ibMetaSourceDescriptor<ibRecordQueryable, ibValueMetaObjectRecordDataRef> m_queryable{ this };
+	ibMetaCommandDescriptor<ibRecordQueryable, ibValueMetaObjectRecordDataRef> m_queryable{ this };
 
 protected:
 
@@ -555,7 +649,7 @@ public:
 	virtual bool AccessRight_Show() const { return AccessRight_Read(); }
 #pragma endregion
 
-	IB_DECLARE_RWD_ROLE_TRIPLET("Wrire")   // legacy storage typo — kept until migration arc
+	IB_DECLARE_RWD_ROLE_TRIPLET("Write")   // legacy storage typo — kept until migration arc
 
 	ibMetaDescription& GetGenerationDescription() const { return m_propertyGeneration->GetValueAsMetaDesc(); }
 
@@ -564,6 +658,10 @@ public:
 
 	ibValueMetaObjectAttributePredefined* GetDataDeletionMark() const { return m_propertyAttributeDeletionMark->GetMetaObject(); }
 	bool IsDataDeletionMark(const ibMetaID& id) const { return id == (*m_propertyAttributeDeletionMark)->GetMetaID(); }
+
+	// DOCUMENT variant — reference / deletion mark / data version hidden; number / date / posted / attributes
+	// visible. Fills its columns directly by its own predicates. Body in commonObjectAction.cpp.
+	virtual void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
 
 	virtual bool HasQuickChoice() const { return false; }
 
@@ -587,6 +685,25 @@ public:
 
 	//copy associate value
 	ibValueRecordDataObjectRef* CopyObjectValue(const ibGuid& guid) const;
+
+	// This source's OWN command ids (class-scoped — no global enum, no collision with the action system). eEditValue
+	// bakes the front inline-edit flag (actionInfo.h eStartEditingFlag). Ids < 32767 (wxMenuItem), band 1..27.
+	// Subclasses inherit these and add their own (Document +Post, hierarchy +AddFolder).
+	enum {
+		eAddValue = 1,
+		eCopyValue,
+		eEditValue = 3 | eStartEditingFlag,
+		eDeleteValue = 4,
+		eMarkAsDeleteValue = 26,
+	};
+
+	// source COMMANDS (override of GenericData) — the writeable-ref base command set. GetCommandCollection lists
+	// Add/Copy/Edit/Delete/MarkAsDelete (+AddFolder when the source has a folder column); CallAsCommand runs one
+	// by id against `key` (create/copy/open/delete/mark) and refreshes `srcForm`; ShowValueByKey opens the row's form.
+	// Bodies in objectList.cpp (next to the list models they were lifted from). Document overrides to add Post.
+	virtual void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const override;
+	virtual void CallAsCommand(const ibUniqueKey& key, ibActionID id, ibBackendValueForm* srcForm) const override;
+	virtual void ShowValueByKey(const ibUniqueKey& key, ibBackendValueForm* srcForm) const override;
 
 	//create single object
 	virtual ibValueRecordDataObject* CreateRecordDataObjectValue() const;
@@ -725,10 +842,26 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 	ibValueMetaObjectAttributePredefined* GetDataIsFolder() const { return m_propertyAttributeIsFolder->GetMetaObject(); }
 	virtual bool IsDataFolder(const ibMetaID& id) const { return id == (*m_propertyAttributeIsFolder)->GetMetaID(); }
 
+	// A catalog / chart IS hierarchical by its class — it returns its parent attribute (the record queryable forwards
+	// here, no cast). Body in commonObjectMetaQuery.cpp (attribute→column upcast complete there).
+	virtual const ibBackendQueryColumn* GetHierarchyColumn() const override;
+
+	// CATALOG variant — reference / deletion mark / data version / predefined name / parent / is-folder hidden;
+	// code / description / attributes visible. Fills its columns directly. Body in commonObjectAction.cpp.
+	virtual void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
+
 	virtual bool HasQuickChoice() const { return m_propertyQuickChoice->GetValueAsBoolean(); }
 
 	ibValueMetaObjectRecordDataHierarchyMutableRef();
 	virtual ~ibValueMetaObjectRecordDataHierarchyMutableRef();
+
+	enum { eAddFolder = 27 };   // this source's OWN folder command (adds to the inherited writeable set)
+
+	// source COMMANDS — the base writeable set PLUS AddFolder (gated by the source having a folder column, so a
+	// flat catalog reaching here shows no folder command). CallAsCommand handles eAddFolder (new folder) and
+	// delegates the rest to the base. Bodies in objectList.cpp.
+	virtual void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const override;
+	virtual void CallAsCommand(const ibUniqueKey& key, ibActionID id, ibBackendValueForm* srcForm) const override;
 
 	//process choice
 	virtual bool ProcessChoice(ibBackendControlFrame* ownerValue,
@@ -884,6 +1017,7 @@ public:
 	virtual const ibMetaData* GetMetaData() const override;                      // metadata context for column-based value reads
 	virtual std::vector<ibQuerySortItem> GetIdentitySort() const override;
 	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;   // recorder+line+period / period+dims
+	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const override;   // = m_meta (body in .cpp — the metaobject type is complete there)
 private:
 	const ibValueMetaObjectRegisterData* m_meta;
 };
@@ -1053,6 +1187,30 @@ public:
 
 	ibValueRecordManagerObject* CopyRecordManagerObjectValue(const ibUniqueKeyPair& uniqueKey) const;
 
+	// This register's OWN command ids (class-scoped). eEditValue bakes the front inline-edit flag.
+	enum {
+		eAddValue = 1,
+		eCopyValue,
+		eEditValue = 3 | eStartEditingFlag,
+		eDeleteValue = 4,
+	};
+
+	// ---- Source COMMAND surface (the descriptor forwards each call here). A register is its OWN family (no shared
+	// record base), so these are FRESH virtuals. GetCommandCollection lists Add/Copy/Edit/Delete only for a register
+	// WITHOUT a recorder (an independent record-manager register); a recorder-based register (document movements)
+	// shows none. Execute / open run through the record manager (by the row's key). Bodies in objectList.cpp.
+	virtual void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const;
+	virtual void CallAsCommand(const ibUniqueKey& key, ibActionID id, ibBackendValueForm* srcForm) const;
+	virtual void ShowValueByKey(const ibUniqueKey& key, ibBackendValueForm* srcForm) const;
+	// SELECT value — a register has no single reference; its picker value IS the composite RECORD KEY built from
+	// the row's dimension cells (the whole value map). Body in objectList.cpp.
+	virtual ibValue GetSelectValue(const ibRowMetaValues& rowValues) const;
+	// ITEM KEY — a register has SEVERAL key columns; its identity is the COMPOSITE record key built from the row's
+	// dimension cells (CreateUniqueKeyPair). commonObjectAction.cpp.
+	virtual ibUniqueKey GetItemKey(const ibRowMetaValues& rowValues) const;
+	// REGISTER variant — all columns (dimensions / resources / period …) visible by default. commonObjectAction.cpp.
+	virtual void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const;
+
 	//get module object in compose object 
 	virtual const ibValueMetaObjectModule* GetObjectModule() const { return nullptr; }
 	virtual const ibValueMetaObjectCommonModule* GetManagerModule() const { return nullptr; }
@@ -1138,7 +1296,7 @@ protected:
 	// ADDITIONALLY owns CUSTOM virtual-table descriptors (balances / turnovers / balances-and-
 	// turnovers / slices) registered alongside it on load — pending the companion queryables
 	// (docs §22.4, the totals-table arc).
-	ibMetaSourceDescriptor<ibRegisterDataQueryable, ibValueMetaObjectRegisterData> m_queryable{ this };
+	ibMetaCommandDescriptor<ibRegisterDataQueryable, ibValueMetaObjectRegisterData> m_queryable{ this };
 
 	// Read/Write/Delete role triplet emitted by IB_DECLARE_RWD_ROLE_TRIPLET
 	// above (in the public access region).

@@ -48,7 +48,7 @@ bool ibPGDynamicListProperty::StringToValue(wxVariant& variant,
 
 #include "frontend/visualView/ctrl/formAttribute.h"
 #include "frontend/win/dlgs/listSettings/listSettings.h"
-#include "backend/metaCollection/partial/list/dynamicList.h"
+#include "backend/system/value/valueDynamicList.h"
 #include "backend/composition/listFilter.h"
 
 void ibPGDynamicListProperty::OnSetValue()

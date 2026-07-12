@@ -277,10 +277,12 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// reaches here — its short-circuit above returns the LIVE storage rows, identified by their stable pointer.)
 	const std::vector<const ibBackendQueryColumn*> keyCols = q->GetPrimaryKeyColumns();
 
-	// The FOLDER-flag column (catalog IsFolder / ЭтоГруппа): a row with it set is a CONTAINER — a folder,
-	// shown drillable even when empty (the folder convention) — vs a leaf item. Resolved once; null for an item-only
-	// hierarchy or a flat source (then the driver row's hasChildren decides containerness).
-	const ibBackendQueryColumn* folderCol = q->GetFolderColumn();
+	// FOLDER-flag container-marking: a folder row renders as a DRILLABLE container even when EMPTY (the folder
+	// convention). The DB level-fetch reports hasChildren=false for every row (dataComposer's flat path emits
+	// OnRow(0,false,…)), so this is the ONLY folder signal the tree has. The column is the LIST's display column
+	// (GetDataIsFolder, handed in at ibCreateHierarchyList) — NOT a queryable accessor; folders are a display
+	// concern of the hierarchical list, ordering is the folder-first SORT. Null on a flat / non-folder list.
+	const ibBackendQueryColumn* folderCol = GetFolderDisplayColumn();
 
 	// `this` is const here (fetch READS + returns rows). The node holds COPIES of the row values and
 	// overrides IsAttached() -> true, so there is NO owner pin and NO const_cast on the model state.
@@ -340,11 +342,12 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 			// drill re-entered RunComposerPage with an empty group path (depth 0) → groupLevel fired again → the
 			// whole grouping tree nested under the folder ("infinite" re-grouping). Only a non-grouped hierarchy /
 			// flat fetch honours folderCol / hasChildren for containerness.
-			const bool isContainer = grouping
-				? false
-				: (folderCol != nullptr
-					? r.GetValue(folderCol->GetColumnId()).GetBoolean()
-					: r.m_hasChildren);
+			// A FOLDER is a container even when empty (drillable folder convention); a plain item-hierarchy row is a
+			// container when the fetch flagged children. Grouping replaces the tree → no drillable rows.
+			bool isFolderRow = false;
+			if (folderCol != nullptr)
+				isFolderRow = r.GetValue(folderCol->GetColumnId()).GetBoolean();
+			const bool isContainer = grouping ? false : (isFolderRow || r.m_hasChildren);
 			node = new ibComposerNode(r.m_values, isContainer, std::move(rowKey));
 		}
 		out.Add(ibDataViewItem(node));   // ctor IncRefs to 2

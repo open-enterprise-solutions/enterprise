@@ -7,6 +7,7 @@
 #include <wx/combobox.h>
 #include <wx/choice.h>
 #include <wx/textctrl.h>
+#include <wx/checkbox.h>
 
 #include "backend/composition/listFilter.h"
 
@@ -61,6 +62,7 @@ private:
 	class ibOrderModel;   // Sort tab dataview model (over the buffer sort list)
 	class ibGroupModel;   // Group tab dataview model (over the buffer group list)
 
+	wxWindow* BuildQueryPage(wxWindow* parent);   // FIRST tab (dynamic-list only) — arbitrary-query source
 	wxWindow* BuildFilterPage(wxWindow* parent);
 	wxWindow* BuildOrderPage(wxWindow* parent);
 	wxWindow* BuildGroupPage(wxWindow* parent);
@@ -100,6 +102,11 @@ private:
 	ibValueModel*        m_model;      // the model whose composer the dialog commits to on OK
 	ibValueDynamicList*  m_list;       // non-null only on the dynamic-list path (source + composer); null for a plain model
 	ibValuePtr<ibValueListSettings> m_settings;   // the dialog's OWN transactional BUFFER (load from composer on open, commit on OK)
+
+	// Query tab (dynamic-list only) — arbitrary-query source: enable flag + query text. Edits the list's own
+	// UseCustomQuery / CustomQuery properties (not the settings buffer); applied to m_list on OK.
+	wxCheckBox* m_queryUseCheck = nullptr;
+	wxTextCtrl* m_queryText      = nullptr;
 
 	// Filter — runtime-driven dataview (Use / Field / Comparison / Value).
 	ibDataViewCtrl* m_filterView   = nullptr;

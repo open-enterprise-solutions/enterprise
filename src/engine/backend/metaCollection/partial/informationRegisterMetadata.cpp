@@ -1,9 +1,8 @@
 #include "informationRegister.h"
 #include "backend/serialize/dataBuilder.h"
-#include "list/objectList.h"
+#include "backend/system/value/valueDynamicList.h"   // ibValueDynamicList — the standard list migrates onto the universal dynamic list
 #include "backend/metaData.h"
 #include "backend/moduleManager/moduleManager.h"
-#include "backend/query/queryableHooks.h"   // light L4 source registration hooks (slice descriptors)
 
 //***********************************************************************
 //*                         metaData                                    * 
@@ -53,7 +52,7 @@ ibBackendValueForm* ibValueMetaObjectInformationRegister::GetListForm(const wxSt
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		strFormName,
 		ibValueMetaObjectInformationRegister::eFormList,
-		ownerControl, new ibValueListRegisterObject(this, ibValueMetaObjectInformationRegister::eFormList),
+		ownerControl, ibCreateList(GetQueryable(), HasPeriod() ? GetRegisterPeriod() : nullptr),   // migrated onto the universal dynamic list
 		formGuid
 	);
 }
@@ -190,11 +189,10 @@ bool ibValueMetaObjectInformationRegister::OnAfterRunMetaObject(int flags)
 		return false;
 
 	// Custom virtual-table descriptors (slices). The base records descriptor is registered by
-	// ibValueMetaObjectRegisterData::OnAfterRunMetaObject below. Skip the onlyLoadFlag pass.
-	if (!(flags & onlyLoadFlag)) {
-		ibRegisterQueryableSource(&m_sliceLast);
-		ibRegisterQueryableSource(&m_sliceFirst);
-	}
+	// ibValueMetaObjectRegisterData::OnAfterRunMetaObject below. Register ALWAYS — the factory is PER-CONFIG
+	// (in the metadata), so a read-only DB load (onlyLoadFlag) still registers its OWN sources into its OWN factory.
+	m_metaData->RegisterSource(&m_sliceLast);
+	m_metaData->RegisterSource(&m_sliceFirst);
 
 	if (!(*m_propertyObjectModule)->OnAfterRunMetaObject(flags))
 		return false;
@@ -219,8 +217,8 @@ bool ibValueMetaObjectInformationRegister::OnAfterRunMetaObject(int flags)
 
 bool ibValueMetaObjectInformationRegister::OnBeforeCloseMetaObject()
 {
-	ibUnregisterQueryableSource(&m_sliceLast);
-	ibUnregisterQueryableSource(&m_sliceFirst);
+	m_metaData->UnregisterSource(&m_sliceLast);
+	m_metaData->UnregisterSource(&m_sliceFirst);
 
 	if (!(*m_propertyManagerModule)->OnBeforeCloseMetaObject())
 		return false;
@@ -330,7 +328,7 @@ ibSourceDataObject* ibValueMetaObjectInformationRegister::CreateSourceObject(con
 	case eFormRecord:
 		return CreateRecordManagerObjectValue();
 	case eFormList:
-		return new ibValueListRegisterObject(this, metaObject->GetTypeForm());
+		return ibCreateList(GetQueryable(), HasPeriod() ? GetRegisterPeriod() : nullptr);   // migrated onto the universal dynamic list
 	}
 
 	return nullptr;

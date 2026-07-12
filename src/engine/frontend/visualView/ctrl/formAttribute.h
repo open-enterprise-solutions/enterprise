@@ -70,7 +70,9 @@ class FRONTEND_API ibFormAttributeValue :
 
 		virtual wxString GetClassName() const override { return ibValue::GetClassName(); }
 		virtual wxString GetObjectTypeName() const override { return GetName(); }
-		virtual bool IsEditable() const override { return true; }
+		// A form attribute is only editable when its owner form is (a form opened over a read-only metadata — a DB /
+		// file config — is view-only). Out-of-line: ibValueForm is only forward-declared here.
+		virtual bool IsEditable() const override;
 
 		// ibBackendTypeConfigFactory = the Type-config factory the Type property's variant resolves
 		// through (internal — the holder's FAÇADE re-exposes name / id / type, never this object):
@@ -137,7 +139,12 @@ public:
 	// --- ibPropertyObject (accumulator: attaches attribute + value) ---------
 	virtual wxString GetClassName() const override { return ibValue::GetClassName(); }   // registered value type
 	virtual wxString GetObjectTypeName() const override { return m_attribute->GetObjectTypeName(); }
-	virtual bool IsEditable() const override { return true; }
+	virtual bool IsEditable() const override { return m_attribute->IsEditable(); }   // → attribute → owner form
+	// Metadata flows THROUGH the form. The holder is the attach-owner a held dynamic list reaches from its
+	// GetSourceMetaData(); forward to the attribute, which reads m_ownerForm->GetMetaData() (active-config
+	// fallback). Without this the base returns null, so the held list's Source picker resolves the WRONG
+	// (empty global) factory and lists nothing — even in the designer on the original config.
+	virtual const ibMetaData* GetMetaData() const override { return m_attribute->GetMetaData(); }
 	// Single interception point (the holder is what the inspector selects): forward the change
 	// to the property's REAL owner (attribute / value — each reacts to its own), and on the
 	// attribute's Type change re-materialise the value + re-accumulate.

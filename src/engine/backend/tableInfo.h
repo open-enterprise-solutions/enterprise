@@ -32,6 +32,7 @@ class ibValueListSettings;
 // Forward-declared here so tableInfo.h names the source-hook without pulling the query layer (no include
 // cycle). RAM models have NO queryable — the composer reads ibRamValueStorage directly.
 class ibBackendQueryable;
+class ibBackendQueryColumn;
 
 // The RAM value-storage — the RAM analog of a queryable (a flat/tree table that OWNS the live nodes). Defined
 // LOWER (it holds ibValueModel::ibComposerNode); ibValueModelStorage owns one, ibDataRamComposer sources from it.
@@ -1273,6 +1274,12 @@ public:
 	// paging + HasKeyedRows). A RAM model does NOT override it — it has no queryable (the RAM composer reads
 	// ibRamValueStorage directly), so it inherits this null default (→ HasKeyedRows false → restore-by-index).
 	virtual const ibBackendQueryable* GetSourceQueryable() const { return nullptr; }
+
+	// The FOLDER-flag display column of a hierarchical LIST: folder rows render as drillable containers even when
+	// EMPTY (the folder convention). The DB level-fetch reports hasChildren=false for every row (dataComposer's flat
+	// path), so this is the ONLY folder signal the tree has. Handed to the LIST at creation (ibCreateHierarchyList)
+	// — a display concern of the hierarchical list, NOT a queryable accessor. Null = not a folder hierarchy.
+	virtual const ibBackendQueryColumn* GetFolderDisplayColumn() const { return nullptr; }
 
 	// Discard the rendered view and re-fetch everything (batch mutations wxDVC's incremental tracking can't follow).
 	void NotifyReset() {

@@ -7,6 +7,7 @@
 #include "form.h"
 #include "backend/compiler/procUnit.h"
 #include "backend/serialize/dataBuilder.h"   // ibDataNode / ibDataBuilder / ibBinaryProvider
+#include "backend/metaCollection/metaFormObject.h"   // ibValueMetaObjectFormBase — IsCopyMode / IsPasteMode mark
 
 #ifdef OES_USE_WEB
 #include <iostream>
@@ -70,13 +71,21 @@ bool ibValueFrame::LoadControl(const ibValueMetaObjectFormBase* metaForm, ibRead
 	ibDataBuilder builder;
 	if (!builder.Load(ibBinaryProvider(), dataReader))
 		return false;
+	// A pasted metaobject's form materialises WHILE the object is marked (the deferred build re-armed it) — route to
+	// the paste cascade so the source hops re-home onto it; otherwise the plain read. (Disarming the mark + re-storing
+	// the form raw is the deferred build's job — ibDeferredForm::Construct — not this per-tree load.)
+	if (metaForm != nullptr && metaForm->IsPasteMode())
+		return PasteNode(builder.Root());
 	return LoadNode(builder.Root());
 }
 
-bool ibValueFrame::SaveControl(const ibValueMetaObjectFormBase* metaForm, ibWriterMemory& dataWritter, bool copy_form) const
+bool ibValueFrame::SaveControl(const ibValueMetaObjectFormBase* metaForm, ibWriterMemory& dataWritter) const
 {
 	ibDataBuilder builder;
-	if (!SaveNode(builder.Root()))
+	// While the form's metaobject is marked for copy (ibControlCopyGuard) the clipboard blob rides guids — route to
+	// the copy cascade; otherwise the plain raw save.
+	const bool ok = (metaForm != nullptr && metaForm->IsCopyMode()) ? CopyNode(builder.Root()) : SaveNode(builder.Root());
+	if (!ok)
 		return false;
 	return builder.Save(ibBinaryProvider(), dataWritter);
 }
@@ -123,6 +132,70 @@ bool ibValueFrame::SaveNode(ibDataNode& node) const
 		ibDataNode& childNode = node.AddChild(child->GetClassType(), child->GetControlID());
 		if (!child->SaveNode(childNode))
 			return false;
+	}
+	return true;
+}
+
+// COPY / PASTE node — the control's OWN copy-paste serialization (routed to from SaveControl / LoadControl while the
+// form's metaobject is marked). It mirrors SaveNode / LoadNode but drives every property AND event through the
+// Copy / PasteNodeValue pair: default == Write / ReadNodeValue, so a plain control round-trips unchanged, while a
+// source property rides its hops on guids and re-homes them onto the pasted object. Children recurse the same pair.
+bool ibValueFrame::CopyNode(ibDataNode& node) const
+{
+	node.SetValue(wxT("ControlId"), (s32)m_controlId);
+	node.SetValue(wxT("Name"),      GetControlName());
+	node.SetValue(wxT("Expanded"),  m_expanded);
+
+	for (unsigned int idx = 0; idx < ibPropertyObject::GetPropertyCount(); idx++)
+		if (ibProperty* prop = ibPropertyObject::GetProperty(idx)) {
+			ibDataValue value;
+			if (!prop->CopyNodeValue(value))
+				return false;
+			node.SetProperty(prop->GetName(), value);
+		}
+	for (unsigned int idx = 0; idx < ibPropertyObject::GetEventCount(); idx++)
+		if (ibEvent* event = ibPropertyObject::GetEvent(idx)) {
+			ibDataValue value;
+			if (!event->CopyNodeValue(value))
+				return false;
+			node.SetProperty(event->GetName(), value);
+		}
+
+	for (unsigned int idx = 0; idx < GetChildCount(); idx++) {
+		ibValueFrame* child = GetChild(idx);
+		if (child == nullptr)
+			continue;
+		ibDataNode& childNode = node.AddChild(child->GetClassType(), child->GetControlID());
+		if (!child->CopyNode(childNode))
+			return false;
+	}
+	return true;
+}
+
+bool ibValueFrame::PasteNode(const ibDataNode& node)
+{
+	m_controlId = (ibFormID)node.GetValue<s32>(wxT("ControlId"));
+	SetControlName(node.GetValue<wxString>(wxT("Name")));
+	m_expanded = node.GetValue<bool>(wxT("Expanded"));
+
+	for (unsigned int idx = 0; idx < ibPropertyObject::GetPropertyCount(); idx++)
+		if (ibProperty* prop = ibPropertyObject::GetProperty(idx))
+			if (!prop->PasteNodeValue(node.GetProperty(prop->GetName())))
+				return false;
+	for (unsigned int idx = 0; idx < ibPropertyObject::GetEventCount(); idx++)
+		if (ibEvent* event = ibPropertyObject::GetEvent(idx))
+			if (!event->PasteNodeValue(node.GetProperty(event->GetName())))
+				return false;
+
+	ibValueForm* ownerForm = GetOwnerForm();
+	if (ownerForm != nullptr) {
+		for (const ibDataNode& childNode : node.Children()) {
+			ibValueFrame* child = ownerForm->NewObject(childNode.GetClsid(), this, false);
+			if (child == nullptr)
+				continue;
+			if (!child->PasteNode(childNode))
+				return false;
+		}
 	}
 	return true;
 }

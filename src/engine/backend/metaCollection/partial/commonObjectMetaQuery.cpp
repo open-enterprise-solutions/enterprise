@@ -203,16 +203,23 @@ std::vector<const ibBackendQueryColumn*> ibRecordQueryable::GetPrimaryKeyColumns
 	return { refAttr };
 }
 const ibBackendQueryColumn* ibRecordQueryable::GetHierarchyColumn() const {
-	// Only a HIERARCHICAL record (catalog / chart) has a parent attribute — the base ref does not.
-	if (auto* h = dynamic_cast<const ibValueMetaObjectRecordDataHierarchyMutableRef*>(m_meta))
-		return h->GetDataParent();   // the parent attribute (predefined) IS-A ibBackendQueryColumn
-	return nullptr;
+	// The metaobject knows if it is hierarchical — its CLASS is the signal (a catalog / chart IS one). It returns
+	// its parent column through a virtual, null on a flat ref. No cast — virtual dispatch down its OWN inheritance.
+	return m_meta->GetHierarchyColumn();
 }
-const ibBackendQueryColumn* ibRecordQueryable::GetFolderColumn() const {
-	// A folders+items hierarchical record carries the predefined IsFolder flag (item-only hierarchy has none).
-	if (auto* h = dynamic_cast<const ibValueMetaObjectRecordDataHierarchyMutableRef*>(m_meta))
-		return h->GetDataIsFolder();   // the IsFolder attribute (predefined) IS-A ibBackendQueryColumn
-	return nullptr;
+
+// The metaobject behind the source — the front reads its icon / presentation off it (via the dynamic list's
+// GetSourceMetaObject → GetSourceQueryable → here). Out-of-line because the metaobject type is only complete in
+// this TU (the upcast RecordDataRef → GenericData needs the full class).
+const ibValueMetaObjectGenericData* ibRecordQueryable::GetSourceMetaObject() const {
+	return m_meta;
+}
+
+// The hierarchy metaobject's own parent column (a predefined attribute IS-A ibBackendQueryColumn) — defined
+// out-of-line HERE where the attribute type is complete. The record queryable (above) forwards to it. (Folder
+// column removed — folders are a creation-time sort/filter setting, not a structural column.)
+const ibBackendQueryColumn* ibValueMetaObjectRecordDataHierarchyMutableRef::GetHierarchyColumn() const {
+	return GetDataParent();
 }
 const ibBackendQueryable* ibRecordQueryable::ResolveReferenceTarget(const ibBackendQueryColumn* refColumn) const {
 	// Resolve a single-target reference COLUMN to the queryable of the object it points
@@ -282,6 +289,7 @@ ibGuid ibRegisterDataQueryable::GetQueryTableGuid() const { return m_meta->GetGu
 wxString ibRegisterDataQueryable::GetQueryName()      const { return m_meta->GetName(); }
 ibMetaID ibRegisterDataQueryable::GetQueryTableId() const { return m_meta->GetMetaID(); }
 const ibMetaData* ibRegisterDataQueryable::GetMetaData() const { return m_meta->GetMetaData(); }
+const ibValueMetaObjectGenericData* ibRegisterDataQueryable::GetSourceMetaObject() const { return m_meta; }   // the metaobject behind the source (front reads its icon)
 std::vector<ibQuerySortItem> ibRegisterDataQueryable::GetIdentitySort() const {
 	std::vector<ibQuerySortItem> ret;
 	if (m_meta->HasRecorder()) {

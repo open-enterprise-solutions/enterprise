@@ -28,7 +28,7 @@ private:
 };
 
 // ibTabularSourceDescriptor — the DB-backed tabular section's L4 source descriptor. Like the
-// standard ibMetaSourceDescriptor it CONTAINS the queryable and replaces the plain m_queryable
+// standard ibMetaCommandDescriptor it CONTAINS the queryable and replaces the plain m_queryable
 // field; but a tabular section is a SUB-object, so its (namespace, name) is PARENT-QUALIFIED —
 // ns = the parent record/document's kind, name = "<Parent>.<Section>" — reached as the
 // 3-segment source `Document.Expense.Goods`. Methods are out-of-line (the parent type is

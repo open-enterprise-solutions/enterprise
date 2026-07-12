@@ -799,6 +799,11 @@ void ibVisualHost::UpdateControl(ibValueFrame* obj, ibValueFrame* parent)
 	RelayoutStaticBoxIfAny(ctx.objParent, ctx.parentObj);
 
 	CalculateLabelSize(obj);
+	// The FORM's own command bar autofills from the MAIN source control's action collection, so a control
+	// property change that alters that set — e.g. a list's ChoiceMode adds the Select command — must refresh
+	// the form layers too. RefreshControl only refreshed the control's OWN (here suppressed) bar; without this
+	// the form toolbar kept the stale band until the whole host rebuilt. Cheap: BuildCommands + show/hide.
+	UpdateFormLayers(GetValueForm(), m_formLayerParts);
 	UpdateHostSize();
 	UpdateVirtualSize();
 }

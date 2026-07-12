@@ -1,7 +1,8 @@
 #include "propertySource.h"
-#include "backend/propertyManager/property/variant/variantSource.h"
-#include "backend/serialize/dataBuilder.h"   // ibDataValue — node value (Binary, transitional)
-#include "backend/sourceDescription.h"       // ibSourceDescription / ibSourceDescriptionMemory (raw id path)
+#include "backend/propertyManager/property/variant/variantSource.h"   // GetGuidByID / GetIdByGuid — the hop <-> guid resolve
+#include "backend/serialize/dataBuilder.h"   // ibDataValue — node value (Binary)
+#include "backend/sourceDescription.h"       // ibSourceDescription / ibSourceHop (the id path the variant holds)
+#include "backend/fileSystem/fs.h"           // ibReaderMemory / ibWriterMemory — the guid-keyed node blob
 
 wxObject* (*ibPropertySource::ms_propertySource)(ibPropertyObject*, const wxString&, const wxString&, const wxVariant&) = nullptr;
 
@@ -104,8 +105,7 @@ bool ibPropertySource::GetDataValue(ibValue& pvarPropVal) const
 	return true;
 }
 
-// The path serialises as RAW ids (no metadata / guid coupling) — the source explorer resolves each hop on
-// the walk, so serialization needs no metaData. See ibSourceDescriptionMemory.
+// READ / WRITE — the DUMB serializer: the id path verbatim, no metadata, no guids. This is the normal on-disk format.
 bool ibPropertySource::ReadNodeValue(const ibDataValue& value)
 {
 	return ibSourceDescriptionMemory::ReadNode(value, GetValueAsSourceDesc());
@@ -114,4 +114,66 @@ bool ibPropertySource::ReadNodeValue(const ibDataValue& value)
 bool ibPropertySource::WriteNodeValue(ibDataValue& value) const
 {
 	return ibSourceDescriptionMemory::WriteNode(value, GetValueAsSourceDesc());
+}
+
+// COPY / PASTE — their OWN binary of the source description: each metaobject hop rides its GUID instead of a raw id.
+// GetGuidByID == the metaobject's GetCommonGuid, which auto-picks the copy-guid while the object is marked for copy.
+// PASTE resolves each guid back through GetIdByGuid → THIS config's live id: on a paste the mark landed on the NEW
+// object (paste-guid == copy-guid, ibControlPasteGuard), so it lands on IT, not the surviving original. HEAD (idx 0)
+// is a form-local attribute id → always raw. This format is TRANSIENT — it lives only in the clipboard / paste
+// transaction; the first normal WriteNodeValue re-emits the plain raw path.
+static const unsigned char kHopRaw  = 0, kHopGuid  = 1;
+static const unsigned char kTypeRaw = 0, kTypeMeta = 1;
+
+bool ibPropertySource::CopyNodeValue(ibDataValue& value) const
+{
+	const ibVariantDataSource* variant = get_cell_variant<ibVariantDataSource>();
+	const std::vector<ibSourceHop>& path = GetValueAsPath();
+	ibWriterMemory writer;
+	writer.w_u32((unsigned int)path.size());
+	size_t idx = 0;
+	for (const ibSourceHop& hop : path) {
+		const ibGuid guid = (idx > 0) ? variant->GetGuidByID((ibMetaID)hop.m_id) : wxNullGuid;   // head is form-local -> raw
+		if (guid.isValid()) { writer.w_u8(kHopGuid); writer.w_stringZ(guid.str()); }
+		else                { writer.w_u8(kHopRaw);  writer.w_u32((unsigned int)hop.m_id); }
+		const ibGuid typeGuid = IsMetaValue(hop.m_type) ? variant->GetGuidByID((ibMetaID)(hop.m_type & kIbClsidBodyMask)) : wxNullGuid;
+		if (typeGuid.isValid()) { writer.w_u8(kTypeMeta); writer.w_u8((unsigned char)clsid_kind(hop.m_type)); writer.w_stringZ(typeGuid.str()); }
+		else                    { writer.w_u8(kTypeRaw);  writer.w_u64((unsigned wxLongLong_t)hop.m_type); }
+		idx++;
+	}
+	value = ibDataValue::Binary(writer.buffer());
+	return true;
+}
+
+bool ibPropertySource::PasteNodeValue(const ibDataValue& value)
+{
+	const wxMemoryBuffer& data = value.AsBinary();
+	if (data.GetDataLen() == 0)
+		return true;
+	const ibVariantDataSource* variant = get_cell_variant<ibVariantDataSource>();
+	ibSourceDescription& desc = GetValueAsSourceDesc();
+	desc.ClearSource();
+	ibReaderMemory reader(data);
+	const unsigned int count = reader.r_u32();
+	for (unsigned int i = 0; i < count; i++) {
+		ibSourceId id = wxNOT_FOUND;
+		if (reader.r_u8() == kHopGuid) {
+			const ibGuid guid(reader.r_stringZ());
+			id = (ibSourceId)variant->GetIdByGuid(guid);   // guid -> live id (the pasted object's)
+		}
+		else {
+			id = (ibSourceId)reader.r_u32();
+		}
+		ibClassID type = g_valueUndefinedCLSID;
+		if (reader.r_u8() == kTypeMeta) {
+			const ibClassKind kind = (ibClassKind)reader.r_u8();
+			const ibGuid typeGuid(reader.r_stringZ());
+			type = make_clsid_dynamic((ibClassID)variant->GetIdByGuid(typeGuid), kind);
+		}
+		else {
+			type = (ibClassID)reader.r_u64();
+		}
+		desc.AppendSource(id, type);
+	}
+	return true;
 }

@@ -17,7 +17,16 @@ ibValue* ibDeferredForm::Construct() const
 {
 	if (m_parent == nullptr || m_form == nullptr)
 		return nullptr;
-	return formWrapper::inl::cast_value(m_parent->CreateObjectForm(m_form));
+	// A pasted OBJECT form materialises HERE, long after PasteObject cleared the mark. Re-arm the SAME guid so the
+	// build parses its controls as a PASTE (LoadControl → PasteNode → re-home onto the pasted objects), reading the
+	// stored copy-paste structure verbatim. Once the form is CREATED the paste is consumed — this deferred builder
+	// clears the mark UNIVERSALLY (one-shot, for every form kind, not per-form).
+	if (m_paste)
+		m_form->SetPasteGuid(m_form->GetGuid());
+	ibValue* result = formWrapper::inl::cast_value(m_parent->CreateObjectForm(m_form));
+	if (m_paste)
+		m_form->SetPasteGuid(wxNullGuid);
+	return result;
 }
 
 // -----------------------------------------------------------------------
@@ -175,7 +184,9 @@ wxMemoryBuffer ibValueMetaObjectFormBase::FormNodeToBlob(const ibDataValue& form
 	return writer.buffer();
 }
 
-// The LIVE form's control tree AS a transparent node (Child) — the blob never hits disk.
+// The LIVE form's control tree AS a transparent node (Child) — the blob never hits disk. The form metaobject (this)
+// is in COPY mode here (ibControlCopyGuard stamped it), so SaveForm routes SaveControl → CopyNode: the source hops
+// ride their metaobject copy-guids (the copy/paste binary), so a paste re-homes them onto the pasted objects.
 ibDataValue ibValueMetaObjectFormBase::CopyFormData() const
 {
 	ibBackendValueForm* valueForm = nullptr;
@@ -188,6 +199,10 @@ ibDataValue ibValueMetaObjectFormBase::CopyFormData() const
 	return ibDataValue();
 }
 
+// Intentional no-op. The paste's own work — storing the copy/paste blob — is done by ibPropertyForm::PasteNodeValue
+// (it materialises the node into the form-data cell). The RE-HOMING happens later, on first form access: the form
+// object does not exist yet here, so ibDeferredForm re-arms the paste mark and the deferred build reads the blob via
+// PasteNode. Kept as the symmetric hook to CopyFormData / an extension point.
 bool ibValueMetaObjectFormBase::PasteFormData()
 {
 	return true;
@@ -334,6 +349,8 @@ bool ibValueMetaObjectForm::OnAfterRunMetaObject(int flags)
 		// result here would need session->m_root compiled, but CompileRoot
 		// only fires after RunDatabase finishes. The cache stores a builder
 		// and materializes it on first FindCompileModule lookup.
+		// ibDeferredForm's constructor records the paste mark NOW, while it is live (PasteObject stamped it); on first
+		// access it re-arms from that, so the form re-homes its source hops onto the pasted objects instead of reading raw.
 		return cc->AddCompileModule(this, [deferred = ibDeferredForm(metaObject, this)]() -> ibValue* {
 			return deferred.Construct();
 			});

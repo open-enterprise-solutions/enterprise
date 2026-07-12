@@ -414,11 +414,18 @@ ibFormAttributeValue::ibFormAttribute::~ibFormAttribute()
 
 const ibMetaData* ibFormAttributeValue::ibFormAttribute::GetMetaData() const
 {
+	// Through the form — now NON-recursive: ibValueForm::GetMetaData() resolves the creator config directly and
+	// no longer delegates to the form's SOURCE object (which, for a held dynamic list, walked back here → stack
+	// overflow). A dynamically-created form yields null → fall back to the ACTIVE config (always correct).
 	const ibMetaData* md = m_ownerForm != nullptr ? m_ownerForm->GetMetaData() : nullptr;
-	// A queryable-based source (a dynamic list) carries NO metaobject and an auto-built form has
-	// no creator → the form yields null; fall back to the ACTIVE configuration metadata so the
-	// Type property still resolves (was a null-deref crash in DoRefreshTypeDesc).
 	return md != nullptr ? md : ibApplicationData::GetActiveMetaData();
+}
+
+// Editable only when the owner form is — a form opened over a read-only metadata (a DB / file config, not the
+// designer's own storage) is view-only, so its attributes must present as read-only in the inspector.
+bool ibFormAttributeValue::ibFormAttribute::IsEditable() const
+{
+	return m_ownerForm != nullptr ? m_ownerForm->IsEditable() : true;
 }
 
 //*********************************************************************************************

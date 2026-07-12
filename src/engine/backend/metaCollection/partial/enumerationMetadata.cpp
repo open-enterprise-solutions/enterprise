@@ -6,7 +6,7 @@
 #include "enumeration.h"
 #include "backend/serialize/dataBuilder.h"
 #include "backend/metaData.h"
-#include "list/objectList.h"
+#include "backend/system/value/valueDynamicList.h"   // ibValueDynamicList — the standard list migrates onto the universal dynamic list
 
 
 //********************************************************************************************
@@ -51,9 +51,9 @@ ibSourceDataObject* ibValueMetaObjectEnumeration::CreateSourceObject(const ibVal
 	switch (metaObject->GetTypeForm())
 	{
 	case eFormList:
-		return new ibValueListDataObjectEnumRef(this, metaObject->GetTypeForm());
+		return ibCreateList(GetQueryable(), GetDataOrder());   // migrated onto the universal dynamic list
 	case eFormSelect:
-		return new ibValueListDataObjectEnumRef(this, metaObject->GetTypeForm(), true);
+		return ibCreateList(GetQueryable(), GetDataOrder(), ibDynamicListView_Choice);   // select front-driven — choice mode
 	}
 
 	return nullptr;
@@ -65,7 +65,7 @@ ibBackendValueForm* ibValueMetaObjectEnumeration::GetListForm(const wxString& st
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		strFormName,
 		ibValueMetaObjectEnumeration::eFormList,
-		ownerControl, new ibValueListDataObjectEnumRef(this, ibValueMetaObjectEnumeration::eFormList),
+		ownerControl, ibCreateList(GetQueryable(), GetDataOrder()),   // migrated onto the universal dynamic list
 		formGuid
 	);
 }
@@ -75,7 +75,7 @@ ibBackendValueForm* ibValueMetaObjectEnumeration::GetSelectForm(const wxString& 
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		strFormName,
 		ibValueMetaObjectEnumeration::eFormSelect,
-		ownerControl, new ibValueListDataObjectEnumRef(this, ibValueMetaObjectEnumeration::eFormSelect, true),
+		ownerControl, ibCreateList(GetQueryable(), GetDataOrder(), ibDynamicListView_Choice),   // select front-driven — choice mode
 		formGuid
 	);
 }

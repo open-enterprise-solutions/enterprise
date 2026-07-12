@@ -341,8 +341,17 @@ bool ibValueMetaObject::PasteObject(ibReaderMemory& reader)
 			/*const ibVersionID& version =*/ readerHeaderMemory->r_s32();
 			pasteObject->m_metaGuid = readerHeaderMemory->r_stringZ();
 
-			//and running initialization
-			if (!pasteObject->OnBeforeRunMetaObject(onlyLoadFlag))
+			// MARK the pasted object as pasted — its paste-guid equals its own guid (the source copy-guid it was
+			// created under). IsPasteMode() then holds while the tree runs, so a form re-loaded here re-homes its
+			// source hops onto this NEW object via GetIdByGuid; the OUTER guard clears the mark on exit. This mirrors
+			// ibControlCopyGuard on the copy side. No new flag — the existing paste-guid IS the mark.
+			pasteObject->m_metaPasteGuid = pasteObject->m_metaGuid;
+
+			// Running initialization AS A PASTE (pasteObjectFlag, NOT onlyLoadFlag): a pasted object is a NEW object,
+			// so its RUN event must register its queryable source — exactly like a fresh create (newObjectFlag) does.
+			// onlyLoadFlag gates the queryable registration OFF (the load-only pass), which left a copied catalog /
+			// register unregistered → its source descriptor was unresolvable ("источник не видит его"). — Max.
+			if (!pasteObject->OnBeforeRunMetaObject(pasteObjectFlag))
 				return false;
 
 
@@ -356,7 +365,7 @@ bool ibValueMetaObject::PasteObject(ibReaderMemory& reader)
 			pasteObject->LoadInterface(*readerDataMemory);
 			pasteObject->LoadRole(*readerDataMemory);
 
-			if (!pasteObject->OnAfterRunMetaObject(onlyLoadFlag))
+			if (!pasteObject->OnAfterRunMetaObject(pasteObjectFlag))
 				return false;
 
 			std::shared_ptr <ibReaderMemory> readerChildMemory(reader.open_chunk(childBlock));
@@ -390,6 +399,14 @@ bool ibValueMetaObject::PasteObject(ibReaderMemory& reader)
 
 	public:
 
+		// Recursively clear the paste marks once the whole tree is pasted, run and its forms re-homed — the mirror of
+		// ibControlCopyGuard::Erase. RAII from the public PasteObject.
+		static void ErasePasteGuid(const ibValueMetaObject* pasteObject) {
+			for (unsigned int idx = 0; idx < pasteObject->GetChildCount(); idx++)
+				ErasePasteGuid(pasteObject->GetChild(idx));
+			pasteObject->m_metaPasteGuid = wxNullGuid;
+		}
+
 		static bool PasteAndRunObject(ibValueMetaObject* pasteObject, ibReaderMemory& reader)
 		{
 			ibMetaData* metaData = pasteObject->GetMetaData();
@@ -399,8 +416,11 @@ bool ibValueMetaObject::PasteObject(ibReaderMemory& reader)
 			/*const ibVersionID& version =*/ readerHeaderMemory->r_s32();
 			/*pasteObject->m_metaGuid =*/ readerHeaderMemory->r_stringZ();
 
-			//and running initialization
-			if (!pasteObject->OnBeforeRunMetaObject(onlyLoadFlag))
+			// Running initialization AS A PASTE (pasteObjectFlag, NOT onlyLoadFlag): a pasted object is a NEW object,
+			// so its RUN event must register its queryable source — exactly like a fresh create (newObjectFlag) does.
+			// onlyLoadFlag gates the queryable registration OFF (the load-only pass), which left a copied catalog /
+			// register unregistered → its source descriptor was unresolvable ("источник не видит его"). — Max.
+			if (!pasteObject->OnBeforeRunMetaObject(pasteObjectFlag))
 				return false;
 
 			std::shared_ptr <ibReaderMemory>readerDataMemory(reader.open_chunk(dataBlock));
@@ -413,7 +433,7 @@ bool ibValueMetaObject::PasteObject(ibReaderMemory& reader)
 			pasteObject->LoadInterface(*readerDataMemory);
 			pasteObject->LoadRole(*readerDataMemory);
 
-			if (!pasteObject->OnAfterRunMetaObject(onlyLoadFlag))
+			if (!pasteObject->OnAfterRunMetaObject(pasteObjectFlag))
 				return false;
 
 			std::shared_ptr <ibReaderMemory> readerChildMemory(reader.open_chunk(childBlock));
@@ -446,7 +466,14 @@ bool ibValueMetaObject::PasteObject(ibReaderMemory& reader)
 		}
 	};
 
-#pragma endregion 
+#pragma endregion
+
+	// RAII: whatever the outcome, clear the paste marks once the whole tree is pasted, run and its forms re-homed —
+	// the mirror of ibControlCopyGuard erasing the copy marks after CopyObject.
+	struct ibControlPasteGuard {
+		const ibValueMetaObject* m_pasteObject;
+		~ibControlPasteGuard() { ibControlMemoryReader::ErasePasteGuid(m_pasteObject); }
+	} pasteGuard{ this };
 
 	return ibControlMemoryReader::PasteAndRunObject(this, reader);
 }

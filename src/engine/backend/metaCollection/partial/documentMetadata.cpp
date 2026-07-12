@@ -5,23 +5,13 @@
 
 #include "document.h"
 #include "backend/serialize/dataBuilder.h"
-#include "list/objectList.h"
+#include "backend/system/value/valueDynamicList.h"   // ibValueDynamicList — the document list migrates onto the universal dynamic list
 #include "backend/metaData.h"
 #include "backend/moduleManager/moduleManager.h"
 
 
-//********************************************************************************************
-
-class ibValueListDataObjectRefDocument : public ibValueListDataObjectRef {
-	public:
-	ibValueListDataObjectRefDocument(const ibValueMetaObjectDocument* metaObject = nullptr, const ibFormID& formType = wxNOT_FOUND, bool choiceMode = false) :
-		ibValueListDataObjectRef(metaObject, formType, choiceMode)
-	{
-		// Default sort by Date goes STRAIGHT to the composer (the store) — no helper. (Number was a disabled
-		// default; the uuid identity tiebreaker comes from the queryable's GetIdentitySort.)
-		m_composer.Sort(metaObject->GetDocumentDate()->GetName());
-	}
-};
+// (ibValueListDataObjectRefDocument REMOVED — the document list IS the dynamic list now; its default sort by number
+//  is a creation-time setting (ibCreateList + GetDocumentNumber), serialized and user-removable. Lists-as-a-class abolished.)
 
 //********************************************************************************************
 //*                                      metaData                                            *
@@ -95,10 +85,10 @@ ibSourceDataObject* ibValueMetaObjectDocument::CreateSourceObject(const ibValueM
 	{
 	case eFormObject: return CreateObjectValue(); break;
 	case eFormList:
-		return new ibValueListDataObjectRefDocument(this, metaObject->GetTypeForm());
+		return ibCreateList(GetQueryable(), GetDocumentNumber());   // migrated onto the universal dynamic list
 		break;
 	case eFormSelect:
-		return new ibValueListDataObjectRefDocument(this, metaObject->GetTypeForm(), true);
+		return ibCreateList(GetQueryable(), GetDocumentNumber(), ibDynamicListView_Choice);   // select front-driven — choice mode
 		break;
 	}
 
@@ -121,7 +111,7 @@ ibBackendValueForm* ibValueMetaObjectDocument::GetListForm(const wxString& strFo
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		strFormName,
 		ibValueMetaObjectDocument::eFormList,
-		ownerControl, new ibValueListDataObjectRefDocument(this, ibValueMetaObjectDocument::eFormList),
+		ownerControl, ibCreateList(GetQueryable(), GetDocumentNumber()),   // migrated onto the universal dynamic list
 		formGuid
 	);
 }
@@ -131,7 +121,7 @@ ibBackendValueForm* ibValueMetaObjectDocument::GetSelectForm(const wxString& str
 	return ibValueMetaObjectGenericData::CreateAndBuildForm(
 		strFormName,
 		ibValueMetaObjectDocument::eFormSelect,
-		ownerControl, new ibValueListDataObjectRefDocument(this, ibValueMetaObjectDocument::eFormSelect, true),
+		ownerControl, ibCreateList(GetQueryable(), GetDocumentNumber(), ibDynamicListView_Choice),   // select front-driven — choice mode
 		formGuid
 	);
 }

@@ -239,6 +239,70 @@ de-policied (the owner's `OnAccessWrite` already gated the save), and it always 
 
 ---
 
+## Planned — read→EXISTS unification (the filter-not-JOIN principle)
+
+**RLS is a FILTER, not a multiplying JOIN.** A filter selects a subset of rows; it must not change any
+row's multiplicity. The write path already honours this — a dot-walk RLS condition rides as a correlated
+`EXISTS` (see *Write path*), which passes a row **once or zero** times no matter how many permission rows
+match. The **read path still folds a real JOIN** (`pathAsExists=false`; the dot-walk resolves to a join
+alias in `BuildPageIR`), so a join-based read role can **duplicate rows** — a catalog row appears twice
+when its permission join is 1:N. Worse, the duplicate is **silent and poisons aggregates** (a `SUM` under
+the policy doubles), invisible because RLS is a decorator the query code never sees. Attributing "which
+duplicate came from RLS" is hard precisely because the root cause is JOIN — fix the cause, not the symptom.
+
+Make read use the SAME correlated `EXISTS` the write path uses. Then RLS **cannot** add a duplicate by
+construction, so:
+- there is nothing to **detect or attribute** — any duplicate left in the result is the user query's own
+  (legitimate multiset), never the policy's;
+- **EXISTS is idempotent to a dirty permission source** — five identical permission rows (or a sloppy ACL
+  JSON) still answer "exists" once; only *wrong* permissions leak, not *redundant* ones;
+- **EXISTS is floor-capability** — a correlated `EXISTS` is SQL-92, native on all five drivers, one generic
+  render path, zero dialect forks; it unifies read and write onto one mechanism ("can I see this row" ==
+  "may I write this row" == "does a permitting row exist").
+
+### Design (decided)
+
+- **Per-condition behavioural flag, NOT polymorphism.** `ibQueryCondition` is a value type held in
+  `std::vector<ibQueryCondition>`; a subclass would slice (forcing `unique_ptr` storage, allocations, a
+  rewrite of every hold/copy site) for a **single** diverging render choice. Add one field —
+  `bool m_asExists` ("render as a correlated EXISTS / semi-join, not a projection JOIN"). It is a
+  **behavioural** tag, not a provenance one: the provider cares HOW to render, not WHERE the condition came
+  from, and the tag is reusable by any future semi-join condition. Sits next to `m_path`, which is already
+  a behavioural tag (empty/non-empty).
+- **The decorator raises the flag at fold.** `ibValueQueryDecorator`'s `Where` / `Join` set `m_asExists`
+  on the conditions they produce. RLS is expressed **only as dot-walk** — `Where(dot-walk)` and
+  `Join(dot-walk + condition)`, never an arbitrary join-node to an ACL table — so every RLS condition
+  carries `m_path` and lowers through the existing `BuildDotWalkExists`. (An RLS `Join` that currently
+  emits a real join-node must instead emit a flagged `m_path` condition.)
+- **Provider reads the flag per condition** (four points, already located):
+  `BuildConditionExpr` — `(pathAsExists || c.m_asExists) && !c.m_path.empty()` → EXISTS;
+  `BuildFilterPredicate` — do not `continue`-skip a flagged dot-walk on read;
+  `BuildPredicateExpr` — thread the flag through the And/Or/Not tree;
+  `BuildPageIR` — do not build a join for flagged conditions.
+- **Multi-role = OR of EXISTS predicates, no materialisation.** Each role yields its dot-walk EXISTS
+  condition; roles OR-fold `EXISTS(r1) OR EXISTS(r2) …` (the "solyanka through OR"). The "reach an
+  unconditional grant → OR is unrestricted, else stack a batch of condition-predicates" branch is already
+  in `ApplyToSource`. The current key-**materialisation** (`scratch.Execute` for the admitted keys — a
+  subquery run during `ApplyReadAccess`) is **removed**: a role contributes a predicate, it does not
+  execute a query for keys. The condition is appended to each query **before** it runs, nothing runs
+  separately.
+
+The net is **subtractive**: two lowering paths (write dot-walk-EXISTS + read/multi-role
+join-materialisation) collapse to one — a role always produces a dot-walk EXISTS condition; one role adds
+it, several OR-fold it. Neither the join-node transform nor the materialisation survives. The
+duplicate-in-stream detector considered as a stopgap becomes unnecessary once read is EXISTS.
+
+### Open (mechanics — no design forks left)
+
+- Add `m_asExists` to `ibQueryCondition` (`dataQueryBuilder.h`).
+- Decorator raises it in `Where`-fold and `Join`-dot-walk-fold; the latter stops emitting a join-node.
+- Provider: the four points above.
+- Rewrite multi-role (`session.cpp` ~176-217): OR of EXISTS predicates in place of materialisation.
+- Verify: register sources (auto-restricted aggregates), fail-closed (empty EXISTS → 0 rows → deny), and a
+  **live run under a role** (filters, does not multiply). "Works" is confirmed only live — a leak is silent.
+
+---
+
 ## Current state & limitations
 
 Read-restriction **confirmed working live** — both the explicit `Source.Where(…)` form and the

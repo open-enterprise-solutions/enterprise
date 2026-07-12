@@ -499,7 +499,7 @@ void ibVisualEditorRemoveObjectCmd::DoRestore()
 //-----------------------------------------------------------------------------
 
 ibVisualEditorModifyPropertyCmd::ibVisualEditorModifyPropertyCmd(ibVisualEditorNotebook::ibVisualEditor* visualEditor, ibProperty* prop, const wxVariant& oldValue, const wxVariant& newValue) : m_visualEditor(visualEditor),
-m_property(prop), m_oldValue(prop), m_newValue(newValue)
+m_property(prop), m_oldValue(oldValue), m_newValue(newValue)
 {
 }
 
@@ -523,9 +523,14 @@ void ibVisualEditorModifyPropertyCmd::DoExecute()
 		}
 	}
 	else {
-		// Non-control owner (a form ATTRIBUTE / its held value): rebuild the WHOLE editor — its
-		// RefreshEditor fans out NotifyEditorRefresh, which re-reads the attribute tree too.
+		// Non-control owner (a form ATTRIBUTE / its held value / a command-bar LAYER): rebuild the WHOLE
+		// editor — its RefreshEditor fans out NotifyEditorRefresh, which re-reads the attribute tree too.
 		m_visualEditor->RefreshEditor();
+		// RefreshEditor rebuilds the object tree, which drops the tree selection — and with it the inspector's
+		// focus. Re-select the object whose property changed so the inspector STAYS on it (else toggling e.g.
+		// a command bar's AutoFill bounces the inspector off the bar onto the form).
+		if (ibPropertyObject* owner = m_property->GetPropertyObject())
+			objectInspector->SelectObject(owner, true);
 	}
 }
 
@@ -552,7 +557,10 @@ void ibVisualEditorModifyPropertyCmd::DoRestore()
 	}
 
 	m_visualEditor->Modify(true);
-	objectInspector->SelectObject(control);
+	// Re-select the object whose property was restored — GetPropertyObject() generalises `control` to a LAYER
+	// owner (command bar / item) too, so undo keeps the inspector on it instead of dropping to null.
+	if (ibPropertyObject* owner = m_property->GetPropertyObject())
+		objectInspector->SelectObject(owner, true);
 }
 
 //-----------------------------------------------------------------------------
