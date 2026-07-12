@@ -2066,6 +2066,9 @@
     <ClCompile Include="system\value\valueQueryable.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
+    <ClCompile Include="system\value\valueDynamicList.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
     <ClCompile Include="query\queryProvider.cpp">
       <Filter>query</Filter>
     </ClCompile>
@@ -2178,6 +2181,9 @@
       <Filter>system\value</Filter>
     </ClInclude>
     <ClInclude Include="system\value\valueQueryable.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
+    <ClInclude Include="system\value\valueDynamicList.h">
       <Filter>system\value</Filter>
     </ClInclude>
   </ItemGroup>

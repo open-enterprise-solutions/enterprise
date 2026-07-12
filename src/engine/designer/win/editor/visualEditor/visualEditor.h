@@ -18,7 +18,7 @@
 class ibValueLayerObject;      // common base for a layer node (the bar OR one command)
 class ibValueCommandBar;       // command-interface layer — tree-node payload
 class ibValueCommandBarItem;   // one child command — tree-node payload
-class ibSourceDescription;     // "oes_source_drag" drop payload — a binding source path (raw ids)
+struct ibSourceDescription;    // "oes_source_drag" drop payload — a binding source path (raw ids)
 
 // wxDropTarget for the "oes_source_drag" payload (a node dragged from the attribute tree). Shared by the
 // form CANVAS and the OBJECT TREE — each supplies a handler that maps the drop point (x,y) to a parent and

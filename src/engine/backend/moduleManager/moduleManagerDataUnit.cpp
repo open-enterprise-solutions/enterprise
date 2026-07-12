@@ -76,15 +76,17 @@ void ibValueModuleManager::ibValueDataUnit::FillMembers(ibMemberTable& helper) c
 
 	// The QUERYABLE kinds only — mirrors the query language's source coverage
 	// (queryableFactory): data-reference records, registers, constants.
-	helper.AppendProp("Constants", true, false, g_metaConstantCLSID);
-	helper.AppendProp("Catalogs", true, false, g_metaCatalogCLSID);
-	helper.AppendProp("Documents", true, false, g_metaDocumentCLSID);
-	helper.AppendProp("Enumerations", true, false, g_metaEnumerationCLSID);
-	helper.AppendProp("InformationRegisters", true, false, g_metaInformationRegisterCLSID);
-	helper.AppendProp("AccumulationRegisters", true, false, g_metaAccumulationRegisterCLSID);
-	helper.AppendProp("ChartsOfCharacteristicTypes", true, false, g_metaChartOfCharacteristicTypesCLSID);
-	helper.AppendProp("ChartsOfAccounts", true, false, g_metaChartOfAccountsCLSID);
-	helper.AppendProp("AccountingRegisters", true, false, g_metaAccountingRegisterCLSID);
+	// clsid narrowed into the (long) tag slot on purpose — GetPropVal keys by ordinal and re-supplies
+	// the clsid, so only the tag identity matters; static_cast makes the u64->long explicit (no C4305/C4309).
+	helper.AppendProp("Constants", true, false, static_cast<long>(g_metaConstantCLSID));
+	helper.AppendProp("Catalogs", true, false, static_cast<long>(g_metaCatalogCLSID));
+	helper.AppendProp("Documents", true, false, static_cast<long>(g_metaDocumentCLSID));
+	helper.AppendProp("Enumerations", true, false, static_cast<long>(g_metaEnumerationCLSID));
+	helper.AppendProp("InformationRegisters", true, false, static_cast<long>(g_metaInformationRegisterCLSID));
+	helper.AppendProp("AccumulationRegisters", true, false, static_cast<long>(g_metaAccumulationRegisterCLSID));
+	helper.AppendProp("ChartsOfCharacteristicTypes", true, false, static_cast<long>(g_metaChartOfCharacteristicTypesCLSID));
+	helper.AppendProp("ChartsOfAccounts", true, false, static_cast<long>(g_metaChartOfAccountsCLSID));
+	helper.AppendProp("AccountingRegisters", true, false, static_cast<long>(g_metaAccountingRegisterCLSID));
 }
 
 bool ibValueModuleManager::ibValueDataUnit::SetPropVal(const long lPropNum, const ibValue& varPropVal)

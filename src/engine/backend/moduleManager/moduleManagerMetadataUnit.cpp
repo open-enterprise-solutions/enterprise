@@ -39,20 +39,23 @@ enum
 
 void ibValueModuleManager::ibValueMetadataUnit::FillMembers(ibMemberTable& helper) const
 {
-	helper.AppendProp("CommonModules", true, false, g_metaCommonModuleCLSID);
-	helper.AppendProp("CommonForms", true, false, g_metaCommonFormCLSID);
-	helper.AppendProp("CommonTemplates", true, false, g_metaCommonTemplateCLSID);
-	helper.AppendProp("Constants", true, false, g_metaConstantCLSID);
-	helper.AppendProp("Catalogs", true, false, g_metaCatalogCLSID);
-	helper.AppendProp("Documents", true, false, g_metaDocumentCLSID);
-	helper.AppendProp("Enumerations", true, false, g_metaEnumerationCLSID);
-	helper.AppendProp("DataProcessors", true, false, g_metaDataProcessorCLSID);
-	helper.AppendProp("Reports", true, false, g_metaReportCLSID);
-	helper.AppendProp("InformationRegisters", true, false, g_metaInformationRegisterCLSID);
-	helper.AppendProp("AccumulationRegisters", true, false, g_metaAccumulationRegisterCLSID);
-	helper.AppendProp("ChartsOfCharacteristicTypes", true, false, g_metaChartOfCharacteristicTypesCLSID);
-	helper.AppendProp("ChartsOfAccounts", true, false, g_metaChartOfAccountsCLSID);
-	helper.AppendProp("AccountingRegisters", true, false, g_metaAccountingRegisterCLSID);
+	// The clsid rides in the (long) property-tag slot only to distinguish these members; GetPropVal
+	// dispatches by ordinal and re-supplies the clsid itself, so the narrowing is intentional and
+	// lossless-in-practice. static_cast makes it explicit (silences C4305/C4309 on the u64 clsid).
+	helper.AppendProp("CommonModules", true, false, static_cast<long>(g_metaCommonModuleCLSID));
+	helper.AppendProp("CommonForms", true, false, static_cast<long>(g_metaCommonFormCLSID));
+	helper.AppendProp("CommonTemplates", true, false, static_cast<long>(g_metaCommonTemplateCLSID));
+	helper.AppendProp("Constants", true, false, static_cast<long>(g_metaConstantCLSID));
+	helper.AppendProp("Catalogs", true, false, static_cast<long>(g_metaCatalogCLSID));
+	helper.AppendProp("Documents", true, false, static_cast<long>(g_metaDocumentCLSID));
+	helper.AppendProp("Enumerations", true, false, static_cast<long>(g_metaEnumerationCLSID));
+	helper.AppendProp("DataProcessors", true, false, static_cast<long>(g_metaDataProcessorCLSID));
+	helper.AppendProp("Reports", true, false, static_cast<long>(g_metaReportCLSID));
+	helper.AppendProp("InformationRegisters", true, false, static_cast<long>(g_metaInformationRegisterCLSID));
+	helper.AppendProp("AccumulationRegisters", true, false, static_cast<long>(g_metaAccumulationRegisterCLSID));
+	helper.AppendProp("ChartsOfCharacteristicTypes", true, false, static_cast<long>(g_metaChartOfCharacteristicTypesCLSID));
+	helper.AppendProp("ChartsOfAccounts", true, false, static_cast<long>(g_metaChartOfAccountsCLSID));
+	helper.AppendProp("AccountingRegisters", true, false, static_cast<long>(g_metaAccountingRegisterCLSID));
 }
 
 //****************************************************************************
