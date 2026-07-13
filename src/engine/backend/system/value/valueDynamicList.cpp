@@ -500,3 +500,8 @@ bool ibValueDynamicList::WriteProperty(ibDataNode& node) const
 
 // Register the type — runtime / designer know "DynamicList".
 VALUE_TYPE_REGISTER(ibValueDynamicList, "DynamicList", g_valueDynamicListCLSID);
+// The row / return-line type. When a choice has NO source-command handler (holder == null →
+// GetItemSelectValue empty), the base ibValueModelReturnLine::GetSelectValue falls back to the row's
+// OWN value (GetValue → this), so its C++ type MUST be in the ctor registry or GetTypeIDByRef asserts.
+// Mirrors the value-table's VL_TVROW registration — missed in the dynamic-list migration.
+SYSTEM_TYPE_REGISTER(ibDynamicListReturnLine, "DynamicListRow", system_to_clsid("VL_DLROW"));
