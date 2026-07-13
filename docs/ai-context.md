@@ -5,7 +5,7 @@
 > add a metaobject, write a script module, draft a report. **Read this
 > file first**, then drill into the topic docs linked at the bottom.
 >
-> **Last refreshed:** 2026-05-28.
+> **Last refreshed:** 2026-07-13.
 >
 > **Not a substitute for** `CLAUDE.md` (general onboarding) or topic
 > docs (deep mechanics). This file is the 5-minute contract.
@@ -62,7 +62,7 @@ business behaviour. The architect validates by running.
 | OES script modules inside metadata | `*.vcxproj`, `CMakeLists.txt`, `Common.props` |
 | Form layouts (visual designer) | Plugin DLLs (`simplePlugin.dll` pattern) |
 | Spreadsheet templates (`SpreadsheetDocument`) | `enterprise.sln` solution structure |
-| Reference / demo configurations under `examples/` | Build outputs, locale `.mo` / `.po` files |
+| Test configurations exercised by codeRunner scripts | Build outputs, locale `.mo` / `.po` files |
 | Tests against generated configs (codeRunner scripts) | DB driver code under `databaseLayer/` |
 
 **Reason:** OES enforces invariants in C++ (RAII, prepared statements,
@@ -199,8 +199,7 @@ The 11 metaobject types and their script-side namespace:
 
 Configuration is serialized through the `ibDataNode` tree (binary via
 `ibBinaryProvider`); JSON output is write-only (diff/inspection). See
-`docs/configuration-compare.md` for the Compare/Merge feature and sample
-configurations under `examples/`.
+`docs/configuration-compare.md` for the Compare/Merge feature.
 
 ---
 
@@ -242,17 +241,23 @@ Drill into these only when the task touches the specific area.
 | Build / clone / submodules | `docs/BUILD.md` |
 | Configuration Compare / Merge (`.mcf`) | `docs/configuration-compare.md` |
 | OES script — full language | `docs/lambda.md`, `docs/closure-capture.md`, `docs/linq.md`, `docs/eval-scope-refactor.md` |
-| Metadata system, CLSIDs, inheritance | `docs/ARCHITECTURE.md` §Metadata System |
+| Query language / L2–L5 engine (LINQ → SQL) | `docs/query-language-arc.md` |
+| Data composition (L5 filter/sort/group) | `docs/data-composer.md`, `docs/ram-composer-decoupling.md` |
+| Row-level security / access policy (`Restrict`) | `docs/access-policy-rls.md`, `docs/data-policy-arc.md` |
+| Metadata system, CLSIDs, inheritance | `docs/ARCHITECTURE.md` §Metadata System, `docs/schema-first-metadata.md` |
+| Name binding / prepare-names | `docs/name-binding.md`, `docs/preparenames-bind-arc.md` |
 | Sessions, threading, registry | `docs/session-registry.md` |
 | DB access, connection pool, transactions | `docs/connection-pool.md` |
 | Concurrent-write protection | `docs/record-locks.md` |
 | Distribution (Firebird mesh / shara) | `docs/firebird-mesh-driver.md` |
-| Lists / trees / paging | `docs/paging-design.md` |
+| Lists / trees / paging | `docs/paging-design.md`, `docs/dynamic-list.md` |
 | Forms architecture | `docs/backend-frontend-split.md`, `docs/ARCHITECTURE.md` §Form System |
+| Form attribute binding (dot-path sources) | `docs/form-attribute-binding.md` |
 | Doc/View subsystem (desktop + web fork) | `docs/docview-fork.md` |
+| Copy / paste across the object model | `docs/copy-paste.md` |
 | UI palette / colours | `docs/ui-palette.md` |
 | Web frontend | `docs/web/` |
-| Accounting registers (WIP) | `docs/register-totals-strategy.md` |
+| Accounting registers (WIP) | `docs/register-totals-strategy.md`, `docs/value-audit.md` |
 | Syntax helper / inline reference | `docs/syntax-helper-design.md` |
 
 ---

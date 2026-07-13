@@ -249,7 +249,7 @@ Per-driver `ClassifyDatabaseError(int nativeCode)` on each `ibDatabaseErrorRepor
 | `byteCodeAOT.cpp` | `ibByteCode::SerializeAOT/DeserializeAOT` | Binary persistence for the AOT cache (sys_bytecode_cache.blob); host-endian linear format with magic `'PBC1'` + format version |
 | `procUnit.h/cpp` | `ibProcUnit` | Interpreter: executes `ibByteCode` against a variable stack |
 | `procContext.h/cpp` | `ibRunContext` | Execution context: local variable frame, call stack |
-| `value.h/cpp` | `ibValue` | Universal value type — `TYPE_UNDEFINED`, `TYPE_NULL`, `TYPE_BOOLEAN`, `TYPE_NUMBER` (`ibNumber`), `TYPE_DATE`, `TYPE_STRING`, `TYPE_REFFER` |
+| `value.h/cpp` | `ibValue` | Universal value type — tag enum `ibValueTypes` in `backend_core.h`: `TYPE_EMPTY` (=0, the "undefined" value), `TYPE_BOOLEAN`, `TYPE_NUMBER` (`ibNumber`), `TYPE_DATE`, `TYPE_STRING`, `TYPE_NULL`, `TYPE_REFFER` / `TYPE_CONST_REFFER`, object kinds `TYPE_VALUE` / `TYPE_ENUM` / `TYPE_OLE` / `TYPE_FUNCTION` / `TYPE_ITERATOR` |
 | `codeDef.h` | enums | Opcode (`OPER_*`) and keyword (`KEY_*`) definitions |
 
 ### `src/engine/backend/databaseLayer/`
@@ -259,7 +259,7 @@ Per-driver `ClassifyDatabaseError(int nativeCode)` on each `ibDatabaseErrorRepor
 | `databaseLayer.h/cpp` | `ibDatabaseLayer` | Abstract base: Open/Close/RunQuery/PrepareStatement/Transactions |
 | `databaseResultSet.h/cpp` | `ibDatabaseResultSet` | Abstract result set cursor |
 | `preparedStatement.h` | `ibPreparedStatement` | Abstract prepared statement |
-| `firebird/` | `ibDatabaseLayerFirebird` | Firebird 3/4 driver |
+| `firebird/` | `ibDatabaseLayerFirebird` | Firebird 3/4/5 driver (INT128 via `SQL_INT128`; RLS confirmed live on FB5) |
 | `postgres/` | `ibDatabaseLayerPostgres` | PostgreSQL driver |
 | `sqllite/` | `ibDatabaseLayerSQLite` | SQLite 3 driver (note: directory named `sqllite`) |
 | `mysql/` | `ibDatabaseLayerMySQL` | MySQL driver |
@@ -361,11 +361,12 @@ Each opcode has type-specialised variants selected by adding `TYPE_DELTA1` (numb
 
 ### Keyword Inventory
 
-60 keywords defined in `KEY_*` enumerators (`codeDef.h`, `KEY_IF=0` … `LastKeyWord`), in lock-step with `s_listKeyWord[]` in `translateCode.cpp`. Groups:
+61 keywords defined in `KEY_*` enumerators (`codeDef.h`, `KEY_IF=0` … `KEY_RESTRICT`, before the `LastKeyWord` sentinel), in lock-step with `s_listKeyWord[]` in `translateCode.cpp`. Groups:
 - Control / structure — `KEY_IF`, `KEY_FOR`, `KEY_FOREACH`, `KEY_WHILE`, `KEY_PROCEDURE`, `KEY_FUNCTION`, `KEY_TRY`, `KEY_EXCEPT`, `KEY_ENDTRY`, `KEY_RAISE`, `KEY_RETURN`, `KEY_NEW`, …
 - Access modifiers (leading) — `KEY_PUBLIC` (was `Export`), `KEY_PRIVATE`, `KEY_PROTECTED`
 - Preprocessor — `KEY_DEFINE`, `KEY_UNDEF`, `KEY_IFDEF`, `KEY_IFNDEF`, `KEY_ELSEDEF`, `KEY_ENDIFDEF`, `KEY_REGION`, `KEY_ENDREGION`
 - LINQ — `KEY_FROM`, `KEY_WHERE`, `KEY_SELECT`, `KEY_ORDERBY`, `KEY_ASCENDING`, `KEY_DESCENDING`, `KEY_TAKE`, `KEY_SKIP`, `KEY_DISTINCT`, `KEY_JOIN`, `KEY_ON`, `KEY_EQUALS`, `KEY_GROUP`, `KEY_BY`, `KEY_INTO` (`KEY_IN` is reused from `Foreach`)
+- Access policy — `KEY_RESTRICT` (`restrict <id> in <src> join … where …` — the row-level-security filter; see `docs/access-policy-rls.md`)
 
 Keywords are English-only — there are no Cyrillic / Russian-language synonyms. Two parallel syntax modes share these keywords and compile to the same bytecode:
 - **VES** — Visual-Basic-style: `If c Then … EndIf`, `Foreach x In coll Do … EndDo`, `Procedure F() … EndProcedure`. Keyword-fenced blocks.

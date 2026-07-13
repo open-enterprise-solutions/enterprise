@@ -941,8 +941,9 @@ breaks the `wfrontend.dll` compile (C2653).
 The "generic row" goal (one row class replaces the four per-family list row classes; the
 driver emits final model rows; the conversion loops + refcount dance retire) was mostly
 **already landed** — a re-audit found no per-family rows left. `ibValueTableEnumRow`,
-`ibValueTreeListNode`, and `ibValueTableKeyRow` are gone (deletion comments in
-`objectList.h`); **`ibComposerNode`** (`tableInfo.h`) is the single row for every family —
+`ibValueTreeListNode`, and `ibValueTableKeyRow` are gone (the former `objectList.h/.cpp`
+was itself removed, the surviving list bodies folded into `commonObject.*`);
+**`ibComposerNode`** (`tableInfo.h`) is the single row for every family —
 enum / catalog / FolderRef tree / register — carrying the values map (`m_nodeValues`), the
 identity (`m_rowKey` PK values, `m_groupPath` dimension path, or live-node pointer), and the
 container flag (`m_container`). `RunComposerPage` (DB + RAM) wraps the driver's

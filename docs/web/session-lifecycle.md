@@ -14,7 +14,7 @@ Two-stage model since the compile/runtime split (2026-04-19):
 
 1. **Server bootstrap** (`wfrontendInit*` → metadata load) compiles
    all module bytecode into descriptor-owned `ibByteCode` blobs on
-   `ibModuleDataObject::m_byteCode` (shared across sessions). No
+   `ibRuntimeModuleDataObject::m_byteCode` (shared across sessions). No
    `ibProcUnit` is created at this stage.
 2. **Per-session runtime** (`ibWebSession::Login` → registry
    anonymous-create → `session->Open(user, pwd)` →
@@ -23,7 +23,7 @@ Two-stage model since the compile/runtime split (2026-04-19):
    instances against the shared bytecode and fires the `OnStart` script
    on them.
 
-Each session owns its own `ibValueModuleManagerConfiguration` via
+Each session owns its own `ibValueModuleManagerRuntimeConfiguration` via
 `ibSession::m_root` (`ibValuePtr`-managed). `ibWebApplication` is the
 per-session "app" analogue of `wxTheApp`. It owns the frame, the
 worker thread, and a borrowed pointer to the session's `ibSession`.
@@ -102,7 +102,7 @@ POST /w/<prefix>/login
                     ├── session->SetFrame(frame)   ← publish to ibSession
                     └── StartMainModuleSafe(mgr)
                           │ SEH-wrapped call into:
-                          └── ibValueModuleManagerConfiguration::StartMainModule
+                          └── ibValueModuleManagerRuntimeConfiguration::StartMainModule
                               ├── BeforeStart()  → CallAsProc("beforeStart", bCancel)
                               │     (script veto; false ⇒ abort login)
                               └── OnStart()      → CallAsProc("onStart")
@@ -111,7 +111,7 @@ POST /w/<prefix>/login
           }   // on OnInit failure: m_session->Close() + reset
 ```
 
-Script dispatch through `ibModuleDataObject::GetProcUnit()` returns
+Script dispatch through `ibRuntimeModuleDataObject::GetProcUnit()` returns
 the descriptor's `m_procUnit` slot. The slot is rebuilt for the
 active session by `AttachRuntime` and serialised by
 `m_runtimeMutex` — so concurrent web sessions calling into the same
@@ -164,7 +164,7 @@ ibWebSession::OnExit
             sys_session row; m_session.reset() drops our strong ref
 ```
 
-Per-session `ibValueModuleManagerConfiguration` (`session->m_root`)
+Per-session `ibValueModuleManagerRuntimeConfiguration` (`session->m_root`)
 drops with the session — it's owned by the session, not metadata.
 Compile state on descriptors lives for the process lifetime
 regardless.
@@ -228,7 +228,7 @@ each enter their own debug loop. `ibDebuggerServer` stays
 process-level — it dispatches commands by `sessionGuid` to the
 matching session's debug state.
 
-The former `ibValuePtr<ibValueModuleManagerConfiguration> m_moduleManager`
+The former `ibValuePtr<ibValueModuleManagerRuntimeConfiguration> m_moduleManager`
 field on `ibWebApplication` is gone. Each session owns its own root
 mm directly via `ibSession::m_root` (ibValuePtr); any caller that used
 to access `app->GetModuleManager()` now goes through the session

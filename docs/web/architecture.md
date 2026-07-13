@@ -3,9 +3,9 @@
 ## Compile/runtime split
 
 The module manager is **per-session**. Each session owns its own
-`ibValueModuleManagerConfiguration` via `ibSession::m_root`
+`ibValueModuleManagerRuntimeConfiguration` via `ibSession::m_root`
 (`ibValuePtr`-managed, intrusive-refcounted). Bytecode (`ibByteCode`)
-is per-descriptor (`ibModuleDataObject`), shared across sessions
+is per-descriptor (`ibRuntimeModuleDataObject`), shared across sessions
 because compile is metadata-driven and immutable; the runtime
 ProcUnit is rebuilt on each descriptor for the active session by
 `ibValueModuleManager::AttachRuntime(s)` and torn down by
@@ -52,7 +52,7 @@ Debug). SolutionDir must be the enterprise root — props at the root
 Each HTTP session gets its own `ibWebSession` owning an `ibWebApplication`.
 The session itself owns:
 
-- `m_root : ibValuePtr<ibValueModuleManagerConfiguration>` — the
+- `m_root : ibValuePtr<ibValueModuleManagerRuntimeConfiguration>` — the
   per-session module manager root.
 - `m_frame : ibBackendDocFrame*` (set via `SetFrame`) — published by
   `ibWebApplication` after it builds the `ibWebFrame`.
