@@ -684,7 +684,7 @@ public:
 
 public:
 	virtual void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const override {}
-	virtual void CallAsCommand(const ibDataViewItem& row, const ibActionID& lNumAction, class ibBackendValueForm* srcForm) override {}
+	virtual void CallAsCommand(const ibActionID& lNumAction, const ibDataViewCommandContext& ctx, class ibBackendValueForm* srcForm) override {}
 
 	// Double-click on a READ-ONLY row (a list) opens the row's OWN form — delegated here so each model opens it
 	// PER TYPE (object / folder / register recorder) through its existing CallAsCommand path (the SAME the Edit

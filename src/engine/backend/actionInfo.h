@@ -216,7 +216,7 @@ public:
 	// Runs the command by id against the CURRENT ROW; srcForm is the form that invoked it. (The Edit command DOES
 	// arrive here — its id still carries eStartEditingFlag, baked into the model's enum — so a list opens its object
 	// form; the front then ALSO opens the inline editor. See eStartEditingFlag above + the TableBox's CallAsAction.)
-	virtual void CallAsCommand(const class ibDataViewItem& row, const ibActionID& lNumAction, class ibBackendValueForm* srcForm) = 0;
+	virtual void CallAsCommand(const ibActionID& lNumAction, const struct ibDataViewCommandContext& ctx, class ibBackendValueForm* srcForm) = 0;
 };
 
 #endif

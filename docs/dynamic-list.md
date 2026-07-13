@@ -199,7 +199,8 @@ metaobject (`reference_source_command_layer`).
     its primary-key column values, for the FindRowValue selection-restore — see below),
     `FillSourceExplorer(explorer)` (the column set, system columns hidden).
   - **COMMAND INTERFACE** — `GetCommandCollection(formType, out)` (the command band),
-    `CallAsCommand(key, id, srcForm)` (run one by id).
+    `CallAsCommand(id, anchor, key, srcForm)` (run one by id — `key` = the selected row for delete / edit / copy,
+    `anchor` = the create context, the front-computed drill folder / top a NEW element parents under).
   - **ENTRY** — `ShowValueByKey(key, srcForm)` (open a row's value directly — the double-click /
     "enter" affordance, no command id).
 - **Two templates, so a pure query source is not forced to carry the command surface:**

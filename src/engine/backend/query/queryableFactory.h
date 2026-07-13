@@ -91,8 +91,10 @@ public:
 	// ---- COMMAND INTERFACE: the command band (list the commands, run one by id). ----
 	// LIST the commands this source offers (Add / Copy / Edit / … — the TableBox merges them into its bar).
 	virtual void GetCommandCollection(const ibFormID& /*formType*/, std::vector<ibCommandItem>& /*commands*/) const {}
-	// RUN a command by id against the row identified by `key`; `srcForm` is the form to open under / refresh.
-	virtual void CallAsCommand(const ibUniqueKey& /*key*/, ibActionID /*id*/, ibBackendValueForm* /*srcForm*/) const {}
+	// RUN a command by id; `key` = the selected row (delete / edit target, and the parent source for create when
+	// present), `anchor` = where the user stands in the tree (the create fallback when nothing is selected so a
+	// new element lands in the browsed folder); `srcForm` is the form to open under / refresh.
+	virtual void CallAsCommand(ibActionID /*id*/, const ibUniqueKey& /*anchor*/, const ibUniqueKey& /*key*/, ibBackendValueForm* /*srcForm*/) const {}
 
 	// ---- ENTRY: open a row's value directly (the double-click / "enter" affordance, no command id). ----
 	virtual void ShowValueByKey(const ibUniqueKey& /*key*/, ibBackendValueForm* /*srcForm*/) const {}

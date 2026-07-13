@@ -228,9 +228,10 @@ class ibValueModelTableBox : public ibValueWindowComposite,
 	*/
 
 	virtual ibActionCollection GetActionCollection(const ibFormID& formType);
-	// The command bar calls this (generic id, form). The TableBox reads its OWN current row and either runs a
-	// view-state command DIRECTLY against the control (Command_*), or forwards the OBJECT command to the model
-	// as CallAsCommand(row, id, form) — the ibTabularCommandDataObject contract (table command = current row + id + form).
+	// The command bar calls this (generic id, form). The TableBox reads the rows a command runs against — the
+	// SELECTED row plus the create ANCHOR (resolved per view mode, see CallAsAction) — and either runs a view-state
+	// command DIRECTLY against the control (Command_*), or forwards the OBJECT command to the model as
+	// CallAsCommand(id, {selection, anchor}, form) — the ibTabularCommandDataObject contract.
 	virtual void CallAsAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm);
 
 

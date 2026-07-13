@@ -53,7 +53,7 @@ public:
 	// source COMMANDS — the writeable-ref base set PLUS Post / ClearPosting. CallAsCommand loads the document by
 	// key and writes it in the posting / undo-posting mode; the rest delegates to the base. Bodies in documentAction.cpp.
 	virtual void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const override;
-	virtual void CallAsCommand(const ibUniqueKey& key, ibActionID id, ibBackendValueForm* srcForm) const override;
+	virtual void CallAsCommand(ibActionID id, const ibUniqueKey& anchor, const ibUniqueKey& key, ibBackendValueForm* srcForm) const override;
 
 	//support icons
 	virtual wxIcon GetIcon() const;

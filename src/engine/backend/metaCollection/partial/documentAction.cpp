@@ -55,7 +55,7 @@ void ibValueMetaObjectDocument::GetCommandCollection(const ibFormID& formType, s
 	commands.emplace_back(eClearPostingValue, wxT("ClearPosting"), _("Clear posting"), g_picSaveCLSID);
 }
 
-void ibValueMetaObjectDocument::CallAsCommand(const ibUniqueKey& key, ibActionID id, ibBackendValueForm* srcForm) const
+void ibValueMetaObjectDocument::CallAsCommand(ibActionID id, const ibUniqueKey& anchor, const ibUniqueKey& key, ibBackendValueForm* srcForm) const
 {
 	if (id == ePostValue || id == eClearPostingValue) {
 		if (!key.IsOk()) return;
@@ -74,6 +74,6 @@ void ibValueMetaObjectDocument::CallAsCommand(const ibUniqueKey& key, ibActionID
 		catch (...) { wxLogError(wxT("ibValueMetaObjectDocument::CallAsCommand: unhandled non-ibBackend exception swallowed")); }
 		return;
 	}
-	ibValueMetaObjectRecordDataMutableRef::CallAsCommand(key, id, srcForm);   // Add/Copy/Edit/Delete/MarkAsDelete
+	ibValueMetaObjectRecordDataMutableRef::CallAsCommand(id, anchor, key, srcForm);   // Add/Copy/Edit/Delete/MarkAsDelete
 }
 

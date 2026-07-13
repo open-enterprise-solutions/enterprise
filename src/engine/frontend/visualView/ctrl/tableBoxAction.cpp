@@ -69,9 +69,31 @@ void ibValueModelTableBox::CallAsAction(const ibActionID& lNumAction, ibBackendV
 	if (m_tableModel == nullptr || appData->DesignerMode())
 		return;
 
-	// The FRONT owns the current row — read it once here and pass it wherever the command needs it.
-	const ibDataViewItem row = m_tableCurrentLine != nullptr ?
-		m_tableCurrentLine->GetLineItem() : ibDataViewItem();
+	// The FRONT owns the rows a command runs against — read them once here. m_selection = the selected row
+	// (delete / edit / copy target). m_anchor = WHERE a new element is created — CREATE always anchors here,
+	// NEVER on the selection — resolved PER VIEW MODE:
+	//   List         → flat, no hierarchy → no anchor (a new element lands at the root).
+	//   Hierarchical → the folder the user has drilled INTO — the frozen top-parent crumb (rendered separately
+	//                  above the scroll area), NOT GetTopItem (that returns the first NON-frozen visible row).
+	//                  Empty when at the root → a new element lands at the root.
+	//   Tree         → the folder the user stands in: the current item if it IS a folder, else its parent folder.
+	ibDataViewCommandContext ctx;
+	ctx.m_selection = m_tableCurrentLine != nullptr ? m_tableCurrentLine->GetLineItem() : ibDataViewItem();
+	if (auto* ctrl = dynamic_cast<ibDataViewCtrl*>(GetInnerWx())) {
+		switch (ctrl->GetViewMode()) {
+		case ibDataViewHierarchical:
+			ctx.m_anchor = ctrl->GetDrillHierarchyItem();   // the drilled-into folder (the hierarchical-drill crumb, rendered separately above the scroll)
+			break;
+		case ibDataViewTree: {
+			const ibDataViewItem cur = ctrl->GetCurrentItem();
+			ctx.m_anchor = cur.IsContainer() ? cur : cur.GetParentItem();
+			break;
+		}
+		case ibDataViewList:
+		default:
+			break;   // flat list — no anchor
+		}
+	}
 
 	switch (lNumAction)
 	{
@@ -85,9 +107,9 @@ void ibValueModelTableBox::CallAsAction(const ibActionID& lNumAction, ibBackendV
 		// in, so its own `case eEditValue` matches — a list opens the object form, a value-table does nothing there).
 		// Then, if that bit is set, the FRONT ALSO forces the row's inline editor: a value-table / tabular row edits
 		// inline (EditCurrentRow), a list row no-ops (not inline-editable — its form already opened). Tested per id.
-		m_tableModel->CallAsCommand(row, lNumAction, srcForm);
+		m_tableModel->CallAsCommand(lNumAction, ctx, srcForm);
 		if (lNumAction & eStartEditingFlag)
-			EditCurrentRow(row);
+			EditCurrentRow(ctx.m_selection);
 		break;
 	}
 }

@@ -125,7 +125,7 @@ public:
 	// (the metaobject's set, reached through the descriptor). The TableBox merges these into its bar and routes
 	// a click back here → we forward it with the row's key. No command interface (custom query) → empty / no-op.
 	virtual void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const override;
-	virtual void CallAsCommand(const ibDataViewItem& row, const ibActionID& lNumAction, class ibBackendValueForm* srcForm) override;
+	virtual void CallAsCommand(const ibActionID& lNumAction, const ibDataViewCommandContext& ctx, class ibBackendValueForm* srcForm) override;
 
 	// Picker Choose — the list is a BRIDGE: it hands the row's value map (its default columns) to the source's
 	// command interface, which reads the right SELECT value per family (reference / record key). Metadata-blind.

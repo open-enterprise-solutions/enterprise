@@ -151,7 +151,7 @@ public:
 	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override { this->m_meta->FillSourceExplorer(explorer); }
 	// COMMAND INTERFACE
 	void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const override { this->m_meta->GetCommandCollection(formType, commands); }
-	void CallAsCommand(const ibUniqueKey& key, ibActionID id, ibBackendValueForm* srcForm) const override { this->m_meta->CallAsCommand(key, id, srcForm); }
+	void CallAsCommand(ibActionID id, const ibUniqueKey& anchor, const ibUniqueKey& key, ibBackendValueForm* srcForm) const override { this->m_meta->CallAsCommand(id, anchor, key, srcForm); }
 	// ENTRY
 	void ShowValueByKey(const ibUniqueKey& key, ibBackendValueForm* srcForm) const override { this->m_meta->ShowValueByKey(key, srcForm); }
 };
@@ -413,7 +413,7 @@ public:
 	virtual void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const;         // enum: reference VISIBLE, rest hidden
 	// COMMAND INTERFACE — the command band (the writeable levels override to fill these):
 	virtual void GetCommandCollection(const ibFormID& /*formType*/, std::vector<ibCommandItem>& /*commands*/) const {}
-	virtual void CallAsCommand(const ibUniqueKey& /*key*/, ibActionID /*id*/, ibBackendValueForm* /*srcForm*/) const {}
+	virtual void CallAsCommand(ibActionID /*id*/, const ibUniqueKey& /*anchor*/, const ibUniqueKey& /*key*/, ibBackendValueForm* /*srcForm*/) const {}
 	// ENTRY — open a row's value directly (writeable levels override):
 	virtual void ShowValueByKey(const ibUniqueKey& /*key*/, ibBackendValueForm* /*srcForm*/) const {}
 
@@ -702,7 +702,7 @@ public:
 	// by id against `key` (create/copy/open/delete/mark) and refreshes `srcForm`; ShowValueByKey opens the row's form.
 	// Bodies in objectList.cpp (next to the list models they were lifted from). Document overrides to add Post.
 	virtual void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const override;
-	virtual void CallAsCommand(const ibUniqueKey& key, ibActionID id, ibBackendValueForm* srcForm) const override;
+	virtual void CallAsCommand(ibActionID id, const ibUniqueKey& anchor, const ibUniqueKey& key, ibBackendValueForm* srcForm) const override;
 	virtual void ShowValueByKey(const ibUniqueKey& key, ibBackendValueForm* srcForm) const override;
 
 	//create single object
@@ -861,7 +861,7 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 	// flat catalog reaching here shows no folder command). CallAsCommand handles eAddFolder (new folder) and
 	// delegates the rest to the base. Bodies in objectList.cpp.
 	virtual void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const override;
-	virtual void CallAsCommand(const ibUniqueKey& key, ibActionID id, ibBackendValueForm* srcForm) const override;
+	virtual void CallAsCommand(ibActionID id, const ibUniqueKey& anchor, const ibUniqueKey& key, ibBackendValueForm* srcForm) const override;
 
 	//process choice
 	virtual bool ProcessChoice(ibBackendControlFrame* ownerValue,
@@ -1200,7 +1200,7 @@ public:
 	// WITHOUT a recorder (an independent record-manager register); a recorder-based register (document movements)
 	// shows none. Execute / open run through the record manager (by the row's key). Bodies in objectList.cpp.
 	virtual void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const;
-	virtual void CallAsCommand(const ibUniqueKey& key, ibActionID id, ibBackendValueForm* srcForm) const;
+	virtual void CallAsCommand(ibActionID id, const ibUniqueKey& anchor, const ibUniqueKey& key, ibBackendValueForm* srcForm) const;
 	virtual void ShowValueByKey(const ibUniqueKey& key, ibBackendValueForm* srcForm) const;
 	// SELECT value — a register has no single reference; its picker value IS the composite RECORD KEY built from
 	// the row's dimension cells (the whole value map). Body in objectList.cpp.

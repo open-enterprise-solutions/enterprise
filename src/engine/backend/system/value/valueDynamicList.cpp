@@ -319,12 +319,14 @@ void ibValueDynamicList::GetCommandCollection(const ibFormID& formType, std::vec
 		holder->GetCommandCollection(formType, commands);
 }
 
-// Run a bar/menu click: convert the front-owned row to its key and hand it to the source descriptor, which
-// forwards to the metaobject and returns the answer to the bus (opens a form / refreshes srcForm).
-void ibValueDynamicList::CallAsCommand(const ibDataViewItem& row, const ibActionID& lNumAction, ibBackendValueForm* srcForm)
+// Run a bar/menu click: convert BOTH front-owned rows to their keys and hand them to the source descriptor,
+// which forwards to the metaobject (opens a form / refreshes srcForm). key = the selected row (delete / edit
+// target, and the parent source for create when present); anchor = where the user stands in the tree, the
+// create fallback when nothing is selected so a new element lands in the browsed folder.
+void ibValueDynamicList::CallAsCommand(const ibActionID& lNumAction, const ibDataViewCommandContext& ctx, ibBackendValueForm* srcForm)
 {
 	if (const ibQueryableSourceDescriptor* holder = GetSourceDescriptor())
-		holder->CallAsCommand(GetItemKey(row), lNumAction, srcForm);
+		holder->CallAsCommand(lNumAction, GetItemKey(ctx.m_anchor), GetItemKey(ctx.m_selection), srcForm);
 }
 
 // Picker Choose — hand the row's value map (its default columns) to the source descriptor, which reads the

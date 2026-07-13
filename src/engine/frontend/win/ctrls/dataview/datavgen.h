@@ -879,7 +879,7 @@ public:
 	// Hierarchical drill context (control-owned, model-stateless).
 	// Empty in List / Tree mode; non-empty when the user has drilled
 	// into a folder via SetTopParent.
-	ibDataViewItem GetTopParentItem() const {
+	ibDataViewItem GetDrillHierarchyItem() const {
 		// Front of the chain (the deepest folder we're currently inside);
 		// empty in List / Tree mode.
 		return m_topParentChain.IsEmpty() ? ibDataViewItem() : m_topParentChain[0];

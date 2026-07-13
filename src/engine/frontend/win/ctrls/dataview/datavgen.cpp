@@ -3282,7 +3282,7 @@ static void BuildHierarchicalHelper(ibDataViewCtrl* window, const ibDataViewMode
 {
 	ibDataViewItemArray children;
 
-	ibDataViewItem item  = window->GetTopParentItem();
+	ibDataViewItem item  = window->GetDrillHierarchyItem();
 	ibDataViewItem child = item;
 
 	while (child.IsOk())

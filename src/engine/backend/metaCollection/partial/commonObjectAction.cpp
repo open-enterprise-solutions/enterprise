@@ -100,7 +100,7 @@ void ibValueMetaObjectRecordDataMutableRef::GetCommandCollection(const ibFormID&
 	commands.emplace_back(eMarkAsDeleteValue, wxT("MarkAsDelete"), _("Mark as delete"), g_picMarkAsDeleteCLSID, true);
 }
 
-void ibValueMetaObjectRecordDataMutableRef::CallAsCommand(const ibUniqueKey& key, ibActionID id, ibBackendValueForm* srcForm) const
+void ibValueMetaObjectRecordDataMutableRef::CallAsCommand(ibActionID id, const ibUniqueKey& /*anchor*/, const ibUniqueKey& key, ibBackendValueForm* srcForm) const
 {
 	try {
 		switch (id)
@@ -163,18 +163,19 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::GetCommandCollection(const 
 	ibValueMetaObjectRecordDataMutableRef::GetCommandCollection(formType, commands);   // Add/Copy/Edit/Delete/MarkAsDelete
 }
 
-void ibValueMetaObjectRecordDataHierarchyMutableRef::CallAsCommand(const ibUniqueKey& key, ibActionID id, ibBackendValueForm* srcForm) const
+void ibValueMetaObjectRecordDataHierarchyMutableRef::CallAsCommand(ibActionID id, const ibUniqueKey& anchor, const ibUniqueKey& key, ibBackendValueForm* srcForm) const
 {
 	if (id == eAddFolder || id == eAddValue) {
-		// PARENT inheritance from the SELECTED row (the folder the user has expanded / is standing in): a folder →
-		// the new value lands INSIDE it (parent = the folder itself); an item → the new value is its SIBLING (parent
-		// = the item's own parent); no selection → the catalog root (empty parent). Restores the old folder list's
-		// ResolveParentForNew. The command interface is by-KEY, so the selected row's own IsFolder / Parent /
-		// Reference come from a single point load of that key (the front no longer hands the node down).
+		// CREATE always anchors on the ANCHOR (never the selected row): the front computed it per view mode — a
+		// hierarchy list gives the top element, a tree gives the folder the user is standing in, a flat list gives
+		// none. A folder anchor → the new value lands INSIDE it (parent = the folder itself); an item anchor → the
+		// new value is its SIBLING (parent = the item's own parent); an empty anchor → the catalog root. The command
+		// interface is by-KEY, so the anchor's own IsFolder / Parent / Reference come from one point load of it.
+		const ibUniqueKey& ctxKey = anchor;
 		try {
 			ibValue parent;   // empty → root
-			if (key.IsOk()) {
-				ibValuePtr<ibValueRecordDataObjectHierarchyRef> sel(CreateObjectValue(ibObjectMode::OBJECT_ITEM, key.GetGuid()));
+			if (ctxKey.IsOk()) {
+				ibValuePtr<ibValueRecordDataObjectHierarchyRef> sel(CreateObjectValue(ibObjectMode::OBJECT_ITEM, ctxKey.GetGuid()));
 				if (sel != nullptr) {
 					ibValue isFolder;
 					sel->GetValueByMetaID(GetDataIsFolder()->GetMetaID(), isFolder);
@@ -194,7 +195,7 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::CallAsCommand(const ibUniqu
 		catch (...) { wxLogError(wxT("ibValueMetaObjectRecordDataHierarchyMutableRef::CallAsCommand: unhandled non-ibBackend exception swallowed")); }
 		return;
 	}
-	ibValueMetaObjectRecordDataMutableRef::CallAsCommand(key, id, srcForm);   // Copy/Edit/Delete/MarkAsDelete
+	ibValueMetaObjectRecordDataMutableRef::CallAsCommand(id, anchor, key, srcForm);   // Copy/Edit/Delete/MarkAsDelete
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -212,7 +213,7 @@ void ibValueMetaObjectRegisterData::GetCommandCollection(const ibFormID& /*formT
 	commands.emplace_back(eDeleteValue, wxT("Delete"), _("Delete"), g_picDeleteCLSID);
 }
 
-void ibValueMetaObjectRegisterData::CallAsCommand(const ibUniqueKey& key, ibActionID id, ibBackendValueForm* srcForm) const
+void ibValueMetaObjectRegisterData::CallAsCommand(ibActionID id, const ibUniqueKey& /*anchor*/, const ibUniqueKey& key, ibBackendValueForm* srcForm) const
 {
 	if (!HasRecordManager())
 		return;

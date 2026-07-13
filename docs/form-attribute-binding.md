@@ -505,18 +505,19 @@ The toolbar's commands flow through ONE interface — `ibActionDataObject` (`Get
 already carry the pair. Three roles compose it:
 
 - **The model is a dumb command STORE** — `ibTabularCommandDataObject` (`GetCommandCollection(formType, out)` +
-  `CallAsCommand(row, id, form)`, `actionInfo.h`). It lists its OWN narrow set as `ibCommandItem`
+  `CallAsCommand(id, {selection, anchor}, form)`, `actionInfo.h`). It lists its OWN narrow set as `ibCommandItem`
   records (the SAME record the action collection lays out — a default item, `m_act_id == wxNOT_FOUND`, is
-  a separator) and runs one by id against the FRONT-passed current row. No action composition, no widget
+  a separator) and runs one by id against the FRONT-passed rows (delete / edit use the selection; a CREATE
+  parents a new element under the anchor). No action composition, no widget
   pull. There is NO shared base command enum — each model class defines its OWN commands (a value-table /
   tabular section its Add / Copy / Edit / Delete inline; the list family a file-local enum in
   `objectListAction.cpp`, adding MarkAsDelete / AddFolder; an enum list nothing).
 - **The tablebox is the ADAPTER** — it turns the dumb model into a full `ibActionDataObject`.
   `GetActionCollection` composes Select (choice mode, first) + the model's `GetCommandCollection` + the
   view-state band (Filter / FilterByColumn / FilterClear / ViewMode — the TableBox's own high-base ids,
-  `20000+`). `CallAsAction` reads its OWN current row off the live control (`m_tableCurrentLine`) and
+  `20000+`). `CallAsAction` reads the command rows off the live control — the selection (`m_tableCurrentLine`) plus the create anchor (per view mode: hierarchy = the drilled-into folder, tree = the folder the cursor stands in, list = none) — and
   routes: a band id → `Command_*` (driven straight on the widget); any other id →
-  `model->CallAsCommand(row, id, form)` (the object commands). The model never sees the widget; the view
+  `model->CallAsCommand(id, {selection, anchor}, form)` (the object commands). The model never sees the widget; the view
   never composes what the model owns.
 - **The form is a WRAPPER** — `GetActionCollection` surfaces its command PROVIDER's set + the form chrome
   (Close / Update / Help / Change); `CallAsAction` handles the chrome ids, else forwards to the provider.

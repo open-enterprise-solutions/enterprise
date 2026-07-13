@@ -208,12 +208,13 @@ public:
 		commands.emplace_back(eEditValue,    wxT("Edit"),   _("Edit"),   g_picEditCLSID);
 		commands.emplace_back(eDeleteValue,  wxT("Delete"), _("Delete"), g_picDeleteCLSID);
 	}
-	virtual void CallAsCommand(const ibDataViewItem& row, const ibActionID& lNumAction, ibBackendValueForm* srcForm) override {
+	// Flat tabular section: no hierarchy, so only the SELECTED row matters — m_anchor is ignored.
+	virtual void CallAsCommand(const ibActionID& lNumAction, const ibDataViewCommandContext& ctx, ibBackendValueForm* srcForm) override {
 		switch (lNumAction) {
-		case eAddValue:    AddValue(row);    break;
-		case eCopyValue:   CopyValue(row);   break;
-		case eEditValue:   EditValue(row);   break;   // no-op on the backend; Edit's id carries eStartEditingFlag → the FRONT opens the real inline editor
-		case eDeleteValue: DeleteValue(row); break;
+		case eAddValue:    AddValue(ctx.m_selection);    break;
+		case eCopyValue:   CopyValue(ctx.m_selection);   break;
+		case eEditValue:   EditValue(ctx.m_selection);   break;   // no-op on the backend; Edit's id carries eStartEditingFlag → the FRONT opens the real inline editor
+		case eDeleteValue: DeleteValue(ctx.m_selection); break;
 		}
 	}
 
