@@ -66,7 +66,7 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird()
 
 	m_pStatus = new ISC_STATUS_ARRAY();
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
-	m_pInterface = new ibInterfaceFirebird();
+	m_pInterface = std::make_shared<ibInterfaceFirebird>();
 	
 	if (!m_pInterface->Init())
 	{
@@ -93,7 +93,7 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strDatabase)
 
 	m_pStatus = new ISC_STATUS_ARRAY();
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
-	m_pInterface = new ibInterfaceFirebird();
+	m_pInterface = std::make_shared<ibInterfaceFirebird>();
 	
 	if (!m_pInterface->Init())
 	{
@@ -121,7 +121,7 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strDatabase, co
 
 	m_pStatus = new ISC_STATUS_ARRAY();
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
-	m_pInterface = new ibInterfaceFirebird();
+	m_pInterface = std::make_shared<ibInterfaceFirebird>();
 	if (!m_pInterface->Init())
 	{
 		SetErrorCode(DATABASE_LAYER_ERROR_LOADING_LIBRARY);
@@ -147,7 +147,7 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strServer, cons
 
 	m_pStatus = new ISC_STATUS_ARRAY();
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
-	m_pInterface = new ibInterfaceFirebird();
+	m_pInterface = std::make_shared<ibInterfaceFirebird>();
 	if (!m_pInterface->Init())
 	{
 		SetErrorCode(DATABASE_LAYER_ERROR_LOADING_LIBRARY);
@@ -173,7 +173,7 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const wxString& strServer, cons
 
 	m_pStatus = new ISC_STATUS_ARRAY();
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
-	m_pInterface = new ibInterfaceFirebird();
+	m_pInterface = std::make_shared<ibInterfaceFirebird>();
 	if (!m_pInterface->Init())
 	{
 		SetErrorCode(DATABASE_LAYER_ERROR_LOADING_LIBRARY);
@@ -198,7 +198,7 @@ ibDatabaseLayerFirebird::ibDatabaseLayerFirebird(const ibDatabaseLayerFirebird& 
 
 	m_pStatus = new ISC_STATUS_ARRAY();
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
-	m_pInterface = new ibInterfaceFirebird();
+	m_pInterface = std::make_shared<ibInterfaceFirebird>();
 	if (!m_pInterface->Init())
 	{
 		SetErrorCode(DATABASE_LAYER_ERROR_LOADING_LIBRARY);
@@ -223,8 +223,11 @@ ibDatabaseLayerFirebird::~ibDatabaseLayerFirebird()
 	ISC_STATUS_ARRAY* pStatus = (ISC_STATUS_ARRAY*)m_pStatus;
 	wxDELETEA(pStatus);
 	m_pStatus = NULL;
-	wxDELETE(m_pInterface);
-	m_pInterface = NULL;
+	// m_pInterface is a shared_ptr: releasing our reference here frees the
+	// interface ONLY if the maintenance scheduler is not still holding it.
+	// Open() may have donated it to the scheduler (Standalone mode); the
+	// scheduler keeps the fbclient function table alive for as long as its
+	// worker may call in, so a reaped donor connection cannot dangle it.
 }
 
 // open database
@@ -255,7 +258,7 @@ bool ibDatabaseLayerFirebird::Open()
 {
 	ResetErrorCodes();
 
-	if (m_pInterface == NULL)
+	if (!m_pInterface)
 		return false;
 
 	//wxCSConv conv(wxT("UTF-8"));
@@ -998,7 +1001,7 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 			}
 
 			// Create the result set object
-			ibDatabaseResultSetFirebird* pResultSet = new ibDatabaseResultSetFirebird(m_pInterface, m_pDatabase, pQueryTransaction, pStatement, pOutputSqlda, true, bManageTransaction);
+			ibDatabaseResultSetFirebird* pResultSet = new ibDatabaseResultSetFirebird(m_pInterface.get(), m_pDatabase, pQueryTransaction, pStatement, pOutputSqlda, true, bManageTransaction);
 			pResultSet->SetEncoding(GetEncoding());
 			if (pResultSet->GetErrorCode() != DATABASE_LAYER_OK)
 			{
@@ -1060,7 +1063,7 @@ ibPreparedStatement* ibDatabaseLayerFirebird::DoPrepareStatement(const wxString&
 	// for the rationale.
 	ReconnectIfLeaderChanged();
 
-	ibPreparedStatementFirebird* pStatement = ibPreparedStatementFirebird::CreateStatement(m_pInterface, m_pDatabase, m_pTransaction, strQuery, GetEncoding());
+	ibPreparedStatementFirebird* pStatement = ibPreparedStatementFirebird::CreateStatement(m_pInterface.get(), m_pDatabase, m_pTransaction, strQuery, GetEncoding());
 	if (pStatement && (pStatement->GetErrorCode() != DATABASE_LAYER_OK))
 	{
 		SetErrorCode(pStatement->GetErrorCode());
@@ -1411,7 +1414,7 @@ void ibDatabaseLayerFirebird::InterpretErrorCodes()
 	//wxLogDebug(wxT("ibDatabaseLayerFirebird::InterpretErrorCodes()"));
 
 	long nSqlCode = m_pInterface->GetIscSqlcode()(*(ISC_STATUS_ARRAY*)m_pStatus);
-	SetErrorMessage(ibDatabaseLayerFirebird::TranslateErrorCodeToString(m_pInterface, nSqlCode, *(ISC_STATUS_ARRAY*)m_pStatus));
+	SetErrorMessage(ibDatabaseLayerFirebird::TranslateErrorCodeToString(m_pInterface.get(), nSqlCode, *(ISC_STATUS_ARRAY*)m_pStatus));
 	if (nSqlCode < -900)  // Error codes less than -900 indicate that it wasn't a SQL error but an ibase system error
 	{
 		SetErrorCode(ibDatabaseLayerFirebird::TranslateErrorCode(*((ISC_STATUS_ARRAY*)m_pStatus)[1]));

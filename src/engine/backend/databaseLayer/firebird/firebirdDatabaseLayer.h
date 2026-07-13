@@ -5,6 +5,8 @@
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/databaseLayer/firebird/engine/ibase.h"
 
+#include <memory>   // std::shared_ptr — m_pInterface is ref-counted (shared with the maintenance scheduler)
+
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
 class ibInterfaceFirebird;
 #endif
@@ -144,7 +146,11 @@ private:
 	wxString m_currentConnectUrl;
 
 #if _USE_DYNAMIC_DATABASE_LAYER_LINKING == 1
-	ibInterfaceFirebird* m_pInterface;
+	// Ref-counted: the maintenance scheduler (a process singleton) borrows this
+	// interface and may outlive THIS pooled connection. Shared ownership keeps
+	// the fbclient function table alive until BOTH the driver and the scheduler
+	// release it, so a reaped donor connection cannot dangle the worker's pointer.
+	std::shared_ptr<ibInterfaceFirebird> m_pInterface;
 #endif
 
 	wxString m_strServer;

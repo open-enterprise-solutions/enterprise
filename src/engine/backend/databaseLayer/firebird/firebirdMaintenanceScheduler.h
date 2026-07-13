@@ -27,12 +27,14 @@
 //     don't touch the shared DB at all. Standalone single-process
 //     embedded is the only safe scheduler scope.
 //   - Stopped deterministically in ibApplicationData teardown (step 0
-//     of ~ibApplicationData, BEFORE the connection pool frees the FB
-//     driver + the ibInterfaceFirebird* the worker holds). The atexit
-//     hook registered in Start() remains as an idempotent backstop —
-//     by the time it runs the scheduler is already stopped. Per-driver
-//     Close does NOT Stop — pool checkouts/checkins would constantly
-//     kill the scheduler.
+//     of ~ibApplicationData). The atexit hook registered in Start()
+//     remains as an idempotent backstop. Per-driver Close does NOT Stop —
+//     pool checkouts/checkins would constantly kill the scheduler.
+//   - The FB interface is held by SHARED ownership (std::shared_ptr), so
+//     the worker never dangles: a pooled donor connection can be reaped /
+//     destroyed while the scheduler keeps the fbclient function table
+//     alive. Correctness no longer depends on teardown ORDERING — the
+//     interface simply outlives every caller that might touch it.
 //
 // First-cut policy keeps clocks in memory — a process restart
 // resets the "last run" timestamps. Persistence to a
@@ -42,6 +44,8 @@
 #include "backend/databaseLayer/firebird/firebirdMaintenance.h"
 
 #include <wx/string.h>
+
+#include <memory>   // std::shared_ptr — the scheduler co-owns the FB interface
 
 class ibInterfaceFirebird;
 
@@ -66,14 +70,19 @@ public:
 	// is a no-op; different path stops the prior scheduler first.
 	// Safe to call from `firebirdDatabaseLayer::Open` regardless of
 	// whether the scheduler already runs.
+	//
+	// `iface` is taken by SHARED ownership: the scheduler co-owns the
+	// fbclient interface, so the worker's calls stay valid even after the
+	// pooled connection that donated it is reaped / destroyed. This — not
+	// teardown ordering — is what prevents the use-after-free.
 	static void Start(
-		ibInterfaceFirebird* iface,
+		std::shared_ptr<ibInterfaceFirebird> iface,
 		const wxString& dbPath,
 		const ibFirebirdMaintenance::ServiceConnection& conn);
 
-	// Stop the scheduler (if any) and join the background thread.
-	// Safe to call multiple times. Called from
-	// `firebirdDatabaseLayer::Close` and at process exit.
+	// Stop the scheduler (if any) and join the background thread, then
+	// release the scheduler's interface reference. Safe to call multiple
+	// times. Called from `firebirdDatabaseLayer::Close` and at process exit.
 	static void Stop();
 
 	// Currently-scheduled dbPath, or empty when not running.

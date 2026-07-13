@@ -18,7 +18,7 @@ namespace {
 struct SchedulerState {
 	std::mutex                       mu;
 	wxString                         dbPath;
-	ibInterfaceFirebird*             iface = nullptr;
+	std::shared_ptr<ibInterfaceFirebird> iface;   // shared: outlives the pooled donor connection (no dangling worker)
 	ibFirebirdMaintenance::ServiceConnection conn{};
 
 	std::atomic<bool>                stopRequested{false};
@@ -86,7 +86,7 @@ void RunMaintenanceCycle(SchedulerState* st) {
 	// Snapshot params under lock — the loop runs without holding
 	// the mutex so Stop() can flip stopRequested without blocking.
 	wxString dbPath;
-	ibInterfaceFirebird* iface = nullptr;
+	std::shared_ptr<ibInterfaceFirebird> iface;   // a local strong ref pins the interface alive for the WHOLE cycle
 	ibFirebirdMaintenance::ServiceConnection conn{};
 	{
 		std::lock_guard<std::mutex> g(st->mu);
@@ -94,7 +94,7 @@ void RunMaintenanceCycle(SchedulerState* st) {
 		iface  = st->iface;
 		conn   = st->conn;
 	}
-	if (dbPath.IsEmpty() || iface == nullptr) return;
+	if (dbPath.IsEmpty() || !iface) return;
 
 	// Sweep — cheap, can run any time of day.
 	if (IsOverdue(st->lastSweepMs.load(),
@@ -103,7 +103,7 @@ void RunMaintenanceCycle(SchedulerState* st) {
 			wxT("ibFirebirdMaintenanceScheduler: running sweep on %s"),
 			dbPath));
 		const auto status = ibFirebirdMaintenance::RunSweep(
-			iface, dbPath, conn, &st->stopRequested);
+			iface.get(), dbPath, conn, &st->stopRequested);
 		if (status == ibFirebirdMaintenance::Status::Ok) {
 			st->lastSweepMs.store(NowUnixMs());
 		} else {
@@ -126,7 +126,7 @@ void RunMaintenanceCycle(SchedulerState* st) {
 			wxT("ibFirebirdMaintenanceScheduler: running BR cycle on %s"),
 			dbPath));
 		const auto status = ibFirebirdMaintenance::RunBackupRestoreCycle(
-			iface, dbPath, conn, &st->stopRequested);
+			iface.get(), dbPath, conn, &st->stopRequested);
 		if (status == ibFirebirdMaintenance::Status::Ok) {
 			st->lastBackupRestoreMs.store(NowUnixMs());
 		} else {
@@ -172,11 +172,11 @@ void WorkerLoop(SchedulerState* st) {
 } // namespace
 
 void ibFirebirdMaintenanceScheduler::Start(
-	ibInterfaceFirebird* iface,
+	std::shared_ptr<ibInterfaceFirebird> iface,
 	const wxString& dbPath,
 	const ibFirebirdMaintenance::ServiceConnection& conn)
 {
-	if (iface == nullptr || dbPath.IsEmpty()) return;
+	if (!iface || dbPath.IsEmpty()) return;
 
 	auto& st = GS();
 
@@ -289,7 +289,7 @@ void ibFirebirdMaintenanceScheduler::Stop()
 	std::lock_guard<std::mutex> g(st.mu);
 	st.running.store(false);
 	st.dbPath.Clear();
-	st.iface = nullptr;
+	st.iface.reset();   // release the scheduler's shared ref — frees the interface iff the driver already released
 	st.conn  = ibFirebirdMaintenance::ServiceConnection{};
 }
 
