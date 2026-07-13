@@ -11953,6 +11953,7 @@ class binary_reader
         }
 
         // step 2: convert array into number of type T and return
+        static_assert(sizeof(vec) == sizeof(NumberType), "size mismatch between buffer and NumberType");
         std::memcpy(&result, vec.data(), sizeof(NumberType));
         return true;
     }
