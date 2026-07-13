@@ -14,6 +14,22 @@ list(FILTER FRONTEND_SOURCES EXCLUDE REGEX "special/valueFileDialog\\.cpp$")
 list(FILTER FRONTEND_SOURCES EXCLUDE REGEX "special/valueFontDialog\\.cpp$")
 list(FILTER FRONTEND_SOURCES EXCLUDE REGEX "special/valueGrid\\.cpp$")
 
+# GLOB grabs every .cpp, but the desktop frontend.dll (frontend.vcxproj) builds
+# a HAND-PICKED subset. The files below are NOT in that project, so building
+# them here breaks the CMake build:
+#   * web/ + wfrontend.cpp — web sources; they belong to wfrontend.dll and only
+#     compile with OES_USE_WEB defined.
+#   * the listed uikit units — unfinished, not part of the desktop build.
+# Excluding them realigns the GLOB with the real .sln source set.
+list(FILTER FRONTEND_SOURCES EXCLUDE REGEX "/web/")
+list(FILTER FRONTEND_SOURCES EXCLUDE REGEX "wfrontend\\.cpp$")
+list(FILTER FRONTEND_SOURCES EXCLUDE REGEX "uikit/ctrl/statusBar\\.cpp$")
+list(FILTER FRONTEND_SOURCES EXCLUDE REGEX "uikit/dialog\\.cpp$")
+list(FILTER FRONTEND_SOURCES EXCLUDE REGEX "uikit/settings\\.cpp$")
+list(FILTER FRONTEND_SOURCES EXCLUDE REGEX "uikit/theme/theme_win32\\.cpp$")
+list(FILTER FRONTEND_SOURCES EXCLUDE REGEX "uikit/topLevel\\.cpp$")
+list(FILTER FRONTEND_SOURCES EXCLUDE REGEX "uikit/frame\\.cpp$")
+
 add_library(frontend SHARED ${FRONTEND_SOURCES})
 
 target_include_directories(frontend
@@ -27,6 +43,14 @@ target_compile_definitions(frontend
     PRIVATE
         NOPCH
 )
+
+# Windows DLL export macro — FRONTEND_API resolves to dllexport only when
+# FRONTEND_EXPORTS is defined (frontend.h); without it every FRONTEND_API class
+# is dllimport and its wx event-table / class-info static members fail to define
+# (C2491). Mirrors backend's BACKEND_EXPORTS.
+if(WIN32)
+    target_compile_definitions(frontend PRIVATE FRONTEND_EXPORTS)
+endif()
 
 target_link_libraries(frontend
     PRIVATE

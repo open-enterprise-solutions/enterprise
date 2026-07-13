@@ -50,6 +50,44 @@ bring-up.
 The isolated targets are kept out of `oes_tests` so an appData bring-up (or an
 optional driver being OFF) can't break the main run.
 
+### Frontend GUI tests (`oes_frontend_runtime_test`)
+
+A separate CMake target links **frontend.dll** (desktop wx) + backend into a
+gtest binary — the first target to build the frontend under CMake on Windows
+(the desktop DLL had only ever been built via the `.sln`). Files:
+`tests/frontendFix.h` (GUI wxApp + runtime appData env + SQLite `:memory:` pool),
+`tests/frontendFormFix.h` (adds a minimal bound main frame so
+`ibSession::CurrentFrame()` resolves), and
+`test_frontend{Runtime,Form,DocView,VisualHost,Controls}.cpp`.
+
+Key facts:
+
+- Desktop controls are real `wxWindow` (`ibVisualHost : wxScrolledCanvas`), so
+  the harness brings up a live GUI `wxApp` via `wxEntryStart` — not just wxBase.
+- **Headless must suppress modal dialogs.** A wxASSERT or a CRT heap/assert
+  report in a Debug build otherwise pops a blocking window and hangs the run.
+  The GUI environment routes them to stderr: `wxSetAssertHandler(nullptr)`,
+  `_CrtSetReportMode(..., _CRTDBG_MODE_FILE)` + `_CRTDBG_FILE_STDERR`, and
+  `SetErrorMode(SEM_NOGPFAULTERRORBOX | ...)`.
+- A form **cannot** be `new`ed — `ibValueForm`'s ctor needs frame/session
+  context and throws "Context functions are not available!". Build forms with
+  `ibBackendValueForm::CreateNewForm()` on `FrontendFormFix`.
+- On a headless CI box with no display the fixtures `GTEST_SKIP` rather than
+  fail.
+
+Green today: harness bring-up, form creation via `CreateNewForm`, form clsid
+identity, the doc/view framework (`ibDocument` / `ibView` / `ibDocManager`
+accessors), and clsid kind-typing. The control-model / attribute / visual-host /
+serialize tests are `DISABLED_`: `NewObject(clsid)` faults inside the control's
+`ibValueFrame::Init` when run headless (the ctor registry is global, so this is
+**not** a missing-config issue — it needs a debugger to localise the null
+deref, not a fixture change).
+
+```powershell
+& $cmake --build enterprise/build --config Debug --target oes_frontend_runtime_test
+& "enterprise/build/bin/Debug/oes_frontend_runtime_test.exe"
+```
+
 ### What is covered
 
 - **Crypto / auth:** PBKDF2 password hashing (+ legacy-MD5 upgrade), MD5 and

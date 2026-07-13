@@ -1,5 +1,5 @@
-#ifndef _GRID_H__
-#define _GRID_H__
+#ifndef _TEXTBOX_H__
+#define _TEXTBOX_H__
 
 #include "window.h"
 #include "frontend/win/editor/textEditor/textEditor.h"

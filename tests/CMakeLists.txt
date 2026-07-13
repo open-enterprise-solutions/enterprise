@@ -291,3 +291,52 @@ set_target_properties(oes_temp_db_sqlite_test PROPERTIES
 )
 
 gtest_discover_tests(oes_temp_db_sqlite_test)
+
+# ---------------------------------------------------------------------------
+# Frontend GUI harness — STEP 1. Links the DESKTOP frontend.dll (real wx
+# widgets: ibVisualHost : wxScrolledCanvas) + backend into a gtest target and
+# proves a live GUI wxApp + a runtime-mode appData env come up together in the
+# test process — the seam every later form/control test stands on.
+#
+# Desktop controls are wxWindow subclasses, so this needs a live GUI toolkit (a
+# display); the harness GTEST_SKIPs on a headless box. Kept as its OWN target
+# (like oes_temp_db_sqlite_test) so its wxApp / appData bring-up can't perturb
+# the main oes_tests run, and so its heavy wx link stays off the fast suites.
+#   cmake --build build --target oes_frontend_runtime_test --config Debug
+#   ./bin/oes_frontend_runtime_test
+# ---------------------------------------------------------------------------
+add_executable(oes_frontend_runtime_test
+    test_frontendRuntime.cpp
+    test_frontendForm.cpp
+    test_frontendDocView.cpp
+    test_frontendVisualHost.cpp
+    test_frontendControls.cpp
+)
+
+target_link_libraries(oes_frontend_runtime_test
+    PRIVATE
+        backend
+        frontend
+        wx::core wx::aui wx::html wx::propgrid wx::adv
+        wx::stc  wx::xrc wx::qa  wx::base wx::net wx::xml
+        GTest::gtest
+        GTest::gtest_main
+)
+
+target_compile_definitions(oes_frontend_runtime_test PRIVATE OES_TESTING)
+
+target_include_directories(oes_frontend_runtime_test PRIVATE
+    "${CMAKE_SOURCE_DIR}/src"
+    "${CMAKE_SOURCE_DIR}/src/engine"
+    "${CMAKE_SOURCE_DIR}/src/engine/backend"
+    "${CMAKE_SOURCE_DIR}/src/engine/frontend"
+)
+
+set_target_properties(oes_frontend_runtime_test PROPERTIES
+    CXX_STANDARD          17
+    CXX_STANDARD_REQUIRED ON
+    BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
+    INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
+)
+
+gtest_discover_tests(oes_frontend_runtime_test)
