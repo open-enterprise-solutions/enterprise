@@ -30,8 +30,8 @@
 >   temp table, so it is NOT metadata-bound). Reads every family (catalog / document /
 >   register / constant / tabular) through the queryable; write-core (`Upsert`/`DeleteByKey`/
 >   `WriteRow`); aggregation `SelectAggregate` + `Having`; **dot-walk** (`SelectPath` over
->   `ibBackendQueryColumn` — auto-joins a reference path, e.g. `Номенклатура.Производитель.
->   Наименование`). Backing-blind: a polymorphic `ibMetaResultSource` (DB cursor OR RAM
+>   `ibBackendQueryColumn` — auto-joins a reference path, e.g. `Product.Manufacturer.
+>   Name`). Backing-blind: a polymorphic `ibMetaResultSource` (DB cursor OR RAM
 >   table) chosen once in `MakeProvider`; consumers read uniformly.
 > - **Dot-walk physical foundation** — each catalog/document row now stores its OWN
 >   reference (the data-reference predefined attribute's `_RTRef`/`_RRRef` column, unblocked
@@ -102,7 +102,7 @@
 > - **Reference dot-walk** — the join chain extracted to a shared `ibRefJoinChain`; typed-empty
 >   (not SQL NULL) through an empty / broken reference; a **COMPOSITE reference at ANY segment**,
 >   resolved by a recursive branch-per-target walk with a peek optimisation — the headline case is a
->   **register RECORDER (Регистратор)** of 15+ document types where the pulled field exists on one
+>   **register RECORDER** of 15+ document types where the pulled field exists on one
 >   (one `LEFT JOIN`, not 15; `COALESCE` across the matching branch(es)). Wired into projection,
 >   WHERE (flat + boolean tree), and ORDER BY.
 > - **Aggregation over dot-walk** — single-source `GROUP BY Producer.Region` and `SUM(Producer.Weight)`
@@ -121,7 +121,7 @@
 >
 > The "parsed but not yet executed" list shrank. Landed:
 >
-> - **`SELECT TOP n`** (keyword `Top`, 1С «ПЕРВЫЕ») — a row limit on the SELECT core. Lowering:
+> - **`SELECT TOP n`** (keyword `Top`) — a row limit on the SELECT core. Lowering:
 >   single-source / JOIN reads ride the page request (`m_count`); a UNION's FIRST core limits the
 >   WHOLE union (like the trailing ORDER BY), a later branch's TOP limits that branch; a subquery's
 >   TOP limits its materialised rows (`ibSubqueryQueryable` ctor). TOP over aggregates / TOTALS
@@ -162,7 +162,7 @@
 >   `m_topCount`; the single-source DB aggregate and the co-located join aggregate render the
 >   dialect `LIMIT`, the RAM fold (`RamAggregate` — computed sources and the multi-source stitch)
 >   truncates the folded groups (first-seen order).
-> - **Composite NON-scalar dot-walk leaf** — `SELECT Регистратор.Контрагент` (a composite at ANY
+> - **Composite NON-scalar dot-walk leaf** — `SELECT Recorder.Counterparty` (a composite at ANY
 >   segment, the leaf itself a reference / enum / composite) executes: the recursive branch walk
 >   (same fork + peek as the scalar case) collects the leaf occurrences, each branch contributes
 >   the leaf's FULL field spread, and the spreads merge PER SUFFIX with `COALESCE` under the alias
@@ -1833,7 +1833,7 @@ method (the ~530-line 4-method duplication is gone). The slice classes are decla
 - **a materialised query / JOIN** — feeds the SAME configured slice into `From()`;
   the door's computed provider runs the SAME `ComputeRows`.
 
-So a runtime call and a composed query hit one identical path — `…Цены.СрезПоследних`
+So a runtime call and a composed query hit one identical path — `…Prices.SliceLast`
 is just `ibSliceLastQueryable(reg, period, filter)` in `From()`. L4 will construct it
 the same way. Discovery (which virtual tables a metaobject offers) is a later concern;
 nothing persistent is vended today. (A runtime Slice* re-materialises the small RAM
@@ -1993,7 +1993,7 @@ comparison := primary [ cmpOp primary | [NOT] LIKE primary
                       | [NOT] IN '(' … ')' | IS [NOT] NULL | [NOT] BETWEEN primary AND primary ]
 totalDim := columnPath [HIERARCHY | ELEMENTS]
 ```
-`TOTALS … BY …` is the hierarchical-subtotals clause (1С `ИТОГИ … ПО …`): aggregates
+`TOTALS … BY …` is the hierarchical-subtotals clause: aggregates
 between `TOTALS` and `BY` roll in-place at each level, the `BY` list is the dimension
 levels in order → door `Totals().Sum(col).TotalBy(col, dim).SelectTotals()`. Distinct
 from flat `GROUP BY` (aggregates in `SELECT`, one row per group).
@@ -2121,8 +2121,9 @@ absent), reading validates node kinds and caps depth at 256 (failure = a clean c
 An AOT hit KEEPS the push-down — a hit is the production norm, so the feature survives it.
 
 **Lowering reuse** (`query/queryLowering.{h,cpp}`): public `LowerLambdaPredicate` /
-`LowerLambdaColumnPath` are thin wrappers over the SAME file-local `BuildWherePredicate` /
-`ResolvePath` the text language lowers through (sources = the one queryable, dot-walk allowed
+`LowerLambdaColumnPath` / `LowerLambdaColumnExpr` are thin wrappers over the SAME file-local
+`BuildWherePredicate` / `ResolvePath` / `BuildColumnExprFromAst` (gated by `GateComputedExpr` —
+single physical source) the text language lowers through (sources = the one queryable, dot-walk allowed
 on a DB source only); any lowering error returns `nullptr` → RAM. Captured outer identifiers
 are Param nodes resolved BY NAME from the lambda's captured frames at dispatch time.
 
@@ -2319,8 +2320,8 @@ the type's typed empty on its own (and an untagged `_TYPE`=0, e.g. a data-refere
 typed empty — never UNDEFINED, and never reads a sub-field the column lacks).
 
 **Composite reference at ANY segment — the register RECORDER.** A composite (multi-type) reference points
-to N target types (a register's **Регистратор / recorder** is the headline case: 15+ document types). A
-field pulled through it (`SELECT Регистратор.SomeField`) commonly exists on only ONE type. The resolution
+to N target types (a register's **recorder** is the headline case: 15+ document types). A
+field pulled through it (`SELECT Recorder.SomeField`) commonly exists on only ONE type. The resolution
 is RECURSIVE (`pathCompositeScalarExpr` in `BuildPageIR`, mirrored by `ExecuteAggregate`):
 - Walk from the main table. A SINGLE-target ref → one `LEFT JOIN`, continue. A COMPOSITE ref → **FORK**:
   one `LEFT JOIN` + a recursive tail per target type. Each segment is re-resolved BY NAME per branch (the
@@ -2514,7 +2515,7 @@ where the old two-valued `<` returned false both ways and left them unordered. (
 `ibValue::IsNull()` added. `TYPE_EMPTY` (Undefined) is the no-type default of a composite value, NOT a
 SQL null; an empty reference (type chosen, no guid) is "not filled" yet NOT a null. `RamIsNullValue`,
 `IsNullOperand` and the UNKNOWN sentinel all key on TYPE_NULL. Script builtins `IsNull(value)` and
-`ValueIsFilled(value)` (the latter = `!IsEmpty`, the 1С "filled" predicate) expose this.
+`ValueIsFilled(value)` (the latter = `!IsEmpty`, the "value is filled" predicate) expose this.
 
 ### Reference identity = the DB key
 A reference's `GetHashKey` is now `metaID + guid` (the `_RRRef` key), not the guid alone — a reference
@@ -2578,10 +2579,12 @@ column, read by pointer via `sel.GetValue`) and `m_projectAlias` (a dot-walk lea
 `SelectPath(path) AS alias`, read via `sel.GetColumn(alias)`). The shared `RowValue` helper, when a projection
 is set, yields that scalar per row instead of the whole reference / structure — threaded through every read
 path (`ToArray` / `First` / the iterator / `MaterialiseThenRam` / `CreateIterator` / `CloneLink`). The
-`case M::Select` in `DispatchLinqMethod` reduces the lambda via `LowerLambdaColumnPath`: one plain column →
-`m_projectCol`; a dot-walk path → `SelectPath` + `m_projectAlias`; a structure (`x => new {A, B}`), an
-arithmetic projection (`x => x.A * 2`), a computed-source dot-walk, or a projection chained onto an existing
-scalar projection → the RAM floor (unchanged, correct). Zero regression for un-projected reads (the projection
+`case M::Select` in `DispatchLinqMethod` reduces the lambda via `LowerLambdaColumnPath` /
+`LowerLambdaColumnExpr`: one plain column → `m_projectCol`; a dot-walk path → `SelectPath` + `m_projectAlias`;
+an arithmetic / CASE projection (`x => x.A * 2`, `x => IIF(c, a, b)`) → `SelectExpr` + `m_projectAlias`
+(a server-side computed column, reaching parity with the text `SELECT Qty * Price AS Total` path); a structure
+(`x => new {A, B}`), a computed-source dot-walk, or a projection chained onto an existing scalar projection →
+the RAM floor (unchanged, correct). Zero regression for un-projected reads (the projection
 defaults to none → the prior full-row path).
 
 **The safe-lowering boundary is now VERIFIED by code (not guessed) — the remaining RAM-floor ops stay there
