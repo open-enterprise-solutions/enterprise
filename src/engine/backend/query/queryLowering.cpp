@@ -1162,6 +1162,22 @@ std::vector<const ibBackendQueryColumn*> ibQueryLowering::LowerLambdaColumnPath(
 	}
 }
 
+ibQueryColumnExprPtr ibQueryLowering::LowerLambdaColumnExpr(
+	const ibBackendQueryable* source, const ibQueryAstExpr& expr,
+	const std::map<wxString, ibValue>& captured)
+{
+	if (source == nullptr || !IsComputedExprAst(expr))
+		return nullptr;   // only arithmetic / CASE; a plain column / dot-walk / structure is handled elsewhere
+	const std::vector<ibSourceBinding> sources{ { wxEmptyString, source } };
+	try {
+		GateComputedExpr(sources, expr);   // single physical source only (no JOIN, no computed / RAM source)
+		return BuildColumnExprFromAst(sources, expr, captured);
+	}
+	catch (...) {
+		return nullptr;   // resolution failure -> caller bails to RAM
+	}
+}
+
 //////////////////////////////////////////////////////////////////////
 // ibQueryLowering::Execute
 //////////////////////////////////////////////////////////////////////

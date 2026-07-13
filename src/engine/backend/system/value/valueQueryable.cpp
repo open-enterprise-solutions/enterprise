@@ -544,10 +544,10 @@ void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibV
 		// v1: a scalar projection lowers server-side — the read then yields the projected value
 		// per row instead of the whole row. A plain column (x => x.Field) reads by pointer
 		// (m_projectCol); a DOT-WALK leaf (x => x.Ref.Field) is projected onto the door via
-		// SelectPath AS an alias (m_projectAlias) and read back by name. A structure
-		// (x => new {A, B}), an arithmetic projection (x => x.A * 2), or a projection CHAINED
-		// onto an existing scalar projection (the lambda would run over the scalar, not the row)
-		// is not yet lowerable -> the RAM floor.
+		// SelectPath AS an alias (m_projectAlias) and read back by name. An arithmetic / CASE
+		// projection (x => x.A * 2, x => IIF(c, a, b)) lowers as a computed output column (SelectExpr).
+		// A structure (x => new {A, B}) or a projection CHAINED onto an existing scalar projection
+		// (the lambda would run over the scalar, not the row) is not yet lowerable -> the RAM floor.
 		const bool alreadyProjected = (m_projectCol != nullptr) || !m_projectAlias.IsEmpty();
 		if (!alreadyProjected) {
 			ibValueFunction* fn = LambdaOf(args, n);
@@ -570,6 +570,20 @@ void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibV
 						link->m_ops.push_back(wxT("Select"));
 						ret = link;
 						return;
+					}
+					// arithmetic / CASE projection (x => x.A * 2, x => IIF(c, a, b)) — a computed
+					// output column lowered server-side, read back by its alias like a dot-walk leaf.
+					std::map<wxString, ibValue> captured;
+					if (CollectCaptured(*ast, fn, captured)) {
+						if (ibQueryColumnExprPtr projExpr = ibQueryLowering::LowerLambdaColumnExpr(m_queryable, *ast, captured)) {
+							ibValueQueryable* link = CloneLink();
+							const wxString alias = wxT("__proj");
+							link->m_builder.SelectExpr(projExpr, alias);
+							link->m_projectAlias = alias;
+							link->m_ops.push_back(wxT("Select"));
+							ret = link;
+							return;
+						}
 					}
 				}
 			}
