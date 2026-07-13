@@ -159,6 +159,10 @@ public:
 	virtual ibDataViewItem FindRowValue(const ibValue& varValue, const wxString& colName = wxEmptyString) const override;
 
 	virtual const ibSourceExplorer* GetSourceExplorer() const override;
+	// DESIGN-TIME dot-walk hop (WalkColumns) — mirrors ibValueModelTable::GetValueBySourceHop. The list has no
+	// current row, so the walk steps by TYPE: hand back the pinned reference branch's empty typed twin. Without
+	// this a dotted reference column (List.Ref.Field) reads back "<not selected>" though the picker shows it.
+	virtual bool GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const override;
 	virtual wxString GetSourceCaption() const override;
 	// READ — the metadata OF THE CHOSEN SOURCE, taken straight from the VALUE (the picked queryable's metaobject).
 	// TERMINAL (no owner-walk), so a form's metadata may fall back to this list without recursing.

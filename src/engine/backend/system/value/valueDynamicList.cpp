@@ -232,6 +232,23 @@ bool ibValueDynamicList::GetValueByMetaID(const ibDataViewItem& item, const ibMe
 	return node != nullptr && node->GetValue(id, pvarMetaVal);
 }
 
+// Scalar hop gate — DESIGN-TIME dot-walk (WalkColumns) only. Like the value-table, the dynamic list holds
+// 0..N query rows, so there is NO single scalar cell to read: the walk steps by TYPE, not value. Hand back the
+// pinned reference branch's empty typed twin (CoerceHopType — the reference builds its OWN twin). The column's
+// CURRENT type is the stale-pin filter, read STRAIGHT off the queryable (its stable column set) — NOT via
+// GetSourceExplorer(), which Reset()s the very explorer WalkColumns is mid-walk on. WITHOUT this override a
+// dotted reference column (List.Ref.Field) reads back "<not selected>" though the picker shows it, because the
+// base ibSourceDataObject::GetValueBySourceHop returns false — the missing twin of ibValueModelTable's.
+bool ibValueDynamicList::GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const
+{
+	ibTypeDescription colType;
+	if (const ibBackendQueryable* q = GetSourceQueryable()) {
+		for (const ibBackendQueryColumn* col : q->GetColumns())
+			if (col != nullptr && col->GetColumnId() == hop.m_id) { colType = col->GetTypeDesc(); break; }
+	}
+	return ibValueReferenceDataObject::CoerceHopType(hop, out, colType, GetSourceMetaData());
+}
+
 ibValueModel::ibValueModelReturnLine* ibValueDynamicList::GetRowAt(const ibDataViewItem& line)
 {
 	if (!line.IsOk())
