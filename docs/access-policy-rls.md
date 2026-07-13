@@ -35,6 +35,17 @@ query.Execute()                         dataQueryBuilder.cpp — the L3 door
 - The door pulls its policy from the session (`session->GetAccessPolicy()`), the same seam it pulls
   the holder from — so a user-facing builder enforces by default; a trusted / internal read passes a
   null policy (`WithAccessPolicy(nullptr)`), which also dissolves re-entrancy.
+- **The role module runs PRIVILEGED (`ibAccessTrustScope`).** A handler often reads the very source it
+  restricts (e.g. to compute an allowed set before the `Restrict`) — that inner read must NOT re-enter
+  RLS or it recurses forever. The policy wraps the `CallAsProc` in an `ibAccessTrustScope`, an RAII guard
+  that sets a per-session TRUSTED flag; while set, `GetAccessPolicy()` returns null **even though the real
+  policy exists**, so every query the handler's body builds bypasses enforcement. The scope saves/restores
+  the prior value (nested trusted windows compose) and its dtor runs on every exit **including a handler
+  throw**, so enforcement is always restored. The bypass is CONSTRUCTIVE — only the scope sets the flag,
+  so it never masks a *forgotten* policy (an absent policy stays fail-closed). The flag is **per-session**,
+  never process-global: a trusted window on one web session must not lift enforcement on another. Because a
+  builder snapshots the policy in its ctor, a query *built* inside the window carries its null forward even
+  if it executes after the window closes — the scope need only be active at build time.
 - **Runs once per query, never per row.** The module builds the *rule*; the DB applies it *per row*.
   Runtime cost scales with the number of tables in the query, not rows.
 
@@ -387,7 +398,7 @@ temp tables) falls back to an INNER JOIN (read-only, may duplicate) — the defe
 |---|---|
 | `metaCollection/metaRoleObject.{h,cpp}` + `metaRoleObjectMenu.cpp` | Role is module-bearing; `OnAccessRead`/`OnAccessWrite` default **procedures** (args `Source`, `Operation`, by-ref `Allowed`); "Open role module" tree menu |
 | `query/dataQueryBuilder.{h,cpp}` | `ibAccessPolicy` interface; policy injection; copy-apply-execute; the write verbs `Insert("Create")` / `Update("Write")` / `Delete("Delete")` — each denies (`ibBackendAccessException`) on `0 affected` under a policy; `WithAccessPolicy(nullptr)` (physical ops / tabular); `AdoptOwnedSource` / `GetSources` / `GetWherePredicate`; `AddSemiJoin` folds an `ibSemiJoinExists` into `m_predicate` (so it rides read + write) |
-| `session/session.{h,cpp}` | `GetAccessPolicy`; concrete `ibRuntimeAccessPolicy` — **fail-closed** contract (`RoleOutcome` NoHandler/Failed/Succeeded via `CallAsProc` + by-ref `Allowed`, exception→deny, multi-role OR where a failed role never widens); ctor-cached role procUnits; policy built in `CompileRoot` |
+| `session/session.{h,cpp}` | `GetAccessPolicy` (returns null inside a trusted window); `ibAccessTrustScope` — RAII per-session TRUSTED flag wrapping the handler `CallAsProc`, so the module runs privileged (its own reads bypass RLS, dissolving re-entrancy); concrete `ibRuntimeAccessPolicy` — **fail-closed** contract (`RoleOutcome` NoHandler/Failed/Succeeded via `CallAsProc` + by-ref `Allowed`, exception→deny, multi-role OR where a failed role never widens); ctor-cached role procUnits; policy built in `CompileRoot` |
 | `query/queryable.h` | `ibSemiJoinExists` (the semi-join spec: inner + `m_where` + correlation keys + op); `ibQueryCondition::m_asExists` (dot-walk render tag) + `m_semiJoin` (the semi-join payload) |
 | `system/value/valueQueryable.{h,cpp}` | `ibValueQueryDecorator` — `Where` marks dot-walk leaves for EXISTS (`ibMarkRestrictExists`); `Join` DISPATCHES: single-source register → `AddSemiJoin`, multi-source / value table → temp-promote path. `ibValueQueryable::GetWherePredicate` (inner's Where) / `IsSingleSource` (the gate) |
 | `query/dbTableProvider.cpp` | `BuildSemiJoinExists` — the correlated `EXISTS(SELECT * FROM inner sj WHERE <inner Where over sj> AND correlation)`; the semi-join / `m_asExists` branches in `BuildConditionExpr` + `BuildColocatedPredicate` so it rides every WHERE path |

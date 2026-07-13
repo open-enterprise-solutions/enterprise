@@ -142,6 +142,10 @@ private:
 			                                   // A grant-flag is more informative than a deny/cancel one — the
 			                                   // positive `Allowed = True` says exactly what happened.
 			try {
+				// The handler runs PRIVILEGED: any query its body builds during this call sees a trusted
+				// session (GetAccessPolicy -> null), so reading the very source it restricts does NOT re-enter
+				// RLS. RAII restores enforcement on every exit, including the throw caught just below.
+				ibAccessTrustScope trust(m_session);
 				// CallAsProc (comma-separated args) returns TRUE only if the procedure was FOUND and RAN; it
 				// returns FALSE — WITHOUT throwing and WITHOUT running anything — when there is no such handler.
 				// So absence is the bool, not an exception: no handler -> this role imposes no restriction ->
@@ -523,6 +527,12 @@ void ibSession::EnsureRoot()
 
 const ibAccessPolicy* ibSession::GetAccessPolicy() const
 {
+	// Inside a trusted window (a role module runs privileged) the door must see
+	// no policy even though m_accessPolicy is real — the handler's own queries
+	// must not re-enter RLS. The bypass is CONSTRUCTIVE (ibAccessTrustScope is
+	// the only thing that sets the flag), so it never masks a forgotten policy.
+	if (m_accessTrusted)
+		return nullptr;
 	return m_accessPolicy.get();
 }
 

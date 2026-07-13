@@ -249,6 +249,7 @@ public:
 	// pulls it opaquely in its ctor and applies it to every read/write. Null on
 	// Designer / technical sessions (no enforcement). Created at authentication
 	// (EnsureRoot) for runtime sessions; the concrete impl lives in session.cpp.
+	// Returns null inside an ibAccessTrustScope (a role module runs privileged).
 	const ibAccessPolicy* GetAccessPolicy() const;
 
 	// The module manager whose context (Manager / Catalogs / Documents / globals)
@@ -598,6 +599,7 @@ public:
 private:
 	friend class ibSessionScope;
 	friend class ibSessionRegistry;
+	friend class ibAccessTrustScope;   // toggles m_accessTrusted (RLS privileged window)
 
 	wxString       m_id;
 	ibSessionKind  m_kind;
@@ -750,7 +752,15 @@ private:
 	std::unique_ptr<ibDebugSession> m_debug;
 
 	// RLS — the concrete session-side policy (created at auth)
-	std::unique_ptr<ibAccessPolicy> m_accessPolicy;   
+	std::unique_ptr<ibAccessPolicy> m_accessPolicy;
+
+	// RLS trusted window. While set, GetAccessPolicy() returns null (bypass)
+	// EVEN THOUGH m_accessPolicy is real: a role module runs privileged, so any
+	// query its body spins up (reading the very source it restricts) does not
+	// re-enter RLS. Toggled ONLY through ibAccessTrustScope (RAII save/restore —
+	// survives a handler throw). Per-session, never process-global: a trusted
+	// window on one web session must not lift enforcement on another.
+	bool m_accessTrusted = false;
 
 	// Lambda executor — see GetLambdaRuntime() for semantics. Allocated
 	// in CreateRoot; SetParent(m_root's procUnit) is wired lazily on
@@ -892,6 +902,30 @@ public:
 
 private:
 	std::weak_ptr<ibSession> m_prev;
+};
+
+// RAII: mark the session's access context TRUSTED for the scope's lifetime, so
+// a role module runs PRIVILEGED — every query its body builds sees GetAccessPolicy()
+// return null and therefore bypasses RLS, dissolving re-entrancy (the module may
+// read the very source it restricts). Saves and restores the PRIOR value, so nested
+// trusted scopes compose; the dtor runs on every exit INCLUDING a handler throw, so
+// enforcement is always restored. The bypass is CONSTRUCTIVE (only this scope sets
+// the flag) — never a failure default, so a genuinely absent policy stays fail-closed.
+class BACKEND_API ibAccessTrustScope {
+public:
+	explicit ibAccessTrustScope(ibSession* s)
+		: m_session(s), m_prev(s != nullptr && s->m_accessTrusted)
+	{
+		if (m_session != nullptr) m_session->m_accessTrusted = true;
+	}
+	~ibAccessTrustScope() { if (m_session != nullptr) m_session->m_accessTrusted = m_prev; }
+
+	ibAccessTrustScope(const ibAccessTrustScope&)            = delete;
+	ibAccessTrustScope& operator=(const ibAccessTrustScope&) = delete;
+
+private:
+	ibSession* m_session;
+	bool       m_prev;
 };
 
 // ibApplicationData::CreateSession<SessionT> template bodies live in
