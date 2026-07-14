@@ -525,6 +525,8 @@ void ibVisualEditorModifyPropertyCmd::DoExecute()
 	else {
 		// Non-control owner (a form ATTRIBUTE / its held value / a command-bar LAYER): rebuild the WHOLE
 		// editor — its RefreshEditor fans out NotifyEditorRefresh, which re-reads the attribute tree too.
+		// (RefreshEditor coalesces re-entrant calls itself, so the parallel objinspect child→parent bubble
+		// firing the same refresh is a no-op — no double rebuild.)
 		m_visualEditor->RefreshEditor();
 		// RefreshEditor rebuilds the object tree, which drops the tree selection — and with it the inspector's
 		// focus. Re-select the object whose property changed so the inspector STAYS on it (else toggling e.g.

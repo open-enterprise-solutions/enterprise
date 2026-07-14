@@ -704,11 +704,26 @@ public:
 	}
 
 	void RefreshEditor() {
-		if (m_visualEditor != nullptr) {
-			// then update control
-			m_visualEditor->UpdateVisualHost();
-		}
-		NotifyEditorRefresh();
+		// Coalesce + DEFER — one rebuild per burst, on the SETTLED model. A single edit fans out to several
+		// RefreshEditor calls (the ModifyProperty command AND the objinspect child→parent bubble, plus a Type
+		// change cascading further); a full rebuild is idempotent, but inline calls rebuild against a not-yet-
+		// settled model (a Type change's value is still materialising its source/columns → the [+] composition
+		// would be missing). So defer the single rebuild past the current stack and skip any further call while
+		// one is pending (m_refreshPending cleared FIRST inside the lambda so a throw can't wedge it). Same
+		// pattern as ibObjectInspector::Create. No per-caller reasoning about who "should" refresh.
+		if (m_refreshPending)
+			return;
+		m_refreshPending = true;
+		CallAfter([this] {
+			// Keep the guard SET for the whole rebuild (RAII clears it on exit, even on a throw): UpdateVisualHost
+			// re-creates the control tree, and a tablebox's render can re-fire RefreshEditor — while one rebuild
+			// runs, a nested one must be a no-op, or it spawns an OVERLAPPING deferred rebuild on half-built
+			// controls (the old tablebox-render loop). Cleared only after this rebuild finishes.
+			struct ResetOnExit { bool& flag; ~ResetOnExit() { flag = false; } } reset{ m_refreshPending };
+			if (m_visualEditor != nullptr)
+				m_visualEditor->UpdateVisualHost();
+			NotifyEditorRefresh();
+		});
 	}
 
 	void Undo();
@@ -784,6 +799,10 @@ private:
 	wxSplitterWindow* m_splitter = nullptr;
 	//Splitter between the control tree and the attribute tree
 	wxSplitterWindow* m_treeSplitter = nullptr;
+
+	// One-rebuild-per-burst guard for RefreshEditor (see RefreshEditor): true while a refresh has already run
+	// this event-loop iteration, cleared next tick by a CallAfter.
+	bool m_refreshPending = false;
 
 	//access to private object
 	friend class ibVisualEditorNotebook;
