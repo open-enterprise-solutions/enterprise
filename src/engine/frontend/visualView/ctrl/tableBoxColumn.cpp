@@ -99,7 +99,12 @@ bool ibValueModelTableBoxColumn::GetSourceList(std::vector<ibBackendFormAttribut
 	// tabular sections; the picker roots the bound one and lists its columns) PLUS the form's object
 	// attributes (exactly what the ATTRIBUTE picker returns) — so a column can also bind a value from
 	// the object ABOVE the table (its header), living alongside the table's own columns (Mode 2).
-	bool ok = GetOwner()->GetSourceList(out);                       // current table
+	// The parent tablebox may be transiently DETACHED mid-rebuild — a deferred inspector Create can query a
+	// just-orphaned column (GetOwner() == null). Skip it gracefully instead of dereferencing null, same as
+	// OnCreated below guards the transiently-gone composite inner. The header object still contributes.
+	bool ok = false;
+	if (auto* owner = GetOwner())
+		ok = owner->GetSourceList(out);                            // current table
 	if (m_formOwner != nullptr)
 		ok = m_formOwner->GetSourceList(ibSourceDataType::ibSourceDataType_attribute, out) || ok;   // + header object
 	return ok;
