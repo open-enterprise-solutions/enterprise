@@ -487,6 +487,10 @@ public:
 		void OnEditorLoaded() { RebuildTree(); }
 		void OnEditorRefresh() { RebuildTree(); }
 		void RebuildTree();
+		// Reactive update on a property change (driven by NotifyPropertyModified, like the control tree): a Type/
+		// source edit changes an attribute's [+] composition picker. DEFERRED (CallAfter) so it runs once the value
+		// has finished materialising — an inline rebuild still sees the pre-change state.
+		void OnPropertyModified(ibProperty* prop);
 
 	protected:
 
@@ -701,7 +705,7 @@ public:
 
 	void RefreshEditor() {
 		if (m_visualEditor != nullptr) {
-			// then update control 
+			// then update control
 			m_visualEditor->UpdateVisualHost();
 		}
 		NotifyEditorRefresh();

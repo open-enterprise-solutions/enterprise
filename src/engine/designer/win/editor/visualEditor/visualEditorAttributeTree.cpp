@@ -64,6 +64,17 @@ ibAttributeTree::ibVisualEditorAttributeTree(ibVisualEditor* owner, wxWindow* pa
 		wxTR_DEFAULT_STYLE | wxTR_HIDE_ROOT | wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_FULL_ROW_HIGHLIGHT | wxTR_EDIT_LABELS);
 	m_tcAttributes->SetDoubleBuffered(true);   // no flicker on RebuildTree (add / set-main), like the object tree
 
+	// Ctrl+C / Ctrl+X / Ctrl+V / Delete — via an accelerator table ON THE TREE (same pattern the metadata trees
+	// and the visual-editor panel use). It must sit on the tree itself: the parent editor panel already maps
+	// Ctrl+C→wxID_COPY (control copy), so a table closer in the focus chain is what routes the keys to the
+	// attribute handlers instead. The IDs fire the same EVT_MENU handlers as the context menu.
+	wxAcceleratorEntry accelEntries[4];
+	accelEntries[0].Set(wxACCEL_CTRL,   (int)'C',    ID_ATTR_COPY);
+	accelEntries[1].Set(wxACCEL_CTRL,   (int)'X',    ID_ATTR_CUT);
+	accelEntries[2].Set(wxACCEL_CTRL,   (int)'V',    ID_ATTR_PASTE);
+	accelEntries[3].Set(wxACCEL_NORMAL, WXK_DELETE,  ID_ATTR_REMOVE);
+	m_tcAttributes->SetAcceleratorTable(wxAcceleratorTable(4, accelEntries));
+
 	// Every entry carries the default meta-attribute icon (index 0).
 	wxImageList* images = new wxImageList(16, 16);
 	images->Add(ibValueMetaObjectAttribute::GetIconGroup());
@@ -204,6 +215,35 @@ void ibAttributeTree::RebuildTree()
 	SelectEntry(keep);   // restore by identity — now fires OnSelChanged with a LIVE holder
 }
 
+void ibAttributeTree::OnPropertyModified(ibProperty* /*prop*/)
+{
+	// Targeted re-eval of each attribute's [+] composition picker — a Type change can make a node GAIN or LOSE
+	// its expandable child. Mirrors the object tree's OnPropertyModified: update the items IN PLACE — do NOT
+	// re-select / rebuild the inspector (that stacks a stale property set and asserts GetClassName on the nested
+	// no-register description). The tree is tiny, so re-check them all.
+	if (m_tcAttributes == nullptr)
+		return;
+	const wxTreeItemId root = m_tcAttributes->GetRootItem();
+	if (!root.IsOk())
+		return;
+	ibValueForm* form = m_formHandler != nullptr ? m_formHandler->GetValueForm() : nullptr;
+	const ibMetaData* metaData = form != nullptr ? form->GetMetaData() : nullptr;
+
+	wxTreeItemIdValue cookie;
+	for (wxTreeItemId id = m_tcAttributes->GetFirstChild(root, cookie); id.IsOk(); id = m_tcAttributes->GetNextChild(root, cookie)) {
+		ibFormAttributeValue* entry = GetEntryFromItem(id);
+		if (entry == nullptr)
+			continue;
+		const std::vector<ibMetaID> refTypes = ibValueReferenceDataObject::ConvertToMetaIds(entry->GetTypeDesc().GetClsidList(), metaData);
+		const bool hasComp = HasComposition(entry, refTypes);
+		const bool expandable = m_tcAttributes->GetChildrenCount(id, false) > 0;
+		if (hasComp && !expandable)
+			m_tcAttributes->AppendItem(id, wxEmptyString);            // gained composition -> dummy [+]
+		else if (!hasComp && expandable && !m_tcAttributes->IsExpanded(id))
+			m_tcAttributes->DeleteChildren(id);                      // lost composition (collapsed) -> drop the [+]
+	}
+}
+
 ibFormAttributeValue* ibAttributeTree::GetEntryFromItem(const wxTreeItemId& item) const
 {
 	if (item.IsOk())
@@ -339,7 +379,7 @@ void ibAttributeTree::OnContextMenu(wxContextMenuEvent& event)
 	menu.AppendSeparator();
 	appendItem(ID_ATTR_CUT, _("Cut"), wxART_CUT, hasAttr && editable);
 	appendItem(ID_ATTR_COPY, _("Copy"), wxART_COPY, hasAttr);        // read-only safe
-	appendItem(ID_ATTR_PASTE, _("Paste"), wxART_PASTE, editable);
+	appendItem(ID_ATTR_PASTE, _("Paste"), wxART_PASTE, editable && ibFormAttributeValue::HasClipboardData());   // grey when clipboard empty
 	menu.AppendSeparator();
 	appendItem(ID_ATTR_SETMAIN, isMain ? _("Unset main") : _("Set as main"), wxART_TICK_MARK, hasAttr && editable);
 	appendItem(ID_ATTR_PROPERTIES, _("Properties"), wxART_LIST_VIEW, hasAttr);   // read-only safe

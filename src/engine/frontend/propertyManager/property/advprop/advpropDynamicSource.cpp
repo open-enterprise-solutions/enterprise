@@ -6,6 +6,7 @@
 #include "backend/propertyManager/property/propertyDynamicSource.h"            // ms_propertyDynamicSource slot
 #include "backend/propertyManager/property/variant/variantDynamicSource.h"     // ibVariantDataDynamicSource
 #include "backend/system/value/valueDynamicList.h"                   // ibValueDynamicList (the owner) — its GetSourceMetaData
+#include "frontend/visualView/ctrl/formAttribute.h"                   // ibFormAttributeValue — the attach-owner to refresh the attribute tree
 #include "backend/appData.h"
 #include "backend/query/queryableFactory.h"
 #include "backend/metaData.h"   // ibMetaData full def — owner->GetMetaData() gives a bare pointer without it, but ->GetSourceFactory() dereferences it
@@ -86,7 +87,9 @@ bool ibPGDynamicSourceProperty::IntToValue(wxVariant& value, int number, wxPGPro
 	// Facade: gates on a REAL source change, rebuilds columns/composer and re-applies the
 	// settings. Yield the new variant so the backend property value stays in sync.
 	list->SetSource(m_sources[number].first, m_sources[number].second);
-	value = new ibVariantDataDynamicSource(list->GetSourceQueryable());
+	// Owner (the list) → the variant re-resolves through ITS config factory; without it the source
+	// resolves to null (global fallback) and shows blank / doesn't stick.
+	value = new ibVariantDataDynamicSource(list->GetSourceQueryable(), list);
 	return true;
 }
 
@@ -142,7 +145,18 @@ wxPGEditorDialogAdapter* ibPGDynamicSourceProperty::GetEditorDialog() const
 			// real change). Commit the new variant through the grid so the cell repaints and
 			// the backend property value stays in sync.
 			list->SetSource(sources[sel].first, sources[sel].second);
-			SetValue(new ibVariantDataDynamicSource(list->GetSourceQueryable()));
+			// Pass the OWNER (the list) — the variant re-resolves the source LIVE through the owner's
+			// CONFIG factory. Without it the variant falls back to the global (empty) factory, resolves
+			// to null, and the source shows blank / doesn't stick (mirrors ibPropertyDynamicSource::SetQueryable).
+			SetValue(new ibVariantDataDynamicSource(list->GetSourceQueryable(), list));
+			// The source (a property of the list, a CHILD of the attribute holder) is now set, but the grid's
+			// property-change event already fired BEFORE the dialog, so nothing runs the normal refresh. Raise the
+			// SAME child→parent signal an inline edit would (OnChildChanged bubbles to the holder → RefreshEditor),
+			// but DEFERRED (CallAfter): a synchronous refresh re-enters HandleCustomEditorEvent on a freed property
+			// (use-after-free). One path, no bespoke refresher.
+			ibFormAttributeValue* holder = dynamic_cast<ibFormAttributeValue*>(list->GetAttachOwner());
+			if (holder != nullptr)
+				pg->CallAfter([holder] { holder->OnChildChanged(); });
 			return true;
 		}
 	};

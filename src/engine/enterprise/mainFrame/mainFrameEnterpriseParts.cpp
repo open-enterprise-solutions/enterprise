@@ -6,6 +6,8 @@
 #include "mainFrameEnterprise.h"
 #include "frontend/win/theme/luna_toolbarart.h"
 
+#include <wx/wupdlock.h>   // wxWindowUpdateLocker — RAII Freeze/Thaw
+
 #include "frontend/artProvider/artProvider.h"
 
 void ibFrontendMainFrameEnterprise::CreateWideGui()
@@ -110,12 +112,11 @@ void ibFrontendMainFrameEnterprise::CreateBottomPane()
 		wxAUI_NB_BOTTOM | wxAUI_NB_TAB_MOVE | wxAUI_NB_SCROLL_BUTTONS);
 
 	auiNotebook->SetArtProvider(new wxAuiLunaTabArt());
-	auiNotebook->Freeze();
-
-	auiNotebook->AddPage(m_outputWindow, _("Messages"), false, wxArtProvider::GetBitmapBundle(wxART_MESSAGE, wxART_SERVICE, wxSize(16, 16)));
-
-	auiNotebook->SetNullSelection();
-	auiNotebook->Thaw();
+	{
+		wxWindowUpdateLocker freeze(auiNotebook);
+		auiNotebook->AddPage(m_outputWindow, _("Messages"), false, wxArtProvider::GetBitmapBundle(wxART_MESSAGE, wxART_SERVICE, wxSize(16, 16)));
+		auiNotebook->SetNullSelection();
+	}
 
 	m_mgr.AddPane(auiNotebook, paneInfo);
 }

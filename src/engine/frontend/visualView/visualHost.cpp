@@ -324,39 +324,9 @@ void ibVisualHost::ClearControl(ibValueFrame*, bool)                 {}
 #include "pageWindow.h"
 
 #include <wx/collpane.h>
+#include <wx/wupdlock.h>   // wxWindowUpdateLocker — RAII Freeze/Thaw
 
 wxIMPLEMENT_ABSTRACT_CLASS(ibVisualHost, wxScrolledWindow)
-
-#if !defined(__WXGTK__ )
-#define __FREEZE_CONTROL__
-#endif
-
-namespace {
-
-// RAII guard that freezes/thaws the parent background window for the
-// duration of a layout-changing operation. Replaces the half-dozen
-// copy-pasted #if __FREEZE_CONTROL__ blocks that used to wrap each
-// Create/Update/Remove/Clear call and made early-return impossible
-// without leaking a Thaw.
-class ScopedFreeze {
-public:
-	explicit ScopedFreeze(wxWindow* window) : m_window(window) {
-#if defined(__FREEZE_CONTROL__)
-		if (m_window != nullptr) m_window->Freeze();
-#endif
-	}
-	~ScopedFreeze() {
-#if defined(__FREEZE_CONTROL__)
-		if (m_window != nullptr) m_window->Thaw();
-#endif
-	}
-	ScopedFreeze(const ScopedFreeze&) = delete;
-	ScopedFreeze& operator=(const ScopedFreeze&) = delete;
-private:
-	wxWindow* m_window;
-};
-
-} // namespace
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -412,7 +382,7 @@ bool ibVisualHost::CreateVisualHost()
 {
 	const ibValueForm* valueForm = GetValueForm();
 
-	ScopedFreeze freeze(GetParentBackgroundWindow());
+	wxWindowUpdateLocker freeze(GetParentBackgroundWindow());
 
 	if (valueForm != nullptr && IsShownHost()) {
 
@@ -488,7 +458,7 @@ bool ibVisualHost::UpdateVisualHost()
 	const ibValueForm* valueForm = GetValueForm();
 
 	
-	ScopedFreeze freeze(GetParentBackgroundWindow());
+	wxWindowUpdateLocker freeze(GetParentBackgroundWindow());
 	
 	if (valueForm != nullptr && IsShownHost()) {
 
@@ -550,7 +520,7 @@ bool ibVisualHost::UpdateVisualHost()
 
 bool ibVisualHost::ClearVisualHost()
 {
-	ScopedFreeze freeze(GetParentBackgroundWindow());
+	wxWindowUpdateLocker freeze(GetParentBackgroundWindow());
 
 	ibValueForm* valueForm = GetValueForm();
 	if (valueForm != nullptr) ClearControl(valueForm, true);
@@ -778,7 +748,7 @@ void ibVisualHost::CreateControl(ibValueFrame* obj, ibValueFrame* parent, bool f
 {
 	const ControlContext ctx = ResolveControlContext(obj, parent);
 
-	ScopedFreeze freeze(GetParentBackgroundWindow());
+	wxWindowUpdateLocker freeze(GetParentBackgroundWindow());
 
 	GenerateControl(ctx.objControl, ctx.windowObj, ctx.parentObj, firstCreated);
 	RefreshControl(ctx.objControl, ctx.windowObj, ctx.parentObj);
@@ -793,7 +763,7 @@ void ibVisualHost::UpdateControl(ibValueFrame* obj, ibValueFrame* parent)
 {
 	const ControlContext ctx = ResolveControlContext(obj, parent);
 
-	ScopedFreeze freeze(GetParentBackgroundWindow());
+	wxWindowUpdateLocker freeze(GetParentBackgroundWindow());
 
 	RefreshControl(ctx.objControl, ctx.windowObj, ctx.parentObj);
 	RelayoutStaticBoxIfAny(ctx.objParent, ctx.parentObj);
@@ -812,7 +782,7 @@ void ibVisualHost::RemoveControl(ibValueFrame* obj, ibValueFrame* parent)
 {
 	const ControlContext ctx = ResolveControlContext(obj, parent, /*resolveWindow*/false);
 
-	ScopedFreeze freeze(GetParentBackgroundWindow());
+	wxWindowUpdateLocker freeze(GetParentBackgroundWindow());
 
 	ClearControl(ctx.objControl);
 	RelayoutStaticBoxIfAny(ctx.objParent, ctx.parentObj);

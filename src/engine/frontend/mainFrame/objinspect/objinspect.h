@@ -355,6 +355,16 @@ private:
 
 	ibPropertyObject* m_currentSel;
 
+	// Deferred / coalesced rebuild. A child edit bubbles back here to re-Create the grid, but Create()
+	// Clear()s it — fatal if a wxPG change event is still dispatching on one of those properties, and
+	// wasteful when several selects fire in one refresh burst. m_inGridEvent marks "an event is in flight"
+	// (set by the change handlers); m_rebuildScheduled marks "a rebuild is already queued". While either
+	// holds, Create() stashes the target and posts ONE CallAfter instead of rebuilding inline.
+	bool m_inGridEvent = false;
+	bool m_rebuildScheduled = false;
+	ibPropertyObject* m_pendingObject = nullptr;
+	bool m_pendingForce = false;
+
 	int m_style;
 
 	//save the current selected property

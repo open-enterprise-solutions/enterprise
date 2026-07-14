@@ -17,6 +17,7 @@
 #include "frontend/web/webTimer.h"
 #else
 #include <wx/timer.h>
+#include <wx/wupdlock.h>   // wxWindowUpdateLocker — RAII Freeze/Thaw
 #endif
 
 //*************************************************************************************************
@@ -503,12 +504,9 @@ void ibValueForm::UpdateForm()
 			// Web build serialises a fresh JSON tree on every request,
 			// so there's no mid-render flicker to hide — call the host
 			// walker directly.
-			visualView->Freeze();
+			wxWindowUpdateLocker freeze(visualView);
 #endif
 			visualView->UpdateVisualHost();
-#ifndef OES_USE_WEB
-			visualView->Thaw();
-#endif
 		}
 	}
 

@@ -126,6 +126,13 @@ class FRONTEND_API ibFormAttributeValue :
 
 public:
 
+	// Expose the internal description type so it can be REGISTERED in the class factory. A runtime property
+	// object (one the inspector may show / GetClassName) must be registered, or GetClassType returns 0 and
+	// GetClassName throws "Class not registered". It is a SYSTEM type: no ctor, never created by the factory
+	// (CreateObject → null) — the holder builds it programmatically. (Public alias to the private nested type
+	// so the file-scope SYSTEM_TYPE_REGISTER can name it.)
+	using ibFormAttributeImpl = ibFormAttribute;
+
 	// The holder IS the inspector's property-object — a pure ACCUMULATOR. It owns no properties
 	// of its own; it attaches the attribute (its standard Name/Type/FillCheck) and, if the held
 	// value supports properties (a dynamic list → Source/Settings), that value too — both show
@@ -215,6 +222,9 @@ public:
 	// Paste deserializes it as a fresh NON-main entry on `form` (via ibValueForm::PasteAttribute).
 	static bool CopyToClipboard(const ibFormAttributeValue* entry);
 	static ibFormAttributeValue* PasteFromClipboard(ibValueForm* form);
+	// True when the clipboard holds an attribute (our format) — for greying out the Paste action when
+	// there is nothing to paste, mirroring the control tree's CanPaste gate.
+	static bool HasClipboardData();
 
 private:
 	ibValuePtr<ibFormAttribute> m_attribute;   // the nested description (private Impl), created in the ctor

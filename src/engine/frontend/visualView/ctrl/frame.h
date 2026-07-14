@@ -507,6 +507,12 @@ protected:
 	virtual bool ReadData(const ibDataNode& node) { return true; }
 	virtual bool WriteData(ibDataNode& node) const { return true; }
 
+	// Extra per-type data carried on the COPY/PASTE blob beyond properties & events — the
+	// copy-path twin of Read/WriteData (which the copy walk bypasses to ride source hops on
+	// guids). Base has none; ibValueForm overrides to carry its attribute collection.
+	virtual bool CopyData(ibDataNode& node) const { return true; }
+	virtual bool PasteData(const ibDataNode& node) { return true; }
+
 protected:
 
 	bool m_expanded = true; // is expanded in the object tree, allows for saving to file

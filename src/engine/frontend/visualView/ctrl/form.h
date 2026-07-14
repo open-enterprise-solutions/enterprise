@@ -432,9 +432,14 @@ public:
 	virtual wxIcon GetIcon() const;
 	static wxIcon GetIconGroup();
 
-	//load & save object in control 
+	//load & save object in control
 	virtual bool ReadData(const ibDataNode& node);
 	virtual bool WriteData(ibDataNode& node) const;
+
+	// Copy/paste twin of Read/WriteData — carry the attribute store on the clipboard blob
+	// (the copy walk bypasses Read/WriteData, so attributes would otherwise be dropped).
+	virtual bool CopyData(ibDataNode& node) const;
+	virtual bool PasteData(const ibDataNode& node);
 
 	virtual int GetComponentType() const { return COMPONENT_TYPE_FRAME; }
 

@@ -1,8 +1,21 @@
 #include "objinspect.h"
 
+#include <wx/wupdlock.h>   // wxWindowUpdateLocker — RAII Freeze/Thaw (guaranteed Thaw on scope exit)
+
 enum {
 	WXOES_PROPERTY_GRID = wxID_HIGHEST + 1000
 };
+
+namespace {
+	// RAII: mark a wxPG change event "in flight" for its whole handler, so any rebuild the edit triggers
+	// (Create) defers instead of Clear()ing the grid under the property wxPG is still dispatching on. Restores
+	// on scope exit even through the handler's early returns / Veto paths.
+	struct ScopedFlag {
+		bool& m_flag;
+		explicit ScopedFlag(bool& flag) : m_flag(flag) { m_flag = true; }
+		~ScopedFlag() { m_flag = false; }
+	};
+}
 
 // -----------------------------------------------------------------------
 // ibObjectInspector
@@ -58,8 +71,36 @@ ibObjectInspector* ibObjectInspector::GetObjectInspector()
 
 void ibObjectInspector::Create(ibPropertyObject* object, bool force)
 {
+	// Defer + coalesce. A child edit routes back here to rebuild (RefreshEditor → attribute tree →
+	// SelectObject → Create), but the m_pg->Clear() below DESTROYS every wxPGProperty. If a wxPG change
+	// event is still being dispatched, that frees the very property wxPG is editing → use-after-free the
+	// moment the handler returns; and a burst of selects in one refresh would each Clear+refill (flicker,
+	// the "re-population on every child" churn). So while an event is in flight or a rebuild is already
+	// queued, record the target and post a SINGLE CallAfter — the grid rebuilds once, after the stack
+	// unwinds, on the last requested object. A plain selection (no event, nothing queued) rebuilds inline.
+	if (m_inGridEvent || m_rebuildScheduled) {
+		m_pendingObject = object;
+		m_pendingForce = m_pendingForce || force;
+		if (!m_rebuildScheduled) {
+			m_rebuildScheduled = true;
+			CallAfter([this] {
+				m_rebuildScheduled = false;
+				const bool pendingForce = m_pendingForce;
+				m_pendingForce = false;
+				Create(m_pendingObject, pendingForce);
+			});
+		}
+		return;
+	}
+
+	// RAII Freeze/Thaw: Thaw MUST run even if a rebuild step throws (e.g. GetClassName on an
+	// unexpected object) or returns early. A skipped Thaw leaves the grid frozen forever (the
+	// "freeze" bug) AND unbalances the freeze count so later rebuilds stop suppressing paint
+	// (the flicker bug). wxWindowUpdateLocker Thaws in its dtor at block exit.
+	wxWindowUpdateLocker updateLock(m_pg);
+
 	if (force || object != m_currentSel) {
-		m_pg->Freeze();
+
 		m_currentSel = object;
 
 		const int pageNumber = m_pg->GetSelectedPage();
@@ -116,12 +157,9 @@ void ibObjectInspector::Create(ibPropertyObject* object, bool force)
 
 		m_pg->Refresh();
 		m_pg->Update();
-
-		m_pg->Thaw();
 	}
 
 	if (m_currentSel != nullptr) {
-		m_pg->Freeze();
 		for (auto& prop : m_propMap)
 			m_currentSel->OnPropertyRefresh(m_pg, prop.first, prop.second);
 		for (auto event : m_eventMap)
@@ -144,7 +182,6 @@ void ibObjectInspector::Create(ibPropertyObject* object, bool force)
 				}
 			}
 		}
-		m_pg->Thaw();
 	}
 
 	RestoreLastSelectedPropItem();
@@ -239,13 +276,13 @@ bool ibObjectInspector::ModifyProperty(ibProperty* prop, const wxVariant& newVal
 	if (m_currentSel->OnPropertyChanging(prop, newValue)) {
 		prop->SetValue(newValue);
 		m_currentSel->OnPropertyChanged(prop, oldValue, newValue);
-		// If the edited object is ATTACHED to an owner (a value-table column-info sits under its
-		// value-table, which sits under the form-attribute holder), tell that owner its children
-		// changed — the signal bubbles up the attach-owner chain until a frontend holder re-renders.
-		// Objects that self-refresh (controls, the holder itself) have no attach-owner, so this is a
-		// no-op for them, and it never re-fires the edited object's own OnPropertyChanged.
-		if (ibPropertyObject* attachOwner = m_currentSel->GetAttachOwner())
-			attachOwner->OnChildChanged();
+		// Raise the change from the property's REAL owner — which may be a NESTED child the inspected holder only
+		// ACCUMULATES (a dynamic list under a form-attribute holder: m_currentSel is the holder, but the edited
+		// Source belongs to the list). Call the OWNER's own OnChildChanged so the CHILD initialises its reaction
+		// and then bubbles up the attach chain to the holder. A self-refreshing owner (a control) has no attach
+		// owner, so the bubble stops and this is a no-op for it.
+		if (ibPropertyObject* owner = prop->GetPropertyObject())
+			owner->OnChildChanged();
 		return true;
 	}
 	return false;
@@ -257,10 +294,10 @@ bool ibObjectInspector::ModifyEvent(ibEvent* event, const wxVariant& newValue)
 	if (m_currentSel->OnEventChanging(event, newValue)) {
 		event->SetValue(newValue);
 		m_currentSel->OnEventChanged(event, oldValue, newValue);
-		// Same as a property edit: if the object is attached, bubble the change up the attach-owner
-		// chain so a frontend holder re-renders (an event edit on a nested backend object counts too).
-		if (ibPropertyObject* attachOwner = m_currentSel->GetAttachOwner())
-			attachOwner->OnChildChanged();
+		// Same as a property edit: raise it from the event's REAL owner so a nested child initialises + bubbles
+		// up the attach chain to a frontend holder that re-renders.
+		if (ibPropertyObject* owner = event->GetPropertyObject())
+			owner->OnChildChanged();
 		return true;
 	}
 	return false;
@@ -270,6 +307,7 @@ bool ibObjectInspector::ModifyEvent(ibEvent* event, const wxVariant& newValue)
 
 void ibObjectInspector::OnPropertyGridChanging(wxPropertyGridEvent& event)
 {
+	ScopedFlag inEvent(m_inGridEvent);   // an edit here may bubble back to Create — keep it deferred
 	wxPGProperty* propPtr = event.GetProperty();
 	std::map< wxPGProperty*, ibProperty*>::iterator itProperty = m_propMap.find(propPtr);
 	if (itProperty != m_propMap.end()) {
@@ -303,8 +341,20 @@ void ibObjectInspector::OnPropertyGridChanging(wxPropertyGridEvent& event)
 
 void ibObjectInspector::OnPropertyGridChanged(wxPropertyGridEvent& event)
 {
+	ScopedFlag inEvent(m_inGridEvent);       // same as Changing — defer any rebuild the refresh triggers
+
+	// The edit already invalidated the property set and a rebuild is QUEUED (deferred out of the event): an
+	// attribute Type change re-materialises its held value, freeing the old value's ibProperties that are still
+	// in m_propMap. Walking the stale map here would call RefreshPGProperty on a freed ibProperty (use-after-
+	// free — the crash). Skip; the deferred Create rebuilds m_propMap with the live property set.
+	if (m_rebuildScheduled) {
+		event.Skip();
+		return;
+	}
+
+	wxWindowUpdateLocker updateLock(m_pg);   // RAII Thaw — a throwing OnPropertyRefresh must not leave the grid frozen
+
 	if (m_currentSel != nullptr) {
-		m_pg->Freeze();
 		for (auto prop : m_propMap) m_currentSel->OnPropertyRefresh(m_pg, prop.first, prop.second);
 		for (auto event : m_eventMap) m_currentSel->OnEventRefresh(m_pg, event.first, event.second);
 		for (auto prop : m_propMap) {
@@ -332,8 +382,6 @@ void ibObjectInspector::OnPropertyGridChanged(wxPropertyGridEvent& event)
 			wxASSERT(event_ptr);
 			event_ptr->RefreshPGProperty(evt.first);
 		};
-
-		m_pg->Thaw();
 	}
 	event.Skip();
 }

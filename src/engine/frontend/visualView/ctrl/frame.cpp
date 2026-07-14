@@ -161,6 +161,9 @@ bool ibValueFrame::CopyNode(ibDataNode& node) const
 			node.SetProperty(event->GetName(), value);
 		}
 
+	if (!CopyData(node))
+		return false;
+
 	for (unsigned int idx = 0; idx < GetChildCount(); idx++) {
 		ibValueFrame* child = GetChild(idx);
 		if (child == nullptr)
@@ -186,6 +189,9 @@ bool ibValueFrame::PasteNode(const ibDataNode& node)
 		if (ibEvent* event = ibPropertyObject::GetEvent(idx))
 			if (!event->PasteNodeValue(node.GetProperty(event->GetName())))
 				return false;
+
+	if (!PasteData(node))
+		return false;
 
 	ibValueForm* ownerForm = GetOwnerForm();
 	if (ownerForm != nullptr) {

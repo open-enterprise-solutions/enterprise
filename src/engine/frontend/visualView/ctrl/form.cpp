@@ -125,6 +125,19 @@ bool ibValueForm::WriteData(ibDataNode& node) const
 	return ibValueFrame::WriteData(node);
 }
 
+// Copy/paste carries ONLY the attribute store — the form's own properties (Title/Orient/…)
+// already ride the generic property walk in Copy/PasteNode, so re-emitting them here (as
+// WriteData does) would double-write. Attributes are the one form-level datum that walk skips.
+bool ibValueForm::CopyData(ibDataNode& node) const
+{
+	return WriteAttributes(node);
+}
+
+bool ibValueForm::PasteData(const ibDataNode& node)
+{
+	return ReadAttributes(node);
+}
+
 
 //**********************************************************************************
 //*                                   Other                                        *

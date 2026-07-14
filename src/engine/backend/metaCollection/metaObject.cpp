@@ -416,6 +416,18 @@ bool ibValueMetaObject::PasteObject(ibReaderMemory& reader)
 			/*const ibVersionID& version =*/ readerHeaderMemory->r_s32();
 			/*pasteObject->m_metaGuid =*/ readerHeaderMemory->r_stringZ();
 
+			// MARK the ROOT as pasted too — the SAME two-level rule the copy side already follows. On copy,
+			// ibControlCopyGuard::Generate stamps the whole subtree ROOT + children, so IsCopyMode() holds and the
+			// form writes its blob in COPY format (per-hop guid/kind tags). On paste, only the recursive CHILD
+			// PasteObject stamps its objects; this ROOT entry did not — so a form copied AS PART OF a whole
+			// metaobject (a child) re-homed fine, but a form copied DIRECTLY (a common form, or a form within a
+			// group) — which arrives HERE as the root — had IsPasteMode() == false and read its COPY-format blob as
+			// RAW: the reader mis-parses the hop layout and drops the source-hop paths (and the attribute section).
+			// Keep the root's OWN m_metaGuid (it is the paste TARGET's identity — the source guid read above is
+			// intentionally discarded, unlike a child which adopts it); the mark only has to be valid for the whole
+			// run so LoadControl routes to PasteNode, and the OUTER ibControlPasteGuard clears it on exit.
+			pasteObject->m_metaPasteGuid = pasteObject->m_metaGuid;
+
 			// Running initialization AS A PASTE (pasteObjectFlag, NOT onlyLoadFlag): a pasted object is a NEW object,
 			// so its RUN event must register its queryable source — exactly like a fresh create (newObjectFlag) does.
 			// onlyLoadFlag gates the queryable registration OFF (the load-only pass), which left a copied catalog /

@@ -4,6 +4,8 @@
 #include "metaModuleObject.h"
 #include "backend/uniqueKey.h"
 
+#include <functional>
+
 #define defaultFormType wxNOT_FOUND
 #define formDefaultName wxT("Form")
 
@@ -103,20 +105,27 @@ class BACKEND_API ibValueMetaObjectGenericData;
 
 class BACKEND_API ibDeferredForm {
 public:
-	ibDeferredForm(ibValueMetaObjectGenericData* parent, ibValueMetaObjectFormBase* form) noexcept
-		: m_parent(parent), m_form(form), m_paste(form != nullptr && form->IsPasteMode()) {}
+	// `build` = how THIS form materialises its runtime value. Both form kinds are DEFERRED (the build only
+	// runs on first FindCompileModule, AFTER the whole config has run and every metaobject is registered) so
+	// a form can safely resolve its attribute types / source hops against objects that register later in the
+	// pass. The two kinds differ only in the entry: an OBJECT form goes through its owning GenericData (which
+	// binds the source object), a COMMON form builds standalone — both land on CreateAndBuildForm underneath.
+	// The form ptr is kept only for the paste re-arm, recorded NOW while the paste mark is still live.
+	ibDeferredForm(ibValueMetaObjectFormBase* form, std::function<ibBackendValueForm*()> build) noexcept
+		: m_form(form), m_build(std::move(build)), m_paste(form != nullptr && form->IsPasteMode()) {}
 
-	// parent->CreateObjectForm(form), wrapped into an ibValue* (out-of-line — needs formWrapper / GenericData
-	// complete). When the recorded paste flag is set, re-arms the SAME guid so the build re-homes as a paste.
+	// Runs `build()`, wrapped into an ibValue* (out-of-line — needs formWrapper complete). When the recorded
+	// paste flag is set, re-arms the SAME guid so the deferred build reads the copy blob via PasteNode.
 	ibValue* Construct() const;
 
-	ibValueMetaObjectGenericData* Parent() const { return m_parent; }
-	ibValueMetaObjectFormBase*    Form()   const { return m_form; }
+	ibValueMetaObjectFormBase* Form() const { return m_form; }
 
 private:
-	ibValueMetaObjectGenericData* m_parent;
-	ibValueMetaObjectFormBase*    m_form;
-	bool                          m_paste;
+	ibValueMetaObjectFormBase*           m_form;
+	std::function<ibBackendValueForm*()> m_build;
+	// One-shot: TRUE only until the first Construct consumes the paste (mutable — the builder is captured
+	// by-value in the compile-cache lambda, so the retire must persist across rebuilds). See Construct.
+	mutable bool                         m_paste;
 };
 
 // -----------------------------------------------------------------------

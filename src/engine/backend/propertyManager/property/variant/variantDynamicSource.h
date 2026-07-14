@@ -6,7 +6,8 @@
 
 class BACKEND_API ibBackendQueryable;
 class ibQueryableSourceDescriptor;
-class ibPropertyObject;   // the OWNING property object — re-resolves the source through ITS config factory (metadata)
+class ibPropertyObject;   // the OWNING property object — its GetMetaData() gives the SPECIFIC config to resolve through
+class BACKEND_API ibMetaData;
 
 // wxVariantData holding the chosen SOURCE — kept as the source's STABLE table id, NOT a cached
 // queryable pointer. The queryable is OWNED by the metaobject's source descriptor (the factory
@@ -18,13 +19,14 @@ class ibPropertyObject;   // the OWNING property object — re-resolves the sour
 class BACKEND_API ibVariantDataDynamicSource : public wxVariantData {
 public:
 
-	// `owner` = the property object this cell belongs to; the source is RE-RESOLVED through owner→GetMetaData()'s
-	// per-config factory (which descends to the global on a miss), so a copied / other-config list resolves ITS
-	// source. Owner is null on a bare/initial cell (resolves nothing). The control owns the property owns this cell,
-	// so the owner pointer outlives the variant — no dangling.
+	// `owner` = the property object this cell belongs to; at construction we resolve owner→GetMetaData() ONCE and
+	// keep the SPECIFIC config (each metadata owns its own queryable set — the queryable lives in the config where
+	// it was created, never in a global/active one). We keep the METADATA, not the owner pointer: a form-attribute's
+	// dynamic list is TRANSIENT (re-materialised on a Type change) while the grid's display cell (a COPY) outlives
+	// it — storing the owner would then dangle and crash on the next paint. The config metadata outlives the list.
 	ibVariantDataDynamicSource(const ibBackendQueryable* queryable = nullptr, const ibPropertyObject* owner = nullptr);
 	ibVariantDataDynamicSource(const ibVariantDataDynamicSource& src)
-		: wxVariantData(), m_tableId(src.m_tableId), m_owner(src.m_owner) {}
+		: wxVariantData(), m_tableId(src.m_tableId), m_metaData(src.m_metaData) {}
 
 	// Resolve the chosen source LIVE through the factory — null when none is picked or the source
 	// was deleted (never a stale/dangling pointer).
@@ -55,7 +57,7 @@ public:
 
 private:
 	ibMetaID m_tableId = wxNOT_FOUND;   // the chosen source's stable table id (queryable re-resolved on demand)
-	const ibPropertyObject* m_owner = nullptr;   // owning property — re-resolves through ITS config's factory (metadata)
+	const ibMetaData* m_metaData = nullptr;   // the SPECIFIC config this source lives in — resolved once from the owner
 };
 
 #endif // __DYNAMIC_SOURCE_VARIANT_H__

@@ -30,24 +30,25 @@
 
 bool ibValueForm::ReadAttributes(const ibDataNode& node)
 {
-	// The MAIN attribute is NEVER serialized — it is always reconstructed from the form's
-	// source in the ctor (its name List/Object and Type derive from the source; its id is
-	// stable). Only the user-added (non-main) attributes are persisted. So: KEEP the ctor's
-	// main, REPLACE the non-main set from the "Attributes" section, and DROP any main-flagged
-	// entry from an old blob (the ctor's main wins — never a second "Object").
+	// An OBJECT form reconstructs its MAIN in the ctor (name List/Object + Type derive from the source, id
+	// stable); a COMMON form has NO source, so its main can only come from the blob. So: KEEP a ctor-built
+	// main and REPLACE the rest; when there is NO ctor main, ADOPT the blob's main (with its Main flag) —
+	// otherwise a sourceless form loses its primary attribute on copy AND on a plain load. Never two mains.
+	bool hasMain = false;
 	for (auto it = m_attributes.begin(); it != m_attributes.end(); ) {
-		if ((*it)->IsMain()) ++it;
+		if ((*it)->IsMain()) { hasMain = true; ++it; }
 		else { DropAttributeBinds(*it); it = m_attributes.erase(it); }
 	}
 
 	if (const ibDataNode* attrsNode = node.FindChild(wxT("Attributes"))) {
 		for (const ibDataNode& attrNode : attrsNode->Children()) {
-			if (attrNode.GetValue<bool>(wxT("Main")))
-				continue;   // the main belongs to the ctor — never load one from the blob
+			const bool isMain = attrNode.GetValue<bool>(wxT("Main"));
+			if (isMain && hasMain)
+				continue;   // the source-reconstructed main wins — never load a second one
 			ibValuePtr<ibFormAttributeValue> holder(new ibFormAttributeValue(this));   // builds its description
-			holder->m_attribute->SetMainAttribute(false);
-			if (!holder->ReadProperty(attrNode))   // facade: reads the attribute + the generated value
+			if (!holder->ReadProperty(attrNode))   // facade: reads the attribute (incl. its Main flag) + the value
 				return false;
+			if (isMain) hasMain = true;   // adopted the blob's main — block any further one
 			m_attributes.emplace_back(std::move(holder));
 		}
 	}
@@ -56,12 +57,13 @@ bool ibValueForm::ReadAttributes(const ibDataNode& node)
 
 bool ibValueForm::WriteAttributes(ibDataNode& node) const
 {
-	// Persist ONLY the user-added (non-main) attributes. The MAIN is reconstructed from the
-	// source in the ctor, so writing it would just produce a duplicate main on copy / load.
+	// Persist EVERY attribute, MAIN included (each entry carries its Main flag). An object form ignores the
+	// stored main on load and rebuilds it from the source (see ReadAttributes), so the stored copy is just
+	// redundant there; but a common form has NO source — without the stored main it loses its primary
+	// attribute on copy AND on a plain save/load. Keeping it also lets a sourceless form later be
+	// reconstructed into an object form by re-homing that main onto a real object.
 	ibDataNode& attrsNode = node.Child(wxT("Attributes"));
 	for (const auto& av : m_attributes) {
-		if (av->IsMain())
-			continue;
 		ibDataNode& attrNode = attrsNode.AddChild(av->GetClassType(), av->GetId());
 		// WriteProperty returns false when the attribute is INCOMPLETE (a dynamic list with no
 		// source picked) — FAIL the whole write so a broken definition is never persisted (the
@@ -247,8 +249,10 @@ bool ibValueForm::RenameAttribute(ibFormAttributeValue* entry, const wxString& n
 ibFormAttributeValue* ibValueForm::PasteAttribute(const ibDataNode& node)
 {
 	ibValuePtr<ibFormAttributeValue> holder(new ibFormAttributeValue(this));   // builds its description
+	holder->ReadProperty(node);   // FACADE: reads the attribute AND materialises + reads the held value (a
+	                              // dynamic list's Source / Settings) — not just the description, or the pasted
+	                              // value is empty and the list never expands / reacts.
 	auto& attr = *holder->m_attribute;   // friend access to the private description
-	attr.ReadProperty(node);
 	attr.SetMainAttribute(false);   // a paste is never the main — only one main per form
 	attr.SetAttributeId(NextAttributeId());   // fresh id so its bindings never collide
 	attr.SetAttributeName(MakeUniqueAttributeName(attr.GetName()));
@@ -475,17 +479,13 @@ void ibFormAttributeValue::OnPropertyChanged(ibProperty* property, const wxVaria
 		Refresh();
 
 #ifndef OES_USE_WEB
-
-	// g_visualHostContext = designer's editor notebook; web has no
-	// designer context, so property changes just update the backing
-	// ibProperty model without notifying a live editor.
-	if (ibFrontendVisualEditorNotebook* editor = ibFrontendVisualEditorNotebook::FindEditorByForm(m_attribute->GetOwnerForm())) {
+	// EXACTLY the path a control edit takes (see controlProperty / frameProperty): route through the visual
+	// editor's ModifyProperty command. That command is the ONE place a property edit marks the form modified
+	// AND rebuilds the editor (canvas + object tree + attribute tree — a Type/source change can cascade into
+	// bindings and controls). The holder IS the inspector's selected object, so this fires once; a genuinely
+	// nested value (a value-table column) is edited as its OWN selection and bubbles via OnChildChanged instead.
+	if (ibFrontendVisualEditorNotebook* editor = ibFrontendVisualEditorNotebook::FindEditorByForm(m_attribute->GetOwnerForm()))
 		editor->ModifyProperty(property, oldValue, newValue);
-		editor->RefreshEditor();
-	}
-
-#else
-	(void)property; (void)oldValue; (void)newValue;
 #endif
 }
 
@@ -665,10 +665,12 @@ bool ibFormAttributeValue::CopyToClipboard(const ibFormAttributeValue* entry)
 #ifndef OES_USE_WEB
 	if (entry == nullptr)
 		return false;
-	// Serialize the description through OUR format (the same Read/WriteProperty used on save),
-	// then put the bytes on the clipboard under our own format id — analogous to control copy.
+	// Serialize the WHOLE entry through OUR format — the FACADE WriteProperty writes both the attribute
+	// description AND the held value (a dynamic list's Source / Settings), same as a form save. Writing only
+	// the description dropped the value, so a pasted list came back empty. Put the bytes on the clipboard under
+	// our own format id — analogous to control copy.
 	ibDataNode node;
-	entry->m_attribute->WriteProperty(node);   // static method → access to the private description
+	entry->WriteProperty(node);
 	ibWriterMemory writer;
 	if (!ibBinaryProvider().Write(node, writer))
 		return false;
@@ -710,6 +712,21 @@ ibFormAttributeValue* ibFormAttributeValue::PasteFromClipboard(ibValueForm* form
 #endif
 }
 
+bool ibFormAttributeValue::HasClipboardData()
+{
+#ifndef OES_USE_WEB
+	// Peek only — is there an attribute (OUR format) to paste? Used to grey out the Paste action.
+	bool ok = false;
+	if (wxTheClipboard->Open()) {
+		ok = wxTheClipboard->IsSupported(oes_clipboard_attribute);
+		wxTheClipboard->Close();
+	}
+	return ok;
+#else
+	return false;
+#endif
+}
+
 //*********************************************************************************************
 //*                              system type registration                                    *
 //*********************************************************************************************
@@ -717,3 +734,6 @@ ibFormAttributeValue* ibFormAttributeValue::PasteFromClipboard(ibValueForm* form
 // Registered as a system runtime value type (clsid + name come from the registry;
 // GetClassName / GetClassType resolve through it — see formAttribute.h).
 SYSTEM_TYPE_REGISTER(ibFormAttributeValue, "FormAttributeValue");
+// The nested description is also a runtime property object (the inspector can reach it via GetClassName on a
+// re-select), so it must be registered too — a SYSTEM type (no ctor; the holder creates it programmatically).
+SYSTEM_TYPE_REGISTER(ibFormAttributeValue::ibFormAttributeImpl, "FormAttribute");

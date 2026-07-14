@@ -7,19 +7,20 @@
 #include "backend/propertyManager/propertyObject.h"   // ibPropertyObject::GetMetaData
 
 ibVariantDataDynamicSource::ibVariantDataDynamicSource(const ibBackendQueryable* queryable, const ibPropertyObject* owner)
-	: wxVariantData(), m_tableId(queryable != nullptr ? (ibMetaID)queryable->GetQueryTableId() : wxNOT_FOUND), m_owner(owner)
+	: wxVariantData(), m_tableId(queryable != nullptr ? (ibMetaID)queryable->GetQueryTableId() : wxNOT_FOUND),
+	// Resolve the owner's SPECIFIC config ONCE, here, and keep the metadata — NOT the owner pointer (which, for a
+	// form-attribute's transient dynamic list, dangles once the list is re-materialised). (CONST owner: the non-const
+	// GetMetaData wxFAILs.)
+	  m_metaData(owner != nullptr ? owner->GetMetaData() : nullptr)
 {
 }
 
-// The factory this cell re-resolves through: the OWNER config's own factory (the metadata it runs on behalf of), which
+// The factory this cell re-resolves through: the SPECIFIC config's own factory (where the queryable lives), which
 // descends to the global factory INTERNALLY on a miss — so a copied / other-config list resolves ITS source, never
-// whatever registered globally last. Entry is ALWAYS the metadata; a null owner-config resolves nothing (no appData /
-// active-metadata grab). (CONST owner: the non-const GetMetaData wxFAILs.)
-static ibQueryableFactory* ibVariantSourceFactory(const ibPropertyObject* owner)
+// whatever registered globally last. Null metadata → the global base factory (common/plugin; empty today).
+static ibQueryableFactory* ibVariantSourceFactory(const ibMetaData* md)
 {
-	const ibMetaData* md = owner != nullptr ? owner->GetMetaData() : nullptr;
 	ibQueryableFactory* factory = md != nullptr ? md->GetSourceFactory() : nullptr;
-	// No owner config → the global base factory (common/plugin; empty today) — a harmless last resort.
 	return factory != nullptr ? factory : ibApplicationData::GetQueryableFactory();
 }
 
@@ -29,7 +30,7 @@ const ibBackendQueryable* ibVariantDataDynamicSource::GetQueryable() const
 	// global), which hands back the descriptor's own `&m_queryable`, or null if the source was deleted.
 	if (m_tableId == wxNOT_FOUND)
 		return nullptr;
-	ibQueryableFactory* factory = ibVariantSourceFactory(m_owner);
+	ibQueryableFactory* factory = ibVariantSourceFactory(m_metaData);
 	return factory != nullptr ? factory->ResolveById(m_tableId) : nullptr;
 }
 
@@ -39,7 +40,7 @@ const ibQueryableSourceDescriptor* ibVariantDataDynamicSource::GetDescriptor() c
 	// column surface, FillSourceExplorer) is the copy's OWN, so the columns are the copy's. Null when deleted.
 	if (m_tableId == wxNOT_FOUND)
 		return nullptr;
-	ibQueryableFactory* factory = ibVariantSourceFactory(m_owner);
+	ibQueryableFactory* factory = ibVariantSourceFactory(m_metaData);
 	return factory != nullptr ? factory->ResolveDescriptorById(m_tableId) : nullptr;
 }
 
