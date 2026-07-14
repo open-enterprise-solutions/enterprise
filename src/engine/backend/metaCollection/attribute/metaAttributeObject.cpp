@@ -142,6 +142,7 @@ bool ibValueMetaObjectAttribute::ReadData(const ibDataNode& node)
 {
 	m_propertyType->ReadNodeValue(node.GetProperty(m_propertyType->GetName()));
 	m_propertyFillCheck->ReadNodeValue(node.GetProperty(m_propertyFillCheck->GetName()));
+	m_propertyIndexingMode->ReadNodeValue(node.GetProperty(m_propertyIndexingMode->GetName()));
 	m_propertyItemMode->ReadNodeValue(node.GetProperty(m_propertyItemMode->GetName()));
 	m_propertySelectMode->ReadNodeValue(node.GetProperty(m_propertySelectMode->GetName()));
 	return true;
@@ -150,6 +151,7 @@ bool ibValueMetaObjectAttribute::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyType->GetName(),       m_propertyType->GetNodeValue());
 	node.SetProperty(m_propertyFillCheck->GetName(),  m_propertyFillCheck->GetNodeValue());
+	node.SetProperty(m_propertyIndexingMode->GetName(),   m_propertyIndexingMode->GetNodeValue());
 	node.SetProperty(m_propertyItemMode->GetName(),   m_propertyItemMode->GetNodeValue());
 	node.SetProperty(m_propertySelectMode->GetName(), m_propertySelectMode->GetNodeValue());
 	return true;
@@ -164,6 +166,7 @@ bool ibValueMetaObjectAttributePredefined::WriteData(ibDataNode& node) const
 	ibTypeDescriptionMemory::WriteNode(typeValue, m_typeDesc, GetMetaData());
 	node.SetProperty(wxT("Type"), typeValue);
 	node.SetValue(wxT("FillCheck"), (bool)m_fillCheck);
+	node.SetValue(wxT("Indexing"), (int)m_indexingMode);
 	return true;
 }
 
@@ -171,6 +174,7 @@ bool ibValueMetaObjectAttributePredefined::ReadData(const ibDataNode& node)
 {
 	ibTypeDescriptionMemory::ReadNode(node.GetProperty(wxT("Type")), m_typeDesc, GetMetaData());
 	m_fillCheck = node.GetValue<bool>(wxT("FillCheck"));
+	m_indexingMode = (ibIndexingMode)node.GetValue<int>(wxT("Indexing"));   // absent -> 0 -> DontIndex
 	return true;
 }
 

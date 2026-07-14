@@ -37,6 +37,28 @@ wxString ibValueMetaObjectRecordDataRef::GetPhysicalTableName() const
 // (SnapshotOf removed: building a snapshot is just `common->ContributeTables(snap)` — the metadata side
 //  does it directly where it drives the builder, keeping the builder itself config-agnostic.)
 
+namespace {
+// One secondary DB index per indexed attribute. Index -> the attribute alone; IndexWithAdditionalOrder ->
+// the attribute plus the row reference, so ordered list browsing reads its order straight off the index.
+// Non-unique — an attribute value repeats. Named <table>_<attrId>_IX (metaID key: stable and short). A
+// register has no single row reference, so its caller passes orderRef = nullptr and the ordered variant
+// degrades to a plain index there.
+void ContributeAttributeIndexes(ibSchemaTable& t,
+	const std::vector<ibValueMetaObjectAttributeBase*>& attributes,
+	const ibBackendQueryColumn* orderRef = nullptr)
+{
+	for (const auto attr : attributes) {
+		const ibIndexingMode mode = attr->GetIndexingMode();
+		if (mode == ibIndexingMode::ibIndexingMode_DontIndex)
+			continue;
+		std::vector<const ibBackendQueryColumn*> cols = { attr };
+		if (mode == ibIndexingMode::ibIndexingMode_IndexWithAdditionalOrder && orderRef != nullptr && orderRef != attr)
+			cols.push_back(orderRef);
+		t.Index(wxString::Format(wxT("%s_%i_IX"), t.m_name, (int)attr->GetColumnId()), std::move(cols));
+	}
+}
+} // namespace
+
 void ibValueMetaObjectRecordDataMutableRef::ContributeTables(ibSchemaSnapshot& out) const
 {
 	// --- the record's main table ---
@@ -52,6 +74,11 @@ void ibValueMetaObjectRecordDataMutableRef::ContributeTables(ibSchemaSnapshot& o
 	if (const ibValueMetaObjectAttributeBase* refAttr = GetDataReference())
 		t.Index(t.m_name + wxT("_REF_UQ"), { refAttr }, true);               // _REF_UQ — the data-reference unique key
 
+	// Per-attribute secondary indexes (plain + predefined: Code / Description / Parent / ...) —
+	// the row reference is the additional-order column. Each carries its own Indexing flag.
+	ContributeAttributeIndexes(t, GetAttributeArrayObject(), GetDataReference());
+	ContributeAttributeIndexes(t, GetPredefinedAttributeArrayObject(), GetDataReference());
+
 	// --- tabular sections — each its own table ---
 	for (const auto tab : GetTableArrayObject()) {
 		ibSchemaTable& tt = out.CreateSchemaTable(tab->GetQueryable());
@@ -59,6 +86,9 @@ void ibValueMetaObjectRecordDataMutableRef::ContributeTables(ibSchemaSnapshot& o
 		for (const auto object : tab->GetGenericAttributeArrayObject())
 			tt.Add(object);
 		tt.Index(tt.m_name + wxT("_INDEX"), { tabUuid });                     // tabular uuid index — NOT unique (repeats per owner)
+		// Per-attribute secondary indexes on the section's own columns — no single row reference
+		// (browsing is per-owner by line), so the ordered variant degrades to a plain index here.
+		ContributeAttributeIndexes(tt, tab->GetGenericAttributeArrayObject());
 	}
 }
 
@@ -89,7 +119,11 @@ void ibValueMetaObjectRegisterData::ContributeTables(ibSchemaSnapshot& out) cons
 	for (const auto object : GetAttributeArrayObject())
 		t.Add(object);
 
-	// The lookup index: recorder + line for a subordinate register, else the dimension columns.
+	// The key index: recorder + line for a subordinate register, else the dimension columns
+	// (period + dimensions when periodic — GetGenericDimensionArrayObject prepends the period).
+	// UNIQUE — these columns ARE the register's key: at most one record per key, same as objects
+	// key on a unique uuid. It is the DB-level guarantee against duplicate rows; the app-level
+	// ExistData probe alone (a fragile string compare) let dimension-key duplicates slip in.
 	std::vector<const ibBackendQueryColumn*> idxCols;
 	if (HasRecorder()) {
 		idxCols.push_back(GetRegisterRecorder());
@@ -100,7 +134,13 @@ void ibValueMetaObjectRegisterData::ContributeTables(ibSchemaSnapshot& out) cons
 			idxCols.push_back(object);
 	}
 	if (!idxCols.empty())
-		t.Index(t.m_name + wxT("_INDEX"), idxCols);
+		t.Index(t.m_name + wxT("_INDEX"), idxCols, true);
+
+	// Per-field secondary indexes. Dimensions, resources, attributes and predefined all carry the
+	// Indexing flag (each is-a ibValueMetaObjectAttribute), so GetGenericAttributeArrayObject covers
+	// them all. A register has no single row reference, so the ordered variant degrades to a plain
+	// index here (the dimensions already ride the composite key index above).
+	ContributeAttributeIndexes(t, GetGenericAttributeArrayObject());
 }
 
 void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSnapshot& out) const

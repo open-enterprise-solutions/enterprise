@@ -57,6 +57,27 @@ bool HasIndex(const std::vector<ibSchemaIndex>& indexes, const wxString& name)
 	return false;
 }
 
+const ibSchemaIndex* FindIndex(const std::vector<ibSchemaIndex>& indexes, const wxString& name)
+{
+	for (const ibSchemaIndex& i : indexes)
+		if (i.m_name == name)
+			return &i;
+	return nullptr;
+}
+
+// Two same-named indexes are the SAME shape iff their uniqueness and their column list (by model id,
+// stable across config instances) match. A mismatch (e.g. Index -> IndexWithAdditionalOrder adds the
+// order column, or a unique flip) means the index must be dropped and rebuilt, not left as-is.
+bool SameIndex(const ibSchemaIndex& a, const ibSchemaIndex& b)
+{
+	if (a.m_unique != b.m_unique)             return false;
+	if (a.m_columns.size() != b.m_columns.size()) return false;
+	for (size_t k = 0; k < a.m_columns.size(); ++k)
+		if (a.m_columns[k]->GetColumnId() != b.m_columns[k]->GetColumnId())
+			return false;
+	return true;
+}
+
 // The USER-facing name of a table for the change ledger — the metaobject's name as it reads in the
 // metadata tree (e.g. "Enumeration3"), not the physical "ClassNNNN". The queryable vends it directly
 // (it already wraps the metaobject); the physical name is the fallback (a table with no queryable).
@@ -246,12 +267,20 @@ int AlterTable(ibStructureBatch& batch, const ibSchemaTable& old, const ibSchema
 		}
 	}
 
-	for (const ibSchemaIndex& i : cur.m_indexes)
-		if (!HasIndex(old.m_indexes, i.m_name)) {
+	for (const ibSchemaIndex& i : cur.m_indexes) {
+		const ibSchemaIndex* o = FindIndex(old.m_indexes, i.m_name);
+		if (o == nullptr) {
 			batch.CreateIndex(i.m_name, i.m_columns, i.m_unique);
 			if (report != nullptr)
 				report->AppendInfo(_("Add index ") + i.m_name);
 		}
+		else if (!SameIndex(*o, i)) {
+			batch.Ddl(ibDropIndex(i.m_name, cur.m_name));   // shape / uniqueness changed -> drop + recreate
+			batch.CreateIndex(i.m_name, i.m_columns, i.m_unique);
+			if (report != nullptr)
+				report->AppendInfo(_("Rebuild index ") + i.m_name);
+		}
+	}
 	for (const ibSchemaIndex& o : old.m_indexes)
 		if (!HasIndex(cur.m_indexes, o.m_name)) {
 			batch.Ddl(ibDropIndex(o.m_name, cur.m_name));

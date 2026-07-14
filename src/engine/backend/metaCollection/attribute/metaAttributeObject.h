@@ -85,6 +85,7 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 
 	virtual ibItemMode GetItemMode() const { return ibItemMode::ibItemMode_Item; }
 	virtual ibSelectMode GetSelectMode() const { return ibSelectMode::ibSelectMode_Items; }
+	virtual ibIndexingMode GetIndexingMode() const { return ibIndexingMode::ibIndexingMode_DontIndex; }
 
 	//get metaData
 	virtual const ibMetaData* GetMetaData() const { return m_metaData; }
@@ -124,6 +125,7 @@ class BACKEND_API ibValueMetaObjectAttribute : public ibValueMetaObjectAttribute
 
 	virtual ibItemMode GetItemMode() const;
 	virtual ibSelectMode GetSelectMode() const;
+	virtual ibIndexingMode GetIndexingMode() const { return m_propertyIndexingMode->GetValueAsEnum(); }
 
 	//get type description 
 	virtual ibTypeDescription& GetTypeDesc() const { return m_propertyType->GetValueAsTypeDesc(); }
@@ -150,6 +152,7 @@ private:
 	ibPropertyType* m_propertyType = ibPropertyObject::CreateProperty<ibPropertyType>(m_categoryType, wxT("Type"), _("Type"), ibValueTypes::TYPE_STRING);
 	ibPropertyCategory* m_categoryAttribute = ibPropertyObject::CreatePropertyCategory(wxT("Attribute"), _("Attribute"));
 	ibPropertyBoolean* m_propertyFillCheck = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryAttribute, wxT("FillCheck"), _("Fill check"));
+	ibPropertyEnum<ibValueEnumIndexingMode>* m_propertyIndexingMode = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumIndexingMode>>(m_categoryAttribute, wxT("Indexing"), _("Indexing"), ibIndexingMode::ibIndexingMode_DontIndex);
 	ibPropertyCategory* m_categoryPresentation = ibPropertyObject::CreatePropertyCategory(wxT("Presentation"), _("Presentation"));
 	ibPropertyEnum<ibValueEnumSelectMode>* m_propertySelectMode = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumSelectMode>>(m_categoryPresentation, wxT("Select"), _("Select group and items"), ibSelectMode::ibSelectMode_Items);
 	ibPropertyCategory* m_categoryGroup = ibPropertyObject::CreatePropertyCategory(wxT("Group"), _("Group"));
@@ -160,58 +163,58 @@ class BACKEND_API ibValueMetaObjectAttributePredefined : public ibValueMetaObjec
 	public:
 private:
 
-	ibValueMetaObjectAttributePredefined(const wxString& name, const wxString& synonym, const wxString& comment, bool fillCheck, const ibValue& defValue, ibItemMode itemMode, ibSelectMode selectMode)
+	ibValueMetaObjectAttributePredefined(const wxString& name, const wxString& synonym, const wxString& comment, bool fillCheck, const ibValue& defValue, ibItemMode itemMode, ibSelectMode selectMode, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex)
 		: ibValueMetaObjectAttributeBase(name, wxT(""), comment), m_itemMode(itemMode), m_selectMode(selectMode), m_strSynonym(synonym)
 	{
 		m_typeDesc.SetDefaultMetaType(ibValueTypes::TYPE_BOOLEAN);
-		m_fillCheck = fillCheck; m_defValue = defValue;
+		m_fillCheck = fillCheck; m_indexingMode = indexingMode; m_defValue = defValue;
 	}
 
-	ibValueMetaObjectAttributePredefined(const wxString& name, const wxString& synonym, const wxString& comment, const ibQualifierNumber& qNumber, bool fillCheck, const ibValue& defValue, ibItemMode itemMode, ibSelectMode selectMode)
+	ibValueMetaObjectAttributePredefined(const wxString& name, const wxString& synonym, const wxString& comment, const ibQualifierNumber& qNumber, bool fillCheck, const ibValue& defValue, ibItemMode itemMode, ibSelectMode selectMode, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex)
 		: ibValueMetaObjectAttributeBase(name, wxT(""), comment), m_itemMode(itemMode), m_selectMode(selectMode), m_strSynonym(synonym)
 	{
 		m_typeDesc.SetDefaultMetaType(ibValueTypes::TYPE_NUMBER);
 		m_typeDesc.SetNumber(qNumber.m_precision, qNumber.m_scale);
-		m_fillCheck = fillCheck; m_defValue = defValue;
+		m_fillCheck = fillCheck; m_indexingMode = indexingMode; m_defValue = defValue;
 	}
 
-	ibValueMetaObjectAttributePredefined(const wxString& name, const wxString& synonym, const wxString& comment, const ibQualifierDate& qDate, bool fillCheck, const ibValue& defValue, ibItemMode itemMode, ibSelectMode selectMode)
+	ibValueMetaObjectAttributePredefined(const wxString& name, const wxString& synonym, const wxString& comment, const ibQualifierDate& qDate, bool fillCheck, const ibValue& defValue, ibItemMode itemMode, ibSelectMode selectMode, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex)
 		: ibValueMetaObjectAttributeBase(name, wxT(""), comment), m_itemMode(itemMode), m_selectMode(selectMode), m_strSynonym(synonym)
 	{
 		m_typeDesc.SetDefaultMetaType(ibValueTypes::TYPE_DATE);
 		m_typeDesc.SetDate(qDate.m_dateTime);
-		m_fillCheck = fillCheck; m_defValue = defValue;
+		m_fillCheck = fillCheck; m_indexingMode = indexingMode; m_defValue = defValue;
 	}
 
-	ibValueMetaObjectAttributePredefined(const wxString& name, const wxString& synonym, const wxString& comment, const ibQualifierString& qString, bool fillCheck, const ibValue& defValue, ibItemMode itemMode, ibSelectMode selectMode)
+	ibValueMetaObjectAttributePredefined(const wxString& name, const wxString& synonym, const wxString& comment, const ibQualifierString& qString, bool fillCheck, const ibValue& defValue, ibItemMode itemMode, ibSelectMode selectMode, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex)
 		: ibValueMetaObjectAttributeBase(name, wxT(""), comment), m_itemMode(itemMode), m_selectMode(selectMode), m_strSynonym(synonym)
 	{
 		m_typeDesc.SetDefaultMetaType(ibValueTypes::TYPE_STRING);
 		m_typeDesc.SetString(qString.m_length);
-		m_fillCheck = fillCheck; m_defValue = defValue;
+		m_fillCheck = fillCheck; m_indexingMode = indexingMode; m_defValue = defValue;
 	}
 
 	ibValueMetaObjectAttributePredefined(const wxString& name, const wxString& synonym, const wxString& comment,
-		const ibClassID& clsid, bool fillCheck, const ibValue& defValue, ibItemMode itemMode, ibSelectMode selectMode)
+		const ibClassID& clsid, bool fillCheck, const ibValue& defValue, ibItemMode itemMode, ibSelectMode selectMode, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex)
 		: ibValueMetaObjectAttributeBase(name, wxT(""), comment), m_itemMode(itemMode), m_selectMode(selectMode), m_strSynonym(synonym)
 	{
 		m_typeDesc.SetDefaultMetaType(clsid);
-		m_fillCheck = fillCheck; m_defValue = defValue;
+		m_fillCheck = fillCheck; m_indexingMode = indexingMode; m_defValue = defValue;
 	}
 
 	ibValueMetaObjectAttributePredefined(const wxString& name, const wxString& synonym, const wxString& comment,
-		const ibClassID& clsid, const ibTypeDescription::ibTypeData& descr, bool fillCheck, const ibValue& defValue, ibItemMode itemMode, ibSelectMode selectMode)
+		const ibClassID& clsid, const ibTypeDescription::ibTypeData& descr, bool fillCheck, const ibValue& defValue, ibItemMode itemMode, ibSelectMode selectMode, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex)
 		: ibValueMetaObjectAttributeBase(name, wxT(""), comment), m_itemMode(itemMode), m_selectMode(selectMode), m_strSynonym(synonym)
 	{
 		m_typeDesc.SetDefaultMetaType(clsid, descr);
-		m_fillCheck = fillCheck; m_defValue = defValue;
+		m_fillCheck = fillCheck; m_indexingMode = indexingMode; m_defValue = defValue;
 	}
 
-	ibValueMetaObjectAttributePredefined(const wxString& name, const wxString& synonym, const wxString& comment, bool fillCheck, ibItemMode itemMode, ibSelectMode selectMode)
+	ibValueMetaObjectAttributePredefined(const wxString& name, const wxString& synonym, const wxString& comment, bool fillCheck, ibItemMode itemMode, ibSelectMode selectMode, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex)
 		: ibValueMetaObjectAttributeBase(name, wxT(""), comment), m_itemMode(itemMode), m_selectMode(selectMode), m_strSynonym(synonym)
 	{
 		m_typeDesc.ClearMetaType();
-		m_fillCheck = fillCheck;
+		m_fillCheck = fillCheck; m_indexingMode = indexingMode;
 	}
 
 public:
@@ -227,10 +230,11 @@ public:
 	virtual wxString GetSynonym() const { return m_strSynonym; }
 	virtual void SetSynonym(const wxString& strSynonym) {}
 
-	//check if attribute is fill 
+	//check if attribute is fill
 	virtual bool FillCheck() const { return m_fillCheck && m_typeDesc.GetClsidCount() > 0; }
 	virtual ibItemMode GetItemMode() const { return m_itemMode; }
 	virtual ibSelectMode GetSelectMode() const { return m_selectMode; }
+	virtual ibIndexingMode GetIndexingMode() const { return m_indexingMode; }
 
 	//get type description 
 	virtual ibTypeDescription& GetTypeDesc() const { return m_typeDesc; }
@@ -250,6 +254,7 @@ private:
 	bool m_fillCheck;
 	ibItemMode m_itemMode;
 	ibSelectMode m_selectMode;
+	ibIndexingMode m_indexingMode = ibIndexingMode::ibIndexingMode_DontIndex;
 
 	wxString m_strSynonym;
 };
