@@ -64,11 +64,6 @@ public:
 	// ibWebWindow
 	virtual wxString GetControlType() const override { return wxT("frame"); }
 
-	// Back-compat surface. Desktop code reaches through this to get
-	// the wx host for parent-window resolution; web has no wx frame,
-	// so we return nullptr and expect callers that actually need a
-	// native parent to guard against it.
-	virtual wxFrame* GetFrameHandler() const override { return nullptr; }
 
 	virtual void SetTitle(const wxString& strTitle) override { m_title = strTitle; }
 	virtual void SetStatusText(const wxString& strStatus, int number = 0) override;

@@ -25,7 +25,6 @@ protected:
 public:
 
 	virtual ~ibBackendDocFrame() = default;
-	virtual wxFrame* GetFrameHandler() const = 0;
 
 	// Session this frame drives. Desktop: the single process session,
 	// forwarded from appData->GetMainSession(). Web (ibWebFrame): the

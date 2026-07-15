@@ -60,11 +60,10 @@ That is what makes `wenterprise-server.exe` possible: N per-cookie sessions in o
 each with its own frame ([ARCHITECTURE.md](ARCHITECTURE.md)). A process-wide `theMainFrame`
 would have made the web host unbuildable.
 
-The contract itself stays GUI-free apart from one handle:
+The contract itself is now GUI-free, with no exception left:
 
 ```cpp
 class BACKEND_API ibBackendDocFrame {
-    virtual wxFrame* GetFrameHandler() const = 0;
     virtual ibSession* GetSession() const { return nullptr; }   // default: headless / pre-session
     virtual ibMetaData* FindMetadataByPath(const wxString& strFileName) const { return nullptr; }
     virtual void BackendError(const wxString& file, const wxString& docPath, long line, const wxString& msg) const {}
@@ -79,6 +78,15 @@ class BACKEND_API ibBackendDocFrame {
 
 Every method has a **safe default** (`nullptr` / no-op) — a headless run has no frame, and
 backend code calling these must simply get nothing back rather than crash.
+
+> **`GetFrameHandler()` is gone.** It was the one method here that named a widget
+> (`virtual wxFrame*`), and it turned out **nobody called it**: the desktop returned
+> `s_instance`, `ibWebFrame` returned `nullptr` with a comment telling callers to guard —
+> callers that never existed. Third dead hook of its kind, after `RefreshPGProperty` and
+> `OnEventRefresh` ([property-system.md § 4](property-system.md)), and the pattern is worth
+> naming: **where the core handed a UI type outward, the need had usually already gone.**
+> The obligation outlived its purpose, not the other way round. If a native parent is ever
+> needed again, it belongs on the frontend side of this interface, not in its signature.
 
 Two session links on the frame:
 

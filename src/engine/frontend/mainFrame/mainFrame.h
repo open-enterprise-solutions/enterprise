@@ -109,8 +109,6 @@ public:
 	virtual wxAuiToolBar* GetMainFrameToolbar() const { return m_mainFrameToolbar; }
 	virtual wxAuiToolBar* GetDocToolbar() const { return m_docToolbar; }
 
-	virtual wxFrame* GetFrameHandler() const { return s_instance; }
-
 	virtual ibPropertyObject* GetProperty() const;
 	virtual bool SetProperty(ibPropertyObject* prop);
 
