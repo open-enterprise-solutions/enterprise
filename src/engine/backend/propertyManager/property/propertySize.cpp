@@ -1,8 +1,23 @@
 #include "propertySize.h"
+#include "backend/propertyManager/property/variant/variantSize.h"
 #include "backend/serialize/dataBuilder.h"
 #include "backend/system/value/valueSize.h"
 
 wxObject* (*ibPropertySize::ms_propertySize)(const wxString&, const wxString&, const wxSize&) = nullptr;
+
+////////////////////////////////////////////////////////////////////////
+
+wxVariantData* ibPropertySize::CreateVariantData(const wxSize& val)
+{
+	return new ibVariantDataSize(val);
+}
+
+wxSize ibPropertySize::GetValueAsSize() const
+{
+	return get_cell_variant<ibVariantDataSize>()->GetSize();
+}
+
+////////////////////////////////////////////////////////////////////////
 
 //base property for "size"
 bool ibPropertySize::SetDataValue(const ibValue& varPropVal)

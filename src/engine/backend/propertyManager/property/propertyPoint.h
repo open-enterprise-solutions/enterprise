@@ -3,23 +3,15 @@
 
 #include "backend/propertyManager/propertyObject.h"
 
-//base property for "size"
+//base property for "point"
 class BACKEND_API ibPropertyPoint : public ibProperty {
-	wxVariant CreateVariantData(const wxPoint& val) const {
-		wxVariant newValue;
-		newValue << val;
-		return newValue;
-	}
+	wxVariantData* CreateVariantData(const wxPoint& val);
 public:
 
-	wxPoint GetValueAsPoint() const {
-		wxPoint point;
-		point << m_propValue;
-		return point;
-	}
+	wxPoint GetValueAsPoint() const;
 	wxString GetValueAsString() const { return typeConv::PointToString(GetValueAsPoint()); }
 
-	void SetValue(const wxPoint& val) { ibProperty::SetValue(CreateVariantData(val)); }
+	void SetValue(const wxPoint& val) { m_propValue = CreateVariantData(val); }
 	void SetValue(const wxString& val) { SetValue(typeConv::StringToPoint(val)); }
 
 	ibPropertyPoint(ibPropertyCategory* cat, const wxString& name, const wxPoint& p = wxDefaultPosition)

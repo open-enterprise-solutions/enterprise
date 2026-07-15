@@ -295,6 +295,8 @@
     <ClInclude Include="propertyManager\property\variant\variantNumber.h" />
     <ClInclude Include="propertyManager\property\variant\variantOwner.h" />
     <ClInclude Include="propertyManager\property\variant\variantPicture.h" />
+    <ClInclude Include="propertyManager\property\variant\variantPoint.h" />
+    <ClInclude Include="propertyManager\property\variant\variantSize.h" />
     <ClInclude Include="propertyManager\property\variant\variantRecord.h" />
     <ClInclude Include="propertyManager\property\variant\variantSource.h" />
     <ClInclude Include="propertyManager\property\variant\variantSpreadsheet.h" />
@@ -686,6 +688,8 @@
     <ClCompile Include="propertyManager\property\variant\variantNumber.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantOwner.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantPicture.cpp" />
+    <ClCompile Include="propertyManager\property\variant\variantPoint.cpp" />
+    <ClCompile Include="propertyManager\property\variant\variantSize.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantRecord.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantSource.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantSpreadsheet.cpp" />

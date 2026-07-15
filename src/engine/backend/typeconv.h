@@ -19,14 +19,25 @@
 		systemVal =	NAME;							\
 	}
 
-#include <wx/artprov.h>
 #include <wx/tokenzr.h>
-// NOTE: load-bearing transitively — typeconv.h is pulled in via backend_core.h
-// across the backend, and this include is what currently provides wxPGProperty /
-// WXVARIANT to the backend property system (propertyObject.h, propertyNumber.h,
-// propertyEnum.h, propertyList.h) and wxFileName to wxFileName consumers. It can
-// only be dropped once propgrid is moved out of the backend property layer.
-#include <wx/propgrid/propgrid.h>
+#include <wx/filename.h>
+
+// This header is a GUI utility that happens to live in the backend: it art-provides
+// bitmaps, crosses out an invalid one with a wxMemoryDC + wxPen, and maps strings to
+// wxSystemColour. It used to get all of that transitively from <wx/propgrid/propgrid.h>
+// — and since backend_core.h includes this file, that made propgrid a de-facto prefix
+// header for every backend TU. The property layer no longer needs propgrid at all
+// (choices travel as ibPropertyChoiceList, point/size live in ibVariantDataPoint /
+// ibVariantDataSize), so what is left is this file's OWN dependencies, named honestly.
+// Moving these conversions to the frontend, where a device context belongs, is its own arc.
+#include <wx/artprov.h>
+#include <wx/gdicmn.h>
+#include <wx/colour.h>
+#include <wx/font.h>
+#include <wx/bitmap.h>
+#include <wx/dcmemory.h>
+#include <wx/pen.h>
+#include <wx/settings.h>
 
 namespace typeConv
 {

@@ -667,6 +667,12 @@
     <ClInclude Include="propertyManager\property\variant\variantPicture.h">
       <Filter>propertyManager\property\variant</Filter>
     </ClInclude>
+    <ClInclude Include="propertyManager\property\variant\variantPoint.h">
+      <Filter>propertyManager\property\variant</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\variant\variantSize.h">
+      <Filter>propertyManager\property\variant</Filter>
+    </ClInclude>
     <ClInclude Include="propertyManager\property\variant\variantRecord.h">
       <Filter>propertyManager\property\variant</Filter>
     </ClInclude>
@@ -1634,6 +1640,12 @@
       <Filter>propertyManager\property\variant</Filter>
     </ClCompile>
     <ClCompile Include="propertyManager\property\variant\variantPicture.cpp">
+      <Filter>propertyManager\property\variant</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\variant\variantPoint.cpp">
+      <Filter>propertyManager\property\variant</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\variant\variantSize.cpp">
       <Filter>propertyManager\property\variant</Filter>
     </ClCompile>
     <ClCompile Include="propertyManager\property\variant\variantRecord.cpp">

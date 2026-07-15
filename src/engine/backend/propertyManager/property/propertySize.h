@@ -5,20 +5,12 @@
 
 //base property for "size"
 class BACKEND_API ibPropertySize : public ibProperty {
-	wxVariant CreateVariantData(const wxSize& val) const {
-		wxVariant newValue;
-		newValue << val;
-		return newValue;
-	}
+	wxVariantData* CreateVariantData(const wxSize& val);
 public:
-	wxSize GetValueAsSize() const {
-		wxSize size;
-		size << m_propValue;
-		return size;
-	}
+	wxSize GetValueAsSize() const;
 	wxString GetValueAsString() const { return typeConv::SizeToString(GetValueAsSize()); }
 
-	void SetValue(const wxSize& val) { ibProperty::SetValue(CreateVariantData(val)); }
+	void SetValue(const wxSize& val) { m_propValue = CreateVariantData(val); }
 	void SetValue(const wxString& val) { SetValue(typeConv::StringToSize(val)); }
 
 	ibPropertySize(ibPropertyCategory* cat, const wxString& name, const wxSize& s = wxDefaultSize)

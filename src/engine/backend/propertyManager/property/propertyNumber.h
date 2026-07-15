@@ -51,7 +51,7 @@ public:
 
 //base property for "integer"
 class BACKEND_API ibPropertyInteger : public ibProperty {
-	wxVariant CreateVariantData(const int& val) const { return WXVARIANT(val); }
+	wxVariant CreateVariantData(const int& val) const { return wxVariant((long)val); }   // WXVARIANT<int> IS wxVariant((long)v) — propgriddefs.h
 public:
 
 	void SetValue(const int& val) { m_propValue = CreateVariantData(val); }
@@ -108,7 +108,7 @@ public:
 
 //base property for "unsigned integer"
 class BACKEND_API ibPropertyUInteger : public ibProperty {
-	wxVariant CreateVariantData(const unsigned int& val) const { return WXVARIANT((long)val); }
+	wxVariant CreateVariantData(const unsigned int& val) const { return wxVariant((long)val); }
 public:
 
 	void SetValue(const unsigned int& val) { m_propValue = CreateVariantData(val); }
