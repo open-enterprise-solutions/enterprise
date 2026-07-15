@@ -107,6 +107,12 @@ void SetValue(const bool boolean) { m_propValue = boolean; }
 wxPropertyGrid. The seam is a static function-pointer slot per property type, and a return
 type of `wxObject*` — the most derived type backend is allowed to name:
 
+> **`wxObject*` is the whole rule, and it is now actually held.** The backend includes no
+> propgrid header and names no wxPG type. What travels through a slot is either a plain
+> value (`const ibNumber&`, `const wxPoint&`) or a backend type — `ibPropertyChoiceList`
+> for the choice-based ones (§4.1). Anything richer belongs on the far side: the front
+> converts, because the front owns the widget.
+
 ```cpp
 // backend/propertyManager/property/propertyBoolean.h
 virtual wxObject* GetPGProperty() const {
@@ -147,6 +153,42 @@ public:
   by convention, enforced only by the slot's signature.
 - Registration order is static-initialisation order across a DLL — fine here because the
   slots are only *read* later, on first inspector render.
+
+### 4.1 What a slot may carry — `ibPropertyChoiceList`
+
+A slot's payload has the same rule as its return type: backend types only. Three properties
+offer a list to pick from — `ibPropertyList`, `ibPropertyEnum<T>`, `ibEventAction` — and each
+used to compose a **`wxPGChoices`** and pass it through. That inverted the seam: the core
+built the editor's own type, and it is the reason propgrid had to reach the whole backend.
+
+The data was ours all along (`ibPropertyOptionList` / `ibEventOptionList` carry label + id +
+bitmap; the enum generates the same triple from its creator). Only the *conversion* sat on
+the wrong side. So the slot carries
+
+```cpp
+class BACKEND_API ibPropertyChoiceList {   // propertyObject.h
+    void Add(const wxString& label, long id, const wxBitmap& bmp = wxNullBitmap);
+    unsigned int GetCount() const;
+    wxString GetLabel(unsigned int) const;
+    long GetId(unsigned int) const;
+    const wxBitmap& GetBitmap(unsigned int) const;
+};
+```
+
+and `advpropList` / `advpropEnum` / `advpropEventTool` build the `wxPGChoices` themselves.
+Three hand-rolled conversions became one type.
+
+The same reasoning removed the last propgrid dependency: `ibPropertyPoint` / `ibPropertySize`
+stored their value via `variant << point`, whose operators come from
+`WX_PG_DECLARE_VARIANT_DATA_EXPORTED(wxPoint)` in `propgriddefs.h`. They now use
+`ibVariantDataPoint` / `ibVariantDataSize` (`property/variant/`), shaped exactly like
+`ibVariantDataNumber`. **The backend no longer includes propgrid at all.**
+
+> What that clean-up exposed is worth keeping: the dependencies were never absent, only
+> hidden behind `typeconv.h` → propgrid → everything. `interfaceHelper.h` lived on `<set>`
+> without saying so, and the frontend's own `prop.h` took `wxPGFlags` **from the backend** —
+> the core was handing the grid library to the UI layer. A prefix header does not remove
+> dependencies; it removes the *record* of them.
 
 ---
 
@@ -703,18 +745,6 @@ not own, so queued grid events must not outlive it.
   drift the naming plan should sweep.
 - The `.h`/`.cpp` split in `advprop/` is nominal: several of those `.cpp` files are only a
   loader object, which is why their headers are empty.
-- **propgrid still reaches the backend property layer — and it is no longer about the
-  metaobjects.** With the notifier in (§5.3) no metaobject vtable names a wxPG type, but
-  three files still *build* one: `eventAction.h`, `propertyEnum.h`, `propertyList.h` compose
-  a `wxPGChoices` and pass it **through** the slot
-  (`ms_propertyEnum(…, const wxPGChoices&, …)`) — which is exactly what §4 says backend may
-  not do (`wxObject*` is the limit). They reach it transitively: `typeconv.h` includes
-  `<wx/propgrid/propgrid.h>` and is pulled in by `backend_core.h`, i.e. by every backend TU.
-  The data is already backend-side — `ibPropertyList::m_listPropValue` has
-  `GetItemCount / GetItemLabel / GetItemId / GetItemBitmap` — so `wxPGChoices` here is a
-  converter standing on the wrong side of the seam; handing the list over and letting the
-  front build the choices removes it rather than abstracts it. (`GetValueList()` also
-  `const_cast`s `this` to invoke its functor.)
 - **The 32 slots have no key.** A property is the one type in the engine with no
   `ibClassKind` ([../CLAUDE.md](../CLAUDE.md) §6): lacking an id to dispatch on, the seam
   encodes the type *in the signature* — hence one slot per value type, paired with its
@@ -723,5 +753,11 @@ not own, so queued grid events must not outlive it.
   suffices; everything in it is reachable from the property itself
   (`GetPropertyObject / GetLabel / GetName / GetValue`). A property kind + a frontend
   registry keyed by clsid would collapse all 32 into one renderer contract and let
-  `GetPGProperty()` leave the backend entirely. Not attempted yet; the choice-list three
-  above are the smaller, self-contained first step.
+  `GetPGProperty()` leave the backend entirely. This is the remaining structural debt here.
+- **`GetValueList()` `const_cast`s `this`** to invoke its functor (`propertyList.h`) — the
+  functor fills the list, so the read is not really const. Worth straightening when that
+  file is next touched.
+- **The link line still lists `wxmsw33ud_propgrid`, `_aui`, `_stc`** in `backend.vcxproj`
+  even though the code names none of them (the only AUI mention in the backend is a comment
+  in `firebirdCommon.h`). Whether the import libs still create a real dependency is a
+  question for a build, not a grep — but the code side is clear.
