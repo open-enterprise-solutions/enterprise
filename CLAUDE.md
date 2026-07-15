@@ -63,6 +63,8 @@ enterprise/
 │   ├── pictures.md           # three picture kinds, one description
 │   ├── serialization-io.md   # ibWriter/ibReader, chunks, compression (⚠ licensing)
 │   ├── ROADMAP.md            # state of the platform — landed / in flight / not built
+│   ├── naming-plan.md        # PLAN — file/folder renames (nothing applied)
+│   ├── restructure-plan.md   # PLAN — grouping, declaration order, naming (nothing applied)
 │   └── configuration-compare.md  # Compare/Merge feature — walker, model, Apply paths
 └── src/
     ├── 3rdparty/wxWidgets/  # Submodule (wxWidgets 3.3.2)
