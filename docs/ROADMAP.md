@@ -65,6 +65,7 @@ Do not treat these as "nearly done"; they are captured thinking.
 |---|---|---|
 | Data policy (declarative platform policies) | [data-policy-arc.md](data-policy-arc.md) | **DESIGN — no code yet** (2026-06-11 session) |
 | Register totals (trigger-maintained) | [register-totals-strategy.md](register-totals-strategy.md) | **proposal — NOTHING implemented** |
+| Metadata hot reload (change classes + tombstone door) | [metadata-hot-reload.md](metadata-hot-reload.md) | **PROPOSAL — NOTHING implemented** (2026-07-15 session) |
 | Memory allocator | [memory-allocator.md](memory-allocator.md) | **design note / NOT STARTED** |
 | Metadata storage container | [metadata-storage-container-arc.md](metadata-storage-container-arc.md) | design detailed; **backlog** until size / partial-save triggers fire |
 
