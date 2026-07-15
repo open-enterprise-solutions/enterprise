@@ -857,7 +857,8 @@ void ibMetadataTree::AddCatalogItem(ibValueMetaObject* metaObject, const wxTreeI
 	ibValueMetaObjectRecordDataRef* metaObjectValue = metaObject->ConvertToType<ibValueMetaObjectRecordDataRef>();
 	wxASSERT(metaObject);
 
-	// attribute listconst wxTreeItemId& hAttributes = AppendGroupItem(hParentID, g_metaAttributeCLSID, objectAttributesName);
+	// attribute list
+	const wxTreeItemId& hAttributes = AppendGroupItem(hParentID, g_metaAttributeCLSID, objectAttributesName);
 	for (auto attribute : metaObjectValue->GetAttributeArrayObject()) {
 
 		if (attribute->IsDeleted())
@@ -875,7 +876,8 @@ void ibMetadataTree::AddCatalogItem(ibValueMetaObject* metaObject, const wxTreeI
 		AppendItem(hAttributes, attribute);
 	}
 
-	// tabular section list// tabular sections group. A catalog / document is ALWAYS a reference, so its table is the
+	// tabular section list
+	// tabular sections group. A catalog / document is ALWAYS a reference, so its table is the
 	// DB-backed MD_TBLR; processors / reports are RAM, so MD_TBL. Set explicitly per object kind.
 	const wxTreeItemId& hTables = AppendGroupItem(hParentID, g_metaTableRefCLSID, objectTablesName);
 	for (auto metaTable : metaObjectValue->GetTableArrayObject()) {
@@ -909,7 +911,8 @@ void ibMetadataTree::AddCatalogItem(ibValueMetaObject* metaObject, const wxTreeI
 		}
 	}
 
-	// formsconst wxTreeItemId& hForm = AppendGroupItem(hParentID, g_metaFormCLSID, objectFormsName);
+	// forms
+	const wxTreeItemId& hForm = AppendGroupItem(hParentID, g_metaFormCLSID, objectFormsName);
 	for (auto metaForm : metaObjectValue->GetFormArrayObject()) {
 
 		if (metaForm->IsDeleted())
@@ -924,7 +927,8 @@ void ibMetadataTree::AddCatalogItem(ibValueMetaObject* metaObject, const wxTreeI
 		AppendItem(hForm, metaForm);
 	}
 
-	// tablesconst wxTreeItemId& hTemplates = AppendGroupItem(hParentID, g_metaTemplateCLSID, objectTemplatesName);
+	// tables
+	const wxTreeItemId& hTemplates = AppendGroupItem(hParentID, g_metaTemplateCLSID, objectTemplatesName);
 	for (auto metaTemplate : metaObjectValue->GetTemplateArrayObject()) {
 
 		if (metaTemplate->IsDeleted())
@@ -946,7 +950,8 @@ void ibMetadataTree::AddDocumentItem(ibValueMetaObject* metaObject, const wxTree
 
 	wxASSERT(metaObject);
 
-	// attribute listconst wxTreeItemId& hAttributes = AppendGroupItem(hParentID, g_metaAttributeCLSID, objectAttributesName);
+	// attribute list
+	const wxTreeItemId& hAttributes = AppendGroupItem(hParentID, g_metaAttributeCLSID, objectAttributesName);
 	for (auto attribute : metaObjectValue->GetAttributeArrayObject()) {
 
 		if (attribute->IsDeleted())
@@ -964,7 +969,8 @@ void ibMetadataTree::AddDocumentItem(ibValueMetaObject* metaObject, const wxTree
 		AppendItem(hAttributes, attribute);
 	}
 
-	// tabular section list// tabular sections group. A catalog / document is ALWAYS a reference, so its table is the
+	// tabular section list
+	// tabular sections group. A catalog / document is ALWAYS a reference, so its table is the
 	// DB-backed MD_TBLR; processors / reports are RAM, so MD_TBL. Set explicitly per object kind.
 	const wxTreeItemId& hTables = AppendGroupItem(hParentID, g_metaTableRefCLSID, objectTablesName);
 	for (auto metaTable : metaObjectValue->GetTableArrayObject()) {
@@ -997,7 +1003,8 @@ void ibMetadataTree::AddDocumentItem(ibValueMetaObject* metaObject, const wxTree
 		}
 	}
 
-	// formsconst wxTreeItemId& hForm = AppendGroupItem(hParentID, g_metaFormCLSID, objectFormsName);
+	// forms
+	const wxTreeItemId& hForm = AppendGroupItem(hParentID, g_metaFormCLSID, objectFormsName);
 	for (auto metaForm : metaObjectValue->GetFormArrayObject()) {
 
 		if (metaForm->IsDeleted())
@@ -1012,7 +1019,8 @@ void ibMetadataTree::AddDocumentItem(ibValueMetaObject* metaObject, const wxTree
 		AppendItem(hForm, metaForm);
 	}
 
-	// tablesconst wxTreeItemId& hTemplates = AppendGroupItem(hParentID, g_metaTemplateCLSID, objectTemplatesName);
+	// tables
+	const wxTreeItemId& hTemplates = AppendGroupItem(hParentID, g_metaTemplateCLSID, objectTemplatesName);
 	for (auto metaTemplate : metaObjectValue->GetTemplateArrayObject()) {
 
 		if (metaTemplate->IsDeleted())
@@ -1050,7 +1058,8 @@ void ibMetadataTree::AddEnumerationItem(ibValueMetaObject* metaObject, const wxT
 		AppendItem(hEnums, metaEnumerations);
 	}
 
-	// formsconst wxTreeItemId& hForm = AppendGroupItem(hParentID, g_metaFormCLSID, objectFormsName);
+	// forms
+	const wxTreeItemId& hForm = AppendGroupItem(hParentID, g_metaFormCLSID, objectFormsName);
 	for (auto metaForm : metaObjectValue->GetFormArrayObject()) {
 
 		if (metaForm->IsDeleted())
@@ -1065,7 +1074,8 @@ void ibMetadataTree::AddEnumerationItem(ibValueMetaObject* metaObject, const wxT
 		AppendItem(hForm, metaForm);
 	}
 
-	// tablesconst wxTreeItemId& hTemplates = AppendGroupItem(hParentID, g_metaTemplateCLSID, objectTemplatesName);
+	// tables
+	const wxTreeItemId& hTemplates = AppendGroupItem(hParentID, g_metaTemplateCLSID, objectTemplatesName);
 	for (auto metaTemplate : metaObjectValue->GetTemplateArrayObject()) {
 
 		if (metaTemplate->IsDeleted())
@@ -1086,7 +1096,8 @@ void ibMetadataTree::AddDataProcessorItem(ibValueMetaObject* metaObject, const w
 	ibValueMetaObjectRecordData* metaObjectValue = metaObject->ConvertToType <ibValueMetaObjectRecordData>();
 	wxASSERT(metaObjectValue);
 
-	// attribute listconst wxTreeItemId& hAttributes = AppendGroupItem(hParentID, g_metaAttributeCLSID, objectAttributesName);
+	// attribute list
+	const wxTreeItemId& hAttributes = AppendGroupItem(hParentID, g_metaAttributeCLSID, objectAttributesName);
 	for (auto attribute : metaObjectValue->GetAttributeArrayObject()) {
 
 		if (attribute->IsDeleted())
@@ -1104,7 +1115,8 @@ void ibMetadataTree::AddDataProcessorItem(ibValueMetaObject* metaObject, const w
 		AppendItem(hAttributes, attribute);
 	}
 
-	// tabular section list// tabular sections group. A catalog / document is ALWAYS a reference, so its table is the
+	// tabular section list
+	// tabular sections group. A catalog / document is ALWAYS a reference, so its table is the
 	// DB-backed MD_TBLR; processors / reports are RAM, so MD_TBL. Set explicitly per object kind.
 	const wxTreeItemId& hTables = AppendGroupItem(hParentID, g_metaTableCLSID, objectTablesName);
 	for (auto metaTable : metaObjectValue->GetTableArrayObject()) {
@@ -1137,7 +1149,8 @@ void ibMetadataTree::AddDataProcessorItem(ibValueMetaObject* metaObject, const w
 		}
 	}
 
-	// formsconst wxTreeItemId& hForm = AppendGroupItem(hParentID, g_metaFormCLSID, objectFormsName);
+	// forms
+	const wxTreeItemId& hForm = AppendGroupItem(hParentID, g_metaFormCLSID, objectFormsName);
 	for (auto metaForm : metaObjectValue->GetFormArrayObject()) {
 
 		if (metaForm->IsDeleted())
@@ -1152,7 +1165,8 @@ void ibMetadataTree::AddDataProcessorItem(ibValueMetaObject* metaObject, const w
 		AppendItem(hForm, metaForm);
 	}
 
-	// tablesconst wxTreeItemId& hTemplates = AppendGroupItem(hParentID, g_metaTemplateCLSID, objectTemplatesName);
+	// tables
+	const wxTreeItemId& hTemplates = AppendGroupItem(hParentID, g_metaTemplateCLSID, objectTemplatesName);
 	for (auto metaTemplate : metaObjectValue->GetTemplateArrayObject()) {
 
 		if (metaTemplate->IsDeleted())
@@ -1173,7 +1187,8 @@ void ibMetadataTree::AddReportItem(ibValueMetaObject* metaObject, const wxTreeIt
 	ibValueMetaObjectRecordData* metaObjectValue = metaObject->ConvertToType<ibValueMetaObjectRecordData>();
 	wxASSERT(metaObjectValue);
 
-	// attribute listconst wxTreeItemId& hAttributes = AppendGroupItem(hParentID, g_metaAttributeCLSID, objectAttributesName);
+	// attribute list
+	const wxTreeItemId& hAttributes = AppendGroupItem(hParentID, g_metaAttributeCLSID, objectAttributesName);
 	for (auto attribute : metaObjectValue->GetAttributeArrayObject()) {
 
 		if (attribute->IsDeleted())
@@ -1191,7 +1206,8 @@ void ibMetadataTree::AddReportItem(ibValueMetaObject* metaObject, const wxTreeIt
 		AppendItem(hAttributes, attribute);
 	}
 
-	// tabular section list// tabular sections group. A catalog / document is ALWAYS a reference, so its table is the
+	// tabular section list
+	// tabular sections group. A catalog / document is ALWAYS a reference, so its table is the
 	// DB-backed MD_TBLR; processors / reports are RAM, so MD_TBL. Set explicitly per object kind.
 	const wxTreeItemId& hTables = AppendGroupItem(hParentID, g_metaTableCLSID, objectTablesName);
 	for (auto metaTable : metaObjectValue->GetTableArrayObject()) {
@@ -1223,7 +1239,8 @@ void ibMetadataTree::AddReportItem(ibValueMetaObject* metaObject, const wxTreeIt
 		}
 	}
 
-	// formsconst wxTreeItemId& hForm = AppendGroupItem(hParentID, g_metaFormCLSID, objectFormsName);
+	// forms
+	const wxTreeItemId& hForm = AppendGroupItem(hParentID, g_metaFormCLSID, objectFormsName);
 	for (auto metaForm : metaObjectValue->GetFormArrayObject()) {
 
 		if (metaForm->IsDeleted())
@@ -1238,7 +1255,8 @@ void ibMetadataTree::AddReportItem(ibValueMetaObject* metaObject, const wxTreeIt
 		AppendItem(hForm, metaForm);
 	}
 
-	// tablesconst wxTreeItemId& hTemplates = AppendGroupItem(hParentID, g_metaTemplateCLSID, objectTemplatesName);
+	// tables
+	const wxTreeItemId& hTemplates = AppendGroupItem(hParentID, g_metaTemplateCLSID, objectTemplatesName);
 	for (auto metaTemplate : metaObjectValue->GetTemplateArrayObject()) {
 
 		if (metaTemplate->IsDeleted())
@@ -1259,7 +1277,8 @@ void ibMetadataTree::AddInformationRegisterItem(ibValueMetaObject* metaObject, c
 	ibValueMetaObjectRegisterData* metaObjectValue = metaObject->ConvertToType<ibValueMetaObjectRegisterData>();
 	wxASSERT(metaObjectValue);
 
-	// dimension listconst wxTreeItemId& hDimensions = AppendGroupItem(hParentID, g_metaDimensionCLSID, objectDimensionsName);
+	// dimension list
+	const wxTreeItemId& hDimensions = AppendGroupItem(hParentID, g_metaDimensionCLSID, objectDimensionsName);
 	for (auto metaDimension : metaObjectValue->GetDimensionArrayObject()) {
 
 		if (metaDimension->IsDeleted())
@@ -1277,7 +1296,8 @@ void ibMetadataTree::AddInformationRegisterItem(ibValueMetaObject* metaObject, c
 		AppendItem(hDimensions, metaDimension);
 	}
 
-	// resource listconst wxTreeItemId& hResources = AppendGroupItem(hParentID, g_metaResourceCLSID, objectResourcesName);
+	// resource list
+	const wxTreeItemId& hResources = AppendGroupItem(hParentID, g_metaResourceCLSID, objectResourcesName);
 	for (auto metaResource : metaObjectValue->GetResourceArrayObject()) {
 
 		if (metaResource->IsDeleted())
@@ -1295,7 +1315,8 @@ void ibMetadataTree::AddInformationRegisterItem(ibValueMetaObject* metaObject, c
 		AppendItem(hResources, metaResource);
 	}
 
-	// attribute listconst wxTreeItemId& hAttributes = AppendGroupItem(hParentID, g_metaAttributeCLSID, objectAttributesName);
+	// attribute list
+	const wxTreeItemId& hAttributes = AppendGroupItem(hParentID, g_metaAttributeCLSID, objectAttributesName);
 	for (auto attribute : metaObjectValue->GetAttributeArrayObject()) {
 
 		if (attribute->IsDeleted())
@@ -1313,7 +1334,8 @@ void ibMetadataTree::AddInformationRegisterItem(ibValueMetaObject* metaObject, c
 		AppendItem(hAttributes, attribute);
 	}
 
-	// formsconst wxTreeItemId& hForm = AppendGroupItem(hParentID, g_metaFormCLSID, objectFormsName);
+	// forms
+	const wxTreeItemId& hForm = AppendGroupItem(hParentID, g_metaFormCLSID, objectFormsName);
 	for (auto metaForm : metaObjectValue->GetFormArrayObject()) {
 
 		if (metaForm->IsDeleted())
@@ -1328,7 +1350,8 @@ void ibMetadataTree::AddInformationRegisterItem(ibValueMetaObject* metaObject, c
 		AppendItem(hForm, metaForm);
 	}
 
-	// tablesconst wxTreeItemId& hTemplates = AppendGroupItem(hParentID, g_metaTemplateCLSID, objectTemplatesName);
+	// tables
+	const wxTreeItemId& hTemplates = AppendGroupItem(hParentID, g_metaTemplateCLSID, objectTemplatesName);
 	for (auto metaTemplate : metaObjectValue->GetTemplateArrayObject()) {
 
 		if (metaTemplate->IsDeleted())
@@ -1349,7 +1372,8 @@ void ibMetadataTree::AddAccumulationRegisterItem(ibValueMetaObject* metaObject, 
 	ibValueMetaObjectRegisterData* metaObjectValue = metaObject->ConvertToType<ibValueMetaObjectRegisterData>();
 	wxASSERT(metaObjectValue);
 
-	// dimension listconst wxTreeItemId& hDimensions = AppendGroupItem(hParentID, g_metaDimensionCLSID, objectDimensionsName);
+	// dimension list
+	const wxTreeItemId& hDimensions = AppendGroupItem(hParentID, g_metaDimensionCLSID, objectDimensionsName);
 	for (auto metaDimension : metaObjectValue->GetDimensionArrayObject()) {
 
 		if (metaDimension->IsDeleted())
@@ -1367,7 +1391,8 @@ void ibMetadataTree::AddAccumulationRegisterItem(ibValueMetaObject* metaObject, 
 		AppendItem(hDimensions, metaDimension);
 	}
 
-	// resource listconst wxTreeItemId& hResources = AppendGroupItem(hParentID, g_metaResourceCLSID, objectResourcesName);
+	// resource list
+	const wxTreeItemId& hResources = AppendGroupItem(hParentID, g_metaResourceCLSID, objectResourcesName);
 	for (auto metaResource : metaObjectValue->GetResourceArrayObject()) {
 
 		if (metaResource->IsDeleted())
@@ -1385,7 +1410,8 @@ void ibMetadataTree::AddAccumulationRegisterItem(ibValueMetaObject* metaObject, 
 		AppendItem(hResources, metaResource);
 	}
 
-	// attribute listconst wxTreeItemId& hAttributes = AppendGroupItem(hParentID, g_metaAttributeCLSID, objectAttributesName);
+	// attribute list
+	const wxTreeItemId& hAttributes = AppendGroupItem(hParentID, g_metaAttributeCLSID, objectAttributesName);
 	for (auto attribute : metaObjectValue->GetAttributeArrayObject()) {
 
 		if (attribute->IsDeleted())
@@ -1403,7 +1429,8 @@ void ibMetadataTree::AddAccumulationRegisterItem(ibValueMetaObject* metaObject, 
 		AppendItem(hAttributes, attribute);
 	}
 
-	// formsconst wxTreeItemId& hForm = AppendGroupItem(hParentID, g_metaFormCLSID, objectFormsName);
+	// forms
+	const wxTreeItemId& hForm = AppendGroupItem(hParentID, g_metaFormCLSID, objectFormsName);
 	for (auto metaForm : metaObjectValue->GetFormArrayObject()) {
 
 		if (metaForm->IsDeleted())
@@ -1418,7 +1445,8 @@ void ibMetadataTree::AddAccumulationRegisterItem(ibValueMetaObject* metaObject, 
 		AppendItem(hForm, metaForm);
 	}
 
-	// tablesconst wxTreeItemId& hTemplates = AppendGroupItem(hParentID, g_metaTemplateCLSID, objectTemplatesName);
+	// tables
+	const wxTreeItemId& hTemplates = AppendGroupItem(hParentID, g_metaTemplateCLSID, objectTemplatesName);
 	for (auto metaTemplate : metaObjectValue->GetTemplateArrayObject()) {
 
 		if (metaTemplate->IsDeleted())

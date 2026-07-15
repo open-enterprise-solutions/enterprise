@@ -485,10 +485,14 @@ bool ibDataReportTree::RenameMetaObject(ibValueMetaObject* obj, const wxString& 
 void ibDataReportTree::InitTree()
 {
 	m_treeREPORTS = AppendRootItem(g_metaReportCLSID, _("Reports"));
-	// attribute listm_treeATTRIBUTES = AppendGroupItem(m_treeREPORTS, g_metaAttributeCLSID, objectAttributesName);
-	// tabular section listm_treeTABLES = AppendGroupItem(m_treeREPORTS, g_metaTableCLSID, objectTablesName);
-	// formsm_treeFORM = AppendGroupItem(m_treeREPORTS, g_metaFormCLSID, objectFormsName);
-	// tablesm_treeTEMPLATES = AppendGroupItem(m_treeREPORTS, g_metaTemplateCLSID, objectTablesName);
+	// attribute list
+	m_treeATTRIBUTES = AppendGroupItem(m_treeREPORTS, g_metaAttributeCLSID, objectAttributesName);
+	// tabular section list
+	m_treeTABLES = AppendGroupItem(m_treeREPORTS, g_metaTableCLSID, objectTablesName);
+	// forms
+	m_treeFORM = AppendGroupItem(m_treeREPORTS, g_metaFormCLSID, objectFormsName);
+	// tables
+	m_treeTEMPLATES = AppendGroupItem(m_treeREPORTS, g_metaTemplateCLSID, objectTablesName);
 }
 
 void ibDataReportTree::ActivateTree()
@@ -549,7 +553,8 @@ void ibDataReportTree::FillData()
 	//append default value 
 	m_defaultFormValue->AppendString(_("<not selected>"));
 
-	// attribute listfor (auto attribute : commonMetadata->GetAttributeArrayObject()) {
+	// attribute list
+	for (auto attribute : commonMetadata->GetAttributeArrayObject()) {
 		if (attribute->IsDeleted())
 			continue;
 		if (attribute->GetClassType() == g_metaPredefinedAttributeCLSID)
@@ -557,7 +562,8 @@ void ibDataReportTree::FillData()
 		AppendItem(m_treeATTRIBUTES, attribute);
 	}
 
-	// tabular section listfor (auto metaTable : commonMetadata->GetTableArrayObject()) {
+	// tabular section list
+	for (auto metaTable : commonMetadata->GetTableArrayObject()) {
 		if (metaTable->IsDeleted())
 			continue;
 		const wxTreeItemId& hItem = AppendGroupItem(m_treeTABLES, g_metaAttributeCLSID, metaTable);
@@ -570,13 +576,15 @@ void ibDataReportTree::FillData()
 		}
 	}
 
-	// formsfor (auto metaForm : commonMetadata->GetFormArrayObject()) {
+	// forms
+	for (auto metaForm : commonMetadata->GetFormArrayObject()) {
 		if (metaForm->IsDeleted())
 			continue;
 		AppendItem(m_treeFORM, metaForm);
 	}
 
-	// tablesfor (auto metaTemplates : commonMetadata->GetTemplateArrayObject()) {
+	// tables
+	for (auto metaTemplates : commonMetadata->GetTemplateArrayObject()) {
 		if (metaTemplates->IsDeleted())
 			continue;
 		AppendItem(m_treeTEMPLATES, metaTemplates);

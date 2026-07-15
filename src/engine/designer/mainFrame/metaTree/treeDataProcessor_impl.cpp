@@ -482,10 +482,14 @@ bool ibDataProcessorTree::RenameMetaObject(ibValueMetaObject* obj, const wxStrin
 void ibDataProcessorTree::InitTree()
 {
 	m_treeDATAPROCESSORS = AppendRootItem(g_metaDataProcessorCLSID, _("DataProcessor"));
-	// attribute listm_treeATTRIBUTES = AppendGroupItem(m_treeDATAPROCESSORS, g_metaAttributeCLSID, objectAttributesName);
-	// tabular section listm_treeTABLES = AppendGroupItem(m_treeDATAPROCESSORS, g_metaTableCLSID, objectTablesName);
-	// formsm_treeFORM = AppendGroupItem(m_treeDATAPROCESSORS, g_metaFormCLSID, objectFormsName);
-	// templatesm_treeTEMPLATES = AppendGroupItem(m_treeDATAPROCESSORS, g_metaTemplateCLSID, objectTablesName);
+	// attribute list
+	m_treeATTRIBUTES = AppendGroupItem(m_treeDATAPROCESSORS, g_metaAttributeCLSID, objectAttributesName);
+	// tabular section list
+	m_treeTABLES = AppendGroupItem(m_treeDATAPROCESSORS, g_metaTableCLSID, objectTablesName);
+	// forms
+	m_treeFORM = AppendGroupItem(m_treeDATAPROCESSORS, g_metaFormCLSID, objectFormsName);
+	// templates
+	m_treeTEMPLATES = AppendGroupItem(m_treeDATAPROCESSORS, g_metaTemplateCLSID, objectTablesName);
 }
 
 void ibDataProcessorTree::ActivateTree()
@@ -550,7 +554,8 @@ void ibDataProcessorTree::FillData()
 	//append default value 
 	m_defaultFormValue->AppendString(_("<not selected>"));
 
-	// attribute listfor (auto attribute : commonMetadata->GetAttributeArrayObject()) {
+	// attribute list
+	for (auto attribute : commonMetadata->GetAttributeArrayObject()) {
 		if (attribute->IsDeleted())
 			continue;
 		if (attribute->GetClassType() == g_metaPredefinedAttributeCLSID)
@@ -558,7 +563,8 @@ void ibDataProcessorTree::FillData()
 		AppendItem(m_treeATTRIBUTES, attribute);
 	}
 
-	// tabular section listfor (auto metaTable : commonMetadata->GetTableArrayObject()) {
+	// tabular section list
+	for (auto metaTable : commonMetadata->GetTableArrayObject()) {
 		if (metaTable->IsDeleted())
 			continue;
 		const wxTreeItemId& hItem = AppendGroupItem(m_treeTABLES, g_metaAttributeCLSID, metaTable);
@@ -571,13 +577,15 @@ void ibDataProcessorTree::FillData()
 		}
 	}
 
-	// formsfor (auto metaForm : commonMetadata->GetFormArrayObject()) {
+	// forms
+	for (auto metaForm : commonMetadata->GetFormArrayObject()) {
 		if (metaForm->IsDeleted())
 			continue;
 		AppendItem(m_treeFORM, metaForm);
 	}
 
-	// tablesfor (auto metaTemplates : commonMetadata->GetTemplateArrayObject()) {
+	// tables
+	for (auto metaTemplates : commonMetadata->GetTemplateArrayObject()) {
 		if (metaTemplates->IsDeleted())
 			continue;
 		const wxTreeItemId& hItem = AppendItem(m_treeTEMPLATES, metaTemplates);
