@@ -23,13 +23,19 @@ public:
 } g_toolLoader;
 
 ibPGEventToolProperty::ibPGEventToolProperty(const wxString& label, const wxString& strName,
-	const wxPGChoices& choices,
+	const ibPropertyChoiceList& choices,
 	const wxVariant& value) : wxPGProperty(label, strName)
 {
 	ibVariantDataAction* dataAction = property_cast(value, ibVariantDataAction);
 	wxASSERT(dataAction);
 
-	m_choices.Assign(choices);
+	wxPGChoices ch;
+	for (unsigned int idx = 0; idx < choices.GetCount(); idx++) {
+		wxPGChoiceEntry item(choices.GetLabel(idx), choices.GetId(idx));
+		item.SetBitmap(choices.GetBitmap(idx));
+		ch.Add(item);
+	}
+	m_choices.Assign(ch);
 	m_value = wxVariant(0L);
 	
 	const ibActionDescription& actionDesc = dataAction->GetValueAsActionDesc();

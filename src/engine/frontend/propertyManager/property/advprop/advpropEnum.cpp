@@ -9,8 +9,10 @@ class ibPropertyEnumLoader
 public:
 	ibPropertyEnumLoader()
 	{
-		ibPropertyEnumBase::ms_propertyEnum = [](const wxString& label, const wxString& name, const wxPGChoices& choices, const int& value) -> wxObject* {
-			wxPGChoices ch(choices);
+		ibPropertyEnumBase::ms_propertyEnum = [](const wxString& label, const wxString& name, const ibPropertyChoiceList& choices, const int& value) -> wxObject* {
+			wxPGChoices ch;
+			for (unsigned int idx = 0; idx < choices.GetCount(); idx++)
+				ch.Add(choices.GetLabel(idx), choices.GetId(idx));
 			return new wxEnumProperty(label, name, ch, value);
 		};
 	}

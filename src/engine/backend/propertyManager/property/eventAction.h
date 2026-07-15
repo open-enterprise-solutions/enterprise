@@ -8,15 +8,14 @@
 class BACKEND_API ibEventAction : public ibEvent {
 
 	wxVariantData* CreateVariantData(const ibPropertyObject* property, const ibActionDescription& act) const;
-	wxPGChoices GetEventList() const {
-		wxPGChoices constants;
+	ibPropertyChoiceList GetEventList() const {
+		ibPropertyChoiceList constants;
 		for (unsigned int idx = 0; idx < m_listPropValue.GetItemCount(); idx++) {
-			wxPGChoiceEntry item(
+			constants.Add(
 				m_listPropValue.GetItemLabel(idx),
-				m_listPropValue.GetItemId(idx)
+				m_listPropValue.GetItemId(idx),
+				m_listPropValue.GetItemBitmap(idx)
 			);
-			item.SetBitmap(m_listPropValue.GetItemBitmap(idx));
-			constants.Add(item);
 		}
 		return constants;
 	}
@@ -185,7 +184,7 @@ public:
 
 public:
 
-	static wxObject* (*ms_propertyEventAction)(const wxString&, const wxString&, const wxPGChoices&, const wxVariant&);
+	static wxObject* (*ms_propertyEventAction)(const wxString&, const wxString&, const ibPropertyChoiceList&, const wxVariant&);
 
 private:
 

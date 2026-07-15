@@ -44,11 +44,11 @@ public:
 
 public:
 
-	static wxObject* (*ms_propertyEnum)(const wxString&, const wxString&, const wxPGChoices&, const int&);
+	static wxObject* (*ms_propertyEnum)(const wxString&, const wxString&, const ibPropertyChoiceList&, const int&);
 
 protected:
 
-	virtual wxPGChoices GetEnumList() const = 0;
+	virtual ibPropertyChoiceList GetEnumList() const = 0;
 };
 
 #include "backend/compiler/enumUnit.h"
@@ -96,8 +96,8 @@ public:
 	};
 
 protected:
-	virtual wxPGChoices GetEnumList() const {
-		wxPGChoices list;
+	virtual ibPropertyChoiceList GetEnumList() const {
+		ibPropertyChoiceList list;
 		for (unsigned int idx = 0; idx < m_enumCreator->GetEnumCount(); idx++) {
 			list.Add(m_enumCreator->GetEnumDesc(idx), m_enumCreator->GetEnumValue(idx));
 		}

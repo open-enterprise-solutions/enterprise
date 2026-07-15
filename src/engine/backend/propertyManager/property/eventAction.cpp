@@ -3,7 +3,7 @@
 #include "backend/serialize/dataBuilder.h"   // ibDataValue — node value (Binary, transitional)
 
 // get property for grid
-wxObject* (*ibEventAction::ms_propertyEventAction)(const wxString&, const wxString&, const wxPGChoices&, const wxVariant&) = nullptr;
+wxObject* (*ibEventAction::ms_propertyEventAction)(const wxString&, const wxString&, const ibPropertyChoiceList&, const wxVariant&) = nullptr;
 
 //////////////////////////////////////////////////////////////////
 

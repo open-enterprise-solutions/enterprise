@@ -6,17 +6,15 @@
 //base property for "list"
 class BACKEND_API ibPropertyList : public ibProperty {
 
-	wxPGChoices GetValueList() const {
-		wxPGChoices constants;
-		if (m_functor->Invoke(const_cast<ibPropertyList*>(this))) {
-			for (unsigned int idx = 0; idx < m_listPropValue.GetItemCount(); idx++) {
-				wxPGChoiceEntry item(
-					m_listPropValue.GetItemLabel(idx),
-					m_listPropValue.GetItemId(idx)
-				);
-				item.SetBitmap(m_listPropValue.GetItemBitmap(idx));
-				constants.Add(item);
-			}
+	// GetPGProperty already invoked the functor, so this only reads what it filled.
+	ibPropertyChoiceList GetValueList() const {
+		ibPropertyChoiceList constants;
+		for (unsigned int idx = 0; idx < m_listPropValue.GetItemCount(); idx++) {
+			constants.Add(
+				m_listPropValue.GetItemLabel(idx),
+				m_listPropValue.GetItemId(idx),
+				m_listPropValue.GetItemBitmap(idx)
+			);
 		}
 		return constants;
 	}
@@ -225,7 +223,7 @@ public:
 
 public:
 
-	static wxObject* (*ms_propertyList)(const wxString&, const wxString&, const wxPGChoices&, const int&);
+	static wxObject* (*ms_propertyList)(const wxString&, const wxString&, const ibPropertyChoiceList&, const int&);
 
 protected:
 

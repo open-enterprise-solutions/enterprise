@@ -2,7 +2,7 @@
 #include "backend/serialize/dataBuilder.h"
 
 //get property for grid
-wxObject* (*ibPropertyList::ms_propertyList)(const wxString&, const wxString&, const wxPGChoices&, const int&) = nullptr;
+wxObject* (*ibPropertyList::ms_propertyList)(const wxString&, const wxString&, const ibPropertyChoiceList&, const int&) = nullptr;
 
 //base property for "list"
 bool ibPropertyList::SetDataValue(const ibValue& varPropVal)

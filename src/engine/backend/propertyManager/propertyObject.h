@@ -114,6 +114,38 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////////
 
+// The choices a property offers — label + id + optional bitmap, in backend terms.
+//
+// This is what a list / enum / event-action property HANDS OVER; turning it into the
+// editor's own choice type is the front's job. It exists because the three of them used
+// to build a wxPGChoices right here and pass it through the ms_property* slot, which the
+// seam does not allow (wxObject* is the most derived type backend may name — §4 of
+// docs/property-system.md) and which dragged propgrid into every backend TU. The data
+// was already ours; only the conversion sat on the wrong side.
+class BACKEND_API ibPropertyChoiceList {
+
+	struct ibPropertyChoiceItem {
+		ibPropertyChoiceItem(const wxString& label, long id, const wxBitmap& bmp)
+			: m_label(label), m_id(id), m_bmp(bmp) {}
+		wxString m_label;
+		long m_id;
+		wxBitmap m_bmp;
+	};
+
+	std::vector<ibPropertyChoiceItem> m_items;
+
+public:
+
+	void Add(const wxString& label, long id, const wxBitmap& bmp = wxNullBitmap) {
+		m_items.emplace_back(label, id, bmp);
+	}
+
+	unsigned int GetCount() const { return (unsigned int)m_items.size(); }
+	wxString GetLabel(unsigned int idx) const { return m_items[idx].m_label; }
+	long GetId(unsigned int idx) const { return m_items[idx].m_id; }
+	const wxBitmap& GetBitmap(unsigned int idx) const { return m_items[idx].m_bmp; }
+};
+
 class BACKEND_API ibBackendProperty {
 protected:
 
