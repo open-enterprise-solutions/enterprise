@@ -11,6 +11,7 @@
     "date": "Date",
     "linq": "LINQ — collection queries",
     "query": "Data queries",
+    "rls": "Row-level security (RLS)",
     "guide": "Guide"
   }
 }

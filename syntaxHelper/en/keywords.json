@@ -1502,6 +1502,37 @@
         "ces"
       ],
       "reviewed": true
+    },
+    {
+      "id": "kw.Restrict",
+      "name_local": "Restrict",
+      "name_en": "Restrict",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "linq",
+        "rls"
+      ],
+      "signature": "restrict <Var> in <Source> [join <Var2> in <Table> on <Var.Key> <Op> <Var2.Key>]* [where <Condition>]",
+      "description": "The concise form of an access restriction in a Role's module: narrows a source and returns it — assign the result back to `Source` so the intent to narrow is visible.\n\nIt compiles to the same `Source.Join(…).Where(…)` chain as the explicit form: every clause folds **straight into the query** and pushes down to the database. It is **not** RAM iteration.\n\n- **join** — one `on <Var.Key> <Op> <Var2.Key>` condition; the operators `= <> < <= > >=` come from the shared expression grammar. The joined table is any expression: a `Data.*` source, a computed value table, or a source carrying its own `.Where(…)` (handy to pre-filter the joined table by the current user). The join acts as a **semi-join** — it filters without multiplying rows.\n- **where** — one condition against the source alias; every operator, `and` / `or` / `not`, dot-walk, a captured local (pushed into the query as a parameter), and `in` — `<Field> in (value, …)` or `<Field> in <Array>`.\n- **There is no `select`** — a restriction carries conditions only; it projects nothing.\n\n**Limitation:** `where` sees only the **source** alias; a condition on a joined alias (`where a.Field = …`) does not resolve — pre-filter that table instead via `join a in Table.Where(…)`.",
+      "syntax_block": "Source = restrict s in Source\n             join a in Data.Registers.WarehouseAccess.Where(Function(a) { Return a.User = CurrentUser(); })\n                 on s.Warehouse = a.Warehouse\n         where s.Code in (myCodes);",
+      "syntax_block_ves": "Source = restrict s in Source\n             join a in Data.Registers.WarehouseAccess.Where(Function(a) Return a.User = CurrentUser(); EndFunction)\n                 on s.Warehouse = a.Warehouse\n         where s.Code in (myCodes);",
+      "parameters": "",
+      "return_descr": "Returns the same source carrying the folded restriction.",
+      "example": "",
+      "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+      "see_also": [
+        "guide.rls",
+        "ev.Role.OnAccessRead",
+        "cls.QueryDecorator",
+        "kw.Join",
+        "kw.Where"
+      ],
+      "modes": [
+        "ves",
+        "ces"
+      ],
+      "reviewed": true
     }
   ]
 }
