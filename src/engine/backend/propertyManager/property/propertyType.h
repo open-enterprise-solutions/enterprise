@@ -46,7 +46,8 @@ public:
 
 	static wxObject* (*ms_propertyType)(ibPropertyObject*, ibSelectorDataType, const wxString&, const wxString&, const wxVariant&);
 
-protected:
+	// Which types this property may offer. Public because the FRONT builds the editor now
+	// and reads it there — it was protected while the property built its own wxPGProperty.
 	ibSelectorDataType GetFilterDataType() const;
 };
 

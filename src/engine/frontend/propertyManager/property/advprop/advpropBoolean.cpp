@@ -3,14 +3,16 @@
 #include <wx/propgrid/advprops.h>
 
 #include "backend/propertyManager/property/propertyBoolean.h"
-#include "frontend/propertyManager/property/private/prop.h"
+#include "frontend/propertyManager/property/private/propertyRegistry.h"
 
-// register frontend property 
+// register frontend property
 class ibPropertyBooleanLoader
 {
 public:
 	ibPropertyBooleanLoader()
 	{
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(wxBoolProperty, ibPropertyBoolean::ms_propertyBoolean);
+		ibPropertyRegistry::Register([](ibPropertyBoolean* prop) -> wxPGProperty* {
+			return new wxBoolProperty(prop->GetLabel(), prop->GetName(), prop->GetValueAsBoolean());
+		});
 	}
 }g_boolLoader;

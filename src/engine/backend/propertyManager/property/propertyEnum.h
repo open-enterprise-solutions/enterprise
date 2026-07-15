@@ -32,6 +32,11 @@ public:
 		return nullptr;
 	}
 
+	// The choices this enum offers. Public because the FRONT builds the editor now and has
+	// to read them (it was protected while the property built its own wxPGProperty and only
+	// needed them inside GetPGProperty).
+	virtual ibPropertyChoiceList GetEnumList() const = 0;
+
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal) = 0;
 	virtual bool GetDataValue(ibValue& pvarPropVal) const = 0;
@@ -45,10 +50,6 @@ public:
 public:
 
 	static wxObject* (*ms_propertyEnum)(const wxString&, const wxString&, const ibPropertyChoiceList&, const int&);
-
-protected:
-
-	virtual ibPropertyChoiceList GetEnumList() const = 0;
 };
 
 #include "backend/compiler/enumUnit.h"

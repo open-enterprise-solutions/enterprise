@@ -926,6 +926,9 @@
     <ClCompile Include="propertyManager\property\advprop\advpropBoolean.cpp">
       <Filter>propertyManager\property\advprop</Filter>
     </ClCompile>
+    <ClCompile Include="propertyManager\property\private\propertyRegistry.cpp">
+      <Filter>propertyManager\property\private</Filter>
+    </ClCompile>
     <ClCompile Include="propertyManager\property\advprop\advpropChartOfCharacteristicTypes.cpp">
       <Filter>propertyManager\property\advprop</Filter>
     </ClCompile>
@@ -1642,6 +1645,9 @@
       <Filter>propertyManager</Filter>
     </ClInclude>
     <ClInclude Include="propertyManager\property\private\prop.h">
+      <Filter>propertyManager\property\private</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\private\propertyRegistry.h">
       <Filter>propertyManager\property\private</Filter>
     </ClInclude>
     <ClInclude Include="propertyManager\property\advprop\advpropEvent.h">

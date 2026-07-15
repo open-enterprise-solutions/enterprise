@@ -3,7 +3,8 @@
 #include "backend/propertyManager/property/propertyType.h"
 #include "backend/propertyManager/property/variant/variantType.h"
 
-#include "frontend/propertyManager/property/private/prop.h"
+#include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_* — the grid flags
+#include "frontend/propertyManager/property/private/propertyRegistry.h"
 #include "frontend/propertyManager/propertyEditor.h"
 
 #define icon_size 16
@@ -20,7 +21,12 @@ class ibPropertyTypeLoader
 public:
 	ibPropertyTypeLoader()
 	{
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(ibPGTypeProperty, ibPropertyType::ms_propertyType);
+		// The five-parameter slot dissolves: owner and the type filter were always the
+		// property's own, the slot just carried them across.
+		ibPropertyRegistry::Register([](ibPropertyType* prop) -> wxPGProperty* {
+			return new ibPGTypeProperty(prop->GetPropertyObject(), prop->GetFilterDataType(),
+				prop->GetLabel(), prop->GetName(), prop->GetValue());
+		});
 	}
 }g_typeLoader;
 

@@ -51,6 +51,7 @@
     <ClCompile Include="mainFrame\settings\stlutility.cpp" />
     <ClCompile Include="mainFrame\settings\xmlutility.cpp" />
     <ClCompile Include="propertyManager\propertyEditor.cpp" />
+    <ClCompile Include="propertyManager\property\private\propertyRegistry.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropBoolean.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropColour.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropDate.cpp" />
@@ -516,6 +517,7 @@
     <ClInclude Include="propertyManager\property\advprop\advpropString.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropType.h" />
     <ClInclude Include="propertyManager\property\private\prop.h" />
+    <ClInclude Include="propertyManager\property\private\propertyRegistry.h" />
     <ClInclude Include="res\resource.h" />
     <ClInclude Include="visualView\controlCtor.h" />
     <ClInclude Include="visualView\controlEnum.h" />
