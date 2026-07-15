@@ -29,12 +29,6 @@ public:
 
 	virtual bool IsEmptyProperty() const { return GetValueAsNumber().IsZero(); }
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (ms_propertyNumber != nullptr)
-			return ms_propertyNumber(m_propLabel, m_propName, GetValueAsNumber());
-		return nullptr;
-	};
 
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);
@@ -46,7 +40,6 @@ public:
 
 public:
 
-	static wxObject* (*ms_propertyNumber)(const wxString&, const wxString&, const ibNumber&);
 };
 
 //base property for "integer"
@@ -74,12 +67,6 @@ public:
 
 	virtual bool IsEmptyProperty() const { return GetValueAsInteger() == 0; }
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (ms_propertyInteger != nullptr)
-			return ms_propertyInteger(m_propLabel, m_propName, GetValueAsInteger());
-		return nullptr;
-	};
 
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal) {
@@ -103,7 +90,6 @@ public:
 
 public:
 
-	static wxObject* (*ms_propertyInteger)(const wxString&, const wxString&, const int&);
 };
 
 //base property for "unsigned integer"
@@ -131,12 +117,6 @@ public:
 
 	virtual bool IsEmptyProperty() const { return GetValueAsUInteger() == 0; }
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (ms_propertyUInteger != nullptr)
-			return ms_propertyUInteger(m_propLabel, m_propName, GetValueAsUInteger());
-		return nullptr;
-	};
 
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal) {
@@ -161,7 +141,6 @@ public:
 
 public:
 
-	static wxObject* (*ms_propertyUInteger)(const wxString&, const wxString&, const unsigned int&);
 };
 
 #endif

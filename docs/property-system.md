@@ -17,7 +17,7 @@ mechanism reads that one declaration:
 
 | Surface | Entry | Lives |
 |---|---|---|
-| **Designer editor** | `GetPGProperty()` → a `wxPGProperty` (§4); presentation pushed back via `ibPropertyObjectNotifier` (§5.3) | frontend only (null when unloaded / no notifier registered) |
+| **Designer editor** | `ibPropertyRegistry::Create()` — the FRONT builds the widget (§4); presentation pushed back via `ibPropertyObjectNotifier` (§5.3) | frontend only; the backend declares nothing about it |
 | **Runtime script** | `SetDataValue` / `GetDataValue` over `ibValue` (§7) | backend, headless-safe |
 | **Serialization** | `ReadNodeValue` / `WriteNodeValue` over `ibDataValue` (§6) | backend, headless-safe |
 | **Copy / paste** | `CopyNodeValue` / `PasteNodeValue` (§6) | backend, headless-safe |
@@ -101,58 +101,149 @@ void SetValue(const bool boolean) { m_propValue = boolean; }
 
 ---
 
-## 4. The backend/frontend seam — a function-pointer slot
+## 4. The backend/frontend seam — the frontend registry
 
-`backend.dll` owns no UI **code**, yet each property must produce a `wxPGProperty` for
-wxPropertyGrid. The seam is a static function-pointer slot per property type, and a return
-type of `wxObject*` — the most derived type backend is allowed to name:
+**A property does not build its own editor. It does not know one exists.**
 
-> **`wxObject*` is the whole rule, and it is now actually held.** The backend includes no
-> propgrid header and names no wxPG type. What travels through a slot is either a plain
-> value (`const ibNumber&`, `const wxPoint&`) or a backend type — `ibPropertyChoiceList`
-> for the choice-based ones (§4.1). Anything richer belongs on the far side: the front
-> converts, because the front owns the widget.
-
-```cpp
-// backend/propertyManager/property/propertyBoolean.h
-virtual wxObject* GetPGProperty() const {
-    if (ms_propertyBoolean != nullptr)
-        return ms_propertyBoolean(m_propLabel, m_propName, GetValueAsBoolean());
-    return nullptr;   // frontend not loaded → no editor, no crash
-}
-static wxObject* (*ms_propertyBoolean)(const wxString&, const wxString&, const bool&);
-```
-
-```cpp
-// backend/propertyManager/property/propertyBoolean.cpp — the slot starts empty
-wxObject* (*ibPropertyBoolean::ms_propertyBoolean)(const wxString&, const wxString&, const bool&) = nullptr;
-```
-
-The frontend fills it by **static initialisation** — a loader object whose constructor
-runs when `frontend.dll` loads:
+`backend.dll` owns no UI code and now no UI *obligation*: no `GetPGProperty()`, no slots,
+no wxPG type named anywhere, no propgrid include. A backend property is data — a value in
+a variant, typed getters, node serialization. The correspondence to a widget lives
+entirely on the front, in `ibPropertyRegistry`
+(`frontend/propertyManager/property/private/propertyRegistry.{h,cpp}`):
 
 ```cpp
 // frontend/propertyManager/property/advprop/advpropBoolean.cpp — the whole file
 class ibPropertyBooleanLoader {
 public:
     ibPropertyBooleanLoader() {
-        ibPG_IMPLEMENT_PROPERTY_CALLBACK(wxBoolProperty, ibPropertyBoolean::ms_propertyBoolean);
+        ibPropertyRegistry::Register([](ibPropertyBoolean* prop) -> wxPGProperty* {
+            return new wxBoolProperty(prop->GetLabel(), prop->GetName(), prop->GetValueAsBoolean());
+        });
     }
 } g_boolLoader;
 ```
 
-(`ibPG_IMPLEMENT_PROPERTY_CALLBACK` expands to `AssocProperty<name>(value)` —
-`frontend/propertyManager/property/private/prop.h`.)
+Read what one registration carries: **which backend type**, **which widget**, and **how to
+read the value out of it** — all three, in one place, at once. They cannot drift apart.
 
-**There are 32 such slots.** The consequences are worth stating plainly:
+### 4.1 Why there is no type key
 
-- A headless run (daemon / codeRunner) never loads the frontend, every slot stays
-  `nullptr`, `GetPGProperty()` returns null, and nothing breaks — properties still
-  serialise and still carry data.
-- Each property type is one backend file + one frontend `advprop*` file. The pairing is
-  by convention, enforced only by the slot's signature.
-- Registration order is static-initialisation order across a DLL — fine here because the
-  slots are only *read* later, on first inspector render.
+The obvious way to map A to B is a third thing: a string, an enum, a clsid, a
+`type_index`. There is none here, and that is deliberate — **the `dynamic_cast` IS the
+match**:
+
+```cpp
+template <typename typeMaker>
+static void Register(typeMaker maker, int priority = Priority_Exact) {
+    using typeProp = typename ibMakerArg<typeMaker>::type;   // deduced from the lambda's parameter
+    GetEntries().push_back({ priority,
+        [maker](ibBackendProperty* property) -> wxPGProperty* {
+            typeProp* typed = dynamic_cast<typeProp*>(property);
+            return typed != nullptr ? maker(typed) : nullptr;   // "not mine" → next entry
+        }});
+}
+```
+
+It answers *"is this mine?"* and yields the typed pointer in **one step**. Three
+consequences worth knowing:
+
+- **The type is named once** — in the lambda's own parameter, deduced from `operator()`.
+  No `Register<Foo>(...)` plus `Foo*` in the body.
+- **It matches by HIERARCHY**, which a `typeid`/`type_index` table cannot:
+  `ibPropertyEnum<T>` has **22 instantiations**, and one maker taking `ibPropertyEnumBase*`
+  covers them all.
+- **Hence `priority`.** A base swallows anything derived from it, so a base maker must run
+  after the concrete ones — `Priority_Base` states that where the registration is, rather
+  than relying on static-initialisation order across a DLL, which would be a coin toss.
+  Two cases exist today: `ibPropertyEnumBase` (22 heirs) and `ibPropertyUString`
+  (`ibPropertyUEString` derives from it).
+
+The registry is keyed on **`ibBackendProperty`**, not `ibProperty`: `ibProperty` and
+`ibEvent` are siblings under it (§2) and the inspector renders both. One registry, both
+branches — a maker just names the side it wants.
+
+### 4.2 The two deliberate escapes
+
+```cpp
+ibPropertyRegistry::RegisterNoEditor<ibPropertyContainer<>>();
+```
+
+`nullptr` from a maker already means *"not my type"*, so a type that has **no editor by
+design** (`ibPropertyContainer` carries composition, not an editable value) would be
+indistinguishable from a forgotten `Register`. `RegisterNoEditor` states the absence, and
+`Create` answers null quietly for it.
+
+Everything else asserts:
+
+```cpp
+wxFAIL_MSG(wxString::Format(
+    wxT("ibPropertyRegistry: no frontend property registered for '%s' (property '%s'). ..."),
+    wxString::FromAscii(typeid(*property).name()), property->GetName()));
+```
+
+An unregistered type with a live front is a **programming error** — the property would
+silently vanish from the grid. Headless registers nothing and never reaches `Create`, so
+the assert costs it nothing. Note what this replaced: 32 separate `if (ms_x != nullptr)`
+checks. Headless is no longer a special case — the question simply does not arise.
+
+### 4.3 What a maker may read
+
+Everything the old 32 slots ferried was **already on the property**, which is why one
+contract replaced them all:
+
+| the slot used to pass | the maker reads |
+|---|---|
+| `m_propLabel` / `m_propName` | `GetLabel()` / `GetName()` |
+| `m_propValue` | `GetValue()` |
+| `ibPropertyObject* owner` | `GetPropertyObject()` |
+| `GetFilterDataType()` (the 5-param `Type` slot) | the property's own method |
+| `wxPGChoices` | `GetValueList()` / `GetEnumList()` → `ibPropertyChoiceList` (§4.4) |
+
+Two properties need naming by hand rather than by base: `ibPropertyInnerModule<T>` is a
+template with **no non-template base**, so unlike `ibPropertyEnumBase` it cannot be caught
+by one registration — its two instantiations are registered individually
+(`advpropModule.cpp`). It also hands over `GetMetaObject()`, not `GetPropertyObject()` —
+a module property points at the metaobject it edits.
+
+### 4.4 What a maker may NOT be handed — `ibPropertyChoiceList`
+
+A list / enum / event-action property offers choices to pick from. Those three used to
+compose a **`wxPGChoices`** in the backend and pass it out — the core building the
+editor's own type, and the reason propgrid had to reach every backend TU.
+
+The data was always ours (`ibPropertyOptionList` / `ibEventOptionList` carry label + id +
+bitmap; the enum generates the same triple from its creator). Only the *conversion* sat on
+the wrong side. So the backend hands over
+
+```cpp
+class BACKEND_API ibPropertyChoiceList {   // propertyObject.h
+    void Add(const wxString& label, long id, const wxBitmap& bmp = wxNullBitmap);
+    unsigned int GetCount() const;
+    wxString GetLabel(unsigned int) const;
+    long GetId(unsigned int) const;
+    const wxBitmap& GetBitmap(unsigned int) const;
+};
+```
+
+and `advpropList` / `advpropEnum` / `advpropEventTool` build the `wxPGChoices` themselves.
+
+`GetValueList()` / `GetEnumList()` are **public and non-const**: the front reads them, and
+they fire their own functor — which is what *fills* the list, so it belongs where the list
+is read. It used to sit inside `GetPGProperty`, the only caller it had. Non-const because
+refilling mutates; the old `const` was a lie paid for with a `const_cast` on `this`.
+
+The same reasoning removed the last propgrid dependency: `ibPropertyPoint` /
+`ibPropertySize` stored their value via `variant << point`, whose operators come from
+`WX_PG_DECLARE_VARIANT_DATA_EXPORTED(wxPoint)` in `propgriddefs.h`. They now use
+`ibVariantDataPoint` / `ibVariantDataSize` (`property/variant/`), shaped exactly like
+`ibVariantDataNumber`.
+
+> **The lesson from the clean-up.** The dependencies were never absent, only hidden:
+> `typeconv.h` included propgrid and `backend_core.h` includes `typeconv.h`, so propgrid
+> was a de-facto prefix header for the whole backend — handing out `wxSharedPtr`,
+> `wxVector` and `<set>` to files with no relation to a grid. `interfaceHelper.h` lived on
+> `<set>` without saying so, and the frontend's own `prop.h` took `wxPGFlags` **from the
+> backend**. A prefix header does not remove dependencies; it removes the *record* of them.
 
 ### 4.1 What a slot may carry — `ibPropertyChoiceList`
 
@@ -553,20 +644,23 @@ class BACKEND_API ibVariantDataSpreadsheet : public wxVariantData {
 ```
 
 Read the chain as: **property → variant-data → `ibSpreadsheetDescription`**. At design
-time the inspector edits it through `ms_propertySpreadsheet`; at runtime the report reads
-the same descriptor out of the same property and builds an `ibBackendSpreadsheetObject`
-from it ([report-engine.md § 3](report-engine.md)). One template, two readers, zero
-copies of the storage.
+time the front builds its editor from the property (§4); at runtime the report reads the
+same descriptor out of the same property and builds an `ibBackendSpreadsheetObject` from
+it ([report-engine.md § 3](report-engine.md)). One template, two readers, zero copies of
+the storage.
 
 `GetValueAsSpreadsheetDesc()` returning a **non-const reference** is what lets the runtime
 work against the live descriptor — and is also why "generate live, do not cache" (§3)
 matters here: a cached copy of the table would go stale the moment the variant is written.
 
-Note the signature difference — a composite property's slot takes the **owner** and the
-raw variant, because its editor needs the object for context:
+A composite's maker needs the **owner** for context, and reads it off the property like
+everything else:
 
 ```cpp
-static wxObject* (*ms_propertySpreadsheet)(ibPropertyObject*, const wxString&, const wxString&, const wxVariant&);
+ibPropertyRegistry::Register([](ibPropertySpreadsheet* prop) -> wxPGProperty* {
+    return new ibPGHyperLinkProperty(prop->GetPropertyObject(), prop->GetLabel(),
+        prop->GetName(), prop->GetValue());
+});
 ```
 
 ---
@@ -577,7 +671,9 @@ static wxObject* (*ms_propertySpreadsheet)(ibPropertyObject*, const wxString&, c
 `wxPropertyGridManager`, reachable through the `objectInspector` macro singleton.
 
 Render walks the category tree (`CreateCategory` → `AddItems`), calls `GetProperty(prop)`
-→ `prop->GetPGProperty()` for each, appends the result, and records the mapping both ways:
+→ `ibPropertyRegistry::Create(prop)` for each, appends the result, and records the mapping
+both ways. It is one of **two** consumers — the other is `formEditor.cpp` (changing a form
+in enterprise mode), which does the same and keeps the same kind of map:
 
 ```cpp
 std::map<wxPGProperty*, ibProperty*> m_propMap;
@@ -732,28 +828,35 @@ not own, so queued grid events must not outlive it.
   property serialising against a null metaData would write null GUIDs ("binding loses its
   source"). Reach the const overload through a const pointer unless you truly own a mutable
   metaData.
-- **7 empty headers.** `advpropBoolean.h`, `advpropColour.h`, `advpropDate.h`,
-  `advpropEnum.h`, `advpropForm.h`, `advpropModule.h`, `advpropSpreadsheet.h` are **0
-  bytes** and still `#include`d by their `.cpp`. Dead includes — removal candidates for
-  the restructuring plan.
 - **A spreadsheet property renders as a hyperlink, by design.** `advpropSpreadsheet.cpp`
-  registers `ibPGHyperLinkProperty` into `ibPropertySpreadsheet::ms_propertySpreadsheet` —
-  a table is not editable in a grid row, so the inspector shows a link that opens the
-  spreadsheet editor (§8.4). Worth knowing before "fixing" the apparent type mismatch.
-- **Copy-pasted loader name.** That same file names its loader instance
-  `s_dateLoaderSpreadsheet` (from `advpropDate.cpp`). Cosmetic, but it is the kind of
-  drift the naming plan should sweep.
-- The `.h`/`.cpp` split in `advprop/` is nominal: several of those `.cpp` files are only a
-  loader object, which is why their headers are empty.
-- **The 32 slots have no key.** A property is the one type in the engine with no
-  `ibClassKind` ([../CLAUDE.md](../CLAUDE.md) §6): lacking an id to dispatch on, the seam
-  encodes the type *in the signature* — hence one slot per value type, paired with its
-  `advprop*` file by filename convention only. The composite slots
-  (`(ibPropertyObject*, label, name, const wxVariant&)`) already show that one shape
-  suffices; everything in it is reachable from the property itself
-  (`GetPropertyObject / GetLabel / GetName / GetValue`). A property kind + a frontend
-  registry keyed by clsid would collapse all 32 into one renderer contract and let
-  `GetPGProperty()` leave the backend entirely. This is the remaining structural debt here.
+  registers `ibPGHyperLinkProperty` for `ibPropertySpreadsheet` — a table is not editable
+  in a grid row, so the inspector shows a link that opens the spreadsheet editor (§8.4).
+  Worth knowing before "fixing" the apparent type mismatch. The same widget serves three
+  backend types (Form / Module / Spreadsheet) — a maker is a lambda, so the mapping was
+  never required to be one-to-one.
+- **`const_cast` survives in `ibPropertyList`** — `GetValueAsInteger() const` and
+  `GetDataValue() const` still cast `this` to fire the functor, and unlike `GetValueList`
+  they **cannot** simply drop `const`: their callers (`GetDataValue` / `WriteNodeValue` /
+  `IsEmptyProperty`) are `const` by the base's contract. The root is deeper than a cast:
+  `WriteNodeValue() const` — *serialization* — refills the option list through the functor,
+  so reading mutates. The honest fix is to admit the list is a **cache**
+  (`mutable ibPropertyOptionList m_listPropValue`; the logical state is `m_propValue`, the
+  list is derived) — but that runs into `bool (optClass::*)(ibPropertyList*)`: the handlers
+  are non-const, so const-correctness through the functor reaches every metaobject that
+  fills a list.
+- **`ibPropertyOptionList` and `ibEventOptionList` are near-duplicates** (label + id +
+  bitmap + value). Both now hand out a shared `ibPropertyChoiceList` (§4.4), but the
+  storage behind them is still two copies of the same idea.
+- **A property has no `ibClassKind`** ([../CLAUDE.md](../CLAUDE.md) §6) — the one type in
+  the engine without a kind. It is not needed today: the registry matches by
+  `dynamic_cast`, which beats a kind at this job (it follows the hierarchy). It would only
+  become necessary to *persist* "which property type is this" or to build properties
+  dynamically. Adding it before then would be premature.
+- 👀 **`ibPropertyOptionValue`** (`propertyList.h`) declares
+  `struct { ibValue* m_pValue, m_cValue; };` — an anonymous struct where `m_pValue` is a
+  pointer and `m_cValue` a **value**. Given `eValType_pointer` / `eValType_value`, the
+  intent looks union-like, but what exists is two independent fields, both always live.
+  Unverified; worth a fresh read.
 - **`GetValueList()` `const_cast`s `this`** to invoke its functor (`propertyList.h`) — the
   functor fills the list, so the read is not really const. Worth straightening when that
   file is next touched.

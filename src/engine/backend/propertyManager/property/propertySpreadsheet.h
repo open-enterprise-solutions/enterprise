@@ -31,13 +31,6 @@ public:
 
 	virtual bool IsEmptyProperty() const;
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (ms_propertySpreadsheet != nullptr)
-			return ms_propertySpreadsheet(m_owner, m_propLabel, m_propName, m_propValue);
-		return nullptr;
-	}
-
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
@@ -48,7 +41,6 @@ public:
 
 public:
 
-	static wxObject* (*ms_propertySpreadsheet)(ibPropertyObject*, const wxString&, const wxString&, const wxVariant&);
 };
 
 #endif

@@ -32,13 +32,6 @@ public:
 
 	virtual bool IsEmptyProperty() const;
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (ms_propertyPicture != nullptr)
-			return ms_propertyPicture(m_propLabel, m_propName, m_propValue);
-		return nullptr;
-	}
-
 	//set/Get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
@@ -49,7 +42,6 @@ public:
 
 public:
 
-	static wxObject* (*ms_propertyPicture)(const wxString&, const wxString&, const wxVariant&);
 };
 
 //base property for "external picture"
@@ -80,13 +72,6 @@ public:
 
 	virtual bool IsEmptyProperty() const;
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (ms_propertyExtPicture != nullptr)
-			return ms_propertyExtPicture(m_propLabel, m_propName, m_propValue);
-		return nullptr;
-	}
-
 	//set/Get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
@@ -97,7 +82,6 @@ public:
 
 public:
 
-	static wxObject* (*ms_propertyExtPicture)(const wxString&, const wxString&, const wxVariant&);
 };
 
 #endif

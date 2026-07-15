@@ -1,7 +1,8 @@
 #include "advpropFont.h"
 
 #include "backend/propertyManager/property/propertyFont.h"
-#include "frontend/propertyManager/property/private/prop.h"
+#include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frontend/propertyManager/property/private/propertyRegistry.h"
 
 // -----------------------------------------------------------------------
 // ibPGFontProperty
@@ -62,7 +63,9 @@ class ibPropertyFontLoader
 {
 public:
 	ibPropertyFontLoader() {
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(ibPGFontProperty, ibPropertyFont::ms_propertyFont);
+		ibPropertyRegistry::Register([](ibPropertyFont* prop) -> wxPGProperty* {
+			return new ibPGFontProperty(prop->GetLabel(), prop->GetName(), prop->GetValueAsFont());
+		});
 	}
 } g_fontLoader;
 

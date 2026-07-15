@@ -34,12 +34,6 @@ public:
 	}
 
 	// get property for grid — pass the OWNER to the frontend slot (like ibPropertyForm).
-	virtual wxObject* GetPGProperty() const override {
-		if (ms_propertyDynamicList != nullptr)
-			return ms_propertyDynamicList(m_owner, m_propLabel, m_propName, m_propValue);
-		return nullptr;
-	}
-
 	// Action property — no runtime data exchange and nothing to (de)serialize on
 	// the property cell itself. The dynamic-list settings are persisted by the
 	// OWNER (the form attribute), not by this property.
@@ -49,10 +43,6 @@ public:
 	virtual bool ReadNodeValue(const ibDataValue& /*value*/) override { return true; }
 	virtual bool WriteNodeValue(ibDataValue& /*value*/) const override { return true; }
 
-public:
-
-	// Wired at frontend load by ibPG_IMPLEMENT_PROPERTY_CALLBACK in advpropDynamicList.cpp.
-	static wxObject* (*ms_propertyDynamicList)(ibPropertyObject*, const wxString&, const wxString&, const wxVariant&);
 };
 
 #endif // __PROPERTY_DYNAMIC_LIST_H__

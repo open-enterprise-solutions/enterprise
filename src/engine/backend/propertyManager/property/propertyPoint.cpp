@@ -3,7 +3,6 @@
 #include "backend/serialize/dataBuilder.h"
 #include "backend/system/value/valuePoint.h"
 
-wxObject* (*ibPropertyPoint::ms_propertyPoint)(const wxString&,const wxString&,const wxPoint&) = nullptr;
 
 wxVariantData* ibPropertyPoint::CreateVariantData(const wxPoint& val)
 {

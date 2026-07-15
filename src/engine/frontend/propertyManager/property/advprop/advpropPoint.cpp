@@ -1,7 +1,8 @@
 #include "advpropPoint.h"
 
 #include "backend/propertyManager/property/propertyPoint.h"
-#include "frontend/propertyManager/property/private/prop.h"
+#include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frontend/propertyManager/property/private/propertyRegistry.h"
 
 // -----------------------------------------------------------------------
 // ibPGPointProperty
@@ -19,7 +20,9 @@ class ibPropertyPointerLoader
 public:
 	ibPropertyPointerLoader()
 	{
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(ibPGPointProperty, ibPropertyPoint::ms_propertyPoint);
+		ibPropertyRegistry::Register([](ibPropertyPoint* prop) -> wxPGProperty* {
+			return new ibPGPointProperty(prop->GetLabel(), prop->GetName(), prop->GetValueAsPoint());
+		});
 	}
 }g_pointerLoader;
 

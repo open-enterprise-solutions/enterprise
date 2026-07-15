@@ -2,7 +2,8 @@
 
 #include "backend/propertyManager/property/variant/variantOwner.h"
 
-#include "frontend/propertyManager/property/private/prop.h"
+#include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frontend/propertyManager/property/private/propertyRegistry.h"
 #include "frontend/propertyManager/propertyEditor.h"
 
 #define icon_size 16
@@ -19,7 +20,9 @@ class ibPropertyOwnerLoader
 public:
 	ibPropertyOwnerLoader()
 	{
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(ibPGOwnerProperty, ibPropertyOwner::ms_propertyOwner);
+		ibPropertyRegistry::Register([](ibPropertyOwner* prop) -> wxPGProperty* {
+			return new ibPGOwnerProperty(prop->GetPropertyObject(), prop->GetLabel(), prop->GetName(), prop->GetValue());
+		});
 	}
 }g_ownerLoader;
 

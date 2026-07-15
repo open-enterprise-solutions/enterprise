@@ -1,7 +1,8 @@
 #include "advpropSize.h"
 
 #include "backend/propertyManager/property/propertySize.h"
-#include "frontend/propertyManager/property/private/prop.h"
+#include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frontend/propertyManager/property/private/propertyRegistry.h"
 
 // -----------------------------------------------------------------------
 // ibPGSizeProperty
@@ -18,7 +19,9 @@ class ibPropertySizeLoader
 public:
 	ibPropertySizeLoader()
 	{
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(ibPGSizeProperty, ibPropertySize::ms_propertySize);
+		ibPropertyRegistry::Register([](ibPropertySize* prop) -> wxPGProperty* {
+			return new ibPGSizeProperty(prop->GetLabel(), prop->GetName(), prop->GetValueAsSize());
+		});
 	}
 }g_sizeLoader;
 

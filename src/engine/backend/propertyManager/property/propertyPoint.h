@@ -29,13 +29,6 @@ public:
 	{
 	}
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (ms_propertyPoint != nullptr)
-			return ms_propertyPoint(m_propLabel, m_propName, GetValueAsPoint());
-		return nullptr;
-	}
-
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
@@ -48,7 +41,6 @@ public:
 
 public:
 
-	static wxObject* (*ms_propertyPoint)(const wxString&, const wxString&, const wxPoint&);
 };
 
 #endif

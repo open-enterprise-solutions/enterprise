@@ -3,7 +3,8 @@
 #include "backend/propertyManager/property/eventControl.h"
 #include "backend/stringUtils.h"
 
-#include "frontend/propertyManager/property/private/prop.h"
+#include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frontend/propertyManager/property/private/propertyRegistry.h"
 
 // -----------------------------------------------------------------------
 // ibPGEventProperty
@@ -17,7 +18,10 @@ class ibPropertyEventLoader
 public:
 	ibPropertyEventLoader()
 	{
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(ibPGEventProperty, ibEventControl::ms_propertyEvent);
+		// the ibEvent side of the tree — same registry, it is keyed on ibBackendProperty
+		ibPropertyRegistry::Register([](ibEventControl* evt) -> wxPGProperty* {
+			return new ibPGEventProperty(evt->GetLabel(), evt->GetName(), evt->GetValue());
+		});
 	}
 } g_eventLoader;
 

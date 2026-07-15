@@ -1,8 +1,8 @@
-#include "advpropBoolean.h"
 
 #include <wx/propgrid/advprops.h>
 
 #include "backend/propertyManager/property/propertyBoolean.h"
+#include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frontend/propertyManager/property/private/propertyRegistry.h"
 
 // register frontend property

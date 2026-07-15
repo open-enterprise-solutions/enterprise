@@ -2,7 +2,6 @@
 #include "backend/serialize/dataBuilder.h"
 #include "backend/propertyManager/property/variant/variantOwner.h"
 
-wxObject* (*ibPropertyOwner::ms_propertyOwner)(ibPropertyObject*, const wxString&, const wxString&, const wxVariant&) = nullptr;
 
 ////////////////////////////////////////////////////////////////
 

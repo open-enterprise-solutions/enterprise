@@ -3,7 +3,6 @@
 #include "backend/serialize/dataBuilder.h"
 #include "backend/system/value/valueSize.h"
 
-wxObject* (*ibPropertySize::ms_propertySize)(const wxString&, const wxString&, const wxSize&) = nullptr;
 
 ////////////////////////////////////////////////////////////////////////
 

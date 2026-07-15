@@ -17,13 +17,6 @@ public:
 	ibPropertyRecord(ibPropertyCategory* cat, const wxString& name, const wxString& label) : ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject())) {}
 	ibPropertyRecord(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString) : ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())) {}
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (ms_propertyRecord != nullptr)
-			return ms_propertyRecord(m_owner, m_propLabel, m_propName, m_propValue);
-		return nullptr;
-	}
-
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
@@ -36,7 +29,6 @@ public:
 
 public:
 
-	static wxObject* (*ms_propertyRecord)(ibPropertyObject*, const wxString&, const wxString&, const wxVariant&);
 };
 
 #endif

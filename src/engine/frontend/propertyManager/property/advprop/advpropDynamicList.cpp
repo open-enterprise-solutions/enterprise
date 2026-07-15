@@ -1,6 +1,7 @@
 #include "advpropDynamicList.h"
 
-#include "frontend/propertyManager/property/private/prop.h"
+#include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frontend/propertyManager/property/private/propertyRegistry.h"
 #include "frontend/propertyManager/propertyEditor.h"
 
 #include "backend/propertyManager/property/propertyDynamicList.h"
@@ -17,7 +18,9 @@ class ibPropertyDynamicListLoader
 public:
 	ibPropertyDynamicListLoader()
 	{
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(ibPGDynamicListProperty, ibPropertyDynamicList::ms_propertyDynamicList);
+		ibPropertyRegistry::Register([](ibPropertyDynamicList* prop) -> wxPGProperty* {
+			return new ibPGDynamicListProperty(prop->GetPropertyObject(), prop->GetLabel(), prop->GetName(), prop->GetValue());
+		});
 	}
 }g_dynamicListLoader;
 

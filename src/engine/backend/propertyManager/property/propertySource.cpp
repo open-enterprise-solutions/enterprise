@@ -4,7 +4,6 @@
 #include "backend/sourceDescription.h"       // ibSourceDescription / ibSourceHop (the id path the variant holds)
 #include "backend/fileSystem/fs.h"           // ibReaderMemory / ibWriterMemory — the guid-keyed node blob
 
-wxObject* (*ibPropertySource::ms_propertySource)(ibPropertyObject*, const wxString&, const wxString&, const wxVariant&) = nullptr;
 
 ////////////////////////////////////////////////////////////////////////
 

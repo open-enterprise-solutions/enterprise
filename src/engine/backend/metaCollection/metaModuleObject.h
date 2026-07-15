@@ -43,13 +43,6 @@ public:
 	// get meta object via pointer
 	T* operator->() { return GetMetaObject(); }
 
-	//get property for grid
-	virtual wxObject* GetPGProperty() const {
-		if (ibPropertyModule::ms_propertyModule != nullptr)
-			return ibPropertyModule::ms_propertyModule(m_metaObject, m_propLabel, m_propName, m_propValue);
-		return nullptr;
-	}
-
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal) { return false; }
 	virtual bool GetDataValue(ibValue& pvarPropVal) const {

@@ -34,11 +34,6 @@ bool ibPropertyExternalPicture::IsEmptyProperty() const {
 
 #include "backend/system/value/valuePicture.h"
 
-// get property for grid
-wxObject* (*ibPropertyExternalPicture::ms_propertyExtPicture)(
-	const wxString&,
-	const wxString&,
-	const wxVariant&) = nullptr;
 
 //base property for "external picture"
 bool ibPropertyExternalPicture::SetDataValue(const ibValue& varPropVal)

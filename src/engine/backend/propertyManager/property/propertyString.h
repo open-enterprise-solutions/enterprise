@@ -50,11 +50,6 @@ public:
 
 public:
 
-	static wxObject* (*ms_propertyString)(const wxString&, const wxString&, const wxString&);
-	static wxObject* (*ms_propertyUString)(const wxString&, const wxString&, const wxString&);
-	static wxObject* (*ms_propertyUEString)(const wxString&, const wxString&, const wxString&);
-	static wxObject* (*ms_propertyTString)(const ibPropertyObject*, const wxString&, const wxString&, const wxString&);
-	static wxObject* (*ms_propertyMString)(const wxString&, const wxString&, const wxString&);
 };
 
 //base property for "string"
@@ -76,12 +71,6 @@ public:
 	{
 	}
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (ms_propertyString != nullptr)
-			return ms_propertyString(m_propLabel, m_propName, GetValueAsString());
-		return nullptr;
-	}
 };
 
 //base property for "general" - unique name 
@@ -103,12 +92,6 @@ public:
 	{
 	}
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (ms_propertyUString != nullptr)
-			return ms_propertyUString(m_propLabel, m_propName, GetValueAsString());
-		return nullptr;
-	}
 };
 
 //base property for "general" - unique name or empty value 
@@ -130,12 +113,6 @@ public:
 	{
 	}
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (ms_propertyUEString != nullptr)
-			return ms_propertyUEString(m_propLabel, m_propName, GetValueAsString());
-		return nullptr;
-	}
 };
 
 //base property for "caption" - for translate 
@@ -171,13 +148,6 @@ public:
 
 	virtual bool IsEmptyProperty() const { return GetValueAsTranslateString().IsEmpty(); }
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (ms_propertyTString != nullptr)
-			return ms_propertyTString(m_owner, m_propLabel, m_propName, GetValueAsString());
-		return nullptr;
-	}
-
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
@@ -202,12 +172,6 @@ public:
 	{
 	}
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (ms_propertyMString != nullptr)
-			return ms_propertyMString(m_propLabel, m_propName, GetValueAsString());
-		return nullptr;
-	}
 };
 
 #endif

@@ -2,8 +2,6 @@
 #include "backend/serialize/dataBuilder.h"
 #include "backend/propertyManager/property/variant/variantGen.h"
 
-// get property for grid
-wxObject* (*ibPropertyGeneration::ms_propertyGeneration)(ibPropertyObject*, const wxString&, const wxString&, const wxVariant&) = nullptr;
 
 /////////////////////////////////////////////////////////////////////
 

@@ -5,10 +5,18 @@
 
 //base property for "list"
 class BACKEND_API ibPropertyList : public ibProperty {
+public:
 
-	// GetPGProperty already invoked the functor, so this only reads what it filled.
-	ibPropertyChoiceList GetValueList() const {
+	// The choices this list offers. Public because the FRONT builds the editor now and
+	// reads them there; it fires the functor itself, since that is what fills the list —
+	// this used to sit in GetPGProperty, which is the one caller it had.
+	//
+	// NOT const: the functor REFILLS m_listPropValue, so this mutates. The const here was
+	// a lie the old code paid for with a const_cast on `this`.
+	ibPropertyChoiceList GetValueList() {
 		ibPropertyChoiceList constants;
+		if (!m_functor->Invoke(this))
+			return constants;
 		for (unsigned int idx = 0; idx < m_listPropValue.GetItemCount(); idx++) {
 			constants.Add(
 				m_listPropValue.GetItemLabel(idx),
@@ -18,6 +26,8 @@ class BACKEND_API ibPropertyList : public ibProperty {
 		}
 		return constants;
 	}
+
+private:
 
 	class BACKEND_API ibPropertyOptionValue {
 		enum eValType {
@@ -202,15 +212,6 @@ public:
 
 	virtual bool IsEmptyProperty() const { return GetValueAsInteger() == wxNOT_FOUND; }
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (!m_functor->Invoke(const_cast<ibPropertyList*>(this)))
-			return nullptr;
-		if (ms_propertyList != nullptr)
-			return ms_propertyList(m_propLabel, m_propName, GetValueList(), GetValueAsInteger());
-		return nullptr;
-	}
-
 	// Set/Get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
@@ -223,7 +224,6 @@ public:
 
 public:
 
-	static wxObject* (*ms_propertyList)(const wxString&, const wxString&, const ibPropertyChoiceList&, const int&);
 
 protected:
 

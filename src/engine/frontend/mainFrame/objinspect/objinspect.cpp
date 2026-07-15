@@ -1,4 +1,5 @@
 #include "objinspect.h"
+#include "frontend/propertyManager/property/private/propertyRegistry.h"
 
 #include <wx/wupdlock.h>   // wxWindowUpdateLocker — RAII Freeze/Thaw (guaranteed Thaw on scope exit)
 
@@ -304,7 +305,7 @@ bool ibObjectInspector::PropertyHidden(const ibProperty* property, bool hide)
 
 wxPGProperty* ibObjectInspector::GetProperty(ibProperty* prop) const
 {
-	wxPGProperty* result = (wxPGProperty* )prop->GetPGProperty();
+	wxPGProperty* result = ibPropertyRegistry::Create(prop);
 	if (result != nullptr) {
 		result->SetHelpString(prop->GetHelp());
 		result->Enable(prop->IsEditable());
@@ -314,7 +315,7 @@ wxPGProperty* ibObjectInspector::GetProperty(ibProperty* prop) const
 
 wxPGProperty* ibObjectInspector::GetEvent(ibEvent* event) const
 {
-	wxPGProperty* result = (wxPGProperty*)event->GetPGProperty();
+	wxPGProperty* result = ibPropertyRegistry::Create(event);
 	if (result != nullptr) {
 		result->SetHelpString(event->GetHelp());
 		result->Enable(event->IsEditable());

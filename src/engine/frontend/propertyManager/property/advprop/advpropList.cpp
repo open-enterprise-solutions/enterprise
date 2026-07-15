@@ -1,6 +1,7 @@
 #include "advpropList.h"
 #include "backend/propertyManager/property/propertyList.h"
-#include "frontend/propertyManager/property/private/prop.h"
+#include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frontend/propertyManager/property/private/propertyRegistry.h"
 #include "frontend/propertyManager/propertyEditor.h"
 
 #define icon_size 16
@@ -17,7 +18,10 @@ class ibPropertyListLoader
 public:
 	ibPropertyListLoader()
 	{
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(ibPGListProperty, ibPropertyList::ms_propertyList);
+		ibPropertyRegistry::Register([](ibPropertyList* prop) -> wxPGProperty* {
+			return new ibPGListProperty(prop->GetLabel(), prop->GetName(), prop->GetValueList(),
+				prop->GetValueAsInteger());
+		});
 	}
 }g_listLoader;
 

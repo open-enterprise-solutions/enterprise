@@ -1695,27 +1695,6 @@
     <ClInclude Include="propertyManager\property\advprop\advpropType.h">
       <Filter>propertyManager\property\advprop</Filter>
     </ClInclude>
-    <ClInclude Include="propertyManager\property\advprop\advpropDate.h">
-      <Filter>propertyManager\property\advprop</Filter>
-    </ClInclude>
-    <ClInclude Include="propertyManager\property\advprop\advpropEnum.h">
-      <Filter>propertyManager\property\advprop</Filter>
-    </ClInclude>
-    <ClInclude Include="propertyManager\property\advprop\advpropColour.h">
-      <Filter>propertyManager\property\advprop</Filter>
-    </ClInclude>
-    <ClInclude Include="propertyManager\property\advprop\advpropModule.h">
-      <Filter>propertyManager\property\advprop</Filter>
-    </ClInclude>
-    <ClInclude Include="propertyManager\property\advprop\advpropForm.h">
-      <Filter>propertyManager\property\advprop</Filter>
-    </ClInclude>
-    <ClInclude Include="propertyManager\property\advprop\advpropSpreadsheet.h">
-      <Filter>propertyManager\property\advprop</Filter>
-    </ClInclude>
-    <ClInclude Include="propertyManager\property\advprop\advpropBoolean.h">
-      <Filter>propertyManager\property\advprop</Filter>
-    </ClInclude>
     <ClInclude Include="propertyManager\property\advprop\advpropChartOfCharacteristicTypes.h">
       <Filter>propertyManager\property\advprop</Filter>
     </ClInclude>

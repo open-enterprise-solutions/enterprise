@@ -3,7 +3,8 @@
 #include "backend/propertyManager/property/eventAction.h"
 #include "backend/propertyManager/property/variant/variantAction.h"
 
-#include "frontend/propertyManager/property/private/prop.h"
+#include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frontend/propertyManager/property/private/propertyRegistry.h"
 #include "frontend/propertyManager/propertyEditor.h"
 
 // -----------------------------------------------------------------------
@@ -18,7 +19,10 @@ class ibPropertyToolLoader
 public:
 	ibPropertyToolLoader()
 	{
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(ibPGEventToolProperty, ibEventAction::ms_propertyEventAction);
+		ibPropertyRegistry::Register([](ibEventAction* evt) -> wxPGProperty* {
+			return new ibPGEventToolProperty(evt->GetLabel(), evt->GetName(), evt->GetEventList(),
+				evt->GetValue());
+		});
 	}
 } g_toolLoader;
 

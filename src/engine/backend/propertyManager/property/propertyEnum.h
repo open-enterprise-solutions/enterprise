@@ -25,13 +25,6 @@ public:
 	{
 	}
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const final {
-		if (ms_propertyEnum != nullptr)
-			return ms_propertyEnum(m_propLabel, m_propName, GetEnumList(), GetValueAsInteger());
-		return nullptr;
-	}
-
 	// The choices this enum offers. Public because the FRONT builds the editor now and has
 	// to read them (it was protected while the property built its own wxPGProperty and only
 	// needed them inside GetPGProperty).
@@ -49,7 +42,6 @@ public:
 
 public:
 
-	static wxObject* (*ms_propertyEnum)(const wxString&, const wxString&, const ibPropertyChoiceList&, const int&);
 };
 
 #include "backend/compiler/enumUnit.h"

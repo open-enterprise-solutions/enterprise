@@ -3,7 +3,6 @@
 #include "backend/serialize/dataBuilder.h"   // ibDataNode / ibDataValue (Child + Array)
 #include "backend/typeDescription.h"        // ibTypeDescription + qualifiers
 
-wxObject* (*ibPropertyType::ms_propertyType)(ibPropertyObject*, ibSelectorDataType, const wxString&, const wxString&, const wxVariant&) = nullptr;
 
 ////////////////////////////////////////////////////////////////////////
 

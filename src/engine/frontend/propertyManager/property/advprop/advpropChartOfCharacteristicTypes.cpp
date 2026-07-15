@@ -3,7 +3,8 @@
 #include "backend/propertyManager/property/variant/variantOwner.h"
 #include "backend/propertyManager/property/propertyChartOfCharacteristicTypes.h"
 
-#include "frontend/propertyManager/property/private/prop.h"
+#include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frontend/propertyManager/property/private/propertyRegistry.h"
 #include "frontend/propertyManager/propertyEditor.h"
 
 #define icon_size 16
@@ -20,7 +21,9 @@ class ibPropertyChartOfCharacteristicTypesLoader
 public:
 	ibPropertyChartOfCharacteristicTypesLoader()
 	{
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(ibPGChartOfCharacteristicTypesProperty, ibPropertyChartOfCharacteristicTypes::ms_propertyChartOfCharacteristicTypes);
+		ibPropertyRegistry::Register([](ibPropertyChartOfCharacteristicTypes* prop) -> wxPGProperty* {
+			return new ibPGChartOfCharacteristicTypesProperty(prop->GetPropertyObject(), prop->GetLabel(), prop->GetName(), prop->GetValue());
+		});
 	}
 }g_chartOfCharacteristicTypesLoader;
 

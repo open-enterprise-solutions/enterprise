@@ -2,8 +2,6 @@
 #include "backend/system/value/valueEvent.h"
 #include "backend/serialize/dataBuilder.h"   // ibDataValue — node value (Binary, transitional)
 
-// get property for grid
-wxObject* (*ibEventControl::ms_propertyEvent)(const wxString&, const wxString&, const wxString&) = nullptr;
 
 //base property for "event"
 bool ibEventControl::SetDataValue(const ibValue& varPropVal)

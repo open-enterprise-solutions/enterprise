@@ -3,7 +3,8 @@
 #include "backend/propertyManager/property/variant/variantOwner.h"
 #include "backend/propertyManager/property/propertyChartOfAccounts.h"
 
-#include "frontend/propertyManager/property/private/prop.h"
+#include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frontend/propertyManager/property/private/propertyRegistry.h"
 #include "frontend/propertyManager/propertyEditor.h"
 
 #define icon_size 16
@@ -20,7 +21,9 @@ class ibPropertyChartOfAccountsLoader
 public:
 	ibPropertyChartOfAccountsLoader()
 	{
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(ibPGChartOfAccountsProperty, ibPropertyChartOfAccounts::ms_propertyChartOfAccounts);
+		ibPropertyRegistry::Register([](ibPropertyChartOfAccounts* prop) -> wxPGProperty* {
+			return new ibPGChartOfAccountsProperty(prop->GetPropertyObject(), prop->GetLabel(), prop->GetName(), prop->GetValue());
+		});
 	}
 }g_chartOfAccountsLoader;
 

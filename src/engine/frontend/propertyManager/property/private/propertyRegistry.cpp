@@ -11,7 +11,13 @@ std::vector<ibPropertyRegistry::ibPropertyEntry>& ibPropertyRegistry::GetEntries
 	return s_entries;
 }
 
-wxPGProperty* ibPropertyRegistry::Create(ibProperty* property)
+std::vector<ibPropertyRegistry::ibPropertySilent>& ibPropertyRegistry::GetSilent()
+{
+	static std::vector<ibPropertySilent> s_silent;
+	return s_silent;
+}
+
+wxPGProperty* ibPropertyRegistry::Create(ibBackendProperty* property)
 {
 	if (property == nullptr)
 		return nullptr;
@@ -31,6 +37,12 @@ wxPGProperty* ibPropertyRegistry::Create(ibProperty* property)
 	for (const ibPropertyEntry& entry : entries) {
 		if (wxPGProperty* pgProperty = entry.m_maker(property))
 			return pgProperty;
+	}
+
+	// Declared editor-less on purpose? Then a null is the right answer, not a bug.
+	for (const ibPropertySilent& silent : GetSilent()) {
+		if (silent(property))
+			return nullptr;
 	}
 
 	// Nothing matched. If the front is loaded at all, this is a property type nobody taught

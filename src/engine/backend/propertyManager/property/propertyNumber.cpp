@@ -2,10 +2,6 @@
 #include "backend/propertyManager/property/variant/variantNumber.h"
 #include "backend/serialize/dataBuilder.h"   // ibDataValue — node value (Binary, transitional)
 
-//get property for grid 
-wxObject* (*ibPropertyNumber::ms_propertyNumber)(const wxString&, const wxString&, const ibNumber&) = nullptr;
-wxObject* (*ibPropertyInteger::ms_propertyInteger)(const wxString&, const wxString&, const int&) = nullptr;
-wxObject* (*ibPropertyUInteger::ms_propertyUInteger)(const wxString&, const wxString&, const unsigned int&) = nullptr;
 
 ////////////////////////////////////////////////////////////////////////
 

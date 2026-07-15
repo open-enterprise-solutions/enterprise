@@ -28,13 +28,6 @@ public:
 	{
 	}
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (ms_propertySize != nullptr)
-			return ms_propertySize(m_propLabel, m_propName, GetValueAsSize());
-		return nullptr;
-	}
-
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
@@ -47,7 +40,6 @@ public:
 
 public:
 
-	static wxObject* (*ms_propertySize)(const wxString&, const wxString&, const wxSize&);
 };
 
 #endif

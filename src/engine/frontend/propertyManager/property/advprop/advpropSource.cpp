@@ -3,7 +3,8 @@
 #include "backend/propertyManager/property/variant/variantSource.h"   // ibVariantDataSource + ibBackendFormAttribute (via backend_type.h)
 #include "backend/system/value/valueTable.h"
 
-#include "frontend/propertyManager/property/private/prop.h"
+#include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frontend/propertyManager/property/private/propertyRegistry.h"
 #include "frontend/propertyManager/propertyEditor.h"
 
 #define icon_size 16
@@ -20,7 +21,9 @@ class ibPropertySourceLoader
 public:
 	ibPropertySourceLoader()
 	{
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(ibPGDataSourceProperty, ibPropertySource::ms_propertySource);
+		ibPropertyRegistry::Register([](ibPropertySource* prop) -> wxPGProperty* {
+			return new ibPGDataSourceProperty(prop->GetPropertyObject(), prop->GetLabel(), prop->GetName(), prop->GetValue());
+		});
 	}
 }g_sourceLoader;
 

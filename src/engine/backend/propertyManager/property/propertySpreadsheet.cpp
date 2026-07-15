@@ -2,7 +2,6 @@
 #include "backend/propertyManager/property/variant/variantSpreadsheet.h"
 #include "backend/serialize/dataBuilder.h"   // ibDataValue — node value (Binary, transitional)
 
-wxObject* (*ibPropertySpreadsheet::ms_propertySpreadsheet)(ibPropertyObject*, const wxString&, const wxString&, const wxVariant&) = nullptr;
 
 ////////////////////////////////////////////////////////////////////////
 

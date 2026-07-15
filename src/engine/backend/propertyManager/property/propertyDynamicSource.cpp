@@ -7,7 +7,6 @@
 #include "backend/serialize/dataBuilder.h"
 #include "backend/compiler/value.h"
 
-wxObject* (*ibPropertyDynamicSource::ms_propertyDynamicSource)(ibPropertyObject*, const wxString&, const wxString&, const wxVariant&) = nullptr;
 
 // The factory the list resolves THROUGH — the metadata it runs ON BEHALF OF (its owner's config). Its per-config
 // factory descends to the global one INTERNALLY on a miss, so a bound list resolves ITS config's source (the fix for

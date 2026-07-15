@@ -2,7 +2,6 @@
 #include "backend/serialize/dataBuilder.h"
 #include "backend/propertyManager/property/variant/variantOwner.h"
 
-wxObject* (*ibPropertyChartOfCharacteristicTypes::ms_propertyChartOfCharacteristicTypes)(ibPropertyObject*, const wxString&, const wxString&, const wxVariant&) = nullptr;
 
 wxVariantData* ibPropertyChartOfCharacteristicTypes::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc) const
 {

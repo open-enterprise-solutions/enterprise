@@ -2,8 +2,6 @@
 #include "backend/propertyManager/property/variant/variantAction.h"
 #include "backend/serialize/dataBuilder.h"   // ibDataValue — node value (Binary, transitional)
 
-// get property for grid
-wxObject* (*ibEventAction::ms_propertyEventAction)(const wxString&, const wxString&, const ibPropertyChoiceList&, const wxVariant&) = nullptr;
 
 //////////////////////////////////////////////////////////////////
 

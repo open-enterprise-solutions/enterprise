@@ -1,7 +1,8 @@
 #include "advpropNumber.h"
 #include "backend/propertyManager/property/propertyNumber.h"
 #include "backend/propertyManager/property/variant/variantNumber.h"
-#include "frontend/propertyManager/property/private/prop.h"
+#include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frontend/propertyManager/property/private/propertyRegistry.h"
 
 // -----------------------------------------------------------------------
 // ibPGDataSourceProperty
@@ -9,15 +10,21 @@
 
 wxPG_IMPLEMENT_PROPERTY_CLASS(ibPGNumberProperty, wxNumericProperty, TextCtrl)
 
-// register frontend property 
+// register frontend property
 class ibPropertyNumberLoader
 {
 public:
 	ibPropertyNumberLoader()
 	{
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(ibPGNumberProperty, ibPropertyNumber::ms_propertyNumber);
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(wxIntProperty, ibPropertyInteger::ms_propertyInteger);
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(wxUIntProperty, ibPropertyUInteger::ms_propertyUInteger);
+		ibPropertyRegistry::Register([](ibPropertyNumber* prop) -> wxPGProperty* {
+			return new ibPGNumberProperty(prop->GetLabel(), prop->GetName(), prop->GetValueAsNumber());
+		});
+		ibPropertyRegistry::Register([](ibPropertyInteger* prop) -> wxPGProperty* {
+			return new wxIntProperty(prop->GetLabel(), prop->GetName(), prop->GetValueAsInteger());
+		});
+		ibPropertyRegistry::Register([](ibPropertyUInteger* prop) -> wxPGProperty* {
+			return new wxUIntProperty(prop->GetLabel(), prop->GetName(), prop->GetValueAsUInteger());
+		});
 	}
 }g_numberLoader;
 

@@ -2,8 +2,6 @@
 #include "backend/serialize/dataBuilder.h"
 #include "backend/system/value/valueColour.h"
 
-// get property for grid	
-wxObject* (*ibPropertyColour::ms_propertyColour)(const wxString&, const wxString&, const wxColour&) = nullptr;
 
 //base property for "colour"
 bool ibPropertyColour::SetDataValue(const ibValue& varPropVal)

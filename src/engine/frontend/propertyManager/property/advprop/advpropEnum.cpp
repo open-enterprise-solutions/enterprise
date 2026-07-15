@@ -1,8 +1,8 @@
-#include "advpropEnum.h"
 
 #include <wx/propgrid/props.h>   // wxEnumProperty / wxPGChoices — this file's own, not the backend's
 
 #include "backend/propertyManager/property/propertyEnum.h"
+#include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frontend/propertyManager/property/private/propertyRegistry.h"
 
 // register frontend property

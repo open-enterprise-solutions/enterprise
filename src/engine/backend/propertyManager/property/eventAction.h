@@ -6,10 +6,15 @@
 
 //base event for "list"
 class BACKEND_API ibEventAction : public ibEvent {
+public:
 
-	wxVariantData* CreateVariantData(const ibPropertyObject* property, const ibActionDescription& act) const;
-	ibPropertyChoiceList GetEventList() const {
+	// Public + fires its own functor, same as ibPropertyList::GetValueList — the front
+	// builds the editor now and reads the actions from here. NOT const: the functor
+	// refills m_listPropValue, so this mutates.
+	ibPropertyChoiceList GetEventList() {
 		ibPropertyChoiceList constants;
+		if (!m_functor->Invoke(this))
+			return constants;
 		for (unsigned int idx = 0; idx < m_listPropValue.GetItemCount(); idx++) {
 			constants.Add(
 				m_listPropValue.GetItemLabel(idx),
@@ -19,6 +24,10 @@ class BACKEND_API ibEventAction : public ibEvent {
 		}
 		return constants;
 	}
+
+private:
+
+	wxVariantData* CreateVariantData(const ibPropertyObject* property, const ibActionDescription& act) const;
 
 	class BACKEND_API ibEventOptionList {
 
@@ -165,15 +174,6 @@ public:
 
 	virtual bool IsEmptyProperty() const { return GetValueAsInteger() == wxNOT_FOUND; }
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (!m_functor->Invoke(const_cast<ibEventAction*>(this)))
-			return nullptr;
-		if (ms_propertyEventAction != nullptr)
-			return ms_propertyEventAction(m_propLabel, m_propName, GetEventList(), m_propValue);
-		return nullptr;
-	}
-
 	// Set/Get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
@@ -184,7 +184,6 @@ public:
 
 public:
 
-	static wxObject* (*ms_propertyEventAction)(const wxString&, const wxString&, const ibPropertyChoiceList&, const wxVariant&);
 
 private:
 

@@ -43,12 +43,6 @@ public:
 	void SetSource(const wxString& ns, const wxString& name);
 
 	// get property for grid — hand the owner to the frontend chooser slot.
-	virtual wxObject* GetPGProperty() const override {
-		if (ms_propertyDynamicSource != nullptr)
-			return ms_propertyDynamicSource(m_owner, m_propLabel, m_propName, m_propValue);
-		return nullptr;
-	}
-
 	// Runtime data exchange — the source's table id as the value.
 	virtual bool SetDataValue(const ibValue& varPropVal) override;
 	virtual bool GetDataValue(ibValue& pvarPropVal) const override;
@@ -57,10 +51,6 @@ public:
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
 	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
-public:
-
-	// Wired at frontend load by ibPG_IMPLEMENT_PROPERTY_CALLBACK in advpropDynamicSource.cpp.
-	static wxObject* (*ms_propertyDynamicSource)(ibPropertyObject*, const wxString&, const wxString&, const wxVariant&);
 };
 
 #endif // __PROPERTY_DYNAMIC_SOURCE_H__

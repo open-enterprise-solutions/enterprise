@@ -2,7 +2,6 @@
 #include "backend/serialize/dataBuilder.h"
 #include "backend/propertyManager/property/variant/variantRecord.h"
 
-wxObject* (*ibPropertyRecord::ms_propertyRecord)(ibPropertyObject*, const wxString&, const wxString&, const wxVariant&) = nullptr;
 
 ////////////////////////////////////////////////////////////////////
 

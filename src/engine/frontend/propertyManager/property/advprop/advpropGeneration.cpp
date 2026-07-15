@@ -2,7 +2,8 @@
 
 #include "backend/propertyManager/property/variant/variantGen.h"
 
-#include "frontend/propertyManager/property/private/prop.h"
+#include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frontend/propertyManager/property/private/propertyRegistry.h"
 #include "frontend/propertyManager/propertyEditor.h"
 
 #define icon_size 16
@@ -19,7 +20,9 @@ class ibPropertyGenerationLoader
 public:
     ibPropertyGenerationLoader()
     {
-        ibPG_IMPLEMENT_PROPERTY_CALLBACK(ibPGGenerationProperty, ibPropertyGeneration::ms_propertyGeneration);
+		ibPropertyRegistry::Register([](ibPropertyGeneration* prop) -> wxPGProperty* {
+			return new ibPGGenerationProperty(prop->GetPropertyObject(), prop->GetLabel(), prop->GetName(), prop->GetValue());
+		});
     }
 }g_generationLoader;
 

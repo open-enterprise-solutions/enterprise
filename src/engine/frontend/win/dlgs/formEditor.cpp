@@ -1,5 +1,6 @@
 ﻿#include "formEditor.h"
 #include "backend/compiler/value.h"
+#include "frontend/propertyManager/property/private/propertyRegistry.h"
 
 enum {
 	WXOES_PROPERTY_GRID = wxID_HIGHEST + 1001
@@ -303,7 +304,7 @@ void ibDialogFormEditor::OnSelChanged(wxTreeEvent& event)
 							continue;
 					}
 
-					wxPGProperty* pg = (wxPGProperty *)prop->GetPGProperty();
+					wxPGProperty* pg = ibPropertyRegistry::Create(prop);
 					propertyGridPage->Append(pg);
 					pg->SetHelpString(prop->GetHelp());
 					pg->RefreshChildren();

@@ -27,13 +27,6 @@ public:
 
 	virtual bool IsEmptyProperty() const { return GetValueAsDateTime() == emptyDate; }
 
-	//get property for grid 
-	virtual wxObject* GetPGProperty() const {
-		if (ms_propertyDate != nullptr)
-			return ms_propertyDate(m_propLabel, m_propName, wxDateTime(static_cast<time_t>(GetValueAsDateTime())));
-		return nullptr;
-	}
-
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
@@ -46,7 +39,6 @@ public:
 
 public:
 
-	static wxObject* (*ms_propertyDate)(const wxString&, const wxString&, const wxDateTime&);
 };
 
 #endif

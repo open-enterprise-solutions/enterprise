@@ -225,8 +225,6 @@ public:
 	virtual bool IsOk() const { return !m_propValue.IsNull(); }
 	virtual bool IsEmptyProperty() const { return false; }
 
-	//get property for grid
-	virtual wxObject* GetPGProperty() const = 0;
 
 	// Property <-> node value — the ONLY per-property serialization (no byte
 	// SaveData/LoadData anymore). Read/Write pair: bool + out-param + const on the

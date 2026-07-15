@@ -1,19 +1,33 @@
 #include "advpropString.h"
 
 #include "backend/propertyManager/property/propertyString.h"
-#include "frontend/propertyManager/property/private/prop.h"
+#include "frontend/propertyManager/property/private/prop.h"                 // wxPGPropertyFlags_*
+#include "frontend/propertyManager/property/private/propertyRegistry.h"
 
-// register frontend property 
+// register frontend property
 class ibPropertyStringLoader
 {
 public:
 	ibPropertyStringLoader()
 	{
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(wxStringProperty, ibPropertyStringBase::ms_propertyString);
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(ibUStringProperty, ibPropertyStringBase::ms_propertyUString);
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(ibUEStringProperty, ibPropertyStringBase::ms_propertyUEString);
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(wxTStringProperty, ibPropertyStringBase::ms_propertyTString);
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(wxMStringProperty, ibPropertyStringBase::ms_propertyMString);
+		ibPropertyRegistry::Register([](ibPropertyString* prop) -> wxPGProperty* {
+			return new wxStringProperty(prop->GetLabel(), prop->GetName(), prop->GetValueAsString());
+		});
+		// ibPropertyUEString DERIVES from ibPropertyUString, so the base must be tried after
+		// it — otherwise the UString maker would swallow every UEString.
+		ibPropertyRegistry::Register([](ibPropertyUEString* prop) -> wxPGProperty* {
+			return new ibUEStringProperty(prop->GetLabel(), prop->GetName(), prop->GetValueAsString());
+		});
+		ibPropertyRegistry::Register([](ibPropertyUString* prop) -> wxPGProperty* {
+			return new ibUStringProperty(prop->GetLabel(), prop->GetName(), prop->GetValueAsString());
+		}, ibPropertyRegistry::Priority_Base);
+		ibPropertyRegistry::Register([](ibPropertyTString* prop) -> wxPGProperty* {
+			return new wxTStringProperty(prop->GetPropertyObject(), prop->GetLabel(), prop->GetName(),
+				prop->GetValueAsString());
+		});
+		ibPropertyRegistry::Register([](ibPropertyMString* prop) -> wxPGProperty* {
+			return new wxMStringProperty(prop->GetLabel(), prop->GetName(), prop->GetValueAsString());
+		});
 	}
 }g_stringLoader;
 

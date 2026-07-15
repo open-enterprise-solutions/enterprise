@@ -2,7 +2,6 @@
 #include "backend/serialize/dataBuilder.h"
 #include "backend/system/value/valueFont.h"
 
-wxObject* (*ibPropertyFont::ms_propertyFont)(const wxString&, const wxString&, const wxFont&) = nullptr;
 
 //base property for "colour"
 bool ibPropertyFont::SetDataValue(const ibValue& varPropVal)

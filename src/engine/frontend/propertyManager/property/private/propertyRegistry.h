@@ -43,14 +43,23 @@ class ibPropertyRegistry {
 	struct ibMakerArg<typeRet(typeClass::*)(typeArg*)> { using type = typeArg; };
 
 	// A registered maker: the widget if the property is its type, nullptr if not.
-	using ibPropertyMaker = std::function<wxPGProperty* (ibProperty*)>;
+	//
+	// Keyed on ibBackendProperty, not ibProperty: ibProperty and ibEvent are SIBLINGS under
+	// it (§2 of docs/property-system.md), and the inspector renders both through the same
+	// GetProperty/GetEvent pair. One registry serves them; a maker just names the side it
+	// wants in its parameter, and the dynamic_cast sorts it out.
+	using ibPropertyMaker = std::function<wxPGProperty* (ibBackendProperty*)>;
 
 	struct ibPropertyEntry {
 		int m_priority;          // LOWER runs first — see Register()
 		ibPropertyMaker m_maker;
 	};
 
+	// Types that answer "yes, that's me" and want no editor — see RegisterNoEditor().
+	using ibPropertySilent = std::function<bool (ibBackendProperty*)>;
+
 	static std::vector<ibPropertyEntry>& GetEntries();
+	static std::vector<ibPropertySilent>& GetSilent();
 
 public:
 
@@ -68,18 +77,29 @@ public:
 		using typeProp = typename ibMakerArg<typeMaker>::type;
 		GetEntries().push_back({
 			priority,
-			[maker](ibProperty* property) -> wxPGProperty* {
+			[maker](ibBackendProperty* property) -> wxPGProperty* {
 				typeProp* typed = dynamic_cast<typeProp*>(property);
 				return typed != nullptr ? maker(typed) : nullptr;
 			}
 		});
 	}
 
-	// Build the editor for a property. Null ONLY when the front was never loaded (headless
-	// registers nothing and never reaches here). With a live front an unregistered type is
-	// a programming error — a property that can never be edited and would fail silently —
-	// so it asserts rather than returning a quiet null.
-	static wxPGProperty* Create(ibProperty* property);
+	// "This type is shown in no grid at all" — a DELIBERATE absence, as opposed to a
+	// forgotten Register. Without it the two would be indistinguishable: a maker returning
+	// nullptr already means "not my type", so Create would walk past and assert on a case
+	// that is perfectly correct (ibValueMetaObjectComposite has no editor by design).
+	template <typename typeProp>
+	static void RegisterNoEditor() {
+		GetSilent().push_back([](ibBackendProperty* property) -> bool {
+			return dynamic_cast<typeProp*>(property) != nullptr;
+		});
+	}
+
+	// Build the editor for a property or an event. Null when the front was never loaded
+	// (headless registers nothing and never reaches here) or when the type declared itself
+	// editor-less. With a live front an unregistered type is a programming error —
+	// something that would silently vanish from the grid — so it asserts.
+	static wxPGProperty* Create(ibBackendProperty* property);
 };
 
 #endif

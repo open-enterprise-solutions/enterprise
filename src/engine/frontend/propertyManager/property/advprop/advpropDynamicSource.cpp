@@ -1,6 +1,7 @@
 #include "advpropDynamicSource.h"
 
-#include "frontend/propertyManager/property/private/prop.h"
+#include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frontend/propertyManager/property/private/propertyRegistry.h"
 #include "frontend/propertyManager/propertyEditor.h"
 
 #include "backend/propertyManager/property/propertyDynamicSource.h"            // ms_propertyDynamicSource slot
@@ -32,7 +33,9 @@ class ibPropertyDynamicSourceLoader
 public:
 	ibPropertyDynamicSourceLoader()
 	{
-		ibPG_IMPLEMENT_PROPERTY_CALLBACK(ibPGDynamicSourceProperty, ibPropertyDynamicSource::ms_propertyDynamicSource);
+		ibPropertyRegistry::Register([](ibPropertyDynamicSource* prop) -> wxPGProperty* {
+			return new ibPGDynamicSourceProperty(prop->GetPropertyObject(), prop->GetLabel(), prop->GetName(), prop->GetValue());
+		});
 	}
 }g_dynamicSourceLoader;
 
