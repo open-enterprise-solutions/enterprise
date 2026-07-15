@@ -21,21 +21,21 @@
 
 #include "engine/ibase.h"
 
-class ibDatatabaseParameterFirebird : public ibDatabaseStringConverter
+class ibDatabaseParameterFirebird : public ibDatabaseStringConverter
 {
 public:
 	// ctor
-	ibDatatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar);
-	ibDatatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, const wxString& strValue, const wxCSConv* conv);
-	ibDatatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, const ibNumber& dblValue);
-	ibDatatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, int nValue);
-	ibDatatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, double dblValue);
-	ibDatatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, bool bValue);
-	ibDatatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, const wxDateTime& dateValue);
-	ibDatatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, const void* pData, long nDataLength);
+	ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar);
+	ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, const wxString& strValue, const wxCSConv* conv);
+	ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, const ibNumber& dblValue);
+	ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, int nValue);
+	ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, double dblValue);
+	ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, bool bValue);
+	ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, const wxDateTime& dateValue);
+	ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, const void* pData, long nDataLength);
 
 	// dtor
-	virtual ~ibDatatabaseParameterFirebird();
+	virtual ~ibDatabaseParameterFirebird();
 
 	enum {
 		PARAM_STRING = 0,

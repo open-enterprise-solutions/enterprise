@@ -508,7 +508,7 @@ void ibValueSystemFunction::Alert(const wxString& strMessage) //Alert
 ibValue ibValueSystemFunction::Question(const wxString& strMessage, ibQuestionMode mode)//Question
 {
 	if (ibBackendException::IsEvalMode()) {
-		return new ibValuibQuestionReturnCode();
+		return new ibValueEnumQuestionReturnCode();
 	}
 
 	int wndStyle = 0;
@@ -531,7 +531,7 @@ ibValue ibValueSystemFunction::Question(const wxString& strMessage, ibQuestionMo
 		? frame->ShowModalMessage(strMessage, _("Question"), wndStyle | wxICON_QUESTION)
 		: wxCANCEL;
 
-	ibValuibQuestionReturnCode* retValue = new ibValuibQuestionReturnCode();
+	ibValueEnumQuestionReturnCode* retValue = new ibValueEnumQuestionReturnCode();
 	switch (retCode) {
 	case wxOK:
 		retValue->InitializeEnumeration(ibQuestionReturnCode::ibQuestionReturnCode_OK);

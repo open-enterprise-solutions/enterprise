@@ -21,7 +21,7 @@ ibValueMetaObjectAccumulationRegister::ibValueMetaObjectAccumulationRegister() :
 
 ibValueMetaObjectAccumulationRegister::~ibValueMetaObjectAccumulationRegister()
 {
-	//wxDELETE((*m_propertyAttributibRecordType));
+	//wxDELETE((*m_propertyAttributeRecordType));
 }
 
 ibValueMetaObjectFormBase* ibValueMetaObjectAccumulationRegister::GetDefaultFormByID(const ibFormID& id) const 
@@ -51,7 +51,7 @@ ibBackendValueForm* ibValueMetaObjectAccumulationRegister::GetListForm(const wxS
 
 bool ibValueMetaObjectAccumulationRegister::WriteData(ibDataNode& node) const
 {
-	node.SetProperty(m_propertyAttributibRecordType->GetName(), m_propertyAttributibRecordType->GetNodeValue());
+	node.SetProperty(m_propertyAttributeRecordType->GetName(), m_propertyAttributeRecordType->GetNodeValue());
 
 	node.SetValue(m_propertyDefFormList->GetName(), GetGuidByID(m_propertyDefFormList->GetValueAsInteger()).str());
 
@@ -65,7 +65,7 @@ bool ibValueMetaObjectAccumulationRegister::WriteData(ibDataNode& node) const
 
 bool ibValueMetaObjectAccumulationRegister::ReadData(const ibDataNode& node)
 {
-	m_propertyAttributibRecordType->ReadNodeValue(node.GetProperty(m_propertyAttributibRecordType->GetName()));
+	m_propertyAttributeRecordType->ReadNodeValue(node.GetProperty(m_propertyAttributeRecordType->GetName()));
 
 	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormList->GetName())));
 
@@ -88,14 +88,14 @@ bool ibValueMetaObjectAccumulationRegister::OnCreateMetaObject(ibMetaData* metaD
 	if (!ibValueMetaObjectRegisterData::OnCreateMetaObject(metaData, flags))
 		return false;
 
-	return (*m_propertyAttributibRecordType)->OnCreateMetaObject(metaData, flags) &&
+	return (*m_propertyAttributeRecordType)->OnCreateMetaObject(metaData, flags) &&
 		(*m_propertyManagerModule)->OnCreateMetaObject(metaData, flags) &&
 		(*m_propertyObjectModule)->OnCreateMetaObject(metaData, flags);
 }
 
 bool ibValueMetaObjectAccumulationRegister::OnLoadMetaObject(ibMetaData* metaData)
 {
-	if (!(*m_propertyAttributibRecordType)->OnLoadMetaObject(metaData))
+	if (!(*m_propertyAttributeRecordType)->OnLoadMetaObject(metaData))
 		return false;
 
 	if (!(*m_propertyManagerModule)->OnLoadMetaObject(metaData))
@@ -109,7 +109,7 @@ bool ibValueMetaObjectAccumulationRegister::OnLoadMetaObject(ibMetaData* metaDat
 
 bool ibValueMetaObjectAccumulationRegister::OnSaveMetaObject(int flags)
 {
-	if (!(*m_propertyAttributibRecordType)->OnSaveMetaObject(flags))
+	if (!(*m_propertyAttributeRecordType)->OnSaveMetaObject(flags))
 		return false;
 
 	if (!(*m_propertyManagerModule)->OnSaveMetaObject(flags))
@@ -130,7 +130,7 @@ bool ibValueMetaObjectAccumulationRegister::OnSaveMetaObject(int flags)
 
 bool ibValueMetaObjectAccumulationRegister::OnDeleteMetaObject()
 {
-	if (!(*m_propertyAttributibRecordType)->OnDeleteMetaObject())
+	if (!(*m_propertyAttributeRecordType)->OnDeleteMetaObject())
 		return false;
 
 	if (!(*m_propertyManagerModule)->OnDeleteMetaObject())
@@ -160,7 +160,7 @@ bool ibValueMetaObjectAccumulationRegister::OnReloadMetaObject()
 
 bool ibValueMetaObjectAccumulationRegister::OnBeforeRunMetaObject(int flags)
 {
-	if (!(*m_propertyAttributibRecordType)->OnBeforeRunMetaObject(flags))
+	if (!(*m_propertyAttributeRecordType)->OnBeforeRunMetaObject(flags))
 		return false;
 
 	if (!(*m_propertyManagerModule)->OnBeforeRunMetaObject(flags))
@@ -176,7 +176,7 @@ bool ibValueMetaObjectAccumulationRegister::OnBeforeRunMetaObject(int flags)
 
 bool ibValueMetaObjectAccumulationRegister::OnAfterRunMetaObject(int flags)
 {
-	if (!(*m_propertyAttributibRecordType)->OnAfterRunMetaObject(flags))
+	if (!(*m_propertyAttributeRecordType)->OnAfterRunMetaObject(flags))
 		return false;
 
 	if (!(*m_propertyManagerModule)->OnAfterRunMetaObject(flags))
@@ -210,7 +210,7 @@ bool ibValueMetaObjectAccumulationRegister::OnBeforeCloseMetaObject()
 	m_metaData->UnregisterSource(&m_balance);
 	m_metaData->UnregisterSource(&m_turnover);
 
-	if (!(*m_propertyAttributibRecordType)->OnBeforeCloseMetaObject())
+	if (!(*m_propertyAttributeRecordType)->OnBeforeCloseMetaObject())
 		return false;
 
 	if (!(*m_propertyManagerModule)->OnBeforeCloseMetaObject())
@@ -236,7 +236,7 @@ bool ibValueMetaObjectAccumulationRegister::OnBeforeCloseMetaObject()
 
 bool ibValueMetaObjectAccumulationRegister::OnAfterCloseMetaObject()
 {
-	if (!(*m_propertyAttributibRecordType)->OnAfterCloseMetaObject())
+	if (!(*m_propertyAttributeRecordType)->OnAfterCloseMetaObject())
 		return false;
 
 	if (!(*m_propertyManagerModule)->OnAfterCloseMetaObject())

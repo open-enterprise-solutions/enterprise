@@ -22,16 +22,16 @@
 
 #include "engine/ibase.h"
 
-WX_DEFINE_ARRAY_PTR(ibDatatabaseParameterFirebird*, FirebirdParameterArray);
+WX_DEFINE_ARRAY_PTR(ibDatabaseParameterFirebird*, FirebirdParameterArray);
 
-class ibDatatabaseParameterFirebirdCollection : public ibDatabaseStringConverter
+class ibDatabaseParameterFirebirdCollection : public ibDatabaseStringConverter
 {
 public:
 	// ctor
-	ibDatatabaseParameterFirebirdCollection(ibInterfaceFirebird* pInterface, XSQLDA* pParameters);
+	ibDatabaseParameterFirebirdCollection(ibInterfaceFirebird* pInterface, XSQLDA* pParameters);
 
 	// dtor
-	virtual ~ibDatatabaseParameterFirebirdCollection();
+	virtual ~ibDatabaseParameterFirebirdCollection();
 
 	// set field
 	void SetParam(int nPosition, int nValue);
@@ -42,7 +42,7 @@ public:
 	void SetParam(int nPosition, const void* pData, long nDataLength);
 	void SetParam(int nPosition, const wxDateTime& dateValue);
 	void SetParam(int nPosition, bool bValue);
-	void SetParam(int nPosition, ibDatatabaseParameterFirebird* pParameter);
+	void SetParam(int nPosition, ibDatabaseParameterFirebird* pParameter);
 
 	bool ResetBlobParameters(isc_db_handle database, isc_tr_handle transaction);
 	void AllocateParameterSpace();

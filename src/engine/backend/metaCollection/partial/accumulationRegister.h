@@ -68,11 +68,11 @@ private:
 public:
 
 	ibValueMetaObjectAttributePredefined* GetRegisterRecordType() const {
-		return m_propertyAttributibRecordType->GetMetaObject();
+		return m_propertyAttributeRecordType->GetMetaObject();
 	}
 
 	bool IsRegisterRecordType(const ibMetaID& id) const {
-		return id == (*m_propertyAttributibRecordType)->GetMetaID();
+		return id == (*m_propertyAttributeRecordType)->GetMetaID();
 	}
 
 	///////////////////////////////////////////////////////////////////
@@ -175,7 +175,7 @@ protected:
 		array.push_back(m_propertyAttributeLineActive->GetMetaObject());
 		array.push_back(m_propertyAttributePeriod->GetMetaObject());
 		if (GetRegisterType() == ibRegisterType::eBalances)
-			array.push_back(m_propertyAttributibRecordType->GetMetaObject());
+			array.push_back(m_propertyAttributeRecordType->GetMetaObject());
 		array.push_back(m_propertyAttributeRecorder->GetMetaObject());
 		array.push_back(m_propertyAttributeLineNumber->GetMetaObject());
 		return true;
@@ -228,7 +228,7 @@ private:
 	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
 	ibPropertyEnum<ibValueEnumAccumulationRegisterType>* m_propertyRegisterType = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumAccumulationRegisterType>>(m_categoryData, wxT("RegisterType"), _("Register type"), ibRegisterType::eBalances);
 
-	ibPropertyContainer<>* m_propertyAttributibRecordType = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateSpecialType(wxT("RecordType"), _("Record type"), wxEmptyString, g_enumRecordTypeCLSID, false, ibValueEnumAccumulationRegisterRecordType::CreateDefEnumValue()));
+	ibPropertyContainer<>* m_propertyAttributeRecordType = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateSpecialType(wxT("RecordType"), _("Record type"), wxEmptyString, g_enumRecordTypeCLSID, false, ibValueEnumAccumulationRegisterRecordType::CreateDefEnumValue()));
 
 	friend class ibBalanceQueryable;
 	friend class ibTurnoverQueryable;

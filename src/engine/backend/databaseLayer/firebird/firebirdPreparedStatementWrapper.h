@@ -60,7 +60,7 @@ private:
 	isc_db_handle m_pDatabase;
 	isc_tr_handle m_pTransaction;
 
-	ibDatatabaseParameterFirebirdCollection* m_pParameterCollection;
+	ibDatabaseParameterFirebirdCollection* m_pParameterCollection;
 
 	ISC_STATUS_ARRAY m_Status;
 	ibInterfaceFirebird* m_pInterface;

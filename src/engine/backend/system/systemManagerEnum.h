@@ -4,10 +4,10 @@
 #include "systemEnum.h"
 #include "backend/compiler/enumUnit.h"
 
-class ibValuibStatusMessage : public ibValueEnumeration<ibStatusMessage> {
+class ibValueEnumStatusMessage : public ibValueEnumeration<ibStatusMessage> {
 	public:
-	ibValuibStatusMessage() : ibValueEnumeration() {}
-	//ibValuibStatusMessage(ibStatusMessage status) : ibValueEnumeration(status) {}
+	ibValueEnumStatusMessage() : ibValueEnumeration() {}
+	//ibValueEnumStatusMessage(ibStatusMessage status) : ibValueEnumeration(status) {}
 
 	virtual void CreateEnumeration() {
 		AddEnumeration(ibStatusMessage::ibStatusMessage_Information, wxT("Information"), _("Information"));
@@ -16,10 +16,10 @@ class ibValuibStatusMessage : public ibValueEnumeration<ibStatusMessage> {
 	}
 };
 
-class ibValuibQuestionMode : public ibValueEnumeration<ibQuestionMode> {
+class ibValueEnumQuestionMode : public ibValueEnumeration<ibQuestionMode> {
 	public:
-	ibValuibQuestionMode() : ibValueEnumeration() {}
-	//ibValuibQuestionMode(ibQuestionMode mode) : ibValueEnumeration(mode) {}
+	ibValueEnumQuestionMode() : ibValueEnumeration() {}
+	//ibValueEnumQuestionMode(ibQuestionMode mode) : ibValueEnumeration(mode) {}
 
 	virtual void CreateEnumeration() {
 		AddEnumeration(ibQuestionMode::ibQuestionMode_YesNo, wxT("YesNo"), _("Yes or no"));
@@ -29,10 +29,10 @@ class ibValuibQuestionMode : public ibValueEnumeration<ibQuestionMode> {
 	}
 };
 
-class ibValuibQuestionReturnCode : public ibValueEnumeration<ibQuestionReturnCode> {
+class ibValueEnumQuestionReturnCode : public ibValueEnumeration<ibQuestionReturnCode> {
 	public:
-	ibValuibQuestionReturnCode() : ibValueEnumeration() {}
-	//ibValuibQuestionReturnCode(ibQuestionReturnCode code) : ibValueEnumeration(code) {}
+	ibValueEnumQuestionReturnCode() : ibValueEnumeration() {}
+	//ibValueEnumQuestionReturnCode(ibQuestionReturnCode code) : ibValueEnumeration(code) {}
 
 	virtual void CreateEnumeration() {
 		AddEnumeration(ibQuestionReturnCode::ibQuestionReturnCode_Yes, wxT("Yes"), _("Yes"));
@@ -42,10 +42,10 @@ class ibValuibQuestionReturnCode : public ibValueEnumeration<ibQuestionReturnCod
 	}
 };
 
-class ibValuibRoundMode : public ibValueEnumeration<ibRoundMode> {
+class ibValueEnumRoundMode : public ibValueEnumeration<ibRoundMode> {
 	public:
-	ibValuibRoundMode() : ibValueEnumeration() {}
-	//ibValuibRoundMode(ibRoundMode mode) : ibValueEnumeration(mode) {}
+	ibValueEnumRoundMode() : ibValueEnumeration() {}
+	//ibValueEnumRoundMode(ibRoundMode mode) : ibValueEnumeration(mode) {}
 
 	virtual void CreateEnumeration() {
 		AddEnumeration(ibRoundMode::ibRoundMode_Round15as10, wxT("Round15as10"), _("Round 15 as 10"));

@@ -102,7 +102,7 @@ bool ibPreparedStatementFirebirdWrapper::Prepare()
 		}
 	}
 
-	m_pParameterCollection = new ibDatatabaseParameterFirebirdCollection(m_pInterface, m_pParameters);
+	m_pParameterCollection = new ibDatabaseParameterFirebirdCollection(m_pInterface, m_pParameters);
 	m_pParameterCollection->SetEncoding(GetEncoding());
 
 	return true;

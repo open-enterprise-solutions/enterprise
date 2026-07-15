@@ -4,7 +4,7 @@
 #include "backend/databaseLayer/databaseLayerException.h"
 
 // ctor
-ibDatatabaseParameterFirebird::ibDatatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar) : m_nParameterType(ibDatatabaseParameterFirebird::PARAM_NULL)
+ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar) : m_nParameterType(ibDatabaseParameterFirebird::PARAM_NULL)
 {
 	m_pInterface = pInterface;
 	m_pParameter = pVar;
@@ -13,7 +13,7 @@ ibDatatabaseParameterFirebird::ibDatatabaseParameterFirebird(ibInterfaceFirebird
 	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator
 }
 
-ibDatatabaseParameterFirebird::ibDatatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, const wxString& strValue, const wxCSConv* conv) : m_nParameterType(ibDatatabaseParameterFirebird::PARAM_STRING), m_strValue(strValue)
+ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, const wxString& strValue, const wxCSConv* conv) : m_nParameterType(ibDatabaseParameterFirebird::PARAM_STRING), m_strValue(strValue)
 {
 	m_pInterface = pInterface;
 	m_pParameter = pVar;
@@ -37,7 +37,7 @@ ibDatatabaseParameterFirebird::ibDatatabaseParameterFirebird(ibInterfaceFirebird
 	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator
 }
 
-ibDatatabaseParameterFirebird::ibDatatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, const ibNumber& dblValue) : m_nParameterType(ibDatatabaseParameterFirebird::PARAM_NUMBER)
+ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, const ibNumber& dblValue) : m_nParameterType(ibDatabaseParameterFirebird::PARAM_NUMBER)
 {
 	m_pInterface = pInterface;
 	m_pParameter = pVar;
@@ -94,7 +94,7 @@ ibDatatabaseParameterFirebird::ibDatatabaseParameterFirebird(ibInterfaceFirebird
 	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator
 }
 
-ibDatatabaseParameterFirebird::ibDatatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, int nValue) : m_nParameterType(ibDatatabaseParameterFirebird::PARAM_INT)
+ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, int nValue) : m_nParameterType(ibDatabaseParameterFirebird::PARAM_INT)
 {
 	m_pInterface = pInterface;
 	m_pParameter = pVar;
@@ -106,7 +106,7 @@ ibDatatabaseParameterFirebird::ibDatatabaseParameterFirebird(ibInterfaceFirebird
 	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator
 }
 
-ibDatatabaseParameterFirebird::ibDatatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, double dblValue) : m_nParameterType(ibDatatabaseParameterFirebird::PARAM_DOUBLE)
+ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, double dblValue) : m_nParameterType(ibDatabaseParameterFirebird::PARAM_DOUBLE)
 {
 	m_pInterface = pInterface;
 	m_pParameter = pVar;
@@ -133,7 +133,7 @@ ibDatatabaseParameterFirebird::ibDatatabaseParameterFirebird(ibInterfaceFirebird
 	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator
 }
 
-ibDatatabaseParameterFirebird::ibDatatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, bool bValue) : m_nParameterType(ibDatatabaseParameterFirebird::PARAM_BOOL)
+ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, bool bValue) : m_nParameterType(ibDatabaseParameterFirebird::PARAM_BOOL)
 {
 	m_pInterface = pInterface;
 	m_pParameter = pVar;
@@ -149,7 +149,7 @@ ibDatatabaseParameterFirebird::ibDatatabaseParameterFirebird(ibInterfaceFirebird
 
 const long TIME_T_FACTOR = 1000l;
 
-ibDatatabaseParameterFirebird::ibDatatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, const wxDateTime& dateValue) : m_nParameterType(ibDatatabaseParameterFirebird::PARAM_DATETIME)
+ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, const wxDateTime& dateValue) : m_nParameterType(ibDatabaseParameterFirebird::PARAM_DATETIME)
 {
 	m_pInterface = pInterface;
 	m_pParameter = pVar;
@@ -172,7 +172,7 @@ ibDatatabaseParameterFirebird::ibDatatabaseParameterFirebird(ibInterfaceFirebird
 	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator
 }
 
-ibDatatabaseParameterFirebird::ibDatatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, const void* pData, long nDataLength) : m_nParameterType(ibDatatabaseParameterFirebird::PARAM_BLOB)
+ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, const void* pData, long nDataLength) : m_nParameterType(ibDatabaseParameterFirebird::PARAM_BLOB)
 {
 	m_pInterface = pInterface;
 	m_pParameter = pVar;
@@ -225,7 +225,7 @@ ibDatatabaseParameterFirebird::ibDatatabaseParameterFirebird(ibInterfaceFirebird
 	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator
 }
 
-bool ibDatatabaseParameterFirebird::ResetBlob(isc_db_handle database, isc_tr_handle transaction)
+bool ibDatabaseParameterFirebird::ResetBlob(isc_db_handle database, isc_tr_handle transaction)
 {
 	// If the databaes and transaction handles aren't valid then don't try to do anything
 	if ((database == NULL) || (transaction == NULL))
@@ -292,7 +292,7 @@ bool ibDatatabaseParameterFirebird::ResetBlob(isc_db_handle database, isc_tr_han
 	return true;
 }
 
-ibDatatabaseParameterFirebird::~ibDatatabaseParameterFirebird()
+ibDatabaseParameterFirebird::~ibDatabaseParameterFirebird()
 {
 }
 
