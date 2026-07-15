@@ -17,6 +17,32 @@ namespace {
 	};
 }
 
+// ---------------------------------------------------------
+// ibGenericPropertyObjectNotifier
+// ---------------------------------------------------------
+
+// The inspector's end of the object's push channel: turns "this ibProperty is now
+// hidden" into the wxPG call. The object never names a widget; the mapping back to
+// wxPGProperty lives here, where the grid does.
+class ibGenericPropertyObjectNotifier : public ibPropertyObjectNotifier
+{
+public:
+
+	ibGenericPropertyObjectNotifier(ibObjectInspector* inspector)
+	{
+		m_inspector = inspector;
+	}
+
+	virtual bool PropertyHidden(const ibProperty* property, bool hide) wxOVERRIDE
+	{
+		return m_inspector->PropertyHidden(property, hide);
+	}
+
+private:
+
+	ibObjectInspector* m_inspector;
+};
+
 // -----------------------------------------------------------------------
 // ibObjectInspector
 // -----------------------------------------------------------------------
@@ -36,6 +62,7 @@ wxEND_EVENT_TABLE()
 
 ibObjectInspector::ibObjectInspector(wxWindow* parent, int id, int style)
 	: wxPanel(parent, id), m_style(style), m_currentSel(nullptr)
+	, m_notifier(new ibGenericPropertyObjectNotifier(this))
 {
 	m_pg = CreatePropertyGridManager(this, WXOES_PROPERTY_GRID);
 
@@ -48,6 +75,11 @@ ibObjectInspector::ibObjectInspector(wxWindow* parent, int id, int style)
 
 ibObjectInspector::~ibObjectInspector()
 {
+	// The other direction: we die first, and the object we were showing outlives us holding a
+	// pointer to our notifier. Leave its list before that pointer goes stale.
+	if (m_currentSel != nullptr && m_notifier->GetOwner() == m_currentSel)
+		m_currentSel->RemoveNotifier(m_notifier.get());
+
 	ibObjectInspector::Disconnect(wxID_ANY, wxEVT_OES_PROP_PICTURE_CHANGED, wxCommandEventHandler(ibObjectInspector::OnBitmapPropertyChanged));
 }
 
@@ -101,7 +133,17 @@ void ibObjectInspector::Create(ibPropertyObject* object, bool force)
 
 	if (force || object != m_currentSel) {
 
+		// The object pushes its presentation through the notifier, so it must be registered on
+		// exactly the object we are showing — leave the old one first. A null owner means that
+		// object already died under us (its dtor cleared it): m_currentSel is a corpse and must
+		// NOT be dereferenced to unregister — it already dropped every notifier it had.
+		if (m_currentSel != nullptr && m_notifier->GetOwner() == m_currentSel)
+			m_currentSel->RemoveNotifier(m_notifier.get());
+
 		m_currentSel = object;
+
+		if (m_currentSel != nullptr)
+			m_currentSel->AddNotifier(m_notifier.get());
 
 		const int pageNumber = m_pg->GetSelectedPage();
 
@@ -160,10 +202,7 @@ void ibObjectInspector::Create(ibPropertyObject* object, bool force)
 	}
 
 	if (m_currentSel != nullptr) {
-		for (auto& prop : m_propMap)
-			m_currentSel->OnPropertyRefresh(m_pg, prop.first, prop.second);
-		for (auto event : m_eventMap)
-			m_currentSel->OnEventRefresh(m_pg, event.first, event.second);
+		m_currentSel->OnRefresh();
 		for (auto prop : m_propMap) {
 			wxPGProperty* property = prop.first;
 			if (property != nullptr) {
@@ -250,7 +289,20 @@ wxPropertyGridManager* ibObjectInspector::CreatePropertyGridManager(wxWindow* pa
 	return pg;
 }
 
-wxPGProperty* ibObjectInspector::GetProperty(ibProperty* prop) const 
+bool ibObjectInspector::PropertyHidden(const ibProperty* property, bool hide)
+{
+	// m_propMap is keyed the way rendering needs it (wxPGProperty → ibProperty); the push
+	// arrives the other way round, so walk it. A property set is a screenful, and an object
+	// pushes only for the few properties it owns — a second map would cost more to keep in
+	// step (Clear() rebuilds it wholesale) than this walk costs to run.
+	for (const auto& prop : m_propMap) {
+		if (prop.second == property)
+			return HideProperty(prop.first, hide);   // recursive, as the wxPG default: these are
+	}                                                // the object's OWN leaf properties, and a
+	return false;                                    // composite's children stay its editor's business
+}
+
+wxPGProperty* ibObjectInspector::GetProperty(ibProperty* prop) const
 {
 	wxPGProperty* result = (wxPGProperty* )prop->GetPGProperty();
 	if (result != nullptr) {
@@ -355,8 +407,7 @@ void ibObjectInspector::OnPropertyGridChanged(wxPropertyGridEvent& event)
 	wxWindowUpdateLocker updateLock(m_pg);   // RAII Thaw — a throwing OnPropertyRefresh must not leave the grid frozen
 
 	if (m_currentSel != nullptr) {
-		for (auto prop : m_propMap) m_currentSel->OnPropertyRefresh(m_pg, prop.first, prop.second);
-		for (auto event : m_eventMap) m_currentSel->OnEventRefresh(m_pg, event.first, event.second);
+		m_currentSel->OnRefresh();
 		for (auto prop : m_propMap) {
 			wxPGProperty* property = prop.first;
 			if (property != nullptr) {
@@ -372,16 +423,7 @@ void ibObjectInspector::OnPropertyGridChanged(wxPropertyGridEvent& event)
 					if (parentProperty->IsVisible() != visible) parentProperty->Hide(!visible);
 				}
 			}
-			ibProperty* prop_ptr = prop.second;
-			wxASSERT(prop_ptr);
-			prop_ptr->RefreshPGProperty(property);
 		}
-
-		for (auto evt : m_eventMap) {
-			ibEvent* event_ptr = evt.second;
-			wxASSERT(event_ptr);
-			event_ptr->RefreshPGProperty(evt.first);
-		};
 	}
 	event.Skip();
 }

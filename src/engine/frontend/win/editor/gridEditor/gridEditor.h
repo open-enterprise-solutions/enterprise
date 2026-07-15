@@ -412,7 +412,7 @@ class FRONTEND_API ibGridEditor : public ibGrid {
 		* Property events
 		*/
 		virtual void OnPropertyCreated(ibProperty* property);
-		virtual void OnPropertyRefresh(class wxPropertyGridManager* pg, class wxPGProperty* pgProperty, ibProperty* property);
+		virtual void OnPropertyRefresh() override;
 		virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue);
 
 		friend class ibGridEditor;

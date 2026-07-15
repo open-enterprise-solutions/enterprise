@@ -150,7 +150,7 @@ public:
 	/**
 	* Property events
 	*/
-	virtual void OnPropertyRefresh(class wxPropertyGridManager* pg, class wxPGProperty* pgProperty, ibProperty* property);
+	virtual void OnPropertyRefresh() override;
 
 protected:
 

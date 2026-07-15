@@ -47,6 +47,10 @@ public:
 		return m_pg->HideProperty(id, !show, flags);
 	}
 
+	// The object's push lands here (see ibPropertyObjectNotifier): resolve the ibProperty
+	// to the wxPGProperty currently rendering it and hide/reveal that one.
+	bool PropertyHidden(const ibProperty* property, bool hide);
+
 	wxPGProperty* GetProperty(ibProperty* prop) const;
 	wxPGProperty* GetEvent(ibEvent* event) const;
 
@@ -354,6 +358,10 @@ private:
 	std::map< wxPGProperty*, ibEvent*> m_eventMap;
 
 	ibPropertyObject* m_currentSel;
+
+	// Our end of m_currentSel's push channel, registered on it for exactly as long as we show
+	// it. Its owner doubles as the liveness flag: null means m_currentSel died under us.
+	std::unique_ptr<ibPropertyObjectNotifier> m_notifier;
 
 	// Deferred / coalesced rebuild. A child edit bubbles back here to re-Create the grid, but Create()
 	// Clear()s it — fatal if a wxPG change event is still dispatching on one of those properties, and

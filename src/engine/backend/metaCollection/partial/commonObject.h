@@ -734,7 +734,7 @@ protected:
 	* Property events
 	*/
 	virtual void OnPropertyCreated(ibProperty* property);
-	virtual void OnPropertyRefresh(class wxPropertyGridManager* pg, class wxPGProperty* pgProperty, ibProperty* property);
+	virtual void OnPropertyRefresh() override;
 	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue);
 	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue);
 
@@ -946,11 +946,6 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 	const std::vector<wxObjectDataPtr<ibPredefinedValueObject>>& GetPredefinedValueArray() const { return m_predefinedObjectVector; }
 
 protected:
-
-	/**
-	* Property events
-	*/
-	virtual void OnPropertyRefresh(class wxPropertyGridManager* pg, class wxPGProperty* pgProperty, ibProperty* property);
 
 	// Declare the main table (via the base) + the predefined values as its SEED rows (cells keyed by
 	// column id; the builder diffs by uuid + cells).

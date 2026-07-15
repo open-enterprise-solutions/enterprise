@@ -193,9 +193,8 @@ public:
 	virtual bool IsOk() const { return !m_propValue.IsNull(); }
 	virtual bool IsEmptyProperty() const { return false; }
 
-	//get property for grid 
+	//get property for grid
 	virtual wxObject* GetPGProperty() const = 0;
-	virtual void RefreshPGProperty(wxPGProperty* pg) {};
 
 	// Property <-> node value — the ONLY per-property serialization (no byte
 	// SaveData/LoadData anymore). Read/Write pair: bool + out-param + const on the
@@ -264,6 +263,35 @@ protected:
 #define property_cast(val, type) dynamic_cast<type*>(val.GetData())
 
 ///////////////////////////////////////////////////////////////////////////////
+
+// ---------------------------------------------------------
+// ibPropertyObjectNotifier
+// ---------------------------------------------------------
+
+// The object's presentation channel to whatever is showing it. PURE PUSH, like
+// ibDataViewModelNotifier: the object says WHAT CHANGED about one of ITS OWN
+// properties, in ibProperty terms; the front owns the widget and decides how to
+// apply it. Nothing here pulls, so the editor's toolkit stays out of the object's
+// vtable — and, because an object only ever pushes for a property it declared, a
+// composite's editor keeps full control of its own sub-properties.
+class BACKEND_API ibPropertyObjectNotifier {
+public:
+
+	ibPropertyObjectNotifier() { m_owner = nullptr; }
+	virtual ~ibPropertyObjectNotifier() { m_owner = nullptr; }
+
+	virtual bool PropertyHidden(const ibProperty* property, bool hide) = 0;
+
+	// Null once the object we were registered on is gone (its dtor clears it) — so the
+	// front can tell "still showing a live object" from "holding a corpse" without the
+	// object having to announce anything.
+	void SetOwner(ibPropertyObject* owner) { m_owner = owner; }
+	ibPropertyObject* GetOwner() const { return m_owner; }
+
+private:
+
+	ibPropertyObject* m_owner;
+};
 
 class BACKEND_API ibPropertyObject {
 protected:
@@ -404,12 +432,20 @@ public:
 	virtual bool ReadProperty(const ibDataNode& node);
 	virtual bool WriteProperty(ibDataNode& node) const;
 
+	// The front's ONE refresh entry — sent per render and after an edit, NOT per property.
+	// Default fans out to both halves; override a half to push what that kind's state
+	// decides, or this to do both at once.
+	virtual void OnRefresh() { OnPropertyRefresh(); OnEventRefresh(); }
+
 	/**
 	* ibProperty events
 	*/
 	virtual void OnPropertyCreated() {}
 	virtual void OnPropertyCreated(ibProperty* property) {}
-	virtual void OnPropertyRefresh(class wxPropertyGridManager* pg, class wxPGProperty* pgProperty, ibProperty* property) {}
+	// An override calls HideProperty() for the properties whose visibility its current state
+	// decides (a Type change flips SelectMode) and stays silent about the rest, so nothing it
+	// does not own is ever touched.
+	virtual void OnPropertyRefresh() {}
 	virtual void OnPropertySelected(ibProperty* property) {}
 	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue) { return true; }
 	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) {}
@@ -419,7 +455,7 @@ public:
 	*/
 	virtual void OnEventCreated() {}
 	virtual void OnEventCreated(ibEvent* event) {}
-	virtual void OnEventRefresh(class wxPropertyGridManager* pg, class wxPGProperty* pgProperty, ibEvent* event) {}
+	virtual void OnEventRefresh() {}
 	virtual void OnEventSelected(ibEvent* event) {}
 	virtual bool OnEventChanging(ibEvent* event, const wxVariant& newValue) { return true; }
 	virtual void OnEventChanged(ibEvent* property, const wxVariant& oldValue, const wxVariant& newValue) {}
@@ -430,6 +466,25 @@ public:
 	// signal, not the property event: reusing OnPropertyChanged here would make a holder re-forward to
 	// the property's owner and fire the child's handler a second time.
 	virtual void OnChildChanged() { if (m_attachOwner != nullptr) m_attachOwner->OnChildChanged(); }
+
+#pragma region __notifier_h__
+
+	// The front registers itself once the object's properties are built, and drops out
+	// when it stops showing it. Non-owning — the notifier outlives nothing here.
+	void AddNotifier(ibPropertyObjectNotifier* notifier);
+	void RemoveNotifier(ibPropertyObjectNotifier* notifier);
+
+	int GetViewCount() const { return (int)m_notifiers.size(); }
+
+protected:
+
+	// The push. An OnPropertyRefresh override calls this for a property IT declared;
+	// silence means "not mine, leave it alone".
+	bool HideProperty(const ibProperty* property, bool hide = true);
+
+public:
+
+#pragma endregion
 
 	/**
 	* Checks whether the type is derived from the one passed as a parameter.
@@ -469,6 +524,9 @@ private:
 	std::map<wxString, ibEvent*> m_events;
 	std::vector<ibPropertyObject*> m_attachedObjects;   // non-owning — GetProperty routes to them
 	ibPropertyObject* m_attachOwner = nullptr;          // upward back-link to whoever attached us (see GetAttachOwner)
+
+	//property notifier
+	std::vector<ibPropertyObjectNotifier*> m_notifiers; // non-owning — the front adds and removes itself
 };
 
 template <typename T>

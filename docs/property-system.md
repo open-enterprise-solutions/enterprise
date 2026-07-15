@@ -17,7 +17,7 @@ mechanism reads that one declaration:
 
 | Surface | Entry | Lives |
 |---|---|---|
-| **Designer editor** | `GetPGProperty()` → a `wxPGProperty` | frontend only (null when unloaded) |
+| **Designer editor** | `GetPGProperty()` → a `wxPGProperty` (§4); presentation pushed back via `ibPropertyObjectNotifier` (§5.3) | frontend only (null when unloaded / no notifier registered) |
 | **Runtime script** | `SetDataValue` / `GetDataValue` over `ibValue` (§7) | backend, headless-safe |
 | **Serialization** | `ReadNodeValue` / `WriteNodeValue` over `ibDataValue` (§6) | backend, headless-safe |
 | **Copy / paste** | `CopyNodeValue` / `PasteNodeValue` (§6) | backend, headless-safe |
@@ -103,10 +103,9 @@ void SetValue(const bool boolean) { m_propValue = boolean; }
 
 ## 4. The backend/frontend seam — a function-pointer slot
 
-`backend.dll` has **zero UI code** (decision #4 in [../CLAUDE.md](../CLAUDE.md)), yet each
-property must produce a `wxPGProperty` for wxPropertyGrid. The seam is a static
-function-pointer slot per property type, and a return type of `wxObject*` — the most
-derived type backend is allowed to name:
+`backend.dll` owns no UI **code**, yet each property must produce a `wxPGProperty` for
+wxPropertyGrid. The seam is a static function-pointer slot per property type, and a return
+type of `wxObject*` — the most derived type backend is allowed to name:
 
 ```cpp
 // backend/propertyManager/property/propertyBoolean.h
@@ -279,6 +278,92 @@ property's owner and fire the child's handler a second time.
 > **The lesson from the arc that built this:** do not add parallel notifiers. One standard
 > upward path (`OnChildChanged` along the attach chain) replaced a set of ad-hoc
 > `NotifyFormModified` / `RefreshAttributeTree` / `RefreshCompositionTree` calls.
+
+### 5.3 The outward edge — `ibPropertyObjectNotifier`
+
+`OnChildChanged` carries a change *up*. This carries one *out*, to whatever is showing the
+object. Modelled on `ibDataViewModelNotifier` ([../src/engine/backend/tableView.h](../src/engine/backend/tableView.h)),
+including its rule: **PURE PUSH** — the object says what changed, in `ibProperty` terms, and
+the front owns the widget.
+
+```cpp
+class BACKEND_API ibPropertyObjectNotifier {
+public:
+    ibPropertyObjectNotifier() { m_owner = nullptr; }
+    virtual ~ibPropertyObjectNotifier() { m_owner = nullptr; }
+    virtual bool PropertyHidden(const ibProperty* property, bool hide) = 0;
+    void SetOwner(ibPropertyObject* owner) { m_owner = owner; }
+    ibPropertyObject* GetOwner() const { return m_owner; }
+private:
+    ibPropertyObject* m_owner;
+};
+```
+
+`ibPropertyObject` holds them non-owningly (`AddNotifier` / `RemoveNotifier`, `GetViewCount`)
+and pushes through the protected `HideProperty(const ibProperty*, bool)`. The front's end is
+`ibGenericPropertyObjectNotifier` (`frontend/mainFrame/objinspect/objinspect.cpp`) — a
+forwarder that resolves the `ibProperty` back to its `wxPGProperty` through `m_propMap` and
+calls the grid. One method per fact, as in the reference: a second state (enabled) becomes
+`PropertyEnabled`, **not** a widened `SetPropertyState(prop, bool)` — a name promising
+"state" while carrying one flag cannot grow without breaking its signature.
+
+**Why this replaced a per-property hook.** The old
+`OnPropertyRefresh(wxPropertyGridManager*, wxPGProperty*, ibProperty*)` put two wxPG types
+in the vtable of every metaobject — `ibValueMetaObjectAttribute`, `…RecordDataMutableRef`,
+`…TableData` — and was asked once **per property**. Every implementation did exactly one
+thing: `pg->HideProperty(pgProperty, <bool>)`. Two widget types travelling through the core
+for one boolean.
+
+**The refresh is one call per object, not per property** (§5.4), and an override pushes only
+for properties **it declared**. That silence is load-bearing, and it is why a pull-shaped
+`bool IsPropertyVisible(const ibProperty*)` was tried and rejected:
+
+- `ibObjectInspector::HideProperty` defaults to `wxPGPropertyValuesFlags::Recurse`.
+- Composite editors (`advpropType`, `advpropPicture`, `advpropSource`) drive the visibility
+  of their **own sub-properties** — `m_precision`, `m_scale`, `m_date_time`, `m_length`.
+- Under the old hook nobody overrode for `Type`, so `HideProperty` was never called on it
+  and those children kept whatever their editor set. A pull answering "visible: true" by
+  default would call `HideProperty(Type, false, Recurse)` and **reveal them all** — a string
+  type would sprout `precision` and `scale`.
+
+Not being asked is not the same as answering yes. Push preserves that; pull cannot.
+
+### 5.4 Refresh — one entry, two halves
+
+```cpp
+virtual void OnRefresh() { OnPropertyRefresh(); OnEventRefresh(); }  // the front's ONE call
+virtual void OnPropertyRefresh() {}   // declared in the ibProperty events group
+virtual void OnEventRefresh() {}      // declared in the ibEvent events group
+```
+
+The inspector calls `OnRefresh()` after a build and after an edit. An override recomputes
+live from current state — never cached, same rule as the value (§3):
+
+```cpp
+void ibValueMetaObjectTableData::OnPropertyRefresh()
+{
+    ibValueMetaObjectCompositeData::OnPropertyRefresh();
+    HideProperty(m_propertyUse,
+        dynamic_cast<ibValueMetaObjectRecordDataHierarchyMutableRef*>(m_parent) == nullptr);
+}
+```
+
+### 5.5 Dangling — the owner IS the liveness flag
+
+A front outlives the object it shows: a reload, a deleted node, or an attribute Type change
+re-materialising its value all destroy an object under a live inspector. `~ibPropertyObject`
+clears `SetOwner(nullptr)` on every notifier and drops them. No separate "I am dying" callback
+is needed — a null owner already means "the pointer you kept is a corpse":
+
+```cpp
+if (m_currentSel != nullptr && m_notifier->GetOwner() == m_currentSel)
+    m_currentSel->RemoveNotifier(m_notifier.get());   // else: do NOT dereference
+```
+
+Both directions are covered: `~ibObjectInspector` unregisters from a live object, and the
+object's dtor disarms the front. (The pre-existing dtor hop through
+`ibSession::CurrentFrame()->SetProperty(nullptr)` is the **same** problem solved by hand —
+its own TODO asks for exactly this observer.)
 
 ---
 
@@ -480,9 +565,11 @@ if (m_inGridEvent || m_rebuildScheduled) {
 }
 ```
 
-`OnPropertyGridChanged` pairs with it: if a rebuild is already scheduled it **skips**,
-because walking the stale `m_propMap` would call `RefreshPGProperty` on an `ibProperty`
-already freed by a re-materialised value (the attribute-Type-change crash).
+`OnPropertyGridChanged` pairs with it: if a rebuild is already scheduled it **skips**, because
+walking the stale `m_propMap` would touch an `ibProperty` already freed by a re-materialised
+value (the attribute-Type-change crash). The guard outlived its original reason —
+`RefreshPGProperty(wxPGProperty*)`, a hook nothing ever overrode, is gone — but the map is
+still walked here to collapse empty categories, so the skip stays load-bearing.
 
 ### 8.2 RAII freeze — why `wxWindowUpdateLocker`
 
@@ -616,3 +703,25 @@ not own, so queued grid events must not outlive it.
   drift the naming plan should sweep.
 - The `.h`/`.cpp` split in `advprop/` is nominal: several of those `.cpp` files are only a
   loader object, which is why their headers are empty.
+- **propgrid still reaches the backend property layer — and it is no longer about the
+  metaobjects.** With the notifier in (§5.3) no metaobject vtable names a wxPG type, but
+  three files still *build* one: `eventAction.h`, `propertyEnum.h`, `propertyList.h` compose
+  a `wxPGChoices` and pass it **through** the slot
+  (`ms_propertyEnum(…, const wxPGChoices&, …)`) — which is exactly what §4 says backend may
+  not do (`wxObject*` is the limit). They reach it transitively: `typeconv.h` includes
+  `<wx/propgrid/propgrid.h>` and is pulled in by `backend_core.h`, i.e. by every backend TU.
+  The data is already backend-side — `ibPropertyList::m_listPropValue` has
+  `GetItemCount / GetItemLabel / GetItemId / GetItemBitmap` — so `wxPGChoices` here is a
+  converter standing on the wrong side of the seam; handing the list over and letting the
+  front build the choices removes it rather than abstracts it. (`GetValueList()` also
+  `const_cast`s `this` to invoke its functor.)
+- **The 32 slots have no key.** A property is the one type in the engine with no
+  `ibClassKind` ([../CLAUDE.md](../CLAUDE.md) §6): lacking an id to dispatch on, the seam
+  encodes the type *in the signature* — hence one slot per value type, paired with its
+  `advprop*` file by filename convention only. The composite slots
+  (`(ibPropertyObject*, label, name, const wxVariant&)`) already show that one shape
+  suffices; everything in it is reachable from the property itself
+  (`GetPropertyObject / GetLabel / GetName / GetValue`). A property kind + a frontend
+  registry keyed by clsid would collapse all 32 into one renderer contract and let
+  `GetPGProperty()` leave the backend entirely. Not attempted yet; the choice-list three
+  above are the smaller, self-contained first step.

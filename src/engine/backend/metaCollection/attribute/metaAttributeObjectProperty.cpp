@@ -15,34 +15,24 @@ void ibValueMetaObjectAttribute::OnPropertyCreated(ibProperty* property)
 	//}
 }
 
-#include <wx/propgrid/manager.h>
-
-void ibValueMetaObjectAttribute::OnPropertyRefresh(wxPropertyGridManager* pg, wxPGProperty* pgProperty, ibProperty* property)
+void ibValueMetaObjectAttribute::OnPropertyRefresh()
 {
-	if (m_propertySelectMode == property) {
-		if (GetClsidCount() > 1) {
-			pg->HideProperty(pgProperty, true);
-		}
-		else {
-			const ibCtorMetaValueType* so = GetMetaData()->GetTypeCtor(GetFirstClsid());
-			if (so != nullptr) {
-				const ibValueMetaObjectRecordDataHierarchyMutableRef* metaObject = dynamic_cast<const ibValueMetaObjectRecordDataHierarchyMutableRef*>(so->GetMetaObject());
-				if (metaObject == nullptr)
-					pg->HideProperty(pgProperty, true);
-				else if (so->GetMetaTypeCtor() != ibCtorObjectMetaType::ibCtorObjectMetaType_Reference)
-					pg->HideProperty(pgProperty, true);
-				else 
-					pg->HideProperty(pgProperty, false);
-			}
-			else {
-				pg->HideProperty(pgProperty, true);
-			}
-		}
+	ibValueMetaObjectAttributeBase::OnPropertyRefresh();
+
+	// SelectMode only means something for an attribute that points at ONE hierarchical
+	// reference type: a multi-type attribute has no single hierarchy to choose in.
+	bool selectable = false;
+	if (GetClsidCount() == 1) {
+		const ibCtorMetaValueType* so = GetMetaData()->GetTypeCtor(GetFirstClsid());
+		selectable = so != nullptr
+			&& so->GetMetaTypeCtor() == ibCtorObjectMetaType::ibCtorObjectMetaType_Reference
+			&& dynamic_cast<const ibValueMetaObjectRecordDataHierarchyMutableRef*>(so->GetMetaObject()) != nullptr;
 	}
-	else if (m_propertyItemMode == property) {
-		ibValueMetaObjectRecordDataHierarchyMutableRef* metaObject = dynamic_cast<ibValueMetaObjectRecordDataHierarchyMutableRef*>(m_parent);
-		pg->HideProperty(pgProperty, metaObject == nullptr);
-	}
+	HideProperty(m_propertySelectMode, !selectable);
+
+	// ItemMode is the OWNER's question — only a hierarchical owner has folders vs items.
+	HideProperty(m_propertyItemMode,
+		dynamic_cast<ibValueMetaObjectRecordDataHierarchyMutableRef*>(m_parent) == nullptr);
 }
 
 bool ibValueMetaObjectAttribute::OnPropertyChanging(ibProperty* property, const wxVariant& newValue)

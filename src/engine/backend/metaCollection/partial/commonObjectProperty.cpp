@@ -5,11 +5,10 @@ void ibValueMetaObjectRecordDataMutableRef::OnPropertyCreated(ibProperty* proper
 	ibValueMetaObjectRecordDataRef::OnPropertyCreated(property);
 }
 
-#include <wx/propgrid/manager.h>
-
-void ibValueMetaObjectRecordDataMutableRef::OnPropertyRefresh(wxPropertyGridManager* pg, wxPGProperty* pgProperty, ibProperty* property)
+void ibValueMetaObjectRecordDataMutableRef::OnPropertyRefresh()
 {
-	if (m_propertyQuickChoice == property) { pg->HideProperty(pgProperty, true); }
+	ibValueMetaObjectRecordDataRef::OnPropertyRefresh();
+	HideProperty(m_propertyQuickChoice, true);
 }
 
 bool ibValueMetaObjectRecordDataMutableRef::OnPropertyChanging(ibProperty* property, const wxVariant& newValue)
@@ -20,10 +19,4 @@ bool ibValueMetaObjectRecordDataMutableRef::OnPropertyChanging(ibProperty* prope
 void ibValueMetaObjectRecordDataMutableRef::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
 {
 	ibValueMetaObjectRecordDataRef::OnPropertyChanged(property, oldValue, newValue);
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-
-void ibValueMetaObjectRecordDataHierarchyMutableRef::OnPropertyRefresh(wxPropertyGridManager* pg, wxPGProperty* pgProperty, ibProperty* property)
-{
 }

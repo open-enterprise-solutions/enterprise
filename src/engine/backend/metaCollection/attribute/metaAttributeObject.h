@@ -134,7 +134,7 @@ class BACKEND_API ibValueMetaObjectAttribute : public ibValueMetaObjectAttribute
 	* Property events
 	*/
 	virtual void OnPropertyCreated(ibProperty* property);
-	virtual void OnPropertyRefresh(class wxPropertyGridManager* pg, class wxPGProperty* pgProperty, ibProperty* property);
+	virtual void OnPropertyRefresh() override;
 	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue);
 	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue);
 

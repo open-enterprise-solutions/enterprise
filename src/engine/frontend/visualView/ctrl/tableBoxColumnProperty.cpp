@@ -4,30 +4,21 @@ void ibValueModelTableBoxColumn::OnPropertyCreated(ibProperty* property)
 {
 }
 
-#include <wx/propgrid/manager.h>
-
 #include "backend/metaData.h"
 #include "backend/objCtor.h"
 
-void ibValueModelTableBoxColumn::OnPropertyRefresh(wxPropertyGridManager* pg, wxPGProperty* pgProperty, ibProperty* property)
+void ibValueModelTableBoxColumn::OnPropertyRefresh()
 {
-	if (m_propertyChoiceForm == property) {
-		if (GetClsidCount() > 1) {
-			pg->HideProperty(pgProperty, true);
-		}
-		else {
-			const ibCtorMetaValueType* so = GetMetaData()->GetTypeCtor(GetFirstClsid());
-			if (so != nullptr) {
-				if (so->GetMetaTypeCtor() != ibCtorObjectMetaType::ibCtorObjectMetaType_Reference)
-					pg->HideProperty(pgProperty, true);
-				else
-					pg->HideProperty(pgProperty, false);
-			}
-			else {
-				pg->HideProperty(pgProperty, true);
-			}
-		}
+	ibValueControl::OnPropertyRefresh();
+
+	// A choice form can only be offered when the column points at ONE reference type.
+	bool hasChoice = false;
+	if (GetClsidCount() == 1) {
+		const ibCtorMetaValueType* so = GetMetaData()->GetTypeCtor(GetFirstClsid());
+		hasChoice = so != nullptr
+			&& so->GetMetaTypeCtor() == ibCtorObjectMetaType::ibCtorObjectMetaType_Reference;
 	}
+	HideProperty(m_propertyChoiceForm, !hasChoice);
 }
 
 bool ibValueModelTableBoxColumn::OnPropertyChanging(ibProperty* property, const wxVariant& newValue)

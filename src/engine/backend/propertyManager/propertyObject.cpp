@@ -72,6 +72,14 @@ ibPropertyObject::~ibPropertyObject()
 	if (m_attachOwner != nullptr)
 		m_attachOwner->RemoveAttachedObject(this);
 
+	// Same rule for the notifiers: a front outlives the object it shows (a reload, a deleted node, a
+	// re-materialised value all kill us under a live inspector). Clearing the owner is what tells it
+	// the pointer it kept is now a corpse — it can no longer ask us anything after this line.
+	for (ibPropertyObjectNotifier* notifier : m_notifiers)
+		if (notifier->GetOwner() == this)
+			notifier->SetOwner(nullptr);
+	m_notifiers.clear();
+
 	wxDELETE(m_category);
 
 	for (auto& property : m_properties)
@@ -171,6 +179,36 @@ void ibPropertyObject::AddProperty(ibProperty* prop)
 void ibPropertyObject::AddEvent(ibEvent* event)
 {
 	m_events.emplace(std::map<wxString, ibEvent*>::value_type(event->GetName(), event));
+}
+
+void ibPropertyObject::AddNotifier(ibPropertyObjectNotifier* notifier)
+{
+	if (notifier == nullptr)
+		return;
+	m_notifiers.push_back(notifier);
+	notifier->SetOwner(this);
+}
+
+void ibPropertyObject::RemoveNotifier(ibPropertyObjectNotifier* notifier)
+{
+	if (notifier == nullptr)
+		return;
+	m_notifiers.erase(
+		std::remove(m_notifiers.begin(), m_notifiers.end(), notifier),
+		m_notifiers.end());
+	if (notifier->GetOwner() == this)
+		notifier->SetOwner(nullptr);
+}
+
+bool ibPropertyObject::HideProperty(const ibProperty* property, bool hide)
+{
+	if (property == nullptr)
+		return false;
+	bool result = false;
+	for (ibPropertyObjectNotifier* notifier : m_notifiers)
+		if (notifier->PropertyHidden(property, hide))
+			result = true;
+	return result;
 }
 
 void ibPropertyObject::AttachPropertyObject(ibPropertyObject* other)

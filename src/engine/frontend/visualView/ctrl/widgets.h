@@ -164,7 +164,7 @@ class ibValueTextCtrl : public ibValueWindow,
 	* Property events
 	*/
 	virtual void OnPropertyCreated(ibProperty* property);
-	virtual void OnPropertyRefresh(class wxPropertyGridManager* pg, class wxPGProperty* pgProperty, ibProperty* property);
+	virtual void OnPropertyRefresh() override;
 
 	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue);
 

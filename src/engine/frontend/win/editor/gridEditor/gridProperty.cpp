@@ -217,15 +217,15 @@ void ibGridEditor::ibPropertyGridEditorSpreadsheet::OnPropertyCreated(ibProperty
 		ibPropertyGridEditorSpreadsheet::OnPropertyCreated(property, coords);
 }
 
-void ibGridEditor::ibPropertyGridEditorSpreadsheet::OnPropertyRefresh(wxPropertyGridManager* pg, wxPGProperty* pgProperty, ibProperty* property)
+void ibGridEditor::ibPropertyGridEditorSpreadsheet::OnPropertyRefresh()
 {
-	if (m_propertyText == property) {
-		pg->HideProperty(pgProperty, m_propertyFillType->GetValueAsEnum() == ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter);
-	}
-	else if (m_propertyParameter == property) {
-		pg->HideProperty(pgProperty, m_propertyFillType->GetValueAsEnum() != ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter);
-	}
+	ibPropertyObject::OnPropertyRefresh();
 
+	// Text and Parameter are the two faces of FillType — exactly one of them applies.
+	const bool byParameter =
+		m_propertyFillType->GetValueAsEnum() == ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter;
+	HideProperty(m_propertyText, byParameter);
+	HideProperty(m_propertyParameter, !byParameter);
 }
 
 void ibGridEditor::ibPropertyGridEditorSpreadsheet::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)

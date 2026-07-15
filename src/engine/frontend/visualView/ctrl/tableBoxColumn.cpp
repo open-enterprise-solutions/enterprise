@@ -389,9 +389,7 @@ bool ibValueModelTableBoxColumn::WriteData(ibDataNode& node) const
 // finds them. ChoiceProcessing in particular is pure-virtual in the
 // base, the override is required even on web.
 void ibValueModelTableBoxColumn::OnPropertyCreated(ibProperty* /*property*/) {}
-void ibValueModelTableBoxColumn::OnPropertyRefresh(
-	class wxPropertyGridManager* /*pg*/, class wxPGProperty* /*pgProperty*/,
-	ibProperty* /*property*/) {}
+void ibValueModelTableBoxColumn::OnPropertyRefresh() {}
 bool ibValueModelTableBoxColumn::OnPropertyChanging(ibProperty* /*property*/,
 	const wxVariant& /*newValue*/) { return true; }
 void ibValueModelTableBoxColumn::ChoiceProcessing(ibValue& /*vSelected*/) {}
