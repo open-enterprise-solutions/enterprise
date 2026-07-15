@@ -41,6 +41,28 @@ enterprise/
 │   ├── ui-palette.md         # Interior-design palette — source of truth for UI colours
 │   ├── uikit.md              # Custom-drawn UI engine (wxUniversal fork + Luna theme)
 │   ├── data-composer.md      # L5 — declarative composition over the query language
+│   ├── report-engine.md      # Report metaobject + spreadsheet document (runtime shape)
+│   ├── command-interface.md  # Interface metaobject = subsystem + command bar
+│   ├── property-system.md    # ibPropertyObject + object inspector — the skeleton (5 surfaces)
+│   ├── metadata-tree.md      # Designer navigator + external reports/processors
+│   ├── form-editor.md        # visual designer — panels, undo/redo, drag-to-create
+│   ├── spreadsheet-editor.md # the grid behind templates and report output
+│   ├── system-functions.md   # the global script API — 89 functions + 6 procedures
+│   ├── database-modes.md     # file vs server base — where each puts its artefacts
+│   ├── debugger-architecture.md # TCP transport, why the debuggee is the server
+│   ├── database-layer.md     # driver abstraction — lineage, what's ours, adding a driver
+│   ├── script-value-types.md # every script type — creatable vs vended
+│   ├── compiler-pipeline.md  # the spine: translate → compile → execute, runtime assembly
+│   ├── factories.md          # ctor registries + the two-phase Init idiom
+│   ├── enumerations.md       # the enum template system + RECIPE to add one
+│   ├── descriptions.md       # the ibXxxDescription storage-shape pattern
+│   ├── source-object.md      # what a form binds to — the metadata-free source node
+│   ├── main-frame.md         # one base, Designer/Enterprise windows, startup phases
+│   ├── designer-editors.md   # code / role / interface editors
+│   ├── wx-fork.md            # forked + vendored widget layer (dataview, grid, charts)
+│   ├── pictures.md           # three picture kinds, one description
+│   ├── serialization-io.md   # ibWriter/ibReader, chunks, compression (⚠ licensing)
+│   ├── ROADMAP.md            # state of the platform — landed / in flight / not built
 │   └── configuration-compare.md  # Compare/Merge feature — walker, model, Apply paths
 └── src/
     ├── 3rdparty/wxWidgets/  # Submodule (wxWidgets 3.3.2)

@@ -93,6 +93,33 @@ The in-designer control clipboard copy (`ibValueForm::CopyObject` → `ibValueFr
 already serialises through `CopyProperty` / `PasteProperty` → `Copy/PasteNodeValue` — consistent, by
 analogy with the metaobject.
 
+### `CopyData` / `PasteData` — the hook for what the walk skips
+
+`CopyNode` / `PasteNode` are **forked from** `WriteData` / `ReadData`, not layered on them. That fork is
+why the generic property walk alone is not enough: a datum that is not a property has no way into the
+copy blob. Form **attributes** were exactly that datum — they did not survive a copy.
+
+The seam is a pair of virtuals on the frame, defaulting to a no-op so no control has to care
+(`visualView/ctrl/frame.h`):
+
+```cpp
+virtual bool CopyData(ibDataNode& node) const { return true; }
+virtual bool PasteData(const ibDataNode& node) { return true; }
+```
+
+`ibValueFrame::CopyNode` / `PasteNode` call them as part of the walk (`frame.cpp`), and the form
+overrides them (`visualView/ctrl/form.cpp`):
+
+```cpp
+bool ibValueForm::CopyData (ibDataNode& node) const { return WriteAttributes(node); }
+bool ibValueForm::PasteData(const ibDataNode& node) { return ReadAttributes(node); }
+```
+
+**Why only attributes, and not `WriteData`'s whole payload:** the form's own properties (Title / Orient /
+…) already ride the generic property walk inside `Copy/PasteNode`. Re-emitting them here — which is what
+delegating to `WriteData` would do — would **double-write** them. Attributes are the one form-level datum
+the walk skips, so they are the one thing the hook carries.
+
 ### The lazy object-form catch (the hard part)
 
 An OBJECT form (catalog/document/…) materialises **lazily**: `OnAfterRunMetaObject` registers an
