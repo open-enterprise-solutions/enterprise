@@ -3,7 +3,7 @@
 
 // L4-2 — ibValueQueryable (script "Queryable"): a DATA SOURCE as a script value.
 //
-// Vended by the `Data` global (Data.Catalogs.Номенклатура — see
+// Vended by the `Data` global (Data.Catalogs.Goods — see
 // moduleManager/moduleManagerDataUnit.cpp); never constructed with New. Wraps the
 // metaobject's ibBackendQueryable — the SAME object the text query language reads
 // through, so the script surface and `FROM Catalogs.X` are one world by
@@ -53,7 +53,7 @@ class ibBackendQueryable;
 class BACKEND_API ibValueQueryable : public ibValue
 {
 	const ibBackendQueryable* m_queryable = nullptr;
-	wxString                  m_sourceName;          // "Catalogs.Номенклатура" — watch / diagnostics
+	wxString                  m_sourceName;          // "Catalogs.Goods" — watch / diagnostics
 	ibDataQueryBuilder        m_builder;             // accumulated door verbs (From set at vend)
 	long                      m_take = 0;            // Take(n) — page limit at execute (0 = all)
 	// Select(x => x.Field) — a single-column SCALAR projection: the read yields THIS column's
@@ -182,7 +182,7 @@ public:
 	// straight into the target query (never a separate builder).
 	virtual void DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibValue** args, long n) override;
 
-	// Type branch in a handler: `Source = "Document.Поступление"` compares the decorated source to its
+	// Type branch in a handler: `Source = "Document.Receipt"` compares the decorated source to its
 	// canonical full-name STRING ("<ClassName>.<Name>"), so a module can shape per source.
 	virtual bool CompareValueEQ(const ibValue& cParam) const override;
 	virtual bool CompareValueNE(const ibValue& cParam) const override { return !CompareValueEQ(cParam); }

@@ -26,7 +26,7 @@ wxObject* ibValueSlider::Create(wxWindow* wxparent, ibVisualHost* visualHost)
 	return slider;
 }
 
-void ibValueSlider::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueSlider::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
 }
 

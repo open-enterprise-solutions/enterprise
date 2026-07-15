@@ -34,14 +34,14 @@ class ibRoleEditor : public wxSplitterWindow {
 	ibValueMetaObject* m_metaRole;
 
 	class wxTreeItemMetaData : public wxTreeItemData {
-		ibAccessObject* m_metaObject; //тип элемента
+		ibAccessObject* m_metaObject; // element type
 	public:
 		wxTreeItemMetaData(ibAccessObject* metaObject) : m_metaObject(metaObject) {}
 		ibAccessObject* GetMetaObject() const { return m_metaObject; }
 	};
 
 	class wxTreeItemRoleData : public wxTreeItemMetaData {
-		ibRole* m_role; //тип элемента
+		ibRole* m_role; // element type
 	public:
 		wxTreeItemRoleData(ibRole* role) : wxTreeItemMetaData(role->GetRoleObject()), m_role(role) {}
 		ibRole* GetRole() const { return m_role; }

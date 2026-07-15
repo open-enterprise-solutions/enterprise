@@ -7,7 +7,7 @@
 > metadata-blind list act on a metadata row: commands, open, select, key, columns, and the
 > source metaobject all forward from a per-metaobject descriptor. Folder / select / default
 > sort became creation-time **settings** on the composer, not subtypes. Designer supports an
-> arbitrary-query first tab (runtime rendering of the result is the remaining "потом").
+> arbitrary-query first tab (runtime rendering of the result is the remaining "later").
 > Reference memory: `reference_source_command_layer`, `project_dynamic_list_unification`,
 > `project_totals_by_without_aggregate`.
 

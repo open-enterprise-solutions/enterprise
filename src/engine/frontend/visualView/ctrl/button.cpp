@@ -35,7 +35,7 @@ wxObject* ibValueButton::Create(ibFrontendWindow* wxparent, ibVisualHost* visual
 	return button;
 }
 
-void ibValueButton::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueButton::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
 }
 

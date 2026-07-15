@@ -251,7 +251,7 @@ bool ibValueMetaObjectChartOfAccounts::OnAfterRunMetaObject(int flags)
 	if (!(*m_propertyManagerModule)->OnAfterRunMetaObject(flags)) return false;
 
 
-	// Set SubcontoKind column type from РџР’РҐ binding
+	// Set SubcontoKind column type from ChartOfCharacteristicTypes binding
 	const ibMetaDescription& metaDesc = m_propertyChartOfCharacteristicTypes->GetValueAsMetaDesc();
 	if (m_propertySubcontoKindsTable->GetMetaObject() != nullptr && metaDesc.GetTypeCount() > 0) {
 		ibTypeDescription typeDesc;

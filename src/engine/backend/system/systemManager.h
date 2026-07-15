@@ -4,7 +4,7 @@
 #include "backend/backend.h"
 #include "backend/compiler/value.h"
 
-//--Константы:
+//-- Constants:
 #define PageBreak wxT("\n\n")
 #define LineBreak wxT("\n")
 #define TabSymbol wxT("\t")
@@ -18,13 +18,13 @@ class BACKEND_API ibValueSystemFunction : public ibValueStaticMembers<&ibValueSy
 	static wxDateTime ms_workDate;
 public:
 
-	//--- Базовые:
+	//--- Basic:
 	static bool Boolean(const ibValue& cValue);
 	static ibNumber Number(const ibValue& cValue);
 	static wxLongLong_t Date(const ibValue& cValue);
 	static wxString String(const ibValue& cValue);
 
-	//--- Математика:
+	//--- Math:
 	static ibNumber Round(const ibValue& cValue, int precision = 0, ibRoundMode mode = ibRoundMode::ibRoundMode_Round15as20);
 	static ibValue Int(const ibValue& cNumber);
 	static ibNumber Log10(const ibValue& cValue);
@@ -33,7 +33,7 @@ public:
 	static ibValue Min(ibValue** paParams, const long lSizeArray);
 	static ibValue Sqrt(const ibValue& cValue);
 
-	//--- Строки:
+	//--- Strings:
 	static int StrLen(const ibValue& cValue);
 	static bool IsBlankString(const ibValue& cValue);
 	static ibString TrimL(const ibValue& cValue);
@@ -53,7 +53,7 @@ public:
 	static short Asc(const ibValue& cSource);
 	static wxString TStr(const ibValue& cSource, const ibValue& cLanguage);
 
-	//--- Дата и время:
+	//--- Date and time:
 	static ibValue CurrentDate();
 	static ibValue WorkingDate();
 	static ibValue AddMonth(const ibValue& cData, int nMonthAdd = 1);
@@ -78,16 +78,16 @@ public:
 	static int GetDayOfWeek(const ibValue& cData);
 	static int GetQuartOfYear(const ibValue& cData);
 
-	//--- Работа с файлами:
+	//--- File operations:
 	static bool CopyFile(const wxString& src, const wxString& dst);
 	static bool DeleteFile(const wxString& file);
 	static wxString GetTempDir();
 	static wxString GetTempFileName();
 
-	//--- Работа с окнами:
+	//--- Window operations:
 	static class ibBackendValueForm* ActiveWindow();
 
-	//--- Уведомления:
+	//--- Notifications:
 	static void Message(const wxString& strMessage, ibStatusMessage status = ibStatusMessage::ibStatusMessage_Information);
 	static void Alert(const wxString& strMessage);
 	static ibValue Question(const wxString& strMessage, ibQuestionMode mode = ibQuestionMode::ibQuestionMode_OK);

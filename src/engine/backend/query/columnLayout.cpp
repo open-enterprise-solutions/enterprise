@@ -328,7 +328,7 @@ bool ibColumnCodec::ReadField(const wxString& fieldName, int fieldType,
 		}
 
 		// Empty _RRRef and no refType — the reference is empty / its dot-walk join did not match: the
-		// column's TYPED EMPTY (пусто), not UNDEFINED.
+		// column's TYPED EMPTY value, not UNDEFINED.
 		retValue = (col != nullptr) ? ibValueTypeDescription::AdjustValue(col->GetTypeDesc()) : ibValue();
 		return true;
 	}
@@ -363,7 +363,7 @@ bool ibColumnCodec::ReadValue(const wxString& fieldName,
 	default:
 		// The stored TYPE tag is NULL / untagged (0): no value in this cell — a fresh row, or a dot-walk
 		// through an empty / broken reference whose LEFT JOIN did not match. Yield the COLUMN'S TYPED EMPTY
-		// (пусто), never UNDEFINED, and NEVER read a sub-field the column lacks (a number column has no
+		// empty value, never UNDEFINED, and NEVER read a sub-field the column lacks (a number column has no
 		// _RRRef). A real reference value tags _TYPE = Reference and takes the case above.
 		// (docs/query-language-arc.md §22.4b — typed-empty dot-walk)
 		retValue = (col != nullptr) ? ibValueTypeDescription::AdjustValue(col->GetTypeDesc()) : ibValue();

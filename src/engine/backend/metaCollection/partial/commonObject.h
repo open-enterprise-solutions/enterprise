@@ -321,7 +321,7 @@ class BACKEND_API ibValueMetaObjectRecordDataExt : public ibValueMetaObjectRecor
 	//ctor
 	ibValueMetaObjectRecordDataExt();
 
-	//пїЅreate from file?
+	//create from file?
 	virtual bool IsExternalCreate() const { return false; }
 
 	//module manager is started or exit

@@ -35,7 +35,7 @@ public:
 	// or writes the value itself.
 	const std::vector<ibSourceHop>& GetValueAsPath() const;   // the {id, expected type} hop path — id + type per hop
 
-	// The binding rendered as its dotted NAME (e.g. "Товар.Артикул") — the variant's own MakeString, the
+	// The binding rendered as its dotted NAME (e.g. "Product.SKU") — the variant's own MakeString, the
 	// same string the designer shows and the composer's ORDER BY / Filter dot-walks. "<not selected>" when unbound.
 	wxString GetValueAsString() const;
 

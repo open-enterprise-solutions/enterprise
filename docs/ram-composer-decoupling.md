@@ -1,14 +1,14 @@
 # Composer / model split — decoupling RAM tables from the queryable (arc design)
 
 Status: **STEPS 1–4 LANDED + RUNTIME-VERIFIED** (2026-07-01, backend + solution build GREEN Debug|x86, 0 errors;
-Max confirmed the RAM live-node display / edit works at runtime — "работает на удивление"). Step 5 (the literal `ibValueModelDb`/`ibValueModelRam` class split) is deliberately NOT done — the
+Max confirmed the RAM live-node display / edit works at runtime — "works surprisingly well"). Step 5 (the literal `ibValueModelDb`/`ibValueModelRam` class split) is deliberately NOT done — the
 polymorphic composer + a universal node that serves both a live RAM row and a DB copy already realise the
 DB/RAM behaviour split, so the class split is pure reorganisation against the recent one-model collapse. This
 doc is the source of truth for the arc.
 
 ## Why
 
-The in-memory-source-unification arc routed EVERY table — including RAM tables (value table / ТЗ,
+The in-memory-source-unification arc routed EVERY table — including RAM tables (value table,
 tabular section, record set) — through the L5 composer over an `ibBackendQueryable`. For a RAM table
 that meant: wrap the live rows in `ibRamTableQueryable`, register it in the per-query `ibTempSourceScope`,
 `ComputeRows`-copy the rows into an `ibQueryRamTable`, then "query" the copy. That is a query over data
@@ -44,7 +44,7 @@ ibValueModel  (ABSTRACT — the universal node + display + columns + list-settin
   in its ctor: `m_composer.FromStorage(&m_storage)`. The composer NEVER references the model — only the DATA.
 - **`ibRamComposer` sources from the storage** (`FromStorage`), reads its nodes DIRECTLY, and materialises the
   view: iterate → deliver the requested fields → filter / **group** / sort, ALL IN MEMORY (element counts are
-  modest — ТЗ 10–100, big lists 60–200k max). No query text, no lowering, no ComputeRows copy. `RunComposerPage`
+  modest — value-tables 10–100, big lists 60–200k max). No query text, no lowering, no ComputeRows copy. `RunComposerPage`
   is split: `ibValueModelDb::RunComposerPage` = the SQL/copy-node path; `ibValueModelRam::RunComposerPage` =
   `ComputeOrder` over the storage → window by anchor → return the LIVE nodes.
 - **`BindComposerSource` is GONE** — the queryable-based "decide RAM-or-DB" was a crutch; now the KIND decides
@@ -112,15 +112,15 @@ Settings form: ONE dialog, talks to `ibDataComposerBase` polymorphically (DB/RAM
 - **Hierarchy (parent-ref tree) is DB-only.** `GetHierarchyColumn` / `GetFolderColumn` / `page.m_hierarchyCol`
   / the drill / the `s_constIgnoreParent` flat-vs-tree sentinel all live in `ibValueModelDb`. RAM is flat
   (only a user grouping could make it a tree — see deferral below).
-- **`ibRamTableQueryable` + `ibTempSourceScope` stay — but ONLY for EXPLICit querying** (a ТЗ deliberately
-  put into a query, the 1С "ПоместитьВовременнуюТаблицу + ЗАПРОС" case). They leave the DISPLAY path.
+- **`ibRamTableQueryable` + `ibTempSourceScope` stay — but ONLY for EXPLICit querying** (a value-table deliberately
+  put into a query — the "put it into a temp table, then query it" case). They leave the DISPLAY path.
 - **Composer becomes the real L5 data ENGINE**: source + settings + portions + (RAM) mutation/notify. The
   model is a thin showcase / notify-relay. This is the "composer fully replaces data management" endgame.
 
 ### Deferred
 
-- **RAM display grouping** (group flat rows by a field → group-header + detail tree). Rare for ТЗ;
-  `ТЗ.Свернуть` (collapse/aggregate) is a separate DATA method, not display grouping. срез1 of
+- **RAM display grouping** (group flat rows by a field → group-header + detail tree). Rare for a value-table;
+  its own collapse/aggregate method is a separate DATA method, not display grouping. Slice-1 of
   `ibRamComposer` is **filter + sort only (flat)**. Grouping is additive later (the node is already
   tree-capable). Heavy dot-walk over RAM is the "explicit querying" case, not the common display path.
 
@@ -139,7 +139,7 @@ Settings form: ONE dialog, talks to `ibDataComposerBase` polymorphically (DB/RAM
    base-ctor trap), else `ibDataComposer`. `RunComposerPage` SHORT-CIRCUITS a RAM model: `ComputeOrder` →
    window by the browsed anchor's storage index → return the LIVE `m_nodeValues` rows (no copy, no driver). The
    list-settings facade resolves `GetModelComposer()` lazily through the model (the composer is created after
-   full construction). ⚠ runtime-test ТЗ / tabular / record-set.
+   full construction). ⚠ runtime-test value-table / tabular / record-set.
 4. ✅ **backing-index / write-back "patch" DELETED**: `m_backingIndex`, `m_writeSource`, `UpsertCell` (node +
    ibRamTableQueryable + the base virtual), the hidden `kComposerBackingIdMetaID` column + constant — all gone.
    A RAM edit writes its live storage row directly (`SetValue` → notify); a DB grid is read-only (edit via the
@@ -147,11 +147,11 @@ Settings form: ONE dialog, talks to `ibDataComposerBase` polymorphically (DB/RAM
 5. ⛔ **Structural model split** `ibValueModelDb`/`ibValueModelRam` — NOT done, deliberately (see Status). The
    polymorphic composer + universal node subsume it; revisit only if a real need appears.
 
-**Honest remainder** (deferred, all runtime-test-gated): RAM display GROUPING (срез1 is flat); RAM keyset-vs-
+**Honest remainder** (deferred, all runtime-test-gated): RAM display GROUPING (slice-1 is flat); RAM keyset-vs-
 index paging edge cases on LARGE RAM tables (the window is exact for the whole in-memory list, but untested at
 scale); the tabular-section line-number under a SORTED RAM view (StorageIndexOf is the storage position, not the
 display position); dot-walk-over-reference RAM filters (skipped, so they currently do not filter). Everything
-here builds GREEN; the ⚠ items need a runtime pass on the live catalog / ТЗ.
+here builds GREEN; the ⚠ items need a runtime pass on the live catalog / value-table.
 
 ---
 
@@ -195,7 +195,7 @@ contained (no L5-1 / L4-1 / queryable tie). What changed:
 - **RAM GROUPING** in `ibValueModelRam::RunComposerPage`: the browsed parent node carries a group PATH; scope the
   ordered rows to it; at a group LEVEL emit one synthetic `ibComposerNode` group node per distinct `dims[depth]`
   value (container, drillable); at the DETAIL level (drilled through every dim) return the LIVE scoped rows. Same
-  node semantics as the DB path (GetGroupPath / container), so the paged control treats both identically. `срез`:
+  node semantics as the DB path (GetGroupPath / container), so the paged control treats both identically. `slice`:
   Elements grouping; a dot-tail dim groups by the walked value (stamped under the head column).
 
 - **File split**: `tableInfo.cpp` → shared base + node (`tableInfo.cpp`), DB fetch (`tableInfoDb.cpp`:
@@ -281,8 +281,8 @@ from the portion → grouped-detail editing falls out.
 
 ### Phase 3 — CORRECTION: the node DOES carry a composer-set display-parent (2026-07-01)
 
-Reversed the "node loses display-parent" step above (Max: "строка содержит ссылку на родителя, который композер
-определяет"). The clean shape:
+Reversed the "node loses display-parent" step above (Max: "the row carries a reference to the parent, and the composer
+is what determines it"). The clean shape:
 - `ibComposerNode` carries `m_parent` — its DISPLAY-parent — set by the COMPOSER per slice via `SetDisplayParent`,
   a MANUALLY refcounted strong ref (IncRef on set / DecRef on re-set + in the dtor). It does NOT dangle (a child
   keeps its parent alive) and does NOT leak past the slice (re-set to null on a flat re-fetch); no cycle — a

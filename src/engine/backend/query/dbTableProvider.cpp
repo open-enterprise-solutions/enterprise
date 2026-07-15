@@ -1765,7 +1765,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 			};
 
 			// A dot-walk through an EMPTY or broken reference must read its target attribute's TYPED EMPTY
-			// value (пусто), not SQL NULL — a typed empty reference has empty attributes. The LEFT JOIN
+			// empty value, not SQL NULL — a typed empty reference has empty attributes. The LEFT JOIN
 			// yields NULL on a non-match, so the projection coalesces it: CASE WHEN col IS NULL THEN <empty>
 			// ELSE col END. Only PLAIN SCALAR leaves (string/number/date/bool, single type) — a reference /
 			// enum / composite leaf is a single-field read already and stays NULL (multi-type dot-walk = a
@@ -1783,7 +1783,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 			// expression. Recursively walk from the main table: a SINGLE-target ref → one LEFT JOIN, continue;
 			// a COMPOSITE ref → FORK, one LEFT JOIN + recursive tail per target type. Each branch contributes
 			// its RAW leaf field (NULL on a non-matching join); the whole is COALESCE(branch1, …, <typed-empty>)
-			// so a row reads its one matched branch's value, else пусто. Each segment is re-resolved BY NAME per
+			// so a row reads its one matched branch's value, else the empty value. Each segment is re-resolved BY NAME per
 			// branch (the path columns were resolved against the representative type at lowering). Returns
 			// nullptr for a PURE single-target path (caller keeps the existing qualified-alias path / full spread)
 			// or a non-scalar leaf. (docs/query-language-arc.md §22.4b)
@@ -1810,7 +1810,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 							return;
 						}
 						sawComposite = true;
-						// A REGISTER's Регистратор (recorder) is a composite of MANY document types (15+); a field
+						// A REGISTER's Recorder is a composite of MANY document types (15+); a field
 						// pulled through it often exists on only ONE. Join ONLY the types that actually have the next
 						// segment — no point in 15 LEFT JOINs for a field on 1. The deeper tail still self-skips.
 						for (const ibBackendQueryable* tq : ownerQ->ResolveReferenceTargets(col)) {
@@ -1838,7 +1838,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 				const ibBackendQueryColumn* leaf = fp.back();
 
 				// COMPOSITE reference ANYWHERE in the path + a SCALAR leaf -> ONE COALESCE expression. THIS is
-				// the register Регистратор case: a recorder is a composite of MANY document types (15+) and the
+				// the register Recorder case: a recorder is a composite of MANY document types (15+) and the
 				// pulled field exists on only one — the walk joins ONLY the types that have it and COALESCEs.
 				// nullptr for a pure single-target path or a non-scalar leaf (handled below).
 				if (ibQueryExprPtr e = pathCompositeScalarExpr(fp)) {
@@ -1906,7 +1906,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 						};
 					collect(mainTable, queryable, 0);
 					if (!sawComposite || occs.empty())
-						continue;   // unresolvable path — same skip as before (the read yields пусто)
+						continue;   // unresolvable path — same skip as before (the read yields the empty value)
 
 					// Per-occurrence field spreads, cached; the representative drives the suffix list.
 					std::vector<std::vector<wxString>> occFields;
@@ -2199,7 +2199,7 @@ public:
 	// A dot-walk leaf that is a reference / enum / composite is projected as its FULL field spread under
 	// `prefix` (<prefix>_TYPE/_RTRef/_RRRef/…) — reassemble the object value off those fields, exactly as a
 	// normal metadata column reads. A non-matching join (empty / broken ref) leaves the fields null, so the
-	// reassembly yields the type's empty value (пусто) on its own.
+	// reassembly yields the type's empty value on its own.
 	ibValue ColumnObject(const wxString& prefix, const ibBackendQueryColumn* col) const override {
 		if (col == nullptr)
 			return ibValue();

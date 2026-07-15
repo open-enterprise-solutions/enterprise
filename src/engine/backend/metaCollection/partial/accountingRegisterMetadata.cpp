@@ -178,12 +178,12 @@ bool ibValueMetaObjectAccountingRegister::OnAfterRunMetaObject(int flags)
 	else
 		(*m_propertyAttributeAccount)->SetFlag(metaDisableFlag);
 
-	// Set Subconto1/2/3 types from РџР’РҐ linked to the Chart of Accounts
-	// Find the Chart of Accounts and get its РџР’РҐ binding
+	// Set Subconto1/2/3 types from ChartOfCharacteristicTypes linked to the Chart of Accounts
+	// Find the Chart of Accounts and get its ChartOfCharacteristicTypes binding
 	for (unsigned int idx = 0; idx < metaDesc.GetTypeCount(); idx++) {
 		const ibValueMetaObject* chartOfAccounts = m_metaData->FindAnyObjectByFilter(metaDesc.GetByIdx(idx));
 		if (chartOfAccounts != nullptr) {
-			// Cast to ibValueMetaObjectChartOfAccounts to access РџР’РҐ binding
+			// Cast to ibValueMetaObjectChartOfAccounts to access ChartOfCharacteristicTypes binding
 			const ibValueMetaObjectChartOfAccounts* chartOfAccountsObj = nullptr;
 			if (chartOfAccounts->ConvertToValue(chartOfAccountsObj) && chartOfAccountsObj != nullptr) {
 				ibPropertyChartOfCharacteristicTypes* pvhBinding = chartOfAccountsObj->GetChartOfCharacteristicTypes();
@@ -198,7 +198,7 @@ bool ibValueMetaObjectAccountingRegister::OnAfterRunMetaObject(int flags)
 								subcontoTypeDesc.AppendMetaType(pvhCtor->GetClassType());
 						}
 					}
-					// Set all subconto fields to accept РџР’РҐ reference types
+					// Set all subconto fields to accept ChartOfCharacteristicTypes reference types
 					if (subcontoTypeDesc.GetClsidCount() > 0) {
 						(*m_propertyAttributeSubconto1)->SetDefaultMetaType(subcontoTypeDesc);
 						(*m_propertyAttributeSubconto2)->SetDefaultMetaType(subcontoTypeDesc);

@@ -30,7 +30,7 @@ struct ibLogEntry {
 
     // Navigable reference — present when the audit row is about a
     // specific business object. Viewer uses (ref_meta_id, ref_guid) to
-    // resolve back to the live record (метаданные → объект → форма) so
+    // resolve back to the live record (metadata → object → form) so
     // the admin can drill from a journal row into the object that
     // triggered it. Empty for system events (login, session.opened).
     wxString       ref_guid;       // string form of ibGuid; empty when no ref

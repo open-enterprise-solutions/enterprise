@@ -137,7 +137,7 @@ public:
 	ibDataComposer& Sort(const wxString& path, bool ascending = true);
 
 	// Totals: aggregates + dimension levels (DB → `TOTALS agg… BY dim…`, the folded tree). RAM grouping is a
-	// deferred follow-up; the срез1 RAM composer ignores totals (filter + sort only).
+	// deferred follow-up; the slice-1 RAM composer ignores totals (filter + sort only).
 	ibDataComposer& Total(const wxString& func, const wxString& path);
 	// The grouping VID (kind): Elements / Hierarchy / HierarchyOnly — the ONE switch between a flat and a
 	// hierarchical view (lifted to L5 — the list settings carry it).

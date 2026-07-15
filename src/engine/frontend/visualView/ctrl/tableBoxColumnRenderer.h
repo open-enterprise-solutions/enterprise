@@ -131,7 +131,7 @@ public:
 	}
 
 	// Fork power: the per-cell value fetch resolves THROUGH this column's binding. A dot-path
-	// column ("Контрагент.Поставщик") is resolved per row on the front — first hop via the dumb
+	// column ("Counterparty.Supplier") is resolved per row on the front — first hop via the dumb
 	// model, deeper hops walk the reference. A plain column falls through to the base (model).
 	virtual wxVariant CheckedGetValue(const ibDataViewModel* model,
 		const ibDataViewItem& item, unsigned column) const override

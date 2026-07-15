@@ -109,9 +109,9 @@ unsigned int ibValueModelStorage::RunComposerPage(const ibDataViewItem& parent, 
 	m_storage.SetColumns(GetColumnCollection());          // let the composer resolve field names → column ids
 
 	// Grouping dims (field paths → head storage column + dotted tail). The VIEW MODE decides flat-vs-grouped: a
-	// flat LIST view passes the ignore-parent SENTINEL → grouping is OFF (the user set "Плоский" → a flat table,
+	// flat LIST view passes the ignore-parent SENTINEL → grouping is OFF (the user set the Flat view → a flat table,
 	// even with a grouping configured); a TREE / Hierarchical view passes an empty/real parent → grouping is ON.
-	// So the flat toggle always wins over a stored grouping. No dims → the flat live-node path below. срез:
+	// So the flat toggle always wins over a stored grouping. No dims → the flat live-node path below. slice:
 	// Elements grouping; a dot-tail dim groups by the walked value.
 	const bool flatView = (parent == s_constIgnoreParent);
 	std::vector<std::pair<ibMetaID, std::vector<wxString>>> dims;

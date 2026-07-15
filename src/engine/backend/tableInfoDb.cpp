@@ -38,7 +38,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// Hierarchy/HierarchyOnly dim makes that level unfold the reference's parent tree.
 	//
 	// The VIEW MODE decides flat-vs-grouped, exactly as the RAM half does (tableInfoRam.cpp): a flat LIST view
-	// passes the ignore-parent SENTINEL → grouping is OFF (the user chose "Плоский" → a flat table even with a
+	// passes the ignore-parent SENTINEL → grouping is OFF (the user chose the Flat view → a flat table even with a
 	// grouping configured, so the flat toggle always wins over a stored grouping); a TREE / Hierarchical view
 	// passes an empty/real parent → grouping is ON. Populating dims in a flat view drove groupLevel=true there,
 	// so a flat List of a grouped source ran a TOTALS read that returned the whole tree pre-order → level-0-only

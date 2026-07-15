@@ -29,7 +29,7 @@ stays out of this PR.
 | 1.3b | Editor right-click context menu (Cut/Copy/Paste/SelectAll + Look up in Syntax Helper) routing wxEVT_MENU upward through the parent chain | context menu item posts to host designer |
 | 1.3c | Drag target — wxStyledTextCtrl built-in handles `wxTextDataObject` from `helpDragSource` | drag from panel into editor inserts identifier |
 | - | UTF-8 BOM on 25 syntax-helper source files (MSVC without `/utf-8` flag was producing em-dash mojibake in `_()` literals) | no `вЂ—` in panel labels |
-| - | `.hbk → .hlk` rename across loader / service / build / docs (avoids collision with 1С proprietary `.hbk` format) | `bin/help/*.hlk` artefacts |
+| - | `.hbk → .hlk` rename across loader / service / build / docs (avoids collision with a third-party proprietary `.hbk` format) | `bin/help/*.hlk` artefacts |
 | - | Menu items live in Help menu (was Tools, moved per user preference); macOS macro-Help-menu interception risk noted in comment | designer Help menu carries Syntax Helper + Look up + About |
 | - | Compact appData footprint: +13 lines `.h` (forward decl + member + static getter) / +6 lines `.cpp` (include + lazy init in `InitLocale`); ownership mirrors `ibLogger` / `ibLockManager` | no `m_helpCorpus` / `RebuildHelpCorpus` directly on appData |
 | - | `CMakePresets.json` (8 presets for VS-based CMake `Open Folder` workflow) | VS 2022 picks presets from dropdown |
@@ -69,9 +69,9 @@ The upstream branch carries ~250 additional files for AI / MCP / pluginWebPane /
 
 - Renames the backend / frontend subsystem directory `help/ → syntaxHelper/` for naming consistency with the content root (was `data/help/` upstream → `syntaxHelper/` here)
 - Replaces `data/help/` content path with `syntaxHelper/` (repo root, alongside `docs/`, `locale/`)
-- Renames archive extension `.hbk → .hlk` (avoids overloading the 1С proprietary `.hbk` extension)
+- Renames archive extension `.hbk → .hlk` (avoids overloading a third-party proprietary `.hbk` extension)
 - Pulls `ibHelpService` out of `ibApplicationData` (upstream had `GetHelpCorpus` / `ReloadHelpCorpus` directly on appData — port follows the `ibLogger`/`ibLockManager` subsystem pattern)
-- Drops the `bring-your-own-.hbk` external-platform integration path (was tied to the 1С ecosystem)
+- Drops the `bring-your-own-.hbk` external-platform integration path (was tied to a third-party platform ecosystem)
 - Strips Cyrillic UI strings from comments + design doc (code stays ASCII-only; user-facing labels stay in `_()` macros for i18n)
 
 ---

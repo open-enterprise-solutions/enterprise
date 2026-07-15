@@ -314,7 +314,7 @@ PrepareNames calls. The only survivors:
 - **Dead CValue dialogs** (valueGrid / valueColourDialog / valueFontDialog /
   valueFileDialog) — still carry `static CMethodHelper m_methodHelper` + their own
   `PrepareNames()`, but they are NOT in any vcxproj (same dead-legacy hierarchy as
-  CDocMDIFrame; user: "уже давно нет"). Left untouched.
+  CDocMDIFrame; user: "long gone"). Left untouched.
 - **Factory eliminated (2026-06-06).** `ibValue::CreateAndPrepareValueRef<T>` existed
   only to call `PrepareNames()` at creation; with PrepareNames gone its body was just
   `::new T(...)`. The whole factory is now removed (193 call sites across 59 files):

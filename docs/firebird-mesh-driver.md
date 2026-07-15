@@ -514,7 +514,7 @@ ID = (peer_id_4bit << 60) | (hlc_timestamp_56bit)
 ```
 
 Globally unique by construction. Sortable by HLC = global causal
-order. For human-readable sequential numbers (`Накладная №1234`):
+order. For human-readable sequential numbers (`Invoice #1234`):
 range allocation per peer — peer A gets 1-10000, B gets 10001-20000.
 Numbers unique but not sequentially consecutive across peers. Period
 close runs a re-numbering pass on archive-node for users who want

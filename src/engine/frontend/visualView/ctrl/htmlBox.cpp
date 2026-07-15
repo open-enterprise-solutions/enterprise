@@ -31,7 +31,7 @@ wxObject* ibValueHTMLBox::Create(wxWindow* wxparent, ibVisualHost* visualHost)
 	return htmlBox;
 }
 
-void ibValueHTMLBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueHTMLBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
 	wxHtmlWindow* htmlBox = dynamic_cast<wxHtmlWindow*>(wxobject);
 }

@@ -352,7 +352,7 @@ public:
 
 	virtual std::vector<ibValuePtr<ibValueRuntimeModuleUnit>>& GetCommonModules() { return m_listCommonModuleManager; }
 
-	// Per-session runtime — create ProcUnit'ы for main + common modules
+	// Per-session runtime — create ProcUnits for main + common modules
 	// under the given session's m_procUnitMap. Compile state untouched
 	// on `this`. Overridden by subclasses with additional modules
 	// (external data processor, report). Default impl handles the

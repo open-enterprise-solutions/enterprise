@@ -148,7 +148,7 @@ void ibValueDynamicList::RefreshComposerSettings()
 	NotifyReset();
 }
 
-// Add a filter (отбор) — forward the predicate to the composer under the list. The composer is the SINGLE settings
+// Add a filter — forward the predicate to the composer under the list. The composer is the SINGLE settings
 // store (it persists the line and the fetch reads it WITHOUT clearing), so a backend-injected select predicate and
 // a user filter coexist. Same shape the presentation Sort uses in RebuildSource.
 void ibValueDynamicList::AddFilter(const wxString& path, const wxString& op, const ibValue& value)
@@ -266,7 +266,7 @@ ibUniqueKey ibValueDynamicList::GetGuid() const
 
 // The dynamic list creates its own row key (the cursor base makes none): the row's primary-key REFERENCE (guid),
 // read off the item's node — the same shape a regular list uses, since a dynamic list row references an object.
-// The row's identity key comes from the METAOBJECT — the node carries no metaobject id ("у ноды нет ид"), and a
+// The row's identity key comes from the METAOBJECT — the node carries no metaobject id ("the node has no id"), and a
 // register has SEVERAL key columns, so only the metaobject can shape the family-correct key. The list snaps the
 // source descriptor and forwards the row's value map; the metaobject decodes it (record → reference guid, register
 // → composite record key). Same currency (rowValues) as GetItemSelectValue. Neutral surface (custom query) → empty.

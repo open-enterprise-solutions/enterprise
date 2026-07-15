@@ -187,8 +187,8 @@ void ibDataViewCtrl::SetScrollbar(int orient, int pos, int thumbSize, int range,
 			// the rows area itself is shorter than 19 row-heights —
 			// wheel-scroll still moves the contents because virtual
 			// size > actual rows-area client size, but the lying
-			// scrollbar is hidden ("элементы дальше есть, скролла нет,
-			// прокрутка идёт").
+			// scrollbar is hidden ("there are more items, no scrollbar,
+			// yet it still scrolls").
 			//
 			// Subtract crumbCount: in Hierarchical drill mode crumbs
 			// are FROZEN at top in a separate window and don't take

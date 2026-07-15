@@ -76,7 +76,7 @@ public:
 	ibDataValue CopyFormData() const;
 	bool PasteFormData();
 
-	// node <-> runtime-blob shim ("прокладка"): the form blob already IS the binary-provider
+	// node <-> runtime-blob shim: the form blob already IS the binary-provider
 	// node format, so the adapter is ONE provider round-trip. This lets the runtime stay
 	// blob-based (SaveForm / LoadForm, the property cell, the prop-grid variant) while the
 	// metadata serializes a transparent node tree — no base64 lump on disk / in JSON.

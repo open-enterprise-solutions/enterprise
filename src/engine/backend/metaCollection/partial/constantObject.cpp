@@ -60,7 +60,7 @@ bool ibValueRecordDataObjectConstant::InitializeObject(const ibValueRecordDataOb
 	// after-fact cascade needed.
 	ibRuntimeModuleDataObject::SetParent(moduleManager);
 	BindContextVariable(wxT("ThisObject"), this);
-	// Constant's Value (Значение) is the module's own writable local — the
+	// Constant's Value is the module's own writable local — the
 	// binder seeds the frame slot with &m_constValue, so `Value` / `Value = …`
 	// inside the constant module read/write the backing member directly. No
 	// AppendProp + eSystem GetPropVal/SetPropVal round-trip. The address is

@@ -350,7 +350,7 @@ bool ibValueMetaObject::PasteObject(ibReaderMemory& reader)
 			// Running initialization AS A PASTE (pasteObjectFlag, NOT onlyLoadFlag): a pasted object is a NEW object,
 			// so its RUN event must register its queryable source — exactly like a fresh create (newObjectFlag) does.
 			// onlyLoadFlag gates the queryable registration OFF (the load-only pass), which left a copied catalog /
-			// register unregistered → its source descriptor was unresolvable ("источник не видит его"). — Max.
+			// register unregistered → its source descriptor was unresolvable ("the source cannot see it"). — Max.
 			if (!pasteObject->OnBeforeRunMetaObject(pasteObjectFlag))
 				return false;
 
@@ -431,7 +431,7 @@ bool ibValueMetaObject::PasteObject(ibReaderMemory& reader)
 			// Running initialization AS A PASTE (pasteObjectFlag, NOT onlyLoadFlag): a pasted object is a NEW object,
 			// so its RUN event must register its queryable source — exactly like a fresh create (newObjectFlag) does.
 			// onlyLoadFlag gates the queryable registration OFF (the load-only pass), which left a copied catalog /
-			// register unregistered → its source descriptor was unresolvable ("источник не видит его"). — Max.
+			// register unregistered → its source descriptor was unresolvable ("the source cannot see it"). — Max.
 			if (!pasteObject->OnBeforeRunMetaObject(pasteObjectFlag))
 				return false;
 

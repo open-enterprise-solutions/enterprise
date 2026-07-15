@@ -15,7 +15,7 @@
 
 // SaveNode — write this object into the node. Common header (intrinsics → fields,
 // editable values → props, interface/roles), then per-type WriteData. Every value
-// is in its REAL form, so a JSON view shows `"Name": "Цена"`, not a base64 blob.
+// is in its REAL form, so a JSON view shows `"Name": "Price"`, not a base64 blob.
 bool ibValueMetaObject::SaveNode(ibDataNode& node) const
 {
 	// intrinsics → fields

@@ -213,7 +213,7 @@ Encoding decided — **wchar in memory, UTF-8 on the wire/DB.** The runtime
 string functions (`StrLen`/`Left`/`Right`/`Mid`/`Find`, `systemManagerFunc.cpp`)
 index by character position via `GetString() → wxString` (wxChar units).
 UTF-8 storage would make each an O(n) transcode; wchar keeps them O(1) and
-exact — the same reason 1C uses UTF-16 internally. `std::string`/UTF-8 was
+exact — the same reason Windows and Java use UTF-16 internally. `std::string`/UTF-8 was
 considered and rejected for this. Rejected refs: FastString (fixed-cap,
 truncates), SuperString (rope+COW+GC, v0.0.1 — too heavy a dependency under
 the core type).

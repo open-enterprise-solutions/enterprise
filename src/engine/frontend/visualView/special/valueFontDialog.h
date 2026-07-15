@@ -16,16 +16,16 @@ private:
 	};
 public:
 
-	//эти методы нужно переопределить в ваших агрегатных объектах:
+	// override these methods in your aggregate objects:
 	virtual CMethodHelper* GetPMethods() const { 
 		PrepareNames();
 		return &m_methodHelper; 
 	}
-	virtual void PrepareNames() const;//этот метод автоматически вызывается для инициализации имен атрибутов и методов
-	virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);//вызов метода
+	virtual void PrepareNames() const;// called automatically to initialise attribute and method names
+	virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);// method call
 
-	virtual bool SetPropVal(const long lPropNum, CValue &varPropVal);//установка атрибута
-	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);//значение атрибута
+	virtual bool SetPropVal(const long lPropNum, CValue &varPropVal);// set attribute
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);// attribute value
 
 	CValueFontDialog();
 	virtual ~CValueFontDialog();

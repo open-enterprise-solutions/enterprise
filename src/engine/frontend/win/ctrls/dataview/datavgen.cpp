@@ -6753,7 +6753,7 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 				// alignment: SetValue picks it per value type (a numeric line-number column right-aligns),
 				// and a bare SetAlignment(wxALIGN_CENTER_VERTICAL) dropped the horizontal flag → every
 				// expander-column cell fell back to LEFT, so the tabular-section line number stopped
-				// indenting right in Tree/Hierarchical view ("флаг не доходит").
+				// indenting right in Tree/Hierarchical view ("the flag does not get through").
 				int expAlign = cell->GetAlignment();
 				if (expAlign == wxDVR_DEFAULT_ALIGNMENT)
 					expAlign = wxALIGN_LEFT;

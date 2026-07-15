@@ -482,14 +482,10 @@ bool ibDataProcessorTree::RenameMetaObject(ibValueMetaObject* obj, const wxStrin
 void ibDataProcessorTree::InitTree()
 {
 	m_treeDATAPROCESSORS = AppendRootItem(g_metaDataProcessorCLSID, _("DataProcessor"));
-	//Список аттрибутов 
-	m_treeATTRIBUTES = AppendGroupItem(m_treeDATAPROCESSORS, g_metaAttributeCLSID, objectAttributesName);
-	//список табличных частей 
-	m_treeTABLES = AppendGroupItem(m_treeDATAPROCESSORS, g_metaTableCLSID, objectTablesName);
-	//Формы
-	m_treeFORM = AppendGroupItem(m_treeDATAPROCESSORS, g_metaFormCLSID, objectFormsName);
-	//Макеты
-	m_treeTEMPLATES = AppendGroupItem(m_treeDATAPROCESSORS, g_metaTemplateCLSID, objectTablesName);
+	// attribute listm_treeATTRIBUTES = AppendGroupItem(m_treeDATAPROCESSORS, g_metaAttributeCLSID, objectAttributesName);
+	// tabular section listm_treeTABLES = AppendGroupItem(m_treeDATAPROCESSORS, g_metaTableCLSID, objectTablesName);
+	// formsm_treeFORM = AppendGroupItem(m_treeDATAPROCESSORS, g_metaFormCLSID, objectFormsName);
+	// templatesm_treeTEMPLATES = AppendGroupItem(m_treeDATAPROCESSORS, g_metaTemplateCLSID, objectTablesName);
 }
 
 void ibDataProcessorTree::ActivateTree()
@@ -554,8 +550,7 @@ void ibDataProcessorTree::FillData()
 	//append default value 
 	m_defaultFormValue->AppendString(_("<not selected>"));
 
-	//Список аттрибутов 
-	for (auto attribute : commonMetadata->GetAttributeArrayObject()) {
+	// attribute listfor (auto attribute : commonMetadata->GetAttributeArrayObject()) {
 		if (attribute->IsDeleted())
 			continue;
 		if (attribute->GetClassType() == g_metaPredefinedAttributeCLSID)
@@ -563,8 +558,7 @@ void ibDataProcessorTree::FillData()
 		AppendItem(m_treeATTRIBUTES, attribute);
 	}
 
-	//Список табличных частей 
-	for (auto metaTable : commonMetadata->GetTableArrayObject()) {
+	// tabular section listfor (auto metaTable : commonMetadata->GetTableArrayObject()) {
 		if (metaTable->IsDeleted())
 			continue;
 		const wxTreeItemId& hItem = AppendGroupItem(m_treeTABLES, g_metaAttributeCLSID, metaTable);
@@ -577,15 +571,13 @@ void ibDataProcessorTree::FillData()
 		}
 	}
 
-	//Формы
-	for (auto metaForm : commonMetadata->GetFormArrayObject()) {
+	// formsfor (auto metaForm : commonMetadata->GetFormArrayObject()) {
 		if (metaForm->IsDeleted())
 			continue;
 		AppendItem(m_treeFORM, metaForm);
 	}
 
-	//Таблицы
-	for (auto metaTemplates : commonMetadata->GetTemplateArrayObject()) {
+	// tablesfor (auto metaTemplates : commonMetadata->GetTemplateArrayObject()) {
 		if (metaTemplates->IsDeleted())
 			continue;
 		const wxTreeItemId& hItem = AppendItem(m_treeTEMPLATES, metaTemplates);

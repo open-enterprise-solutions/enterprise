@@ -16,7 +16,7 @@
 ## What it does
 
 Local audit trail of business events and admin actions. Designed
-for the "Журнал регистрации" admin surface: every Save / Delete of
+for the activity-log admin surface: every Save / Delete of
 a Catalog or Document, every authentication outcome, every metadata
 Apply, every session open / close lands as a row in a per-month
 SQLite file. The viewer dialog reads back through a filter strip

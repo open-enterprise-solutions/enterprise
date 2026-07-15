@@ -437,7 +437,7 @@ long ibValueModelTable::AppendRow(unsigned int before, const ibDataViewItem& con
 
 	// Grouped add: the new row inherits the current group's dimension values (read each grouping dim off the
 	// FRONT-passed context row — the selected row), so it lands INSIDE the group instead of losing the grouping
-	// value. No context / ungrouped → no dims → no-op; a dotted (reference-walk) dim is skipped. (NOT ТЧ-only.)
+	// value. No context / ungrouped → no dims → no-op; a dotted (reference-walk) dim is skipped. (NOT tabular-section-only.)
 	if (ibComposerNode* ctx = GetViewData<ibComposerNode>(contextRow)) {
 		for (size_t i = 0; i < GetModelComposer().GroupCount(); ++i) {
 			wxString field; ibQueryDimUnfold kind = ibQueryDimUnfold::Elements;

@@ -331,7 +331,7 @@ public:
 	virtual bool IsEmpty() const override { return GetRowCount() == 0; }
 
 	// A table-of-values is fully composer-driven (filter / sort / group live on the RAM composer), so it exposes
-	// the whole List-settings affordance — including GROUP, which folds the flat ТЗ into a tree "лёгким движением".
+	// the whole List-settings affordance — including GROUP, which folds the flat value-table into a tree "with one easy move".
 	virtual Features GetFeatures() const override {
 		Features f;
 		f.flags |= Features::Filters | Features::Sorting | Features::Grouping;

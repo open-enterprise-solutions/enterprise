@@ -71,16 +71,16 @@ wxObject* ibValueToolbar::Create(ibFrontendWindow* wxparent, ibVisualHost* visua
 	return toolbar;
 }
 
-void ibValueToolbar::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueToolbar::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
 #ifdef OES_USE_WEB
 	(void)wxobject;
 	(void)wxparent;
 	(void)visualHost;
-	(void)firstСreated;
+	(void)firstCreated;
 #else
 	if (visualHost->IsDesignerHost() && GetChildCount() == 0
-		&& firstСreated) {
+		&& firstCreated) {
 		ibValueToolbar::AddToolItem();
 	}
 #endif

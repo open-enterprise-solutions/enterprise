@@ -8,12 +8,12 @@
 
 enum
 {
-	//--- Базовые:
+	//--- Basic:
 	enBoolean = 0,
 	enNumber,
 	enDate,
 	enString,
-	//--- Математические:
+	//--- Math:
 	enRound,
 	enInt,
 	enLog10,
@@ -21,7 +21,7 @@ enum
 	enMax,
 	enMin,
 	enSqrt,
-	//--- Строковые:
+	//--- Strings:
 	enStrLen,
 	enIsBlankString,
 	enTrimL,
@@ -40,7 +40,7 @@ enum
 	enChr,
 	enAsc,
 	enTStr,
-	//--- Работа с датой и временем:
+	//--- Date and time:
 	enCurrentDate,
 	enWorkingDate,
 	enAddMonth,
@@ -64,14 +64,14 @@ enum
 	enGetDayOfYear,
 	enGetDayOfWeek,
 	enGetQuartOfYear,
-	//--- Работа с файлами: 
+	//--- File operations: 
 	enFileCopy,
 	enFileDelete,
 	enGetTempDir,
 	enGetTempFileName,
-	//--- Работа с окнами: 
+	//--- Window operations: 
 	enActiveWindow,
-	//--- Специальные:
+	//--- Special:
 	enMessage,
 	enAlert,
 	enQuestion,
@@ -115,12 +115,12 @@ enum
 void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
 
-	//--- Базовые:
+	//--- Basic:
 	helper.AppendFunc(wxT("Boolean"), 1, wxT("Boolean(value : any)"));
 	helper.AppendFunc(wxT("Number"), 1, wxT("Number(value: any)"));
 	helper.AppendFunc(wxT("Date"), 1, wxT("Date(value: any)"));
 	helper.AppendFunc(wxT("String"), 1, wxT("String(value: any)"));
-	//--- Математические:
+	//--- Math:
 	helper.AppendFunc(wxT("Round"), 3, wxT("Round(num : number, number, roundMode)"));
 	helper.AppendFunc(wxT("Int"), 1, wxT("Int(num : number)"));
 	helper.AppendFunc(wxT("Log10"), 1, wxT("Log10(num : number)"));
@@ -128,7 +128,7 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	helper.AppendFunc(wxT("Max"), -1, wxT("Max(num : number, ...)"));
 	helper.AppendFunc(wxT("Min"), -1, wxT("Min(num : number, ...)"));
 	helper.AppendFunc(wxT("Sqrt"), 1, wxT("Sqrt(num : number)"));
-	//--- Строковые:
+	//--- Strings:
 	helper.AppendFunc(wxT("StrLen"), 1, wxT("StrLen(str : string)"));
 	helper.AppendFunc(wxT("IsBlankString"), 1, wxT("IsBlankString(str : string)"));
 	helper.AppendFunc(wxT("TrimL"), 1, wxT("TrimL(str : string)"));
@@ -147,7 +147,7 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	helper.AppendFunc(wxT("Chr"), 1, wxT("Chr(num : number)"));
 	helper.AppendFunc(wxT("Asc"), 1, wxT("Asc(str : string)"));
 	helper.AppendFunc(wxT("Tstr"), 2, wxT("Tstr(text : string, langCode : string)"));
-	//--- Работа с датой и временем:
+	//--- Date and time:
 	helper.AppendFunc(wxT("CurrentDate"), wxT("CurrentDate()"));
 	helper.AppendFunc(wxT("WorkingDate"), wxT("WorkingDate()"));
 	helper.AppendFunc(wxT("AddMonth"), 2, wxT("AddMonth(d : date, num : number)"));
@@ -171,7 +171,7 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	helper.AppendFunc(wxT("GetDayOfYear"), 1, wxT("GetDayOfYear(d : date)"));
 	helper.AppendFunc(wxT("GetDayOfWeek"), 1, wxT("GetDayOfWeek(d : date)"));
 	helper.AppendFunc(wxT("GetQuartOfYear"), 1, wxT("GetQuartOfYear(d : date)"));
-	//--- Работа с файлами:
+	//--- File operations:
 	// Order MUST match the enFileCopy..enGetTempFileName enum block above —
 	// the method number is the index into this table (ibValue::ibMemberTable::
 	// FindMethod), so a swap here calls the wrong case in CallAsFunc.
@@ -179,9 +179,9 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	helper.AppendFunc(wxT("FileDelete"), 1, wxT("FileDelete(fileName : string)"));
 	helper.AppendFunc(wxT("GetTempDir"), wxT("GetTempDir()"));
 	helper.AppendFunc(wxT("GetTempFileName"), wxT("GetTempFileName()"));
-	//--- Работа с окнами: 
+	//--- Window operations: 
 	helper.AppendFunc(wxT("ActiveWindow"), wxT("ActiveWindow()"));
-	//--- Специальные:
+	//--- Special:
 	helper.AppendProc(wxT("Message"), 2, wxT("Message(message : string, statusMessage : statusMessage)"));
 	helper.AppendFunc(wxT("Alert"), 1, wxT("Alert(message : string)"));
 	helper.AppendFunc(wxT("Question"), 2, wxT("Question(message : string, questionMode)"));
@@ -232,12 +232,12 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 	if (!appData->DesignerMode()) {
 		switch (lMethodNum)
 		{
-			//--- Базовые:
+			//--- Basic:
 		case enBoolean: pvarRetValue = Boolean(*paParams[0]); return true;
 		case enNumber: pvarRetValue = Number(*paParams[0]); return true;
 		case enDate: pvarRetValue = Date(*paParams[0]); return true;
 		case enString: pvarRetValue = String(*paParams[0]); return true;
-			//--- Математические:
+			//--- Math:
 		case enRound: pvarRetValue = Round(*paParams[0],
 			lSizeArray > 1 ? paParams[1]->GetInteger() : 0,
 			lSizeArray > 2 ?
@@ -249,7 +249,7 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 		case enMax: pvarRetValue = Max(paParams, lSizeArray); return true;
 		case enMin: pvarRetValue = Min(paParams, lSizeArray); return true;
 		case enSqrt: pvarRetValue = Sqrt(*paParams[0]); return true;
-			//--- Строковые:  
+			//--- Strings:  
 		case enStrLen: pvarRetValue = StrLen(*paParams[0]); return true;
 		case enIsBlankString: pvarRetValue = IsBlankString(*paParams[0]); return true;
 		case enTrimL: pvarRetValue = TrimL(*paParams[0]); return true;
@@ -268,7 +268,7 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 		case enChr: pvarRetValue = Chr(paParams[0]->GetInteger()); return true;
 		case enAsc: pvarRetValue = Asc(*paParams[0]); return true;
 		case enTStr: pvarRetValue = TStr(*paParams[0], lSizeArray > 1 ? paParams[1]->GetString() : wxT("")); return true;
-			//--- Работа с датой и временем:
+			//--- Date and time:
 		case enCurrentDate: pvarRetValue = CurrentDate(); return true;
 		case enWorkingDate: pvarRetValue = WorkingDate(); return true;
 		case enAddMonth: pvarRetValue = AddMonth(*paParams[0], paParams[1]->GetInteger()); return true;
@@ -292,14 +292,14 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 		case enGetDayOfYear: pvarRetValue = GetDayOfYear(*paParams[0]); return true;
 		case enGetDayOfWeek: pvarRetValue = GetDayOfWeek(*paParams[0]); return true;
 		case enGetQuartOfYear: pvarRetValue = GetQuartOfYear(*paParams[0]); return true;
-			//--- Работа с файлами:
+			//--- File operations:
 		case enFileCopy: pvarRetValue = CopyFile(paParams[0]->GetString(), paParams[1]->GetString()); return true;
 		case enFileDelete: pvarRetValue = DeleteFile(paParams[0]->GetString()); return true;
 		case enGetTempDir: pvarRetValue = GetTempDir(); return true;
 		case enGetTempFileName: pvarRetValue = GetTempFileName(); return true;
-			//--- Работа с окнами: 
+			//--- Window operations: 
 		case enActiveWindow: pvarRetValue = ActiveWindow(); return true;
-			//--- Специальные:
+			//--- Special:
 		case enMessage:
 			Message(paParams[0]->GetString(),
 				lSizeArray > 1 ? paParams[1]->ConvertToEnumValue<ibStatusMessage>() : ibStatusMessage::ibStatusMessage_Information);
@@ -355,7 +355,7 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 		case enGetCommonTemplate:
 			pvarRetValue = GetCommonTemplate(paParams[0]->GetString());
 			return true;
-			//--- Тразакции:
+			//--- Transactions:
 		case enBeginTransaction: BeginTransaction(); return true;
 		case enCommitTransaction: CommitTransaction(); return true;
 		case enRollBackTransaction: RollBackTransaction(); return true;
@@ -365,7 +365,7 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 	{
 		switch (lMethodNum)
 		{
-			//--- Специальные:
+			//--- Special:
 		case enType:
 			pvarRetValue = Type(*paParams[0]);
 			return true;
@@ -393,7 +393,7 @@ bool ibValueSystemFunction::CallAsProc(const long lMethodNum, ibValue** paParams
 	if (!appData->DesignerMode()) {
 		switch (lMethodNum)
 		{
-			//--- Специальные:
+			//--- Special:
 		case enMessage:
 			Message(paParams[0]->GetString(),
 				lSizeArray > 1 ? paParams[1]->ConvertToEnumValue<ibStatusMessage>() : ibStatusMessage::ibStatusMessage_Information);
@@ -414,7 +414,7 @@ bool ibValueSystemFunction::CallAsProc(const long lMethodNum, ibValue** paParams
 			lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr,
 			lSizeArray > 2 ? paParams[2]->ConvertToType<ibValueGuid>() : nullptr);
 			return true;
-			//--- Тразакции:
+			//--- Transactions:
 		case enBeginTransaction: BeginTransaction(); return true;
 		case enCommitTransaction: CommitTransaction(); return true;
 		case enRollBackTransaction: RollBackTransaction(); return true;
@@ -424,7 +424,7 @@ bool ibValueSystemFunction::CallAsProc(const long lMethodNum, ibValue** paParams
 	{
 		switch (lMethodNum)
 		{
-			//--- Специальные:
+			//--- Special:
 		case enShowCommonForm:
 			ShowCommonForm(paParams[0]->GetString(),
 				lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr,

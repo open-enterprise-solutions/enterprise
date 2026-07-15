@@ -28,7 +28,7 @@ wxObject* ibValueStaticBoxSizer::Create(ibFrontendWindow* wxparent, ibVisualHost
 #endif
 }
 
-void ibValueStaticBoxSizer::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueStaticBoxSizer::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
 #ifndef OES_USE_WEB
 	wxStaticBoxSizer* staticboxsizer = dynamic_cast<wxStaticBoxSizer*>(wxobject);

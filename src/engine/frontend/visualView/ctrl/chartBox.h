@@ -9,7 +9,7 @@ class ibValueChartBox : public ibValueWindow {
 	ibValueChartBox();
 
 	virtual wxObject* Create(ibFrontendWindow* wxparent, ibVisualHost* visualHost) override;
-	virtual void OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstСreated) override;
+	virtual void OnCreated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost, bool firstCreated) override;
 	virtual void OnSelected(wxObject* wxobject) override;
 	virtual void Update(wxObject* wxobject, ibVisualHost* visualHost) override;
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;

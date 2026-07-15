@@ -15,7 +15,7 @@ used to compile by silently selecting `operator=(bool)` — a `const` pointer
 converts to `bool` (non-null → `true`), while `operator=(ibValue*)` rejects it
 (const → non-const is ill-formed). The result: the value became a **Boolean
 `true`** instead of the object, so at runtime `Metadata.<member>` resolved to
-nothing ("ничего нет").
+nothing ("there is nothing there").
 
 ## The design
 

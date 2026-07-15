@@ -129,7 +129,7 @@ class ibValueMetaObjectExternalReport : public ibValueMetaObjectReport {
 		m_metaId = default_meta_id;
 	}
 
-	//СЃreate from file?
+	//create from file?
 	virtual bool IsExternalCreate() const { return true; }
 };
 

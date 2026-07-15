@@ -108,8 +108,8 @@ prediction. Record-locks added two lines per site (`TryAcquireFormLock`
 
 ### Document = Catalog minus hierarchy plus movements
 
-User's reframe (2026-05-25): "по сути, документ похож максимально
-на справочник, у него иерархии нет, зато есть запись по движениям".
+User's reframe (2026-05-25): "in essence a document is as close as it
+gets to a catalog — no hierarchy, but it does record movements".
 
 This is more accurate than "outlier" — the difference is a **parallel
 variation along an orthogonal axis**, not a fundamentally different

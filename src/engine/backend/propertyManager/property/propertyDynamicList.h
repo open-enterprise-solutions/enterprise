@@ -6,7 +6,7 @@
 // ---------------------------------------------------------------------------
 // ibPropertyDynamicList — backend half of the "dynamic list settings" designer
 // property. Pure action property (no stored scalar of its own): it surfaces a
-// single "Настройка..." action on whatever owner created it (a form attribute
+// single "Settings…" action on whatever owner created it (a form attribute
 // whose Type is a dynamic list). It mirrors ibPropertyForm: GetPGProperty hands
 // the owner (ibPropertyObject*) to the frontend slot, and the frontend property
 // (ibPGDynamicListProperty) dynamic_casts that owner to reach the dynamic list

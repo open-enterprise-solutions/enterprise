@@ -3,7 +3,7 @@
 
 #include "backend/compiler/value.h"
 
-//Поддержка массивов
+// array support
 class CORE_API CValueGrid : public CValue {
 	wxDECLARE_DYNAMIC_CLASS(CValueGrid);
 private:
@@ -25,14 +25,14 @@ public:
 
 	static CMethodHelper m_methodHelper;
 
-	virtual bool SetPropVal(const long lPropNum, CValue &varPropVal);        //установка атрибута
-	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);                   //значение атрибута
+	virtual bool SetPropVal(const long lPropNum, CValue &varPropVal);        // set attribute
+	virtual bool GetPropVal(const long lPropNum, CValue& pvarPropVal);                   // attribute value
 
 	virtual CMethodHelper* GetPMethods() const { 
 		PrepareNames(); return &m_methodHelper; 
 	} 
-	virtual void PrepareNames() const;                         //этот метод автоматически вызывается для инициализации имен атрибутов и методов
-	virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);       //вызов метода
+	virtual void PrepareNames() const;                         // called automatically to initialise attribute and method names
+	virtual bool CallAsFunc(const long lMethodNum, CValue& pvarRetValue, CValue** paParams, const long lSizeArray);       // method call
 
 protected:
 

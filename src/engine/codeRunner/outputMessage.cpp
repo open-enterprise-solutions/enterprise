@@ -10,7 +10,7 @@ bool ibValueOutput::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibV
 {
 	switch (lMethodNum)
 	{
-		//--- Специальные:
+		//--- Special:
 	case 0:
 		static_cast<ibAppCodeRunner*>(wxApp::GetInstance())->AppendOutput(paParams[0]->GetString());
 		return true;

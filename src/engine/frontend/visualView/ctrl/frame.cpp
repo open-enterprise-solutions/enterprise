@@ -386,7 +386,7 @@ ibFrontendVisualEditorNotebook* ibValueFrame::FindVisualEditor() const
 
 wxObject* ibValueFrame::GetWxObject() const
 {
-	// Unified path: form в†’ visualDoc в†’ view в†’ host в†’ GetWxObject(this).
+	// Unified path: form → visualDoc → view → host → GetWxObject(this).
 	// Web's ibVisualHostClient also populates m_baseObjects (walker
 	// inserts ibWebWindow* per ibValueFrame), so the same lookup works
 	// on both builds. Previously web returned nullptr unconditionally,

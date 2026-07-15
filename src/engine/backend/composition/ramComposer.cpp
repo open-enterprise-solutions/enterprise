@@ -8,7 +8,7 @@
 // and produces the display ORDER (filtered + stable multi-key sorted storage indices). Grouping + the windowing
 // of this order into a page live on the model side (ibValueModelStorage::RunComposerPage, tableInfoRam.cpp); the
 // per-row field resolution (incl. dot-walk over references) lives on the storage (ibRamValueStorage::SplitField
-// / ResolveField). срез: filter + sort, flat order; dot-walk up to references.
+// / ResolveField). slice: filter + sort, flat order; dot-walk up to references.
 
 #include "backend/composition/ramComposer.h"   // ibDataRamComposer
 #include "backend/tableInfo.h"                  // ibRamValueStorage — RowCount / SplitField / ResolveField

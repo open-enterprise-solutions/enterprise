@@ -2,7 +2,7 @@
 #define __TEMP_TABLE_QUERYABLE_H__
 
 // ibTempTableQueryable — a TEMP / pre-filled in-memory table as a FIRST-CLASS L3 source:
-// `From(временной таблицы)`. It is the proof that a queryable need not be a metaobject
+// `From(<temp table>)`. It is the proof that a queryable need not be a metaobject
 // (docs §22.0): its columns are generic (ibTempColumn — name + type + source-id, NO
 // attribute behind them), and it is read through the SAME door + RAM source as a
 // register slice — uniformly by GetColumnId(), no attribute, no metaobject. It vends the

@@ -37,7 +37,7 @@ void ibCodeEditor::AddKeywordFromObject(const ibValue& vObject)
 		for (long i = 0; i < vObject.GetNProps(); i++) {
 			// Scope-local props (ThisObject / ThisForm) must not
 			// surface in autocomplete after a chain walk reaches a
-			// foreign object (`Catalogs.Catalog1.CreateElement().` вЂ¦).
+			// foreign object (`Catalogs.Catalog1.CreateElement().` …).
 			if (vObject.IsPropScoped(i)) continue;
 			m_ac.Append(
 				ibContentType::eVariable,

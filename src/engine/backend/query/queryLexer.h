@@ -8,7 +8,7 @@
 // lexer idioms" — but classifies words against the QUERY keyword table
 // (queryKeywords.h), not the script one. Because the primitives are already
 // UTF-8 / Unicode aware, Cyrillic metaobject / attribute identifiers
-// (Номенклатура, Склад) tokenize for free.
+// (Goods, Warehouse) tokenize for free.
 //
 // On a malformed literal the primitives signal through SetError -> DoSetError
 // (whose base body is a no-op the script path overrides); we override DoSetError

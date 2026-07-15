@@ -47,10 +47,10 @@ wxObject* ibValueNotebook::Create(wxWindow* wxparent, ibVisualHost* visualHost)
 	return notebook;
 }
 
-void ibValueNotebook::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueNotebook::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
 	if (visualHost->IsDesignerHost() && GetChildCount() == 0
-		&& firstСreated) {
+		&& firstCreated) {
 		ibValueNotebook::AddNotebookPage();
 	}
 
@@ -148,7 +148,7 @@ bool ibValueNotebook::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, i
 				structurePage->Insert(notebookPage->GetControlName(), ibValue(notebookPage));
 			}
 		}
-#pragma message("nouverbe to nouverbe: необходимо доработать!")
+#pragma message("nouverbe to nouverbe: needs more work!")
 		pvarRetValue = structurePage;
 		return true; 
 	}

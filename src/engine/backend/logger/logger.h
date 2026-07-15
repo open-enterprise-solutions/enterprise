@@ -58,7 +58,7 @@ public:
     ibLogger& operator=(const ibLogger&) = delete;
 
     // Audit — business events (login / document write / DDL apply / ...).
-    // This is the "журнал регистрации" surface.
+    // This is the activity-log surface.
     void Audit(const wxString& source,
                const wxString& event_type,
                const wxString& message);

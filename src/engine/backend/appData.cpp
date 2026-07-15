@@ -52,7 +52,7 @@ wxString ibApplicationData::ResolveLogDir() const
 	if (m_dbMode == ibDatabaseMode::eSERVER) {
 		// Per-user persistent location. %TEMP% would be wiped by
 		// Windows disk cleanup; %LOCALAPPDATA% survives reboots and
-		// "очистка временных файлов". Until compute-server arrives
+		// "temp-file cleanup". Until compute-server arrives
 		// this is the only place a client's journal lives.
 		wxString tag = m_strDatabase;
 		if (tag.IsEmpty()) tag = m_strServer;

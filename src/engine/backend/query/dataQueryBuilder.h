@@ -156,7 +156,7 @@ public:
 	ibValue GetColumn(const wxString& alias) const;
 
 	// A dot-walk leaf that is a reference / enum / composite — reassembled from its field spread projected
-	// under `prefix` (vs GetColumn, which reads one scalar field). An empty / broken ref reads as пусто.
+	// under `prefix` (vs GetColumn, which reads one scalar field). An empty / broken ref reads as the empty value.
 	ibValue GetColumnObject(const wxString& prefix, const ibBackendQueryColumn* col) const;
 
 	// TRAVERSAL — selection = result.Select(mode). Drains the cursor ONCE into a flat snapshot

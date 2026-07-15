@@ -399,8 +399,8 @@ Conscious omissions, each with a revisit trigger:
 | Form-open auto-lock | Same | Same |
 | `ibLockManager` singleton + handle RAII + sweep | Same | Same |
 | Admin "currently held locks" UI | Operational visibility into who's editing what | Multi-tenant deployment where ops needs to force-release stuck sessions |
-| Script-level `New DataLock()` API | 1С-script-compatibility for managed locks | Concrete migration project from 1С configs that uses managed locks |
-| Range filters (`Period < #2023#`) | 1С-style range locks on RecordSet | Same as above |
+| Script-level `New DataLock()` API | Script compatibility for managed locks | Concrete migration project from a legacy platform's configs that uses managed locks |
+| Range filters (`Period < #2023#`) | Range locks on RecordSet | Same as above |
 | Shared (S) lock mode | "Block writers while I read consistently" | Reports complain about register snapshot shifting mid-computation (rare — usually `BeginTransaction({.readOnly = true})` is enough) |
 | Wait-with-timeout `Lock(timeoutMs)` | User control over how long to wait | Specific UX request |
 | Cross-TX session-scope locks | Long-held UX-driven locks | Same trigger as `sys_lock` |
@@ -417,8 +417,8 @@ flow without changing the existing semantics.
 > throw at Save) chosen over the original hard-block ("form refuses
 > to open") design after first smoke pass; B.4 simplified from a
 > `New DataLock` script value-class to direct `Lock()`/`Unlock()`
-> methods on the four ref-object kinds per user feedback ("просто
-> добавь лок в справочники, документы" — less script ceremony, same
+> methods on the four ref-object kinds per user feedback ("just add
+> a lock to catalogs and documents" — less script ceremony, same
 > coverage of the practical use cases). Schema simplified — all
 > locks are session-scoped, no TX-scoped variant (TX-row-locks
 > already cover that from Phase 5-7).

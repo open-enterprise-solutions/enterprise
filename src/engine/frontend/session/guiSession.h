@@ -3,7 +3,7 @@
 
 // ibGUISession — desktop GUI session base. Owns the main frame instance
 // for the duration of the session. Concrete derived classes live in the
-// exe'шки that carry their specific frame class (ibFrontendMainFrameEnterprise
+// executables that carry their specific frame class (ibFrontendMainFrameEnterprise
 // in enterprise.exe, ibFrontendMainFrameDesigner in designer.exe) and
 // override OnCreateSession() to `new` that concrete frame + call AttachFrame.
 //

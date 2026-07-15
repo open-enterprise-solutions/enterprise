@@ -759,7 +759,7 @@ public:
 	// Does a container render its data columns (not just a col-0 label)? BOTH a folder AND a group do: a folder is
 	// a full item (every column, like a leaf); a GROUP node carries its dimension VALUE in the grouped column
 	// (RunComposerPage stamps it there), so the header must render that column to show WHAT it groups by — the
-	// wx default (collapse a container to column 0) hid it, since column 0 of a ТЗ is the line-number column, not
+	// wx default (collapse a container to column 0) hid it, since column 0 of a value-table is the line-number column, not
 	// data. Only the grouped column carries a value on a group node; the rest come back null → blank.
 	virtual bool HasContainerColumns(const ibDataViewItem& item) const {
 		return GetViewData<ibComposerNode>(item) != nullptr;
@@ -1328,7 +1328,7 @@ public:
 // (a sibling RAM source). (A node's OWN m_nodeValues is its cell map; THIS owns the node ARRAY.)
 // The RAM value-storage — the RAM analog of a queryable. It does NOT keep a parallel node vector: it holds a
 // single ROOT node, and the rows ARE the root's CHILDREN ("the list lives inside the root", Max). A flat list
-// is a root of leaf children; a value-TREE is children that carry their own children ("детей бонусом"). The
+// is a root of leaf children; a value-TREE is children that carry their own children ("children as a bonus"). The
 // node (ibComposerNode) is ALREADY a tree — its own m_children / Append / Remove / GetChild ARE the storage,
 // so there is exactly ONE node class and ONE tree. The root is a synthetic handle: never displayed, never a row's
 // display-parent (a row's m_parent is the DISPLAY-parent the COMPOSER stamps per slice, orthogonal to storage

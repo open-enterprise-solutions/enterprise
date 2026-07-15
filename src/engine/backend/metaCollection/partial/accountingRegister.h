@@ -192,7 +192,7 @@ private:
 	ibPropertyContainer<>* m_propertyAttributeAccount = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon,
 		ibValueMetaObjectCompositeData::CreateEmptyType(wxT("Account"), _("Account"), wxEmptyString, false, ibItemMode::ibItemMode_Item));
 
-	// Predefined attributes: Subconto 1-3 (polymorphic references, type determined by РџР’РҐ linked to account)
+	// Predefined attributes: Subconto 1-3 (polymorphic references, type determined by ChartOfCharacteristicTypes linked to account)
 	ibPropertyContainer<>* m_propertyAttributeSubconto1 = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon,
 		ibValueMetaObjectCompositeData::CreateEmptyType(wxT("Subconto1"), _("Subconto 1"), wxEmptyString, false, ibItemMode::ibItemMode_Item));
 

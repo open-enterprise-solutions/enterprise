@@ -126,7 +126,7 @@ class ibValueMetaObjectExternalDataProcessor : public ibValueMetaObjectDataProce
 		m_metaId = default_meta_id;
 	}
 
-	//СЃreate from file?
+	//create from file?
 	virtual bool IsExternalCreate() const { return true; }
 };
 

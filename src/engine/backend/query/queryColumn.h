@@ -45,7 +45,7 @@ enum ibFieldTypes {
 // (ibBackendTypeSourceFactory) returns THIS, blind to the concrete class: a metaobject attribute
 // OR a dynamic list's queryable column, both already ARE an ibBackendSourceColumn, no adapter.
 // ibBackendAbstractColumn — the NAME / SYNONYM / COMMENT face shared by a metadata source column
-// AND a form attribute (the "связующее звено"): a control reads the caption / comment from it without
+// AND a form attribute (the "linking element"): a control reads the caption / comment from it without
 // knowing which it is. Both ibBackendSourceColumn (metadata / query column) and the form attribute
 // (ibBackendFormAttributeValue) derive it, so ONE resolver returns either, uniformly.
 class BACKEND_API ibBackendAbstractColumn

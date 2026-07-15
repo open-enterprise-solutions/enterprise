@@ -327,7 +327,7 @@ void ibSessionRegistry::Stop()
 	}
 
 	// Quiesce the registry thread FIRST without giving it any new work.
-	// Earlier shape ran Remove'ы through Submit + ThreadBody so they
+	// Earlier shape ran Removes through Submit + ThreadBody so they
 	// happened on the registry thread; that turned shutdown into a
 	// cross-thread mutex chase between main (in unwind / dtor) and
 	// ThreadBody (in ProcessRemove → session.m_mtx / NotifyDisconnect

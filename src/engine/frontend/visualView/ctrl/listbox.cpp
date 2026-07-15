@@ -23,7 +23,7 @@ wxObject* ibValueListBox::Create(wxWindow* wxparent, ibVisualHost* visualHost)
 	return m_listbox;
 }
 
-void ibValueListBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueListBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
 }
 

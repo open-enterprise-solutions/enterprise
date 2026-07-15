@@ -47,7 +47,7 @@ enum
 
 // One kind namespace: Name -> Queryable for every metaobject of the kind that
 // vends a queryable (ibBackendQueryableHolder). The source name mirrors the
-// canonical script path ("Catalogs.Номенклатура") for watch / diagnostics.
+// canonical script path ("Catalogs.Goods") for watch / diagnostics.
 ibValueStructure* BuildKindNamespace(ibMetaData* metaData, const ibClassID& clsid,
                                      const wxString& kindName)
 {

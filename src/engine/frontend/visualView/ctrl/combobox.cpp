@@ -22,7 +22,7 @@ wxObject* ibValueComboBox::Create(wxWindow* wxparent, ibVisualHost* visualHost)
 	return combobox;
 }
 
-void ibValueComboBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstСreated)
+void ibValueComboBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
 }
 

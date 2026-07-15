@@ -74,7 +74,7 @@ The OES UI went through several palette iterations before landing here. Each one
 1. **Hard dark navy `#293955` chrome + white captions.** Inherited from the original Luna theme. Looked like an early-2000s MDI app and clashed with modern Windows themes.
 2. **Flat slate everywhere.** Lifted to a Tailwind slate scale. Cool and modern but uniformly cold — felt sterile, "too white".
 3. **Five-tier cool slate gradation.** Same family but with explicit tier roles. Still too monotone for prolonged use.
-4. **1C-style warm cream + steel-blue captions.** Familiar, comfortable, but instantly recognisable as a 1C clone — not distinctive enough.
+4. **Warm cream + steel-blue captions.** Familiar, comfortable, but instantly recognisable as a legacy-ERP clone — not distinctive enough.
 5. **Cool chrome + cream content + terracotta accent (current).** Inspired by the cool-walls / warm-ottoman interior composition. Calm framing, comfortable content, single warm focal point — distinctive without trying.
 
 When extending the UI, prefer reusing a tier from the table above. If you find yourself needing a new shade, add it to the tier table here in the same edit so the palette stays auditable.

@@ -18,7 +18,7 @@
 
 #include "systemManagerEnum.h"
 
-//--- Базовые:
+//--- Basic:
 bool ibValueSystemFunction::Boolean(const ibValue& cValue)
 {
 	return cValue.GetBoolean();
@@ -39,7 +39,7 @@ wxString ibValueSystemFunction::String(const ibValue& cValue)
 	return cValue.GetString();
 }
 
-//---Математические:
+//--- Math:
 ibNumber ibValueSystemFunction::Round(const ibValue& cValue, int precision, ibRoundMode mode)
 {
 	ibNumber fNumber = cValue.GetNumber();
@@ -111,7 +111,7 @@ ibValue ibValueSystemFunction::Sqrt(const ibValue& cValue)
 	return ibValue(fNumber.Sqrt());
 }
 
-//---Строковые:
+//--- Strings:
 int ibValueSystemFunction::StrLen(const ibValue& cValue)
 {
 	ibString scratch;
@@ -268,7 +268,7 @@ wxString ibValueSystemFunction::TStr(const ibValue& cSource, const ibValue& cLan
 		cLanguage.GetString(), cSource.GetString());
 }
 
-//---Работа с датой и временем
+//--- Date and time:
 ibValue ibValueSystemFunction::CurrentDate()
 {
 	wxDateTime timeNow = wxDateTime::Now();
@@ -444,7 +444,7 @@ int ibValueSystemFunction::GetQuartOfYear(const ibValue& cData)
 	return 1 + ((nMonth - 1) / 3);
 }
 
-//--- Работа с файлами: 
+//--- File operations: 
 
 #include <wx/filename.h>
 
@@ -470,14 +470,14 @@ wxString ibValueSystemFunction::GetTempFileName()
 	);
 }
 
-//--- Работа с окнами:
+//--- Window operations:
 ibBackendValueForm* ibValueSystemFunction::ActiveWindow()
 {
 	auto* frame = ibSession::CurrentFrame();
 	return frame != nullptr ? frame->ActiveWindow() : nullptr;
 }
 
-//--- Специальные:
+//--- Special:
 void ibValueSystemFunction::Message(const wxString& strMessage, ibStatusMessage status)
 {
 	if (ibBackendException::IsEvalMode())

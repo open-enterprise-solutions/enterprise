@@ -563,7 +563,7 @@ public:
 	// those triggers cache miss → recompile → write a new row
 	// under the same key.
 	//
-	// Why GUID, not name: user renames in Designer (e.g. "Утилиты"
+	// Why GUID, not name: user renames in Designer (e.g. "Utilities"
 	// → "Tools") don't touch the descriptor's GUID, so dependent
 	// bytecodes' references stay valid. Same way `metadataReader`
 	// already references metadata objects through their own

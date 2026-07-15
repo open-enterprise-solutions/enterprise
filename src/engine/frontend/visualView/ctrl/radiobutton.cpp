@@ -22,7 +22,7 @@ wxObject* ibValueRadioButton::Create(wxWindow* wxparent, ibVisualHost *visualHos
 	return radioButton;
 }
 
-void ibValueRadioButton::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost *visualHost, bool firstСreated)
+void ibValueRadioButton::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost *visualHost, bool firstCreated)
 {
 }
 

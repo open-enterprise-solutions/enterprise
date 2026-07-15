@@ -537,7 +537,7 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 	// is locked, incremented and returned in one shot — concurrent
 	// sessions (incl. cross-machine) sequentialise through the DB row
 	// lock with no race window between SELECT and UPSERT. Two attempts:
-	//   1) UPDATE...RETURNING — row exists в†’ done.
+	//   1) UPDATE...RETURNING — row exists → done.
 	//   2) Bootstrap-scan + INSERT. INSERT may PK-conflict if another
 	//      session inserted first; the next loop iteration's UPDATE arm
 	//      then succeeds with the racing session's value + 1.
@@ -577,7 +577,7 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 				gotCode = true;
 			}
 			// else: PK conflict from a racing session's bootstrap
-			// в†’ loop, UPDATE arm now succeeds.
+			// → loop, UPDATE arm now succeeds.
 		}
 	}
 

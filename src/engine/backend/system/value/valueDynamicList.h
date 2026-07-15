@@ -87,7 +87,7 @@ public:
 	// Commit Filter/Order/Group from the buffer ONTO the composer — call on a settings change, NOT per fetch.
 	void RefreshComposerSettings();
 
-	// Add a FILTER (отбор) to the list — a predicate `path op value` fed to the composer underneath (the SINGLE
+	// Add a FILTER to the list — a predicate `path op value` fed to the composer underneath (the SINGLE
 	// settings store; it persists and feeds the fetch). The backend injects a FIXED predicate here when it
 	// GENERATES a select form (folder-select: IsFolder "=" true); the general / user filter path lands here too.
 	void AddFilter(const wxString& path, const wxString& op, const ibValue& value);

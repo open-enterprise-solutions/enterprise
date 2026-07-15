@@ -111,8 +111,8 @@ BACKEND_API ibBackendQueryProvider& ibComputedProviderInstance();
 // operators. (L3 doesn't pull L2 includes; see docs/query-language-arc.md §20, §22.4b.)
 // The L3 comparison/filter operator — ONE L3-native enum covering equality AND the ordered/LIKE ops, so the
 // crippled 2-value ibComparisonType (Eq/Ne, a leftover from the legacy ibFilterRow) is GONE from the query
-// path. Equal/NotEqual are the common case; the rest are the former WhereCompare/WhereLike ops. (Max: "зачем
-// каличный ibComparisonType везде тащишь".)
+// path. Equal/NotEqual are the common case; the rest are the former WhereCompare/WhereLike ops. (Max: "why do you
+// drag that clunky ibComparisonType everywhere".)
 enum class ibQueryFilterOp { Equal, NotEqual, Like, Less, LessEqual, Greater, GreaterEqual };
 
 struct ibQueryCondition
@@ -441,7 +441,7 @@ public:
 	// columns / identity / parent all come from it; family-blind, register ≡ ref).
 	virtual const ibBackendQueryable* GetQueryable() const = 0;
 
-	// --- dynamic-list source configuration (the "Запрос" surface). A plain holder
+	// --- dynamic-list source configuration (the "Query" surface). A plain holder
 	// is a fixed main-table source; a custom-query holder overrides these.
 	//   UseCustomQuery → read from QueryText instead of the main table directly.
 	//   KeyFields      → the keyset columns when the query has no natural PK

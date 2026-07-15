@@ -7,13 +7,13 @@
 > **One sentence:** access rules, period close, and read-only enforcement become
 > **declarative platform-level policies** that the L3 door injects into every query plan
 > and the connection layer translates into DBMS transaction modes — instead of an
-> application-level library bolted on top (the 1С-БСП shape).
+> application-level library bolted on top (the bolt-on standard-library shape).
 
 ---
 
 ## 1. Motivation — why platform, not library
 
-A library (the БСП shape: period-close checks as application subscriptions) can only
+A library (the application-library shape: period-close checks as application subscriptions) can only
 **check**. A platform-level declaration can be **exploited**:
 
 - the engine *routes* queries over frozen periods to the totals table / an eternal cache;
@@ -33,7 +33,7 @@ bypassed by application code; below the door there is only physics.
 
 ## 2. Core model — three entities, no tree
 
-The decisive difference from the 1С shape ("a role is a monolith of checkboxes with RLS
+The decisive difference from the conventional shape ("a role is a monolith of checkboxes with RLS
 templates baked in"): **the policy is the atom, the role is a label.**
 
 1. **Policy** — a self-contained declaration: *what* (metaobject / scope), *under which
@@ -77,7 +77,7 @@ register in a platform registry; at plan-build time the door consults all of the
 | Period close | write-deny verdicts, read-only verdicts, routing hints |
 | Plugins (future) | anything — territorial access, workflow states, … |
 
-"БСП inverted": the platform owns the socket, subsystems own the rules. The policy SPI
+"The application library, inverted": the platform owns the socket, subsystems own the rules. The policy SPI
 is the same extensibility contract for *rules* that the queryable contract is for
 *sources* — and both plug into the same door.
 
@@ -154,7 +154,7 @@ Why the L3 door is the uniquely right place — five properties:
    policy reaches computed / external queryables (pushed into the connector or applied
    at materialisation) — one policy for own and foreign data, mandatory for BI.
 
-**Anti-pattern to never repeat** (the 1С РЛС lesson): injecting correlated permission
+**Anti-pattern to never repeat** (the correlated-RLS lesson): injecting correlated permission
 subqueries per query — legendary performance death. Our injection is a **flat sargable
 predicate**; RLS here *shrinks* plans (less data), it does not kill them.
 
