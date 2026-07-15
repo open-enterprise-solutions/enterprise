@@ -99,23 +99,23 @@
       "reviewed": false
     },
     {
-      "id": "fn.Lnt",
-      "name_local": "Lnt",
-      "name_en": "Lnt",
+      "id": "fn.Int",
+      "name_local": "Int",
+      "name_en": "Int",
       "kind": "system_function",
       "category_keys": [
         "global_context",
         "global_functions"
       ],
-      "signature": "Lnt(num : number)",
-      "description": "",
-      "syntax_block": "Lnt(num : number)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "signature": "Int(num : number)",
+      "description": "The integer part of a number: the fractional part is truncated, nothing is rounded. `Int(3.9)` is `3`, not `4`; truncation goes towards zero, so `Int(-3.9)` is `-3`. Use `Round` when you want rounding.",
+      "syntax_block": "Int(num : number)",
+      "parameters": "num — a number (or a value convertible to one).",
+      "return_descr": "Number — the integer part of the argument.",
+      "example": "Message(Int(3.9));    // 3\nMessage(Int(-3.9));   // -3\nMessage(Round(3.9));  // 4 — rounding, not truncation",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Round"],
+      "reviewed": true
     },
     {
       "id": "fn.Log10",

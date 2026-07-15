@@ -122,7 +122,7 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	helper.AppendFunc(wxT("String"), 1, wxT("String(value: any)"));
 	//--- Математические:
 	helper.AppendFunc(wxT("Round"), 3, wxT("Round(num : number, number, roundMode)"));
-	helper.AppendFunc(wxT("Lnt"), 1, wxT("Lnt(num : number)"));
+	helper.AppendFunc(wxT("Int"), 1, wxT("Int(num : number)"));
 	helper.AppendFunc(wxT("Log10"), 1, wxT("Log10(num : number)"));
 	helper.AppendFunc(wxT("Ln"), 1, wxT("Ln(num : number)"));
 	helper.AppendFunc(wxT("Max"), -1, wxT("Max(num : number, ...)"));
@@ -141,7 +141,7 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	helper.AppendFunc(wxT("StrReplace"), 3, wxT("StrReplace(str : string, string, string)"));
 	helper.AppendFunc(wxT("StrCountOccur"), 2, wxT("StrCountOccur(str : string, string)"));
 	helper.AppendFunc(wxT("StrLineCount"), 1, wxT("StrLineCount(str : string)"));
-	helper.AppendFunc(wxT("StrGetLine"), 1, wxT("StrGetLine(str : string)"));
+	helper.AppendFunc(wxT("StrGetLine"), 2, wxT("StrGetLine(str : string, line : number)"));
 	helper.AppendFunc(wxT("Upper"), 1, wxT("Upper(str : string)"));
 	helper.AppendFunc(wxT("Lower"), 1, wxT("Lower(str : string)"));
 	helper.AppendFunc(wxT("Chr"), 1, wxT("Chr(num : number)"));
@@ -149,7 +149,7 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	helper.AppendFunc(wxT("Tstr"), 2, wxT("Tstr(text : string, langCode : string)"));
 	//--- Работа с датой и временем:
 	helper.AppendFunc(wxT("CurrentDate"), wxT("CurrentDate()"));
-	helper.AppendFunc(wxT("WorkingDate"), 1, wxT("WorkingDate(d : date)"));
+	helper.AppendFunc(wxT("WorkingDate"), wxT("WorkingDate()"));
 	helper.AppendFunc(wxT("AddMonth"), 2, wxT("AddMonth(d : date, num : number)"));
 	helper.AppendFunc(wxT("BegOfMonth"), 1, wxT("BegOfMonth(d : date)"));
 	helper.AppendFunc(wxT("EndOfMonth"), 1, wxT("EndOfMonth(d : date)"));
@@ -171,9 +171,12 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	helper.AppendFunc(wxT("GetDayOfYear"), 1, wxT("GetDayOfYear(d : date)"));
 	helper.AppendFunc(wxT("GetDayOfWeek"), 1, wxT("GetDayOfWeek(d : date)"));
 	helper.AppendFunc(wxT("GetQuartOfYear"), 1, wxT("GetQuartOfYear(d : date)"));
-	//--- Работа с файлами: 
+	//--- Работа с файлами:
+	// Order MUST match the enFileCopy..enGetTempFileName enum block above —
+	// the method number is the index into this table (ibValue::ibMemberTable::
+	// FindMethod), so a swap here calls the wrong case in CallAsFunc.
+	helper.AppendFunc(wxT("FileCopy"), 2, wxT("FileCopy(fileSrcName : string, fileDstName : string)"));
 	helper.AppendFunc(wxT("FileDelete"), 1, wxT("FileDelete(fileName : string)"));
-	helper.AppendFunc(wxT("FileCopy"), 2, wxT("FileCopy(fileDstName : string, fileSrcName : string)"));
 	helper.AppendFunc(wxT("GetTempDir"), wxT("GetTempDir()"));
 	helper.AppendFunc(wxT("GetTempFileName"), wxT("GetTempFileName()"));
 	//--- Работа с окнами: 
@@ -189,13 +192,13 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	helper.AppendFunc(wxT("ErrorDescription"), wxT("ErrorDescription()"));
 	helper.AppendFunc(wxT("IsEmptyValue"), 1, wxT("IsEmptyValue(value : any)"));
 	helper.AppendFunc(wxT("Evaluate"), 1, wxT("Evaluate(expr : string)"));
-	helper.AppendFunc(wxT("Execute"), 2, wxT("Execute(expr : string)"));
+	helper.AppendFunc(wxT("Execute"), 1, wxT("Execute(expr : string)"));
 	helper.AppendFunc(wxT("Format"), 2, wxT("Format(value : any, format : string)"));
 	helper.AppendFunc(wxT("Type"), 1, wxT("Type(strType : string)"));
 	helper.AppendFunc(wxT("TypeOf"), 1, wxT("TypeOf(value : any)"));
 	helper.AppendFunc(wxT("Rand"), wxT("Rand()"));
 	helper.AppendFunc(wxT("ArgCount"), wxT("ArgCount()"));
-	helper.AppendFunc(wxT("ArgValue"), wxT("ArgValue()"));
+	helper.AppendFunc(wxT("ArgValue"), 1, wxT("ArgValue(index : number)"));
 	helper.AppendFunc(wxT("ComputerName"), wxT("ComputerName()"));
 	helper.AppendFunc(wxT("RunApp"), 1, wxT("RunApp(command : string)"));
 	helper.AppendFunc(wxT("SetAppTitle"), 1, wxT("SetAppTitle(title : string)"));
@@ -254,8 +257,8 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 		case enTrimAll: pvarRetValue = TrimAll(*paParams[0]); return true;
 		case enLeft: pvarRetValue = Left(*paParams[0], paParams[1]->GetInteger()); return true;
 		case enRight: pvarRetValue = Right(*paParams[0], paParams[1]->GetInteger()); return true;
-		case enMid: pvarRetValue = Mid(*paParams[0], paParams[1]->GetInteger(), lSizeArray > 1 ? paParams[2]->GetInteger() : 1); return true;
-		case enFind: pvarRetValue = Find(*paParams[0], *paParams[1], lSizeArray > 1 ? paParams[2]->GetInteger() : 0); return true;
+		case enMid: pvarRetValue = Mid(*paParams[0], paParams[1]->GetInteger(), lSizeArray > 2 ? paParams[2]->GetInteger() : 1); return true;
+		case enFind: pvarRetValue = Find(*paParams[0], *paParams[1], lSizeArray > 2 ? paParams[2]->GetInteger() : 0); return true;
 		case enStrReplace: pvarRetValue = StrReplace(*paParams[0], *paParams[1], *paParams[2]); return true;
 		case enStrCountOccur: pvarRetValue = StrCountOccur(*paParams[0], *paParams[1]); return true;
 		case enStrLineCount: pvarRetValue = StrLineCount(*paParams[0]); return true;
@@ -264,7 +267,7 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 		case enLower: pvarRetValue = Lower(*paParams[0]); return true;
 		case enChr: pvarRetValue = Chr(paParams[0]->GetInteger()); return true;
 		case enAsc: pvarRetValue = Asc(*paParams[0]); return true;
-		case enTStr: pvarRetValue = TStr(*paParams[0], lSizeArray > 0 ? paParams[1]->GetString() : wxT("")); return true;
+		case enTStr: pvarRetValue = TStr(*paParams[0], lSizeArray > 1 ? paParams[1]->GetString() : wxT("")); return true;
 			//--- Работа с датой и временем:
 		case enCurrentDate: pvarRetValue = CurrentDate(); return true;
 		case enWorkingDate: pvarRetValue = WorkingDate(); return true;
@@ -302,7 +305,9 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 				lSizeArray > 1 ? paParams[1]->ConvertToEnumValue<ibStatusMessage>() : ibStatusMessage::ibStatusMessage_Information);
 			return true;
 		case enAlert: Alert(paParams[0]->GetString()); return true;
-		case enQuestion: pvarRetValue = Question(paParams[0]->GetString(), paParams[1]->ConvertToEnumValue<ibQuestionMode>());
+		case enQuestion: pvarRetValue = Question(paParams[0]->GetString(),
+			lSizeArray > 1 ? paParams[1]->ConvertToEnumValue<ibQuestionMode>() : ibQuestionMode::ibQuestionMode_OK);
+			return true;
 		case enSetStatus: SetStatus(paParams[0]->GetString()); return true;
 		case enClearMessage: ClearMessage(); return true;
 		case enSetError: SetError(paParams[0]->GetString()); return true;
@@ -318,7 +323,7 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 		case enTypeOf: pvarRetValue = TypeOf(*paParams[0]); return true;
 		case enRand: pvarRetValue = Rand(); return true;
 		case enArgCount: pvarRetValue = ArgCount(); return true;
-		case enArgValue: pvarRetValue = ArgValue(paParams[0]->GetInteger());
+		case enArgValue: pvarRetValue = ArgValue(paParams[0]->GetInteger()); return true;
 		case enComputerName: pvarRetValue = ComputerName(); return true;
 		case enRunApp: RunApp(paParams[0]->GetString()); return true;
 		case enSetAppTitle: SetAppTitle(paParams[0]->GetString()); return true;

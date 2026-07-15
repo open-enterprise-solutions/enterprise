@@ -99,23 +99,23 @@
       "reviewed": false
     },
     {
-      "id": "fn.Lnt",
-      "name_local": "Lnt",
-      "name_en": "Lnt",
+      "id": "fn.Int",
+      "name_local": "Int",
+      "name_en": "Int",
       "kind": "system_function",
       "category_keys": [
         "global_context",
         "global_functions"
       ],
-      "signature": "Lnt(num : number)",
-      "description": "",
-      "syntax_block": "Lnt(num : number)",
-      "parameters": "",
-      "return_descr": "",
-      "example": "",
+      "signature": "Int(num : number)",
+      "description": "Ціла частина числа: дробова частина відкидається, округлення не відбувається. `Int(3.9)` — це `3`, а не `4`; відкидання йде до нуля, тому `Int(-3.9)` — це `-3`. Для округлення візьміть `Round`.",
+      "syntax_block": "Int(num : number)",
+      "parameters": "num — число (або значення, що приводиться до числа).",
+      "return_descr": "Число — ціла частина аргументу.",
+      "example": "Message(Int(3.9));    // 3\nMessage(Int(-3.9));   // -3\nMessage(Round(3.9));  // 4 — округлення, а не відкидання",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
-      "see_also": [],
-      "reviewed": false
+      "see_also": ["fn.Round"],
+      "reviewed": true
     },
     {
       "id": "fn.Log10",
