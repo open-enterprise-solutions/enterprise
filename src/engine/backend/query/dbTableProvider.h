@@ -67,8 +67,29 @@ public:
 	// GROUPING(key) flags — the DBMS computes every subtotal level from raw detail (correct for
 	// COUNT / AVG) — and assembles the ibSelectorTree node tree from the result. Else the composer
 	// RAM-folds the detail. BACKEND_API for the unit test.
+	// CanRollupTotalsShape = the STRUCTURAL half (no dialect probe -> unit-testable without a DB);
+	// CanPushRollupTotals adds the ROLLUP-dialect capability (what the composer dispatches on).
+	static BACKEND_API bool CanRollupTotalsShape(const ibDataQuerySpec& spec);
 	static BACKEND_API bool CanPushRollupTotals(const ibDataQuerySpec& spec);
 	static ibSelectorTree   ExecuteRollupTotals(const ibDataQuerySpec& spec);
+
+	// Multi-source variant of the ROLLUP totals push-down: the SAME GROUP BY ROLLUP + GROUPING()
+	// mechanism, but over a co-located INNER/LEFT JOIN tree (BuildColocatedFrom) OR a UNION-of-branches
+	// derived table (BuildUnionRollupFrom) instead of one table —
+	// so a TOTALS over a JOIN runs server-side (the DBMS computes every subtotal level; only aggregated
+	// rows transit) instead of the composer materialising both leaves and folding the tree in RAM. Same
+	// ibSelectorTree either way — perf, not correctness. Split in two so the routing is unit-testable
+	// without a DB (unlike the single-source CanPushRollupTotals, which conflates shape + dialect and is
+	// consequently untested):
+	//   CanColocateRollupTotals     — the STRUCTURAL half: CanColocateBase's join tree, SCALAR group keys /
+	//                                 aggregate inputs (a reference-spread ROLLUP stays RAM), no dot-walk /
+	//                                 computed group or aggregate. No dialect probe -> testable like
+	//                                 CanColocateAggregate.
+	//   CanPushColocatedRollupTotals — adds the DB-intrinsic ROLLUP-dialect capability. The composer
+	//                                 dispatches on this.
+	static BACKEND_API bool CanColocateRollupTotals(const ibDataQuerySpec& spec);
+	static BACKEND_API bool CanPushColocatedRollupTotals(const ibDataQuerySpec& spec);
+	static ibSelectorTree   ExecuteColocatedRollupTotals(const ibDataQuerySpec& spec);
 
 	// (The plain column value codec — GetValueColumn / SetValueColumn — was INLINED to its tier home
 	//  ibColumnCodec::ReadValue / WriteValue (query/columnLayout.h): call sites speak the tier directly,

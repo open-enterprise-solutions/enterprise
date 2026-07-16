@@ -189,7 +189,8 @@
 > per shared prefix), shared by `ExecuteTotals` and `PopulateBuilder`. Remaining edges, each an honest `Fail`:
 > dot-walk over a UNION (union output is not reference-aware), a dot-walk aggregate input (`SUM(c.Owner.Weight)`)
 > / `SelectAggregate` GROUP BY, CROSS / non-equi JOIN, and server-side ROLLUP push-down for multi-source
-> (RAM-fold today — the perf, not correctness, tail).]**
+> (RAM-fold today — the perf, not correctness, tail; ROLLUP for multi-source **landed 2026-07-16(2)** —
+> co-located JOIN + UNION, see the update block above).]**
 > ~~TOTALS BY a reference / composite dot-walk leaf (scalar today)~~ **[non-scalar leaf landed 2026-06-28: a
 > single-target dot-walk path whose LEAF is a reference / composite now rides `ExpandDotWalkJoins` (single-source
 > too — adding the ref-join makes it RAM-folded, grouping by the leaf's reference VALUE the scalar synthetic
@@ -230,6 +231,32 @@
 > no RAM stitch. Test: `QueryComposerGate.Join_ColumnTheta_Colocatable`. Still RAM-folds (correctly): a
 > **computed** ON (`a.x + 1 > b.y`) and any **cross-DB** join — co-location is a same-source property, not
 > "always". `JoinRamTables` remains the fallback for both.
+>
+> ### Update 2026-07-16 (2) — multi-source TOTALS ROLLUP push-down (the last totals tail, landed)
+>
+> `ExecuteTotals` pushed `GROUP BY ROLLUP` server-side only for a **single source**; a hierarchical
+> TOTALS over a co-located JOIN / UNION always RAM-folded (`Compose` → `BuildTotalsTree`) even though the
+> flat GROUP BY over the same JOIN already co-located. That tail is closed:
+> - **Shared core `RunRollupTotals(spec, from, colExpr)`** — the projection (`g<i>` / `GROUPING(g<i>)` /
+>   aggregates), the GROUPING-level read and the `ibSelectorTree` assembly now live in ONE place; the
+>   single-source push, the co-located JOIN push and the UNION push differ only in `from` + how a column is
+>   qualified (no duplicated read/tree code).
+> - **JOIN** — `ExecuteColocatedRollupTotals` runs ROLLUP over `BuildColocatedFrom` (columns qualified by
+>   their owning leaf's table), WHERE via the same `ColocatedWhere` — so an RLS **semi-join rides
+>   server-side** on the totals too (`BuildColocatedPredicate` renders the correlated EXISTS).
+>   `CanColocateRollupTotals` gates it (colocatable join tree, SCALAR levels / inputs).
+> - **UNION** — `BuildUnionRollupFrom` projects each branch's referenced columns under inner aliases
+>   (`k<n>`), UNION[/ALL]-stacks them and wraps the result as a subquery `u`; the outer ROLLUP folds over
+>   `u.k<n>`. `CanColocateUnionRollupShape` requires every referenced column to resolve BY NAME + SCALAR in
+>   every branch, and **gates OFF when a boolean WHERE tree / RLS `m_predicate` is present** (the union
+>   branch path renders only flat conditions) → RAM, which applies it — never an under-restricted read.
+> - **Testability** — the single-source gate was untested (shape + dialect conflated). Both sides now
+>   expose the STRUCTURAL half (`CanRollupTotalsShape` / `CanColocateRollupTotals`) with no dialect probe,
+>   so the routing is unit-tested without a DB: `QueryComposerGate.RollupTotals_*` (JOIN scalar, single
+>   source, computed leaf, no-levels, UNION scalar, UNION computed-branch, UNION-with-predicate, single
+>   shape, multi-source, single computed). The server-side SQL execution + the GROUPING-level parse stay
+>   integration scope (a ROLLUP-capable DB — FB5 / PG / MySQL8; SQLite has no ROLLUP → correct RAM fold,
+>   not a gap).
 >
 > ### Update 2026-06-28 (4) — named ref-join `JOIN o.Customer AS Cust1` (landed, builds clean Debug|x86, launcher pending)
 >

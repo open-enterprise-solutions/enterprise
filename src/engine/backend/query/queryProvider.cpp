@@ -2039,6 +2039,12 @@ ibSelectorTree ibQueryComposer::ExecuteTotals(const ibDataQuerySpec& spec)
 	if (IsSingleSource(spec) && ibDbTableProvider::CanPushRollupTotals(spec))
 		return ibDbTableProvider::ExecuteRollupTotals(spec);
 
+	// Multi-source co-located JOIN on a ROLLUP-capable dialect: push GROUP BY ROLLUP server-side (the
+	// DBMS computes every subtotal level; only aggregated rows transit) instead of materialising the
+	// leaves and folding the totals tree in RAM. Same ibSelectorTree either way — perf, not correctness.
+	if (!IsSingleSource(spec) && ibDbTableProvider::CanPushColocatedRollupTotals(spec))
+		return ibDbTableProvider::ExecuteColocatedRollupTotals(spec);
+
 	ibQueryRamTable combined;
 	if (IsSingleSource(spec)) {
 		// Materialise the source's group + sum columns, unfiltered by page.

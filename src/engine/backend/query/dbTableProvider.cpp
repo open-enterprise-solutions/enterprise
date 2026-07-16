@@ -1502,9 +1502,9 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedUnion(const ibDataQuerySpec
 // read the result + the GROUPING(key) flags and assemble the ibSelectorTree node tree the runtime
 // already consumes. Only the aggregated subtotal rows transit — no raw detail.
 // ==========================================================================
-bool ibDbTableProvider::CanPushRollupTotals(const ibDataQuerySpec& spec)
+bool ibDbTableProvider::CanRollupTotalsShape(const ibDataQuerySpec& spec)
 	{
-		// Single-source DB queryable (a multi-source totals goes through the composer's RAM fold).
+		// Single-source DB queryable (a multi-source totals goes through the co-located / RAM paths).
 		if (spec.m_root != nullptr && spec.m_root->m_kind != ibQueryNode::Kind::Source) return false;
 		const ibBackendQueryable* q = spec.m_queryable;
 		if (q == nullptr || q->IsComputedInRam())                 return false;
@@ -1517,114 +1517,296 @@ bool ibDbTableProvider::CanPushRollupTotals(const ibDataQuerySpec& spec)
 			if (g == nullptr || !ScalarReadable(g, one)) return false;
 		for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates)
 			if (a.m_col != nullptr && !ScalarReadable(a.m_col, one)) return false;
+		return true;
+	}
 
+bool ibDbTableProvider::CanPushRollupTotals(const ibDataQuerySpec& spec)
+	{
+		if (!CanRollupTotalsShape(spec)) return false;
 		// The connected dialect must advertise ROLLUP (FB5 / PG / MySQL8; NOT SQLite -> RAM).
 		ibConnectionScope scope(spec.m_holder);
 		if (!scope) return false;
 		return scope->GetDialect().m_features.m_rollup;
 	}
 
+// Shared ROLLUP-totals core: SELECT g<i>, GROUPING(g<i>) AS grp<i>, <agg> AS alias FROM <from>
+// GROUP BY ROLLUP(keys) [HAVING …], run it, and assemble the ibSelectorTree from the GROUPING levels.
+// `from` is the ALREADY-filtered source relation; `colExpr` maps a group / aggregate column to its SQL
+// reference — UNqualified for a single table, table-qualified for a co-located JOIN. Both the
+// single-source push (ExecuteRollupTotals) and the co-located multi-source push
+// (ExecuteColocatedRollupTotals) funnel here, so the row-read + tree-assembly lives in ONE place.
+static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr from,
+	const std::function<ibQueryExprPtr(const ibBackendQueryColumn*)>& colExpr)
+{
+	// Build the IR: SELECT g<i>, GROUPING(g<i>) AS grp<i>, <agg> AS alias FROM <from>
+	//               GROUP BY ROLLUP(g0, g1, …)
+	std::vector<ibQueryProjItem> projection;
+	std::vector<ibQueryExprPtr>  groupKeys;
+	std::vector<wxString>        groupAliases, groupingAliases;
+	int gi = 0;
+	for (const ibBackendQueryColumn* g : *spec.m_groupBy) {
+		const ibQueryExprPtr gexpr    = colExpr(g);
+		const wxString       galias   = wxString::Format(wxT("g%d"),   gi);
+		const wxString       grpalias = wxString::Format(wxT("grp%d"), gi);
+		groupKeys.push_back(gexpr);
+		projection.push_back(ibQueryProjItem{ gexpr, galias });
+		projection.push_back(ibQueryProjItem{ ibFunc(wxT("GROUPING"), { colExpr(g) }), grpalias });
+		groupAliases.push_back(galias);
+		groupingAliases.push_back(grpalias);
+		++gi;
+	}
+	for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates) {
+		std::vector<ibQueryExprPtr> args;
+		args.push_back(a.m_col != nullptr ? colExpr(a.m_col) : ibCol(wxT("*")));
+		projection.push_back(ibQueryProjItem{ ibFunc(AggregateFnName(a.m_fn), std::move(args)), a.m_alias });
+	}
+
+	ibQueryExprPtr having;
+	for (const ibDataQueryBuilder::HavingItem& h : *spec.m_having) {
+		std::vector<ibQueryExprPtr> args;
+		args.push_back(h.m_col != nullptr ? colExpr(h.m_col) : ibCol(wxT("*")));
+		ibQueryExprPtr cmp = ibBinOp(FilterOpToBinOp(h.m_op),
+			ibFunc(AggregateFnName(h.m_fn), std::move(args)), ibConst(h.m_value));
+		having = having ? ibBinOp(ibQueryBinOp::And, having, cmp) : cmp;
+	}
+
+	ibQueryIR ir(ibAggregate(from, std::move(projection), std::move(groupKeys), having, /*rollup*/ true));
+	ibDatabaseQueryBuilder qb(spec.m_holder);
+	ibQueryResult cursor = qb.ExecuteIR(ir);
+
+	// Read every ROLLUP row: its group values, its aggregate values, and its LEVEL (= count of
+	// GROUPING=0 keys — for ROLLUP they are always a prefix).
+	struct RRow { std::vector<ibValue> groups; std::vector<ibValue> aggs; int level; };
+	const size_t nGroup = spec.m_groupBy->size();
+	std::vector<RRow> rrows;
+	while (cursor.Next()) {
+		RRow rr; rr.level = 0;
+		for (size_t i = 0; i < nGroup; ++i) {
+			rr.groups.push_back(ReadScalarByAlias((*spec.m_groupBy)[i], groupAliases[i], cursor));
+			if (cursor.GetResultInt(groupingAliases[i]) == 0) ++rr.level;
+		}
+		for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates) {
+			using Fn = ibDataQueryBuilder::AggregateFn;
+			rr.aggs.push_back((a.m_fn == Fn::Min || a.m_fn == Fn::Max)
+				? ReadScalarByAlias(a.m_col, a.m_alias, cursor)
+				: ibValue(cursor.GetResultNumber(a.m_alias)));
+		}
+		rrows.push_back(std::move(rr));
+	}
+
+	// Assemble the tree. Columns = group cols + aggregates IN-PLACE in their own source columns.
+	ibSelectorTree tree;
+	for (const ibBackendQueryColumn* g : *spec.m_groupBy)
+		tree.AddColumn(g->GetColumnId(), g->GetName(), g->GetTypeDesc());
+	for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates)
+		if (a.m_col != nullptr) tree.AddColumn(a.m_col->GetColumnId(), a.m_col->GetName(), a.m_col->GetTypeDesc());
+
+	// Parent-before-child: process by level ascending (a level-L node's level-(L-1) parent must
+	// exist). The grand total (level 0) is the root.
+	std::stable_sort(rrows.begin(), rrows.end(), [](const RRow& a, const RRow& b) { return a.level < b.level; });
+	std::map<wxString, ibSelectorTree::Node*> nodes;
+	nodes[wxString()] = &tree.Root();
+	for (const RRow& rr : rrows) {
+		wxString key, parentKey;
+		for (int i = 0; i < rr.level; ++i) {
+			const wxString seg = rr.groups[static_cast<size_t>(i)].GetString() + wxT("\x1f");
+			if (i + 1 < rr.level) parentKey += seg;
+			key += seg;
+		}
+		ibSelectorTree::Node* node = nullptr;
+		if (rr.level == 0) {
+			node = &tree.Root();          // grand total
+		}
+		else {
+			const auto pit = nodes.find(parentKey);
+			ibSelectorTree::Node* parent = (pit != nodes.end()) ? pit->second : &tree.Root();
+			node = parent->AddChild(rr.level);
+			for (int i = 0; i < rr.level; ++i)
+				node->m_values[(*spec.m_groupBy)[static_cast<size_t>(i)]->GetColumnId()] = rr.groups[static_cast<size_t>(i)];
+			nodes[key] = node;
+		}
+		for (size_t i = 0; i < rr.aggs.size() && i < spec.m_aggregates->size(); ++i)
+			if (const ibBackendQueryColumn* ac = (*spec.m_aggregates)[i].m_col)
+				node->m_values[ac->GetColumnId()] = rr.aggs[i];   // IN-PLACE in the aggregate's own column
+	}
+	return tree;
+}
+
+// Single-source ROLLUP totals push-down — SELECT … GROUP BY ROLLUP over ONE physical table.
 ibSelectorTree ibDbTableProvider::ExecuteRollupTotals(const ibDataQuerySpec& spec)
 	{
 		const ibBackendQueryable* q = spec.m_queryable;
-
-		// Build the IR: SELECT g<i>, GROUPING(g<i>) AS grp<i>, <agg> AS alias FROM table WHERE …
-		//               GROUP BY ROLLUP(g0, g1, …)
 		ibQueryRelPtr from = ibScan(q->GetQueryTableName());
 		if (ibQueryExprPtr where = ibMetaIRBuilder::BuildWhere(q, *spec.m_conditions, spec.m_predicate))
 			from = ibFilter(from, where);
+		// One table -> columns are UNqualified (their first SQL field).
+		return RunRollupTotals(spec, from,
+			[](const ibBackendQueryColumn* c) { return ibCol(FirstSqlFieldOfColumn(c)); });
+	}
 
-		std::vector<ibQueryProjItem> projection;
-		std::vector<ibQueryExprPtr>  groupKeys;
-		std::vector<wxString>        groupAliases, groupingAliases;
-		int gi = 0;
-		for (const ibBackendQueryColumn* g : *spec.m_groupBy) {
-			const wxString       field = FirstSqlFieldOfColumn(g);
-			const ibQueryExprPtr gexpr = ibCol(field);
-			const wxString       galias   = wxString::Format(wxT("g%d"),   gi);
-			const wxString       grpalias = wxString::Format(wxT("grp%d"), gi);
-			groupKeys.push_back(gexpr);
-			projection.push_back(ibQueryProjItem{ gexpr, galias });
-			projection.push_back(ibQueryProjItem{ ibFunc(wxT("GROUPING"), { ibCol(field) }), grpalias });
-			groupAliases.push_back(galias);
-			groupingAliases.push_back(grpalias);
-			++gi;
+// STRUCTURAL gate for a co-located UNION totals: every branch a real DB Source leaf, and every column
+// the ROLLUP references (group keys + aggregate inputs + having + flat WHERE conditions) resolves BY
+// NAME in EVERY branch and is SCALAR there — so BuildUnionRollupFrom's union-of-projections can carry
+// them. A boolean WHERE TREE / RLS semi-join (m_predicate) is NOT rendered on the union-branch path, so
+// its presence forces RAM (which applies it) — a co-located UNION totals is never an under-restricted read.
+static bool CanColocateUnionRollupShape(const ibDataQuerySpec& spec)
+{
+	const ibQueryNode* root = spec.m_root;
+	if (root == nullptr || root->m_kind != ibQueryNode::Kind::Union || root->m_parts.empty()) return false;
+	if (!spec.m_keyIn->empty())      return false;   // a row-key IN is not a union-totals shape
+	if (spec.m_predicate != nullptr) return false;   // RLS / boolean tree -> RAM (branch path renders only flat conds)
+
+	for (const auto& part : root->m_parts) {
+		const ibQueryNode* p = part.get();
+		if (p == nullptr || p->m_kind != ibQueryNode::Kind::Source)         return false;
+		if (p->m_queryable == nullptr || p->m_queryable->IsComputedInRam())  return false;
+	}
+	// Resolve-by-name + SCALAR in EVERY branch (a reference / enum column is not co-located here).
+	auto okEveryBranch = [&](const ibBackendQueryColumn* c) -> bool {
+		if (c == nullptr) return true;   // COUNT(*) — no input column
+		for (const auto& part : root->m_parts) {
+			const ibBackendQueryable* q = part->m_queryable;
+			const ibBackendQueryColumn* bc = q->ResolveColumnByName(c->GetName());
+			if (bc == nullptr) return false;
+			ColocatedLeaves one; one.push_back(q);
+			if (!ScalarReadable(bc, one)) return false;
 		}
-		for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates) {
-			std::vector<ibQueryExprPtr> args;
-			args.push_back(a.m_col != nullptr ? ibCol(FirstSqlFieldOfColumn(a.m_col)) : ibCol(wxT("*")));
-			projection.push_back(ibQueryProjItem{ ibFunc(AggregateFnName(a.m_fn), std::move(args)), a.m_alias });
+		return true;
+	};
+	for (const ibBackendQueryColumn* g : *spec.m_groupBy)                  if (!okEveryBranch(g))      return false;
+	for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates)  if (!okEveryBranch(a.m_col)) return false;
+	for (const ibDataQueryBuilder::HavingItem& h : *spec.m_having)         if (!okEveryBranch(h.m_col)) return false;
+	for (const ibQueryCondition& c : *spec.m_conditions) {
+		if (c.m_col == nullptr)                                          return false;   // row-key over a union — nonsensical
+		if (!c.m_path.empty() || c.m_expr != nullptr || c.m_semiJoin)   return false;   // dot-walk / computed / semi-join need a join the branch path lacks
+		if (!okEveryBranch(c.m_col))                                    return false;
+	}
+	return true;
+}
+
+// Build the derived table for a co-located UNION totals: each branch projects the ROLLUP's referenced
+// columns (group keys + aggregate inputs + having) resolved BY NAME under stable inner aliases k<n>,
+// UNION[/ALL]-stacked per m_partAll, filtered per branch by the flat conditions, and wrapped as a
+// subquery "u". Fills `aliasOf` (referenced column -> inner alias) so the caller's colExpr references
+// u.<alias>. The gate (CanColocateUnionRollupShape) guarantees every column resolves in every branch.
+static ibQueryRelPtr BuildUnionRollupFrom(const ibDataQuerySpec& spec,
+	std::map<const ibBackendQueryColumn*, wxString>& aliasOf)
+{
+	std::vector<const ibBackendQueryColumn*> cols;
+	auto addCol = [&](const ibBackendQueryColumn* c) {
+		if (c == nullptr) return;
+		for (const ibBackendQueryColumn* e : cols) if (e == c) return;
+		cols.push_back(c);
+	};
+	for (const ibBackendQueryColumn* g : *spec.m_groupBy)                  addCol(g);
+	for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates)  addCol(a.m_col);
+	for (const ibDataQueryBuilder::HavingItem& h : *spec.m_having)         addCol(h.m_col);
+	for (size_t i = 0; i < cols.size(); ++i)
+		aliasOf[cols[i]] = wxString::Format(wxT("k%d"), static_cast<int>(i));
+
+	const ibQueryNode* root = spec.m_root;
+	ibQueryRelPtr unionRel;
+	for (size_t pi = 0; pi < root->m_parts.size(); ++pi) {
+		const ibBackendQueryable* q = root->m_parts[pi]->m_queryable;
+		ibQueryRelPtr rel = ibScan(q->GetQueryTableName());
+
+		// Flat WHERE, resolved per branch by name (m_predicate is gated off -> RLS goes RAM).
+		std::vector<ibQueryCondition> conds;
+		for (const ibQueryCondition& c : *spec.m_conditions) {
+			if (c.m_col == nullptr) continue;
+			const ibBackendQueryColumn* bc = q->ResolveColumnByName(c.m_col->GetName());
+			if (bc == nullptr) continue;
+			ibQueryCondition nc = c; nc.m_col = bc; conds.push_back(nc);
 		}
+		if (ibQueryExprPtr pred = ibMetaIRBuilder::BuildFilterPredicate(q, conds, wxString()))
+			rel = ibFilter(rel, pred);
 
-		ibQueryExprPtr having;
-		for (const ibDataQueryBuilder::HavingItem& h : *spec.m_having) {
-			std::vector<ibQueryExprPtr> args;
-			args.push_back(h.m_col != nullptr ? ibCol(FirstSqlFieldOfColumn(h.m_col)) : ibCol(wxT("*")));
-			ibQueryExprPtr cmp = ibBinOp(FilterOpToBinOp(h.m_op),
-				ibFunc(AggregateFnName(h.m_fn), std::move(args)), ibConst(h.m_value));
-			having = having ? ibBinOp(ibQueryBinOp::And, having, cmp) : cmp;
+		std::vector<ibQueryProjItem> proj;
+		for (const ibBackendQueryColumn* c : cols) {
+			const ibBackendQueryColumn* bc = q->ResolveColumnByName(c->GetName());   // gate-guaranteed non-null
+			proj.push_back(ibQueryProjItem{ ibCol(FirstSqlFieldOfColumn(bc)), aliasOf[c] });
 		}
+		rel = ibProject(rel, std::move(proj));
 
-		ibQueryIR ir(ibAggregate(from, std::move(projection), std::move(groupKeys), having, /*rollup*/ true));
-		ibDatabaseQueryBuilder qb(spec.m_holder);
-		ibQueryResult cursor = qb.ExecuteIR(ir);
+		const bool keepDups = pi >= root->m_partAll.size() || root->m_partAll[pi];   // missing flag = ALL (back-compat)
+		unionRel = unionRel ? (keepDups ? ibUnionAll(unionRel, rel) : ibUnion(unionRel, rel)) : rel;
+	}
+	return ibSubquery(unionRel, wxT("u"));
+}
 
-		// Read every ROLLUP row: its group values, its aggregate values, and its LEVEL (= count of
-		// GROUPING=0 keys — for ROLLUP they are always a prefix).
-		struct RRow { std::vector<ibValue> groups; std::vector<ibValue> aggs; int level; };
-		const size_t nGroup = spec.m_groupBy->size();
-		std::vector<RRow> rrows;
-		while (cursor.Next()) {
-			RRow rr; rr.level = 0;
-			for (size_t i = 0; i < nGroup; ++i) {
-				rr.groups.push_back(ReadScalarByAlias((*spec.m_groupBy)[i], groupAliases[i], cursor));
-				if (cursor.GetResultInt(groupingAliases[i]) == 0) ++rr.level;
-			}
-			for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates) {
-				using Fn = ibDataQueryBuilder::AggregateFn;
-				rr.aggs.push_back((a.m_fn == Fn::Min || a.m_fn == Fn::Max)
-					? ReadScalarByAlias(a.m_col, a.m_alias, cursor)
-					: ibValue(cursor.GetResultNumber(a.m_alias)));
-			}
-			rrows.push_back(std::move(rr));
-		}
+// Multi-source co-located ROLLUP totals — the SAME GROUP BY ROLLUP mechanism over a co-located
+// INNER/LEFT JOIN tree. Split so the routing decision is unit-testable without a DB (the single-source
+// CanPushRollupTotals conflates shape + dialect and is consequently untested):
+//   CanColocateRollupTotals    — the STRUCTURAL half: a colocatable JOIN tree (CanColocateBase) with
+//                                SCALAR group keys / aggregate inputs and no dot-walk / computed group
+//                                or aggregate (BuildColocatedFrom renders only the .From/.Join tree, so
+//                                anything needing an extra join or a non-qualifiable column RAM-folds).
+//   CanPushColocatedRollupTotals — adds the DB-intrinsic ROLLUP-dialect capability. The composer
+//                                dispatches on this; ExecuteColocatedRollupTotals then runs GROUP BY
+//                                ROLLUP over the co-located JOIN (server-side) instead of the composer
+//                                materialising both leaves and folding the totals tree in RAM.
+// (docs/query-language-arc.md §22.1b)
+bool ibDbTableProvider::CanColocateRollupTotals(const ibDataQuerySpec& spec)
+	{
+		const ibQueryNode* root = spec.m_root;
+		if (root == nullptr)         return false;   // single-source -> CanRollupTotalsShape, not this gate
+		if (spec.m_groupBy->empty()) return false;   // a totals query always has levels
 
-		// Assemble the tree. Columns = group cols + aggregates IN-PLACE in their own source columns.
-		ibSelectorTree tree;
-		for (const ibBackendQueryColumn* g : *spec.m_groupBy)
-			tree.AddColumn(g->GetColumnId(), g->GetName(), g->GetTypeDesc());
+		// Neither the JOIN nor the UNION co-located FROM renders a dot-walk / dimension join or a
+		// COMPUTED group / aggregate -> those RAM-fold (which DOES handle them). (mirrors §22 honest-fail)
+		for (const auto& gp : *spec.m_groupPaths) if (!gp.empty()) return false;
+		if (!spec.m_dimWalks->empty())            return false;
 		for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates)
-			if (a.m_col != nullptr) tree.AddColumn(a.m_col->GetColumnId(), a.m_col->GetName(), a.m_col->GetTypeDesc());
+			if (!a.m_path.empty() || a.m_expr != nullptr) return false;
 
-		// Parent-before-child: process by level ascending (a level-L node's level-(L-1) parent must
-		// exist). The grand total (level 0) is the root.
-		std::stable_sort(rrows.begin(), rrows.end(), [](const RRow& a, const RRow& b) { return a.level < b.level; });
-		std::map<wxString, ibSelectorTree::Node*> nodes;
-		nodes[wxString()] = &tree.Root();
-		for (const RRow& rr : rrows) {
-			wxString key, parentKey;
-			for (int i = 0; i < rr.level; ++i) {
-				const wxString seg = rr.groups[static_cast<size_t>(i)].GetString() + wxT("\x1f");
-				if (i + 1 < rr.level) parentKey += seg;
-				key += seg;
-			}
-			ibSelectorTree::Node* node = nullptr;
-			if (rr.level == 0) {
-				node = &tree.Root();          // grand total
-			}
-			else {
-				const auto pit = nodes.find(parentKey);
-				ibSelectorTree::Node* parent = (pit != nodes.end()) ? pit->second : &tree.Root();
-				node = parent->AddChild(rr.level);
-				for (int i = 0; i < rr.level; ++i)
-					node->m_values[(*spec.m_groupBy)[static_cast<size_t>(i)]->GetColumnId()] = rr.groups[static_cast<size_t>(i)];
-				nodes[key] = node;
-			}
-			for (size_t i = 0; i < rr.aggs.size() && i < spec.m_aggregates->size(); ++i)
-				if (const ibBackendQueryColumn* ac = (*spec.m_aggregates)[i].m_col)
-					node->m_values[ac->GetColumnId()] = rr.aggs[i];   // IN-PLACE in the aggregate's own column
+		// UNION tree -> the branch-union derived table; JOIN tree -> the co-located join.
+		if (root->m_kind == ibQueryNode::Kind::Union)
+			return CanColocateUnionRollupShape(spec);
+
+		ColocatedLeaves leaves;
+		if (!CanColocateBase(spec, leaves)) return false;   // colocatable JOIN tree, no dot-walk / key-in, single-field keys
+		// SCALAR group keys owned by a leaf (a reference-spread ROLLUP -> RAM, like the single-source gate).
+		for (const ibBackendQueryColumn* g : *spec.m_groupBy)
+			if (g == nullptr || !ScalarReadable(g, leaves) || ColocatedOwner(leaves, g) == nullptr) return false;
+		// SCALAR aggregate inputs.
+		for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates)
+			if (a.m_col != nullptr && !ScalarReadable(a.m_col, leaves)) return false;
+		for (const ibDataQueryBuilder::HavingItem& h : *spec.m_having)
+			if (h.m_col != nullptr && !ScalarReadable(h.m_col, leaves)) return false;
+		return true;
+	}
+
+bool ibDbTableProvider::CanPushColocatedRollupTotals(const ibDataQuerySpec& spec)
+	{
+		if (!CanColocateRollupTotals(spec)) return false;
+		// The connected dialect must advertise ROLLUP (FB5 / PG / MySQL8; NOT SQLite -> RAM).
+		ibConnectionScope scope(spec.m_holder);
+		if (!scope) return false;
+		return scope->GetDialect().m_features.m_rollup;
+	}
+
+ibSelectorTree ibDbTableProvider::ExecuteColocatedRollupTotals(const ibDataQuerySpec& spec)
+	{
+		// UNION tree -> ROLLUP over the branch-union derived table; the group / aggregate columns
+		// reference its inner aliases (u.k<n>), the outer GROUP BY ROLLUP folds every subtotal level.
+		if (spec.m_root != nullptr && spec.m_root->m_kind == ibQueryNode::Kind::Union) {
+			std::map<const ibBackendQueryColumn*, wxString> aliasOf;
+			ibQueryRelPtr from = BuildUnionRollupFrom(spec, aliasOf);
+			return RunRollupTotals(spec, from,
+				[&aliasOf](const ibBackendQueryColumn* c) {
+					const auto it = aliasOf.find(c);
+					return ibCol(wxT("u"), it != aliasOf.end() ? it->second : FirstSqlFieldOfColumn(c));
+				});
 		}
-		return tree;
+
+		// JOIN tree -> ROLLUP over the co-located join; qualify each column by its owning leaf's table.
+		ColocatedLeaves leaves;
+		ColocatableJoinTree(spec, leaves);   // the gate already validated; refill the leaf set
+		ibQueryRelPtr from = BuildColocatedFrom(spec.m_root, leaves);
+		if (ibQueryExprPtr where = ColocatedWhere(spec, leaves))
+			from = ibFilter(from, where);
+		return RunRollupTotals(spec, from,
+			[&leaves](const ibBackendQueryColumn* c) { return ibCol(ColocatedQual(leaves, c), FirstSqlFieldOfColumn(c)); });
 	}
 
 // Bind a write column's value positionally: a RAW column straight by its declared RawType (no

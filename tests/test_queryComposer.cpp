@@ -94,6 +94,8 @@ struct SpecBuf {
 	std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> writes;
 	std::vector<ibDotWalkColumn> dots;
 	std::vector<std::pair<const ibBackendQueryColumn*, wxString>> sel;
+	std::vector<std::vector<const ibBackendQueryColumn*>> groupPaths;   // parallel to groupBy (dot-walk keys)
+	std::vector<ibDotWalkColumn> dimWalks;                              // TotalByDotWalk dimensions
 
 	ibDataQuerySpec Make(const ibQueryNode* root, const ibBackendQueryable* primary) {
 		ibDataQuerySpec s;
@@ -101,6 +103,7 @@ struct SpecBuf {
 		s.m_conditions = &conds; s.m_keyIn = &keyIn; s.m_sorts = &sorts;
 		s.m_groupBy = &groupBy; s.m_aggregates = &aggs; s.m_having = &having;
 		s.m_writeValues = &writes; s.m_dotWalks = &dots; s.m_selectCols = &sel;
+		s.m_groupPaths = &groupPaths; s.m_dimWalks = &dimWalks;
 		return s;
 	}
 };
@@ -587,6 +590,231 @@ TEST(QueryComposerGate, Aggregate_GroupBySum_Colocatable)
 	const ibDataQuerySpec spec = buf.Make(root.get(), &A);
 
 	EXPECT_TRUE(ibDbTableProvider::CanColocateAggregate(spec));
+}
+
+// ===========================================================================
+// Routing gate — CanColocateRollupTotals (the STRUCTURAL half of the multi-source hierarchical
+// TOTALS push-down: a co-located JOIN with SCALAR group LEVELS / aggregate inputs. When it holds AND
+// the dialect advertises ROLLUP, a TOTALS over a JOIN runs server-side (GROUP BY ROLLUP) instead of
+// the composer materialising both leaves and folding the totals tree in RAM. The dialect capability —
+// CanPushColocatedRollupTotals — is DB-intrinsic, exercised at integration scope like the single-
+// source CanPushRollupTotals.)
+// ===========================================================================
+
+TEST(QueryComposerGate, RollupTotals_JoinScalarLevels_Colocatable)
+{
+	ibRawDBColumn aKey = ibRawDBColumn::Number(wxT("a_key"));
+	ibRawDBColumn aDim = ibRawDBColumn::String(wxT("a_dim"));
+	ibRawDBColumn bKey = ibRawDBColumn::Number(wxT("b_key"));
+	ibRawDBColumn bAmt = ibRawDBColumn::Number(wxT("b_amt"));
+	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aKey); A.AddCol(&aDim);
+	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bKey); B.AddCol(&bAmt);
+
+	auto root = Join2(&A, &B, &aKey, &bKey);
+	SpecBuf buf;
+	buf.groupBy = { &aDim };                                   // one scalar TOTALS level
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &bAmt; sum.m_alias = wxT("total");
+	buf.aggs = { sum };
+	const ibDataQuerySpec spec = buf.Make(root.get(), &A);
+
+	EXPECT_TRUE(ibDbTableProvider::CanColocateRollupTotals(spec));   // JOIN + scalar level + scalar SUM -> server-side ROLLUP
+}
+
+TEST(QueryComposerGate, RollupTotals_SingleSource_NotColocatable)
+{
+	// A single table is the single-source ROLLUP push (CanPushRollupTotals), NOT the co-located gate.
+	ibRawDBColumn dim = ibRawDBColumn::String(wxT("dim"));
+	ibRawDBColumn amt = ibRawDBColumn::Number(wxT("amt"));
+	TestQueryable A(wxT("TableA"), 1); A.AddCol(&dim); A.AddCol(&amt);
+
+	SpecBuf buf;
+	buf.groupBy = { &dim };
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amt; sum.m_alias = wxT("total");
+	buf.aggs = { sum };
+	const ibDataQuerySpec spec = buf.Make(nullptr, &A);            // Source root (no join tree)
+
+	EXPECT_FALSE(ibDbTableProvider::CanColocateRollupTotals(spec));
+}
+
+TEST(QueryComposerGate, RollupTotals_ComputedLeaf_NotColocatable)
+{
+	// A computed (RAM) leaf in the join can't co-locate -> the composer RAM-folds the totals tree.
+	ibRawDBColumn aKey = ibRawDBColumn::Number(wxT("a_key"));
+	ibRawDBColumn aDim = ibRawDBColumn::String(wxT("a_dim"));
+	ibRawDBColumn cKey = ibRawDBColumn::Number(wxT("c_key"));
+	ibRawDBColumn cAmt = ibRawDBColumn::Number(wxT("c_amt"));
+	TestQueryable A(wxT("TableA"), 1);                   A.AddCol(&aKey); A.AddCol(&aDim);
+	TestQueryable C(wxT("Slice"), 2, /*computed*/ true); C.AddCol(&cKey); C.AddCol(&cAmt);
+
+	auto root = Join2(&A, &C, &aKey, &cKey);
+	SpecBuf buf;
+	buf.groupBy = { &aDim };
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &cAmt; sum.m_alias = wxT("total");
+	buf.aggs = { sum };
+	const ibDataQuerySpec spec = buf.Make(root.get(), &A);
+
+	EXPECT_FALSE(ibDbTableProvider::CanColocateRollupTotals(spec));
+}
+
+TEST(QueryComposerGate, RollupTotals_NoLevels_NotColocatable)
+{
+	// A totals query always has at least one level; an empty groupBy is not a totals shape.
+	ibRawDBColumn aKey = ibRawDBColumn::Number(wxT("a_key"));
+	ibRawDBColumn aOut = ibRawDBColumn::String(wxT("a_out"));
+	ibRawDBColumn bKey = ibRawDBColumn::Number(wxT("b_key"));
+	ibRawDBColumn bAmt = ibRawDBColumn::Number(wxT("b_amt"));
+	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aKey); A.AddCol(&aOut);
+	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bKey); B.AddCol(&bAmt);
+
+	auto root = Join2(&A, &B, &aKey, &bKey);
+	SpecBuf buf;                                                   // groupBy empty -> not a totals shape
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &bAmt; sum.m_alias = wxT("total");
+	buf.aggs = { sum };
+	const ibDataQuerySpec spec = buf.Make(root.get(), &A);
+
+	EXPECT_FALSE(ibDbTableProvider::CanColocateRollupTotals(spec));
+}
+
+// A UNION-of-branches TOTALS also pushes down: each branch projects the referenced columns under
+// stable inner aliases, the DBMS ROLLUPs over the union derived table. The branches resolve the
+// group / aggregate columns BY NAME.
+TEST(QueryComposerGate, RollupTotals_UnionScalar_Colocatable)
+{
+	ibRawDBColumn aDim = ibRawDBColumn::String(wxT("dim"));
+	ibRawDBColumn aAmt = ibRawDBColumn::Number(wxT("amt"));
+	ibRawDBColumn bDim = ibRawDBColumn::String(wxT("dim"));
+	ibRawDBColumn bAmt = ibRawDBColumn::Number(wxT("amt"));
+	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aDim); A.AddCol(&aAmt);
+	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bDim); B.AddCol(&bAmt);
+
+	auto root = std::make_shared<ibQueryNode>();
+	root->m_kind = ibQueryNode::Kind::Union;
+	root->m_parts.push_back(ibQueryNode::Source(&A));
+	root->m_parts.push_back(ibQueryNode::Source(&B));
+
+	SpecBuf buf;
+	buf.groupBy = { &aDim };                                   // resolved per branch by NAME ("dim")
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &aAmt; sum.m_alias = wxT("total");
+	buf.aggs = { sum };
+	const ibDataQuerySpec spec = buf.Make(root.get(), &A);
+
+	EXPECT_TRUE(ibDbTableProvider::CanColocateRollupTotals(spec));   // UNION + scalar level + scalar SUM -> server-side ROLLUP
+}
+
+TEST(QueryComposerGate, RollupTotals_UnionComputedBranch_NotColocatable)
+{
+	ibRawDBColumn aDim = ibRawDBColumn::String(wxT("dim"));
+	ibRawDBColumn aAmt = ibRawDBColumn::Number(wxT("amt"));
+	ibRawDBColumn cDim = ibRawDBColumn::String(wxT("dim"));
+	ibRawDBColumn cAmt = ibRawDBColumn::Number(wxT("amt"));
+	TestQueryable A(wxT("TableA"), 1);                   A.AddCol(&aDim); A.AddCol(&aAmt);
+	TestQueryable C(wxT("Slice"), 2, /*computed*/ true); C.AddCol(&cDim); C.AddCol(&cAmt);
+
+	auto root = std::make_shared<ibQueryNode>();
+	root->m_kind = ibQueryNode::Kind::Union;
+	root->m_parts.push_back(ibQueryNode::Source(&A));
+	root->m_parts.push_back(ibQueryNode::Source(&C));
+
+	SpecBuf buf;
+	buf.groupBy = { &aDim };
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &aAmt; sum.m_alias = wxT("total");
+	buf.aggs = { sum };
+	const ibDataQuerySpec spec = buf.Make(root.get(), &A);
+
+	EXPECT_FALSE(ibDbTableProvider::CanColocateRollupTotals(spec));   // a computed branch -> RAM fold
+}
+
+TEST(QueryComposerGate, RollupTotals_UnionWithPredicate_NotColocatable)
+{
+	// A boolean WHERE tree / RLS restriction is NOT rendered on the union-branch path, so its presence
+	// forces RAM (which applies it) — a co-located UNION totals never emits an under-restricted read.
+	ibRawDBColumn aDim = ibRawDBColumn::String(wxT("dim"));
+	ibRawDBColumn aAmt = ibRawDBColumn::Number(wxT("amt"));
+	ibRawDBColumn bDim = ibRawDBColumn::String(wxT("dim"));
+	ibRawDBColumn bAmt = ibRawDBColumn::Number(wxT("amt"));
+	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aDim); A.AddCol(&aAmt);
+	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bDim); B.AddCol(&bAmt);
+
+	auto root = std::make_shared<ibQueryNode>();
+	root->m_kind = ibQueryNode::Kind::Union;
+	root->m_parts.push_back(ibQueryNode::Source(&A));
+	root->m_parts.push_back(ibQueryNode::Source(&B));
+
+	SpecBuf buf;
+	buf.groupBy = { &aDim };
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &aAmt; sum.m_alias = wxT("total");
+	buf.aggs = { sum };
+	ibDataQuerySpec spec = buf.Make(root.get(), &A);
+	ibQueryCondition leaf; leaf.m_col = &aDim; leaf.m_value = ibValue(wxString(wxT("North")));
+	spec.m_predicate = ibQueryPredicate::Leaf(leaf);              // stand-in for a boolean WHERE / RLS tree
+
+	EXPECT_FALSE(ibDbTableProvider::CanColocateRollupTotals(spec));
+}
+
+// ===========================================================================
+// Routing gate — CanRollupTotalsShape (the STRUCTURAL half of the SINGLE-source ROLLUP push; the
+// full CanPushRollupTotals adds the ROLLUP-dialect capability, integration scope).
+// ===========================================================================
+
+TEST(QueryComposerGate, RollupTotals_SingleSourceScalar_Shape)
+{
+	ibRawDBColumn dim = ibRawDBColumn::String(wxT("dim"));
+	ibRawDBColumn amt = ibRawDBColumn::Number(wxT("amt"));
+	TestQueryable A(wxT("TableA"), 1); A.AddCol(&dim); A.AddCol(&amt);
+
+	SpecBuf buf;
+	buf.groupBy = { &dim };
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amt; sum.m_alias = wxT("total");
+	buf.aggs = { sum };
+	const ibDataQuerySpec spec = buf.Make(nullptr, &A);           // Source root (single source)
+
+	EXPECT_TRUE(ibDbTableProvider::CanRollupTotalsShape(spec));
+}
+
+TEST(QueryComposerGate, RollupTotals_MultiSource_NotSingleShape)
+{
+	// A join tree is NOT the single-source shape (it is the co-located gate's job).
+	ibRawDBColumn aKey = ibRawDBColumn::Number(wxT("a_key"));
+	ibRawDBColumn aDim = ibRawDBColumn::String(wxT("a_dim"));
+	ibRawDBColumn bKey = ibRawDBColumn::Number(wxT("b_key"));
+	ibRawDBColumn bAmt = ibRawDBColumn::Number(wxT("b_amt"));
+	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aKey); A.AddCol(&aDim);
+	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bKey); B.AddCol(&bAmt);
+
+	auto root = Join2(&A, &B, &aKey, &bKey);
+	SpecBuf buf;
+	buf.groupBy = { &aDim };
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &bAmt; sum.m_alias = wxT("total");
+	buf.aggs = { sum };
+	const ibDataQuerySpec spec = buf.Make(root.get(), &A);
+
+	EXPECT_FALSE(ibDbTableProvider::CanRollupTotalsShape(spec));   // join tree -> not single-source
+}
+
+TEST(QueryComposerGate, RollupTotals_SingleComputed_NotShape)
+{
+	// A computed (RAM) single source (a register slice) can't push ROLLUP -> RAM fold.
+	ibRawDBColumn dim = ibRawDBColumn::String(wxT("dim"));
+	ibRawDBColumn amt = ibRawDBColumn::Number(wxT("amt"));
+	TestQueryable C(wxT("Slice"), 1, /*computed*/ true); C.AddCol(&dim); C.AddCol(&amt);
+
+	SpecBuf buf;
+	buf.groupBy = { &dim };
+	ibDataQueryBuilder::AggregateItem sum;
+	sum.m_fn = ibDataQueryBuilder::AggregateFn::Sum; sum.m_col = &amt; sum.m_alias = wxT("total");
+	buf.aggs = { sum };
+	const ibDataQuerySpec spec = buf.Make(nullptr, &C);
+
+	EXPECT_FALSE(ibDbTableProvider::CanRollupTotalsShape(spec));   // computed source -> RAM
 }
 
 // ===========================================================================
