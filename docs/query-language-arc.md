@@ -258,6 +258,22 @@
 >   integration scope (a ROLLUP-capable DB — FB5 / PG / MySQL8; SQLite has no ROLLUP → correct RAM fold,
 >   not a gap).
 >
+> ### Update 2026-07-16 (3) — co-located UNION read renders the full WHERE (RLS + boolean tree through the door)
+>
+> The one server-side terminal that did NOT go through the unified WHERE door: `ExecuteColocatedUnion`
+> rendered only the flat `m_conditions` per branch and silently DROPPED `spec.m_predicate` — the boolean
+> WHERE tree (OR / NOT / IS NULL) AND the RLS semi-join. A boolean WHERE over a co-located union returned
+> too many rows; an RLS restriction (folded into `m_predicate` by `AddSemiJoin`) leaked. Closed by pushing
+> the predicate INTO EACH branch — a union's branches are parallel, so (unlike a JOIN's one qualified
+> expression over the joined row) the same predicate is rendered against every branch with columns
+> resolved BY NAME: new `BuildBranchPredicate` mirrors `BuildColocatedPredicate` for a single by-name
+> source and re-correlates an RLS semi-join's outer key to each branch; `CanColocateUnion` co-locates only
+> when `UnionPredicateColocatable` confirms every referenced column resolves BY NAME + SCALAR in every
+> branch (a dot-walk / computed leaf -> RAM, which applies it). RLS now rides the UNION read server-side,
+> not just the JOIN. Tests: `QueryComposerGate.Union_{BooleanPredicate,SemiJoinPredicate}_Colocatable` +
+> `Union_{PredicateColMissingInBranch,DotWalkPredicate}_NotColocatable`. (The seam the "one door" thesis
+> predicts: the lone gap sat exactly on the lone terminal that bypassed the shared door.)
+>
 > ### Update 2026-06-28 (4) — named ref-join `JOIN o.Customer AS Cust1` (landed, builds clean Debug|x86, launcher pending)
 >
 > A reference dot-walk can now be DECLARED once and reused: `JOIN rootAlias.refA[.refB…] AS alias` auto-joins

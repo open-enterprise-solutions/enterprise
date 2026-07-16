@@ -572,6 +572,101 @@ TEST(QueryComposerGate, Union_ComputedBranch_NotColocatableDirectly)
 	EXPECT_FALSE(ibDbTableProvider::CanColocateUnion(spec));
 }
 
+// The co-located UNION read pushes the full boolean WHERE tree + RLS semi-join into EACH branch
+// (BuildBranchPredicate). Regression guard: before this, m_predicate was silently dropped on the
+// server-side union -> a boolean OR/NOT WHERE returned too many rows, and an RLS restriction leaked.
+TEST(QueryComposerGate, Union_BooleanPredicate_Colocatable)
+{
+	ibRawDBColumn aReg = ibRawDBColumn::String(wxT("region"));
+	ibRawDBColumn bReg = ibRawDBColumn::String(wxT("region"));
+	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aReg);
+	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bReg);
+
+	auto root = std::make_shared<ibQueryNode>();
+	root->m_kind = ibQueryNode::Kind::Union;
+	root->m_parts.push_back(ibQueryNode::Source(&A));
+	root->m_parts.push_back(ibQueryNode::Source(&B));
+
+	SpecBuf buf; buf.sel = { { &aReg, wxT("region") } };
+	ibDataQuerySpec spec = buf.Make(root.get(), &A);
+	auto leaf = [&](const wxString& v) {
+		ibQueryCondition c; c.m_col = &aReg; c.m_value = ibValue(v); return ibQueryPredicate::Leaf(c);
+	};
+	spec.m_predicate = ibQueryPredicate::Compose(ibQueryPredicateKind::Or, leaf(wxT("North")), leaf(wxT("South")));
+
+	EXPECT_TRUE(ibDbTableProvider::CanColocateUnion(spec));   // boolean tree renders per branch -> server-side
+}
+
+TEST(QueryComposerGate, Union_SemiJoinPredicate_Colocatable)
+{
+	// An RLS restriction (semi-join on the region key) whose outer key resolves in every branch rides
+	// the co-located union server-side -- RLS on a UNION read, not just a JOIN.
+	ibRawDBColumn aReg = ibRawDBColumn::String(wxT("region"));
+	ibRawDBColumn bReg = ibRawDBColumn::String(wxT("region"));
+	ibRawDBColumn permReg = ibRawDBColumn::String(wxT("region"));
+	TestQueryable A(wxT("TableA"), 1);         A.AddCol(&aReg);
+	TestQueryable B(wxT("TableB"), 2);         B.AddCol(&bReg);
+	TestQueryable P(wxT("AllowedRegions"), 3); P.AddCol(&permReg);   // permission source
+
+	auto root = std::make_shared<ibQueryNode>();
+	root->m_kind = ibQueryNode::Kind::Union;
+	root->m_parts.push_back(ibQueryNode::Source(&A));
+	root->m_parts.push_back(ibQueryNode::Source(&B));
+
+	SpecBuf buf; buf.sel = { { &aReg, wxT("region") } };
+	ibDataQuerySpec spec = buf.Make(root.get(), &A);
+	ibSemiJoinExists sj; sj.m_inner = &P; sj.m_outerKey = &aReg; sj.m_innerKey = &permReg;
+	ibQueryCondition c; c.m_semiJoin = std::make_shared<ibSemiJoinExists>(sj);
+	spec.m_predicate = ibQueryPredicate::Leaf(c);
+
+	EXPECT_TRUE(ibDbTableProvider::CanColocateUnion(spec));   // semi-join outer key resolves in every branch
+}
+
+TEST(QueryComposerGate, Union_PredicateColMissingInBranch_NotColocatable)
+{
+	// The predicate references a column present only in branch A -> can't render over B -> RAM (applies it).
+	ibRawDBColumn aReg = ibRawDBColumn::String(wxT("region"));
+	ibRawDBColumn aExtra = ibRawDBColumn::String(wxT("extra"));
+	ibRawDBColumn bReg = ibRawDBColumn::String(wxT("region"));
+	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aReg); A.AddCol(&aExtra);
+	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bReg);   // no "extra"
+
+	auto root = std::make_shared<ibQueryNode>();
+	root->m_kind = ibQueryNode::Kind::Union;
+	root->m_parts.push_back(ibQueryNode::Source(&A));
+	root->m_parts.push_back(ibQueryNode::Source(&B));
+
+	SpecBuf buf; buf.sel = { { &aReg, wxT("region") } };
+	ibDataQuerySpec spec = buf.Make(root.get(), &A);
+	ibQueryCondition c; c.m_col = &aExtra; c.m_value = ibValue(wxString(wxT("x")));
+	spec.m_predicate = ibQueryPredicate::Leaf(c);
+
+	EXPECT_FALSE(ibDbTableProvider::CanColocateUnion(spec));   // "extra" absent in branch B -> RAM
+}
+
+TEST(QueryComposerGate, Union_DotWalkPredicate_NotColocatable)
+{
+	// A dot-walk predicate leaf (a reference path) needs a join the branch scan lacks -> RAM.
+	ibRawDBColumn aReg = ibRawDBColumn::String(wxT("region"));
+	ibRawDBColumn bReg = ibRawDBColumn::String(wxT("region"));
+	ibRawDBColumn refc = ibRawDBColumn::String(wxT("owner"));
+	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aReg);
+	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bReg);
+
+	auto root = std::make_shared<ibQueryNode>();
+	root->m_kind = ibQueryNode::Kind::Union;
+	root->m_parts.push_back(ibQueryNode::Source(&A));
+	root->m_parts.push_back(ibQueryNode::Source(&B));
+
+	SpecBuf buf; buf.sel = { { &aReg, wxT("region") } };
+	ibDataQuerySpec spec = buf.Make(root.get(), &A);
+	ibQueryCondition c; c.m_col = &aReg; c.m_value = ibValue(wxString(wxT("x")));
+	c.m_path = { &refc, &aReg };   // dot-walk path present -> not a plain branch column
+	spec.m_predicate = ibQueryPredicate::Leaf(c);
+
+	EXPECT_FALSE(ibDbTableProvider::CanColocateUnion(spec));   // dot-walk in predicate -> RAM
+}
+
 TEST(QueryComposerGate, Aggregate_GroupBySum_Colocatable)
 {
 	ibRawDBColumn aKey = ibRawDBColumn::Number(wxT("a_key"));

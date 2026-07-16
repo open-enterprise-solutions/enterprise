@@ -1396,6 +1396,92 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedAggregate(const ibDataQuery
 		return ibDataQueryResult(std::move(out), spec.m_queryable);
 	}
 
+// --- co-located UNION WHERE: push the full boolean tree + RLS semi-join into EACH branch -----------
+// A UNION differs from a JOIN: the branches are structurally PARALLEL (branch B owns its OWN "Code"
+// column, not the primary's), so the SAME predicate is pushed into EACH branch with every column
+// resolved BY NAME against that branch -- vs BuildColocatedPredicate, which qualifies by owning leaf in
+// ONE joined row space. This is what makes an RLS restriction ride the UNION read server-side (not just
+// the JOIN); it is also the plain-correctness fix for a boolean WHERE (OR/NOT/IS NULL) over a union.
+
+// Is the predicate renderable over every union branch? Every referenced column must resolve BY NAME +
+// SCALAR in every branch; a dot-walk / computed leaf needs a join the branch scan lacks -> RAM.
+static bool UnionPredicateColocatable(const ibQueryPredicatePtr& p,
+	const std::vector<std::shared_ptr<ibQueryNode>>& parts)
+{
+	if (!p) return true;
+	auto resolvesEveryBranch = [&](const ibBackendQueryColumn* c) -> bool {
+		if (c == nullptr) return false;
+		for (const auto& part : parts) {
+			const ibBackendQueryable* q = part != nullptr ? part->m_queryable : nullptr;
+			const ibBackendQueryColumn* bc = q != nullptr ? q->ResolveColumnByName(c->GetName()) : nullptr;
+			if (bc == nullptr) return false;
+			ColocatedLeaves one; one.push_back(q);
+			if (!ScalarReadable(bc, one)) return false;
+		}
+		return true;
+	};
+	switch (p->m_kind) {
+	case ibQueryPredicateKind::Leaf:
+		if (p->m_leaf.m_semiJoin) return resolvesEveryBranch(p->m_leaf.m_semiJoin->m_outerKey);
+		if (!p->m_leaf.m_path.empty() || p->m_leaf.m_expr) return false;   // dot-walk / computed -> RAM
+		return resolvesEveryBranch(p->m_leaf.m_col);
+	case ibQueryPredicateKind::IsNull:
+		if (!p->m_path.empty()) return false;                              // dot-walk IS NULL -> RAM
+		return resolvesEveryBranch(p->m_col);
+	case ibQueryPredicateKind::And:
+	case ibQueryPredicateKind::Or:
+	case ibQueryPredicateKind::Not:
+		for (const auto& ch : p->m_children)
+			if (!UnionPredicateColocatable(ch, parts)) return false;
+		return true;
+	}
+	return false;
+}
+
+// Render the predicate for ONE branch: columns resolved BY NAME against `q`, qualified by its table; an
+// RLS semi-join re-correlates its OUTER key to THIS branch. Mirrors BuildColocatedPredicate for a single
+// by-name-resolved source. The gate (UnionPredicateColocatable) guarantees every column resolves.
+static ibQueryExprPtr BuildBranchPredicate(const ibQueryPredicatePtr& p, const ibBackendQueryable* q)
+{
+	if (!p) return nullptr;
+	const wxString qual = q->GetQueryTableName();
+	switch (p->m_kind) {
+	case ibQueryPredicateKind::Leaf: {
+		if (p->m_leaf.m_semiJoin) {
+			ibSemiJoinExists sj = *p->m_leaf.m_semiJoin;
+			sj.m_outerKey = q->ResolveColumnByName(sj.m_outerKey->GetName());   // correlate to THIS branch's key
+			return ibMetaIRBuilder::BuildSemiJoinExists(sj, qual);
+		}
+		ibQueryCondition c = p->m_leaf;
+		c.m_col = q->ResolveColumnByName(p->m_leaf.m_col->GetName());
+		return ibMetaIRBuilder::BuildConditionExpr(q, c, qual);
+	}
+	case ibQueryPredicateKind::And: {
+		ibQueryExprPtr a;
+		for (const auto& ch : p->m_children) a = AndFold(a, BuildBranchPredicate(ch, q));
+		return a;
+	}
+	case ibQueryPredicateKind::Or: {
+		ibQueryExprPtr a;
+		for (const auto& ch : p->m_children) a = OrFold(a, BuildBranchPredicate(ch, q));
+		return a;
+	}
+	case ibQueryPredicateKind::Not: {
+		ibQueryExprPtr in = p->m_children.empty() ? nullptr : BuildBranchPredicate(p->m_children.front(), q);
+		return in ? ibNot(in) : nullptr;
+	}
+	case ibQueryPredicateKind::IsNull: {
+		const ibBackendQueryColumn* bc = q->ResolveColumnByName(p->m_col->GetName());
+		ibQueryExprPtr allNull;
+		for (const wxString& f : ColumnValueFields(bc))
+			allNull = AndFold(allNull, ibIsNull(ibColQ(qual, f), false));
+		if (!allNull) return nullptr;
+		return p->m_negated ? ibNot(allNull) : allNull;
+	}
+	}
+	return nullptr;
+}
+
 // ==========================================================================
 // Co-located server-side UNION — the branches stack as one SQL UNION ALL (docs §22.1b). Each branch
 // (a real DB table) gets a SELECT projecting the output columns resolved BY NAME, aligned by position
@@ -1428,6 +1514,12 @@ bool ibDbTableProvider::CanColocateUnion(const ibDataQuerySpec& spec)
 				if (!ScalarReadable(bc, one)) return false;
 			}
 		}
+
+		// A boolean WHERE tree / RLS semi-join (m_predicate) is pushed into EACH branch by
+		// BuildBranchPredicate; co-locate only if every referenced column resolves BY NAME + SCALAR in
+		// every branch (a dot-walk / computed leaf needs a join the branch scan lacks). Else RAM applies it.
+		if (spec.m_predicate != nullptr && !UnionPredicateColocatable(spec.m_predicate, root->m_parts))
+			return false;
 		return true;
 	}
 
@@ -1452,8 +1544,13 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedUnion(const ibDataQuerySpec
 				if (bc == nullptr) continue;
 				ibQueryCondition nc = c; nc.m_col = bc; conds.push_back(nc);
 			}
-			if (ibQueryExprPtr pred = ibMetaIRBuilder::BuildFilterPredicate(q, conds, wxString()))
-				rel = ibFilter(rel, pred);
+			// Flat conditions AND the full boolean WHERE tree + RLS semi-join (m_predicate) pushed into
+			// THIS branch (columns resolved BY NAME; the gate guarantees they resolve) -> RLS rides the
+			// UNION read server-side, and a boolean OR/NOT/IS NULL WHERE is no longer silently dropped.
+			ibQueryExprPtr where = ibMetaIRBuilder::BuildFilterPredicate(q, conds, wxString());
+			where = AndFold(where, BuildBranchPredicate(spec.m_predicate, q));
+			if (where)
+				rel = ibFilter(rel, where);
 
 			std::vector<ibQueryProjItem> proj;
 			for (size_t i = 0; i < outs.size(); ++i) {
