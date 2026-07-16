@@ -173,11 +173,12 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 		}
 	}
 
-	// Group-level paging within ONE level is a follow-up: the TOTALS read returns the whole level at
-	// once, so a continuation (anchored) fetch returns nothing rather than re-emitting it (which would
-	// duplicate rows). Detail rows page normally below (parity with RunPage).
-	if (groupLevel && anchor.IsOk())
-		return 0;
+	// Group-level paging: a TOTALS read returns the WHOLE level at once (ExecuteTotals ignores the page envelope —
+	// the fold is eager), so this level windows on the CLIENT by the browsed anchor group below, the SAME rule the
+	// RAM half pages a group level by (ibComputePageWindow). (Was: an anchored group fetch returned 0 to avoid
+	// re-emitting the level — but the first page's probe-trim then dropped the tail group with no continuation to
+	// re-fetch it, silently losing the last group of any level with more groups than a page.) Detail rows still
+	// keyset-page in SQL below.
 
 	// ONE composer for THIS fetch (the persistent settings STORE — source + filter + sort + grouping). The fetch
 	// does NOT clear it; it overlays the per-fetch DRILL of the browsed parent transiently: take the grouping
@@ -214,13 +215,17 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	composer.PutGroups(savedGroups);
 	composer.RestoreScope(scope);
 
-	// Wrap each driver row in a generic composer node, honouring count + direction
-	// exactly as RunPage does: trim the extra probe row, reverse on Backward.
+	// Wrap each driver row in a generic composer node, honouring count + direction exactly as RunPage does. A
+	// DETAIL / flat level was keyset-sized by the SQL page — trim the +1 probe, flip a Backward page to display
+	// order. A GROUP level is NOT page-sized (TOTALS fold the whole level, ignoring the envelope), so leave every
+	// row: it windows on the client below, where ibComputePageWindow handles the direction and count itself.
 	std::vector<ibListFetchDriver::Row>& rows = driver.Rows();
-	if (static_cast<int>(rows.size()) > count && count > 0)
-		rows.pop_back();                       // drop the +1 probe
-	if (dir == ibFetchDirection::Backward)
-		std::reverse(rows.begin(), rows.end());
+	if (!groupLevel) {
+		if (static_cast<int>(rows.size()) > count && count > 0)
+			rows.pop_back();                       // drop the +1 probe
+		if (dir == ibFetchDirection::Backward)
+			std::reverse(rows.begin(), rows.end());
+	}
 
 	// At a GROUP level the dimension being grouped is dims[depth]; the DISPLAY column that renders the group
 	// header + the drill scope key by its column id. A PLAIN dimension resolves through the model column
@@ -287,6 +292,10 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// `this` is const here (fetch READS + returns rows). The node holds COPIES of the row values and
 	// overrides IsAttached() -> true, so there is NO owner pin and NO const_cast on the model state.
 	unsigned int fetched = 0;
+	// A GROUP level is collected WHOLE first (TOTALS ignore the page), then windowed by the anchor group below; a
+	// DETAIL / flat level is already page-sized, so it emits straight to `out`. groupNodes holds the ctor ref until
+	// the window transfers the kept ones into `out` (and frees the rest).
+	std::vector<ibComposerNode*> groupNodes;
 	out.Alloc(rows.size());
 	for (const ibListFetchDriver::Row& r : rows) {
 		// LAZY drill: a TOTALS result arrives pre-order over EVERY level, but the paged control wants only the
@@ -325,7 +334,8 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 			std::vector<ibValue> groupPath = parentPath;
 			if (groupDimCol != wxNOT_FOUND)
 				groupPath.push_back(dimValue);
-			node = new ibComposerNode(values, groupPath, /*container*/ groupDimCol != wxNOT_FOUND);
+			groupNodes.push_back(new ibComposerNode(values, groupPath, /*container*/ groupDimCol != wxNOT_FOUND));
+			continue;   // collected — the client window (below) transfers the on-page groups into `out`
 		}
 		else {
 			// A DETAIL row (DB-list copy): keeps its PRIMARY-KEY row-key (re-fetch selection survival + FindRowValue
@@ -354,6 +364,34 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 		node->DecRef();                  // -> `out` owns exactly one reference per row
 		++fetched;
 	}
+
+	// GROUP-level client window: TOTALS folded the WHOLE level (the page envelope does not size a totals read), so
+	// window the collected groups by the browsed anchor group — the SAME rule the RAM half pages a group level by.
+	// Locate the anchor group by its own last group-path value, take `count` groups after / before it per the
+	// direction (the anchor stays in a Reset page so the viewport does not drift). Then drop OUR ctor ref on every
+	// group node: `out` took its own via the item ctor's IncRef, so the on-page groups survive with one reference
+	// and the off-page ones free.
+	if (groupLevel) {
+		long p = -1;
+		if (anchor.IsOk())
+			if (const ibComposerNode* anode = GetViewData<ibComposerNode>(anchor)) {
+				const std::vector<ibValue>& apath = anode->GetGroupPath();
+				if (!apath.empty())
+					for (size_t k = 0; k < groupNodes.size(); ++k) {
+						const std::vector<ibValue>& gp = groupNodes[k]->GetGroupPath();
+						if (!gp.empty() && gp.back() == apath.back()) { p = static_cast<long>(k); break; }
+					}
+			}
+		const std::vector<long> win = ibComputePageWindow(static_cast<long>(groupNodes.size()), p, dir,
+			count > 0 ? count : defaultCountPerPage);
+		for (const long pos : win) {
+			out.Add(ibDataViewItem(groupNodes[pos]));   // ctor IncRefs to 2 (node holds our ctor ref = 1)
+			++fetched;
+		}
+		for (ibComposerNode* gn : groupNodes)
+			gn->DecRef();   // drop the build ref: on-page -> 1 (out owns), off-page -> 0 (freed)
+	}
+
 	for (size_t i = 0; i < out.GetCount(); ++i) SetItemParent(out[i], parent); return fetched;
 }
 

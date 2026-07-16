@@ -73,8 +73,9 @@ ibValue ibRamValueStorage::ResolveField(long row, ibMetaID headCol, const std::v
 
 // The `want` display positions in [0,total) around the browsed anchor position `p` (or the top / bottom when
 // there is no anchor, p==-1), honouring the fetch direction — the ONE windowing rule the flat / grouped /
-// detail RAM levels all page by. Backward gathers nearest-first then flips to display order.
-static std::vector<long> RamWindowPositions(long total, long p, ibFetchDirection dir, int want)
+// detail levels all page by, in BOTH the RAM half (in-place sorted rows) and the DB half (a grouped level's
+// folded group list; declared in tableInfo.h). Backward gathers nearest-first then flips to display order.
+std::vector<long> ibComputePageWindow(long total, long p, ibFetchDirection dir, int want)
 {
 	std::vector<long> win;
 	if (dir == ibFetchDirection::Backward) {
@@ -136,7 +137,7 @@ unsigned int ibValueModelStorage::RunComposerPage(const ibDataViewItem& parent, 
 			for (size_t k = 0; k < ord.size(); ++k)
 				if (ord[k] == aidx) { p = static_cast<long>(k); break; }
 		}
-		const std::vector<long> win = RamWindowPositions(static_cast<long>(ord.size()), p, dir, want);
+		const std::vector<long> win = ibComputePageWindow(static_cast<long>(ord.size()), p, dir, want);
 		out.Alloc(win.size());
 		unsigned int fetched = 0;
 		for (const long pos : win) {
@@ -175,7 +176,7 @@ unsigned int ibValueModelStorage::RunComposerPage(const ibDataViewItem& parent, 
 			for (size_t k = 0; k < scoped.size(); ++k)
 				if (scoped[k] == aidx) { p = static_cast<long>(k); break; }
 		}
-		const std::vector<long> win = RamWindowPositions(static_cast<long>(scoped.size()), p, dir, want);
+		const std::vector<long> win = ibComputePageWindow(static_cast<long>(scoped.size()), p, dir, want);
 		out.Alloc(win.size());
 		unsigned int fetched = 0;
 		for (const long pos : win) {
@@ -208,7 +209,7 @@ unsigned int ibValueModelStorage::RunComposerPage(const ibDataViewItem& parent, 
 				for (size_t k = 0; k < groupValues.size(); ++k)
 					if (groupValues[k] == apath.back()) { p = static_cast<long>(k); break; }
 		}
-	const std::vector<long> win = RamWindowPositions(static_cast<long>(groupValues.size()), p, dir, want);
+	const std::vector<long> win = ibComputePageWindow(static_cast<long>(groupValues.size()), p, dir, want);
 
 	out.Alloc(win.size());
 	unsigned int fetched = 0;

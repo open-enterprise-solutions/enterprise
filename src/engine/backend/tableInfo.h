@@ -54,6 +54,13 @@ class ibUniqueKey;
 //  removed: the universal ibValueModel::RunComposerPage replaced every typed per-model Fetch, building the keyset
 //  anchor itself from the composer + the row-key. ibFetchDirection — the live page direction — is in tableView.h.)
 
+// The `want` display positions in [0,total) around the browsed anchor position `p` (top / bottom when there is
+// no anchor, p==-1), honouring the fetch direction — the ONE windowing rule every paged LEVEL uses: the RAM half's
+// flat / grouped / detail rows (in-place sorted) AND the DB half's grouped level (its folded group list, which
+// TOTALS return whole — the page envelope does not size a totals read, so the group level windows here). Defined
+// in tableInfoRam.cpp.
+std::vector<long> ibComputePageWindow(long total, long p, ibFetchDirection dir, int want);
+
 #pragma region _data_model_h_
 class BACKEND_API ibDataViewModelProvider : public ibDataViewModel {
 public:

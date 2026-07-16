@@ -776,6 +776,35 @@ view-mode enum order (`dataview.h`): `ibDataViewTree = 0`,
 `ibDataViewHierarchical = 1`, `ibDataViewList = 2` — only List(2) yields the
 flat-scan sentinel.
 
+### 9.1.1 Group-level paging — client window (2026-07-16)
+
+A `TOTALS BY` read folds the **whole** level eagerly (`ExecuteTotals` ignores the
+page envelope — the fold in `queryProvider.cpp` builds the full tree), so a grouped
+level cannot keyset-page in SQL the way a detail level does. It was left as a
+follow-up: an anchored group fetch returned 0 (`if (groupLevel && anchor.IsOk())
+return 0`) rather than re-emitting the level. That hid a **data-loss** bug — the
+detail-level `+1` probe-trim (`rows.pop_back()`) still ran on the grouped rows and
+dropped the **last group** of any level with more groups than a page, and with the
+anchored fetch returning 0 nothing ever re-fetched it. On any grouped list/report
+with more than `defaultCountPerPage` groups the last group silently vanished.
+
+Fixed by windowing the grouped level on the **client**, the SAME rule the RAM half
+pages by (`ibComputePageWindow`, factored out of the former `RamWindowPositions` in
+`tableInfoRam.cpp` into `tableInfo.h` so both halves share it — no duplication).
+`RunComposerPage` (`tableInfoDb.cpp`) now collects every group node of the level,
+locates the browsed anchor group by its own last group-path value, and takes the
+`count` groups after/before it per direction (the anchor stays in a Reset page so the
+viewport does not drift). The probe-trim/reverse is gated to the detail path only
+(`if (!groupLevel)`). Reference-counting: each group node is built with the ctor ref,
+the window `out.Add`s the on-page ones (IncRef), then one pass DecRefs every node —
+on-page → 1 (owned by `out`), off-page → 0 (freed).
+
+Boundary (honest): the fold is still eager — the whole level lands in RAM every
+fetch, the window only bounds what reaches the control. A true keyset group push-down
+in SQL (`LIMIT` on `GROUP BY` cursored by the dimension) is a larger, separate arc,
+not this. What is closed here is correctness (no lost group) and working group
+navigation, not server-side group streaming.
+
 ### 9.2 Selection restore across a view-mode switch — `BuildAncestorBreadcrumb`
 
 Switching view mode with a selection **inside a sub-level** (a sub-folder, or a
