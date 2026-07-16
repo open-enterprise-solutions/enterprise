@@ -1,5 +1,9 @@
 # Query Language — Architecture Arc
 
+> **Read the floor plan first:** [query-engine-layers.md](query-engine-layers.md) — the L1–L5
+> taxonomy (which floor is which, L3 = {L3-1/2/3}, L4 = {L4-1/2/3} on top of L3, the shared L2↔L3
+> technical floor, what feeds metadata). This doc is the detailed L2 / L3 / L4 arc **under** that map.
+>
 > **Status:** **LANDED (experimental working copy) — the full ladder is in the tree.**
 > L1 (drivers ×5) release · L2 (`ibDatabaseQueryBuilder`, structured IR + dialect dictionary)
 > release-candidate · L3 (`ibDataQueryBuilder` source-agnostic door: read + write + aggregation

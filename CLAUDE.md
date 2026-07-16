@@ -40,12 +40,15 @@ enterprise/
 │   ├── BUILD.md
 │   ├── ui-palette.md         # Interior-design palette — source of truth for UI colours
 │   ├── uikit.md              # Custom-drawn UI engine (wxUniversal fork + Luna theme)
+│   ├── query-engine-layers.md # THE FLOOR PLAN — L1–L5 taxonomy, one house (read first for the query arc)
 │   ├── data-composer.md      # L5 — declarative composition over the query language
+│   ├── table-model.md        # tables/lists/trees — ibDataViewModel + ibValueModel + RunComposerPage (fetch = web road)
 │   ├── report-engine.md      # Report metaobject + spreadsheet document (runtime shape)
 │   ├── command-interface.md  # Interface metaobject = subsystem + command bar
 │   ├── view-only.md          # read-only forms — rights matryoshka, control read-only, command greying
 │   ├── property-system.md    # ibPropertyObject + object inspector — the skeleton (5 surfaces)
 │   ├── metadata-tree.md      # Designer navigator + external reports/processors
+│   ├── metadata-lifecycle.md # load/run/save/close — the metaobject events in order + external DP/Report
 │   ├── form-editor.md        # visual designer — panels, undo/redo, drag-to-create
 │   ├── spreadsheet-editor.md # the grid behind templates and report output
 │   ├── system-functions.md   # the global script API — 89 functions + 6 procedures
@@ -53,6 +56,7 @@ enterprise/
 │   ├── debugger-architecture.md # TCP transport, why the debuggee is the server
 │   ├── database-layer.md     # driver abstraction — lineage, what's ours, adding a driver
 │   ├── script-value-types.md # every script type — creatable vs vended
+│   ├── fnumber.md            # ibNumber — exact-decimal number in 8 bytes (tagged word + bignum tier)
 │   ├── compiler-pipeline.md  # the spine: translate → compile → execute, runtime assembly
 │   ├── factories.md          # ctor registries + the two-phase Init idiom
 │   ├── enumerations.md       # the enum template system + RECIPE to add one
