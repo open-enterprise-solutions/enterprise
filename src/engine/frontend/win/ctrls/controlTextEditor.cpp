@@ -571,15 +571,19 @@ void ibControlTextEditor::DrawButton(wxDC& dc, const ButtonSlot& b)
 	if (!b.visible || b.rect.IsEmpty())
 		return;
 
+	// A button reads enabled only when the CONTROL is enabled AND the slot itself is — a per-button disabled
+	// slot (Select / Clear on a read-only binding) greys out just like the whole-control disabled state.
+	const bool on = m_enabledIntent && b.enabled;
+
 	// flat embedded style: no bevel, just a subtle fill on hover/pressed so the
 	// buttons read as inline affordances inside the text field, not standalone
 	// push buttons.
-	const wxColour base = m_enabledIntent
+	const wxColour base = on
 		? wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW)
 		: wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE);
 
 	wxColour fill = base;
-	if (m_enabledIntent) {
+	if (on) {
 		if (b.pressed && b.hovered) fill = base.ChangeLightness(85);
 		else if (b.hovered)         fill = base.ChangeLightness(93);
 	}
@@ -589,13 +593,13 @@ void ibControlTextEditor::DrawButton(wxDC& dc, const ButtonSlot& b)
 	dc.DrawRectangle(b.rect);
 
 	// thin vertical separator on the left of the button to visually group them
-	const wxColour sepCol = m_enabledIntent
+	const wxColour sepCol = on
 		? wxSystemSettings::GetColour(wxSYS_COLOUR_ACTIVEBORDER)
 		: wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT);
 	dc.SetPen(wxPen(sepCol));
 	dc.DrawLine(b.rect.x, b.rect.y + 2, b.rect.x, b.rect.y + b.rect.height - 2);
 
-	dc.SetTextForeground(m_enabledIntent
+	dc.SetTextForeground(on
 		? GetForegroundColour()
 		: wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
 
@@ -611,9 +615,10 @@ void ibControlTextEditor::DrawButton(wxDC& dc, const ButtonSlot& b)
 
 ibControlTextEditor::ButtonSlot* ibControlTextEditor::HitTestButton(const wxPoint& p)
 {
-	if (m_btnSelect.visible && m_btnSelect.rect.Contains(p)) return &m_btnSelect;
-	if (m_btnClear.visible  && m_btnClear.rect.Contains(p))  return &m_btnClear;
-	if (m_btnOpen.visible   && m_btnOpen.rect.Contains(p))   return &m_btnOpen;
+	// A disabled slot is inert — skip it so it takes no hover / press / click (greyed but dead).
+	if (m_btnSelect.visible && m_btnSelect.enabled && m_btnSelect.rect.Contains(p)) return &m_btnSelect;
+	if (m_btnClear.visible  && m_btnClear.enabled  && m_btnClear.rect.Contains(p))  return &m_btnClear;
+	if (m_btnOpen.visible   && m_btnOpen.enabled   && m_btnOpen.rect.Contains(p))   return &m_btnOpen;
 	return nullptr;
 }
 

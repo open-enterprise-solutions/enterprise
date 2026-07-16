@@ -23,7 +23,7 @@ ibValueRecordDataObjectDocument::ibActionCollection ibValueRecordDataObjectDocum
 	documentActions.AddAction(wxT("Post"), _("Post"), g_picPostCLSID, true, ePost);
 	documentActions.AddAction(wxT("ClearPosting"), _("Clear posting"), g_picSaveCLSID, true, eClearPosting);
 	documentActions.AddSeparator();
-	documentActions.AddAction(wxT("Generate"), _("Generate"), g_picGenerateCLSID, true, eGenerate);
+	documentActions.AddAction(wxT("Generate"), _("Generate"), g_picGenerateCLSID, true, eGenerate).SetModify(false);   // creates a NEW object — doesn't modify THIS one
 	documentActions.AddSeparator();
 	documentActions.AddAction(wxT("Clone"), _("Clone"), g_picCloneCLSID, true, eCopy);
 

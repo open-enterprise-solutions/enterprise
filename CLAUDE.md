@@ -43,6 +43,7 @@ enterprise/
 │   ├── data-composer.md      # L5 — declarative composition over the query language
 │   ├── report-engine.md      # Report metaobject + spreadsheet document (runtime shape)
 │   ├── command-interface.md  # Interface metaobject = subsystem + command bar
+│   ├── view-only.md          # read-only forms — rights matryoshka, control read-only, command greying
 │   ├── property-system.md    # ibPropertyObject + object inspector — the skeleton (5 surfaces)
 │   ├── metadata-tree.md      # Designer navigator + external reports/processors
 │   ├── form-editor.md        # visual designer — panels, undo/redo, drag-to-create

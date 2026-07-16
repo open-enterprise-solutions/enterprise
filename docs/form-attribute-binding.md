@@ -113,7 +113,10 @@ Add/rename/delete go through `NextAttributeId` / `RegisterAttribute` / `WireAttr
 `ThisForm.<attr>` refreshes).
 
 `IsWritableBinding`: only a DIRECT field is writable — `[attr]` or `[attr, field]`. A
-reference dot-walk is read-only.
+reference dot-walk is read-only. It is ALSO the single **view-only** gate every editable
+control asks: false when the form `IsViewOnly()` (explicit / rights) OR the binding's own
+source metaobject denies `AccessRight_Modify` (per-source — a writable form can still carry a
+read-only object). See [view-only.md](view-only.md).
 
 ## Type resolution — gate-aware
 

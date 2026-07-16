@@ -54,6 +54,9 @@ public:
 	wxString GetToolTip() const { return m_propertyTooltip->GetValueAsTranslateString(); }
 	bool IsEnabled() const { return m_propertyEnabled->GetValueAsBoolean(); }
 	bool IsVisible() const { return m_propertyVisible->GetValueAsBoolean(); }
+	// Does this command modify data? A view-only form greys it. Default true (a manual command is assumed to
+	// change data until told otherwise); a read-only command (navigate / open) is switched off in the designer.
+	bool GetModifiesData() const { return m_propertyModifiesData->GetValueAsBoolean(); }
 
 	// The bound Action — its system id feeds the command's real action (empty -> synthetic).
 	void SetAction(const ibActionDescription& action) { m_eventAction->SetValue(action); }
@@ -100,6 +103,7 @@ private:
 	ibPropertyTString* m_propertyTooltip = ibPropertyObject::CreateProperty<ibPropertyTString>(m_category, wxT("Tooltip"), _("Tooltip"), wxEmptyString);
 	ibPropertyBoolean* m_propertyEnabled = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_category, wxT("Enabled"), _("Enabled"), true);
 	ibPropertyBoolean* m_propertyVisible = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_category, wxT("Visible"), _("Visible"), true);
+	ibPropertyBoolean* m_propertyModifiesData = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_category, wxT("ModifiesData"), _("Modifies data"), true);
 	ibEventAction* m_eventAction = ibPropertyObject::CreateEvent<ibEventAction>(m_category, wxT("Action"), _("Action"), wxArrayString{ wxT("Command") }, &ibValueCommandBarItem::GetItemAction, wxNOT_FOUND);
 };
 

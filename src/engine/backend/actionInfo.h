@@ -31,17 +31,28 @@ public:
 #include "backend_picture.h"
 
 struct ibCommandItem {
-	ibActionID m_act_id;
-	wxString m_name;
-	wxString m_caption;
+	ibActionID           m_actionId = wxNOT_FOUND;   // the action's id (wxNOT_FOUND = a separator)
+	wxString             m_name;
+	wxString             m_caption;
 	ibPictureDescription m_pictureDescription;
-	bool m_pictureAndText;
-	bool m_createDef;
-	ibValue* m_srcData;
+	bool                 m_pictureAndText = false;   // show picture AND caption (else picture-only when it has one)
+	bool                 m_createInForm   = false;   // put this command on the form by default (vs available-only)
+	ibValue*             m_srcData        = nullptr;
+	// Does running this action MODIFY data? Default true — a view-only form greys every data-modifying command
+	// (Save / Post / Mark-for-delete / Create / …); read-only actions (Refresh / Filter / Sort / open) set it
+	// false (SetModify) so they stay live. Only the view-only greying reads it (BuildCommands).
+	bool                 m_modifiesData   = true;
 
-	ibCommandItem() : m_act_id(wxNOT_FOUND), m_pictureAndText(false), m_createDef(false), m_srcData(nullptr) {}
-	ibCommandItem(const ibActionID& act_id, const wxString& name, const wxString& caption, const ibPictureDescription& pictureDescription, bool pictureAndText = false, bool createDef = false, ibValue* srcData = nullptr)
-	: m_act_id(act_id), m_name(name), m_caption(caption), m_pictureDescription(pictureDescription), m_pictureAndText(pictureAndText), m_createDef(createDef), m_srcData(srcData) {}
+	ibCommandItem() {}
+	ibCommandItem(const ibActionID& actionId, const wxString& name, const wxString& caption,
+		const ibPictureDescription& pictureDescription, bool pictureAndText = false, bool createInForm = false, ibValue* srcData = nullptr)
+		: m_actionId(actionId), m_name(name), m_caption(caption), m_pictureDescription(pictureDescription),
+		  m_pictureAndText(pictureAndText), m_createInForm(createInForm), m_srcData(srcData) {}
+
+	// Fluent setters — chain right after AddAction: `actions.AddAction(…, eGenerate).SetModify(false)`.
+	ibCommandItem& SetModify(bool modifies)      { m_modifiesData   = modifies; return *this; }
+	ibCommandItem& SetPictureAndText(bool value) { m_pictureAndText = value;    return *this; }
+	ibCommandItem& SetCreateInForm(bool value)   { m_createInForm   = value;    return *this; }
 };
 
 class ibActionDataObject {
@@ -57,73 +68,74 @@ protected:
 		// The single lookup primitive — every id-keyed accessor routes through here (nullptr on miss).
 		const ibCommandItem* FindByID(const ibActionID& lNumAction) const {
 			auto iterator = std::find_if(m_vecAction.begin(), m_vecAction.end(), [lNumAction](const ibCommandItem& act) {
-				return lNumAction == act.m_act_id; });
+				return lNumAction == act.m_actionId; });
 			return iterator != m_vecAction.end() ? &*iterator : nullptr;
 		}
 
 		bool ExistsAction(const ibActionID& lNumAction) const { return FindByID(lNumAction) != nullptr; }
 
 		// The single construction/placement primitive — index < 0 appends at the end, otherwise inserts at
-		// index. All AddAction / InsertAction wrappers funnel through here so the item field order is defined
-		// in ONE place (the ibCommandItem ctor), which structurally removes the class of "swapped argument" bugs.
-		void EmplaceAction(int index, const ibActionID& lNumAction, const wxString& name, const wxString& caption,
-			const ibPictureDescription& pictureDescription, bool pictureAndText, bool createDef, ibValue* srcData) {
+		// index. All AddAction / InsertAction wrappers funnel through here (field order defined in ONE place),
+		// and it returns the placed item BY REF so a caller can chain a fluent setter right after.
+		ibCommandItem& EmplaceAction(int index, const ibActionID& lNumAction, const wxString& name, const wxString& caption,
+			const ibPictureDescription& pictureDescription, bool pictureAndText, bool createInForm, ibValue* srcData) {
 			wxASSERT(!ExistsAction(lNumAction));
 			ibValue* src = srcData ? srcData : m_srcData;
-			if (index < 0)
-				m_vecAction.emplace_back(lNumAction, name, caption, pictureDescription, pictureAndText, createDef, src);
-			else
-				m_vecAction.insert(m_vecAction.begin() + index,
-					ibCommandItem(lNumAction, name, caption, pictureDescription, pictureAndText, createDef, src));
+			if (index < 0) {
+				m_vecAction.emplace_back(lNumAction, name, caption, pictureDescription, pictureAndText, createInForm, src);
+				return m_vecAction.back();
+			}
+			return *m_vecAction.insert(m_vecAction.begin() + index,
+				ibCommandItem(lNumAction, name, caption, pictureDescription, pictureAndText, createInForm, src));
 		}
 
 	public:
 
 		ibActionCollection(ibValue* srcData = nullptr) : m_srcData(srcData) {}
 
-		// ---- append at the end ------------------------------------------------
+		// ---- append at the end (returns the item BY REF — chain .SetModify(...) etc right after) -------------
 
-		void AddAction(const wxString& name, const ibActionID& lNumAction, bool createDef = true, ibValue* srcData = nullptr) {
-			EmplaceAction(-1, lNumAction, name, wxEmptyString, ibPictureDescription(), false, createDef, srcData);
+		ibCommandItem& AddAction(const wxString& name, const ibActionID& lNumAction, bool createInForm = true, ibValue* srcData = nullptr) {
+			return EmplaceAction(-1, lNumAction, name, wxEmptyString, ibPictureDescription(), false, createInForm, srcData);
 		}
 
-		void AddAction(const wxString& name, const wxString& caption, const ibActionID& lNumAction, bool createDef = true, ibValue* srcData = nullptr) {
-			EmplaceAction(-1, lNumAction, name, caption, ibPictureDescription(), false, createDef, srcData);
+		ibCommandItem& AddAction(const wxString& name, const wxString& caption, const ibActionID& lNumAction, bool createInForm = true, ibValue* srcData = nullptr) {
+			return EmplaceAction(-1, lNumAction, name, caption, ibPictureDescription(), false, createInForm, srcData);
 		}
 
-		void AddAction(const wxString& name, const wxString& caption, const ibPictureDescription& pictureDescription, const ibActionID& lNumAction, bool createDef = true, ibValue* srcData = nullptr) {
-			EmplaceAction(-1, lNumAction, name, caption, pictureDescription, false, createDef, srcData);
+		ibCommandItem& AddAction(const wxString& name, const wxString& caption, const ibPictureDescription& pictureDescription, const ibActionID& lNumAction, bool createInForm = true, ibValue* srcData = nullptr) {
+			return EmplaceAction(-1, lNumAction, name, caption, pictureDescription, false, createInForm, srcData);
 		}
 
-		void AddAction(const wxString& name, const wxString& caption, const ibPictureDescription& pictureDescription, bool pictureAndText, const ibActionID& lNumAction, bool createDef = true, ibValue* srcData = nullptr) {
-			EmplaceAction(-1, lNumAction, name, caption, pictureDescription, pictureAndText, createDef, srcData);
+		ibCommandItem& AddAction(const wxString& name, const wxString& caption, const ibPictureDescription& pictureDescription, bool pictureAndText, const ibActionID& lNumAction, bool createInForm = true, ibValue* srcData = nullptr) {
+			return EmplaceAction(-1, lNumAction, name, caption, pictureDescription, pictureAndText, createInForm, srcData);
 		}
 
 		void AddSeparator() { m_vecAction.emplace_back(); }
 
-		// ---- insert at index --------------------------------------------------
+		// ---- insert at index (also returns the item BY REF) -------------------
 
-		void InsertAction(unsigned int index, const wxString& name, const ibActionID& lNumAction, bool createDef = true, ibValue* srcData = nullptr) {
-			EmplaceAction((int)index, lNumAction, name, wxEmptyString, ibPictureDescription(), false, createDef, srcData);
+		ibCommandItem& InsertAction(unsigned int index, const wxString& name, const ibActionID& lNumAction, bool createInForm = true, ibValue* srcData = nullptr) {
+			return EmplaceAction((int)index, lNumAction, name, wxEmptyString, ibPictureDescription(), false, createInForm, srcData);
 		}
 
-		void InsertAction(unsigned int index, const wxString& name, const wxString& caption, const ibActionID& lNumAction, bool createDef = true, ibValue* srcData = nullptr) {
-			EmplaceAction((int)index, lNumAction, name, caption, ibPictureDescription(), false, createDef, srcData);
+		ibCommandItem& InsertAction(unsigned int index, const wxString& name, const wxString& caption, const ibActionID& lNumAction, bool createInForm = true, ibValue* srcData = nullptr) {
+			return EmplaceAction((int)index, lNumAction, name, caption, ibPictureDescription(), false, createInForm, srcData);
 		}
 
-		void InsertAction(unsigned int index, const wxString& name, const wxString& caption, const ibPictureDescription& pictureDescription, const ibActionID& lNumAction, bool createDef = true, ibValue* srcData = nullptr) {
-			EmplaceAction((int)index, lNumAction, name, caption, pictureDescription, false, createDef, srcData);
+		ibCommandItem& InsertAction(unsigned int index, const wxString& name, const wxString& caption, const ibPictureDescription& pictureDescription, const ibActionID& lNumAction, bool createInForm = true, ibValue* srcData = nullptr) {
+			return EmplaceAction((int)index, lNumAction, name, caption, pictureDescription, false, createInForm, srcData);
 		}
 
-		void InsertAction(unsigned int index, const wxString& name, const wxString& caption, const ibPictureDescription& pictureDescription, bool pictureAndText, const ibActionID& lNumAction, bool createDef = true, ibValue* srcData = nullptr) {
-			EmplaceAction((int)index, lNumAction, name, caption, pictureDescription, pictureAndText, createDef, srcData);
+		ibCommandItem& InsertAction(unsigned int index, const wxString& name, const wxString& caption, const ibPictureDescription& pictureDescription, bool pictureAndText, const ibActionID& lNumAction, bool createInForm = true, ibValue* srcData = nullptr) {
+			return EmplaceAction((int)index, lNumAction, name, caption, pictureDescription, pictureAndText, createInForm, srcData);
 		}
 
 		void InsertSeparator(unsigned int index) { m_vecAction.insert(m_vecAction.begin() + index, {}); }
 
 		void RemoveAction(const ibActionID& lNumAction) {
 			auto iterator = std::find_if(m_vecAction.begin(), m_vecAction.end(), [lNumAction](const ibCommandItem& act) {
-				return lNumAction == act.m_act_id; });
+				return lNumAction == act.m_actionId; });
 			if (iterator != m_vecAction.end()) m_vecAction.erase(iterator);
 		}
 
@@ -160,7 +172,7 @@ protected:
 
 		bool IsCreateInForm(const ibActionID& lNumAction) const {
 			const ibCommandItem* act = FindByID(lNumAction);
-			return act != nullptr ? act->m_createDef : true;
+			return act != nullptr ? act->m_createInForm : true;
 		}
 
 		ibValue* GetSourceDataByID(const ibActionID& lNumAction) const {
@@ -168,10 +180,17 @@ protected:
 			return act != nullptr ? act->m_srcData : nullptr;
 		}
 
+		// Does this action modify data? Unknown id → true (assume it does, so a view-only form greys it). Set at
+		// add time via the fluent AddAction(...).SetModify(false) — no separate id-keyed setter.
+		bool GetModifiesDataByID(const ibActionID& lNumAction) const {
+			const ibCommandItem* act = FindByID(lNumAction);
+			return act != nullptr ? act->m_modifiesData : true;
+		}
+
 		ibActionID GetID(unsigned int idx) const {
 			if (idx >= GetCount())
 				return wxNOT_FOUND;
-			return m_vecAction[idx].m_act_id;
+			return m_vecAction[idx].m_actionId;
 		}
 
 		unsigned int GetCount() const { return (unsigned int)m_vecAction.size(); }
@@ -179,11 +198,13 @@ protected:
 
 public:
 
+	// Polymorphic base (pure-virtual methods below) — a virtual destructor so deleting a derived object
+	// through an ibActionDataObject* runs the derived dtor (else UB / leak). Mostly a mixin (ibValueFrame
+	// IS-A one), but correctness shouldn't hinge on nobody ever owning it through this pointer.
+	virtual ~ibActionDataObject() = default;
+
 	//support action
 	virtual ibActionCollection GetActionCollection(const ibFormID& formType) = 0;
-	virtual void AppendActionCollection(ibActionCollection& actionData, const ibFormID& formType) {
-		actionData.AppendFrom(GetActionCollection(formType));
-	}
 
 	// execute action
 	virtual void CallAsAction(const ibActionID& lNumAction, class ibBackendValueForm* srcForm) = 0;
@@ -191,7 +212,7 @@ public:
 
 // A simplified, STANDALONE action-analog that lives ON THE MODEL — the model has NO ibActionDataObject of its
 // own; it is just a command STORE. Two jobs: (1) hand out its command set (the SAME ibCommandItem the action
-// collection uses — one unified record; a default item, m_act_id == wxNOT_FOUND, is a separator), (2) execute a
+// collection uses — one unified record; a default item, m_actionId == wxNOT_FOUND, is a separator), (2) execute a
 // command by id against the CURRENT ROW + form. The FRONT (TableBox) merges the set into the real action it
 // gives the command bar and routes the execute here with the front-owned row — the model never pulls the widget.
 // A command's id carries THIS bit to say "after running me on the model, ALSO start the row's inline editor on

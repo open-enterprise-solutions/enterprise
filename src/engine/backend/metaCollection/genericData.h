@@ -94,6 +94,13 @@ public:
 
 #pragma region access_generic
 	virtual bool AccessRight_Show() const { return true; }
+	// MODIFY right — the GENERIC "can change this" predicate, the write-side twin of AccessRight_Show (which
+	// generalises "can view": a common form maps it to Use, a catalog to Read). Each object maps Modify to its
+	// own concrete right — a record / register / constant to its Write role — so a read-only role denies it.
+	// Virtual on the base so a form reads it polymorphically off GetSourceMetaObject() (view-only mode) without
+	// knowing the concrete metaobject. Default true: a metaobject with no modify concept (data processor /
+	// report) is never view-only-gated.
+	virtual bool AccessRight_Modify() const { return true; }
 #pragma endregion
 
 	// (Source list COMMANDS live as plain virtuals on the record / register / constant metaobjects, forwarded by the

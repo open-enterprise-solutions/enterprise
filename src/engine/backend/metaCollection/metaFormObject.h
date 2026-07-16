@@ -44,6 +44,7 @@ public:
 
 #pragma region access_generic
 	virtual bool AccessRight_Show() const { return true; }
+	virtual bool AccessRight_Modify() const { return true; }
 #pragma endregion
 
 	ibValueMetaObjectFormBase(const wxString& strName = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString);
@@ -209,6 +210,7 @@ class BACKEND_API ibValueMetaObjectCommonForm :
 
 #pragma region access_generic
 	virtual bool AccessRight_Show() const { return AccessRight_Use(); }
+	virtual bool AccessRight_Modify() const { return AccessRight_Use(); }
 #pragma endregion
 
 #pragma region access

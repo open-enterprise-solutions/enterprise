@@ -9,6 +9,8 @@
 
 void ibValueCheckbox::OnClickedCheckbox(wxCommandEvent& event)
 {
+	// A read-only binding never reaches here — the custom control's own wxEVT_CHECKBOX guard reverts the
+	// toggle and swallows the event (SetReadOnly), so this handler only runs for a real, writable change.
 	// Both wx (desktop wxCheckBox) and our web path set event.GetInt()
 	// to the new checked state — read from there to keep a single
 	// handler body across platforms, no dynamic_cast to a native class

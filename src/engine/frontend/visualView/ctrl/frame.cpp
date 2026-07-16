@@ -64,6 +64,15 @@ bool ibValueFrame::IsEditable() const
 	return false;
 }
 
+bool ibValueFrame::IsReadOnly() const
+{
+	// A control is read-only when its form is in view-only mode. The form is the root frame, so every control
+	// reaches it through GetOwnerForm(); the form's own case resolves to IsViewOnly() through this same path
+	// (GetOwnerForm returns the form itself). Each control reads this at build time to render read-only.
+	const ibValueForm* handler = GetOwnerForm();
+	return handler != nullptr && handler->IsViewOnly();
+}
+
 // The control is serialized as a node tree (header + per-type WriteData), rendered to
 // the form buffer by the binary provider — the same path metaobjects use.
 bool ibValueFrame::LoadControl(const ibValueMetaObjectFormBase* metaForm, ibReaderMemory& dataReader)

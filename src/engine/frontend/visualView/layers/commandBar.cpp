@@ -1,5 +1,6 @@
 #include "commandBar.h"
 #include "frontend/visualView/ctrl/frame.h"   // ibValueFrame — the owner's action collection + CallAsAction
+#include "frontend/visualView/ctrl/form.h"    // ibValueForm::IsViewOnly — grey data-modifying commands in view-only
 #include "backend/serialize/dataBuilder.h"     // ibDataNode (layer -> node)
 #include "backend/compiler/procUnit.h"         // ibProcUnit::CallAsProc — full type for the CallAsEvent instantiation below (run a command's custom-action procedure)
 #ifndef OES_USE_WEB
@@ -54,6 +55,11 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 	// so every use goes through `auto` (deduced, never spelled). That also blocks hoisting it into
 	// a named helper/param, so the manual branch fetches it per action-bound item (few in practice).
 	m_commands.clear();
+	// A view-only form greys every DATA-MODIFYING command (Save / Post / Create / Mark-for-delete / …);
+	// read-only commands (Refresh / Filter / Sort / open) stay live. The modify flag is per-action for AutoFill
+	// (the action collection) and per-item for manual commands (the command's own ModifiesData property).
+	const bool viewOnly = m_owner != nullptr && m_owner->GetOwnerForm() != nullptr
+		&& m_owner->GetOwnerForm()->IsViewOnly();
 	if (IsAutoFill() && m_owner != nullptr) {
 		auto actions = m_owner->GetActionCollection(m_owner->GetTypeForm());
 		for (unsigned int i = 0; i < actions.GetCount(); i++) {
@@ -68,7 +74,8 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 			const ibRepresentation rep = pic.IsEmptyPicture()
 				? ibRepresentation_PictureAndText
 				: (actions.IsCreatePictureAndText(id) ? ibRepresentation_PictureAndText : ibRepresentation_Picture);
-			m_commands.emplace_back(id, actions.GetCaptionByID(id), pic, rep);
+			const bool enabled = !(viewOnly && actions.GetModifiesDataByID(id));   // greyed if it changes data
+			m_commands.emplace_back(id, actions.GetCaptionByID(id), pic, rep, enabled);
 		}
 	}
 	// Manual commands — each maps to its bound Action's id when one is set (click dispatches through
@@ -88,7 +95,8 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 			if (caption.IsEmpty()) caption = actions.GetCaptionByID(actId);
 			if (item->IsEmptyPicture()) pic = actions.GetPictureByID(actId);
 		}
-		m_commands.emplace_back(synthId++, caption, pic, item->GetRepresentation(), item->IsEnabled(), item);
+		const bool enabled = item->IsEnabled() && !(viewOnly && item->GetModifiesData());   // greyed if it changes data
+		m_commands.emplace_back(synthId++, caption, pic, item->GetRepresentation(), enabled, item);
 	}
 	return m_commands;
 }
@@ -401,6 +409,7 @@ bool ibValueCommandBarItem::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyTooltip->GetName(), m_propertyTooltip->GetNodeValue());
 	node.SetProperty(m_propertyEnabled->GetName(), m_propertyEnabled->GetNodeValue());
 	node.SetProperty(m_propertyVisible->GetName(), m_propertyVisible->GetNodeValue());
+	node.SetProperty(m_propertyModifiesData->GetName(), m_propertyModifiesData->GetNodeValue());
 	node.SetProperty(m_eventAction->GetName(), m_eventAction->GetNodeValue());
 	return true;
 }
@@ -414,6 +423,7 @@ bool ibValueCommandBarItem::ReadData(const ibDataNode& node)
 	m_propertyTooltip->ReadNodeValue(node.GetProperty(m_propertyTooltip->GetName()));
 	m_propertyEnabled->ReadNodeValue(node.GetProperty(m_propertyEnabled->GetName()));
 	m_propertyVisible->ReadNodeValue(node.GetProperty(m_propertyVisible->GetName()));
+	m_propertyModifiesData->ReadNodeValue(node.GetProperty(m_propertyModifiesData->GetName()));
 	m_eventAction->ReadNodeValue(node.GetProperty(m_eventAction->GetName()));
 	return true;
 }

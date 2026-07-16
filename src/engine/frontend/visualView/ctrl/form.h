@@ -326,6 +326,13 @@ public:
 	*/
 	virtual bool IsEditable() const;
 
+	// Is the form in VIEW-ONLY mode? Runtime state (NOT a persisted property): the form was opened over a
+	// source whose WRITE right is denied (a read-only role), or opened explicitly view-only. Controls read it
+	// through ibValueFrame::IsReadOnly() and build themselves read-only; data-modifying commands grey out.
+	// Distinct from IsEditable() (designer: can the STRUCTURE be changed). SetViewOnly forces it on open.
+	bool IsViewOnly() const;
+	void SetViewOnly(bool viewOnly) { m_viewOnly = viewOnly; }
+
 public:
 
 	class ibValueFormCollectionControl : public ibValueDynamicMembers {
@@ -465,6 +472,10 @@ private:
 	ibUniqueKey				m_formKey;
 
 	bool					m_formModified;
+
+	// Explicit view-only override (set on open); IsViewOnly() also derives it live from the source's WRITE
+	// right, so an unset flag still yields view-only when the role denies writing.
+	bool					m_viewOnly = false;
 
 	bool					m_closeOnChoice;
 	bool					m_closeOnOwnerClose;

@@ -308,11 +308,17 @@ public:
 	void SetValue(bool v) { m_value = v; }
 	bool GetValue() const { return m_value; }
 
+	// Read-only mirror of desktop ibControlCheckbox::SetReadOnly — the client toggle is ignored (FireToggle
+	// no-ops) and the JSON carries the flag so the browser renders the box inert (value shown, not changeable).
+	void SetReadOnly(bool ro) { m_readOnly = ro; }
+	bool IsReadOnly() const { return m_readOnly; }
+
 	// Client toggle. wxEVT_CHECKBOX carries the new state as int on
 	// desktop (event.GetInt() == IsChecked()); we mirror that so the
 	// shared OnClickedCheckbox handler reads the same field on both
 	// sides.
 	bool FireToggle(bool checked) {
+		if (m_readOnly) return false;   // read-only: ignore the client toggle — value can't change
 		m_value = checked;
 		wxCommandEvent ev(wxEVT_CHECKBOX);
 		ev.SetInt(checked ? 1 : 0);
@@ -330,11 +336,13 @@ public:
 	virtual nlohmann::json ToJSON() const override {
 		auto node = ibWebWindow::ToJSON();
 		node["value"] = m_value;
+		node["readOnly"] = m_readOnly;
 		return node;
 	}
 
 private:
 	bool m_value = false;
+	bool m_readOnly = false;
 };
 
 class ibWebToolbar : public ibWebWindow {
@@ -427,11 +435,9 @@ public:
 
 	void SetPasswordMode(bool v)  { m_passwordMode = v; }
 	void SetMultilineMode(bool v) { m_multilineMode = v; }
-	// Mirror desktop ibControlTextEditor::SetTextEditMode — enables the
-	// inline-editable surface. On web the browser's <input> is always
-	// editable; flag is still stored so JSON carries it and scripts that
-	// toggle it server-side get persisted state for diagnostics.
-	void SetTextEditMode(bool v)  { m_textEditMode = v; }
+	// Mirror desktop ibControlTextEditor::SetTextEditMode — TextEditMode off = read-only: JSON carries the flag
+	// (browser <input> goes read-only) AND the value-changing side buttons (Select / Clear) lock; Open stays.
+	void SetTextEditMode(bool v)  { m_textEditMode = v; m_enableSelectButton = v; m_enableClearButton = v; }
 
 	// Side-button visibility — mirrors desktop's ibControlTextEditor
 	// ShowSelectButton / ShowOpenButton / ShowClearButton. Each renders
@@ -483,6 +489,8 @@ public:
 		node["showSelectButton"] = m_showSelectButton;
 		node["showOpenButton"]   = m_showOpenButton;
 		node["showClearButton"]  = m_showClearButton;
+		node["enableSelectButton"] = m_enableSelectButton;
+		node["enableClearButton"]  = m_enableClearButton;
 		return node;
 	}
 
@@ -494,6 +502,8 @@ private:
 	bool     m_showSelectButton  = false;
 	bool     m_showOpenButton    = false;
 	bool     m_showClearButton   = false;
+	bool     m_enableSelectButton = true;
+	bool     m_enableClearButton  = true;
 };
 
 #endif

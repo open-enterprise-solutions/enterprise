@@ -313,6 +313,7 @@ class BACKEND_API ibValueMetaObjectRecordDataExt : public ibValueMetaObjectRecor
 
 #pragma region access_generic
 	virtual bool AccessRight_Show() const { return AccessRight_Use(); }
+	virtual bool AccessRight_Modify() const { return true; }
 #pragma endregion
 #pragma region access
 	bool AccessRight_Use() const { return IsFullAccess() || AccessRight(m_roleUse); }
@@ -634,7 +635,7 @@ private: \
 public: \
 	bool AccessRight_Read()   const { return IsFullAccess() || AccessRight(m_roleRead);   } \
 	bool AccessRight_Write()  const { return IsFullAccess() || AccessRight(m_roleWrite);  } \
-	bool AccessRight_Delete() const { return IsFullAccess() || AccessRight(m_roleDelete); }
+	bool AccessRight_Delete() const { return IsFullAccess() || AccessRight(m_roleDelete); } 
 
 //meta object with reference and deletion mark
 class BACKEND_API ibValueMetaObjectRecordDataMutableRef : public ibValueMetaObjectRecordDataRef {
@@ -647,6 +648,7 @@ public:
 
 #pragma region access_generic
 	virtual bool AccessRight_Show() const { return AccessRight_Read(); }
+	virtual bool AccessRight_Modify() const { return AccessRight_Write(); }
 #pragma endregion
 
 	IB_DECLARE_RWD_ROLE_TRIPLET("Write")   // legacy storage typo — kept until migration arc
@@ -1039,6 +1041,7 @@ public:
 
 #pragma region access_generic
 	virtual bool AccessRight_Show() const { return AccessRight_Read(); }
+	virtual bool AccessRight_Modify() const { return AccessRight_Write(); }
 #pragma endregion
 
 	IB_DECLARE_RWD_ROLE_TRIPLET("Write")

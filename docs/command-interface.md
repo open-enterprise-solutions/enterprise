@@ -138,16 +138,41 @@ Two details worth keeping:
 - **`enabled` greys, it does not remove.** A disabled command keeps its slot, so the bar
   does not reflow as state changes.
 
+**View-only greys DATA-MODIFYING commands.** `BuildCommands` computes `enabled` from the
+owner form's `IsViewOnly()`: a data-modifying command (Save / Post / Create / Delete / …)
+goes `enabled = false` when the form is view-only; read-only commands (Refresh / Filter /
+Sort / View mode / Open / Generate) stay live. What counts as "modifies data" is a flag on
+each action (`ibCommandItem::m_modifiesData`, default true) for AutoFill and a
+`ModifiesData` property on a manual `ibValueCommandBarItem`. The **same** flag is honoured
+by the tablebox context menu (`OnContextMenu`), not just the toolbar. See
+[view-only.md](view-only.md).
+
 The shared runtime / property / metadata / routing machinery lives in the
 `ibValueLayerObject` base; `ibValueCommandBarItem` adds only its own fields and its
 designer menu.
 
 ---
 
-## 6. Honest remainder
+## 6. Action collection — `ibActionDataObject` (`backend/actionInfo.h`)
 
-- `actionInfo` was **rolled back** — the bar consumes `ibActionID` /
-  `ibActionDescription` from `backend/actionInfo.h` as they stand today.
+An `ibValueFrame` IS-A `ibActionDataObject`, so every control and the form itself hands out
+an `ibActionCollection` (`GetActionCollection`) and executes one by id (`CallAsAction`). The
+collection is a vector of `ibCommandItem` records built through the **funnel** `EmplaceAction`
+(one definition of field order — no swapped-argument bugs). Field names read plainly:
+`m_actionId` (wxNOT_FOUND = separator), `m_name`, `m_caption`, `m_pictureDescription`,
+`m_pictureAndText`, `m_createInForm`, `m_srcData`, `m_modifiesData`.
+
+`AddAction` / `InsertAction` **return the placed item by ref**, so a caller chains fluent
+setters right after:
+
+```cpp
+actions.AddAction(wxT("Generate"), _("Generate"), g_picGenerateCLSID, true, eGenerate).SetModify(false);
+```
+
+`SetModify(bool)` / `SetPictureAndText(bool)` / `SetCreateInForm(bool)` each return `*this`.
+`ibActionDataObject` has a `virtual` destructor (it is a polymorphic base). There is no
+id-keyed `SetModifiesData` setter — the flag is set at add time through the chain.
+
 - The `Sybsystem` typo in the `interfaceHelper.h` banner is real and is a rename candidate
   (see the naming plan), not a hidden concept.
 - `ibInterfaceCommandType_Select` exists as an enumerator; the selection-list command path

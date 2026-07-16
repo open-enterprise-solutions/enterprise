@@ -459,7 +459,14 @@ public:
 
 	virtual bool IsEditable() const;
 
-	//runtime 
+	// Is this control READ-ONLY at runtime (its form in view-only mode)? Distinct from IsEditable (designer:
+	// can the STRUCTURE be changed). The form is the root frame, so a control resolves this off its owner
+	// form's IsViewOnly(); a control reads it at build time and renders classic read-only — value visible,
+	// selectable, copyable, openable, but NOT editable. NOT Enable(false): that is availability (a dead,
+	// greyed widget), which is for action BUTTONS, not data controls.
+	virtual bool IsReadOnly() const;
+
+	//runtime
 	std::shared_ptr<ibProcUnit> GetFormProcUnit() const;
 
 public:

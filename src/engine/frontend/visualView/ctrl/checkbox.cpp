@@ -125,11 +125,13 @@ void ibValueCheckbox::Update(wxObject* wxobject, ibVisualHost* visualHost)
 		}
 
 		checkbox->SetLabel(GetControlTitle());
-		// A dotted reference path is read-only; unbound = editable.
+		// A read-only binding (a dotted reference, a view-only form, or a read-only source) makes the box
+		// READ-ONLY: value shown and focusable, but a click / space can't toggle it. The custom control blocks
+		// the change itself (SetReadOnly reverts the toggle in its own guard) — NOT Enable(false), which would
+		// grey it out (availability, for action buttons, not data controls).
 		const bool writableBinding = m_propertySource->IsEmptyProperty()
 			|| (m_formOwner != nullptr && m_formOwner->IsWritableBinding(m_propertySource->GetValueAsSourceDesc()));
-		if (!writableBinding)
-			checkbox->Enable(false);
+		checkbox->SetReadOnly(!writableBinding);
 #ifdef OES_USE_WEB
 		checkbox->SetValue(m_selValue.GetBoolean());
 #else

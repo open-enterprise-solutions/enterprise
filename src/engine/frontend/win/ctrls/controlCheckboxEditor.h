@@ -81,6 +81,10 @@ private:
 	// relying on the HWND state (HWND may stay enabled in designer mode).
 	bool           m_enabledIntent = true;
 
+	// Read-only: the box RENDERS its value and takes focus, but a click / space cannot CHANGE it (a view-only
+	// form / read-only binding). Distinct from Enable(false) — the box is not greyed, just inert to edits.
+	bool           m_readOnly = false;
+
 	// Tracks whether the native wxCheckBox currently has keyboard focus so
 	// OnPaint can draw a dotted focus rectangle spanning label + box.
 	bool           m_hasFocus = false;
@@ -134,6 +138,17 @@ public:
 		m_checkBox->Bind(wxEVT_KILL_FOCUS, [this](wxFocusEvent& e) {
 			m_hasFocus = false;
 			Refresh();
+			e.Skip();
+		});
+
+		// Read-only guard: a click still toggles the native box, so UNDO it and swallow the event when
+		// read-only — the value shows but can't change (no source write, no OnChange script downstream). The
+		// editable path skips through so ibValueCheckbox::OnClickedCheckbox runs as before.
+		m_checkBox->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent& e) {
+			if (m_readOnly) {
+				if (m_checkBox != nullptr) m_checkBox->SetValue(!e.IsChecked());   // revert to the model value
+				return;   // consumed — never reaches the outer ibValueCheckbox handler
+			}
 			e.Skip();
 		});
 
@@ -200,6 +215,11 @@ public:
 		Refresh();
 		return true;
 	}
+
+	// Read-only: value shown / focusable, but not changeable (view-only form / read-only binding). NOT Enable —
+	// the box stays crisp, only edits are blocked (the toggle is reverted in the wxEVT_CHECKBOX guard above).
+	void SetReadOnly(bool readOnly) { m_readOnly = readOnly; }
+	bool IsReadOnly() const { return m_readOnly; }
 
 	virtual bool AllowCalc() const {
 		return m_align == wxAlignment::wxALIGN_LEFT;

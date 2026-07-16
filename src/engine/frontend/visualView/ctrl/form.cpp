@@ -193,6 +193,32 @@ bool ibValueForm::IsEditable() const
 		true;
 }
 
+bool ibValueForm::IsViewOnly() const
+{
+	if (m_viewOnly)
+		return true;   // opened explicitly view-only
+
+	// The OUTER matryoshka shell, TWO gates from outer to inner. AccessRight_Modify is the GENERIC "can change"
+	// predicate (twin of AccessRight_Show), read polymorphically; either gate denying makes the whole form
+	// view-only (browse / open / copy, no edit). The finer PER-SOURCE right (a writable form carrying a
+	// read-only NON-main object) lives in IsWritableBinding, keyed on each control's own binding.
+	//
+	// Gate 1 — the FORM metaobject (the metaobject that spawned this form). It may be absent (a form built
+	// straight from a source); then fall through to the source.
+	if (m_metaFormObject != nullptr && !m_metaFormObject->AccessRight_Modify())
+		return true;
+
+	// Gate 2 — the MAIN source's metaobject. A record maps Modify to its Write role; an object with no modify
+	// concept (data processor / report) stays true (never gated).
+	const ibSourceDataObject* sourceObject = GetSourceObject();
+	if (sourceObject != nullptr) {
+		const ibValueMetaObjectGenericData* metaObject = sourceObject->GetSourceMetaObject();
+		if (metaObject != nullptr && !metaObject->AccessRight_Modify())
+			return true;
+	}
+	return false;
+}
+
 //****************************************************************************
 //*                              Support methods                             *
 //****************************************************************************
@@ -205,7 +231,8 @@ enum Prop {
 	eFormOwner,
 	eUniqueKey,
 	eCloseOnChoice,
-	eCloseOnOwnerClose
+	eCloseOnOwnerClose,
+	eReadOnly
 };
 
 enum Func
@@ -234,6 +261,7 @@ void ibValueForm::FillFormMembers(ibMemberTable& helper) const
 
 	helper.AppendProp(wxT("CloseOnChoice"), eCloseOnChoice, eSystem);
 	helper.AppendProp(wxT("CloseOnOwnerClose"), eCloseOnOwnerClose, eSystem);
+	helper.AppendProp(wxT("ReadOnly"), eReadOnly, eSystem);   // runtime read/write — open a form read-only (or read the mode)
 
 	helper.AppendProc(wxT("Show"), wxT("Show()"));
 	helper.AppendProc(wxT("Activate"), wxT("Activate()"));
@@ -295,6 +323,11 @@ bool ibValueForm::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 		case eCloseOnOwnerClose:
 			m_closeOnOwnerClose = varPropVal.GetBoolean();
 			return true;
+		case eReadOnly:
+			SetViewOnly(varPropVal.GetBoolean());
+			RefreshForm();   // re-render live — controls re-Update (re-read writability) and command bars rebuild,
+			                 // so a runtime ThisForm.ReadOnly = True takes effect WITHOUT reopening the form
+			return true;
 		}
 	}
 	else if (lPropAlias == eAttribute) {
@@ -352,6 +385,9 @@ bool ibValueForm::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 			return true;
 		case eCloseOnOwnerClose:
 			pvarPropVal = m_closeOnOwnerClose;
+			return true;
+		case eReadOnly:
+			pvarPropVal = IsViewOnly();   // reflects the explicit flag OR the rights-derived mode
 			return true;
 		}
 	}

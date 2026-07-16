@@ -36,30 +36,32 @@ ibValueModelTableBox::ibActionCollection ibValueModelTableBox::GetActionCollecti
 
 	ibActionCollection actionData(this);
 
-	// 1) Select — always FIRST, only when this table is a picker (the TableBox's own affordance).
+	// 1) Select — always FIRST, only when this table is a picker (the TableBox's own affordance). View-state,
+	//    not a data change → stays live in a view-only form.
 	if (IsChoiceMode())
-		actionData.AddAction(wxT("Select"), _("Select"), g_picSelectCLSID, true, enTableSelect);
+		actionData.AddAction(wxT("Select"), _("Select"), g_picSelectCLSID, true, enTableSelect).SetModify(false);
 
 	// 2) The model's OWN command set, merged in — the model is just a command STORE (GetCommandCollection), the TableBox
-	//    lays it out into the real action (name / caption / picture / separators).
+	//    lays it out into the real action (name / caption / picture / separators), carrying each command's modify flag.
 	std::vector<ibCommandItem> commands;
 	model->GetCommandCollection(formType, commands);
 
 	for (const ibCommandItem& c : commands) {
-		if (c.m_act_id == wxNOT_FOUND)
+		if (c.m_actionId == wxNOT_FOUND)
 			actionData.AddSeparator();
 		else
-			actionData.AddAction(c.m_name, c.m_caption, c.m_pictureDescription, c.m_pictureAndText, c.m_act_id);
+			actionData.AddAction(c.m_name, c.m_caption, c.m_pictureDescription, c.m_pictureAndText, c.m_actionId).SetModify(c.m_modifiesData);
 	}
 
-	// 3) The standard view-state band, poured in on the FRONT.
+	// 3) The standard view-state band — Filter / by-column / clear, ViewMode — never changes DATA, so it stays
+	//    live in a view-only form (only the model's Add / Delete / Copy row greys out).
 	actionData.AddSeparator();
-	actionData.AddAction(wxT("Filter"), _("Filter"), g_picFilterCLSID, false, enTableFilter);
-	actionData.AddAction(wxT("FilterByColumn"), _("Filter by column"), g_picFilterSetCLSID, false, enTableFilterByColumn);
-	actionData.AddAction(wxT("FilterClear"), _("Filter clear"), g_picFilterClearCLSID, false, enTableFilterClear);
+	actionData.AddAction(wxT("Filter"), _("Filter"), g_picFilterCLSID, false, enTableFilter).SetModify(false);
+	actionData.AddAction(wxT("FilterByColumn"), _("Filter by column"), g_picFilterSetCLSID, false, enTableFilterByColumn).SetModify(false);
+	actionData.AddAction(wxT("FilterClear"), _("Filter clear"), g_picFilterClearCLSID, false, enTableFilterClear).SetModify(false);
 
 	actionData.AddSeparator();
-	actionData.AddAction(wxT("ViewMode"), _("View mode"), g_picHierarchyCLSID, false, enTableViewMode);
+	actionData.AddAction(wxT("ViewMode"), _("View mode"), g_picHierarchyCLSID, false, enTableViewMode).SetModify(false);
 
 	return actionData;
 }

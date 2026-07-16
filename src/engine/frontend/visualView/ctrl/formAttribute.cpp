@@ -375,10 +375,22 @@ bool ibValueForm::GetValueByAttributePath(const ibSourceDescription& desc, ibVal
 
 bool ibValueForm::IsWritableBinding(const ibSourceDescription& desc) const
 {
+	if (IsViewOnly())
+		return false;   // whole-form view-only (explicit open, or the MAIN source's modify right denied) — the
+	                    // OUTER shell of the matryoshka: nothing on the form is writable.
 	const std::vector<ibSourceHop>& path = desc.GetPath();
 	if (path.empty())
 		return false;
 	if (ibFormAttributeValue* attr = FindAttributeById(desc.GetFirst())) {
+		// PER-SOURCE (the INNER matryoshka): a form holds MANY sources — each attribute its own. A read-only
+		// role on THAT object denies its modify right, so ITS controls are read-only even when the form (its
+		// main source) is writable — a writable form can still carry a read-only object. Each control asks with
+		// its own binding, so this resolves per control. The right comes from the METAOBJECT, not the instance.
+		if (ibSourceDataObject* source = attr->GetSourceValue()) {
+			const ibValueMetaObjectGenericData* metaObject = source->GetSourceMetaObject();
+			if (metaObject != nullptr && !metaObject->AccessRight_Modify())
+				return false;
+		}
 		if (attr->IsReferenceValue())
 			return false;            // anything read through a reference is read-only
 		return path.size() <= 2;     // [attr] or [attr, directField]

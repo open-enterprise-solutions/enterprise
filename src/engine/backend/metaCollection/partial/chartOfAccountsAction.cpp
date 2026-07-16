@@ -13,7 +13,7 @@ ibValueRecordDataObjectChartOfAccounts::ibActionCollection ibValueRecordDataObje
 	actions.AddAction(wxT("SaveAndClose"), _("Save and close"), g_picSaveCLSID, true, eDefActionAndClose);
 	actions.AddAction(wxT("Save"), _("Save"), g_picSaveCLSID, true, eSave);
 	actions.AddSeparator();
-	actions.AddAction(wxT("Generate"), _("Generate"), g_picGenerateCLSID, true, eGenerate);
+	actions.AddAction(wxT("Generate"), _("Generate"), g_picGenerateCLSID, true, eGenerate).SetModify(false);   // creates a NEW object — doesn't modify THIS one
 	actions.AddSeparator();
 	actions.AddAction(wxT("Clone"), _("Clone"), g_picCloneCLSID, true, eCopy);
 	return actions;

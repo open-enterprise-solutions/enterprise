@@ -214,6 +214,7 @@ class FRONTEND_API ibControlTextEditor :
 
 	struct ButtonSlot {
 		bool        visible = false;
+		bool        enabled = true;   // false = greyed & inert (a read-only binding disables Select / Clear)
 		wxString    text;
 		wxEventType eventType = wxEVT_NULL;
 		wxRect      rect;
@@ -346,20 +347,19 @@ public:
 
 	bool GetPasswordMode() const { return m_passwordMode; }
 
+	// TextEditMode IS the read-only policy: mode == false makes the inner text inert AND locks the value-
+	// changing side buttons (Select / Clear); Open (a read-only navigation) stays live. One flag — a read-only
+	// binding is just SetTextEditMode(false), no separate read-only setter.
 	void SetTextEditMode(bool mode) {
-		if (m_text != nullptr && m_textEditMode != mode) {
+		m_textEditMode = mode;
+		if (m_text != nullptr) {
 			const long style = m_text->GetWindowStyleFlag();
-			if (mode) {
-				m_text->SetWindowStyle(style & (~wxTE_READONLY));
-			}
-			else {
-				m_text->SetWindowStyleFlag(style | wxTE_READONLY);
-			}
+			m_text->SetWindowStyleFlag(mode ? (style & ~wxTE_READONLY) : (style | wxTE_READONLY));
 			m_text->Update();
 		}
-		m_textEditMode = mode;
+		EnableSelectButton(mode);
+		EnableClearButton(mode);
 	}
-
 	bool GetTextEditMode() const { return m_textEditMode; }
 
 	virtual void SetLabel(const wxString& label) {
@@ -390,6 +390,11 @@ public:
 
 	void ShowClearButton(bool select = true) { ShowButton(m_btnClear, select); }
 	bool IsClearButtonVisible() const { return m_btnClear.visible; }
+
+	// Grey Select / Clear without hiding them (they stay visible but inert). SetTextEditMode(false) calls these
+	// — a read-only text box keeps its value-changing buttons visible but locked; Open (read) stays live.
+	void EnableSelectButton(bool enable) { EnableButton(m_btnSelect, enable); }
+	void EnableClearButton(bool enable)  { EnableButton(m_btnClear, enable); }
 
 	// overridden base class virtuals
 	virtual bool SetBackgroundColour(const wxColour& colour) {
@@ -602,6 +607,14 @@ private:
 		if (!show) { slot.hovered = false; slot.pressed = false; }
 		InvalidateBestSize();
 		LayoutControls();
+		Refresh();
+	}
+
+	// Enable/disable a slot in place — same size (stays visible), just greyed & inert. No relayout.
+	void EnableButton(ButtonSlot& slot, bool enable) {
+		if (slot.enabled == enable) return;
+		slot.enabled = enable;
+		if (!enable) { slot.hovered = false; slot.pressed = false; }
 		Refresh();
 	}
 

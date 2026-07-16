@@ -202,6 +202,8 @@ void ibValueTextCtrl::Update(wxObject* wxobject, ibVisualHost* visualHost)
 	// regardless of the control's TextEditMode property. Unbound = editable.
 	const bool writableBinding = m_propertySource->IsEmptyProperty()
 		|| (m_formOwner != nullptr && m_formOwner->IsWritableBinding(m_propertySource->GetValueAsSourceDesc()));
+	// A read-only binding (view-only form / read-only source / dotted reference) is just TextEditMode off — the
+	// control then greys the text AND locks Select / Clear itself (Open stays live).
 	textEditor->SetTextEditMode(m_propertyTexteditMode->GetValueAsBoolean() && writableBinding);
 	textEditor->ShowSelectButton(m_propertySelectButton->GetValueAsBoolean());
 	textEditor->ShowOpenButton(m_propertyOpenButton->GetValueAsBoolean());

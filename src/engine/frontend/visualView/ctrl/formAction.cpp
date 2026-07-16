@@ -55,14 +55,15 @@ ibValueForm::ibActionCollection ibValueForm::GetActionCollection(const ibFormID&
 	// The form is a WRAPPER: it surfaces its command provider's set, then adds the form-level chrome. The
 	// provider distributes internally (a tablebox: its own view-state band vs its model's object commands).
 	if (ibActionDataObject* provider = GetCommandProvider())
-		provider->AppendActionCollection(actionData, formType);
+		actionData.AppendFrom(provider->GetActionCollection(formType));
 
-	actionData.AddAction(wxT("Close"), _("Close"), g_picCloseFormCLSID, false, enClose);
-	actionData.AddAction(wxT("Update"), _("Update"), g_picUpdateFormCLSID, false, enUpdate);
-	actionData.AddAction(wxT("Help"), _("Help"), g_picHelpFormCLSID, false, enHelp);
+	// Form chrome is navigation / view — never data-modifying — so it stays live in a view-only form.
+	actionData.AddAction(wxT("Close"), _("Close"), g_picCloseFormCLSID, false, enClose).SetModify(false);
+	actionData.AddAction(wxT("Update"), _("Update"), g_picUpdateFormCLSID, false, enUpdate).SetModify(false);
+	actionData.AddAction(wxT("Help"), _("Help"), g_picHelpFormCLSID, false, enHelp).SetModify(false);
 
 	actionData.AddSeparator();
-	actionData.AddAction(wxT("Change"), _("Change form"), g_picChangeFormCLSID, false, enChange);
+	actionData.AddAction(wxT("Change"), _("Change form"), g_picChangeFormCLSID, false, enChange).SetModify(false);
 
 	return actionData;
 }

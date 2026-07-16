@@ -337,6 +337,11 @@ void ibValueModelTableBox::OnContextMenu(ibDataViewEvent& event)
 	const ibActionCollection& actionData =
 		ibValueModelTableBox::GetActionCollection(m_formOwner->GetTypeForm());
 
+	// A view-only form greys the DATA-MODIFYING entries (Add / Copy / Edit / Delete) here too — the context
+	// menu builds straight from the action collection, so it must honour the same modify flag as the toolbar
+	// (BuildCommands). Read-only entries (Filter / View mode / Select) stay live.
+	const bool viewOnly = m_formOwner != nullptr && m_formOwner->IsViewOnly();
+
 	wxMenu menu;
 	for (unsigned int idx = 0; idx < actionData.GetCount(); idx++) {
 		const ibActionID& id = actionData.GetID(idx);
@@ -345,6 +350,8 @@ void ibValueModelTableBox::OnContextMenu(ibDataViewEvent& event)
 			ibPictureDescription pictureDesc = actionData.GetPictureByID(id);
 			if (!pictureDesc.IsEmptyPicture())
 				menuItem->SetBitmap(ibBackendPicture::CreatePicture(pictureDesc));
+			if (viewOnly && actionData.GetModifiesDataByID(id))
+				menuItem->Enable(false);   // grey data-modifying command in view-only
 		}
 	}
 	ibDataViewCtrl* wnd = wxDynamicCast(
