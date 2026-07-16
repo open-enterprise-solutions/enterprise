@@ -214,6 +214,27 @@ a successful commit — collect `(descriptor, line-count)` during the walk and a
 debugger part past the commit point (the save-side analogue of the load's "swap only after
 success").
 
+**External-file root-block clsid — framed under the EXTERNAL kind, read forgivingly (2026-07-16).**
+The container frames the whole tree under ONE outer data block keyed by a clsid: `SaveCommonTree` does
+`writerData.w_chunk(<clsid>, …)`, `LoadCommonTree` peels it with `open_chunk(<clsid>)`. The two must
+agree — and they diverged for external DP / Report. `SaveCommonTree` framed under
+`builder.Root().GetClsid()` == the object's **base** metadata kind (`GetClassType()` = MD_DPR / MD_RPT,
+what `BuildDataNode` stamps), while `LoadCommonTree` peeled under the **external container** clsid
+(MD_EDPR / MD_ERPT — the passed `clsid`). So `open_chunk` missed the block, the `.epf` / `.erf` failed
+to load, and the doc/view teardown then tripped `CloseDatabase`'s `wxASSERT(IsConfigOpen())` — a
+**secondary crash** on the already-rolled-back config (`LoadGuard` had closed it). The fix:
+- **Save** frames the root block under the **passed external clsid** (`w_chunk((u64)clsid, …)`),
+  ignoring the object's base `GetClassType()` — the on-disk root class is now deterministic (every
+  external file frames its tree under its external kind).
+- **Load** peels under the external clsid, **falling back** to the base clsid for files written before
+  this fix (a second `open_chunk`). `open_chunk` returns an **owned** reader (`shared_ptr`-safe). ⚠ The
+  chunk **iterator** (`open_chunk_iterator`) is NOT: it `_prev->close()`s and returns a fresh reader —
+  wrapping its result in a `shared_ptr` cursor double-frees (`ds:dddddddd` dump). Use `open_chunk` here.
+- **Configuration** is unaffected — a single kind where the passed clsid == `GetClassType()`, so
+  `open_chunk(clsid)` already matched Save.
+Diagnosis was a hex-logged `LoadCommonTree` (want-clsid vs the file's data-block id): the block id was
+`g_metaDataProcessorCLSID` while the loader wanted `g_metaExternalDataProcessorCLSID`.
+
 **Lifecycle events — verified across load + save (no regression from the detached-root work).**
 - **Load.** `OnCreateMetaObject` fires only on the **root** (a "main" metaobject) and on a
   manual add in the designer — it gates the creation of predefined sub-structure. Objects

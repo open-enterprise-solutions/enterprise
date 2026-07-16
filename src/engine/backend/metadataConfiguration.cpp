@@ -346,6 +346,8 @@ bool ibMetaDataConfigurationFile::LoadCommonTree(const ibClassID& clsid, ibReade
 		headerReader->r_stringZ(metaGuid);
 	}
 
+	// Configuration is a single kind (MD_MTD == the passed clsid == GetClassType()), so the
+	// data block IS keyed by the passed clsid — no external/base split like DataProcessor/Report.
 	std::shared_ptr<ibReaderMemory> readerMemory(readerData.open_chunk(clsid));
 
 	if (!readerMemory)
@@ -360,19 +362,19 @@ bool ibMetaDataConfigurationFile::LoadCommonTree(const ibClassID& clsid, ibReade
 	// Parse the stream into the universal structure tree. readerMetaMemory is the
 	// root's INNER content ({ eDataBlock, eChildBlock }) — clsid/metaId already
 	// peeled above — so the binary provider reads exactly what BuildDataNode wrote.
+	ibValuePtr<ibValueMetaObjectConfiguration> fresh(BuildFreshRoot()); // adopt (refcount 0 -> 1)
+	if (!fresh)
+		return false;
 	ibDataNode rootNode(clsid, (ibMetaID)meta_id);
 	ibBinaryProvider provider;
 	provider.Read(*readerMetaMemory, rootNode);
 
-	// Detached-root atomic swap: apply into a freshly-built root, not the live one.
+	// Detached-root atomic swap: apply into the freshly-built root, not the live one.
 	// ApplyDataNode throws ibBackendException on a factory miss or bad data — on a
 	// throw the fresh root is discarded and m_commonObject is untouched
 	// (all-or-nothing). On success, swap it in and release the old root. The caller
 	// has already closed the old tree's run-state (or it was never run), so the
 	// DecrRef below can't leave dangling entries in the active image's factory.
-	ibValuePtr<ibValueMetaObjectConfiguration> fresh(BuildFreshRoot()); // adopt (refcount 0 -> 1)
-	if (!fresh)
-		return false;
 	try {
 		fresh->ApplyDataNode(rootNode);
 	}

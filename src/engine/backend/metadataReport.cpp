@@ -377,7 +377,15 @@ bool ibMetaDataReport::LoadCommonTree(ibValueMetaObjectReport* root, const ibCla
 		headerReader->close();
 	}
 
-	std::shared_ptr<ibReaderMemory> readerMemory(readerData.open_chunk(clsid));
+	// The tree's data block is keyed by the root's GetClassType() AT SAVE TIME, which may be the
+	// EXTERNAL container clsid (MD_ERPT, files saved now) or the BASE metadata clsid (MD_RPT, files
+	// saved before the external kind was split out). Try the external clsid first, then fall back to
+	// the base — one is what Save wrote. open_chunk returns an OWNED reader (shared_ptr-safe). (Same
+	// fix as the DataProcessor reader.)
+	(void)clsid;
+	std::shared_ptr<ibReaderMemory> readerMemory(readerData.open_chunk(g_metaExternalReportCLSID));
+	if (!readerMemory)
+		readerMemory.reset(readerData.open_chunk(g_metaReportCLSID));
 
 	if (!readerMemory)
 		return false;
@@ -393,7 +401,7 @@ bool ibMetaDataReport::LoadCommonTree(ibValueMetaObjectReport* root, const ibCla
 	// root for the external start-from-file swap). ApplyDataNode throws
 	// ibBackendException on a factory miss / bad data — catch at this container
 	// boundary and report false (the caller discards the fresh root).
-	ibDataNode rootNode(clsid, (ibMetaID)meta_id);
+	ibDataNode rootNode(root->GetClassType(), (ibMetaID)meta_id);
 	ibBinaryProvider provider;
 	provider.Read(*readerMetaMemory, rootNode);
 	try {
@@ -416,15 +424,16 @@ bool ibMetaDataReport::SaveCommonTree(const ibClassID& clsid, ibWriterMemory& wr
 		writerData.w_chunk(eHeaderBlock, headerWriter.pointer(), headerWriter.size());
 	}
 
-	// Top-level structure builder — BuildDataNode fills the root's clsid/metaId from
-	// the object itself, so the report root is self-describing too.
-	(void)clsid;
+	// Top-level structure builder — BuildDataNode fills the root's clsid/metaId from the object.
 	ibDataBuilder builder;
 	if (!m_commonObject->BuildDataNode(builder.Root(), flags))
 		return false;
 
 	// Provider writes the root's INNER; frame it with the root identity — chunk(clsid){
-	// chunk(metaId){ inner } } — exactly what LoadCommonTree peels above.
+	// chunk(metaId){ inner } } — exactly what LoadCommonTree peels above. Frame the OUTER block
+	// under the passed `clsid` — the EXTERNAL container class (MD_ERPT), fixed at the SaveToFile call
+	// site — NOT the object's own GetClassType() (its BASE metadata kind, MD_RPT). This makes the
+	// on-disk root class deterministic: the loader always peels the tree under the external clsid.
 	ibBinaryProvider provider;
 	ibWriterMemory innerWriter;
 	if (!builder.Save(provider, innerWriter))
@@ -432,7 +441,7 @@ bool ibMetaDataReport::SaveCommonTree(const ibClassID& clsid, ibWriterMemory& wr
 
 	ibWriterMemory metaWriter;
 	metaWriter.w_chunk((u64)builder.Root().GetMetaId(), innerWriter.pointer(), innerWriter.size());
-	writerData.w_chunk((u64)builder.Root().GetClsid(), metaWriter.pointer(), metaWriter.size());
+	writerData.w_chunk((u64)clsid, metaWriter.pointer(), metaWriter.size());
 	return true;
 }
 
