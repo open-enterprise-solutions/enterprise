@@ -293,8 +293,12 @@ public:
 	// source -> repeat. The SAME mechanism as the runtime value-hop, only it collects the leaf column +
 	// dotted name instead of a value. Gateway boolean: true iff every hop resolved (a plain-value leaf with
 	// no column is still a VALID binding); `leaf` is the last node's descriptor (may be null), `outText`
-	// (optional) accumulates the dotted display name.
-	bool WalkColumns(const std::vector<ibSourceHop>& path, size_t from, const ibBackendSourceColumn*& leaf, wxString* outText = nullptr) const;
+	// (optional) accumulates the dotted display name. `outLeafIsTable` / `outContainerIsTable` (optional)
+	// report the leaf's own table-ness and whether the container it sits in is a table (then the leaf is
+	// that table's per-row COLUMN) — the facts a control-class choice needs but `leaf` (null for a section)
+	// cannot carry.
+	bool WalkColumns(const std::vector<ibSourceHop>& path, size_t from, const ibBackendSourceColumn*& leaf,
+		wxString* outText = nullptr, bool* outLeafIsTable = nullptr, bool* outContainerIsTable = nullptr) const;
 
 protected:
 	

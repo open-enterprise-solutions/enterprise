@@ -970,31 +970,30 @@ static wxString ResolveDropControlClass(ibValueForm* form, const ibSourceDescrip
 	ibSourceDataObject* source = head->GetSourceValue();
 
 	// The leaf is either the whole attribute (a 1-hop path) or a node reached by walking the head's source
-	// explorer down the remaining hops (a table section is a CHILD of the object's explorer; a list IS the head).
-	bool isTable = false;
+	// explorer down the remaining hops. Deeper hops go through THE shared structure walk (WalkColumns — the
+	// same door the caption / type / gate resolvers use), so a dotted path THROUGH A REFERENCE resolves: the
+	// reference vends its target's columns and the walk descends into them. The hand-rolled FindById loop this
+	// replaced was a SECOND walk that could not hop a reference — its leaf came back null, so every field
+	// behind a reference (DeletionMark, Code, …) declined the drop.
+	bool isTable = false, containerIsTable = false;
 	ibTypeDescription typeDesc;
 	if (path.size() == 1) {
 		isTable = source != nullptr && source->IsTableSource();
 		typeDesc = head->GetTypeDesc();
 	}
 	else {
-		// Walk to the leaf, tracking whether its CONTAINER is a list / table section. A field inside one is
-		// a COLUMN, bindable only INTO that table (a standalone scalar's path gates on the table row and
-		// shows <not selected>). Such a column is served by the drop's tablebox branch; here we decline, so a
-		// canvas / non-table drop creates nothing instead of a broken control.
-		bool containerIsList = source != nullptr && source->IsTableSource();   // head itself a value-table
-		const ibSourceExplorer* explorer = source != nullptr ? source->GetSourceExplorer() : nullptr;
-		for (size_t i = 1; i + 1 < path.size() && explorer != nullptr; i++) {
-			explorer = explorer->FindById(path[i].m_id);
-			containerIsList = explorer != nullptr && explorer->IsTableSection();
-		}
-		const ibSourceExplorer* leaf = explorer != nullptr ? explorer->FindById(desc.GetLeaf()) : nullptr;
-		if (leaf == nullptr)
+		const ibBackendSourceColumn* leaf = nullptr;
+		if (source == nullptr || !source->WalkColumns(path, 1, leaf, nullptr, &isTable, &containerIsTable))
+			return wxEmptyString;   // broken binding (a hop missed) -> nothing to create
+		// A field inside a list / table section is a COLUMN, bindable only INTO that table; the drop's tablebox
+		// branch serves the valid drop, so a canvas / non-table drop here declines instead of a broken control.
+		if (containerIsTable)
 			return wxEmptyString;
-		if (containerIsList)
-			return wxEmptyString;   // a table column -> table-only (the tablebox branch handles the valid drop)
-		isTable = leaf->IsTableSection();
-		typeDesc = leaf->GetTypeDesc();
+		if (!isTable) {
+			if (leaf == nullptr)
+				return wxEmptyString;   // no descriptor and not a table -> nothing bindable
+			typeDesc = leaf->GetTypeDesc();
+		}
 	}
 
 	if (isTable)

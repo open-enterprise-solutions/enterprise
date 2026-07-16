@@ -58,7 +58,8 @@ bool ibSourceDataObject::GetValueByPath(const std::vector<ibSourceHop>& path, ib
 // Gateway boolean: true iff every hop resolved. The whole `this` explorer is built ONCE and never refilled
 // here, so the nested node refs stay valid across the walk; leaf = GetColumn() points into the owning
 // metaobject (stable regardless).
-bool ibSourceDataObject::WalkColumns(const std::vector<ibSourceHop>& path, size_t from, const ibBackendSourceColumn*& leaf, wxString* outText) const
+bool ibSourceDataObject::WalkColumns(const std::vector<ibSourceHop>& path, size_t from, const ibBackendSourceColumn*& leaf,
+	wxString* outText, bool* outLeafIsTable, bool* outContainerIsTable) const
 {
 	leaf = nullptr;
 	const ibSourceExplorer* explorer = GetSourceExplorer();
@@ -73,8 +74,15 @@ bool ibSourceDataObject::WalkColumns(const std::vector<ibSourceHop>& path, size_
 			return false;   // not a column at this level -> broken binding
 		if (outText != nullptr) { *outText += wxT("."); *outText += node->GetSourceName(); }
 		leaf = node->GetColumn();
-		if (i + 1 >= path.size())
+		if (i + 1 >= path.size()) {
+			// Leaf reached — the control-class facts: is the leaf itself a table (a tabular section drops as a
+			// tablebox), and is its container a table (then the leaf is a per-row COLUMN, bindable only INTO
+			// that table). The source root itself flags table (the value-table / list invariant), so one
+			// IsTableSection() answers the container uniformly at root and mid-path.
+			if (outLeafIsTable != nullptr) *outLeafIsTable = node->IsTableSection();
+			if (outContainerIsTable != nullptr) *outContainerIsTable = explorer->IsTableSection();
 			break;
+		}
 		if (node->GetHelperCount() > 0) {
 			// CONTAINER node (a tabular section) — its columns are CHILDREN in the SAME explorer.
 			explorer = node;
