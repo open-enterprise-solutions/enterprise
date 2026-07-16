@@ -20,16 +20,46 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::RebuildTr
 	ibValueFrame* valueForm =
 		m_formHandler->GetValueForm();
 
+	// Remember the current selection by payload identity (a control frame OR a layer — command bar /
+	// command). A rebuild is often driven by a DEFERRED RefreshEditor (a command-bar / attribute property
+	// edit coalesced onto the next tick); without this the DeleteAllItems below drops the highlight onto the
+	// root form. The edit command keeps the INSPECTOR on the object itself — here we only re-mark the row.
+	ibValueFrame* keepObj = nullptr;
+	ibValueLayerObject* keepLayer = nullptr;
+	if (const wxTreeItemId sel = m_tcObjects->GetSelection(); sel.IsOk())
+		if (auto* keepData = (ibVisualEditorObjectTreeItemData*)m_tcObjects->GetItemData(sel)) {
+			keepObj = keepData->GetObject();
+			keepLayer = keepData->GetLayerObject();
+		}
+
 	// Clear the old tree and map
 	m_tcObjects->DeleteAllItems();
 	m_listItem.clear();
-	m_commandItemMap.clear();
+	m_layerItemMap.clear();
 
 	if (valueForm != nullptr) {
 		wxTreeItemId dummy;
 		AddChildren(valueForm, dummy, true);
 		// Expand items that were previously expanded
 		RestoreItemStatus(valueForm);
+
+		// Restore the row highlight by identity — under m_notifySelecting so SelectItem sets the bold mark
+		// WITHOUT re-pushing the inspector (OnSelChanged bolds before the guard early-out), matching
+		// OnObjectSelected. A layer resolves through m_layerItemMap, a control frame through m_listItem.
+		wxTreeItemId keepNode;
+		if (keepLayer != nullptr) {
+			const auto it = m_layerItemMap.find(keepLayer);
+			if (it != m_layerItemMap.end()) keepNode = it->second;
+		}
+		else if (keepObj != nullptr) {
+			const auto it = m_listItem.find(keepObj);
+			if (it != m_listItem.end()) keepNode = it->second;
+		}
+		if (keepNode.IsOk()) {
+			m_notifySelecting = true;
+			m_tcObjects->SelectItem(keepNode);
+			m_notifySelecting = false;
+		}
 	}
 
 	Connect(wxID_ANY, wxEVT_COMMAND_TREE_ITEM_COLLAPSED, wxTreeEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnExpansionChange));
@@ -124,7 +154,8 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::AddChildr
 			wxTreeItemId cmdNode = m_tcObjects->AppendItem(new_parent, _("Command interface"),
 				GetImageIndex(wxT("Toolbar")), wxNOT_FOUND,
 				new ibVisualEditorObjectTreeItemData(cbar));
-			// Its child COMMANDS (runtime items) as sub-nodes — remembered in m_commandItemMap
+			m_layerItemMap[cbar] = cmdNode;   // the bar node — re-selectable by identity after a rebuild
+			// Its child COMMANDS (runtime items) as sub-nodes — remembered in m_layerItemMap too
 			// so a just-added / moved command can be re-selected after the rebuild.
 			for (unsigned int c = 0; c < cbar->GetCommandItemCount(); c++) {
 				ibValueCommandBarItem* citem = cbar->GetCommandItem(c);
@@ -132,7 +163,7 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::AddChildr
 					wxTreeItemId itemNode = m_tcObjects->AppendItem(cmdNode, citem->GetName(),
 						GetImageIndex(wxT("Tool")), wxNOT_FOUND,
 						new ibVisualEditorObjectTreeItemData(citem));
-					m_commandItemMap[citem] = itemNode;
+					m_layerItemMap[citem] = itemNode;
 				}
 			}
 			// Restore the node's open-state (kept on the bar, like a control's expand flag).
@@ -194,8 +225,8 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::RestoreIt
 
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::SelectCommandItem(ibValueCommandBarItem* citem)
 {
-	auto it = m_commandItemMap.find(citem);
-	if (it == m_commandItemMap.end() || !it->second.IsOk())
+	auto it = m_layerItemMap.find(citem);
+	if (it == m_layerItemMap.end() || !it->second.IsOk())
 		return;
 	m_tcObjects->EnsureVisible(it->second);   // expands ancestor nodes so the item shows
 	m_tcObjects->SelectItem(it->second);      // drives OnSelChanged -> inspector shows its props

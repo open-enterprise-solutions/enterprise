@@ -210,9 +210,15 @@ void ibAttributeTree::RebuildTree()
 		}
 	}
 	m_tcAttributes->Thaw();
-	m_rebuilding = false;
 
-	SelectEntry(keep);   // restore by identity — now fires OnSelChanged with a LIVE holder
+	// Restore the row highlight by identity, but KEEP the rebuild guard set so SelectItem's
+	// EVT_TREE_SEL_CHANGED is swallowed (OnSelChanged early-outs on m_rebuilding). A rebuild is usually
+	// driven by an edit on ANOTHER surface (a control / the command bar, via the coalesced RefreshEditor);
+	// pushing THIS tree's selection into the inspector there would yank it off what the user actually picked.
+	// Mirrors the object tree, whose RebuildTree restores structure only and never re-selects. Callers that DO
+	// want the inspector to follow (OnAdd / OnPaste / OnSetMain) call SelectEntry themselves after the rebuild.
+	SelectEntry(keep);
+	m_rebuilding = false;
 }
 
 void ibAttributeTree::OnPropertyModified(ibProperty* /*prop*/)
@@ -477,12 +483,17 @@ void ibAttributeTree::OnAdd(wxCommandEvent& WXUNUSED(event))
 
 	// A new attribute is never empty: a UNIQUE name and a default Type (String) — the user changes
 	// the Type via the inspector afterwards. Build it UNOWNED and run it through the command
-	// processor so the add is UNDOABLE; the command attaches it and refreshes the editor (this tree
-	// re-reads the form's attribute set). Then land the current row on the new entry BY IDENTITY —
-	// the holder is ref-counted, so the raw pointer survives being handed to the command.
+	// processor so the add is UNDOABLE; the command attaches it. The holder is ref-counted, so the
+	// raw pointer survives being handed to the command.
 	ibValuePtr<ibFormAttributeValue> holder = form->MakeAttribute(form->MakeUniqueAttributeName());
 	ibFormAttributeValue* added = holder;
-	m_formHandler->InsertAttribute(holder);   // attach + RefreshEditor → RebuildTree
+	m_formHandler->InsertAttribute(holder);   // attach on the form (undoable)
+	// The command's editor refresh is DEFERRED (RefreshEditor coalesces onto the next tick), so the new
+	// node does not exist yet — a SelectEntry now would find nothing and the deferred rebuild would then
+	// restore the OLD selection. Build the tree SYNCHRONOUSLY (the same idiom OnPaste / OnAddColumn use),
+	// land the row on the new entry BY IDENTITY, and the later deferred rebuild keeps it (it restores the
+	// current selection, which is now the new attribute).
+	RebuildTree();
 	SelectEntry(added);                        // select the new attribute (drives OnSelChanged → inspector)
 }
 
@@ -596,6 +607,7 @@ void ibAttributeTree::OnSetMain(wxCommandEvent& WXUNUSED(event))
 	m_formHandler->Modify(true);
 	m_formHandler->NotifyEditorSaved();
 	RebuildTree();
+	SelectEntry(entry);               // keep the inspector on the toggled attribute (RebuildTree no longer pushes)
 	m_formHandler->RefreshEditor();   // source moved to the new main → controls re-render accordingly
 }
 

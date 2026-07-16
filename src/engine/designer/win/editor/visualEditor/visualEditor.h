@@ -366,7 +366,7 @@ public:
 		void RestoreItemStatus(ibValueFrame* obj);
 	public:
 		// Select (and scroll to) a command-bar child after a rebuild — looks it up in
-		// m_commandItemMap. No-op if the item isn't in the current tree (e.g. after delete).
+		// m_layerItemMap. No-op if the item isn't in the current tree (e.g. after delete).
 		// Public: the notebook's SelectPropertyObject calls it to reveal on a toolbar click.
 		void SelectCommandItem(ibValueCommandBarItem* citem);
 	private:
@@ -439,9 +439,10 @@ public:
 		wxImageList* m_iconList = nullptr;
 
 		std::map<ibValueFrame*, wxTreeItemId> m_listItem;
-		// Parallel map for command-bar children — they are not ibValueFrame, so they can't live
-		// in m_listItem; used to re-select a command after add / reorder rebuilds the tree.
-		std::map<ibValueCommandBarItem*, wxTreeItemId> m_commandItemMap;
+		// Parallel map for LAYER nodes — the command bar itself AND its command children. They are not
+		// ibValueFrame, so they can't live in m_listItem; used to re-select a bar / command by identity
+		// after a rebuild (a deferred RefreshEditor would otherwise drop the highlight onto the root form).
+		std::map<ibValueLayerObject*, wxTreeItemId> m_layerItemMap;
 		std::map<wxString, int> m_iconIdx;
 
 		wxTreeCtrl* m_tcObjects = nullptr;

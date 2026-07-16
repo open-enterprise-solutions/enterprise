@@ -4,6 +4,7 @@
 #include "backend/compiler/procUnit.h"         // ibProcUnit::CallAsProc — full type for the CallAsEvent instantiation below (run a command's custom-action procedure)
 #ifndef OES_USE_WEB
 #include <wx/menu.h>                           // wxMenu (designer layer menu)
+#include <wx/app.h>                             // wxTheApp->CallAfter — reveal a new command AFTER the deferred rebuild
 #include <wx/artprov.h>                         // menu icons (same art as the control menu)
 #include "frontend/win/ctrls/toolBar.h"        // ibAuiToolBar
 #include "frontend/win/theme/luna_toolbarart.h"
@@ -140,8 +141,14 @@ void ibValueCommandBar::ExecuteMenu(ibFrontendVisualEditorNotebook* editor, int 
 	else if (menuId == kMenuPaste)
 		target = PasteCommandInto(this);
 	if (target != nullptr) {
-		editor->RefreshEditor();                // rebuild tree + re-render chrome
-		editor->SelectPropertyObject(target);   // edit the new command right away
+		editor->RefreshEditor();                // rebuild tree + re-render chrome (DEFERRED — coalesced onto the next tick)
+		// Reveal + select the new command AFTER that rebuild. SelectPropertyObject reveals it in the object
+		// tree via SelectCommandItem, which looks the node up in the tree's layer map — and that map is only
+		// (re)populated by the deferred rebuild above. A synchronous reveal here would miss the not-yet-created
+		// node (the inspector part survives, the tree row would not). CallAfter is FIFO, so it runs once the
+		// rebuild has — the same shape as the attribute add's post-rebuild select.
+		ibValueCommandBarItem* citem = target;
+		wxTheApp->CallAfter([editor, citem] { editor->SelectPropertyObject(citem); });
 	}
 #else
 	(void)editor; (void)menuId;
