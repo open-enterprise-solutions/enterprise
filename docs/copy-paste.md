@@ -52,6 +52,36 @@ metaobject reference overrides them to ride the guid. The owner's copy/paste loo
 (`ibPropertyObject::CopyProperty` / `PasteProperty`) walks every property + event calling
 `CopyNodeValue` / `PasteNodeValue` — same shape as `Read/WriteData`, one level up.
 
+### Modules — RESET the guid, don't adopt it (the one exception to "child adopts")
+
+The default `PasteNodeValue = raw = LoadNode` reads the guid straight out of the node (`SaveNode`/`LoadNode`
+in `metaObjectSerialize.cpp` carry `Guid`), so a module held by `ibPropertyInnerModule` (a document's
+**ObjectModule** / **ManagerModule**) would ADOPT the source guid like every other child. That adoption is
+correct for anything RE-HOMED by guid (references, form source hops) — but WRONG for a module: nothing
+references a module by guid (it has no incoming hops), while its compiled bytecode is **cached BY guid**
+(`sys_bytecode_cache` + the in-memory `g_byteCodeRegistry`, both keyed on the descriptor guid). Adopting the
+source guid makes a copied document's module share the ORIGINAL's cache row → the wrong owner's bytecode
+loads → `Binding type mismatch for 'ThisObject': expected clsid X, got Y` at the module pre-flight
+(`procUnit.cpp`). It bites the module because a module has bytecode; a predefined attribute adopts the same
+way but has no cache row, so nothing goes wrong there.
+
+So `ibPropertyInnerModule::PasteNodeValue` overrides the default — load the node, THEN reset to a fresh guid:
+
+```cpp
+virtual bool PasteNodeValue(const ibDataValue& value) override {
+    const std::shared_ptr<ibDataNode>& child = value.AsChild();
+    if (child) m_metaObject->LoadNode(*child);   // module code
+    m_metaObject->ResetGuid();                    // but a FRESH guid — no bytecode-cache collision
+    return true;
+}
+```
+
+A top-level common module already gets this for free (a directly-pasted ROOT keeps its own fresh guid via
+`PasteAndRunObject`; only a CHILD adopts). The rule: **a metaobject with re-homed bindings adopts the source
+guid; a metaobject CACHED by guid must reset it.** (`metaCollection/metaModuleObject.h`) Note this only helps
+copies made AFTER the fix — an already-pasted module has the adopted guid baked into the saved config, so an
+old copy must be re-pasted (or its `sys_bytecode_cache` row cleared) once.
+
 ---
 
 ## Source description — the form control binding

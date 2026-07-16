@@ -63,6 +63,18 @@ public:
 		return true;
 	}
 
+	// copy & paste — the module rides its WHOLE node (code + guid). On PASTE reset the module's guid to a fresh
+	// one: a module caches its compiled bytecode BY guid (sys_bytecode_cache / g_byteCodeRegistry), so a copied
+	// document's module must NOT keep the source guid — otherwise it shares the original's cache row and loads
+	// the wrong owner's bytecode -> "Binding type mismatch for 'ThisObject'". (An ordinary metaobject re-homes
+	// its bindings BY guid so it adopts the source guid; a module has no re-homed hops, so a fresh id is safe.)
+	virtual bool PasteNodeValue(const ibDataValue& value) override {
+		const std::shared_ptr<ibDataNode>& child = value.AsChild();
+		if (child) m_metaObject->LoadNode(*child);
+		m_metaObject->ResetGuid();
+		return true;
+	}
+
 private:
 	ibValuePtr<T> m_metaObject;
 };
