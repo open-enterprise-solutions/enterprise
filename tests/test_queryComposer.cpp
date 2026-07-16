@@ -508,6 +508,26 @@ TEST(QueryComposerGate, Join_ComputedLeaf_NotColocatable)
 	EXPECT_FALSE(ibDbTableProvider::CanColocateJoin(spec));   // a computed leaf -> RAM (or temp-promote, not this gate)
 }
 
+TEST(QueryComposerGate, Join_ColumnTheta_Colocatable)
+{
+	// A column-to-column theta join (a_key > b_key) over two DB tables renders server-side now — the ON
+	// carries its real op, not a forced Eq. Balance-on-date / range joins ride this instead of RAM-folding.
+	// (A COMPUTED ON — a.x+1 > b.y, m_exprL set — still falls to RAM; that path is the computed-leaf gate.)
+	ibRawDBColumn aKey = ibRawDBColumn::Number(wxT("a_key"));
+	ibRawDBColumn aOut = ibRawDBColumn::String(wxT("a_out"));
+	ibRawDBColumn bKey = ibRawDBColumn::Number(wxT("b_key"));
+	ibRawDBColumn bOut = ibRawDBColumn::String(wxT("b_out"));
+	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aKey); A.AddCol(&aOut);
+	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bKey); B.AddCol(&bOut);
+
+	auto root = Join2(&A, &B, &aKey, &bKey);
+	root->m_on.m_op = ibJoinCompareOp::Gt;   // theta, not Eq
+	SpecBuf buf; buf.sel = { { &aOut, wxT("ao") }, { &bOut, wxT("bo") } };
+	const ibDataQuerySpec spec = buf.Make(root.get(), &A);
+
+	EXPECT_TRUE(ibDbTableProvider::CanColocateJoin(spec));   // column theta -> SQL push-down
+}
+
 // ===========================================================================
 // Routing gates — CanColocateUnion / CanColocateAggregate
 // ===========================================================================

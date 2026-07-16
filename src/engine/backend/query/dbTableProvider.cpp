@@ -196,6 +196,21 @@ ibQueryBinOp FilterOpToBinOp(ibQueryFilterOp op)
 	return ibQueryBinOp::Eq;
 }
 
+// L3 join-ON compare op -> IR binary op (1:1 — both enums list Eq/Ne/Lt/Le/Gt/Ge in the same order). Lets a
+// co-located column-to-column THETA join render its real operator server-side instead of the forced Eq.
+ibQueryBinOp JoinOpToBinOp(ibJoinCompareOp op)
+{
+	switch (op) {
+	case ibJoinCompareOp::Eq: return ibQueryBinOp::Eq;
+	case ibJoinCompareOp::Ne: return ibQueryBinOp::Ne;
+	case ibJoinCompareOp::Lt: return ibQueryBinOp::Lt;
+	case ibJoinCompareOp::Le: return ibQueryBinOp::Le;
+	case ibJoinCompareOp::Gt: return ibQueryBinOp::Gt;
+	case ibJoinCompareOp::Ge: return ibQueryBinOp::Ge;
+	}
+	return ibQueryBinOp::Eq;
+}
+
 // Aggregate function -> SQL name.
 wxString AggregateFnName(ibDataQueryBuilder::AggregateFn fn)
 {
@@ -394,15 +409,15 @@ bool ColocatableJoinTree(const ibDataQuerySpec& spec, ColocatedLeaves& leaves)
 		return innerOrLeftOnly(n->m_left.get()) && innerOrLeftOnly(n->m_right.get());
 	};
 	if (!innerOrLeftOnly(root))                return false;
-	// A non-equi (theta) join has no equi key the co-located ON can render (BuildColocatedFrom emits `=`);
-	// it folds in the RAM stitch (nested-loop). Reject here so EVERY co-located decider (join / aggregate /
-	// union all call this gate) falls back to RAM for a theta join.
-	std::function<bool(const ibQueryNode*)> allEqui = [&](const ibQueryNode* n) -> bool {
+	// A COMPUTED ON (a.x+1 <op> b.y) has no column key to qualify, so it still folds in the RAM stitch. A plain
+	// column-to-column THETA (a.x > b.y) now renders server-side — BuildColocatedFrom emits the node's real op —
+	// so only computed ON forces RAM. EVERY co-located decider (join / aggregate / union) calls this gate.
+	std::function<bool(const ibQueryNode*)> allColumnKeyed = [&](const ibQueryNode* n) -> bool {
 		if (n == nullptr || n->m_kind != ibQueryNode::Kind::Join) return true;
-		if (n->m_on.m_op != ibJoinCompareOp::Eq || n->m_on.m_exprL != nullptr) return false;   // theta / computed ON -> RAM
-		return allEqui(n->m_left.get()) && allEqui(n->m_right.get());
+		if (n->m_on.m_exprL != nullptr) return false;   // computed ON -> RAM (no column key to qualify)
+		return allColumnKeyed(n->m_left.get()) && allColumnKeyed(n->m_right.get());
 	};
-	if (!allEqui(root))                        return false;
+	if (!allColumnKeyed(root))                 return false;
 	for (const ibQueryCondition& c : *spec.m_conditions) {
 		if (c.m_col == nullptr)                                return false;   // row-key cond ambiguous in a join
 		if (ColocatedOwner(leaves, c.m_col) == nullptr)        return false;
@@ -473,7 +488,9 @@ ibQueryRelPtr BuildColocatedFrom(const ibQueryNode* node, const ColocatedLeaves&
 	const ibBackendQueryColumn* onL = nullptr; const ibBackendQueryColumn* onR = nullptr;
 	ResolveNodeKeys(node, onL, onR);   // the gate guaranteed every node resolves
 	const ibQueryJoinType jt = (node->m_joinKind == ibQueryJoinKind::Left) ? ibQueryJoinType::Left : ibQueryJoinType::Inner;
-	ibQueryExprPtr on = ibBinOp(ibQueryBinOp::Eq,
+	// The ON operator is the join's real compare op — Eq (the common case) OR a column-to-column theta
+	// (a.x > b.y): the gate admits only column-keyed joins here, so onL/onR are set and the op renders directly.
+	ibQueryExprPtr on = ibBinOp(JoinOpToBinOp(node->m_on.m_op),
 		ibCol(ColocatedQual(leaves, onL), FirstSqlFieldOfColumn(onL)),
 		ibCol(ColocatedQual(leaves, onR), FirstSqlFieldOfColumn(onR)));
 	return ibJoin(left, right, on, jt);

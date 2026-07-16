@@ -215,6 +215,18 @@
 > everywhere, but not pushed down on the same-DB co-located case); the ON is column-to-column only (a computed
 > `a.x + 1 > b.y` honest-fails in `ResolveColumnSingle`).
 >
+> ### Update 2026-07-16 — theta JOIN server-side push-down (the co-located follow-up, landed)
+>
+> The perf follow-up above is closed for the common case. `ColocatableJoinTree` no longer rejects a
+> column-to-column theta join: the gate (renamed `allColumnKeyed`) now rejects ONLY a **computed** ON
+> (`m_on.m_exprL != nullptr`), so a plain `a.x <op> b.y` inequality is co-locatable. `BuildColocatedFrom`
+> renders the join's real operator via `JoinOpToBinOp` (a 1:1 `ibJoinCompareOp → ibQueryBinOp` map — both
+> enums list Eq/Ne/Lt/Le/Gt/Ge in the same order) instead of the forced `=`, so a same-DB co-located theta
+> JOIN pushes down to SQL (`ON a.period <= :d`, the balance-on-date shape) and the DB serves it by index —
+> no RAM stitch. Test: `QueryComposerGate.Join_ColumnTheta_Colocatable`. Still RAM-folds (correctly): a
+> **computed** ON (`a.x + 1 > b.y`) and any **cross-DB** join — co-location is a same-source property, not
+> "always". `JoinRamTables` remains the fallback for both.
+>
 > ### Update 2026-06-28 (4) — named ref-join `JOIN o.Customer AS Cust1` (landed, builds clean Debug|x86, launcher pending)
 >
 > A reference dot-walk can now be DECLARED once and reused: `JOIN rootAlias.refA[.refB…] AS alias` auto-joins
