@@ -202,10 +202,10 @@ bool ibValueMetaObjectInformationRegister::OnAfterRunMetaObject(int flags)
 
 		if (ibValueMetaObjectRegisterData::OnAfterRunMetaObject(flags)) {
 
-			if (!cc->AddCompileModule(m_metaRecordManager, CreateRecordManagerObjectValue()))
+			if (!cc->AddCompileModule(m_metaRecordManager, [this]() -> ibValue* { return CreateRecordManagerObjectValue(); }))
 				return false;
 
-			if (!cc->AddCompileModule(m_propertyObjectModule->GetMetaObject(), CreateRecordSetObjectValue()))
+			if (!cc->AddCompileModule(m_propertyObjectModule->GetMetaObject(), [this]() -> ibValue* { return CreateRecordSetObjectValue(); }))
 				return false;
 
 			return true;
@@ -217,6 +217,7 @@ bool ibValueMetaObjectInformationRegister::OnAfterRunMetaObject(int flags)
 
 bool ibValueMetaObjectInformationRegister::OnBeforeCloseMetaObject()
 {
+	// un-resolve — mirror of OnRun's RegisterSource (slice last / first)
 	m_metaData->UnregisterSource(&m_sliceLast);
 	m_metaData->UnregisterSource(&m_sliceFirst);
 

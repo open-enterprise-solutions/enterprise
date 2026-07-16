@@ -219,11 +219,12 @@ bool ibMetaDataConfigurationFile::RunDatabase(int flags)
 	// exception == rollback (the guard's dtor aborts as the stack unwinds). We still
 	// catch it to log + return false so it doesn't escape onto the worker thread.
 	try {
-		if (!m_commonObject->RunSubtree(flags, true))
+		// Phase 1 — REGISTER: every object announces its identity / type ctor.
+		if (!m_commonObject->RunSubtree(flags, ibValueMetaObject::ibRunPhase::Before))
 			return false;
 
 		// Seed the editor's context (Manager + Catalogs/Documents/Enums + globals)
-		// AFTER RunSubtree(true) — the ctor-context factories register while the
+		// AFTER the register pass — the ctor-context factories register while the
 		// subtree runs, so CreateMainModule must run once they're available. Common-
 		// module registration already happened above (in OnBeforeRunMetaObject).
 		if (auto* cc = GetCompileCache()) {
@@ -231,7 +232,9 @@ bool ibMetaDataConfigurationFile::RunDatabase(int flags)
 				mgr->CreateMainModule();
 		}
 
-		if (!m_commonObject->RunSubtree(flags, false))
+		// Phase 2 — RESOLVE: cross-object references + source registration + forms /
+		// object-module values (all identities now present).
+		if (!m_commonObject->RunSubtree(flags, ibValueMetaObject::ibRunPhase::After))
 			return false;
 	}
 	catch (const ibBackendException& err) {
@@ -254,19 +257,20 @@ bool ibMetaDataConfigurationFile::CloseDatabase(int flags)
 
 	// CloseSubtree closes every descendant then the root's own hook (bottom-up),
 	// unregistering ctors / queryables per node while the image is still live.
-	if (!m_commonObject->CloseSubtree(true))
+	// Close is the LIFO mirror of run: un-resolve → un-register.
+	if (!m_commonObject->CloseSubtree(ibValueMetaObject::ibRunPhase::Before))   // un-resolve
 		return false;
 
-	// Tear down the designer manager AND release it BEFORE the after-close phase. The
+	// Tear down the designer manager AND release it BEFORE the un-register phase. The
 	// metaobject it binds to is about to be reset; dropping the manager now prevents a
-	// dangling reference (the next RunDatabase makes a fresh one).
+	// dangling reference (the next RunDatabase makes a fresh one). Mirrors CreateMainModule.
 	if (auto* cc = GetCompileCache()) {
 		if (auto* mgr = cc->GetModuleManager())
 			mgr->DestroyMainModule();
 		cc->SetModuleManager(nullptr);   // ibValuePtr: releases (DecrRef → delete)
 	}
 
-	if (!m_commonObject->CloseSubtree(false))
+	if (!m_commonObject->CloseSubtree(ibValueMetaObject::ibRunPhase::After))    // un-register
 		return false;
 
 	// Per-node teardown done — drop the runtime image: frees whatever ctors remain +

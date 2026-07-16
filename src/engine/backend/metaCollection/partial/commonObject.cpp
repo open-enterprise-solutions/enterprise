@@ -322,7 +322,7 @@ bool ibValueMetaObjectRecordDataRef::OnAfterRunMetaObject(int flags)
 	return true;
 }
 
-bool ibValueMetaObjectRecordDataRef::OnBeforeCloseMetaObject()
+bool ibValueMetaObjectRecordDataRef::OnBeforeCloseMetaObject()   // un-resolve — mirror of OnRun's RegisterSource
 {
 	m_metaData->UnregisterSource(&m_queryable);
 	return ibValueMetaObjectRecordData::OnBeforeCloseMetaObject();
@@ -1137,7 +1137,7 @@ bool ibValueMetaObjectRegisterData::OnAfterRunMetaObject(int flags)
 	return true;
 }
 
-bool ibValueMetaObjectRegisterData::OnBeforeCloseMetaObject()
+bool ibValueMetaObjectRegisterData::OnBeforeCloseMetaObject()   // un-resolve — mirror of OnRun's RegisterSource
 {
 	m_metaData->UnregisterSource(&m_queryable);
 	return ibValueMetaObjectGenericData::OnBeforeCloseMetaObject();

@@ -221,7 +221,7 @@ bool ibValueMetaObjectTableDataRef::OnAfterRunMetaObject(int flags)
 	return ibValueMetaObjectTableData::OnAfterRunMetaObject(flags);
 }
 
-bool ibValueMetaObjectTableDataRef::OnBeforeCloseMetaObject()
+bool ibValueMetaObjectTableDataRef::OnBeforeCloseMetaObject()   // un-resolve — mirror of OnRun's RegisterSource
 {
 	m_metaData->UnregisterSource(&m_queryable);
 	return ibValueMetaObjectTableData::OnBeforeCloseMetaObject();

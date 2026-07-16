@@ -80,10 +80,10 @@ bool ibValueFrame::LoadControl(const ibValueMetaObjectFormBase* metaForm, ibRead
 	ibDataBuilder builder;
 	if (!builder.Load(ibBinaryProvider(), dataReader))
 		return false;
-	// A pasted metaobject's form materialises WHILE the object is marked (the deferred build re-armed it) — route to
-	// the paste cascade so the source hops re-home onto it; otherwise the plain read. (Disarming the mark + re-storing
-	// the form raw is the deferred build's job — ibDeferredForm::Construct — not this per-tree load.)
-	if (metaForm != nullptr && metaForm->IsPasteMode())
+	// Route by the blob's OWN format tag (SELF-DESCRIBING), not a transient paste mark: a copy blob — a pasted form,
+	// possibly saved to disk and reloaded long after the paste mark cleared — re-homes its source hops (guid→id) onto
+	// the pasted objects; a raw blob (incl. every OLD config, no tag) loads plainly. No copy→raw normalization anywhere.
+	if (builder.Root().GetValue<bool>(wxT("PasteFormat")))
 		return PasteNode(builder.Root());
 	return LoadNode(builder.Root());
 }
@@ -93,9 +93,15 @@ bool ibValueFrame::SaveControl(const ibValueMetaObjectFormBase* metaForm, ibWrit
 	ibDataBuilder builder;
 	// While the form's metaobject is marked for copy (ibControlCopyGuard) the clipboard blob rides guids — route to
 	// the copy cascade; otherwise the plain raw save.
-	const bool ok = (metaForm != nullptr && metaForm->IsCopyMode()) ? CopyNode(builder.Root()) : SaveNode(builder.Root());
+	const bool copy = (metaForm != nullptr && metaForm->IsCopyMode());
+	const bool ok = copy ? CopyNode(builder.Root()) : SaveNode(builder.Root());
 	if (!ok)
 		return false;
+	// SELF-DESCRIBING tag: a copy blob stamps its root so LoadControl re-homes it (PasteNode) by CONTENT, independent of
+	// any live paste mark. Absent on a raw save (and on every old config) → back-compat load as raw. A pasted form keeps
+	// its copy blob on disk and re-homes on each load; editing+saving it writes raw (no tag) — self-healing.
+	if (copy)
+		builder.Root().SetValue(wxT("PasteFormat"), true);
 	return builder.Save(ibBinaryProvider(), dataWritter);
 }
 

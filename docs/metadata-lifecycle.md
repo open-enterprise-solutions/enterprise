@@ -65,12 +65,22 @@ Every phase fires virtual hooks on `ibValueMetaObject` (`metaObject.h`):
 OnCreateMetaObject(metaData, flags)   OnLoadMetaObject(metaData)
 OnSaveMetaObject(flags)               OnDeleteMetaObject()
 OnRenameMetaObject(name)              OnReloadMetaObject()          // designer
-OnBeforeRunMetaObject(flags) / OnAfterRunMetaObject(flags)         // start (init) — "module manager started"
-OnBeforeCloseMetaObject()    / OnAfterCloseMetaObject()            // teardown
+OnBeforeRunMetaObject(flags) / OnAfterRunMetaObject(flags)         // run:   Before = register, After = resolve
+OnBeforeCloseMetaObject()    / OnAfterCloseMetaObject()            // close: Before = un-resolve, After = un-register
 ```
 
-Two orchestrators recurse the tree, firing the before/after phase on every node:
-`RunSubtree(flags, before)` and `CloseSubtree(before)`.
+Two orchestrators recurse the tree, firing one pass per phase on every node: `RunSubtree(flags, ibRunPhase)`
+(top-down) and `CloseSubtree(ibRunPhase)` (bottom-up). The phase is an
+`enum class ibRunPhase : unsigned char { Before, After }` — **two** passes (not a bool), mirror-named across
+run and close so the sequence is predictable:
+
+- **run** — `Before` = **register** (a node announces its identity / type ctor); `After` = **resolve**
+  (cross-object references, `RegisterSource`, lazy form / object-module builders — every identity is present
+  by now). Two passes because resolve needs every identity registered first.
+- **close** — the LIFO mirror: `Before` = **un-resolve** (`UnregisterSource`); `After` = **un-register**.
+
+There is no separate "build" pass: forms and object-module values are built **lazily** (§5), so the resolve
+pass only registers a builder — it does not need a third synchronous phase.
 
 ---
 
@@ -98,19 +108,25 @@ flow and is not a regression.)
 
 ## 5. RUN / INIT — bring the tree to life
 
-`RunDatabase(flags)` → `RunSubtree(flags, before=true)` then `RunSubtree(flags, before=false)`:
+`RunDatabase(flags)` drives the two passes with `CreateMainModule` seeded between them:
 
 ```
 RunDatabase
- ├─ RunSubtree(before=true)   → OnBeforeRunMetaObject on every node
- └─ RunSubtree(before=false)  → OnAfterRunMetaObject  on every node   ← ctors register, module manager starts
+ ├─ RunSubtree(Before)  → OnBeforeRunMetaObject  → REGISTER: each node's identity / type ctor
+ ├─ CreateMainModule                             → seed the editor context, now that every identity exists
+ └─ RunSubtree(After)   → OnAfterRunMetaObject   → RESOLVE: cross-refs, RegisterSource, lazy form/module builders
 ```
 
-This is the **initialisation** phase: `OnAfterRunMetaObject` is where per-type constructors
-register into the factory and module managers start. Skipping it (loading a config without
-running the fresh tree) leaves types unregistered — the concrete bug it caused was a reference
-attribute read as a string → a `DROP` on a non-existent column → FB-607. So load is always
-followed by a run.
+This is the **initialisation** phase. The split matters: the register pass makes every type ctor present,
+`CreateMainModule` seeds the module manager on top of them, then the resolve pass wires cross-object
+references and registers each node's L4 query source. Skipping the run entirely (loading a config without
+running the fresh tree) leaves types unregistered — the concrete bug it caused was a reference attribute
+read as a string → a `DROP` on a non-existent column → FB-607. So load is always followed by a run.
+
+Forms and object-module values are **not built in this pass** — the resolve pass only registers a lazy
+builder (`ibDeferredForm` / a compile-module thunk) into the compile cache; the real build runs on first
+`FindCompileModule`, after the whole graph is resolved. That laziness is why the run needs only two phases,
+not a third "build" pass (see [copy-paste.md](copy-paste.md) for the deferred-form case).
 
 ---
 
@@ -143,12 +159,13 @@ side effects until commit):
 
 ## 7. CLOSE
 
-`CloseDatabase(flags)` → `CloseSubtree(before=true)` then `CloseSubtree(before=false)`:
+`CloseDatabase(flags)` is the LIFO mirror of run — `DestroyMainModule` between the passes:
 
 ```
 CloseDatabase
- ├─ CloseSubtree(before=true)  → OnBeforeCloseMetaObject
- └─ CloseSubtree(before=false) → OnAfterCloseMetaObject   ← module manager exits
+ ├─ CloseSubtree(Before)  → OnBeforeCloseMetaObject  → UN-RESOLVE: UnregisterSource
+ ├─ DestroyMainModule                                → release the manager before its node is reset
+ └─ CloseSubtree(After)   → OnAfterCloseMetaObject   → UN-REGISTER: drop the type ctors
 ```
 
 ---

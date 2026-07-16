@@ -17,24 +17,11 @@ ibValue* ibDeferredForm::Construct() const
 {
 	if (m_form == nullptr || !m_build)
 		return nullptr;
-	// A pasted form materialises HERE, long after PasteObject cleared the mark. Re-arm the SAME guid so the
-	// build parses its controls as a PASTE (LoadControl → PasteNode → re-home onto the pasted objects), reading the
-	// stored copy-paste structure verbatim. Once the form is CREATED the paste is consumed — this deferred builder
-	// clears the mark UNIVERSALLY (one-shot, for every form kind, not per-form).
-	if (m_paste)
-		m_form->SetPasteGuid(m_form->GetGuid());
-	ibValue* result = formWrapper::inl::cast_value(m_build());
-	if (m_paste) {
-		m_form->SetPasteGuid(wxNullGuid);
-		// RETIRE the paste flag — the paste is consumed. The ONLY path that invalidates this cache entry and
-		// forces a rebuild is SaveFormData, which rewrites the stored blob in NORMAL (raw) format. So every
-		// rebuild after this MUST read via LoadNode, not PasteNode. Leaving m_paste set re-ran PasteNode on the
-		// normalized blob and over-read the shorter raw hop layout (the copy-format reader expects per-hop
-		// guid/kind tags that the raw format doesn't carry). The first Construct always sees the copy blob
-		// (nothing can normalize it before a build, which only happens here), so retiring here is safe.
-		m_paste = false;
-	}
-	return result;
+	// PURE lazy build — no metadata side effect. The re-home is automatic: m_build() reads the control blob through
+	// LoadControl, which routes to PasteNode by the blob's OWN self-describing tag (PasteFormat, stamped by SaveControl
+	// at copy time), independent of any live paste mark → each guid source hop re-homes onto the pasted object via
+	// GetIdByGuid. A raw blob (no tag) reads plainly via LoadNode.
+	return formWrapper::inl::cast_value(m_build());
 }
 
 // -----------------------------------------------------------------------
@@ -357,8 +344,9 @@ bool ibValueMetaObjectForm::OnAfterRunMetaObject(int flags)
 		// result here would need session->m_root compiled, but CompileRoot
 		// only fires after RunDatabase finishes. The cache stores a builder
 		// and materializes it on first FindCompileModule lookup.
-		// ibDeferredForm's constructor records the paste mark NOW, while it is live (PasteObject stamped it); on first
-		// access it re-arms from that, so the form re-homes its source hops onto the pasted objects instead of reading raw.
+		// The build is DEFERRED but the paste RE-HOME is not: ibValueMetaObject::PasteObject forces this build at the
+		// end of the paste, while the metaobject's paste mark is still live, so Construct re-homes the form's source
+		// hops onto the pasted objects and normalizes the stored blob. A later lazy build just reads the raw blob.
 		return cc->AddCompileModule(this, [deferred = ibDeferredForm(this, [metaObject, this]() -> ibBackendValueForm* {
 				return metaObject->CreateObjectForm(this);
 			})]() -> ibValue* {
@@ -443,7 +431,7 @@ bool ibValueMetaObjectCommonForm::OnAfterRunMetaObject(int flags)
 		// LATER in the pass are still invisible → an object-typed attribute silently collapsed to String. The deferred
 		// builder runs on first FindCompileModule, after the whole config has run and everything is registered. A
 		// common form is standalone (no owning GenericData / source object), so it builds through CreateAndBuildForm
-		// directly; ibDeferredForm still captures the paste mark NOW and re-arms it at build time (PasteNode re-home).
+		// directly; the paste RE-HOME is forced by ibValueMetaObject::PasteObject at paste end (mark still live).
 		if (cc->AddCompileModule(this, [deferred = ibDeferredForm(this, [this]() -> ibBackendValueForm* {
 				return ibValueMetaObjectFormBase::CreateAndBuildForm(this, defaultFormType);
 			})]() -> ibValue* {

@@ -108,7 +108,7 @@ bool ibValueMetaObjectConstant::OnAfterRunMetaObject(int flags)
 	if (auto* cc = m_metaData->GetCompileCache()) {
 
 		if (ibValueMetaObjectAttribute::OnAfterRunMetaObject(flags))
-			return cc->AddCompileModule(m_propertyModule->GetMetaObject(), CreateRecordDataObjectValue());
+			return cc->AddCompileModule(m_propertyModule->GetMetaObject(), [this]() -> ibValue* { return CreateRecordDataObjectValue(); });
 
 		return false;
 	}
@@ -118,6 +118,7 @@ bool ibValueMetaObjectConstant::OnAfterRunMetaObject(int flags)
 
 bool ibValueMetaObjectConstant::OnBeforeCloseMetaObject()
 {
+	// un-resolve — mirror of OnRun's RegisterSource
 	m_metaData->UnregisterSource(&m_queryable);
 
 	if (!m_propertyModule->GetMetaObject()->OnBeforeCloseMetaObject())

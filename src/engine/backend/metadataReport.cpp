@@ -159,7 +159,7 @@ bool ibMetaDataReport::RunDatabase(int flags)
 		// The designer module-manager (for the report's compile cache) was already
 		// built by the image ctor via CreateDesignerModuleManager() — common modules
 		// register into it during RunSubtree(true) below.
-		if (!m_commonObject->RunSubtree(flags, true))
+		if (!m_commonObject->RunSubtree(flags, ibValueMetaObject::ibRunPhase::Before))
 			return false;
 
 		if (auto* cc = GetCompileCache()) {
@@ -168,7 +168,7 @@ bool ibMetaDataReport::RunDatabase(int flags)
 		}
 
 		if (m_moduleManager->CreateMainModule()) {
-			if (!m_commonObject->RunSubtree(flags, false))
+			if (!m_commonObject->RunSubtree(flags, ibValueMetaObject::ibRunPhase::After))
 				return false;
 			if (!m_moduleManager->StartMainModule())
 				return false;
@@ -179,10 +179,10 @@ bool ibMetaDataReport::RunDatabase(int flags)
 	}
 	else if (!m_commonObject->IsExternalCreate()) {
 
-		if (!m_commonObject->RunSubtree(flags, true))
+		if (!m_commonObject->RunSubtree(flags, ibValueMetaObject::ibRunPhase::Before))
 			return false;
 
-		if (!m_commonObject->RunSubtree(flags, false))
+		if (!m_commonObject->RunSubtree(flags, ibValueMetaObject::ibRunPhase::After))
 			return false;
 
 		load.Commit();
@@ -201,7 +201,7 @@ bool ibMetaDataReport::CloseDatabase(int flags)
 
 	// CloseSubtree closes every descendant then the root's own hook (bottom-up);
 	// it self-skips a deleted node.
-	if (!m_commonObject->CloseSubtree(true))
+	if (!m_commonObject->CloseSubtree(ibValueMetaObject::ibRunPhase::Before))   // un-resolve
 		return false;
 
 	// Symmetric to RunDatabase — tear down + release the designer manager.
@@ -211,7 +211,7 @@ bool ibMetaDataReport::CloseDatabase(int flags)
 		cc->SetModuleManager(nullptr);
 	}
 
-	if (!m_commonObject->CloseSubtree(false))
+	if (!m_commonObject->CloseSubtree(ibValueMetaObject::ibRunPhase::After))    // un-register
 		return false;
 
 	m_image.reset();   // drop the runtime image ⇒ closed (frees ctors + modules + cache)

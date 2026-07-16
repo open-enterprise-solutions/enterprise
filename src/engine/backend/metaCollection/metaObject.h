@@ -342,14 +342,17 @@ public:
 
 public:
 
-	// Runtime lifecycle walk over THIS node + descendants. before=true is the pre
-	// phase (OnBeforeRun/Close), before=false the post phase. Deleted nodes (and
-	// their subtree) are skipped. The walk fires the hook on the node itself:
-	// RunSubtree is top-down (self before children), CloseSubtree is bottom-up
-	// (children before self, so the root closes last) - a caller just drives the
-	// before/after phase on the root, no separate root-hook firing.
-	bool RunSubtree(int flags, bool before);
-	bool CloseSubtree(bool before);
+	// Runtime lifecycle walk over THIS node + descendants. Deleted nodes (and their
+	// subtree) are skipped. The walk fires the hook on the node itself: RunSubtree is
+	// top-down (self before children), CloseSubtree is bottom-up (children before self,
+	// so the root closes last) — a caller just drives the two phases on the root, no
+	// separate root-hook firing.
+	// Lifecycle phase for RunSubtree / CloseSubtree — TWO passes over the tree.
+	//   Run  : Before = register (identity), After = resolve (cross-refs, sources / forms).
+	//   Close: Before = un-resolve, After = un-register (LIFO mirror of Run).
+	enum class ibRunPhase : unsigned char { Before, After };
+	bool RunSubtree(int flags, ibRunPhase phase);
+	bool CloseSubtree(ibRunPhase phase);
 
 	// (CreateMetaTable / UpdateMetaTable / DeleteMetaTable removed — structure DDL is the config-save
 	//  differ's job; see ContributeTables below (declares both structure and seed) + query/schemaSnapshot.h.)
@@ -368,11 +371,13 @@ public:
 	//for designer 
 	virtual bool OnReloadMetaObject() { return true; }
 
-	//module manager is started or exit
-	//after and before for designer
+	//module manager lifecycle — TWO run phases (see ibRunPhase), driven by RunSubtree:
+	//  OnBeforeRun = register (identity / type ctor),
+	//  OnAfterRun  = resolve (cross-refs, sources / forms — all identities now present).
 	virtual bool OnBeforeRunMetaObject(int flags) { return true; }
 	virtual bool OnAfterRunMetaObject(int flags) { return true; }
 
+	// close mirrors run in reverse (LIFO): OnBeforeClose = un-resolve, OnAfterClose = un-register.
 	virtual bool OnBeforeCloseMetaObject() { return true; }
 	virtual bool OnAfterCloseMetaObject();
 

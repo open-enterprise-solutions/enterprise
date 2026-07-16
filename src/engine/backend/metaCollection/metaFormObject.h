@@ -111,12 +111,14 @@ public:
 	// a form can safely resolve its attribute types / source hops against objects that register later in the
 	// pass. The two kinds differ only in the entry: an OBJECT form goes through its owning GenericData (which
 	// binds the source object), a COMMON form builds standalone — both land on CreateAndBuildForm underneath.
-	// The form ptr is kept only for the paste re-arm, recorded NOW while the paste mark is still live.
+	// The form ptr is kept for the paste re-home: Construct reads its LIVE paste mark at build time.
 	ibDeferredForm(ibValueMetaObjectFormBase* form, std::function<ibBackendValueForm*()> build) noexcept
-		: m_form(form), m_build(std::move(build)), m_paste(form != nullptr && form->IsPasteMode()) {}
+		: m_form(form), m_build(std::move(build)) {}
 
-	// Runs `build()`, wrapped into an ibValue* (out-of-line — needs formWrapper complete). When the recorded
-	// paste flag is set, re-arms the SAME guid so the deferred build reads the copy blob via PasteNode.
+	// Runs `build()`, wrapped into an ibValue* (out-of-line — needs formWrapper complete). If the form's metaobject
+	// is marked as a paste at build time, the built controls re-home (PasteNode) and the stored blob is normalized to
+	// raw. The paste completion (ibValueMetaObject::PasteObject) forces this build while the mark is still live, so
+	// there is no captured flag — the live mark is the signal.
 	ibValue* Construct() const;
 
 	ibValueMetaObjectFormBase* Form() const { return m_form; }
@@ -124,9 +126,6 @@ public:
 private:
 	ibValueMetaObjectFormBase*           m_form;
 	std::function<ibBackendValueForm*()> m_build;
-	// One-shot: TRUE only until the first Construct consumes the paste (mutable — the builder is captured
-	// by-value in the compile-cache lambda, so the retire must persist across rebuilds). See Construct.
-	mutable bool                         m_paste;
 };
 
 // -----------------------------------------------------------------------

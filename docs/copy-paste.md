@@ -7,7 +7,9 @@ all ride this SAME mechanism. There is no DB round-trip and no per-field remap t
 
 The key structural fact: **copy/paste is a SECOND serialization path, distinct from the normal
 read/write path.** The stored copy-paste binary is understood only by the paste reader; a normal reader
-sees a plain binary. What tells the two apart is the **mark** (see below).
+sees a plain binary. What tells the two apart: the live **paste mark** on the synchronous path, and — for a
+blob that outlives the mark (a lazily-built form) — a **self-describing tag stamped into the blob at copy
+time** (see "Forms and controls" below).
 
 ---
 
@@ -102,7 +104,7 @@ right layer (the source property's copy hook), NOT a parallel format.
 
 ---
 
-## Forms and controls — two paths, routed by the mark
+## Forms and controls — two paths, routed by the blob's self-describing tag
 
 The control tree has the SAME dual structure as a metaobject:
 
@@ -112,12 +114,19 @@ The control tree has the SAME dual structure as a metaobject:
   `Paste/CopyNodeValue` (a source property re-homes its hops; a plain control round-trips unchanged since
   the pair defaults to Read/Write).
 
-`SaveControl` / `LoadControl` route once, on the form metaobject's mark:
+`SaveControl` picks the writer on the form metaobject's **copy mark**; `LoadControl` picks the reader on the
+blob's **own tag** — the blob is SELF-DESCRIBING:
 
 ```
-SaveControl → metaForm->IsCopyMode()  ? CopyNode  : SaveNode
-LoadControl → metaForm->IsPasteMode() ? PasteNode : LoadNode
+SaveControl → metaForm->IsCopyMode() ? CopyNode + stamp root "PasteFormat"=true : SaveNode
+LoadControl → root.GetValue<bool>("PasteFormat") ? PasteNode : LoadNode
 ```
+
+The write side reads a live mark, but the read side must NOT — a copy blob can sit on disk long after the
+mark cleared (a form pasted and saved but never opened; see the deferred case below). So the copy writer
+**stamps `PasteFormat` into the blob root**, and `LoadControl` routes on that tag by CONTENT, independent of
+any runtime mark. A raw blob — and every old config, where the key is absent — reads as raw: `GetValue<bool>`
+returns `false` for a missing key, so it is back-compatible with no migration.
 
 The in-designer control clipboard copy (`ibValueForm::CopyObject` → `ibValueFrame::CopyObject/PasteObject`)
 already serialises through `CopyProperty` / `PasteProperty` → `Copy/PasteNodeValue` — consistent, by
@@ -152,34 +161,32 @@ the walk skips, so they are the one thing the hook carries.
 
 ### The lazy object-form catch (the hard part)
 
-An OBJECT form (catalog/document/…) materialises **lazily**: `OnAfterRunMetaObject` registers an
-`ibDeferredForm` (`metaCollection/metaFormObject.h`) in the compile-value cache; the form is built on first
-`FindCompileModule` lookup — long after `PasteObject` cleared the paste mark. So at build time
-`IsPasteMode` is already false, and a naive load would read the copy-paste binary as raw.
+An OBJECT form (catalog/document/…) materialises **lazily**: `OnAfterRunMetaObject` (the resolve pass)
+registers an `ibDeferredForm` (`metaCollection/metaFormObject.h`) in the compile-value cache; the form is
+built on first `FindCompileModule` lookup — long after `PasteObject` cleared the paste mark. So at build
+time `IsPasteMode` is already false. Routing on the live mark would then read the copy-paste binary as raw
+and drop every source hop → the pasted form comes up empty. This was the **reload-bomb**: a copy blob
+persisted to disk, re-read in the wrong format.
 
-`ibDeferredForm` bridges the gap:
+The fix is the self-describing tag above — NOT a flag threaded through the deferred builder. The copy blob
+already carries `PasteFormat` (stamped by `SaveControl` at copy time), so whenever the form is built —
+immediately, or a session later off disk — `LoadControl` sees the tag and routes to `PasteNode`, which
+re-homes each guid hop through `GetIdByGuid` onto the pasted object (the object adopted the source copy-guid
+as its own guid, so the lookup lands on it). The live paste mark is irrelevant at build time.
 
-- Its **constructor RECORDS** the paste flag (`form->IsPasteMode()`) at registration, while the mark is
-  still live.
-- `Construct` (first access) **re-arms** the same guid (`SetPasteGuid(GetGuid())`) so the build's
-  `LoadControl` routes to `PasteNode`; the re-homing runtime form reads the paste binary from the stream;
-  then it **disarms** (`SetPasteGuid(wxNullGuid)`) once created. One-shot, universal — the deferred builder
-  owns it, not any single form kind.
+So `ibDeferredForm::Construct` is **pure** — no metadata side effect, no re-arm/disarm, no captured flag:
 
 ```cpp
 ibValue* ibDeferredForm::Construct() const {
-    if (m_paste) m_form->SetPasteGuid(m_form->GetGuid());          // re-arm → deferred read goes to PasteNode
-    ibValue* result = ...->CreateObjectForm(m_form);              // create + read (PasteNode) + run (module init)
-    if (m_paste) m_form->SetPasteGuid(wxNullGuid);               // disarm after created — consumed
-    return result;
+    if (m_form == nullptr || !m_build) return nullptr;
+    return formWrapper::inl::cast_value(m_build());   // m_build() → LoadControl routes by the blob's own tag
 }
 ```
 
-The paste flag is INSURANCE: it says "the binary on input is a paste blob, not a normal one" — so
-`PasteNode` processes it (re-home); once consumed, the form works with a standard binary.
-
-`ibDeferredForm` lives in `metaFormObject.h` (not `metaData.h`): the form type is complete there, so the
-constructor reads `IsPasteMode` inline.
+There is **no copy→raw normalization anywhere**: the blob describes its own format, so nothing has to
+rewrite it before save. Dissolving that normalization is what let the run drop its third "build" pass — the
+lifecycle collapsed back to two phases (see [metadata-lifecycle.md](metadata-lifecycle.md) §5). `ibDeferredForm`
+lives in `metaFormObject.h` (not `metaData.h`): the form type is complete there.
 
 ---
 
@@ -209,6 +216,6 @@ crash on open.
 | Source binding — dumb raw serializer | `sourceDescription.{h,cpp}` |
 | Source binding — guid copy/paste hooks | `propertyManager/property/propertySource.cpp`, `.../variant/variantSource.cpp` |
 | Form/control raw vs copy/paste node paths | `visualView/ctrl/frame.{h,cpp}`, `formMem.cpp` |
-| Lazy object-form deferred paste flag | `metaCollection/metaFormObject.{h,cpp}` (`ibDeferredForm`) |
+| Lazy object-form deferred builder (pure `Construct`, self-describing blob) | `metaCollection/metaFormObject.{h,cpp}` (`ibDeferredForm`) |
 | Dynamic-list read/select split | `system/value/valueDynamicList.{h,cpp}` |
 | Per-config queryable factory | `metaData.{h,cpp}`, `query/queryableFactory.{h,cpp}` |

@@ -179,27 +179,31 @@ bool ibValueMetaObject::DeleteSubtree()
 	return true;
 }
 
-bool ibValueMetaObject::RunSubtree(int flags, bool before)
+// Top-down (self before children): the phase hook fires on the node, then recurses. One pass per ibRunPhase.
+bool ibValueMetaObject::RunSubtree(int flags, ibRunPhase phase)
 {
 	if (IsDeleted())
 		return true;
 
-	if (before ? !OnBeforeRunMetaObject(flags) : !OnAfterRunMetaObject(flags))
+	const bool ok =
+		phase == ibRunPhase::Before ? OnBeforeRunMetaObject(flags)
+		                            : OnAfterRunMetaObject(flags);
+	if (!ok)
 		return false;
 
 	for (unsigned int idx = 0; idx < GetChildCount(); idx++) {
 		ibValueMetaObject* child = GetChild(idx);
 		if (!FilterChild(child->GetClassType()))
 			continue;
-		if (!child->RunSubtree(flags, before))
+		if (!child->RunSubtree(flags, phase))
 			return false;
 	}
 	return true;
 }
 
 // Close is bottom-up (post-order): descendants close before this node's own hook,
-// so the root closes last — matching the original container order.
-bool ibValueMetaObject::CloseSubtree(bool before)
+// so the root closes last — matching the original container order. LIFO mirror of RunSubtree.
+bool ibValueMetaObject::CloseSubtree(ibRunPhase phase)
 {
 	if (IsDeleted())
 		return true;
@@ -208,11 +212,14 @@ bool ibValueMetaObject::CloseSubtree(bool before)
 		ibValueMetaObject* child = GetChild(idx);
 		if (!FilterChild(child->GetClassType()))
 			continue;
-		if (!child->CloseSubtree(before))
+		if (!child->CloseSubtree(phase))
 			return false;
 	}
 
-	if (before ? !OnBeforeCloseMetaObject() : !OnAfterCloseMetaObject())
+	const bool ok =
+		phase == ibRunPhase::Before ? OnBeforeCloseMetaObject()
+		                            : OnAfterCloseMetaObject();
+	if (!ok)
 		return false;
 	return true;
 }

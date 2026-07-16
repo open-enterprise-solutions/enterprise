@@ -393,7 +393,7 @@ bool ibValueMetaObject::PasteObject(ibReaderMemory& reader)
 					prevReaderMemory = readerMemory;
 				} while (true);
 			}
-
+			
 			return true;
 		}
 
