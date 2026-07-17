@@ -244,7 +244,10 @@
 > - **JOIN** — `ExecuteColocatedRollupTotals` runs ROLLUP over `BuildColocatedFrom` (columns qualified by
 >   their owning leaf's table), WHERE via the same `ColocatedWhere` — so an RLS **semi-join rides
 >   server-side** on the totals too (`BuildColocatedPredicate` renders the correlated EXISTS).
->   `CanColocateRollupTotals` gates it (colocatable join tree, SCALAR levels / inputs).
+>   `CanColocateRollupTotals` gates it (colocatable join tree, SCALAR **or REFERENCE** group levels — a
+>   reference groups by its spread as ONE composite `ROLLUP((f0,f1,…))` element, reassembled on read — scalar
+>   aggregate inputs). Single-source: `CanRollupTotalsShape` likewise takes reference levels AND a resolvable
+>   dot-walk group level (via a reference-join chain in `ExecuteRollupTotals`); dot-walk aggregate inputs stay RAM.
 > - **UNION** — `BuildUnionRollupFrom` projects each branch's referenced columns under inner aliases
 >   (`k<n>`), UNION[/ALL]-stacks them and wraps the result as a subquery `u`; the outer ROLLUP folds over
 >   `u.k<n>`. `CanColocateUnionRollupShape` requires every referenced column to resolve BY NAME + SCALAR in

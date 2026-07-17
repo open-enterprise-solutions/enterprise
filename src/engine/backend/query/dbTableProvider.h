@@ -96,8 +96,9 @@ public:
 	// ibSelectorTree either way — perf, not correctness. Split in two so the routing is unit-testable
 	// without a DB (unlike the single-source CanPushRollupTotals, which conflates shape + dialect and is
 	// consequently untested):
-	//   CanColocateRollupTotals     — the STRUCTURAL half: CanColocateBase's join tree, SCALAR group keys /
-	//                                 aggregate inputs (a reference-spread ROLLUP stays RAM), no dot-walk /
+	//   CanColocateRollupTotals     — the STRUCTURAL half: CanColocateBase's join tree, SCALAR or REFERENCE group
+	//                                 keys over the JOIN (a reference groups by its spread as a composite ROLLUP
+	//                                 element; a UNION branch stays scalar), scalar aggregate inputs, no dot-walk /
 	//                                 computed group or aggregate. No dialect probe -> testable like
 	//                                 CanColocateAggregate.
 	//   CanPushColocatedRollupTotals — adds the DB-intrinsic ROLLUP-dialect capability. The composer

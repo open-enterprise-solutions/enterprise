@@ -1684,9 +1684,17 @@ bool ibDbTableProvider::CanRollupTotalsShape(const ibDataQuerySpec& spec)
 		if (spec.m_groupBy->empty())                              return false;
 		if (!spec.m_dotWalks->empty() || !spec.m_keyIn->empty())  return false;
 
-		// A dot-walk GROUP key needs a reference JOIN that RunRollupTotals does not build -> RAM.
+		// A dot-walk GROUP key rides a reference JOIN chain (ExecuteRollupTotals builds it) — allowed WHEN every
+		// NON-leaf path segment is a SINGLE-TARGET reference (structurally resolvable, metadata-only, no DB). A
+		// composite / multi-target mid-hop can't be joined -> RAM-fold (correct there).
 		if (spec.m_groupPaths != nullptr)
-			for (const auto& gp : *spec.m_groupPaths) if (!gp.empty()) return false;
+			for (const auto& gp : *spec.m_groupPaths) {
+				if (gp.empty()) continue;
+				const ibBackendQueryable* walk = q;
+				for (size_t s = 0; s + 1 < gp.size() && walk != nullptr; ++s)
+					walk = walk->ResolveReferenceTarget(gp[s]);
+				if (walk == nullptr) return false;   // an unresolvable hop -> RAM-fold
+			}
 		// Group keys: SCALAR or a REFERENCE / variant (a reference groups by its full spread as ONE composite
 		// ROLLUP element, reassembled on read — RunRollupTotals handles it). Aggregate inputs stay SCALAR.
 		ColocatedLeaves one; one.push_back(q);
@@ -1848,18 +1856,46 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 ibSelectorTree ibDbTableProvider::ExecuteRollupTotals(const ibDataQuerySpec& spec)
 	{
 		const ibBackendQueryable* q = spec.m_queryable;
-		ibQueryRelPtr from = ibScan(q->GetQueryTableName());
+		const wxString mainTable = q->GetQueryTableName();
+
+		// DOT-WALK group keys / aggregate inputs (Producer.Region) ride a reference JOIN chain, exactly like the
+		// non-ROLLUP aggregate: resolve each path to a join alias + its JOINED source (whose leaf-set / metaData
+		// drive the leaf's scalar test + a reference leaf's spread reassembly). A plain column keeps the main table.
+		ibRefJoinChain chain(q, mainTable);
+		std::map<const ibBackendQueryColumn*, std::pair<wxString, const ibBackendQueryable*>> dw;   // col -> (alias, joined source)
+		bool hasDotWalk = false;
+		auto resolveDot = [&](const ibBackendQueryColumn* col, const std::vector<const ibBackendQueryColumn*>& path) {
+			if (col == nullptr || path.empty()) return;
+			wxString a; const ibBackendQueryable* tq = nullptr;
+			if (chain.Resolve(path, a, tq) && tq != nullptr) { dw[col] = { a, tq }; hasDotWalk = true; }   // gate guaranteed resolvable
+		};
+		for (size_t i = 0; i < spec.m_groupBy->size(); ++i)
+			resolveDot((*spec.m_groupBy)[i], i < spec.m_groupPaths->size() ? (*spec.m_groupPaths)[i]
+			                                                               : std::vector<const ibBackendQueryColumn*>{});
+		for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates)
+			resolveDot(a.m_col, a.m_path);
+
+		ibQueryRelPtr from = hasDotWalk ? chain.From() : ibScan(mainTable);
 		if (ibQueryExprPtr where = ibMetaIRBuilder::BuildWhere(q, *spec.m_conditions, spec.m_predicate))
 			from = ibFilter(from, where);
-		// One table -> columns are UNqualified (their first SQL field).
-		ColocatedLeaves leaves1; leaves1.push_back(q);
-		const ibMetaData* meta = q->GetMetaData();
+
+		// A plain column qualifies by the main table WHEN joins are present (disambiguation), else UNqualified.
+		const wxString mainQual = hasDotWalk ? mainTable : wxString();
+		auto qualOf = [dw, mainQual](const ibBackendQueryColumn* c) {
+			const auto it = dw.find(c); return it != dw.end() ? it->second.first : mainQual;
+		};
 		return RunRollupTotals(spec, from,
-			[](const ibBackendQueryColumn* c) { return ibCol(FirstSqlFieldOfColumn(c)); },
-			[leaves1, meta](const ibBackendQueryColumn* g) -> RollupGroupKey {
-				// scalar key -> one field; a reference / variant key -> its full spread (composite ROLLUP element),
-				// reassembled via the source's metaData. UNqualified (single table).
-				return { g->IsRawColumn() || ScalarReadable(g, leaves1), wxString(), meta };
+			[qualOf](const ibBackendQueryColumn* c) {
+				const wxString ql = qualOf(c);
+				return ql.empty() ? ibCol(FirstSqlFieldOfColumn(c)) : ibCol(ql, FirstSqlFieldOfColumn(c));
+			},
+			[dw, qualOf, q](const ibBackendQueryColumn* g) -> RollupGroupKey {
+				// scalar key -> one field; a reference / variant key -> its spread (composite ROLLUP element). A
+				// dot-walk key qualifies by its join alias + tests scalar / reassembles against the JOINED source.
+				const auto it = dw.find(g);
+				const ibBackendQueryable* owner = (it != dw.end()) ? it->second.second : q;
+				ColocatedLeaves ls; ls.push_back(owner);
+				return { g->IsRawColumn() || ScalarReadable(g, ls), qualOf(g), owner->GetMetaData() };
 			});
 	}
 
@@ -1984,9 +2020,10 @@ bool ibDbTableProvider::CanColocateRollupTotals(const ibDataQuerySpec& spec)
 
 		ColocatedLeaves leaves;
 		if (!CanColocateBase(spec, leaves)) return false;   // colocatable JOIN tree, no dot-walk / key-in, single-field keys
-		// SCALAR group keys owned by a leaf (a reference-spread ROLLUP -> RAM, like the single-source gate).
+		// Group keys: SCALAR or a REFERENCE / variant (a reference groups by its full spread as ONE composite
+		// ROLLUP element, reassembled on read — RunRollupTotals handles it), each owned by a leaf.
 		for (const ibBackendQueryColumn* g : *spec.m_groupBy)
-			if (g == nullptr || !ScalarReadable(g, leaves) || ColocatedOwner(leaves, g) == nullptr) return false;
+			if (g == nullptr || ColocatedOwner(leaves, g) == nullptr) return false;
 		// SCALAR aggregate inputs.
 		for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates)
 			if (a.m_col != nullptr && !ScalarReadable(a.m_col, leaves)) return false;
@@ -2027,7 +2064,12 @@ ibSelectorTree ibDbTableProvider::ExecuteColocatedRollupTotals(const ibDataQuery
 			from = ibFilter(from, where);
 		return RunRollupTotals(spec, from,
 			[&leaves](const ibBackendQueryColumn* c) { return ibCol(ColocatedQual(leaves, c), FirstSqlFieldOfColumn(c)); },
-			[](const ibBackendQueryColumn*) -> RollupGroupKey { return { true, wxString(), nullptr }; });   // CanColocateRollupTotals guarantees SCALAR group keys
+			[&leaves](const ibBackendQueryColumn* g) -> RollupGroupKey {
+				// scalar key -> one field; a reference / variant key -> its spread under the leaf's qualifier,
+				// reassembled via the owning leaf's metaData.
+				const ibBackendQueryable* o = ColocatedOwner(leaves, g);
+				return { g->IsRawColumn() || ScalarReadable(g, leaves), ColocatedQual(leaves, g), o ? o->GetMetaData() : nullptr };
+			});
 	}
 
 // Bind a write column's value positionally: a RAW column straight by its declared RawType (no
