@@ -23,7 +23,6 @@
 #include "dbTableProvider.h"                                          // ibDbTableProvider (vended by GetProvider) + ibRenderedPageCache (NewPageCache)
 #include "resultSource.h"                                             // ibDataResultSource — the backing ibRamTableResultSource derives
 #include "tempTableManager.h"                                         // ibTempTableManager — promote a computed leaf to a DB temp table (+ ibDbTempTableQueryable)
-#include "columnLayout.h"                                             // ColumnValueFields — the value fields the temp aggregate projects a group key by
 
 #include <map>                                                        // dot-walk join dedup + col->attr cache
 #include <functional>                                                 // std::function — reference-hierarchy parent chain-up
@@ -80,6 +79,23 @@ private:
 	mutable ibTypeDescription m_type;
 };
 } // namespace
+
+// Reference dot-walk resolution over a COMPUTED source — this layer owns no metadata, so it FORWARDS
+// to the DB provider (the single metadata home). Resolution reads queryable->GetMetaData(), which a
+// computed register carries (it mirrors the register), so Balance.Item.Name resolves on the RAM path.
+const ibBackendQueryable* ibComputedProvider::ResolveReferenceTarget(const ibBackendQueryable* queryable,
+                                                                     const ibBackendQueryColumn* refColumn) const
+{
+	static ibDbTableProvider s_db;   // stateless — resolution reads only its arguments' metadata
+	return s_db.ResolveReferenceTarget(queryable, refColumn);
+}
+
+std::vector<const ibBackendQueryable*> ibComputedProvider::ResolveReferenceTargets(const ibBackendQueryable* queryable,
+                                                                                   const ibBackendQueryColumn* refColumn) const
+{
+	static ibDbTableProvider s_db;
+	return s_db.ResolveReferenceTargets(queryable, refColumn);
+}
 
 // ibComputedProvider — the RAM-computed virtual table (register slice / balance /
 // turnover / subquery). Stateless: computes the rows from the spec, no physical scan, no
@@ -549,7 +565,7 @@ ibQueryRamTable ResolveComputedDotWalks(ibQueryRamTable rows, const ibBackendQue
 		wxString prefixKey;
 		for (size_t i = 0; i + 1 < path.size(); ++i) {
 			const ibBackendQueryColumn* refCol = path[i];
-			const ibBackendQueryable*   tgtQ   = (curQ != nullptr) ? curQ->ResolveReferenceTarget(refCol) : nullptr;
+			const ibBackendQueryable*   tgtQ   = (curQ != nullptr) ? curQ->GetProvider().ResolveReferenceTarget(curQ, refCol) : nullptr;
 			const ibBackendQueryColumn* tgtKey = SelfReferenceColumn(tgtQ);
 			const ibBackendQueryColumn* bring  = path[i + 1];   // the next hop's ref column, or the final leaf
 			if (tgtQ == nullptr || tgtKey == nullptr)
@@ -604,7 +620,7 @@ ibQueryRamTable ComputeRowsResolved(const ibDataQuerySpec& spec,
 const ibBackendQueryColumn* ReferenceColumnTo(const ibBackendQueryable* from, const ibBackendQueryable* to)
 {
 	for (const ibBackendQueryColumn* c : from->GetColumns())
-		if (c != nullptr && from->ResolveReferenceTarget(c) == to) return c;
+		if (c != nullptr && from->GetProvider().ResolveReferenceTarget(from, c) == to) return c;
 	return nullptr;
 }
 
@@ -1616,17 +1632,20 @@ ibDataQueryResult ComposeMultiSource(const ibDataQuerySpec& spec, const ibReadPa
 // rows into a DB temp table, remap every column reference onto the temp's same-named columns, and run the
 // query over the temp — a REAL DB table (ibDbTempTableQueryable inherits the DB provider) — as ordinary
 // server-side SQL (WHERE / GROUP BY / SUM(expr) / HAVING). A reference column travels as its ibReference
-// blob (the temp stores the metadata spread); grouping / filtering by the reference needs NO decomposition.
-// A DOT-WALK (navigate THROUGH a reference: Ref.Field) is NOT promoted here — it would need the temp to
-// auto-join the target, which stays the RAM path. Null = not computed / no connection / a dot-walk present /
-// not worth a temp / no temp capability / an unresolved remap -> the caller stays on the RAM fold. The out-
-// buffers outlive the spec2 use; the manager keeps the temp alive across the read. (docs/temp-db.md)
+// blob (the temp stores the metadata spread); grouping / filtering BY the reference needs NO decomposition
+// (the aggregate GROUPs by the full spread, the read side reconstructs via GetValue). A DOT-WALK THROUGH a
+// reference (Balance.Item.Name) is promoted too: the path's FIRST segment (the reference the computed source
+// owns) maps to the temp, the deeper segments stay on their target catalogs, and the temp — a real DB source
+// — auto-joins them SERVER-SIDE through the ordinary dot-walk join chain (ibRefJoinChain). Null = not computed
+// / no connection / not worth a temp / no temp capability / an unresolved remap -> the caller stays on the RAM
+// fold. The out-buffers outlive the spec2 use; the manager keeps the temp alive across the read. (docs/temp-db.md)
 std::unique_ptr<ibTempTableManager> PromoteSingleComputed(
 	const ibDataQuerySpec& spec,
 	std::vector<ibQueryCondition>& outConds,
 	std::vector<ibQuerySortItem>& outSorts,
 	std::vector<std::pair<const ibBackendQueryColumn*, wxString>>& outSelects,
 	std::vector<const ibBackendQueryColumn*>& outGroupBy,
+	std::vector<std::vector<const ibBackendQueryColumn*>>& outGroupPaths,
 	std::vector<ibDataQueryBuilder::AggregateItem>& outAggs,
 	std::vector<ibDataQueryBuilder::HavingItem>& outHaving,
 	const ibBackendQueryable*& outPrimary)
@@ -1634,21 +1653,6 @@ std::unique_ptr<ibTempTableManager> PromoteSingleComputed(
 	const ibBackendQueryable* q = spec.m_queryable;
 	if (q == nullptr || !q->IsComputedInRam() || spec.m_holder == nullptr)
 		return nullptr;
-
-	// A dot-walk ANYWHERE needs the temp to auto-join a reference target (the RAM path resolves it) -> not promoted.
-	auto isWalk = [](const std::vector<const ibBackendQueryColumn*>& p) { return p.size() > 1; };
-	if (spec.m_dotWalks != nullptr && !spec.m_dotWalks->empty())          return nullptr;
-	if (spec.m_conditions) for (const ibQueryCondition& c : *spec.m_conditions) if (isWalk(c.m_path)) return nullptr;
-	if (spec.m_sorts)      for (const ibQuerySortItem&  s : *spec.m_sorts)      if (isWalk(s.m_path)) return nullptr;
-	if (spec.m_groupPaths) for (const auto& gp : *spec.m_groupPaths)            if (isWalk(gp))       return nullptr;
-	if (spec.m_aggregates) for (const auto& a : *spec.m_aggregates)             if (isWalk(a.m_path)) return nullptr;
-
-	// A REFERENCE / composite group key (a multi-field value spread) is read back from the temp aggregate by
-	// its single value field only — enough for a scalar (string / number) key, but incomplete for a reference
-	// (its _RRRef spread). Keep reference group keys on the RAM fold (correct); scalar keys go server-side.
-	if (spec.m_groupBy)
-		for (const ibBackendQueryColumn* g : *spec.m_groupBy)
-			if (g != nullptr && ColumnValueFields(g).size() > 1) return nullptr;
 
 	// Materialise the computed rows (own conditions pushed as compute filters) into a DB temp table.
 	std::vector<ibQueryCondition> ownConds;
@@ -1673,13 +1677,59 @@ std::unique_ptr<ibTempTableManager> PromoteSingleComputed(
 		if (t == nullptr) ok = false;
 		return t;
 	};
+	// A DOT-WALK path lives HALF on the temp (its FIRST segment is the reference the computed source owns) and
+	// HALF on the target catalogs (the deeper segments + leaf — real DB sources the temp joins server-side via
+	// ibRefJoinChain). So remap ONLY the first segment onto the temp; keep the rest. A plain (empty) path is a
+	// scalar column remapped whole.
+	auto remapPath = [&](const std::vector<const ibBackendQueryColumn*>& p) {
+		std::vector<const ibBackendQueryColumn*> np = p;
+		if (!np.empty()) np[0] = remap(np[0]);
+		return np;
+	};
 
-	if (spec.m_conditions) for (const ibQueryCondition& c : *spec.m_conditions) { ibQueryCondition n = c; n.m_col = remap(c.m_col); outConds.push_back(n); }
-	if (spec.m_sorts)      for (const ibQuerySortItem&  s : *spec.m_sorts)      { ibQuerySortItem  n = s; n.m_col = remap(s.m_col); outSorts.push_back(n); }
-	if (spec.m_selectCols) for (const auto& sc : *spec.m_selectCols)            outSelects.push_back({ remap(sc.first), sc.second });
-	if (spec.m_groupBy)    for (const ibBackendQueryColumn* g : *spec.m_groupBy) outGroupBy.push_back(remap(g));
-	if (spec.m_aggregates) for (const auto& a : *spec.m_aggregates)             { ibDataQueryBuilder::AggregateItem n = a; n.m_col = remap(a.m_col); outAggs.push_back(n); }
-	if (spec.m_having)     for (const auto& h : *spec.m_having)                 { ibDataQueryBuilder::HavingItem     n = h; n.m_col = remap(h.m_col); outHaving.push_back(n); }
+	if (spec.m_conditions)
+		for (const ibQueryCondition& c : *spec.m_conditions) {
+			ibQueryCondition n = c;
+			n.m_col  = c.m_path.empty() ? remap(c.m_col) : c.m_col;   // scalar -> temp; a dot-walk leaf stays on its catalog
+			n.m_path = remapPath(c.m_path);
+			outConds.push_back(n);
+		}
+	if (spec.m_sorts)
+		for (const ibQuerySortItem& s : *spec.m_sorts) {
+			ibQuerySortItem n = s;
+			n.m_col  = s.m_path.empty() ? remap(s.m_col) : s.m_col;
+			n.m_path = remapPath(s.m_path);
+			outSorts.push_back(n);
+		}
+	if (spec.m_selectCols)
+		for (const auto& sc : *spec.m_selectCols) outSelects.push_back({ remap(sc.first), sc.second });
+
+	// GROUP BY: a scalar / reference key maps onto the temp (a reference rides its blob spread and GROUPs
+	// server-side by the full spread); a DOT-WALK key's leaf stays on its catalog (joined), only the path's
+	// first segment maps to the temp. outGroupBy and outGroupPaths stay index-parallel (the aggregate reads
+	// the leaf's fields qualified by the path's join alias).
+	static const std::vector<std::vector<const ibBackendQueryColumn*>> kNoPaths;
+	const std::vector<std::vector<const ibBackendQueryColumn*>>& groupPaths = spec.m_groupPaths ? *spec.m_groupPaths : kNoPaths;
+	if (spec.m_groupBy)
+		for (size_t gi = 0; gi < spec.m_groupBy->size(); ++gi) {
+			const ibBackendQueryColumn* g = (*spec.m_groupBy)[gi];
+			const std::vector<const ibBackendQueryColumn*> gp = (gi < groupPaths.size()) ? groupPaths[gi]
+			                                                  : std::vector<const ibBackendQueryColumn*>{};
+			outGroupBy.push_back(gp.empty() ? remap(g) : g);   // scalar/reference -> temp; a dot-walk leaf stays on its catalog
+			outGroupPaths.push_back(remapPath(gp));
+		}
+
+	if (spec.m_aggregates)
+		for (const auto& a : *spec.m_aggregates) {
+			ibDataQueryBuilder::AggregateItem n = a;
+			n.m_col  = a.m_path.empty() ? remap(a.m_col) : a.m_col;   // scalar input -> temp; a dot-walk leaf stays on its catalog
+			n.m_path = remapPath(a.m_path);
+			// n.m_expr (SUM(Qty*Price)) references the source columns by field NAME -> lowers over the temp's
+			// same-named fields; no pointer remap needed.
+			outAggs.push_back(n);
+		}
+	if (spec.m_having)
+		for (const auto& h : *spec.m_having) { ibDataQueryBuilder::HavingItem n = h; n.m_col = remap(h.m_col); outHaving.push_back(n); }
 	if (!ok)
 		return nullptr;   // a column had no temp counterpart -> RAM
 
@@ -1727,14 +1777,15 @@ ibDataQueryResult ibQueryComposer::ExecuteAggregate(const ibDataQuerySpec& spec)
 			std::vector<ibQueryCondition> pConds; std::vector<ibQuerySortItem> pSorts;
 			std::vector<std::pair<const ibBackendQueryColumn*, wxString>> pSelects;
 			std::vector<const ibBackendQueryColumn*>       pGroupBy;
+			std::vector<std::vector<const ibBackendQueryColumn*>> pGroupPaths;   // parallel to pGroupBy — a dot-walk key's path
 			std::vector<ibDataQueryBuilder::AggregateItem> pAggs;
 			std::vector<ibDataQueryBuilder::HavingItem>    pHaving;
 			const ibBackendQueryable* pPrimary = nullptr;
 			if (std::unique_ptr<ibTempTableManager> mgr =
-			        PromoteSingleComputed(spec, pConds, pSorts, pSelects, pGroupBy, pAggs, pHaving, pPrimary)) {
+			        PromoteSingleComputed(spec, pConds, pSorts, pSelects, pGroupBy, pGroupPaths, pAggs, pHaving, pPrimary)) {
 				ibDataQuerySpec spec2 = spec;
-				spec2.m_conditions = &pConds;  spec2.m_sorts      = &pSorts;   spec2.m_selectCols = &pSelects;
-				spec2.m_groupBy    = &pGroupBy; spec2.m_aggregates = &pAggs;   spec2.m_having     = &pHaving;
+				spec2.m_conditions = &pConds;  spec2.m_sorts      = &pSorts;      spec2.m_selectCols = &pSelects;
+				spec2.m_groupBy    = &pGroupBy; spec2.m_groupPaths = &pGroupPaths; spec2.m_aggregates = &pAggs;   spec2.m_having = &pHaving;
 				spec2.m_queryable  = pPrimary;
 				// The DB aggregate result is a CURSOR over the temp; the mgr DROPs the temp when this block exits.
 				// Drain it into RAM HERE (mgr still alive) so the returned result outlives the temp — the same
@@ -1754,11 +1805,10 @@ ibDataQueryResult ibQueryComposer::ExecuteAggregate(const ibDataQuerySpec& spec)
 					const long r = out.AppendRow();
 					for (const ibBackendQueryColumn* g : pGroupBy) {
 						if (g == nullptr) continue;
-						// The aggregate projected the group key by its VALUE field(s) (ColumnValueFields) AS that
-						// field — read it back by that name, NOT GetValue(col) which reconstructs from the FULL spread
-						// (the TYPE tag isn't projected). A single-value scalar key reads its one field.
-						const std::vector<wxString> vf = ColumnValueFields(g);
-						out.SetCell(r, g->GetColumnId(), vf.empty() ? lazy.GetValue(g) : lazy.GetColumn(vf.front()));
+						// The provider projected every group key by its FULL spread (reference / variant / scalar
+						// alike) — so the read here is uniform and metadata-blind: GetValue reconstructs the value.
+						// The reference-typing (what to project, how to rebuild) lives in the provider, not here.
+						out.SetCell(r, g->GetColumnId(), lazy.GetValue(g));
 					}
 					for (const std::pair<ibMetaID, wxString>& ac : aggCols)
 						out.SetCell(r, ac.first, lazy.GetColumn(ac.second));
@@ -1951,7 +2001,7 @@ ibSelectorTree ibQueryComposer::BuildReferenceHierarchy(const ibQueryRamTable& s
 		ibDatabaseConnectionHolder* holder, const ibBackendQueryable* source, ibDimensionKind dim)
 {
 	// Resolve the target catalog of the reference field + its hierarchy keys.
-	const ibBackendQueryable* target = (source != nullptr) ? source->ResolveReferenceTarget(refCol) : nullptr;
+	const ibBackendQueryable* target = (source != nullptr) ? source->GetProvider().ResolveReferenceTarget(source, refCol) : nullptr;
 	const ibBackendQueryColumn* tRowKey = (target != nullptr && !target->GetPrimaryKeyColumns().empty())
 	                                       ? target->GetPrimaryKeyColumns().front() : nullptr;
 	const ibBackendQueryColumn* tParent = (target != nullptr) ? target->GetHierarchyColumn() : nullptr;
@@ -1964,7 +2014,7 @@ ibSelectorTree ibQueryComposer::BuildReferenceHierarchy(const ibQueryRamTable& s
 	std::map<wxString, wxString> parentOf;
 	{
 		ibDataQueryBuilder q(holder);
-		q.From(source->ResolveReferenceTarget(refCol)).Select(tRowKey, wxEmptyString).Select(tParent, wxEmptyString);
+		q.From(source->GetProvider().ResolveReferenceTarget(source, refCol)).Select(tRowKey, wxEmptyString).Select(tParent, wxEmptyString);
 		ibSelector ts = q.Execute(ibReadPageRequest{}).Select(ibSelectKind::ibSelectKind_Direct);
 		while (ts.Next())
 			parentOf[CellKey(ts.GetValue(tRowKey))] = CellKey(ts.GetValue(tParent));
@@ -2028,7 +2078,7 @@ struct DimCtx {
 std::map<wxString, wxString> ParentMapForField(const DimCtx& ctx, const ibBackendQueryColumn* field)
 {
 	std::map<wxString, wxString> pm;
-	const ibBackendQueryable* target = (ctx.source != nullptr) ? ctx.source->ResolveReferenceTarget(field) : nullptr;
+	const ibBackendQueryable* target = (ctx.source != nullptr) ? ctx.source->GetProvider().ResolveReferenceTarget(ctx.source, field) : nullptr;
 	if (target == nullptr && ctx.source != nullptr && field == ctx.source->GetHierarchyColumn())
 		target = ctx.source;
 	if (target == nullptr || ctx.holder == nullptr) return pm;

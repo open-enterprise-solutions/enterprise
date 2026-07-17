@@ -2682,9 +2682,25 @@ not wired to the computed path). Tests: `tests/test_queryComputedDotWalk.cpp` (8
 (L4-2 lambda→predicate→rows execution parity).
 
 **Server-side (the optimisation, `PromoteSingleComputed`, docs/temp-db.md §9).** A single computed source with a
-big result (≥ `kTempTableMinRows`) whose read AGGREGATES (scalar group key, no dot-walk) is materialised into a
-DB temp table and run as ONE server-side SQL `GROUP BY` — the DBMS does the fold. The lazy cursor is DRAINED into
-RAM while the temp manager is alive (a RAM-backed result outlives the temp DROP). Reference group keys / dot-walk
-/ small results stay RAM. SQLite-validated (`tests/test_queryComputedServer.cpp`). Push what you can to the DBMS;
-RAM is the fallback. NEXT: computed dot-walk server-side (the temp reference column resolves its target by clsid
-— the `ibReference` blob rides the spread — so the door emits a server-side JOIN to the target catalog).
+big result (≥ `kTempTableMinRows`) whose read AGGREGATES is materialised into a DB temp table and run as ONE
+server-side SQL `GROUP BY` — the DBMS does the fold. A **reference GROUP key** groups by its full blob spread; a
+**dot-walk key / input** (`Balance.Item.Name`, `SUM(Item.Weight)`) remaps its FIRST path segment onto the temp and
+the deeper segments JOIN the target catalog server-side through the ordinary dot-walk join chain (`ibRefJoinChain`)
+— the temp is a real DB source, so it inherits the physical dot-walk machinery, no new SQL. The provider projects
+every group key by its FULL spread (`ColumnFieldNames`) and the lazy cursor is DRAINED into RAM (metadata-blind,
+`GetValue`) while the temp manager is alive (a RAM-backed result outlives the temp DROP) — the reference-typing
+stays in the provider, not the reader. Only small results stay RAM. SQLite-validated (`tests/test_queryComputedServer.cpp`
+— the scalar promote plus a LINQ-lowered WHERE pushed to SQLite). Push what you can to the DBMS; RAM is the fallback.
+
+**Reference-target resolution — no cast.** The dot-walk resolver (`column → target queryable`) moved off the
+queryable onto the ONE metadata-owning provider (`ibDbTableProvider::ResolveReferenceTarget`); the query-provider
+layer names no metadata (base returns null, the computed provider forwards). It is CAST-FREE: the clsid KIND
+(`IsReference`, a bit read) gates, then `ibCtorMetaValueType::GetQueryable()` dispatches VIRTUALLY to the reference
+ctor (whose metaobject is the typed queryable holder) — no `dynamic_cast`, no RTTI on the lowering path. The virtual
+generalises: object / manager / tabular ctors can vend their queryable the same way.
+
+**Grouping a table by a reference — fixed.** `CanPageGroupLevel` claimed "PLAIN scalar dimension" but did not
+check scalarity, so a reference group key slipped into the keyset-paged `ExecuteGroupLevelPage`, whose projection
+(`ColumnValueFields`) dropped the TYPE field the read reconstructs from → "field `<col>_TYPE` not found in the
+resultset". The gate now rejects any multi-field-spread dimension (reference / variant), routing it to the unpaged
+full-spread `ExecuteAggregate`. Regression guard: `QueryComposerGate.GroupLevelPage_ReferenceDim_NotPageable`.

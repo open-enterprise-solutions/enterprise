@@ -19,6 +19,8 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <memory>
+#include <algorithm>
 
 #include <wx/init.h>                                         // wxInitializer — bring up wxBase
 
@@ -32,6 +34,10 @@
 #include "backend/query/queryProvider.h"
 #include "backend/query/queryable.h"
 #include "backend/query/queryColumn.h"
+#include "backend/query/queryLowering.h"      // ibQueryLowering::LowerLambdaPredicate (L4-2 lowering)
+#include "backend/query/queryAst.h"           // ibQueryAstExpr (recorded lambda)
+#include "backend/compiler/compileCode.h"     // ibCompileCode — script lexer feeding the LINQ recorder
+#include "backend/compiler/lambdaQueryAst.h"  // ibBuildLambdaQueryAst (L4-2 recorder)
 
 namespace {
 
@@ -83,6 +89,45 @@ private:
 };
 
 const ibMetaID S_ITEM = 20, S_QTY = 21;
+
+// A PHYSICAL source over a real DB table: it does NOT override GetProvider (inherits the DB provider) and
+// IsComputedInRam() is false, so the door runs it as SERVER SQL -- a LINQ-lowered WHERE on it executes on
+// the DBMS (ibDbTableProvider::ExecuteRead), not a RAM fold.
+class PhysicalQ : public ibBackendQueryable {
+public:
+	PhysicalQ(const wxString& table, ibMetaID id) : m_table(table), m_id(id) {}
+	void AddCol(const ibBackendQueryColumn* c) { m_cols.push_back(c); }
+	bool     IsComputedInRam()   const override { return false; }
+	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_cols; }
+	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override {
+		for (const ibBackendQueryColumn* c : m_cols) if (c->GetName() == name) return c;
+		return nullptr;
+	}
+	bool OwnsColumn(const ibBackendQueryColumn* col) const override {
+		for (const ibBackendQueryColumn* c : m_cols) if (c == col) return true;
+		return false;
+	}
+	wxString GetQueryTableName() const override { return m_table; }
+	ibMetaID GetQueryTableId()   const override { return m_id; }
+	ibGuid   GetQueryTableGuid() const override { ibGuidImpl i{}; i.m_data1 = static_cast<unsigned long>(m_id); return ibGuid(i); }
+	std::vector<ibQuerySortItem> GetIdentitySort() const override { return {}; }
+	const ibMetaData* GetMetaData() const override { return nullptr; }
+private:
+	wxString m_table;
+	ibMetaID m_id;
+	std::vector<const ibBackendQueryColumn*> m_cols;
+};
+
+// Record a lambda BODY into the L4-2 query AST (script lexer -> recorder), as test_queryLinqExec does.
+std::shared_ptr<ibQueryAstExpr> RecordLambda(const wxString& body, const wxString& rowParam = wxT("x")) {
+	ibCompileCode cc;
+	cc.Load(body);
+	if (!cc.PrepareLexem()) return nullptr;
+	const std::vector<ibLexem>& lex = cc.GetLexems();
+	size_t to = lex.size();
+	while (to > 0 && lex[to - 1].m_lexType == ENDPROGRAM) --to;
+	return ibBuildLambdaQueryAst(lex, 0, to, rowParam);
+}
 
 } // namespace
 
@@ -151,4 +196,42 @@ TEST_F(ComputedServerFix, Aggregate_PromotesToServer)
 	EXPECT_EQ(totals["K0"], 500);
 	EXPECT_EQ(totals["K1"], 500);
 	EXPECT_EQ(totals["K2"], 500);
+}
+
+// A LINQ lambda WHERE, lowered and run over a PHYSICAL DB source, executes as SERVER SQL on SQLite (not a
+// RAM fold): x.region == "North" -> door.Where(predicate) -> ExecuteRead -> SELECT ... FROM t WHERE
+// region = 'North'. Proves the LINQ front-end PUSHES to the DBMS, not just the RAM-parity test_queryLinqExec
+// proves. (The predicate is scalar, so no metaData is needed -- the config-layer wall is not hit here.)
+TEST_F(ComputedServerFix, Linq_WherePushesToServer)
+{
+	if (!ready) return;
+	ibCompileCode::SetCodeStyle(CODE_CES);   // the lambda body below is CES ('{ return … ; }')
+
+	db->RunQuery(wxT("CREATE TABLE t (region TEXT, qty INTEGER)"));
+	db->RunQuery(wxT("INSERT INTO t (region, qty) VALUES ('North', 10), ('South', 5), ('North', 7), ('East', 3)"));
+
+	ibRawDBColumn region = ibRawDBColumn::String(wxT("region"));   // RAW scalar -> single physical field, matches the table column
+	ibRawDBColumn qty    = ibRawDBColumn::Number(wxT("qty"));
+	PhysicalQ src(wxT("t"), 300);
+	src.AddCol(&region);
+	src.AddCol(&qty);
+
+	auto expr = RecordLambda(wxT("{ return x.region == \"North\"; }"));
+	ASSERT_NE(expr, nullptr);
+	ibQueryPredicatePtr pred = ibQueryLowering::LowerLambdaPredicate(&src, *expr, {});
+	ASSERT_NE(pred, nullptr) << "a translatable LINQ body must lower to a predicate";
+
+	ibDatabaseConnectionHolder* holder = ibConnectionPool::ThreadHolder();
+	ASSERT_NE(holder, nullptr);
+
+	ibDataQueryBuilder q(holder);
+	q.From(&src);
+	q.Select(&qty, wxT("qty"));
+	q.Where(pred);
+	ibReadPageRequest page;
+	ibDataQueryResult res = q.Execute(page);   // physical source -> ibDbTableProvider::ExecuteRead -> server SQL
+
+	int rows = 0;
+	while (res.Next()) ++rows;
+	EXPECT_EQ(rows, 2);   // the two North rows survived the server-side WHERE (out of four) -> LINQ pushed to the DBMS
 }

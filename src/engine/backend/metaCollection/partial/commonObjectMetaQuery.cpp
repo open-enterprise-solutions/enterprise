@@ -261,48 +261,10 @@ const ibValueMetaObjectGenericData* ibRecordQueryable::GetSourceMetaObject() con
 const ibBackendQueryColumn* ibValueMetaObjectRecordDataHierarchyMutableRef::GetHierarchyColumn() const {
 	return GetDataParent();
 }
-const ibBackendQueryable* ibRecordQueryable::ResolveReferenceTarget(const ibBackendQueryColumn* refColumn) const {
-	// Resolve a single-target reference COLUMN to the queryable of the object it points
-	// at. Works off the column's type (its class id) + this metaobject's metadata — the
-	// column need not be a metaobject attribute (an L3 source may be a temp table), only
-	// a typed reference column. Null if polymorphic / non-reference / no target queryable.
-	if (refColumn == nullptr)
-		return nullptr;
-	const ibTypeDescription& td = refColumn->GetTypeDesc();
-	if (td.GetClsidList().size() != 1)
-		return nullptr;
-	const ibMetaData* metaData = m_meta->GetMetaData();
-	if (metaData == nullptr)
-		return nullptr;
-	const ibCtorMetaValueType* ctor = metaData->GetTypeCtor(td.GetFirstClsid());
-	if (ctor == nullptr || ctor->GetMetaTypeCtor() != ibCtorObjectMetaType::ibCtorObjectMetaType_Reference)
-		return nullptr;
-	const ibBackendQueryableHolder* holder = dynamic_cast<const ibBackendQueryableHolder*>(ctor->GetMetaObject());
-	return holder != nullptr ? holder->GetQueryable() : nullptr;
-}
-
-// ALL reference targets of a COLUMN — one queryable per reference type in the column's (possibly
-// composite) type. Mirrors the single-target resolver but loops the whole CLSID list: a composite
-// "Catalog.A or Catalog.B" yields both queryables; a non-reference alternative (a String) and a
-// target that vends no queryable are skipped. The composite dot-walk joins one table per entry.
-std::vector<const ibBackendQueryable*> ibRecordQueryable::ResolveReferenceTargets(const ibBackendQueryColumn* refColumn) const {
-	std::vector<const ibBackendQueryable*> targets;
-	if (refColumn == nullptr)
-		return targets;
-	const ibMetaData* metaData = m_meta->GetMetaData();
-	if (metaData == nullptr)
-		return targets;
-	for (const ibClassID& clsid : refColumn->GetTypeDesc().GetClsidList()) {
-		const ibCtorMetaValueType* ctor = metaData->GetTypeCtor(clsid);
-		if (ctor == nullptr || ctor->GetMetaTypeCtor() != ibCtorObjectMetaType::ibCtorObjectMetaType_Reference)
-			continue;   // a non-reference alternative of the composite type — contributes no join
-		const ibBackendQueryableHolder* holder = dynamic_cast<const ibBackendQueryableHolder*>(ctor->GetMetaObject());
-		if (holder != nullptr)
-			if (const ibBackendQueryable* q = holder->GetQueryable())
-				targets.push_back(q);
-	}
-	return targets;
-}
+// ResolveReferenceTarget / ResolveReferenceTargets moved to ibDbTableProvider (query/dbTableProvider.cpp)
+// — the ONE provider that owns metadata. The record queryable only vends GetMetaData(); the provider
+// reads it off queryable->GetMetaData() and does clsid -> GetTypeCtor -> holder -> GetQueryable. The
+// call sites now go through queryable->GetProvider().ResolveReferenceTarget(queryable, col). (docs §22)
 // (Auto-join no longer needs dedicated self-reference / find-reference virtuals: the
 // composer derives the join keys from the columns — a referencing column resolved by
 // ResolveReferenceTarget, matched to the target's IsPrimaryKey column. The data-reference

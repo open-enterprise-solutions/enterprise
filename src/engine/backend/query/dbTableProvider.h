@@ -37,6 +37,13 @@ public:
 	ibDataQueryResult ExecuteAggregate(const ibDataQuerySpec& spec) override;
 	long ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBuilder::WriteKind kind) override;
 
+	// Reference dot-walk target resolution — THIS is the ONE metadata-owning provider (clsid ->
+	// metaData->GetTypeCtor -> holder -> GetQueryable, read off queryable->GetMetaData()). The base
+	// returns null and the computed provider forwards here, so the query-provider layer stays
+	// metadata-free while resolution has a single home. (docs/query-language-arc.md §22 dot-walk)
+	const ibBackendQueryable* ResolveReferenceTarget(const ibBackendQueryable* queryable, const ibBackendQueryColumn* refColumn) const override;
+	std::vector<const ibBackendQueryable*> ResolveReferenceTargets(const ibBackendQueryable* queryable, const ibBackendQueryColumn* refColumn) const override;
+
 	// --- multi-source: co-located server-side JOIN (docs/query-language-arc.md §22.1a) -------
 	// CanColocateJoin — is the spec's relational tree an N-way INNER/LEFT join of DISTINCT real DB
 	// tables on resolvable (explicit OR reference-derived) single-field keys, every output column

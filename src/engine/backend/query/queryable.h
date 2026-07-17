@@ -363,23 +363,9 @@ public:
 	// key authority. The uuid stays a second link key (this identity tail) until cleaned.
 	virtual std::vector<ibQuerySortItem> GetIdentitySort() const = 0;
 
-	// Resolve a single-target reference COLUMN of this queryable to the queryable of
-	// the object it points at — the dot-walk join target. Works off the column's type
-	// (ibBackendQueryColumn::GetTypeDesc) + this queryable's metadata. Null if the
-	// column is not a reference, is polymorphic (more than one target type), or the
-	// target vends no queryable. Navigation lives on the queryable (it owns the
-	// metadata context); the door just chains the result. (docs §22 dot-walk)
-	virtual const ibBackendQueryable* ResolveReferenceTarget(const ibBackendQueryColumn* refColumn) const { return nullptr; }
-
-	// ALL reference targets of a column — N for a COMPOSITE (multi-type) reference, 1 for a single
-	// reference, empty for a non-reference. The composite dot-walk joins one table per target and
-	// COALESCEs the leaf across them (the _RRRef[metaID] tag matches at most one). Default: wrap the
-	// single-target resolver, so non-record sources need not override. (docs §22 dot-walk)
-	virtual std::vector<const ibBackendQueryable*> ResolveReferenceTargets(const ibBackendQueryColumn* refColumn) const {
-		const ibBackendQueryable* one = ResolveReferenceTarget(refColumn);
-		return one != nullptr ? std::vector<const ibBackendQueryable*>{ one }
-		: std::vector<const ibBackendQueryable*>{};
-	}
+	// Reference dot-walk target resolution moved to the PROVIDER (ibDbTableProvider — the one metadata
+	// owner): callers use queryable->GetProvider().ResolveReferenceTarget(queryable, col). The queryable
+	// names no metadata; it only vends GetMetaData(), which the provider reads. (docs §22 dot-walk)
 
 	// The PARENT-reference column of a hierarchical record source (the parent attribute) — paired with
 	// GetPrimaryKeyColumns().front() (the self-reference) it gives the source's own parent-ref hierarchy.

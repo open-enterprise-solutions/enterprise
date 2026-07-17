@@ -58,6 +58,22 @@ public:
 	{
 		return -1;
 	}
+
+	// Resolve a reference COLUMN of `queryable` to the queryable it points at — the dot-walk join
+	// target. METADATA-BACKED, so the resolution lives in the ONE provider that owns metadata (the
+	// DB provider: clsid -> GetTypeCtor -> holder -> GetQueryable, read off queryable->GetMetaData);
+	// the computed provider FORWARDS to it, every other provider inherits null. This query-provider
+	// layer names NO metadata — only the signature. (docs/query-language-arc.md §22 dot-walk)
+	virtual const ibBackendQueryable* ResolveReferenceTarget(const ibBackendQueryable* /*queryable*/,
+	                                                         const ibBackendQueryColumn* /*refColumn*/) const { return nullptr; }
+	// ALL reference targets of a column — N for a COMPOSITE (multi-type) reference, 1 for a single
+	// reference, empty for a non-reference. Default wraps the single-target resolver. (docs §22)
+	virtual std::vector<const ibBackendQueryable*> ResolveReferenceTargets(const ibBackendQueryable* queryable,
+	                                                                        const ibBackendQueryColumn* refColumn) const {
+		const ibBackendQueryable* one = ResolveReferenceTarget(queryable, refColumn);
+		return one != nullptr ? std::vector<const ibBackendQueryable*>{ one }
+		                      : std::vector<const ibBackendQueryable*>{};
+	}
 };
 
 // Computed virtual table provider — register slice / balance / turnover. Stateless:
@@ -72,6 +88,10 @@ public:
 	// (the base default would silently return the RAW rows). Enables SELECT SUM(x) FROM (subquery)
 	// and aggregates over a register slice. HAVING is not folded on the RAM path (gated above).
 	ibDataQueryResult ExecuteAggregate(const ibDataQuerySpec& spec) override;
+	// Reference dot-walk resolution over a COMPUTED source — FORWARDS to the DB provider (the one
+	// metadata owner); this layer names no metadata. Makes Balance.Item.Name resolve on the RAM path.
+	const ibBackendQueryable* ResolveReferenceTarget(const ibBackendQueryable* queryable, const ibBackendQueryColumn* refColumn) const override;
+	std::vector<const ibBackendQueryable*> ResolveReferenceTargets(const ibBackendQueryable* queryable, const ibBackendQueryColumn* refColumn) const override;
 };
 
 // ==========================================================================

@@ -15,6 +15,7 @@
 #include "backend/composition/dataComposer.h"      // ibDataDBComposer — render → SQL
 #include "backend/composition/listFetchDriver.h"   // ibListFetchDriver — the universal composer-fetch sink
 #include "backend/query/dataQueryBuilder.h"        // ibReadPageRequest — the page envelope
+#include "backend/query/queryProvider.h"           // ibBackendQueryProvider — GetProvider().ResolveReferenceTarget (dot-walk hop)
 #include "backend/system/value/valueType.h"        // ibValueTypeDescription::AdjustValue — typed empty parent ref (hierarchy roots)
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject — drilled folder guid
 #include "backend/uniqueKey.h"                      // ibUniqueKey — GetItemKey builds the row's reference key
@@ -329,7 +330,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 			leaf = walk->ResolveColumnByName(rest.BeforeFirst(wxT('.')));
 			rest = rest.AfterFirst(wxT('.'));
 			if (leaf == nullptr) break;
-			if (!rest.IsEmpty()) walk = walk->ResolveReferenceTarget(leaf);   // hop into the reference target
+			if (!rest.IsEmpty()) walk = walk->GetProvider().ResolveReferenceTarget(walk, leaf);   // hop into the reference target
 		}
 		return (leaf != nullptr && rest.IsEmpty()) ? leaf->GetColumnId() : ibMetaID(wxNOT_FOUND);
 	};

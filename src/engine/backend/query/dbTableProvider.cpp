@@ -18,6 +18,7 @@
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/valueInfo.h"                                    // ibReference (physical reference blob, GetQueryTableId source)
 #include "backend/metaData.h"                                     // ibMetaData (threaded through reads/writes)
+#include "backend/objCtor.h"                                      // ibCtorMetaValueType::GetQueryable — reference-target resolution (clsid -> ctor -> queryable, no cast)
 #include "backend/system/value/valueType.h"                      // ibValueTypeDescription::AdjustValue (dot-walk typed empty)
 
 #include <map>          // dot-walk join dedup
@@ -327,7 +328,7 @@ const ibBackendQueryColumn* ColocatedSelfRef(const ibBackendQueryable* q)
 const ibBackendQueryColumn* ColocatedRefColumnTo(const ibBackendQueryable* from, const ibBackendQueryable* to)
 {
 	for (const ibBackendQueryColumn* c : from->GetColumns())
-		if (c != nullptr && from->ResolveReferenceTarget(c) == to) return c;
+		if (c != nullptr && from->GetProvider().ResolveReferenceTarget(from, c) == to) return c;
 	return nullptr;
 }
 
@@ -734,7 +735,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildDotWalkExists(const ibBackendQueryable* que
 
 	// First hop: ref0 on the outer source -> target t0, correlated to the outer write row.
 	const ibBackendQueryColumn* ref0 = queryable->ResolveColumnByName(path[0]->GetName());
-	const ibBackendQueryable*   t0   = ref0 ? queryable->ResolveReferenceTarget(ref0) : nullptr;
+	const ibBackendQueryable*   t0   = ref0 ? queryable->GetProvider().ResolveReferenceTarget(queryable, ref0) : nullptr;
 	if (ref0 == nullptr || t0 == nullptr || SelfReferenceField(t0).empty())
 		throw std::logic_error("BuildDotWalkExists: unresolved first reference hop on the write path");
 
@@ -745,7 +746,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildDotWalkExists(const ibBackendQueryable* que
 	// Middle hops: each further reference joins its target into the subquery.
 	for (size_t i = 1; i + 1 < path.size(); ++i) {
 		const ibBackendQueryColumn* refI = owner->ResolveColumnByName(path[i]->GetName());
-		const ibBackendQueryable*   tI   = refI ? owner->ResolveReferenceTarget(refI) : nullptr;
+		const ibBackendQueryable*   tI   = refI ? owner->GetProvider().ResolveReferenceTarget(owner, refI) : nullptr;
 		if (refI == nullptr || tI == nullptr || SelfReferenceField(tI).empty())
 			throw std::logic_error("BuildDotWalkExists: unresolved reference hop on the write path (composite mid-path not supported)");
 		const wxString alias = wxString::Format(wxT("ex%d"), static_cast<int>(i));
@@ -1042,7 +1043,7 @@ public:
 		wxString curQual = m_rootTable, prefixKey;
 		for (size_t i = 0; i + 1 < path.size(); ++i) {
 			const ibBackendQueryColumn* refCol = path[i];
-			const ibBackendQueryable* tgtQ = (curQ != nullptr) ? curQ->ResolveReferenceTarget(refCol) : nullptr;
+			const ibBackendQueryable* tgtQ = (curQ != nullptr) ? curQ->GetProvider().ResolveReferenceTarget(curQ, refCol) : nullptr;
 			const wxString tgtRefField = (tgtQ != nullptr) ? SelfReferenceField(tgtQ) : wxString();
 			if (tgtQ == nullptr || tgtRefField.empty()) return false;
 			prefixKey += wxString::Format(wxT("%p|"), (const void*)refCol);
@@ -1122,7 +1123,11 @@ ibDataQueryResult ibDbTableProvider::ExecuteAggregate(const ibDataQuerySpec& spe
 			const std::vector<const ibBackendQueryColumn*>& path = (gi < groupPaths.size()) ? groupPaths[gi]
 			                                                      : std::vector<const ibBackendQueryColumn*>{};
 			const wxString qual = path.empty() ? mainQual : joinLeaf(path);   // dot-walk leaf -> join alias
-			for (const wxString& field : ColumnValueFields(gcol)) {   // tier derives its fields — no ResolveAttribute
+			// The group key GROUPs + projects by its FULL spread (ColumnFieldNames): a reference / variant key
+			// carries its TYPE + _RTRef + _RRRef fields so the read side reconstructs the value via GetValue; a
+			// plain scalar's spread IS its one field, so this is uniform. The reference-typing stays HERE in the
+			// provider — the reader just calls GetValue, blind to whether the key is a reference.
+			for (const wxString& field : ColumnFieldNames(gcol)) {   // tier derives its fields — no ResolveAttribute
 				const ibQueryExprPtr gexpr = qualCol(qual, field);
 				q.GroupBy(gexpr);
 				projection.push_back(ibQueryProjItem{ gexpr, field });   // AS its physname -> GetValue(gcol) reads it back
@@ -1312,6 +1317,13 @@ bool ibDbTableProvider::CanPageGroupLevel(const ibDataQuerySpec& spec)
 		// PLAIN scalar dimension -- a dot-walk key (path length > 1) expands to joins / a synthetic id that a
 		// single-column keyset ORDER BY cannot page by; leave it on the RAM fold.
 		if (spec.m_groupPaths != nullptr && !spec.m_groupPaths->empty() && (*spec.m_groupPaths)[0].size() > 1)
+			return false;
+		// ...and it must be a TRUE scalar. A REFERENCE / variant dimension's value is a multi-field spread
+		// (TYPE + _RTRef + _RRRef): a single-column keyset ORDER BY / anchor cannot page it, and the paged
+		// projection (ColumnValueFields) would DROP the TYPE field GetValue reconstructs from -> "field
+		// _TYPE not found". Route it to the unpaged ExecuteAggregate (full-spread GROUP BY) -- grouping by a
+		// reference has no meaningful keyset order anyway (its id, not its presentation). Scalar = 1 field.
+		if (ColumnFieldNames((*spec.m_groupBy)[0]).size() > 1)
 			return false;
 		// SINGLE real DB source -- no relational tree, or a lone Source node. A JOIN / UNION group needs
 		// co-location (a later step). The common case: a catalog / register grouped by one of its own fields.
@@ -1692,7 +1704,7 @@ bool ibDbTableProvider::CanRollupTotalsShape(const ibDataQuerySpec& spec)
 				if (gp.empty()) continue;
 				const ibBackendQueryable* walk = q;
 				for (size_t s = 0; s + 1 < gp.size() && walk != nullptr; ++s)
-					walk = walk->ResolveReferenceTarget(gp[s]);
+					walk = walk->GetProvider().ResolveReferenceTarget(walk, gp[s]);
 				if (walk == nullptr) return false;   // an unresolvable hop -> RAM-fold
 			}
 		// Group keys: SCALAR or a REFERENCE / variant (a reference groups by its full spread as ONE composite
@@ -2264,7 +2276,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 							out.push_back(ibCol(ownerQual, FirstSqlFieldOfColumn(col)));
 							return;
 						}
-						if (const ibBackendQueryable* single = ownerQ->ResolveReferenceTarget(col)) {
+						if (const ibBackendQueryable* single = ownerQ->GetProvider().ResolveReferenceTarget(ownerQ, col)) {
 							const wxString f = SelfReferenceField(single);
 							if (f.empty()) return;
 							walk(chain.AddLeftJoin(single->GetQueryTableName(), ownerQual, FirstSqlFieldOfColumn(col), f),
@@ -2275,7 +2287,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 						// A REGISTER's Recorder is a composite of MANY document types (15+); a field
 						// pulled through it often exists on only ONE. Join ONLY the types that actually have the next
 						// segment — no point in 15 LEFT JOINs for a field on 1. The deeper tail still self-skips.
-						for (const ibBackendQueryable* tq : ownerQ->ResolveReferenceTargets(col)) {
+						for (const ibBackendQueryable* tq : ownerQ->GetProvider().ResolveReferenceTargets(ownerQ, col)) {
 							if (tq->ResolveColumnByName(path[seg + 1]->GetName()) == nullptr) continue;
 							const wxString f = SelfReferenceField(tq);
 							if (f.empty()) continue;
@@ -2350,7 +2362,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 								occs.push_back(LeafOcc{ ownerQual, col, ownerQ });
 								return;
 							}
-							if (const ibBackendQueryable* single = ownerQ->ResolveReferenceTarget(col)) {
+							if (const ibBackendQueryable* single = ownerQ->GetProvider().ResolveReferenceTarget(ownerQ, col)) {
 								const wxString f = SelfReferenceField(single);
 								if (f.empty()) return;
 								collect(chain.AddLeftJoin(single->GetQueryTableName(), ownerQual, FirstSqlFieldOfColumn(col), f),
@@ -2358,7 +2370,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 								return;
 							}
 							sawComposite = true;
-							for (const ibBackendQueryable* tq : ownerQ->ResolveReferenceTargets(col)) {
+							for (const ibBackendQueryable* tq : ownerQ->GetProvider().ResolveReferenceTargets(ownerQ, col)) {
 								if (tq->ResolveColumnByName(fp[seg + 1]->GetName()) == nullptr) continue;
 								const wxString f = SelfReferenceField(tq);
 								if (f.empty()) continue;
@@ -2602,6 +2614,55 @@ bool ibDbTableProvider::GetValueAttribute(const wxString& fieldName, ibFieldType
 	const ibValueMetaObjectAttributeBase* attr, ibValue& retValue, ibQueryResult& result, bool createData)
 {
 	return ibColumnCodec::ReadField(fieldName, static_cast<int>(fieldType), attr, attr->GetMetaData(), retValue, result, createData);
+}
+
+// ==========================================================================
+// Reference dot-walk target resolution — THE metadata home in the provider layer (moved here from
+// ibRecordQueryable so the query-provider layer names no metadata). A single-target reference COLUMN
+// resolves off `queryable`'s metadata context: the clsid KIND (bit-check, no metadata lookup) says
+// reference, then metaData->GetTypeCtor vends the reference ctor and ctor->GetQueryable() the target
+// queryable by VIRTUAL dispatch — NO cast, no RTTI on this dot-walk hot path. The base provider returns
+// null; the computed provider forwards here. (docs/query-language-arc.md §22 dot-walk; kind-typing)
+// ==========================================================================
+const ibBackendQueryable* ibDbTableProvider::ResolveReferenceTarget(const ibBackendQueryable* queryable,
+                                                                    const ibBackendQueryColumn* refColumn) const
+{
+	if (queryable == nullptr || refColumn == nullptr)
+		return nullptr;
+	const ibTypeDescription& td = refColumn->GetTypeDesc();
+	if (td.GetClsidList().size() != 1)
+		return nullptr;                                  // polymorphic / non-typed -> use ResolveReferenceTargets
+	const ibClassID clsid = td.GetFirstClsid();
+	if (!IsReference(clsid))
+		return nullptr;                                  // KIND straight off the clsid bits — skip non-refs, no metadata lookup
+	const ibMetaData* metaData = queryable->GetMetaData();
+	if (metaData == nullptr)
+		return nullptr;                                  // a temp / metadata-free source has no reference reconstruction
+	const ibCtorMetaValueType* ctor = metaData->GetTypeCtor(clsid);
+	return ctor != nullptr ? ctor->GetQueryable() : nullptr;   // reference ctor -> target queryable (virtual dispatch, no cast)
+}
+
+// ALL reference targets of a COLUMN — one queryable per reference type in the column's (possibly
+// composite) type. Loops the whole CLSID list: a composite "Catalog.A or Catalog.B" yields both
+// queryables; a non-reference alternative (bit-check) and a target vending no queryable are skipped.
+std::vector<const ibBackendQueryable*> ibDbTableProvider::ResolveReferenceTargets(const ibBackendQueryable* queryable,
+                                                                                  const ibBackendQueryColumn* refColumn) const
+{
+	std::vector<const ibBackendQueryable*> targets;
+	if (queryable == nullptr || refColumn == nullptr)
+		return targets;
+	const ibMetaData* metaData = queryable->GetMetaData();
+	if (metaData == nullptr)
+		return targets;
+	for (const ibClassID& clsid : refColumn->GetTypeDesc().GetClsidList()) {
+		if (!IsReference(clsid))
+			continue;                                    // a non-reference alternative of the composite type
+		const ibCtorMetaValueType* ctor = metaData->GetTypeCtor(clsid);
+		if (ctor != nullptr)
+			if (const ibBackendQueryable* q = ctor->GetQueryable())   // virtual dispatch to the reference ctor — no cast
+				targets.push_back(q);
+	}
+	return targets;
 }
 
 // ==========================================================================

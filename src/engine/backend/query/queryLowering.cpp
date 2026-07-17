@@ -7,6 +7,7 @@
 
 #include "queryRewrite.h"                 // ibQueryRewrite — optimizer pass (AST -> AST)
 #include "queryable.h"                    // ibBackendQueryColumn / ibQueryFilterOp
+#include "queryProvider.h"                // ibBackendQueryProvider — GetProvider().ResolveReferenceTarget (dot-walk resolution)
 #include "queryableFactory.h"             // ibQueryableFactory — source-namespace resolution
 #include "backend/appData.h"              // ibApplicationData::GetQueryableFactory
 #include "backend/metaData.h"             // ibMetaData::GetSourceFactory — resolve through the query's OWN config
@@ -227,13 +228,13 @@ std::vector<const ibBackendQueryColumn*> ResolvePath(const std::vector<ibSourceB
 		}
 		cols.push_back(col);
 		if (k + 1 < path.size()) {
-			const ibBackendQueryable* next = cur->ResolveReferenceTarget(col);
+			const ibBackendQueryable* next = cur->GetProvider().ResolveReferenceTarget(cur, col);
 			if (next == nullptr) {
 				// A COMPOSITE (multi-type) reference at ANY segment: resolve the REPRESENTATIVE chain through
 				// the FIRST target (attribute names are the same across types); the provider (BuildPageIR)
 				// re-resolves + BRANCHES per type — one JOIN sub-tree per target, COALESCE the leaf. A
 				// composite mid-segment forks the path; the provider's recursive walk handles the tree.
-				const std::vector<const ibBackendQueryable*> targets = cur->ResolveReferenceTargets(col);
+				const std::vector<const ibBackendQueryable*> targets = cur->GetProvider().ResolveReferenceTargets(cur, col);
 				if (targets.empty()) {
 					Fail(e.m_line, e.m_col,
 						wxString::Format(_("'%s' is not a single-target reference (cannot walk)"), path[k]));
@@ -277,7 +278,7 @@ const ibBackendQueryColumn* ExpandDotWalkJoins(
 	wxString prefixKey;
 	for (size_t i = 0; i + 1 < pathCols.size(); ++i) {
 		const ibBackendQueryColumn* refCol = pathCols[i];
-		const ibBackendQueryable* tgtQ = (curQ != nullptr) ? curQ->ResolveReferenceTarget(refCol) : nullptr;
+		const ibBackendQueryable* tgtQ = (curQ != nullptr) ? curQ->GetProvider().ResolveReferenceTarget(curQ, refCol) : nullptr;
 		const std::vector<const ibBackendQueryColumn*> tgtKeys = (tgtQ != nullptr) ? tgtQ->GetPrimaryKeyColumns()
 		                                                                           : std::vector<const ibBackendQueryColumn*>{};
 		if (tgtQ == nullptr || tgtKeys.empty())
@@ -316,7 +317,7 @@ void ExpandRefJoinAlias(ibDataQueryBuilder& b, std::vector<ibSourceBinding>& sou
 	const ibBackendQueryable* curQ = rootQ;
 	for (size_t i = 0; i < segs.size(); ++i) {
 		const ibBackendQueryColumn* refCol = (curQ != nullptr) ? curQ->ResolveColumnByName(segs[i]) : nullptr;
-		const ibBackendQueryable*   tgtQ   = (curQ != nullptr && refCol != nullptr) ? curQ->ResolveReferenceTarget(refCol) : nullptr;
+		const ibBackendQueryable*   tgtQ   = (curQ != nullptr && refCol != nullptr) ? curQ->GetProvider().ResolveReferenceTarget(curQ, refCol) : nullptr;
 		const std::vector<const ibBackendQueryColumn*> tgtKeys = (tgtQ != nullptr) ? tgtQ->GetPrimaryKeyColumns()
 		                                                                           : std::vector<const ibBackendQueryColumn*>{};
 		if (refCol == nullptr || tgtQ == nullptr || tgtKeys.empty())

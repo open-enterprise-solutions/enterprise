@@ -23,6 +23,7 @@
 #include "backend/query/dataQueryBuilder.h"  // ibDataQuerySpec / ibQueryNode / AggregateItem
 #include "backend/query/queryable.h"         // ibBackendQueryable / ibQueryCondition
 #include "backend/query/queryColumn.h"       // ibBackendQueryColumn / ibRawDBColumn
+#include "backend/clsid.h"                    // reference_to_clsid — a reference-typed column (multi-field spread)
 
 namespace {
 
@@ -784,6 +785,21 @@ TEST(QueryComposerGate, GroupLevelPage_JoinSource_NotPageable)
 	buf.groupBy = { &aDim };
 	const ibDataQuerySpec spec = buf.Make(root.get(), &A);
 	EXPECT_FALSE(ibDbTableProvider::CanPageGroupLevel(spec));   // multi-source group -> RAM fold (co-location is a later step)
+}
+
+TEST(QueryComposerGate, GroupLevelPage_ReferenceDim_NotPageable)
+{
+	// A REFERENCE dimension is NOT a plain scalar: its value is a multi-field spread (TYPE + _RTRef + _RRRef).
+	// Keyset-paging by it would drop the TYPE field the read reconstructs from ("field <col>_TYPE not found")
+	// and has no meaningful keyset order (its id, not its presentation) -> the gate rejects it, routing to the
+	// unpaged full-spread ExecuteAggregate. Regression guard for the "grouping a table by a reference crashes".
+	TestCol dim(wxT("counterparty"), 2);
+	dim.GetTypeDesc() = ibTypeDescription(reference_to_clsid(999));   // reference-typed dimension (spread > 1 field)
+	TestQueryable A(wxT("doc"), 1); A.AddCol(&dim);
+	SpecBuf buf;
+	buf.groupBy = { &dim };
+	const ibDataQuerySpec spec = buf.Make(nullptr, &A);
+	EXPECT_FALSE(ibDbTableProvider::CanPageGroupLevel(spec));
 }
 
 TEST(QueryComposerGate, RollupTotals_ComputedLeaf_NotColocatable)

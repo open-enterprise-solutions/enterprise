@@ -370,8 +370,7 @@ public:
 	virtual const ibMetaData* GetMetaData() const override;                      // metadata context for column-based value reads
 	virtual std::vector<ibQuerySortItem> GetIdentitySort() const override;       // { uuid } — real column
 	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;   // { data-reference } — key authority
-	virtual const ibBackendQueryable* ResolveReferenceTarget(const ibBackendQueryColumn* refColumn) const override;
-	virtual std::vector<const ibBackendQueryable*> ResolveReferenceTargets(const ibBackendQueryColumn* refColumn) const override;   // composite: one per type
+	// (ResolveReferenceTarget/Targets moved to ibDbTableProvider — the provider owns metadata.)
 	virtual const ibBackendQueryColumn* GetHierarchyColumn() const override;   // the parent attribute (hierarchy key)
 	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const override;   // = m_meta (body in .cpp — the metaobject type is complete there)
 private:

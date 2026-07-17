@@ -44,6 +44,17 @@ private:
 	mutable ibTypeDescription m_type;
 };
 
+class ComputedQ;   // fwd — the fake provider reads the reference map off it
+
+// The RAM harness has no real metadata (a computed register would carry the register's), so the DB
+// provider's reference resolution returns null here. This fake provider — vended by ComputedQ::GetProvider()
+// in place of the shared computed one — resolves a reference by the map INJECTED into the ComputedQ, so the
+// tests exercise the SAME provider-side dot-walk path (queryable->GetProvider().ResolveReferenceTarget).
+class FakeComputedProvider : public ibComputedProvider {
+public:
+	const ibBackendQueryable* ResolveReferenceTarget(const ibBackendQueryable* q, const ibBackendQueryColumn* col) const override;   // out-of-line: needs ComputedQ complete
+};
+
 // A COMPUTED (RAM) queryable. ComputeRows rebuilds its rows from a BUILDER each call (ibQueryRamTable is
 // move-only, so the source can't hold + copy one). Reference targets + a primary key are injected so
 // ResolveComputedDotWalks can walk + join.
@@ -55,7 +66,7 @@ public:
 	void SetRefTarget(const ibBackendQueryColumn* refCol, const ibBackendQueryable* tgt) { m_refs[refCol] = tgt; }
 	void SetPrimaryKey(const ibBackendQueryColumn* k) { m_pk = k; }
 
-	ibBackendQueryProvider& GetProvider() const override { return ibComputedProviderInstance(); }
+	ibBackendQueryProvider& GetProvider() const override { static FakeComputedProvider s_fake; return s_fake; }
 	bool     IsComputedInRam() const override { return true; }
 	ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& /*extra*/) const override {
 		return m_build ? m_build() : ibQueryRamTable();
@@ -73,7 +84,8 @@ public:
 		for (const ibBackendQueryColumn* c : m_cols) if (c == col) return true;
 		return false;
 	}
-	const ibBackendQueryable* ResolveReferenceTarget(const ibBackendQueryColumn* c) const override {
+	// The reference map, read by FakeComputedProvider::ResolveReferenceTarget (resolution is provider-side now).
+	const ibBackendQueryable* RefTarget(const ibBackendQueryColumn* c) const {
 		auto it = m_refs.find(c);
 		return it != m_refs.end() ? it->second : nullptr;
 	}
@@ -92,6 +104,12 @@ private:
 	std::map<const ibBackendQueryColumn*, const ibBackendQueryable*> m_refs;
 	const ibBackendQueryColumn* m_pk = nullptr;
 };
+
+// Reference resolution over the fake computed source — reads the map injected into the ComputedQ.
+const ibBackendQueryable* FakeComputedProvider::ResolveReferenceTarget(const ibBackendQueryable* q, const ibBackendQueryColumn* col) const {
+	const ComputedQ* cq = dynamic_cast<const ComputedQ*>(q);
+	return cq != nullptr ? cq->RefTarget(col) : nullptr;
+}
 
 // Column ids for the shared scenario.
 const ibMetaID ITEM_KEY = 10, ITEM_NAME = 11, BAL_ITEM = 20, BAL_QTY = 21, BAL_PRICE = 22;
@@ -258,6 +276,26 @@ TEST_F(ComputedFix, ComputedAggregate_GroupBy)
 		totals[res.GetValue(&balItem).GetString().ToStdString()] = res.GetColumn(wxT("total")).GetInteger();
 	EXPECT_EQ(totals["K1"], 260);
 	EXPECT_EQ(totals["K2"], 150);
+}
+
+// GROUP BY Item.Name, SUM(Qty) — a DOT-WALK group KEY over a computed source: the register can't group by
+// the reference's FIELD; the provider joins the leaf and folds by it. This is the RAM analog of the SERVER
+// path (a promoted temp joins the target catalog through the same ibRefJoinChain). Apple(K1): 100+30=130;
+// Pear(K2): 50.
+TEST_F(ComputedFix, DotWalk_GroupByReferenceField)
+{
+	ibDataQueryBuilder q(nullptr);
+	q.From(&balance);
+	q.GroupBy(std::vector<const ibBackendQueryColumn*>{ &balItem, &itemName });   // GROUP BY Item.Name (dot-walk key)
+	q.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, &balQty, wxT("totalQty"));
+	ibDataQueryResult res = q.SelectAggregate();
+
+	std::map<std::string, long> totals;
+	while (res.Next())
+		totals[res.GetValue(&itemName).GetString().ToStdString()] = res.GetColumn(wxT("totalQty")).GetInteger();
+	EXPECT_EQ(totals.size(), 2u);
+	EXPECT_EQ(totals["Apple"], 130);   // K1 rows: 100 + 30
+	EXPECT_EQ(totals["Pear"],  50);    // K2 row
 }
 
 // GROUP BY Item HAVING SUM(Qty) > 100 — group filtering the register can't do; the RAM fold does.
