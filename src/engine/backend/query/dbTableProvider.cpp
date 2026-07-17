@@ -1299,6 +1299,82 @@ bool ibDbTableProvider::CanColocateAggregate(const ibDataQuerySpec& spec)
 		return true;
 	}
 
+// Single-level group KEYSET paging gate (docs: group-level paging). A drill fetches ONE grouping level at a
+// time; when that level is a single PLAIN scalar dimension over a SINGLE real DB source, its groups run
+// server-side as GROUP BY dim ORDER BY dim [dim > anchor] LIMIT count -- a keyset-paged group read -- rather
+// than reading every detail row and folding all groups in RAM. Multi-level / dot-walk / multi-source groups
+// keep the fold (a multi-source group is a co-location follow-up, mirroring the JOIN/UNION push-downs).
+bool ibDbTableProvider::CanPageGroupLevel(const ibDataQuerySpec& spec)
+	{
+		// Exactly one grouping level (the per-level drill).
+		if (spec.m_groupBy == nullptr || spec.m_groupBy->size() != 1) return false;
+		if ((*spec.m_groupBy)[0] == nullptr) return false;
+		// PLAIN scalar dimension -- a dot-walk key (path length > 1) expands to joins / a synthetic id that a
+		// single-column keyset ORDER BY cannot page by; leave it on the RAM fold.
+		if (spec.m_groupPaths != nullptr && !spec.m_groupPaths->empty() && (*spec.m_groupPaths)[0].size() > 1)
+			return false;
+		// SINGLE real DB source -- no relational tree, or a lone Source node. A JOIN / UNION group needs
+		// co-location (a later step). The common case: a catalog / register grouped by one of its own fields.
+		if (spec.m_root != nullptr && spec.m_root->m_kind != ibQueryNode::Kind::Source) return false;
+		if (spec.m_queryable == nullptr) return false;
+		// No key-in / computed-select complications ride this path (each has its own handling).
+		if (spec.m_keyIn != nullptr && !spec.m_keyIn->empty()) return false;
+		if (spec.m_selectExprs != nullptr && !spec.m_selectExprs->empty()) return false;
+		return true;
+	}
+
+// ExecuteGroupLevelPage -- the single-level group KEYSET page (gate: CanPageGroupLevel). Runs the level's groups
+// server-side instead of reading every detail row + folding in RAM: SELECT dim [, aggs] FROM src WHERE <conds>
+// [AND dim </> anchor] GROUP BY dim ORDER BY dim LIMIT count. The dim is the group key AND the sort/keyset column,
+// so the page is positioned by the anchor group's dim value (page.m_anchorSortValues, stamped by the model from the
+// browsed anchor group). Mirrors ExecuteAggregate (single-source GROUP BY) + the read path's keyset ORDER/anchor/LIMIT.
+ibDataQueryResult ibDbTableProvider::ExecuteGroupLevelPage(const ibDataQuerySpec& spec, const ibReadPageRequest& page)
+	{
+		const ibBackendQueryable* queryable = spec.m_queryable;
+		const wxString            mainTable  = queryable->GetQueryTableName();
+		const wxString            mainQual;   // single PLAIN source (the gate rejects dot-walk / joins) -> no qualifier
+		const ibBackendQueryColumn* dim = (*spec.m_groupBy)[0];
+
+		ibDatabaseQueryBuilder q(spec.m_holder);
+
+		// WHERE = the persistent conditions + boolean predicate (the drill SCOPE filters + the user filter + an RLS
+		// semi-join all ride here, exactly as the detail read renders them).
+		if (auto predicate = ibMetaIRBuilder::BuildWhere(queryable, *spec.m_conditions, spec.m_predicate, mainQual))
+			q.Where(predicate);
+
+		// GROUP BY the dimension + project it back AS its physname, so GetValue(dim) reads the group's value.
+		std::vector<ibQueryProjItem> projection;
+		for (const wxString& field : ColumnValueFields(dim)) {
+			const ibQueryExprPtr gexpr = ibCol(field);
+			q.GroupBy(gexpr);
+			projection.push_back(ibQueryProjItem{ gexpr, field });
+		}
+		for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates) {
+			std::vector<ibQueryExprPtr> args;
+			args.push_back(a.m_col != nullptr ? ibCol(FirstSqlFieldOfColumn(a.m_col)) : ibCol(wxT("*")));
+			projection.push_back(ibQueryProjItem{ ibFunc(AggregateFnName(a.m_fn), std::move(args)), a.m_alias });
+		}
+		q.Project(std::move(projection));
+
+		// ORDER BY the group dimension -- the total order the keyset page rides (Backward flips it). The dim is the
+		// single sort key of this level; the identity tail is unneeded (a distinct dim value is its own unique key).
+		ibQuerySortItem dimSortItem; dimSortItem.m_col = dim; dimSortItem.m_ascending = true;
+		const std::vector<ibQuerySortItem> dimSort = { dimSortItem };
+		for (const ibQuerySortKey& key : ibMetaIRBuilder::BuildSortKeys(queryable, dimSort, page.m_reverseSort, mainQual))
+			q.AddSortKey(key);
+
+		// KEYSET: dim </> the anchor group's dim value. Empty anchor = the first page (top / bottom by direction).
+		if (page.m_hasAnchor && !page.m_anchorSortValues.empty())
+			if (auto anchorPred = ibMetaIRBuilder::BuildAnchorPredicate(queryable, dimSort, page.m_anchorSortValues, page.m_direction, mainQual))
+				q.Where(anchorPred);
+
+		if (page.m_count > 0)
+			q.Limit(page.m_count);   // LIMIT the GROUPS (dim is the group key) -- the page-sized level, not all groups
+
+		q.From(mainTable);           // the single physical source (a plain single-table read; the gate rejects joins)
+		return ibDataQueryResult(q.Execute(), queryable);
+	}
+
 ibDataQueryResult ibDbTableProvider::ExecuteColocatedAggregate(const ibDataQuerySpec& spec)
 	{
 		ColocatedLeaves leaves;

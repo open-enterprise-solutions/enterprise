@@ -733,6 +733,59 @@ TEST(QueryComposerGate, RollupTotals_SingleSource_NotColocatable)
 	EXPECT_FALSE(ibDbTableProvider::CanColocateRollupTotals(spec));
 }
 
+// ===========================================================================
+// Routing gate — CanPageGroupLevel (single-level group KEYSET paging: one plain scalar dimension over a
+// single DB source pages its groups server-side — GROUP BY dim ORDER BY dim [dim > anchor] LIMIT count —
+// instead of reading every detail row and folding all groups in RAM). Outside the shape keeps the fold.
+// ===========================================================================
+
+TEST(QueryComposerGate, GroupLevelPage_SingleScalarDim_Pageable)
+{
+	ibRawDBColumn dim = ibRawDBColumn::String(wxT("code"));
+	TestQueryable A(wxT("TableA"), 1); A.AddCol(&dim);
+	SpecBuf buf;
+	buf.groupBy = { &dim };                                  // one plain scalar grouping level
+	const ibDataQuerySpec spec = buf.Make(nullptr, &A);      // single source (Source root)
+	EXPECT_TRUE(ibDbTableProvider::CanPageGroupLevel(spec));
+}
+
+TEST(QueryComposerGate, GroupLevelPage_TwoLevels_NotPageable)
+{
+	ibRawDBColumn dim1 = ibRawDBColumn::String(wxT("code"));
+	ibRawDBColumn dim2 = ibRawDBColumn::String(wxT("region"));
+	TestQueryable A(wxT("TableA"), 1); A.AddCol(&dim1); A.AddCol(&dim2);
+	SpecBuf buf;
+	buf.groupBy = { &dim1, &dim2 };                          // two levels -> not a single-level drill
+	const ibDataQuerySpec spec = buf.Make(nullptr, &A);
+	EXPECT_FALSE(ibDbTableProvider::CanPageGroupLevel(spec));
+}
+
+TEST(QueryComposerGate, GroupLevelPage_DotWalkDim_NotPageable)
+{
+	ibRawDBColumn owner = ibRawDBColumn::Number(wxT("owner"));
+	ibRawDBColumn name  = ibRawDBColumn::String(wxT("name"));
+	TestQueryable A(wxT("TableA"), 1); A.AddCol(&owner); A.AddCol(&name);
+	SpecBuf buf;
+	buf.groupBy    = { &name };
+	buf.groupPaths = { { &owner, &name } };                 // dot-walk path (Owner.Name) -> not a single-column keyset
+	const ibDataQuerySpec spec = buf.Make(nullptr, &A);
+	EXPECT_FALSE(ibDbTableProvider::CanPageGroupLevel(spec));
+}
+
+TEST(QueryComposerGate, GroupLevelPage_JoinSource_NotPageable)
+{
+	ibRawDBColumn aKey = ibRawDBColumn::Number(wxT("a_key"));
+	ibRawDBColumn aDim = ibRawDBColumn::String(wxT("a_dim"));
+	ibRawDBColumn bKey = ibRawDBColumn::Number(wxT("b_key"));
+	TestQueryable A(wxT("TableA"), 1); A.AddCol(&aKey); A.AddCol(&aDim);
+	TestQueryable B(wxT("TableB"), 2); B.AddCol(&bKey);
+	auto root = Join2(&A, &B, &aKey, &bKey);                // multi-source join tree
+	SpecBuf buf;
+	buf.groupBy = { &aDim };
+	const ibDataQuerySpec spec = buf.Make(root.get(), &A);
+	EXPECT_FALSE(ibDbTableProvider::CanPageGroupLevel(spec));   // multi-source group -> RAM fold (co-location is a later step)
+}
+
 TEST(QueryComposerGate, RollupTotals_ComputedLeaf_NotColocatable)
 {
 	// A computed (RAM) leaf in the join can't co-locate -> the composer RAM-folds the totals tree.

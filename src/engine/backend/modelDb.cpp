@@ -206,6 +206,14 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	if (anchor.IsOk()) {
 		page.m_hasAnchor = true;
 		ibValueModel::ibComposerNode* a = GetViewData<ibValueModel::ibComposerNode>(anchor);
+		// A GROUP-LEVEL keyset page is ordered by the level's DIM alone -> the single anchor value is the anchor
+		// group's OWN dim value (the tail of its group path). The server GROUP-BY page keysets dim >/< this value;
+		// the detail sort/PK tail (else) is a detail-read cursor. (docs: group-level paging)
+		if (groupLevel) {
+			if (a != nullptr && !a->GetGroupPath().empty())
+				page.m_anchorSortValues.push_back(a->GetGroupPath().back());
+		}
+		else {
 		// A real fetched anchor carries its sort+identity values inline. A FindRowValue restore STUB carries ONLY
 		// its row-key (the PK) — resolve the rest with ONE point lookup keyed by that PK so the keyset predicate
 		// positions the page AT the row. (This is where the old per-list FindRowValue sort pre-reading moved —
@@ -244,6 +252,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 			}
 			if (dup) continue;
 			page.m_anchorSortValues.push_back(anchorValue(pk->GetColumnId()));
+		}
 		}
 	}
 

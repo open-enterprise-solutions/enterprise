@@ -93,9 +93,16 @@ public:
 	// returning the result with the totals config STAMPED (the runtime's QueryResult.Select() folds it
 	// into a grouped selection — ByGroupsHierarchy — no second query). Fills outSchema (dimension +
 	// aggregate columns, in order) for Field / property lookup. Single source. (§22.1b)
+	// `page` + `outServerGroupedLevel`: when the TOTALS is a SINGLE plain scalar level over a single source
+	// with NO measures (the nomenclature-tree drill) AND page.m_count>0, the level's groups run server-side
+	// (GROUP BY dim ORDER BY dim [keyset] LIMIT count) and *outServerGroupedLevel is set true — the caller then
+	// emits the flat groups at level 1 WITHOUT the ByGroups fold. Otherwise the usual detail-read + fold (docs:
+	// group-level paging). Defaults keep every non-paged / report / multi-level caller on the fold.
 	static ibDataQueryResult ExecuteTotals(const ibQuerySelect& ast,
 	                                       const std::map<wxString, ibValue>& params,
-	                                       std::vector<OutputColumn>& outSchema);
+	                                       std::vector<OutputColumn>& outSchema,
+	                                       const ibReadPageRequest& page = ibReadPageRequest{},
+	                                       bool* outServerGroupedLevel = nullptr);
 
 	// === L4-2 (LINQ pushdown) — recorded-lambda lowering against ONE source ===
 	// The lambda recorder (compiler/lambdaQueryAst.*) emits the same

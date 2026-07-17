@@ -508,6 +508,14 @@ ibDataQueryResult ibDataQueryBuilder::SelectAggregate() const
 	return ibQueryComposer::ExecuteAggregate(BuildSpec());
 }
 
+// Paged single-level group read (docs: group-level paging) — GROUP BY dim ORDER BY dim [dim </> anchor]
+// LIMIT count. Routes to the server-side keyset group page when the shape allows (CanPageGroupLevel), else
+// the unpaged all-groups aggregate. The single-scalar-dim TOTALS drill uses this instead of the detail fold.
+ibDataQueryResult ibDataQueryBuilder::SelectAggregatePage(const ibReadPageRequest& page) const
+{
+	return ibQueryComposer::ExecuteGroupLevelPage(BuildSpec(), page);
+}
+
 ibSelectorTree ibDataQueryBuilder::SelectTotals() const
 {
 	return ibQueryComposer::ExecuteTotals(BuildSpec());

@@ -91,6 +91,9 @@ public:
 	static ibDataQueryResult ExecuteReadCached(const ibDataQuerySpec& spec, const ibReadPageRequest& page,
 	                                           ibRenderedPageCache& cache, const wxString& signature);
 	static ibDataQueryResult ExecuteAggregate(const ibDataQuerySpec& spec);
+	// Paged single-level group read (door SelectAggregatePage): server-side GROUP BY + keyset + LIMIT when the
+	// shape is pageable (ibDbTableProvider::CanPageGroupLevel), else the unpaged ExecuteAggregate (all groups).
+	static ibDataQueryResult ExecuteGroupLevelPage(const ibDataQuerySpec& spec, const ibReadPageRequest& page);
 	static ibSelectorTree    ExecuteTotals(const ibDataQuerySpec& spec);   // totals — raw hierarchical totals tree
 	// The totals fold in isolation: detail SNAPSHOT -> subtotal tree. Pure (no DB) — unit-testable.
 	static ibSelectorTree    BuildTotalsTree(const ibQueryRamTable& detail,

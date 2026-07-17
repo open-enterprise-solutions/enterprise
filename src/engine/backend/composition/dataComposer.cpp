@@ -326,8 +326,15 @@ ibDataQueryResult ibDataDBComposer::Execute(std::vector<ibQueryLowering::OutputC
 	ibSourceMetaDataScope mdScope(m_metaData);
 
 	hasTotals = m_ast->m_hasTotals;
-	if (hasTotals)
-		return ibQueryLowering::ExecuteTotals(*m_ast, m_params, schema);
+	m_serverGroupedLevel = false;
+	if (hasTotals) {
+		// Pass THIS fetch's page so a single-scalar-dim TOTALS drill can page its groups server-side
+		// (m_serverGroupedLevel then tells Run to emit the flat groups at level 1, skipping the fold).
+		bool serverGrouped = false;
+		ibDataQueryResult r = ibQueryLowering::ExecuteTotals(*m_ast, m_params, schema, page, &serverGrouped);
+		m_serverGroupedLevel = serverGrouped;
+		return r;
+	}
 
 	wxString signature;
 	if (BuildPageSignature(page, signature)) {
@@ -353,7 +360,23 @@ bool ibDataDBComposer::Run(ibCompositionDriver& driver)
 	driver.OnColumns(schema);
 
 	std::vector<ibValue> row(schema.size());
-	if (!hasTotals) {
+	if (m_serverGroupedLevel) {
+		// Server-paged GROUPS (one grouping level, keyset-paged by the DB) — already grouped, so emit each as a
+		// level-1 DRILLABLE group node WITHOUT the ByGroups fold (which folds a flat detail snapshot). The row
+		// reads exactly like the flat cursor. (⚠ a reference-spread group value needs m_objectPrefix in the
+		// schema — a follow-up; a scalar dim reads straight. docs: group-level paging)
+		while (result.Next()) {
+			for (size_t i = 0; i < schema.size(); ++i) {
+				const ibQueryLowering::OutputColumn& oc = schema[i];
+				if (!oc.m_objectPrefix.empty() && oc.m_col != nullptr)
+					row[i] = result.GetColumnObject(oc.m_objectPrefix, oc.m_col);
+				else
+					row[i] = oc.m_byAlias ? result.GetColumn(oc.m_alias) : result.GetValue(oc.m_col);
+			}
+			driver.OnRow(1, /*hasChildren*/true, row);
+		}
+	}
+	else if (!hasTotals) {
 		// Flat result — the forward cursor; a dot-walk object leaf reassembles from
 		// its prefixed field spread (mirrors the runtime selection's ReadColumn).
 		while (result.Next()) {

@@ -54,6 +54,20 @@ public:
 	static BACKEND_API bool  CanColocateAggregate(const ibDataQuerySpec& spec);
 	static ibDataQueryResult ExecuteColocatedAggregate(const ibDataQuerySpec& spec);
 
+	// Single-level group KEYSET paging (docs: group-level paging). CanPageGroupLevel: a single PLAIN scalar
+	// grouping dimension over a SINGLE DB source -> the level's groups page server-side as
+	// GROUP BY dim ORDER BY dim [dim > anchor] LIMIT count, instead of reading EVERY detail row and folding
+	// all groups in RAM (the eager path that OOMs a nomenclature hierarchy with thousands of groups per level).
+	// Outside the shape (multi-level, a dot-walk / computed dim, a multi-source group) keeps the RAM fold.
+	// BACKEND_API + no dialect probe -> unit-testable without a DB, like the co-location gates.
+	static BACKEND_API bool CanPageGroupLevel(const ibDataQuerySpec& spec);
+
+	// The paged group-level read (gate above). SELECT dim [, aggs] FROM src WHERE <conds> [AND dim </> anchor]
+	// GROUP BY dim ORDER BY dim LIMIT count -- the dim is the group key AND the keyset column, so a page is
+	// positioned by the anchor group's dim value. Returns the groups for ONE level; the model wraps them as
+	// group nodes. (Single plain scalar dim over a single source -- the gate guarantees the shape.)
+	static ibDataQueryResult ExecuteGroupLevelPage(const ibDataQuerySpec& spec, const ibReadPageRequest& page);
+
 	// Co-located server-side UNION — the branches (each a real DB table) stack as a SQL UNION ALL of
 	// per-branch SELECTs (output columns resolved per branch by NAME, aligned by position); ORDER BY /
 	// LIMIT wrap the union in a subquery. Scalar outputs (the common catalog ∪ catalog list); a

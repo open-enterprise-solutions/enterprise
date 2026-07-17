@@ -202,8 +202,9 @@ rebuilt per fetch) through `ibApplyDynamicSettings(composer, settings)`.
 Fields are **paths**: a dot-walk (`"Ref.Owner"`) resolves to an auto-JOIN on the door. Grouping
 is any query-result field, not the table's parent column: a non-empty Group turns a flat list
 into a drillable tree via `TOTALS BY <dim>` — **including aggregate-free pure grouping**. Drill
-re-fetches scoped by the already-drilled dimension values. (Group-level rows currently load a
-whole level at once — group paging is a follow-up; detail rows page normally.)
+re-fetches scoped by the already-drilled dimension values. (A single plain scalar Elements grouping level over
+a single source pages its groups SERVER-side — a keyset `GROUP BY dim ORDER BY dim LIMIT` (§10); reports /
+dot-walk / multi-level / multi-source still load a whole level at once. Detail rows page normally.)
 
 Header-click sort is committed entirely on the **front** (`ibValueModelTableBox::OnColumnClick`
 pokes this model's composer + `RefetchAll`) — the model bridges no `{col, asc}` pair.
@@ -298,9 +299,12 @@ source-command band. Details: [paging-design.md](paging-design.md) §8.
   the web frontend over HTTP (`/fetch?parent=…&anchor=…&count=…` → JSON), but `wfrontend.cpp` is
   not yet on it (building the JSON schema ahead of a consumer would freeze it blind). Without
   paging the web client OOMs on large catalogs. See [paging-design.md](paging-design.md) §8.9.
-- **Group-level paging is a follow-up.** A grouped model loads a whole group level at once;
-  detail rows page normally. Fine for typical dimension cardinality, not for a level with
-  thousands of groups.
+- **Group-level paging — partial (server-side for the common case).** A single plain scalar **Elements**
+  grouping level over a **single source** now pages its groups server-side — a keyset `GROUP BY dim ORDER BY
+  dim [dim </> anchor] LIMIT count` (`ibDbTableProvider::ExecuteGroupLevelPage`, reached from the composer's
+  single-scalar-dim TOTALS drill via `SelectAggregatePage`) — so the nomenclature-hierarchy tree no longer
+  loads every group. Reports (measures), dot-walk / multi-level / multi-source groupings still load the whole
+  level at once and RAM-fold; the composite-`ROLLUP` / reference-spread push-down (L2-IR) is the remaining piece.
 - **The `ibVisualHost` scrollbar flash on form open is NOT the data-view.** `ibDataViewCtrl`'s
   own vertical scrollbar range is always 0; the flash is the form host (`wxScrolledWindow`)
   setting a virtual size larger than its placeholder client during build. Tracked in

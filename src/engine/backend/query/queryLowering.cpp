@@ -1257,7 +1257,9 @@ ibDataQueryResult ibQueryLowering::ExecuteImpl(const ibQuerySelect& astIn,
 
 ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
                                                  const std::map<wxString, ibValue>& params,
-                                                 std::vector<OutputColumn>& outSchema)
+                                                 std::vector<OutputColumn>& outSchema,
+                                                 const ibReadPageRequest& page,
+                                                 bool* outServerGroupedLevel)
 {
 	// Same optimizer pass as Execute — the totals path benefits from a flattened FROM
 	// and a normalized WHERE the same way. (queryRewrite.h)
@@ -1302,6 +1304,34 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	else {
 		// FROM + JOINs / single source -- shared with the non-totals read path (BuildSourceTree).
 		BuildSourceTree(ast, params, owner, sources, b);
+	}
+
+	// ⭐ SINGLE-LEVEL GROUP KEYSET PAGE (docs: group-level paging). A drill fetches ONE grouping level; when it
+	// is a single PLAIN scalar dim over a SINGLE source with NO measures (the nomenclature-hierarchy tree) AND
+	// the fetch carries a real page, run the level's groups server-side -- GROUP BY dim ORDER BY dim [keyset]
+	// LIMIT count (SelectAggregatePage -> CanPageGroupLevel) -- instead of reading EVERY detail row and folding
+	// all groups in RAM. The caller emits the flat groups at level 1 (outServerGroupedLevel), skipping the fold.
+	// Reports (measures), multi-level, dot-walk and multi-source keep the detail-read + fold below.
+	const bool multiSourceTotals = !ast.m_joins.empty() || !ast.m_unions.empty();
+	if (outServerGroupedLevel != nullptr && page.m_count > 0 && !multiSourceTotals
+	    && ast.m_totalsBy.size() == 1 && ast.m_totalsAggregates.empty()
+	    && ast.m_totalsBy[0].m_unfold == ibQueryDimUnfold::Elements) {   // flat grouping only (Hierarchy = recursive tree -> fold)
+		const std::vector<const ibBackendQueryColumn*> pathCols = ResolvePath(sources, *ast.m_totalsBy[0].m_expr);
+		if (pathCols.size() == 1) {   // plain scalar dim (no dot-walk expansion -> single-column keyset ORDER BY)
+			const ibBackendQueryColumn* leaf = pathCols.back();
+			b.GroupBy(leaf);
+			OutputColumn oc; oc.m_name = leaf->GetName(); oc.m_col = leaf;
+			outSchema.clear(); outSchema.push_back(oc);
+			// WHERE = the drill SCOPE filter + the user filter (same lowering the fold path uses below).
+			if (ast.m_where) {
+				if (IsFlatAndWhere(*ast.m_where))
+					LowerFlatWhere(b, sources, *ast.m_where, params, /*allowDotWalk*/false);
+				else
+					b.Where(BuildWherePredicate(sources, *ast.m_where, params, /*allowDotWalk*/false));
+			}
+			*outServerGroupedLevel = true;
+			return b.SelectAggregatePage(page);   // server-side GROUP BY + keyset + LIMIT -> the page's groups
+		}
 	}
 
 	outSchema.clear();
@@ -1428,8 +1458,9 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	// selection — so the result's stamped raw pointers into them stay valid through Select(). (docs §22.1b)
 	//
 	// TOP n caps the DETAIL rows the fold runs over — the first n (0 = all); the subtotals then roll over
-	// exactly those rows. The tree itself is not row-limited (a subtotal is not a detail row).
-	ibReadPageRequest page;
-	if (ast.m_top > 0) page.m_count = ast.m_top;
-	return b.Execute(page);
+	// exactly those rows. The tree itself is not row-limited (a subtotal is not a detail row). (`topPage`, not the
+	// fetch `page` parameter — the fold reads its own detail slice; the fetch page only drives the group-level fast path above.)
+	ibReadPageRequest topPage;
+	if (ast.m_top > 0) topPage.m_count = ast.m_top;
+	return b.Execute(topPage);
 }

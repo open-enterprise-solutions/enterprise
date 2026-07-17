@@ -308,6 +308,9 @@ private:
 	mutable wxString                             m_renderedText;   // the AST's key
 	mutable ibQuerySelectPtr                     m_ast;
 	mutable std::shared_ptr<ibRenderedPageCache> m_pageCache;
+	// Set by Execute when a TOTALS fetch took the server-side single-level GROUP-BY keyset page (not the detail
+	// read + fold): Run then emits the flat groups at level 1 without ByGroups. (docs: group-level paging)
+	mutable bool                                 m_serverGroupedLevel = false;
 	struct Source
 	{
 		wxString m_namespace;

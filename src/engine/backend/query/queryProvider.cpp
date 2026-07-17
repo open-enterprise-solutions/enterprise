@@ -2028,6 +2028,17 @@ ibValue ibQueryComposer::EvalColumnExpr(const ibQueryColumnExpr* expr, const ibQ
 	return EvalColumnExprRow(expr, table, row);   // the per-row computed-column evaluator (defined above)
 }
 
+// ExecuteGroupLevelPage — the paged single-level group read (door SelectAggregatePage). On a pageable shape
+// (CanPageGroupLevel: one plain scalar dim over a single source) the level's groups run server-side as
+// GROUP BY dim ORDER BY dim [dim </> anchor] LIMIT count — a keyset-paged group read; otherwise the unpaged
+// aggregate (all groups). The lowering's single-scalar-dim TOTALS drill routes here instead of the RAM fold.
+ibDataQueryResult ibQueryComposer::ExecuteGroupLevelPage(const ibDataQuerySpec& spec, const ibReadPageRequest& page)
+{
+	if (ibDbTableProvider::CanPageGroupLevel(spec))
+		return ibDbTableProvider::ExecuteGroupLevelPage(spec, page);
+	return ExecuteAggregate(spec);   // not pageable server-side -> unpaged all-groups (defensive fallback)
+}
+
 // totals (hierarchical totals): fold the detail rows into a subtotal TREE. The group
 // columns are the LEVELS (in order); the aggregates the sums folded at every level + the
 // grand total. Input = the single source materialised, or the composed multi-source

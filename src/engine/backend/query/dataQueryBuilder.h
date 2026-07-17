@@ -513,6 +513,12 @@ public:
 	// GetColumn(alias). Single-source = physical DB GROUP BY; multi-source = RAM.
 	[[nodiscard]] ibDataQueryResult SelectAggregate() const;
 
+	// Paged single-level group read (docs: group-level paging) — GROUP BY + keyset + LIMIT, so a grouping
+	// level with thousands of groups (nomenclature hierarchy) pages server-side instead of loading every
+	// group. Routes to the provider's ExecuteGroupLevelPage on a pageable shape (CanPageGroupLevel), else
+	// the unpaged SelectAggregate. Used by the lowering's single-scalar-dim TOTALS drill.
+	[[nodiscard]] ibDataQueryResult SelectAggregatePage(const ibReadPageRequest& page) const;
+
 	// Totals terminal (hierarchical totals) — returns the RAW totals TREE (ibSelectorTree), NOT a
 	// flat group set and NOT a paged cursor. The GroupBy() columns are the LEVELS in order
 	// (TOTALS field1, field2), Sum()/… the folded aggregates (BY sum1, sum2); the
