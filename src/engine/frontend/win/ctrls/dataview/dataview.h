@@ -33,7 +33,7 @@ class WXDLLIMPEXP_FWD_CORE wxImageList;
 class wxItemAttr;
 class ibHeaderGenericCtrl;
 
-#include "backend/tableView.h"
+#include "backend/modelView.h"
 #include "headerctrlg.h"
 #include "frontend/frontend.h"
 

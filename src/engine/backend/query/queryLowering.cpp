@@ -9,7 +9,7 @@
 #include "queryableFactory.h"             // ibQueryableFactory — source-namespace resolution
 #include "backend/appData.h"              // ibApplicationData::GetQueryableFactory
 #include "backend/metaData.h"             // ibMetaData::GetSourceFactory — resolve through the query's OWN config
-#include "backend/tableInfo.h"            // ibComparisonType
+#include "backend/model.h"            // ibComparisonType
 #include "backend/backend_exception.h"    // ibBackendCoreException
 
 // --- the AUXILIARY per-query temp-source registry (decl in queryable.h) ------------

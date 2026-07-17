@@ -7,7 +7,7 @@
 #include "backend/backend_exception.h"
 
 // L5-1 composer — full type to bind the base m_composer to this table's source in the ctor (the RAM
-// queryable itself now lives in tableInfo.cpp, generalised onto ibValueModelStorage).
+// queryable itself now lives in model.cpp, generalised onto ibValueModelStorage).
 #include "backend/composition/dataComposer.h"   // ibDataDBComposer — m_composer.FromSource(...)
 
 //////////////////////////////////////////////////////////////////////

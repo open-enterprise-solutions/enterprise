@@ -60,7 +60,7 @@ list, enum list, register list, folder tree — see [paging-design.md](paging-de
 that history). All of it was **retired** into one composer-rendering primitive:
 
 ```cpp
-// ibValueModel (tableInfo.h) — PURE VIRTUAL, realised per SOURCE KIND, not per table type.
+// ibValueModel (model.h) — PURE VIRTUAL, realised per SOURCE KIND, not per table type.
 // The body renders the model's composer to a page; the composer is the source of truth.
 virtual unsigned int RunComposerPage(const ibDataViewItem& parent, const ibDataViewItem& anchor,
     int count, ibFetchDirection dir, ibDataViewItemArray& out) const = 0;
@@ -70,8 +70,8 @@ Two realisations, and only two:
 
 | Realisation | Source | What it does | Rows it hands out |
 |---|---|---|---|
-| `ibValueModelCursor::RunComposerPage` (`tableInfoDb.cpp`) | a queryable (DB) | render the composer → SQL → **keyset** page → walk driver rows | **COPY** nodes (`ibComposerNode`) |
-| `ibValueModelStorage::RunComposerPage` (`tableInfoRam.cpp`) | `ibRamValueStorage` (live nodes) | `ibDataRamComposer::ComputeOrder` filters + sorts the live rows **in place**, windowed by anchor | the **LIVE** storage node (the node IS the row) |
+| `ibValueModelCursor::RunComposerPage` (`modelDb.cpp`) | a queryable (DB) | render the composer → SQL → **keyset** page → walk driver rows | **COPY** nodes (`ibComposerNode`) |
+| `ibValueModelStorage::RunComposerPage` (`modelRam.cpp`) | `ibRamValueStorage` (live nodes) | `ibDataRamComposer::ComputeOrder` filters + sorts the live rows **in place**, windowed by anchor | the **LIVE** storage node (the node IS the row) |
 
 Every table type in the product — dynamic list, table-of-values, tabular section, register
 recordset — is one of these two by inheritance (§7). Filter / sort / group are **not** per-model:
@@ -86,11 +86,11 @@ A table is two collaborating bases fused into one runtime object:
 
 | Layer | Class | Lives | Is |
 |---|---|---|---|
-| **View contract** | `ibDataViewModel` | `backend/tableView.h` | wx-neutral: what a data-view control needs (values, hierarchy, notifier, paged fetch) |
-| **Script + composition** | `ibValueModel` | `backend/tableInfo.h` | `ibValue` + tabular command/data object: the model as a script value, owner of the L5 composer |
+| **View contract** | `ibDataViewModel` | `backend/modelView.h` | wx-neutral: what a data-view control needs (values, hierarchy, notifier, paged fetch) |
+| **Script + composition** | `ibValueModel` | `backend/model.h` | `ibValue` + tabular command/data object: the model as a script value, owner of the L5 composer |
 
 `ibValueModel` does **not** inherit `ibDataViewModel` — it *owns a bridge* to it, a nested
-`ibDataViewModelProviderImpl m_modelProvider` (tableInfo.h) that forwards every view virtual
+`ibDataViewModelProviderImpl m_modelProvider` (model.h) that forwards every view virtual
 (`GetValue` / `GetParent` / `GetFirstFetch` / `GetFeatures` / …) to the owning value-model:
 
 ```cpp
@@ -111,7 +111,7 @@ inherited by every subclass, so the class factory reports them all as tables by 
 Rows are **refcount-aware** and carry their own queries, so the model shrinks to "produce items,
 accept writes, notify".
 
-- **`ibDataViewObject : wxRefCounter`** (`tableView.h`) — the base every row/node subclass
+- **`ibDataViewObject : wxRefCounter`** (`modelView.h`) — the base every row/node subclass
   (`ibComposerNode`, `ibValueTreeNode`, `ibValueTableRow`) derives. Virtuals live **on the row**,
   not the model: `IsContainer()`, `GetParentItem()`, `IsEqualTo()` (logical row equality across
   re-fetch behind a fresh pointer), `IsAttached()` (row survives its model's Clear via refcount →
@@ -141,7 +141,7 @@ GetPrevFetch  → anchor ? RunComposerPage(…, Backward) : 0
 ```
 
 - **`parent`** = the scope. Invalid item = the invisible root (top-level rows). The sentinel
-  `s_constIgnoreParent` (tableView.h) = a FLAT scan of a *hierarchical* source (one `ORDER BY`
+  `s_constIgnoreParent` (modelView.h) = a FLAT scan of a *hierarchical* source (one `ORDER BY`
   over the whole table instead of recursing per folder) — the front's List view passes it.
 - **`anchor`** = the keyset cursor: the last (Forward) / first (Backward) loaded row. Not a
   positional offset — a concurrent insert/delete can't make pages overlap or skip. On a sort
@@ -162,6 +162,32 @@ save — the old per-list `FindRowValue` sort-value pre-read, moved into L5).
 DB round-trip never blocks the UI thread; the control marshals the result back via `CallAfter`
 and discards it if a generation token moved on (filter/sort changed mid-flight). The backend
 model itself is stateless — the prefetch deque and scroll position live in the control (§6).
+
+---
+
+## 4a. Dynamic data read — live cursor vs whole-list RAM snapshot
+
+A DB list (`ibValueModelCursor`) is a **live keyset cursor** by default: each fetch reads one page from
+the DB (§4). A `virtual bool IsDynamicRead()` (default `true`) gates a **fallback** — when a subclass
+returns `false`, the model materialises the WHOLE result set once into an in-memory `ibRamValueStorage`
+and serves every fetch / scroll / group from RAM. The DB half borrows the RAM half's paging; the two
+kinds (§1) meet.
+
+- **One primitive, two callers.** `ibValueModel::RunStoragePage(storage, composer, …)` — the RAM sibling
+  of `RunComposerPage` — pages any in-memory storage. The native RAM model passes its own
+  `m_storage`/`m_composer`; a Cursor with dynamic-read OFF passes its `m_snapshot`/`m_snapshotComposer`.
+  One windowing rule, no duplication.
+- **`EnsureSnapshot()`** renders the persistent filter + sort into ONE unbounded flat SELECT (grouping and
+  the page limit dropped), walks every row into a copy node, and adopts it into `m_snapshot`. Grouping is
+  mirrored onto the snapshot composer and rebuilt IN RAM (`RunStoragePage`); filter / sort are already
+  baked into the materialised order.
+- **Invalidation is free.** The snapshot re-materialises only when the view generation moves — a refresh /
+  filter / sort change bumps it, a scroll does not. Scrolling reuses the snapshot; a settings change reloads
+  it. (The silent `AddValue` bumps the counter per row, so the generation is captured AFTER the fill.)
+- **The toggle** is the dynamic list's `DynamicRead` designer property (default = live). OFF is the safety
+  net for when cursor paging misbehaves, or a small / stable list where liveness doesn't matter — at the
+  cost of loading the whole result into memory and a static (refresh-to-update) view. A self-hierarchy
+  source flattens under it (the parent-ref tree is a live-cursor feature).
 
 ---
 
@@ -186,7 +212,7 @@ pokes this model's composer + `RefetchAll`) — the model bridges no `{col, asc}
 
 ## 6. Notifier + refresh — pure push, single entry
 
-`ibDataViewModelNotifier` (`tableView.h`) is **PURE PUSH**: the model tells the front WHAT
+`ibDataViewModelNotifier` (`modelView.h`) is **PURE PUSH**: the model tells the front WHAT
 CHANGED (`ItemInserted` / `ItemDeleted` / `ItemChanged` / `ValueChanged` / `BeforeReset` /
 `AfterReset` / `Cleared` / `Resort`) and nothing else. Everything the notifier used to *pull*
 (selection, drill parent, page size, view mode) is gone — the control owns selection + page
@@ -253,10 +279,10 @@ source-command band. Details: [paging-design.md](paging-design.md) §8.
 
 | File | Holds |
 |---|---|
-| `backend/tableView.{h,cpp}` | `ibDataViewModel`, `ibDataViewItem`, `ibDataViewObject`, notifier, `ibFetchDirection`, `s_constIgnoreParent` |
-| `backend/tableInfo.h` + `tableInfo.cpp` | `ibValueModel`, the provider bridge, `Get*Fetch` defaults, `RefetchAll`, `ResolveAnchorByKey`, `m_listSettings` |
-| `backend/tableInfoDb.cpp` | `ibValueModelCursor::RunComposerPage` — DB keyset fetch |
-| `backend/tableInfoRam.cpp` | `ibValueModelStorage::RunComposerPage` — RAM in-place fetch; `ibValueModelRamTableBase` |
+| `backend/modelView.{h,cpp}` | `ibDataViewModel`, `ibDataViewItem`, `ibDataViewObject`, notifier, `ibFetchDirection`, `s_constIgnoreParent` |
+| `backend/model.h` + `model.cpp` | `ibValueModel`, the provider bridge, `Get*Fetch` defaults, `RefetchAll`, `ResolveAnchorByKey`, `m_listSettings` |
+| `backend/modelDb.cpp` | `ibValueModelCursor::RunComposerPage` — DB keyset fetch |
+| `backend/modelRam.cpp` | `ibValueModelStorage::RunComposerPage` — RAM in-place fetch; `ibValueModelRamTableBase` |
 | `backend/composition/ramComposer.{h,cpp}` | `ibDataRamComposer::ComputeOrder` (RAM filter/sort) |
 | `backend/composition/listFilter.h` | `ibValueListSettings`, `ibApplyDynamicSettings` |
 | `system/value/valueTable.h` | `ibValueModelTable` (table-of-values) |

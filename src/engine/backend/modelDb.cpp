@@ -3,15 +3,15 @@
 //	Description : DB value-model (L5-1 fetch)
 ////////////////////////////////////////////////////////////////////////////
 //
-// The DB half of the value-model, split out of tableInfo.cpp: ibValueModelCursor::RunComposerPage (render the
+// The DB half of the value-model, split out of model.cpp: ibValueModelCursor::RunComposerPage (render the
 // settings → SQL → keyset page → walk → COPY nodes; hierarchy drill via GROUPING) + ibValueModel::ResolveAnchorByKey
 // (the point lookup a FindRowValue restore stub positions on). A DB model reads dynamically from the cursor — no
-// stored rows. The RAM half lives in tableInfoRam.cpp; the shared ibValueModel base + the node lives in tableInfo.cpp.
+// stored rows. The RAM half lives in modelRam.cpp; the shared ibValueModel base + the node lives in model.cpp.
 
-#include "tableInfo.h"
+#include "model.h"
 
 #include "backend/backend_exception.h"             // ibBackendException — the fetch's catch/restore-scope guard
-#include "backend/tableView.h"                     // s_constIgnoreParent / ibDataViewItem
+#include "backend/modelView.h"                     // s_constIgnoreParent / ibDataViewItem
 #include "backend/composition/dataComposer.h"      // ibDataDBComposer — render → SQL
 #include "backend/composition/listFetchDriver.h"   // ibListFetchDriver — the universal composer-fetch sink
 #include "backend/query/dataQueryBuilder.h"        // ibReadPageRequest — the page envelope
@@ -20,11 +20,85 @@
 #include "backend/uniqueKey.h"                      // ibUniqueKey — GetItemKey builds the row's reference key
 
 
+// ibValueModelCursor::EnsureSnapshot — DynamicRead OFF: materialise the WHOLE result set into m_snapshot ONCE, then
+// every fetch / scroll / group serves from RAM (RunStoragePage). Re-materialises only when the view generation moved
+// (a refresh / filter / sort change bumps it; a scroll does not). The SQL read applies the persistent FILTER + SORT
+// but drops GROUPING + the page limit (the whole detail set in one shot); grouping is mirrored onto the snapshot
+// composer and rebuilt IN RAM. `this` is const — the fill goes through the const-model storage ops, NO const_cast. A
+// self-hierarchy source flattens here (RAM has no parent-ref tree — that is a live-cursor feature).
+void ibValueModelCursor::EnsureSnapshot() const
+{
+	if (m_snapshotValid && m_snapshotGen == GetViewGeneration())
+		return;                                           // snapshot current — reuse across scroll
+
+	m_snapshot.Clear(this, false);                        // drop the previous materialisation (silent)
+
+	const ibBackendQueryable* q = GetSourceQueryable();
+	if (q != nullptr) {
+		// Read the WHOLE detail set in ONE unbounded flat SELECT (persistent filter + sort applied; grouping OUT).
+		ibReadPageRequest page;
+		page.m_direction  = ibFetchDirection::Reset;
+		page.m_count      = 0;                            // 0 = unbounded (every row)
+		page.m_flatScan   = true;
+		page.m_isTopLevel = true;
+
+		ibDataDBComposer& composer = m_composer;
+		const ibDataComposer::SettingsScope scope = composer.MarkScope();
+		const std::vector<std::pair<wxString, ibQueryDimUnfold>> savedGroups = composer.TakeGroups();   // detail read
+		ibListFetchDriver driver(page);
+		try {
+			composer.Run(driver);
+		}
+		catch (const ibBackendException&) {
+			composer.PutGroups(savedGroups);
+			composer.RestoreScope(scope);
+			throw;
+		}
+		composer.PutGroups(savedGroups);
+		composer.RestoreScope(scope);
+
+		// Mirror the persistent GROUPING onto the snapshot composer — RunStoragePage builds the group tree IN RAM
+		// (the SQL read dropped it). Filter/sort are baked into the materialised order, so the snapshot composer
+		// keeps none → ComputeOrder returns the rows in their SQL order.
+		m_snapshotComposer.PutGroups(savedGroups);
+
+		// One DETAIL copy node per row (same shape as the DB detail fetch), adopted (silent) into the snapshot.
+		const std::vector<const ibBackendQueryColumn*> keyCols = q->GetPrimaryKeyColumns();
+		const ibBackendQueryColumn* folderCol = GetFolderDisplayColumn();
+		m_snapshot.Reserve(static_cast<long>(driver.Rows().size()));
+		for (const ibListFetchDriver::Row& r : driver.Rows()) {
+			if (r.m_level != 0)
+				continue;                                 // a flat / detail read emits every row at level 0
+			std::vector<ibValue> rowKey;
+			rowKey.reserve(keyCols.size());
+			for (const ibBackendQueryColumn* kc : keyCols)
+				if (kc != nullptr) rowKey.push_back(r.GetValue(kc->GetColumnId()));
+			const bool isFolderRow = (folderCol != nullptr) && r.GetValue(folderCol->GetColumnId()).GetBoolean();
+			const bool isContainer = isFolderRow || r.m_hasChildren;
+			ibComposerNode* node = new ibComposerNode(r.m_values, isContainer, std::move(rowKey));
+			m_snapshot.AddValue(this, node, false);       // adopt (silent) — const-model op, no const_cast
+		}
+	}
+
+	// Capture the generation AFTER the fill — the silent Clear / AddValue bump it per row, so recording it before
+	// would leave m_snapshotGen != the current generation and re-materialise on every fetch.
+	m_snapshotGen   = GetViewGeneration();
+	m_snapshotValid = true;
+}
+
 // ibValueModelCursor::RunComposerPage — the DB fetch: render the composer → SQL → keyset page → walk → COPY nodes;
-// hierarchy drill. NO stored row here — the DB reads dynamically from the cursor.
+// hierarchy drill. NO stored row here — the DB reads dynamically from the cursor. When IsDynamicRead() is false it
+// short-circuits to the whole-list RAM snapshot instead.
 unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, const ibDataViewItem& anchor,
 	int count, ibFetchDirection dir, ibDataViewItemArray& out) const
 {
+	// DynamicRead OFF (the safety fallback): serve the WHOLE list from the RAM snapshot — materialise it once, then
+	// page + group it IN MEMORY (RunStoragePage), bypassing the keyset cursor entirely.
+	if (!IsDynamicRead()) {
+		EnsureSnapshot();
+		return RunStoragePage(m_snapshot, m_snapshotComposer, parent, anchor, count, dir, out);
+	}
+
 	const ibBackendQueryable* q = GetSourceQueryable();
 	if (q == nullptr)
 		return 0;
@@ -37,7 +111,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// from the COMPOSER (the committed store; set by the ctor / settings-dialog commit), skip empty lines. A
 	// Hierarchy/HierarchyOnly dim makes that level unfold the reference's parent tree.
 	//
-	// The VIEW MODE decides flat-vs-grouped, exactly as the RAM half does (tableInfoRam.cpp): a flat LIST view
+	// The VIEW MODE decides flat-vs-grouped, exactly as the RAM half does (modelRam.cpp): a flat LIST view
 	// passes the ignore-parent SENTINEL → grouping is OFF (the user chose the Flat view → a flat table even with a
 	// grouping configured, so the flat toggle always wins over a stored grouping); a TREE / Hierarchical view
 	// passes an empty/real parent → grouping is ON. Populating dims in a flat view drove groupLevel=true there,

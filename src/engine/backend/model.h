@@ -1,5 +1,5 @@
-#ifndef __TABLE_INFO_H__
-#define __TABLE_INFO_H__
+#ifndef __MODEL_H__
+#define __MODEL_H__
 
 #include <algorithm>
 #include <functional>
@@ -7,7 +7,7 @@
 #include <map>      // ibComposerNode holds the driver row's std::map<ibMetaID, ibValue>
 #include <memory>   // std::shared_ptr (CreateIterator)
 
-#include "backend/tableView.h"
+#include "backend/modelView.h"
 
 #include "backend/system/value/valueType.h"
 
@@ -15,21 +15,21 @@
 #include "backend/tabularDataObject.h"   // ibTabularDataObject — ibValueModel IS one (the table hop gate)
 
 // L5-1 declarative composer — held BY VALUE (mutable ibDataDBComposer m_composer). The cycle that used to
-// force a forward-decl + unique_ptr (dataComposer.h → queryLowering.h → queryable.h → tableInfo.h) is
-// broken: queryable.h now takes ibComparisonType/ibMetaID from tableView.h (above), NOT tableInfo.h.
+// force a forward-decl + unique_ptr (dataComposer.h → queryLowering.h → queryable.h → model.h) is
+// broken: queryable.h now takes ibComparisonType/ibMetaID from modelView.h (above), NOT model.h.
 #include "backend/composition/dataComposer.h"
 #include "backend/composition/ramComposer.h"   // ibDataRamComposer — ibValueModelStorage holds one BY VALUE
 
 // L3 Selector tree (folded from a flat snapshot) — mirrored into the RAM tree model by
-// ibValueModelRamTreeBase::PopulateFromTree. Full type only needed in tableInfo.cpp.
+// ibValueModelRamTreeBase::PopulateFromTree. Full type only needed in model.cpp.
 class ibSelectorTree;
 
 // Persistent runtime list-settings (Filter / Order / Group). Held by every model;
-// full type only needed in tableInfo.cpp (backend/composition/listFilter.h).
+// full type only needed in model.cpp (backend/composition/listFilter.h).
 class ibValueListSettings;
 
 // L3 navigation door a DB model vends over its own rows (the base GetSourceQueryable() return type).
-// Forward-declared here so tableInfo.h names the source-hook without pulling the query layer (no include
+// Forward-declared here so model.h names the source-hook without pulling the query layer (no include
 // cycle). RAM models have NO queryable — the composer reads ibRamValueStorage directly.
 class ibBackendQueryable;
 class ibBackendQueryColumn;
@@ -38,7 +38,7 @@ class ibBackendQueryColumn;
 // LOWER (it holds ibValueModel::ibComposerNode); ibValueModelStorage owns one, ibDataRamComposer sources from it.
 class ibRamValueStorage;
 
-// The row identity key returned by GetItemKey (value.h → uniqueKey.h pulled in tableInfo.cpp / the model .cpp's).
+// The row identity key returned by GetItemKey (value.h → uniqueKey.h pulled in model.cpp / the model .cpp's).
 class ibUniqueKey;
 
 
@@ -47,18 +47,18 @@ class ibUniqueKey;
 ///////////////////////////////////////////////////////////////////////////////////
 
 // ibComparisonType / ibFilterRow / ibSortOrder / ibSortData / ibSortModel (deleted) + ibFetchDirection (live)
-// live in tableView.h — view-layer types shared by both ibDataViewModel virtuals and the paged-fetch / query
-// builders (ibReadPageRequest), so the query layer can see them WITHOUT including tableInfo.h (no include cycle).
+// live in modelView.h — view-layer types shared by both ibDataViewModel virtuals and the paged-fetch / query
+// builders (ibReadPageRequest), so the query layer can see them WITHOUT including model.h (no include cycle).
 
 // (The templated paged-fetch contract — ibFetchAnchor / ibFetchRequest / ibFetchResponse / ibAnchorOfFn — was
 //  removed: the universal ibValueModel::RunComposerPage replaced every typed per-model Fetch, building the keyset
-//  anchor itself from the composer + the row-key. ibFetchDirection — the live page direction — is in tableView.h.)
+//  anchor itself from the composer + the row-key. ibFetchDirection — the live page direction — is in modelView.h.)
 
 // The `want` display positions in [0,total) around the browsed anchor position `p` (top / bottom when there is
 // no anchor, p==-1), honouring the fetch direction — the ONE windowing rule every paged LEVEL uses: the RAM half's
 // flat / grouped / detail rows (in-place sorted) AND the DB half's grouped level (its folded group list, which
 // TOTALS return whole — the page envelope does not size a totals read, so the group level windows here). Defined
-// in tableInfoRam.cpp.
+// in modelRam.cpp.
 std::vector<long> ibComputePageWindow(long total, long p, ibFetchDirection dir, int want);
 
 #pragma region _data_model_h_
@@ -311,7 +311,7 @@ public:
 	// Persistent runtime list-settings (Filter / Order / Group) carried by this model. Surfaced
 	// so UI / script can read and edit the model's filter / sort / group settings uniformly.
 	// Out-of-line: the ibValuePtr<ibValueListSettings> -> ibValueListSettings* conversion needs the COMPLETE type,
-	// which lives in listFilter.h (included by tableInfo.cpp, only forward-declared here to avoid the include cycle).
+	// which lives in listFilter.h (included by model.cpp, only forward-declared here to avoid the include cycle).
 	ibValueListSettings* GetListSettings() const;
 
 	// Wrap an ibValue into a dataview wxVariant for a FRONT-side resolver (a dot-path column's
@@ -614,6 +614,16 @@ public:
 	virtual unsigned int RunComposerPage(const ibDataViewItem& parent, const ibDataViewItem& anchor,
 		int count, ibFetchDirection dir, ibDataViewItemArray& out) const = 0;
 
+	// Page a RAM value-storage — the ONE in-memory paging primitive (the RAM sibling of RunComposerPage), shared by
+	// BOTH the native RAM model (ibValueModelStorage, its own m_storage/m_composer) AND a DB model's whole-list RAM
+	// SNAPSHOT (ibValueModelCursor when DynamicRead is off, its m_snapshot/m_snapshotComposer). `storage` + `composer`
+	// MUST be a bound pair (composer.FromStorage(&storage)). ComputeOrder gives the display order; then window flat by
+	// the anchor, or (grouping configured) emit synthetic group nodes per level and the live scoped rows at the leaf.
+	// Def in modelRam.cpp beside the RAM engine. (No SQL, no queryable — the rows are already in memory.)
+	unsigned int RunStoragePage(ibRamValueStorage& storage, ibDataRamComposer& composer,
+		const ibDataViewItem& parent, const ibDataViewItem& anchor,
+		int count, ibFetchDirection dir, ibDataViewItemArray& out) const;
+
 	// Point lookup for a FindRowValue restore STUB: given an anchor's row-key (PK value(s)), fetch that ONE row
 	// from the source and return its value map, so RunComposerPage can fill the anchor's sort tuple and the
 	// keyset predicate positions the page AT the row. Source-agnostic (same composer/driver path). Empty on miss.
@@ -802,6 +812,7 @@ protected:
 	// Monotonic change counter — bumped on any value / row mutation the model notifies the GUI of (the
 	// structural-mutation reset path bumps it). Subclasses bump through BumpViewGeneration(), not the field.
 	void BumpViewGeneration() const { ++m_viewGeneration; }   // m_viewGeneration is mutable (a view counter, not model state)
+	uint32_t GetViewGeneration() const { return m_viewGeneration; }   // read it — the RAM snapshot re-materialises when it moves
 
 private:
 
@@ -1106,7 +1117,7 @@ public:
 
 public:
 
-	// (ctor / dtor are ibValueModel's — the dtor Clears the RAM rows then DecRefs the provider, in tableInfo.cpp.)
+	// (ctor / dtor are ibValueModel's — the dtor Clears the RAM rows then DecRefs the provider, in model.cpp.)
 
 	/////////////////////////////////////////////////////////
 
@@ -1142,17 +1153,19 @@ public:
 	// an empty ibDataViewItem — the same convention the wx index / virtual-list models use
 	// (ItemInserted(ibDataViewItem(), item)). notify=false (silent batch build / LoadData) just bumps the
 	// view generation, matching the old NotifyStructuralChange(false) branch.
-	void NotifyRowAppended(ibComposerNode* item, bool notify) {
+	// CONST — the notify touches only the mutable view generation + the provider (through the pointer), never the
+	// model's own state; so a whole-list RAM SNAPSHOT can drive them from a const fetch (silent, notify=false).
+	void NotifyRowAppended(ibComposerNode* item, bool notify) const {
 		BumpViewGeneration();
 		if (notify && m_modelProvider != nullptr)
 			m_modelProvider->ItemAppended(ibDataViewItem(), ibDataViewItem(item));
 	}
-	void NotifyRowInserted(ibComposerNode* item, bool notify) {
+	void NotifyRowInserted(ibComposerNode* item, bool notify) const {
 		BumpViewGeneration();
 		if (notify && m_modelProvider != nullptr)
 			m_modelProvider->ItemInserted(ibDataViewItem(), ibDataViewItem(item));
 	}
-	void NotifyRowDeleted(ibComposerNode* item, bool notify) {
+	void NotifyRowDeleted(ibComposerNode* item, bool notify) const {
 		BumpViewGeneration();
 		if (notify && m_modelProvider != nullptr)
 			m_modelProvider->ItemDeleted(ibDataViewItem(), ibDataViewItem(item));
@@ -1289,7 +1302,8 @@ public:
 	virtual const ibBackendQueryColumn* GetFolderDisplayColumn() const { return nullptr; }
 
 	// Discard the rendered view and re-fetch everything (batch mutations wxDVC's incremental tracking can't follow).
-	void NotifyReset() {
+	// CONST (touches only the mutable view generation + the provider) so the RAM snapshot's Clear can run in a const fetch.
+	void NotifyReset() const {
 		BumpViewGeneration();
 		if (m_modelProvider) {
 			m_modelProvider->BeforeReset();
@@ -1300,7 +1314,7 @@ public:
 	// Structural-change notify hook the RAM value-storage calls after Add/Insert/Remove/Clear on the nodes: a
 	// visible batch re-fetches the page (NotifyReset — the view holds fresh nodes each fetch), a silent batch
 	// (notify=false) just bumps the view generation. (Public so ibRamValueStorage, which owns the nodes, drives it.)
-	void NotifyStructuralChange(bool notify) { if (notify) NotifyReset(); else BumpViewGeneration(); }
+	void NotifyStructuralChange(bool notify) const { if (notify) NotifyReset(); else BumpViewGeneration(); }
 
 	// --- row access (source-agnostic query; base default = DB tier: NO stored rows) ------------------------
 	// A DB model reads dynamically from the cursor and has NO stored rows, so these return empty; ibValueModelStorage
@@ -1374,21 +1388,23 @@ public:
 	// Field-path resolution over the stored rows (shared by the RAM composer's ComputeOrder AND the model's
 	// grouping): SplitField cuts a path on '.' → HEAD storage column + dotted TAIL; ResolveField reads ONE row's
 	// value, walking references down the tail (a reference cell IS-A source → GetSourceExplorer name→id →
-	// GetValueByMetaID). Out-of-line (ResolveField needs the source-object type). See tableInfoRam.cpp.
+	// GetValueByMetaID). Out-of-line (ResolveField needs the source-object type). See modelRam.cpp.
 	bool    SplitField(const wxString& path, ibMetaID& headCol, std::vector<wxString>& tail) const;
 	ibValue ResolveField(long row, ibMetaID headCol, const std::vector<wxString>& tail) const;
 
 	// --- mutation (the RAM model's ops; take the model for the view notify) — target the root's children ---
-	long AddValue(ibValueModel* model, Row* node, bool notify = true) {
+	// The model is CONST: notify=false just bumps the mutable view generation (BumpViewGeneration is const), so a
+	// whole-list RAM SNAPSHOT (ibValueModelCursor, DynamicRead off) fills these from its CONST fetch — no const_cast.
+	long AddValue(const ibValueModel* model, Row* node, bool notify = true) {
 		wxASSERT(node); node->m_valueTable = model; m_root.m_children.emplace_back(node);
 		model->NotifyRowAppended(node, notify); return RowCount() - 1;
 	}
-	long InsertValue(ibValueModel* model, Row* node, unsigned int row, bool notify = true) {
+	long InsertValue(const ibValueModel* model, Row* node, unsigned int row, bool notify = true) {
 		wxASSERT(node); node->m_valueTable = model;
 		m_root.m_children.insert(m_root.m_children.begin() + row, node);
 		model->NotifyRowInserted(node, notify); return row + 1;
 	}
-	bool RemoveValue(ibValueModel* model, Row* node, bool notify = true) {
+	bool RemoveValue(const ibValueModel* model, Row* node, bool notify = true) {
 		std::vector<Row*>& kids = m_root.m_children;
 		auto it = std::find(kids.begin(), kids.end(), node);
 		if (it == kids.end()) return false;
@@ -1397,14 +1413,14 @@ public:
 		model->NotifyRowDeleted(node, notify);
 		kids.erase(it); node->m_valueTable = nullptr; node->DecRef(); return true;
 	}
-	void Clear(ibValueModel* model, bool notify = true) {
+	void Clear(const ibValueModel* model, bool notify = true) {
 		std::vector<Row*>& kids = m_root.m_children;
 		if (kids.empty()) return;
 		for (Row* n : kids) { n->m_valueTable = nullptr; n->DecRef(); }
 		kids.clear();
 		model->NotifyStructuralChange(notify);
 	}
-	void ClearRange(ibValueModel* model, unsigned long from, unsigned long to, bool notify = true) {
+	void ClearRange(const ibValueModel* model, unsigned long from, unsigned long to, bool notify = true) {
 		std::vector<Row*>& kids = m_root.m_children;
 		if (from > kids.size() || to > kids.size() || from >= to) return;
 		for (size_t i = from; i < to; ++i) { kids[i]->m_valueTable = nullptr; kids[i]->DecRef(); }
@@ -1427,22 +1443,49 @@ public:
 	// ibDataComposer&. NO node storage — a DB model reads dynamically from the cursor.
 	ibDataDBComposer& GetModelComposer() const override { return m_composer; }
 
-	// DB paged fetch: render → SQL → keyset page → COPY nodes; hierarchy drill. (Out-of-line in tableInfo.cpp.)
+	// Bind the whole-list RAM SNAPSHOT's composer to its storage (used only when DynamicRead is off, see below).
+	ibValueModelCursor() { m_snapshotComposer.FromStorage(&m_snapshot); }
+
+	// DYNAMIC DATA READ — the safety toggle. TRUE (default): the list is a LIVE keyset cursor, paged from the DB one
+	// batch at a time (the fast path, in-sync with concurrent writes). FALSE: the WHOLE result set is materialised
+	// ONCE into an in-memory snapshot (ibRamValueStorage) and every fetch / scroll / group is served from RAM through
+	// RunStoragePage — the fallback for when cursor paging misbehaves (a driver quirk, a pathological sort) or a
+	// list is small and stability beats liveness. A subclass reads it off its own property (the dynamic list's
+	// "DynamicRead"); the base default keeps every other cursor list live.
+	virtual bool IsDynamicRead() const { return true; }
+
+	// DB paged fetch: render → SQL → keyset page → COPY nodes; hierarchy drill. When IsDynamicRead() is false it
+	// short-circuits to the whole-list RAM snapshot (EnsureSnapshot + WindowStoragePage). (Out-of-line in modelDb.cpp.)
 	unsigned int RunComposerPage(const ibDataViewItem& parent, const ibDataViewItem& anchor,
 		int count, ibFetchDirection dir, ibDataViewItemArray& out) const override;
 
 	// The DB row key = its primary-key REFERENCE (guid). A register overrides this to build its composite from the
-	// dimensions instead. (Out-of-line in tableInfoDb.cpp, where the queryable + reference value are in scope.)
+	// dimensions instead. (Out-of-line in modelDb.cpp, where the queryable + reference value are in scope.)
 	ibUniqueKey GetItemKey(const ibDataViewItem& item) const override;
 
 	// The ancestor chain (immediate parent → … → root) of a row, so a Hierarchical / Tree view can drill down to a
 	// selection sitting inside a sub-folder after a view-mode switch. The base is a stub (returns empty), so a DB
 	// catalog lost a sub-folder selection on switch; here we walk the queryable's parent-ref column upward via a
-	// point lookup per level. (Out-of-line in tableInfoDb.cpp.)
+	// point lookup per level. (Out-of-line in modelDb.cpp.)
 	void BuildAncestorBreadcrumb(const ibDataViewItem& fromRow, ibDataViewItemArray& out) const override;
 
 protected:
+	// Materialise the WHOLE result set into m_snapshot ONCE (DynamicRead off) — render the persistent filter + sort to
+	// SQL (NO grouping, NO page limit), walk every row into a COPY node, AppendSilent it. Grouping/paging then happen
+	// in RAM (RunStoragePage). Cheap re-check: it re-materialises only when the view generation moved (a refresh /
+	// filter / sort change bumps it; a scroll does not), so a scroll reuses the snapshot and a settings change reloads
+	// it. (Out-of-line in modelDb.cpp — needs the queryable + driver.)
+	void EnsureSnapshot() const;
+
 	mutable ibDataDBComposer m_composer;   // the DB composer (bound to the queryable by the concrete subclass ctor)
+
+	// Whole-list RAM snapshot — ONLY populated when IsDynamicRead() is false. m_snapshotComposer sources from
+	// m_snapshot (bound in the ctor); it re-materialises when the view generation moves past m_snapshotGen (a refresh
+	// / filter / sort change bumps the generation; a scroll does not).
+	mutable ibRamValueStorage m_snapshot;
+	mutable ibDataRamComposer  m_snapshotComposer;
+	mutable bool               m_snapshotValid = false;   // has the snapshot been materialised for m_snapshotGen?
+	mutable uint32_t           m_snapshotGen   = 0;       // the view generation the snapshot was built at
 };
 
 class BACKEND_API ibValueModelStorage : public ibValueModel
@@ -1461,7 +1504,7 @@ public:
 	// The ancestor GROUP chain of a RAM row (a grouped RAM list drills through group levels; a plain RAM list has
 	// no folder hierarchy). Mirrors the DB cursor's grouped branch so a selection inside a group survives a
 	// view-mode switch — the top-level fetch returns group headers, not the row, so a plain restore-scan misses.
-	// (Out-of-line in tableInfoRam.cpp.)
+	// (Out-of-line in modelRam.cpp.)
 	void BuildAncestorBreadcrumb(const ibDataViewItem& fromRow, ibDataViewItemArray& out) const override;
 
 	// Row access reads the storage (overrides the base DB-defaults).

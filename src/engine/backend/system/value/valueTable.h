@@ -4,7 +4,7 @@
 #include "valueArray.h"
 #include "valueMap.h"
 
-#include "backend/tableInfo.h"
+#include "backend/model.h"
 #include "backend/picturePredefined.h"                 // g_pic*CLSID — this model emits its own standard command icons
 #include "backend/srcDataObject.h"                    // ibSourceDataObject / ibSourceExplorer — the table IS a form data source
 #include "backend/query/queryColumn.h"                 // ibBackendSourceColumn — a RAM column IS its own source-column presentation (header/type via the explorer)

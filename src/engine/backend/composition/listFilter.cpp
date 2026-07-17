@@ -1,6 +1,6 @@
 #include "backend/composition/listFilter.h"
 #include "backend/composition/dataComposer.h"
-#include "backend/tableInfo.h"             // ibValueModel::GetModelComposer — the FACADE resolves it lazily
+#include "backend/model.h"             // ibValueModel::GetModelComposer — the FACADE resolves it lazily
 #include "backend/compiler/typeCtor.h"
 
 // ===========================================================================

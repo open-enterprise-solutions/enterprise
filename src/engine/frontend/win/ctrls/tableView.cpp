@@ -1,5 +1,5 @@
 ﻿#include "tableView.h"
-#include "backend/tableInfo.h"
+#include "backend/model.h"
 
 wxIMPLEMENT_DYNAMIC_CLASS(ibTableViewCtrl, ibDataViewCtrl);
 

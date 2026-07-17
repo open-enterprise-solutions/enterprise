@@ -1,5 +1,5 @@
-#ifndef __TABLE_VIEW_H__
-#define __TABLE_VIEW_H__
+#ifndef __MODEL_VIEW_H__
+#define __MODEL_VIEW_H__
 
 #include <algorithm>
 #include <vector>
@@ -27,7 +27,7 @@ class BACKEND_API ibDataViewModel;
 
 // Page DIRECTION for the universal paged fetch — shared by ibValueModel::RunComposerPage (the model layer) AND
 // ibReadPageRequest (the query layer, dataQueryBuilder.h). It lives HERE, the shared view/query-neutral header,
-// so the query layer sees it without including tableInfo.h (which would re-introduce the include cycle).
+// so the query layer sees it without including model.h (which would re-introduce the include cycle).
 enum class ibFetchDirection : int8_t {
 	Reset    = 0,   // discard buffer, fetch initial window at anchor
 	Forward  = 1,   // append after anchor

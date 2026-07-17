@@ -46,7 +46,7 @@
 #include "backend/actionInfo.h"
 #include "backend/moduleInfo.h"
 #include "backend/valueInfo.h"
-#include "backend/tableInfo.h"
+#include "backend/model.h"
 
 // L3 data-navigation interface — ibValueMetaObjectRecordDataRef and
 // ibValueMetaObjectRegisterData implement it so the query builder is family-blind.

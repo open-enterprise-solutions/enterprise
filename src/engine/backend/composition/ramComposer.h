@@ -13,7 +13,7 @@
 // the view. The composer NEVER references the model — only the DATA (the storage); mutations + notify are the
 // model's job. See docs/ram-composer-decoupling.md.
 //
-// ComputeOrder / Run are defined out-of-line in tableInfo.cpp (they read the storage's node API).
+// ComputeOrder / Run are defined out-of-line in model.cpp (they read the storage's node API).
 
 #include "backend/composition/dataComposer.h"   // ibDataComposer
 

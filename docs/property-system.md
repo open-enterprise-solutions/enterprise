@@ -415,7 +415,7 @@ property's owner and fire the child's handler a second time.
 ### 5.3 The outward edge — `ibPropertyObjectNotifier`
 
 `OnChildChanged` carries a change *up*. This carries one *out*, to whatever is showing the
-object. Modelled on `ibDataViewModelNotifier` ([../src/engine/backend/tableView.h](../src/engine/backend/tableView.h)),
+object. Modelled on `ibDataViewModelNotifier` ([../src/engine/backend/modelView.h](../src/engine/backend/modelView.h)),
 including its rule: **PURE PUSH** — the object says what changed, in `ibProperty` terms, and
 the front owns the widget.
 

@@ -165,8 +165,8 @@ While building this feature, the `GetChildren` virtual on `ibDataViewModel` / `i
 
 Touched files:
 
-- `src/engine/backend/tableView.h` — removed pure-virtual `GetChildren` from `ibDataViewModel`
-- `src/engine/backend/tableInfo.h` — removed pure-virtual `GetChildren` from `ibValueModel`; folded the four legacy overrides (`ibValueModelTableBase`, `ibValueModelRamTableBase`, `ibValueModelTreeBase`, `ibValueModelRamTreeBase`) into the existing `GetFirstFetch` paths
+- `src/engine/backend/modelView.h` — removed pure-virtual `GetChildren` from `ibDataViewModel`
+- `src/engine/backend/model.h` — removed pure-virtual `GetChildren` from `ibValueModel`; folded the four legacy overrides (`ibValueModelTableBase`, `ibValueModelRamTableBase`, `ibValueModelTreeBase`, `ibValueModelRamTreeBase`) into the existing `GetFirstFetch` paths
 - `src/engine/frontend/win/ctrls/dataview/dataview.h` + `datavcmn.cpp` — migrated the three concrete-model overrides (`ibDataViewIndexListModel`, `ibDataViewVirtualListModel`, `ibDataViewTreeStore`)
 - `src/engine/frontend/win/ctrls/dataview/datavgen.cpp` — the single internal call site (`GetModel()->GetChildren(parent, modelSiblings)`) routed through `GetFirstFetch`
 - `src/engine/designer/win/dlg/predefinedEditor.{h,cpp}` — model override migrated

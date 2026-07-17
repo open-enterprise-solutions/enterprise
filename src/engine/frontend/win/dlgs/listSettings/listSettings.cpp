@@ -11,7 +11,7 @@
 #include "frontend/visualView/ctrl/frame.h"
 
 #include "backend/system/value/valueType.h"
-#include "backend/tableInfo.h"                                  // ibValueModel + ibValueModelColumnCollection (PATH A field source)
+#include "backend/model.h"                                  // ibValueModel + ibValueModelColumnCollection (PATH A field source)
 #include "backend/system/value/valueDynamicList.h"   // ibValueDynamicList — the dialog is built on it
 #include "backend/query/queryable.h"                            // ibBackendQueryable::GetColumns
 #include "backend/query/queryColumn.h"                          // ibBackendQueryColumn

@@ -2,7 +2,7 @@
 #include "backend/appData.h"                         // appData / GetActiveMetaData
 #include "backend/query/queryable.h"                 // ibBackendQueryable
 #include "backend/query/queryableFactory.h"          // ibQueryableSourceDescriptor (source holder + its command surface)
-// (listFetchDriver.h / session.h(ses_query) / tableView.h(s_constIgnoreParent) includes removed — they were
+// (listFetchDriver.h / session.h(ses_query) / modelView.h(s_constIgnoreParent) includes removed — they were
 //  only for the deleted RunPage/ibDynamicListProvider; the fetch lives in the base RunComposerPage now.)
 #include "backend/query/queryColumn.h"               // ibBackendQueryColumn::GetColumnId
 #include "backend/srcDataObject.h"                      // ibSourceExplorer
@@ -448,6 +448,11 @@ void ibValueDynamicList::OnPropertyChanged(ibProperty* property, const wxVariant
 		RebuildSource();
 	// The source/settings changed; re-commit the settings buffer onto the composer (L5).
 	RefreshComposerSettings();
+	// Toggling DynamicRead switches the fetch path (live keyset cursor ↔ whole-list RAM snapshot). Re-drive the fetch
+	// so it takes effect: RefetchAll bumps the view generation → the snapshot rebuilds on the next fetch, or the cursor
+	// resumes. (Nothing to rebuild in the source/composer — only the fetch route changes.)
+	if (m_propertyDynamicRead == property)
+		RefetchAll();
 }
 
 // Central save/load entry (ibPropertyObject::ReadProperty/WriteProperty override): the
@@ -467,6 +472,10 @@ bool ibValueDynamicList::ReadProperty(const ibDataNode& node)
 
 	// Default view — a hidden intrinsic field (absent on an old blob → Normal, forward-compatible).
 	m_view = (ibDynamicListView)node.GetValue<s32>(wxT("View"));
+
+	// DynamicRead — stored INVERTED (DynamicReadOff: 1 = static/RAM-snapshot, absent/0 = the default dynamic read), so
+	// a list blob written before this field loads as dynamic. (SetValue does not fire OnPropertyChanged.)
+	m_propertyDynamicRead->SetValue(node.GetValue<s32>(wxT("DynamicReadOff")) == 0);
 	return true;
 }
 
@@ -495,6 +504,9 @@ bool ibValueDynamicList::WriteProperty(ibDataNode& node) const
 
 	// Default view — written implicitly as a hidden intrinsic field (see ibDynamicListView).
 	node.SetValue<s32>(wxT("View"), (s32)m_view);
+
+	// DynamicRead — record only the DEVIATION from the default (1 = static/RAM snapshot; 0/absent = dynamic). See ReadProperty.
+	node.SetValue<s32>(wxT("DynamicReadOff"), IsDynamicRead() ? 0 : 1);
 	return true;
 }
 

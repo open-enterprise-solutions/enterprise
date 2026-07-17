@@ -6,12 +6,12 @@
 // The RAM realisation of ibDataComposer, defined next to its declaration (ramComposer.h). It reads the RAM
 // VALUE-STORAGE's live nodes DIRECTLY — never a query text / parse / lowering / queryable / ComputeRows copy —
 // and produces the display ORDER (filtered + stable multi-key sorted storage indices). Grouping + the windowing
-// of this order into a page live on the model side (ibValueModelStorage::RunComposerPage, tableInfoRam.cpp); the
+// of this order into a page live on the model side (ibValueModelStorage::RunComposerPage, modelRam.cpp); the
 // per-row field resolution (incl. dot-walk over references) lives on the storage (ibRamValueStorage::SplitField
 // / ResolveField). slice: filter + sort, flat order; dot-walk up to references.
 
 #include "backend/composition/ramComposer.h"   // ibDataRamComposer
-#include "backend/tableInfo.h"                  // ibRamValueStorage — RowCount / SplitField / ResolveField
+#include "backend/model.h"                  // ibRamValueStorage — RowCount / SplitField / ResolveField
 
 // The DISPLAY-order source: filter + stable multi-key sort the storage's rows → their STORAGE indices in display
 // order (index i ↔ storage node i). A field path is split into a HEAD storage column + a dotted TAIL walked over

@@ -22,7 +22,7 @@
 #if wxUSE_DATAVIEWCTRL
 
 #include "dataview.h"
-#include "backend/tableInfo.h"   // ibValueModel + Features for SetViewMode
+#include "backend/model.h"   // ibValueModel + Features for SetViewMode
 #include "datavgen.paged.private.h"   // kBufferSlack + ScopedPagedFreeze
 #ifndef WX_PRECOMP
 #include <wx/log.h>

@@ -3,15 +3,15 @@
 //	Description : RAM value-model + its value-storage
 ////////////////////////////////////////////////////////////////////////////
 //
-// The RAM half of the value-model, split out of tableInfo.cpp: ibValueModelStorage (the in-memory model whose live
+// The RAM half of the value-model, split out of model.cpp: ibValueModelStorage (the in-memory model whose live
 // rows fetch straight from ibRamValueStorage) + the storage's own out-of-line methods (ColumnIdByName /
 // SplitField / ResolveField). The in-place engine itself — ibDataRamComposer — lives WITH its declaration in
 // composition/ramComposer.cpp; a RAM fetch here just windows the order it computes. The DB half lives in
-// tableInfoDb.cpp; the shared ibValueModel base + the node lives in tableInfo.cpp.
+// modelDb.cpp; the shared ibValueModel base + the node lives in model.cpp.
 
-#include "tableInfo.h"
+#include "model.h"
 
-#include "backend/tableView.h"                  // s_constIgnoreParent / ibDataViewItem
+#include "backend/modelView.h"                  // s_constIgnoreParent / ibDataViewItem
 #include "backend/composition/ramComposer.h"    // ibDataRamComposer (pulls dataComposer.h) — m_composer.ComputeOrder()
 #include "backend/srcDataObject.h"               // ibSourceDataObject / ibSourceExplorer — ResolveField dot-walk over reference cells
 
@@ -74,7 +74,7 @@ ibValue ibRamValueStorage::ResolveField(long row, ibMetaID headCol, const std::v
 // The `want` display positions in [0,total) around the browsed anchor position `p` (or the top / bottom when
 // there is no anchor, p==-1), honouring the fetch direction — the ONE windowing rule the flat / grouped /
 // detail levels all page by, in BOTH the RAM half (in-place sorted rows) and the DB half (a grouped level's
-// folded group list; declared in tableInfo.h). Backward gathers nearest-first then flips to display order.
+// folded group list; declared in model.h). Backward gathers nearest-first then flips to display order.
 std::vector<long> ibComputePageWindow(long total, long p, ibFetchDirection dir, int want)
 {
 	std::vector<long> win;
@@ -96,18 +96,21 @@ std::vector<long> ibComputePageWindow(long total, long p, ibFetchDirection dir, 
 }
 
 // ---------------------------------------------------------------------------
-// ibValueModelStorage::RunComposerPage — the RAM live-node fetch. ComputeOrder (filter + sort in place) gives the
-// display order over the storage; then:
+// ibValueModel::RunStoragePage — the RAM paging primitive (the RAM sibling of RunComposerPage). ComputeOrder (filter +
+// sort in place) gives the display order over `storage`; then:
 //   • FLAT (no grouping / a flat-view sentinel): window the LIVE nodes by the browsed anchor and return them —
 //     the node IS the storage row (direct edit + notify; selection survives by the stable pointer).
 //   • GROUPED: the browsed parent node carries a group PATH (dim values root→parent). Scope the ordered rows to
 //     it; at a group LEVEL emit ONE synthetic group node per distinct dims[depth] value (container, drillable);
 //     at the DETAIL level (drilled through every dim) return the LIVE scoped rows. A dim field may itself dot-
 //     walk a reference (ibRamValueStorage::ResolveField). No queryable, no SQL — RAM is in memory.
-unsigned int ibValueModelStorage::RunComposerPage(const ibDataViewItem& parent, const ibDataViewItem& anchor,
+// `storage`/`composer` are a bound pair: the native RAM model passes its own m_storage/m_composer; a DB model's
+// whole-list snapshot (DynamicRead off) passes m_snapshot/m_snapshotComposer — same paging, same nodes.
+unsigned int ibValueModel::RunStoragePage(ibRamValueStorage& storage, ibDataRamComposer& composer,
+	const ibDataViewItem& parent, const ibDataViewItem& anchor,
 	int count, ibFetchDirection dir, ibDataViewItemArray& out) const
 {
-	m_storage.SetColumns(GetColumnCollection());          // let the composer resolve field names → column ids
+	storage.SetColumns(GetColumnCollection());          // let the composer resolve field names → column ids
 
 	// Grouping dims (field paths → head storage column + dotted tail). The VIEW MODE decides flat-vs-grouped: a
 	// flat LIST view passes the ignore-parent SENTINEL → grouping is OFF (the user set the Flat view → a flat table,
@@ -117,23 +120,23 @@ unsigned int ibValueModelStorage::RunComposerPage(const ibDataViewItem& parent, 
 	const bool flatView = (parent == s_constIgnoreParent);
 	std::vector<std::pair<ibMetaID, std::vector<wxString>>> dims;
 	if (!flatView) {
-		for (size_t i = 0; i < m_composer.GroupCount(); ++i) {
+		for (size_t i = 0; i < composer.GroupCount(); ++i) {
 			wxString field; ibQueryDimUnfold kind = ibQueryDimUnfold::Elements;
-			if (!m_composer.GetGroupAt(i, field, kind) || field.IsEmpty()) continue;
+			if (!composer.GetGroupAt(i, field, kind) || field.IsEmpty()) continue;
 			ibMetaID head; std::vector<wxString> tail;
-			if (m_storage.SplitField(field, head, tail))
+			if (storage.SplitField(field, head, tail))
 				dims.emplace_back(head, std::move(tail));
 		}
 	}
 
-	const std::vector<long> ord = m_composer.ComputeOrder();   // filtered + sorted storage indices, display order
+	const std::vector<long> ord = composer.ComputeOrder();   // filtered + sorted storage indices, display order
 	const int want = (count > 0 ? count : defaultCountPerPage);
 
 	// ---- FLAT: no grouping — window the live storage nodes by the anchor and return them ----
 	if (dims.empty()) {
 		long p = -1;
 		if (anchor.IsOk()) {
-			const long aidx = StorageIndexOf(anchor);
+			const long aidx = storage.IndexOf(GetViewData<ibComposerNode>(anchor));
 			for (size_t k = 0; k < ord.size(); ++k)
 				if (ord[k] == aidx) { p = static_cast<long>(k); break; }
 		}
@@ -141,7 +144,7 @@ unsigned int ibValueModelStorage::RunComposerPage(const ibDataViewItem& parent, 
 		out.Alloc(win.size());
 		unsigned int fetched = 0;
 		for (const long pos : win) {
-			ibComposerNode* node = m_storage.GetNode(ord[pos]);
+			ibComposerNode* node = storage.GetNode(ord[pos]);
 			if (node == nullptr) continue;
 			out.Add(ibDataViewItem(node));   // the LIVE storage node (ctor IncRefs)
 			++fetched;
@@ -162,7 +165,7 @@ unsigned int ibValueModelStorage::RunComposerPage(const ibDataViewItem& parent, 
 	for (const long idx : ord) {
 		bool inScope = true;
 		for (size_t k = 0; k < depth && k < dims.size(); ++k) {
-			const ibValue v = m_storage.ResolveField(idx, dims[k].first, dims[k].second);
+			const ibValue v = storage.ResolveField(idx, dims[k].first, dims[k].second);
 			if (!(v == parentPath[k])) { inScope = false; break; }
 		}
 		if (inScope) scoped.push_back(idx);
@@ -172,7 +175,7 @@ unsigned int ibValueModelStorage::RunComposerPage(const ibDataViewItem& parent, 
 	if (depth >= dims.size()) {
 		long p = -1;
 		if (anchor.IsOk()) {
-			const long aidx = StorageIndexOf(anchor);
+			const long aidx = storage.IndexOf(GetViewData<ibComposerNode>(anchor));
 			for (size_t k = 0; k < scoped.size(); ++k)
 				if (scoped[k] == aidx) { p = static_cast<long>(k); break; }
 		}
@@ -180,7 +183,7 @@ unsigned int ibValueModelStorage::RunComposerPage(const ibDataViewItem& parent, 
 		out.Alloc(win.size());
 		unsigned int fetched = 0;
 		for (const long pos : win) {
-			ibComposerNode* node = m_storage.GetNode(scoped[pos]);
+			ibComposerNode* node = storage.GetNode(scoped[pos]);
 			if (node == nullptr) continue;
 			out.Add(ibDataViewItem(node));
 			++fetched;
@@ -194,7 +197,7 @@ unsigned int ibValueModelStorage::RunComposerPage(const ibDataViewItem& parent, 
 	const std::vector<wxString>& dimTail = dims[depth].second;
 	std::vector<ibValue> groupValues;
 	for (const long idx : scoped) {
-		const ibValue v = m_storage.ResolveField(idx, dimCol, dimTail);
+		const ibValue v = storage.ResolveField(idx, dimCol, dimTail);
 		bool seen = false;
 		for (const ibValue& g : groupValues) if (g == v) { seen = true; break; }
 		if (!seen) groupValues.push_back(v);
@@ -231,6 +234,13 @@ unsigned int ibValueModelStorage::RunComposerPage(const ibDataViewItem& parent, 
 		++fetched;
 	}
 	for (size_t i = 0; i < out.GetCount(); ++i) SetItemParent(out[i], parent); return fetched;
+}
+
+// ibValueModelStorage::RunComposerPage — a native RAM model pages its OWN storage + composer through the shared primitive.
+unsigned int ibValueModelStorage::RunComposerPage(const ibDataViewItem& parent, const ibDataViewItem& anchor,
+	int count, ibFetchDirection dir, ibDataViewItemArray& out) const
+{
+	return RunStoragePage(m_storage, m_composer, parent, anchor, count, dir, out);
 }
 
 // ibValueModelStorage::BuildAncestorBreadcrumb — the ancestor GROUP chain of a RAM row, so a selection inside a

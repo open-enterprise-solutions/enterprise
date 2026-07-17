@@ -13,7 +13,7 @@ class ibDataViewMetaDiffModel;
 // One per ibMetaDiffRecord — wraps an int index back into the model's
 // flat record vector. We need a refcounted ibDataViewObject (not the
 // raw void* encoding) because ibDataViewItem::IsContainer() returns
-// false unconditionally for RawId items (tableView.h:400), and the
+// false unconditionally for RawId items (modelView.h:400), and the
 // dataview's expander-visibility check goes through that method. So
 // every row that may be expanded HAS to be Refcounted-mode.
 //

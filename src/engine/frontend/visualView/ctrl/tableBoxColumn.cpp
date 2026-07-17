@@ -69,14 +69,14 @@ void ibDataViewColumnObject::SyncSortArrowFromModel()
 	ibValueModelTableBoxColumn* col = GetControl();
 	if (col == nullptr) return;
 	ibValueModelTableBox* owner = col->GetOwner();
-	ibValueModel* modelValue = owner != nullptr ? owner->GetTableModel() : nullptr;
-	if (modelValue == nullptr || appData->DesignerMode()
-		|| !modelValue->GetFeatures().Has(ibValueModel::Features::Sorting))
+	ibValueModel* model = owner != nullptr ? owner->GetTableModel() : nullptr;
+	if (model == nullptr || appData->DesignerMode()
+		|| !model->GetFeatures().Has(ibValueModel::Features::Sorting))
 		return;
 	const wxString field = col->GetSourceFieldName();
-	for (size_t i = 0; !field.IsEmpty() && i < modelValue->GetModelComposer().SortCount(); ++i) {
+	for (size_t i = 0; !field.IsEmpty() && i < model->GetModelComposer().SortCount(); ++i) {
 		wxString sortField; bool asc;
-		if (modelValue->GetModelComposer().GetSortAt(i, sortField, asc) && sortField == field) {
+		if (model->GetModelComposer().GetSortAt(i, sortField, asc) && sortField == field) {
 			SetSortOrder(asc);
 			break;
 		}
@@ -208,12 +208,12 @@ void ibValueModelTableBoxColumn::OnUpdated(wxObject* wxobject, ibFrontendWindow*
 
 	const ibFormID source_column = GetModelColumn();
 
-	ibValueModel* modelValue = GetOwner()->GetTableModel();
+	ibValueModel* model = GetOwner()->GetTableModel();
 
 	// Sortability is gated by the model's Sorting FEATURE (when the flag is turned off, sorting
 	// cannot be used). The ACTIVE sort + direction come from L5 (the composer, read via GetSortAt below).
-	const bool sortable = modelValue != nullptr && !appData->DesignerMode()
-		&& modelValue->GetFeatures().Has(ibValueModel::Features::Sorting);
+	const bool sortable = model != nullptr && !appData->DesignerMode()
+		&& model->GetFeatures().Has(ibValueModel::Features::Sorting);
 
 	// A source-less column is not shown — no binding PATH (m_propertySource) and no explicit model column
 	// (m_model_id). It appears once the user binds a source (a field, or a dotted path), mirroring the

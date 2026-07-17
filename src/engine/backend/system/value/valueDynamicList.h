@@ -1,7 +1,7 @@
 #ifndef __VALUE_DYNAMIC_LIST_H__
 #define __VALUE_DYNAMIC_LIST_H__
 
-#include "backend/tableInfo.h"                       // ibValueModelCursor
+#include "backend/model.h"                       // ibValueModelCursor
 #include "backend/metaCollection/partial/commonObject.h"   // ibSourceDataObject
 #include "backend/composition/dataComposer.h"        // L5 — ibDataDBComposer
 #include "backend/composition/listFilter.h"          // ibValueListSettings
@@ -113,6 +113,10 @@ public:
 	virtual ibValueModelReturnLine* GetRowAt(const ibDataViewItem& line) override;
 	virtual Features GetFeatures() const override;
 	virtual bool EditableLine(const ibDataViewItem& item, unsigned int col) const override { return false; }
+
+	// DynamicRead OFF → the base ibValueModelCursor serves the WHOLE list from its RAM snapshot instead of the live
+	// keyset cursor (EnsureSnapshot / RunStoragePage). Read straight off the designer property (default = live).
+	bool IsDynamicRead() const override { return m_propertyDynamicRead->GetValueAsBoolean(); }
 	// Add/Copy/Edit/Delete: NOT overridden — the base no-ops. List mutation goes through the
 	// choice/keyset path (separate design). AutoCreateColumn also keeps the base default (false).
 
@@ -238,6 +242,11 @@ private:
 	// by ReadProperty/WriteProperty). The text is edited on the settings dialog's first "Query" tab.
 	ibPropertyBoolean* m_propertyUseCustomQuery = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryList, wxT("UseCustomQuery"), _("Arbitrary query"), false);
 	ibPropertyString*  m_propertyCustomQuery    = ibPropertyObject::CreateProperty<ibPropertyString>(m_categoryList, wxT("CustomQuery"), _("Query text"), wxEmptyString);
+	// DynamicRead — the safety toggle (1C "Dynamic data read"). TRUE (default): a live keyset cursor paged from the DB
+	// batch by batch. FALSE: the whole result set is materialised into a RAM snapshot ONCE and paged in memory (the base
+	// ibValueModelCursor::EnsureSnapshot / RunStoragePage) — the fallback for when cursor paging misbehaves, or a
+	// small / stable list where liveness does not matter. Read by IsDynamicRead() above; serialised by Read/WriteProperty.
+	ibPropertyBoolean* m_propertyDynamicRead = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryList, wxT("DynamicRead"), _("Dynamic data read"), true);
 };
 
 // Create a folder-select SOURCE: a dynamic list in CHOICE mode with a FIXED `IsFolder = true` predicate — the

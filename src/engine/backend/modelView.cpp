@@ -1,4 +1,4 @@
-#include "tableView.h"
+#include "modelView.h"
 
 // ---------------------------------------------------------
 // s_constIgnoreParent — flat-scan sentinel (RESTORED)

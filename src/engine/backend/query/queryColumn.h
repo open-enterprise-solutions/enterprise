@@ -13,7 +13,7 @@
 //
 // Lives in its OWN light header (only typeDescription.h) so the fundamental
 // attribute metaobject can derive from it without dragging in the full queryable.h
-// (and tableInfo.h) weight: ibValueMetaObjectAttributeBase IS a query column — it
+// (and model.h) weight: ibValueMetaObjectAttributeBase IS a query column — it
 // implements this interface directly, no adapter.
 
 #include "backend/typeDescription.h"    // ibTypeDescription (the column's L3 type)

@@ -5,13 +5,13 @@
 //
 // The SHARED half of the value-model: the ibValueModel base (settings / selection / actions / iteration /
 // column collection) + the ibComposerNode out-of-line members. The two paged-fetch realisations live in their
-// own translation units — the DB fetch in tableInfoDb.cpp (ibValueModelCursor::RunComposerPage), the in-place RAM
-// fetch + composer in tableInfoRam.cpp (ibValueModelStorage::RunComposerPage / ibDataRamComposer).
+// own translation units — the DB fetch in modelDb.cpp (ibValueModelCursor::RunComposerPage), the in-place RAM
+// fetch + composer in modelRam.cpp (ibValueModelStorage::RunComposerPage / ibDataRamComposer).
 
-#include "tableInfo.h"
+#include "model.h"
 
 #include "backend/session/session.h"            // ibSession — SubmitFetchAsync
-#include "backend/tableView.h"                  // ibDataViewModel / ibDataViewItem — the base view types
+#include "backend/modelView.h"                  // ibDataViewModel / ibDataViewItem — the base view types
 #include "backend/composition/listFilter.h"    // ibValueListSettings (dialog buffer) + ibLoad/CommitSettings — settings live on the composer
 #include "backend/composition/dataComposer.h"  // ibDataComposer — IsGroupedModel reads GroupCount() off the composer
 #include "backend/uniqueKey.h"                  // ibUniqueKey — GetItemKey return (base default = no key)
@@ -68,7 +68,7 @@ bool ibValueModel::ibComposerNode::SetValue(const ibMetaID& id, const ibValue& v
 	return true;
 }
 
-// Out-of-line (declared in tableInfo.h): the ibValuePtr<ibValueListSettings> -> ibValueListSettings* conversion
+// Out-of-line (declared in model.h): the ibValuePtr<ibValueListSettings> -> ibValueListSettings* conversion
 // needs the COMPLETE ibValueListSettings type (listFilter.h, included here), not the header's forward decl.
 ibValueListSettings* ibValueModel::GetListSettings() const { return m_listSettings; }
 

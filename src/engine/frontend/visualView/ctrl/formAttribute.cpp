@@ -9,7 +9,7 @@
 #include "backend/serialize/dataBuilder.h"
 #include "backend/system/value/valueType.h"                 // ibValueTypeDescription::AdjustValue
 #include "backend/composition/listFilter.h"                 // ibValueListSettings (list settings form)
-#include "backend/tableInfo.h"                               // ibValueModel (table-source check)
+#include "backend/model.h"                               // ibValueModel (table-source check)
 #include "backend/typeDescription.h"                          // ibTypeDescription::GetFirstClsid (value materialise)
 #include "backend/metaData.h"                                // GetTypeCtor
 #include "backend/objCtor.h"                                 // ibCtorMetaValueType / ibCtorObjectMetaType

@@ -548,7 +548,7 @@
     </ClInclude>
     <ClInclude Include="srcObject.h" />
     <ClInclude Include="moduleInfo.h" />
-    <ClInclude Include="tableInfo.h" />
+    <ClInclude Include="model.h" />
     <ClInclude Include="valueInfo.h" />
     <ClInclude Include="actionInfo.h" />
     <ClInclude Include="compiler\value.h">
@@ -714,7 +714,7 @@
     </ClInclude>
     <ClInclude Include="value_ptr.h" />
     <ClInclude Include="restructureInfo.h" />
-    <ClInclude Include="tableView.h" />
+    <ClInclude Include="modelView.h" />
     <ClInclude Include="propertyManager\property\propertyChartOfCharacteristicTypes.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
@@ -1524,9 +1524,9 @@
     <ClCompile Include="metaCollection\metaObjectComposite.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
-    <ClCompile Include="tableInfo.cpp" />
-    <ClCompile Include="tableInfoDb.cpp" />
-    <ClCompile Include="tableInfoRam.cpp" />
+    <ClCompile Include="model.cpp" />
+    <ClCompile Include="modelDb.cpp" />
+    <ClCompile Include="modelRam.cpp" />
     <ClCompile Include="moduleInfo.cpp" />
     <ClCompile Include="fnumber.cpp" />
     <ClCompile Include="compiler\value_res.cpp">
@@ -1722,7 +1722,7 @@
     <ClCompile Include="system\value\valueSpreadsheetCell.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
-    <ClCompile Include="tableView.cpp" />
+    <ClCompile Include="modelView.cpp" />
     <ClCompile Include="propertyManager\property\propertyChartOfAccounts.cpp">
       <Filter>propertyManager\property</Filter>
     </ClCompile>

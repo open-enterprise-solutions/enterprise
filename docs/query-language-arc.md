@@ -1442,7 +1442,7 @@ offset 0 holds). `GetName`/`GetPhysicalName` on the base; `GetTypeDesc` is the
 attribute's existing accessor, **reused as-is** to satisfy the interface (no copy,
 no separate method). No adapter in the builder — the attribute carries the column
 identity directly. It lives in its own light header so the fundamental attribute
-class does not drag in the full `queryable.h` / `tableInfo.h` weight.
+class does not drag in the full `queryable.h` / `model.h` weight.
 
 A **constant** is therefore both: a column (it derives `ibValueMetaObjectAttribute`)
 **and** a queryable (`ibValueMetaObjectConstant` now also derives

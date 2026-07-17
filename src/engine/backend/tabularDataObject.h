@@ -6,7 +6,7 @@
 #include "backend/sourceDescription.h"  // ibSourceHop — a binding path is {id, expected type} per hop
 
 // Fwd — the hop gate takes these BY REF, so declarations suffice here (full types come in the .cpp's that
-// implement it): ibSourceHop (sourceDescription.h), ibDataViewItem (tableView.h), ibValue (compiler/value.h).
+// implement it): ibSourceHop (sourceDescription.h), ibDataViewItem (modelView.h), ibValue (compiler/value.h).
 class BACKEND_API ibDataViewItem;
 
 // ibTabularDataObject — the FULL tabular source: the TABLE mirror of ibSourceDataObject (the full SCALAR source

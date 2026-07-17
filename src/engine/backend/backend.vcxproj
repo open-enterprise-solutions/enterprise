@@ -326,8 +326,8 @@
     <ClInclude Include="system\value\valueDatabase.h" />
     <ClInclude Include="system\value\valueTable.h" />
     <ClInclude Include="system\value\valueType.h" />
-    <ClInclude Include="tableInfo.h" />
-    <ClInclude Include="tableView.h" />
+    <ClInclude Include="model.h" />
+    <ClInclude Include="modelView.h" />
     <ClInclude Include="sourceDescription.h" />
     <ClInclude Include="typeconv.h" />
     <ClInclude Include="typeDescription.h" />
@@ -719,11 +719,11 @@
     <ClCompile Include="system\value\valueTableModel.cpp" />
     <ClCompile Include="system\value\valueTable_res.cpp" />
     <ClCompile Include="system\value\valueType.cpp" />
-    <ClCompile Include="tableInfo.cpp" />
-    <ClCompile Include="tableInfoDb.cpp" />
-    <ClCompile Include="tableInfoRam.cpp" />
+    <ClCompile Include="model.cpp" />
+    <ClCompile Include="modelDb.cpp" />
+    <ClCompile Include="modelRam.cpp" />
     <ClCompile Include="sourceDescription.cpp" />
-    <ClCompile Include="tableView.cpp" />
+    <ClCompile Include="modelView.cpp" />
     <ClCompile Include="typeDescription.cpp" />
     <ClCompile Include="uniqueKey.cpp" />
     <ClCompile Include="plugin\pluginManager.cpp" />

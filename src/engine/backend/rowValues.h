@@ -73,7 +73,7 @@ public:
 	size_type count(const Key& k) const { return find(k) != m_data.end() ? 1 : 0; }
 
 	// at() throws std::out_of_range on a miss — same as std::map (some callers
-	// rely on the throw, e.g. tableInfo.h's try/catch around at()).
+	// rely on the throw, e.g. model.h's try/catch around at()).
 	T& at(const Key& k) {
 		iterator it = LowerBound(k);
 		if (!Hit(it, k)) throw std::out_of_range("ibRowValues::at");

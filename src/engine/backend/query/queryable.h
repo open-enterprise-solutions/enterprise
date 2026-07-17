@@ -19,9 +19,9 @@
 //
 // See docs/query-language-arc.md §18 (name substitution) / §20 (this interface).
 
-#include "backend/tableView.h"          // ibMetaID (via backend.h) — NOT tableInfo.h, so tableInfo.h can hold
+#include "backend/modelView.h"          // ibMetaID (via backend.h) — NOT model.h, so model.h can hold
                                         // ibDataDBComposer BY VALUE (breaks the dataComposer→queryLowering→queryable→
-                                        // tableInfo include cycle). (ibComparisonType is no longer used here — the
+                                        // model include cycle). (ibComparisonType is no longer used here — the
                                         // L3 condition op is ibQueryFilterOp now, defined below.)
 #include "backend/compiler/value.h"     // ibValue
 #include "queryColumn.h"                // ibBackendQueryColumn (the column counterpart)

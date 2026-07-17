@@ -23,7 +23,7 @@
 #if wxUSE_DATAVIEWCTRL
 
 #include "dataview.h"
-#include "backend/tableInfo.h"
+#include "backend/model.h"
 #include "datavgen.paged.private.h"
 #ifndef WX_PRECOMP
 #include <wx/log.h>
