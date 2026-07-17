@@ -304,7 +304,9 @@ source-command band. Details: [paging-design.md](paging-design.md) §8.
   dim [dim </> anchor] LIMIT count` (`ibDbTableProvider::ExecuteGroupLevelPage`, reached from the composer's
   single-scalar-dim TOTALS drill via `SelectAggregatePage`) — so the nomenclature-hierarchy tree no longer
   loads every group. Reports (measures), dot-walk / multi-level / multi-source groupings still load the whole
-  level at once and RAM-fold; the composite-`ROLLUP` / reference-spread push-down (L2-IR) is the remaining piece.
+  level at once and RAM-fold. (A **single-source** reference-spread ROLLUP totals now pushes down too — the
+  reference groups as ONE composite `ROLLUP((spread))` element, reassembled on read; **co-located** reference
+  ROLLUP and dot-walk group keys are the remaining fold cases.)
 - **The `ibVisualHost` scrollbar flash on form open is NOT the data-view.** `ibDataViewCtrl`'s
   own vertical scrollbar range is always 0; the flash is the form host (`wxScrolledWindow`)
   setting a virtual size larger than its placeholder client during build. Tracked in

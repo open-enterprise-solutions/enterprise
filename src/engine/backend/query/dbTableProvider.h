@@ -76,7 +76,8 @@ public:
 	static ibDataQueryResult ExecuteColocatedUnion(const ibDataQuerySpec& spec, const ibReadPageRequest& page);
 
 	// Totals push-down via GROUP BY ROLLUP (docs/query-language-arc.md §22.1b). CanPushRollupTotals:
-	// a single-source DB queryable, scalar group keys / aggregate inputs, AND the connected dialect
+	// a single-source DB queryable, SCALAR or REFERENCE group keys (a reference groups by its full spread as ONE
+	// composite ROLLUP((f0,f1,…)) element, reassembled on read) + scalar aggregate inputs, AND the connected dialect
 	// advertises ROLLUP. ExecuteRollupTotals then runs ONE GROUP BY ROLLUP(keys) + the aggregates +
 	// GROUPING(key) flags — the DBMS computes every subtotal level from raw detail (correct for
 	// COUNT / AVG) — and assembles the ibSelectorTree node tree from the result. Else the composer

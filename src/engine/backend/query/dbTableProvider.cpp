@@ -1684,10 +1684,14 @@ bool ibDbTableProvider::CanRollupTotalsShape(const ibDataQuerySpec& spec)
 		if (spec.m_groupBy->empty())                              return false;
 		if (!spec.m_dotWalks->empty() || !spec.m_keyIn->empty())  return false;
 
-		// Scalar group keys + aggregate inputs (reference group-by-rollup needs spread GROUP BY -> RAM).
+		// A dot-walk GROUP key needs a reference JOIN that RunRollupTotals does not build -> RAM.
+		if (spec.m_groupPaths != nullptr)
+			for (const auto& gp : *spec.m_groupPaths) if (!gp.empty()) return false;
+		// Group keys: SCALAR or a REFERENCE / variant (a reference groups by its full spread as ONE composite
+		// ROLLUP element, reassembled on read — RunRollupTotals handles it). Aggregate inputs stay SCALAR.
 		ColocatedLeaves one; one.push_back(q);
 		for (const ibBackendQueryColumn* g : *spec.m_groupBy)
-			if (g == nullptr || !ScalarReadable(g, one)) return false;
+			if (g == nullptr) return false;
 		for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates)
 			if (a.m_col != nullptr && !ScalarReadable(a.m_col, one)) return false;
 		return true;
@@ -1708,23 +1712,54 @@ bool ibDbTableProvider::CanPushRollupTotals(const ibDataQuerySpec& spec)
 // reference — UNqualified for a single table, table-qualified for a co-located JOIN. Both the
 // single-source push (ExecuteRollupTotals) and the co-located multi-source push
 // (ExecuteColocatedRollupTotals) funnel here, so the row-read + tree-assembly lives in ONE place.
+// Per group-key rendering plan for a ROLLUP totals: a SCALAR key is one field (colExpr); a REFERENCE / variant
+// key is its FULL SPREAD grouped as ONE composite ROLLUP element ((f0,f1,…)) so the whole reference is a single
+// level, projected under a prefix, and reassembled on read via ibColumnCodec::ReadValue. The caller supplies the
+// per-column plan (scalar? + qualifier for the spread fields + the metaData for reassembly).
+struct RollupGroupKey { bool scalar; wxString qualifier; const ibMetaData* meta; };
+
 static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr from,
-	const std::function<ibQueryExprPtr(const ibBackendQueryColumn*)>& colExpr)
+	const std::function<ibQueryExprPtr(const ibBackendQueryColumn*)>& colExpr,
+	const std::function<RollupGroupKey(const ibBackendQueryColumn*)>& keyInfo)
 {
-	// Build the IR: SELECT g<i>, GROUPING(g<i>) AS grp<i>, <agg> AS alias FROM <from>
-	//               GROUP BY ROLLUP(g0, g1, …)
+	// Build the IR: SELECT <g<i> | spread>, GROUPING(<key rep>) AS grp<i>, <agg> AS alias FROM <from>
+	//               GROUP BY ROLLUP(g0 | (spread0), g1 | (spread1), …)
+	struct KeyPlan { const ibBackendQueryColumn* col; bool scalar; wxString tag; const ibMetaData* meta; };
+	std::vector<KeyPlan>         keyPlans;
 	std::vector<ibQueryProjItem> projection;
 	std::vector<ibQueryExprPtr>  groupKeys;
-	std::vector<wxString>        groupAliases, groupingAliases;
+	std::vector<wxString>        groupingAliases;
 	int gi = 0;
 	for (const ibBackendQueryColumn* g : *spec.m_groupBy) {
-		const ibQueryExprPtr gexpr    = colExpr(g);
-		const wxString       galias   = wxString::Format(wxT("g%d"),   gi);
+		const RollupGroupKey ki       = keyInfo(g);
 		const wxString       grpalias = wxString::Format(wxT("grp%d"), gi);
-		groupKeys.push_back(gexpr);
-		projection.push_back(ibQueryProjItem{ gexpr, galias });
-		projection.push_back(ibQueryProjItem{ ibFunc(wxT("GROUPING"), { colExpr(g) }), grpalias });
-		groupAliases.push_back(galias);
+		auto fieldCol = [&](const wxString& f) { return ki.qualifier.empty() ? ibCol(f) : ibCol(ki.qualifier, f); };
+		if (ki.scalar) {
+			const wxString       galias = wxString::Format(wxT("g%d"), gi);
+			const ibQueryExprPtr gexpr  = colExpr(g);
+			groupKeys.push_back(gexpr);
+			projection.push_back(ibQueryProjItem{ gexpr, galias });
+			projection.push_back(ibQueryProjItem{ ibFunc(wxT("GROUPING"), { colExpr(g) }), grpalias });
+			keyPlans.push_back({ g, true, galias, ki.meta });
+		}
+		else {
+			// REFERENCE / variant key: GROUP BY its SPREAD as ONE composite ROLLUP element ((f0,f1,…) — an empty-
+			// name Func renders as a parenthesised tuple) so the whole reference is a single ROLLUP level; project
+			// the spread under a prefix; GROUPING on the FIRST field (a ROLLUP element's fields share the flag).
+			const wxString prefix = wxString::Format(wxT("gcol%d"), gi);
+			const wxString base   = g->GetPhysicalName();
+			std::vector<ibQueryExprPtr> spread;
+			ibQueryExprPtr firstField;
+			for (const wxString& f : ColumnFieldNames(g)) {
+				const ibQueryExprPtr fexpr = fieldCol(f);
+				if (!firstField) firstField = fexpr;
+				spread.push_back(fexpr);
+				projection.push_back(ibQueryProjItem{ fexpr, prefix + f.Mid(base.length()) });
+			}
+			groupKeys.push_back(ibFunc(wxT(""), std::move(spread)));   // composite element -> "(f0, f1, …)"
+			projection.push_back(ibQueryProjItem{ ibFunc(wxT("GROUPING"), { firstField }), grpalias });
+			keyPlans.push_back({ g, false, prefix, ki.meta });
+		}
 		groupingAliases.push_back(grpalias);
 		++gi;
 	}
@@ -1755,7 +1790,11 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 	while (cursor.Next()) {
 		RRow rr; rr.level = 0;
 		for (size_t i = 0; i < nGroup; ++i) {
-			rr.groups.push_back(ReadScalarByAlias((*spec.m_groupBy)[i], groupAliases[i], cursor));
+			const KeyPlan& kp = keyPlans[i];
+			ibValue v;
+			if (kp.scalar) v = ReadScalarByAlias(kp.col, kp.tag, cursor);
+			else           ibColumnCodec::ReadValue(kp.tag, kp.col, kp.meta, v, cursor);   // reference / variant key reassembly
+			rr.groups.push_back(v);
 			if (cursor.GetResultInt(groupingAliases[i]) == 0) ++rr.level;
 		}
 		for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates) {
@@ -1782,7 +1821,7 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 	for (const RRow& rr : rrows) {
 		wxString key, parentKey;
 		for (int i = 0; i < rr.level; ++i) {
-			const wxString seg = rr.groups[static_cast<size_t>(i)].GetString() + wxT("\x1f");
+			const wxString seg = rr.groups[static_cast<size_t>(i)].GetHashKey() + wxT("\x1f");   // unique per value (scalar OR reference)
 			if (i + 1 < rr.level) parentKey += seg;
 			key += seg;
 		}
@@ -1813,8 +1852,15 @@ ibSelectorTree ibDbTableProvider::ExecuteRollupTotals(const ibDataQuerySpec& spe
 		if (ibQueryExprPtr where = ibMetaIRBuilder::BuildWhere(q, *spec.m_conditions, spec.m_predicate))
 			from = ibFilter(from, where);
 		// One table -> columns are UNqualified (their first SQL field).
+		ColocatedLeaves leaves1; leaves1.push_back(q);
+		const ibMetaData* meta = q->GetMetaData();
 		return RunRollupTotals(spec, from,
-			[](const ibBackendQueryColumn* c) { return ibCol(FirstSqlFieldOfColumn(c)); });
+			[](const ibBackendQueryColumn* c) { return ibCol(FirstSqlFieldOfColumn(c)); },
+			[leaves1, meta](const ibBackendQueryColumn* g) -> RollupGroupKey {
+				// scalar key -> one field; a reference / variant key -> its full spread (composite ROLLUP element),
+				// reassembled via the source's metaData. UNqualified (single table).
+				return { g->IsRawColumn() || ScalarReadable(g, leaves1), wxString(), meta };
+			});
 	}
 
 // STRUCTURAL gate for a co-located UNION totals: every branch a real DB Source leaf, and every column
@@ -1969,7 +2015,8 @@ ibSelectorTree ibDbTableProvider::ExecuteColocatedRollupTotals(const ibDataQuery
 				[&aliasOf](const ibBackendQueryColumn* c) {
 					const auto it = aliasOf.find(c);
 					return ibCol(wxT("u"), it != aliasOf.end() ? it->second : FirstSqlFieldOfColumn(c));
-				});
+				},
+				[](const ibBackendQueryColumn*) -> RollupGroupKey { return { true, wxString(), nullptr }; });   // CanColocateRollupTotals guarantees SCALAR group keys (a co-located reference ROLLUP still RAM-folds)
 		}
 
 		// JOIN tree -> ROLLUP over the co-located join; qualify each column by its owning leaf's table.
@@ -1979,7 +2026,8 @@ ibSelectorTree ibDbTableProvider::ExecuteColocatedRollupTotals(const ibDataQuery
 		if (ibQueryExprPtr where = ColocatedWhere(spec, leaves))
 			from = ibFilter(from, where);
 		return RunRollupTotals(spec, from,
-			[&leaves](const ibBackendQueryColumn* c) { return ibCol(ColocatedQual(leaves, c), FirstSqlFieldOfColumn(c)); });
+			[&leaves](const ibBackendQueryColumn* c) { return ibCol(ColocatedQual(leaves, c), FirstSqlFieldOfColumn(c)); },
+			[](const ibBackendQueryColumn*) -> RollupGroupKey { return { true, wxString(), nullptr }; });   // CanColocateRollupTotals guarantees SCALAR group keys
 	}
 
 // Bind a write column's value positionally: a RAW column straight by its declared RawType (no
