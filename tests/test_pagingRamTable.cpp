@@ -29,7 +29,7 @@
 
 #include <gtest/gtest.h>
 
-#include "backend/tableInfo.h"
+#include "backend/modelInfo.h"
 #include "backend/compiler/value.h"
 
 namespace {
