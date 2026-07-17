@@ -88,6 +88,7 @@ private:
 	ibQueryAstExprPtr             ParseMulDiv();      // * / % (higher precedence)
 	ibQueryAstExprPtr             ParsePrimary();
 	ibQueryAstExprPtr             ParseAggregate();   // SUM/COUNT/... ( ... )
+	ibQueryAstExprPtr             ParseValueConstant();// VALUE( <Kind>.<Name>.<Member> ) — literal reference constant
 	ibQueryAstExprPtr             ParseCase();        // CASE WHEN … THEN … [ELSE …] END
 };
 

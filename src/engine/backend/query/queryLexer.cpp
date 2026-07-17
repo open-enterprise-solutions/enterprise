@@ -61,6 +61,7 @@ static const ibQueryKeyWordEntry s_queryKeyWordsEN[] =
 	{ ibQueryKeyword::Min,      wxT("MIN")      },
 	{ ibQueryKeyword::Max,      wxT("MAX")      },
 	{ ibQueryKeyword::Avg,      wxT("AVG")      },
+	{ ibQueryKeyword::Value,    wxT("VALUE")    },
 };
 
 namespace {

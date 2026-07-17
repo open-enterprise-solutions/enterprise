@@ -852,7 +852,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildColumnExpr(const ibBackendQueryable* querya
 	return nullptr;
 }
 
-std::vector<ibQuerySortKey> ibMetaIRBuilder::BuildSortKeys(const ibBackendQueryable* /*queryable*/,
+std::vector<ibQuerySortKey> ibMetaIRBuilder::BuildSortKeys(const ibBackendQueryable* queryable,
                                                            const std::vector<ibQuerySortItem>& sorts,
                                                            bool reverse,
                                                            const wxString& mainQual)
@@ -864,6 +864,13 @@ std::vector<ibQuerySortKey> ibMetaIRBuilder::BuildSortKeys(const ibBackendQuerya
 	// (GetValueFields), so no ResolveAttribute: an attribute column returns its authoritative
 	// field list, a temp / raw column its bare field. One uniform pass.
 	for (const ibQuerySortItem& s : sorts) {
+		if (s.m_expr) {   // ORDER BY <expression> (CASE / arithmetic / value) — lower the L3 expr to L2, sort on it
+			ibQuerySortKey k;
+			k.m_expr = BuildColumnExpr(queryable, s.m_expr, mainQual);
+			k.m_dir  = (reverse ? !s.m_ascending : s.m_ascending) ? ibQuerySortDir::Asc : ibQuerySortDir::Desc;
+			keys.push_back(std::move(k));
+			continue;
+		}
 		if (s.m_col == nullptr) continue;
 		if (!s.m_path.empty()) continue;   // dot-walk sort — emitted inline by BuildPageIR (qualified by its join alias)
 		const bool asc = reverse ? !s.m_ascending : s.m_ascending;
@@ -2548,6 +2555,13 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 		if (hasDotWalk) {
 			// Emit sort keys in effective ORDER, interleaving plain (main-table) and dot-walk (joined) sorts.
 			for (const ibQuerySortItem& s : effective) {
+				if (s.m_expr) {   // computed sort (ORDER BY <expression>) — lower the L3 expr to L2, sort on it
+					ibQuerySortKey k;
+					k.m_expr = ibMetaIRBuilder::BuildColumnExpr(queryable, s.m_expr, mainQual);
+					k.m_dir  = (req.m_reverseSort ? !s.m_ascending : s.m_ascending) ? ibQuerySortDir::Asc : ibQuerySortDir::Desc;
+					q.AddSortKey(std::move(k));
+					continue;
+				}
 				if (s.m_col == nullptr) continue;
 				const bool asc = req.m_reverseSort ? !s.m_ascending : s.m_ascending;
 				if (!s.m_path.empty()) {

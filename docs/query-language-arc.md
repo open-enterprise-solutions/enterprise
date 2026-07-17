@@ -2704,3 +2704,40 @@ check scalarity, so a reference group key slipped into the keyset-paged `Execute
 (`ColumnValueFields`) dropped the TYPE field the read reconstructs from → "field `<col>_TYPE` not found in the
 resultset". The gate now rejects any multi-field-spread dimension (reference / variant), routing it to the unpaged
 full-spread `ExecuteAggregate`. Regression guard: `QueryComposerGate.GroupLevelPage_ReferenceDim_NotPageable`.
+
+## Update 2026-07-17 — `value(...)` literal reference constant + expression ORDER BY + constant JOIN ON
+
+**`value(<Kind>.<Name>.<Member>)` — a literal reference constant (1C `ЗНАЧЕНИЕ`).** New keyword `VALUE`
+(`queryKeywords.h` / `queryLexer.cpp`), parsed in `ParsePrimary` into a new AST kind `Value` carrying the
+dotted meta-path (`queryAst.h`). The name is NOT resolved at parse time (the AST stays metadata-free) — resolution
+happens at LOWERING, where the config is in scope, exactly like a source name. `value(Catalog.Currencies.EmptyRef)`
+→ the catalog's empty reference; `value(Catalog.Currencies.Dollar)` → the reference to that predefined item.
+
+- **Resolution lives on the metaobject, reached through the queryable.** `EvalValue` (the leaf node→`ibValue`
+  evaluator — the same one that turns a `&parameter` into its bound value) resolves the meta-path through the SAME
+  factory a FROM source uses (`md->GetSourceFactory()->Resolve(ns, name)`), then reads the member straight off the
+  resolved queryable's `GetSourceMetaObject()`. Nothing is added to the queryable — it already vends the metaobject.
+- **`ibValueMetaObjectGenericData::ResolveQueryConstant(member, out)`** — a virtual try-resolve returning `bool` +
+  the value in `out` (NOT throwing, NOT returning): the generic base has no constants → false; the record level
+  (`ibValueMetaObjectRecordDataRef`) resolves `EmptyRef` via `ibValueReferenceDataObject::Create(this)`; the
+  hierarchy level (`…HierarchyMutableRef`) adds predefined items via `FindPredefinedValue(member)` →
+  `Create(this, guid)`. Cast-free — each override uses its own `this` type. An unknown member returns false and
+  **the query engine raises the exception** (in `EvalValue`, so the error carries the query source span).
+- **Works everywhere a value is expected — one seam (`EvalValue`).** `WHERE / HAVING / IN(list) / BETWEEN / LIKE`
+  RHS already route through `EvalValue`, so `value(...)` and `&param` work there for free. Plus a `Value` /
+  `Param` case in the projection (`SELECT value(...) [AS x]`, `SELECT &param`) and in `BuildColumnExprFromAst`
+  (inside a computed column / CASE).
+
+**Constant JOIN ON — `col <op> value/&param` is an INNER-join filter.** `JOIN b ON b.x <op> &p` is, by SQL, a
+cross join filtered on `b.x` — so the lowering emits `CrossJoin` + `Where(col, op, value)` when exactly one side of
+the ON comparison is a constant (literal / `&param` / `value(...)`). Gated to INNER joins: filter-in-ON differs from
+filter-in-WHERE only for outer joins (it pre-filters the null-padded side), which errors clearly ("put it in WHERE").
+
+**Expression ORDER BY — `ORDER BY CASE … END` (sort by a condition).** New `ibDataQueryBuilder::OrderByExpr(expr,
+asc)` + `ibQuerySortItem::m_expr` (an `ibQueryColumnExpr`, mirroring the computed-WHERE `m_expr`). The L2 sort key
+already sorts by an EXPRESSION (`ibQuerySortKey::m_expr`), so `BuildSortKeys` just lowers the L3 expr to L2 through
+the existing `BuildColumnExpr` and emits it — no new SQL. The lowering routes an `Arith` / `Case` (or a bare
+constant) ORDER BY item to `OrderByExpr`; a plain column / dot-walk keeps the column sort (it can keyset). Single DB
+source only (like the computed WHERE side; `computedPrimary` and JOIN error clearly). A computed sort is NOT a
+keyset key — the anchor / keyset builders already skip `m_col == null` items, so it materialises only in the ORDER
+BY; the text-query full read (`Query.Execute()`, never the path-based list composer) is the user.

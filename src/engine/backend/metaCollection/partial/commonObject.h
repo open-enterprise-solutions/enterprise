@@ -402,6 +402,10 @@ public:
 
 	virtual bool IsDataReference(const ibMetaID& id) const override { return id == (*m_propertyAttributeReference)->GetMetaID(); }
 
+	// value(...) — a reference record vends its EMPTY reference (member "EmptyRef"); the hierarchy level below adds
+	// predefined items. False on an unknown member (the query engine throws). (Body in commonObjectMetaQuery.cpp.)
+	virtual bool ResolveQueryConstant(const wxString& member, ibValue& out) const override;
+
 	// ---- Source surface (the descriptor forwards each call here). The reference-record BASE = the ENUM variant:
 	// it selects by the reference cell, fills the list showing ONLY the reference visible (an enum's value IS its
 	// reference), and lists no commands (an enum shows none — the writeable levels override to add them). The
@@ -890,9 +894,14 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 	virtual bool OnBeforeCloseMetaObject();
 	virtual bool OnAfterCloseMetaObject();
 
-	//is predefined value? 
+	//is predefined value?
 	bool HasPredefinedValue(const ibGuid& valueGuid) const { return FindPredefinedValue(valueGuid) != nullptr; }
 	bool HasPredefinedValue(const wxString& strPredefinedName) const { return FindPredefinedValue(strPredefinedName) != nullptr; }
+
+	// value(...) — the hierarchy level adds PREDEFINED items on top of the record base's EmptyRef: member ==
+	// "EmptyRef" → the empty reference; else FindPredefinedValue(member) → a reference to that predefined item;
+	// false on an unknown member (the query engine throws). (Body in commonObjectMetaQuery.cpp.)
+	virtual bool ResolveQueryConstant(const wxString& member, ibValue& out) const override;
 
 	//create associate value
 	ibValueRecordDataObjectHierarchyRef* CreateObjectValue(ibObjectMode mode) const;

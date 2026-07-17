@@ -158,6 +158,12 @@ struct ibQuerySortItem
 	const ibBackendQueryColumn* m_col = nullptr;   // null = row-key (reference/PK) sort; with m_path = the path LEAF
 	bool                        m_ascending = true;
 	std::vector<const ibBackendQueryColumn*> m_path;     // reference dot-walk path (empty = plain column)
+
+	// COMPUTED sort (ORDER BY <expression> — a CASE, arithmetic, or a bare value/&parameter): when set, the
+	// provider lowers it via BuildColumnExpr and sorts on the resulting expression — m_col stays null, m_path
+	// empty. Single-source DB reads only (the L4 lowering gates it), like the computed WHERE side; a computed
+	// sort cannot be a keyset key, so a paged read cannot page by it (the text-query full read is the user).
+	std::shared_ptr<struct ibQueryColumnExpr> m_expr;
 };
 
 // ==========================================================================

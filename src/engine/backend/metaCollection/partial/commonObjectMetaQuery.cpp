@@ -34,6 +34,37 @@ wxString ibValueMetaObjectRecordDataRef::GetPhysicalTableName() const
 		className, GetMetaID());
 }
 
+// --- value(<Kind>.<Name>.<Member>) resolution (L4-1 literal reference constant, 1C ЗНАЧЕНИЕ) ------------------
+// A pure try-resolve: TRUE + the value in `out`, FALSE when the member is unknown (the query engine raises the
+// exception, so the error carries the query source span — Max). The GENERIC metaobject has no constants; a
+// reference record vends EmptyRef; the hierarchy level adds predefined items. No throw here.
+
+bool ibValueMetaObjectGenericData::ResolveQueryConstant(const wxString& /*member*/, ibValue& /*out*/) const
+{
+	return false;
+}
+
+bool ibValueMetaObjectRecordDataRef::ResolveQueryConstant(const wxString& member, ibValue& out) const
+{
+	if (member.CmpNoCase(wxT("EmptyRef")) != 0)
+		return false;
+	out = ibValue(ibValueReferenceDataObject::Create(this));
+	return true;
+}
+
+bool ibValueMetaObjectRecordDataHierarchyMutableRef::ResolveQueryConstant(const wxString& member, ibValue& out) const
+{
+	if (member.CmpNoCase(wxT("EmptyRef")) == 0) {
+		out = ibValue(ibValueReferenceDataObject::Create(this));
+		return true;
+	}
+	if (const wxObjectDataPtr<ibPredefinedValueObject> pv = FindPredefinedValue(member)) {
+		out = ibValue(ibValueReferenceDataObject::Create(this, pv->GetPredefinedGuid()));
+		return true;
+	}
+	return false;
+}
+
 // (SnapshotOf removed: building a snapshot is just `common->ContributeTables(snap)` — the metadata side
 //  does it directly where it drives the builder, keeping the builder itself config-agnostic.)
 

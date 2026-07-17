@@ -34,6 +34,9 @@ enum class ibQueryAstExprKind
 	Column,    // dotted path a.b.c  (m_path)
 	Literal,   // ibValue constant   (m_literal)
 	Param,     // &Name              (m_paramName)
+	Value,     // value(<Kind>.<Name>.<Member>) — a literal reference / enum / predefined constant, resolved AT
+	           // LOWERING against the config (m_path = the dotted meta-path). Behaves like a Param once resolved:
+	           // EvalValue turns it into an ibValue that flows as a bound value. (Enum members land here too.)
 	Func,      // SUM/MIN/MAX/AVG(arg) | COUNT(*|arg)   (m_func, m_arg / m_star)
 	Arith,     // lhs <+ - * / %> rhs   (m_arith)
 	Case,      // CASE WHEN p THEN e … [ELSE e] END   (m_cases, m_else)

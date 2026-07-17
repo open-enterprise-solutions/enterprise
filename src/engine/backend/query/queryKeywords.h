@@ -52,6 +52,9 @@ enum class ibQueryKeyword
 
 	// aggregate functions
 	Sum, Count, Min, Max, Avg,
+
+	// literal-reference constant: value(<Kind>.<Name>.<Member>) — an empty reference / a predefined item
+	Value,
 };
 
 // One row of a keyword table: the enum and its (canonical / localized) spelling.

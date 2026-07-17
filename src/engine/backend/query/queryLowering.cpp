@@ -11,6 +11,7 @@
 #include "queryableFactory.h"             // ibQueryableFactory — source-namespace resolution
 #include "backend/appData.h"              // ibApplicationData::GetQueryableFactory
 #include "backend/metaData.h"             // ibMetaData::GetSourceFactory — resolve through the query's OWN config
+#include "backend/metaCollection/genericData.h"  // ibValueMetaObjectGenericData::ResolveQueryConstant (value(...) resolution)
 #include "backend/model.h"            // ibComparisonType
 #include "backend/backend_exception.h"    // ibBackendCoreException
 
@@ -361,6 +362,31 @@ ibValue EvalValue(const ibQueryAstExpr& e, const std::map<wxString, ibValue>& pa
 		}
 		return *v;
 	}
+	if (e.m_kind == ibQueryAstExprKind::Value) {
+		// value(<Kind>.<Name>.<Member>) — a literal reference constant. Resolve the metaobject through the SAME
+		// factory a FROM source uses, then read the member's value straight off the queryable's metaobject (Max:
+		// "you just get the runtime value off the queryable by name"). The metaobject try-resolves (bool + out); the
+		// engine raises the exception HERE so it carries the query source span (Max).
+		if (e.m_path.size() < 3)
+			Fail(e.m_line, e.m_col, _("value(...) needs <Kind>.<Name>.<Member>"));
+		const wxString& ns     = e.m_path.front();
+		const wxString& member = e.m_path.back();
+		wxString name = e.m_path[1];
+		for (size_t i = 2; i + 1 < e.m_path.size(); ++i) name += wxT(".") + e.m_path[i];
+
+		const ibMetaData* md = ibSourceMetaDataScope::Get();
+		ibQueryableFactory* factory = md != nullptr ? md->GetSourceFactory() : ibApplicationData::GetQueryableFactory();
+		if (factory == nullptr)
+			Fail(e.m_line, e.m_col, _("the query engine is not available (no application data)"));
+		const ibBackendQueryable* q = factory->Resolve(ns, name);
+		if (q == nullptr)
+			Fail(e.m_line, e.m_col, wxString::Format(_("value(): metaobject '%s.%s' not found"), ns, name));
+		const ibValueMetaObjectGenericData* meta = q->GetSourceMetaObject();
+		ibValue out;
+		if (meta == nullptr || !meta->ResolveQueryConstant(member, out))
+			Fail(e.m_line, e.m_col, wxString::Format(_("value(): '%s.%s' has no '%s' (an empty reference or a predefined item)"), ns, name, member));
+		return out;
+	}
 	Fail(e.m_line, e.m_col, _("expected a literal or a parameter as the comparison value"));
 	return ibValue();
 }
@@ -685,6 +711,7 @@ ibQueryColumnExprPtr BuildColumnExprFromAst(const std::vector<ibSourceBinding>& 
 	case ibQueryAstExprKind::Literal:
 		return ibQueryColumnExpr::Const(e.m_literal);
 	case ibQueryAstExprKind::Param:
+	case ibQueryAstExprKind::Value:   // value(...) resolves to a constant, exactly like a &parameter
 		return ibQueryColumnExpr::Const(EvalValue(e, params));
 
 	case ibQueryAstExprKind::Arith: {
@@ -920,6 +947,14 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 				oc.m_alias = alias;
 				oc.m_byAlias = true;
 			}
+			else if (e.m_kind == ibQueryAstExprKind::Value || e.m_kind == ibQueryAstExprKind::Param) {
+				// SELECT value(<Kind>.<Name>.<Member>) [AS x] / SELECT &param [AS x] — project a CONSTANT column
+				// (an empty ref / a predefined item / a bound &parameter value), resolved now. Common to tag a
+				// UNION branch or seed a constant column.
+				b.SelectExpr(ibQueryColumnExpr::Const(EvalValue(e, params)), alias);
+				oc.m_alias = alias;
+				oc.m_byAlias = true;
+			}
 			else {
 				Fail(e.m_line, e.m_col, _("unsupported projection expression"));
 			}
@@ -990,7 +1025,23 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 	// it instead, but either way the sort keys on the leaf column.
 	const bool allowOrderDotWalk = allowDotWalk || computedPrimary;
 	for (const ibQueryOrderItem& o : ast.m_orderBy) {
-		const std::vector<const ibBackendQueryColumn*> cols = ResolveWhereTarget(sources, *o.m_expr, allowOrderDotWalk);
+		const ibQueryAstExpr& oe = *o.m_expr;
+		// ORDER BY <expression> — a CASE / arithmetic ("sort by a condition") or a bare constant (value(...) /
+		// &parameter): lower it to an EXPRESSION sort. Single DB source only (like the computed WHERE side); a
+		// computed sort is no keyset key, so the text-query full read is the user. A plain column / dot-walk keeps
+		// the column sort below (it CAN keyset).
+		if (IsComputedExprAst(oe)
+		    || oe.m_kind == ibQueryAstExprKind::Param
+		    || oe.m_kind == ibQueryAstExprKind::Value
+		    || oe.m_kind == ibQueryAstExprKind::Literal) {
+			if (computedPrimary)
+				Fail(oe.m_line, oe.m_col, _("ORDER BY an expression over a computed source is not yet supported — sort by a column"));
+			if (IsComputedExprAst(oe))
+				GateComputedExpr(sources, oe);
+			b.OrderByExpr(BuildColumnExprFromAst(sources, oe, params), o.m_ascending);
+			continue;
+		}
+		const std::vector<const ibBackendQueryColumn*> cols = ResolveWhereTarget(sources, oe, allowOrderDotWalk);
 		if (cols.size() > 1) b.OrderBy(cols, o.m_ascending);
 		else                 b.OrderBy(cols[0], o.m_ascending);
 	}
@@ -1118,7 +1169,44 @@ void BuildSourceTree(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 		else if (j.m_on) {
 			if (j.m_on->m_kind != ibQueryAstExprKind::Compare)
 				Fail(j.m_on->m_line, j.m_on->m_col, _("a JOIN ON clause must be a single comparison (a.x <op> b.y) or TRUE (cross join)"));
-			if (IsComputedExprAst(*j.m_on->m_lhs) || IsComputedExprAst(*j.m_on->m_rhs)) {
+			// A CONSTANT side (&parameter / value(...) / literal) makes the ON a FILTER, not a join key —
+			// `JOIN b ON b.x <op> &p` is, by SQL, a cross join filtered on b.x (Max: params/values usable in a JOIN
+			// ON like anywhere a value goes). Emit it as cross-join + WHERE on the column side. Filter-in-ON differs
+			// from filter-in-WHERE only for OUTER joins (it pre-filters the null-padded side), so gate to INNER —
+			// an outer join wanting this writes the condition in WHERE.
+			const auto isValueExpr = [](const ibQueryAstExpr& x) {
+				return x.m_kind == ibQueryAstExprKind::Literal
+					|| x.m_kind == ibQueryAstExprKind::Param
+					|| x.m_kind == ibQueryAstExprKind::Value;
+			};
+			const bool lhsVal = isValueExpr(*j.m_on->m_lhs);
+			const bool rhsVal = isValueExpr(*j.m_on->m_rhs);
+			if (lhsVal != rhsVal) {
+				if (kind != ibQueryJoinKind::Inner)
+					Fail(j.m_on->m_line, j.m_on->m_col, _("a constant JOIN ON (column <op> value/&param) is only supported for an INNER join — put the condition in WHERE for an outer join"));
+				const ibQueryAstExpr& colE = rhsVal ? *j.m_on->m_lhs : *j.m_on->m_rhs;
+				const ibQueryAstExpr& valE = rhsVal ? *j.m_on->m_rhs : *j.m_on->m_lhs;
+				// When the value is on the LEFT the comparison direction flips for `col <op> value`.
+				ibQueryCompareOp cmp = j.m_on->m_cmp;
+				if (lhsVal) switch (cmp) {
+					case ibQueryCompareOp::Lt: cmp = ibQueryCompareOp::Gt; break;
+					case ibQueryCompareOp::Le: cmp = ibQueryCompareOp::Ge; break;
+					case ibQueryCompareOp::Gt: cmp = ibQueryCompareOp::Lt; break;
+					case ibQueryCompareOp::Ge: cmp = ibQueryCompareOp::Le; break;
+					default: break;   // Eq / Ne are symmetric
+				}
+				const ibQueryFilterOp fop =
+					cmp == ibQueryCompareOp::Eq ? ibQueryFilterOp::Equal
+					: cmp == ibQueryCompareOp::Ne ? ibQueryFilterOp::NotEqual
+					: cmp == ibQueryCompareOp::Lt ? ibQueryFilterOp::Less
+					: cmp == ibQueryCompareOp::Le ? ibQueryFilterOp::LessEqual
+					: cmp == ibQueryCompareOp::Gt ? ibQueryFilterOp::Greater
+					                              : ibQueryFilterOp::GreaterEqual;
+				const ibBackendQueryColumn* col = ResolveColumnSingle(sources, colE);
+				b.CrossJoin(qi, kind, alias);
+				b.Where(col, fop, EvalValue(valE, params));
+			}
+			else if (IsComputedExprAst(*j.m_on->m_lhs) || IsComputedExprAst(*j.m_on->m_rhs)) {
 				// Computed ON (a.x+1 <op> b.y) — both sides become column exprs, evaluated per pair in the RAM
 				// theta loop (lhs over left, rhs over right). No dot-walk inside the expression.
 				b.Join(qi, BuildColumnExprFromAst(sources, *j.m_on->m_lhs, params),

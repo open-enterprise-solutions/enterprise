@@ -473,6 +473,10 @@ ibQueryAstExprPtr ibQueryParser::ParsePrimary()
 	if (IsAggregateKw(tk))
 		return ParseAggregate();
 
+	// value(<Kind>.<Name>.<Member>) — a literal reference constant (empty ref / predefined), resolved at lowering
+	if (tk.IsKeyword(ibQueryKeyword::Value))
+		return ParseValueConstant();
+
 	// keyword literals: TRUE / FALSE / NULL
 	if (tk.IsKeyword(ibQueryKeyword::True)) {
 		++m_pos;
@@ -545,6 +549,26 @@ ibQueryAstExprPtr ibQueryParser::ParseAggregate()
 	else {
 		e->m_arg = ParseAddSub();   // a column path, or an arithmetic expression (SUM(Qty * Price))
 	}
+
+	ExpectPunct(wxT(')'), wxT("')'"));
+	return e;
+}
+
+// VALUE( <Kind>.<Name>.<Member> ) — a LITERAL reference constant: the empty reference of a metaobject
+// (`value(Catalog.Currencies.EmptyRef)`) or one of its predefined items (`value(Catalog.Currencies.Dollar)`).
+// The name is NOT resolved here (the AST is metadata-free) — the dotted path is carried as-is and resolved at
+// lowering, where the config is in scope. Mirrors 1C's ЗНАЧЕНИЕ(...). The resolved value then flows as a bound
+// value, exactly like a &parameter.
+ibQueryAstExprPtr ibQueryParser::ParseValueConstant()
+{
+	const ibQueryToken& tk = Cur();
+	++m_pos;
+
+	ExpectPunct(wxT('('), wxT("'(' after VALUE"));
+
+	auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::Value);
+	e->m_line = tk.m_line; e->m_col = tk.m_col;
+	e->m_path = ParseDottedName();
 
 	ExpectPunct(wxT(')'), wxT("')'"));
 	return e;

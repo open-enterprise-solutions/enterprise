@@ -268,6 +268,17 @@ ibDataQueryBuilder& ibDataQueryBuilder::OrderBy(const std::vector<const ibBacken
 	return *this;
 }
 
+ibDataQueryBuilder& ibDataQueryBuilder::OrderByExpr(const ibQueryColumnExprPtr& expr, bool ascending)
+{
+	if (!expr)
+		return *this;
+	ibQuerySortItem s;
+	s.m_ascending = ascending;
+	s.m_expr      = expr;   // computed sort — the provider lowers it (BuildColumnExpr) and orders on the expression
+	m_sorts.push_back(std::move(s));
+	return *this;
+}
+
 ibDataQueryBuilder& ibDataQueryBuilder::GroupBy(const ibBackendQueryColumn* col)
 {
 	if (col) { m_groupBy.push_back(col); m_groupPaths.emplace_back(); }   // plain key — empty parallel path

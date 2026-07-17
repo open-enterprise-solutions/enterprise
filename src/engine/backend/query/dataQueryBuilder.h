@@ -371,6 +371,7 @@ public:
 	                                 ibQueryFilterOp op, const ibValue& value);
 	ibDataQueryBuilder& OrderBy(const ibBackendQueryColumn* col, bool ascending);            // col (null = row-key) -> sort
 	ibDataQueryBuilder& OrderBy(const std::vector<const ibBackendQueryColumn*>& path, bool ascending); // dot-walk leaf sort
+	ibDataQueryBuilder& OrderByExpr(const ibQueryColumnExprPtr& expr, bool ascending);       // ORDER BY <expression> (CASE / arithmetic / value)
 	ibDataQueryBuilder& GroupBy(const ibBackendQueryColumn* col);                            // grouping key (reports / totals)
 	ibDataQueryBuilder& GroupBy(const std::vector<const ibBackendQueryColumn*>& path);       // dot-walk grouping key (Producer.Region)
 
