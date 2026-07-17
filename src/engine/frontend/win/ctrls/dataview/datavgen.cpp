@@ -6653,6 +6653,23 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 	ibDataViewColumn* const
 		expander = GetExpanderColumnOrFirstOne(this);
 
+	// GROUP-caption geometry (1C-style hierarchical output): a group row draws its dimension value as ONE caption
+	// that STARTS at the expander column's text and FLOWS RIGHT across columns with no value of their own — so a
+	// grouping whose dimension has no bound column still shows, while in-scope dimension columns keep their values
+	// (each empty cell paints its own slice of the caption; a valued cell paints its value instead — no cross-cell
+	// erase, since every cell draws its own background then its own content in column order). Precompute the
+	// expander column's content x; the per-row indent + expander width are added at the draw site below.
+	int grpCaptionColX = 0;
+	{
+		const unsigned int expIdx = GetColumnIndex(expander);
+		for (unsigned int c = 0; c < expIdx; c++) {
+			ibDataViewColumn* cc = GetColumnAt(c);
+			if (cc != nullptr && !cc->IsHidden())
+				grpCaptionColX += cc->GetWidth();
+		}
+	}
+	const int grpExpanderWidth = wxRendererNative::Get().GetExpanderSize(this).GetWidth();
+
 	// redraw all cells for all rows which must be repainted and all columns
 	wxRect cell_rect;
 	cell_rect.x = x_start;
@@ -6795,6 +6812,9 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 			//       respect the given wxRect's top & bottom coords, eventually
 			//       violating only the left & right coords - however the user can
 			//       make its own renderer and thus we cannot be sure of that.
+			// A GROUP row renders its VALUED cells here as usual (an in-scope dimension / its dot-walk, an aggregate);
+			// its dimension-value CAPTION is drawn ONCE as a continuous span in a dedicated pass AFTER this loop
+			// (below), so column rules / per-cell padding never break it into stripes.
 			wxDCClipper clip(dc, item_rect);
 
 			if (hasValue)
@@ -6804,6 +6824,67 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 		}
 
 		cell_rect.x += cell_rect.width;
+	}
+
+	// GROUP-row captions — drawn LAST, as ONE continuous span per row, so nothing (column rules, per-cell padding,
+	// backgrounds) breaks the text into stripes. The caption flows from the expander across the columns with NO
+	// value of their own and STOPS at the first column that carries a value (an in-scope dimension / its dot-walk),
+	// which keeps that value visible. The presentation string comes off the node itself (item.GetGroupCaption).
+	{
+		unsigned int grp_line = first_line_start;
+		for (unsigned int item = item_start; item < item_last; item++)
+		{
+			const int lh = GetLineHeight(item);
+			ibDataViewTreeNode* gnode = IsVirtualList() ? NULL : GetTreeNodeByRow(item);
+			wxString grpCaption;
+			if (gnode != NULL && gnode->GetItem().GetGroupCaption(grpCaption))
+			{
+				const ibDataViewItem gitem = gnode->GetItem();
+				const int capX = grpCaptionColX + FromDIP(PADDING_RIGHTLEFT)
+					+ GetIndent() * gnode->GetIndentLevel() + grpExpanderWidth;
+				// Right edge = the LEFT x of the first column (after the expander) that resolves a value of its own.
+				int rightX = GetEndOfLastCol();
+				int cx = 0;
+				for (unsigned int i = 0; i < GetColumnCount(); i++)
+				{
+					ibDataViewColumn* c = GetColumnAt(i);
+					if (c->IsHidden()) continue;
+					if (c != expander && cx >= capX && c->GetRenderer() != NULL
+					    && c->GetRenderer()->PrepareForItem(model, gitem, c->GetModelColumn()))
+					{
+						rightX = cx;
+						break;
+					}
+					cx += c->GetWidth();
+				}
+				if (rightX > capX)
+				{
+					const bool sel = m_selection.IsSelected(item);
+					// Draw through the SAME path a data cell uses (ibDataViewCustomRendererBase::WXCallRender ->
+					// RenderText): set the DC colour + font like the cell does (row attribute wins, else the control's
+					// own foreground / font — NOT the system default, which the form may override), then paint via the
+					// NATIVE wxRendererNative::DrawItemText with the SELECTED flag — it owns the selection-colour logic
+					// (theme-aware), so a highlighted group header matches a highlighted detail cell exactly, rather
+					// than a hand-picked HIGHLIGHTTEXT. The DC font is set explicitly (a cell above may have left a
+					// different one on the DC).
+					ibDataViewItemAttr attr;
+					GetModel()->GetAttr(gitem, expander->GetModelColumn(), attr);
+					const wxColour fg = sel ? wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHTTEXT)
+					                  : attr.HasColour() ? attr.GetColour()
+					                  : GetForegroundColour();
+					int flags = 0;
+					if (sel)          flags |= wxCONTROL_SELECTED;
+					if (!IsEnabled()) flags |= wxCONTROL_DISABLED;
+					const wxRect capRect(capX, grp_line, rightX - capX, lh);
+					wxDCClipper     clip(dc, capRect);
+					wxDCFontChanger fontChg(dc, attr.HasFont() ? attr.GetEffectiveFont(GetFont()) : GetFont());
+					dc.SetTextForeground(fg);
+					wxRendererNative::Get().DrawItemText(this, dc, grpCaption, capRect,
+						wxALIGN_LEFT | wxALIGN_CENTRE_VERTICAL, flags, wxELLIPSIZE_END);
+				}
+			}
+			grp_line += lh;
+		}
 	}
 
 #if wxUSE_DRAG_AND_DROP

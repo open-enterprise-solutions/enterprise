@@ -91,6 +91,12 @@ public:
 	// expander).  Default: leaf.
 	virtual bool IsContainer() const { return false; }
 
+	// A GROUP node's caption — the dimension VALUE this group folds by, as a display string, for the 1C-style
+	// hierarchical render (the front paints it flowing across the columns that have no value of their own).  The
+	// node SELF-describes it (the model is not consulted — the front asks the item directly, like IsContainer);
+	// only a composer GROUP node overrides.  Default: not a group → false.
+	virtual bool GetGroupCaption(wxString& WXUNUSED(caption)) const { return false; }
+
 	// Item's logical parent inside the data source.  Default: no parent.
 	// Tree-node subclasses override to walk up the live tree; row
 	// subclasses can return the parent row recovered from a reference
@@ -227,6 +233,11 @@ public:
 	// dereference an invalid pointer).
 	bool IsContainer() const {
 		return m_mode == Mode::Refcounted && m_id->IsContainer();
+	}
+	// The GROUP row's caption — asked straight off the held node (like IsContainer), so the model stays out of it.
+	// Empty for a detail / non-group. Guards RawId / fake pointers (never dereferenceable).
+	bool GetGroupCaption(wxString& caption) const {
+		return m_mode == Mode::Refcounted && m_id->GetGroupCaption(caption);
 	}
 	ibDataViewItem GetParentItem() const;
 

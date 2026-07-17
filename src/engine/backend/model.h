@@ -891,6 +891,17 @@ public:
 		const std::vector<ibValue>& GetGroupPath() const { return m_groupPath; }
 		bool IsGroup() const { return !m_groupPath.empty(); }
 
+		// GROUP caption (self-described, model-free): the node folds by a dimension VALUE — hand back that value's
+		// PRESENTATION so the front paints it as the 1C-style spanning caption. The node's OWN (deepest) dimension
+		// value is m_groupPath.back(); a detail / key-only node has no group path → false (base default), so the
+		// front keeps per-column rendering.
+		virtual bool GetGroupCaption(wxString& caption) const override {
+			if (m_groupPath.empty())
+				return false;
+			caption = m_groupPath.back().GetString();
+			return true;
+		}
+
 		// Source primary-key value(s) — the row's stable identity. A FindRowValue restore STUB carries ONLY this
 		// (no node values); RunComposerPage resolves the rest of its sort tuple by a point lookup on this key.
 		const std::vector<ibValue>& GetRowKey() const { return m_rowKey; }

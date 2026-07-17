@@ -415,6 +415,23 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 				if (groupDimCol != wxNOT_FOUND)
 					values[groupDimCol] = dimValue;
 			}
+			// ANCESTOR-dimension SCOPE on the group header (nested grouping). The per-level drill FILTERS each
+			// already-drilled ancestor dimension to its browsed value (parentPath[k]) but does NOT project it, so
+			// ONLY this level's dimension rides in r.m_values. A display column that dot-walks an ANCESTOR
+			// dimension's reference — e.g. grouped by Warehouse then Product, a column `Warehouse.Region` shown on
+			// the Product header — resolves its FIRST hop off the node by that dimension's column id (the front's
+			// GetValueByPath), which is absent here → the cell read blank. Stamp each ancestor dimension's value
+			// under its column id (the SAME id the current level's dimension already sits under), so the front walks
+			// the ancestor reference exactly as on a detail row — the scope the SELECTOR's group fold inherits down
+			// (FoldDimLevel: child->m_values = node->m_values). parentPath[k] aligns with dims[k]; a dot-walk
+			// ancestor dimension keys by its leaf id. emplace keeps r.m_values authoritative (never overwrites).
+			for (size_t k = 0; k < depth && k < dims.size() && k < parentPath.size(); ++k) {
+				ibMetaID ancId = GetColumnIDByName(dims[k]);
+				if (ancId == ibMetaID(wxNOT_FOUND))
+					ancId = resolveDotWalkLeaf(dims[k]);
+				if (ancId != ibMetaID(wxNOT_FOUND))
+					values.emplace(ancId, parentPath[k]);
+			}
 			std::vector<ibValue> groupPath = parentPath;
 			if (groupDimCol != wxNOT_FOUND)
 				groupPath.push_back(dimValue);
