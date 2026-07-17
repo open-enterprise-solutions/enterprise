@@ -16,8 +16,8 @@
 // ibQueryIR is metadata-free, so L2 stays metadata-blind. The substitution
 // primitives live in ibMetaIRBuilder.
 //
-// Lives in backend/query/ — the dedicated L3 home (the future L4 text parser
-// lands here too and lowers into this entry; the runtime invokes it).
+// Lives in backend/query/ — the dedicated L3 home (the L4 text parser + the L4-2
+// LINQ fold both lower into this entry; the runtime invokes it).
 //
 // PERFORMANCE (docs/query-language-arc.md §19) — under every scroll tick:
 //   * cacheable, no connection: the metadata resolution (the model/buffer holds

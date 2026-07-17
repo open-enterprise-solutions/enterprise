@@ -1,5 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////
-//	L4-1 — lowering: AST + parameters -> ibDataQueryBuilder, executed (queryLowering.h)
+//	L4 — lowering: BOTH front-ends land here — L4-1 text (Execute / ExecuteTotals) and
+//	L4-2 LINQ (LowerLambda*) -> ibDataQueryBuilder, executed (queryLowering.h)
 ////////////////////////////////////////////////////////////////////////////
 
 #include "queryLowering.h"
@@ -411,15 +412,14 @@ bool IsComputedExprAst(const ibQueryAstExpr& e)
 	return e.m_kind == ibQueryAstExprKind::Arith || e.m_kind == ibQueryAstExprKind::Case;
 }
 
-// Gate for a computed (arithmetic / CASE) condition lhs or aggregate input: the provider lowers
-// it server-side on a single DB source only — the RAM stitch and computed sources do not
-// evaluate condition expressions, and a silent drop would widen the filter (wrong rows).
+// Gate for a computed (arithmetic / CASE) condition lhs / aggregate input / projection: a single DB source
+// lowers it server-side; a COMPUTED source (register slice / subquery) evaluates it in RAM per row
+// (EvalColumnExprRow — SELECT / WHERE / SUM alike). Only a JOIN across leaves is still unsupported here
+// (the RAM stitch has no cross-leaf expression evaluator yet).
 void GateComputedExpr(const std::vector<ibSourceBinding>& sources, const ibQueryAstExpr& e)
 {
 	if (sources.size() > 1)
 		Fail(e.m_line, e.m_col, _("an arithmetic / CASE expression here is not yet supported over a JOIN"));
-	if (!sources.empty() && sources[0].m_q != nullptr && sources[0].m_q->IsComputedInRam())
-		Fail(e.m_line, e.m_col, _("an arithmetic / CASE expression here is not yet supported over a computed source (subquery / virtual table)"));
 }
 
 // Build the full boolean WHERE as an L3 predicate TREE (ibQueryPredicate). The door lowers it to
@@ -836,8 +836,8 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 				}
 				else {
 					const std::vector<const ibBackendQueryColumn*> argCols = ResolvePath(sources, *e.m_arg);
-					if (argCols.size() > 1 && computedPrimary)
-						Fail(e.m_line, e.m_col, _("a dot-walk aggregate input over a computed source is not yet supported"));
+					// A dot-walk aggregate input over a COMPUTED source is resolved in RAM (the provider LEFT-joins
+					// the reference leaf via ResolveComputedDotWalks, then aggregates it); a JOIN expands SQL leaves.
 					if (argCols.size() > 1 && multiSource) {
 						// dot-walk aggregate input over a JOIN — expand the ref path into LEFT-join leaves and
 						// aggregate the qualified leaf (same mechanism as the TOTALS dimension / projection).
@@ -857,8 +857,8 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 					// AGGREGATE mode: a projected column is a GROUP BY key (a non-aggregate output must be
 					// grouped). The provider GROUPS BY + projects it (plain or dot-walk leaf) and the result is
 					// read back by the leaf column — NOT via SelectPath (the read-path machinery).
-					if (pathCols.size() > 1 && computedPrimary)
-						Fail(e.m_line, e.m_col, _("a dot-walk GROUP BY column over a computed source is not yet supported"));
+					// A dot-walk GROUP BY key over a COMPUTED source is RAM-joined by the provider; over a JOIN it
+					// expands SQL join leaves; either way the key IS the leaf column (read back by GetColumnId).
 					oc.m_col = (pathCols.size() > 1 && multiSource)
 						? ExpandDotWalkJoins(b, RootForPath(sources, e), pathCols, dwJoined, dwAliasSeq, e)   // JOIN -> expand ref path
 						: pathCols.back();
@@ -883,21 +883,28 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 					oc.m_byAlias = true;
 				}
 				else {
-					if (computedPrimary)
-						Fail(e.m_line, e.m_col, _("a dot-walk projection over a computed source (subquery / virtual table) is not yet supported"));
-					b.SelectPath(pathCols, alias);
-					oc.m_alias = alias;
-					oc.m_byAlias = true;
-					// A NON-scalar leaf (reference / enum / composite) is read by reassembling its full field
-					// spread (the provider projects it under the alias prefix). A plain single-primitive scalar
-					// keeps the by-alias single-field read. Same type test as the provider's scalar/object split.
-					const ibTypeDescription& ltd = pathCols.back()->GetTypeDesc();
-					const bool plainScalar = ltd.GetClsidCount() == 1
-						&& (ltd.ContainType(ibValueTypes::TYPE_NUMBER) || ltd.ContainType(ibValueTypes::TYPE_STRING)
-							|| ltd.ContainType(ibValueTypes::TYPE_DATE) || ltd.ContainType(ibValueTypes::TYPE_BOOLEAN));
-					if (!plainScalar) {
-						oc.m_objectPrefix = alias;
-						oc.m_col          = pathCols.back();
+					b.SelectPath(pathCols, alias);   // records m_dotWalks — the provider resolves it (SQL join / computed-source RAM join)
+					if (computedPrimary) {
+						// A COMPUTED source resolves the dot-walk in RAM (ibComputedProvider::ResolveComputedDotWalks
+						// materialises the reference targets + LEFT-joins the leaf in, keyed by GetColumnId), so the
+						// leaf — scalar OR a whole reassembled reference/enum cell — is read DIRECTLY by its column, not
+						// by an SQL alias. (The physical path below aliases it in SQL and reads by alias.)
+						oc.m_col = pathCols.back();
+					}
+					else {
+						oc.m_alias = alias;
+						oc.m_byAlias = true;
+						// A NON-scalar leaf (reference / enum / composite) is read by reassembling its full field
+						// spread (the provider projects it under the alias prefix). A plain single-primitive scalar
+						// keeps the by-alias single-field read. Same type test as the provider's scalar/object split.
+						const ibTypeDescription& ltd = pathCols.back()->GetTypeDesc();
+						const bool plainScalar = ltd.GetClsidCount() == 1
+							&& (ltd.ContainType(ibValueTypes::TYPE_NUMBER) || ltd.ContainType(ibValueTypes::TYPE_STRING)
+								|| ltd.ContainType(ibValueTypes::TYPE_DATE) || ltd.ContainType(ibValueTypes::TYPE_BOOLEAN));
+						if (!plainScalar) {
+							oc.m_objectPrefix = alias;
+							oc.m_col          = pathCols.back();
+						}
 					}
 				}
 			}
@@ -906,8 +913,8 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 				// AS the alias. Single-source non-aggregate only (the read path BuildPageIR projects it).
 				if (aggregate)   // single source -> SQL; JOIN -> composer RAM-eval; OVER aggregates only is unsupported
 					Fail(e.m_line, e.m_col, _("a computed column (arithmetic / CASE) over aggregates is not supported"));
-				if (computedPrimary)
-					Fail(e.m_line, e.m_col, _("a computed column (arithmetic / CASE) over a computed source (subquery / virtual table) is not yet supported"));
+				// A computed column over a COMPUTED source evaluates in RAM (ibComputedProvider::ExecuteRead —
+				// EvalColumnExprRow per row, projected under the alias). Over aggregates it stays unsupported (above).
 				b.SelectExpr(BuildColumnExprFromAst(sources, e, params), alias);
 				oc.m_alias = alias;
 				oc.m_byAlias = true;
@@ -923,8 +930,8 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 	// routes size-1 to a plain key; the provider joins a longer path (single source only — JOIN is A1).
 	for (const ibQueryAstExprPtr& g : ast.m_groupBy) {
 		const std::vector<const ibBackendQueryColumn*> gcols = ResolvePath(sources, *g);
-		if (gcols.size() > 1 && computedPrimary)
-			Fail(g->m_line, g->m_col, _("a dot-walk GROUP BY over a computed source is not yet supported"));
+		// A dot-walk GROUP BY over a COMPUTED source is RAM-joined by the provider (ExecuteAggregate resolves
+		// m_groupPaths); a JOIN expands SQL join leaves; a single physical source auto-joins the ref chain.
 		if (gcols.size() > 1 && multiSource)
 			b.GroupBy(ExpandDotWalkJoins(b, RootForPath(sources, *g), gcols, dwJoined, dwAliasSeq, *g));   // JOIN -> expand ref path
 		else
@@ -967,14 +974,22 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 	// path (the stitch path errors), and a dot-walk leaf there is rejected (allowDotWalk is false).
 	if (ast.m_where) {
 		if (IsFlatAndWhere(*ast.m_where))
-			LowerFlatWhere(b, sources, *ast.m_where, params, allowDotWalk);
+			// A COMPUTED source resolves a flat dot-walk WHERE (Ref.Field = X) in RAM: the provider joins the
+			// reference leaf and filters by it (the register cannot). The boolean predicate path stays gated.
+			LowerFlatWhere(b, sources, *ast.m_where, params, allowDotWalk || computedPrimary);
 		else
-			b.Where(BuildWherePredicate(sources, *ast.m_where, params, allowDotWalk));
+			// A COMPUTED source resolves a boolean dot-walk WHERE (Ref.A = X OR Ref.B = Y) in RAM too: the
+			// provider joins the leaves (predicate-tree gather) and FilterRows evaluates the tree by the leaf.
+			b.Where(BuildWherePredicate(sources, *ast.m_where, params, allowDotWalk || computedPrimary));
 	}
 
-	// ORDER BY — plain column or reference dot-walk leaf.
+	// ORDER BY — plain column or reference dot-walk leaf. A COMPUTED source resolves the dot-walk leaf in
+	// RAM (ibComputedProvider::ResolveComputedDotWalks joins it, keyed by GetColumnId; the RAM sort keys on
+	// s.m_col == the leaf), so ORDER BY a reference field is allowed there too — the physical path SQL-joins
+	// it instead, but either way the sort keys on the leaf column.
+	const bool allowOrderDotWalk = allowDotWalk || computedPrimary;
 	for (const ibQueryOrderItem& o : ast.m_orderBy) {
-		const std::vector<const ibBackendQueryColumn*> cols = ResolveWhereTarget(sources, *o.m_expr, allowDotWalk);
+		const std::vector<const ibBackendQueryColumn*> cols = ResolveWhereTarget(sources, *o.m_expr, allowOrderDotWalk);
 		if (cols.size() > 1) b.OrderBy(cols, o.m_ascending);
 		else                 b.OrderBy(cols[0], o.m_ascending);
 	}

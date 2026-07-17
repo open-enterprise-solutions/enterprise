@@ -2666,3 +2666,25 @@ Layer-3 scope is the harder structural work — an array-of-structures receiver 
 `ibValueModelTable` today) and the join key-selector reentrancy semantics (`EnsureIndexed` builds the hash
 inline, no snapshot-before-lambda guard) — separate arcs that need a script-level test harness. (Built green
 Debug|x86 2026-07-02; the script path has no gtest, so runtime behaviour is live-run verified.)
+
+## Update 2026-07-17 — computed-source dot-walk / expressions / HAVING (RAM) + server-side temp-promote
+
+A **computed source** (register `Balance` / `Turnover` slice, a subquery) is `IsComputedInRam()` — it has no
+server table, so historically dot-walk / arithmetic / HAVING over it threw "unsupported". Now, two layers:
+
+**RAM (the always-works floor, `ibComputedProvider`).** `ResolveComputedDotWalks` materialises each reference
+hop's TARGET and LEFT-joins the leaf in (`MaterialiseLeaf` + `JoinRamTables` — the RAM analog of the physical
+`ExpandDotWalkJoins`), so a reference dot-walk (`Balance.Item.Name`) resolves for projection / WHERE (flat +
+boolean OR/NOT) / ORDER BY / GROUP BY / aggregate input. Arithmetic / CASE evaluate per row (`EvalColumnExprRow`
+— `SUM(Qty*Price)`, `WHERE Qty*Price > N`, a computed SELECT column). `RamAggregate` applies **HAVING**
+(`PassesHaving`). The `GateComputedExpr` computed-source bail is removed (the mechanism existed — it just was
+not wired to the computed path). Tests: `tests/test_queryComputedDotWalk.cpp` (8), `tests/test_queryLinqExec.cpp`
+(L4-2 lambda→predicate→rows execution parity).
+
+**Server-side (the optimisation, `PromoteSingleComputed`, docs/temp-db.md §9).** A single computed source with a
+big result (≥ `kTempTableMinRows`) whose read AGGREGATES (scalar group key, no dot-walk) is materialised into a
+DB temp table and run as ONE server-side SQL `GROUP BY` — the DBMS does the fold. The lazy cursor is DRAINED into
+RAM while the temp manager is alive (a RAM-backed result outlives the temp DROP). Reference group keys / dot-walk
+/ small results stay RAM. SQLite-validated (`tests/test_queryComputedServer.cpp`). Push what you can to the DBMS;
+RAM is the fallback. NEXT: computed dot-walk server-side (the temp reference column resolves its target by clsid
+— the `ibReference` blob rides the spread — so the door emits a server-side JOIN to the target catalog).

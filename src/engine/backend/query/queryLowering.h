@@ -111,7 +111,9 @@ public:
 	// captured outer locals (Param nodes) to their values — the &parameter
 	// analogy. Both return EMPTY (null / {}) instead of throwing on anything
 	// untranslatable: the fold then falls back to RAM (bail-out, not an error).
-	static ibQueryPredicatePtr LowerLambdaPredicate(const ibBackendQueryable* source,
+	// BACKEND_API: exported so the L4-2 lowering is unit-testable across the DLL (like the
+	// ibDbTableProvider::Can* gates) — see tests/test_queryLinqExec.cpp.
+	static BACKEND_API ibQueryPredicatePtr LowerLambdaPredicate(const ibBackendQueryable* source,
 	                                                const ibQueryAstExpr& expr,
 	                                                const std::map<wxString, ibValue>& captured);
 	// A pure column / dot-walk path lambda body (OrderBy / aggregate selectors).

@@ -1,7 +1,9 @@
 #ifndef __QUERY_AST_H__
 #define __QUERY_AST_H__
 
-// L4-1 — text query language AST.
+// L4-1 — text query language AST. (Its `ibQueryAstExpr` expression sub-tree is SHARED with
+// L4-2: the LINQ lambda recorder builds the SAME expr nodes — compiler/lambdaQueryAst — and
+// lowers them through the same builders. `ibQuerySelect` below is L4-1-only.)
 //
 // A POD tree, L2/L3-FREE (it names ibValue + wxString only, like the L2 IR names
 // no metadata). The parser (queryParser.{h,cpp}) builds it; names are NOT yet

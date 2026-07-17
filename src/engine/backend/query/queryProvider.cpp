@@ -23,6 +23,7 @@
 #include "dbTableProvider.h"                                          // ibDbTableProvider (vended by GetProvider) + ibRenderedPageCache (NewPageCache)
 #include "resultSource.h"                                             // ibDataResultSource — the backing ibRamTableResultSource derives
 #include "tempTableManager.h"                                         // ibTempTableManager — promote a computed leaf to a DB temp table (+ ibDbTempTableQueryable)
+#include "columnLayout.h"                                             // ColumnValueFields — the value fields the temp aggregate projects a group key by
 
 #include <map>                                                        // dot-walk join dedup + col->attr cache
 #include <functional>                                                 // std::function — reference-hierarchy parent chain-up
@@ -49,6 +50,37 @@ void AppendRowByCols(const ibQueryRamTable& src, long srcRow, ibQueryRamTable& d
 }
 } // namespace
 
+// RAM dot-walk resolution for a computed source — DEFINED BELOW (it needs MaterialiseLeaf /
+// SelfReferenceColumn). Each reference-path leaf is resolved by materialising the hop targets and
+// LEFT-joining them onto the computed rows (the RAM analog of the door's SelectPath auto-join).
+namespace {
+ibQueryRamTable ResolveComputedDotWalks(ibQueryRamTable rows, const ibBackendQueryable* primary,
+                                        const ibDataQuerySpec& spec,
+                                        std::vector<const ibBackendQueryColumn*>& present);
+// ComputeRows over the computed source + dot-walk resolution + dot-walk WHERE (shared read/aggregate).
+ibQueryRamTable ComputeRowsResolved(const ibDataQuerySpec& spec,
+                                    std::vector<const ibBackendQueryColumn*>& present);
+// Per-row RAM evaluation of a computed (arithmetic / CASE) expression — defined below; forward-declared
+// here so the computed read / WHERE / aggregate paths above can evaluate SELECT / WHERE / SUM expressions.
+ibValue EvalColumnExprRow(const ibQueryColumnExpr* e, const ibQueryRamTable& t, long row);
+
+// A synthetic output column for a computed SELECT expression (Qty * Price AS x) over a computed source:
+// the alias as its name + a unique id. ExecuteRead evaluates the expr into this column; GetColumn(alias)
+// finds it by name, the sort / limit rebuild keeps it by id.
+class ibComputedExprColumn : public ibBackendQueryColumn {
+public:
+	ibComputedExprColumn(const wxString& name, ibMetaID id) : m_name(name), m_id(id) {}
+	wxString           GetName()         const override { return m_name; }
+	wxString           GetPhysicalName() const override { return m_name; }
+	ibTypeDescription& GetTypeDesc()     const override { return m_type; }
+	ibMetaID           GetColumnId()     const override { return m_id; }
+private:
+	wxString                  m_name;
+	ibMetaID                  m_id;
+	mutable ibTypeDescription m_type;
+};
+} // namespace
+
 // ibComputedProvider — the RAM-computed virtual table (register slice / balance /
 // turnover / subquery). Stateless: computes the rows from the spec, no physical scan, no
 // L2. The flat conditions push into ComputeRows; the boolean predicate TREE, the ORDER BY
@@ -56,14 +88,35 @@ void AppendRowByCols(const ibQueryRamTable& src, long srcRow, ibQueryRamTable& d
 // would silently drop on a computed source.
 ibDataQueryResult ibComputedProvider::ExecuteRead(const ibDataQuerySpec& spec, const ibReadPageRequest& req)
 {
-	ibQueryRamTable rows = spec.m_queryable->ComputeRows(*spec.m_conditions);
+	// ComputeRows + dot-walk resolution + dot-walk WHERE: plain conditions push into ComputeRows, a dot-walk
+	// Ref.Field condition joins the reference leaf and filters in RAM. `cols` receives the source columns +
+	// every joined leaf, so the DISTINCT / sort / limit rebuilds below keep them.
+	std::vector<const ibBackendQueryColumn*> cols;
+	ibQueryRamTable rows = ComputeRowsResolved(spec, cols);
+
+	// COMPUTED output columns (SELECT Qty * Price, a CASE) — evaluate the expression per row and add it as a
+	// column NAMED by its alias (the RAM analog of the DB provider projecting `expr AS alias`). Added to `cols`
+	// so the sort / limit rebuild keeps it; read back by GetColumn(alias), resolved by name.
+	std::vector<ibComputedExprColumn> exprCols;
+	if (spec.m_selectExprs != nullptr && !spec.m_selectExprs->empty()) {
+		exprCols.reserve(spec.m_selectExprs->size());
+		ibMetaID exprId = 0x70000000u;   // synthetic ids, clear of metaIDs / COUNT(*) (0x40..) / subquery-agg (0x60..)
+		for (const ibQueryColumnSelect& sc : *spec.m_selectExprs)
+			exprCols.emplace_back(sc.m_alias, exprId++);
+		for (size_t k = 0; k < exprCols.size(); ++k) {
+			rows.AddColumn(exprCols[k].GetColumnId(), exprCols[k].GetName(), exprCols[k].GetTypeDesc());
+			for (long i = 0; i < rows.RowCount(); ++i)
+				rows.SetCell(i, exprCols[k].GetColumnId(),
+				             EvalColumnExprRow((*spec.m_selectExprs)[k].m_expr.get(), rows, i));
+			cols.push_back(&exprCols[k]);
+		}
+	}
 
 	if (spec.m_predicate)
 		rows = ibQueryComposer::FilterRows(rows, spec.m_predicate.get());
 
 	// SELECT DISTINCT over a computed source (subquery / slice) -- dedup by the output columns while keeping
 	// ALL columns (the sort below may key on one not in the select list). First occurrence wins.
-	const std::vector<const ibBackendQueryColumn*> cols = spec.m_queryable->GetColumns();
 	if (spec.m_distinct && spec.m_selectCols != nullptr && !spec.m_selectCols->empty()) {
 		ibQueryRamTable deduped = RamTableOf(cols);
 		std::set<wxString> seen;
@@ -447,6 +500,106 @@ const ibBackendQueryColumn* SelfReferenceColumn(const ibBackendQueryable* q)
 	return keys.empty() ? nullptr : keys.front();
 }
 
+// RAM dot-walk resolution for a COMPUTED source (register slice / balance / turnover / subquery). Each
+// ibDotWalkColumn (ref segments + leaf) is resolved by materialising every reference hop's TARGET as a RAM
+// table (MaterialiseLeaf) and LEFT-joining it onto the computed rows, keyed on (segment ref column, target
+// self-reference) — the RAM analog of ExpandDotWalkJoins, which builds SQL joins for a physical source. The
+// leaf column lands in `rows` keyed by GetColumnId, so projection / filter / sort read it like a plain
+// column. `present` accumulates every column now in `rows` (the source's own + each brought-in leaf) so the
+// caller's DISTINCT / sort / limit rebuilds keep them. Sibling paths sharing a ref prefix reuse ONE join
+// (joined). A non-single-target (composite) reference hop is SKIPPED — the leaf stays a null cell (mirrors
+// the door's single-target guard), never a throw. (docs/query-language-arc.md §22 computed dot-walk)
+ibQueryRamTable ResolveComputedDotWalks(ibQueryRamTable rows, const ibBackendQueryable* primary,
+                                        const ibDataQuerySpec& spec,
+                                        std::vector<const ibBackendQueryColumn*>& present)
+{
+	// Gather every dot-walk PATH used over the computed source — projection (m_dotWalks), ORDER BY (m_sorts),
+	// GROUP BY (m_groupPaths) and aggregate inputs (m_aggregates[].m_path). Each is a reference chain to
+	// materialise + LEFT-join; the leaf lands keyed by GetColumnId so every clause reads it as a plain column.
+	// (WHERE dot-walk is a later slice — its flat conditions push into ComputeRows, which the register owns.)
+	std::vector<const std::vector<const ibBackendQueryColumn*>*> paths;
+	if (spec.m_dotWalks != nullptr)
+		for (const ibDotWalkColumn& dw : *spec.m_dotWalks)
+			if (dw.m_path.size() > 1) paths.push_back(&dw.m_path);
+	if (spec.m_sorts != nullptr)
+		for (const ibQuerySortItem& s : *spec.m_sorts)
+			if (s.m_path.size() > 1) paths.push_back(&s.m_path);
+	if (spec.m_groupPaths != nullptr)
+		for (const std::vector<const ibBackendQueryColumn*>& gp : *spec.m_groupPaths)
+			if (gp.size() > 1) paths.push_back(&gp);
+	if (spec.m_aggregates != nullptr)
+		for (const ibAggregateItem& a : *spec.m_aggregates)
+			if (a.m_path.size() > 1) paths.push_back(&a.m_path);
+	if (spec.m_conditions != nullptr)
+		for (const ibQueryCondition& c : *spec.m_conditions)
+			if (c.m_path.size() > 1) paths.push_back(&c.m_path);   // flat WHERE Ref.Field = X — join the leaf, filter in RAM
+	// Boolean WHERE predicate (OR / NOT / IS NULL over dot-walk leaves) — walk the tree, collect each leaf's path.
+	std::function<void(const ibQueryPredicate*)> gatherPred = [&](const ibQueryPredicate* p) {
+		if (p == nullptr) return;
+		if (p->m_leaf.m_path.size() > 1) paths.push_back(&p->m_leaf.m_path);   // Leaf condition dot-walk
+		if (p->m_path.size() > 1)        paths.push_back(&p->m_path);          // IS NULL dot-walk
+		for (const ibQueryPredicatePtr& ch : p->m_children) gatherPred(ch.get());
+	};
+	gatherPred(spec.m_predicate.get());
+
+	std::map<wxString, bool> joined;   // ref-prefix key -> already joined (dedup sibling / repeated paths)
+	for (const std::vector<const ibBackendQueryColumn*>* pathPtr : paths) {
+		const std::vector<const ibBackendQueryColumn*>& path = *pathPtr;
+		const ibBackendQueryable* curQ = primary;
+		wxString prefixKey;
+		for (size_t i = 0; i + 1 < path.size(); ++i) {
+			const ibBackendQueryColumn* refCol = path[i];
+			const ibBackendQueryable*   tgtQ   = (curQ != nullptr) ? curQ->ResolveReferenceTarget(refCol) : nullptr;
+			const ibBackendQueryColumn* tgtKey = SelfReferenceColumn(tgtQ);
+			const ibBackendQueryColumn* bring  = path[i + 1];   // the next hop's ref column, or the final leaf
+			if (tgtQ == nullptr || tgtKey == nullptr)
+				break;   // not a single-target reference — the leaf stays absent (a null cell), like the door's guard
+			prefixKey += wxString::Format(wxT("%p|"), (const void*)refCol);
+			if (joined.find(prefixKey) == joined.end()) {
+				const ibQueryRamTable tgt = MaterialiseLeaf(tgtQ, spec.m_holder, {}, { tgtKey, bring });
+				std::vector<const ibBackendQueryColumn*> outCols = present;               // keep every present column (LEFT) ...
+				std::vector<bool> fromLeft(present.size(), true);
+				outCols.push_back(bring);  fromLeft.push_back(false);                     // ... plus the brought-in target column (RIGHT)
+				rows = ibQueryComposer::JoinRamTables(rows, tgt, refCol, tgtKey, outCols, fromLeft, ibQueryJoinKind::Left);
+				present.push_back(bring);
+				joined[prefixKey] = true;
+			}
+			curQ = tgtQ;
+		}
+	}
+	return rows;
+}
+
+// ComputeRows over a COMPUTED source PLUS dot-walk resolution + a dot-walk WHERE. PLAIN door conditions
+// push into ComputeRows (the register / slice filters them itself); a dot-walk condition (WHERE Ref.Field
+// = X) the register cannot do, so the reference leaf is LEFT-joined in (ResolveComputedDotWalks) and the
+// condition applied in RAM by its now-plain leaf column. `present` receives the source columns + every
+// joined leaf (for the caller's DISTINCT / sort / limit rebuilds). Shared by the read + aggregate paths.
+ibQueryRamTable ComputeRowsResolved(const ibDataQuerySpec& spec,
+                                    std::vector<const ibBackendQueryColumn*>& present)
+{
+	// PLAIN conditions push into ComputeRows; a dot-walk OR computed-expr condition is deferred to the RAM
+	// filter below (the register can filter neither a reference leaf nor an arithmetic / CASE expression).
+	std::vector<ibQueryCondition> plainConds;
+	if (spec.m_conditions != nullptr)
+		for (const ibQueryCondition& c : *spec.m_conditions)
+			if (c.m_path.empty() && !c.m_expr) plainConds.push_back(c);
+
+	ibQueryRamTable rows = spec.m_queryable->ComputeRows(plainConds);
+	present = spec.m_queryable->GetColumns();
+	rows = ResolveComputedDotWalks(std::move(rows), spec.m_queryable, spec, present);
+
+	// A dot-walk (Ref.Field = X) or computed-expr (Qty * Price > N) WHERE — the reference leaf is now a
+	// JOINED plain column and the expr evaluates per row, so filter it in RAM (RamEvalLeaf handles both).
+	if (spec.m_conditions != nullptr)
+		for (ibQueryCondition c : *spec.m_conditions)
+			if (!c.m_path.empty() || c.m_expr) {
+				c.m_path.clear();   // a joined dot-walk leaf reads by m_col; an expr condition keeps m_expr
+				rows = ibQueryComposer::FilterRows(rows, ibQueryPredicate::Leaf(c).get());
+			}
+	return rows;
+}
+
 // A column of `from` whose reference resolves to `to` — the referencing side of an auto-join.
 const ibBackendQueryColumn* ReferenceColumnTo(const ibBackendQueryable* from, const ibBackendQueryable* to)
 {
@@ -521,8 +674,11 @@ bool RamIsNullValue(const ibValue& v)
 
 RamTri RamEvalLeaf(const ibQueryCondition& c, const ibQueryRamTable& t, long row)
 {
-	if (c.m_col == nullptr) return RamTri::False;
-	const ibValue cell = t.GetCell(row, c.m_col->GetColumnId());
+	// A COMPUTED lhs (WHERE Qty * Price > 100, a CASE) evaluates its expression per row; else read the column.
+	ibValue cell;
+	if (c.m_expr)                cell = EvalColumnExprRow(c.m_expr.get(), t, row);
+	else if (c.m_col != nullptr) cell = t.GetCell(row, c.m_col->GetColumnId());
+	else                         return RamTri::False;
 	// Any NULL operand -> UNKNOWN (the row survives only on a definite TRUE below).
 	if (RamIsNullValue(cell) || RamIsNullValue(c.m_value))
 		return RamTri::Unknown;
@@ -1011,8 +1167,8 @@ std::vector<const ibBackendQueryColumn*> AggregateRefCols(const ibDataQuerySpec&
 ibValue AggregateOne(const ibDataQueryBuilder::AggregateItem& a, const ibQueryRamTable& TC, const std::vector<long>& idx)
 {
 	using Fn = ibDataQueryBuilder::AggregateFn;
-	// COUNT(*) — no source column — counts every row in the bucket.
-	if (a.m_col == nullptr)
+	// COUNT(*) — no source column AND no computed input — counts every row in the bucket.
+	if (a.m_col == nullptr && !a.m_expr)
 		return ibValue(ibNumber(static_cast<long>(idx.size())));
 
 	// Every column aggregate IGNORES NULL operands (SQL semantics): COUNT(col) counts
@@ -1020,7 +1176,9 @@ ibValue AggregateOne(const ibDataQueryBuilder::AggregateItem& a, const ibQueryRa
 	// MIN/MAX skip NULL. A NULL row no longer inflates the result or wins MIN.
 	ibNumber sum(0); long n = 0; ibValue best; bool have = false;
 	for (long i : idx) {
-		const ibValue v = RamCell(TC, i, a.m_col);
+		// A COMPUTED aggregate input (SUM(Qty * Price), MAX(CASE …)) evaluates its expression per row;
+		// a plain input reads its source column. Same RAM expr evaluator the JOIN stitch uses.
+		const ibValue v = a.m_expr ? EvalColumnExprRow(a.m_expr.get(), TC, i) : RamCell(TC, i, a.m_col);
 		if (RamIsNullValue(v))
 			continue;
 		switch (a.m_fn) {
@@ -1121,6 +1279,31 @@ std::vector<long> AttachHierNode(const HierBuildCtx& ctx, ibSelectorTree::Node* 
 	return subtreeRows;
 }
 
+// Does a bucket satisfy every HAVING condition? Each HavingItem compares its aggregate (fn over col,
+// COUNT(*) when col is null) to a value. Used to drop a group in the RAM fold — the computed source's
+// register can't apply HAVING, so the fold does (a SUM > N group filter is core reporting).
+bool PassesHaving(const std::vector<ibDataQueryBuilder::HavingItem>& having,
+                  const ibQueryRamTable& TC, const std::vector<long>& idx)
+{
+	for (const ibDataQueryBuilder::HavingItem& h : having) {
+		ibDataQueryBuilder::AggregateItem ai;                 // m_alias / m_path / m_expr default-empty
+		ai.m_fn = h.m_fn; ai.m_col = h.m_col;
+		const ibValue agg = AggregateOne(ai, TC, idx);
+		bool ok = true;
+		switch (h.m_op) {
+		case ibQueryFilterOp::Greater:      ok =  (agg >  h.m_value); break;
+		case ibQueryFilterOp::GreaterEqual: ok = !(agg <  h.m_value); break;
+		case ibQueryFilterOp::Less:         ok =  (agg <  h.m_value); break;
+		case ibQueryFilterOp::LessEqual:    ok = !(agg >  h.m_value); break;
+		case ibQueryFilterOp::Equal:        ok =  (agg == h.m_value); break;
+		case ibQueryFilterOp::NotEqual:     ok = !(agg == h.m_value); break;
+		default:                            ok = true;                break;
+		}
+		if (!ok) return false;
+	}
+	return true;
+}
+
 // RAM GROUP BY over a composed combined table: bucket rows by the group keys, fold the
 // aggregates per bucket. Group columns ride keyed by GetColumnId (read via GetValue);
 // aggregate columns are named by their alias (read via GetColumn(alias)).
@@ -1158,6 +1341,8 @@ ibDataQueryResult RamAggregate(const ibQueryRamTable& TC, const ibDataQuerySpec&
 		if (spec.m_topCount > 0 && TO.RowCount() >= spec.m_topCount)
 			break;   // SELECT TOP n + GROUP BY — cap the folded groups (first-seen order)
 		const std::vector<long>& idx = buckets[key];
+		if (spec.m_having != nullptr && !PassesHaving(*spec.m_having, TC, idx))
+			continue;   // HAVING drops this group (the register can't apply it; the RAM fold does)
 		const long r = TO.AppendRow();
 		for (const ibBackendQueryColumn* g : *spec.m_groupBy)
 			TO.SetCell(r, g->GetColumnId(), RamCell(TC, idx.front(), g));
@@ -1426,6 +1611,81 @@ ibDataQueryResult ComposeMultiSource(const ibDataQuerySpec& spec, const ibReadPa
 		composed = RamFilter(composed, spec.m_predicate.get());
 	return ProjectToAliases(composed, spec, page);
 }
+
+// Promote a SINGLE computed source (register slice / balance / subquery) to SERVER-SIDE: materialise its
+// rows into a DB temp table, remap every column reference onto the temp's same-named columns, and run the
+// query over the temp — a REAL DB table (ibDbTempTableQueryable inherits the DB provider) — as ordinary
+// server-side SQL (WHERE / GROUP BY / SUM(expr) / HAVING). A reference column travels as its ibReference
+// blob (the temp stores the metadata spread); grouping / filtering by the reference needs NO decomposition.
+// A DOT-WALK (navigate THROUGH a reference: Ref.Field) is NOT promoted here — it would need the temp to
+// auto-join the target, which stays the RAM path. Null = not computed / no connection / a dot-walk present /
+// not worth a temp / no temp capability / an unresolved remap -> the caller stays on the RAM fold. The out-
+// buffers outlive the spec2 use; the manager keeps the temp alive across the read. (docs/temp-db.md)
+std::unique_ptr<ibTempTableManager> PromoteSingleComputed(
+	const ibDataQuerySpec& spec,
+	std::vector<ibQueryCondition>& outConds,
+	std::vector<ibQuerySortItem>& outSorts,
+	std::vector<std::pair<const ibBackendQueryColumn*, wxString>>& outSelects,
+	std::vector<const ibBackendQueryColumn*>& outGroupBy,
+	std::vector<ibDataQueryBuilder::AggregateItem>& outAggs,
+	std::vector<ibDataQueryBuilder::HavingItem>& outHaving,
+	const ibBackendQueryable*& outPrimary)
+{
+	const ibBackendQueryable* q = spec.m_queryable;
+	if (q == nullptr || !q->IsComputedInRam() || spec.m_holder == nullptr)
+		return nullptr;
+
+	// A dot-walk ANYWHERE needs the temp to auto-join a reference target (the RAM path resolves it) -> not promoted.
+	auto isWalk = [](const std::vector<const ibBackendQueryColumn*>& p) { return p.size() > 1; };
+	if (spec.m_dotWalks != nullptr && !spec.m_dotWalks->empty())          return nullptr;
+	if (spec.m_conditions) for (const ibQueryCondition& c : *spec.m_conditions) if (isWalk(c.m_path)) return nullptr;
+	if (spec.m_sorts)      for (const ibQuerySortItem&  s : *spec.m_sorts)      if (isWalk(s.m_path)) return nullptr;
+	if (spec.m_groupPaths) for (const auto& gp : *spec.m_groupPaths)            if (isWalk(gp))       return nullptr;
+	if (spec.m_aggregates) for (const auto& a : *spec.m_aggregates)             if (isWalk(a.m_path)) return nullptr;
+
+	// A REFERENCE / composite group key (a multi-field value spread) is read back from the temp aggregate by
+	// its single value field only — enough for a scalar (string / number) key, but incomplete for a reference
+	// (its _RRRef spread). Keep reference group keys on the RAM fold (correct); scalar keys go server-side.
+	if (spec.m_groupBy)
+		for (const ibBackendQueryColumn* g : *spec.m_groupBy)
+			if (g != nullptr && ColumnValueFields(g).size() > 1) return nullptr;
+
+	// Materialise the computed rows (own conditions pushed as compute filters) into a DB temp table.
+	std::vector<ibQueryCondition> ownConds;
+	if (spec.m_conditions)
+		for (const ibQueryCondition& c : *spec.m_conditions)
+			if (c.m_path.empty() && !c.m_expr && c.m_col != nullptr && q->OwnsColumn(c.m_col)) ownConds.push_back(c);
+	ibQueryRamTable rows = q->ComputeRows(ownConds);
+	if (!WorthDbTemp(rows.RowCount()))
+		return nullptr;
+	std::unique_ptr<ibTempTableManager> mgr = ibTempTableManager::Materialise(spec.m_holder, rows, q->GetMetaData());
+	if (!mgr)
+		return nullptr;
+	const ibDbTempTableQueryable* temp = mgr->Queryable();
+	if (temp == nullptr)
+		return nullptr;
+
+	// Remap a source column onto the temp's same-named column; a miss fails the promote (-> RAM).
+	bool ok = true;
+	auto remap = [&](const ibBackendQueryColumn* c) -> const ibBackendQueryColumn* {
+		if (c == nullptr) return nullptr;
+		const ibBackendQueryColumn* t = temp->ResolveColumnByName(c->GetName());
+		if (t == nullptr) ok = false;
+		return t;
+	};
+
+	if (spec.m_conditions) for (const ibQueryCondition& c : *spec.m_conditions) { ibQueryCondition n = c; n.m_col = remap(c.m_col); outConds.push_back(n); }
+	if (spec.m_sorts)      for (const ibQuerySortItem&  s : *spec.m_sorts)      { ibQuerySortItem  n = s; n.m_col = remap(s.m_col); outSorts.push_back(n); }
+	if (spec.m_selectCols) for (const auto& sc : *spec.m_selectCols)            outSelects.push_back({ remap(sc.first), sc.second });
+	if (spec.m_groupBy)    for (const ibBackendQueryColumn* g : *spec.m_groupBy) outGroupBy.push_back(remap(g));
+	if (spec.m_aggregates) for (const auto& a : *spec.m_aggregates)             { ibDataQueryBuilder::AggregateItem n = a; n.m_col = remap(a.m_col); outAggs.push_back(n); }
+	if (spec.m_having)     for (const auto& h : *spec.m_having)                 { ibDataQueryBuilder::HavingItem     n = h; n.m_col = remap(h.m_col); outHaving.push_back(n); }
+	if (!ok)
+		return nullptr;   // a column had no temp counterpart -> RAM
+
+	outPrimary = temp;
+	return mgr;
+}
 } // namespace
 
 // Aggregated read over a COMPUTED source (a register slice / a subquery): compute the rows
@@ -1434,7 +1694,13 @@ ibDataQueryResult ComposeMultiSource(const ibDataQuerySpec& spec, const ibReadPa
 // HAVING is not folded on the RAM path (the lowering gates it).
 ibDataQueryResult ibComputedProvider::ExecuteAggregate(const ibDataQuerySpec& spec)
 {
-	return RamAggregate(spec.m_queryable->ComputeRows(*spec.m_conditions), spec);
+	// ComputeRows + dot-walk resolution + dot-walk WHERE: GROUP BY Ref.Field, SUM(Ref.Field) and WHERE
+	// Ref.Field = X over the computed source all resolve the reference leaves in RAM before the fold.
+	std::vector<const ibBackendQueryColumn*> cols;
+	ibQueryRamTable rows = ComputeRowsResolved(spec, cols);
+	if (spec.m_predicate)   // boolean WHERE (OR / NOT / IS NULL) — filter before the fold (the register can't)
+		rows = ibQueryComposer::FilterRows(rows, spec.m_predicate.get());
+	return RamAggregate(rows, spec);
 }
 
 ibDataQueryResult ibQueryComposer::ExecuteRead(const ibDataQuerySpec& spec, const ibReadPageRequest& page)
@@ -1454,8 +1720,54 @@ ibDataQueryResult ibQueryComposer::ExecuteReadCached(const ibDataQuerySpec& spec
 
 ibDataQueryResult ibQueryComposer::ExecuteAggregate(const ibDataQuerySpec& spec)
 {
-	if (IsSingleSource(spec))
-		return spec.m_queryable->GetProvider().ExecuteAggregate(spec);
+	if (IsSingleSource(spec)) {
+		// Push to server: materialise the computed source into a DB temp table and run the aggregate as
+		// server-side SQL (GROUP BY / SUM(expr) / HAVING over a real table). On any miss -> the RAM fold.
+		if (spec.m_queryable != nullptr && spec.m_queryable->IsComputedInRam()) {
+			std::vector<ibQueryCondition> pConds; std::vector<ibQuerySortItem> pSorts;
+			std::vector<std::pair<const ibBackendQueryColumn*, wxString>> pSelects;
+			std::vector<const ibBackendQueryColumn*>       pGroupBy;
+			std::vector<ibDataQueryBuilder::AggregateItem> pAggs;
+			std::vector<ibDataQueryBuilder::HavingItem>    pHaving;
+			const ibBackendQueryable* pPrimary = nullptr;
+			if (std::unique_ptr<ibTempTableManager> mgr =
+			        PromoteSingleComputed(spec, pConds, pSorts, pSelects, pGroupBy, pAggs, pHaving, pPrimary)) {
+				ibDataQuerySpec spec2 = spec;
+				spec2.m_conditions = &pConds;  spec2.m_sorts      = &pSorts;   spec2.m_selectCols = &pSelects;
+				spec2.m_groupBy    = &pGroupBy; spec2.m_aggregates = &pAggs;   spec2.m_having     = &pHaving;
+				spec2.m_queryable  = pPrimary;
+				// The DB aggregate result is a CURSOR over the temp; the mgr DROPs the temp when this block exits.
+				// Drain it into RAM HERE (mgr still alive) so the returned result outlives the temp — the same
+				// RAM-backed shape RamAggregate yields (group keys by GetColumnId, aggregates named by alias).
+				ibDataQueryResult lazy = pPrimary->GetProvider().ExecuteAggregate(spec2);   // server-side SQL
+				ibQueryRamTable out;
+				for (const ibBackendQueryColumn* g : pGroupBy)
+					if (g != nullptr) out.AddColumn(g->GetColumnId(), g->GetName(), g->GetTypeDesc());
+				ibMetaID aggId = 0x40000000u;   // far from any metaID — aggregates read by alias NAME (as RamAggregate)
+				std::vector<std::pair<ibMetaID, wxString>> aggCols;
+				for (const ibDataQueryBuilder::AggregateItem& a : pAggs) {
+					out.AddColumn(aggId, a.m_alias, ibTypeDescription());
+					aggCols.emplace_back(aggId, a.m_alias);
+					++aggId;
+				}
+				while (lazy.Next()) {
+					const long r = out.AppendRow();
+					for (const ibBackendQueryColumn* g : pGroupBy) {
+						if (g == nullptr) continue;
+						// The aggregate projected the group key by its VALUE field(s) (ColumnValueFields) AS that
+						// field — read it back by that name, NOT GetValue(col) which reconstructs from the FULL spread
+						// (the TYPE tag isn't projected). A single-value scalar key reads its one field.
+						const std::vector<wxString> vf = ColumnValueFields(g);
+						out.SetCell(r, g->GetColumnId(), vf.empty() ? lazy.GetValue(g) : lazy.GetColumn(vf.front()));
+					}
+					for (const std::pair<ibMetaID, wxString>& ac : aggCols)
+						out.SetCell(r, ac.first, lazy.GetColumn(ac.second));
+				}
+				return ibDataQueryResult(std::move(out), pPrimary);
+			}
+		}
+		return spec.m_queryable->GetProvider().ExecuteAggregate(spec);   // RAM fallback
+	}
 
 	// Fast path: a 2-leaf inner join of two real DB tables, scalar group keys / aggregate inputs —
 	// run the JOIN + GROUP BY + aggregates in ONE server-side SELECT instead of materialising both
