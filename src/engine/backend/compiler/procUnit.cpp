@@ -531,36 +531,49 @@ void ibProcUnit::Execute(ibRunContext* pContext, ibValue* pvarRetValue, bool bDe
 	ibSession*       const cancelSession = ibSession::Current();
 	ibProcUnitState* const state         = ibSession::GetPUState();
 
+	// evalMode is a session-level flag the debugger toggles ONLY around a
+	// watch-eval (a separate nested Execute); it never changes within one
+	// Execute frame. Resolve it ONCE here instead of calling
+	// ibBackendException::IsEvalMode() (= Current() + acquire-load) twice per
+	// opcode in the hot loop below. cancelSession already IS Current().
+	const bool evalMode = (cancelSession != nullptr && cancelSession->IsEvalMode());
+
+	// Cooperative cancel / force-exit abort long-running loops; a sub-us
+	// latency is invisible, so poll them once every kCancelPoll opcodes rather
+	// than paying two acquire-loads on EVERY instruction. opTick is global to
+	// the run, so even a 3-opcode tight loop is polled ~every kCancelPoll/3
+	// iterations. (docs: interpreter hot-loop per-opcode overhead trim.)
+	constexpr unsigned kCancelPoll = 1024;   // power of two -> mask test, not modulo
+	unsigned opTick = 0;
+
 start_label:
 
 	try { //slower by 2-3% for each nested module
 		while (lCodeLine < lFinish) {
 
-			if (!ibBackendException::IsEvalMode()) {
+			if (!evalMode) {
 				pContext->m_lCurLine = lCodeLine;
 				if (state != nullptr) state->SetCurrentRunModule(this);
 			}
 
-			// Per-session force-exit — voluntary kick. Flag set by
-			// ibSession::Close(true) / RequestForceExit (admin kick, GUI
-			// close, debug Destroy, etc.); OnForceExit fired the per-kind
-			// action; here we just break out of the loop and let the host
-			// clean up. Atomic load per opcode — same cost class as the
-			// cancel check below.
-			if (cancelSession != nullptr && cancelSession->IsForceExit())
-				break;
-
-			// Cooperative cancellation — admin Kick / pool CancelSession
-			// flips the flag; the interpreter notices on its next loop
-			// iteration and unwinds via ibBackendInterruptException.
-			// One atomic load per opcode — single cache-line read.
-			if (cancelSession != nullptr && cancelSession->IsCancelRequested()) {
-				cancelSession->ClearCancel();
-				ibBackendInterruptException::Error();
+			// Cooperative cancel + force-exit, polled every kCancelPoll opcodes
+			// (see prologue) instead of two acquire-loads on the per-opcode path
+			// — the hot-loop win; abort latency stays sub-microsecond.
+			//   force-exit: admin kick / GUI close / debug Destroy -> break, let
+			//               the host clean up.
+			//   cancel:     admin Kick / pool CancelSession -> unwind via
+			//               ibBackendInterruptException.
+			if (((++opTick & (kCancelPoll - 1)) == 0) && cancelSession != nullptr) {
+				if (cancelSession->IsForceExit())
+					break;
+				if (cancelSession->IsCancelRequested()) {
+					cancelSession->ClearCancel();
+					ibBackendInterruptException::Error();
+				}
 			}
 
 			//enter in debugger
-			if (debugServer != nullptr && !ibBackendException::IsEvalMode())
+			if (debugServer != nullptr && !evalMode)
 				debugServer->EnterDebugger(pContext, curCode, lPrevLine);
 
 			switch (curCode.m_numOper)

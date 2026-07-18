@@ -28,6 +28,7 @@
 #include <functional>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <string>
 
 #include "backend/compiler/compileCode.h"
@@ -70,21 +71,39 @@ double BestTotalNs(int repeats, F&& f) {
     return best;
 }
 
-// One labelled row: OES figure, native baseline, ratio (oes/base).
-void Row(const char* name, double oes, double base, const char* unit) {
+// Format a nanosecond duration in human units (ns / us / ms / s).
+std::string FmtWall(double ns) {
+    std::ostringstream o; o << std::fixed << std::setprecision(2);
+    if (ns < 1e3)      o << ns       << "ns";
+    else if (ns < 1e6) o << ns / 1e3 << "us";
+    else if (ns < 1e9) o << ns / 1e6 << "ms";
+    else               o << ns / 1e9 << "s";
+    return o.str();
+}
+
+// One labelled row: OES figure, native baseline, ratio (oes/base). When wall
+// totals are given (>0), also print how long one full run of the scenario
+// actually took — the "in seconds" view next to the per-op overhead factor.
+void Row(const char* name, double oes, double base, const char* unit,
+         double oesWallNs = 0, double baseWallNs = 0) {
     std::cout << "  " << std::left << std::setw(26) << name << std::right
               << "  oes=" << std::setw(10) << std::fixed << std::setprecision(1) << oes << unit
               << "  native=" << std::setw(10) << base << unit;
     if (base > 0)
         std::cout << "  x" << std::setprecision(1) << (oes / base);
+    if (oesWallNs > 0)
+        std::cout << "   [run: oes=" << FmtWall(oesWallNs)
+                  << (baseWallNs > 0 ? "  native=" + FmtWall(baseWallNs) : std::string()) << "]";
     std::cout << "\n";
 }
 
 // OES-only row (no meaningful native equivalent, e.g. 200-digit decimal).
-void RowOes(const char* name, double oes, const char* unit) {
+void RowOes(const char* name, double oes, const char* unit, double oesWallNs = 0) {
     std::cout << "  " << std::left << std::setw(26) << name << std::right
-              << "  oes=" << std::setw(10) << std::fixed << std::setprecision(1) << oes << unit
-              << "\n";
+              << "  oes=" << std::setw(10) << std::fixed << std::setprecision(1) << oes << unit;
+    if (oesWallNs > 0)
+        std::cout << "   [run: oes=" << FmtWall(oesWallNs) << "]";
+    std::cout << "\n";
 }
 
 bool Build(ibCompileCode& cc, const wxString& src) {
@@ -117,11 +136,11 @@ TEST(RuntimeBench, DISABLED_ArithLoop) {
         wxT("EndFunction\n")));
     ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
     ibValue argN((int)n), ret;
-    const double oes = BestTotalNs(5, [&]{ pu.CallAsFunc(wxT("SumTo"), ret, argN); g_sink += (uint64_t)ret.GetInteger(); }) / double(n);
+    const double oesTot = BestTotalNs(5, [&]{ pu.CallAsFunc(wxT("SumTo"), ret, argN); g_sink += (uint64_t)ret.GetInteger(); });
 
     volatile int64_t s = 0;
-    const double base = BestTotalNs(5, [&]{ s = 0; for (long i = 0; i < n; ++i) s += i; g_sink += (uint64_t)s; }) / double(n);
-    Row("arith loop (ns/iter)", oes, base, "ns");
+    const double baseTot = BestTotalNs(5, [&]{ s = 0; for (long i = 0; i < n; ++i) s += i; g_sink += (uint64_t)s; });
+    Row("arith loop (ns/iter)", oesTot / double(n), baseTot / double(n), "ns", oesTot, baseTot);
     SUCCEED();
 }
 
@@ -138,11 +157,11 @@ TEST(RuntimeBench, DISABLED_Recursion) {
         wxT("EndFunction\n")));
     ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
     ibValue argN(N), ret;
-    const double oes = BestTotalNs(5, [&]{ pu.CallAsFunc(wxT("Fib"), ret, argN); g_sink += (uint64_t)ret.GetInteger(); }) / double(calls);
+    const double oesTot = BestTotalNs(5, [&]{ pu.CallAsFunc(wxT("Fib"), ret, argN); g_sink += (uint64_t)ret.GetInteger(); });
 
     std::function<int64_t(int)> fib = [&](int n) -> int64_t { return n < 2 ? n : fib(n - 1) + fib(n - 2); };
-    const double base = BestTotalNs(5, [&]{ g_sink += (uint64_t)fib(N); }) / double(calls);
-    Row("recursion (ns/call)", oes, base, "ns");
+    const double baseTot = BestTotalNs(5, [&]{ g_sink += (uint64_t)fib(N); });
+    Row("recursion (ns/call)", oesTot / double(calls), baseTot / double(calls), "ns", oesTot, baseTot);
     SUCCEED();
 }
 
@@ -157,11 +176,12 @@ TEST(RuntimeBench, DISABLED_HostCall) {
         wxT("EndFunction\n")));
     ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
     ibValue arg(0), ret;
-    const double oes = TimeNsPerOp(200000, [&](long i){ arg = ibValue((int)i); pu.CallAsFunc(wxT("Inc"), ret, arg); g_sink += (uint64_t)ret.GetInteger(); });
+    const long iters = 200000;
+    const double oes = TimeNsPerOp(iters, [&](long i){ arg = ibValue((int)i); pu.CallAsFunc(wxT("Inc"), ret, arg); g_sink += (uint64_t)ret.GetInteger(); });
 
     auto inc = [](int64_t x){ return x + 1; };
-    const double base = TimeNsPerOp(200000, [&](long i){ g_sink += (uint64_t)inc(i); });
-    Row("host->script (ns/call)", oes, base, "ns");
+    const double base = TimeNsPerOp(iters, [&](long i){ g_sink += (uint64_t)inc(i); });
+    Row("host->script (ns/call)", oes, base, "ns", oes * double(iters), base * double(iters));
     SUCCEED();
 }
 
@@ -184,11 +204,11 @@ TEST(RuntimeBench, DISABLED_StringConcat) {
         wxT("EndFunction\n")));
     ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
     ibValue argN((int)n), ret;
-    const double oes = BestTotalNs(5, [&]{ pu.CallAsFunc(wxT("Cat"), ret, argN); g_sink += (uint64_t)ret.GetString().length(); }) / double(n);
+    const double oesTot = BestTotalNs(5, [&]{ pu.CallAsFunc(wxT("Cat"), ret, argN); g_sink += (uint64_t)ret.GetString().length(); });
     EXPECT_EQ((long)ret.GetString().length(), n);   // "" + n*"x"
 
-    const double base = BestTotalNs(5, [&]{ std::string s; for (long i = 0; i < n; ++i) s += 'x'; g_sink += s.size(); }) / double(n);
-    Row("string concat (ns/app)", oes, base, "ns");
+    const double baseTot = BestTotalNs(5, [&]{ std::string s; for (long i = 0; i < n; ++i) s += 'x'; g_sink += s.size(); });
+    Row("string concat (ns/app)", oesTot / double(n), baseTot / double(n), "ns", oesTot, baseTot);
     SUCCEED();
 }
 
@@ -205,8 +225,8 @@ TEST(RuntimeBench, DISABLED_LinqPipe) {
         wxT("EndFunction\n")));
     ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
     ibValue argN((int)n), ret;
-    const double oes = BestTotalNs(5, [&]{ pu.CallAsFunc(wxT("Pipe"), ret, argN); g_sink += (uint64_t)ret.GetInteger(); }) / double(n);
-    RowOes("LINQ build+pipe (ns/el)", oes, "ns");
+    const double oesTot = BestTotalNs(5, [&]{ pu.CallAsFunc(wxT("Pipe"), ret, argN); g_sink += (uint64_t)ret.GetInteger(); });
+    RowOes("LINQ build+pipe (ns/el)", oesTot / double(n), "ns", oesTot);
     SUCCEED();
 }
 
