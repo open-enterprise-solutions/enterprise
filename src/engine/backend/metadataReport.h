@@ -53,7 +53,7 @@ public:
 	//factory version 
 	virtual unsigned int GetFactoryCountChanges() const {
 		return m_factoryCtorCountChanges +
-			activeMetaData != nullptr ? activeMetaData->GetFactoryCountChanges() : 0;
+			(activeMetaData != nullptr ? activeMetaData->GetFactoryCountChanges() : 0);
 	}
 
 	//metaData 
