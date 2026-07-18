@@ -354,11 +354,14 @@ automatic (the semi-join rides `GetWherePredicate`, materialisation bypassed). A
 inner MATERIALISES to a temp and semi-joins over it (server-side, read + write) on SQLite / PG; Firebird (no
 temp tables) falls back to an INNER JOIN (read-only, may duplicate) — the deferred pure-SQL EXISTS is its fix.
 
-- **Multi-role OR is fail-OPEN on an empty role.** A role with NO handler for the operation grants full
-  access (the migration-safe default), so in the OR a single handler-less role assigned to the user OPENS
-  the whole thing — the restricting role's filter is discarded. For a restriction to hold, give the user
-  ONLY restricting roles. Making a handler-less role NEUTRAL in the OR (contribute nothing, not "grant
-  all") is the fail-closed fix, still open.
+- **Multi-role OR — handler-less role is NEUTRAL (fixed in code, pending live verify).** A role with NO
+  handler for the operation used to `return` (grant full access), so in the OR a single handler-less role
+  assigned to the user OPENED the whole thing and discarded a restricting role's filter. Now a handler-less
+  role does NOT participate in the OR: it neither widens (no silent "grant all") nor denies. Only an
+  EXPLICIT full-grant (a handler that runs, succeeds, folds no restriction) opens the OR. An `anyParticipated`
+  flag keeps the terminal honest: **no** participating role → migration-safe ALLOW (matches the single-role
+  NoHandler path); participating roles that **all** fail → fail-closed DENY. See `ApplyToSource` in
+  `session/session.cpp`.
 - **One handler, every source.** `OnAccessRead` / `OnAccessWrite` run for EVERY source (catalog, document,
   register, …); a hard-coded `Restrict s.code = …` THROWS on a source without `code` → deny. Branch by
   source — `Source` compares to its full name with `=`: `If Source = "Catalog.X" Then Restrict … EndIf;` —
@@ -374,8 +377,15 @@ temp tables) falls back to an INNER JOIN (read-only, may duplicate) — the defe
   compiler change that alters bytecode output for unchanged source needs the same bump (or an
   `ibByteCodeCache::InvalidateAll`). The recorded AST *is* AOT-serialised (v14), so once recompiled it
   survives caching.
-- **Primary-source only** — the primary `From` is restricted; joined tables in the *user's own* query
-  are not yet (needs per-leaf handling over the query tree; `GetSources` is in place for it).
+- **Every source in the query is restricted (fixed in code, pending live verify).** `Apply` walks
+  `GetSources()` (descending Join / Union) and fires the role handler ONCE per distinct table (dedup by
+  `GetQueryTableId()`), not just the primary `From` — so a joined table is gated too, and the handler
+  branches on `Source`'s full name. A single-source query has only the primary, so the old behaviour is a
+  strict subset. Caveat: the restriction still folds into the query's top-level WHERE, correct for the
+  primary and for INNER joins / semi-join (`restrict … join` → `ibSemiJoinExists` = cardinality-safe
+  correlated EXISTS on any leaf); a bare column `Source.Where(x => x.col = v)` on a LEFT-joined table
+  collapses the outer join to inner — folding into the join's own ON is the deeper leaf-scoped step. See
+  `Apply` / `ApplyToSource` in `session/session.cpp`.
 - **Multi-hop `ON` inside a `Join`** — the decorator `Join` takes single-column keys; a multi-hop key
   is rejected with a message pointing to dot-walk `Where` (`x.Ref.Field = v`), which already handles
   multi-hop conditions. A true multi-hop `IN (subquery)` predicate would let join-roles also OR without

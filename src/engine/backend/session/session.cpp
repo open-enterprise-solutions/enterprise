@@ -15,6 +15,7 @@
 #include <shared_mutex>
 #include <thread>
 #include <unordered_map>
+#include <algorithm>
 
 // RLS — the concrete access policy lives here (session side); the L3 door sees
 // only the ibAccessPolicy interface.
@@ -95,10 +96,24 @@ private:
 		if (m_metaData != nullptr && m_metaData->IsFullAccess())
 			return;                                   // Tier 0 — full-access user, nothing restricted
 
-		const ibBackendQueryable* primary = query.GetPrimarySource();
-		if (primary == nullptr || primary->GetMetaData() == nullptr)
-			return;                                   // custom / temp / computed — no RLS
-		ApplyToSource(query, primary, operation);
+		// Restrict EVERY metadata-backed source in the query, not just the primary From: a joined
+		// table is as much a read of that table as the root is, so its role handler must gate it too
+		// (the handler branches on `Source`'s full name and grants the ones it does not restrict).
+		// GetSources walks the whole tree (descends Join / Union) — for a single-source query it is
+		// just the primary, so the old primary-only path is a strict subset. Apply ONCE per distinct
+		// table (dedup by query-table id) so a table joined twice under two aliases is not double-folded.
+		std::vector<const ibBackendQueryable*> sources;
+		query.GetSources(sources);
+		std::vector<ibMetaID> gated;                  // tables already restricted — no repeats
+		for (const ibBackendQueryable* source : sources) {
+			if (source == nullptr || source->GetMetaData() == nullptr)
+				continue;                             // custom / temp / computed — no RLS
+			const ibMetaID tableId = source->GetQueryTableId();
+			if (std::find(gated.begin(), gated.end(), tableId) != gated.end())
+				continue;                             // this table is already gated — skip the repeat
+			gated.push_back(tableId);
+			ApplyToSource(query, source, operation);
+		}
 	}
 
 	// One table, EVERY query (no cache — real-time). The module gets the SOURCE as a base decorator over
@@ -171,11 +186,19 @@ private:
 			return;
 		}
 
-		// SEVERAL restricting roles — a user gains access via ANY of them, so their restrictions OR (not
-		// AND). Each role folds into a per-role scratch; we OR the succeeding roles' restrictions into the
-		// main query, keeping the real source (still pages). A WHERE-only role contributes its predicate; a
-		// role that JOINs a table is reduced by MATERIALISING the source keys it admits into `key = v … OR`
-		// (the SQL IR has no IN-subquery). A FAILED role contributes nothing (does not widen the OR).
+		// SEVERAL roles — a user gains access via ANY of them, so their restrictions OR (not AND). Each role
+		// folds into a per-role scratch; we OR the succeeding roles' restrictions into the main query, keeping
+		// the real source (still pages). A WHERE-only role contributes its predicate; a role that JOINs a table
+		// is reduced by MATERIALISING the source keys it admits into `key = v … OR` (the SQL IR has no
+		// IN-subquery). A FAILED role contributes nothing (does not widen the OR).
+		//
+		// A role with NO handler for this op does NOT participate in RLS: it is NEUTRAL — it neither widens the
+		// OR (a role that simply does not implement RLS must NOT silently OPEN everything for a user who also
+		// holds a restricting role — the multi-role fail-open footgun) nor denies. Only an EXPLICIT full-grant
+		// (a handler that runs, succeeds, and folds NO restriction) opens the OR. Terminal: if NO role
+		// participated (all handler-less) there is no RLS here -> ALLOW (migration-safe, matches the single-role
+		// NoHandler path); if roles participated but ALL failed -> fail-closed DENY.
+		bool anyParticipated = false;                     // any role RAN a handler (restrict / full-grant / fail)
 		std::vector<ibQueryPredicatePtr> rolePredicates;
 		for (const std::shared_ptr<ibProcUnit>& proc : procs) {
 			ibDataQueryBuilder scratch;
@@ -184,7 +207,8 @@ private:
 			const RoleOutcome outcome = runRole(proc, scratch);
 
 			if (outcome == RoleOutcome::NoHandler)
-				return;   // this role imposes no row-restriction -> grants full access -> the OR is unrestricted
+				continue; // no handler -> this role does not participate -> NEUTRAL (does not widen, does not deny)
+			anyParticipated = true;
 			if (outcome == RoleOutcome::Failed)
 				continue; // fail-closed: a failed role admits no rows -> contributes NOTHING to the OR
 
@@ -216,12 +240,14 @@ private:
 			}
 			ibQueryPredicatePtr pred = scratch.GetWherePredicate();
 			if (!pred)
-				return;   // succeeded with NO Join and NO Where -> grants FULL access -> the OR is unrestricted
+				return;   // succeeded with NO Join and NO Where -> EXPLICIT full grant -> the OR is unrestricted
 			rolePredicates.push_back(pred);
 		}
 
+		if (!anyParticipated)
+			return;                                       // no role implements RLS here -> migration-safe ALLOW
 		if (rolePredicates.empty())
-			ibBackendAccessException::Error();            // every role FAILED -> loud fail-closed (nothing to OR)
+			ibBackendAccessException::Error();            // roles participated but ALL failed -> loud fail-closed deny
 
 		ibQueryPredicatePtr orPred = rolePredicates.front();
 		for (size_t i = 1; i < rolePredicates.size(); ++i)
