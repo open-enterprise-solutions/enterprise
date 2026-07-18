@@ -49,6 +49,7 @@ enterprise/
 │   ├── property-system.md    # ibPropertyObject + object inspector — the skeleton (5 surfaces)
 │   ├── metadata-tree.md      # Designer navigator + external reports/processors
 │   ├── metadata-lifecycle.md # load/run/save/close — the metaobject events in order + external DP/Report
+│   ├── metadata-containers.md # the ibMetaData family — mechanism + varieties (config vs external DP/Report)
 │   ├── form-editor.md        # visual designer — panels, undo/redo, drag-to-create
 │   ├── spreadsheet-editor.md # the grid behind templates and report output
 │   ├── system-functions.md   # the global script API — 89 functions + 6 procedures

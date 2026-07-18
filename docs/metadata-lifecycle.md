@@ -10,6 +10,8 @@
 > (the shipped node-serialization names), [metadata-storage-container-arc.md](metadata-storage-container-arc.md)
 > (file vs storage split), [metadata-hot-reload.md](metadata-hot-reload.md) (live reload),
 > [metadata-tree.md](metadata-tree.md) (designer navigator + external reports/processors),
+> [metadata-containers.md](metadata-containers.md) (the `ibMetaData` family — the mechanism and its
+> varieties: configuration vs external report / data-processor),
 > [runtime-facade.md](runtime-facade.md) (why the runtime survives a reload).
 >
 > **Status:** landed. Node-owned `ibDataNode` serialization; detached-root atomic load/swap;
