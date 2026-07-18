@@ -30,6 +30,8 @@ const ibDialectDictionary& ibDatabaseLayerPostgres::Dialect()
 		d.m_typeGuid          = wxT("UUID");
 		d.m_typeNumberPattern = wxT("NUMERIC(%d,%d)");
 		d.m_analyzePrefix     = wxT("ANALYZE");   // ANALYZE <t> — refresh planner stats (temps aren't autovacuumed)
+		d.m_indexListQuery = wxT("SELECT indexname FROM pg_indexes WHERE tablename = LOWER(?)");   // differ introspects existing indexes
+		d.m_rowIdColumn    = wxT("ctid");         // physical row id for the pre-UNIQUE dedup (keep one row per key)
 		return d;
 	}();
 	return s_dialect;

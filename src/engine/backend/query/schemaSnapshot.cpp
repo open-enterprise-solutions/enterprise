@@ -244,7 +244,7 @@ int CreateTable(ibStructureBatch& batch, const ibSchemaTable& t, ibRestructureIn
 // diff by name (present-only-in-target -> create, only-in-baseline -> drop). Scaffold never changes.
 // Reporting: add / drop is reported unconditionally; a MATCHED column is reported as "Change" ONLY when
 // its slot diff actually emitted DDL (StepCount grew) — an unchanged column stays silent.
-int AlterTable(ibStructureBatch& batch, const ibSchemaTable& old, const ibSchemaTable& cur, ibRestructureInfo* report)
+int AlterTable(ibStructureBatch& batch, const ibSchemaTable& old, const ibSchemaTable& cur, ibRestructureInfo* report, ibSchemaBuilder& schema)
 {
 	int retCode = 1;
 
@@ -267,14 +267,29 @@ int AlterTable(ibStructureBatch& batch, const ibSchemaTable& old, const ibSchema
 		}
 	}
 
+	// Physical index reconciliation: the baseline is metadata-derived (a re-run of the CURRENT code), so a
+	// code-added index shows in BOTH sides and the metadata diff alone never creates it. When the dialect can
+	// introspect (m_indexListQuery), ask the DB which indexes physically exist and create the declared ones it
+	// is MISSING — through the NORMAL CreateIndex (plain CREATE INDEX; Firebird has no IF NOT EXISTS). Names
+	// compared case-insensitively (FB stores them upper-cased). Without introspection: the metadata diff.
+	wxArrayString physIdx;
+	const bool introspect = schema.CanIntrospectIndexes();
+	if (introspect)
+		physIdx = schema.PhysicalIndexes(cur.m_name);
+	auto physHas = [&](const wxString& n) {
+		for (const wxString& p : physIdx) if (p.IsSameAs(n, false)) return true;
+		return false;
+	};
+
 	for (const ibSchemaIndex& i : cur.m_indexes) {
 		const ibSchemaIndex* o = FindIndex(old.m_indexes, i.m_name);
-		if (o == nullptr) {
+		const bool needCreate = introspect ? !physHas(i.m_name) : (o == nullptr);
+		if (needCreate) {
 			batch.CreateIndex(i.m_name, i.m_columns, i.m_unique);
 			if (report != nullptr)
 				report->AppendInfo(_("Add index ") + i.m_name);
 		}
-		else if (!SameIndex(*o, i)) {
+		else if (o != nullptr && !SameIndex(*o, i)) {
 			batch.Ddl(ibDropIndex(i.m_name, cur.m_name));   // shape / uniqueness changed -> drop + recreate
 			batch.CreateIndex(i.m_name, i.m_columns, i.m_unique);
 			if (report != nullptr)
@@ -321,7 +336,7 @@ int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& targ
 		if (old == nullptr)
 			CreateTable(batch, cur, report);
 		else
-			AlterTable(batch, *old, cur, report);
+			AlterTable(batch, *old, cur, report, schema);
 
 		// DATA after structure, SAME batch: rows into a just-created table defer past the DDL commit on
 		// Firebird; other dialects fill them inside the transaction (ibStructureBatch::Flush -> RunOrDefer).

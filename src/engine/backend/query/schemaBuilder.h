@@ -26,6 +26,8 @@
 
 #include "backend.h"
 
+#include <wx/arrstr.h>   // wxArrayString — PhysicalIndexes result
+
 #include <functional>
 #include <set>
 #include <vector>
@@ -61,6 +63,14 @@ public:
 	// structure builder folds a batch into one ALTER when true, and into one statement per clause when
 	// not (SQLite). See ibDialectDictionary::m_alterTableMultiClause.
 	bool AlterTableMultiClause() const;
+
+	// Index introspection (ibDialectDictionary::m_indexListQuery). CanIntrospectIndexes() is false when the
+	// dialect has no index-list query (MySQL / ODBC) -> the differ keeps its metadata-only diff. PhysicalIndexes()
+	// returns the NAMES of the indexes that currently exist on `table` (empty when it cannot introspect), so the
+	// differ creates only the declared indexes the DB is physically missing — the retrofit path on engines
+	// without CREATE INDEX IF NOT EXISTS (Firebird).
+	bool CanIntrospectIndexes() const;
+	wxArrayString PhysicalIndexes(const wxString& table) const;
 
 	// Reset the per-save tracking (created-set + deferred queue) on this builder's barrier holder.
 	// Call at the start of a save. No longer static — the state lives on the holder, not a global.

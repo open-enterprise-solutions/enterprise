@@ -47,6 +47,9 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 		d.m_rowLockNoWaitSuffix = wxEmptyString;       // FB has no FOR UPDATE NOWAIT — noWait rides the TX (isc_tpb_nowait)
 		d.m_dropColumnClause  = wxT("DROP ");          // FB rejects the COLUMN keyword: ALTER TABLE t DROP c
 		d.m_ddlCommitBeforeData = true;                // legacy isc_* API can't mix CREATE/ALTER + bound INSERT in one TX
+		// FB has no CREATE INDEX IF NOT EXISTS -> the differ introspects RDB$INDICES and creates only the missing ones.
+		d.m_indexListQuery = wxT("SELECT RDB$INDEX_NAME FROM RDB$INDICES WHERE RDB$RELATION_NAME = UPPER(?)");
+		d.m_rowIdColumn    = wxT("RDB$DB_KEY");         // physical row id for the pre-UNIQUE dedup (keep one row per key)
 		return d;
 	}();
 	return s_dialect;

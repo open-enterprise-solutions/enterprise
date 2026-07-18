@@ -83,6 +83,18 @@ struct ibDialectDictionary
 	// SQLite take just "DROP INDEX <name>". Default = standalone (no table).
 	bool m_dropIndexNeedsTable = false;
 
+	// Index introspection: a SELECT that returns the NAMES of the indexes on a table, one `?` param =
+	// the table name. Lets the schema differ ask the DB "does this declared index already exist?" and
+	// create only the missing ones through its NORMAL CreateIndex — so a code-added index reaches an
+	// EXISTING table (Firebird has no CREATE INDEX IF NOT EXISTS; this is how the retrofit works there).
+	// EMPTY (default — MySQL / ODBC) => no introspection, the differ keeps the metadata-only diff.
+	wxString m_indexListQuery;
+
+	// Physical row identifier, used to drop duplicate-key rows (keep one) BEFORE a UNIQUE index is created
+	// over existing data: FB "RDB$DB_KEY", SQLite "rowid", PG "ctid". EMPTY (default) => no dedup, so the
+	// UNIQUE create fails loudly on duplicates. Used by ibSchemaBuilder::Execute.
+	wxString m_rowIdColumn;
+
 	// UPSERT (INSERT-or-update by PK) as a TEMPLATE the renderer fills. Placeholders:
 	//   {table} {columns} {values} {keys} {update}
 	// {update} = the conflict-update body: m_upsertUpdateItem per non-key column,

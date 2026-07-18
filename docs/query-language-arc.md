@@ -71,8 +71,13 @@
 >   dot-walk self-reference (record → data-reference `_RRRef`, register → composite,
 >   constant → `RECORD_KEY`); `GetIdentitySort()` owns the read keyset as **real columns**
 >   (catalog uuid, no null sentinel). uuid is a rudiment (PK + read/DELETE key) coexisting
->   with `_RRRef` as two link keys until cleaned. (DDL `_RRRef` unique index ships on
->   createMetaTable only — existing tables need a migration step.)
+>   with `_RRRef` as two link keys until cleaned. (A code-declared index — `_RRRef` unique, a
+>   register's dimension key — now reaches EXISTING tables through the normal schema diff: the differ
+>   introspects the physical indexes (`ibDialectDictionary::m_indexListQuery` → FB `RDB$INDICES`,
+>   SQLite `sqlite_master`, PG `pg_indexes`) and creates only the ones the DB is MISSING, via the
+>   normal `CreateIndex` — plain `CREATE INDEX`, since Firebird has no `IF NOT EXISTS`. A UNIQUE index
+>   is preceded by a duplicate-key dedup: `ibSchemaBuilder::Execute` keeps one row per key via the
+>   dialect's physical `m_rowIdColumn` (`RDB$DB_KEY` / `rowid` / `ctid`). No per-index special path.)
 > - **`ibDataResultSource`** (renamed from `ibMetaResultSource`) — backing-blind result;
 >   `GetGuidString` removed (the row guid reads as the uuid identity column). The DB result
 >   source + provider extracted to `query/dbTableProvider.{h,cpp}`; `ibComputedRegister
@@ -92,9 +97,10 @@
 >   L3 makes a temp table just an ordinary DB source, so the read path is reused and a runtime
 >   failure transparently falls back to RAM. Manager / adapter / planner / per-driver dialects
 >   pending — full design contract in [temp-db.md](temp-db.md).
-> - **Still open:** the DDL migration gap above (existing tables need the `_RRRef` unique index);
->   balances/turnovers as DB-backed virtual tables (totals-table arc); the accounting register
->   (subconto); cross-DBMS validation beyond Firebird.
+> - **Still open:** the index retrofit above covers dialects that can introspect (FB / SQLite / PG);
+>   MySQL / ODBC keep the metadata-only diff until they gain an `m_indexListQuery`. Balances/turnovers
+>   as DB-backed virtual tables (totals-table arc); the accounting register (subconto); cross-DBMS
+>   validation beyond Firebird.
 > - **L4-1 — text query language (in progress, §23):** the greenfield text-query front-end
 >   (lexer → parser → lowering → `Query`/`QueryResult` value objects) + a queryable-source
 >   factory on `appData`. Written, golden-tested on the front-end, pre-build. L4-2 (LINQ
