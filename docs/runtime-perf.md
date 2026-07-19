@@ -4,9 +4,10 @@
 > micro-benchmark harness. What was trimmed, why it is safe, how to measure, and where
 > the numbers land against interpreters of the same class.
 >
-> **Status:** hot-loop trim + wall-time bench column are an **experimental working copy
-> (uncommitted), 2026-07-18**. Numbers are Release|x64, MSVC 19.42, min-of-5 micro-bench
-> (jitter ±3–5% — read orders of magnitude, not the last nanosecond).
+> **Status:** hot-loop trim + wall-time bench column, 2026-07-18. **The shortLet-peephole revival +
+> string in-place append landed 2026-07-19 (§1b) — the string-concat O(n²) is gone (×1189 → ×68).**
+> Numbers are Release|x64, MSVC 19.42, min-of-5 micro-bench (jitter ±3–5% — read orders of
+> magnitude, not the last nanosecond).
 >
 > **Companions:** [ARCHITECTURE.md](ARCHITECTURE.md) (Bytecode Engine), [fnumber.md](fnumber.md)
 > (`ibNumber`), [compiler-pipeline.md](compiler-pipeline.md).
@@ -63,6 +64,30 @@ real runtime with a session it should be ≥.
 
 ---
 
+## 1b. shortLet peephole + string in-place append (2026-07-19)
+
+The `string concat ×~1100` in §3 was **not** an inherent O(n²) — it was a dead compiler peephole
+masking a missed optimisation.
+
+- **The peephole.** `x = a op b` compiles to `OP tmp,a,b; LET x,tmp`. The `shortLet` peephole is
+  meant to fuse that to `OP x,a,b` (drop the `LET`). A macro-precedence bug —
+  `#define TYPE_DELTA1 1 * (OPER_END + 1)` without outer parens, so `m_numOper % TYPE_DELTA1` is
+  `(m_numOper % 1) * N == 0` — made it match nothing. It was dead for **every** compound assignment,
+  language-wide (see [compiler-pipeline.md](compiler-pipeline.md) §3.1). Parenthesising the macro
+  revived it: every `x = a op b` now emits one fewer opcode + one fewer `ibValue` copy.
+- **In-place string append.** With the `LET` gone, the fused `ADD` writes straight to the LHS slot,
+  so in `s = s + expr` the dest and the left operand are the **same** `ibValue`. `AddValue`'s string
+  branch detects that alias (`&dest == &left && dest is a live TYPE_STRING`) and appends onto `s` in
+  place instead of building `s + expr` into a fresh string and copying it back — **O(n²) → O(n)**.
+  The guard also checks `m_pStr != null`: a reused / moved-out slot can read `TYPE_STRING` with a
+  null buffer, which falls back to the safe `SetString` path (`GetString()` is null-safe, so the
+  result is `"" + expr`). A `cdb` session pinned exactly this null-buffer AV before the guard landed.
+- **Result:** `string concat` **×1189 → ×67.8** (84.8 ns/append), 712/712 tests green. AOT format
+  version bumped 17 → 18 (`byteCodeAOT.cpp`) so cached bytecode recompiles to the fused form — old
+  blobs still execute correctly, just without the optimisation.
+
+---
+
 ## 2. Benchmark harness (`tests/bench_runtime.cpp`)
 
 DISABLED-by-default gtest benches (kept out of the fast suite). Four groups:
@@ -107,12 +132,12 @@ Release only — Debug numbers are meaningless (MSVC checked-iterators tax value
 | LINQ build+pipe (10K) | 1111 / 1087 / 1013 | **946 / 982** | — | 9.6 ms |
 | recursion Fib(28) (1.03M) | 371.6 / 380.5 / 370.9 | 369.8 / 348.0 | ×~220 | 359 ms |
 | host→script (200K) | 413.7 / 397.6 / 378.1 | 379.5 / 388.3 | ×~215 | 77 ms |
-| string concat Cat(2000) | 1545 / 1462 / 1486 | 1427 / 1454 | ×~1100 | 2.9 ms |
+| string concat Cat(2000) | 1427 (pre-peephole) | **84.8** (§1b) | ×~1100 → **×68** | 2.9 ms → **0.17 ms** |
 
 `arith` and `LINQ` drop ~10% cleanly (both after-runs below all before-runs). `recursion` /
-`host` / `concat` sit inside jitter — their bottleneck is not the dispatch checks. The
-`string concat ×1100` outlier is O(n²) immutable-string alloc, not the interpreter (same trap as
-`String` vs `StringBuilder`).
+`host` sit inside jitter — their bottleneck is not the dispatch checks. The `string concat` row
+**was** an O(n²) outlier (×~1100, immutable-string alloc — the `String` vs `StringBuilder` trap);
+the shortLet-peephole revival + in-place append (§1b) cut it to **×68 / 84.8 ns/append** — now O(n).
 
 ### `ibNumber` (8 bytes, exact decimal)
 

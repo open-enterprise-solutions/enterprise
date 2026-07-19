@@ -275,7 +275,22 @@ inline void AddValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cV
 		}
 	}
 	else {
-		cValue1.SetString(cValue2.GetString() + cValue3.GetString());
+		// Fused `s = s + expr`: the shortLet peephole rewrote the ADD dest to be
+		// the LHS slot, so cValue1 (dest) and cValue2 (left) resolve to the SAME
+		// ibValue. Append onto s in place instead of building `s + expr` into a
+		// fresh string and copying it back — turns accumulate-in-a-loop from
+		// O(n^2) into O(n). Fast path only when the slot holds a LIVE (non-null)
+		// string buffer we own: a reused / moved-out slot can read TYPE_STRING
+		// with m_pStr == null (see note above), which SetString() rebuilds safely
+		// (GetString() is null-safe, so `"" + expr` is the correct result).
+		if (&cValue1 == &cValue2 && &cValue1 != &cValue3 &&
+			cValue1.m_typeClass == ibValueTypes::TYPE_STRING && cValue1.m_pStr) {
+			ibString scratch;
+			*cValue1.m_pStr += cValue3.GetString(scratch);
+		}
+		else {
+			cValue1.SetString(cValue2.GetString() + cValue3.GetString());
+		}
 	}
 }
 

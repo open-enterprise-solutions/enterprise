@@ -140,10 +140,14 @@ enum { //instruction types
 	OPER_END,
 };
 
-#define TYPE_DELTA1 1 * (OPER_END + 1)  // for numeric operations
-#define TYPE_DELTA2 2 * TYPE_DELTA1		// for string operations
-#define TYPE_DELTA3 3 * TYPE_DELTA1		// for date operations
-#define TYPE_DELTA4 4 * TYPE_DELTA1		// for operations with booleans
+// NOTE: the outer parens are load-bearing. Without them `x % TYPE_DELTA1`
+// expands to `x % 1 * (OPER_END+1)` == `(x % 1) * N` == 0 (same precedence,
+// left-assoc), which silently killed the shortLet peephole below. Additive
+// uses (`OPER_ADD + TYPE_DELTAn`) worked regardless; modulo/divide did not.
+#define TYPE_DELTA1 (1 * (OPER_END + 1))  // for numeric operations
+#define TYPE_DELTA2 (2 * TYPE_DELTA1)		// for string operations
+#define TYPE_DELTA3 (3 * TYPE_DELTA1)		// for date operations
+#define TYPE_DELTA4 (4 * TYPE_DELTA1)		// for operations with booleans
 
 enum { //token types
 	ERRORTYPE = 0,

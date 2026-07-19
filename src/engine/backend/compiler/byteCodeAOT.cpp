@@ -125,7 +125,15 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 // with an ABSENT AST → hasAst = 0) is served unchanged and the cached restrict silently loses the
 // pushdown (Where/Join throws "cannot be lowered", swallowed by the module's try/except → no
 // restriction). Bump rejects those v16 blobs → recompile records the AST → the filter applies.
-constexpr uint16_t kAOTFormatVersion = 17;
+// v18 (2026-07-19): the shortLet peephole (compileCode.cpp) was resurrected. A
+// macro-precedence bug — `x % TYPE_DELTA1` expanded to `(x % 1) * N == 0` — had
+// left it dead, so every compound assignment `x = a op b` emitted a redundant
+// `OP tmp,a,b; LET x,tmp`. With TYPE_DELTAn parenthesised it fuses to `OP x,a,b`
+// (one fewer opcode + one fewer ibValue copy; the string case additionally does an
+// in-place append, O(n^2) -> O(n)). COMPILER-OUTPUT change, payload layout identical
+// — bump so cached blobs recompile to the fused form (old blobs still execute
+// correctly, just without the optimisation).
+constexpr uint16_t kAOTFormatVersion = 18;
 constexpr uint16_t kAOTFlagPortable  = 0x0001;       // unused — host-endian today
 
 // Sentinel for an over-large collection — guards Deserialize against

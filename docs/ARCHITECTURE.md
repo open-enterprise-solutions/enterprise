@@ -353,7 +353,7 @@ Opcodes are defined as plain integer constants in `src/engine/backend/compiler/c
 | Exceptions | `OPER_TRY`, `OPER_ENDTRY`, `OPER_RAISE`, `OPER_RAISE_T` |
 | Optimised const variants | `OPER_ADDCONS`, `OPER_SUBCONS`, `OPER_MULTCONS`, `OPER_DIVCONS`, `OPER_MODCONS`, `OPER_GTCONS`, etc. |
 
-Each opcode has type-specialised variants selected by adding `TYPE_DELTA1` (number), `TYPE_DELTA2` (string), `TYPE_DELTA3` (date), or `TYPE_DELTA4` (boolean) to the base opcode.
+Each opcode has type-specialised variants selected by adding `TYPE_DELTA1` (number), `TYPE_DELTA2` (string), `TYPE_DELTA3` (date), or `TYPE_DELTA4` (boolean) to the base opcode. The `TYPE_DELTAn` macros must stay **parenthesised** — a missing outer paren silently breaks `%`/`/` uses (add/subtract are unaffected), which once left the `shortLet` peephole dead; see [compiler-pipeline.md](compiler-pipeline.md) §3.1.
 
 ### Execution Model
 

@@ -34,6 +34,7 @@
 #include "backend/compiler/compileCode.h"
 #include "backend/compiler/procUnit.h"
 #include "backend/compiler/byteCode.h"
+#include "backend/compiler/codeDef.h"
 #include "backend/compiler/value.h"
 #include "backend/fnumber.h"
 
@@ -209,6 +210,61 @@ TEST(RuntimeBench, DISABLED_StringConcat) {
 
     const double baseTot = BestTotalNs(5, [&]{ std::string s; for (long i = 0; i < n; ++i) s += 'x'; g_sink += s.size(); });
     Row("string concat (ns/app)", oesTot / double(n), baseTot / double(n), "ns", oesTot, baseTot);
+    SUCCEED();
+}
+
+// --- bytecode dump: SEE what `s = s + "x"` actually compiled to -------------
+static const char* OpName(int base) {
+    switch (base) {
+        case OPER_NOP: return "NOP";     case OPER_ADD: return "ADD";
+        case OPER_SUB: return "SUB";     case OPER_MULT: return "MULT";
+        case OPER_DIV: return "DIV";     case OPER_MOD: return "MOD";
+        case OPER_LET: return "LET";     case OPER_CONST: return "CONST";
+        case OPER_CONSTN: return "CONSTN"; case OPER_IF: return "IF";
+        case OPER_GOTO: return "GOTO";   case OPER_NEXT: return "NEXT";
+        case OPER_FOR: return "FOR";     case OPER_FOREACH: return "FOREACH";
+        case OPER_RET: return "RET";     case OPER_FUNC: return "FUNC";
+        case OPER_ENDFUNC: return "ENDFUNC";
+        case OPER_FUNC_PARAM: return "FUNC_PARAM";
+        case OPER_FUNC_LOCAL: return "FUNC_LOCAL";
+        case OPER_CTX_BEGIN: return "CTX_BEGIN"; case OPER_CTX_END: return "CTX_END";
+        case OPER_CALL: return "CALL";
+        case OPER_GT: return "GT"; case OPER_EQ: return "EQ"; case OPER_LS: return "LS";
+        case OPER_GE: return "GE"; case OPER_LE: return "LE"; case OPER_NE: return "NE";
+        case OPER_NOT: return "NOT"; case OPER_AND: return "AND"; case OPER_OR: return "OR";
+        default: return "?";
+    }
+}
+
+TEST(RuntimeBench, DISABLED_DumpBytecode) {
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("Function Cat(n) Public\n")
+        wxT("  var s; var i; s = \"\"; i = 0;\n")
+        wxT("  While i < n Do\n")
+        wxT("    s = s + \"x\"; i = i + 1;\n")
+        wxT("  EndDo;\n")
+        wxT("  Return s;\n")
+        wxT("EndFunction\n")));
+    const auto& code = cc.m_cByteCode.m_listCode;
+    std::cout << "=== bytecode dump (" << code.size() << " ops)  TYPE_DELTA1=" << (int)TYPE_DELTA1
+              << "  OPER_ADD=" << (int)OPER_ADD << " OPER_LET=" << (int)OPER_LET
+              << "  [p=(array,index)] ===\n";
+    for (size_t ip = 0; ip < code.size(); ++ip) {
+        const auto& c = code[ip];
+        const int raw  = (int)c.m_numOper;
+        const int base = ((raw % TYPE_DELTA1) + TYPE_DELTA1) % TYPE_DELTA1;
+        const int tier = (int)(c.m_numOper / TYPE_DELTA1);
+        std::cout << std::right << std::setw(3) << ip << "  raw" << std::setw(5) << raw << "  "
+                  << std::left << std::setw(10) << OpName(base)
+                  << (tier == 0 ? "   " : tier == 1 ? "+n " : tier == 2 ? "+s " : tier == 3 ? "+d " : "+b ")
+                  << "p1(" << (long long)c.m_param1.m_numArray << "," << (long long)c.m_param1.m_numIndex << ") "
+                  << "p2(" << (long long)c.m_param2.m_numArray << "," << (long long)c.m_param2.m_numIndex << ") "
+                  << "p3(" << (long long)c.m_param3.m_numArray << "," << (long long)c.m_param3.m_numIndex << ") "
+                  << "p4(" << (long long)c.m_param4.m_numArray << "," << (long long)c.m_param4.m_numIndex << ")"
+                  << std::right << "\n";
+    }
+    std::cout.flush();
     SUCCEED();
 }
 

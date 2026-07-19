@@ -99,6 +99,30 @@ exports — resolution is not confined to one translation unit.
 Syntax modes (VES / CES) are the *lexer's* concern; both produce the same bytecode
 ([../CLAUDE.md](../CLAUDE.md) § Compiler Quick Reference).
 
+### 3.1 The `shortLet` peephole — fuse `OP tmp; LET x` → `OP x`
+
+A compound assignment `x = a op b` first emits the operator into a **temporary** slot, then a
+`LET` copying that temp to `x`:
+
+```
+OP  tmp, a, b     ; tmp = a op b   (DEF_VAR_TEMP dest, array -3)
+LET x, tmp        ; x = tmp
+```
+
+The `shortLet` peephole (`compileCode.cpp`, in the assignment handler) collapses the pair: when the
+right-hand expression landed in a `DEF_VAR_TEMP` and the immediately-preceding opcode is one of
+`ADD/SUB/MULT/DIV/MOD` or a comparison, it rewrites that opcode's destination to `x` and drops the
+`LET` — one fewer opcode and one fewer `ibValue` copy per compound assignment, language-wide.
+
+> **Trap (fixed 2026-07-19).** The peephole reads the base opcode with `m_numOper % TYPE_DELTA1`.
+> `TYPE_DELTA1` was `#define TYPE_DELTA1 1 * (OPER_END + 1)` — **no outer parens** — so
+> `x % TYPE_DELTA1` expanded to `(x % 1) * N == 0` (`%` and `*` share precedence, left-assoc). The
+> base op was always `0` (`OPER_NOP`), the match never fired, and the peephole was **dead for every
+> assignment**. Additive uses (`OPER_ADD + TYPE_DELTA1`) were unaffected, so nothing else broke and
+> the bug hid for a long time. Parenthesising the macro revived it. The string branch of
+> `ibProcUnit::AddValue` then exploits the resulting `dest == left` alias to append in place
+> (`s = s + …` loops go O(n²) → O(n)); see [runtime-perf.md](runtime-perf.md) §1b.
+
 ---
 
 ## 4. The artefact — bytecode is a **template**
