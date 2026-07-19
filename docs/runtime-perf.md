@@ -82,8 +82,12 @@ masking a missed optimisation.
   The guard also checks `m_pStr != null`: a reused / moved-out slot can read `TYPE_STRING` with a
   null buffer, which falls back to the safe `SetString` path (`GetString()` is null-safe, so the
   result is `"" + expr`). A `cdb` session pinned exactly this null-buffer AV before the guard landed.
-- **Result:** `string concat` **×1189 → ×67.8** (84.8 ns/append), 712/712 tests green. AOT format
-  version bumped 17 → 18 (`byteCodeAOT.cpp`) so cached bytecode recompiles to the fused form — old
+- **Result:** `string concat` **×1189 → ×67.8** (84.8 ns/append). The revival also shows up wherever
+  compound assignments dominate a loop body: `arith loop` (`i = i + 1` + accumulate) **136 → 119
+  ns/iter (−12%)**, on top of §1's dispatch trim (≈ −21% cumulative from the 150 ns raw baseline).
+  Non-assignment loops (recursion / host / LINQ) and the direct `ibNumber` / `ibString` micro-ops are
+  flat — as they must be, the fix touches assignment overhead, not arithmetic. 712/712 tests green;
+  AOT format version 17 → 18 (`byteCodeAOT.cpp`) so cached bytecode recompiles to the fused form — old
   blobs still execute correctly, just without the optimisation.
 
 ---
@@ -122,19 +126,20 @@ Release only — Debug numbers are meaningless (MSVC checked-iterators tax value
 
 ---
 
-## 3. Results (Release x64, 2026-07-18)
+## 3. Results (Release x64, 2026-07-18; string concat + arith re-measured 2026-07-19, §1b)
 
 ### Interpreter — overhead + before/after (ns, dispatch trim)
 
 | Scenario | before (3 runs) | after (2 runs) | overhead | one full run |
 |---|---|---|---|---|
-| arith loop (1M iters) | 150.7 / 154.8 / 147.9 | **135.7 / 136.0** | ×~200 | 136 ms |
+| arith loop (1M iters) | 150.7 / 154.8 / 147.9 | 135.7 / 136.0 → **119.0** (peephole §1b) | ×~200 → **×178** | 119 ms |
 | LINQ build+pipe (10K) | 1111 / 1087 / 1013 | **946 / 982** | — | 9.6 ms |
 | recursion Fib(28) (1.03M) | 371.6 / 380.5 / 370.9 | 369.8 / 348.0 | ×~220 | 359 ms |
 | host→script (200K) | 413.7 / 397.6 / 378.1 | 379.5 / 388.3 | ×~215 | 77 ms |
 | string concat Cat(2000) | 1427 (pre-peephole) | **84.8** (§1b) | ×~1100 → **×68** | 2.9 ms → **0.17 ms** |
 
-`arith` and `LINQ` drop ~10% cleanly (both after-runs below all before-runs). `recursion` /
+`arith` and `LINQ` drop ~10% cleanly (both after-runs below all before-runs), and `arith` drops a
+further ~12% (136 → 119) with the §1b peephole — its body is compound-assignment-dense. `recursion` /
 `host` sit inside jitter — their bottleneck is not the dispatch checks. The `string concat` row
 **was** an O(n²) outlier (×~1100, immutable-string alloc — the `String` vs `StringBuilder` trap);
 the shortLet-peephole revival + in-place append (§1b) cut it to **×68 / 84.8 ns/append** — now O(n).
