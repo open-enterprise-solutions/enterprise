@@ -70,6 +70,7 @@ enterprise/
 │   ├── serialization-io.md   # ibWriter/ibReader, chunks, compression (⚠ licensing)
 │   ├── ROADMAP.md            # state of the platform — landed / in flight / not built
 │   ├── naming-plan.md        # PLAN — file/folder renames (nothing applied)
+│   ├── metaobject-naming.md  # PLAN — user-visible taxonomy: designer labels, script names, tree order
 │   ├── restructure-plan.md   # PLAN — grouping, declaration order, naming (nothing applied)
 │   └── configuration-compare.md  # Compare/Merge feature — walker, model, Apply paths
 └── src/

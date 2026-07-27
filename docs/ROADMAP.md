@@ -68,6 +68,7 @@ Do not treat these as "nearly done"; they are captured thinking.
 | Metadata hot reload (change classes + tombstone door) | [metadata-hot-reload.md](metadata-hot-reload.md) | **PROPOSAL — NOTHING implemented** (2026-07-15 session) |
 | Memory allocator | [memory-allocator.md](memory-allocator.md) | **design note / NOT STARTED** |
 | Metadata storage container | [metadata-storage-container-arc.md](metadata-storage-container-arc.md) | design detailed; **backlog** until size / partial-save triggers fire |
+| Metaobject naming (designer labels, script names, tree order) | [metaobject-naming.md](metaobject-naming.md) | **PLAN — nothing applied** (2026-07-27). The script-visible half is near-free now and gets dearer with every configuration written. |
 
 ---
 
