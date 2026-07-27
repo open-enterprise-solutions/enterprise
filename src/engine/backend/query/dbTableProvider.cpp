@@ -193,6 +193,11 @@ ibQueryBinOp FilterOpToBinOp(ibQueryFilterOp op)
 	case ibQueryFilterOp::LessEqual:    return ibQueryBinOp::Le;
 	case ibQueryFilterOp::Greater:      return ibQueryBinOp::Gt;
 	case ibQueryFilterOp::GreaterEqual: return ibQueryBinOp::Ge;
+	// `In` is SET-valued and has no binary counterpart — BuildConditionExpr branches on it BEFORE calling
+	// this, so the mapping is unreachable there. Listed only to keep the switch exhaustive (the Eq answer
+	// would be wrong for a caller that skipped that branch, which is why no such caller may exist: the
+	// dot-walk condOp path below is the only other user and the producer never emits a dot-walk `In`).
+	case ibQueryFilterOp::In:           return ibQueryBinOp::Eq;
 	}
 	return ibQueryBinOp::Eq;
 }
@@ -602,6 +607,35 @@ ibQueryExprPtr ibMetaIRBuilder::BuildConditionExpr(const ibBackendQueryable* que
 	// the already-qualified leaf reaches here as a plain column.
 	if ((pathAsExists || c.m_asExists) && !c.m_path.empty())
 		return BuildDotWalkExists(queryable, c, mainQual);
+
+	// SET-valued `In` (the semi-join key reduction) — reads m_values, not m_value, so it MUST branch before
+	// FilterOpToBinOp below, which would answer Eq and then compare against an unset m_value.
+	if (c.m_op == ibQueryFilterOp::In) {
+		// A METADATA column takes the SAME route Eq does, once per value, OR-folded. Not because the field
+		// name would be wrong — FirstSqlFieldOfColumn already skips the _TYPE discriminator and picks the
+		// first primitive slot, which is right for a single-primitive column. It is because of the other two
+		// things the spread carries: the _TYPE discriminator (a VARIANT column would otherwise match rows of
+		// the wrong variant, since a native IN compares one primitive field and ignores the tag), and the
+		// correctly-encoded value (a REFERENCE needs its write-spread _RRRef blob, NOT a bare ibConst — the
+		// same trap the Ne branch below spells out). Guarded on non-empty: an empty OR-fold comes back null,
+		// i.e. NO predicate — which matches EVERYTHING, the exact opposite of the empty-set meaning.
+		if (c.m_col != nullptr && !c.m_col->IsRawColumn() && !c.m_values.empty()) {
+			ibQueryExprPtr pred;
+			for (const ibValue& v : c.m_values)
+				pred = OrFold(pred, DecomposeEquality(c.m_col, queryable->GetMetaData(), v, mainQual));
+			return pred;
+		}
+		// Single-field lhs: the row's own key when m_col is null (same shape BuildKeyInPredicate renders for
+		// .WhereKeyIn(), one IN instead of an OR-chain), else the column's first physical field. An EMPTY set
+		// falls through here ON PURPOSE — L2 already renders `x IN ()` as `1 = 0`
+		// (QueryRenderer.In_EmptyListIsConstantFalse), so "matches nothing" stays decided in ONE place.
+		std::vector<ibQueryExprPtr> vals;
+		vals.reserve(c.m_values.size());
+		for (const ibValue& v : c.m_values)
+			vals.push_back(ibConst(v));
+		return ibIn(ibColQ(mainQual, c.m_col == nullptr ? RowKeyField(queryable) : FirstSqlFieldOfColumn(c.m_col)),
+		            std::move(vals));
+	}
 
 	const ibQueryBinOp op = FilterOpToBinOp(c.m_op);   // ONE op (m_comparison + m_explicitOp collapsed into m_op)
 

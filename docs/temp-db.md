@@ -78,6 +78,14 @@ consumer never branches. In an execution-bound engine a fallback means rewriting
 it means choosing a different backing for the intermediate. Graceful degradation is a **dividend
 of the column-based / backing-blind design**.
 
+**The floor is not flat.** Landing on RAM is not the end of optimisation: the stitch passes
+information sideways, pushing the already-materialised side's join keys into the other side's read
+(`key IN (…)`), so a leaf on the RAM path still fetches only rows that can join. The two levers are
+complementary and independent — temp-promote moves work TO the DBMS (needs a temp dialect, so not on
+Firebird today, § 5), the key reduction shrinks a read that stays where it is (needs nothing, works
+on every driver, and covers the shapes temp-promote cannot reach — a cross-DB join above all). See
+[query-language-arc.md — Update 2026-07-27](query-language-arc.md).
+
 ## 4. Strategy — discriminator in the dict, behaviour in the manager
 
 The behavioural fork stays **data**, not code-in-the-dictionary:

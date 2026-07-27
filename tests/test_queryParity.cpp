@@ -133,6 +133,19 @@ ibQueryPredicatePtr Like(const ibBackendQueryColumn* c, const wxString& pat)
 	return ibQueryPredicate::Leaf(cond);
 }
 
+// IN — the ONE set-valued op: it fills m_values, never m_value. This is what the semi-join key
+// reduction pushes into a leaf, so its NULL behaviour has to match SQL exactly or a reduced read
+// silently returns a different row set than the unreduced one.
+ibQueryPredicatePtr In(const ibBackendQueryColumn* c, const std::vector<wxString>& vals)
+{
+	ibQueryCondition cond;
+	cond.m_col = c;
+	cond.m_op = ibQueryFilterOp::In;
+	for (const wxString& v : vals)
+		cond.m_values.push_back(ibValue(v));
+	return ibQueryPredicate::Leaf(cond);
+}
+
 // A test holding the two fixtures side by side.
 struct ParityFix : ::testing::Test {
 	TestCol               region{ wxT("region"), REGION };
@@ -213,6 +226,51 @@ TEST_F(ParityFix, Like_NullDropped)
 {
 	EXPECT_EQ(RamCount(ram, Like(&region, wxT("Nor%")).get()),
 	          SqlCount(db, wxT("region LIKE 'Nor%'")));          // North -> 1 == 1
+}
+
+// ---- IN parity: the semi-join key filter --------------------------------------
+//
+// The reduction is only sound if `col IN (keys)` means the SAME thing in the RAM stitch and
+// server-side — it is applied to make a read cheaper, never to change what it returns.
+
+TEST_F(ParityFix, In_Match)
+{
+	EXPECT_EQ(RamCount(ram, In(&region, { wxT("North"), wxT("South") }).get()),
+	          SqlCount(db, wxT("region IN ('North', 'South')")));   // 2 == 2
+}
+
+// A single-element IN must agree with plain equality — the degenerate key set.
+TEST_F(ParityFix, In_SingleValueEqualsEquality)
+{
+	EXPECT_EQ(RamCount(ram, In(&region, { wxT("North") }).get()),
+	          RamCount(ram, Eq(&region, wxT("North")).get()));      // 1 == 1
+	EXPECT_EQ(RamCount(ram, In(&region, { wxT("North") }).get()),
+	          SqlCount(db, wxT("region IN ('North')")));            // 1 == 1
+}
+
+// The NULL-region row probes the set and is UNKNOWN, not FALSE — dropped on both sides. This is
+// where a naive "cell equals any value, else false" RAM implementation diverges from SQL.
+TEST_F(ParityFix, In_NullProbeIsUnknown)
+{
+	EXPECT_EQ(RamCount(ram, In(&region, { wxT("North"), wxT("East") }).get()),
+	          SqlCount(db, wxT("region IN ('North', 'East')")));    // 2 == 2, the NULL row excluded
+}
+
+// A value in the set that matches nothing must not widen the result.
+TEST_F(ParityFix, In_UnmatchedValueIgnored)
+{
+	EXPECT_EQ(RamCount(ram, In(&region, { wxT("North"), wxT("Nowhere") }).get()),
+	          SqlCount(db, wxT("region IN ('North', 'Nowhere')")));  // 1 == 1
+}
+
+// EMPTY set = matches nothing. The load-bearing case: the driving side of a semi-join produced no
+// keys, and the reduced read must return NOTHING — an empty filter that degraded to "no predicate"
+// would return the whole table instead. SQL has no legal `IN ()`, so the equivalent is a false
+// constant (which is exactly how L2 renders an empty IN — QueryRenderer.In_EmptyListIsConstantFalse).
+TEST_F(ParityFix, In_EmptySetMatchesNothing)
+{
+	EXPECT_EQ(RamCount(ram, In(&region, {}).get()),
+	          SqlCount(db, wxT("1 = 0")));                          // 0 == 0
 }
 
 // ---- aggregate NULL semantics: SQL ignores NULL operands ---------------------

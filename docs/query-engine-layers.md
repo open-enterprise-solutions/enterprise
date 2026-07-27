@@ -81,6 +81,24 @@ backing-blind (a DB cursor **or** a RAM table, chosen once in `MakeProvider`). T
 snapshot — one declaration on the node produces both the DDL (L3-2) and the row round-trip (L3-3).
 See [metadata-lifecycle.md](metadata-lifecycle.md) §2, §6.
 
+**When the stitch stays in RAM, the reads still shrink.** A multi-source tree that cannot co-locate
+falls to the RAM stitch (materialise each leaf, join in C++). There the composer passes information
+SIDEWAYS: the side it materialises first has known join-key values, which it pushes into the other
+side's read as `key IN (…)`, so that leaf fetches only rows that can possibly join. It is a pure
+reduction — the answer cannot change, only the read shrinks. The side that drives is chosen to shrink
+the expensive one (a computed/RAM source is read first; it is built in memory anyway), and the
+direction is a correctness gate on a LEFT join, never a preference. See
+[query-language-arc.md — Update 2026-07-27](query-language-arc.md).
+
+**Derived-state regeneration is *not* a fourth query floor.** Rebuilding a derived table (register
+`totals_X` from its source `mov_X`) is a **compute-server job** that *composes* L3-2 (drop/recreate
+the totals bundle) with a bulk aggregate transfer (an L3-1 `SelectAggregate` read into a bulk write)
+— orchestration (chunked, resumable, under exclusive), not a new query primitive. The `ContributeTables`
+snapshot classifies each table **source** or **derived**, and that one bit routes all three floors:
+L3-2 builds both, L3-3 moves **source only**, the regeneration job rebuilds **derived only**. Steady-
+state per-movement maintenance is a DB trigger, never a floor. See
+[register-totals-strategy.md § Engine integration](register-totals-strategy.md).
+
 ### L4 — the authoring tiers (each has a human writing something)
 Three front-ends, all lowering into the **one** L3 door — L4 **lives on L3** (L3 is its parent):
 

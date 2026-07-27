@@ -16,6 +16,7 @@
 #include <memory>
 #include <vector>
 #include <algorithm>   // stable_sort — RamSortCompareKey null-placement test
+#include <functional>  // std::function — the recording computed queryable's row builder
 
 #include "backend/query/queryProvider.h"     // ibQueryComposer + ibQueryRamTable
 #include "backend/query/querySelector.h"     // ibSelector — traversal façade over a snapshot
@@ -82,6 +83,65 @@ private:
 	bool     m_computed;
 	std::vector<const ibBackendQueryColumn*> m_cols;
 };
+
+// A computed (RAM) queryable that RECORDS what the composer pushed into its ComputeRows, and then
+// deliberately IGNORES it — exactly like the real register computes (balance / turnover / slice), which
+// take the parameter and drop it. Two things ride on that:
+//
+//   * OBSERVABILITY. The semi-join key reduction is a PURE reduction — it can never change the answer —
+//     so results alone cannot tell whether it fired. Reading what was pushed is the only way to see it.
+//   * The ADVISORY contract. Honouring `extra` inside ComputeRows is an optimisation; ibComputedProvider
+//     applies the conditions over the returned rows regardless. A source that ignores them (this one, and
+//     every register today) still comes back correctly filtered.
+class RecordingComputedQ : public ibBackendQueryable {
+public:
+	RecordingComputedQ(const wxString& table, ibMetaID metaId) : m_table(table), m_metaId(metaId) {}
+	void AddCol(const ibBackendQueryColumn* c) { m_cols.push_back(c); }
+	void SetRows(std::function<ibQueryRamTable()> b) { m_build = std::move(b); }
+	const std::vector<ibQueryCondition>& Seen() const { return m_seen; }
+
+	ibBackendQueryProvider& GetProvider() const override { return ibComputedProviderInstance(); }
+	bool     IsComputedInRam() const override { return true; }
+	ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override {
+		m_seen = extra;                                  // record, then ignore — see the note above
+		return m_build ? m_build() : ibQueryRamTable();
+	}
+
+	wxString GetQueryTableName() const override { return m_table; }
+	ibMetaID GetQueryTableId()   const override { return m_metaId; }
+	ibGuid   GetQueryTableGuid() const override {
+		ibGuidImpl impl{}; impl.m_data1 = static_cast<unsigned long>(m_metaId); return ibGuid(impl);
+	}
+	const ibMetaData* GetMetaData() const override { return nullptr; }
+	std::vector<ibQuerySortItem> GetIdentitySort() const override { return {}; }
+	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_cols; }
+	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override {
+		for (const ibBackendQueryColumn* c : m_cols) if (c->GetName() == name) return c;
+		return nullptr;
+	}
+	bool OwnsColumn(const ibBackendQueryColumn* col) const override {
+		for (const ibBackendQueryColumn* c : m_cols) if (c == col) return true;
+		return false;
+	}
+private:
+	wxString m_table;
+	ibMetaID m_metaId;
+	std::vector<const ibBackendQueryColumn*> m_cols;
+	std::function<ibQueryRamTable()>         m_build;
+	mutable std::vector<ibQueryCondition>    m_seen;
+};
+
+// One-column key table (model id `id`) holding `keys` — the driving side of the reductions below.
+ibQueryRamTable KeyRows(ibMetaID id, const wxString& name, const std::vector<long>& keys)
+{
+	ibQueryRamTable t;
+	t.AddColumn(id, name, kNoType);
+	for (const long k : keys) {
+		const long r = t.AppendRow();
+		t.SetCell(r, id, ibValue(ibNumber(k)));
+	}
+	return t;
+}
 
 // Fill an ibDataQuerySpec with all the (empty) side-vectors + a root + select list. The vectors
 // must outlive the spec use, so the caller owns them.
@@ -1252,4 +1312,245 @@ TEST(QueryComposerCore, DedupeRows_EmptyAndAllUnique)
 		uniq.SetCell(r, C1, ibValue(ibNumber(i)));
 	}
 	EXPECT_EQ(ibQueryComposer::DedupeRows(uniq, cols).RowCount(), 4);
+}
+
+// ---- semi-join key reduction (sideways information passing) -------------------------
+//
+// Once one side of a join is materialised its key values are known, so the OTHER side can read only
+// rows that can possibly join. Correctness can never depend on it (dropping a non-joining row cannot
+// change the result), which is exactly why it needs its own observation: RecordingComputedQ reports
+// what was pushed while ignoring it, so each case asserts BOTH that the reduction fired and that the
+// answer is right without it.
+
+TEST(QuerySemiJoin, InnerJoin_PushesDistinctKeysToTheOtherSide)
+{
+	const ibMetaID AK = 1, BK = 2, BV = 3;
+	TestCol aKey(wxT("k"), AK), bKey(wxT("k"), BK), bVal(wxT("v"), BV);
+
+	RecordingComputedQ A(wxT("a"), 100); A.AddCol(&aKey);
+	RecordingComputedQ B(wxT("b"), 101); B.AddCol(&bKey); B.AddCol(&bVal);
+	A.SetRows([&] { return KeyRows(AK, wxT("k"), { 1, 2, 3, 2 }); });   // 2 twice — the set must dedup
+	B.SetRows([&] {
+		ibQueryRamTable t;
+		t.AddColumn(BK, wxT("k"), kNoType);
+		t.AddColumn(BV, wxT("v"), kNoType);
+		for (const long k : { 2, 3, 4 }) {
+			const long r = t.AppendRow();
+			t.SetCell(r, BK, ibValue(ibNumber(k)));
+			t.SetCell(r, BV, ibValue(ibNumber(k * 10)));
+		}
+		return t;
+	});
+
+	ibDataQueryBuilder q(nullptr);
+	q.From(&A).Join(&B, &aKey, &bKey);
+	q.Select(&bVal, wxT("v"));
+	ibReadPageRequest page;
+	ibDataQueryResult res = q.Execute(page);
+
+	int rows = 0;
+	while (res.Next()) ++rows;
+	EXPECT_EQ(rows, 3);   // A holds 1,2,3,2 and B holds 2,3,4 -> keys 2 (twice) and 3
+
+	ASSERT_EQ(B.Seen().size(), 1u) << "the right side should have been handed exactly one reduction";
+	EXPECT_TRUE(B.Seen()[0].m_op == ibQueryFilterOp::In);
+	EXPECT_EQ(B.Seen()[0].m_col, &bKey) << "the condition must name the RIGHT side's key column";
+	EXPECT_EQ(B.Seen()[0].m_values.size(), 3u) << "distinct keys of the left side: 1, 2, 3";
+	EXPECT_TRUE(A.Seen().empty()) << "the driving side is read first and receives nothing";
+}
+
+// THE correctness gate. `A LEFT JOIN B` preserves every A row, so the reduction may only ever travel
+// left -> right. If the direction were flipped, A would lose its unmatched rows and this fails.
+TEST(QuerySemiJoin, LeftJoin_KeepsUnmatchedLeftRows)
+{
+	const ibMetaID AK = 1, BK = 2, BV = 3;
+	TestCol aKey(wxT("k"), AK), bKey(wxT("k"), BK), bVal(wxT("v"), BV);
+
+	RecordingComputedQ A(wxT("a"), 110); A.AddCol(&aKey);
+	RecordingComputedQ B(wxT("b"), 111); B.AddCol(&bKey); B.AddCol(&bVal);
+	A.SetRows([&] { return KeyRows(AK, wxT("k"), { 1, 2 }); });
+	B.SetRows([&] {
+		ibQueryRamTable t;
+		t.AddColumn(BK, wxT("k"), kNoType);
+		t.AddColumn(BV, wxT("v"), kNoType);
+		const long r = t.AppendRow();
+		t.SetCell(r, BK, ibValue(ibNumber(2)));
+		t.SetCell(r, BV, ibValue(ibNumber(20)));
+		return t;
+	});
+
+	ibDataQueryBuilder q(nullptr);
+	q.From(&A).Join(&B, &aKey, &bKey, ibQueryJoinKind::Left);
+	q.Select(&aKey, wxT("k"));
+	ibReadPageRequest page;
+	ibDataQueryResult res = q.Execute(page);
+
+	int rows = 0;
+	while (res.Next()) ++rows;
+	EXPECT_EQ(rows, 2) << "key 1 has no match and MUST survive a LEFT join";
+
+	ASSERT_EQ(B.Seen().size(), 1u) << "left -> right is the sound direction and stays enabled for LEFT";
+	EXPECT_TRUE(B.Seen()[0].m_op == ibQueryFilterOp::In);
+}
+
+// A THETA ON (a.k > b.k) cannot be reduced by an equality key set — knowing which keys the left holds
+// says nothing about which right rows satisfy `>`. The gate must leave it alone.
+TEST(QuerySemiJoin, ThetaJoin_IsNotReduced)
+{
+	const ibMetaID AK = 1, BK = 2;
+	TestCol aKey(wxT("k"), AK), bKey(wxT("k"), BK);
+
+	RecordingComputedQ A(wxT("a"), 120); A.AddCol(&aKey);
+	RecordingComputedQ B(wxT("b"), 121); B.AddCol(&bKey);
+	A.SetRows([&] { return KeyRows(AK, wxT("k"), { 5 }); });
+	B.SetRows([&] { return KeyRows(BK, wxT("k"), { 1, 2, 9 }); });
+
+	ibDataQueryBuilder q(nullptr);
+	q.From(&A).Join(&B, &aKey, &bKey, ibJoinCompareOp::Gt);
+	q.Select(&bKey, wxT("k"));
+	ibReadPageRequest page;
+	ibDataQueryResult res = q.Execute(page);
+
+	int rows = 0;
+	while (res.Next()) ++rows;
+	EXPECT_EQ(rows, 2);   // 5 > 1 and 5 > 2, not 5 > 9
+
+	EXPECT_TRUE(B.Seen().empty()) << "an equality key set must not be pushed into a theta join";
+}
+
+// An empty driving side yields no keys, so nothing is pushed — the join is empty anyway and the
+// reduction must not manufacture a filter (an empty IN would be correct here, but the plain path is
+// simpler and the result is the same; this pins that choice).
+TEST(QuerySemiJoin, EmptyDrivingSidePushesNothing)
+{
+	const ibMetaID AK = 1, BK = 2;
+	TestCol aKey(wxT("k"), AK), bKey(wxT("k"), BK);
+
+	RecordingComputedQ A(wxT("a"), 130); A.AddCol(&aKey);
+	RecordingComputedQ B(wxT("b"), 131); B.AddCol(&bKey);
+	A.SetRows([&] { return KeyRows(AK, wxT("k"), {}); });
+	B.SetRows([&] { return KeyRows(BK, wxT("k"), { 1, 2 }); });
+
+	ibDataQueryBuilder q(nullptr);
+	q.From(&A).Join(&B, &aKey, &bKey);
+	q.Select(&bKey, wxT("k"));
+	ibReadPageRequest page;
+	ibDataQueryResult res = q.Execute(page);
+
+	int rows = 0;
+	while (res.Next()) ++rows;
+	EXPECT_EQ(rows, 0);
+	EXPECT_TRUE(B.Seen().empty());
+}
+
+// A 3+ unit pure-INNER chain takes a DIFFERENT path (FlattenInnerChain + JoinUnitsSmallestFirst, which
+// materialises every unit up front). The reduction has to ride there too, and it composes: each unit is
+// reduced by the units already read, so the narrowing is transitive down the chain.
+TEST(QuerySemiJoin, InnerChainOfThree_ReducesDownTheChain)
+{
+	const ibMetaID AK = 1, BK = 2, CK = 3;
+	TestCol aKey(wxT("k"), AK), bKey(wxT("k"), BK), cKey(wxT("k"), CK);
+
+	RecordingComputedQ A(wxT("a"), 140); A.AddCol(&aKey);
+	RecordingComputedQ B(wxT("b"), 141); B.AddCol(&bKey);
+	RecordingComputedQ C(wxT("c"), 142); C.AddCol(&cKey);
+	A.SetRows([&] { return KeyRows(AK, wxT("k"), { 1, 2 }); });
+	B.SetRows([&] { return KeyRows(BK, wxT("k"), { 2, 3 }); });
+	C.SetRows([&] { return KeyRows(CK, wxT("k"), { 2, 3, 4 }); });
+
+	ibDataQueryBuilder q(nullptr);
+	q.From(&A).Join(&B, &aKey, &bKey).Join(&C, &bKey, &cKey);
+	q.Select(&cKey, wxT("k"));
+	ibReadPageRequest page;
+	ibDataQueryResult res = q.Execute(page);
+
+	int rows = 0;
+	while (res.Next()) ++rows;
+	EXPECT_EQ(rows, 1);   // only key 2 is in all three
+
+	ASSERT_EQ(B.Seen().size(), 1u);
+	EXPECT_TRUE(B.Seen()[0].m_op == ibQueryFilterOp::In);
+	EXPECT_EQ(B.Seen()[0].m_values.size(), 2u) << "A's keys 1, 2";
+
+	ASSERT_EQ(C.Seen().size(), 1u) << "the second edge reduces C by what B holds";
+	EXPECT_TRUE(C.Seen()[0].m_op == ibQueryFilterOp::In);
+	EXPECT_EQ(C.Seen()[0].m_col, &cKey);
+
+	EXPECT_TRUE(A.Seen().empty()) << "the head of the chain is read first";
+}
+
+// ---- the advisory contract of ComputeRows(extra) --------------------------------------
+//
+// Every register compute takes `extra` and drops it (`ComputeRows(const std::vector<ibQueryCondition>&
+// /*extra*/)` — balance / turnover / slice). That was invisible while `extra` was always empty; the
+// semi-join reduction now pushes a real filter through it. So the PROVIDER enforces: whatever the source
+// chose to ignore is applied over the rows it returned. These pin that, on a single source — no join, so
+// nothing else could be doing the filtering.
+
+TEST(QueryComputedFilter, IgnoredConditionIsStillEnforced)
+{
+	const ibMetaID K = 1;
+	TestCol key(wxT("k"), K);
+	RecordingComputedQ src(wxT("s"), 150);
+	src.AddCol(&key);
+	src.SetRows([&] { return KeyRows(K, wxT("k"), { 1, 2, 3, 4 }); });   // ignores whatever it is handed
+
+	ibDataQueryBuilder q(nullptr);
+	q.From(&src);
+	q.Select(&key, wxT("k"));
+	q.WhereIn(&key, { ibValue(ibNumber(2)), ibValue(ibNumber(4)) });
+	ibReadPageRequest page;
+	ibDataQueryResult res = q.Execute(page);
+
+	int rows = 0;
+	while (res.Next()) ++rows;
+	EXPECT_EQ(rows, 2) << "the source returned all four rows; the provider must apply the filter it dropped";
+
+	ASSERT_EQ(src.Seen().size(), 1u) << "the condition is still HANDED down (a source may push it deeper)";
+	EXPECT_TRUE(src.Seen()[0].m_op == ibQueryFilterOp::In);
+}
+
+// The scalar ops go through the same enforcement — this is not an `In`-only patch.
+TEST(QueryComputedFilter, IgnoredEqualityIsStillEnforced)
+{
+	const ibMetaID K = 1;
+	TestCol key(wxT("k"), K);
+	RecordingComputedQ src(wxT("s"), 151);
+	src.AddCol(&key);
+	src.SetRows([&] { return KeyRows(K, wxT("k"), { 1, 2, 3 }); });
+
+	ibDataQueryBuilder q(nullptr);
+	q.From(&src);
+	q.Select(&key, wxT("k"));
+	q.Where(&key, ibValue(ibNumber(2)));
+	ibReadPageRequest page;
+	ibDataQueryResult res = q.Execute(page);
+
+	int rows = 0;
+	while (res.Next()) ++rows;
+	EXPECT_EQ(rows, 1);
+}
+
+// A condition on a column the source does NOT vend must not silently empty the result: the missing cell
+// would read back as NULL and the three-valued evaluator would drop every row. Such a condition is skipped
+// by the enforcement (the source is the only one who could have meant it).
+TEST(QueryComputedFilter, ConditionOnUnvendedColumnDoesNotEmptyTheResult)
+{
+	const ibMetaID K = 1, OTHER = 99;
+	TestCol key(wxT("k"), K), absent(wxT("absent"), OTHER);
+	RecordingComputedQ src(wxT("s"), 152);
+	src.AddCol(&key);
+	src.AddCol(&absent);                                       // declared on the source...
+	src.SetRows([&] { return KeyRows(K, wxT("k"), { 1, 2 }); });   // ...but NOT in the rows it returns
+
+	ibDataQueryBuilder q(nullptr);
+	q.From(&src);
+	q.Select(&key, wxT("k"));
+	q.Where(&absent, ibValue(ibNumber(7)));
+	ibReadPageRequest page;
+	ibDataQueryResult res = q.Execute(page);
+
+	int rows = 0;
+	while (res.Next()) ++rows;
+	EXPECT_EQ(rows, 2) << "an unvended column is the source's business; enforcement must skip it";
 }

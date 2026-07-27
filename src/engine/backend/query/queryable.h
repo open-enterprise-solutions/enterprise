@@ -113,7 +113,12 @@ BACKEND_API ibBackendQueryProvider& ibComputedProviderInstance();
 // crippled 2-value ibComparisonType (Eq/Ne, a leftover from the legacy ibFilterRow) is GONE from the query
 // path. Equal/NotEqual are the common case; the rest are the former WhereCompare/WhereLike ops. (Max: "why do you
 // drag that clunky ibComparisonType everywhere".)
-enum class ibQueryFilterOp { Equal, NotEqual, Like, Less, LessEqual, Greater, GreaterEqual };
+// `In` is the ONE set-valued op: it reads m_values, NOT m_value (every other op is the reverse). It exists
+// for the SEMI-JOIN key reduction — the RAM stitch materialises the cheap side of a join first, collects that
+// side's DISTINCT key values, and pushes them as an `In` condition into the other leaf's read, so the leaf
+// fetches only rows that can possibly join instead of the whole table. Appended LAST: the enum is runtime-only
+// (never serialised), but keeping the existing ordinals stable costs nothing.
+enum class ibQueryFilterOp { Equal, NotEqual, Like, Less, LessEqual, Greater, GreaterEqual, In };
 
 struct ibQueryCondition
 {
@@ -123,6 +128,12 @@ struct ibQueryCondition
 	// this. Providers read it directly (FilterOpToBinOp / the RAM switch); no branch.
 	ibQueryFilterOp             m_op = ibQueryFilterOp::Equal;
 	ibValue                     m_value;
+
+	// The `In` operand set — the ONLY op that reads this instead of m_value. An EMPTY set with m_op == In is
+	// the empty IN, i.e. matches nothing (SQL `x IN ()` has no legal spelling, so both renderers short-circuit
+	// to FALSE rather than emitting it). NULL never belongs here: a NULL key matches nothing in an equi-join,
+	// and `IN (…, NULL)` is the classic SQL trap — the producer strips nulls before filling this.
+	std::vector<ibValue>        m_values;
 
 	// Reference DOT-WALK: when non-empty, this condition filters the LEAF attribute of a reference
 	// path (Producer.Region -> {Producer, Region}). Every non-leaf segment is a single-target
@@ -405,7 +416,11 @@ public:
 	// instead of the DB provider. So the same door reads physical and computed
 	// sources alike, and the computed result is a RAM relation L3 can join. The
 	// instance is call-scoped (it carries one query's filters). `extra` is any
-	// further door conditions to compose on top (post-filter); empty for now.
+	// further door conditions to compose on top (post-filter) — ADVISORY: an
+	// implementation may push them into its own compute to build fewer rows, but
+	// the caller (ibComputedProvider) applies them over the result regardless, so
+	// ignoring them costs speed, never correctness. It is no longer "empty for
+	// now": the semi-join key reduction pushes an `In` filter through it.
 	// Default: physical. (docs/query-language-arc.md §22.4d, §22.6 — RAM-set.)
 	virtual bool IsComputedInRam() const { return false; }
 	

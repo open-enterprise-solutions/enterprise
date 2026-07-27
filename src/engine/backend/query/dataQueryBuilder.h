@@ -351,6 +351,18 @@ public:
 	                              const ibValue& pattern);                                    // col LIKE pattern (FindByCode/Description)
 	ibDataQueryBuilder& WhereCompare(const ibBackendQueryColumn* col,
 	                                 ibQueryFilterOp op, const ibValue& value);               // col <op> value (ordered: <=, <, >, >=, LIKE)
+	// A ready-made condition, pushed VERBATIM. The composer re-reads leaves through this door, and a
+	// condition is no longer three fields — it carries m_values (In), m_path, m_expr, m_asExists, m_semiJoin.
+	// Rebuilding one from (col, op, value) silently drops the rest, which for an `In` means an EMPTY set,
+	// i.e. "matches nothing". Forward the whole struct; every future field rides for free.
+	ibDataQueryBuilder& Where(const ibQueryCondition& condition);
+	// Set membership — col IN (values). THE semi-join key filter: the RAM stitch materialises the cheap side
+	// of a join first and pushes that side's key values in here, so the other leaf reads only rows that can
+	// possibly join instead of the whole table. NULLs are dropped on the way in (a NULL key matches nothing
+	// in an equi-join, and `IN (…, NULL)` is the classic SQL trap), so an all-NULL or empty set renders as
+	// "matches nothing" on BOTH the SQL and the RAM side. Pass DISTINCT values — duplicates are harmless but
+	// only lengthen the rendered list.
+	ibDataQueryBuilder& WhereIn(const ibBackendQueryColumn* col, const std::vector<ibValue>& values);
 	// Full boolean WHERE — a predicate TREE (OR / NOT / IS NULL beyond the flat AND-fold of the
 	// verbs above). L4 builds it from its parsed WHERE; the provider lowers it to the L2 IR. AND-folded
 	// with any verb conditions / row-key filters. (docs/query-language-arc.md §23 — door Where via L2.)

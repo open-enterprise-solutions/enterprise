@@ -13,10 +13,10 @@
 > The lower sections (§4–§22) are the design this converged from; §23–§24 + the dated update
 > blocks below are what is actually in the tree.
 >
-> **Last updated:** 2026-06-23 (L4-2 JOIN push-down — the two-paths merge started: script `.Join()`
-> with a `Data.*` source now lowers into the L3 door / temp-promote; + SQLite temp dialect + ANALYZE
-> as an L2 statement — see the final dated-update block). The dated update blocks run newest-last;
-> read §23–§24 for the realized L4/L5 mechanism.
+> **Last updated:** 2026-07-27 (semi-join key reduction in the RAM stitch — a materialised side's join
+> keys are pushed into the other side's read as `key IN (…)`, so a leaf fetches only rows that can join;
+> + the set-valued `ibQueryFilterOp::In` it rides on — see the final dated-update block). The dated
+> update blocks run newest-last; read §23–§24 for the realized L4/L5 mechanism.
 >
 > ### Landed snapshot (2026-06-07)
 >
@@ -2747,3 +2747,117 @@ constant) ORDER BY item to `OrderByExpr`; a plain column / dot-walk keeps the co
 source only (like the computed WHERE side; `computedPrimary` and JOIN error clearly). A computed sort is NOT a
 keyset key — the anchor / keyset builders already skip `m_col == null` items, so it materialises only in the ORDER
 BY; the text-query full read (`Query.Execute()`, never the path-based list composer) is the user.
+
+---
+
+## Update 2026-07-27 — semi-join key reduction (sideways information passing) in the RAM stitch
+
+**The problem.** The RAM stitch reads each leaf WHOLE and joins afterwards, so a leaf pays for every row
+it holds even when almost none of them can join. On a mixed tree (a DB table joined to a register slice)
+the DB table is scanned in full and then thrown away row by row in the nested loop.
+
+**The move.** Once ONE side of a join is materialised its join-key values are KNOWN, so they are pushed
+into the other side's read as `key IN (…)`. It is a **pure reduction**: a row the filter removes could not
+have appeared in the result, so the answer is identical and only the read shrinks. Three pieces landed —
+the condition that carries the keys, the reduction that produces them, and the enforcement that makes a
+pushed condition actually bite on a computed source:
+
+### 1. A set-valued condition — `ibQueryFilterOp::In` + `ibQueryCondition::m_values`
+
+- `queryable.h` — `In` appended LAST to the op enum (runtime-only, never serialised, but the ordinals stay
+  stable), plus `std::vector<ibValue> m_values`. It is the ONE op that reads `m_values` instead of `m_value`.
+  Placed after `m_value` so the existing aggregate initialisers `{ col, op, value }` keep working.
+- **Door** — `ibDataQueryBuilder::WhereIn(col, values)`. NULLs are stripped on the way in: a NULL key matches
+  nothing in an equi-join and `IN (…, NULL)` is the classic SQL trap, so an all-NULL set becomes the EMPTY set.
+- **SQL render** (`ibMetaIRBuilder::BuildConditionExpr`) — branches BEFORE `FilterOpToBinOp`, which would
+  answer `Eq` and compare against an unset `m_value`. Two shapes: a single-field lhs (raw column, or the
+  row key) renders one native `ibIn`; a METADATA column OR-folds the SAME composite equality `Eq` uses, once
+  per value — load-bearing for a VARIANT (a native IN on one primitive field ignores the `_TYPE` tag and would
+  match rows of the wrong variant) and for a REFERENCE (whose constant must be the encoded `_RRRef` blob, not
+  a bare `ibConst`). The empty set is NOT special-cased here: L2 already renders `x IN ()` as `1 = 0`
+  (`QueryRenderer.In_EmptyListIsConstantFalse`), so "matches nothing" stays decided in ONE place. The
+  metadata fold IS guarded on non-empty — an empty OR-fold returns null, i.e. NO predicate, i.e. the whole table.
+- **RAM eval** (`RamEvalLeaf`) — branches before the scalar null guard, which would read the unset `m_value`
+  as NULL and answer UNKNOWN for every row. SQL semantics: a NULL probe is UNKNOWN, an empty set is FALSE.
+
+### 2. The reduction itself — in both stitch paths
+
+`MaterialiseNode` gained an `extra` parameter carrying reductions down the recursion, routed by column
+OWNERSHIP at the Source node (a caller hands a set to a whole subtree without knowing which leaf holds the key).
+
+- **Two-leaf join.** One side is materialised first; its distinct keys reduce the other.
+- **3+ unit INNER chain** (`JoinUnitsSmallestFirst`) — before reading a unit, every edge to an already-read
+  unit hands down its keys. Transitive: a unit reduced early hands on a narrower set. The counts fed to
+  `PlanInnerJoinOrder` stay EXACT — measured after the reduction, which is what the planner should see.
+
+**WHICH side drives is the trick.** A computed source is built in memory whatever we do — the register's
+`ComputeBalance` / `ComputeTurnover` / `ComputeSlice` runs in full and a filter can only trim its *result*,
+never avoid the compute. Reducing it therefore saves downstream join work but no I/O, while reducing a DB
+read saves the scan itself. Therefore: when exactly one side is a computed leaf, it is materialised FIRST
+and its keys shrink the other's scan — the DB⋈RAM case. In the N-way chain the same rule orders the reads
+(computed units first).
+
+**DIRECTION IS A CORRECTNESS GATE, not a preference.** For a LEFT join only left→right is sound: the right is
+the null-producing side, so a right row matching no left key contributes nothing either way, while the
+preserved left side must never lose a row. Driving from the right is therefore INNER only. Never applied to
+RIGHT / FULL / cross, to a computed ON (no column key), or to a THETA ON — an equality key set says nothing
+about which rows satisfy `a.x > b.y`. (`FlattenInnerChain` already admits only INNER / non-cross / equi-key /
+non-computed ON, so the N-way path is sound unconditionally.)
+
+**The cap is the whole cost model.** `kSemiJoinMaxKeys = 512`, alongside `kTempTableMinRows`. Beyond it the IN
+list costs more than the read it saves, and a key set that large is rarely selective. Above the cap the
+reduction simply does not happen — correctness never depends on it.
+
+**One trap closed on the way.** `MaterialiseLeafToRam` re-created each condition as `Where(m_col, m_op,
+m_value)` — three of seven fields. For an `In` that means an EMPTY set, i.e. "matches nothing". Fixed at the
+root rather than by special-casing `In`: a new `ibDataQueryBuilder::Where(const ibQueryCondition&)` forwards a
+condition VERBATIM, and the composer uses it. `m_path` / `m_expr` / `m_asExists` / `m_semiJoin` stopped being
+dropped too, and any future field rides for free.
+
+### 3. `ComputeRows(extra)` made ADVISORY — the provider enforces
+
+The reduction has to reach a computed leaf too (it is the receiving side whenever the driving one is a real
+table), and it did not: every register compute takes the parameter and drops it —
+`ibBalanceQueryable::ComputeRows(const std::vector<ibQueryCondition>& /*extra*/)`, same for turnover and
+slice. Invisible while `extra` was always empty; the reduction is its first real user.
+
+Fixed at the CALLER, not per implementation: `ComputeRowsResolved` now applies the plain conditions over the
+rows `ComputeRows` returned. Re-filtering a source that DID honour them is idempotent, so one place serves
+both kinds — present and future. Two guards:
+
+- **Only conditions whose column is IN the returned table.** A column the source does not vend reads back as
+  an empty cell, which the three-valued evaluator takes for NULL and uses to drop EVERY row.
+- **Applied BEFORE the dot-walk resolution**, so the reference joins run on fewer rows.
+
+The interface contract in `queryable.h` was rewritten to match: `extra` is **advisory** — an implementation
+may push it into its own compute to build fewer rows, but the caller applies it regardless, so ignoring it
+costs speed, never correctness. Note what this does *not* buy: filtering after the fact trims the result, it
+does not avoid the register's compute — which is exactly why the drive-order rule above prefers to reduce the
+side that pays per row.
+
+**Blast radius: none on existing behaviour.** The L4-1 text `WHERE` lowers into the predicate TREE
+(`b.Where(BuildWherePredicate(...))`, `queryLowering.cpp`), and the tree was always applied on the computed
+path (`if (spec.m_predicate) rows = FilterRows(...)`). Only the FLAT-condition path was unenforced, and the
+register companion queryables carry their filters in the ctor rather than through the door — so that path was
+effectively empty until the reduction started using it. No report moves.
+
+**Tests (19).** A pure reduction cannot change the answer, so results alone cannot tell whether it fired.
+`RecordingComputedQ` (`tests/test_queryComposer.cpp`) records what was pushed into `ComputeRows` and then
+IGNORES it — exactly like the real registers — so the cases assert BOTH that the reduction fired and that the
+provider's enforcement makes the answer right anyway:
+
+- **Reduction** — `InnerJoin_PushesDistinctKeysToTheOtherSide` (keys dedup; the driving side receives
+  nothing) · `LeftJoin_KeepsUnmatchedLeftRows` (**the direction gate** — flip the direction and it fails) ·
+  `ThetaJoin_IsNotReduced` · `EmptyDrivingSidePushesNothing` · `InnerChainOfThree_ReducesDownTheChain`.
+- **Enforcement** — `QueryComputedFilter.IgnoredConditionIsStillEnforced` (the source returns everything, the
+  provider filters) · `IgnoredEqualityIsStillEnforced` (not an `In`-only patch) ·
+  `ConditionOnUnvendedColumnDoesNotEmptyTheResult` (the guard).
+- **The operator** — `tests/test_queryParity.cpp` (RAM vs real SQLite: match / single-value / NULL probe /
+  unmatched value / empty set) · `tests/test_queryComputedServer.cpp` (through the door onto a live SQLite:
+  native IN, NULL probe, empty set, all-NULL keys, and both metadata-column shapes — `BuildConditionExpr` is
+  TU-local to `dbTableProvider.cpp`, so the door IS the seam).
+
+**Honest remainder.** Not built, not measured — everything above is reasoned from the code. The DB-side win
+is bounded by indexing: `key IN (…)` without an index on the join key still scans, it only transfers less.
+And `kSemiJoinMaxKeys = 512` is a guess wearing the same "tune against real numbers" label as
+`kTempTableMinRows` — neither has real numbers yet.

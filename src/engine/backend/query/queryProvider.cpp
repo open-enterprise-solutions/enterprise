@@ -249,6 +249,12 @@ bool MatchRamCondition(const ibValue& cell, const ibQueryCondition& c)
 	case ibQueryFilterOp::LessEqual:    return cell < c.m_value || cell == c.m_value;
 	case ibQueryFilterOp::Greater:      return !(cell < c.m_value) && !(cell == c.m_value);
 	case ibQueryFilterOp::GreaterEqual: return !(cell < c.m_value);
+	// SET-valued: reads m_values, not m_value. An empty set matches nothing (same answer the SQL side
+	// renders), so the loop falling through to false is the correct empty-IN semantics, not an oversight.
+	case ibQueryFilterOp::In:
+		for (const ibValue& v : c.m_values)
+			if (cell == v) return true;
+		return false;
 	}
 	return false;
 }
@@ -437,6 +443,56 @@ const long kTempTableMinRows = 1000;   // heuristic; tune against real numbers
 
 bool WorthDbTemp(long rowCount) { return rowCount >= kTempTableMinRows; }
 
+// --- semi-join key reduction (sideways information passing) ---------------------------------
+// The RAM stitch reads each leaf whole and joins afterwards, so a leaf pays for every row it holds
+// even when almost none of them can join. Once ONE side of a join is materialised its join-key values
+// are KNOWN — pushing them into the other side as `key IN (…)` makes that read fetch only rows that
+// can possibly join. It is a pure reduction: a row the filter removes could not have appeared in the
+// result, so the answer is identical and only the read shrinks (docs/query-language-arc.md).
+//
+// The cap is the whole cost model. Beyond it the IN list itself (bind parameters, a long rendered
+// predicate, the DBMS's own list handling) costs more than the read it saves — and a key set that
+// large is usually not selective anyway. Above the cap we simply do not reduce; correctness never
+// depends on the reduction happening.
+const size_t kSemiJoinMaxKeys = 512;   // heuristic; tune against real numbers
+
+// Distinct non-NULL values of `col` across `t`, or false when the set is unusable for a reduction:
+// no column, an empty table (nothing to reduce BY — the join yields nothing anyway and the caller
+// keeps the plain path), or more distinct keys than the cap. NULLs are skipped: a NULL key matches
+// nothing in an equi-join, so it must not enter the set (and would poison an IN list).
+bool CollectDistinctJoinKeys(const ibQueryRamTable& t, const ibBackendQueryColumn* col,
+                             std::vector<ibValue>& out)
+{
+	out.clear();
+	if (col == nullptr || t.RowCount() <= 0)
+		return false;
+	std::set<wxString> seen;                                   // GetHashKey — the same identity the DISTINCT fold uses
+	for (long i = 0; i < t.RowCount(); ++i) {
+		const ibValue v = t.GetCell(i, col->GetColumnId());
+		if (v.IsNull() || v.IsEmpty())
+			continue;
+		if (!seen.insert(v.GetHashKey()).second)
+			continue;
+		if (seen.size() > kSemiJoinMaxKeys)
+			return false;                                      // too many keys — not worth the IN list
+		out.push_back(v);
+	}
+	return !out.empty();
+}
+
+// The reduction condition for the OTHER side's key column, appended to `extra` (the per-leaf extras the
+// materialisation carries down). Ownership routing happens at the Source node: only the leaf that owns
+// `col` picks it up.
+void AppendSemiJoinCondition(const ibBackendQueryColumn* col, std::vector<ibValue> keys,
+                             std::vector<ibQueryCondition>& extra)
+{
+	ibQueryCondition c;
+	c.m_col    = col;
+	c.m_op     = ibQueryFilterOp::In;
+	c.m_values = std::move(keys);
+	extra.push_back(std::move(c));
+}
+
 // Materialisation SEAM — read a leaf through its OWN provider (single-source, its
 // conditions pushed down) and collect the needed columns into a RAM table, keyed by
 // GetColumnId. (docs/query-language-arc.md §22.1a, docs/temp-db.md)
@@ -450,9 +506,8 @@ ibQueryRamTable MaterialiseLeafToRam(const ibBackendQueryable* leaf, ibDatabaseC
 
 	ibDataQueryBuilder q(holder);
 	q.From(leaf);
-	for (const ibQueryCondition& c : conds) {
-		q.Where(c.m_col, c.m_op, c.m_value);   // ONE op — Where carries any ibQueryFilterOp now
-	}
+	for (const ibQueryCondition& c : conds)
+		q.Where(c);   // VERBATIM — rebuilding from (col, op, value) drops m_values / m_path / m_expr
 	ibReadPageRequest page; page.m_count = 0;   // every matching row
 	ibDataQueryResult sel = q.Execute(page);     // reads through the cursor — never names a runtime table
 	while (sel.Next()) {
@@ -602,6 +657,26 @@ ibQueryRamTable ComputeRowsResolved(const ibDataQuerySpec& spec,
 			if (c.m_path.empty() && !c.m_expr) plainConds.push_back(c);
 
 	ibQueryRamTable rows = spec.m_queryable->ComputeRows(plainConds);
+
+	// ENFORCE the plain conditions here. They are HANDED to ComputeRows, but honouring them there is an
+	// optimisation, not a duty — every register compute (balance / turnover / slice) ignores the parameter
+	// and returns its whole set. Before the semi-join reduction `extra` was always empty, so nobody noticed;
+	// now a key filter can ride in it and a source that drops it would read (and join) far more than asked.
+	// Re-filtering a source that DID honour the conditions is idempotent — the rows it dropped are already
+	// gone — so this is correct for both kinds of implementation.
+	//
+	// Restricted to conditions whose column is actually IN the returned table: a column the source does not
+	// vend reads back as an empty cell, which the three-valued evaluator would take for NULL and use to drop
+	// EVERY row. Applied BEFORE the dot-walk resolution below, so the reference joins run on fewer rows.
+	if (!plainConds.empty()) {
+		std::set<ibMetaID> vended;
+		for (const ibQueryRamColumn& rc : rows.Columns())
+			vended.insert(rc.m_id);
+		for (const ibQueryCondition& c : plainConds)
+			if (c.m_col != nullptr && vended.count(c.m_col->GetColumnId()) != 0)
+				rows = ibQueryComposer::FilterRows(rows, ibQueryPredicate::Leaf(c).get());
+	}
+
 	present = spec.m_queryable->GetColumns();
 	rows = ResolveComputedDotWalks(std::move(rows), spec.m_queryable, spec, present);
 
@@ -695,6 +770,15 @@ RamTri RamEvalLeaf(const ibQueryCondition& c, const ibQueryRamTable& t, long row
 	if (c.m_expr)                cell = EvalColumnExprRow(c.m_expr.get(), t, row);
 	else if (c.m_col != nullptr) cell = t.GetCell(row, c.m_col->GetColumnId());
 	else                         return RamTri::False;
+	// SET-valued `In` — handled BEFORE the scalar null guard below, which would read the unset m_value as
+	// NULL and answer UNKNOWN for every row. Semantics match SQL: a NULL probe is UNKNOWN, an empty set is
+	// FALSE, otherwise membership. (m_values itself never carries NULL — the producer strips them.)
+	if (c.m_op == ibQueryFilterOp::In) {
+		if (RamIsNullValue(cell)) return RamTri::Unknown;
+		for (const ibValue& v : c.m_values)
+			if (cell.CompareValueEQ(v)) return RamTri::True;
+		return RamTri::False;
+	}
 	// Any NULL operand -> UNKNOWN (the row survives only on a definite TRUE below).
 	if (RamIsNullValue(cell) || RamIsNullValue(c.m_value))
 		return RamTri::Unknown;
@@ -707,6 +791,7 @@ RamTri RamEvalLeaf(const ibQueryCondition& c, const ibQueryRamTable& t, long row
 		case ibQueryFilterOp::Greater:      res = cell.CompareValueGT(c.m_value) > 0; break;   // three-way int -> '>'
 		case ibQueryFilterOp::GreaterEqual: res = cell.CompareValueGE(c.m_value); break;
 		case ibQueryFilterOp::Like:         res = RamLike(cell.GetString(), c.m_value.GetString()); break;
+		case ibQueryFilterOp::In:           break;   // unreachable — returned above; listed to keep the switch exhaustive
 	}
 	return res ? RamTri::True : RamTri::False;
 }
@@ -874,7 +959,8 @@ const ibBackendQueryColumn* ResolveInSubtree(const ibQueryNode* node, const wxSt
 }
 
 ibQueryRamTable MaterialiseNode(const ibQueryNode* node, const std::vector<const ibBackendQueryColumn*>& refCols,
-                                const ibDataQuerySpec& spec, bool condsByName);
+                                const ibDataQuerySpec& spec, bool condsByName,
+                                const std::vector<ibQueryCondition>* extra);
 
 // --- Optimizer: smallest-first reorder of a pure-INNER join chain -----------------
 // Flatten a maximal subtree of INNER Join nodes into "units" (Source / Union /
@@ -936,12 +1022,51 @@ bool JoinUnitsSmallestFirst(const std::vector<const ibQueryNode*>& units,
 	}
 
 	// Materialise every unit — the exact cost input.
-	std::vector<ibQueryRamTable> tables;
-	tables.reserve(n);
-	std::vector<long> counts;
-	for (const ibQueryNode* u : units) {
-		tables.push_back(MaterialiseNode(u, needed, spec, condsByName));
-		counts.push_back(tables.back().RowCount());
+	//
+	// SEMI-JOIN reduction rides along: before reading unit u, every edge to an ALREADY-materialised unit
+	// hands down its key values, so u fetches only rows that can join. Sound unconditionally here —
+	// FlattenInnerChain admits only INNER, non-cross, equi-KEY, non-computed ON, so a row the filter drops
+	// could not have reached the result. Several edges compose (each is another AND-ed filter), and the
+	// reduction is transitive: a unit reduced early makes the keys it hands on narrower still.
+	//
+	// The counts fed to PlanInnerJoinOrder stay EXACT — they are measured after the reduction, which is
+	// what the planner should see anyway: reduced tables are the ones it will actually join.
+	// Materialisation ORDER: computed / RAM units first. A computed source is built in memory whatever we
+	// do and its provider ignores pushed conditions, so reading it early costs nothing — and once it is
+	// read, its keys reduce every DB unit joined to it. Tree order is kept within each group; this decides
+	// only what gets READ first, not the join order (PlanInnerJoinOrder below still owns that).
+	std::vector<size_t> matOrder;
+	matOrder.reserve(n);
+	auto isComputedUnit = [&units](size_t u) {
+		return units[u]->m_kind == ibQueryNode::Kind::Source && units[u]->m_queryable != nullptr
+		    && units[u]->m_queryable->IsComputedInRam();
+	};
+	for (size_t u = 0; u < n; ++u) if (isComputedUnit(u)) matOrder.push_back(u);
+	for (size_t u = 0; u < n; ++u) if (!isComputedUnit(u)) matOrder.push_back(u);
+
+	std::vector<ibQueryRamTable> tables(n);
+	std::vector<bool>            materialised(n, false);
+	std::vector<long>            counts(n, 0);
+	for (const size_t idx : matOrder) {
+		std::vector<ibQueryCondition> extra;
+		for (size_t e = 0; e < edges.size(); ++e) {
+			size_t src = n;
+			const ibBackendQueryColumn* mineKey = nullptr; const ibBackendQueryColumn* srcKey = nullptr;
+			if (edges[e].second == idx && materialised[edges[e].first]) {
+				src = edges[e].first;  srcKey = keyPairs[e].first;  mineKey = keyPairs[e].second;
+			}
+			else if (edges[e].first == idx && materialised[edges[e].second]) {
+				src = edges[e].second; srcKey = keyPairs[e].second; mineKey = keyPairs[e].first;
+			}
+			if (src == n) continue;
+			std::vector<ibValue> keys;
+			if (CollectDistinctJoinKeys(tables[src], srcKey, keys))
+				AppendSemiJoinCondition(mineKey, std::move(keys), extra);
+		}
+		tables[idx] = MaterialiseNode(units[idx], needed, spec, condsByName,
+		                              extra.empty() ? nullptr : &extra);
+		counts[idx] = tables[idx].RowCount();
+		materialised[idx] = true;
 	}
 
 	const std::vector<size_t> order = ibQueryComposer::PlanInnerJoinOrder(counts, edges);
@@ -986,8 +1111,14 @@ bool JoinUnitsSmallestFirst(const std::vector<const ibQueryNode*>& units,
 // provide. Source -> read the leaf; Join -> recurse + nested-loop; UNION -> RamUnion (a union nested
 // inside a join). N-way left-deep falls out of the recursion. `condsByName` routes leaf conditions by
 // NAME (a UNION branch) vs by column OWNERSHIP (a plain join). (§22.1)
+//
+// `extra` carries SEMI-JOIN key reductions down the recursion: conditions produced from an already-
+// materialised side's join keys. They are routed by OWNERSHIP at the Source node — an extra whose column
+// this leaf does not own is simply not its business — so a caller can hand the same set to a whole
+// subtree without knowing which leaf inside it holds the key.
 ibQueryRamTable MaterialiseNode(const ibQueryNode* node, const std::vector<const ibBackendQueryColumn*>& refCols,
-                                const ibDataQuerySpec& spec, bool condsByName = false)
+                                const ibDataQuerySpec& spec, bool condsByName = false,
+                                const std::vector<ibQueryCondition>* extra = nullptr)
 {
 	if (node->m_kind == ibQueryNode::Kind::Union)
 		return RamUnion(spec, node, refCols);   // a UNION nested inside a JOIN subtree
@@ -996,9 +1127,13 @@ ibQueryRamTable MaterialiseNode(const ibQueryNode* node, const std::vector<const
 		std::vector<const ibBackendQueryColumn*> mine;
 		for (const ibBackendQueryColumn* c : refCols)
 			if (node->m_queryable->OwnsColumn(c)) mine.push_back(c);
-		const std::vector<ibQueryCondition> conds = condsByName
+		std::vector<ibQueryCondition> conds = condsByName
 			? LeafConditionsByName(spec, node->m_queryable)
 			: LeafConditions(spec, node->m_queryable);
+		if (extra != nullptr)
+			for (const ibQueryCondition& e : *extra)
+				if (e.m_col != nullptr && node->m_queryable->OwnsColumn(e.m_col))
+					conds.push_back(e);
 		return MaterialiseLeaf(node->m_queryable, spec.m_holder, conds, mine);
 	}
 
@@ -1015,9 +1150,55 @@ ibQueryRamTable MaterialiseNode(const ibQueryNode* node, const std::vector<const
 		}
 	}
 
-	// Join: recurse, then nested-loop. Output = refCols this subtree provides.
-	const ibQueryRamTable TL = MaterialiseNode(node->m_left.get(),  refCols, spec, condsByName);
-	const ibQueryRamTable TR = MaterialiseNode(node->m_right.get(), refCols, spec, condsByName);
+	const ibBackendQueryColumn* onL = nullptr; const ibBackendQueryColumn* onR = nullptr;
+	ResolveJoinKeys(node, onL, onR);   // explicit or derived (the tree was validated resolvable)
+
+	// SEMI-JOIN reduction. One side is materialised first; its join-key values are then known, so the other
+	// side reads only rows that can possibly join. A row the filter drops could not have appeared in the
+	// result, so the answer is identical — only the read shrinks.
+	//
+	// WHICH side drives is the whole trick. Reducing costs nothing on a COMPUTED source (it is built in
+	// memory either way and its provider ignores pushed conditions) and everything on a real DB read. So
+	// when exactly one side is a computed leaf, materialise THAT one first and let its keys shrink the
+	// other's scan — the DB⋈RAM case, where the whole complaint lives. Otherwise keep tree order.
+	//
+	// DIRECTION IS A CORRECTNESS GATE, not just a preference. For a LEFT join only left→right is sound:
+	// the right is the null-producing side, so a right row matching no left key contributes nothing either
+	// way, while the preserved left side must never lose a row. Driving from the right is therefore INNER
+	// only. Never applied to RIGHT / FULL / cross, to a computed ON (no column key), or to a THETA ON —
+	// an equality key set says nothing about which rows satisfy `a.x > b.y`.
+	auto isComputedLeaf = [](const ibQueryNode* n) {
+		return n != nullptr && n->m_kind == ibQueryNode::Kind::Source
+		    && n->m_queryable != nullptr && n->m_queryable->IsComputedInRam();
+	};
+	const bool reducible = onL != nullptr && onR != nullptr && !node->m_on.m_cross
+	                    && node->m_on.m_exprL == nullptr && node->m_on.m_op == ibJoinCompareOp::Eq;
+	const bool driveFromRight = reducible && node->m_joinKind == ibQueryJoinKind::Inner
+	                         && isComputedLeaf(node->m_right.get()) && !isComputedLeaf(node->m_left.get());
+
+	std::vector<ibQueryCondition> passed;
+	if (extra != nullptr)
+		passed = *extra;
+
+	ibQueryRamTable TL, TR;
+	if (driveFromRight) {
+		TR = MaterialiseNode(node->m_right.get(), refCols, spec, condsByName, extra);
+		std::vector<ibValue> keys;
+		if (CollectDistinctJoinKeys(TR, onR, keys))
+			AppendSemiJoinCondition(onL, std::move(keys), passed);
+		TL = MaterialiseNode(node->m_left.get(), refCols, spec, condsByName,
+		                     passed.empty() ? nullptr : &passed);
+	}
+	else {
+		TL = MaterialiseNode(node->m_left.get(), refCols, spec, condsByName, extra);
+		if (reducible && (node->m_joinKind == ibQueryJoinKind::Inner || node->m_joinKind == ibQueryJoinKind::Left)) {
+			std::vector<ibValue> keys;
+			if (CollectDistinctJoinKeys(TL, onL, keys))
+				AppendSemiJoinCondition(onR, std::move(keys), passed);
+		}
+		TR = MaterialiseNode(node->m_right.get(), refCols, spec, condsByName,
+		                     passed.empty() ? nullptr : &passed);
+	}
 
 	std::vector<const ibBackendQueryColumn*> outCols;     // provided cols, with their side
 	std::vector<bool> fromLeft;
@@ -1025,9 +1206,6 @@ ibQueryRamTable MaterialiseNode(const ibQueryNode* node, const std::vector<const
 		if      (SubtreeProvides(node->m_left.get(),  c)) { outCols.push_back(c); fromLeft.push_back(true);  }
 		else if (SubtreeProvides(node->m_right.get(), c)) { outCols.push_back(c); fromLeft.push_back(false); }
 	}
-
-	const ibBackendQueryColumn* onL = nullptr; const ibBackendQueryColumn* onR = nullptr;
-	ResolveJoinKeys(node, onL, onR);   // explicit or derived (the tree was validated resolvable)
 
 	return ibQueryComposer::JoinRamTables(TL, TR, onL, onR, outCols, fromLeft, node->m_joinKind, node->m_on);
 }

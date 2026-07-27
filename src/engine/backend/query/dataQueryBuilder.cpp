@@ -199,6 +199,24 @@ ibDataQueryBuilder& ibDataQueryBuilder::WhereLike(const ibBackendQueryColumn* co
 	return WhereCompare(col, ibQueryFilterOp::Like, pattern);
 }
 
+ibDataQueryBuilder& ibDataQueryBuilder::Where(const ibQueryCondition& condition)
+{
+	m_conditions.push_back(condition);
+	return *this;
+}
+
+ibDataQueryBuilder& ibDataQueryBuilder::WhereIn(const ibBackendQueryColumn* col, const std::vector<ibValue>& values)
+{
+	ibQueryCondition c;
+	c.m_col = col;
+	c.m_op  = ibQueryFilterOp::In;
+	c.m_values.reserve(values.size());
+	for (const ibValue& v : values)
+		if (!v.IsNull()) c.m_values.push_back(v);   // a NULL key joins nothing; IN (…, NULL) misbehaves
+	m_conditions.push_back(std::move(c));
+	return *this;
+}
+
 ibDataQueryBuilder& ibDataQueryBuilder::WhereExpr(const ibQueryColumnExprPtr& expr,
                                                   ibQueryFilterOp comparison, const ibValue& value)
 {
