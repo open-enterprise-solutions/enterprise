@@ -1,7 +1,10 @@
 # Debugger — transport, roles, and why the server is the debuggee
 
 > **Scope:** how the Designer debugs a running process — the TCP transport, the
-> client/server inversion, the per-connection threading and the connection manager.
+> client/server inversion, the per-connection threading and the connection manager, **how
+> the interpreter decides to stop** (§4.1), the protocol and its two hard problems
+> (evaluated values §5.1, COM across apartments §5.2), editing while stopped (§5.3), what
+> "verified" actually guarantees (§7), and what the debugger **cannot** do (§8).
 > Companion: [debugger-per-session.md](debugger-per-session.md) (per-session sessions, the
 > wake/drain protocol, one open heisenbug).
 > This is foundation code — it predates most arcs in this folder.
@@ -147,6 +150,71 @@ completed the handshake is not yet a debuggee.
 
 The server side mirrors the shape: `ibDebuggerServer` owns
 `ibDebuggerServerConnection : wxThread`.
+
+### 4.1 How the runtime decides to stop
+
+Everything above is transport. This is the mechanism — the part that turns a running
+interpreter into a stopped one.
+
+There is exactly **one** hook, and it sits in the interpreter's hot loop, before the opcode
+switch (`compiler/procUnit.cpp`):
+
+```cpp
+//enter in debugger
+if (debugServer != nullptr && !evalMode)
+    debugServer->EnterDebugger(pContext, curCode, lPrevLine);
+```
+
+`!evalMode` is load-bearing: a Watch expression is itself executed by the interpreter, and
+without this gate evaluating a watch would re-enter the debugger from inside the debugger.
+
+`EnterDebugger` (`debugServer.cpp`) then decides, per instruction, whether to park. Four
+gates, cheapest first:
+
+| # | Gate | Why it is first |
+|---|---|---|
+| 1 | `if (!m_bUseDebug) return;` | Debugging off = one atomic read per instruction. This is what keeps the hook affordable in production builds. |
+| 2 | `IsSteppableOpcode(m_numOper)` | Housekeeping opcodes (`OPER_CTX_BEGIN` / `OPER_CTX_END` / …) are not user-visible steps. Stopping on them would step "into" nothing. |
+| 3 | `byteCode.m_numLine != numPrevLine` | **Stop on a line CHANGE, not per instruction.** One source line compiles to many opcodes; without this the debugger would stop several times on the same line. `numPrevLine` is carried by the interpreter frame, not the server — it is per-execution state. |
+| 4 | a stop *reason* below | Only now does anything cost real work. |
+
+The stop reasons, in priority order:
+
+```cpp
+//step into
+if (m_bDebugStopLine && byteCode.m_numLine >= 0) { m_bDebugStopLine = false; m_bDoLoop = true; }
+
+// step through  (= step over)
+else if (auto* st = ibSession::GetPUState();
+         st && m_numCurrentNumberStopContext
+            && m_numCurrentNumberStopContext >= st->GetCountRunContext()
+            && byteCode.m_numLine >= 0)
+{ m_numCurrentNumberStopContext = st->GetCountRunContext(); m_bDoLoop = true; }
+
+else { /* arbitrary breakpoint: look the line up in this module's list */ }
+```
+
+- **StepInto** is a one-shot flag: *stop at the next steppable line, whatever frame it is
+  in.*
+- **StepOver** is a **call-depth comparison**, not a line calculation:
+  `m_numCurrentNumberStopContext >= st->GetCountRunContext()` — resume, and stop again as
+  soon as the frame stack is **no deeper** than it was when the user pressed the key. A
+  called function runs to completion because while inside it the depth is greater. This is
+  the right way to build step-over, and it is worth knowing that **the depth machinery for
+  StepOut is therefore already present** — see §8.
+- **Breakpoint** is a lookup in `std::map<wxString, std::vector<unsigned int>>` keyed by
+  module doc-path, then a linear `std::find` over that module's line vector. The vector is
+  fine at human breakpoint counts; it is a linear scan **per line change**, so it is the
+  thing to change first if breakpoints ever become numerous (a sorted vector +
+  `binary_search`, or a `set`).
+
+When a reason fires, `DoDebugLoop(fileName, docPath, line + 1, runContext)` parks the
+script thread on the per-session condition variable — see
+[debugger-per-session.md](debugger-per-session.md) for the wake/drain half.
+
+> **Read the shape as:** the interpreter offers every instruction to the debugger; the
+> debugger rejects almost all of them in two atomic reads. The expensive question — "is
+> there a breakpoint here?" — is asked only when the source line actually changed.
 
 ---
 
@@ -370,6 +438,57 @@ arise.
 > [compute-server-tiering.md](compute-server-tiering.md)), this sweep is what has to move
 > with it.
 
+### 5.3 Editing while stopped — the line-shift protocol
+
+A breakpoint is stored as a **line number**, and the user edits the module while the
+process is parked on it. Every insert or delete above a breakpoint invalidates it silently
+unless something shifts it. `ibDebuggerClient::PatchModule` (`debugClient.cpp`) is that
+something:
+
+```cpp
+void ibDebuggerClient::PatchModule(const wxString& strModuleName, unsigned int line,
+                                   int line_offset, bool atLineStart)
+{
+    // Two maps shift the same way for this edit, differing only in collision handling:
+    // breakpoints collapse onto one line; the dense committed<->editor offset map keeps all lines.
+    ShiftLineMap(*breakpoints, line, line_offset, atLineStart, /*collapseCollisions*/ true);
+    ShiftLineMap(*offsets,     line, line_offset, atLineStart, /*collapseCollisions*/ false);
+
+    // …then tell the debuggee, so ITS line numbers move too
+    commandChannel.w_u16(line_offset > 0 ? CommandId_PatchInsertLine : CommandId_PatchDeleteLine);
+}
+```
+
+Three things worth keeping:
+
+- **Two maps, one edit, different collision rules.** `m_listBreakpoint` collapses — two
+  breakpoints pushed onto the same line become one, because a line either has a breakpoint
+  or does not. The dense `m_listOffsetBreakpoint` (committed ↔ editor line correspondence)
+  keeps every line, because it is a mapping, not a set.
+- **The shift is replicated to the debuggee.** The Designer moving its own markers is not
+  enough — the running process holds its own breakpoint list, so the edit goes over the
+  wire as `PatchInsertLine` / `PatchDeleteLine`.
+- **The editor drives it, through a virtual.** `ibCodeEditor::OnPatchModule` is an empty
+  hook in the base editor (`frontend/…/codeEditor.h`); `ibCodeEditorDesigner` overrides it
+  and calls `debugClient->PatchModule`. codeRunner embeds the same editor with no debugger
+  and pays nothing.
+
+`InitializeModule(module, line_count)` seeds the dense map (every line → offset 0) when a
+module is first opened; `SaveModule` re-bases the breakpoint list on commit.
+
+### 5.4 Socket options
+
+Set on every client connection once it comes up (`debugClient.cpp`):
+
+```cpp
+m_socketClient->SetOption(IPPROTO_TCP, TCP_NODELAY,  &flag, sizeof(flag));
+m_socketClient->SetOption(SOL_SOCKET,  SO_KEEPALIVE, &flag, sizeof(flag));
+```
+
+`TCP_NODELAY` because the debug protocol is **bursty with tiny packets** (step, eval,
+locals) — Nagle would batch them and add visible latency to every keypress. `SO_KEEPALIVE`
+so a crashed or killed debuggee is detected in seconds rather than hours.
+
 ---
 
 ## 6. Lifecycle
@@ -388,7 +507,64 @@ constantly, so the static slot is read directly rather than resolved.
 
 ---
 
-## 7. Honest remainder
+## 7. Verification is NOT authentication
+
+`CommandId_VerifyConnection` reads like a security handshake. It is not one. What actually
+happens (`debugServer.cpp` / `debugClient.cpp`):
+
+```cpp
+// debuggee answers a probe with four strings:
+w_stringZ(activeMetaData->GetConfigGuid());     // configuration identity
+w_stringZ(activeMetaData->GetConfigMD5());      // configuration content hash
+w_stringZ(appData->GetUserName());              // informational
+w_stringZ(appData->GetComputerName());          // informational
+
+// Designer's verdict — GUID only:
+m_verifiedConnection = activeMetaData->GetConfigGuid() == ibGuid(m_confGuid);
+```
+
+So *verified* means **"this process runs the same configuration I have open"** — a
+correctness check that stops you from stepping through line 40 of a module the debuggee
+never compiled. It is not a credential check: no secret is exchanged, and nothing proves
+the client is entitled to attach.
+
+Two consequences to hold on to:
+
+- **The MD5 is sent, stored in `m_md5Hash`, and never used in the verdict.** GUID equality
+  passes even when the two sides hold *different versions of the same configuration* — the
+  exact case where line numbers drift and breakpoints land on the wrong statements. The
+  hash needed to catch it is already on the wire; only the comparison is missing. Whoever
+  tightens this should decide deliberately between hard-fail and a warning (a Designer
+  edited since the debuggee started is a routine state, not necessarily an error).
+- **What actually contains the exposure today is the bind address, not the protocol.**
+  Every `CreateServer` call site passes `defaultHost` (`= "localhost"`,
+  `debugDefs.h`), so the listener is loopback-only. §1 lists cross-machine debugging as
+  something the TCP choice *buys*, and that remains true architecturally — but the moment
+  the host is changed to a routable address, **any client on the network can attach to a
+  production runtime and evaluate arbitrary expressions in its context** (Watch is a full
+  `ibProcUnit::Evaluate`, §5.1). Remote debugging therefore needs a real handshake — a
+  shared secret at minimum — before the bind address moves. Treat "it is localhost" as the
+  current control, and note that nothing in the protocol enforces it.
+
+---
+
+## 8. Boundaries — what this debugger does not do
+
+Recorded so a reader does not infer capability from the shape of the protocol. All three
+are absences in `CommandId` (`debugDefs.h`), verified against the enum:
+
+| Missing | State | Cost to add |
+|---|---|---|
+| **StepOut** ("run to caller") | No command, no server handling. The stepping vocabulary is Continue / StepOver / StepInto / Pause. | **Small — the mechanism already exists.** StepOver is a call-depth comparison (`m_numCurrentNumberStopContext >= GetCountRunContext()`, §4.1); StepOut is the same test with a strict `>`. One command id, one branch beside the step-over branch, one toolbar action. |
+| **Conditional breakpoints** | Not representable: a breakpoint is a bare line number in `std::map<wxString, std::vector<unsigned int>>` (`debugServer.h`) — there is nowhere to put a condition. | Medium. The evaluation half is free (`EvalInParkedSession` already runs arbitrary expressions at the stopped frame); what it needs is a payload change (line → line + expression), the wire format, and the Designer UI. |
+| **Break on exception** | No command; the debuggee reports errors after the fact through `CommandId_MessageFromServer` / `SendErrorToClient`, which sends a message, it does not park. | Medium. The natural seam is the procUnit catch path, which would have to enter `DoDebugLoop` before unwinding — i.e. park while the frame is still alive. |
+
+Ordering note: StepOut is the one that costs a day and is felt every hour; the other two
+are real features. Do not let the low price of the first imply the other two are near.
+
+---
+
+## 9. Honest remainder
 
 - Web/debug transport unification is an open arc ([ROADMAP.md § 2](ROADMAP.md)); the TCP
   path described here is the live one.
@@ -396,3 +572,5 @@ constantly, so the static slot is read directly rather than resolved.
   [debugger-per-session.md](debugger-per-session.md). Do not re-derive it.
 - `m_number_connection_attempts` starts at `-1` (unlimited) — the retry policy for a
   scanner is worth verifying before relying on it.
+- The breakpoint lookup is a linear scan per line change (§4.1) — correct, and the first
+  thing to change if breakpoint counts ever grow.

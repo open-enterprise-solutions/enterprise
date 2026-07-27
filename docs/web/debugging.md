@@ -1,5 +1,17 @@
 # Debugging the web runtime
 
+> **Scope — read this first, the two are often confused.** This file is about debugging
+> **the platform itself**: running `wenterprise-server.exe` locally, catching access
+> violations in C++, resolving a fault address to a source line, and the diagnostic HTTP
+> endpoints. It is a C++ engineer's page.
+>
+> Debugging **a configuration's script** (breakpoints, stepping, Watch) is a different
+> subsystem entirely — the Designer attaching over TCP to a running runtime. That is
+> [../debugger-architecture.md](../debugger-architecture.md); note that unifying it with
+> the web transport is still an open arc ([../ROADMAP.md § 2](../ROADMAP.md)), so the
+> script debugger described there talks to `wenterprise-server` over the same TCP path as
+> a desktop runtime.
+
 ## Running the server locally
 
 ```
@@ -73,8 +85,12 @@ Once you have `module+RVA`, options in increasing effort:
 ## Log prefixes used
 
 - `[app]` — `ibWebApplication` lifecycle (OnInit, CreateMainModule,
-  StartMainModule + SEH).
-- `[LoadControl]` — per-invocation trace in
-  `ibValueFrame::LoadControl` (temporary instrumentation).
-- `[LoadChildForm]` — `NewObject` failures during child-control
-  deserialisation (temporary instrumentation).
+  StartMainModule + SEH). Live.
+
+Two prefixes this file used to list — `[LoadControl]` (per-invocation trace in
+`ibValueFrame::LoadControl`) and `[LoadChildForm]` (`NewObject` failures during
+child-control deserialisation) — were **temporary instrumentation and are no longer in the
+tree**. They are kept here only as the worked example of technique #2 above: when a fault
+address alone was not enough, `std::cerr` traces around the suspect block under
+`#ifdef OES_USE_WEB` found a `this == nullptr` in `LoadControl`. Add them the same way when
+needed, and remove them again when the bug is closed.

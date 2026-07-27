@@ -91,14 +91,30 @@ data. The metaobjects, metadata and forms exist; the execution does not. See
 [register-totals-strategy.md](register-totals-strategy.md) for the strategy that would
 back it.
 
-### 4.2 Web — controls are stubs
+### 4.2 Web — the control surface is roughly one third ported
 
-`tableBox.cpp` / `tableBoxColumn.cpp` return `new ibWebStubControl(wxT("tablebox"))` /
-`("tableboxcolumn")` (`frontend/web/webWindow.h:240`). Per
-[release-notes/v1.3.0.md](release-notes/v1.3.0.md), checkbox / combobox / choice / listbox
-/ radiobutton / notebook / tablebox-gridbox render as placeholders so metadata loads
-cleanly; JS renderers are filled in tier by tier. Forms work to the extent of the ported
-controls.
+Re-verified against `frontend/wfrontend.vcxproj` + each control's `OES_USE_WEB` branch on
+2026-07-27. The gap is **wider than "renders as a placeholder"** — most controls are not in
+the web build at all, so their clsid never registers and the form logs *unregistered
+clsid* rather than drawing a placeholder.
+
+Three distinct states, not one:
+
+| State | Controls | What a user sees |
+|---|---|---|
+| **Ported** — real `ibWeb*` widget (`frontend/web/webWindow.h`) | StaticText, Button, CheckBox, TextCtrl, ToolBar + ToolBarItem/Separator, and the sizers (Box / Grid / StaticBox / Wrap / Item) | Works |
+| **Stub** — compiled in, returns `ibWebStubControl` | TableBox, TableBoxColumn, form object (`formObject.cpp`) | Placeholder block; metadata still loads |
+| **Absent** — file not in `wfrontend.vcxproj`, no web branch | ComboBox, Choice, ListBox, RadioButton, Notebook, Gauge, Slider, GridBox, HtmlBox, ChartBox, TextBox, StaticLine | clsid unregistered |
+
+Read the consequence plainly: **data entry on the web today is TextCtrl and CheckBox.** A
+real document form — which needs at minimum a ComboBox/Choice for reference fields and a
+TableBox for line items — does not assemble. Layout, commands and navigation are further
+along than input.
+
+> Two comments in `wfrontend.vcxproj` describe the toolbar as a stub with child
+> `CT_TLITM` / `CT_TLSP` logging *unregistered clsid*. That is stale — `toolBarItem.cpp` is
+> in the project and `ibWebToolbar` / `ibWebToolBarItem` / `ibWebToolBarSeparator` are real
+> classes. Fix the comments when next in that file.
 
 ### 4.3 Report — no platform generate action
 
@@ -137,8 +153,11 @@ The state above is factual. This section is a **proposal** and the one part of t
 that should be argued with.
 
 1. **Web controls** — §4.2 is the widest gap between "the platform can" and "a user can".
-   Desktop forms work; the web renders placeholders for exactly the controls a real
-   application form is made of (tablebox above all).
+   Desktop forms work; on the web the controls a real application form is made of are
+   either stubs (tablebox) or **absent from the build entirely** (combobox / choice /
+   listbox / notebook). Suggested order — ComboBox and Choice first (reference fields are
+   in every form and are cheap: a select element over an existing fetch), then TableBox
+   (expensive, and the one that unblocks documents), then the rest.
 2. **Form attribute binding → spec + tests** — §2 says it is exercised through the
    designer, not a harness. It is the substrate everything else in the form editor stands
    on; leaving it unspec'd taxes every arc above it.
