@@ -6,6 +6,8 @@
 #include "backend/srcDataObject.h"   // ibSourceDataObject base — a reference IS a source object (vends its target's explorer)
 #include "backend/typeDescription.h"   // ibTypeDescription — CoerceHopType validates the pin against a field's CURRENT type filter
 
+#include <chrono>   // reference-key timestamp (MakeNewGuid)
+
 //********************************************************************************************
 //*                                     Defines                                              *
 //********************************************************************************************
@@ -33,6 +35,29 @@ private:
 	}
 	ibValueReferenceDataObject(const ibValueMetaObjectRecordDataRef* metaObject, const ibGuid& objGuid = wxNullGuid);
 public:
+
+	// ─── Reference-key encoder ─────────────────────────────────────────────────────────────────
+	// THE place a NEW reference value's key is minted — the reference mechanism owns it, so it lives on
+	// the reference. A time-ordered, self-describing 16-byte guid, laid out through ibGuidImpl fields so
+	// it lines up with the guid comparator / stored-blob order:
+	//     Data1 = metaID (type)  |  Data2+Data3 = second  |  Data4 = 64-bit random
+	// metaID leads → type grouping / SQL-slice (the same slot the reader extracts metaID from); the second
+	// orders inserts (~136 yr range, index locality); the 64-bit random tail makes concurrent same-second
+	// same-type keys unique (uniqueness lives here — the timestamp only orders). Random comes from a v4
+	// guid — never a v1 time_low we'd overwrite (that destroyed uniqueness under concurrency).
+	static ibGuid MakeNewGuid(ibMetaID metaID) {
+		// A zero metaID means the type isn't set — the key would encode a 0 type (Data1). Catch it.
+		wxASSERT_MSG(metaID != 0, wxT("MakeNewGuid: reference key minted with a zero (unset) metaID"));
+
+		ibGuidImpl impl = ibGuid::newGuid(GUID_RANDOM);
+		impl.m_data1 = (uint32_t)metaID;                                     // Data1 : metaID (type)
+		const uint32_t sec = (uint32_t)std::chrono::duration_cast<std::chrono::seconds>(
+			std::chrono::system_clock::now().time_since_epoch()).count();
+		impl.m_data2 = (unsigned short)((sec >> 16) & 0xFFFF);              // Data2 : seconds, high 16
+		impl.m_data3 = (unsigned short)( sec        & 0xFFFF);              // Data3 : seconds, low 16
+		// Data4 stays the OS-random 64-bit tail
+		return impl;
+	}
 
 	ibReference* GetReferenceData() const {
 		return m_reference_impl;
@@ -82,21 +107,17 @@ public:
 	static std::vector<ibMetaID> ConvertToMetaIds(const std::vector<ibClassID>& clsids, const ibMetaData* metaData);
 
 	// Ordering primitive (three-way) — the base virtual GT/GE/LE and operator< all derive from this, so this
-	// ONE method tunes all four for references. Orders by GUID first (value order, via ibGuid's operators),
-	// then by the type's metaID — so a mixed-type (variant) reference stream forms a deterministic sequence,
-	// mirroring the physical _RRRef blob's [guid][metaID] layout. A mixed stream carries distinct guids, so the
-	// guid already fully orders it; metaID is the tiebreak keeping the order total. metaID comes from
-	// GetClassType() & kIbClsidBodyMask — the SAME source the DB _RRRef codec uses, and it sidesteps the
-	// incomplete m_metaObject here (a non-reference operand is order-incomparable -> 0).
+	// ONE method tunes all four for references. Orders by the GUID alone (value order, via ibGuid's
+	// operators): the guid now CARRIES the metaID in its Data1 (the reference-key encoder), so it already
+	// orders by type first and then by identity, matching the physical _RRRef blob byte-for-byte. Same guid
+	// ⟹ same metaID, so no separate metaID tiebreak is needed. A non-reference operand is incomparable -> 0.
 	virtual int CompareValueLS(const ibValue& cParam) const {
 		ibValueReferenceDataObject* rhs = dynamic_cast<ibValueReferenceDataObject*>(cParam.GetRef());
 		if (rhs == nullptr)
 			return 0;
 		if (m_objGuid < rhs->m_objGuid) return -1;
 		if (rhs->m_objGuid < m_objGuid) return 1;
-		const ibMetaID l = static_cast<ibMetaID>(GetClassType()      & kIbClsidBodyMask);
-		const ibMetaID r = static_cast<ibMetaID>(rhs->GetClassType() & kIbClsidBodyMask);
-		return l < r ? -1 : (r < l ? 1 : 0);
+		return 0;   // guids equal ⟹ same metaID (in Data1) ⟹ same key
 	}
 
 	//operator '=='

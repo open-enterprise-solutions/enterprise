@@ -1850,7 +1850,9 @@ ibValueRecordDataObjectExt* ibValueRecordDataObjectExt::CopyObjectValue()
 
 
 ibValueRecordDataObjectRef::ibValueRecordDataObjectRef(const ibValueMetaObjectRecordDataMutableRef* metaObject, const ibGuid& objGuid) :
-	ibValueRecordDataObject(objGuid.isValid() ? objGuid : ibGuid(ibGuid::newGuid(GUID_TIME_BASED)), !objGuid.isValid()),
+	ibValueRecordDataObject(objGuid.isValid() ? objGuid
+		: (metaObject != nullptr ? ibValueReferenceDataObject::MakeNewGuid(metaObject->GetMetaID()) : ibGuid(ibGuid::newGuid(GUID_RANDOM))),
+		!objGuid.isValid()),
 	m_metaObject(metaObject),
 	m_reference_impl(nullptr),
 	m_objModified(false)
@@ -2767,7 +2769,7 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 		const wxString refGuid = m_reference_impl
 			? ibGuid(m_reference_impl->m_guid).str() : wxString();
 		const int refMetaId = m_reference_impl
-			? static_cast<int>(m_reference_impl->m_id) : 0;
+			? static_cast<int>(m_reference_impl->GetMetaID()) : 0;
 		const wxString evt = (writeMode == ibDocumentWriteMode::ibDocumentWriteMode_Posting)
 			? wxT("posted") : wxT("unposted");
 		ibLog->Audit(wxT("document"), evt, GetSourceCaption(), refGuid, refMetaId);

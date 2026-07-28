@@ -133,27 +133,6 @@ public:
 	ibMetaID GetMetaID() const { return m_metaId; }
 	void SetMetaID(const ibMetaID& id) { m_metaId = id; }
 
-	// --- reference key <-> metaID : the metaID rides in the key's Data1 field --------------------
-	// The metaID lives in the metaclass, never in ibGuid (a primitive that knows bytes, not metaIDs).
-	//
-	// A fresh reference key to an instance of THIS metaobject: raw entropy bytes are patched with the
-	// metaID in Data1 and THEN wrapped, so an unbranded key never exists as a typed guid. metaID
-	// (big-endian in _bytes) leads the persisted _RRRef blob through the operator ibGuidImpl field-swap,
-	// so it is SQL-sliceable and the index prefix groups by type. Data1 is v1 time_low — traded for the
-	// type prefix; coarser time survives in Data2/3.
-	ibGuid NewReferenceGuid() const {
-		ibGuidImpl impl = ibGuid::newGuid(GUID_TIME_BASED);   // fresh guid in storage form — no intermediate ibGuid
-		impl.m_data1 = (uint32_t)m_metaId;   // Data1 IS m_data1 — the metaID slot; no byte-poking, no endian math
-		return impl;                          // implicit ibGuidImpl -> ibGuid
-	}
-
-	// The metaID stamped into a key's Data1 — the inverse of NewReferenceGuid. A pure function of the
-	// key (no instance): reconstruction reads it off a stored blob or a bare key column. Meaningless on
-	// an unbranded guid.
-	static ibMetaID ReferenceMetaID(const ibGuid& key) {
-		return (ibMetaID)ibGuidImpl(key).m_data1;   // Data1 carries the metaID
-	}
-
 	wxString GetName() const { return m_propertyName->GetValueAsString(); }
 	void SetName(const wxString& strName) { m_propertyName->SetValue(strName); }
 

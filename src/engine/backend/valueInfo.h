@@ -3,13 +3,17 @@
 
 #include "backend/uniqueKey.h"
 
-//reference data
+//reference data — a self-describing 16-byte key: the metaID rides in the guid's Data1 (see the reference
+//key encoder, ibValueReferenceDataObject::MakeNewGuid). No separate metaID field — the ctor stamps Data1
+//from `id`, so a real key (already branded → no-op) and a metaID-only sentinel (empty guid + id) both land
+//right; GetMetaID() reads it back. sizeof == 16 (was 20).
 struct ibReference {
 
-	ibReference(const ibMetaID& id, const ibGuidImpl& guid) : m_guid(guid), m_id(id) {}
+	ibReference(const ibMetaID& id, const ibGuidImpl& guid) : m_guid(guid) { m_guid.m_data1 = (uint32_t)id; }
+
+	ibMetaID GetMetaID() const { return (ibMetaID)m_guid.m_data1; }   // Data1 carries the metaID
 
 	ibGuidImpl m_guid;
-	ibMetaID m_id; // id of metadata 
 };
 
 ///////////////////

@@ -245,7 +245,7 @@ void ibValueRecordDataObjectRef::CommitWriteScope(ibConnectionScope& scope,
 			? ibGuid(m_reference_impl->m_guid).str()
 			: wxString();
 		const int refMetaId = m_reference_impl
-			? static_cast<int>(m_reference_impl->m_id)
+			? static_cast<int>(m_reference_impl->GetMetaID())
 			: 0;
 		ibLog->Audit(wxT("record"),
 		             newObject ? wxT("created") : wxT("saved"),
@@ -271,7 +271,7 @@ void ibValueRecordDataObjectRef::CommitDeleteScope(ibConnectionScope& scope,
 			? ibGuid(m_reference_impl->m_guid).str()
 			: wxString();
 		const int refMetaId = m_reference_impl
-			? static_cast<int>(m_reference_impl->m_id)
+			? static_cast<int>(m_reference_impl->GetMetaID())
 			: 0;
 		ibLog->Audit(wxT("record"), wxT("deleted"),
 		             GetSourceCaption(), refGuid, refMetaId);
