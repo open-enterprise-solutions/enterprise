@@ -226,7 +226,55 @@ text box for a string and a reference picker for a reference. See
 
 ---
 
-## 6. File map
+## 6. Editor safety gates — view-only and inspector lifetime
+
+Two guards that keep the editor honest: one blocks structural edits on a read-only form, the
+other stops the shared inspector from outliving what it inspects.
+
+### 6.1 View-only editing — `ibVisualEditor::IsEditable()`
+
+Distinct from runtime view-only ([view-only.md](view-only.md), which is read-only *data*): this
+is the DESIGNER question — can the form's STRUCTURE be changed? It is false for a config opened
+read-only from a DB / file, read off the form's own metaobject:
+
+```cpp
+bool IsEditable() const { return m_valueForm == nullptr || m_valueForm->IsEditable(); }
+```
+
+The form is the single source of truth (`ibValueForm::IsEditable()` → `metaObject->IsEditable()`,
+the SAME gate the attribute tree reads) — no editor-local flag. Every mutating surface asks it:
+
+- **object tree** — drag-reorder (`OnBeginDrag`), Alt+↑/↓ keyboard reorder, and the
+  MOVE / DELETE / PASTE menu items;
+- **command tree** — Add (the menu item **and** the accelerator that bypasses it) / Cut / Paste /
+  Delete, plus dragging a command onto a control (a binding edit);
+- **attribute tree** — Add / Edit / Delete / Cut / Paste.
+
+Read-only-safe actions (Copy, Properties) stay live. Gating at each *source* — not only the menu —
+is deliberate: an accelerator or a drag must hit the same wall the greyed menu item shows.
+
+### 6.2 The inspector never outlives the document
+
+`objectInspector` is a SINGLE shared panel. It holds the inspected object alive through a variant,
+while a raw back-pointer *inside* that object (e.g. a tablebox column's `m_formOwner` → the form) is
+NOT owning. Close the document and the form dies, but the panel keeps rendering the column — its
+next repaint reaches a dangling pointer (use-after-free, "the inspector paints a corpse").
+
+One global clear fixes it, at the ONE close point every editor kind shares —
+`ibMetaDocument::OnCloseDocument` (`frontend/docView/docView.cpp`), UNCONDITIONALLY before
+`DeleteContents()` tears the document down:
+
+```cpp
+objectInspector->SelectObject(nullptr);   // drop the held object BEFORE the form is freed
+if (metaTree != nullptr)
+    metaTree->Activate();
+```
+
+Sitting at the shared close point, it covers form / module / document editors at once.
+
+---
+
+## 7. File map
 
 | File | Lines | Holds |
 |---|---|---|
@@ -244,7 +292,7 @@ Neighbours: `innerFrame.{h,cpp}` (462) — the frame the canvas draws in; `title
 
 ---
 
-## 7. Honest remainder
+## 8. Honest remainder
 
 - **`visualEditor.h` at 1025 lines declares 10+ classes**, most of them nested inside
   `ibVisualEditorNotebook::ibVisualEditor`. The nesting expresses ownership honestly, but

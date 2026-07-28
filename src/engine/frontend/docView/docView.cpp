@@ -2584,9 +2584,14 @@ bool ibMetaDocument::OnCloseDocument()
 	// objectInspector is the designer's property panel (not in wfrontend.dll)
 	// and Activate() would bring its tree-ctrl into focus. Neither is
 	// meaningful on web, so the selection/activation side-effect is skipped.
-	if (metaTree == nullptr)
-		objectInspector->SelectObject(nullptr);
-	else
+	//
+	// Clear the inspector UNCONDITIONALLY before DeleteContents() tears this document's contents down. The
+	// panel may still be showing an object that dies with this document — e.g. a tablebox column holding a
+	// raw back-pointer to the form we're about to delete; its next repaint would reach through a dangling
+	// pointer (use-after-free — the inspector paints a corpse). This is the ONE global close point, so every
+	// editor kind (form / module / document) drops its inspector content here. Then re-focus the metaTree.
+	objectInspector->SelectObject(nullptr);
+	if (metaTree != nullptr)
 		metaTree->Activate();
 #else
 	(void)metaTree;

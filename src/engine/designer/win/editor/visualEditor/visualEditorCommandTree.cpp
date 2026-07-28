@@ -209,6 +209,11 @@ void ibCommandTree::OnBeginDrag(wxTreeEvent& event)
 	if (data == nullptr || !data->GetCommandDesc().IsOk())
 		return;
 
+	// Dragging a command onto a control BINDS it — a form edit; blocked on a view-only form (leaving the
+	// drag unstarted). Same gate as the menu / object-tree drag.
+	if (!m_formHandler->IsEditable())
+		return;
+
 	// The COMMAND drag KIND owns its format + serialization (symmetric to the attribute tree's source kind) — the
 	// command-hop path goes through the ENGINE writer, not a raw byte pack. Construction IS the drag.
 	ibCommandDragItem(m_tcCommands, data->GetCommandDesc());
@@ -239,6 +244,10 @@ void ibCommandTree::OnContextMenu(wxContextMenuEvent& event)
 	// a config command isn't ours to manage); Paste greys when the command clipboard is empty. PopupMenu lets the
 	// EVT_MENU Binds dispatch — the SAME handlers the accelerators fire.
 	const bool hasCmd = SelectedFormCommand() != nullptr;
+	// A view-only form (read-only metadata) can be browsed but not restructured — every MUTATING item is
+	// disabled; Copy / Properties stay live. The gate is the form's own IsEditable, the SAME one the object
+	// and attribute trees read.
+	const bool editable = m_formHandler->IsEditable();
 	wxMenu menu;
 	auto appendItem = [&menu](int menuId, const wxString& label, const wxArtID& art, bool enabled) {
 		wxMenuItem* item = new wxMenuItem(&menu, menuId, label);
@@ -246,13 +255,13 @@ void ibCommandTree::OnContextMenu(wxContextMenuEvent& event)
 		menu.Append(item);
 		item->Enable(enabled);
 	};
-	appendItem(ID_COMMANDTREE_ADD_OBJECT, _("Add command"), wxART_NEW, true);   // the form always holds its own commands
+	appendItem(ID_COMMANDTREE_ADD_OBJECT, _("Add command"), wxART_NEW, editable);   // mutates → locked when read-only
 	menu.AppendSeparator();
-	appendItem(ID_COMMANDTREE_CUT,   _("Cut"),   wxART_CUT,    hasCmd);
-	appendItem(ID_COMMANDTREE_COPY,  _("Copy"),  wxART_COPY,   hasCmd);
-	appendItem(ID_COMMANDTREE_PASTE, _("Paste"), wxART_PASTE,  ibFormCommandValue::HasClipboardData());
+	appendItem(ID_COMMANDTREE_CUT,   _("Cut"),   wxART_CUT,    hasCmd && editable);
+	appendItem(ID_COMMANDTREE_COPY,  _("Copy"),  wxART_COPY,   hasCmd);                         // read-only safe
+	appendItem(ID_COMMANDTREE_PASTE, _("Paste"), wxART_PASTE,  ibFormCommandValue::HasClipboardData() && editable);
 	menu.AppendSeparator();
-	appendItem(ID_COMMANDTREE_DELETE, _("Delete"), wxART_DELETE, hasCmd);
+	appendItem(ID_COMMANDTREE_DELETE, _("Delete"), wxART_DELETE, hasCmd && editable);
 	menu.AppendSeparator();
 	appendItem(ID_COMMANDTREE_PROPERTIES, _("Properties"), wxART_LIST_VIEW, hasCmd);   // open the inspector on this command
 	m_tcCommands->PopupMenu(&menu);   // pop on the TREE so the menu events reach its EVT_MENU Binds (events bubble up)
@@ -277,6 +286,9 @@ void ibCommandTree::AddCommand(bool /*general*/)
 {
 	ibValueForm* form = m_formHandler != nullptr ? m_formHandler->GetValueForm() : nullptr;
 	if (form == nullptr)
+		return;
+	// View-only form — no new commands (the accelerator reaches here bypassing the greyed menu item). Same gate.
+	if (!m_formHandler->IsEditable())
 		return;
 	// A form command is a form-LOCAL event (NOT a metaobject — nothing goes into the metadata tree). Its Action
 	// starts EMPTY — the handler procedure does not exist yet; the developer creates it later through the event

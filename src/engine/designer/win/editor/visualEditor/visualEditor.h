@@ -680,7 +680,10 @@ public:
 
 	ibMetaDocument* GetEditorDocument() const { return m_document; }
 
-	bool IsEditable() const { return true; }
+	// View-only follows the FORM (its metaObject's IsEditable — a config opened read-only from a DB / file):
+	// the ONE gate every editor surface reads (object tree move/delete/paste/drag, command tree add, attribute
+	// tree). No editor-local flag — the form is the single source of truth. Null form (mid-construction) = editable.
+	bool IsEditable() const { return m_valueForm == nullptr || m_valueForm->IsEditable(); }
 	void SetReadOnly(bool readOnly = true) {}
 
 	void ActivateEditor();

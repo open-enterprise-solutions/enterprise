@@ -427,9 +427,11 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnKeyDown
 	if (event.GetKeyEvent().AltDown() && event.GetKeyCode() != WXK_ALT)
 	{
 #ifdef __WXGTK__
-		if (ibValueFrame* obj = GetObjectFromTreeItem(m_tcObjects->GetSelection())) {
-			if (event.GetKeyCode() == WXK_UP)   { m_formHandler->MovePosition(obj, false); return; }
-			if (event.GetKeyCode() == WXK_DOWN) { m_formHandler->MovePosition(obj, true);  return; }
+		if (m_formHandler->IsEditable()) {   // view-only: no keyboard reorder, same gate as the MOVE menu / drag
+			if (ibValueFrame* obj = GetObjectFromTreeItem(m_tcObjects->GetSelection())) {
+				if (event.GetKeyCode() == WXK_UP)   { m_formHandler->MovePosition(obj, false); return; }
+				if (event.GetKeyCode() == WXK_DOWN) { m_formHandler->MovePosition(obj, true);  return; }
+			}
 		}
 #endif
 		event.Skip();
@@ -491,6 +493,11 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnBeginDr
 {
 	// need to explicitly allow drag
 	if (event.GetItem() == m_tcObjects->GetRootItem())
+		return;
+
+	// A view-only form's layout is frozen — drag reorders/reparents controls, so gate it exactly like the
+	// menu MOVE items (leaving event unallowed cancels the drag).
+	if (!m_formHandler->IsEditable())
 		return;
 
 	m_draggedItem = event.GetItem();
