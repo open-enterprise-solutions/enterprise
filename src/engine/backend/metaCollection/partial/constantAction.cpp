@@ -7,9 +7,9 @@ enum
 };
 
 
-ibValueRecordDataObjectConstant::ibActionCollection ibValueRecordDataObjectConstant::GetActionCollection(const ibFormID& formType)
+ibValueRecordDataObjectConstant::ibStandardCommandSet ibValueRecordDataObjectConstant::GetStandardCommands(const ibFormID& formType)
 {
-	ibActionCollection catalogActions(this);
+	ibStandardCommandSet catalogActions(this);
 	catalogActions.AddAction(wxT("SaveAndClose"), _("Save and close"), g_picSaveCLSID, true, eDefActionAndClose);
 	catalogActions.AddAction(wxT("Save"), _("Save"), g_picSaveCLSID, true, eSave);
 	return catalogActions;

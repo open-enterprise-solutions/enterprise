@@ -24,6 +24,7 @@
 #include "procUnit.h"          // class ibProcUnit (friend grant for ibValueFunction)
 #include "procUnitState.h"     // ibProcUnitState::GetLambdaRuntime()
 #include "session/session.h"   // ibSession::GetPUState() — used by ibValueFunction::Execute
+#include "backend/eventDispatcher.h"   // ibValueFunction IS-A dispatcher — a lambda dispatches by running its own body
 // ibBackendCoreException reaches us transitively via compileCode.h's chain.
 
 #pragma region iterator_support
@@ -88,9 +89,15 @@ inline constexpr ibClassID g_valueFunction = system_to_clsid("VL_FUNC");   // he
 // Lifetime: parentBc points into the session's bytecode storage; the
 // ibByteFunction inside m_listFunc is owned by parentBc. The value
 // must not outlive the session that produced it.
-class ibValueFunction : public ibValue {
+class ibValueFunction : public ibValue, public ibEventDispatcher {
 	public:
 	ibValueFunction() : ibValue(ibValueTypes::TYPE_FUNCTION) {}
+
+	// ibEventDispatcher — a lambda IS its own dispatcher: run its own body with the args (+ trailing cancel). NOT const
+	// (the invoke may heap-promote / mutate the lambda's captured frames). IsEmpty is false: a bound lambda is set.
+	virtual bool IsEmpty() const override { return false; }
+	virtual bool Dispatch(ibProcUnit* runtime, ibValue** args, long argc, ibValue& outCancel) override;
+
 
 	ibValueFunction(const ibByteCode* parentBc, long funcIndex)
 		: ibValue(ibValueTypes::TYPE_FUNCTION),

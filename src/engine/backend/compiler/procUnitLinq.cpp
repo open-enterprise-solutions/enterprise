@@ -121,6 +121,19 @@ static inline void CallLambdaWith2Args(ibValueFunction& fn, ibValue& arg0,
 	CallLambdaWithArgs(fn, ptrs, 2, retVal);
 }
 
+// ibEventDispatcher facet — a lambda dispatches by running ITS OWN body with the event args (+ the trailing cancel
+// ref, the classic event contract). Reuses the SAME frame/param-bind path the LINQ predicates use above; the return
+// value is discarded (an event handler's meaningful output is the cancel flag it may set). `runtime` is ignored — the
+// lambda resolves the session's lambda runtime itself. Non-const: the invoke may heap-promote the captured frames.
+bool ibValueFunction::Dispatch(ibProcUnit* /*runtime*/, ibValue** args, long argc, ibValue& outCancel)
+{
+	std::vector<ibValue*> params(args, args + argc);
+	params.push_back(&outCancel);
+	ibValue ret;
+	CallLambdaWithArgs(*this, params.data(), (long)params.size(), ret);
+	return outCancel.GetBoolean();
+}
+
 // Public host-API wrapper — invoke a lambda value (TYPE_FUNCTION,
 // directly or wrapped in TYPE_REFFER) with a single argument from
 // C++ code. Used by ibValueArray's Sum/Min/Max/Average selector

@@ -3,7 +3,7 @@
 
 #include "backend/backend.h"                              // BACKEND_API (base header, not includer-order dependent)
 #include "backend/uniqueKey.h"                            // ibUniqueKey (form guid)
-#include "backend/actionInfo.h"                           // ibCommandItem / ibFormID / ibActionID — the metaobject's command contract
+#include "backend/standardCommand.h"                           // ibCommandItem / ibFormID / ibActionID — the metaobject's command contract
 #include "backend/metaCollection/metaObjectComposite.h"   // ibValueMetaObjectCompositeData (base) + FillArrayObjectByFilter templates
 #include "backend/metaCollection/metaFormObject.h"        // ibValueMetaObjectFormBase + ibBackendCommandItem (bases), ibBackendValueForm, defaultFormType (ibSelectorDataType comes transitively via backend_type.h)
 #include "backend/metaCollection/metaCommandObject.h"      // ibValueMetaObjectCommand — GetCommandArrayObject returns the real command type

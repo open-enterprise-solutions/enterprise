@@ -32,7 +32,7 @@ expansion, and must remain coherent when filter / sort / view-mode change.
 
 ### Backend (where data lives)
 
-* `ibValueModel` — script-exposed base (`ibValue` + `ibActionDataObject`),
+* `ibValueModel` — script-exposed base (`ibValue` + `ibStandardCommandSource`),
   owns `m_filterRow`, `m_sortOrder`, dispatches `ExecuteAction`.
 * `ibValueModelTableBase` / `ibValueModelTreeBase` — row/tree storage with
   `m_nodeValues` (vector) / `m_root` (tree).
@@ -242,7 +242,7 @@ void UnpinForSelection(const ibDataViewItem& item);
 The model exposes the same operations on its non-templated base via
 plain virtuals so the frontend can call them without knowing `TKey`:
 ```cpp
-class ibValueModel : public ibValue, public ibActionDataObject, ... {
+class ibValueModel : public ibValue, public ibStandardCommandSource, ... {
     virtual bool IsPaged() const             { return false; }
     virtual void NotifyViewportChanged(const ibViewport&) {}
     virtual void ResetForFilterOrSort()      {}

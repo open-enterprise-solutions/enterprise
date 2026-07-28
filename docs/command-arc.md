@@ -142,7 +142,7 @@ The command door is the parallel of the data door, one level up:
    Do not introduce a second source.
 
 ⚠️ **bound-to-source** (command *pulls data* from source) ≠ **command source #4 below**
-(source *supplies its own commands*, `ibTabularCommandDataObject`). The source-object plays
+(source *supplies its own commands*, `ibStandardCommandTabular`). The source-object plays
 two roles — data supplier and command supplier — keep them distinct.
 
 ---

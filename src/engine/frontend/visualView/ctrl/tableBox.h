@@ -133,7 +133,7 @@ class ibValueModelTableBox : public ibValueWindowComposite,
 	ibValueModel* GetTableModel() const { return m_tableModel; }
 
 	// Choice mode = this table is a VALUE PICKER (opened to return a selection to a caller). The TableBox owns
-	// this affordance (like a form owns Close / Update): when on, GetActionCollection composes Select FIRST.
+	// this affordance (like a form owns Close / Update): when on, GetStandardCommands composes Select FIRST.
 	// The front-owned property is the SOLE source of truth — set at form-build from the source explorer's choice
 	// flag (autobuild) or by the runtime open-as-choice path (SetChoiceMode). The dumb model carries no choice.
 	bool IsChoiceMode() const { return m_propertyChoiceMode->GetValueAsBoolean(); }
@@ -227,11 +227,11 @@ class ibValueModelTableBox : public ibValueWindowComposite,
 	* Override actionData
 	*/
 
-	virtual ibActionCollection GetActionCollection(const ibFormID& formType);
+	virtual ibStandardCommandSet GetStandardCommands(const ibFormID& formType);
 	// The command bar calls this (generic id, form). The TableBox reads the rows a command runs against — the
 	// SELECTED row plus the create ANCHOR (resolved per view mode, see CallAsAction) — and either runs a view-state
 	// command DIRECTLY against the control (Command_*), or forwards the OBJECT command to the model as
-	// CallAsCommand(id, {selection, anchor}, form) — the ibTabularCommandDataObject contract.
+	// CallAsCommand(id, {selection, anchor}, form) — the ibStandardCommandTabular contract.
 	virtual void CallAsAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm);
 
 

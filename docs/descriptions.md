@@ -3,7 +3,7 @@
 > **Scope:** the `ibXxxDescription` family — the structs that describe *how data is
 > stored*, and their `ibXxxDescriptionMemory` serialisers.
 > `typeDescription.*`, `sourceDescription.*`, `spreadsheetDescription.*`,
-> `pictureDescription.*`, `actionInfo.h`.
+> `pictureDescription.*`, `standardCommand.h`.
 > Companions: [property-system.md](property-system.md) (descriptions live inside
 > variants), [pictures.md](pictures.md), [report-engine.md](report-engine.md),
 > [form-attribute-binding.md](form-attribute-binding.md).
@@ -44,7 +44,7 @@ The family:
 | `ibSourceDescription` | `sourceDescription.h` (83) | a binding path |
 | `ibSpreadsheetDescription` | `spreadsheetDescription.h` (835) | a whole table document |
 | `ibPictureDescription` | `pictureDescription.h` | where an image comes from |
-| `ibActionDescription` | `actionInfo.h` | a command |
+| `ibStandardCommandDescription` | `standardCommand.h` | a command |
 
 They are what the five property surfaces move around
 ([property-system.md § 1](property-system.md)): put a description in a variant and it
@@ -188,7 +188,7 @@ a pointer, a handle, or state — and diff/copy silently stop working.
 - The naming is not uniform: the serialiser suffix is `…Memory` (from the
   `ibReaderMemory` / `ibWriterMemory` era — [serialization-io.md](serialization-io.md)),
   which reads as "in-memory" rather than "serialiser". A rename candidate.
-- `ibActionDescription` lives in `actionInfo.h`, not in a `*Description.h` of its own —
+- `ibStandardCommandDescription` lives in `standardCommand.h`, not in a `*Description.h` of its own —
   the one family member that is not where the pattern predicts.
 - Descriptions are `struct`s with public fields by design. That is a deliberate exception
   to encapsulation: they are data, and the pattern relies on them staying that way.

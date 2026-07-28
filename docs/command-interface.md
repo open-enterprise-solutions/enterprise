@@ -169,10 +169,10 @@ designer menu.
 
 ---
 
-## 6. Action collection — `ibActionDataObject` (`backend/actionInfo.h`)
+## 6. Standard commands — `ibStandardCommandSource` (`backend/standardCommand.h`)
 
-An `ibValueFrame` IS-A `ibActionDataObject`, so every control and the form itself hands out
-an `ibActionCollection` (`GetActionCollection`) and executes one by id (`CallAsAction`). The
+An `ibValueFrame` IS-A `ibStandardCommandSource`, so every control and the form itself hands out
+an `ibStandardCommandSet` (`GetStandardCommands`) and executes one by id (`CallAsAction`). The
 collection is a vector of `ibCommandItem` records built through the **funnel** `EmplaceAction`
 (one definition of field order — no swapped-argument bugs). Field names read plainly:
 `m_actionId` (wxNOT_FOUND = separator), `m_name`, `m_caption`, `m_pictureDescription`,
@@ -186,7 +186,7 @@ actions.AddAction(wxT("Generate"), _("Generate"), g_picGenerateCLSID, true, eGen
 ```
 
 `SetModify(bool)` / `SetPictureAndText(bool)` / `SetCreateInForm(bool)` each return `*this`.
-`ibActionDataObject` has a `virtual` destructor (it is a polymorphic base). There is no
+`ibStandardCommandSource` has a `virtual` destructor (it is a polymorphic base). There is no
 id-keyed `SetModifiesData` setter — the flag is set at add time through the chain.
 
 - The `Sybsystem` typo in the `interfaceHelper.h` banner is real and is a rename candidate
@@ -271,7 +271,7 @@ public:
 
     // THE hop gate — resolve ONE command id to the next command-capable VALUE (again a sender, so the
     // walk continues on it). false = not a command here. NOT const: a live frontend form answers "is
-    // this hop a standard action?" via GetActionCollection (a mutable back-pointer) — the walk mutates nothing.
+    // this hop a standard action?" via GetStandardCommands (a mutable back-pointer) — the walk mutates nothing.
     virtual bool GetCommandByHop(const ibCommandHop& hop, ibValue& out) { return false; }
 
     // THE shared walk — the mirror of ibSourceDataObject::ResolvePath. Static: the start need not be THIS.
@@ -465,41 +465,43 @@ real defect; the gather fallback PATCHES it, it does not fix it. `ResolveCommand
 surface share the same patch — button, bar and cell now agree — but the underlying fragile walk is
 still there to fix.
 
-### 8.8 Future work — naming to reconcile
+### 8.8 Naming — `actionInfo` → standard commands (LANDED)
 
-> **Status:** PROPOSAL, nothing applied. A COSMETIC naming pass, not a structural merge.
+> **Status:** LANDED (concept symbols + file). A COSMETIC naming pass, not a structural merge.
 
 With the command side consolidated to **SENDER** (`ibBackendCommandSender`) / **RECEIVER**
 (`ibBackendCommandReceiver` ← `ibFrontendCommandReceiver`), the old `actionInfo` layer (§6) is
 no longer "the command system." It is now just ONE of the three command sources a sender vends:
 the **standard commands** set (`GatherFormCommands` section 2, §9), alongside the form's own
-custom commands (section 1) and the global config commands (section 3).
+custom commands (section 1) and the global config commands (section 3). The layer was renamed to
+say so.
 
-Historically `actionInfo` WAS the whole command system — command == action, a single source —
-so it still carries the legacy "Action" vocabulary, an *okamenelost* (fossil) of that origin.
-The migration is already HALF done: the collection ENTRY is named `ibCommandItem`, not
-`ibActionItem` (§6), and `ibActionID` is really a command HOP id in a reserved range — a
-gathered standard command's path is `ibCommandDescription(actionId)`, and
-`ibBackendCommandSender::GetCommandByHop` matches that id against the collection (§8.1).
+Historically `actionInfo` WAS the whole command system — command == action, a single source — so
+it carried the legacy "Action" vocabulary, an *okamenelost* (fossil) of that origin. The concept
+symbols now read "standard command"; the collection ENTRY was already `ibCommandItem`, not
+`ibActionItem` (§6).
 
-**This is naming coherence ONLY — not a merge.** `actionInfo` stays a distinct DATA layer: the
-per-object-type catalog of built-in actions. It must NOT be folded into sender/receiver, because
-it has independent consumers — the command bar's AutoFill builds standard toolbars straight from
-`GetActionCollection` (§5), and view-only greying reads the `m_modifiesData` flag off it (§5–§6).
-Generalizing it into the command interface would ADD coupling, not remove it.
+**This is naming coherence ONLY — not a merge.** The standard-command layer stays a distinct DATA
+layer: the per-object-type catalog of built-in commands. It must NOT be folded into
+sender/receiver, because it has independent consumers — the command bar's AutoFill builds standard
+toolbars straight from `GetStandardCommands` (§5), and view-only greying reads the `m_modifiesData`
+flag off it (§5–§6). Generalizing it into the command interface would ADD coupling, not remove it.
 
-Suggested mapping (a proposal, not applied):
+Mapping applied:
 
-| today | rename to |
+| was | now |
 |---|---|
-| `ibActionDataObject` | a sender facet — "standard commands" |
-| `GetActionCollection` | `GetStandardCommands` |
-| `ibActionCollection` | `ibStandardCommandSet` |
-| `ibActionID` | a standard-command id (or leave as-is — it is already a hop id) |
+| `ibActionDataObject` | **`ibStandardCommandSource`** — a sender facet |
+| `ibTabularCommandDataObject` | **`ibStandardCommandTabular`** — the table/list facet |
+| `GetActionCollection` | **`GetStandardCommands`** |
+| `ibActionCollection` | **`ibStandardCommandSet`** |
+| `ibActionDescription` | **`ibStandardCommandDescription`** — the record shape |
+| file `backend/actionInfo.h` | **`backend/standardCommand.h`** |
 
-**Cost — do it as its own pass.** `GetActionCollection` is implemented in ~11 per-type
-`*Action.cpp` files with ~43 consumers, so the blast radius is wide. Land it as one focused
-change, not tacked onto other work.
+**Deliberately left** as low-level call-verb / id (they live in `standardCommand.h` now but keep
+the "action" word): `ibActionID` (a command HOP id in a reserved range — a gathered standard
+command's path is `ibCommandDescription(actionId)`, matched by `ibBackendCommandSender::GetCommandByHop`,
+§8.1); `CallAsAction` (fits the `CallAs*` call-kind family). Renaming those is a deeper pass, not this one.
 
 ---
 
@@ -546,7 +548,7 @@ fixed ones):
    (`form->GetFormCommands()`), NOT metaobjects (§8.2). Each is a 1-hop `[id]` path; tree text = the
    command NAME, cell path = `Form.<name>`.
 2. **Standard commands** (section "Standard commands", sub-grouped per source) — the standard
-   actions of the form (`form->GetActionCollection`, sub-group "Form"), then of every tablebox
+   actions of the form (`form->GetStandardCommands`, sub-group "Form"), then of every tablebox
    (`CollectTableboxes`, sub-group = the table name). A form action carries `[actionId]`; a table
    action carries `[table-source, actionId]` so a click lands on THAT table. A tablebox bound to the
    form's MAIN source is SKIPPED (`IsMainSourceBound` — the form toolbar already serves it).

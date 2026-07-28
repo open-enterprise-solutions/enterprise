@@ -12,6 +12,7 @@
 #include "backend/backend_type.h"
 #include "backend/backend_form.h"
 #include "backend/backend_localization.h"
+#include "backend/eventDispatcher.h"   // ibEventDispatcher — CallAsEvent dispatches the event's value through it
 
 #include "frontend/visualView/formdefs.h"
 #include "frontend/visualView/controlCtor.h"
@@ -28,7 +29,7 @@ class BACKEND_API ibDataNode;   // serialize/dataBuilder.h — universal node (c
 class FRONTEND_API ibValueForm;
 class FRONTEND_API ibVisualHostClient;
 
-#include "backend/actionInfo.h"
+#include "backend/standardCommand.h"
 #include "backend/moduleInfo.h"
 #include "frontend/visualView/layers/commandBar.h"   // ibValueCommandBar (command STORE the frame owns)
 
@@ -69,7 +70,7 @@ public:
 class FRONTEND_API ibValueFrame : public ibValueDynamicMembers,
 	public ibPropertyObjectHelper<ibValueFrame>,
 	public ibControlFrame,
-	public ibActionDataObject {
+	public ibStandardCommandSource {
 	public:
 protected:
 
@@ -291,29 +292,23 @@ public:
 
 public:
 
-	// call current event
+	// call current event — ask the event for its dispatcher (a named-event value or a lambda, both ibEventDispatcher)
+	// and Dispatch. The fire site stays agnostic: named vs lambda is pure polymorphism behind GetDispatcher()->Dispatch.
 	template <typename ...Types>
 	bool CallAsEvent(const ibEvent* event, Types&&... args) const {
 		if (event == nullptr)
 			return false;
-		const wxString& eventValue = event->GetValue();
-		std::shared_ptr<ibProcUnit> formProcUnit = GetFormProcUnit();
-		if (formProcUnit != nullptr && !eventValue.IsEmpty()) {
-			ibValue eventCancel = false;
-			try {
-				formProcUnit->CallAsProc(
-					eventValue, //event name
-					args...,
-					eventCancel
-				);
-			}
-			catch (...) {
-				return false;
-			}
-			return eventCancel.GetBoolean();
+		ibEventDispatcher* dispatcher = event->GetDispatcher();
+		if (dispatcher == nullptr || dispatcher->IsEmpty())
+			return true;   // undefined -> no-op, the event just proceeds
+		ibValue* argPtrs[] = { (&args)..., nullptr };   // trailing null keeps a 0-arg array valid (mirrors CallAsProc)
+		ibValue eventCancel = false;
+		try {
+			return dispatcher->Dispatch(GetFormProcUnit().get(), argPtrs, (long)sizeof...(args), eventCancel);
 		}
-
-		return true;
+		catch (...) {
+			return false;
+		}
 	}
 
 	//call current form
@@ -359,7 +354,7 @@ public:
 public:
 
 	//support actionData
-	virtual ibActionCollection GetActionCollection(const ibFormID& formType) override { return ibActionCollection(); }
+	virtual ibStandardCommandSet GetStandardCommands(const ibFormID& formType) override { return ibStandardCommandSet(); }
 	virtual void CallAsAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm) override {}
 
 	// Command bar STORE, owned by this frame (created in the ctor of controls that

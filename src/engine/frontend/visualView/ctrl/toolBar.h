@@ -78,7 +78,7 @@ class ibValueToolbar : public ibValueWindow {
 	void AddToolSeparator();
 
 	//array of the commands 
-	const ibActionCollection& GetActionArray() const { return m_actionArray; }
+	const ibStandardCommandSet& GetActionArray() const { return m_actionArray; }
 
 protected:
 
@@ -96,7 +96,7 @@ private:
 	bool GetActionSource(ibPropertyList*);
 
 	//storage for action array 
-	ibActionCollection m_actionArray;
+	ibStandardCommandSet m_actionArray;
 
 	ibPropertyCategory* m_categoryAction = ibPropertyObject::CreatePropertyCategory(wxT("Action"), _("Toolbar"));
 	ibPropertyList* m_actSource = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryAction, wxT("ActionSource"), _("Source"), &ibValueToolbar::GetActionSource, wxNOT_FOUND);
@@ -117,16 +117,16 @@ public:
 	void SetToolTip(const wxString& caption) { return m_properyTooltip->SetValue(caption); }
 	wxString GetToolTip() const { return m_properyTooltip->GetValueAsTranslateString(); }
 
-	void SetAction(const ibActionDescription& action) { return m_eventAction->SetValue(action); }
-	const ibActionDescription& GetAction() const { return m_eventAction->GetValueAsActionDesc(); }
+	void SetAction(const ibStandardCommandDescription& action) { return m_eventAction->SetValue(action); }
+	const ibStandardCommandDescription& GetAction() const { return m_eventAction->GetValueAsActionDesc(); }
 
 	///////////////////////////////////////////////////////////////////////
 
 	ibValueToolbar* GetOwner() const { return m_parent->ConvertToType<ibValueToolbar>(); }
 
 #pragma region __tool_item_desc_h__
-	wxBitmap GetItemPicture(const ibActionCollection& collection) const {
-		const ibActionDescription& actionDesc = m_eventAction->GetValueAsActionDesc();
+	wxBitmap GetItemPicture(const ibStandardCommandSet& collection) const {
+		const ibStandardCommandDescription& actionDesc = m_eventAction->GetValueAsActionDesc();
 		if (m_propertyPicture->IsEmptyProperty()) {
 			const ibActionID selected = actionDesc.GetSystemAction();
 			if (selected != wxNOT_FOUND) {
@@ -148,8 +148,8 @@ public:
 		return m_propertyPicture->GetValueAsBitmap();
 	}
 
-	wxString GetItemCaption(const ibActionCollection& collection) const {
-		const ibActionDescription& actionDesc = m_eventAction->GetValueAsActionDesc();
+	wxString GetItemCaption(const ibStandardCommandSet& collection) const {
+		const ibStandardCommandDescription& actionDesc = m_eventAction->GetValueAsActionDesc();
 		if (m_propertyTitle->IsEmptyProperty()) {
 			const ibActionID selected = actionDesc.GetSystemAction();
 			if (selected != wxNOT_FOUND) {
@@ -164,8 +164,8 @@ public:
 		return m_propertyTitle->GetValueAsTranslateString();
 	}
 
-	wxString GetItemToolTip(const ibActionCollection& collection) const {
-		const ibActionDescription& actionDesc = m_eventAction->GetValueAsActionDesc();
+	wxString GetItemToolTip(const ibStandardCommandSet& collection) const {
+		const ibStandardCommandDescription& actionDesc = m_eventAction->GetValueAsActionDesc();
 		if (m_properyTooltip->IsEmptyProperty()) {
 			const ibActionID selected = actionDesc.GetSystemAction();
 			if (selected != wxNOT_FOUND) {
@@ -180,8 +180,8 @@ public:
 		return m_properyTooltip->GetValueAsTranslateString();
 	}
 
-	ibRepresentation GetItemRepresentation(const ibActionCollection& collection) const {
-		const ibActionDescription& actionDesc = m_eventAction->GetValueAsActionDesc();
+	ibRepresentation GetItemRepresentation(const ibStandardCommandSet& collection) const {
+		const ibStandardCommandDescription& actionDesc = m_eventAction->GetValueAsActionDesc();
 		if (m_propertyPicture->IsEmptyProperty()) {
 			const ibActionID selected = actionDesc.GetSystemAction();
 			if (selected != wxNOT_FOUND) {

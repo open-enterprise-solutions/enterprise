@@ -199,7 +199,7 @@ public:
 	void EditValue(const ibDataViewItem& row);
 	virtual void DeleteValue(const ibDataViewItem& row);
 
-	// Command store (ibTabularCommandDataObject): a tabular section defines its OWN Add / Copy / Edit / Delete and runs
+	// Command store (ibStandardCommandTabular): a tabular section defines its OWN Add / Copy / Edit / Delete and runs
 	// them by id on the front-passed row (no shared base set — each model ships its own).
 	enum { eAddValue = 1, eCopyValue, eEditValue = 3 | eStartEditingFlag, eDeleteValue = 4 };   // Edit's id carries the front-edit flag
 	virtual void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const override {

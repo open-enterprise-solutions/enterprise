@@ -19,7 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="actionInfo.h" />
+    <ClInclude Include="standardCommand.h" />
     <ClInclude Include="appData.h" />
     <ClInclude Include="appDataCtorToken.h" />
     <ClInclude Include="appEnv.h" />
@@ -166,6 +166,7 @@
     <ClInclude Include="fileSystem\lz\lzhuf.h" />
     <ClInclude Include="fileSystem\quicklz\quicklz.h" />
     <ClInclude Include="fileSystem\types.h" />
+    <ClInclude Include="eventDispatcher.h" />
     <ClInclude Include="guid.h" />
     <ClInclude Include="backend_localization.h" />
     <ClInclude Include="metaCollection\metaLanguageObject.h" />
@@ -473,6 +474,7 @@
     <ClCompile Include="serialize\jsonProvider.cpp" />
     <ClCompile Include="fileSystem\lz\lzhuf.cpp" />
     <ClCompile Include="fileSystem\quicklz\quicklz.c" />
+    <ClCompile Include="eventDispatcher.cpp" />
     <ClCompile Include="guid.cpp" />
     <ClCompile Include="metaCollection\attribute\metaAttributeObject.cpp" />
     <ClCompile Include="metaCollection\attribute\metaAttributeObjectEnum.cpp" />

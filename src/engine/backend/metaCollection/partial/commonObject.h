@@ -43,7 +43,7 @@
 #include "backend/system/value/valueGuid.h"
 
 #include "backend/appData.h"
-#include "backend/actionInfo.h"
+#include "backend/standardCommand.h"
 #include "backend/moduleInfo.h"
 #include "backend/valueInfo.h"
 #include "backend/model.h"
@@ -692,7 +692,7 @@ public:
 	ibValueRecordDataObjectRef* CopyObjectValue(const ibGuid& guid) const;
 
 	// This source's OWN command ids (class-scoped — no global enum, no collision with the action system). eEditValue
-	// bakes the front inline-edit flag (actionInfo.h eStartEditingFlag). Ids < 32767 (wxMenuItem), band 1..27.
+	// bakes the front inline-edit flag (standardCommand.h eStartEditingFlag). Ids < 32767 (wxMenuItem), band 1..27.
 	// Subclasses inherit these and add their own (Document +Post, hierarchy +AddFolder).
 	enum {
 		eAddValue = 1,
@@ -1380,7 +1380,7 @@ class BACKEND_API ibValueManagerDataObjectPredefined : public ibValueManagerData
 
 //object with metaobject 
 #pragma region objects 
-class BACKEND_API ibValueRecordDataObject : public ibValueDynamicMembers, public ibActionDataObject,
+class BACKEND_API ibValueRecordDataObject : public ibValueDynamicMembers, public ibStandardCommandSource,
 	public ibSourceDataObject, public ibValueDataObject, public ibRuntimeModuleDataObject {
 	public:
 protected:
@@ -1410,7 +1410,7 @@ public:
 	virtual ~ibValueRecordDataObject();
 
 	//support actionData
-	virtual ibActionCollection GetActionCollection(const ibFormID& formType) override { return ibActionCollection(); }
+	virtual ibStandardCommandSet GetStandardCommands(const ibFormID& formType) override { return ibStandardCommandSet(); }
 	virtual void CallAsAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm) override {}
 
 	// Feed the record's data-object module into ibRuntimeModuleDataObject's
@@ -2434,7 +2434,7 @@ protected:
 };
 
 class BACKEND_API ibValueRecordManagerObject : public ibValueDynamicMembers,
-	public ibSourceDataObject, public ibActionDataObject {
+	public ibSourceDataObject, public ibStandardCommandSource {
 	public:
 protected:
 	ibValueRecordManagerObject(const ibValueMetaObjectRegisterData* metaObject, const ibUniqueKeyPair& uniqueKey);

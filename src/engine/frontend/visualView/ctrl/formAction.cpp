@@ -5,7 +5,7 @@
 
 #include "form.h"
 #include "backend/appData.h"
-#include "backend/srcDataObject.h"        // ibSourceDataObject COMPLETE — the dynamic_cast<ibActionDataObject*>(GetSourceObject())
+#include "backend/srcDataObject.h"        // ibSourceDataObject COMPLETE — the dynamic_cast<ibStandardCommandSource*>(GetSourceObject())
 #include "backend/picturePredefined.h"    // g_pic*FormCLSID — the form-level chrome commands
 
 enum
@@ -36,26 +36,26 @@ static ibValueFrame* FindMainCommandView(ibValueFrame* top)
 	return nullptr;
 }
 
-// The form's command provider — ALWAYS an ibActionDataObject: the main data VIEW (a control that IS-A
-// ibActionDataObject via ibValueFrame, adapting its dumb ibTabularCommandDataObject model — view-state band + current
+// The form's command provider — ALWAYS an ibStandardCommandSource: the main data VIEW (a control that IS-A
+// ibStandardCommandSource via ibValueFrame, adapting its dumb ibStandardCommandTabular model — view-state band + current
 // row + dispatch), or — an object form — the self-commanding source object itself (both ibSourceDataObject and
-// ibActionDataObject). The form NEVER touches the dumb ibTabularCommandDataObject directly: composing/dispatching
+// ibStandardCommandSource). The form NEVER touches the dumb ibStandardCommandTabular directly: composing/dispatching
 // table commands is the view's own job.
-ibActionDataObject* ibValueForm::GetCommandProvider()
+ibStandardCommandSource* ibValueForm::GetCommandProvider()
 {
 	if (ibValueFrame* mainView = FindMainCommandView(this))
-		return mainView;   // ibValueFrame IS-A ibActionDataObject
-	return dynamic_cast<ibActionDataObject*>(ibValueForm::GetSourceObject());
+		return mainView;   // ibValueFrame IS-A ibStandardCommandSource
+	return dynamic_cast<ibStandardCommandSource*>(ibValueForm::GetSourceObject());
 }
 
-ibValueForm::ibActionCollection ibValueForm::GetActionCollection(const ibFormID& formType)
+ibValueForm::ibStandardCommandSet ibValueForm::GetStandardCommands(const ibFormID& formType)
 {
-	ibActionCollection actionData(this);
+	ibStandardCommandSet actionData(this);
 
 	// The form is a WRAPPER: it surfaces its command provider's set, then adds the form-level chrome. The
 	// provider distributes internally (a tablebox: its own view-state band vs its model's object commands).
-	if (ibActionDataObject* provider = GetCommandProvider())
-		actionData.AppendFrom(provider->GetActionCollection(formType));
+	if (ibStandardCommandSource* provider = GetCommandProvider())
+		actionData.AppendFrom(provider->GetStandardCommands(formType));
 
 	// Form chrome is navigation / view — never data-modifying — so it stays live in a view-only form.
 	actionData.AddAction(wxT("Close"), _("Close"), g_picCloseFormCLSID, false, enClose).SetModify(false);
@@ -92,7 +92,7 @@ void ibValueForm::CallAsAction(const ibActionID& lNumAction, ibBackendValueForm*
 		// Not a form-level id — hand it to the command provider. A tablebox routes it internally (a view-state
 		// Command_* or down to its model's CallAsCommand with the front-owned row); an object source runs its
 		// own object command.
-		if (ibActionDataObject* provider = GetCommandProvider())
+		if (ibStandardCommandSource* provider = GetCommandProvider())
 			provider->CallAsAction(lNumAction, srcForm);
 		break;
 	}

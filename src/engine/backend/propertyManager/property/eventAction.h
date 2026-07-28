@@ -2,7 +2,7 @@
 #define __EVENT_LIST_H__
 
 #include "backend/propertyManager/propertyObject.h"
-#include "backend/actionInfo.h"
+#include "backend/standardCommand.h"
 
 //base event for "list"
 class BACKEND_API ibEventAction : public ibEvent {
@@ -27,7 +27,7 @@ public:
 
 private:
 
-	wxVariantData* CreateVariantData(const ibPropertyObject* property, const ibActionDescription& act) const;
+	wxVariantData* CreateVariantData(const ibPropertyObject* property, const ibStandardCommandDescription& act) const;
 
 	class BACKEND_API ibEventOptionList {
 
@@ -139,8 +139,8 @@ public:
 #pragma region value
 	ibActionID GetValueAsInteger() const;
 	wxString GetValueAsString() const;
-	ibActionDescription& GetValueAsActionDesc() const;
-	void SetValue(const ibActionDescription& val);
+	ibStandardCommandDescription& GetValueAsActionDesc() const;
+	void SetValue(const ibStandardCommandDescription& val);
 #pragma endregion 
 
 #pragma region item
@@ -173,6 +173,10 @@ public:
 	virtual ~ibEventAction() { wxDELETE(m_functor); }
 
 	virtual bool IsEmptyProperty() const { return GetValueAsInteger() == wxNOT_FOUND; }
+
+	// An action event does NOT dispatch through CallAsEvent — it runs via its own functor (Invoke). No procedure /
+	// lambda dispatcher, so the CallAsEvent path is a no-op for it (nullptr).
+	virtual ibEventDispatcher* GetDispatcher() const override { return nullptr; }
 
 	// Set/Get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);

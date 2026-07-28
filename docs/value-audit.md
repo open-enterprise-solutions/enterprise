@@ -376,7 +376,7 @@ The arc walked through and rejected several heavier designs:
   fine for *new* leaf classes, but rewrites the inheritance line of every
   class (layout-affecting) and needs a `Base` template param for the chains /
   multiple-inheritance that pervade the tree (`ibValueModel : ibValue,
-  ibActionDataObject, ibTabularObject`). Strictly worse than a macro for the
+  ibStandardCommandSource, ibTabularObject`). Strictly worse than a macro for the
   retrofit; kept on the table only as optional ergonomics for new code.
 - **`royvandam/rtti`** (intrusive vptr type-id, FNV1a of the C++ type name):
   its id is hashed from the *C++* name, but our `clsid` is hashed from the

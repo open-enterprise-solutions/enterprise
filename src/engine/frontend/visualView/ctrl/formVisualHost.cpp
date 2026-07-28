@@ -112,7 +112,7 @@ bool ibValueForm::GetCommandByHop(const ibCommandHop& hop, ibValue& out)
 		return true;
 	}
 	// (5) a standard ACTION on the FORM's OWN bus — the form is the action's runtime (the caller runs CallAsAction).
-	auto actions = GetActionCollection(GetTypeForm());
+	auto actions = GetStandardCommands(GetTypeForm());
 	if (!actions.GetNameByID((ibActionID)hop.m_id).IsEmpty()) {
 		out = static_cast<const ibValue*>(this);
 		return true;

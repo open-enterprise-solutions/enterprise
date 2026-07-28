@@ -453,15 +453,15 @@ public:
 	virtual void OnUpdated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost);
 
 	//actionData
-	virtual ibActionCollection GetActionCollection(const ibFormID& formType);
+	virtual ibStandardCommandSet GetStandardCommands(const ibFormID& formType);
 	virtual void CallAsAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm);
 
 	// The form's COMMAND provider, resolved LIVE on every query (never cached — a stored pointer would go stale
 	// the moment the designer re-points the MAIN attribute without re-running any view's bind). A list form:
 	// the control whose WHOLE binding is the main attribute (ibValueModelTableBox::IsMainSourceBound) adapts its dumb
 	// command model into a full action interface. An object form: the self-commanding source object (both
-	// ibSourceDataObject and ibActionDataObject). null when neither exists.
-	ibActionDataObject* GetCommandProvider();
+	// ibSourceDataObject and ibStandardCommandSource). null when neither exists.
+	ibStandardCommandSource* GetCommandProvider();
 
 	//support icons
 	virtual wxIcon GetIcon() const;

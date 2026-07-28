@@ -127,7 +127,7 @@ bool ibValueWindow::WriteData(ibDataNode& node) const
 // the caller runs CallAsAction on it). A plain control / sizer is NOT a command source (it doesn't inherit this).
 bool ibValueWindowComposite::GetCommandByHop(const ibCommandHop& hop, ibValue& out)
 {
-	auto actions = GetActionCollection(GetTypeForm());
+	auto actions = GetStandardCommands(GetTypeForm());
 	if (!actions.GetNameByID((ibActionID)hop.m_id).IsEmpty()) {
 		out = static_cast<const ibValue*>(this);   // this composite IS the action runtime; caller runs CallAsAction(id)
 		return true;

@@ -12,9 +12,9 @@ enum
 	eCopy,
 };
 
-ibValueRecordManagerObjectInformationRegister::ibActionCollection ibValueRecordManagerObjectInformationRegister::GetActionCollection(const ibFormID &formType)
+ibValueRecordManagerObjectInformationRegister::ibStandardCommandSet ibValueRecordManagerObjectInformationRegister::GetStandardCommands(const ibFormID &formType)
 {
-	ibActionCollection registerActions(this);
+	ibStandardCommandSet registerActions(this);
 
 	registerActions.AddAction(wxT("SaveAndClose"), _("Save and close"), g_picSaveCLSID, true, eDefActionAndClose);
 	registerActions.AddAction(wxT("Save"), _("Save"), g_picSaveCLSID, true, eSave);

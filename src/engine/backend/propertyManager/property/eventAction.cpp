@@ -5,7 +5,7 @@
 
 //////////////////////////////////////////////////////////////////
 
-wxVariantData* ibEventAction::CreateVariantData(const ibPropertyObject* property, const ibActionDescription& act) const
+wxVariantData* ibEventAction::CreateVariantData(const ibPropertyObject* property, const ibStandardCommandDescription& act) const
 {
 	return new ibVariantDataAction(act);
 }
@@ -29,12 +29,12 @@ wxString ibEventAction::GetValueAsString() const
 	return GetValueAsActionDesc().GetCustomAction();
 }
 
-ibActionDescription& ibEventAction::GetValueAsActionDesc() const
+ibStandardCommandDescription& ibEventAction::GetValueAsActionDesc() const
 {
 	return get_cell_variant<ibVariantDataAction>()->GetValueAsActionDesc();
 }
 
-void ibEventAction::SetValue(const ibActionDescription& val)
+void ibEventAction::SetValue(const ibStandardCommandDescription& val)
 {
 	m_propValue = CreateVariantData(m_owner, val);
 }
@@ -69,7 +69,7 @@ bool ibEventAction::GetDataValue(ibValue& pvarPropVal) const
 }
 
 // node form: a Child { Action: <system id>, Name: <custom handler> }.
-bool ibActionDescriptionMemory::ReadNode(const ibDataValue& value, ibActionDescription& actionDesc)
+bool ibActionDescriptionMemory::ReadNode(const ibDataValue& value, ibStandardCommandDescription& actionDesc)
 {
 	const std::shared_ptr<ibDataNode>& root = value.AsChild();
 	if (!root)
@@ -79,7 +79,7 @@ bool ibActionDescriptionMemory::ReadNode(const ibDataValue& value, ibActionDescr
 	return true;
 }
 
-bool ibActionDescriptionMemory::WriteNode(ibDataValue& value, const ibActionDescription& actionDesc)
+bool ibActionDescriptionMemory::WriteNode(ibDataValue& value, const ibStandardCommandDescription& actionDesc)
 {
 	auto root = std::make_shared<ibDataNode>();
 	root->SetValue(wxT("Action"), (s32)actionDesc.m_lAction);

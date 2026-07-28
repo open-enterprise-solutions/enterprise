@@ -100,8 +100,8 @@ void ibValueToolBarItem::Update(wxObject* wxobject, ibVisualHost* visualHost)
 	ibWebToolBarItem* item = static_cast<ibWebToolBarItem*>(wxobject);
 
 	ibValueToolbar* owner = GetOwner();
-	const ibActionCollection& coll = owner ? owner->GetActionArray()
-	                                       : ibActionCollection();
+	const ibStandardCommandSet& coll = owner ? owner->GetActionArray()
+	                                       : ibStandardCommandSet();
 
 	// Effective representation — Auto resolves through collection.
 	ibRepresentation rep = m_propertyRepresentation->GetValueAsEnum();
@@ -168,7 +168,7 @@ void ibValueToolBarItem::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxparen
 		toolbar->DestroyTool(GetControlID());
 
 	if (m_propertyRepresentation->GetValueAsEnum() == ibRepresentation::ibRepresentation_Auto) {
-		const ibActionCollection& collection = GetOwner()->GetActionArray();
+		const ibStandardCommandSet& collection = GetOwner()->GetActionArray();
 		if (GetItemRepresentation(collection) == ibRepresentation::ibRepresentation_PictureAndText) {
 			toolItem = toolbar->InsertTool(idx, GetControlID(),
 				GetItemCaption(collection),
@@ -204,7 +204,7 @@ void ibValueToolBarItem::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxparen
 		}
 	}
 	else if (m_propertyRepresentation->GetValueAsEnum() == ibRepresentation::ibRepresentation_PictureAndText) {
-		const ibActionCollection& collection = GetOwner()->GetActionArray();
+		const ibStandardCommandSet& collection = GetOwner()->GetActionArray();
 		toolItem = toolbar->InsertTool(idx, GetControlID(),
 			GetItemCaption(collection),
 			GetItemPicture(collection),
@@ -216,7 +216,7 @@ void ibValueToolBarItem::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxparen
 		);
 	}
 	else if (m_propertyRepresentation->GetValueAsEnum() == ibRepresentation::ibRepresentation_Picture) {
-		const ibActionCollection& collection = GetOwner()->GetActionArray();
+		const ibStandardCommandSet& collection = GetOwner()->GetActionArray();
 		toolItem = toolbar->InsertTool(idx, GetControlID(),
 			wxEmptyString,
 			GetItemPicture(collection),
@@ -228,7 +228,7 @@ void ibValueToolBarItem::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxparen
 		);
 	}
 	else if (m_propertyRepresentation->GetValueAsEnum() == ibRepresentation::ibRepresentation_Text) {
-		const ibActionCollection& collection = GetOwner()->GetActionArray();
+		const ibStandardCommandSet& collection = GetOwner()->GetActionArray();
 		toolItem = toolbar->InsertTool(idx, GetControlID(),
 			GetItemCaption(collection),
 			wxNullBitmap,

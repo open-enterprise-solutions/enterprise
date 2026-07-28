@@ -1,7 +1,7 @@
 #include "commandReceiver.h"
 
 #include <vector>
-#include "frontend/visualView/ctrl/frame.h"        // ibValueFrame — CallAsAction / GetActionCollection / children
+#include "frontend/visualView/ctrl/frame.h"        // ibValueFrame — CallAsAction / GetStandardCommands / children
 #include "frontend/visualView/ctrl/form.h"         // ibValueForm — GetMetaData / FindFormCommandById; IS-A ibBackendValueForm
 #include "frontend/visualView/ctrl/formCommand.h"   // ibFormCommandValue — a form command resolved BY ID (caption / Action)
 #include "backend/metaCollection/metaCommandObject.h" // ibValueMetaObjectCommand — the leaf command
@@ -192,7 +192,7 @@ bool ibFrontendCommandReceiver::ResolveValueByPath(const ibCommandDescription& d
 	// (4) standard action — its caption + picture + modifies flag off the resolved frame's bus.
 	ibValueFrame* frame = nullptr;
 	if (leaf.ConvertToValue(frame) && frame != nullptr) {
-		auto actions = frame->GetActionCollection(frame->GetTypeForm());
+		auto actions = frame->GetStandardCommands(frame->GetTypeForm());
 		outCaption = actions.GetCaptionByID((ibActionID)desc.GetLeaf());
 		const ibPictureDescription pic = actions.GetPictureByID((ibActionID)desc.GetLeaf());
 		outIcon = pic.IsEmptyPicture() ? wxNullBitmap : ibBackendPicture::CreatePicture(pic, gate->GetMetaData());

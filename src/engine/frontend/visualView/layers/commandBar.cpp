@@ -164,7 +164,7 @@ std::vector<ibCommandSourceEntry> GatherFormCommands(ibValueForm* form)
 	// ONE section but SUB-grouped by source (the form vs each table). The form's actions carry [actionId]; a
 	// table's carry [table-source, actionId] so a click lands on THAT table.
 	{
-		auto actions = form->GetActionCollection(form->GetTypeForm());
+		auto actions = form->GetStandardCommands(form->GetTypeForm());
 		for (unsigned int i = 0; i < actions.GetCount(); i++) {
 			const ibActionID id = actions.GetID(i);
 			if (id != wxNOT_FOUND) {
@@ -191,7 +191,7 @@ std::vector<ibCommandSourceEntry> GatherFormCommands(ibValueForm* form)
 		const std::vector<ibSourceHop>& srcPath = factory->GetSourceDesc().GetPath();
 		if (srcPath.empty())
 			continue;
-		auto actions = table->GetActionCollection(table->GetTypeForm());
+		auto actions = table->GetStandardCommands(table->GetTypeForm());
 		const wxString tableName = table->GetControlName();
 		for (unsigned int i = 0; i < actions.GetCount(); i++) {
 			const ibActionID id = actions.GetID(i);
@@ -280,7 +280,7 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 	// (Re)build from scratch so toggling AutoFill stays in sync (a stale auto-filled set must not
 	// linger). AutoFill contributes the owner's standard actions; the manual child items are ALWAYS
 	// appended on top (else a just-added command is invisible while AutoFill is on — the default).
-	// NB: ibActionCollection is a PROTECTED nested type of ibActionDataObject — it can't be named,
+	// NB: ibStandardCommandSet is a PROTECTED nested type of ibStandardCommandSource — it can't be named,
 	// so every use goes through `auto` (deduced, never spelled). That also blocks hoisting it into
 	// a named helper/param, so the manual branch fetches it per action-bound item (few in practice).
 	m_commands.clear();
@@ -291,7 +291,7 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 	const bool viewOnly = m_owner != nullptr && m_owner->GetOwnerForm() != nullptr
 		&& m_owner->GetOwnerForm()->IsViewOnly();
 	if (IsAutoFill() && m_owner != nullptr) {
-		auto actions = m_owner->GetActionCollection(m_owner->GetTypeForm());
+		auto actions = m_owner->GetStandardCommands(m_owner->GetTypeForm());
 		for (unsigned int i = 0; i < actions.GetCount(); i++) {
 			const ibActionID id = actions.GetID(i);
 			if (id == wxNOT_FOUND) {

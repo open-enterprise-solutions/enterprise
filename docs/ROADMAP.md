@@ -118,7 +118,7 @@ along than input.
 
 ### 4.3 Report — no platform generate action
 
-`backend/metaCollection/partial/dataReportAction.cpp`: `GetActionCollection` returns an
+`backend/metaCollection/partial/dataReportAction.cpp`: `GetStandardCommands` returns an
 empty collection, `CallAsAction` has an empty body. Running a report is entirely the object
 module's script. See [report-engine.md § 5](report-engine.md).
 

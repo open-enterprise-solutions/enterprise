@@ -22,7 +22,7 @@ enum
 	enTableViewMode,
 };
 
-ibValueModelTableBox::ibActionCollection ibValueModelTableBox::GetActionCollection(const ibFormID& formType)
+ibValueModelTableBox::ibStandardCommandSet ibValueModelTableBox::GetStandardCommands(const ibFormID& formType)
 {
 	// Resolve the model: the created one, or (unbound path) the bound form-attribute's model.
 	ibValuePtr<ibValueModel> resolved;
@@ -32,9 +32,9 @@ ibValueModelTableBox::ibActionCollection ibValueModelTableBox::GetActionCollecti
 		model = resolved;
 
 	if (model == nullptr)
-		return ibActionCollection();
+		return ibStandardCommandSet();
 
-	ibActionCollection actionData(this);
+	ibStandardCommandSet actionData(this);
 
 	// 1) Select — always FIRST, only when this table is a picker (the TableBox's own affordance). View-state,
 	//    not a data change → stays live in a view-only form.

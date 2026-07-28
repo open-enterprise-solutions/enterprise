@@ -15,7 +15,7 @@ bool ibValueToolBarItem::GetToolAction(ibEventAction* evtList)
 	if (toolbar == nullptr) return false;
 	ibValueFrame* sourceElement = toolbar->GetActionSrc() != wxNOT_FOUND ? FindControlByID(toolbar->GetActionSrc()) : nullptr;
 	if (sourceElement != nullptr) {
-		const ibActionCollection& data = sourceElement->GetActionCollection(sourceElement->GetTypeForm());
+		const ibStandardCommandSet& data = sourceElement->GetStandardCommands(sourceElement->GetTypeForm());
 		for (unsigned int i = 0; i < data.GetCount(); i++) {
 			const ibActionID& id = data.GetID(i);
 			if (id == wxNOT_FOUND) continue;

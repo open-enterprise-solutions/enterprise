@@ -267,7 +267,7 @@ protected:
 public:
 
 	//support actionData
-	virtual ibActionCollection GetActionCollection(const ibFormID& formType);
+	virtual ibStandardCommandSet GetStandardCommands(const ibFormID& formType);
 	virtual void CallAsAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm);
 
 protected:

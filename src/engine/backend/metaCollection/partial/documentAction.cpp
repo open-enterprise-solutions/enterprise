@@ -16,9 +16,9 @@ enum action {
 	eMarkAsDelete,
 };
 
-ibValueRecordDataObjectDocument::ibActionCollection ibValueRecordDataObjectDocument::GetActionCollection(const ibFormID &formType)
+ibValueRecordDataObjectDocument::ibStandardCommandSet ibValueRecordDataObjectDocument::GetStandardCommands(const ibFormID &formType)
 {
-	ibActionCollection documentActions(this);
+	ibStandardCommandSet documentActions(this);
 	documentActions.AddAction(wxT("PostAndClose"), _("Post and close"), g_picPostCLSID, true, eDefActionAndClose);
 	documentActions.AddAction(wxT("Post"), _("Post"), g_picPostCLSID, true, ePost);
 	documentActions.AddAction(wxT("ClearPosting"), _("Clear posting"), g_picSaveCLSID, true, eClearPosting);

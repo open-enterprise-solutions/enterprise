@@ -11,7 +11,7 @@
 
 #include "backend/system/value/valueType.h"
 
-#include "backend/actionInfo.h"
+#include "backend/standardCommand.h"
 #include "backend/tabularDataObject.h"   // ibTabularDataObject — ibValueModel IS one (the table hop gate)
 
 // L5-1 declarative composer — held BY VALUE (mutable ibDataDBComposer m_composer). The cycle that used to
@@ -78,7 +78,7 @@ protected:
 
 //Common entity for tables, list, table trees
 class BACKEND_API ibValueModel : public ibValueDynamicMembers,
-	public ibTabularCommandDataObject, public ibTabularDataObject {
+	public ibStandardCommandTabular, public ibTabularDataObject {
 	public:
 
 	// The table gate (see ibValue::IsTableValue): every model IS a tabular source. Declared
@@ -693,7 +693,7 @@ public:
 	// and the header click drives the composer ORDER BY on the front (tablebox OnColumnClick). (col unused now.)
 	virtual bool IsSortable(unsigned int col) const { (void)col; return true; }
 
-	// --- Command store (ibTabularCommandDataObject) ---------------------------------------------------------------
+	// --- Command store (ibStandardCommandTabular) ---------------------------------------------------------------
 	// The model is a STORE of commands: it lists its OWN set (GetCommandCollection) and executes one by id against the
 	// FRONT-passed current row (CallAsCommand). No action composition, no widget pull — the TableBox merges the
 	// set into the real action it hands the command bar and passes the current row on execute. Base = nothing;

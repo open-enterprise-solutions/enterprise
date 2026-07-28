@@ -503,37 +503,37 @@ ABOVE the content. The subsystem lives in `frontend/visualView/` (`layerObject.{
 
 ### Command provider — the model stores, the view adapts, the form wraps
 
-The toolbar's commands flow through ONE interface — `ibActionDataObject` (`GetActionCollection` +
-`CallAsAction`, `actionInfo.h`) — and `ibValueFrame` IS-A one, so every control and the form itself
+The toolbar's commands flow through ONE interface — `ibStandardCommandSource` (`GetStandardCommands` +
+`CallAsAction`, `standardCommand.h`) — and `ibValueFrame` IS-A one, so every control and the form itself
 already carry the pair. Three roles compose it:
 
-- **The model is a dumb command STORE** — `ibTabularCommandDataObject` (`GetCommandCollection(formType, out)` +
-  `CallAsCommand(id, {selection, anchor}, form)`, `actionInfo.h`). It lists its OWN narrow set as `ibCommandItem`
+- **The model is a dumb command STORE** — `ibStandardCommandTabular` (`GetCommandCollection(formType, out)` +
+  `CallAsCommand(id, {selection, anchor}, form)`, `standardCommand.h`). It lists its OWN narrow set as `ibCommandItem`
   records (the SAME record the action collection lays out — a default item, `m_act_id == wxNOT_FOUND`, is
   a separator) and runs one by id against the FRONT-passed rows (delete / edit use the selection; a CREATE
   parents a new element under the anchor). No action composition, no widget
   pull. There is NO shared base command enum — each model class defines its OWN commands (a value-table /
   tabular section its Add / Copy / Edit / Delete inline; the list family a file-local enum in
   `objectListAction.cpp`, adding MarkAsDelete / AddFolder; an enum list nothing).
-- **The tablebox is the ADAPTER** — it turns the dumb model into a full `ibActionDataObject`.
-  `GetActionCollection` composes Select (choice mode, first) + the model's `GetCommandCollection` + the
+- **The tablebox is the ADAPTER** — it turns the dumb model into a full `ibStandardCommandSource`.
+  `GetStandardCommands` composes Select (choice mode, first) + the model's `GetCommandCollection` + the
   view-state band (Filter / FilterByColumn / FilterClear / ViewMode — the TableBox's own high-base ids,
   `20000+`). `CallAsAction` reads the command rows off the live control — the selection (`m_tableCurrentLine`) plus the create anchor (per view mode: hierarchy = the drilled-into folder, tree = the folder the cursor stands in, list = none) — and
   routes: a band id → `Command_*` (driven straight on the widget); any other id →
   `model->CallAsCommand(id, {selection, anchor}, form)` (the object commands). The model never sees the widget; the view
   never composes what the model owns.
-- **The form is a WRAPPER** — `GetActionCollection` surfaces its command PROVIDER's set + the form chrome
+- **The form is a WRAPPER** — `GetStandardCommands` surfaces its command PROVIDER's set + the form chrome
   (Close / Update / Help / Change); `CallAsAction` handles the chrome ids, else forwards to the provider.
   `GetCommandProvider()` (`formAction.cpp`) resolves it: a **list form** — the control that reports
   `IsMainSourceBound()`, found by `FindMainCommandView` (a recursive walk asking the BASE
   `ibValueFrame::IsMainSourceBound` virtual — `false` by default, the tablebox overrides it, so no
   per-type cast); an **object form** — the source object itself
-  (`dynamic_cast<ibActionDataObject*>(GetSourceObject())`: a catalog element / document IS both the data
-  source and its own command interface). The form never touches the dumb `ibTabularCommandDataObject`.
+  (`dynamic_cast<ibStandardCommandSource*>(GetSourceObject())`: a catalog element / document IS both the data
+  source and its own command interface). The form never touches the dumb `ibStandardCommandTabular`.
 
 **Edit = a front-intercepted command (a flag bit baked into the id).** Inline editing is a pure FRONT
 operation, so the Edit command is not round-tripped through the backend to call back. A model bakes a flag
-bit into its Edit id in the enum — `constexpr ibActionID eStartEditingFlag = 0x1000` (`actionInfo.h`), so
+bit into its Edit id in the enum — `constexpr ibActionID eStartEditingFlag = 0x1000` (`standardCommand.h`), so
 `eEditValue = <n> | eStartEditingFlag`; for the MODEL it is just an ordinary command value (it emits
 `eEditValue` and dispatches `case eEditValue` unaware of the flag). The tablebox's `CallAsAction` tests the bit
 on EVERY id it forwards to `CallAsCommand` AS-IS (the model's Edit case carries the flag too — a list opens its

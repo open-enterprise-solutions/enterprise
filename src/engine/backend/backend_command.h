@@ -29,7 +29,7 @@ public:
 	// ibBackendCommandSender, so the walk continues on it). Gateway bool: false = the id is not a command here.
 	// Default: this object vends no command (the twin of GetValueBySourceHop's default).
 	// NOT const (unlike GetValueBySourceHop): a command source can be a LIVE frontend form, and telling whether a hop
-	// is one of its standard actions goes through GetActionCollection, which owns a mutable back-pointer to the form.
+	// is one of its standard actions goes through GetStandardCommands, which owns a mutable back-pointer to the form.
 	// The walk still MUTATES NOTHING here — command EXECUTION-const lives on ibBackendCommandItem::Execute (const).
 	virtual bool GetCommandByHop(const ibCommandHop& hop, ibValue& out) { return false; }
 

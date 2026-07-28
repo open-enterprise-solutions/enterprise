@@ -375,3 +375,7 @@ A few independent fixes landed alongside option A:
   is part of that crash.
 - **Arrow syntax** `(x) => expr` — pure parser sugar over
   `Function/EndFunction`. Add when usage pressure surfaces it.
+
+**See also:** [event-dispatcher.md](event-dispatcher.md) — a lambda assigned to an event (or a command's Action) is the
+"lambda as an event handler" consumer of anonymous functions: `ibValueFunction` itself implements the event-dispatch
+facet, so a runtime-assigned lambda fires through the same `CallAsEvent` door as a classic named handler.

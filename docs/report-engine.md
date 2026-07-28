@@ -139,7 +139,7 @@ candidate for the restructuring plan, not a design statement.
 ## 5. Honest remainder
 
 - **No platform-level report action.** `dataReportAction.cpp` is a stub in the literal
-  sense: `GetActionCollection` returns an empty `ibActionCollection(this)` and
+  sense: `GetStandardCommands` returns an empty `ibStandardCommandSet(this)` and
   `CallAsAction` has an empty body. There is **no built-in "Generate" command** — running
   a report is whatever the report's object module script does. If a platform-level
   generate action is wanted, this file is where it goes.

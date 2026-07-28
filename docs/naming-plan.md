@@ -215,7 +215,7 @@ The worst category, because the name is a **placeholder**: it tells a reader the
 |---|---|
 | `backend/valueInfo.h` | `ibReference`, `ibValueDataObject` |
 | `backend/moduleInfo.h` | `ibRuntimeRoot`, `ibRuntimeModuleDataObject` |
-| `backend/actionInfo.h` | `ibActionDescription`, `ibCommandItem`, `ibActionCollection` … (6) |
+| `backend/standardCommand.h` | `ibStandardCommandDescription`, `ibCommandItem`, `ibStandardCommandSet` … (6) |
 | `backend/tableInfo.h` | `ibValueModel`, `ibDataViewModelProvider`, `ibVariantDataValue` … (**20**) |
 | `backend/roleHelper.h` | `ibRole`, `ibRoleUserInfo`, `ibAccessObject` |
 | `backend/interfaceHelper.h` | `ibInterfaceObject` (+ the section enums) |
@@ -225,7 +225,7 @@ The worst category, because the name is a **placeholder**: it tells a reader the
 Suggested direction (needs a read each, so these are proposals, not decisions):
 `valueInfo.h` → `reference.h`; `moduleInfo.h` → `runtimeModule.h`;
 `roleHelper.h` → `role.h`; `interfaceHelper.h` → `interfaceObject.h`;
-`lockTypes.h` → `lockItem.h`; `actionInfo.h` → `action.h`.
+`lockTypes.h` → `lockItem.h`; `standardCommand.h` → `action.h`.
 
 ### 7.2 Names that describe the wrong thing
 

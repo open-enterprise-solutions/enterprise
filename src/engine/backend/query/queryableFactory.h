@@ -24,7 +24,7 @@
 #include "backend/backend_core.h"     // core prelude (wx set up first) — provides ibClassID + BACKEND_API in order
 #include "backend/appDataCtorToken.h" // ib::AppDataCtorToken (owner-only construction)
 #include "backend/compiler/value.h"   // ibValue::GetNameObjectFromID (the metaobject's registered name = the namespace token)
-#include "backend/actionInfo.h"        // ibCommandItem / ibFormID / ibActionID — the descriptor's command-surface signatures
+#include "backend/standardCommand.h"        // ibCommandItem / ibFormID / ibActionID — the descriptor's command-surface signatures
 #include "backend/srcDataObject.h"     // ibSourceDataObject::ibSourceExplorer — the columns the source fills
 #include "backend/uniqueKey.h"         // ibUniqueKey — GetItemKey returns one BY VALUE (default = empty)
 

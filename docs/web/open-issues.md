@@ -405,7 +405,7 @@ Resolution chain in `ibValueToolBarItem::Create` web branch:
    tool is at least addressable in the DOM ("MainToolbarClose").
 
 The collection is populated in `ibValueToolbar::Create` web branch
-via `sourceElement->GetActionCollection(typeForm)`. Source
+via `sourceElement->GetStandardCommands(typeForm)`. Source
 resolution: prefer saved `m_actSource`, fall back to `GetOwnerForm()`
 when the property is `wxNOT_FOUND` — test forms saved by older
 Designer versions skip the SetActionSrc call (desktop's BuildForm

@@ -5,9 +5,9 @@
 
 #include "dataReport.h"
 
-ibValueRecordDataObjectReport::ibActionCollection ibValueRecordDataObjectReport::GetActionCollection(const ibFormID &formType)
+ibValueRecordDataObjectReport::ibStandardCommandSet ibValueRecordDataObjectReport::GetStandardCommands(const ibFormID &formType)
 {
-	return ibActionCollection(this);
+	return ibStandardCommandSet(this);
 }
 
 void ibValueRecordDataObjectReport::CallAsAction(const ibActionID &action, ibBackendValueForm *srcForm)

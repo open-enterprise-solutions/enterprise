@@ -3,7 +3,7 @@
 
 #include <vector>
 #include "frontend/visualView/layerObject.h"   // ibValueLayerObject — the common runtime+property base
-#include "backend/actionInfo.h"          // ibActionID, ibPictureDescription, ibActionDescription
+#include "backend/standardCommand.h"          // ibActionID, ibPictureDescription, ibStandardCommandDescription
 #include "backend/commandDescription.h"  // ibCommandDescription — the command-hop path a button binds to
 #include "backend/propertyManager/property/propertyCommandSource.h" // ibPropertyCommandSource — the button's command SOURCE property (real picker)
 #include "backend/backend_command.h"                                // ibBackendCommandReceiver — a bar item is a receiver (via the door it inherits)

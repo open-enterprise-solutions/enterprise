@@ -820,9 +820,9 @@ void ibValueModelTableBox::OnPropertyCreated(ibProperty* /*property*/) {}
 bool ibValueModelTableBox::OnPropertyChanging(ibProperty* /*property*/, const wxVariant& /*newValue*/) { return true; }
 void ibValueModelTableBox::OnPropertyChanged(ibProperty* /*property*/, const wxVariant& /*oldValue*/, const wxVariant& /*newValue*/) {}
 
-ibValueModelTableBox::ibActionCollection ibValueModelTableBox::GetActionCollection(const ibFormID& /*formType*/)
+ibValueModelTableBox::ibStandardCommandSet ibValueModelTableBox::GetStandardCommands(const ibFormID& /*formType*/)
 {
-	return ibActionCollection();
+	return ibStandardCommandSet();
 }
 void ibValueModelTableBox::CallAsAction(const ibActionID& /*lNumAction*/, ibBackendValueForm* /*srcForm*/) {}
 

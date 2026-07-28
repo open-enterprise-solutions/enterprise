@@ -45,6 +45,7 @@ enterprise/
 │   ├── table-model.md        # tables/lists/trees — ibDataViewModel + ibValueModel + RunComposerPage (fetch = web road)
 │   ├── report-engine.md      # Report metaobject + spreadsheet document (runtime shape)
 │   ├── command-interface.md  # Interface metaobject = subsystem + command bar
+│   ├── event-dispatcher.md   # events hold a named handler OR a lambda — one CallAsEvent door, polymorphic dispatch
 │   ├── view-only.md          # read-only forms — rights matryoshka, control read-only, command greying
 │   ├── property-system.md    # ibPropertyObject + object inspector — the skeleton (5 surfaces)
 │   ├── metadata-tree.md      # Designer navigator + external reports/processors

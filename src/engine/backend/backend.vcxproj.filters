@@ -554,7 +554,7 @@
     <ClInclude Include="moduleInfo.h" />
     <ClInclude Include="model.h" />
     <ClInclude Include="valueInfo.h" />
-    <ClInclude Include="actionInfo.h" />
+    <ClInclude Include="standardCommand.h" />
     <ClInclude Include="compiler\value.h">
       <Filter>compiler</Filter>
     </ClInclude>

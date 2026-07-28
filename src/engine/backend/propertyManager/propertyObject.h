@@ -6,6 +6,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 class BACKEND_API ibPropertyObject;
+class BACKEND_API ibEventDispatcher;   // backend/eventDispatcher.h — the facet a concrete event exposes
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -284,6 +285,12 @@ protected:
 	ibEvent(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const wxArrayString& args, const wxVariant& value) :ibBackendProperty(cat, name, label, helpString, value), m_args(args) { InitEvent(cat, value); }
 public:
 	const wxArrayString& GetArgs() const { return m_args; }
+
+	// THE dispatcher this event fires through — PURE: every concrete event decides HOW it dispatches (ibEventControl
+	// vends a named-event / lambda value; a plain no-dispatch event returns nullptr). CallAsEvent asks for this and
+	// calls Dispatch, staying agnostic. Typed on the base -> no cast at the fire site.
+	virtual ibEventDispatcher* GetDispatcher() const = 0;
+
 protected:
 	wxArrayString m_args;
 };

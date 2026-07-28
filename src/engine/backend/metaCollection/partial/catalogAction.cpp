@@ -14,9 +14,9 @@ enum
 	eMarkAsDelete,
 };
 
-ibValueRecordDataObjectCatalog::ibActionCollection ibValueRecordDataObjectCatalog::GetActionCollection(const ibFormID &formType)
+ibValueRecordDataObjectCatalog::ibStandardCommandSet ibValueRecordDataObjectCatalog::GetStandardCommands(const ibFormID &formType)
 {
-	ibActionCollection catalogActions(this);
+	ibStandardCommandSet catalogActions(this);
 	catalogActions.AddAction(wxT("SaveAndClose"), _("Save and close"), g_picSaveCLSID, true, eDefActionAndClose);
 	catalogActions.AddAction(wxT("Save"), _("Save"), g_picSaveCLSID, true, eSave);
 	catalogActions.AddSeparator();

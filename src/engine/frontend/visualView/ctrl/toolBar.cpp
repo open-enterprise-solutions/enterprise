@@ -114,9 +114,9 @@ void ibValueToolbar::Update(wxObject* wxobject, ibVisualHost* visualHost)
 			? FindControlByID(id)
 			: GetOwnerForm();
 		if (sourceElement != nullptr)
-			m_actionArray = sourceElement->GetActionCollection(sourceElement->GetTypeForm());
+			m_actionArray = sourceElement->GetStandardCommands(sourceElement->GetTypeForm());
 		else
-			m_actionArray = ibActionCollection();
+			m_actionArray = ibStandardCommandSet();
 	}
 
 	UpdateWindow(toolbar);

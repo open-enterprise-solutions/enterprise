@@ -137,7 +137,7 @@ private:
 
 #include "backend/moduleInfo.h"
 
-class BACKEND_API ibValueRecordDataObjectConstant : public ibValueDynamicMembers, public ibActionDataObject,
+class BACKEND_API ibValueRecordDataObjectConstant : public ibValueDynamicMembers, public ibStandardCommandSource,
 	public ibSourceDataObject, public ibRuntimeModuleDataObject {
 	public:
 	virtual bool InitializeObject(const ibValueRecordDataObjectConstant* source = nullptr);
@@ -243,7 +243,7 @@ public:
 #pragma endregion
 
 	//support actionData
-	virtual ibActionCollection GetActionCollection(const ibFormID& formType);
+	virtual ibStandardCommandSet GetStandardCommands(const ibFormID& formType);
 	virtual void CallAsAction(const ibActionID& lNumAction, ibBackendValueForm* srcForm);
 
 	//default showing

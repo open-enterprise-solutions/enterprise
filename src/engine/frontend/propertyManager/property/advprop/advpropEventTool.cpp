@@ -42,7 +42,7 @@ ibPGEventToolProperty::ibPGEventToolProperty(const wxString& label, const wxStri
 	m_choices.Assign(ch);
 	m_value = wxVariant(0L);
 	
-	const ibActionDescription& actionDesc = dataAction->GetValueAsActionDesc();
+	const ibStandardCommandDescription& actionDesc = dataAction->GetValueAsActionDesc();
 	if (actionDesc.GetSystemAction() != wxNOT_FOUND) {
 		for (unsigned int i = 0; i < m_choices.GetCount(); i++) {
 			const int val = m_choices.GetValue(i);
@@ -73,7 +73,7 @@ wxString ibPGEventToolProperty::ValueToString( wxVariant& value, wxPGPropValForm
 {
 	ibVariantDataAction* dataAction = property_cast(value, ibVariantDataAction);
 	wxASSERT(dataAction);
-	const ibActionDescription& actionDesc = dataAction->GetValueAsActionDesc();
+	const ibStandardCommandDescription& actionDesc = dataAction->GetValueAsActionDesc();
 
 	for (unsigned int i = 0; i < m_choices.GetCount(); i++) {
 		const int sel_val = m_choices.GetValue(i);

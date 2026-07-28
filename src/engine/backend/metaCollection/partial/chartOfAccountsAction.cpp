@@ -7,9 +7,9 @@
 
 enum { eDefActionAndClose = 1, eSave, eCopy, eGenerate, eMarkAsDelete };
 
-ibValueRecordDataObjectChartOfAccounts::ibActionCollection ibValueRecordDataObjectChartOfAccounts::GetActionCollection(const ibFormID& formType)
+ibValueRecordDataObjectChartOfAccounts::ibStandardCommandSet ibValueRecordDataObjectChartOfAccounts::GetStandardCommands(const ibFormID& formType)
 {
-	ibActionCollection actions(this);
+	ibStandardCommandSet actions(this);
 	actions.AddAction(wxT("SaveAndClose"), _("Save and close"), g_picSaveCLSID, true, eDefActionAndClose);
 	actions.AddAction(wxT("Save"), _("Save"), g_picSaveCLSID, true, eSave);
 	actions.AddSeparator();

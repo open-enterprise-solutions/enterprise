@@ -334,8 +334,8 @@ void ibValueModelTableBox::OnCommandMenu(wxCommandEvent& event)
 
 void ibValueModelTableBox::OnContextMenu(ibDataViewEvent& event)
 {
-	const ibActionCollection& actionData =
-		ibValueModelTableBox::GetActionCollection(m_formOwner->GetTypeForm());
+	const ibStandardCommandSet& actionData =
+		ibValueModelTableBox::GetStandardCommands(m_formOwner->GetTypeForm());
 
 	// A view-only form greys the DATA-MODIFYING entries (Add / Copy / Edit / Delete) here too — the context
 	// menu builds straight from the action collection, so it must honour the same modify flag as the toolbar

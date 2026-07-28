@@ -75,7 +75,7 @@ void ibValueToolbar::OnTool(wxCommandEvent& event)
 	ibFrontendVisualEditorNotebook* const visualEditor = g_visualHostContext;
 #endif
 
-	const ibActionDescription& actionDesc = foundedToolControl->GetAction();
+	const ibStandardCommandDescription& actionDesc = foundedToolControl->GetAction();
 	const wxString& strAction = actionDesc.GetCustomAction();
 
 	// Source resolution: explicit m_actSource wins; otherwise fall back

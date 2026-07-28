@@ -1,18 +1,18 @@
-#ifndef __ACTION_INFO_H__
-#define __ACTION_INFO_H__
+#ifndef __STANDARD_COMMAND_H__
+#define __STANDARD_COMMAND_H__
 
-struct ibActionDescription {
+struct ibStandardCommandDescription {
 
 	ibActionID m_lAction;
 	wxString m_strAction;
 
-	ibActionDescription(const ibActionID& lAction) : m_lAction(lAction), m_strAction() {}
-	ibActionDescription(const wxString& strAction) : m_lAction(wxNOT_FOUND), m_strAction(strAction) {}
+	ibStandardCommandDescription(const ibActionID& lAction) : m_lAction(lAction), m_strAction() {}
+	ibStandardCommandDescription(const wxString& strAction) : m_lAction(wxNOT_FOUND), m_strAction(strAction) {}
 
 	wxString GetCustomAction() const { return m_strAction; }
 	ibActionID GetSystemAction() const { return m_lAction; }
 
-	bool operator == (const ibActionDescription& rhs) const {
+	bool operator == (const ibStandardCommandDescription& rhs) const {
 		if (m_lAction == wxNOT_FOUND)
 			return m_strAction == rhs.m_strAction;
 		return m_lAction == rhs.m_lAction;
@@ -24,8 +24,8 @@ struct ibActionDescription {
 class ibActionDescriptionMemory {
 public:
 	// node form
-	static bool ReadNode(const class ibDataValue& value, ibActionDescription& actionDesc);
-	static bool WriteNode(class ibDataValue& value, const ibActionDescription& actionDesc);
+	static bool ReadNode(const class ibDataValue& value, ibStandardCommandDescription& actionDesc);
+	static bool WriteNode(class ibDataValue& value, const ibStandardCommandDescription& actionDesc);
 };
 
 #include "backend_picture.h"
@@ -55,10 +55,10 @@ struct ibCommandItem {
 	ibCommandItem& SetCreateInForm(bool value)   { m_createInForm   = value;    return *this; }
 };
 
-class ibActionDataObject {
+class ibStandardCommandSource {
 protected:
 
-	class ibActionCollection {
+	class ibStandardCommandSet {
 
 		ibValue* m_srcData;
 		std::vector<ibCommandItem> m_vecAction;
@@ -91,7 +91,7 @@ protected:
 
 	public:
 
-		ibActionCollection(ibValue* srcData = nullptr) : m_srcData(srcData) {}
+		ibStandardCommandSet(ibValue* srcData = nullptr) : m_srcData(srcData) {}
 
 		// ---- append at the end (returns the item BY REF — chain .SetModify(...) etc right after) -------------
 
@@ -140,9 +140,9 @@ protected:
 		}
 
 		// Append every entry (separators included) of another collection onto this one. The reusable copy
-		// primitive both the base AppendActionCollection and the list-model GetActionCollection overrides route
+		// primitive both the base AppendActionCollection and the list-model GetStandardCommands overrides route
 		// through, instead of each re-implementing the same id-by-id copy loop.
-		void AppendFrom(const ibActionCollection& data) {
+		void AppendFrom(const ibStandardCommandSet& data) {
 			m_vecAction.insert(m_vecAction.end(), data.m_vecAction.begin(), data.m_vecAction.end());
 		}
 
@@ -199,18 +199,18 @@ protected:
 public:
 
 	// Polymorphic base (pure-virtual methods below) — a virtual destructor so deleting a derived object
-	// through an ibActionDataObject* runs the derived dtor (else UB / leak). Mostly a mixin (ibValueFrame
+	// through an ibStandardCommandSource* runs the derived dtor (else UB / leak). Mostly a mixin (ibValueFrame
 	// IS-A one), but correctness shouldn't hinge on nobody ever owning it through this pointer.
-	virtual ~ibActionDataObject() = default;
+	virtual ~ibStandardCommandSource() = default;
 
 	//support action
-	virtual ibActionCollection GetActionCollection(const ibFormID& formType) = 0;
+	virtual ibStandardCommandSet GetStandardCommands(const ibFormID& formType) = 0;
 
 	// execute action
 	virtual void CallAsAction(const ibActionID& lNumAction, class ibBackendValueForm* srcForm) = 0;
 };
 
-// A simplified, STANDALONE action-analog that lives ON THE MODEL — the model has NO ibActionDataObject of its
+// A simplified, STANDALONE action-analog that lives ON THE MODEL — the model has NO ibStandardCommandSource of its
 // own; it is just a command STORE. Two jobs: (1) hand out its command set (the SAME ibCommandItem the action
 // collection uses — one unified record; a default item, m_actionId == wxNOT_FOUND, is a separator), (2) execute a
 // command by id against the CURRENT ROW + form. The FRONT (TableBox) merges the set into the real action it
@@ -230,9 +230,9 @@ public:
 // must likewise keep bit 12 clear.
 constexpr ibActionID eStartEditingFlag = 0x1000;
 
-class ibTabularCommandDataObject {
+class ibStandardCommandTabular {
 public:
-	virtual ~ibTabularCommandDataObject() {}
+	virtual ~ibStandardCommandTabular() {}
 	virtual void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const = 0;
 	// Runs the command by id against the CURRENT ROW; srcForm is the form that invoked it. (The Edit command DOES
 	// arrive here — its id still carries eStartEditingFlag, baked into the model's enum — so a list opens its object
