@@ -101,7 +101,7 @@ protected:
 	virtual void ContributeTables(ibSchemaSnapshot& out) const override;
 
 	//get default form 
-	virtual ibBackendValueForm* GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) {
+	virtual ibBackendValueForm* GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) const {
 
 		if (cmdType == ibInterfaceCommandType::ibInterfaceCommandType_Create) {
 			return GetObjectForm();

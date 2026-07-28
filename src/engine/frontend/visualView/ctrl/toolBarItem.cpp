@@ -385,7 +385,7 @@ bool ibValueToolBarItem::ReadData(const ibDataNode& node)
 	m_propertyEnabled->ReadNodeValue(node.GetProperty(m_propertyEnabled->GetName()));
 	m_eventAction->ReadNodeValue(node.GetProperty(m_eventAction->GetName()));
 
-	//events 
+	//events
 	m_eventAction->ReadNodeValue(node.GetProperty(m_eventAction->GetName()));
 	return ibValueControl::ReadData(node);
 }
@@ -400,7 +400,7 @@ bool ibValueToolBarItem::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyEnabled->GetName(), m_propertyEnabled->GetNodeValue());
 	node.SetProperty(m_eventAction->GetName(), m_eventAction->GetNodeValue());
 
-	//events 
+	//events
 	node.SetProperty(m_eventAction->GetName(), m_eventAction->GetNodeValue());
 	return ibValueControl::WriteData(node);
 }

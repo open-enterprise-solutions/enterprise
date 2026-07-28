@@ -4,10 +4,14 @@ Architecture proposal for OES register storage that would move the
 "totals" maintenance burden into the database via triggers, while
 preserving the read latency profile of the classic denormalized
 totals-table pattern (as used by comparable enterprise platforms).
-Status: **proposal — design discussed 2026-04-30, NOTHING implemented
-in code** (verified 2026-06-19: no `totals_*`/`mov_*` tables, no
-trigger generation, no `ibRegisterTotalsStrategy`, no totals views, no
-`RebuildTotals`). Registers today persist movement lines only — there
+Status: **proposal — design discussed 2026-04-30, extended 2026-07-22,
+NOTHING implemented in code** (verified 2026-06-19: no `totals_*`/`mov_*`
+tables, no trigger generation, no `ibRegisterTotalsStrategy`, no totals
+views, no `RebuildTotals`). The 2026-07-22 session added the engine-
+integration design (§ *Engine integration* below): the source/derived
+table classification driving L3-2/L3-3/L3-4, the per-driver
+materialization dictionary, reconciliation-by-cheapest-op, and totals-row
+sharding as a per-register mode. Still design-only. Registers today persist movement lines only — there
 is no totals/aggregation layer yet, denormalized or otherwise. This
 doc describes the *intended* design for when registers/reporting get
 built; treat every "OES does X" below as "OES would do X under this
@@ -81,6 +85,177 @@ For the runtime, `totals_X` is implementation detail. Views are the
 public read API. `mov_X` is the public write API. Strategy can swap
 later (live aggregation, partitioning, MSSQL indexed views, etc.)
 without touching runtime code.
+
+---
+
+## Engine integration (design extension — 2026-07-22)
+
+The sketch above is generic. This section is how the totals layer plugs into the OES query
+engine (L1–L5, see [query-engine-layers.md](query-engine-layers.md)) so that the read path
+stays coherent and the maintenance stays out of C++.
+
+### 1. One bit: source vs derived
+
+Every table a metaobject contributes (via its `ContributeTables` snapshot) is classified
+**source** or **derived**. This single classification drives three floors correctly:
+
+| Table | Class | L3-2 (structure) | L3-3 (data mover) | L3-4 (regeneration) | Read |
+|---|---|---|---|---|---|
+| `mov_X` | **source** | generate + migrate | round-trip (dump **and** load) | — | physical scan |
+| `totals_X` + triggers + views | **derived** | generate + migrate | **never touched** | regenerate | co-locatable queryable |
+
+`totals_X` is *derived state*: never dumped (regenerated at the destination), never migrated
+(dropped + regenerated), never hand-maintained (the trigger owns it). One bit — "derived" —
+says all three: *don't move it, regenerate it, keep it consistent by trigger.*
+
+### 2. Three actors, three verbs — do not conflate them
+
+- **Trigger — *updates*.** Per-movement delta, in the DB, TX-atomic, **unbypassable**
+  (fires for any writer to `mov_X`: runtime, plugin, script, restore), **never invoked**.
+  This is steady state.
+- **L3-4 — *regenerates*.** Rebuilds totals from source, **invoked** on discrete events
+  (Apply / structure-change, bulk import, migration). Not per-movement. **Not a cadence.**
+- **L3-2 — *builds structure*.** Generates and migrates the whole bundle: `mov_X`, `totals_X`,
+  the three triggers, the three views.
+
+The seam that rusts: "update" is the trigger's job, never L3-4's. The moment L3-4 (or the
+compute server) runs *per-movement* totals updates, you are back in the bypassable
+managed-code pattern and drift returns. Keep the verbs apart: **trigger updates, L3-4
+regenerates.**
+
+### 3. Read side — totals become an ordinary queryable
+
+Reads go through `vw_balance_X` / `vw_turnover_X` / `vw_slice_last_X`. The register's queryable
+points at the view, so `IsComputedInRam()` flips **false** (was true for the RAM-computed
+`ComputeRows` path). Now totals are an **ordinary physical co-locatable source**: they JOIN,
+UNION, temp-promote, keyset-page and RLS-restrict through the *existing* L3 machinery, with no
+special case above the view. This is the migration in one seam: `IsComputedInRam → false`,
+`GetQueryable → view`; the read path (L3-1/L4/L5) does not change.
+
+**Keep the view thin** — `SELECT … FROM totals_X`, not `GROUP BY` over `mov_X`. A thin view
+co-locates and stays O(log N); a fat live-aggregation view JOINs syntactically but recomputes
+every read and does not break the scale ceiling. JOINability comes from the thin table shape;
+speed comes from the trigger-maintained table under it. Two separable properties, both needed.
+
+### 4. The materialization dictionary — a *second* per-driver dictionary
+
+The trigger bodies are imperative and **per-engine divergent in structure**, not just in
+spelling. They therefore do **not** fit the L2 **query** dialect dictionary (which substitutes
+tokens over a *shared* structure — `LIMIT`, quoting, type mapping). Forcing them into L2 would
+either pollute the query IR with imperative nodes (`RETURN`/`IF`/`NEW`/`OLD`) or add a raw-SQL
+escape hatch that breaks L2's "never raw SQL" invariant.
+
+Instead, each driver vends a **second dictionary — the materialization dialect** — parallel to
+`GetDialect()`:
+
+- **L2 query dictionary** renders the *declarative skeleton*: `CREATE TABLE mov_X`/`totals_X`,
+  indexes, the view's inner `SELECT`, the rebuild `INSERT … SELECT … GROUP BY`, `ALTER`.
+- **Materialization dictionary** renders the *imperative delta*: trigger shell + upsert idiom +
+  hot-update hints. Used only at Apply / regeneration, never on a read.
+
+Shape it as a 2-D table, **`kind × engine`**:
+
+- **`kind`** (turnover `+=` / running-balance `+=` + bump-later-periods / slice-last) is the
+  **delta-clause parameter** — the same concept across engines.
+- **`engine`** is the **key**, and it splits into two template **families** by *execution model*:
+  - **per-row** — Firebird PSQL, PostgreSQL PL/pgSQL, MySQL SP, SQLite triggers. All are
+    `FOR EACH ROW`, use `NEW`/`OLD`, and reduce to a handful of plain SQL statements. Design to
+    the **SQLite floor** (SQL-statements-only, no procedural block) and the same logic fits all
+    four; only the upsert idiom (`ON CONFLICT DO UPDATE` for PG/SQLite, `ON DUPLICATE KEY` for
+    MySQL, `MERGE` for Firebird) and the shell (PG needs a separate `FUNCTION`; the rest inline)
+    differ — those are the per-engine *slots*.
+  - **set-based** — MSSQL/T-SQL (`inserted`/`deleted` pseudo-tables, batch `MERGE`). This is a
+    *different algorithm*, not a different word, which is exactly why a separate dictionary
+    holds it where the query dictionary could not. **Deferred to the MSSQL port** — not one of
+    the four native engines; adding it later is one more engine key, not a reshape.
+
+Both families implement one interface (`RenderTotalsTrigger(kind, dims, res) → SQL`); the L3-2
+generator is engine-agnostic and only fills parameters. The dictionary is also the natural home
+for the future pluggable strategy (MSSQL `INDEXED VIEW`, Oracle `MV REFRESH ON COMMIT`) — a
+different entry per engine, no generator change.
+
+> **ODBC has no materialization entry.** ODBC is generic — it does not know the backend, so it
+> cannot template engine-specific triggers. An ODBC-backed register stays on the
+> live-aggregation / RAM fallback (`IsComputedInRam` stays true); it never gets the trigger
+> upgrade. Not a blocker — ODBC is a marginal target — but it is the one driver the dictionary
+> does not cover.
+
+### 5. Reconciliation by the cheapest sufficient operation
+
+The "What OES Apply generates" section below always full-rebuilds on a structure change. That
+is correct and simple, but on large registers the full `mov_X` scan is minutes-to-hours. Most
+structure changes do **not** need it — their effect on totals is *derivable*:
+
+| Change | Reconciliation | Full `mov` scan? |
+|---|---|---|
+| Add a registrar | nothing (future movements → trigger) | no |
+| Remove a registrar | delete its `mov` rows → trigger reverses their deltas | no (delta) |
+| New resource column | `ALTER totals ADD res DEFAULT 0` (no history → 0) | no |
+| New dimension, uniform default | `ALTER totals ADD dim = default` (grouping unchanged) | no |
+| Drop a dimension | **coarsen** — re-aggregate from the *existing* `totals`, not `mov` | no |
+| Full data load (restore / migrate) | totals start empty → rebuild | **yes** |
+| Grouping changes un-derivably (backfill dim with per-row values, finer period) | rebuild | **yes** |
+| Bulk import | aggregate **only the imported batch** and merge (`… GROUP BY … FROM batch`) | no (delta of the batch) |
+
+So reframe L3-4: it is not "the full-rebuild door", it is **"reconcile derived state by the
+cheapest sufficient operation"**, and the full scan is its *fallback mode*. Preference order:
+trigger delta (steady state) → subset delta-aggregate (import, removed registrar) → in-place
+totals transform (add-default-column, coarsen) → full `mov` scan (empty totals / un-derivable
+regroup).
+
+**Correctness gate (same asymmetry as everywhere): a delta / in-place path is valid ONLY for
+change kinds whose totals-effect is provably derivable.** Misclassify — delta where a scan was
+needed — and you get *silently wrong totals*. When unsure, full-scan. Full-scan is the safe
+default; deltas are the optimization applied to provably-derivable kinds. Ship the full-scan
+fallback first; add the delta paths when a real big-register Apply window forces it.
+
+### 6. Sharding — "разделение итогов" (a per-register mode)
+
+Hot-row write contention on a single `(period, dim)` (a popular SKU in the current period,
+dozens of concurrent postings) is mitigated by **sharding the totals row** N-ways. This is the
+same concept as 1C's *разделение итогов* (feature parity) — but on OES's **drift-proof trigger
+substrate**, where 1C maintains its split totals in managed code (bypassable, needs *пересчёт
+итогов*).
+
+A per-register spec parameter, `sharded: N`:
+
+- `N > 1` → the totals PK gains a shard column `(period, dim1..dimN, shard)`; the trigger's
+  upsert writes `shard = hash(connection / tx)` chosen **locally**; the view sums shards
+  (`SELECT … SUM(res) … GROUP BY period, dim`).
+- **The view absorbs sharding** — the read path above the view is unchanged, co-locates like any
+  table. Sharding does not leak upward; it is contained in `table + trigger + view`.
+
+Two properties make it as autonomous as the base deltas — no coordination, no extra state:
+
+1. **Local shard key.** `hash(current connection/tx)` — not a shared counter (which would itself
+   contend). Concurrent writers hash to different shards.
+2. **Sum-invariance.** An insert's `+delta` and a *later* delete's `−delta` may land in
+   **different** shards; because the read **sums all shards**, the total is exact regardless of
+   distribution: `Σ shards = Σ inserts − Σ deletes = net`. So the trigger stores **no memory**
+   of which shard a movement used — it just hashes the current context. Individual shards hold
+   partial/odd values; the read-sum is always exact. Each shard row is still trigger-maintained
+   TX-atomically → **drift-proof is preserved.**
+
+**Tradeoff:** read `O(1)` → `O(N)` (sum N shards). Sharding is **per-register** — the read tax
+hits *all* its rows, not just the hot one — so shard **only** registers profiled hot on write,
+never by default. Cleanest for turnover (`+=`); running-balance shards ride the same
+sum-invariance but the subsequent-period bump is inherently fiddlier (it is fiddly without
+shards too). Capture `sharded:N` in the spec now so the form accepts it; implement when a real
+hot register pulls it. Regeneration with shards is trivial: bulk-rebuild into `shard 0` (no
+contention under Apply), steady-state redistributes via the hash.
+
+### 7. Who invokes L3-4 (deployment)
+
+Same L3-4 operation; different **dispatcher**:
+
+- **Server mode** (compute server present): a **compute-server job** — chunked, resumable,
+  under exclusive/Apply. Fits the [compute-server-tiering.md](compute-server-tiering.md) arc:
+  heavy server-side regeneration is exactly such a tier.
+- **File / embedded mode** (no compute-server process; single session → already exclusive): an
+  in-process **background task**. Keep it a **janitor** (detect-and-repair an *incomplete*
+  bulk/crash: trigger missing / totals stale after an interrupted operation → rebuild), **not a
+  patrol** (periodic recalc of trigger-maintained totals — that is the *пересчёт итогов* ghost
+  the trigger makes unnecessary by construction). Fire it on **events**, not on a cadence.
 
 ---
 

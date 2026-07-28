@@ -2,6 +2,7 @@
 #define _FRAME_INT_H__
 
 #include "backend/uniqueKey.h"
+#include "backend/backend_command.h"   // ibBackendCommandSender — the form is the command SOURCE (server contract)
 
 ///////////////////////////////////////////////////
 class BACKEND_API ibBackendValueForm;
@@ -34,8 +35,13 @@ public:
 	virtual void ControlDecrRef() = 0;
 };
 
-class BACKEND_API ibBackendValueForm : public ibBackendValue {
+class BACKEND_API ibBackendValueForm : public ibBackendValue, public ibBackendCommandSender {
 public:
+
+	// ibBackendCommandSender — the form IS the command SOURCE, declared HERE (server-side) so a headless caller
+	// (the web server / daemon / codeRunner holding a bare ibBackendValueForm*) can start the command walk and run a
+	// command with NO front-end. PURE: every concrete form (desktop, web) must vend its commands.
+	virtual bool GetCommandByHop(const ibCommandHop& hop, ibValue& out) override = 0;
 
 #pragma region _frontend_call_h__
 

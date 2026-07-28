@@ -11,25 +11,40 @@
 #include "frontend/visualView/visualHost.h"
 
 #include "backend/sourceDescription.h"   // ibSourceHop — the attribute-tree node path carries the pinned reference type per hop
+#include "backend/commandDescription.h"  // ibCommandDescription — the command-tree node carries the command-hop path (symmetric to the source path)
 
 #include <wx/dnd.h>
 #include <functional>
+#include <vector>
+#include <memory>
 
+class ibPropertyObject;        // common base of every inspector-selectable element (control / attribute / command)
 class ibValueLayerObject;      // common base for a layer node (the bar OR one command)
 class ibValueCommandBar;       // command-interface layer — tree-node payload
 class ibValueCommandBarItem;   // one child command — tree-node payload
 struct ibSourceDescription;    // "oes_source_drag" drop payload — a binding source path (raw ids)
+class ibFormDragItem;          // one polymorphic draggable KIND — format + (de)serialize + apply (visualEditorDragItem.h)
 
-// wxDropTarget for the "oes_source_drag" payload (a node dragged from the attribute tree). Shared by the
-// form CANVAS and the OBJECT TREE — each supplies a handler that maps the drop point (x,y) to a parent and
-// creates the bound control there. The payload (raw source-path ids) is decoded once, in one place.
+// wxDropTarget for a node dragged from a form-editor tree. Shared by the form CANVAS, the OBJECT TREE and each
+// tablebox grid. It holds the registered draggable KINDS (ibFormDragItem — a source path, a command); OnData
+// matches the RECEIVED format to a kind, decodes it and enacts the drop. NO per-format branch — adding a draggable
+// is a new ibFormDragItem subclass registered in the ctor, nothing here changes. Each surface supplies only a
+// RESOLVER (drop point → the frame to act on, in that surface's coordinates) and an APPLIER (runs the decoded
+// item's ApplyDrop with the surface's editor). `deferred` runs the apply through CallAfter — for a tablebox grid
+// whose own target re-wires (frees) itself when the drop rebuilds the editor.
 class ibSourceDragDropTarget : public wxDropTarget {
 public:
-	using Handler = std::function<void(wxCoord, wxCoord, const ibSourceDescription&)>;
-	explicit ibSourceDragDropTarget(Handler handler);
+	using PointResolver = std::function<ibValueFrame*(wxCoord, wxCoord)>;                  // drop point → target frame (may be null)
+	using DropApply     = std::function<void(const ibFormDragItem&, ibValueFrame*)>;       // enact a decoded item on a frame
+	ibSourceDragDropTarget(PointResolver resolver, DropApply apply, bool deferred = false);
+	~ibSourceDragDropTarget() override;   // out-of-line: unique_ptr<ibFormDragItem> (forward-declared) destroyed here
 	wxDragResult OnData(wxCoord x, wxCoord y, wxDragResult def) override;
 private:
-	Handler m_handler;
+	PointResolver m_resolver;
+	DropApply     m_apply;
+	bool          m_deferred;
+	std::vector<std::unique_ptr<ibFormDragItem>> m_items;   // registered kinds (source, command)
+	std::vector<wxCustomDataObject*>             m_data;    // composite sub-objects, index-parallel to m_items
 };
 
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -287,11 +302,8 @@ public:
 
 		//set and create window
 		void SetObjectSelect(ibValueFrame* obj);
+		void ClearObjectSelect();   // drop the canvas control highlight (a non-control element is now selected)
 		void ScrollToObject(ibValueFrame* obj);
-
-		// A node dropped from the attribute tree: hit-test the point to the owning object, then create the
-		// control (class resolved from the type at the path) there and bind it. Called by ibFormEditorDropTarget.
-		void DropBoundControl(wxCoord x, wxCoord y, const ibSourceDescription& desc);
 
 	protected:
 
@@ -415,10 +427,6 @@ public:
 		void OnObjectRemoved(ibValueFrame* obj);
 
 		void OnPropertyModified(ibProperty* prop);
-
-		// A node dragged from the attribute tree, dropped ONTO a tree node → create + bind the control
-		// under that node (its container). Mirrors the canvas host's DropBoundControl.
-		void DropBoundControl(wxCoord x, wxCoord y, const ibSourceDescription& desc);
 
 		ibVisualEditorObjectTree(ibVisualEditor* owner, wxWindow* parent, int id = wxID_ANY);
 		virtual ~ibVisualEditorObjectTree() override {}
@@ -556,6 +564,12 @@ public:
 			bool underList = false)
 			: m_entry(entry), m_path(path), m_refTypes(refTypes), m_tableSection(tableSection), m_dropControl(dropControl),
 			m_underList(underList) {}
+		// A COMMAND node of the navigator: carries a draggable command projection as a HOP PATH
+		// (ibCommandDescription) — SYMMETRIC to a source node carrying its binding path. A command is a 1-hop
+		// [metaId]; a table command a 2-hop [source, action]. Dragged onto the form → a bound button.
+		explicit ibVisualEditorAttributeTreeItemData(const ibCommandDescription& commandDesc)
+			: m_commandDesc(commandDesc) {}
+		const ibCommandDescription& GetCommandDesc() const { return m_commandDesc; }
 		ibFormAttributeValue* GetEntry() const { return m_entry; }
 		const std::vector<ibSourceHop>& GetPath() const { return m_path; }
 		const std::vector<ibMetaID>& GetRefTypes() const { return m_refTypes; }
@@ -585,6 +599,50 @@ public:
 		bool m_loaded = false;                      // composition already built? (lazy one-shot)
 		ibClassID m_dropControl = 0;                // control-class CLSID this node maps to (0 = not draggable)
 		bool m_underList = false;                   // inside a list/section (fields are columns, not sources)
+		ibCommandDescription m_commandDesc;         // navigator command node: the command-hop path (empty = not a command)
+	};
+
+	// The COMMAND NAVIGATOR — its OWN panel beside the attribute tree (the "command door" parallel of the
+	// attribute/source tree). It lists the commands available to THIS form (general + the object's own) by
+	// group and is the surface a designer DRAGS from: a command dragged onto the form → a bound command
+	// button, resolved live at click. A context menu ADDS a new command right here (a command under the
+	// form's object, or a general one) so a designer needn't leave the form to make one — then drag it out.
+	// Nodes carry the command by metaId (ibVisualEditorAttributeTreeItemData).
+	class ibVisualEditorCommandTree : public wxPanel {
+	public:
+
+		ibVisualEditorCommandTree(ibVisualEditor* owner, wxWindow* parent, int id = wxID_ANY);
+		virtual ~ibVisualEditorCommandTree() override {}
+
+		void OnEditorLoaded() { RebuildTree(); }
+		void OnEditorRefresh() { RebuildTree(); }
+		// A command property edit (caption / picture / Action) must re-gather so the navigator's labels + icons
+		// track live — the SAME hook name the object / attribute trees use for a property change.
+		void OnPropertyModified(class ibProperty* prop) { RebuildTree(); }
+		void RebuildTree();
+
+	protected:
+
+		void OnBeginDrag(wxTreeEvent& event);      // drag a command onto the form -> a bound command button
+		void OnContextMenu(wxContextMenuEvent& event);   // right-click IN THE FORM COMMANDS GROUP -> add / copy / paste / delete
+		void OnSelChanged(wxTreeEvent& event);     // selection CHANGED -> show the form command in the inspector
+		void RevealSelectedCommand();              // surface the selected form command in the inspector (both click paths)
+		void AddCommand(bool general);             // create a form-local command (property object) + reveal in the inspector
+		void CopyCommand();                        // copy the selected form command to the clipboard (oes_clipboard_command)
+		void CutCommand();                         // copy + delete the selected form command (undoable, own buffer)
+		void PasteCommand();                       // paste a clipboard form command as a fresh entry on the form
+		void DeleteCommand();                      // delete the selected form command from the form
+		class ibFormCommandValue* SelectedFormCommand() const;   // the selected node's FORM COMMAND, else null
+		void SelectCommand(class ibFormCommandValue* cmd);       // land the row on a form command BY IDENTITY (like the attribute tree's SelectEntry)
+
+	private:
+
+		ibVisualEditor* m_formHandler = nullptr;
+		wxTreeCtrl* m_tcCommands = nullptr;
+		wxTreeItemId m_formCommandsGroup;          // the "Form commands" section node — the ONLY place the menu shows
+		bool m_rebuilding = false;                 // suppress OnSelChanged while RebuildTree churns items (same guard as the attribute tree)
+
+		wxDECLARE_EVENT_TABLE();
 	};
 
 	/**
@@ -668,6 +726,22 @@ public:
 	// a source path — the drop counterpart of the palette's CreateObject. The control CLASS is resolved from
 	// the type AT the path (the drop side owns the choice). Returns the created control (unwrapped) or nullptr.
 	ibValueFrame* CreateBoundControl(ibValueFrame* parentHint, const ibSourceDescription& desc);
+	// The shared create-a-control-on-the-form flow behind CreateBoundControl and CreateCommandButton: climb to a
+	// parent that can hold `className`, create + unwrap it, let `bind` set its binding BEFORE the widget builds
+	// (so it renders already bound), then insert (undoable) + notify + refill-if-source + select. Returns the
+	// unwrapped control or nullptr. The ONLY thing that varies between droppers is the class + the bind step.
+	ibValueFrame* CreateControlOfClass(ibValueFrame* parentHint, const wxString& className,
+		const std::function<void(ibValueFrame*)>& bind);
+	// A command dragged from the navigator, dropped onto the form → add a bound command projection. It lands
+	// on the NEAREST command bar climbing up from the hit-tested target: a tablebox / list node → its OWN
+	// command (a table / list command); the form / a plain control → the form's command bar (a button).
+	// The dragged command-hop path (a command 1-hop, or a table's [source, action]) is bound onto the button.
+	void CreateCommandButton(ibValueFrame* target, const ibCommandDescription& desc);
+	// Set by the drop resolver right before ApplyDrop when the drop landed on a command-bar TOOLBAR (form or
+	// tablebox): the command joins THAT bar as a new item instead of spawning a free button. CreateCommandButton
+	// reads then clears it; null for any other drop. A per-drop side channel (the resolver returns only an
+	// ibValueFrame*, and a command bar is a layer, not a frame).
+	void SetPendingDropBar(ibValueCommandBar* bar) { m_pendingDropBar = bar; }
 	// (Re)attach a drop target to every tablebox's own grid — a native grid swallows the OS drop before the
 	// form-canvas target sees it, so drops over the rows need the grid's own target. Called on editor refresh.
 	void WireTableboxDrops(ibValueFrame* obj);
@@ -699,10 +773,56 @@ public:
 
 	void ScrollToObject(ibValueFrame* obj);
 
-	// Services for the observers
-	ibValueFrame* GetSelectedObject() const {
-		return m_selObj != nullptr ? m_selObj : m_valueForm;
-	}
+	// The editor's ONE selection, SELF-DESCRIBING. Built FROM the concrete type — a control, an attribute or a
+	// command (any other inspector property via the generic ctor) — so the KIND is captured BY CONSTRUCTION: you
+	// cannot store the wrong kind, and it is never re-derived by RTTI. AsFrame STATIC-casts back only when the
+	// selection IS a control (the kind guarantees the layout), else null. One value = pointer + kind, set together.
+	class ibEditorSelection {
+	public:
+		ibEditorSelection() = default;
+		ibEditorSelection(class ibValueFrame* frame);              // a control  -> Frame
+		ibEditorSelection(class ibFormAttributeValue* attribute);  // an attribute
+		ibEditorSelection(class ibFormCommandValue* command);      // a command
+		ibEditorSelection(ibPropertyObject* other);                // any other inspector property (e.g. a value-table column)
+		ibPropertyObject* GetObject() const { return m_object; }   // the element for the inspector (any kind)
+		// The three typed views — each STATIC-casts only when the kind matches, else null ("wrong type -> null").
+		ibValueFrame*               AsFrame()     const;
+		class ibFormAttributeValue* AsAttribute() const;
+		class ibFormCommandValue*   AsCommand()   const;
+		// LIGHT the inspector on THIS selection — THE single place a selection ever reaches objectInspector. forceOpen
+		// raises a hidden inspector (explicit "Properties" / a live-surface click); otherwise fill only an already-open
+		// inspector — a passive select auto-activates the property ONLY while the inspector is up, never pops it open.
+		// Out-of-line (uses objectInspector). Callers go through SetCurrentElement, not here directly.
+		void Reveal(bool forceOpen = false) const;
+	private:
+		enum Kind { None, Frame, Attribute, Command, Property };
+		ibPropertyObject* m_object = nullptr;
+		Kind              m_kind   = None;
+	};
+
+	// The frame VIEW of the ONE selection — for canvas ops (highlight / copy-paste / insert position). DERIVED, not
+	// stored, so it can NEVER drift from the selection. When the current element IS a control -> that control;
+	// otherwise the form root.
+	ibValueFrame* GetSelectedObject() const;
+
+	// THE single selection AND the one entry point. Sets the current element (control / attribute / command), syncs the
+	// canvas highlight (a control highlights; anything else clears it — no "two selected"), and LIGHTS the inspector
+	// through the selection itself (ibEditorSelection::Reveal). Every surface — canvas, attribute tree, command tree,
+	// undo/redo, the live toolbar — calls ONLY this; nothing else touches objectInspector. The argument's TYPE picks the
+	// kind (implicit ctor); whichever surface selected LAST wins and is restored on re-activation. forceOpen force-opens
+	// a hidden inspector (explicit "Properties" / a live click); default is the SOFT reveal. Out-of-line (uses objectInspector).
+	void SetCurrentElement(ibEditorSelection element, bool forceOpen = false);
+	ibPropertyObject* GetCurrentElement() const { return m_selected.GetObject(); }
+
+	// SHOW the CURRENT element — the explicit "Properties" entry. Force-opens a hidden inspector and reveals it. This
+	// is the door that controls SHOWING; a thin wrapper over the one selector, SetCurrentElement(<current>, forceOpen).
+	void ShowCurrentElement(bool forceOpen = true);
+
+	// REFRESH the CURRENT element in place — just RE-FIRES the selector's soft reveal on the current selection; the
+	// recompute is NOT new force, it's the force already in Reveal (SelectObject(obj, true) rebuilds the grid even on
+	// the same object). Adds only: don't change the selection, don't open the panel, no-op when hidden. Exists because
+	// ModifyPropertyCmd is a separate class and m_selected is private — it needs a public hook. REFRESH, not SHOW.
+	void RefreshCurrentElement() { m_selected.Reveal(false); }
 
 	void RefreshEditor() {
 		// Coalesce + DEFER — one rebuild per burst, on the SETTLED model. A single edit fans out to several
@@ -780,7 +900,7 @@ public:
 
 private:
 
-	ibValueFrame* m_selObj = nullptr;     // selected object
+	ibEditorSelection m_selected;   // THE selection — self-describing (control / attribute / command); the frame view derives
 
 	// Undo/Redo command processor
 	ibCommandProcessor* m_cmdProc;
@@ -788,10 +908,16 @@ private:
 	//Form handler 
 	ibValueForm* m_valueForm;
 
-	//Elements form 
+	//Elements form
 	ibVisualEditorHost* m_visualEditor;
 	ibVisualEditorObjectTree* m_objectTree;
 	ibVisualEditorAttributeTree* m_attributeTree = nullptr;
+	ibVisualEditorCommandTree* m_commandTree = nullptr;   // command navigator (its own panel)
+
+	// A command dropped on a command-bar toolbar joins THAT bar. EVERY drop resolver sets this fresh (the canvas one to
+	// the tagged toolbar or null, the tablebox / object-tree ones to null), so it always reflects the CURRENT drop — no
+	// stale value survives from a prior drop. CreateCommandButton reads + clears it. See SetPendingDropBar.
+	ibValueCommandBar* m_pendingDropBar = nullptr;
 
 	//Document & view
 	ibMetaDocument* m_document;
@@ -800,6 +926,12 @@ private:
 	wxSplitterWindow* m_splitter = nullptr;
 	//Splitter between the control tree and the attribute tree
 	wxSplitterWindow* m_treeSplitter = nullptr;
+	//Splitter between the attribute tree and the command navigator (the right pane's own split)
+	wxSplitterWindow* m_rightSplitter = nullptr;
+
+	// One-shot guard: the three splitter sashes are balanced (canvas strip + equal-thirds navigators) on the FIRST
+	// real size, then left to gravity — so a later manual drag is not overwritten. See CreateWideGui's size hook.
+	bool m_layoutBalanced = false;
 
 	// One-rebuild-per-burst guard for RefreshEditor (see RefreshEditor): true while a refresh has already run
 	// this event-loop iteration, cleared next tick by a CallAfter.

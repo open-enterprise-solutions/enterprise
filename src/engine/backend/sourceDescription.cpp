@@ -21,7 +21,7 @@ bool ibSourceDescriptionMemory::LoadData(ibReaderMemory& reader, ibSourceDescrip
 	return true;
 }
 
-bool ibSourceDescriptionMemory::SaveData(ibWriterMemory& writer, ibSourceDescription& srcDesc)
+bool ibSourceDescriptionMemory::SaveData(ibWriterMemory& writer, const ibSourceDescription& srcDesc)
 {
 	const std::vector<ibSourceHop>& path = srcDesc.GetPath();
 	writer.w_u32((unsigned int)path.size());
@@ -45,7 +45,7 @@ bool ibSourceDescriptionMemory::ReadNode(const ibDataValue& value, ibSourceDescr
 	return true;
 }
 
-bool ibSourceDescriptionMemory::WriteNode(ibDataValue& value, ibSourceDescription& srcDesc)
+bool ibSourceDescriptionMemory::WriteNode(ibDataValue& value, const ibSourceDescription& srcDesc)
 {
 	ibWriterMemory writer;
 	if (!SaveData(writer, srcDesc))

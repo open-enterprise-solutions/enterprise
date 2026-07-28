@@ -1,14 +1,14 @@
-#include "metaInterfaceObject.h"
+#include "metaSectionObject.h"
 
 /* PNG */
 static const wxString s_interface_16_png = wxT("iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAAAA3NCSVQICAjb4U/gAAABfVBMVEUAAAD///+Im6qMnqmRoq2VpbCOn6uMnamOn6qPoKuWpbCisLqptr+7xcygrruClKN4i5x3ipt2iZqHmKeGl6WZp7Ta3+Tf5Ofx8/Tk6OvT2d/u8fLn6+3N09ri5uro6+2ImaeTorDT3eT6/P5EhrRFhrRLirbJycnKyspGh7T8/f7w8vOUo7HH1N31+/7IyMjHx8fGxsfLy8vExcbFxsf5/f7c4OSSoa/f5uvv9fvU1NS5vL7Nzc2urq6sra2+vr72+f3P1trc5OmRkZGYmJi+x82VpLHQ2uLt9ftFhrOvr6/1+f27xMrW3+Xs9fvOzs6RkJCSkpL0+f25w8mRoa+WpbLy8/Xm8Pe6urrx9/u8xcuQoK6Yp7Tu8fPj7PSQkZGTk5OUlJTv9PnK0tft8fP2/P7x+f/z+v/w+f/4+/7u8PHm6ezq7vDq7fDq7e/o7O7p7e/p7O7m6u2XqLSUo6+To7CUpLCWpbGYp7OaqbWbqrWZqLSXprKSoq6Qoq/v8qiOAAAAAXRSTlMAQObYZgAAAOtJREFUGJVjYGRgYEQGDEzMLKxs7OzsHJwsXNw8vHwM/AJAICgEBIICQCTMICIqJi4hKSUtIykrJy8lqsCgqKSsoqKqpq6hqaqirqWtw6Coq6eur69hYGhkbKJhaqbDYG5haWVto2ELBHb2Do5AASdLGxt1dWcQcHFwdWNQdPdQ8VRVsfUCqfH2AZrh66eu768eEABUERgUHMIQGhauoa6uDpL3ioiMimaIiY0D2qIeH58QH5iYlBzNEJqSmpYOBhkZGZlZ0Qw62Tm5uXl5+QW5+YVFednRDMUlpWXlFZVV1TVlpWW1NXUM6AAACMk1gcjwGOEAAAAASUVORK5CYII=");
 
-wxIcon ibValueMetaObjectInterface::GetIcon() const
+wxIcon ibValueMetaObjectSection::GetIcon() const
 {
 	return GetIconGroup();
 }
 
-wxIcon ibValueMetaObjectInterface::GetIconGroup()
+wxIcon ibValueMetaObjectSection::GetIconGroup()
 {
 	static wxIcon icon =
 		ibBackendPicture::GetIconFromBase64(s_interface_16_png, wxSize(16, 16));

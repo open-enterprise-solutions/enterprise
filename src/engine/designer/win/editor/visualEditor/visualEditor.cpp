@@ -6,35 +6,75 @@
 #include "visualEditor.h"
 
 #include "backend/propertyManager/propertyManager.h"
-#include "backend/sourceDescription.h"   // ibSourceDescription / ibSourceDescriptionMemory (load the drag payload)
-#include "backend/fileSystem/fs.h"       // ibReaderMemory (drag payload buffer)
+#include "visualEditorDragItem.h"        // ibFormDragItem / ibSourceDragItem / ibCommandDragItem — the polymorphic drop kinds
 #include "frontend/win/ctrls/toolBar.h"  // ibAuiToolBar — a command-bar toolbar right-click is served by the bar's own menu
+#include "frontend/visualView/layers/commandBar.h"  // ibCommandBarFromToolBar — route a command dropped on a toolbar to its bar
 
 #include <wx/dnd.h>       // wxDropTarget / wxCustomDataObject — form-canvas accepts a dragged attribute node
+#include <wx/dataobj.h>   // wxDataObjectComposite — accept every registered drag kind on one target
 #include <wx/utils.h>     // wxFindWindowAtPoint (point -> widget hit-test)
+#include <wx/app.h>       // wxTheApp->CallAfter (deferred apply for tablebox-grid drops)
 
 static const int ID_TIMER_SCAN = wxScrolledWindow::NewControlId();
 
-// Form-canvas drop target: receives a node dragged from the attribute tree (oes_source_drag format) and
-// creates a control at the drop point, bound to the node's PATH. The payload is the source path, serialized
-// by the engine's ibSourceDescriptionMemory (the tree's OnBeginDrag) — loaded back the same way here; the
-// control class is resolved from the type AT the path on THIS (drop) side. ONE target per surface (the form
-// content panel AND the object tree); child controls don't intercept — the point is hit-tested to an object
-// manually in each surface's handler (its own DropBoundControl). Payload decode lives here, in one place.
-ibSourceDragDropTarget::ibSourceDragDropTarget(Handler handler)
-	: wxDropTarget(new wxCustomDataObject(wxDataFormat(wxT("oes_source_drag")))), m_handler(std::move(handler)) {}
+// Form-editor drop target: receives a node dragged from a form-editor tree and enacts it on the form. It registers
+// the draggable KINDS (ibFormDragItem — a source path → a bound control, a command → a command button); OnData
+// matches the received wire format to a kind, decodes it and hands it to the surface's applier. Shared by the form
+// CANVAS, the OBJECT TREE and each tablebox grid — each supplies only its point→frame resolver and its editor-bound
+// applier. Adding a draggable is a new ibFormDragItem subclass registered below; OnData never changes.
+ibSourceDragDropTarget::ibSourceDragDropTarget(PointResolver resolver, DropApply apply, bool deferred)
+	: m_resolver(std::move(resolver)), m_apply(std::move(apply)), m_deferred(deferred)
+{
+	// The registered kinds — the ONE place they are listed. A composite carries one sub-object per kind so OnData
+	// can read the received kind's bytes back (the composite owns them; m_data keeps non-owning, index-parallel refs).
+	m_items.push_back(std::make_unique<ibSourceDragItem>());    // oes_source_drag — the preferred (common) format
+	m_items.push_back(std::make_unique<ibCommandDragItem>());   // oes_command_drag
+
+	wxDataObjectComposite* composite = new wxDataObjectComposite();
+	bool preferred = true;
+	for (const std::unique_ptr<ibFormDragItem>& item : m_items) {
+		wxCustomDataObject* data = new wxCustomDataObject(item->GetFormat());
+		composite->Add(data, preferred);
+		m_data.push_back(data);
+		preferred = false;
+	}
+	SetDataObject(composite);
+}
+
+ibSourceDragDropTarget::~ibSourceDragDropTarget() = default;
 
 wxDragResult ibSourceDragDropTarget::OnData(wxCoord x, wxCoord y, wxDragResult def)
 {
 	if (!GetData())
 		return wxDragNone;
-	wxCustomDataObject* obj = static_cast<wxCustomDataObject*>(GetDataObject());
-	if (obj != nullptr && obj->GetSize() > 0) {
-		ibReaderMemory reader(obj->GetData(), (int)obj->GetSize());
-		ibSourceDescription srcDesc;
-		ibSourceDescriptionMemory::LoadData(reader, srcDesc);   // raw id path — metadata-agnostic
-		if (srcDesc.IsOk() && m_handler)
-			m_handler(x, y, srcDesc);   // pass the WRAPPER through (no decompose/rewrap)
+	wxDataObjectComposite* composite = static_cast<wxDataObjectComposite*>(GetDataObject());
+	if (composite == nullptr)
+		return wxDragNone;
+
+	const wxDataFormat fmt = composite->GetReceivedFormat();
+	for (size_t i = 0; i < m_items.size(); ++i) {
+		ibFormDragItem* item = m_items[i].get();
+		if (item->GetFormat() != fmt)
+			continue;
+		wxCustomDataObject* data = m_data[i];
+		if (data != nullptr && data->GetSize() > 0) {
+			ibReaderMemory reader(data->GetData(), (int)data->GetSize());
+			if (item->LoadPayload(reader) && m_apply) {
+				ibValueFrame* target = m_resolver ? m_resolver(x, y) : nullptr;
+				if (m_deferred) {
+					// DEFER out of the OS drop callback: a target on a tablebox grid re-wires (frees) itself when
+					// the apply rebuilds the editor → use-after-free. Clone the DECODED item so it outlives THIS
+					// target, and run the apply after the drag unwinds.
+					DropApply apply = m_apply;
+					std::shared_ptr<ibFormDragItem> clone(item->Clone());
+					wxTheApp->CallAfter([apply, clone, target]() { apply(*clone, target); });
+				}
+				else {
+					m_apply(*item, target);
+				}
+			}
+		}
+		return def;
 	}
 	return def;
 }
@@ -59,27 +99,28 @@ ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::ibVisualEditorHost(i
 	InitMainSizer();
 	m_back->GetEventHandler()->Connect(wxID_ANY, wxEVT_LEFT_DOWN, wxMouseEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnClickBackPanel), nullptr, this);
 
-	// The form canvas accepts a node dragged from the attribute tree → create + bind a control at the drop
-	// point (hit-tested in DropBoundControl). Same shared target the object tree uses, with our handler.
+	// The form canvas accepts any registered drag KIND: a source path → a bound control, a command → a bound
+	// command button. It supplies only the RESOLVER (map the OS drop point to the ibValueFrame under it, by
+	// walking wx parents to the owning object — the same resolution a click uses) and the APPLIER (run the decoded
+	// item's ApplyDrop with THIS editor). A null resolve is fine: a source falls back to the form root, a command
+	// climbs to the nearest command bar. Same shared target the object tree and tablebox grids use.
 	m_back->GetFrameContentPanel()->SetDropTarget(
-		new ibSourceDragDropTarget([this](wxCoord x, wxCoord y, const ibSourceDescription& d) { DropBoundControl(x, y, d); }));
-}
-
-void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::DropBoundControl(
-	wxCoord x, wxCoord y, const ibSourceDescription& desc)
-{
-	// The OS gives only the drop coordinates, so map the point to the widget under it, then walk wx
-	// parents to the owning ibValueFrame — the same resolution OnLeftClickFromApp uses for a click.
-	// Fall back to the form root when the point maps to nothing (drop on empty canvas). CreateBoundControl
-	// resolves the control class from the type at the path (the drop side owns the class choice).
-	wxWindow* panel = m_back->GetFrameContentPanel();
-	const wxPoint screenPt = panel->ClientToScreen(wxPoint(x, y));
-	ibValueFrame* target = nullptr;
-	for (wxWindow* w = wxFindWindowAtPoint(screenPt); w != nullptr && target == nullptr; w = w->GetParent())
-		target = GetObjectBase(w);
-	if (target == nullptr)
-		target = GetValueForm();
-	m_formHandler->CreateBoundControl(target, desc);
+		new ibSourceDragDropTarget(
+			[this](wxCoord x, wxCoord y) -> ibValueFrame* {
+				const wxPoint screenPt = m_back->GetFrameContentPanel()->ClientToScreen(wxPoint(x, y));
+				// A command dropped on a command-bar TOOLBAR (the form's or a tablebox's) joins THAT bar — a new item,
+				// not a free button. Detect the tagged toolbar under the point and hand its bar to CreateCommandButton;
+				// cleared when the drop is elsewhere. Set BEFORE the object walk (which returns the frame, not the bar).
+				ibValueCommandBar* dropBar = nullptr;
+				for (wxWindow* w = wxFindWindowAtPoint(screenPt); w != nullptr && dropBar == nullptr; w = w->GetParent())
+					dropBar = ibCommandBarFromToolBar(w);
+				m_formHandler->SetPendingDropBar(dropBar);
+				ibValueFrame* target = nullptr;
+				for (wxWindow* w = wxFindWindowAtPoint(screenPt); w != nullptr && target == nullptr; w = w->GetParent())
+					target = GetObjectBase(w);
+				return target;
+			},
+			[this](const ibFormDragItem& item, ibValueFrame* target) { item.ApplyDrop(m_formHandler, target); }));
 }
 
 ibValueForm* ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::GetValueForm() const
@@ -189,6 +230,17 @@ bool ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnRightClickFro
 		wnd = wnd->GetParent();
 	}
 	return true;
+}
+
+void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::ClearObjectSelect()
+{
+	// Drop the canvas control highlight — a non-control element (an attribute / command) is now the selection, so a
+	// lingering control box would read as a SECOND selection. Mirrors the "not a visible object" clear below.
+	m_back->SetSelectedSizer(nullptr);
+	m_back->SetSelectedItem(nullptr);
+	m_back->SetSelectedObject(nullptr);
+	m_back->SetSelectedPanel(nullptr);
+	m_back->Refresh();
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::SetObjectSelect(ibValueFrame* obj)

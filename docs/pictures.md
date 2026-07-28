@@ -154,6 +154,63 @@ arguments.
 
 The `"PC_XXXXX"` string is an **opaque key**, like every other clsid key — not a label.
 
+### 4.1 Recipe — adding a new engine picture (PNG → base64)
+
+Engine pictures are **embedded as base64-encoded PNG string literals** — no external files,
+no resource compilation. The bytes travel inside `backend.dll`. Adding one is four edits, all
+in the picture-predefined pair (`picturePredefined.h` / `.cpp`):
+
+**Step 1 — encode the PNG to base64.** A 16×16 PNG is the norm (these are icons). Any base64
+tool works; the string is the raw PNG bytes, base64'd, no `data:` prefix, no line breaks:
+
+```bash
+base64 -w0 myicon_16.png            # POSIX
+# or [Convert]::ToBase64String([IO.File]::ReadAllBytes('myicon_16.png'))   # PowerShell
+```
+
+**Step 2 — add the literal** inside the `__predefined_png__` region of `picturePredefined.cpp`:
+
+```cpp
+/* PNG */
+static const wxString s_myIcon_16_png = "iVBORw0KGgoAAAANS...==";   // your base64
+```
+
+**Step 3 — declare the CLSID** in `picturePredefined.h` (5-char opaque key, `PC_` family):
+
+```cpp
+constexpr ibPictureID g_picMyIconCLSID = picture_to_clsid("PC_MYICO");
+```
+
+`picture_to_clsid` stamps the picture KIND into the id's high byte
+([../CLAUDE.md](../CLAUDE.md) §6); `constexpr` means it costs nothing and works as a default
+argument. The `"PC_MYICO"` key only has to be unique **within the picture kind** (the registry
+duplicate-check catches a collision).
+
+**Step 4 — register it** in `RegisterAllBackendPicture()` (bottom of `picturePredefined.cpp`):
+
+```cpp
+::RegisterBackendPicture(wxT("MyIcon"), g_picMyIconCLSID, s_myIcon_16_png);
+```
+
+`RegisterBackendPicture(name, id, base64)` (`backend_picture.cpp`) decodes the base64 via
+`ibBackendPicture::GetImageFromBase64` and calls `ibBackendPicture::RegisterPicture` — but
+only `if (!IsRegisterPicture(id))`, so double-registration is a no-op. The `name` is what a
+picture chooser shows (`GetArrayPicture()`).
+
+**No wiring needed** — `RegisterAllBackendPicture()` runs from the ctor of a static
+`ibBackendPictureAutoLoader` (which also calls `wxInitAllImageHandlers()` so PNG decoding
+works), so every engine picture is live before `main()`. Use it anywhere a description takes
+an engine id:
+
+```cpp
+ibPictureDescription desc(g_picMyIconCLSID);                 // tagged eFromBackend (§2)
+wxBitmap bmp = ibBackendPicture::CreatePicture(g_picMyIconCLSID);   // resolve to bytes (§3.2)
+```
+
+> There are three `RegisterBackendPicture` overloads (`backend_picture.cpp`): raw bytes
+> (`wxImage(data)`), **base64** (the one used here), and a ready `wxBitmap`. New engine icons
+> take the base64 path.
+
 ---
 
 ## 5. The other surfaces

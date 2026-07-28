@@ -513,6 +513,9 @@
     <ClInclude Include="propertyManager\property\propertyGeneration.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
+    <ClInclude Include="propertyManager\property\propertyCommandSource.h">
+      <Filter>propertyManager\property</Filter>
+    </ClInclude>
     <ClInclude Include="propertyManager\property\propertySource.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
@@ -538,6 +541,7 @@
       <Filter>propertyManager\property</Filter>
     </ClInclude>
     <ClInclude Include="backend_type.h" />
+    <ClInclude Include="commandDescription.h" />
     <ClInclude Include="sourceDescription.h" />
     <ClInclude Include="typeDescription.h" />
     <ClInclude Include="propertyManager\property\eventAction.h">
@@ -640,7 +644,10 @@
     </ClInclude>
     <ClInclude Include="value_cast.h" />
     <ClInclude Include="interfaceHelper.h" />
-    <ClInclude Include="metaCollection\metaInterfaceObject.h">
+    <ClInclude Include="metaCollection\metaSectionObject.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\metaCommandObject.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
     <ClInclude Include="metadataDataProcessor.h" />
@@ -674,6 +681,9 @@
       <Filter>propertyManager\property\variant</Filter>
     </ClInclude>
     <ClInclude Include="propertyManager\property\variant\variantRecord.h">
+      <Filter>propertyManager\property\variant</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\variant\variantCommandSource.h">
       <Filter>propertyManager\property\variant</Filter>
     </ClInclude>
     <ClInclude Include="propertyManager\property\variant\variantSource.h">
@@ -1493,6 +1503,9 @@
     <ClCompile Include="propertyManager\property\propertyGeneration.cpp">
       <Filter>propertyManager\property</Filter>
     </ClCompile>
+    <ClCompile Include="propertyManager\property\propertyCommandSource.cpp">
+      <Filter>propertyManager\property</Filter>
+    </ClCompile>
     <ClCompile Include="propertyManager\property\propertySource.cpp">
       <Filter>propertyManager\property</Filter>
     </ClCompile>
@@ -1538,6 +1551,7 @@
     <ClCompile Include="compiler\valueFactory.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
+    <ClCompile Include="commandDescription.cpp" />
     <ClCompile Include="sourceDescription.cpp" />
     <ClCompile Include="typeDescription.cpp" />
     <ClCompile Include="system\systemManager.cpp">
@@ -1605,13 +1619,22 @@
     </ClCompile>
     <ClCompile Include="value_cast.cpp" />
     <ClCompile Include="interfaceHelper.cpp" />
-    <ClCompile Include="metaCollection\metaInterfaceObject_res.cpp">
+    <ClCompile Include="metaCollection\metaSectionObject_res.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\metaInterfaceObjectMenu.cpp">
+    <ClCompile Include="metaCollection\metaSectionObjectMenu.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\metaInterfaceObject.cpp">
+    <ClCompile Include="metaCollection\metaSectionObject.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaCommandObject.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaCommandObjectMenu.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaCommandObject_res.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\metaModuleObjectProperty.cpp">

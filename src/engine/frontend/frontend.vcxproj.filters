@@ -896,6 +896,9 @@
     <ClCompile Include="propertyManager\property\advprop\advpropSize.cpp">
       <Filter>propertyManager\property\advprop</Filter>
     </ClCompile>
+    <ClCompile Include="propertyManager\property\advprop\advpropCommandSource.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
     <ClCompile Include="propertyManager\property\advprop\advpropSource.cpp">
       <Filter>propertyManager\property\advprop</Filter>
     </ClCompile>
@@ -1684,6 +1687,9 @@
       <Filter>propertyManager\property\advprop</Filter>
     </ClInclude>
     <ClInclude Include="propertyManager\property\advprop\advpropSize.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\advprop\advpropCommandSource.h">
       <Filter>propertyManager\property\advprop</Filter>
     </ClInclude>
     <ClInclude Include="propertyManager\property\advprop\advpropSource.h">

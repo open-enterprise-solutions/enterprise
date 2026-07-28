@@ -3011,6 +3011,9 @@ msgstr "Метадані"
 msgid "Common modules"
 msgstr "Загальні модулі"
 
+msgid "Common commands"
+msgstr "Загальні команди"
+
 #: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:15
 #: src/engine/designer/win/editor/interfaceEditor/interfaceEditor.cpp:46
 #: src/engine/designer/win/editor/roleEditor/roleEditor.cpp:4
@@ -3023,8 +3026,8 @@ msgstr "Загальні шаблони"
 
 #: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:18
 #: src/engine/designer/win/editor/roleEditor/roleEditor.cpp:5
-msgid "Interfaces"
-msgstr "Інтерфейси"
+msgid "Sections"
+msgstr "Розділи"
 
 #: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp:19
 msgid "Roles"

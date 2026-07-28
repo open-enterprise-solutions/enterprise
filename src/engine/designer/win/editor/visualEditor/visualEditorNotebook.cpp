@@ -4,7 +4,6 @@
 
 #include "frontend/win/editor/codeEditor/codeEditor.h"
 #include "frontend/win/editor/codeEditor/codeEditorParser.h"
-#include "frontend/mainFrame/objinspect/objinspect.h"   // objectInspector (SelectPropertyObject)
 #include "frontend/visualView/layers/commandBar.h"       // ibValueCommandBarItem (tree reveal)
 
 void ibVisualEditorNotebook::CreateVisualEditor(ibMetaDocument* document, wxWindow* parent, wxWindowID id, long flags)
@@ -146,15 +145,16 @@ void ibVisualEditorNotebook::ModifyEvent(ibEvent* event, const wxVariant& oldVal
 
 void ibVisualEditorNotebook::SelectPropertyObject(ibPropertyObject* obj)
 {
-	if (obj == nullptr)
+	if (obj == nullptr || m_visualEditor == nullptr)
 		return;
-	if (!objectInspector->IsShownInspector())
-		objectInspector->ShowInspector();
-	objectInspector->SelectObject(obj, true);
-	// Reveal a command in the object tree too (EnsureVisible + SelectItem) — so a click on the
-	// rendered toolbar / an add-move from the menu also highlights the node. Bar nodes and plain
-	// property objects aren't in the command map; SelectCommandItem no-ops for them.
-	if (m_visualEditor != nullptr && m_visualEditor->GetObjectTree() != nullptr) {
+	// Route through the editor's SINGLE selector, NOT a second door into the inspector: the live surface (a rendered
+	// toolbar click, an add / move / paste from the bar menu) makes `obj` the editor's current element AND force-opens
+	// the inspector on it in ONE call. This keeps GetCurrentElement in sync, so a later rebuild reveals THIS element,
+	// not a stale one — the "must reselect" bug. forceOpen: an explicit live click deserves the panel raised.
+	m_visualEditor->SetCurrentElement(obj, true);
+	// The live surface ALSO reveals the command in the object tree (EnsureVisible + SelectItem) and brings the designer
+	// page forward — the two extras a plain tree-select doesn't need. Bar nodes / plain property objects no-op the reveal.
+	if (m_visualEditor->GetObjectTree() != nullptr) {
 		if (ibValueCommandBarItem* citem = dynamic_cast<ibValueCommandBarItem*>(obj))
 			m_visualEditor->GetObjectTree()->SelectCommandItem(citem);
 	}

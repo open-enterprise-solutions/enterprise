@@ -3,11 +3,12 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "visualEditor.h"
+#include "designerTreeCtrl.h"                                          // focus-safe DeleteAllItems (our wxTreeCtrl projection)
+#include "visualEditorDragItem.h"                                        // ibSourceDragItem — serialize + start the drag (one kind)
 #include "frontend/visualView/ctrl/formAttribute.h"                    // ibFormAttributeValue (+ clipboard statics)
 #include "frontend/visualView/ctrl/form.h"                              // ibValueForm attribute API
 #include "frontend/visualView/ctrl/widgets.h"                           // g_controlCheckboxCLSID / g_controlTextCtrlCLSID (node -> control map)
 #include "frontend/visualView/ctrl/tableBox.h"                          // g_controlTableBoxCLSID
-#include "frontend/mainFrame/objinspect/objinspect.h"                  // objectInspector
 #include "backend/metaCollection/attribute/metaAttributeObject.h"      // GetIconGroup (default attribute icon)
 #include "backend/srcDataObject.h"                                      // ibSourceDataObject / ibSourceExplorer / ConvertToMetaIds
 #include "backend/sourceDescription.h"                                   // ibSourceDescription / ibSourceDescriptionMemory (drag payload = the source path, unified serialize)
@@ -60,7 +61,7 @@ ibAttributeTree::ibVisualEditorAttributeTree(ibVisualEditor* owner, wxWindow* pa
 {
 	// No toolbar — every action lives on the context menu. wxTR_EDIT_LABELS enables the inline
 	// rename used by "Edit".
-	m_tcAttributes = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+	m_tcAttributes = new ibDesignerTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxTR_DEFAULT_STYLE | wxTR_HIDE_ROOT | wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_FULL_ROW_HIGHLIGHT | wxTR_EDIT_LABELS);
 	m_tcAttributes->SetDoubleBuffered(true);   // no flicker on RebuildTree (add / set-main), like the object tree
 
@@ -89,6 +90,16 @@ ibAttributeTree::ibVisualEditorAttributeTree(ibVisualEditor* owner, wxWindow* pa
 			if (!SelectColumnInInspector(id))          // a value-table column node re-surfaces its column-info
 				SelectInInspector(GetEntryFromItem(id));   // else re-surface the already-selected attribute
 		event.Skip();
+	});
+
+	// ACTIVATING the tree (it gains focus) reveals its SELECTED element too — not only a click. Tabbing to the tree,
+	// or it becoming the active surface, re-surfaces the current attribute in the inspector (the SAME reveal a click
+	// runs). Soft: fills an open inspector, never pops it open, never steals focus.
+	m_tcAttributes->Bind(wxEVT_SET_FOCUS, [this](wxFocusEvent& event) {
+		event.Skip();
+		const wxTreeItemId id = m_tcAttributes->GetSelection();
+		if (id.IsOk() && !SelectColumnInInspector(id))
+			SelectInInspector(GetEntryFromItem(id));
 	});
 
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
@@ -186,6 +197,10 @@ void ibAttributeTree::RebuildTree()
 
 	m_rebuilding = true;        // suppress OnSelChanged while items churn (stale/freed holders)
 	m_tcAttributes->Freeze();   // no flicker while the tree is torn down and re-appended
+	// BLOCK the tree's events for the whole churn: DeleteAllItems / SelectItem otherwise generate native selection +
+	// focus events, and the app's OnSetFocus follows that focus and switches the active MDI tab — a background
+	// rebuild would yank the tab from the editor the user is in. Re-enabled after the row is restored below.
+	m_tcAttributes->SetEvtHandlerEnabled(false);
 	m_tcAttributes->DeleteAllItems();
 	const wxTreeItemId root = m_tcAttributes->AddRoot(wxT("Attributes"));
 
@@ -218,6 +233,7 @@ void ibAttributeTree::RebuildTree()
 	// Mirrors the object tree, whose RebuildTree restores structure only and never re-selects. Callers that DO
 	// want the inspector to follow (OnAdd / OnPaste / OnSetMain) call SelectEntry themselves after the rebuild.
 	SelectEntry(keep);
+	m_tcAttributes->SetEvtHandlerEnabled(true);   // churn done, row restored — resume normal event handling
 	m_rebuilding = false;
 }
 
@@ -278,14 +294,12 @@ void ibAttributeTree::SelectEntry(ibFormAttributeValue* entry)
 
 void ibAttributeTree::SelectInInspector(ibFormAttributeValue* entry)
 {
-	// The single decode-and-select point. Select the HOLDER (facade): it surfaces the attribute's +
-	// the generated value's properties and intercepts their changes. SelectObject is a no-op while
-	// the inspector is hidden, so raise it first.
+	// The single decode-and-select point. Make the HOLDER (facade) the current element — it surfaces the attribute's +
+	// the generated value's properties and intercepts their changes. The ONE selector sets current AND soft-lights the
+	// inspector (fills an open one, never pops it open), so a tree click no longer pokes objectInspector on its own.
 	if (entry == nullptr)
 		return;
-	if (!objectInspector->IsShownInspector())
-		objectInspector->ShowInspector();
-	objectInspector->SelectObject(entry, true);
+	m_formHandler->SetCurrentElement(entry);
 }
 
 bool ibAttributeTree::SelectColumnInInspector(const wxTreeItemId& item)
@@ -324,9 +338,7 @@ bool ibAttributeTree::SelectColumnInInspector(const wxTreeItemId& item)
 		// The concrete column-info IS the property object; reach it via ConvertToValue (it is an ibValue).
 		ibTableColumnInfo* colInfo = nullptr;
 		if (ci->ConvertToValue(colInfo) && colInfo != nullptr) {
-			if (!objectInspector->IsShownInspector())
-				objectInspector->ShowInspector();
-			objectInspector->SelectObject(colInfo, true);
+			m_formHandler->SetCurrentElement(colInfo);   // the column IS the property object — reveal via the ONE selector (soft)
 			return true;
 		}
 	}
@@ -461,18 +473,12 @@ void ibAttributeTree::OnBeginDrag(wxTreeEvent& event)
 		return;
 
 	// Payload = the binding PATH as RAW ids — resolution is via the source explorer (metadata-agnostic), so
-	// the serializer needs no metaData. The drop loads it and resolves the control class from the path.
+	// the serializer needs no metaData. The drop loads it and resolves the control class from the path. The
+	// SOURCE drag KIND owns its format + serialization + DoDrag (symmetric to the command tree's command kind).
 	ibSourceDescription srcDesc;   // build from the HOP path — reference hops carry the pinned branch type (composite)
 	for (const ibSourceHop& hop : data->GetPath())
 		srcDesc.AppendSource(hop.m_id, hop.m_type);
-	ibWriterMemory writer;
-	ibSourceDescriptionMemory::SaveData(writer, srcDesc);
-	const wxMemoryBuffer buf = writer.buffer();
-
-	wxCustomDataObject payload(wxDataFormat(wxT("oes_source_drag")));
-	payload.SetData(buf.GetDataLen(), buf.GetData());
-	wxDropSource source(payload, m_tcAttributes);
-	source.DoDragDrop(wxDrag_CopyOnly);
+	ibSourceDragItem(m_tcAttributes, srcDesc);   // construction IS the drag
 }
 
 void ibAttributeTree::OnAdd(wxCommandEvent& WXUNUSED(event))
@@ -613,7 +619,9 @@ void ibAttributeTree::OnSetMain(wxCommandEvent& WXUNUSED(event))
 
 void ibAttributeTree::OnProperties(wxCommandEvent& WXUNUSED(event))
 {
-	SelectInInspector(GetEntryFromItem(m_tcAttributes->GetSelection()));
+	// Route the EXPLICIT "Properties" through the editor's ONE mechanism — the select already recorded this attribute
+	// as the current element; ShowCurrentElement force-opens the inspector on it. Not per-tree talking to it.
+	m_formHandler->ShowCurrentElement();
 }
 
 void ibAttributeTree::OnCopy(wxCommandEvent& WXUNUSED(event))

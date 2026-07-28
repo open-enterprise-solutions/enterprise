@@ -3,6 +3,7 @@
 
 #include "frontend/visualView/ctrl/control.h"
 #include "backend/sourceDescription.h"   // ibSourceDescription — the binding-path wrapper (Get/SetValueByAttributePath)
+#include "backend/backend_command.h"   // ibBackendCommandSender — the form IS-A command-hop source (entry gate)
 
 #include <memory>   // std::unique_ptr — owns the form's attribute/value registry entries
 
@@ -22,6 +23,7 @@ class BACKEND_API ibValueMetaObjectFormBase;
 class BACKEND_API ibValueMetaObjectGenericData;
 
 class FRONTEND_API ibFormAttributeValue;   // registry entry: owns an attribute + its managed value
+class FRONTEND_API ibFormCommandValue;     // registry entry: a form-local command (event) property object
 class BACKEND_API ibBackendFormAttribute;
 
 //********************************************************************************************
@@ -40,6 +42,8 @@ class FRONTEND_API ibValueForm :
 	// putting it at offset 0 keeps ibValue at the form's offset 0 — member-pmf binds
 	// (m_members.Bind(this, &ibValueForm::FillFormMembers)) then need no MI
 	// this-adjustment, which the cast to void(ibValue::*) would otherwise drop.
+	// The form is the command SOURCE / ENTRY hop of the walk — the ibBackendCommandSender contract comes through
+	// ibBackendValueForm (server-side, so a headless caller can walk commands); ibValueForm IMPLEMENTS GetCommandByHop.
 	public ibValueFrame, public ibBackendValueForm, public ibRuntimeModuleDataObject
 {
 public:
@@ -252,6 +256,30 @@ public:
 	// Paste a clipboard-deserialized attribute node as a fresh NON-main entry (unique name + id,
 	// wired into the module). Returns the new entry, or nullptr on failure.
 	ibFormAttributeValue* PasteAttribute(const ibDataNode& node);
+
+	// FORM COMMAND CRUD — form-local events managed like ATTRIBUTES: each is an ibFormCommandValue property object
+	// (Name/Caption/Action/Picture) the inspector edits, held by ibValuePtr, serialized WITH the form data. A
+	// projection binds to a form command by its ID (a normal 1-hop command path, rename-stable) and runs its Action
+	// (a form-runtime procedure) live; nothing to do with metaobjects.
+	ibFormCommandValue* AddFormCommand(const wxString& name, const wxString& procedure = wxEmptyString);
+	const std::vector<ibValuePtr<ibFormCommandValue>>& GetFormCommands() const { return m_formCommands; }
+	ibFormCommandValue* GetFormCommand(const wxString& name) const;
+	ibFormCommandValue* FindFormCommandById(const ibMetaID& id) const;
+
+	// ibBackendCommandSender — the form is the command SOURCE / entry hop: resolve an id to a command-capable
+	// value. Either the id is a config command / object command (a command metaobject, itself command-capable, which
+	// then hops its own sub-commands / a section its items), or the walk ends here. The front-end door starts
+	// ResolveCommandPath on the form; each further hop self-describes, exactly as a source path does.
+	virtual bool GetCommandByHop(const ibCommandHop& hop, ibValue& out) override;
+
+	void DeleteFormCommand(const wxString& name);
+	bool RenameFormCommand(ibFormCommandValue* entry, const wxString& newName);
+	wxString MakeUniqueFormCommandName(const wxString& base = wxT("Command")) const;
+	bool IsFormCommandNameUnique(const wxString& name, const ibFormCommandValue* except = nullptr) const;
+	ibMetaID NextFormCommandId() const;
+	ibFormCommandValue* PasteFormCommand(const ibDataNode& node);
+	bool ReadFormCommands(const ibDataNode& node);
+	bool WriteFormCommands(ibDataNode& node) const;
 
 	unsigned int GetAttributeCount() const { return (unsigned int)m_attributes.size(); }
 	// Next free attribute id (max existing + 1) — PUBLIC so the holder's nested description can
@@ -490,6 +518,10 @@ private:
 	// one whose attribute carries the Main flag — no separate pointer (single source of
 	// truth = the flag).
 	std::vector<ibValuePtr<ibFormAttributeValue>> m_attributes;
+
+	// FORM COMMANDS — form-local events (NOT metaobjects), managed like m_attributes: each is an ibFormCommandValue
+	// property object, held ref-counted, serialized with the form data, listed in the navigator's "Form commands".
+	std::vector<ibValuePtr<ibFormCommandValue>> m_formCommands;
 
 	// Shared internals of the Add*/Paste attribute paths (dedup):
 	void WireAttribute(ibFormAttributeValue* entry);                    // bind (if module live) + InvalidateNames

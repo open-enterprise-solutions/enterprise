@@ -104,6 +104,13 @@ ibObjectInspector* ibObjectInspector::GetObjectInspector()
 
 void ibObjectInspector::Create(ibPropertyObject* object, bool force)
 {
+	// The DEFERRED rebuild (the CallAfter below) reads m_pendingObject at FIRE time, so it must ALWAYS track the
+	// latest requested object — record it on EVERY call, not only when we defer. Otherwise a rebuild queued for object
+	// A that is then re-selected to B (e.g. a form closing hands the inspector to its metaobject) would still fire on
+	// the now-STALE A: if A was freed in the meantime the deferred Create dereferences a corpse (the floating crash).
+	// With this, the queued rebuild always sees the REAL current target (B), so the reassignment "wins".
+	m_pendingObject = object;
+
 	// Defer + coalesce. A child edit routes back here to rebuild (RefreshEditor → attribute tree →
 	// SelectObject → Create), but the m_pg->Clear() below DESTROYS every wxPGProperty. If a wxPG change
 	// event is still being dispatched, that frees the very property wxPG is editing → use-after-free the
@@ -112,7 +119,6 @@ void ibObjectInspector::Create(ibPropertyObject* object, bool force)
 	// queued, record the target and post a SINGLE CallAfter — the grid rebuilds once, after the stack
 	// unwinds, on the last requested object. A plain selection (no event, nothing queued) rebuilds inline.
 	if (m_inGridEvent || m_rebuildScheduled) {
-		m_pendingObject = object;
 		m_pendingForce = m_pendingForce || force;
 		if (!m_rebuildScheduled) {
 			m_rebuildScheduled = true;

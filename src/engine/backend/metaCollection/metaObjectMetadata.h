@@ -39,7 +39,8 @@ public:
 			clsid == g_metaCommonFormCLSID ||
 			clsid == g_metaCommonTemplateCLSID ||
 			clsid == g_metaRoleCLSID ||
-			clsid == g_metaInterfaceCLSID ||
+			clsid == g_metaSectionCLSID ||
+			clsid == g_metaCommonCommandCLSID ||
 			clsid == g_metaPictureCLSID ||
 			clsid == g_metaLanguageCLSID ||
 			clsid == g_metaConstantCLSID ||

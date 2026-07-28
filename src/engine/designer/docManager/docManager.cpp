@@ -43,7 +43,7 @@ ibDocManagerDesigner::ibDocManagerDesigner()
 	AddDocTemplate(g_metaCommonFormCLSID, CLASSINFO(ibFormEditDocument), CLASSINFO(ibFormEditView));
 	AddDocTemplate(g_metaCommonTemplateCLSID, _("Spreadsheet document"), wxT("*.oxl"), wxT("oxl"), CLASSINFO(ibSpreadsheetEditDocument), CLASSINFO(ibSpreadsheetEditView));
 
-	AddDocTemplate(g_metaInterfaceCLSID, CLASSINFO(ibInterfaceEditDocument), CLASSINFO(ibInterfaceEditView));
+	AddDocTemplate(g_metaSectionCLSID, CLASSINFO(ibInterfaceEditDocument), CLASSINFO(ibInterfaceEditView));
 	AddDocTemplate(g_metaRoleCLSID, CLASSINFO(ibRoleEditDocument), CLASSINFO(ibRoleEditView));
 
 	// Tools — invisible template, opened through CreateDocument<T>().

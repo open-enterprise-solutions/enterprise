@@ -122,6 +122,19 @@ bool ibValueWindow::WriteData(ibDataNode& node) const
 // the real control inside as its inner child; the rest unwrap the composite back to the
 // inner (via ibCanvasWindow::GetGenericControl) before calling the control's own stage.
 
+// ibBackendCommandSender — a composite control (a tablebox) is a command source: the form's command walk
+// descends into it, and it TERMINATES on a standard action of its OWN bus (the composite is the action's runtime;
+// the caller runs CallAsAction on it). A plain control / sizer is NOT a command source (it doesn't inherit this).
+bool ibValueWindowComposite::GetCommandByHop(const ibCommandHop& hop, ibValue& out)
+{
+	auto actions = GetActionCollection(GetTypeForm());
+	if (!actions.GetNameByID((ibActionID)hop.m_id).IsEmpty()) {
+		out = static_cast<const ibValue*>(this);   // this composite IS the action runtime; caller runs CallAsAction(id)
+		return true;
+	}
+	return false;
+}
+
 ibValueWindowComposite::ibValueWindowComposite() : ibValueWindow()
 {
 	// The frame owns the command-bar STORE and points it back at itself; the

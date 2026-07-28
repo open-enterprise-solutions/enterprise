@@ -66,6 +66,9 @@
     <ClCompile Include="win\editor\visualEditor\visualEditorAttributeTree.cpp">
       <Filter>win\editor\visualEditor</Filter>
     </ClCompile>
+    <ClCompile Include="win\editor\visualEditor\visualEditorCommandTree.cpp">
+      <Filter>win\editor\visualEditor</Filter>
+    </ClCompile>
     <ClCompile Include="win\editor\visualEditor\visualEditorObjectTree.cpp">
       <Filter>win\editor\visualEditor</Filter>
     </ClCompile>

@@ -1,5 +1,8 @@
 #include "interfaceEditor.h"
 
+#include "frontend/docView/docView.h"                       // docManager — notify open editors of the change
+#include "designer/docManager/templates/docViewMetaFile.h"  // ibMetaDocument — a config metaobject document
+
 #define ICON_SIZE 16
 
 ibInterfaceEditor::ibInterfaceEditor(wxWindow* parent,
@@ -35,6 +38,20 @@ void ibInterfaceEditor::OnCheckItem(wxTreeEvent& event)
 		ibInterfaceObject* metaObject = data->GetMetaObject();
 		wxASSERT(metaObject);
 		metaObject->SetInterface(m_metaInterface->GetMetaID(), event.GetExtraLong());
+
+		// Section composition changed -> re-render every open form so its command navigator re-gathers the section's
+		// content LIVE (a just-included / excluded item shows or hides without reopening the form). SKIP ONLY the
+		// section BEING EDITED — matched by its metaID: SetInterface flipped a membership FLAG, THIS section's tree
+		// needs no rebuild (that would drop the checked row). Every OTHER open doc updates and preserves its own row.
+		const ibMetaID editedId = m_metaInterface->GetMetaID();
+		for (auto& doc : docManager->GetDocumentsVector()) {
+			ibMetaDocument* metaDoc = wxDynamicCast(doc, ibMetaDocument);
+			if (metaDoc == nullptr)
+				continue;
+			const ibValueMetaObject* docMeta = metaDoc->GetMetaObject();
+			if (docMeta == nullptr || docMeta->GetMetaID() != editedId)
+				metaDoc->UpdateAllViews();
+		}
 	}
 
 	event.Skip();
@@ -44,6 +61,7 @@ void ibInterfaceEditor::OnCheckItem(wxTreeEvent& event)
 
 #define commonName _("Common")
 #define commonFormsName _("Common forms")
+#define commandsName _("Common commands")
 
 #define constantsName _("Constants")
 
@@ -73,6 +91,7 @@ void ibInterfaceEditor::InitInterface()
 	///////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	m_treeFORMS = AppendGroupItem(m_treeCOMMON, g_metaCommonFormCLSID, commonFormsName);
+	m_treeCOMMANDS = AppendGroupItem(m_treeCOMMON, g_metaCommonCommandCLSID, commandsName);
 
 	//*****************************************************************************************************
 	//*                                      Custom objects                                               *
@@ -106,6 +125,7 @@ void ibInterfaceEditor::ClearInterface() {
 	//*****************************************************************************************************
 
 	if (m_treeFORMS.IsOk()) m_interfaceCtrl->DeleteChildren(m_treeFORMS);
+	if (m_treeCOMMANDS.IsOk()) m_interfaceCtrl->DeleteChildren(m_treeCOMMANDS);
 
 	if (m_treeCONSTANTS.IsOk()) m_interfaceCtrl->DeleteChildren(m_treeCONSTANTS);
 
@@ -147,6 +167,18 @@ void ibInterfaceEditor::FillData()
 		if (commonForm->IsDeleted())
 			continue;
 		AppendItem(m_treeFORMS, commonForm);
+	}
+
+	//****************************************************************
+	//*                          Commands                            *
+	//****************************************************************
+	// General commands, checkable into THIS section — a checked command (with its Interface area) then renders in
+	// the section's runtime menu in that area, and a click runs it. The command is a first-class citizen: same one
+	// binds to a form button too.
+	for (auto command : metaData->GetAnyArrayObject(g_metaCommonCommandCLSID)) {
+		if (command->IsDeleted())
+			continue;
+		AppendItem(m_treeCOMMANDS, command);
 	}
 
 	//****************************************************************

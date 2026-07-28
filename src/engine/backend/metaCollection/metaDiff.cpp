@@ -95,7 +95,7 @@ wxString ibMetaDiffWalker::GroupLabelFor(ibClassID clsid)
 	if (clsid == g_metaCommonModuleCLSID)               return _("Common modules");
 	if (clsid == g_metaCommonFormCLSID)                 return _("Common forms");
 	if (clsid == g_metaCommonTemplateCLSID)             return _("Common templates");
-	if (clsid == g_metaInterfaceCLSID)                  return _("Interfaces");
+	if (clsid == g_metaSectionCLSID)                  return _("Sections");
 	if (clsid == g_metaRoleCLSID)                       return _("Roles");
 	if (clsid == g_metaPictureCLSID)                    return _("Pictures");
 	if (clsid == g_metaLanguageCLSID)                   return _("Languages");
@@ -144,7 +144,7 @@ int ibMetaDiffWalker::GroupOrderRank(ibClassID clsid)
 		{ g_metaCommonFormCLSID,                  20 },
 		{ g_metaCommonTemplateCLSID,              30 },
 		{ g_metaPictureCLSID,                     40 },
-		{ g_metaInterfaceCLSID,                   50 },
+		{ g_metaSectionCLSID,                   50 },
 		{ g_metaRoleCLSID,                        60 },
 		{ g_metaLanguageCLSID,                    70 },
 

@@ -15,14 +15,18 @@ enum ibInterfaceCommandType {
 	ibInterfaceCommandType_Select,
 };
 
+// The interface AREAS an object / command can occupy inside a section (subsystem), 1C's command-interface panels:
+// Important (top, with the main items) + Normal make the navigation panel; Create / Reports / Service make the
+// action panel. Combined = a list object that offers both its list (Normal) and a Create.
 enum ibInterfaceCommandSection {
 
-	ibInterfaceCommandSection_Default = 100,
+	ibInterfaceCommandSection_Default = 100,   // Normal (Обычное)
+	ibInterfaceCommandSection_Important = 120, // Important (Важное) — shown at the top with the main items
 
-	ibInterfaceCommandSection_Create = 150,
+	ibInterfaceCommandSection_Create = 150,    // Create (Создать)
 	ibInterfaceCommandSection_Combined,
-	ibInterfaceCommandSection_Report,
-	ibInterfaceCommandSection_Service,
+	ibInterfaceCommandSection_Report,          // Reports (Отчёты)
+	ibInterfaceCommandSection_Service,         // Service (Сервис)
 };
 
 //********************************************************************************************

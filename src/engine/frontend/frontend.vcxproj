@@ -74,6 +74,7 @@
     <ClCompile Include="propertyManager\property\advprop\advpropPoint.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropRecord.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropSize.cpp" />
+    <ClCompile Include="propertyManager\property\advprop\advpropCommandSource.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropSource.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropSpreadsheet.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropString.cpp" />
@@ -96,6 +97,7 @@
     <ClCompile Include="visualView\ctrl\controlProperty.cpp" />
     <ClCompile Include="visualView\ctrl\form.cpp" />
     <ClCompile Include="visualView\ctrl\formAttribute.cpp" />
+    <ClCompile Include="visualView\ctrl\formCommand.cpp" />
     <ClCompile Include="visualView\ctrl\formAction.cpp" />
     <ClCompile Include="visualView\ctrl\formControl.cpp" />
     <ClCompile Include="visualView\ctrl\formVisualHost.cpp" />
@@ -152,6 +154,7 @@
     <ClCompile Include="visualView\ctrl\textctrlProperty.cpp" />
     <ClCompile Include="visualView\ctrl\textctrl_res.cpp" />
     <ClCompile Include="visualView\layers\commandBar.cpp" />
+    <ClCompile Include="visualView\layers\commandReceiver.cpp" />
     <ClCompile Include="visualView\layerObject.cpp" />
     <ClCompile Include="visualView\canvasWindow.cpp" />
     <ClCompile Include="visualView\ctrl\toolBar.cpp" />
@@ -506,6 +509,7 @@
     <ClInclude Include="propertyManager\property\advprop\advpropPoint.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropRecord.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropSize.h" />
+    <ClInclude Include="propertyManager\property\advprop\advpropCommandSource.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropSource.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropString.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropType.h" />
@@ -518,6 +522,7 @@
     <ClInclude Include="visualView\ctrl\control.h" />
     <ClInclude Include="visualView\ctrl\form.h" />
     <ClInclude Include="visualView\ctrl\formAttribute.h" />
+    <ClInclude Include="visualView\ctrl\formCommand.h" />
     <ClInclude Include="visualView\ctrl\frame.h" />
     <ClInclude Include="visualView\ctrl\gridBox.h" />
     <ClInclude Include="visualView\ctrl\htmlBox.h" />
@@ -527,6 +532,7 @@
     <ClInclude Include="visualView\ctrl\tableBoxColumnRenderer.h" />
     <ClInclude Include="visualView\ctrl\textBox.h" />
     <ClInclude Include="visualView\layers\commandBar.h" />
+    <ClInclude Include="visualView\layers\commandReceiver.h" />
     <ClInclude Include="visualView\layerObject.h" />
     <ClInclude Include="visualView\canvasWindow.h" />
     <ClInclude Include="visualView\ctrl\toolBar.h" />

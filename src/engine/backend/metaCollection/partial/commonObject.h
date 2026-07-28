@@ -25,7 +25,7 @@
 #include "backend/metaCollection/metaSpreadsheetObject.h"
 
 //interface
-#include "backend/metaCollection/metaInterfaceObject.h"
+#include "backend/metaCollection/metaSectionObject.h"
 
 //attributes 
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
@@ -292,7 +292,7 @@ protected:
 	}
 
 	//get default form 
-	virtual ibBackendValueForm* GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) {
+	virtual ibBackendValueForm* GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) const {
 
 		if (cmdType == ibInterfaceCommandType::ibInterfaceCommandType_Create) {
 			return GetObjectForm();
@@ -501,7 +501,7 @@ public:
 protected:
 
 	//get default form 
-	virtual ibBackendValueForm* GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) {
+	virtual ibBackendValueForm* GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) const {
 
 		if (cmdType == ibInterfaceCommandType::ibInterfaceCommandType_Create)
 			return GetObjectForm();
@@ -1253,7 +1253,7 @@ public:
 protected:
 
 	//get default form
-	virtual ibBackendValueForm* GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) {
+	virtual ibBackendValueForm* GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) const {
 
 		//if (cmdType == ibInterfaceCommandType::ibInterfaceCommandType_Create)
 		//	return GetObjectRecord();

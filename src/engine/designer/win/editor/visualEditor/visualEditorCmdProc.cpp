@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "visualEditor.h"
+#include "visualEditorDragItem.h"   // ibFormDragItem — the polymorphic drop kinds (ApplyDrop enacts the drop)
 
 #include "frontend/mainFrame/mainFrame.h"
 #include "frontend/mainFrame/objinspect/objinspect.h"
@@ -11,9 +12,13 @@
 #include "backend/propertyManager/propertyManager.h"
 
 #include "frontend/visualView/ctrl/formAttribute.h"   // ibFormAttributeValue (form attribute add command)
+#include "frontend/visualView/ctrl/formCommand.h"      // ibFormCommandValue (ibEditorSelection command ctor upcast)
 #include "frontend/visualView/ctrl/tableBox.h"         // g_controlTableBoxCLSID — a drop onto a tablebox appends a column
 #include "backend/query/queryColumn.h"                 // ibBackendSourceColumn::GetName (name a dropped control after its field)
 #include "backend/srcDataObject.h"                     // ibSourceExplorer — resolve a dropped path's leaf type -> control class
+#include "frontend/visualView/layers/commandBar.h"     // ibValueCommandBar / ibValueCommandBarItem — a command dropped on a tablebox becomes a bar item
+#include "frontend/visualView/ctrl/widgets.h"           // ibValueButton — a command dropped on the form becomes a bound Button control
+#include "backend/metadata.h"                           // ibMetaData::FindAnyObjectByFilter — name the button after the command
 #include <wx/app.h>                                     // wxTheApp->CallAfter — defer a grid drop out of the OS drop callback
 
 void ibVisualEditorNotebook::ibVisualEditor::Execute(ibVisualEditorCmd* cmd)
@@ -528,11 +533,12 @@ void ibVisualEditorModifyPropertyCmd::DoExecute()
 		// (RefreshEditor coalesces re-entrant calls itself, so the parallel objinspect child→parent bubble
 		// firing the same refresh is a no-op — no double rebuild.)
 		m_visualEditor->RefreshEditor();
-		// RefreshEditor rebuilds the object tree, which drops the tree selection — and with it the inspector's
-		// focus. Re-select the object whose property changed so the inspector STAYS on it (else toggling e.g.
-		// a command bar's AutoFill bounces the inspector off the bar onto the form).
-		if (ibPropertyObject* owner = m_property->GetPropertyObject())
-			objectInspector->SelectObject(owner, true);
+		// RefreshEditor drops the tree selection. Re-reveal the CURRENTLY selected element (what the inspector shows —
+		// the attribute FACADE, not m_property's real owner which is the hidden inner attribute) and FORCE its property
+		// list to recompute: a Type change (e.g. -> DynamicList) regenerates the facade's sub-properties, so the
+		// inspector must rebuild even though the selection is unchanged — no more "reselect the attribute by hand".
+		// REFRESH, not show: a no-op when the panel is hidden (nothing shown -> nothing to recompute).
+		m_visualEditor->RefreshCurrentElement();
 	}
 }
 
@@ -559,10 +565,9 @@ void ibVisualEditorModifyPropertyCmd::DoRestore()
 	}
 
 	m_visualEditor->Modify(true);
-	// Re-select the object whose property was restored — GetPropertyObject() generalises `control` to a LAYER
-	// owner (command bar / item) too, so undo keeps the inspector on it instead of dropping to null.
-	if (ibPropertyObject* owner = m_property->GetPropertyObject())
-		objectInspector->SelectObject(owner, true);
+	// Undo restored the value — REFRESH the current selection's properties in place (a restored Type must rebuild the
+	// facade's sub-properties), same as DoExecute. No-op when the panel is hidden; keeps the inspector where it was.
+	m_visualEditor->RefreshCurrentElement();
 }
 
 //-----------------------------------------------------------------------------
@@ -807,7 +812,7 @@ void ibVisualEditorInsertAttributeCmd::DoExecute()
 
 	m_visualEditor->RefreshEditor();
 	if (m_entry != nullptr)
-		objectInspector->SelectObject(m_entry, true);
+		m_visualEditor->SetCurrentElement(m_entry);   // reveal the new attribute through the ONE selector (soft)
 }
 
 void ibVisualEditorInsertAttributeCmd::DoRestore()
@@ -847,7 +852,7 @@ void ibVisualEditorRemoveAttributeCmd::DoRestore()
 
 	m_visualEditor->RefreshEditor();
 	if (m_entry != nullptr)
-		objectInspector->SelectObject(m_entry, true);
+		m_visualEditor->SetCurrentElement(m_entry);   // undo re-attaches: reveal it through the ONE selector (soft)
 }
 
 //-----------------------------------------------------------------------------
@@ -1003,6 +1008,60 @@ static wxString ResolveDropControlClass(ibValueForm* form, const ibSourceDescrip
 	return wxT("Textctrl");
 }
 
+void ibVisualEditorNotebook::ibVisualEditor::CreateCommandButton(ibValueFrame* target, const ibCommandDescription& desc)
+{
+	if (m_valueForm == nullptr || !desc.IsOk())
+		return;
+
+	// Resolve the display name by matching the dropped id path against the form's gathered command sources (the
+	// ONE gather that also feeds the navigator + picker) — no per-hop kind needed. Only the caption is seeded;
+	// the icon stays LIVE (BuildCommands / the button's Update re-resolve it from the command).
+	wxString caption;   // the command-source CELL text = the full PATH (fullName), so the binding reads as its path
+	for (const ibCommandSourceEntry& entry : GatherFormCommands(m_valueForm))
+		if (entry.desc == desc) { caption = entry.fullName.IsEmpty() ? entry.label : entry.fullName; break; }
+
+	// A drop that landed ON a command-bar TOOLBAR (the form's own or a tablebox's — the resolver tagged it) joins
+	// THAT bar as a new item, never a free button. Read + clear the per-drop channel so it can't leak to the next drop.
+	if (ibValueCommandBar* dropBar = m_pendingDropBar) {
+		m_pendingDropBar = nullptr;
+		ibValueCommandBarItem* item = dropBar->AddCommandItem();   // fresh unique name + SetBar
+		item->SetCommandDesc(desc, caption);   // the item's Caption stays unset -> the command supplies the DEFAULT look
+		Modify(true);
+		RefreshEditor();
+		return;
+	}
+
+	// A drop onto a TABLEBOX projects the command onto ITS OWN command bar (a bar item where table-scoped commands
+	// live). Every other drop — the form or a plain control — creates a BUTTON control bound to the command.
+	for (ibValueFrame* box = target; box != nullptr; box = box->GetParent()) {
+		if (box->GetClassType() != g_controlTableBoxCLSID)
+			continue;
+		if (!box->HasCommandBar())
+			break;
+		ibValueCommandBarItem* item = box->GetCommandBar()->AddCommandItem();   // fresh unique name + SetBar
+		item->SetCommandDesc(desc, caption);   // bind the command id path + its display name; the CAPTION is left
+		// unset on purpose so the command provides the DEFAULT look (BuildCommands fills it via the command door).
+		Modify(true);
+		RefreshEditor();
+		return;
+	}
+
+	// A drop ALWAYS ADDS a new command button — even onto an existing button — never overwrites the target's
+	// binding. (The old "drop onto a button -> rebind THAT button" silently replaced the button's command, which
+	// read as a bug: you dropped a second command and the first vanished.) The new button lands next to the target.
+
+	// Form / plain-control drop -> a NEW Button control bound to the command, through the SAME create flow any
+	// dropped control uses (CreateControlOfClass). The bind leaves the Title UNSET so the command supplies the
+	// DEFAULT caption + icon (button->Update resolves them live via the command door).
+	CreateControlOfClass(target, wxT("Button"), [&desc, &caption](ibValueFrame* control) {
+		if (control != nullptr && control->GetClassType() == g_controlButtonCLSID) {   // type by clsid, not dynamic_cast
+			ibValueButton* button = static_cast<ibValueButton*>(control);
+			button->SetCommandDesc(desc, caption);
+			button->SetCaption(wxEmptyString);
+		}
+	});
+}
+
 ibValueFrame* ibVisualEditorNotebook::ibVisualEditor::CreateBoundControl(
 	ibValueFrame* parentHint, const ibSourceDescription& desc)
 {
@@ -1053,11 +1112,22 @@ ibValueFrame* ibVisualEditorNotebook::ibVisualEditor::CreateBoundControl(
 	const wxString className = ResolveDropControlClass(m_valueForm, desc);
 	if (className.IsEmpty())
 		return nullptr;
-	ibValueFrame* obj = nullptr;
-	ibValueFrame* parent = (parentHint != nullptr) ? parentHint : m_valueForm;
+	// A scalar control shows its value / a tablebox refills its columns on first build because the source is
+	// bound BEFORE the widget is created — CreateControlOfClass runs the bind step ahead of the insert.
+	return CreateControlOfClass(parentHint, className, [this, &desc](ibValueFrame* control) {
+		SetBoundSource(control, desc);
+	});
+}
 
-	// Walk up until a parent that can hold the control (same convenience as CreateObject: an item /
-	// leaf can't be a parent, so climb to its container).
+// The shared create-a-control flow behind CreateBoundControl (source drop) and CreateCommandButton (command drop).
+// Climb to a parent that can hold `className`, create + unwrap it, run `bind` BEFORE the widget builds (so its
+// Update renders it already bound — no stale-until-reselect), insert undoably, notify, refill-if-source, select.
+ibValueFrame* ibVisualEditorNotebook::ibVisualEditor::CreateControlOfClass(
+	ibValueFrame* parentHint, const wxString& className, const std::function<void(ibValueFrame*)>& bind)
+{
+	// Walk up until a parent that can hold the control (an item / leaf can't be a parent — climb to its container).
+	ibValueFrame* parent = (parentHint != nullptr) ? parentHint : m_valueForm;
+	ibValueFrame* obj = nullptr;
 	while (parent != nullptr && obj == nullptr) {
 		obj = m_valueForm->CreateObject(_STDSTR(className), parent);
 		if (obj == nullptr) {
@@ -1069,27 +1139,21 @@ ibValueFrame* ibVisualEditorNotebook::ibVisualEditor::CreateBoundControl(
 	if (obj == nullptr)
 		return nullptr;
 
-	// Insert right after the dropped-on sibling when it shares the resolved parent, else append (-1).
-	// Unwrap the sizer-item wrapper to the real control and bind it BEFORE the widget is built, so the
-	// widget is created ALREADY bound: the source shows immediately and a tablebox refills its columns
-	// from the source. Binding AFTER the build left the control stale until a manual reselect / reopen.
+	// Unwrap the sizer-item wrapper to the real control, then bind BEFORE the build: InsertObjectCmd runs the
+	// control's Create -> Update pipeline, and Update reads the binding — so it renders correct on first paint.
 	ibValueFrame* control = obj;
 	while (control != nullptr && control->GetComponentType() == COMPONENT_TYPE_SIZERITEM)
 		control = control->GetChildCount() > 0 ? control->GetChild(0) : nullptr;
-	if (control != nullptr)
-		SetBoundSource(control, desc);
+	if (control != nullptr && bind)
+		bind(control);
 
-	// The bind is set on the object ABOVE, BEFORE this: InsertObjectCmd -> ibVisualHost::CreateControl
-	// runs the control's own pipeline (Create -> Update -> OnCreated -> OnUpdated), and Update reads the
-	// source — a textctrl shows its value, a tablebox refills its columns (CreateColumnCollection). So the
-	// drop renders through the SAME event flow as any created control; no extra editor refresh is needed.
 	const int pos = CalcPositionOfInsertion(parentHint, parent);
 	Execute(new ibVisualEditorInsertObjectCmd(this, obj, parent, pos));   // builds the widget (already bound)
 	NotifyObjectCreated(obj);
 
-	// A tablebox fills its DEFAULT columns from the bound source explorer now that its widget exists
-	// (the runtime CreateColumnCollection is designer-gated; this is the designer twin, the SAME fill the
-	// inspector's Source-change refill uses). No-op for scalar controls.
+	// A source-bound control (a tablebox) fills its DEFAULT columns from its source explorer now the widget
+	// exists — the designer twin of the runtime CreateColumnCollection. A no-op for a scalar / a plain button
+	// (not an ibTypeControlFactory).
 	if (ibTypeControlFactory* factory = dynamic_cast<ibTypeControlFactory*>(control))
 		factory->RefillFromSource();
 
@@ -1108,12 +1172,16 @@ void ibVisualEditorNotebook::ibVisualEditor::WireTableboxDrops(ibValueFrame* obj
 	if (obj->GetClassType() == g_controlTableBoxCLSID) {
 		ibValueFrame* box = obj;
 		if (wxWindow* chrome = wxDynamicCast(obj->GetWxObject(), wxWindow))
-			chrome->SetDropTarget(new ibSourceDragDropTarget([this, box](wxCoord, wxCoord, const ibSourceDescription& d) {
-				// DEFER out of the OS drop callback: this target lives ON the tablebox's grid, and adding a
-				// column rebuilds / re-wires that grid — freeing THIS very target mid-callback (use-after-free
-				// crash). Run the add after the drag-drop unwinds. desc is copied into the deferred call.
-				wxTheApp->CallAfter([this, box, d]() { CreateBoundControl(box, d); });
-			}));
+			// A drop ON the tablebox grid targets THIS table (fixed target = box, the point is irrelevant): a source
+			// path → a bound column, a command → a command on this table. DEFERRED — this target
+			// lives ON the grid, and the apply rebuilds / re-wires that grid, freeing THIS very target mid-callback
+			// (use-after-free); the target clones the decoded item and runs the apply after the drag unwinds.
+			chrome->SetDropTarget(new ibSourceDragDropTarget(
+				// Drop on the tablebox grid targets THIS table; clear the per-drop command-bar channel (no form toolbar
+				// here) so a command drop climbs to the table's OWN bar instead of reading a stale bar from a prior drop.
+				[this, box](wxCoord, wxCoord) -> ibValueFrame* { m_pendingDropBar = nullptr; return box; },
+				[this](const ibFormDragItem& item, ibValueFrame* target) { item.ApplyDrop(this, target); },
+				/*deferred*/ true));
 	}
 	for (unsigned int i = 0; i < obj->GetChildCount(); i++)
 		WireTableboxDrops(obj->GetChild(i));
@@ -1281,17 +1349,84 @@ void ibVisualEditorNotebook::ibVisualEditor::CutObject(ibValueFrame* obj, bool f
 
 bool ibVisualEditorNotebook::ibVisualEditor::SelectObject(ibValueFrame* obj, bool force, bool notify)
 {
-	if ((obj == objectInspector->GetSelectedObject()) && !force)
+	if ((obj == GetCurrentElement()) && !force)   // compare with OUR selection state, not the inspector's
 		return false;
 
-	m_visualEditor->SetObjectSelect(obj); m_selObj = obj;
-
-	if (notify) {
+	// The canvas control path is just the frame case of the ONE selector: it sets the highlight + the selection and
+	// soft-lights the inspector. Only the canvas adds a NOTIFY (scroll / observers) on top.
+	SetCurrentElement(obj);
+	if (notify)
 		NotifyObjectSelected(obj, force);
-	}
-
-	objectInspector->SelectObject(obj, this);
 	return true;
+}
+
+// ibEditorSelection — the KIND is captured by the ctor's PARAMETER TYPE (a control / attribute / command / other
+// property), so it can never be set wrong and AsFrame is a STATIC cast, never RTTI. The upcast to ibPropertyObject*
+// lives here (out-of-line) because visualEditor.h only forward-declares the attribute / command types.
+ibVisualEditorNotebook::ibVisualEditor::ibEditorSelection::ibEditorSelection(ibValueFrame* frame)
+	: m_object(frame), m_kind(frame != nullptr ? Frame : None) {}
+ibVisualEditorNotebook::ibVisualEditor::ibEditorSelection::ibEditorSelection(ibFormAttributeValue* attribute)
+	: m_object(attribute), m_kind(attribute != nullptr ? Attribute : None) {}
+ibVisualEditorNotebook::ibVisualEditor::ibEditorSelection::ibEditorSelection(ibFormCommandValue* command)
+	: m_object(command), m_kind(command != nullptr ? Command : None) {}
+ibVisualEditorNotebook::ibVisualEditor::ibEditorSelection::ibEditorSelection(ibPropertyObject* other)
+	: m_object(other), m_kind(other != nullptr ? Property : None) {}
+
+// The control view: a STATIC cast, valid because Frame was set from an ibValueFrame* at construction. A mismatch
+// (the selection is an attribute / command / nothing) simply returns null — you asked for a control, there is none.
+ibValueFrame* ibVisualEditorNotebook::ibVisualEditor::ibEditorSelection::AsFrame() const
+{
+	return m_kind == Frame ? static_cast<ibValueFrame*>(m_object) : nullptr;
+}
+
+ibFormAttributeValue* ibVisualEditorNotebook::ibVisualEditor::ibEditorSelection::AsAttribute() const
+{
+	return m_kind == Attribute ? static_cast<ibFormAttributeValue*>(m_object) : nullptr;
+}
+
+ibFormCommandValue* ibVisualEditorNotebook::ibVisualEditor::ibEditorSelection::AsCommand() const
+{
+	return m_kind == Command ? static_cast<ibFormCommandValue*>(m_object) : nullptr;
+}
+
+// The frame VIEW of the ONE selection — DERIVED, never stored. The control when the selection IS a control;
+// otherwise (an attribute / command / nothing) the form root, so canvas ops always get a valid frame.
+ibValueFrame* ibVisualEditorNotebook::ibVisualEditor::GetSelectedObject() const
+{
+	ibValueFrame* frame = m_selected.AsFrame();
+	return frame != nullptr ? frame : m_valueForm;
+}
+
+// LIGHT the inspector on this selection — THE only spot that reaches objectInspector to reveal a selection. forceOpen
+// raises a hidden inspector; the soft path fills only an already-open one (SelectObject is a no-op while hidden).
+void ibVisualEditorNotebook::ibVisualEditor::ibEditorSelection::Reveal(bool forceOpen) const
+{
+	if (m_object == nullptr)
+		return;
+	if (forceOpen) {
+		if (!objectInspector->IsShownInspector())
+			objectInspector->ShowInspector();           // SHOW: raise the panel only when hidden
+	}
+	else if (!objectInspector->IsShownInspector())
+		return;                                          // SOFT: no panel -> nothing to reveal / refresh
+	objectInspector->SelectObject(m_object, true);      // force-rebuild the grid on this object
+}
+
+// THE one entry point — set the selection, sync the canvas highlight, and light the inspector through the selection.
+void ibVisualEditorNotebook::ibVisualEditor::SetCurrentElement(ibEditorSelection element, bool forceOpen)
+{
+	m_selected = element;
+	if (ibValueFrame* frame = element.AsFrame())
+		m_visualEditor->SetObjectSelect(frame);   // a control -> the canvas highlight follows the selection
+	else
+		m_visualEditor->ClearObjectSelect();       // anything else -> drop the canvas highlight (no "two selected")
+	m_selected.Reveal(forceOpen);                  // the selector lights the inspector — nothing else does
+}
+
+// Re-reveal the current element unchanged (explicit "Properties") — a thin wrapper over the one selector.
+void ibVisualEditorNotebook::ibVisualEditor::ShowCurrentElement(bool forceOpen)
+{
+	SetCurrentElement(m_selected, forceOpen);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////
@@ -1341,7 +1476,6 @@ void ibVisualEditorNotebook::ibVisualEditor::ScrollToObject(ibValueFrame* obj)
 
 void ibVisualEditorNotebook::ibVisualEditor::ModifyProperty(ibProperty* prop, const wxVariant& oldValue, const wxVariant& newValue)
 {
-	ibPropertyObject* object = prop->GetPropertyObject();
 	if (oldValue != newValue) {
 		Execute(new ibVisualEditorModifyPropertyCmd(this, prop, oldValue, newValue));
 		NotifyPropertyModified(prop);
@@ -1350,7 +1484,6 @@ void ibVisualEditorNotebook::ibVisualEditor::ModifyProperty(ibProperty* prop, co
 
 void ibVisualEditorNotebook::ibVisualEditor::ModifyEvent(ibEvent* evt, const wxVariant& oldValue, const wxVariant& newValue)
 {
-	ibPropertyObject* object = evt->GetPropertyObject();
 	if (oldValue != newValue) {
 		Execute(new ibVisualEditorModifyEventCmd(this, evt, oldValue, newValue));
 		NotifyEventModified(evt);

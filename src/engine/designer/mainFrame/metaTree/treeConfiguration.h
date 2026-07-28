@@ -105,6 +105,7 @@ private:
 
 	wxTreeItemId m_treePICTURES;
 	wxTreeItemId m_treeINTERFACES;
+	wxTreeItemId m_treeCOMMANDS;
 	wxTreeItemId m_treeROLES;
 	wxTreeItemId m_treeLANGUAGES;
 
@@ -359,6 +360,10 @@ private:
 			new wxTreeItemMetaData(metaObject)
 		);
 	}
+
+	// HUB — append a command node and, recursively, its sub-commands (a group command holds commands, shown
+	// nested, exactly as a subsystem holds subsystems). Defined in the .cpp — needs the full command type.
+	void AppendCommandNode(const wxTreeItemId& parent, ibValueMetaObject* command);
 
 	void ActivateItem(const wxTreeItemId& item);
 

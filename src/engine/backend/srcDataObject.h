@@ -284,7 +284,22 @@ public:
 	// reference cell (resolved through its dumb model), GetValueByPath feeds its own first hop. Gateway
 	// boolean: false = a hop hit a non-source (a primitive mid-path) or a missing id; `out` is the final
 	// value only on true. Metadata-free — no metaID -> name -> FindProp round-trip.
-	static bool ResolvePath(const ibValue& start, const std::vector<ibSourceHop>& path, size_t from, ibValue& out);
+	static bool ResolvePath(const ibValue& start, const std::vector<ibSourceHop>& path, size_t from, ibValue& out)
+	{
+		ibValue current = start;
+		for (size_t i = from; i < path.size(); ++i) {
+			ibSourceDataObject* source = nullptr;
+			current.ConvertToValue<ibSourceDataObject>(source);
+			if (source == nullptr)
+				return false;   // a non-source value (a primitive) ends the walk: you cannot dot into it
+			ibValue next;
+			if (!source->GetValueBySourceHop(path[i], next))   // THE hop gate — the live value, or an empty typed twin of the pin
+				return false;
+			current = next;
+		}
+		out = current;
+		return true;
+	}
 
 
 	// THE structure-resolve hop — the design-time twin of ResolvePath, the ONE gate WalkSource and the

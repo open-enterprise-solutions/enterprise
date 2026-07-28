@@ -73,11 +73,11 @@ public:
 class BACKEND_API ibSourceDescriptionMemory {
 public:
 	static bool LoadData(class ibReaderMemory& reader, ibSourceDescription& srcDesc);
-	static bool SaveData(class ibWriterMemory& writer, ibSourceDescription& srcDesc);
+	static bool SaveData(class ibWriterMemory& writer, const ibSourceDescription& srcDesc);
 
 	// node form — a Binary blob of the id path; the byte reader / writer is contained here, not the property.
 	static bool ReadNode(const class ibDataValue& value, ibSourceDescription& srcDesc);
-	static bool WriteNode(class ibDataValue& value, ibSourceDescription& srcDesc);
+	static bool WriteNode(class ibDataValue& value, const ibSourceDescription& srcDesc);
 };
 
 #endif // !__SOURCE_DESCRIPTION_H__

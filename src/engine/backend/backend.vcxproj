@@ -175,7 +175,8 @@
     <ClInclude Include="metaCollection\attribute\metaAttributeObjectEnum.h" />
     <ClInclude Include="metaCollection\dimension\metaDimensionObject.h" />
     <ClInclude Include="metaCollection\enumeration\metaEnumObject.h" />
-    <ClInclude Include="metaCollection\metaInterfaceObject.h" />
+    <ClInclude Include="metaCollection\metaSectionObject.h" />
+    <ClInclude Include="metaCollection\metaCommandObject.h" />
     <ClInclude Include="metaCollection\metaObjectComposite.h" />
     <ClInclude Include="metaCollection\metaFormObject.h" />
     <ClInclude Include="metaCollection\metaSpreadsheetObject.h" />
@@ -283,6 +284,7 @@
     <ClInclude Include="propertyManager\property\propertyPoint.h" />
     <ClInclude Include="propertyManager\property\propertyRecord.h" />
     <ClInclude Include="propertyManager\property\propertySize.h" />
+    <ClInclude Include="propertyManager\property\propertyCommandSource.h" />
     <ClInclude Include="propertyManager\property\propertySource.h" />
     <ClInclude Include="propertyManager\property\propertyString.h" />
     <ClInclude Include="propertyManager\property\propertySpreadsheet.h" />
@@ -298,6 +300,7 @@
     <ClInclude Include="propertyManager\property\variant\variantPoint.h" />
     <ClInclude Include="propertyManager\property\variant\variantSize.h" />
     <ClInclude Include="propertyManager\property\variant\variantRecord.h" />
+    <ClInclude Include="propertyManager\property\variant\variantCommandSource.h" />
     <ClInclude Include="propertyManager\property\variant\variantSource.h" />
     <ClInclude Include="propertyManager\property\variant\variantSpreadsheet.h" />
     <ClInclude Include="propertyManager\property\variant\variantType.h" />
@@ -328,6 +331,7 @@
     <ClInclude Include="system\value\valueType.h" />
     <ClInclude Include="model.h" />
     <ClInclude Include="modelView.h" />
+    <ClInclude Include="commandDescription.h" />
     <ClInclude Include="sourceDescription.h" />
     <ClInclude Include="typeconv.h" />
     <ClInclude Include="typeDescription.h" />
@@ -485,9 +489,12 @@
     <ClCompile Include="metaCollection\metaSpreadsheetObject.cpp" />
     <ClCompile Include="metaCollection\metaSpreadsheetObjectMenu.cpp" />
     <ClCompile Include="metaCollection\metaSpreadsheetObject_res.cpp" />
-    <ClCompile Include="metaCollection\metaInterfaceObject.cpp" />
-    <ClCompile Include="metaCollection\metaInterfaceObjectMenu.cpp" />
-    <ClCompile Include="metaCollection\metaInterfaceObject_res.cpp" />
+    <ClCompile Include="metaCollection\metaSectionObject.cpp" />
+    <ClCompile Include="metaCollection\metaCommandObject.cpp" />
+    <ClCompile Include="metaCollection\metaCommandObjectMenu.cpp" />
+    <ClCompile Include="metaCollection\metaCommandObject_res.cpp" />
+    <ClCompile Include="metaCollection\metaSectionObjectMenu.cpp" />
+    <ClCompile Include="metaCollection\metaSectionObject_res.cpp" />
     <ClCompile Include="metaCollection\metaModuleObject.cpp" />
     <ClCompile Include="metaCollection\metaModuleObjectMenu.cpp" />
     <ClCompile Include="metaCollection\metaModuleObjectProperty.cpp" />
@@ -675,6 +682,7 @@
     <ClCompile Include="propertyManager\property\propertyPoint.cpp" />
     <ClCompile Include="propertyManager\property\propertyRecord.cpp" />
     <ClCompile Include="propertyManager\property\propertySize.cpp" />
+    <ClCompile Include="propertyManager\property\propertyCommandSource.cpp" />
     <ClCompile Include="propertyManager\property\propertySource.cpp" />
     <ClCompile Include="propertyManager\property\propertyString.cpp" />
     <ClCompile Include="propertyManager\property\propertyStringExt.cpp" />
@@ -722,6 +730,7 @@
     <ClCompile Include="model.cpp" />
     <ClCompile Include="modelDb.cpp" />
     <ClCompile Include="modelRam.cpp" />
+    <ClCompile Include="commandDescription.cpp" />
     <ClCompile Include="sourceDescription.cpp" />
     <ClCompile Include="modelView.cpp" />
     <ClCompile Include="typeDescription.cpp" />

@@ -15,7 +15,7 @@
 #define THEME_COLOUR_BORDER  wxColour(0xA8, 0xBA, 0xC8)  // #A8BAC8 light dusty
 
 #include "backend/metadataConfiguration.h"
-#include "backend/metaCollection/metaInterfaceObject.h"
+#include "backend/metaCollection/metaSectionObject.h"
 
 #include "frontend/visualView/ctrl/frame.h"
 
@@ -71,9 +71,9 @@ class ibSubSystemWindow : public wxWindow {
 				m_popupWindow->Dismiss();
 		}
 
-		const ibValueMetaObjectInterface* GetMetaObject() const { return m_metaObject; }
+		const ibValueMetaObjectSection* GetMetaObject() const { return m_metaObject; }
 
-		ibSubSystemButton(ibSubSystemWindow* mainWindow, wxWindowID id, const ibValueMetaObjectInterface* object)
+		ibSubSystemButton(ibSubSystemWindow* mainWindow, wxWindowID id, const ibValueMetaObjectSection* object)
 			: wxControl(mainWindow, id, wxDefaultPosition, wxDefaultSize, wxNO_BORDER),
 			m_mainWindow(mainWindow), m_bitmap(object->GetPictureAsBitmap()), m_metaObject(object), m_popupWindow(nullptr),
 			m_eventType(wxEVT_BUTTON) {
@@ -367,7 +367,7 @@ class ibSubSystemWindow : public wxWindow {
 
 		unsigned int m_flags = wxAUI_TB_TEXT | wxAUI_NB_LEFT;
 
-		const ibValueMetaObjectInterface* m_metaObject;
+		const ibValueMetaObjectSection* m_metaObject;
 		wxPopupTransientWindow* m_popupWindow;
 
 		wxAuiToolBarItem item;
@@ -412,7 +412,7 @@ class ibSubSystemWindow : public wxWindow {
 				wxBoxSizer* sizerMain = new wxBoxSizer(wxHORIZONTAL);
 				wxBoxSizer* sizerLeft = new wxBoxSizer(wxVERTICAL);
 
-				const ibValueMetaObjectInterface* metaObject = m_popupWindow->GetMetaObject();
+				const ibValueMetaObjectSection* metaObject = m_popupWindow->GetMetaObject();
 				if (metaObject != nullptr) {
 					std::vector<ibValueMetaObject*> array;
 					if (metaObject->GetInterfaceItemArrayObject(ibInterfaceCommandSection_Default, array)) {
@@ -471,7 +471,7 @@ class ibSubSystemWindow : public wxWindow {
 
 						struct CSubWindowConstructor {
 
-							static void NextChildConstruct(wxBoxSizer* sizerSubSystemItem, const ibValueMetaObjectInterface* parent, ibScrolledSubWindow* wnd) {
+							static void NextChildConstruct(wxBoxSizer* sizerSubSystemItem, const ibValueMetaObjectSection* parent, ibScrolledSubWindow* wnd) {
 
 								for (const auto child : parent->GetInterfaceArrayObject()) {
 
@@ -705,7 +705,7 @@ class ibSubSystemWindow : public wxWindow {
 					dynamic_cast<ibBackendCommandItem*>(activeMetaData->FindAnyObjectByFilter(event.GetId()));
 
 				if (cmdItem != nullptr &&
-					cmdItem->ShowFormByCommandType(GetCommandType(section)))
+					cmdItem->Execute(GetCommandType(section)))
 					event.Skip();
 			}
 
@@ -714,7 +714,7 @@ class ibSubSystemWindow : public wxWindow {
 
 	public:
 
-		const ibValueMetaObjectInterface* GetMetaObject() const { return m_currentButton->GetMetaObject(); }
+		const ibValueMetaObjectSection* GetMetaObject() const { return m_currentButton->GetMetaObject(); }
 
 		// ctors
 		ibPopupSubWindow() : m_currentButton(nullptr) {}
@@ -804,7 +804,7 @@ class ibSubSystemWindow : public wxWindow {
 		bool    m_dismissPending = false;
 	};
 
-	ibSubSystemButton* CreateSubMenu(const ibValueMetaObjectInterface* object) {
+	ibSubSystemButton* CreateSubMenu(const ibValueMetaObjectSection* object) {
 		return m_arrayPageButton.emplace_back(
 			new ibSubSystemButton(this, wxID_ANY, object));
 	}
@@ -819,7 +819,7 @@ public:
 		long style = 0,
 		const wxString& name = wxASCII_STR(wxPanelNameStr)) : wxWindow(parent, id, pos, size, style, name), m_activeButton(nullptr)
 	{
-		for (const auto object : activeMetaData->GetAnyArrayObject<ibValueMetaObjectInterface>(g_metaInterfaceCLSID)) {
+		for (const auto object : activeMetaData->GetAnyArrayObject<ibValueMetaObjectSection>(g_metaSectionCLSID)) {
 			if (object->AccessRight_Use()) CreateSubMenu(object);
 		}
 
@@ -897,7 +897,7 @@ void ibFrontendMainFrameEnterprise::CreateSubSystem()
 {
 	bool hasInterface = false;
 
-	for (const auto object : activeMetaData->GetAnyArrayObject<ibValueMetaObjectInterface>(g_metaInterfaceCLSID)) {
+	for (const auto object : activeMetaData->GetAnyArrayObject<ibValueMetaObjectSection>(g_metaSectionCLSID)) {
 		if (object->AccessRight_Use()) {
 			hasInterface = true;
 			break;

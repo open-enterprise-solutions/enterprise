@@ -3,6 +3,7 @@
 
 #include "control.h"
 #include "frontend/frontendTypes.h"
+#include "backend/backend_command.h"   // ibBackendCommandSender — a composite control (tablebox) is a command source
 
 class ibCanvasWindow;   // layer canvas widget (visualView/canvasWindow.h)
 
@@ -60,8 +61,13 @@ protected:
 // rest. The host maps the composite as the control's wxObject. A control opts in by
 // deriving from here instead of ibValueWindow (tableBox first). Update stays plain:
 // wxCompositeWindow forwards colour/font/focus to the inner, size/show sit on the wrapper.
-class ibValueWindowComposite : public ibValueWindow {
+class ibValueWindowComposite : public ibValueWindow, public ibBackendCommandSender {
 public:
+
+	// ibBackendCommandSender — a COMPOSITE control (a tablebox) IS a command source (it carries a command bar),
+	// unlike a plain control / sizer. The form's command walk DESCENDS into it; it TERMINATES on a standard action
+	// of its OWN bus (the composite is the action's runtime — the caller runs CallAsAction). Mirror of a source hop.
+	virtual bool GetCommandByHop(const ibCommandHop& hop, ibValue& out) override;
 
 	// Every composite window carries a command bar (its toolbar layer) — created
 	// here so any composite gets one by default; non-composite controls leave

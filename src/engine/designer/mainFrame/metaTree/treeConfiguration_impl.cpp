@@ -8,6 +8,7 @@
 #include "frontend/docView/docView.h"
 #include "backend/appData.h"
 #include "backend/appEnv.h"
+#include "backend/metaCollection/metaCommandObject.h"   // ibValueMetaObjectCommand::GetSubCommands (hub — nested commands)
 
 #define metadataName _("Metadata")
 #define commonName _("Common")
@@ -16,7 +17,8 @@
 #define commonFormsName _("Common forms")
 #define commonTemplatesName _("Common templates")
 
-#define interfacesName _("Interfaces")
+#define interfacesName _("Sections")
+#define commandsName _("Common commands")
 #define rolesName _("Roles")
 #define picturesName _("Pictures")
 #define languagesName _("Languages")
@@ -38,6 +40,7 @@
 #define	objectModulesName _("Modules")
 #define	objectTemplatesName _("Templates")
 #define objectAttributesName _("Attributes")
+#define objectCommandsName _("Commands")
 #define objectDimensionsName _("Dimensions")
 #define objectResourcesName _("Resources")
 
@@ -221,6 +224,14 @@ ibValueMetaObject* ibMetadataTree::CreateItem(bool showValue)
 		if (showValue) { OpenObjectForm(createdObject); }
 		UpdateToolbar(createdObject,
 			FillItem(createdObject, item, oldSelection == objectInspector->GetSelectedObject(), false));
+
+		// Notify every open editor that the config gained an object — a form editor's command navigator (and any
+		// other config-wide surface) re-gathers, so a just-added global / object command shows up live. The delete
+		// path already does this; the add path did not — hence a new command stayed invisible on an open form.
+		for (auto& doc : docManager->GetDocumentsVector()) {
+			ibMetaDocument* metaDoc = wxDynamicCast(doc, ibMetaDocument);
+			if (metaDoc != nullptr) metaDoc->UpdateAllViews();
+		}
 	}
 
 	Thaw();
@@ -237,8 +248,8 @@ wxTreeItemId ibMetadataTree::FillItem(ibValueMetaObject* metaItem, const wxTreeI
 	if (metaItem->GetClassType() == g_metaTableCLSID || metaItem->GetClassType() == g_metaTableRefCLSID) {
 		createdItem = AppendGroupItem(item, g_metaAttributeCLSID, metaItem);
 	}
-	else if (metaItem->GetClassType() == g_metaInterfaceCLSID) {
-		createdItem = AppendGroupItem(item, g_metaInterfaceCLSID, metaItem);
+	else if (metaItem->GetClassType() == g_metaSectionCLSID) {
+		createdItem = AppendGroupItem(item, g_metaSectionCLSID, metaItem);
 	}
 	else {
 		createdItem = AppendItem(item, metaItem);
@@ -269,13 +280,15 @@ wxTreeItemId ibMetadataTree::FillItem(ibValueMetaObject* metaItem, const wxTreeI
 			AppendItem(createdItem, attribute);
 		}
 	}
-	else if (metaItem->GetClassType() == g_metaInterfaceCLSID) {
-		ibValueMetaObjectInterface* metaItemRecord = metaItem->ConvertToType<ibValueMetaObjectInterface>();
+	else if (metaItem->GetClassType() == g_metaSectionCLSID) {
+		ibValueMetaObjectSection* metaItemRecord = metaItem->ConvertToType<ibValueMetaObjectSection>();
 		for (auto object : metaItemRecord->GetInterfaceArrayObject()) {
 			if (object->IsDeleted())
 				continue;
 			AppendItem(createdItem, object);
 		}
+		for (auto metaCommand : metaItemRecord->GetCommandArrayObject())   // a section owns its own commands
+			AppendCommandNode(createdItem, metaCommand);
 	}
 
 	m_metaTreeCtrl->InvalidateBestSize();
@@ -290,6 +303,18 @@ wxTreeItemId ibMetadataTree::FillItem(ibValueMetaObject* metaItem, const wxTreeI
 		m_metaTreeCtrl->ScrollTo(createdItem);
 
 	return createdItem;
+}
+
+// HUB — append a command node and, recursively, its sub-commands (a group command holds commands, shown nested,
+// exactly as a subsystem holds subsystems). Skips deleted. The clsid gate makes the cast type-safe.
+void ibMetadataTree::AppendCommandNode(const wxTreeItemId& parent, ibValueMetaObject* command)
+{
+	if (command == nullptr || command->IsDeleted())
+		return;
+	const wxTreeItemId hCmd = AppendItem(parent, command);
+	if (command->GetClassType() == g_metaCommonCommandCLSID || command->GetClassType() == g_metaCommandCLSID)
+		for (auto sub : static_cast<ibValueMetaObjectCommand*>(command)->GetSubCommands())
+			AppendCommandNode(hCmd, sub);
 }
 
 void ibMetadataTree::EditItem()
@@ -833,7 +858,7 @@ bool ibMetadataTree::RenameMetaObject(ibValueMetaObject* metaObject, const wxStr
 
 void ibMetadataTree::AddInterfaceItem(ibValueMetaObject* metaObject, const wxTreeItemId& hParentID)
 {
-	ibValueMetaObjectInterface* metaObjectValue = metaObject->ConvertToType<ibValueMetaObjectInterface>();
+	ibValueMetaObjectSection* metaObjectValue = metaObject->ConvertToType<ibValueMetaObjectSection>();
 	wxASSERT(metaObject);
 
 	for (auto commonInterface : metaObjectValue->GetInterfaceArrayObject()) {
@@ -848,8 +873,11 @@ void ibMetadataTree::AddInterfaceItem(ibValueMetaObject* metaObject, const wxTre
 		//	continue;
 
 		AddInterfaceItem(commonInterface,
-			AppendGroupItem(hParentID, g_metaInterfaceCLSID, commonInterface));
+			AppendGroupItem(hParentID, g_metaSectionCLSID, commonInterface));
 	}
+
+	for (auto metaCommand : metaObjectValue->GetCommandArrayObject())   // a section owns its own commands
+		AppendCommandNode(hParentID, metaCommand);
 }
 
 void ibMetadataTree::AddCatalogItem(ibValueMetaObject* metaObject, const wxTreeItemId& hParentID)
@@ -926,6 +954,11 @@ void ibMetadataTree::AddCatalogItem(ibValueMetaObject* metaObject, const wxTreeI
 
 		AppendItem(hForm, metaForm);
 	}
+
+	// commands (object scope) — each business object owns its own commands
+	const wxTreeItemId& hCommands = AppendGroupItem(hParentID, g_metaCommandCLSID, objectCommandsName);
+	for (auto metaCommand : metaObjectValue->GetCommandArrayObject())
+		AppendCommandNode(hCommands, metaCommand);   // hub — nests sub-commands, skips deleted
 
 	// tables
 	const wxTreeItemId& hTemplates = AppendGroupItem(hParentID, g_metaTemplateCLSID, objectTemplatesName);
@@ -1019,6 +1052,11 @@ void ibMetadataTree::AddDocumentItem(ibValueMetaObject* metaObject, const wxTree
 		AppendItem(hForm, metaForm);
 	}
 
+	// commands (object scope) — each business object owns its own commands
+	const wxTreeItemId& hCommands = AppendGroupItem(hParentID, g_metaCommandCLSID, objectCommandsName);
+	for (auto metaCommand : metaObjectValue->GetCommandArrayObject())
+		AppendCommandNode(hCommands, metaCommand);   // hub — nests sub-commands, skips deleted
+
 	// tables
 	const wxTreeItemId& hTemplates = AppendGroupItem(hParentID, g_metaTemplateCLSID, objectTemplatesName);
 	for (auto metaTemplate : metaObjectValue->GetTemplateArrayObject()) {
@@ -1073,6 +1111,11 @@ void ibMetadataTree::AddEnumerationItem(ibValueMetaObject* metaObject, const wxT
 
 		AppendItem(hForm, metaForm);
 	}
+
+	// commands (object scope) — each business object owns its own commands
+	const wxTreeItemId& hCommands = AppendGroupItem(hParentID, g_metaCommandCLSID, objectCommandsName);
+	for (auto metaCommand : metaObjectValue->GetCommandArrayObject())
+		AppendCommandNode(hCommands, metaCommand);   // hub — nests sub-commands, skips deleted
 
 	// tables
 	const wxTreeItemId& hTemplates = AppendGroupItem(hParentID, g_metaTemplateCLSID, objectTemplatesName);
@@ -1165,6 +1208,11 @@ void ibMetadataTree::AddDataProcessorItem(ibValueMetaObject* metaObject, const w
 		AppendItem(hForm, metaForm);
 	}
 
+	// commands (object scope) — each business object owns its own commands
+	const wxTreeItemId& hCommands = AppendGroupItem(hParentID, g_metaCommandCLSID, objectCommandsName);
+	for (auto metaCommand : metaObjectValue->GetCommandArrayObject())
+		AppendCommandNode(hCommands, metaCommand);   // hub — nests sub-commands, skips deleted
+
 	// tables
 	const wxTreeItemId& hTemplates = AppendGroupItem(hParentID, g_metaTemplateCLSID, objectTemplatesName);
 	for (auto metaTemplate : metaObjectValue->GetTemplateArrayObject()) {
@@ -1254,6 +1302,11 @@ void ibMetadataTree::AddReportItem(ibValueMetaObject* metaObject, const wxTreeIt
 
 		AppendItem(hForm, metaForm);
 	}
+
+	// commands (object scope) — each business object owns its own commands
+	const wxTreeItemId& hCommands = AppendGroupItem(hParentID, g_metaCommandCLSID, objectCommandsName);
+	for (auto metaCommand : metaObjectValue->GetCommandArrayObject())
+		AppendCommandNode(hCommands, metaCommand);   // hub — nests sub-commands, skips deleted
 
 	// tables
 	const wxTreeItemId& hTemplates = AppendGroupItem(hParentID, g_metaTemplateCLSID, objectTemplatesName);
@@ -1350,6 +1403,11 @@ void ibMetadataTree::AddInformationRegisterItem(ibValueMetaObject* metaObject, c
 		AppendItem(hForm, metaForm);
 	}
 
+	// commands (object scope) — each business object owns its own commands
+	const wxTreeItemId& hCommands = AppendGroupItem(hParentID, g_metaCommandCLSID, objectCommandsName);
+	for (auto metaCommand : metaObjectValue->GetCommandArrayObject())
+		AppendCommandNode(hCommands, metaCommand);   // hub — nests sub-commands, skips deleted
+
 	// tables
 	const wxTreeItemId& hTemplates = AppendGroupItem(hParentID, g_metaTemplateCLSID, objectTemplatesName);
 	for (auto metaTemplate : metaObjectValue->GetTemplateArrayObject()) {
@@ -1445,6 +1503,11 @@ void ibMetadataTree::AddAccumulationRegisterItem(ibValueMetaObject* metaObject, 
 		AppendItem(hForm, metaForm);
 	}
 
+	// commands (object scope) — each business object owns its own commands
+	const wxTreeItemId& hCommands = AppendGroupItem(hParentID, g_metaCommandCLSID, objectCommandsName);
+	for (auto metaCommand : metaObjectValue->GetCommandArrayObject())
+		AppendCommandNode(hCommands, metaCommand);   // hub — nests sub-commands, skips deleted
+
 	// tables
 	const wxTreeItemId& hTemplates = AppendGroupItem(hParentID, g_metaTemplateCLSID, objectTemplatesName);
 	for (auto metaTemplate : metaObjectValue->GetTemplateArrayObject()) {
@@ -1482,11 +1545,15 @@ void ibMetadataTree::InitTree()
 
 	m_treeMODULES = AppendGroupItem(m_treeCOMMON, g_metaCommonModuleCLSID, commonModulesName);
 	m_treeFORMS = AppendGroupItem(m_treeCOMMON, g_metaCommonFormCLSID, commonFormsName);
+	m_treeCOMMANDS = AppendGroupItem(m_treeCOMMON, g_metaCommonCommandCLSID, commandsName);
+
 	m_treeTEMPLATES = AppendGroupItem(m_treeCOMMON, g_metaCommonTemplateCLSID, commonTemplatesName);
 
 	m_treePICTURES = AppendGroupItem(m_treeCOMMON, g_metaPictureCLSID, picturesName);
 
-	m_treeINTERFACES = AppendGroupItem(m_treeCOMMON, g_metaInterfaceCLSID, interfacesName);
+	// Sections come AFTER the common items — a top-level navigation grouping, not a common asset.
+	m_treeINTERFACES = AppendGroupItem(m_treeCOMMON, g_metaSectionCLSID, interfacesName);
+
 	m_treeROLES = AppendGroupItem(m_treeCOMMON, g_metaRoleCLSID, rolesName);
 
 	m_treeLANGUAGES = AppendGroupItem(m_treeCOMMON, g_metaLanguageCLSID, languagesName);
@@ -1550,6 +1617,8 @@ void ibMetadataTree::ClearTree()
 
 	if (m_treeINTERFACES.IsOk())
 		m_metaTreeCtrl->DeleteChildren(m_treeINTERFACES);
+	if (m_treeCOMMANDS.IsOk())
+		m_metaTreeCtrl->DeleteChildren(m_treeCOMMANDS);
 	if (m_treeROLES.IsOk())
 		m_metaTreeCtrl->DeleteChildren(m_treeROLES);
 	if (m_treePICTURES.IsOk())
@@ -1685,7 +1754,7 @@ void ibMetadataTree::FillData()
 	//*                          Interfaces							 *
 	//****************************************************************
 
-	for (auto commonInterface : m_metaData->GetAnyArrayObject(g_metaInterfaceCLSID)) {
+	for (auto commonInterface : m_metaData->GetAnyArrayObject(g_metaSectionCLSID)) {
 
 		if (commonInterface->IsDeleted())
 			continue;
@@ -1697,7 +1766,7 @@ void ibMetadataTree::FillData()
 			continue;
 
 		AddInterfaceItem(commonInterface,
-			AppendGroupItem(m_treeINTERFACES, g_metaInterfaceCLSID, commonInterface));
+			AppendGroupItem(m_treeINTERFACES, g_metaSectionCLSID, commonInterface));
 	}
 
 	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeINTERFACES))
@@ -1762,6 +1831,26 @@ void ibMetadataTree::FillData()
 
 	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeCONSTANTS))
 		m_metaTreeCtrl->Delete(m_treeCONSTANTS);
+
+	//****************************************************************
+	//*                        Commands                              *
+	//****************************************************************
+	for (auto command : m_metaData->GetAnyArrayObject(g_metaCommonCommandCLSID)) {
+
+		if (command->IsDeleted())
+			continue;
+
+		const wxString& strName = command->GetName();
+
+		if (!m_strSearch.IsEmpty()
+			&& strName.Find(m_strSearch) < 0)
+			continue;
+
+		AppendCommandNode(m_treeCOMMANDS, command);   // hub — nests sub-commands
+	}
+
+	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeCOMMANDS))
+		m_metaTreeCtrl->Delete(m_treeCOMMANDS);
 
 	//****************************************************************
 	//*                        Catalogs                              *

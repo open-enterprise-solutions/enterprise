@@ -272,7 +272,7 @@ WFRONTEND_API std::string wfrontendAllFunctionsJSON();
 
 // Open the form for a metadata object by its metaID. `cmdType` is the
 // raw ibInterfaceCommandType integer (100=Default, 150=Create,
-// 151=List, 152=Select) — passed through to ShowFormByCommandType so
+// 151=List, 152=Select) — passed through to Execute so
 // Create-section clicks land in the new-record flow, List in the list
 // flow, etc. Returns the updated active host JSON; "{}" on access
 // denied / unknown id / failure.

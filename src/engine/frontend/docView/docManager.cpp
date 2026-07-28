@@ -304,7 +304,7 @@ void ibDocManager::RegisterDefaultTemplates()
 		CLASSINFO(ibSpreadsheetFileDocument), CLASSINFO(ibSpreadsheetEditView),
 		ibTEMPLATE_VISIBLE);
 
-	AddDocTemplate(g_metaInterfaceCLSID,
+	AddDocTemplate(g_metaSectionCLSID,
 		_("Help document"), wxT("*.hle"), wxT("hle"),
 		_("Help Doc"), _("Help View"),
 		CLASSINFO(ibHelpFileDocument), CLASSINFO(ibHelpEditView),

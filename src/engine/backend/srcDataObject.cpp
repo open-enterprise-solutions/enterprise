@@ -12,28 +12,9 @@ bool ibSourceDataObject::IsTableSource() const
 	return explorer != nullptr && explorer->IsTableSection();
 }
 
-// THE shared deep-hop — the single code path the whole engine fetches dotted data through (this is
-// what GetValueByPath and the tablebox column renderer both call). The value at each step IS a source
-// object (a reference now inherits ibSourceDataObject), so it self-describes the next id. Static: the
-// starting value need not be THIS source (the renderer feeds a row's reference cell). Metadata-free —
-// no metaID -> name -> FindProp round-trip. Gateway boolean: false = a primitive mid-path or a missing
-// id; `out` holds the final value only on true.
-bool ibSourceDataObject::ResolvePath(const ibValue& start, const std::vector<ibSourceHop>& path, size_t from, ibValue& out)
-{
-	ibValue current = start;
-	for (size_t i = from; i < path.size(); ++i) {
-		ibSourceDataObject* source = nullptr;
-		current.ConvertToValue<ibSourceDataObject>(source);
-		if (source == nullptr)
-			return false;   // a non-source value (a primitive) ends the walk: you cannot dot into it
-		ibValue next;
-		if (!source->GetValueBySourceHop(path[i], next))   // THE hop gate — the live value, or an empty typed twin of the pin
-			return false;
-		current = next;
-	}
-	out = current;
-	return true;
-}
+// (ResolvePath — the shared deep-hop — is now an inline static in srcDataObject.h, symmetric with
+//  ibBackendCommandSender::ResolveCommandPath: both walks are tiny header-only loops over a self-describing
+//  value. The virtual hop inside stays a virtual call either way, so this is symmetry, not a speed change.)
 
 // Walk a whole hop path off THIS source to the leaf value: first hop off this, deeper hops via the shared
 // ResolvePath. Steps through the hop array; each step self-describes the next.

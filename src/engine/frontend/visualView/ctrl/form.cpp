@@ -108,6 +108,7 @@ bool ibValueForm::ReadData(const ibDataNode& node)
 
 	if (!ReadAttributes(node))
 		return false;
+	ReadFormCommands(node);
 	return ibValueFrame::ReadData(node);
 }
 
@@ -122,6 +123,7 @@ bool ibValueForm::WriteData(ibDataNode& node) const
 
 	if (!WriteAttributes(node))
 		return false;
+	WriteFormCommands(node);
 	return ibValueFrame::WriteData(node);
 }
 
@@ -130,12 +132,14 @@ bool ibValueForm::WriteData(ibDataNode& node) const
 // WriteData does) would double-write. Attributes are the one form-level datum that walk skips.
 bool ibValueForm::CopyData(ibDataNode& node) const
 {
-	return WriteAttributes(node);
+	WriteAttributes(node);
+	return WriteFormCommands(node);
 }
 
 bool ibValueForm::PasteData(const ibDataNode& node)
 {
-	return ReadAttributes(node);
+	ReadAttributes(node);
+	return ReadFormCommands(node);
 }
 
 

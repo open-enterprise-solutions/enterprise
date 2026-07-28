@@ -4,15 +4,20 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "visualEditor.h"
+#include "designerTreeCtrl.h"     // focus-safe DeleteAllItems (our wxTreeCtrl projection)
+#include "visualEditorDragItem.h"   // ibFormDragItem — the polymorphic drop kinds (ApplyDrop enacts the drop)
 #include "backend/propertyManager/propertyManager.h"
 #include "frontend/visualView/layers/commandBar.h"      // ibValueCommandBar (command-interface node)
-#include "frontend/mainFrame/objinspect/objinspect.h"   // objectInspector
 
 #include <wx/imaglist.h>
 
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::RebuildTree()
 {
 	wxWindow::Freeze();
+	// BLOCK the tree's events for the churn: DeleteAllItems / SelectItem otherwise fire native selection + focus
+	// events, and the app's OnSetFocus follows that focus and switches the active MDI tab — a background rebuild
+	// would yank the tab from the editor the user is in. Re-enabled before Thaw, after the row is restored.
+	m_tcObjects->SetEvtHandlerEnabled(false);
 
 	Disconnect(wxID_ANY, wxEVT_COMMAND_TREE_ITEM_EXPANDED, wxTreeEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnExpansionChange));
 	Disconnect(wxID_ANY, wxEVT_COMMAND_TREE_ITEM_COLLAPSED, wxTreeEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnExpansionChange));
@@ -61,6 +66,8 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::RebuildTr
 			m_notifySelecting = false;
 		}
 	}
+
+	m_tcObjects->SetEvtHandlerEnabled(true);   // churn done, row restored — resume normal event handling
 
 	Connect(wxID_ANY, wxEVT_COMMAND_TREE_ITEM_COLLAPSED, wxTreeEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnExpansionChange));
 	Connect(wxID_ANY, wxEVT_COMMAND_TREE_ITEM_EXPANDED, wxTreeEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnExpansionChange));
@@ -336,7 +343,7 @@ ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::ibVisualEditor
 	wxPanel(parent, id),
 	m_formHandler(handler)
 {
-	m_tcObjects = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_HAS_BUTTONS | wxTR_NO_LINES | wxSIMPLE_BORDER | wxTR_TWIST_BUTTONS);
+	m_tcObjects = new ibDesignerTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_HAS_BUTTONS | wxTR_NO_LINES | wxSIMPLE_BORDER | wxTR_TWIST_BUTTONS);
 
 	wxBoxSizer* sizerMain = new wxBoxSizer(wxVERTICAL);
 	sizerMain->Add(m_tcObjects, 1, wxEXPAND, 0);
@@ -347,11 +354,26 @@ ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::ibVisualEditor
 
 	m_tcObjects->SetDoubleBuffered(true);
 
-	// Accept a node dragged from the attribute tree, dropped ONTO a tree node → create + bind the control
-	// under that node (its container). The tree's own EVT_TREE_BEGIN/END_DRAG (reparent) is a separate
-	// mechanism and keeps working. DropBoundControl hit-tests the item under the drop point.
+	// Accept any registered drag KIND dropped ONTO a tree node: a source path → a bound control under that node
+	// (its container), a command → a command button on the nearest bar up from it. The tree's own
+	// EVT_TREE_BEGIN/END_DRAG (reparent) is a separate mechanism and keeps working. ONE resolver for every kind:
+	// hit-test the drop point to the tree item → its owning frame (a layer node resolves to its owner frame; an
+	// empty area → null, which the source's CreateBoundControl falls back to the form root).
 	m_tcObjects->SetDropTarget(
-		new ibSourceDragDropTarget([this](wxCoord x, wxCoord y, const ibSourceDescription& d) { DropBoundControl(x, y, d); }));
+		new ibSourceDragDropTarget(
+			[this](wxCoord x, wxCoord y) -> ibValueFrame* {
+				m_formHandler->SetPendingDropBar(nullptr);   // no command-bar toolbar in the object tree — clear the
+				                                             // per-drop channel so a command drop here can't read a stale bar
+				int flags = 0;
+				const wxTreeItemId item = m_tcObjects->HitTest(wxPoint(x, y), flags);
+				ibValueFrame* target = GetObjectFromTreeItem(item);
+				if (target == nullptr && item.IsOk())
+					if (wxTreeItemData* itemData = m_tcObjects->GetItemData(item))
+						if (ibValueLayerObject* layer = ((ibVisualEditorObjectTreeItemData*)itemData)->GetLayerObject())
+							target = layer->GetOwnerFrame();
+				return target;
+			},
+			[this](const ibFormDragItem& item, ibValueFrame* target) { item.ApplyDrop(m_formHandler, target); }));
 
 	Connect(wxID_ANY, wxEVT_COMMAND_TREE_ITEM_EXPANDED, wxTreeEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnExpansionChange));
 	Connect(wxID_ANY, wxEVT_COMMAND_TREE_ITEM_COLLAPSED, wxTreeEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnExpansionChange));
@@ -364,6 +386,13 @@ ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::ibVisualEditor
 	};
 	m_tcObjects->Bind(wxEVT_LEFT_DOWN, reselectOnClick);
 	m_tcObjects->Bind(wxEVT_RIGHT_DOWN, reselectOnClick);
+	// ACTIVATING the tree (it gains focus) reveals its SELECTED node too — not only a click. So switching to the object
+	// tree re-surfaces the current control / layer in the inspector (SelectObject early-outs if it is already current).
+	m_tcObjects->Bind(wxEVT_SET_FOCUS, [this](wxFocusEvent& event) {
+		event.Skip();
+		if (const wxTreeItemId sel = m_tcObjects->GetSelection(); sel.IsOk())
+			SelectItemData(m_tcObjects->GetItemData(sel));
+	});
 
 	m_altKeyIsDown = false;
 	m_notifySelecting = false;
@@ -380,9 +409,8 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::SelectIte
 		return;
 	auto* data = (ibVisualEditorObjectTreeItemData*)item_data;
 	if (ibValueLayerObject* layer = data->GetLayerObject()) {
-		if (!objectInspector->IsShownInspector()) objectInspector->ShowInspector();
-		objectInspector->SelectObject(layer, true);
-		return;
+		m_formHandler->SetCurrentElement(layer);   // a tree click is SOFT — reveal in an open inspector, don't pop it
+		return;                                    // open (matches the control node below; "Properties" force-opens)
 	}
 	ibValueFrame* obj(data->GetObject());
 	assert(obj);
@@ -390,43 +418,18 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::SelectIte
 	m_formHandler->ScrollToObject(obj);
 }
 
-void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::DropBoundControl(
-	wxCoord x, wxCoord y, const ibSourceDescription& desc)
-{
-	// A node dragged from the attribute tree, dropped onto an object-tree node → create + bind the control
-	// UNDER that node (its container). HitTest maps the drop point to the tree item; a LAYER node (command
-	// bar / command) resolves to its owner frame; an empty area → nullptr, and CreateBoundControl falls back
-	// to the form root and climbs to a legal parent (the same insert path the canvas drop uses).
-	int flags = 0;
-	const wxTreeItemId item = m_tcObjects->HitTest(wxPoint(x, y), flags);
-	ibValueFrame* target = GetObjectFromTreeItem(item);
-	if (target == nullptr && item.IsOk()) {
-		if (wxTreeItemData* itemData = m_tcObjects->GetItemData(item))
-			if (ibValueLayerObject* layer = ((ibVisualEditorObjectTreeItemData*)itemData)->GetLayerObject())
-				target = layer->GetOwnerFrame();
-	}
-	m_formHandler->CreateBoundControl(target, desc);
-}
-
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnKeyDown(wxTreeEvent& event)
 {
+	// Alt+Up / Alt+Down reorder the selected control among its siblings (GTK only — on MSVC the tree drives this
+	// itself). Guard the selection: a layer node (command bar) or empty selection resolves to null, which must NOT
+	// be passed to MovePosition. Alt+Left/Right (move a control IN / OUT of a container) has no editor primitive yet
+	// — it would be a real cross-platform reparent command with undo, not a keystroke — so it falls through to default.
 	if (event.GetKeyEvent().AltDown() && event.GetKeyCode() != WXK_ALT)
 	{
 #ifdef __WXGTK__
-		switch (event.GetKeyCode())
-		case WXK_UP:
-		{
-			m_formHandler->MovePosition(GetObjectFromTreeItem(m_tcObjects->GetSelection()), false);
-			return;
-		case WXK_DOWN:
-			m_formHandler->MovePosition(GetObjectFromTreeItem(m_tcObjects->GetSelection()), true);
-			return;
-		case WXK_RIGHT:
-			m_formHandler->MoveHierarchy(GetObjectFromTreeItem(m_tcObjects->GetSelection()), false);
-			return;
-		case WXK_LEFT:
-			m_formHandler->MoveHierarchy(GetObjectFromTreeItem(m_tcObjects->GetSelection()), true);
-			return;
+		if (ibValueFrame* obj = GetObjectFromTreeItem(m_tcObjects->GetSelection())) {
+			if (event.GetKeyCode() == WXK_UP)   { m_formHandler->MovePosition(obj, false); return; }
+			if (event.GetKeyCode() == WXK_DOWN) { m_formHandler->MovePosition(obj, true);  return; }
 		}
 #endif
 		event.Skip();
@@ -617,8 +620,10 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorItemPopupMenu::OnMenu
 	case MENU_MOVE_DOWN: m_formHandler->MovePosition(m_object, true); break;
 
 	case MENU_PROPERTIES:
-		if (!objectInspector->IsShownInspector()) objectInspector->ShowInspector();
+		// Explicit "Properties" — select the control (canvas highlight + scroll) then FORCE-open the inspector on it,
+		// the ONE force-open path. Both through the selector; no direct objectInspector poke here.
 		m_formHandler->SelectObject(m_object, true);
+		m_formHandler->ShowCurrentElement(true);
 		break;
 
 	default: { m_object->ExecuteMenu(m_formHandler->GetVisualEditor(), m_selID); }

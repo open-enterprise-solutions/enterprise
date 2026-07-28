@@ -1524,7 +1524,7 @@ function showInterfacePopup(iface){
         try {
           // sec.section is the raw ibInterfaceCommandType: 100=Default
           // (browse/list), 150=Create (new-record form), 151=List, 152=
-          // Select. Backend's ShowFormByCommandType branches on it.
+          // Select. Backend's Execute branches on it.
           const body = new URLSearchParams({cmd: String(sec.section|0)});
           const r = await netFetch(API+'/open-meta/'+it.id, {
             method:'POST', credentials:'same-origin',

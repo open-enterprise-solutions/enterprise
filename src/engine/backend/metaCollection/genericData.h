@@ -6,6 +6,7 @@
 #include "backend/actionInfo.h"                           // ibCommandItem / ibFormID / ibActionID — the metaobject's command contract
 #include "backend/metaCollection/metaObjectComposite.h"   // ibValueMetaObjectCompositeData (base) + FillArrayObjectByFilter templates
 #include "backend/metaCollection/metaFormObject.h"        // ibValueMetaObjectFormBase + ibBackendCommandItem (bases), ibBackendValueForm, defaultFormType (ibSelectorDataType comes transitively via backend_type.h)
+#include "backend/metaCollection/metaCommandObject.h"      // ibValueMetaObjectCommand — GetCommandArrayObject returns the real command type
 #include "backend/metaCollection/metaSpreadsheetObject.h" // ibValueMetaObjectSpreadsheetBase
 
 class BACKEND_API ibSourceDataObject;
@@ -116,7 +117,8 @@ public:
 
 	virtual ibClassID ResolveChild(const ibClassID& clsid) const {
 		if (clsid == g_metaFormCLSID ||
-			clsid == g_metaTemplateCLSID)
+			clsid == g_metaTemplateCLSID ||
+			clsid == g_metaCommandCLSID)   // every business object owns its own commands (object scope)
 			return clsid;
 		return 0;
 	}
@@ -132,6 +134,14 @@ public:
 	std::vector<ibValueMetaObjectFormBase*> GetFormArrayObject(
 		std::vector<ibValueMetaObjectFormBase*> array = std::vector<ibValueMetaObjectFormBase*>()) const {
 		FillArrayObjectByFilter<ibValueMetaObjectFormBase>(array, { g_metaFormCLSID });
+		return array;
+	}
+
+	//commands (object scope) — a business object owns its own commands; returns the REAL command type (like
+	// GetFormArrayObject returns FormBase*), the clsid filter makes the finder's static_cast type-safe.
+	std::vector<ibValueMetaObjectCommand*> GetCommandArrayObject(
+		std::vector<ibValueMetaObjectCommand*> array = std::vector<ibValueMetaObjectCommand*>()) const {
+		FillArrayObjectByFilter<ibValueMetaObjectCommand>(array, { g_metaCommandCLSID });
 		return array;
 	}
 

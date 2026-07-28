@@ -458,12 +458,12 @@ public:
 	template <typename _T1 = ibValueMetaObject, typename _T2>
 	const _T1* FindAnyObjectByFilter(const _T2& id,
 		const std::initializer_list<ibClassID> filter, const bool use_child_filter = false) const {
-		return FindObjectByFilter<_T2, ibValueMetaObject, ibValueMetaObject, _T1>(id, filter, use_child_filter);
+		return FindObjectByFilter<_T2, ibValueMetaObject, _T1>(id, filter, use_child_filter);
 	}
 	template <typename _T1 = ibValueMetaObject, typename _T2>
 	_T1* FindAnyObjectByFilter(const _T2& id,
 		const std::initializer_list<ibClassID> filter, const bool use_child_filter = false) {
-		return FindObjectByFilter<_T2, ibValueMetaObject, ibValueMetaObject, _T1>(id, filter, use_child_filter);
+		return FindObjectByFilter<_T2, ibValueMetaObject, _T1>(id, filter, use_child_filter);
 	}
 
 #pragma endregion

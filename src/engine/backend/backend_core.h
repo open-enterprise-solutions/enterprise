@@ -28,6 +28,7 @@ constexpr ibClassID g_valueUndefinedCLSID = primitive_to_clsid("VL_UNDF");
 #define oes_clipboard_role		wxT("oes_clipboard_role")
 #define oes_clipboard_template	wxT("oes_clipboard_template")
 #define oes_clipboard_attribute	wxT("oes_clipboard_attribute")
+#define oes_clipboard_command	wxT("oes_clipboard_command")
 
 //*******************************************************************************************
 //*                                 Special structures                                      *

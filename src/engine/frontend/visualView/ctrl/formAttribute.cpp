@@ -3,6 +3,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "formAttribute.h"
+#include "formCommand.h"
 #include "form.h"
 
 #include "backend/metaCollection/partial/commonObject.h"   // ibSourceDataObject
@@ -233,6 +234,115 @@ wxString ibValueForm::MakeUniqueAttributeName(const wxString& base) const
 		if (IsAttributeNameUnique(candidate))
 			return candidate;
 	}
+}
+
+//****************************************************************************
+//*                          Form commands (form-local events)               *
+//****************************************************************************
+
+ibMetaID ibValueForm::NextFormCommandId() const
+{
+	// Form-command ids live in a HIGH range so a form-command hop id can NEVER collide with a standard action id
+	// (~100+) or a metaobject/source metaID. The command walk probes an untyped hop id against the form's own
+	// commands first (ExecuteValueByCommandHop case a0); a distinct id space keeps that probe unambiguous — an
+	// action's id is never mistaken for a form command's, and vice versa.
+	ibMetaID nextId = kFormCommandIdBase;
+	for (const auto& fc : m_formCommands)
+		if (fc->GetId() >= nextId)
+			nextId = fc->GetId() + 1;
+	return nextId;
+}
+
+bool ibValueForm::IsFormCommandNameUnique(const wxString& name, const ibFormCommandValue* except) const
+{
+	for (const auto& fc : m_formCommands)
+		if (fc != except && fc->GetName() == name)
+			return false;
+	return true;
+}
+
+wxString ibValueForm::MakeUniqueFormCommandName(const wxString& base) const
+{
+	const wxString stem = base.IsEmpty() ? wxT("Command") : base;
+	if (IsFormCommandNameUnique(stem))
+		return stem;
+	for (unsigned int n = 1; ; ++n) {
+		const wxString candidate = wxString::Format(wxT("%s%u"), stem, n);
+		if (IsFormCommandNameUnique(candidate))
+			return candidate;
+	}
+}
+
+ibFormCommandValue* ibValueForm::AddFormCommand(const wxString& name, const wxString& procedure)
+{
+	ibValuePtr<ibFormCommandValue> holder(new ibFormCommandValue(this));
+	holder->SetCommandName(name);
+	holder->SetProcedure(procedure);
+	m_formCommands.emplace_back(holder);
+	return holder;
+}
+
+ibFormCommandValue* ibValueForm::GetFormCommand(const wxString& name) const
+{
+	for (const auto& fc : m_formCommands)
+		if (fc->GetName() == name) return fc;
+	return nullptr;
+}
+
+ibFormCommandValue* ibValueForm::FindFormCommandById(const ibMetaID& id) const
+{
+	for (const auto& fc : m_formCommands)
+		if (fc->GetId() == id) return fc;
+	return nullptr;
+}
+
+void ibValueForm::DeleteFormCommand(const wxString& name)
+{
+	for (auto it = m_formCommands.begin(); it != m_formCommands.end(); ++it)
+		if ((*it)->GetName() == name) { m_formCommands.erase(it); return; }
+}
+
+bool ibValueForm::RenameFormCommand(ibFormCommandValue* entry, const wxString& newName)
+{
+	if (entry == nullptr || newName.IsEmpty() || !IsFormCommandNameUnique(newName, entry))
+		return false;
+	entry->SetCommandName(newName);
+	return true;
+}
+
+bool ibValueForm::WriteFormCommands(ibDataNode& node) const
+{
+	ibDataNode& cmdsNode = node.Child(wxT("FormCommands"));
+	for (const auto& fc : m_formCommands) {
+		ibDataNode& cmdNode = cmdsNode.AddChild(fc->GetClassType(), fc->GetId());
+		fc->WriteProperty(cmdNode);
+	}
+	return true;
+}
+
+bool ibValueForm::ReadFormCommands(const ibDataNode& node)
+{
+	m_formCommands.clear();
+	if (const ibDataNode* cmdsNode = node.FindChild(wxT("FormCommands"))) {
+		for (const ibDataNode& cmdNode : cmdsNode->Children()) {
+			ibValuePtr<ibFormCommandValue> holder(new ibFormCommandValue(this));
+			if (!holder->ReadProperty(cmdNode))   // like ReadAttributes: a failed read is a failed load, not a silent drop
+				return false;
+			m_formCommands.emplace_back(holder);
+		}
+	}
+	return true;
+}
+
+ibFormCommandValue* ibValueForm::PasteFormCommand(const ibDataNode& node)
+{
+	ibValuePtr<ibFormCommandValue> holder(new ibFormCommandValue(this));   // fresh id
+	if (!holder->ReadProperty(node))
+		return nullptr;
+	holder->SetCommandName(MakeUniqueFormCommandName(holder->GetName()));   // keep names unique
+	holder->SetCommandId(NextFormCommandId());
+	m_formCommands.emplace_back(holder);
+	return holder;
 }
 
 bool ibValueForm::RenameAttribute(ibFormAttributeValue* entry, const wxString& newName)

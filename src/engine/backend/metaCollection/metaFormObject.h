@@ -17,12 +17,23 @@ class BACKEND_API ibBackendCommandItem {
 public:
 
 	virtual ~ibBackendCommandItem() {}
-	virtual bool ShowFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default);
+
+	// THE single execution entry (nav sites call it directly): show a form OR run the command's own code. Each
+	// metaobject PREDEFINES its behaviour by OVERRIDING this — a form/data metaobject uses the default below (opens
+	// its form via GetFormByCommandType); a command OVERRIDES Execute to run its runtime handler instead. srcForm /
+	// commandParameter are the context an override may use (the default form path ignores them), so a bare
+	// Execute(cmdType) is the common call.
+	// CONST — the metaobject is CONST (found through a const config); execution does NOT mutate it: it opens a form
+	// (a fresh form value) or, for a command, spawns a TRANSIENT runtime (ibValueCommandDataObject) that lives only
+	// for the call and vanishes. So a const command / object, resolved from the FORM's own const config, runs — no
+	// activeMetaData, no const_cast.
+	virtual bool Execute(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default,
+	                     ibBackendValueForm* srcForm = nullptr, ibValue* commandParameter = nullptr) const;
 
 protected:
 
-	//get default form 
-	virtual ibBackendValueForm* GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) = 0;
+	//get default form (the default Execute opens it; a command overrides Execute and returns nullptr here)
+	virtual ibBackendValueForm* GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) const = 0;
 };
 
 // -----------------------------------------------------------------------
@@ -259,7 +270,7 @@ protected:
 	virtual bool WriteData(ibDataNode& node) const override;
 
 	//get default form
-	virtual ibBackendValueForm* GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) {
+	virtual ibBackendValueForm* GetFormByCommandType(ibInterfaceCommandType cmdType = ibInterfaceCommandType::ibInterfaceCommandType_Default) const {
 
 		if (cmdType == ibInterfaceCommandType::ibInterfaceCommandType_Default)
 			return GetObjectForm();

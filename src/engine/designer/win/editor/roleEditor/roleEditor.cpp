@@ -1,8 +1,11 @@
 #include "roleEditor.h"
 
+#include "frontend/docView/docView.h"                       // docManager — notify open editors of the change
+#include "designer/docManager/templates/docViewMetaFile.h"  // ibMetaDocument — a config metaobject document
+
 #define commonName _("Common")
 #define commonFormsName _("Common forms")
-#define interfacesName _("Interfaces")
+#define interfacesName _("Sections")
 #define constantsName _("Constants")
 
 #define catalogsName _("Catalogs")
@@ -68,6 +71,20 @@ void ibRoleEditor::OnCheckItem(wxTreeEvent& event)
 		ibAccessObject* metaObject = data->GetMetaObject();
 		wxASSERT(metaObject);
 		metaObject->SetRight(role, m_metaRole->GetMetaID(), event.GetExtraLong());
+
+		// Access rights changed -> re-render every open editor so read-only state / command greying re-evaluates LIVE
+		// against the new right (the view-only matryoshka reads these). SKIP ONLY the role BEING EDITED — matched by
+		// its metaID: SetRight flipped a right FLAG on THIS role, its own tree needs no rebuild (that would drop the
+		// checked row). Every OTHER open doc updates and preserves its current row on rebuild (RefreshRole/Interface).
+		const ibMetaID editedId = m_metaRole->GetMetaID();
+		for (auto& doc : docManager->GetDocumentsVector()) {
+			ibMetaDocument* metaDoc = wxDynamicCast(doc, ibMetaDocument);
+			if (metaDoc == nullptr)
+				continue;
+			const ibValueMetaObject* docMeta = metaDoc->GetMetaObject();
+			if (docMeta == nullptr || docMeta->GetMetaID() != editedId)
+				metaDoc->UpdateAllViews();
+		}
 	}
 
 	event.Skip();
@@ -97,7 +114,7 @@ void ibRoleEditor::OnSelectedItem(wxTreeEvent& event) {
 
 void ibRoleEditor::AddInterfaceItem(ibValueMetaObject* metaObject, const wxTreeItemId& hParentID)
 {
-	ibValueMetaObjectInterface* metaObjectValue = metaObject->ConvertToType<ibValueMetaObjectInterface>();
+	ibValueMetaObjectSection* metaObjectValue = metaObject->ConvertToType<ibValueMetaObjectSection>();
 	wxASSERT(metaObject);
 
 	for (auto commonInterface : metaObjectValue->GetInterfaceArrayObject()) {
@@ -131,7 +148,7 @@ void ibRoleEditor::InitRole()
 	///////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	m_treeFORMS = AppendGroupItem(m_treeCOMMON, g_metaCommonFormCLSID, commonFormsName);
-	m_treeINTERFACES = AppendGroupItem(m_treeCOMMON, g_metaInterfaceCLSID, interfacesName);
+	m_treeINTERFACES = AppendGroupItem(m_treeCOMMON, g_metaSectionCLSID, interfacesName);
 
 	//*****************************************************************************************************
 	//*                                      Custom objects                                               *
@@ -224,7 +241,7 @@ void ibRoleEditor::FillData()
 	//****************************************************************
 	//*                          Interfaces							 *
 	//****************************************************************
-	for (auto commonInterface : metaData->GetAnyArrayObject(g_metaInterfaceCLSID)) {
+	for (auto commonInterface : metaData->GetAnyArrayObject(g_metaSectionCLSID)) {
 		if (commonInterface->IsDeleted())
 			continue;	
 		AddInterfaceItem(commonInterface,

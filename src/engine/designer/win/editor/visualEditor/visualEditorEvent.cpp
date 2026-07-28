@@ -13,6 +13,7 @@ void ibVisualEditorNotebook::ibVisualEditor::NotifyEditorLoaded()
 {
 	m_objectTree->OnEditorLoaded();
 	m_attributeTree->OnEditorLoaded();
+	m_commandTree->OnEditorLoaded();   // command navigator: gather this form's commands
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::NotifyEditorSaved()
@@ -28,6 +29,7 @@ void ibVisualEditorNotebook::ibVisualEditor::NotifyEditorRefresh()
 {
 	m_objectTree->OnEditorRefresh();
 	m_attributeTree->OnEditorRefresh();
+	m_commandTree->OnEditorRefresh();   // command navigator: re-gather (commands may have been added/removed)
 
 	WireTableboxDrops(m_valueForm);   // (re)attach per-grid drop targets after the widgets rebuild
 }
@@ -61,6 +63,9 @@ void ibVisualEditorNotebook::ibVisualEditor::NotifyPropertyModified(ibProperty* 
 	// The attribute tree tracks property changes the SAME way the control tree does: a Type/source edit
 	// re-evaluates the affected attribute's [+] composition picker in place (was only refreshed on reopen).
 	m_attributeTree->OnPropertyModified(prop);
+	// A command's caption / synonym / icon edit in the inspector must re-gather the command navigator so its
+	// label / icon track live (the list of AVAILABLE commands is what a projection binds against).
+	m_commandTree->OnPropertyModified(prop);
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::NotifyEventModified(ibEvent* event)

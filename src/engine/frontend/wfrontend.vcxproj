@@ -190,6 +190,7 @@
          / CT_TLSP still log "unregistered clsid" until iteration
          follow-up. -->
     <ClCompile Include="visualView\layers\commandBar.cpp" />
+    <ClCompile Include="visualView\layers\commandReceiver.cpp" />
     <ClCompile Include="visualView\layerObject.cpp" />
     <ClCompile Include="visualView\ctrl\toolBar.cpp" />
     <ClCompile Include="visualView\ctrl\toolBar_res.cpp" />
@@ -220,6 +221,7 @@
     <ClCompile Include="visualView\ctrl\itemsizer.cpp" />
     <ClCompile Include="visualView\ctrl\form.cpp" />
     <ClCompile Include="visualView\ctrl\formAttribute.cpp" />
+    <ClCompile Include="visualView\ctrl\formCommand.cpp" />
     <ClCompile Include="visualView\ctrl\formControl.cpp" />
     <ClCompile Include="visualView\ctrl\formObject.cpp" />
     <ClCompile Include="visualView\ctrl\formVisualHost.cpp" />

@@ -30,7 +30,7 @@ ibValue* ibDeferredForm::Construct() const
 
 #include "backend/system/systemManager.h"
 
-bool ibBackendCommandItem::ShowFormByCommandType(ibInterfaceCommandType cmdType)
+bool ibBackendCommandItem::Execute(ibInterfaceCommandType cmdType, ibBackendValueForm* /*srcForm*/, ibValue* /*commandParameter*/) const
 {
 	ibBackendValueForm* valueForm = nullptr;
 
@@ -39,7 +39,7 @@ bool ibBackendCommandItem::ShowFormByCommandType(ibInterfaceCommandType cmdType)
 		valueForm = GetFormByCommandType(cmdType);
 
 		if (valueForm == nullptr)
-			return false;
+			return false;   // default (form) behaviour; a command OVERRIDES Execute to run its handler
 
 		valueForm->ShowForm();
 	}

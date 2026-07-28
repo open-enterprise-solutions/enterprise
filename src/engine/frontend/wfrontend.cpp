@@ -31,7 +31,7 @@
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaCollection/metaObjectMetadata.h"
 #include "backend/metaCollection/metaFormObject.h"
-#include "backend/metaCollection/metaInterfaceObject.h"
+#include "backend/metaCollection/metaSectionObject.h"
 #include "backend/interfaceHelper.h"
 #include "backend/backend_picture.h"
 
@@ -278,7 +278,7 @@ private:
 		// Explicit wxString→std::string conversion: without ToStdString()
 		// MSVC chains two user-defined conversions (wxString → const char*
 		// → std::string) and warns C4927.
-		return ibGuid::newGuid().str().ToStdString();
+		return ibGuid(ibGuid::newGuid()).str().ToStdString();
 	}
 
 	// Idle-session sweep + metadata-change watch. Wakes every sweep
@@ -1051,7 +1051,7 @@ std::string OpenFormInSession(ibWebSession* session, int metaID)
 	// CreateNewForm, which is now a pure factory — no re-entry.
 	//
 	// Note: we deliberately do NOT dispatch via
-	// ibBackendCommandItem::ShowFormByCommandType here. That path was
+	// ibBackendCommandItem::Execute here. That path was
 	// designed for the "interface subsystem" buttons in enterprise.exe
 	// sidebar (see mainFrameEnterpriseInterface.cpp:703) where each
 	// subsection maps to a command type (FormList / FormSelect / etc.).
@@ -1485,8 +1485,8 @@ WFRONTEND_API std::string wfrontendInterfacesJSON()
 		{ ibInterfaceCommandSection::ibInterfaceCommandSection_Service,  "Service"  },
 	};
 	nlohmann::json arr = nlohmann::json::array();
-	for (auto* obj0 : activeMetaData->GetAnyArrayObject(g_metaInterfaceCLSID)) {
-		auto* iface = dynamic_cast<ibValueMetaObjectInterface*>(obj0);
+	for (auto* obj0 : activeMetaData->GetAnyArrayObject(g_metaSectionCLSID)) {
+		auto* iface = dynamic_cast<ibValueMetaObjectSection*>(obj0);
 		if (iface == nullptr || iface->IsDeleted()) continue;
 		if (!iface->AccessRight_Use()) continue;
 		nlohmann::json o;
@@ -1527,7 +1527,7 @@ WFRONTEND_API std::string wfrontendInterfacesJSON()
 }
 
 // Mirrors desktop's ibDialogFunctionAll double-click handler which
-// calls metaObject->ShowFormByCommandType(). Returns updated active
+// calls metaObject->Execute(). Returns updated active
 // host JSON after the form is opened (so the client refreshes its
 // tab strip + content in one round-trip).
 WFRONTEND_API std::string wfrontendOpenMetaObject(const std::string& sessionId,
@@ -1549,7 +1549,7 @@ WFRONTEND_API std::string wfrontendOpenMetaObject(const std::string& sessionId,
 		auto* cmdItem = dynamic_cast<ibBackendCommandItem*>(metaObject);
 		if (cmdItem == nullptr) return "{}";
 		const auto type = static_cast<ibInterfaceCommandType>(cmdType);
-		if (!cmdItem->ShowFormByCommandType(type))
+		if (!cmdItem->Execute(type))
 			return "{}";
 		ibVisualHostClient* host = app->GetActiveHost();
 		try {

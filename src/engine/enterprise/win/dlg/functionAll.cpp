@@ -121,7 +121,7 @@ void ibDialogFunctionAll::OnTreeCtrlElementsOnLeftDClick(wxMouseEvent& event)
 	ibMetaDataItem* itemData = dynamic_cast<ibMetaDataItem*>(m_treeCtrlElements->GetItemData(selItem));
 	if (itemData != nullptr) {
 		ibBackendCommandItem* metaObject = dynamic_cast<ibBackendCommandItem*>(itemData->GetMetaObject());
-		if (metaObject != nullptr && metaObject->ShowFormByCommandType())
+		if (metaObject != nullptr && metaObject->Execute())
 			Close(true);
 	}
 

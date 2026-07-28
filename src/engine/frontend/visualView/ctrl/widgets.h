@@ -4,13 +4,19 @@
 #include "window.h"
 #include "typeControl.h"
 #include "backend/sourceDescription.h"   // ibSourceDescription (full [head, field] binding path)
+#include "backend/propertyManager/property/propertyCommandSource.h"   // ibPropertyCommandSource — assign a COMMAND to the button
+#include "frontend/visualView/layers/commandReceiver.h"             // ibFrontendCommandReceiver — the command door the button IS-A (IS-A ibBackendCommandReceiver too)
 
 /////////////////////////////////////////////////////////////////////////////////////
 //                                 COMMON ELEMENTS                                 //
 /////////////////////////////////////////////////////////////////////////////////////
 #include <wx/button.h>
 
-class ibValueButton : public ibValueWindow {
+// ibValueButton's control clsid — kind-typed identity (mirror g_controlTableBoxCLSID), so a control's TYPE is
+// read from its clsid, never via dynamic_cast.
+constexpr ibClassID g_controlButtonCLSID = control_to_clsid("CT_BUTN");
+
+class ibValueButton : public ibValueWindow, public ibFrontendCommandReceiver {
 	public:
 
 	void SetCaption(const wxString& caption) { return m_propertyTitle->SetValue(caption); }
@@ -46,10 +52,19 @@ private:
 	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryButton, wxT("Title"), _("Title"), wxT("Button"));
 	ibPropertyEnum<ibValueEnumRepresentation>* m_propertyRepresentation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumRepresentation>>(m_categoryButton, wxT("Representation"), _("Representation"), ibRepresentation::ibRepresentation_Auto);
 	ibPropertyPicture* m_propertyPicture = ibPropertyObject::CreateProperty<ibPropertyPicture>(m_categoryButton, wxT("Picture"), _("Picture"));
+	// A button has NO event — it carries ONLY a bound COMMAND (command-source picker, the command-door twin of a
+	// control's data source). A press RUNS the command through ibFrontendCommandReceiver::ExecuteValueByPath. Internal
+	// name MUST differ from any category name (wxPropertyGrid keys both in one map); lives in the Button category.
+	ibPropertyCommandSource* m_propertyCommand = ibPropertyObject::CreateProperty<ibPropertyCommandSource>(m_categoryButton, wxT("Command"), _("Command"));
 
-	//event
-	ibPropertyCategory* m_categoryEvent = ibPropertyObject::CreatePropertyCategory(wxT("Event"), _("Event"));
-	ibEventControl* m_onButtonPressed = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, wxT("OnButtonPressed"), _("Button pressed"), wxArrayString{ wxT("Control") });
+public:
+	// ibFrontendCommandReceiver gate — the button IS-A command door; the walk starts at its owner form. WalkCommand
+	// (the backend receiver's validate) is inherited from the door — no per-control impl.
+	virtual ibValueForm* GetCommandGateForm() const override;
+	// the button's bound command-hop path (empty = none) — the click handler runs it.
+	const ibCommandDescription& GetCommandDesc() const { return m_propertyCommand->GetValueAsCommandDesc(); }
+	// Bind a command to this button (a command drop / the picker): desc = the hop path, display = its caption.
+	void SetCommandDesc(const ibCommandDescription& desc, const wxString& display) { m_propertyCommand->SetValue(desc, display); }
 };
 
 #include <wx/stattext.h>
@@ -405,7 +420,7 @@ private:
 	ibPropertyEnum<ibValueEnumTitleLocation>* m_propertyTitleLocation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumTitleLocation>>(m_categoryCheckBox, wxT("TitleLocation"), _("Title location"), ibTitleLocation::eLeft);
 
 	ibPropertyCategory* m_categorySource = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
-	ibPropertySource* m_propertySource = ibPropertyObject::CreateProperty<ibPropertySource>(m_categoryCheckBox, wxT("Source"), _("Source"), ibValueTypes::TYPE_BOOLEAN);
+	ibPropertySource* m_propertySource = ibPropertyObject::CreateProperty<ibPropertySource>(m_categorySource, wxT("Source"), _("Source"), ibValueTypes::TYPE_BOOLEAN);
 
 	ibPropertyCategory* m_categoryEvent = ibPropertyObject::CreatePropertyCategory(wxT("Event"), _("Event"));
 	ibEventControl* m_onCheckboxClicked = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, wxT("OnCheckboxClicked"), _("Checkbox clicked"), wxArrayString{ wxT("Control") });
