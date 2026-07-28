@@ -261,7 +261,7 @@ void ibDataMover::BinaryFromResult(const ibBackendQueryColumn* col, const ibMeta
 
 	// COMPACT wire (the inverse of BinaryToStatement): the tag, then ONLY the active type's value —
 	// read off the row when the column actually carries that type, else a placeholder — then, for a
-	// reference, the target id + the guid+metaID blob. Empty / Null write the tag alone.
+	// reference, the target id + the pure guid blob. Empty / Null write the tag alone.
 	writer.w_s32(tag);
 
 	switch (tag) {

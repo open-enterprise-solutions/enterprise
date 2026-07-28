@@ -198,7 +198,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 		page.m_flatScan        = false;
 		page.m_isTopLevel      = !hierHasParent;
 		// DRILL scope = the browsed folder's own PK reference (its children = rows whose parent == it). Pass the
-		// KEY value WHOLE — the provider encodes it (a reference → its _RRRef blob, self-describing metaID). Empty
+		// KEY value WHOLE — the provider encodes it (a reference → its pure _RRRef guid blob). Empty
 		// when top-level → the provider filters the empty-parent roots. (Was: decompose to a bare guid + rebuild
 		// the blob from the queryable's table id — a crutch that assumed guid-keying AND a self-hierarchy.)
 		if (hierHasParent)

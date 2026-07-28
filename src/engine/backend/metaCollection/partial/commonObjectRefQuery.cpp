@@ -244,8 +244,8 @@ void ibValueRecordDataObjectRef::CommitWriteScope(ibConnectionScope& scope,
 		const wxString refGuid = m_reference_impl
 			? ibGuid(m_reference_impl->m_guid).str()
 			: wxString();
-		const int refMetaId = m_reference_impl
-			? static_cast<int>(m_reference_impl->GetMetaID())
+		const int refMetaId = m_metaObject != nullptr
+			? static_cast<int>(m_metaObject->GetMetaID())   // type from the metaObject, not the key bytes
 			: 0;
 		ibLog->Audit(wxT("record"),
 		             newObject ? wxT("created") : wxT("saved"),
@@ -270,8 +270,8 @@ void ibValueRecordDataObjectRef::CommitDeleteScope(ibConnectionScope& scope,
 		const wxString refGuid = m_reference_impl
 			? ibGuid(m_reference_impl->m_guid).str()
 			: wxString();
-		const int refMetaId = m_reference_impl
-			? static_cast<int>(m_reference_impl->GetMetaID())
+		const int refMetaId = m_metaObject != nullptr
+			? static_cast<int>(m_metaObject->GetMetaID())   // type from the metaObject, not the key bytes
 			: 0;
 		ibLog->Audit(wxT("record"), wxT("deleted"),
 		             GetSourceCaption(), refGuid, refMetaId);
@@ -316,11 +316,11 @@ bool ibValueRecordDataObjectRef::SaveData()
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 		ibValue value;
 		if (m_metaObject->IsDataReference(object->GetMetaID())) {
-			// The row's OWN reference, written in the SAME binary form (_RTRef +
-			// _RRRef = ibReference[guid][metaID]) as any reference TO this row. That
-			// byte-identity is what makes a dot-walk JOIN equate
-			// source.fldX_RRRef = target.<selfref>_RRRef. CreateRaw skips PrepareRef
-			// (we only need the reference identity bytes, not materialised members).
+			// The row's OWN reference, written in the SAME binary form (_RTRef = clsid +
+			// _RRRef = the pure guid) as any reference TO this row. That byte-identity is
+			// what makes a dot-walk JOIN equate source.fldX_RRRef = target.<selfref>_RRRef.
+			// CreateRaw skips PrepareRef (we only need the reference identity bytes, not
+			// materialised members).
 			value = ibValue(ibValueReferenceDataObject::CreateRaw(m_metaObject, m_objGuid));
 		}
 		else {

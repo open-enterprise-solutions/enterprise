@@ -263,7 +263,7 @@ std::vector<ibQuerySortItem> ibRecordQueryable::GetIdentitySort() const {
 	return { ibQuerySortItem{ &s_uuidKey, true } };
 }
 // The uniqueness key (UPSERT match + dot-walk self-reference + row identity) — the data-reference
-// attribute (ibReference[guid][metaID] self-reference blob the row stores). The provider reads its
+// attribute (the pure-guid self-reference blob the row stores; type is the _RTRef column). The provider reads its
 // Reference field for the join key and its fields for the match; uuid stays as a second link key
 // (GetIdentitySort) until cleaned. No GetRowKeyColumn / IsReferenceAttribute / GetReferenceKeyColumn:
 // all three are derived from this one authority. (docs/query-language-arc.md §22.1)

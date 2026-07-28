@@ -89,7 +89,9 @@ ibValueReferenceDataObject::ibValueReferenceDataObject(const ibValueMetaObjectRe
 m_metaObject(metaObject), m_initializedRef(false), m_reference_impl(nullptr), m_foundedRef(false)
 {
 	m_members.Bind(this, &ibValueReferenceDataObject::FillMembers);
-	m_reference_impl = new ibReference(m_metaObject->GetMetaID(), m_objGuid);
+	// The stored key (_RRRef) is the pure object guid; the type is carried separately (metaObject / _RTRef).
+	// An unset reference is simply an empty guid — no normalization needed.
+	m_reference_impl = new ibReference(m_objGuid);
 	//gs_references.emplace_back(this);
 }
 
@@ -100,6 +102,23 @@ wxString ibValueReferenceDataObject::GetHashKey() const
 	return m_metaObject != nullptr
 		? wxString::Format(wxT("%i:%s"), m_metaObject->GetMetaID(), wxString(GetGuid()))
 		: wxString(GetGuid());
+}
+
+// Ordering: GUID first, then TYPE (metaID) as the tiebreak — see the header. m_metaObject is complete in this
+// TU, so GetMetaID() resolves. The tiebreak only fires on equal guids (in practice: empty references, which all
+// share the all-zero guid), keeping LS==0 exactly when CompareValueEQ is true.
+int ibValueReferenceDataObject::CompareValueLS(const ibValue& cParam) const
+{
+	ibValueReferenceDataObject* rhs = dynamic_cast<ibValueReferenceDataObject*>(cParam.GetRef());
+	if (rhs == nullptr)
+		return 0;
+	if (m_objGuid < rhs->m_objGuid) return -1;
+	if (rhs->m_objGuid < m_objGuid) return 1;
+	const ibMetaID lm = m_metaObject      != nullptr ? m_metaObject->GetMetaID()      : 0;
+	const ibMetaID rm = rhs->m_metaObject != nullptr ? rhs->m_metaObject->GetMetaID() : 0;
+	if (lm < rm) return -1;
+	if (rm < lm) return 1;
+	return 0;   // same guid AND same type -> the same reference
 }
 
 ibValueReferenceDataObject::~ibValueReferenceDataObject()
@@ -148,11 +167,21 @@ ibValueReferenceDataObject* ibValueReferenceDataObject::CreateRaw(const ibValueM
 	return new ibValueReferenceDataObject(metaObject, objGuid);
 }
 
-ibValueReferenceDataObject* ibValueReferenceDataObject::Create(const ibMetaData* metaData, void* ptr)
+// clsid (the _RTRef target type) -> its reference metaObject, through the class factory. The type comes
+// from the column, never from the key bytes (the _RRRef blob is pure identity now).
+static const ibValueMetaObjectRecordDataRef* MetaObjectFromClsid(const ibMetaData* metaData, const ibClassID& clsid)
+{
+	const ibCtorMetaValueType* typeCtor = metaData != nullptr ? metaData->GetTypeCtor(clsid) : nullptr;
+	if (typeCtor == nullptr || typeCtor->GetMetaTypeCtor() != ibCtorObjectMetaType::ibCtorObjectMetaType_Reference)
+		return nullptr;
+	return dynamic_cast<const ibValueMetaObjectRecordDataRef*>(typeCtor->GetMetaObject());
+}
+
+ibValueReferenceDataObject* ibValueReferenceDataObject::Create(const ibMetaData* metaData, const ibClassID& refClsid, void* ptr)
 {
 	ibReference* reference = static_cast<ibReference*>(ptr);
 	if (reference != nullptr) {
-		const ibValueMetaObjectRecordDataRef* metaObject = metaData->FindAnyObjectByFilter<ibValueMetaObjectRecordDataRef>(reference->GetMetaID());
+		const ibValueMetaObjectRecordDataRef* metaObject = MetaObjectFromClsid(metaData, refClsid);
 		if (metaObject != nullptr) {
 			//auto& it = std::find_if(gs_references.begin(), gs_references.end(), [metaObject, reference](ibValueReferenceDataObject* ref) {
 			//	return metaObject == ref->GetMetaObject() && ref->GetGuid() == reference->m_guid; }
@@ -165,11 +194,11 @@ ibValueReferenceDataObject* ibValueReferenceDataObject::Create(const ibMetaData*
 	return nullptr;
 }
 
-ibValueReferenceDataObject* ibValueReferenceDataObject::CreateFromPtr(const ibMetaData* metaData, void* ptr)
+ibValueReferenceDataObject* ibValueReferenceDataObject::CreateFromPtr(const ibMetaData* metaData, const ibClassID& refClsid, void* ptr)
 {
 	ibReference* reference = static_cast<ibReference*>(ptr);
 	if (reference != nullptr) {
-		const ibValueMetaObjectRecordDataRef* metaObject = metaData->FindAnyObjectByFilter<ibValueMetaObjectRecordDataRef>(reference->GetMetaID());
+		const ibValueMetaObjectRecordDataRef* metaObject = MetaObjectFromClsid(metaData, refClsid);
 		if (metaObject != nullptr) {
 			//auto& it = std::find_if(gs_references.begin(), gs_references.end(), [metaObject, reference](ibValueReferenceDataObject* ref) {
 			//	return metaObject == ref->GetMetaObject() && ref->GetGuid() == reference->m_guid; }

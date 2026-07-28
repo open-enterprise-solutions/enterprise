@@ -29,8 +29,8 @@ struct ibGuidImpl { // UUID = GUID = CLSID = LIBID = IID
 	uint32_t        m_data1;   // fixed-width, NOT `unsigned long`: that is 64-bit on LP64 (Linux/macOS),
 	unsigned short  m_data2;   // which would make this struct 20 bytes there and desync the persisted
 	unsigned short  m_data3;   // 16-byte _RRRef key. Pinned so ibGuidImpl behaves identically on every
-	unsigned char   m_data4[8];// platform — this is the storage dupe of a guid, and Data1 (m_data1) is
-};                             // the reference key's metaID slot.
+	unsigned char   m_data4[8];// platform — this is the storage dupe of a guid. All four fields are pure
+};                             // identity (a reference key carries no type; the type is the _RTRef column).
 static_assert(sizeof(ibGuidImpl) == 16, "ibGuidImpl must stay a portable 16-byte POD (guid storage dupe / _RRRef key)");
 
 #if defined(__WXMSW__)
@@ -77,8 +77,8 @@ public:
 	ibGuid& operator=(ibGuid&& other) = default;
 
 	// Mint a fresh guid in its STORAGE form (ibGuidImpl, the dupe): it flows implicitly into an ibGuid
-	// (`ibGuid g = ibGuid::newGuid();`), while the metaclass takes the ibGuidImpl DIRECTLY and patches
-	// Data1 with the metaID — no intermediate ibGuid. See ibValueMetaObject::NewReferenceGuid.
+	// (`ibGuid g = ibGuid::newGuid();`). A reference key is just this guid — pure identity, no type baked in
+	// (the type is the _RTRef column); ibGuid stays a primitive that mints guids, it does not know metaIDs.
 	static ibGuidImpl newGuid(short version = GUID_RANDOM);
 
 	bool operator > (const ibGuid& other) const;

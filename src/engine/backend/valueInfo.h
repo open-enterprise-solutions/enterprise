@@ -3,17 +3,16 @@
 
 #include "backend/uniqueKey.h"
 
-//reference data — a self-describing 16-byte key: the metaID rides in the guid's Data1 (see the reference
-//key encoder, ibValueReferenceDataObject::MakeNewGuid). No separate metaID field — the ctor stamps Data1
-//from `id`, so a real key (already branded → no-op) and a metaID-only sentinel (empty guid + id) both land
-//right; GetMetaID() reads it back. sizeof == 16 (was 20).
+//reference data — the _RRRef storage key is a PURE 16-byte object guid: identity only, NO type. The type
+//lives in the SEPARATE _RTRef (clsid) column beside it (query/columnLayout.cpp) and, at runtime, in the
+//reference's metaObject. So an empty reference is simply an all-zero guid — no special-casing, full 128-bit
+//uniqueness, and a retype touches only _RTRef, never this blob. (Earlier this baked the metaID into Data1,
+//which duplicated _RTRef and made an unset key look non-empty; that stamping is gone.) sizeof == 16.
 struct ibReference {
 
-	ibReference(const ibMetaID& id, const ibGuidImpl& guid) : m_guid(guid) { m_guid.m_data1 = (uint32_t)id; }
+	ibReference(const ibGuidImpl& guid) : m_guid(guid) {}
 
-	ibMetaID GetMetaID() const { return (ibMetaID)m_guid.m_data1; }   // Data1 carries the metaID
-
-	ibGuidImpl m_guid;
+	ibGuidImpl m_guid;   // pure object identity; the type is read from the _RTRef column, not from here
 };
 
 ///////////////////

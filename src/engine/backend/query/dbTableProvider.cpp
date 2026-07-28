@@ -1,9 +1,9 @@
 ////////////////////////////////////////////////////////////////////////////
 //	Description : ibDbTableProvider — the BIG DB provider's implementation: the
 //	              real-table read / cached / aggregate / write engine, the name-
-//	              substitution lowering (ibMetaIRBuilder -> physical L2 ibQueryIR),
+//	              substitution lowering (ibMetaIRBuilder -> physical L2-1 ibQueryIR),
 //	              and the static GET / WRITE value templates (GetValueAttribute /
-//	              SetValueAttribute). The ONLY place L2 and the attribute field-
+//	              SetValueAttribute). The ONLY place L2-1 and the attribute field-
 //	              machinery meet for a physical table. Split out of queryProvider.cpp
 //	              (which keeps the composer / computed provider / result sources).
 //	              See docs/query-language-arc.md §18, §22.
@@ -17,6 +17,7 @@
 #include "backend/databaseLayer/databaseResultSet.h"
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/valueInfo.h"                                    // ibReference (physical reference blob, GetQueryTableId source)
+#include "backend/fnumber.h"                                      // ibNumber — the _RTRef type (clsid) keyset tiebreak const
 #include "backend/metaData.h"                                     // ibMetaData (threaded through reads/writes)
 #include "backend/objCtor.h"                                      // ibCtorMetaValueType::GetQueryable — reference-target resolution (clsid -> ctor -> queryable, no cast)
 #include "backend/system/value/valueType.h"                      // ibValueTypeDescription::AdjustValue (dot-walk typed empty)
@@ -43,7 +44,7 @@ namespace {
 // attribute-bound FirstSqlField it replaced — load-bearing because the keyset anchor
 // must match the FIRST ORDER BY field, which BuildSortKeys emits in exactly this order
 // (a composite attribute's declaration order is NOT this order). No primitive present
-// => the column is a reference and yields its _RRRef (guid+metaID) blob.
+// => the column is a reference and yields its _RRRef (pure guid) blob.
 wxString FirstSqlFieldOfColumn(const ibBackendQueryColumn* col)
 {
 	const wxString base = col->GetPhysicalName();
@@ -60,7 +61,7 @@ wxString FirstSqlFieldOfColumn(const ibBackendQueryColumn* col)
 	if (has(ibValueTypes::TYPE_DATE))    return base + wxT("_D");
 	if (has(ibValueTypes::TYPE_STRING))  return base + wxT("_S");
 	if (has(ibValueTypes::TYPE_ENUM))    return base + wxT("_E");
-	return base + wxT("_RRRef");   // reference -> the guid+metaID blob
+	return base + wxT("_RRRef");   // reference -> the pure guid blob
 }
 
 // The row-key physical field of a single-key source (catalog / document: the uuid). Read off the
@@ -75,7 +76,7 @@ wxString RowKeyField(const ibBackendQueryable* queryable)
 	                                                    : FirstSqlFieldOfColumn(ids.back().m_col);
 }
 
-// The dot-walk self-reference field — the Reference-typed (_RRRef guid+metaID blob) physical field
+// The dot-walk self-reference field — the Reference-typed (_RRRef pure guid blob) physical field
 // of a queryable's reference key (its data-reference, vended through GetPrimaryKeyColumns). A
 // dot-walk binds source.<ref>_RRRef = target.<this>_RRRef, byte-identical. Empty when the source is
 // not a reference target (register / constant). Replaces GetReferenceKeyColumn — same type-specific
@@ -231,7 +232,7 @@ wxString AggregateFnName(ibDataQueryBuilder::AggregateFn fn)
 }
 
 // ibMetaIRBuilder — the GENERIC name-substitution primitives that turn query-native
-// conditions / sorts (columns) into physical L2 ibQueryIR fragments. Per-family
+// conditions / sorts (columns) into physical L2-1 ibQueryIR fragments. Per-family
 // knowledge arrives through ibBackendQueryable, so catalog and register share ONE
 // keyset with no fork. `mainQual` (default empty) qualifies the MAIN table's columns
 // when a dot-walk join is present. (Declared here, before the co-located helpers that call it.)
@@ -243,12 +244,12 @@ public:
 	                                           const std::vector<ibQueryCondition>& conditions,
 	                                           const wxString& mainQual = wxEmptyString,
 	                                           bool pathAsExists = false);
-	// One door condition -> L2 expr (the per-leaf body shared by the AND-fold above and the tree below).
+	// One door condition -> L2-1 expr (the per-leaf body shared by the AND-fold above and the tree below).
 	static ibQueryExprPtr BuildConditionExpr(const ibBackendQueryable* queryable,
 	                                         const ibQueryCondition& c,
 	                                         const wxString& mainQual = wxEmptyString,
 	                                         bool pathAsExists = false);
-	// The full boolean WHERE TREE -> L2 expr (And/Or/Not/IsNull; leaves via BuildConditionExpr).
+	// The full boolean WHERE TREE -> L2-1 expr (And/Or/Not/IsNull; leaves via BuildConditionExpr).
 	static ibQueryExprPtr BuildPredicateExpr(const ibBackendQueryable* queryable,
 	                                         const ibQueryPredicatePtr& predicate,
 	                                         const wxString& mainQual = wxEmptyString,
@@ -263,7 +264,7 @@ public:
 	// AND sj.<innerKey> <op> outer.<outerKey>)`. The inner's own conditions (incl. inner dot-walk -> nested
 	// EXISTS via pathAsExists) ride along; `outerQual` qualifies the main-source correlation column.
 	static ibQueryExprPtr BuildSemiJoinExists(const ibSemiJoinExists& sj, const wxString& outerQual);
-	// A COMPUTED-COLUMN expression (arithmetic / CASE) -> L2 expr (ibBinOp / ibCase; columns qualified
+	// A COMPUTED-COLUMN expression (arithmetic / CASE) -> L2-1 expr (ibBinOp / ibCase; columns qualified
 	// by mainQual, WHEN predicates via BuildPredicateExpr). For a projected computed column.
 	static ibQueryExprPtr BuildColumnExpr(const ibBackendQueryable* queryable,
 	                                      const ibQueryColumnExprPtr& expr,
@@ -293,7 +294,7 @@ public:
 	                                          const wxString& mainQual = wxEmptyString);
 };
 
-// Read a SCALAR output column of a co-located join row off the L2 cursor by its projection
+// Read a SCALAR output column of a co-located join row off the L2-1 cursor by its projection
 // ALIAS (SELECT qual.field AS alias). The getter is chosen by the column's declared type — a
 // single projected field, no _TYPE/_RRRef spread, so this covers primitive + raw columns only
 // (reference / enum columns are excluded upstream by CanColocateJoin, which falls back to RAM).
@@ -480,13 +481,19 @@ bool AllNodeKeysSingleField(const ibQueryNode* node, const ColocatedLeaves& leav
 	return AllNodeKeysSingleField(node->m_left.get(), leaves) && AllNodeKeysSingleField(node->m_right.get(), leaves);
 }
 
-// Build the L2 FROM tree (nested ibJoin) from the L3 join node — RECURSIVE, any depth. A Source ->
+// Build the L2-1 FROM tree (nested ibJoin) from the L3 join node — RECURSIVE, any depth. A Source ->
 // ibScan(table); a Join -> its two children joined on the node's resolved keys, qualified by the
 // owning leaf's table. INNER/LEFT per node. The shared co-located FROM both fast paths build over.
 ibQueryRelPtr BuildColocatedFrom(const ibQueryNode* node, const ColocatedLeaves& leaves)
 {
-	if (node->m_kind == ibQueryNode::Kind::Source)
+	if (node->m_kind == ibQueryNode::Kind::Source) {
+		// A source may BE a derived table rather than a table — a register's balance is an
+		// aggregate over its totals view, parameterised by a date that no view can hold. Asking
+		// keeps the join in SQL; assuming a table name would force the whole thing into RAM first.
+		if (ibQueryRelPtr rel = node->m_queryable->GetSourceRelation(node->m_queryable->GetQueryTableName()))
+			return rel;
 		return ibScan(node->m_queryable->GetQueryTableName());
+	}
 
 	ibQueryRelPtr left  = BuildColocatedFrom(node->m_left.get(),  leaves);
 	ibQueryRelPtr right = BuildColocatedFrom(node->m_right.get(), leaves);
@@ -627,7 +634,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildConditionExpr(const ibBackendQueryable* que
 		}
 		// Single-field lhs: the row's own key when m_col is null (same shape BuildKeyInPredicate renders for
 		// .WhereKeyIn(), one IN instead of an OR-chain), else the column's first physical field. An EMPTY set
-		// falls through here ON PURPOSE — L2 already renders `x IN ()` as `1 = 0`
+		// falls through here ON PURPOSE — L2-1 already renders `x IN ()` as `1 = 0`
 		// (QueryRenderer.In_EmptyListIsConstantFalse), so "matches nothing" stays decided in ONE place.
 		std::vector<ibQueryExprPtr> vals;
 		vals.reserve(c.m_values.size());
@@ -833,7 +840,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildSemiJoinExists(const ibSemiJoinExists& sj, 
 // A bare constant projected into a SELECT list (or a CASE branch) reaches the DB as an UNTYPED
 // placeholder (SELECT ? AS x) — Firebird and other strict engines cannot infer its type and reject the
 // statement (FB -804 "Data type unknown"). Pin the type with a CAST derived from the value. The target is
-// a CANONICAL ibColumnType, NOT a SQL string: the L2 renderer spells it per-DBMS through the dialect
+// a CANONICAL ibColumnType, NOT a SQL string: the L2-1 renderer spells it per-DBMS through the dialect
 // TYPE-MAP (ibQueryRenderer::MapType), so the SQLite date-affinity (TEXT), boolean (INTEGER) and FB /
 // MySQL narrow-DECIMAL forks are all closed at render time — the one place that owns the dialect.
 static ibColumnType CastTypeForConst(const ibValue& v)
@@ -882,6 +889,12 @@ ibQueryExprPtr ibMetaIRBuilder::BuildColumnExpr(const ibBackendQueryable* querya
 			                   BuildColumnExpr(queryable, wt.second, mainQual));
 		return ibCase(std::move(cases), expr->m_else ? BuildColumnExpr(queryable, expr->m_else, mainQual) : nullptr);
 	}
+
+	case ibQueryColumnExprKind::PeriodTrunc:
+		// Straight through to the L2-1 node of the same name — the dialect's truncation map does the
+		// spelling. Nothing engine-specific reaches this far up, which is the point: a totals rebuild
+		// groups the movements by the very expression the maintenance trigger keys rows with.
+		return ibPeriodTrunc(BuildColumnExpr(queryable, expr->m_lhs, mainQual), expr->m_periodUnit);
 	}
 	return nullptr;
 }
@@ -898,7 +911,7 @@ std::vector<ibQuerySortKey> ibMetaIRBuilder::BuildSortKeys(const ibBackendQuerya
 	// (GetValueFields), so no ResolveAttribute: an attribute column returns its authoritative
 	// field list, a temp / raw column its bare field. One uniform pass.
 	for (const ibQuerySortItem& s : sorts) {
-		if (s.m_expr) {   // ORDER BY <expression> (CASE / arithmetic / value) — lower the L3 expr to L2, sort on it
+		if (s.m_expr) {   // ORDER BY <expression> (CASE / arithmetic / value) — lower the L3 expr to L2-1, sort on it
 			ibQuerySortKey k;
 			k.m_expr = BuildColumnExpr(queryable, s.m_expr, mainQual);
 			k.m_dir  = (reverse ? !s.m_ascending : s.m_ascending) ? ibQuerySortDir::Asc : ibQuerySortDir::Desc;
@@ -911,6 +924,16 @@ std::vector<ibQuerySortKey> ibMetaIRBuilder::BuildSortKeys(const ibBackendQuerya
 		for (const wxString& name : ColumnValueFields(s.m_col)) {
 			ibQuerySortKey k;
 			k.m_expr = ibColQ(mainQual, name);
+			k.m_dir  = asc ? ibQuerySortDir::Asc : ibQuerySortDir::Desc;
+			keys.push_back(std::move(k));
+		}
+		// A reference's identity is (guid, type). ColumnValueFields gives the _RRRef guid; append the _RTRef
+		// type as the tiebreak so an empty reference (all-zero guid) of type A orders distinctly from one of
+		// type B — in lockstep with BuildAnchorPredicate and CompareValueLS (reference clsids order by metaID).
+		// A single-type / self-reference column has a constant _RTRef, so this is a harmless no-op there.
+		if (FirstSqlFieldOfColumn(s.m_col).EndsWith(wxT("_RRRef"))) {
+			ibQuerySortKey k;
+			k.m_expr = ibColQ(mainQual, s.m_col->GetPhysicalName() + ibFieldSuffix(ibColumnRole::ReferenceType));
 			k.m_dir  = asc ? ibQuerySortDir::Asc : ibQuerySortDir::Desc;
 			keys.push_back(std::move(k));
 		}
@@ -929,8 +952,10 @@ static ibQueryExprPtr ReferenceKeyBlob(const ibValue& v)
 	ibValueReferenceDataObject* refObj = nullptr;
 	if (!v.ConvertToValue(refObj) || refObj == nullptr)
 		return nullptr;
-	const ibMetaID metaID = static_cast<ibMetaID>(refObj->GetClassType() & kIbClsidBodyMask);
-	ibReference ref{ metaID, ibGuidImpl{} };
+	// The _RRRef blob is the PURE guid (type is the _RTRef column, compared separately if a query needs it —
+	// but a globally-unique guid identifies the object on its own). Write the guid in the field-normalized
+	// storage byte order so `_RRRef OP blob` agrees byte-for-byte with the server's ORDER BY _RRRef.
+	ibReference ref{ ibGuidImpl{} };
 	const auto& be = refObj->GetGuid().GetGuid().bytes();
 	auto* p = reinterpret_cast<unsigned char*>(&ref.m_guid);
 	p[0] = be[3]; p[1] = be[2]; p[2] = be[1]; p[3] = be[0];
@@ -954,10 +979,10 @@ ibQueryExprPtr ibMetaIRBuilder::BuildAnchorPredicate(const ibBackendQueryable* /
 		const ibBackendQueryColumn* col;
 		bool asc;
 	};
-	// The keyset compares by FirstSqlFieldOfColumn — the SAME field ColumnValueFields drives the ORDER BY with,
-	// so the keyset and the sort agree (a divergent field set re-reads the page head = duplicates). The anchor
-	// value is EMBEDDED: a REFERENCE encodes to its real _RRRef BLOB (ReferenceKeyBlob — binary, so `_RRRef OP
-	// blob` is a true reference compare, NOT a stringified guid); a scalar rides inline as ibConst.
+	// The keyset compares on the SAME fields BuildSortKeys drives the ORDER BY with, so keyset and sort agree
+	// (a divergent field set re-reads the page head = duplicates). A REFERENCE contributes TWO fields — its
+	// _RRRef guid then its _RTRef type — so the anchor value (a reference) encodes to its guid BLOB
+	// (ReferenceKeyBlob — a true binary reference compare) plus its clsid; a scalar rides inline as ibConst.
 	std::vector<SortCol> cols;
 	for (const ibQuerySortItem& s : sorts) {
 		if (s.m_col == nullptr) continue;
@@ -974,23 +999,37 @@ ibQueryExprPtr ibMetaIRBuilder::BuildAnchorPredicate(const ibBackendQueryable* /
 		return ibConst(v);                                            // scalar (uuid string / number / date / bool)
 	};
 
+	// Flatten each sort column into its comparison TERMS: a scalar is one term; a REFERENCE is two — the
+	// _RRRef guid, then the _RTRef type (its clsid) as the tiebreak — matching BuildSortKeys' ORDER BY and
+	// CompareValueLS (reference clsids order by metaID). Both terms read the SAME anchor reference value.
+	struct Term { ibQueryExprPtr field; ibQueryExprPtr operand; bool asc; };
+	std::vector<Term> terms;
+	for (size_t i = 0; i < cols.size(); ++i) {
+		const ibBackendQueryColumn* col = cols[i].col;
+		const bool     asc = cols[i].asc;
+		const ibValue  v   = valueAt(i);
+		terms.push_back({ ibColQ(mainQual, FirstSqlFieldOfColumn(col)), operand(v), asc });
+		if (FirstSqlFieldOfColumn(col).EndsWith(wxT("_RRRef"))) {
+			ibValueReferenceDataObject* refObj = nullptr;
+			const ibClassID clsid = (v.ConvertToValue(refObj) && refObj != nullptr) ? refObj->GetClassType() : 0;
+			terms.push_back({ ibColQ(mainQual, col->GetPhysicalName() + ibFieldSuffix(ibColumnRole::ReferenceType)),
+			                  ibConst(ibValue(ibNumber(clsid))), asc });
+		}
+	}
+
 	auto eqUpTo = [&](size_t kExclusive) -> ibQueryExprPtr {
 		ibQueryExprPtr eq;
 		for (size_t j = 0; j < kExclusive; ++j)
-			eq = AndFold(eq, ibBinOp(ibQueryBinOp::Eq,
-			                         ibColQ(mainQual, FirstSqlFieldOfColumn(cols[j].col)),
-			                         operand(valueAt(j))));
+			eq = AndFold(eq, ibBinOp(ibQueryBinOp::Eq, terms[j].field, terms[j].operand));
 		return eq;
 	};
 
 	ibQueryExprPtr predicate;
-	for (size_t i = 0; i < cols.size(); ++i) {
-		const bool isLast = (i + 1 == cols.size());
+	for (size_t i = 0; i < terms.size(); ++i) {
+		const bool isLast = (i + 1 == terms.size());
 		const ibQueryBinOp op =
-			(inclusiveTail && isLast) ? inclusiveOp(cols[i].asc) : strictOp(cols[i].asc);
-		ibQueryExprPtr clause = AndFold(
-			eqUpTo(i),
-			ibBinOp(op, ibColQ(mainQual, FirstSqlFieldOfColumn(cols[i].col)), operand(valueAt(i))));
+			(inclusiveTail && isLast) ? inclusiveOp(terms[i].asc) : strictOp(terms[i].asc);
+		ibQueryExprPtr clause = AndFold(eqUpTo(i), ibBinOp(op, terms[i].field, terms[i].operand));
 		predicate = OrFold(predicate, clause);
 	}
 
@@ -1004,16 +1043,17 @@ ibQueryExprPtr ibMetaIRBuilder::BuildParentRefPredicate(const ibBackendQueryable
                                                         const wxString& mainQual)
 {
 	// Non-root: compare the hierarchy column against the parent KEY value itself. A reference encodes to its own
-	// _RRRef blob (ReferenceKeyBlob — self-describing metaID, so NO same-table assumption); a non-reference key
-	// rides inline (ibConst). This is the SAME encoding the keyset anchor uses, not a bare-guid special case.
+	// _RRRef blob (ReferenceKeyBlob — the pure guid; a globally-unique guid identifies the parent within the
+	// table); a non-reference key rides inline (ibConst). This is the SAME encoding the keyset anchor uses.
 	if (!isTopLevel) {
 		if (ibQueryExprPtr blob = ReferenceKeyBlob(parentKey))
 			return ibBinOp(ibQueryBinOp::Eq, ibColQ(mainQual, refDataField), blob);
 		return ibBinOp(ibQueryBinOp::Eq, ibColQ(mainQual, refDataField), ibConst(parentKey));
 	}
-	// Root level: the EMPTY parent reference — the table's own type + a zero guid, the sentinel stored for a
-	// parentless row. (A non-reference hierarchy's roots would compare inline; none exist yet.)
-	ibReference ref{ queryable->GetQueryTableId(), ibGuidImpl{} };
+	// Root level: the EMPTY parent reference — a zero guid, the sentinel stored for a parentless row. All rows
+	// of this single hierarchy table share the type (the _RTRef column), so an all-zero _RRRef finds exactly the
+	// roots. (A non-reference hierarchy's roots would compare inline; none exist yet.)
+	ibReference ref{ ibGuidImpl{} };
 	return ibBinOp(ibQueryBinOp::Eq, ibColQ(mainQual, refDataField),
 	               ibConstBlob(&ref, sizeof(ibReference)));
 }
@@ -1034,7 +1074,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildKeyInPredicate(const ibBackendQueryable* qu
 // ==========================================================================
 // ibDbTableProvider — the real-table engine. STATELESS: every method reads the
 // ibDataQuerySpec the door hands it. It owns the name-substitution lowering and runs
-// it through L2. A single static instance serves every DB queryable (GetProvider).
+// it through L2-1. A single static instance serves every DB queryable (GetProvider).
 // ==========================================================================
 ibDataQueryResult ibDbTableProvider::ExecuteRead(const ibDataQuerySpec& spec, const ibReadPageRequest& req)
 	{
@@ -1160,7 +1200,19 @@ ibDataQueryResult ibDbTableProvider::ExecuteAggregate(const ibDataQuerySpec& spe
 
 		std::vector<ibQueryProjItem> projection;
 		for (size_t gi = 0; gi < spec.m_groupBy->size(); ++gi) {
+			// A COMPUTED key (GroupByExpr) occupies the same slot with a null column: lower the tree
+			// and project it under its alias. One GROUP BY item, not a field spread — an expression
+			// has no reference typing to reconstruct, so the reader takes it by alias.
+			if (spec.m_groupExprs != nullptr && gi < spec.m_groupExprs->size() && (*spec.m_groupExprs)[gi]) {
+				const ibQueryExprPtr gexpr =
+					ibMetaIRBuilder::BuildColumnExpr(queryable, (*spec.m_groupExprs)[gi], mainQual);
+				q.GroupBy(gexpr);
+				projection.push_back(ibQueryProjItem{ gexpr, (*spec.m_groupAliases)[gi] });
+				continue;
+			}
 			const ibBackendQueryColumn* gcol = (*spec.m_groupBy)[gi];
+			if (gcol == nullptr)
+				continue;   // a null column with no expression is an empty slot — nothing to group by
 			const std::vector<const ibBackendQueryColumn*>& path = (gi < groupPaths.size()) ? groupPaths[gi]
 			                                                      : std::vector<const ibBackendQueryColumn*>{};
 			const wxString qual = path.empty() ? mainQual : joinLeaf(path);   // dot-walk leaf -> join alias
@@ -1660,7 +1712,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedUnion(const ibDataQuerySpec
 
 		// Build each branch as SELECT <field AS u<i>> FROM table WHERE <branch conds>. The operator per
 		// branch follows the node's m_partAll flag: UNION ALL keeps duplicates, plain UNION dedupes —
-		// the DBMS does it natively (the spelling lives in the L2 render: ibUnion vs ibUnionAll).
+		// the DBMS does it natively (the spelling lives in the L2-1 render: ibUnion vs ibUnionAll).
 		ibQueryRelPtr unionRel;
 		for (size_t pi = 0; pi < root->m_parts.size(); ++pi) {
 			const ibBackendQueryable* q = root->m_parts[pi]->m_queryable;
@@ -2146,7 +2198,7 @@ static void BindWriteValue(ibQueryStatement& stmt, const ibBackendQueryColumn* c
 	ibColumnCodec::WriteValue(col, metaData, v, &stmt, pos);
 }
 
-// The L2 write CORE — buried in the provider. Identity is the WHERE section (spec conditions):
+// The L2-1 write CORE — buried in the provider. Identity is the WHERE section (spec conditions):
 // each condition column (a RAW uuid column, or a register's primary-key attribute) = value.
 // The SetValue() data rides ONLY for INSERT / UPSERT; DELETE is WHERE-only. INSERT/UPSERT write
 // every assignment column; UPSERT matches on the IsPrimaryKey ones (the raw uuid reports
@@ -2241,7 +2293,7 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 		catch (...) { return -1; }
 	}
 
-// Generate L2 by substituting names — all read from the spec; Build() is connection-free.
+// Generate L2-1 by substituting names — all read from the spec; Build() is connection-free.
 // The dot-walk join-tree + projection, the parent/tree filter, the user conditions, the
 // key-in set, the keyset anchor, the sort keys, the limit.
 ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibReadPageRequest& req,
@@ -2589,7 +2641,7 @@ ibQueryIR ibDbTableProvider::BuildPageIR(const ibDataQuerySpec& spec, const ibRe
 		if (hasDotWalk) {
 			// Emit sort keys in effective ORDER, interleaving plain (main-table) and dot-walk (joined) sorts.
 			for (const ibQuerySortItem& s : effective) {
-				if (s.m_expr) {   // computed sort (ORDER BY <expression>) — lower the L3 expr to L2, sort on it
+				if (s.m_expr) {   // computed sort (ORDER BY <expression>) — lower the L3 expr to L2-1, sort on it
 					ibQuerySortKey k;
 					k.m_expr = ibMetaIRBuilder::BuildColumnExpr(queryable, s.m_expr, mainQual);
 					k.m_dir  = (req.m_reverseSort ? !s.m_ascending : s.m_ascending) ? ibQuerySortDir::Asc : ibQuerySortDir::Desc;
@@ -2714,7 +2766,7 @@ std::vector<const ibBackendQueryable*> ibDbTableProvider::ResolveReferenceTarget
 }
 
 // ==========================================================================
-// ibDbResultSource — the DB cursor MATERIALISATION: walk the L2 result, lift each column up
+// ibDbResultSource — the DB cursor MATERIALISATION: walk the L2-1 result, lift each column up
 // through the provider's read rule. This is the DB provider's read side, so it lives here
 // (moved out of queryProvider.cpp with the rest of ibDbTableProvider). (docs §22.4d)
 // ==========================================================================
@@ -2733,9 +2785,9 @@ ibValue ProviderReadColumn(const ibBackendQueryColumn* col, const ibMetaData* me
 	return v;
 }
 
-// Physical scan — walks the L2 cursor; each column is lifted via the column-based read rule. It
+// Physical scan — walks the L2-1 cursor; each column is lifted via the column-based read rule. It
 // holds the metadata context (from the source's queryable) so a reference / enum column can
-// reconstruct its value without the attribute. The materialisation lives here, over the L2 result.
+// reconstruct its value without the attribute. The materialisation lives here, over the L2-1 result.
 class ibDbResultSource : public ibDataResultSource {
 public:
 	ibDbResultSource(ibQueryResult&& cursor, const ibBackendQueryable* queryable)

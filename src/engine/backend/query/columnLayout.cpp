@@ -142,7 +142,7 @@ std::vector<ibColumnSlot> DescribeColumnLayout(const ibBackendQueryColumn* col)
 	pushPrim(ibValueTypes::TYPE_STRING,  ibColumnRole::String,  wxString());
 	pushPrim(ibValueTypes::TYPE_ENUM,    ibColumnRole::Enum,    wxT("0"));
 
-	// Reference pair — _RTRef (target clsid, BIGINT) + _RRRef (guid+metaID blob, fixed-width
+	// Reference pair — _RTRef (target clsid, BIGINT) + _RRRef (pure guid blob, fixed-width
 	// BINARY so it is indexable for the dot-walk = join). Present when ANY clsid in the type
 	// is a reference target.
 	bool hasReference = false;
@@ -297,14 +297,14 @@ bool ibColumnCodec::ReadField(const wxString& fieldName, int fieldType,
 			if (createData) {
 
 				ibValuePtr<ibValueReferenceDataObject> created_reference(
-					ibValueReferenceDataObject::CreateFromPtr(metaData, bufferData.GetData()));
+					ibValueReferenceDataObject::CreateFromPtr(metaData, refType, bufferData.GetData()));
 
 				retValue = created_reference;
 				return created_reference != nullptr;
 			}
 
 			ibValuePtr<ibValueReferenceDataObject> created_reference(
-				ibValueReferenceDataObject::Create(metaData, bufferData.GetData()));
+				ibValueReferenceDataObject::Create(metaData, refType, bufferData.GetData()));
 
 			retValue = created_reference;
 			return created_reference != nullptr;

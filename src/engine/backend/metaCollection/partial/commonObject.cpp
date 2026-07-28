@@ -1850,15 +1850,16 @@ ibValueRecordDataObjectExt* ibValueRecordDataObjectExt::CopyObjectValue()
 
 
 ibValueRecordDataObjectRef::ibValueRecordDataObjectRef(const ibValueMetaObjectRecordDataMutableRef* metaObject, const ibGuid& objGuid) :
-	ibValueRecordDataObject(objGuid.isValid() ? objGuid
-		: (metaObject != nullptr ? ibValueReferenceDataObject::MakeNewGuid(metaObject->GetMetaID()) : ibGuid(ibGuid::newGuid(GUID_RANDOM))),
+	// A new object mints a PLAIN unique guid (pure identity — the type is carried by _RTRef / the metaObject,
+	// never baked into the key). An existing object keeps its stored guid.
+	ibValueRecordDataObject(objGuid.isValid() ? objGuid : ibGuid(ibGuid::newGuid(GUID_RANDOM)),
 		!objGuid.isValid()),
 	m_metaObject(metaObject),
 	m_reference_impl(nullptr),
 	m_objModified(false)
 {
 	if (m_metaObject != nullptr)
-		m_reference_impl = new ibReference(m_metaObject->GetMetaID(), m_objGuid);
+		m_reference_impl = new ibReference(m_objGuid);   // pure guid; type is the metaObject / _RTRef
 }
 
 ibValueRecordDataObjectRef::ibValueRecordDataObjectRef(const ibValueRecordDataObjectRef& src) :
@@ -1868,7 +1869,7 @@ ibValueRecordDataObjectRef::ibValueRecordDataObjectRef(const ibValueRecordDataOb
 	m_objModified(false)
 {
 	if (m_metaObject != nullptr)
-		m_reference_impl = new ibReference(m_metaObject->GetMetaID(), m_objGuid);
+		m_reference_impl = new ibReference(m_objGuid);   // pure guid; type is the metaObject / _RTRef
 }
 
 ibValueRecordDataObjectRef::~ibValueRecordDataObjectRef()
@@ -2768,8 +2769,8 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 	{
 		const wxString refGuid = m_reference_impl
 			? ibGuid(m_reference_impl->m_guid).str() : wxString();
-		const int refMetaId = m_reference_impl
-			? static_cast<int>(m_reference_impl->GetMetaID()) : 0;
+		const int refMetaId = m_metaObject != nullptr
+			? static_cast<int>(m_metaObject->GetMetaID()) : 0;   // type from the metaObject, not the key bytes
 		const wxString evt = (writeMode == ibDocumentWriteMode::ibDocumentWriteMode_Posting)
 			? wxT("posted") : wxT("unposted");
 		ibLog->Audit(wxT("document"), evt, GetSourceCaption(), refGuid, refMetaId);

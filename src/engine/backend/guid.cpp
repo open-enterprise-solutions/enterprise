@@ -364,10 +364,9 @@ void ibGuid::swap(ibGuid& other)
 }
 
 // Platform entropy source. newGuid returns the STORAGE form (ibGuidImpl): it flows implicitly into an
-// ibGuid, while the metaclass takes it directly and patches Data1 with the metaID (no intermediate
-// ibGuid). Each body builds the canonical big-endian byte array and lets ibGuid -> ibGuidImpl (the
+// ibGuid. Each body builds the canonical big-endian byte array and lets ibGuid -> ibGuidImpl (the
 // field-swap in operator ibGuidImpl) produce native-endian fields. ibGuid stays a primitive: it mints
-// guids, it does not know metaIDs.
+// guids, it does not know metaIDs — a reference key is a pure guid, its type is the _RTRef column.
 
 #ifdef GUID_LIBUUID
 // linux (libuuid); works anywhere libuuid is available

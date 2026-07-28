@@ -1,163 +1,108 @@
-# Reference key = one guid (type + time + uniqueness)
+# Reference key = a pure guid; the type is a separate column
 
-**Status: guid primitive LANDED; the reference-key encoder AND the storage collapse (20→16) are in
-code, uncommitted (build-verify pending on a stable tree).**
+**Status: code complete, NOT yet committed. An earlier revision (pure-guid + `_RTRef`) built green; the
+current revision adds the `(guid, type)` keyset tiebreak (below) and awaits a clean build — verification is
+blocked only by an unrelated parallel change breaking the shared tree, not by this work.**
 
-A reference to an object is a single **16-byte guid** that carries three things at once — no
-side-channel, no separate metaID column: the same 16 bytes say *what type*, *roughly when*, and
-*which one*. One primitive, consistency by construction.
+A stored reference is a PAIR — `_RTRef` (the target type, a clsid column) + `_RRRef` (a pure 16-byte object
+guid). The guid carries NO type.
+
+A reference to an object is **two physical columns**, exactly as it always was in the storage layer:
 
 ```
- byte:  0  1  2  3 | 4  5  6  7 | 8  9 10 11 12 13 14 15
-        └ Data1  ┘  └ Data2/3 ┘ └────────  Data4  ─────┘
-        =  metaID     = seconds   =  64-bit random
-           (type)      (order)       (uniqueness)
+_RTRef : BIGINT   — the target type (clsid). Resolves to the reference's metaObject.
+_RRRef : BINARY(16) — the object's identity: a plain guid. Nothing else.
 ```
 
-- **Data1 (4 bytes) = metaID** — the target's type. Leads the key → type grouping / SQL-slice, and
-  it is the slot the reader extracts the type from.
-- **Data2+Data3 (4 bytes) = a 32-bit second counter** — coarse time, for insert ORDER and index
-  locality (~136-year range). It does NOT provide uniqueness (many rows share a second).
-- **Data4 (8 bytes) = 64-bit random** — the uniqueness. Two concurrent same-second same-type inserts
-  differ here. Uniqueness lives entirely in this tail; the timestamp only orders.
+The type lives in `_RTRef`; the identity lives in `_RRRef`. They are **orthogonal**: an empty reference is
+an all-zero `_RRRef` with its type still in `_RTRef`; a retype touches only `_RTRef`; a join matches on the
+globally-unique `_RRRef` guid.
 
-## Why this split (and not a plain v1/v4 uuid)
+## Why the guid is pure (the road here)
 
-- The type must be embedded so a bare key is self-describing (drop the separate metaID storage).
-- Concurrency needs a differentiator. **Uniqueness comes from the 64-bit random, NOT from timestamp
-  precision** — two rows created in the same instant share the timestamp, so only the random tells
-  them apart. Finer timestamps (µs/ns) don't help: the OS clock caps resolution (~µs), and the random
-  is what actually distinguishes concurrent rows.
-- **We take RANDOM bytes (v4 `UuidCreate`), never v1 `UuidCreateSequential`.** A v1 uuid keeps its
-  fast-changing uniqueness bits in `time_low` = Data1 — exactly the slot we overwrite with metaID.
-  Overwriting v1's time_low destroys uniqueness under concurrency (same-server rows within one ~7-min
-  window collapse to identical tails). So the key is built from a v4 random guid; only Data1/Data2/Data3
-  are stamped, Data4 stays the OS-random tail.
+An earlier iteration tried to make the key **self-describing** — bake the `metaID` into the guid's `Data1`
+so a bare 16-byte key knew its own type (collapsing 20 bytes → 16). It looked elegant and it was wrong:
 
-## Sizing (ERP-class)
+- **It duplicated `_RTRef`.** The type was *already* stored beside the guid in the `_RTRef` clsid column
+  (`query/columnLayout.cpp`) — the read path even reads it. Baking it into `Data1` stored the type twice.
+- **It broke emptiness.** An unset reference became `{metaID, 0, 0, 0}` — non-zero because of the type
+  slot — so `isValid()` read it as a real object and tried to resolve it (`Not found <metaID:…>`) instead
+  of showing blank. Distinguishing "type slot" from "identity" then needed a special `ObjectIdentityOrEmpty`
+  dance.
+- **It shrank uniqueness.** `Data1` (4 of the 16 bytes) was spent on the type, leaving 96 identity bits
+  instead of 128, and it forced a v4 random guid so the overwritten `time_low` didn't matter.
 
-- **metaID 4 bytes.** metaID is a *global* sequential id assigned to EVERY metaobject (via
-  `GenerateNewID` in `OnCreateMetaObject`) — catalogs, documents, registers AND their attributes /
-  tabular-section columns / forms / commands. A flagship ERP config reaches **millions** of metaobjects,
-  so 3 bytes (16.7M) is too tight; 4 bytes (2.1B) is never a concern.
-- **seconds 4 bytes** — 136-year range from a custom epoch (or Unix seconds, valid to 2106).
-- **random 8 bytes** — 64 bits, bulletproof (below).
+The clean model was **already half-built here** — we got it for free: a reference column already stored its
+type in the `_RTRef` clsid column, and the read path already read it. The fix is simply to **stop storing the
+type a second time in the key**. Single-type columns know their type from metadata (schema-on-read); every
+reference column also carries the explicit `_RTRef` clsid for composite targets. So the guid is free to be
+pure identity.
 
-## metaID lifecycle & ceiling (AI-first)
+## How the type is resolved
 
-`GenerateNewID` returns **max(live metaID) + 1** (`metadata.cpp`) — it never reuses a freed id. This is
-deliberate: metaID is part of every stored reference, so it must **permanently** mean the same type;
-reusing a deleted type's id would make old references point to the wrong type. The price of that
-stability is that the ceiling **climbs cumulatively** with additions to a config (deletions leave gaps,
-a fresh config resets from ~1000).
+- **Write** (`ibColumnCodec::WriteValue`): binds `_RTRef` = the value's clsid, `_RRRef` = its pure guid blob.
+- **Read** (`ibColumnCodec::ReadField`): reads `_RTRef` into `refClsid`, then
+  `ibValueReferenceDataObject::Create(metaData, refClsid, blob)` resolves the metaObject from the clsid
+  (`GetTypeCtor(clsid)->GetMetaObject()`) and wraps the pure guid. The type comes from the column, never the
+  key bytes.
+- **Runtime**: a live reference holds its `metaObject` directly, so it always knows its type without touching
+  the guid.
 
-Ceiling now: `ibMetaID = int` (signed) → **~2.1 billion**. The guid's Data1 slot is already `uint32_t`,
-so it holds the full unsigned range — **the type, not the key, is the limit**, and there is a clean 2×
-growth lever available: switch metaID to `unsigned int` → **~4.29 billion**.
+## Uniqueness
 
-That growth is NOT free, though (an earlier note wrongly called it cheap): `wxNOT_FOUND` (−1) is the
-entrenched "invalid / not-found" metaID sentinel in ~14 sites (`commandDescription`, `tabularSection`,
-`metaData`, `modelDb` ×5, `modelRam`, `variantSource`, `srcDataObject`, …). Under `unsigned`, −1 becomes
-`UINT_MAX` = the very top of the range, so the sentinel would **collide with the maximum valid metaID**.
-Going unsigned therefore requires moving the sentinel to a non-colliding value (e.g. 0) across all those
-sites plus a signed/unsigned sweep.
+A new object mints a **plain unique guid** (`wxNewUniqueGuid` = full v4 random) — no encoding, no timestamp,
+no type. 128 random bits: collision is a birthday on 2¹²⁸, i.e. never. Because the guid is globally unique,
+a dot-walk JOIN (`source.fldX_RRRef = target.<selfref>_RRRef`) and a keyset anchor match on the guid alone —
+the type is not needed to disambiguate identity (two objects, even of different types, do not share a guid).
 
-Reaching even 2.1 billion needs ~2 billion cumulative metaobject-additions to a SINGLE config; AI batch
-generation could climb toward ~1 billion over a long-lived, heavily-iterated config — so headroom
-matters — but 2.1 billion is sufficient. **Decision: keep signed `int` (2.1 billion) now; the room to
-grow ~2× (unsigned, ~4.29 billion) is there for later, gated on the sentinel rework above.** Beyond that,
-`int64` metaID + a guid rebalance remains the far-future path (≫ any conceivable need).
+## Sorting — (guid, type), consistently on both sides
 
-If some future extreme AI-churn scenario ever needed more, the path is a platform-wide `int64` metaID
-plus a guid rebalance — e.g. `[metaID 6][sec 4][random 6]` (ceiling ~281 trillion, keeps time+random) or
-`[metaID 8][random 8]` (drops the timestamp). Not needed now; recorded so the choice stays deliberate.
+A reference orders by its **guid first, then its type** — identity, then the target-type tiebreak. This holds
+identically in RAM and in SQL:
 
-## The encoder — lives on the reference
+- **Runtime**: `ibValueReferenceDataObject::CompareValueLS` compares `m_objGuid`, then `metaID`.
+- **SQL**: the keyset ORDER BY (`BuildSortKeys`) and anchor predicate (`BuildAnchorPredicate`) emit **two**
+  fields for a reference sort column — `_RRRef` (the guid, field-normalized to match `guidValueCompare`
+  byte-for-byte) then `_RTRef` (the clsid). Because a reference's clsid is `(Reference_kind << 56) | metaID`,
+  all reference clsids share the high byte and order by their metaID body — so `_RTRef` order **equals**
+  metaID order, matching the runtime tiebreak exactly.
 
-`ibValueReferenceDataObject::MakeNewGuid(ibMetaID)` (`metaCollection/partial/reference/reference.h`)
-is THE place a new reference key is minted — it lives on the reference itself, so the mechanism is
-visible where references are defined. It works through **ibGuidImpl fields** (not raw bytes) so the
-key lines up with the guid comparator and the stored-blob field order:
+The type tiebreak matters only when guids tie, i.e. for **empty references** (all share the all-zero guid):
+it keeps an empty ref of type A distinct from one of type B on both sides, so `CompareValueLS == 0` stays in
+lockstep with `CompareValueEQ` (type + guid) and a keyset never mis-pages a run of mixed-type empties. For a
+single-type / self-reference column `_RTRef` is constant, so the second field is a harmless no-op. Non-empty
+references have unique guids, so the guid alone already decides — the tiebreak never fires there.
 
-```cpp
-static ibGuid MakeNewGuid(ibMetaID metaID) {
-    wxASSERT_MSG(metaID != 0, "MakeNewGuid: reference key minted with a zero (unset) metaID");
-    ibGuidImpl impl = ibGuid::newGuid(GUID_RANDOM);   // v4 random — Data4 stays the tail
-    impl.m_data1 = (uint32_t)metaID;                  // Data1  : metaID (type)
-    const uint32_t sec = /* system_clock seconds since epoch */;
-    impl.m_data2 = (unsigned short)(sec >> 16);       // Data2  : seconds high
-    impl.m_data3 = (unsigned short)(sec & 0xFFFF);    // Data3  : seconds low
-    return impl;
-}
-```
+## The type id (`_RTRef`) and its ceiling
 
-Minted only for a **NEW reference value** (the new-object branch of `ibValueRecordDataObjectRef`,
-`commonObject.cpp`). Loaded / copied guids are kept as-is (already minted). A **zero metaID asserts** —
-the type must be set before a key exists.
+The type stored in `_RTRef` is the target's clsid, resolving to a metaObject whose `metaID` is the stable
+type identity. `GenerateNewID` returns **max(live metaID) + 1** and never reuses a freed id — a stored
+reference's type must permanently mean the same thing. `ibMetaID = int` (signed) → ~2.1 billion metaobjects,
+which is never a concern (a flagship config reaches millions). `_RTRef` is a `BIGINT` column, so it holds the
+full range with room to spare. AI batch-generating metaobjects could climb, but 2.1 billion is ample; the
+far-future lever (unsigned / int64) is recorded in the code's sentinel notes, not needed now.
 
-Scope: **reference objects only** — catalogs, documents, charts. **Registers** (accumulation /
-information / accounting) use composite keys (dimensions), never mint through here.
+## Empty reference
 
-The metaobject's OWN guid (`m_metaGuid`) is a separate, config-level identity — it is **not** branded;
-it keeps its plain generation.
+An empty reference is simply an **all-zero `_RRRef` guid** with its type in `_RTRef`. `isValid()` reads the
+zero guid as unset → `IsNewObject()` is true → it presents blank, and `GetObject()` mints a fresh empty
+object of the `_RTRef` type. No special-casing, no identity/type gymnastics — zero is zero because the type
+was never in the guid to begin with.
 
-## Collision — bulletproof
+## Restructuring (why this shape suits an AI-first, schema-churning platform)
 
-A collision needs all three to match: **same type AND same second AND same 64-bit random**. It reduces
-to a birthday on 64 bits **within one (type, second) bucket**: `P ≈ N² / 2⁶⁵`, N = same-type inserts in
-that second.
+Because the type is a **separate column**, not fused into the key:
 
-**Key property:** collisions compete only inside a (type, second) bucket, so the risk depends on the
-**peak inserts/sec into a single type — NOT on total DB size.** The database may hold trillions of rows.
-
-| Rate into ONE type | collisions over 10 years |
-|---|---|
-| 1 000 /sec        | ~8.5×10⁻⁶ |
-| 10 000 /sec       | ~8.5×10⁻⁴ |
-| 100 000 /sec      | ~8.5×10⁻² |
-| 1 000 000 /sec    | >1 |
-
-A 50% chance within one second needs ≈ 2³² ≈ 4.3 billion inserts of one type in a single second —
-physically impossible. For any realistic ERP load (stream spread across types, ≤1000/sec per type),
-collision is ~10⁻⁵ over a decade, i.e. zero.
-
-## Sorting
-
-`ibGuid::operator<` (`guidValueCompare`) and the server's `ORDER BY` on the stored blob are aligned
-(field-normalized to match). metaID in Data1 → references **group by type** automatically (same type =
-identical leading bytes = adjacent). Within a type they cluster by second, and the random tie-breaks —
-invisibly to the user, who never enters sub-second precision.
-
-Caveat: the comparator matches the little-endian stored-blob order, so within a type the second is
-*clustered* but not strictly numeric-ascending. A clean ascending time-sort would require storing the
-blob big-endian — a codec change deferred to the storage phase; it is a query-locality nicety, not
-correctness.
-
-## Storage collapse 20 → 16 — DONE (in code)
-
-The metaID tail is gone. `ibReference` now holds only the 16-byte guid; its ctor stamps Data1 from `id`
-(real keys — already branded — are a no-op; metaID-only sentinels land right), and `GetMetaID()` reads
-the type back from Data1. `reference_size_t` → 16 drives the DDL column, the blob write
-(`SetParamBlob(…, sizeof(ibReference))`) and the read reconstruction (`CreateFromPtr` / `Create` via
-`GetMetaID`) — all size-driven, no 20-byte / offset-16 assumptions. The reference value comparators use
-the guid alone (metaID is in Data1; the old metaID tiebreak was removed).
-
-Query-engine consistency holds: `guidValueCompare` matches the server's bytewise `ORDER BY` on the blob,
-so reference `=` / `<` / `ORDER BY` / `JOIN` push down to SQL with identical results — a clean 16-byte
-key is directly DB-comparable.
-
-## Still open (deferred, not correctness)
-
-- **Sort-order alignment (cosmetic).** In-memory order == server order and groups by type, but it is
-  little-endian-scrambled (not strictly numeric-ascending time within a type). A clean ascending sort
-  would need storing the blob big-endian + changing the comparator — not worth it; range scans (exact
-  type prefix) and keyset paging already work on the current consistent total order.
-- **SQL-side metaID slice (unused).** Type filtering already uses the `_RTRef` clsid column, not a blob
-  slice; a `substring(key,1,4)` helper is only worth adding when a query actually needs it.
+- **Retype** a reference column → change `_RTRef` (and the metadata), the `_RRRef` guids are untouched.
+- **Clear** values → zero `_RRRef`, `_RTRef` stays; no blob rewrite dance.
+- **Single-type columns** can go further (schema-on-read): the type is implied by the column's declaration,
+  so even `_RTRef` is redundant there — a retype is a pure metadata operation. (Not yet specialized; `_RTRef`
+  is written for every reference column today. A worthwhile follow-up if restructuring of populated tables
+  proves hot.)
 
 ## Non-goals
 
-- Branding the metaobject's own guid (`m_metaGuid`) — it is config identity, not a stored data reference.
-- Register keys (composite dimensions) — no reference guid to brand.
-- Global uniqueness / finer-than-second timestamps — neither is needed; uniqueness is the 64-bit random,
-  and it is scoped per (type, second), which is sufficient and correct.
+- Baking the type into the guid — tried, reverted (this document is the record of why).
+- Register keys (composite dimensions) — no reference guid to carry a type.
+- A time-ordered guid for insert locality — dropped with the metaID experiment; a pure-random guid scatters
+  inserts, which is a possible future refinement (a type-free time-ordered guid) if index locality bites.

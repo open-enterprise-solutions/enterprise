@@ -123,7 +123,7 @@ struct ibDialectDictionary
 	wxString m_typeGuid          = wxT("VARCHAR(36)");   // VARCHAR (not CHAR): carries vary_length, so a guid reads back exact — no charset-padded CHAR tail (PG overrides to native UUID)
 	wxString m_typeStringPattern = wxT("VARCHAR(%d)");   // variable-length string
 	wxString m_typeCharPattern   = wxT("CHAR(%d)");      // fixed-length string
-	wxString m_typeBinaryPattern = wxT("BINARY(%d)");    // fixed-length bytes (reference _RRRef = guid+metaID); indexable for = joins
+	wxString m_typeBinaryPattern = wxT("BINARY(%d)");    // fixed-length bytes (reference _RRRef = pure guid); indexable for = joins
 	wxString m_typeNumberPattern = wxT("DECIMAL(%d,%d)");
 
 	// DDL/DML transaction barrier. Some engines cannot safely populate a table
