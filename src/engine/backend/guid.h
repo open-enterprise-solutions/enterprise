@@ -22,14 +22,16 @@ THE SOFTWARE.
 #define __GUID_H__
 
 #include <array>
+#include <cstdint>
 #include <wx/wx.h>
 
 struct ibGuidImpl { // UUID = GUID = CLSID = LIBID = IID
-	unsigned long   m_data1;
-	unsigned short  m_data2;
-	unsigned short  m_data3;
-	unsigned char   m_data4[8];
-};
+	uint32_t        m_data1;   // fixed-width, NOT `unsigned long`: that is 64-bit on LP64 (Linux/macOS),
+	unsigned short  m_data2;   // which would make this struct 20 bytes there and desync the persisted
+	unsigned short  m_data3;   // 16-byte _RRRef key. Pinned so ibGuidImpl behaves identically on every
+	unsigned char   m_data4[8];// platform — this is the storage dupe of a guid, and Data1 (m_data1) is
+};                             // the reference key's metaID slot.
+static_assert(sizeof(ibGuidImpl) == 16, "ibGuidImpl must stay a portable 16-byte POD (guid storage dupe / _RRRef key)");
 
 #if defined(__WXMSW__)
 #define GUID_WINDOWS
@@ -55,12 +57,16 @@ class BACKEND_API ibGuid
 {
 public:
 
+	// EXPLICIT: wrapping raw bytes into a guid is a deliberate act (`ibGuid g(ibGuid::newGuid());`). The
+	// IMPLICIT conversion is reserved for ibGuidImpl (the storage dupe, ctor below), so an ibGuidImpl flows
+	// into an ibGuid freely while a bare array does not.
 	explicit ibGuid(const std::array<unsigned char, 16>& bytes);
 	explicit ibGuid(const std::array<unsigned char, 16>&& bytes);
 	explicit ibGuid(const std::string_view& fromString);
 
 	ibGuid();
-	ibGuid(const ibGuidImpl& bytes);
+	ibGuid(const ibGuidImpl& bytes);   // IMPLICIT on purpose: the storage dupe flows into an ibGuid freely
+	                                   // (the metaclass patches Data1 on an ibGuidImpl, then returns it as a guid)
 #if __WXWINDOWS__
 	ibGuid(const wxString& fromString);
 #endif
@@ -70,7 +76,10 @@ public:
 	ibGuid(ibGuid&& other) = default;
 	ibGuid& operator=(ibGuid&& other) = default;
 
-	static ibGuid newGuid(short version = GUID_RANDOM);
+	// Mint a fresh guid in its STORAGE form (ibGuidImpl, the dupe): it flows implicitly into an ibGuid
+	// (`ibGuid g = ibGuid::newGuid();`), while the metaclass takes the ibGuidImpl DIRECTLY and patches
+	// Data1 with the metaID — no intermediate ibGuid. See ibValueMetaObject::NewReferenceGuid.
+	static ibGuidImpl newGuid(short version = GUID_RANDOM);
 
 	bool operator > (const ibGuid& other) const;
 	bool operator >= (const ibGuid& other) const;
@@ -109,6 +118,9 @@ private:
 };
 
 #define wxNullGuid	ibGuid()
-#define wxNewUniqueGuid	ibGuid::newGuid(GUID_RANDOM)
+// Wrapped so wxNewUniqueGuid is an ibGuid (newGuid returns ibGuidImpl): several call sites do
+// `ibUniqueKey k = wxNewUniqueGuid`, and ibUniqueKey <- ibGuidImpl would need TWO user conversions
+// (ibGuidImpl -> ibGuid -> ibUniqueKey), which copy-init forbids. Invisible at the call site.
+#define wxNewUniqueGuid	ibGuid(ibGuid::newGuid(GUID_RANDOM))
 
 #endif

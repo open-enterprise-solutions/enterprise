@@ -1850,7 +1850,7 @@ ibValueRecordDataObjectExt* ibValueRecordDataObjectExt::CopyObjectValue()
 
 
 ibValueRecordDataObjectRef::ibValueRecordDataObjectRef(const ibValueMetaObjectRecordDataMutableRef* metaObject, const ibGuid& objGuid) :
-	ibValueRecordDataObject(objGuid.isValid() ? objGuid : ibGuid::newGuid(GUID_TIME_BASED), !objGuid.isValid()),
+	ibValueRecordDataObject(objGuid.isValid() ? objGuid : ibGuid(ibGuid::newGuid(GUID_TIME_BASED)), !objGuid.isValid()),
 	m_metaObject(metaObject),
 	m_reference_impl(nullptr),
 	m_objModified(false)

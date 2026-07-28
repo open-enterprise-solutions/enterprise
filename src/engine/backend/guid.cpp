@@ -363,10 +363,15 @@ void ibGuid::swap(ibGuid& other)
 	_bytes.swap(other._bytes);
 }
 
-// This is the linux friendly implementation, but it could work on other
-// systems that have libuuid available
+// Platform entropy source. newGuid returns the STORAGE form (ibGuidImpl): it flows implicitly into an
+// ibGuid, while the metaclass takes it directly and patches Data1 with the metaID (no intermediate
+// ibGuid). Each body builds the canonical big-endian byte array and lets ibGuid -> ibGuidImpl (the
+// field-swap in operator ibGuidImpl) produce native-endian fields. ibGuid stays a primitive: it mints
+// guids, it does not know metaIDs.
+
 #ifdef GUID_LIBUUID
-ibGuid ibGuid::newGuid(short version)
+// linux (libuuid); works anywhere libuuid is available
+ibGuidImpl ibGuid::newGuid(short /*version*/)
 {
 	std::array<unsigned char, 16> data;
 	static_assert(std::is_same<unsigned char[16], uuid_t>::value, "Wrong type!");
@@ -375,9 +380,9 @@ ibGuid ibGuid::newGuid(short version)
 }
 #endif
 
-// this is the mac and ios version
 #ifdef GUID_CFUUID
-ibGuid ibGuid::newGuid(short version)
+// mac / ios
+ibGuidImpl ibGuid::newGuid(short /*version*/)
 {
 	auto newId = CFUUIDCreate(nullptr);
 	auto bytes = CFUUIDGetUUIDBytes(newId);
@@ -406,11 +411,9 @@ ibGuid ibGuid::newGuid(short version)
 }
 #endif
 
-// obviously this is the windows version
 #ifdef GUID_WINDOWS
-#pragma comment( lib, "rpcrt4.lib" )
-
-ibGuid ibGuid::newGuid(short version)
+// windows
+ibGuidImpl ibGuid::newGuid(short version)
 {
 	GUID newId = { 0 };
 	if (version == GUID_TIME_BASED)
@@ -440,7 +443,11 @@ ibGuid ibGuid::newGuid(short version)
 		(unsigned char)newId.Data4[6],
 		(unsigned char)newId.Data4[7]
 	};
-
-	return ibGuid{ std::move(bytes) };
+	ibGuid guid(std::move(bytes));       // explicit array ctor
+	return guid;                          // ibGuid -> ibGuidImpl via operator ibGuidImpl (field-swap)
 }
+#endif
+
+#ifdef GUID_WINDOWS
+#pragma comment( lib, "rpcrt4.lib" )
 #endif
