@@ -15,8 +15,6 @@
 // WriteRecordSet / DeleteRecordSet inherited from ibValueRecordSetObject
 // (Phase B template-method) — see commonObjectRecordSetQuery.cpp.
 
-bool ibValueRecordSetObjectAccountingRegister::SaveVirtualTable() { return true; }
-bool ibValueRecordSetObjectAccountingRegister::DeleteVirtualTable() { return true; }
 
 enum func
 {

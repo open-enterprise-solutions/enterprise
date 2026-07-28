@@ -5,7 +5,7 @@
 // indexes) to a TARGET connection, and owns the DDL/DML transaction barrier. The metaobject layer
 // builds an ibDdlStatement from the column-layout tier (DescribeColumnLayout) and applies it THROUGH
 // here — so the metaobject never renders SQL or names a dialect; the dialect dictionary closes the
-// per-DBMS forks inside the L2 render.
+// per-DBMS forks inside the L2-1 render.
 //
 // Responsibility split: the metadata-config orchestrator BUILDS the DDL (through the metaobjects),
 // VERIFIES it (the restructure ledger) and drives the TRANSACTION; this door is the shim it applies
@@ -18,7 +18,7 @@
 // DDL commit, when the table is durable. No `if (driver == FIREBIRD)` in the metadata layer — the
 // barrier is the dialect fact m_ddlCommitBeforeData, and the deferral is local to each write site.
 //
-// The `holder` is the seam (same as L2 ibDatabaseQueryBuilder / L3 ibTempTableManager): it is the
+// The `holder` is the seam (same as L2-1 ibDatabaseQueryBuilder / L3 ibTempTableManager): it is the
 // connection lifetime anchor; the door runs DDL on holder->EnsureConnection() (the holder's pinned /
 // scoped conn — the SAME conn its open transaction lives on). nullptr = the local DDL channel (db_query,
 // the designer's single save channel); an explicit holder = another database / a dedicated restructuring
@@ -32,7 +32,7 @@
 #include <set>
 #include <vector>
 
-struct ibDdlStatement;   // a struct in databaseQueryBuilder.h — match the tag or MSVC name-mangles Execute differently (LNK2019)
+struct ibDdlStatement;              // a struct in databaseQueryBuilder.h — match the tag or MSVC name-mangles Execute differently (LNK2019)
 class ibDatabaseLayer;
 class ibDatabaseConnectionHolder;
 
@@ -71,6 +71,12 @@ public:
 	// without CREATE INDEX IF NOT EXISTS (Firebird).
 	bool CanIntrospectIndexes() const;
 	wxArrayString PhysicalIndexes(const wxString& table) const;
+
+	// The connection this save runs on, for a LEVEL that executes what it rendered — L2-2 applies
+	// its own trigger / view bundle, the same way ibDatabaseQueryBuilder runs the queries it builds.
+	// This door hands over the connection and never sees a SQL string: no floor above L2 handles
+	// one, which is the whole reason both halves of level 2 exist.
+	ibDatabaseLayer& Connection() const;
 
 	// Reset the per-save tracking (created-set + deferred queue) on this builder's barrier holder.
 	// Call at the start of a save. No longer static — the state lives on the holder, not a global.

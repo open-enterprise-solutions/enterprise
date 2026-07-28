@@ -85,6 +85,7 @@
     <ClInclude Include="databaseLayer\connectionScope.h" />
     <ClInclude Include="databaseLayer\columnType.h" />
     <ClInclude Include="databaseLayer\databaseQueryBuilder.h" />
+    <ClInclude Include="databaseLayer\databaseMaterializeBuilder.h" />
     <ClInclude Include="databaseLayer\databaseLayer.h" />
     <ClInclude Include="databaseLayer\databaseLayerDef.h" />
     <ClInclude Include="databaseLayer\databaseLayerException.h" />
@@ -223,6 +224,7 @@
     <ClInclude Include="query\columnSpread.h" />
     <ClInclude Include="query\dataMover.h" />
     <ClInclude Include="query\schemaBuilder.h" />
+    <ClInclude Include="query\derivedStateBuilder.h" />
     <ClInclude Include="query\schemaSnapshot.h" />
     <ClInclude Include="query\structureBatch.h" />
     <ClInclude Include="query\structureBuilder.h" />
@@ -411,6 +413,7 @@
     <ClCompile Include="databaseLayer\connectionPool.cpp" />
     <ClCompile Include="databaseLayer\connectionScope.cpp" />
     <ClCompile Include="databaseLayer\databaseQueryBuilder.cpp" />
+    <ClCompile Include="databaseLayer\databaseMaterializeBuilder.cpp" />
     <ClCompile Include="databaseLayer\databaseErrorReporter.cpp" />
     <ClCompile Include="databaseLayer\databaseLayer.cpp" />
     <ClCompile Include="databaseLayer\databaseLayerException.cpp" />
@@ -522,7 +525,6 @@
     <ClCompile Include="metaCollection\partial\accumulationRegisterMetadataProperty.cpp" />
     <ClCompile Include="metaCollection\partial\accumulationRegisterMetadata_res.cpp" />
     <ClCompile Include="metaCollection\partial\accumulationRegisterObject.cpp" />
-    <ClCompile Include="metaCollection\partial\accumulationRegisterQuery.cpp" />
     <ClCompile Include="metaCollection\partial\accountingRegisterEnum.cpp" />
     <ClCompile Include="metaCollection\partial\accountingRegisterManager.cpp" />
     <ClCompile Include="metaCollection\partial\accountingRegisterManager_impl.cpp" />
@@ -616,6 +618,9 @@
     <ClCompile Include="query\columnLayout.cpp" />
     <ClCompile Include="query\dataMover.cpp" />
     <ClCompile Include="query\schemaBuilder.cpp" />
+    <ClCompile Include="metaCollection\partial\accumulationRegisterSchema.cpp" />
+    <ClCompile Include="query\derivedStateBuilder.cpp" />
+    <ClCompile Include="query\queryRamTable.cpp" />
     <ClCompile Include="query\schemaSnapshot.cpp" />
     <ClCompile Include="query\structureBatch.cpp" />
     <ClCompile Include="query\structureBuilder.cpp" />

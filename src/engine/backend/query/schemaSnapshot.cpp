@@ -7,7 +7,39 @@
 #include "backend/restructureInfo.h"                        // ibRestructureInfo — the apply-change ledger
 #include "backend/query/queryColumn.h"                     // ibBackendQueryColumn::GetName (friendly column name)
 #include "backend/query/queryable.h"                        // ibBackendQueryable::GetQueryName / GetQueryTableName
+#include "backend/databaseLayer/databaseMaterializeBuilder.h"     // L2-2 RenderMaterialization — derived-state triggers + view
+#include "backend/query/derivedStateBuilder.h"              // L3-4 — rebuild derived state after a structure change
 #include "appData.h"                                        // db_query — the local channel the seed writes target
+
+wxString ibSchemaMaterialize::SourceTable() const
+{
+	return m_source != nullptr ? m_source->GetQueryTableName() : wxString();
+}
+
+ibMaterializeSpec ibSchemaMaterialize::ToRenderSpec(const wxString& tableName) const
+{
+	ibMaterializeSpec out;
+	out.m_table            = tableName;
+	out.m_source           = SourceTable();
+	out.m_views            = m_views;   // already in L2-2's vocabulary — nothing to translate
+	out.m_periodColumn     = m_periodColumn;
+	out.m_periodSourceExpr = m_periodSourceExpr;
+	out.m_periodUnit       = m_periodUnit;
+	out.m_guard            = m_guard;
+	out.m_shards           = m_shards;
+
+	// A logical column expands to its PHYSICAL fields — a reference dimension is a _RTRef/_RRRef
+	// pair, not one column. Reading the layout tier instead of assuming one field per column is
+	// what keeps reference dimensions working in the totals key.
+	for (const ibBackendQueryColumn* k : m_keys)
+		for (const wxString& f : ColumnFieldNames(k))
+			out.m_keyColumns.push_back(f);
+
+	for (const ibSchemaDelta& d : m_deltas)
+		out.m_deltas.push_back({ d.m_column != nullptr ? d.m_column->GetPhysicalName() : wxString(), d.m_valueExpr });
+
+	return out;
+}
 
 const ibSchemaTable* ibSchemaSnapshot::Find(ibMetaID id) const
 {
@@ -30,8 +62,15 @@ ibSchemaTable& ibSchemaSnapshot::CreateSchemaTable(const ibBackendQueryable* que
 ibSchemaTable& ibSchemaSnapshot::Shared(ibMetaID id, const wxString& name)
 {
 	for (ibSchemaTable& t : m_tables)
-		if (t.m_id == id)
+		if (t.m_id == id) {
+			// Same id, different NAME means two declarations collided in the id space — the caller
+			// gets somebody else's table and pours its columns into it, which surfaces much later
+			// as a duplicate field or an index over columns nobody added. Ids derived from a metaID
+			// must use a HIGH bit: metaIDs are small sequential integers, so a low-bit tweak IS the
+			// neighbouring metaobject's id.
+			wxASSERT_MSG(t.m_name.IsSameAs(name, false), wxT("schema table id collision: ") + t.m_name + wxT(" vs ") + name);
 			return t;
+		}
 	ibSchemaTable t;
 	t.m_id   = id;
 	t.m_name = name;
@@ -308,6 +347,41 @@ int AlterTable(ibStructureBatch& batch, const ibSchemaTable& old, const ibSchema
 
 } // namespace
 
+// Apply a derived table's materialization bundle — drop the old triggers / view, create the new
+// ones. Runs AFTER the table's own structure is in place (a trigger references its columns).
+//
+// The bundle is always replaced WHOLE, never patched: a trigger body carries the column list it
+// was generated with, so any structural change to either the movements or the totals invalidates
+// it silently. Dropping and recreating is cheap (no data moves — the totals rows are untouched)
+// and removes an entire class of "trigger still writing the old column set" bugs.
+//
+// The DROPs are best-effort: on a first create there is nothing to drop, and not every engine has
+// IF EXISTS for every object. A failed drop must not abort an apply, so it is swallowed; a failed
+// CREATE is a real error and propagates.
+// ...but only when the declaration actually CHANGED, or the installed objects went missing. An
+// apply that touched one register used to announce a rebuild for every register in the
+// configuration, which reads as "everything was recomputed" and buries the one line that matters.
+static void ApplyMaterialization(ibSchemaBuilder& schema, const ibSchemaTable* old, const ibSchemaTable& t,
+                                 ibRestructureInfo* report)
+{
+	if (!t.m_derived)
+		return;
+
+	// Hand the declaration and the connection to L2-2; which dictionaries exist, how the statements
+	// are spelled and in what order they run is that level's business. This floor sees no SQL and
+	// no dialect — the same way it sees neither for an ordinary DDL statement.
+	ibMaterializeSpec was;
+	const bool hasOld = (old != nullptr && old->m_derived);
+	if (hasOld)
+		was = old->m_materialize.ToRenderSpec(old->m_name);
+
+	const ibMaterializeApply done = ibApplyMaterialization(
+		schema.Connection(), t.m_materialize.ToRenderSpec(t.m_name), hasOld ? &was : nullptr);
+
+	if (done == ibMaterializeApply::Rebuilt && report != nullptr)
+		report->AppendInfo(_("Rebuild totals maintenance for ") + LedgerName(t));
+}
+
 int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& target, ibDatabaseConnectionHolder* holder, ibRestructureInfo* report)
 {
 	int retCode = 1;
@@ -320,6 +394,18 @@ int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& targ
 				continue;
 			if (old.m_external)
 				continue;                         // external tables (sys_const) are never dropped by the differ
+
+			// A DERIVED table does not own its maintenance: the triggers hang on the MOVEMENTS table
+			// and only MENTION the totals by name. Dropping the table therefore leaves them behind,
+			// firing on every subsequent write into a table that is gone — the movements stop being
+			// writable, and the error surfaces nowhere near the change that caused it.
+			//
+			// This is the register KIND SWITCH in practice: balances and turnovers keep separate
+			// tables under separate ids, so a switch is a drop of one and a create of the other. The
+			// old bundle must come down by its OLD name, which is exactly what the old spec holds.
+			if (old.m_derived)
+				ibDropMaterialization(schema.Connection(), old.m_materialize.ToRenderSpec(old.m_name));
+
 			ibStructureBatch batch(old.m_name);   // a drop needs no metadata
 			batch.DropTable();
 			if (report != nullptr)
@@ -332,7 +418,32 @@ int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& targ
 	for (const ibSchemaTable& cur : target.Tables()) {
 		const ibSchemaTable* old = baseline != nullptr ? baseline->Find(cur.m_id) : nullptr;
 
-		ibStructureBatch batch(cur.m_queryable);   // the queryable vends the metadata the field diff needs
+		// A DERIVED table whose shape changed is REPLACED, never altered.
+		//
+		// It holds no information of its own — every row is a function of the movements, and the
+		// regeneration below recomputes all of them anyway. So migrating it in place buys nothing
+		// and costs the whole class of migration edges: a re-keyed row, an index that references a
+		// column being dropped, a field the physical table has and the baseline does not. Dropping
+		// takes the columns and the indexes with it, and the CREATE that follows is unconditional.
+		//
+		// The maintenance goes first — the triggers live on the MOVEMENTS table and merely mention
+		// this one by name, so they would survive the drop and fire into nothing.
+		if (cur.m_derived && old != nullptr && ibDerivedState::NeedsRegeneration(old, cur)) {
+			ibDropMaterialization(schema.Connection(), old->m_materialize.ToRenderSpec(old->m_name));
+			ibStructureBatch drop(old->m_name);
+			drop.DropTable();
+			drop.Flush(schema);
+			if (report != nullptr)
+				report->AppendInfo(_("Rebuild totals table ") + LedgerName(cur));
+			old = nullptr;   // from here it is a CREATE, and everything below follows from that
+		}
+
+		// Keyed by the queryable when there IS one — it vends the metadata the field diff needs. A
+		// DERIVED table has no metaobject behind it (it is declared BY one, but is not one), so it
+		// is keyed by name instead; its columns are raw fields that need no metadata to diff.
+		ibStructureBatch batch = (cur.m_queryable != nullptr)
+			? ibStructureBatch(cur.m_queryable)
+			: ibStructureBatch(cur.m_name);
 		if (old == nullptr)
 			CreateTable(batch, cur, report);
 		else
@@ -343,6 +454,20 @@ int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& targ
 		DiffSeedInto(batch, old, cur, report, holder);
 
 		batch.Flush(schema);   // errors THROW; a 0-row (DDL / no-change) result is not a failure
+
+		// DERIVED state last: the trigger and view reference the columns the batch just settled, so
+		// this cannot run before the flush. Rebuilt on every apply — see ApplyMaterialization for why
+		// replacing beats patching. Note it does NOT populate: the table is created empty and the
+		// trigger only maintains it from here on, so a table with pre-existing movements needs the
+		// L3-4 regeneration pass before its totals mean anything.
+		ApplyMaterialization(schema, old, cur, report);
+
+		// L3-4: the bundle above only starts maintaining from NOW. A table created over a source
+		// that already holds movements, or one whose grouping just changed, needs its content
+		// rebuilt — and an empty totals table is not a neutral state, it reads as "no stock of
+		// anything". NeedsRegeneration keeps the common case (a column merely added) free.
+		if (ibDerivedState::NeedsRegeneration(old, cur))
+			ibDerivedState::Regenerate(cur, holder);
 	}
 
 	return retCode;   // 1 — success; a real DB error THREW (no return-code error signal in the apply path)

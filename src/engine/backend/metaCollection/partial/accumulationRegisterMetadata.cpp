@@ -190,6 +190,7 @@ bool ibValueMetaObjectAccumulationRegister::OnAfterRunMetaObject(int flags)
 	// (in the metadata), so a read-only DB load (onlyLoadFlag) still registers its OWN sources into its OWN factory.
 	m_metaData->RegisterSource(&m_balance);
 	m_metaData->RegisterSource(&m_turnover);
+	m_metaData->RegisterSource(&m_balanceAndTurnover);
 
 	if (auto* cc = m_metaData->GetCompileCache()) {
 
@@ -209,6 +210,7 @@ bool ibValueMetaObjectAccumulationRegister::OnBeforeCloseMetaObject()
 {
 	m_metaData->UnregisterSource(&m_balance);
 	m_metaData->UnregisterSource(&m_turnover);
+	m_metaData->UnregisterSource(&m_balanceAndTurnover);
 
 	if (!(*m_propertyAttributeRecordType)->OnBeforeCloseMetaObject())
 		return false;

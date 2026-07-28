@@ -32,6 +32,27 @@ const ibDialectDictionary& ibDatabaseLayerPostgres::Dialect()
 		d.m_analyzePrefix     = wxT("ANALYZE");   // ANALYZE <t> — refresh planner stats (temps aren't autovacuumed)
 		d.m_indexListQuery = wxT("SELECT indexname FROM pg_indexes WHERE tablename = LOWER(?)");   // differ introspects existing indexes
 		d.m_rowIdColumn    = wxT("ctid");         // physical row id for the pre-UNIQUE dedup (keep one row per key)
+		// Period truncation. date_trunc names seven of the ten units directly; the other three are
+		// offsets from the start of the enclosing unit:
+		//   TenDays  — the 1st / 11th / 21st. The offset is CAPPED at 2 because a 31-day month
+		//              would otherwise floor to 3 and land on the 31st, opening a fourth one-day
+		//              bucket. The last ten-day period runs 8-11 days by definition; the cap is
+		//              what encodes that.
+		//   HalfYear — January or July.
+		//   Week     — date_trunc('week') is already ISO (Monday), the convention all engines pin to.
+		// (PG's own 'decade' means ten YEARS and is unrelated to TenDays.)
+		d.m_periodTrunc = {
+			{ ibTotalsPeriod::Second,   wxT("date_trunc('second', {expr})")  },
+			{ ibTotalsPeriod::Minute,   wxT("date_trunc('minute', {expr})")  },
+			{ ibTotalsPeriod::Hour,     wxT("date_trunc('hour', {expr})")    },
+			{ ibTotalsPeriod::Day,      wxT("date_trunc('day', {expr})")     },
+			{ ibTotalsPeriod::Week,     wxT("date_trunc('week', {expr})")    },
+			{ ibTotalsPeriod::TenDays,  wxT("(date_trunc('month', {expr}) + (LEAST(FLOOR((EXTRACT(DAY FROM {expr}) - 1) / 10), 2) * INTERVAL '10 days'))") },
+			{ ibTotalsPeriod::Month,    wxT("date_trunc('month', {expr})")   },
+			{ ibTotalsPeriod::Quarter,  wxT("date_trunc('quarter', {expr})") },
+			{ ibTotalsPeriod::HalfYear, wxT("(date_trunc('year', {expr}) + (FLOOR((EXTRACT(MONTH FROM {expr}) - 1) / 6) * INTERVAL '6 months'))") },
+			{ ibTotalsPeriod::Year,     wxT("date_trunc('year', {expr})")    },
+		};
 		return d;
 	}();
 	return s_dialect;
@@ -63,6 +84,47 @@ const ibTempTableDialect& ibDatabaseLayerPostgres::TempDialect()
 const ibTempTableDialect* ibDatabaseLayerPostgres::GetTempTableDialect() const
 {
 	return &TempDialect();
+}
+
+// PG materialisation: the production target, and the one per-row engine whose shell is
+// two objects instead of one — a trigger here cannot carry a body, it can only EXECUTE a
+// FUNCTION, so m_functionShellTemplate is non-empty and the generator emits the function
+// first. The body itself is still the shared per-row shape (an accumulating ON CONFLICT
+// upsert), which is the whole point of designing to the SQLite floor.
+//
+// fillfactor on the totals table is not a micro-tune: a totals row is UPDATEd on nearly
+// every movement, and leaving free space on the page keeps that update HOT (same page, no
+// index write). It is the difference between a totals table that keeps up with posting and
+// one that becomes the write bottleneck.
+const ibMaterializationDialect& ibDatabaseLayerPostgres::MaterializationDialect()
+{
+	static const ibMaterializationDialect s_mat = [] {
+		ibMaterializationDialect m;
+		m.m_family = ibTriggerFamily::PerRow;
+		m.m_functionShellTemplate =
+			wxT("CREATE OR REPLACE FUNCTION {name}() RETURNS trigger AS $$ BEGIN {body} RETURN NULL; END; $$ LANGUAGE plpgsql");
+		m.m_triggerShellTemplate =
+			wxT("CREATE TRIGGER {name} {timing} ON {table} FOR EACH ROW EXECUTE FUNCTION {function}()");
+		m.m_dropTriggerTemplate  = wxT("DROP TRIGGER IF EXISTS {name} ON {table}");
+		m.m_dropFunctionTemplate = wxT("DROP FUNCTION IF EXISTS {name}()");
+		m.m_deltaUpsertTemplate =
+			wxT("INSERT INTO {table} ({columns}) SELECT {values}{from}{where} ON CONFLICT ({keys}) DO UPDATE SET {update}");
+		m.m_deltaTargetAlias  = wxT("{table}");     // ON CONFLICT names the target by table name
+		m.m_deltaSourceAlias  = wxT("excluded");
+		m.m_deltaUpdateItem   = wxT("{col} = {target}.{col} + {source}.{col}");
+		m.m_deltaKeyMatchItem = wxT("{target}.{col} = {source}.{col}");   // unused by ON CONFLICT — rendered, not spent
+		m.m_totalsTableSuffix = wxT(" WITH (fillfactor = 80)");
+		m.m_connectionIdExpr  = wxT("pg_backend_pid()");   // per-backend id — concurrent writers hash apart
+		m.m_createViewTemplate = wxT("CREATE OR REPLACE VIEW {name} AS {body}");
+		m.m_dropViewTemplate   = wxT("DROP VIEW IF EXISTS {name}");
+		return m;
+	}();
+	return s_mat;
+}
+
+const ibMaterializationDialect* ibDatabaseLayerPostgres::GetMaterializationDialect() const
+{
+	return &MaterializationDialect();
 }
 
 // ctor

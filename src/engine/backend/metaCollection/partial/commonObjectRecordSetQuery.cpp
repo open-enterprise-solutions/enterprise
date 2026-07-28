@@ -299,8 +299,10 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 		hasError = m_selected ? !q.Upsert() : !q.Insert();   // selected = exists -> rewrite (Upsert); not selected = new -> create (Insert)
 	}
 
-	if (!hasError && !SaveVirtualTable())
-		return false;
+	// (No totals write here. Derived state is maintained by the DATABASE trigger the schema
+	//  installs on this table, inside this same transaction — so it cannot be bypassed by any
+	//  other writer and cannot drift. Updating it from here would restore exactly the
+	//  managed-code pattern the trigger replaced. See docs/register-totals-strategy.md.)
 
 	if (!hasError) {
 		// m_selected drives IsEmpty()/IsNewObject(); it must reflect the persisted
@@ -332,7 +334,7 @@ bool ibValueRecordSetObject::DeleteData()
 	q.Delete();
 
 	m_selected = false; // the record set no longer exists in the DB
-	return DeleteVirtualTable();
+	return true;        // the delete trigger reversed the totals in this same transaction
 }
 
 //**********************************************************************************************************

@@ -16,6 +16,7 @@
 #include "backend.h"
 #include "backend/query/queryColumn.h"   // ibRawDBColumn (the snapshot OWNS its scaffold raw columns)
 #include "backend/compiler/value.h"      // ibValue — a seed row is a column-id -> value map
+#include "backend/databaseLayer/databaseMaterializeBuilder.h"   // L2-2 — ibMaterializeSpec / ibTotalsPeriod (pulls databaseLayer.h)
 
 #include <memory>
 #include <vector>
@@ -25,6 +26,12 @@
 class ibBackendQueryable;
 class ibMetaData;
 class ibDatabaseConnectionHolder;
+
+// The L3 expression a delta carries for REGENERATION (query/queryable.h). Forward-declared rather
+// than included: a shared_ptr member needs no complete type, and pulling the whole queryable header
+// in here would tie the structure snapshot to the navigation contract for one field.
+struct ibQueryColumnExpr;
+using  ibQueryColumnExprPtr = std::shared_ptr<ibQueryColumnExpr>;
 class ibMetaDataConfigurationBase;
 class ibRestructureInfo;
 class ibStructureBatch;
@@ -64,6 +71,128 @@ struct ibSchemaSeedRow
 	ibSchemaSeedRow& Set(const ibBackendQueryColumn* qc, const ibValue& value) { m_values[qc->GetColumnId()] = value; return *this; }
 };
 
+// ==========================================================================
+// DERIVED-STATE declaration — a table whose rows are a FUNCTION of another table's rows, kept
+// current by a database trigger. Today: a register's totals. (docs/register-totals-strategy.md)
+//
+// The metaobject declares INTENT here — which table feeds this one, what the key is, what each
+// resource accumulates, at what period grain. It never renders SQL and never names an engine:
+// the materialization renderer turns this plus the driver's ibMaterializationDialect into the
+// trigger / view statements. Same division as everywhere else in this file — metadata declares,
+// the differ emits.
+//
+// Expression fields are SQL fragments over the MOVEMENT row with one placeholder, {row}, which
+// the renderer replaces by the dialect's NEW / OLD alias. They are built by the metaobject from
+// its own column knowledge (which field is the record type, which is the resource), so the
+// renderer needs no metadata.
+// ==========================================================================
+
+// One accumulating column: a totals column plus what a single movement contributes to it.
+// For a balance register the contribution carries the sign split — receipt and expense are two
+// deltas whose value expressions are complementary CASEs over the record type — so the
+// accumulate itself stays unconditional and only its VALUE branches.
+struct ibSchemaDelta
+{
+	const ibBackendQueryColumn* m_column = nullptr;   // the totals column being accumulated
+	wxString                    m_valueExpr;          // SQL over {row} — what this movement adds (TRIGGER)
+
+	// The same contribution as an L3 expression, for REGENERATION. Two forms of one thing, and the
+	// duplication is forced by context rather than convenience: a trigger sees ONE row through NEW /
+	// OLD aliases, while a rebuild sees the whole TABLE and sums a column across it. There is no
+	// single syntax that is valid in both places.
+	//
+	// They must agree, and what keeps them honest is not discipline but the parity test: the
+	// trigger-maintained totals and a full rebuild of the same movements have to produce identical
+	// rows. A divergence here fails that immediately rather than months later.
+	ibQueryColumnExprPtr        m_regenExpr;
+};
+
+struct ibSchemaMaterialize
+{
+	// The SOURCE this table is derived from — the QUERYABLE, not a bare name. Two floors consume
+	// it and they need different things from it: L3-2 wants only the physical table name (to hang
+	// the triggers on), but L3-4 has to READ the source and aggregate it, and reading is what the
+	// queryable exists for — it is the contract the L3 door navigates a source through. Handing
+	// down a name would leave regeneration to re-resolve it, or to reach past L3 with hand-built
+	// SQL; handing down the queryable means regeneration is an ordinary L3 read.
+	const ibBackendQueryable* m_source = nullptr;
+
+	// The source's physical table — resolved from the queryable, for the trigger DDL.
+	wxString SourceTable() const;
+
+	// Lower this DECLARATION into the L2-2 render spec: logical columns expand into their physical
+	// fields (a reference dimension is two), the source queryable resolves to a table name. That
+	// expansion is a metadata question, so it happens HERE and never inside the renderer — which is
+	// what keeps L2-1 metadata-blind and the dependency pointing downward.
+	ibMaterializeSpec ToRenderSpec(const wxString& tableName) const;
+
+	// The totals KEY — the columns the delta upserts against (period + dimensions, plus the shard
+	// column when split). Also the PRIMARY KEY / unique index of the derived table.
+	std::vector<const ibBackendQueryColumn*> m_keys;
+
+	// The period key: which key column holds the truncated period, and the movement expression it
+	// is truncated FROM. Empty column name = this derived table has no period dimension at all.
+	wxString       m_periodColumn;
+	wxString       m_periodSourceExpr;                       // SQL over {row} — the TRIGGER's form
+	const ibBackendQueryColumn* m_periodSource = nullptr;     // the same column, for REGENERATION to group by
+	ibTotalsPeriod m_periodUnit = ibTotalsPeriod::Month;      // STORED grain — the floor on what can be read back
+
+	// Non-key columns whose values accumulate.
+	std::vector<ibSchemaDelta> m_deltas;
+
+	// Optional guard over {row}: apply this delta only when the movement populates this side.
+	// Empty = unconditional. The accounting register's debit / credit split is the reason it exists.
+	wxString m_guard;
+
+	// SPLIT TOTALS — how many shard rows one logical key is spread across, to relieve write
+	// contention on a hot key. 1 = not split (the default, and correct for almost every register:
+	// the read pays O(N) shards for every row, so splitting is for registers PROFILED hot on write,
+	// never a default). The view absorbs the split — it sums the shards — so nothing above L3 can
+	// tell a split register from a plain one. Engines without ibMaterializationDialect::
+	// m_connectionIdExpr (SQLite) collapse to 1: single-writer engines have no contention to split.
+	unsigned int m_shards = 1;
+
+	// The READ views — the public surface, one per virtual table. Each is an ORDINARY relation to
+	// everything above L3: it joins, filters, pages and RLS-restricts through the engine's own
+	// machinery, indistinguishable from a table. What it hides is the materialisation underneath —
+	// the trigger-maintained totals and, when split, the shards. Swapping what sits below changes a
+	// view body and nothing else.
+	//
+	// Declared in L2-2's own vocabulary (a shard fold, a difference, a running sum) because that
+	// vocabulary is metadata-free: the METAOBJECT decides that a running sum of the signed turnover
+	// is what it calls a balance, and level 2 renders it without ever learning the word. An
+	// accounting register composes the same primitives into its own tables with no change below.
+	//
+	// By convention the names are the owning table's physical name plus a suffix.
+	std::vector<ibMaterializeView> m_views;
+
+	// ---- fluent declaration (mirrors ibSchemaTable's own builders) ----
+	ibSchemaMaterialize& Key(const ibBackendQueryColumn* qc) { m_keys.push_back(qc); return *this; }
+	// `source` is the movement's period COLUMN; `sourceExpr` is how the trigger names it over {row}.
+	ibSchemaMaterialize& Period(const wxString& column, const ibBackendQueryColumn* source,
+	                            const wxString& sourceExpr, ibTotalsPeriod unit)
+	{
+		m_periodColumn = column; m_periodSource = source; m_periodSourceExpr = sourceExpr; m_periodUnit = unit;
+		return *this;
+	}
+	// Both forms of one contribution — see ibSchemaDelta on why the pair is unavoidable.
+	ibSchemaMaterialize& Accumulate(const ibBackendQueryColumn* qc, const wxString& valueExpr,
+	                                const ibQueryColumnExprPtr& regenExpr = nullptr)
+	{
+		m_deltas.push_back({ qc, valueExpr, regenExpr }); return *this;
+	}
+	// Declare a read view; the returned reference takes its columns.
+	ibMaterializeView& View(const wxString& name, bool withPeriod, bool dropZeroRows = false)
+	{
+		ibMaterializeView v;
+		v.m_name = name; v.m_withPeriod = withPeriod; v.m_dropZeroRows = dropZeroRows;
+		m_views.push_back(std::move(v));
+		return m_views.back();
+	}
+	ibSchemaMaterialize& Guard(const wxString& expr) { m_guard = expr; return *this; }
+	ibSchemaMaterialize& Split(unsigned int shards)  { m_shards = shards > 0 ? shards : 1; return *this; }
+};
+
 // One table's declared structure. Produced by a metaobject's DescribeTable(); consumed by DiffSnapshots.
 struct ibSchemaTable
 {
@@ -75,6 +204,17 @@ struct ibSchemaTable
 	// CreateConstantSQLTable: DEFAULT / PRIMARY KEY / single-row seed the snapshot can't model). The
 	// differ manages only its COLUMNS (add / drop / alter), never the table itself.
 	bool                        m_external = false;
+
+	// DERIVED table — its ROWS are a function of another table's rows, maintained by a trigger
+	// (m_materialize below carries the declaration). ONE bit routes all three floors correctly:
+	//   L3-2 (structure)  — builds it, its trigger and its view, like any other table
+	//   L3-3 (data mover) — NEVER dumps or loads it; moving derived rows would move a stale copy
+	//                       of something the destination regenerates exactly
+	//   L3-4 (regenerate) — rebuilds it from the source when the trigger cannot have kept up
+	//                       (restore, bulk load, a regroup that is not derivable in place)
+	// "Don't move it, regenerate it, keep it consistent by trigger" — all three read off this bit.
+	bool                        m_derived = false;
+	ibSchemaMaterialize         m_materialize;   // meaningful only when m_derived
 
 	// The snapshot OWNS its scaffold / index raw columns (uuid, rowData) via shared_ptr — stable heap
 	// address through every move/copy of the table, so the pointers below never dangle. Live attribute
@@ -107,6 +247,17 @@ struct ibSchemaTable
 	// matches columns across config instances by identity.
 	ibSchemaTable& Add(const ibBackendQueryColumn* qc) { m_columns.push_back({ qc->GetColumnId(), qc }); return *this; }
 	ibSchemaTable& Index(const wxString& name, std::vector<const ibBackendQueryColumn*> cols, bool unique = false) { m_indexes.push_back({ name, std::move(cols), unique }); return *this; }
+
+	// Declare this table as DERIVED from `source`, maintained by trigger. Returns the materialize
+	// spec for fluent filling: Derived(movQueryable, view).Key(dim).Period(col, expr, unit)
+	// .Accumulate(res, expr).Guard(expr).Split(4). Sets m_derived, which is what L3-3 and L3-4 read
+	// — declaring materialisation and being derived are the same statement, so they cannot disagree.
+	ibSchemaMaterialize& Derived(const ibBackendQueryable* source)
+	{
+		m_derived = true;
+		m_materialize.m_source = source;
+		return m_materialize;
+	}
 
 	// Add a DATA row (enum value / predefined value) — returns it so cells bind fluently: AddRow(uuid,name).Set(qc,val)...
 	ibSchemaSeedRow& AddRow(const wxString& uuid, const wxString& name = wxEmptyString)

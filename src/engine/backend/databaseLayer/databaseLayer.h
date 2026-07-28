@@ -17,6 +17,7 @@
 #include <wx/variant.h>
 
 #include <atomic>
+#include <map>
 #include <memory>
 #include <vector>
 
@@ -33,7 +34,7 @@
 // lives here, with the driver interface (moved from the former dialectDictionary.h).
 // Level 2 stays DBMS-indifferent: ONE generic renderer walks the ibQueryIR and, at
 // every divergence point, consults this dictionary. Adding a DBMS = a new dictionary,
-// not an edit to L2.
+// not an edit to L2-1.
 // ==========================================================================
 
 // Parameter placeholder style (bound positionally; 1-based, matching SetParam*).
@@ -70,6 +71,44 @@ struct ibSqlFeatures
 	bool m_iLike         = false;   // case-insensitive LIKE
 	bool m_rollup        = false;   // GROUP BY ROLLUP(...) — hierarchical subtotals server-side (FB 2.1+ / PG / MySQL8; NOT SQLite)
 };
+
+// A period truncation unit — "start of the minute / week / month / … containing this moment".
+//
+// It lives in the QUERY dictionary, not the materialization one, because truncating a period is
+// an ordinary DECLARATIVE expression: it belongs in any SELECT that groups by month, whoever
+// wrote it — a report, the composer, a user query — and only incidentally in a totals trigger.
+// Locking it inside the dictionary that only the trigger generator can reach would have shut a
+// generally useful fact into a private room.
+//
+// ORDERED COARSENING, and that ordering is a CONTRACT: every member is coarser than the one
+// before it. Consumers rely on it to decide derivability — a value truncated to unit A can be
+// re-truncated to any B >= A, and to nothing finer, because the finer information is gone.
+// Insert new members in order.
+//
+// (Not to be confused with ibPeriodicity — that is the granularity of a record KEY, a different
+// question that happens to share a word.)
+enum class ibTotalsPeriod
+{
+	Second,
+	Minute,
+	Hour,
+	Day,
+	Week,       // starts Monday (ISO) on every engine — the truncations encode that per dialect
+	TenDays,    // the 1st / 11th / 21st of the month; the last one runs 8-11 days
+	Month,
+	Quarter,
+	HalfYear,
+	Year
+};
+
+// The RAM twin of the dialect's truncation expression: same answer, computed in C++ for the paths
+// that cannot push down (a multi-source read materialises its leaves and folds them here).
+//
+// The two MUST agree exactly, or a query answers differently depending on whether it happened to
+// co-locate — a difference that shows up as totals that reconcile in one deployment and not in
+// another. So this walks the calendar (month lengths, leap years) rather than approximating with
+// fixed-length arithmetic, exactly as the SQL expressions do.
+BACKEND_API wxDateTime ibTruncateToPeriod(const wxDateTime& moment, ibTotalsPeriod unit);
 
 struct ibDialectDictionary
 {
@@ -183,9 +222,20 @@ struct ibDialectDictionary
 	// requires a one-row dummy table -> "RDB$DATABASE". Set per driver; empty = emit no FROM at all.
 	wxString m_selectFromDual = wxEmptyString;
 
+	// Period truncation: unit -> a SQL expression template with ONE placeholder, {expr}. This is
+	// what the L2-1 renderer spells an ibQueryExprKind::PeriodTrunc node through, so ANY query can
+	// group by month without its author naming an engine. A unit absent from the map is NOT
+	// SUPPORTED here and the renderer refuses it loudly — the alternative, silently falling back to
+	// a neighbouring unit or leaving the value untruncated, is a wrong grouping key that reconciles
+	// to nothing and surfaces months later. In practice every real driver covers the whole enum.
+	//
+	// One definition per engine, shared by every consumer: the totals trigger keys rows with it and
+	// the read view projects columns with it, so a stored key and a read column CANNOT drift apart.
+	std::map<ibTotalsPeriod, wxString> m_periodTrunc;
+
 	// --- behaviour slots (the small tail data cannot express) -------------
 	// Reserved for emulation rewrites (FULL OUTER -> LEFT UNION RIGHT, window ->
-	// correlated subquery) as strategy callbacks, so L2 still reads only the dictionary.
+	// correlated subquery) as strategy callbacks, so L2-1 still reads only the dictionary.
 };
 
 // ==========================================================================
@@ -225,8 +275,222 @@ struct ibTempTableDialect
 	bool     m_autoDrops      = true;
 	// DROP statement prefix (used only when !m_autoDrops) — the manager appends the name.
 	wxString m_dropPrefix     = wxT("DROP TABLE");
-	// (ANALYZE is NOT here — it is a general L2 statement, ibDdlKind::Analyze, rendered from the
+	// (ANALYZE is NOT here — it is a general L2-1 statement, ibDdlKind::Analyze, rendered from the
 	//  main ibDialectDictionary::m_analyzePrefix, so any caller can refresh stats, not just temp.)
+};
+
+// ==========================================================================
+// ibMaterializationDialect — the SECOND per-driver dictionary: the facts needed to
+// MATERIALISE derived state (a register's totals table kept current by a trigger).
+//
+// Why it is not the L2-1 query dictionary. That one substitutes TOKENS over a SHARED
+// declarative structure (LIMIT vs FIRST/SKIP, quoting, the type map) — every engine
+// renders the same SELECT shape. A totals trigger is IMPERATIVE and diverges in
+// STRUCTURE, not spelling: per-row engines fire FOR EACH ROW over NEW/OLD, T-SQL fires
+// ONCE per statement over the `inserted`/`deleted` pseudo-tables and merges a set. That
+// is a different ALGORITHM, so folding it into L2-1 would mean either imperative nodes in
+// the query IR (RETURN / IF / NEW / OLD) or a raw-SQL escape hatch — and L2-1's "never raw
+// SQL" invariant is exactly what keeps five drivers honest. A second dictionary keeps
+// both invariants intact.
+//
+// Vended SEPARATELY and NULLABLE (ibDatabaseLayer::GetMaterializationDialect), same as
+// ibTempTableDialect: its PRESENCE IS the capability. A driver returning nullptr gets no
+// totals table and no trigger; its registers keep serving Balance / Turnover from the
+// LIVE aggregation (ComputeBalance / ComputeTurnover — a signed SUM over the movement
+// table). That live path is the always-works FLOOR: correct at any scale, merely slower,
+// which is why ODBC — generic by construction, it cannot know the engine underneath —
+// simply never opts in. Read paths above L3 do not change either way.
+//
+// PURE DECLARATIVE FACTS + a strategy DISCRIMINATOR, matching ibTempTableDialect: the
+// family below is DATA; the control-flow fork it selects lives in the generator that
+// reads it, never as `if (driver)` in this struct.
+// (docs/register-totals-strategy.md § Engine integration)
+// ==========================================================================
+
+// Execution model of the maintenance trigger — the discriminator that picks a template
+// FAMILY. Two, and only two, are needed for the five-plus engines:
+enum class ibTriggerFamily
+{
+	//   PerRow   : fires once per affected row over NEW / OLD row aliases, and reduces to a
+	//              handful of plain SQL statements — Firebird PSQL, PostgreSQL PL/pgSQL,
+	//              MySQL, SQLite. Designed to the SQLITE FLOOR (statements only, no
+	//              procedural block), so one body fits all four; only the upsert idiom and
+	//              the shell differ, and both are slots below.
+	PerRow,
+	//   SetBased : fires once per STATEMENT over the `inserted` / `deleted` pseudo-tables and
+	//              merges an aggregated set — MSSQL / T-SQL. A different algorithm, not a
+	//              different word; this is the case the L2-1 dictionary could not have held.
+	//              Reserved for the MSSQL port — adding it is one more dictionary, not a reshape.
+	SetBased
+};
+
+// (ibTotalsPeriod lives with the QUERY dictionary above — truncating a period is a declarative
+// expression any SELECT may want, not a materialisation-only concern. The two roles it serves
+// here are STORAGE granularity, the unit a movement's period is truncated to before it becomes
+// part of the totals key, and READ projections, every coarser unit exposed as its own column on
+// the view. They are independent by design: read granularity is a QUERY parameter, storage
+// granularity a schema decision, and the second need only be fine enough to serve the first.
+// Granularity finer than Second — per-recorder, per-record — is deliberately not in the enum:
+// that is not a truncation, it is the movement row itself, and a totals row per movement is a
+// movement table with extra steps. Those readings are served by reading the MOVEMENTS, which
+// makes the enum exactly the boundary between what materialises and what does not.)
+
+struct ibMaterializationDialect
+{
+	ibTriggerFamily m_family = ibTriggerFamily::PerRow;
+
+	// --- row aliases the trigger body reads the movement through --------------
+	// PerRow: the inserted / deleted ROW ("NEW" / "OLD").
+	// SetBased: the inserted / deleted TABLE ("inserted" / "deleted") — same slots, and
+	// that reuse is the point: the generator names a side, the dialect says how.
+	wxString m_newRowAlias = wxT("NEW");
+	wxString m_oldRowAlias = wxT("OLD");
+
+	// --- the trigger shell ----------------------------------------------------
+	// Placeholders: {name} {table} {timing} {body}. The generator supplies {body} already
+	// rendered from the slots below, so the shell is pure syntax.
+	//
+	// {body} is N statements, not one. A single movement can feed SEVERAL totals tables:
+	// an accounting register's line carries a debit side and a credit side, and each side
+	// accumulates into its own turnover table (plus, later, per-subconto breakdowns). One
+	// trigger, several deltas, all inside the one transaction that wrote the movement — so
+	// the multi-table case keeps the same atomicity guarantee as the single-table one, and
+	// needs no coordination anywhere above.
+	wxString m_triggerShellTemplate =
+		wxT("CREATE TRIGGER {name} {timing} ON {table} FOR EACH ROW BEGIN {body} END");
+
+	// Separator the generator joins those statements with. A trailing separator after the
+	// last statement is required by the PSQL / plpgsql / SQLite trigger bodies, so this is
+	// a terminator rather than a true separator — the generator appends it after each.
+	wxString m_bodyStatementTerminator = wxT("; ");
+
+	// PostgreSQL cannot inline a trigger body — it needs a FUNCTION the trigger then calls.
+	// When non-empty the generator emits THIS FIRST ({name} gets an "fn_" flavour, {body} the
+	// same rendered body) and the shell above only references it. EMPTY (FB / MySQL / SQLite)
+	// = the body inlines, one statement instead of two.
+	wxString m_functionShellTemplate;
+
+	// Timing clauses substituted into {timing}, one per movement event.
+	wxString m_timingInsert = wxT("AFTER INSERT");
+	wxString m_timingUpdate = wxT("AFTER UPDATE");
+	wxString m_timingDelete = wxT("AFTER DELETE");
+
+	// DROP spelling — {name} {table}. MySQL / PG drop by name alone; SQLite / FB likewise,
+	// but MSSQL and MySQL disagree about the schema qualifier, so it stays a template.
+	wxString m_dropTriggerTemplate = wxT("DROP TRIGGER {name}");
+
+	// Drops the separate function object, for the engines that have one — {name}. EMPTY where
+	// the body inlines (FB / MySQL / SQLite), because there is nothing to drop. Without this
+	// a dropped table would leave its trigger function orphaned in the schema: harmless, but
+	// it accumulates across every restructure and nothing else would ever collect it.
+	wxString m_dropFunctionTemplate;
+
+	// --- "does this object exist?" — the probes that make a DROP safe ---------
+	// A SELECT returning at least one row when the named object exists; {name} is substituted.
+	//
+	// Needed because a failed DDL is NOT harmless on every engine: Firebird ROLLS BACK the
+	// transaction, so a DROP of something that was never created takes the whole restructuring
+	// down with it — the first apply would destroy itself. Engines that spell DROP … IF EXISTS
+	// leave these EMPTY: there the drop cannot fail, so nothing needs probing.
+	//
+	// The probe belongs to the dialect because the catalogue it reads is engine-specific
+	// (RDB$RELATIONS / pg_class / sqlite_master), which is exactly the kind of fact a dictionary
+	// exists to hold.
+	wxString m_viewExistsQuery;
+	wxString m_triggerExistsQuery;
+
+	// --- the delta upsert (the whole point of the dictionary) -----------------
+	// "add this delta into the totals row for this key, creating the row if absent".
+	//
+	// It is NOT ibDialectDictionary::m_upsertTemplate. That one REPLACES a column
+	// (`{col} = excluded.{col}`); a totals delta ACCUMULATES (`{col} = t.{col} + …`), and
+	// the difference is structural rather than cosmetic. Firebird proves it: UPDATE OR
+	// INSERT .. MATCHING can only replace, so an accumulating upsert there must be a MERGE
+	// — a different STATEMENT for the same concept. That is why the template carries a
+	// superset of placeholders and each engine spends only the ones its form needs:
+	//
+	//   {table}     the totals table
+	//   {columns}   all totals columns (keys + resources), comma-joined
+	//   {values}    the incoming values, positionally matching {columns}
+	//   {keys}      the key columns alone (ON CONFLICT / MATCHING target)
+	//   {update}    m_deltaUpdateItem per resource column, comma-joined
+	//   {target}    m_deltaTargetAlias — how the totals row is named in {update} / {keyMatch}
+	//   {source}    m_deltaSourceAlias — how the incoming row is named in the same
+	//   {sourceRel} the incoming row as a one-row relation, per m_deltaSourceTemplate (MERGE USING)
+	//   {keyMatch}  m_deltaKeyMatchItem per key column, AND-joined (MERGE ON)
+	//   {from}      the source-less-SELECT FROM clause, from ibDialectDictionary::
+	//               m_selectFromDual (empty on PG / SQLite, " FROM RDB$DATABASE" on Firebird)
+	//   {where}     " WHERE <guard>", or EMPTY when the delta is unconditional
+	//
+	// The generator renders ALL of them and substitutes; an unused placeholder simply never
+	// appears in a given dialect's template. That keeps the generator engine-agnostic — it
+	// fills parameters and never asks which engine it is talking to.
+	//
+	// Why the SELECT form and not plain VALUES. A CONDITIONAL delta — apply this movement to
+	// this totals table only if the side is populated — is what an accounting register needs
+	// (a movement carries a debit side and a credit side; each feeds a DIFFERENT totals
+	// table, and either may be absent). VALUES cannot carry a predicate, so the alternative
+	// would be a procedural IF — which breaks the SQLite floor and splits the family in two.
+	// INSERT..SELECT..WHERE expresses the same thing declaratively on all four engines. An
+	// unconditional delta (an accumulation register) renders {where} empty and pays nothing.
+	wxString m_deltaUpsertTemplate =
+		wxT("INSERT INTO {table} ({columns}) SELECT {values}{from}{where} ON CONFLICT ({keys}) DO UPDATE SET {update}");
+
+	// One accumulate item, comma-joined into {update}. Placeholders: {target} {source} {col}.
+	wxString m_deltaUpdateItem   = wxT("{col} = {target}.{col} + {source}.{col}");
+	// One key-equality item, AND-joined into {keyMatch}. Same placeholders.
+	wxString m_deltaKeyMatchItem = wxT("{target}.{col} = {source}.{col}");
+
+	// How the two sides are named inside the items above. PG / SQLite: the target is the
+	// table itself and the incoming row is "excluded". Firebird's MERGE binds both to
+	// explicit aliases. MySQL names neither — its item spells the incoming value as
+	// VALUES({col}), so both aliases stay unused there. One slot, three spellings.
+	wxString m_deltaTargetAlias = wxT("{table}");
+	wxString m_deltaSourceAlias = wxT("excluded");
+
+	// Renders the incoming row as a one-row relation for MERGE USING — {selectItems} is
+	// "<value> AS <col>" per column, comma-joined. Empty (PG / SQLite / MySQL) = the form
+	// takes VALUES directly and needs no relation. Firebird additionally needs a FROM, and
+	// takes it from ibDialectDictionary::m_selectFromDual (RDB$DATABASE) — the fact already
+	// lives there, so it is not restated here.
+	wxString m_deltaSourceTemplate;
+
+	// (Period truncation is NOT here — it moved to ibDialectDictionary::m_periodTrunc, where the
+	//  L2-1 renderer can reach it. A trigger keys its rows through the same map the view projects
+	//  its columns through, so the two cannot disagree.)
+
+	// --- the totals table itself ----------------------------------------------
+	// Appended after the CREATE TABLE column list — PostgreSQL " WITH (fillfactor = 80)",
+	// which keeps the hot totals UPDATE on the same page (HOT update, no index write) and is
+	// worth a multiple on write throughput. Empty elsewhere.
+	wxString m_totalsTableSuffix;
+
+	// --- split totals (write-contention relief) --------------------------------
+	// An expression yielding an id unique to the CURRENT connection / transaction. It is the
+	// shard chooser: a register split N ways adds a shard column to its totals key, and the
+	// trigger picks its shard by hashing THIS. Two properties make that safe with no
+	// coordination — the choice is LOCAL (never a shared counter, which would contend exactly
+	// where the split is meant to relieve contention), and the read SUMS all shards, so an
+	// insert's +delta and a later delete's -delta may land in different shards and the total
+	// is still exact. The trigger therefore remembers nothing.
+	//
+	// EMPTY = this engine cannot split totals. SQLite is the honest empty: a single-writer
+	// embedded engine has no write contention to relieve, so the feature is meaningless
+	// rather than missing. A register asking for shards on such an engine gets one shard.
+	wxString m_connectionIdExpr;
+
+	// Folds the connection id into a shard number — {conn} and {n}. Default is the infix
+	// remainder every engine but Firebird takes; Firebird has no '%' operator and spells it
+	// MOD(a, b). A one-token difference, but it is exactly the kind that would otherwise
+	// become an `if (driver)` in the renderer.
+	wxString m_shardExprTemplate = wxT("({conn} % {n})");
+
+	// --- the read views -------------------------------------------------------
+	// {name} {body}. The view is the register's public read API; the totals table under it is
+	// an implementation detail, which is what lets the strategy change later without touching
+	// a single caller above L3.
+	wxString m_createViewTemplate = wxT("CREATE VIEW {name} AS {body}");
+	wxString m_dropViewTemplate   = wxT("DROP VIEW {name}");
 };
 
 WX_DECLARE_HASH_SET(ibDatabaseResultSet*, wxPointerHash, wxPointerEqual, DatabaseResultSetHashSet);
@@ -339,7 +603,18 @@ public:
 		return !m_ResultSets.empty() || !m_Statements.empty();
 	}
 
-	// Define formatted run query 
+	// Run ONE statement exactly as given — no printf formatting, no splitting on ';'.
+	//
+	// RunQuery below does both, and both are wrong for a statement that CONTAINS those characters
+	// rather than being described by them:
+	//   * a trigger body is `BEGIN <stmt>; <stmt>; END` — splitting it on ';' hands the server a
+	//     fragment ending mid-block, which it rejects as an unexpected end of command;
+	//   * a period-truncation expression is `strftime('%Y-%m-%d', …)` — a '%' that printf would
+	//     eat before the server ever saw it.
+	// Anything whose text is already final belongs here, not there.
+	int RunStatement(const wxString& sql) { return DoRunQuery(sql, /*bParseQueries*/ false); }
+
+	// Define formatted run query
 
 	/// Run an insert, update, or delete query on the database
 	WX_DEFINE_VARARG_FUNC(int, RunQuery, 1, (const wxFormatString&),
@@ -459,7 +734,7 @@ public:
 	virtual int GetDatabaseLayerType() const = 0;
 
 	// The SQL dialect this driver speaks (placeholder style, pagination, type
-	// map, feature flags). L2 (ibDatabaseQueryBuilder / ibQueryRenderer) reads
+	// map, feature flags). L2-1 (ibDatabaseQueryBuilder / ibQueryRenderer) reads
 	// this instead of branching on GetDatabaseLayerType() — there is no
 	// "is this PG or FB" check anywhere. PURE virtual: every concrete driver
 	// owns its dialect (typically a static singleton it returns by reference);
@@ -477,6 +752,16 @@ public:
 	// lands where the data scale needs it. (docs/query-language-arc.md — temp-db foundation)
 	virtual const ibTempTableDialect* GetTempTableDialect() const { return nullptr; }
 
+	// The driver's MATERIALIZATION facts (trigger shell, delta upsert, period truncation,
+	// view spelling), or nullptr if it cannot maintain derived state. PRESENCE = the
+	// capability, exactly as above: nullptr => the register keeps no totals table and its
+	// Balance / Turnover queryables stay on the LIVE aggregation, which is correct at any
+	// scale and merely slower. ODBC is the permanent nullptr — it is engine-agnostic by
+	// construction, so it cannot template engine-specific triggers, and that is a floor
+	// rather than a gap. NOT pure: drivers inherit nullptr until each opts in, so totals
+	// land additively, driver by driver. (docs/register-totals-strategy.md)
+	virtual const ibMaterializationDialect* GetMaterializationDialect() const { return nullptr; }
+
 	// Best-effort reconnect when an external cluster event has
 	// invalidated this connection — currently triggered by the FB
 	// driver's leader-mode handoff (followers' TCP to the old
@@ -492,7 +777,7 @@ public:
 
 	// ---- Row-level pessimistic write lock ----
 	// The row-lock clause moved OFF per-driver virtuals onto the dialect dictionary
-	// (m_rowLockSuffix / m_rowLockNoWaitSuffix); the L2 door renders it from
+	// (m_rowLockSuffix / m_rowLockNoWaitSuffix); the L2-1 door renders it from
 	// ibQueryIR::m_lockForUpdate / m_lockNoWait. The old RowLockHint() / NoWaitClause()
 	// virtuals are gone — their last callers (ibLockManager, the constant row-lock) now
 	// go through the door. See docs/record-locks.md.

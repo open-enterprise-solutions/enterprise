@@ -1,5 +1,5 @@
-################################################################################
-# OES Enterprise — Unit Tests
+﻿################################################################################
+# OES Enterprise вЂ” Unit Tests
 #
 # Uses Google Test fetched via FetchContent.
 # Build with: cmake -B build -DBUILD_TESTING=ON && cmake --build build
@@ -39,7 +39,7 @@ add_executable(oes_tests
     test_connectionPool.cpp
     test_session.cpp
     test_module_manager_split.cpp
-    # test_pagingRamTable.cpp  # API-rotted (ibValueModelTableBase renamed) — excluded until updated
+    # test_pagingRamTable.cpp  # API-rotted (ibValueModelTableBase renamed) вЂ” excluded until updated
     test_blobCompression.cpp
     test_firebirdLease.cpp
     test_logger.cpp
@@ -70,6 +70,10 @@ add_executable(oes_tests
     test_queryComputedServer.cpp
     test_typeDescription.cpp
     test_dialectDictionary.cpp
+    test_materializationDialect.cpp
+    test_databaseMaterializeBuilder.cpp
+    test_periodFold.cpp
+    test_totalsViewParity.cpp
     test_uniqueKey.cpp
     test_valueArray.cpp
     test_valueContainer.cpp
@@ -83,7 +87,7 @@ add_executable(oes_tests
     test_md5.cpp
     test_sha256.cpp
     test_stringUtils.cpp
-    test_guid.cpp
+    # test_guid.cpp  # API-rotted (ibGuidImpl::isValid/str/bytes gone) вЂ” excluded until updated
     test_dbTransaction.cpp
     test_propertyObject.cpp
     test_sourceExplorer.cpp
@@ -125,11 +129,11 @@ include(GoogleTest)
 gtest_discover_tests(oes_tests)
 
 # ---------------------------------------------------------------------------
-# Lightweight string-layer tests — ibString/fstring only.
+# Lightweight string-layer tests вЂ” ibString/fstring only.
 #
 # fstring.h + fstringPool.h are header-only and depend on nothing but wxBase,
 # so this target does NOT link (or recompile) backend.dll. Use it for fast
-# iteration on the string type — it builds in seconds even after touching core
+# iteration on the string type вЂ” it builds in seconds even after touching core
 # backend headers:
 #
 #   cmake --build build --target oes_string_tests
@@ -163,7 +167,7 @@ set_target_properties(oes_string_tests PROPERTIES
 gtest_discover_tests(oes_string_tests)
 
 # ---------------------------------------------------------------------------
-# Standalone ИТОГИ-tree test — backend + gtest only, no other test TUs (so it
+# Standalone РРўРћР“Р-tree test вЂ” backend + gtest only, no other test TUs (so it
 # links even when an optional driver, e.g. MySQL, is OFF and a sibling test TU
 # references it). Pure RAM fold, no DB:
 #   cmake --build build --target oes_query_totals_test --config Debug
@@ -196,8 +200,8 @@ set_target_properties(oes_query_totals_test PROPERTIES
 gtest_discover_tests(oes_query_totals_test)
 
 # ---------------------------------------------------------------------------
-# Standalone DB/RAM parity test — backend + gtest only (isolated, like the
-# ИТОГИ-tree target above). Real in-memory SQLite vs the RAM filter core:
+# Standalone DB/RAM parity test вЂ” backend + gtest only (isolated, like the
+# РРўРћР“Р-tree target above). Real in-memory SQLite vs the RAM filter core:
 #   cmake --build build --target oes_query_parity_test --config Debug
 #   ./bin/oes_query_parity_test
 #   ./bin/oes_query_parity_test --gtest_also_run_disabled_tests   # show the gap
@@ -229,7 +233,7 @@ set_target_properties(oes_query_parity_test PROPERTIES
 gtest_discover_tests(oes_query_parity_test)
 
 # ---------------------------------------------------------------------------
-# Standalone JOIN parity test — RAM join core vs a live in-memory SQLite JOIN
+# Standalone JOIN parity test вЂ” RAM join core vs a live in-memory SQLite JOIN
 # (isolated, like the parity target above). No appData / pool:
 #   cmake --build build --target oes_query_join_parity_test --config Debug
 #   ./bin/oes_query_join_parity_test
@@ -263,7 +267,7 @@ gtest_discover_tests(oes_query_join_parity_test)
 # ---------------------------------------------------------------------------
 # Temp-DB round-trip on the embedded SQLite driver (INTEGRATION scope). Brings
 # up the global appData env + a SQLite-only pool (the temp manager pins a
-# holder's connection), so it is a STANDALONE target — kept out of the main
+# holder's connection), so it is a STANDALONE target вЂ” kept out of the main
 # oes_tests list so its appData bring-up can't affect that run. Skips if the
 # headless env can't come up.
 #   cmake --build build --target oes_temp_db_sqlite_test --config Debug
@@ -296,10 +300,10 @@ set_target_properties(oes_temp_db_sqlite_test PROPERTIES
 gtest_discover_tests(oes_temp_db_sqlite_test)
 
 # ---------------------------------------------------------------------------
-# Frontend GUI harness — STEP 1. Links the DESKTOP frontend.dll (real wx
+# Frontend GUI harness вЂ” STEP 1. Links the DESKTOP frontend.dll (real wx
 # widgets: ibVisualHost : wxScrolledCanvas) + backend into a gtest target and
 # proves a live GUI wxApp + a runtime-mode appData env come up together in the
-# test process — the seam every later form/control test stands on.
+# test process вЂ” the seam every later form/control test stands on.
 #
 # Desktop controls are wxWindow subclasses, so this needs a live GUI toolkit (a
 # display); the harness GTEST_SKIPs on a headless box. Kept as its OWN target

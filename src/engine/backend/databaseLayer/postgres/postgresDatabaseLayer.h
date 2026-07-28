@@ -90,6 +90,13 @@ public:
 	static const ibTempTableDialect& TempDialect();
 	virtual const ibTempTableDialect* GetTempTableDialect() const override;
 
+	// Derived-state materialisation (register totals) — the production target. PG is the
+	// only per-row engine that cannot inline a trigger body (it needs a FUNCTION), and the
+	// only one with a storage knob worth setting (fillfactor → HOT updates on the hot totals
+	// row). Both are dictionary slots. (docs/register-totals-strategy.md)
+	static const ibMaterializationDialect& MaterializationDialect();
+	virtual const ibMaterializationDialect* GetMaterializationDialect() const override;
+
 	static int TranslateErrorCode(int nCode);
 	static bool IsAvailable();
 

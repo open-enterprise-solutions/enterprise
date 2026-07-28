@@ -79,6 +79,14 @@ public:
 	}
 	virtual const ibDialectDictionary& GetDialect() const override { return Dialect(); }
 
+	// NO materialization dialect — the inherited nullptr is the ANSWER here, not an
+	// omission. Maintaining derived state means emitting a TRIGGER, and a trigger body is
+	// engine-specific in structure; ODBC by construction does not know which engine is
+	// underneath, so there is nothing correct it could emit. A register on ODBC therefore
+	// keeps serving Balance / Turnover from the live aggregation — the always-works floor.
+	// This stays true even after the MSSQL port: an MSSQL driver would carry the set-based
+	// dictionary, MSSQL-through-ODBC still would not. (docs/register-totals-strategy.md)
+
 	static bool IsAvailable();
 
 	// SQLSTATE-based classification — ODBC's standard error identifier

@@ -26,12 +26,18 @@
 #include "backend/compiler/value.h"     // ibValue
 #include "queryColumn.h"                // ibBackendQueryColumn (the column counterpart)
 #include "queryRamTable.h"              // ibQueryRamTable — ComputeRows produces the L3 table (no runtime type)
+#include "backend/databaseLayer/databaseLayer.h"   // ibTotalsPeriod — the unit a PeriodTrunc expression carries
 
 #include <map>
 #include <memory>
 #include <vector>
 
-class ibBackendQueryProvider;   // the engine the queryable vends — defined in queryProvider.h; it IS the whole L3<->L2 layer
+// The L2-1 relation tree (databaseQueryBuilder.h). Forward-declared: a queryable may DESCRIBE
+// itself as a derived table without this header pulling in the whole L2-1 vocabulary.
+struct ibQueryRel;
+using  ibQueryRelPtr = std::shared_ptr<ibQueryRel>;
+
+class ibBackendQueryProvider;   // the engine the queryable vends — defined in queryProvider.h; it IS the whole L3<->L2-1 layer
 class ibDataQueryBuilder;       // the inner query a system subquery-queryable wraps (defined below) — full type only in its .cpp
 class ibMetaData;               // the metadata context — the provider needs it to reconstruct reference / enum values column-based
 class ibBackendQueryable;       // defined below — ibTempSourceScope references it by pointer only
@@ -106,9 +112,9 @@ BACKEND_API ibBackendQueryProvider& ibComputedProviderInstance();
 // attribute — the DB provider resolves it back to an attribute (ResolveAttribute by
 // name) only when it needs the field-machinery, so a future virtual/temp column with no
 // attribute behind it fits the same shape. L3-native filter operators beyond the
-// list layer's Equal / NotEqual. Kept here (not L2's ibQueryBinOp) so the metadata
-// side carries no L2 dependency — the query builder translates these to physical IR
-// operators. (L3 doesn't pull L2 includes; see docs/query-language-arc.md §20, §22.4b.)
+// list layer's Equal / NotEqual. Kept here (not L2-1's ibQueryBinOp) so the metadata
+// side carries no L2-1 dependency — the query builder translates these to physical IR
+// operators. (L3 doesn't pull L2-1 includes; see docs/query-language-arc.md §20, §22.4b.)
 // The L3 comparison/filter operator — ONE L3-native enum covering equality AND the ordered/LIKE ops, so the
 // crippled 2-value ibComparisonType (Eq/Ne, a leftover from the legacy ibFilterRow) is GONE from the query
 // path. Equal/NotEqual are the common case; the rest are the former WhereCompare/WhereLike ops. (Max: "why do you
@@ -180,9 +186,9 @@ struct ibQuerySortItem
 // ==========================================================================
 // ibQueryPredicate — an L3 WHERE predicate TREE (still L2-free: columns + values).
 // The flat ibQueryCondition list AND-folds; this tree adds OR / NOT / IS NULL so L4 can
-// express full boolean WHERE. The provider lowers it to the L2 IR (ibBinOp Or/And, ibNot,
+// express full boolean WHERE. The provider lowers it to the L2-1 IR (ibBinOp Or/And, ibNot,
 // ibIsNull) — L3 stays L2-blind. IN expands to Or(Eq …) and BETWEEN to And(>=, <=) at the
-// L4 lowering, so the tree needs no dedicated IN / BETWEEN node. (docs §23: door Where via L2.)
+// L4 lowering, so the tree needs no dedicated IN / BETWEEN node. (docs §23: door Where via L2-1.)
 // ==========================================================================
 enum class ibQueryPredicateKind { Leaf, And, Or, Not, IsNull };
 
@@ -240,11 +246,16 @@ struct ibSemiJoinExists
 // ==========================================================================
 // ibQueryColumnExpr — an L3 COMPUTED-COLUMN expression TREE (L2-free: columns + values + ops). A plain
 // projection is a single column; this lets a projection COMPUTE — arithmetic (a * b - c) and a searched
-// CASE (CASE WHEN <predicate> THEN <expr> … ELSE <expr> END). The provider lowers it to the L2 IR
-// (ibBinOp Add/Sub/Mul/Div/Mod, the L2 Case node) and projects it AS the output alias; the column-based
+// CASE (CASE WHEN <predicate> THEN <expr> … ELSE <expr> END). The provider lowers it to the L2-1 IR
+// (ibBinOp Add/Sub/Mul/Div/Mod, the L2-1 Case node) and projects it AS the output alias; the column-based
 // door stays L2-blind. WHEN conditions reuse the ibQueryPredicate tree. (docs §23 — computed columns.)
 // ==========================================================================
-enum class ibQueryColumnExprKind { Column, Const, Arith, Case };
+// PeriodTrunc — "the start of the <unit> containing m_lhs". Lowers to the L2-1 node of the same
+// name, which the dialect's truncation map spells. It is here so a query can GROUP BY month
+// without its author naming an engine — and so a totals REBUILD can group the movements by
+// exactly the expression the maintenance trigger keys rows with. Two paths, one definition; a
+// second notion of "start of the month" would silently split rows the trigger had merged.
+enum class ibQueryColumnExprKind { Column, Const, Arith, Case, PeriodTrunc };
 enum class ibQueryColumnArithOp { Add, Sub, Mul, Div, Mod };
 
 struct ibQueryColumnExpr;
@@ -264,6 +275,10 @@ struct ibQueryColumnExpr
 	std::vector<std::pair<ibQueryPredicatePtr, ibQueryColumnExprPtr>> m_cases;
 	ibQueryColumnExprPtr        m_else;
 
+	// PeriodTrunc — the unit m_lhs is truncated to. Same principle as everything else here: the
+	// expression names the CONCEPT, the dialect owns the spelling.
+	ibTotalsPeriod              m_periodUnit = ibTotalsPeriod::Month;
+
 	static ibQueryColumnExprPtr Col(const ibBackendQueryColumn* col) {
 		auto e = std::make_shared<ibQueryColumnExpr>();
 		e->m_kind = ibQueryColumnExprKind::Column; e->m_col = col; return e;
@@ -275,6 +290,15 @@ struct ibQueryColumnExpr
 	static ibQueryColumnExprPtr Arith(ibQueryColumnArithOp op, ibQueryColumnExprPtr a, ibQueryColumnExprPtr b) {
 		auto e = std::make_shared<ibQueryColumnExpr>();
 		e->m_kind = ibQueryColumnExprKind::Arith; e->m_arith = op; e->m_lhs = a; e->m_rhs = b; return e;
+	}
+	static ibQueryColumnExprPtr PeriodTrunc(ibQueryColumnExprPtr expr, ibTotalsPeriod unit) {
+		auto e = std::make_shared<ibQueryColumnExpr>();
+		e->m_kind = ibQueryColumnExprKind::PeriodTrunc; e->m_lhs = expr; e->m_periodUnit = unit; return e;
+	}
+	static ibQueryColumnExprPtr Case(std::vector<std::pair<ibQueryPredicatePtr, ibQueryColumnExprPtr>> cases,
+	                                 ibQueryColumnExprPtr otherwise) {
+		auto e = std::make_shared<ibQueryColumnExpr>();
+		e->m_kind = ibQueryColumnExprKind::Case; e->m_cases = std::move(cases); e->m_else = otherwise; return e;
 	}
 };
 
@@ -296,7 +320,7 @@ public:
 	// --- the queryable VENDS its provider ('the table generates its engine') ----
 	// L3 (the door) is metadata-BLIND: it pulls a provider from here and runs the
 	// query through the ibBackendQueryProvider ABSTRACTION — never naming a concrete
-	// provider, never touching L2. The provider holds ALL the L2 + metadata->physical
+	// provider, never touching L2-1. The provider holds ALL the L2-1 + metadata->physical
 	// lowering. The DB families share one default (a stateless static DB provider);
 	// computed queryables (slice / balance / turnover) OVERRIDE this to vend their own
 	// (a static computed provider). The default impl lives in queryProvider.cpp where
@@ -348,6 +372,22 @@ public:
 	// --- physical layout -------------------------------------------------
 	// The real backing table for the main row scan.
 	virtual wxString GetQueryTableName() const = 0;
+
+	// What this source IS inside a FROM clause, when it is not a plain table scan. Returning a
+	// relation makes the provider emit `FROM (<that>) AS alias` instead of `FROM <table> alias` —
+	// so the source becomes a DERIVED TABLE and everything around it (JOIN, WHERE, ORDER BY,
+	// paging, RLS) stays ordinary SQL handled by the engine.
+	//
+	// Null (the default) = an ordinary table, scanned by GetQueryTableName().
+	//
+	// This is what keeps a parameterised reading on the server. A register's balance "as of a
+	// date" is an aggregate over the totals view — the date cannot live in a view, so it lives in
+	// this subquery; without the hook the whole result would have to be materialised into RAM
+	// before it could be joined to anything, turning the most latency-critical reading in the
+	// system into a transfer. The pattern is not new here: the information register's slice
+	// already joins a nested MAX(period) aggregate through ibSubquery — this only lets a queryable
+	// declare the same thing for itself.
+	virtual ibQueryRelPtr GetSourceRelation(const wxString& alias) const { return nullptr; }
 	virtual ibGuid GetQueryTableGuid() const = 0;
 
 	// The USER-facing name (as in the metadata tree, e.g. "Enumeration3") — for the restructure change
@@ -402,7 +442,7 @@ public:
 	// --- DB-row materialisation: NOT here ---------------------------------
 	// Materialising a value from a physical DB row needs the metaobject attribute + the L1
 	// result set — neither of which this L3 interface may name. The whole concern lives in
-	// the PROVIDER (the L3<->L2 layer): it receives the COLUMN, static_casts it to the
+	// the PROVIDER (the L3<->L2-1 layer): it receives the COLUMN, static_casts it to the
 	// metaobject attribute internally, and calls the existing GetValueAttribute /
 	// SetValueAttribute. L3 just names columns; the provider knows how. (docs §22.4b)
 
@@ -529,7 +569,7 @@ private:
 // ibValueMetaObjectAccumulationRegister — both vend GetQueryable(). It is a template over an
 // unknown TReg, so it lives in this header alongside the interface; GetProvider() vends the
 // shared computed provider through ibComputedProviderInstance() (so this header still names no
-// concrete provider / L2 type). (docs/query-language-arc.md §22.4)
+// concrete provider / L2-1 type). (docs/query-language-arc.md §22.4)
 // ==========================================================================
 template <typename TReg>
 class ibComputedRegisterQueryable : public ibBackendQueryable
@@ -538,25 +578,33 @@ public:
 	explicit ibComputedRegisterQueryable(const TReg* reg) : m_reg(reg) {}
 
 	// Vends the shared stateless computed (RAM) provider; the door pulls it via GetProvider()
-	// and runs the read through it — the rows come from ComputeRows(), no physical scan, no L2.
+	// and runs the read through it — the rows come from ComputeRows(), no physical scan, no L2-1.
 	virtual ibBackendQueryProvider& GetProvider() const override { return ibComputedProviderInstance(); }
 
 	// Computed (RAM) virtual table — the door builds the selection from ComputeRows(), never a
 	// physical scan (the concrete subclass overrides ComputeRows).
 	virtual bool IsComputedInRam() const override { return true; }
 
-	// L3 navigation forwards to the register's own queryable — a computed table carries the
-	// register's columns, so it navigates exactly like the register. It is a COMPUTED (RAM)
-	// source: read through ComputeRows, never a DB cursor, so no attribute / L1 materialisation.
-	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override { return m_reg->GetQueryable()->ResolveColumnByName(name); }
-	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_reg->GetQueryable()->GetColumns(); }
-	virtual wxString GetQueryTableName() const override { return m_reg->GetQueryable()->GetQueryTableName(); }
-	virtual ibGuid GetQueryTableGuid() const override { return m_reg->GetQueryable()->GetQueryTableGuid(); }
-	virtual wxString GetQueryName()       const override { return m_reg->GetQueryable()->GetQueryName(); }
-	virtual ibMetaID GetQueryTableId()    const override { return m_reg->GetQueryable()->GetQueryTableId(); }
+	// L3 navigation forwards to ONE source, named here so a subclass can redirect the whole set at
+	// once. By default that is the register's own queryable: a computed table carries the
+	// register's columns, so it navigates exactly like the register.
+	//
+	// A subclass backed by a materialised VIEW overrides this single method and every forward below
+	// follows — the columns it exposes then describe the VIEW (opening / receipt / turnover …),
+	// which is what its rows actually contain. Without one point of substitution each forward would
+	// have to be overridden separately, and the one missed would report the movement table's
+	// columns for a totals row.
+	virtual const ibBackendQueryable* NavigationSource() const { return m_reg->GetQueryable(); }
+
+	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override { return NavigationSource()->ResolveColumnByName(name); }
+	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override { return NavigationSource()->GetColumns(); }
+	virtual wxString GetQueryTableName() const override { return NavigationSource()->GetQueryTableName(); }
+	virtual ibGuid GetQueryTableGuid() const override { return NavigationSource()->GetQueryTableGuid(); }
+	virtual wxString GetQueryName()       const override { return NavigationSource()->GetQueryName(); }
+	virtual ibMetaID GetQueryTableId()    const override { return NavigationSource()->GetQueryTableId(); }
 	virtual const ibMetaData* GetMetaData() const override { return m_reg->GetQueryable()->GetMetaData(); }
-	virtual std::vector<ibQuerySortItem> GetIdentitySort() const override { return m_reg->GetQueryable()->GetIdentitySort(); }
-	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override { return m_reg->GetQueryable()->GetPrimaryKeyColumns(); }
+	virtual std::vector<ibQuerySortItem> GetIdentitySort() const override { return NavigationSource()->GetIdentitySort(); }
+	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override { return NavigationSource()->GetPrimaryKeyColumns(); }
 
 protected:
 	const TReg* m_reg;

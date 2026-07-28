@@ -92,6 +92,15 @@ public:
 	static const ibDialectDictionary& Dialect();                       // FB dialect (no instance needed)
 	virtual const ibDialectDictionary& GetDialect() const override;    // polymorphic access for L2
 
+	// Derived-state materialisation (register totals). Firebird is the DEFAULT embedded
+	// database, so this is the dialect most installations will actually run, and it is also
+	// the one that diverges most: an accumulating upsert must be MERGE (UPDATE OR INSERT ..
+	// MATCHING can only replace), and there is no date_trunc — period truncation is built
+	// from EXTRACT + DATEADD. Both differences are absorbed here, in data.
+	// (docs/register-totals-strategy.md)
+	static const ibMaterializationDialect& MaterializationDialect();
+	virtual const ibMaterializationDialect* GetMaterializationDialect() const override;
+
 	// FB-specific: route to `ReconnectIfLeaderChanged()` so callers
 	// holding long-lived connections (session registry's heartbeat /
 	// snapshot jobs) can recover after a leader handoff without

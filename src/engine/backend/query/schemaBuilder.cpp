@@ -96,6 +96,11 @@ int ibSchemaBuilder::Execute(const ibDdlStatement& ddl)
 	return c->RunQuery(renderer.RenderDDL(ddl));
 }
 
+ibDatabaseLayer& ibSchemaBuilder::Connection() const
+{
+	return *conn();
+}
+
 bool ibSchemaBuilder::RunOrDefer(const wxString& table, std::function<bool()> work)
 {
 	ibDatabaseConnectionHolder* h = BarrierHolder();

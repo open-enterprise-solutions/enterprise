@@ -57,6 +57,40 @@ L3-3 `ibDataMover` (`DumpDataToBuffer` / `RestoreDataFromBuffer` on the storage 
 driven by the same `ContributeTables` snapshot that drives the DDL. Boundary: **File = config
 metadata, Storage = live table data.**
 
+**Derived tables are a third case.** A table the snapshot marks `m_derived` (a register's totals)
+holds rows that are a FUNCTION of another table's rows, so it belongs to neither category above: it
+is not configuration, and it is not data worth moving. One bit routes it through all four floors —
+L3-2 builds it *and* its trigger/view bundle, L3-3 **skips** it in both directions, and **L3-4**
+(`ibDerivedState`, `query/derivedStateBuilder`) rebuilds it from the source when the trigger cannot
+have kept up: a table created over an already-populated source, a restore, or a change to the
+grouping shape.
+
+The order matters on a restore — L3-3 loads the source rows first, then L3-4 regenerates from them.
+Carrying the derived rows instead would ship a redundant copy at best, and at worst a stale one
+that silently disagrees with the movements it claims to summarise.
+
+`NeedsRegeneration` keeps the common case free: a column merely ADDED has no history, so its
+correct value everywhere is the zero the `ALTER` default already wrote. Everything else rebuilds —
+skipping a needed rebuild yields silently wrong totals, while a needless one only costs time. The
+KEY SHAPE (a dimension, the stored grain, the shard split) and the NUMBER OF ACCUMULATIONS both
+force a rebuild: re-keyed rows cannot be migrated in place, and gaining a second accumulation
+changes what the first one means, so every stored figure is wrong even though its column still
+exists.
+
+**A derived table is REPLACED, never altered.** When `NeedsRegeneration` says its shape changed,
+L3-2 drops the table and creates it fresh instead of emitting ALTER clauses. It holds no
+information of its own — the regeneration recomputes every row regardless — so migrating it in
+place buys nothing while costing the whole class of migration edges: re-keyed rows, an index over a
+column being dropped, a field the physical table has and the baseline does not.
+
+**A derived table that VANISHES must be un-maintained before it is dropped.** Its triggers live on
+the SOURCE table and only mention it by name, so `DROP TABLE` leaves them behind, firing on the next
+write into a table that is gone. The differ therefore calls `ibDropMaterialization` with the
+BASELINE spec — the only thing that still knows the old names — before dropping. The register KIND
+SWITCH is this path in practice: balances and turnovers keep separate tables under separate ids
+(`GetTotalsTableId()`), so switching is a drop of one plus a create-and-regenerate of the other,
+never an ALTER.
+
 ---
 
 ## 3. The node event set

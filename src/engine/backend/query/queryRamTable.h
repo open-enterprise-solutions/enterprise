@@ -55,4 +55,38 @@ private:
 	std::vector<Row>              m_rows;      // flat rows — the whole snapshot
 };
 
+// One resource's five reported columns in a balance-and-turnover row, by RAM-table column id.
+// The fold fills turnover / opening / closing from the receipt / expense pair.
+struct ibBalanceFoldSlot
+{
+	ibMetaID m_receipt  = 0;   // in  — already aggregated for the period
+	ibMetaID m_expense  = 0;   // out — already aggregated for the period
+	ibMetaID m_turnover = 0;   // filled: receipt - expense
+	ibMetaID m_opening  = 0;   // filled: the balance entering the period
+	ibMetaID m_closing  = 0;   // filled: opening + turnover
+};
+
+// Roll per-period turnovers forward into per-period BALANCES, in place.
+//
+// `table` holds one row per (key, period) with the receipt / expense pair already aggregated, and
+// must be ordered by period within a key. `opening` gives the balance each key carried INTO the
+// interval — outer key = the same identity string the fold builds from `keyColumns`, inner key =
+// the slot's m_turnover id (absent = zero). Then, per key,
+// walking periods in order: opening = the previous period's closing, closing = opening + turnover.
+//
+// It lives here rather than on a register because it is the SAME operation for every register kind
+// that reports balances over periods. An accumulation register signs its movements by record type,
+// an accounting register by debit / credit side — but by the time rows reach this fold that
+// difference is already spent: both arrive as a receipt / expense pair per period. Keeping the
+// running step in one place is what lets the accounting register reuse the mechanism instead of
+// re-deriving it, which is the whole reason it is not a private helper of one register.
+//
+// The step is inherently sequential (a period's opening IS the previous closing), but it walks
+// PERIODS — tens of them — not movements, so its cost is independent of how deep the history goes.
+BACKEND_API void FoldBalancesForward(ibQueryRamTable& table,
+                                     const std::vector<ibMetaID>& keyColumns,
+                                     ibMetaID periodColumn,
+                                     const std::vector<ibBalanceFoldSlot>& slots,
+                                     const std::map<wxString, std::map<ibMetaID, ibNumber>>& opening);
+
 #endif // __QUERY_RAM_TABLE_H__

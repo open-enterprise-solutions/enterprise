@@ -1,7 +1,7 @@
 #ifndef __IB_DATABASE_QUERY_BUILDER_H__
 #define __IB_DATABASE_QUERY_BUILDER_H__
 
-// The single Level 2 header — the WHOLE L2 vocabulary lives here so any L2 work
+// The single Level 2 header — the WHOLE L2-1 vocabulary lives here so any L2-1 work
 // is one include (no reaching into databaseLayer/* pieces; no separate
 // queryIR / queryDDL / queryDML / queryRenderer / queryStatement headers):
 //
@@ -15,7 +15,7 @@
 //
 // The tier ladder (all flagships share the ibDatabase* prefix):
 //     L3  ibDataQueryBuilder      — what the developer WRITES (metadata query); builds IR
-//     L2  ibDatabaseQueryBuilder  — fluent build + terminal execute, dialect-indifferent
+//     L2-1  ibDatabaseQueryBuilder  — fluent build + terminal execute, dialect-indifferent
 //     L1  ibDatabaseLayer         — WHERE it runs: the physical driver (×5)
 //
 // The currency is a structured ibQueryIR (never raw SQL), so SQL injection is
@@ -39,7 +39,7 @@ class ibDatabaseResultSet;
 class ibResultSetMetaData;
 
 // ==========================================================================
-// Query IR — the universal, structured query L2 accepts. Plain data (tagged
+// Query IR — the universal, structured query L2-1 accepts. Plain data (tagged
 // structs, shared_ptr children) over PHYSICAL names; carries no metadata
 // knowledge (the metadata->physical mapping is a Level 3 concern).
 // ==========================================================================
@@ -65,8 +65,15 @@ enum class ibQueryExprKind
 	IsNull,   // m_lhs IS [NOT m_negated] NULL
 	Not,      // NOT m_lhs
 	Cast,     // CAST( m_lhs AS <m_castType, spelled per-DBMS via the dialect TYPE-MAP> ) — pin an expr's type
-	Exists    // [NOT m_negated] EXISTS ( m_subquery ) — a CORRELATED subquery test; the write-path lowering of a
+	Exists,   // [NOT m_negated] EXISTS ( m_subquery ) — a CORRELATED subquery test; the write-path lowering of a
 	          // dot-walk RLS predicate (a write cannot JOIN, so the reference path rides as a correlated EXISTS)
+	PeriodTrunc  // start of the m_periodUnit containing m_lhs, spelled per-DBMS via the dialect's
+	             // m_periodTrunc map. A SEMANTIC node, not a raw-SQL hatch: the IR says "truncate to
+	             // month", never how, so L2-1 keeps its no-SQL invariant while engines that disagree
+	             // structurally (strftime mask vs date_trunc vs EXTRACT+DATEADD arithmetic) each
+	             // spell it their own way. Grouping by month is wanted far beyond totals — reports,
+	             // the composer, user queries — which is why it is an IR node and not a private trick
+	             // of the totals generator.
 };
 
 enum class ibQueryBinOp
@@ -95,8 +102,8 @@ struct ibQueryExpr
 	// Const: the literal value (bound as a parameter at execute time).
 	ibValue m_const;
 
-	// Const (blob form): raw bytes bound via SetParamBlob — OPAQUE to L2. The
-	// metadata layer encodes a reference (ibReference) / binary key here; L2
+	// Const (blob form): raw bytes bound via SetParamBlob — OPAQUE to L2-1. The
+	// metadata layer encodes a reference (ibReference) / binary key here; L2-1
 	// never interprets it, so it stays metadata-blind. Empty = not a blob.
 	wxMemoryBuffer m_blob;
 
@@ -118,6 +125,10 @@ struct ibQueryExpr
 	// Cast: the CANONICAL target type. The renderer spells it per-DBMS through the dialect TYPE-MAP
 	// (ibQueryRenderer::MapType) — the IR bakes no SQL type string, so it stays dialect-neutral.
 	ibColumnType m_castType;
+
+	// PeriodTrunc: the unit m_lhs is truncated to. Same principle as m_castType — the IR names the
+	// CONCEPT and the dialect owns the spelling.
+	ibTotalsPeriod m_periodUnit = ibTotalsPeriod::Month;
 
 	// In / IsNull / Exists: negation (NOT IN / IS NOT NULL / NOT EXISTS).
 	bool m_negated = false;
@@ -159,7 +170,7 @@ inline ibQueryExprPtr ibConst(const ibValue& value)
 }
 
 // Opaque blob constant — bound via SetParamBlob. The metadata layer uses this
-// for a reference (ibReference) / binary key; L2 binds the bytes without
+// for a reference (ibReference) / binary key; L2-1 binds the bytes without
 // interpreting them.
 inline ibQueryExprPtr ibConstBlob(const void* data, size_t len)
 {
@@ -243,6 +254,18 @@ inline ibQueryExprPtr ibCast(ibQueryExprPtr expr, const ibColumnType& castType)
 	auto e = std::make_shared<ibQueryExpr>(ibQueryExprKind::Cast);
 	e->m_lhs      = std::move(expr);
 	e->m_castType = castType;
+	return e;
+}
+
+// Start of the period containing `expr` — "the month this timestamp falls in". The unit is the
+// concept; the dialect owns the spelling (ibDialectDictionary::m_periodTrunc). Group by the result
+// to roll rows up to that grain: one definition of "start of the month" per engine, shared by
+// every caller, so a totals key and a report's grouping cannot silently differ.
+inline ibQueryExprPtr ibPeriodTrunc(ibQueryExprPtr expr, ibTotalsPeriod unit)
+{
+	auto e = std::make_shared<ibQueryExpr>(ibQueryExprKind::PeriodTrunc);
+	e->m_lhs        = std::move(expr);
+	e->m_periodUnit = unit;
 	return e;
 }
 
@@ -491,7 +514,7 @@ struct ibQueryIR
 // ==========================================================================
 
 // The canonical column type + factories (ibColumnType / ibTypeNumber / …) live in a shared low-tier
-// vocabulary used by both L2 and the L3 layout tier (included at the top). ibDdlColumn below carries one.
+// vocabulary used by both L2-1 and the L3 layout tier (included at the top). ibDdlColumn below carries one.
 
 struct ibDdlColumn
 {
@@ -784,7 +807,14 @@ public:
 	// DML (Insert/Update/Delete/Upsert) — SQL + bind plan, like Render().
 	ibRenderedQuery RenderDML(const ibDmlStatement& dml);
 
+	// (No view-body renderer here. A VIEW's body is produced by L2-2 — see
+	//  databaseMaterializeBuilder — because the bodies that matter carry window functions and
+	//  shard folds, which the query IR has no nodes for. Adding an inline-literal mode to THIS
+	//  renderer would have meant owning per-dialect quote escaping for a caller that does not
+	//  exist.)
+
 private:
+
 	wxString RenderSelect(const ibQueryRel* root);  // flatten a relation chain into one SELECT (appends binds)
 	wxString RenderExpr(const ibQueryExprPtr& expr);
 	wxString RenderSource(const ibQueryRel* rel);   // FROM source: Scan / Join-tree / Subquery (recursive)
@@ -801,6 +831,7 @@ private:
 	                                           // a reference member would dangle. The dictionary is small + copyable.
 	ibRenderedQuery            m_out;          // accumulates during a Render() call
 	int                        m_paramPos = 0; // running 1-based placeholder count
+
 };
 
 // ==========================================================================
@@ -831,7 +862,7 @@ public:
 	// Typed field reads by name — the dialect-NORMALISED form of the row's physical fields
 	// (the "same shape as L1, minus the dialect"). The provider's value-assembly reads the
 	// physical _N/_S/_RRRef columns through THESE, so it never touches the raw L1 result set
-	// (RawResultSet is an L2 leak). Delegate to the borrowed driver cursor.
+	// (RawResultSet is an L2-1 leak). Delegate to the borrowed driver cursor.
 	wxString    GetResultString(const wxString& name);
 	int         GetResultInt(const wxString& name);
 	long long   GetResultLong(const wxString& name);
@@ -861,7 +892,7 @@ private:
 };
 
 // ==========================================================================
-// ibDatabaseQueryBuilder — the single L2 door. Move-only.
+// ibDatabaseQueryBuilder — the single L2-1 door. Move-only.
 //
 //     ibDatabaseQueryBuilder(holder)
 //         .From("Reference17")
@@ -942,7 +973,7 @@ public:
 	void RollBack() { m_scope.SafeRollBackTransaction(); }
 
 	// --- connection / schema introspection --------------------------------
-	// Predicates that delegate to the borrowed connection, so a DAO can stay on this one L2 door
+	// Predicates that delegate to the borrowed connection, so a DAO can stay on this one L2-1 door
 	// for its whole job — gate a CREATE on TableExists, read a live column set, check open /
 	// in-transaction state — without reaching for the raw ibDatabaseLayer. A scope that holds no
 	// connection reports false / empty (these never throw — they are pre-flight checks).
@@ -971,8 +1002,8 @@ private:
 
 // ==========================================================================
 // ibQueryStatement — an ibPreparedStatement that executes NOTHING at the driver
-// when you bind. Each SetParam* is captured as an L2 value node; the object is a
-// deferred-execution TEMPLATE — a structured L2 DML over physical columns.
+// when you bind. Each SetParam* is captured as an L2-1 value node; the object is a
+// deferred-execution TEMPLATE — a structured L2-1 DML over physical columns.
 // RunQuery() renders it through the connected dialect and runs it ONCE.
 //
 // The statement-level migration seam: a writer that used to do
@@ -1000,7 +1031,7 @@ public:
 	using ibPreparedStatement::SetParamDate;
 	using ibPreparedStatement::SetParamBlob;
 
-	// --- ibPreparedStatement: bind -> capture as an L2 value node ----------
+	// --- ibPreparedStatement: bind -> capture as an L2-1 value node ----------
 	void Close() override {}
 	void SetParamInt(int nPosition, int nValue) override;
 	void SetParamDouble(int nPosition, double dblValue) override;

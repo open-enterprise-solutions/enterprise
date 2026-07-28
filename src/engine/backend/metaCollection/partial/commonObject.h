@@ -2408,8 +2408,6 @@ protected:
 
 	////////////////////////////////////////
 
-	virtual bool SaveVirtualTable() { return true; }
-	virtual bool DeleteVirtualTable() { return true; }
 
 protected:
 

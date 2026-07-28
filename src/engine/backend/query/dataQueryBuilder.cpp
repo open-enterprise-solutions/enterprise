@@ -299,7 +299,12 @@ ibDataQueryBuilder& ibDataQueryBuilder::OrderByExpr(const ibQueryColumnExprPtr& 
 
 ibDataQueryBuilder& ibDataQueryBuilder::GroupBy(const ibBackendQueryColumn* col)
 {
-	if (col) { m_groupBy.push_back(col); m_groupPaths.emplace_back(); }   // plain key — empty parallel path
+	if (col) {   // plain key — empty parallel path / no expression
+		m_groupBy.push_back(col);
+		m_groupPaths.emplace_back();
+		m_groupExprs.emplace_back();
+		m_groupAliases.emplace_back();
+	}
 	return *this;
 }
 
@@ -309,6 +314,19 @@ ibDataQueryBuilder& ibDataQueryBuilder::GroupBy(const std::vector<const ibBacken
 	if (path.size() == 1) return GroupBy(path.front());                  // not a dot-walk — plain key
 	m_groupBy.push_back(path.back());                                    // leaf is the grouped column
 	m_groupPaths.push_back(path);                                        // its reference path (provider joins it)
+	m_groupExprs.emplace_back();
+	m_groupAliases.emplace_back();
+	return *this;
+}
+
+ibDataQueryBuilder& ibDataQueryBuilder::GroupByExpr(const ibQueryColumnExprPtr& expr, const wxString& alias)
+{
+	if (!expr || alias.IsEmpty())
+		return *this;   // an unnamed computed key could not be read back — refuse it rather than group blind
+	m_groupBy.push_back(nullptr);        // no column: the slot is the expression's
+	m_groupPaths.emplace_back();
+	m_groupExprs.push_back(expr);
+	m_groupAliases.push_back(alias);
 	return *this;
 }
 
@@ -460,8 +478,10 @@ ibDataQuerySpec ibDataQueryBuilder::BuildSpec() const
 	spec.m_predicate   = m_predicate;       // full boolean WHERE tree (null = none)
 	spec.m_keyIn       = &m_keyIn;
 	spec.m_sorts       = &m_sorts;
-	spec.m_groupBy     = &m_groupBy;
-	spec.m_groupPaths  = &m_groupPaths;
+	spec.m_groupBy      = &m_groupBy;
+	spec.m_groupPaths   = &m_groupPaths;
+	spec.m_groupExprs   = &m_groupExprs;
+	spec.m_groupAliases = &m_groupAliases;
 	spec.m_aggregates  = &m_aggregates;
 	spec.m_having      = &m_having;
 	spec.m_writeValues = &m_writeValues;

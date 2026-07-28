@@ -36,6 +36,27 @@ const ibDialectDictionary& ibDatabaseLayerSQLite::Dialect()
 		d.m_typeBinaryPattern = wxT("BLOB");      // SQLite has no fixed-width binary
 		d.m_typeGuid          = wxT("TEXT");
 		d.m_analyzePrefix     = wxT("ANALYZE");   // ANALYZE <t> — refresh planner stats (SQLite has no auto-analyze)
+		// Period truncation. strftime handles the units that are a literal format mask; the four
+		// that are not — Week, TenDays, Quarter, HalfYear — are date() arithmetic off the start of
+		// the enclosing unit, expressed through SQLite's modifier strings:
+		//   Week    — step back 6 days, then forward to the next Monday. Lands on this week's
+		//             Monday for every day including Monday itself (ISO, as on the other engines).
+		//   TenDays — 1st / 11th / 21st, offset CAPPED at 2 so a 31-day month cannot floor to 3
+		//             and open a fourth one-day bucket; the last period runs 8-11 days.
+		// Integer division on INTEGER operands is integer division here, and min() with two
+		// arguments is the scalar function, not the aggregate.
+		d.m_periodTrunc = {
+			{ ibTotalsPeriod::Second,   wxT("strftime('%Y-%m-%d %H:%M:%S', {expr})")  },
+			{ ibTotalsPeriod::Minute,   wxT("strftime('%Y-%m-%d %H:%M:00', {expr})")  },
+			{ ibTotalsPeriod::Hour,     wxT("strftime('%Y-%m-%d %H:00:00', {expr})")  },
+			{ ibTotalsPeriod::Day,      wxT("strftime('%Y-%m-%d 00:00:00', {expr})")  },
+			{ ibTotalsPeriod::Week,     wxT("strftime('%Y-%m-%d 00:00:00', {expr}, '-6 days', 'weekday 1')") },
+			{ ibTotalsPeriod::TenDays,  wxT("strftime('%Y-%m-%d 00:00:00', date(strftime('%Y-%m-01', {expr}), '+' || (min((CAST(strftime('%d', {expr}) AS INTEGER) - 1) / 10, 2) * 10) || ' days'))") },
+			{ ibTotalsPeriod::Month,    wxT("strftime('%Y-%m-01 00:00:00', {expr})")  },
+			{ ibTotalsPeriod::Quarter,  wxT("strftime('%Y-%m-%d 00:00:00', date(strftime('%Y-01-01', {expr}), '+' || (((CAST(strftime('%m', {expr}) AS INTEGER) - 1) / 3) * 3) || ' months'))") },
+			{ ibTotalsPeriod::HalfYear, wxT("strftime('%Y-%m-%d 00:00:00', date(strftime('%Y-01-01', {expr}), '+' || (((CAST(strftime('%m', {expr}) AS INTEGER) - 1) / 6) * 6) || ' months'))") },
+			{ ibTotalsPeriod::Year,     wxT("strftime('%Y-01-01 00:00:00', {expr})")  },
+		};
 		return d;
 	}();
 	return s_dialect;
@@ -68,6 +89,44 @@ const ibTempTableDialect& ibDatabaseLayerSQLite::TempDialect()
 const ibTempTableDialect* ibDatabaseLayerSQLite::GetTempTableDialect() const
 {
 	return &TempDialect();
+}
+
+// SQLite materialisation: the per-row FLOOR. Its trigger body may contain only plain SQL
+// statements — no variables, no IF, no procedural block — which is exactly why the family
+// is designed here first: whatever expresses a totals delta in SQLite expresses it
+// everywhere else, and the richer engines simply do not need their extra syntax.
+// Period truncation goes through strftime, whose output is TEXT — consistent with this
+// dialect storing dates as TEXT (m_typeDate above), so the totals key column and the
+// movement's period column compare like for like.
+const ibMaterializationDialect& ibDatabaseLayerSQLite::MaterializationDialect()
+{
+	static const ibMaterializationDialect s_mat = [] {
+		ibMaterializationDialect m;
+		m.m_family = ibTriggerFamily::PerRow;
+		// SQLite names the trigger's timing before the table and takes no FOR EACH ROW
+		// keyword requirement (it is the only mode it has), but accepts it — kept explicit
+		// so the four per-row shells read alike.
+		m.m_triggerShellTemplate = wxT("CREATE TRIGGER {name} {timing} ON {table} FOR EACH ROW BEGIN {body} END");
+		m.m_functionShellTemplate = wxEmptyString;   // body inlines — no separate function object
+		// The SELECT form (not VALUES) is also what SQLite itself prefers here: with
+		// INSERT..SELECT the parser needs a WHERE before ON CONFLICT to disambiguate, so the
+		// shape the conditional-delta case requires is the shape SQLite documents anyway.
+		m.m_deltaUpsertTemplate =
+			wxT("INSERT INTO {table} ({columns}) SELECT {values}{from}{where} ON CONFLICT ({keys}) DO UPDATE SET {update}");
+		m.m_deltaTargetAlias  = wxT("{table}");     // ON CONFLICT names the target by table name
+		m.m_deltaSourceAlias  = wxT("excluded");
+		m.m_deltaUpdateItem   = wxT("{col} = {target}.{col} + {source}.{col}");
+		m.m_deltaKeyMatchItem = wxT("{target}.{col} = {source}.{col}");   // unused by ON CONFLICT — rendered, not spent
+		m.m_totalsTableSuffix = wxEmptyString;       // no fillfactor concept (single writer anyway)
+		m.m_connectionIdExpr  = wxEmptyString;       // single writer => no contention to split; shards are meaningless, not missing
+		return m;
+	}();
+	return s_mat;
+}
+
+const ibMaterializationDialect* ibDatabaseLayerSQLite::GetMaterializationDialect() const
+{
+	return &MaterializationDialect();
 }
 
 // ctor()

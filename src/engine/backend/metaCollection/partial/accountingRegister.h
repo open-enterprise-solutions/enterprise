@@ -221,8 +221,6 @@ class ibValueRecordSetObjectAccountingRegister : public ibValueRecordSetObject {
 	// WriteRecordSet / DeleteRecordSet inherited from
 	// ibValueRecordSetObject (Phase B template-method).
 
-	virtual bool SaveVirtualTable();
-	virtual bool DeleteVirtualTable();
 
 	void FillMembers(ibMemberTable& helper) const;
 

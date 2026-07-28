@@ -82,6 +82,12 @@ public:
 	static const ibDialectDictionary& Dialect();                       // MySQL dialect (no instance needed)
 	virtual const ibDialectDictionary& GetDialect() const override;    // polymorphic access for L2
 
+	// Derived-state materialisation (register totals). MySQL is the third accumulate
+	// spelling — ON DUPLICATE KEY UPDATE, which names the incoming value inline as
+	// VALUES(col) and has no source alias at all. (docs/register-totals-strategy.md)
+	static const ibMaterializationDialect& MaterializationDialect();
+	virtual const ibMaterializationDialect* GetMaterializationDialect() const override;
+
 	static int TranslateErrorCode(int nCode);
 	static bool IsAvailable();
 

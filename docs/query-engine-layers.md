@@ -7,11 +7,11 @@
 > **already exists.**
 >
 > **Companions (per-floor detail):** [query-language-arc.md](query-language-arc.md) (the full
-> arc — L2 IR, L3 door, L4-1/L4-2), [data-composer.md](data-composer.md) (L5),
+> arc — L2-1 IR, L3 door, L4-1/L4-2), [data-composer.md](data-composer.md) (L5),
 > [linq.md](linq.md) (L4-2), [access-policy-rls.md](access-policy-rls.md) (L4-3),
 > [database-layer.md](database-layer.md) (L1), [temp-db.md](temp-db.md) (the temp-table seam),
 > [table-model.md](table-model.md) (who consumes a fetch), [metadata-lifecycle.md](metadata-lifecycle.md)
-> (what L3-2 / L3-3 feed).
+> (what L3-2 / L3-3 / L3-4 feed).
 >
 > **Status:** landed (experimental working copy) — the whole ladder is in the tree.
 
@@ -24,19 +24,20 @@
        │  renders/settles ▼
   L4  authoring tiers     L4-1 text query  ·  L4-2 LINQ push-down  ·  L4-3 RLS (decorator)
        │  all lower into the ONE L3 door ▼
- ┄┄┄┄┄ shared technical floor: ibBackendQueryProvider ("the whole L3↔L2 layer") ┄┄┄┄┄┄┄┄┄┄
+ ┄┄┄┄┄ shared technical floor: ibBackendQueryProvider ("the whole L3↔L2-1 layer") ┄┄┄┄┄┄┄┄┄┄
        │  + ibBackendQueryable / ibBackendQueryColumn / ibQueryAst / ibTempSourceScope
   L3  source-agnostic door  L3-1 the door (read/write/aggregate/dot-walk)
-                            L3-2 structure (DDL)  ·  L3-3 data mover (rows)   → feed metadata
+                            L3-2 structure (DDL) · L3-3 data mover (rows) · L3-4 regenerate (derived)
        │  builds IR ▼
-  L2  ibDatabaseQueryBuilder — structured ibQueryIR, dialect-driven renderer (never raw SQL)
+  L2  renderers   L2-1 ibDatabaseQueryBuilder — structured ibQueryIR (never raw SQL)
+                  L2-2 ibDatabaseMaterializeBuilder — derived-state triggers + views
        │  ▼
   L1  ibDatabaseLayer ×5 drivers — each vends its ibDialectDictionary
 ```
 
 The rule of the house: **one door down, many front-ends up.** Everything above L3 (the three L4
-authoring tiers, both L5 composers) funnels through the **single** L3 door; L3 renders to L2 IR;
-L2 renders to a driver's dialect at L1. No front-end reaches the drivers directly.
+authoring tiers, both L5 composers) funnels through the **single** L3 door; L3 renders to L2-1 IR;
+L2-1 renders to a driver's dialect at L1. No front-end reaches the drivers directly.
 
 ---
 
@@ -47,15 +48,50 @@ Firebird / PostgreSQL / SQLite / MySQL / ODBC. Each vends its own `ibDialectDict
 (`GetDialect()`) — **zero central type-switch**. See [database-layer.md](database-layer.md),
 [connection-pool.md](connection-pool.md).
 
-### L2 — the IR builder (`ibDatabaseQueryBuilder`, `databaseLayer/databaseQueryBuilder`)
-A structured **`ibQueryIR`** (never raw SQL) with a full vocabulary — Scan/Filter/Project/Sort/
-Limit/Join/Aggregate/Subquery/Distinct/Union, expressions, DDL, DML — rendered generically through
-the dialect dictionary.
+### L2 — the renderers (`databaseLayer/`) — TWO halves
+L2 is "a structured description in, dialect-spelled SQL out". It has two halves, each with its own
+dictionary, and neither knows anything about metadata:
+
+- **L2-1 — the query IR** (`ibDatabaseQueryBuilder` / `ibQueryRenderer`, `databaseQueryBuilder`).
+  A structured **`ibQueryIR`** (never raw SQL) with a full vocabulary — Scan/Filter/Project/Sort/
+  Limit/Join/Aggregate/Subquery/Distinct/Union, expressions, DDL, DML — rendered generically
+  through `ibDialectDictionary`.
+- **L2-2 — the materialization renderer** (`databaseMaterializeBuilder`). An `ibMaterializeSpec` →
+  the trigger / view statements that maintain a **derived** table, rendered through the driver's
+  second dictionary, `ibMaterializationDialect`. It also RENDERS THE READ (`RenderMaterializedRead`
+  → an `ibQueryRelPtr` the caller drops into a `FROM`), so a metaobject describes the figures it
+  wants and never assembles SQL shape; and it EXECUTES what it rendered (`ibMaterializeSql::Apply`),
+  the same way L2-1 runs the queries it builds — no SQL string ever leaves this level.
+
+  Its two entry points are a pair: `ibApplyMaterialization` replaces a bundle whole — but only when
+  the declaration CHANGED (it renders the baseline too and compares the text, then probes that the
+  objects are really installed, so an untouched register costs nothing and a half-installed one
+  heals) — and `ibDropMaterialization` removes one **by an old spec**, needed because a bundle
+  OUTLIVES the declaration that made it. Triggers hang on the SOURCE table and only mention the derived one by
+  name, so dropping the derived table does not take them with it; they must be named down
+  explicitly, from the spec that created them.
+
+**Why two.** A trigger body is imperative and diverges between engines in STRUCTURE, not spelling
+(Firebird must `MERGE` where PostgreSQL and SQLite `ON CONFLICT`; T-SQL fires once per statement
+over pseudo-tables instead of once per row). Expressing that inside the query IR would mean either
+imperative nodes (`RETURN` / `IF` / `NEW` / `OLD`) in it, or a raw-SQL escape hatch — and the hatch
+would dissolve L2-1's "never raw SQL" invariant for *every* caller. A second renderer with a second
+dictionary keeps both halves honest.
+
+**What they share.** Period truncation (`m_periodTrunc`) lives in the QUERY dictionary and is
+spelled by the L2-1 node `ibQueryExprKind::PeriodTrunc` — grouping by month is wanted far beyond
+totals (reports, the composer, user queries), so it is not a private trick of the trigger
+generator. L2-2 reads the same map, which is why a trigger's stored key and a view's projected
+column are the SAME expression by construction rather than by two authors agreeing.
+
+L3-2 does not render: it DECLARES what it wants (`ibSchemaMaterialize`), lowers that to an
+`ibMaterializeSpec` — expanding logical columns into physical fields, which is the metadata step —
+and APPLIES what comes back.
 
 ### The shared technical floor (between L2 and L3) — `query/`
 Not a level of its own: the **contracts every floor speaks**. `ibBackendQueryProvider`
-(`query/queryProvider.h`) is literally *"the whole L3↔L2 layer"* — the engine a source vends that
-turns the door's calls into L2 IR. Alongside it:
+(`query/queryProvider.h`) is literally *"the whole L3↔L2-1 layer"* — the engine a source vends that
+turns the door's calls into L2-1 IR. Alongside it:
 - **`ibBackendQueryable`** (`query/queryable.h`) — the source-navigation contract L3 reads a
   metaobject through (physical table, keyset tail, reference/attribute materialisation, virtual
   tables). Implemented by the two families (`…RecordDataRef`, `…RegisterData`); a pure mixin,
@@ -69,13 +105,37 @@ turns the door's calls into L2 IR. Alongside it:
 
 ### L3 — the source-agnostic door (`ibDataQueryBuilder`, `query/dataQueryBuilder`)
 Reads **every family** (catalog / document / register / constant / tabular) through the queryable,
-backing-blind (a DB cursor **or** a RAM table, chosen once in `MakeProvider`). Three sub-floors:
+backing-blind (a DB cursor **or** a RAM table, chosen once in `MakeProvider`). Four sub-floors:
 
 | Sub-floor | Is | Feeds |
 |---|---|---|
 | **L3-1** | **the door** — read + write-core (`Upsert`/`DeleteByKey`/`WriteRow`) + aggregation (`SelectAggregate`/`Having`) + **dot-walk** (`SelectPath` auto-joins a reference path) | queries, up to L4/L5 |
 | **L3-2** | **structure** — `ibStructureBuilder` / `DiffSnapshots` / `ibSchemaBuilder` generate & migrate the **tables** (DDL) | **metadata** |
 | **L3-3** | **data mover** — `ibDataMover` (`query/dataMover`) dumps / restores the **rows** | **metadata** |
+| **L3-4** | **regeneration** — `ibDerivedState` (`query/derivedStateBuilder`) rebuilds a **derived** table from its source | derived state |
+
+**L3-4 composes, it does not invent.** Regeneration is `read the source grouped by the totals key,
+write the aggregate back` — the L3-1 door's aggregate read plus its write core, no new query
+primitive. It groups the period by `PeriodTrunc` through the SAME dialect map the maintenance
+trigger keys rows with, so a rebuilt row lands on the identical key the trigger would have
+produced; two separate notions of "start of the month" would silently split rows the trigger had
+merged. The aggregate runs server-side, so what crosses to the client is one row per KEY, not per
+movement.
+
+It runs when the trigger cannot have kept up — a table created over an already-populated source, a
+restore, or a change to the grouping shape. `NeedsRegeneration` keeps the common case free: a
+column merely ADDED has no history, so its correct value everywhere is the zero the ALTER default
+already wrote. Everything else rebuilds, because skipping a needed rebuild yields silently wrong
+totals while a needless one only costs time.
+
+**The derived bit routes all four.** A table a metaobject contributes is classified source or
+derived (`ibSchemaTable::m_derived`). One bit says three things: L3-2 builds it *and* its
+maintenance bundle — and, when the table VANISHES from the target, tears that bundle down before
+dropping it; L3-3 **never** moves it (the destination regenerates it exactly, so carrying it
+would ship a redundant copy at best and a stale one at worst); L3-4 rebuilds it when the trigger
+cannot have kept up. Three actors, three verbs, and conflating them is the seam that rusts — the
+**trigger updates** (per movement, in the DB, unbypassable), **L3-4 regenerates** (on discrete
+events, invoked, never per movement), **L3-2 builds structure**.
 
 **L3-2 and L3-3 feed the metadata:** both are driven by the metaobject's `ContributeTables`
 snapshot — one declaration on the node produces both the DDL (L3-2) and the row round-trip (L3-3).
@@ -127,7 +187,7 @@ See [data-composer.md](data-composer.md); the two composers are the DB/RAM split
 ## 3. How the floors connect (the "one house" wiring)
 
 - **One door, many front-ends.** L4-1, L4-2, and both L5 composers all end at the **single** L3
-  door. Add a query front-end by lowering into L3 — never by touching L2 / the drivers.
+  door. Add a query front-end by lowering into L3 — never by touching L2-1 / the drivers.
 - **L4 sits on L3.** The L4 tiers are authoring surfaces *over* L3; L3 is the parent they lower into.
 - **L4-3 decorates, it does not source.** L4-1/L4-2/L5 *produce* queries; L4-3 *wraps* any of them
   on the L3 door — so RLS composes with everything above it for free.
@@ -135,14 +195,16 @@ See [data-composer.md](data-composer.md); the two composers are the DB/RAM split
 - **Temp tables ride the L4 seam.** A RAM/temp source has no registered name, so L5 registers it in
   `ibTempSourceScope` at the L4 resolve step; L4 resolves it directly; **L3 runs it unchanged** (it
   already IS a complete L3 queryable).
-- **L3-2 / L3-3 feed metadata.** The structure builder and the data mover are driven by the node's
-  `ContributeTables` — the same declaration produces the schema and moves the rows.
+- **L3-2 / L3-3 / L3-4 all read ONE declaration.** The structure builder, the data mover and the
+  regenerator are driven by the node's `ContributeTables`: the same declaration produces the schema,
+  moves the rows, and rebuilds what is derived from them. Three consumers, one source of truth —
+  which is what stops a trigger, a view and a rebuild from each having their own idea of the shape.
 
 ---
 
 ## 4. Reading order
 
 Start here (the floor plan), then drop to the floor you need: L1 → [database-layer.md](database-layer.md),
-L2/L3/L4-1/L4-2 → [query-language-arc.md](query-language-arc.md), L4-3 → [access-policy-rls.md](access-policy-rls.md),
+L2-1/L3/L4-1/L4-2 → [query-language-arc.md](query-language-arc.md), L4-3 → [access-policy-rls.md](access-policy-rls.md),
 L5 → [data-composer.md](data-composer.md), the temp seam → [temp-db.md](temp-db.md), and who consumes
 a fetched page → [table-model.md](table-model.md).

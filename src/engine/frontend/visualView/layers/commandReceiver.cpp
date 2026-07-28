@@ -117,9 +117,13 @@ bool ibFrontendCommandReceiver::ExecuteValueByPath(const ibCommandDescription& d
 	// (1) a FORM COMMAND — run its Action (a form-runtime procedure); an EMPTY Action is a placeholder.
 	ibFormCommandValue* fc = nullptr;
 	if (leaf.ConvertToValue(fc) && fc != nullptr) {
-		const wxString proc = fc->GetProcedure();
-		if (!proc.IsEmpty())
-			gate->CallAsEvent(proc);
+		// Fire the Action through the event OBJECT, not its name: GetDispatcher() routes a named
+		// handler OR a lambda polymorphically (an unset Action dispatches to a no-op). The initiating
+		// COMMAND is passed as the handler's first argument -- Procedure(Command) / Function(cmd) -- so a
+		// handler can read who fired it, mirroring how a control event hands over its source. `leaf` IS
+		// that command value (the walk just resolved it). CallAsProc copies min(passed, formal params),
+		// so a handler that declares fewer parameters (or none) still runs; the named contract holds.
+		gate->CallAsEvent(fc->GetActionEvent(), leaf);
 		return true;
 	}
 	// (2) a COMMAND / OBJECT ITEM (both ibBackendCommandItem) — Execute by the desc's command type. A command runs

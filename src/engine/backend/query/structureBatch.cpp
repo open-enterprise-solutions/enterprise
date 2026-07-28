@@ -8,7 +8,10 @@
 #include <set>
 
 ibStructureBatch::ibStructureBatch(const ibBackendQueryable* queryable)
-	: m_queryable(queryable), m_table(queryable->GetQueryTableName())
+	// Null-tolerant: not every table in a snapshot stands behind a metaobject. A DERIVED table
+	// (a register's totals) is declared by one but IS none, so it carries no queryable — and the
+	// name-keyed constructor is the right one for it. Dereferencing here crashed the apply.
+	: m_queryable(queryable), m_table(queryable != nullptr ? queryable->GetQueryTableName() : wxString())
 {
 }
 

@@ -900,6 +900,13 @@ ibValue EvalColumnExprRow(const ibQueryColumnExpr* e, const ibQueryRamTable& t, 
 				if (RamEvalPredicate(wt.first.get(), t, row) == RamTri::True) return EvalColumnExprRow(wt.second.get(), t, row);
 			return e->m_else ? EvalColumnExprRow(e->m_else.get(), t, row) : ibValue();
 		}
+		case ibQueryColumnExprKind::PeriodTrunc: {
+			// The RAM twin of the SQL truncation. It must agree with the dialect's expression to the
+			// day, or a query answers differently depending on whether it happened to co-locate — so
+			// this walks the calendar rather than approximating (no "30-day month" arithmetic).
+			const ibValue v = EvalColumnExprRow(e->m_lhs.get(), t, row);
+			return ibValue(ibTruncateToPeriod(v.GetDateTime(), e->m_periodUnit));
+		}
 	}
 	return ibValue();
 }
@@ -916,6 +923,7 @@ void GatherColumnExprColumns(const ibQueryColumnExpr* e, const std::function<voi
 			for (const auto& wt : e->m_cases) { GatherPredicateColumns(wt.first.get(), add); GatherColumnExprColumns(wt.second.get(), add); }
 			GatherColumnExprColumns(e->m_else.get(), add);
 			break;
+		case ibQueryColumnExprKind::PeriodTrunc: GatherColumnExprColumns(e->m_lhs.get(), add); break;
 	}
 }
 
@@ -1350,6 +1358,12 @@ std::vector<const ibBackendQueryColumn*> AggregateRefCols(const ibDataQuerySpec&
 		cols.push_back(c);
 	};
 	for (const ibBackendQueryColumn* g : *spec.m_groupBy)        add(g);
+	// A COMPUTED group key reads columns of its own (the period a truncation is applied to). They
+	// must ride into the composed table or the fold would evaluate the expression against a table
+	// that does not carry its input.
+	if (spec.m_groupExprs != nullptr)
+		for (const ibQueryColumnExprPtr& e : *spec.m_groupExprs)
+			if (e) GatherColumnExprColumns(e.get(), add);
 	for (const auto& a : *spec.m_aggregates)                     add(a.m_col);
 	for (const ibQueryCondition& c : *spec.m_conditions)         add(c.m_col);
 	CollectJoinKeys(spec.m_root, cols);
@@ -1505,12 +1519,28 @@ ibDataQueryResult RamAggregate(const ibQueryRamTable& TC, const ibDataQuerySpec&
 {
 	const long rows = TC.RowCount();
 
+	// One group key slot: a plain COLUMN, or a COMPUTED expression (GroupByExpr — e.g. the period
+	// truncated to month). The RAM fold has to honour computed keys for the same reason the SQL path
+	// does: if it silently grouped by the raw column instead, a multi-source read would return one
+	// group per distinct instant while a single-source read returned one per month — the same query
+	// answering differently depending on whether it happened to co-locate.
+	const size_t groupCount = spec.m_groupBy->size();
+	auto groupExprAt = [&](size_t gi) -> const ibQueryColumnExpr* {
+		if (spec.m_groupExprs == nullptr || gi >= spec.m_groupExprs->size()) return nullptr;
+		return (*spec.m_groupExprs)[gi].get();
+	};
+	auto groupCell = [&](size_t gi, long row) -> ibValue {
+		if (const ibQueryColumnExpr* e = groupExprAt(gi))
+			return EvalColumnExprRow(e, TC, row);
+		return RamCell(TC, row, (*spec.m_groupBy)[gi]);
+	};
+
 	std::vector<wxString> keyOrder;                    // first-seen group order
 	std::map<wxString, std::vector<long>> buckets;
 	for (long i = 0; i < rows; ++i) {
 		wxString key;
-		for (const ibBackendQueryColumn* g : *spec.m_groupBy)
-			key += RamCell(TC, i, g).GetHashKey() + wxT("\x1f");   // identity key — two refs with the same name don't merge
+		for (size_t gi = 0; gi < groupCount; ++gi)
+			key += groupCell(gi, i).GetHashKey() + wxT("\x1f");   // identity key — two refs with the same name don't merge
 		auto it = buckets.find(key);
 		if (it == buckets.end()) { buckets.emplace(key, std::vector<long>{ i }); keyOrder.push_back(key); }
 		else it->second.push_back(i);
@@ -1521,9 +1551,21 @@ ibDataQueryResult RamAggregate(const ibQueryRamTable& TC, const ibDataQuerySpec&
 		buckets.emplace(wxString(), all); keyOrder.push_back(wxString());
 	}
 
+	// A computed key has no model column to take an id / name from, so it gets a synthetic id in its
+	// own band and is read back by ALIAS — the same arrangement the aggregates already use.
+	const ibMetaID grpExprBaseId = 0x50000000u;
 	ibQueryRamTable TO;
-	for (const ibBackendQueryColumn* g : *spec.m_groupBy)
-		TO.AddColumn(g->GetColumnId(), g->GetName(), g->GetTypeDesc());
+	{
+		ibMetaID gid = grpExprBaseId;
+		for (size_t gi = 0; gi < groupCount; ++gi) {
+			if (groupExprAt(gi) != nullptr)
+				TO.AddColumn(gid++, (*spec.m_groupAliases)[gi], ibTypeDescription());
+			else {
+				const ibBackendQueryColumn* g = (*spec.m_groupBy)[gi];
+				TO.AddColumn(g->GetColumnId(), g->GetName(), g->GetTypeDesc());
+			}
+		}
+	}
 	const ibMetaID aggBaseId = 0x40000000u;             // far from any metaID — aggregates read by alias NAME
 	{
 		ibMetaID aggId = aggBaseId;
@@ -1538,8 +1580,16 @@ ibDataQueryResult RamAggregate(const ibQueryRamTable& TC, const ibDataQuerySpec&
 		if (spec.m_having != nullptr && !PassesHaving(*spec.m_having, TC, idx))
 			continue;   // HAVING drops this group (the register can't apply it; the RAM fold does)
 		const long r = TO.AppendRow();
-		for (const ibBackendQueryColumn* g : *spec.m_groupBy)
-			TO.SetCell(r, g->GetColumnId(), RamCell(TC, idx.front(), g));
+		{
+			ibMetaID gid = grpExprBaseId;
+			for (size_t gi = 0; gi < groupCount; ++gi) {
+				// Every row in the bucket shares the key by construction, so the first one carries it.
+				if (groupExprAt(gi) != nullptr)
+					TO.SetCell(r, gid++, groupCell(gi, idx.front()));
+				else
+					TO.SetCell(r, (*spec.m_groupBy)[gi]->GetColumnId(), groupCell(gi, idx.front()));
+			}
+		}
 		ibMetaID aId = aggBaseId;
 		for (const auto& a : *spec.m_aggregates)
 			TO.SetCell(r, aId++, AggregateOne(a, TC, idx));

@@ -28,12 +28,32 @@ const ibDialectDictionary& ibDatabaseLayerMySQL::Dialect()
 		d.m_features.m_rollup = true;                 // GROUP BY <keys> WITH ROLLUP (MySQL spelling)
 		d.m_rollupPrefix      = wxEmptyString;
 		d.m_rollupSuffix      = wxT(" WITH ROLLUP");
+		// A bare FROM-less SELECT is fine in MySQL, but a WHERE on one is not — "SELECT 1
+		// WHERE ..." is a syntax error without a source. DUAL is MySQL's one-row dummy, the
+		// same role RDB$DATABASE plays for Firebird.
+		d.m_selectFromDual = wxT("DUAL");
 		// type map
 		d.m_typeBoolean = wxT("TINYINT");
 		d.m_typeInteger = wxT("INT");
 		d.m_typeDate    = wxT("DATETIME");
 		d.m_typeBlob    = wxT("LONGBLOB");
 		d.m_typeGuid    = wxT("CHAR(36)");
+		// Period truncation. WEEKDAY() is 0=Monday here (DAYOFWEEK() is 1=Sunday — the wrong one,
+		// and the easy mistake), so subtracting it directly gives the ISO week start the other
+		// engines use. DIV is integer division; LEAST caps the ten-day offset at 2 so a 31-day
+		// month cannot open a fourth, one-day bucket.
+		d.m_periodTrunc = {
+			{ ibTotalsPeriod::Second,   wxT("CAST({expr} AS DATETIME(0))")                                  },
+			{ ibTotalsPeriod::Minute,   wxT("DATE_FORMAT({expr}, '%Y-%m-%d %H:%i:00')")                     },
+			{ ibTotalsPeriod::Hour,     wxT("DATE_FORMAT({expr}, '%Y-%m-%d %H:00:00')")                     },
+			{ ibTotalsPeriod::Day,      wxT("DATE({expr})")                                                 },
+			{ ibTotalsPeriod::Week,     wxT("DATE_SUB(DATE({expr}), INTERVAL WEEKDAY({expr}) DAY)")         },
+			{ ibTotalsPeriod::TenDays,  wxT("DATE_ADD(DATE_SUB(DATE({expr}), INTERVAL DAYOFMONTH({expr}) - 1 DAY), INTERVAL LEAST((DAYOFMONTH({expr}) - 1) DIV 10, 2) * 10 DAY)") },
+			{ ibTotalsPeriod::Month,    wxT("DATE_SUB(DATE({expr}), INTERVAL DAYOFMONTH({expr}) - 1 DAY)")  },
+			{ ibTotalsPeriod::Quarter,  wxT("MAKEDATE(YEAR({expr}), 1) + INTERVAL (QUARTER({expr}) - 1) QUARTER") },
+			{ ibTotalsPeriod::HalfYear, wxT("MAKEDATE(YEAR({expr}), 1) + INTERVAL (((MONTH({expr}) - 1) DIV 6) * 6) MONTH") },
+			{ ibTotalsPeriod::Year,     wxT("MAKEDATE(YEAR({expr}), 1)")                                    },
+		};
 		return d;
 	}();
 	return s_dialect;
@@ -42,6 +62,39 @@ const ibDialectDictionary& ibDatabaseLayerMySQL::Dialect()
 const ibDialectDictionary& ibDatabaseLayerMySQL::GetDialect() const
 {
 	return Dialect();
+}
+
+// MySQL materialisation — the third accumulate spelling, and the one that justifies
+// m_deltaUpdateItem being a TEMPLATE rather than a pair of alias slots. ON DUPLICATE KEY
+// UPDATE has no source alias at all: the incoming value is written inline as VALUES(col).
+// So MySQL spends neither {target} nor {source}, and its item still says exactly what the
+// other three say. A design that had hard-coded "target alias + source alias" would have
+// had to special-case this engine; a template just describes it.
+const ibMaterializationDialect& ibDatabaseLayerMySQL::MaterializationDialect()
+{
+	static const ibMaterializationDialect s_mat = [] {
+		ibMaterializationDialect m;
+		m.m_family = ibTriggerFamily::PerRow;
+		m.m_triggerShellTemplate  = wxT("CREATE TRIGGER {name} {timing} ON {table} FOR EACH ROW BEGIN {body} END");
+		m.m_functionShellTemplate = wxEmptyString;   // body inlines
+		m.m_dropTriggerTemplate   = wxT("DROP TRIGGER IF EXISTS {name}");
+
+		m.m_deltaUpsertTemplate =
+			wxT("INSERT INTO {table} ({columns}) SELECT {values}{from}{where} ON DUPLICATE KEY UPDATE {update}");
+		// No aliases anywhere in the item — the incoming value is VALUES(col) by construction.
+		m.m_deltaUpdateItem   = wxT("{col} = {col} + VALUES({col})");
+		m.m_deltaKeyMatchItem = wxT("{col} = VALUES({col})");   // unused (the PK drives the conflict)
+
+		m.m_totalsTableSuffix = wxEmptyString;
+		m.m_connectionIdExpr  = wxT("CONNECTION_ID()");
+		return m;
+	}();
+	return s_mat;
+}
+
+const ibMaterializationDialect* ibDatabaseLayerMySQL::GetMaterializationDialect() const
+{
+	return &MaterializationDialect();
 }
 
 // ctor

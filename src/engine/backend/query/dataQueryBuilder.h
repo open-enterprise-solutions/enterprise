@@ -386,6 +386,14 @@ public:
 	ibDataQueryBuilder& OrderByExpr(const ibQueryColumnExprPtr& expr, bool ascending);       // ORDER BY <expression> (CASE / arithmetic / value)
 	ibDataQueryBuilder& GroupBy(const ibBackendQueryColumn* col);                            // grouping key (reports / totals)
 	ibDataQueryBuilder& GroupBy(const std::vector<const ibBackendQueryColumn*>& path);       // dot-walk grouping key (Producer.Region)
+	// GROUP BY <expression> — the same expression vocabulary Where/OrderBy/Select/Aggregate already
+	// take (arithmetic / CASE / PeriodTrunc). Needs an explicit alias because, unlike a column key,
+	// there is no physical name to read the value back by: GetColumn(alias).
+	//
+	// The case that pulled it in is rolling movements up to a period grain — GROUP BY the period
+	// TRUNCATED to month. Grouping by the raw column instead would produce one group per distinct
+	// instant, i.e. no rollup at all, so this is not sugar over GroupBy(col).
+	ibDataQueryBuilder& GroupByExpr(const ibQueryColumnExprPtr& expr, const wxString& alias);
 
 	// --- dot-walk select columns (reference navigation) ------------------
 	// Add an output column that walks a reference PATH and reads a leaf attribute on
@@ -639,6 +647,11 @@ private:
 	std::vector<ibQuerySortItem>  m_sorts;          // .OrderBy() — USER sort; identity tail appended in Select
 	std::vector<const ibBackendQueryColumn*> m_groupBy;   // .GroupBy()
 	std::vector<std::vector<const ibBackendQueryColumn*>> m_groupPaths;   // parallel to m_groupBy: dot-walk path (empty = plain column)
+	// Parallel to m_groupBy as well: a COMPUTED key (null = the plain / dot-walk column). When set,
+	// m_groupBy's slot holds nullptr and the alias below names the output — the three vectors stay
+	// index-aligned so a provider walks one loop, exactly as it already does for the dot-walk paths.
+	std::vector<ibQueryColumnExprPtr> m_groupExprs;
+	std::vector<wxString>             m_groupAliases;
 	std::vector<ibValue>          m_keyIn;          // .WhereKeyIn() — row-key IN (OR-of-equals)
 	std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> m_writeValues;   // .SetValue() — write assignments (key + data columns)
 	std::vector<AggregateItem>    m_aggregates;     // .Group().Sum()… — GroupBy common aggregate set
@@ -692,6 +705,8 @@ struct ibDataQuerySpec
 	const std::vector<ibQuerySortItem>*             m_sorts       = nullptr;
 	const std::vector<const ibBackendQueryColumn*>* m_groupBy     = nullptr;
 	const std::vector<std::vector<const ibBackendQueryColumn*>>* m_groupPaths = nullptr;   // parallel to m_groupBy: dot-walk path per key (empty = plain)
+	const std::vector<ibQueryColumnExprPtr>* m_groupExprs   = nullptr;   // parallel: computed key (null = column key)
+	const std::vector<wxString>*             m_groupAliases = nullptr;   // parallel: output name of a computed key
 	const std::vector<ibDataQueryBuilder::AggregateItem>* m_aggregates = nullptr;
 	const std::vector<ibDataQueryBuilder::HavingItem>*    m_having     = nullptr;
 	const std::vector<std::pair<const ibBackendQueryColumn*, ibValue>>* m_writeValues = nullptr;

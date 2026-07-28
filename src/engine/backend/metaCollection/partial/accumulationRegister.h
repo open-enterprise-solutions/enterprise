@@ -3,13 +3,16 @@
 
 #include "commonObject.h"
 #include "accumulationRegisterEnum.h"
-#include "backend/query/queryable.h"   // ibComputedRegisterQueryable<TReg> — shared base for the balance / turnover virtual tables
+#include "backend/query/queryable.h"          // ibComputedRegisterQueryable<TReg> — shared base for the balance / turnover virtual tables
+#include "backend/query/tempTableQueryable.h" // ibDbTempTableQueryable — a named physical relation; what a VIEW is to L3
 
+#include <map>
 #include <memory>
 
 class ibValueMetaObjectAccumulationRegister;
 class ibBalanceQueryable;
 class ibTurnoverQueryable;
+class ibBalanceAndTurnoverQueryable;
 
 // L4 virtual-table source descriptors for the accumulation register — balances (as-of period +
 // dimension filter) and turnovers (begin/end range + filter). Owned by the register as fields;
@@ -40,6 +43,22 @@ public:
 private:
 	ibValueMetaObjectAccumulationRegister* m_reg;
 	std::unique_ptr<ibTurnoverQueryable>   m_companion;
+};
+
+// The THIRD virtual table: balance AND turnover, per period. Reported per resource as opening
+// balance / receipt / expense / turnover / closing balance — the readings a stock report is
+// actually made of. Its parameters are the interval plus the PERIODICITY the rows roll up to.
+class ibAccumRegisterBalanceAndTurnoverDescriptor : public ibQueryableSourceDescriptor
+{
+public:
+	explicit ibAccumRegisterBalanceAndTurnoverDescriptor(ibValueMetaObjectAccumulationRegister* reg) : m_reg(reg) {}
+	~ibAccumRegisterBalanceAndTurnoverDescriptor() override;
+	wxString GetNamespace() const override;
+	wxString GetName() const override;
+	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
+private:
+	ibValueMetaObjectAccumulationRegister*          m_reg;
+	std::unique_ptr<ibBalanceAndTurnoverQueryable>  m_companion;
 };
 
 class ibValueMetaObjectAccumulationRegister : public ibValueMetaObjectRegisterData {
@@ -81,22 +100,42 @@ public:
 		return m_propertyRegisterType->GetValueAsEnum();
 	}
 
+	// The totals table — a DIFFERENT one per register kind, `_T` for balances and `_Tn` for
+	// turnovers, because the two hold genuinely different shapes: a balance register keeps receipt
+	// and expense apart, a turnover-only register has no second side at all.
 	wxString GetRegisterTableNameDB(ibRegisterType rType) const {
-		wxString className = GetClassName();
 		wxASSERT(m_metaId != 0);
-
-		if (rType == ibRegisterType::eBalances) {
-			return wxString::Format("%s%i_T",
-				className, GetMetaID());
-		}
-
-		return wxString::Format("%s%i_Tn",
-			className, GetMetaID());
+		return wxString::Format(rType == ibRegisterType::eBalances ? wxT("%s%i_T") : wxT("%s%i_Tn"),
+			GetClassName(), GetMetaID());
 	}
 
-	wxString GetRegisterTableNameDB() const {
-		return GetRegisterTableNameDB(GetRegisterType());
+	wxString GetRegisterTableNameDB() const { return GetRegisterTableNameDB(GetRegisterType()); }
+
+	// The totals table's IDENTITY — and it must move with the name.
+	//
+	// The schema differ matches tables by id, never by name. When the id stayed put while the name
+	// followed the register kind, switching kinds looked like "the same table, renamed": the differ
+	// emitted ALTER and CREATE INDEX against a table that did not exist yet. Making the id depend on
+	// the kind states the truth instead — the old totals table VANISHES (dropped) and the new one is
+	// created empty, which is also what the data demands, since figures accumulated under one kind
+	// mean nothing under the other.
+	//
+	// The id must live in a range NO metaID can occupy, hence a high bit rather than a low one.
+	// metaIDs are small sequential integers, so `metaID ^ 1` is the id of the NEIGHBOURING
+	// metaobject — and ibSchemaSnapshot::Shared matches on id alone and hands back whatever table
+	// already carries it, name ignored. The totals declaration then poured its columns into an
+	// unrelated table, which surfaced far away as a duplicate field or an index over columns that
+	// were never added, and only for registers whose neighbours happened to exist.
+	ibMetaID GetTotalsTableId() const {
+		return GetMetaID() | (GetRegisterType() == ibRegisterType::eBalances ? 0x40000000 : 0x60000000);
 	}
+
+	// The shard column's IDENTITY. It needs one for the same reason the accumulating columns do:
+	// turning split totals on or off ADDS or REMOVES a physical column on an existing table, and a
+	// scaffold column is created with its table and never migrated — so the key would be rebuilt
+	// around a column that was never created ("Unknown columns in index"). Same high-bit rule as
+	// above: a dimension's own metaID sits in the low range, so an OR cannot land on one.
+	ibMetaID GetShardColumnId() const { return GetMetaID() | 0x20000000; }
 
 	///////////////////////////////////////////////////////////////////
 
@@ -107,6 +146,73 @@ public:
 	// balance = as-of "<="; turnover = [begin, end].
 	ibQueryRamTable ComputeBalance(const ibValue& cPeriod, const ibValue& cFilter) const;
 	ibQueryRamTable ComputeTurnover(const ibValue& cBegin, const ibValue& cEnd, const ibValue& cFilter) const;
+
+	// Balance AND turnover, per period at `unit` granularity: opening / receipt / expense /
+	// turnover / closing per resource. Built from TWO server-side aggregates — the balance as it
+	// stood entering the interval, and the turnovers grouped by the truncated period — then rolled
+	// forward in memory, because each period's opening balance is the previous period's closing.
+	// That running step is inherently sequential, but it walks PERIODS (tens), not movements.
+	ibQueryRamTable ComputeBalanceAndTurnover(const ibValue& cBegin, const ibValue& cEnd,
+	                                          ibTotalsPeriod unit, const ibValue& cFilter) const;
+
+	///////////////////////////////////////////////////////////////////
+	//  Materialised read surface — the totals bundle and the views over it
+	///////////////////////////////////////////////////////////////////
+
+	// STRUCTURE: the movements table (base) PLUS the derived totals bundle — the totals table, the
+	// triggers that keep it current, and the read views that are its public surface. Declaring it
+	// here is what turns the machinery on for this register; the shape it declares is the only
+	// thing L2-2 and the regenerator ever read.
+	virtual void ContributeTables(ibSchemaSnapshot& out) const override;
+
+	// Physical names of the read views — the register's table plus a suffix, by convention. These
+	// are what a queryable points at, so they are API the moment a configuration is applied.
+	wxString GetBalanceViewName() const            { return GetPhysicalTableName() + wxT("_Balance"); }
+	wxString GetTurnoverViewName() const           { return GetPhysicalTableName() + wxT("_Turnovers"); }
+	wxString GetBalanceAndTurnoverViewName() const { return GetPhysicalTableName() + wxT("_BalanceAndTurnovers"); }
+
+	// The granularity totals are STORED at — the floor on what can be read back, since a projection
+	// is derivable only into a unit no finer than this. One place, read by the schema declaration
+	// and by the view source alike, so the columns a view HAS and the columns a reader EXPECTS
+	// cannot drift apart. Day today; this is the hook a per-register property will replace.
+	ibTotalsPeriod GetTotalsPeriodUnit() const { return ibTotalsPeriod::Day; }
+
+	// Is this register's totals row split across shards? A schema question, answered by the
+	// designer's switch — turning it on or off changes the totals KEY, so it takes effect through
+	// an Apply, and the regenerator rebuilds the table because the key shape changed.
+	bool IsTotalsSplitEnabled() const { return m_propertySplitTotals->GetValueAsBoolean(); }
+
+	// How many shards a split register uses. Fixed rather than configurable: the number that
+	// matters is "more than one", and every extra shard is paid on every read of every row. Eight
+	// spreads the writers wide enough that collisions become rare, without making the read fold
+	// noticeable. An engine that cannot hash a connection id (SQLite) collapses this to one.
+	static constexpr unsigned int kTotalsShardCount = 8;
+
+	// Which columns a read surface exposes. Named rather than a pair of flags because there are
+	// three shapes and they are not independent — and because naming a column a surface does not
+	// have is how a reader gets a silent empty value instead of an error.
+	enum class ibViewShape
+	{
+		Balance,              // dimensions + <res>_Balance            — no period, folded over all of it
+		Turnovers,            // period (+ coarser projections) + dimensions + receipt / expense / turnover
+		BalanceAndTurnovers   // dimensions + opening / receipt / expense / turnover / closing, one row per key
+	};
+
+	// A read surface as an ORDINARY DB SOURCE. ibDbTempTableQueryable already is exactly that — a
+	// named physical relation with generic columns, read by the standard physical provider — so
+	// none of these needs a queryable class of its own. Built on demand and cached: the shape
+	// depends only on the register's metadata, and surfaces are read far more often than metadata
+	// changes.
+	//
+	// BalanceAndTurnovers has no VIEW behind it — it is a query over the turnovers view — but it
+	// still needs a column description, and it is the same kind of description. `viewName` is then
+	// only a cache key.
+	const ibBackendQueryable* GetViewQueryable(const wxString& viewName, ibViewShape shape) const;
+
+	// Is the materialised surface usable? False when the driver cannot maintain derived state
+	// (ODBC) — the register then answers from live aggregation, correct at any scale and only
+	// slower. Every reader must ask, because the answer decides which path it takes.
+	bool HasMaterializedViews() const;
 
 	///////////////////////////////////////////////////////////////////
 
@@ -228,6 +334,16 @@ private:
 	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
 	ibPropertyEnum<ibValueEnumAccumulationRegisterType>* m_propertyRegisterType = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumAccumulationRegisterType>>(m_categoryData, wxT("RegisterType"), _("Register type"), ibRegisterType::eBalances);
 
+	// SPLIT TOTALS — spread one logical totals row across several physical ones, so concurrent
+	// posters stop queueing on the same row. OFF by default, and deliberately a switch rather than
+	// anything automatic: the benefit is local (it relieves the HOT key) while the cost is global
+	// (every read of every row sums the shards), so only someone who has profiled the register
+	// knows whether it pays. Nothing in the metadata can tell where the contention is.
+	//
+	// (An information register has no counterpart: it holds a slice, not accumulated sums, so there
+	// is nothing to split. An accounting register will carry this same switch.)
+	ibPropertyBoolean* m_propertySplitTotals = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, wxT("SplitTotals"), _("Split totals"), false);
+
 	ibPropertyContainer<>* m_propertyAttributeRecordType = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateSpecialType(wxT("RecordType"), _("Record type"), wxEmptyString, g_enumRecordTypeCLSID, false, ibValueEnumAccumulationRegisterRecordType::CreateDefEnumValue()));
 
 	friend class ibBalanceQueryable;
@@ -239,6 +355,11 @@ private:
 	// run, dropped on close. Reached as AccumulationRegister.<Name>.Balance / .Turnovers.
 	ibAccumRegisterBalanceDescriptor  m_balance { this };
 	ibAccumRegisterTurnoverDescriptor m_turnover{ this };
+	ibAccumRegisterBalanceAndTurnoverDescriptor m_balanceAndTurnover{ this };
+
+	// Cached view sources, keyed by view name. Mutable: building one is pure derivation from
+	// metadata, so a const read may fill the cache without the register being logically modified.
+	mutable std::map<wxString, std::unique_ptr<ibDbTempTableQueryable>> m_viewSources;
 };
 
 //********************************************************************************************
@@ -251,12 +372,34 @@ private:
 // ComputeTurnover; the RAM-virtual-table plumbing + the register-forwarding navigation
 // live in the shared ibComputedRegisterQueryable base. Call-scoped — not persisted.
 
+// ============================================================================
+// The three virtual tables. Each has TWO backings and one observable:
+//
+//   materialised — the source IS a DERIVED TABLE over the totals view. The parameters (the date,
+//                  the interval, the dimension filter) travel INSIDE that subquery, so the
+//                  selection happens there, before the outer query engine sees anything. A join to
+//                  a catalog is then an ordinary SQL join, and only matching rows ever leave the
+//                  server. This is the path that matters: reading balances is the most
+//                  latency-critical operation in the system.
+//   live         — no materialised surface (ODBC): the rows are computed in RAM from the
+//                  movements. Correct at any scale, only slower — and the oracle a parity test
+//                  measures the other path against.
+//
+// Which one is in use is invisible upstream: the same columns, the same rows, the same numbers.
+// ============================================================================
+
 // balance — resource balances as of a date.
 class BACKEND_API ibBalanceQueryable : public ibComputedRegisterQueryable<ibValueMetaObjectAccumulationRegister> {
 public:
 	ibBalanceQueryable(const ibValueMetaObjectAccumulationRegister* reg,
 	                   const ibValue& period = ibValue(), const ibValue& filter = ibValue())
 		: ibComputedRegisterQueryable(reg), m_period(period), m_filter(filter) {}
+
+	virtual bool IsComputedInRam() const override { return !m_reg->HasMaterializedViews(); }
+	virtual ibBackendQueryProvider& GetProvider() const override;
+	virtual ibQueryRelPtr GetSourceRelation(const wxString& alias) const override;
+	virtual const ibBackendQueryable* NavigationSource() const override;
+
 	virtual ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override;
 private:
 	ibValue m_period;   // as-of date
@@ -270,11 +413,54 @@ public:
 	                    const ibValue& begin = ibValue(), const ibValue& end = ibValue(),
 	                    const ibValue& filter = ibValue())
 		: ibComputedRegisterQueryable(reg), m_begin(begin), m_end(end), m_filter(filter) {}
+
+	virtual bool IsComputedInRam() const override { return !m_reg->HasMaterializedViews(); }
+	virtual ibBackendQueryProvider& GetProvider() const override;
+	virtual ibQueryRelPtr GetSourceRelation(const wxString& alias) const override;
+	virtual const ibBackendQueryable* NavigationSource() const override;
+
 	virtual ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override;
 private:
 	ibValue m_begin;
 	ibValue m_end;
 	ibValue m_filter;
+};
+
+// balance AND turnover — per period over [begin, end], rolled up to `unit`. Reports, per resource,
+// the opening balance / receipt / expense / turnover / closing balance. Not a third stored shape:
+// it is the balance readings and the turnover reading presented side by side, which is exactly why
+// it needs no storage of its own.
+class BACKEND_API ibBalanceAndTurnoverQueryable : public ibComputedRegisterQueryable<ibValueMetaObjectAccumulationRegister> {
+public:
+	// `unitGiven` false = no periodicity was asked for: report ONE row per key over the whole
+	// interval. True = break the interval into periods of `unit`.
+	ibBalanceAndTurnoverQueryable(const ibValueMetaObjectAccumulationRegister* reg,
+	                              const ibValue& begin = ibValue(), const ibValue& end = ibValue(),
+	                              ibTotalsPeriod unit = ibTotalsPeriod::Month, bool unitGiven = false,
+	                              const ibValue& filter = ibValue())
+		: ibComputedRegisterQueryable(reg), m_begin(begin), m_end(end), m_unit(unit),
+		  m_unitGiven(unitGiven), m_filter(filter) {}
+
+	// The server path answers the UNPERIODISED question — one row per key, opening / turnover /
+	// closing over the whole interval — in a single grouped pass.
+	//
+	// A PERIODISED reading is a different computation: each period opens where the previous one
+	// closed, which is a running balance the conditional sums cannot express. It is served by the
+	// live path, which folds the periods explicitly. Routing it there is not a limitation quietly
+	// admitted — it is the alternative to accepting the parameter and silently ignoring it, which
+	// is what this did before and which would have returned a plausible, wrong single row.
+	virtual bool IsComputedInRam() const override { return m_unitGiven || !m_reg->HasMaterializedViews(); }
+	virtual ibBackendQueryProvider& GetProvider() const override;
+	virtual ibQueryRelPtr GetSourceRelation(const wxString& alias) const override;
+	virtual const ibBackendQueryable* NavigationSource() const override;
+
+	virtual ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override;
+private:
+	ibValue        m_begin;
+	ibValue        m_end;
+	ibTotalsPeriod m_unit;     // the READ granularity — a query parameter, not a schema property
+	bool           m_unitGiven;
+	ibValue        m_filter;
 };
 
 // --- L4 descriptor method bodies (the register + balance / turnover companions are complete) ---
@@ -320,6 +506,44 @@ inline const ibBackendQueryable* ibAccumRegisterTurnoverDescriptor::CreateQuerya
 	return m_companion.get();
 }
 
+inline ibAccumRegisterBalanceAndTurnoverDescriptor::~ibAccumRegisterBalanceAndTurnoverDescriptor() = default;
+
+inline wxString ibAccumRegisterBalanceAndTurnoverDescriptor::GetNamespace() const
+{
+	return ibValue::GetNameObjectFromID(m_reg->GetClassType());
+}
+
+inline wxString ibAccumRegisterBalanceAndTurnoverDescriptor::GetName() const
+{
+	return m_reg->GetName() + wxT(".BalanceAndTurnovers");
+}
+
+inline const ibBackendQueryable* ibAccumRegisterBalanceAndTurnoverDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray)
+{
+	// (begin, end, periodicity, filter). Periodicity is the READ granularity and rides here rather
+	// than on the metaobject — one register serves monthly, weekly and quarterly readings of the
+	// same data with no schema change. Absent = Month.
+	const ibValue begin  = (lSizeArray > 0 && paParams != nullptr && paParams[0] != nullptr) ? *paParams[0] : ibValue();
+	const ibValue end    = (lSizeArray > 1 && paParams != nullptr && paParams[1] != nullptr) ? *paParams[1] : ibValue();
+	const ibValue period = (lSizeArray > 2 && paParams != nullptr && paParams[2] != nullptr) ? *paParams[2] : ibValue();
+	const ibValue filter = (lSizeArray > 3 && paParams != nullptr && paParams[3] != nullptr) ? *paParams[3] : ibValue();
+
+	// Whether a periodicity was GIVEN is as meaningful as its value: absent means "one row per key
+	// over the whole interval", which is a different computation, not a default granularity.
+	ibTotalsPeriod unit = ibTotalsPeriod::Month;
+	bool unitGiven = false;
+	if (period.GetType() == TYPE_NUMBER) {
+		const long n = period.GetInteger();
+		if (n >= static_cast<long>(ibTotalsPeriod::Second) && n <= static_cast<long>(ibTotalsPeriod::Year)) {
+			unit = static_cast<ibTotalsPeriod>(n);
+			unitGiven = true;
+		}
+	}
+
+	m_companion = std::make_unique<ibBalanceAndTurnoverQueryable>(m_reg, begin, end, unit, unitGiven, filter);
+	return m_companion.get();
+}
+
 //********************************************************************************************
 //*                                      Object                                              *
 //********************************************************************************************
@@ -343,8 +567,7 @@ class ibValueRecordSetObjectAccumulationRegister : public ibValueRecordSetObject
 
 	//////////////////////////////////////////////////////////////////////////////
 
-	virtual bool SaveVirtualTable();
-	virtual bool DeleteVirtualTable();
+
 
 	//****************************************************************************
 	//*                              Support methods                             *

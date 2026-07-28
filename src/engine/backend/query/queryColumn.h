@@ -131,28 +131,33 @@ class BACKEND_API ibRawDBColumn : public ibBackendQueryColumn
 {
 public:
 	// How the provider binds the raw value — fixed by the concrete factory, not the value.
-	// Reference is the FIXED reference-key binary (_RRRef = [guid 16][metaID 4], indexable); Blob is a
+	// Reference is the FIXED reference-key binary (_RRRef = pure [guid 16], indexable; type is the _RTRef column); Blob is a
 	// VARIABLE-length blob (a register's rowData). Guid / Blob / Reference are the schema-scaffold types
 	// so the structure builder can create those columns through this same column interface, no ibDdlColumn.
 	enum class RawType { String, Number, Reference, Date, Boolean, Guid, Blob };
 
-	ibRawDBColumn(const wxString& field, RawType type)
-		: m_field(field), m_type(type) {}
+	// `modelId` gives the column an IDENTITY. Zero (the default) means "scaffold": a field created
+	// with its table and never migrated — a row key, a blob of packed data. A non-zero id makes it
+	// a column the schema differ can track, so it can be ADDED to or DROPPED from an existing
+	// table. A derived table's accumulating columns need that: they appear and disappear as the
+	// metaobject gains and loses resources, and without an identity the differ cannot see either.
+	ibRawDBColumn(const wxString& field, RawType type, ibMetaID modelId = 0)
+		: m_field(field), m_type(type), m_modelId(modelId) {}
 
 	wxString              GetName()         const override { return m_field; }
 	wxString              GetPhysicalName() const override { return m_field; }
 	ibTypeDescription&    GetTypeDesc()     const override { return m_typeDesc; }   // interface returns a non-const ref
-	ibMetaID              GetColumnId()      const override { return 0; }            // no model — raw field
+	ibMetaID              GetColumnId()      const override { return m_modelId; }   // 0 = scaffold, never diffed
 	bool                  IsRawColumn()     const override { return true; }
 
 	RawType               GetRawType()      const { return m_type; }   // the provider's bind selector
 
 	// Convenience makers — read cleaner than naming the enum at the call site, with no extra
 	// type to maintain (these are static factories, not subclasses). One per RawType.
-	static ibRawDBColumn String   (const wxString& field) { return ibRawDBColumn(field, RawType::String);    }
-	static ibRawDBColumn Number   (const wxString& field) { return ibRawDBColumn(field, RawType::Number);    }
+	static ibRawDBColumn String   (const wxString& field, ibMetaID id = 0) { return ibRawDBColumn(field, RawType::String, id);    }
+	static ibRawDBColumn Number   (const wxString& field, ibMetaID id = 0) { return ibRawDBColumn(field, RawType::Number, id);    }
 	static ibRawDBColumn Reference(const wxString& field) { return ibRawDBColumn(field, RawType::Reference); }
-	static ibRawDBColumn Date     (const wxString& field) { return ibRawDBColumn(field, RawType::Date);      }
+	static ibRawDBColumn Date     (const wxString& field, ibMetaID id = 0) { return ibRawDBColumn(field, RawType::Date, id);      }
 	static ibRawDBColumn Boolean  (const wxString& field) { return ibRawDBColumn(field, RawType::Boolean);   }
 	static ibRawDBColumn Guid     (const wxString& field) { return ibRawDBColumn(field, RawType::Guid);      }
 	static ibRawDBColumn Blob     (const wxString& field) { return ibRawDBColumn(field, RawType::Blob);      }
@@ -160,6 +165,7 @@ public:
 private:
 	wxString                  m_field;
 	RawType                   m_type;
+	ibMetaID                  m_modelId;   // 0 = scaffold: created with its table, never migrated
 	mutable ibTypeDescription m_typeDesc;   // mutable: GetTypeDesc() is const but returns a non-const ref
 };
 

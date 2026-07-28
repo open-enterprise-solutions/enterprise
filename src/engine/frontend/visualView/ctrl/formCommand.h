@@ -61,6 +61,10 @@ public:
 	wxString GetFullName()  const { return wxT("Form.") + GetName(); }
 	wxString GetCaption()   const { return m_propertyCaption->IsEmptyProperty() ? GetName() : m_propertyCaption->GetValueAsTranslateString(); }
 	wxString GetProcedure() const { return m_eventCommand->GetValue().GetString(); }
+	// The Action as the EVENT object (not just its name), so the fire path dispatches through
+	// GetDispatcher() -> named handler OR lambda, exactly like a control event. GetProcedure stays
+	// for the string view (serialize / inspector).
+	ibEvent* GetActionEvent() const { return m_eventCommand; }
 	wxBitmap GetPictureBitmap() const { return m_propertyPicture->GetValueAsBitmap(); }
 	bool     IsEmptyPicture()   const { return m_propertyPicture->IsEmptyProperty(); }
 	ibMetaID GetId() const { return m_commandId; }

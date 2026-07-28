@@ -1203,7 +1203,7 @@
     <ClCompile Include="metaCollection\partial\accumulationRegisterObject.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
-    <ClCompile Include="metaCollection\partial\accumulationRegisterQuery.cpp">
+    <ClCompile Include="metaCollection\partial\accumulationRegisterSchema.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\accountingRegisterEnum.cpp">
@@ -2122,6 +2122,15 @@
     <ClCompile Include="query\structureBatch.cpp">
       <Filter>query</Filter>
     </ClCompile>
+    <ClCompile Include="databaseLayer\databaseMaterializeBuilder.cpp">
+      <Filter>databaseLayer</Filter>
+    </ClCompile>
+    <ClCompile Include="query\derivedStateBuilder.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryRamTable.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
     <ClCompile Include="query\schemaSnapshot.cpp">
       <Filter>query</Filter>
     </ClCompile>
@@ -2165,6 +2174,12 @@
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\structureBatch.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="databaseLayer\databaseMaterializeBuilder.h">
+      <Filter>databaseLayer</Filter>
+    </ClInclude>
+    <ClInclude Include="query\derivedStateBuilder.h">
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\schemaSnapshot.h">

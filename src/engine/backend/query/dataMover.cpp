@@ -185,6 +185,12 @@ bool RunRestore(const wxString& tableName, const ibMetaData* metaData,
 
 bool ibDataMover::Dump(const ibSchemaTable& table, ibWriterMemory& out)
 {
+	// DERIVED tables are never moved. Their rows are a function of a source table that IS moved,
+	// so the destination regenerates them exactly — carrying them would ship a redundant copy at
+	// best, and at worst a stale one that silently disagrees with the movements it claims to
+	// summarise. "Don't move it, regenerate it" is the whole point of the derived bit.
+	if (table.m_derived)
+		return true;
 	if (table.m_columns.empty())   // a pure scaffold / seed table (e.g. an enum) — no rows to move
 		return true;
 	return RunDump(table.m_name, MetaOf(table), ColumnsOf(table), KeyOf(table).name, out);
@@ -192,6 +198,11 @@ bool ibDataMover::Dump(const ibSchemaTable& table, ibWriterMemory& out)
 
 bool ibDataMover::Restore(const ibSchemaTable& table, const ibReaderMemory& rows)
 {
+	// Nothing was dumped for a derived table, so there is nothing to load. It comes back through
+	// L3-4 regeneration once the source rows are in place — which is also the only order that can
+	// be correct, since the totals are computed FROM those rows.
+	if (table.m_derived)
+		return true;
 	if (table.m_columns.empty())
 		return true;
 	const KeyInfo key = KeyOf(table);

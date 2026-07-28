@@ -50,6 +50,37 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 		// FB has no CREATE INDEX IF NOT EXISTS -> the differ introspects RDB$INDICES and creates only the missing ones.
 		d.m_indexListQuery = wxT("SELECT RDB$INDEX_NAME FROM RDB$INDICES WHERE RDB$RELATION_NAME = UPPER(?)");
 		d.m_rowIdColumn    = wxT("RDB$DB_KEY");         // physical row id for the pre-UNIQUE dedup (keep one row per key)
+
+		// --- period truncation: no date_trunc here, so every unit is arithmetic ---
+		// Truncate-to-midnight, the base every coarser unit builds on.
+		const wxString day   = wxT("CAST(CAST({expr} AS DATE) AS TIMESTAMP)");
+		// Back up to the 1st: today minus (day-of-month - 1) days.
+		const wxString month = wxT("DATEADD(-(EXTRACT(DAY FROM {expr}) - 1) DAY TO ") + day + wxT(")");
+		// Sub-day units truncate TEXTUALLY rather than through EXTRACT + DATEADD. Firebird's
+		// EXTRACT(SECOND) / EXTRACT(MILLISECOND) return FRACTIONAL values (a TIMESTAMP carries
+		// 100-microsecond resolution), so subtracting them back out invites rounding — and a
+		// period key that rounds occasionally lands in the wrong bucket. The textual form is
+		// always 'YYYY-MM-DD HH:MM:SS.ttt', so cutting at 19 / 16 / 13 characters is exactly
+		// second / minute / hour: exact and total. Ugly and correct beats elegant and approximate.
+		const wxString text = wxT("CAST({expr} AS VARCHAR(24))");
+		d.m_periodTrunc = {
+			{ ibTotalsPeriod::Second,  wxT("CAST(SUBSTRING(") + text + wxT(" FROM 1 FOR 19) AS TIMESTAMP)") },
+			{ ibTotalsPeriod::Minute,  wxT("CAST(SUBSTRING(") + text + wxT(" FROM 1 FOR 16) || ':00' AS TIMESTAMP)") },
+			{ ibTotalsPeriod::Hour,    wxT("CAST(SUBSTRING(") + text + wxT(" FROM 1 FOR 13) || ':00:00' AS TIMESTAMP)") },
+			{ ibTotalsPeriod::Day,     day },
+			// Week: EXTRACT(WEEKDAY) is 0=Sunday..6=Saturday; (wd + 6) mod 7 is the distance back
+			// to Monday (Mon->0 … Sun->6), pinning FB to the same ISO week start as the others.
+			{ ibTotalsPeriod::Week,    wxT("DATEADD(-MOD(EXTRACT(WEEKDAY FROM {expr}) + 6, 7) DAY TO ") + day + wxT(")") },
+			// TenDays: forward from the 1st by 0/10/20 days. MINVALUE caps the offset at 2 so a
+			// 31-day month cannot open a fourth, one-day bucket.
+			{ ibTotalsPeriod::TenDays, wxT("DATEADD(MINVALUE((EXTRACT(DAY FROM {expr}) - 1) / 10, 2) * 10 DAY TO ") + month + wxT(")") },
+			{ ibTotalsPeriod::Month,   month },
+			// Quarter / HalfYear: back up from the start of the month by (month - 1) mod 3 / 6.
+			{ ibTotalsPeriod::Quarter,  wxT("DATEADD(-MOD(EXTRACT(MONTH FROM {expr}) - 1, 3) MONTH TO ") + month + wxT(")") },
+			{ ibTotalsPeriod::HalfYear, wxT("DATEADD(-MOD(EXTRACT(MONTH FROM {expr}) - 1, 6) MONTH TO ") + month + wxT(")") },
+			// Year: EXTRACT(YEARDAY) is 0-based (1 Jan == 0), so subtracting it lands on 1 Jan.
+			{ ibTotalsPeriod::Year,    wxT("DATEADD(-EXTRACT(YEARDAY FROM {expr}) DAY TO ") + day + wxT(")") },
+		};
 		return d;
 	}();
 	return s_dialect;
@@ -58,6 +89,68 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 const ibDialectDictionary& ibDatabaseLayerFirebird::GetDialect() const
 {
 	return Dialect();
+}
+
+// Firebird materialisation — the default embedded engine, and the one that pays for the
+// dictionary existing at all. Two divergences are structural, not cosmetic:
+//
+//  1. The accumulating upsert is a MERGE. Firebird's UPDATE OR INSERT .. MATCHING (the
+//     m_upsertTemplate above) can only REPLACE a column — it has no way to read the target
+//     row's current value — and a totals delta must ADD to it. MERGE is the only Firebird
+//     form that can see both sides, so this engine spends the {sourceRel} / {keyMatch}
+//     placeholders the ON CONFLICT engines leave empty. Same concept, different statement.
+//
+//  2. There is no date_trunc. Period truncation is arithmetic: cast to DATE (which drops
+//     the time), then subtract the offset back to the start of the unit with DATEADD. It
+//     reads worse than PostgreSQL's one call and computes exactly the same key.
+//
+// Second is deliberately ABSENT from the truncation map: a Firebird TIMESTAMP carries
+// fractional seconds at 1/10000 resolution and there is no clean, portable way to shear
+// them off in an expression. Rather than emit something that silently rounds, the unit is
+// unsupported and the generator refuses it. Totals at one-second granularity are not a
+// real requirement — a totals row per second is a movement table with extra steps.
+const ibMaterializationDialect& ibDatabaseLayerFirebird::MaterializationDialect()
+{
+	static const ibMaterializationDialect s_mat = [] {
+		ibMaterializationDialect m;
+		m.m_family = ibTriggerFamily::PerRow;
+		// Firebird names the table BEFORE the timing (CREATE TRIGGER t FOR tbl ACTIVE AFTER
+		// INSERT), the reverse of the ANSI-ish order — exactly the kind of reshuffle a
+		// template absorbs and a token substitution could not.
+		m.m_triggerShellTemplate  = wxT("CREATE TRIGGER {name} FOR {table} ACTIVE {timing} POSITION 0 AS BEGIN {body} END");
+		m.m_functionShellTemplate = wxEmptyString;   // PSQL bodies inline — no separate function object
+		m.m_dropTriggerTemplate   = wxT("DROP TRIGGER {name}");
+		// Firebird has no IF EXISTS for either object, and a failed DDL ROLLS BACK the transaction —
+		// so a drop of something never created would take the whole restructuring with it. Probe first.
+		m.m_viewExistsQuery    = wxT("SELECT 1 FROM RDB$RELATIONS WHERE RDB$RELATION_NAME = UPPER('{name}')");
+		m.m_triggerExistsQuery = wxT("SELECT 1 FROM RDB$TRIGGERS WHERE RDB$TRIGGER_NAME = UPPER('{name}')");
+
+		m.m_deltaUpsertTemplate =
+			wxT("MERGE INTO {table} {target} USING ({sourceRel}) {source} ON ({keyMatch}) ")
+			wxT("WHEN MATCHED THEN UPDATE SET {update} ")
+			wxT("WHEN NOT MATCHED THEN INSERT ({columns}) VALUES ({values})");
+		m.m_deltaSourceTemplate = wxT("SELECT {selectItems}{from}{where}");
+		m.m_deltaTargetAlias    = wxT("t");
+		m.m_deltaSourceAlias    = wxT("s");
+		// The assigned column is NOT qualified: inside MERGE … WHEN MATCHED THEN UPDATE SET,
+		// Firebird takes a bare column name on the left — a `t.col = …` there is a syntax error,
+		// and the parser reports it at the following token rather than at the qualifier.
+		m.m_deltaUpdateItem     = wxT("{col} = {target}.{col} + {source}.{col}");
+		m.m_deltaKeyMatchItem   = wxT("{target}.{col} = {source}.{col}");
+
+		m.m_totalsTableSuffix  = wxEmptyString;                        // no page-fill knob in DDL
+		m.m_connectionIdExpr   = wxT("CURRENT_CONNECTION");            // per-attachment id — the shard hash source
+		m.m_shardExprTemplate  = wxT("MOD({conn}, {n})");              // Firebird has no '%' operator
+		m.m_createViewTemplate = wxT("CREATE OR ALTER VIEW {name} AS {body}");   // FB 2.5+ idempotent form
+		m.m_dropViewTemplate   = wxT("DROP VIEW {name}");               // no IF EXISTS in Firebird
+		return m;
+	}();
+	return s_mat;
+}
+
+const ibMaterializationDialect* ibDatabaseLayerFirebird::GetMaterializationDialect() const
+{
+	return &MaterializationDialect();
 }
 
 // ctor()

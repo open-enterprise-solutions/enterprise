@@ -64,7 +64,7 @@ Do not treat these as "nearly done"; they are captured thinking.
 | Area | Doc | Status as stated there |
 |---|---|---|
 | Data policy (declarative platform policies) | [data-policy-arc.md](data-policy-arc.md) | **DESIGN — no code yet** (2026-06-11 session) |
-| Register totals (trigger-maintained) | [register-totals-strategy.md](register-totals-strategy.md) | **proposal — NOTHING implemented** |
+| Register totals | [register-totals-strategy.md](register-totals-strategy.md) | **reading works 2026-07-28** — three virtual tables (Balance / Turnovers / BalanceAndTurnovers) reachable from query + LINQ, via live aggregation. Trigger-maintained totals: built (dictionary, L2-2 renderer, derived bit, L3-4 regeneration) but **dormant** — no register declares the bundle yet |
 | Metadata hot reload (change classes + tombstone door) | [metadata-hot-reload.md](metadata-hot-reload.md) | **PROPOSAL — NOTHING implemented** (2026-07-15 session) |
 | Memory allocator | [memory-allocator.md](memory-allocator.md) | **design note / NOT STARTED** |
 | Metadata storage container | [metadata-storage-container-arc.md](metadata-storage-container-arc.md) | design detailed; **backlog** until size / partial-save triggers fire |

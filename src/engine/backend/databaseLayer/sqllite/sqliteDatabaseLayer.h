@@ -69,6 +69,12 @@ public:
 	static const ibTempTableDialect& TempDialect();                    // SQLite temp dialect (no instance needed)
 	virtual const ibTempTableDialect* GetTempTableDialect() const override;
 
+	// Derived-state materialisation (register totals). SQLite is the FLOOR the per-row
+	// family is designed against — statements only, no procedural block — so a body that
+	// fits here fits Firebird / PostgreSQL / MySQL too. (docs/register-totals-strategy.md)
+	static const ibMaterializationDialect& MaterializationDialect();
+	virtual const ibMaterializationDialect* GetMaterializationDialect() const override;
+
 	static int TranslateErrorCode(int nCode);
 
 	// SQLite has no SQLSTATE — classification reads its single-int

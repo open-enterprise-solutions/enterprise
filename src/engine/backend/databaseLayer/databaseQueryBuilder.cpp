@@ -38,7 +38,7 @@ static void ibBindPlan(ibPreparedStatement* stmt,
 			ibBindParam(stmt, pos, inRange ? external[p.m_externalIndex] : wxEmptyValue);
 		} else if (p.m_isBlob) {
 			// Opaque bytes (a reference / binary key encoded by the metadata
-			// layer). L2 binds them without interpreting — stays metadata-blind.
+			// layer). L2-1 binds them without interpreting — stays metadata-blind.
 			stmt->SetParamBlob(pos, p.m_blob.GetData(), static_cast<long>(p.m_blob.GetDataLen()));
 		} else {
 			ibBindParam(stmt, pos, p.m_value);
@@ -720,6 +720,24 @@ wxString ibQueryRenderer::RenderExpr(const ibQueryExprPtr& expr)
 		// order right here) and references the outer write row's columns. `[NOT] EXISTS ( … )`.
 		return (expr->m_negated ? wxT("(NOT EXISTS (") : wxT("(EXISTS ("))
 		     + RenderSelect(expr->m_subquery.get()) + wxT("))");
+
+	case ibQueryExprKind::PeriodTrunc: {
+		// Spell the unit through the dialect's truncation map — same principle as Cast above: the IR
+		// carries the CONCEPT ("start of the month"), the dictionary carries the engine's spelling.
+		// The engines diverge structurally here (a strftime mask, a date_trunc call, EXTRACT +
+		// DATEADD arithmetic), which is exactly what a per-dialect template absorbs and a token
+		// substitution could not.
+		const auto it = m_dialect.m_periodTrunc.find(expr->m_periodUnit);
+		if (it == m_dialect.m_periodTrunc.end())
+			// Refuse loudly. Falling back to the untruncated value or a neighbouring unit would
+			// produce a WRONG grouping key that still runs, still commits, and reconciles to
+			// nothing — the failure would surface months later, far from here.
+			ibBackendQueryException::Throw(ibBackendQueryException::Kind::UnsupportedNode,
+				_("The database engine cannot truncate a period to this unit"));
+		wxString tpl = it->second;
+		tpl.Replace(wxT("{expr}"), RenderExpr(expr->m_lhs));
+		return tpl;
+	}
 	}
 
 	return wxString();

@@ -4,10 +4,114 @@ Architecture proposal for OES register storage that would move the
 "totals" maintenance burden into the database via triggers, while
 preserving the read latency profile of the classic denormalized
 totals-table pattern (as used by comparable enterprise platforms).
-Status: **proposal — design discussed 2026-04-30, extended 2026-07-22,
-NOTHING implemented in code** (verified 2026-06-19: no `totals_*`/`mov_*`
-tables, no trigger generation, no `ibRegisterTotalsStrategy`, no totals
-views, no `RebuildTotals`). The 2026-07-22 session added the engine-
+Status: **the READING works; the materialisation is declared, applied on a live Firebird, and
+survives a register kind switch.** (2026-07-29)
+
+Read the two halves separately, because they landed in the opposite order to this document:
+
+**Working today — through LIVE aggregation.** The accumulation register vends THREE virtual
+tables — `.Balance`, `.Turnovers`, `.BalanceAndTurnovers` — registered as query sources, so both
+the text query language (L4-1) and LINQ (L4-2) reach them; they lower into the one L3 door, so
+there is no second engine. `BalanceAndTurnovers` takes (begin, end, **periodicity**, filter) and
+reports opening / receipt / expense / turnover / closing per resource. Periodicity is a QUERY
+parameter, not a schema property: one register serves monthly, weekly or quarterly readings of the
+same data. It is computed from two server-side aggregates — the balance entering the interval, and
+turnovers grouped by the truncated period — folded forward by `FoldBalancesForward`
+(`query/queryRamTable`), which is shared rather than owned by the register precisely so the
+accounting register reuses it. Correct at any scale; slow at large ones.
+
+**Applied on a live Firebird (2026-07-29).** The bundle is created for real: the totals table with
+a receipt/expense pair per resource, its unique key, the three triggers and the read views. Three
+things had to be fixed to get there, each worth remembering because none of them was visible in the
+generated SQL:
+
+1. **A register with no resources** rendered an empty `UPDATE SET` — valid-looking text that no
+   engine parses. Such a register is a legitimate intermediate state, so it now warns and skips the
+   bundle rather than failing the update.
+2. **The driver splits statements on `;`**, which tore the trigger body apart at `BEGIN … ; … END`
+   and produced "unexpected end of command". Rendered text now goes through `RunStatement`, which
+   neither splits nor printf-formats it — the latter would also have eaten the `%` in SQLite's
+   `strftime`.
+3. **A failed DROP rolls back the transaction.** Speculatively dropping a view that was never
+   created destroyed the entire restructuring — the first apply killed itself, and the damage
+   surfaced later as an error in the trigger. Drops are now guarded by an existence probe
+   (`RDB$RELATIONS` / `RDB$TRIGGERS`); a probe is a read and cannot poison the transaction.
+   Swallowing the exception, which is what the code did first, hid the symptom and kept the cause.
+
+Still unverified: that the triggers produce CORRECT numbers under real movements, and the parity of
+the materialised readings against the live aggregation.
+
+**The register KIND SWITCH — a full lifecycle, not an alter (2026-07-29).** Turning a balance
+register into a turnover-only one (or back) is the change that exercised every seam at once, and
+each seam had to be repaired:
+
+- **Different structures deserve different tables.** Balances keep a receipt/expense pair per
+  resource; turnovers keep one column. The physical names already differed (`…_T` / `…_Tn`), but
+  the schema differ matches tables by IDENTITY, not by name — so it read the switch as "the same
+  table, renamed" and took the ALTER path against a table that did not exist
+  (`CREATE INDEX … Unknown columns`). The identity now moves with the kind
+  (`GetTotalsTableId()` = metaID plus a per-kind HIGH bit), which turns the switch into what it
+  actually is: a DROP of one table and a CREATE of the other.
+
+  The bit must be HIGH, and that is the sharper half of the lesson. metaIDs are small sequential
+  integers, so the first attempt — `metaID ^ 1` / `metaID ^ 2` — produced the id of the
+  NEIGHBOURING metaobject. `ibSchemaSnapshot::Shared` matches on id alone and hands back whatever
+  table already carries it, name ignored, so the totals declaration poured its columns into an
+  unrelated table. The symptoms were duplicate fields and indexes over columns nobody had added, on
+  registers whose neighbours happened to exist and in an order that depended on the tree — a fault
+  that reads as "sometimes it slips through" while being perfectly deterministic. `Shared` now
+  asserts when the name disagrees, so the next collision announces itself where it happens.
+- **The maintenance does not go down with the table.** The triggers hang on the MOVEMENTS table and
+  merely MENTION the totals by name, so dropping the totals table leaves them behind, firing on
+  every subsequent write into a table that is gone — the movements stop being writable, and the
+  failure surfaces nowhere near the change that caused it. The drop path now removes the old
+  bundle first, rendered from the OLD spec (`ibDropMaterialization`), which is the only thing that
+  still knows the old names.
+- **Losing the last resource must still drop.** The bundle used to render as EMPTY when there was
+  nothing to accumulate — which is exactly the case where a surviving trigger does most damage,
+  because the same apply drops the columns it writes. Drops are now rendered unconditionally; only
+  the creates are skipped.
+- **The new table has to be filled.** A created totals table starts empty, and empty is not a
+  neutral state — it reads as "no stock of anything". `NeedsRegeneration` returns true for a table
+  with no baseline, so the switch regenerates. It also returns true when the number of
+  accumulations changed, because gaining an expense side changes what the receipt side MEANS: the
+  column stops holding every movement and starts holding one direction, so every stored figure is
+  wrong even though the column that held it still exists.
+- **Accumulating columns carry an identity.** `ibRawDBColumn` gained an optional model id; zero
+  still means "scaffold" (created with its table, never migrated). Without one, a totals table
+  whose resources changed would keep columns shaped for the old ones. The shard column needed the
+  same treatment for the same reason.
+- **An untouched register is left alone.** The bundle is still replaced WHOLE when it changes, but
+  "whole" is not "always": the apply renders the baseline declaration too and skips a register
+  whose rendered text is identical — after PROBING that its objects are actually there, so a
+  half-failed earlier apply still heals. Before this, editing one register announced a totals
+  rebuild for every register in the configuration, which reads as "everything was recomputed" and
+  buries the one line that matters.
+
+**The trigger-maintained totals are now DECLARED.** `ibMaterializationDialect` + the L2-2 renderer
+(`databaseLayer/databaseMaterializeBuilder`) + the derived bit and its declaration in the schema
+snapshot + L3-4 regeneration (`query/derivedStateBuilder`) are wired into the accumulation
+register's `ContributeTables` (`accumulationRegisterSchema.cpp`), and the three queryables read the
+views through `RenderMaterializedRead` when the driver materialises, falling back to live
+aggregation when it does not. Nothing above L3 changed: the fallback and the materialised path
+vend the same relation shape.
+
+The rest of this document describes that half in detail.
+
+---
+
+Earlier status line, kept for the record: **design, with the FIRST slice landed 2026-07-28 — the
+materialization dictionary (§4) exists in code.** Landed:
+`ibMaterializationDialect` in `databaseLayer/databaseLayer.h`, vended per driver
+through `ibDatabaseLayer::GetMaterializationDialect()` (nullable — presence IS
+the capability), with dictionaries for Firebird / PostgreSQL / SQLite / MySQL,
+a deliberate `nullptr` for ODBC, and structural pins in
+`tests/test_materializationDialect.cpp`. Still absent: `totals_*` tables,
+trigger generation, totals views, the L3-4 regeneration door, and any read-path
+change — the registers continue to serve Balance / Turnover from the live
+aggregation (`ComputeBalance` / `ComputeTurnover`). Everything below §4 remains
+a proposal; treat every "OES does X" outside §4 as "OES would do X".
+Design discussed 2026-04-30, extended 2026-07-22. The 2026-07-22 session added the engine-
 integration design (§ *Engine integration* below): the source/derived
 table classification driving L3-2/L3-3/L3-4, the per-driver
 materialization dictionary, reconciliation-by-cheapest-op, and totals-row
@@ -140,15 +244,15 @@ speed comes from the trigger-maintained table under it. Two separable properties
 ### 4. The materialization dictionary — a *second* per-driver dictionary
 
 The trigger bodies are imperative and **per-engine divergent in structure**, not just in
-spelling. They therefore do **not** fit the L2 **query** dialect dictionary (which substitutes
-tokens over a *shared* structure — `LIMIT`, quoting, type mapping). Forcing them into L2 would
+spelling. They therefore do **not** fit the L2-1 **query** dialect dictionary (which substitutes
+tokens over a *shared* structure — `LIMIT`, quoting, type mapping). Forcing them into L2-1 would
 either pollute the query IR with imperative nodes (`RETURN`/`IF`/`NEW`/`OLD`) or add a raw-SQL
-escape hatch that breaks L2's "never raw SQL" invariant.
+escape hatch that breaks L2-1's "never raw SQL" invariant.
 
 Instead, each driver vends a **second dictionary — the materialization dialect** — parallel to
 `GetDialect()`:
 
-- **L2 query dictionary** renders the *declarative skeleton*: `CREATE TABLE mov_X`/`totals_X`,
+- **L2-1 query dictionary** renders the *declarative skeleton*: `CREATE TABLE mov_X`/`totals_X`,
   indexes, the view's inner `SELECT`, the rebuild `INSERT … SELECT … GROUP BY`, `ALTER`.
 - **Materialization dictionary** renders the *imperative delta*: trigger shell + upsert idiom +
   hot-update hints. Used only at Apply / regeneration, never on a read.
@@ -173,6 +277,197 @@ Both families implement one interface (`RenderTotalsTrigger(kind, dims, res) →
 generator is engine-agnostic and only fills parameters. The dictionary is also the natural home
 for the future pluggable strategy (MSSQL `INDEXED VIEW`, Oracle `MV REFRESH ON COMMIT`) — a
 different entry per engine, no generator change.
+
+#### 4a. As landed (2026-07-28) — and two shapes the accounting register forced
+
+`ibMaterializationDialect` is pure declarative facts plus the `ibTriggerFamily` discriminator,
+mirroring `ibTempTableDialect` exactly: vended nullable, presence = capability, behaviour in the
+generator that reads it. Firebird carries the structural outlier the doc predicted — its
+accumulate is a `MERGE`, because `UPDATE OR INSERT … MATCHING` cannot read the target's current
+value and can therefore only *replace*. That is valid SQL producing silently wrong totals, so it
+is pinned by test.
+
+Two slots go **beyond** the sketch above, both because the accounting register is the
+destination and both cheap to add now / expensive later:
+
+- **The delta upsert is an `INSERT … SELECT … WHERE`, not `INSERT … VALUES`.** An accounting
+  movement carries a debit side and a credit side; each feeds a *different* totals table and
+  either may be absent, so the delta must be **conditional**. `VALUES` cannot carry a predicate,
+  and the alternative — a procedural `IF` — breaks the SQLite floor and splits the per-row family
+  in two. `INSERT … SELECT … WHERE` says the same thing declaratively on all four engines. An
+  unconditional delta (an accumulation register) renders the guard empty and pays nothing. This
+  is also why MySQL's dialect now sets `m_selectFromDual = DUAL`: a FROM-less `SELECT` there
+  cannot carry a `WHERE`.
+- **A trigger body is N statements, not one.** One movement can feed several totals tables
+  (debit turnover, credit turnover, later per-subconto breakdowns). The shell takes a rendered
+  multi-statement body, so the multi-table case inherits the same TX atomicity as the
+  single-table one and needs no coordination above.
+
+Neither shape costs the accumulation register anything, which is the point: the register we
+harden on and the register we are aiming at share one mechanism rather than two.
+
+#### 4b. Periodicity is a READ parameter, not a schema property
+
+The shape to build against — settled 2026-07-28, and it changes what the virtual tables are:
+
+**Periodicity is chosen per QUERY**, alongside the period bounds and the filter, not declared
+once on the metaobject. One register therefore serves monthly, weekly and quarterly readings of
+the same data with no schema change and no second source.
+
+**It selects the COLUMN SET, not just the grouping.** The virtual table's fields are a function
+of the requested periodicity: `Period` plus one column per unit **coarser than or equal to** it
+(`PeriodDay`, `PeriodWeek`, `PeriodMonth`, `PeriodQuarter`, …). Ask for monthly and the daily
+column is not merely empty — it is *absent*, because the information does not exist at that
+grain. Two consequences worth stating plainly:
+
+- The queryable's column contract becomes **parameter-dependent**. Today a queryable vends the
+  metaobject's fixed columns; here `GetColumns()` is a function of the periodicity argument. The
+  seam already exists — the descriptor's `CreateQueryable(params…)` passes read parameters into
+  the queryable's constructor (that is how `ibBalanceQueryable` already takes period + filter),
+  so periodicity rides the same road.
+- **Periodicity also picks the SOURCE.** Coarser-or-equal to the stored grain → read the totals
+  view. Finer than stored — including the two non-time granularities, per-recorder and
+  per-record — → read the **movements** and aggregate live, which is also where `Recorder` /
+  `LineNumber` columns come from. `MakeProvider` already chooses backing once per query; this is
+  that decision, driven by one comparison on the ordered `ibTotalsPeriod` enum.
+
+So `ibTotalsPeriod` is ordered coarsening BY CONTRACT: a projection is derivable exactly when its
+unit is `>=` the stored unit, and the generator must refuse rather than invent when it is not.
+
+**Storage granularity** stays a schema decision — one unit per register, the floor on what can be
+read back. It only has to be fine enough to serve the finest periodicity anyone will ask the
+totals for; everything below that floor is served by the movement table anyway. Note this is *not*
+the existing `ibPeriodicity` (`eNonPeriodic` / `eWithinSecond` / `eWithinDay`), which is the
+granularity of a record KEY — a different question that happens to share a word.
+
+**The truncation map covers every unit on every engine.** `m_periodTrunc` maps `ibTotalsPeriod` →
+an expression template, and the same expression serves both roles — keying a totals row inside a
+trigger and projecting a coarser column inside a view — so the stored key and the read column
+cannot drift apart. Coverage is total on all four engines (`Second … Year`, including `Week`,
+`TenDays`, `HalfYear`), and the tests enforce it: partial coverage would make a query's answer
+depend on which engine the deployment happens to run. Three details are pinned because they are
+easy to get subtly wrong: the week starts **Monday** everywhere (Firebird and MySQL need opposite
+corrections to get there), the ten-day offset is **capped at 2** so day 31 folds into the third
+period instead of opening a fourth one-day bucket, and Firebird truncates sub-day units
+**textually** rather than through `EXTRACT` + `DATEADD`, whose fractional seconds would round.
+
+#### 4bis. What L3-2 materialises is a SUBSYSTEM, not a table
+
+Worth stating before the mechanics, because it decides what "done" means. The unit L3-2 builds is
+not a totals table — it is the **apparatus that answers totals questions**: the table, its three
+maintenance triggers, and the read view, created and dropped as one. The table alone answers
+nothing; the triggers alone maintain nothing; the view alone has nothing under it.
+
+What that apparatus has to serve is four readings, all parameterised by a period the caller
+supplies at query time:
+
+| Reading | Asked as | Answered by |
+|---|---|---|
+| Balance **as of a date** | one date | `Σ(receipt − expense)` over periods `<= date` |
+| Balance at the **start** of an interval | interval | the same fold over periods `< begin` |
+| Balance at the **end** of an interval | interval | the same fold over periods `<= end` |
+| **Turnover** over an interval | interval | `Σ receipt`, `Σ expense` over `begin … end` |
+
+All four are range folds over ONE stored form — per-period receipt and expense buckets. That is
+the property to protect: adding a reading must not add a stored form. `BalanceAndTurnover` is not
+a fifth thing to store, it is the first three and the fourth reported side by side, which is
+exactly why it can exist at all without a second table.
+
+The date is a QUERY parameter, so it cannot live in the view — a view has no arguments. The
+division is therefore: L3-2 materialises what is date-independent (the buckets and their upkeep),
+and the three queryables fold them at read time with the caller's dates. Push a date into the
+materialised side and you get one view per question and no way to ask a new one.
+
+#### 4c. What BalanceAndTurnover needs — and why net storage is not enough
+
+The third virtual table (`BalanceAndTurnover`, alongside `Balance` and `Turnover`) reports, per
+period and per resource: **opening balance, receipt, expense, turnover, closing balance**. That
+list dictates the storage shape, and it corrects the first sketch of it.
+
+**Store receipt and expense SEPARATELY — not one signed net column.** Net is receipt − expense,
+and from a net you cannot recover either side; a period that took in 100 and paid out 100 is
+indistinguishable from one with no movement at all. `ComputeTurnover` already reports the three
+columns (`_Turnover` / `_Receipt` / `_Expense`) for a balance register, so a net-only totals table
+could not serve the reading that exists today. Two stored columns per resource, and every reported
+column derives from them:
+
+| Reported | Derived as |
+|---|---|
+| Receipt / Expense | stored directly, summed over the interval |
+| Turnover | `receipt − expense` over the interval |
+| Opening balance | `Σ(receipt − expense)` over every period **strictly before** the interval |
+| Closing balance | opening + turnover |
+
+A turnover-only register (`eTurnovers`, no record type) has no sign and therefore **one** stored
+column per resource. So the column count of the totals table is a function of the register type —
+a generator concern, not a dictionary one: the delta expression stays an unconditional
+accumulate, it is only its *value* that carries the `CASE WHEN recordType…` that splits the sides.
+No new dictionary slot; this is why §4a's shape holds.
+
+**This is also what settles the storage question.** Per-period receipt/expense buckets give all
+five reported columns from one table: the opening balance is an aggregate over periods before the
+interval, which is an index range scan, not a walk of movements. That is what makes a stored
+running balance unnecessary in v1 — and a backdated movement still touches only its own period's
+row, with no bump of later periods, because no later row contains a carried total.
+
+#### 4d. The fill method — boundary rows, not a calendar
+
+Without filling, a period with no movements produces no row. The consequence is not cosmetic: at
+the edges of the requested interval you lose exactly the numbers the report is usually for — the
+balance as it stood entering the interval and as it stood leaving it. Whatever happened inside is
+bounded by those two, and without them the reading is open-ended.
+
+Filling adds rows at the **interval boundaries** — the period containing the start and the period
+containing the end — carrying zero turnover and the balance carried in. Worth stating because it
+determines the cost: this is **two synthetic rows unioned in**, not a generated calendar joined
+against the totals. No `generate_series` / recursive-CTE dialect slot is needed, and the fill
+therefore costs the same on the embedded engine as on the production one.
+
+(Filling every empty period inside the interval, rather than only the boundaries, is a separate
+and more expensive mode. Not in scope; if it is ever wanted, it is the one that needs the
+calendar.)
+
+#### 4d-bis. Not yet served: recorder and line number
+
+A reading may legitimately ask for granularity FINER than any period — per **recorder** (the
+document that produced the movement) or per **record** (its line). These are not truncations of a
+period; they are the movement row itself. Totals cannot answer them at all: folding movements into
+daily rows is precisely what discards the recorder.
+
+They therefore belong to the MOVEMENTS, and the register already stores both columns. What is
+missing is the ROUTING — a virtual table asked at recorder / record granularity must read the
+movement table instead of the totals surface, the same way a *periodised* balance-and-turnover
+reading already falls back to the live path. Until that lands these two granularities are simply
+not offered, which is the honest state; the failure to avoid is accepting the parameter and
+answering at the wrong grain.
+
+This is the boundary `ibTotalsPeriod` draws — everything in the enum materialises, everything
+finer is read from the source — and the enum deliberately has no member for either.
+
+#### 4e. A zero balance is an ABSENT row — and the filter runs after the fold
+
+No stock of an item means no row for that item. Not a row of zeros: **no row**. `ComputeBalance`
+already encodes this as a `HAVING` over the aggregate, OR-ed across resources — the row survives
+if *any* resource is non-zero, so an item with quantity 0 but amount 5 still reports. The
+trigger-maintained path must produce the same observable, and that is a read-side filter, not a
+storage rule.
+
+**The filter applies to the FOLDED value, not to the stored rows.** An item that took in 100 and
+paid out 100 has two non-zero totals rows and a balance of zero — so it must not appear in a
+balance reading, even though its storage is not empty. Hence: aggregate over the interval first,
+filter after. Applying it to stored rows would be both wrong and pointless.
+
+This is the invariant most likely to break the parity test in a way that looks like a rounding
+bug, because the two paths fail differently: the live aggregation never emits the row, while a
+naive view over the totals table emits it filled with zeros. Same numbers, different row count —
+and a report that lists every item ever traded instead of the ones on hand.
+
+**It also settles when a totals row may be deleted: essentially never.** A zero *balance* does not
+mean zero *turnover* — the receipt and expense that cancelled out are themselves reportable
+figures for that period, and deleting the row would destroy them. Only a row whose receipt AND
+expense are both zero carries no information, and such a row is never created in the first place.
+So the totals table has no cleanup pass, and no trigger-side delete: rows accumulate as history,
+and emptiness is expressed by the read filter alone.
 
 > **ODBC has no materialization entry.** ODBC is generic — it does not know the backend, so it
 > cannot template engine-specific triggers. An ODBC-backed register stays on the
@@ -209,13 +504,14 @@ needed — and you get *silently wrong totals*. When unsure, full-scan. Full-sca
 default; deltas are the optimization applied to provably-derivable kinds. Ship the full-scan
 fallback first; add the delta paths when a real big-register Apply window forces it.
 
-### 6. Sharding — "разделение итогов" (a per-register mode)
+### 6. Split totals — sharding a hot row (a per-register mode)
 
 Hot-row write contention on a single `(period, dim)` (a popular SKU in the current period,
-dozens of concurrent postings) is mitigated by **sharding the totals row** N-ways. This is the
-same concept as 1C's *разделение итогов* (feature parity) — but on OES's **drift-proof trigger
-substrate**, where 1C maintains its split totals in managed code (bypassable, needs *пересчёт
-итогов*).
+dozens of concurrent postings) is mitigated by **sharding the totals row** N-ways. Comparable
+platforms offer the same switch; what differs here is the substrate. Ours is a **trigger**, so a
+shard cannot drift from the movements it summarises — the split changes only how many rows one
+logical key occupies, never who maintains them. Where the maintenance lives in application code
+instead, it is bypassable, and a periodic full recalculation becomes a standing operational chore.
 
 A per-register spec parameter, `sharded: N`:
 
@@ -238,11 +534,57 @@ Two properties make it as autonomous as the base deltas — no coordination, no 
 
 **Tradeoff:** read `O(1)` → `O(N)` (sum N shards). Sharding is **per-register** — the read tax
 hits *all* its rows, not just the hot one — so shard **only** registers profiled hot on write,
-never by default. Cleanest for turnover (`+=`); running-balance shards ride the same
+never by default.
+
+#### When it actually helps — and the intuition that misleads
+
+Splitting cures **contention for one row**, not size. The question is never "is this register
+big?" but **how many writers land on the SAME key at the same time**.
+
+| Shape | Split? | Why |
+|---|---|---|
+| An account like revenue / VAT with no or coarse subconto | **yes** | every posting in the company lands on one key per period |
+| Retail with a fast-moving SKU | **yes** | hundreds of tills, one product row |
+| Settlements with one dominant counterparty | **yes** | same row, many writers |
+| **Batch (lot) accounting** | **no** | a lot is an extra dimension: keys MULTIPLY, writers spread out |
+| Any register with fine-grained dimensions | **no** | movements already land on different rows |
+| A rarely-posted register | **no** | no concurrency to relieve |
+
+Batch accounting is the trap, because it *feels* like the heavy case. It is heavy in ROW COUNT and
+light in contention — two tills almost never write the same lot, since each delivery has its own
+key. Splitting there multiplies an already-large totals table by N and taxes every read for a
+collision that was not happening.
+
+**The measurable symptom** of real contention: posting time grows NON-LINEARLY with the number of
+concurrent users at unchanged document size — five cashiers fine, twenty four times slower rather
+than evenly slower. If it is equally slow with one user and with twenty, the bottleneck is
+elsewhere and shards will not touch it.
+
+This is also why the switch defaults to OFF even for an accounting register: the decision belongs
+to a specific account under a specific load, not to a metaobject KIND. Cleanest for turnover (`+=`); running-balance shards ride the same
 sum-invariance but the subsequent-period bump is inherently fiddlier (it is fiddly without
-shards too). Capture `sharded:N` in the spec now so the form accepts it; implement when a real
-hot register pulls it. Regeneration with shards is trivial: bulk-rebuild into `shard 0` (no
-contention under Apply), steady-state redistributes via the hash.
+shards too).
+
+**Turning the switch is a structure change, not a setting (2026-07-29).** The shard column joins
+the KEY, so flipping it re-keys every stored row. Two attempts got this wrong before the third one
+stopped trying to be clever:
+
+1. **Scaffold.** Declared with the table and never migrated, so enabling the split rebuilt the
+   unique index around a column that had never been added (`Unknown columns in index`).
+2. **A migratable column.** Better, but it only moved the problem: an existing database could
+   already hold the field from the scaffold era, and `ALTER TABLE … ADD` on an existing field does
+   not merely fail — on Firebird it rolls the whole restructuring back.
+3. **Don't migrate it at all.** A derived table holds no information of its own; the regeneration
+   recomputes every row anyway. So when `NeedsRegeneration` says the shape changed, the differ
+   DROPS the table and creates it fresh — which takes the columns and the indexes with it and
+   removes the entire class of migration edges at once. The column still carries an identity
+   (`GetShardColumnId()`), because the declaration must state what the table holds; it simply no
+   longer has to be reachable by an ALTER.
+
+Regeneration with shards is trivial and stays so: the bulk rebuild writes one consolidated row per
+key into **shard 0** (a rebuild is a single writer, and there is nothing to spread), and the
+trigger distributes everything that follows through the hash. The reads never notice — the view
+sums the shards, which is the sum-invariance the whole scheme rests on.
 
 ### 7. Who invokes L3-4 (deployment)
 
@@ -254,8 +596,8 @@ Same L3-4 operation; different **dispatcher**:
 - **File / embedded mode** (no compute-server process; single session → already exclusive): an
   in-process **background task**. Keep it a **janitor** (detect-and-repair an *incomplete*
   bulk/crash: trigger missing / totals stale after an interrupted operation → rebuild), **not a
-  patrol** (periodic recalc of trigger-maintained totals — that is the *пересчёт итогов* ghost
-  the trigger makes unnecessary by construction). Fire it on **events**, not on a cadence.
+  patrol** (periodic recalculation of trigger-maintained totals — the standing chore the trigger
+  makes unnecessary by construction). Fire it on **events**, not on a cadence.
 
 ---
 
@@ -504,6 +846,39 @@ performance numbers above:
    pass. One SQL per register, runs at first Apply after upgrade.
 
 ---
+
+## What remains (2026-07-29)
+
+The maintenance is live and the switches work. What is NOT yet proven or built, in the order it
+matters:
+
+1. **Numeric parity is UNVERIFIED.** Everything checked so far is the SHAPE of the SQL — that the
+   bundle renders the intended primitives and creates without error. What has not been checked is
+   that the trigger-maintained figures EQUAL the live aggregation over real movements, including
+   after updates, deletes and backdated entries. This is the only remaining question that can make
+   the feature silently wrong rather than merely absent, so it ranks first. The live path is still
+   in place and doubles as the oracle; the test wants an in-memory SQLite base, a few hundred
+   randomised movements, and a column-by-column comparison of the two readings.
+2. **Storage granularity is hard-wired to Day.** It wants to be a per-register property: a register
+   posted once a month per key gains nothing from daily rows, and one that must answer hourly
+   cannot use them. The mechanism already READS the value rather than assuming it
+   (`GetTotalsPeriodUnit()`), so this is a property plus a regeneration.
+3. **The accounting register does not declare totals yet.** It was the reason for building the
+   primitives this way — a debit and a credit side are two guarded accumulations into one table —
+   and four `#if 0` blocks mark where its declaration goes.
+4. **Recorder / line-number granularity** is served only by the MOVEMENTS table. That is the
+   boundary the period enum draws deliberately, but nothing in the read path yet ROUTES a sub-day
+   or per-recorder request to the movements automatically; it falls back wholesale.
+5. **The Fill method** (boundary rows: opening figures for keys with no movement in the interval)
+   is not implemented.
+6. **The split has no automatic mode**, by decision — it is a property, because the choice depends
+   on a specific key under a specific load rather than on a metaobject kind. See §6 for the shapes
+   where it helps and the one that misleads (batch accounting: heavy in row count, light in
+   contention).
+7. **DROP + CREATE of one table name inside a single Firebird transaction** is the one path in the
+   replace-don't-alter rule that has not been exercised end to end. If it turns out FB refuses, the
+   release valve already exists — `m_ddlCommitBeforeData`, the barrier that already defers data
+   writes past the DDL commit.
 
 ## Open questions
 
