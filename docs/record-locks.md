@@ -442,7 +442,7 @@ columns (see "Why NOT per-row lock columns" further below). Shape of
   `(sessionGuid)` for session-end cascade.
 - ✅ `ibLockManager` singleton in `backend/lock/lockManager.{h,cpp}`
   with `Acquire(items, opts, customHolder=nullptr) → ibLockHandle`,
-  `ReleaseRows`, `OnSessionEnd`, `OnZombieSweep`, `GetSnapshot`.
+  `ReleaseRows`, `OnSessionEnd`, `SweepOrphans`, `GetSnapshot`.
 - ✅ `ibLockHandle` RAII (move-only) — `lock/lockHandle.{h,cpp}`.
 - ✅ `ibLockHolder` interface + `ibSingleLockHolder` concrete
   (`lock/lockHolder.{h,cpp}`) for extensibility — custom owners that
@@ -458,8 +458,24 @@ columns (see "Why NOT per-row lock columns" further below). Shape of
   derivation). Adding a new resource kind = adding a new `For*`
   factory; lockManager just reads `item.KeyHash()` during Acquire.
 - ✅ Hooks: `OnSessionEnd` from `ibSessionRegistry::ProcessRemove`
-  (drop all session rows on logout), `OnZombieSweep` cascade in
-  `JobSweepStale` (drop dead-session rows on heartbeat timeout).
+  (drop all session rows on logout), `SweepOrphans` from `JobSweepStale`
+  every tick — the sweep hands over the sessions `sys_session` still
+  holds and the manager drops every lock owned by anyone else.
+
+  **Stated as "who is alive", not "who just died" (2026-07-29).** The
+  earlier cascade dropped locks for the zombies that one sweep pass had
+  just removed, which left a hole nothing could close: the moment a
+  session row disappeared before its locks did — a crash between the two
+  deletes, a peer sweeping the session, a kill during shutdown — the
+  locks lost their last mention and stayed FOREVER. That is not a stale
+  row: a lock with no owner cannot be released by anyone, so the record
+  it guards stops opening on every machine in the cluster, and the
+  conflict message has no user name to show (`userName` lives on the lock
+  row, and the session behind it is gone). Keying on liveness makes the
+  question answerable from the two tables alone, so no failure mode has
+  to be enumerated. A lock cannot legitimately precede its own session
+  row — the session is registered at start, long before it can acquire —
+  so "no session" means dead, never "not yet born".
 - ✅ `ibSourceDataObject::TryAcquireFormLock` / `ReleaseFormLock`
   base API + storage; `ibValueRecordDataObjectRef` overrides with
   ref-keyed acquire. Default no-op for sources without lock identity

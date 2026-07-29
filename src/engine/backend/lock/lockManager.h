@@ -90,10 +90,23 @@ public:
 	// B.2. No-op safe to call from anywhere.
 	void OnSessionEnd(const ibGuid& sessionGuid);
 
-	// Hook for ibSessionRegistry's zombie sweep — drops lock rows
-	// for sessions that no longer have a live sys_session entry.
-	// Wired in Phase B.2.
-	void OnZombieSweep(const std::vector<ibGuid>& deadSessionGuids);
+	// Drop every lock row whose owner is NOT in the live session list —
+	// the caller passes what sys_session currently holds, this drops the
+	// rest. Called from the session sweep on every tick.
+	//
+	// Stated as "who is ALIVE" rather than "who just died", and that is
+	// the whole point. Keying cleanup on the sessions a sweep had just
+	// removed left a hole nothing ever closed: once the session row was
+	// gone — its owner force-killed, the row swept by another process, a
+	// crash between the two deletes — its locks had no one left to
+	// mention them, and they stayed FOREVER. A lock nobody can release
+	// is not a stale row: it is a document that cannot be opened again
+	// on any machine, with no owner to name in the message.
+	//
+	// A lock whose session is missing is unambiguous: a session row is
+	// written when the session starts, long before it can take a lock,
+	// so it cannot be a lock racing ahead of its own registration.
+	void SweepOrphans(const std::vector<ibGuid>& liveSessionGuids);
 
 	// Cluster snapshot for admin UI / /admin/locks. Returns a copy;
 	// the caller may iterate freely without holding the manager

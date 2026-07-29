@@ -1397,6 +1397,7 @@ void ibSessionRegistry::JobSweepStale()
 	(void)cutoff.Subtract(wxTimeSpan(0, 0, kStaleCutoffSec));
 
 	std::vector<wxString> zombies;
+	std::vector<ibGuid>   live;   // everyone that survives this pass — the lock sweep's input
 	try {
 		ibDatabaseQueryBuilder q(&m_writeHolder);
 		ibQueryResult rs = q.ExecuteIR(ibQueryIR(ibProject(ibScan(session_table),
@@ -1404,12 +1405,16 @@ void ibSessionRegistry::JobSweepStale()
 
 		while (rs.Next()) {
 			const wxString guid = rs.GetResultString(wxT("session"));
-			if (m_own.find(guid) != m_own.end())
+			if (m_own.find(guid) != m_own.end()) {
+				live.emplace_back(guid);
 				continue;  // our own — heartbeat keeps lastActive fresh
+			}
 
 			const wxDateTime lastActive = rs.GetResultDate(wxT("lastActive"));
 			if (lastActive.IsValid() && lastActive.IsEarlierThan(cutoff))
 				zombies.push_back(guid);
+			else
+				live.emplace_back(guid);
 		}
 	}
 	catch (...) {
@@ -1424,20 +1429,19 @@ void ibSessionRegistry::JobSweepStale()
 		try { DeleteSessionRow(m_writeHolder, g); } catch (...) { /* swallowed: per-row cleanup loop, keep going even if one row's DELETE fails (next sweep retries) */ }
 	}
 
-	// Cluster-wide sys_lock cleanup — drop any long-held lock rows
-	// owned by the zombies we just removed from sys_session. Without
-	// this a force-killed process can leave permanent locks behind.
-	if (!zombies.empty()) {
-		std::vector<ibGuid> deadGuids;
-		deadGuids.reserve(zombies.size());
-		for (const wxString& g : zombies)
-			deadGuids.emplace_back(g);
-		try {
-			if (auto* lm = ibApplicationData::GetLockManager())
-				lm->OnZombieSweep(deadGuids);
-		}
-		catch (...) { /* swallowed: lock cleanup is best-effort, next sweep retries on stale rows */ }
+	// Cluster-wide sys_lock cleanup — hand over WHO IS ALIVE and let the lock
+	// manager drop everything else. Unconditional, even when this pass found no
+	// zombies: a lock outlives the session row that owned it whenever the two
+	// deletes are not one operation — a crash between them, a peer that swept the
+	// session while this process held the lock table, a kill during shutdown — and
+	// a lock whose session is already gone was, until now, unreachable by any
+	// cleanup at all. It stayed until someone deleted the row by hand, and until
+	// then the document it guarded could not be opened on any machine.
+	try {
+		if (auto* lm = ibApplicationData::GetLockManager())
+			lm->SweepOrphans(live);
 	}
+	catch (...) { /* swallowed: lock cleanup is best-effort, next sweep retries on stale rows */ }
 }
 
 void ibSessionRegistry::JobHeartbeatOwn()

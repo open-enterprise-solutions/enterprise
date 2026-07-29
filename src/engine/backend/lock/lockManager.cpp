@@ -36,6 +36,8 @@
 
 #include <wx/datetime.h>
 
+#include <set>
+
 namespace {
 
 // Table name kept here so call sites don't drift. Mirrors the
@@ -261,13 +263,35 @@ void ibLockManager::OnSessionEnd(const ibGuid& sessionGuid)
 	q.Commit();
 }
 
-void ibLockManager::OnZombieSweep(const std::vector<ibGuid>& deadSessionGuids)
+void ibLockManager::SweepOrphans(const std::vector<ibGuid>& liveSessionGuids)
 {
-	for (const auto& g : deadSessionGuids)
-		OnSessionEnd(g);
-	// One-DELETE-per-zombie keeps the implementation trivial; if
-	// sweep ever runs on hundreds of zombies at once, batch into
-	// a single "WHERE sessionGuid IN (...)" DELETE.
+	ibDatabaseQueryBuilder q(&m_lockHolder);
+	if (!q.IsOpen())
+		return;
+
+	std::set<wxString> live;
+	for (const ibGuid& g : liveSessionGuids)
+		live.insert(g.str());
+
+	// Read the owners first, delete after — the DELETE runs per owner through
+	// OnSessionEnd, which owns its own TX. Distinct owners, so a session holding
+	// several locks is one DELETE, not one per row.
+	std::set<wxString> orphans;
+	try {
+		ibQueryResult rs = q.ExecuteIR(ibQueryIR(ibProject(ibScan(kSysLockTable),
+			{ { ibCol(wxT("sessionGuid")), wxEmptyString } })));
+		while (rs.Next()) {
+			const wxString owner = rs.GetResultString(wxT("sessionGuid"));
+			if (!owner.IsEmpty() && live.find(owner) == live.end())
+				orphans.insert(owner);
+		}
+	}
+	catch (const ibBackendException&) {
+		return;   // transient DB error — the next sweep tick retries
+	}
+
+	for (const wxString& owner : orphans)
+		OnSessionEnd(ibGuid(owner));
 }
 
 std::vector<ibLockSnapshotRow> ibLockManager::GetSnapshot() const
