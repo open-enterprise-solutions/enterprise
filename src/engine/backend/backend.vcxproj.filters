@@ -741,6 +741,9 @@
     <ClInclude Include="session\session.h">
       <Filter>session</Filter>
     </ClInclude>
+    <ClInclude Include="session\sessionHolder.h">
+      <Filter>session</Filter>
+    </ClInclude>
     <ClInclude Include="session\sessionPolicy.h">
       <Filter>session</Filter>
     </ClInclude>
@@ -1757,6 +1760,9 @@
       <Filter>plugin</Filter>
     </ClCompile>
     <ClCompile Include="session\session.cpp">
+      <Filter>session</Filter>
+    </ClCompile>
+    <ClCompile Include="session\sessionHolder.cpp">
       <Filter>session</Filter>
     </ClCompile>
     <ClCompile Include="session\sessionRegistry.cpp">

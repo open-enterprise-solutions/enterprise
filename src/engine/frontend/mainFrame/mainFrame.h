@@ -14,10 +14,10 @@
 
 class ibMetaView;
 
+// The main window is created by the exe that has the holder, shown with
+// Show() and destroyed by wx — so the old create / show / destroy
+// macros have no callers left and are gone. Only the lookup remains.
 #define mainFrame            		 (ibFrontendMainFrame::GetFrame())
-#define mainFrameCreate(frame)       (ibFrontendMainFrame::InitFrame(new frame))
-#define mainFrameShow()				 (ibFrontendMainFrame::ShowFrame())
-#define mainFrameDestroy()  		 (ibFrontendMainFrame::DestroyFrame())
 
 #include "objinspect/objinspect.h"
 
@@ -46,27 +46,11 @@ public:
 	virtual void Modify(bool modify) {}
 	virtual bool IsModified() const { return false; }
 
-	// Session this frame was initialized for. Set once via Initialize()
-	// (see below) right after OpenSession in the phased startup flow.
-	// Frames that go through the legacy monolithic Connect() read it
-	// through the base-class fallback to appData's main ticket.
-	virtual ibSession* GetSession() const override { return m_session; }
+	// GetSession() comes from ibBackendDocFrame — it answers out of the
+	// holder this frame was built with. The old m_session mirror and the
+	// Initialize(session) call that filled it are gone: one owner, one
+	// source of truth.
 
-	// GUI-session back-link — populated by ibGUISession::AttachFrame.
-	// Null until the derived session claims this frame; stays null for
-	// frames built by the legacy mainFrameCreate path. Use GetSession()
-	// for plain ibSession*-typed code; reach for ibGUISession* only
-	// when GUI-specific plumbing (module manager per-session, debugger
-	// hooks) matters.
-	void SetGUISession(class ibGUISession* s) { m_guiSession = s; }
-	class ibGUISession* GetGUISession() const { return m_guiSession; }
-
-	// Bind session to this frame. Called once right after session->Open
-	// succeeds, BEFORE LoadMetadata — so AllowRun/AllowClose and any
-	// session-aware UI already see the session even while metadata is
-	// being compiled. Runtime start (CreateRoot + AttachRuntime)
-	// is deferred to Show() so activeMetaData is guaranteed populated.
-	virtual bool Initialize(ibSession* session);
 
 	virtual ibMetaData* FindMetadataByPath(const wxString& strFileName) const;
 
@@ -114,10 +98,14 @@ public:
 
 	virtual void SetTitle(const wxString& title) override { wxAuiMDIParentFrame::SetTitle(title); }
 	virtual void SetStatusText(const wxString& text, int number = 0) override { wxAuiMDIParentFrame::SetStatusText(text, number); }
-	virtual bool Show(bool show = true) override {
-		if (show && !EnsureRuntime()) return false;
-		return (show && AllowRun() || !show && AllowClose()) && wxAuiMDIParentFrame::Show(show);
-	}
+	// Show does the whole opening: build the GUI, start the runtime, ask
+	// AllowRun, put the window up. Callers just say Show().
+	//
+	// Hiding is not closing — the old `!show && AllowClose()` arm meant
+	// minimising or hiding the window asked "may I close?" and could run
+	// the BeforeExit script. The close question lives where closing
+	// actually happens: the wxEVT_CLOSE_WINDOW handler.
+	virtual bool Show(bool show = true) override;
 
 #if wxUSE_MENUS
 	virtual void SetMenuBar(wxMenuBar* pMenuBar) override;
@@ -128,8 +116,9 @@ public:
 	// bring window to front
 	virtual void Raise() override;
 
-	//destroy window 
+	//destroy window
 	virtual bool Destroy() override;
+
 
 	// update frame manager 
 	void UpdateManager() {
@@ -150,18 +139,25 @@ protected:
 		return wxAuiMDIParentFrame::TryBefore(event) || TryProcessEvent(event);
 	}
 
-	virtual bool AllowRun() const { return true; }
+	// May the window come up? Desktop default: yes. Enterprise overrides
+	// to fire BeforeStart on the session's runtime.
+	virtual bool AllowRun() { return true; }
 
 public:
-	// Soft-close veto hook. Called from wx's EVT_CLOSE_WINDOW handler when
-	// the user clicks [X], and from ibGUISession::OnDestroySession when
-	// EndJob(false) lands from script — both flows must consult the same
-	// veto (BeforeExit script for enterprise; unsaved-config dialog for
-	// designer). Default true means "allow close"; subclass returns false
-	// to cancel.
-	virtual bool AllowClose() const { return true; }
+	// May the window go down? Asked ONLY when the answer can be honoured —
+	// a forced close does not call this at all, which is why there is no
+	// force parameter: "don't ask" is expressed by not asking.
+	//
+	// Public because the GUI session's closing sequence asks it: the
+	// question belongs to the window, the sequence belongs to the session.
+	//
+	// Desktop default: poll the open documents, each of which may refuse.
+	// Enterprise chains BeforeExit after this; the Designer chains its
+	// unsaved-configuration prompt.
+	virtual bool AllowClose();
 
 protected:
+
 
 	// Lazy runtime start — first Show() after LoadMetadata creates the
 	// root module manager and wires per-session ProcUnits onto the
@@ -170,7 +166,12 @@ protected:
 	// (Designer / Launcher / WebServer). Called from Show().
 	bool EnsureRuntime();
 
-	ibFrontendMainFrame(const wxString& title,
+	// The session comes in with the window. Everything the frame needs to
+	// do with it — take ownership, wire the back-link, register itself as
+	// the process's main window — happens inside, so callers just build
+	// the frame and hand over the holder they were given.
+	ibFrontendMainFrame(ibSessionHolder&& holder,
+		const wxString& title,
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize,
 		long style = wxDEFAULT_FRAME_STYLE,
@@ -200,13 +201,14 @@ public:
 		return nullptr;
 	}
 
+	// The process's main window. One per desktop process, which is why
+	// the desktop session can answer GetFrame() from here instead of
+	// storing a pointer of its own.
 	static ibFrontendMainFrame* GetFrame() { return s_instance; }
 
-	// Force the static appData instance to Init()
+	// Claim the singleton slot. Called from the ctor — the window that
+	// was built around the holder is the process's main window.
 	static void InitFrame(ibFrontendMainFrame* mf);
-	static bool ShowFrame();
-
-	static void DestroyFrame();
 
 	ibKeyBinder             GetKeyBinder() const { return m_keyBinder; }
 	ibFontColorSettings     GetFontColorSettings() const { return m_fontColorSettings; }
@@ -242,20 +244,6 @@ protected:
 	};
 
 	static ibFrontendMainFrame* s_instance;
-
-	// Bound at Initialize(). Drives AllowRun/AllowClose and any
-	// session-aware UI actions. Raw pointer — session outlives frame
-	// (registry's m_own keeps it alive until ibSession::Close()).
-	ibSession* m_session = nullptr;
-
-	// GUI-session back-link — set by ibGUISession::AttachFrame when the
-	// derived session (ibEnterpriseSession / ibDesignerSession) instantiates
-	// this frame in its OnCreateSession. Lets frame handlers reach the
-	// per-session runtime (module manager, ProcUnit map, ibValueSystemFunction
-	// once it goes non-static) without routing through wxApp singletons.
-	// Non-owning; session owns the frame and clears this pointer on its
-	// dtor via SetGUISession(nullptr) before `delete m_frame`.
-	class ibGUISession* m_guiSession = nullptr;
 
 	ibObjectInspector* m_objectInspector;
 

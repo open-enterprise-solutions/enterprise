@@ -21,10 +21,11 @@ ibFrontendMainFrameEnterprise* ibFrontendMainFrameEnterprise::GetFrame() {
 
 ///////////////////////////////////////////////////////////////////
 
-ibFrontendMainFrameEnterprise::ibFrontendMainFrameEnterprise(const wxString& title,
+ibFrontendMainFrameEnterprise::ibFrontendMainFrameEnterprise(ibSessionHolder&& holder,
+	const wxString& title,
 	const wxPoint& pos,
 	const wxSize& size) :
-	ibFrontendMainFrame(title, pos, size),
+	ibFrontendMainFrame(std::move(holder), title, pos, size),
 	m_outputWindow(new ibOutputWindow(this, wxID_ANY))
 {
 	m_docManager = new ibDocManagerEnterprise;
@@ -67,11 +68,10 @@ void ibFrontendMainFrameEnterprise::BackendError(const wxString& strFileName, co
 		);
 	}
 
-	//close window — force-close every session the registry owns:
-	// each session's m_forceExit flag interrupts any running script,
-	// OnForceExit (overridden on ibGUISession) schedules wxTheApp::Exit
-	// once, Remove submitted for each session row. GUI ends with the
-	// app exiting through wx's normal teardown.
+	//close window — force-close every session the registry owns: the
+	// force flag interrupts any running script and each session closes
+	// its own window without asking. The app then ends through wx's
+	// normal teardown, and each window's holder release removes its row.
 	if (retCode == 3) {
 		if (auto* reg = ibApplicationData::GetSessionRegistry())
 			reg->CloseAll(true);
@@ -102,26 +102,35 @@ bool ibFrontendMainFrameEnterprise::Show(bool show)
 #include "backend/session/session.h"
 #include "backend/moduleManager/moduleManager.h"
 
-bool ibFrontendMainFrameEnterprise::AllowRun() const
+// The enterprise window is the one with a full runtime behind it, so
+// both of its boundaries fire script events on the session's root.
+
+bool ibFrontendMainFrameEnterprise::AllowRun()
 {
-	// StartMainModule fires BeforeStart / OnStart on the session's
-	// root. BeforeStart veto returns false → frame show blocked.
-	if (ibSession* s = GetSession()) {
-		if (auto* root = s->GetManagerModule())
-			return root->StartMainModule();
-	}
-	return false;
+	// StartMainModule fires BeforeStart / OnStart. A BeforeStart veto —
+	// or no runtime at all — would leave a half-alive client, so refuse.
+	ibSession* s = GetSession();
+	auto* root = s != nullptr ? s->GetManagerModule() : nullptr;
+	return root != nullptr && root->StartMainModule();
 }
 
-bool ibFrontendMainFrameEnterprise::AllowClose() const
+bool ibFrontendMainFrameEnterprise::AllowClose()
 {
-	// ExitMainModule fires BeforeExit / OnExit. BeforeExit veto blocks
-	// close (user sees "cancelled by script" banner / modal).
-	if (ibSession* s = GetSession()) {
-		if (auto* root = s->GetManagerModule())
-			return root->ExitMainModule();
-	}
-	return false;
+	// Documents first (base), script second: a document that refuses
+	// stops us before BeforeExit runs — no point asking the script about
+	// an exit that is not going to happen.
+	if (!ibFrontendMainFrame::AllowClose())
+		return false;
+
+	// ExitMainModule fires BeforeExit / OnExit. It runs HERE — window,
+	// runtime and session all alive — so the script can still save,
+	// message and query, and BeforeExit can still cancel.
+	//
+	// No runtime ⇒ allow. Refusing on a missing root (startup failed
+	// before compile) would trap the user in an unclosable window.
+	ibSession* const s = GetSession();
+	auto* root = s != nullptr ? s->GetManagerModule() : nullptr;
+	return root == nullptr || root->ExitMainModule();
 }
 
 ///////////////////////////////////////////////////////////////////////////

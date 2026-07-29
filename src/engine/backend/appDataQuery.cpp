@@ -251,13 +251,14 @@ bool ibApplicationData::SaveUserInfoToBuffer(wxMemoryBuffer& buffer) const
 
 // -----------------------------------------------------------------------
 // Phased session lifecycle — apps compose CreateSession (or the typed
-// CreateSession<T>) with session->Open() so the registry ticket
-// stays visible during login-retry loops. There is no one-shot
-// "Connect/StartSession" anymore; failed Open keeps the anonymous row
-// in sys_session until the caller drops the ticket explicitly.
+// CreateSession<T>) with holder->Open() so the anonymous row stays
+// visible during login-retry loops. There is no one-shot
+// "Connect/StartSession" anymore; a failed Open keeps the row in
+// sys_session until the caller drops the holder, and dropping it is
+// what removes the row.
 // -----------------------------------------------------------------------
 
-ibSession* ibApplicationData::CreateSession()
+ibSessionHolder ibApplicationData::CreateSession()
 {
 	// Default-factory passthrough — registry builds a plain ibSession.
 	// Used by codeRunner / daemon / headless callers and by the wes

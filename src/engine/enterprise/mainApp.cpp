@@ -86,21 +86,11 @@ bool ibAppEnterprise::OnCmdLineParsed(wxCmdLineParser& parser)
 
 //////////////////////////////////////////////////////////////////////////////////
 
-// ibEnterpriseSession — concrete GUI session for enterprise.exe. Lives
-// here (not in a dedicated header) because only this exe ever needs it.
-// OnCreateSession runs on the main thread after the registry has Added
-// the session; it instantiates the exe-specific frame class — the only
-// place where `ibFrontendMainFrameEnterprise` is visible, since the
-// concrete frame type is not exported to frontend.dll.
-class ibEnterpriseSession : public ibGUISession {
-public:
-	using ibGUISession::ibGUISession;
-
-	bool OnCreateSession() override {
-		AttachFrame(new ibFrontendMainFrameEnterprise);
-		return m_frame != nullptr;
-	}
-};
+// No exe-specific session class. What made enterprise.exe's session
+// different was that it built ibFrontendMainFrameEnterprise — and that
+// now happens the other way round, in DoOnRun, with the window built
+// around the holder. ibGUISession carries the rest (login prompt, what
+// a forced close means on desktop), so there is nothing left to derive.
 
 int ibAppEnterprise::DoOnRun()
 {
@@ -210,14 +200,14 @@ int ibAppEnterprise::DoOnRun()
 	wxImage::AddHandler(new wxPNGHandler);
 #endif
 	// Flow (enterprise thick client):
-	//   1. CreateSession<ibEnterpriseSession> — session is registered
-	//      in the registry; its OnCreateSession hook instantiates the
-	//      frame + wires the back-link on the main thread.
-	//   2. Authenticate — attaches user creds to the ticket; interactive
-	//      dialog fallback shows through session->GetFrame().
-	//   3. LoadMetadata — compile descriptors.
-	//   4. mainFrameShow — EnsureRuntime lazily creates root + ProcUnits,
-	//      AllowRun fires BeforeStart veto.
+	//   1. CreateSession — the registry registers the session and hands
+	//      back the holder.
+	//   2. Open — attaches user creds; the login dialog is standalone, so
+	//      no window is needed yet.
+	//   3. new ibFrontendMainFrameEnterprise(std::move(holder)) — the
+	//      window takes ownership; from here it IS the session's life.
+	//   4. Show — EnsureRuntime creates root + ProcUnits, AllowRun fires
+	//      BeforeStart.
 	// Stash flags so OnFirstConnect listener picks them up when
 	// LoadMetadata fires from the registry event chain.
 	appData->m_loadMetadataFlags = m_debugEnable
@@ -228,29 +218,31 @@ int ibAppEnterprise::DoOnRun()
 	// listeners (wired in appData ctor) handle BindSessionToThread,
 	// LoadMetadata, CreateRoot + CompileRoot + AttachRuntime
 	// through OnFirstConnect / OnAuthenticated.
-	ibSession* session = nullptr;
+	// The holder lives on this stack frame until it is handed to the main
+	// form. Every failure path below simply lets it go — dropping the
+	// holder IS closing the session (anonymous sys_session row removed,
+	// registry entry dropped). There is no error-path cleanup to forget.
+	ibSessionHolder holder;
 	wxString openError;
 	ibSession::OpenResult openResult = ibSession::OpenResult::Failed;
 	try {
-		session = appData->CreateSession<ibEnterpriseSession>();
-		if (session != nullptr) {
-			openResult = session->Open(m_strIBUser, m_strIBPassword);
-			if (openResult != ibSession::OpenResult::Authenticated) {
-				session->Close();
-				session = nullptr;
-			}
+		holder = appData->CreateSession<ibGUISession>();
+		if (holder) {
+			openResult = holder->Open(m_strIBUser, m_strIBPassword);
+			if (openResult != ibSession::OpenResult::Authenticated)
+				holder.Reset();
 		}
 	} catch (const ibBackendException& e) {
 		openError = e.GetErrorDescription();
-		session   = nullptr;
+		holder.Reset();
 		openResult = ibSession::OpenResult::Failed;
 	} catch (const std::exception& e) {
 		openError = wxString::FromUTF8(e.what());
-		session   = nullptr;
+		holder.Reset();
 		openResult = ibSession::OpenResult::Failed;
 	}
 
-	if (session == nullptr) {
+	if (!holder) {
 		if (splashScreenLoader != nullptr) splashScreenLoader->Destroy();
 		// Cancelled = user clicked Cancel on the login dialog. They
 		// already know they cancelled — a second "Authentication failed"
@@ -267,7 +259,20 @@ int ibAppEnterprise::DoOnRun()
 	}
 
 	if (splashScreenLoader != nullptr) splashScreenLoader->Destroy();
-	if (!session->ShowFrame()) return 1;
+
+	// The window IS the session's owner: it takes the holder and from here
+	// the session lives exactly as long as the window.
+	auto* frame = new ibFrontendMainFrameEnterprise(std::move(holder));
+	if (!frame->Show()) {
+		// BeforeStart vetoed (or the runtime never came up). Destroy() on a
+		// top-level window is DELAYED — wxPendingDelete, pruned on the next
+		// idle — and we are about to return without ever entering the event
+		// loop, so the destructor will not run and the holder will not be
+		// released on this path. registry->Stop() in OnExit is what removes
+		// the session here. Every other path goes through the window.
+		frame->Destroy();
+		return 1;
+	}
 	return wxApp::OnRun();
 }
 

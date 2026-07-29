@@ -389,8 +389,8 @@ bool ibValueModuleManagerRuntimeConfiguration::CreateMainModule()
 	// fire site doesn't depend on ibSession::Current()'s thread-binding
 	// state at compile time.
 	if (auto* reg = ibApplicationData::GetSessionRegistry()) {
-		if (auto* session = reg->FindSessionByRoot(this))
-			reg->NotifyAfterCompile(session);
+		if (auto s = reg->FindSessionByRoot(this).Share())
+			reg->NotifyAfterCompile(s.get());
 	}
 
 	return true;

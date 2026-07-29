@@ -40,10 +40,15 @@ class ibWebDocChildFrame;
 //     parent/child hierarchy as the controls it hosts and is
 //     serialisable into the JSON response alongside them.
 class ibWebApplication;
+class ibWebClientSession;   // typed Session() below
 
 class ibWebFrame : public ibBackendDocFrame, public ibWebWindow {
 public:
-	explicit ibWebFrame(ibWebApplication* app);
+	// Same shape as the desktop main window: the frame is built around an
+	// authenticated session and owns it from that moment. Closing the tab
+	// destroys this frame, which releases the holder, which ends the
+	// session — no separate logout bookkeeping.
+	ibWebFrame(ibSessionHolder&& holder, ibWebApplication* app);
 	virtual ~ibWebFrame() override;
 
 	// Back-pointer to the session's owning application. Lets
@@ -53,13 +58,11 @@ public:
 	// second thread_local or a separate globals table.
 	ibWebApplication* GetApp() const { return m_app; }
 
-	// Per-cookie session this frame drives. Forwarded from the owning
-	// ibWebApplication which has the session pointer set at Login time
-	// (ibWebSession::Login → app->SetSessionContext(ticket->Session())).
-	// Used by UI-originated paths (script OpenForm from OnStart, sidebar
-	// clicks) where no ownerControl is available to walk a descriptor
-	// parent chain up to the session.
-	virtual ibSession* GetSession() const override;
+	// GetSession() comes from ibBackendDocFrame — it answers out of the
+	// holder this frame owns. This is the typed view of the same thing:
+	// the ONE place the web side narrows a session pointer, so callers
+	// (and the constructor's back-link) never spell a cast themselves.
+	ibWebClientSession* Session() const;
 
 	// ibWebWindow
 	virtual wxString GetControlType() const override { return wxT("frame"); }

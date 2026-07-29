@@ -260,7 +260,7 @@ void ibApplicationData::WireSessionEvents()
 
 	// First authenticated session in the process → load metadata skeleton
 	// only. CreateRoot / RunDatabase / CompileRoot live in OnAuthenticated
-	// (and the designer's manual RunDatabase after mainFrameShow) — this
+	// (and the designer's manual RunDatabase after the window shows) — this
 	// listener is just the one-shot metadata bootstrap.
 	//
 	// Direct CreateActiveMetaData call — we are inside ibApplicationData
@@ -716,7 +716,7 @@ bool ibApplicationData::InitLocale(const wxString& locale)
 // ---------------------------------------------------------------------------
 // Phased startup (split of legacy Connect). Apps compose the phases;
 // runtime start is NOT here — it's driven from the session owned by the
-// app's main frame (frame->Initialize(session) wires it). Connect() stays
+// app's main frame (the window is built around the holder). Connect() stays
 // as a convenience wrapper for callers without inter-phase hooks
 // (codeRunner, daemon, tests).
 // ---------------------------------------------------------------------------

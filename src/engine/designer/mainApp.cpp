@@ -85,19 +85,10 @@ bool ibAppDesigner::OnCmdLineParsed(wxCmdLineParser& parser)
 
 //////////////////////////////////////////////////////////////////////////////////
 
-// ibDesignerSession — concrete GUI session for designer.exe. OnCreateSession
-// instantiates the exe-specific frame class (ibFrontendMainFrameDesigner),
-// which is not exported to frontend.dll. Declared here so designer.exe owns
-// its own concrete session type.
-class ibDesignerSession : public ibGUISession {
-public:
-	using ibGUISession::ibGUISession;
-
-	bool OnCreateSession() override {
-		AttachFrame(new ibFrontendMainFrameDesigner);
-		return m_frame != nullptr;
-	}
-};
+// No exe-specific session class — see enterprise/mainApp.cpp. The pair's
+// designer half lives entirely in ibFrontendMainFrameDesigner (which asks
+// about an unsaved configuration and runs no session scripts); the
+// session half is the same ibGUISession the enterprise client uses.
 
 int ibAppDesigner::DoOnRun()
 {
@@ -197,42 +188,42 @@ int ibAppDesigner::DoOnRun()
 	wxImage::AddHandler(new wxPNGHandler);
 #endif
 	// Flow (designer IDE):
-	//   1. CreateSession<ibDesignerSession> — registry Add plus
-	//      OnCreateSession hook that instantiates the designer frame on
-	//      the main thread (DesignerExclusivePolicy veto happens inside
-	//      the registry Connect before OnCreateSession runs).
-	//   2. Authenticate — creds, dialog fallback via session->GetFrame().
-	//   3. LoadMetadata — compile descriptors (intellisense).
-	//   4. mainFrameShow — Designer kind → EnsureRuntime no-op;
-	//                      AllowRun = true unconditionally.
+	//   1. CreateSession — registry Add (DesignerExclusivePolicy veto
+	//      happens inside the registry Connect), returns the holder.
+	//   2. Open — creds, standalone login dialog on failure.
+	//   3. new ibFrontendMainFrameDesigner(std::move(holder)) — the window
+	//      takes ownership of the session.
+	//   4. Show — Designer kind → EnsureRuntime no-op; AllowRun passes
+	//      unconditionally (no session scripts here).
 
 	// AccessMode was set by appData's ctor based on runMode. Registry
 	// listeners (wired in appData ctor) handle BindSessionToThread,
 	// LoadMetadata, CreateRoot + CompileRoot through OnFirstConnect /
 	// OnAuthenticated — nothing to compose here.
-	ibSession* session = nullptr;
+	// Holder on the stack until the designer window takes it — see
+	// enterprise/mainApp.cpp for the rationale. Dropping it closes the
+	// session, so every failure path below is complete as written.
+	ibSessionHolder holder;
 	wxString openError;
 	ibSession::OpenResult openResult = ibSession::OpenResult::Failed;
 	try {
-		session = appData->CreateSession<ibDesignerSession>();
-		if (session != nullptr) {
-			openResult = session->Open(m_strIBUser, m_strIBPassword);
-			if (openResult != ibSession::OpenResult::Authenticated) {
-				session->Close();
-				session = nullptr;
-			}
+		holder = appData->CreateSession<ibGUISession>();
+		if (holder) {
+			openResult = holder->Open(m_strIBUser, m_strIBPassword);
+			if (openResult != ibSession::OpenResult::Authenticated)
+				holder.Reset();
 		}
 	} catch (const ibBackendException& e) {
 		openError = e.GetErrorDescription();
-		session   = nullptr;
+		holder.Reset();
 		openResult = ibSession::OpenResult::Failed;
 	} catch (const std::exception& e) {
 		openError = wxString::FromUTF8(e.what());
-		session   = nullptr;
+		holder.Reset();
 		openResult = ibSession::OpenResult::Failed;
 	}
 
-	if (session == nullptr) {
+	if (!holder) {
 		if (splashScreenLoader != nullptr) splashScreenLoader->Destroy();
 		// Same Cancel-vs-Failed split as enterprise.exe — see enterprise/
 		// mainApp.cpp for the rationale.
@@ -257,7 +248,16 @@ int ibAppDesigner::DoOnRun()
 		new ibDebuggerClientBridgeDesigner);
 
 	if (splashScreenLoader != nullptr) splashScreenLoader->Destroy();
-	if (!session->ShowFrame()) return 1;
+
+	// Same shape as enterprise.exe: the window takes the holder and owns
+	// the session. On a failed Show the Destroy is delayed and no event
+	// loop will ever prune it, so the session is removed by
+	// registry->Stop() in OnExit — see the comment in enterprise/mainApp.cpp.
+	auto* frame = new ibFrontendMainFrameDesigner(std::move(holder));
+	if (!frame->Show()) {
+		frame->Destroy();
+		return 1;
+	}
 	return wxApp::OnRun();
 }
 

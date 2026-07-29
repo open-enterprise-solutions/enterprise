@@ -70,7 +70,9 @@ public:
 
 	static ibFrontendMainFrameDesigner* GetFrame();
 
-	ibFrontendMainFrameDesigner(const wxString& title = _("Designer"),
+	// Built around an authenticated session; owns it from here.
+	explicit ibFrontendMainFrameDesigner(ibSessionHolder&& holder,
+		const wxString& title = _("Designer"),
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize);
 
@@ -121,8 +123,11 @@ protected:
 	virtual void CreateBottomPane();
 	virtual void CreateWideGui();
 
-	virtual bool AllowRun() const;
-	virtual bool AllowClose() const;
+	// Opening loads the metadata tree (no session scripts here — the
+	// Designer has no runtime); closing asks about an unsaved
+	// configuration.
+	bool AllowRun() override;
+	bool AllowClose() override;
 
 	/**
 	* Adds the default profile to the hot keys.

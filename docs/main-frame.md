@@ -88,15 +88,20 @@ backend code calling these must simply get nothing back rather than crash.
 > The obligation outlived its purpose, not the other way round. If a native parent is ever
 > needed again, it belongs on the frontend side of this interface, not in its signature.
 
-Two session links on the frame:
+One session link on the frame, and it is ownership — see
+[session-ownership.md](session-ownership.md):
 
 ```cpp
-virtual ibSession* GetSession() const override { return m_session; }
-void SetGUISession(ibGUISession* s);   ibGUISession* GetGUISession() const;   // set by ibGUISession::AttachFrame
+// ibBackendDocFrame: no default ctor — a frame is always built around a session
+explicit ibBackendDocFrame(ibSessionHolder&& holder);
+ibSession* GetSession() const;          // answers out of the holder
 ```
 
-Use `GetSession()` for plain `ibSession*` code; reach for `ibGUISession*` **only** when
-GUI-specific plumbing matters (per-session module manager, debugger hooks).
+The frame OWNS the session: releasing the holder in `~ibBackendDocFrame`
+is what ends it. The old pair of links (`m_session` mirror plus
+`SetGUISession` / `GetGUISession`, wired by `ibGUISession::AttachFrame`)
+is gone — the desktop session answers `GetFrame()` from the window
+singleton instead of storing a pointer.
 
 ---
 
@@ -105,43 +110,42 @@ GUI-specific plumbing matters (per-session module manager, debugger hooks).
 This is the part that is easy to get wrong, and the code is explicit about the ordering:
 
 ```
-1.  session->Open(...)                       ← credentials, session row
-2.  frame->Initialize(session)               ← BIND ONLY. No runtime.
-3.  LoadMetadata()                           ← the configuration loads + compiles
-4.  frame->Show()  →  EnsureRuntime()        ← runtime start, now that activeMetaData exists
+1.  holder = appData->CreateSession<ibGUISession>()   ← session row, ownership in hand
+2.  holder->Open(user, pwd)                           ← credentials (standalone dialog,
+                                                        no window needed yet)
+3.  LoadMetadata()                                    ← fires from the registry's
+                                                        OnFirstConnect during Open
+4.  new ibFrontendMainFrameEnterprise(std::move(holder))   ← the window takes the session
+5.  frame->Show()                                     ← CreateGUI → EnsureRuntime → AllowRun
 ```
 
-```cpp
-bool ibFrontendMainFrame::Initialize(ibSession* session)
-{
-    // Bind-only. Runtime start deferred to Show() → EnsureRuntime() so
-    // activeMetaData is guaranteed populated (LoadMetadata runs between
-    // Initialize and Show in the app flow).
-    m_session = session;
-    return m_session != nullptr;
-}
-```
+There is no separate bind step: the frame cannot exist without a session,
+so `GetSession()` is valid from its first line. `Initialize(session)` and
+the `m_session` mirror it filled are gone.
 
-**Why `Initialize` runs *before* `LoadMetadata`:** `AllowRun` / `AllowClose` and any
-session-aware UI must already see the session **while metadata is still compiling**. A
-frame that learned its session only after the load would have no way to refuse or report
-during it.
+**Order inside `Show()` matters.** `CreateGUI()` runs *first*, before
+`EnsureRuntime()` and before `AllowRun()`, because the gate reaches into
+panes: enterprise fires `BeforeStart`/`OnStart` (a startup script may
+open forms) and the Designer loads its metadata tree into `m_metaWindow`.
+Asking before building dereferences panes that do not exist yet — that
+was a live crash during the ownership arc.
 
-**Why runtime start is deferred to `Show()`:** the runtime needs `activeMetaData` populated.
-Starting it in `Initialize` would race the load.
+**Why runtime start is deferred to `Show()`:** the runtime needs `activeMetaData` populated,
+and the load happens during `Open` (registry's `OnFirstConnect`).
 
 ```cpp
 bool ibFrontendMainFrame::EnsureRuntime()
 {
-    if (m_session == nullptr || activeMetaData == nullptr)
+    ibSession* session = GetSession();          // from the holder — no bind step
+    if (session == nullptr || activeMetaData == nullptr)
         return false;
 
     // Re-entry guard — root module manager lives on the session; if it's
     // already installed the runtime was started on a previous Show().
-    if (m_session->GetManagerModule() != nullptr)
+    if (session->GetManagerModule() != nullptr)
         return true;
 
-    const ibSessionKind kind = m_session->GetKind();
+    const ibSessionKind kind = session->GetKind();
     const bool wantsRuntime =
         (kind == ibSessionKind::Enterprise) ||
         (kind == ibSessionKind::WebClient)  ||
@@ -149,8 +153,8 @@ bool ibFrontendMainFrame::EnsureRuntime()
     if (!wantsRuntime)
         return true;                       // ← Designer takes this exit
 
-    if (auto* mm = m_session->GetManagerModule())
-        mm->AttachRuntime(m_session);
+    if (auto* mm = session->GetManagerModule())
+        mm->AttachRuntime(session);
     return true;
 }
 ```
@@ -161,6 +165,34 @@ bool ibFrontendMainFrame::EnsureRuntime()
   `wantsRuntime`, so the IDE compiles but never attaches a runtime
   ([ARCHITECTURE.md](ARCHITECTURE.md) § "Designer — compile only",
   [module-manager-split.md](module-manager-split.md)).
+
+---
+
+## 3a. Closing — one road, two entrances
+
+The window's close handler is the whole sequence, and both roads run it:
+
+```
+[X]                → wxEVT_CLOSE ─┐
+session->Close(f)  → frame->Close(f) ─┴→ OnCloseWindow
+                                          force = !event.CanVeto()
+                                          ├ !force && !AllowClose() → Veto, nothing happened
+                                          └ Skip → wx destroys the window
+                                              └ holder released → session ends
+```
+
+`AllowClose()` takes **no** force parameter — "don't ask" is expressed by
+not asking, so a non-vetoable close skips it entirely. Soft close asks in
+two steps: open documents first (each may refuse), then `ExitMainModule()`
+on the session's runtime (`BeforeExit` may cancel, `OnExit` runs). The
+enterprise window adds the second step; the Designer adds its
+unsaved-configuration prompt instead — it has no runtime.
+
+`Destroy()` closes whatever is still open unconditionally: it is past the
+point of no return, where a refusal could not be honoured.
+
+Full picture, including the web and headless owners:
+[session-ownership.md](session-ownership.md).
 
 ---
 

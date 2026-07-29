@@ -328,30 +328,84 @@ ibValueModuleManager* ibSession::EditModuleManagerFor(const ibMetaData* metaData
 	return session ? session->GetEditModuleManager(metaData) : nullptr;
 }
 
-void ibSession::Close(bool force)
+bool ibSession::Close(bool force)
 {
-	// Force close cuts the session's runtime everywhere: any in-flight
-	// script breaks out of its interpreter loop on the next opcode
-	// (m_forceExit flag, checked in ibProcUnit::Execute), and OnForceExit
-	// fires the per-kind side effect (GUI exits wxApp; web/server just
-	// stops running). Hard-close path was previously achieved through
-	// the process-level ibApplicationData::ForceExit; folding it into
-	// Close(true) keeps a single "kick this session" entry point.
+	// Close does ONE thing: hand the decision to whatever this session
+	// is — a desktop window, a web tab, a job runner. It is the same as
+	// the user pressing [X], just arriving from the backend. It does not
+	// tear anything down itself: the thing it just asked to close will
+	// die, its holder will be released, and THAT is the teardown.
+	//
+	// A refusal is a normal answer — nothing happened, try again later.
+	const ibSessionState state = State();
+	if (state == ibSessionState::Stopping || state == ibSessionState::Gone)
+		return true;
+
+	// Force also stops whatever is running: the interpreter sees the flag
+	// at its next opcode and unwinds, so nothing executes while the close
+	// goes through.
 	if (force)
 		RequestForceExit();
 
-	// Main-thread teardown hook — wx frame destruction must run on the
-	// thread that created the frame. Derived ibGUISession overrides
-	// OnDestroySession to schedule frame->Destroy() through wx's event
-	// loop. force=false lets the override veto (AllowClose script,
-	// unsaved-data prompt); force=true skips the check and tears down.
-	if (!OnDestroySession(force) && !force)
+	// And that is all Close does — start the close of whatever owns us.
+	// It deliberately does NOT tear the session down itself, not even
+	// under force: the teardown belongs to the holder release, and a
+	// session torn down while its holder still lives would leave the
+	// owner sitting on a corpse — a live window whose GetSession()
+	// answers with a session that has no row, no runtime and no state.
+	//
+	// When there is nothing to close (no window, no tab) the default
+	// OnClose ends the session right there, because in that case the
+	// holder belongs to plain code that will drop it on its own.
+	return OnClose(force);
+}
+
+void ibSession::Teardown()
+{
+	// The other half: what actually dismantles the session. Reached only
+	// by releasing the owning holder — so it runs exactly once, when the
+	// owner is really gone, and closing a window does NOT have to tell
+	// the session anything: the holder release says it.
+	const ibSessionState state = State();
+	if (state == ibSessionState::Stopping || state == ibSessionState::Gone)
 		return;
 
-	// Submit Remove@Urgent — registry-thread ProcessRemove erases m_own,
-	// which drops the last shared_ptr and destroys this session. Tolerate
-	// post-teardown calls (Close arriving from a dtor chain after appData
-	// has been destroyed) — nothing to do, the registry is gone with us.
+	// Mark the point of no return synchronously. The registry stamps
+	// Stopping too, but on its own thread after the Remove below is
+	// drained; without this line a second release in that gap would run
+	// the whole teardown again.
+	Transition(ibSessionState::Stopping);
+
+	// --- quiesce ---------------------------------------------------
+	// Expiring weak thread-bindings is not enough to make teardown safe:
+	// a script thread holds its session by RAW pointer on its own stack,
+	// where no weak_ptr can reach it. So we ask any in-flight script to
+	// stop (checked at loop boundaries in ibProcUnit::Execute) and then
+	// wait behind it in the session's own FIFO — when our empty task
+	// runs, everything queued before it is done and the worker has given
+	// up its lease on us.
+	//
+	// Re-entrant by construction: Submit runs inline when we are already
+	// on this session's worker (or when there is no pool at all, the
+	// single-session GUI case), so the future is ready before Submit
+	// returns and this never deadlocks against itself.
+	RequestCancel();
+	{
+		std::future<void> drained = Submit([] {});
+		if (drained.valid())
+			drained.wait_for(std::chrono::seconds(5));
+	}
+	// Lower the flag again: the teardown below still runs script-visible
+	// handlers (per-kind hooks, module OnDestroy through DestroyRoot),
+	// and a latched cancel would abort them at their first loop check.
+	ClearCancel();
+
+	// Submit Remove@Urgent — the registry thread DELETEs the sys_session
+	// row, fires OnDisconnect and drops the index entry. It does NOT free
+	// the object: m_own is a weak index, so the object dies when the last
+	// holder does, which is normally the window that just went down.
+	// Tolerate a release arriving from a dtor chain after appData is
+	// gone — nothing to do, the registry went with it.
 	ibSessionRegistry* const regPtr = ibApplicationData::GetSessionRegistry();
 	if (regPtr == nullptr) return;
 	auto& reg = *regPtr;
@@ -579,12 +633,11 @@ ibSession* ibSession::Current()
 	// the right session through the same Current() call other code
 	// uses, without an explicit sid threaded through every handler.
 	if (reg.IsDebugThread(tid)) {
-		// shared_ptr<...>::get() — caller holds nothing; returned raw
-		// is valid as long as some other strong-ref keeps the session
-		// alive (registry's m_own typically). Debug commands run
-		// synchronously while the script thread is parked, so the
-		// session is alive for the duration of the handler.
-		if (auto sp = reg.GetActiveDebugTarget()) return sp.get();
+		// Raw out of a temporary hold — the caller keeps nothing, and the
+		// session stays alive because its owner does. Debug commands run
+		// synchronously while the script thread is parked, so it cannot
+		// go away for the duration of the handler.
+		if (auto s = reg.GetActiveDebugTarget().Share()) return s.get();
 		// No session parked → fall through to the regular path below
 		// so a debug worker can still observe its own Designer-side
 		// connection on a thread that was bound separately.
@@ -763,15 +816,15 @@ void ibSession::WakeDebugLoop()
 
 void ibSession::RequestForceExit()
 {
-	// Set first, then dispatch. The interpreter check observes the
-	// flag on its next opcode loop iteration; OnForceExit dispatches
-	// the per-kind side effect (wx exit, schedule Close, etc.).
+	// Raise the flag only. The interpreter observes it on its next opcode
+	// loop iteration and unwinds. Announcing the close is NOT done here —
+	// Close() does that exactly once, right after calling us; doing it in
+	// both places fired OnClose twice on every forced close.
 	if (m_forceExit.exchange(true, std::memory_order_acq_rel))
-		return;   // already requested — don't fire OnForceExit twice
-	OnForceExit();
+		return;   // already requested
 
-	// Registry fan-out — covers session kinds whose virtual OnForceExit
-	// is the empty base (wes' WebServer technical session). Without it,
+	// Registry fan-out — covers session kinds with nothing of their own
+	// to close (wes' WebServer technical session). Without it,
 	// a debug-thread Current() that falls back to the system row would
 	// close it but no host listener would learn about it. Tolerate a
 	// post-teardown trigger silently — there's no one left to notify.

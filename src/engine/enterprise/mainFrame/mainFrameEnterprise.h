@@ -28,7 +28,10 @@ public:
 
 	static ibFrontendMainFrameEnterprise* GetFrame();
 
-	ibFrontendMainFrameEnterprise(const wxString& title = _("Enterprise"),
+	// The window is built around an authenticated session and owns it
+	// from that moment on.
+	explicit ibFrontendMainFrameEnterprise(ibSessionHolder&& holder,
+		const wxString& title = _("Enterprise"),
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize);
 	virtual ~ibFrontendMainFrameEnterprise();
@@ -51,8 +54,10 @@ protected:
 	virtual void CreateBottomPane();
 	virtual void CreateWideGui();
 
-	virtual bool AllowRun() const;
-	virtual bool AllowClose() const;
+	// This window's open/close questions, both fired on the session's
+	// runtime: BeforeStart on the way up, BeforeExit on the way down.
+	bool AllowRun() override;
+	bool AllowClose() override;
 
 	/**
 	* Adds the default profile to the hot keys.

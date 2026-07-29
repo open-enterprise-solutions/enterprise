@@ -183,6 +183,12 @@ void ibFrameCodeRunner::SyntaxChoiceOnChange(wxCommandEvent& event)
 ///////////////////////////////////////////////////////////////////////////
 
 ibFrameCodeRunner::ibFrameCodeRunner(wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style) :
+	// Sessionless by design: codeRunner opens no infobase — it compiles and
+	// runs a script buffer, and inherits ibBackendDocFrame only so backend
+	// diagnostics land in its output pane. The empty holder says that out
+	// loud; the base class has no default constructor precisely so that
+	// "no session" is a statement, never an omission.
+	ibBackendDocFrame(ibSessionHolder()),
 	wxFrame(parent, id, title, pos, size, style), m_compileCode(new ibCompileCode), m_procUnit(new ibProcUnit)
 {
 	this->SetSizeHints(wxDefaultSize, wxDefaultSize);

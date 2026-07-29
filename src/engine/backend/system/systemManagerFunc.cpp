@@ -893,11 +893,11 @@ wxString ibValueSystemFunction::GeneralLanguage() {
 
 void ibValueSystemFunction::EndJob(bool force) //EndJob
 {
-	// Just close the current session through the manager. force=true
-	// skips BeforeExit / OnExit veto checks. The registry's
-	// OnLastDisconnect listener fires when the auth-counter hits 0 and
-	// requests ForceExit there — declined by keep-alive predicates if
-	// other clients (web tabs, etc.) are still live.
+	// "End the job" ends the session, which means closing the window that
+	// holds it. EndJob(False) and the user clicking [X] are therefore the
+	// same event — both run the window's close path, so BeforeExit and
+	// unsaved documents get their say and a refusal leaves everything
+	// exactly as it was. EndJob(True) does not ask.
 	if (auto* session = ibSession::Current())
 		session->Close(force);
 }

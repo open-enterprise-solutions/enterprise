@@ -16,20 +16,39 @@
 #include "visualView/visualHostClient.h"
 
 #include "webChildFrame.h"
-#include "webApplication.h"   // for GetSessionContext on GetSession()
+#include "webApplication.h"
+#include "webClientSession.h"   // typed Session() + its SetFrame back-link
 
-ibWebFrame::ibWebFrame(ibWebApplication* app) : m_app(app) {}
-
-ibSession* ibWebFrame::GetSession() const
+ibWebFrame::ibWebFrame(ibSessionHolder&& holder, ibWebApplication* app)
+	: ibBackendDocFrame(std::move(holder)), m_app(app)
 {
-	// Per-cookie ibWebApplication carries the ticket's session (bound
-	// at Login time via ibWebSession::Login → SetSessionContext). No
-	// app / no session set — return nullptr; callers guard.
-	return m_app != nullptr ? m_app->GetSessionContext() : nullptr;
+	// The session learns its window here, in one visible line, the same
+	// moment it becomes ours. wes has no main-window singleton to ask
+	// (many tabs at once), so unlike the desktop pair this link has to be
+	// stored — but it is set exactly where ownership is taken, not
+	// patched in by whoever happened to build the frame.
+	//
+	// Guarded: a frame built with an empty holder (tests) has no session
+	// to tell, and that is not a reason to crash.
+	if (auto* session = Session())
+		session->SetFrame(this);
+}
+
+ibWebClientSession* ibWebFrame::Session() const
+{
+	return static_cast<ibWebClientSession*>(GetSession());
 }
 
 ibWebFrame::~ibWebFrame()
 {
+	// Undo the constructor's back-link first: the session must not point
+	// at a window that is already unwinding, and a late
+	// ibSession::CurrentFrame() during teardown would otherwise hand out
+	// a freed pointer. Symmetric with the ctor — bound where ownership is
+	// taken, cleared where it ends, with nothing to remember outside.
+	if (auto* session = Session())
+		session->SetFrame(nullptr);
+
 	// The OnExit path is responsible for running DeleteAllViews on every
 	// tab's doc BEFORE deleting the frame — that must happen on the
 	// session worker thread so procUnit's per-thread state is valid.

@@ -160,41 +160,22 @@ public:
 	// the same for every session inside a process — not duplicated here.
 	ibSession(wxString id, ibSessionKind kind);
 
-	// Virtual — derived ibGUISession (frontend.dll) and per-exe concrete
-	// sessions (ibEnterpriseSession, ibDesignerSession) hang off this.
-	// Registry + ticket hold shared_ptr<ibSession>; concrete dtor runs
-	// through the virtual chain.
+	// Virtual — ibGUISession (desktop) and ibWebClientSession (per web
+	// tab) hang off this. The holder is the only strong reference (the
+	// registry indexes weakly); the concrete dtor runs through the
+	// virtual chain when that holder is released.
 	virtual ~ibSession();
 
 	ibSession(const ibSession&)            = delete;
 	ibSession& operator=(const ibSession&) = delete;
 
-	// Main UI frame this session owns. Read-only contract for backend
-	// code (CurrentFrame() lookups, script-side CreateNewForm, etc.).
-	// Default null — frameless sessions (daemon, codeRunner,
-	// future compute server, WebServer technical row) have no UI and never
-	// override. Sessions that own a frame (ibGUISession with
-	// ibFrontendMainFrame, ibWebClientSession with ibWebFrame) carry
-	// their own typed storage and override GetFrame to expose it.
+	// The window driving this session, for backend callers that need to
+	// reach the UI (CurrentFrame, script-side CreateNewForm). Each kind
+	// answers from wherever its window already is — the desktop pair from
+	// its main-window singleton, a web client from its tab — so nothing
+	// is stored here and there is no registration step to get wrong.
+	// Default null: daemon, codeRunner, the wes technical row have no UI.
 	virtual ibBackendDocFrame* GetFrame() const { return nullptr; }
-
-	// Lifecycle event hooks. OnCreateSession fires once on the main
-	// (caller) thread after the registry has Added the session — GUI
-	// subclasses create their wx frame here so ctor work lands on the
-	// UI thread. OnDestroySession fires symmetrically from
-	// ibApplicationData::CloseSession on the main thread before the
-	// ticket is released so frame/UI resources are torn down in a safe
-	// place. Returns false to veto the close (only honoured when
-	// Close was called with force=false). Base bodies are no-ops/true.
-	virtual bool OnCreateSession()  { return true; }
-	virtual bool OnDestroySession(bool force = false) { (void)force; return true; }
-
-	// Make the session's main frame visible. Called from the host app's
-	// OnRun after Authenticate but before the wx event loop starts. GUI
-	// sessions override (ibGUISession does Show + Center + Raise on their
-	// frame); frameless sessions (WebServer, headless service, codeRunner)
-	// inherit the default no-op success — nothing to show, OnRun proceeds.
-	virtual bool ShowFrame() { return true; }
 
 	// Session-owned auth orchestration. Submits Attach to the registry
 	// directly (via shared_from_this so no ticket is required in the call
@@ -274,36 +255,19 @@ public:
 	// register common modules in metadata's storage between the two.
 	ibValueModuleManagerRuntimeConfiguration* CreateRoot(class ibMetaDataConfigurationBase* metaData);
 
-	// Explicit close — fires OnDestroySession on the calling thread
-	// (main-thread wx frame teardown for GUI sessions) and submits
-	// Remove@Urgent to the registry so this session is dropped from
-	// m_own.
+	// End this session — by asking whatever holds it to go. Close does
+	// NOT dismantle anything itself; it is the backend's equivalent of
+	// the user pressing [X].
 	//
-	// Lifetime contract. Close uses shared_from_this internally to keep
-	// the session alive across the registry's async ProcessRemove. The
-	// caller's pointer (raw or shared_ptr) is what determines safety
-	// AFTER Close returns:
-	//   - Raw `ibSession*` (desktop main, EndJob, internal helpers):
-	//     do NOT touch the pointer after Close. Once registry processes
-	//     Remove and drops m_own's strong-ref, if no other shared_ptr
-	//     holds the session, ~ibSession runs and the raw pointer
-	//     dangles. The standard pattern is "Close, then return / let
-	//     the local variable go out of scope".
-	//   - shared_ptr<ibSession> (ibWebSession::m_session):
-	//     after Close, call reset() on your shared_ptr to release
-	//     your strong-ref symmetrically. The registry's strong-ref
-	//     was already dropped during ProcessRemove; your reset is the
-	//     final drop and triggers ~ibSession.
+	//   Close()      — try. The owner runs its own close path and may
+	//                  refuse (unsaved document, BeforeExit script);
+	//                  then nothing happened and this returns false.
+	//   Close(true)  — force. Nobody is asked.
 	//
-	// force=false (default) — soft close. OnDestroySession may run veto
-	//                         checks (AllowClose / unsaved-data prompts);
-	//                         a veto leaves the session Added and the
-	//                         caller's pointer stays valid. Submit only
-	//                         happens when the veto passes.
-	// force=true             — hard close. Skips veto, always destroys —
-	//                         used by debug-Destroy and shutdown paths
-	//                         where the close cannot be cancelled.
-	void Close(bool force = false);
+	// The teardown follows on its own: the owner dies, its holder is
+	// released, and that release is what ends the session. So closing a
+	// window never has to notify the session — the release says it.
+	bool Close(bool force = false);
 
 	// Drop the user identity bound to this session. Auth axis transitions
 	// back to Anonymous; the session itself stays Added so the caller can
@@ -420,13 +384,13 @@ public:
 	bool IsCancelRequested() const { return m_cancelRequested.load(std::memory_order_acquire); }
 
 	// Force-exit flag — "voluntary kick" of this session. The interpreter
-	// breaks out of its loop at the next iteration; OnForceExit() then
-	// fires the per-kind action: GUI session exits the wx main loop,
-	// web client session schedules its Close, plain server-side sessions
-	// just stop running scripts. Atomic + cooperative (script-thread
-	// checks the flag); blocking I/O won't notice. Kept distinct from
-	// Cancel because cancel says "interrupt this task" while ForceExit
-	// says "stop running on this session for the rest of its life".
+	// breaks out of its loop at the next iteration and the window is told
+	// hears OnClose(true) — no questions asked. Atomic +
+	// cooperative (the script thread checks the flag); blocking I/O won't
+	// notice. Kept distinct from Cancel because cancel says "interrupt
+	// this task" while force-exit says "stop running on this session for
+	// the rest of its life". Normally you call Close(true) instead, which
+	// does both in the right order.
 	void RequestForceExit();
 	bool IsForceExit() const { return m_forceExit.load(std::memory_order_acquire); }
 
@@ -466,11 +430,31 @@ public:
 	}
 
 protected:
-	// Per-kind reaction to ForceExit. Default no-op (server-style — just
-	// exit the script loop and let the host do nothing else). ibGUISession
-	// overrides → wxTheApp->Exit; future ibWebClientSession could
-	// override → schedule session Close.
-	virtual void OnForceExit() {}
+	// "This session is closing" — the one event, and it is about the
+	// SESSION, not about a window. Not every session has a window: a
+	// background worker running scheduled jobs is a perfectly good
+	// session with no UI at all, and it hears this the same way.
+	//
+	// Each kind does what closing means for it: the desktop pair closes
+	// its main frame, a web client closes its tab, a job runner stops
+	// taking work, a plain headless session does nothing and inherits
+	// the default. Whatever it does, the holder release that follows is
+	// what actually ends the session.
+	//
+	// Start the close of whatever owns this session. Kinds that HAVE
+	// something to close (window, tab) do exactly that and no more —
+	// their teardown arrives with the holder release that follows, so the
+	// owner is never left holding a session that has already been
+	// dismantled.
+	//
+	// The default is the other case: nothing to close. Then there is no
+	// owner whose death would release a holder — the holder sits in plain
+	// code (daemon's scope, a job runner, wes's technical global) — so
+	// this IS the end and the session ends here.
+	//
+	// Returning false means "not now": nothing happened and the caller
+	// may try again. Under force the answer is not asked for.
+	virtual bool OnClose(bool /*force*/) { Teardown(); return true; }
 
 public:
 
@@ -599,6 +583,15 @@ public:
 private:
 	friend class ibSessionScope;
 	friend class ibSessionRegistry;
+	friend class ibSessionHolder;   // releasing the holder tears us down
+
+	// The teardown: quiesce the worker, then Remove@Urgent so the
+	// registry drops us, DELETEs the sys_session row and fires
+	// OnDisconnect (where DetachRuntime + DestroyRoot live). Reached ONLY
+	// by releasing the owning holder — that is what makes "the owner
+	// died, so the session died" true by construction rather than by
+	// convention, and why nothing else needs to report a close.
+	void Teardown();
 	friend class ibAccessTrustScope;   // toggles m_accessTrusted (RLS privileged window)
 
 	wxString       m_id;

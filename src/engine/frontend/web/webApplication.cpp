@@ -150,9 +150,9 @@ static bool ExitMainModuleSafe(ibValueModuleManagerRuntimeConfiguration* mgr)
 
 ibSession* ibWebApplication::GetSessionContext() const
 {
-	// Implicit upcast ibWebClientSession* -> ibSession*. Out-of-line
-	// because the header only forward-declares ibWebClientSession.
-	return m_sessionContext;
+	// Straight out of the frame — one source of truth. Out-of-line
+	// because the header only forward-declares ibWebFrame.
+	return m_frame != nullptr ? m_frame->GetSession() : nullptr;
 }
 
 ibWebApplication::ibWebApplication() = default;
@@ -182,7 +182,7 @@ ibWebApplication* currentWebApp()
 	return frame != nullptr ? frame->GetApp() : nullptr;
 }
 
-bool ibWebApplication::OnInit()
+bool ibWebApplication::OnInit(ibSessionHolder&& holder)
 {
 	std::cerr << "[app] OnInit begin" << std::endl;
 	if (activeMetaData == nullptr)
@@ -196,15 +196,11 @@ bool ibWebApplication::OnInit()
 	// handlers, early OpenForm calls, page-load code) can already
 	// reach backend_mainFrame and register open documents.
 	(void)common;  // pulled from metadata inside the shared moduleManager
-	m_frame = new ibWebFrame(this);
-	std::cerr << "[app] frame created" << std::endl;
 
-	// Publish the frame on the session so script-side calls into
-	// ibBackendValueForm::CreateNewForm / FindFormByUniqueKey resolve
-	// through ibSession::CurrentFrame() instead of throwing
-	// "Context functions are not available!".
-	if (m_sessionContext != nullptr)
-		m_sessionContext->SetFrame(m_frame);
+	// One line, same as desktop: the window takes the session and wires
+	// itself to it in its own constructor. Nothing to patch in from here.
+	m_frame = new ibWebFrame(std::move(holder), this);
+	std::cerr << "[app] frame created" << std::endl;
 
 	// No per-session moduleManager any more — the shared Configuration
 	// lives in metadata (compiled once at wfrontendInit). AttachRuntime
@@ -248,7 +244,7 @@ bool ibWebApplication::OnInit()
 	// Worker dispatch goes through the process-wide ibWorkerPool
 	// (appData->GetWorkerPool()) — no per-session thread to start.
 	// Per-session FIFO + lease inside the pool preserves the script
-	// invariant that one task at a time runs on m_sessionContext.
+	// invariant that one task at a time runs on this session.
 
 	m_initialized = true;
 	return true;
@@ -335,10 +331,11 @@ void ibWebApplication::PostWork(std::function<void()> fn)
 	// per-session worker thread provided. The pool worker binds the
 	// session via ibSessionScope at lease start, so script-side
 	// Current()/GetPUState() see this session.
-	if (m_sessionContext == nullptr) return;
+	ibSession* const session = GetSessionContext();
+	if (session == nullptr) return;
 	// Discard the future — PostWork is fire-and-forget; exceptions are
 	// captured in the promise state, which we ignore here.
-	(void)m_sessionContext->Submit(std::move(fn));
+	(void)session->Submit(std::move(fn));
 }
 
 void ibWebApplication::OnExit()
@@ -390,10 +387,8 @@ void ibWebApplication::OnExit()
 		std::cerr << "[app] delete m_frame: begin" << std::endl;
 		// Tabs already closed above; m_frame's m_tabs should be empty.
 		// ~ibWebFrame's DeleteAllViews loop is an idempotent no-op here.
-		// Detach from session first so any late ibSession::CurrentFrame()
-		// lookup doesn't see a freed pointer.
-		if (m_sessionContext != nullptr)
-			m_sessionContext->SetFrame(nullptr);
+		// The frame clears its own back-link and releases the holder as
+		// it goes — deleting it IS ending the session.
 		delete m_frame;
 		m_frame = nullptr;
 		std::cerr << "[app] delete m_frame: done" << std::endl;

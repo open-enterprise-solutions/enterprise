@@ -1,5 +1,14 @@
 # Session registry refactor — full picture
 
+> **⚠ Ownership changed after this document was written (2026-07-30).**
+> The registry no longer owns sessions: `m_own` is an index of
+> `ibSessionWatch` (weak), and the single owner is an `ibSessionHolder`
+> held by the window the session exists for. Wherever this document says
+> the registry OWNS a session or holds a `shared_ptr` in `m_own`, read
+> [session-ownership.md](session-ownership.md) instead — everything else
+> here (queue, row I/O, heartbeat liveness, policy chain, gotchas) is
+> still accurate and is not repeated there.
+
 > **Status:** LANDED. Registry + per-session lifecycle (`Open`/`Close`,
 > no ticket) + worker pool + heartbeat liveness all in tree. The
 > pessimistic row-lock scheme (`HoldRowLocks` / `TryProbeRowLock`) was
@@ -18,7 +27,7 @@ Full reference for the session-registry refactor (2026-04-20). Covers the archit
 Replace the old `ibApplicationDataSessionUpdater` (heartbeat thread on singleton `ibApplicationData` with 1Hz UPDATE of its own row in `sys_session`) with:
 
 - **Per-process session registry** (`ibSessionRegistry`) with a single consumer thread and priority queue.
-- **Per-session object** (`ibSession`) with a state machine (lifecycle + auth) and a cv for producers. The registry OWNS each live session as `shared_ptr<ibSession>` in `m_own` (keyed by `GetId()`).
+- **Per-session object** (`ibSession`) with a state machine (lifecycle + auth) and a cv for producers. The registry tracks each live session in `m_own` (keyed by `GetId()`) — as a `shared_ptr` when this was written, as a weak `ibSessionWatch` since 2026-07-30.
 - **Lifecycle via the session itself** — `ibSession::Open(user,pwd)` / `Close(force)` use `shared_from_this` to submit Attach / Remove@Urgent; there is no separate `ibSessionTicket` class (the early ticket-RAII design was folded into the session — older comments still say "ticket").
 - **Unified `Connect(req)` entry** for desktop / designer / web-server / web-cookie, reached through `CreateSessionWithFactory` (returns the `ibSession*` owned by `m_own`).
 - **Policy chain** (`ibSessionPolicy`) instead of scattered veto hooks.
@@ -40,11 +49,14 @@ Replace the old `ibApplicationDataSessionUpdater` (heartbeat thread on singleton
 The phased entry points on `ibApplicationData` are
 `CreateSession()` (or typed `CreateSession<SessionT>()`) plus the
 session's own `Open(user, pwd)`. The legacy monolithic `StartSession`
-is gone. The session is owned by the registry's `m_own`; the caller
-holds a raw `ibSession*` and tears down via `s->Close()` (no ticket).
+is gone. Since 2026-07-30 `CreateSession` returns an `ibSessionHolder`
+(ownership) rather than a raw pointer, and the caller moves it into the
+window it builds — see [session-ownership.md](session-ownership.md). The
+sketch below shows the pre-holder shape; the registry steps in it are
+unchanged.
 
 ```
-ibSession* s = appData->CreateSession<ibEnterpriseSession>();
+ibSession* s = appData->CreateSession<ibEnterpriseSession>();   # now: ibSessionHolder
 │   ├── registry.EnableSysSessionOwnership(true)         # one-shot
 │   ├── (designer only) registry policy chain includes DesignerExclusivePolicy
 │   ├── registry.EnsureStartedForCreateSession()         # spawn thread,
@@ -118,8 +130,9 @@ POST /login { user, password }
 ## Thread model
 
 **Registry thread** (single consumer) owns:
-- `m_own : unordered_map<wxString, shared_ptr<ibSession>>` (keyed by
-  `GetId()`, guarded by `m_ownMutex`) — sessions this process tracks.
+- `m_own : unordered_map<wxString, ibSessionWatch>` (keyed by `GetId()`,
+  guarded by `m_ownMutex`) — the index of sessions this process tracks.
+  Weak since 2026-07-30; it was `shared_ptr` when this was written.
 - **One** pool-bound connection: `m_writeConn` (via `m_writeHolder`,
   bound through `EnsureConnection()` on Start when `m_ownsSysSession`) —
   INSERT / UPDATE / DELETE + JobRefreshSnapshot SELECT. The historical

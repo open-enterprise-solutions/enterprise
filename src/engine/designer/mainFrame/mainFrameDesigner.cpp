@@ -29,9 +29,10 @@ ibFrontendMainFrameDesigner* ibFrontendMainFrameDesigner::GetFrame() {
 
 ///////////////////////////////////////////////////////////////////
 
-ibFrontendMainFrameDesigner::ibFrontendMainFrameDesigner(const wxString& title,
+ibFrontendMainFrameDesigner::ibFrontendMainFrameDesigner(ibSessionHolder&& holder,
+	const wxString& title,
 	const wxPoint& pos,
-	const wxSize& size) : ibFrontendMainFrame(title, pos, size),
+	const wxSize& size) : ibFrontendMainFrame(std::move(holder), title, pos, size),
 
 	m_metaWindow(nullptr),
 
@@ -212,11 +213,17 @@ void ibFrontendMainFrameDesigner::Debugger_OnLeaveLoop()
 }
 #pragma endregion 
 
+bool ibFrontendMainFrameDesigner::AllowRun()
+{
+	// The Designer's "may I come up?" is its metadata tree: load it, and
+	// refuse the show if it cannot be loaded. Runs from the base Show
+	// AFTER CreateGUI, so m_metaWindow and the panes around it exist —
+	// this used to sit at the top of Show(), before anything was built.
+	return m_metaWindow != nullptr && m_metaWindow->Load();
+}
+
 bool ibFrontendMainFrameDesigner::Show(bool show)
 {
-	if (show && !m_metaWindow->Load())
-		return false;
-
 	bool ret = ibFrontendMainFrame::Show(show);
 	if (ret) {
 		if (!outputWindow->IsEmpty()) {
@@ -232,17 +239,14 @@ bool ibFrontendMainFrameDesigner::Show(bool show)
 
 #include "backend/metadataConfiguration.h"
 
-bool ibFrontendMainFrameDesigner::AllowRun() const
+bool ibFrontendMainFrameDesigner::AllowClose()
 {
-	// Designer is compile-only — no session runtime, no BeforeStart /
-	// OnStart script events. Always allow frame show.
-	return true;
-}
+	// The Designer has no session runtime and therefore no open/close
+	// script events at all — AllowRun stays at the inherited yes. Its
+	// only question is its own: an unsaved configuration.
+	if (!ibFrontendMainFrame::AllowClose())
+		return false;
 
-bool ibFrontendMainFrameDesigner::AllowClose() const
-{
-	// Unsaved-config confirmation is a designer-only concern; no
-	// BeforeExit / OnExit script events (no runtime to fire them on).
 	if (activeMetaData != nullptr && IsModified()) {
 		const int answer = wxMessageBox(wxString::Format(_("Configuration '%s' has been changed. Save?"), activeMetaData->GetConfigName()),
 			wxTheApp->GetAppDisplayName(), wxYES | wxNO | wxCANCEL | wxCENTRE | wxICON_QUESTION, (wxWindow*)this);

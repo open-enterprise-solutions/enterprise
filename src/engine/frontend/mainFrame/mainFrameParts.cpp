@@ -124,26 +124,21 @@ void ibFrontendMainFrame::ActivateView(ibView* view, bool activate) {
 #include "backend/moduleManager/moduleManager.h"
 #include "backend/metadataConfiguration.h"
 
-bool ibFrontendMainFrame::Initialize(ibSession* session)
-{
-	// Bind-only. Runtime start deferred to Show() → EnsureRuntime() so
-	// activeMetaData is guaranteed populated (LoadMetadata runs between
-	// Initialize and Show in the app flow).
-	m_session = session;
-	return m_session != nullptr;
-}
-
 bool ibFrontendMainFrame::EnsureRuntime()
 {
-	if (m_session == nullptr || activeMetaData == nullptr)
+	// The session comes from the holder we were built with — no separate
+	// bind step, so there is no window in which the frame exists without
+	// knowing its session.
+	ibSession* session = GetSession();
+	if (session == nullptr || activeMetaData == nullptr)
 		return false;
 
 	// Re-entry guard — root module manager lives on the session; if it's
 	// already installed the runtime was started on a previous Show().
-	if (m_session->GetManagerModule() != nullptr)
+	if (session->GetManagerModule() != nullptr)
 		return true;
 
-	const ibSessionKind kind = m_session->GetKind();
+	const ibSessionKind kind = session->GetKind();
 	const bool wantsRuntime =
 		(kind == ibSessionKind::Enterprise) ||
 		(kind == ibSessionKind::WebClient)  ||
@@ -151,10 +146,11 @@ bool ibFrontendMainFrame::EnsureRuntime()
 	if (!wantsRuntime)
 		return true;
 
-	// CreateRoot + CompileRoot already happened in OnRun after LoadMetadata
-	// — frame->Initialize is the runtime-start phase, only InitRuntime here.
-	if (auto* mm = m_session->GetManagerModule())
-		mm->AttachRuntime(m_session);
+	// CreateRoot + CompileRoot already happened during authentication
+	// (registry's NotifyAuthenticated chain) — only the runtime attach is
+	// left, and it waits until Show() so activeMetaData is populated.
+	if (auto* mm = session->GetManagerModule())
+		mm->AttachRuntime(session);
 	return true;
 }
 

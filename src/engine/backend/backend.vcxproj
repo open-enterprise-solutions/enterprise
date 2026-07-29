@@ -44,6 +44,7 @@
     <ClInclude Include="diagnostics\crashGuard.h" />
     <ClInclude Include="session\designerExclusivePolicy.h" />
     <ClInclude Include="session\session.h" />
+    <ClInclude Include="session\sessionHolder.h" />
     <ClInclude Include="session\sessionPolicy.h" />
     <ClInclude Include="session\sessionRegistry.h" />
     <ClInclude Include="session\sessionSnapshot.h" />
@@ -370,6 +371,7 @@
     <ClCompile Include="diagnostics\crashGuard.cpp" />
     <ClCompile Include="session\designerExclusivePolicy.cpp" />
     <ClCompile Include="session\session.cpp" />
+    <ClCompile Include="session\sessionHolder.cpp" />
     <ClCompile Include="session\sessionRegistry.cpp" />
     <ClCompile Include="session\sessionSnapshot.cpp" />
     <ClCompile Include="session\workerPoolHeadless.cpp" />

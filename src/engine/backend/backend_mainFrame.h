@@ -4,6 +4,7 @@
 #include "backend/uniqueKey.h"
 #include "backend/backend_spreadsheet.h"
 #include "backend/system/systemEnum.h"
+#include "backend/session/sessionHolder.h"   // the frame OWNS its session
 
 class ibSession;
 
@@ -21,18 +22,28 @@ class ibSession;
 
 class BACKEND_API ibBackendDocFrame {
 protected:
-	ibBackendDocFrame() = default;
+	// The ONLY way to build a frame: with a session in hand. There is no
+	// default constructor on purpose — a frame without a holder cannot be
+	// written, so "someone forgot to attach the session" is not a bug
+	// that can exist. That single rule is this base class's whole job;
+	// what opening and closing MEAN is each implementation's business
+	// (desktop asks BeforeStart / BeforeExit, the designer asks nothing,
+	// the web will grow states desktop never has).
+	explicit ibBackendDocFrame(ibSessionHolder&& holder) noexcept
+		: m_sessionHolder(std::move(holder)) {
+	}
+
 public:
 
 	virtual ~ibBackendDocFrame() = default;
 
-	// Session this frame drives. Desktop: the single process session,
-	// forwarded from appData->GetMainSession(). Web (ibWebFrame): the
-	// per-cookie session bound at construction. Used by UI-originated
-	// form-open paths (sidebar / menu / toolbar click) where no
-	// ownerControl is available to walk a descriptor parent chain.
-	// Default nullptr — headless / pre-session bootstrap paths.
-	virtual ibSession* GetSession() const { return nullptr; }
+	// The session this frame OWNS. Desktop (ibFrontendMainFrame), web
+	// (ibWebFrame) and the server-side projection driving a thin client
+	// are all the same case: the frame is what the session exists for,
+	// so the frame is what keeps it alive.
+	virtual ibSession* GetSession() const { return m_sessionHolder.Get(); }
+
+
 
 	virtual class ibMetaData* FindMetadataByPath(const wxString& strFileName) const { return nullptr; }
 	virtual void BackendError(const wxString& strFileName, const wxString& strDocPath, const long line, const wxString& strErrorMessage) const {}
@@ -97,6 +108,11 @@ public:
 	virtual void RefreshFrame() = 0;
 	virtual void RaiseFrame() = 0;
 
+private:
+	// The thread of life. Filled at construction — there is no other way
+	// to build this class — and released by ~ibBackendDocFrame, which is
+	// what ends the session.
+	ibSessionHolder m_sessionHolder;
 };
 
 #endif

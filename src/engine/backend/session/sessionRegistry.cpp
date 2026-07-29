@@ -89,8 +89,11 @@ void ibSessionRegistry::CloseAll(bool force)
 		std::shared_lock<std::shared_mutex> lk(m_ownMutex);
 		snapshot.reserve(m_own.size());
 		for (auto& kv : m_own)
-			if (kv.second) snapshot.push_back(kv.second);
+			if (auto s = kv.second.Share()) snapshot.push_back(std::move(s));
 	}
+	// force closes each window without asking (and breaks any in-flight
+	// script out of its loop); without it every session gets the normal
+	// close path and may refuse.
 	for (auto& s : snapshot)
 		s->Close(force);
 }
@@ -120,40 +123,45 @@ ibSessionRegistry::~ibSessionRegistry()
 	Stop();
 }
 
-ibSession* ibSessionRegistry::Find(const wxString& id)
+ibSessionWatch ibSessionRegistry::Find(const wxString& id)
 {
-	// Lookup by session id in m_own — the live ownership map keyed by
-	// GetId(), populated through the normal Connect / worker-pool flow. The
+	// Lookup by session id in m_own — the live map keyed by GetId(),
+	// populated through the normal Connect / worker-pool flow. The
 	// designer echoes GetId() back as the debug sid, so this resolves
 	// Continue / Step / Pause targets and the web "session paused?" query
 	// (wfrontendSessionPaused).
 	std::shared_lock<std::shared_mutex> lock(m_ownMutex);
 	auto it = m_own.find(id);
-	return it != m_own.end() ? it->second.get() : nullptr;
+	if (it == m_own.end())
+		return ibSessionWatch();
+	// The stored watch IS the answer — expired means "the owner is gone
+	// and the sweep has not caught up", which reads the same as "no such
+	// session" to every caller.
+	return it->second;
 }
 
-ibSession* ibSessionRegistry::FindSessionByRoot(ibValueModuleManagerRuntimeConfiguration* mm) const
+ibSessionWatch ibSessionRegistry::FindSessionByRoot(ibValueModuleManagerRuntimeConfiguration* mm) const
 {
-	if (mm == nullptr) return nullptr;
+	if (mm == nullptr) return ibSessionWatch();
 	std::shared_lock<std::shared_mutex> lock(m_ownMutex);
 	for (const auto& kv : m_own) {
-		ibSession* s = kv.second.get();
-		if (s != nullptr && s->GetManagerModule() == mm)
-			return s;
+		auto s = kv.second.Share();
+		if (s && s->GetManagerModule() == mm)
+			return kv.second;
 	}
-	return nullptr;
+	return ibSessionWatch();
 }
 
-ibSession* ibSessionRegistry::FindSessionByFrame(ibBackendDocFrame* frame) const
+ibSessionWatch ibSessionRegistry::FindSessionByFrame(ibBackendDocFrame* frame) const
 {
-	if (frame == nullptr) return nullptr;
+	if (frame == nullptr) return ibSessionWatch();
 	std::shared_lock<std::shared_mutex> lock(m_ownMutex);
 	for (const auto& kv : m_own) {
-		ibSession* s = kv.second.get();
-		if (s != nullptr && s->GetFrame() == frame)
-			return s;
+		auto s = kv.second.Share();
+		if (s && s->GetFrame() == frame)
+			return kv.second;
 	}
-	return nullptr;
+	return ibSessionWatch();
 }
 
 bool ibSessionRegistry::HasClients() const
@@ -166,8 +174,8 @@ bool ibSessionRegistry::HasClients() const
 	if (!server) return false;
 	std::shared_lock<std::shared_mutex> lock(m_ownMutex);
 	for (const auto& kv : m_own) {
-		const ibSession* s = kv.second.get();
-		if (s == nullptr || s == server.get()) continue;
+		auto s = kv.second.Share();
+		if (!s || s == server) continue;
 		auto srv = s->Server();
 		if (srv && srv.get() == server.get())
 			return true;
@@ -197,9 +205,9 @@ void ibSessionRegistry::EnsureStartedForCreateSession(ibRunMode runMode)
 	Start();
 }
 
-ibSession* ibSessionRegistry::CreateSessionWithFactory(ibRunMode runMode,
-                                                       const wxString& computer,
-                                                       ibConnectRequest::SessionFactory factory)
+ibSessionHolder ibSessionRegistry::CreateSessionWithFactory(ibRunMode runMode,
+                                                            const wxString& computer,
+                                                            ibConnectRequest::SessionFactory factory)
 {
 	EnsureStartedForCreateSession(runMode);
 
@@ -223,19 +231,19 @@ ibSession* ibSessionRegistry::CreateSessionWithFactory(ibRunMode runMode,
 		// session" wrapper in FinishCreateSession.
 		if (!result.m_reason.IsEmpty())
 			ibBackendCoreException::Error(result.m_reason);
-		return nullptr;
+		return ibSessionHolder();
 	}
-	// Registry's m_own holds the shared_ptr; result.m_session is a raw
-	// observer. Lifecycle is driven by ibSession::Close() from the holder
-	// (mainApp, webSession).
-	return result.m_session;
+	// Hand the thread of life to the caller. Until it is moved into an
+	// owner, it lives in the caller's stack frame — so an early return
+	// anywhere upstream closes the session instead of leaking it.
+	return std::move(result.m_holder);
 }
 
-ibSession* ibSessionRegistry::CreateSessionWithFactory(ibRunMode runMode,
-                                                       const wxString& computer,
-                                                       const wxString& presetGuid,
-                                                       const wxString& address,
-                                                       ibConnectRequest::SessionFactory factory)
+ibSessionHolder ibSessionRegistry::CreateSessionWithFactory(ibRunMode runMode,
+                                                            const wxString& computer,
+                                                            const wxString& presetGuid,
+                                                            const wxString& address,
+                                                            ibConnectRequest::SessionFactory factory)
 {
 	// Per-tab variant — registry is normally already running by the time
 	// per-tab logins arrive (wes process bring-up created its WebServer
@@ -255,9 +263,9 @@ ibSession* ibSessionRegistry::CreateSessionWithFactory(ibRunMode runMode,
 	if (result.m_code != ibConnectResult::Ok) {
 		if (!result.m_reason.IsEmpty())
 			ibBackendCoreException::Error(result.m_reason);
-		return nullptr;
+		return ibSessionHolder();
 	}
-	return result.m_session;
+	return std::move(result.m_holder);
 }
 
 // --- Thread lifecycle ----------------------------------------------------
@@ -390,7 +398,7 @@ void ibSessionRegistry::Stop()
 			std::shared_lock<std::shared_mutex> lk(m_ownMutex);
 			owned.reserve(m_own.size());
 			for (auto& kv : m_own) {
-				if (kv.second) owned.push_back(kv.second);
+				if (auto s = kv.second.Share()) owned.push_back(std::move(s));
 			}
 		}
 		for (auto& s : owned) {
@@ -464,8 +472,8 @@ ibConnectResult ibSessionRegistry::Connect(const ibConnectRequest& req,
 	const wxString idStr = identity.m_guid;
 
 	// Factory path — typed CreateSession<T> on appData hands us a
-	// callback that builds a derived session (ibGUISession / ibEnterpriseSession /
-	// ibWebClientSession …). Default path keeps the plain base class.
+	// callback that builds a derived session (ibGUISession on desktop,
+	// ibWebClientSession per web tab). Default path keeps the base class.
 	auto session = req.m_sessionFactory
 		? req.m_sessionFactory(idStr, req.m_kind)
 		: std::make_shared<ibSession>(idStr, req.m_kind);
@@ -529,10 +537,12 @@ ibConnectResult ibSessionRegistry::Connect(const ibConnectRequest& req,
 		}
 	}
 
-	// Success — return raw session pointer. Registry's m_own keeps it
-	// alive; caller drives the lifecycle through ibSession::Close().
-	r.m_code    = ibConnectResult::Ok;
-	r.m_session = session.get();
+	// Success — hand over ownership, and it really is ownership: the
+	// registry's m_own is a weak index, so this holder is the only thing
+	// keeping the session alive. Whatever the caller moves it into
+	// decides when the session ends.
+	r.m_code   = ibConnectResult::Ok;
+	r.m_holder = ibSessionHolder(std::move(session));
 	return r;
 }
 
@@ -822,13 +832,13 @@ void ibSessionRegistry::LeaveDebugLoop(ibSession* s)
 	}
 }
 
-std::shared_ptr<ibSession> ibSessionRegistry::GetActiveDebugTarget() const
+ibSessionWatch ibSessionRegistry::GetActiveDebugTarget() const
 {
 	std::shared_lock<std::shared_mutex> lk(m_debugMtx);
 	for (const auto& w : m_debugQueue) {
-		if (auto sp = w.lock()) return sp;
+		if (auto sp = w.lock()) return ibSessionWatch(std::move(sp));
 	}
-	return nullptr;
+	return ibSessionWatch();
 }
 
 // --- Handlers ------------------------------------------------------------
@@ -985,11 +995,14 @@ void ibSessionRegistry::ProcessAdd(ibRegistryRequest& req)
 		}
 	}
 
-	// Claim ownership before touching DB — ProcessRemove finds us in
-	// m_own regardless of whether the INSERT below succeeded.
+	// Index us before touching the DB — ProcessRemove finds us in m_own
+	// regardless of whether the INSERT below succeeded. This is a weak
+	// entry: the request's own shared_ptr keeps the session alive for the
+	// duration of this handler, and after that only the caller's holder
+	// does.
 	{
 		std::unique_lock<std::shared_mutex> lock(m_ownMutex);
-		m_own[s.GetId()] = req.session;
+		m_own[s.GetId()] = ibSessionWatch(req.session);
 	}
 
 	// DB ownership gate. When `m_ownsSysSession` is off, registry only
@@ -1169,8 +1182,14 @@ void ibSessionRegistry::ProcessRemove(ibRegistryRequest& req)
 	{
 		std::unique_lock<std::shared_mutex> lock(m_ownMutex);
 		auto it = m_own.find(s.GetId());
-		if (it != m_own.end() && it->second.get() == &s)
-			m_own.erase(it);
+		// owner_before comparison, not a raw ==: the entry may already be
+		// expired (owner gone), and an expired entry that belonged to us
+		// is exactly the one to erase.
+		if (it != m_own.end()) {
+			auto held = it->second.Share();
+			if (!held || held.get() == &s)
+				m_own.erase(it);
+		}
 	}
 
 	s.Transition(ibSessionState::Gone);
@@ -1252,8 +1271,8 @@ void ibSessionRegistry::ProcessSetExclusive(ibRegistryRequest& req)
 		{
 			std::shared_lock<std::shared_mutex> lock(m_ownMutex);
 			for (const auto& kv : m_own) {
-				ibSession* other = kv.second.get();
-				if (other == nullptr || other == &s) continue;
+				auto other = kv.second.Share();
+				if (!other || other.get() == &s) continue;
 				if (other->State() == ibSessionState::Added) {
 					soleLive = false;
 					break;
@@ -1405,7 +1424,11 @@ void ibSessionRegistry::JobSweepStale()
 
 		while (rs.Next()) {
 			const wxString guid = rs.GetResultString(wxT("session"));
-			if (m_own.find(guid) != m_own.end()) {
+			// Ours AND still owned. An expired entry means the owner died
+			// without the Remove landing yet — leave it to the stale
+			// cutoff below rather than protecting a row nobody holds.
+			auto own = m_own.find(guid);
+			if (own != m_own.end() && own->second) {
 				live.emplace_back(guid);
 				continue;  // our own — heartbeat keeps lastActive fresh
 			}
@@ -1467,7 +1490,8 @@ void ibSessionRegistry::JobHeartbeatOwn()
 		ibDatabaseQueryBuilder q(&m_writeHolder);
 		const wxDateTime now = wxDateTime::Now();
 		for (const auto& kv : m_own) {
-			if (!kv.second || !kv.second->Inserted()) continue;
+			auto s = kv.second.Share();
+			if (!s || !s->Inserted()) continue;
 			try {
 				q.Execute(ibUpdate(session_table,
 					{ { wxT("lastActive"), ibConst(ibValue(now)) } },
@@ -1527,7 +1551,8 @@ void ibSessionRegistry::JobCheckSignal()
 	ibDatabaseQueryBuilder q(&m_writeHolder);   // bound conn = m_writeConn; reused by the act-phase clear below
 	try {
 		for (const auto& kv : m_own) {
-			if (!kv.second || !kv.second->Inserted()) continue;
+			auto s = kv.second.Share();
+			if (!s || !s->Inserted()) continue;
 			const wxString guid = wxString::FromUTF8(kv.first.c_str());
 			ibQueryResult rs = q.ExecuteIR(ibQueryIR(ibProject(
 				ibFilter(ibScan(session_table),
@@ -1550,33 +1575,35 @@ void ibSessionRegistry::JobCheckSignal()
 		          << " value='" << (const char*)p.signal.ToUTF8().data() << "'");
 
 		if (p.signal == wxT("kick")) {
-			// Find the own session and submit Remove@Urgent. Ticket dtor
-			// elsewhere would do this on lifecycle end; here the admin
-			// request replaces that signal path.
+			// Find the own session and submit Remove@Urgent. Normally the
+			// owner's holder release does this; here the admin request
+			// takes that role.
 			auto it = m_own.find(p.guid);
-			if (it != m_own.end() && it->second) {
+			if (auto target = it != m_own.end() ? it->second.Share() : nullptr) {
 				// Cooperative cancel before Remove — gives the running
 				// script a chance to unwind via ibBackendInterruptException
 				// at the next opcode, so OnExit / pool drain runs against
 				// an idle worker rather than racing a still-executing task.
 				if (m_workerPool)
-					m_workerPool->CancelSession(it->second.get());
+					m_workerPool->CancelSession(target.get());
 
 				ibRegistryRequest rm;
 				rm.kind    = ibRegistryRequestKind::Remove;
-				rm.session = it->second;
+				rm.session = target;
 				Submit(std::move(rm), ibPriority::Urgent);
 			}
 		}
 		else if (p.signal == wxT("reload")) {
 			// Broad "reload metadata" directive. Wes uses the process-wide
 			// flag (eviction on next /poll). Per-session listeners
-			// (frontend GUI registers one in ibGUISession::AttachFrame)
+			// (the frontend registers one at startup)
 			// react with their own teardown — backend stays GUI-free.
 			m_reloadRequested.store(true, std::memory_order_release);
 			auto it = m_own.find(p.guid);
-			if (it != m_own.end() && it->second)
-				NotifyReload(it->second.get());
+			if (it != m_own.end()) {
+				if (auto target = it->second.Share())
+					NotifyReload(target.get());
+			}
 		}
 		// Future: "refresh" → broadcast SSE prod to client.
 

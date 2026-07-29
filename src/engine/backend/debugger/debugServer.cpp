@@ -203,16 +203,17 @@ void ibDebuggerServer::WakeDebugSession(const wxString& sessionGuid)
 	// Find() now searches the live m_own map; it used to hit the dead legacy
 	// m_sessions map and return null, so this wake was a no-op masked by the
 	// old server-global m_bDebugLoop flag.
-	ibSession* sess = reg->Find(sessionGuid);
-
 	// Fallback: the session actually parked at the breakpoint (front of the
 	// debug queue). Guards against sid drift so Continue / Step never strand
 	// the parked worker — the failure mode that surfaced when the global flag
 	// was removed.
-	if (sess == nullptr) {
-		if (auto sp = reg->GetActiveDebugTarget()) sess = sp.get();
-	}
-	if (sess == nullptr) return;
+	ibSessionWatch target = reg->Find(sessionGuid);
+	if (!target) target = reg->GetActiveDebugTarget();
+
+	// Held for the whole wake — the session cannot be torn down between
+	// resolving it and notifying its CV.
+	auto sess = target.Share();
+	if (!sess) return;
 
 	auto* d = sess->Debug();
 	if (d == nullptr) return;
@@ -1344,12 +1345,10 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 				// WakeDebugSession). Fall back to the parked session (front of
 				// the debug queue) so a sid drift still cancels the right
 				// worker instead of silently dropping the hard-abort.
-				ibSession* sess = reg->Find(sid);
-				if (sess == nullptr) {
-					if (auto sp = reg->GetActiveDebugTarget()) sess = sp.get();
-				}
-				if (sess != nullptr)
-					pool->CancelSession(sess);
+				ibSessionWatch target = reg->Find(sid);
+				if (!target) target = reg->GetActiveDebugTarget();
+				if (auto sess = target.Share())
+					pool->CancelSession(sess.get());
 			}
 		}
 	}
@@ -1371,14 +1370,14 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 
 		// Destroy = process exit, but hosts can decline. wes registers a
 		// keep-alive hook that returns true while user tabs are still
-		// connected. Drop the gate and just Close(true) the parked
-		// session — its ProcessRemove → NotifyDisconnect cascade is
+		// connected. Drop the gate and force-exit the parked session —
+		// its ProcessRemove → NotifyDisconnect cascade is
 		// what drives the OnLastDisconnect / wes exit hook chain.
 		// Note: CoUninitialize() is already done in Entry() epilogue
 		// (line ~472). Doing it again here would give a double-uninit
-		// on the worker thread. Per-kind OnForceExit dispatches:
-		// GUI desktop session quits wx; web per-tab session just
-		// kicks itself.
+		// on the worker thread. The forced close breaks the parked script
+		// out of its loop and takes the window down with it — desktop
+		// closes its main frame, a web tab kicks itself.
 		if (auto* s = ibSession::Current())
 			s->Close(true);
 	}

@@ -8,8 +8,11 @@
 
 //application data
 #include "backend/appData.h"
+#include "backend/session/sessionRegistry.h"   // OnReload subscription
 
 #include "frontend/session/guiSession.h"
+
+#include <wx/msgdlg.h>
 
 //common 
 #include "frontend/docView/docView.h"
@@ -32,48 +35,42 @@ void ibFrontendMainFrame::InitFrame(ibFrontendMainFrame* frame)
 	}
 }
 
-bool ibFrontendMainFrame::ShowFrame()
-{
-	if (s_instance != nullptr && !s_instance->IsShown() && !ibSession::IsCurrentForceExit()) {
-
-		s_instance->CreateGUI();
-
-		s_instance->SetClientSize(s_instance->FromDIP(wxSize(800, 600)));
-		s_instance->SetFocus();
-
-		s_instance->Center();
-
-		if (s_instance->Show()) {
-			s_instance->Raise();
-			return true;
-		}
-
-		return false;
-	}
-
-	return false;
-}
-
-void ibFrontendMainFrame::DestroyFrame()
-{
-	if (s_instance != nullptr) {
-		s_instance->Destroy();
-	}
-}
 
 //***********************************************************************************
 //*                                 Constructor                                     *
 //***********************************************************************************
 
-ibFrontendMainFrame::ibFrontendMainFrame(const wxString& title,
+ibFrontendMainFrame::ibFrontendMainFrame(ibSessionHolder&& holder,
+	const wxString& title,
 	const wxPoint& pos,
 	const wxSize& size,
 	long style,
-	const wxString& strName) : ibDocParentFrameAnyBase(this),
+	const wxString& strName) : ibBackendDocFrame(std::move(holder)),
+	ibDocParentFrameAnyBase(this),
 	m_objectInspector(nullptr), m_docToolbar(nullptr), m_mainFrameToolbar(nullptr),
 	m_callRaiseFrame(false), m_callUpdateFrameManager(false)
 {
 	Create(title, pos, size, style | wxNO_FULL_REPAINT_ON_RESIZE);
+
+	// Claim the process's main-window slot.
+	InitFrame(this);
+
+	// Admin "reload clients" on our session's row. The window is what
+	// reacts — it tells the user and closes itself, and closing releases
+	// the holder, which ends the session. Backend stays UI-free: it only
+	// says "this session should reload", never touches a window.
+	if (auto* reg = ibApplicationData::GetSessionRegistry()) {
+		ibSession* const self = GetSession();
+		reg->OnReload([self](ibSession* target) {
+			if (target != self || wxTheApp == nullptr) return;
+			wxTheApp->CallAfter([]() {
+				wxMessageBox(_("Session reloaded by an administrator. The application will close - please re-open it from the launcher."),
+					wxTheApp->GetAppDisplayName(), wxOK | wxICON_INFORMATION);
+				if (auto* frame = ibFrontendMainFrame::GetFrame())
+					frame->Close(true);
+			});
+		});
+	}
 }
 
 #include "backend/compiler/value.h"
@@ -256,6 +253,46 @@ void ibFrontendMainFrame::Raise()
 	wxAuiMDIParentFrame::Raise();
 }
 
+bool ibFrontendMainFrame::Show(bool show)
+{
+	if (!show)
+		return wxAuiMDIParentFrame::Show(false);
+
+	// Already up — nothing to build, nothing to ask.
+	if (IsShown())
+		return true;
+
+	// GUI FIRST, then the runtime, then the question. Order matters and it
+	// is not arbitrary: AllowRun is where BeforeStart / OnStart run and
+	// where the Designer loads its metadata tree, and all of that reaches
+	// into panes that CreateGUI builds. Asking before building leaves the
+	// gate dereferencing panes that do not exist yet.
+	CreateGUI();
+
+	if (!EnsureRuntime()) return false;
+	if (!AllowRun()) return false;
+
+	SetClientSize(FromDIP(wxSize(800, 600)));
+	SetFocus();
+	Center();
+
+	if (!wxAuiMDIParentFrame::Show(true))
+		return false;
+	Raise();
+	return true;
+}
+
+bool ibFrontendMainFrame::AllowClose()
+{
+	// Each open document gets to refuse (unsaved data, an edit it will not
+	// abandon), and one refusal stops the close with nothing torn down.
+	// force=false is the point: this is the asking path. The unconditional
+	// close of whatever is still open lives in Destroy().
+	if (m_docManager == nullptr)
+		return true;
+	return m_docManager->CloseDocuments(false);
+}
+
 bool ibFrontendMainFrame::Destroy()
 {
 	wxAuiMDIClientWindow* client_window = GetClientWindow();
@@ -263,10 +300,13 @@ bool ibFrontendMainFrame::Destroy()
 
 	client_window->Freeze();
 
-	bool success = m_docManager != nullptr ?
-		m_docManager->CloseDocuments() : true;
-
-	if (success && m_docManager != nullptr) {
+	// Past the point of no return — the close gate already asked the
+	// documents and they agreed. Anything still open at this point (a
+	// document opened by a script DURING teardown, or a forced close that
+	// never consulted the gate) goes down unconditionally: refusing here
+	// would leave the frame alive with its session already ending.
+	if (m_docManager != nullptr) {
+		m_docManager->CloseDocuments(true);
 #if wxUSE_CONFIG
 		m_docManager->FileHistorySave(*wxConfig::Get());
 #endif // wxUSE_CONFIG
@@ -275,17 +315,15 @@ bool ibFrontendMainFrame::Destroy()
 
 	client_window->Thaw();
 
-	return success &&
-		wxAuiMDIParentFrame::Destroy();
+	return wxAuiMDIParentFrame::Destroy();
 }
 
 ibFrontendMainFrame::~ibFrontendMainFrame()
 {
 	if (s_instance == this) s_instance = nullptr;
 
-	// Notify the owning session so its observer-pointer doesn't dangle when
-	// wx destroys top-level frames before wxApp::OnExit fires Session::Close.
-	if (m_guiSession != nullptr) m_guiSession->DetachFrame(this);
+	// The session's back-link is cleared by ~ibBackendDocFrame, which
+	// then releases the holder — that release is what ends the session.
 
 	// deinitialize the valueForm manager
 	m_mgr.UnInit();
@@ -327,9 +365,25 @@ void ibFrontendMainFrame::OnExit(wxCommandEvent& WXUNUSED(event))
 
 void ibFrontendMainFrame::OnCloseWindow(wxCloseEvent& event)
 {
-	bool allowClose = event.CanVeto() ? AllowClose() : true;
-	// The user decided not to close finally, abort.
-	if (allowClose) event.Skip();
-	// Just skip the event, base class handler will destroy the window.
-	else event.Veto();
+	// The close sequence lives here, inside the window's own close, and
+	// both roads run it: the user's [X] raises this event directly, and
+	// session->Close(force) raises it through frame->Close(force). One
+	// place, one order, and the answer travels back out on its own — a
+	// veto here makes wxWindow::Close return false, which is what the
+	// session hands to its caller.
+	//
+	// wx carries the force flag on the event: a close that cannot be
+	// vetoed (kick, process shutdown) is precisely a forced close, so
+	// nobody is asked.
+	const bool force = !event.CanVeto();
+
+	if (!force && !AllowClose()) {
+		event.Veto();
+		return;
+	}
+
+	// Let wx finish the close the standard way: wxFrame's default handler
+	// destroys the window, and that destructor releases the holder, which
+	// ends the session.
+	event.Skip();
 }

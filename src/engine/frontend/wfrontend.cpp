@@ -11,6 +11,7 @@
 #include <sstream>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <wx/bitmap.h>
@@ -90,6 +91,22 @@ public:
 		m_sweepCv.notify_all();
 		if (m_sweepThread.joinable())
 			m_sweepThread.join();
+	}
+
+	// Queue a session for destruction and wake the sweep.
+	//
+	// Deliberately NOT synchronous: the caller is usually the session's
+	// own worker (script EndJob) or the registry thread (admin kick), and
+	// Destroy runs OnExit — which drains that very worker and would
+	// deadlock against itself. The sweep thread owns nothing, so it can
+	// safely do the teardown.
+	void RequestDestroy(const std::string& id)
+	{
+		{
+			std::lock_guard<std::mutex> lk(m_sweepMtx);
+			m_pendingDestroy.insert(id);
+		}
+		m_sweepCv.notify_all();
 	}
 
 	// Bump LastActiveMs on the session. Called by every HTTP handler
@@ -312,11 +329,26 @@ private:
 			lastObservedMetaGuid = activeMetaData->GetConfigGuid().str();
 
 		for (;;) {
+			std::vector<std::string> requested;
 			{
 				std::unique_lock<std::mutex> lk(m_sweepMtx);
-				if (m_sweepCv.wait_for(lk, kInterval,
-						[this]{ return m_sweepStop.load(); }))
+				// Wake early either to stop or to serve a queued destroy —
+				// a kicked tab must not wait out the whole sweep interval.
+				m_sweepCv.wait_for(lk, kInterval, [this] {
+					return m_sweepStop.load() || !m_pendingDestroy.empty();
+				});
+				if (m_sweepStop.load())
 					return;  // stopped
+				requested.assign(m_pendingDestroy.begin(), m_pendingDestroy.end());
+				m_pendingDestroy.clear();
+			}
+
+			// 0) Explicit destroys (script EndJob, admin kick). Done here,
+			// off the requester's thread, so OnExit can drain the
+			// session's own worker without deadlocking against it.
+			for (const std::string& id : requested) {
+				std::cerr << "[sweep] destroying session on request " << id << std::endl;
+				Destroy(id);
 			}
 
 			// Guard against shutdown that landed between wait and the
@@ -491,11 +523,15 @@ private:
 	std::unordered_map<std::string, std::shared_ptr<ibWebSession>> m_sessions;
 
 	// Sweep-thread plumbing. m_sweepCv lets the dtor unblock the
-	// in-flight `wait_for` instead of waiting the full interval.
-	std::thread              m_sweepThread;
-	std::mutex               m_sweepMtx;
-	std::condition_variable  m_sweepCv;
-	std::atomic<bool>        m_sweepStop { false };
+	// in-flight `wait_for` instead of waiting the full interval; the same
+	// wake serves queued destroys.
+	std::thread                     m_sweepThread;
+	std::mutex                      m_sweepMtx;
+	std::condition_variable         m_sweepCv;
+	std::atomic<bool>               m_sweepStop { false };
+	// Sessions asked to die by someone who cannot do it himself — see
+	// RequestDestroy. A set, so a repeated kick collapses into one.
+	std::unordered_set<std::string> m_pendingDestroy;
 };
 
 SessionManager& Sessions()
@@ -507,6 +543,11 @@ SessionManager& Sessions()
 std::atomic<bool> g_initialized{ false };
 std::mutex        g_initMutex;
 std::string       g_lastError;
+
+// The wes process's own technical session. It has no window to own it,
+// so the process does: this holder is its lifetime, and releasing it at
+// shutdown is what removes the technical sys_session row.
+ibSessionHolder   g_serverSession;
 
 // HTTP host:port the container is bound on. Set by
 // wfrontendSetServerAddress from the host (wenterprise-server main);
@@ -557,13 +598,17 @@ bool FinishConnect(const std::string& ibUser, const std::string& ibPassword)
 	// no-arg CreateSession overload) registers this session as the
 	// process's server in ibSessionRegistry::ServerSession(); subsequent
 	// per-tab WebClient sessions auto-link to it.
-	ibSession* session = appData->CreateSession();
-	if (session == nullptr ||
-	    session->Open(
+	// This session has no window, so the process itself is its owner: the
+	// holder lives in a process-lifetime global and the technical
+	// sys_session row disappears when wfrontend shuts down.
+	g_serverSession = appData->CreateSession();
+	if (!g_serverSession ||
+	    g_serverSession->Open(
 	        wxString::FromUTF8(ibUser.c_str()),
 	        wxString::FromUTF8(ibPassword.c_str()))
 	      != ibSession::OpenResult::Authenticated)
 	{
+		g_serverSession.Reset();
 		RememberError();
 		appDataDestroy();
 		return false;
@@ -789,6 +834,9 @@ WFRONTEND_API void wfrontendShutdown()
 	// process and trip the assert in Instance().
 	Sessions().StopSweep();
 	Sessions().Clear();
+	// Client tabs are gone; now let go of the process's own session
+	// before appData (and the registry inside it) is torn down.
+	g_serverSession.Reset();
 	appDataDestroy();
 	g_lastError.clear();
 }
@@ -817,7 +865,7 @@ WFRONTEND_API std::string wfrontendConfigName()
 static void (*s_processExitHook)() = nullptr;
 static std::atomic<bool> s_processExitFired{false};
 
-// Intra-DLL: callable from ibWebClientSession::OnForceExit (and the
+// Intra-DLL: callable from ibWebClientSession::OnClose (and the
 // OnLastDisconnect listener below). Sticky single-shot via
 // s_processExitFired so a cascade of force-exits during shutdown
 // doesn't re-invoke svr.stop().
@@ -827,6 +875,14 @@ void wfrontendCallProcessExitHook()
 		return;
 	if (s_processExitHook != nullptr)
 		s_processExitHook();
+}
+
+// Intra-DLL: callable from ibWebClientSession::OnClose. "Close this
+// session" on web means "destroy this tab's ibWebSession", and that has
+// to happen off the requester's thread — see SessionManager::RequestDestroy.
+void wfrontendRequestDestroySession(const wxString& sessionId)
+{
+	Sessions().RequestDestroy(std::string(sessionId.ToUTF8()));
 }
 
 WFRONTEND_API void wfrontendSetProcessExitHook(void (*hook)())
@@ -864,8 +920,8 @@ WFRONTEND_API void wfrontendSetProcessExitHook(void (*hook)())
 
 		// Force-exit listener — fires regardless of session kind.
 		// Picks up the wes-WebServer fallback case (debug-thread
-		// Current() resolves to the system row when the queue is
-		// empty; that bare ibSession's virtual OnForceExit is empty).
+		// Current() resolves to the system row when the queue is empty,
+		// and that session has no window to close).
 		reg->OnForceExit([](ibSession*) {
 			if (wfrontendDebugMode())
 				wfrontendCallProcessExitHook();
@@ -888,8 +944,8 @@ WFRONTEND_API bool wfrontendSessionPaused(const std::string& sessionId)
 		return false;
 	auto* reg = ibApplicationData::GetSessionRegistry();
 	if (reg == nullptr) return false;
-	auto* sess = reg->Find(wxString::FromUTF8(sessionId.c_str()));
-	if (sess == nullptr) return false;
+	auto sess = reg->Find(wxString::FromUTF8(sessionId.c_str())).Share();
+	if (!sess) return false;
 	auto* d = sess->Debug();
 	if (d == nullptr) return false;
 	return d->m_debugLoop.load(std::memory_order_acquire);

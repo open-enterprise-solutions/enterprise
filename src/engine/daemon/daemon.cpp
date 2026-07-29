@@ -103,9 +103,12 @@ int main(int argc, char** argv)
 	// CreateSession + Authenticate. Registry's lifecycle listeners (wired
 	// in ibApplicationData ctor) handle metadata load + per-session
 	// runtime bring-up through OnFirstConnect / OnAuthenticated.
-	ibSession* session = appData->CreateSession();
-	if (session == nullptr ||
-	    session->Open(strIBUser, strIBPassword) != ibSession::OpenResult::Authenticated) {
+	//
+	// The daemon has no frame, so the holder stays right here: this scope
+	// IS the owner, and the session ends when the holder goes out of it.
+	ibSessionHolder holder = appData->CreateSession();
+	if (!holder ||
+	    holder->Open(strIBUser, strIBPassword) != ibSession::OpenResult::Authenticated) {
 		appDataDestroy();
 		return 1;
 	}

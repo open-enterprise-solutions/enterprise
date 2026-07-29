@@ -11,6 +11,11 @@
 #include <unordered_map>
 
 #include "backend/backend_core.h"
+// Session ownership is part of appData's public surface: CreateSession
+// hands out an ibSessionHolder. Safe to include here — sessionHolder.h
+// only forward-declares ibSession, so it does not pull session.h (which
+// includes this header) back in.
+#include "backend/session/sessionHolder.h"
 
 #define appData				(ibApplicationData::Get())
 
@@ -107,30 +112,31 @@ public:
 	// ------------------------------------------------------------------
 	// Phased startup — split of Connect(). Apps compose:
 	//
-	//   CreateSession()     → ticket visible in sys_session, registry
-	//                         policies fire (DesignerExclusive etc.).
-	//   Authenticate(u, p)  → ticket.Attach with creds (+ dialog
-	//                         fallback on fail).
-	//   LoadMetadata(flags) → compile descriptors.
-	//   frame->Initialize(session)  → bind + runtime (by session kind).
-	//   frame->Show()       → AllowRun fires BeforeStart veto.
+	//   CreateSession()     → holder in hand, row visible in sys_session,
+	//                         registry policies fire (DesignerExclusive).
+	//   holder->Open(u, p)  → Attach with creds (+ dialog fallback).
+	//   new Frame(std::move(holder))  → the window takes ownership.
+	//   frame->Show()       → runtime start + the window's own AllowRun.
 	//
-	// A failed Authenticate keeps the ticket visible (user sees
-	// "login in progress" in admin) until it's explicitly dropped.
-	// Retry loops can call Authenticate again without re-creating the
-	// session.
+	// A failed Open keeps the row visible (user sees "login in progress"
+	// in admin) until the holder is dropped — and dropping it is what
+	// removes the row. Retry loops call Open again on the same holder.
 	// ------------------------------------------------------------------
 
 	// Phase 1: registry session — anonymous Connect (no creds yet).
 	// Row inserted in sys_session immediately so admin / policies see
 	// "someone is logging in". DesignerExclusivePolicy (etc.) fire
-	// here before any auth. Returns session pointer on success;
-	// nullptr if registry Connect failed (policy veto, row-lock dup).
-	ibSession* CreateSession();
+	// here before any auth.
+	//
+	// Returns OWNERSHIP, not a pointer. Nothing in this codebase hands out
+	// a bare live session: whoever calls this holds the session's life in
+	// its hands until it moves the holder into a real owner (a frame), and
+	// an empty holder is the failure case (policy veto, duplicate id).
+	ibSessionHolder CreateSession();
 
 	// Typed overload of CreateSession. The caller (enterprise/mainApp.cpp,
 	// designer/mainApp.cpp, web code) picks the concrete derived session
-	// class (ibEnterpriseSession, ibDesignerSession, ibWebClientSession, …).
+	// class (ibGUISession on desktop, ibWebClientSession per web tab, …).
 	// Template bodies live in backend/session/sessionRegistry.h (callers
 	// that instantiate the typed overload include it) so the registry's
 	// CreateSessionWithFactory is visible at instantiation.
@@ -138,12 +144,10 @@ public:
 	//   1. m_sessionRegistry->CreateSessionWithFactory runs
 	//      EnsureStartedForCreateSession + Connect(req) under a factory
 	//      that builds SessionT instead of the plain base.
-	//   2. OnCreateSession() fires on the main (caller) thread for UI-side
-	//      setup — GUI sessions create their wx frame here.
-	//   3. On OnCreateSession returning false, the session is Close()d so
-	//      the registry ticket is dropped and CreateSession returns nullptr.
+	//   2. The holder comes back to the caller, which moves it into the
+	//      window it builds. An empty holder means Connect failed.
 	template<class SessionT>
-	SessionT* CreateSession();
+	ibSessionHolder CreateSession();
 
 	// Per-tab variant for the wes web frontend. Caller supplies the cookie
 	// guid (used as sys_session.session PK + the registry's session id —
@@ -155,8 +159,8 @@ public:
 	// non-server sessions to it. Single-session apps never register a
 	// WebServer session so their Server() stays null.
 	template<class SessionT>
-	SessionT* CreateSession(const wxString& presetGuid,
-	                        const wxString& address);
+	ibSessionHolder CreateSession(const wxString& presetGuid,
+	                              const wxString& address);
 
 private:
 	// Register the session-lifecycle event listeners that drive
@@ -351,11 +355,10 @@ public:
 
 	// Process-level force-exit machinery (m_forceExit, ForceExit,
 	// IsForceExit, SetProcessExitHook) was removed — force-exit is now
-	// per-session. ibSession::Close(true) / RequestForceExit set the
-	// session's flag; OnForceExit (overridden on ibGUISession) dispatches
-	// the per-kind action (wxTheApp::Exit on desktop GUI; per-tab
-	// shutdown on web; no-op on headless). The interpreter loop checks
-	// the session's flag, not a global one.
+	// per-session. ibSession::Close(true) sets the session's flag and
+	// closes its window without asking; each kind knows what its window
+	// is (desktop main frame, web tab, nothing at all on headless). The
+	// interpreter loop checks the session's flag, not a global one.
 	//
 	// wes-specific concern: when the wes process needs to shut down on
 	// signal (Ctrl+C, console close), main.cpp wires that path

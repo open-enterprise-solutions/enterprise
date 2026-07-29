@@ -65,6 +65,7 @@ enterprise/
 │   ├── descriptions.md       # the ibXxxDescription storage-shape pattern
 │   ├── source-object.md      # what a form binds to — the metadata-free source node
 │   ├── main-frame.md         # one base, Designer/Enterprise windows, startup phases
+│   ├── session-ownership.md  # the window owns the session — holder/watch, open & close paths
 │   ├── designer-editors.md   # code / role / interface editors
 │   ├── wx-fork.md            # forked + vendored widget layer (dataview, grid, charts)
 │   ├── pictures.md           # three picture kinds, one description

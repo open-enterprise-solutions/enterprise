@@ -26,6 +26,7 @@
 #include "backend/appDataCtorToken.h"
 #include "backend/databaseLayer/connectionHolder.h"   // ibSingleConnectionHolder base
 #include "session.h"
+#include "sessionHolder.h"   // what the registry hands out: ownership, not pointers
 #include "sessionPolicy.h"   // unique_ptr<ibSessionPolicy> needs complete type
 
 #include <array>
@@ -124,8 +125,8 @@ struct BACKEND_API ibConnectRequest {
 	// Optional session factory — when set, Connect() builds the session
 	// through this callback instead of make_shared<ibSession>. Lets the
 	// typed factory path (ibApplicationData::CreateSession<T>)
-	// construct derived sessions (ibGUISession / ibEnterpriseSession /
-	// ibWebClientSession etc.) while the registry's Add/Attach/Remove
+	// construct derived sessions (ibGUISession on desktop,
+	// ibWebClientSession per web tab) while the registry's Add/Attach/Remove
 	// pipeline keeps working through the base ibSession interface.
 	// Default-constructed (empty std::function) → default behaviour.
 	using SessionFactory =
@@ -135,15 +136,21 @@ struct BACKEND_API ibConnectRequest {
 
 struct BACKEND_API ibConnectResult {
 	enum Code {
-		Ok,              // session Added (+ Attached if creds given) — m_session non-null
+		Ok,              // session Added (+ Attached if creds given) — m_holder non-empty
 		RejectedPolicy,  // ProcessAdd policy veto — terminal
 		RejectedAuth,    // ProcessAttach AuthenticateUser failed — terminal here
 		Timeout,         // registry didn't answer within the window
 		RegistryDown,    // registry fatal / not started
 	};
-	Code        m_code    = Timeout;
-	wxString    m_reason;
-	ibSession*  m_session = nullptr;   // owned by registry's m_own; session->Close() to remove
+	Code            m_code = Timeout;
+	wxString        m_reason;
+
+	// A granted connection comes out as OWNERSHIP, never as a bare
+	// pointer: the registry hands over the thread of life and the caller
+	// moves it into whatever will own the session (normally the frame).
+	// Dropping the result without moving the holder out closes the
+	// session — which is exactly right for an error path.
+	ibSessionHolder m_holder;
 };
 
 class ibDatabaseLayer;
@@ -157,24 +164,29 @@ public:
 	// This keeps a single coordinator pattern: subsystems do not own
 	// their own global state, they exist only because appData is alive.
 
-	// Lookup a live session by its id (GetId()) in m_own. Resolves debugger
-	// per-session routing (Continue / Step / Pause sid) and the web
-	// "session paused?" query. Shared lock on m_ownMutex.
-	ibSession* Find(const wxString& id);
+	// ---- Lookups ----
+	// Looking something up is NOT being granted it. These return a watch,
+	// never a holder: a caller that found a session can observe it and
+	// hold it still while it works (watch.Share()), but cannot extend its
+	// life beyond its owner. An empty watch means "no such live session" —
+	// the same answer a null pointer used to give, minus the
+	// dangling-pointer window.
 
-	// Reverse lookup — find the session in m_own whose root module-manager
+	// By session id (GetId()) in m_own. Resolves debugger per-session
+	// routing (Continue / Step / Pause sid) and the web "session paused?"
+	// query. Shared lock on m_ownMutex.
+	ibSessionWatch Find(const wxString& id);
+
+	// Reverse lookup — the session in m_own whose root module-manager
 	// equals `mm`. Used by mm::CreateMainModule to recover its owning
 	// session deterministically (without going through ibSession::Current()
-	// which depends on AccessMode + thread-binding state). Returns nullptr
-	// when no live session in m_own owns this mm. Iterates m_own under
-	// m_ownMutex (shared lock).
-	ibSession* FindSessionByRoot(ibValueModuleManagerRuntimeConfiguration* mm) const;
+	// which depends on AccessMode + thread-binding state).
+	ibSessionWatch FindSessionByRoot(ibValueModuleManagerRuntimeConfiguration* mm) const;
 
-	// Symmetric lookup by main-window pointer. Frame's own m_guiSession
-	// back-link is the cheap path; this is for backend code that has
-	// the frame pointer but no direct field on it (e.g. cross-DLL hooks).
-	// Iterates m_own comparing s->GetFrame() == frame.
-	ibSession* FindSessionByFrame(class ibBackendDocFrame* frame) const;
+	// Symmetric lookup by main-window pointer. The frame's own back-link
+	// is the cheap path; this is for backend code that has the frame
+	// pointer but no direct field on it (e.g. cross-DLL hooks).
+	ibSessionWatch FindSessionByFrame(class ibBackendDocFrame* frame) const;
 
 	// Does the registered server session (m_currentServer) currently have
 	// any client attached? Server-shutdown logic uses this to decline
@@ -191,18 +203,19 @@ public:
 	// from appData's runtime state (those values are used for the
 	// DesignerExclusivePolicy gate + the default ibConnectRequest fields
 	// m_appMode / m_computer / m_kind).
-	// Returns the registered ibSession pointer (owned by m_own); nullptr
-	// on registry-Connect failure (policy veto, row-lock dup, registry
-	// down). Throws nothing — typed wrappers in ibApplicationData turn
-	// nullptr into ibBackendCoreException.
-	ibSession* CreateSessionWithFactory(ibRunMode runMode,
-	                                    const wxString& computer,
-	                                    ibConnectRequest::SessionFactory factory);
-	ibSession* CreateSessionWithFactory(ibRunMode runMode,
-	                                    const wxString& computer,
-	                                    const wxString& presetGuid,
-	                                    const wxString& address,
-	                                    ibConnectRequest::SessionFactory factory);
+	// Returns OWNERSHIP of the registered session. Empty holder on
+	// registry-Connect failure (policy veto, duplicate id, registry down).
+	// The caller moves the holder into the object that will own the
+	// session; anything it does not move out dies with the temporary,
+	// which is the correct behaviour for every early-return path.
+	ibSessionHolder CreateSessionWithFactory(ibRunMode runMode,
+	                                         const wxString& computer,
+	                                         ibConnectRequest::SessionFactory factory);
+	ibSessionHolder CreateSessionWithFactory(ibRunMode runMode,
+	                                         const wxString& computer,
+	                                         const wxString& presetGuid,
+	                                         const wxString& address,
+	                                         ibConnectRequest::SessionFactory factory);
 
 	// ---- Thread + queue ----
 	// Set whether the registry owns sys_session row I/O. Default false —
@@ -312,11 +325,12 @@ public:
 	void OnLastDisconnect(VoidCallback cb);
 
 	// Fires from ibSession::RequestForceExit on any session kind.
-	// Per-class virtual OnForceExit only covers ibGUISession (wxApp
-	// quit) and ibWebClientSession (svr.stop via wfrontend). Designer's
-	// CommandId_Destroy lands on Current(), which for wes falls back to
-	// the WebServer technical session whose OnForceExit is the empty
-	// base — this listener picks up THAT case.
+	// Per-class OnClose only does something for sessions that have
+	// something to close — a window, a tab, a job queue
+	// (desktop pair, web tab). Designer's CommandId_Destroy lands on
+	// Current(), which for wes falls back to the WebServer technical
+	// session — windowless, so nothing happens there. This listener picks
+	// up THAT case.
 	void OnForceExit(SessionCallback cb);
 	void NotifyForceExit(ibSession* s);
 
@@ -347,13 +361,12 @@ public:
 	// session's queue from the pool automatically.
 	class ibWorkerPool* GetWorkerPool() const { return m_workerPool.get(); }
 
-	// Force-close every session this process owns. force=true sets
-	// each session's m_forceExit flag (interrupts any in-flight script
-	// at the next opcode), fires OnForceExit per kind (GUI: schedule
-	// wxTheApp::Exit; web/server: no-op), and submits Remove. Used by
-	// GUI hosts on app shutdown so the wx event loop ends after every
-	// session has cleaned up — without the host having to enumerate
-	// sessions itself.
+	// Close every session this process owns. force=true interrupts any
+	// in-flight script and closes each window without asking; force=false
+	// runs each window's normal close path, so a session may refuse.
+	// Used by GUI hosts on app shutdown so the wx event loop ends after
+	// every session has cleaned up — without the host having to
+	// enumerate sessions itself.
 	void CloseAll(bool force);
 
 	// ---- Session-state mutators (single-authority entry points) ----
@@ -419,7 +432,7 @@ public:
 
 	// Read by ibSession::Current() on debug threads. Returns nullptr
 	// when no session is parked.
-	std::shared_ptr<ibSession> GetActiveDebugTarget() const;
+	ibSessionWatch GetActiveDebugTarget() const;
 
 	// Registry-thread invariant: if the thread exits abnormally (exception
 	// escaped, stuck tick, DB hang) the process must terminate — continuing
@@ -538,17 +551,23 @@ private:
 	// must not assume the call never returns.
 	void Die(const wxString& why);
 
-	// --- queue-based ownership (populated by ProcessAdd) ---
-	// shared_ptr — ticket co-owns. When ProcessRemove erases the map
-	// entry, the ticket's shared_ptr keeps the session alive until it
-	// drops too; that's fine because at Stopping → Gone the session has
-	// no DB row and no lock anymore.
+	// --- index, NOT ownership (populated by ProcessAdd) ---
+	// weak_ptr on purpose. The registry tracks which sessions this
+	// process has; the single owner is the holder the caller was handed
+	// (normally living inside a window). That is what makes "the window
+	// died, so the session died" a property of the types rather than a
+	// convention: when the last holder drops, nothing here keeps the
+	// object alive and every entry here goes stale at the same instant.
+	//
+	// An expired entry means the session is gone but its row has not been
+	// swept yet; readers lock() and skip the empties, ProcessRemove
+	// erases them.
 	//
 	// m_ownMutex guards m_own for cross-thread reads (FindSessionByRoot
 	// from compile threads). Writers — ProcessAdd / ProcessRemove on the
 	// registry thread — take a unique lock; readers take a shared lock.
 	mutable std::shared_mutex                                    m_ownMutex;
-	std::unordered_map<wxString, std::shared_ptr<ibSession>>     m_own;
+	std::unordered_map<wxString, ibSessionWatch>                 m_own;
 
 	// Worker pool. Allocated by appData ctor for headless modes via
 	// SetWorkerPool; nullptr otherwise. Stop'd before m_own teardown
@@ -723,20 +742,6 @@ private:
 namespace ib_detail {
 
 template<class SessionT>
-inline SessionT* FinishCreateSession(ibSession* base)
-{
-	if (base == nullptr)
-		ibBackendCoreException::Error(_("Failed to create session"));
-
-	SessionT* derived = static_cast<SessionT*>(base);
-	if (!derived->OnCreateSession()) {
-		derived->Close();   // submit Remove → registry drops m_own entry
-		ibBackendCoreException::Error(_("Failed to create session frame"));
-	}
-	return derived;
-}
-
-template<class SessionT>
 inline std::shared_ptr<ibSession> MakeSessionFactory(wxString id, ibSessionKind kind)
 {
 	return std::make_shared<SessionT>(std::move(id), kind);
@@ -744,28 +749,30 @@ inline std::shared_ptr<ibSession> MakeSessionFactory(wxString id, ibSessionKind 
 
 } // namespace ib_detail
 
+// The type argument only picks which class the registry constructs. No
+// post-construction hook, no downcast, no failure branch of its own: an
+// empty holder is the failure, and letting it die is the cleanup.
+
 template<class SessionT>
-SessionT* ibApplicationData::CreateSession()
+ibSessionHolder ibApplicationData::CreateSession()
 {
 	static_assert(std::is_base_of<ibSession, SessionT>::value,
 		"CreateSession<T>: T must derive from ibSession");
 
-	ibSession* base = m_sessionRegistry->CreateSessionWithFactory(
+	return m_sessionRegistry->CreateSessionWithFactory(
 		m_runMode, m_strComputer, &ib_detail::MakeSessionFactory<SessionT>);
-	return ib_detail::FinishCreateSession<SessionT>(base);
 }
 
 template<class SessionT>
-SessionT* ibApplicationData::CreateSession(const wxString& presetGuid,
-                                            const wxString& address)
+ibSessionHolder ibApplicationData::CreateSession(const wxString& presetGuid,
+                                                 const wxString& address)
 {
 	static_assert(std::is_base_of<ibSession, SessionT>::value,
 		"CreateSession<T>: T must derive from ibSession");
 
-	ibSession* base = m_sessionRegistry->CreateSessionWithFactory(
+	return m_sessionRegistry->CreateSessionWithFactory(
 		m_runMode, m_strComputer, presetGuid, address,
 		&ib_detail::MakeSessionFactory<SessionT>);
-	return ib_detail::FinishCreateSession<SessionT>(base);
 }
 
 #endif
