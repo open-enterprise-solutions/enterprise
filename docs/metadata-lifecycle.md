@@ -52,6 +52,14 @@ by a pluggable `ibFormatProvider` — `ibBinaryProvider` (round-trip) or `ibJson
 The container is a thin forwarder: `LoadCommonTree` / `SaveCommonTree` / `DeleteCommonTree` →
 the root's `ApplyDataNode` / `BuildDataNode`.
 
+**The child walk is FILTERED.** `BuildDataNode` recurses only the children the type's
+`ResolveChild` admits (`FilterChild`), so a child a metaobject holds without publishing it as a
+tree node is invisible to the walk and has to be carried by its owner's `WriteData` / `ReadData`.
+The accumulation register's two totals metaobjects are exactly that — nested, absent from
+`ResolveChild`, and written as sub-nodes of the register's own node. That is what makes their
+metaID survive a save; without it every register's totals would load carrying the same id, and
+`ibSchemaSnapshot::Shared` matches a table by id alone.
+
 **Row data is separate.** Table *contents* do not ride the config blob — they move through the
 L3-3 `ibDataMover` (`DumpDataToBuffer` / `RestoreDataFromBuffer` on the storage container),
 driven by the same `ContributeTables` snapshot that drives the DDL. Boundary: **File = config
@@ -88,8 +96,8 @@ the SOURCE table and only mention it by name, so `DROP TABLE` leaves them behind
 write into a table that is gone. The differ therefore calls `ibDropMaterialization` with the
 BASELINE spec — the only thing that still knows the old names — before dropping. The register KIND
 SWITCH is this path in practice: balances and turnovers keep separate tables under separate ids
-(`GetTotalsTableId()`), so switching is a drop of one plus a create-and-regenerate of the other,
-never an ALTER.
+(`GetTotalsObject()` — one totals METAOBJECT per kind, so the ids are ordinary metaIDs), so
+switching is a drop of one plus a create-and-regenerate of the other, never an ALTER.
 
 ---
 

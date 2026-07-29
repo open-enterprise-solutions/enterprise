@@ -14,6 +14,13 @@
 
 ibValueMetaObjectAccumulationRegister::ibValueMetaObjectAccumulationRegister() : ibValueMetaObjectRegisterData()
 {
+	// The two totals tables. Created HERE, as predefined children — which is what reserves their ids:
+	// GenerateNewID walks every child in the tree, so from this point on nothing else can be handed
+	// the same number. They carry no state beyond that identity, so there is no property to hang them
+	// on; the reference is the whole of what the register needs.
+	m_totalsBalances = CreateMetaObjectAndSetParent<ibValueMetaObjectTotals>(wxT("BalanceTotals"), _("Balance totals"));
+	m_totalsTurnovers = CreateMetaObjectAndSetParent<ibValueMetaObjectTotals>(wxT("TurnoverTotals"), _("Turnover totals"));
+
 	//set default proc
 	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
 	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnWrite"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
@@ -57,6 +64,15 @@ bool ibValueMetaObjectAccumulationRegister::WriteData(ibDataNode& node) const
 
 	node.SetProperty(m_propertyRegisterType->GetName(), m_propertyRegisterType->GetNodeValue());
 
+	node.SetProperty(m_propertySplitTotals->GetName(), m_propertySplitTotals->GetNodeValue());
+
+	// The two totals tables are written for their IDENTITY alone: the sub-node carries each object's
+	// metaID, which is what makes the id survive a save and what the schema differ matches the
+	// physical table by. Losing them here would hand every register the same (zero) id on the next
+	// load, and ibSchemaSnapshot::Shared would then pour one register's columns into another's table.
+	m_totalsBalances->SaveNode(node.Child(wxT("BalanceTotals")));
+	m_totalsTurnovers->SaveNode(node.Child(wxT("TurnoverTotals")));
+
 	node.SetProperty(m_propertyObjectModule->GetName(), m_propertyObjectModule->GetNodeValue());
 	node.SetProperty(m_propertyManagerModule->GetName(), m_propertyManagerModule->GetNodeValue());
 
@@ -70,6 +86,15 @@ bool ibValueMetaObjectAccumulationRegister::ReadData(const ibDataNode& node)
 	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormList->GetName())));
 
 	m_propertyRegisterType->ReadNodeValue(node.GetProperty(m_propertyRegisterType->GetName()));
+
+	m_propertySplitTotals->ReadNodeValue(node.GetProperty(m_propertySplitTotals->GetName()));
+
+	// Absent sub-node = a configuration written before the totals tables existed. The object keeps
+	// the id it was given at construction rather than being left at zero.
+	if (const ibDataNode* totals = node.FindChild(wxT("BalanceTotals")))
+		m_totalsBalances->LoadNode(*totals);
+	if (const ibDataNode* totals = node.FindChild(wxT("TurnoverTotals")))
+		m_totalsTurnovers->LoadNode(*totals);
 
 	m_propertyObjectModule->ReadNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
 	m_propertyManagerModule->ReadNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
@@ -88,7 +113,13 @@ bool ibValueMetaObjectAccumulationRegister::OnCreateMetaObject(ibMetaData* metaD
 	if (!ibValueMetaObjectRegisterData::OnCreateMetaObject(metaData, flags))
 		return false;
 
+	// The totals tables are stamped HERE and only here: this is where a predefined child takes its
+	// metaID from the configuration's counter, which is also what reserves it against every later
+	// GenerateNewID. On a load the id comes from the saved sub-node instead, which is why both
+	// directions of WriteData / ReadData carry them.
 	return (*m_propertyAttributeRecordType)->OnCreateMetaObject(metaData, flags) &&
+		m_totalsBalances->OnCreateMetaObject(metaData, flags) &&
+		m_totalsTurnovers->OnCreateMetaObject(metaData, flags) &&
 		(*m_propertyManagerModule)->OnCreateMetaObject(metaData, flags) &&
 		(*m_propertyObjectModule)->OnCreateMetaObject(metaData, flags);
 }
@@ -96,6 +127,12 @@ bool ibValueMetaObjectAccumulationRegister::OnCreateMetaObject(ibMetaData* metaD
 bool ibValueMetaObjectAccumulationRegister::OnLoadMetaObject(ibMetaData* metaData)
 {
 	if (!(*m_propertyAttributeRecordType)->OnLoadMetaObject(metaData))
+		return false;
+
+	if (!m_totalsBalances->OnLoadMetaObject(metaData))
+		return false;
+
+	if (!m_totalsTurnovers->OnLoadMetaObject(metaData))
 		return false;
 
 	if (!(*m_propertyManagerModule)->OnLoadMetaObject(metaData))
@@ -110,6 +147,12 @@ bool ibValueMetaObjectAccumulationRegister::OnLoadMetaObject(ibMetaData* metaDat
 bool ibValueMetaObjectAccumulationRegister::OnSaveMetaObject(int flags)
 {
 	if (!(*m_propertyAttributeRecordType)->OnSaveMetaObject(flags))
+		return false;
+
+	if (!m_totalsBalances->OnSaveMetaObject(flags))
+		return false;
+
+	if (!m_totalsTurnovers->OnSaveMetaObject(flags))
 		return false;
 
 	if (!(*m_propertyManagerModule)->OnSaveMetaObject(flags))
@@ -131,6 +174,12 @@ bool ibValueMetaObjectAccumulationRegister::OnSaveMetaObject(int flags)
 bool ibValueMetaObjectAccumulationRegister::OnDeleteMetaObject()
 {
 	if (!(*m_propertyAttributeRecordType)->OnDeleteMetaObject())
+		return false;
+
+	if (!m_totalsBalances->OnDeleteMetaObject())
+		return false;
+
+	if (!m_totalsTurnovers->OnDeleteMetaObject())
 		return false;
 
 	if (!(*m_propertyManagerModule)->OnDeleteMetaObject())
@@ -308,3 +357,10 @@ ibSourceDataObject* ibValueMetaObjectAccumulationRegister::CreateSourceObject(co
 //***********************************************************************
 
 METADATA_TYPE_REGISTER(ibValueMetaObjectAccumulationRegister, "AccumulationRegister", g_metaAccumulationRegisterCLSID);
+
+// The totals table's own type. Registered because every metaobject is built through the factory —
+// CreateMetaObjectAndSetParent goes through it too — not because anything ever asks for one by name:
+// it is nested in the register, absent from ResolveChild, and therefore unreachable from the
+// metadata tree, from copy/paste and from script. Hence no named clsid constant either: the id is
+// the hash of the name right here, and there is no second place that needs to spell it.
+METADATA_TYPE_REGISTER(ibValueMetaObjectAccumulationRegister::ibValueMetaObjectTotals, "AccumulationRegisterTotals");

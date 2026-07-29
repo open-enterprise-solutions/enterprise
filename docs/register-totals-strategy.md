@@ -49,18 +49,34 @@ each seam had to be repaired:
   resource; turnovers keep one column. The physical names already differed (`…_T` / `…_Tn`), but
   the schema differ matches tables by IDENTITY, not by name — so it read the switch as "the same
   table, renamed" and took the ALTER path against a table that did not exist
-  (`CREATE INDEX … Unknown columns`). The identity now moves with the kind
-  (`GetTotalsTableId()` = metaID plus a per-kind HIGH bit), which turns the switch into what it
-  actually is: a DROP of one table and a CREATE of the other.
+  (`CREATE INDEX … Unknown columns`). The identity now moves with the kind, which turns the switch
+  into what it actually is: a DROP of one table and a CREATE of the other.
 
-  The bit must be HIGH, and that is the sharper half of the lesson. metaIDs are small sequential
-  integers, so the first attempt — `metaID ^ 1` / `metaID ^ 2` — produced the id of the
-  NEIGHBOURING metaobject. `ibSchemaSnapshot::Shared` matches on id alone and hands back whatever
-  table already carries it, name ignored, so the totals declaration poured its columns into an
-  unrelated table. The symptoms were duplicate fields and indexes over columns nobody had added, on
-  registers whose neighbours happened to exist and in an order that depended on the tree — a fault
-  that reads as "sometimes it slips through" while being perfectly deterministic. `Shared` now
-  asserts when the name disagrees, so the next collision announces itself where it happens.
+  **Where that identity comes from is the sharper half of the lesson.** The first attempt derived it
+  arithmetically from the register's own metaID — `metaID ^ 1` / `metaID ^ 2` — which produced the
+  id of the NEIGHBOURING metaobject, because metaIDs are small sequential integers.
+  `ibSchemaSnapshot::Shared` matches on id alone and hands back whatever table already carries it,
+  name ignored, so the totals declaration poured its columns into an unrelated table. The symptoms
+  were duplicate fields and indexes over columns nobody had added, on registers whose neighbours
+  happened to exist and in an order that depended on the tree — a fault that reads as "sometimes it
+  slips through" while being perfectly deterministic. Moving to a HIGH bit made the collision
+  unreachable, but kept the shape of the mistake: a private numbering convention that every future
+  totals table would need its own band of.
+
+  **A totals table is now a METAOBJECT**
+  (`ibValueMetaObjectAccumulationRegister::ibValueMetaObjectTotals`), one per kind, created in the
+  register's constructor as a predefined child and held by a plain `ibValuePtr` — not by a property,
+  because there is nothing here to show or edit and the reference is the whole of what is needed.
+  Two properties fall out rather than being arranged. Its id is unique BY CONSTRUCTION, because
+  `GenerateNewID` walks every child in the tree and a predefined child really is one; and it is
+  stable across saves, because the register's own `WriteData` writes each object's whole node — id
+  included — as a sub-node (`BalanceTotals` / `TurnoverTotals`) and `ReadData` reads it back. That
+  hand-written pair is not ceremony: the generic child walk only descends what `ResolveChild`
+  admits, and these are deliberately not in it.
+  Declaring only the active kind is what makes the other table absent, so
+  the DROP-plus-CREATE needs no rule stating it. The next totals table (the accounting register wants
+  several) costs one more child, not one more bit. `Shared` still asserts when a name disagrees with
+  an id it already holds, so any future collision announces itself where it happens.
 - **The maintenance does not go down with the table.** The triggers hang on the MOVEMENTS table and
   merely MENTION the totals by name, so dropping the totals table leaves them behind, firing on
   every subsequent write into a table that is gone — the movements stop being writable, and the
@@ -577,9 +593,18 @@ stopped trying to be clever:
 3. **Don't migrate it at all.** A derived table holds no information of its own; the regeneration
    recomputes every row anyway. So when `NeedsRegeneration` says the shape changed, the differ
    DROPS the table and creates it fresh — which takes the columns and the indexes with it and
-   removes the entire class of migration edges at once. The column still carries an identity
-   (`GetShardColumnId()`), because the declaration must state what the table holds; it simply no
-   longer has to be reachable by an ALTER.
+   removes the entire class of migration edges at once. The column still carries an identity,
+   because the declaration must state what the table holds; it simply no longer has to be reachable
+   by an ALTER. That identity is the totals METAOBJECT's own metaID — there is exactly one shard
+   column per totals table and it belongs to that table, so no second id has to be invented for it,
+   and a table id and a column id are matched in different places to begin with.
+
+**The switch also has to SURVIVE a save.** It did not: `SplitTotals` was declared as a property and
+never written into (or read back from) the register's node, so every reload silently returned it to
+off — the one failure mode that looks like the feature working, since the totals stay correct while
+the contention it was turned on for comes back. Fixed with the totals metaobjects, which travel the
+same road: a property that is not in `ReadData` / `WriteData` does not exist past the session that
+set it.
 
 Regeneration with shards is trivial and stays so: the bulk rebuild writes one consolidated row per
 key into **shard 0** (a rebuild is a single writer, and there is nothing to spread), and the
@@ -859,10 +884,13 @@ matters:
    the feature silently wrong rather than merely absent, so it ranks first. The live path is still
    in place and doubles as the oracle; the test wants an in-memory SQLite base, a few hundred
    randomised movements, and a column-by-column comparison of the two readings.
-2. **Storage granularity is hard-wired to Day.** It wants to be a per-register property: a register
-   posted once a month per key gains nothing from daily rows, and one that must answer hourly
-   cannot use them. The mechanism already READS the value rather than assuming it
-   (`GetTotalsPeriodUnit()`), so this is a property plus a regeneration.
+2. **Storage granularity is Day, and it is not a setting.** The periodicity of a READING is a query
+   parameter — the caller asks for daily, weekly or monthly rows, or for none at all and gets the
+   movements — so nothing about it belongs in the metadata. What Day fixes is the FLOOR under those
+   readings, an internal storage decision: coarser is derivable, finer is served from the movement
+   table anyway. The mechanism still READS the value rather than assuming it
+   (`GetTotalsPeriodUnit()`), so a register that one day needs a different floor changes one place
+   plus a regeneration — but it is not a knob to hand the user.
 3. **The accounting register does not declare totals yet.** It was the reason for building the
    primitives this way — a debit and a credit side are two guarded accumulations into one table —
    and four `#if 0` blocks mark where its declaration goes.

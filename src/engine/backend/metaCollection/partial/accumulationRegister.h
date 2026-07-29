@@ -111,31 +111,57 @@ public:
 
 	wxString GetRegisterTableNameDB() const { return GetRegisterTableNameDB(GetRegisterType()); }
 
-	// The totals table's IDENTITY — and it must move with the name.
+	// ============================================================================
+	// The totals table AS A METAOBJECT. It carries no data and declares nothing — it exists to hold
+	// an IDENTITY, which is exactly what a derived table lacked.
 	//
-	// The schema differ matches tables by id, never by name. When the id stayed put while the name
-	// followed the register kind, switching kinds looked like "the same table, renamed": the differ
-	// emitted ALTER and CREATE INDEX against a table that did not exist yet. Making the id depend on
-	// the kind states the truth instead — the old totals table VANISHES (dropped) and the new one is
-	// created empty, which is also what the data demands, since figures accumulated under one kind
-	// mean nothing under the other.
+	// The schema differ matches a table by id and never by name, so the totals table needs an id that
+	// belongs to no one else. It used to be derived arithmetically from the register's own metaID,
+	// and that is what this replaces: metaIDs are small sequential integers, so `metaID ^ 1` was the
+	// id of the NEIGHBOURING metaobject — ibSchemaSnapshot::Shared matches on id alone and hands back
+	// whatever table already carries it, name ignored, so the totals declaration poured its columns
+	// into an unrelated table. Moving to a high bit made the collision unreachable but kept the
+	// shape: a private convention that every future totals table would need its own band of.
 	//
-	// The id must live in a range NO metaID can occupy, hence a high bit rather than a low one.
-	// metaIDs are small sequential integers, so `metaID ^ 1` is the id of the NEIGHBOURING
-	// metaobject — and ibSchemaSnapshot::Shared matches on id alone and hands back whatever table
-	// already carries it, name ignored. The totals declaration then poured its columns into an
-	// unrelated table, which surfaced far away as a duplicate field or an index over columns that
-	// were never added, and only for registers whose neighbours happened to exist.
-	ibMetaID GetTotalsTableId() const {
-		return GetMetaID() | (GetRegisterType() == ibRegisterType::eBalances ? 0x40000000 : 0x60000000);
+	// A metaobject answers both questions at once. ibMetaData::GenerateNewID walks EVERY child in the
+	// tree — predefined children included, since CreateMetaObjectAndSetParent really does AddChild
+	// them — so the id is unique BY CONSTRUCTION rather than by a range nobody has claimed yet. And
+	// it is stable across saves, because the holder property writes this object's whole node (id
+	// included) inside the register's own node. A second and a third totals table (the accounting
+	// register wants several) cost one more child each, not one more bit.
+	//
+	// Nested rather than global: it is not a metaobject anyone creates, references or sees — it is
+	// part of what an accumulation register IS. It stays out of ResolveChild, so it never appears in
+	// the metadata tree, in copy/paste or in the child serialization walk. And it declares no table
+	// of its own: a totals table's SHAPE is a function of the register's dimensions and resources, so
+	// the register declares it (accumulationRegisterSchema.cpp) and reads the identity from here.
+	//
+	// Held as a plain owning reference, not as a property. A property is the object inspector's road
+	// — a name, a label, a category, an editor — and there is nothing here to show or to edit. What
+	// is needed is the reference itself, so that is all it is.
+	// ============================================================================
+	class ibValueMetaObjectTotals : public ibValueMetaObject {
+	public:
+		ibValueMetaObjectTotals(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString,
+			const wxString& comment = wxEmptyString) : ibValueMetaObject(name, synonym, comment) {
+		}
+		virtual ~ibValueMetaObjectTotals() {}
+	};
+
+	// TWO of them, one per register kind — and that is the point of holding the identity here rather
+	// than computing it. A balance register keeps receipt and expense apart, a turnover-only one has
+	// no second side at all, so the two are genuinely different tables (`_T` / `_Tn`). While one id
+	// served both, switching the kind read as "the same table, renamed" and the differ emitted ALTER
+	// + CREATE INDEX against a table that did not exist. With an object per kind the switch IS what
+	// it always was — one table dropped, the other created empty — with no rule to state anywhere:
+	// ContributeTables declares the active one, and the other id simply stops being present.
+	ibValueMetaObjectTotals* GetTotalsObject(ibRegisterType rType) const {
+		return rType == ibRegisterType::eBalances
+			? static_cast<ibValueMetaObjectTotals*>(m_totalsBalances)
+			: static_cast<ibValueMetaObjectTotals*>(m_totalsTurnovers);
 	}
 
-	// The shard column's IDENTITY. It needs one for the same reason the accumulating columns do:
-	// turning split totals on or off ADDS or REMOVES a physical column on an existing table, and a
-	// scaffold column is created with its table and never migrated — so the key would be rebuilt
-	// around a column that was never created ("Unknown columns in index"). Same high-bit rule as
-	// above: a dimension's own metaID sits in the low range, so an OR cannot land on one.
-	ibMetaID GetShardColumnId() const { return GetMetaID() | 0x20000000; }
+	ibValueMetaObjectTotals* GetTotalsObject() const { return GetTotalsObject(GetRegisterType()); }
 
 	///////////////////////////////////////////////////////////////////
 
@@ -171,10 +197,16 @@ public:
 	wxString GetTurnoverViewName() const           { return GetPhysicalTableName() + wxT("_Turnovers"); }
 	wxString GetBalanceAndTurnoverViewName() const { return GetPhysicalTableName() + wxT("_BalanceAndTurnovers"); }
 
-	// The granularity totals are STORED at — the floor on what can be read back, since a projection
-	// is derivable only into a unit no finer than this. One place, read by the schema declaration
-	// and by the view source alike, so the columns a view HAS and the columns a reader EXPECTS
-	// cannot drift apart. Day today; this is the hook a per-register property will replace.
+	// The granularity totals are STORED at — NOT the periodicity of a reading, which is a QUERY
+	// parameter (the caller asks for daily / weekly / monthly rows, or for none at all and gets the
+	// movements). This is the floor under those readings: a projection is derivable only into a unit
+	// no finer than what is stored, and everything below the floor is answered from the movement
+	// table anyway, which is also where per-recorder and per-record granularity comes from.
+	//
+	// Day, and not as a placeholder: it is where compression is still large (a key usually sees many
+	// movements a day) while the coverage includes everything a totals reading is actually asked.
+	// One place, read by the schema declaration and by the view source alike, so the columns a view
+	// HAS and the columns a reader EXPECTS cannot drift apart.
 	ibTotalsPeriod GetTotalsPeriodUnit() const { return ibTotalsPeriod::Day; }
 
 	// Is this register's totals row split across shards? A schema question, answered by the
@@ -343,6 +375,14 @@ private:
 	// (An information register has no counterpart: it holds a slice, not accumulated sums, so there
 	// is nothing to split. An accounting register will carry this same switch.)
 	ibPropertyBoolean* m_propertySplitTotals = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, wxT("SplitTotals"), _("Split totals"), false);
+
+	// The two totals tables — held for their IDENTITY (see ibValueMetaObjectTotals above). Predefined
+	// children: created with the register in its constructor, pinned to it for life, serialized as
+	// sub-nodes of the register's own node. Which of the two is declared follows the register kind,
+	// so switching the kind is a DROP of one and a CREATE of the other rather than an ALTER of
+	// something that was never there.
+	ibValuePtr<ibValueMetaObjectTotals> m_totalsBalances;
+	ibValuePtr<ibValueMetaObjectTotals> m_totalsTurnovers;
 
 	ibPropertyContainer<>* m_propertyAttributeRecordType = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateSpecialType(wxT("RecordType"), _("Record type"), wxEmptyString, g_enumRecordTypeCLSID, false, ibValueEnumAccumulationRegisterRecordType::CreateDefEnumValue()));
 

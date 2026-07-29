@@ -54,6 +54,7 @@ Undocumented-until-now subsystems, mapped 2026-07-15:
 | **LINQ** | [linq.md](linq.md) | experimental, on top of lambda + iterator |
 | **Paging** | [paging-design.md](paging-design.md) | the universal `Get*Fetch` contract (§8) is what lives |
 | **Access policy / RLS** | [access-policy-rls.md](access-policy-rls.md) | read + write live; semi-join / temp-promote landed |
+| **Register totals** | [register-totals-strategy.md](register-totals-strategy.md) | reading works (three virtual tables via live aggregation); the trigger-maintained bundle is declared by the accumulation register and applied on a live Firebird, surviving a kind switch (2026-07-29). Open: numeric parity of the two paths is **unverified**; the accounting register declares no totals; boundary-row Fill and the routing of recorder / sub-day readings to the movements are absent |
 
 ---
 
@@ -64,7 +65,6 @@ Do not treat these as "nearly done"; they are captured thinking.
 | Area | Doc | Status as stated there |
 |---|---|---|
 | Data policy (declarative platform policies) | [data-policy-arc.md](data-policy-arc.md) | **DESIGN — no code yet** (2026-06-11 session) |
-| Register totals | [register-totals-strategy.md](register-totals-strategy.md) | **reading works 2026-07-28** — three virtual tables (Balance / Turnovers / BalanceAndTurnovers) reachable from query + LINQ, via live aggregation. Trigger-maintained totals: built (dictionary, L2-2 renderer, derived bit, L3-4 regeneration) but **dormant** — no register declares the bundle yet |
 | Metadata hot reload (change classes + tombstone door) | [metadata-hot-reload.md](metadata-hot-reload.md) | **PROPOSAL — NOTHING implemented** (2026-07-15 session) |
 | Memory allocator | [memory-allocator.md](memory-allocator.md) | **design note / NOT STARTED** |
 | Metadata storage container | [metadata-storage-container-arc.md](metadata-storage-container-arc.md) | design detailed; **backlog** until size / partial-save triggers fire |
@@ -87,9 +87,10 @@ Each was checked against source on 2026-07-15.
 ```
 
 Consequence: the accounting read path does not execute — Balance / Turnovers do not return
-data. The metaobjects, metadata and forms exist; the execution does not. See
-[register-totals-strategy.md](register-totals-strategy.md) for the strategy that would
-back it.
+data. The metaobjects, metadata and forms exist; the execution does not. The strategy that
+backs it is no longer hypothetical — it is declared and applied for the accumulation register
+— but the accounting register contributes no totals of its own yet. See
+[register-totals-strategy.md](register-totals-strategy.md).
 
 ### 4.2 Web — the control surface is roughly one third ported
 

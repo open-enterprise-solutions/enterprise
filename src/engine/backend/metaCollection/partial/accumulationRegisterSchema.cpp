@@ -60,7 +60,12 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 	const wxString totalsName  = GetRegisterTableNameDB();
 	const wxString periodField = ibRegValueField(GetRegisterPeriod());
 
-	ibSchemaTable& t = out.Shared(GetTotalsTableId(), totalsName);   // identity moves with the kind
+	// The identity comes from the totals METAOBJECT of the active kind — a real metaID, unique by
+	// construction, stable across saves. Declaring one kind is what makes the other's table absent,
+	// so switching the register kind is a DROP plus a CREATE and never an ALTER of a table that was
+	// never there. (See ibValueMetaObjectTotals in accumulationRegister.h for what this replaced.)
+	const ibValueMetaObjectTotals* totals = GetTotalsObject();
+	ibSchemaTable& t = out.Shared(totals->GetMetaID(), totalsName);
 
 	// --- structure: the period, the dimensions, and a stored pair per resource -----------------
 	const ibBackendQueryColumn* periodCol = t.Scaffold(ibRawDBColumn::Date(periodField));
@@ -81,9 +86,13 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 	// physical column to an existing table (and turning it back REMOVES one), and scaffold columns
 	// are created with their table and never migrated. Without the id the differ would rebuild the
 	// key around a column it never created.
+	//
+	// The totals object's own metaID names it. There is exactly one shard column per totals table and
+	// it belongs to that table, so the table's identity IS the column's — a table id and a column id
+	// are matched in different places and cannot be confused for one another.
 	const bool split = IsTotalsSplitEnabled();
 	if (split) {
-		const ibBackendQueryColumn* shard = t.OwnRaw(ibRawDBColumn::Number(ShardColumnName(), GetShardColumnId()));
+		const ibBackendQueryColumn* shard = t.OwnRaw(ibRawDBColumn::Number(ShardColumnName(), totals->GetMetaID()));
 		t.Add(shard);
 		keyCols.push_back(shard);
 	}
