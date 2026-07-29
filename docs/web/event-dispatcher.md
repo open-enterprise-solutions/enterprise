@@ -299,10 +299,9 @@ above gets exercised on a real second controller. Port the controls
 (see `docs/web/open-issues.md` — they're already on the priority
 list) and add their events in the same commit:
 
-1. **Port the `*.cpp` to `wfrontend.vcxproj`** (textctrl is already
-   ported; checkbox.cpp + checkboxEvent.cpp + checkboxProperty.cpp +
-   checkbox_res.cpp; choice.cpp). Stub-first pattern from
-   `conventions.md`.
+1. **Port the `*.cpp` to `wfrontend.vcxproj`** (textctrl and checkbox —
+   all four `checkbox*.cpp` — are already ported; `choice.cpp` is the
+   next one). Stub-first pattern from `conventions.md`.
 2. **Layer 1** (`webWindow.h`):
    - `ibWebTextCtrl::FireTextChange(const wxString&)` — already has
      `m_value`; set it then `wxCommandEvent(wxEVT_TEXT); SetString(v); FireEvent(ev)`.

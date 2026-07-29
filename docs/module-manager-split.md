@@ -25,7 +25,9 @@ unit type). The split removes the runtime from the designer's path entirely.
 ```
 ibValueModuleManager                         — LIGHTWEIGHT base
   │   nested: ibValueModuleUnit (managerless, no ProcUnit), ibValueMetadataUnit
-  │   holds: "Manager" singleton, m_metaManager, m_listGlConstValue, named context
+  │   holds: "Manager" singleton, m_metaManager, named context
+  │   (the m_listGlConstValue registry was removed — globals live in the compile
+  │    module's m_listExternValue; see the Bind-API section below)
   │   virtual CreateMainModule/DestroyMainModule (default no-op)
   │   pure virtual FindCommonModule(commonModule)        ← resolved per-branch
   │
@@ -55,7 +57,7 @@ which asserts on a type-id missing from the ctor registry. The runtime unit
 
 The designer manager lives in `ibCompileValueCache` (field
 `ibValuePtr<ibValueModuleManagerDesigner> m_moduleManager`, accessors out-of-line
-in `metadata.cpp`). The cache exists only in DesignerMode
+in `backend/metaData.cpp`). The cache exists only in DesignerMode
 (`ibMetaDataConfigurationStorage` ctor; external DP/Report ctors).
 
 - **Created** in `RunDatabase` **before** `RunSubtree(flags, true)` — common

@@ -195,7 +195,8 @@ contained (no L5-1 / L4-1 / queryable tie). What changed:
   top-level `using ibComposerNode = …` alias. 137 refs across 20 files. Fluent RAM builder on it:
   `node.AddRow().Set(col,v).Set(col2,v2)…`, navigate via `GetParent()`.
 
-- **RAM dot-walk over references** (`RamResolveField`): a field path splits into a HEAD storage column + a dotted
+- **RAM dot-walk over references** (`ibRamValueStorage::ResolveField` — the free `RamResolveField`
+  of this phase became a storage method, see the closing note below): a field path splits into a HEAD storage column + a dotted
   TAIL; each tail segment hops into the previous value AS A SOURCE (a reference cell IS an `ibSourceDataObject` →
   `GetSourceExplorer` name→id → `GetValueByMetaID`, the same hop `ContinueHops` runs). Drives filter + sort +
   group dims. A primitive mid-path / unknown segment → empty value (filter passes, sort key empty — never a crash).
@@ -208,7 +209,8 @@ contained (no L5-1 / L4-1 / queryable tie). What changed:
 
 - **File split**: `model.cpp` → shared base + node (`model.cpp`), DB fetch (`modelDb.cpp`:
   `ibValueModelDb::RunComposerPage` + `ResolveAnchorByKey`), RAM fetch + composer (`modelRam.cpp`:
-  `RamResolveField`/`RamSplitField`/`RamWindowPositions` + `ibRamValueStorage::ColumnIdByName` +
+  `ibRamValueStorage::ResolveField`/`SplitField` (shipped names; the free `Ram*` helpers of this
+  phase no longer exist) + `ibRamValueStorage::ColumnIdByName` +
   `ibDataRamComposer::ComputeOrder` + `ibValueModelRam::RunComposerPage`). Both new units added to backend.vcxproj.
 
 **Open**: the header `model.h` name is now misleading (it holds `ibValueModel`/`ibComposerNode`/

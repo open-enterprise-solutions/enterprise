@@ -122,16 +122,20 @@ which also clears the offending rows.
 
 ---
 
-## Not covered yet — register composite indexes
+## Register composite indexes — half landed
 
 The per-attribute flag declares **single-column** indexes. Register aggregate access needs
 **composite** indexes the flag cannot express:
-- **Totals** (accumulation): a composite over the dimensions for `SUM` aggregation.
-- **Slice of last** (information register): `(dimensions, period)` — dimension-leading, the
-  reverse of the period-leading key — to fetch the latest record per dimension as of a date.
 
-The mechanics are ready (`t.Index(name, { col1, col2, ... })` + the content-aware differ handle
-any composite). The missing piece is the **declaration**, which belongs with the register's
-virtual tables (`Balance` / `Turnovers` / `SliceLast` each declaring the composite index it
-needs), landing together with those features — not as a per-column flag. See
+- **Totals** (accumulation) — **LANDED.** `accumulationRegisterSchema.cpp` declares the totals
+  key `(period, dimensions…[, shard])` as a unique `_PK` index on the derived totals table,
+  built alongside the maintenance bundle. The declaration arrived with the totals metaobject
+  (2026-07-29), exactly where this section predicted it belonged.
+- **Slice of last** (information register) — still open: `(dimensions, period)`,
+  dimension-leading (the reverse of the period-leading key), to fetch the latest record per
+  dimension as of a date.
+
+The mechanics were ready all along (`t.Index(name, { col1, col2, ... })` + the content-aware
+differ handle any composite); what was missing was the declaration, and it belongs with the
+register's virtual tables rather than with a per-column flag. See
 [register-totals-strategy.md](register-totals-strategy.md).

@@ -7,7 +7,7 @@
 > [command-interface.md](command-interface.md) (the command-bar layer edited here).
 > This document describes code that **already exists**; it is a map, not a plan.
 
-`designer/win/editor/visualEditor/` — ~5400 lines across 8 files, the largest single
+`designer/win/editor/visualEditor/` — ~6400 lines across 15 files (10 `.cpp` / 5 `.h`), the largest single
 editor in the Designer.
 
 ---
@@ -18,8 +18,8 @@ editor in the Designer.
 the engine in the first place. It has been reworked far enough that perhaps ~5% of the
 original remains, but the debt is worth stating plainly, because it explains the shape.
 
-The attribution is still in the source, and stays there — five files, all of them **in the
-editor**:
+The attribution is still in the source, and stays there — **twelve files**, seven of them in the
+editor:
 
 ```
 designer/win/editor/visualEditor/innerFrame.cpp        // Author : Maxim Kornienko, wxFormBuilder
@@ -27,10 +27,20 @@ designer/win/editor/visualEditor/titleFrame.cpp        // Author : Maxim Kornien
 designer/win/editor/visualEditor/visualEditor.cpp      // Author : Maxim Kornienko, wxFormBuilder
 designer/win/editor/visualEditor/visualEditorCmdProc.cpp
 designer/win/editor/visualEditor/visualEditorEvent.cpp
+designer/win/editor/visualEditor/visualEditorObjectTree.cpp
+designer/win/editor/visualEditor/visualEditorPanel.cpp
+
+frontend/visualView/visualHost.cpp                     // the three runtime hosts
+frontend/visualView/visualHostClient.cpp
+frontend/visualView/visualHostEvent.cpp
+
+frontend/win/dlgs/errorDialog.cpp                      // wxFormBuilder community
+frontend/win/dlgs/about.cpp                            // credit line in the About box
 ```
 
-**There is not a single wxFormBuilder trace in `frontend/visualView/`.** That is the whole
-migration, visible as a grep: the inherited code kept sliding until only the *editor* still
+**The wxFormBuilder lineage survives in exactly three `frontend/visualView/` files** — the hosts
+`visualHost.cpp`, `visualHostClient.cpp`, `visualHostEvent.cpp`; nothing else in the runtime view
+carries it. That is the migration, visible as a grep: the inherited code kept sliding until the *editor* still
 carries it. What was general moved out; what stayed is the editing tool.
 
 ### 1.1 What the rework actually was

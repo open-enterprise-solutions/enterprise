@@ -28,7 +28,7 @@
 
 Status: **byte path REMOVED; node path landed (schema-first-metadata.md). Below = design history; method names superseded per the map above.**
 
-Landed (working copy, unbuilt):
+Landed (since built and shipped — the "unbuilt working copy" caveats below are historical):
 - Node-owned walk on `ibValueMetaObject`: `SaveSubtree` / `LoadSubtree` / `DeleteSubtree`
   + lifecycle `RunSubtree` / `CloseSubtree`. The former `SaveMeta`/`LoadMeta` stay
   (reused for predefined-attribute inline serialization); the former
@@ -74,13 +74,14 @@ Landed (working copy, unbuilt):
   "column unknown FLDnnnn_TYPE"). Now the first Apply creates, the rest are incremental.
 
 Remaining: the atomic detached-root swap (#10), and the Clear / destruction-model change.
-**Not done and blocking verification: nothing in this working copy has been built —
-Step 4 touches `ibValueMetaObject` (repo-wide blast radius), so until a clean CMake
-`oes_tests` build runs, everything below is "written, unverified".** The two interim fixes
+~~**Not done and blocking verification: nothing in this working copy has been built**~~ —
+**resolved.** The successors are all in-tree and building: `BuildFreshRoot`, `ibMetaImage`,
+`LoadGuard` and `metaCollection/metaObjectSerialize.cpp` are live, and
+`tests/test_metadataSerialize.cpp` is registered in `oes_tests`. The two interim fixes
 above sit on `OnAfterSaveDatabase` / `LoadConfigFromBuffer`, which Step 5 reworks — treat
 them as transitional.
 
-**Step 0 round-trip gtest — written (unbuilt):** `tests/test_metadataSerialize.cpp`
+**Step 0 round-trip gtest — written and building:** `tests/test_metadataSerialize.cpp`
 (registered in `tests/CMakeLists.txt` under `oes_tests`). DB-free by construction — it
 drives a standalone `ibMetaDataConfigurationFile` (public ctor) and serializes with
 `saveToFileFlag` so `SaveSubtree` skips the only DB-touching hook (`OnSaveMetaObject`); a
@@ -166,11 +167,11 @@ a DB-load failure is a corrupt-config / startup case.
   intentional mid-process rebuild. Order is UAF-safe: the manager is released **before** the
   root (it references the root via `m_objectValue`).
 - **Consistency:** this aligns the external-file metadata with the **session** manager, which
-  was already `ibValuePtr<ibValueModuleManagerConfiguration> m_root`. The config metadata has
+  was already `ibValuePtr<ibValueModuleManagerRuntimeConfiguration> m_root`. The config metadata has
   **no** manager member — the configuration runtime lives per-session (`ibSession::m_root` +
   `m_lambdaRuntime`), so config-detached-root just swaps the tree. `ibValuePtr` itself got a
   self-assign guard fix this pass (`this != ptr` → `m_pRef != ptr`, removing a `p = p.get()`
-  use-after-free). Open: optional RAII `~ibValueModuleManagerConfiguration` for full symmetry.
+  use-after-free). Open: optional RAII `~ibValueModuleManagerRuntimeConfiguration` for full symmetry.
 
 **Save side — preflight then generate (no detached swap).** The save does NOT need the load's
 detached-root machinery. It is the simple two-phase shape: (1) **preflight** — check "can we

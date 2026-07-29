@@ -1,6 +1,6 @@
 # The wx control fork — what is forked, what is vendored, what is ours
 
-> **Scope:** `frontend/win/` (~359 files) — the forked and vendored widget layer under the
+> **Scope:** `frontend/win/` (~367 files) — the forked and vendored widget layer under the
 > OES controls. Companions: [uikit.md](uikit.md) (the custom-drawn engine + Luna theme),
 > [docview-fork.md](docview-fork.md), [paging-design.md](paging-design.md),
 > [spreadsheet-editor.md](spreadsheet-editor.md), [designer-editors.md](designer-editors.md).
@@ -172,7 +172,7 @@ Licensing across this folder is **clean**: wxWindows licence (grid, dataview) an
 
 ## 6. Honest remainder
 
-- **`ctrls/charts/` is 246 of the folder's 359 files** — 69% of `frontend/win` is a vendored
+- **`ctrls/charts/` is 246 of the folder's 367 files** — 67% of `frontend/win` is a vendored
   chart library that is never touched. Any "the wx layer is huge" instinct should be checked
   against that.
 - The dataview fork is the highest-risk inherited code: upstream's generic control plus a

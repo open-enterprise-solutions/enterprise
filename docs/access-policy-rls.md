@@ -375,8 +375,9 @@ temp tables) falls back to an INNER JOIN (read-only, may duplicate) — the defe
   "cannot be lowered", which a module `try/except` swallows → the query runs unrestricted. Fix:
   `kAOTFormatVersion` was bumped (16 → 17) so stale blobs are rejected and recompiled. A future
   compiler change that alters bytecode output for unchanged source needs the same bump (or an
-  `ibByteCodeCache::InvalidateAll`). The recorded AST *is* AOT-serialised (v14), so once recompiled it
-  survives caching.
+  `ibByteCodeCache::InvalidateAll`). The recorded AST *is* AOT-serialised, so once recompiled it
+  survives caching. (The constant has moved on since — 18 as of the shortLet-peephole fix; always read
+  `byteCodeAOT.cpp:136` rather than a number written here.)
 - **Every source in the query is restricted (fixed in code, pending live verify).** `Apply` walks
   `GetSources()` (descending Join / Union) and fires the role handler ONCE per distinct table (dedup by
   `GetQueryTableId()`), not just the primary `From` — so a joined table is gated too, and the handler
@@ -416,7 +417,7 @@ temp tables) falls back to an INNER JOIN (read-only, may duplicate) — the defe
 | `compiler/compileCode.{h,cpp}` | `CompileRestrictExpression` (the `restrict` block) + `EmitRestrictBody` (a clause → a 1-or-2-param lambda via `EmitFunctionBody`); triggered on `KEY_RESTRICT` in `GetExpression` and the statement switch |
 | `compiler/lambdaQueryAst.{h,cpp}` | body → L4 pushdown AST — `ibBuildLambdaQueryAst` (LINQ, single alias) / `ibBuildRestrictedQueryAst` (`restrict`, bare span, 2-alias join ON); `in (list)` / `in <array>` parsing shared by both |
 | `query/queryLowering.cpp` | `In` lowering — expands a captured array / collection item into its elements |
-| `compiler/byteCodeAOT.cpp` + `compiler/cache/byteCodeCache.{h,cpp}` | AOT (de)serialisation of the pushdown AST (`m_lambdaExprAst`, v14) + the `sys_bytecode_cache` DB DAO; `kAOTFormatVersion` bump invalidates stale AST-less blobs |
+| `compiler/byteCodeAOT.cpp` + `compiler/cache/byteCodeCache.{h,cpp}` | AOT (de)serialisation of the pushdown AST (`m_lambdaExprAst`) + the `sys_bytecode_cache` DB DAO; `kAOTFormatVersion` bump invalidates stale AST-less blobs |
 | `compiler/procUnit.h` | `CallAsProc` / `CallAsFunc` comma-args variadics return **bool** (found?) — the presence gate the door uses without a separate lookup |
 | `query/queryProvider.{h,cpp}` + `query/dbTableProvider.{h,cpp}` | `ExecuteWrite` returns the **affected-row count**; per verb — CREATE = guarded `INSERT … SELECT` over a one-row derived relation (`WITH CHECK`), WRITE = guarded `UPDATE` (`Kind::Update` + `SetWherePredicate`), DELETE = `BuildWhere`; `BuildDotWalkExists` + the `pathAsExists` flag lower a reference-path write condition to a correlated `EXISTS` |
 | `databaseLayer/databaseQueryBuilder.{h,cpp}` | `ibQueryStatement::Kind::Update` (+ `SetWherePredicate`) — SET non-key, WHERE key AND the RLS predicate; `ibInsertSelect` + source-less SELECT (`m_selectFromDual`, FB `RDB$DATABASE`) for the create `WITH CHECK`; `ibQueryExprKind::Exists` / `ibExists` — the correlated-subquery expr for dot-walk writes |

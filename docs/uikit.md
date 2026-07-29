@@ -68,7 +68,8 @@ umbrella header `uikit/uikit.h` lists the revived set:
 
 `ibControl` and `ibAnyButton` are bases, not user controls. Not yet in the
 build (file pairs staged in the tree, waiting for the univ frame):
-ibStatusBar, ibMenuBar, ibDialog / ibFrame / ibTopLevel.
+ibStatusBar, ibDialog / ibFrame / ibTopLevel. **ibMenuBar is not written
+yet** — no file pair exists for it.
 
 Notable designs:
 

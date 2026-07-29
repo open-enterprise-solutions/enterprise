@@ -59,7 +59,15 @@ engineering-playbook   — not "DevGuidelines"
 
 ## Standard project file layout
 
-### Monolithic C++ repository (current structure)
+### Monolithic C++ repository (TARGET layout — partly aspirational)
+
+> **Verified 2026-07-29:** the tree below is the shape being aimed at, not what is on disk.
+> Absent today: `cmake/`, `scripts/`, `third_party/`, `resources/`, `docs/architecture/`,
+> `docs/api/`, `tests/unit/`, `tests/integration/`, `.github/`, `.claude.json`. Also note
+> the real driver folder is `databaseLayer/sqllite/` (two `l`, a known typo), there is no
+> `commonObjectQuery.cpp` (the real files are `commonObject{Manager,Meta,RecordSet,Ref}Query.cpp`),
+> and `CreateAndUpdateTableDB()` was removed when structure DDL moved to L3-2.
+> For the test layout as built, see [10-testing.md](10-testing.md).
 
 OES Enterprise is a monolithic desktop product. Everything lives in one repository.
 

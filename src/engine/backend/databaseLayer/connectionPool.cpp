@@ -330,9 +330,9 @@ void ibConnectionPool::Init(std::shared_ptr<ibDatabaseLayer> primary, std::size_
 	}
 	// Pre-warm — Clone() up to minIdle additional conns so light bursts
 	// don't pay the Open cost. Server modes (wes, future oes-server)
-	// pass minIdle high enough to absorb typical concurrency;
-	// single-session GUI hosts use minIdle=1, which means the loop
-	// below is a no-op.
+	// pass minIdle high enough to absorb typical concurrency; GUI hosts
+	// use minIdle=2 (registry write conn + script thread), so the loop
+	// below clones exactly one extra connection at Init.
 	while (m_entries.size() < m_minIdle && m_entries.size() < m_maxSize) {
 		ibDatabaseLayer* raw = primary ? primary->Clone() : nullptr;
 		if (raw == nullptr) break;

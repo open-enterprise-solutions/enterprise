@@ -91,19 +91,21 @@ control loses that subtree.
     — unregistered control type; skipping subtree
 ```
 
-**Clsid decoding:** bytes are ASCII, MSB first. `0x43545f5458544320` =
-`"CT_TXTC "` (space-padded to 8) = `string_to_clsid("CT_TXTC")` =
-`ibValueTextCtrl` (see
-`src/engine/frontend/visualView/ctrl/textctrl.cpp`:
-`CONTROL_TYPE_REGISTER(ibValueTextCtrl, "Textctrl", "Widget",
-string_to_clsid("CT_TXTC"))`). Python quick-decode:
-`bytes.fromhex('%x' % clsid).decode('latin1').rstrip()`.
+**Clsid decoding — the old ASCII recipe no longer works.** Clsids are FNV-1a-64
+hashes with the class KIND in the high byte (`backend/clsid.h`); the 8-byte ASCII
+pack and `string_to_clsid()` are both gone, so unpacking the hex to latin1 yields
+garbage. To identify a logged clsid, match it against the registry — the
+constants live beside their controls, e.g. `visualView/ctrl/widgets.h`:
+`constexpr ibClassID g_controlTextCtrlCLSID = control_to_clsid("CT_TXTC");` —
+or read it back through `/diag/ctors`.
 
-**Root cause:** `visualView/ctrl/textctrl.cpp` (and siblings —
-`textctrlEvent.cpp`, `textctrlProperty.cpp`, `textctrl_res.cpp`) are in
-`frontend.vcxproj` but **not** in `wfrontend.vcxproj`. The file that
-houses `CONTROL_TYPE_REGISTER` isn't compiled into wfrontend.dll, so the
-static ctor never runs and `NewObject(clsid)` returns nullptr.
+**Root cause (historical — textctrl itself is fixed):** `visualView/ctrl/textctrl.cpp`
+(and siblings — `textctrlEvent.cpp`, `textctrlProperty.cpp`, `textctrl_res.cpp`) were in
+`frontend.vcxproj` but **not** in `wfrontend.vcxproj`. The file that houses
+`CONTROL_TYPE_REGISTER` was not compiled into wfrontend.dll, so the static ctor never ran
+and `NewObject(clsid)` returned nullptr. All four are in `wfrontend.vcxproj` now and
+textctrl renders through a real `ibWebTextCtrl` — but the **failure mode** described here
+is still live for every control not yet in the web project, which is why the section stays.
 
 **Fix** — bulk stub-first port (see `conventions.md` → "Stub-first
 control registration"). Don't wait until each control is fully rendered
@@ -125,9 +127,9 @@ on the web:
 5. Promote stubs to real `ibWeb<Control>` + JS renderer one control at
    a time as UI work progresses.
 
-Priority order for **promoting stubs → real renderers**: textctrl,
-checkbox, combobox, choice, listbox, radiobutton, notebook, tablebox /
-gridbox.
+Priority order for **promoting stubs → real renderers** (textctrl and checkbox
+are already promoted): combobox, choice, listbox, radiobutton, notebook,
+tablebox / gridbox.
 
 **Subordinate controls** (`S_CONTROL_TYPE_REGISTER` — see
 `conventions.md`): SizerItem, NotebookPage, TableboxColumn, Tool /
@@ -161,10 +163,12 @@ place until a few configurations have been exercised.
 
 ### Controls still to port
 
-Priority order by apparent use:
+**Already ported with real shims** (not stubs): statictext, button, textctrl (incl.
+passwordMode), checkbox, toolbar + tool / separator, and the sizers. **Stub-registered:**
+tablebox, tableboxcolumn.
 
-- `textctrl` (incl. passwordMode)
-- `checkbox`
+Priority order for the rest, by apparent use:
+
 - `combobox` / `choice`
 - `listbox`
 - `radiobutton`
@@ -361,7 +365,7 @@ the next HTTP response rebuild pick up the change:
   on both builds (desktop: `wxWindow*`, web: `ibWebWindow*`).
 - `ShowForm / ActivateForm / UpdateForm / CloseForm` — now one
   inline null-guarded body per build. `visualHostClient_impl.cpp`
-  emptied (file retained in vcxproj to avoid build-config churn).
+  deleted — its bodies became per-build inlines in `visualHostClient.h`.
 - `SetCaption / SetOrientation` on web are real now:
   SetCaption pushes to the owning `ibWebDocChildFrame::SetTitle`
   (surfaces in `/session`'s `formName`); SetOrientation mutates
@@ -413,7 +417,7 @@ sets it explicitly at auto-build time; web never runs BuildForm).
 
 ### Toolbar port — iteration 2 landed
 
-Tool items + separators render on web. `CT_TLITM` and `CT_TLSP` are
+Tool items + separators render on web. `CT_TLIT` and `CT_TLIS` are
 registered; forms with a toolbar now show the full tool chain, not
 just an empty toolbar block.
 
@@ -436,7 +440,9 @@ What landed on top of iteration 1:
 - `visualHost.cpp` walker — added `COMPONENT_TYPE_ABSTRACT` to the
   window case (toolbar items are ABSTRACT on desktop but render as
   web windows on web). static_cast still applies.
-- `webToolbar.cpp` — new `ibValueToolBarItem::GetToolAction` stub
+- `webToolbar.cpp` (since **deleted** — the real companions were ifdef'd and added to the
+  project instead; the surviving web link-stub file is `web/webStubs.cpp`) — new
+  `ibValueToolBarItem::GetToolAction` stub
   (pointer-to-member referenced by the Action property initializer;
   linker needs the symbol even though the web build never exercises
   the desktop-only action-source walker).
@@ -447,18 +453,16 @@ Browser JS renderers for `"tool"` / `"toolseparator"` are still the
 fallback box render — tools show as a labelled placeholder. Follow-up:
 proper JS renderer per type + wire `/action/<id>` click on tool.
 
-Still deferred (companion source files not in vcxproj):
-- `toolBarEvent.cpp` — wx native event routing.
-- `toolBarProperty.cpp` — designer-only property handlers.
-- `toolBarMenu.cpp` — wx context menu.
-- `toolBarAction.cpp` — action-source list walker (designer).
-- `toolBarItemAction.cpp` — stubbed via `webToolbar.cpp`.
+~~Still deferred (companion source files not in vcxproj)~~ — **DONE.** All five
+(`toolBarEvent.cpp`, `toolBarProperty.cpp`, `toolBarMenu.cpp`, `toolBarAction.cpp`,
+`toolBarItemAction.cpp`) are in `wfrontend.vcxproj`, with their designer-only bodies under
+`#ifndef OES_USE_WEB` — shared sources, not per-build copies.
 
 ### Toolbar port — iteration 1 landed (stub companions deferred)
 
 **State:** `CT_TLBR` now registers. Forms with a toolbar render an
 empty `ibWebToolbar` block — the toolbar node itself renders,
-children (CT_TLITM / CT_TLSP) still log "unregistered clsid"
+children (CT_TLIT / CT_TLIS) still log "unregistered clsid"
 warnings until the companion files land.
 
 What landed:
@@ -470,7 +474,8 @@ What landed:
   `OnToolDropDown(wxAuiToolBarEvent&)` decl guarded under
   `#ifndef OES_USE_WEB` so the header compiles on web without
   pulling in `<wx/aui/auibar.h>`.
-- `webToolbar.cpp` (new, web-only) — empty stubs for
+- `webToolbar.cpp` (was new + web-only; **deleted since** — superseded by ifdef'd shared
+  companions) — empty stubs for
   `OnPropertyCreated / OnPropertySelected / OnPropertyChanged /
   PrepareDefaultMenu / ExecuteMenu / GetActionSource` so the vtable
   links without touching the desktop companion sources.
@@ -487,7 +492,7 @@ Deferred companions (still `<!-- -->` in vcxproj):
 - `toolBarAction.cpp` — uses `ibPropertyList` action source walker;
   needs re-examination on web.
 - `toolBarItem.cpp`, `toolBarItem_res.cpp`, `toolBarItemAction.cpp` —
-  would register `CT_TLITM` / `CT_TLSP`. `toolBarItem.cpp` uses
+  would register `CT_TLIT` / `CT_TLIS`. `toolBarItem.cpp` uses
   `ibAuiToolBar::InsertSeparator(int, id)` and accesses
   `ibValueFrame::m_controlId` directly (pre-existing suspect code).
 
@@ -496,9 +501,14 @@ Deferred companions (still `<!-- -->` in vcxproj):
 stub file). Tool events hook into the dispatcher via the standard
 HandleRequest pattern once items have runtime ids.
 
-### Toolbar port — needs broader ifdef coverage
+### Toolbar port — needs broader ifdef coverage — **SUPERSEDED by iterations 1–2 (verified 2026-07-29)**
 
-**State:** `toolBar.cpp` has had its `Create/Update/Cleanup` bodies
+> Nothing below is current. `toolBar.cpp` returns a real `ibWebToolbar`, not a stub; nine
+> toolbar sources are in `wfrontend.vcxproj`; and the string `Toolbar port deferred` no longer
+> appears anywhere in `src/engine/frontend/`. Kept as the record of how the port was reasoned
+> about, not as a description of the tree.
+
+**State (historical):** `toolBar.cpp` has had its `Create/Update/Cleanup` bodies
 ifdef'd and returns an `ibWebStubControl(wxT("toolbar"))` for the web
 path. But the companion files it depends on for the linker
 (`toolBarEvent.cpp`, `toolBarProperty.cpp`, `toolBarMenu.cpp`,
@@ -515,7 +525,7 @@ defined in the web build:
 
 Sources have been **kept out of `wfrontend.vcxproj`** (see commented
 lines around `<!-- Toolbar port deferred -->`). Result: the
-`CT_TLBR` / `CT_TLITM` / `CT_TLSP` clsids log the `[LoadChildForm]`
+`CT_TLBR` / `CT_TLIT` / `CT_TLIS` clsids log the `[LoadChildForm]`
 skip-subtree warning and the toolbar doesn't render, but the rest of
 the form loads cleanly.
 

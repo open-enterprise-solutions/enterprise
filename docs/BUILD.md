@@ -28,7 +28,12 @@ This document covers how to build OES on Windows (MSBuild), macOS (CMake), and L
 | Windows SDK | 10.0 (latest) | Installed by VS workload (`WindowsTargetPlatformVersion=10.0`) |
 | Git | Any recent | For submodule initialisation |
 
-MSBuild is the only supported build system on Windows. CMake (`CMakeLists.txt` at repo root) targets macOS / Linux — see the per-platform sections below; bring-up on Windows is in progress.
+MSBuild (`enterprise.sln`) is the shipping build on Windows. CMake (`CMakeLists.txt` at repo root) is the build for macOS / Linux — **and it also works on Windows**: `CMakePresets.json` ships four host-conditioned presets (`windows-x64-debug`, `windows-x64-release`, `windows-x86-debug`, `windows-x86-release`), and that is the path the Google Test targets are built through (see [engineering-playbook/10-testing.md](engineering-playbook/10-testing.md)).
+
+```cmd
+cmake --preset windows-x64-debug
+cmake --build --preset windows-x64-debug
+```
 
 ### macOS
 
@@ -51,8 +56,6 @@ sudo apt install -y \
     cmake \
     git \
     pkg-config \
-    libwxgtk3.2-dev \
-    wx3.2-headers \
     libfirebird-dev \
     libpq-dev \
     libsqlite3-dev \
@@ -60,7 +63,11 @@ sudo apt install -y \
     unixodbc-dev
 ```
 
-For other distributions, install the equivalent packages providing wxWidgets 3.2+, Firebird, PostgreSQL, SQLite3, MySQL, and ODBC development headers.
+**No system wxWidgets package is needed** — wxWidgets 3.3.2 is built from the in-tree submodule
+by the CMake build (see below); a distro `libwxgtk` would be both unused and older.
+
+For other distributions, install the equivalent packages providing Firebird, PostgreSQL, SQLite3,
+MySQL, and ODBC development headers.
 
 ---
 
@@ -113,8 +120,10 @@ msbuild enterprise.sln /p:Configuration=Debug /p:Platform=x86 /m /nologo
 
 Use `/p:Platform=x86` or `/p:Platform=x64` (the solution does not expose a
 `Win32` platform name). The `/m` flag enables parallel compilation; note that
-`MultiProcessorCompilation` is disabled in `Debug` configs (incremental
-linking) and enabled in `Release`. Add `/v:m` for minimal verbosity or `/v:d`
+`Common.props` sets `MultiProcessorCompilation=false` for `Debug` (incremental
+linking) and true for `Release`, **but `backend.vcxproj` overrides it back to
+true per-configuration** — so `/MP` is active in all four configurations for the
+largest project. Add `/v:m` for minimal verbosity or `/v:d`
 for detailed output.
 
 ### Build Output (Windows)
@@ -140,8 +149,9 @@ bin\
 ```
 
 `wfrontend.dll` + `wenterprise-server.exe` are the web runtime (headless
-server + web frontend). `simplePlugin.dll` is the plugin example and is not
-copied into `bin\` by default. Firebird embedded libraries (`fbclient.dll`,
+server + web frontend). `simplePlugin.dll` is the plugin example; it builds into
+`bin\<Platform>\<Configuration>\plugins\` — the directory the plugin manager scans at
+startup. Firebird embedded libraries (`fbclient.dll`,
 `ib_util.dll`, ICU) are expected alongside the executables — they ship in the
 repo's prebuilt `_fb` payload and are copied next to the binaries.
 
@@ -196,7 +206,7 @@ cmake --build build --parallel 6
 | `OES_USE_MYSQL` | OFF | Enable MySQL database driver (requires `libmysqlclient` to build) |
 | `OES_USE_ODBC` | OFF | Enable ODBC database driver |
 | `OES_FB_LOCALSERVER` | ON | Firebird out-of-process local server (Phase 6, leader-election); needs `firebird.exe` in `_fb/` at runtime |
-| `OES_USE_TBB` | OFF | Intel TBB parallelism (`USE_TBB_PARALLEL`); consumed by `backend` |
+| `OES_USE_TBB` | (undeclared) | Intel TBB parallelism (`USE_TBB_PARALLEL`); **not declared via `option()`** in the root `CMakeLists.txt` — only read by `backend/CMakeLists.txt`, so it never appears in `cmake-gui` / `ccmake`. Pass `-DOES_USE_TBB=ON` explicitly if you want it |
 | `BUILD_TESTING` | OFF | Build the Google Test suite under `tests/` |
 
 SQLite is always enabled (embedded sources, no option). `OES_USE_FIREBIRD`
@@ -270,8 +280,9 @@ on the wxWidgets `3.2` maintenance branch.
 ```
 
 - **Windows (MSBuild):** the solution links the **pre-built** wxWidgets
-  binaries under `$(oes3rdParty)wxWidgets\lib\vc_dll` (x64) /
-  `vc_dll`+`mswu` includes (`oes3rdParty` = `$(SolutionDir)src\3rdparty\`).
+  binaries under `$(oes3rdParty)wxWidgets\lib\vc_dll` (x86) /
+  `…\lib\vc_x64_dll` (x64), plus the `mswu` includes
+  (`oes3rdParty` = `$(SolutionDir)src\3rdparty\`).
   The libraries are `wxmsw33u*` / `wxbase33u*` (release) and `wxmsw33ud*`
   (debug). The submodule source is not compiled by the MSBuild build.
 - **macOS / Linux (CMake):** wxWidgets is built from the submodule via
@@ -287,7 +298,7 @@ on the wxWidgets `3.2` maintenance branch.
 
 Firebird Embedded is the default engine. The embedded libraries (`fbclient.dll` on Windows, `libfbclient.so` on Linux) must be present in the same directory as the executables.
 
-- **Windows:** Download the Firebird embedded package from https://firebirdsql.org/ and extract to the `bin\` folder.
+- **Windows:** nothing to install. The embedded payload is vendored in-repo under `src/engine/backend/databaseLayer/firebird/engine/dll/` (`fbclient_x86.dll` / `fbclient_x64.dll`, `ib_util_*.dll`, ICU, `firebird.msg`, `firebird.conf`) and the `backend` project copies it to `bin\<Platform>\<Configuration>\_fb\` on build.
 - **Linux/macOS:** Install the Firebird client development package; the runtime library must be on `LD_LIBRARY_PATH` / `DYLD_LIBRARY_PATH`.
 
 The Launcher (`launcher.exe`) creates a new Firebird database file when you select **File mode**. No server process is required for embedded mode.

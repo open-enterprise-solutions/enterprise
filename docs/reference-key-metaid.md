@@ -1,8 +1,7 @@
 # Reference key = a pure guid; the type is a separate column
 
-**Status: code complete, NOT yet committed. An earlier revision (pure-guid + `_RTRef`) built green; the
-current revision adds the `(guid, type)` keyset tiebreak (below) and awaits a clean build — verification is
-blocked only by an unrelated parallel change breaking the shared tree, not by this work.**
+**Status: LANDED 2026-07-29 (`f4d92cc7` — "Reference key: store a pure guid; the type is the _RTRef
+column, not the key bytes"), including the `(guid, type)` keyset tiebreak below.**
 
 A stored reference is a PAIR — `_RTRef` (the target type, a clsid column) + `_RRRef` (a pure 16-byte object
 guid). The guid carries NO type.

@@ -31,7 +31,7 @@
 │                    │  │                                    │
 │  ibValueForm       │◄─►  ibApplicationData (singleton)     │
 │  ibVisualHost      │  │  ibMetaDataConfiguration           │
-│  22 Controls       │  │  ibCompileCode / ibProcUnit        │
+│  18 Controls       │  │  ibCompileCode / ibProcUnit        │
 │  ibMainFrame       │  │  ibDatabaseLayer (+ 5 drivers)     │
 │  Property editor   │  │  ibDebuggerServer                  │
 └────────────────────┘  └────────────────┬───────────────────┘
@@ -284,7 +284,7 @@ Metadata object hierarchy. Every business object type extends `ibValueMetaObject
 
 | File | Class | Role |
 |---|---|---|
-| `systemManager.h/cpp` | `ibSystemManager` | Built-in function dispatcher; registers ~93 built-in functions (count drifts as features land; grep `AppendFunc\|AppendProc` for the live total) |
+| `systemManager.h/cpp` | `ibSystemManager` | Built-in function dispatcher; registers 89 functions + 6 procedures = 95 built-ins (count drifts as features land; grep `AppendFunc\|AppendProc` for the live total) |
 | `systemEnum.h` | enums | System-level enumeration constants |
 
 ### `src/engine/frontend/visualView/`
@@ -580,7 +580,7 @@ ibDatabaseResultSet* rs = db_query->RunQueryWithResults(
     wxT("SELECT * FROM %s WHERE guid = ?"), table_name);
 ```
 
-Each driver folder contains an `engine/` subdirectory with the vendored native client library.
+Every driver folder except `odbc/` contains an `engine/` subdirectory with the vendored native client library; ODBC links the system driver manager (`odbc32` / `odbccp32`).
 
 ---
 
@@ -612,9 +612,19 @@ metaId **PATH** whose head selects an attribute (the gate), resolved through one
 `Get/SetValueByAttributePath` pair. The source object passed on open lands in the MAIN
 attribute. See `docs/form-attribute-binding.md` (Blocker A of the ERP roadmap).
 
-### 22 Visual Controls
+### Visual controls — 18 registered + 6 system-kind children
 
-Implemented in `src/engine/frontend/visualView/ctrl/`:
+Implemented in `src/engine/frontend/visualView/ctrl/`. Two corrections to the table below,
+verified 2026-07-29 by grepping `CONTROL_TYPE_REGISTER`:
+
+- **Choice, ComboBox and ListBox carry NO registration.** The classes exist (~55 lines each,
+  `Create()` only) but no CLSID is registered, so they cannot be placed from the palette or
+  instantiated from metadata — on either desktop or web. Treat the rows below as "class exists,
+  control does not".
+- **StaticBoxSizer is missing from the table** and *is* registered
+  (`staticboxsizer.cpp`, `CT_SSZER`), as are the six system-kind children registered via
+  `S_CONTROL_TYPE_REGISTER`: SizerItem, NotebookPage, TableboxColumn, Tool, ToolSeparator,
+  ClientForm.
 
 | Control | File |
 |---|---|

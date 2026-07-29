@@ -216,18 +216,20 @@ private:
 enum class ibQueryJoinKind { Inner, Left, Right, Full };   // Right / Full -> RAM stitch only (co-located does Inner/Left)
 
 // Join ON comparison operator. Independent of the L4 AST's ibQueryCompareOp (L3 must not depend on the L4
-// parser). Eq is the hash-join fast path; the inequalities drive a RAM nested-loop theta join — a non-equi
-// join always folds in the RAM stitch (the co-located SQL path rejects it).
+// parser). Eq is the hash-join fast path; a non-equi op is a theta join. A COLUMN-KEYED theta co-locates —
+// BuildColocatedFrom emits the node's real operator server-side (JoinOpToBinOp, dbTableProvider.cpp) — so only
+// a COMPUTED ON forces the RAM nested-loop stitch. (Landed 2026-07-16; the gate is `allColumnKeyed`.)
 enum class ibJoinCompareOp { Eq, Ne, Lt, Le, Gt, Ge };
 
 // A JOIN's ON condition — grouped (was six scattered fields on ibQueryNode) so the mutually-exclusive ways to
 // express it live in one cohesive place. By convention: m_cross = cartesian (ON TRUE); else m_exprL/m_exprR
-// set = a COMPUTED theta join (a.x+1 <op> b.y), always RAM nested-loop; else m_colL/m_colR = explicit key
-// columns (Eq -> hash, other m_op -> theta); all null and not cross = an auto-join by reference (dot-walk style).
+// set = a COMPUTED theta join (a.x+1 <op> b.y), always RAM nested-loop — no column key to qualify against a
+// leaf's table; else m_colL/m_colR = explicit key columns (Eq -> hash, other m_op -> theta), co-locatable
+// either way; all null and not cross = an auto-join by reference (dot-walk style).
 struct ibJoinOn {
 	const ibBackendQueryColumn*  m_colL  = nullptr;   // explicit key columns (both null + !cross = auto-join by reference)
 	const ibBackendQueryColumn*  m_colR  = nullptr;
-	ibJoinCompareOp              m_op    = ibJoinCompareOp::Eq;   // Eq -> hash; non-Eq -> RAM nested-loop theta
+	ibJoinCompareOp              m_op    = ibJoinCompareOp::Eq;   // Eq -> hash; non-Eq -> theta (server-side when co-located)
 	ibQueryColumnExprPtr         m_exprL;                         // computed ON: LEFT-side expr (presence -> theta)
 	ibQueryColumnExprPtr         m_exprR;                         // computed ON: RIGHT-side expr
 	bool                         m_cross = false;                 // CROSS / ON TRUE — keyless cartesian (RAM only)
@@ -367,9 +369,10 @@ public:
 	// verbs above). L4 builds it from its parsed WHERE; the provider lowers it to the L2 IR. AND-folded
 	// with any verb conditions / row-key filters. (docs/query-language-arc.md §23 — door Where via L2.)
 	ibDataQueryBuilder& Where(const ibQueryPredicatePtr& predicate);
-	// COMPUTED-expression WHERE — `expr <op> value` (WHERE Qty * Price > 100, a CASE …). The provider
-	// lowers the expression via BuildColumnExpr. Single-source DB reads / aggregates only (the L4
-	// lowering gates it: the RAM stitch and computed sources do not evaluate condition expressions).
+	// COMPUTED-expression WHERE — `expr <op> value` (WHERE Qty * Price > 100, a CASE …). A single DB
+	// source lowers it server-side via BuildColumnExpr; a COMPUTED source / RAM-filterable predicate
+	// evaluates it per row (RamEvalLeaf -> EvalColumnExprRow). Only a multi-source JOIN is gated at L4
+	// (GateComputedExpr — the stitch has no cross-leaf expression evaluator).
 	ibDataQueryBuilder& WhereExpr(const ibQueryColumnExprPtr& expr,
 	                              ibQueryFilterOp comparison, const ibValue& value);   // = / <> (Equal/NotEqual)
 	ibDataQueryBuilder& WhereExprCompare(const ibQueryColumnExprPtr& expr,
@@ -402,8 +405,10 @@ public:
 	// is resolved attributes — every NON-leaf segment is a single-target reference
 	// attribute (the door resolves its target queryable and joins on the self-reference
 	// column); the leaf is read on the final target. Read it back with GetColumn(alias).
-	// Paths sharing a prefix reuse one join. Catalog/document targets only today (they
-	// carry the self-reference join key). (docs/query-language-arc.md §22 dot-walk)
+	// Paths sharing a prefix reuse one join. Any target carrying a self-reference join
+	// key qualifies (SelfReferenceField — catalogs, documents, charts of characteristic
+	// types / accounts); a target without one is rejected, not silently dropped.
+	// (docs/query-language-arc.md §22 dot-walk)
 	ibDataQueryBuilder& SelectPath(const std::vector<const ibBackendQueryColumn*>& path,
 	                               const wxString& alias);
 

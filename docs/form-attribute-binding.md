@@ -514,7 +514,7 @@ already carry the pair. Three roles compose it:
   parents a new element under the anchor). No action composition, no widget
   pull. There is NO shared base command enum — each model class defines its OWN commands (a value-table /
   tabular section its Add / Copy / Edit / Delete inline; the list family a file-local enum in
-  `objectListAction.cpp`, adding MarkAsDelete / AddFolder; an enum list nothing).
+  `commonObjectAction.cpp`, adding MarkAsDelete / AddFolder; an enum list nothing).
 - **The tablebox is the ADAPTER** — it turns the dumb model into a full `ibStandardCommandSource`.
   `GetStandardCommands` composes Select (choice mode, first) + the model's `GetCommandCollection` + the
   view-state band (Filter / FilterByColumn / FilterClear / ViewMode — the TableBox's own high-base ids,

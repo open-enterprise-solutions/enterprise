@@ -149,8 +149,15 @@ if (stringUtils::CompareString(propName, pair.first))
 > find-or-replace); `ibByteFunction::m_lCodeParamCount` (→ `m_listParam.size()`);
 > `ibByteFunction::m_listParamRealName` (folded into `ibByteParam::m_strName`, **AOT
 > format v14 → v15**); `ibCompileEval` ctor delegation. **Still open:** the registry
-> `clsid → ibValueMethodHelper*` (blocked by helper-template lifecycle — AOT persistence
-> lands first). Subsections below kept as the design record.
+> `clsid → ibMemberTable*`. Its recorded blocker — splitting `PrepareNames()` into
+> per-class and per-instance halves — is **RESOLVED**: that split shipped as
+> `ibValueStaticMembers<&fn>` vs `ibValueDynamicMembers` (`compiler/value.h`), and
+> `PrepareNames()` no longer exists to be split. What remains is the lookup itself plus
+> dropping ContextProp / ContextMethod from `m_listVar` / `m_listFunc`. Subsections below
+> kept as the design record.
+>
+> **Rename note:** read every `ibValueMethodHelper` below as `ibValue::ibMemberTable` —
+> the type was renamed and the old name has zero hits in code.
 
 ### Compile-side `ibVariable` / `ibFunction` — kind enum  *(landed 2026-06-22)*
 
@@ -206,10 +213,12 @@ class's helper already knows. After registry:
 * Drop `m_strContext` / `m_parentRef` cross-table refs on bc.
 * AOT cache row drops 10-30% of payload.
 
-Blocked by: helper-template lifecycle (per-class vs per-instance
+~~Blocked by: helper-template lifecycle (per-class vs per-instance
 state) — requires splitting `PrepareNames()` into static and
-instance-dependent halves, or constructing one throwaway instance
-per class on first lookup.
+instance-dependent halves~~ — **that split landed** as
+`ibValueStaticMembers<&fn>` (per-class, free contributor fn) vs
+`ibValueDynamicMembers` (per-instance), so the blocker is gone; only
+the registry lookup itself is still to write.
 
 See `docs/next-session-aot.md` for the persistence-layer plan, which
 should land **before** the registry refactor (registry compresses

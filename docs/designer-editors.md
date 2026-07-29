@@ -27,7 +27,8 @@ sense while authoring lives in `designer/`. The runtime never links the editing 
 
 ## 2. Code editor — `ibCodeEditor : wxStyledTextCtrl`
 
-`frontend/win/editor/codeEditor/` — ~6 600 lines. Scintilla-backed, and **sessionless**.
+`frontend/win/editor/codeEditor/` — ~6 600 lines at the folder's top level (≈11 000 including
+`components/` and `res/`). Scintilla-backed, and **sessionless**.
 
 Three markers, `protected` so the designer subclass can reach them:
 

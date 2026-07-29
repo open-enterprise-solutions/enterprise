@@ -196,8 +196,9 @@ kinds (§1) meet.
 A model carries `m_listSettings` (`ibValueListSettings`, `backend/composition/listFilter.h`) —
 the script-visible container of **Filter** / **Order** / **Group**, a thin facade over the L5
 composer. `RunComposerPage` reads the composer **directly every fetch**; the legacy per-model
-`m_filterRow` / `m_sortOrder` are abolished. Settings are applied on change (not cleared and
-rebuilt per fetch) through `ibApplyDynamicSettings(composer, settings)`.
+`m_filterRow` / `m_sortOrder` are abolished. The settings object is a transactional dialog
+buffer: `ibLoadSettingsFromComposer` on open (composer → buffer), `ibCommitSettingsToComposer`
+on OK (buffer → composer, clear then re-apply); Cancel is a no-op.
 
 Fields are **paths**: a dot-walk (`"Ref.Owner"`) resolves to an auto-JOIN on the door. Grouping
 is any query-result field, not the table's parent column: a non-empty Group turns a flat list
@@ -285,7 +286,7 @@ source-command band. Details: [paging-design.md](paging-design.md) §8.
 | `backend/modelDb.cpp` | `ibValueModelCursor::RunComposerPage` — DB keyset fetch |
 | `backend/modelRam.cpp` | `ibValueModelStorage::RunComposerPage` — RAM in-place fetch; `ibValueModelRamTableBase` |
 | `backend/composition/ramComposer.{h,cpp}` | `ibDataRamComposer::ComputeOrder` (RAM filter/sort) |
-| `backend/composition/listFilter.h` | `ibValueListSettings`, `ibApplyDynamicSettings` |
+| `backend/composition/listFilter.h` | `ibValueListSettings`, `ibLoadSettingsFromComposer` / `ibCommitSettingsToComposer` |
 | `system/value/valueTable.h` | `ibValueModelTable` (table-of-values) |
 | `system/value/valueDynamicList.{h,cpp}` | `ibValueDynamicList` |
 | `frontend/win/ctrls/tableView.{h,cpp}`, `datavgen.cpp` | `ibDataViewCtrl` — the forked control |

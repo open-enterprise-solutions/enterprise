@@ -1,5 +1,10 @@
 # 09. CI/CD with GitHub Actions
 
+> **Status: NOT WIRED.** The repository has no `.github/` directory and no CI runs today —
+> every workflow below is a proposed starting point, not a description of a live pipeline.
+> The referenced `scripts/build.ps1`, `scripts/package.ps1` and `scripts/build-installer.ps1`
+> do not exist either.
+>
 > Automation for the OES C++ project: MSBuild/CMake builds, cppcheck static analysis, Google Test tests, NSIS/WiX installer packaging, artifact publishing, release automation.
 
 ---

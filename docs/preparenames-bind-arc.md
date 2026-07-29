@@ -229,12 +229,11 @@ that read `m_methodHelper != nullptr ? …GetNProps() : 0` becomes
     `static` helper for the by-value base. The ONLY live `PrepareNames()` left in the
     tree is the separate `CMethodHelper` CValue* dialog hierarchy (valueGrid / Font /
     File / Colour dialogs) — a different base class, out of scope for this arc.
-  - **Still TODO (static-helper managers — different shape):** `constantManager`,
-    `…ExternalDataProcessor`, `…ExternalReport` use a `static ibValueMethodHelper` +
-    own `DoGetPMethods` (type-invariant, no base call). Convert to either
-    `ibValueStaticMembers<&free_fn>` OR the dynamic pattern (adds CopyMethod). And the
-    NON-external `…DataProcessor`/`…Report` managers (dynamic, base call) — migrate
-    like the 9 above. (All four are currently broken by the base change.)
+  - ~~**Still TODO (static-helper managers — different shape)**~~ — **DONE.** No
+    `ibValueMethodHelper` remains anywhere in the tree (the type is now
+    `ibValue::ibMemberTable`), and `PrepareNames` has no declaration or call left in the
+    backend. The three static-helper managers converted alongside the nine dynamic ones,
+    as the paragraph above already records.
 
 **value.h core:** binder list holds free OR member pmf; `m_tailBinder` runs last in
 `Build()` (out-of-line in value.cpp); `HasBinders()` gates Build/EnsureBuilt;

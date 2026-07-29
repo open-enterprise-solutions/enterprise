@@ -94,15 +94,19 @@ visible settings container (≈ a SettingsComposer):
 - **Order** — `ibValueSortList` of `ibValueSortItem {Field, Direction}`; `Direction`
   is `ibValueEnumSortDirection`.
 - **Group** — `ibValueGroupList` (field paths).
-- **Source config** — `MainTable` / `UseCustomQuery` / `QueryText` / `KeyFields`.
+`ibValueListSettings` itself holds only those three — `m_filter` / `m_order` / `m_group`
+(`composition/listFilter.h`). The **source config** is not on it: `UseCustomQuery` /
+`GetQueryText` / `GetKeyFields` are virtuals on `ibBackendQueryableHolder`
+(`query/queryable.h`), and the list's own switch is the property `m_propertyUseCustomQuery`.
 
-Applied to the composer through `ibApplyDynamicSettings(composer, settings)` — one source
-of truth, shared with the legacy list path. It splits into per-aspect helpers
-`ibApplyDynamicFilters` / `ibApplyDynamicSorts` / `ibApplyDynamicGroups` (the combined call
-runs all three) so a caller can apply only part — the grouping drill applies Filters + Sorts
-onto a scoped composer but supplies its OWN per-level grouping. **Applied on change, not cleared
-and rebuilt every fetch.** Fields are paths: dot-walk (`"Ref.Owner"`) resolves to an auto-JOIN
-on the door.
+The settings object is a **transactional dialog buffer**, moved between it and the composer by
+one pair (`composition/listFilter.h`):
+
+- `ibLoadSettingsFromComposer(settings, composer)` — on dialog open, composer → buffer;
+- `ibCommitSettingsToComposer(composer, settings)` — on OK, buffer → composer, **CLEAR then
+  re-apply** (that clear-and-reapply *is* the commit); Cancel is simply a no-op.
+
+Fields are paths: dot-walk (`"Ref.Owner"`) resolves to an auto-JOIN on the door.
 
 ### Grouping & drill
 
@@ -124,12 +128,14 @@ is bypassed, and the grouping field is ANY query-result field, not the table's p
 ## Designer + form
 
 - **Type** — `DynamicList` appears in the Choice type dialog
-  (`advpropType.cpp`, `FillByClsid(g_dynamicListCLSID)`), selectable as a form
-  attribute's type alongside Table.
+  (`advpropType.cpp`, `FillByClsid(selectorDataType, g_valueDynamicListCLSID)`), selectable as a
+  form attribute's type alongside Table.
 - **Settings entry point** — a form attribute (`ibValueFormAttribute`) of type
   DynamicList gets a **«List settings»** property in the inspector; picking
-  «Open...» fires `ibValueListSettings::ms_showDialog` → the settings form. The
-  settings live on the attribute (`m_listSettings`; harden: serialised).
+  «Open...» calls the frontend static `ibDialogListSettings::ShowListSettingsDialog(list)`
+  (`frontend/win/dlgs/listSettings/listSettings.h`, invoked from `advpropDynamicList.cpp`).
+  The settings buffer lives on the **base model** — `ibValueModel::m_listSettings`
+  (`backend/model.h`) — not on the attribute, and no subclass holds its own.
 - **Form** — `ibDialogListSettings` (`frontend/win/dlgs/listSettings/`), a modal
   `wxDialog` + `wxNotebook` with **Source / Filter / Sort / Group** tabs. The
   Source tab is where the **main table / custom query** is chosen. Backend→frontend
@@ -167,12 +173,13 @@ through the neutral source-column seam, not a metaobject:
 
 - **Columns are source columns.** A queryable column (`ibBackendQueryColumn`) IS-A
   `ibBackendSourceColumn` (name / synonym / type), so the list vends them with no adapter:
-  `GetSourceColumn(id)` finds a live queryable column by id; `GetSourceExplorer()` builds the
-  metadata-free column template the same way (`AppendColumn(col)`).
-- **Closed column set.** `HasOwnColumns()` is `true`: the queryable's columns are the COMPLETE
-  set, so `WalkSource` treats a missing id as a BROKEN binding (a column dropped by a Type/source
-  change reads back broken in the caption) instead of re-finding it config-wide. A metaobject
-  source is open (`false`) and dot-walks references config-wide.
+  `GetSourceExplorer()` builds the metadata-free column template the same way
+  (`AppendColumn(col)`).
+- **One resolve path for every source.** The `HasOwnColumns()` open/closed distinction is gone,
+  and so is the config-wide re-find fallback: every source now resolves through
+  `ibSourceDataObject::WalkColumns(path, …)` over its own explorer, so a missing id is a
+  genuinely broken binding (a column dropped by a Type/source change reads back broken in the
+  caption) rather than something to hunt for elsewhere.
 - **Metadata via the queryable.** `GetSourceMetaData()` returns `GetSourceQueryable()->GetMetaData()`
   (a metaobject source returns its metaobject's) — the ONE accessor the form's `GetMetaData()`
   chains to, so a source with no metaobject still resolves a metadata context.

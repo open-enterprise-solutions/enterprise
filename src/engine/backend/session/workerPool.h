@@ -15,9 +15,10 @@
 //     queue + lease, blocking workers wait on a CV. Suitable for
 //     wenterprise-server.exe and the future oes-server.exe compute
 //     server.
-//   - ibWorkerPoolGUI (in frontend.dll, future): wraps wxTheApp's
-//     CallAfter so tasks run on the wx main thread. The session arg
-//     is unused (desktop apps run a single session).
+//   - ibWorkerPoolGUI (frontend/session/workerPoolGUI.{h,cpp}): wraps
+//     wxTheApp's CallAfter so tasks run on the wx main thread. Implemented,
+//     but NOT auto-installed — the desktop still runs script on the wx main
+//     thread directly. The session arg is unused (desktop = one session).
 //
 // See docs/worker-pool-tls-audit.md (TLS migration prerequisite — done)
 // and docs/compute-server-tiering.md (architectural roadmap).

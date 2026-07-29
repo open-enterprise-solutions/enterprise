@@ -67,7 +67,7 @@ Do not treat these as "nearly done"; they are captured thinking.
 | Data policy (declarative platform policies) | [data-policy-arc.md](data-policy-arc.md) | **DESIGN — no code yet** (2026-06-11 session) |
 | Metadata hot reload (change classes + tombstone door) | [metadata-hot-reload.md](metadata-hot-reload.md) | **PROPOSAL — NOTHING implemented** (2026-07-15 session) |
 | Memory allocator | [memory-allocator.md](memory-allocator.md) | **design note / NOT STARTED** |
-| Metadata storage container | [metadata-storage-container-arc.md](metadata-storage-container-arc.md) | design detailed; **backlog** until size / partial-save triggers fire |
+| Metadata storage container | [metadata-storage-container-arc.md](metadata-storage-container-arc.md) | **FOLDED (2026-06-17)** into [schema-first-metadata.md](schema-first-metadata.md) — "single-blob → per-entry rows" *is* file-per-object; pursue it through that direction, not as a standalone storage refactor |
 | Metaobject naming (designer labels, script names, tree order) | [metaobject-naming.md](metaobject-naming.md) | **PLAN — nothing applied** (2026-07-27). The script-visible half is near-free now and gets dearer with every configuration written. |
 
 ---
@@ -103,9 +103,21 @@ Three distinct states, not one:
 
 | State | Controls | What a user sees |
 |---|---|---|
-| **Ported** — real `ibWeb*` widget (`frontend/web/webWindow.h`) | StaticText, Button, CheckBox, TextCtrl, ToolBar + ToolBarItem/Separator, and the sizers (Box / Grid / StaticBox / Wrap / Item) | Works |
+| **Ported** — real `ibWeb*` widget (`frontend/web/webWindow.h`) | StaticText, Button, CheckBox, TextCtrl, ToolBar + ToolBarItem/Separator, and the sizers (Box / Grid / StaticBox / Item) | Works |
 | **Stub** — compiled in, returns `ibWebStubControl` | TableBox, TableBoxColumn, form object (`formObject.cpp`) | Placeholder block; metadata still loads |
 | **Absent** — file not in `wfrontend.vcxproj`, no web branch | ComboBox, Choice, ListBox, RadioButton, Notebook, Gauge, Slider, GridBox, HtmlBox, ChartBox, TextBox, StaticLine | clsid unregistered |
+
+Two corrections to that table, both found by re-verification on 2026-07-29:
+
+- **WrapSizer is a fourth state — implemented end to end, never registered.** It has a desktop
+  implementation, an `OES_USE_WEB` branch (`ibWebWrapSizer`, `web/webSizer.h`) and JS
+  (`webClient.cpp`), but `wrapsizer.cpp` carries no `CONTROL_TYPE_REGISTER` while its four sibling
+  sizers do. Its clsid registers on **neither** platform, so it is unreachable code on both. One
+  macro line would make it work.
+- **ComboBox / Choice / ListBox are green-field on BOTH sides, not "a desktop control awaiting a
+  port".** Their `.cpp` files are in the desktop `frontend.vcxproj` but carry no
+  `CONTROL_TYPE_REGISTER` either, and the bodies are empty shells (`OnCreated` is a no-op). §6 below
+  orders them first because they are cheap on the web; read that as writing them, not porting them.
 
 Read the consequence plainly: **data entry on the web today is TextCtrl and CheckBox.** A
 real document form — which needs at minimum a ComboBox/Choice for reference fields and a
@@ -193,7 +205,7 @@ Remaining thin spots (known, deliberate):
 
 - **`roleEditor` / `interfaceEditor`** — read at class level only
   ([designer-editors.md § 5](designer-editors.md)); the two smallest Designer surfaces.
-- **`dlgs/` (35 files)** and **`theme/`** — undocumented; low leverage.
+- **`dlgs/` (31 files, 27 of them `.cpp`/`.h`)** and **`theme/`** — undocumented; low leverage.
 - **`ctrls/charts/`** — 246 vendored wxCharts files, deliberately not documented
   ([wx-fork.md § 3](wx-fork.md)).
 - `backend/utils/`, `backend/diagnostics/` — small, no doc.
@@ -205,7 +217,7 @@ not mistake inherited shape for original design:
 
 | Subsystem | Origin | State |
 |---|---|---|
-| **Form editor** | **wxFormBuilder** — also the source of the *property* idea | ~5% of the original remains; traces confined to `designer/…/visualEditor` ([form-editor.md § 1](form-editor.md)) |
+| **Form editor** | **wxFormBuilder** — also the source of the *property* idea | ~5% of the original remains; the attribution survives in 12 files — seven in `designer/…/visualEditor`, the three `frontend/visualView` hosts, and two `frontend/win/dlgs` dialogs ([form-editor.md § 1](form-editor.md)) |
 | **Database layer** | **wxDatabaseLayer** (wxCode, last release 2009) | ~40% resemblance; architecture kept, drivers reworked. **Oracle / MSSQL exist upstream** ([database-layer.md § 1](database-layer.md)) |
 | **UI kit** | wxWidgets fork (wxUniversal + Luna) | the fork is a teacher/substrate, not debt ([uikit.md](uikit.md)) |
 | **Designer + debugger** | **written from scratch** | TCP replaced the era's DDE approach; the debuggee is the server ([debugger-architecture.md § 1-2](debugger-architecture.md)) |

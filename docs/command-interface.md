@@ -34,7 +34,7 @@ for the visible half — a **Section** — not the internal "subsystem".
 
 ## 2. Section tree — `ibValueMetaObjectSection`
 
-`backend/metaCollection/metaInterfaceObject.h` (clsid `g_metaSectionCLSID`, key `MD_SSYST`)
+`backend/metaCollection/metaSectionObject.h` (clsid `g_metaSectionCLSID`, key `MD_SSYST`)
 
 ```cpp
 virtual ibClassID ResolveChild(const ibClassID& clsid) const {

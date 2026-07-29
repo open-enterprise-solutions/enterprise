@@ -586,9 +586,6 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
 	}
 }
 
-// Lower a WHERE for a MULTI-source (JOIN) query to the door's FLAT verb conditions. The provider's
-// co-located join path partitions m_conditions per leaf (by OwnsColumn) and AND-folds them — it does
-// NOT yet lower the boolean predicate tree across joined leaves. So a JOIN WHERE is restricted to an
 // Resolve a WHERE / ORDER target to a column PATH: size 1 = a plain column, >1 = a reference dot-walk
 // (Producer.Region). Dot-walk is only realizable in a single-source, non-aggregate read (BuildPageIR
 // builds the join + qualifies the leaf); reject it elsewhere rather than let the aggregate / stitch
@@ -938,7 +935,8 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 			}
 			else if (e.m_kind == ibQueryAstExprKind::Arith || e.m_kind == ibQueryAstExprKind::Case) {
 				// COMPUTED column (a * b, CASE …). The provider lowers the L3 expression tree + projects it
-				// AS the alias. Single-source non-aggregate only (the read path BuildPageIR projects it).
+				// AS the alias. NON-AGGREGATE only: a single DB source projects it server-side, a JOIN /
+				// computed source evaluates it per row in the composer (EvalColumnExprRow).
 				if (aggregate)   // single source -> SQL; JOIN -> composer RAM-eval; OVER aggregates only is unsupported
 					Fail(e.m_line, e.m_col, _("a computed column (arithmetic / CASE) over aggregates is not supported"));
 				// A computed column over a COMPUTED source evaluates in RAM (ibComputedProvider::ExecuteRead —
@@ -1216,7 +1214,7 @@ void BuildSourceTree(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 			else {
 				const ibBackendQueryColumn* lc = ResolveColumnSingle(sources, *j.m_on->m_lhs);
 				const ibBackendQueryColumn* rc = ResolveColumnSingle(sources, *j.m_on->m_rhs);
-				b.Join(qi, lc, rc, MapJoinOp(j.m_on->m_cmp), kind, alias);   // = -> hash; <,<=,>,>=,<> -> RAM theta
+				b.Join(qi, lc, rc, MapJoinOp(j.m_on->m_cmp), kind, alias);   // = -> hash; <,<=,>,>=,<> -> theta (server-side when co-located)
 			}
 		}
 		else {

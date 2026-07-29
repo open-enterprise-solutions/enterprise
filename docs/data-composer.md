@@ -161,7 +161,8 @@ L3 door.
    spreadsheet document by the rules of the structure; then the column axis /
    pivot, and the L5-2 appearance tier (conditional formatting, layouts).
 
-Known language gaps L5 will press on (by-demand): boolean WHERE over a
-RAM-stitched JOIN, dot-walk filters/sorts over a JOIN, TOTALS over a subquery
+Known language gaps L5 will press on (by-demand): a dot-walk LEAF inside a boolean
+WHERE over a non-co-located JOIN (the plain boolean WHERE itself now runs as a
+post-compose `RamFilter`), dot-walk filters/sorts over a JOIN, TOTALS over a subquery
 source, reference-awareness of subquery columns, the shared virtual-table
 companion under concurrency.

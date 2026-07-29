@@ -96,7 +96,7 @@ Web request on wenterprise-server (per-session worker thread)
  │   ├─ parse → enqueue to session's ibSessionRequestQueue
  │   └─ Dispatcher submits processable sessions to workerPool
  │
- ├─ workerPool (fixed N=16..64 threads)
+ ├─ workerPool (4 × cores, clamped to 4..32 threads)
  │   ├─ pulls pending session-request pair
  │   ├─ runs: SessionScope(sid) + ibConnectionScope + Execute
  │   └─ returns to pool; next work item
@@ -193,7 +193,8 @@ by `ibSessionRegistry`. Components as built:
 
 - `ibWorkerPool` (abstract, in `backend/session/`) +
   `ibWorkerPoolHeadless` (concrete, lazy-spawn up to `maxWorkers`,
-  idle-shrink at 60s, per-session FIFO + lease, reentrant Submit
+  idle-shrink at 30 s (`workerPoolHeadless.cpp:21` — note 60 s is the CONNECTION
+  pool's timeout, a different constant), per-session FIFO + lease, reentrant Submit
   inline). `ibWorkerPoolGUI` scaffold lives in `frontend/session/`,
   not auto-installed.
 - The "session request queue" lives inside the pool (per-session
@@ -300,7 +301,7 @@ that decouples threads from sessions.
 
 | Component | Formula | Typical |
 |---|---|---|
-| Worker pool | `4 × CPU_cores` up to 64 | 16-32 |
+| Worker pool | `4 × CPU_cores`, clamped to [4, 32] (`PickWorkerCount`, `appData.cpp:128-133`) | 16-32 |
 | Connection pool `maxSize` | ~ worker-pool size + 4 (registry/watcher slack) | 20-36 |
 | Per-session runtime state | ~ 10-50 MB depending on config size | 20 MB |
 | Active sessions per server | RAM / session state → say 500-2000 per 32GB server | |

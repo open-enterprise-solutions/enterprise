@@ -1,14 +1,14 @@
 # Open Enterprise Solutions (OES)
 
-OES is an open-source, cross-platform low-code enterprise application platform written in C++17, conceptually similar to 1C:Enterprise. It provides a fully integrated environment — compiler, bytecode interpreter, visual form designer, multi-database abstraction layer, and remote debugger — that allows developers to build line-of-business applications using a built-in scripting language with two syntax modes (VBS-style and CES-style), a rich set of 88 built-in functions, and 8 first-class business-object types (Catalog, Document, Enumeration, Constant, InformationRegister, AccumulationRegister, DataProcessor, Report).
+OES is an open-source, cross-platform low-code enterprise application platform written in C++17, conceptually similar to 1C:Enterprise. It provides a fully integrated environment — compiler, bytecode interpreter, visual form designer, multi-database abstraction layer, and remote debugger — that allows developers to build line-of-business applications using a built-in scripting language with two syntax modes (VES, the Visual-Basic-flavoured legacy dialect, and CES, the C-flavoured default for new configurations), a rich set of 95 built-in globals (89 functions + 6 procedures), and 11 first-class business-object types (Catalog, Document, Enumeration, Constant, InformationRegister, AccumulationRegister, AccountingRegister, ChartOfAccounts, ChartOfCharacteristicTypes, DataProcessor, Report — AccountingRegister's read path is currently non-functional, see [docs/ROADMAP.md](docs/ROADMAP.md) §4.1).
 
 ---
 
 ## Key Features
 
 - **Integrated designer** — metadata tree editor, form builder, code editor with syntax highlighting and autocomplete
-- **Bytecode compiler** — two-pass compiler (lexer → parser → bytecode) producing 66-opcode bytecode; supports procedures, functions, modules, regions, and preprocessor directives (`#ifdef`/`#define`)
-- **Visual form system** — 22 controls (TableBox, TextBox, ChartBox, GridBox, Notebook, ToolBar, etc.) rendered through wxWidgets; forms are described in metadata and instantiated at runtime
+- **Bytecode compiler** — two-pass compiler (lexer → parser → bytecode) producing 75-opcode bytecode (`compiler/codeDef.h`); supports procedures, functions, modules, regions, lambdas with closure capture, and preprocessor directives (`#ifdef`/`#define`)
+- **Visual form system** — 24 registered control types (TableBox, TextBox, ChartBox, GridBox, Notebook, ToolBar, sizers, etc.) rendered through wxWidgets; forms are described in metadata and instantiated at runtime
 - **Multi-database back end** — Firebird (primary, embedded shipped with the distribution), PostgreSQL, SQLite, MySQL, ODBC; unified `ibDatabaseLayer` API across all drivers
 - **Remote TCP debugger** — client/server architecture over TCP (default port 1650); supports breakpoints, step-over, step-into, variable inspection, tooltips, and live code patching
 - **Session management** — multi-user sessions tracked in the system database; launcher, daemon, designer, enterprise, and codeRunner modes
@@ -43,7 +43,7 @@ OES is an open-source, cross-platform low-code enterprise application platform w
 
 ### macOS
 
-> CMake support is under development. The steps below describe the intended workflow once `CMakeLists.txt` is provided.
+> The CMake build lives at `CMakeLists.txt` (repo root, CMake ≥ 3.20).
 
 ```bash
 # Install dependencies
@@ -61,7 +61,7 @@ cmake --build build -j$(sysctl -n hw.logicalcpu)
 
 ### Linux (Ubuntu / Debian)
 
-> CMake support is under development.
+> The CMake build lives at `CMakeLists.txt` (repo root, CMake ≥ 3.20).
 
 ```bash
 # Install dependencies
@@ -94,7 +94,7 @@ Output: `bin\Win64\Release\`
 
 ### All Platforms — CMake
 
-A top-level `CMakeLists.txt` needs to be created (tracked in the backlog). Once available:
+The top-level `CMakeLists.txt` (CMake ≥ 3.20) builds every target. DB drivers opt in — `OES_USE_FIREBIRD`, `OES_USE_POSTGRESQL`, `OES_USE_MYSQL`, `OES_USE_ODBC` (all default OFF); SQLite is always embedded, no flag:
 
 ```bash
 cmake -B build \
@@ -117,7 +117,7 @@ git submodule update --init --recursive
 
 ```
 enterprise/
-├── enterprise.sln            # MSBuild solution (9 projects)
+├── enterprise.sln            # MSBuild solution (10 C++ projects)
 ├── Common.props              # Shared MSBuild properties (paths, platforms)
 ├── ConfigurationDefs.props   # Preprocessor definitions per configuration
 ├── LICENSE.md                # LGPL 2.1
@@ -141,13 +141,14 @@ enterprise/
         │   ├── system/       # System manager, built-in functions
         │   └── utils/
         ├── frontend/         # UI DLL (wxWidgets controls, form renderer)
-        │   ├── visualView/   # ibValueForm, 22 form controls
+        │   ├── visualView/   # ibValueForm, 24 registered form control types
         │   │   └── ctrl/     # Individual control implementations
         │   ├── mainFrame/    # Main application window
         │   ├── docView/      # Document/view framework wrappers
         │   └── win/          # Windows-specific widgets and dialogs
         ├── enterprise/       # Enterprise runtime executable
         ├── designer/         # Designer/IDE executable
+        ├── wenterprise-server/ # Web server (wes process)
         ├── launcher/         # Launcher (connection chooser)
         ├── daemon/           # Background service
         ├── codeRunner/       # Script runner
@@ -165,7 +166,7 @@ enterprise/
 | Primary database | Firebird (embedded) |
 | Optional databases | PostgreSQL, SQLite, MySQL, ODBC |
 | Build (Windows) | MSBuild / Visual Studio 2019+ |
-| Build (cross-platform) | CMake (planned) |
+| Build (cross-platform) | CMake ≥ 3.20 — `CMakeLists.txt` at repo root (macOS / Linux) |
 | License | LGPL 2.1 |
 
 ---

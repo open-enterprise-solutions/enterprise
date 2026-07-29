@@ -1404,13 +1404,13 @@ migration — the magic-byte gate is one-way.
 |---|---|---|
 | Services-API `gbak` BR cycle | ✅ landed | `ibFirebirdMaintenance::RunBackupRestoreCycle` (uses `isc_service_attach` + `isc_service_start`) |
 | Adaptive sweep via `MON$DATABASE` | ✅ landed | `ibFirebirdMaintenance::AdaptiveSweep` (triggers when OAT/OST gap > threshold) |
-| `ibFirebirdMaintenanceScheduler` background job (weekly cron) | ⏳ pending | scaffolding exists (`firebirdMaintenanceScheduler.{h,cpp}`) but not wired to scheduler |
+| `ibFirebirdMaintenanceScheduler` background job (weekly cron) | ✅ landed | started from `firebirdDatabaseLayer::Open` (Standalone leader-role only, `firebirdDatabaseLayer.cpp:662`), stopped deterministically in `~ibApplicationData` (`appData.cpp:395`) |
 | UI surface in Designer: "DB size X, last maintenance Y" | ⏳ pending | |
 
 Effect once fully landed: file size stays bounded over time without
-manual ops attention. Current state: the maintenance primitives are
-available for manual invocation, but the scheduler that calls them
-automatically is still to be wired.
+manual ops attention. Current state: the primitives run automatically —
+the scheduler is wired at `Open` and torn down at shutdown; only the
+Designer status panel ("DB size X, last maintenance Y") is left.
 
 ### Phase 4 — leader-election mode — ✅ foundations + driver wiring landed
 

@@ -19,8 +19,8 @@ All examples use abstract server names, paths, and project names. Adapt to your 
 | 03 | [Nginx / Reverse Proxy](03-nginx.md) | Reverse proxy in front of OES Daemon, SSL termination, routing |
 | 04 | [Process Management](04-service-management.md) | Managing OES daemon processes: systemd (Linux), Windows Service, auto-restart |
 | 05 | [Docker](05-docker.md) | Containerizing OES daemon, docker-compose, multi-stage C++ builds |
-| 06 | [PostgreSQL Administration](06-postgresql.md) | Setting up PostgreSQL for OES, backups, replication, optimization |
-| 07 | [Firebird Administration](07-caching.md) | Configuring Firebird Server, gbak, gfix, monitoring, optimization |
+| 06 | [Database administration](06-databases.md) | Firebird (primary) plus PostgreSQL / SQLite / MySQL: setup, backups, optimization |
+| 07 | [Caching](07-caching.md) | Optional Redis / in-process caching, relevant only in daemon and server modes |
 | 08 | [Cloudflare / DNS](08-cloudflare.md) | DNS for OES web components, SSL, DDoS protection, API |
 | 09 | [CI/CD with GitHub Actions](09-github-actions.md) | MSBuild/CMake build, cppcheck, Google Test, NSIS installer, code signing, release publishing |
 | 10 | [Monitoring](10-monitoring.md) | Crashpad crash reporting, logging, daemon/service monitoring, Firebird health checks |

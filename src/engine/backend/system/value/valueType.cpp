@@ -273,10 +273,9 @@ void ibValueTypeDescription_BindNames(ibValue::ibMemberTable& helper, const ibVa
 	helper.AppendFunc(wxT("Types"), wxT("Types()"));
 }
 
-// Population moved to the bound contributor (BindTypeDescNames), built lazily
-// on first GetPMethods()/EnsureBuilt(). Kept as an empty override so the
-// factory's post-construction PrepareNames() call is a no-op and the build is
-// deferred to first access (per-instance helper -> thread-safe lazy build).
+// Population lives in ibValueTypeDescription_BindNames above, run lazily by
+// ibValue::EnsureBuilt() on first GetPMethods() — a per-instance member table
+// built once on first access (thread-safe lazy build). PrepareNames() is gone.
 
 bool ibValueTypeDescription::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
 {

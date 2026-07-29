@@ -45,6 +45,7 @@ The family:
 | `ibSpreadsheetDescription` | `spreadsheetDescription.h` (835) | a whole table document |
 | `ibPictureDescription` | `pictureDescription.h` | where an image comes from |
 | `ibStandardCommandDescription` | `standardCommand.h` | a command |
+| `ibCommandDescription` | `commandDescription.h` (81) | a command path — id hops, the leaf is executed |
 
 They are what the five property surfaces move around
 ([property-system.md § 1](property-system.md)): put a description in a variant and it

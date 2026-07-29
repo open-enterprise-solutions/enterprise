@@ -13,7 +13,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // WriteRecordSet / DeleteRecordSet inherited from ibValueRecordSetObject
-// (Phase B template-method) — see commonObjectRecordSetQuery.cpp.
+// (Phase B template-method) — the scaffold is in commonObject.cpp; the
+// Begin/Commit + LockByKeys helpers it calls live in commonObjectRecordSetQuery.cpp.
 
 
 enum func

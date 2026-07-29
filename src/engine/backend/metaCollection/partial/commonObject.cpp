@@ -2156,9 +2156,9 @@ ibValueReferenceDataObject* ibValueRecordDataObjectRef::GetReference() const
 //*                        ibValueRecordDataObjectHierarchyRef					*
 //***********************************************************************
 
-// Symmetric placeholder for the Document-flavour axis — see
-// commonObject.h for the rationale. Empty body; reflection registry
-// needs the wxIMPLEMENT so RTTI works the same as the Hierarchy side.
+// Hierarchy axis (Catalog / ChartOf* / Enumeration) — see commonObject.h for
+// the rationale. Class identity comes from the metaobject's clsFactory via
+// GetClassType(); no RTTI macro is involved (wxRTTI was dropped in Phase 3).
 
 ibValueRecordDataObjectHierarchyRef::ibValueRecordDataObjectHierarchyRef(const ibValueMetaObjectRecordDataHierarchyMutableRef* metaObject, const ibGuid& objGuid, ibObjectMode objMode)
 	: ibValueRecordDataObjectRef(metaObject, objGuid), m_objMode(objMode)

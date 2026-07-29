@@ -212,9 +212,12 @@ the capability is its declaration** and absence is a silent fallback to the hone
 Steps 1–3 deliver most of the value and need neither snapshots nor A/B.
 
 1. Close `GetAnyArrayObject<T>()` + the 13 `const_cast`s (§3) — **before** anything else.
-2. Per-property granularity in `metaDiff` — today `Changed` on an attribute node is opaque:
-   a renamed synonym (harmless) and a narrowed type (catastrophic) look identical. The header
-   states the limit: "Object-level granularity — V1 doesn't break the status down per-property."
+2. Per-property granularity in `metaDiff` — **LANDED** (verified 2026-07-29). `WalkPair` emits a
+   synthetic Properties group with one status-bearing row per property
+   (`metaDiff.cpp:259-300`; carrier fields `m_propertyName` / `m_leftValue` / `m_rightValue` +
+   `IsProperty()` at `metaDiff.h:98-103`). What remains is *classifying* those deltas — a renamed
+   synonym (harmless) versus a narrowed type (catastrophic) are now both visible, but not yet
+   told apart. That classification is step 3.
 3. Classifier: diff → `{additive, destructive, derived-invalidating, retroactive}`; additive
    applies the DDL, publishes, touches nobody. Everything unclassified evicts, as now.
 4. Schema-version marker in a `sys_*` table + check at an operation boundary; re-purpose the

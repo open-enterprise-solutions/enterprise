@@ -46,7 +46,8 @@
 >   L2 aggregate IR) carry NO hand-concatenated SQL. The slice / balance / turnover are
 >   **call-scoped companion queryables** (filters in the ctor, handed to `From()`,
 >   RAM-computed via `ComputeRows` → the register's `Compute*`), sharing one
->   `ibComputedRegisterQueryable<TReg>` forwarding base (`query/computedRegisterQueryable.h`)
+>   `ibComputedRegisterQueryable<TReg>` forwarding base (`query/queryable.h:575` — it never got a
+>   header of its own)
 >   and one lowering header (`metaCollection/partial/registerQueryLowering.h`:
 >   `ibRegFieldsOf`/`ibRegValueField`/`ibRegCompositeIR`).
 > - **Open (next arcs):** ~~the L3 door's read path still trafficks in
@@ -122,9 +123,10 @@
 >   the output schema (the metaID-keyed totals fold reads them like real resources).
 > - **Const CAST** — a bare projected constant is wrapped `CAST(? AS <type>)` (FB `-804` otherwise).
 > - JOIN kinds completed: INNER / LEFT / RIGHT / FULL / CROSS (`ON TRUE`).
-> - **Still open:** TOTALS over a JOIN / UNION (multi-source); a TOTALS BY a reference / composite
->   dot-walk leaf (scalar today); a composite NON-scalar leaf beyond the last segment; arithmetic /
->   CASE as an aggregate input (a dot-walk leaf input works); aggregate subqueries.
+> - **Still open (as of THIS update):** ~~TOTALS over a JOIN / UNION (multi-source)~~; ~~a TOTALS BY a
+>   reference / composite dot-walk leaf~~; a composite NON-scalar leaf beyond the last segment;
+>   ~~arithmetic / CASE as an aggregate input~~; ~~aggregate subqueries~~. All but the composite
+>   mid-segment leaf landed in the updates below — struck per this doc's convention.
 >
 > ### Update 2026-06-11 (2) — L4 executable subset: TOP, computed WHERE / aggregate inputs,
 > ### aggregate subqueries, UNION dedup
@@ -221,10 +223,11 @@
 > SQL three-valued NULL = never matches; OUTER keeps unmatched rows). `FlattenInnerChain` excludes non-equi
 > from the smallest-first equi-reorder, and `ColocatableJoinTree` rejects a theta join so EVERY co-located
 > decider (join / aggregate / union) folds it in the RAM stitch — no silent `=` render. TOTALS over a theta
-> JOIN rides it too (the multi-source totals gate already accepts any keyed join). Still open as a perf
-> follow-up: a co-located **server-side** SQL non-equi render (today a theta join always RAM-folds — correct
-> everywhere, but not pushed down on the same-DB co-located case); the ON is column-to-column only (a computed
-> `a.x + 1 > b.y` honest-fails in `ResolveColumnSingle`).
+> JOIN rides it too (the multi-source totals gate already accepts any keyed join). ~~Still open as a perf
+> follow-up: a co-located **server-side** SQL non-equi render~~ — **LANDED 2026-07-16** (see the update
+> below): a COLUMN-KEYED theta renders server-side (`allColumnKeyed` + `JoinOpToBinOp`), and a computed
+> `a.x + 1 > b.y` no longer fails at all — it lowers to `ibJoinOn::m_exprL/m_exprR` and runs the RAM
+> nested-loop theta.
 >
 > ### Update 2026-07-16 — theta JOIN server-side push-down (the co-located follow-up, landed)
 >
@@ -464,9 +467,11 @@ Two facts about the current tree drive this arc:
    table** into memory and filters there.
 
 2. **Dialect logic is smeared as inline branches.** SQL is hand-assembled
-   per call site with per-driver `if`s — e.g.
+   per call site with per-driver `if`s — e.g. the old
    `metaCollection/partial/list/listSqlBuilder.cpp:14`
-   (`if FIREBIRD → "SELECT FIRST N" else "LIMIT N"`), plus `BYTEA` vs `BLOB`,
+   (`if FIREBIRD → "SELECT FIRST N" else "LIMIT N"`; that file and its
+   `ibListSqlBuilder` are gone from the tree — the migration below happened),
+   plus `BYTEA` vs `BLOB`,
    `DATE` vs `TIMESTAMP` scattered elsewhere. There is no canonical query
    representation and no single translation layer.
 
@@ -2102,9 +2107,11 @@ rest, growing as the door grows:
   AND-of-simple WHERE to the door's per-leaf verb conditions (works in both join paths) and a boolean
   WHERE to the predicate tree (`Where(tree)`); the provider's `BuildColocatedPredicate` lowers the
   tree per-leaf-qualified (`ColocatedOwner`, so an `OR` spanning two leaves is ONE server expression).
-  When the join can't co-locate (RAM stitch), a boolean WHERE **errors clearly** — the stitch
-  materialises each leaf with its own flat conditions, so a cross-leaf `OR` can't be pushed per leaf;
-  erroring (vs dropping an OR branch) keeps the result honest. A post-join RAM filter would lift it.
+  When the join can't co-locate (RAM stitch), the boolean WHERE is applied as a **POST-COMPOSE RAM
+  filter** over the joined rows (`RamFilter`, `queryProvider.cpp`) — the per-leaf push the stitch cannot
+  do is simply done after the join instead. Only a **dot-walk LEAF inside** such a tree still errors: it
+  needs a join the composed table does not carry, and erroring beats dropping an OR branch (which would
+  silently WIDEN the filter).
 - **Reference dot-walk in WHERE / ORDER BY** — `WHERE Producer.Region = &R`, `ORDER BY Producer.Name`
   — reuses the L3 dot-walk crown: the same auto-join `SelectPath` builds (the `_RRRef` self-reference
   LEFT-join chain, aliased `dw0/dw1…`, deduped by path prefix). The door gained `Where(path, …)` /
@@ -2123,12 +2130,12 @@ rest, growing as the door grows:
   - **Dot-walk also in `IN` and `IS NULL`.** `Producer.Region IN (&A, &B)` (every Eq shares the path →
     one join) and `Producer.Region IS NULL` (the `IsNull` tree node carries `m_path` too); the
     provider's `lowerTree` resolves both via `resolvePath`.
-- **Parser is COMPLETE; the lowering realizes the executable subset.** The parser now accepts
-  **arithmetic** (`+ - * / %`, standard precedence), **CASE** (`CASE WHEN … THEN … ELSE … END`),
-  **UNION [ALL]**, and **IN (subquery)** — but the column-based L3 door does not execute computed
-  expressions or set operations yet, so the lowering throws a clear "parsed but not yet executed" for
-  these (they are an L3-expression-layer / composer-wiring concern, sibling to L4-2). The AST carries
-  them (`ibQueryExprKind::Arith` / `Case`, `ibQuerySelect::m_unions`, `In.m_subquery`) so the future
+- **Parser is COMPLETE; the lowering realizes the executable subset.** *(State AT THIS MVP write-up —
+  all four have since landed; see §23.4.)* The parser accepts **arithmetic** (`+ - * / %`, standard
+  precedence), **CASE** (`CASE WHEN … THEN … ELSE … END`), **UNION [ALL]**, and **IN (subquery)** — but
+  the column-based L3 door did not yet execute computed expressions or set operations, so the lowering
+  threw a clear "parsed but not yet executed" for these. The AST carried them
+  (`ibQueryExprKind::Arith` / `Case`, `ibQuerySelect::m_unions`, `In.m_subquery`) so the later
   work — and LINQ — reuse the same tree.
 - **Hierarchical TOTALS EXECUTE — one unified selection.** `SELECT … TOTALS SUM(Qty) BY Warehouse,
   Goods` runs: `ibQueryLowering::ExecuteTotals` builds the door's `Totals()`/`TotalBy()`/in-place
@@ -2146,24 +2153,29 @@ rest, growing as the door grows:
   `ibQueryColumnExpr` tree (`queryable.h` — Column / Const / Arith / Case, WHEN reusing the predicate
   tree), the door's `SelectExpr(expr, alias)` carries it, and the provider's `BuildColumnExpr`
   (`dbTableProvider.cpp`) lowers it to the L2 IR (`ibBinOp` Add/Sub/Mul/Div/Mod, `ibCase`) and projects
-  it `AS alias` in `BuildPageIR`. Read back by alias. **Single-source non-aggregate** only (a JOIN /
-  aggregate computed column errors clearly); arithmetic / CASE in a WHERE / an aggregate argument still
-  errors (the predicate / aggregate take a column, not an expression — a later step).
+  it `AS alias` in `BuildPageIR`. Read back by alias. **Non-aggregate only:** a single DB source projects
+  it server-side, a JOIN / computed source evaluates it per joined row in the composer
+  (`EvalColumnExprRow`); only a computed column **over aggregates** errors. Arithmetic / CASE in a WHERE
+  and as an aggregate argument execute too (single source → SQL, computed source → RAM per row).
 - **UNION EXECUTES.** `SELECT … UNION [ALL] SELECT …` runs: each branch's core is wrapped as an
   `ibSubqueryQueryable` (`WrapSelectAsQueryable`), stacked with `From(b0).Union(b1)…`, and the composer
-  realizes the stack (RAM union today; columns matched BY NAME across branches). The trailing `ORDER BY`
-  applies to the whole. A branch may not use JOIN / TOTALS yet; UNION-vs-UNION-ALL dedup is a later step.
+  realizes the stack — ONE server-side `UNION` / `UNION ALL` when every branch is a real DB table
+  (`CanColocateUnion`), else the RAM stack (columns matched BY NAME across branches). Each branch carries
+  its own UNION-vs-ALL flag, so plain `UNION` dedupes at its operator and `UNION ALL` keeps duplicates.
+  The trailing `ORDER BY` applies to the whole. A branch may not use JOIN / TOTALS yet.
 - **IN (subquery) EXECUTES** — `WHERE x IN (SELECT y FROM …)` materialises the (uncorrelated) inner
   SELECT's single column eagerly into a value list, then lowers as `Or(x = v …)` (the same path as a
   literal IN list; dot-walk leaf supported). An empty result → a contradiction leaf (matches nothing);
   `NOT IN ()` → everything. The inner runs once through a local `ibSubqueryQueryable`.
-- **Parsed but not yet executed (clear error):** arithmetic / CASE in a WHERE or an aggregate argument
-  (a reference dot-walk LEAF as an aggregate input now DOES execute — §23.9 — but an *expression* there
-  does not), and **aggregate subqueries** (`FROM (SELECT cat, SUM(x) AS s … GROUP BY cat)`). Access is
-  **SELECT-only** for user text (§14). The aggregate subquery is the one **provider-level** gap left —
-  `ibSubqueryQueryable` must expose the aggregate-alias columns (synthetic raw columns) + run
-  `SelectAggregate` in `ComputeRows` + a RAM post-filter for the outer's pushed-down conditions; the
-  door does not yet surface an aggregate's OUTPUT schema, so it wants a focused door + provider change.
+- **Aggregate subqueries EXECUTE** (`FROM (SELECT cat, SUM(x) AS s … GROUP BY cat)`).
+  `ibSubqueryQueryable` detects the aggregate shape from the builder, exposes the group keys plus a
+  synthetic column per aggregate alias, runs `SelectAggregate` in `ComputeRows`, and RAM-post-filters the
+  outer's pushed-down conditions.
+- **Parsed but not yet executed (clear error)** — the residual tail only: an arithmetic / CASE expression
+  in a WHERE, an aggregate argument or a projection **across a JOIN's leaves** (`GateComputedExpr` — the
+  RAM stitch has no cross-leaf expression evaluator), a computed column **over aggregates**, and a
+  dot-walk LEAF inside a boolean WHERE over a non-co-located JOIN. Access is **SELECT-only** for user
+  text (§14).
 
 ### 23.5 L4-2 — LINQ push-down (**LANDED v1, 2026-06-11**)
 
@@ -2351,7 +2363,8 @@ Registered in `backend.vcxproj` + the CMake test list.
   `BuildPageIR.lowerTree` (a recursive `std::function`) lowers the tree path-aware — a path leaf joins
   via `resolvePath` + qualifies by alias, a plain leaf by `mainQual` — so `…Producer.Region = &R OR
   Producer.Kind = 3` is one server-side SELECT. `PredicateHasPath` flags such a tree into the dot-walk
-  path; an unresolvable path leaf throws (no dropped OR branch). `IN` / `IS NULL` nodes stay plain.
+  path; an unresolvable path leaf throws (no dropped OR branch). `IN` / `IS NULL` carry the dot-walk
+  path too (§23.4).
 
 **Not yet built** — expect minor signature fixups on the first `Debug|x86`. Open wiring
 point: the metadata open/close hook → `RegisterBuiltins()` / `Clear()`.
@@ -2447,8 +2460,10 @@ read-back).
 `TIMESTAMP` / `BOOLEAN` otherwise). The cast-type spelling is FB/PG/MySQL-portable; a fully dialect-correct
 spelling (esp. SQLite date affinity) belongs in the L1 Dialect Dictionary — TODO.
 
-**Open (totals):** TOTALS over a JOIN / UNION (multi-source — two totals mechanisms + snapshot seq-keying),
-and a TOTALS BY a reference / composite dot-walk leaf (today scalar leaves only).
+**Open (totals):** a composite MID-segment dot-walk dimension, and dot-walk over a UNION (union output
+is not reference-aware). ~~TOTALS over a JOIN / UNION~~ and ~~TOTALS BY a reference / composite dot-walk
+leaf~~ both landed — the multi-source ROLLUP push-down (`CanColocateRollupTotals` /
+`BuildUnionRollupFrom`) runs them server-side.
 
 ---
 
@@ -2485,7 +2500,7 @@ to its L3-3 home `ibDataMover` (its only callers are the mover + the constant's 
 `DiffSeedInto` / `WriteSeedRow` (schemaSnapshot.cpp) UPSERT a seed row matching on the table's declared
 unique **scaffold key (uuid)** — NOT the queryable's data-reference (a seed never sets it, and an enum
 table has no such column; matching on it raised `-206 FLDxxxx_TYPE does not belong`). A predefined
-catalog value's seed sets its **own data-reference** (`_RRRef` = [its guid][this metaID], guid == uuid)
+catalog value's seed sets its **own data-reference** (`_RRRef` = its pure guid, == uuid; `_RTRef` = the catalog's clsid)
 so the value is referenceable by its key AND each row has a UNIQUE `_RRRef` (no `_REF_UQ` collision on
 the NULL default). Predefined values are correctly non-deletable at runtime as a result.
 
@@ -2586,7 +2601,7 @@ SQL null; an empty reference (type chosen, no guid) is "not filled" yet NOT a nu
 `ValueIsFilled(value)` (the latter = `!IsEmpty`, the "value is filled" predicate) expose this.
 
 ### Reference identity = the DB key
-A reference's `GetHashKey` is now `metaID + guid` (the `_RRRef` key), not the guid alone — a reference
+A reference's `GetHashKey` is now `metaID + guid` (the DB key pair `_RTRef` + `_RRRef`), not the guid alone — a reference
 column can target several types, so the metaID disambiguates. Runtime grouping / join / dedup over a
 reference now match the database key.
 

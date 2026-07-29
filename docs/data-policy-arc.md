@@ -1,6 +1,15 @@
 # Data Policy — Architecture Arc (design)
 
-> **Status:** DESIGN — captured from the 2026-06-11 design session, no code yet.
+> **Status:** PARTIALLY LANDED (re-verified 2026-07-29 — the earlier "no code yet" was stale).
+> Build-order **step 2** (the door's verdict seam) shipped: `class ibAccessPolicy` with
+> `ApplyReadAccess` / `ApplyWriteAccess` (`query/dataQueryBuilder.h:286`), pulled from the session
+> in the builder's ctor, consulted at 8 sites in `dataQueryBuilder.cpp` (Create / Write / Delete).
+> Build-order **step 5** (the role RLS provider) shipped too: `ibRuntimeAccessPolicy`
+> (`session/session.cpp:40`) resolving per-role `OnAccessRead` / `OnAccessWrite` module procUnits,
+> fail-closed — plus the authoring keyword `KEY_RESTRICT` (`compiler/codeDef.h`).
+> **Still design:** the three-entity Policy / Binding / Role model (§2), period close (§4), the
+> totals tie-in, routing and the eternal cache (§6), and the read-only TPB flag (§7). What shipped
+> is a *single*-policy seam, not the composite the design calls for.
 > Builds on the landed L1–L4 query stack (`query-language-arc.md`) and precedes /
 > accompanies the totals-table arc (`temp-db.md` §9 neighbourhood, accounting roadmap).
 >

@@ -1,6 +1,6 @@
 # Property system + object inspector
 
-> **Scope:** the property mechanism — one declaration, **three surfaces** (designer editor,
+> **Scope:** the property mechanism — one declaration, **five surfaces** (designer editor,
 > runtime script, serialization) — and the inspector that renders the first of them.
 > Companions: [form-attribute-binding.md](form-attribute-binding.md) (what the *binding*
 > properties mean), [report-engine.md](report-engine.md) (the spreadsheet a property
@@ -9,7 +9,7 @@
 
 ---
 
-## 1. One declaration, three surfaces
+## 1. One declaration, five surfaces
 
 **This is not a Designer subsystem.** It lives in `backend.dll`, and the Designer is only
 its most visible consumer. A property is declared **once** and every platform-wide

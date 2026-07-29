@@ -17,7 +17,8 @@
 //   proj     := (aggregate | expr) [ [AS] alias ]
 //   aggregate:= (SUM|MIN|MAX|AVG) '(' expr ')' | COUNT '(' ('*'|expr) ')'
 //   source   := dottedName [ '(' arg {',' arg} ')' ] [ [AS] alias ] | '(' statement ')' [ [AS] alias ]
-//   join     := [INNER|LEFT] JOIN source [ON predicate]
+//   join     := [INNER|LEFT|RIGHT|FULL] [OUTER] JOIN source [ON predicate]
+//                                                  (ON TRUE = cross; omitted ON = auto-join by reference)
 //   predicate:= andExpr { OR andExpr }
 //   andExpr  := notExpr { AND notExpr }
 //   notExpr  := NOT notExpr | comparison
@@ -26,14 +27,15 @@
 //                      | [NOT] IN '(' (expr {',' expr} | statement) ')'
 //                      | IS [NOT] NULL
 //                      | [NOT] BETWEEN expr AND expr ]
-//   expr     := mulDiv { ('+'|'-') mulDiv }            (arithmetic — parsed, not yet executed)
+//   expr     := mulDiv { ('+'|'-') mulDiv }
 //   mulDiv   := primary { ('*'|'/'|'%') primary }
 //   primary  := columnPath | literal | param | '(' predicate ')' | aggregate | case
-//   case     := CASE { WHEN predicate THEN expr } [ELSE expr] END   (parsed, not yet executed)
+//   case     := CASE { WHEN predicate THEN expr } [ELSE expr] END
 //
-// The parser accepts the FULL grammar above; the lowering (queryLowering) realizes the subset the
-// column-based L3 door executes and throws a clear "not yet executed" for the rest (arithmetic, CASE,
-// UNION, IN-subquery) — keeping the surface honest while the parser stays complete.
+// The parser accepts the FULL grammar above and the lowering (queryLowering) EXECUTES it — arithmetic,
+// CASE, UNION and IN-subquery all run. What still throws a clear "not yet executed" is the residual
+// tail only (a computed expression across a JOIN's leaves, a computed column over aggregates, a
+// dot-walk leaf inside a boolean WHERE over a non-co-located JOIN). See docs/query-language-arc.md §23.4.
 //
 // Throws ibBackendCoreException (line / position) on a syntax error.
 //

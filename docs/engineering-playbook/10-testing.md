@@ -15,7 +15,7 @@ Tests are not bureaucracy — they protect against regressions. OES historically
 > (some examples reference illustrative classes, not real OES code).
 
 Google Test, fetched via CMake `FetchContent` (v1.14.0), gated behind
-`option(BUILD_TESTING)`. ~650 tests across one main target plus a few isolated
+`option(BUILD_TESTING)`. ~850 tests across one main target plus a few isolated
 targets. Tests are flat `test_*.cpp` files compiled into the targets below;
 there is no `unit/` / `integration/` / `mocks/` directory split.
 

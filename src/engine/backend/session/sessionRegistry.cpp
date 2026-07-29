@@ -267,9 +267,9 @@ void ibSessionRegistry::Start()
 	if (m_threadAlive.load(std::memory_order_acquire)) return;
 	if (m_fatal.load(std::memory_order_acquire))       return;
 
-	// When we own sys_session, grab two dedicated pool connections:
-	// one for INSERT/UPDATE/DELETE + JobRefreshSnapshot SELECT, one for
-	// NOWAIT probes during Sweep. nullptr-tolerant downstream — if the
+	// When we own sys_session, grab ONE dedicated pool connection for
+	// INSERT/UPDATE/DELETE + JobRefreshSnapshot's SELECT. (The NOWAIT-probe
+	// conn went with the row-lock scheme.) nullptr-tolerant downstream — if the
 	// pool is not yet initialised (early startup / test harness) the DB
 	// ops no-op gracefully.
 	//
@@ -1350,7 +1350,7 @@ void ibSessionRegistry::ProcessSetActivity(ibRegistryRequest& req)
 	} catch (...) { /* swallowed: SetActivity is a UI-state hint, not a correctness signal — a failed UPDATE just means peer dialogs show a stale label until the next tick */ }
 }
 
-// --- Periodic jobs (placeholders) ----------------------------------------
+// --- Periodic jobs --------------------------------------------------------
 
 void ibSessionRegistry::JobSweepStale()
 {

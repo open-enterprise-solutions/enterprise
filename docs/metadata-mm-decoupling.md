@@ -139,7 +139,7 @@ Grep over `src/engine` for `GetModuleManager` returns only the
    (same null-or-set pattern, same callsite shape `if (auto* x =
    md->GetX())`).
 
-2. **`ibValueModuleManagerExternal*` template-dedup.** Two
+2. **`ibValueModuleRuntimeManagerExternal{DataProcessor,Report}` template-dedup.** Two
    subclasses (DataProcessor / Report) duplicate near-identical
    bodies. `runtime-facade.md` Step 0 calls for a template over
    `<TMeta, TDataObject>`. Independent of this doc's scope, left
@@ -163,7 +163,7 @@ Grep over `src/engine` for `GetModuleManager` returns only the
   `ibValueModuleManagerDesigner` (inside the compile cache).
 - `ibSession::m_root` is the only owner of
   `ibValueModuleManagerRuntimeConfiguration` in non-codeRunner builds;
-  codeRunner uses `ibValueModuleManagerExternal*` directly as its
+  codeRunner uses `ibValueModuleRuntimeManagerExternal{DataProcessor,Report}` directly as its
   root because it's standalone (no session bring-up).
 
 ---

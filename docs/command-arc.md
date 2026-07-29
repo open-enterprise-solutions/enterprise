@@ -13,6 +13,10 @@
 > The front-end command resolver was replaced by a backend hop interface, the exact mirror of the
 > source-hop (`command-interface.md` §8 has the full write-up). What changed since 2026-07-20:
 >
+> **Naming note (2026-07-28):** the interface below was renamed to **`ibBackendCommandSender`** and
+> moved into `backend/backend_command.h`; the old `backend/commandDataObject.h` was deleted. Read the
+> block as the design record and `command-interface.md` §8 as the current spec.
+>
 > - **`ibBackendCommandDataObject`** (`backend/commandDataObject.h`) — the command-side twin of
 >   `ibSourceDataObject`: `virtual bool GetCommandByHop(const ibCommandHop&, ibValue& out) const`
 >   plus a static inline `ResolveCommandPath` (the mirror of `ibSourceDataObject::ResolvePath`,

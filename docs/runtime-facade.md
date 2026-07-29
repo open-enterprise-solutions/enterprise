@@ -92,8 +92,8 @@ session and the implementation phase plan. Verified against tree on
 >   per-descriptor `m_binder` with `SetVar` for per-execute binding.
 >   Replaces compile-time `AddContextVariable` staging.
 > - **13-17** — AOT cache pipeline landed. The blob (de)serialiser is
->   `backend/compiler/byteCodeAOT.cpp` (`kAOTFormatVersion = 14`
->   currently — `byteCodeAOT.cpp:111`; bumped on each opcode-layout
+>   `backend/compiler/byteCodeAOT.cpp` (`kAOTFormatVersion = 18`
+>   currently — `byteCodeAOT.cpp:136`; bumped on each opcode-layout
 >   change, e.g. CES + closure-capture + LINQ shifts); the cache-row /
 >   table layer is `backend/compiler/cache/byteCodeCache.{h,cpp}`:
 >   `sys_bytecode_cache` table with UPSERT semantics,
@@ -611,7 +611,7 @@ Brief summary:
 >   for step 10 — designer without runtimes); `ibSession::EnsureRoot()`
 >   + 3-phase `NotifyAuthenticated` — root-mm ownership on session.
 > - **Steps 13-17 — AOT cache pipeline landed** (blob serialiser
->   `backend/compiler/byteCodeAOT.cpp`, `kAOTFormatVersion = 14`;
+>   `backend/compiler/byteCodeAOT.cpp`, `kAOTFormatVersion = 18`;
 >   cache-row layer `backend/compiler/cache/byteCodeCache.{h,cpp}`).
 >   UPSERT row per descriptor, dependency registry,
 >   Designer Save / Delete cascading invalidate. Only automated
@@ -668,8 +668,9 @@ Brief summary:
   time.
 - **`project_runtime_owner_refactor`** — previous iteration of the plan.
   Superseded by this document.
-- **`project_bytecode_compile_decoupling`** — step 8, refined in
-  [`reference_extern_binder`](../memory/reference_extern_binder.md)
+- **`project_bytecode_compile_decoupling`** — step 8, refined in the
+  `reference_extern_binder` note (an assistant memory outside this repo — the
+  name is kept for provenance, there is no file to open here)
   to specify what exactly migrates into the bytecode.
 
 ---

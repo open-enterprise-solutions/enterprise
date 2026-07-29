@@ -30,8 +30,20 @@ substrate for the future compute server (`oes-server.exe`) and a
 
 This document enumerates every `thread_local` (and thread-bound static)
 in our own code as of the audit, classifies it, and records the
-migration that landed. Connection pool and session registry are not in
-scope — they're the prerequisite stages and are already correct.
+migration that landed.
+
+> ⚠ **The inventory is a 2026-04 snapshot — 25 `thread_local`s exist today.** Additions the
+> audit never classified, several of them exactly the "per-task transient flag" shape its own
+> safety checklist covers: `ts_acquiredByGate` (`metaCollection/metaObject.cpp`),
+> `g_refReadStack` (`metaCollection/partial/reference/reference.cpp`),
+> `t_tempSources` / `t_sourceMetaData` (`query/queryLowering.cpp`),
+> `ts_threeValuedNullCompare` (`compiler/procUnit.cpp`), `tl_errorChain`
+> (`backend_exception.cpp`), plus three in `databaseQueryParser.cpp`, two in
+> `propertyString.h`, one in `systemManagerFunc.cpp` and the `t_pool` in `fstring.h`.
+> Re-grep before relying on the classification below.
+
+Connection pool and session registry are not in scope — they're the prerequisite stages and are
+already correct.
 
 > **Scope note.** Third-party TLS (Firebird `fb_*` thread state, MySQL
 > `pthread_key_*` shims, wxWidgets log target, Win32 `TlsAlloc` etc.)
@@ -72,7 +84,7 @@ context: which `ibProcUnit` is currently running, the run-context stack
 **What landed:** all four moved into `struct ibProcUnitState`
 (`backend/compiler/procUnitState.h`), one instance owned by each
 `ibSession` (`ibSession::m_procUnitState`). The interpreter reads them
-through `ibSession::GetPUState()` (`session.cpp:452`), which returns
+through `ibSession::GetPUState()` (`session.cpp:725`), which returns
 `&Current()->m_procUnitState`, or a `thread_local` fallback
 `ibProcUnitState` when no session is bound (codeRunner / CLI ad-hoc
 scripts). The four interpreter thread_locals named above **no longer
@@ -113,22 +125,19 @@ Both live in `src/engine/backend/backend_exception.cpp:95`:
 **What landed:** instead of clearing per-task flags, both moved onto
 `ibSession` as atomics: `m_evalMode` / `m_processingBackendError`, with
 `IsEvalMode` / `SetEvalMode` / `IsProcessingBackendError` /
-`SetProcessingBackendError` accessors (`session.h:431-438`). Per-session
+`SetProcessingBackendError` accessors (`session.h:439-446`). Per-session
 storage is stricter than the original "reset on task entry" plan — a
 debug-watch on tab 1 setting eval-mode can never leak into tab 2's
 OnWrite, regardless of which worker runs which task. The thread_local
 `gs_evalMode` / `gs_processBackendError` in backend_exception.cpp are
 gone; `ibBackendException::IsEvalMode()` resolves per-session.
 
-**Caveat — debug eval.** When the debugger evaluates a watch expression
-mid-breakpoint, the script thread is parked in `DoDebugLoop`'s CV wait;
-the debug command thread sets `gs_evalMode = true`, runs the eval, clears
-it. With per-session debug (`ibSession::ibDebugSession`) already in place,
-the debug command runs on a separate thread — `gs_evalMode` on that
-thread is independent. No regression. But the *script* thread that's
-parked must not have `gs_evalMode` set when it resumes. Today it doesn't
-(eval thread is a different OS thread); after pool, eval-on-pooled-worker
-needs to ensure `gs_evalMode` is local to its task.
+**Caveat — debug eval (RESOLVED by the migration above).** When the debugger evaluates a watch
+expression mid-breakpoint, the script thread is parked in `DoDebugLoop`'s CV wait while the debug
+command thread runs the eval. The concern was that a *thread*-local eval flag could still be set
+when the parked script thread resumed. It cannot: the flag is no longer thread-local at all —
+`gs_evalMode` does not exist, and eval mode is per-session state (`ibSession::m_evalMode`, an
+`std::atomic<bool>`), so a pooled worker cannot inherit another task's flag.
 
 ---
 
@@ -140,11 +149,11 @@ calls don't grab a mutex:
 
 | Line | Symbol | Type |
 |---|---|---|
-| 69 | `entry` | `ibBackendLocalizationEntry` |
-| 112, 223 | `array` | `ibBackendLocalizationEntryArray` |
-| 155 | `strRawTranslate` | `wxString` |
-| 180 | `code, data` | `wxString, wxString` |
-| 236, 244, 267 | `strResult, result` | `wxString` |
+| 82 | `entry` | `ibBackendLocalizationEntry` |
+| 125, 236 | `array` | `ibBackendLocalizationEntryArray` |
+| 168 | `strRawTranslate` | `wxString` |
+| 193 | `code, data` | `wxString, wxString` |
+| 249, 257, 280 | `strResult, result` | `wxString` |
 
 These hold per-call output, are populated and consumed within a single
 function call, never observed across calls. A worker swapping sessions

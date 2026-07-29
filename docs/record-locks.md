@@ -646,8 +646,8 @@ Per-row column is the wrong shape for this problem.
 | `backend/metaCollection/partial/accountingRegisterObject.cpp` | Same |
 | `backend/metaCollection/partial/constantObject.cpp` | `SetConstValue` — single-row `FOR UPDATE` guard |
 | `locale/*.po` + sources | 2 user-visible strings |
-| `tests/test_dataVersion.cpp` | **New** — round-trip, mismatch detection, stamp monotonicity |
-| `tests/test_writeProtection.cpp` | **New** — gtest: parallel Write on same ref → exactly one succeeds |
+| `tests/test_dataVersion.cpp` | **PLANNED, never written** — round-trip, mismatch detection, stamp monotonicity |
+| `tests/test_writeProtection.cpp` | **PLANNED, never written** — gtest: parallel Write on same ref → exactly one succeeds |
 
 Estimated diff: ~400-500 lines added, ~30 lines edited per Write
 method × ~9 methods.

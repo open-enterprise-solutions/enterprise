@@ -4,8 +4,8 @@
 #include "window.h"
 #ifndef OES_USE_WEB
 // Pulls in <wx/aui/auibar.h> (ibAuiToolBar / wxAuiToolBarEvent) —
-// designer + desktop-runtime only. Web keeps a stub Create path and
-// doesn't need AUI machinery.
+// designer + desktop-runtime only. Web builds its own ibWebToolbar render
+// node (web/webWindow.h) and doesn't need AUI machinery.
 #include "frontend/win/ctrls/toolBar.h"
 #endif
 

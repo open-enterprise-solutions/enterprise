@@ -45,7 +45,7 @@ stays out of this PR.
 | 7 | Help editor: `reviewed: true` flip workflow + Designer-side review gate | Same blocker as 1.4 — needs the editor tool first |
 | 2 | Skeleton generator + LLM fill + validation gate | Current corpus is hand-authored; tooling lands when content scales past manual editing. Original design proposed Python; user prefers C++ (e.g. `a help-registry dump CLI` + gtest validation) — no Python in repo |
 | - | Tests — no `test_help*.cpp` in the port (none in upstream either). Smoke is manual. | gtest fixtures pending; corpus-load unit test plus resolver fixtures would be ~150 lines |
-| - | Content quality — `global_functions.json` is skeleton-only (`reviewed: false`, empty description / parameters / return / example); `keywords.json` + `primitive_types.json` are populated and `reviewed: true`. **2026-06-11:** `queries.json` added (en/ru/uk, 14 reviewed entries each + the `query` category) — the full query-language reference: overview (how a query is written / executed), the `Query` / `QueryResult` / `QuerySelect` classes, and per-clause articles (SELECT/TOP/DISTINCT, FROM + virtual tables + subqueries, JOIN, WHERE, GROUP BY/HAVING, ORDER BY, TOTALS…BY, UNION/UNION ALL, &parameters, dot-walk incl. composite references), with the current executable-subset limits stated per clause | Phase 2 generator + LLM fill remains the cost driver; current state ships with usable keywords + types + the query reference, and stubs for functions |
+| - | Content quality — `global_functions.json` is 93 entries, of which **2 are reviewed** and 91 remain skeletons (`reviewed: false`, empty description / parameters / return / example); `keywords.json` + `primitive_types.json` are populated and `reviewed: true`. **2026-06-11:** `queries.json` added (en/ru/uk, **15** reviewed entries each + the `query` category) — the full query-language reference: overview (how a query is written / executed), the `Query` / `QueryResult` / `QuerySelect` classes, and per-clause articles (SELECT/TOP/DISTINCT, FROM + virtual tables + subqueries, JOIN, WHERE, GROUP BY/HAVING, ORDER BY, TOTALS…BY, UNION/UNION ALL, &parameters, dot-walk incl. composite references), with the current executable-subset limits stated per clause | Phase 2 generator + LLM fill remains the cost driver; current state ships with usable keywords + types + the query reference, and stubs for functions |
 | - | `wxLogMessage` debug noise in `wxZipInputStream` parsing path (left for now to ease zip-format diagnosis); strip after smoke validation stabilises | Diagnostic value during current shake-out |
 
 ### Files touched in this port
@@ -54,7 +54,9 @@ stays out of this PR.
 
 - 11 new files in `src/engine/backend/syntaxHelper/` (9 upstream + 2 my `helpService.{h,cpp}`)
 - 14 new files in `src/engine/frontend/syntaxHelper/` (all upstream, includes adapted to `syntaxHelper/` namespace)
-- 15 JSON content files in `syntaxHelper/{en,ru,uk}/` (repo root, not under `src/`)
+- 21 JSON content files in `syntaxHelper/{en,ru,uk}/` — 7 buckets × 3 locales
+  (`_categories`, `global_functions`, `guide`, `keywords`, `primitive_types`, `queries`, `rls`),
+  repo root, not under `src/`
 - 1 design doc `docs/syntax-helper-design.md` (this file)
 - 1 `CMakePresets.json` (repo root, 8 build presets)
 - Build wiring: `backend.vcxproj` + `backend.vcxproj.filters` + `backend/CMakeLists.txt` (+`StageSyntaxHelperContent` Target with `[IO.Compression.ZipFile]`); `frontend.vcxproj` + `frontend.vcxproj.filters`
@@ -123,17 +125,17 @@ desktop designer.
 
 ### What already exists
 
-* `s_listKeyWord` (**60** entries in
-  `src/engine/backend/compiler/translateCode.cpp:25-101` — 45 core
-  language keywords (incl. preprocessor) + 15 LINQ keywords; ordering is
-  load-bearing per the `KEY_FROM..KEY_INTO` comment at
-  translateCode.cpp:84-85, and the array is index-locked to the `KEY_*`
+* `s_listKeyWord` (**61** entries in
+  `src/engine/backend/compiler/translateCode.cpp:26-101` — 45 core
+  language keywords (incl. preprocessor) + 16 LINQ keywords; ordering is
+  load-bearing per the `KEY_FROM..KEY_RESTRICT` comment at
+  translateCode.cpp:83-84, and the array is index-locked to the `KEY_*`
   enum in `codeDef.h`). Each row is `ibKeyWords{ wxString m_strKeyWord;
   wxString m_strShortDescription; }` (`translateCode.h`); the array
   initialises only the first field, so descriptions are empty today.
 * `s_listHelpDescription` — file-static
   `std::map<wxString, void*>` at `translateCode.cpp:16`, populated by
-  `LoadKeyWords()` at `translateCode.cpp:244-257`. The `void*` value
+  `LoadKeyWords()` at `translateCode.cpp:238`. The `void*` value
   is a pointer to the originating `m_strShortDescription`. The map
   has no external accessor; we add one (`GetKeywordHelp`) or refactor
   to `const wxString&` returns during Phase 1.
@@ -141,7 +143,8 @@ desktop designer.
   (`src/engine/backend/system/systemManager.cpp:113`) — registers the
   built-ins via `helper.AppendFunc(name, argCount, signature)` /
   `AppendProc(...)` (the bind-in-ctor model, post `PrepareNames → bind`
-  arc). **93** `AppendFunc`/`AppendProc` calls today; the number drifts
+  arc). **95** `AppendFunc`/`AppendProc` calls today (89 + 6, at
+  `systemManager.cpp:115`); the number drifts
   as built-ins land, so the Phase 1 generator pulls live counts —
   grep `AppendFunc\|AppendProc` for the current total.
 * `ibValueMetaObject*` hierarchy — 11 business object types
@@ -164,7 +167,7 @@ desktop designer.
   "more info" affordance pointing into the help pane (§9).
 * Designer AUI host is `ibFrameManager : wxAuiManager` (not
   `ibAuiManager` — earlier doc draft had the wrong name), declared at
-  `src/engine/frontend/mainFrame/mainFrame.h:236,274` and consumed by
+  `src/engine/frontend/mainFrame/mainFrame.h:234,272` and consumed by
   the active designer frame `ibFrontendMainFrameDesigner :
   ibFrontendMainFrame` (`src/engine/designer/mainFrame/mainFrameDesigner.h:68`).
   (The legacy `wxAuiDocDesignerMDIFrame` in the root
@@ -176,7 +179,7 @@ desktop designer.
   the existing `OnMarginClick` is the integration point for the
   `...` button.
 * `wenterprise-server` HTTP routes are inline `svr.Get(...)` /
-  `svr.Post(...)` lambdas in `wenterprise-server/main.cpp:441+` —
+  `svr.Post(...)` lambdas in `wenterprise-server/main.cpp:460+` —
   there is NO pluggable route registry today. The new `/api/help/*`
   endpoints land as more inline lambdas alongside the existing
   ones. A future route-registration table is out of scope for this

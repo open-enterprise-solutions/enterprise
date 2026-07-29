@@ -1637,9 +1637,9 @@ ibParamUnit ibCompileCode::CompileLambdaExpression(ibCompileContext* context)
 	// same time). Previously this line nullified m_parentContext,
 	// enforcing the strict isolation discipline that has been
 	// superseded by the per-frame heap-promotion design (see
-	// docs/closure-capture.md). Runtime wiring still pending — Phase A
-	// is compile-only; running code that captures outer locals crashes
-	// until Phase B lands.
+	// docs/closure-capture.md). Phase B (runtime frame capture) landed
+	// alongside — see procUnit.cpp OPER_LFUNC / OPER_CALL_LAMBDA, which
+	// heap-promote the frame and fill ibValueFunction::m_capturedFrames.
 	std::shared_ptr<ibCompileContext::ibFunction> createdFunction;
 	std::unique_ptr<ibCompileContext> functionContextOwner;
 	int errorPlace = 0;

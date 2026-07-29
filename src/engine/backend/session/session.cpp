@@ -36,8 +36,6 @@ namespace {
 // receives a query handle and ADDS a restricting semi-join so the query returns
 // only the rows the role's keys permit (the row filter, on the SUBD side).
 //
-// FIRST BLIND PASS: `// TODO(build)` lines are best-guess accessor names to be
-// confirmed by the compiler.
 // ---------------------------------------------------------------------------
 class ibRuntimeAccessPolicy : public ibAccessPolicy
 {

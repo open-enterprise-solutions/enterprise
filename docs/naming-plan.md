@@ -1,6 +1,12 @@
 # File & folder naming plan
 
-> **Status: PLAN — nothing applied.** Proposal for review.
+> **Status: PARTIALLY APPLIED** (re-verified 2026-07-29). **Wave 1 is done** — all seven empty
+> `advprop*.h` headers are deleted (no zero-byte headers remain in the tree). The `tableInfo*` /
+> `tableView*` renames of §6.2/§7 are also done, under different target names: those files are now
+> `backend/model.{h,cpp}` / `modelDb.cpp` / `modelRam.cpp` / `modelView.{h,cpp}`, which also
+> dissolves the `backend/tableView.h ↔ frontend/win/ctrls/tableView.h` collision §5.3 warns about.
+> Waves 2-4 are outstanding. ⚠️ The occurrence counts below were measured 2026-07-15 and have
+> drifted — the `backend/` root is now 99 files / 63 modules, not 94 / 59.
 > Scope: **file and folder names only** — naming that follows what the code *does*, rather
 > than how it happened to grow. Class/member naming and code grouping are a separate plan.
 > Every cost figure below was measured with grep on 2026-07-15.

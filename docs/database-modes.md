@@ -70,9 +70,17 @@ Key facts:
 
 ## 3. Server mode
 
-Selected when a server/database pair is given (`m_strServer` / `m_strDatabase`). The
-concrete driver comes from the connection settings — Firebird, PostgreSQL, MySQL or ODBC
-([../CLAUDE.md](../CLAUDE.md) §1). There is no embedded engine in the process.
+Selected when a server/database pair is given (`m_strServer` / `m_strDatabase`). There is no
+embedded engine in the process.
+
+> **The driver is NOT chosen from the connection settings today.**
+> `CreateServerAppDataEnv` (`backend/appData.cpp:557`) constructs `ibDatabaseLayerPostgres`
+> unconditionally — there is no branch on any setting. PostgreSQL / MySQL / ODBC / Firebird-server
+> are all compiled and all implement `ibDatabaseLayer`, but only PostgreSQL is reachable from the
+> open path. The launcher adds a second inconsistency: `launcher/connectionDB.cpp:174-199` picks its
+> Test-Connection driver at COMPILE time (`#ifdef OES_USE_FIREBIRD` / `#elif OES_USE_POSTGRESQL`),
+> so a Firebird build tests one driver and then opens another. Wiring the runtime choice is a small
+> job — the drivers are already behind the abstraction; what is missing is the selector.
 
 ---
 
@@ -141,16 +149,17 @@ Creating a base is a **Designer** act — the two axes meeting in one condition.
 
 File mode is embedded Firebird. Sharing a file base across users means sharing the
 **directory** — a network share — and that is the classic failure mode of a file-based
-RDBMS: concurrent writes over SMB. [firebird-mesh-driver.md](firebird-mesh-driver.md) puts
-the boundary at roughly **8 users / 5 GB**, past which the choice is "keep wrestling with
-file-mode" or move to a server.
+RDBMS: concurrent writes over SMB. [firebird-mesh-driver.md](firebird-mesh-driver.md) puts the
+band it targets at **3–30 users on a shared LAN, bases up to 100 GB** — that is the leader-election
+mode's design point, not a hard ceiling on plain file mode. (The "8 users / 5 GB" figure in that
+doc describes the legacy competitor's file mode, not ours; don't quote it as an OES limit.)
 
 Read the modes as a deployment ladder, not as equals:
 
 | | File | Server |
 |---|---|---|
 | Setup | copy a folder | install and administer a DBMS |
-| Drivers | Firebird only (embedded) | Firebird / PostgreSQL / MySQL / ODBC |
+| Drivers | Firebird only (embedded) | PostgreSQL only in practice — hardcoded in `CreateServerAppDataEnv`; the other server drivers compile but are not wired to the open path (§3) |
 | Log | with the base | per-user `%LOCALAPPDATA%` |
 | Concurrency | small teams; degrades over a share | the real answer |
 

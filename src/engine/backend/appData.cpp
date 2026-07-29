@@ -138,8 +138,8 @@ static std::size_t PickWorkerCount(ibRunMode runMode)
 // shrinking won't go.
 //
 // Baseline = 2 for GUI: one for the session manager's persistent
-// bookkeeping connections (write / probe — registry checks them out
-// at Start and never returns), one for the script thread's actual
+// write connection (the registry checks it out at Start and never
+// returns it), one for the script thread's actual
 // UI work. Server modes scale higher because tab counts amplify both
 // concurrency and burst rate; pool grows past minIdle up to maxSize
 // under load and shrinks back here on idle timeout.
@@ -593,7 +593,8 @@ bool ibApplicationData::CreateServerAppDataEnv(ibRunMode runMode, const wxString
 			ibApplicationData::MigrateTableSession();
 			ibApplicationData::MigrateTableBytecodeCache();
 
-			// Audit + trace logger. In server-mode the .olg directory
+			// Audit + trace logger. In server-mode the log directory
+			// (…\OES\<tag>\logs, holding oes_YYYY_MM.olg)
 			// lives under %LOCALAPPDATA% — every client of this PG/FB
 			// server keeps its own journal locally until compute-server
 			// arrives.

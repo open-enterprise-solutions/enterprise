@@ -32,7 +32,7 @@
 | pre-Phase 1 | 96 | `m_sData` (wxString) + `m_refCount` in the tail (word + pad), `m_typeClass` = int |
 | post-Phase 1 | ~88 | enum→1B + `m_refCount` packed with the scalars (Debug-x86 padding eats most of the narrowing) |
 | post-Phase 2 | ~56 | `m_sData` (wxString) removed; TYPE_STRING now an `ibString*` folded **into the union**; `ibNumber` stays by-value |
-| **post-Phase 3 (final)** | **40** | dead `wxObject::m_refData` gone, `ibValue` no longer derives `wxObject` ([[project_value_footprint_audit]]) |
+| **post-Phase 3 (final)** | **x86 32 / x64 40** | dead `wxObject::m_refData` gone, `ibValue` no longer derives `wxObject`. (Recount from declaration order: vptr 4 + 1 + 1 + pad 2 + union 8 + `m_fData` 8 + `m_refCount` 4 + tail pad 4 = 32 on x86; 40 on x64 — matching Phase 4's own "32 → 24 (x86)" figure below) |
 
 Re-run `test_value.cpp::SizeofReport` for the live x64 figure (smaller — no
 Debug iterator-debug bloat in the now-pointer string member).
@@ -47,7 +47,7 @@ Debug iterator-debug bloat in the now-pointer string member).
 | vptr | 8 | ibValue has its own virtuals |
 | `m_typeClass` (`ibValueTypes : unsigned char`) | 1 | narrowed in Phase 1 |
 | `m_bReadOnly` (bool) | 1 | |
-| `m_refCount` (`std::atomic<uint>`) | 4 | repacked next to the 1-byte scalars (fills the hole before the 8-aligned union) |
+| `m_refCount` (`std::atomic<uint>`) | 4 | ⚠ **the intended repack never happened** — it is declared LAST in the class (`value.h:1390`), so under MSVC's declaration-order layout it occupies the tail word, and the 2-byte hole after `m_bReadOnly` is still padding |
 | `union {bool/date/ibValue*/const ibValue*/ibString*}` | 8 | active member selected by `m_typeClass`; `m_pConstRef`/`m_pStr` alias `m_pRef` |
 | `m_fData` (ibNumber) | 8 | present even for non-numbers; stays by-value (8B; sharing the union would reinstate the random-delete bug — see Phase 4) |
 
@@ -129,7 +129,8 @@ those must go through a constructed active member.
   flatten the hierarchy — close the public-field shadow vector instead.
   **→ folds into Phase 2.**
 - **F6 — header bloat (low priority; do NOT un-nest).** `ibValue::ibMemberTable`
-  + its ~40 `AppendProp` / `AppendProc` / `AppendMethod` overloads are inline in
+  + its **24** `AppendProp` / `AppendProc` / `AppendFunc` / `AppendMethod` overloads
+  (`value.h:506-628`) are inline in
   `value.h`; every TU including `value.h` re-parses them. Per-class, not
   per-instance — zero footprint. **Keep it a nested type of `ibValue` on
   purpose:** the nesting plus the population pattern (instances handed out via
@@ -149,7 +150,8 @@ those must go through a constructed active member.
 |---|---|---|---|
 | 0 | sizeof probe in test_value.cpp | none | landed |
 | 1 | F2 (narrow `ibValueTypes`, repack `m_refCount` — now `std::atomic`) | low | landed |
-| 2 | F1 tagged-union (`ibString*` in union) + F4 (Reset frees active) + F5 (encapsulate) | medium | **landed** |
+| 2 | F1 tagged-union (`ibString*` in union) + F4 (Reset frees active) | medium | **landed** |
+| 2 | F5 (encapsulate the payload behind accessors) | medium | **NOT landed** — `m_typeClass` / `m_bReadOnly` / the union / `m_fData` are all still `public` (`value.h:67-94`), and outside callers still read them (e.g. `value_cast.h:20`). Only `m_refCount` is private. The base-field shadow vector F5 targets is open |
 | 3 | F3 (drop wxObject / wxRTTI → **typeid** registry) | high blast radius | **landed** (F6 header split still deferred) |
 
 **Verified (working tree):** the two script suites pass —
@@ -161,7 +163,8 @@ path that lets these runtime functions be called as functions. Unit tests:
 `tests/test_string.cpp`, `tests/bench_string.cpp`, plus the `ibNumber`
 transcendental coverage in `tests/test_number.cpp`.
 
-**Full gtest suite revived — 246/246 green.** The Google Test target had not
+**Full gtest suite revived — 246/246 green at the time of writing** (the suite has since grown to
+**849 cases across 72 files** — re-run rather than trusting this number). The Google Test target had not
 built or run for a long time; bringing it up on Windows (CMake) took: enabling
 the Firebird/PostgreSQL drivers (dynamic client load, no link-time dependency),
 exporting the AOT (`SerializeAOT`/`DeserializeAOT`) and `operator<<(ibGuid)`
@@ -310,7 +313,7 @@ live value object?* There are only two runtime-type needs in the value system,
 and the C++ language already provides both for free:
 
 1. **Downcast** — "is this `ibValue*` really an `ibValueArray`? give me the
-   typed pointer." Served by `dynamic_cast` in `CastValue` (`value_cast.h:18`).
+   typed pointer." Served by `dynamic_cast` in `CastValue` (`backend/value_cast.h:18`).
    This already uses C++ RTTI, **not** wxRTTI — zero work, untouched.
 2. **Self-identity** — "what `clsid` is this live value?" Served by the
    polymorphic `ibValue::GetClassType()` (`value.cpp:921`). For fixed value

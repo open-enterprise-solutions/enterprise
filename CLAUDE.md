@@ -30,7 +30,7 @@ The runtime executes compiled bytecode, renders forms through wxWidgets, and sto
 
 ```
 enterprise/
-├── enterprise.sln           # MSBuild solution (13 projects + a Solution Items folder)
+├── enterprise.sln           # MSBuild solution (10 C++ projects in 4 folders: services / exec / plugins / Solution Items)
 ├── Common.props             # Shared output paths and macros
 ├── ConfigurationDefs.props  # Per-configuration preprocessor defines
 ├── CLAUDE.md                # This file
@@ -308,6 +308,10 @@ The 11 business object types and their C++ classes:
 | ChartOfAccounts | `ibValueMetaObjectChartOfAccounts` | `metaCollection/partial/chartOfAccounts.h` |
 | AccountingRegister | `ibValueMetaObjectAccountingRegister` | `metaCollection/partial/accountingRegister.h` |
 
+Four further registered metatypes are **not** top-level business objects: `ExternalDataProcessor`,
+`ExternalReport`, `SubcontoKindsTable`, and `AccumulationRegisterTotals` (the totals table became a
+metaobject in its own right on 2026-07-29, rather than a bit on the register's id).
+
 ---
 
 ## Configuration Serialization
@@ -349,9 +353,9 @@ stored as the 64-bit `ibClassID` hash.
 
 - **Opcodes:** defined in `src/engine/backend/compiler/codeDef.h` as `OPER_*` enumerators. Call-family: `OPER_CALL` (stack-frame named call), `OPER_CALL_CLOSURE` (named call with heap-promoted frame — callee has an inner lambda capturing locals), `OPER_CALL_METHOD` (per-class method dispatched by name string), `OPER_CALL_LINQ` (universal pipeline op dispatched by `ibLinqMethod` enum id, no string lookup), `OPER_CALL_LAMBDA` (dynamic call — target read from a slot at runtime, must wrap an `ibValueFunction`). Lambda body fences `OPER_LFUNC` (the active materialiser) / `OPER_ENDLFUNC`. (`OPER_FUNC_PTR` is retired — `OPER_LFUNC` materialises the lambda value.)
 - **Keywords:** 61, defined as `KEY_*` enumerators (`KEY_IF`=0 … `KEY_RESTRICT`) in the same file — includes access modifiers (`Public`/`Private`/`Protected`), preprocessor (`#Define`/`#Ifdef`/…), the LINQ block (`From`/`Where`/`Select`/`Join`/`Group`/…) and the access-policy filter (`Restrict`). The matching token strings are `s_listKeyWord[]` in `translateCode.cpp`, in lock-step index order with the enum.
-- **Built-in functions:** ~93, registered in `ibSystemManager` (`src/engine/backend/system/systemManager.cpp`); count drifts as features land — grep `AppendFunc\|AppendProc` for the live total
+- **Built-in globals:** 89 functions + 6 procedures = 95, registered in `ibSystemManager` (`src/engine/backend/system/systemManager.cpp`); count drifts as features land — grep `AppendFunc\|AppendProc` for the live total
 - **Syntax modes:** VES (`If…Then…EndIf`, Visual-Basic-style, a legacy business-scripting dialect) and CES (`if (…) { … }`, C-flavoured); both compile to the same bytecode. Mode is process-global on `ibCompileCode::SetCodeStyle()` / `GetCodeStyle()`. **CES is the default** for new configurations (2026-05-10); existing serialised configs preserve their stored Syntax. Wire token in metadata enum still reads `vbs` for back-compat — user-visible label is `ves`.
-- **Anonymous functions:** `Function(args) ... EndFunction` and `Procedure(args) ... EndProcedure` (or CES `Function(args) { … }`) work as expressions — assignable to slots, callable through variables. Backed by `ibValueFunction` (inline class in `procUnit.cpp` near `ibValueIterator`, CLSID `VL_FUNC`). Lambda's compile-context return kind is `RETURN_LAMBDA_FUNCTION` / `RETURN_LAMBDA_PROCEDURE` (`compileCode.h`). Eval-in-lambda resolves outer frames via splice in `CompileExpression` (lambda-shim's `m_pppArrayList[1..]` → eval's `[2..]`). No closure capture yet — outer-function locals fail with "undefined identifier" at compile. See `docs/lambda.md`.
+- **Anonymous functions:** `Function(args) ... EndFunction` and `Procedure(args) ... EndProcedure` (or CES `Function(args) { … }`) work as expressions — assignable to slots, callable through variables. Backed by `ibValueFunction` (inline class in `procUnit.cpp` near `ibValueIterator`, CLSID `VL_FUNC`). Lambda's compile-context return kind is `RETURN_LAMBDA_FUNCTION` / `RETURN_LAMBDA_PROCEDURE` (`compileCode.h`). Eval-in-lambda resolves outer frames via splice in `CompileExpression` (lambda-shim's `m_pppArrayList[1..]` → eval's `[2..]`). **Closure capture landed 2026-05-11..12** (per-frame heap promotion): the compiler marks the enclosing function `m_needsHeapFrame` and emits `OPER_CALL_CLOSURE`; at runtime the lambda holds `std::vector<std::shared_ptr<ibRunContext>> m_capturedFrames` and outer-function locals resolve at depth ≥ 1. See `docs/lambda.md`, `docs/closure-capture.md`.
 - **Debugger port:** 1650 (`defaultDebuggerPort` in `src/engine/backend/debugger/debugDefs.h`)
 
 ### Bytecode resolver (kind-driven, AOT-ready)

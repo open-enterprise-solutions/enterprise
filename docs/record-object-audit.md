@@ -159,35 +159,32 @@ section below for the three options.
 
 ### Drift / bug findings
 
-1. **ChartOfAccounts formatting drift** — same logic as Catalog but
-   compressed into one-line `if`/`else` statements (no braces, no
-   newlines). Pure copy-paste-then-minify. Maintenance cost
-   per-cross-cutting change is the same; readability is worse.
+> **Re-verified 2026-07-29: findings 1, 3, 4 and 5 are RESOLVED** — the `fc4efa55`
+> consolidation removed the duplicated leaf scaffolds these described. Kept below with their
+> resolutions so the reasoning survives; do not go hunting for them.
 
-2. **Document.DeleteObject order mismatch** (documentObject.cpp:449-470)
-   — runs `DeleteRecordSet` → `OnDelete` script → `DeleteData`, while
-   Catalog/ChartOf* run `BeforeDelete` → `DeleteData` → `OnDelete`.
-   Document is the odd one. May be intentional (registers must clear
-   before the recorder row disappears) but breaks the "uniform shape"
-   assumption.
+1. ~~**ChartOfAccounts formatting drift**~~ — **RESOLVED.** No leaf defines `WriteObject` /
+   `DeleteObject` at all any more; the single scaffold lives on
+   `ibValueRecordDataObjectHierarchyRef` (`commonObject.h:1882-1883`). There is no
+   ChartOfAccounts copy left to minify.
 
-3. **Copy-paste bug in Document.DeleteObject** (documentObject.cpp:451)
-   — DeleteRecordSet failure branch uses
-   `ibBackendCoreException::Error(_("Failed to write object in db!"))`
-   inside a Delete path. Copy-paste from Write. Cosmetic, but a
-   confused operator gets the wrong word.
+2. **Document.DeleteObject order mismatch** — the ordering survived the move and is now
+   *documented as deliberate*. It lives at `commonObject.cpp:2798`, with the rationale at
+   `:2802-2805`: the register clear runs **before** `OnDelete` + `DeleteData` so the recorder
+   row still exists for script side-effects, and so the cascade serialises on recorder-level
+   row locks. The audit's open question is answered — this is intent, not drift.
 
-4. **Lowercase "failed" in constantObject.cpp:374** — `_("failed to
-   write object in db!")` in BeforeWrite-cancel branch; everything
-   else uses "Failed". Translation table will dedupe but it's a
-   localization gotcha.
+3. ~~**Copy-paste bug in Document.DeleteObject**~~ — **RESOLVED.** Every Delete-path message in
+   the new home reads `Failed to delete object in db!` (`commonObject.cpp:2815`, `:2822`,
+   `:2831`, `:2838`).
 
-5. **Register comment drift** —
-   `accumulationRegisterObject.cpp` Write has a multi-line comment
-   about Document.Write re-entrance and recorder serialization;
-   `accountingRegisterObject.cpp` Write has only the one-line "Lock by
-   key set (recorder for AccountingRegister)" comment. Same code,
-   different docs.
+4. ~~**Lowercase "failed" in constantObject.cpp**~~ — **RESOLVED.** All three error strings in
+   `constantObject.cpp` (`:366`, `:392`, `:401`) are capitalised; no lowercase variant remains
+   anywhere in the tree.
+
+5. ~~**Register comment drift**~~ — **RESOLVED.** All three register files now carry the
+   identical two-line note (`accumulationRegisterObject.cpp:10-11`,
+   `accountingRegisterObject.cpp:15-16`, `informationRegisterObject.cpp:10-11`).
 
 6. **No `TryAcquireFormLock` on Constant.SetConstValue** — Phase B.3
    wired the soft-lock into form-open via `ibValueRecordDataObject
@@ -220,26 +217,26 @@ Every cross-cutting change pays 15×.
 ibValueMetaObject (root, metaObject.h)
 ├── ibValueMetaObjectCompositeData
 │   └── ibValueMetaObjectGenericData                       (commonObject.h:157)
-│       ├── ibValueMetaObjectRecordData                    (commonObject.h:267)
-│       │   ├── ibValueMetaObjectRecordDataExt             (commonObject.h:410)
+│       ├── ibValueMetaObjectRecordData                    (commonObject.h:160)
+│       │   ├── ibValueMetaObjectRecordDataExt             (commonObject.h:311)
 │       │   │   ├── ibValueMetaObjectDataProcessor         (dataProcessor.h:6)
 │       │   │   │   └── ibValueMetaObjectExternalDataProcessor (dataProcessor.h:123)
 │       │   │   └── ibValueMetaObjectReport                (dataReport.h:6)
 │       │   │       └── ibValueMetaObjectExternalReport    (dataReport.h:126)
-│       │   └── ibValueMetaObjectRecordDataRef             (commonObject.h:453)
-│       │       ├── ibValueMetaObjectRecordDataEnumRef     (commonObject.h:557)
+│       │   └── ibValueMetaObjectRecordDataRef             (commonObject.h:385)
+│       │       ├── ibValueMetaObjectRecordDataEnumRef     (commonObject.h:550)
 │       │       │   └── ibValueMetaObjectEnumeration       (enumeration.h:6)
-│       │       └── ibValueMetaObjectRecordDataMutableRef  (commonObject.h:631)
+│       │       └── ibValueMetaObjectRecordDataMutableRef  (commonObject.h:644)
 │       │           ├── ibValueMetaObjectDocument          (document.h:12)
-│       │           └── ibValueMetaObjectRecordDataHierarchyMutableRef (commonObject.h:744)
+│       │           └── ibValueMetaObjectRecordDataHierarchyMutableRef (commonObject.h:767)
 │       │               ├── ibValueMetaObjectCatalog       (catalog.h:11)
 │       │               ├── ibValueMetaObjectChartOfAccounts (chartOfAccounts.h:14)
 │       │               └── ibValueMetaObjectChartOfCharacteristicTypes (chartOfCharacteristicTypes.h:11)
-│       ├── ibValueMetaObjectRegisterData                  (commonObject.h:975)
-│       │   ├── ibValueMetaObjectAccumulationRegister      (accumulationRegister.h:7)
+│       ├── ibValueMetaObjectRegisterData                  (commonObject.h:1031)
+│       │   ├── ibValueMetaObjectAccumulationRegister      (accumulationRegister.h:64)
 │       │   ├── ibValueMetaObjectAccountingRegister        (accountingRegister.h:8)
-│       │   └── ibValueMetaObjectInformationRegister       (informationRegister.h:7)
-│       └── ibValueMetaObjectConstant                      (constant.h:8)
+│       │   └── ibValueMetaObjectInformationRegister       (informationRegister.h:34)
+│       └── ibValueMetaObjectConstant                      (constant.h:28)
 ```
 
 7-level deep tree, 13 leaf classes, 3 intermediates carrying state
@@ -258,11 +255,12 @@ ibValueMetaObject (root, metaObject.h)
    hoisted to a common ancestor (probably `RecordData` since
    `RegisterData` lives in a parallel branch).
 
-2. **`Wrire` typo in role name** — the stored metadata name was
-   `"Wrire"` (display `_("Write")` is correct). **Still present**
-   (verified 2026-06-19, now `commonObject.h:745` via the
-   `IB_DECLARE_RWD_ROLE_TRIPLET("Wrire")` macro) — kept until a
-   migration arc; fixing it migrates stored role definitions.
+2. **`Wrire` typo in role name** — **RESOLVED** (re-verified 2026-07-29; the earlier
+   "still present, verified 2026-06-19" line was itself stale). Both branches now pass the
+   same argument: `IB_DECLARE_RWD_ROLE_TRIPLET("Write")` at `commonObject.h:657`
+   (MutableRef) and `:1055` (RegisterData). The only `Wrire` left in the tree is the
+   historical note inside the macro comment at `commonObject.h:631` — no such string
+   literal exists any more.
 
 3. **`Dimention` typo throughout `RegisterData`** — **RESOLVED**
    since this snapshot: the methods are now correctly spelled
@@ -274,7 +272,8 @@ ibValueMetaObject (root, metaObject.h)
    in the record-locks arc). The base declaration lists
    `{Reference, DeletionMark}`; subclasses must repeat the base list
    plus their own additions. This is the **trap class** documented
-   in [memory: reference_predefined_attr_subclass_lists](../memory/reference_predefined_attr_subclass_lists.md):
+   in the predefined-attribute subclass-list trap note (an assistant memory
+   outside this repo — no file to open here):
    "base declares a column, subclass list must also include it or
    runtime won't touch the slot". Cause of the original DataVersion
    subclass-list bug fixed in Phase A.
@@ -440,7 +439,7 @@ boilerplate is the same), promote to Option B in Phase B.
    tolerable for one more cross-cutting concern cycle.
 
 5. **Meta-side cleanup** (parallel or after) — hoist role machinery
-   to a common base, fix `Wrire` typo (with migration), audit the
+   to a common base, ~~fix `Wrire` typo (with migration)~~ (done — see finding 2), audit the
    `FillArrayObjectByPredefinedAttribute` contract for a less
    error-prone shape (the subclass-list trap caused the
    DataVersion bug; will cause the next one too).

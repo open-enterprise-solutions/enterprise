@@ -1,6 +1,10 @@
 # Code restructuring plan — grouping, declaration order, naming
 
-> **Status: PLAN — nothing applied.** Proposal for review.
+> **Status: PARTIALLY APPLIED** (re-verified 2026-07-29). Wave B1 landed — `ibValuib*` is now
+> `ibValueEnum*` (`system/systemManagerEnum.h`) and `AttributibRecordType` is now
+> `AttributeRecordType`; so did B2's `ibDatatabaseParameterFirebird` → `ibDatabaseParameterFirebird`.
+> All three grep to **zero** occurrences today. Waves A1, A2, the B2 remainder (`Sybsystem`,
+> `ExpectDelimeter`) and Wave C are still outstanding and their line references still check out.
 > Scope: **naming, declaration grouping and comments. The logic stays exactly as it is.**
 > No behaviour change, no moved responsibilities, no "while I'm here" fixes.
 > File/folder renames are a separate plan ([naming-plan.md](naming-plan.md)).

@@ -87,7 +87,8 @@ Script-level data access goes through metaobject managers:
 ```c
 // CORRECT — OES script
 var found = Catalogs.Products.FindByCode("APPLE-01");
-var balance = ChartsOfAccounts.Hozraschetnyi.Sub("62").Balance(EndOfMonth());
+var account = ChartsOfAccounts.Hozraschetnyi.FindByCode("62");
+var balance = AccountingRegisters.Hozraschetnyi.Balance(EndOfMonth(), account);
 
 // WRONG — you cannot do this in OES script (no raw SQL surface)
 //   db_query(...)   ← C++ only
@@ -101,7 +102,8 @@ var bigOrders = from o in Documents.Orders
                 select o;
 ```
 
-Full LINQ surface: `docs/linq.md` (31 chain ops + block syntax).
+Full LINQ surface: `docs/linq.md` (33 chain ops + block syntax — the live count is the
+`ibLinqMethod` enum in `compiler/value.h`).
 
 ### 4.2 Throw by value, catch by const reference
 
@@ -163,8 +165,9 @@ happen. When generating control logic, remember:
 
 - A form opened in Designer's **form editor** must not assume data
   exists. Code in `OnOpen` that calls `Items.Fetch()` will fail in
-  the designer preview. Guard with `if not Session.IsDesigner then
-  ...` if the side-effect is undesired in preview.
+  the designer preview. There is **no script-visible guard for this** —
+  no `Session` global and no `IsDesigner` exist; do not emit one.
+  Write `OnOpen` so it tolerates an empty source instead.
 - Reports and dynamic lists fetch lazily through `Get*Fetch` —
   designer's form preview doesn't run them. You don't have to gate
   this manually; the platform gates it for you.
@@ -187,7 +190,7 @@ The 11 metaobject types and their script-side namespace:
 |---|---|---|
 | `Catalog` | `Catalogs.<Name>` | Reference lists (products, contractors, units) |
 | `Document` | `Documents.<Name>` | Business operations (sales, payments, postings) |
-| `Enumeration` | `Enums.<Name>` | Fixed-value lists (status, type discriminator) |
+| `Enumeration` | `Enumerations.<Name>` | Fixed-value lists (status, type discriminator) |
 | `Constant` | `Constants.<Name>` | Singleton values (company name, tax ID) |
 | `InformationRegister` | `InformationRegisters.<Name>` | Periodic / dimensioned facts (price lists, exchange rates) |
 | `AccumulationRegister` | `AccumulationRegisters.<Name>` | Quantitative balances (inventory, AR / AP) |
@@ -196,6 +199,10 @@ The 11 metaobject types and their script-side namespace:
 | `ChartOfCharacteristicTypes` | `ChartsOfCharacteristicTypes.<Name>` | Subconto-type definitions |
 | `DataProcessor` | `DataProcessors.<Name>` | Interactive tooling (utilities, batch operations) |
 | `Report` | `Reports.<Name>` | Read-only output (analytics, statements) |
+
+Two further global namespaces exist for the external (out-of-configuration) variants:
+`ExternalDataProcessors.<Name>` and `ExternalReports.<Name>`. The full registered set is the
+`AppendProp` list in `backend/moduleManager/globalContextManager.cpp` — 13 namespaces.
 
 Configuration is serialized through the `ibDataNode` tree (binary via
 `ibBinaryProvider`); JSON output is write-only (diff/inspection). See
@@ -221,7 +228,7 @@ Mapping common ERP / business-application concepts to their OES form:
 | Interactive utility / batch tool | DataProcessor | Forms + script, no persisted business data |
 | Read-only analytical output | Report | Form + LINQ / register query |
 | Save an object | `object.Write()` | Record-locks enforced; see `docs/record-locks.md` |
-| Add an accounting movement | `document.RecordSets.<RegisterName>.Add()` | AccountingRegister WIP; see `register-totals-strategy.md` |
+| Add an accounting movement | `document.RegisterRecords.<RegisterName>.Add()` | AccountingRegister WIP; see `register-totals-strategy.md` |
 | Built-in query language | LINQ block / chain syntax | `from ... where ... select`; see `docs/linq.md` |
 | Document posting handler | `OnPosting` script in Document module | Writes register movements |
 | Document date | `document.Date` | `ibDateTime` type |

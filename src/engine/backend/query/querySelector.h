@@ -71,10 +71,12 @@ public:
 
 	// EAGER fold: the whole snapshot → the node tree per the TRAVERSAL kind. Subtotals from THIS snapshot.
 	//   Direct            → flat: each row a leaf node;
-	//   ByGroups / ByGroupsHierarchy → fold by the TotalBy LEVELS (in order). A Hierarchy / HierarchyOnly
-	//     level's reference-hierarchy unfold needs the target catalog's rows — a later layer; for now the
-	//     levels group by value (Elements semantics). Manual ByParentRef / ByGroups (no TotalBy levels) is
-	//     the direct-config / unit-test path.
+	//   ByGroups / ByGroupsHierarchy → fold by the TotalBy LEVELS (in order). A SINGLE Hierarchy /
+	//     HierarchyOnly level on the source's OWN parent column unfolds as a real tree (BuildHierarchyTree,
+	//     row-keyed, no extra query — the fast path below); a multi-level or cross-catalog reference-
+	//     hierarchy unfold still needs the target catalog's rows, so those levels group by value
+	//     (Elements semantics). Manual ByParentRef / ByGroups (no TotalBy levels) is the direct-config /
+	//     unit-test path.
 	ibSelectorTree Build() const
 	{
 		if (m_kind == ibSelectKind::ibSelectKind_Direct)

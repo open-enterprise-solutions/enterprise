@@ -1379,10 +1379,10 @@ protected:
 	virtual bool DoDeserialize(const wxString& strValue);
 #pragma endregion
 private:
-	// Placed next to the two 1-byte scalars on purpose: it fills the
-	// alignment hole that would otherwise precede the 8-byte payload
-	// union. Declared here rather than at the end of the class so the
-	// reverse-padding word at the tail is reclaimed. See docs/value-audit.md.
+	// NOTE: this sits at the END of the class, so under MSVC's declaration-order
+	// layout it occupies the TAIL word — the intended repack next to the two
+	// 1-byte scalars (to fill the hole before the 8-aligned union) never
+	// happened, and that hole is still padding. See docs/value-audit.md.
 	// std::atomic (not wxAtomicInt) — same 4 bytes, but a defined memory
 	// model; part of the incremental wxBase→std migration. Never copied /
 	// moved: ibValue's copy/move ctors value-init it to 0, Copy/Move only

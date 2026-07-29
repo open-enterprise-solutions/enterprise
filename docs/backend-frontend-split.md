@@ -146,7 +146,7 @@ has no equivalent.
 
 5. **Backend knows frontend concepts via the interface.**
    `ibBackendValueForm::ShowForm(ibBackendMetaDocument* doc, ...)`
-   (`backend/backend_form.h:94`) takes the document as its parent — that
+   (`backend/backend_form.h:97`) takes the document as its parent — that
    document is really a frontend `ibFormVisualDocument`
    (`: ibDocument`, the in-tree doc/view fork — see
    [`docview-fork.md`](docview-fork.md), not stock `wxDocument`). The

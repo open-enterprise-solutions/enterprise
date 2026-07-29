@@ -185,13 +185,16 @@ handle. Avoids handle leak + invisible-second-attach surprise.
 the handle either way; preserving the old value risked double-free
 on a stray follow-up call).
 
-**`HoldRowLocks` / `TryProbeRowLock` outer-TX guards.** Both refuse
-when `IsActiveTransaction()` returns true — inner `BeginTransaction`
-would just bump the counter, leaving the actual SELECT WITH LOCK to
-run under the outer wait-mode TX. The lock would then live past
-`ReleaseRowLocks` and the probe would block instead of fail-fast.
-`ReleaseRowLocks` falls back to `RollBack` if `Commit` throws
-(otherwise a stuck commit would pin the cluster row).
+**`HoldRowLocks` / `TryProbeRowLock` / `ReleaseRowLocks` — REMOVED.** All three are gone
+from the tree (only retirement comments remain in `session/sessionRegistry.*` and
+`session/designerExclusivePolicy.*`); session liveness moved to a heartbeat on `lastActive`
+instead of a held row lock. See [session-registry.md](session-registry.md) §4.
+
+*Historical rationale, kept because the reasoning still applies to anything that takes a
+lock inside a wrapper:* both refused when `IsActiveTransaction()` returned true — an inner
+`BeginTransaction` would just bump the counter, leaving the actual SELECT WITH LOCK running
+under the outer wait-mode TX, so the lock would outlive the release and the probe would block
+instead of failing fast.
 
 ### `firebirdPreparedStatementWrapper.cpp`
 

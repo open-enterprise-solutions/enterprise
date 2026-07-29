@@ -288,7 +288,7 @@ keep ~10-20 lines of override hooks instead of full methods.
 
 ### Document — the tricky case
 
-`WriteObject(ibObjectMode writeMode, ibObjectMode postingMode)` takes
+`WriteObject(ibDocumentWriteMode writeMode, ibDocumentPostingMode postingMode)` takes
 args. Options:
 
 A. Member-store the args before calling `WriteObject()`:

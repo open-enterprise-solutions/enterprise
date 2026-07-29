@@ -28,7 +28,7 @@ always carry the runtime id into the web shim:
    scripts, metadata, `form->FindControlByID`, and therefore by
    the dispatcher when routing HTTP click/text/toggle events.
 2. **Web-local auto-id** — a process-wide `std::atomic<int>` inside
-   `ibWebWindow.cpp` starting at `1'000'000`. Kicks in only when
+   `web/webWindow.cpp` starting at `1'000'000`. Kicks in only when
    the ctor receives `id <= 0`. Range-disjoint from runtime ids so
    the two spaces never collide.
 

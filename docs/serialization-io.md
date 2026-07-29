@@ -15,7 +15,7 @@
 
 ## 1. Shape
 
-Four classes (`fs.h`, ~290 lines + `fs.cpp`, 396):
+Four classes (`fs.h`, 275 lines + `fs.cpp`, 396):
 
 ```cpp
 class BACKEND_API ibWriter        { … };   // abstract sink

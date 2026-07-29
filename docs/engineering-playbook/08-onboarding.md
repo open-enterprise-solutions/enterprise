@@ -25,7 +25,7 @@ A new team member should, within their first week:
 ### Install development tools
 
 **Supported platforms:**
-- **Windows** — primary platform, build via `enterprise.sln` (MSBuild/Visual Studio 2017+)
+- **Windows** — primary platform, build via `enterprise.sln` (MSBuild / Visual Studio 2022 — the projects pin toolset `v143`, which 2017/2019 cannot open without retargeting)
 - **macOS / Linux** — cross-platform target, build via CMake (created separately)
 
 **Windows (primary platform):**
@@ -188,7 +188,7 @@ cp config.ini.example config.ini
 ### Build with MSBuild (Windows — primary path)
 
 ```powershell
-# Open enterprise.sln in Visual Studio 2019/2022
+# Open enterprise.sln in Visual Studio 2022 (toolset v143)
 # Choose the configuration: Debug | x64
 
 # Or from the command line (Developer Command Prompt)

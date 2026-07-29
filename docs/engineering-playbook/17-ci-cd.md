@@ -1,5 +1,9 @@
 # 17. CI/CD
 
+> **Status: NOT WIRED — there is no `.github/` directory in the repo and no CI runs today.**
+> Everything below is a proposed pipeline; `scripts/build.ps1` / `scripts/package.ps1` /
+> `scripts/build-installer.ps1` do not exist either.
+>
 > **Reality check (verify against the repo before copying a snippet):**
 > - MSBuild output lands in `bin\<Platform>\<Configuration>\` where `Platform`
 >   is `Win32` (x86) or `Win64` (x64) — e.g. `bin\Win64\Release\`, **not**

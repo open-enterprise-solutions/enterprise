@@ -458,8 +458,8 @@ private:
 	// lock briefly — actual handlers execute outside the lock.
 	std::vector<ibRegistryRequest> DrainAll();
 
-	// Per-request handlers. All stubs for now; real impl lands with
-	// ibSessionTicket + Connect(req).
+	// Per-request handlers, executed on the registry thread outside the submit
+	// lock. See the Process* bodies in sessionRegistry.cpp.
 	void ProcessAdd(ibRegistryRequest& req);
 	void ProcessAttach(ibRegistryRequest& req);
 	void ProcessDetach(ibRegistryRequest& req);
@@ -476,9 +476,8 @@ private:
 	// returned Timeout.
 	void DrainPendingExclusive();
 
-	// Periodic jobs. Real impl ports `Job_*` from appDataQuery.cpp in a
-	// follow-up; current bodies are placeholders that simply bump the
-	// tick counter.
+	// Periodic jobs, driven from ThreadBody: refresh/heartbeat every 1 s,
+	// stale sweep every 3 s (kRefreshInterval / kSweepInterval).
 	void JobSweepStale();
 	void JobRefreshSnapshot();
 

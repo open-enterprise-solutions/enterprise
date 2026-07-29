@@ -51,8 +51,9 @@ enum class ibMetaDiffStatus {
 	Reordered,
 
 	// Paired by GUID, but CompareObject returned false at this node OR a
-	// descendant differs. Object-level granularity — V1 doesn't break the
-	// status down per-property. Changed dominates Reordered and Same when
+	// descendant differs. The NODE's status is object-level, but the synthetic
+	// Properties group beneath it (g_diffPropertiesGroupClsid, above) carries a
+	// per-property status row. Changed dominates Reordered and Same when
 	// rolled up.
 	Changed,
 

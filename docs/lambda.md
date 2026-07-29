@@ -273,10 +273,12 @@ Name-keyed lookups in `m_listFunc` (`FindFunction`, `FindMethod`,
 ## AOT format
 
 Bumped to **v5** (2026-05-10 PM) at the lambda landing; current
-format version in tree is **v14** (`byteCodeAOT.cpp::kAOTFormatVersion`)
+format version in tree is **v18** (`byteCodeAOT.cpp::kAOTFormatVersion`)
 after subsequent bumps for closure capture (v10), a CLSID encoding
-switch (v12), and the LINQ push-down lambda-AST payload (v14). Always
-read the constant from the source file rather than this prose.
+switch (v12), the LINQ push-down lambda-AST payload (v14), kind-typed
+CLSIDs (16), the `restrict`-pushdown-AST fix (17) and the shortLet
+peephole (18). Always read the constant from the source file rather
+than this prose — it drifts every few commits.
 v3→v4 added the `m_param2` arg-count stamp on
 `OPER_CALL_LAMBDA`; v4→v5 swapped the lambda metadata model from
 inline `ibLambdaInfo` (operand-resident: paramCount/varCount/bCodeRet
@@ -292,7 +294,7 @@ Backend / compiler:
 
 - `src/engine/backend/compiler/codeDef.h` — 3 live lambda opcodes (`OPER_LFUNC`, `OPER_ENDLFUNC`, `OPER_CALL_LAMBDA`); the earlier `OPER_FUNC_PTR` materialise opcode is gone (`OPER_LFUNC` absorbed value-materialisation)
 - `src/engine/backend/compiler/byteCode.h` — `ibFnKind::Lambda` enum + `IsLambda()` helper, `IsCrossBcVisible()` filter
-- `src/engine/backend/compiler/byteCodeAOT.cpp` — AOT format (v14 in tree)
+- `src/engine/backend/compiler/byteCodeAOT.cpp` — AOT format (read `kAOTFormatVersion`; v18 in tree)
 - `src/engine/backend/compiler/compileContext.h` — `RETURN_LAMBDA_FUNCTION` / `RETURN_LAMBDA_PROCEDURE` enum kinds
 - `src/engine/backend/compiler/compileContext.cpp` — lambda body scope discipline + rootCtx fallback for Context bindings
 - `src/engine/backend/compiler/compileCode.h` — split helper decls (`ParseFunctionSignature`, `EmitFunctionBody`, `CompileLambdaExpression`)

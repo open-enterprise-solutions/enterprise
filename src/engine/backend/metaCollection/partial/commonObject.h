@@ -1778,8 +1778,9 @@ protected:
 	// the middle threw, scope's RAII rollback fires automatically and
 	// Commit*Scope never runs.
 	//
-	// Document keeps its inline scaffold (writeMode/postingMode args +
-	// register-cascade state machine) — Phase B may promote it.
+	// Document's (writeMode, postingMode) scaffold + register-cascade state
+	// machine were PROMOTED onto ibValueRecordDataObjectRecorderRef, built on
+	// these same Begin/Commit helpers (bodies in commonObject.cpp).
 	// Constants stay inline (single use, single file).
 	bool BeginWriteScope (ibConnectionScope& scope);
 	bool BeginDeleteScope(ibConnectionScope& scope);
@@ -1876,9 +1877,9 @@ public:
 	// ResetUniqueIdentifier / SaveData / DeleteData / metaobject's
 	// FindPredefinedValue / IsNewObject.
 	//
-	// Document keeps its inline scaffold (writeMode/postingMode args +
-	// posting state machine + register cascade). Promoting it to a
-	// hook-based extension of this scaffold is Phase C.
+	// Document's (writeMode, postingMode) scaffold + posting state machine +
+	// register cascade now live on ibValueRecordDataObjectRecorderRef, as a
+	// hook-based extension of this one — the promotion is done, not pending.
 	virtual bool WriteObject()  override;
 	virtual bool DeleteObject() override;
 

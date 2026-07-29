@@ -49,9 +49,11 @@ public:
 	// tables on resolvable (explicit OR reference-derived) single-field keys, every output column
 	// owned by a leaf? When true the whole join runs in ONE server-side SELECT (the DBMS does the
 	// join + the cross-table filter; reference / enum / variant outputs reconstruct via the full
-	// spread). Outside this shape (self-join, a computed/temp leaf, row-key conditions, dot-walk,
-	// key-in, an aggregate terminal) stays the composer's RAM path — a co-location FAST PATH, not a
-	// replacement. BACKEND_API on the gates so the routing decision is unit-testable across the DLL.
+	// spread). Outside this shape (self-join, a RAM-computed leaf, row-key conditions, dot-walk,
+	// key-in) stays the composer's RAM path — a co-location FAST PATH, not a replacement. Note a DB
+	// TEMP leaf co-locates like any real table (ibDbTempTableQueryable does not override GetProvider),
+	// and an aggregate terminal routes to the sibling gate CanColocateAggregate, not to RAM.
+	// BACKEND_API on the gates so the routing decision is unit-testable across the DLL.
 	static BACKEND_API bool  CanColocateJoin(const ibDataQuerySpec& spec);
 	static ibDataQueryResult ExecuteColocatedJoin(const ibDataQuerySpec& spec, const ibReadPageRequest& page);
 

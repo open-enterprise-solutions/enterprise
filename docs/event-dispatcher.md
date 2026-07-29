@@ -130,8 +130,9 @@ Handler = ThisForm.OnChange;   // the function value (a lambda) or the named-eve
 ```
 
 The lambda is the **easy subset** of the language's anonymous functions: it compiles as a top-level callable with the
-event's parameter signature plus `ThisForm` context, so it needs **no closure capture** (the one thing lambdas don't yet
-support — see [lambda.md](lambda.md)).
+event's parameter signature plus `ThisForm` context, so it needs **no closure capture** — though closure capture is
+itself available since 2026-05-12 (see [lambda.md](lambda.md), [closure-capture.md](closure-capture.md)); the event
+lambda simply does not depend on it.
 
 ---
 
