@@ -1,5 +1,5 @@
 #include "metaResourceObject.h"
-#include "backend/metadata.h"
+#include "backend/metaData.h"
 
 
 ibSelectorDataType ibValueMetaObjectResource::GetFilterDataType() const

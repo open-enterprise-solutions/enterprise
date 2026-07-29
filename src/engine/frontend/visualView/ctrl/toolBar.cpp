@@ -1,4 +1,4 @@
-#include "toolbar.h"
+#include "toolBar.h"
 #include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "frontend/visualView/visualHostClient.h"
 #ifdef OES_USE_WEB

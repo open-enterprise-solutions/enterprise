@@ -3,7 +3,7 @@
 //	Description : simple grid
 ////////////////////////////////////////////////////////////////////////////
 
-#include "valuegrid.h"
+#include "valueGrid.h"
 #include "utils/stringUtils.h"
 
 #include "frontend/grid/gridCommon.h"

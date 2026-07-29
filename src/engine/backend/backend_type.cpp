@@ -65,7 +65,7 @@ ibValue ibBackendTypeConfigFactory::CreateValue() const
 	return refData;
 }
 
-#include "backend/metadata.h"
+#include "backend/metaData.h"
 #include "backend/objCtor.h"
 
 ibValue* ibBackendTypeConfigFactory::CreateValueRef() const

@@ -5,7 +5,7 @@
 #include <wx/hashset.h>
 #include <wx/vlbox.h>
 #include <wx/listctrl.h>
-#include "wx/toplevel.h"
+#include "wx/topLevel.h"
 #include <wx/tokenzr.h>
 #include <wx/renderer.h>
 #include <wx/wupdlock.h>

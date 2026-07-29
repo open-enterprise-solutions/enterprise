@@ -20,7 +20,7 @@
 #include "templates/docViewConfigCompare.h"
 
 //files
-#include "templates/docViewdataProcessorFile.h"
+#include "templates/docViewDataProcessorFile.h"
 #include "templates/docViewDataReportFile.h"
 #include "templates/docViewMetaFile.h"
 

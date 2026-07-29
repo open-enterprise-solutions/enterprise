@@ -3,7 +3,7 @@
 //	Description : OLE-supporter
 ////////////////////////////////////////////////////////////////////////////
 
-#include "valueole.h"
+#include "valueOLE.h"
 #include "backend/backend_exception.h"
 #include "backend/appData.h"
 

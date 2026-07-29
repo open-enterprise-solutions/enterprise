@@ -385,7 +385,7 @@ public:
 	//Check is full access 
 	virtual bool IsFullAccess() const { return true; }
 
-	//associate this metaData with 
+	//associate this metaData with the designer's metadata tree (null outside the designer)
 	virtual ibBackendMetadataTree* GetMetaTree() const { return m_metaTree; }
 	virtual void SetMetaTree(ibBackendMetadataTree* metaTree) { m_metaTree = metaTree; }
 

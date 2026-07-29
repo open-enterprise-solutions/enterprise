@@ -27,7 +27,7 @@ public:
 	}
 }g_chartOfCharacteristicTypesLoader;
 
-#include "backend/metadata.h"
+#include "backend/metaData.h"
 
 void ibPGChartOfCharacteristicTypesProperty::FillByClsid(const ibClassID& clsid)
 {

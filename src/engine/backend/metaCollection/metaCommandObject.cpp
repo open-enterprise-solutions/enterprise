@@ -1,6 +1,6 @@
 #include "metaCommandObject.h"
 
-#include "backend/metadata.h"                       // ibMetaData::GetAnyArrayObject
+#include "backend/metaData.h"                       // ibMetaData::GetAnyArrayObject
 #include "backend/session/session.h"                // ibSession::EditModuleManagerFor
 #include "backend/moduleManager/moduleManager.h"    // ibValueModuleManager (descriptor scope parent)
 #include "backend/backend_form.h"                   // ibBackendValueForm + formWrapper::cast_value

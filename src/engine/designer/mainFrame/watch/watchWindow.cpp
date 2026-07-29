@@ -3,7 +3,7 @@
 //	Description : watch window
 ////////////////////////////////////////////////////////////////////////////
 
-#include "watchwindow.h"
+#include "watchWindow.h"
 #include "watchdroptarget.h"
 
 #include "backend/debugger/debugClient.h"

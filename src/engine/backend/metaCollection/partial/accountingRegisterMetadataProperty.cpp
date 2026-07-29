@@ -1,5 +1,5 @@
 #include "accountingRegister.h"
-#include "backend/metadata.h"
+#include "backend/metaData.h"
 #include "backend/objCtor.h"
 
 void ibValueMetaObjectAccountingRegister::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)

@@ -32,7 +32,7 @@ bool ibValueArray::Init(ibValue** paParams, const long lSizeArray)
 	return false;
 }
 
-#include "appdata.h"
+#include "appData.h"
 
 void ibValueArray::CheckIndex(unsigned int index) const //array index must start from 1
 {

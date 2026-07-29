@@ -1,4 +1,4 @@
-#include "gridbox.h"
+#include "gridBox.h"
 #include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 
 //***********************************************************************************

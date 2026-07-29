@@ -1,4 +1,4 @@
-#include "toolbar.h"
+#include "toolBar.h"
 #include "backend/metaCollection/partial/commonObject.h"
 #include "frontend/visualView/visualHostClient.h"
 

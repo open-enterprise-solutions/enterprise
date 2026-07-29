@@ -1,6 +1,6 @@
 #include "widgets.h"
 #ifndef OES_USE_WEB
-#include "frontend/win/ctrls/controltextEditor.h"
+#include "frontend/win/ctrls/controlTextEditor.h"
 #endif
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/metaData.h"

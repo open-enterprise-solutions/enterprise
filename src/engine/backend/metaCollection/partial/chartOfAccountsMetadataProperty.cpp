@@ -1,5 +1,5 @@
 #include "chartOfAccounts.h"
-#include "backend/metadata.h"
+#include "backend/metaData.h"
 #include "backend/objCtor.h"
 
 void ibValueMetaObjectChartOfAccounts::OnPropertyCreated(ibProperty* property)

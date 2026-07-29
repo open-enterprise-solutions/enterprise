@@ -37,7 +37,7 @@ bool ibPGHyperLinkProperty::StringToValue(wxVariant& variant,
 	return false;
 }
 
-#include "backend/metadata.h"
+#include "backend/metaData.h"
 
 void ibPGHyperLinkProperty::OnSetValue()
 {

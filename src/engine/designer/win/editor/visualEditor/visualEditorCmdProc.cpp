@@ -18,7 +18,7 @@
 #include "backend/srcDataObject.h"                     // ibSourceExplorer — resolve a dropped path's leaf type -> control class
 #include "frontend/visualView/layers/commandBar.h"     // ibValueCommandBar / ibValueCommandBarItem — a command dropped on a tablebox becomes a bar item
 #include "frontend/visualView/ctrl/widgets.h"           // ibValueButton — a command dropped on the form becomes a bound Button control
-#include "backend/metadata.h"                           // ibMetaData::FindAnyObjectByFilter — name the button after the command
+#include "backend/metaData.h"                           // ibMetaData::FindAnyObjectByFilter — name the button after the command
 #include <wx/app.h>                                     // wxTheApp->CallAfter — defer a grid drop out of the OS drop callback
 
 void ibVisualEditorNotebook::ibVisualEditor::Execute(ibVisualEditorCmd* cmd)

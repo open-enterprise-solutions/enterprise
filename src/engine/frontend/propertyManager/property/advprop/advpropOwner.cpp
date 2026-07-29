@@ -26,7 +26,7 @@ public:
 	}
 }g_ownerLoader;
 
-#include "backend/metadata.h"
+#include "backend/metaData.h"
 
 void ibPGOwnerProperty::FillByClsid(const ibClassID& clsid)
 {

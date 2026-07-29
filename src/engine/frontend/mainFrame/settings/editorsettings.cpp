@@ -1,6 +1,6 @@
 
 #include "editorsettings.h"
-#include "XmlUtility.h"
+#include "xmlutility.h"
 
 #include <wx/wx.h>
 #include <wx/xml/xml.h>

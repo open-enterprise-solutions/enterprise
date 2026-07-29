@@ -262,7 +262,7 @@ void wxAuiDocDesignerMDIFrame::OnDebugEvent(wxDebugEvent& event)
 	}
 }
 
-#include "metadata.h"
+#include "metaData.h"
 
 void wxAuiDocDesignerMDIFrame::OnToolbarClicked(wxEvent& event)
 {

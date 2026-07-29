@@ -5,7 +5,7 @@
 
 #include <memory>
 
-#include "backend/metadata.h"
+#include "backend/metaData.h"
 #include "backend/appData.h"
 #include "backend/appEnv.h"   // appEnv::ActiveMetaData accessor
 #include "backend/query/structureBuilder.h"   // ibStructureBuilder — the config-save structure subsystem (member)

@@ -1,4 +1,4 @@
-#include "metadata.h"
+#include "metaData.h"
 
 wxString ibMetaData::Serialize(const ibValue& cValue)
 {

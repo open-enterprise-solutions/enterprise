@@ -10,7 +10,7 @@
 //*                           Metamodule                                *
 //***********************************************************************
 
-#include "backend/metadata.h"
+#include "backend/metaData.h"
 
 bool ibValueMetaObjectLanguage::IsValidCode(const wxString& strLangCode)
 {

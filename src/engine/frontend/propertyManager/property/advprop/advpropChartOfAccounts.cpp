@@ -27,7 +27,7 @@ public:
 	}
 }g_chartOfAccountsLoader;
 
-#include "backend/metadata.h"
+#include "backend/metaData.h"
 
 void ibPGChartOfAccountsProperty::FillByClsid(const ibClassID& clsid)
 {

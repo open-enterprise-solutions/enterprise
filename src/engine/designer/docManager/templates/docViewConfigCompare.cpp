@@ -4,7 +4,7 @@
 #include "backend/fileSystem/fs.h"
 #include "backend/metaCollection/metaDiff.h"
 #include "backend/metaCollection/metaObject.h"
-#include "backend/metadata.h"
+#include "backend/metaData.h"
 
 #include "frontend/win/ctrls/dataview/dataview.h"
 #include "frontend/win/theme/luna_toolbarart.h"

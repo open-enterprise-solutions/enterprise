@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "mainFrameDesigner.h"
-#include "theme/statusbar.h"
+#include "theme/statusBar.h"
 #include "frontend/metatree/metatreeWnd.h"
 
 #include "frontend/artProvider/artProvider.h"

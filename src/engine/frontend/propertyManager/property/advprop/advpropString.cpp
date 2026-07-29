@@ -140,7 +140,7 @@ bool wxTStringProperty::StringToValue(wxVariant& variant, const wxString& text, 
 	return true;
 }
 
-#include "backend/metadata.h"
+#include "backend/metaData.h"
 #include "backend/metaCollection/metaLanguageObject.h"
 
 bool wxTStringProperty::DisplayEditorDialog(wxPropertyGrid* pg, wxVariant& value)

@@ -39,7 +39,7 @@ wxPGChoices ibPGTypeProperty::GetDateTime()
 	return choices;
 }
 
-#include "backend/metadata.h"
+#include "backend/metaData.h"
 #include "backend/objCtor.h"
 
 void ibPGTypeProperty::FillByClsid(const ibSelectorDataType& selectorDataType, const ibClassID& clsid)

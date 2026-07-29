@@ -1,5 +1,5 @@
 #include "chartOfCharacteristicTypes.h"
-#include "backend/metadata.h"
+#include "backend/metaData.h"
 #include "backend/objCtor.h"
 
 void ibValueMetaObjectChartOfCharacteristicTypes::OnPropertyCreated(ibProperty* property)

@@ -252,7 +252,7 @@
     <ClInclude Include="metaCollection\resource\metaResourceObject.h" />
     <ClInclude Include="metaCollection\table\metaTableObject.h" />
     <ClInclude Include="metaCtor.h" />
-    <ClInclude Include="metadata.h" />
+    <ClInclude Include="metaData.h" />
     <ClInclude Include="metadataConfiguration.h" />
     <ClInclude Include="metadataDataProcessor.h" />
     <ClInclude Include="metadataReport.h" />
@@ -646,7 +646,7 @@
     <ClCompile Include="metaCollection\table\metaTableObject.cpp" />
     <ClCompile Include="metaCollection\table\metaTableObjectProperty.cpp" />
     <ClCompile Include="metaCollection\table\metaTableObject_res.cpp" />
-    <ClCompile Include="metadata.cpp" />
+    <ClCompile Include="metaData.cpp" />
     <ClCompile Include="metadataConfiguration.cpp" />
     <ClCompile Include="metadataConfigurationQuery.cpp" />
     <ClCompile Include="metadataDataProcessor.cpp" />

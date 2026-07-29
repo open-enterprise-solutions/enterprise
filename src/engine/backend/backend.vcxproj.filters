@@ -4,7 +4,7 @@
     <ClInclude Include="backend.h" />
     <ClInclude Include="backend_form.h" />
     <ClInclude Include="metaCtor.h" />
-    <ClInclude Include="metadata.h" />
+    <ClInclude Include="metaData.h" />
     <ClInclude Include="backend_metatree.h" />
     <ClInclude Include="objCtor.h" />
     <ClInclude Include="debugger\debugClient.h">
@@ -787,7 +787,7 @@
   <ItemGroup>
     <ClCompile Include="backend.cpp" />
     <ClCompile Include="backend_form.cpp" />
-    <ClCompile Include="metadata.cpp" />
+    <ClCompile Include="metaData.cpp" />
     <ClCompile Include="metadataFactory.cpp" />
     <ClCompile Include="objCtor.cpp" />
     <ClCompile Include="debugger\debugClient.cpp">

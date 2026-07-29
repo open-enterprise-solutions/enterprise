@@ -5,7 +5,7 @@
 #include "backend/serialize/dataBuilder.h"     // ibDataNode (layer -> node)
 #include "backend/metaCollection/genericData.h"  // ibValueMetaObjectGenericData::GetCommandArrayObject — the owner object's own commands
 #include "backend/metaCollection/metaCommandObject.h" // ibValueMetaObjectCommand::GetModifiesData (view-only greying)
-#include "backend/metadata.h"                   // ibMetaData::FindAnyObjectByFilter
+#include "backend/metaData.h"                   // ibMetaData::FindAnyObjectByFilter
 #include "frontend/visualView/ctrl/typeControl.h" // ibTypeControlFactory::GetSourceDesc — find the control a table-command's source hop points at
 #include "backend/sourceDescription.h"          // ibSourceHop — the bound control's source path (source-hop match)
 #include "backend/metaCollection/metaObject.h"  // g_metaCommandCLSID — general (root) commands

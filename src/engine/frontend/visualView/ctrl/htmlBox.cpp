@@ -1,4 +1,4 @@
-#include "htmlbox.h"
+#include "htmlBox.h"
 #include "backend/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 
 //***********************************************************************************

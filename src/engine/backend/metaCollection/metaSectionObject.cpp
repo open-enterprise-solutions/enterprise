@@ -15,7 +15,7 @@ ibValueMetaObjectSection::ibValueMetaObjectSection(const wxString& name, const w
 {
 }
 
-#include "backend/metadata.h"
+#include "backend/metaData.h"
 
 bool ibValueMetaObjectSection::GetInterfaceItemArrayObject(ibInterfaceCommandSection cmdSection,
 	std::vector<ibValueMetaObject*>& array) const

@@ -1,4 +1,4 @@
-#include "controltextEditor.h"
+#include "controlTextEditor.h"
 
 #include <wx/dcbuffer.h>
 #include <wx/dcscreen.h>

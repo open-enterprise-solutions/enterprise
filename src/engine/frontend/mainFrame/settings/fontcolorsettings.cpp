@@ -1,6 +1,6 @@
 
 #include "fontcolorsettings.h"
-#include "XmlUtility.h"
+#include "xmlutility.h"
 
 #include <wx/xml/xml.h>
 

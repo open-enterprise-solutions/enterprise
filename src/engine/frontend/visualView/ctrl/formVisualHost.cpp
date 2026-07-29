@@ -9,7 +9,7 @@
 #include "backend/metaCollection/partial/commonObject.h"
 #include "frontend/visualView/visualHostClient.h"
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject::ConvertToMetaIds (main attr Type -> object)
-#include "backend/metadata.h"                                      // FindAnyObjectByFilter (resolve the object metaobject)
+#include "backend/metaData.h"                                      // FindAnyObjectByFilter (resolve the object metaobject)
 #include "backend/metaCollection/metaCommandObject.h"              // ibValueMetaObjectCommand — command-capable leaf (GetCommandByHop)
 #include "backend/metaCollection/metaObject.h"                     // g_metaCommonCommandCLSID / g_metaCommandCLSID
 
