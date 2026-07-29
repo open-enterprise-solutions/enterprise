@@ -141,17 +141,27 @@ bool ibValueMetaObjectConfiguration::OnBeforeRunMetaObject(int flags)
 	return ibValueMetaObject::OnBeforeRunMetaObject(flags);
 }
 
-bool ibValueMetaObjectConfiguration::OnAfterCloseMetaObject()
+bool ibValueMetaObjectConfiguration::OnBeforeCloseMetaObject()
 {
-	if (!(*m_propertyModuleConfiguration)->OnAfterCloseMetaObject())
-		return false;
-
+	// CLOSE-BEFORE unloads forms and MODULES — the configuration module goes here,
+	// alongside the form's RemoveCompileModule and the common module's
+	// RemoveCommonModule. It used to run in CLOSE-AFTER, which dropped the module
+	// before the un-register phase could still reach it.
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		if (!cc->RemoveCompileModule(m_propertyModuleConfiguration->GetMetaObject()))
 			return false;
 		// Holder teardown (DestroyMainModule) is driven by CloseDatabase, symmetric
 		// with the RunDatabase start — not here.
 	}
+
+	return ibValueMetaObject::OnBeforeCloseMetaObject();
+}
+
+bool ibValueMetaObjectConfiguration::OnAfterCloseMetaObject()
+{
+	// CLOSE-AFTER un-registers the runtime only.
+	if (!(*m_propertyModuleConfiguration)->OnAfterCloseMetaObject())
+		return false;
 
 	return ibValueMetaObject::OnAfterCloseMetaObject();
 }

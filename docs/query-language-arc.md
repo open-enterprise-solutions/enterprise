@@ -1458,10 +1458,26 @@ no separate method). No adapter in the builder — the attribute carries the col
 identity directly. It lives in its own light header so the fundamental attribute
 class does not drag in the full `queryable.h` / `model.h` weight.
 
-A **constant** is therefore both: a column (it derives `ibValueMetaObjectAttribute`)
-**and** a queryable (`ibValueMetaObjectConstant` now also derives
-`ibBackendQueryable` for its single-row `sys_const` table). `GetConstValue` reads
-through the door — column detail = the attribute, table detail = the queryable.
+A **constant** used to be both: a column (it derived `ibValueMetaObjectAttribute`) **and** the
+single-row `sys_const` table it lives in. **It is neither now — it HAS both (2026-07-29).** The
+table face moved out first (a vended `ibConstantQueryable`), and the column face followed: a nested
+`ibValueMetaObjectConstantColumn`, reachable only through `GetValueColumn()`. `GetConstValue` still
+reads through the door — column detail = the nested column, table detail = the queryable.
+
+Being both was not a shortcut, it was a contradiction, and it was paid for at the form layer. Every
+form asks its source for a `CompositeData` (`srcObject.h`), which a constant-as-attribute is not, so
+the object half was produced by C-casting the constant into an unrelated class — a
+`reinterpret_cast` whose virtual calls landed in a foreign vtable. The visible symptom was a
+constant opening READ-ONLY under full rights (`AccessRight_Modify` read out of a wrong slot); the
+invisible one was that it could have jumped anywhere. `ibValueMetaObjectConstant` now derives
+`ibValueMetaObjectGenericData` and answers the composite questions itself: one attribute, and it is
+its value column.
+
+Two invariants hold the physical schema still, and both live on the nested column: `GetColumnId()`
+returns the CONSTANT's metaID (columns are matched baseline↔target by id, so an id of its own would
+read as drop-plus-add and empty every constant), and `GetPhysicalName()` keeps the `fld<metaID>`
+rule keyed on the same id. The type stays a property of the constant — the column reads it back — so
+what the user edits and what the DDL renders remain one value.
 
 ### 21.7 NEXT (after a green build) — the provider seam
 

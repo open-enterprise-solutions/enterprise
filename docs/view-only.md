@@ -56,6 +56,16 @@ Each metaobject maps Modify to its own concrete right:
 - a record / register / constant → its `Write` role (a read-only role denies it);
 - a form metaobject → its `Use` right.
 
+**The constant reached this list late, and the way it failed is worth keeping (2026-07-29).** It was
+an ATTRIBUTE, not a `GenericData`, so it could not answer `AccessRight_Modify` at all — and instead
+of that showing up as a compile error, the object half was produced by casting the constant into an
+unrelated class. The call landed in a foreign vtable and returned whatever was in that slot, so a
+constant opened READ-ONLY for a user with full rights. Two properties of the failure are the lesson:
+it looked like a rights problem while no right was ever consulted, and the form had no second gate
+to fall back on (a constant has no form metaobject, so the first gate is always empty). The constant
+is now a `GenericData` that maps Modify onto its own `Write` role, with the value living in a nested
+column — see `query-language-arc.md §21.6`.
+
 Virtual on the base so a form reads it without knowing the concrete type. The backend write
 path already gates on the SAME `Write` role, so UI view-only and the write-time
 `ibBackendAccessException` agree.

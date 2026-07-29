@@ -8,13 +8,14 @@ class ibStructureBatch;   // per-table DDL/seed batch — ProcessAttribute pours
 
 // ibConstantQueryable — the L3 queryable for a constant (its single-row sys_const
 // table). The constant no longer IS a queryable; it VENDS this adapter (a stable
-// member), which forwards to the constant's own query methods. The constant is still
-// a COLUMN (via ibValueMetaObjectAttribute); only the table face moved out.
+// member), which forwards to the constant's own query methods. Nor is the constant a
+// COLUMN any more: it HAS one (ibValueMetaObjectConstantColumn, nested below), and
+// this queryable resolves its single column to it.
 class ibValueMetaObjectConstant;
 class BACKEND_API ibConstantQueryable : public ibBackendQueryable {
 public:
 	explicit ibConstantQueryable(const ibValueMetaObjectConstant* meta) : m_meta(meta) {}
-	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override;   // the constant IS its one column
+	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override;   // -> the constant's value column
 	virtual wxString GetQueryTableName() const override;
 	virtual ibGuid GetQueryTableGuid() const override;
 	virtual ibMetaID GetQueryTableId() const override;
@@ -26,16 +27,102 @@ private:
 };
 
 class BACKEND_API ibValueMetaObjectConstant :
-	public ibValueMetaObjectAttribute, public ibBackendCommandItem, public ibBackendQueryableHolder {
+	public ibValueMetaObjectGenericData, public ibBackendTypeConfigFactory, public ibBackendQueryableHolder {
 	public:
 
-	// A constant is BOTH a column (via ibValueMetaObjectAttribute -> the value lives as
-	// one column of the shared single-row sys_const) AND, through its vended queryable,
-	// that one-row table. The constant VENDS the queryable; ibConstantQueryable (a
-	// friend) owns the table navigation, from the constant's primitives (GetName /
-	// GetMetaID / GetPhysicalTableName). So From(constant->GetQueryable()) reads the one row.
+	// ============================================================================
+	// The constant's VALUE COLUMN — the physical half of a constant, and nothing else.
+	//
+	// A constant lives as ONE COLUMN of the shared single-row sys_const, and that used to be said by
+	// making the constant itself an attribute. It made the constant a column and an object at once,
+	// and it cannot be both: every form asks its source for a CompositeData (srcObject.h), so the
+	// object half was produced by CASTING the constant into a class it does not derive from. The
+	// virtual calls that followed landed in a foreign vtable — which is why a fully privileged user
+	// got a read-only form, and why the same cast could just as well have jumped anywhere.
+	//
+	// So the column moves INSIDE. It owns NOTHING: name, id and type all come from the constant, so
+	// the column the schema differ sees is the same column it saw before, merely described by a
+	// different object. That is what keeps sys_const unchanged — no rename, no re-add, no migration.
+	//
+	// The id delegation is not a detail. Columns are matched between the baseline and the target BY
+	// ID (schemaSnapshot.h), so a column with an id of its own would read as "the old one vanished,
+	// a new one appeared" — a DROP plus an ADD, which silently empties every constant in the base.
+	// ============================================================================
+	class BACKEND_API ibValueMetaObjectConstantColumn : public ibValueMetaObjectAttributeBase {
+	public:
+		explicit ibValueMetaObjectConstantColumn(ibValueMetaObjectConstant* owner = nullptr)
+			: ibValueMetaObjectAttributeBase(), m_owner(owner) {
+		}
+
+		virtual wxString GetName() const { return m_owner != nullptr ? m_owner->GetName() : wxEmptyString; }
+
+		// The SYNONYM has to be delegated explicitly, and the reason is a trap worth naming: the base
+		// derives it from GetName(), but ibValueMetaObject::GetName() is NOT virtual — only the query
+		// column's is. So the base reads its OWN empty name, generates an empty synonym from it, and
+		// the form loses the field's caption while everything else keeps working.
+		virtual wxString GetSynonym() const override { return m_owner != nullptr ? m_owner->GetSynonym() : wxEmptyString; }
+
+		// `fld<metaID>` — the SAME rule the attribute base applied when the constant itself was the
+		// column, keyed on the CONSTANT's id. This is the second half of "sys_const does not move":
+		// the id decides which column the differ matches, the name decides which field it renders.
+		virtual wxString GetPhysicalName() const override {
+			return m_owner != nullptr ? wxString::Format(wxT("fld%i"), m_owner->GetMetaID()) : wxEmptyString;
+		}
+		virtual ibMetaID GetColumnId() const override { return m_owner != nullptr ? m_owner->GetMetaID() : 0; }
+		virtual ibTypeDescription& GetTypeDesc() const override { return m_owner->GetTypeDesc(); }
+		virtual bool FillCheck() const override { return m_owner != nullptr && m_owner->FillCheck(); }
+
+	private:
+		ibValueMetaObjectConstant* m_owner;
+	};
+
+	// A constant VENDS its queryable — the single-row sys_const table. ibConstantQueryable (a friend)
+	// owns the table navigation, built from the constant's primitives (GetName / GetMetaID /
+	// GetPhysicalTableName), and resolves the one column to the value column above. So
+	// From(constant->GetQueryable()) reads the one row.
 	virtual const ibBackendQueryable* GetQueryable() const override { return m_queryable.GetQueryable(); }
 	friend class ibConstantQueryable;
+
+	const ibValueMetaObjectConstantColumn* GetValueColumn() const { return m_column; }
+
+	// --- the composite face — answered directly now, with no cast anywhere --------------------
+	//
+	// Show / Modify map onto the constant's own Read / Write roles, which is the whole question the
+	// form was asking and could not get an answer to. The attribute list holds exactly one entry:
+	// the value column. A constant IS an object with one attribute — that is the honest shape.
+	virtual bool AccessRight_Show() const override { return AccessRight_Read(); }
+	virtual bool AccessRight_Modify() const override { return AccessRight_Write(); }
+
+	// Two bases declare GetMetaData — the metaobject (which HAS one) and the type factory (which
+	// only needs to READ one, and declares it pure). One definition per signature answers both: a
+	// using-declaration would not, since it makes a name visible without implementing anything, and
+	// the class stays abstract.
+	virtual const ibMetaData* GetMetaData() const override { return m_metaData; }
+	virtual ibMetaData* GetMetaData() override { return m_metaData; }
+
+	virtual std::vector<ibValueMetaObjectAttributeBase*> GetGenericAttributeArrayObject(
+		std::vector<ibValueMetaObjectAttributeBase*>& array) const override {
+		array.push_back(m_column);
+		return array;
+	}
+
+	// Hosts no children of its own. A constant carries a module (a predefined child, not a tree
+	// node) and nothing else — no forms, no templates, no commands. Left at GenericData's default
+	// it would start admitting them, which changes the designer tree rather than fixing a cast.
+	virtual ibClassID ResolveChild(const ibClassID&) const override { return 0; }
+
+	// The form is built on the fly from the source (see GetObjectForm) — a constant has no form
+	// metaobject, so there is no form KIND to list either.
+	virtual ibFormTypeList GetFormType() const override { return ibFormTypeList(); }
+
+	// --- the type facade — it stayed HERE, which is what the user edits ------------------------
+	//
+	// The type is the constant's own property, exactly as it was when the constant was an attribute:
+	// same property class, same editor, same place in the inspector. The value column reads it back
+	// through GetTypeDesc, so the type the user picks and the type the DDL renders are one value,
+	// not two that have to be kept in step.
+	virtual ibTypeDescription& GetTypeDesc() const override { return m_propertyType->GetValueAsTypeDesc(); }
+	virtual bool FillCheck() const { return m_propertyFillCheck->GetValueAsBoolean() && GetTypeDesc().GetClsidCount() > 0; }
 
 
 protected:
@@ -79,7 +166,14 @@ public:
 	//create empty object
 	virtual ibValueRecordDataObjectConstant* CreateRecordDataObjectValue() const;
 
-	//support form 
+	// GenericData's contract. A constant DOES have a manager (ibValueManagerDataObjectConstant), but
+	// it is built by the constant's own type ctor (constantCtor.h) and descends from
+	// ibValueManagerObject rather than from ibValueManagerDataObject — a single global value has no
+	// record-collection surface to offer. Answering nullptr says exactly that; wiring the existing
+	// manager in here would mean promoting it to a base whose methods it cannot honour.
+	virtual ibValueManagerDataObject* CreateManagerDataObjectValue() const override { return nullptr; }
+
+	//support form
 	virtual ibBackendValueForm* GetObjectForm() const;
 
 	//create constant table  
@@ -121,6 +215,17 @@ protected:
 private:
 
 	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyModule = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("RecordModule"), _("Record module"));
+
+	// The VALUE properties — moved here from the attribute base the constant used to inherit. They
+	// are what the user edits, so they belong on the object the designer shows, and the inner column
+	// reads them back rather than holding a second copy.
+	ibPropertyCategory* m_categoryValue = ibPropertyObject::CreatePropertyCategory(wxT("Value"), _("Value"));
+	ibPropertyType* m_propertyType = ibPropertyObject::CreateProperty<ibPropertyType>(m_categoryValue, wxT("Type"), _("Type"), ibValueTypes::TYPE_STRING);
+	ibPropertyBoolean* m_propertyFillCheck = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryValue, wxT("FillCheck"), _("Fill check"));
+
+	// The one column of sys_const — a predefined child, created with the constant and reachable only
+	// through it. No metaID of its own (it reports the constant's), so nothing to serialize.
+	ibValuePtr<ibValueMetaObjectConstantColumn> m_column;
 
 	// the L4 source descriptor — CONTAINS the vended queryable (stable for this constant's
 	// life) and is registered with the factory on run / close; GetQueryable() forwards to it.
@@ -220,8 +325,10 @@ public:
 	virtual void SourceDecrRef() { ibValue::DecrRef(); }
 
 	//get metaData from object 
+	// The constant IS a GenericData now, so this is an ordinary upcast the compiler checks. It used
+	// to be a C-style cast between unrelated classes — the source of the read-only-form bug.
 	virtual const ibValueMetaObjectGenericData* GetMetaObject() const {
-		return (const ibValueMetaObjectGenericData*)m_metaObject;
+		return m_metaObject;
 	};
 
 	//get unique identifier

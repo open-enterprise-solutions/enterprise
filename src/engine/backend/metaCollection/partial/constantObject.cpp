@@ -15,7 +15,7 @@
 // --- vended queryable — the constant's single-row (sys_const) table navigation ---
 // The constant is the queryable's only column AND its one-row table; resolution by
 // name / id yields the constant itself (m_meta), the value comes via GetValueAttribute.
-const ibBackendQueryColumn* ibConstantQueryable::ResolveColumnByName(const wxString& name) const { return name == m_meta->GetName() ? m_meta : nullptr; }   // the constant IS its one column
+const ibBackendQueryColumn* ibConstantQueryable::ResolveColumnByName(const wxString& name) const { return name == m_meta->GetName() ? m_meta->GetValueColumn() : nullptr; }   // the constant HAS one column
 wxString ibConstantQueryable::GetQueryTableName() const { return m_meta->GetPhysicalTableName(); }
 ibGuid ibConstantQueryable::GetQueryTableGuid() const { return m_meta->GetGuid(); }
 ibMetaID ibConstantQueryable::GetQueryTableId() const { return m_meta->GetMetaID(); }
@@ -163,7 +163,7 @@ const ibSourceExplorer* ibValueRecordDataObjectConstant::GetSourceExplorer() con
 		false, true
 	);
 
-	m_sourceExplorer.AppendColumn(m_metaObject);
+	m_sourceExplorer.AppendColumn(m_metaObject->GetValueColumn());
 	return &m_sourceExplorer;
 }
 
@@ -282,7 +282,7 @@ ibValue ibValueRecordDataObjectConstant::GetConstValue() const
 				page.m_count = 1;
 				ibDataQueryResult selection = q.Execute(page);
 				if (selection.Next())
-					ret = m_metaObject->AdjustValue(selection.GetValue(m_metaObject));
+					ret = m_metaObject->AdjustValue(selection.GetValue(m_metaObject->GetValueColumn()));
 				else
 					ret = m_metaObject->CreateValue();
 			}
@@ -386,7 +386,7 @@ bool ibValueRecordDataObjectConstant::SetConstValue(const ibValue& cValue)
 	if (!ibDataQueryBuilder()
 		.From(m_metaObject->GetQueryable())
 		.SetValue(ibRawDBColumn::String(wxT("RECORD_KEY")), ibValue(wxT("6")))   // raw primary -> MATCHING
-		.SetValue(m_metaObject, m_constValue)                                          // data attribute
+		.SetValue(m_metaObject->GetValueColumn(), m_constValue)                        // the value column
 		.Upsert()) {
 		rollback();
 		ibBackendCoreException::Error(_("Failed to write object in db!"));

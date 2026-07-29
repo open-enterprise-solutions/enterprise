@@ -308,9 +308,12 @@ The 11 business object types and their C++ classes:
 | ChartOfAccounts | `ibValueMetaObjectChartOfAccounts` | `metaCollection/partial/chartOfAccounts.h` |
 | AccountingRegister | `ibValueMetaObjectAccountingRegister` | `metaCollection/partial/accountingRegister.h` |
 
-Four further registered metatypes are **not** top-level business objects: `ExternalDataProcessor`,
-`ExternalReport`, `SubcontoKindsTable`, and `AccumulationRegisterTotals` (the totals table became a
-metaobject in its own right on 2026-07-29, rather than a bit on the register's id).
+Five further registered metatypes are **not** top-level business objects: `ExternalDataProcessor`,
+`ExternalReport`, `SubcontoKindsTable`, `AccumulationRegisterTotals` (the totals table became a
+metaobject in its own right on 2026-07-29, rather than a bit on the register's id), and
+`ConstantValueColumn` (same day: a constant stopped BEING a column of `sys_const` and now HAS one —
+it derives `ibValueMetaObjectGenericData`, so the form layer no longer casts it into a class it does
+not derive from).
 
 ---
 

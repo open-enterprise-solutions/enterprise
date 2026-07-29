@@ -58,8 +58,13 @@ void ibValueMetaObjectConstant::ContributeTables(ibSchemaSnapshot& out) const
 	static const ibMetaID kSysConstTableId = (ibMetaID)0x40000001;   // sentinel — sys_const is not a single metaobject
 
 	// Shared find-or-create: the first constant marks it external + sets the handle; each constant Adds
-	// itself as one column (this IS the value column). No rows — a constant is structure only.
-	out.Shared(kSysConstTableId, GetPhysicalTableName()).External(GetQueryable()).Add(this);
+	// its VALUE COLUMN. No rows — a constant is structure only.
+	//
+	// The column reports the constant's own id, name and type, so the differ matches it against the
+	// very same column it recorded before the value column existed as an object of its own: no ALTER,
+	// no re-add, no migration. If it ever starts reporting an identity of its own, the differ reads
+	// that as "old column gone, new column added" — a DROP plus an ADD that empties every constant.
+	out.Shared(kSysConstTableId, GetPhysicalTableName()).External(GetQueryable()).Add(m_column);
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
