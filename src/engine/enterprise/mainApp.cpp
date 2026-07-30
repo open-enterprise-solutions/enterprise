@@ -28,6 +28,10 @@
 #include <wx/xrc/xh_aui.h>
 #endif
 
+#include "backend/diagnostics/leakTracker.h"
+
+IB_LEAK_TRACKER_ARM();
+
 wxIMPLEMENT_APP(ibAppEnterprise);
 
 //////////////////////////////////////////////////////////////////////////////////

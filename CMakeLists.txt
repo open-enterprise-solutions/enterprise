@@ -81,6 +81,40 @@ option(OES_FB_LOCALSERVER  "Enable Firebird out-of-process local server (Phase 6
 # SQLite is always available (embedded sources in the project).
 
 # ---------------------------------------------------------------------------
+# Sanitizers
+# ---------------------------------------------------------------------------
+#
+# The leak hunt on Windows leans on the MSVC debug CRT: an exit dump of every
+# surviving block, plus the opt-in tracker in backend/diagnostics/leakTracker
+# that names who allocated them. Neither exists here, and neither is worth
+# reimplementing — LeakSanitizer already reports leaks with full stacks, and it
+# rides in with AddressSanitizer.
+#
+#     cmake -B build -DCMAKE_BUILD_TYPE=Debug -DOES_SANITIZE=address
+#
+# The procedure is the same on every platform (see
+# docs/engineering-playbook/25-memory-leaks.md); only the instrument differs.
+# Accepts anything the toolchain does: address, undefined, thread,
+# address,undefined. OFF by default — ASan roughly doubles memory and costs
+# ~2x runtime, which is not what an ordinary debug build should pay.
+set(OES_SANITIZE "" CACHE STRING "Sanitizers to enable, e.g. address or address,undefined")
+
+if(OES_SANITIZE)
+    if(MSVC)
+        # MSVC ships ASan but not LSan — /fsanitize=address finds overflows and
+        # use-after-free, never leaks. Leaks on Windows are the debug CRT's job,
+        # so say so rather than let the flag imply cover it does not give.
+        message(WARNING
+            "OES_SANITIZE on MSVC: /fsanitize=address has no leak detector. "
+            "Use a Debug build and the CRT dump (docs/engineering-playbook/25-memory-leaks.md).")
+        add_compile_options(/fsanitize=${OES_SANITIZE})
+    else()
+        add_compile_options(-fsanitize=${OES_SANITIZE} -fno-omit-frame-pointer -g)
+        add_link_options(-fsanitize=${OES_SANITIZE})
+    endif()
+endif()
+
+# ---------------------------------------------------------------------------
 # Convenience paths
 # ---------------------------------------------------------------------------
 
@@ -340,5 +374,6 @@ message(STATUS "  MySQL ............. ${OES_USE_MYSQL}")
 message(STATUS "  ODBC .............. ${OES_USE_ODBC}")
 message(STATUS "  SQLite ............ ON (embedded)")
 message(STATUS "  Tests ............. ${BUILD_TESTING}")
+message(STATUS "  Sanitizers ........ ${OES_SANITIZE}")
 message(STATUS "=============================================")
 message(STATUS "")

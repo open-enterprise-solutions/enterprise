@@ -26,4 +26,8 @@ int ibAppLauncher::OnExit()
 	return wxApp::OnExit();
 }
 
+#include "backend/diagnostics/leakTracker.h"
+
+IB_LEAK_TRACKER_ARM();
+
 wxIMPLEMENT_APP(ibAppLauncher);

@@ -354,6 +354,10 @@ static void BuildUtf8Argv(int& argc, char**& argv)
 }
 #endif
 
+#include "backend/diagnostics/leakTracker.h"
+
+IB_LEAK_TRACKER_ARM();
+
 int main(int argc, char** argv)
 {
 #ifdef _WIN32

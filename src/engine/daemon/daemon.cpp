@@ -33,6 +33,10 @@ static const wxCmdLineEntryDesc s_cmdLineDesc[] = {
 	{ wxCMD_LINE_NONE,   NULL,     NULL,       NULL,                      wxCMD_LINE_VAL_NONE,   0 }
 };
 
+#include "backend/diagnostics/leakTracker.h"
+
+IB_LEAK_TRACKER_ARM();
+
 int main(int argc, char** argv)
 {
 	wxApp::CheckBuildOptions(WX_BUILD_OPTIONS_SIGNATURE, "daemon");

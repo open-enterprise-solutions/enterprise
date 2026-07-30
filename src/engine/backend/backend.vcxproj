@@ -42,6 +42,7 @@
     <ClInclude Include="backend_spreadsheet.h" />
     <ClInclude Include="backend_exception.h" />
     <ClInclude Include="diagnostics\crashGuard.h" />
+    <ClInclude Include="diagnostics\leakTracker.h" />
     <ClInclude Include="session\designerExclusivePolicy.h" />
     <ClInclude Include="session\session.h" />
     <ClInclude Include="session\sessionHolder.h" />
@@ -370,6 +371,7 @@
     <ClCompile Include="backend_spreadsheet.cpp" />
     <ClCompile Include="backend_exception.cpp" />
     <ClCompile Include="diagnostics\crashGuard.cpp" />
+    <ClCompile Include="diagnostics\leakTracker.cpp" />
     <ClCompile Include="session\designerExclusivePolicy.cpp" />
     <ClCompile Include="session\session.cpp" />
     <ClCompile Include="session\sessionHolder.cpp" />

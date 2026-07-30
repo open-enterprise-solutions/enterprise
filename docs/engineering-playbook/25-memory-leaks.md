@@ -48,6 +48,27 @@ allocation ordinal; the free hook removes the entry; `ibLeakTrackReport()` print
 grouped by call site. Bookkeeping lives on a **private Win32 heap** — records must not appear in
 the dump they exist to explain, nor re-enter the hook that writes them.
 
+It lives in `backend/diagnostics/leakTracker.{h,cpp}`, so **every** binary that links backend has
+it: enterprise, designer, codeRunner, launcher, daemon, wenterprise-server. Each one arms it with a
+single line next to its entry point:
+
+```cpp
+#include "backend/diagnostics/leakTracker.h"
+
+IB_LEAK_TRACKER_ARM();
+```
+
+Two details in that macro are load-bearing. It expands at **static-init** time, because both hooks
+have to be armed before wxWidgets allocates anything — `OnInit` is already too late. And the
+`std::atexit` call expands **in the executable**, not inside `ibLeakTrackArm`: MSVC gives every DLL
+its own onexit table, so an `atexit` called from `backend.dll` would run at backend's
+`DLL_PROCESS_DETACH` instead of at the exe's exit, which is not where the report was measured to
+belong.
+
+In Release the macro expands to nothing at all — no static, no hook, no `dbghelp`/`psapi`. The whole
+module is `#if defined(DEBUG) && defined(__WXMSW__)`, and the dump it explains is a debug-CRT
+feature that does not exist in a release build either.
+
 ### The object traces are switches too
 
 `ibValue` and the type factory carry Debug-time traces of their own. They are **off by default**,
@@ -289,9 +310,17 @@ four-step procedure holds; only the instrument changes:
 
 | here | there |
 |---|---|
-| the CRT exit dump | LeakSanitizer (`-fsanitize=address`, on by default with ASan) |
+| the CRT exit dump | LeakSanitizer (rides in with ASan) |
 | `OES_TRACK_SIZE` + tracker report | ASan's own allocation stacks, or valgrind `--leak-check=full` |
 | `OES_BREAK_ALLOC` | a conditional breakpoint on the allocator |
+
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Debug -DOES_SANITIZE=address
+```
+
+⚠ On MSVC that switch is **not** the same thing: `/fsanitize=address` finds overflows and
+use-after-free and ships no leak detector at all. Windows leaks are the debug CRT's job. CMake says
+so out loud rather than let the flag imply cover it does not give.
 
 What must not differ is the **product** code, and one thing genuinely does. The per-thread string
 pool is drained on thread exit through `DllMain`'s `DLL_THREAD_DETACH`, which exists only on
