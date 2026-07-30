@@ -444,20 +444,20 @@
       ],
       "signature": "",
       "description": "Объявляет процедуру — вызываемый блок кода, который выполняет действия, но не возвращает значение. Когда вызывающему нужен результат — используйте Function.",
-      "syntax_block": "Procedure <Name>([Val] <Param1>, [Val] <Param2>, …) [Export] {\n    // body\n}",
-      "parameters": "<Name> — идентификатор. Val — модификатор «по значению». Export — делает процедуру доступной из других модулей.",
+      "syntax_block": "[Public] Procedure <Name>([Val] <Param1>, [Val] <Param2>, …) {\n    // body\n}",
+      "parameters": "<Name> — идентификатор. Val — модификатор «по значению». Public — делает процедуру доступной из других модулей (пишется перед объявлением).",
       "return_descr": "",
-      "example": "Procedure LogMessage(Val Text) Export {\n    Message(Text);\n}",
+      "example": "Public Procedure LogMessage(Val Text) {\n    Message(Text);\n}",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.Function",
         "kw.Return",
-        "kw.Export",
+        "kw.Public",
         "kw.Val"
       ],
       "reviewed": true,
-      "syntax_block_ves": "Procedure <Name>([Val] <Param1>, [Val] <Param2>, …) [Export]\n    // body\nEndProcedure",
-      "example_ves": "Procedure LogMessage(Val Text) Export\n    Message(Text);\nEndProcedure",
+      "syntax_block_ves": "[Public] Procedure <Name>([Val] <Param1>, [Val] <Param2>, …)\n    // body\nEndProcedure",
+      "example_ves": "Public Procedure LogMessage(Val Text)\n    Message(Text);\nEndProcedure",
       "modes": [
         "ves",
         "ces"
@@ -498,19 +498,19 @@
       ],
       "signature": "",
       "description": "Объявляет функцию — вызываемый блок кода, возвращающий значение через Return. Функции взаимозаменяемы с процедурами везде, кроме использования в качестве источника выражения.",
-      "syntax_block": "Function <Name>([Val] <Param1>, …) [Export] {\n    // body\n    Return <Value>;\n}",
-      "parameters": "<Name> — идентификатор. Val — модификатор «по значению». Export — делает функцию доступной из других модулей.",
+      "syntax_block": "[Public] Function <Name>([Val] <Param1>, …) {\n    // body\n    Return <Value>;\n}",
+      "parameters": "<Name> — идентификатор. Val — модификатор «по значению». Public — делает функцию доступной из других модулей (пишется перед объявлением).",
       "return_descr": "Значение, переданное оператору Return.",
-      "example": "Function Sum(Val A, Val B) Export {\n    Return A + B;\n}",
+      "example": "Public Function Sum(Val A, Val B) {\n    Return A + B;\n}",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.Procedure",
         "kw.Return",
-        "kw.Export"
+        "kw.Public"
       ],
       "reviewed": true,
-      "syntax_block_ves": "Function <Name>([Val] <Param1>, …) [Export]\n    // body\n    Return <Value>;\nEndFunction",
-      "example_ves": "Function Sum(Val A, Val B) Export\n    Return A + B;\nEndFunction",
+      "syntax_block_ves": "[Public] Function <Name>([Val] <Param1>, …)\n    // body\n    Return <Value>;\nEndFunction",
+      "example_ves": "Public Function Sum(Val A, Val B)\n    Return A + B;\nEndFunction",
       "modes": [
         "ves",
         "ces"
@@ -543,25 +543,83 @@
       ]
     },
     {
-      "id": "kw.Export",
-      "name_local": "Export",
-      "name_en": "Export",
+      "id": "kw.Public",
+      "name_local": "Public",
+      "name_en": "Public",
       "kind": "keyword",
       "category_keys": [
         "common_lang",
         "control_flow"
       ],
       "signature": "",
-      "description": "Помечает процедуру, функцию или модульную переменную как доступную из других модулей. Без Export символ виден только в своём модуле.",
-      "syntax_block": "Procedure DoWork() Export {\n    // body\n}",
-      "syntax_block_ves": "Procedure DoWork() Export\n    // body\nEndProcedure",
+      "description": "Модификатор доступа: делает процедуру, функцию или модульную переменную видимой из других модулей. Пишется ПЕРЕД объявлением. Заменяет прежнее ключевое слово Export, которого больше нет.",
+      "syntax_block": "Public Procedure DoWork() {\n    // body\n}",
+      "syntax_block_ves": "Public Procedure DoWork()\n    // body\nEndProcedure",
       "parameters": "",
       "return_descr": "",
-      "example": "Var Counter Export;  // module-public variable\n\nFunction Read() Export\n    Return Counter;\nEndFunction",
+      "example": "Public Var Counter;\n\nPublic Function Read() {\n    Return Counter;\n}",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
+        "kw.Private",
+        "kw.Protected",
         "kw.Procedure",
         "kw.Function",
+        "kw.Var"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Private",
+      "name_local": "Private",
+      "name_en": "Private",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Модификатор доступа: символ виден только внутри своего модуля. Это поведение по умолчанию, поэтому Private пишут, чтобы явно обозначить намерение.",
+      "syntax_block": "Private Procedure Helper() {\n    // body\n}",
+      "syntax_block_ves": "Private Procedure Helper()\n    // body\nEndProcedure",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Private Var cache;\n\nPrivate Function Prepare() {\n    Return cache;\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Public",
+        "kw.Protected",
+        "kw.Var"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Protected",
+      "name_local": "Protected",
+      "name_en": "Protected",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Модификатор доступа: символ виден потомкам модуля — модуль объекта отдаёт его формам этого объекта, — но не всей конфигурации.",
+      "syntax_block": "Protected Procedure Recalculate() {\n    // видно формам этого объекта\n}",
+      "syntax_block_ves": "Protected Procedure Recalculate()\n    // видно формам этого объекта\nEndProcedure",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Protected Var lastTotal;\n\nProtected Function Total() {\n    Return lastTotal;\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Public",
+        "kw.Private",
         "kw.Var"
       ],
       "reviewed": true,
@@ -805,7 +863,7 @@
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.Undefined",
-        "kw.Export"
+        "kw.Public"
       ],
       "reviewed": true,
       "modes": [

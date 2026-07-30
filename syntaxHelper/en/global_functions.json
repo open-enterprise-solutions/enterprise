@@ -1241,6 +1241,50 @@
       "reviewed": false
     },
     {
+      "id": "fn.IsNull",
+      "name_local": "IsNull",
+      "name_en": "IsNull",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "IsNull(value : any)",
+      "description": "Tests whether the value is the database NULL - a value that came back from SQL as NULL. Distinct from Undefined, which means no value at all; use IsEmptyValue for that one.",
+      "syntax_block": "IsNull(value : any)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "fn.IsEmptyValue",
+        "fn.ValueIsFilled"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "fn.ValueIsFilled",
+      "name_local": "ValueIsFilled",
+      "name_en": "ValueIsFilled",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "ValueIsFilled(value : any)",
+      "description": "Tests whether the value carries anything meaningful: false for Undefined, for NULL, for an empty string, a zero number, an empty date and an empty reference. The usual guard before using a value.",
+      "syntax_block": "ValueIsFilled(value : any)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "fn.IsEmptyValue",
+        "fn.IsNull"
+      ],
+      "reviewed": true
+    },
+    {
       "id": "fn.IsEmptyValue",
       "name_local": "IsEmptyValue",
       "name_en": "IsEmptyValue",

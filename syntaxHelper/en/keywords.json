@@ -444,20 +444,20 @@
       ],
       "signature": "",
       "description": "Declares a procedure — a callable unit that performs work but does not return a value. Use Function instead when the caller needs a result.",
-      "syntax_block": "Procedure <Name>([Val] <Param1>, [Val] <Param2>, …) [Export] {\n    // body\n}",
-      "parameters": "<Name> — identifier. Val — pass-by-value modifier. Export — make the procedure callable from other modules.",
+      "syntax_block": "[Public] Procedure <Name>([Val] <Param1>, [Val] <Param2>, …) {\n    // body\n}",
+      "parameters": "<Name> — identifier. Val — pass-by-value modifier. Public — make the procedure callable from other modules (written before the declaration).",
       "return_descr": "",
-      "example": "Procedure LogMessage(Val Text) Export {\n    Message(Text);\n}",
+      "example": "Public Procedure LogMessage(Val Text) {\n    Message(Text);\n}",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.Function",
         "kw.Return",
-        "kw.Export",
+        "kw.Public",
         "kw.Val"
       ],
       "reviewed": true,
-      "syntax_block_ves": "Procedure <Name>([Val] <Param1>, [Val] <Param2>, …) [Export]\n    // body\nEndProcedure",
-      "example_ves": "Procedure LogMessage(Val Text) Export\n    Message(Text);\nEndProcedure",
+      "syntax_block_ves": "[Public] Procedure <Name>([Val] <Param1>, [Val] <Param2>, …)\n    // body\nEndProcedure",
+      "example_ves": "Public Procedure LogMessage(Val Text)\n    Message(Text);\nEndProcedure",
       "modes": [
         "ves",
         "ces"
@@ -498,19 +498,19 @@
       ],
       "signature": "",
       "description": "Declares a function — a callable that returns a value via Return. Functions are interchangeable with procedures everywhere except as expression sources.",
-      "syntax_block": "Function <Name>([Val] <Param1>, …) [Export] {\n    // body\n    Return <Value>;\n}",
-      "parameters": "<Name> — identifier. Val — pass-by-value modifier. Export — make the function callable from other modules.",
+      "syntax_block": "[Public] Function <Name>([Val] <Param1>, …) {\n    // body\n    Return <Value>;\n}",
+      "parameters": "<Name> — identifier. Val — pass-by-value modifier. Public — make the function callable from other modules (written before the declaration).",
       "return_descr": "Whatever the Return statement produces.",
-      "example": "Function Sum(Val A, Val B) Export {\n    Return A + B;\n}",
+      "example": "Public Function Sum(Val A, Val B) {\n    Return A + B;\n}",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.Procedure",
         "kw.Return",
-        "kw.Export"
+        "kw.Public"
       ],
       "reviewed": true,
-      "syntax_block_ves": "Function <Name>([Val] <Param1>, …) [Export]\n    // body\n    Return <Value>;\nEndFunction",
-      "example_ves": "Function Sum(Val A, Val B) Export\n    Return A + B;\nEndFunction",
+      "syntax_block_ves": "[Public] Function <Name>([Val] <Param1>, …)\n    // body\n    Return <Value>;\nEndFunction",
+      "example_ves": "Public Function Sum(Val A, Val B)\n    Return A + B;\nEndFunction",
       "modes": [
         "ves",
         "ces"
@@ -543,25 +543,83 @@
       ]
     },
     {
-      "id": "kw.Export",
-      "name_local": "Export",
-      "name_en": "Export",
+      "id": "kw.Public",
+      "name_local": "Public",
+      "name_en": "Public",
       "kind": "keyword",
       "category_keys": [
         "common_lang",
         "control_flow"
       ],
       "signature": "",
-      "description": "Marks a procedure, function, or module-level variable as accessible from other modules. Without Export the symbol is private to its defining module.",
-      "syntax_block": "Procedure DoWork() Export {\n    // body\n}",
-      "syntax_block_ves": "Procedure DoWork() Export\n    // body\nEndProcedure",
+      "description": "Access modifier: makes a procedure, function, or module-level variable visible to other modules. Written BEFORE the declaration. Replaces the former Export keyword, which no longer exists.",
+      "syntax_block": "Public Procedure DoWork() {\n    // body\n}",
+      "syntax_block_ves": "Public Procedure DoWork()\n    // body\nEndProcedure",
       "parameters": "",
       "return_descr": "",
-      "example": "Var Counter Export;  // module-public variable\n\nFunction Read() Export\n    Return Counter;\nEndFunction",
+      "example": "Public Var Counter;\n\nPublic Function Read() {\n    Return Counter;\n}",
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
+        "kw.Private",
+        "kw.Protected",
         "kw.Procedure",
         "kw.Function",
+        "kw.Var"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Private",
+      "name_local": "Private",
+      "name_en": "Private",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Access modifier: the symbol is visible only inside its own module. This is the default, so Private is written to state the intent explicitly.",
+      "syntax_block": "Private Procedure Helper() {\n    // body\n}",
+      "syntax_block_ves": "Private Procedure Helper()\n    // body\nEndProcedure",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Private Var cache;\n\nPrivate Function Prepare() {\n    Return cache;\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Public",
+        "kw.Protected",
+        "kw.Var"
+      ],
+      "reviewed": true,
+      "modes": [
+        "ves",
+        "ces"
+      ]
+    },
+    {
+      "id": "kw.Protected",
+      "name_local": "Protected",
+      "name_en": "Protected",
+      "kind": "keyword",
+      "category_keys": [
+        "common_lang",
+        "control_flow"
+      ],
+      "signature": "",
+      "description": "Access modifier: the symbol is visible to the module's children — an object module exposes it to the forms of that object — but not to the whole configuration.",
+      "syntax_block": "Protected Procedure Recalculate() {\n    // visible to this object's forms\n}",
+      "syntax_block_ves": "Protected Procedure Recalculate()\n    // visible to this object's forms\nEndProcedure",
+      "parameters": "",
+      "return_descr": "",
+      "example": "Protected Var lastTotal;\n\nProtected Function Total() {\n    Return lastTotal;\n}",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "kw.Public",
+        "kw.Private",
         "kw.Var"
       ],
       "reviewed": true,
@@ -805,7 +863,7 @@
       "availability": "Designer, codeRunner, daemon, wenterprise-server",
       "see_also": [
         "kw.Undefined",
-        "kw.Export"
+        "kw.Public"
       ],
       "reviewed": true,
       "modes": [

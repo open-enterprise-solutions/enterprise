@@ -1241,6 +1241,50 @@
       "reviewed": false
     },
     {
+      "id": "fn.IsNull",
+      "name_local": "IsNull",
+      "name_en": "IsNull",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "IsNull(value : any)",
+      "description": "Перевіряє, чи є значення бази даних NULL - значенням, що надійшло з SQL як NULL. Відрізняється від Undefined, який означає відсутність значення взагалі; для нього використовуйте IsEmptyValue.",
+      "syntax_block": "IsNull(value : any)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "fn.IsEmptyValue",
+        "fn.ValueIsFilled"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "fn.ValueIsFilled",
+      "name_local": "ValueIsFilled",
+      "name_en": "ValueIsFilled",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "ValueIsFilled(value : any)",
+      "description": "Перевіряє, чи є в значенні щось змістовне: хиба для Undefined, NULL, порожнього рядка, нульового числа, порожньої дати та порожнього посилання. Звичайна перевірка перед використанням значення.",
+      "syntax_block": "ValueIsFilled(value : any)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "fn.IsEmptyValue",
+        "fn.IsNull"
+      ],
+      "reviewed": true
+    },
+    {
       "id": "fn.IsEmptyValue",
       "name_local": "IsEmptyValue",
       "name_en": "IsEmptyValue",

@@ -1241,6 +1241,50 @@
       "reviewed": false
     },
     {
+      "id": "fn.IsNull",
+      "name_local": "IsNull",
+      "name_en": "IsNull",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "IsNull(value : any)",
+      "description": "Проверяет, является ли значение базы данных NULL - значением, пришедшим из SQL как NULL. Отличается от Undefined, который означает отсутствие значения вообще; для него используйте IsEmptyValue.",
+      "syntax_block": "IsNull(value : any)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "fn.IsEmptyValue",
+        "fn.ValueIsFilled"
+      ],
+      "reviewed": true
+    },
+    {
+      "id": "fn.ValueIsFilled",
+      "name_local": "ValueIsFilled",
+      "name_en": "ValueIsFilled",
+      "kind": "system_function",
+      "category_keys": [
+        "global_context",
+        "global_functions"
+      ],
+      "signature": "ValueIsFilled(value : any)",
+      "description": "Проверяет, есть ли в значении что-то содержательное: ложь для Undefined, NULL, пустой строки, нулевого числа, пустой даты и пустой ссылки. Обычная проверка перед использованием значения.",
+      "syntax_block": "ValueIsFilled(value : any)",
+      "parameters": "",
+      "return_descr": "",
+      "example": "",
+      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "see_also": [
+        "fn.IsEmptyValue",
+        "fn.IsNull"
+      ],
+      "reviewed": true
+    },
+    {
       "id": "fn.IsEmptyValue",
       "name_local": "IsEmptyValue",
       "name_en": "IsEmptyValue",
