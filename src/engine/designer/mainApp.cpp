@@ -144,9 +144,10 @@ int ibAppDesigner::DoOnRun()
 			wxBORDER_SIMPLE
 		);
 
-	// Init handlers
-	wxInitAllImageHandlers();
-
+	// Image handlers are already up: backend.dll registers them ALL from its picture
+	// auto-loader (picturePredefined.cpp), which runs at DLL load — before this. Calling
+	// wxInitAllImageHandlers again only produced a screenful of "Adding duplicate image
+	// handler" in the debug log (wx deletes the duplicate and logs it).
 	wxXmlResource::Get()->InitAllHandlers();
 #if wxVERSION_NUMBER >= 2905 && wxVERSION_NUMBER <= 3100
 	wxXmlResource::Get()->AddHandler(new wxAuiNotebookXmlHandler);
@@ -176,10 +177,6 @@ int ibAppDesigner::DoOnRun()
 	// Message output to the same as the log target
 	delete wxMessageOutput::Set(new wxMessageOutputLog);
 
-#if wxUSE_LIBPNG
-	wxImage::AddHandler(new wxPNGHandler);
-#endif
-
 	// Support loading files from memory
 	// Used to load the XRC preview, but could be useful elsewhere
 	wxFileSystem::AddHandler(new wxMemoryFSHandler);
@@ -188,9 +185,6 @@ int ibAppDesigner::DoOnRun()
 	wxFileSystem::AddHandler(new wxArchiveFSHandler);
 	wxFileSystem::AddHandler(new wxFilterFSHandler);
 
-#if wxUSE_LIBPNG
-	wxImage::AddHandler(new wxPNGHandler);
-#endif
 	// Flow (designer IDE):
 	//   1. CreateSession — registry Add (DesignerExclusivePolicy veto
 	//      happens inside the registry Connect), returns the holder.
