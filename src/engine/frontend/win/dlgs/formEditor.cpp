@@ -333,9 +333,10 @@ void ibDialogFormEditor::OnRightClick(wxTreeEvent& event)
 	if (item_data != nullptr) {
 		ibValueFrame* obj(((ibDialogFormEditorObjectTreeItemData*)item_data)->GetObject());
 		assert(obj);
-		wxMenu* menu = new ibDialogFormEditorItemPopupMenu(this, obj);
+		// On the stack — PopupMenu does not take ownership and blocks until dismissed.
+		ibDialogFormEditorItemPopupMenu menu(this, obj);
 		wxPoint pos = event.GetPoint();
-		menu->UpdateUI(menu); PopupMenu(menu, pos.x, pos.y);
+		menu.UpdateUI(&menu); PopupMenu(&menu, pos.x, pos.y);
 	}
 }
 

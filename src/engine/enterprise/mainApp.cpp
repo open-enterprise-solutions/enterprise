@@ -306,5 +306,10 @@ int ibAppEnterprise::OnExit()
 		wxTheClipboard->Close();
 	}
 
+	// See the note in designer/mainApp.cpp: wxEntryCleanup deletes the log target but keeps
+	// auto-vivification on, so anything logged after it leaks a target nobody owns. Turning it off
+	// costs no messages — wxLog falls back to a static target — and it costs no heap.
+	wxLog::DontCreateOnDemand();
+
 	return success_exit;
 }

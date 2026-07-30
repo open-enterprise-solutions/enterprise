@@ -222,9 +222,12 @@ bool ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnRightClickFro
 			if (founded != m_formHandler->GetSelectedObject()) {
 				m_formHandler->SelectObject(founded);
 			}
-			ibVisualEditorItemPopupMenu* menu = new ibVisualEditorItemPopupMenu(m_formHandler, currentWindow, founded);
-			menu->UpdateUI(menu);
-			currentWindow->PopupMenu(menu, event.GetPosition());
+			// On the stack: PopupMenu does NOT take ownership, and it blocks until the menu is
+			// dismissed, so the selection is fully handled before the scope ends. Same shape as
+			// every other popup here (userList, activeUser, codeEditor) — no delete to forget.
+			ibVisualEditorItemPopupMenu menu(m_formHandler, currentWindow, founded);
+			menu.UpdateUI(&menu);
+			currentWindow->PopupMenu(&menu, event.GetPosition());
 			break;
 		}
 		wnd = wnd->GetParent();

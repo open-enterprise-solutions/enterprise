@@ -6,10 +6,45 @@
 #include "value.h"
 #include "backend/backend_exception.h"
 #include "backend/ctorRegistry.h"
+#include "backend/utils/debugTrace.h"
+
+#ifdef DEBUG
+// OFF unless OES_TRACE_TYPES says otherwise — see utils/debugTrace.h.
+static const bool s_traceTypes = ibDebugTraceEnabled("OES_TRACE_TYPES");
+#endif
 
 // Single owner of the registered value-ctors + the clsid / type_info / name
 // lookups. Hot keys (clsid, type_info) are O(1); name stays linear (see header).
-static ibCtorRegistry<ibCtorAbstractType>* s_registry = nullptr;
+//
+// The registry OWNS ITS LIFETIME instead of having it inferred from its contents. It used to be
+// a raw pointer newed by whichever value_register happened to register first, and deleted again
+// the moment the map went empty — a guess about the future, and a wrong one: unregistration runs
+// from the static teardown of several modules, so one ctor that never comes back leaves the whole
+// registry alive to the end of the process, with nobody left to free it.
+//
+// A function-local static needs neither the new nor the guess. It is built by the first caller
+// and destroyed by the CRT at exit, and the ORDER is right by construction: MSVC keeps static
+// destructors in one LIFO list, so an object that registers its destructor before every registrar
+// that had to build it is destroyed after all of them. Registrars unregister first, the registry
+// dies last.
+static bool s_registryAlive = false;   // trivially destructible, so it stays readable after the
+                                       // holder below is gone — see CtorRegistry()
+
+struct ibCtorRegistryHolder {
+	ibCtorRegistry<ibCtorAbstractType> m_registry;
+	ibCtorRegistryHolder() { s_registryAlive = true; }
+	~ibCtorRegistryHolder() { s_registryAlive = false; }
+};
+
+// nullptr once teardown has passed the registry — a late query then answers "not registered"
+// rather than touching a destroyed map. The pointer form got this for free (it simply leaked
+// instead); paying for it explicitly is the price of having a destructor at all.
+static ibCtorRegistry<ibCtorAbstractType>* CtorRegistry()
+{
+	static ibCtorRegistryHolder s_holder;
+	return s_registryAlive ? &s_holder.m_registry : nullptr;
+}
+
 static std::atomic<unsigned int> s_factoryCtorCountChanges = 0;
 
 //*******************************************************************************
@@ -46,8 +81,6 @@ ibValue* ibValue::CreateObjectRef(const ibClassID& clsid, ibValue** paParams, co
 
 void ibValue::RegisterCtor(ibCtorAbstractType* typeCtor)
 {
-	if (s_registry == nullptr) s_registry = new ibCtorRegistry<ibCtorAbstractType>;
-
 	if (typeCtor != nullptr) {
 
 		if (ibValue::IsRegisterCtor(typeCtor->GetClassType())) {
@@ -58,14 +91,15 @@ void ibValue::RegisterCtor(ibCtorAbstractType* typeCtor)
 		}
 
 #ifdef DEBUG
-		if (wxTheApp != NULL)
+		if (s_traceTypes && wxTheApp != NULL)
 			wxLogDebug(wxT("* Register class '%s' with clsid '%s:%llu' "), typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()), typeCtor->GetClassType());
 #endif
 
 		s_factoryCtorCountChanges++;
 
 		typeCtor->CallEvent(ibCtorObjectTypeEvent::ibCtorObjectTypeEvent_Register);
-		s_registry->Register(typeCtor);
+		if (ibCtorRegistry<ibCtorAbstractType>* registry = CtorRegistry())
+			registry->Register(typeCtor);
 	}
 }
 
@@ -76,21 +110,24 @@ void ibValue::UnRegisterCtor(ibCtorAbstractType*& typeCtor)
 		typeCtor->CallEvent(ibCtorObjectTypeEvent::ibCtorObjectTypeEvent_UnRegister);
 
 #ifdef DEBUG
-		if (wxTheApp != NULL)
+		// The wxTheApp guard is NOT about noise: this also runs from static teardown, where a log
+		// call would ask wx to build a log target nobody can then delete (see OnExit's
+		// wxLog::DontCreateOnDemand note).
+		if (s_traceTypes && wxTheApp != NULL)
 			wxLogDebug(wxT("* Unregister class '%s' with clsid '%s:%llu' "), typeCtor->GetClassName(), clsid_to_string(typeCtor->GetClassType()), typeCtor->GetClassType());
 #endif
 		// Registry owns the ctor via shared_ptr — Unregister FREES it; null the caller's
 		// (by-ref) pointer so the now-dangling ctor is never dereferenced (replaces the
 		// old wxDELETE that nulled it; value_register's dtor relies on this).
-		s_registry->Unregister(typeCtor);
+		CtorRegistry()->Unregister(typeCtor);
 		s_factoryCtorCountChanges++;
 		typeCtor = nullptr;
 	}
 	else if (typeCtor != nullptr) {
 		ibBackendCoreException::Error(_("Object '%s' is not register"), typeCtor->GetClassName());
 	}
-
-	if (s_registry != nullptr && s_registry->IsEmpty()) wxDELETE(s_registry);
+	// No "delete it once it is empty" here any more: empty is not the same as finished, and the
+	// registry's own destructor already covers the finished case.
 }
 
 void ibValue::UnRegisterCtor(const wxString& className)
@@ -107,24 +144,24 @@ void ibValue::UnRegisterCtor(const wxString& className)
 
 bool ibValue::IsRegisterCtor(const wxString& className)
 {
-	if (s_registry == nullptr || className.IsEmpty())
+	if (CtorRegistry() == nullptr || className.IsEmpty())
 		return false;
-	return s_registry->Find(className) != nullptr;
+	return CtorRegistry()->Find(className) != nullptr;
 }
 
 bool ibValue::IsRegisterCtor(const wxString& className, ibCtorObjectType objectType)
 {
-	if (s_registry == nullptr)
+	if (CtorRegistry() == nullptr)
 		return false;
 	// Names are unique (RegisterCtor rejects duplicates), so the single
 	// name-match is the one to check the object-type against.
-	const ibCtorAbstractType* typeCtor = s_registry->Find(className);
+	const ibCtorAbstractType* typeCtor = CtorRegistry()->Find(className);
 	return typeCtor != nullptr && objectType == typeCtor->GetObjectTypeCtor();
 }
 
 bool ibValue::IsRegisterCtor(const ibClassID& clsid)
 {
-	return s_registry != nullptr && s_registry->Find(clsid) != nullptr;
+	return CtorRegistry() != nullptr && CtorRegistry()->Find(clsid) != nullptr;
 }
 
 ibClassID ibValue::GetTypeIDByRef(const std::type_info& typeInfo)
@@ -185,10 +222,10 @@ wxString ibValue::GetNameObjectFromID(const ibClassID& clsid, bool upper)
 
 wxString ibValue::GetNameObjectFromVT(ibValueTypes valueType, bool upper)
 {
-	if (valueType > ibValueTypes::TYPE_REFFER || s_registry == nullptr)
+	if (valueType > ibValueTypes::TYPE_REFFER || CtorRegistry() == nullptr)
 		return wxEmptyString;
 	wxString result;
-	s_registry->ForEach([&](ibCtorAbstractType* typeCtor) {
+	CtorRegistry()->ForEach([&](ibCtorAbstractType* typeCtor) {
 		if (!result.IsEmpty())
 			return;
 		const ibCtorSingleType* simpleSingleObject = dynamic_cast<ibCtorSingleType*>(typeCtor);
@@ -244,24 +281,24 @@ ibClassID ibValue::GetIDByVT(const ibValueTypes& valueType)
 
 ibCtorAbstractType* ibValue::GetAvailableCtor(const wxString& className)
 {
-	return s_registry != nullptr ? s_registry->Find(className) : nullptr;
+	return CtorRegistry() != nullptr ? CtorRegistry()->Find(className) : nullptr;
 }
 
 ibCtorAbstractType* ibValue::GetAvailableCtor(const ibClassID& clsid)
 {
-	return s_registry != nullptr ? s_registry->Find(clsid) : nullptr;
+	return CtorRegistry() != nullptr ? CtorRegistry()->Find(clsid) : nullptr;
 }
 
 ibCtorAbstractType* ibValue::GetAvailableCtor(const std::type_info& typeInfo)
 {
-	return s_registry != nullptr ? s_registry->Find(typeInfo) : nullptr;
+	return CtorRegistry() != nullptr ? CtorRegistry()->Find(typeInfo) : nullptr;
 }
 
 std::vector<ibCtorAbstractType*> ibValue::GetListCtorsByType(ibCtorObjectType objectType)
 {
 	std::vector<ibCtorAbstractType*> retVector;
-	if (s_registry != nullptr)
-		s_registry->ForEach([&](ibCtorAbstractType* t) {
+	if (CtorRegistry() != nullptr)
+		CtorRegistry()->ForEach([&](ibCtorAbstractType* t) {
 			if (objectType == t->GetObjectTypeCtor()) retVector.push_back(t);
 		});
 	std::sort(retVector.begin(), retVector.end(),

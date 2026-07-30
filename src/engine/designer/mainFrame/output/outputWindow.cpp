@@ -245,13 +245,14 @@ void ibOutputWindow::OnContextMenu(wxContextMenuEvent& event)
 		pt = this->PointFromPosition(this->GetCurrentPos());
 	}
 
-	wxMenu* popupMenu = new wxMenu;
+	// On the stack — PopupMenu does not take ownership and blocks until dismissed.
+	wxMenu popupMenu;
 
-	wxMenuItem* menuItemCopy = popupMenu->Append(idcmdCopy, _("Copy"));
+	wxMenuItem* menuItemCopy = popupMenu.Append(idcmdCopy, _("Copy"));
 	menuItemCopy->Enable(wxStyledTextCtrl::CanCopy());
-	wxMenuItem* menuItemClear = popupMenu->Append(idcmdClear, _("Clear"));
+	wxMenuItem* menuItemClear = popupMenu.Append(idcmdClear, _("Clear"));
 
-	wxStyledTextCtrl::PopupMenu(popupMenu, pt);
+	wxStyledTextCtrl::PopupMenu(&popupMenu, pt);
 	//event.Skip();
 }
 

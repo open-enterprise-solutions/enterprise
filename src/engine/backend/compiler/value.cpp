@@ -24,6 +24,7 @@
 #include <sstream>
 #include <thread>
 #include <wx/log.h>
+#include "backend/utils/debugTrace.h"
 
 // Atomic counter — Create/Delete can race across the HTTP and worker
 // threads on the web build, and even on desktop if the designer's debug
@@ -43,10 +44,18 @@ static inline void DebugValueEmit(const char* tag, unsigned int count) {
 	   << " tid=" << std::this_thread::get_id();
 	wxLogDebug(wxT("%s"), wxString::FromUTF8(os.str().c_str()));
 }
+
+// OFF unless OES_TRACE_VALUES says otherwise — see utils/debugTrace.h. The counter itself keeps
+// running either way: it costs one atomic, and it is what makes a later "how many are alive?"
+// answerable without a rebuild. Only the ~18000 lines per run are conditional.
+static const bool s_traceValues = ibDebugTraceEnabled("OES_TRACE_VALUES");
+
 #define DEBUG_VALUE_CREATE() \
-	DebugValueEmit("Create", s_nCreateCount.fetch_add(1) + 1);
+	{ const unsigned int alive = s_nCreateCount.fetch_add(1) + 1; \
+	  if (s_traceValues) DebugValueEmit("Create", alive); }
 #define DEBUG_VALUE_DELETE() \
-	DebugValueEmit("Delete", s_nCreateCount.fetch_sub(1) - 1);
+	{ const unsigned int alive = s_nCreateCount.fetch_sub(1) - 1; \
+	  if (s_traceValues) DebugValueEmit("Delete", alive); }
 #else
 #define DEBUG_VALUE_CREATE()
 #define DEBUG_VALUE_DELETE()

@@ -13,21 +13,57 @@
 
 #include "backend_mainFrame.h"
 
+#include <mutex>
+#include <thread>
+#include <unordered_map>
+
 namespace {
-// Per-thread error history. Bounded to prevent runaway-throw loops from
-// growing the vector without limit (compile-side runaway, FB error in a
-// reconnect-retry loop, etc.). 64 entries are plenty for any startup or
-// login sequence we want to surface to the user.
+// Per-thread error history, kept in ONE process-wide registry keyed by thread
+// id — deliberately not a thread_local.
+//
+// A thread_local with a non-trivial destructor is constructed by __dyn_tls_init
+// at DLL_THREAD_ATTACH, for every thread, whether it ever raises an error or
+// not, and each one costs an 8-byte destructor-registration node. A thread that
+// is still running at process exit is killed without TLS teardown, so that node
+// is never returned: measured 2026-07-30 as six leaked blocks, one per thread
+// outliving shutdown. Per-thread state has no owner, and nothing without an
+// owner can be cleaned up.
+//
+// A static registry has one: the CRT destroys it during exit, and the whole
+// class of leak goes with it. The cost is a lock on the error path, which is by
+// definition not hot.
+//
+// The chain is bounded to keep a runaway-throw loop (compile-side runaway, an
+// FB error inside a reconnect-retry loop) from growing without limit; 64
+// entries cover any startup or login sequence we want to surface to the user.
 constexpr std::size_t kErrorChainMax = 64;
-thread_local std::vector<wxString> tl_errorChain;
+
+// Same shape as the current-session binding in session.cpp: a namespace-scope
+// lock plus a map keyed by thread id. Trivially destructible flag declared
+// FIRST, so it outlives the map — a thread still running during shutdown reads
+// it, sees the registry is gone, and drops its error rather than touching a
+// destroyed container. That window is not hypothetical here: threads outliving
+// exit are exactly what this registry exists to survive.
+bool s_errorsAlive = false;
+
+std::mutex s_errorMutex;
+std::unordered_map<std::thread::id, std::vector<wxString>> s_errorsByThread;
+
+struct ibErrorsLifetime {
+	ibErrorsLifetime() { s_errorsAlive = true; }
+	~ibErrorsLifetime() { s_errorsAlive = false; }
+} s_errorsLifetime;
 } // namespace
 
 void ibBackendException::PushLastError(const wxString& description)
 {
-	if (description.IsEmpty()) return;
-	if (tl_errorChain.size() >= kErrorChainMax)
-		tl_errorChain.erase(tl_errorChain.begin());
-	tl_errorChain.push_back(description);
+	if (description.IsEmpty() || !s_errorsAlive) return;
+
+	std::lock_guard<std::mutex> lock(s_errorMutex);
+	std::vector<wxString>& chain = s_errorsByThread[std::this_thread::get_id()];
+	if (chain.size() >= kErrorChainMax)
+		chain.erase(chain.begin());
+	chain.push_back(description);
 }
 
 wxString ibBackendException::GetLastError()
@@ -35,22 +71,39 @@ wxString ibBackendException::GetLastError()
 	// Drain semantics preserved for legacy callers (mainApp's
 	// appDataCreate* failure path). Returns the most recent entry and
 	// clears the chain — same one-string surface as before.
-	if (tl_errorChain.empty()) return wxEmptyString;
-	wxString last = tl_errorChain.back();
-	tl_errorChain.clear();
+	if (!s_errorsAlive) return wxEmptyString;
+
+	std::lock_guard<std::mutex> lock(s_errorMutex);
+	auto found = s_errorsByThread.find(std::this_thread::get_id());
+	if (found == s_errorsByThread.end() || found->second.empty()) return wxEmptyString;
+	wxString last = found->second.back();
+	// Drop the whole entry, not just its contents: the map is then bounded by
+	// threads holding a PENDING error, not by every thread ever seen.
+	s_errorsByThread.erase(found);
 	return last;
 }
 
 std::vector<wxString> ibBackendException::DrainLastErrors()
 {
 	std::vector<wxString> out;
-	out.swap(tl_errorChain);
+	if (!s_errorsAlive) return out;
+
+	std::lock_guard<std::mutex> lock(s_errorMutex);
+	auto found = s_errorsByThread.find(std::this_thread::get_id());
+	if (found != s_errorsByThread.end()) {
+		out.swap(found->second);
+		s_errorsByThread.erase(found);
+	}
 	return out;
 }
 
 std::vector<wxString> ibBackendException::PeekLastErrors()
 {
-	return tl_errorChain;
+	if (!s_errorsAlive) return {};
+
+	std::lock_guard<std::mutex> lock(s_errorMutex);
+	auto found = s_errorsByThread.find(std::this_thread::get_id());
+	return found != s_errorsByThread.end() ? found->second : std::vector<wxString>();
 }
 
 //////////////////////////////////////////////////////////////////////

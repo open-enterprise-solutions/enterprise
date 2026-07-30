@@ -36,6 +36,7 @@ Corporate development standards for **Open Enterprise Solutions** — a cross-pl
 | 22 | [Plugin system](./22-plugin-system.md) | C++ Plugin Architecture: DLL/SO loading, C ABI interfaces, versioning, ABI stability |
 | 23 | [Access management](./23-access-management.md) | Access matrix, granting/revoking rights, code signing, secret rotation |
 | 24 | [Compliance](./24-compliance.md) | LGPL 2.1, dependency licensing, GDPR for crash reports, OES licensing |
+| 25 | [Hunting memory leaks](./25-memory-leaks.md) | Reading the CRT dump, the `leak-track` stacks, what in the dump is a cache and not a leak |
 
 ---
 

@@ -11,6 +11,9 @@
 
 ////////////////////////////////////////////////////////////////////////
 
+
+////////////////////////////////////////////////////////////////////////
+
 bool ibBackendProperty::IsEditable() const
 {
 	return m_owner ? m_owner->IsEditable() : false;
@@ -63,6 +66,11 @@ ibDataValue ibBackendProperty::GetNodeValue() const
 #include "backend/backend_mainFrame.h"
 #include "backend/appData.h"
 #include "backend/session/session.h"
+
+ibPropertyObject::ibPropertyObject()
+{
+	m_category = new ibPropertyCategory(this);
+}
 
 ibPropertyObject::~ibPropertyObject()
 {

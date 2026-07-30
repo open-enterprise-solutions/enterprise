@@ -360,13 +360,11 @@ public:
 			wxDefaultPosition, wxSize(500, 300), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
 		m_tableModelStore(nullptr)
 	{
-		// add our own reference to the new model:
+		// wxRefCounter starts at 1, so `new` IS our reference — there is nothing to add. An IncRef
+		// on top of it is a second reference nobody holds and nobody drops: AssociateModel takes
+		// its own (released by ~wxDataViewCtrl), our dtor releases this one, and the count stopped
+		// at 1. The model and its rows then outlived the dialog.
 		m_tableModelStore = new ibDataViewPredefinedTreeStore(valueMetaObjectHierarchy);
-
-		if (m_tableModelStore)
-		{
-			m_tableModelStore->IncRef();
-		}
 
 		CreateDialogView();
 	}

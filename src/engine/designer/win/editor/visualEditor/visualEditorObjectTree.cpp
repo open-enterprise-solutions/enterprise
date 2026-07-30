@@ -483,9 +483,10 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnRightCl
 		ibValueFrame* obj(data->GetObject());
 		assert(obj);
 		m_formHandler->SelectObject(obj);
-		wxMenu* menu = new ibVisualEditorItemPopupMenu(m_formHandler, this, obj);
+		// On the stack — PopupMenu does not take ownership and blocks until dismissed.
+		ibVisualEditorItemPopupMenu menu(m_formHandler, this, obj);
 		wxPoint pos = event.GetPoint();
-		menu->UpdateUI(menu); PopupMenu(menu, pos.x, pos.y);
+		menu.UpdateUI(&menu); PopupMenu(&menu, pos.x, pos.y);
 	}
 }
 

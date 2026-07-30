@@ -10,23 +10,28 @@ static constexpr int kHubMenuIdBase = wxID_HIGHEST + 1;
 // HUB — build a menu for `subs`; a sub-command that is ITSELF a group becomes a NESTED submenu (full recursion,
 // exactly as a subsystem holds subsystems), a leaf a plain item. Each leaf gets a unique id whose offset into
 // `runnable` is the command to run — so a click anywhere in the tree resolves back to one terminal path.
-static wxMenu* BuildHubMenu(const ibFrontendCommandReceiver* door,
-	const std::vector<ibFrontendCommandReceiver::ibCommandSubItem>& subs, std::vector<ibCommandDescription>& runnable)
+// Fills a menu the CALLER owns rather than returning one — so the root can live on the stack, like
+// every other popup here. Only NESTED menus are heap: AppendSubMenu takes ownership and the parent
+// frees the whole tree, so a submenu is the one place `new` is not a leak waiting to happen.
+static void FillHubMenu(const ibFrontendCommandReceiver* door,
+	const std::vector<ibFrontendCommandReceiver::ibCommandSubItem>& subs, std::vector<ibCommandDescription>& runnable,
+	wxMenu& menu)
 {
-	wxMenu* menu = new wxMenu();
 	for (const ibFrontendCommandReceiver::ibCommandSubItem& sub : subs) {
 		std::vector<ibFrontendCommandReceiver::ibCommandSubItem> nested;
 		wxMenuItem* mi = nullptr;
-		if (door->ResolveSubCommands(sub.desc, nested))   // sub is a GROUP -> recurse into a submenu
-			mi = menu->AppendSubMenu(BuildHubMenu(door, nested, runnable), sub.caption);
+		if (door->ResolveSubCommands(sub.desc, nested)) { // sub is a GROUP -> recurse into a submenu
+			wxMenu* const child = new wxMenu();           // owned by `menu` from AppendSubMenu on
+			FillHubMenu(door, nested, runnable, *child);
+			mi = menu.AppendSubMenu(child, sub.caption);
+		}
 		else {                                            // sub is a LEAF -> a runnable item
-			mi = menu->Append(kHubMenuIdBase + static_cast<int>(runnable.size()), sub.caption);
+			mi = menu.Append(kHubMenuIdBase + static_cast<int>(runnable.size()), sub.caption);
 			runnable.push_back(sub.desc);
 		}
 		if (sub.icon.IsOk())
 			mi->SetBitmap(sub.icon);
 	}
-	return menu;
 }
 #endif
 
@@ -44,15 +49,15 @@ void ibValueButton::OnButtonPressed(wxCommandEvent& event)
 	if (ResolveSubCommands(desc, subs)) {
 #ifndef OES_USE_WEB
 		std::vector<ibCommandDescription> runnable;
-		wxMenu* const menu = BuildHubMenu(this, subs, runnable);
+		wxMenu menu;   // stack — it owns its submenus, the whole tree goes at scope end
+		FillHubMenu(this, subs, runnable, menu);
 		wxWindow* const anchor = wxDynamicCast(event.GetEventObject(), wxWindow);
-		const int sel = anchor != nullptr ? anchor->GetPopupMenuSelectionFromUser(*menu) : wxID_NONE;
+		const int sel = anchor != nullptr ? anchor->GetPopupMenuSelectionFromUser(menu) : wxID_NONE;
 		if (sel != wxID_NONE) {
 			const size_t idx = static_cast<size_t>(sel - kHubMenuIdBase);
 			if (idx < runnable.size())
 				ExecuteValueByPath(runnable[idx]);
 		}
-		delete menu;   // owns its submenus — the whole tree goes with it
 #endif
 	}
 	else

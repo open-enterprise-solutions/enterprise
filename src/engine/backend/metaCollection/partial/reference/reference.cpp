@@ -21,20 +21,39 @@
 // config, so this must terminate rather than crash.
 //
 // A thread-local stack of identities (each worker reads on its own call stack): push on
-// entry, pop on exit (RAII — correct across the FB exceptions ReadData can throw). It costs
-// no allocation once the vector's capacity settles, and a linear scan over a depth that is
-// tiny in practice — negligible next to the DB query the read itself issues.
+// entry, pop on exit (RAII — correct across the FB exceptions ReadData can throw). A linear
+// scan over a depth that is tiny in practice — negligible next to the DB query the read
+// itself issues.
+//
+// A FIXED array, not a vector, and the difference is not micro-optimisation: a thread-local
+// vector allocates once per thread and hands the block back only when the thread ends
+// normally. A thread still running at process exit is killed without TLS teardown, so it
+// keeps the block — measured 2026-07-30 as six leaked buffers, one per surviving thread.
+// A fixed buffer has nothing to hand back. It is also trivially destructible, so no TLS
+// destructor is registered at all.
 namespace {
-	thread_local std::vector<std::pair<ibMetaID, ibGuid>> g_refReadStack;
+	// Depth beyond this means a reference graph nested deeper than any real config; the guard
+	// then stops tracking rather than growing. Cycle detection degrades to "not detected" for
+	// those levels, which is the same answer it gave before any of them were pushed.
+	constexpr std::size_t kRefReadDepthMax = 64;
+
+	thread_local std::pair<ibMetaID, ibGuid> g_refReadStack[kRefReadDepthMax];
+	thread_local std::size_t                 g_refReadDepth = 0;
 
 	struct ibRefReadGuard {
 		bool m_cycle = false;
+		bool m_pushed = false;
+
 		ibRefReadGuard(const ibMetaID& metaId, const ibGuid& guid) {
 			const std::pair<ibMetaID, ibGuid> key{ metaId, guid };
-			m_cycle = std::find(g_refReadStack.begin(), g_refReadStack.end(), key) != g_refReadStack.end();
-			g_refReadStack.push_back(key);
+			m_cycle = std::find(g_refReadStack, g_refReadStack + g_refReadDepth, key)
+				!= g_refReadStack + g_refReadDepth;
+			if (g_refReadDepth < kRefReadDepthMax) {
+				g_refReadStack[g_refReadDepth++] = key;
+				m_pushed = true;
+			}
 		}
-		~ibRefReadGuard() { g_refReadStack.pop_back(); }
+		~ibRefReadGuard() { if (m_pushed) --g_refReadDepth; }
 		bool Cycle() const { return m_cycle; }   // true == this identity is already being read up the stack
 	};
 }

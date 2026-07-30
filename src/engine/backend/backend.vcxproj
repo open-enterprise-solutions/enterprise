@@ -344,6 +344,7 @@
     <ClInclude Include="plugin\pluginManager.h" />
     <ClInclude Include="utils\md5.hpp" />
     <ClInclude Include="utils\sha256.hpp" />
+    <ClInclude Include="utils\debugTrace.h" />
     <ClInclude Include="utils\passwordHash.hpp" />
     <ClInclude Include="utils\dataVersion.hpp" />
     <ClInclude Include="valueInfo.h" />

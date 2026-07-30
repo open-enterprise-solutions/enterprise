@@ -379,11 +379,11 @@ void ibDataProcessorTree::PrepareContextMenu(wxMenu* defaultMenu, const wxTreeIt
 
 void ibDataProcessorTree::ShowContextMenu(wxWindow* eventSrc, const wxTreeItemId& item, const wxPoint& pos)
 {
-	wxMenu* innerMenu = new wxMenu;
-	PrepareContextMenu(innerMenu, item);
+	wxMenu innerMenu;   // stack — PopupMenu does not take ownership, and it blocks until dismissed
+	PrepareContextMenu(&innerMenu, item);
 
 	std::vector<int> boundIds;
-	for (auto def_menu : innerMenu->GetMenuItems())
+	for (auto def_menu : innerMenu.GetMenuItems())
 	{
 		const int id = def_menu->GetId();
 		if (id == ID_METATREE_NEW
@@ -398,7 +398,7 @@ void ibDataProcessorTree::ShowContextMenu(wxWindow* eventSrc, const wxTreeItemId
 		boundIds.push_back(id);
 	}
 
-	eventSrc->PopupMenu(innerMenu, pos);
+	eventSrc->PopupMenu(&innerMenu, pos);
 
 #ifdef __WXOSX__
 	auto* handler = eventSrc->GetEventHandler();
@@ -413,8 +413,6 @@ void ibDataProcessorTree::ShowContextMenu(wxWindow* eventSrc, const wxTreeItemId
 		eventSrc->GetEventHandler()->Unbind(wxEVT_MENU, &ibDataProcessorTree::ibDataProcessorTreeCtrl::OnCommandItem, m_metaTreeCtrl, id);
 	}
 #endif
-
-	delete innerMenu;
 }
 
 void ibDataProcessorTree::UpdateToolbar(ibValueMetaObject* obj, const wxTreeItemId& item)

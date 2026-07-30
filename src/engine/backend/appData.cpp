@@ -418,6 +418,12 @@ ibApplicationData::~ibApplicationData()
 	// m_lockManager → m_pluginManager → m_connectionPool. Each step is
 	// a normal unique_ptr<T>::~unique_ptr() that fires the polymorphic
 	// dtor chain on T — no explicit reset() needed.
+	//
+	// Nothing may report "what survived" from HERE: the sweep above happens
+	// after this body returns, so the metadata tree is still fully alive at
+	// this point. The live-object report therefore sits in DestroyAppDataEnv,
+	// past the delete. (Measured 2026-07-30: reporting here printed 510 live
+	// property objects that the sweep then destroyed to zero.)
 }
 
 
@@ -634,6 +640,22 @@ bool ibApplicationData::DestroyAppDataEnv()
 		// Pool shutdown is now driven by ~ibApplicationData (RAII) —
 		// see the dtor for the ordering rationale.
 		wxDELETE(s_instance);
+
+		// The ibPropertyObject live-register used to be printed here. It answered its question —
+		// "none alive, clean teardown" — and the answer is now kept by something cheaper and
+		// wider: the CRT exit dump is empty (docs/engineering-playbook/25-memory-leaks.md), so a
+		// property object that outlives teardown shows up there by itself, named, with the
+		// tracker able to produce its stack. A mutex and a set on every construction, in every
+		// Debug run, to re-answer a settled question was the wrong trade.
+
+		// Last: hand the string pool's free list back. It is a cache, but the CRT cannot tell a
+		// cache from a leak — every cached block sits in the exit dump holding its old contents,
+		// which is where the "leaked" fragments of metadata names came from. Draining here, past
+		// the metadata tree and every session, leaves the dump saying only what actually leaked.
+		// Per-module and per-thread (see the note on Drain), so this covers the backend's main
+		// thread — the one that churns strings.
+		ibFStringPool::Drain();
+
 		return true;
 	}
 

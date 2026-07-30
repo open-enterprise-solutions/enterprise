@@ -350,17 +350,19 @@ void ibCompileContext::PushVariable(const wxString& strVarName, const wxString& 
 
 void ibCompileContext::PushFunction(const wxString& strFuncName, const wxString& strContextVar, const wxString& strShortDescription, unsigned int numFunction, bool hasRetVal, int argCount)
 {
-	std::shared_ptr<ibCompileContext::ibFunction> contextFunction(
-		new ibFunction(strFuncName, CreateContext(hasRetVal ? RETURN_FUNCTION : RETURN_PROCEDURE))
-	);
+	// No compile-context here. A context method has no body to compile, so the only thing the
+	// (name, context) ctor would do is wire the back-pointer on a context nobody then keeps:
+	// ibFunction stopped owning contexts (see its ctor comment), this call site never stored
+	// the pointer, and CreateContext hands out a raw one. The result was one 116-byte context
+	// leaked per registered context method, per compile — and PrepareModuleData registers the
+	// whole system API, so closing an editor (SyntaxControl recompiles) leaked another set.
+	std::shared_ptr<ibCompileContext::ibFunction> contextFunction(new ibFunction(strFuncName));
 
 	contextFunction->m_nStart = numFunction;
 	contextFunction->m_kind = ibFnKind::ContextMethod;
-	// The (name, compileContext) ctor wires the back-pointer but does NOT
-	// stamp m_bCodeRet (defaults false). Context methods have no compile
-	// finalize that runs IsReturnFunction(m_numReturn), so set it straight
-	// from hasRetVal here — otherwise every built-in function (TrimAll,
-	// Left, Right, ...) resolves as a procedure and using its result throws
+	// m_bCodeRet defaults false and context methods have no compile finalize to run
+	// IsReturnFunction(m_numReturn) — set it straight from hasRetVal, otherwise every built-in
+	// function (TrimAll, Left, Right, ...) resolves as a procedure and using its result throws
 	// ERROR_USE_PROCEDURE_AS_FUNCTION.
 	contextFunction->m_bCodeRet = hasRetVal;
 

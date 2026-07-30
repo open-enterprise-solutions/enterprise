@@ -59,9 +59,39 @@ namespace detail {
 
 	struct Node { Node* next; };
 
-	struct ThreadPool {                  // trivially destructible — no thread-exit / static-order hazard
+	struct ThreadPool {
 		Node*         head[kNum]  = {};
 		std::size_t   count[kNum] = {};
+
+		// Hand every cached block back to the CRT. Shared by Drain() and, off Windows, by the
+		// destructor below.
+		void Release() noexcept {
+			for (int c = 0; c < kNum; ++c) {
+				Node* node = head[c];
+				while (node != nullptr) {
+					Node* const next = node->next;
+					::operator delete(node);
+					node = next;
+				}
+				head[c] = nullptr;
+				count[c] = 0;
+			}
+		}
+
+#ifndef __WXMSW__
+		// POSIX has no DLL_THREAD_DETACH, so the drain that covers worker threads on Windows has
+		// no place to live here — and without it every thread that ends keeps its cache forever,
+		// which on a long-running server (wenterprise-server spawns per session) accumulates
+		// thread after thread. So off Windows the pool destroys itself on thread exit, which is
+		// exactly what thread_local destructors are for.
+		//
+		// NOT done on Windows, deliberately: there a thread_local with a destructor is built by
+		// __dyn_tls_init for EVERY thread and costs an 8-byte registration node that is lost when
+		// a thread is killed at process exit — the trade is measured in
+		// docs/engineering-playbook/25-memory-leaks.md. DllMain covers those threads for free, so
+		// the pool stays trivially destructible there.
+		~ThreadPool() noexcept { Release(); }
+#endif
 	};
 
 	// inline (C++17) ⇒ ONE instance merged across all TUs; thread_local ⇒ one
@@ -96,6 +126,21 @@ inline void Deallocate(void* p, std::size_t bytes) noexcept {
 	detail::t_pool.head[c] = n;
 	++detail::t_pool.count[c];
 }
+
+// Hands this thread's cached blocks back to the CRT. The cache exists to make string churn
+// cheap, not to outlive the process: at exit the free list is indistinguishable from a leak in
+// the CRT dump — the block still holds its old contents with only the first word overwritten by
+// `next`, which is why the dump used to show fragments of metadata names. 279 blocks of that
+// hide the next real leak.
+//
+// An explicit call at a chosen point, because the one thread that needs it most cannot be reached
+// any other way: the thread that calls exit() detaches the PROCESS, never itself, so no
+// thread-exit hook fires for it on any platform. Worker threads are covered without this — by
+// DLL_THREAD_DETACH on Windows, by ~ThreadPool elsewhere (see the note there).
+//
+// Note the pool is thread_local AND per-module — an inline variable is one instance per TU set, so
+// each DLL carries its own. Draining has to happen inside the module whose strings churn.
+inline void Drain() noexcept { detail::t_pool.Release(); }
 
 } // namespace ibFStringPool
 

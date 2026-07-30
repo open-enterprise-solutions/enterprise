@@ -789,12 +789,12 @@ void ibMetadataTree::PrepareContextMenu(wxMenu* defaultMenu, const wxTreeItemId&
 
 void ibMetadataTree::ShowContextMenu(wxWindow* eventSrc, const wxTreeItemId& item, const wxPoint& pos)
 {
-	wxMenu* innerMenu = new wxMenu;
-	PrepareContextMenu(innerMenu, item);
+	wxMenu innerMenu;   // stack — PopupMenu does not take ownership, and it blocks until dismissed
+	PrepareContextMenu(&innerMenu, item);
 
 	// Collect IDs of custom (non-standard) menu items
 	std::vector<int> boundIds;
-	for (auto def_menu : innerMenu->GetMenuItems())
+	for (auto def_menu : innerMenu.GetMenuItems())
 	{
 		const int id = def_menu->GetId();
 		if (id == ID_METATREE_NEW
@@ -812,13 +812,11 @@ void ibMetadataTree::ShowContextMenu(wxWindow* eventSrc, const wxTreeItemId& ite
 		boundIds.push_back(id);
 	}
 
-	m_metaTreeCtrl->PopupMenu(innerMenu, m_metaTreeCtrl->ScreenToClient(eventSrc->ClientToScreen(pos)));
+	m_metaTreeCtrl->PopupMenu(&innerMenu, m_metaTreeCtrl->ScreenToClient(eventSrc->ClientToScreen(pos)));
 
 	for (int id : boundIds) {
 		m_metaTreeCtrl->Unbind(wxEVT_MENU, &ibMetadataTree::ibMetaTreeCtrl::OnCommandItem, m_metaTreeCtrl, id);
 	}
-
-	delete innerMenu;
 }
 
 void ibMetadataTree::UpdateToolbar(ibValueMetaObject* obj, const wxTreeItemId& item)

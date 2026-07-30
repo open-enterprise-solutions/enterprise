@@ -364,7 +364,10 @@ protected:
 
 	wxString GetIndentString(int indent) const; // gets the string with the indentation
 
-	ibPropertyObject() /*: m_parent(nullptr)*/ { m_category = new ibPropertyCategory(this); }
+	// Defined out of line (propertyObject.cpp) so the live-object tally stays a
+	// SINGLE process-wide count: an inline ctor would hand frontend.dll its own
+	// copy of the static and split the number across the two DLLs.
+	ibPropertyObject();
 
 	friend class ibProperty;
 	friend class ibEvent;
