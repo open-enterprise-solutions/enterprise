@@ -7,6 +7,7 @@
 
 #include "backend/query/schemaSnapshot.h"
 #include "backend/query/queryColumn.h"
+#include "backend/query/tempTableQueryable.h"                       // ibSchemaTableQueryable — the totals table as a source
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
 #include "backend/metaCollection/partial/registerQueryLowering.h"   // ibRegValueField
 #include "backend/databaseLayer/databaseMaterializeBuilder.h"      // ibCanMaterialize — ask L2-2, never a dialect
@@ -176,6 +177,24 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 				ibQueryColumnExpr::Col(res)));
 
 		pairs.push_back({ inName, outName, res->GetName() });
+	}
+
+	// --- the totals table AS A SOURCE -----------------------------------------------------------
+	// This table is declared BY a metaobject but is not one, so nothing else vends a queryable for
+	// it — and the door needs one to read or write anything. Both L3-4 operations gate on exactly
+	// that (`m_queryable == nullptr` -> "nothing to do"), so without this binding regeneration and
+	// the shard fold are unreachable code: they return success having touched nothing.
+	//
+	// Bound HERE, after every column exists, and built from the table's OWN declaration — the
+	// scaffold period plus every logical column — so the source cannot drift from the schema it
+	// describes. The physical TABLE, deliberately, not one of the views below: a view sums the
+	// shards away, and the fold's whole business is the individual shard rows underneath.
+	{
+		std::vector<const ibBackendQueryColumn*> sourceColumns = t.m_scaffold;
+		for (const ibSchemaColumn& c : t.m_columns)
+			sourceColumns.push_back(c.m_column);
+		t.SelfSource(std::make_shared<ibSchemaTableQueryable>(
+			t.m_name, t.m_id, std::move(sourceColumns), GetMetaData()));
 	}
 
 	// --- the read views, composed from L2-2 primitives ------------------------------------------

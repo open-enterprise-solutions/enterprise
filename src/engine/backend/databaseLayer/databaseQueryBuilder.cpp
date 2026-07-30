@@ -1099,6 +1099,15 @@ void ibQueryStatement::SetParamBlob(int p, const void* d, long n) { Put(p, ibCon
 void ibQueryStatement::SetParamDate(int p, const wxDateTime& v)   { Put(p, ibConst(ibValue(v))); }
 void ibQueryStatement::SetParamBool(int p, bool v)                { Put(p, ibConst(ibValue(v))); }
 
+// The one bind that is not a constant: `col = col + <delta>`, evaluated by the DB. The column name
+// comes from the bind position — m_columns is the bind order — so the caller supplies only the delta.
+void ibQueryStatement::SetParamAccumulate(int p, const ibNumber& delta)
+{
+	if (p < 1 || p > static_cast<int>(m_columns.size()))
+		return;
+	Put(p, ibBinOp(ibQueryBinOp::Add, ibCol(m_columns[p - 1]), ibConst(ibValue(delta))));
+}
+
 ibDmlStatement ibQueryStatement::BuildDml() const
 {
 	if (m_kind == Kind::Delete) {

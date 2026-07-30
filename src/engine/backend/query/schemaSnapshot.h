@@ -145,9 +145,11 @@ struct ibSchemaMaterialize
 	wxString m_guard;
 
 	// SPLIT TOTALS — how many shard rows one logical key is spread across, to relieve write
-	// contention on a hot key. 1 = not split (the default, and correct for almost every register:
-	// the read pays O(N) shards for every row, so splitting is for registers PROFILED hot on write,
-	// never a default). The view absorbs the split — it sums the shards — so nothing above L3 can
+	// contention on a hot key. 1 = not split (the default today: without the fold running on a
+	// schedule the read pays O(N) shards on every row forever, so splitting is for registers PROFILED
+	// hot on write. Once ibDerivedState::Collapse runs regularly the tax shrinks to the OPEN period
+	// alone — closed ones fold back to one row per key — and a wider default becomes defensible;
+	// docs/register-totals-strategy.md §6a). The view absorbs the split — it sums the shards — so nothing above L3 can
 	// tell a split register from a plain one. Engines without ibMaterializationDialect::
 	// m_connectionIdExpr (SQLite) collapse to 1: single-writer engines have no contention to split.
 	unsigned int m_shards = 1;
@@ -221,6 +223,10 @@ struct ibSchemaTable
 	// columns are NOT owned (they belong to the in-memory config, valid for the save).
 	std::vector<std::shared_ptr<ibRawDBColumn>> m_ownedRaw;
 
+	// A queryable this table owns (SelfSource) — set only for a table nothing else vends one for.
+	// Empty on every table declared by a metaobject: there m_queryable points at the live config.
+	std::shared_ptr<const ibBackendQueryable>   m_ownedQueryable;
+
 	// Scaffold columns (the uuid row-key / a register's rowData) — created WITH the table, never altered.
 	std::vector<const ibBackendQueryColumn*> m_scaffold;
 	// Logical columns (attributes / dimensions / resources) — diffed by id.
@@ -240,6 +246,18 @@ struct ibSchemaTable
 	// (the queryable is bound at construction by ibSchemaSnapshot::CreateSchemaTable; External re-binds it
 	//  for the shared sys_const table only.)
 	ibSchemaTable& External(const ibBackendQueryable* q) { if (m_queryable == nullptr) { m_queryable = q; m_external = true; } return *this; }
+
+	// Bind a queryable this table OWNS, for a table no metaobject vends one for — the DERIVED
+	// (totals) table. Without it the table exists physically and is unreachable through the door:
+	// regeneration and the shard fold both gate on a non-null queryable and quietly do nothing.
+	// Held by shared_ptr so the pointer survives every move of this struct inside the snapshot's
+	// deque, exactly like m_ownedRaw does for the scaffold columns.
+	ibSchemaTable& SelfSource(std::shared_ptr<const ibBackendQueryable> q)
+	{
+		m_ownedQueryable = std::move(q);
+		m_queryable      = m_ownedQueryable.get();
+		return *this;
+	}
 
 	// Add a scaffold raw column (uuid / rowData) — owned, returns the stable pointer for index use.
 	const ibBackendQueryColumn* Scaffold(ibRawDBColumn col) { const ibBackendQueryColumn* p = OwnRaw(std::move(col)); m_scaffold.push_back(p); return p; }

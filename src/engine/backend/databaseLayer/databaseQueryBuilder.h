@@ -1057,6 +1057,19 @@ public:
 	// RLS-restricted save uses it to fold the access predicate into the UPDATE. Ignored by other kinds.
 	void SetWherePredicate(ibQueryExprPtr where) { m_wherePredicate = std::move(where); }
 
+	// ACCUMULATING bind: the column's new value is its CURRENT value plus `delta`, computed by the
+	// DB — `col = col + ?`. Update only (an insert has no current value to add to).
+	//
+	// It is a sibling of the SetParam* family, not an escape hatch: a statement's values are already
+	// expression nodes, so this simply binds a different node in the same slot. The column is taken
+	// from the bind position, so the caller names nothing the statement does not already know.
+	//
+	// Why it exists as its own verb: a read-modify-write on the client silently discards whatever
+	// landed between the read and the write, while an in-statement addition composes with it. That is
+	// what lets a maintenance pass move figures around a table people are writing to. Pass a negative
+	// delta to subtract.
+	void SetParamAccumulate(int nPosition, const ibNumber& delta);
+
 private:
 	void           Put(int position, ibQueryExprPtr expr);   // 1-based -> m_values[pos-1]
 	ibDmlStatement BuildDml() const;

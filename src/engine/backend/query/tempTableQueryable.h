@@ -189,4 +189,62 @@ private:
 	const ibMetaData*         m_metaData;    // reference / enum reconstruction context
 };
 
+// ==========================================================================
+// ibSchemaTableQueryable — a table the SCHEMA declared, read and written as an ordinary L3 source.
+//
+// The case it exists for is the DERIVED table (a register's totals). Every other table in the
+// snapshot is declared BY a metaobject and therefore already has that metaobject's queryable; a
+// derived table is declared by one but is not one, so nothing vends a source for it — and until
+// something did, both L3-4 floors were unreachable: the door needs a queryable to read or write
+// through, and their entry gates simply returned "nothing to do" on a null.
+//
+// Physically it is an ordinary table, so it needs no provider of its own — like ibDbTempTableQueryable
+// it does NOT override GetProvider and is read by the plain DB scan. What it does need is the metaData
+// context, because a totals table's dimensions are real attribute columns (a reference dimension is a
+// field spread), so reconstructing their values takes the same machinery any other table's read does.
+//
+// NO primary key is reported, deliberately. The base default (empty) is what we want: it makes an
+// UPDATE key off the door's own .Where() conditions instead of a key match, which is exactly how a
+// caller addresses ONE physical row of a split key (period + dimensions + shard). Reporting a key
+// here would silently widen every write.
+// ==========================================================================
+class ibSchemaTableQueryable : public ibBackendQueryable
+{
+public:
+	ibSchemaTableQueryable(wxString tableName, ibMetaID tableId,
+	                       std::vector<const ibBackendQueryColumn*> columns,
+	                       const ibMetaData* metaData = nullptr)
+		: m_tableName(std::move(tableName)), m_tableGuid(wxNewUniqueGuid), m_tableId(tableId)
+		, m_columns(std::move(columns)), m_metaData(metaData) {}
+
+	wxString          GetQueryTableName() const override { return m_tableName; }
+	ibGuid            GetQueryTableGuid() const override { return m_tableGuid; }
+	ibMetaID          GetQueryTableId()   const override { return m_tableId; }
+	const ibMetaData* GetMetaData()       const override { return m_metaData; }
+	// No row key and no keyset: a derived table is addressed by its declared key columns, never
+	// scrolled. An identity sort would invent an ordering nothing stores.
+	std::vector<ibQuerySortItem> GetIdentitySort() const override { return {}; }
+
+	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override
+	{
+		for (const ibBackendQueryColumn* c : m_columns)
+			if (c->GetName() == name) return c;
+		return nullptr;
+	}
+	std::vector<const ibBackendQueryColumn*> GetColumns() const override { return m_columns; }
+	bool OwnsColumn(const ibBackendQueryColumn* col) const override
+	{
+		for (const ibBackendQueryColumn* c : m_columns)
+			if (c == col) return true;
+		return false;
+	}
+
+private:
+	wxString                                 m_tableName;
+	ibGuid                                   m_tableGuid;
+	ibMetaID                                 m_tableId;
+	std::vector<const ibBackendQueryColumn*> m_columns;    // NOT owned — the schema table / the config own them
+	const ibMetaData*                        m_metaData;   // reference / enum reconstruction context
+};
+
 #endif // __TEMP_TABLE_QUERYABLE_H__

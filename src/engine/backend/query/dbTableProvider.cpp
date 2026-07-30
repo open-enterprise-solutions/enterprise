@@ -2250,10 +2250,37 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 			// WHERE and would ignore the folded predicate. One statement, the row count is the answer.
 			ibQueryStatement upd(ibQueryStatement::Kind::Update, table, columns, matchKeys, spec.m_holder);
 			int p = 1;
-			for (const auto& wv : *spec.m_writeValues)
+			for (size_t idx = 0; idx < spec.m_writeValues->size(); idx++) {
+				const auto& wv = (*spec.m_writeValues)[idx];
+				const bool additive = spec.m_writeAdditive != nullptr
+					&& idx < spec.m_writeAdditive->size() && (*spec.m_writeAdditive)[idx];
+
+				// ACCUMULATE (AddValue) — `col = col + <delta>`, computed by the DB. A statement's
+				// values ARE IR expressions, so this occupies exactly the slot a bound Const would:
+				// no L2 change and no raw-SQL hatch. It matters because a read-modify-write on the
+				// client silently discards whatever landed between the read and the write, while an
+				// in-statement addition composes with it — the same property that lets a totals
+				// trigger accumulate without coordinating with anyone.
+				if (additive) {
+					const std::vector<wxString> fields = ColumnFieldNames(wv.first);
+					// Arithmetic has no meaning on a spread column (a reference is two fields), so
+					// this is single-field only. Falls through to a plain assignment rather than
+					// emitting something wrong if that is ever violated.
+					wxASSERT_MSG(fields.size() == 1, wxT("AddValue: additive write needs a single-field numeric column"));
+					if (fields.size() == 1) {
+						upd.SetParamAccumulate(p++, wv.second.GetNumber());
+						continue;
+					}
+				}
 				BindWriteValue(upd, wv.first, metaData, wv.second, p);
-			if (spec.m_predicate)
-				upd.SetWherePredicate(ibMetaIRBuilder::BuildPredicateExpr(spec.m_queryable, spec.m_predicate, wxEmptyString, /*pathAsExists*/ true));
+			}
+			// WHERE = the folded RLS predicate AND the door's OWN .Where() conditions. The conditions
+			// were dropped here before, which made `.Where(...).Update()` update by primary key alone
+			// — a caller narrowing to a subset silently hit every row the key matched. DELETE has
+			// always folded both through BuildWhere; UPDATE now agrees with it.
+			if (ibQueryExprPtr where = ibMetaIRBuilder::BuildWhere(spec.m_queryable, *spec.m_conditions,
+			                                                       spec.m_predicate, wxEmptyString, /*pathAsExists*/ true))
+				upd.SetWherePredicate(where);
 			return upd.RunQuery();
 		}
 

@@ -510,6 +510,22 @@ public:
 	ibDataQueryBuilder& SetValue(const ibBackendQueryColumn* column, const ibValue& value);
 	ibDataQueryBuilder& SetValue(const ibRawDBColumn& rawColumn, const ibValue& value);   // direct field (door owns a copy)
 
+	// ACCUMULATE instead of assign — `column = column + delta`, evaluated by the DB. UPDATE only
+	// (an INSERT has no current value to add to), and numeric single-field columns only: the point
+	// is arithmetic, and a spread column (a reference is two fields) has none.
+	//
+	// Why it exists rather than read-modify-write on the client: between the read and the write
+	// another writer's delta lands, and assignment SILENTLY discards it. The addition happens inside
+	// the statement, so concurrent deltas compose instead of overwriting each other — the same
+	// property that lets a totals trigger accumulate without coordinating with anyone. Pass a
+	// negative delta to subtract.
+	//
+	// Mechanically it is not a new capability, only a newly reachable one: an ibQueryStatement's
+	// values ARE IR expressions (a plain SetValue just happens to put a Const there), so this puts
+	// `Add(Col, Const)` in the same slot. No L2 change, no raw SQL.
+	ibDataQueryBuilder& AddValue(const ibBackendQueryColumn* column, const ibValue& delta);
+	ibDataQueryBuilder& AddValue(const ibRawDBColumn& rawColumn, const ibValue& delta);   // direct field (door owns a copy)
+
 	// Effective sort order = user sort ++ the queryable's identity tail (deduped
 	// by metaID; the row-key sentinel kept once). This is the cursor's TOTAL
 	// order — Select() uses it internally, and a caller that builds a keyset
@@ -659,6 +675,10 @@ private:
 	std::vector<wxString>             m_groupAliases;
 	std::vector<ibValue>          m_keyIn;          // .WhereKeyIn() — row-key IN (OR-of-equals)
 	std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> m_writeValues;   // .SetValue() — write assignments (key + data columns)
+	// Parallel to m_writeValues, ONE ENTRY PER ASSIGNMENT (both SetValue and AddValue push here):
+	// true = this assignment ACCUMULATES (col = col + value) instead of replacing. Same
+	// index-aligned-vectors shape the group-by keys already use, so the provider walks one loop.
+	std::vector<bool>             m_writeAdditive;
 	std::vector<AggregateItem>    m_aggregates;     // .Group().Sum()… — GroupBy common aggregate set
 	std::vector<HavingItem>       m_having;         // .Having()
 	std::vector<ibTotalLevel>     m_totals;         // .TotalBy(field, dim) — totals dimensions, in order
@@ -715,6 +735,7 @@ struct ibDataQuerySpec
 	const std::vector<ibDataQueryBuilder::AggregateItem>* m_aggregates = nullptr;
 	const std::vector<ibDataQueryBuilder::HavingItem>*    m_having     = nullptr;
 	const std::vector<std::pair<const ibBackendQueryColumn*, ibValue>>* m_writeValues = nullptr;
+	const std::vector<bool>*                        m_writeAdditive = nullptr;   // parallel to m_writeValues: col = col + value
 	const std::vector<ibDotWalkColumn>*             m_dotWalks    = nullptr;
 	const std::vector<ibDotWalkColumn>*             m_dimWalks    = nullptr;   // dot-walk TOTALS dimensions
 	const std::vector<ibQueryColumnSelect>*         m_selectExprs = nullptr;   // computed output columns (arithmetic / CASE)

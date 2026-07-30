@@ -5,7 +5,10 @@ Architecture proposal for OES register storage that would move the
 preserving the read latency profile of the classic denormalized
 totals-table pattern (as used by comparable enterprise platforms).
 Status: **the READING works; the materialisation is declared, applied on a live Firebird, and
-survives a register kind switch.** (2026-07-29)
+survives a register kind switch** (2026-07-29). **The maintenance side landed 2026-07-31** — the
+derived table became an ordinary readable source, the shard fold and the parity check exist, and
+both sit behind one call a scheduled job makes (§6a, § *What remains* 1–1b). Nothing is wired to a
+scheduler yet, and the parity check has not been run against real traffic.
 
 Read the two halves separately, because they landed in the opposite order to this document:
 
@@ -549,27 +552,47 @@ Two properties make it as autonomous as the base deltas — no coordination, no 
    TX-atomically → **drift-proof is preserved.**
 
 **Tradeoff:** read `O(1)` → `O(N)` (sum N shards). Sharding is **per-register** — the read tax
-hits *all* its rows, not just the hot one — so shard **only** registers profiled hot on write,
-never by default.
+hits *all* its rows, not just the hot one — so shard registers profiled hot on write, not everything
+by reflex.
 
-#### When it actually helps — and the intuition that misleads
+> **Amended 2026-07-31 (§6a).** The read tax is no longer permanent: the fold collapses closed
+> periods back to one row per key, so only the OPEN period stays spread. That changes the arithmetic
+> behind the default — a widely-enabled split now costs a handful of adjacent rows on the current
+> period rather than N rows across all history. Widely-enabled is defensible once the fold runs on a
+> schedule; until it does, the tax is still standing and the switch stays off by default.
+
+#### When it actually helps — and one guess this document got wrong
 
 Splitting cures **contention for one row**, not size. The question is never "is this register
-big?" but **how many writers land on the SAME key at the same time**.
+big?" but **how many writers converge on the SAME key at the same time**. Two things make them
+converge, and the second one was missing from this section entirely:
+
+- the write STREAM narrows to one key — a revenue / VAT account every posting touches, a
+  fast-moving SKU, a dominant counterparty;
+- the write must first READ the row under a lock — which turns even a moderate stream into a queue,
+  because each writer holds the row while it decides what to write.
 
 | Shape | Split? | Why |
 |---|---|---|
 | An account like revenue / VAT with no or coarse subconto | **yes** | every posting in the company lands on one key per period |
 | Retail with a fast-moving SKU | **yes** | hundreds of tills, one product row |
 | Settlements with one dominant counterparty | **yes** | same row, many writers |
-| **Batch (lot) accounting** | **no** | a lot is an extra dimension: keys MULTIPLY, writers spread out |
-| Any register with fine-grained dimensions | **no** | movements already land on different rows |
+| Any register with fine-grained dimensions and no read-back | **no** | movements already land on different rows |
 | A rarely-posted register | **no** | no concurrency to relieve |
 
-Batch accounting is the trap, because it *feels* like the heavy case. It is heavy in ROW COUNT and
-light in contention — two tills almost never write the same lot, since each delivery has its own
-key. Splitting there multiplies an already-large totals table by N and taxes every read for a
-collision that was not happening.
+> **Correction (2026-07-31).** This table used to list **batch (lot) accounting** as the trap — heavy
+> in rows, light in contention, because each delivery has its own key and two tills rarely write the
+> same lot. That reasoning covers the RECEIPT side and quietly assumes the ISSUE side works the same
+> way. It does not. FIFO issue draws from the OLDEST open lot, so the entire sales stream for a
+> product converges on ONE lot row until it is exhausted — and each issue must read the remaining
+> quantity under a lock before it can decide how much to take. Batch accounting is therefore heavy in
+> rows AND contended, which is the case for splitting, not against it.
+>
+> The reasoning had checked half the traffic. What decides the answer is not the kind of accounting
+> but whether the issue is computed **synchronously at posting**: an online FIFO is hot, the same
+> lots settled by a periodic close are not — one writer, no convergence. Kept here rather than
+> quietly rewritten, because the shape of the mistake is the lesson: a contention claim that only
+> examines writes and not read-backs is only half-checked.
 
 **The measurable symptom** of real contention: posting time grows NON-LINEARLY with the number of
 concurrent users at unchanged document size — five cashiers fine, twenty four times slower rather
@@ -610,6 +633,45 @@ Regeneration with shards is trivial and stays so: the bulk rebuild writes one co
 key into **shard 0** (a rebuild is a single writer, and there is nothing to spread), and the
 trigger distributes everything that follows through the hash. The reads never notice — the view
 sums the shards, which is the sum-invariance the whole scheme rests on.
+
+#### 6a. Folding the shards back — what makes the split affordable (landed 2026-07-31)
+
+A split trades write contention for read width: one logical key occupies N rows forever, and every
+read of it sums N rows forever. That standing tax is what kept the switch off by default and made
+"split everything" a bad idea rather than a lazy one.
+
+**The fold removes the tax where it earns nothing.** `ibDerivedState::Collapse` re-packs a key's
+shards back into one row — reading the TOTALS table, never the movements, so it costs a fraction of
+a rebuild. Applied to a period nobody writes to any more, it is permanent: a closed month folds to
+one row per key and stays there. Only the open period stays spread, which is where the split is
+actually doing its job. History reads at N = 1, and the shards on top of the current period are a
+handful of rows sitting adjacently in the index (the shard column is the key's last segment, so
+reading them is one range scan, not N lookups).
+
+Three properties make it safe to run while people work, and all three come from moving figures with
+ARITHMETIC rather than rewriting them:
+
+- **`col = col + delta`, computed by the DB** (the door's `AddValue`). A movement landing mid-fold
+  composes with the adjustment instead of being overwritten by it — the same reason the trigger can
+  accumulate without coordinating with anyone.
+- **A drained row is dropped only when it is provably empty.** One that took a delta mid-fold stays,
+  its contribution intact, and the next pass folds it.
+- **One transaction per KEY** — the finest scope that is still atomic (the add / subtract pair), so a
+  row lock lives three statements rather than a table's worth of them.
+
+The frontier is DERIVED, never stored: everything strictly before the current stored period, worked
+out from the table's own unit and the clock. There is no "how far have we folded" state to keep and
+therefore none to get out of step — the fold sees what is folded by counting rows per key.
+
+**One fold per table at a time.** Concurrent writers are fine; two folds racing on one table are not,
+and the failure is worth stating because it nearly works. Both move the same figure twice, which the
+sum survives (it skews the distribution and the next pass straightens it) — until one drains a row to
+zero and deletes it while the other still holds that row's value: its addition lands, its subtraction
+hits nothing, and the key's total grows. Serialise at the job level; different tables are independent.
+
+**Not running it is safe.** Shards read exactly right at any distribution, so a skipped fold costs a
+slightly wider read and nothing else. This is housekeeping, never correctness — which is precisely
+why it can run unattended.
 
 ### 7. Who invokes L3-4 (deployment)
 
@@ -877,13 +939,30 @@ performance numbers above:
 The maintenance is live and the switches work. What is NOT yet proven or built, in the order it
 matters:
 
-1. **Numeric parity is UNVERIFIED.** Everything checked so far is the SHAPE of the SQL — that the
-   bundle renders the intended primitives and creates without error. What has not been checked is
-   that the trigger-maintained figures EQUAL the live aggregation over real movements, including
-   after updates, deletes and backdated entries. This is the only remaining question that can make
-   the feature silently wrong rather than merely absent, so it ranks first. The live path is still
-   in place and doubles as the oracle; the test wants an in-memory SQLite base, a few hundred
-   randomised movements, and a column-by-column comparison of the two readings.
+1. **Numeric parity — the CHECK now exists; the answer is still unmeasured.**
+   `ibDerivedState::VerifyLastPeriod` re-aggregates one elapsed period from the movements and compares
+   it key by key with what the totals hold for it, counting disagreements in both directions (a key
+   the movements know and the totals do not, and a figure nothing accounts for). Written as a routine
+   rather than a one-off test, precisely because a full check costs exactly what a full rebuild costs
+   — the same scan, the same grouping — so it can never be the cheap half of a decision. One period
+   is a day's movements, which is affordable on a schedule.
+   Still open: actually running it against real traffic, including updates, deletes and backdated
+   entries. The live path remains in place and is the oracle.
+
+1a. **The maintenance pass** — `MaintainTotals(snapshot, holder)` — is the single call a scheduled
+   job makes: verify each derived table's last elapsed period, then fold its shards. No modes, no
+   policy, no arguments beyond its context. It deliberately does NOT rebuild: regenerating a register
+   is a full history scan and must not start by itself while people work, so it belongs to the
+   Designer's *recompute totals* command (whose body is `RegenerateAll`). The pass therefore never
+   fixes a disagreement — it REPORTS one, and that report is what sends an administrator to the
+   Designer. Nothing is wired to a scheduler yet; the job dispatcher is a separate piece.
+
+1b. **A derived table is now READABLE as an ordinary source.** It is declared by a metaobject but is
+   not one, so nothing vended a queryable for it — and both L3-4 operations gate on exactly that,
+   meaning regeneration had been returning success without touching anything since it was written.
+   `ibSchemaTableQueryable` (bound via `ibSchemaTable::SelfSource`) closes it. Note what this implies
+   about the parity question above: until now there was nothing to compare against, because both
+   sides of the comparison were silent.
 2. **Storage granularity is Day, and it is not a setting.** The periodicity of a READING is a query
    parameter — the caller asks for daily, weekly or monthly rows, or for none at all and gets the
    movements — so nothing about it belongs in the metadata. What Day fixes is the FLOOR under those
