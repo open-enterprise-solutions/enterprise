@@ -245,42 +245,6 @@ The same reasoning removed the last propgrid dependency: `ibPropertyPoint` /
 > `<set>` without saying so, and the frontend's own `prop.h` took `wxPGFlags` **from the
 > backend**. A prefix header does not remove dependencies; it removes the *record* of them.
 
-### 4.1 What a slot may carry — `ibPropertyChoiceList`
-
-A slot's payload has the same rule as its return type: backend types only. Three properties
-offer a list to pick from — `ibPropertyList`, `ibPropertyEnum<T>`, `ibEventAction` — and each
-used to compose a **`wxPGChoices`** and pass it through. That inverted the seam: the core
-built the editor's own type, and it is the reason propgrid had to reach the whole backend.
-
-The data was ours all along (`ibPropertyOptionList` / `ibEventOptionList` carry label + id +
-bitmap; the enum generates the same triple from its creator). Only the *conversion* sat on
-the wrong side. So the slot carries
-
-```cpp
-class BACKEND_API ibPropertyChoiceList {   // propertyObject.h
-    void Add(const wxString& label, long id, const wxBitmap& bmp = wxNullBitmap);
-    unsigned int GetCount() const;
-    wxString GetLabel(unsigned int) const;
-    long GetId(unsigned int) const;
-    const wxBitmap& GetBitmap(unsigned int) const;
-};
-```
-
-and `advpropList` / `advpropEnum` / `advpropEventTool` build the `wxPGChoices` themselves.
-Three hand-rolled conversions became one type.
-
-The same reasoning removed the last propgrid dependency: `ibPropertyPoint` / `ibPropertySize`
-stored their value via `variant << point`, whose operators come from
-`WX_PG_DECLARE_VARIANT_DATA_EXPORTED(wxPoint)` in `propgriddefs.h`. They now use
-`ibVariantDataPoint` / `ibVariantDataSize` (`property/variant/`), shaped exactly like
-`ibVariantDataNumber`. **The backend no longer includes propgrid at all.**
-
-> What that clean-up exposed is worth keeping: the dependencies were never absent, only
-> hidden behind `typeconv.h` → propgrid → everything. `interfaceHelper.h` lived on `<set>`
-> without saying so, and the frontend's own `prop.h` took `wxPGFlags` **from the backend** —
-> the core was handing the grid library to the UI layer. A prefix header does not remove
-> dependencies; it removes the *record* of them.
-
 ---
 
 ## 5. Two kinds of property object — flat and tree
@@ -822,6 +786,34 @@ not own, so queued grid events must not outlive it.
 
 ## 9. Traps and honest remainder
 
+- **`ibPropertyCategory::GetCategory(index)` returns null out of range.** It used to return a
+  freshly built empty category — which leaked (nothing owns it; the dtor sweeps only
+  `m_categories`) and hid a bad index behind a plausible-looking stand-in. `GetCategoryCount()`
+  is the bound; callers that walk it stay inside, and the inspector null-checks anyway.
+- **A member number is not a property index.** `FillMembers` on a control appends the parent
+  sizerItem's properties *after* the control's own, and stores the property index in the
+  member's DATA — so both `GetPropVal` and `SetPropVal` must unpack it via
+  `m_members.GetPropData(lPropNum)`. The write path passed the raw member number for the
+  sizerItem branch, landing on a different property (fixed; the read path was always right).
+  Keep the two paths symmetric when touching either.
+- **`IsSubclassOf` walks the TREE, not the type hierarchy.** Inherited from wxFormBuilder: it
+  climbs `GetParent()` and compares `GetObjectTypeName()` **as a string**, so it answers "is one
+  of my ancestors of this type", not "is my class derived from". Three live callsites
+  (`visualEditor.cpp`, `formFactory.cpp` ×2) and they disagree on case — `"sizerItem"` vs
+  `"SizerItem"` — which only works because `stringUtils::CompareString` is case-insensitive.
+  The engine has a kind-typed clsid for exactly this job ([../CLAUDE.md](../CLAUDE.md) §6).
+- **Three ways to index the same container.** `GetProperty(idx)` (`std::advance` + assert),
+  `GetPropertyByIndex(idx)` (`std::advance` + bounds return) and `GetEvent(idx)` (a hand-rolled
+  `while` loop). The storage is `std::map<wxString, …>`, so indexed access is O(n) *and* the
+  order is lexicographic by name, not declaration order — which is why compare matches
+  properties **by name** (§6.1) rather than by position.
+- **The three `ibBackendProperty` constructors take a `const wxVariant& value` they ignore** —
+  the value is applied later, in `InitProperty` / `InitEvent`. Dead parameter, and it sits
+  exactly where a reader is trying to work out where the value lives.
+- **`AddChild`'s comment claims it is virtual.** It is not.
+- **`~ibPropertyObject` still reaches the frame** (`ibSession::CurrentFrame()->GetProperty()`)
+  to clear a stale selection, with its own TODO asking for an observer — while
+  `ibPropertyObjectNotifier` (§5.3, §5.5) is that observer, already in the same file.
 - **`GetMetaData()` — the non-const overload is a trap, guarded.** Types implement the
   *const* overload (a control resolves it through its owning form). A call through a
   non-const `ibPropertyObject*` hits the base, which `wxFAIL_MSG`es and returns null — a

@@ -481,11 +481,16 @@ bool ibValueFrame::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 			property->SetDataValue(varPropVal);
 	}
 	else if (lPropAlias == eSizerItem) {
-		//if we have sizerItem then call him savepropery 
+		//if we have sizerItem then call him savepropery
 		ibValueFrame* sizerItem = GetParent();
 		if (sizerItem != nullptr &&
 			sizerItem->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
-			ibProperty* property = sizerItem->GetPropertyByIndex(lPropNum);
+			// The member number is NOT the property index: FillMembers appends the
+			// sizerItem's properties AFTER our own, so the index it stored lives in
+			// the member's DATA. Reading it back is what GetPropVal does; writing
+			// must do the same or it lands on a different property.
+			unsigned int idx = m_members.GetPropData(lPropNum);
+			ibProperty* property = sizerItem->GetPropertyByIndex(idx);
 			if (property != nullptr)
 				property->SetDataValue(varPropVal);
 		}

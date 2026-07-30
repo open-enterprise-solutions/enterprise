@@ -442,7 +442,7 @@ public:
 	unsigned int GetPropertyIndex(const wxString& nameParam) const;
 
 	ibProperty* GetPropertyByIndex(unsigned int idx) const {
-		if (m_properties.size() < idx)
+		if (idx >= m_properties.size())
 			return nullptr;
 		auto properties_iterator = m_properties.begin();
 		std::advance(properties_iterator, idx);
@@ -639,19 +639,6 @@ public:
 				result = parent;
 			else
 				result = parent->FindNearAncestor(type);
-		}
-
-		return result;
-	}
-
-	propertyType* FindNearAncestorByBaseClass(const wxString& type) const {
-		propertyType* result = nullptr;
-		propertyType* parent = GetParent();
-		if (parent != nullptr) {
-			if (stringUtils::CompareString(parent->GetObjectTypeName(), type))
-				result = parent;
-			else
-				result = parent->FindNearAncestorByBaseClass(type);
 		}
 
 		return result;

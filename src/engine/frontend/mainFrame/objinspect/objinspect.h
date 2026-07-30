@@ -212,6 +212,8 @@ private:
 		for (unsigned int i = 0; i < catCount; i++) {
 
 			ibPropertyCategory* nextCat = category->GetCategory(i);
+			if (nextCat == nullptr)
+				continue;
 			if (0 == nextCat->GetCategoryCount() && 0 == nextCat->GetPropertyCount()) {
 				continue;
 			}
@@ -283,6 +285,8 @@ private:
 		for (unsigned int i = 0; i < catCount; i++)
 		{
 			ibPropertyCategory* nextCat = category->GetCategory(i);
+			if (nextCat == nullptr)
+				continue;
 			if (0 == nextCat->GetCategoryCount() && 0 == nextCat->GetEventCount()) {
 				continue;
 			}

@@ -343,7 +343,10 @@ ibPropertyCategory* ibPropertyCategory::GetCategory(unsigned int index) const
 			index -= cnt;
 		}
 	}
-	return new ibPropertyCategory(m_owner);
+	// Out of range. Returning a fresh category here leaked it (nothing owns it — the
+	// dtor only sweeps m_categories) AND hid the bad index behind an empty stand-in.
+	// Null says what happened; GetCategoryCount is the bound callers walk.
+	return nullptr;
 }
 
 unsigned int ibPropertyCategory::GetCategoryCount() const
