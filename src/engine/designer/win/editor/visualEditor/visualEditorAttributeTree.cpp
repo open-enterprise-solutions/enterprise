@@ -472,6 +472,11 @@ void ibAttributeTree::OnBeginDrag(wxTreeEvent& event)
 	if (data == nullptr || data->GetDropControl() == 0)
 		return;
 
+	// Dropping a node onto the form CREATES a bound control — a form edit; blocked on a view-only form (leaving the
+	// drag unstarted, so nothing follows the cursor). Same gate as the command tree's drag / the object tree's.
+	if (!m_formHandler->IsEditable())
+		return;
+
 	// Payload = the binding PATH as RAW ids — resolution is via the source explorer (metadata-agnostic), so
 	// the serializer needs no metaData. The drop loads it and resolves the control class from the path. The
 	// SOURCE drag KIND owns its format + serialization + DoDrag (symmetric to the command tree's command kind).

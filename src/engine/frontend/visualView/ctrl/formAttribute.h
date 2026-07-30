@@ -208,8 +208,9 @@ public:
 	ibSourceDataObject* GetSourceValue() const override { return GetValueAsSource(); }
 	void SetSourceValue(ibSourceDataObject* source);
 
-	// True when the value is a REFERENCE (everything read THROUGH it is read-only).
-	bool IsReferenceValue() const;
+	// True when the declared TYPE is a REFERENCE — everything read THROUGH it is read-only (only an OBJECT
+	// source is written; a reference is re-pointed, never written into). Type, not the currently held value.
+	bool IsReferenceType() const;
 
 	// Read down a binding tail (relative to this entry): empty → the value itself;
 	// deeper → step into the value (as a source object) and walk. Encapsulates the

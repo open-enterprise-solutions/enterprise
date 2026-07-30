@@ -501,8 +501,13 @@ bool ibValueForm::IsWritableBinding(const ibSourceDescription& desc) const
 			if (metaObject != nullptr && !metaObject->AccessRight_Modify())
 				return false;
 		}
-		if (attr->IsReferenceValue())
-			return false;            // anything read through a reference is read-only
+		// Only an OBJECT source is written: a catalog / document OBJECT is the record this form edits, so its own
+		// fields are writable. A REFERENCE is an identity, not a record — you RE-POINT it (the reference itself,
+		// path [attr], stays writable), but everything read THROUGH it belongs to a foreign object and is
+		// read-only. Decided from the attribute's declared TYPE, never from the value it happens to hold: an empty
+		// slot is still reference-typed, and a control builds its read-only look before any value lands there.
+		if (path.size() > 1 && attr->IsReferenceType())
+			return false;
 		return path.size() <= 2;     // [attr] or [attr, directField]
 	}
 	// path[0] is always a form-local attribute (the gate) — a non-attribute head is a stale binding.
@@ -676,14 +681,18 @@ void ibFormAttributeValue::SetSourceValue(ibSourceDataObject* source)
 	SetHeldValue(srcVal != nullptr ? *srcVal : ibValue());
 }
 
-bool ibFormAttributeValue::IsReferenceValue() const
+bool ibFormAttributeValue::IsReferenceType() const
 {
-	// Read from the ALREADY-ASSIGNED value's actual type — not the declared Type. For a
-	// COMPOSITE Type only the concrete value tells which one it is. No value → not a ref.
-	// The kind is read straight from the value's clsid (clsid.h) — no metadata lookup.
-	if (m_value.IsEmpty())
-		return false;
-	return ::IsReference(m_value.GetClassType());
+	// Read from the DECLARED Type, not from the held value: whether a path may be written is a property of the
+	// SCHEMA, not of what the slot currently holds — an empty reference is still a reference, and a control
+	// decides its read-only look at build time, before any value is assigned.
+	// A COMPOSITE Type counts as a reference as soon as ONE branch is one: the walk past the head is only
+	// meaningful through that branch anyway. The kind is read straight from the clsid (clsid.h) — no metadata lookup.
+	for (const ibClassID& clsid : GetTypeDesc().GetClsidList()) {
+		if (::IsReference(clsid))
+			return true;
+	}
+	return false;
 }
 
 // Walk the tail through the VALUE's runtime members (FindProp / GetPropVal) — the same

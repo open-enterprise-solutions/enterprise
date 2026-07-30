@@ -260,10 +260,18 @@ the SAME gate the attribute tree reads) — no editor-local flag. Every mutating
   MOVE / DELETE / PASTE menu items;
 - **command tree** — Add (the menu item **and** the accelerator that bypasses it) / Cut / Paste /
   Delete, plus dragging a command onto a control (a binding edit);
-- **attribute tree** — Add / Edit / Delete / Cut / Paste.
+- **attribute tree** — Add / Edit / Delete / Cut / Paste, plus dragging a node onto the canvas
+  (drag-to-create, §5 — the drop CREATES a bound control, so it is a structural edit like any other).
 
 Read-only-safe actions (Copy, Properties) stay live. Gating at each *source* — not only the menu —
 is deliberate: an accelerator or a drag must hit the same wall the greyed menu item shows.
+
+**A drag gates at `OnBeginDrag`, not at the drop (2026-07-30).** The attribute tree's drag was the
+one source that did not ask, so a locked form still took dropped controls — the greyed toolbar and
+menu items said "locked" while the tree said otherwise. The rule the fix follows: a refused drag must
+never START. Gating only the landing (as the metadata tree did — `OnEndDrag` refused, `OnBeginDrag`
+allowed) still drags the item under the cursor and still highlights targets as if they would accept
+it, then silently drops nothing — the user reads that as a bug, not as a lock.
 
 ### 6.2 The inspector never outlives the document
 

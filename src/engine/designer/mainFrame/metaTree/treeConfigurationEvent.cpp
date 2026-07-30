@@ -95,6 +95,10 @@ void ibMetadataTree::ibMetaTreeCtrl::OnBeginDrag(wxTreeEvent& event) {
 	ibValueMetaObject* metaObject = m_ownerTree->GetMetaObject(curItem);
 	if (metaObject == nullptr)
 		return;
+	// A read-only configuration is not restructured — the drag copies a metaobject onto another node. Refuse it at
+	// the START: OnEndDrag already refused the DROP, but the item still followed the cursor as if it would land.
+	if (!m_ownerTree->IsEditable())
+		return;
 	m_draggedItem = curItem;
 	event.Allow();
 }

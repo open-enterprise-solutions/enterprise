@@ -93,6 +93,13 @@ The consistent 4-file split per tree is worth naming, since it repeats:
 An external report / processor is a **self-contained metadata container**, so it gets a
 full navigator of its own rather than a branch inside the configuration tree.
 
+**A read-only tree refuses a drag at its START** (`OnBeginDrag`, `treeConfigurationEvent.cpp`).
+`IsEditable()` (= `!m_bReadOnly`, the flag `SetReadOnly` sets — §1) is what the New / Delete /
+Up / Down toolbar buttons and the Paste handler already ask. `OnEndDrag` asked it too, but
+`OnBeginDrag` did not (fixed 2026-07-30): the node followed the cursor and targets lit up as
+accepting, and only the landing was refused — silently. Same rule as the form editor's trees
+([form-editor.md § 6.1](form-editor.md)).
+
 ---
 
 ## 3. Node payload — two node kinds

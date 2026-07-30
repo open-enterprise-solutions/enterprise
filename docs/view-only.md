@@ -36,10 +36,36 @@ inner per-source** matryoshka:
   asks, `formAttribute.cpp`) also checks the source held by *that binding's* attribute. A
   writable form can still carry a **read-only object**: a read-only role on that object denies
   its `AccessRight_Modify`, so ITS controls are read-only while the rest of the form edits.
+- **Inner per-binding** — the same gate then reads the binding's SHAPE: only an **object** source
+  is written (§2.1).
 
 The right comes from the **metaobject**, read polymorphically off `GetSourceMetaObject()` — a
 dynamic list forwards it through its queryable, so a list over a read-only object greys only
 its data-modifying commands too.
+
+### 2.1 Only an OBJECT is written — a reference is re-pointed
+
+Rights aside, `IsWritableBinding` reads the binding's SHAPE. An **object** (a catalog / document
+object the form holds) is the record this form edits, so its own fields are writable. A
+**reference** is an identity, not a record: the reference ITSELF (path `[attr]`) stays writable —
+you re-point it — but everything read THROUGH it belongs to a foreign object and is read-only.
+Deeper than one field (`[attr, field, …]`) is read-only regardless.
+
+```cpp
+if (path.size() > 1 && attr->IsReferenceType())
+    return false;
+return path.size() <= 2;     // [attr] or [attr, directField]
+```
+
+**The predicate is the declared TYPE, and that is the whole point (2026-07-30).** It used to be
+`IsReferenceValue()` — read off the value the slot currently HELD — and that inverted the answer
+twice over. A form builds its controls before anything lands in an attribute, so an empty
+reference read as "not a reference" and `Reference.Field` came up EDITABLE; once a value did
+arrive, the same check fired one hop too early and made the reference picker itself read-only.
+Writability is a property of the SCHEMA, not of the current contents: `IsReferenceType()` reads
+`GetTypeDesc().GetClsidList()` and the stateless `IsReference(clsid)` kind bit (a composite type
+counts as a reference as soon as one branch is one). Static answer, decided once at build time —
+which is exactly what a build-time read-only look needs.
 
 ---
 
@@ -122,3 +148,9 @@ The **context menu** (`OnContextMenu`) honours the same flag, not just the toolb
 - The per-source (nested read-only object inside a writable form's tablebox) case is covered
   for cell edit + row commands via `IsReadOnly()` / `IsViewOnly()`; a deeper per-column right
   inside a tabular section is a refinement, not wired.
+- A tablebox CELL asks only the form (`m_tableBoxColumn->IsReadOnly()`,
+  `tableBoxColumnRenderer.cpp`), never its own binding — so a foreign column bound THROUGH a
+  reference (`Item.Name`) still edits, where the scalar control with the same binding does not
+  (§2.1). Wiring `IsWritableBinding` in as-is would not do: a row column's path is
+  `[attr, section, field]` — three hops — and the `path.size() <= 2` rule would lock ordinary
+  tabular editing. The tabular path needs its own rule (writable when the HEAD is an object).
