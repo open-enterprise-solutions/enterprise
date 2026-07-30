@@ -81,7 +81,13 @@ static const wxString s_print_16_png = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf
 /* PNG */
 static const wxString s_hierarchy_16_png = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAZUlEQVR4nGNgIBL4VW39jw0zkGJA9/YPKJigAWmV/f9hmGwDGCjxQhqSATjBcWfn/+iYJBccd3b+/72/H47xGYA1DI5jMQA58AgG4nFquOA4JWFAcSzgA1R1gd+AJGVkQHFuxAUAmRxGnOsR4JoAAAAASUVORK5CYII=";
 
-#pragma endregion 
+/* PNG — the start page (home page workspace).
+   Art: icons8 "switch host" (icons8.com), 80px original downscaled to 16px. icons8's free
+   tier requires attribution — see the credits note in docs/home-page.md, and keep it there
+   the same way the ttmath credit is kept. */
+static const wxString s_homePage_16_png = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAGuSURBVDhPpZPdK0NxGMfPrT9D/gRl5c6d/8CFIZoLCp0mrUQpMjtGbji0Y+R4GWteLijOXmyjzHsjlgvvmzINly589d2ynFNT8tSn8/R9eW5+HUH47wwtblevxq9lNXr1J9hhV1AjV+otgNOPHOcALgFcGKBG7zvHDrsCr1EIPwG7L8BMJIH+mQ1I85oOavSYYZYddnUHomlgIXgM1bcBz5qmgxo9Zgoe0B6Bk/sMCg09Zgoe8CeBg+u0sZcfesz8euDo5sXYyw+9Xw8EU0AkkULyOYNU+lUHNXrM6A54YndyAsDeGxB7B3bSQCj5iVDKQPIz6zGz95p7VnYFSdXGF/cvMKnFc/jP4A6cZ7+KFs9i1KaDcaycXMKhauNCvdWuNHePoaFd0lEn9sPc2puF+7deIzrQZR+CS51ErWhXBItVKm7rkU2NtmGTxTZYWlHVUlJe2VjSN+qd8wbOQLhTo9dkGyk1W4dNZptssnRKxbr/QnR6ily+yMDsesyt+MIPm4f3INxn1/fd9ESns0hX+jkd9qky13J0SfGFvRPe0NTo/JZMuFOjx4yx96/5Ag7nnLGj5JMFAAAAAElFTkSuQmCC";
+
+#pragma endregion
 
 void RegisterAllBackendPicture()
 {
@@ -113,6 +119,8 @@ void RegisterAllBackendPicture()
 	::RegisterBackendPicture(wxT("Generate"), g_picGenerateCLSID, s_generate_16_png);
 	::RegisterBackendPicture(wxT("Print"), g_picPrintCLSID, s_print_16_png);
 	::RegisterBackendPicture(wxT("Hierarchy"), g_picHierarchyCLSID, s_hierarchy_16_png);
+
+	::RegisterBackendPicture(wxT("HomePage"), g_picHomePageCLSID, s_homePage_16_png);
 
 	::RegisterBackendPicture(wxT("User"), g_picUserCLSID, s_user_16_png);
 	::RegisterBackendPicture(wxT("UserActive"), g_picUserActiveCLSID, s_activeUser_16_png);

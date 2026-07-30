@@ -149,16 +149,11 @@ bool ibValueForm::CreateDocForm(ibDocument* docParent, bool createContext)
 	}
 
 	if (createContext) {
-		ibSourceDataObject* srcData = GetSourceObject();
-		if (srcData != nullptr && !srcData->IsNewObject()) {
-			ibFormVisualDocument* foundedVisualDocument =
-				ibFormVisualDocument::FindDocByUniqueKey(m_formKey);
-			if (foundedVisualDocument != nullptr) {
-				foundedVisualDocument->Activate();
-				return true;
-			}
-		}
-		else if (srcData == nullptr) {
+		// "This one is already open — bring it up instead of opening a second copy." An
+		// element placed on the start page carries an identity of its OWN, so it never
+		// answers here and never blocks the same thing from being opened for real.
+		const ibSourceDataObject* srcData = GetSourceObject();
+		if (srcData == nullptr || !srcData->IsNewObject()) {
 			ibFormVisualDocument* foundedVisualDocument =
 				ibFormVisualDocument::FindDocByUniqueKey(m_formKey);
 			if (foundedVisualDocument != nullptr) {

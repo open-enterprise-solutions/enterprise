@@ -205,6 +205,36 @@ public:
 
     virtual bool IsChildDocument() const { return m_documentParent != nullptr; }
 
+    // A COMPOSITE document answers this for the children it lays out: the window the child's
+    // view must render into. The default — null — means "take a tab of your own", so nothing
+    // changes for an ordinary document.
+    //
+    // This is what lets ONE tab hold several documents: the home page hands each attached form
+    // a cell of its splitter tree, and the children are its doc CHILDREN, so they live and die
+    // with it. The child carries no "where am I" state — it asks its parent, which is the only
+    // one that knows.
+    virtual ibFrontendWindow* GetChildDocumentWindow(const ibDocument* child) const { return nullptr; }
+
+    // The window my PARENT gives me because it composes me — null when I am on my own and
+    // take a tab. THE question; everything about composition is asked through it.
+    ibFrontendWindow* GetComposedWindow() const {
+        return m_documentParent != nullptr ? m_documentParent->GetChildDocumentWindow(this) : nullptr;
+    }
+
+    // Am I laid out INSIDE my parent rather than in a tab? Asked by the close rules: a
+    // composed view must not destroy a window it does not own, and a composed form has no
+    // close of its own.
+    bool IsEmbedded() const { return GetComposedWindow() != nullptr; }
+
+    // A composed document does not close itself — its PARENT closes it. This is the parent
+    // saying "it is me, let them go"; false the rest of the time, which is what makes every
+    // other close path (a Close command, a forced close from the object, a manager sweep)
+    // bounce off a child that lives in someone else's window.
+    virtual bool IsClosingChildren() const { return false; }
+    bool IsClosedByParent() const {
+        return m_documentParent != nullptr && m_documentParent->IsClosingChildren();
+    }
+
     bool CanClose();
 
     // OES-side adaptations lifted from ibMetaDocument (step-4 collapse).

@@ -59,6 +59,9 @@ protected:
 	bool AllowRun() override;
 	bool AllowClose() override;
 
+	// The home page — built after BeforeStart / OnStart; its locked tab keeps it first.
+	void CreateStartupPage() override;
+
 	/**
 	* Adds the default profile to the hot keys.
 	*/

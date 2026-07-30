@@ -177,6 +177,14 @@ void ibMetadataTree::EditPredefinedValues(ibValueMetaObjectRecordDataHierarchyMu
 	dlg.ShowModal();
 }
 
+#include "win/dlg/homePageEditor.h"
+
+void ibMetadataTree::EditHomePage(ibValueMetaObjectConfiguration* metaObjectConfiguration)
+{
+	ibDialogHomePageEditor dlg(this, metaObjectConfiguration);
+	dlg.ShowModal();
+}
+
 //**********************************************************************************
 //*                                  metaTree window						       *
 //**********************************************************************************

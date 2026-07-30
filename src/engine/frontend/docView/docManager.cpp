@@ -22,6 +22,7 @@
 #include "frontend/docView/templates/docViewSpreadsheet.h"
 #include "frontend/docView/templates/docViewHelp.h"
 #include "frontend/docView/templates/docViewAuditLog.h"
+#include "frontend/docView/templates/docViewHomePage.h"
 #endif
 
 #ifndef OES_USE_WEB
@@ -321,6 +322,17 @@ void ibDocManager::RegisterDefaultTemplates()
 		wxEmptyString, wxEmptyString, wxEmptyString,
 		_("Audit Log Doc"), _("Audit Log View"),
 		CLASSINFO(ibAuditLogDocument), CLASSINFO(ibAuditLogView),
+		ibTEMPLATE_INVISIBLE);
+
+	// Home page — the composite tab (N runtime forms in one tab). Same registration shape as
+	// the journal: a plain, invisible template reached through
+	// CreateDocument<ibHomePageDocument>() from ibHomePageDocument::ShowHomePage, which the
+	// Enterprise window calls before the start-up script runs.
+	new ibDocTemplate(this,
+		_("Home page"),
+		wxEmptyString, wxEmptyString, wxEmptyString,
+		_("Home Page Doc"), _("Home Page View"),
+		CLASSINFO(ibHomePageDocument), CLASSINFO(ibHomePageView),
 		ibTEMPLATE_INVISIBLE);
 #endif
 }

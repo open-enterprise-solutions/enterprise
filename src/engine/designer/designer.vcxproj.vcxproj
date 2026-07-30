@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -221,6 +221,7 @@
     <ClCompile Include="mainFrame\watch\watchWindow.cpp" />
     <ClCompile Include="win\ctrl\menuBar.cpp" />
     <ClCompile Include="win\dlg\debugItem\debugItem.cpp" />
+    <ClCompile Include="win\dlg\homePageEditor.cpp" />
     <ClCompile Include="win\dlg\predefinedEditor.cpp" />
     <ClCompile Include="win\editor\codeEditor\codeEditorDesigner.cpp" />
     <ClCompile Include="win\editor\interfaceEditor\interfaceEditor.cpp" />
@@ -262,6 +263,7 @@
     <ClInclude Include="resource.h" />
     <ClInclude Include="win\ctrl\menuBar.h" />
     <ClInclude Include="win\dlg\debugItem\debugItem.h" />
+    <ClInclude Include="win\dlg\homePageEditor.h" />
     <ClInclude Include="win\dlg\predefinedEditor.h" />
     <ClInclude Include="win\editor\codeEditor\codeEditorDesigner.h" />
     <ClInclude Include="win\editor\interfaceEditor\interfaceEditor.h" />

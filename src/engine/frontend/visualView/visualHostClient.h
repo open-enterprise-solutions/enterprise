@@ -69,7 +69,9 @@ public:
 	// to the owned ibValueForm. The web null guard is also safe on
 	// desktop (m_valueForm is always set there, short-circuits out), so
 	// one inline covers both instead of a .cpp + header split.
-	void ShowForm()     { if (m_valueForm) m_valueForm->ShowForm(nullptr); }
+	// No argument: a bare nullptr would be ambiguous between the two ShowForm overloads
+	// (backend meta-document parent vs. document + host window).
+	void ShowForm()     { if (m_valueForm) m_valueForm->ShowForm(); }
 	void ActivateForm() { if (m_valueForm) m_valueForm->ActivateForm(); }
 	void UpdateForm()   { if (m_valueForm) m_valueForm->UpdateForm(); }
 	bool CloseForm()    { return m_valueForm ? m_valueForm->CloseForm() : true; }

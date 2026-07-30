@@ -401,22 +401,20 @@ void ibValueForm::RemoveControl(const ibValue& vControl)
 //*                                              Events                                           *
 //*************************************************************************************************
 
-void ibValueForm::ShowForm(ibBackendMetaDocument* doc, bool createContext)
+bool ibValueForm::ShowForm(ibDocument* docParent, bool createContext)
 {
-	ibDocument* docParent = static_cast<ibMetaDocument*>(doc);
-
 	if (ibBackendException::IsEvalMode())
-		return;
+		return false;
 
 	ibFormVisualDocument* const ownerDocForm = GetVisualDocument();
 
 	if (ownerDocForm != nullptr) {
 		ActivateForm();
-		return;
+		return true;
 	}
 
 	if (m_controlOwner != nullptr &&
-		doc == nullptr) {
+		docParent == nullptr) {
 		docParent = m_controlOwner->GetVisualDocument();
 	}
 
@@ -450,8 +448,11 @@ void ibValueForm::ShowForm(ibBackendMetaDocument* doc, bool createContext)
 			}
 		}
 
-		CreateDocForm(docParent, createContext);
+		return CreateDocForm(docParent, createContext);
 	}
+
+	// Designer preview path — the form is not opened here.
+	return false;
 }
 
 void ibValueForm::RefreshLockBadge()
@@ -524,6 +525,15 @@ bool ibValueForm::CloseForm(bool force)
 	}
 
 	ibFormVisualDocument* const ownerDocForm = GetVisualDocument();
+
+	// A form bound to a HOST document (a cell of the home page) cannot close: the window is
+	// the host's, not the form's. ONLY the close is suppressed — everything the command did
+	// before reaching here already happened (Save-and-close wrote the object, beforeClose /
+	// onClose ran), and the cell keeps the very same form. Nothing is asked, nothing is
+	// replaced. force=true (the teardown path) is never suppressed, or the window could not
+	// shut down.
+	if (!force && ownerDocForm != nullptr && ownerDocForm->IsEmbedded())
+		return false;
 
 	if (ownerDocForm != nullptr) {
 #ifdef OES_USE_WEB

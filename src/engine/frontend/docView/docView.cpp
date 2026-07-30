@@ -2492,28 +2492,40 @@ bool ibDocument::OnCreate(const wxString& WXUNUSED(path), long flags)
 
 	view->SetDocument(this);
 
-	// Shared doc/view pipeline: spawn the child-frame for this view.
-	// Desktop hits ibFrontendMainFrame (ibAuiDocChildFrame inside an
-	// AUI MDI parent); web hits ibWebFrame (ibWebDocChildFrame parked
-	// in the session's m_tabs). Both sides have matching static factory
-	// signatures so only the class-qualifier differs.
+	// Where the view's frame comes from. A document COMPOSED by its parent (the home page: a
+	// pane of the splitter dividing its frame) takes the window the parent hands it and spawns
+	// no tab — one question, asked through the doc parent. Everyone else gets a child frame
+	// from the transport's factory: desktop hits ibFrontendMainFrame (ibAuiDocChildFrame
+	// inside an AUI MDI parent), web hits ibWebFrame (ibWebDocChildFrame parked in the
+	// session's m_tabs). Both sides have matching static factory signatures so only the
+	// class-qualifier differs.
+	ibFrontendWindow* const composedWindow = GetComposedWindow();
+
 #ifdef OES_USE_WEB
-	ibFrontendWindow* childFrame =
-		ibWebFrame::CreateChildFrame(view.get(), wxDefaultPosition, wxDefaultSize, 0);
+	ibFrontendWindow* childFrame = nullptr;
+	if (composedWindow != nullptr)
+		view->SetFrame(composedWindow);
+	else
+		childFrame = ibWebFrame::CreateChildFrame(view.get(), wxDefaultPosition, wxDefaultSize, 0);
 #else
-	bool createModal = false;
-	for (wxWindow* window : wxTopLevelWindows) {
-		if (window->IsKindOf(CLASSINFO(wxDialog))) {
-			if (((wxDialog*)window)->IsModal()) {
-				createModal = true; break;
+	if (composedWindow != nullptr) {
+		view->SetFrame(composedWindow);
+	}
+	else {
+		bool createModal = false;
+		for (wxWindow* window : wxTopLevelWindows) {
+			if (window->IsKindOf(CLASSINFO(wxDialog))) {
+				if (((wxDialog*)window)->IsModal()) {
+					createModal = true; break;
+				}
 			}
 		}
+
+		long style = wxDEFAULT_FRAME_STYLE;
+		if (createModal) style = style | wxCREATE_SDI_FRAME;
+
+		ibFrontendMainFrame::CreateChildFrame(view.get(), wxDefaultPosition, wxDefaultSize, style);
 	}
-
-	long style = wxDEFAULT_FRAME_STYLE;
-	if (createModal) style = style | wxCREATE_SDI_FRAME;
-
-	ibFrontendMainFrame::CreateChildFrame(view.get(), wxDefaultPosition, wxDefaultSize, style);
 #endif
 
 	if (!view->OnCreate(this, flags))
@@ -2537,7 +2549,8 @@ bool ibDocument::OnCreate(const wxString& WXUNUSED(path), long flags)
 	// Unified ShowFrame — the explicit "make it visible" trigger.
 	// Desktop: reveals the ibAuiDocChildFrame. Web: base is a no-op
 	// (m_viewFrame is null), subclasses may override to activate
-	// the owning tab.
+	// the owning tab. An embedded view's window is already up, so this
+	// simply reports "nothing to do" there.
 	view->ShowFrame();
 	return view.release() != nullptr;
 }

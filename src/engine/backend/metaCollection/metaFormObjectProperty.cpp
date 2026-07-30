@@ -27,6 +27,7 @@ void ibValueMetaObjectForm::OnPropertyChanged(ibProperty* property, const wxVari
 			if (auto* metaTree = m_metaData->GetMetaTree())
 				metaTree->CloseMetaObject(this);
 			if (cc->RemoveCompileModule(this)) {
+				// Keyed by the METAFORM — the cache's own value (see CreateObjectForm).
 				cc->AddCompileModule(this, formWrapper::inl::cast_value(metaObjectValue->CreateObjectForm(this)));
 			}
 			if (auto* metaTree = m_metaData->GetMetaTree())

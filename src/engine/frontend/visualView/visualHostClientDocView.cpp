@@ -295,6 +295,7 @@ ibFormVisualDocument* ibFormVisualDocument::FindDocByUniqueKey(const ibUniqueKey
 	return nullptr;
 }
 
+
 bool ibFormVisualDocument::UpdateFormUniqueKey(const ibUniqueKeyPair& formKey)
 {
 	// Lookup by stable instance GUID, NOT by composite key:
@@ -382,6 +383,14 @@ void ibFormVisualEditView::OnUpdate(ibView* sender, wxObject* hint)
 
 bool ibFormVisualEditView::OnClose(bool deleteWindow)
 {
+	// A COMPOSED form cannot close itself: its window belongs to the parent, and only the
+	// parent takes it down. THIS is where every teardown passes — the Close command, a forced
+	// close from the object, a manager sweep — so refusing here is what keeps a pane from
+	// ending up empty. (ibValueForm::CloseForm refuses too, but that covers only the button.)
+	const ibDocument* const composedDoc = GetDocument();
+	if (composedDoc != nullptr && composedDoc->IsEmbedded() && !composedDoc->IsClosedByParent())
+		return false;
+
 	if (!deleteWindow) {
 
 		ibDocument const* doc = GetDocument();
@@ -416,7 +425,15 @@ bool ibFormVisualEditView::OnClose(bool deleteWindow)
 	// This runs through the CloseForm → CallAfter defer path
 	// (formObject.cpp), so we're on a fresh idle dispatch — safe to
 	// Destroy synchronously.
-	if (deleteWindow) {
+	//
+	// An EMBEDDED form (a cell of the home-page composite) does NOT own its
+	// frame — the composite does. Destroying it here would tear a hole in
+	// the host's splitter tree, so the embedded view only releases it.
+	const ibDocument* const ownerDoc = GetDocument();
+	if (ownerDoc != nullptr && ownerDoc->IsEmbedded()) {
+		SetFrame(nullptr);
+	}
+	else if (deleteWindow) {
 		GetFrame()->Destroy();
 		SetFrame(nullptr);
 	}

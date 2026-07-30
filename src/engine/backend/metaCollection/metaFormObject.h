@@ -73,9 +73,22 @@ public:
 		ibBackendControlFrame* ownerControl = nullptr,
 		ibSourceDataObject* srcObject = nullptr, const ibUniqueKey& formGuid = wxNullGuid);
 
-#pragma endregion 
+#pragma endregion
 
-	//set module code 
+#pragma region _form_builder_h_
+	// MY form value, bound to whatever source my kind implies — the one verb, answered by each
+	// kind for itself: a common form stands alone, an object form asks the object that owns it.
+	// A caller never asks "which kind are you" and then casts to say it; the access right is
+	// answered by the same call.
+	//
+	// `formGuid` is the form's IDENTITY: empty lets it fall back to the source (the ordinary
+	// open), a supplied one gives this instance an identity of its own — what an element placed
+	// on the start page needs, since it may sit there beside a twin.
+	virtual ibBackendValueForm* GetObjectForm(ibBackendControlFrame* ownerControl = nullptr,
+		const ibUniqueKey& formGuid = wxNullGuid) const = 0;
+#pragma endregion
+
+	//set module code
 	virtual void SetModuleText(const wxString& moduleText) = 0;
 	virtual wxString GetModuleText() const = 0;
 
@@ -192,6 +205,14 @@ public:
 		return m_properyFormType->GetValueAsInteger();
 	}
 
+#pragma region _form_builder_h_
+	// An object form belongs to a business object, and THAT object knows which source my kind
+	// implies — a list form gets the list, an object form a NEW object. Body out-of-line: the
+	// owner's type must be complete.
+	virtual ibBackendValueForm* GetObjectForm(ibBackendControlFrame* ownerControl = nullptr,
+		const ibUniqueKey& formGuid = wxNullGuid) const override;
+#pragma endregion
+
 protected:
 
 	virtual bool ReadData(const ibDataNode& node) override;
@@ -260,9 +281,10 @@ class BACKEND_API ibValueMetaObjectCommonForm :
 	virtual ibFormID GetTypeForm() const { return defaultFormType; }
 
 #pragma region _form_builder_h_
-	//support form 
-	ibBackendValueForm* GetObjectForm(ibBackendControlFrame* ownerControl = nullptr, const ibUniqueKey& formGuid = wxNullGuid) const;
-#pragma endregion 
+	//support form
+	virtual ibBackendValueForm* GetObjectForm(ibBackendControlFrame* ownerControl = nullptr,
+		const ibUniqueKey& formGuid = wxNullGuid) const override;
+#pragma endregion
 
 protected:
 

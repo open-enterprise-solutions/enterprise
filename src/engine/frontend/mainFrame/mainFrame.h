@@ -143,6 +143,13 @@ protected:
 	// to fire BeforeStart on the session's runtime.
 	virtual bool AllowRun() { return true; }
 
+	// The tabs this window opens BY ITSELF. Called from Show() once the runtime is up AND the
+	// start-up script has run (BeforeStart / OnStart) — a vetoed start never builds them.
+	// Order of creation does not decide order on screen: the home page's tab is locked, and
+	// locked tabs always sit ahead of the normal ones. Desktop default: nothing; Enterprise
+	// opens the home page.
+	virtual void CreateStartupPage() {}
+
 public:
 	// May the window go down? Asked ONLY when the answer can be honoured —
 	// a forced close does not call this at all, which is why there is no
@@ -155,6 +162,12 @@ public:
 	// Enterprise chains BeforeExit after this; the Designer chains its
 	// unsaved-configuration prompt.
 	virtual bool AllowClose();
+
+	// True while the WINDOW is taking its documents down (AllowClose / Destroy), false when a
+	// close question comes from a user gesture on a single tab. Both reach a view as
+	// OnClose(deleteWindow = false), so a document owned by the window — the start page —
+	// needs this to refuse the tab's [x] without ever refusing the window itself.
+	bool IsClosingWindow() const { return m_closingWindow; }
 
 protected:
 
@@ -252,6 +265,7 @@ protected:
 	ibEditorSettings        m_editorSettings;
 
 	bool m_callRaiseFrame, m_callUpdateFrameManager;
+	bool m_closingWindow = false;   // see IsClosingWindow()
 
 	wxAuiToolBar* m_mainFrameToolbar;
 	wxAuiToolBar* m_docToolbar;

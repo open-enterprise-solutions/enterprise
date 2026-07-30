@@ -176,7 +176,9 @@ bool ibVisualEditorNotebook::ibVisualEditor::SaveForm()
 
 void ibVisualEditorNotebook::ibVisualEditor::TestForm()
 {
-	m_valueForm->ShowForm(m_document, false);
+	// Down to the doc/view side explicitly: ibMetaDocument IS-A ibBackendMetaDocument AND an
+	// ibDocument, so both ShowForm overloads would match it equally well.
+	m_valueForm->ShowForm(static_cast<ibDocument*>(m_document), false);
 }
 
 ibVisualEditorNotebook::ibVisualEditor::~ibVisualEditor()

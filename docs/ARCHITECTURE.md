@@ -602,7 +602,7 @@ ibValueForm  (concrete — frontend/visualView/ctrl/form.h)
   , public ibRuntimeModuleDataObject (per-instance compile module + ProcUnit)
 ```
 
-`ibValueForm` owns the complete control tree for one open form. The static entry point `ibBackendValueForm::CreateNewForm()` instantiates the form; the higher-level orchestrator is `ibValueMetaObjectFormBase::CreateAndBuildForm()` (`metaCollection/metaFormObject.h`), which resolves the form descriptor from metadata and builds the control tree (see [Form Open](#form-open)).
+`ibValueForm` owns the complete control tree for one open form. The static entry point `ibBackendValueForm::CreateNewForm()` instantiates the form; the higher-level orchestrator is `ibValueMetaObjectFormBase::CreateAndBuildForm()` (`metaCollection/metaFormObject.h`), which resolves the form descriptor from metadata and builds the control tree (see [Form Open](#form-open)). The verb a caller actually uses is `ibValueMetaObjectFormBase::GetObjectForm()` — virtual, answered by the form's own kind (a common form stands alone, an object form asks the object that owns it). Full map: [form-engine.md](form-engine.md).
 
 ### Attribute binding
 
@@ -756,6 +756,10 @@ HTTP: POST /w/<dbalias>/login  (body: user+pwd, cookie: tabSid UUID)
 ```
 
 ### Form Open
+
+> The full map of this layer — who builds a form, what its identity is, how it reaches a
+> window and how it dies — is [form-engine.md](form-engine.md). The chain below is the
+> one-screen version.
 
 ```
 Script (desktop) / HTTP POST /open?metaID=N (web):

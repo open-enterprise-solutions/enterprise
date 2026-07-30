@@ -5,6 +5,7 @@
 #include "metaObjectMetadataEnum.h"
 
 #include "metaModuleObject.h"
+#include "backend/homePageDescription.h"   // ibHomePageDescription — the start-page workspace
 
 //*****************************************************************************************
 //*                                  metaData object                                      *
@@ -20,6 +21,7 @@ class BACKEND_API ibValueMetaObjectConfiguration : public ibValueMetaObject {
 	enum
 	{
 		ID_METATREE_OPEN_INIT_MODULE = 19000,
+		ID_METATREE_EDIT_HOME_PAGE,
 	};
 
 public:
@@ -67,6 +69,14 @@ public:
 
 	void SetLanguage(const ibMetaID& id) { m_propertyDefLanguage->SetValue(id); }
 	ibMetaID GetLanguage() const { return m_propertyDefLanguage->GetValueAsInteger(); }
+
+	// The start-page workspace — the forms every session opens FIRST, and how they are split.
+	// Read by the runtime composite (frontend ibHomePageDocument), written by the designer's
+	// workspace editor. It is plain state on the root, not a property: the inspector has no
+	// cell shape for "two ordered lists of forms", the dedicated editor has.
+	const ibHomePageDescription& GetHomePage() const { return m_homePage; }
+	ibHomePageDescription& GetHomePage() { return m_homePage; }
+	void SetHomePage(const ibHomePageDescription& homePage) { m_homePage = homePage; }
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -141,6 +151,8 @@ private:
 
 	bool FillRoleList(ibPropertyList* prop)     { return FillListByClsid(prop, g_metaRoleCLSID); }
 	bool FillLanguageList(ibPropertyList* prop) { return FillListByClsid(prop, g_metaLanguageCLSID); }
+
+	ibHomePageDescription m_homePage;
 
 	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyModuleConfiguration = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("ConfigurationModule"), _("Configuration module"));
 

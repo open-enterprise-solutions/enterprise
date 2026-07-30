@@ -43,4 +43,8 @@ constexpr ibPictureID g_picUserListCLSID = picture_to_clsid("PC_USRLS");
 
 constexpr ibPictureID g_picAuthenticationCLSID = picture_to_clsid("PC_ATTON");
 
+// The start page — the tab, the designer's workspace editor and its menu item.
+// Art: icons8 ("switch host"), downscaled to 16px — see the note in picturePredefined.cpp.
+constexpr ibPictureID g_picHomePageCLSID = picture_to_clsid("PC_HOMEP");
+
 #endif 

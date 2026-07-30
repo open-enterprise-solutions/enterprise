@@ -241,6 +241,12 @@ of `GetCommandSection()` by kind.
 The **config-root** owns more than the desktop: also the **section-panel order** and the
 **home page**. The desktop is one facet of that root surface.
 
+> **The home page LANDED** (2026-07-30) — as a composite doc/view, not as a command surface:
+> the root holds an `ibHomePageDescription` (which FORMS the start page shows, in which column,
+> in which order), the designer edits it through the workspace editor, and the Enterprise
+> window opens it as its first tab. See [home-page.md](home-page.md). Attaching a **command**
+> (rather than a form) to that surface is still this arc's step 5 — the placement table below.
+
 **Visibility gates — a separate arc.** A command shows only if all gates pass: **role**,
 **auto-rights** (hidden for objects the user cannot access), and — config-wide —
 **functional options** (declarative feature flags that enable/disable whole slices of

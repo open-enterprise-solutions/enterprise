@@ -2,6 +2,8 @@
 
 > **Scope:** the Designer's form editor — its panels, the undo/redo command layer, and how
 > an edit reaches the canvas. Companions:
+> [form-engine.md](form-engine.md) (the OTHER engine: how a form is built, identified and
+> shown at runtime — what this editor produces the metadata for),
 > [form-attribute-binding.md](form-attribute-binding.md) (what a binding *is*),
 > [property-system.md](property-system.md) (the inspector that drives most edits),
 > [command-interface.md](command-interface.md) (the command-bar layer edited here).

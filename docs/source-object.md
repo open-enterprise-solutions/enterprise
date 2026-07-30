@@ -5,6 +5,7 @@
 > dotted path walks it.
 > Companions: [form-attribute-binding.md](form-attribute-binding.md) (the binding arc),
 > [descriptions.md § 3](descriptions.md) (`ibSourceDescription` / `ibSourceHop`),
+> [form-engine.md § 2](form-engine.md) (who BUILDS the source a form gets, per form kind),
 > [form-editor.md § 5](form-editor.md) (drag-to-create).
 > This is foundation code.
 

@@ -272,6 +272,13 @@ bool ibFrontendMainFrame::Show(bool show)
 	if (!EnsureRuntime()) return false;
 	if (!AllowRun()) return false;
 
+	// The window's own tabs come AFTER the start-up script, which is the natural order:
+	// BeforeStart / OnStart run on a bare window, and a script that vetoes the start never
+	// gets a home page built for nothing. Being FIRST no longer depends on being created
+	// first — the start page's tab is LOCKED, and wx keeps locked tabs ahead of every normal
+	// one no matter when they joined (docs/home-page.md § 5).
+	CreateStartupPage();
+
 	SetClientSize(FromDIP(wxSize(800, 600)));
 	SetFocus();
 	Center();
@@ -290,7 +297,16 @@ bool ibFrontendMainFrame::AllowClose()
 	// close of whatever is still open lives in Destroy().
 	if (m_docManager == nullptr)
 		return true;
-	return m_docManager->CloseDocuments(false);
+
+	// Mark WHO is asking. Both this gate and a tab's own [x] reach a view as
+	// OnClose(deleteWindow = false) — indistinguishable from inside. A document that
+	// belongs to the WINDOW (the start page) refuses the user's [x] and must not refuse
+	// the window; this flag is what lets it tell the two apart.
+	m_closingWindow = true;
+	const bool closed = m_docManager->CloseDocuments(false);
+	m_closingWindow = false;
+
+	return closed;
 }
 
 bool ibFrontendMainFrame::Destroy()
@@ -306,6 +322,10 @@ bool ibFrontendMainFrame::Destroy()
 	// never consulted the gate) goes down unconditionally: refusing here
 	// would leave the frame alive with its session already ending.
 	if (m_docManager != nullptr) {
+		// Same signal as in AllowClose — the forced close still ASKS each view
+		// (DeleteAllViews → Close(false)), so the window-owned documents must see that it
+		// is the window closing them, not a user gesture.
+		m_closingWindow = true;
 		m_docManager->CloseDocuments(true);
 #if wxUSE_CONFIG
 		m_docManager->FileHistorySave(*wxConfig::Get());

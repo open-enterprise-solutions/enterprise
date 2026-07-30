@@ -422,6 +422,10 @@ public:
 	virtual void EditPredefinedValues(ibValueMetaObjectRecordDataHierarchyMutableRef* obj);
 #pragma endregion
 
+#pragma region __home_page_h__
+	virtual void EditHomePage(ibValueMetaObjectConfiguration* obj);
+#pragma endregion
+
 	virtual ibMetaData* GetMetaData() const { return m_metaData; }
 
 	ibMetadataTree();

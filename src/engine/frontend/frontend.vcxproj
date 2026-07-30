@@ -23,6 +23,7 @@
     <ClCompile Include="docView\docManager.cpp" />
     <ClCompile Include="docView\docView.cpp" />
     <ClCompile Include="docView\templates\docViewAuditLog.cpp" />
+    <ClCompile Include="docView\templates\docViewHomePage.cpp" />
     <ClCompile Include="docView\templates\docViewHelp.cpp" />
     <ClCompile Include="docView\templates\docViewSpreadsheet.cpp" />
     <ClCompile Include="docView\templates\docViewText.cpp" />
@@ -464,6 +465,7 @@
     <ClInclude Include="docView\docManager.h" />
     <ClInclude Include="docView\docView.h" />
     <ClInclude Include="docView\templates\docViewAuditLog.h" />
+    <ClInclude Include="docView\templates\docViewHomePage.h" />
     <ClInclude Include="docView\templates\docViewHelp.h" />
     <ClInclude Include="docView\templates\docViewSpreadsheet.h" />
     <ClInclude Include="docView\templates\docViewText.h" />

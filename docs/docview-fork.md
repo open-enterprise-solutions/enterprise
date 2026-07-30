@@ -8,6 +8,8 @@
 >
 > Related: [`backend-frontend-split.md`](backend-frontend-split.md)
 > (the `ibBackendDocFrame` interface this sits behind),
+> [`form-engine.md`](form-engine.md) (the biggest user of this stack: how a runtime form
+> reaches a document, a view and a window),
 > `ARCHITECTURE.md` §Form System. Memory: [[project_doc_frame_any]],
 > [[project_mdi_rename]], [[reference_template_creates_child_frame]].
 
@@ -175,6 +177,25 @@ went away" bookkeeping at the call site — the doc graph enforces it.
 This parent/child graph is one of the OES extensions that make the fork
 worth owning: it is doc/view-level lifecycle the stock wx classes do
 not provide.
+
+---
+
+## Composite documents — one tab, several documents (OES extension)
+
+Stock wx doc/view assumes *one document → one child frame*. `ibDocument::GetChildDocumentWindow`
+makes that assumption optional — and does it through the parent/child graph rather than beside
+it: a **composite** document answers, for each child it lays out, the window that child's view
+must render into. `ibDocument::OnCreate` asks it through the doc parent and, when the answer is
+a window, hands it to the view and **skips `CreateChildFrame`** — no tab, everything downstream
+unchanged. The default answer is null, so an ordinary document still owns its tab.
+
+The child holds no state about where it lives: it asks its parent, which is the only one that
+knows. That is what makes the **home page** a composite rather than a container — one document
+owning a splitter tree whose panes ARE its children's frames, with the cascade close of the
+parent/child graph tearing them all down together. See [home-page.md](home-page.md).
+
+`ibFormVisualEditView::OnClose` honours it too — a composed view releases its frame instead of
+destroying it, because the window belongs to the parent, not to the form.
 
 ---
 

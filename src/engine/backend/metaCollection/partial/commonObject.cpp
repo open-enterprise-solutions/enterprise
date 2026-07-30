@@ -1421,11 +1421,17 @@ ibValueRecordDataObject::~ibValueRecordDataObject()
 {
 }
 
+// MY form — the one showing THIS object. Found by SOURCE, not by form key: the key is the
+// form's own identity and a caller may set it to anything (an element placed on the start page
+// gets a fresh one of its own, so several copies never collide). What never changes is that
+// the form's source object is me. Searching by the key only worked while it happened to fall
+// back to the source guid — a coincidence, and one that broke the moment a caller supplied a
+// key.
 ibBackendValueForm* ibValueRecordDataObject::GetForm() const
 {
 	if (!m_objGuid.isValid())
 		return nullptr;
-	return ibBackendValueForm::FindFormByUniqueKey(m_objGuid);
+	return ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid);
 }
 
 //----------------------------------------------------------------------
@@ -2038,7 +2044,7 @@ const ibSourceExplorer* ibValueRecordDataObjectRef::GetSourceExplorer() const
 
 void ibValueRecordDataObjectRef::Modify(bool mod)
 {
-	ibBackendValueForm* const foundedForm = ibBackendValueForm::FindFormByUniqueKey(m_objGuid);
+	ibBackendValueForm* const foundedForm = ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid);
 
 	if (foundedForm != nullptr)
 		foundedForm->Modify(mod);
@@ -2051,7 +2057,7 @@ bool ibValueRecordDataObjectRef::Generate()
 	if (m_newObject)
 		return false;
 
-	ibBackendValueForm* const foundedForm = ibBackendValueForm::FindFormByUniqueKey(m_objGuid);
+	ibBackendValueForm* const foundedForm = ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid);
 	if (foundedForm != nullptr)
 		return foundedForm->GenerateForm(this);
 
@@ -3004,7 +3010,7 @@ ibBackendValueForm* ibValueRecordManagerObject::GetForm() const
 	if (!m_objGuid.isValid())
 		return nullptr;
 	if (m_recordSet->m_selected)
-		return ibBackendValueForm::FindFormByUniqueKey(m_objGuid);
+		return ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid);
 	return nullptr;
 }
 
@@ -3028,7 +3034,7 @@ const ibSourceExplorer* ibValueRecordManagerObject::GetSourceExplorer() const
 
 void ibValueRecordManagerObject::Modify(bool mod)
 {
-	ibBackendValueForm* const foundedForm = ibBackendValueForm::FindFormByUniqueKey(m_objGuid);
+	ibBackendValueForm* const foundedForm = ibBackendValueForm::FindFormBySourceUniqueKey(m_objGuid);
 	if (foundedForm != nullptr)
 		foundedForm->Modify(mod);
 	m_recordSet->Modify(mod);

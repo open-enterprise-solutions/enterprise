@@ -182,14 +182,25 @@ public:
 	//Get metaObject by def id
 	virtual ibValueMetaObjectFormBase* GetDefaultFormByID(const ibFormID& id) const { return nullptr; }
 
-	//create form with data 
-	virtual ibBackendValueForm* CreateObjectForm(ibValueMetaObjectFormBase* metaForm) {
+	// Build the form value of one of MY form metaobjects, bound to the source its kind implies
+	// (a list form gets the list, an object form a NEW object).
+	//
+	// `formGuid` is the FORM KEY. It defaults to EMPTY — the runtime meaning — so a plain
+	// CreateObjectForm(metaForm) does the safe thing: the key falls back to the SOURCE
+	// object's guid, which is how everything finds a live form afterwards
+	// (ibValueRecordDataObject::GetForm / Modify / the write notify all call
+	// FindFormByUniqueKey(m_objGuid)). Only the DESIGNER's compile cache passes a guid — the
+	// METAFORM's — because its value IS one per metaform and is keyed that way. Keyed by the
+	// metaform, a runtime form would be invisible to the lookups above and Save / Refresh
+	// would have nothing to act on.
+	virtual ibBackendValueForm* CreateObjectForm(const ibValueMetaObjectFormBase* metaForm,
+		const ibUniqueKey& formGuid = wxNullGuid) const {
 		return ibValueMetaObjectGenericData::CreateAndBuildForm(
 			metaForm != nullptr ? metaForm->GetName() : wxString(wxEmptyString),
 			metaForm != nullptr ? metaForm->GetTypeForm() : defaultFormType,
 			nullptr,
 			CreateSourceObject(metaForm),
-			metaForm != nullptr ? metaForm->GetGuid() : wxNullGuid
+			formGuid
 		);
 	}
 

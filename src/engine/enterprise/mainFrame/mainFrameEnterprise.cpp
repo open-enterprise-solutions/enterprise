@@ -105,6 +105,17 @@ bool ibFrontendMainFrameEnterprise::Show(bool show)
 // The enterprise window is the one with a full runtime behind it, so
 // both of its boundaries fire script events on the session's root.
 
+#include "frontend/docView/templates/docViewHomePage.h"
+
+void ibFrontendMainFrameEnterprise::CreateStartupPage()
+{
+	// The start page — a composite tab of the forms the configuration attached to it. Opens
+	// nothing when the configuration attached none. Created AFTER BeforeStart / OnStart; its
+	// tab is locked, so it takes the head of the notebook regardless of what the script
+	// opened before it.
+	ibHomePageDocument::ShowHomePage();
+}
+
 bool ibFrontendMainFrameEnterprise::AllowRun()
 {
 	// StartMainModule fires BeforeStart / OnStart. A BeforeStart veto —

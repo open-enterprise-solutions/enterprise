@@ -32,6 +32,14 @@ public:
 	virtual void EditPredefinedValues(class ibValueMetaObjectRecordDataHierarchyMutableRef* obj) = 0;
 #pragma endregion
 
+#pragma region __home_page_h__
+	// The start-page workspace editor — the config root's own surface (which forms the start
+	// page shows, in which column, in which order). Same seam as EditPredefinedValues: the
+	// metaobject asks, the designer owns the dialog. Default no-op, so a tree without the
+	// editor (a runtime host that still implements this interface) is not forced to carry it.
+	virtual void EditHomePage(class ibValueMetaObjectConfiguration* obj) {}
+#pragma endregion
+
 	virtual ibBackendMetaDocument* GetDocument(ibValueMetaObject* obj) const = 0;
 
 	virtual bool RenameMetaObject(ibValueMetaObject* obj, const wxString& strNewName) = 0;

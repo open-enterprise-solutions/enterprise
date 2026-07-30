@@ -2,6 +2,7 @@
 #define __FORM_VALUE_H__
 
 #include "frontend/visualView/ctrl/control.h"
+#include "frontend/docView/docView.h"   // ibDocument / ibMetaDocument — the doc-parent a form opens under
 #include "backend/sourceDescription.h"   // ibSourceDescription — the binding-path wrapper (Get/SetValueByAttributePath)
 #include "backend/backend_command.h"   // ibBackendCommandSender — the form IS-A command-hop source (entry gate)
 
@@ -425,7 +426,11 @@ public:
 	virtual void ChangeForm();
 
 	virtual bool GenerateForm(ibValueRecordDataObjectRef* obj) const;
-	virtual void ShowForm(ibBackendMetaDocument* docParent = nullptr, bool createContext = true) override;
+	// The backend contract, and nothing beyond a type step: backend cannot name the doc/view
+	// types, and the two hierarchies meet in ibMetaDocument alone. It has no body of its own.
+	virtual void ShowForm(ibBackendMetaDocument* docParent = nullptr, bool createContext = true) override {
+		ShowForm(static_cast<ibDocument*>(static_cast<ibMetaDocument*>(docParent)), createContext);
+	}
 
 	//set & get modify 
 	virtual void Modify(bool modify = true);
@@ -462,6 +467,11 @@ public:
 	// command model into a full action interface. An object form: the self-commanding source object (both
 	// ibSourceDataObject and ibStandardCommandSource). null when neither exists.
 	ibStandardCommandSource* GetCommandProvider();
+
+	// THE open — one body, one door. The form says only WHOSE child it is; where it lands
+	// follows from that: a parent that composes its children (the home page) hands the
+	// document a window of its own frame, everyone else gets a tab.
+	bool ShowForm(ibDocument* docParent, bool createContext = true);
 
 	//support icons
 	virtual wxIcon GetIcon() const;

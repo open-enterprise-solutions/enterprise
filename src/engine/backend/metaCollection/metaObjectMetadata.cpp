@@ -56,6 +56,8 @@ bool ibValueMetaObjectConfiguration::ReadData(const ibDataNode& node)
 	m_propertyModuleConfiguration->ReadNodeValue(node.GetProperty(m_propertyModuleConfiguration->GetName()));
 	m_propertySyntax->ReadNodeValue(node.GetProperty(m_propertySyntax->GetName()));
 
+	m_homePage.ReadNode(node.GetProperty(wxT("HomePage")));
+
 	return true;
 }
 
@@ -67,6 +69,10 @@ bool ibValueMetaObjectConfiguration::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyDefLanguage->GetName(), m_propertyDefLanguage->GetNodeValue());
 	node.SetProperty(m_propertyModuleConfiguration->GetName(), m_propertyModuleConfiguration->GetNodeValue());
 	node.SetProperty(m_propertySyntax->GetName(), m_propertySyntax->GetNodeValue());
+
+	ibDataValue homePageValue;
+	if (m_homePage.WriteNode(homePageValue))
+		node.SetProperty(wxT("HomePage"), homePageValue);
 
 	return true;
 }

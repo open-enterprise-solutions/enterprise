@@ -328,6 +328,17 @@ bool ibValueMetaObjectForm::OnDeleteMetaObject()
 	return ibValueMetaObjectFormBase::OnDeleteMetaObject();
 }
 
+ibBackendValueForm* ibValueMetaObjectForm::GetObjectForm(ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
+{
+	// The owner is what knows the source a form of this kind must be bound to (and it checks
+	// the access right on the way, exactly as the common form's own answer does). A form with
+	// no owning object cannot be materialised at all.
+	const ibValueMetaObjectGenericData* const owner =
+		dynamic_cast<const ibValueMetaObjectGenericData*>(GetParent());
+
+	return owner != nullptr ? owner->CreateObjectForm(this, formGuid) : nullptr;
+}
+
 bool ibValueMetaObjectForm::OnBeforeRunMetaObject(int flags)
 {
 	return ibValueMetaObjectFormBase::OnBeforeRunMetaObject(flags);
@@ -348,6 +359,7 @@ bool ibValueMetaObjectForm::OnAfterRunMetaObject(int flags)
 		// end of the paste, while the metaobject's paste mark is still live, so Construct re-homes the form's source
 		// hops onto the pasted objects and normalizes the stored blob. A later lazy build just reads the raw blob.
 		return cc->AddCompileModule(this, [deferred = ibDeferredForm(this, [metaObject, this]() -> ibBackendValueForm* {
+				// Keyed by the METAFORM: this value IS the compile cache's, one per metaform.
 				return metaObject->CreateObjectForm(this);
 			})]() -> ibValue* {
 			return deferred.Construct();
