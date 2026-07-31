@@ -202,7 +202,8 @@ std::shared_ptr<ibDatabaseLayer> ibDatabaseConnectionHolder::AcquireFreeConnecti
 	return pool != nullptr ? pool->Checkout() : nullptr;
 }
 
-std::shared_ptr<ibDatabaseLayer> ibDatabaseConnectionHolder::EnsureConnection()
+std::shared_ptr<ibDatabaseLayer> ibDatabaseConnectionHolder::EnsureConnection(
+	std::chrono::milliseconds wait)
 {
 	auto* pool = ibApplicationData::GetConnectionPool();
 	if (pool == nullptr) return nullptr;
@@ -212,9 +213,13 @@ std::shared_ptr<ibDatabaseLayer> ibDatabaseConnectionHolder::EnsureConnection()
 	// without it, every call would Checkout a new conn and live result
 	// sets on a previously-Acquired conn would leak (entry returned to
 	// pool while busy → next Checkout skips → grows pool → deadlocks).
+	//
+	// `wait` reaches only the third step — the first two answer from what this
+	// holder already holds, where there is nothing to wait for.
 	if (auto tx = pool->GetReservedTx(this)) return tx;
 	if (auto scope = pool->GetScopeConn(this)) return scope;
-	auto conn = pool->Checkout();
+	auto conn = pool->Checkout(wait > std::chrono::milliseconds::zero()
+		? wait : std::chrono::milliseconds(ibConnectionPool::kCheckoutTimeout));
 	if (conn) pool->BindScopeHolder(this, conn);
 	return conn;
 }
@@ -374,10 +379,10 @@ void ibConnectionPool::Shutdown()
 	m_cv.notify_all();
 }
 
-std::shared_ptr<ibDatabaseLayer> ibConnectionPool::Checkout()
+std::shared_ptr<ibDatabaseLayer> ibConnectionPool::Checkout(std::chrono::milliseconds wait)
 {
 	std::unique_lock<std::mutex> lock(m_mutex);
-	const auto deadline = std::chrono::steady_clock::now() + kCheckoutTimeout;
+	const auto deadline = std::chrono::steady_clock::now() + wait;
 	while (true) {
 		if (m_shutdown || !m_source)
 			return nullptr;
@@ -425,9 +430,11 @@ std::shared_ptr<ibDatabaseLayer> ibConnectionPool::Checkout()
 		// blocking the worker thread forever (the old wait() had no timeout —
 		// a leaked or stuck borrower would hang the caller indefinitely).
 		if (std::chrono::steady_clock::now() >= deadline) {
+			// The wait is the CALLER'S (see Checkout's declaration), so the message
+			// names the bound that actually expired rather than the default one.
 			ibBackendCoreException::Error(
-				_("Database connection pool exhausted: all %d connections are busy and none became free within %d s. Try again later or raise the pool size."),
-				(int)m_maxSize, (int)kCheckoutTimeout.count());
+				_("Database connection pool exhausted: all %d connections are busy and none became free within %d ms. Try again later or raise the pool size."),
+				(int)m_maxSize, (int)wait.count());
 		}
 		m_cv.wait_until(lock, deadline);
 	}

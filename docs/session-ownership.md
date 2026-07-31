@@ -3,6 +3,10 @@
 > **Status:** LANDED (2026-07-30). Desktop, web and headless all run on
 > it; Debug|x86 green; desktop and web close paths verified against a
 > live infobase. See §"Verified end to end".
+>
+> **2026-07-31:** a session can now own one more session — the *reader*
+> (`ibSessionKind::SessionReader`), created on first background read and
+> released with the window or after 60 s idle. See §"The reader session".
 
 A session lives exactly as long as the thing it exists for. Kill that
 thing and the session is gone; while it lives, the session is alive.
@@ -55,10 +59,134 @@ s->SetActivity(...);
 | wes technical row | `g_serverSession` in `wfrontend.cpp` |
 | compute-server projection (future) | the server-side `ibBackendDocFrame` |
 | scheduled-job runner (future) | the runner object |
+| reader (`SessionReader`) | the session it reads for — `ibSession::m_reader` |
+| job run (`BackgroundJob` / `ScheduledJob` / `SystemJob`) | the `ibJobEntry` / `ibBackgroundRun` |
 
 The registry is **not** an owner. `m_own` is
 `unordered_map<wxString, ibSessionWatch>` — an index plus the
 `sys_session` row, nothing more.
+
+## The reader session — the sleeping half of a window
+
+> Landed 2026-07-31. `ibSessionKind::SessionReader = 104`;
+> `ibSession::Reader()` / `DropIdleReader(int)` / private `OpenReader()`
+> in `backend/session/session.{h,cpp}`.
+
+A list or table control must not read on the thread that draws it. So a
+read is not submitted to the window's own session — on the desktop that
+session's worker **is** the wx main thread, the very thread the read has
+to get off. It is addressed to somebody else:
+
+```cpp
+ibSession::Current()->Reader()->Submit(work);
+```
+
+The verb stays one (`Submit`). What differs is the **addressee**.
+
+`Reader()` returns `this` when there can be no reader — teardown is under
+way, there is no registry, or this session already *is* one. That is why
+it returns a session rather than a pointer that can be empty: the call
+above still compiles to something correct (submit to yourself, which the
+GUI session runs inline), and the caller needs no branch, no null check
+and no fallback of its own.
+
+### Why a SESSION and not just a thread
+
+Everything a read resolves — the connection, the RLS access policy, the
+interpreter state — resolves through `ibSession::Current()`, and the
+worker binds that with `ibSessionScope` before draining its queue. So
+handing the read a *different session* is the whole mechanism: it is what
+makes those lookups land somewhere else without threading an explicit
+holder through every layer from L5 down to L2.
+
+And a session owns exactly **one** connection (`ibSession::Holder()`;
+`AcquireFreeConnection` is deliberately not mirrored on it) — which is
+precisely the second connection a parallel read needs. A thread would
+have given neither.
+
+The reader is a plain `ibSession` (base factory), so its
+`GetWorkerPool()` is the registry's pool — `ibWorkerPoolHeadless`, off
+the UI thread. Its identity is the owner's: `m_userInfo` is read on the
+owner's thread at creation and installed on the reader, so it sees
+exactly what the person at that window sees — same rights, same
+row-level policy, same result.
+
+### Created on first read, woken by its own first task
+
+`OpenReader()` runs under `m_readerMtx` (two controls on one window can
+ask at the same moment and must not each build one). A window whose lists
+never read in the background never pays for one.
+
+The identity install and the runtime bring-up are submitted as the FIRST
+task in the reader's own queue, not run inline — they must happen on the
+reader's worker, where `ibSessionScope` has bound it:
+
+```cpp
+reader->Submit([registry, reader, owner]{
+    if (owner.IsOk()) registry->InstallUser(reader, owner, wxEmptyString);
+    registry->NotifyAuthenticated(reader);
+    reader->SetActivity(_("waiting for a read"));
+});
+```
+
+**The FIFO queue IS the initialisation barrier.** Because the queue is
+drained in order under a lease, every read submitted after this one is
+guaranteed to run after it finishes. No "ready" flag, nobody waiting, no
+re-check per read. The same property gives **answer ordering for free**:
+however many portions the scroll wheel asks for, the answers come back in
+the order they were asked. Nothing enforces that — it is what a session
+is.
+
+A wake-up that throws is logged (`wxLogDebug`) and nothing else: the
+reads then run on it and fail one by one, visibly, instead of this
+failing once, silently, where nobody is looking.
+
+### It is in Active Users, and it is not a person
+
+The reader holds one connection out of the pool, and an invisible session
+holding a connection is what makes pool exhaustion undiagnosable — the
+administrator counts half the rows and sees none free. So it appears:
+`GetApplication` → *"Background read"*, `GetSessionKindDescr` →
+*"Reader"* (`sessionSnapshot.cpp`).
+
+⚠ But it is **not a second user**. It carries the same user name and
+computer as the window it reads for. Every predicate meaning "is a person
+working here" skips it — `HasActiveUsers`, `IsUserActive`, and by the
+same rule the three job kinds (`ibIsPersonSession` in
+`sessionSnapshot.cpp`). Otherwise one person reads as two, an
+exclusive-mode gate blocks on a session the blocking window created
+itself, and a licence count doubles every seat.
+
+Its administrative decision is its own, distinct from a job's: killing a
+reader makes somebody's list stop loading and it comes back on the next
+scroll, where killing a `BackgroundJob` loses a result somebody is
+waiting for.
+
+### It is released, not kept
+
+A reader that outlives the reading is exactly what must not exist: an
+idle form would keep a row in Active Users and a connection out of a pool
+of 32 for as long as it stays open. So "sleeping" is not a state the
+reader has — it stops existing, and the next scroll makes a new one. Two
+exits:
+
+- **Owner teardown.** The reader goes **first**, at the top of
+  `ibSession::Teardown()`, before the owner quiesces itself. Nobody else
+  knows about it, so nobody else would release it. The holder is moved
+  out under `m_readerMtx` and reset **outside** the lock — its release
+  runs the reader's own teardown (cancel, drain, hand the connection
+  back), which must not wait behind the owner's.
+- **Idle sweep.** `DropIdleReader(60)` from
+  `ibSessionRegistry::JobDropIdleReaders()` on the 3 s tick.
+  `m_readerLastUseMs` is stamped in `Reader()` — at SUBMIT, so a long read
+  counts as use only at its start; the timeout is set well above any sane
+  single-page read.
+
+Sixty seconds is long next to a scroll and short next to a coffee break:
+a burst of wheel turns is served by ONE reader, and only a genuine pause
+pays for a fresh `Connect`. It is also what the worker pool uses to
+shrink its own idle threads, so the two agree on what "idle" means rather
+than each having a private opinion.
 
 ## A frame cannot exist without a session
 
@@ -196,6 +324,9 @@ the session died" a property of the types rather than a convention.
 ```
 Teardown()
   ├ Transition(Stopping)      synchronously — see below
+  ├ release m_reader          FIRST, and outside m_readerMtx — a session of
+  │                           our own making that nobody else would release,
+  │                           holding a pooled connection while it lives
   ├ quiesce: RequestCancel + wait behind an empty task in the session's
   │          own FIFO (5s cap) — a script thread holds its session by RAW
   │          pointer on its stack, where no weak_ptr can help

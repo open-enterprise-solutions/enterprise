@@ -10,13 +10,19 @@
 > [dynamic-list.md](dynamic-list.md) (the DB-backed list consumer + the source-command layer),
 > [data-composer.md](data-composer.md) (L5 — the composer a fetch renders),
 > [property-system.md](property-system.md) (a table's columns ARE property objects),
-> [connection-pool.md](connection-pool.md) (where the DB fetch's connection comes from).
+> [connection-pool.md](connection-pool.md) (where the DB fetch's connection comes from),
+> [job-manager.md](job-manager.md) (the rented run a page fetch is).
 >
 > **Status:** landed, but **still moving.** This is one of the most-churned subsystems in the
 > engine — a long-running, constantly-evolving mechanism. Treat any specific below as a snapshot;
 > the shape (§0) is the durable part. Every standard list/tree/register/value-table is an
 > `ibValueModel` fetching through `RunComposerPage`; the legacy per-family models and the typed
 > per-model `Fetch` are DELETED. Web HTTP fetch endpoint is the one deferred piece (§9, §10).
+>
+> **2026-07-31: every read leaves the thread that asked** — the first page included. One door on
+> the model decides where it runs, one dispatcher in the control asks for it, one lock guards it.
+> See § "Off the UI thread" here and [paging-design.md](paging-design.md) §9.9 for what the user
+> sees while a portion is out.
 
 ---
 
@@ -158,10 +164,141 @@ on the model. `ResolveAnchorByKey(rowKey)` is the point-lookup that re-reads one
 tuple so a page can be positioned AT a row by its key (selection restore after a child-form
 save — the old per-list `FindRowValue` sort-value pre-read, moved into L5).
 
-**Async.** `SubmitFetchAsync(work)` routes through `ibSession::Submit` (the worker pool) so a
-DB round-trip never blocks the UI thread; the control marshals the result back via `CallAfter`
-and discards it if a generation token moved on (filter/sort changed mid-flight). The backend
-model itself is stateless — the prefetch deque and scroll position live in the control (§6).
+The backend model itself is stateless — the prefetch deque and scroll position live in the
+control (§6).
+
+### Off the UI thread — the model answers, the control has one door (landed 2026-07-31)
+
+**One point of departure, direction inside the request.** `ibDataViewCtrl::DispatchPagedFetch`
+takes an `ibFetchDirection` — `Reset` (the first page, and every reload after a sort or a filter),
+`Forward`, `Backward` — builds ONE parcel (`ibPagedFetch`) and hands the work to
+**`model->SubmitFetchAsync`**. The control's own `PagedFetchDir` is gone; the first page stopped
+being a separate machine. The direction matters again only at the far end, where three result
+handlers say what to do with the portion: fill from scratch, append at the tail, prepend at the
+head.
+
+The model answers WHERE the read runs, and that is the whole split — it lives where the knowledge
+is, and it is the only place in the engine that knows a background job exists:
+
+| | Answers | Because |
+|---|---|---|
+| `ibDataViewModel::SubmitFetchAsync` (base, `modelView.cpp`) | **a thread of the model's own** — one, owned, joined in the dtor and before the next read | "the thread that asked" is not always a UI thread with time to spare: the same forms render on the web server, where it is a session's worker and a blocking read holds up that session's whole answer |
+| `ibValueModel::SubmitFetchAsync` (`model.cpp`) | **a rented run** | that is a RUNTIME table — it reads a DATABASE |
+| `ibValueModelStorage::SubmitFetchAsync` (`model.h`) | **back to the base's thread** | RAM: there is no database on the other end, so a session and a pooled connection would be minted for nothing — and its rows are the LIVE storage nodes the view is holding, pinned by a non-atomic refcount |
+
+A model also outlives its own read by construction: `ibValueModel` keeps the run handle and
+cancels + waits it out in its destructor (the base joins its thread there). The control's alive
+token answers for the CONTROL; nothing else answered for the model.
+
+Pinned by `tests/test_modelFetchDoor.cpp`: the work leaves the calling thread; `GuardFetch`
+serialises even when the model runs its units in parallel (the base serialises by joining, so the
+lock can only be tested through a model that does not); the destructor waits for a read in flight.
+
+⚠ On a web host the base's answer is the one to revisit — one thread per model is right for a
+window and wrong for a server with a hundred tabs. It is a single virtual, which is the point of
+having the door.
+
+**One lock, in the door.** `ibDataViewModel::GuardFetch` wraps every unit of work handed over,
+whoever runs it. A sort click is a Reset: the composer recomputes, a portion is re-fetched, the
+view rebuilds its tree — and while the previous portion is still coming back, the next one waits
+in the door. Nothing else takes it: not the mutators, not the composer, not the paint.
+
+**A scroll burst is answered in full.** A request that arrives while one is out cannot be
+dispatched — it would be anchored on the same row and fetch the same portion twice — so it is
+remembered (`m_pagedFetchAgain*`) and re-asked by the delivery, with the anchor by then advanced.
+Scroll three times and three portions arrive in turn; the exhaustion flag the result sets is what
+ends the chain.
+
+The rented run is `ibJobManager::StartBackground(..., ibJobTenancy::Tenant)`: no identity, no
+runtime, no row in `sys_session`, and the caller's access policy borrowed rather than rebuilt. It
+creates a session for one reason only — a session owns exactly one connection and the caller's is
+busy being the caller's — and takes that connection on the CALLING thread, so a saturated pool is
+a refusal in front of somebody who can act on it. **Where the caller lives does not enter into
+it**: a list is a list in the Designer, in the thick client and in a browser tab, and the run is
+used up, brings the data back and ends in all three. Anything that cannot be rented (no free
+connection, no job manager at all — tests, headless) falls back to reading inline, and the
+control is never told which happened. See [job-manager.md](job-manager.md) § tenancy.
+
+The control therefore has ONE code point per read: raise the in-flight counters, hand over the
+work, post the delivery back. The busy veil, the generation token and the counters are identical
+for every kind of table it can hold — there is no second path to keep in step.
+
+⚠ `SchedulePagedRefresh` deliberately does NOT use that door: it is a re-entry on the same
+thread (capture restore state, arm the bootstrap — all control state), so it posts through
+`wxTheApp->CallAfter`. Sending it through the fetch door would run a tree walk on a worker.
+
+An earlier shape kept ONE sleeping reader session per window between portions
+(`ibSession::Reader()`, removed): a session held open is one that can sit in Active Users
+holding a connection with nobody able to tell working from stuck, and a run that ends by
+construction cannot.
+
+The worker touches nothing but the model — `GetNextFetch` / `GetPrevFetch` into a shared payload
+— then `wxTheApp->CallAfter` marshals the delivery back. Through `wxTheApp`, not the control:
+posting is safe from any thread, but *reading the control to ask it to post* is not. On the UI
+thread the delivery decrements the in-flight counter and is **discarded when the generation token
+moved** (a sort / filter / refresh wiped the buffer since submit) — the answer is to a question
+nobody is asking any more.
+
+Two details are load-bearing, and neither is stylistic:
+
+- **An alive token, not `wxWeakRef`.** `m_aliveToken` is a `shared_ptr<bool>` the control owns
+  and clears in its destructor. The worker only ever *copies* it, and it is read exclusively on
+  the UI thread, where the destructor also runs — so "is the form still there" is answered with
+  no cross-thread write at all. `wxWeakRef` un-links itself by WRITING into the tracked object
+  when that object dies, which races a copy sitting on a worker.
+- **A refcounted row is never released on a worker.** `ibDataViewItem` pins its node through
+  `wxRefCounter`, whose `IncRef` / `DecRef` are a plain `++` / `--` — **not atomic**. So the
+  anchor and the fetch parent live in a `shared_ptr<FetchRequest>` payload that both lambdas
+  hold, instead of being captured into the worker lambda directly: the worker drops its copy as
+  soon as it has posted, by which time the UI lambda already holds one, so the payload — and the
+  two items in it — is always destroyed on the UI thread.
+
+There is no per-fetch cancel handle, and none is wanted: a rented run ends by construction, and
+the alive token makes a delivery already posted to the UI queue a no-op when it lands on a
+control that is gone.
+
+`ibValueModel::SubmitFetchAsync` still exists (`model.cpp`) and still routes through
+`ibSession::Submit` — i.e. the caller's OWN session, which on the desktop *is* the wx main
+thread. Its only caller now is the debounced `SchedulePagedRefresh`; it is not the fetch path.
+
+**There is no UI dispatcher.** The former `SetUiDispatcher` / `DispatchToUi` hop on `model.h` was
+REMOVED, not moved. It was a process-wide static, which is the wrong shape twice over: the
+backend had to know what a host's UI thread is, and a web server — one process, MANY sessions —
+has no single answer to give it. "Run this where the view lives" is already answered per session
+and polymorphically by `ibSession::Submit` → `ibWorkerPool`: the GUI pool drains onto the wx main
+thread, the headless pool onto that session's FIFO worker, and a host with no pool runs inline
+because nothing is watching. A background read hands its result back by submitting to the session
+that ASKED — captured when the read starts, never `ibSession::Current()`, which in the background
+is the reading session, not the form's.
+
+### The busy overlay
+
+The control, not the model, knows a read is out: `IsFetchInFlight()` reads the two fetch
+counters it incremented at dispatch. A second copy of that fact on the model could only ever
+disagree. `UpdateBusyIndicator()` samples it on every idle pass (`OnIdleEvent`), so an idle list
+costs nothing.
+
+| Constant | Value | Why |
+|---|---|---|
+| `kBusyShowDelayMs` | 300 ms | under it the list simply updates and no spinner appears — the common case on a local base, and a spinner that flashes for two frames reads as a glitch |
+| `kBusyTickMs` | 60 ms | animation cadence — continuous to the eye, without repainting a list 20×/s for decoration |
+| `kBusySteps` | 24 | one turn of the arc ≈ 1.4 s at that cadence |
+
+**The tick is also the watchdog.** `OnBusyTimer` re-checks `IsFetchInFlight()` before every
+frame, which is what ends the spinner when a read dies without delivering (worker gone, pool
+stopped, session torn down). A spinner that only stops on success can spin forever. What it
+cannot catch is a read wedged in a socket — cancellation is cooperative and a blocking read never
+sees the flag — that case belongs to the driver's timeout.
+
+`DrawBusyOverlay(dc, area)` paints at the **tail of the table area's `OnPaint`**, after the rows:
+a translucent white veil (alpha 140) plus a stroked accent arc drawn through `wxGraphicsContext`
+(`wxSYS_COLOUR_HIGHLIGHT`, a 3/4 sweep rotated by the phase — a path, not a bitmap, so it scales
+with DPI for free). No graphics backend → skip; never fail a paint.
+
+Deliberately **not** a child window: one on top flickers on scroll under wxMSW and takes part in
+focus, and this must do neither. There is no mouse capture — the list stays fully usable while
+the overlay shows, and the previous rows stay legible underneath, which is what tells the user
+WHICH list is loading and lets them keep reading the old answer.
 
 ---
 
@@ -290,12 +427,29 @@ source-command band. Details: [paging-design.md](paging-design.md) §8.
 | `system/value/valueTable.h` | `ibValueModelTable` (table-of-values) |
 | `system/value/valueDynamicList.{h,cpp}` | `ibValueDynamicList` |
 | `frontend/win/ctrls/tableView.{h,cpp}`, `datavgen.cpp` | `ibDataViewCtrl` — the forked control |
+| `frontend/win/ctrls/dataview/datavgen.paged.cpp` | `PagedBootstrap` (decide → dispatch) + `PagedBootstrapApply`, `DispatchPagedFetch` (both → a rented run), the fwd/bwd result handlers, the busy indicator |
+| `backend/job/jobManager.{h,cpp}` | `ibJobTenancy`, `StartBackground` — the rented run a page read is |
+| `frontend/session/workerPoolGUI.{h,cpp}` | `ibWorkerPoolGUI` — inline on the wx main thread, `CallAfter` otherwise |
 | `frontend/visualView/ctrl/tableBox*.cpp` | `ibValueModelTableBox` — the form control |
 
 ---
 
 ## 10. Honest remainder
 
+- ~~**`PagedBootstrap` is still synchronous.**~~ **Landed 2026-07-31.** Every read the control
+  makes now leaves the UI thread, the first page included. `PagedBootstrap` was split by WHO MAY
+  TOUCH WHAT rather than by convenience — decide (UI) → read (worker) → apply (UI) — carried in
+  one parcel, `ibPagedFetch` (`datavgen.paged.private.h`, shared by all three directions); the read is a free function
+  so it cannot reach the control at all, and it gathers EVERYTHING the rebuild will need,
+  including the ancestor breadcrumb and each tree crumb's children, which the auto-expand walk
+  used to fetch per level in the middle of building the tree. The wipe moved to the END: the old
+  rows stay legible under the busy veil until there is something to put in their place, and the
+  wipe + rebuild + focus + scroll happen in one frozen transaction on arrival. Dispatch raises
+  BOTH fetch counters — a bootstrap replaces the whole buffer, so neither end may be extended
+  while the replacement is out (a backward portion arriving after the wipe would prepend rows
+  from an ordering that no longer exists). An answer overtaken by a later refresh is dropped by
+  the generation stamp; a read that throws leaves the list exactly as it was, with the reason in
+  the journal. No job manager (tests, a headless embedder) → the model reads it on its own thread instead.
 - **Web HTTP `/fetch` endpoint — not wired.** The universal `Get*Fetch` was designed to serve
   the web frontend over HTTP (`/fetch?parent=…&anchor=…&count=…` → JSON), but `wfrontend.cpp` is
   not yet on it (building the JSON schema ahead of a consumer would freeze it blind). Without

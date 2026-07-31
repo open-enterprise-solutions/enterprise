@@ -61,6 +61,12 @@ private:
 	struct ibSessionQueue {
 		std::deque<ibSessionTask> tasks;
 		std::atomic<bool>         leased { false };
+		// DROPPED WHILE LEASED. A session's teardown runs from inside one of its own
+		// tasks — the task's closure can own the session holder — so DropSession can
+		// arrive while a worker is standing on this very object. Erasing it there is
+		// a use-after-free under the pool's own mutex. So the drop is RECORDED here
+		// and the worker erases the queue itself when it lets the lease go.
+		bool                      dropped { false };
 	};
 
 	void WorkerLoop();
@@ -92,6 +98,7 @@ private:
 	mutable std::mutex                                                m_mtx;
 	std::condition_variable                                           m_cv;
 	std::unordered_map<ibSession*, std::unique_ptr<ibSessionQueue>>   m_sessions;
+
 };
 
 #endif

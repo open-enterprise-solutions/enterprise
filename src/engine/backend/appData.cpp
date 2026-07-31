@@ -1,4 +1,4 @@
-////////////////////////////////////////////////////////////////////////////
+﻿////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko, wxFormBuider
 //	Description : app info
 ////////////////////////////////////////////////////////////////////////////
@@ -18,6 +18,8 @@
 #include "backend/logger/logger.h"
 #include "backend/logger/loggerSweep.h"
 #include "backend/lock/lockManager.h"
+#include "backend/job/jobManager.h"           // ibJobManager (owned via GetJobManager)
+#include "backend/job/platformJobs.h"         // the engine's own jobs, declared when a database opens
 
 #include "backend/utils/passwordHash.hpp"
 
@@ -25,7 +27,6 @@
 
 //databases
 #include "backend/databaseLayer/firebird/firebirdDatabaseLayer.h"
-#include "backend/databaseLayer/firebird/firebirdMaintenanceScheduler.h"
 #include "backend/databaseLayer/postgres/postgresDatabaseLayer.h"
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/databaseLayer/connectionPool.h"
@@ -107,6 +108,9 @@ wxString DescribeSessionKind(ibSessionKind k) {
 	case ibSessionKind::Service:    return wxT("Service");
 	case ibSessionKind::WebServer:  return wxT("WebServer");
 	case ibSessionKind::WebClient:  return wxT("WebClient");
+	case ibSessionKind::BackgroundJob: return wxT("BackgroundJob");
+	case ibSessionKind::ScheduledJob:  return wxT("ScheduledJob");
+	case ibSessionKind::SystemJob:     return wxT("SystemJob");
 	}
 	return wxT("Unknown");
 }
@@ -169,6 +173,7 @@ ibApplicationData::ibApplicationData(ibRunMode runMode) :
 	m_lockManager(std::unique_ptr<ibLockManager>(new ibLockManager(ib::AppDataCtorToken{}))),
 	m_queryableFactory(std::unique_ptr<ibQueryableFactory>(new ibQueryableFactory(ib::AppDataCtorToken{}))),
 	m_sessionRegistry(std::unique_ptr<ibSessionRegistry>(new ibSessionRegistry(ib::AppDataCtorToken{}, PickWorkerCount(runMode)))),
+	m_jobManager(std::unique_ptr<ibJobManager>(new ibJobManager(ib::AppDataCtorToken{}))),
 	m_dbMode(ibDatabaseMode::eNONE),
 	m_locale_lang(wxLanguage::wxLANGUAGE_UNKNOWN)
 {
@@ -291,10 +296,14 @@ void ibApplicationData::WireSessionEvents()
 		} catch (...) {}
 		ibSession::BindSessionToThread(s, std::this_thread::get_id());
 		auto* registry = m_sessionRegistry.get();
-		if (registry && registry->GetAccessMode() == ibSession::AccessMode::Shared
-		    && registry->GetFallback() == nullptr)
-		{
-			// First Shared-mode auth establishes the system fallback.
+		if (registry && registry->GetFallback() == nullptr) {
+			// The first authenticated session becomes what an UNBOUND thread
+			// resolves to. No longer gated on Shared mode: identity resolution is
+			// now one rule everywhere (ibSession::Current), and a desktop process
+			// stopped having a single session the moment jobs and readers took
+			// their own. On the desktop this fallback IS the window's session —
+			// the same answer the old "hand back the lone map entry" gave, minus
+			// the part where it stopped being lone.
 			registry->SetFallback(s);
 		}
 		// Enable per-session debug context iff this process was started
@@ -381,20 +390,22 @@ ibApplicationData::~ibApplicationData()
 	// order was chosen (see appData.h ownership block) so that every
 	// field's dtor finds its dependencies still alive.
 	//
-	// 0. Quiesce the Firebird maintenance scheduler FIRST. Its background
-	//    sweep/BR worker holds a raw ibInterfaceFirebird* captured at
-	//    firebirdDatabaseLayer::Open. If it survives into step 4 (pool
-	//    shutdown frees the FB driver + that interface) it dereferences
-	//    freed memory mid-Services-API poll → EIP=0xdddddddd in
-	//    WaitForServiceCompletion (crash dumps 2026-05-26 and -05-29).
-	//    Stop() now cancels + full-joins the worker (cancelToken plumbed
-	//    through the poll loop), so calling it here — while the interface
-	//    is still alive — is what actually closes the race. The atexit
-	//    Stop() in the scheduler stays as an idempotent backstop (this
-	//    call leaves it not-running, so atexit is a no-op).
-	ibFirebirdMaintenanceScheduler::Stop();
+	// 0. JOBS FIRST — everything this process started on its own goes down before
+	//    anything it depends on. Stop() ends the tick, waits out every scheduled
+	//    run and cancels every background run, so by the time the metadata, the
+	//    registry and the connection pool come down below, nothing of ours is
+	//    still executing against them.
+	//
+	//    This ordering is the whole reason the subsystems underneath need no
+	//    "is it still there?" guards: a job cannot be mid-Services-API-call while
+	//    the driver is freed, because it is already finished. History — an earlier
+	//    shape let a detached maintenance worker outlive the pool shutdown and
+	//    dereference the freed interface (EIP=0xdddddddd in
+	//    WaitForServiceCompletion, 2026-05-26 and -05-29); that thread is gone,
+	//    and this order is what keeps its replacement honest.
+	if (m_jobManager) m_jobManager->Stop();
 
-	// 1. activeMetaData first — OnDestroy may save state, close compile
+	// 1. activeMetaData — OnDestroy may save state, close compile
 	//    caches, run cascading detach; those paths still want db_query.
 	if (m_activeMetaData) m_activeMetaData->OnDestroy();
 
@@ -414,10 +425,12 @@ ibApplicationData::~ibApplicationData()
 	if (m_connectionPool) m_connectionPool->Shutdown();
 
 	// From here the default destructor unwinds in reverse declaration
-	// order: m_activeMetaData → m_sessionRegistry → m_logger →
-	// m_lockManager → m_pluginManager → m_connectionPool. Each step is
-	// a normal unique_ptr<T>::~unique_ptr() that fires the polymorphic
-	// dtor chain on T — no explicit reset() needed.
+	// order: m_activeMetaData → m_helpService → m_jobManager →
+	// m_sessionRegistry → m_logger → m_lockManager → m_pluginManager →
+	// m_connectionPool. Each step is a normal unique_ptr<T>::~unique_ptr()
+	// that fires the polymorphic dtor chain on T — no explicit reset()
+	// needed. (The job manager's own dtor calls Stop() again; it is
+	// idempotent, so the explicit step above only fixes the ORDER.)
 	//
 	// Nothing may report "what survived" from HERE: the sweep above happens
 	// after this body returns, so the metadata tree is still fully alive at
@@ -523,6 +536,13 @@ bool ibApplicationData::CreateFileAppDataEnv(ibRunMode runMode, const wxString& 
 			// minIdle clones grow lazily and shrink on idle timeout.
 			s_instance->m_connectionPool->Init(db, 32, PickConnectionMinIdle(runMode));
 
+			// The platform's own scheduled work is declared HERE, not by each host:
+			// a database is open, so the jobs have something to be about, and every
+			// host that opens one gets the same list without repeating it in its
+			// own main. Declaring is cheap — no session, no metadata; a job builds
+			// those on its first run.
+			ibRegisterPlatformJobs();
+
 			if (runMode == ibRunMode::eDESIGNER_MODE && !ibApplicationData::TableAlreadyCreated()) {
 				ibApplicationData::CreateTableSession();
 				ibApplicationData::CreateTableUser();
@@ -541,6 +561,10 @@ bool ibApplicationData::CreateFileAppDataEnv(ibRunMode runMode, const wxString& 
 			// sys_lock — long-held pessimistic lock table. Idempotent
 			// CREATE so existing DBs pick it up on startup.
 			ibApplicationData::CreateTableLock();
+			// sys_job — the shared last-run clock. Created before the platform's
+			// jobs are declared below, so their first tick already has somewhere
+			// to look.
+			ibApplicationData::CreateTableJob();
 
 			if (!SetLocaleAppDataEnv(strLocale))
 				return false;
@@ -581,6 +605,10 @@ bool ibApplicationData::CreateServerAppDataEnv(ibRunMode runMode, const wxString
 			// minIdle picked per runMode (server pre-warms; GUI doesn't).
 			// Beyond minIdle clones grow lazily and shrink on idle timeout.
 			s_instance->m_connectionPool->Init(db, 32, PickConnectionMinIdle(runMode));
+
+			// Same as the file branch above — the platform's job list belongs to
+			// whoever opened the database, not to whichever executable did it.
+			ibRegisterPlatformJobs();
 
 			if (!SetLocaleAppDataEnv(strLocale))
 				return false;
@@ -1226,3 +1254,5 @@ wxString ibApplicationData::ComputeMd5(const wxString& userPassword) const
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+
+

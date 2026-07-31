@@ -150,9 +150,21 @@ POST /login { user, password }
 | Interval | Job |
 |---|---|
 | 1s | `JobHeartbeatOwn` (UPDATE own lastActive), `JobRefreshSnapshot` (SELECT * → snapshot). |
-| 3s | `JobSweepStale` (delete zombies whose `lastActive` is older than `kStaleCutoffSec` = 10s). |
+| 3s | `JobSweepStale` (delete zombies whose `lastActive` is older than `kStaleCutoffSec` = 10s), `JobDropIdleReaders`, `JobCheckSignal`. |
 | On-demand | drain queue (Add/Attach/Detach/Remove/SetActivity) — strict descending priority. |
 | Eager on Start | one initial sweep + refresh so UI has data immediately. |
+
+`JobDropIdleReaders` (landed 2026-07-31) walks `m_own` and calls
+`ibSession::DropIdleReader(60)` on each — releasing the per-window reader
+session (`ibSessionKind::SessionReader`) once nothing has read through it for
+60 s. It lives on this tick because this is already the thread that walks own
+sessions periodically; a private timer would be a second clock answering the
+same question. Releasing a reader tears a session down, which posts a request
+back to THIS queue — safe while iterating because the drop is one per session
+and the reader leaves through the normal `Remove` path on the next drain, not
+by mutating `m_own` underfoot. Sixty seconds also matches what the worker pool
+uses to shrink idle threads. Full rationale:
+[session-ownership.md](session-ownership.md) § "The reader session".
 
 **Fatal invariant:** if ThreadBody throws — `Die()` → `std::terminate`. Registry-thread must-be-alive; otherwise sys_session no longer reflects reality and other processes will ClearLost our rows.
 
@@ -321,14 +333,26 @@ thread); surfaced under heavy debugger use.
 
 ```cpp
 enum class ibSessionKind : int {
-    Launcher   = eLAUNCHER_MODE,
-    Designer   = eDESIGNER_MODE,
-    Enterprise = eRUNTIME_MODE,
-    Service    = eSERVICE_MODE,
-    WebServer  = eWEB_RUNTIME_MODE,   // wes process technical row
-    WebClient  = 100,                     // per-tab / API caller
+    Launcher      = eLAUNCHER_MODE,
+    Designer      = eDESIGNER_MODE,
+    Enterprise    = eRUNTIME_MODE,
+    Service       = eSERVICE_MODE,
+    WebServer     = eWEB_RUNTIME_MODE,   // wes process technical row
+    WebClient     = 100,                 // per-tab / API caller
+    // Outside the run-mode range: these are not ways of running the process.
+    BackgroundJob = 101,   // started by hand from script, under the caller's identity
+    ScheduledJob  = 102,   // declared by the configuration, runs on its interval
+    SystemJob     = 103,   // the platform's own (totals fold, maintenance)
+    SessionReader = 104,   // the reading half of one window (2026-07-31)
 };
 ```
+
+The three job kinds are three rather than one because an administrator has a
+different decision for each (see [job-manager.md](job-manager.md) §2).
+`SessionReader` is not a job at all — no schedule, no registration, no history
+— it exists only to read for the window that owns it and only while that
+window is open ([session-ownership.md](session-ownership.md) § "The reader
+session").
 
 - Desktop `appData->CreateSession()` → `SessionKindFromRunMode(m_runMode)` (wes process passes `WebServer` explicitly via the typed factory).
 - `ibWebSession::Login` → `ibSessionKind::WebClient` + `m_appMode = eWEB_RUNTIME_MODE`.
@@ -549,11 +573,33 @@ Cluster-wide sys_session snapshot — renamed from
 Aggregate helpers added on top of per-row accessors:
 
 ```cpp
-bool         HasActiveUsers();           // any non-empty userName
-                                         // (excludes technical wes-server row)
-bool         IsUserActive(name);          // user logged in anywhere in cluster
-unsigned int CountByKind(ibSessionKind);  // rows of given kind
+bool         HasActiveUsers();            // any non-empty userName on a PERSON session
+bool         IsUserActive(name);          // that user working anywhere in the cluster
+unsigned int CountByKind(ibSessionKind);  // rows of given kind — counts every kind
 ```
+
+**Both predicates skip non-person session kinds** (2026-07-31). The gate is the
+file-local `ibIsPersonSession(int kind)` in `sessionSnapshot.cpp`, which returns
+false for `SessionReader`, `BackgroundJob`, `ScheduledJob` and `SystemJob`.
+These predicates answer one question — *is a person working here?* — and a
+reader carries the same user name as the window it reads for, so counting it
+makes one person read as two. The consequences are not cosmetic: an
+exclusive-mode gate built on these would block on a session the blocking window
+created itself, and a licence count would double every seat. `CountByKind` is
+deliberately NOT filtered — it is asked about a kind by name, so the caller has
+already said what it wants.
+
+Display strings for the new kinds (`GetApplication` / `GetSessionKindDescr`):
+
+| Kind | Application | Kind column |
+|---|---|---|
+| `BackgroundJob` / `ScheduledJob` / `SystemJob` | "Background job" / "Scheduled job" / "System job" | "Job" |
+| `SessionReader` | "Background read" | "Reader" |
+
+The kind is checked **before** the run mode in `GetApplication`, because a run
+mode says which executable happens to host the session — the wrong answer for
+the question that column asks. A fold running inside `enterprise.exe` is not a
+thick client, and reading it as one is how three rows look like three users.
 
 Header stays independent of `session.h` — `ibSessionKind` is
 forward-declared with explicit `int` underlying type, full enum

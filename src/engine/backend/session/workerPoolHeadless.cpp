@@ -1,4 +1,4 @@
-#include "workerPoolHeadless.h"
+﻿#include "workerPoolHeadless.h"
 
 #include "backend/session/session.h"   // ibSessionScope
 #include "backend/backend_exception.h" // ibBackendException
@@ -122,7 +122,17 @@ std::future<void> ibWorkerPoolHeadless::Submit(ibSession* session, Task task)
 void ibWorkerPoolHeadless::DropSession(ibSession* session)
 {
 	std::unique_lock<std::mutex> lk(m_mtx);
-	m_sessions.erase(session);
+	auto it = m_sessions.find(session);
+	if (it == m_sessions.end())
+		return;
+	// A LEASED QUEUE IS NOT OURS TO ERASE — a worker is standing on it right now,
+	// and the teardown that called us usually runs from inside one of its tasks.
+	// Record the drop; the worker erases it when it releases the lease.
+	if (it->second && it->second->leased.load(std::memory_order_acquire)) {
+		it->second->dropped = true;
+		return;
+	}
+	m_sessions.erase(it);
 }
 
 void ibWorkerPoolHeadless::CancelSession(ibSession* session)
@@ -175,6 +185,7 @@ void ibWorkerPoolHeadless::WorkerLoop()
 		ibSessionQueue*  q       = nullptr;
 		bool             gotWork = false;
 
+
 		{
 			std::unique_lock<std::mutex> lk(m_mtx);
 			m_idleWorkers.fetch_add(1, std::memory_order_acq_rel);
@@ -191,6 +202,7 @@ void ibWorkerPoolHeadless::WorkerLoop()
 		if (m_stop.load(std::memory_order_acquire))
 			break;
 
+
 		if (!gotWork || q == nullptr) {
 			// Idle timeout fired with no work waiting. Self-exit unless
 			// we're among the last kMinIdle survivors — keep at least
@@ -206,6 +218,13 @@ void ibWorkerPoolHeadless::WorkerLoop()
 		ibSessionScope scope(session);
 		tl_currentLease = session;
 
+		// A task's closure can own the very session this worker is leasing (a
+		// background run holds its own session holder), so destroying it here tears
+		// that session down from inside its own lease. That is DELIBERATE and it is
+		// why the task is destroyed while `tl_currentLease` still names this
+		// session: Teardown's drain-Submit then takes the reentrant inline path
+		// instead of queueing behind itself, and the DropSession it ends with finds
+		// this queue leased and defers the erase to us (see ibSessionQueue::dropped).
 		while (true) {
 			ibSessionTask item;
 			{
@@ -227,13 +246,22 @@ void ibWorkerPoolHeadless::WorkerLoop()
 				LogWorkerException(wxT("worker pool task"));
 				item.promise->set_exception(std::current_exception());
 			}
+			// item dies HERE, inside the lease — see above.
 		}
 
 		tl_currentLease = nullptr;
 
-		// Release lease; another worker may claim this session if new
-		// tasks arrived while we were draining.
-		q->leased.store(false);
+		// Release the lease; another worker may claim this session if new tasks
+		// arrived while we were draining. And if the session was dropped while we
+		// held it, WE are the one that erases the queue — the dropper could not.
+		{
+			std::unique_lock<std::mutex> lk(m_mtx);
+			q->leased.store(false);
+			auto it = m_sessions.find(session);
+			if (it != m_sessions.end() && it->second.get() == q
+			    && it->second->dropped && it->second->tasks.empty())
+				m_sessions.erase(it);
+		}
 		m_cv.notify_one();
 	}
 	}
@@ -267,3 +295,4 @@ void ibWorkerPoolHeadless::Stop()
 		return m_aliveWorkers.load(std::memory_order_acquire) == 0;
 	});
 }
+

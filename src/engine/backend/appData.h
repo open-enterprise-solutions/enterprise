@@ -396,6 +396,10 @@ private:
 	static void CreateTableSession();
 	static void CreateTableEvent();
 	static void CreateTableLock();
+	// Additive — creates sys_job if missing. The shared last-run clock for
+	// scheduled jobs; independent table, not part of TableAlreadyCreated()'s
+	// init contract, so existing databases pick it up on next open.
+	static void CreateTableJob();
 	static void MigrateTableSession();
 	// Additive — creates sys_bytecode_cache if missing. Runs in any
 	// runMode after the existing-tables gate, so DBs initialised before
@@ -481,6 +485,13 @@ private:
 	// (no AV, no hidden assert in Release).
 	std::unique_ptr<class ibSessionRegistry> m_sessionRegistry;
 
+	// Scheduled + background work. Declared AFTER the registry on purpose:
+	// destruction runs in reverse declaration order, and the manager holds
+	// session holders whose release goes through the registry — so it must
+	// die while the registry is still up. Its own Stop() waits for in-flight
+	// runs first, so no worker is left holding a session being dropped.
+	std::unique_ptr<class ibJobManager> m_jobManager;
+
 	// Syntax-helper corpus owner. Same ownership shape as logger /
 	// lockManager — lives with appData. Lazy-built in InitLocale once
 	// the platform locale is settled; null before that.
@@ -552,6 +563,13 @@ public:
 		return s_instance != nullptr ? s_instance->m_logger.get() : nullptr;
 	}
 
+	// Job manager — the schedule and the sessions behind scheduled /
+	// background work. Same nullptr-before-and-after contract as the
+	// accessors above. See backend/job/jobManager.h and docs/job-manager.md.
+	static class ibJobManager* GetJobManager() {
+		return s_instance != nullptr ? s_instance->m_jobManager.get() : nullptr;
+	}
+
 private:
 
 	// Build the absolute path for the .olg directory:
@@ -603,6 +621,10 @@ private:
 #define event_table				wxT("sys_event")
 #define bytecode_cache_table	wxT("sys_bytecode_cache")
 #define lock_table				wxT("sys_lock")
+// sys_job — one row per scheduled job, holding the LAST RUN as every process on
+// this base sees it. Without it each process keeps its own clock and a job runs
+// once per process per interval instead of once per interval.
+#define job_table				wxT("sys_job")
 ///////////////////////////////////////////////////////////////////////////////
 
 #endif

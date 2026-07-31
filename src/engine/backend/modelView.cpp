@@ -1,5 +1,8 @@
 #include "modelView.h"
 
+#include <system_error>
+#include <thread>
+
 // ---------------------------------------------------------
 // s_constIgnoreParent — flat-scan sentinel (RESTORED)
 // ---------------------------------------------------------
@@ -78,8 +81,65 @@ ibDataViewModel::ibDataViewModel()
 {
 }
 
+// The model's own fetch thread — see ibDataViewModel::SubmitFetchAsync. A class of
+// its own only so <thread> stays out of modelView.h, which half the engine sees.
+class ibModelFetchThread
+{
+public:
+	~ibModelFetchThread() { Join(); }
+
+	void Join() { if (m_thread.joinable()) m_thread.join(); }
+
+	// One at a time: the previous read is waited out before the next starts, so a
+	// model is never walked by two reads at once and the thread object is never
+	// reassigned while it runs.
+	void Run(std::function<void()> work)
+	{
+		Join();
+		m_thread = std::thread(std::move(work));
+	}
+
+private:
+	std::thread m_thread;
+};
+
+// The default answer to "where does this model's portion read run": on a thread of
+// the model's own — one, owned, joined in the dtor and joined again before the next
+// read starts, so a read can never outlive the model it is walking and two of them
+// can never walk it at once.
+void ibDataViewModel::SubmitFetchAsync(std::function<void()> work)
+{
+	if (!work)
+		return;
+
+	// Under the door's own lock (GuardFetch — one portion at a time), and behind a
+	// catch: anything a read throws is caught where the work is defined (the control
+	// logs it and reports the portion as failed), but an escape into std::thread
+	// calls std::terminate, so this is the last line of defence.
+	auto locked = GuardFetch(std::move(work));
+	auto guarded = [locked]() {
+		try { locked(); } catch (...) { /* swallowed: the work owns its own reporting; letting it out kills the process */ }
+	};
+
+	try {
+		if (!m_fetchThread)
+			m_fetchThread = std::make_unique<ibModelFetchThread>();
+		m_fetchThread->Run(std::move(guarded));
+	}
+	catch (const std::system_error&) {
+		// No thread to be had (the OS refused). Read it here — a list that fills
+		// while the window waits is better than a list that never fills. `guarded`
+		// was moved from by then, so this runs the wrapped work directly.
+		try { locked(); } catch (...) { /* swallowed: same rule as above */ }
+	}
+}
+
 ibDataViewModel::~ibDataViewModel()
 {
+	// FIRST — a read must never outlive the model it is walking. Joining here is
+	// what makes that true without any caller having to arrange it.
+	m_fetchThread.reset();
+
 	ibDataViewModelNotifiers::const_iterator iter;
 	for (iter = m_notifiers.begin(); iter != m_notifiers.end(); ++iter)
 	{

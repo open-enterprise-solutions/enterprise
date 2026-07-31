@@ -36,6 +36,18 @@ wxString ibSessionSnapshot::GetApplication(unsigned int idx) const {
 	// the same ibRunMode::eWEB_RUNTIME_MODE. Pick a web-specific
 	// label when the kind disambiguates, otherwise fall back to the
 	// run-mode description.
+	// A JOB IS NOT AN APPLICATION. Its run mode says which executable happens to
+	// host it, which is exactly the wrong answer for the question this column
+	// asks — a fold running inside enterprise.exe is not a thick client, and
+	// reading it as one is how three rows look like three users. The kind is
+	// checked first, because for these it carries the real answer.
+	switch (row.m_kind) {
+	case static_cast<int>(ibSessionKind::BackgroundJob): return _("Background job");
+	case static_cast<int>(ibSessionKind::ScheduledJob):  return _("Scheduled job");
+	case static_cast<int>(ibSessionKind::SystemJob):     return _("System job");
+	default: break;
+	}
+
 	if (row.m_runMode == ibRunMode::eWEB_RUNTIME_MODE) {
 		// ibSessionKind::WebServer = 5, WebClient = 100.
 		if (row.m_kind == 100) return _("Web client");
@@ -69,6 +81,17 @@ wxString ibSessionSnapshot::GetSessionKindDescr(unsigned int idx) const
 	// m_kind = 0; interpret that as Server when run-mode is web (the
 	// historic behaviour before per-tab sessions landed) and Client
 	// otherwise.
+	// Jobs are neither: nobody is sitting at them. Saying "Client" here would
+	// claim a person is connected, which is the one thing an administrator reads
+	// this column to find out.
+	switch (row.m_kind) {
+	case static_cast<int>(ibSessionKind::BackgroundJob):
+	case static_cast<int>(ibSessionKind::ScheduledJob):
+	case static_cast<int>(ibSessionKind::SystemJob):
+		return _("Job");
+	default: break;
+	}
+
 	if (row.m_runMode == ibRunMode::eWEB_RUNTIME_MODE) {
 		// ibSessionKind::WebClient = 100.
 		return (row.m_kind == 100) ? _("Client") : _("Server");
@@ -118,10 +141,28 @@ wxString ibSessionSnapshot::ExclusiveHolderUser() const
 	return wxEmptyString;
 }
 
+// IS A PERSON WORKING HERE? Both predicates below answer that, and neither may
+// count a session that exists only to serve one — a background job carries the
+// user name of whoever started it, so counting it makes one person read as two.
+// The consequences are not cosmetic: an exclusive-mode gate built on these would
+// block on a job the blocking window itself started, and a licence count would
+// double every seat that happens to be reading.
+static bool ibIsPersonSession(int kind)
+{
+	switch (kind) {
+	case static_cast<int>(ibSessionKind::BackgroundJob):
+	case static_cast<int>(ibSessionKind::ScheduledJob):
+	case static_cast<int>(ibSessionKind::SystemJob):
+		return false;
+	default:
+		return true;
+	}
+}
+
 bool ibSessionSnapshot::HasActiveUsers() const
 {
 	for (const auto& u : m_listSession)
-		if (!u.m_strUserName.IsEmpty())
+		if (!u.m_strUserName.IsEmpty() && ibIsPersonSession(u.m_kind))
 			return true;
 	return false;
 }
@@ -131,7 +172,7 @@ bool ibSessionSnapshot::IsUserActive(const wxString& userName) const
 	if (userName.IsEmpty())
 		return false;
 	for (const auto& u : m_listSession)
-		if (u.m_strUserName == userName)
+		if (u.m_strUserName == userName && ibIsPersonSession(u.m_kind))
 			return true;
 	return false;
 }

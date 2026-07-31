@@ -8,6 +8,7 @@
 #include "backend/metaCollection/metaModuleObject.h"
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/query/queryableFactory.h"   // ibQueryableFactory::Register/Unregister — the per-config source registry
+#include "backend/query/schemaSnapshot.h"     // ibSchemaSnapshot — BuildSchemaSnapshot
 
 #include <algorithm>
 #include <cwctype>
@@ -30,6 +31,18 @@ ibMetaID ibMetaData::MetaIdByGuid(const ibGuid& guid) const
 		return wxNOT_FOUND;
 	const ibValueMetaObject* meta = FindAnyObjectByFilter(guid, true);
 	return meta != nullptr && meta->IsAllowed() ? meta->GetMetaID() : wxNOT_FOUND;
+}
+
+// The whole structure this configuration declares — see the header. The walk
+// itself belongs to the metaobjects (ibValueMetaObject::ContributeTables descends
+// its children); this only names WHERE it starts, which is the one thing every
+// caller was repeating.
+ibSchemaSnapshot ibMetaData::BuildSchemaSnapshot() const
+{
+	ibSchemaSnapshot snapshot;
+	if (const ibValueMetaObject* common = GetCommonMetaObject())
+		common->ContributeTables(snapshot);
+	return snapshot;
 }
 
 // Register the source into THIS config's OWN factory (the metaobject calls it on run: GetMetaData()->RegisterSource).

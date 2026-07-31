@@ -3,7 +3,6 @@
 
 #include <algorithm>
 #include <functional>
-#include <future>
 #include <map>      // ibComposerNode holds the driver row's std::map<ibMetaID, ibValue>
 #include <memory>   // std::shared_ptr (CreateIterator)
 
@@ -85,6 +84,14 @@ class BACKEND_API ibValueModel : public ibValueDynamicMembers,
 	// ONCE here — all model subclasses (list / tree / table / dynamic list) inherit this
 	// static through name-lookup, so the class factory reports them as tables by CLSID.
 	static bool IsTableValue() { return true; }
+
+	// NOTE on IsTransferable: deliberately NOT overridden here. Being a mutable
+	// collection is not by itself a reason to refuse a session boundary — a value
+	// table is a self-contained runtime value and travels with its own data, the
+	// same as an array does. What cannot travel is a model that is PART of
+	// something else that keeps changing: a register's record set, an object's
+	// tabular section. Those say so themselves (see commonObject.h,
+	// tabularSection.h), and the distinction is ownership, not mutability.
 
 	template <typename T>
 	class ibVariantDataValueImpl :
@@ -241,10 +248,8 @@ class BACKEND_API ibValueModel : public ibValueDynamicMembers,
 			return m_ownerModel->IsSortable(col);
 		}
 
-		// Forward to ibValueModel which delegates to ibSession::Submit
-		// (worker pool).  Future return value is discarded — fetch
-		// completion is communicated via the lambda body itself
-		// (typically via wxWindow::CallAfter back to the UI thread).
+		// Forward to ibValueModel — a runtime table sends the work to a background
+		// job; the answer comes back through the work itself.
 		virtual void SubmitFetchAsync(std::function<void()> work) override {
 			m_ownerModel->SubmitFetchAsync(std::move(work));
 		}
@@ -288,6 +293,12 @@ class BACKEND_API ibValueModel : public ibValueDynamicMembers,
 	};
 
 	ibDataViewModelProviderImpl* m_modelProvider;
+
+	// The rented run this model's last portion went out on — kept so the destructor
+	// can wait it out. Nothing else keeps a model alive while a worker is reading
+	// it: the control's alive token answers for the control, not for this. One slot
+	// because the door already serialises reads (ibDataViewModel::GuardFetch).
+	std::shared_ptr<class ibBackgroundRun> m_fetchRun;
 
 	// Persistent runtime list-settings (Filter / Order / Group), surfaced to UI / script so ANY model
 	// (value-table, tabular section, list, tree) carries filter / sort / group settings. The settings are a thin
@@ -624,6 +635,7 @@ public:
 		const ibDataViewItem& parent, const ibDataViewItem& anchor,
 		int count, ibFetchDirection dir, ibDataViewItemArray& out) const;
 
+
 	// Point lookup for a FindRowValue restore STUB: given an anchor's row-key (PK value(s)), fetch that ONE row
 	// from the source and return its value map, so RunComposerPage can fill the anchor's sort tuple and the
 	// keyset predicate positions the page AT the row. Source-agnostic (same composer/driver path). Empty on miss.
@@ -649,14 +661,27 @@ public:
 	// only differentiates ibValueModel-derived (paged) from native
 	// non-paged wxDVC models (lists, tree-stores, predefined editor).
 
-	// Submit a Fetch-style task to the current session's worker pool.
-	// Returns the future the pool gave us; if no session is bound the
-	// task runs inline and the returned future is already ready (matches
-	// ibSession::Submit's no-pool fallback contract). Caller owns the
-	// UI marshaling decision: future.wait() inline, wxTheApp->CallAfter
-	// on completion, or fire-and-forget. Backend itself stays free of
-	// frontend coupling.
-	std::future<void> SubmitFetchAsync(std::function<void()> work);
+	// A RUNTIME MODEL READS A DATABASE, so this override sends the portion to a
+	// RENTED background run (ibJobTenancy::Tenant): a session of its own, because a
+	// session owns one connection and the caller's is busy being the caller's, and
+	// nothing else of its own — no identity, no runtime, no row in Active Users,
+	// and the caller's access policy borrowed, so the read sees exactly what the
+	// caller sees. It is used up, brings the data back and ends.
+	//
+	// WHERE the caller lives does not enter into it. A list is a list in the
+	// Designer, in the thick client and in a browser tab; the run is the same in
+	// all three.
+	//
+	// Everything that cannot be rented lands INLINE — a saturated pool, a registry
+	// going down, a host with no job manager at all (tests, headless). The caller
+	// is never told which happened: it hands over a unit of work and gets it done.
+	// Marshalling the ANSWER back to whoever asked stays the caller's business
+	// (the control posts it to the UI thread), so the backend keeps no idea that a
+	// UI exists.
+	// (Not an override of the view virtual — ibValueModel does not derive from
+	//  ibDataViewModel; the provider bridge above forwards it here.)
+	virtual void SubmitFetchAsync(std::function<void()> work);
+
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -809,6 +834,18 @@ protected:
 	// (Filter + Sort state are GONE from the model — both live in L5: ListSettings->Filter / ->Order,
 	// applied to the composer per fetch. The old ibFilterRow m_filterRow / ibSortOrder m_sortOrder are removed.)
 
+	// (The former SetUiDispatcher / DispatchToUi hop was REMOVED. It was a
+	//  process-wide static, which is the wrong shape twice over: the backend had
+	//  to know what a host's UI thread is, and a web server — one process, MANY
+	//  sessions — has no single answer to give it. The question "run this where
+	//  the view lives" is already answered, per session and polymorphically, by
+	//  ibSession::Submit → ibWorkerPool: the GUI pool drains onto the wx main
+	//  thread, the headless pool onto that session's FIFO worker, and a host with
+	//  no pool runs inline because nothing is watching. A background read hands
+	//  its result back by Submitting to the session that ASKED for it — captured
+	//  when the read starts, never ibSession::Current(), which in the background
+	//  is the reading session, not the form's.)
+
 	// Monotonic change counter — bumped on any value / row mutation the model notifies the GUI of (the
 	// structural-mutation reset path bumps it). Subclasses bump through BumpViewGeneration(), not the field.
 	void BumpViewGeneration() const { ++m_viewGeneration; }   // m_viewGeneration is mutable (a view counter, not model state)
@@ -817,6 +854,7 @@ protected:
 private:
 
 	mutable uint32_t m_viewGeneration = 0;   // view-change counter — mutable so const notify/fetch paths can bump it
+
 
 	// ===== FOLDED IN: the former ibValueModel body (Max: "the base model becomes a tree; a list = a
 	// tree without children; any table is simultaneously in both states"). The row NODE, the concrete data-model
@@ -1486,6 +1524,11 @@ protected:
 	// in RAM (RunStoragePage). Cheap re-check: it re-materialises only when the view generation moved (a refresh /
 	// filter / sort change bumps it; a scroll does not), so a scroll reuses the snapshot and a settings change reloads
 	// it. (Out-of-line in modelDb.cpp — needs the queryable + driver.)
+	//
+	// It runs wherever the FETCH that reached it runs — which, when the fetch was
+	// dispatched in the background, is a background session. Nothing here arranges
+	// that: the whole read (page or snapshot) is one unit of work, and the thread
+	// it happens on is the caller's decision, made once, at the fetch.
 	void EnsureSnapshot() const;
 
 	mutable ibDataDBComposer m_composer;   // the DB composer (bound to the queryable by the concrete subclass ctor)
@@ -1507,6 +1550,19 @@ public:
 
 	// COVARIANT return (ibDataRamComposer& to a RAM caller; ibDataComposer& via the base).
 	ibDataRamComposer& GetModelComposer() const override { return m_composer; }
+
+	// A RAM READ TAKES THE PLAIN THREAD, not a rented run: there is no database on
+	// the other end, so a session and a pooled connection would be minted for
+	// nothing. What it wants is exactly what a plain model gets —
+	// ibDataViewModel::SubmitFetchAsync, the model's own thread, under the same
+	// door lock.
+	//
+	// Reached through the bridge and QUALIFIED: ibValueModel does not derive
+	// ibDataViewModel, it owns a provider that does — and that provider's override
+	// forwards straight back here, so an unqualified call would loop forever.
+	void SubmitFetchAsync(std::function<void()> work) override {
+		GetDataViewModel()->ibDataViewModel::SubmitFetchAsync(std::move(work));
+	}
 
 	// RAM paged fetch: ComputeOrder over the storage's nodes → window by the anchor → return the LIVE nodes.
 	unsigned int RunComposerPage(const ibDataViewItem& parent, const ibDataViewItem& anchor,

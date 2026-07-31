@@ -1006,6 +1006,43 @@ public:
 	virtual wxString GetClassName() const;
 	virtual ibClassID GetClassType() const;
 
+	// May this value cross into ANOTHER session?
+	//
+	// Everything the interpreter passes around within one session is fine; the
+	// question only arises at a session boundary — handing arguments to a
+	// background job, which runs on its own session and its own thread. Nothing
+	// is serialised on the way (one process, one address space), so what is being
+	// asked is about OWNERSHIP, not transport: is this value safe for a second
+	// session to hold and read?
+	//
+	// Default YES, because the overwhelming majority of values are — numbers,
+	// strings, dates, references, enumeration values: immutable, owned by nobody.
+	// A type says NO when it is either
+	//   - MUTABLE and owned by its session (a form, an open recordset, a live
+	//     object): two sessions mutating one object coordinate through nothing; or
+	//   - BOUND to its session's runtime (a lambda holds m_parentBc, a pointer
+	//     into the compiling session's bytecode — which is per-session, built by
+	//     CompileRoot; an iterator is a cursor over somebody else's collection; an
+	//     OLE handle belongs to the thread that created it).
+	//
+	// Answering here rather than switching on the tag at the boundary is what
+	// keeps the rule with the type: a new value kind states its own case, and the
+	// job layer never grows a list of what it knows about.
+	//
+	// TYPE_REFFER and TYPE_CONST_REFFER are ALIASES, not things of their own — both
+	// hop to the object they wrap and let IT answer. Without the hop the wrapper
+	// would say "yes" on behalf of whatever it points at, which is exactly the
+	// case that matters: a form, an object or a lambda is almost always reached
+	// through one. Const-ness is not the question either — a read-only alias to a
+	// mutable object still aliases a mutable object.
+	virtual bool IsTransferable() const {
+		if (m_pRef != nullptr
+		 && (m_typeClass == ibValueTypes::TYPE_REFFER
+		  || m_typeClass == ibValueTypes::TYPE_CONST_REFFER))
+			return m_pRef->IsTransferable();
+		return true;
+	}
+
 	virtual bool Init() {
 		if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
 			return m_pRef->Init();

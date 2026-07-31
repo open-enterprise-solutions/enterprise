@@ -13,7 +13,14 @@ bool ibDesignerExclusivePolicy::CanAdd(const ibSession& session, wxString& reaso
 {
 	// Only designer Adds are subject to the exclusion; everyone else
 	// passes unconditionally.
-	if (session.Identity().m_appMode != eDESIGNER_MODE)
+	//
+	// WHAT IS BEING ADDED, not WHERE it runs. A job's session carries the app mode of
+	// the process that started it, so a scheduled or background run inside
+	// designer.exe announced itself as eDESIGNER_MODE and was vetoed as "another
+	// designer process". One designer per base is about DESIGNERS; the kind is what
+	// says whether this is one. (A rented read never reaches here at all — it is
+	// minted unlisted and never goes through the registry.)
+	if (session.GetKind() != ibSessionKind::Designer)
 		return true;
 
 	if (m_registry == nullptr)
@@ -34,6 +41,14 @@ bool ibDesignerExclusivePolicy::CanAdd(const ibSession& session, wxString& reaso
 	const wxString& ownId = session.GetId();
 	for (unsigned int i = 0; i < snap.GetSessionCount(); ++i) {
 		if (snap.GetSessionApplication(i) != eDESIGNER_MODE)
+			continue;
+
+		// Same distinction on the ROW side: a job started BY a designer process
+		// carries that process's app mode without being a designer, so a peer's
+		// scheduled run must not veto a designer starting here. An unknown kind
+		// (legacy schema, back-fill missed) still counts as a designer — the safe
+		// side of this particular question.
+		if (IsJobSessionKind(static_cast<ibSessionKind>(snap.GetSessionKind(i))))
 			continue;
 
 		const wxString otherGuid = snap.GetSession(i);

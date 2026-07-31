@@ -195,6 +195,12 @@ public:
 	// session apps where no WebServer-kind session ever registered.
 	bool                     HasClients() const;
 
+	// How long a producer waits for the registry thread to settle a Connect.
+	// Generous on purpose: the consumer may be mid-sweep or mid-snapshot when the
+	// request arrives, and a session that fails to open is a user who cannot work.
+	// A caller serving somebody who is already waiting names a shorter one.
+	static constexpr std::chrono::seconds kConnectTimeout { 20 };
+
 	// ---- Session factory facade ----
 	// Wraps the EnsureStartedForCreateSession + Connect(req) handshake.
 	// `appData->CreateSession*` forward here; per-tab web flow uses the
@@ -216,6 +222,16 @@ public:
 	                                         const wxString& presetGuid,
 	                                         const wxString& address,
 	                                         ibConnectRequest::SessionFactory factory);
+
+	// Explicit-kind variant, for a session whose kind does not follow from the
+	// run mode. A job is exactly that case: any host can hold one next to its
+	// own session, so "what kind of session is this" stops being answerable from
+	// how the process was started. Giving it its own kind is what makes it show
+	// up in Active Users as work rather than as another user.
+	ibSessionHolder CreateSessionOfKind(ibRunMode runMode,
+	                                    const wxString& computer,
+	                                    ibSessionKind kind,
+	                                    ibConnectRequest::SessionFactory factory);
 
 	// ---- Thread + queue ----
 	// Set whether the registry owns sys_session row I/O. Default false —
@@ -263,7 +279,7 @@ public:
 	// ibSessionTicket whose dtor submits Remove@Urgent. On failure the
 	// result carries the terminal code + reason and an empty ticket.
 	ibConnectResult Connect(const ibConnectRequest& req,
-	                        std::chrono::milliseconds timeout = std::chrono::seconds(20));
+	                        std::chrono::milliseconds timeout = kConnectTimeout);
 
 	// ---- Admin signals (write to sys_session.signal for cross-process
 	// control). Owning process picks them up on its next JobCheckSignal
@@ -359,7 +375,29 @@ public:
 	// registry hands them out and tears them down. The pool is allocated
 	// in the ctor when maxWorkers > 0; ProcessRemove drops the leaving
 	// session's queue from the pool automatically.
+	//
+	// This is the pool a session reaches through ibSession::GetWorkerPool()
+	// unless the session class overrides that — the desktop GUI session
+	// does, so an interactive session keeps running script inline on the
+	// wx main thread while background / scheduled sessions in the same
+	// process use the pool installed here.
 	class ibWorkerPool* GetWorkerPool() const { return m_workerPool.get(); }
+
+	// Install (or replace) the pool after construction. The ctor's
+	// maxWorkers covers hosts that know their sizing up front; a host that
+	// decides later — a desktop process that needs background sessions
+	// even though its own session runs on the wx main thread — calls this
+	// during startup instead of being forced to pick at ctor time.
+	//
+	// Stops the previous pool before dropping it, so its pending tasks
+	// finish against still-valid sessions (ibWorkerPool::Stop is an
+	// actor-style drain, not a force-kill). Passing nullptr removes the
+	// pool: sessions then fall back to running tasks inline.
+	//
+	// Call during startup, before sessions are handed out. Replacing a
+	// pool that already has in-flight work is not a supported sequence —
+	// the drained tasks would complete against a pool nobody can reach.
+	void SetWorkerPool(std::unique_ptr<class ibWorkerPool> pool);
 
 	// Close every session this process owns. force=true interrupts any
 	// in-flight script and closes each window without asking; force=false

@@ -36,6 +36,16 @@ private:
 
 public:
 
+	// NOT transferable across sessions. A tabular section is not a table of its
+	// own — it is PART of an object (m_objectValue below), the lines of a document
+	// or a catalog item that is open and being edited. Handing it over would hand
+	// a second session a live piece of somebody else's object, which is refused
+	// for the same reason the object itself is.
+	//
+	// A value table copied out of it (Unload) travels perfectly well: at that
+	// point the rows are a self-contained runtime value and belong to nobody.
+	virtual bool IsTransferable() const override { return false; }
+
 	virtual ibValueModelColumnCollection* GetColumnCollection() const override { return m_recordColumnCollection; }
 	virtual ibValueModelReturnLine* GetRowAt(const ibDataViewItem& line) {
 		if (!line.IsOk())

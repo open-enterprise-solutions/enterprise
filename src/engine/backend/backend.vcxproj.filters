@@ -777,6 +777,15 @@
     <ClInclude Include="lock\lockManager.h">
       <Filter>lock</Filter>
     </ClInclude>
+    <ClInclude Include="job\jobManager.h">
+      <Filter>job</Filter>
+    </ClInclude>
+    <ClInclude Include="job\platformJobs.h">
+      <Filter>job</Filter>
+    </ClInclude>
+    <ClInclude Include="job\jobSchedule.h">
+      <Filter>job</Filter>
+    </ClInclude>
     <ClInclude Include="utils\passwordHash.hpp">
       <Filter>utils</Filter>
     </ClInclude>
@@ -1789,6 +1798,15 @@
     <ClCompile Include="lock\lockManager.cpp">
       <Filter>lock</Filter>
     </ClCompile>
+    <ClCompile Include="job\jobManager.cpp">
+      <Filter>job</Filter>
+    </ClCompile>
+    <ClCompile Include="job\platformJobs.cpp">
+      <Filter>job</Filter>
+    </ClCompile>
+    <ClCompile Include="job\jobSchedule.cpp">
+      <Filter>job</Filter>
+    </ClCompile>
     <ClCompile Include="utils\passwordHash.cpp">
       <Filter>utils</Filter>
     </ClCompile>
@@ -1952,6 +1970,9 @@
     </Filter>
     <Filter Include="lock">
       <UniqueIdentifier>{6c0f1d2a-7b3e-4d8a-9f1c-2e3b5a6c7d8e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="job">
+      <UniqueIdentifier>{9a1e4c7b-2d6f-4a3e-b8c5-7d1f2a4e6b9c}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>

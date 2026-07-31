@@ -3,6 +3,7 @@
 #include "backend/session/session.h"
 
 #include <wx/app.h>
+#include <wx/thread.h>   // wxIsMainThread — the inline-vs-hop decision
 
 #include <stdexcept>
 
@@ -31,8 +32,35 @@ std::future<void> ibWorkerPoolGUI::Submit(ibSession* /*session*/, Task task)
 		return future;
 	}
 
-	// Schedule on the wx main thread. CallAfter posts a wx event that
-	// the next idle pump executes — safe to call from any thread.
+	// ALREADY on the thread this pool drains onto — run it here and now.
+	//
+	// This is what makes the pool installable on an interactive session without
+	// changing a single thing about how the desktop behaves today: every script
+	// path, every form handler, every Submit that exists right now runs on the wx
+	// main thread, so every one of them takes this branch and stays inline,
+	// exactly as it did when GetWorkerPool() answered nullptr. The CallAfter
+	// below then serves ONLY the case that has no equivalent today — a result
+	// arriving from a background thread — which is the whole reason to install it.
+	//
+	// It is also a correctness rule, not just a shortcut: a task submitted from
+	// the main thread and deferred would fulfil its future only on the next idle
+	// pump, so a caller that waits on that future (RunOnSession, the teardown
+	// drain) would block the very loop that has to run it — a self-deadlock.
+	// Reentrant-inline is the same contract the headless pool keeps for a caller
+	// that already holds the session's lease.
+	if (wxIsMainThread()) {
+		try {
+			task();
+			promise->set_value();
+		}
+		catch (...) {
+			promise->set_exception(std::current_exception());
+		}
+		return future;
+	}
+
+	// Off-thread caller — hop. CallAfter posts a wx event that the next idle
+	// pump executes; safe to call from any thread.
 	wxTheApp->CallAfter([t = std::move(task), p = promise]() mutable {
 		try {
 			t();

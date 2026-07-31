@@ -23,11 +23,7 @@
 #if wxUSE_DATAVIEWCTRL
 
 #include "dataview.h"
-#include "backend/model.h"
-#include "datavgen.paged.private.h"
-#ifndef WX_PRECOMP
-#include <wx/log.h>
-#endif
+#include "datavgen.window.private.h"
 
 bool ibDataViewCtrl::IsPagedScrollbarMode() const
 {
@@ -94,9 +90,6 @@ ibDataViewCtrl::ibPagedThumb ibDataViewCtrl::DerivePagedThumb() const
 	else if (dataAhead && dataBehind) result = ibPagedThumb::Middle;
 	else result = ibPagedThumb::Top;            // both false: empty / fits in buffer
 
-	const char* label =
-		(result == ibPagedThumb::Top)    ? "Top" :
-		(result == ibPagedThumb::Bottom) ? "Bottom" : "Middle";
 		return result;
 }
 
@@ -133,10 +126,6 @@ void ibDataViewCtrl::GetPagedPinRange(long& minRow, long& maxRow) const
 		if (maxRow < 0 || i > maxRow) maxRow = i;
 	}
 }
-
-// GetPagedInsertParent / SchedulePagedRefresh / PagedRefresh /
-// PagedBootstrap / DispatchPagedFetch / OnPagedFetch{Forward,Backward}Result
-// — extracted to datavgen.paged.cpp on 2026-05-08.
 
 void ibDataViewCtrl::UpdatePagedScrollbar()
 {

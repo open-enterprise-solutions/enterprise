@@ -132,6 +132,31 @@ public:
 	static void CommitTransaction();
 	static void RollBackTransaction();
 
+	//--- Jobs:
+	// The tick. Launches every job that is due and returns how many were launched;
+	// does NOT wait for any of them. A file deployment has no daemon to keep time,
+	// so the schedule advances only when something calls this — the platform timer
+	// on a desktop host, the compute server's own loop where one exists, or script
+	// that wants to force a round. See docs/job-manager.md § "The tick".
+	static int  RunScheduledJobs();
+
+	// Run one job now, ignoring its interval and window. False when the name is
+	// unknown or that job is already running. Without this a job could only be
+	// exercised by waiting out its schedule, which makes a misbehaving tenant
+	// impossible to tell apart from a misbehaving manager.
+	static bool RunJob(const wxString& strJobName);
+
+	// Start `procedure` on a session of its own and return a BackgroundJob value —
+	// the caller may wait on it, poll it, cancel it, or drop it and let the work
+	// finish unattended.
+	//
+	// `procedure` is `ModuleName.MethodName`: a PUBLIC method of a common module.
+	// The run adopts the CALLER's identity, so it sees exactly what the caller
+	// sees. `args` is an Array whose elements are passed positionally; every one
+	// of them must be transferable (ibValue::IsTransferable) — passing a form, an
+	// object or a record set throws here rather than failing in the background.
+	static ibValue RunBackground(const wxString& strProcedureName, ibValue* pArgs);
+
 public:
 
 	ibValueSystemFunction() :

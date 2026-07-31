@@ -108,6 +108,32 @@ void ibApplicationData::CreateTableLock()
 	}
 }
 
+// sys_job — the SHARED clock for scheduled jobs. One row per job name,
+// carrying when it last ran as every process on this base sees it.
+//
+// Why it exists: the cross-process claim (sys_lock, Job.<name>) answers
+// "is somebody running it RIGHT NOW", which is not the same question as
+// "has it already run recently". Without a shared last-run, two clients
+// open on one file base each keep their own in-memory clock and the job
+// fires once per process per interval — twice the work, and for anything
+// that is not idempotent, twice the effect.
+//
+// Deliberately minimal. No history, no status, no next-run: those are
+// per-process observations (ibJobState) and belong in memory. What has to
+// be shared is exactly the one fact that decides whether to start.
+void ibApplicationData::CreateTableJob()
+{
+	ibDatabaseQueryBuilder q;
+	if (!q.TableExists(job_table)) {
+
+		q.Execute(ibCreateTable(job_table, {
+			{ wxT("jobName"),  ibTypeString(128), false, true,  wxEmptyString },   // primary key — the job's registered name
+			{ wxT("lastRun"),  ibTypeDate(),      true,  false, wxEmptyString },   // wall clock, shared across processes
+			{ wxT("computer"), ibTypeString(128), false, false, wxEmptyString },   // who ran it last, for diagnostics
+		}));
+	}
+}
+
 // Additive column migration for sys_session. Existing databases created
 // before the session-registry refactor (pid / address / currentActivity
 // added 2026-04-20) are transparently upgraded on startup — registry

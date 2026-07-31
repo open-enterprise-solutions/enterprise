@@ -5,7 +5,20 @@
 #include <wx/app.h>
 #include <wx/frame.h>
 
-ibGUISession::~ibGUISession() = default;
+ibGUISession::~ibGUISession()
+{
+	// Stop the pool before the session it belongs to stops existing. After this
+	// a Submit arriving late (a background read that outlived the form) is
+	// refused with an exception instead of posting a CallAfter that would run
+	// against a destroyed session. The pool owns no threads, so there is nothing
+	// to join — the flag IS the whole stop.
+	m_workerPool.Stop();
+}
+
+ibWorkerPool* ibGUISession::GetWorkerPool() const
+{
+	return &m_workerPool;
+}
 
 bool ibGUISession::OnShowAuthenticate(const wxString& user, const wxString& password)
 {

@@ -50,6 +50,10 @@ class ibValueIterator : public ibValue {
 
 	virtual ~ibValueIterator() = default;
 
+	// NOT transferable: a cursor is a position inside somebody else's collection,
+	// and advancing it from a second session would move it under the first.
+	virtual bool IsTransferable() const override { return false; }
+
 	bool MoveNext(ibValue& current) {
 		return m_state ? m_state->MoveNext(current) : false;
 	}
@@ -96,6 +100,12 @@ class ibValueFunction : public ibValue, public ibEventDispatcher {
 	// ibEventDispatcher — a lambda IS its own dispatcher: run its own body with the args (+ trailing cancel). NOT const
 	// (the invoke may heap-promote / mutate the lambda's captured frames). IsEmpty is false: a bound lambda is set.
 	virtual bool IsEmpty() const override { return false; }
+
+	// NOT transferable across sessions: m_parentBc points into the COMPILING
+	// session's bytecode (see the lifetime note above), and m_capturedFrames holds
+	// that session's locals. Dispatched elsewhere this runs one session's bytecode
+	// on another's interpreter, and once the owner closes the pointer dangles.
+	virtual bool IsTransferable() const override { return false; }
 	virtual bool Dispatch(ibProcUnit* runtime, ibValue** args, long argc, ibValue& outCancel) override;
 
 

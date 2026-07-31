@@ -56,6 +56,10 @@
     <ClInclude Include="lock\lockHolder.h" />
     <ClInclude Include="lock\lockKeyHash.h" />
     <ClInclude Include="lock\lockManager.h" />
+    <ClInclude Include="job\jobManager.h" />
+    <ClInclude Include="job\platformJobs.h" />
+    <ClInclude Include="job\jobSchedule.h" />
+    <ClInclude Include="system\value\valueBackgroundJob.h" />
     <ClInclude Include="backend_core.h" />
     <ClInclude Include="backend_mainFrame.h" />
     <ClInclude Include="backend_picture.h" />
@@ -383,6 +387,10 @@
     <ClCompile Include="lock\lockHolder.cpp" />
     <ClCompile Include="lock\lockKeyHash.cpp" />
     <ClCompile Include="lock\lockManager.cpp" />
+    <ClCompile Include="job\jobManager.cpp" />
+    <ClCompile Include="job\platformJobs.cpp" />
+    <ClCompile Include="job\jobSchedule.cpp" />
+    <ClCompile Include="system\value\valueBackgroundJob.cpp" />
     <ClCompile Include="backend_core.cpp" />
     <ClCompile Include="backend_mainFrame.cpp" />
     <ClCompile Include="backend_picture.cpp" />

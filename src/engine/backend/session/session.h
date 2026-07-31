@@ -93,7 +93,38 @@ enum class ibSessionKind : int {
 	Service    = eSERVICE_MODE,        // 4
 	WebServer  = eWEB_RUNTIME_MODE, // 5 — wes process technical row
 	WebClient  = 100,                  // per-tab / API caller
+	// A job's own session. Like WebClient these live OUTSIDE the run-mode range,
+	// because a job is not a way of running the process: any host can hold one
+	// alongside its normal sessions, so "what kind of session is this" stops
+	// being answerable from how the process was started.
+	//
+	// THREE kinds rather than one, because an administrator looking at Active
+	// Users has a different decision for each. A stuck BackgroundJob has a user
+	// waiting on it and a form to tell. A stuck ScheduledJob belongs to the
+	// configuration — someone wrote it, and it will come back on its interval
+	// whether or not this run is killed. A stuck SystemJob is the engine's own
+	// housekeeping, which is safe to kill precisely because it is housekeeping
+	// (a skipped fold costs a slightly wider read and nothing else). Collapsing
+	// them into one row type would hide exactly the distinction that decides
+	// whether to wait or to kick.
+	BackgroundJob = 101,   // started by hand from script, under the caller's identity
+	ScheduledJob  = 102,   // declared by the configuration, runs on its interval
+	SystemJob     = 103,   // the platform's own (totals fold, maintenance)
+
 };
+
+// IS THIS SESSION A JOB — one of the three above, whatever host it lives in.
+//
+// Worth one question because a job's session carries the APP MODE of whoever
+// started it: a run inside designer.exe says eDESIGNER_MODE, and anything reading
+// the app mode to decide "is this a designer" counts it as one. It is not — it is a
+// job that happens to live there. The KIND is what answers, and this is the
+// shorthand for asking.
+inline bool IsJobSessionKind(ibSessionKind k) {
+	return k == ibSessionKind::BackgroundJob
+	    || k == ibSessionKind::ScheduledJob
+	    || k == ibSessionKind::SystemJob;
+}
 
 inline ibSessionKind SessionKindFromRunMode(ibRunMode m) {
 	// Web run mode is ambiguous at this layer — default to WebClient
@@ -458,13 +489,35 @@ protected:
 
 public:
 
-	// Submit a task to run on the session's worker. Forwards through
-	// the session registry's worker pool (so pool ownership and
-	// configuration stay encapsulated on the registry). When no pool
-	// is configured — single-session GUI hosts — the task runs inline
-	// on the calling thread and the returned future is fulfilled
-	// before Submit returns.
+	// Which pool runs THIS session's tasks. Virtual because the answer
+	// belongs to the session kind, not to the process: one process can
+	// hold an interactive session that must stay on the UI thread and
+	// background / scheduled sessions that must not. Branching on kind
+	// inside Submit would put that knowledge in the wrong place.
+	//
+	// Base answer is the registry's pool. Returning nullptr is a valid
+	// answer and means "run inline on the calling thread" — which is what
+	// the desktop GUI session does, keeping script on the wx main thread.
+	virtual class ibWorkerPool* GetWorkerPool() const;
+
+	// Submit a task to run on the session's worker. Routed through
+	// GetWorkerPool() above, so pool ownership stays on the registry
+	// while the CHOICE of pool stays with the session. When that
+	// resolves to no pool the task runs inline on the calling thread
+	// and the returned future is fulfilled before Submit returns.
 	std::future<void> Submit(std::function<void()> task);
+
+	// (A read that must leave this thread does NOT get a door here. It is a RENTED
+	//  background run — ibJobManager::StartBackground with ibJobTenancy::Tenant —
+	//  which gives a read the one thing it cannot borrow (a connection, since this
+	//  session owns exactly one and it is busy) and borrows everything else: no
+	//  identity, no runtime, no row, and THIS session's access policy, so it sees
+	//  exactly what this session sees. Run once, gone.
+	//
+	//  An earlier attempt kept a per-window reader session alive between portions
+	//  to save the start-up cost. It was removed: a session held open is one that
+	//  can sit in Active Users holding a connection with nobody able to tell
+	//  working from stuck, and a run that ends by construction cannot.)
 
 	// Per-session "working date" — the conceptual business-date used by
 	// script's WorkingDate() helper (reports, document registration,
@@ -584,6 +637,22 @@ private:
 	friend class ibSessionScope;
 	friend class ibSessionRegistry;
 	friend class ibSessionHolder;   // releasing the holder tears us down
+	friend class ibJobManager;      // mints an unlisted session for a rented read
+
+	// WAS THIS SESSION EVER TAKEN IN BY THE REGISTRY?
+	//
+	// A rented read is minted straight (ibJobManager::StartBackground with
+	// ibJobTenancy::Tenant): it takes no row, passes no policy and answers no
+	// lookup, so Add has nothing to do for it — and Add is not free. It is a
+	// handshake with the consumer thread plus, inside ProcessAdd, a cluster-snapshot
+	// refresh (a SELECT over sys_session), paid on the thread that asked, per
+	// scrolled page.
+	//
+	// Nothing taken in means nothing to give back: Teardown skips the Remove, which
+	// would otherwise fire the disconnect listeners — an audit row per page for a
+	// session nobody was ever told about.
+	bool m_listed = true;
+	void SetUnlisted() { m_listed = false; }
 
 	// The teardown: quiesce the worker, then Remove@Urgent so the
 	// registry drops us, DELETEs the sys_session row and fires
@@ -734,7 +803,22 @@ private:
 	// Owned holder identity — session uses its own holder for pool
 	// reservations (TX pin / scope binding). Const-mutable not needed:
 	// every method that touches m_dbHolder is non-const.
-	ibDatabaseConnectionHolder m_dbHolder;
+	//
+	// SELF-CLEANING ON PURPOSE. ibSingleConnectionHolder's dtor releases every
+	// reservation this holder took out of the pool; the plain base's dtor is
+	// trivial and releases nothing. EnsureConnection BINDS the checked-out entry to
+	// this holder and nothing else ever unbinds it — no scope object is involved —
+	// so with the base type a session that had ever touched the database left its
+	// entry marked "bound", pointing at a holder that no longer exists. Checkout
+	// skips a bound entry and the idle reaper never reclaims one, so the connection
+	// was lost to the pool for the life of the process.
+	//
+	// Invisible while a session was one-per-window. Fatal the moment a session is
+	// created per scrolled page (a rented read): thirty-odd portions drain a
+	// 32-connection pool, and everything after that waits out its checkout timeout
+	// before failing. The registry's own write holder is an ibSingleConnectionHolder
+	// for exactly this reason.
+	ibSingleConnectionHolder m_dbHolder;
 	// Root runtime — intrusive-refcounted owner (ibValuePtr is the
 	// project convention for ibValue-derived types). Nested descriptors
 	// (common modules, object instances, forms) parent up through

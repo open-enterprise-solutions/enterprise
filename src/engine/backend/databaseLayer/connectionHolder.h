@@ -18,6 +18,7 @@
 
 #include "backend/backend.h"
 
+#include <chrono>
 #include <memory>
 #include <set>
 #include <vector>
@@ -45,7 +46,16 @@ public:
 	// Defined out-of-line in connectionPool.cpp where the pool's
 	// header is in scope. Returns nullptr only if the pool is not
 	// initialised.
-	std::shared_ptr<ibDatabaseLayer> EnsureConnection();
+	//
+	// `wait` bounds step 3 only — the first two answer from what this holder
+	// already reserved, where there is nothing to wait for. Zero means the pool's
+	// own default (ibConnectionPool::kCheckoutTimeout), which is the right answer
+	// for work somebody started and is waiting on. Work that merely SERVES
+	// somebody names a shorter one: a rented run reads one portion for a form that
+	// already has rows on screen, and a half-minute stall there is worse than an
+	// answer of "not now" (the pool throws its "exhausted" error instead).
+	std::shared_ptr<ibDatabaseLayer> EnsureConnection(
+		std::chrono::milliseconds wait = std::chrono::milliseconds::zero());
 
 	// Fresh conn from the pool — wrapped Checkout, NOT bound to this
 	// holder. The returned shared_ptr's deleter releases the entry

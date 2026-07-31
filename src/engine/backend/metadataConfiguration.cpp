@@ -578,13 +578,9 @@ bool ibMetaDataConfigurationStorage::RestoreDataFromBuffer(const wxMemoryBuffer&
 
 	if (reader.r_chunk(1, bufferData)) {
 
-		ibValueMetaObject* commonObject = m_configMetadata->GetCommonMetaObject();
-		wxASSERT(commonObject);
-
-		// The SAME ContributeTables snapshot the dump used — read each table's rows back by its metaID
-		// and RESTORE through the L3-3 mover (UPSERT / INSERT / external-UPDATE chosen off the structure).
-		ibSchemaSnapshot snapshot;
-		commonObject->ContributeTables(snapshot);
+		// The SAME snapshot the dump used — read each table's rows back by its metaID and RESTORE through
+		// the L3-3 mover (UPSERT / INSERT / external-UPDATE chosen off the structure).
+		const ibSchemaSnapshot snapshot = m_configMetadata->BuildSchemaSnapshot();
 
 		ibReaderMemory readerData(bufferData);
 		for (const ibSchemaTable& table : snapshot.Tables()) {
@@ -630,14 +626,10 @@ bool ibMetaDataConfigurationStorage::DumpDataToBuffer(wxMemoryBuffer& buffer)
 	//common data
 	ibWriterMemory writerData;
 
-	ibValueMetaObject* commonObject = m_configMetadata->GetCommonMetaObject();
-	wxASSERT(commonObject);
-
-	// ONE source of truth: the whole config's structure — the SAME ContributeTables snapshot the DDL
-	// differ consumes — drives the data dump too. Every declared table SELECTs its rows through the
-	// L3-3 mover, framed by the table's metaID (a pure scaffold / seed table, e.g. an enum, is skipped).
-	ibSchemaSnapshot snapshot;
-	commonObject->ContributeTables(snapshot);
+	// ONE source of truth: the whole config's structure — the SAME snapshot the DDL differ consumes —
+	// drives the data dump too. Every declared table SELECTs its rows through the L3-3 mover, framed by
+	// the table's metaID (a pure scaffold / seed table, e.g. an enum, is skipped).
+	const ibSchemaSnapshot snapshot = m_configMetadata->BuildSchemaSnapshot();
 	for (const ibSchemaTable& table : snapshot.Tables()) {
 		if (table.m_columns.empty())
 			continue;

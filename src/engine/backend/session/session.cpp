@@ -94,6 +94,16 @@ private:
 		if (m_metaData != nullptr && m_metaData->IsFullAccess())
 			return;                                   // Tier 0 — full-access user, nothing restricted
 
+		// ONE POLICY, POSSIBLY TWO THREADS. A rented run borrows this object from
+		// the session that started it (ibSession::GetAccessPolicy) — that is the
+		// point of renting, one policy per user rather than a rebuilt copy — and it
+		// runs on a worker while its host may be running script of its own. What
+		// follows executes the role modules' procUnits, which belong to the HOST's
+		// runtime and keep their frame in the object; two threads inside one of
+		// them would corrupt it. So the modules run one at a time. Cheap: this is
+		// once per query, never per row, and the handler builds a join and returns.
+		std::lock_guard<std::mutex> lk(m_applyMtx);
+
 		// Restrict EVERY metadata-backed source in the query, not just the primary From: a joined
 		// table is as much a read of that table as the root is, so its role handler must gate it too
 		// (the handler branches on `Source`'s full name and grants the ones it does not restrict).
@@ -258,6 +268,10 @@ private:
 	// The current user's role-module procUnits — resolved ONCE in the ctor (built post-compile, pre-run)
 	// and held for the session's whole life (roles are fixed while it lives). Empty = no restricting role.
 	std::vector<std::shared_ptr<ibProcUnit>> m_roleProcs;
+	// Serialises the role-module run — see Apply. Mutable because applying a policy
+	// is const from the door's side; the lock is what makes that true when a rented
+	// run borrows this object onto another thread.
+	mutable std::mutex m_applyMtx;
 };
 
 } // namespace
@@ -276,6 +290,7 @@ namespace {
 // next observation — no UAF.
 std::shared_mutex s_currentMutex;
 std::unordered_map<std::thread::id, std::weak_ptr<ibSession>> s_currentByThread;
+
 } // namespace
 
 ibSession::ibSession(wxString id, ibSessionKind kind)
@@ -386,8 +401,9 @@ void ibSession::Teardown()
 	// up its lease on us.
 	//
 	// Re-entrant by construction: Submit runs inline when we are already
-	// on this session's worker (or when there is no pool at all, the
-	// single-session GUI case), so the future is ready before Submit
+	// on this session's worker — the headless pool when we hold its lease,
+	// the GUI pool when we are on the wx main thread it drains onto, and
+	// trivially when there is no pool. So the future is ready before Submit
 	// returns and this never deadlocks against itself.
 	RequestCancel();
 	{
@@ -399,6 +415,19 @@ void ibSession::Teardown()
 	// handlers (per-kind hooks, module OnDestroy through DestroyRoot),
 	// and a latched cancel would abort them at their first loop check.
 	ClearCancel();
+
+	// NEVER TAKEN IN, SO NOTHING TO GIVE BACK. An unlisted session (a rented read —
+	// see m_listed) has no row to DELETE, no index entry to drop and nothing that
+	// ever announced itself, so a Remove would only make the registry thread fire
+	// disconnect listeners for it — an audit row per scrolled page. What it does
+	// own is a queue in the worker pool, keyed on this pointer; drop that and we
+	// are done. The connection goes back with the holder in ~ibSession.
+	if (!m_listed) {
+		if (ibWorkerPool* const pool = GetWorkerPool())
+			pool->DropSession(this);
+		Transition(ibSessionState::Gone);
+		return;
+	}
 
 	// Submit Remove@Urgent — the registry thread DELETEs the sys_session
 	// row, fires OnDisconnect and drops the index entry. It does NOT free
@@ -611,7 +640,28 @@ const ibAccessPolicy* ibSession::GetAccessPolicy() const
 	// the only thing that sets the flag), so it never masks a forgotten policy.
 	if (m_accessTrusted)
 		return nullptr;
-	return m_accessPolicy.get();
+	if (m_accessPolicy)
+		return m_accessPolicy.get();
+
+	// NO POLICY OF ITS OWN — BORROW THE HOST'S. A session builds a policy at
+	// CompileRoot, out of the user's role modules; a session with no identity and
+	// no runtime therefore has none to build. A RENTED run is exactly that (see
+	// ibJobTenancy): it reads on behalf of the session that started it, so the
+	// rows it may see are the rows that session may see, and the policy that says
+	// so already exists — one per user, where it was built, rather than a second
+	// copy that could answer differently.
+	//
+	// The chain is walked rather than followed once, because a host may itself be
+	// hosted. The host's TRUST flag is deliberately not consulted: a trusted
+	// window is a property of what the host is doing on its own thread, and
+	// lifting enforcement here because the host happens to be inside one would be
+	// a bypass nobody asked for. Not a failure default either — a session that
+	// has no host answers null exactly as before.
+	for (std::shared_ptr<ibSession> host = Server(); host; host = host->Server()) {
+		if (host->m_accessPolicy)
+			return host->m_accessPolicy.get();
+	}
+	return nullptr;
 }
 
 ibSession* ibSession::Current()
@@ -643,26 +693,27 @@ ibSession* ibSession::Current()
 		// connection on a thread that was bound separately.
 	}
 
-	const auto mode = reg.GetAccessMode();
+	// ONE RULE, EVERY HOST: the calling thread's own binding, else the fallback.
+	//
+	// There used to be two. Single mode meant "one session per process — hand the
+	// lone map entry to whoever asks, regardless of thread", and that was true
+	// right up until a desktop process stopped having one session. It has not had
+	// one for a while: the job manager gives platform jobs their own, background
+	// runs take their own, and a window's reader takes one more. With two entries
+	// `begin()` on an unordered_map is an arbitrary one of them, so the UI thread
+	// could resolve to a reader's session and a reader's thread to the window's —
+	// silently, and differently from run to run.
+	//
+	// The fix is not a better Single; it is not having one. A thread that bound
+	// itself means it (that is the whole point of ibSessionScope), and a thread
+	// that did not gets the process's fallback — the first authenticated session,
+	// which on a desktop IS the lone session the old branch was reaching for. The
+	// access mode still sizes the worker pool; it no longer decides identity.
 	std::shared_lock<std::shared_mutex> lk(s_currentMutex);
-	switch (mode) {
-	case AccessMode::Single:
-		// One session per process. Map holds at most one entry; return
-		// the lone value regardless of calling thread. Empty map
-		// (pre-bind / post-clear) or expired weak_ptr → nullptr.
-		return s_currentByThread.empty()
-			? nullptr
-			: s_currentByThread.begin()->second.lock().get();
-	case AccessMode::Shared:
-		// Per-thread lookup with fallback to the registry's system session.
-		// Expired binding (session destroyed without explicit Unbind) →
-		// fall through to fallback, same as no binding at all.
-		if (auto it = s_currentByThread.find(tid); it != s_currentByThread.end()) {
-			if (auto sp = it->second.lock()) return sp.get();
-		}
-		return reg.GetFallback();
+	if (auto it = s_currentByThread.find(tid); it != s_currentByThread.end()) {
+		if (auto sp = it->second.lock()) return sp.get();
 	}
-	return nullptr;
+	return reg.GetFallback();
 }
 
 void ibSession::SetAccessMode(AccessMode mode)
@@ -698,20 +749,12 @@ ibSession* ibSession::GetByThread(std::thread::id tid)
 {
 	ibSessionRegistry* const regPtr = ibApplicationData::GetSessionRegistry();
 	if (regPtr == nullptr) return nullptr;
-	const auto mode = regPtr->GetAccessMode();
+	// Same one rule as Current(), for a named thread rather than this one.
 	std::shared_lock<std::shared_mutex> lk(s_currentMutex);
-	switch (mode) {
-	case AccessMode::Single:
-		return s_currentByThread.empty()
-			? nullptr
-			: s_currentByThread.begin()->second.lock().get();
-	case AccessMode::Shared:
-		if (auto it = s_currentByThread.find(tid); it != s_currentByThread.end()) {
-			if (auto sp = it->second.lock()) return sp.get();
-		}
-		return regPtr->GetFallback();
+	if (auto it = s_currentByThread.find(tid); it != s_currentByThread.end()) {
+		if (auto sp = it->second.lock()) return sp.get();
 	}
-	return nullptr;
+	return regPtr->GetFallback();
 }
 
 std::vector<std::pair<std::thread::id, ibSession*>> ibSession::SnapshotByThread()
@@ -739,7 +782,9 @@ void ibSession::BindSessionToThread(ibSession* s, std::thread::id tid)
 		// Bind the shared control block exists. If a future code path
 		// constructs ibSession on the stack, the binding silently
 		// expires on next lookup — safer than dangling raw pointer.
+	{
 		s_currentByThread[tid] = s->weak_from_this();
+	}
 	else
 		s_currentByThread.erase(tid);
 	// Interpreter state needs no separate setup — ibSession::GetPUState()
@@ -832,18 +877,35 @@ void ibSession::RequestForceExit()
 		reg->NotifyForceExit(this);
 }
 
-std::future<void> ibSession::Submit(std::function<void()> task)
+ibWorkerPool* ibSession::GetWorkerPool() const
 {
 	ibSessionRegistry* const regPtr = ibApplicationData::GetSessionRegistry();
-	auto* pool = regPtr != nullptr ? regPtr->GetWorkerPool() : nullptr;
-	if (pool != nullptr)
+	return regPtr != nullptr ? regPtr->GetWorkerPool() : nullptr;
+}
+
+std::future<void> ibSession::Submit(std::function<void()> task)
+{
+	if (ibWorkerPool* pool = GetWorkerPool())
 		return pool->Submit(this, std::move(task));
 
-	// No pool — single-session GUI host. Run the task inline so the
-	// caller's future contract still holds (call returns with the
-	// future already fulfilled or carrying the exception). When the
-	// GUI worker pool lands later, this fallback turns into a
-	// CallAfter-backed dispatch on the wx main thread.
+	// No pool for this session: either none is installed in the process,
+	// or the session answered nullptr on purpose because its work belongs
+	// on the calling thread (the desktop GUI session). Run inline so the
+	// future contract still holds — the call returns with it already
+	// fulfilled, or carrying the exception the task threw.
+	//
+	// BOUND EITHER WAY. A worker takes an ibSessionScope around every task it
+	// drains, and work that runs here must not be the exception to that: what a
+	// task resolves through Current() — the interpreter state, the connection, the
+	// access policy the query layer reads — would otherwise be somebody else's.
+	// The case that made it visible is a RENTED read: it mints a session precisely
+	// to get a connection of its own, and unbound it would go straight back to
+	// reading through the parent's, which is the one that is busy.
+	//
+	// Costs nothing where the binding already holds (the GUI session submitting to
+	// itself, a re-entrant submit from inside this session's own worker): the scope
+	// saves and restores whatever was there.
+	ibSessionScope scope(this);
 	std::promise<void> p;
 	try { task(); p.set_value(); }
 	catch (...) { p.set_exception(std::current_exception()); }
@@ -998,8 +1060,9 @@ ibSessionScope::ibSessionScope(ibSession* s)
 	// pointer. Was the root cause of the rapid-F5 UAF in CurrentFrame
 	// (see project_refresh_execute_crash 2026-04-27).
 	if (it != s_currentByThread.end()) m_prev = it->second;
-	if (s != nullptr)
+	if (s != nullptr) {
 		s_currentByThread[tid] = s->weak_from_this();
+	}
 	else
 		s_currentByThread.erase(tid);
 	// Interpreter state — no separate cache to manage. ibSession::GetPUState()

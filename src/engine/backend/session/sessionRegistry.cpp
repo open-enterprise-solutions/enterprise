@@ -40,21 +40,21 @@ int CurrentPid()
 #endif
 }
 
-// Temporary diagnostic sink — mirrors [session …] stderr lines into a
-// file so GUI apps (launcher → designer / enterprise) whose stderr is
-// closed can still be diagnosed. Remove once session plumbing on
-// server-mode DBs (PG / FB-server / MSSQL) is confirmed working.
-std::mutex g_sessLogMtx;
+// Diagnostic sink for the [session …] lines. Two destinations, both free and
+// neither of them a file: stderr for a console host, and wxLogDebug for a GUI one
+// (whose stderr is closed — that is what the removed hand-rolled log file was
+// working around, at the price of an fopen/fclose per line on the registry's own
+// INSERT / sweep / signal paths, and a path baked into the binary).
+//
+// Deliberately NOT the platform journal: these fire on every sweep tick, and a
+// journal row per tick would bury what an administrator actually reads.
 void LogSession(const std::string& msg)
 {
 	std::ostringstream line;
 	line << "[pid=" << CurrentPid() << "] " << msg;
 	const std::string tagged = line.str();
 	std::cerr << tagged << std::endl;
-	std::lock_guard<std::mutex> lk(g_sessLogMtx);
-	if (FILE* f = fopen("F:/projects/oes-work/session-diag.log", "a")) {
-		fputs(tagged.c_str(), f); fputc('\n', f); fclose(f);
-	}
+	wxLogDebug(wxT("%s"), wxString::FromUTF8(tagged.c_str()));
 }
 
 } // namespace
@@ -75,6 +75,18 @@ ibSessionRegistry::ibSessionRegistry(ib::AppDataCtorToken, std::size_t maxWorker
 	// wx main thread don't need a thread pool at all.
 	if (maxWorkers > 0)
 		m_workerPool = std::make_unique<ibWorkerPoolHeadless>(maxWorkers);
+}
+
+void ibSessionRegistry::SetWorkerPool(std::unique_ptr<ibWorkerPool> pool)
+{
+	// Drain the outgoing pool before it dies: Stop() lets pending tasks
+	// run to completion against sessions that are still alive, which a
+	// plain reset would not (the unique_ptr would destroy the pool with
+	// queued work still in it).
+	if (m_workerPool != nullptr)
+		m_workerPool->Stop();
+
+	m_workerPool = std::move(pool);
 }
 
 void ibSessionRegistry::CloseAll(bool force)
@@ -236,6 +248,32 @@ ibSessionHolder ibSessionRegistry::CreateSessionWithFactory(ibRunMode runMode,
 	// Hand the thread of life to the caller. Until it is moved into an
 	// owner, it lives in the caller's stack frame — so an early return
 	// anywhere upstream closes the session instead of leaking it.
+	return std::move(result.m_holder);
+}
+
+ibSessionHolder ibSessionRegistry::CreateSessionOfKind(ibRunMode runMode,
+                                                       const wxString& computer,
+                                                       ibSessionKind kind,
+                                                       ibConnectRequest::SessionFactory factory)
+{
+	EnsureStartedForCreateSession(runMode);
+
+	// Same anonymous-phase Connect as the facade above; only the kind is the
+	// caller's rather than derived from runMode. The row appears immediately with
+	// an empty user name, so a job is visible from the moment it exists — before
+	// it has an identity, and whether or not it ever gets one.
+	ibConnectRequest req;
+	req.m_computer       = computer;
+	req.m_appMode        = runMode;
+	req.m_kind           = kind;
+	req.m_sessionFactory = std::move(factory);
+
+	auto result = Connect(req);
+	if (result.m_code != ibConnectResult::Ok) {
+		if (!result.m_reason.IsEmpty())
+			ibBackendCoreException::Error(result.m_reason);
+		return ibSessionHolder();
+	}
 	return std::move(result.m_holder);
 }
 
@@ -1813,7 +1851,7 @@ void ibSessionRegistry::ThreadBody() noexcept
 			// latency-tolerant.
 			if (now >= nextSweep) {
 				JobSweepStale();
-				JobCheckSignal();
+					JobCheckSignal();
 				nextSweep = now + kSweepInterval;
 			}
 

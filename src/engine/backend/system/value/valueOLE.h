@@ -29,6 +29,12 @@ private:
 	friend class ibDebuggerServer;
 public:
 
+	// NOT transferable across sessions: a COM interface pointer is apartment-bound
+	// (that is what the STA stream marshalling below exists for), and the object
+	// behind it is external and mutable. Handing one to a job's own thread would
+	// be a cross-apartment call nobody marshalled.
+	virtual bool IsTransferable() const override { return false; }
+
 	//STA
 	static void CreateStreamForDispatch();
 	static void ReleaseStreamForDispatch();

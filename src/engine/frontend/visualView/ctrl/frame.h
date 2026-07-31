@@ -89,6 +89,19 @@ private:
 
 public:
 
+	// NOT transferable across sessions — and this one override covers the whole
+	// control tree, the form included (ibValueForm derives from here).
+	//
+	// Two reasons, either sufficient. A control is MUTABLE and being edited by the
+	// user right now, so a second session reading it would see a moving target.
+	// And it is bound to the wx widget behind it, which belongs to one thread:
+	// a job touching it from a worker is a cross-thread wx call, which is
+	// undefined rather than merely racy.
+	//
+	// Pass a job the DATA instead — a reference, a number, a string. Whatever the
+	// form is showing can be re-derived on the other side; the form itself cannot.
+	virtual bool IsTransferable() const override { return false; }
+
 	void SetControlName(const wxString& controlName) { SetControlNameAsString(controlName); }
 	wxString GetControlName() const {
 		wxString result;

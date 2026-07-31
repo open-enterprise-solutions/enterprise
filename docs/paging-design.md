@@ -639,7 +639,7 @@ re-fetches via `Get*Fetch`.
 | FolderRef adapter `Get*Fetch(ibTreeFetchArgs)` → virtual `(ibDataViewItem)` | ✅ landed 2026-05-05 |
 | Lazy tree expansion (`ibValueTreeListNode::LoadState{NotLoaded,Loading,Loaded}`) | ✅ landed 2026-05-06 — mutable LoadState on the node so const `GetChildren` can drive the first-expand fetch without const_cast'ing the node |
 | Logical-equality selection survival across re-fetch | ✅ landed 2026-05-06 — `ibValueTableRow::IsEqualTo` compares `m_nodeValues`; `ibDataViewItem::operator==` short-circuits on pointer match then dispatches to row's virtual |
-| Async fetch via `ibSession::Submit` | ✅ landed 2026-05-06 — `ibDataViewModel::SubmitFetchAsync(work)` virtual + `ibValueModel` override forwarding to `ibSession::Submit`; default impl runs inline. Result UI marshalling done by control via `wxTheApp->CallAfter`-style hops (`OnPagedFetchForwardResult` / `OnPagedFetchBackwardResult`) |
+| Async fetch | ✅ landed 2026-05-06, **rebuilt 2026-07-31**. 2026-05-06: `ibDataViewModel::SubmitFetchAsync(work)` virtual forwarding to `ibSession::Submit` — which on the desktop resolves to the caller's own session, i.e. the wx main thread, so the read never actually left it. 2026-07-31: `DispatchPagedFetch` submits to `ibSession::Current()->Reader()` — a per-window sleeping session whose worker is the registry's headless pool — and the read genuinely runs off the UI thread. Result marshalled by `wxTheApp->CallAfter` into `OnPagedFetchForwardResult` / `OnPagedFetchBackwardResult`; a `shared_ptr<bool>` alive token replaced `wxWeakRef` (which un-links by writing into the tracked object, a race once a copy sits on a worker), and the refcounted anchor / parent items ride a shared payload so they are always released on the UI thread (`wxRefCounter` is not atomic). `SubmitFetchAsync` survives, now used only by the debounced `SchedulePagedRefresh`. Still synchronous: `PagedBootstrap`. See [table-model.md](table-model.md) § "Off the UI thread" |
 | In-flight fetch cancellation (generation tokens) | ✅ landed 2026-05-06 — `m_pagedFetchGen` bumped on every reset (`PagedRefresh` / `Cleared` / `AssociateModel`); fetch lambda captures the token at submit time and discards the result if the live token has moved on |
 | Per-direction in-flight fetch counters | ✅ landed 2026-05-06 — `m_pagedFetchingFwd / m_pagedFetchingBwd` independent so a scroll burst that crosses both edges can dispatch to each side without serialising (was a single counter pre-2026-05-06) |
 | Soft-eviction via `wxDataViewTreeNode::SetHidden(bool)` | ✅ landed 2026-05-06 — hidden nodes stay in `m_children` but are skipped by walkers and excluded from `subTreeCount`; backward scroll re-shows fetched rows from the hidden head instead of going to DB. Replaces the un-hide-everything anti-pattern flagged in 2026-05-05's «Scroll polish» |
@@ -1029,3 +1029,116 @@ a guid, not a reference — no metaID half to reconstruct), so a bare guid is th
 `ReferenceKeyBlob` is the correct canonical encoder. `GetQueryTableGuid()` returns the queryable's
 own table-identity guid (the dynamic list's `GetGuid()`), not a decomposed row reference. All
 legitimate.
+
+### 9.8 Viewport after a re-order — the offset, not the anchor (2026-07-31)
+
+Sorting drops the scroll ANCHOR on purpose: it is a keyset cursor (row PK + sort values), and
+in the new ordering it names nothing. `PagedRefresh` therefore clears it (`skipCapture`) and
+`PagedBootstrap` re-fetches from the top of the new order. That is correct — and it is also
+where the viewport used to go missing, in two different ways.
+
+**Nothing focused → the pixel lied.** With no anchor AND no focus there was nothing to
+position on, so bootstrap simply did not scroll. But `wxScroll`'s scroll-Y is a PIXEL and it
+survives `DestroyTree`, while the row that pixel used to name does not: the user landed in the
+middle of a list they had just re-ordered, or past its end. The buffer is rebuilt from the
+FIRST row of the ordering, so the viewport belongs at the top of it — `ScrollTo(crumbCount)`,
+a no-op for the cold open that reaches the same branch.
+
+**Something focused → the row was pinned to the top.** The bootstrap cursor falls back to the
+focus, so the focused row came back as `items[0]` and sat at the very top of the viewport —
+the row survived the sort, everything the user was reading around it slid up. What was missing
+is not the row but the DISTANCE: `m_pagedRestoreFocusOffset` = focus row − visible top,
+captured only on the `skipCapture` path (the only one with no anchor to answer with) and only
+when the focus was actually on screen.
+
+It is consumed ONCE, in `OnPagedFetchBackwardResult`, because that is the first moment it can
+be honoured — after the bootstrap there are no rows ABOVE the focus to scroll into. The
+backward fill prepends a batch, then the final `ScrollTo` targets `m_currentRow − offset`
+instead of "the old top + n". Driven off `m_currentRow` (already shifted by the prepend) rather
+than the saved index, so a focus-scan that MISSED drops the offset instead of scrolling to a
+row nobody found. Dropped explicitly on every path that cannot use it — no backward rows,
+selection-cursor mode (which centres the row itself, a stronger intent), an anchor that
+survived — so an ordinary backward scroll can never inherit a sort's answer.
+
+### 9.9 What the user sees while a portion is out (2026-07-31)
+
+The read left the UI thread (§ table-model.md "Off the UI thread"), so for the first time the
+control has a STATE between "asked" and "answered". Everything below is that state made honest;
+each rule exists because its absence was visible on screen.
+
+**One frame, not two.** A Reset pages FROM the row the user was on, so on its own it would put
+that row at the top of the viewport and a later backward portion would slide it down — the list
+visibly jumped up and then settled. The read now pulls the rows ABOVE the cursor in the same pass
+(`ibPagedFetch::m_backfill`) and glues them in front of the page. The control receives one portion,
+scrolls, and the row is already where the eye expects it.
+
+How much to pull depends on which cursor mode the Reset is in, and both cases are the same
+mechanism:
+
+| Mode | Backfill | Where the row lands |
+|---|---|---|
+| Anchor (sort, filter, plain refresh) | the saved screen offset (§9.8) | at the same distance from the top it had |
+| Selection (a record was just written) | a WHOLE viewport | mid-viewport; the scroll clamps if the ordering ends at the row |
+
+A viewport rather than half of one, because a new record usually sorts LAST: the page below the
+cursor is then a single row, and half a screen of backfill leaves the other half blank. Reading a
+viewport costs one query either way and fills the window in both cases — the scroll decides where
+the row sits, not the size of the read. Where the backfill delivered rows, the separate backward
+portion is NOT dispatched: prepending a second time is the slide this fold removes. The symptom it
+cured was reported as "the zebra flickers and the height lags on save" — two frames, the second one
+taller than the first.
+
+Two flags read off the same split: `m_pagedHasMoreFwd` counts the FORWARD part only
+(`n - m_backfilled`, or a short page looks full), and `m_pagedHasMoreBwd` goes down when the
+backfill returned fewer rows than asked — it hit the top, and leaving the flag up costs an empty
+backward portion, which is one more frame for nothing.
+
+**The offset itself** is `m_pagedRestoreFocusOffset` — focus row minus visible top, captured only
+where the scroll ANCHOR is deliberately dropped (a sort: its cursor key means nothing in the new
+ordering) and only while the focus was on screen. §9.8 is why it exists; this section is where it
+is now spent.
+
+**The busy arc.** `IsFetchInFlight() || m_pagedNeedsBootstrap` — waiting starts when the rows go,
+not when the read leaves, because a whole idle pass separates the two and that gap was the blank
+white rectangle. The arc appears only once the read has been out `kBusyShowDelayMs` (200 ms), and
+that rule has NO exception: an empty table used to raise it immediately, on the reasoning that a
+blank rectangle says nothing — but a RAM-backed table answers in microseconds, so what that
+produced was an arc flashing on every instant read and then held for its minimum show. Reads slow
+enough to be worth naming cross 200 ms regardless. Once up the arc stays `kBusyMinShowMs` (250 ms)
+from the moment it appeared, and the DELIVERY takes it off — not the next idle or tick, which
+lagged a frame behind the rows.
+
+⚠ **A frozen window paints nothing — so the arc has a window of its own.** `ibDataViewBusyWindow`
+is a small badge, a child of the CONTROL rather than of the rows area, shown while waiting and
+hidden by the delivery. Painting it at the tail of the rows' `OnPaint` (as it first was) meant
+freeze OR spinner, never both: `Freeze()` silences a window and everything painted inside it. A
+sibling window is frozen by nobody.
+
+That is what lets the rows-area freeze stay. It covers the REBUILD — wipe → build → focus → scroll,
+armed on arrival and dropped by `EndBootstrapFreeze()` at the end of `OnPagedFetchResetComplete`
+(with a watchdog copy in `OnInternalIdle` for the delivery that never comes) — so the half-built
+tree is neither shown nor painted: one composite frame, and no pass per step of the rebuild.
+
+What the freeze must NOT cover is the wait before the portion and the settle after it. Before: the
+old rows are still the best answer available and stay legible. After: top-ups and the backward pull
+move the viewport in the open, deliberately — a freeze held over the settle hides a focus landing
+on the wrong row or a selection jumping behind a clean picture, which is precisely how those
+defects went unnoticed while it did.
+
+**Alternate-row stripes.** Painted from `(row + m_stripePhase) % 2`, not the raw index: the buffer
+is a sliding window (a backward portion prepends, a trim drops from the front, a Reset rebuilds),
+and every shift changed a row's parity — the whole list repainted in the other shade and read as
+flicker. The phase is corrected where the buffer shifts and set on a rebuild so the row the user
+was looking at keeps its shade.
+
+**Restore precedence.** Explicit prefer > programmatic stamp (`SetPagedRestoreSelection`) >
+pre-refresh current row. The middle case is load-bearing now that `SchedulePagedRefresh` posts
+onto the event loop: a post-Save Select lands BEFORE the refresh, so recomputing focus and the
+"was selected" flag from the ambient state threw the intent away — the second created row was
+positioned to but not highlighted, and then re-selected the previous one. A stamp arriving after
+the read was dispatched bumps the generation and re-arms, since the answer in flight was computed
+for the older question.
+
+**No phantom current row.** wx makes a focused control usable from the keyboard by stamping row 0
+as current when it has none; while a restore is still coming that painted a highlight at the top
+which then jumped away. `OnSetFocus` now stands aside while `m_pagedRestoreFocus` is pending.

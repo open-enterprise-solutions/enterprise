@@ -13,6 +13,7 @@
 
 #include "frontend/frontend.h"
 #include "backend/session/session.h"
+#include "frontend/session/workerPoolGUI.h"   // the desktop's answer to "where does this run"
 
 class FRONTEND_API ibGUISession : public ibSession {
 public:
@@ -38,6 +39,30 @@ public:
 	// The window then runs its own close path — which knows nothing
 	// about sessions — and its destruction releases the holder.
 	bool OnClose(bool force) override;
+
+	// WHERE THIS SESSION'S WORK RUNS. The desktop answer is "the wx main thread",
+	// because a form handler touches widgets and wx tolerates that from one
+	// thread only — and ibWorkerPoolGUI is precisely that answer made into an
+	// object. The backend never names it: it asks ibSession::GetWorkerPool() and
+	// gets an ibWorkerPool*, so the same Submit means "the wx main thread" here,
+	// "this session's FIFO worker" under the web server, and "right here" where
+	// no view is watching. One question, one door, three honest answers.
+	//
+	// Nothing about today's behaviour changes by holding one: the GUI pool runs a
+	// task INLINE when the caller is already on the main thread, which every
+	// existing desktop caller is. What it adds is the case that had no answer
+	// before — a background read handing its result back to the session that
+	// asked for it, from another thread.
+	//
+	// Held per session rather than on the registry: the registry's pool serves the
+	// background and scheduled sessions of this process, whose entire purpose is
+	// to stay OFF the UI thread. Two different questions.
+	class ibWorkerPool* GetWorkerPool() const override;
+
+private:
+	// mutable: GetWorkerPool is const (it answers a question about the session,
+	// it does not change it), but the pool it hands out is used to run work.
+	mutable ibWorkerPoolGUI m_workerPool;
 };
 
 #endif

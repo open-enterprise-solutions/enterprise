@@ -205,20 +205,30 @@ bool ibValueModuleRuntimeManager::AttachRuntime(ibSession* session)
 	// thread-safe against concurrent Execute on the same compileModule.
 	// Rapid F5 reliably hit this as an OOB operator[] inside Execute.
 	std::lock_guard<std::mutex> lock(m_runtimeMutex);
-	// Runtime only for sessions that represent user work:
-	//   Enterprise — desktop thick client's single user.
-	//   WebClient  — one per browser tab through wes.
-	//   Service    — daemon / codeRunner batch runs.
-	// Skip WebServer (wes process's technical row), Designer (compile-
-	// only) and Launcher (no metadata). userInfo-empty is NOT a valid
-	// discriminator: open-access configurations (empty sys_user) have
-	// empty userInfo even for legitimate user sessions.
+	// WHICH SESSIONS DO NOT GET A RUNTIME — the short list, and the question is
+	// asked that way round on purpose:
+	//   Launcher   — no metadata to compile.
+	//   Designer   — compile-only; it runs off the edit-time module manager in the
+	//                metadata's compile cache, never a per-session runtime root.
+	//   WebServer  — the wes process's own technical row; it serves tabs, it does
+	//                not execute a configuration.
+	// Everything else executes script and therefore needs one. Naming the
+	// EXCEPTIONS rather than the members is what makes a new session kind default
+	// to working: the list used to be positive (Enterprise / WebClient / Service),
+	// and every kind added after it — a background run, a scheduled job — silently
+	// got no root module at all, so a job declared as `Module.Method` could not
+	// run and said nothing about why. userInfo-empty is NOT a valid discriminator
+	// either: open-access configurations (empty sys_user) have empty userInfo for
+	// legitimate user sessions.
+	//
+	// A RENTED run never arrives here — it is not authenticated and asks for no
+	// runtime (see ibJobTenancy) — so this gate is not what keeps it cheap.
 	const ibSessionKind kind = session->GetKind();
-	const bool wantsRuntime =
-		(kind == ibSessionKind::Enterprise) ||
-		(kind == ibSessionKind::WebClient)  ||
-		(kind == ibSessionKind::Service);
-	if (!wantsRuntime)
+	const bool noRuntime =
+		(kind == ibSessionKind::Launcher)  ||
+		(kind == ibSessionKind::Designer)  ||
+		(kind == ibSessionKind::WebServer);
+	if (noRuntime)
 		return true;
 	// Imperative pipeline — each descriptor owns its m_procUnit.
 	// CreateMainModule already compiled m_compileModule.

@@ -34,6 +34,7 @@
 #include <wx/stockitem.h>
 #include <wx/popupwin.h>
 #include <wx/renderer.h>
+#include <wx/graphics.h>   // the busy badge's arc (antialiased, alpha)
 #include <wx/dcbuffer.h>
 #include <wx/icon.h>
 #include <wx/itemattr.h>
@@ -507,11 +508,10 @@ wxEND_EVENT_TABLE()
 // ibDataViewMainWindow
 //-----------------------------------------------------------------------------
 
-// ibDataViewMainWindow class definition moved to datavgen.paged.private.h
-// (extracted 2026-05-08) so datavgen.paged.cpp can call its methods.
-// Out-of-line wxIMPLEMENT_DYNAMIC_CLASS / event-table impls below stay
-// here.
-#include "datavgen.paged.private.h"
+// The class definition lives in datavgen.window.private.h (a window is not part
+// of a portion); the out-of-line wxIMPLEMENT_DYNAMIC_CLASS and event-table impls
+// below stay here.
+#include "datavgen.window.private.h"
 
 // ---------------------------------------------------------
 // ibGenericDataViewModelNotifier
@@ -3746,7 +3746,8 @@ EVT_SCROLLWIN(ibDataViewCtrl::OnScrollEvent)
 // on this control is no longer used.
 wxEND_EVENT_TABLE()
 
-#include "datavgen.paged.private.h"   // kBufferSlack + ScopedPagedFreeze
+#include "datavgen.window.private.h"  // ibDataViewMainWindow — the rows area this freezes / scrolls
+#include "datavgen.paged.private.h"   // kBufferSlack + ScopedPagedFreeze + ibPagedFetch
 
 // OnIdleEvent body collapsed into OnInternalIdle — single idle entry
 // point on the control.  See OnInternalIdle below.
@@ -3773,7 +3774,6 @@ void ibDataViewCtrl::OnScrollEvent(wxScrollWinEvent& event)
 		// no round-trip through Item lookup which fails when fetched
 		// rows have no model-side parent).
 		const long topAdj       = static_cast<long>(GetFirstVisibleRow());
-		const long topIdx       = topAdj;
 		const long marginFwd    = total - (topAdj + countPerPage);
 		const long marginBwd    = topAdj;
 
@@ -3868,6 +3868,19 @@ void ibDataViewCtrl::OnScrollEvent(wxScrollWinEvent& event)
 
 ibDataViewCtrl::~ibDataViewCtrl()
 {
+	// FIRST, before anything else is unwound. Clearing the token is what makes
+	// every delivery already posted to the UI queue a no-op — those lambdas hold
+	// a copy of it and check it before they touch this object, and by the time
+	// they run this object is gone.
+	//
+	// The reads themselves are not cancelled here and need not be: each is a
+	// rented run that ends by construction — it reads its portion, posts, and its
+	// session goes with it. A control dying while its form lives (a panel rebuild)
+	// leaves a read that finishes, finds the token cleared, and drops its answer.
+	if (m_aliveToken)
+		*m_aliveToken = false;
+	m_busyTimer.Stop();
+
 	// Must do this or ~wxScrollHelper will pop the wrong event handler
 	SetTargetWindow(this);
 
@@ -3969,6 +3982,17 @@ bool ibDataViewCtrl::Create(wxWindow* parent,
 #endif
 
 	m_tableAreaWin = new ibDataViewMainWindow(this, ibDataViewMainWindow::ibDataViewWindowNormal);
+
+	// The busy indicator's tick. Owned by the control so it dies with it — a
+	// timer outliving its window fires into freed memory. It is armed only while
+	// a read is actually out (UpdateBusyIndicator), so an idle list costs nothing.
+	//
+	// An OWN id, not wxID_ANY: this control already owns another timer (the rename
+	// one), and binding on wxID_ANY means "every timer event reaching this
+	// handler" — the two would fire each other's handlers.
+	static const int s_busyTimerId = wxWindow::NewControlId();
+	m_busyTimer.SetOwner(this, s_busyTimerId);
+	Bind(wxEVT_TIMER, &ibDataViewCtrl::OnBusyTimer, this, s_busyTimerId);
 
 	// We use the cursor keys for moving the selection, not scrolling, so call
 	// this method to ensure wxScrollHelperEvtHandler doesn't catch all
@@ -4672,17 +4696,16 @@ bool ibDataViewCtrl::AssociateModel(ibDataViewModel* model)
 	m_pagedBwdAnchor      = ibDataViewItem();
 	++m_pagedFetchGen;
 
-	// Freeze the rows area before the control's first paint hits the
-	// screen.  Without this the control mounts → wx queues a paint event
-	// against the just-created empty root → user sees one empty frame.
-	// Freeze() ONLY on m_tableAreaWin (rows) — header window stays
-	// unfrozen so the column titles paint immediately; only the row
-	// area is held back until Bootstrap on idle fills it and the
-	// matching idle-thaw releases the freeze.
-	if (m_pagedNeedsBootstrap && !m_pagedFrozenForBootstrap) {
-		if (m_tableAreaWin) m_tableAreaWin->Freeze();
-		m_pagedFrozenForBootstrap = true;
-	}
+	// NOT FROZEN HERE ANY MORE. This used to hold the rows area back so the empty
+	// frame between mounting the control and filling it never reached the screen —
+	// correct while the fill was synchronous and one idle pass away.
+	//
+	// It is wrong now: the fill waits for a portion, and a frozen window does not
+	// repaint AT ALL, so the whole wait showed as a blank rectangle with no way to
+	// say anything on it. The empty frame IS the waiting state, and it has an
+	// answer to give — the busy arc. So the area stays live and the indicator does
+	// the talking; the wipe + fill that follows is frozen as its own transaction
+	// (OnPagedFetchResetComplete), which is where flicker actually mattered.
 
 	if (model && !model->IsPagedModel())
 	{
@@ -5433,11 +5456,6 @@ void ibDataViewCtrl::OnInternalIdle()
 {
 	ibDataViewCtrlBase::OnInternalIdle();
 
-	const bool entryFrozen = IsFrozen();
-	const bool entryAreaFrozen = m_tableAreaWin ? m_tableAreaWin->IsFrozen() : false;
-	if (m_colsDirty || m_dirty || m_pagedNeedsBootstrap
-	    || m_pagedFrozenForBootstrap) {
-			}
 
 	if (m_colsDirty)
 		UpdateColWidths();
@@ -5448,19 +5466,6 @@ void ibDataViewCtrl::OnInternalIdle()
 		m_dirty = false;
 	}
 
-	// External seed-chain hook FIRST — runs before PagedBootstrap so
-	// it can stamp m_pagedRestoreSelection via Select(item) /
-	// SetPagedRestoreSelection on the controller side.  Bootstrap
-	// reads the stamp to drive its IsEqualTo-based selection
-	// restoration in the freshly-fetched batch.  Reversing the order
-	// (hook after bootstrap) breaks form-open selection restore — by
-	// the time the hook fires, bootstrap already finished and the
-	// stamp lands on a settled buffer where re-fetch won't run.
-	// Hook implementations must be idempotent / cheap on the no-op
-	// path since OnInternalIdle fires every idle pass.
-	if (m_idleHook)
-		m_idleHook();
-
 	// Bootstrap path: AssociateModel cannot fetch yet because the
 	// control's height (and therefore the desired batch size) isn't
 	// known until layout settles.  We wait for the first idle after
@@ -5469,6 +5474,11 @@ void ibDataViewCtrl::OnInternalIdle()
 	    && GetCountPerPage() > 0) {
 		PagedBootstrap();
 	}
+
+	// Sample whether the model is still waiting on data. Here rather than in a
+	// handler of its own because idle already runs on every pass, and the answer
+	// is only interesting between frames.
+	UpdateBusyIndicator();
 
 	// Top-up fill: keep buf at target size whenever forward data is
 	// available.  Driven by the always-checked condition `loaded <
@@ -5495,47 +5505,57 @@ void ibDataViewCtrl::OnInternalIdle()
 			// size on its own.  Firing forward here too would race
 			// the backward result, push the buffer past target, and
 			// then trigger an aggressive trim inside
-			// OnPagedFetchForwardResult that wipes the just-loaded
+			// OnPagedFetchForwardComplete that wipes the just-loaded
 			// backward rows — visually "rows disappear" near the
 			// saved top.
-			const int sy = m_tableAreaWin ?
-				CalcUnscrolledPosition(wxPoint(0, 0)).y : 0;
 						const int batch = cpp - loaded;   // fill to the viewport exactly — no slack over-fetch
 			PagedFetchForward(batch);
-			const int sy2 = m_tableAreaWin ?
-				CalcUnscrolledPosition(wxPoint(0, 0)).y : 0;
 					}
 	}
 
-	// Refresh-anti-flicker Thaw: PagedRefresh froze the control
-	// before destroying the tree; bootstrap above (or the size-fill
-	// branch if no bootstrap was pending) has now repopulated rows.
-	// Drop the freeze so the single composite paint shows the new
-	// state.  Guarded against the cold-bootstrap-without-prior-
-	// refresh case (frozen flag only set in PagedRefresh).
-	if (m_pagedFrozenForBootstrap && !m_pagedNeedsBootstrap) {
-		// Bootstrap and any forward/backward fetches above flipped
-		// m_dirty=true via UpdateDisplay() but did not call
-		// RecalculateDisplay synchronously — that ran in step 3 of
-		// this same pass on the EMPTY tree (just before bootstrap),
-		// so virtual size is still 0 when we reach Thaw.  Without
-		// this, wx paints the freshly-populated rows against the
-		// stale (empty) virtual size first, then the next idle pass
-		// re-runs RecalculateDisplay and triggers a second paint —
-		// visible flicker.  Fold the recalc into the same idle so
-		// Thaw releases a single composite paint with the correct
-		// virtual size.
-		if (m_dirty) {
-			RecalculateDisplay();
-			m_dirty = false;
-		}
-		m_pagedFrozenForBootstrap = false;
-		// Match the rows-area-only Freeze in PagedBootstrap /
-		// AssociateModel — outer ctrl was never frozen, no Thaw needed.
-		if (m_tableAreaWin) m_tableAreaWin->Thaw();
-		const int sy = m_tableAreaWin ?
-			CalcUnscrolledPosition(wxPoint(0, 0)).y : 0;
-			}
+	// Anti-flicker Thaw — THE WATCHDOG COPY of it.
+	//
+	// The freeze covers the REBUILD and only the rebuild: wipe → build → focus →
+	// scroll, armed where the portion lands (OnPagedFetchResetComplete) and dropped
+	// at the end of it. Nothing in between is worth showing — the half-built tree is
+	// not an answer — and painting it would cost a pass per step. That is the freeze
+	// paying for itself twice: no intermediate frames, and no work drawing them.
+	//
+	// What it must NOT cover is the wait before the portion and the settle after it.
+	// Before: the old rows are still there, still the best answer available, and the
+	// arc spins over them from its own window (which no freeze touches — that is why
+	// it has one). After: top-ups and the backward pull move the viewport in the
+	// open, deliberately. A freeze held over the settle hides real defects — a focus
+	// landing on the wrong row, a selection jumping — behind a clean picture, which
+	// is exactly how those stayed unnoticed while it did.
+	//
+	// This copy is what ends the freeze when the rebuild does not: a delivery that
+	// returned early on a failed read, or one whose control was gone by then.
+	if (!m_pagedNeedsBootstrap && !IsFetchInFlight())
+		EndBootstrapFreeze();
+}
+
+void ibDataViewCtrl::EndBootstrapFreeze()
+{
+	if (!m_pagedFrozenForBootstrap)
+		return;
+
+	// Bootstrap and any forward/backward fetches flipped m_dirty=true via
+	// UpdateDisplay() but did not call RecalculateDisplay synchronously — that ran
+	// on the EMPTY tree (just before bootstrap), so virtual size is still 0 when we
+	// reach Thaw.  Without this, wx paints the freshly-populated rows against the
+	// stale (empty) virtual size first, then the next idle pass re-runs
+	// RecalculateDisplay and triggers a second paint — visible flicker.  Fold the
+	// recalc in here so Thaw releases a single composite paint with the correct
+	// virtual size.
+	if (m_dirty) {
+		RecalculateDisplay();
+		m_dirty = false;
+	}
+	m_pagedFrozenForBootstrap = false;
+	// Match the rows-area-only Freeze in OnPagedFetchResetComplete /
+	// AssociateModel — outer ctrl was never frozen, no Thaw needed.
+	if (m_tableAreaWin) m_tableAreaWin->Thaw();
 }
 
 int ibDataViewCtrl::GetColumnPosition(const ibDataViewColumn* column) const
@@ -5976,16 +5996,14 @@ void ibDataViewCtrl::SetTopParent(const ibDataViewItem& item)
 				PagedRefresh();
 				if (m_pagedNeedsBootstrap && m_tableAreaWin != nullptr
 				    && GetCountPerPage() > 0) {
-					// ScopedPagedFreeze already froze m_table; tell
-					// PagedBootstrap to skip its own inner freeze.
-					// Without this we'd end with depth 2 going into
-					// ScopedPagedFreeze.~Thaw → m_table stays frozen at
-					// depth 1 (paints stale until OnInternalIdle thaws
-					// the bootstrap-owned freeze later).
-					const bool prevFrozen = m_pagedFrozenForBootstrap;
-					m_pagedFrozenForBootstrap = true;
+					// DISPATCHES, does not fill: the new folder's rows
+					// arrive on the UI thread when the read comes back
+					// (OnPagedFetchResetComplete), inside a freeze of its own.
+					// So this freeze no longer spans the rebuild — the
+					// PREVIOUS folder stays on screen under the busy badge
+					// until there is something to replace it with, which
+					// is the same bargain every other paged read makes.
 					PagedBootstrap();
-					m_pagedFrozenForBootstrap = prevFrozen;
 				}
 				// PagedBootstrap rebuilds m_root but only flips
 				// m_dirty; the m_tableAreaWin virtual size still reflects
@@ -6378,7 +6396,14 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 		for (unsigned int item = item_start; item < item_last; item++)
 		{
 			const int h = GetLineHeight(item);
-			if (item % 2)
+			// PHASE, not raw index. The buffer is a window that slides: a backward
+			// portion prepends rows, a trim drops them off the front, a refresh
+			// rebuilds it outright — and every one of those shifts every index by
+			// an arbitrary amount. Striping on `item % 2` therefore repainted the
+			// SAME business row in the other shade each time, which reads as the
+			// whole list flickering. The phase is corrected wherever the buffer
+			// shifts, so a row keeps its stripe (see m_stripePhase).
+			if ((item + m_stripePhase) % 2)
 			{
 				dc.DrawRectangle(xRect, cur_line_start, widthRect, h);
 			}
@@ -8470,6 +8495,273 @@ void ibDataViewMainWindow::OnPaint(wxPaintEvent& WXUNUSED(event))
 	m_owner->DrawTableContent(dc, this);
 }
 
+// ---------------------------------------------------------------------------
+// The busy indicator — "the data is on its way".
+// ---------------------------------------------------------------------------
+
+namespace {
+// TWO numbers, and both are about the eye, not about the data.
+//
+// How long a read may take before it is worth telling anybody. Under this the
+// list simply updates and no arc appears at all — the common case on a local base.
+constexpr long kBusyShowDelayMs = 200;
+
+// And once it IS up, how long it stays at the very least. Without this an answer
+// landing just past the delay puts the arc on screen and takes it off in the same
+// breath, which reads as a flicker — the exact thing the delay was meant to spare
+// the user. It does NOT delay the rows: they are already there, this only keeps
+// the arc legible over them.
+constexpr long kBusyMinShowMs = 250;
+
+// Animation cadence. Fast enough to look continuous, slow enough that an idle
+// desktop is not repainting a list twenty times a second for decoration.
+constexpr int  kBusyTickMs = 60;
+
+// One turn of the arc = kBusySteps ticks (~1.4 s at the cadence above).
+constexpr int  kBusySteps = 24;
+
+// Spelled out rather than M_PI: that one is not standard C++ and needs a define
+// before <cmath> on MSVC, which is a build-order dependency for one constant.
+constexpr double kTwoPi = 6.283185307179586;
+
+// The badge's side, in DIP — big enough to read as a spinner, small enough that
+// it covers a row and a half and nothing more.
+constexpr int  kBusyBadgeSide = 44;
+}   // namespace
+
+// THE ARC IN A WINDOW OF ITS OWN.
+//
+// It used to be painted at the tail of the rows' OnPaint, which is less code and
+// was wrong for one reason: `Freeze()` silences a WINDOW. The rows area is frozen
+// across the blind stretch — from the moment the old rows are wiped to the moment
+// the portion lands — and everything painted INSIDE it went silent with it, so the
+// wait showed as a blank rectangle with nothing to say on it. Freeze or spinner,
+// pick one. A sibling window is frozen by nobody, so both hold.
+class ibDataViewBusyWindow : public wxWindow
+{
+public:
+	explicit ibDataViewBusyWindow(ibDataViewCtrl* owner)
+		: wxWindow(owner, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+		           wxBORDER_NONE | wxTRANSPARENT_WINDOW)
+	{
+		SetBackgroundStyle(wxBG_STYLE_PAINT);
+		Bind(wxEVT_PAINT, &ibDataViewBusyWindow::OnPaint, this);
+		// The badge is decoration: it must not erase (flicker), must not take the
+		// focus away from the list, and must not eat a click meant for a row.
+		Bind(wxEVT_ERASE_BACKGROUND, [](wxEraseEvent&) {});
+	}
+
+	bool AcceptsFocus() const wxOVERRIDE             { return false; }
+	bool AcceptsFocusFromKeyboard() const wxOVERRIDE { return false; }
+
+	void SetPhase(int phase) { m_phase = phase; }
+
+private:
+	void OnPaint(wxPaintEvent& WXUNUSED(event));
+
+	int m_phase = 0;
+};
+
+void ibDataViewBusyWindow::OnPaint(wxPaintEvent& WXUNUSED(event))
+{
+	wxAutoBufferedPaintDC dc(this);
+
+	const wxSize size = GetClientSize();
+	if (size.x <= 0 || size.y <= 0)
+		return;
+
+	// A plate in the list's own background colour, not a translucent veil: this
+	// window has no idea what is underneath it (that is the rows' window, and on
+	// the blind stretch it is frozen), so there is nothing to blend with.
+	const wxColour plate = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW);
+	dc.SetBackground(wxBrush(plate));
+	dc.Clear();
+
+	// wxGraphicsContext::Create takes a CONCRETE dc, and wxAutoBufferedPaintDC
+	// resolves to wxBufferedPaintDC (a wxMemoryDC) where double buffering is
+	// emulated and to wxPaintDC (a wxWindowDC) where the platform buffers
+	// natively. So ask for both.
+	wxGraphicsContext* raw = nullptr;
+	if (auto* mem = dynamic_cast<wxMemoryDC*>(static_cast<wxDC*>(&dc)))
+		raw = wxGraphicsContext::Create(*mem);
+	else if (auto* win = dynamic_cast<wxWindowDC*>(static_cast<wxDC*>(&dc)))
+		raw = wxGraphicsContext::Create(*win);
+
+	std::unique_ptr<wxGraphicsContext> gc(raw);
+	if (!gc)
+		return;                            // no graphics backend — skip, never fail a paint
+
+	const wxColour frame = wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW);
+	gc->SetBrush(wxBrush(plate));
+	gc->SetPen(wxPen(wxColour(frame.Red(), frame.Green(), frame.Blue(), 90), 1));
+	gc->DrawRoundedRectangle(0.5, 0.5, size.x - 1.0, size.y - 1.0, 6.0);
+
+	const double cx = size.x / 2.0;
+	const double cy = size.y / 2.0;
+	const double radius = wxMin(size.x, size.y) / 2.0 - 8.0;
+	if (radius < 4.0)
+		return;                            // too small to read as a spinner
+
+	// The arc: a fixed-length sweep rotated by the phase. Drawn as a thick stroked
+	// path rather than a rotating bitmap so it scales with the DPI for free.
+	const double turn  = (kTwoPi * m_phase) / kBusySteps;
+	const double sweep = kTwoPi * 0.75;
+
+	wxColour accent = wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT);
+	gc->SetPen(wxPen(wxColour(accent.Red(), accent.Green(), accent.Blue(), 210),
+	                 wxMax(2, static_cast<int>(radius / 4))));
+	gc->SetBrush(*wxTRANSPARENT_BRUSH);
+
+	wxGraphicsPath path = gc->CreatePath();
+	path.AddArc(cx, cy, radius, turn, turn + sweep, true);
+	gc->StrokePath(path);
+}
+
+// Centred over the ROWS, not over the control: the header keeps painting through
+// the whole wait, and a badge sitting half on it would read as part of the chrome.
+void ibDataViewCtrl::PositionBusyWindow()
+{
+	if (m_busyWin == nullptr)
+		return;
+
+	wxWindow* area = (m_tableAreaWin != nullptr)
+	                 ? static_cast<wxWindow*>(m_tableAreaWin)
+	                 : static_cast<wxWindow*>(this);
+
+	const wxSize side = FromDIP(wxSize(kBusyBadgeSide, kBusyBadgeSide));
+	const wxPoint at  = (area == this) ? wxPoint(0, 0) : area->GetPosition();
+	const wxSize  span = area->GetClientSize();
+
+	const wxRect want(at.x + (span.x - side.x) / 2,
+	                  at.y + (span.y - side.y) / 2,
+	                  side.x, side.y);
+	if (m_busyWin->GetRect() != want)
+		m_busyWin->SetSize(want);
+}
+
+void ibDataViewCtrl::ShowBusyWindow(bool show)
+{
+	if (!show) {
+		if (m_busyWin != nullptr && m_busyWin->IsShown())
+			m_busyWin->Hide();
+		return;
+	}
+
+	if (m_busyWin == nullptr)
+		m_busyWin = new ibDataViewBusyWindow(this);
+
+	PositionBusyWindow();
+	m_busyWin->SetPhase(m_busyPhase);
+	if (!m_busyWin->IsShown())
+		m_busyWin->Show();
+	m_busyWin->Raise();
+	m_busyWin->Refresh();
+	// Paint NOW rather than on the next idle: the arc's whole job is to appear
+	// while the UI thread is between two pieces of work, and an idle pass is
+	// exactly what it may not get.
+	m_busyWin->Update();
+}
+
+// THE WHOLE RULE, and it is two lines of it:
+//
+//   the answer is in  → the arc goes, at once. No hold, no fade: the rows are
+//                       there, so there is nothing left to say.
+//   the read is slow  → the arc appears. "Slow" is the only thing that needs a
+//                       number (kBusyShowDelayMs): a read that answers before an
+//                       eye can catch it must paint NOTHING, or every scrolled
+//                       portion flickers.
+//
+// So the delay guards the appearance only. It is not a grace period for the
+// answer — the answer never waits.
+void ibDataViewCtrl::UpdateBusyIndicator()
+{
+	// WAITING STARTS WHEN THE ROWS GO, not when the read leaves. Between the two
+	// there is a whole idle pass: the buffer is already wiped and the portion is
+	// only dispatched from the next OnInternalIdle. That gap is exactly the blank
+	// white rectangle the user sees, and "no read in flight yet" is why nothing was
+	// painted over it.
+	const bool waiting = IsFetchInFlight() || m_pagedNeedsBootstrap;
+
+	if (!waiting) {
+		// STILL LEGIBLE FIRST. The rows are already on screen — this only decides
+		// when the arc over them goes. If it has not been up long enough to be
+		// read, leave it and let the tick take it off; the tick is still running,
+		// which is why nothing here stops it on this path.
+		if (m_busyShown
+		    && (wxGetUTCTimeMillis() - m_busyShownMs).ToLong() < kBusyMinShowMs)
+			return;
+
+		m_busySinceMs = 0;
+		if (m_busyTimer.IsRunning())
+			m_busyTimer.Stop();
+		if (m_busyShown) {
+			m_busyShown = false;
+			ShowBusyWindow(false);           // take it off the finished rows
+		}
+		return;
+	}
+
+	if (m_busySinceMs == 0) {
+		// A read just went out. Note the moment and arm the tick — the tick both
+		// turns the arc and re-checks, so a read that dies without delivering
+		// still ends the spinner.
+		m_busySinceMs = wxGetUTCTimeMillis();
+		m_busyPhase   = 0;
+	}
+	if (!m_busyTimer.IsRunning())
+		m_busyTimer.Start(kBusyTickMs);
+
+	// THE DELAY APPLIES TO EVERY READ, including the one with nothing on screen yet.
+	//
+	// An empty table used to raise the arc on the first pass, on the reasoning that
+	// a blank rectangle says nothing and the wait is worth naming. In practice it
+	// named waits that were not waits: a RAM table answers in microseconds, so what
+	// the user got on every one of them was an arc appearing and then held for its
+	// minimum-show — a flash for a read that had already finished. Meanwhile the
+	// slow reads it was written for cross 200 ms anyway and show regardless.
+	//
+	// So there is ONE rule and no exception to it: a read that answers before an eye
+	// can catch it paints nothing at all. 200 ms of blank on a cold open is the
+	// cheaper of the two, and the rows usually beat it.
+	//
+	// Checked here as well as in the tick: on the tick alone nothing could appear
+	// sooner than one cadence after the delay, which made the delay meaningless
+	// for anything shorter.
+	if (!m_busyShown
+	    && (wxGetUTCTimeMillis() - m_busySinceMs).ToLong() >= kBusyShowDelayMs) {
+		m_busyShown  = true;
+		m_busyShownMs = wxGetUTCTimeMillis();   // the minimum above counts from HERE
+		ShowBusyWindow(true);
+	}
+}
+
+void ibDataViewCtrl::OnBusyTimer(wxTimerEvent& WXUNUSED(event))
+{
+	// THE TICK IS ALSO THE WATCHDOG. Re-checking here is what ends the spinner
+	// when a read dies without delivering — its worker gone, the pool stopped,
+	// the session torn down. A spinner that only ever stops on success is a
+	// spinner that can spin forever, which is the one failure to avoid.
+	//
+	// What it CANNOT catch is a read wedged in a socket: the counter stays up
+	// because nothing ever came back. Cancellation is cooperative and a blocking
+	// read does not see the flag, so that case belongs to the driver's timeout,
+	// not here. The form stays usable throughout either way.
+	if (!IsFetchInFlight()) {
+		UpdateBusyIndicator();
+		return;
+	}
+
+	if (!m_busyShown) {
+		if ((wxGetUTCTimeMillis() - m_busySinceMs).ToLong() < kBusyShowDelayMs)
+			return;                       // still inside the grace period
+		m_busyShown   = true;             // crossing the delay — start painting
+		m_busyShownMs = wxGetUTCTimeMillis();
+	}
+
+	m_busyPhase = (m_busyPhase + 1) % kBusySteps;
+	ShowBusyWindow(true);
+}
+
 void ibDataViewMainWindow::OnChar(wxKeyEvent& event)
 {
 	// propagate the char event upwards
@@ -8507,10 +8799,20 @@ void ibDataViewMainWindow::OnSetFocus(wxFocusEvent& event)
 
 	// Make the control usable from keyboard once it gets focus by ensuring
 	// that it has a current row, if at all possible.
-	if (!m_owner->HasCurrentRow() && !m_owner->IsEmpty())
+	//
+	// EXCEPT WHILE A RESTORE IS STILL COMING. After a sort or a filter the row the
+	// user was on is looked for in the fetched page, and when it is not in the
+	// FIRST page it arrives with the backward portion a moment later. Stamping row
+	// 0 as current in that gap paints a highlight at the top that then jumps away —
+	// the phantom selection. The restore knows which row it wants; this only has to
+	// keep out of its way.
+	if (!m_owner->HasCurrentRow() && !m_owner->IsEmpty()
+	    && !m_owner->m_pagedRestoreFocus.IsOk()
+	    && !m_owner->m_skipFocusRowOnNextSetFocus)
 	{
 		m_owner->ChangeCurrentRow(0);
 	}
+	m_owner->m_skipFocusRowOnNextSetFocus = false;
 
 	if (m_owner->HasCurrentRow())
 	{

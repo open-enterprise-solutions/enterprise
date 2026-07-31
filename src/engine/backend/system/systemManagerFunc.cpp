@@ -996,3 +996,78 @@ void ibValueSystemFunction::RollBackTransaction()
 
 	ses_query->RollBack();
 }
+
+//****************************************************************************
+//*                                  Jobs                                    *
+//****************************************************************************
+
+#include "backend/job/jobManager.h"
+
+int ibValueSystemFunction::RunScheduledJobs()
+{
+	// Evaluating a watch expression in the debugger must not start work — the
+	// same guard the transaction verbs above use.
+	if (ibBackendException::IsEvalMode())
+		return 0;
+
+	ibJobManager* const manager = ibApplicationData::GetJobManager();
+	if (manager == nullptr)
+		return 0;   // no appData (launcher / pre-bootstrap) — nothing scheduled
+
+	// Returns as soon as the due jobs are handed to their sessions. Waiting here
+	// would block the caller — and the common caller is a form's idle handler.
+	return manager->Tick();
+}
+
+bool ibValueSystemFunction::RunJob(const wxString& strJobName)
+{
+	if (ibBackendException::IsEvalMode())
+		return false;
+
+	ibJobManager* const manager = ibApplicationData::GetJobManager();
+	if (manager == nullptr)
+		return false;
+
+	return manager->RunNow(strJobName);
+}
+
+#include "backend/system/value/valueArray.h"
+#include "backend/system/value/valueBackgroundJob.h"
+
+ibValue ibValueSystemFunction::RunBackground(const wxString& strProcedureName, ibValue* pArgs)
+{
+	// Starting work from a watch expression would be a side effect of LOOKING at
+	// something — the same reason the transaction verbs guard on this.
+	if (ibBackendException::IsEvalMode())
+		return wxEmptyValue;
+
+	ibJobManager* const manager = ibApplicationData::GetJobManager();
+	if (manager == nullptr)
+		ibBackendCoreException::Error(_("Background job: the application is not running"));
+
+	// Flatten the Array into positional arguments. Anything else non-empty is a
+	// caller mistake worth naming — silently treating it as "no arguments" would
+	// start a procedure with the wrong signature and fail deep inside it.
+	std::vector<ibValue> args;
+	if (pArgs != nullptr && !pArgs->IsEmpty()) {
+		ibValueArray* const array = pArgs->ConvertToType<ibValueArray>();
+		if (array == nullptr)
+			ibBackendCoreException::Error(_("Background job: the second argument must be an Array"));
+
+		ibValue count;
+		array->CallAsFunc(array->FindMethod(wxT("Count")), count, nullptr, 0);
+		const long n = count.GetInteger();
+		args.reserve(static_cast<std::size_t>(n > 0 ? n : 0));
+		for (long i = 0; i < n; ++i) {
+			ibValue item, index(static_cast<signed int>(i));
+			ibValue* params[] = { &index, nullptr };
+			array->CallAsFunc(array->FindMethod(wxT("Get")), item, params, 1);
+			args.push_back(item);
+		}
+	}
+
+	// StartBackground gates the arguments and throws on a mutable one, so a bad
+	// call lands here, on the caller's stack, with the script's try/except as the
+	// natural handling point.
+	return new ibValueBackgroundJob(manager->StartBackground(strProcedureName, args));
+}

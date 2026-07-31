@@ -12,12 +12,18 @@
 // (N threads serving M sessions) doesn't apply on GUI: there's only
 // one session and one UI thread.
 //
-// Not auto-installed on the registry by default. The current code path
-// for GUI session script execution runs inline on the calling thread
-// (wx main), which is correct for the synchronous scenarios in use
-// today. When async dispatch becomes a real need, host startup
-// constructs an ibWorkerPoolGUI and registers it on the registry via
-// the planned setter — the class is ready in advance.
+// Installed: ibGUISession holds one and returns it from GetWorkerPool().
+// Desktop script still runs inline on the calling thread, because Submit
+// runs a task INLINE when the caller is already on the wx main thread —
+// which every existing desktop caller is. The CallAfter path therefore
+// serves exactly one case, the one that had no answer before: a result
+// arriving from a background thread (a list / report read that went off
+// to the registry's pool) being handed back to the session that asked.
+//
+// The registry's own pool is NOT the place for it: that one serves the
+// background and scheduled sessions of the process, and their whole
+// point is to stay OFF the UI thread. Two different questions, two
+// different answers — which is why the choice lives on the session.
 
 #include "frontend/frontend.h"
 #include "backend/session/workerPool.h"

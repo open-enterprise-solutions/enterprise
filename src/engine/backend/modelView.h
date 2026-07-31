@@ -2,6 +2,9 @@
 #define __MODEL_VIEW_H__
 
 #include <algorithm>
+#include <functional>
+#include <memory>
+#include <mutex>
 #include <vector>
 
 #include <wx/variant.h>
@@ -569,12 +572,40 @@ public:
 		(void)fromRow; (void)out;
 	}
 
-	// Dispatch a unit of fetch work asynchronously (worker pool when
-	// available, inline as fallback).  Default impl runs `work`
-	// synchronously; ibValueModel routes through ibSession::Submit so
-	// the DB roundtrip never blocks the UI thread.
-	virtual void SubmitFetchAsync(std::function<void()> work) {
-		if (work) work();
+	// HOW THIS MODEL'S PORTION READ RUNS — asked of the MODEL, because only the
+	// model knows what its read costs and what it is allowed to touch. The control
+	// has ONE code point for every kind of table it can hold: it hands over a unit
+	// of work and is told nothing about where it ran.
+	//
+	// This base answers WITH A THREAD OF ITS OWN — one per model, owned here (see
+	// below). Not because a plain model's read is slow, but because
+	// "the thread that asked" is not always a UI thread with time to spare: the same
+	// forms are rendered on the web server, where it is a session's worker and a
+	// blocking read holds up that session's whole answer. One shape for both hosts,
+	// and the busy indicator becomes honest everywhere — a slow read shows a
+	// spinner instead of a frozen window.
+	//
+	// `ibValueModel` overrides it: that is a RUNTIME table, so its portion goes to a
+	// background job instead. The decision is per model, never per control, which is
+	// why it is a virtual here and not a branch at the call site — and it is the
+	// only place in the engine that knows a background job exists at all.
+	// (Out-of-line in modelView.cpp — it is the only thing here that needs <thread>.)
+	virtual void SubmitFetchAsync(std::function<void()> work);
+
+	// ONE PORTION AT A TIME — the only lock in the whole path, and it lives in the
+	// door because that is where the operation is.
+	//
+	// A sort click is a RESET: the composer recomputes, a portion is re-fetched, and
+	// the view rebuilds its tree from it. If a portion is still on its way back when
+	// the next reset starts, the two are inside the same buffer. So every unit of
+	// work handed to the door runs wrapped in this — whoever runs it, thread or
+	// background job. Nothing else takes it: not the mutators, not the composer, not
+	// the paint.
+	std::function<void()> GuardFetch(std::function<void()> work) {
+		return [this, work]() {
+			std::lock_guard<std::mutex> lock(m_fetchMtx);
+			if (work) work();
+		};
 	}
 
 	void AddNotifier(ibDataViewModelNotifier* notifier);
@@ -601,8 +632,10 @@ public:
 
 protected:
 	// Dtor is protected because the objects of this class must not be deleted,
-	// DecRef() must be used instead.
+	// DecRef() must be used instead. It JOINS the fetch thread — a read must never
+	// outlive the model it is reading.
 	virtual ~ibDataViewModel();
+
 
 	// Helper function used by the default Compare() implementation to compare
 	// values of types it is not aware about. Can be overridden in the derived
@@ -615,6 +648,15 @@ protected:
 
 private:
 	ibDataViewModelNotifiers  m_notifiers;
+
+	// The thread from SubmitFetchAsync. Held as a pointer so this header does not
+	// pull <thread> into every translation unit that sees a model; created on the
+	// first read that leaves the thread and never afterwards recreated while it
+	// runs (it is joined first).
+	std::unique_ptr<class ibModelFetchThread> m_fetchThread;
+
+	// See GuardFetch — one portion at a time.
+	std::mutex m_fetchMtx;
 };
 
 #endif

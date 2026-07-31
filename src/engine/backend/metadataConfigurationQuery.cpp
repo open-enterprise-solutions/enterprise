@@ -172,16 +172,14 @@ bool ibMetaDataConfigurationStorage::OnSaveDatabase(int flags)
 		}
 
 		// Structure + seed via the declarative differ. The Storage's only job is to BUILD the two snapshots
-		// (ContributeTables on the saved baseline m_configMetadata + the edited config `this`) and hand them
-		// to the metadata-agnostic builder; the builder computes and applies the delta. An object now only
+		// (the saved baseline m_configMetadata + the edited config `this`) and hand them to the
+		// metadata-agnostic builder; the builder computes and applies the delta. An object now only
 		// DECLARES its tables + value rows — no per-metaobject DeleteMetaTable / CreateMetaTable walk.
-		ibSchemaSnapshot target;
-		if (ibValueMetaObject* common = GetCommonMetaObject())
-			common->ContributeTables(target);
-		ibSchemaSnapshot baseline;
+		const ibSchemaSnapshot target = BuildSchemaSnapshot();
 		const bool hasBaseline = (m_configMetadata != nullptr && m_configMetadata->GetCommonMetaObject() != nullptr);
-		if (hasBaseline)
-			m_configMetadata->GetCommonMetaObject()->ContributeTables(baseline);
+		const ibSchemaSnapshot baseline = hasBaseline
+			? m_configMetadata->BuildSchemaSnapshot()
+			: ibSchemaSnapshot();
 
 		const int structRet = m_structureBuilder.OnSave(hasBaseline ? &baseline : nullptr, target);
 
@@ -325,9 +323,7 @@ bool ibMetaDataConfigurationStorage::ReCreateDatabase()
 	// Full rebuild: the Storage builds the target snapshot and hands it to the builder, which OWNS the
 	// whole transaction — drop all of the config's tables, recreate + seed them all, commit (+ FB deferred-
 	// seed flush). Metadata only declares the schema and reads the change log out.
-	ibSchemaSnapshot target;
-	if (ibValueMetaObject* common = GetCommonMetaObject())
-		common->ContributeTables(target);
+	const ibSchemaSnapshot target = BuildSchemaSnapshot();
 
 	const int recreateRet = m_structureBuilder.Recreate(target);
 	GetRestructureInfo().Absorb(m_structureBuilder.GetChanges());

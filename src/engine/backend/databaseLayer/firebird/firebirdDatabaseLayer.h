@@ -112,6 +112,22 @@ public:
 	// Row-lock dialect now lives in the dialect dictionary (m_rowLockSuffix=" WITH LOCK",
 	// m_rowLockNoWaitSuffix=""); FB's NOWAIT rides the TPB (isc_tpb_nowait via ibTxOptions::noWait).
 
+	// Housekeeping this connection can do on its own database: sweep, and the
+	// periodic backup/restore cycle. Runs whatever is due and returns whether
+	// anything did.
+	//
+	// A METHOD rather than a service with its own copy of the parameters — the
+	// interface, the path and the credentials are already here, valid for as long
+	// as this connection is checked out of the pool. The previous shape cached
+	// them in a process-wide singleton and then had to prove the cache outlived
+	// nothing it shouldn't; a connection borrowed for the call proves that by
+	// construction.
+	//
+	// Called by the `firebird.maintenance` job on its own session's connection,
+	// so the blocking Services API calls are on a worker rather than on any
+	// thread someone is waiting on.
+	bool RunDueMaintenance();
+
 protected:
 
 	// query database

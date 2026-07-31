@@ -301,6 +301,19 @@ public:
 	virtual const ibValueMetaObject* GetCommonMetaObject() const { return nullptr; }
 	virtual ibValueMetaObject* GetCommonMetaObject() { return nullptr; }
 
+	// THE WHOLE STRUCTURE THIS CONFIGURATION DECLARES — every table of every
+	// metaobject in it, in one snapshot.
+	//
+	// One door, because there is one answer. Five callers used to reach for the
+	// common object and ask it themselves (the DDL differ, the full rebuild, the
+	// config dump and its restore, the totals fold), which is four chances to ask
+	// a slightly different question — and the fold, which walks what it is given,
+	// would simply have folded less. Nothing open (no configuration) yields an
+	// empty snapshot, which every caller already treats as "nothing to do".
+	//
+	// Out-of-line (metaData.cpp) — ibSchemaSnapshot is only forward-declared here.
+	class ibSchemaSnapshot BuildSchemaSnapshot() const;
+
 	//runtime support:
 	inline ibValue CreateObject(const ibClassID& clsid, ibValue** paParams = nullptr, const long lSizeArray = 0) const {
 		return CreateObjectRef(clsid, paParams, lSizeArray);

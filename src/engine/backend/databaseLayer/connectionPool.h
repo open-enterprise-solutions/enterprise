@@ -130,6 +130,14 @@ public:
 	// resolves the SAME holder across the save when no explicit holder was given.
 	static ibDatabaseConnectionHolder* ThreadHolder();
 
+public:
+	// Default upper bound on how long Checkout() blocks when the pool is
+	// saturated (all m_maxSize connections busy). On expiry it throws instead of
+	// waiting forever, so a leaked / stuck borrower can't hang the worker thread.
+	// Public because a caller that knows its work must not stall picks its own
+	// bound against this one (see Checkout below).
+	static constexpr std::chrono::seconds kCheckoutTimeout { 30 };
+
 private:
 	// --- Internal API -------------------------------------------------------
 
@@ -152,7 +160,16 @@ private:
 	// External use is funneled through ibDatabaseConnectionHolder::
 	// AcquireFreeConnection (raw borrow) and ibConnectionScope (RAII
 	// scope-bound borrow); both are friends.
-	std::shared_ptr<ibDatabaseLayer> Checkout();
+	//
+	// HOW LONG TO WAIT IS THE CALLER'S, not the pool's. The default is the
+	// half-minute above — the right answer for work somebody started and is
+	// waiting on, where failing early only means asking again. It is the wrong
+	// answer for work that is merely SERVING somebody: a rented run reads one
+	// portion for a form that already has rows on screen, so "the pool is full"
+	// has to come back as an answer it can act on rather than as a stall. Same
+	// bound, named by whoever knows what the wait costs.
+	std::shared_ptr<ibDatabaseLayer> Checkout(
+		std::chrono::milliseconds wait = kCheckoutTimeout);
 
 	// Symmetric counterpart to Checkout — drops the caller's
 	// shared_ptr (its deleter clears entry.inUse). Most callers just
@@ -258,10 +275,6 @@ private:
 	};
 	std::vector<ibConnectionEntry>  m_entries;
 	static constexpr std::chrono::seconds kIdleTimeout { 60 };
-	// Upper bound on how long Checkout() blocks when the pool is saturated
-	// (all m_maxSize connections busy). On expiry it throws instead of waiting
-	// forever, so a leaked / stuck borrower can't hang the worker thread.
-	static constexpr std::chrono::seconds kCheckoutTimeout { 30 };
 
 	std::size_t                     m_maxSize   = 0;
 	std::size_t                     m_minIdle   = 2;

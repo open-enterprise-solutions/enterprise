@@ -10,7 +10,9 @@
 
 #include "model.h"
 
-#include "backend/session/session.h"            // ibSession — SubmitFetchAsync
+#include "backend/session/session.h"            // ibSession — the caller a rented run borrows from
+#include "backend/job/jobManager.h"             // ibJobManager / ibJobTenancy — the rented run a portion reads on
+#include "backend/backend_exception.h"          // ibBackendException — a refusal to rent falls back to inline
 #include "backend/modelView.h"                  // ibDataViewModel / ibDataViewItem — the base view types
 #include "backend/composition/listFilter.h"    // ibValueListSettings (dialog buffer) + ibLoad/CommitSettings — settings live on the composer
 #include "backend/composition/dataComposer.h"  // ibDataComposer — IsGroupedModel reads GroupCount() off the composer
@@ -94,6 +96,20 @@ ibValueModel::ibValueModel()
 
 ibValueModel::~ibValueModel()
 {
+	// A READ MUST NOT OUTLIVE WHAT IT IS READING. The rented run walks this model
+	// from a worker, and nothing else keeps the model alive: the control's alive
+	// token answers for the CONTROL, and dropping a form (or AssociateModel) frees
+	// the model outright. So the last read is waited out here — the same promise
+	// the base door keeps by joining its thread.
+	//
+	// Cheap in the ordinary case: by the time a form closes its portion has long
+	// since landed, and a run that has finished returns from Wait immediately.
+	if (m_fetchRun) {
+		m_fetchRun->Cancel();   // cooperative — a query already in flight still finishes
+		m_fetchRun->Wait();
+		m_fetchRun.reset();
+	}
+
 	// The RAM node storage (ibRamValueStorage) is a member of ibValueModelStorage — its dtor DecRefs the nodes; the
 	// base just drops the view provider. (A DB model has no node storage.)
 	m_modelProvider->DecRef();
@@ -107,15 +123,37 @@ ibValueModel::~ibValueModel()
 //  m_composer.GetSortAt + GetColumnIDByName inline, each at the point of use. Max: "ibSortModel is either part
 //  of L5, or removed entirely" — L5 is name-based, so it was removed.)
 
-std::future<void> ibValueModel::SubmitFetchAsync(std::function<void()> work)
+void ibValueModel::SubmitFetchAsync(std::function<void()> work)
 {
-	auto* sess = ibSession::Current();
-	if (sess != nullptr)
-		return sess->Submit(std::move(work));
-	if (work) work();
-	std::promise<void> p;
-	p.set_value();
-	return p.get_future();
+	if (!work)
+		return;
+
+	// Under the door's own lock — one portion at a time. The lock lives on the view
+	// side of this model (its provider bridge IS the ibDataViewModel), which is the
+	// one object both halves of a table share.
+	auto locked = GetDataViewModel()->GuardFetch(std::move(work));
+
+	// The rented run — see the header for what is borrowed and what is not. The
+	// try/catch IS the fallback: StartBackground refuses out loud (no session to
+	// rent from, no free connection within the tenant's short wait, the manager
+	// stopping), and a refusal here means "read it here instead", never "no data".
+	if (ibJobManager* const jobs = ibApplicationData::GetJobManager()) {
+		try {
+			// The handle is KEPT, not dropped: it is what the destructor waits on so
+			// a read cannot outlive this model. One at a time by construction — the
+			// door's lock already serialises them — so one slot is enough.
+			m_fetchRun = jobs->StartBackground(
+				[locked](ibSession*) -> ibValue { locked(); return ibValue(); },
+				_("reading table data"),
+				ibJobTenancy::Tenant);
+			return;
+		}
+		catch (const ibBackendException&) {
+			// Nothing to rent — fall through.
+		}
+	}
+
+	locked();
 }
 
 namespace {

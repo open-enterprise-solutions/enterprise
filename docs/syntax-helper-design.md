@@ -28,7 +28,7 @@ stays out of this PR.
 | 1.3 | `ibCodeEditor::GetIdentifierUnderCursor` + `OpenHelpForCursor` resolver pipeline + chooser dialog wiring; RawCtrl+Alt+F1 (pane toggle), RawCtrl+F1 (cursor look-up) | live lookup via menu + shortcut |
 | 1.3b | Editor right-click context menu (Cut/Copy/Paste/SelectAll + Look up in Syntax Helper) routing wxEVT_MENU upward through the parent chain | context menu item posts to host designer |
 | 1.3c | Drag target — wxStyledTextCtrl built-in handles `wxTextDataObject` from `helpDragSource` | drag from panel into editor inserts identifier |
-| - | UTF-8 BOM on 25 syntax-helper source files (MSVC without `/utf-8` flag was producing em-dash mojibake in `_()` literals) | no `вЂ—` in panel labels |
+| - | UTF-8 BOM on 25 syntax-helper source files (MSVC without `/utf-8` flag was producing em-dash mojibake in `_()` literals) | no `‗` in panel labels |
 | - | `.hbk → .hlk` rename across loader / service / build / docs (avoids collision with a third-party proprietary `.hbk` format) | `bin/help/*.hlk` artefacts |
 | - | Menu items live in Help menu (was Tools, moved per user preference); macOS macro-Help-menu interception risk noted in comment | designer Help menu carries Syntax Helper + Look up + About |
 | - | Compact appData footprint: +13 lines `.h` (forward decl + member + static getter) / +6 lines `.cpp` (include + lazy init in `InitLocale`); ownership mirrors `ibLogger` / `ibLockManager` | no `m_helpCorpus` / `RebuildHelpCorpus` directly on appData |

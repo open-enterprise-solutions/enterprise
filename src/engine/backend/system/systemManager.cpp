@@ -109,7 +109,13 @@ enum
 	enCommitTransaction,
 	enRollBackTransaction,
 	enIsNull,
-	enValueIsFilled
+	enValueIsFilled,
+	//--- Jobs: appended at the END on purpose — the enumerator's ordinal IS the
+	// method index into the bind table below, so inserting anywhere above would
+	// silently re-point every later method at the wrong case.
+	enRunScheduledJobs,
+	enRunJob,
+	enRunBackground
 };
 
 void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
@@ -220,6 +226,10 @@ void ibValueSystemFunction_BindNames(ibValue::ibMemberTable& helper, const ibVal
 	helper.AppendProc(wxT("RollBackTransaction"), wxT("RollBackTransaction()"));
 	helper.AppendFunc(wxT("IsNull"), 1, wxT("IsNull(value : any)"));
 	helper.AppendFunc(wxT("ValueIsFilled"), 1, wxT("ValueIsFilled(value : any)"));
+	//--- Jobs: keep last, matching the enRunScheduledJobs..enRunJob enum tail.
+	helper.AppendFunc(wxT("RunScheduledJobs"), wxT("RunScheduledJobs()"));
+	helper.AppendFunc(wxT("RunJob"), 1, wxT("RunJob(name : string)"));
+	helper.AppendFunc(wxT("RunBackground"), 2, wxT("RunBackground(procedure : string, args : array)"));
 };
 
 #include "backend/compiler/enumUnit.h"
@@ -316,6 +326,12 @@ bool ibValueSystemFunction::CallAsFunc(const long lMethodNum, ibValue& pvarRetVa
 		case enIsEmptyValue: pvarRetValue = IsEmptyValue(*paParams[0]); return true;
 		case enIsNull: pvarRetValue = IsNull(*paParams[0]); return true;
 		case enValueIsFilled: pvarRetValue = ValueIsFilled(*paParams[0]); return true;
+		case enRunScheduledJobs: pvarRetValue = RunScheduledJobs(); return true;
+		case enRunJob: pvarRetValue = RunJob(paParams[0]->GetString()); return true;
+		case enRunBackground:
+			pvarRetValue = RunBackground(paParams[0]->GetString(),
+				lSizeArray > 1 ? paParams[1] : nullptr);
+			return true;
 		case enEvaluate: pvarRetValue = Evaluate(paParams[0]->GetString()); return true;
 		case enExecute: Execute(paParams[0]->GetString()); return true;
 		case enFormat: pvarRetValue = Format(*paParams[0], paParams[1]->GetString()); return true;

@@ -1335,6 +1335,22 @@ class BACKEND_API ibValueManagerObject : public ibValueDynamicMembers {
 	ibValueManagerObject() : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true) {}
 	virtual ~ibValueManagerObject() {}
 
+	// NOT transferable across sessions — declared once here, so every manager
+	// (catalog, document, information / accumulation / accounting register)
+	// inherits it.
+	//
+	// A manager looks like a stateless door onto a metaobject, and that is the
+	// trap: it is bound to the SESSION's runtime. Its methods run in the manager
+	// module compiled for that session (CompileRoot builds one per session), and
+	// what it reads it reads through that session's connection and its RLS policy.
+	// Handed to a job, it would either run one session's bytecode on another's
+	// interpreter or read under rights that are not the job's.
+	//
+	// The job resolves its own manager by name on its own side — that costs
+	// nothing and gets the right runtime, the right connection and the right
+	// rights in one step.
+	virtual bool IsTransferable() const override { return false; }
+
 	virtual const ibValueMetaObject* GetMetaObject() const = 0;
 };
 
@@ -1408,6 +1424,17 @@ protected:
 	// surface is supplied by ReflectMembers, bound per-instance in the ctor.
 public:
 	virtual ~ibValueRecordDataObject();
+
+	// NOT transferable across sessions. A loaded object (a document, a catalog
+	// item) is MUTABLE state owned by the session that read it: its attributes and
+	// tabular sections are being edited, and it carries a record lock and an
+	// unfinished write. A second session holding the same instance would edit the
+	// first one's buffer with nothing coordinating the two.
+	//
+	// A REFERENCE to the same row travels perfectly well — guid plus type, which
+	// the target session resolves through its own metadata. That is the value to
+	// pass a job: it re-reads the object on its own side, under its own rights.
+	virtual bool IsTransferable() const override { return false; }
 
 	//support actionData
 	virtual ibStandardCommandSet GetStandardCommands(const ibFormID& formType) override { return ibStandardCommandSet(); }
@@ -2086,6 +2113,17 @@ protected:
 class BACKEND_API ibValueRecordSetObject : public ibValueModelStorage, public ibRuntimeModuleDataObject {
 	public:
 
+	// NOT transferable across sessions. Not because it is a table — a value table
+	// is one too and travels fine — but because it is the register's records:
+	// keyed by m_keyValues, written back by Write(), and edited right up to that
+	// moment. A second session holding this instance would be appending to a
+	// buffer the first is about to write, and the later write would silently
+	// decide the register's movements.
+	//
+	// A job that needs these takes the KEY — the recorder reference, the dimension
+	// values — and reads the set on its own side.
+	virtual bool IsTransferable() const override { return false; }
+
 	virtual ibValueModelColumnCollection* GetColumnCollection() const override { return m_recordColumnCollection; }
 	virtual ibValueModelReturnLine* GetRowAt(const ibDataViewItem& line) override {
 		if (!line.IsOk())
@@ -2441,6 +2479,13 @@ protected:
 public:
 
 	ibValueRecordSetObject* GetRecordSet() const { return m_recordSet; }
+
+	// NOT transferable across sessions. A record manager is not a door either — it
+	// OWNS a record set (m_recordSet above) that is being edited, and it holds the
+	// key that set is keyed by. Passing it would hand another session a live,
+	// half-written buffer; the fact that it also carries the session's runtime and
+	// rights, like every other manager, is the second reason rather than the first.
+	virtual bool IsTransferable() const override { return false; }
 
 	virtual ~ibValueRecordManagerObject();
 

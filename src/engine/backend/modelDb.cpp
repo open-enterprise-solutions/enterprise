@@ -19,8 +19,6 @@
 #include "backend/system/value/valueType.h"        // ibValueTypeDescription::AdjustValue — typed empty parent ref (hierarchy roots)
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject — drilled folder guid
 #include "backend/uniqueKey.h"                      // ibUniqueKey — GetItemKey builds the row's reference key
-
-
 // ibValueModelCursor::EnsureSnapshot — DynamicRead OFF: materialise the WHOLE result set into m_snapshot ONCE, then
 // every fetch / scroll / group serves from RAM (RunStoragePage). Re-materialises only when the view generation moved
 // (a refresh / filter / sort change bumps it; a scroll does not). The SQL read applies the persistent FILTER + SORT
