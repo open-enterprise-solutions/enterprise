@@ -806,8 +806,17 @@ static void ReadPagedFetchReset(ibDataViewModel* model, ibPagedFetch& req)
 void ibDataViewCtrl::DispatchPagedFetch(ibFetchDirection dir, int batch)
 {
 	ibDataViewModel* model = GetModel();
-	if (model == nullptr)
+	if (model == nullptr) {
+		// NO MODEL, NO FIRST FETCH — so disarm, or the flag stands for the life of
+		// the window naming a read that can never be dispatched. That is not
+		// hypothetical: the FORM EDITOR deliberately associates no model (a preview
+		// must not issue SQL against a metadata table still being designed), while
+		// the control's own refresh path arms the flag regardless. Left standing it
+		// reads as "waiting" — and the busy arc it raised had nothing that could
+		// ever take it off.
+		m_pagedNeedsBootstrap = false;
 		return;
+	}
 
 	const bool isReset   = (dir == ibFetchDirection::Reset);
 	const bool isForward = (dir == ibFetchDirection::Forward);

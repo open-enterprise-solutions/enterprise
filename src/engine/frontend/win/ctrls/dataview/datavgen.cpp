@@ -8680,7 +8680,17 @@ void ibDataViewCtrl::UpdateBusyIndicator()
 	// only dispatched from the next OnInternalIdle. That gap is exactly the blank
 	// white rectangle the user sees, and "no read in flight yet" is why nothing was
 	// painted over it.
-	const bool waiting = IsFetchInFlight() || m_pagedNeedsBootstrap;
+	//
+	// A PENDING BOOTSTRAP COUNTS ONLY IF IT CAN ACTUALLY GO — the same condition
+	// the idle pass dispatches on. The flag alone is not a wait: a control too
+	// short to hold a single row (a table box in the FORM EDITOR, sized to a couple
+	// of pixels of preview) never reaches a batch size, so its bootstrap stands
+	// armed for the life of the window. Read as waiting, that painted an arc that
+	// could never be taken off — a spinner over a form nobody is loading.
+	const bool bootstrapCanRun = m_pagedNeedsBootstrap
+	                          && m_tableAreaWin != nullptr
+	                          && GetCountPerPage() > 0;
+	const bool waiting = IsFetchInFlight() || bootstrapCanRun;
 
 	if (!waiting) {
 		// STILL LEGIBLE FIRST. The rows are already on screen — this only decides
