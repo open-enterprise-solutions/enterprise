@@ -250,12 +250,36 @@ void ibValueMetaObjectRegisterData::CallAsCommand(ibActionID id, const ibUniqueK
 	catch (...) { wxLogError(wxT("ibValueMetaObjectRegisterData::CallAsCommand: unhandled non-ibBackend exception swallowed")); }
 }
 
-// OPEN a register record by key (double-click) — through the record manager, mirroring the eEditValue command. A
-// recorder-based register (document movements) has no record manager, so it no-ops.
+// OPEN a register record by key (double-click) — through the record manager, mirroring the eEditValue command.
+//
+// A RECORDER-BASED REGISTER OPENS ITS RECORDER. Its rows are not editable on their own — they belong to the document
+// that wrote them, which is why there is no record manager to raise a form from. What the user is pointing at in that
+// case is the document, and the recorder reference is PART of the row's identity, so it is already in the key: no
+// second lookup, no row node to reach back for.
 void ibValueMetaObjectRegisterData::ShowValueByKey(const ibUniqueKey& key, ibBackendValueForm* srcForm) const
 {
-	if (!HasRecordManager() || !key.IsOk())
+	if (!key.IsOk())
 		return;
+
+	if (!HasRecordManager()) {
+		if (!HasRecorder())
+			return;                       // neither a record of its own nor a recorder — nothing to open
+		try {
+			const ibValueMetaObjectAttributePredefined* metaRecorder = GetRegisterRecorder();
+			if (metaRecorder == nullptr)
+				return;
+			const ibRowMetaValues& keyValues = key.GetKeyValues();
+			auto it = keyValues.find(metaRecorder->GetMetaID());
+			if (it != keyValues.end()) {
+				ibValue recorderVal = it->second;
+				recorderVal.ShowValue();
+			}
+		}
+		catch (const ibBackendCoreException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
+		catch (...) { wxLogError(wxT("ibValueMetaObjectRegisterData::ShowValueByKey: unhandled non-ibBackend exception swallowed")); }
+		return;
+	}
+
 	try {
 		ibValuePtr<ibValueRecordManagerObject> obj(CreateRecordManagerObjectValue(ibUniqueKeyPair(key.GetKeyValues())));
 		if (obj != nullptr) obj->ShowFormValue(wxEmptyString, dynamic_cast<ibBackendControlFrame*>(srcForm));
