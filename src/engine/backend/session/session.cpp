@@ -16,6 +16,7 @@
 #include <thread>
 #include <unordered_map>
 #include <algorithm>
+#include <functional>
 
 // RLS — the concrete access policy lives here (session side); the L3 door sees
 // only the ibAccessPolicy interface.
@@ -23,6 +24,7 @@
 #include "backend/query/queryable.h"                 // ibBackendQueryable — GetMetaData / GetQueryName / GetPrimaryKeyColumns
 #include "backend/system/value/valueQueryable.h"     // ibValueQueryable — a role-module restriction returned as a set
 #include "backend/metaCollection/metaRoleObject.h"   // ibValueMetaObjectRole — GetRoleModule()
+#include "backend/metaCollection/genericData.h"      // AccessRight_Show / _Modify / _Erase — the rights, as the metadata already answers them
 #include "backend/backend_exception.h"               // ibBackendAccessException
 
 namespace {
@@ -37,6 +39,11 @@ namespace {
 // only the rows the role's keys permit (the row filter, on the SUBD side).
 //
 // ---------------------------------------------------------------------------
+// WHICH right answers for a stage — a pointer to the metaobject predicate that already knows how
+// to answer it (IsFullAccess, the roles, the object's own mapping are all inside it). The policy
+// names the right; it does not re-implement it.
+typedef bool (ibValueMetaObjectGenericData::*RightPredicate)() const;
+
 class ibRuntimeAccessPolicy : public ibAccessPolicy
 {
 public:
@@ -68,10 +75,145 @@ public:
 		}
 	}
 
-	void ApplyReadAccess(ibDataQueryBuilder& query) const override                        { Apply(query, wxT("Read")); }
-	void ApplyWriteAccess(ibDataQueryBuilder& query, const wxString& operation) const override { Apply(query, operation); }
+	// ONE METHOD PER OPERATION; the stage picks which of the two questions. Creating asks the Write
+	// right — creating IS writing — and stays its own method because its restriction checks the row
+	// being made rather than filtering rows that already exist.
+	bool CheckSelect(ibDataQueryBuilder& query, const ibAccessStage& stage, long affected) const override
+	{ return Check(query, &ibValueMetaObjectGenericData::AccessRight_Show, wxT("Read"), stage, affected); }
+
+	bool CheckCreate(ibDataQueryBuilder& query, const ibAccessStage& stage, long affected) const override
+	{ return Check(query, &ibValueMetaObjectGenericData::AccessRight_Modify, wxT("Create"), stage, affected); }
+
+	bool CheckUpdate(ibDataQueryBuilder& query, const ibAccessStage& stage, long affected) const override
+	{ return Check(query, &ibValueMetaObjectGenericData::AccessRight_Modify, wxT("Write"), stage, affected); }
+
+	bool CheckDelete(ibDataQueryBuilder& query, const ibAccessStage& stage, long affected) const override
+	{ return Check(query, &ibValueMetaObjectGenericData::AccessRight_Erase, wxT("Delete"), stage, affected); }
 
 private:
+	// What the four share: the stage decides which question, the action decides which right answers.
+	bool Check(ibDataQueryBuilder& query, RightPredicate right, const wxString& operation,
+	           const ibAccessStage& stage, long affected) const
+	{
+		return stage == ibAccessStage::Table
+			? Gate(query, right, operation)
+			: Verdict(query, affected);
+	}
+
+
+
+	// May every table this query touches be touched this way? The right itself answers — the
+	// metaobject predicate already folds in full access and the roles behind it — and the first one
+	// that refuses ends the walk: the query is not going to run either way.
+	//
+	// Not cached. It is a hot path and the answer is a session constant, so caching is tempting, but
+	// nothing here has been measured yet and a cache brings a staleness question with it. The place
+	// to put one is exactly here, when there is a number saying it is needed.
+	bool TablesAllowed(const ibDataQueryBuilder& query, RightPredicate right) const
+	{
+		bool allowed = true;
+		Unwind(query, [&](const ibBackendQueryable*, const ibValueMetaObjectGenericData* srcMeta) {
+			if ((srcMeta->*right)())
+				return true;
+			allowed = false;
+			return false;                                 // the first table that refuses ends the walk
+		});
+		return allowed;
+	}
+
+	// THE UNWINDER — the one procedure that turns a query into the tables it actually touches, and
+	// the only walk in this class. Both sides of every Join, every branch of every Union (that is
+	// what GetSources does), each visited ONCE even when joined twice under two aliases, and each
+	// handed over as what carries its RIGHTS. Sources with nothing behind them — temp, computed,
+	// subquery — are skipped, exactly as the row filter skips them: no rights to ask of.
+	//
+	// All four operations and both stages go through here. Nobody else walks sources.
+	// `visit` returns false to STOP: the first table that refuses ends the walk. There is nothing to
+	// learn from the rest — the query is not going to run either way, and the user gets the error
+	// and fixes it.
+	void Unwind(const ibDataQueryBuilder& query,
+	            const std::function<bool(const ibBackendQueryable*,
+	                                     const ibValueMetaObjectGenericData*)>& visit) const
+	{
+		std::vector<const ibBackendQueryable*> sources;
+		query.GetSources(sources);
+		std::vector<ibMetaID> seen;
+		for (const ibBackendQueryable* source : sources) {
+			const ibValueMetaObjectGenericData* srcMeta = FindSourceMetaObject(source);
+			if (srcMeta == nullptr)
+				continue;
+			const ibMetaID tableId = source->GetQueryTableId();
+			if (std::find(seen.begin(), seen.end(), tableId) != seen.end())
+				continue;
+			seen.push_back(tableId);
+			if (!visit(source, srcMeta))
+				return;
+		}
+	}
+
+	// AFTER the statement — the only question a result can answer: did the write happen? Zero rows
+	// means one thing on a ROW-controlled source and another on a table-controlled one, and which
+	// it is the OBJECT says (ibAccessObject::IsAccessPerRecord — row by default, table for a register):
+	//
+	//   row-controlled (a record) — the row exists as itself, so nothing written means the folded
+	//                               filter kept the statement off a row that is there: REFUSED.
+	//   table-controlled (a register) — its set is addressed by its recorder and may legitimately be
+	//                               empty; the count carries no verdict, so it passes.
+	//
+	// A non-zero count passed; a negative one is the write having thrown — a database failure, not
+	// an access decision, and the caller's own error path speaks for it.
+	bool Verdict(const ibDataQueryBuilder& query, long affected) const
+	{
+		if (affected != 0)
+			return true;
+		// Nothing was restricting this write in the first place, so nothing could have been kept
+		// from it: an empty result is an empty result. Without these two, un-posting a document
+		// that never had movements would report "not enough access rights" to a full-access user —
+		// which is exactly the confusion this whole second stage exists to end.
+		if (m_roleProcs.empty())
+			return true;                                  // no restricting role (or Designer)
+		if (m_metaData != nullptr && m_metaData->IsFullAccess())
+			return true;                                  // Tier 0 — full access
+
+		bool allowed = true;
+		Unwind(query, [&](const ibBackendQueryable*, const ibValueMetaObjectGenericData* srcMeta) {
+			if (!srcMeta->IsAccessPerRecord())
+				return true;                              // a set — its count says nothing; keep looking
+			allowed = false;
+			return false;                                 // refused: stop here
+		});
+		return allowed;
+	}
+
+	// The TABLE stage — the SAME unwind the row filter uses, run BEFORE it, on the query that is
+	// waiting to go: every table it touches is asked for the right that guards this very action.
+	// One table saying no is enough — the answer is FALSE, and nothing is folded, nothing runs. The
+	// door turns that into the exception; here it stays a verdict, as the row filter's is.
+	//
+	// It is asked even with no RLS module anywhere: a role can restrict nothing per-row and still
+	// have a flag cleared on a table.
+	bool Gate(ibDataQueryBuilder& query, RightPredicate right, const wxString& operation) const
+	{
+		if (!TablesAllowed(query, right))
+			return false;                                 // refused on a table — the filter never runs
+
+		// Whether anything restricts at all is a property of the RUN, not of a table (Designer / no
+		// restricting role / full access), so it is settled once, outside the walk.
+		if (m_roleProcs.empty())
+			return true;
+		if (m_metaData != nullptr && m_metaData->IsFullAccess())
+			return true;
+
+		// The modules run one at a time: they belong to the host session's runtime and keep their
+		// frame in the object, and a rented run borrows this very policy on another thread.
+		std::lock_guard<std::mutex> lk(m_applyMtx);
+		Unwind(query, [&](const ibBackendQueryable* source, const ibValueMetaObjectGenericData*) {
+			ApplyToSource(query, source, operation);
+			return true;
+		});
+		return true;
+	}
+
 	// Outcome of running ONE role's OnAccess* handler. The door owns the safe default (fail-closed),
 	// NOT the module's error handling: a handler that does not explicitly signal success is DENIED.
 	enum class RoleOutcome {
@@ -80,48 +222,13 @@ private:
 		Succeeded,   // handler set Allowed=True -> trust what it folded (restriction or full-allow)
 	};
 
-	// Tier 0: full-access user -> skip. Otherwise restrict the query's PRIMARY source. The
-	// restriction is re-woven on EVERY query (NO cache): the role module runs each time, reading
-	// the CURRENT settings / flags, so a changed constant sends the module down a different branch
-	// and the query gets a different join (or none) — real-time, the reason the restriction must
-	// live INSIDE the query. The module runs ONCE PER QUERY to build the join, NEVER per row: the
-	// DB applies the join and filters the rows, so there is no per-row Runtime (no "billion calls").
-	void Apply(ibDataQueryBuilder& query, const wxString& operation) const
+	// The metaobject behind a source, or null for one that has none (temp / computed / subquery) —
+	// the only place a source is turned into metadata, which is why the door never has to.
+	const ibValueMetaObjectGenericData* FindSourceMetaObject(const ibBackendQueryable* source) const
 	{
-		if (m_roleProcs.empty())
-			return;                                   // no restricting role (or Designer) -> default-allow
-
-		if (m_metaData != nullptr && m_metaData->IsFullAccess())
-			return;                                   // Tier 0 — full-access user, nothing restricted
-
-		// ONE POLICY, POSSIBLY TWO THREADS. A rented run borrows this object from
-		// the session that started it (ibSession::GetAccessPolicy) — that is the
-		// point of renting, one policy per user rather than a rebuilt copy — and it
-		// runs on a worker while its host may be running script of its own. What
-		// follows executes the role modules' procUnits, which belong to the HOST's
-		// runtime and keep their frame in the object; two threads inside one of
-		// them would corrupt it. So the modules run one at a time. Cheap: this is
-		// once per query, never per row, and the handler builds a join and returns.
-		std::lock_guard<std::mutex> lk(m_applyMtx);
-
-		// Restrict EVERY metadata-backed source in the query, not just the primary From: a joined
-		// table is as much a read of that table as the root is, so its role handler must gate it too
-		// (the handler branches on `Source`'s full name and grants the ones it does not restrict).
-		// GetSources walks the whole tree (descends Join / Union) — for a single-source query it is
-		// just the primary, so the old primary-only path is a strict subset. Apply ONCE per distinct
-		// table (dedup by query-table id) so a table joined twice under two aliases is not double-folded.
-		std::vector<const ibBackendQueryable*> sources;
-		query.GetSources(sources);
-		std::vector<ibMetaID> gated;                  // tables already restricted — no repeats
-		for (const ibBackendQueryable* source : sources) {
-			if (source == nullptr || source->GetMetaData() == nullptr)
-				continue;                             // custom / temp / computed — no RLS
-			const ibMetaID tableId = source->GetQueryTableId();
-			if (std::find(gated.begin(), gated.end(), tableId) != gated.end())
-				continue;                             // this table is already gated — skip the repeat
-			gated.push_back(tableId);
-			ApplyToSource(query, source, operation);
-		}
+		if (source == nullptr || m_metaData == nullptr)
+			return nullptr;
+		return m_metaData->FindAnyObjectByFilter<ibValueMetaObjectGenericData>(source->GetQueryTableId());
 	}
 
 	// One table, EVERY query (no cache — real-time). The module gets the SOURCE as a base decorator over
@@ -145,7 +252,7 @@ private:
 		// The module identifies the source by its canonical FULL NAME ("Document.X" / "Catalog.X"),
 		// so pass GetFullName() (not the short GetQueryName()); fall back to the short name if the
 		// metaobject cannot be resolved.
-		const ibValueMetaObject* srcMeta = m_metaData->FindAnyObjectByFilter<ibValueMetaObject>(source->GetQueryTableId());
+		const ibValueMetaObjectGenericData* srcMeta = FindSourceMetaObject(source);
 		const wxString sourceName = srcMeta != nullptr ? srcMeta->GetFullName() : source->GetQueryName();
 		const wxString handler = (operation == wxT("Read")) ? wxT("OnAccessRead") : wxT("OnAccessWrite");
 
@@ -187,7 +294,9 @@ private:
 		if (procs.size() == 1) {
 			// ONE restricting role — folds straight into the query (real source: pages + pushes down).
 			switch (runRole(procs.front(), query)) {
-			case RoleOutcome::Failed:    ibBackendAccessException::Error();  // loud fail-closed deny
+			case RoleOutcome::Failed:    // loud fail-closed deny — say which source and which operation
+				ibBackendAccessException::Error(wxString::Format(_("%s on '%s' was refused by the role's access policy"),
+					operation, sourceName));
 			case RoleOutcome::NoHandler:                                     // no restriction -> allow
 			case RoleOutcome::Succeeded: return;                            // fold (if any) already applied
 			}
@@ -229,7 +338,9 @@ private:
 				// the query language's `key IN (subquery)` lowering). No key to reduce onto -> fail closed.
 				const std::vector<const ibBackendQueryColumn*> keyCols = source->GetPrimaryKeyColumns();
 				if (keyCols.empty() || keyCols.front() == nullptr)
-					ibBackendAccessException::Error();
+					ibBackendAccessException::Error(wxString::Format(
+						_("%s on '%s': the role restricts it through a join, but the source has no key to reduce onto"),
+						operation, sourceName));
 				const ibBackendQueryColumn* keyCol = keyCols.front();
 				scratch.Select(keyCol, wxT("v"));
 				ibDataQueryResult r = scratch.Execute(ibReadPageRequest{});
@@ -254,8 +365,9 @@ private:
 
 		if (!anyParticipated)
 			return;                                       // no role implements RLS here -> migration-safe ALLOW
-		if (rolePredicates.empty())
-			ibBackendAccessException::Error();            // roles participated but ALL failed -> loud fail-closed deny
+		if (rolePredicates.empty())                       // roles participated but ALL failed -> fail-closed deny
+			ibBackendAccessException::Error(wxString::Format(
+				_("%s on '%s' was refused by every role's access policy"), operation, sourceName));
 
 		ibQueryPredicatePtr orPred = rolePredicates.front();
 		for (size_t i = 1; i < rolePredicates.size(); ++i)

@@ -75,7 +75,7 @@ ibBackendValueForm* ibValueMetaObjectGenericData::CreateAndBuildForm(const wxStr
 	}
 
 	if (!AccessRight_Show()) {
-		ibBackendAccessException::Error();
+		ibBackendAccessException::Error(wxString::Format(_("opening '%s'"), GetSynonym()));
 		return nullptr;
 	}
 
@@ -1780,7 +1780,7 @@ bool ibValueRecordDataObjectExt::InitializeObject()
 	if (!m_metaObject->IsExternalCreate()) {
 
 		if (!m_metaObject->AccessRight_Use()) {
-			ibBackendAccessException::Error();
+			ibBackendAccessException::Error(wxString::Format(_("using '%s'"), m_metaObject->GetSynonym()));
 			return false;
 		}
 
@@ -1886,7 +1886,7 @@ ibValueRecordDataObjectRef::~ibValueRecordDataObjectRef()
 bool ibValueRecordDataObjectRef::InitializeObject(const ibGuid& copyGuid)
 {
 	if (!m_metaObject->AccessRight_Read()) {
-		ibBackendAccessException::Error();
+		ibBackendAccessException::Error(wxString::Format(_("reading '%s'"), m_metaObject->GetSynonym()));
 		return false;
 	}
 
@@ -2386,12 +2386,15 @@ bool ibValueRecordDataObjectHierarchyRef::WriteObject()
 	ibBackendValueForm* const valueForm = GetForm();
 	const bool newObject = IsNewObject();
 
+	// Stage-named failures — same rule as the recorder path: the message says which stage
+	// stopped the write and on which object, and a script cancel reads as a cancel.
 	{
 		ibValue cancel = false;
 		ExecAsProc(wxT("BeforeWrite"), cancel);
 		if (cancel.GetBoolean()) {
 			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("Failed to write object in db!"));
+			ibBackendCoreException::Error(_("%s: writing cancelled by the BeforeWrite handler"),
+				GetSourceCaption());
 			return false;
 		}
 	}
@@ -2407,7 +2410,7 @@ bool ibValueRecordDataObjectHierarchyRef::WriteObject()
 	if (!SaveData()) {
 		if (generateUniqueIdentifier) ResetUniqueIdentifier();
 		scope.SafeRollBackTransaction();
-		ibBackendCoreException::Error(_("Failed to write object in db!"));
+		ibBackendCoreException::Error(_("%s: failed to save the object data"), GetSourceCaption());
 		return false;
 	}
 
@@ -2417,7 +2420,8 @@ bool ibValueRecordDataObjectHierarchyRef::WriteObject()
 		if (cancel.GetBoolean()) {
 			if (generateUniqueIdentifier) ResetUniqueIdentifier();
 			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("Failed to write object in db!"));
+			ibBackendCoreException::Error(_("%s: writing cancelled by the OnWrite handler"),
+				GetSourceCaption());
 			return false;
 		}
 	}
@@ -2436,7 +2440,8 @@ bool ibValueRecordDataObjectHierarchyRef::DeleteObject()
 		wxASSERT(valueMetaObject);
 		const ibGuid& objGuid = GetGuid();
 		if (valueMetaObject->FindPredefinedValue(objGuid) != nullptr) {
-			ibBackendCoreException::Error(_("Attempting to delete a predefined element!"));
+			ibBackendCoreException::Error(_("%s cannot be deleted: it is a predefined element"),
+				GetSourceCaption());
 			return false;
 		}
 	}
@@ -2451,14 +2456,15 @@ bool ibValueRecordDataObjectHierarchyRef::DeleteObject()
 		ExecAsProc(wxT("BeforeDelete"), cancel);
 		if (cancel.GetBoolean()) {
 			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("Failed to delete object in db!"));
+			ibBackendCoreException::Error(_("%s: deletion cancelled by the BeforeDelete handler"),
+				GetSourceCaption());
 			return false;
 		}
 	}
 
 	if (!DeleteData()) {
 		scope.SafeRollBackTransaction();
-		ibBackendCoreException::Error(_("Failed to delete object in db!"));
+		ibBackendCoreException::Error(_("%s: failed to delete the object data"), GetSourceCaption());
 		return false;
 	}
 
@@ -2467,7 +2473,8 @@ bool ibValueRecordDataObjectHierarchyRef::DeleteObject()
 		ExecAsProc(wxT("OnDelete"), cancel);
 		if (cancel.GetBoolean()) {
 			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("Failed to delete object in db!"));
+			ibBackendCoreException::Error(_("%s: deletion cancelled by the OnDelete handler"),
+				GetSourceCaption());
 			return false;
 		}
 	}
@@ -2516,11 +2523,14 @@ bool ibValueRecordDataObjectRecorderRef::ibRecorderRegister::WriteRecordSet()
 	for (auto& pair : m_records) {
 		ibValueRecordSetObject* record = pair.second;
 		wxASSERT(record);
-		try {
-			if (!record->WriteRecordSet())
-				return false;
-		}
-		catch (...) { return false; }
+		// The register's OWN exception is the informative one — it names the line, the required
+		// attribute, the lock conflict, the access deny. It travels UP intact instead of being
+		// flattened into a bare false that the recorder above can only report as "failed to post":
+		// the whole point of this pass is that the user learns WHICH register refused and WHY.
+		// The write scope's dtor rolls back the unmatched Begin, so leaving through a throw is safe.
+		if (!record->WriteRecordSet())
+			ibBackendCoreException::Error(_("Failed to write the movements of register '%s'"),
+				record->GetMetaObject()->GetSynonym());
 	}
 	return true;
 }
@@ -2530,11 +2540,11 @@ bool ibValueRecordDataObjectRecorderRef::ibRecorderRegister::DeleteRecordSet()
 	for (auto& pair : m_records) {
 		ibValueRecordSetObject* record = pair.second;
 		wxASSERT(record);
-		try {
-			if (!record->DeleteRecordSet())
-				return false;
-		}
-		catch (...) { return false; }
+		// Same as WriteRecordSet — the register speaks for itself; this only names the one that
+		// returned a plain false without saying anything.
+		if (!record->DeleteRecordSet())
+			ibBackendCoreException::Error(_("Failed to clear the movements of register '%s'"),
+				record->GetMetaObject()->GetSynonym());
 	}
 	return true;
 }
@@ -2666,7 +2676,8 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 	    && writeMode == ibDocumentWriteMode::ibDocumentWriteMode_Posting
 	    && !CheckDeletionMarkOnPosting(writeMode))
 	{
-		ibBackendCoreException::Error(_("Failed to post object in db!"));
+		ibBackendCoreException::Error(_("%s cannot be posted: it is marked for deletion"),
+			GetSourceCaption());
 		return false;
 	}
 
@@ -2681,6 +2692,10 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 	ibBackendValueForm* const valueForm = GetForm();
 	const bool newObject = IsNewObject();
 
+	// Every failure below says WHICH STAGE refused and on WHICH OBJECT. A posting run walks a long
+	// chain — handler, row, movements per register, handler again — and "failed to write object in
+	// db!" for all of them tells the user nothing about where to look. A cancel raised by script is
+	// also reported as a cancel, not as a database failure: nothing went wrong in the DB there.
 	{
 		ibValue cancel = false;
 		ExecAsProc(wxT("BeforeWrite"), cancel,
@@ -2689,7 +2704,8 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 		);
 		if (cancel.GetBoolean()) {
 			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("Failed to write object in db!"));
+			ibBackendCoreException::Error(_("%s: writing cancelled by the BeforeWrite handler"),
+				GetSourceCaption());
 			return false;
 		}
 		ApplyPostedAttributeOnWrite(writeMode);
@@ -2709,7 +2725,7 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 	if (!SaveData()) {
 		if (generateUniqueIdentifier) ResetUniqueIdentifier();
 		scope.SafeRollBackTransaction();
-		ibBackendCoreException::Error(_("Failed to write object in db!"));
+		ibBackendCoreException::Error(_("%s: failed to save the object data"), GetSourceCaption());
 		return false;
 	}
 
@@ -2727,13 +2743,17 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 		if (cancel.GetBoolean()) {
 			if (generateUniqueIdentifier) ResetUniqueIdentifier();
 			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("Failed to write object in db!"));
+			ibBackendCoreException::Error(_("%s: posting cancelled by the Posting handler"),
+				GetSourceCaption());
 			return false;
 		}
+		// The cascade names the failing register itself (and lets its own exception through);
+		// this only covers a silent false from the fan-out.
 		if (!m_registerRecords->WriteRecordSet()) {
 			if (generateUniqueIdentifier) ResetUniqueIdentifier();
 			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("Failed to write object in db!"));
+			ibBackendCoreException::Error(_("%s: failed to write the register movements"),
+				GetSourceCaption());
 			return false;
 		}
 	}
@@ -2743,13 +2763,15 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 		if (cancel.GetBoolean()) {
 			if (generateUniqueIdentifier) ResetUniqueIdentifier();
 			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("Failed to write object in db!"));
+			ibBackendCoreException::Error(_("%s: undo posting cancelled by the UndoPosting handler"),
+				GetSourceCaption());
 			return false;
 		}
 		if (!m_registerRecords->DeleteRecordSet()) {
 			if (generateUniqueIdentifier) ResetUniqueIdentifier();
 			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("Failed to write object in db!"));
+			ibBackendCoreException::Error(_("%s: failed to clear the register movements"),
+				GetSourceCaption());
 			return false;
 		}
 	}
@@ -2760,7 +2782,8 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 		if (cancel.GetBoolean()) {
 			if (generateUniqueIdentifier) ResetUniqueIdentifier();
 			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("Failed to write object in db!"));
+			ibBackendCoreException::Error(_("%s: writing cancelled by the OnWrite handler"),
+				GetSourceCaption());
 			return false;
 		}
 	}
@@ -2814,19 +2837,22 @@ bool ibValueRecordDataObjectRecorderRef::DeleteObject()
 
 	ibBackendValueForm* const valueForm = GetForm();
 
+	// Stage-named failures, as on the write path: a delete that stops has a reason and a place.
 	{
 		ibValue cancel = false;
 		ExecAsProc(wxT("BeforeDelete"), cancel);
 		if (cancel.GetBoolean()) {
 			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("Failed to delete object in db!"));
+			ibBackendCoreException::Error(_("%s: deletion cancelled by the BeforeDelete handler"),
+				GetSourceCaption());
 			return false;
 		}
 	}
 
 	if (!m_registerRecords->DeleteRecordSet()) {
 		scope.SafeRollBackTransaction();
-		ibBackendCoreException::Error(_("Failed to delete object in db!"));
+		ibBackendCoreException::Error(_("%s: failed to clear the register movements"),
+			GetSourceCaption());
 		return false;
 	}
 
@@ -2835,14 +2861,15 @@ bool ibValueRecordDataObjectRecorderRef::DeleteObject()
 		ExecAsProc(wxT("OnDelete"), cancel);
 		if (cancel.GetBoolean()) {
 			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("Failed to delete object in db!"));
+			ibBackendCoreException::Error(_("%s: deletion cancelled by the OnDelete handler"),
+				GetSourceCaption());
 			return false;
 		}
 	}
 
 	if (!DeleteData()) {
 		scope.SafeRollBackTransaction();
-		ibBackendCoreException::Error(_("Failed to delete object in db!"));
+		ibBackendCoreException::Error(_("%s: failed to delete the object data"), GetSourceCaption());
 		return false;
 	}
 
@@ -3136,7 +3163,7 @@ void ibValueRecordSetObject::CreateEmptyKey()
 bool ibValueRecordSetObject::InitializeObject(const ibValueRecordSetObject* source, bool newRecord)
 {
 	if (!m_metaObject->AccessRight_Read()) {
-		ibBackendAccessException::Error();
+		ibBackendAccessException::Error(wxString::Format(_("reading register '%s'"), m_metaObject->GetSynonym()));
 		return false;
 	}
 
@@ -3233,14 +3260,18 @@ bool ibValueRecordSetObject::WriteRecordSet(bool replace, bool clearTable)
 		ExecAsProc(wxT("BeforeWrite"), cancel);
 		if (cancel.GetBoolean()) {
 			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("Failed to write object in db!"));
+			ibBackendCoreException::Error(_("Register '%s': writing cancelled by the BeforeWrite handler"),
+				m_metaObject->GetSynonym());
 			return false;
 		}
 	}
 
+	// SaveData already reports a failed fill check per line ("The %s is required on line %i");
+	// this names the register whose rows could not be stored.
 	if (!SaveData(replace, clearTable)) {
 		scope.SafeRollBackTransaction();
-		ibBackendCoreException::Error(_("Failed to write object in db!"));
+		ibBackendCoreException::Error(_("Register '%s': failed to store the records"),
+			m_metaObject->GetSynonym());
 		return false;
 	}
 
@@ -3249,7 +3280,8 @@ bool ibValueRecordSetObject::WriteRecordSet(bool replace, bool clearTable)
 		ExecAsProc(wxT("OnWrite"), cancel);
 		if (cancel.GetBoolean()) {
 			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("Failed to write object in db!"));
+			ibBackendCoreException::Error(_("Register '%s': writing cancelled by the OnWrite handler"),
+				m_metaObject->GetSynonym());
 			return false;
 		}
 	}
@@ -3268,14 +3300,16 @@ bool ibValueRecordSetObject::DeleteRecordSet()
 		ExecAsProc(wxT("BeforeDelete"), cancel);
 		if (cancel.GetBoolean()) {
 			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("Failed to delete object in db!"));
+			ibBackendCoreException::Error(_("Register '%s': deletion cancelled by the BeforeDelete handler"),
+				m_metaObject->GetSynonym());
 			return false;
 		}
 	}
 
 	if (!DeleteData()) {
 		scope.SafeRollBackTransaction();
-		ibBackendCoreException::Error(_("Failed to delete object in db!"));
+		ibBackendCoreException::Error(_("Register '%s': failed to delete the records"),
+			m_metaObject->GetSynonym());
 		return false;
 	}
 
@@ -3284,7 +3318,8 @@ bool ibValueRecordSetObject::DeleteRecordSet()
 		ExecAsProc(wxT("OnDelete"), cancel);
 		if (cancel.GetBoolean()) {
 			scope.SafeRollBackTransaction();
-			ibBackendCoreException::Error(_("Failed to delete object in db!"));
+			ibBackendCoreException::Error(_("Register '%s': deletion cancelled by the OnDelete handler"),
+				m_metaObject->GetSynonym());
 			return false;
 		}
 	}

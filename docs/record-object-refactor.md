@@ -6,6 +6,14 @@
 > Debug|x86, smoke-validated on Catalog / Document (new + edit,
 > repost, parallel-write version conflict) + the 3 register kinds.
 >
+> **Later (this arc):** the error MESSAGES in the scaffold are no longer the one
+> `"Failed to write object in db!"` the snippets below show. Every stage names
+> itself and the object — which handler cancelled, which register refused, which
+> data failed to store — and the register cascade no longer swallows the reason
+> (`ibRecorderRegister::WriteRecordSet` used to `catch (...) { return false; }`,
+> flattening an access deny or a fill-check error into a bare false). Read the
+> snippets as structure, not as message text.
+>
 > What actually shipped vs the proposal below:
 >
 > - **Phase A (Begin*/Commit*Scope helpers)** — landed as

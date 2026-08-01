@@ -77,7 +77,10 @@ bool ibValueRecordSetObject::BeginRecordSetWriteScope(ibConnectionScope& scope)
 	if (ibBackendException::IsEvalMode()) return false;
 
 	if (!m_metaObject->AccessRight_Write()) {
-		ibBackendAccessException::Error();
+		// Name the register AND the right: during a posting cascade several objects are gated in a
+		// row, and "not enough access rights" alone does not say which one closed the door.
+		ibBackendAccessException::Error(wxString::Format(_("writing to register '%s'"),
+			m_metaObject->GetSynonym()));
 		return false;
 	}
 
@@ -94,7 +97,8 @@ bool ibValueRecordSetObject::BeginRecordSetDeleteScope(ibConnectionScope& scope)
 	if (ibBackendException::IsEvalMode()) return false;
 
 	if (!m_metaObject->AccessRight_Delete()) {
-		ibBackendAccessException::Error();
+		ibBackendAccessException::Error(wxString::Format(_("clearing register '%s'"),
+			m_metaObject->GetSynonym()));
 		return false;
 	}
 
@@ -116,7 +120,10 @@ bool ibValueRecordSetObject::ExistData()
 	// UNGUARDED (WithAccessPolicy(nullptr)): this decides whether a replace must DELETE the old set, so it
 	// must see the RAW physical rows, not the RLS-filtered view. Otherwise records the role cannot read are
 	// invisible here -> DeleteData is skipped -> the insert DUPLICATES them (or hits a unique key). Seeing
-	// them raw lets DeleteData run -> the guarded DELETE affects 0 -> a clean "cannot delete" access-deny.
+	// them raw lets DeleteData run over the whole set. Note what the delete does NOT do any more: its row
+	// count is not read as a verdict on rights. A set is addressed by its recorder, so an empty one is a
+	// normal state — the permission question was answered before the statement, by this register's own
+	// Write / Delete right and by the policy refusing outright. (docs: access-policy-rls, write-deny)
 	try {
 		ibDataQueryBuilder q;
 		q.WithAccessPolicy(nullptr);

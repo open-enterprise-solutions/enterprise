@@ -409,7 +409,7 @@ bool ibValueMetaObjectCommonForm::WriteData(ibDataNode& node) const
 ibBackendValueForm* ibValueMetaObjectCommonForm::GetObjectForm(ibBackendControlFrame* ownerControl, const ibUniqueKey& formGuid) const
 {
 	if (!AccessRight_Use()) {
-		ibBackendAccessException::Error();
+		ibBackendAccessException::Error(wxString::Format(_("opening form '%s'"), GetSynonym()));
 		return nullptr;
 	}
 

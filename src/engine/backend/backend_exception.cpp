@@ -483,9 +483,9 @@ void ibBackendInterruptException::Error()
 	throw ibBackendInterruptException();
 }
 
-void ibBackendAccessException::Error()
+void ibBackendAccessException::Error(const wxString& subject)
 {
-	throw ibBackendAccessException();
+	throw ibBackendAccessException(subject);
 }
 
 void ibBackendLockException::VersionChangedThrow(const wxString& objectSynonym,

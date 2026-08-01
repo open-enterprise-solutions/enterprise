@@ -70,7 +70,11 @@ void ibValueMetaObjectDocument::CallAsCommand(ibActionID id, const ibUniqueKey& 
 				if (srcForm != nullptr) srcForm->UpdateForm();
 			}
 		}
-		catch (const ibBackendCoreException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
+		// Catch the BASE, not ibBackendCoreException: a denied right and a lock conflict are
+		// ibBackendException too, and catching only Core dropped them into the catch(...) below —
+		// posting refused for lack of rights, and the user saw nothing but a line in the log.
+		catch (const ibBackendInterruptException&) {}   // the user stopped it — nothing to report
+		catch (const ibBackendException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
 		catch (...) { wxLogError(wxT("ibValueMetaObjectDocument::CallAsCommand: unhandled non-ibBackend exception swallowed")); }
 		return;
 	}

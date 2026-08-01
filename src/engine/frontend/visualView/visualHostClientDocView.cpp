@@ -121,8 +121,11 @@ bool ibFormVisualDocument::Save()
 		ibValueSystemFunction::Alert(err.GetErrorDescription());
 		success = false;
 	}
-	catch (const ibBackendException&) {
-		ibValueSystemFunction::Alert(_("An error occurred while trying to save the form!"));
+	catch (const ibBackendException& err) {
+		// The exception already carries the reason ("Register 'Stock': failed to store the
+		// records", "… cancelled by the OnWrite handler"). Replacing it with a generic
+		// "an error occurred" threw away the only part worth reading — show what it says.
+		ibValueSystemFunction::Alert(err.GetErrorDescription());
 		success = false;
 	}
 

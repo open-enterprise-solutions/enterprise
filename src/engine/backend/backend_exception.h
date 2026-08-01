@@ -238,9 +238,17 @@ public:
 };
 
 class BACKEND_API ibBackendAccessException : public ibBackendException {
-	ibBackendAccessException() : ibBackendException(_("Not enough access rights for this user!")) {}
+	explicit ibBackendAccessException(const wxString& subject = wxEmptyString)
+		: ibBackendException(subject.IsEmpty()
+			? _("Not enough access rights for this user!")
+			: wxString::Format(_("Not enough access rights for this user: %s"), subject)) {}
 public:
-	static void Error();
+	// One denial, said as precisely as the caller can afford: `subject` names WHAT was refused
+	// ("writing register 'Sales'") and the exception wraps it in the standard line; omitted, the
+	// message reads exactly as before. During a posting run the bare form leaves the user guessing
+	// which object in the chain closed the door, so gates that know pass it. The type does not
+	// change, so every catch site (the web door's "forbidden" mapping included) keeps matching.
+	static void Error(const wxString& subject = wxEmptyString);
 };
 
 // Concurrent-write protection failures surfaced by the Write-time

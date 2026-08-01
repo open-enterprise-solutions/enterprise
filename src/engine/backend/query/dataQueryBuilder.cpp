@@ -13,12 +13,13 @@
 #include "queryProvider.h"                                           // ibBackendQueryProvider abstraction (NO L2 — the door runs through it)
 #include "backend/session/session.h"                                 // ibSession::Current()->Holder()
 #include "backend/guid.h"                                            // ibGuid -> wxString (WhereKey / WhereKeyIn)
-#include "backend/backend_exception.h"                               // ibBackendAccessException (write-deny on 0 rows)
+#include "backend/backend_exception.h"                               // ibBackendAccessException
 
 // NOTE: this TU intentionally includes NO L2 (databaseQueryBuilder.h) and NO
 // field-machinery (metaAttributeObject.h) — the door speaks columns + the provider
 // ABSTRACTION it pulls from the queryable; queryProvider.cpp owns all the lowering.
-// Keep it that way.
+// Keep it that way. The table right is not asked here either: the policy walks the
+// sources and resolves their metaobjects already, so it asks — see ibRuntimeAccessPolicy.
 
 // ==========================================================================
 // ibDataQueryBuilder — construction + fluent accumulation (no execution here).
@@ -547,7 +548,11 @@ ibDataQueryResult ibDataQueryBuilder::Execute(const ibReadPageRequest& req) cons
 	if (m_policy != nullptr) {
 		ibDataQueryBuilder guarded(*this);
 		guarded.m_policy = nullptr;                   // the restricted query carries no policy (no re-entrancy)
-		m_policy->ApplyReadAccess(guarded);           // policy adds RLS joins/conditions, or throws on hard deny
+		// The policy folds its restriction and lets us through, or refuses — and a refusal is
+		// told, never mimed as an empty selection: it either threw with its own words, or said
+		// false and the same exception is raised here.
+		if (!m_policy->CheckSelect(guarded, ibAccessStage::Table))
+			ibBackendAccessException::Error(_("reading"));
 		return guarded.Execute(req);                  // L4-1 + L4-2 both land here
 	}
 	ibDataQueryResult r = ibQueryComposer::ExecuteRead(BuildSpec(), req);
@@ -562,7 +567,8 @@ ibDataQueryResult ibDataQueryBuilder::Execute(const ibReadPageRequest& req,
 	if (m_policy != nullptr) {
 		ibDataQueryBuilder guarded(*this);
 		guarded.m_policy = nullptr;
-		m_policy->ApplyReadAccess(guarded);           // the list / paging path lands here too
+		if (!m_policy->CheckSelect(guarded, ibAccessStage::Table))          // the list / paging path lands here too
+			ibBackendAccessException::Error(_("reading"));
 		return guarded.Execute(req, cache, signature);
 	}
 	ibDataQueryResult r = ibQueryComposer::ExecuteReadCached(BuildSpec(), req, cache, signature);
@@ -590,20 +596,19 @@ ibSelectorTree ibDataQueryBuilder::SelectTotals() const
 
 bool ibDataQueryBuilder::Insert() const
 {
-	// CREATE. Under a policy the handler may fold a WITH CHECK predicate (a Restrict on op="Create"); the
-	// provider then inserts the row IFF it satisfies the restriction, so 0 rows affected = the new row is
-	// outside this role's scope -> ACCESS DENIED (fail-closed, like Update/Delete). With NO folded predicate
-	// it is a plain INSERT (always 1 row) -> creation stays unrestricted for that source.
+	// CREATE. The policy is asked before (the right, plus any check it folds onto the row being
+	// made) and again after, with what the statement actually did.
 	if (m_policy != nullptr) {
 		ibDataQueryBuilder guarded(*this);
 		guarded.m_policy = nullptr;
-		m_policy->ApplyWriteAccess(guarded, wxT("Create"));
+		if (!m_policy->CheckCreate(guarded, ibAccessStage::Table))
+			ibBackendAccessException::Error(_("creating a record"));
 		const long affected = ibQueryComposer::ExecuteWrite(guarded.BuildSpec(), WriteKind::Insert);
-		if (affected == 0)
-			ibBackendAccessException::Error();
-		return affected > 0;
+		if (!m_policy->CheckCreate(guarded, ibAccessStage::Value, affected))
+			ibBackendAccessException::Error(_("creating a record"));
+		return affected >= 0;
 	}
-	return ibQueryComposer::ExecuteWrite(BuildSpec(), WriteKind::Insert) >= 0;   // no WHERE -> no 0-row gate
+	return ibQueryComposer::ExecuteWrite(BuildSpec(), WriteKind::Insert) >= 0;
 }
 
 bool ibDataQueryBuilder::Upsert() const
@@ -615,8 +620,12 @@ bool ibDataQueryBuilder::Upsert() const
 	if (m_policy != nullptr) {
 		ibDataQueryBuilder guarded(*this);
 		guarded.m_policy = nullptr;
-		m_policy->ApplyWriteAccess(guarded, wxT("Write"));
-		return ibQueryComposer::ExecuteWrite(guarded.BuildSpec(), WriteKind::Upsert) >= 0;
+		if (!m_policy->CheckUpdate(guarded, ibAccessStage::Table))
+			ibBackendAccessException::Error(_("changing a record"));
+		const long affected = ibQueryComposer::ExecuteWrite(guarded.BuildSpec(), WriteKind::Upsert);
+		if (!m_policy->CheckUpdate(guarded, ibAccessStage::Value, affected))
+			ibBackendAccessException::Error(_("changing a record"));
+		return affected >= 0;
 	}
 	return ibQueryComposer::ExecuteWrite(BuildSpec(), WriteKind::Upsert) >= 0;
 }
@@ -630,11 +639,16 @@ bool ibDataQueryBuilder::Update() const
 	if (m_policy != nullptr) {
 		ibDataQueryBuilder guarded(*this);
 		guarded.m_policy = nullptr;
-		m_policy->ApplyWriteAccess(guarded, wxT("Write"));
+		if (!m_policy->CheckUpdate(guarded, ibAccessStage::Table))   // the right on the table, plus the folded restriction
+			ibBackendAccessException::Error(_("changing a record"));
 		const long affected = ibQueryComposer::ExecuteWrite(guarded.BuildSpec(), WriteKind::Update);
-		if (affected == 0)
-			ibBackendAccessException::Error();
-		return affected > 0;
+		// The SECOND question, the one only the result can answer: did the rewrite happen? Where
+		// the right controls a row, nothing rewritten means the filter kept the statement off a row
+		// that exists — the policy says so and this returns false or throws. Where it controls a
+		// table, the count means nothing and the policy waves it through.
+		if (!m_policy->CheckUpdate(guarded, ibAccessStage::Value, affected))
+			ibBackendAccessException::Error(_("changing a record"));
+		return affected >= 0;
 	}
 	return ibQueryComposer::ExecuteWrite(BuildSpec(), WriteKind::Update) >= 0;
 }
@@ -644,15 +658,16 @@ bool ibDataQueryBuilder::Delete() const
 	if (m_policy != nullptr) {
 		ibDataQueryBuilder guarded(*this);
 		guarded.m_policy = nullptr;
-		m_policy->ApplyWriteAccess(guarded, wxT("Delete"));
-		// Policy active: the restricted DELETE folds the RLS Where into its conditions. If it matches
-		// 0 rows, the row is not one we may touch (RLS filtered it out) -> ACCESS DENIED. No extra
-		// existence query — 0 affected UNDER A POLICY is the signal (fail-closed, mirrors the read door).
-		// -1 = the write itself threw (a DB error, not a denial) -> propagate as failure, not a deny.
+		if (!m_policy->CheckDelete(guarded, ibAccessStage::Table))   // the right on the table, plus the folded restriction
+			ibBackendAccessException::Error(_("deleting a record"));
 		const long affected = ibQueryComposer::ExecuteWrite(guarded.BuildSpec(), WriteKind::Delete);
-		if (affected == 0)
-			ibBackendAccessException::Error();
-		return affected > 0;
+		// The door does not interpret this number — it hands it back. Deleting rows that are not
+		// there is ordinary for a register set; for a row-controlled record it is the filter having
+		// kept the statement off a row that exists. Which of the two it is, the policy knows.
+		// -1 = the write itself threw (a DB error, not a denial).
+		if (!m_policy->CheckDelete(guarded, ibAccessStage::Value, affected))
+			ibBackendAccessException::Error(_("deleting a record"));
+		return affected >= 0;
 	}
 	return ibQueryComposer::ExecuteWrite(BuildSpec(), WriteKind::Delete) >= 0;
 }

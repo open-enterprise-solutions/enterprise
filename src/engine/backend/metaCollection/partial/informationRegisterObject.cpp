@@ -105,7 +105,8 @@ bool ibValueRecordManagerObjectInformationRegister::WriteRegister(bool replace)
 
 				if (!SaveData()) {
 					scope.SafeRollBackTransaction();
-					ibBackendCoreException::Error(_("failed to save object in db!"));
+					ibBackendCoreException::Error(_("Register '%s': failed to store the record"),
+						m_metaObject != nullptr ? m_metaObject->GetSynonym() : wxString());
 					return false;
 				}
 
@@ -144,7 +145,8 @@ bool ibValueRecordManagerObjectInformationRegister::DeleteRegister()
 
 					if (!DeleteData()) {
 						scope.SafeRollBackTransaction();
-						ibBackendCoreException::Error(_("Failed to delete object in db!"));
+						ibBackendCoreException::Error(_("Register '%s': failed to delete the record"),
+							m_metaObject != nullptr ? m_metaObject->GetSynonym() : wxString());
 						return false;
 					}
 

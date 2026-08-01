@@ -102,6 +102,12 @@ public:
 	// knowing the concrete metaobject. Default true: a metaobject with no modify concept (data processor /
 	// report) is never view-only-gated.
 	virtual bool AccessRight_Modify() const { return true; }
+	// ERASE right — the third of the same row: the generic "can remove this". A record / register
+	// maps it to its Delete role; an object with no deletion concept (a data processor, a form)
+	// keeps the default and is never gated by it. Same shape as Show / Modify so the access policy
+	// reads all three the same way, off the metaobject, with IsFullAccess and the roles already
+	// answered inside.
+	virtual bool AccessRight_Erase() const { return true; }
 #pragma endregion
 
 	// (Source list COMMANDS live as plain virtuals on the record / register / constant metaobjects, forwarded by the

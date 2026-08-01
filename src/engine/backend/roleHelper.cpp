@@ -27,12 +27,23 @@ void ibAccessObject::AddRole(ibRole* role)
 
 bool ibAccessObject::AccessRight(const ibRole* role, const ibRoleUserInfo& roleInfo) const
 {
-	if (!DoAccessRight(role))
+	if (role == nullptr || !DoAccessRight(role))
 		return false;
 
-	bool access = true;
+	// UNSET is not the same as DENIED, and the answer for it is not hard-wired here: every right
+	// DECLARES its own default where it is created (CreateRole(name, label, defValue) — allowed
+	// unless the declaration says otherwise). That default is what a user with no roles gets, and
+	// what a role that never had this particular right flipped in the editor contributes. Reading
+	// it off the role is also what makes the designer's checkbox and this gate agree: the editor
+	// paints an unset right by calling right here.
+	const bool defValue = role->GetDefValue();
+	bool access = defValue;
 
+	// Several roles UNION: any role that grants the right wins (granting is what a role is for),
+	// and a role silent about it falls back to the right's default rather than to whatever the
+	// previously examined role happened to say.
 	for (const auto rid : roleInfo.m_arrayRole) {
+		access = defValue;
 		const auto iterator_role = m_valRoles.find(rid);
 		if (iterator_role != m_valRoles.end()) {
 			const auto iterator = std::find_if(iterator_role->second.begin(), iterator_role->second.end(),

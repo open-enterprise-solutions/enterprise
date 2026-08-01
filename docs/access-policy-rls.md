@@ -24,13 +24,36 @@ multi-company / soft-delete / audit are other **policies** over the same decorat
 ## Flow (one read)
 
 ```
-query.Execute()                         dataQueryBuilder.cpp — the L3 door
-  └─ m_policy->ApplyReadAccess(guarded)  copy-apply-execute (the guarded copy carries no policy ->
-       └─ ibRuntimeAccessPolicy::Apply      no re-entrancy) — runs on EVERY query
-            └─ ApplyToSource                per source, over the cached role procUnits
+query.Execute()                              dataQueryBuilder.cpp — the L3 door
+  └─ m_policy->CheckSelect(guarded, Table)   copy-apply-execute (the guarded copy carries no policy
+       └─ ibRuntimeAccessPolicy::Gate           -> no re-entrancy) — runs on EVERY query
+            ├─ TablesAllowed                 1. the RIGHT on every table — BEFORE any filter
+            │    └─ Unwind: From + each Join/Union leaf, stopping at the first refusal
+            └─ ApplyToSource                 2. the row FILTER, per source, over the cached procUnits
                  └─ proc->CallAsFunc("OnAccessRead", result, decorator, Operation)
-                                            ^ THE role module runs here — breakpoint this
+                                                ^ THE role module runs here — breakpoint this
 ```
+
+**Two stages, one call per stage.** The policy exposes one method per operation — `CheckSelect` /
+`CheckCreate` / `CheckUpdate` / `CheckDelete` — and each is asked twice, the `ibAccessStage`
+argument saying which question:
+
+| stage | when | question |
+|---|---|---|
+| `Table` | before the statement | may this role touch these tables at all? the right, then the folded filter |
+| `Value` | after it ran, with `affected` | did the write happen? |
+
+A refusal is a **false** return, never a silent empty result: the door raises
+`ibBackendAccessException` on it, so a denied read and an empty one never look alike. The policy may
+also throw itself when it can say more (it knows *which* source refused; the door does not — a join
+or a subquery may be the one that closed the door, not the primary `From`).
+
+**The right comes first, and a refusal stops everything.** `TablesAllowed` walks the sources and asks
+each metaobject's own generic predicate — `AccessRight_Show` / `AccessRight_Modify` /
+`AccessRight_Erase`, which already fold in `IsFullAccess` and the roles behind them. The first table
+that refuses ends the walk and the row filter never runs. This is what the query language was missing:
+`From Catalog.X` used to read a table the role has no Read right on, because that right was only ever
+consulted when an *object* was opened.
 
 - The door pulls its policy from the session (`session->GetAccessPolicy()`), the same seam it pulls
   the holder from — so a user-facing builder enforces by default; a trusted / internal read passes a
@@ -94,7 +117,7 @@ of their roles):
 - A **join-based role** cannot be OR-folded as SQL (the SQL IR has `IN (list)` but no `IN (subquery)`),
   so it is reduced by **materialising** the source keys it admits: run the join once, collect the
   admitted keys, fold `key = v OR …` (mirrors the query language's `key IN (subquery)` lowering). The
-  materialisation runs during `ApplyReadAccess`, before the main query executes — sequential, not
+  materialisation runs during the Table stage of `CheckSelect`, before the main query executes — sequential, not
   nested.
 - A role that **succeeds** (sets `Allowed = True`) with **no restriction**, or a role with **no handler**,
   grants full access → the whole OR is left unrestricted.
@@ -205,12 +228,27 @@ Function OnAccessRead(Source, Operation)
 
 ## Write path
 
-Every builder write applies the policy with an **operation string**, and the object-write layer picks the
-verb from the object's own state — so `Operation` in the handler is one of `Read` / `Create` / `Write` /
-`Delete`, and the handler can branch on it. Each is **ONE gated SQL statement** whose affected-row count is
-the answer: `ExecuteWrite` returns the count (lifted from the driver's `RunQuery`); under an **active
-policy** `0 affected` = the row is not one this role may touch → `ibBackendAccessException` (fail-closed).
-With no policy `0` is a normal no-op. DB errors THROW, so `0` is unambiguously "0 rows".
+Every builder write asks its own stage method, and the object-write layer picks the verb from the
+object's own state — so `Operation` in the handler is one of `Read` / `Create` / `Write` / `Delete`,
+and the handler can branch on it. Each is **ONE gated SQL statement**; `ExecuteWrite` returns the
+affected-row count (lifted from the driver's `RunQuery`), and the door hands that count straight back
+to the policy — it does not interpret it.
+
+**What `0 affected` means is DECLARED, not guessed.** It depends on what the object says its rights
+control (`ibAccessObject::IsAccessPerRecord`):
+
+- **per RECORD** — the default, and what a catalog / document / constant is: the row exists as itself,
+  so nothing written means the folded filter kept the statement off a row that is there → **refused**;
+- **per TABLE** — a **register**, which overrides the default: its set is addressed by its recorder and
+  may legitimately be empty, so the count carries no verdict at all and the write passes. This is the
+  fix for the oldest confusion here — un-posting a document that never had movements used to report
+  "not enough access rights" to a **full-access** user, because a `DELETE` touching nothing was read
+  as a denial.
+
+The verdict is also skipped outright when nothing was restricting in the first place (no role carries
+an RLS module, or the user has full access): if nothing could have been kept from the write, an empty
+result is just an empty result. DB errors THROW, so a negative count is a database failure, never an
+access decision.
 
 The object save (`ibValueRecordDataObjectRef::SaveData`) reads `IsNewObject()`:
 `m_newObject ? Insert() : Update()`; DELETE is its own op (`DeleteData`). The three writes never merge.
@@ -219,16 +257,16 @@ The object save (`ibValueRecordDataObjectRef::SaveData`) reads `IsNewObject()`:
   restriction, in one statement — a guarded **`INSERT … SELECT`** (`WITH CHECK`):
   `INSERT INTO t (cols) SELECT * FROM (SELECT <val> AS f … [FROM <dual>]) src WHERE <RLS over src>`.
   The derived one-row relation carries this row's own values (reusing the write value-spread, so the bytes
-  match a plain INSERT), the RLS folds over its alias `src`, and **0 rows inserted → deny**. `<dual>` is the
+  match a plain INSERT), the RLS folds over its alias `src`, and **0 rows inserted → refused on a record-controlled object**. `<dual>` is the
   dialect's source-less-SELECT table (Firebird `RDB$DATABASE`; PG / SQLite / MySQL none —
   `ibDialectDictionary::m_selectFromDual`). With NO folded predicate it is a plain INSERT (creation
   unrestricted for that source).
 - **Rewrite → `Update()` → `"Write"`.** ONE `UPDATE … SET <cols> WHERE <pk> AND <folded RLS>`
   (`ibQueryStatement::Kind::Update` + `SetWherePredicate`). The row is updated iff it passes the row filter;
-  **0 rows → deny**. A plain UPSERT has no WHERE and would ignore the folded predicate — that is why an
+  **0 rows → refused on a record-controlled object**. A plain UPSERT has no WHERE and would ignore the folded predicate — that is why an
   existing-row rewrite is an UPDATE, not an UPSERT.
 - **Delete → `Delete()` → `"Delete"`.** `DELETE … WHERE <row-key> AND <folded RLS>`, built via `BuildWhere`
-  (both the row-key conditions AND `m_predicate`). **0 rows → deny.**
+  (both the row-key conditions AND `m_predicate`). **0 rows → refused on a record-controlled object; on a register, no verdict.**
 
 **Dot-walk on writes — correlated `EXISTS`.** A reference-path RLS condition (`s.Ref.Field = v`) cannot
 lower to a JOIN in a write WHERE, so it rides as a correlated subquery:
@@ -408,8 +446,10 @@ temp tables) falls back to an INNER JOIN (read-only, may duplicate) — the defe
 | File | Role |
 |---|---|
 | `metaCollection/metaRoleObject.{h,cpp}` + `metaRoleObjectMenu.cpp` | Role is module-bearing; `OnAccessRead`/`OnAccessWrite` default **procedures** (args `Source`, `Operation`, by-ref `Allowed`); "Open role module" tree menu |
-| `query/dataQueryBuilder.{h,cpp}` | `ibAccessPolicy` interface; policy injection; copy-apply-execute; the write verbs `Insert("Create")` / `Update("Write")` / `Delete("Delete")` — each denies (`ibBackendAccessException`) on `0 affected` under a policy; `WithAccessPolicy(nullptr)` (physical ops / tabular); `AdoptOwnedSource` / `GetSources` / `GetWherePredicate`; `AddSemiJoin` folds an `ibSemiJoinExists` into `m_predicate` (so it rides read + write) |
-| `session/session.{h,cpp}` | `GetAccessPolicy` (returns null inside a trusted window); `ibAccessTrustScope` — RAII per-session TRUSTED flag wrapping the handler `CallAsProc`, so the module runs privileged (its own reads bypass RLS, dissolving re-entrancy); concrete `ibRuntimeAccessPolicy` — **fail-closed** contract (`RoleOutcome` NoHandler/Failed/Succeeded via `CallAsProc` + by-ref `Allowed`, exception→deny, multi-role OR where a failed role never widens); ctor-cached role procUnits; policy built in `CompileRoot` |
+| `query/dataQueryBuilder.{h,cpp}` | `ibAccessPolicy` interface — ONE method per operation (`CheckSelect` / `CheckCreate` / `CheckUpdate` / `CheckDelete`), each asked twice with an `ibAccessStage` (`Table` before the statement, `Value` after it with the affected-row count); policy injection; copy-apply-execute; a false verdict raises `ibBackendAccessException` **here**, naming the operation only — which SOURCE refused is the policy's to say, since a join or a subquery may be the one that closed the door; `WithAccessPolicy(nullptr)` (physical ops / tabular); `AdoptOwnedSource` / `GetSources` / `GetWherePredicate`; `AddSemiJoin` folds an `ibSemiJoinExists` into `m_predicate` (so it rides read + write) |
+| `session/session.{h,cpp}` | `GetAccessPolicy` (returns null inside a trusted window); `ibAccessTrustScope` — RAII per-session TRUSTED flag wrapping the handler `CallAsProc`, so the module runs privileged (its own reads bypass RLS, dissolving re-entrancy); concrete `ibRuntimeAccessPolicy` — `Gate` (the table right, then the row filter) and `Verdict` (what `0 affected` means) behind the four stage methods, both walking the ONE `Unwind` (From + every Join / Union leaf, deduped by table, stopping at the first refusal); **fail-closed** contract (`RoleOutcome` NoHandler/Failed/Succeeded via `CallAsProc` + by-ref `Allowed`, exception→deny, multi-role OR where a failed role never widens); ctor-cached role procUnits; policy built in `CompileRoot` |
+| `roleHelper.h` | The rights themselves. `ibAccessObject::AccessRight(role)` falls back to the right's OWN default (`ibRole::GetDefValue`) instead of a hard-wired "allowed", and re-reads it per role, so one role's denial no longer sticks to the next. `IsAccessPerRecord` — do this object's rights control a record or the whole table (record by default; a register overrides) |
+| `metaCollection/genericData.h` | `AccessRight_Show` / `_Modify` / `_Erase` — the generic rights the policy asks. Each metaobject maps them onto its own Read / Write / Delete role with `IsFullAccess` folded in; `_Erase` is the newest of the row and completes it |
 | `query/queryable.h` | `ibSemiJoinExists` (the semi-join spec: inner + `m_where` + correlation keys + op); `ibQueryCondition::m_asExists` (dot-walk render tag) + `m_semiJoin` (the semi-join payload) |
 | `system/value/valueQueryable.{h,cpp}` | `ibValueQueryDecorator` — `Where` marks dot-walk leaves for EXISTS (`ibMarkRestrictExists`); `Join` DISPATCHES: single-source register → `AddSemiJoin`, multi-source / value table → temp-promote path. `ibValueQueryable::GetWherePredicate` (inner's Where) / `IsSingleSource` (the gate) |
 | `query/dbTableProvider.cpp` | `BuildSemiJoinExists` — the correlated `EXISTS(SELECT * FROM inner sj WHERE <inner Where over sj> AND correlation)`; the semi-join / `m_asExists` branches in `BuildConditionExpr` + `BuildColocatedPredicate` so it rides every WHERE path |

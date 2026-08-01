@@ -193,7 +193,9 @@ bool ibValueRecordDataObjectRef::BeginWriteScope(ibConnectionScope& scope)
 	if (ibBackendException::IsEvalMode()) return false;   // eval skip
 
 	if (!m_metaObject->AccessRight_Write()) {
-		ibBackendAccessException::Error();   // throws — return for warning silence
+		// Name the object and the right — the user has to know WHAT was refused, not only that
+		// something was. Throws; the return is for warning silence.
+		ibBackendAccessException::Error(wxString::Format(_("writing '%s'"), m_metaObject->GetSynonym()));
 		return false;
 	}
 
@@ -211,7 +213,7 @@ bool ibValueRecordDataObjectRef::BeginDeleteScope(ibConnectionScope& scope)
 	if (ibBackendException::IsEvalMode()) return false;
 
 	if (!m_metaObject->AccessRight_Delete()) {
-		ibBackendAccessException::Error();
+		ibBackendAccessException::Error(wxString::Format(_("deleting '%s'"), m_metaObject->GetSynonym()));
 		return false;
 	}
 

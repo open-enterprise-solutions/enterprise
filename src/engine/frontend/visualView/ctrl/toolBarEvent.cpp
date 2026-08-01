@@ -115,7 +115,17 @@ void ibValueToolbar::OnTool(wxCommandEvent& event)
 			(void)err;
 #endif
 		}
-		catch (const ibBackendException&) {
+		catch (const ibBackendException& err) {
+			// WAS EMPTY — and this is the button bar: Post / Clear posting / Save all land here.
+			// Everything the backend says about a refused write (which register failed, which
+			// handler cancelled, which attribute is missing) died right here, and the user got a
+			// button that did nothing. The reason is shown; web keeps routing it through
+			// wfrontend's ExceptionToJson, so it is not surfaced twice there.
+#ifndef OES_USE_WEB
+			ibValueSystemFunction::Alert(err.GetErrorDescription());
+#else
+			(void)err;
+#endif
 		}
 	}
 	else if (strAction.Length() > 0) {

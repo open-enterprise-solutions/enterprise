@@ -37,6 +37,12 @@
 // only forward-declare it. So L3 callers include this without dragging in L2.
 
 #include "queryable.h"                                     // ibBackendQueryable, ibQueryCondition, ibQuerySortItem (L2-free)
+
+// WHICH of the two access questions is being asked — see ibAccessPolicy. Table is the right to
+// touch the source at all (before the statement); Value judges what the statement did.
+enum class ibAccessStage { Table, Value };
+
+
 #include "queryRamTable.h"                                  // ibQueryRamTable — the raw flat snapshot Execute() returns (L2-free)
 #include "querySelectorTree.h"                              // ibSelectorTree — the folded node tree SelectTotals returns (L2-free)
 
@@ -287,14 +293,36 @@ class BACKEND_API ibAccessPolicy
 {
 public:
 	virtual ~ibAccessPolicy() = default;
-	// Read: the policy may ADD restricting conditions / joins to `query` (LINQ-style,
-	// through the builder's fluent verbs — e.g. a semi-join to the user's allowed set)
-	// AND/OR throw ibBackendAccessException on a hard deny. The thrown case is just the
-	// extreme of the SAME mechanism: a condition that admits no rows / forbids the table.
-	virtual void ApplyReadAccess(class ibDataQueryBuilder& query) const = 0;
-	// Write: same, for a write of the given per-type variety ("Write" / "Delete" /
-	// "Post" / …).
-	virtual void ApplyWriteAccess(class ibDataQueryBuilder& query, const wxString& operation) const = 0;
+
+	// ONE METHOD PER STAGE. The door calls the one matching what it is about to do and runs the
+	// query — it keeps nothing of its own about access: no right, no table/row distinction, no
+	// second-guessing of a statement afterwards. How each stage is checked is entirely the
+	// policy's business: which right answers for it, whether that right guards the table or the
+	// rows, and what restriction gets folded into `query` through the builder's own verbs (a
+	// semi-join to the user's allowed set, a Where). A hard deny throws ibBackendAccessException —
+	// the extreme of the same mechanism, a restriction that admits nothing.
+	// ONE METHOD PER OPERATION, each asked twice — the stage says which of the two questions:
+	//
+	//   Table — BEFORE the statement: may this role touch these sources at all? Answered from the
+	//           rights, plus whatever restriction the policy folds into `query`. This is the
+	//           default question, and on a table-controlled source (a register) the whole of it.
+	//   Value — AFTER it ran, with what it actually did (`affected` rows): did the write happen?
+	//           Only the policy knows whether that number carries meaning — on a row-controlled
+	//           source nothing written says the filter kept the statement off a row that is there;
+	//           on a table-controlled one an empty result is simply an empty result.
+	//
+	// FALSE MEANS REFUSED, and a refusal is never silent: the policy either throws it itself, with
+	// everything it knows ("not enough access rights: writing to register 'Stock'"), or answers
+	// false and the door raises the same exception naming what it was doing. Two stages, two
+	// possible refusals: first the right on the source, then — for a write — the right to the row
+	// the statement was aimed at. TRUE = carry on.
+	//
+	// Selecting asks the Table question only: a read has no rows-affected to judge, and rows this
+	// role may not see never reach it — the restriction filtered them, nothing to count afterwards.
+	virtual bool CheckSelect(class ibDataQueryBuilder& query, const ibAccessStage& stage, long affected = 0) const = 0;
+	virtual bool CheckCreate(class ibDataQueryBuilder& query, const ibAccessStage& stage, long affected = 0) const = 0;
+	virtual bool CheckUpdate(class ibDataQueryBuilder& query, const ibAccessStage& stage, long affected = 0) const = 0;
+	virtual bool CheckDelete(class ibDataQueryBuilder& query, const ibAccessStage& stage, long affected = 0) const = 0;
 };
 
 class BACKEND_API ibDataQueryBuilder

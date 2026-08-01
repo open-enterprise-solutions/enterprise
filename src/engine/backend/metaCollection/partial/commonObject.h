@@ -638,7 +638,7 @@ private: \
 public: \
 	bool AccessRight_Read()   const { return IsFullAccess() || AccessRight(m_roleRead);   } \
 	bool AccessRight_Write()  const { return IsFullAccess() || AccessRight(m_roleWrite);  } \
-	bool AccessRight_Delete() const { return IsFullAccess() || AccessRight(m_roleDelete); } 
+	bool AccessRight_Delete() const { return IsFullAccess() || AccessRight(m_roleDelete); }
 
 //meta object with reference and deletion mark
 class BACKEND_API ibValueMetaObjectRecordDataMutableRef : public ibValueMetaObjectRecordDataRef {
@@ -652,9 +652,11 @@ public:
 #pragma region access_generic
 	virtual bool AccessRight_Show() const { return AccessRight_Read(); }
 	virtual bool AccessRight_Modify() const { return AccessRight_Write(); }
+	virtual bool AccessRight_Erase() const { return AccessRight_Delete(); }
 #pragma endregion
 
-	IB_DECLARE_RWD_ROLE_TRIPLET("Write")   // legacy storage typo — kept until migration arc
+	// ("Write" carries the legacy storage typo — kept until the migration arc.)
+	IB_DECLARE_RWD_ROLE_TRIPLET("Write")
 
 	ibMetaDescription& GetGenerationDescription() const { return m_propertyGeneration->GetValueAsMetaDesc(); }
 
@@ -1050,6 +1052,12 @@ public:
 #pragma region access_generic
 	virtual bool AccessRight_Show() const { return AccessRight_Read(); }
 	virtual bool AccessRight_Modify() const { return AccessRight_Write(); }
+	virtual bool AccessRight_Erase() const { return AccessRight_Delete(); }
+	// A register is a SET, addressed by its recorder — the exception to the row-controlled default:
+	// its rights control the TABLE, so an empty set stays a normal state and no row count is ever
+	// read as a verdict on rights. The row filter still applies: an RLS handler that refuses a
+	// movement fails the INSERT, and the posting that produced it fails with it.
+	virtual bool IsAccessPerRecord() const override { return false; }
 #pragma endregion
 
 	IB_DECLARE_RWD_ROLE_TRIPLET("Write")

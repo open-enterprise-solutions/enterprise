@@ -265,7 +265,8 @@ ibValue ibValueRecordDataObjectConstant::GetConstValue() const
 			ibBackendCoreException::Error(_("Database is not open!"));
 
 		if (!m_metaObject->AccessRight_Read()) {
-			ibBackendAccessException::Error();
+			ibBackendAccessException::Error(wxString::Format(_("reading constant '%s'"),
+				m_metaObject->GetSynonym()));
 			return false;
 		}
 
@@ -320,7 +321,8 @@ bool ibValueRecordDataObjectConstant::SetConstValue(const ibValue& cValue)
 		return true;
 
 	if (!m_metaObject->AccessRight_Write()) {
-		ibBackendAccessException::Error();
+		ibBackendAccessException::Error(wxString::Format(_("writing constant '%s'"),
+			m_metaObject->GetSynonym()));
 		return false;
 	}
 
@@ -363,7 +365,8 @@ bool ibValueRecordDataObjectConstant::SetConstValue(const ibValue& cValue)
 		ExecAsProc(wxT("BeforeWrite"), cancel);
 		if (cancel.GetBoolean()) {
 			rollback();
-			ibBackendCoreException::Error(_("Failed to write object in db!"));
+			ibBackendCoreException::Error(_("Constant '%s': writing cancelled by the BeforeWrite handler"),
+				m_metaObject->GetSynonym());
 			return false;
 		}
 	}
@@ -389,7 +392,8 @@ bool ibValueRecordDataObjectConstant::SetConstValue(const ibValue& cValue)
 		.SetValue(m_metaObject->GetValueColumn(), m_constValue)                        // the value column
 		.Upsert()) {
 		rollback();
-		ibBackendCoreException::Error(_("Failed to write object in db!"));
+		ibBackendCoreException::Error(_("Constant '%s': failed to store the value"),
+			m_metaObject->GetSynonym());
 		return false;
 	}
 
@@ -398,7 +402,8 @@ bool ibValueRecordDataObjectConstant::SetConstValue(const ibValue& cValue)
 		ExecAsProc(wxT("OnWrite"), cancel);
 		if (cancel.GetBoolean()) {
 			rollback();
-			ibBackendCoreException::Error(_("Failed to write object in db!"));
+			ibBackendCoreException::Error(_("Constant '%s': writing cancelled by the OnWrite handler"),
+				m_metaObject->GetSynonym());
 			return false;
 		}
 	}

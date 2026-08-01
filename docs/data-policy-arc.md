@@ -1,9 +1,14 @@
 # Data Policy — Architecture Arc (design)
 
 > **Status:** PARTIALLY LANDED (re-verified 2026-07-29 — the earlier "no code yet" was stale).
-> Build-order **step 2** (the door's verdict seam) shipped: `class ibAccessPolicy` with
-> `ApplyReadAccess` / `ApplyWriteAccess` (`query/dataQueryBuilder.h:286`), pulled from the session
-> in the builder's ctor, consulted at 8 sites in `dataQueryBuilder.cpp` (Create / Write / Delete).
+> Build-order **step 2** (the door's verdict seam) shipped: `class ibAccessPolicy` with one method
+> per operation — `CheckSelect` / `CheckCreate` / `CheckUpdate` / `CheckDelete`, each taking an
+> `ibAccessStage` (`Table` before the statement, `Value` after it, with the affected-row count) —
+> pulled from the session in the builder's ctor and consulted twice per write in
+> `dataQueryBuilder.cpp`. The door keeps nothing of its own about access: it calls, and on a false
+> raises `ibBackendAccessException`. The table right is checked BEFORE the row filter runs, and what
+> `0 affected` means is declared by the object (`ibAccessObject::IsAccessPerRecord` — record by
+> default, table for a register), not guessed from the query.
 > Build-order **step 5** (the role RLS provider) shipped too: `ibRuntimeAccessPolicy`
 > (`session/session.cpp:40`) resolving per-role `OnAccessRead` / `OnAccessWrite` module procUnits,
 > fail-closed — plus the authoring keyword `KEY_RESTRICT` (`compiler/codeDef.h`).

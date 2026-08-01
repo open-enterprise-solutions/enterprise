@@ -135,7 +135,11 @@ void ibValueMetaObjectRecordDataMutableRef::CallAsCommand(ibActionID id, const i
 		}
 		}
 	}
-	catch (const ibBackendCoreException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
+	// The BASE, not ibBackendCoreException — an access deny / lock conflict is an ibBackendException
+	// as well, and catching only Core sent those into the catch(...) below: the command failed and
+	// the user was told nothing. (Same fix in every command / show entry point in this file.)
+	catch (const ibBackendInterruptException&) {}   // the user stopped it — nothing to report
+	catch (const ibBackendException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
 	catch (...) { wxLogError(wxT("ibValueMetaObjectRecordDataMutableRef::CallAsCommand: unhandled non-ibBackend exception swallowed")); }
 }
 
@@ -146,7 +150,8 @@ void ibValueMetaObjectRecordDataMutableRef::ShowValueByKey(const ibUniqueKey& ke
 		ibValueRecordDataObjectRef* obj(CreateObjectValue(key));
 		if (obj != nullptr) obj->ShowFormValue(wxEmptyString, dynamic_cast<ibBackendControlFrame*>(srcForm));
 	}
-	catch (const ibBackendCoreException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
+	catch (const ibBackendInterruptException&) {}
+	catch (const ibBackendException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
 	catch (...) { wxLogError(wxT("ibValueMetaObjectRecordDataMutableRef::ShowValueByKey: unhandled non-ibBackend exception swallowed")); }
 }
 
@@ -191,7 +196,8 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::CallAsCommand(ibActionID id
 				obj->ShowFormValue(wxEmptyString, dynamic_cast<ibBackendControlFrame*>(srcForm));
 			}
 		}
-		catch (const ibBackendCoreException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
+		catch (const ibBackendInterruptException&) {}
+		catch (const ibBackendException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
 		catch (...) { wxLogError(wxT("ibValueMetaObjectRecordDataHierarchyMutableRef::CallAsCommand: unhandled non-ibBackend exception swallowed")); }
 		return;
 	}
@@ -246,7 +252,8 @@ void ibValueMetaObjectRegisterData::CallAsCommand(ibActionID id, const ibUniqueK
 		}
 		}
 	}
-	catch (const ibBackendCoreException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
+	catch (const ibBackendInterruptException&) {}
+	catch (const ibBackendException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
 	catch (...) { wxLogError(wxT("ibValueMetaObjectRegisterData::CallAsCommand: unhandled non-ibBackend exception swallowed")); }
 }
 
@@ -275,7 +282,8 @@ void ibValueMetaObjectRegisterData::ShowValueByKey(const ibUniqueKey& key, ibBac
 				recorderVal.ShowValue();
 			}
 		}
-		catch (const ibBackendCoreException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
+		catch (const ibBackendInterruptException&) {}
+		catch (const ibBackendException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
 		catch (...) { wxLogError(wxT("ibValueMetaObjectRegisterData::ShowValueByKey: unhandled non-ibBackend exception swallowed")); }
 		return;
 	}
@@ -284,7 +292,8 @@ void ibValueMetaObjectRegisterData::ShowValueByKey(const ibUniqueKey& key, ibBac
 		ibValuePtr<ibValueRecordManagerObject> obj(CreateRecordManagerObjectValue(ibUniqueKeyPair(key.GetKeyValues())));
 		if (obj != nullptr) obj->ShowFormValue(wxEmptyString, dynamic_cast<ibBackendControlFrame*>(srcForm));
 	}
-	catch (const ibBackendCoreException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
+	catch (const ibBackendInterruptException&) {}
+	catch (const ibBackendException& err) { ibValueSystemFunction::Alert(err.GetErrorDescription()); }
 	catch (...) { wxLogError(wxT("ibValueMetaObjectRegisterData::ShowValueByKey: unhandled non-ibBackend exception swallowed")); }
 }
 

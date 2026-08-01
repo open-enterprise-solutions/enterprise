@@ -44,7 +44,7 @@ private:
 	wxString m_roleName;
 	wxString m_roleLabel;
 	ibAccessObject* m_owner; // pointer to the owner object
-	bool m_defValue;  // handler function name
+	bool m_defValue;  // the answer when nothing was ever set for this right
 };
 
 struct ibRoleUserInfo {
@@ -96,6 +96,15 @@ public:
 	*/
 	ibRole* GetRole(const wxString& nameParam) const;
 	ibRole* GetRole(unsigned int idx) const; // throws ...;
+
+	// Do this object's rights control a ROW, or the whole TABLE? A property of the OBJECT — one
+	// answer for all of its rights, not something an individual right entry carries.
+	//
+	// ROW is the DEFAULT, because that is what data normally is: a catalog element, a document, a
+	// constant — each exists as itself, and a write that touched nothing about it is worth a second
+	// question. A REGISTER says otherwise: its set is addressed by its recorder and may be
+	// legitimately empty, so it overrides this to control the table instead.
+	virtual bool IsAccessPerRecord() const { return true; }
 
 	/**
 	* Obtiene el número de propiedades del objeto.
