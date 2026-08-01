@@ -811,9 +811,13 @@ not own, so queued grid events must not outlive it.
   the value is applied later, in `InitProperty` / `InitEvent`. Dead parameter, and it sits
   exactly where a reader is trying to work out where the value lives.
 - **`AddChild`'s comment claims it is virtual.** It is not.
-- **`~ibPropertyObject` still reaches the frame** (`ibSession::CurrentFrame()->GetProperty()`)
-  to clear a stale selection, with its own TODO asking for an observer — while
-  `ibPropertyObjectNotifier` (§5.3, §5.5) is that observer, already in the same file.
+- **`~ibPropertyObject` still reaches the frame** (`ibSession::Current()->GetFrame()`, then
+  `GetProperty()`) to clear a stale selection, with its own TODO asking for an observer — while
+  `ibPropertyObjectNotifier` (§5.3, §5.5) is that observer, already in the same file. Note it
+  goes through `Current()->GetFrame()` and *not* the usual `ibSession::CurrentFrame()`: that
+  shortcut answers null on a force-exiting session, which is exactly when this cleanup matters
+  (the object dies while the frame still stands). Another reason the observer would be better —
+  the dtor would not have to know which door to use.
 - **`GetMetaData()` — the non-const overload is a trap, guarded.** Types implement the
   *const* overload (a control resolves it through its owning form). A call through a
   non-const `ibPropertyObject*` hits the base, which `wxFAIL_MSG`es and returns null — a

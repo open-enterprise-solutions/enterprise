@@ -177,9 +177,14 @@ The window's close handler is the whole sequence, and both roads run it:
 session->Close(f)  → frame->Close(f) ─┴→ OnCloseWindow
                                           force = !event.CanVeto()
                                           ├ !force && !AllowClose() → Veto, nothing happened
-                                          └ Skip → wx destroys the window
+                                          └ Destroy() → the window goes down
                                               └ holder released → session ends
 ```
+
+The handler calls `Destroy()` rather than `event.Skip()`: skipping lets
+`wxAuiMDIParentFrame::OnClose` run a second closing policy over the tabs,
+and that one vetoes on a refusal without checking `CanVeto()` — an assert
+on every forced close. The tabs are this window's own business.
 
 `AllowClose()` takes **no** force parameter — "don't ask" is expressed by
 not asking, so a non-vetoable close skips it entirely. Soft close asks in
@@ -190,6 +195,14 @@ unsaved-configuration prompt instead — it has no runtime.
 
 `Destroy()` closes whatever is still open unconditionally: it is past the
 point of no return, where a refusal could not be honoured.
+
+A forced close also shuts the window off from the outside:
+`ibSession::CurrentFrame()` answers null once the session is
+force-exiting, so nothing opens a form on the window, questions it, or
+draws into it on the way down — including the "save changes?" prompts.
+The window itself is unaffected; it holds its frame directly. See
+[session-ownership.md](session-ownership.md) § "The window is closed from
+the outside, too".
 
 Full picture, including the web and headless owners:
 [session-ownership.md](session-ownership.md).

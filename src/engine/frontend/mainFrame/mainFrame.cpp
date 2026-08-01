@@ -402,8 +402,16 @@ void ibFrontendMainFrame::OnCloseWindow(wxCloseEvent& event)
 		return;
 	}
 
-	// Let wx finish the close the standard way: wxFrame's default handler
-	// destroys the window, and that destructor releases the holder, which
-	// ends the session.
-	event.Skip();
+	// Down it goes. Deliberately NOT event.Skip(): skipping hands the close
+	// to the base wxAuiMDIParentFrame::OnClose, which runs a SECOND closing
+	// policy over the tabs (CloseAll) on top of the one that just ran here —
+	// and on a refusal it calls Veto() without asking whether the event may
+	// be vetoed at all, which asserts on every forced close.
+	//
+	// The tabs are ours: the asking pass is AllowClose() above, the
+	// unconditional pass is Destroy() below. Nobody else needs to close them.
+	// Destroy() is exactly what the skipped-to default handler would end up
+	// calling, so nothing is lost by naming it here — and the window's
+	// destructor releases the holder, which ends the session.
+	Destroy();
 }

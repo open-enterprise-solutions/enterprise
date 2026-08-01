@@ -101,7 +101,15 @@ ibPropertyObject::~ibPropertyObject()
 	// session → frame; null-guarded for headless (no UI). TODO: replace
 	// this with an observer pattern so ibPropertyObject doesn't reach
 	// the frame at destruction time.
-	if (auto* frame = ibSession::CurrentFrame()) {
+	//
+	// Deliberately NOT ibSession::CurrentFrame(): that door is shut on a
+	// force-exiting session, and rightly so — but this is not someone
+	// reaching for a window to work with, it is the window's own slot
+	// being cleaned of a pointer that is about to dangle. Exactly then it
+	// matters most, because a forced close is when this object dies with
+	// the frame still standing.
+	ibSession* const owner = ibSession::Current();
+	if (auto* frame = owner != nullptr ? owner->GetFrame() : nullptr) {
 		if (this == frame->GetProperty()) {
 			frame->SetProperty(nullptr);
 		}

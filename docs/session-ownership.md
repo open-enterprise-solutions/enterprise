@@ -259,10 +259,19 @@ this arc, caught by the Designer's `m_metaWindow->Load()`.
 [X]                → wxEVT_CLOSE ─┐
 session->Close(f)  → frame->Close(f) ─┴→ OnCloseWindow
                                           ├ !force && !AllowClose() → Veto, nothing happened
-                                          └ Skip → wx destroys the window
+                                          └ Destroy() → the window goes down
                                               └ ~ibBackendDocFrame → holder released
                                                   └ ibSession::Teardown()
 ```
+
+The handler calls `Destroy()` and does **not** `Skip()`. Skipping hands
+the event on to `wxAuiMDIParentFrame::OnClose`, which runs a second
+closing policy over the tabs (`CloseAll`) on top of the one that just
+ran — and on a refusal it calls `Veto()` without checking `CanVeto()`,
+which asserts on every forced close. The tabs belong to this window
+(asked in `AllowClose`, taken down unconditionally in `Destroy`), so
+nobody else needs to close them; `Destroy()` is what the skipped-to
+default handler would have called anyway.
 
 `ibSession::Close(bool force)` does exactly one thing: it asks whatever
 owns the session to close. It never tears anything down itself, not even
@@ -294,8 +303,36 @@ Close(true) → RequestForceExit()          interpreter unwinds at next opcode
             → OnClose(true) → frame->Close(true)
                 → wxEVT_CLOSE with CanVeto()==false
                     → AllowClose() is NOT called — nobody is asked
-                    → Skip → Destroy
+                    → Destroy()
 ```
+
+#### The window is closed from the outside, too
+
+`RequestForceExit` does not only stop the interpreter: from that moment
+`ibSession::CurrentFrame()` answers **null**. The frame is still there
+and still owns the session — this says nothing about lifetime, and the
+closing sequence above does not come this way (it holds its frame
+directly, through `ibFrontendMainFrame::GetFrame()`). It says that from
+the outside the window is already gone: nothing may open a form on it,
+ask a question through it, or draw into it while it is going down.
+
+One gate instead of one per caller, because "no frame" is a state every
+caller already knows how to be in — it is what a headless session has
+always answered:
+
+| caller | with no frame |
+|---|---|
+| `OnSaveModified` / `OnSaveBeforeForceClose` (`docView.cpp`) | no prompt, read as "ok to close" — **this is what stops a forced exit asking to save** |
+| `Message` / `SetStatus` / `ClearMessage` / `SetAppTitle` / `Alert` / `RefreshFrame` / `RaiseFrame` | no-op |
+| `Question` (script) | `wxCANCEL` — the conservative answer it already gives headless |
+| `ibBackendValueForm::CreateNewForm` / `Find*` , spreadsheet `Show` / `Print` | `ibBackendCoreException::Error(_("Context functions are not available!"))` |
+
+The one caller that must **not** go through the gate is
+`~ibPropertyObject`: it clears the frame's property slot of a pointer
+that is about to dangle, which is not someone reaching for a window to
+work with but the window's own housekeeping — and it matters most
+exactly under force, when the object dies with the frame still standing.
+It reaches the frame directly (`ibSession::Current()->GetFrame()`).
 
 `AllowClose()` therefore takes **no** force parameter: "don't ask" is
 expressed by not asking. Under a soft close it runs in two steps, and a

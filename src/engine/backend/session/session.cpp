@@ -929,7 +929,24 @@ void ibSession::UnbindSession(ibSession* s)
 ibBackendDocFrame* ibSession::CurrentFrame()
 {
 	ibSession* s = Current();
-	return s != nullptr ? s->GetFrame() : nullptr;
+	if (s == nullptr)
+		return nullptr;
+
+	// A force-exiting session hands out no window. The frame is still
+	// there and still owns the session — this says nothing about lifetime,
+	// and the closing sequence itself does not come this way (it holds its
+	// frame directly). It says that from the outside the window is already
+	// gone: nothing may open a form on it, ask a question through it, or
+	// draw into it while it is going down.
+	//
+	// One gate instead of one per question, because "no frame" is a state
+	// every caller already knows how to be in: the save prompts read it as
+	// "ok to close", the status / message / refresh calls become no-ops,
+	// and the context functions answer that they are not available.
+	if (s->IsForceExit())
+		return nullptr;
+
+	return s->GetFrame();
 }
 
 ibProcUnitState* ibSession::GetPUState()

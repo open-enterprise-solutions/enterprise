@@ -82,6 +82,18 @@ documenting before the next scale step.
   guard with `if (ibSession::CurrentFrame() != nullptr) ...` and
   otherwise raise
   `ibBackendCoreException::Error(_("Context functions are not available!"))`.
+- **`CurrentFrame()` also answers null on a force-exiting session**, even
+  though `GetFrame()` on that same session still returns the live frame.
+  The two are not synonyms: `GetFrame()` is ownership, `CurrentFrame()` is
+  access from the outside, and a window that is being force-closed grants
+  none. That is the one gate keeping a killed session from opening forms,
+  putting up dialogs or repainting on its way down — every caller already
+  handles "no frame" because headless has always answered that way. Code
+  that needs the frame *because it owns it* (the closing sequence, the
+  property slot cleanup in `~ibPropertyObject`) must say so by reaching
+  through `GetFrame()` directly. See
+  [session-ownership.md](session-ownership.md) § "The window is closed
+  from the outside, too".
 
 The frontend desktop side does keep its own GUI-local singleton:
 `ibFrontendMainFrame::GetFrame()` (via the `mainFrame` macro in
