@@ -308,7 +308,6 @@ public:
 	protected:
 
 		virtual void SetCaption(const wxString& strCaption);
-		virtual void SetOrientation(int orient);
 		virtual void UpdateHostSize();
 
 		friend class ibVisualEditor;

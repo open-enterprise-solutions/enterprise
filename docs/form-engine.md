@@ -9,6 +9,7 @@
 > [command-interface.md](command-interface.md) (the command door),
 > [docview-fork.md](docview-fork.md) (the doc/view stack under it),
 > [home-page.md](home-page.md) (a composite of several forms in one tab),
+> [user-form-editor.md](user-form-editor.md) (the USER re-arranging an open form),
 > [ARCHITECTURE.md](ARCHITECTURE.md) § Form Open (the one-screen call chain).
 > This is a map of code that exists, not a plan.
 
@@ -175,9 +176,47 @@ step only (backend cannot name the doc/view types); the work is in
 - **`createContext == false`** is the DESIGNER's preview: no script events, a demo document
   (`ibFormVisualDocumentDemo`), nothing bound.
 - **`IsShown()`** is exactly "do I have a visual document" — not a window flag.
-- The host is `wxScrolledCanvas` on desktop and `ibWebWindow` on web
-  (`ibFrontendHostBase` typedef). **The form value and its control tree are the same code on
-  both**; only the leaf that paints differs.
+- The host is a `wxPanel` on desktop and `ibWebWindow` on web (`ibFrontendHostBase` typedef).
+  **The form value and its control tree are the same code on both**; only the leaf that paints
+  differs.
+
+### 5a. The host: a facade and the window inside it
+
+On desktop `ibVisualHost` is a FACADE, and the window that scrolls lives inside it:
+
+```
+ibVisualHost (wxPanel)          the facade — carries the form's CHROME (the command-bar
+  │                             toolbar today, a search row later) and nothing else
+  └ ibContentWindow             the inner window — HOLDS the controls (the ibValueFrame ->
+      (wxScrolledCanvas)        wxObject index, their sizer) and scrolls them
+```
+
+The facade fills itself and hands everything about the controls down: `CreateVisualHost` builds
+the chrome layers, then calls `CreateContent`; `UpdateVisualHost` refreshes the layers, then
+`UpdateContent`; `ClearVisualHost` drops the layers, then `ClearContent`. Lookups
+(`GetObjectBase` / `GetWxObject`) and the four control verbs are forwards. The per-control hooks
+(`Create` / `OnCreated` / `Update` / `OnUpdated` / `Cleanup`) stay on the facade — that is where
+the designer overrides them, so both hosts keep the behaviour they had.
+
+**Why:** the toolbar is not in the scrolling window at all, so it no longer moves with the wheel.
+
+Two windows per host, named by the same pair of methods every host answers:
+
+| | `GetParentBackgroundWindow()` (chrome) | `GetBackgroundWindow()` (controls) |
+|---|---|---|
+| runtime (`ibVisualHostClient`) | the facade — toolbar stays put | the inner window |
+| designer (`ibVisualEditorHost`) | the card's content panel — the toolbar scrolls WITH the card, because the card IS the form being drawn | the same panel |
+
+`InitMainSizer()` decides where the chrome sizer lands from that pair and runs lazily on the
+first build — a concrete host never calls it. `UpdateHostSize()` is the heavy pass, run once at
+the end of an update (facade layout + repaint; wx recurses from there); `UpdateVirtualSize()` is
+the cheap one (the inner window's scroll range, which follows what the controls actually need —
+so scrollbars appear only when the form does not fit).
+
+Traps worth keeping in mind when touching this: the form's colour has to reach BOTH windows (the
+chrome reads its look off its parent); the chrome layers are deleted outright and BEFORE the
+content (a deferred `Destroy()` would be freed twice by a host whose chrome shares the controls'
+window); and `ClearContent` asks who owns the controls' sizer before dropping it.
 
 ---
 

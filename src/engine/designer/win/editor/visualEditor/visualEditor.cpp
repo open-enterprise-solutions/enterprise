@@ -79,7 +79,7 @@ wxDragResult ibSourceDragDropTarget::OnData(wxCoord x, wxCoord y, wxDragResult d
 	return def;
 }
 
-wxBEGIN_EVENT_TABLE(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost, wxScrolledWindow)
+wxBEGIN_EVENT_TABLE(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost, wxPanel)
 EVT_INNER_FRAME_RESIZED(wxID_ANY, ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnResizeBackPanel)
 wxEND_EVENT_TABLE()
 
@@ -91,12 +91,11 @@ ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::ibVisualEditorHost(i
 {
 	ibVisualHost::SetExtraStyle(wxWS_EX_BLOCK_EVENTS);
 
-	SetOwnBackgroundColour(wxColour(0xD8, 0xE2, 0xEB));  // #D8E2EB palest powder — light background so form card pops
+	// The canvas the card sits on IS the host's inner scrolling window now — the host itself
+	// is the facade panel around it.
+	GetContentWindow()->SetOwnBackgroundColour(wxColour(0xD8, 0xE2, 0xEB));  // #D8E2EB palest powder — light background so form card pops
 
-	m_back = new ibDesignerWindow(this, wxID_ANY, wxPoint(10, 10));
-	// Default MAIN sizer (m_mainSizer) on the designer card's content panel —
-	// same model as runtime (GetBackgroundWindow() == the content panel here).
-	InitMainSizer();
+	m_back = new ibDesignerWindow(GetContentWindow(), wxID_ANY, wxPoint(10, 10));
 	m_back->GetEventHandler()->Connect(wxID_ANY, wxEVT_LEFT_DOWN, wxMouseEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnClickBackPanel), nullptr, this);
 
 	// The form canvas accepts any registered drag KIND: a source path → a bound control, a command → a bound
@@ -135,12 +134,9 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::SetValueForm(ib
 
 ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::~ibVisualEditorHost()
 {
-	ibValueForm* valueForm = m_formHandler->GetValueForm();
-	if (valueForm != nullptr)
-		ClearControl(valueForm, true);
-
-	m_back->GetFrameContentPanel()->DestroyChildren();
-	m_back->GetFrameContentPanel()->SetSizer(nullptr); // *!*
+	// The same teardown a rebuild does — chrome first, then the controls — so nothing is left
+	// for wx to free a second time when the windows below go.
+	ClearVisualHost();
 
 	DestroyChildren();
 }
@@ -261,8 +257,8 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::SetObjectSelect
 		obj = toolbar;
 
 	// Make sure this is a visible object
-	auto it = m_baseObjects.find(obj);
-	if (it == m_baseObjects.end()) {
+	wxObject* item = GetWxObject(obj);
+	if (item == nullptr) {
 		m_back->SetSelectedSizer(nullptr);
 		m_back->SetSelectedItem(nullptr);
 		m_back->SetSelectedObject(nullptr);
@@ -270,9 +266,6 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::SetObjectSelect
 		m_back->Refresh();
 		return;
 	}
-
-	// Save wxobject
-	wxObject* item = it->second;
 
 	int componentType = obj->GetComponentType();
 
@@ -284,24 +277,19 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::SetObjectSelect
 		item = nullptr;
 	}
 	else if (obj->GetClassName() == wxT("NotebookPage")) {
-		ibValueFrame* parent = obj->GetParent();
-		item = m_baseObjects.at(parent);
+		item = GetWxObject(obj->GetParent());
 	}
 	else if (obj->GetClassName() == wxT("TableboxColumn")) {
-		ibValueFrame* parent = obj->GetParent();
-		item = m_baseObjects.at(parent);
+		item = GetWxObject(obj->GetParent());
 	}
 
 	// Fire selection event in plugin for all parents
 	if (!m_stopSelectedEvent) {
 		ibValueFrame* parent = obj->GetParent();
 		while (parent != nullptr) {
-			auto parentIt = m_baseObjects.find(parent);
-			if (parentIt != m_baseObjects.end()) {
-				if (obj->GetClassName() != wxT("NotebookPage")) {
-					OnSelected(parent, parentIt->second);
-				}
-			}
+			wxObject* parentObj = GetWxObject(parent);
+			if (parentObj != nullptr && obj->GetClassName() != wxT("NotebookPage"))
+				OnSelected(parent, parentObj);
 			parent = parent->GetParent();
 		}
 	}
@@ -330,31 +318,22 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::SetObjectSelect
 	}
 
 	// Get the panel to draw on
-	wxWindow* selPanel = nullptr;
-	if (nextParent != nullptr) {
-		it = m_baseObjects.find(nextParent);
-		if (it != m_baseObjects.end()) {
-			if (nextParent->GetClassName() == wxT("Staticboxsizer")) {
-				wxStaticBoxSizer* staticBoxSizer = wxDynamicCast(it->second, wxStaticBoxSizer);
-				wxASSERT(staticBoxSizer);
-				selPanel = staticBoxSizer->GetStaticBox();
-			}
-			else if (nextParent->GetClassName() == wxT("Notebook") ||
-				nextParent->GetClassName() == wxT("Tablebox")) {
-				wxWindow* notebook = wxDynamicCast(it->second, wxWindow);
-				wxASSERT(notebook);
-				selPanel = notebook->GetParent();
-			}
-			else {
-				selPanel = wxDynamicCast(it->second, wxWindow);
-			}
+	wxWindow* selPanel = m_back->GetFrameContentPanel();
+	if (wxObject* parentObj = nextParent != nullptr ? GetWxObject(nextParent) : nullptr) {
+		if (nextParent->GetClassName() == wxT("Staticboxsizer")) {
+			wxStaticBoxSizer* staticBoxSizer = wxDynamicCast(parentObj, wxStaticBoxSizer);
+			wxASSERT(staticBoxSizer);
+			selPanel = staticBoxSizer->GetStaticBox();
+		}
+		else if (nextParent->GetClassName() == wxT("Notebook") ||
+			nextParent->GetClassName() == wxT("Tablebox")) {
+			wxWindow* notebook = wxDynamicCast(parentObj, wxWindow);
+			wxASSERT(notebook);
+			selPanel = notebook->GetParent();
 		}
 		else {
-			selPanel = m_back->GetFrameContentPanel();
+			selPanel = wxDynamicCast(parentObj, wxWindow);
 		}
-	}
-	else {
-		selPanel = m_back->GetFrameContentPanel();
 	}
 
 	// Find the first COMPONENT_TYPE_WINDOW or COMPONENT_TYPE_SIZER
@@ -364,10 +343,8 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::SetObjectSelect
 	while (nextObj != nullptr) {
 		if (nextObj->GetComponentType() == COMPONENT_TYPE_SIZER ||
 			nextObj->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
-			it = m_baseObjects.find(nextObj);
-			if (it != m_baseObjects.end()) {
-				sizer = wxDynamicCast(it->second, wxSizer);
-			} break;
+			sizer = wxDynamicCast(GetWxObject(nextObj), wxSizer);
+			break;
 		}
 		else if (nextObj->GetComponentType() == COMPONENT_TYPE_WINDOW)
 			break;
@@ -385,15 +362,16 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::SetObjectSelect
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::ScrollToObject(ibValueFrame* obj)
 {
 	// Make sure this is a visible object
-	auto it = m_baseObjects.find(obj);
-	if (it != m_baseObjects.end()) {
+	wxObject* const item = GetWxObject(obj);
+	if (item != nullptr) {
 
-		// Save wxobject
-		wxObject* item = it->second;
+		// Scrolling belongs to the host's inner window now — the host itself is the facade.
+		ibContentWindow* const scrollWindow = GetContentWindow();
+		wxWindow* const targetWindow = scrollWindow->GetTargetWindow();
 
 		if (obj->GetComponentType() == COMPONENT_TYPE_WINDOW) {
 
-			const wxRect viewRect(m_targetWindow->GetClientRect());
+			const wxRect viewRect(targetWindow->GetClientRect());
 
 			// For composite controls such as wxComboCtrl we should try to fit the
 			// entire control inside the visible area of the target window, not just
@@ -408,7 +386,7 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::ScrollToObject(
 			const wxWindow* win = dynamic_cast<wxWindow*>(item);
 			wxASSERT(win);
 
-			if (win->GetParent() != m_targetWindow)
+			if (win->GetParent() != targetWindow)
 			{
 				wxWindow* parent = win->GetParent();
 				wxSize parent_size = parent->GetSize();
@@ -418,10 +396,10 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::ScrollToObject(
 					win = parent;
 			}
 
-			// make win position relative to the m_targetWindow viewing area instead of
+			// make win position relative to the target window viewing area instead of
 			// its parent
 			const wxRect
-				winRect(m_targetWindow->ScreenToClient(win->GetScreenPosition()),
+				winRect(targetWindow->ScreenToClient(win->GetScreenPosition()),
 					win->GetSize());
 
 			// check if it's fully visible
@@ -433,10 +411,10 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::ScrollToObject(
 
 			// do make the window fit inside the view area by scrolling to it
 			int stepx, stepy;
-			GetScrollPixelsPerUnit(&stepx, &stepy);
+			scrollWindow->GetScrollPixelsPerUnit(&stepx, &stepy);
 
 			int startx, starty;
-			GetViewStart(&startx, &starty);
+			scrollWindow->GetViewStart(&startx, &starty);
 
 			// first in vertical direction:
 			if (stepy > 0)
@@ -478,9 +456,9 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::ScrollToObject(
 				startx = (startx * stepx + diff) / stepx;
 			}
 
-			wxScrolledCanvas::Freeze();
-			wxScrolledCanvas::Scroll(startx, starty);
-			wxScrolledCanvas::Thaw();
+			scrollWindow->Freeze();
+			scrollWindow->Scroll(startx, starty);
+			scrollWindow->Thaw();
 		}
 		else if (obj != nullptr) {
 			ScrollToObject(obj->GetParent()); 
@@ -497,6 +475,9 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::UpdateHostSize(
 		m_back->Layout();
 		m_back->SetClientSize(m_back->GetBestSize());
 	}
+
+	// The card sized itself; the canvas around it still needs the base's pass.
+	ibVisualHost::UpdateHostSize();
 }
 
 #include "backend/metaCollection/partial/commonObject.h"
@@ -527,11 +508,6 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::SetCaption(cons
 
 	m_back->SetTitleStyle(wxCAPTION);
 	m_back->ShowTitleBar(true);
-}
-
-void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::SetOrientation(int orient)
-{
-	ApplyContentOrientation(orient);
 }
 
 /////////////////////////////////////////////////////////////////////////////////

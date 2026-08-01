@@ -36,19 +36,9 @@ void ibVisualHostClient::SetCaption(const wxString& strCaption)
 		tab->SetTitle(strCaption);
 }
 
-// Mirror desktop: mutate the root BoxSizer's orientation so child
-// layout rebuilds on the next response reflect the new axis. The
-// host owns the root sizer via SetSizer; only wxBoxSizer-style
-// sizers carry an orientation (grid sizers drop the call silently).
-void ibVisualHostClient::SetOrientation(int orient)
-{
-	if (auto* box = dynamic_cast<ibWebBoxSizer*>(GetSizer()))
-		box->SetOrientation(orient);
-}
-
 #else  // !OES_USE_WEB
-// Desktop-only implementation: wxScrolledCanvas-hosted form, tab,
-// wxDocView Doc/View machinery.
+// Desktop-only implementation: the facade panel that carries the form's chrome, with the
+// scrolling window holding its controls inside; tab, wxDocView Doc/View machinery.
 
 ibVisualHostClient::ibVisualHostClient(ibFormVisualDocument* document, ibValueForm* valueForm, ibFrontendWindow* parent) :
 	// On desktop ibFrontendWindow == wxWindow, so this just forwards.
@@ -58,9 +48,6 @@ ibVisualHostClient::ibVisualHostClient(ibFormVisualDocument* document, ibValueFo
 	m_dataViewSize(wxDefaultSize),
 	m_dataViewSizeChanged(false)
 {
-	// Default MAIN sizer (m_mainSizer) up front — CreateVisualHost hangs the
-	// chrome layers + content sub-sizer onto it (it lives its own parallel life).
-	InitMainSizer();
 	ibVisualHostClient::Bind(wxEVT_SIZE, &ibVisualHostClient::OnSize, this);
 	ibVisualHostClient::Bind(wxEVT_IDLE, &ibVisualHostClient::OnIdle, this);
 }
@@ -167,11 +154,6 @@ void ibVisualHostClient::SetCaption(const wxString& strCaption)
 		m_document->SetTitle(strCaption);
 		m_document->SetFilename(wxEmptyString, true);
 	}
-}
-
-void ibVisualHostClient::SetOrientation(int orient)
-{
-	ApplyContentOrientation(orient);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////

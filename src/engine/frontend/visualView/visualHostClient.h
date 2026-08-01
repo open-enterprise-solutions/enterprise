@@ -15,8 +15,9 @@ class ibFormVisualDocument;
 //
 //   Desktop: ibDocManager -> ibFormVisualDocument (ibDocument)
 //                         -> ibFormVisualEditView (ibView)
-//                         -> ibVisualHostClient (wxScrolledCanvas in
-//                                                a wxAuiMDIChildFrame)
+//                         -> ibVisualHostClient (the facade panel in a
+//                                                wxAuiMDIChildFrame; the
+//                                                controls scroll inside it)
 //
 //   Web: ibWebFrame::m_tabs -> unique_ptr<ibFormVisualDocument>
 //                           -> unique_ptr<ibFormVisualEditView>
@@ -56,14 +57,20 @@ public:
 
 	ibFormVisualDocument* GetDocument() const { return m_document; }
 
-	// Host-is-the-background-window on both builds: desktop inherits
-	// wxScrolledCanvas so `this` IS the wxWindow; web inherits
-	// ibWebWindow so `this` IS the ibWebWindow. ibFrontendWindow*
-	// resolves to the right type per build.
+	// Desktop: the host IS the facade panel, and the controls live in the scrolling window
+	// inside it — so the form's chrome, which the facade carries, does not move when the
+	// controls scroll. Web: nothing scrolls yet and the host is a node in the ibWebWindow
+	// tree, so both ends are the node itself (the same wrapping is what a web scroll window
+	// would slot into later).
 	virtual ibFrontendWindow* GetParentBackgroundWindow() const override
 	{ return const_cast<ibVisualHostClient*>(this); }
+#ifdef OES_USE_WEB
 	virtual ibFrontendWindow* GetBackgroundWindow() const override
 	{ return const_cast<ibVisualHostClient*>(this); }
+#else
+	virtual ibFrontendWindow* GetBackgroundWindow() const override
+	{ return GetContentWindow(); }
+#endif
 
 	// tab lifecycle verbs. Body is identical on both builds — forward
 	// to the owned ibValueForm. The web null guard is also safe on
@@ -84,12 +91,9 @@ protected:
 	// SetCaption: desktop pushes to ibDocument->SetTitle (drives the
 	// tab label); web pushes to the owning ibWebDocChildFrame (the tab
 	// node in the session's ibWebWindow tree) so /session reports the
-	// new title. SetOrientation: desktop mutates the host's root
-	// wxBoxSizer; web mutates its root ibWebBoxSizer. Same intent on
-	// both sides, different owning objects — bodies live in
-	// visualHostClient.cpp (desktop) and webClientHost.cpp (web).
+	// new title. (Orientation is the base's — every host answered it
+	// the same way.)
 	virtual void SetCaption(const wxString& strCaption) override;
-	virtual void SetOrientation(int orient) override;
 
 #ifndef OES_USE_WEB
 	void OnSize(wxSizeEvent& event);

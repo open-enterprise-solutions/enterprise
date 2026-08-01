@@ -1039,8 +1039,12 @@ bool ibDocManager::CloseDocument(ibDocument* doc, bool force)
     // Note that by now the document is certain not to be modified any longer.
 
     // Implicitly deletes the document when
-    // the last view is deleted
-    doc->DeleteAllViews();
+    // the last view is deleted — unless a view REFUSES, and one does: a form editor whose
+    // module does not compile keeps its document open (ibFormDocument::OnCloseDocument ->
+    // SyntaxControl). That refusal is the point, so report it instead of asserting the
+    // document is gone; the caller — a tab's [x], the window's close — has to stop too.
+    if ( !doc->DeleteAllViews() )
+        return false;
 
     wxASSERT(!m_docs.Member(doc));
 

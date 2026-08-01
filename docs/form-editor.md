@@ -6,7 +6,9 @@
 > shown at runtime — what this editor produces the metadata for),
 > [form-attribute-binding.md](form-attribute-binding.md) (what a binding *is*),
 > [property-system.md](property-system.md) (the inspector that drives most edits),
-> [command-interface.md](command-interface.md) (the command-bar layer edited here).
+> [command-interface.md](command-interface.md) (the command-bar layer edited here),
+> [user-form-editor.md](user-form-editor.md) (the small runtime cousin: a USER re-arranging
+> their own open form, from a whitelist of appearance / layout properties).
 > This document describes code that **already exists**; it is a map, not a plan.
 
 `designer/win/editor/visualEditor/` — ~6400 lines across 15 files (10 `.cpp` / 5 `.h`), the largest single

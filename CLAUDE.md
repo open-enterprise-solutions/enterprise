@@ -50,6 +50,7 @@ enterprise/
 │   ├── home-page.md          # the start page — one tab, N runtime forms (composite doc/view)
 │   ├── event-dispatcher.md   # events hold a named handler OR a lambda — one CallAsEvent door, polymorphic dispatch
 │   ├── view-only.md          # read-only forms — rights matryoshka, control read-only, command greying
+│   ├── user-form-editor.md   # "Change form" — the USER re-arranges an open form (whitelisted props, queued commands)
 │   ├── property-system.md    # ibPropertyObject + object inspector — the skeleton (5 surfaces)
 │   ├── metadata-tree.md      # Designer navigator + external reports/processors
 │   ├── metadata-lifecycle.md # load/run/save/close — the metaobject events in order + external DP/Report
