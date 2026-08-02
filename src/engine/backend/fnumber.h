@@ -118,8 +118,18 @@ public:
 	void         FromInt(int v);
 	int          ToInt()     const; // truncates fractional part; clamped on overflow
 	unsigned int ToUInt()    const; // truncates fractional part; clamped on overflow
-	int          ToInt(int64_t&  out) const; // ttmath-compat: 0 on success, 1 on overflow
-	int          ToInt(uint64_t& out) const; // unsigned variant; 1 on overflow / negative
+	// Out-parameter form: 0 on success, 1 on overflow (ttmath-compat). Declared over the
+	// LANGUAGE types for the same reason as the constructors above — `long` and `long long`
+	// are distinct types, and an int64_t/uint64_t pair only ever names one of the two. A
+	// caller holding a wxLongLong_t (that is `long long`) could not bind to an int64_t& on
+	// LP64, where int64_t is `long`. Four spellings collide nowhere and bind everywhere.
+	//
+	// Where the target is NARROWER than 64 bits (Windows `long`), a value that does not fit
+	// reports overflow rather than truncating silently — same contract as the 64-bit form.
+	int ToInt(long&               out) const;
+	int ToInt(long long&          out) const;
+	int ToInt(unsigned long&      out) const;
+	int ToInt(unsigned long long& out) const;
 	int64_t      ToInt64()   const; // throws on overflow / non-integer
 	double       ToDouble()  const; // lossy for values outside double's precision
 	float        ToFloat()   const; // lossy; truncated double
@@ -231,6 +241,10 @@ private:
 	// One body per signedness, shared by the long / long long constructor pair above.
 	void FromSigned64(int64_t v) noexcept;
 	void FromUnsigned64(uint64_t v) noexcept;
+
+	// … and the same for the ToInt family: one conversion, four public spellings over it.
+	int ToSigned64(int64_t& out) const;
+	int ToUnsigned64(uint64_t& out) const;
 
 	// Materialises current value into a stack-allocated BigImpl (no extra heap).
 	void LoadBig(BigImpl& out) const;

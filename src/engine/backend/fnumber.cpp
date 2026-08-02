@@ -1,3 +1,4 @@
+#include <limits>
 #include "backend/fnumber.h"
 
 #include "backend/fileSystem/fs.h" // ibReaderMemory / ibWriterMemory
@@ -851,7 +852,7 @@ unsigned int ibNumber::ToUInt() const
 	return static_cast<unsigned int>(v);
 }
 
-int ibNumber::ToInt(int64_t& out) const
+int ibNumber::ToSigned64(int64_t& out) const
 {
 	BigImpl b;
 	LoadBig(b);
@@ -996,7 +997,7 @@ void ibNumber::FromInt(int v)
 	*this = ibNumber(v);
 }
 
-int ibNumber::ToInt(uint64_t& out) const
+int ibNumber::ToUnsigned64(uint64_t& out) const
 {
 	BigImpl b;
 	LoadBig(b);
@@ -1018,6 +1019,49 @@ int ibNumber::ToInt(uint64_t& out) const
 	if (b.limbs.size() >= 2) v |= static_cast<uint64_t>(b.limbs[1]) << 32;
 	out = v;
 	return 0;
+}
+
+// The four public spellings over the two conversions above. `long` and `long long` are
+// distinct types even at equal width, so each needs its own overload; where the target is
+// narrower than 64 bits (Windows `long`), a value outside its range reports overflow
+// instead of truncating. See the note in fnumber.h.
+int ibNumber::ToInt(long& out) const
+{
+	int64_t v = 0;
+	const int rc = ToSigned64(v);
+	if (rc != 0) return rc;
+	if (v < static_cast<int64_t>(std::numeric_limits<long>::min()) ||
+	    v > static_cast<int64_t>(std::numeric_limits<long>::max()))
+		return 1;
+	out = static_cast<long>(v);
+	return 0;
+}
+
+int ibNumber::ToInt(long long& out) const
+{
+	int64_t v = 0;
+	const int rc = ToSigned64(v);
+	if (rc == 0) out = static_cast<long long>(v);
+	return rc;
+}
+
+int ibNumber::ToInt(unsigned long& out) const
+{
+	uint64_t v = 0;
+	const int rc = ToUnsigned64(v);
+	if (rc != 0) return rc;
+	if (v > static_cast<uint64_t>(std::numeric_limits<unsigned long>::max()))
+		return 1;
+	out = static_cast<unsigned long>(v);
+	return 0;
+}
+
+int ibNumber::ToInt(unsigned long long& out) const
+{
+	uint64_t v = 0;
+	const int rc = ToUnsigned64(v);
+	if (rc == 0) out = static_cast<unsigned long long>(v);
+	return rc;
 }
 
 std::wstring ibNumber::ToWString() const
