@@ -5,8 +5,10 @@
 // normal suite fast). Build in RELEASE for relevant figures, then run:
 //
 //   cmake --build build --config Release --target oes_tests
-//   build/bin/Release/oes_tests --gtest_also_run_disabled_tests \
+//   build/bin/Release/oes_tests --gtest_also_run_disabled_tests
 //       --gtest_filter=*Bench*
+//   (the two lines are one shell command; the continuation backslash is left out
+//    because a trailing \ inside a // comment splices the next line into it)
 //
 // Three groups:
 //   RuntimeBench  — the ibProcUnit bytecode interpreter (dispatch, calls,

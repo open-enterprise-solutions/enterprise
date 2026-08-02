@@ -22,6 +22,13 @@ public:
 
 	ibValueDataObject(const ibGuid& objGuid = wxNullGuid, bool newObject = true) : m_newObject(newObject), m_objGuid(objGuid) {}
 
+	// The class is polymorphic (GetMetaObject below is pure virtual) and three classes derive
+	// it, so the destructor has to be virtual: deleting a derived object through this type
+	// would otherwise be undefined behaviour. Nothing does that today — every delete goes
+	// through the exact type — but the class shape invites it, and GCC flags the risk. The
+	// vtable already exists, so this costs neither a word of storage nor a layout change.
+	virtual ~ibValueDataObject() = default;
+
 	//support source set/get data 
 	virtual bool SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal) { return false; }
 	virtual bool GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const { return false; }

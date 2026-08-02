@@ -975,10 +975,15 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::ProcessChoice(ibBackendCont
 
 	ibBackendValueForm* selectChoiceForm = nullptr;
 
-	if (selectChoiceForm == nullptr && selMode == ibSelectMode::ibSelectMode_Items || selMode == ibSelectMode::ibSelectMode_FoldersAndItems) {
+	// The `selectChoiceForm == nullptr` guards are gone: the variable is initialised to
+	// nullptr on the line above and nothing touches it in between, so both were always true.
+	// They also made the first condition read as "(null AND items) OR foldersAndItems"
+	// (&& binds tighter), which is what GCC flagged. Behaviour is unchanged — the branch
+	// was, and is, chosen purely by selMode.
+	if (selMode == ibSelectMode::ibSelectMode_Items || selMode == ibSelectMode::ibSelectMode_FoldersAndItems) {
 		selectChoiceForm = GetSelectForm(strFormName, ownerValue);
 	}
-	else if (selectChoiceForm == nullptr && selMode == ibSelectMode::ibSelectMode_Folders) {
+	else if (selMode == ibSelectMode::ibSelectMode_Folders) {
 		selectChoiceForm = GetFolderSelectForm(strFormName, ownerValue);
 	}
 
