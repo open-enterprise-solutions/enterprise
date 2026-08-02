@@ -21,7 +21,10 @@ THE SOFTWARE.
 #include "guid.h"
 
 #ifdef GUID_LIBUUID
-#include <guid/guid.h>
+// libuuid — the header is <uuid/uuid.h> (package uuid-dev / libuuid-devel). It was written
+// as <guid/guid.h>, a path that exists nowhere; nothing caught it because this branch is
+// selected only under __WXGTK__, and the GTK build had not been compiled in a long time.
+#include <uuid/uuid.h>
 #endif
 
 #ifdef GUID_CFUUID

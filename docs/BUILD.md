@@ -58,6 +58,7 @@ sudo apt install -y \
     git \
     pkg-config \
     libgtk-3-dev \
+    uuid-dev \
     libfirebird-dev \
     libpq-dev \
     libsqlite3-dev \
@@ -65,8 +66,8 @@ sudo apt install -y \
     unixodbc-dev
 ```
 
-`libgtk-3-dev` is **not optional**: the build defines `__WXGTK__` and the CMake configure step
-pkg-checks `gtk+-3.0`, so wx will not configure without it. `ninja-build` is what the
+`libgtk-3-dev` and `uuid-dev` are **not optional**: the build defines `__WXGTK__` and the CMake configure step
+pkg-checks `gtk+-3.0`, so wx will not configure without it; and under GTK `guid.cpp` generates guids through libuuid's `uuid_generate`, which the backend links against. `ninja-build` is what the
 `linux-debug` / `linux-release` presets generate for. The driver `-dev` packages are only needed
 for the `OES_USE_*` options you turn on — SQLite is always embedded.
 
