@@ -203,12 +203,26 @@ ibFirebirdLease::AcquireResult ibFirebirdLease::TryAcquireExclusive() {
 	// aren't blocked), keeping the lock region small is sound hygiene
 	// and guards against mandatory-locking filesystems (Linux ext
 	// with -o mand) that would otherwise block follower reads.
+	// OFD ("open file description") locks where the platform has them, plain POSIX locks
+	// otherwise. This is not a detail: a classic fcntl lock belongs to the PROCESS, so a
+	// second ibFirebirdLease inside the same process re-takes it happily instead of seeing
+	// AnotherLeaderActive — leader election would not notice a second contender in its own
+	// process, and two lease tests failed on Linux for exactly that reason. An OFD lock
+	// belongs to the open file description, which is what Windows' LockFileEx does per
+	// HANDLE, so the two platforms finally mean the same thing. Linux 3.15+; where the
+	// constant is absent (older kernels, macOS) the old process-wide behaviour remains.
 	struct flock fl{};
 	fl.l_type   = F_WRLCK;
 	fl.l_whence = SEEK_SET;
 	fl.l_start  = kLockSentinelOffset;
 	fl.l_len    = 1;
-	if (fcntl(m_fd, F_SETLK, &fl) < 0) {
+#ifdef F_OFD_SETLK
+	fl.l_pid = 0;                        // required to be 0 for OFD commands
+	const int lockCmd = F_OFD_SETLK;
+#else
+	const int lockCmd = F_SETLK;
+#endif
+	if (fcntl(m_fd, lockCmd, &fl) < 0) {
 		if (errno == EAGAIN || errno == EACCES) {
 			close(m_fd);
 			m_fd = -1;
@@ -359,12 +373,18 @@ void ibFirebirdLease::Release() {
 		}
 #else
 		if (m_fd >= 0) {
+			// Released with the same command family it was taken with — see TryAcquireExclusive.
 			struct flock fl{};
 			fl.l_type   = F_UNLCK;
 			fl.l_whence = SEEK_SET;
 			fl.l_start  = kLockSentinelOffset;
 			fl.l_len    = 1;
+#ifdef F_OFD_SETLK
+			fl.l_pid = 0;
+			fcntl(m_fd, F_OFD_SETLK, &fl);
+#else
 			fcntl(m_fd, F_SETLK, &fl);
+#endif
 		}
 #endif
 		m_holdsLock = false;

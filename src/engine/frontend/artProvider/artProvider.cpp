@@ -29,8 +29,8 @@
 #include "artProvider/designer/designerPage.xpm"
 #include "artProvider/designer/codePage.xpm"
 
-#include "artProvider/metaData/commonFolder.xpm"
-#include "artProvider/metaData/saveMetadata.xpm"
+#include "artProvider/metadata/commonFolder.xpm"
+#include "artProvider/metadata/saveMetadata.xpm"
 
 #include "artProvider/service/message.xpm"
 #include "artProvider/service/variables.xpm"
