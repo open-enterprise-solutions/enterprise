@@ -82,7 +82,9 @@ bool ibValueMetaObjectCommand::Execute(ibInterfaceCommandType /*cmdType*/, ibBac
 {
 	// Run the handler through the command's OWN descriptor — private, no common-module registration,
 	// no name-resolvable exports (a command handler is never called by name from script).
-	ibValuePtr<ibValueCommandDataObject> runtime = new ibValueCommandDataObject(this);
+	// Direct-initialised: ibValuePtr's pointer constructor is explicit, so `= new …` is
+	// copy-initialisation and ill-formed. MSVC accepts it anyway; GCC does not.
+	ibValuePtr<ibValueCommandDataObject> runtime(new ibValueCommandDataObject(this));
 
 	//   CommandParameter = what the command runs on (caller-supplied); ExecuteParameters = the source form.
 	ibValue cmdParam  = commandParameter ? *commandParameter : ibValue();
