@@ -185,14 +185,27 @@ void ibTranslateCode::ibDefineCollection::SetDefine(const wxString& strName, con
 // ibLexem — out-of-line accessors (need ibTranslateCode definition)
 //////////////////////////////////////////////////////////////////////
 
+// These return a REFERENCE, so the fallback must be an object that outlives the call.
+//
+// They used to spell it `… ? m_translateCode->m_strX : wxString()`, which returns a
+// reference to a DEAD TEMPORARY — and on every call, not just the null one: a conditional
+// whose second operand is an lvalue and whose third is a prvalue yields a prvalue, so even
+// the non-null branch was copied into a temporary first. The caller then read freed stack.
+//
+// MSVC survived it by accident (the temporary's stack slot happened to stay intact long
+// enough for AddLineInfo to copy out of it); GCC reuses the memory immediately and every
+// test that compiles a script segfaulted. A file-scope empty string keeps both operands
+// lvalues, so the conditional stays an lvalue and the reference is real.
+static const wxString s_emptyLexemString;
+
 const wxString& ibLexem::GetModuleName() const {
-	return m_translateCode ? m_translateCode->m_strModuleName : wxString();
+	return m_translateCode ? m_translateCode->m_strModuleName : s_emptyLexemString;
 }
 const wxString& ibLexem::GetDocPath() const {
-	return m_translateCode ? m_translateCode->m_strDocPath : wxString();
+	return m_translateCode ? m_translateCode->m_strDocPath : s_emptyLexemString;
 }
 const wxString& ibLexem::GetFileName() const {
-	return m_translateCode ? m_translateCode->m_strFileName : wxString();
+	return m_translateCode ? m_translateCode->m_strFileName : s_emptyLexemString;
 }
 
 //////////////////////////////////////////////////////////////////////
