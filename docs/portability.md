@@ -1,10 +1,12 @@
 # Portability — the rules, and what breaking them cost
 
 > **Why this file exists.** On 2026-08-02 the tree was compiled by GCC for the first time in a
-> long while (CI, see [BUILD.md § Continuous integration](BUILD.md)). It took **fourteen
-> rounds** to get from "does not compile" to "builds and runs 95% of the suite". Almost none of
-> the fixes made the code *more Linux-ish* — each one made it **correct C++** that MSVC had been
-> letting slide. This is the distilled set of rules, so the next thousand lines do not repeat it.
+> long while (CI, see [BUILD.md § Continuous integration](BUILD.md)). It took a day to get from
+> "does not compile" to **the whole suite green on Linux, 914/914 — the same count as Windows**.
+> Almost none of the fixes made the code *more Linux-ish*; each one made it **correct C++** that
+> MSVC had been letting slide, and one of them (§1.6, the dangling `?:` reference) was live
+> undefined behaviour in the shipping Windows build. This is the distilled set of rules, so the
+> next thousand lines do not repeat it.
 >
 > Read § 1 before writing code that touches types, includes or platform APIs. § 2 is the
 > evidence.
@@ -75,7 +77,19 @@ in-class alias so `ibDatabaseLayer::ibTxOptions` still reads the same.
 | `ibValuePtr<T> p = new T()` | the pointer constructor is `explicit`; copy-init cannot use it |
 | `ofstream::open(wstring)` | an MSVC extension — POSIX takes UTF-8 bytes |
 
-### 1.7 Keep the warning log readable, or it stops being a tool
+### 1.7 A GUI object may not be a file-scope static
+
+A `static wxScreenDC` (or `wxBitmap`, `wxFont`, …) at namespace scope is constructed while the
+library loads — **before `wxApp::OnInit`, before `gtk_init`**. Windows tolerates it because
+`GetDC(nullptr)` works at any time; GTK does not. The compiler cannot see this: it is a
+load-order fault, so it shows up as a crash on startup, not as an error.
+
+Build the object where it is used. `ibDynamicStaticText` measured labels through a shared static
+DC, which additionally forced a critical section around the measuring block — a shared DC cannot
+serve two threads. Local, it costs a DC only on a cache miss and needs no lock at all: the
+portability fix removed code rather than adding it.
+
+### 1.8 Keep the warning log readable, or it stops being a tool
 
 The first GCC build produced **~48,000 warnings**. Buried in them were three
 `-Wreturn-local-addr` lines naming the exact cause of 33 crashing tests — found only because
@@ -91,7 +105,7 @@ rises again, it means something:
 | `-Wreorder` | 1,098 | 107 | none — every initialiser reads a *parameter*; the only two members initialised from another member declare it first |
 | `-Wswitch` | 83 | 13 | none — each is a deliberately narrow switch with a fallback return after it |
 
-### 1.8 Fix the root, then sweep — do not fix where the compiler stopped
+### 1.9 Fix the root, then sweep — do not fix where the compiler stopped
 
 A compiler reports the first place a class of mistake surfaces, never the class. Every time one
 of these appeared, the same pattern was grepped across the tree, and it usually found more:
@@ -106,26 +120,37 @@ including the instances the compiler had not reached yet.
 
 | Platform | Build | Suite | Notes |
 |---|---|---|---|
-| **Windows x64** (MSVC, Ninja) | green | **855/855** | Matches the local `.sln` build exactly |
+| **Windows x64** (MSVC, Ninja) | green | **914/914** | Matches the local `.sln` build exactly |
 | **Windows x86** (MSVC, `.sln`) | green | — | The shipping build |
-| **Linux x64** (GCC 11, libstdc++, wxGTK) | green | 820/862 | See below |
-| **GUI (Linux, Xvfb)** | — | — | Runs `oes_frontend_runtime_test`; 26/26 locally on wxMSW |
+| **Linux x64** (GCC 11, libstdc++, wxGTK) | green | **914/914** | Identical count to Windows — same tests, same result |
+| **GUI (Linux, Xvfb)** | in progress | — | See below |
 | **macOS** | not in CI | — | A colleague builds locally; ARM64, libc++, wxOSX — three differences at once |
 
-### Linux — what is still red (2026-08-02)
+The engine — backend, compiler, interpreter, query engine, all five drivers — is cross-platform
+as of 2026-08-02. Two toolchains, two standard libraries, two 64-bit models, one result.
 
-- **33 SEGFAULTs, one suspected root.** Every failing test compiles or executes a script:
-  `CompilerTest`, `ClosureCapture`, `RuntimeTest` in full, plus `CompilerAOT`. Nothing in values,
-  queries, serialization or the DB layer fails. `RuntimeTest.EmptyBytecodeNoop` **passes**, so the
-  machinery comes up and it is handling non-empty source that dies.
+### What the crashes turned out to be
 
-  Worth stating plainly: **the same tests pass on Windows**. A crash on one platform with green
-  tests on another is as often latent undefined behaviour as it is a platform difference — the
-  kind that "works" only because of an allocator or an initialisation order. Until the backtrace
-  says otherwise, treat it as possibly affecting Windows too. CI takes a `gdb` backtrace on
-  failure so the next round answers this rather than guessing.
-- **2 `FirebirdLeaseTest` failures**, plain assertion failures rather than crashes — environment
-  rather than language, not yet investigated.
+The first Linux run had **33 SEGFAULTs**, every one in a test that compiles or executes a script.
+The cause was not a platform difference: three accessors in `ibLexem` returned `const wxString&`
+from a conditional whose second arm was a temporary. A conditional with an lvalue and a prvalue
+arm yields a **prvalue**, so the reference dangled on *every* call, on every platform. Windows
+had been passing on allocator luck. Fixing it retired all 33 at once — and removed real
+undefined behaviour from the shipping build.
+
+The remaining two `FirebirdLeaseTest` failures were genuine POSIX semantics: `fcntl(F_SETLK)`
+locks are owned by the **process**, not the file description, so two connections inside one
+process could not see each other's lock and leader election never excluded anyone. `F_OFD_SETLK`
+(Linux 3.15+) is tied to the open file description and matches what `LockFileEx` does per HANDLE
+on Windows.
+
+### GUI — where it stands
+
+The frontend compiles **1293 of 1672** objects under wxGTK. Notably, nothing among them failed on
+widget drawing: `uikit` is a wxUniversal fork that paints its own controls, so it carries no
+native-toolkit assumptions. Every error so far has been ordinary C++ that MSVC accepted —
+default arguments binding a non-const reference to a temporary, an anonymous aggregate holding
+members with constructors, one include path whose case only a case-sensitive filesystem checks.
 
 ### Not yet proven anywhere
 

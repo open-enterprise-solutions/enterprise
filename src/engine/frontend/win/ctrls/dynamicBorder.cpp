@@ -1,7 +1,5 @@
 #include "dynamicBorder.h"
 
-wxScreenDC ibDynamicStaticText::ms_calcLabelDC;
-
 wxSize ibDynamicStaticText::DoGetBestClientSize() const
 {
 	if (m_staticTextCache.IsSameAs(m_labelOrig, m_font)) {
@@ -10,12 +8,15 @@ wxSize ibDynamicStaticText::DoGetBestClientSize() const
 
 	if (!m_labelOrig.IsEmpty()) {
 
-		// for other thread 
-		static wxCriticalSection s_getBestClientSizeCS;
-		wxCriticalSectionLocker enter(s_getBestClientSizeCS);
+		// The measuring DC is built here rather than kept as a shared static one. A static
+		// wxScreenDC is constructed while the library loads — before the toolkit is up, which
+		// GTK does not survive — and it was what forced the critical section around this block,
+		// since a shared DC cannot be used from two threads at once. Local, it costs a DC only
+		// on a cache miss (a changed label or font), and it needs no locking at all.
+		wxScreenDC calcLabelDC;
 
-		ms_calcLabelDC.SetFont(m_font);
-		ms_calcLabelDC.GetMultiLineTextExtent(
+		calcLabelDC.SetFont(m_font);
+		calcLabelDC.GetMultiLineTextExtent(
 			m_labelOrig,
 			&m_staticTextCache.m_sizeLabel.x, &m_staticTextCache.m_sizeLabel.y
 		);

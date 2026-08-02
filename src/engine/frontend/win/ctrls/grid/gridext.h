@@ -1862,11 +1862,20 @@ public:
 
 	bool IsFrozen() const;
 
-	void DrawGridCellArea(wxDC& dc, const ibGridCellCoordsArray& cells, ibGridCellCacheArray& storage = ibGridCellCacheArray());
+	// The scratch cache is an out-parameter, so it cannot be defaulted to a temporary — a default
+	// argument binding a non-const reference to a prvalue is an MSVC extension. The short forms
+	// below own a local instead; callers that need the filled cache pass their own.
+	void DrawGridCellArea(wxDC& dc, const ibGridCellCoordsArray& cells, ibGridCellCacheArray& storage);
+	void DrawGridCellArea(wxDC& dc, const ibGridCellCoordsArray& cells) {
+		ibGridCellCacheArray storage; DrawGridCellArea(dc, cells, storage);
+	}
 	void DrawGridSpace(wxDC& dc, ibGridWindow* gridWindow);
 	void DrawAllGridLines();
 	void DrawAllGridWindowLines(wxDC& dc, const wxRegion& reg, ibGridWindow* gridWindow);
-	void DrawCell(wxDC& dc, const ibGridCellCoords&, ibGridCellCache& param = ibGridCellCache());
+	void DrawCell(wxDC& dc, const ibGridCellCoords& coords, ibGridCellCache& param);
+	void DrawCell(wxDC& dc, const ibGridCellCoords& coords) {
+		ibGridCellCache param; DrawCell(dc, coords, param);
+	}
 	void DrawBorder(wxDC& dc, const ibGridCellCacheArray& storage);
 	void DrawHighlight(wxDC& dc, const ibGridCellCoordsArray& cells);
 	void DrawFrozenBorder(wxDC& dc, ibGridWindow* gridWindow);

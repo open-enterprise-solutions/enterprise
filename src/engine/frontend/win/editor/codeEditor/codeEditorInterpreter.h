@@ -56,8 +56,14 @@ struct ibPrecompileContext
 	ibParamValue AddVariable(const wxString& varName, const wxString& varType = wxEmptyString, bool isExport = false, bool isTempVar = false, const ibValue& value = ibValue(), int declPos = 0);
 	void         SetVariable(const wxString& varName, const ibValue& value);
 
-	bool FindVariable(const wxString& name, ibValue& valContext = ibValue(), bool isContext = false);
-	bool FindFunction(const wxString& name, ibValue& valContext = ibValue(), bool isContext = false);
+	// valContext is an out-parameter and so cannot carry a temporary as its default (that binds a
+	// non-const reference to a prvalue — an MSVC extension). The name-only forms below, which is
+	// how every existence check calls these, keep the resolved context on a local and discard it.
+	bool FindVariable(const wxString& name, ibValue& valContext, bool isContext = false);
+	bool FindFunction(const wxString& name, ibValue& valContext, bool isContext = false);
+
+	bool FindVariable(const wxString& name) { ibValue valContext; return FindVariable(name, valContext); }
+	bool FindFunction(const wxString& name) { ibValue valContext; return FindFunction(name, valContext); }
 
 	void RemoveVariable(const wxString& name);
 
