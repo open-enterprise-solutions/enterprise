@@ -54,7 +54,7 @@ jobs:
             libgtk-3-dev libsqlite3-dev
 
       - name: Configure
-        run: cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=OFF
+        run: cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON
 
       - name: Build the test target
         run: cmake --build --preset linux-debug --target oes_tests
@@ -80,8 +80,9 @@ jobs:
         with:
           arch: x64
 
+      # Same driver set as the Linux jobs — see the note there.
       - name: Configure
-        run: cmake --preset windows-x64-debug -DBUILD_TESTING=ON
+        run: cmake --preset windows-x64-debug -DBUILD_TESTING=ON -DOES_USE_POSTGRESQL=ON
 
       - name: Build the test target
         run: cmake --build --preset windows-x64-debug --target oes_tests
@@ -116,7 +117,7 @@ jobs:
             libgtk-3-dev libsqlite3-dev xvfb
 
       - name: Configure
-        run: cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=OFF
+        run: cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON
 
       - name: Build the GUI test target
         run: cmake --build --preset linux-debug --target oes_frontend_runtime_test
