@@ -11,6 +11,8 @@
 #include "backend/interfaceHelper.h"
 #include "backend/roleHelper.h"
 
+#include "backend/metaCollection/metaObjectEnum.h"   // ibSelectMode — ProcessChoice takes it
+
 //*******************************************************************************
 class BACKEND_API ibMetaData;
 class BACKEND_API ibDataNode;   // serialize/dataBuilder.h — universal structure node
@@ -302,7 +304,7 @@ public:
 
 	//process choice
 	virtual bool ProcessChoice(ibBackendControlFrame* ownerValue,
-		const wxString& strFormName, enum ibSelectMode selMode) const {
+		const wxString& strFormName, ibSelectMode selMode) const {
 		return true;
 	}
 

@@ -571,7 +571,9 @@ public:
 
 	/// Begin a transaction. The default options preserve historical
 	/// (wait-mode, read-committed, read-write) behaviour.
-	void BeginTransaction(const ibTxOptions& opts = {});
+	// Spelled ibTxOptions() rather than {}: binding a braced-init-list to a const
+	// reference parameter default is something MSVC takes and GCC refuses here.
+	void BeginTransaction(const ibTxOptions& opts = ibTxOptions());
 
 	/// Commit the current transaction (or RollBack if any inner level
 	/// called RollBack first — see the aborted-flag semantics above).

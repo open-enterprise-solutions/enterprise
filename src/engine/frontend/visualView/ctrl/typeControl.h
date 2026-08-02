@@ -9,7 +9,7 @@
 #include "backend/backend_type.h"
 #include "backend/sourceDescription.h"   // ibSourceDescription::GetPath (GetSourceAbstractColumn inline)
 #include "backend/compiler/value.h"
-#include "backend/metaCollection/attribute/metaAttributeObjectEnum.h"
+#include "backend/metaCollection/metaObjectEnum.h"   // ibSelectMode (GetSelectMode's return type)
 ///////////////////////////////////////////////////////////////////////////
 
 class BACKEND_API ibMetaData;

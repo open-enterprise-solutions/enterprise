@@ -105,8 +105,15 @@ public:
 #pragma region __generic_h__
 
 	//attribute
+	// No default argument: it was `= std::vector<...>()`, i.e. a NON-CONST reference bound to a
+	// temporary — an MSVC extension GCC rejects. The base (ibValueMetaObjectCompositeData) already
+	// provides the no-argument form as a separate overload that owns a local vector and forwards
+	// here, so the default bought nothing. `using` re-exposes that overload, which this override
+	// would otherwise hide.
+	using ibValueMetaObjectCompositeData::GetGenericAttributeArrayObject;
+
 	virtual std::vector<ibValueMetaObjectAttributeBase*> GetGenericAttributeArrayObject(
-		std::vector<ibValueMetaObjectAttributeBase*>& array = std::vector<ibValueMetaObjectAttributeBase*>()) const {
+		std::vector<ibValueMetaObjectAttributeBase*>& array) const {
 		FillArrayObjectByPredefinedAttribute(array);
 		FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(array, { g_metaAttributeCLSID });
 		return array;

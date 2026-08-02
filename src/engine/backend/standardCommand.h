@@ -150,7 +150,9 @@ protected:
 
 		wxString GetNameByID(const ibActionID& lNumAction) const {
 			const ibCommandItem* act = FindByID(lNumAction);
-			return act != nullptr ? act->m_name : wxEmptyString;
+			// wxString() rather than wxEmptyString: the two arms of ?: must agree, and
+			// wxEmptyString is a const wxChar* — MSVC converts, GCC calls it ambiguous.
+			return act != nullptr ? act->m_name : wxString();
 		}
 
 		wxString GetCaptionByID(const ibActionID& lNumAction) const {

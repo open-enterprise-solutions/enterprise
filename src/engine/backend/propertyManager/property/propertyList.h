@@ -34,9 +34,14 @@ private:
 			eValType_pointer,
 			eValType_value,
 		} m_valType;
-		struct {
-			ibValue* m_pValue, m_cValue;
-		};
+		// Two plain members. They used to sit inside an ANONYMOUS struct, which is an MSVC
+		// extension and illegal here anyway: an anonymous aggregate may not hold a member
+		// with a constructor, and `ibValue* m_pValue, m_cValue;` declares m_cValue as an
+		// ibValue BY VALUE (the comma binds the `*` to the first name only). The wrapper
+		// carried no meaning — it was not a union, and every constructor below initialises
+		// both members — so it is gone and the declarations are spelled out.
+		ibValue* m_pValue;
+		ibValue  m_cValue;
 	public:
 
 		operator ibValue* () { return GetOptionValue(); }

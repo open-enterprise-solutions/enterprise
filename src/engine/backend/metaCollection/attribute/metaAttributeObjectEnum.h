@@ -7,11 +7,10 @@ enum ibItemMode {
 	ibItemMode_Folder_Item
 };
 
-enum ibSelectMode {
-	ibSelectMode_Items = 1,
-	ibSelectMode_Folders,
-	ibSelectMode_FoldersAndItems
-};
+// ibSelectMode and its ibValueEnumSelectMode wrapper moved to metaCollection/metaObjectEnum.h
+// — a choice mode belongs to the base metaobject (ProcessChoice takes it), not to attributes.
+// What stays here is genuinely attribute-scoped: how an attribute presents items, and whether
+// it is indexed.
 
 // Attribute indexing: a DB-level secondary index on the attribute for faster WHERE / JOIN /
 // list filtering. WithAdditionalOrder appends the row reference to the index so list browsing
@@ -34,18 +33,6 @@ class ibValueEnumItemMode : public ibValueEnumeration<ibItemMode> {
 		AddEnumeration(ibItemMode_Item, wxT("Items"), _("Items"));
 		AddEnumeration(ibItemMode_Folder, wxT("Folders"), _("Folders"));
 		AddEnumeration(ibItemMode_Folder_Item, wxT("FoldersAndItems"), _("Folders and items"));
-	}
-};
-
-class ibValueEnumSelectMode : public ibValueEnumeration<ibSelectMode> {
-	public:
-	ibValueEnumSelectMode() : ibValueEnumeration() {}
-	//ibValueEnumSelectMode(const ibSelectMode &mode) : ibValueEnumeration(mode) {}
-
-	virtual void CreateEnumeration() {
-		AddEnumeration(ibSelectMode_Items, wxT("Items"), _("Items"));
-		AddEnumeration(ibSelectMode_Folders, wxT("Folders"), _("Folders"));
-		AddEnumeration(ibSelectMode_FoldersAndItems, wxT("FoldersAndItems"), _("Folders and items"));
 	}
 };
 

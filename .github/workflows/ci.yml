@@ -57,9 +57,11 @@ jobs:
           key: linux-debug-wx-${{ steps.wx.outputs.sha }}-${{ hashFiles('CMakeLists.txt', 'CMakePresets.json', 'src/**/CMakeLists.txt') }}
           restore-keys: linux-debug-wx-${{ steps.wx.outputs.sha }}-
 
-      # Firebird is OFF here: the suite's DB-backed tests run on SQLite, which is
-      # always embedded, so the Firebird client would be a dependency bought for
-      # nothing. The Windows job keeps the preset default (Firebird ON).
+      # Firebird OFF: the suite's DB-backed tests run on SQLite, which is always
+      # embedded, so the Firebird client would be a dependency bought for nothing.
+      # Switching a driver off is only meaningful because appData.cpp now guards its
+      # driver-specific paths on OES_USE_* — before that, an OFF driver still got
+      # referenced and the link failed.
       - name: Configure
         run: cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=OFF
 

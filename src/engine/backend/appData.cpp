@@ -516,6 +516,12 @@ bool ibApplicationData::CreateAppDataEnv(ibRunMode runMode)
 bool ibApplicationData::CreateFileAppDataEnv(ibRunMode runMode, const wxString& strDirDatabase, const wxString& strLocale)
 {
 	if (s_instance != nullptr) s_instance->DestroyAppDataEnv();
+#ifndef OES_USE_FIREBIRD
+	// A file base IS a Firebird base (sys.fdb). With the driver left out of the build there
+	// is nothing to open, so say so instead of failing to link — see ConfigurationDefs.props
+	// for the macro contract.
+	return false;
+#else
 		std::shared_ptr<ibDatabaseLayerFirebird> db(new ibDatabaseLayerFirebird());
 
 		wxString pathSep = wxFileName::GetPathSeparator();
@@ -577,13 +583,17 @@ bool ibApplicationData::CreateFileAppDataEnv(ibRunMode runMode, const wxString& 
 			return true;
 		}
 		return false;
-	return false;
+#endif
 }
 
 bool ibApplicationData::CreateServerAppDataEnv(ibRunMode runMode, const wxString& strServer, const wxString& strPort,
 	const wxString& strUser, const wxString& strPassword, const wxString& strDatabase, const wxString& strLocale)
 {
 	if (s_instance != nullptr) s_instance->DestroyAppDataEnv();
+#ifndef OES_USE_POSTGRESQL
+	// The server base is PostgreSQL. Driver not in the build -> no server base.
+	return false;
+#else
 		std::shared_ptr<ibDatabaseLayerPostgres> db(new ibDatabaseLayerPostgres());
 		if (db->Open(strServer, strPort, strDatabase, strUser, strPassword)) {
 
@@ -637,7 +647,7 @@ bool ibApplicationData::CreateServerAppDataEnv(ibRunMode runMode, const wxString
 			return true;
 		}
 		return false;
-	return false;
+#endif
 }
 
 bool ibApplicationData::SetLocaleAppDataEnv(const wxString& strLocale)

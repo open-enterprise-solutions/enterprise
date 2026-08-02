@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -193,6 +193,7 @@
     <ClInclude Include="metaCollection\metaDiff.h" />
     <ClInclude Include="metaCollection\metaObject.h" />
     <ClInclude Include="metaCollection\metaObjectMetadata.h" />
+    <ClInclude Include="metaCollection\metaObjectEnum.h" />
     <ClInclude Include="metaCollection\metaObjectMetadataEnum.h" />
     <ClInclude Include="metaCollection\metaRoleObject.h" />
     <ClInclude Include="metaCollection\partial\accumulationRegister.h" />
@@ -523,6 +524,7 @@
     <ClCompile Include="metaCollection\metaObject.cpp" />
     <ClCompile Include="metaCollection\metaObjectSerialize.cpp" />
     <ClCompile Include="metaCollection\metaObjectMetadata.cpp" />
+    <ClCompile Include="metaCollection\metaObjectEnum.cpp" />
     <ClCompile Include="metaCollection\metaObjectMetadataEnum.cpp" />
     <ClCompile Include="metaCollection\metaObjectMetadataMenu.cpp" />
     <ClCompile Include="metaCollection\metaObjectMetadataQuery.cpp" />
