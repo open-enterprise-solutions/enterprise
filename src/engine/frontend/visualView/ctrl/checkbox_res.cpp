@@ -1,7 +1,7 @@
 #include "widgets.h"
 
 /* XPM */
-static char* s_checkbox_xpm[] = {
+static const char* s_checkbox_xpm[] = {
 	/* columns rows colors chars-per-pixel */
 	"16 16 20 1",
 	"  c None",

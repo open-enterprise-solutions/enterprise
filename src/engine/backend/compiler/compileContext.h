@@ -197,9 +197,9 @@ struct ibCompileContext {
 		// FindFunction's bytecode fallback. No compile-context to
 		// wire (eval / synthesized path); back-pointer stays null.
 		ibFunction(const wxString& strFuncName, const ibByteCode::ibByteFunction& fn)
+			// Listed in declaration order — that is the order they are actually
+			// constructed in, whatever this list says.
 			: m_kind(fn.m_kind),
-			  m_strRealName(fn.m_strRealName.IsEmpty() ? strFuncName : fn.m_strRealName),
-			  m_strContext(fn.m_strContext),
 			  m_bCodeRet(fn.m_bCodeRet),
 			  // Same class of bug as the context-method m_bCodeRet gap:
 			  // a default-false flag the reconstruction path must restore.
@@ -208,6 +208,8 @@ struct ibCompileContext {
 			  // dropping this here would emit a plain OPER_CALL and dangle
 			  // the capture (compileCode.cpp:1165 reads m_needsHeapFrame).
 			  m_needsHeapFrame(fn.m_needsHeapFrame),
+			  m_strRealName(fn.m_strRealName.IsEmpty() ? strFuncName : fn.m_strRealName),
+			  m_strContext(fn.m_strContext),
 			  m_lVarCount(fn.m_lVarCount),
 			  m_nStart(fn.m_lCodeLine), m_nFinish(0), m_numLine(0)
 		{

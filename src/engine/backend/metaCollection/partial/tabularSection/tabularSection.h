@@ -174,16 +174,16 @@ public:
 #pragma endregion 
 
 	ibValueTabularSectionDataObjectBase() :
-		m_objectValue(nullptr), m_metaTable(nullptr),
-		m_recordColumnCollection(nullptr),
-		m_readOnly(false) {
+		m_readOnly(false), m_metaTable(nullptr),
+		m_objectValue(nullptr),
+		m_recordColumnCollection(nullptr) {
 		m_members.Bind(this, &ibValueTabularSectionDataObjectBase::FillMembers);
 	}
 
 	ibValueTabularSectionDataObjectBase(ibValueDataObject* objectValue, const ibValueMetaObjectTableData* tableObject, bool readOnly = false) :
-		m_objectValue(objectValue), m_metaTable(tableObject),
-		m_recordColumnCollection(new ibValueTabularSectionDataObjectColumnCollection(this)),
-		m_readOnly(readOnly) {
+		m_readOnly(readOnly), m_metaTable(tableObject),
+		m_objectValue(objectValue),
+		m_recordColumnCollection(new ibValueTabularSectionDataObjectColumnCollection(this)) {
 		m_members.Bind(this, &ibValueTabularSectionDataObjectBase::FillMembers);
 		// (The RAM composer is auto-bound to this model's value-storage in ibValueModelStorage's ctor — no manual
 		// source binding needed; ibDataRamComposer reads the storage's nodes in place.)

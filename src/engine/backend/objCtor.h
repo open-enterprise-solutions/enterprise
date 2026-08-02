@@ -202,7 +202,7 @@ class ibCtorMetaValueTypeTabularSection :
 	public ibCtorMetaValueType {
 public:
 
-	ibCtorMetaValueTypeTabularSection(ibValueMetaObjectRecordData* recordRef, ibValueMetaObjectTableData* recordTable) : ibCtorMetaValueType(), m_metaObject(recordRef), m_metaTable(recordTable) {
+	ibCtorMetaValueTypeTabularSection(ibValueMetaObjectRecordData* recordRef, ibValueMetaObjectTableData* recordTable) : ibCtorMetaValueType(), m_metaTable(recordTable), m_metaObject(recordRef) {
 		m_classType = tabularSection_to_clsid(m_metaTable->GetMetaID());
 	}
 
@@ -248,7 +248,7 @@ class ibCtorMetaValueTypeTabularSectionString :
 	public ibCtorMetaValueType {
 public:
 
-	ibCtorMetaValueTypeTabularSectionString(ibValueMetaObjectRecordData* recordRef, ibValueMetaObjectTableData* recordTable) : ibCtorMetaValueType(), m_metaObject(recordRef), m_metaTable(recordTable) {
+	ibCtorMetaValueTypeTabularSectionString(ibValueMetaObjectRecordData* recordRef, ibValueMetaObjectTableData* recordTable) : ibCtorMetaValueType(), m_metaTable(recordTable), m_metaObject(recordRef) {
 		m_classType = tabularSectionString_to_clsid(m_metaTable->GetMetaID());
 	}
 

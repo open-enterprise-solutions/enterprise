@@ -41,7 +41,7 @@ wxChartsRectangle::wxChartsRectangle(wxDouble x,
                                      const wxChartTooltipProvider::ptr tooltipProvider,
                                      const wxChartsRectangleOptions &options)
     : wxChartsElement(tooltipProvider), 
-    m_position(x, y), m_width(0), m_height(0), m_options(options)
+    m_options(options), m_position(x, y), m_width(0), m_height(0)
 {
 }
 

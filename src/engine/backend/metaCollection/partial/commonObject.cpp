@@ -1865,9 +1865,9 @@ ibValueRecordDataObjectRef::ibValueRecordDataObjectRef(const ibValueMetaObjectRe
 	// never baked into the key). An existing object keeps its stored guid.
 	ibValueRecordDataObject(objGuid.isValid() ? objGuid : ibGuid(ibGuid::newGuid(GUID_RANDOM)),
 		!objGuid.isValid()),
+	m_objModified(false),
 	m_metaObject(metaObject),
-	m_reference_impl(nullptr),
-	m_objModified(false)
+	m_reference_impl(nullptr)
 {
 	if (m_metaObject != nullptr)
 		m_reference_impl = new ibReference(m_objGuid);   // pure guid; type is the metaObject / _RTRef
@@ -1875,9 +1875,9 @@ ibValueRecordDataObjectRef::ibValueRecordDataObjectRef(const ibValueMetaObjectRe
 
 ibValueRecordDataObjectRef::ibValueRecordDataObjectRef(const ibValueRecordDataObjectRef& src) :
 	ibValueRecordDataObject(src),
+	m_objModified(false),
 	m_metaObject(src.m_metaObject),
-	m_reference_impl(nullptr),
-	m_objModified(false)
+	m_reference_impl(nullptr)
 {
 	if (m_metaObject != nullptr)
 		m_reference_impl = new ibReference(m_objGuid);   // pure guid; type is the metaObject / _RTRef
@@ -3225,15 +3225,17 @@ ibValueRecordSetObject* ibValueRecordSetObject::CopyRegisterValue()
 
 ibValueRecordSetObject::ibValueRecordSetObject(const ibValueMetaObjectRegisterData* metaObject, const ibUniqueKeyPair& uniqueKey) : ibValueModelStorage(),
 ibRuntimeModuleDataObject(m_members, this),
-m_recordColumnCollection(new ibValueRecordSetObjectRegisterColumnCollection(this)), m_recordSetKeyValue(new ibValueRecordSetObjectRegisterKeyValue(this)),
-m_metaObject(metaObject), m_keyValues(uniqueKey.IsOk() ? uniqueKey : metaObject->CreateUniqueKeyPair()), m_objModified(false), m_selected(false)
+m_objModified(false), m_selected(false),
+m_keyValues(uniqueKey.IsOk() ? uniqueKey : metaObject->CreateUniqueKeyPair()), m_metaObject(metaObject),
+m_recordColumnCollection(new ibValueRecordSetObjectRegisterColumnCollection(this)), m_recordSetKeyValue(new ibValueRecordSetObjectRegisterKeyValue(this))
 {
 }
 
 ibValueRecordSetObject::ibValueRecordSetObject(const ibValueRecordSetObject& source) : ibValueModelStorage(),
 ibRuntimeModuleDataObject(m_members, this),
-m_recordColumnCollection(new ibValueRecordSetObjectRegisterColumnCollection(this)), m_recordSetKeyValue(new ibValueRecordSetObjectRegisterKeyValue(this)),
-m_metaObject(source.m_metaObject), m_keyValues(source.m_keyValues), m_objModified(true), m_selected(false)
+m_objModified(true), m_selected(false),
+m_keyValues(source.m_keyValues), m_metaObject(source.m_metaObject),
+m_recordColumnCollection(new ibValueRecordSetObjectRegisterColumnCollection(this)), m_recordSetKeyValue(new ibValueRecordSetObjectRegisterKeyValue(this))
 {
 	for (long row = 0; row < source.GetRowCount(); row++) {
 		ibComposerNode* node = source.GetViewData<ibComposerNode>(source.GetItem(row));
@@ -3586,7 +3588,7 @@ ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::~ibValueRecordSe
 //////////////////////////////////////////////////////////////////////
 
 ibValueRecordSetObject::ibValueRecordSetObjectRegisterKeyValue::ibValueRecordSetObjectRegisterKeyDescriptionValue::ibValueRecordSetObjectRegisterKeyDescriptionValue(ibValueRecordSetObject* recordSet, const ibMetaID& id) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE),
-m_recordSet(recordSet), m_metaId(id)
+m_metaId(id), m_recordSet(recordSet)
 {
 	m_members.Bind(this, &ibValueRecordSetObjectRegisterKeyDescriptionValue::FillMembers);
 }

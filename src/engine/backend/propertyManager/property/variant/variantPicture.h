@@ -78,31 +78,31 @@ public:
 
 	//set picture data 
 	ibVariantDataPicture(const ibPropertyObject* prop, const ibClassID& id) :
-		m_pictureDesc(id), m_ownerProperty(prop)
+		m_ownerProperty(prop), m_pictureDesc(id)
 	{
 		m_externalPicture = new ibVariantDataExternalPicture();
 	}
 
 	ibVariantDataPicture(const ibPropertyObject* prop, const ibMetaID& id) :
-		m_pictureDesc(id), m_ownerProperty(prop)
+		m_ownerProperty(prop), m_pictureDesc(id)
 	{
 		m_externalPicture = new ibVariantDataExternalPicture();
 	}
 
 	ibVariantDataPicture(const ibPropertyObject* prop, const ibExternalPictureDescription& container) :
-		m_pictureDesc(container), m_ownerProperty(prop)
+		m_ownerProperty(prop), m_pictureDesc(container)
 	{
 		m_externalPicture = new ibVariantDataExternalPicture(container);
 	}
 
 	ibVariantDataPicture(const ibPropertyObject* prop, const ibPictureDescription& pictureDesc) :
-		m_pictureDesc(pictureDesc), m_ownerProperty(prop)
+		m_ownerProperty(prop), m_pictureDesc(pictureDesc)
 	{
 		m_externalPicture = new ibVariantDataExternalPicture(pictureDesc.m_img_data);
 	}
 
 	ibVariantDataPicture(const ibVariantDataPicture& src) :
-		wxVariantData(), m_pictureDesc(src.m_pictureDesc), m_ownerProperty(src.m_ownerProperty)
+		wxVariantData(), m_ownerProperty(src.m_ownerProperty), m_pictureDesc(src.m_pictureDesc)
 	{
 		m_externalPicture = new ibVariantDataExternalPicture(*src.m_externalPicture);
 	}

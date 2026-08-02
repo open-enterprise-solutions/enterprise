@@ -43,10 +43,10 @@ wxChartsArc::wxChartsArc(wxDouble x,
                          wxDouble innerRadius,
                          const wxString &tooltip,
                          const wxChartsArcOptions &options)
-    : wxChartsElement(tooltip), m_x(x), m_y(y), 
-    m_startAngle(startAngle), m_endAngle(endAngle), 
-    m_outerRadius(outerRadius), m_innerRadius(innerRadius), 
-    m_options(options)
+    : wxChartsElement(tooltip), m_options(options),
+    m_x(x), m_y(y),
+    m_startAngle(startAngle), m_endAngle(endAngle),
+    m_outerRadius(outerRadius), m_innerRadius(innerRadius)
 {
     if (m_startAngle > (2 * M_PI))
     {

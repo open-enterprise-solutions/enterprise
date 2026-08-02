@@ -40,7 +40,7 @@
 wxHistogramDataset::wxHistogramDataset(const wxColor &lineColor,
                                        const wxColor &fillColor,
                                        wxVector<wxDouble> &data)
-    : m_lineColor(lineColor), m_fill(true), m_fillColor(fillColor), m_data(data)
+    : m_fill(true), m_fillColor(fillColor), m_lineColor(lineColor), m_data(data)
 {
 }
 
@@ -85,7 +85,7 @@ wxHistogram::Dataset::Dataset(wxDouble min,
                               std::size_t n,
                               const wxColor &lineColor,
                               const wxColor &fillColor)
-    :  m_lineColor(lineColor), m_fillColor(fillColor), m_fill(true)
+    :  m_fill(true), m_fillColor(fillColor), m_lineColor(lineColor)
 {
     m_buckets = wxVector<Bucket>(n);
     double step = (max-min)/n;

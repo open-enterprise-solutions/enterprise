@@ -89,23 +89,48 @@ DC, which additionally forced a critical section around the measuring block — 
 serve two threads. Local, it costs a DC only on a cache miss and needs no lock at all: the
 portability fix removed code rather than adding it.
 
-### 1.8 Keep the warning log readable, or it stops being a tool
+### 1.8 An initialiser list that disagrees with the declaration order is a lie
+
+Members are constructed in **declaration order**, always. The order written in the initialiser
+list changes nothing — the compiler silently reorders. So a list that reads
+
+```cpp
+class A { int m_size; int m_count; public: A(int n) : m_count(n), m_size(m_count * 2) {} };
+```
+
+looks like it computes `m_count` and then derives `m_size`, while in fact `m_size` is built
+first and reads an **uninitialised** `m_count`. No crash, no error — just a wrong number now
+and then. Nothing in this tree does that today (every initialiser reads a *parameter*), which
+is exactly why the lists were reordered rather than the warning silenced: the day someone adds
+a member-to-member dependency to a list that is already out of order, the bug is silent.
+
+### 1.9 Keep the warning log readable, or it stops being a tool
 
 The first GCC build produced **~48,000 warnings**. Buried in them were three
 `-Wreturn-local-addr` lines naming the exact cause of 33 crashing tests — found only because
-someone went looking. Two classes accounted for 97% of the volume and none of the value, so
-they are off in the CMake build: `-Wunknown-pragmas` (`#pragma region`, an MSVC editor hint)
-and `-Wattributes` (`BACKEND_API` on elaborated type specifiers, ignored off-Windows).
+someone went looking.
 
-What was deliberately left ON, having been swept and found clean — so that when the count
-rises again, it means something:
+Ask both toolchains for the same thing, and mean it:
 
-| Class | Count | Sites | Real bugs |
-|---|---|---|---|
-| `-Wreorder` | 1,098 | 107 | none — every initialiser reads a *parameter*; the only two members initialised from another member declare it first |
-| `-Wswitch` | 83 | 13 | none — each is a deliberately narrow switch with a fallback return after it |
+| | Flags | Note |
+|---|---|---|
+| GCC / Clang | `-Wall`, minus `-Wunused-parameter` / `-Wsign-compare` | `-Wunknown-pragmas` and `-Wattributes` are off — 97% of the original volume, none of the value (`#pragma region`; `BACKEND_API` on elaborated specifiers) |
+| MSVC (`.sln`, Debug) | `/W4` | was `/W3`, i.e. blind to `-Wreorder`'s counterpart `C5038` |
+| MSVC (CMake) | `/W4` | was `/W1` — CI saw **less** than the developer's own Visual Studio, so it could not act as the control |
 
-### 1.9 Fix the root, then sweep — do not fix where the compiler stopped
+`Common.props` and the CMake MSVC branch disable the same set (`4100` = unused parameter,
+`4018/4389/4245` = sign compare, `4127` = constant condition in wx macros), so a warning visible
+on one compiler is visible on the other.
+
+Cleared out on 2026-08-02, from 3,513 GCC warnings down to a few hundred:
+
+| Class | Was | Action |
+|---|---|---|
+| `-Wreorder` | 1,812 in 58 sites | lists reordered — see §1.8. One header (`compileContext.h`) accounted for 1,008 of them: it is included by every TU, so a single constructor was reported over and over. Count sites, not lines |
+| `-Wwrite-strings` | 1,374 | XPM arrays are `const char*` now (31 files). Also a real fix: they feed a `const char**` field, and `char*[]` → `const char**` is not a conversion the standard allows |
+| `-Wswitch` | 83 in 13 sites | left as is — each is a deliberately narrow switch with a fallback return after it |
+
+### 1.10 Fix the root, then sweep — do not fix where the compiler stopped
 
 A compiler reports the first place a class of mistake surfaces, never the class. Every time one
 of these appeared, the same pattern was grepped across the tree, and it usually found more:
@@ -123,7 +148,7 @@ including the instances the compiler had not reached yet.
 | **Windows x64** (MSVC, Ninja) | green | **914/914** | Matches the local `.sln` build exactly |
 | **Windows x86** (MSVC, `.sln`) | green | — | The shipping build |
 | **Linux x64** (GCC 11, libstdc++, wxGTK) | green | **914/914** | Identical count to Windows — same tests, same result |
-| **GUI (Linux, Xvfb)** | in progress | — | See below |
+| **GUI (Linux, Xvfb)** | green | **26/26** | `libfrontend.so` links; the runtime-form suite passes under Xvfb |
 | **macOS** | not in CI | — | A colleague builds locally; ARM64, libc++, wxOSX — three differences at once |
 
 The engine — backend, compiler, interpreter, query engine, all five drivers — is cross-platform
@@ -144,13 +169,25 @@ process could not see each other's lock and leader election never excluded anyon
 (Linux 3.15+) is tied to the open file description and matches what `LockFileEx` does per HANDLE
 on Windows.
 
-### GUI — where it stands
+### GUI — what it took
 
-The frontend compiles **1293 of 1672** objects under wxGTK. Notably, nothing among them failed on
-widget drawing: `uikit` is a wxUniversal fork that paints its own controls, so it carries no
-native-toolkit assumptions. Every error so far has been ordinary C++ that MSVC accepted —
-default arguments binding a non-const reference to a temporary, an anonymous aggregate holding
-members with constructors, one include path whose case only a case-sensitive filesystem checks.
+All **372** frontend translation units compile under wxGTK, `libfrontend.so` links, and the
+runtime-form suite passes 26/26 under Xvfb. (Sixteen more sources are excluded on purpose:
+`web/` + `wfrontend.cpp` belong to `wfrontend.dll`, and six `uikit` units are unfinished.)
+
+Not one failure was about drawing a widget. `uikit` is a wxUniversal fork that paints its own
+controls, so it carries no native-toolkit assumptions — it went through untouched. Everything
+that broke was ordinary C++ MSVC had accepted: default arguments binding a non-const reference
+to a temporary, an anonymous aggregate holding members with constructors, `wxToolTip` used
+without its header, `wxScrolledWindow::OnScroll` (gone since wx 2.8), and twice an include path
+whose case only a case-sensitive filesystem checks — the second of which alone blocked nine
+files, since the header is pulled in by the whole code editor.
+
+A note on method, because it cost the most: with ninja stopping at the first error, a 20-minute
+CI round returned exactly one line. Building the GUI job with `-k 0` returns every independent
+failure at once — the round that produced the final thirteen files resolved to **four** causes.
+Also worth knowing: a `fatal error` (missing header) stops that file at the `#include`, so its
+body is not checked at all. Thirteen failures were ten unread files plus three real errors.
 
 ### Not yet proven anywhere
 

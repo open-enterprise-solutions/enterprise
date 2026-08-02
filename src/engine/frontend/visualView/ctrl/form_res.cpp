@@ -1,7 +1,7 @@
 #include "form.h"
 
 /* XPM */
-static char* s_form_xpm[] = {
+static const char* s_form_xpm[] = {
 	/* columns rows colors chars-per-pixel */
 	"16 16 54 1",
 	", c #6C94C9",

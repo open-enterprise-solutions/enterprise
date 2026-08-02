@@ -1,7 +1,7 @@
 #include "gridBox.h"
 
 /* XPM */
-static char* s_grid_xpm[] = {
+static const char* s_grid_xpm[] = {
 	/* columns rows colors chars-per-pixel */
 	"16 16 4 1",
 	"  c Black",

@@ -1,7 +1,7 @@
 #include "tableBox.h"
 
 /* XPM */
-static char* s_dataviewlist_column_xpm[] = {
+static const char* s_dataviewlist_column_xpm[] = {
 	/* columns rows colors chars-per-pixel */
 	"17 17 7 1",
 	". c None",

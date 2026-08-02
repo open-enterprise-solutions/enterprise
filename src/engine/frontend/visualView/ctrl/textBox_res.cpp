@@ -1,7 +1,7 @@
 #include "textBox.h"
 
 /* XPM */
-static char* s_text_xpm[] = {
+static const char* s_text_xpm[] = {
 	/* columns rows colors chars-per-pixel */
 	"16 16 32 1",
 	"= c #97C4E7",

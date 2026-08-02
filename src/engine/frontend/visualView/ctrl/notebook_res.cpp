@@ -1,7 +1,7 @@
 #include "notebook.h"
 
 /* XPM */
-static char* s_notebook_xpm[] = {
+static const char* s_notebook_xpm[] = {
 	/* columns rows colors chars-per-pixel */
 	"16 16 6 1",
 	"X c None",

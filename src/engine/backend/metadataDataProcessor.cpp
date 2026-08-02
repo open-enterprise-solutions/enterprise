@@ -7,9 +7,9 @@
 #include "backend/appData.h"
 
 ibMetaDataDataProcessor::ibMetaDataDataProcessor() : ibMetaData(),
-m_commonObject(nullptr),
-m_moduleManager(nullptr),
 m_ownerMeta(nullptr),
+m_moduleManager(nullptr),
+m_commonObject(nullptr),
 m_version(version_oes_last)
 {
 	// Compile cache (designer mode only) is built by the image ctor via
@@ -44,9 +44,9 @@ m_version(version_oes_last)
 }
 
 ibMetaDataDataProcessor::ibMetaDataDataProcessor(ibMetaData* metaData, ibValueMetaObjectDataProcessor* srcDataProcessor) : ibMetaData(),
-m_commonObject(srcDataProcessor),
-m_moduleManager(nullptr),
 m_ownerMeta(nullptr),
+m_moduleManager(nullptr),
+m_commonObject(srcDataProcessor),
 m_version(version_oes_last)
 {
 	if (srcDataProcessor == nullptr) {

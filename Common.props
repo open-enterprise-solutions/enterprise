@@ -79,10 +79,19 @@
       <Optimization Condition="$(Configuration.StartsWith('Mixed'))">Disabled</Optimization>
       <!--
         4251 : class 'x' needs to have dll-interface to be used by clients of class 'y'
-        4275 : non dll-interface class 'x' used as base for dll-interface class 'y' 
+        4275 : non dll-interface class 'x' used as base for dll-interface class 'y'
         4458 : declaration of 'x' hides class member
+
+        The rest mirror what the GCC build turns off, so that a warning seen on one
+        toolchain is seen on the other. Debug builds at /W4 (see the .vcxproj files);
+        without these, /W4 buries the signal the way -Wall did before it was trimmed.
+        4100 : unreferenced formal parameter          (= -Wno-unused-parameter)
+        4127 : conditional expression is constant     (fires on wxWidgets macros)
+        4018 : signed/unsigned mismatch               (= -Wno-sign-compare)
+        4389 : signed/unsigned mismatch in ==         (same)
+        4245 : signed/unsigned conversion             (same)
       -->
-      <DisableSpecificWarnings>4251;4275;4458</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4251;4275;4458;4100;4127;4018;4389;4245</DisableSpecificWarnings>
       <!--
         LUABIND_DYNAMIC_LINK : self-explanatory
         MSVC;dSINGLE;WIN32 : for ODE

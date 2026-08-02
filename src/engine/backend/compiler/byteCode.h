@@ -217,8 +217,8 @@ struct ibByteCode {
 			          : (v.m_strType.IsEmpty() ? 0 : ibValue::GetIDObjectFromString(v.m_strType))),
 			  m_bScoped(v.m_bScoped),
 			  m_strRealName(v.m_strRealName),
-			  m_strContext(v.m_strContext),
-			  m_scopeDepth(v.m_scopeDepth)
+			  m_scopeDepth(v.m_scopeDepth),
+			  m_strContext(v.m_strContext)
 		{
 			// Compile-side ibVariable now carries the authoritative kind in
 			// the SAME ibVarKind enum (set at PushVariable + the extern /

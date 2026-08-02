@@ -1,5 +1,5 @@
 /* XPM */
-static char * checked_ld_xpm[] = {
+static const char* checked_ld_xpm[] = {
 "14 15 26 1",
 " 	c None",
 ".	c #1C5180",

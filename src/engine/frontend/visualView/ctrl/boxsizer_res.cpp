@@ -1,7 +1,7 @@
 #include "sizer.h"
 
 /* XPM */
-static char* s_boxSizer_xpm[] = {
+static const char* s_boxSizer_xpm[] = {
 	/* columns rows colors chars-per-pixel */
 	"16 16 3 1",
 	"  c None",

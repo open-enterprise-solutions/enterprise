@@ -7,9 +7,9 @@
 #include "backend/appData.h"
 
 ibMetaDataReport::ibMetaDataReport() : ibMetaData(),
-m_commonObject(nullptr),
-m_moduleManager(nullptr),
 m_ownerMeta(nullptr),
+m_moduleManager(nullptr),
+m_commonObject(nullptr),
 m_version(version_oes_last)
 {
 	// Compile cache (designer mode only) is built by the image ctor via
@@ -41,9 +41,9 @@ m_version(version_oes_last)
 }
 
 ibMetaDataReport::ibMetaDataReport(ibMetaData* metaData, ibValueMetaObjectReport* srcReport) : ibMetaData(),
-m_commonObject(srcReport),
 m_ownerMeta(nullptr),
 m_moduleManager(nullptr),
+m_commonObject(srcReport),
 m_version(version_oes_last)
 {
 	if (srcReport == nullptr) {

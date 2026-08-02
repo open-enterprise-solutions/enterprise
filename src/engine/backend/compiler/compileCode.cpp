@@ -34,8 +34,8 @@ static short gs_codeStyle = CODE_CES;
 ibCompileCode::ibCompileCode() :
 	ibTranslateCode(),
 	m_rootContext(new ibCompileContext(this)),
-	m_changedCode(false),
-	m_onlyFunction(false)
+	m_onlyFunction(false),
+	m_changedCode(false)
 {
 	InitializeCompileModule();
 
@@ -46,8 +46,8 @@ ibCompileCode::ibCompileCode() :
 ibCompileCode::ibCompileCode(const wxString& strModuleName, const wxString& strDocPath, bool onlyFunction) :
 	ibTranslateCode(strModuleName, strDocPath),
 	m_rootContext(new ibCompileContext(this)),
-	m_changedCode(false),
-	m_onlyFunction(onlyFunction)
+	m_onlyFunction(onlyFunction),
+	m_changedCode(false)
 {
 	InitializeCompileModule();
 
@@ -58,8 +58,8 @@ ibCompileCode::ibCompileCode(const wxString& strModuleName, const wxString& strD
 ibCompileCode::ibCompileCode(const wxString& strFileName) :
 	ibTranslateCode(strFileName),
 	m_rootContext(new ibCompileContext(this)),
-	m_changedCode(false),
-	m_onlyFunction(false)
+	m_onlyFunction(false),
+	m_changedCode(false)
 {
 	InitializeCompileModule();
 

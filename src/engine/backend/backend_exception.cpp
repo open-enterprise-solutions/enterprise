@@ -195,7 +195,7 @@ const wxString ibBackendException::GetErrorDescription() const
 }
 
 ibBackendException::ibBackendException(const wxString& strErrorDescription)
-	: m_strErrorDescription(strErrorDescription), m_errorHandled(false)
+	: m_errorHandled(false), m_strErrorDescription(strErrorDescription)
 {
 #ifdef DEBUG
 	wxLogDebug(strErrorDescription);

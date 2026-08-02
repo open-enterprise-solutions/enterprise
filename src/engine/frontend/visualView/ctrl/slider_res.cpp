@@ -1,7 +1,7 @@
 #include "widgets.h"
 
 /* XPM */
-static char* s_slider_xpm[] = {
+static const char* s_slider_xpm[] = {
 	/* columns rows colors chars-per-pixel */
 	"16 16 10 1",
 	"  c None",

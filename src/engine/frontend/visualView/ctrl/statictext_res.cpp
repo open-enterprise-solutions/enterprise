@@ -1,7 +1,7 @@
 #include "widgets.h"
 
 /* XPM */
-static char* s_static_text_xpm[] = {
+static const char* s_static_text_xpm[] = {
 	/* columns rows colors chars-per-pixel */
 	"16 16 18 1",
 	"  c None",

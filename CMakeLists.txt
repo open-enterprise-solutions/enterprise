@@ -168,9 +168,13 @@ if(MSVC)
     # a single big target like backend compiles its hundreds of .cpp serially
     # even under `cmake --build --parallel` (which only parallelises across
     # targets) — /MP fans them across cores.
-    add_compile_options(/fp:fast /GR /W1 /MP /bigobj)
-    # Suppress the same warnings disabled in the .vcxproj files
-    add_compile_options(/wd4251 /wd4275 /wd4458)
+    # /W4 matches the Debug configurations of the .vcxproj files. At /W1 this build saw
+    # less than the shipping one, which made it useless as the control against GCC: a
+    # warning the developer's own Visual Studio prints would have passed CI unnoticed.
+    add_compile_options(/fp:fast /GR /W4 /MP /bigobj)
+    # Same suppressions as Common.props, and for the same reason: they mirror what the
+    # GCC build turns off, so a warning seen on one toolchain is seen on the other.
+    add_compile_options(/wd4251 /wd4275 /wd4458 /wd4100 /wd4127 /wd4018 /wd4389 /wd4245)
 else()
     # GCC / Clang
     add_compile_options(-Wall -Wno-unused-parameter -Wno-sign-compare)

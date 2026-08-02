@@ -1,7 +1,7 @@
 #include "chartBox.h"
 
 /* XPM */
-static char* s_chartBox_xpm[] = {
+static const char* s_chartBox_xpm[] = {
 	/* columns rows colors chars-per-pixel */
 	"16 16 83 1",
 	"( c Black",

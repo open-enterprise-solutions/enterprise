@@ -371,14 +371,14 @@ public:
 	ibDataViewTreeNode(ibDataViewTreeNode* parent, const ibDataViewItem& item)
 		: m_parent(parent),
 		m_item(item),
-		m_branchData(NULL), m_viewMode(ibDataViewCell)
+		m_viewMode(ibDataViewCell), m_branchData(NULL)
 	{
 	}
 
 	ibDataViewTreeNode(ibDataViewTreeNode* parent, const ibDataViewItem& item, ibDataViewTreeNodeViewMode nodeType)
 		: m_parent(parent),
 		m_item(item),
-		m_branchData(NULL), m_viewMode(nodeType)
+		m_viewMode(nodeType), m_branchData(NULL)
 	{
 	}
 

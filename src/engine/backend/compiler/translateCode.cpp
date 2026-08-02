@@ -212,8 +212,8 @@ const wxString& ibLexem::GetFileName() const {
 // Construction/Destruction
 //////////////////////////////////////////////////////////////////////
 
-ibTranslateCode::ibTranslateCode() : m_defineList(nullptr),
-m_current_lex(this),
+ibTranslateCode::ibTranslateCode() : m_current_lex(this),
+m_defineList(nullptr),
 m_bAutoDeleteDefList(false),
 m_nModePreparing(LEXEM_ADD)
 {
@@ -221,20 +221,20 @@ m_nModePreparing(LEXEM_ADD)
 	if (ms_listHashKeyWord.size() == 0) LoadKeyWords(); //only once
 }
 
-ibTranslateCode::ibTranslateCode(const wxString& strModuleName, const wxString& strDocPath) : m_defineList(nullptr),
-m_strModuleName(strModuleName), m_strDocPath(strDocPath),
-m_current_lex(this),
+ibTranslateCode::ibTranslateCode(const wxString& strModuleName, const wxString& strDocPath) : m_current_lex(this),
+m_defineList(nullptr),
 m_bAutoDeleteDefList(false),
-m_nModePreparing(LEXEM_ADD)
+m_nModePreparing(LEXEM_ADD),
+m_strModuleName(strModuleName), m_strDocPath(strDocPath)
 {
 	if (ms_listHashKeyWord.size() == 0) LoadKeyWords();
 }
 
-ibTranslateCode::ibTranslateCode(const wxString& strFileName) : m_defineList(nullptr),
-m_strFileName(strFileName),
-m_current_lex(this),
+ibTranslateCode::ibTranslateCode(const wxString& strFileName) : m_current_lex(this),
+m_defineList(nullptr),
 m_bAutoDeleteDefList(false),
-m_nModePreparing(LEXEM_ADD)
+m_nModePreparing(LEXEM_ADD),
+m_strFileName(strFileName)
 {
 	if (ms_listHashKeyWord.size() == 0) LoadKeyWords();
 }

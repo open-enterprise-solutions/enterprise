@@ -1,7 +1,7 @@
 #include "htmlBox.h"
 
 /* XPM */
-static char* s_htmlwin_xpm[] = {
+static const char* s_htmlwin_xpm[] = {
 	/* columns rows colors chars-per-pixel */
 	"16 16 146 2",
 	"   c None",

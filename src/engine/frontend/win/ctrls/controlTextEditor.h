@@ -265,8 +265,7 @@ private:
 public:
 
 	ibControlTextEditor() :
-		m_passwordMode(false), m_multilineMode(false), m_textEditMode(true),
-		m_dvcMode(false)
+		m_dvcMode(false), m_passwordMode(false), m_multilineMode(false), m_textEditMode(true)
 	{
 		InitButtonSlots();
 	}
@@ -276,8 +275,7 @@ public:
 		const wxString& val = wxEmptyString,
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize, long style = wxBORDER_NONE) :
-		m_passwordMode(false), m_multilineMode(false), m_textEditMode(true),
-		m_dvcMode(false)
+		m_dvcMode(false), m_passwordMode(false), m_multilineMode(false), m_textEditMode(true)
 	{
 		InitButtonSlots();
 		Create(parent, id, val, pos, size, style);

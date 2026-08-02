@@ -141,14 +141,14 @@ public:
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	ibVariantDataSource(const ibBackendTypeSourceFactory* prop, const ibMetaID& id) : wxVariantData(),
-		m_attributeSource(nullptr), m_ownerProperty(prop) {
+		m_ownerProperty(prop), m_attributeSource(nullptr) {
 
 		m_attributeSource = new ibVariantDataAttributeSource(prop, id);
 		if (id != wxNOT_FOUND) m_sourceDesc.SetDefaultSource(id);
 	}
 
 	ibVariantDataSource(const ibBackendTypeSourceFactory* prop, const ibGuid& id, bool fillTypeDesc = true) : wxVariantData(),
-		m_attributeSource(nullptr), m_ownerProperty(prop) {
+		m_ownerProperty(prop), m_attributeSource(nullptr) {
 
 		const ibMetaID mid = GetIdByGuid(id);
 		m_attributeSource = new ibVariantDataAttributeSource(prop, fillTypeDesc ? mid : wxNOT_FOUND);
@@ -156,20 +156,20 @@ public:
 	}
 
 	ibVariantDataSource(const ibBackendTypeSourceFactory* prop, const ibTypeDescription& typeDesc) : wxVariantData(),
-		m_attributeSource(nullptr), m_ownerProperty(prop) {
+		m_ownerProperty(prop), m_attributeSource(nullptr) {
 
 		m_attributeSource = new ibVariantDataAttributeSource(prop, typeDesc);
 	}
 
 	ibVariantDataSource(const ibBackendTypeSourceFactory* prop, const ibSourceDescription& desc) : wxVariantData(),
-		m_attributeSource(nullptr), m_ownerProperty(prop), m_sourceDesc(desc) {
+		m_ownerProperty(prop), m_attributeSource(nullptr), m_sourceDesc(desc) {
 
 		m_attributeSource = new ibVariantDataAttributeSource(prop, wxNOT_FOUND);
 		RefreshTypeFromSource();   // resolve the leaf type from the explorer (not the metadata-seeded leaf id)
 	}
 
 	ibVariantDataSource(const ibVariantDataSource& srcData) : wxVariantData(),
-		m_attributeSource(nullptr), m_ownerProperty(srcData.m_ownerProperty), m_sourceDesc(srcData.m_sourceDesc) {
+		m_sourceDesc(srcData.m_sourceDesc), m_ownerProperty(srcData.m_ownerProperty), m_attributeSource(nullptr) {
 
 		m_attributeSource = new ibVariantDataAttributeSource(*srcData.m_attributeSource);
 	}

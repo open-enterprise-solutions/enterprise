@@ -1,7 +1,7 @@
 #include "toolBar.h"
 
 /* XPM */
-static char* s_toolbar_xpm[] = {
+static const char* s_toolbar_xpm[] = {
 	/* columns rows colors chars-per-pixel */
 	"16 16 36 1",
 	"  c None",

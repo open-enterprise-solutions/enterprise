@@ -143,8 +143,8 @@ wxMath2DPlot::Dataset::Dataset(bool showDots,
                                const wxColor &dotStrokeColor,
                                const wxChartType &chartType)
     : m_showDots(showDots), m_showLine(showLine),
-      m_lineColor(lineColor), m_dotStrokeColor(dotStrokeColor),
-      m_dotColor(lineColor), m_type(chartType)
+      m_lineColor(lineColor), m_dotColor(lineColor),
+      m_dotStrokeColor(dotStrokeColor), m_type(chartType)
 {
 }
 

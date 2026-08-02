@@ -1,7 +1,7 @@
 #include "toolBar.h"
 
 /* XPM */
-static char* s_tool_xpm[] = {
+static const char* s_tool_xpm[] = {
 	/* columns rows colors chars-per-pixel */
 	"16 16 52 1",
 	"  c None",
@@ -86,7 +86,7 @@ wxIcon ibValueToolBarItem::GetIconGroup()
 }
 
 /* XPM */
-static char* s_toolSeparator_xpm[] = {
+static const char* s_toolSeparator_xpm[] = {
 	/* columns rows colors chars-per-pixel */
 	"16 16 32 1",
 	"  c None",
