@@ -176,9 +176,11 @@ What that claim does **not** cover, so nobody reads more into the table than it 
 - **Only SQLite actually executes.** Firebird is compiled but loads `fbclient` at run time, and
   the runner has none; PostgreSQL, MySQL and ODBC are compile-only. `FirebirdLeaseTest` exercises
   file-lock mechanics against a path that need not exist, not the driver.
-- **Only x86-64.** `ibNumber`'s portable carry fallback — everything that is not MSVC on x86/x64
-  — has still never been *executed*, only compiled. An `ubuntu-24.04-arm` job would fix that,
-  and it is free for public repositories.
+- **Only x86-64** — though this matters less than it sounds. `ibNumber` selects its carry
+  intrinsics on `_MSC_VER`, not on the architecture, so GCC and Clang always take the portable
+  fallback: the Linux job already *executes* it, across all 94 `ibNumber` tests. An ARM job
+  would add a second little-endian 64-bit target to a proven one, so it buys less than the
+  gap it was meant to close.
 - **Nobody has run the product on Linux.** Building is not running: the `wxScreenDC` in §1.7 was
   found by reading, and that class of fault — load order, resources, paths — only appears when
   something actually starts.
