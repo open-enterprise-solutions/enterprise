@@ -31,6 +31,10 @@ target_include_directories(frontend
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_SOURCE_DIR}/src/engine
         ${CMAKE_SOURCE_DIR}/src/engine/backend
+        # win/theme/luna_dockart.cpp is a fork of wxAUI's dock art and reaches into wx's
+        # GTK-private headers, which include <gtk/gtk.h> outright. wx links GTK privately,
+        # so those paths never arrive through wx::core. Empty off Linux, hence unguarded.
+        ${GTK3_INCLUDE_DIRS}
 )
 
 target_compile_definitions(frontend

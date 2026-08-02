@@ -342,13 +342,9 @@ bool ibDatabaseLayerPostgres::Open()
 		SetEncoding(&conv);
 	}
 
-	if (m_strDatabase != wxT("") && !DatabaseExists(m_strDatabase)) {
-		bool result = DoRunQuery("CREATE DATABASE " + m_strDatabase, false) != DATABASE_LAYER_QUERY_RESULT_ERROR;
-		if (!result)
-			return false;
-		DoRunQuery("GRANT ALL PRIVILEGES ON DATABASE " + m_strDatabase + " to " + m_strUser, false);
-	}
-
+	// The connection above deliberately carries no database name: it lands on the server's
+	// default so that CREATE DATABASE can run. Once the database is there, the connection is
+	// dropped and reopened against it below.
 	if (m_strDatabase != wxT(""))
 	{
 		databaseBuffer = ConvertToUnicodeStream(m_strDatabase);
@@ -368,7 +364,7 @@ bool ibDatabaseLayerPostgres::Open()
 		m_pDatabase = nullptr;
 	}
 
-	m_pDatabase = m_pInterface->GetPQsetdbLogin()(pHost, pPort, pOptions, pTty, databaseBuffer, pUser, pPassword);
+	m_pDatabase = m_pInterface->GetPQsetdbLogin()(pHost, pPort, pOptions, pTty, pDatabase, pUser, pPassword);
 	if (m_pInterface->GetPQstatus()((PGconn*)m_pDatabase) == CONNECTION_BAD)
 	{
 		SetErrorCode(ibDatabaseLayerPostgres::TranslateErrorCode(m_pInterface->GetPQstatus()((PGconn*)m_pDatabase)));

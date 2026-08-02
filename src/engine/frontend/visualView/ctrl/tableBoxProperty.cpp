@@ -52,7 +52,7 @@ void ibValueModelTableBox::RefillFromSource()
 		// TYPE-ONLY source (only a Type is set, e.g. CatalogList.Catalog1): materialize the model straight
 		// from the Type and mirror its columns — the SAME set the runtime CreateColumnCollection builds.
 		// Each column binds by its own metaID (a 1-hop path == the attribute).
-		ibValuePtr<ibValueModel> typeModel = ibTypeControlFactory::CreateAndConvertValueRef<ibValueModel>();
+		ibValuePtr<ibValueModel> typeModel(ibTypeControlFactory::CreateAndConvertValueRef<ibValueModel>());
 		ibValueModel::ibValueModelColumnCollection* cols = typeModel != nullptr ? typeModel->GetColumnCollection() : nullptr;
 		if (cols != nullptr) {
 			for (unsigned int idx = 0; idx < cols->GetColumnCount(); idx++) {

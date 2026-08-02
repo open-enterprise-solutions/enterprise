@@ -4540,12 +4540,10 @@ void ibTreeListMainWindow::OnScroll(wxScrollWinEvent & event) {
 	// send event to ibTreeListCtrl (for user code)
 	if (m_owner->GetEventHandler()->ProcessEvent(event)) return; // handled (and not skipped) in user code
 
-	// TODO
-#if defined(__WXGTK__) && !defined(__WXUNIVERSAL__)
-	wxScrolledWindow::OnScroll(event);
-#else
+	// HandleOnScroll() is wxScrollHelper's own handler and is what every port ends up in.
+	// The GTK branch used to call wxScrolledWindow::OnScroll(), which no longer exists —
+	// it was a passthrough to this same helper, so the split bought nothing.
 	HandleOnScroll(event);
-#endif
 
 	if (event.GetOrientation() == wxHORIZONTAL) {
 		m_owner->GetHeaderWindow()->Refresh();

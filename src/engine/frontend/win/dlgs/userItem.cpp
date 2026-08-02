@@ -258,8 +258,10 @@ ibDialogUserItem::ibDialogUserItem(wxWindow* parent, wxWindowID id, const wxStri
 					entry.m_strRoleGuid = info.m_strRoleGuid;
 					entry.m_strRoleName = info.m_strRoleName;
 					entry.m_miRoleId = info.m_miRoleId;
-					access_right = access_right || commonObject->AccessRight_Administration(info.m_miRoleId) &&
-						commonObject->AccessRight_DataAdministration(info.m_miRoleId);
+					// Parenthesised as it always behaved: a role grants the right only if it carries
+					// BOTH administration flags, and any one such role is enough for the user.
+					access_right = access_right || (commonObject->AccessRight_Administration(info.m_miRoleId) &&
+						commonObject->AccessRight_DataAdministration(info.m_miRoleId));
 				}
 				item = m_choiceRole->GetNextChild(root, coockie);
 			}

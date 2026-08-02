@@ -6358,7 +6358,7 @@ void ibGrid::Refresh(bool eraseb, const wxRect* rect)
 			else
 			{
 				y = 0;
-				height_cell = rectHeight - ((GridColAreaEnabled() ? (m_colAreaHeight, GetGridZoom()) : 0) + ibCalcGridScale(m_colLabelHeight, GetGridZoom()) - rect_y);
+				height_cell = rectHeight - ((GridColAreaEnabled() ? ibCalcGridScale(m_colAreaHeight, GetGridZoom()) : 0) + ibCalcGridScale(m_colLabelHeight, GetGridZoom()) - rect_y);
 			}
 
 			// Paint corner label part intersecting rect.
