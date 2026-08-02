@@ -28,7 +28,7 @@ wxString ibTabularSourceDescriptor::GetNamespace() const
 {
 	// parent-qualified: the tabular section's namespace is its parent record/document's kind.
 	ibValueMetaObject* parent = m_meta->GetParent();
-	return parent != nullptr ? ibValue::GetNameObjectFromID(parent->GetClassType()) : wxEmptyString;
+	return parent != nullptr ? ibValue::GetNameObjectFromID(parent->GetClassType()) : wxString();
 }
 
 wxString ibTabularSourceDescriptor::GetName() const

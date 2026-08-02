@@ -186,13 +186,13 @@ void ibTranslateCode::ibDefineCollection::SetDefine(const wxString& strName, con
 //////////////////////////////////////////////////////////////////////
 
 const wxString& ibLexem::GetModuleName() const {
-	return m_translateCode ? m_translateCode->m_strModuleName : wxEmptyString;
+	return m_translateCode ? m_translateCode->m_strModuleName : wxString();
 }
 const wxString& ibLexem::GetDocPath() const {
-	return m_translateCode ? m_translateCode->m_strDocPath : wxEmptyString;
+	return m_translateCode ? m_translateCode->m_strDocPath : wxString();
 }
 const wxString& ibLexem::GetFileName() const {
-	return m_translateCode ? m_translateCode->m_strFileName : wxEmptyString;
+	return m_translateCode ? m_translateCode->m_strFileName : wxString();
 }
 
 //////////////////////////////////////////////////////////////////////

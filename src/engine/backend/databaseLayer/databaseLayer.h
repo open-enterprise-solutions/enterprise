@@ -499,6 +499,18 @@ WX_DECLARE_HASH_SET(ibPreparedStatement*, wxPointerHash, wxPointerEqual, Databas
 class ibDatabaseConnectionHolder;
 class ibConnectionPool;
 
+// Transaction options — how a BeginTransaction should behave. Declared here at namespace
+// scope rather than nested in ibDatabaseLayer so its default member initializers are complete
+// where the class's own methods default an argument to it (see the alias inside the class).
+//
+// `noWait`   — fail immediately instead of blocking on a conflicting lock.
+// `readOnly` — the caller promises this transaction issues no DML, letting a driver pick a
+//              cheaper isolation. Drivers without one ignore the flag.
+struct ibDbTxOptions {
+	bool noWait = false;
+	bool readOnly = false;
+};
+
 class BACKEND_API ibDatabaseLayer
 	: public ibDatabaseErrorReporter
 	, public ibDatabaseStringConverter
@@ -542,10 +554,14 @@ public:
 	// reads without long-running snapshot TX; PostgreSQL: SET TRANSACTION
 	// READ ONLY). Drivers that don't have a cheap read-only mode silently
 	// ignore the flag.
-	struct ibTxOptions {
-		bool noWait = false;
-		bool readOnly = false;
-	};
+	// The type itself is declared ABOVE the class (ibDbTxOptions); this alias keeps every
+	// existing `ibDatabaseLayer::ibTxOptions` spelling working. It had to move out: a nested
+	// class's default member initializers are not complete until the ENCLOSING class is, so
+	// naming ibTxOptions{} / ibTxOptions() in a default argument of a method of that same
+	// class is ill-formed — "default member initializer required before the end of its
+	// enclosing class". MSVC accepts it, GCC does not, and no spelling of the default
+	// argument fixes it while the struct stays nested.
+	using ibTxOptions = ibDbTxOptions;
 
 	// Transaction support — nested-safe counter layer.
 	//
@@ -571,9 +587,9 @@ public:
 
 	/// Begin a transaction. The default options preserve historical
 	/// (wait-mode, read-committed, read-write) behaviour.
-	// Spelled ibTxOptions() rather than {}: binding a braced-init-list to a const
-	// reference parameter default is something MSVC takes and GCC refuses here.
-	void BeginTransaction(const ibTxOptions& opts = ibTxOptions());
+	// Defaulted to the namespace-scope name on purpose — see the alias above for why the
+	// nested spelling cannot carry a default here.
+	void BeginTransaction(const ibTxOptions& opts = ibDbTxOptions());
 
 	/// Commit the current transaction (or RollBack if any inner level
 	/// called RollBack first — see the aborted-flag semantics above).

@@ -54,19 +54,19 @@ class BACKEND_API ibValueMetaObjectConstant :
 			: ibValueMetaObjectAttributeBase(), m_owner(owner) {
 		}
 
-		virtual wxString GetName() const { return m_owner != nullptr ? m_owner->GetName() : wxEmptyString; }
+		virtual wxString GetName() const { return m_owner != nullptr ? m_owner->GetName() : wxString(); }
 
 		// The SYNONYM has to be delegated explicitly, and the reason is a trap worth naming: the base
 		// derives it from GetName(), but ibValueMetaObject::GetName() is NOT virtual — only the query
 		// column's is. So the base reads its OWN empty name, generates an empty synonym from it, and
 		// the form loses the field's caption while everything else keeps working.
-		virtual wxString GetSynonym() const override { return m_owner != nullptr ? m_owner->GetSynonym() : wxEmptyString; }
+		virtual wxString GetSynonym() const override { return m_owner != nullptr ? m_owner->GetSynonym() : wxString(); }
 
 		// `fld<metaID>` — the SAME rule the attribute base applied when the constant itself was the
 		// column, keyed on the CONSTANT's id. This is the second half of "sys_const does not move":
 		// the id decides which column the differ matches, the name decides which field it renders.
 		virtual wxString GetPhysicalName() const override {
-			return m_owner != nullptr ? wxString::Format(wxT("fld%i"), m_owner->GetMetaID()) : wxEmptyString;
+			return m_owner != nullptr ? wxString::Format(wxT("fld%i"), m_owner->GetMetaID()) : wxString();
 		}
 		virtual ibMetaID GetColumnId() const override { return m_owner != nullptr ? m_owner->GetMetaID() : 0; }
 		virtual ibTypeDescription& GetTypeDesc() const override { return m_owner->GetTypeDesc(); }

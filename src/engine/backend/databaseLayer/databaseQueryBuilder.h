@@ -968,7 +968,7 @@ public:
 	                                             const std::vector<ibValue>& externalParams = {});
 
 	// --- transaction verbs ------------------------------------------------
-	void BeginTransaction(const ibDatabaseLayer::ibTxOptions& opts = {}) { m_scope.SafeBeginTransaction(opts); }
+	void BeginTransaction(const ibDbTxOptions& opts = ibDbTxOptions()) { m_scope.SafeBeginTransaction(opts); }
 	void Commit()   { m_scope.SafeCommitTransaction(); }
 	void RollBack() { m_scope.SafeRollBackTransaction(); }
 

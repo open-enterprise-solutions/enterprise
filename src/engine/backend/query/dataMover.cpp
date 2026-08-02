@@ -295,7 +295,7 @@ void ibDataMover::BinaryFromResult(const ibBackendQueryColumn* col, const ibMeta
 		break;
 	case ibFieldTypes_String:
 		writer.w_stringZ(td.ContainType(ibValueTypes::TYPE_STRING)
-		                 ? result.GetResultString(f + ibFieldSuffix(ibColumnRole::String)) : wxEmptyString);
+		                 ? result.GetResultString(f + ibFieldSuffix(ibColumnRole::String)) : wxString());
 		break;
 	case ibFieldTypes_Enum:
 		writer.w_s32(td.ContainType(ibValueTypes::TYPE_ENUM)
