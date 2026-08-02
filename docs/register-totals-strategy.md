@@ -939,7 +939,38 @@ performance numbers above:
 The maintenance is live and the switches work. What is NOT yet proven or built, in the order it
 matters:
 
-1. **Numeric parity — the CHECK now exists; the answer is still unmeasured.**
+1. **Numeric parity — measured GREEN under a live engine 2026-08-02; unmeasured against REAL traffic.**
+
+   Writing the check paid for itself immediately: `ibMaterializeSql::Apply` **could not install a
+   bundle on a clean SQLite database at all**, for two independent reasons that only show up on a
+   first apply, and neither of which the render-only tests could see.
+
+   - **A driver reports failure by THROWING, not by a return code.**
+     `ibDatabaseErrorReporter::ThrowDatabaseException` is what a failed statement calls, which
+     makes the `return DATABASE_LAYER_QUERY_RESULT_ERROR` inside SQLite's `DoRunQuery` dead code.
+     `Apply` tested that return code, so the exception from an unguarded DROP — the ordinary
+     "nothing to drop yet" of a first apply, exactly what the guarded-drop loop exists to
+     tolerate — sailed straight out of `Apply`.
+   - **`DATABASE_LAYER_QUERY_RESULT_ERROR` is 0, and `RunStatement` returns the affected-row
+     count** — which for DDL (`CREATE TRIGGER`, `CREATE VIEW`) is legitimately 0. So with the
+     throw caught, every SUCCESSFUL create then read as a failure and `Apply` returned false
+     having installed the bundle perfectly.
+
+   Both are fixed: `Apply` now treats an exception as the failure signal and ignores the row
+   count. Firebird masked this because its drops carry existence guards, so the throwing path
+   was never taken there.
+   `tests/test_totalsNumericParity.cpp` installs the REAL rendered bundle
+   (`RenderMaterialization` → `Apply`) on an in-memory SQLite and compares the maintained
+   totals with the movements re-aggregated directly — the same key-by-key, both-directions
+   comparison `VerifyLastPeriod` makes, with the live aggregation as the oracle. It covers
+   accumulation, month truncation, updates (quantity, side, and across both key columns),
+   deletes, backdated entries, fractional quantities, and a mixed run. It also pins the
+   storage behaviour that is NOT a disagreement: an emptied key leaves a **zero row**, not a
+   missing one. What it does not touch is production traffic volume or Firebird's trigger
+   family — the shapes differ per dialect, so a green SQLite run narrows the risk, it does
+   not retire it.
+
+1-bis. **The production CHECK exists; its verdict against real traffic is still unmeasured.**
    `ibDerivedState::VerifyLastPeriod` re-aggregates one elapsed period from the movements and compares
    it key by key with what the totals hold for it, counting disagreements in both directions (a key
    the movements know and the totals do not, and a figure nothing accounts for). Written as a routine

@@ -54,14 +54,21 @@ sudo apt update
 sudo apt install -y \
     build-essential \
     cmake \
+    ninja-build \
     git \
     pkg-config \
+    libgtk-3-dev \
     libfirebird-dev \
     libpq-dev \
     libsqlite3-dev \
     libmysqlclient-dev \
     unixodbc-dev
 ```
+
+`libgtk-3-dev` is **not optional**: the build defines `__WXGTK__` and the CMake configure step
+pkg-checks `gtk+-3.0`, so wx will not configure without it. `ninja-build` is what the
+`linux-debug` / `linux-release` presets generate for. The driver `-dev` packages are only needed
+for the `OES_USE_*` options you turn on — SQLite is always embedded.
 
 **No system wxWidgets package is needed** — wxWidgets 3.3.2 is built from the in-tree submodule
 by the CMake build (see below); a distro `libwxgtk` would be both unused and older.
@@ -322,6 +329,30 @@ Paths use the `oesPlatform` macro (`Win32` for `x86`, `Win64` for `x64`):
 | `bin\Win32\Debug\` (etc.) | DLLs and EXEs (Windows) |
 | `lib\Win32\Debug\` (etc.) | Import / static libraries |
 | `intermediate\Win32\Debug\<ProjectName>\` | Object files and PCH |
+
+---
+
+## Continuous integration
+
+`.github/workflows/ci.yml` (added 2026-08-02) runs on pushes to `develop` / `master`, on PRs into
+`develop`, and on demand (`workflow_dispatch`). Three jobs:
+
+| Job | Runner | What it proves |
+|---|---|---|
+| **Tests (Linux, Debug)** | ubuntu-22.04 | The backend suite (`oes_tests`) passes. The primary signal. |
+| **Build (Windows, x64 Debug)** | windows-2022 | The shipping platform still compiles under MSVC, and the suite passes there too. |
+| **GUI tests (Linux, Xvfb)** | ubuntu-22.04 | `oes_frontend_runtime_test` — links `frontend.dll`, needs a live wxApp, runs under `xvfb-run`. Separate job: its failure mode (a modal on an assert) is unlike a backend test's. |
+
+Two notes on why it is shaped this way:
+
+- **Everything goes through the CMake presets, including Windows.** `enterprise.sln` carries 14
+  projects and none is wxWidgets, so MSBuild cannot bootstrap a clean runner — it expects wx
+  libraries to exist already. The preset path builds wx from the submodule.
+- **The wxWidgets build dominates the wall clock**, so each job caches its build directory keyed on
+  the submodule commit plus the CMake files. An unchanged wx means only OES recompiles.
+
+Linux jobs configure with `-DOES_USE_FIREBIRD=OFF`: the DB-backed tests run on SQLite, which is
+always embedded, so the Firebird client would be a dependency bought for nothing.
 
 ---
 

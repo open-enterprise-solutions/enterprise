@@ -6678,7 +6678,7 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 	ibDataViewColumn* const
 		expander = GetExpanderColumnOrFirstOne(this);
 
-	// GROUP-caption geometry (1C-style hierarchical output): a group row draws its dimension value as ONE caption
+	// GROUP-caption geometry (hierarchical output): a group row draws its dimension value as ONE caption
 	// that STARTS at the expander column's text and FLOWS RIGHT across columns with no value of their own — so a
 	// grouping whose dimension has no bound column still shows, while in-scope dimension columns keep their values
 	// (each empty cell paints its own slice of the caption; a valued cell paints its value instead — no cross-cell

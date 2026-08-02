@@ -41,12 +41,12 @@ unsigned CountChildrenOfType(ibValueFrame* parent, const ibClassID& clsid)
 // ----------------------------------- TableBox --------------------------------
 
 // The table box builds as its own concrete model type and identifies by clsid.
-TEST_F(FrontendFormFix, DISABLED_TableBoxBuildsAsModelType)
+TEST_F(FrontendFormFix, TableBoxBuildsAsModelType)
 {
 	if (!frameReady) GTEST_SKIP();
 
 	ibValueForm* form = NewForm();
-	ibValueFrame* tb = form->NewObject(g_controlTableBoxCLSID);
+	ibValueFrame* tb = form->NewObject(g_controlTableBoxCLSID, form);
 	ASSERT_NE(tb, nullptr);
 	EXPECT_EQ(tb->GetClassType(), g_controlTableBoxCLSID);
 	EXPECT_NE(dynamic_cast<ibValueModelTableBox*>(tb), nullptr)
@@ -55,12 +55,12 @@ TEST_F(FrontendFormFix, DISABLED_TableBoxBuildsAsModelType)
 
 // AddColumn() adds a table-box-column child of the correct type — the mechanic
 // the list/TSD screen leans on to build its columns.
-TEST_F(FrontendFormFix, DISABLED_TableBoxAddColumnCreatesColumnChild)
+TEST_F(FrontendFormFix, TableBoxAddColumnCreatesColumnChild)
 {
 	if (!frameReady) GTEST_SKIP();
 
 	ibValueForm* form = NewForm();
-	ibValueFrame* tb = form->NewObject(g_controlTableBoxCLSID);
+	ibValueFrame* tb = form->NewObject(g_controlTableBoxCLSID, form);
 	ASSERT_NE(tb, nullptr);
 	ASSERT_NE(dynamic_cast<ibValueModelTableBox*>(tb), nullptr);
 
@@ -74,12 +74,12 @@ TEST_F(FrontendFormFix, DISABLED_TableBoxAddColumnCreatesColumnChild)
 }
 
 // Two AddColumn calls yield two distinct column children.
-TEST_F(FrontendFormFix, DISABLED_TableBoxAddsMultipleColumns)
+TEST_F(FrontendFormFix, TableBoxAddsMultipleColumns)
 {
 	if (!frameReady) GTEST_SKIP();
 
 	ibValueForm* form = NewForm();
-	ibValueFrame* tb = form->NewObject(g_controlTableBoxCLSID);
+	ibValueFrame* tb = form->NewObject(g_controlTableBoxCLSID, form);
 	ASSERT_NE(dynamic_cast<ibValueModelTableBox*>(tb), nullptr);
 
 	form->NewObject(g_controlTableBoxColumnCLSID, tb);
@@ -90,12 +90,12 @@ TEST_F(FrontendFormFix, DISABLED_TableBoxAddsMultipleColumns)
 // ----------------------------------- TextBox ---------------------------------
 
 // The text box builds as ibValueTextBox and identifies by clsid.
-TEST_F(FrontendFormFix, DISABLED_TextBoxBuildsAsModelType)
+TEST_F(FrontendFormFix, TextBoxBuildsAsModelType)
 {
 	if (!frameReady) GTEST_SKIP();
 
 	ibValueForm* form = NewForm();
-	ibValueFrame* tx = form->NewObject(g_ctrlTextBoxCLSID);
+	ibValueFrame* tx = form->NewObject(g_ctrlTextBoxCLSID, form);
 	ASSERT_NE(tx, nullptr);
 	EXPECT_EQ(tx->GetClassType(), g_ctrlTextBoxCLSID);
 	EXPECT_NE(dynamic_cast<ibValueTextBox*>(tx), nullptr)
@@ -103,12 +103,12 @@ TEST_F(FrontendFormFix, DISABLED_TextBoxBuildsAsModelType)
 }
 
 // The text box is a container — a control built into it becomes its child.
-TEST_F(FrontendFormFix, DISABLED_TextBoxHoldsChildControls)
+TEST_F(FrontendFormFix, TextBoxHoldsChildControls)
 {
 	if (!frameReady) GTEST_SKIP();
 
 	ibValueForm* form = NewForm();
-	ibValueFrame* tx = form->NewObject(g_ctrlTextBoxCLSID);
+	ibValueFrame* tx = form->NewObject(g_ctrlTextBoxCLSID, form);
 	ASSERT_NE(tx, nullptr);
 
 	ibValueFrame* child = form->NewObject(g_ctrlButtonCLSID, tx);
@@ -119,12 +119,12 @@ TEST_F(FrontendFormFix, DISABLED_TextBoxHoldsChildControls)
 // ----------------------------------- GridBox ---------------------------------
 
 // The grid box builds as ibValueGridBox and identifies by clsid.
-TEST_F(FrontendFormFix, DISABLED_GridBoxBuildsAsModelType)
+TEST_F(FrontendFormFix, GridBoxBuildsAsModelType)
 {
 	if (!frameReady) GTEST_SKIP();
 
 	ibValueForm* form = NewForm();
-	ibValueFrame* gb = form->NewObject(g_ctrlGridBoxCLSID);
+	ibValueFrame* gb = form->NewObject(g_ctrlGridBoxCLSID, form);
 	ASSERT_NE(gb, nullptr);
 	EXPECT_EQ(gb->GetClassType(), g_ctrlGridBoxCLSID);
 	EXPECT_NE(dynamic_cast<ibValueGridBox*>(gb), nullptr)
@@ -132,12 +132,12 @@ TEST_F(FrontendFormFix, DISABLED_GridBoxBuildsAsModelType)
 }
 
 // The grid box is a container — a control built into it becomes its child.
-TEST_F(FrontendFormFix, DISABLED_GridBoxHoldsChildControls)
+TEST_F(FrontendFormFix, GridBoxHoldsChildControls)
 {
 	if (!frameReady) GTEST_SKIP();
 
 	ibValueForm* form = NewForm();
-	ibValueFrame* gb = form->NewObject(g_ctrlGridBoxCLSID);
+	ibValueFrame* gb = form->NewObject(g_ctrlGridBoxCLSID, form);
 	ASSERT_NE(gb, nullptr);
 
 	ibValueFrame* child = form->NewObject(g_ctrlButtonCLSID, gb);
@@ -148,12 +148,12 @@ TEST_F(FrontendFormFix, DISABLED_GridBoxHoldsChildControls)
 // ----------------------------------- Notebook --------------------------------
 
 // AddNotebookPage() adds a notebook-page child — the tabbed-container mechanic.
-TEST_F(FrontendFormFix, DISABLED_NotebookAddPageCreatesPageChild)
+TEST_F(FrontendFormFix, NotebookAddPageCreatesPageChild)
 {
 	if (!frameReady) GTEST_SKIP();
 
 	ibValueForm* form = NewForm();
-	ibValueFrame* nb = form->NewObject(g_controlNotebookCLSID);
+	ibValueFrame* nb = form->NewObject(g_controlNotebookCLSID, form);
 	ASSERT_NE(dynamic_cast<ibValueNotebook*>(nb), nullptr);
 	EXPECT_EQ(nb->GetClassType(), g_controlNotebookCLSID);
 
@@ -169,7 +169,7 @@ TEST_F(FrontendFormFix, DISABLED_NotebookAddPageCreatesPageChild)
 
 // Every registered control type builds through NewObject, identifies by the
 // requested clsid, and classifies as a Control kind (high byte of the clsid).
-TEST_F(FrontendFormFix, DISABLED_AllRegisteredControlsBuildAndClassify)
+TEST_F(FrontendFormFix, AllRegisteredControlsBuildAndClassify)
 {
 	if (!frameReady) GTEST_SKIP();
 
@@ -190,7 +190,7 @@ TEST_F(FrontendFormFix, DISABLED_AllRegisteredControlsBuildAndClassify)
 
 	for (const auto& s : specs) {
 		EXPECT_TRUE(IsControl(s.clsid)) << s.label << ": clsid classifies as a Control kind";
-		ibValueFrame* ctrl = form->NewObject(s.clsid);
+		ibValueFrame* ctrl = form->NewObject(s.clsid, form);
 		ASSERT_NE(ctrl, nullptr) << "NewObject must build a " << s.label;
 		EXPECT_EQ(ctrl->GetClassType(), s.clsid) << s.label << ": identity by clsid";
 	}
@@ -200,20 +200,24 @@ TEST_F(FrontendFormFix, DISABLED_AllRegisteredControlsBuildAndClassify)
 
 // A form with controls round-trips through SaveForm -> LoadForm: the rebuilt
 // form owns the same number of controls.
-TEST_F(FrontendFormFix, DISABLED_FormSerializeRoundTripPreservesControls)
+TEST_F(FrontendFormFix, FormSerializeRoundTripPreservesControls)
 {
 	if (!frameReady) GTEST_SKIP();
 
-	ibValuePtr<ibValueForm> src(new ibValueForm());
-	src->NewObject(g_ctrlButtonCLSID);
-	src->NewObject(control_to_clsid("CT_CHKB"));
+	// Both forms come from NewForm(): `new ibValueForm()` throws — the ctor reaches
+	// for the frame/session context (see frontendFormFix.h).
+	ibValueForm* src = NewForm();
+	ASSERT_NE(src, nullptr);
+	src->NewObject(g_ctrlButtonCLSID, src);
+	src->NewObject(control_to_clsid("CT_CHKB"), src);
 	const size_t srcCount = src->GetControlList().size();
 	ASSERT_GE(srcCount, 2u) << "the source form has the controls we added";
 
 	wxMemoryBuffer buffer;
 	ASSERT_TRUE(src->SaveForm(buffer)) << "SaveForm serialises the control tree";
 
-	ibValuePtr<ibValueForm> dst(new ibValueForm());
+	ibValueForm* dst = NewForm();
+	ASSERT_NE(dst, nullptr);
 	ASSERT_TRUE(dst->LoadForm(buffer)) << "LoadForm rebuilds the control tree";
 	EXPECT_EQ(dst->GetControlList().size(), srcCount)
 		<< "the round-tripped form owns the same controls";

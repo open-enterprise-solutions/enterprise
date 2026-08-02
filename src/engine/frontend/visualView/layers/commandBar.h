@@ -254,7 +254,7 @@ struct ibCommandSourceEntry {
 	wxString             fullName;   // the FLAT full PATH name (GetFullName) — shown where there is NO tree to give
 	                                 // the path: the bound button's command-source CELL. Empty = fall back to label.
 };
-// The THREE command sections of a form, in display order — the 1C model. The navigator / picker ALWAYS show
+// The THREE command sections of a form, in display order. The navigator / picker ALWAYS show
 // these three (even empty), and GatherFormCommands labels its entries with exactly these strings, so the two
 // can't drift. [0] Form commands (manually added), [1] Standard commands (from the form's sources), [2] Global
 // commands (common + section commands).

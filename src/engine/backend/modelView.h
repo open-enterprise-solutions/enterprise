@@ -94,7 +94,7 @@ public:
 	// expander).  Default: leaf.
 	virtual bool IsContainer() const { return false; }
 
-	// A GROUP node's caption — the dimension VALUE this group folds by, as a display string, for the 1C-style
+	// A GROUP node's caption — the dimension VALUE this group folds by, as a display string, for the
 	// hierarchical render (the front paints it flowing across the columns that have no value of their own).  The
 	// node SELF-describes it (the model is not consulted — the front asks the item directly, like IsContainer);
 	// only a composer GROUP node overrides.  Default: not a group → false.

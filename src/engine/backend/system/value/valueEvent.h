@@ -4,7 +4,7 @@
 #include "backend/compiler/value.h"
 #include "backend/eventDispatcher.h"   // ibValueEvent IS-A dispatcher — it dispatches by calling its named procedure
 
-//event support — a runtime event value that is SIMULTANEOUSLY its own dispatcher (the classic "по старинке" call).
+//event support — a runtime event value that is SIMULTANEOUSLY its own dispatcher (the classic old-school call).
 class BACKEND_API ibValueEvent : public ibValue, public ibEventDispatcher {
 	public:
 

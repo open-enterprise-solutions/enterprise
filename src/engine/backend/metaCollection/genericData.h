@@ -113,7 +113,7 @@ public:
 	// (Source list COMMANDS live as plain virtuals on the record / register / constant metaobjects, forwarded by the
 	//  templated source descriptor — NOT here: GenericData carries no such surface, so nothing is pushed onto it.)
 
-	// value(<Kind>.<Name>.<Member>) — the L4-1 literal-reference constant (1C ЗНАЧЕНИЕ): resolve a metaobject's
+	// value(<Kind>.<Name>.<Member>) — the L4-1 literal-reference constant: resolve a metaobject's
 	// EmptyRef or one of its predefined items to a runtime ibValue. Reached off GetSourceMetaObject() at lowering
 	// (the queryable already vends the metaobject — nothing is added to the queryable). Returns TRUE + the value in
 	// `out` when the member resolves; FALSE otherwise (the query engine raises the exception, it owns the source

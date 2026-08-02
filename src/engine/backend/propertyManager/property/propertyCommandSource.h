@@ -6,7 +6,7 @@
 
 // The button's COMMAND-source property — the command-door twin of ibPropertySource. It holds an
 // ibCommandDescription (a command-hop path: own object / main attribute / table / general) and, like the
-// source property, gets a registered FRONTEND picker (ibPGCommandSourceProperty — a "Вид" selector + a
+// source property, gets a registered FRONTEND picker (ibPGCommandSourceProperty — a "Kind" selector + a
 // command-source DIALOG). The button binds to this instead of a flat id, and renders from the resolved command.
 class BACKEND_API ibPropertyCommandSource : public ibProperty {
 	// The owning property object (a button / a bar item) becomes the variant's factory — cast to ibBackendCommandReceiver,

@@ -34,7 +34,7 @@ wxString ibValueMetaObjectRecordDataRef::GetPhysicalTableName() const
 		className, GetMetaID());
 }
 
-// --- value(<Kind>.<Name>.<Member>) resolution (L4-1 literal reference constant, 1C ЗНАЧЕНИЕ) ------------------
+// --- value(<Kind>.<Name>.<Member>) resolution (L4-1 literal reference constant) ------------------------------
 // A pure try-resolve: TRUE + the value in `out`, FALSE when the member is unknown (the query engine raises the
 // exception, so the error carries the query source span — Max). The GENERIC metaobject has no constants; a
 // reference record vends EmptyRef; the hierarchy level adds predefined items. No throw here.
@@ -138,8 +138,13 @@ void ibValueMetaObjectRecordDataEnumRef::ContributeTables(ibSchemaSnapshot& out)
 
 void ibValueMetaObjectRegisterData::ContributeTables(ibSchemaSnapshot& out) const
 {
+	// No rowData blob scaffold: it was the last trace of single-blob register storage. Nothing
+	// ever wrote or read it (the column was DDL-only), yet the accumulation register folds
+	// t.m_scaffold into its SelfSource projection — so every totals fold and every derived-table
+	// regeneration was selecting an always-NULL column on every movement row. Dropped 2026-08-02.
+	// Existing databases keep the physical column: scaffold columns carry no model id, so the
+	// schema differ does not track them and will not issue a DROP.
 	ibSchemaTable& t = out.CreateSchemaTable(GetQueryable());
-	t.Scaffold(ibRawDBColumn::Blob(wxT("rowData")));
 
 	for (const auto object : GetPredefinedAttributeArrayObject())
 		t.Add(object);

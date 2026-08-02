@@ -48,7 +48,10 @@ struct VisualHostFix : FrontendFormFix {
 	ibVisualHostClient* MakeHost(ibValueForm*& form, ibValueFrame** outCtrl = nullptr) {
 		form = NewForm();
 		if (form == nullptr) return nullptr;
-		ibValueFrame* ctrl = form->NewObject(g_hostButtonCLSID);
+		// The control is PARENTED TO THE FORM. Passing no parent leaves it an orphan:
+		// ibValueFrame::Init only calls AddChild when a parent is given, so the control
+		// never enters the form's tree — GetControlList / the host walker never see it.
+		ibValueFrame* ctrl = form->NewObject(g_hostButtonCLSID, form);
 		if (outCtrl != nullptr) *outCtrl = ctrl;
 		auto* doc = new ibFormVisualDocument(form);         // leaked
 		return new ibVisualHostClient(doc, form, parent);   // leaked (parent child)
@@ -58,7 +61,7 @@ struct VisualHostFix : FrontendFormFix {
 } // namespace
 
 // The host exposes the form it was built over.
-TEST_F(VisualHostFix, DISABLED_HostExposesItsForm)
+TEST_F(VisualHostFix, HostExposesItsForm)
 {
 	if (!frameReady) GTEST_SKIP();
 
@@ -71,7 +74,7 @@ TEST_F(VisualHostFix, DISABLED_HostExposesItsForm)
 
 // The ibValueFrame <-> wxObject map round-trips: append a mapping, resolve it
 // both ways, then remove it.
-TEST_F(VisualHostFix, DISABLED_HostControlMapRoundTrips)
+TEST_F(VisualHostFix, HostControlMapRoundTrips)
 {
 	if (!frameReady) GTEST_SKIP();
 
@@ -92,7 +95,7 @@ TEST_F(VisualHostFix, DISABLED_HostControlMapRoundTrips)
 
 // The full walker builds the wx tree: after CreateAndUpdateVisualHost the form's
 // control has a materialised wx widget registered in the host's map.
-TEST_F(VisualHostFix, DISABLED_CreateVisualHostMaterialisesControl)
+TEST_F(VisualHostFix, CreateVisualHostMaterialisesControl)
 {
 	if (!frameReady) GTEST_SKIP();
 

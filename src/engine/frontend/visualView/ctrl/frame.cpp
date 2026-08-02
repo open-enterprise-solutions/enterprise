@@ -231,7 +231,11 @@ bool ibValueFrame::Init()
 
 bool ibValueFrame::Init(ibValue** paParams, const long lSizeArray)
 {
-	if (lSizeArray < 2)
+	// THREE params are read below (form, parent, generateId) — the gate said 2, so a
+	// two-argument caller walked off the end of paParams on the generateId read. The
+	// only live caller (ibValueForm::NewObject) always passes 3, which is why this
+	// never fired; it is still an out-of-bounds read waiting for a second caller.
+	if (lSizeArray < 3)
 		return false;
 	ibValueForm* ownerForm = nullptr;
 	ibValueFrame* controlParent = nullptr;

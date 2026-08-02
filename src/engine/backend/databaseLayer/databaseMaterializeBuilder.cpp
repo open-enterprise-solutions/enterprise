@@ -617,15 +617,36 @@ bool ibMaterializeSql::Apply(ibDatabaseLayer& conn) const
 	for (const ibRenderedStatement& s : m_drop) {
 		if (!s.m_guard.IsEmpty() && !ExistsByProbe(conn, s.m_guard))
 			continue;
-		if (conn.RunStatement(s.m_sql) == DATABASE_LAYER_QUERY_RESULT_ERROR)
-			conn.ResetErrorCodes();   // an IF EXISTS engine may still refuse; never fatal
+		// "Never fatal" has to hold however the DRIVER reports the failure — and it is the
+		// EXCEPTION that reports it. See the note on the create loop below.
+		try {
+			conn.RunStatement(s.m_sql);
+		}
+		catch (const ibBackendException&) {
+			conn.ResetErrorCodes();   // the object was not there — that is the normal first apply
+		}
 	}
 
 	// A failed CREATE is real: the maintenance would silently not exist, and the totals would drift
 	// from the movements with nothing to signal it.
-	for (const ibRenderedStatement& s : m_create) {
-		if (conn.RunStatement(s.m_sql) == DATABASE_LAYER_QUERY_RESULT_ERROR)
-			return false;
+	//
+	// FAILURE IS AN EXCEPTION, NOT A RETURN CODE — this loop used to test
+	// `== DATABASE_LAYER_QUERY_RESULT_ERROR` and got BOTH halves wrong:
+	//   * that constant is 0, while RunStatement returns the AFFECTED-ROW COUNT — which for DDL
+	//     (CREATE TRIGGER / CREATE VIEW) is legitimately 0. So every successful create read as a
+	//     failure and Apply returned false having installed the bundle perfectly.
+	//   * a real failure never reaches the comparison anyway: the driver throws
+	//     (ibDatabaseErrorReporter::ThrowDatabaseException), which makes the `return …_ERROR`
+	//     line inside SQLite's DoRunQuery dead code.
+	// Both surfaced together on the first apply against a clean in-memory database — first the
+	// unguarded DROP threw, then, with that caught, every CREATE "failed" at zero rows.
+	// Caught 2026-08-02 by tests/test_totalsNumericParity.cpp.
+	try {
+		for (const ibRenderedStatement& s : m_create)
+			conn.RunStatement(s.m_sql);
+	}
+	catch (const ibBackendException&) {
+		return false;
 	}
 	return true;
 }

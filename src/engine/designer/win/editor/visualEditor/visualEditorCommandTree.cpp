@@ -132,7 +132,7 @@ void ibCommandTree::RebuildTree()
 
 	const wxTreeItemId root = m_tcCommands->AddRoot(wxT("Commands"));
 
-	// Pre-create ALL three sections (the 1C model: form / standard / global) in order, so they show even when
+	// Pre-create ALL three sections (form / standard / global) in order, so they show even when
 	// EMPTY — a designer always sees where each kind of command lives. GatherFormCommands labels its entries with
 	// exactly these strings (GetCommandSections is the ONE source), so each entry lands in its pre-made section.
 	std::map<wxString, wxTreeItemId> groups;

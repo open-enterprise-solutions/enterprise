@@ -43,11 +43,43 @@ Undocumented-until-now subsystems, mapped 2026-07-15:
 
 ---
 
+## 1a. Unblocked and verified — 2026-08-02 session
+
+Everything in this section was **built and run**, not reasoned about. Solution `Debug|x86`
+compiles with 0 errors; `oes_tests` **855/855**; `oes_frontend_runtime_test` **26/26 in ~2 s**.
+
+| What | State before | State now |
+|---|---|---|
+| **Frontend GUI harness** | Target did not compile (API drift), 17 tests `DISABLED_`, each surviving test ~30 s | Compiles, **26/26 green**, whole suite ~2 s |
+| **Report — platform action** | `dataReportAction.cpp` empty: no command, no body | **Compose** standard command → object module's declared `Composing(StandartProcessing)` handler |
+| **Register totals — numeric parity** | Unmeasured; nothing compared the two paths | **Green under a live engine** — and the check immediately found two bugs that made materialisation impossible on SQLite |
+| **Form attribute binding** | Surface unspec'd, runtime reference chain untested | *Surface contract* written; runtime chain + the non-owning-cell rule pinned by tests |
+| **JSON provider** | `Read` a silent no-op | Full parser (unwired by design), with its lossy boundary pinned in tests |
+| **WrapSizer** | Implemented end to end, registered nowhere — dead on both platforms | Registered; reachable on desktop and web |
+| **CI** | None | `.github/workflows/ci.yml` — Linux suite, Windows build+suite, GUI under Xvfb |
+
+**Four real defects surfaced, none of them in the new code** — they had been sitting in
+paths nothing exercised:
+
+1. **`ibMaterializeSql::Apply` could not install a bundle on SQLite at all.** A driver
+   reports failure by THROWING, so the return-code test never saw it; and the error
+   sentinel is `0`, which is also the affected-row count of successful DDL — so with the
+   throw caught, every successful `CREATE` then read as a failure. Firebird masked both
+   (its drops carry existence guards). See [register-totals-strategy.md](register-totals-strategy.md) §1.
+2. **`ibValueFrame::Init` gated on `lSizeArray < 2` while reading `paParams[2]`** — an
+   out-of-bounds read that never fired only because the one live caller passes 3.
+3. **A control built with no parent silently belongs to no tree** (`Init` only calls
+   `AddChild` when given a parent) — the actual cause of the 17 disabled tests.
+4. **A stack-allocated `ibDocument` is a use-after-free**: `OnChangedViewList` does
+   `delete this` when the last view detaches.
+
+---
+
 ## 2. In flight — landed but not finished
 
 | Area | Doc | What remains |
 |---|---|---|
-| **Form attribute binding** | [form-attribute-binding.md](form-attribute-binding.md) | "in development, experimental"; first hardened slice landed via designer exercise, **not** a test harness. Surface not spec'd or tested. |
+| **Form attribute binding** | [form-attribute-binding.md](form-attribute-binding.md) | "in development, experimental". **Surface spec'd 2026-08-02** (§ *Surface contract*: entry points, guarantees, and the test pinning each rule). Plumbing is covered by four gtest TUs — `test_sourceDescription` / `test_tabularHop` / `test_sourceExplorer` / `test_sourceHopChain` (the last closes the runtime reference chain + the non-owning-cell hazard). Still unharnessed: anything needing a live form — holder façade, `IsWritableBinding`, designer paths. |
 | **Runtime facade** | [runtime-facade.md](runtime-facade.md) | 16 of 17 steps; **Step 12** (cross-bc metadata) open |
 | **Compute server** | [compute-server-tiering.md](compute-server-tiering.md) | Phase 1 (pool) + Phase 2 (in-process worker) done; later tiers open |
 | **Firebird mesh** | [firebird-mesh-driver.md](firebird-mesh-driver.md) | phases 1, 2, 4, 6 production-validated; rest open |
@@ -55,7 +87,7 @@ Undocumented-until-now subsystems, mapped 2026-07-15:
 | **Paging** | [paging-design.md](paging-design.md) | the universal `Get*Fetch` contract (§8) is what lives |
 | **Access policy / RLS** | [access-policy-rls.md](access-policy-rls.md) | read + write live; semi-join / temp-promote landed |
 | **Job manager** | [job-manager.md](job-manager.md) | scheduled + background work through the worker pool. Landed: per-session pool choice, `ibJobManager` on appData, `RunScheduledJobs` / `RunJob` + the file-base timer, `totals.fold` as first tenant, cross-process claim via `sys_lock`, job state/outcome, and the `ibValue::IsTransferable` gate. Background jobs are live: `RunBackground("Module.Method", args)` returns a vended `BackgroundJob` value (`IsComplete` / `Wait` / `Result` / `Error` / `Activity` / `Cancel`), runs on its own session under the caller's identity, and shows in Active Users as its own session kind (BackgroundJob / ScheduledJob / SystemJob). `ibFirebirdMaintenanceScheduler` folded in — it lost its thread and is now the `firebird.maintenance` job. Full schedules (`ibJobSchedule`: interval + time window + weekdays + month days + months + validity range, with `ToString` / `NextAllowedAfter`), the manager's own tick thread, and cross-process synchronisation (`sys_lock` claim owned by the job's session + shared `sys_job.lastRun` through L2 upsert). Open: background fetch for reports; naming a *different* user than the caller (needs a role gate); metadata for configuration-declared scheduled jobs |
-| **Register totals** | [register-totals-strategy.md](register-totals-strategy.md) | reading works (three virtual tables via live aggregation); the trigger-maintained bundle is declared by the accumulation register and applied on a live Firebird, surviving a kind switch (2026-07-29). Open: numeric parity of the two paths is **unverified**; the accounting register declares no totals; boundary-row Fill and the routing of recorder / sub-day readings to the movements are absent |
+| **Register totals** | [register-totals-strategy.md](register-totals-strategy.md) | reading works (three virtual tables via live aggregation); the trigger-maintained bundle is declared by the accumulation register and applied on a live Firebird, surviving a kind switch (2026-07-29). Numeric parity of the two paths is now **verified GREEN under a live engine** (2026-08-02): `tests/test_totalsNumericParity.cpp` installs the real rendered bundle on in-memory SQLite and compares maintained totals against re-aggregated movements — accumulation, month truncation, updates across both key columns, deletes, backdated entries, fractional values, mixed traffic. It paid for itself on the first run by exposing **two bugs in `ibMaterializeSql::Apply` that made a first apply on a clean SQLite database impossible** (a driver signals failure by throwing, so the return-code test never saw it; and the "error" sentinel is 0, which is also the affected-row count of successful DDL) — see [register-totals-strategy.md](register-totals-strategy.md) §1. Not retired: real traffic volume and Firebird's own trigger family. Open: the accounting register declares no totals; boundary-row Fill and the routing of recorder / sub-day readings to the movements are absent |
 
 ---
 
@@ -70,6 +102,7 @@ Do not treat these as "nearly done"; they are captured thinking.
 | Memory allocator | [memory-allocator.md](memory-allocator.md) | **design note / NOT STARTED** |
 | Metadata storage container | [metadata-storage-container-arc.md](metadata-storage-container-arc.md) | **FOLDED (2026-06-17)** into [schema-first-metadata.md](schema-first-metadata.md) — "single-blob → per-entry rows" *is* file-per-object; pursue it through that direction, not as a standalone storage refactor |
 | Metaobject naming (designer labels, script names, tree order) | [metaobject-naming.md](metaobject-naming.md) | **PLAN — nothing applied** (2026-07-27). The script-visible half is near-free now and gets dearer with every configuration written. |
+| Payroll | [payroll-arc.md](payroll-arc.md) | **DESIGN — no code yet** (2026-08-02). No calculation-register metatype: the one platform piece is an `Intervals(from, to)` reading companion beside `SliceLast` / `SliceFirst`; displacement is a configured table plus interval arithmetic in the run. Phase 0 is worth doing on its own (prices, rates, deferred reserve). |
 
 ---
 
@@ -104,17 +137,20 @@ Three distinct states, not one:
 
 | State | Controls | What a user sees |
 |---|---|---|
-| **Ported** — real `ibWeb*` widget (`frontend/web/webWindow.h`) | StaticText, Button, CheckBox, TextCtrl, ToolBar + ToolBarItem/Separator, and the sizers (Box / Grid / StaticBox / Item) | Works |
+| **Ported** — real `ibWeb*` widget (`frontend/web/webWindow.h`) | StaticText, Button, CheckBox, TextCtrl, ToolBar + ToolBarItem/Separator, and the sizers (Box / Grid / StaticBox / Item / Wrap) | Works |
 | **Stub** — compiled in, returns `ibWebStubControl` | TableBox, TableBoxColumn, form object (`formObject.cpp`) | Placeholder block; metadata still loads |
 | **Absent** — file not in `wfrontend.vcxproj`, no web branch | ComboBox, Choice, ListBox, RadioButton, Notebook, Gauge, Slider, GridBox, HtmlBox, ChartBox, TextBox, StaticLine | clsid unregistered |
 
 Two corrections to that table, both found by re-verification on 2026-07-29:
 
-- **WrapSizer is a fourth state — implemented end to end, never registered.** It has a desktop
-  implementation, an `OES_USE_WEB` branch (`ibWebWrapSizer`, `web/webSizer.h`) and JS
-  (`webClient.cpp`), but `wrapsizer.cpp` carries no `CONTROL_TYPE_REGISTER` while its four sibling
-  sizers do. Its clsid registers on **neither** platform, so it is unreachable code on both. One
-  macro line would make it work.
+- ~~**WrapSizer is a fourth state — implemented end to end, never registered.**~~ **FIXED
+  2026-08-02.** It had a desktop implementation, an `OES_USE_WEB` branch (`ibWebWrapSizer`,
+  `web/webSizer.h`) and JS (`webClient.cpp`), but no `CONTROL_TYPE_REGISTER` — unreachable on both
+  platforms. It was not "one macro line": `ibCtorControlType<T>::GetClassIcon` calls
+  `T::GetIconGroup()` unconditionally, so registering without an icon does not compile. Fixed with
+  `wrapsizer_res.cpp` (XPM + `GetIcon`/`GetIconGroup`, matching the four sibling sizers), the two
+  declarations in `sizer.h`, and `CONTROL_TYPE_REGISTER(ibValueWrapSizer, "Wrapsizer", "Sizer")` —
+  the 3-arg form, since a never-registered control has no legacy `CT_*` key to preserve.
 - **ComboBox / Choice / ListBox are green-field on BOTH sides, not "a desktop control awaiting a
   port".** Their `.cpp` files are in the desktop `frontend.vcxproj` but carry no
   `CONTROL_TYPE_REGISTER` either, and the bodies are empty shells (`OnCreated` is a no-op). §6 below
@@ -125,21 +161,30 @@ real document form — which needs at minimum a ComboBox/Choice for reference fi
 TableBox for line items — does not assemble. Layout, commands and navigation are further
 along than input.
 
-> Two comments in `wfrontend.vcxproj` describe the toolbar as a stub with child
-> `CT_TLITM` / `CT_TLSP` logging *unregistered clsid*. That is stale — `toolBarItem.cpp` is
-> in the project and `ibWebToolbar` / `ibWebToolBarItem` / `ibWebToolBarSeparator` are real
-> classes. Fix the comments when next in that file.
+> ~~Two comments in `wfrontend.vcxproj` describe the toolbar as a stub~~ — **fixed 2026-08-02**;
+> the comment now states what is true: `toolBarItem.cpp` is in the project and `ibWebToolbar` /
+> `ibWebToolBarItem` / `ibWebToolBarSeparator` are real classes, so `CT_TLBR` / `CT_TLITM` /
+> `CT_TLSP` all register on the web.
 
-### 4.3 Report — no platform generate action
+### 4.3 Report — generate action ~~missing~~ LANDED 2026-08-02
 
-`backend/metaCollection/partial/dataReportAction.cpp`: `GetStandardCommands` returns an
-empty collection, `CallAsAction` has an empty body. Running a report is entirely the object
-module's script. See [report-engine.md § 5](report-engine.md).
+`backend/metaCollection/partial/dataReportAction.cpp` now registers the **Generate**
+standard command and routes it to the object module's `Generating(cancel)` handler — the
+report's twin of a document's `Post` → `Posting`. The script still owns data and
+presentation both; the platform owns only the command. See
+[report-engine.md § 5](report-engine.md).
 
-### 4.4 JSON provider — write-only
+### 4.4 JSON provider — Read implemented 2026-08-02, deliberately unwired
 
-`ibJsonProvider::Write` emits JSON for diff/inspection; `Read` is a no-op. Do not rely on
-JSON import (see [../CLAUDE.md](../CLAUDE.md) § Configuration Serialization).
+`ibJsonProvider::Read` is now a complete recursive-descent parser (nested children,
+arrays, base64 binaries, structural + synthetic keys; malformed input throws with a byte
+offset). **Nothing calls it** — `ibBinaryProvider` remains the round-trip format — because
+the *view* is lossy by design and three things cannot come back: Fields and Properties
+flatten into one key set (a scalar property returns as a field; a Child value does return
+to the property area), Date degrades to an ISO String, and `TypeDesc` is synthetic (parsed
+and dropped). A name-form `NodeType` needs the new `SetTypeLookup` inverse to become a
+clsid again. Closing the first two means a *separate lossless emitter*, not more parser.
+Both halves — what survives and what does not — are pinned in `tests/test_jsonProvider.cpp`.
 
 ### 4.5 Open defect
 
@@ -166,20 +211,28 @@ work as "port a known-good reference driver", not "write one from scratch".
 The state above is factual. This section is a **proposal** and the one part of this file
 that should be argued with.
 
+Reordered 2026-08-02: items 2 and 4 came off this list (done — see §2 and §4.3), which moves
+web controls and accounting execution up.
+
 1. **Web controls** — §4.2 is the widest gap between "the platform can" and "a user can".
    Desktop forms work; on the web the controls a real application form is made of are
    either stubs (tablebox) or **absent from the build entirely** (combobox / choice /
    listbox / notebook). Suggested order — ComboBox and Choice first (reference fields are
    in every form and are cheap: a select element over an existing fetch), then TableBox
-   (expensive, and the one that unblocks documents), then the rest.
-2. **Form attribute binding → spec + tests** — §2 says it is exercised through the
-   designer, not a harness. It is the substrate everything else in the form editor stands
-   on; leaving it unspec'd taxes every arc above it.
-3. **Accounting execution** — §4.1 is a whole advertised metatype that does not execute.
-   Either finish the migration or state the register as out of scope.
-4. **Report generate action** — §4.3; small, and it turns reports from "script it" into a
-   platform feature.
-5. Design-only arcs (§3) stay parked until a concrete need pulls them.
+   (expensive, and the one that unblocks documents), then the rest. Note what §4.2 now
+   says about the first two: they are **green-field on both sides**, not a port — the
+   desktop files are empty shells that register no clsid either.
+2. **Accounting execution** — §4.1 is a whole advertised metatype that does not execute.
+   Either finish the migration or state the register as out of scope. The register-totals
+   primitives it was waiting on are now not only built but numerically verified (§2), so
+   the reason to defer it has thinned.
+3. Design-only arcs (§3) stay parked until a concrete need pulls them.
+
+~~Form attribute binding → spec + tests~~ — **done 2026-08-02**: the surface is spec'd
+(*Surface contract*) and the plumbing carries four gtest TUs. What is left is the live-form
+half, which needs the GUI harness rather than a decision.
+
+~~Report generate action~~ — **done 2026-08-02** (§4.3).
 
 ---
 

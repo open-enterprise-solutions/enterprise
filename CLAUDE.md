@@ -333,9 +333,11 @@ that tree to bytes (and reads it back).
   `SaveConfigToFile(fileName)` (`metadataConfiguration.h`).
 - **`ibBinaryProvider`** (`dataBuilder.{h,cpp}`) — the internal, owned binary
   format. This is the round-trip path (Write + Read).
-- **`ibJsonProvider`** (`serialize/jsonProvider.{h,cpp}`) — JSON, **write-only**:
-  `Write` emits JSON for diff/inspection; `Read` is a no-op (`TODO: JSON -> tree`).
-  Do not rely on JSON import.
+- **`ibJsonProvider`** (`serialize/jsonProvider.{h,cpp}`) — JSON. `Write` emits JSON for
+  diff/inspection; `Read` is a full parser but is **wired to nothing on purpose**. The view
+  is lossy by design (Fields + Properties flatten into one key set, Date → ISO string,
+  synthetic `TypeDesc`), so Write→Read is not a round trip — use `ibBinaryProvider` for that.
+  `SetTypeLookup` supplies the name→clsid inverse. Tests: `tests/test_jsonProvider.cpp`.
 - The old XML/JSON config layer is **gone**: `metadataConfigurationXML.cpp` /
   `metadataConfigurationJSON.cpp` and the `SaveConfigToXML` / `LoadConfigFromXML`
   / `SaveConfigToJSON` / `LoadConfigFromJSON` methods no longer exist.

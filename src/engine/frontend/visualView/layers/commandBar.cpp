@@ -67,12 +67,12 @@ static void CollectTableboxes(ibValueFrame* frame, std::vector<ibValueFrame*>& o
 		CollectTableboxes(frame->GetChild(i), out);
 }
 
-// The three command sections of a form, in display order (1C model). GatherFormCommands labels its entries with
+// The three command sections of a form, in display order. GatherFormCommands labels its entries with
 // exactly these, and the navigator / picker pre-create all three so they show even when empty. ONE source of the
 // names -> the surfaces can't drift.
 std::vector<wxString> GetCommandSections()
 {
-	// The 1C model — three command SOURCES: [0] the form's own commands, [1] standard actions (form + tables),
+	// Three command SOURCES: [0] the form's own commands, [1] standard actions (form + tables),
 	// [2] global commands (config-wide: general commands + every object's own commands, by full name).
 	return { _("Form commands"), _("Standard commands"), _("Global commands") };
 }
@@ -106,7 +106,7 @@ static std::set<ibClassID> CollectFormDataTypes(ibValueForm* form)
 }
 
 // A "parameterizable" command (its Parameter type names >= 1 REFERENCE type) is available ONLY where the form
-// carries data of a matching type — 1C's typed commands. A command with no reference parameter type is available
+// carries data of a matching type — a TYPED command. A command with no reference parameter type is available
 // everywhere (returns false = not excluded).
 static bool CommandExcludedByType(const ibValueMetaObjectCommand* cmd, const std::set<ibClassID>& formTypes)
 {
@@ -120,7 +120,7 @@ static bool CommandExcludedByType(const ibValueMetaObjectCommand* cmd, const std
 	return parameterized;   // typed but no form type matches -> exclude; untyped -> keep
 }
 
-// The shared three-section gather (1C model) — the command-door twin of walking a form's source explorers. Feeds
+// The shared three-section gather — the command-door twin of walking a form's source explorers. Feeds
 // BOTH the navigator panel and the inspector's command-source picker, so they can never drift.
 std::vector<ibCommandSourceEntry> GatherFormCommands(ibValueForm* form)
 {

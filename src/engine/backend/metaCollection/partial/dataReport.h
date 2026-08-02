@@ -155,6 +155,22 @@ public:
 	virtual ibStandardCommandSet GetStandardCommands(const ibFormID& formType);
 	virtual void CallAsAction(const ibActionID& action, ibBackendValueForm* srcForm);
 
+	// Run the report: calls the object module's Composing(StandartProcessing) handler — the
+	// report's twin of a document's Posting. COMPOSE, not generate: Generation in this tree
+	// means entering an object on the basis of another. The flag arrives TRUE ("the platform
+	// composes"); a handler that composed the result itself sets it FALSE. See
+	// dataReportAction.cpp.
+	bool Composing() const;
+
+protected:
+	// The platform side of that flag — virtual so a report kind can own its standard
+	// composition. Returns false today: a standard composition needs a declared composition
+	// schema on the metaobject, and the Report metaobject has none yet (see the long note in
+	// dataReportAction.cpp). This is where that execution lands when the schema arrives.
+	virtual bool DoStandardCompose() const;
+
+public:
+
 protected:
 	friend class ibValue;
 	friend class ibValueMetaObjectReport;

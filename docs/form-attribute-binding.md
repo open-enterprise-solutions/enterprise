@@ -10,7 +10,13 @@ RESOLVES — as **raw ids the source explorer walks**, no metadata/guid (see *Pa
 **drag-to-create** rides that same serializer (drop resolves the control class from the path); the
 **value-table** rides the composite-attribute serialization as the dynamic list (and retypes cells
 lazily on read); and `GetSourceDesc` was brought to the same mutable-ref-plus-setter shape as
-`GetTypeDesc`. Uncommitted churn expected; the *model* below is stable, the surface is not yet spec'd or tested.
+`GetTypeDesc`. Uncommitted churn expected; the *model* below is stable.
+
+**The surface is now spec'd** — see *Surface contract* below for the entry points a caller outside
+the binding layer may rely on, their guarantees, and which test pins each rule. The pure-plumbing
+half (hop vector, serialization, both walks, the non-owning-cell rule) is covered by four gtest
+TUs; what still has no harness is anything needing a live form (holder façade, `IsWritableBinding`,
+the designer paths).
 
 ## What it replaces
 
@@ -619,6 +625,79 @@ adding a column rebuilds / re-wires that grid — doing it inside the OS drop ca
 mid-call (a use-after-free crash). The append refreshes only the object tree — a column provisions no new form
 attribute, so the attribute tree must not rebuild and lose the user's expansion / selection mid-drag.
 
+## Surface contract — what a caller may rely on
+
+Everything above describes the MECHANISM. This section is the **contract**: the entry points a
+caller outside the binding layer touches, and what each guarantees. Where a rule is pinned by a
+test, the test is named — a rule with no test is a rule that will drift.
+
+### Vocabulary types
+
+| Type | Contract |
+|---|---|
+| `ibSourceHop` | `{m_id, m_type}`. `m_id` is WHERE to step — an id the source explorer resolves (config metaID, query column id, RAM value-table column id — the walk never distinguishes them). `m_type` is the branch the picker PINNED, undefined where none was imposed. |
+| `ibSourceDescription` | A whole address (a hop vector), to a path what `ibTypeDescription` is to a composite type. `GetHopCount` / `GetFirst` / `GetLeaf` / `GetByIdx` / `GetExpectedType(idx)` / `IsDotWalk()`. **Empty is legal** and means "not bound". |
+| `ibBackendSourceColumn` | The neutral leaf: `GetName` / `GetSynonym` / `GetTypeDesc` / `IsAllowed`. A metaobject attribute, a query column and a value-table column are all one of these, with no adapter. |
+
+**Path shape.** `path[0]` is ALWAYS a form-local attribute id (the gate). `path[1..]` dot-walks
+that attribute's value. A column path is `{mainAttrId, field}` — never a row-type hop
+(`{mainAttrId, rowType, field}`). Pinned by `test_sourceDescription.cpp`.
+
+### Reading and writing a bound value
+
+| Entry point | Guarantees |
+|---|---|
+| `ibValueForm::GetValueByAttributePath(desc, out)` | True iff every hop resolved. `out` is meaningful only on true. An unresolvable hop is a BROKEN binding — false, never a crash, never a partial value. |
+| `ibValueForm::SetValueByAttributePath(desc, value)` | Writes only where `IsWritableBinding` is true; otherwise a no-op returning false. |
+| `ibValueForm::IsWritableBinding(desc)` | True only for a DIRECT field — `[attr]` or `[attr, field]`. Any dot-walk through a reference is read-only. ALSO the single view-only gate: false when the form `IsViewOnly()`, or when the binding's own source metaobject denies `AccessRight_Modify`. Every editable control asks THIS — no control implements its own read-only rule. |
+| `ibSourceDataObject::GetValueByPath(path, out)` | The source feeds its own hop 0, then delegates to `ResolvePath`. |
+| `ibSourceDataObject::ResolvePath(start, path, from, out)` | Static; the start value need not be a form attribute. Stops (false) at a non-source value mid-path — you cannot dot into a primitive — or at an unknown id. `out` is written only on true. Pinned by `test_sourceHopChain.cpp`. |
+| `ibTabularDataObject::GetValueByPath(item, path, from, out)` | The table resolves ONLY hop `from` (a cell of `item`) and transfers the rest to `ResolvePath`. `from >= path.size()` is false, not UB. Pinned by `test_tabularHop.cpp`. |
+
+**Gate rule.** A source is dotted ONLY through `GetValueBySourceHop`, never through
+`GetValueByMetaID`. Overriding the gate is the extension point; a new source kind implements the
+gate and inherits the whole walk.
+
+### Design-time resolution
+
+| Entry point | Guarantees |
+|---|---|
+| `ibBackendTypeSourceFactory::WalkSource(desc, valid, outText)` | Gates `path[0]` to a holder, then `WalkColumns(path, 1, …)`. Returns the leaf as an `ibBackendSourceColumn` — the caller never sees the concrete class. Knows NO metadata. |
+| `ibSourceDataObject::WalkColumns(path, from, leaf, outText)` | The design-time twin of `ResolvePath` — same hop vector, typed-empty values instead of live ones. A section descends in place; a reference descends into whichever target branch owns the NEXT hop (so a composite resolves). Pinned by `test_sourceExplorer.cpp`. |
+| `GetSourceExplorer()` | **Nullable.** nullptr means "this source cannot describe itself" (an unresolved reference with no target). `FindById` / `GetHelper` are nullable too — no sentinel node. |
+| Explorer root flag | **Invariant:** every table source (value-table, dynamic list, object list, register list) flags its explorer root as a table section. "Has columns?" is NOT a substitute — a table may be empty. |
+
+### Holder façade (`ibBackendFormAttributeValue`)
+
+`GetName` / `GetId` / `IsMain` / `GetTypeDesc` / `GetSourceValue`. There is deliberately **no
+`GetAttribute()`** — the concrete description never leaves the holder. `GetSourceList` vends
+holders, so a backend resolver reads columns via `GetSourceValue()->GetSourceExplorer()` without
+knowing the value's type.
+
+Invariants a caller may assume:
+
+- **Exactly one** attribute carries Main, found by `IsMain()` — the flag is the single source of
+  truth, there is no main pointer to keep in sync.
+- The main attribute is **never serialized** — it is reconstructed from the source in the ctor, so
+  copy/paste cannot produce a duplicate.
+- The holder pointer is **stable** (`ibValuePtr`, ref-counted): it survives vector growth, a
+  designer tree rebuild, and being held by the undo stack. Designer code keys selection on it.
+- `GetBindValue()` is the LIVE slot. **A cell holding a source must be captured NON-owning**
+  (`TYPE_CONST_REFFER`); an owning reffer over a member/stack `ibValue` takes refcount 0→1 and
+  deletes an interior pointer on release. Pinned by `test_sourceHopChain.cpp`.
+
+### Serialization
+
+A path serializes as **raw ids** (`ibSourceDescriptionMemory`), consulting no metadata — no
+metaId→guid mapping, no `metaData` parameter. This mirrors resolution exactly, and is what lets a
+RAM-local value-table column id round-trip. **Rule: resolve AND serialize a path through the
+explorer, never through a metadata lookup.** Pinned by `test_sourceDescription.cpp`.
+
+### Command provider
+
+`GetCommandProvider()` is **resolved live, never cached** — a stored back-pointer goes stale the
+moment the designer re-points the main attribute. Callers must not hold it across an edit.
+
 ## Open edges
 
 - **Multi-source** — today it is one main + auxiliary attributes; true N-sources and the
@@ -651,11 +730,18 @@ attribute, so the attribute tree must not rebuild and lose the user's expansion 
   filter skips the check.
 - **Blocker B (compute server)** — binding is necessary but not sufficient; registers /
   reporting on top need the compute tier.
-- **Test harness — first slice landed.** `test_sourceDescription.cpp` (the hop-vector passport +
-  metadata-free serialize round-trip), `test_tabularHop.cpp` (the table `GetValueByPath` walk via a mock
-  table), and `test_sourceExplorer.cpp` (design-time `WalkColumns`) are gtest / CMake (`oes_tests`). Still
-  uncovered: the full RUNTIME reference chain (table → reference → field), which needs a value-wrapped
-  source, and the member-cell-reffer hazard above (statically detectable).
+- **Test harness.** `test_sourceDescription.cpp` (the hop-vector passport + metadata-free serialize
+  round-trip), `test_tabularHop.cpp` (the table `GetValueByPath` walk via a mock table),
+  `test_sourceExplorer.cpp` (design-time `WalkColumns`), and — added 2026-08-02 —
+  `test_sourceHopChain.cpp`, which closes the two gaps this bullet used to name: the full RUNTIME
+  reference chain (table → reference → field, and → reference → reference → field, over a mock
+  source that is `ibValue + ibSourceDataObject`), and the member-cell-reffer hazard (a source cell
+  must be a non-owning `TYPE_CONST_REFFER` and must outlive the cell viewing it). All gtest / CMake
+  (`oes_tests`), all green. Still uncovered: anything needing a live form — the holder façade,
+  `IsWritableBinding` and the designer paths. That gap is now *reachable* rather than blocked:
+  the frontend GUI harness went green on 2026-08-02 (26/26, ~2 s — it previously did not compile
+  and its form tests were disabled), so a live-form test has somewhere to live. See
+  [engineering-playbook/10-testing.md](engineering-playbook/10-testing.md).
 
 This is Blocker A of the ERP roadmap — the binding foundation under registers → reporting →
 period-close → web / thin client.

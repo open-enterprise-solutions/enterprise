@@ -233,6 +233,21 @@ public:
 	                                    ibSessionKind kind,
 	                                    ibConnectRequest::SessionFactory factory);
 
+	// UNLISTED — a session the registry never takes in: no sys_session row, no cluster
+	// snapshot refresh, no disconnect audit. Teardown reads m_listed and skips the Remove,
+	// so nothing is given back because nothing was taken.
+	//
+	// The production user is ibJobManager's rented read (a page of a background fetch does
+	// not deserve a row and a SELECT over sys_session per page). The other user is a TEST
+	// HARNESS standing a session up against a database with no system schema at all: the
+	// registered path would then try its INSERT, fail on a missing table, and pay a
+	// connection timeout per session — around 30 seconds each in the GUI harness — for a row
+	// nobody reads. Imitating the session is the right answer there, not creating the table.
+	//
+	// Ownership: the caller hands over a freshly built session and gets the only holder for
+	// it back, exactly as the registered factories do.
+	static ibSessionHolder MintUnlisted(std::shared_ptr<ibSession> session);
+
 	// ---- Thread + queue ----
 	// Set whether the registry owns sys_session row I/O. Default false —
 	// handlers only drive in-memory state transitions (useful for tests

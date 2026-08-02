@@ -175,7 +175,11 @@ class ibValueWrapSizer : public ibValueSizer {
 	virtual void Update(wxObject* wxobject, ibVisualHost* visualHost) override;
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
 
-	//load & save object in control 
+	//support icons
+	virtual wxIcon GetIcon() const;
+	static wxIcon GetIconGroup();
+
+	//load & save object in control
 	virtual bool ReadData(const ibDataNode& node);
 	virtual bool WriteData(ibDataNode& node) const;
 

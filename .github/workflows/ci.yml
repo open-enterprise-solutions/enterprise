@@ -1,0 +1,159 @@
+# OES Enterprise — continuous integration
+#
+# Both platforms build through the CMake PRESETS, not MSBuild. The solution
+# carries 14 projects and none of them is wxWidgets: enterprise.sln expects wx
+# libraries to already exist, so it cannot bootstrap itself on a clean runner.
+# The CMake path builds wx from the submodule (docs/BUILD.md — "CMake also works
+# on Windows, and that is the path the Google Test targets are built through").
+#
+# The wxWidgets build dominates the wall clock, so each job caches its build
+# directory keyed on the submodule commit: unchanged wx means an incremental
+# rebuild of OES only.
+
+name: CI
+
+on:
+  push:
+    branches: [develop, master]
+  pull_request:
+    branches: [develop]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # The primary signal: the backend suite (~850 tests), no GUI, no display.
+  # ---------------------------------------------------------------------------
+  tests-linux:
+    name: Tests (Linux, Debug)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      # libgtk-3-dev is REQUIRED and is not in BUILD.md's apt list: the CMake
+      # build defines __WXGTK__ and pkg-checks gtk+-3.0, so wx will not
+      # configure without it.
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build ccache pkg-config \
+            libgtk-3-dev libsqlite3-dev
+
+      - name: Record the wxWidgets submodule commit
+        id: wx
+        run: echo "sha=$(git -C src/3rdparty/wxWidgets rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache the build directory
+        uses: actions/cache@v4
+        with:
+          path: build/linux-debug
+          key: linux-debug-wx-${{ steps.wx.outputs.sha }}-${{ hashFiles('CMakeLists.txt', 'CMakePresets.json', 'src/**/CMakeLists.txt') }}
+          restore-keys: linux-debug-wx-${{ steps.wx.outputs.sha }}-
+
+      # Firebird is OFF here: the suite's DB-backed tests run on SQLite, which is
+      # always embedded, so the Firebird client would be a dependency bought for
+      # nothing. The Windows job keeps the preset default (Firebird ON).
+      - name: Configure
+        run: cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=OFF
+
+      - name: Build the test target
+        run: cmake --build --preset linux-debug --target oes_tests
+
+      - name: Run
+        working-directory: build/linux-debug
+        run: ctest --output-on-failure --timeout 300
+
+  # ---------------------------------------------------------------------------
+  # The shipping platform. Building is the signal here — Windows runners are the
+  # slow ones, so the suite runs on Linux and this job guards the MSVC build.
+  # ---------------------------------------------------------------------------
+  build-windows:
+    name: Build (Windows, x64 Debug)
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Record the wxWidgets submodule commit
+        id: wx
+        shell: bash
+        run: echo "sha=$(git -C src/3rdparty/wxWidgets rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache the build directory
+        uses: actions/cache@v4
+        with:
+          path: build/windows-x64-debug
+          key: win-x64-debug-wx-${{ steps.wx.outputs.sha }}-${{ hashFiles('CMakeLists.txt', 'CMakePresets.json', 'src/**/CMakeLists.txt') }}
+          restore-keys: win-x64-debug-wx-${{ steps.wx.outputs.sha }}-
+
+      - name: Configure
+        run: cmake --preset windows-x64-debug -DBUILD_TESTING=ON
+
+      - name: Build the test target
+        run: cmake --build --preset windows-x64-debug --target oes_tests
+
+      - name: Run
+        # No -C: every preset here uses Ninja, which is single-config.
+        working-directory: build/windows-x64-debug
+        run: ctest --output-on-failure --timeout 300
+
+  # ---------------------------------------------------------------------------
+  # The GUI harness is a SEPARATE job, and separate on purpose: it links
+  # frontend.dll, needs a live wxApp, and runs headless under Xvfb. Its failure
+  # mode (a hung modal on an assert) is different in kind from a backend test's,
+  # so it gets its own timeout and does not take the primary signal down with it
+  # when the toolkit itself is the problem.
+  # ---------------------------------------------------------------------------
+  tests-gui-linux:
+    name: GUI tests (Linux, Xvfb)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build ccache pkg-config \
+            libgtk-3-dev libsqlite3-dev xvfb
+
+      - name: Record the wxWidgets submodule commit
+        id: wx
+        run: echo "sha=$(git -C src/3rdparty/wxWidgets rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache the build directory
+        uses: actions/cache@v4
+        with:
+          path: build/linux-debug
+          key: linux-debug-wx-${{ steps.wx.outputs.sha }}-${{ hashFiles('CMakeLists.txt', 'CMakePresets.json', 'src/**/CMakeLists.txt') }}
+          restore-keys: linux-debug-wx-${{ steps.wx.outputs.sha }}-
+
+      - name: Configure
+        run: cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=OFF
+
+      - name: Build the GUI test target
+        run: cmake --build --preset linux-debug --target oes_frontend_runtime_test
+
+      # The harness SKIPs every test when the toolkit cannot come up, so a
+      # display-less runner reports skips, not failures — Xvfb is what turns
+      # those skips back into real assertions.
+      - name: Run under Xvfb
+        working-directory: build/linux-debug
+        run: xvfb-run -a ./bin/oes_frontend_runtime_test

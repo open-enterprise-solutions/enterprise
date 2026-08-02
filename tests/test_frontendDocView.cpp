@@ -59,23 +59,39 @@ TEST_F(DocViewFix, DocumentAccessors)
 
 // A view attaches to a document: AddView registers it, GetFirstView returns it,
 // the view links back to its document, and RemoveView detaches it.
-TEST_F(DocViewFix, DISABLED_DocumentViewWiring)
+//
+// TWO things here are the doc/view CONTRACT, not test scaffolding, and getting
+// either wrong corrupts the heap instead of failing:
+//   * the document is HEAP-allocated. ibDocument::OnChangedViewList does
+//     `delete this` once the last view goes away — a document exists only while
+//     something views it. A stack document would be delete-d out from under us.
+//   * two views are attached, so removing one leaves the document alive and
+//     observable. Removing the only view would destroy the document mid-test.
+// The surviving document + view are deliberately leaked: the test process has no
+// event loop, and a short-lived process is the right place to accept that.
+TEST_F(DocViewFix, DocumentViewWiring)
 {
 	if (!ready) GTEST_SKIP();
 
-	ibDocument doc;
-	ibTestView* view = new ibTestView();
-	view->SetDocument(&doc);
+	ibDocument* doc = new ibDocument();
+	ibTestView* first  = new ibTestView();
+	ibTestView* second = new ibTestView();
+	first->SetDocument(doc);
+	second->SetDocument(doc);
 
-	EXPECT_TRUE(doc.AddView(view));
-	EXPECT_EQ(doc.GetViewsVector().size(), 1u);
-	EXPECT_EQ(doc.GetFirstView(), view);
-	EXPECT_EQ(view->GetDocument(), &doc) << "the view links back to its document";
+	EXPECT_TRUE(doc->AddView(first));
+	EXPECT_TRUE(doc->AddView(second));
+	EXPECT_EQ(doc->GetViewsVector().size(), 2u);
+	EXPECT_EQ(doc->GetFirstView(), first);
+	EXPECT_EQ(first->GetDocument(), doc) << "the view links back to its document";
 
-	doc.RemoveView(view);
-	EXPECT_TRUE(doc.GetViewsVector().empty()) << "RemoveView detaches the view";
-	// Do not delete view here — RemoveView owns its teardown; a manual delete
-	// double-frees (heap corruption).
+	EXPECT_TRUE(doc->RemoveView(first));
+	EXPECT_EQ(doc->GetViewsVector().size(), 1u) << "RemoveView detaches just that view";
+	EXPECT_EQ(doc->GetFirstView(), second) << "the remaining view is now first";
+
+	// Do not delete the views — RemoveView owns its teardown; a manual delete
+	// double-frees. Do not remove `second` either: that would take the document
+	// with it (see the contract note above).
 }
 
 // A document constructed with a parent reports as a child document; the parent

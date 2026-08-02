@@ -557,7 +557,7 @@ ibQueryAstExprPtr ibQueryParser::ParseAggregate()
 // VALUE( <Kind>.<Name>.<Member> ) — a LITERAL reference constant: the empty reference of a metaobject
 // (`value(Catalog.Currencies.EmptyRef)`) or one of its predefined items (`value(Catalog.Currencies.Dollar)`).
 // The name is NOT resolved here (the AST is metadata-free) — the dotted path is carried as-is and resolved at
-// lowering, where the config is in scope. Mirrors 1C's ЗНАЧЕНИЕ(...). The resolved value then flows as a bound
+// lowering, where the config is in scope. The resolved value then flows as a bound
 // value, exactly like a &parameter.
 ibQueryAstExprPtr ibQueryParser::ParseValueConstant()
 {

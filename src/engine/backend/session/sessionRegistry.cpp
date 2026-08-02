@@ -277,6 +277,17 @@ ibSessionHolder ibSessionRegistry::CreateSessionOfKind(ibRunMode runMode,
 	return std::move(result.m_holder);
 }
 
+// No Connect, no queue, no row — the session simply exists and is owned. Mirrors what
+// ibJobManager does inline for a rented read; lifted here so the one place that may call
+// SetUnlisted is the registry that owns the listing rule. See the header for who uses it.
+ibSessionHolder ibSessionRegistry::MintUnlisted(std::shared_ptr<ibSession> session)
+{
+	if (!session)
+		return ibSessionHolder();
+	session->SetUnlisted();
+	return ibSessionHolder(std::move(session));
+}
+
 ibSessionHolder ibSessionRegistry::CreateSessionWithFactory(ibRunMode runMode,
                                                             const wxString& computer,
                                                             const wxString& presetGuid,

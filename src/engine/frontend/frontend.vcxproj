@@ -170,6 +170,7 @@
     <ClCompile Include="visualView\ctrl\typeControl.cpp" />
     <ClCompile Include="visualView\ctrl\window.cpp" />
     <ClCompile Include="visualView\ctrl\wrapsizer.cpp" />
+    <ClCompile Include="visualView\ctrl\wrapsizer_res.cpp" />
     <ClCompile Include="visualView\pageWindow.cpp" />
     <ClCompile Include="visualView\visualHostClient.cpp" />
     <ClCompile Include="visualView\visualHostClientDocView.cpp" />

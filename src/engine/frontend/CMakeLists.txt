@@ -8,12 +8,6 @@ file(GLOB_RECURSE FRONTEND_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
 )
 
-# Exclude legacy/broken special dialog files (use old CValue naming)
-list(FILTER FRONTEND_SOURCES EXCLUDE REGEX "special/valueColourDialog\\.cpp$")
-list(FILTER FRONTEND_SOURCES EXCLUDE REGEX "special/valueFileDialog\\.cpp$")
-list(FILTER FRONTEND_SOURCES EXCLUDE REGEX "special/valueFontDialog\\.cpp$")
-list(FILTER FRONTEND_SOURCES EXCLUDE REGEX "special/valueGrid\\.cpp$")
-
 # GLOB grabs every .cpp, but the desktop frontend.dll (frontend.vcxproj) builds
 # a HAND-PICKED subset. The files below are NOT in that project, so building
 # them here breaks the CMake build:

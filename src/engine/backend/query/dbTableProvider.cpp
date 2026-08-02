@@ -2190,8 +2190,15 @@ static void BindWriteValue(ibQueryStatement& stmt, const ibBackendQueryColumn* c
 			case ibRawDBColumn::RawType::Number:    stmt.SetParamNumber(pos++, v.GetNumber());  break;
 			case ibRawDBColumn::RawType::Date:      stmt.SetParamDate  (pos++, v.GetDate());    break;
 			case ibRawDBColumn::RawType::Boolean:   stmt.SetParamBool  (pos++, v.GetBoolean()); break;
-			case ibRawDBColumn::RawType::Reference: stmt.SetParamString(pos++, v.GetString());  break;   // TODO: real blob bind
-			case ibRawDBColumn::RawType::Blob:      stmt.SetParamString(pos++, v.GetString());  break;   // TODO: real blob bind
+			// Reference / Blob: UNREACHABLE today, and the old "TODO: real blob bind" was a false
+			// promise twice over. Nothing constructs a RawType::Reference column, and the only
+			// RawType::Blob producer (the register's rowData scaffold) was dropped 2026-08-02.
+			// Beyond that, ibValue has no binary tag (ibValueTypes: Empty/Bool/Number/Date/String/
+			// Null/Reffer/…), so a "real" bind has nowhere to put the bytes — giving these a proper
+			// SetParamBlob path means giving ibValue a binary kind FIRST. String is the honest
+			// degenerate binding until then.
+			case ibRawDBColumn::RawType::Reference: stmt.SetParamString(pos++, v.GetString());  break;
+			case ibRawDBColumn::RawType::Blob:      stmt.SetParamString(pos++, v.GetString());  break;
 		}
 		return;
 	}
@@ -2836,8 +2843,10 @@ public:
 				case ibRawDBColumn::RawType::Number:    return ibValue(m_cursor.GetResultNumber(f));
 				case ibRawDBColumn::RawType::Date:      return ibValue(m_cursor.GetResultDate(f));
 				case ibRawDBColumn::RawType::Boolean:   return ibValue(m_cursor.GetResultBool(f));
-				case ibRawDBColumn::RawType::Reference: return ibValue(m_cursor.GetResultString(f));   // TODO: real blob
-				case ibRawDBColumn::RawType::Blob:      return ibValue(m_cursor.GetResultString(f));   // TODO: real blob
+				// Reference / Blob — the read twin of BindWriteValue's two cases: unreachable, and
+				// blocked on ibValue having no binary tag. See the comment there.
+				case ibRawDBColumn::RawType::Reference: return ibValue(m_cursor.GetResultString(f));
+				case ibRawDBColumn::RawType::Blob:      return ibValue(m_cursor.GetResultString(f));
 			}
 			return ibValue();
 		}

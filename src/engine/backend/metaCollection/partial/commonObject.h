@@ -1290,7 +1290,7 @@ protected:
 	virtual ibValueRecordSetObject* CreateRecordSetObjectRegValue(const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) const = 0;
 	virtual ibValueRecordManagerObject* CreateRecordManagerObjectRegValue(const ibUniqueKeyPair& uniqueKey = wxNullUniquePairKey) const { return nullptr; }
 
-	// Declare the register table (rowData blob + dimension/resource columns + the lookup index).
+	// Declare the register table (dimension / resource columns + the lookup index).
 	virtual void ContributeTables(ibSchemaSnapshot& out) const override;
 
 	//load & save metaData from DB

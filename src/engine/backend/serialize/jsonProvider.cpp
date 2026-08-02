@@ -1,7 +1,9 @@
 #include "backend/serialize/jsonProvider.h"
 #include "backend/compiler/value.h"   // ibValue::GetAvailableCtor — clsid -> type name
 #include "backend/objCtor.h"           // ibCtorAbstractType::GetClassName
+#include "backend/backend_exception.h" // ibBackendCoreException — malformed-JSON throw
 #include <wx/base64.h>
+#include <cstring>                     // strlen / strncmp — the JSON literal match
 
 ////////////////////////////////////////////////////////////////////////////
 
@@ -184,8 +186,275 @@ bool ibJsonProvider::Write(const ibDataNode& root, ibWriter& writer) const
 	return true;
 }
 
-bool ibJsonProvider::Read(ibReader& /*reader*/, ibDataNode& /*root*/) const
+////////////////////////////////////////////////////////////////////////////
+// Read — JSON text -> node tree
+////////////////////////////////////////////////////////////////////////////
+
+namespace {
+
+// A small recursive-descent JSON reader over a contiguous buffer. Deliberately
+// self-contained: the tree is the only thing that crosses out of here, so no
+// third-party JSON dependency enters backend.dll for one provider.
+//
+// Errors are POSITIONAL and fatal — a half-parsed tree is worse than none, so
+// every failure path returns false and the provider reports where it stopped.
+class ibJsonReader {
+public:
+	ibJsonReader(const char* begin, size_t size) : m_start(begin), m_p(begin), m_end(begin + size) {}
+
+	size_t Offset() const { return (size_t)(m_p - m_start); }
+
+	// The top level is one object = the root node.
+	bool ParseNode(ibDataNode& node,
+		const std::function<ibClassID(const wxString&)>& lookupType);
+
+private:
+	const char* m_start;
+	const char* m_p;
+	const char* m_end;
+
+	bool Eof() const { return m_p >= m_end; }
+	char Peek() const { return Eof() ? '\0' : *m_p; }
+
+	void SkipWs() {
+		while (!Eof() && (*m_p == ' ' || *m_p == '\t' || *m_p == '\n' || *m_p == '\r'))
+			++m_p;
+	}
+	bool Accept(char c) { SkipWs(); if (Peek() == c) { ++m_p; return true; } return false; }
+	bool Expect(char c) { return Accept(c); }
+
+	bool ParseString(wxString& out);
+	bool ParseNumber(ibNumber& out);
+	bool ParseValue(ibDataValue& out, const std::function<ibClassID(const wxString&)>& lookupType);
+	bool ParseLiteral(const char* text) {
+		SkipWs();
+		const size_t n = strlen(text);
+		if ((size_t)(m_end - m_p) < n || strncmp(m_p, text, n) != 0) return false;
+		m_p += n;
+		return true;
+	}
+};
+
+// JSON string -> wxString, unescaping the same set JsonString escapes (plus \/ and \b\f,
+// which a hand-edited file may carry). \uXXXX is decoded as a UTF-16 code unit, with the
+// surrogate pair joined — the emitter only ever produces \u for control characters, but a
+// human-edited view may hold anything.
+bool ibJsonReader::ParseString(wxString& out)
 {
-	// JSON -> node tree is a later step (import). Export is write-only for now.
-	return false;
+	if (!Accept('\"')) return false;
+	std::string utf8;
+	while (!Eof()) {
+		const char c = *m_p++;
+		if (c == '\"') {
+			out = wxString::FromUTF8(utf8.data(), utf8.size());
+			return true;
+		}
+		if (c != '\\') { utf8 += c; continue; }
+		if (Eof()) return false;
+		const char e = *m_p++;
+		switch (e) {
+		case '\"': utf8 += '\"'; break;
+		case '\\': utf8 += '\\'; break;
+		case '/':  utf8 += '/';  break;
+		case 'b':  utf8 += '\b'; break;
+		case 'f':  utf8 += '\f'; break;
+		case 'n':  utf8 += '\n'; break;
+		case 'r':  utf8 += '\r'; break;
+		case 't':  utf8 += '\t'; break;
+		case 'u': {
+			if ((size_t)(m_end - m_p) < 4) return false;
+			auto hex4 = [this]() -> int {
+				int v = 0;
+				for (int i = 0; i < 4; i++) {
+					const char h = *m_p++;
+					v <<= 4;
+					if      (h >= '0' && h <= '9') v |= (h - '0');
+					else if (h >= 'a' && h <= 'f') v |= (h - 'a' + 10);
+					else if (h >= 'A' && h <= 'F') v |= (h - 'A' + 10);
+					else return -1;
+				}
+				return v;
+			};
+			const int hi = hex4();
+			if (hi < 0) return false;
+			wxUniChar ch((wxChar32)hi);
+			if (hi >= 0xD800 && hi <= 0xDBFF && (size_t)(m_end - m_p) >= 6 && m_p[0] == '\\' && m_p[1] == 'u') {
+				m_p += 2;
+				const int lo = hex4();
+				if (lo < 0) return false;
+				ch = wxUniChar((wxChar32)(0x10000 + ((hi - 0xD800) << 10) + (lo - 0xDC00)));
+			}
+			utf8 += wxString(ch).utf8_str().data();
+			break;
+		}
+		default: return false;
+		}
+	}
+	return false;   // unterminated
+}
+
+// Numbers go through ibNumber::FromString — the emitter writes the EXACT decimal
+// (ibNumber::ToString), so parsing it back through the same type is lossless.
+bool ibJsonReader::ParseNumber(ibNumber& out)
+{
+	SkipWs();
+	const char* start = m_p;
+	if (!Eof() && (*m_p == '-' || *m_p == '+')) ++m_p;
+	while (!Eof() && ((*m_p >= '0' && *m_p <= '9') || *m_p == '.' || *m_p == 'e' || *m_p == 'E'
+		|| ((*m_p == '-' || *m_p == '+') && (m_p[-1] == 'e' || m_p[-1] == 'E'))))
+		++m_p;
+	if (m_p == start) return false;
+	return out.FromString(wxString::FromUTF8(start, (size_t)(m_p - start)));
+}
+
+bool ibJsonReader::ParseValue(ibDataValue& out, const std::function<ibClassID(const wxString&)>& lookupType)
+{
+	SkipWs();
+	const char c = Peek();
+
+	if (c == '\"') {
+		wxString s;
+		if (!ParseString(s)) return false;
+		// "base64:<...>" is how EmitValue renders Binary — the one string shape that is
+		// NOT a String. Everything else stays a String, INCLUDING an emitted Date (see
+		// the header): an ISO string and a string that looks like one are the same text.
+		static const wxString kB64 = wxT("base64:");
+		if (s.StartsWith(kB64))
+			out = ibDataValue::Binary(wxBase64Decode(s.Mid(kB64.length())));
+		else
+			out = ibDataValue::String(s);
+		return true;
+	}
+	if (c == '{') {
+		std::shared_ptr<ibDataNode> child = std::make_shared<ibDataNode>();
+		if (!ParseNode(*child, lookupType)) return false;
+		out = ibDataValue::Child(child);
+		return true;
+	}
+	if (c == '[') {
+		if (!Accept('[')) return false;
+		std::vector<ibDataValue> items;
+		if (Accept(']')) { out = ibDataValue::Array(items); return true; }
+		for (;;) {
+			ibDataValue item;
+			if (!ParseValue(item, lookupType)) return false;
+			items.push_back(item);
+			if (Accept(',')) continue;
+			if (Accept(']')) break;
+			return false;
+		}
+		out = ibDataValue::Array(items);
+		return true;
+	}
+	if (ParseLiteral("true"))  { out = ibDataValue::Bool(true);  return true; }
+	if (ParseLiteral("false")) { out = ibDataValue::Bool(false); return true; }
+	if (ParseLiteral("null"))  { out = ibDataValue();            return true; }
+
+	ibNumber n;
+	if (!ParseNumber(n)) return false;
+	out = ibDataValue::Number(n);
+	return true;
+}
+
+bool ibJsonReader::ParseNode(ibDataNode& node, const std::function<ibClassID(const wxString&)>& lookupType)
+{
+	if (!Expect('{')) return false;
+	if (Accept('}')) return true;   // {} — a legitimately empty node
+
+	for (;;) {
+		wxString key;
+		if (!ParseString(key)) return false;
+		if (!Expect(':')) return false;
+
+		// --- the structural keys EmitNode writes (see the emitter for each) ------------
+		if (key == wxT("NodeType")) {
+			SkipWs();
+			if (Peek() == '\"') {
+				wxString name;
+				if (!ParseString(name)) return false;
+				// The emitter wrote the RESOLVED NAME. Turning it back into a clsid needs the
+				// same knowledge in reverse; without a lookup the node keeps clsid 0 rather
+				// than inventing one.
+				if (lookupType) node.SetClsid(lookupType(name));
+			}
+			else {
+				ibNumber n;
+				if (!ParseNumber(n)) return false;
+				u64 raw = 0; n.ToInt(raw);
+				node.SetClsid((ibClassID)raw);
+			}
+		}
+		else if (key == wxT("NodeId")) {
+			ibNumber n;
+			if (!ParseNumber(n)) return false;
+			s64 raw = 0; n.ToInt(raw);
+			node.SetMetaId((ibMetaID)raw);
+		}
+		else if (key == wxT("NodeRaw")) {
+			ibDataValue v;
+			if (!ParseValue(v, lookupType)) return false;
+			if (v.Kind() == ibDataKind::Binary) node.SetRawData(v.AsBinary());
+		}
+		else if (key == wxT("NodeChildren")) {
+			if (!Expect('[')) return false;
+			if (!Accept(']')) {
+				for (;;) {
+					// AddChild wants the identity up front, but it sits INSIDE the child object.
+					// Parse into a scratch node and move it onto the vector instead — same result,
+					// no throwaway default-constructed slot.
+					ibDataNode scratch;
+					if (!ParseNode(scratch, lookupType)) return false;
+					node.Children().emplace_back(std::move(scratch));
+					if (Accept(',')) continue;
+					if (Accept(']')) break;
+					return false;
+				}
+			}
+		}
+		else if (key == wxT("TypeDesc")) {
+			// SYNTHETIC — injected next to typeId purely so a reader sees "String" beside the
+			// number. There is no node entry behind it; parse and drop.
+			ibDataValue discard;
+			if (!ParseValue(discard, lookupType)) return false;
+		}
+		// --- ordinary data ------------------------------------------------------------
+		else {
+			ibDataValue v;
+			if (!ParseValue(v, lookupType)) return false;
+			// Which AREA a key came from is not in the text (EmitNode flattens Fields and
+			// Properties into one key set). Child values are placed back into the property
+			// area because that is where ibDataNode::Child puts them by construction; every
+			// other key lands in Fields. See the header.
+			if (v.Kind() == ibDataKind::Child) node.SetProperty(key, v);
+			else                               node.AddField(key, v);
+		}
+
+		if (Accept(',')) continue;
+		if (Accept('}')) return true;
+		return false;
+	}
+}
+
+} // namespace
+
+// JSON text -> node tree. Complete and standalone: it parses everything Write emits,
+// including nested children, arrays, base64 binaries and the synthetic keys. It is NOT
+// wired into any load path — the round-trip path stays ibBinaryProvider — because the
+// view is lossy in three places the parser cannot undo (header). Use it for tooling that
+// reads a JSON dump back into a tree, not to load a configuration.
+bool ibJsonProvider::Read(ibReader& reader, ibDataNode& root) const
+{
+	const int size = reader.elapsed();
+	if (size <= 0)
+		return false;
+
+	const char* text = static_cast<const char*>(reader.pointer());
+	ibJsonReader parser(text, (size_t)size);
+	if (!parser.ParseNode(root, m_lookupType)) {
+		ibBackendCoreException::Error(_("ibJsonProvider: malformed JSON at byte %d"),
+			(int)parser.Offset());
+		return false;   // not reached — Error throws
+	}
+	reader.advance(size);
+	return true;
 }

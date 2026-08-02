@@ -515,6 +515,9 @@
     <ClCompile Include="visualView\ctrl\wrapsizer.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
+    <ClCompile Include="visualView\ctrl\wrapsizer_res.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
     <ClCompile Include="visualView\ctrl\boxsizer.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>

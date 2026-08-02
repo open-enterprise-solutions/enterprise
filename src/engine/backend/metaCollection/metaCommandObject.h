@@ -68,7 +68,7 @@ public:
 	wxString GetToolTip()      const { return m_propertyTooltip->GetValueAsTranslateString(); }
 	bool     GetModifiesData() const { return m_propertyModifiesData->GetValueAsBoolean(); }
 	// Parameter data type — a "parameterizable" command shows in a form's GLOBAL section only where the form has
-	// data of this type (empty = not typed, available everywhere). 1C's "command parameter type".
+	// data of this type (empty = not typed, available everywhere) — the command's parameter type.
 	const ibTypeDescription& GetParameterType() const { return m_propertyParamType->GetValueAsTypeDesc(); }
 
 	// HUB — a command may HOLD commands (recursion, exactly as a subsystem holds subsystems). It therefore accepts

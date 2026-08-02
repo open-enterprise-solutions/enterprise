@@ -63,3 +63,9 @@ bool ibValueWrapSizer::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyOrient->GetName(), m_propertyOrient->GetNodeValue());
 	return ibValueSizer::WriteData(node);
 }
+
+//***********************************************************************
+//*                       Register in runtime                           *
+//***********************************************************************
+
+CONTROL_TYPE_REGISTER(ibValueWrapSizer, "Wrapsizer", "Sizer");

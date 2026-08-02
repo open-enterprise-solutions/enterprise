@@ -930,7 +930,7 @@ public:
 		bool IsGroup() const { return !m_groupPath.empty(); }
 
 		// GROUP caption (self-described, model-free): the node folds by a dimension VALUE — hand back that value's
-		// PRESENTATION so the front paints it as the 1C-style spanning caption. The node's OWN (deepest) dimension
+		// PRESENTATION so the front paints it as the spanning group caption. The node's OWN (deepest) dimension
 		// value is m_groupPath.back(); a detail / key-only node has no group path → false (base default), so the
 		// front keeps per-column rendering.
 		virtual bool GetGroupCaption(wxString& caption) const override {

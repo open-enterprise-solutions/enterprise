@@ -75,13 +75,44 @@ Key facts:
 - On a headless CI box with no display the fixtures `GTEST_SKIP` rather than
   fail.
 
-Green today: harness bring-up, form creation via `CreateNewForm`, form clsid
-identity, the doc/view framework (`ibDocument` / `ibView` / `ibDocManager`
-accessors), and clsid kind-typing. The control-model / attribute / visual-host /
-serialize tests are `DISABLED_`: `NewObject(clsid)` faults inside the control's
-`ibValueFrame::Init` when run headless (the ctor registry is global, so this is
-**not** a missing-config issue — it needs a debugger to localise the null
-deref, not a fixture change).
+**Green as of 2026-08-02: 26/26 in ~2 s.** The 17 `DISABLED_` tests were re-enabled once
+the cause turned out to be two bugs in the tests rather than one in the engine. Three more
+things had to be fixed before the target would even build or run at a sane speed — worth
+reading, because each had been invisible precisely because nobody built this target.
+
+**It did not compile at all.** The harness had drifted behind the API: `ibFrontendMainFrame`
+now takes an `ibSessionHolder&&` (the session comes in with the window and the frame wires
+the back-link itself), `ibGUISession::AttachFrame` is gone, and `g_controlButtonCLSID`
+became a global in `widgets.h` — so the test's own local copy made every use ambiguous.
+
+**Every form test cost ~30 seconds.** The fixture went through the registered session path,
+which makes the registry own `sys_session` I/O; this harness runs on a bare SQLite
+`:memory:` database with no system schema, so each session failed its INSERT on a missing
+table and paid a connection timeout for a row no assertion reads. The fix is to **imitate
+the session, not create the table**: `ibSessionRegistry::MintUnlisted` hands back a session
+the registry never takes in — no row, no cluster refresh, no disconnect audit — the same
+shape a background job's rented read uses. **573 s → 2 s for the suite.** (`SetUnlisted` is
+private with a short friend list, which is why this is a registry factory and not a call in
+the test: the registry owns the listing rule.)
+
+The two test bugs proper:
+
+- **A control needs a PARENT.** The tests called `form->NewObject(clsid)` with no
+  parent, and `ibValueFrame::Init` only calls `AddChild` when it gets one — so the
+  control was built but belonged to no tree: absent from `GetControlList`, invisible
+  to the visual-host walker, and everything downstream that assumes a parented
+  control went off the map. Pass the form (or a container control):
+  `form->NewObject(clsid, form)`. This is not a test-only nicety — it is how a real
+  form builds its tree.
+- **A document must be heap-allocated.** `ibDocument::OnChangedViewList` does
+  `delete this` when the last view detaches (a document exists only while something
+  views it), and the doc/view test held one on the STACK. It now allocates on the
+  heap and attaches two views, so removing one leaves the document alive and
+  observable.
+
+Found alongside: the `Init` gate checked `lSizeArray < 2` while reading
+`paParams[2]` — an out-of-bounds read that never fired only because the single live
+caller passes 3. Fixed to `< 3`.
 
 ```powershell
 & $cmake --build enterprise/build --config Debug --target oes_frontend_runtime_test
@@ -110,6 +141,26 @@ deref, not a fixture change).
   Delete, with read-your-writes), value fidelity through the read door,
   `WhereLike` / `Where` / `WhereCompare` filters, and `Sum`/`Min`/`Max`/`Count`
   aggregates.
+- **Register totals — NUMERIC parity (SQLite, added 2026-08-02):**
+  `test_totalsNumericParity.cpp` installs the REAL rendered maintenance bundle
+  (`RenderMaterialization` -> `Apply`) on an in-memory database and compares the
+  trigger-kept totals against the movements re-aggregated directly — the same
+  key-by-key, both-directions check `ibDerivedState::VerifyLastPeriod` makes, with
+  the live aggregation as the oracle. Covers accumulation, month truncation,
+  updates (quantity / side / across both key columns), deletes, backdated entries,
+  fractional values and a mixed run; also pins the storage behaviour that is NOT a
+  disagreement — an emptied key leaves a zero row, not a missing one.
+- **Form binding — the hop walk:** `test_sourceDescription` (path passport +
+  metadata-free serialize), `test_tabularHop` (the table starts the walk),
+  `test_sourceExplorer` (design-time `WalkColumns`), and `test_sourceHopChain`
+  (added 2026-08-02 — the RUNTIME chain table -> reference -> field at one and two
+  hops, plus the non-owning-cell rule: a cell holding a source must be a
+  `TYPE_CONST_REFFER` and must outlive it).
+- **Serialization providers:** the binary provider's byte-identical round trip
+  (`test_dataNode`), and `test_jsonProvider` (added 2026-08-02) — what the JSON
+  view preserves AND, deliberately, what it does not (Fields/Properties flatten,
+  Date degrades to String, `TypeDesc` is synthetic), so the lossy-by-design
+  boundary is a decision on the record rather than a surprise.
 
 ### Fixtures & doubles actually in use
 

@@ -26,11 +26,13 @@
 #include "frontend/visualView/ctrl/tableBox.h"  // g_controlTableBoxCLSID (the TSD/list control)
 #include "backend/compiler/value.h"             // ibValue / ibNumber / g_value*CLSID
 
+// No local clsid constants here. `g_controlButtonCLSID` now lives in widgets.h as a
+// GLOBAL (the drag-to-create arc made the three drop-target clsids shared constants), so
+// re-declaring it in an anonymous namespace made every use ambiguous — a compile error
+// that stayed hidden while this target went unbuilt. Use the shared ones; only the sizer
+// id, which widgets.h does not carry, is spelled out.
 namespace {
-// Control clsids used across the model tests. Named locally so the intent reads
-// at the call site (the ctrl TUs register these same ids via CONTROL_TYPE_REGISTER).
-constexpr ibClassID g_controlButtonCLSID   = control_to_clsid("CT_BUTN");
-constexpr ibClassID g_controlBoxSizerCLSID = control_to_clsid("CT_BSZR");
+constexpr ibClassID g_testBoxSizerCLSID = control_to_clsid("CT_BSZR");
 } // namespace
 
 // Definition of the environment back-pointer declared in the fixture header.
@@ -70,7 +72,12 @@ TEST_F(FrontendRuntimeFix, HarnessBringsUpGuiAndBackend)
 //
 // A form is a plain refcounted value object: its ctor takes all-default args, so
 // it constructs WITHOUT a main frame and without ibSession::CurrentFrame() (the
-// path CreateNewForm needs). NewObject(clsid) builds a control model inside it.
+// path CreateNewForm needs). NewObject(clsid, form) builds a control model inside
+// it — and the PARENT argument is not optional in practice: ibValueFrame::Init only
+// calls AddChild when it gets one, so NewObject(clsid) alone yields a control that
+// belongs to no tree. It is not in GetControlList, the visual-host walker never
+// reaches it, and everything downstream that assumes a parented control is off the
+// map. Always pass the form (or a container control) as the parent.
 // This is the control layer the warehouse / TSD list sits on, exercised without
 // a frame, a display, or ShowForm — the wxWindow tree only materialises later at
 // CreateVisualHost time. Control identity is by clsid, never C++ RTTI.
@@ -91,7 +98,7 @@ TEST_F(FrontendFormFix, FormConstructsAsValueObject)
 // NewObject(clsid) yields a control whose type identity (GetClassType) is the
 // requested clsid — text box, checkbox, and the table box (the list control the
 // TSD screen is built from).
-TEST_F(FrontendFormFix, DISABLED_FormNewObjectBuildsControlOfRequestedType)
+TEST_F(FrontendFormFix, FormNewObjectBuildsControlOfRequestedType)
 {
 	if (!frameReady) GTEST_SKIP();
 
@@ -105,7 +112,7 @@ TEST_F(FrontendFormFix, DISABLED_FormNewObjectBuildsControlOfRequestedType)
 	};
 
 	for (const auto& k : kinds) {
-		ibValueFrame* ctrl = form->NewObject(k.clsid);
+		ibValueFrame* ctrl = form->NewObject(k.clsid, form);
 		ASSERT_NE(ctrl, nullptr)
 			<< "NewObject must build a control for clsid " << k.label;
 		EXPECT_EQ(ctrl->GetClassType(), k.clsid)
@@ -116,16 +123,16 @@ TEST_F(FrontendFormFix, DISABLED_FormNewObjectBuildsControlOfRequestedType)
 // A control built into a container parent still identifies by its own clsid —
 // nesting (a button inside a box sizer) does not change type identity. This is
 // the shape a real form tree takes: containers holding widgets.
-TEST_F(FrontendFormFix, DISABLED_FormNestsControlUnderContainer)
+TEST_F(FrontendFormFix, FormNestsControlUnderContainer)
 {
 	if (!frameReady) GTEST_SKIP();
 
 	ibValueForm* form = NewForm();
 	ASSERT_NE(form, nullptr);
 
-	ibValueFrame* box = form->NewObject(g_controlBoxSizerCLSID);
+	ibValueFrame* box = form->NewObject(g_testBoxSizerCLSID, form);
 	ASSERT_NE(box, nullptr);
-	EXPECT_EQ(box->GetClassType(), g_controlBoxSizerCLSID);
+	EXPECT_EQ(box->GetClassType(), g_testBoxSizerCLSID);
 
 	ibValueFrame* button = form->NewObject(g_controlButtonCLSID, box);
 	ASSERT_NE(button, nullptr) << "a button must build inside the box-sizer parent";
@@ -134,7 +141,7 @@ TEST_F(FrontendFormFix, DISABLED_FormNestsControlUnderContainer)
 
 // A built control is owned by the form and can be removed again — the model
 // supports the create/remove churn the designer and runtime both drive.
-TEST_F(FrontendFormFix, DISABLED_FormRemovesBuiltControl)
+TEST_F(FrontendFormFix, FormRemovesBuiltControl)
 {
 	if (!frameReady) GTEST_SKIP();
 
@@ -142,7 +149,7 @@ TEST_F(FrontendFormFix, DISABLED_FormRemovesBuiltControl)
 	ASSERT_NE(form, nullptr);
 
 	const size_t before = form->GetControlList().size();
-	ibValueFrame* button = form->NewObject(g_controlButtonCLSID);
+	ibValueFrame* button = form->NewObject(g_controlButtonCLSID, form);
 	ASSERT_NE(button, nullptr);
 	EXPECT_EQ(form->GetControlList().size(), before + 1) << "the form owns the new control";
 

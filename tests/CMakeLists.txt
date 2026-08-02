@@ -48,6 +48,7 @@ add_executable(oes_tests
     test_metadataSerialize.cpp
     test_metadataTree.cpp
     test_dataNode.cpp
+    test_jsonProvider.cpp
     test_queryRenderer.cpp
     test_queryLifecycle.cpp
     test_queryBuilderShowcase.cpp
@@ -75,6 +76,7 @@ add_executable(oes_tests
     test_databaseMaterializeBuilder.cpp
     test_periodFold.cpp
     test_totalsViewParity.cpp
+    test_totalsNumericParity.cpp
     test_uniqueKey.cpp
     test_valueArray.cpp
     test_valueContainer.cpp
@@ -94,6 +96,7 @@ add_executable(oes_tests
     test_sourceExplorer.cpp
     test_sourceDescription.cpp
     test_tabularHop.cpp
+    test_sourceHopChain.cpp
     test_modelFetchDoor.cpp
     test_workerPoolDrop.cpp
 )

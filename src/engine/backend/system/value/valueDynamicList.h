@@ -242,7 +242,7 @@ private:
 	// by ReadProperty/WriteProperty). The text is edited on the settings dialog's first "Query" tab.
 	ibPropertyBoolean* m_propertyUseCustomQuery = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryList, wxT("UseCustomQuery"), _("Arbitrary query"), false);
 	ibPropertyString*  m_propertyCustomQuery    = ibPropertyObject::CreateProperty<ibPropertyString>(m_categoryList, wxT("CustomQuery"), _("Query text"), wxEmptyString);
-	// DynamicRead — the safety toggle (1C "Dynamic data read"). TRUE (default): a live keyset cursor paged from the DB
+	// DynamicRead — the safety toggle ("Dynamic data read"). TRUE (default): a live keyset cursor paged from the DB
 	// batch by batch. FALSE: the whole result set is materialised into a RAM snapshot ONCE and paged in memory (the base
 	// ibValueModelCursor::EnsureSnapshot / RunStoragePage) — the fallback for when cursor paging misbehaves, or a
 	// small / stable list where liveness does not matter. Read by IsDynamicRead() above; serialised by Read/WriteProperty.

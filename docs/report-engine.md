@@ -138,11 +138,42 @@ candidate for the restructuring plan, not a design statement.
 
 ## 5. Honest remainder
 
-- **No platform-level report action.** `dataReportAction.cpp` is a stub in the literal
-  sense: `GetStandardCommands` returns an empty `ibStandardCommandSet(this)` and
-  `CallAsAction` has an empty body. There is **no built-in "Generate" command** — running
-  a report is whatever the report's object module script does. If a platform-level
-  generate action is wanted, this file is where it goes.
+- ~~**No platform-level report action.**~~ **Landed 2026-08-02.** `dataReportAction.cpp`
+  now carries one standard command, **Compose** (`g_picGenerateCLSID`, `SetModify(false)`
+  so it stays live on a view-only form). `CallAsAction` routes it to
+  `ibValueRecordDataObjectReport::Composing()`, which calls the object module's
+  `Composing(StandartProcessing)` handler — the report's twin of a document's
+  `Post` → `Posting`.
+
+  **Compose, not "generate".** In this tree *Generation* already means entering one object
+  ON THE BASIS of another (`ibValueRecordDataObjectRef::Generate`, the document's Generate
+  command). A report generates nothing; it COMPOSES a result — the word the rest of the
+  stack already uses ([data-composer.md](data-composer.md), `ibQueryComposer`).
+
+  The handler is a **declared default procedure** — `ibValueMetaObjectReport`'s ctor calls
+  `SetDefaultProcedure("Composing", eProcedureHelper, { "StandartProcessing" })`, the same
+  way a document declares `Posting` — so the designer offers it in the object module's
+  handler list rather than the developer having to know the name.
+
+  **The argument is `StandartProcessing`, not a cancel flag**, following the
+  `Filling` / `SetNewCode` / `SetNewNumber` contract:
+
+  | Flag after the handler | Who composes |
+  |---|---|
+  | left **TRUE** (including: no handler written) | the PLATFORM — `DoStandardCompose()` |
+  | set **FALSE** | the SCRIPT already did; the platform stands down |
+
+  `DoStandardCompose()` returns false today, and the reason is structural rather than
+  unfinished plumbing: a standard composition needs a declared **composition schema** on
+  the metaobject — what to read and how to lay it out — and the Report metaobject has no
+  such property (it carries modules, forms, a default form). Until that exists there is
+  nothing for the platform to compose *from*, and inventing a second private notion of a
+  report's data here would be worse than saying so. **A report written today therefore sets
+  `StandartProcessing = False` and composes in its handler** — data through the query /
+  composer layer, presentation through the spreadsheet's areas (§1) — which is exactly how
+  reports already worked before the command existed. When the schema lands, its execution
+  goes into `DoStandardCompose` (virtual, so a report kind can own its own) and every
+  existing report keeps working unchanged.
 - **Export is two branches, one document.** Geometry (printout → PDF) and semantics
   (walk → Excel / Word) are separate consumers of the same `ibBackendSpreadsheetObject`;
   Excel is deliberately *not* produced through the printout path. Cell typing is the
