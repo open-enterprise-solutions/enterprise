@@ -116,10 +116,16 @@ public:
 
 	virtual bool SetValue(const wxVariant& value) override {
 
+		// The vertical flag has to be spelled out. GetEffectiveAlignmentIfKnown() only adds
+		// wxALIGN_CENTRE_VERTICAL when the renderer left the alignment at wxDVR_DEFAULT_ALIGNMENT,
+		// so setting a bare horizontal flag here (wxALIGN_LEFT is plain 0 — left AND top) opted
+		// this renderer out of vertical centring and pinned every value to the top of its row.
+		// Columns drawn by a renderer that never calls SetAlignment stayed centred, which is why
+		// the date column looked right next to text that did not.
 		if (value.GetType() == wxT("number"))
-			SetAlignment(wxALIGN_RIGHT);
+			SetAlignment(wxALIGN_RIGHT | wxALIGN_CENTRE_VERTICAL);
 		else
-			SetAlignment(wxALIGN_LEFT);
+			SetAlignment(wxALIGN_LEFT | wxALIGN_CENTRE_VERTICAL);
 
 		m_valueVariant = value;
 		return true;
