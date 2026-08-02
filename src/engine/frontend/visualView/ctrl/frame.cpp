@@ -19,8 +19,8 @@
 //*************************************************************************
 
 ibValueFrame::ibValueFrame() : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE),
-m_valEventContainer(new ibValueEventContainer(this)),
-m_controlId(0), m_controlGuid(ibGuid::newGuid())
+m_controlId(0), m_controlGuid(ibGuid::newGuid()),
+m_valEventContainer(new ibValueEventContainer(this))
 {
 	m_members.Bind(this, &ibValueFrame::FillMembers);
 }

@@ -27,9 +27,10 @@
 ibValueForm::ibValueForm(const ibValueMetaObjectFormBase* creator, ibControlFrame* ownerControl,
 	ibSourceDataObject* srcObject, const ibUniqueKey& formGuid) : ibValueFrame(),
 	ibRuntimeModuleDataObject(m_members, this),
-	m_controlOwner(nullptr), m_metaFormObject(nullptr),
-	m_formCollectionControl(new ibValueFormCollectionControl(this)),
-	m_formType(defaultFormType), m_closeOnChoice(true), m_closeOnOwnerClose(true), m_formModified(false)
+	m_formType(defaultFormType), m_formModified(false),
+	m_closeOnChoice(true), m_closeOnOwnerClose(true),
+	m_metaFormObject(nullptr), m_controlOwner(nullptr),
+	m_formCollectionControl(new ibValueFormCollectionControl(this))
 {
 	// Frame surface (properties + Events) comes from ibValueFrame::FillMembers, bound
 	// by the base ctor. The form ADDS its own members on top (FillFormMembers); module

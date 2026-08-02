@@ -3020,16 +3020,16 @@ ibValueRecordManagerObject* ibValueRecordManagerObject::CopyRegisterValue()
 }
 
 ibValueRecordManagerObject::ibValueRecordManagerObject(const ibValueMetaObjectRegisterData* metaObject, const ibUniqueKeyPair& uniqueKey) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE),
+m_objGuid(uniqueKey),
 m_metaObject(metaObject),
-m_recordSet(m_metaObject->CreateRecordSetObjectValue(uniqueKey, false)), m_recordLine(nullptr),
-m_objGuid(uniqueKey)
+m_recordSet(m_metaObject->CreateRecordSetObjectValue(uniqueKey, false)), m_recordLine(nullptr)
 {
 }
 
 ibValueRecordManagerObject::ibValueRecordManagerObject(const ibValueRecordManagerObject& source) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE),
+m_objGuid(source.m_metaObject->CreateUniqueKeyPair()),
 m_metaObject(source.m_metaObject),
-m_recordSet(m_metaObject->CreateRecordSetObjectValue(source.m_recordSet, false)), m_recordLine(nullptr),
-m_objGuid(source.m_metaObject->CreateUniqueKeyPair())
+m_recordSet(m_metaObject->CreateRecordSetObjectValue(source.m_recordSet, false)), m_recordLine(nullptr)
 {
 }
 

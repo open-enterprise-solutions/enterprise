@@ -73,7 +73,7 @@ bool ibValueMetaObject::BuildNewName()
 /////////////////////////////////////////////////////////////////////////////////////////
 
 ibValueMetaObject::ibValueMetaObject(const wxString& strName, const wxString& synonym, const wxString& comment) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true),
-m_metaData(nullptr), m_metaFlags(metaDefaultFlag), m_metaId(0)
+m_metaFlags(metaDefaultFlag), m_metaId(0), m_metaData(nullptr)
 {
 	m_members.Bind(this, &ibValueMetaObject::FillMembers);
 	m_propertyName->SetValue(strName);

@@ -62,8 +62,9 @@ wxEND_EVENT_TABLE()
 ///////////////////////////////////////////////////////////////////////////////
 
 ibObjectInspector::ibObjectInspector(wxWindow* parent, int id, int style)
-	: wxPanel(parent, id), m_style(style), m_currentSel(nullptr)
+	: wxPanel(parent, id), m_currentSel(nullptr)
 	, m_notifier(new ibGenericPropertyObjectNotifier(this))
+	, m_style(style)
 {
 	m_pg = CreatePropertyGridManager(this, WXOES_PROPERTY_GRID);
 

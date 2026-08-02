@@ -67,7 +67,7 @@ void ibGridEditor::ActivateEditor()
 
 // ctor and Create() create the grid window, as with the other controls
 ibGridEditor::ibGridEditor() : ibGrid(),
-m_propertySpreadsheet(nullptr), m_document(nullptr), m_spreadsheetObject(nullptr), m_enableProperty(true)
+m_document(nullptr), m_propertySpreadsheet(nullptr), m_spreadsheetObject(nullptr), m_enableProperty(true)
 {
 }
 
@@ -75,7 +75,7 @@ ibGridEditor::ibGridEditor(ibMetaDocument* document,
 	wxWindow* parent,
 	wxWindowID id, const wxPoint& pos,
 	const wxSize& size) : ibGrid(parent, id, pos, size),
-	m_propertySpreadsheet(nullptr), m_document(document), m_spreadsheetObject(nullptr), m_enableProperty(true)
+	m_document(document), m_propertySpreadsheet(nullptr), m_spreadsheetObject(nullptr), m_enableProperty(true)
 {
 	m_rowLabelWidth = s_rowLabelWidth;
 	m_colLabelHeight = s_colLabelHeight;

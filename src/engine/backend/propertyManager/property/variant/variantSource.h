@@ -162,7 +162,7 @@ public:
 	}
 
 	ibVariantDataSource(const ibBackendTypeSourceFactory* prop, const ibSourceDescription& desc) : wxVariantData(),
-		m_ownerProperty(prop), m_attributeSource(nullptr), m_sourceDesc(desc) {
+		m_sourceDesc(desc), m_ownerProperty(prop), m_attributeSource(nullptr) {
 
 		m_attributeSource = new ibVariantDataAttributeSource(prop, wxNOT_FOUND);
 		RefreshTypeFromSource();   // resolve the leaf type from the explorer (not the metadata-seeded leaf id)

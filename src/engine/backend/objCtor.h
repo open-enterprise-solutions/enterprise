@@ -248,7 +248,9 @@ class ibCtorMetaValueTypeTabularSectionString :
 	public ibCtorMetaValueType {
 public:
 
-	ibCtorMetaValueTypeTabularSectionString(ibValueMetaObjectRecordData* recordRef, ibValueMetaObjectTableData* recordTable) : ibCtorMetaValueType(), m_metaTable(recordTable), m_metaObject(recordRef) {
+	// Mind the order: this class declares m_metaObject before m_metaTable, the opposite of
+	// ibCtorMetaValueTypeTabularSection above. The lists differ because the declarations do.
+	ibCtorMetaValueTypeTabularSectionString(ibValueMetaObjectRecordData* recordRef, ibValueMetaObjectTableData* recordTable) : ibCtorMetaValueType(), m_metaObject(recordRef), m_metaTable(recordTable) {
 		m_classType = tabularSectionString_to_clsid(m_metaTable->GetMetaID());
 	}
 

@@ -109,13 +109,13 @@ void ibCheckTree::ldhighlight(const wxTreeItemId& id)
 
 ibCheckTree::ibCheckTree()
 	:wxTreeCtrl()
-	, last_mo(), last_ld(), last_kf(), mouse_entered_tree_with_left_down(false), m_singleCheck(false), m_allowEmpty(false)
+	, mouse_entered_tree_with_left_down(false), last_mo(), last_ld(), last_kf(), m_singleCheck(false), m_allowEmpty(false)
 {
 }
 
 ibCheckTree::ibCheckTree(wxWindow* parent, const wxWindowID id, const wxPoint& pos, const wxSize& size, long style)
 	: wxTreeCtrl(parent, id, pos, size, style & ~wxCR_MULTIPLE_CHECK & ~wxCR_SINGLE_CHECK & ~wxCR_EMPTY_CHECK)
-	, last_mo(), last_ld(), last_kf(), mouse_entered_tree_with_left_down(false), m_singleCheck((style& wxCR_SINGLE_CHECK) == wxCR_SINGLE_CHECK), m_allowEmpty((style& wxCR_EMPTY_CHECK) == wxCR_EMPTY_CHECK)
+	, mouse_entered_tree_with_left_down(false), last_mo(), last_ld(), last_kf(), m_singleCheck((style& wxCR_SINGLE_CHECK) == wxCR_SINGLE_CHECK), m_allowEmpty((style& wxCR_EMPTY_CHECK) == wxCR_EMPTY_CHECK)
 {
 	Init();
 }

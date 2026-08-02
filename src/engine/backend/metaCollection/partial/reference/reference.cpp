@@ -105,7 +105,7 @@ void ibValueReferenceDataObject::PrepareRef(bool createData)
 }
 
 ibValueReferenceDataObject::ibValueReferenceDataObject(const ibValueMetaObjectRecordDataRef* metaObject, const ibGuid& objGuid) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true), ibValueDataObject(objGuid, !objGuid.isValid()),
-m_metaObject(metaObject), m_initializedRef(false), m_reference_impl(nullptr), m_foundedRef(false)
+m_initializedRef(false), m_metaObject(metaObject), m_reference_impl(nullptr), m_foundedRef(false)
 {
 	m_members.Bind(this, &ibValueReferenceDataObject::FillMembers);
 	// The stored key (_RRRef) is the pure object guid; the type is carried separately (metaObject / _RTRef).

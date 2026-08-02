@@ -768,10 +768,11 @@ void ibDebuggerServer::ibDebuggerServerConnection::Disconnect()
 }
 
 ibDebuggerServer::ibDebuggerServerConnection::ibDebuggerServerConnection(const wxString& strHostName, unsigned short numHostPort) :
-	wxThread(wxTHREAD_JOINABLE), m_socket(nullptr), m_socketServer(nullptr),
+	wxThread(wxTHREAD_JOINABLE), m_waitConnection(false),
 	m_connectionType(ConnectionType::ConnectionType_Unknown),
 	m_strHostName(strHostName), m_numHostPort(numHostPort),
-	m_waitConnection(false), m_acceptConnection(false)
+	m_acceptConnection(false),
+	m_socketServer(nullptr), m_socket(nullptr)
 {
 }
 

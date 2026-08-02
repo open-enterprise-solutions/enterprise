@@ -43,10 +43,10 @@ void ibVisualHostClient::SetCaption(const wxString& strCaption)
 ibVisualHostClient::ibVisualHostClient(ibFormVisualDocument* document, ibValueForm* valueForm, ibFrontendWindow* parent) :
 	// On desktop ibFrontendWindow == wxWindow, so this just forwards.
 	ibVisualHost(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize),
-	m_document(document),
-	m_valueForm(valueForm),
+	m_dataViewSizeChanged(false),
 	m_dataViewSize(wxDefaultSize),
-	m_dataViewSizeChanged(false)
+	m_valueForm(valueForm),
+	m_document(document)
 {
 	ibVisualHostClient::Bind(wxEVT_SIZE, &ibVisualHostClient::OnSize, this);
 	ibVisualHostClient::Bind(wxEVT_IDLE, &ibVisualHostClient::OnIdle, this);

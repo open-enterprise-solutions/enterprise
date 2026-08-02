@@ -347,9 +347,9 @@ ibClassID ibValueModelTableBox::GetSourceClassType() const
 //***********************************************************************************
 
 ibValueModelTableBox::ibValueModelTableBox() : ibValueWindowComposite(), ibTypeControlFactory(),
-m_tableModel(nullptr), m_tableCurrentLine(nullptr),
 m_dataViewCreated(false), m_dataViewSelected(false),
-m_need_calculate_pos(false)
+m_need_calculate_pos(false),
+m_tableModel(nullptr), m_tableCurrentLine(nullptr)
 {
 	m_members.Bind(this, &ibValueModelTableBox::FillControlMembers);
 

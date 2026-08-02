@@ -93,14 +93,14 @@ bool ibValueRecordDataObjectConstant::InitializeObject(const ibValueRecordDataOb
 
 ibValueRecordDataObjectConstant::ibValueRecordDataObjectConstant(const ibValueMetaObjectConstant* metaObject)
 	: ibValueDynamicMembers(ibValueTypes::TYPE_EMPTY), ibRuntimeModuleDataObject(m_members, this),
-	m_metaObject(metaObject), m_objModified(false)
+	m_objModified(false), m_metaObject(metaObject)
 {
 	InitializeObject();
 }
 
 ibValueRecordDataObjectConstant::ibValueRecordDataObjectConstant(const ibValueRecordDataObjectConstant& source)
 	: ibValueDynamicMembers(ibValueTypes::TYPE_EMPTY), ibRuntimeModuleDataObject(m_members, this),
-	m_metaObject(source.m_metaObject), m_objModified(false)
+	m_objModified(false), m_metaObject(source.m_metaObject)
 {
 	InitializeObject(&source);
 }

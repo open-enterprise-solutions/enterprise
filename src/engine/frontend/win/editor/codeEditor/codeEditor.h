@@ -91,7 +91,7 @@ private:
 	public:
 
 		ibFoldLevelParser(ibCodeEditor* codeEditor)
-			: m_codeEditor(codeEditor), m_update_fold(false), m_counts{} {}
+			: m_update_fold(false), m_counts{}, m_codeEditor(codeEditor) {}
 
 		void RecalcFoldLevel() const { m_update_fold = true; }
 
@@ -127,9 +127,9 @@ private:
 					m_codeEditor->SetFoldLevel(l, wxSTC_FOLDLEVELBASE_FLAG + std::max(level, 0));
 
 				if (it->delta > 0)
-					m_codeEditor->SetFoldLevel(it->line, wxSTC_FOLDLEVELBASE_FLAG + std::max(level, 0) | wxSTC_FOLDLEVELHEADER_FLAG);
+					m_codeEditor->SetFoldLevel(it->line, (wxSTC_FOLDLEVELBASE_FLAG + std::max(level, 0)) | wxSTC_FOLDLEVELHEADER_FLAG);
 				else if (it->delta < 0)
-					m_codeEditor->SetFoldLevel(it->line, wxSTC_FOLDLEVELBASE_FLAG + std::max(level, 0) | wxSTC_FOLDLEVELWHITE_FLAG);
+					m_codeEditor->SetFoldLevel(it->line, (wxSTC_FOLDLEVELBASE_FLAG + std::max(level, 0)) | wxSTC_FOLDLEVELWHITE_FLAG);
 				else
 					m_codeEditor->SetFoldLevel(it->line, wxSTC_FOLDLEVELBASE_FLAG + std::max(level, 0));
 
@@ -179,18 +179,18 @@ private:
 				// adds +1 for the body that follows the header. `level`
 				// already includes this line's opens, so subtract 1 to
 				// match the existing decoder.
-				return wxSTC_FOLDLEVELBASE_FLAG + (level - 1) | wxSTC_FOLDLEVELHEADER_FLAG;
+				return (wxSTC_FOLDLEVELBASE_FLAG + (level - 1)) | wxSTC_FOLDLEVELHEADER_FLAG;
 			}
 			if (netHere < 0) {
 				// Closer line: PrepareTABs WHITE branch subtracts 1 to land
 				// at parent indent. `level` already retreated past the
 				// closes — add 1 so the decoder lands at the right spot.
-				return wxSTC_FOLDLEVELBASE_FLAG + (level + 1) | wxSTC_FOLDLEVELWHITE_FLAG;
+				return (wxSTC_FOLDLEVELBASE_FLAG + (level + 1)) | wxSTC_FOLDLEVELWHITE_FLAG;
 			}
 			if (hasMark) {
 				// Else/ElseIf/Except marker on a net-zero line. PrepareTABs
 				// ELSE branch subtracts 1 to align with the parent.
-				return wxSTC_FOLDLEVELBASE_FLAG + level | wxSTC_FOLDLEVELELSE_FLAG;
+				return (wxSTC_FOLDLEVELBASE_FLAG + level) | wxSTC_FOLDLEVELELSE_FLAG;
 			}
 			// Plain line OR balanced inline pair (Open + Close on the same
 			// source line, e.g. one-liner `from x in arr select x` or

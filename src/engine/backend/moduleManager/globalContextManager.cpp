@@ -12,9 +12,9 @@
 class ibValueGlobalContextStructureManager : public ibValueStructure {
 	public:
 
-	ibValueGlobalContextStructureManager() : m_clsid(0), m_metaData(nullptr) {}
+	ibValueGlobalContextStructureManager() : m_metaData(nullptr), m_clsid(0) {}
 	ibValueGlobalContextStructureManager(const ibClassID& clsid, ibMetaData* metaData)
-		: ibValueStructure(true), m_clsid(clsid), m_metaData(metaData) {
+		: ibValueStructure(true), m_metaData(metaData), m_clsid(clsid) {
 
 		for (const auto object : m_metaData->GetAnyArrayObject(clsid)) {
 			ibCtorMetaValueType* so = m_metaData->GetTypeCtor(object, ibCtorObjectMetaType::ibCtorObjectMetaType_Manager);

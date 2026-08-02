@@ -195,7 +195,7 @@ void ibValueOLE::ReleaseComObjects()
 void ibValueOLE::AddFromArray(ibValue& pvarRetValue, long* aPos, SAFEARRAY* psa, SAFEARRAYBOUND* safeArrayBound, int nLastDim) const
 {
 	VARIANT var = { 0 }; HRESULT hr;
-	if (hr = ::SafeArrayGetElement(psa, aPos, &var))
+	if ((hr = ::SafeArrayGetElement(psa, aPos, &var)) != S_OK)
 		throw hr;
 	aPos[nLastDim]++;
 	if (aPos[nLastDim] > safeArrayBound[nLastDim].cElements) {
@@ -349,9 +349,9 @@ ibValue ibValueOLE::FromVariantArray(SAFEARRAY* psa) const
 	SAFEARRAYBOUND* aDims = new SAFEARRAYBOUND[nDim];
 	for (int i = 0; i < nDim; i++) {
 		long nMin, nMax;
-		if (hr = SafeArrayGetLBound(psa, i + 1, &nMin))
+		if ((hr = SafeArrayGetLBound(psa, i + 1, &nMin)) != S_OK)
 			throw hr;
-		if (hr = SafeArrayGetUBound(psa, i + 1, &nMax))
+		if ((hr = SafeArrayGetUBound(psa, i + 1, &nMax)) != S_OK)
 			throw hr;
 		aPos[i] = nMin;// initial position
 		aDims[i].lLbound = nMin;
