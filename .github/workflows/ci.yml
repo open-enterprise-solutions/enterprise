@@ -81,7 +81,7 @@ jobs:
           sudo apt-get install -y gdb
           for t in CompilerTest.SimpleAssignmentEmitsBytecode RuntimeTest.ConstantAssignment; do
             echo "=============== $t ==============="
-            gdb -batch -ex run -ex "bt 40" --args ./bin/oes_tests --gtest_filter=$t || true
+            gdb -batch -ex run -ex "bt 40" --args ./bin/Debug/oes_tests --gtest_filter=$t || true
           done
 
   # ---------------------------------------------------------------------------
@@ -153,4 +153,4 @@ jobs:
       # those skips back into real assertions.
       - name: Run under Xvfb
         working-directory: build/linux-debug
-        run: xvfb-run -a ./bin/oes_frontend_runtime_test
+        run: xvfb-run -a ./bin/Debug/oes_frontend_runtime_test

@@ -344,16 +344,31 @@ Paths use the `oesPlatform` macro (`Win32` for `x86`, `Win64` for `x64`):
 | **Build (Windows, x64 Debug)** | windows-2022 | The shipping platform still compiles under MSVC, and the suite passes there too. |
 | **GUI tests (Linux, Xvfb)** | ubuntu-22.04 | `oes_frontend_runtime_test` — links `frontend.dll`, needs a live wxApp, runs under `xvfb-run`. Separate job: its failure mode (a modal on an assert) is unlike a backend test's. |
 
-Two notes on why it is shaped this way:
+Current state (2026-08-02): **Windows green — 855/855**, the same result as the local `.sln`
+build. Linux compiles and links, and runs 820 of 862; what is still red, and why, is in
+[portability.md § 2](portability.md).
+
+Four notes on why it is shaped this way — each one paid for by a wasted round:
 
 - **Everything goes through the CMake presets, including Windows.** `enterprise.sln` carries 14
   projects and none is wxWidgets, so MSBuild cannot bootstrap a clean runner — it expects wx
   libraries to exist already. The preset path builds wx from the submodule.
-- **The wxWidgets build dominates the wall clock**, so each job caches its build directory keyed on
-  the submodule commit plus the CMake files. An unchanged wx means only OES recompiles.
+- **No build-directory cache.** Caching `build/` keyed on the submodule commit looks obvious and
+  is wrong with Ninja: `actions/cache` restores files with the *current* timestamp, so every
+  restored object looks newer than its source and the build skips work it needed to do. The
+  Windows job spent a round failing to link symbols the committed code no longer referenced,
+  because it was linking a stale object file. A compiler cache (ccache / sccache, keyed on
+  content) is the right optimisation; a timestamp-keyed one lies.
+- **The jobs build the driver set the release ships** (Firebird + PostgreSQL on). Neither needs a
+  system client to *compile* — both carry in-tree headers and load their client at runtime — so
+  enabling them costs no dependency and stops CI from testing a configuration nobody builds.
+  MySQL stays off because its CMake hard-errors without a system client; ODBC because nothing
+  exercises it.
+- **Build every non-GUI test target, not just `oes_tests`.** `ctest` registers them all, so
+  building one reports the rest as `<name>_NOT_BUILT` failures.
 
-Linux jobs configure with `-DOES_USE_FIREBIRD=OFF`: the DB-backed tests run on SQLite, which is
-always embedded, so the Firebird client would be a dependency bought for nothing.
+On a crash, the Linux job runs the two smallest failing tests under `gdb` and prints a backtrace:
+`ctest` reports only the signal, and a 40-minute round trip is too expensive to spend on a guess.
 
 ---
 

@@ -56,10 +56,12 @@ compiles with 0 errors; `oes_tests` **855/855**; `oes_frontend_runtime_test` **2
 | **Form attribute binding** | Surface unspec'd, runtime reference chain untested | *Surface contract* written; runtime chain + the non-owning-cell rule pinned by tests |
 | **JSON provider** | `Read` a silent no-op | Full parser (unwired by design), with its lossy boundary pinned in tests |
 | **WrapSizer** | Implemented end to end, registered nowhere — dead on both platforms | Registered; reachable on desktop and web |
-| **CI** | None | `.github/workflows/ci.yml` — Linux suite, Windows build+suite, GUI under Xvfb |
+| **CI** | None | `.github/workflows/ci.yml` — Linux suite, Windows build+suite, GUI under Xvfb. **Windows is green: 855/855.** Linux builds and runs, 820/862 — see [portability.md](portability.md) |
+| **Portability** | GCC/Linux had not compiled the tree in a long time | Fourteen CI rounds took it from "does not compile" to green build + 95% of the suite; the rules are written down in [portability.md](portability.md) |
 
-**Four real defects surfaced, none of them in the new code** — they had been sitting in
-paths nothing exercised:
+**Defects surfaced, none of them in the new code** — they had been sitting in paths nothing
+exercised. The first four came from the test work, the rest from the first GCC build in a long
+time (full list and the rules that prevent them: [portability.md](portability.md)):
 
 1. **`ibMaterializeSql::Apply` could not install a bundle on SQLite at all.** A driver
    reports failure by THROWING, so the return-code test never saw it; and the error
@@ -72,6 +74,20 @@ paths nothing exercised:
    `AddChild` when given a parent) — the actual cause of the 17 disabled tests.
 4. **A stack-allocated `ibDocument` is a use-after-free**: `OnChangedViewList` does
    `delete this` when the last view detaches.
+5. **The driver options were fiction.** `BUILD.md` advertises `OES_USE_*` as "all default OFF",
+   but `appData.cpp` named Firebird and PostgreSQL unconditionally while CMake dropped an
+   off driver's sources — so any such build failed to link. Compounded by MSVC instantiating an
+   exported class in every TU that merely *includes* its header, which made guarding the code
+   without guarding the include useless.
+6. **The GTK guid path had never compiled**: `guid.cpp` included `<guid/guid.h>`, a path that
+   exists nowhere (it is `<uuid/uuid.h>`), and libuuid was not linked at all.
+7. **The web server's POSIX branch was half-written**: its `#if defined(_WIN32)` block pulled in
+   winsock, while the `#else` contained only `<csignal>` — no socket headers for the
+   `setsockopt` calls right below.
+8. **Two 64-bit alias families that are the same type on Windows** (`ibClassID`/`ibPictureID`
+   over `wxLongLong_t` vs `s64`/`u64` over `<cstdint>`) and different on LP64, so ids could not
+   bind to the reader/writer layer's references. Now one base, `uint64_t`, with no change to any
+   serialised width.
 
 ---
 
