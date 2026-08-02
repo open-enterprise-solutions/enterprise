@@ -173,7 +173,7 @@ wxString ibBackendLocalization::GetRawLocText(const ibBackendLocalizationEntryAr
 bool ibBackendLocalization::GetRawLocText(const ibBackendLocalizationEntryArray& array, wxString& strResult)
 {
 	strResult.Clear();
-	for (const auto pair : array) {
+	for (const auto& pair : array) {
 		strResult += wxString::Format(
 			wxT("%s = '%s';"), pair.m_code, pair.m_data);
 	}

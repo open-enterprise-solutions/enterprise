@@ -312,7 +312,10 @@ bool ibValueModelTable::ibValueModelTableColumnCollection::SetAt(const ibValue& 
 bool ibValueModelTable::ibValueModelTableColumnCollection::GetAt(const ibValue& varKeyValue, ibValue& pvarValue) // read a column-info entry by its index
 {
 	unsigned int index = varKeyValue.GetUInteger();
-	if ((index < 0 || index >= m_listColumnInfo.size() && !appData->DesignerMode())) {
+	// `index` is unsigned, so `index < 0` was dead code, and && binds tighter than ||
+	// — the condition already meant "out of range AND not in the designer". Spelled out;
+	// the designer-mode exemption is preserved, not introduced (see docs/portability.md).
+	if (index >= m_listColumnInfo.size() && !appData->DesignerMode()) {
 		ibBackendCoreException::Error(_("Index goes beyond array")); 
 		return false;
 	}

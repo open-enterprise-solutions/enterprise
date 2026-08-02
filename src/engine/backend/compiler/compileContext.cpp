@@ -154,7 +154,9 @@ ibParamUnit ibCompileContext::GetVariable(const wxString& strVarName, bool bFind
 				if (pCurContext->m_numReturn == RETURN_BLOCK)
 					numContext++;
 
-					guardRecursion();
+				// Indented as if it belonged to the `if` above, but it never did — the guard
+				// runs on every iteration, which is what a recursion guard has to do.
+				guardRecursion();
 
 				if (pCurContext->FindVariable(strVarName, currentVariable)) {
 					ibParamUnit variable;

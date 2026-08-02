@@ -149,7 +149,8 @@ unsigned int ibValueModel::RunStoragePage(ibRamValueStorage& storage, ibDataRamC
 			out.Add(ibDataViewItem(node));   // the LIVE storage node (ctor IncRefs)
 			++fetched;
 		}
-		for (size_t i = 0; i < out.GetCount(); ++i) SetItemParent(out[i], parent); return fetched;
+		for (size_t i = 0; i < out.GetCount(); ++i) SetItemParent(out[i], parent);
+		return fetched;
 	}
 
 	// ---- GROUPED: the browsed parent's group path (dim values root->parent) scopes this level ----
@@ -188,7 +189,8 @@ unsigned int ibValueModel::RunStoragePage(ibRamValueStorage& storage, ibDataRamC
 			out.Add(ibDataViewItem(node));
 			++fetched;
 		}
-		for (size_t i = 0; i < out.GetCount(); ++i) SetItemParent(out[i], parent); return fetched;
+		for (size_t i = 0; i < out.GetCount(); ++i) SetItemParent(out[i], parent);
+		return fetched;
 	}
 
 	// ---- GROUP level: one synthetic group node per DISTINCT value of dims[depth] among the scoped rows, in the
@@ -233,7 +235,8 @@ unsigned int ibValueModel::RunStoragePage(ibRamValueStorage& storage, ibDataRamC
 		node->DecRef();                                     // → out owns exactly one reference
 		++fetched;
 	}
-	for (size_t i = 0; i < out.GetCount(); ++i) SetItemParent(out[i], parent); return fetched;
+	for (size_t i = 0; i < out.GetCount(); ++i) SetItemParent(out[i], parent);
+	return fetched;
 }
 
 // ibValueModelStorage::RunComposerPage — a native RAM model pages its OWN storage + composer through the shared primitive.

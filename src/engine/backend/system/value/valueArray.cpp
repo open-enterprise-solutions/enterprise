@@ -36,7 +36,10 @@ bool ibValueArray::Init(ibValue** paParams, const long lSizeArray)
 
 void ibValueArray::CheckIndex(unsigned int index) const //array index must start from 1
 {
-	if ((index < 0 || index >= m_listValue.size() && !appData->DesignerMode()))
+	// `index` is unsigned, so `index < 0` was dead code, and && binds tighter than ||
+	// — the condition already meant "out of range AND not in the designer". Spelled out;
+	// the designer-mode exemption is preserved, not introduced (see docs/portability.md).
+	if (index >= m_listValue.size() && !appData->DesignerMode())
 		ibBackendCoreException::Error(_("Index goes beyond array"));
 }
 

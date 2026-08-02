@@ -1373,7 +1373,7 @@ void ibValueManagerDataObjectPredefined::FillPredefined(ibMemberTable& helper) c
 	wxASSERT(valueMetaObject);
 
 	//fill custom values
-	for (const auto object : valueMetaObject->GetPredefinedValueArray()) {
+	for (const auto& object : valueMetaObject->GetPredefinedValueArray()) {
 		helper.AppendProp(object->GetPredefinedName(), true, false);
 	}
 }
@@ -2401,7 +2401,7 @@ bool ibValueRecordDataObjectHierarchyRef::WriteObject()
 
 	bool generateUniqueIdentifier = false;
 	if (!IsSetUniqueIdentifier()) {
-		ibValue prefix = "", standartProcessing = true;
+		ibValue prefix = wxEmptyString, standartProcessing = true;
 		ExecAsProc(wxT("SetNewCode"), prefix, standartProcessing);
 		if (standartProcessing.GetBoolean())
 			generateUniqueIdentifier = GenerateUniqueIdentifier(prefix.GetString());
@@ -2713,7 +2713,7 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 
 	bool generateUniqueIdentifier = false;
 	if (!IsSetUniqueIdentifier()) {
-		ibValue prefix = "", standartProcessing = true;
+		ibValue prefix = wxEmptyString, standartProcessing = true;
 		ExecAsProc(wxT("SetNewNumber"), prefix, standartProcessing);
 		if (standartProcessing.GetBoolean())
 			generateUniqueIdentifier = GenerateUniqueIdentifier(prefix.GetString());
@@ -3496,7 +3496,10 @@ bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterColumnCollection::Set
 bool ibValueRecordSetObject::ibValueRecordSetObjectRegisterColumnCollection::GetAt(const ibValue& varKeyValue, ibValue& pvarValue) // array index starts at 0
 {
 	unsigned int index = varKeyValue.GetUInteger();
-	if ((index < 0 || index >= m_listColumnInfo.size() && !appData->DesignerMode())) {
+	// `index` is unsigned, so `index < 0` was dead code, and && binds tighter than ||
+	// — the condition already meant "out of range AND not in the designer". Spelled out;
+	// the designer-mode exemption is preserved, not introduced (see docs/portability.md).
+	if (index >= m_listColumnInfo.size() && !appData->DesignerMode()) {
 		ibBackendCoreException::Error(_("Index goes beyond array"));
 		return false;
 	}

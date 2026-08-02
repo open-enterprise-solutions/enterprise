@@ -491,7 +491,8 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 			gn->DecRef();   // drop the build ref: on-page -> 1 (out owns), off-page -> 0 (freed)
 	}
 
-	for (size_t i = 0; i < out.GetCount(); ++i) SetItemParent(out[i], parent); return fetched;
+	for (size_t i = 0; i < out.GetCount(); ++i) SetItemParent(out[i], parent);
+	return fetched;
 }
 
 // Point lookup for a FindRowValue restore STUB — fetch the single source row matching `rowKey` (its PK value(s))

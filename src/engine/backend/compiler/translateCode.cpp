@@ -255,7 +255,10 @@ void ibTranslateCode::LoadKeyWords()
 	for (unsigned int i = 0; i < sizeof(s_listKeyWord) / sizeof(s_listKeyWord[0]); i++)
 	{
 		const wxString& strEng = stringUtils::MakeUpper(s_listKeyWord[i].m_strKeyWord);
-		ms_listHashKeyWord[strEng] = (void*)(i + 1);
+		// The map stores a small integer IN the pointer slot. Widen it through intptr_t
+		// first: a direct (void*)(int) is a cast between different sizes on 64-bit and
+		// GCC warns accordingly.
+		ms_listHashKeyWord[strEng] = reinterpret_cast<void*>(static_cast<intptr_t>(i + 1));
 
 		//add to array for parser
 		s_listHashKeyword[strEng] = (void*)1;

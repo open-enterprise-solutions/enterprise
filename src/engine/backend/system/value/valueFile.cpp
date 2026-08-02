@@ -39,14 +39,18 @@ bool ibValueFile::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibVal
 	switch (lMethodNum)
 	{
 	case enExist:
+		// Parenthesised as intended: a name is required, AND then either the file or the
+		// directory must exist. Without the brackets && bound tighter, so the whole thing
+		// read as "(named AND file exists) OR directory exists" — the second arm answering
+		// true for an EMPTY name.
 		pvarRetValue = m_fileName.Length() > 0 &&
-			(!strFileName.IsDir() && strFileName.Exists()) || (strFileName.IsDir() && strFileName.DirExists());
+			((!strFileName.IsDir() && strFileName.Exists()) || (strFileName.IsDir() && strFileName.DirExists()));
 		return true;
 		//case enGetHidden: break;
 	case enGetModificationTime: pvarRetValue = strFileName.GetModificationTime();
 		return true;
 	case enGetReadOnly: pvarRetValue = m_fileName.Length() > 0 &&
-		(!strFileName.IsDir() && strFileName.IsFileReadable()) || (strFileName.IsDir() && strFileName.IsDirReadable());
+		((!strFileName.IsDir() && strFileName.IsFileReadable()) || (strFileName.IsDir() && strFileName.IsDirReadable()));
 		return true;
 	case enIsDirectory: pvarRetValue = strFileName.IsDir();
 		return true;

@@ -921,7 +921,7 @@ bool ibValueSystemFunction::IsInRole(const ibValue& cData)
 	if (creator == nullptr) return false;
 
 	if (creator != nullptr) {
-		for (const auto role : appData->GetUserRoleArray()) {
+		for (const auto& role : appData->GetUserRoleArray()) {
 			if (role.m_miRoleId == creator->GetMetaID())
 				return true;
 		}
