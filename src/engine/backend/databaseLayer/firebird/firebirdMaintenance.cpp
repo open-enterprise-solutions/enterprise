@@ -1,3 +1,4 @@
+#include <atomic>   // std::atomic — MSVC supplied this transitively
 #include "firebirdMaintenance.h"
 #include "firebirdInterface.h"
 

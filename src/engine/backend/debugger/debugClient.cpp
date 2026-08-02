@@ -4,6 +4,16 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "debugClient.h"
+
+// Socket-option constants (IPPROTO_TCP / TCP_NODELAY / SOL_SOCKET / SO_KEEPALIVE) used by the
+// SetOption calls below. On Windows they arrive with winsock through wx; POSIX keeps them in
+// its own headers and wx does not re-export them.
+#ifndef __WXMSW__
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#endif
+
 #include "backend/metadataConfiguration.h"
 #include "backend/session/session.h"
 

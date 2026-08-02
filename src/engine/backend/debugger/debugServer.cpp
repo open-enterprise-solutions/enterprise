@@ -5,6 +5,14 @@
 
 #include "debugServer.h"
 
+// Socket-option constants for the SetOption calls below — winsock supplies them through wx on
+// Windows; POSIX keeps them in its own headers. Same reason as debugClient.cpp.
+#ifndef __WXMSW__
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#endif
+
 #include "backend/compiler/procUnit.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/session/session.h"

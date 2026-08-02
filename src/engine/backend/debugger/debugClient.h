@@ -2,6 +2,7 @@
 #define __DEBUGGER_CLIENT_H__
 
 #include <wx/thread.h>
+#include <atomic>   // std::atomic<short> m_number_connection_attempts (MSVC pulled it in transitively)
 
 // Lifecycle: owned by ibMetaDataConfigurationStorage as a unique_ptr
 // field (private ctor + friend). Same cache-pointer pattern as

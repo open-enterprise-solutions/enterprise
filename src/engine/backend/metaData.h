@@ -1,6 +1,7 @@
 #ifndef __METADATA_H__
 #define __METADATA_H__
 
+#include <atomic>   // std::atomic — MSVC supplied this transitively
 #include <map>
 #include <memory>
 #include <optional>

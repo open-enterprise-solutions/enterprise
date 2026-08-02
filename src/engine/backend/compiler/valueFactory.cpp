@@ -3,6 +3,7 @@
 //	Description : common factory module 
 ////////////////////////////////////////////////////////////////////////////
 
+#include <atomic>   // std::atomic — MSVC supplied this transitively
 #include "value.h"
 #include "backend/backend_exception.h"
 #include "backend/ctorRegistry.h"

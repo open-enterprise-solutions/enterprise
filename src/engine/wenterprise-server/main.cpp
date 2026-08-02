@@ -36,6 +36,11 @@
 #	include <windows.h>
 #else
 #	include <csignal>
+// The POSIX half of what winsock2/ws2tcpip provide above: setsockopt itself plus the
+// SOL_SOCKET / SO_* / TCP_NODELAY constants the socket tuning below uses.
+#	include <sys/socket.h>
+#	include <netinet/in.h>
+#	include <netinet/tcp.h>
 #endif
 
 namespace {
