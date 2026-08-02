@@ -440,9 +440,10 @@ wxString ibBackendException::FindErrorCodeLine(const wxString& strBuffer, unsign
 		};
 	}
 
-	//determine the line number
-	unsigned int currLine = 1 + strBuffer.Left(startPos).Replace(wxT('\n'), wxT('\n'));
-
+	// The line NUMBER is not computed here. Both callers already pass their own alongside
+	// this string (compileCode's currPos/currLine pair, the handler's error.m_numLine), and
+	// theirs comes from the parser rather than from counting newlines in a buffer. This
+	// function returns the line's TEXT, marked at the offending position, and nothing else.
 	wxString strError = wxString::Format(wxT("%s <<?>> %s"), strBuffer.Mid(startPos, currPos - startPos), strBuffer.Mid(currPos, endPos - currPos));
 	strError.Replace(wxT("\r"), wxEmptyString);
 	strError.Replace(wxT("\t"), wxT(" "));
