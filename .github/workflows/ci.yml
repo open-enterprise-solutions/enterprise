@@ -145,8 +145,12 @@ jobs:
       - name: Configure
         run: cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON
 
+      # -k 0 keeps ninja going after a failed compile instead of stopping at the first
+      # one. The frontend is being compiled by GCC for the first time, so errors come in
+      # families; stopping at the first turns one CI round into one fix. With keep-going
+      # a round returns every independent failure at once and they get fixed as a batch.
       - name: Build the GUI test target
-        run: cmake --build --preset linux-debug --target oes_frontend_runtime_test
+        run: cmake --build --preset linux-debug --target oes_frontend_runtime_test -- -k 0
 
       # The harness SKIPs every test when the toolkit cannot come up, so a
       # display-less runner reports skips, not failures — Xvfb is what turns

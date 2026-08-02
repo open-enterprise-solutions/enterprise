@@ -4,6 +4,7 @@
 #include <wx/checkbox.h>
 #include <wx/compositewin.h>
 #include <wx/containr.h>
+#include <wx/tooltip.h>   // DoSetToolTip() calls into wxToolTip, so it needs the full type
 
 #include "dynamicBorder.h"
 

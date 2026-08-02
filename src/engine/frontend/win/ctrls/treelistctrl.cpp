@@ -34,6 +34,7 @@
 #include <wx/treebase.h>
 #include <wx/timer.h>
 #include <wx/textctrl.h>
+#include <wx/tooltip.h>   // SetToolTip() reads the tip out of it, so it needs the full type
 #include <wx/imaglist.h>
 #include <wx/settings.h>
 #include <wx/dcclient.h>
