@@ -589,7 +589,15 @@ bool ibBackendSpreadsheetObject::SaveToFile(const wxString& strFileName)
 		return false;
 
 	std::ofstream datafile;
+	// Opening a stream by WIDE path is an MSVC extension — libstdc++ has no such overload,
+	// and its filesystem::path template does not accept a wstring either. Keep the wide path
+	// on Windows (a non-ASCII directory needs it: the narrow overload there goes through the
+	// ANSI code page) and hand POSIX the UTF-8 bytes, which is what its filenames are.
+#ifdef __WXMSW__
 	datafile.open(strFileName.ToStdWstring(), std::ios::binary);
+#else
+	datafile.open(static_cast<const char*>(strFileName.utf8_str()), std::ios::binary);
+#endif
 	datafile.write(reinterpret_cast <char*> (writerData.pointer()), writerData.size());
 	datafile.close();
 
