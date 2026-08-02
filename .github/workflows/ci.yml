@@ -56,12 +56,33 @@ jobs:
       - name: Configure
         run: cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON
 
-      - name: Build the test target
-        run: cmake --build --preset linux-debug --target oes_tests
+      # Every non-GUI test target, not just oes_tests: ctest registers them all, so
+      # building one leaves the others reported as "<name>_NOT_BUILT" failures. The GUI
+      # target belongs to its own job and is excluded from the run below.
+      - name: Build the test targets
+        run: >
+          cmake --build --preset linux-debug
+          --target oes_tests oes_string_tests oes_query_totals_test
+          oes_query_parity_test oes_query_join_parity_test
+          oes_temp_db_sqlite_test oes_job_tenancy_test
 
       - name: Run
         working-directory: build/linux-debug
-        run: ctest --output-on-failure --timeout 300
+        run: ctest --output-on-failure --timeout 300 -E "oes_frontend_runtime_test"
+
+      # A SEGFAULT tells ctest nothing beyond the exit signal, so on failure take one
+      # backtrace here rather than guessing across a 40-minute round trip. Two cases:
+      # the smallest compile test and the smallest runtime one — if the crash is shared
+      # they show the same frames, and if it is not, that is worth knowing too.
+      - name: Backtrace on failure
+        if: failure()
+        working-directory: build/linux-debug
+        run: |
+          sudo apt-get install -y gdb
+          for t in CompilerTest.SimpleAssignmentEmitsBytecode RuntimeTest.ConstantAssignment; do
+            echo "=============== $t ==============="
+            gdb -batch -ex run -ex "bt 40" --args ./bin/oes_tests --gtest_filter=$t || true
+          done
 
   # ---------------------------------------------------------------------------
   # The shipping platform. Building is the signal here — Windows runners are the
@@ -84,13 +105,18 @@ jobs:
       - name: Configure
         run: cmake --preset windows-x64-debug -DBUILD_TESTING=ON -DOES_USE_POSTGRESQL=ON
 
-      - name: Build the test target
-        run: cmake --build --preset windows-x64-debug --target oes_tests
+      # Same target set as Linux — see the note there.
+      - name: Build the test targets
+        run: >
+          cmake --build --preset windows-x64-debug
+          --target oes_tests oes_string_tests oes_query_totals_test
+          oes_query_parity_test oes_query_join_parity_test
+          oes_temp_db_sqlite_test oes_job_tenancy_test
 
       - name: Run
         # No -C: every preset here uses Ninja, which is single-config.
         working-directory: build/windows-x64-debug
-        run: ctest --output-on-failure --timeout 300
+        run: ctest --output-on-failure --timeout 300 -E "oes_frontend_runtime_test"
 
   # ---------------------------------------------------------------------------
   # The GUI harness is a SEPARATE job, and separate on purpose: it links
