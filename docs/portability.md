@@ -122,13 +122,26 @@ Ask both toolchains for the same thing, and mean it:
 `4018/4389/4245` = sign compare, `4127` = constant condition in wx macros), so a warning visible
 on one compiler is visible on the other.
 
-Cleared out on 2026-08-02, from 3,513 GCC warnings down to a few hundred:
+Cleared out on 2026-08-02, from 3,513 GCC warnings down to a couple of hundred:
 
 | Class | Was | Action |
 |---|---|---|
 | `-Wreorder` | 1,812 in 58 sites | lists reordered — see §1.8. One header (`compileContext.h`) accounted for 1,008 of them: it is included by every TU, so a single constructor was reported over and over. Count sites, not lines |
-| `-Wwrite-strings` | 1,374 | XPM arrays are `const char*` now (31 files). Also a real fix: they feed a `const char**` field, and `char*[]` → `const char**` is not a conversion the standard allows |
+| `-Wwrite-strings` | 1,374 | XPM arrays are `const char*` now (31 files). Also a real fix: they feed a `const char**` field, and `char*[]` → `const char**` is not a conversion the standard allows. The 9 that remain are inside wx's own `wxT()` macro |
+| `-Wparentheses` | 35 | `(BASE + level) | FLAG` in the fold-level code. Precedence already grouped it that way — the parentheses only say so |
+| `C4706` (MSVC) | 3 | `if (hr = Call())` in `valueOLE.cpp`. The idiom was deliberate but is spelled exactly like a mistyped `==`, which is why the warning exists; now `(hr = Call()) != S_OK` |
 | `-Wswitch` | 83 in 13 sites | left as is — each is a deliberately narrow switch with a fallback return after it |
+| `C4244` (MSVC) | 305 | left as is — every one is in `3rdparty/` (libwebp, wx). Our own code is clean at `/W4` |
+
+Two ways this sweep went wrong, both caught by the local build, both worth avoiding:
+
+- **A regex must not touch an initialiser list containing a call.** It stops at the first
+  closing paren, so `m_pRef(p ? p->Get() : nullptr)` and
+  `m_objGuid(src.m_metaObject->CreateUniqueKeyPair())` came out mangled. Nested parens get
+  reordered by hand.
+- **Neighbouring classes are not evidence.** `objCtor.h` holds two nearly identical ctor
+  classes whose members are declared in **mirrored** order, so a fix copied from one broke
+  the other — which had been correct. Read the declaration order of the class you are editing.
 
 ### 1.10 Fix the root, then sweep — do not fix where the compiler stopped
 
@@ -153,6 +166,22 @@ including the instances the compiler had not reached yet.
 
 The engine — backend, compiler, interpreter, query engine, all five drivers — is cross-platform
 as of 2026-08-02. Two toolchains, two standard libraries, two 64-bit models, one result.
+
+What that claim does **not** cover, so nobody reads more into the table than it says:
+
+- **The applications are never linked in CI.** `enterprise`, `designer`, `daemon`, `launcher`
+  and `codeRunner` have CMake targets — with `if(APPLE)` bundle branches already written — but
+  no job builds them, on any platform. Their sources are thin (73 files against the engine's
+  760) and only six touch Win32, all already guarded, so this is likely cheap to close.
+- **Only SQLite actually executes.** Firebird is compiled but loads `fbclient` at run time, and
+  the runner has none; PostgreSQL, MySQL and ODBC are compile-only. `FirebirdLeaseTest` exercises
+  file-lock mechanics against a path that need not exist, not the driver.
+- **Only x86-64.** `ibNumber`'s portable carry fallback — everything that is not MSVC on x86/x64
+  — has still never been *executed*, only compiled. An `ubuntu-24.04-arm` job would fix that,
+  and it is free for public repositories.
+- **Nobody has run the product on Linux.** Building is not running: the `wxScreenDC` in §1.7 was
+  found by reading, and that class of fault — load order, resources, paths — only appears when
+  something actually starts.
 
 ### What the crashes turned out to be
 
