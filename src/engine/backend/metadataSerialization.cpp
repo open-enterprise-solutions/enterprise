@@ -48,7 +48,12 @@ ibValue ibMetaData::Deserialize(const wxString& strValue)
 	ibClassID classType = 0;
 	if (classStr.StartsWith(wxT("C:"))) {
 		wxString clsidStr = classStr.Mid(2);
-		clsidStr.ToULongLong(&classType);
+		// Parse into wx's own type, then convert. ToULongLong writes through an
+		// `unsigned long long*` specifically, and ibClassID is uint64_t — the same width
+		// but a different type on LP64, so its address does not fit the parameter.
+		unsigned long long parsed = 0;
+		if (clsidStr.ToULongLong(&parsed))
+			classType = static_cast<ibClassID>(parsed);
 	}
 
 	// Extract data
