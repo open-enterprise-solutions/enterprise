@@ -234,8 +234,13 @@ wxDateTime ibJobManager::ReadSharedLastRun(const wxString& name)
 		// a zero date — a job row that exists but never ran reads as "no opinion".
 		if (rs.Next()) {
 			const ibValue last = rs.GetValue(1);
+			// Through wxLongLong, the way every other ms-to-wxDateTime site in the tree does
+			// it. GetDate() hands back a wxLongLong_t (`long long`), and wxDateTime's
+			// constructors take time_t / double / wxLongLong — on LP64 none of those is an
+			// exact match for `long long`, so the implicit conversion is ambiguous. MSVC
+			// happens to pick one; naming wxLongLong says which, on every platform.
 			if (!last.IsNull() && !last.IsEmpty())
-				return last.GetDate();
+				return wxDateTime(wxLongLong(last.GetDate()));
 		}
 	}
 	catch (...) {
