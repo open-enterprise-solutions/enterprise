@@ -267,6 +267,10 @@ inline void AddValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cV
 	else if (resultType == ibValueTypes::TYPE_DATE) {
 		if (cValue3.m_typeClass == ibValueTypes::TYPE_DATE) { //date + date -> number
 			cValue1.m_typeClass = ibValueTypes::TYPE_NUMBER;
+			// static_cast: wxLongLong_t is `long long`, while ibNumber's 64-bit ctor takes
+			// int64_t — same width, different type on LP64 (there int64_t is `long`). MSVC
+			// spells both __int64 and picks it; GCC finds every ctor equally far away and
+			// calls the conversion ambiguous. Naming the target type settles it everywhere.
 			cValue1.m_fData = cValue2.GetDate() + cValue3.GetDate();
 		}
 		else {

@@ -25,9 +25,20 @@
 
 #include "backend/moduleManager/moduleManager.h"
 
-//databases
+// databases. The driver headers are INCLUDED UNDER THE SAME GUARD as the code using them,
+// and that is load-bearing on MSVC rather than tidiness: these classes are BACKEND_API, i.e.
+// __declspec(dllexport) while backend.dll is being built, and an exported class is
+// instantiated in FULL by every translation unit that merely sees its definition. So an
+// unguarded #include makes this object file demand the driver's whole vtable, constructor and
+// destructor even when every use of it is compiled out — which is exactly how a build with
+// OES_USE_POSTGRESQL=OFF failed to link (CI, 2026-08-02). SQLite is always embedded, so it
+// needs no guard.
+#ifdef OES_USE_FIREBIRD
 #include "backend/databaseLayer/firebird/firebirdDatabaseLayer.h"
+#endif
+#ifdef OES_USE_POSTGRESQL
 #include "backend/databaseLayer/postgres/postgresDatabaseLayer.h"
+#endif
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/databaseLayer/connectionPool.h"
 

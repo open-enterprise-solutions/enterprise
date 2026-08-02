@@ -58,10 +58,23 @@ class BACKEND_API ibNumber
 {
 public:
 	ibNumber() noexcept;
+
+	// Integer constructors are declared over the LANGUAGE types, not over the <cstdint>
+	// aliases, and that is deliberate: `long` and `long long` are DISTINCT types even where
+	// they are the same width, and an alias only ever names one of them.
+	//
+	// With int64_t/uint64_t alone there was a hole. On Windows int64_t IS long long, so every
+	// integer had an exact match and nothing showed. On LP64 (Linux, macOS) int64_t is `long`,
+	// leaving `long long` — which is what wxLongLong_t and every date value is — matched by
+	// nothing: int, long and double all sat equally far away and the conversion was ambiguous.
+	// Spelling all four signed/unsigned widths closes it on every platform at once, with no
+	// per-callsite casts and no #ifdef, because no two of them collide anywhere.
 	ibNumber(int v) noexcept;
 	ibNumber(unsigned int v) noexcept;
-	ibNumber(int64_t v) noexcept;
-	ibNumber(uint64_t v) noexcept;
+	ibNumber(long v) noexcept;
+	ibNumber(unsigned long v) noexcept;
+	ibNumber(long long v) noexcept;
+	ibNumber(unsigned long long v) noexcept;
 	ibNumber(double v);
 	explicit ibNumber(const wxString& s);
 	ibNumber(const ibNumber& o);
@@ -214,6 +227,10 @@ private:
 
 	void StoreImmediate(int64_t mant, int32_t exp10) noexcept;
 	void StoreHeap(BigImpl* p) noexcept;
+
+	// One body per signedness, shared by the long / long long constructor pair above.
+	void FromSigned64(int64_t v) noexcept;
+	void FromUnsigned64(uint64_t v) noexcept;
 
 	// Materialises current value into a stack-allocated BigImpl (no extra heap).
 	void LoadBig(BigImpl& out) const;

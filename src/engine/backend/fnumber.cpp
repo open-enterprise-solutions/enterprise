@@ -496,8 +496,10 @@ ibNumber::ibNumber(int v) noexcept
 {
 }
 
-ibNumber::ibNumber(int64_t v) noexcept
-	: m_payload(0)
+// The two signed 64-bit spellings share one body. `long` and `long long` are different
+// TYPES even when they are the same width, so both need their own constructor — see the
+// note in fnumber.h. FromSigned64 is the single implementation.
+void ibNumber::FromSigned64(int64_t v) noexcept
 {
 	if (CanBeImmediate(v, 0)) {
 		m_payload = PackImmediate(v, 0);
@@ -508,14 +510,26 @@ ibNumber::ibNumber(int64_t v) noexcept
 	StoreHeap(p);
 }
 
+ibNumber::ibNumber(long v) noexcept
+	: m_payload(0)
+{
+	FromSigned64(static_cast<int64_t>(v));
+}
+
+ibNumber::ibNumber(long long v) noexcept
+	: m_payload(0)
+{
+	FromSigned64(static_cast<int64_t>(v));
+}
+
 ibNumber::ibNumber(unsigned int v) noexcept
 	: m_payload(PackImmediate(static_cast<int64_t>(v), 0))
 {
 	// unsigned int max == 2^32 - 1 fits trivially in 47-bit immediate mantissa.
 }
 
-ibNumber::ibNumber(uint64_t v) noexcept
-	: m_payload(0)
+// Unsigned twin of FromSigned64 — same reason for two constructors over one body.
+void ibNumber::FromUnsigned64(uint64_t v) noexcept
 {
 	if (v <= static_cast<uint64_t>(kImmMantMax)) {
 		m_payload = PackImmediate(static_cast<int64_t>(v), 0);
@@ -527,6 +541,18 @@ ibNumber::ibNumber(uint64_t v) noexcept
 	p->negative = false;
 	p->exp      = 0;
 	StoreHeap(p);
+}
+
+ibNumber::ibNumber(unsigned long v) noexcept
+	: m_payload(0)
+{
+	FromUnsigned64(static_cast<uint64_t>(v));
+}
+
+ibNumber::ibNumber(unsigned long long v) noexcept
+	: m_payload(0)
+{
+	FromUnsigned64(static_cast<uint64_t>(v));
 }
 
 ibNumber::ibNumber(double v)
