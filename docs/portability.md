@@ -75,7 +75,23 @@ in-class alias so `ibDatabaseLayer::ibTxOptions` still reads the same.
 | `ibValuePtr<T> p = new T()` | the pointer constructor is `explicit`; copy-init cannot use it |
 | `ofstream::open(wstring)` | an MSVC extension — POSIX takes UTF-8 bytes |
 
-### 1.7 Fix the root, then sweep — do not fix where the compiler stopped
+### 1.7 Keep the warning log readable, or it stops being a tool
+
+The first GCC build produced **~48,000 warnings**. Buried in them were three
+`-Wreturn-local-addr` lines naming the exact cause of 33 crashing tests — found only because
+someone went looking. Two classes accounted for 97% of the volume and none of the value, so
+they are off in the CMake build: `-Wunknown-pragmas` (`#pragma region`, an MSVC editor hint)
+and `-Wattributes` (`BACKEND_API` on elaborated type specifiers, ignored off-Windows).
+
+What was deliberately left ON, having been swept and found clean — so that when the count
+rises again, it means something:
+
+| Class | Count | Sites | Real bugs |
+|---|---|---|---|
+| `-Wreorder` | 1,098 | 107 | none — every initialiser reads a *parameter*; the only two members initialised from another member declare it first |
+| `-Wswitch` | 83 | 13 | none — each is a deliberately narrow switch with a fallback return after it |
+
+### 1.8 Fix the root, then sweep — do not fix where the compiler stopped
 
 A compiler reports the first place a class of mistake surfaces, never the class. Every time one
 of these appeared, the same pattern was grepped across the tree, and it usually found more:

@@ -174,6 +174,23 @@ if(MSVC)
 else()
     # GCC / Clang
     add_compile_options(-Wall -Wno-unused-parameter -Wno-sign-compare)
+
+    # Silence the two classes that BURY everything else. The first GCC build of the tree
+    # produced ~48,000 warnings, of which ~44,000 were unknown-pragma and ~2,800 attributes
+    # — and buried in them were three -Wreturn-local-addr lines naming the exact cause of 33
+    # crashing tests. A warning nobody can find is a warning nobody acts on.
+    #
+    #   unknown-pragmas — `#pragma region` / `endregion`, an editor folding hint MSVC
+    #                     understands and GCC does not. Nothing to fix in the code.
+    #   attributes      — BACKEND_API (dllexport/dllimport) written on elaborated type
+    #                     specifiers, e.g. `class BACKEND_API ibValue` inside a typedef,
+    #                     where the attribute is simply ignored off-Windows.
+    #
+    # Deliberately NOT silenced: -Wreorder (1,098 of them, no real bug found in a sweep of
+    # all 107 sites — but with the noise gone they are visible enough to clean up) and
+    # -Wswitch (83, every one a deliberately narrow switch with a fallback return).
+    add_compile_options(-Wno-unknown-pragmas -Wno-attributes)
+
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         add_compile_options(-Wno-deprecated-declarations)
     endif()
