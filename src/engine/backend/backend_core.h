@@ -45,7 +45,7 @@ typedef int ibSourceId;
 typedef int ibFormID;
 typedef int ibActionID;
 
-typedef unsigned wxLongLong_t ibPictureID;
+typedef uint64_t ibPictureID;   // same base as ibClassID / u64 — see the note in clsid.h
 typedef unsigned int ibVersionID;
 
 // metaID -> ibValue set of one record object / table row.

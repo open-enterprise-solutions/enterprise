@@ -1,7 +1,13 @@
 #ifndef __CLSID_H__
 #define __CLSID_H__
 
-typedef unsigned wxLongLong_t ibClassID;
+// uint64_t, not `unsigned wxLongLong_t`. Same width everywhere, so nothing serialised
+// changes — but the same TYPE as the u64 the reader/writer layer speaks in. Those two
+// spellings are identical on Windows (both unsigned __int64) and DIFFERENT on LP64, where
+// uint64_t is `unsigned long` and wxLongLong_t is `long long`; a chunk id could then not
+// bind to `u64&` and every such call failed to compile. One base for every 64-bit id.
+#include <cstdint>
+typedef uint64_t ibClassID;
 
 //*******************************************************************************************
 //*                       FNV-1a 64 hash — encoding for ibClassID                           *
