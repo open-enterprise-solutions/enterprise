@@ -1396,8 +1396,13 @@ class BACKEND_API ibValueManagerDataObjectPredefined : public ibValueManagerData
 
 	void FillPredefined(ibMemberTable& helper) const;    // predefined-value props (composes onto FillMembers)
 
-	virtual bool SetPropVal(const long lPropNum, ibValue& varPropVal);        //setting attribute
-	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);                   //attribute value
+	// `const ibValue&`, matching the base. Declared as a plain `ibValue&` this did not
+	// override ibValue::SetPropVal at all — it HID it, so a virtual call through the base
+	// (value.cpp: m_pRef->SetPropVal) never reached this class. It stayed harmless only
+	// because predefined properties register as read-only (AppendProp(..., true, false)),
+	// so nothing ever tried to write one. `override` is what keeps the two in step.
+	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal) override;   //setting attribute
+	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;        //attribute value
 };
 
 #pragma endregion 

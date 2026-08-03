@@ -37,7 +37,11 @@ private:
 		enAverage
 	};
 
-	inline void CheckIndex(unsigned int index) const;
+	// NOT inline: the definition lives in valueArray.cpp, and an inline function must be
+	// defined in every TU that uses it. This one is called from Insert() right in this
+	// header, so the promise was one no TU could keep — it only ever linked because the
+	// callers happened to sit in the same TU as the definition.
+	void CheckIndex(unsigned int index) const;
 
 public:
 

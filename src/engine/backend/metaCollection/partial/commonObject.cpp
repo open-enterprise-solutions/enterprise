@@ -1383,9 +1383,9 @@ void ibValueManagerDataObjectPredefined::FillPredefined(ibMemberTable& helper) c
 	}
 }
 
-bool ibValueManagerDataObjectPredefined::SetPropVal(const long lPropNum, ibValue& cValue)
+bool ibValueManagerDataObjectPredefined::SetPropVal(const long lPropNum, const ibValue& cValue)
 {
-	return false;
+	return false;   // predefined values are read-only; the props register as non-writable
 }
 
 bool ibValueManagerDataObjectPredefined::GetPropVal(const long lPropNum, ibValue& pvarPropVal)

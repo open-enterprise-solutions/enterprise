@@ -18,7 +18,7 @@ class ibValueManagerDataObjectEnumeration :
 	void FillManagerMethods(ibMemberTable& helper) const;
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);//method call
 
-	virtual bool SetPropVal(const long lPropNum, ibValue& varPropVal);        //setting attribute
+	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal) override;        //setting attribute
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);                   //attribute value
 
 protected:

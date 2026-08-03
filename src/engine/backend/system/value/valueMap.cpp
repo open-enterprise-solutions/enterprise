@@ -27,7 +27,7 @@ void ibValueContainer::ibValueReturnContainer::FillMembers(ibMemberTable& helper
 	helper.AppendProp(wxT("Value"));
 }
 
-bool ibValueContainer::ibValueReturnContainer::SetPropVal(const long lPropNum, ibValue& cValue)
+bool ibValueContainer::ibValueReturnContainer::SetPropVal(const long lPropNum, const ibValue& cValue)
 {
 	return false;
 }

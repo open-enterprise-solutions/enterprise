@@ -41,7 +41,7 @@ void ibValueManagerDataObjectEnumeration::FillManagerMethods(ibMemberTable& help
 //****************************************************************************
 //*                              Override attribute                          *
 //****************************************************************************
-bool ibValueManagerDataObjectEnumeration::SetPropVal(const long lPropNum, ibValue& cValue)
+bool ibValueManagerDataObjectEnumeration::SetPropVal(const long lPropNum, const ibValue& cValue)
 {
 	return false;
 }

@@ -51,7 +51,7 @@ public:
 
 		void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
-		virtual bool SetPropVal(const long lPropNum, ibValue& cValue);        //setting attribute
+		virtual bool SetPropVal(const long lPropNum, const ibValue& cValue) override;        //setting attribute
 		virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);                   //attribute value
 	};
 
