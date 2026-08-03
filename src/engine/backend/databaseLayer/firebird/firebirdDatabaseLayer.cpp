@@ -678,7 +678,7 @@ bool ibDatabaseLayerFirebird::Open()
 // it — nothing is cached between calls except the two clocks below, which are
 // per-process and in memory (a restart re-arms "never run", and a skipped sweep
 // costs nothing but a later sweep).
-bool ibDatabaseLayerFirebird::RunDueMaintenance()
+bool ibDatabaseLayerFirebird::RunDueMaintenance(const std::atomic<bool>* cancelToken)
 {
 	// Cadence — tuned for this driver's sweet spot (3–30 users, 100 GB cap).
 	// Sweep is cheap enough for several times a day; the BR cycle is heavy
@@ -726,7 +726,7 @@ bool ibDatabaseLayerFirebird::RunDueMaintenance()
 
 	if (isOverdue(s_lastSweepMs.load(), kSweepIntervalSeconds)) {
 		ran = true;
-		if (ibFirebirdMaintenance::RunSweep(m_pInterface.get(), m_strDatabase, conn, nullptr)
+		if (ibFirebirdMaintenance::RunSweep(m_pInterface.get(), m_strDatabase, conn, cancelToken)
 		    == ibFirebirdMaintenance::Status::Ok) {
 			s_lastSweepMs.store(ibFb::NowUnixMs());
 		}
@@ -736,7 +736,7 @@ bool ibDatabaseLayerFirebird::RunDueMaintenance()
 	// no catch-up, no queue.
 	if (isOverdue(s_lastBrMs.load(), kBackupRestoreIntervalSeconds) && inWindow()) {
 		ran = true;
-		if (ibFirebirdMaintenance::RunBackupRestoreCycle(m_pInterface.get(), m_strDatabase, conn, nullptr)
+		if (ibFirebirdMaintenance::RunBackupRestoreCycle(m_pInterface.get(), m_strDatabase, conn, cancelToken)
 		    == ibFirebirdMaintenance::Status::Ok) {
 			s_lastBrMs.store(ibFb::NowUnixMs());
 		}

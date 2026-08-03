@@ -414,6 +414,15 @@ public:
 	void ClearCancel()             { m_cancelRequested.store(false, std::memory_order_release); }
 	bool IsCancelRequested() const { return m_cancelRequested.load(std::memory_order_acquire); }
 
+	// The flag ITSELF, for work that polls instead of running bytecode.
+	// The Firebird Services API is the reason this exists: a sweep or a
+	// backup/restore cycle sits in its own poll loop for up to 30 minutes
+	// and never reaches an interpreter loop boundary, so the one signal
+	// it can watch is this address. The flag lives in the session, which
+	// outlives the task running on it — the pool raises it in Stop()
+	// before waiting for the workers, and the poll bails within one tick.
+	const std::atomic<bool>* CancelFlag() const { return &m_cancelRequested; }
+
 	// Force-exit flag — "voluntary kick" of this session. The interpreter
 	// breaks out of its loop at the next iteration and the window is told
 	// hears OnClose(true) — no questions asked. Atomic +

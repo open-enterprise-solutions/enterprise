@@ -373,15 +373,29 @@ fold is neither — it is compaction, and it is explicitly safe to run unattende
 
 **Firebird maintenance** — folded in. `ibFirebirdMaintenanceScheduler` used to run its own
 thread; now it keeps only the policy (what is due: sweep every 6 h, backup/restore every 7 days
-inside 02:00–05:00) and exposes `RunDueMaintenance()`, which the `firebird.maintenance` job
-calls once a minute.
+inside 02:00–05:00) and exposes `RunDueMaintenance(cancelToken)`, which the `firebird.maintenance`
+job calls once a minute.
 
 Two schedulers in one process meant two answers to "is now a good time" and two teardown orders
 to get right — and getting the second one wrong cost a use-after-free (a detached worker
 outliving the pool shutdown, `EIP=0xdddddddd` in `WaitForServiceCompletion`, 2026-05-26/-05-29).
-The thread and the detach are both gone; what remains is the cancel token, raised by `Stop()`
-in `~ibApplicationData` **before** the driver goes down and checked on every service-query poll
-iteration, so a cycle in flight unwinds within one tick.
+The thread and the detach are both gone; what remains is the cancel token, checked on every
+service-query poll iteration, so a cycle in flight unwinds within one tick.
+
+**Whose token, and who raises it.** The job passes `session->CancelFlag()` — the same session it
+borrows the connection from, alive for exactly the length of the call. `ibWorkerPoolHeadless::Stop`
+raises the flag on every session it knows **before** it starts waiting for its workers. That
+ordering is the whole point: `m_stop` is only read between tasks, so a task already inside a
+Services API poll reads nothing at all.
+
+Both halves of that were missing until 2026-08-03, and the shape of the failure is worth keeping.
+The parameter existed all the way down and every real caller passed `nullptr`; the pool's Stop
+waited on a condition variable with no timeout. So a designer closed within a minute of launch
+(the sweep is due at once — "never run in this process" counts as overdue) parked main in `Stop()`
+for up to the sweep's 30-minute ceiling, with nothing in the log. A cancel path nobody hands a
+token to is not a cancel path, and a wait that says nothing cannot be told from a deadlock — the
+wait now reports every 5 s while it waits. It still waits: leaving early would hand session
+teardown a live worker, which is the 2026-05 use-after-free again.
 
 The Standalone gate did not move: it lives at the driver's arming call, because leader mode
 would break the backup/restore file swap (sharing violation on Windows, silently re-pointed

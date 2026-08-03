@@ -43,7 +43,12 @@ bool ibFirebirdMaintenanceJob::Run(ibSession* session)
 	// The work itself belongs to the driver: the interface, the path and the
 	// service credentials are already there and valid for as long as this
 	// connection is checked out.
-	fb->RunDueMaintenance();
+	// The CANCEL TOKEN comes from the same session, for the same reason the
+	// connection does: it is alive for exactly as long as this call, and the
+	// pool raises it before it starts waiting for us. A Services API pass
+	// answers to nothing else — it is minutes of polling with no interpreter
+	// loop boundary in it, so without this the pool's Stop waits it out.
+	fb->RunDueMaintenance(session->CancelFlag());
 
 	// One pass does everything that is due — nothing to continue on the next tick.
 	return false;

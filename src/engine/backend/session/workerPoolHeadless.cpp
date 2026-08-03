@@ -21,6 +21,10 @@ thread_local ibSession* tl_currentLease = nullptr;
 constexpr auto       kIdleTimeout = std::chrono::seconds(30);
 constexpr std::size_t kMinIdle    = 1;
 
+// How often Stop() says out loud that it is still waiting. Not a
+// deadline — the wait is unbounded by design; see Stop().
+constexpr auto       kStopWaitReport = std::chrono::seconds(5);
+
 void LogWorkerException(const wxString& location)
 {
 	// Reraise to identify the type without losing the original exception_ptr —
@@ -285,14 +289,35 @@ void ibWorkerPoolHeadless::Stop()
 	{
 		std::unique_lock<std::mutex> lk(m_mtx);
 		m_stop.store(true);
+		// RAISE CANCEL ON EVERY KNOWN SESSION. m_stop alone is only read
+		// between tasks — a task already running reads nothing, and a task
+		// that blocks for minutes (the Firebird maintenance poll) turns
+		// this wait into a hang with no way out. The session's cancel flag
+		// is the signal such a task can watch, so shutdown raises it here,
+		// before waiting for anyone. Safe under m_mtx: RequestCancel is one
+		// atomic store and takes no lock of its own, and the queue entry
+		// pins nothing beyond the pointer we already hold.
+		for (auto& kv : m_sessions)
+			if (kv.first != nullptr) kv.first->RequestCancel();
 	}
 	m_cv.notify_all();
 
 	// Wait for every detached worker to exit. m_aliveWorkers decrements
 	// at the end of each WorkerLoop and notifies m_stopCv.
+	//
+	// Timed, and it keeps waiting — leaving early would let a detached
+	// worker run on into session teardown, which is the use-after-free
+	// this drain exists to prevent. What the deadline buys is a VOICE:
+	// a wait that says nothing is indistinguishable from a deadlock, and
+	// reading that difference cost a full-memory dump (2026-08-03: main
+	// parked here while a worker sat in the Firebird sweep poll, which
+	// was passing nullptr for its cancel token).
 	std::unique_lock<std::mutex> lk(m_stopMtx);
-	m_stopCv.wait(lk, [this]() {
+	while (!m_stopCv.wait_for(lk, kStopWaitReport, [this]() {
 		return m_aliveWorkers.load(std::memory_order_acquire) == 0;
-	});
+	})) {
+		wxLogWarning(wxT("worker pool: still waiting on %lu worker(s) after stop"),
+		             (unsigned long)m_aliveWorkers.load(std::memory_order_acquire));
+	}
 }
 
