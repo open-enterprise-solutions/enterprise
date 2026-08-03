@@ -1,7 +1,7 @@
 #ifndef __IB_JOB_SCHEDULE_H__
 #define __IB_JOB_SCHEDULE_H__
 
-// ibJobSchedule — WHEN a job is due.
+// ibJobScheduleDescription — WHEN a job is due.
 //
 // Split out of ibJobDescription because it is the part a user edits and the part
 // that is worth testing on its own: everything here is a pure function of (last
@@ -41,6 +41,8 @@
 
 #include <wx/datetime.h>
 
+class ibDataValue;   // storage door — see ibJobScheduleDescriptionMemory at the bottom
+
 // Bit per weekday, Monday = bit 0 (matching how a week is written, not how
 // wxDateTime numbers it — the conversion lives in the .cpp).
 enum ibJobWeekDay : std::uint8_t {
@@ -57,7 +59,21 @@ enum ibJobWeekDay : std::uint8_t {
 	ibJobWeekDay_Any       = 0x7F,
 };
 
-struct BACKEND_API ibJobSchedule {
+// Which occurrence of a weekday inside its month — "the second Tuesday", "the last Friday". Counted
+// from the start except for Last, which is counted from the end; a month has four or five of any
+// given weekday, so "the fifth" simply does not occur in most months, the same honest reading the
+// day-of-month mask gives "the 31st". 0 = the ordinal is not used at all.
+enum ibJobOrdinal : std::uint8_t {
+	ibJobOrdinal_None   = 0,
+	ibJobOrdinal_First  = 1,
+	ibJobOrdinal_Second = 2,
+	ibJobOrdinal_Third  = 3,
+	ibJobOrdinal_Fourth = 4,
+	ibJobOrdinal_Fifth  = 5,
+	ibJobOrdinal_Last   = 255,
+};
+
+struct BACKEND_API ibJobScheduleDescription {
 
 	// ---- repetition ------------------------------------------------------
 	// Minimum seconds between two runs. Must be positive: a job with no
@@ -90,36 +106,56 @@ struct BACKEND_API ibJobSchedule {
 	wxDateTime m_activeFrom;
 	wxDateTime m_activeTo;
 
-	// ---- the two questions ----------------------------------------------
+	// ---- counted from the END of the month -------------------------------
+	// The same day-of-month idea read backwards: bit 0 = the LAST day, bit 1 = the day before it.
+	// A separate mask rather than a direction flag on the one above, because "the 1st and the last"
+	// is an ordinary wish and a single field with a direction cannot say it. Zero = not used; the
+	// two masks are OR-ed, so naming both means either matches.
+	std::uint32_t m_daysOfMonthFromEnd = 0;
 
-	// Does the calendar allow `moment` (local time)? Pure — pass the moment in
-	// so this is testable without waiting for Tuesday.
-	bool IsAllowed(const wxDateTime& moment) const;
+	// ---- the Nth weekday of the month ------------------------------------
+	// "The second Tuesday", "the last Friday". m_weekdayOrdinal counts occurrences of the weekday
+	// WITHIN the month: 1..5 from the start, or ibJobOrdinal_Last for the final one; 0 = not used.
+	// Which weekday is m_daysOfWeek — it must then name exactly one day, or the ordinal has nothing
+	// to count. Direction is carried by the value itself, so there is no second field to contradict.
+	std::uint8_t m_weekdayOrdinal = 0;
 
-	// Is the schedule usable at all? A non-positive interval, an out-of-range
-	// window or an empty day mask would make a job that can never run — worth
-	// refusing at registration rather than debugging as silence.
+	// ---- how OFTEN, when the masks say WHICH ------------------------------
+	// A mask answers "which days", never "how often": every Monday and every other Monday have the
+	// same mask. These are the period, in whole weeks / months, counted from m_periodAnchor (or from
+	// m_activeFrom when the anchor is unset, or the epoch when neither is). 0 or 1 = every one.
+	//
+	// Counted from a FIXED anchor rather than from the last run on purpose: a run that happens late
+	// must not shift every later run with it, which is exactly what "count from last time" does.
+	std::uint16_t m_everyNWeeks  = 0;
+	std::uint16_t m_everyNMonths = 0;
+	wxDateTime    m_periodAnchor;
+
+	// ---- stop after ------------------------------------------------------
+	// Minutes from midnight after which a pass must not START, even though the window still allows
+	// it. Distinct from m_endMinute: the window says when work may happen, this says when it is too
+	// late to begin something that will run long. -1 = not used.
+	//
+	// It gates the START only. Cutting a pass off mid-flight is the cancel token's job, and belongs
+	// to whoever knows what half-done means for that work — a backup does not survive being halved.
+	int m_stopAfterMinute = -1;
+
+	// ---- the shape, not the meaning --------------------------------------
+
+	// Is this description WELL FORMED? A non-positive interval, a half-declared window, an ordinal
+	// with no single weekday to count. Deliberately the only judgement kept here: it is a statement
+	// about the fields themselves, the kind an editor makes while the user types. WHEN the job runs
+	// is not a property of the data — see ibJobScheduleRules.
 	bool IsValid() const;
 
-	// A human sentence for this schedule — "Every 10 minutes, 10:00-15:00, Tue,
-	// in March". Localised, built from the same fields an editor shows, so a
-	// settings list and a log line say the same thing without either restating
-	// the rules. Omits everything left at "any", because naming defaults is how
-	// a description stops being read.
-	wxString ToString() const;
-
-	// The next moment this schedule allows, at or after `notBefore` — the
-	// CALENDAR's answer, so it accounts for windows, weekdays, month days and
-	// months, not just the interval. Invalid when nothing matches within a year
-	// (a schedule naming, say, February 30th).
-	//
-	// Derived on demand and never stored: a "next run" kept in a field is one
-	// more thing that can disagree with reality after a restart or a clock change.
-	wxDateTime NextAllowedAfter(const wxDateTime& notBefore) const;
+	// Value semantics — two schedules are the same when every field is, which is what an editor
+	// needs to know whether the user actually changed anything.
+	bool operator==(const ibJobScheduleDescription& other) const;
+	bool operator!=(const ibJobScheduleDescription& other) const { return !(*this == other); }
 
 	// Convenience for the common shapes, so a caller does not assemble bits.
-	static ibJobSchedule EverySeconds(int seconds);
-	static ibJobSchedule Nightly(int startHour, int endHour);
+	static ibJobScheduleDescription EverySeconds(int seconds);
+	static ibJobScheduleDescription Nightly(int startHour, int endHour);
 
 	// Minutes-from-midnight helper, so call sites read as clock time.
 	static int AtTime(int hour, int minute = 0) { return hour * 60 + minute; }
@@ -127,6 +163,59 @@ struct BACKEND_API ibJobSchedule {
 	// Window test, exposed for tests: [start, end) in minutes, wrapping when
 	// start > end. Either bound negative means "no window", always inside.
 	static bool IsInsideWindow(int startMinute, int endMinute, int nowMinute);
+};
+
+////////////////////////////////////////////////////////////////////////////
+// THE RULES — what a schedule MEANS, kept away from what it IS.
+//
+// The description above is data: fields a form edits and a serialiser writes down. Reading those
+// fields as "may this job run now" is a decision, and decisions belong with whoever makes them —
+// the manager, which composes these answers with the last run to get a due moment (ibJobManager::
+// IsDue). Static and pure, so they stay testable without standing a manager up: a schedule and a
+// moment in, an answer out.
+////////////////////////////////////////////////////////////////////////////
+class BACKEND_API ibJobScheduleRules {
+public:
+	// Does the calendar allow `moment` (local time)? Windows, weekdays, month days from either end,
+	// the Nth weekday, the every-N phase and the validity range — all of it, one answer.
+	static bool IsAllowed(const ibJobScheduleDescription& schedule, const wxDateTime& moment);
+
+	// The first moment the calendar allows AT OR AFTER `notBefore`. At or after, not strictly after:
+	// a moment that already qualifies IS the answer, which is what makes a time of day read as "not
+	// before" and lets a missed night run late instead of vanishing. Invalid when nothing matches
+	// within a year (a schedule naming, say, February 30th).
+	//
+	// Derived on demand and never stored: a "next run" kept in a field is one more thing that can
+	// disagree with reality after a restart or a clock change.
+	static wxDateTime NextAllowedAfter(const ibJobScheduleDescription& schedule, const wxDateTime& notBefore);
+
+	// A human sentence — "Every 10 minutes, 10:00-15:00, Tue, in March". Localised, built from the
+	// same fields an editor shows, so a settings list and a log line say the same thing without
+	// either restating the rules. Omits everything left at "any", because naming defaults is how a
+	// description stops being read.
+	static wxString Describe(const ibJobScheduleDescription& schedule);
+};
+
+////////////////////////////////////////////////////////////////////////////
+// The serialiser, split from the data the way every other description in the tree is split from
+// its storage (see docs/descriptions.md): the struct above says what a schedule IS, this says how
+// it is written down. Keeping them apart is what lets the struct stay a plain value — copyable,
+// comparable, usable in a form's state — while the node shape evolves on its own.
+//
+// NODE SHAPE — one child node, fields addressed BY NAME:
+//   IntervalSeconds, StartMinute, EndMinute, StopAfterMinute : s32 (minutes from midnight; -1 = unset)
+//   DaysOfWeek, DaysOfMonth, DaysOfMonthFromEnd, Months      : s32 bit masks (0 = any)
+//   WeekdayOrdinal, EveryNWeeks, EveryNMonths                : s32 (0 = unused)
+//   PeriodAnchor, ActiveFrom, ActiveTo                       : Date (0 = invalid / unbounded)
+//
+// Names rather than positions, so adding or dropping a field keeps old data readable: an absent
+// name leaves the member at its default — and every default here means "not restricted", never
+// "restricted to nothing", which would silently produce a job that can never run.
+////////////////////////////////////////////////////////////////////////////
+class BACKEND_API ibJobScheduleDescriptionMemory {
+public:
+	static bool ReadNode(const ibDataValue& value, ibJobScheduleDescription& schedule);
+	static bool WriteNode(ibDataValue& value, const ibJobScheduleDescription& schedule);
 };
 
 #endif // !__IB_JOB_SCHEDULE_H__

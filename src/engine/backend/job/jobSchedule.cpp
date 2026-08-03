@@ -1,8 +1,10 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Description : ibJobSchedule — the calendar half of "is this job due?"
+//	Description : ibJobScheduleDescription — the calendar half of "is this job due?"
 ////////////////////////////////////////////////////////////////////////////
 
 #include "jobSchedule.h"
+
+#include "backend/serialize/dataBuilder.h"   // ibDataNode — the storage door (ReadData / WriteData)
 
 namespace {
 
@@ -18,7 +20,7 @@ std::uint8_t WeekDayBit(const wxDateTime& moment)
 
 } // namespace
 
-bool ibJobSchedule::IsInsideWindow(int startMinute, int endMinute, int nowMinute)
+bool ibJobScheduleDescription::IsInsideWindow(int startMinute, int endMinute, int nowMinute)
 {
 	if (startMinute < 0 || endMinute < 0)
 		return true;   // no window declared — always inside
@@ -31,48 +33,106 @@ bool ibJobSchedule::IsInsideWindow(int startMinute, int endMinute, int nowMinute
 	return nowMinute >= startMinute || nowMinute < endMinute;
 }
 
-bool ibJobSchedule::IsAllowed(const wxDateTime& moment) const
+bool ibJobScheduleRules::IsAllowed(const ibJobScheduleDescription& self, const wxDateTime& moment)
 {
 	if (!moment.IsValid())
 		return false;
 
 	// Validity range first — outside it nothing else matters.
-	if (m_activeFrom.IsValid() && moment < m_activeFrom)
+	if (self.m_activeFrom.IsValid() && moment < self.m_activeFrom)
 		return false;
-	if (m_activeTo.IsValid() && moment > m_activeTo)
+	if (self.m_activeTo.IsValid() && moment > self.m_activeTo)
 		return false;
 
 	// Month. Bit 0 = January; wxDateTime::Jan is 0 as well.
-	if (m_months != 0) {
+	if (self.m_months != 0) {
 		const int monthIndex = static_cast<int>(moment.GetMonth());
-		if ((m_months & (1u << monthIndex)) == 0)
+		if ((self.m_months & (1u << monthIndex)) == 0)
 			return false;
 	}
 
-	// Day of month. Bit 0 = the 1st. A month with no 31st simply never matches
-	// a "31st" schedule — the honest reading of "on the 31st", and better than
-	// silently sliding to the 30th, which would make the job run in months the
-	// author did not name.
-	if (m_daysOfMonth != 0) {
-		const int day = static_cast<int>(moment.GetDay());   // 1..31
-		if ((m_daysOfMonth & (1u << (day - 1))) == 0)
+	// Day of month, from the START and from the END. Bit 0 is the 1st in one mask and the LAST day
+	// in the other; naming both means either matches, which is what "the 1st and the last day" is.
+	// A month with no 31st simply never matches a "31st" schedule — the honest reading, and better
+	// than sliding to the 30th, which would make the job run in months the author did not name.
+	if (self.m_daysOfMonth != 0 || self.m_daysOfMonthFromEnd != 0) {
+		const int day        = static_cast<int>(moment.GetDay());              // 1..31
+		const int daysInMonth = static_cast<int>(wxDateTime::GetNumberOfDays(moment.GetMonth(), moment.GetYear()));
+		const int fromEnd    = daysInMonth - day;                              // 0 = the last day
+
+		const bool byStart = self.m_daysOfMonth != 0
+		                  && (self.m_daysOfMonth & (1u << (day - 1))) != 0;
+		const bool byEnd   = self.m_daysOfMonthFromEnd != 0
+		                  && fromEnd < 32
+		                  && (self.m_daysOfMonthFromEnd & (1u << fromEnd)) != 0;
+		if (!byStart && !byEnd)
 			return false;
 	}
 
 	// Day of week. Zero is treated as "any" rather than "never": an empty mask
 	// is what an untouched control produces, and a job that silently never runs
 	// is the worst possible reading of "the user did not choose days".
-	if (m_daysOfWeek != 0 && m_daysOfWeek != ibJobWeekDay_Any) {
-		if ((m_daysOfWeek & WeekDayBit(moment)) == 0)
+	if (self.m_daysOfWeek != 0 && self.m_daysOfWeek != ibJobWeekDay_Any) {
+		if ((self.m_daysOfWeek & WeekDayBit(moment)) == 0)
 			return false;
+	}
+
+	// WHICH occurrence of that weekday — "the second Tuesday", "the last Friday". Counted within the
+	// month, so the arithmetic is the day number, not a calendar walk: the Nth occurrence covers days
+	// 7(N-1)+1 .. 7N, and the last one is whatever falls in the final seven days.
+	if (self.m_weekdayOrdinal != ibJobOrdinal_None) {
+		const int day         = static_cast<int>(moment.GetDay());
+		const int daysInMonth = static_cast<int>(wxDateTime::GetNumberOfDays(moment.GetMonth(), moment.GetYear()));
+		if (self.m_weekdayOrdinal == ibJobOrdinal_Last) {
+			if (day + 7 <= daysInMonth)
+				return false;   // another one of this weekday follows — so this is not the last
+		}
+		else {
+			const int occurrence = (day - 1) / 7 + 1;
+			if (occurrence != static_cast<int>(self.m_weekdayOrdinal))
+				return false;
+		}
+	}
+
+	// HOW OFTEN, when the masks above said only WHICH. Counted from a fixed anchor so a late run
+	// cannot shift every later one: the phase belongs to the calendar, not to our history.
+	if (self.m_everyNWeeks > 1 || self.m_everyNMonths > 1) {
+		const wxDateTime anchor = self.m_periodAnchor.IsValid() ? self.m_periodAnchor
+		                        : (self.m_activeFrom.IsValid() ? self.m_activeFrom
+		                                                  : wxDateTime(1, wxDateTime::Jan, 1970, 0, 0, 0));
+		if (self.m_everyNWeeks > 1) {
+			// Whole weeks between the two dates, floor — both ends read at midnight so a time of day
+			// cannot move a run into the neighbouring period.
+			const wxDateTime a = anchor.GetDateOnly();
+			const wxDateTime m = moment.GetDateOnly();
+			const long days = (m - a).GetDays();
+			const long weeks = (days >= 0 ? days : days - 6) / 7;   // floor for negatives too
+			if (weeks % static_cast<long>(self.m_everyNWeeks) != 0)
+				return false;
+		}
+		if (self.m_everyNMonths > 1) {
+			const long months = (static_cast<long>(moment.GetYear()) - anchor.GetYear()) * 12
+			                  + (static_cast<long>(moment.GetMonth()) - anchor.GetMonth());
+			if (months % static_cast<long>(self.m_everyNMonths) != 0)
+				return false;
+		}
 	}
 
 	// Time of day.
 	const int nowMinute = moment.GetHour() * 60 + moment.GetMinute();
-	return IsInsideWindow(m_startMinute, m_endMinute, nowMinute);
+	if (!ibJobScheduleDescription::IsInsideWindow(self.m_startMinute, self.m_endMinute, nowMinute))
+		return false;
+
+	// TOO LATE TO BEGIN. The window says when work may happen; this says when starting something
+	// that runs long stops being a good idea. Gates the START only — a pass already under way is
+	// stopped, if at all, through the cancel token, by whoever knows what half-done means for it.
+	if (self.m_stopAfterMinute >= 0 && nowMinute >= self.m_stopAfterMinute)
+		return false;
+
+	return true;
 }
 
-bool ibJobSchedule::IsValid() const
+bool ibJobScheduleDescription::IsValid() const
 {
 	if (m_intervalSeconds <= 0)
 		return false;
@@ -92,6 +152,27 @@ bool ibJobSchedule::IsValid() const
 	// A day-of-month mask that names only days beyond 31 can never match.
 	if (m_daysOfMonth != 0 && (m_daysOfMonth & 0x7FFFFFFFu) == 0)
 		return false;
+	if (m_daysOfMonthFromEnd != 0 && (m_daysOfMonthFromEnd & 0x7FFFFFFFu) == 0)
+		return false;
+
+	// An ordinal counts occurrences of ONE weekday; with several named there is nothing to count,
+	// and with none the ordinal has no subject at all.
+	if (m_weekdayOrdinal != ibJobOrdinal_None) {
+		if (m_weekdayOrdinal > ibJobOrdinal_Fifth && m_weekdayOrdinal != ibJobOrdinal_Last)
+			return false;
+		const std::uint8_t days = (m_daysOfWeek == 0) ? ibJobWeekDay_Any : m_daysOfWeek;
+		const bool exactlyOne = days != 0 && (days & (days - 1)) == 0;
+		if (!exactlyOne)
+			return false;
+	}
+
+	// "Every N" with a stop-after that precedes the window start would gate the job forever.
+	if (m_stopAfterMinute >= 0) {
+		if (m_stopAfterMinute > 24 * 60)
+			return false;
+		if (m_startMinute >= 0 && m_stopAfterMinute <= m_startMinute)
+			return false;
+	}
 
 	// Months beyond December, likewise.
 	if (m_months != 0 && (m_months & 0x0FFFu) == 0)
@@ -176,31 +257,31 @@ wxString FormatMonthDays(std::uint32_t mask)
 
 } // namespace
 
-wxString ibJobSchedule::ToString() const
+wxString ibJobScheduleRules::Describe(const ibJobScheduleDescription& self)
 {
-	wxString out = FormatInterval(m_intervalSeconds);
+	wxString out = FormatInterval(self.m_intervalSeconds);
 
 	// Everything below is skipped when left at "any" — a description that
 	// restates the defaults is one nobody finishes reading.
-	if (m_startMinute >= 0 && m_endMinute >= 0) {
+	if (self.m_startMinute >= 0 && self.m_endMinute >= 0) {
 		out += wxString::Format(wxT(", %s-%s"),
-			FormatMinute(m_startMinute), FormatMinute(m_endMinute));
+			FormatMinute(self.m_startMinute), FormatMinute(self.m_endMinute));
 	}
-	if (m_daysOfWeek != 0 && m_daysOfWeek != ibJobWeekDay_Any)
-		out += wxT(", ") + FormatWeekDays(m_daysOfWeek);
-	if (m_daysOfMonth != 0)
-		out += wxString::Format(_(", on day %s"), FormatMonthDays(m_daysOfMonth));
-	if (m_months != 0)
-		out += wxT(", ") + FormatMonths(m_months);
-	if (m_activeFrom.IsValid())
-		out += wxString::Format(_(", from %s"), m_activeFrom.FormatDate());
-	if (m_activeTo.IsValid())
-		out += wxString::Format(_(", until %s"), m_activeTo.FormatDate());
+	if (self.m_daysOfWeek != 0 && self.m_daysOfWeek != ibJobWeekDay_Any)
+		out += wxT(", ") + FormatWeekDays(self.m_daysOfWeek);
+	if (self.m_daysOfMonth != 0)
+		out += wxString::Format(_(", on day %s"), FormatMonthDays(self.m_daysOfMonth));
+	if (self.m_months != 0)
+		out += wxT(", ") + FormatMonths(self.m_months);
+	if (self.m_activeFrom.IsValid())
+		out += wxString::Format(_(", from %s"), self.m_activeFrom.FormatDate());
+	if (self.m_activeTo.IsValid())
+		out += wxString::Format(_(", until %s"), self.m_activeTo.FormatDate());
 
 	return out;
 }
 
-wxDateTime ibJobSchedule::NextAllowedAfter(const wxDateTime& notBefore) const
+wxDateTime ibJobScheduleRules::NextAllowedAfter(const ibJobScheduleDescription& self, const wxDateTime& notBefore)
 {
 	if (!notBefore.IsValid())
 		return wxInvalidDateTime;
@@ -225,12 +306,12 @@ wxDateTime ibJobSchedule::NextAllowedAfter(const wxDateTime& notBefore) const
 	// The day-level test with the time window removed: those fields cannot change
 	// within a day, so a disallowed day is skipped whole rather than tested 1440
 	// times for 1439 wasted answers.
-	ibJobSchedule dayOnly = *this;
+	ibJobScheduleDescription dayOnly = self;
 	dayOnly.m_startMinute = -1;
 	dayOnly.m_endMinute   = -1;
 
 	for (int day = 0; day < kMaxDays; ++day) {
-		if (!dayOnly.IsAllowed(moment)) {
+		if (!IsAllowed(dayOnly, moment)) {
 			// Next midnight. Recomputed from the date part so a partial first day
 			// does not shift every following one.
 			moment = moment.GetDateOnly() + wxTimeSpan::Days(1);
@@ -239,7 +320,7 @@ wxDateTime ibJobSchedule::NextAllowedAfter(const wxDateTime& notBefore) const
 
 		// This day qualifies — walk its remaining minutes for the window.
 		for (int i = 0; i < kMinutesPerDay; ++i) {
-			if (IsAllowed(moment))
+			if (IsAllowed(self, moment))
 				return moment;
 
 			const wxDateTime next = moment + wxTimeSpan::Minutes(1);
@@ -254,16 +335,91 @@ wxDateTime ibJobSchedule::NextAllowedAfter(const wxDateTime& notBefore) const
 	return wxInvalidDateTime;
 }
 
-ibJobSchedule ibJobSchedule::EverySeconds(int seconds)
+bool ibJobScheduleDescription::operator==(const ibJobScheduleDescription& o) const
 {
-	ibJobSchedule s;
+	return m_intervalSeconds    == o.m_intervalSeconds
+	    && m_startMinute        == o.m_startMinute
+	    && m_endMinute          == o.m_endMinute
+	    && m_stopAfterMinute    == o.m_stopAfterMinute
+	    && m_daysOfWeek         == o.m_daysOfWeek
+	    && m_daysOfMonth        == o.m_daysOfMonth
+	    && m_daysOfMonthFromEnd == o.m_daysOfMonthFromEnd
+	    && m_months             == o.m_months
+	    && m_weekdayOrdinal     == o.m_weekdayOrdinal
+	    && m_everyNWeeks        == o.m_everyNWeeks
+	    && m_everyNMonths       == o.m_everyNMonths
+	    && m_periodAnchor       == o.m_periodAnchor
+	    && m_activeFrom         == o.m_activeFrom
+	    && m_activeTo           == o.m_activeTo;
+}
+
+// ---------------------------------------------------------------------------
+// ibJobScheduleDescriptionMemory — the serialiser. Node shape documented at the declaration.
+// ---------------------------------------------------------------------------
+
+bool ibJobScheduleDescriptionMemory::WriteNode(ibDataValue& value, const ibJobScheduleDescription& s)
+{
+	auto root = std::make_shared<ibDataNode>();
+	root->SetValue(wxT("IntervalSeconds"),    (s32)s.m_intervalSeconds);
+	root->SetValue(wxT("StartMinute"),        (s32)s.m_startMinute);
+	root->SetValue(wxT("EndMinute"),          (s32)s.m_endMinute);
+	root->SetValue(wxT("StopAfterMinute"),    (s32)s.m_stopAfterMinute);
+	root->SetValue(wxT("DaysOfWeek"),         (s32)s.m_daysOfWeek);
+	root->SetValue(wxT("DaysOfMonth"),        (s32)s.m_daysOfMonth);
+	root->SetValue(wxT("DaysOfMonthFromEnd"), (s32)s.m_daysOfMonthFromEnd);
+	root->SetValue(wxT("Months"),             (s32)s.m_months);
+	root->SetValue(wxT("WeekdayOrdinal"),     (s32)s.m_weekdayOrdinal);
+	root->SetValue(wxT("EveryNWeeks"),        (s32)s.m_everyNWeeks);
+	root->SetValue(wxT("EveryNMonths"),       (s32)s.m_everyNMonths);
+	root->SetValue(wxT("PeriodAnchor"),       s.m_periodAnchor);
+	root->SetValue(wxT("ActiveFrom"),         s.m_activeFrom);
+	root->SetValue(wxT("ActiveTo"),           s.m_activeTo);
+	value = ibDataValue::Child(root);
+	return true;
+}
+
+bool ibJobScheduleDescriptionMemory::ReadNode(const ibDataValue& value, ibJobScheduleDescription& s)
+{
+	const std::shared_ptr<ibDataNode>& root = value.AsChild();
+	if (!root)
+		return false;
+
+	// FindField before reading, so an absent name leaves the member at its default. That is the
+	// whole forward-compatibility story: a blob written before a field existed must load as "not
+	// restricted", never as "restricted to nothing".
+	const auto readInt = [&root](const wxString& name, auto& target) {
+		if (root->FindField(name) != nullptr)
+			target = static_cast<typename std::remove_reference<decltype(target)>::type>(root->GetValue<s32>(name));
+	};
+
+	readInt(wxT("IntervalSeconds"),    s.m_intervalSeconds);
+	readInt(wxT("StartMinute"),        s.m_startMinute);
+	readInt(wxT("EndMinute"),          s.m_endMinute);
+	readInt(wxT("StopAfterMinute"),    s.m_stopAfterMinute);
+	readInt(wxT("DaysOfWeek"),         s.m_daysOfWeek);
+	readInt(wxT("DaysOfMonth"),        s.m_daysOfMonth);
+	readInt(wxT("DaysOfMonthFromEnd"), s.m_daysOfMonthFromEnd);
+	readInt(wxT("Months"),             s.m_months);
+	readInt(wxT("WeekdayOrdinal"),     s.m_weekdayOrdinal);
+	readInt(wxT("EveryNWeeks"),        s.m_everyNWeeks);
+	readInt(wxT("EveryNMonths"),       s.m_everyNMonths);
+
+	root->GetValue<wxDateTime>(wxT("PeriodAnchor"), s.m_periodAnchor);
+	root->GetValue<wxDateTime>(wxT("ActiveFrom"),   s.m_activeFrom);
+	root->GetValue<wxDateTime>(wxT("ActiveTo"),     s.m_activeTo);
+	return true;
+}
+
+ibJobScheduleDescription ibJobScheduleDescription::EverySeconds(int seconds)
+{
+	ibJobScheduleDescription s;
 	s.m_intervalSeconds = seconds;
 	return s;
 }
 
-ibJobSchedule ibJobSchedule::Nightly(int startHour, int endHour)
+ibJobScheduleDescription ibJobScheduleDescription::Nightly(int startHour, int endHour)
 {
-	ibJobSchedule s;
+	ibJobScheduleDescription s;
 	// Once a day, inside the window — the interval is what stops it from
 	// re-running every tick for the whole window.
 	s.m_intervalSeconds = 24 * 3600;

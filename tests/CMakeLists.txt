@@ -39,6 +39,7 @@ add_executable(oes_tests
     test_connectionPool.cpp
     test_session.cpp
     test_jobManager.cpp
+    test_jobSchedule.cpp
     test_module_manager_split.cpp
     # test_pagingRamTable.cpp  # API-rotted (ibValueModelTableBase renamed) — excluded until updated
     test_blobCompression.cpp

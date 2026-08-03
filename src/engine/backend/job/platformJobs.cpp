@@ -1,4 +1,4 @@
-﻿////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
 //	Description : the platform's own scheduled jobs — which, and how often
 ////////////////////////////////////////////////////////////////////////////
 
@@ -117,7 +117,7 @@ void ibRegisterPlatformJobs()
 	// longer for no gain. Contrast the Firebird backup/restore cycle, which IS
 	// heavy and therefore does declare a 02:00-05:00 window — declared inside the
 	// scheduler itself, not here.
-	fold.m_schedule = ibJobSchedule::EverySeconds(6 * 3600);
+	fold.m_schedule = ibJobScheduleDescription::EverySeconds(6 * 3600);
 
 	if (!manager->Register(fold)) {
 		// Logged inside Register with the reason. Startup continues: housekeeping

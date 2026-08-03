@@ -33,12 +33,16 @@ public:
 	// duplicate name, so re-opening a database does not stack up jobs.
 	static void Register();
 
-	// The job's body: run what is due, report whether anything ran.
+	// The two bodies, one per cadence. Each does its pass unconditionally: WHEN it is due is the
+	// schedule's question, answered before either is called — the job's interval and window, plus
+	// the shared clock in sys_job. Neither keeps a clock of its own; the pair of process-local
+	// statics that used to live in the driver is what made a sweep fire on every restart, because
+	// "never ran in THIS process" is not the same as "never ran".
 	//
-	// Blocking — the Services API calls return only when the operation finishes.
-	// That is exactly why this is a job: it runs on a worker, never on a thread
-	// anybody is waiting on.
-	static bool Run(ibSession* session);
+	// Blocking — the Services API calls return only when the operation finishes. That is exactly why
+	// these are jobs: they run on a worker, never on a thread anybody is waiting on.
+	static bool RunSweep(ibSession* session);
+	static bool RunBackupRestore(ibSession* session);
 };
 
 #endif // __FIREBIRD_MAINTENANCE_SCHEDULER_H__

@@ -135,7 +135,13 @@ public:
 	// nothing to offer here is a caller nobody can stop, and that shape is
 	// what hung shutdown until 2026-08-03. Must outlive the call; the job
 	// passes its session's flag, and the session outlives the task.
-	bool RunDueMaintenance(const std::atomic<bool>* cancelToken);
+	// One maintenance pass each, run unconditionally — the caller (the platform jobs
+	// firebird.sweep / firebird.backup) already decided that it is due. The cancel token is the
+	// running session's: a Services API pass is minutes of polling with no interpreter boundary in
+	// it, so it is the only thing that can stop it — the pool's shutdown and an administrator's
+	// cancel both arrive through it. Returns whether the operation reported success.
+	bool RunSweepNow(const std::atomic<bool>* cancelToken);
+	bool RunBackupRestoreNow(const std::atomic<bool>* cancelToken);
 
 protected:
 

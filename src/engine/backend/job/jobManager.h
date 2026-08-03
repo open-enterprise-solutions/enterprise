@@ -1,4 +1,4 @@
-﻿#ifndef __IB_JOB_MANAGER_H__
+#ifndef __IB_JOB_MANAGER_H__
 #define __IB_JOB_MANAGER_H__
 
 // ibJobManager — the owner of work that runs OUTSIDE the thread that asked for it.
@@ -44,7 +44,7 @@
 #include "backend/guid.h"        // ibGuid — a job names its user by key, never by name
 #include "backend/session/sessionHolder.h"
 #include "backend/compiler/value.h"        // ibValue — the argument-array gate
-#include "backend/job/jobSchedule.h"       // ibJobSchedule — when a job is due
+#include "backend/job/jobSchedule.h"       // ibJobScheduleDescription — when a job is due
 #include "backend/lock/lockHandle.h"       // ibLockHandle held per running job
 #include "backend/lock/lockHolder.h"       // ibLockHolder — base for the job's claim identity
 
@@ -174,7 +174,7 @@ struct BACKEND_API ibJobDescription {
 	// happens on the first tick after Register that the calendar allows: jobs are
 	// due immediately rather than one interval later, so a restart does not skip
 	// a pass.
-	ibJobSchedule m_schedule;
+	ibJobScheduleDescription m_schedule;
 };
 
 // How the last run ended. Kept for SCHEDULED jobs, which repeat and therefore
@@ -423,6 +423,11 @@ private:
 		// When this job entered the schedule. A job that has never run counts its
 		// first interval FROM HERE — see IsDue.
 		std::chrono::steady_clock::time_point m_registeredAt = std::chrono::steady_clock::now();
+		// The same moment on the WALL clock — the calendar speaks in local time, so a question like
+		// "was there a 02:00 between when we started watching and now?" cannot be asked on a steady
+		// clock. Used only for the first-run decision; every later one measures on the steady clock,
+		// where moving the system time cannot make a job fire twice.
+		wxDateTime                            m_registeredAtWall = wxDateTime::Now();
 		bool                                  m_everRun     = false;
 		// Set from the body's return value: the previous pass left work behind, so
 		// the interval is skipped and the job is due on the next tick.

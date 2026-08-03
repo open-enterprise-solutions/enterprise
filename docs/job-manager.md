@@ -237,8 +237,20 @@ finished.
 
 ## 4a. The schedule
 
-`ibJobSchedule` (`backend/job/jobSchedule.h`) — split out because it is the part a user edits
-and the part worth testing on its own: every field is a pure function of (last run, now).
+Three names, one subject — the split landed 2026-08-03, and it is the same shape every other
+description in the tree has (see `descriptions.md`):
+
+| | Holds | Knows |
+|---|---|---|
+| `ibJobScheduleDescription` | the fields a form edits, `operator==`, `IsValid()` | the SHAPE of a schedule — nothing about time |
+| `ibJobScheduleDescriptionMemory` | `ReadNode` / `WriteNode` over `ibDataValue` | the storage format, and only that |
+| `ibJobScheduleRules` | `IsAllowed` / `NextAllowedAfter` / `Describe` | what a schedule MEANS — static, pure |
+| `ibJobManager::IsDue` | — | composes the rules with the last run into "run it now" |
+
+Why apart: a description is data. Reading its fields as "may this run now" is a decision, and a
+decision belongs with whoever makes it. Keeping the two together is what let the meaning drift
+into two places — the calendar in the struct, the interval in the manager — and a drifted
+meaning is what made a sweep fire on every application start.
 
 **Two independent questions, joined by AND.** The calendar answers *does this moment qualify*;
 the interval answers *has enough time passed*. That composition is what makes the common cases
@@ -270,9 +282,48 @@ Details that are decisions rather than defaults:
 - **`IsValid()` refuses what can never match** — empty window, inverted validity range,
   non-positive interval — at registration, rather than leaving it to be debugged as silence.
 
-`ToString()` renders the sentence a settings list shows ("Every 10 minutes, 10:00-15:00, Tue"),
-naming only what was set. `NextAllowedAfter()` computes the next qualifying moment **through
-the calendar**, so a Tuesday-only job does not promise tomorrow at 03:00.
+`ibJobScheduleRules::Describe()` renders the sentence a settings list shows ("Every 10 minutes,
+10:00-15:00, Tue"), naming only what was set. `NextAllowedAfter()` computes the next qualifying
+moment **through the calendar**, so a Tuesday-only job does not promise tomorrow at 03:00.
+
+### A time of day means NOT BEFORE, never ONLY AT (2026-08-03)
+
+`IsDue` no longer asks "does this instant qualify". It computes the DUE MOMENT and compares:
+
+```
+countFrom = (ever ran ? lastRun : registeredAt) + interval   // first run skips the interval
+dueAt     = NextAllowedAfter(countFrom)                      // the calendar moves it forward
+due       = dueAt <= now
+```
+
+Three consequences, each a bug that was:
+
+- **A missed hour is late, not cancelled.** Machine off at 02:00, started at 07:00 — the job runs
+  at 07:00, because 02:00 is behind us. Start at 10:00 with nothing missed and it waits for 02:00,
+  because that is ahead. One formula answers both, and that is the whole "schedule as a promise".
+- **A first run skips the interval.** Otherwise a weekly job could never start: no desktop client
+  lives a week, so the first gap never elapsed — the most carefully scheduled job was the one that
+  never fired. A plain cadence ("every six hours", no time of day) is protected by having no
+  calendar moment to point at, so its interval from registration is the whole answer.
+- **Cadence belongs to the schedule, not to a driver's memory.** Firebird maintenance kept its real
+  intervals (sweep 6 h, backup weekly) in process-local statics while its job asked every 60
+  seconds; a static resets with the process, so "never ran here" read as "run now" and a sweep
+  fired on every re-login. It is now two jobs — `firebird.sweep` and `firebird.backup` (weekly,
+  02:00–05:00 by CALENDAR, not by an `if` in the body) — and `sys_job` is the only clock.
+
+### Newer parameters
+
+Beyond week days / month days / months: `m_daysOfMonthFromEnd` (bit 0 = the last day — a separate
+mask, because "the 1st and the last" cannot be said with one field plus a direction),
+`m_weekdayOrdinal` ("the second Tuesday", `ibJobOrdinal_Last` for the final one),
+`m_everyNWeeks` / `m_everyNMonths` with `m_periodAnchor` (phase counted from a FIXED point, so a
+late run does not shift every later one), and `m_stopAfterMinute` — too late to BEGIN, gating the
+start only; cutting a pass off mid-flight is the cancel token's job, and belongs to whoever knows
+what half-done means for that work.
+
+Tested in `tests/test_jobSchedule.cpp` — pure, no manager needed: a schedule and a moment in, an
+answer out. The mapping against a familiar four-tab editor (and what is still missing: several
+windows in one day) lives in `job-schedule-parameters.md`.
 
 ## 5. The tick has three sources, one entry
 

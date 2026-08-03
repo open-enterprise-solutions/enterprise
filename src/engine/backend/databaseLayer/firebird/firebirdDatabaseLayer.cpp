@@ -679,42 +679,14 @@ bool ibDatabaseLayerFirebird::Open()
 // it — nothing is cached between calls except the two clocks below, which are
 // per-process and in memory (a restart re-arms "never run", and a skipped sweep
 // costs nothing but a later sweep).
-bool ibDatabaseLayerFirebird::RunDueMaintenance(const std::atomic<bool>* cancelToken)
+// WHEN either of these is due is not decided here any more. It used to be, in two process-local
+// statics — and a static is a clock that resets when the process does, so "never ran in this
+// process" read as "run it now" and a sweep fired on every restart. The schedule lives on the jobs
+// (firebird.sweep / firebird.backup, see firebirdMaintenanceScheduler.cpp), where the interval, the
+// night window and the shared sys_job clock decide together, once, across every process on the base.
+// What is left here is the pass itself.
+bool ibDatabaseLayerFirebird::RunSweepNow(const std::atomic<bool>* cancelToken)
 {
-	// Cadence — tuned for this driver's sweet spot (3–30 users, 100 GB cap).
-	// Sweep is cheap enough for several times a day; the BR cycle is heavy
-	// (~1 s/GB) and belongs off-hours.
-	constexpr int kSweepIntervalSeconds         = 6 * 3600;
-	constexpr int kBackupRestoreIntervalSeconds = 7 * 24 * 3600;
-	constexpr int kWindowStartHour              = 2;   // 02:00 local
-	constexpr int kWindowEndHour                = 5;   // 05:00 local
-
-	static std::atomic<uint64_t> s_lastSweepMs { 0 };
-	static std::atomic<uint64_t> s_lastBrMs    { 0 };
-
-	// "Never run in this process" is due at once. Right for the cheap sweep; the
-	// BR cycle layers the window on top, so a first boot during the day defers to
-	// the next 02:00 instead of freezing the application for minutes at launch.
-	const auto isOverdue = [](uint64_t lastMs, int intervalSeconds) {
-		if (lastMs == 0) return true;
-		const uint64_t nowMs = ibFb::NowUnixMs();
-		const uint64_t ageMs = (nowMs > lastMs) ? (nowMs - lastMs) : 0;
-		return ageMs >= static_cast<uint64_t>(intervalSeconds) * 1000ULL;
-	};
-
-	const auto inWindow = [kWindowStartHour, kWindowEndHour]() {
-		const std::time_t now = std::time(nullptr);
-		std::tm local{};
-#if defined(_MSC_VER)
-		localtime_s(&local, &now);
-#else
-		std::tm* p = std::localtime(&now);
-		if (p) local = *p;
-#endif
-		// [start, end); the default slot never crosses midnight.
-		return local.tm_hour >= kWindowStartHour && local.tm_hour < kWindowEndHour;
-	};
-
 	if (!m_pInterface || m_strDatabase.IsEmpty())
 		return false;
 
@@ -723,27 +695,21 @@ bool ibDatabaseLayerFirebird::RunDueMaintenance(const std::atomic<bool>* cancelT
 	conn.password = m_strPassword;
 	// conn.server stays empty -> service_mgr on the local host.
 
-	bool ran = false;
+	return ibFirebirdMaintenance::RunSweep(m_pInterface.get(), m_strDatabase, conn, cancelToken)
+	    == ibFirebirdMaintenance::Status::Ok;
+}
 
-	if (isOverdue(s_lastSweepMs.load(), kSweepIntervalSeconds)) {
-		ran = true;
-		if (ibFirebirdMaintenance::RunSweep(m_pInterface.get(), m_strDatabase, conn, cancelToken)
-		    == ibFirebirdMaintenance::Status::Ok) {
-			s_lastSweepMs.store(ibFb::NowUnixMs());
-		}
-	}
+bool ibDatabaseLayerFirebird::RunBackupRestoreNow(const std::atomic<bool>* cancelToken)
+{
+	if (!m_pInterface || m_strDatabase.IsEmpty())
+		return false;
 
-	// Heavy: due AND inside the window. Outside it the next ask tries again —
-	// no catch-up, no queue.
-	if (isOverdue(s_lastBrMs.load(), kBackupRestoreIntervalSeconds) && inWindow()) {
-		ran = true;
-		if (ibFirebirdMaintenance::RunBackupRestoreCycle(m_pInterface.get(), m_strDatabase, conn, cancelToken)
-		    == ibFirebirdMaintenance::Status::Ok) {
-			s_lastBrMs.store(ibFb::NowUnixMs());
-		}
-	}
+	ibFirebirdMaintenance::ServiceConnection conn;
+	conn.username = m_strUser;
+	conn.password = m_strPassword;
 
-	return ran;
+	return ibFirebirdMaintenance::RunBackupRestoreCycle(m_pInterface.get(), m_strDatabase, conn, cancelToken)
+	    == ibFirebirdMaintenance::Status::Ok;
 }
 // close database
 bool ibDatabaseLayerFirebird::Close()

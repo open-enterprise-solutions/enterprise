@@ -1,4 +1,4 @@
-﻿////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
 //	Description : ibJobManager — schedule + sessions for out-of-thread work
 ////////////////////////////////////////////////////////////////////////////
 
@@ -139,32 +139,49 @@ bool ibJobManager::IsDue(const ibJobEntry& e, std::chrono::steady_clock::time_po
 	// calendar answers WHETHER THIS MOMENT QUALIFIES, the interval answers
 	// WHETHER ENOUGH TIME HAS PASSED. Drop the calendar and the job runs at any
 	// hour; drop the interval and it re-runs on every tick for the whole window.
-	if (!e.m_desc.m_schedule.IsAllowed(wxDateTime::Now()))
-		return false;
-
-	// NEVER RAN IS NOT THE SAME AS DUE.
+	// ONE QUESTION: HAS THE DUE MOMENT ARRIVED? Not "does this instant qualify" — that reading is
+	// what let a missed hour vanish. A schedule is a promise: the moment it names either is still
+	// ahead (wait) or is already behind us (run now, late). Nothing about being late cancels the run.
 	//
-	// A job that has not run yet counts its first interval from the moment it
-	// entered the schedule — the same way it counts every later one from its last
-	// run. Treating "no history" as "run now" is what made every application start
-	// fire the whole schedule: a six-hourly fold would run at every launch, and a
-	// job whose time is 02:00 would run at 10:00 because nobody had recorded
-	// anything yet. The schedule is the answer, and the absence of a record is not
-	// a reason to ignore it.
-	if (!e.m_everRun)
-		return (now - e.m_registeredAt)
-		     >= std::chrono::seconds(e.m_desc.m_schedule.m_intervalSeconds);
+	// The due moment is computed, not remembered: take the point we last ran from, add the interval
+	// the schedule demands between runs, then ask the calendar for the first moment at or after that
+	// which it allows. A time of day therefore reads as NOT BEFORE rather than ONLY AT — start the
+	// base at 07:00 with a 02:00 job whose night has already passed and it runs at 07:00, because
+	// 02:00 is behind us; start it at 10:00 with nothing missed and it waits for 02:00, because that
+	// is ahead. Same formula answers both.
+	//
+	// FIRST RUN has no last-run to count from, so it counts from when we started watching — and it
+	// skips the interval, because an interval is the gap BETWEEN runs and there was no previous one.
+	// Without that a weekly backup could never start at all: no desktop client lives a week, so the
+	// first gap never elapsed and the most carefully scheduled job was the one that never fired.
+	// What protects a plain cadence ("every six hours", no time of day) from firing on every launch
+	// is that its calendar allows any moment, so the interval from registration is the whole answer.
+	const ibJobScheduleDescription& sched = e.m_desc.m_schedule;
+	wxDateTime countFrom;
+	if (e.m_everRun) {
+		countFrom = e.m_lastRunAt.IsValid() ? e.m_lastRunAt : e.m_registeredAtWall;
+		countFrom += wxTimeSpan::Seconds(sched.m_intervalSeconds);
+	}
+	else {
+		countFrom = e.m_registeredAtWall;
+		if (sched.m_startMinute < 0 && sched.m_endMinute < 0)
+			countFrom += wxTimeSpan::Seconds(sched.m_intervalSeconds);
+	}
 
-	// The previous pass paced itself and left work behind — continue on this tick
-	// rather than idling out the interval. Still gated by the calendar above, so
-	// a paced job cannot walk out of its window.
+	const wxDateTime dueAt = ibJobScheduleRules::NextAllowedAfter(sched, countFrom);
+	if (!dueAt.IsValid())
+		return false;   // the calendar names no moment at all — a schedule that can never run
+	if (dueAt.IsLaterThan(wxDateTime::Now()))
+		return false;   // still ahead
+
+	// The due moment has arrived. One guard left: a WALL clock decided that, and a wall clock can be
+	// moved. The steady clock is what makes a run twice in one second impossible regardless — unless
+	// the previous pass paced itself and asked to continue, which is a deliberate "again, now".
 	if (e.m_workRemains)
 		return true;
-
-	// Measured on a STEADY clock: moving the system clock must not be able to
-	// make a job fire twice or stall until the date comes back around. The
-	// calendar reads wall-clock time, because a user saying "02:00" means theirs.
-	return (now - e.m_lastRun) >= std::chrono::seconds(e.m_desc.m_schedule.m_intervalSeconds);
+	if (!e.m_everRun)
+		return true;
+	return (now - e.m_lastRun) >= std::chrono::seconds(sched.m_intervalSeconds);
 }
 
 void ibJobManager::HarvestFinished(ibJobEntry& e)
@@ -1051,7 +1068,7 @@ std::vector<ibJobState> ibJobManager::Snapshot() const
 		state.m_lastRunAt = e.m_lastRunAt;
 		state.m_error     = e.m_error;
 
-		state.m_schedule = e.m_desc.m_schedule.ToString();
+		state.m_schedule = ibJobScheduleRules::Describe(e.m_desc.m_schedule);
 
 		// Next run is DERIVED, not stored, and derived through the CALENDAR —
 		// "last run + interval" alone would promise 03:00 for a job that only
@@ -1061,7 +1078,7 @@ std::vector<ibJobState> ibJobManager::Snapshot() const
 		if (e.m_everRun && !e.m_workRemains && e.m_lastRunAt.IsValid()) {
 			const wxDateTime earliest =
 				e.m_lastRunAt + wxTimeSpan::Seconds(e.m_desc.m_schedule.m_intervalSeconds);
-			state.m_nextRunAt = e.m_desc.m_schedule.NextAllowedAfter(earliest);
+			state.m_nextRunAt = ibJobScheduleRules::NextAllowedAfter(e.m_desc.m_schedule, earliest);
 		}
 
 		out.push_back(std::move(state));
