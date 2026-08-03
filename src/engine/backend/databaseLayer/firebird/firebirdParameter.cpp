@@ -228,7 +228,7 @@ ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pI
 bool ibDatabaseParameterFirebird::ResetBlob(isc_db_handle database, isc_tr_handle transaction)
 {
 	// If the databaes and transaction handles aren't valid then don't try to do anything
-	if ((database == NULL) || (transaction == NULL))
+	if ((database == 0) || (transaction == 0))
 		return false;
 
 	//m_BlobId = NULL;

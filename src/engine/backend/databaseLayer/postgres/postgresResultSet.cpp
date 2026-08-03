@@ -144,9 +144,9 @@ wxDateTime ibDatabaseResultSetPostgres::GetResultDate(int nField)
 		if (m_pInterface->GetPQgetisnull()(m_pResult, m_nCurrentRow, nField - 1) != 1)
 		{
 			wxString strDateValue = ConvertFromUnicodeStream(m_pInterface->GetPQgetvalue()(m_pResult, m_nCurrentRow, nField - 1));
-			if (dateValue.ParseDateTime(strDateValue) == NULL)
+			if (!dateValue.ParseDateTime(strDateValue))
 			{
-				if (dateValue.ParseDate(strDateValue) != NULL)
+				if (dateValue.ParseDate(strDateValue))
 				{
 					dateValue.SetHour(0);
 					dateValue.SetMinute(0);
@@ -165,9 +165,9 @@ wxDateTime ibDatabaseResultSetPostgres::GetResultDate(int nField)
 		if (m_pInterface->GetPQgetisnull()(m_pResult, m_nCurrentRow, nField - 1) != 1)
 		{
 			wxString strDateValue = ConvertFromUnicodeStream(m_pInterface->GetPQgetvalue()(m_pResult, m_nCurrentRow, nField - 1));
-			if (dateValue.ParseDateTime(strDateValue) == NULL)
+			if (!dateValue.ParseDateTime(strDateValue))
 			{
-				if (dateValue.ParseDate(strDateValue) != NULL)
+				if (dateValue.ParseDate(strDateValue))
 				{
 					dateValue.SetHour(0);
 					dateValue.SetMinute(0);

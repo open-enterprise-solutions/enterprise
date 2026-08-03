@@ -91,7 +91,7 @@ ibPreparedStatementFirebird* ibPreparedStatementFirebird::CreateStatement(ibInte
 	}
 
 	// Start a new transaction if appropriate
-	if (pTransaction == NULL)
+	if (pTransaction == 0)
 	{
 		ISC_STATUS_ARRAY status;
 
