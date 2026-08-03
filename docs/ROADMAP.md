@@ -56,7 +56,7 @@ compiles with 0 errors; `oes_tests` **855/855**; `oes_frontend_runtime_test` **2
 | **Form attribute binding** | Surface unspec'd, runtime reference chain untested | *Surface contract* written; runtime chain + the non-owning-cell rule pinned by tests |
 | **JSON provider** | `Read` a silent no-op | Full parser (unwired by design), with its lossy boundary pinned in tests |
 | **WrapSizer** | Implemented end to end, registered nowhere — dead on both platforms | Registered; reachable on desktop and web |
-| **CI** | None | `.github/workflows/ci.yml` — Linux suite, Windows build+suite, GUI under Xvfb. **Windows is green: 855/855.** Linux builds and runs, 820/862 — see [portability.md](portability.md) |
+| **CI** | None | `.github/workflows/ci.yml` — Linux suite, Windows build+suite, GUI under Xvfb. **Both platforms green and at the same count: 914/914** (run of 2026-08-02, confirmed in the job logs — Linux 98.7 s, Windows 140.1 s; the GUI job is 26/26 under Xvfb). See [portability.md](portability.md) |
 | **Portability** | GCC/Linux had not compiled the tree in a long time | Fourteen CI rounds took it from "does not compile" to green build + 95% of the suite; the rules are written down in [portability.md](portability.md) |
 
 **Defects surfaced, none of them in the new code** — they had been sitting in paths nothing

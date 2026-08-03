@@ -162,25 +162,28 @@ including the instances the compiler had not reached yet.
 | **Windows x86** (MSVC, `.sln`) | green | — | The shipping build |
 | **Linux x64** (GCC 11, libstdc++, wxGTK) | green | **914/914** | Identical count to Windows — same tests, same result |
 | **GUI (Linux, Xvfb)** | green | **26/26** | `libfrontend.so` links; the runtime-form suite passes under Xvfb |
-| **macOS** | not in CI | — | A colleague builds locally; ARM64, libc++, wxOSX — three differences at once |
+| **macOS 14 arm64** (Apple Clang, libc++, wxOSX) | in CI as of 2026-08-03 | pending its first run | Was already building locally on a colleague's Mac; the job makes that standing rather than remembered. ARM64, libc++, wxOSX — three differences at once, and the only place `guid.cpp`'s CFUUID branch compiles |
 
 The engine — backend, compiler, interpreter, query engine, all five drivers — is cross-platform
 as of 2026-08-02. Two toolchains, two standard libraries, two 64-bit models, one result.
 
 What that claim does **not** cover, so nobody reads more into the table than it says:
 
-- **The applications are never linked in CI.** `enterprise`, `designer`, `daemon`, `launcher`
-  and `codeRunner` have CMake targets — with `if(APPLE)` bundle branches already written — but
-  no job builds them, on any platform. Their sources are thin (73 files against the engine's
-  760) and only six touch Win32, all already guarded, so this is likely cheap to close.
+- ~~**The applications are never linked in CI.**~~ **Closed 2026-08-03**: every job now ends
+  with a `Build the applications` step (the default target), so `enterprise`, `designer`,
+  `daemon`, `launcher`, `codeRunner` and `simplePlugin` link on all three platforms. It was as
+  cheap as predicted — backend and frontend are already built by the steps before it, leaving
+  only the executables' own translation units.
 - **Only SQLite actually executes.** Firebird is compiled but loads `fbclient` at run time, and
   the runner has none; PostgreSQL, MySQL and ODBC are compile-only. `FirebirdLeaseTest` exercises
   file-lock mechanics against a path that need not exist, not the driver.
-- **Only x86-64** — though this matters less than it sounds. `ibNumber` selects its carry
-  intrinsics on `_MSC_VER`, not on the architecture, so GCC and Clang always take the portable
-  fallback: the Linux job already *executes* it, across all 94 `ibNumber` tests. An ARM job
-  would add a second little-endian 64-bit target to a proven one, so it buys less than the
-  gap it was meant to close.
+- ~~**Only x86-64.**~~ **Closed 2026-08-03** by the macOS arm64 job. The earlier reasoning —
+  that ARM buys little because `ibNumber` selects its carry intrinsics on `_MSC_VER` rather than
+  on the architecture, so Clang and GCC already execute the portable fallback — holds for
+  `ibNumber` specifically, and that part was right. What it undersold is everything outside it:
+  on AArch64 `char` is **unsigned**, the memory model is weaker (a missing atomic ordering is no
+  longer hidden by x86's), and alignment/padding differ where a type's natural alignment drove
+  the layout. Those are properties of the CPU, not of one class's intrinsics.
 - **Nobody has run the product on Linux.** Building is not running: the `wxScreenDC` in §1.7 was
   found by reading, and that class of fault — load order, resources, paths — only appears when
   something actually starts.

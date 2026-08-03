@@ -336,17 +336,31 @@ Paths use the `oesPlatform` macro (`Win32` for `x86`, `Win64` for `x64`):
 ## Continuous integration
 
 `.github/workflows/ci.yml` (added 2026-08-02) runs on pushes to `develop` / `master`, on PRs into
-`develop`, and on demand (`workflow_dispatch`). Three jobs:
+`develop`, and on demand (`workflow_dispatch`). Four jobs:
 
 | Job | Runner | What it proves |
 |---|---|---|
 | **Tests (Linux, Debug)** | ubuntu-22.04 | The backend suite (`oes_tests`) passes. The primary signal. |
 | **Build (Windows, x64 Debug)** | windows-2022 | The shipping platform still compiles under MSVC, and the suite passes there too. |
 | **GUI tests (Linux, Xvfb)** | ubuntu-22.04 | `oes_frontend_runtime_test` — links `frontend.dll`, needs a live wxApp, runs under `xvfb-run`. Separate job: its failure mode (a modal on an assert) is unlike a backend test's. |
+| **Tests (macOS 14, arm64, Debug)** | macos-14 | The third toolchain, and a different CPU with it: AArch64 (unsigned `char`, a weaker memory model, its own alignment), Apple libc++ rather than libstdc++, and wx against Cocoa instead of GTK — including the `APPLE` branch of `guid.cpp` (CFUUID) that nothing else compiles. Added 2026-08-03. |
 
-Current state (2026-08-02): **Windows green — 855/855**, the same result as the local `.sln`
-build. Linux compiles and links, and runs 820 of 862; what is still red, and why, is in
-[portability.md § 2](portability.md).
+Every job also runs a **Build the applications** step. Until 2026-08-03 CI built only test
+targets, so `enterprise` / `designer` / `daemon` / `launcher` / `codeRunner` / `simplePlugin`
+were never compiled by it at all — a break in an executable's own sources reached a developer
+before it reached the pipeline. The step is cheap: backend and frontend are already built by
+the steps above it.
+
+Current state (2026-08-02, job logs): **both Linux and Windows green at the same count — 914/914**
+(Linux 98.7 s, Windows 140.1 s; the GUI job 26/26 under Xvfb). What the GCC introduction cost and
+the rules that came out of it are in [portability.md](portability.md).
+
+**The macOS job is not a first compile.** A colleague has been building the tree on a Mac locally
+— which is why [portability.md § 3](portability.md) listed macOS as "not in CI" rather than as
+unbuilt — and the `APPLE` branches in the launcher / enterprise / designer CMake files are
+worked out, not placeholders. What the job adds is not the first build but the *standing* one:
+the platform stops depending on a single machine and on someone remembering to try it before a
+release. Anything it does surface belongs in [portability.md](portability.md) as a rule.
 
 Four notes on why it is shaped this way — each one paid for by a wasted round:
 

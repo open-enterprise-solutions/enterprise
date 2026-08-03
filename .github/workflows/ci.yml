@@ -38,7 +38,7 @@ jobs:
     name: Tests (Linux, Debug)
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: recursive
           fetch-depth: 1
@@ -70,6 +70,14 @@ jobs:
         working-directory: build/linux-debug
         run: ctest --output-on-failure --timeout 300 -E "oes_frontend_runtime_test"
 
+      # The APPLICATIONS, which no test target pulls in: enterprise / designer / daemon /
+      # launcher / codeRunner / simplePlugin. Without this step nothing in CI ever compiled
+      # them, so a break in an .exe's own sources reached a developer's machine first.
+      # It is cheap here — backend and frontend are already built by the steps above, so
+      # this only adds the executables' own translation units and their link.
+      - name: Build the applications
+        run: cmake --build --preset linux-debug
+
       # A SEGFAULT tells ctest nothing beyond the exit signal, so on failure take one
       # backtrace here rather than guessing across a 40-minute round trip. Two cases:
       # the smallest compile test and the smallest runtime one — if the crash is shared
@@ -92,7 +100,7 @@ jobs:
     name: Build (Windows, x64 Debug)
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: recursive
           fetch-depth: 1
@@ -101,9 +109,11 @@ jobs:
         with:
           arch: x64
 
-      # Same driver set as the Linux jobs — see the note there.
+      # Same driver set as the Linux jobs — see the note there. Firebird belongs ON here
+      # in particular: it is the DEFAULT driver on the shipping platform, so leaving it
+      # off meant the MSVC build never compiled the driver this product actually runs.
       - name: Configure
-        run: cmake --preset windows-x64-debug -DBUILD_TESTING=ON -DOES_USE_POSTGRESQL=ON
+        run: cmake --preset windows-x64-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON
 
       # Same target set as Linux — see the note there.
       - name: Build the test targets
@@ -118,6 +128,11 @@ jobs:
         working-directory: build/windows-x64-debug
         run: ctest --output-on-failure --timeout 300 -E "oes_frontend_runtime_test"
 
+      # The applications — see the note in the Linux job. This is the SHIPPING platform,
+      # so if they only ever compile in one place, it has to be this one.
+      - name: Build the applications
+        run: cmake --build --preset windows-x64-debug
+
   # ---------------------------------------------------------------------------
   # The GUI harness is a SEPARATE job, and separate on purpose: it links
   # frontend.dll, needs a live wxApp, and runs headless under Xvfb. Its failure
@@ -130,7 +145,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: recursive
           fetch-depth: 1
@@ -158,3 +173,80 @@ jobs:
       - name: Run under Xvfb
         working-directory: build/linux-debug
         run: xvfb-run -a ./bin/Debug/oes_frontend_runtime_test
+
+  # ---------------------------------------------------------------------------
+  # macOS on ARM — the third toolchain, and the one that is a different CPU as
+  # well as a different compiler.
+  #
+  # Why it earns a job. Linux gave us Clang-family strictness and LP64; Apple
+  # Silicon adds what neither of the other two can catch:
+  #   * AArch64 — no x86 memory model to hide a missing atomic ordering, and
+  #     `char` is UNSIGNED, which quietly changes any `char` used as a small
+  #     signed number.
+  #   * Alignment and struct layout differ where a type's natural alignment
+  #     drove the padding.
+  #   * Apple's libc++ instead of libstdc++ — a third standard library that
+  #     does not share MSVC's or libstdc++'s transitive includes.
+  #   * wx builds against Cocoa here, not GTK, so the frontend's toolkit
+  #     assumptions get a second reading. guid.cpp already takes an APPLE
+  #     branch (CFUUID via CoreFoundation) that nothing has been compiling.
+  #
+  # No GUI job for macOS yet: the harness needs a window server, and the
+  # headless story there is not Xvfb. Backend suite + a full application build
+  # is the signal for now.
+  #
+  # This is NOT a first compile — a colleague builds the tree on a Mac locally
+  # (portability.md § 3 listed macOS as "not in CI" for exactly that reason), and
+  # the CMake files carry worked-out APPLE branches in launcher / enterprise /
+  # designer, not placeholders. So the expectation here is green or close to it,
+  # and what the job actually buys is the thing a local build cannot give: the
+  # platform stops depending on one machine and one person remembering to try it.
+  # Anything it does surface is a portability rule for docs/portability.md.
+  # ---------------------------------------------------------------------------
+  tests-macos-arm:
+    name: Tests (macOS 14, arm64, Debug)
+    runs-on: macos-14
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      # cmake ships on the runner image; ninja does not. No GTK, no uuid-dev —
+      # wx uses Cocoa here and the guid path is CoreFoundation's CFUUID.
+      - name: Install build dependencies
+        run: brew install ninja
+
+      # Same driver set as the other jobs: both clients are dlopen'd at RUNTIME
+      # (firebirdInterface / postgresInterface), so enabling them costs no brew
+      # package — it only compiles the driver sources, which is the point.
+      - name: Configure
+        run: cmake --preset macos-debug -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON
+
+      # -k 0 for the same reason the GUI job uses it: a first-time toolchain
+      # returns errors in families, and one round should surface all of them.
+      - name: Build the test targets
+        run: >
+          cmake --build --preset macos-debug
+          --target oes_tests oes_string_tests oes_query_totals_test
+          oes_query_parity_test oes_query_join_parity_test
+          oes_temp_db_sqlite_test oes_job_tenancy_test
+          -- -k 0
+
+      - name: Run
+        working-directory: build/macos-debug
+        run: ctest --output-on-failure --timeout 300 -E "oes_frontend_runtime_test"
+
+      - name: Build the applications
+        run: cmake --build --preset macos-debug -- -k 0
+
+      # lldb, not gdb — same intent as the Linux backtrace step.
+      - name: Backtrace on failure
+        if: failure()
+        working-directory: build/macos-debug
+        run: |
+          for t in CompilerTest.SimpleAssignmentEmitsBytecode RuntimeTest.ConstantAssignment; do
+            echo "=============== $t ==============="
+            lldb -b -o run -o "bt 40" -- ./bin/Debug/oes_tests --gtest_filter=$t || true
+          done
