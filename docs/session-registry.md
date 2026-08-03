@@ -431,6 +431,22 @@ because a user pressing [X] needs no explanation. The web has no equivalent yet:
 the reason sits on the session, but the browser only sees the 401 and the login
 form.
 
+**A forced close puts out the work first (2026-08-03).** `ibSession::OnClose(force)` — the base
+answer, used by every session that has no window of its own — now cancels the session's worker
+before the teardown. Tearing a session down around a running body is how a job's `Job.<name>` claim
+ends up held by nobody; cancelling first lets the body unwind (the interpreter checks between
+opcodes, a native pass through the session's cancel flag) so the teardown waits behind an idle
+queue. This is what makes an admin kick sensible on a session that is not a seat: the kick calls
+`Close(true)` on whatever the session is, and each kind answers for itself — desktop closes its
+frame, a web client destroys its tab, a job stops its run. The registry knows nothing about jobs,
+and does not need to.
+
+**The exclusive gate reads the table, not last second's memory of it.** `ProcessSetExclusive` used
+to judge from the cached cluster snapshot, refreshed on its own tick — so a peer that had just
+disconnected was still standing in it and monopoly was refused for a session that no longer existed.
+What the user saw: "exclusive mode refused while nobody is connected", working on the second or
+third press. It now refreshes before the check, the way `ProcessAdd` already did for the same race.
+
 **Reload means come back, not go away.** The desktop listener used to say "the
 application will close — re-open it from the launcher". It now re-launches the
 same binary through `appData->RunApplication` (the door the designer uses to start
@@ -451,6 +467,37 @@ Three entry points share one UPDATE path (`WriteSessionSignal` in
   `POST /admin/sessions/<guid>/reload`.
 - Designer dialog: right-click a row in Active Users → `Kick session`
   / `Reload clients`.
+
+### The client notices a configuration it is no longer running (2026-08-03)
+
+A dynamic update leaves connected clients on the metadata image they logged in with. That is safe —
+the image is whole, just older — and exactly for that reason it must be SAID: an unnoticed old
+client is how "it works differently for me than for my colleague" begins. `ibFrontendMainFrame`
+polls the deployed `sys_config.file_guid` every ten minutes and, when it differs from the guid this
+session opened with, offers a restart (the same `RunApplication` door the admin reload uses).
+Declining is a real answer: work is never interrupted, and the reminder returns on the next tick.
+Designer is excluded — it publishes configurations, and asking it to reconnect to its own work
+would be absurd. The web has its own watcher already (`g_metaGeneration` in `wfrontend.cpp`).
+
+### Honest remainder — scheduled jobs (open, next arc)
+
+Everything below is about `firebird.maintenance` and shows up as the `Job.firebird.maintenance` lock
+sitting in Active Users:
+
+- **Two schedules, and the wrong one wins.** The job is registered with a 60-second interval ("ask
+  whether anything is due"), while the real cadences — sweep every 6 h, backup/restore weekly — live
+  in PROCESS-LOCAL statics inside `RunDueMaintenance`. Those reset on every process start, so
+  "never ran in this process" reads as "due now": a sweep fires on each re-login, which is why the
+  job reappears right after a restructure. The shared clock (`sys_job`) that would prevent it is
+  keyed to the 60-second interval and therefore permits it. Fix: split into `firebird.sweep` (6 h)
+  and `firebird.backup` (weekly, 02:00–05:00 window), drop the statics, let `sys_job` be the clock.
+- **A cancelled pass comes straight back.** `IsDue` skips the interval when `m_workRemains` is set,
+  so a pass interrupted mid-flight is due on the next tick — cancel it and it returns within
+  seconds.
+- **`job 'firebird.maintenance' failed:` with an empty message** — a maintenance error that loses
+  its own description. Silent failure of housekeeping is worse than noisy failure.
+- **The Active Users menu still says "Kick session" on a job row.** The behaviour is right now (the
+  run stops); the wording is about seats.
 
 ## Web auth form
 

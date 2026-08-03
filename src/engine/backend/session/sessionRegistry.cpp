@@ -1333,10 +1333,19 @@ void ibSessionRegistry::ProcessSetExclusive(ibRegistryRequest& req)
 			return;
 		}
 
+		// ASK THE TABLE, DON'T ASK LAST SECOND'S MEMORY OF IT. The check below reads m_snapshot, which a
+		// job refreshes on its own tick — so a peer that disconnected a moment ago is still standing in it
+		// and the acquire is refused for a session that no longer exists. What the user sees is "exclusive
+		// mode refused while nobody is connected", and then it works on the second or third press, once a
+		// tick has passed. Refresh first: this runs ON the registry thread (the same thread that owns the
+		// refresh), so it cannot deadlock with itself, and a failure just leaves the previous snapshot in
+		// place — the same stale answer we would have given anyway. ProcessAdd already does exactly this,
+		// for exactly this race.
+		try { JobRefreshSnapshot(); } catch (...) { /* swallowed: best-effort — a stale snapshot is the old behaviour, not worse */ }
+
 		// Cluster sole-live check + cross-process exclusive scan — peer
-		// processes' rows live in m_snapshot (refreshed every ~1s by
-		// JobRefreshSnapshot). Any peer row blocks acquire; our own row
-		// is the one we just verified above.
+		// processes' rows live in m_snapshot. Any peer row blocks acquire;
+		// our own row is the one we just verified above.
 		{
 			std::shared_lock<std::shared_mutex> lk(m_snapshotMtx);
 			if (m_snapshot) {
@@ -1635,7 +1644,8 @@ void ibSessionRegistry::JobCheckSignal()
 				// THE USER IS OWED A SENTENCE. Their window is about to vanish under their hands, and a
 				// window that vanishes silently reads as a crash. The reason rides on the session itself,
 				// where the frontend's force-exit listener reads it; an ordinary shutdown leaves it empty
-				// and says nothing, because the user closing the app already knows why it closed.
+				// and says nothing, because the user closing the app already knows why it closed. A job
+				// session ignores it — nobody is sitting there to read it.
 				target->SetReason(_("Your session has been closed by the administrator."));
 
 				// A KICK MUST REACH THE OWNER, NOT JUST THE BOOKKEEPING. Remove is the teardown of the
@@ -1643,15 +1653,14 @@ void ibSessionRegistry::JobCheckSignal()
 				// and it says nothing to whoever is USING the session. So a kicked desktop client lost its
 				// row (and vanished from Active Users, which read as success) while its window carried on
 				// living without a session. Close(true) is the door that does both, in order: it raises the
-				// force-exit flag the interpreter polls and calls OnClose(force), which for a desktop
-				// session hops to the main thread and closes the frame. See ibSession::RequestForceExit —
-				// "normally you call Close(true) instead". CloseAll already went through Close(force);
-				// only the kick did not.
+				// force-exit flag the interpreter polls and calls OnClose(force) — and WHAT that means is
+				// the session kind's own business: a desktop session closes its frame, a web client queues
+				// its tab's destroy, a job stops its run (ibJobSession). CloseAll already went through
+				// Close(force); only the kick did not.
 				//
-				// Teardown then follows by itself: the window dies, its holder is released, and that
+				// Teardown then follows by itself: the owner dies, its holder is released, and that
 				// release IS the Remove. Submitting one here as well would race that path — it stays only
-				// as the fallback for a close that answered "not now", which under force should not happen
-				// but costs nothing to cover (a windowless session whose OnClose declined).
+				// as the fallback for a close that answered "not now".
 				if (!target->Close(true)) {
 					ibRegistryRequest rm;
 					rm.kind    = ibRegistryRequestKind::Remove;

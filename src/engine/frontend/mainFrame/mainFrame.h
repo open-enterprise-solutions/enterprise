@@ -267,6 +267,21 @@ protected:
 	bool m_callRaiseFrame, m_callUpdateFrameManager;
 	bool m_closingWindow = false;   // see IsClosingWindow()
 
+	// THE CONFIGURATION MOVED UNDER US — a dynamic update landed while this client was working, so it
+	// is running on the metadata it opened with and will keep doing so until it logs in again. Nothing
+	// is broken by that (the image is whole, just older), which is exactly why it has to be SAID: an
+	// unnoticed old client is how "it works differently for me than for my colleague" starts.
+	//
+	// A poll rather than a signal: the designer writes the configuration, not a message, and this way a
+	// client also notices a deploy made by somebody who never knew it was connected. Runtime only —
+	// the designer IS the one publishing, and asking it to reconnect to its own work would be absurd.
+	// Answering "no" is a real answer: the reminder comes back later, work is never interrupted.
+	wxTimer   m_configWatchTimer;
+	wxString  m_configWatchGuid;      // the deployed guid this client believes it is running
+	bool      m_configWatchAsking = false;   // a reminder is on screen — do not stack a second one
+	void StartConfigWatch();
+	void OnConfigWatchTimer(wxTimerEvent& event);
+
 	wxAuiToolBar* m_mainFrameToolbar;
 	wxAuiToolBar* m_docToolbar;
 

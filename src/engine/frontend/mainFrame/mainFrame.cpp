@@ -99,6 +99,8 @@ ibFrontendMainFrame::ibFrontendMainFrame(ibSessionHolder&& holder,
 		// The reason is what distinguishes an admin action from an ordinary exit: a process shutting
 		// itself down force-closes its sessions too and leaves the reason empty, and there we stay quiet —
 		// the user pressing [X] does not need to be told the application is closing.
+		StartConfigWatch();
+
 		reg->OnForceExit([self](ibSession* target) {
 			if (target != self || wxTheApp == nullptr) return;
 			const wxString reason = target->Reason();
@@ -108,6 +110,75 @@ ibFrontendMainFrame::ibFrontendMainFrame(ibSessionHolder&& holder,
 			});
 		});
 	}
+}
+
+#include "backend/databaseLayer/databaseQueryBuilder.h"   // reading the deployed guid out of sys_config
+#include "backend/metadataConfiguration.h"                // activeMetaData — the guid this client opened with
+
+// How often this client asks whether the deployed configuration is still the one it opened with. Ten
+// minutes: often enough that nobody spends a working day on yesterday's metadata, rare enough that a
+// declined reminder does not become nagging. The query is one row of one column.
+static constexpr int kConfigWatchIntervalMs = 10 * 60 * 1000;
+
+void ibFrontendMainFrame::StartConfigWatch()
+{
+	// Designer publishes configurations; it must not be asked to reconnect to its own work.
+	if (appData == nullptr || appData->DesignerMode())
+		return;
+	if (activeMetaData == nullptr)
+		return;
+
+	m_configWatchGuid = activeMetaData->GetConfigGuid().str();
+	if (m_configWatchGuid.IsEmpty())
+		return;   // nothing to compare against — a file base opened without a deployed guid
+
+	m_configWatchTimer.SetOwner(this);
+	Bind(wxEVT_TIMER, &ibFrontendMainFrame::OnConfigWatchTimer, this, m_configWatchTimer.GetId());
+	m_configWatchTimer.Start(kConfigWatchIntervalMs);
+}
+
+void ibFrontendMainFrame::OnConfigWatchTimer(wxTimerEvent& WXUNUSED(event))
+{
+	if (m_configWatchAsking || m_closingWindow)
+		return;
+
+	// The DEPLOYED guid — sys_config, not sys_config_save: a designer's unsaved draft is nobody's
+	// business here. A transient DB error is not an event: stay quiet and ask again next tick.
+	wxString deployed;
+	try {
+		ibDatabaseQueryBuilder q;
+		ibQueryResult rs = q.ExecuteIR(ibQueryIR(ibProject(ibScan(wxT("sys_config")),
+			{ { ibCol(wxT("file_guid")), wxEmptyString } })));
+		if (rs.Next())
+			deployed = rs.GetResultString(wxT("file_guid"));
+	}
+	catch (...) {
+		return;
+	}
+
+	if (deployed.IsEmpty() || deployed == m_configWatchGuid)
+		return;
+
+	// ASKING, NEVER TAKING. The user may be halfway through a document; the old configuration keeps
+	// working, so the honest move is an offer. "No" is remembered only until the next tick — the
+	// reminder returns, because the mismatch does not go away by being declined.
+	m_configWatchAsking = true;
+	const int answer = wxMessageBox(
+		_("The configuration has been updated by an administrator.\n\n"
+		  "You are still working with the version this session started on. "
+		  "Restart now to pick up the new one?"),
+		wxTheApp->GetAppDisplayName(), wxYES_NO | wxCENTRE | wxICON_INFORMATION, this);
+	m_configWatchAsking = false;
+
+	if (answer != wxYES)
+		return;
+
+	// Same door the admin "reload" uses: re-launch this binary with this session's connection
+	// arguments, then close. Spawned before the close, because afterwards there is no code of ours
+	// left to spawn anything.
+	const wxFileName exe(wxStandardPaths::Get().GetExecutablePath());
+	appData->RunApplication(exe.GetName(), /*searchDebug=*/false);
+	Close(true);
 }
 
 #include "backend/compiler/value.h"

@@ -988,6 +988,18 @@ void ibSession::WakeDebugLoop()
 	m_debug->m_cv.notify_all();
 }
 
+bool ibSession::OnClose(bool force)
+{
+	// See the declaration: cancel before teardown so the queue this is about to wait behind is idle.
+	// Only under force — a polite close is a request, and a request does not interrupt work.
+	if (force) {
+		if (ibWorkerPool* const pool = GetWorkerPool())
+			pool->CancelSession(this);
+	}
+	Teardown();
+	return true;
+}
+
 void ibSession::RequestForceExit()
 {
 	// Raise the flag only. The interpreter observes it on its next opcode

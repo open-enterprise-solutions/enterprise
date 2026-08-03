@@ -494,7 +494,17 @@ protected:
 	//
 	// Returning false means "not now": nothing happened and the caller
 	// may try again. Under force the answer is not asked for.
-	virtual bool OnClose(bool /*force*/) { Teardown(); return true; }
+	// A FORCED CLOSE PUTS OUT THE WORK FIRST. Whoever has no window to close still has a worker that
+	// may be draining a task, and tearing the session down around a running body is how a job's
+	// Job.<name> claim ends up held by nobody. Cancelling first means the body unwinds (the
+	// interpreter checks between opcodes, a native pass through the session's cancel flag) and the
+	// teardown below then waits behind an idle queue instead of a live one.
+	//
+	// This is what makes an admin kick sensible on a session that is not a seat: the kick calls
+	// Close(true) on whatever the session is, and each kind answers for itself — a desktop session
+	// closes its frame, a web client destroys its tab, and one with neither stops its work and ends.
+	// Nothing above has to know which is which.
+	virtual bool OnClose(bool force);
 
 public:
 
