@@ -25,6 +25,12 @@ public:
 
 	ibFormEditorCmd() : m_executed(false) {}
 
+	// VIRTUAL: m_cmdArray holds shared_ptr<ibFormEditorCmd> built from a base-typed pointer, so the
+	// deleter is base-typed too and a non-virtual destructor would skip every derived one. MSVC says
+	// so out loud (C5205) — the same defect the designer's ibVisualEditorCmd had, where it cost a
+	// leaked control per drag-and-drop.
+	virtual ~ibFormEditorCmd() = default;
+
 	void Execute() {
 		if (!m_executed) {
 			DoExecute();

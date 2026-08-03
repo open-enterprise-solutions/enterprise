@@ -128,6 +128,15 @@ public:
 
 	ibVisualEditorCmd() : m_executed(false) {}
 
+	// VIRTUAL, because the processor below deletes commands through THIS type. Every command that
+	// holds a control holds it in an ibValuePtr — a RAII +1/-1 — so a skipped derived destructor is
+	// not a lost command object, it is a control that never gets its DecrRef and outlives the process.
+	// That is exactly what leaked: one drag-and-drop of a Button left its ibValueSizerItem and
+	// ibValueButton alive with every property they own (measured 2026-08-03, 390 blocks in the CRT
+	// dump, traced to ibCommandDragItem::ApplyDrop). Two of the commands also derive wxEvtHandler,
+	// so the non-virtual delete was undefined behaviour on top of the leak.
+	virtual ~ibVisualEditorCmd() = default;
+
 	void Execute() {
 		if (!m_executed) {
 			DoExecute();
@@ -161,21 +170,16 @@ public: class ibVisualEditor :
 
 		ibCommandProcessor() : m_savePoint(0) {}
 
-		~ibCommandProcessor() {
-			while (!m_redoStack.empty()) {
-				wxDELETE(m_redoStack.top());
-				m_redoStack.pop();
-			}
-			while (!m_undoStack.empty()) {
-				wxDELETE(m_undoStack.top());
-				m_undoStack.pop();
-			}
-		}
+		~ibCommandProcessor() { Reset(); }
 
 		void Execute(ibVisualEditorCmd* command) {
 			command->Execute();
 			m_undoStack.push(command);
+			// A new command kills the redo branch — and the stack owns what it drops. Popping alone
+			// left every abandoned command (and the control it holds) behind: undo, then do something
+			// else, and the redone-away subtree was leaked for the rest of the session.
 			while (!m_redoStack.empty()) {
+				wxDELETE(m_redoStack.top());
 				m_redoStack.pop();
 			}
 		}
@@ -200,11 +204,18 @@ public: class ibVisualEditor :
 			return true;
 		}
 
+		// Drop the whole history. Dropping it means DESTROYING it, not forgetting it: a command owns
+		// the control it inserted (ibValuePtr, +1/-1), so a bare pop() strands that control for the
+		// life of the process. The destructor is this, and nothing else.
 		void Reset() {
-			while (!m_redoStack.empty())
+			while (!m_redoStack.empty()) {
+				wxDELETE(m_redoStack.top());
 				m_redoStack.pop();
-			while (!m_undoStack.empty())
+			}
+			while (!m_undoStack.empty()) {
+				wxDELETE(m_undoStack.top());
 				m_undoStack.pop();
+			}
 			m_savePoint = 0;
 		}
 

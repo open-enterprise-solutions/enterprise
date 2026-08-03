@@ -390,6 +390,20 @@ starts at the first line that is ours. Capture depth is 32 to leave real depth a
   caller that owns it.** `ibCompileContext::PushFunction` created a context nobody owned and nobody
   read — one 116-byte leak per registered context method, per compile, and `SyntaxControl`
   recompiles on document **close**. The fix was to stop creating it.
+- **A base class you `delete` through needs a virtual destructor — and an undo stack deletes through
+  its base.** `ibVisualEditorCmd` had `virtual DoExecute()` and no virtual destructor, so
+  `wxDELETE(m_undoStack.top())` ran the base destructor only. The command object itself is a few
+  dozen bytes; what it *holds* is an `ibValuePtr<ibValueFrame>`, and a skipped `~ibValuePtr` is a
+  control that never gets its `DecrRef`. One drag-and-drop of a Button leaked its sizer-item, its
+  button and every property they own — 390 blocks, reproducible block-for-block. Two sibling
+  commands also derived `wxEvtHandler`, so it was undefined behaviour as well as a leak. The same
+  defect sat in `ibFormEditorCmd`, where MSVC had been saying so all along (**C5205** — "deleting an
+  abstract class with a non-virtual destructor"): a warning naming a class you are actively
+  debugging is not background noise.
+- **A stack that owns its elements owns them on EVERY exit path, not just the destructor.** The same
+  processor popped the redo branch bare in `Execute` and popped both stacks bare in `Reset` — two
+  more leaks of exactly the same shape, each behind an ordinary user action (undo then do something
+  else; reload the form). `Reset()` IS the destructor's body; writing it twice is how they drifted.
 - **`wxRefCounter` starts at 1, so `new` already IS your reference.** An `IncRef()` right after it
   is a second reference nobody holds and nobody drops. `ibDialogPredefinedEditor` did exactly that:
   `new` (1) → `IncRef` (2) → `AssociateModel` (3) → `~wxDataViewCtrl` (2) → the dialog's `DecRef`
@@ -412,6 +426,8 @@ Record what a clean exit looks like, so a regression is a number and not a feeli
 | after `g_refReadStack` → fixed array | 8 | its TLS destructor registration gone with it |
 | after `tl_errorChain` → static registry | 2 | the other six registration nodes gone |
 | after `wxLog::DontCreateOnDemand()` | **0** | no dump printed at all |
+| 2026-08-03, designer + one drag-and-drop | 390 | the tripwire firing: undo commands deleted through a base with no virtual destructor |
+| after the virtual destructors | **0** | dump empty again on the same scenario |
 
 **The dump is empty, and that is the point.** Not because 12 bytes mattered, but because an empty
 dump is a tripwire: from here, any block at all is a regression with a name, and the four steps
@@ -430,3 +446,10 @@ after the report. Tracker-only is not a leak; the dump is the arbiter.
 There is no "structural floor" — that was said twice during this hunt, at 14 blocks and again at 8,
 and both times the next measurement disproved it. State what has been measured; do not promote it to
 a limit.
+
+**A baseline is per SCENARIO, and the July zero was measured on open-and-close.** The first run that
+did real work in the form editor printed 390 blocks — not a regression against that zero, just the
+first look at a path the zero never covered. The tripwire still did its job: 390 blocks, one
+`OES_TRACK_SIZE` run, and the stack named `ibCommandDragItem::ApplyDrop`. Two scenarios now read
+zero; every other one is unmeasured until someone runs it, so treat a fresh non-zero dump as
+"untested path", not "broken yesterday" — and then fix it, because zero is reachable there too.
