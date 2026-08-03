@@ -483,14 +483,14 @@ m_objectName(objectName)
 	}
 	if (createStreamForDispatch) {
 		if (m_dispatch != nullptr) {
-			HRESULT hr =
+			HRESULT marshalHr =
 				::CoMarshalInterThreadInterfaceInStream(IID_IDispatch, m_dispatch, &m_streamDispatch);
-			if (FAILED(hr))
+			if (FAILED(marshalHr))
 				m_streamDispatch = nullptr;
 		}
 		if (m_streamDispatch != nullptr) {
-			HRESULT hr = ::CoGetInterfaceAndReleaseStream(m_streamDispatch, IID_IDispatch, (void**)&m_currentDispatch);
-			if (SUCCEEDED(hr)) {
+			HRESULT unmarshalHr = ::CoGetInterfaceAndReleaseStream(m_streamDispatch, IID_IDispatch, (void**)&m_currentDispatch);
+			if (SUCCEEDED(unmarshalHr)) {
 				m_streamDispatch = nullptr;
 			}
 		}
@@ -561,15 +561,15 @@ bool ibValueOLE::Create(const wxString& strOleName)
 	InvalidateNames();   // COM surface depends on the freshly created dispatch
 	if (createStreamForDispatch) {
 		if (m_dispatch != nullptr) {
-			HRESULT hr =
+			HRESULT marshalHr =
 				::CoMarshalInterThreadInterfaceInStream(IID_IDispatch, m_dispatch, &m_streamDispatch);
-			if (FAILED(hr)) {
+			if (FAILED(marshalHr)) {
 				m_streamDispatch = nullptr;
 			}
 		}
 		if (m_streamDispatch != nullptr) {
-			HRESULT hr = ::CoGetInterfaceAndReleaseStream(m_streamDispatch, IID_IDispatch, (void**)&m_currentDispatch);
-			if (SUCCEEDED(hr)) {
+			HRESULT unmarshalHr = ::CoGetInterfaceAndReleaseStream(m_streamDispatch, IID_IDispatch, (void**)&m_currentDispatch);
+			if (SUCCEEDED(unmarshalHr)) {
 				m_streamDispatch = nullptr;
 			}
 		}

@@ -1034,7 +1034,6 @@ public:
 			catch (std::out_of_range&) {
 				return false;
 			}
-			return false;
 		}
 
 		bool GetValue(unsigned int col, wxVariant& variant) const {
@@ -1046,8 +1045,6 @@ public:
 			catch (std::out_of_range&) {
 				return false;
 			}
-
-			return false;
 		}
 
 		// --- STORAGE value-tree ("a list = a tree without children", Max) + DISPLAY-parent (composer-set) --------

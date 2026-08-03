@@ -615,9 +615,9 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 			}
 
 			if (m_verifiedConnection && m_connectionType == ConnectionType::ConnectionType_Debugger) {
-				ibWriterMemory commandChannel;
-				commandChannel.w_u16(CommandId_StartSession);
-				SendCommand(commandChannel.pointer(), commandChannel.size());
+				ibWriterMemory startSessionChannel;
+				startSessionChannel.w_u16(CommandId_StartSession);
+				SendCommand(startSessionChannel.pointer(), startSessionChannel.size());
 			}
 
 			if (m_verifiedConnection) {

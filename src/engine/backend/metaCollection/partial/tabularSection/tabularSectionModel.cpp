@@ -46,21 +46,22 @@ bool ibValueTabularSectionDataObjectBase::SetValueByRow(const wxVariant& variant
 			const ibValue& selValue = node->GetTableValue(col);
 			const ibValue& newValue = metaData->CreateObject(selValue.GetClassType());
 
+			// The write's own verdict is the answer. It was being dropped into an unread
+			// `ok` — and SetValueByMetaID says false for the cases that matter: the section
+			// is READ-ONLY, the column is the line number, the attribute or node is gone.
+			// Reporting success there tells the view the cell took a value it never stored.
 			if (strData.Length() > 0) {
 				std::vector<ibValue> listValue;
 				const bool found = newValue.FindValue(strData, listValue);
-				
-				if (found) {
-					const bool ok = SetValueByMetaID(row, col, listValue.at(0));
-					
-				}
-				else {
+
+				if (!found)
 					return false;
-				}
+
+				if (!SetValueByMetaID(row, col, listValue.at(0)))
+					return false;
 			}
-			else {
-				const bool ok = SetValueByMetaID(row, col, newValue);
-				
+			else if (!SetValueByMetaID(row, col, newValue)) {
+				return false;
 			}
 		}
 		else {

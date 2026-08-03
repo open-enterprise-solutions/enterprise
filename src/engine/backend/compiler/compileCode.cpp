@@ -31,39 +31,45 @@ static short gs_codeStyle = CODE_CES;
 // Construction/Destruction ibCompileCode
 //////////////////////////////////////////////////////////////////////
 
+// The initialiser lists below follow the DECLARATION order in compileCode.h
+// (m_onlyFunction, m_cByteCode, m_rootContext, m_numCurrentCompile, m_changedCode).
+// Members are constructed in declaration order regardless of what the list says, so a
+// list in any other order reads as a promise the language does not keep — and
+// ibCompileContext's ctor takes `this`.
+
 ibCompileCode::ibCompileCode() :
 	ibTranslateCode(),
-	m_rootContext(new ibCompileContext(this)),
 	m_onlyFunction(false),
+	m_rootContext(new ibCompileContext(this)),
 	m_changedCode(false)
 {
 	InitializeCompileModule();
 
-	// we don�t look for local variables in parent contexts!
+	// we do not look for local variables in parent contexts!
 	m_rootContext->m_numFindLocalInParent = 0;
 }
 
 ibCompileCode::ibCompileCode(const wxString& strModuleName, const wxString& strDocPath, bool onlyFunction) :
 	ibTranslateCode(strModuleName, strDocPath),
-	m_rootContext(new ibCompileContext(this)),
 	m_onlyFunction(onlyFunction),
+	m_rootContext(new ibCompileContext(this)),
 	m_changedCode(false)
 {
 	InitializeCompileModule();
 
-	// we don�t look for local variables in parent contexts!
+	// we do not look for local variables in parent contexts!
 	m_rootContext->m_numFindLocalInParent = 0;
 }
 
 ibCompileCode::ibCompileCode(const wxString& strFileName) :
 	ibTranslateCode(strFileName),
-	m_rootContext(new ibCompileContext(this)),
 	m_onlyFunction(false),
+	m_rootContext(new ibCompileContext(this)),
 	m_changedCode(false)
 {
 	InitializeCompileModule();
 
-	// we don�t look for local variables in parent contexts!
+	// we do not look for local variables in parent contexts!
 	m_rootContext->m_numFindLocalInParent = 0;
 }
 
@@ -1016,13 +1022,13 @@ bool ibCompileCode::CompileModule()
 			m_cByteCode.m_listCode.size(); // go to function call
 		if (PushCallFunction(callFunc)) {
 			// correcting labels
-			ibByteUnit code;
-			AddLineInfo(code);
-			code.m_numOper = OPER_GOTO;
-			code.m_numLine = callFunc->m_numLine;
-			code.m_numString = callFunc->m_numString;
-			code.m_param1.m_numIndex = callFunc->m_numAddLine + 1; // after calling the function we go back
-			m_cByteCode.m_listCode.emplace_back(std::move(code));
+			ibByteUnit gotoCode;
+			AddLineInfo(gotoCode);
+			gotoCode.m_numOper = OPER_GOTO;
+			gotoCode.m_numLine = callFunc->m_numLine;
+			gotoCode.m_numString = callFunc->m_numString;
+			gotoCode.m_param1.m_numIndex = callFunc->m_numAddLine + 1; // after calling the function we go back
+			m_cByteCode.m_listCode.emplace_back(std::move(gotoCode));
 		}
 	}
 
@@ -1218,17 +1224,17 @@ bool ibCompileCode::PushCallFunction(const std::shared_ptr<ibCallFunction>& call
 	m_cByteCode.m_listCode.emplace_back(std::move(code));
 
 	for (unsigned int i = 0; i < numDefCount; i++) {
-		ibByteUnit code;
-		AddLineInfo(code);
-		code.m_numOper = OPER_SET; // parameters are being passed
+		ibByteUnit paramCode;
+		AddLineInfo(paramCode);
+		paramCode.m_numOper = OPER_SET; // parameters are being passed
 		bool defaultValue = false;
 		if (i < numRealCount) {
-			code.m_param1 = callFunction->m_listParam[i];
-			if (code.m_param1.m_numArray == DEF_VAR_SKIP) { // need to substitute the default value
+			paramCode.m_param1 = callFunction->m_listParam[i];
+			if (paramCode.m_param1.m_numArray == DEF_VAR_SKIP) { // need to substitute the default value
 				defaultValue = true;
 			}
 			else {  //��� �������� ��������
-				code.m_param2.m_numIndex = foundedFunc->m_listParam[i].m_bByRef;
+				paramCode.m_param2.m_numIndex = foundedFunc->m_listParam[i].m_bByRef;
 			}
 		}
 		else {
@@ -1240,10 +1246,10 @@ bool ibCompileCode::PushCallFunction(const std::shared_ptr<ibCallFunction>& call
 				SetError(ERROR_FEW_PARAMS);	// too few parameters
 				return false;
 			}
-			code.m_numOper = OPER_SETCONST;	// default values
-			code.m_param1 = foundedFunc->m_listParam[i].m_puValue;
+			paramCode.m_numOper = OPER_SETCONST;	// default values
+			paramCode.m_param1 = foundedFunc->m_listParam[i].m_puValue;
 		}
-		m_cByteCode.m_listCode.emplace_back(std::move(code));
+		m_cByteCode.m_listCode.emplace_back(std::move(paramCode));
 	}
 
 	return true;
@@ -3657,10 +3663,10 @@ bool ibCompileCode::CompileNewObject(ibCompileContext* context)
 
 	for (unsigned int arg = 0; arg < listParam.size(); arg++) {
 
-		ibByteUnit code;
-		AddLineInfo(code);
-		code.m_numOper = OPER_SET;
-		code.m_param1 = listParam[arg];
+		ibByteUnit argCode;
+		AddLineInfo(argCode);
+		argCode.m_numOper = OPER_SET;
+		argCode.m_param1 = listParam[arg];
 
 		m_cByteCode.m_listCode.emplace_back(std::move(code));
 	}
@@ -3757,11 +3763,11 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 			m_cByteCode.m_listCode.emplace_back(std::move(code));
 
 			for (unsigned int i = 0; i < listParam.size(); i++) {
-				ibByteUnit code;
-				AddLineInfo(code);
-				code.m_numOper = OPER_SET;
-				code.m_param1 = listParam[i];
-				m_cByteCode.m_listCode.emplace_back(std::move(code));
+				ibByteUnit argCode;
+				AddLineInfo(argCode);
+				argCode.m_numOper = OPER_SET;
+				argCode.m_param1 = listParam[i];
+				m_cByteCode.m_listCode.emplace_back(std::move(argCode));
 			}
 		}
 		else {
@@ -3846,11 +3852,11 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 				// OPER_CALL_METHOD / OPER_CALL. Runtime walks these via
 				// lCodeLine++ inside its OPER_CALL_LAMBDA handler.
 				for (unsigned int i = 0; i < listParam.size(); i++) {
-					ibByteUnit code;
-					AddLineInfo(code);
-					code.m_numOper = OPER_SET;
-					code.m_param1 = listParam[i];
-					m_cByteCode.m_listCode.emplace_back(std::move(code));
+					ibByteUnit argCode;
+					AddLineInfo(argCode);
+					argCode.m_numOper = OPER_SET;
+					argCode.m_param1 = listParam[i];
+					m_cByteCode.m_listCode.emplace_back(std::move(argCode));
 				}
 			}
 			else {
@@ -4028,11 +4034,11 @@ loopLabel:
 			code.m_param1 = variable;// variable into which the value is returned
 			m_cByteCode.m_listCode.emplace_back(std::move(code));
 			for (unsigned int i = 0; i < listParam.size(); i++) {
-				ibByteUnit code;
-				AddLineInfo(code);
-				code.m_numOper = OPER_SET;
-				code.m_param1 = listParam[i];
-				m_cByteCode.m_listCode.emplace_back(std::move(code));
+				ibByteUnit argCode;
+				AddLineInfo(argCode);
+				argCode.m_numOper = OPER_SET;
+				argCode.m_param1 = listParam[i];
+				m_cByteCode.m_listCode.emplace_back(std::move(argCode));
 			}
 
 			numIsSet = 0;
@@ -4609,11 +4615,11 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 		m_cByteCode.m_listCode.emplace_back(std::move(code));
 
 		for (unsigned int arg = 0; arg < listParam.size(); arg++) {
-			ibByteUnit code;
-			AddLineInfo(code);
-			code.m_numOper = OPER_SET;
-			code.m_param1 = listParam[arg];
-			m_cByteCode.m_listCode.emplace_back(std::move(code));
+			ibByteUnit argCode;
+			AddLineInfo(argCode);
+			argCode.m_numOper = OPER_SET;
+			argCode.m_param1 = listParam[arg];
+			m_cByteCode.m_listCode.emplace_back(std::move(argCode));
 		}
 	}
 	else if (lex.m_lexType == KEYWORD && lex.m_numData == KEY_FROM) {

@@ -35,6 +35,8 @@ inline wxString GetCommonConfigTable(ibConfigType cfg_type) {
 		return config_table;
 	case ibConfigType::ibConfigType_Load_And_Save:
 		return config_save_table;
+	case ibConfigType::ibConfigType_File:
+		break;      // a file configuration has no common table in the database
 	}
 
 	return wxEmptyString;

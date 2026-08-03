@@ -28,7 +28,10 @@ void CalculateBuildId()
 	int					years;
 	char			    month[256];
 
-	::sscanf(build_date.c_str(), "%s %d %d", month, &days, &years);
+	// Width-capped: an unbounded "%s" writes as far as the input goes, and the buffer's size
+	// is the only thing standing between it and the stack. The input is __DATE__, but the
+	// cap belongs in the format string, not in an assumption about the caller.
+	::sscanf(build_date.c_str(), "%255s %d %d", month, &days, &years);
 
 	int					months = 0;
 

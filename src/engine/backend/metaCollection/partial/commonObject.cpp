@@ -3605,7 +3605,6 @@ long ibValueRecordSetObject::AppendRow(unsigned int before)
 
 	const ibValueMetaObjectRegisterData* metaObject = GetMetaObject();
 	wxASSERT(metaObject);
-	const ibMetaData* metaData = metaObject->GetMetaData();
 	for (const auto object : metaObject->GetGenericAttributeArrayObject()) {
 		rowData->AppendTableValue(object->GetMetaID(), object->CreateValue());
 	}

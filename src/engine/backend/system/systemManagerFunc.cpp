@@ -718,22 +718,25 @@ wxString ibValueSystemFunction::Format(ibValue& cData, const wxString& fmt)
 			}
 		}
 
-		ibNumber::Format fmt;
+		// numFmt, not fmt: `fmt` is this function's format-string parameter, and a local
+		// of the same name hides it for the rest of the block.
+		ibNumber::Format numFmt;
 		auto fnd = paParams.find(NFD);
-		if (fnd != paParams.end()) fmt.fracDigits = wxAtoi(fnd->second);
+		if (fnd != paParams.end()) numFmt.fracDigits = wxAtoi(fnd->second);
 		fnd = paParams.find(ND);
-		if (fnd != paParams.end()) fmt.precision  = wxAtoi(fnd->second);
+		if (fnd != paParams.end()) numFmt.precision  = wxAtoi(fnd->second);
 		fnd = paParams.find(NDS);
-		if (fnd != paParams.end() && !fnd->second.IsEmpty()) fmt.decimalSep = fnd->second[0];
+		if (fnd != paParams.end() && !fnd->second.IsEmpty()) numFmt.decimalSep = fnd->second[0];
 		fnd = paParams.find(NGS);
-		if (fnd != paParams.end() && !fnd->second.IsEmpty()) fmt.groupSep   = fnd->second[0];
+		if (fnd != paParams.end() && !fnd->second.IsEmpty()) numFmt.groupSep   = fnd->second[0];
 		fnd = paParams.find(NG);
-		if (fnd != paParams.end()) fmt.groupSize  = wxAtoi(fnd->second);
+		if (fnd != paParams.end()) numFmt.groupSize  = wxAtoi(fnd->second);
 
-		return number.ToString(fmt);
+		return number.ToString(numFmt);
 	}
-	case ibValueTypes::TYPE_DATE:
-
+	case ibValueTypes::TYPE_DATE: {
+		// Braced: the case declares locals, and an unbraced one would put the `default`
+		// label below across their initialisation.
 		if (cData.IsEmpty()) {
 			auto foundedDE = paParams.find(DE);
 			if (foundedDE != paParams.end()) {
@@ -785,6 +788,9 @@ wxString ibValueSystemFunction::Format(ibValue& cData, const wxString& fmt)
 		}
 
 		return cData.GetString();
+	}
+	default:
+		break;      // every other type formats as its plain string
 	}
 
 	return cData.GetString();

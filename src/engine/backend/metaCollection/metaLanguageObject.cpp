@@ -32,8 +32,6 @@ ibValueMetaObjectLanguage::ibValueMetaObjectLanguage(const wxString& name, const
 
 bool ibValueMetaObjectLanguage::OnDeleteMetaObject()
 {
-	const ibValueMetaObject* commonObject = m_metaData->GetCommonMetaObject();
-
 	return true;
 }
 

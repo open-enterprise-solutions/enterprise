@@ -519,7 +519,6 @@ bool ibApplicationData::CreateAppDataEnv(ibRunMode runMode)
 		if (!SetLocaleAppDataEnv())
 			return false;
 		return true;
-	return false;
 }
 
 #define sys_db wxT("sys.fdb")

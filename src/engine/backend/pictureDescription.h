@@ -18,8 +18,6 @@ struct ibExternalPictureDescription {
 		return m_img_buffer == rhs.m_img_buffer
 			&& m_width == rhs.m_width
 			&& m_height == rhs.m_height;
-
-		return false;
 	}
 
 	std::string m_img_name, m_img_buffer;

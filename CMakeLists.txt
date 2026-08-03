@@ -190,9 +190,12 @@ else()
     #                     specifiers, e.g. `class BACKEND_API ibValue` inside a typedef,
     #                     where the attribute is simply ignored off-Windows.
     #
-    # Deliberately NOT silenced: -Wreorder (1,098 of them, no real bug found in a sweep of
-    # all 107 sites — but with the noise gone they are visible enough to clean up) and
-    # -Wswitch (83, every one a deliberately narrow switch with a fallback return).
+    # Deliberately NOT silenced: -Wreorder and -Wswitch. Both were cleaned at the SOURCE
+    # on 2026-08-03 rather than switched off — the 83 -Wswitch lines became an explicit
+    # `default:` (or an explicit TYPE_LAST case where the switch really is exhaustive, so
+    # a new value still warns), and the -Wreorder ones left in our code were the three
+    # ibCompileCode ctors, whose lists now follow declaration order. What remained came
+    # from the vendored forks, which compile quiet per the rule above.
     add_compile_options(-Wno-unknown-pragmas -Wno-attributes)
 
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -234,6 +237,38 @@ if(NOT EXISTS "${OES_3RDPARTY_DIR}/wxWidgets/CMakeLists.txt")
 endif()
 
 add_subdirectory("${OES_3RDPARTY_DIR}/wxWidgets" "${CMAKE_BINARY_DIR}/wxWidgets")
+
+# ---------------------------------------------------------------------------
+# Vendored code compiles QUIET.
+#
+# wxWidgets and the C libraries it bundles (libwebp, libpng, libtiff, zlib, ...) are
+# not ours to fix, and at /W4 they DROWN the build we can act on: of the 703 MSVC
+# warnings in the 2026-08-02 CI run, 305 were a single C4244 family inside libwebp and
+# not one came from src/engine. Same story for GCC's unused-variable / reorder counts.
+#
+# Their warnings are silenced at the TARGET level, not by lowering the project-wide
+# level: our own code keeps /W4 and -Wall, so what is left in a log is ours.
+# ---------------------------------------------------------------------------
+function(oes_silence_directory_targets dir)
+    get_property(_targets DIRECTORY "${dir}" PROPERTY BUILDSYSTEM_TARGETS)
+    foreach(_t IN LISTS _targets)
+        get_target_property(_type ${_t} TYPE)
+        if(NOT _type STREQUAL "INTERFACE_LIBRARY" AND NOT _type STREQUAL "UTILITY")
+            if(MSVC)
+                target_compile_options(${_t} PRIVATE /W0)
+            else()
+                target_compile_options(${_t} PRIVATE -w)
+            endif()
+        endif()
+    endforeach()
+
+    get_property(_subdirs DIRECTORY "${dir}" PROPERTY SUBDIRECTORIES)
+    foreach(_s IN LISTS _subdirs)
+        oes_silence_directory_targets("${_s}")
+    endforeach()
+endfunction()
+
+oes_silence_directory_targets("${OES_3RDPARTY_DIR}/wxWidgets")
 
 # After add_subdirectory, wxWidgets targets (wx::core, wx::base, wx::aui, etc.)
 # are available as imported targets.

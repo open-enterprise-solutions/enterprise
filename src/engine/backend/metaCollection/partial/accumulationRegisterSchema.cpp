@@ -256,8 +256,10 @@ bool ibValueMetaObjectAccumulationRegister::HasMaterializedViews() const
 const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryable(
 	const wxString& viewName, ibViewShape shape) const
 {
-	const bool withPeriod   = (shape == ibViewShape::Turnovers);
-	const bool withBalances = (shape != ibViewShape::Turnovers);
+	// One question, asked once: the turnovers view carries the period column, the balance
+	// views do not. (There was a `withBalances` twin here, never read — it was just this
+	// predicate negated, so the shape it described is the `else` of every `if (withPeriod)`.)
+	const bool withPeriod = (shape == ibViewShape::Turnovers);
 
 	const auto cached = m_viewSources.find(viewName);
 	if (cached != m_viewSources.end())

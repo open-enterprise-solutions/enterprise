@@ -520,7 +520,6 @@ void ibProcUnit::Execute(ibRunContext* pContext, ibValue* pvarRetValue, bool bDe
 
 	ibProcStackGuard stackGuard(pContext);
 
-	ibValue* pLocVars = pContext->m_pLocVars;
 	ibValue** pRefLocVars = pContext->m_pRefLocVars;
 
 	// Snapshot bc at entry. The session's lambda runtime swaps
@@ -529,7 +528,6 @@ void ibProcUnit::Execute(ibRunContext* pContext, ibValue* pvarRetValue, bool bDe
 	// inside the loop. Local snapshot keeps each Execute invocation
 	// pinned to the bc it started with.
 	const ibByteCode* m_pByteCode = this->m_pByteCode;
-	const ibByteUnit* pCodeList = m_pByteCode->m_listCode.data();
 
 	long lCodeLine = pContext->m_lStart;
 	// Loop walks to the bytecode tail; explicit termination is on
@@ -664,10 +662,10 @@ start_label:
 					}
 				}
 				if (needsCreate) {
-					auto state = variable2.CreateIterator();
-					if (!state)
+					auto newIterator = variable2.CreateIterator();
+					if (!newIterator)
 						ibBackendCoreException::Error(_("Undefined value iterator"));
-					CopyValue(variable3, ibValue(new ibValueIterator(std::move(state))));
+					CopyValue(variable3, ibValue(new ibValueIterator(std::move(newIterator))));
 				}
 				ibValueIterator* iterator = AsIterator(variable3);
 				if (!iterator->MoveNext(variable1)) {
@@ -737,7 +735,6 @@ start_label:
 			case OPER_GET_SCOPE://bare member of a scope binding — identical parent+prop resolve
 			{
 				ibValue* pRetValue = &variable1;
-				ibValue* pVariable2 = &variable2;
 				const wxString& strPropName = m_pByteCode->m_listConst[index3].GetString();
 				const long lPropNum = variable2.FindProp(strPropName);
 				if (lPropNum < 0) CheckAndError(variable2, strPropName);
@@ -1351,8 +1348,8 @@ start_label:
 			}
 		}
 
-		if (auto* state = ibSession::GetPUState())
-			state->m_errorPlace.Reset(); //Error is handled in this module - erase the error location
+		if (auto* puState = ibSession::GetPUState())
+			puState->m_errorPlace.Reset(); //Error is handled in this module - erase the error location
 
 	}
 	catch (const ibBackendException& err) {
@@ -1360,8 +1357,8 @@ start_label:
 		const long trySize = tryList.size() - 1;
 		if (trySize >= 0) {
 
-			if (auto* state = ibSession::GetPUState())
-				state->m_errorPlace.Reset(); //Error is handled in this module - erase the error location
+			if (auto* puState = ibSession::GetPUState())
+				puState->m_errorPlace.Reset(); //Error is handled in this module - erase the error location
 
 			const long tryCodeLine = tryList[trySize].m_lEndLine;
 			tryList.resize(trySize);
@@ -1371,12 +1368,12 @@ start_label:
 
 		//there is no handler in this module - save the error location for the following modules
 		//But we don't throw an error right away, because we don't know if there are any handlers further
-		if (auto* state = ibSession::GetPUState()) {
-			if (state->m_errorPlace.m_byteCode == nullptr && m_pByteCode != state->m_errorPlace.m_skipByteCode) { //the Error system function throws an exception only for child modules
+		if (auto* puState = ibSession::GetPUState()) {
+			if (puState->m_errorPlace.m_byteCode == nullptr && m_pByteCode != puState->m_errorPlace.m_skipByteCode) { //the Error system function throws an exception only for child modules
 
 				//previously saved the original error location (i.e. the error didn't occur in this module)
-				state->m_errorPlace.m_byteCode = m_pByteCode;
-				state->m_errorPlace.m_errorLine = lCodeLine;
+				puState->m_errorPlace.m_byteCode = m_pByteCode;
+				puState->m_errorPlace.m_errorLine = lCodeLine;
 			}
 		}
 
