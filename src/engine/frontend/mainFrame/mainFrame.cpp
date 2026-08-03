@@ -13,6 +13,8 @@
 #include "frontend/session/guiSession.h"
 
 #include <wx/msgdlg.h>
+#include <wx/stdpaths.h>   // GetExecutablePath — the reload restart re-launches THIS binary
+#include <wx/filename.h>
 
 //common 
 #include "frontend/docView/docView.h"
@@ -68,10 +70,41 @@ ibFrontendMainFrame::ibFrontendMainFrame(ibSessionHolder&& holder,
 		reg->OnReload([self](ibSession* target) {
 			if (target != self || wxTheApp == nullptr) return;
 			wxTheApp->CallAfter([]() {
-				wxMessageBox(_("Session reloaded by an administrator. The application will close - please re-open it from the launcher."),
+				wxMessageBox(_("Session reloaded by an administrator. The application will restart."),
 					wxTheApp->GetAppDisplayName(), wxOK | wxICON_INFORMATION);
+
+				// RELOAD MEANS COME BACK, NOT GO AWAY. The old session ends because the metadata under it
+				// moved; the user asked for none of it and should find their application running, not a
+				// closed window and an instruction to re-open it from the launcher. Re-launch THIS binary
+				// the same way the designer launches a client — RunApplication rebuilds the connection
+				// arguments from appData and carries the session's own credentials, so the new process
+				// comes up on the same database as the same user, against the metadata that just landed.
+				//
+				// Spawned BEFORE the close: after it there is no code of ours left to spawn anything. The
+				// two processes overlap for the moment the new one spends starting, which the database is
+				// fine with — it is the same overlap as the designer's "start debugging".
+				const wxFileName exe(wxStandardPaths::Get().GetExecutablePath());
+				appData->RunApplication(exe.GetName(), /*searchDebug=*/false);
+
 				if (auto* frame = ibFrontendMainFrame::GetFrame())
 					frame->Close(true);
+			});
+		});
+
+		// A WINDOW THAT VANISHES WITHOUT A WORD READS AS A CRASH. An admin kick force-closes this session
+		// from another process, so the frame goes down under the user's hands; say why first. Only the
+		// closing is done elsewhere (ibSession::Close raises force-exit and then asks the session to
+		// close) — this listener adds the sentence, nothing else.
+		//
+		// The reason is what distinguishes an admin action from an ordinary exit: a process shutting
+		// itself down force-closes its sessions too and leaves the reason empty, and there we stay quiet —
+		// the user pressing [X] does not need to be told the application is closing.
+		reg->OnForceExit([self](ibSession* target) {
+			if (target != self || wxTheApp == nullptr) return;
+			const wxString reason = target->Reason();
+			if (reason.IsEmpty()) return;
+			wxTheApp->CallAfter([reason]() {
+				wxMessageBox(reason, wxTheApp->GetAppDisplayName(), wxOK | wxICON_INFORMATION);
 			});
 		});
 	}

@@ -395,13 +395,52 @@ the column simply stays `NULL` and `JobCheckSignal` skips work). Every
 owning process's registry thread polls `signal` for its own rows on the
 sweep tick (~3s), acts on non-empty values, and clears the cell:
 
-- `"kick"` — submits `Remove@Urgent` for that specific session; the
-  registry drops its `m_own` strong-ref → ~ibSession → row DELETE.
+- `"kick"` — cancels the session's running script, then **closes the session**
+  (`ibSession::Close(true)`); `Remove@Urgent` stays only as the fallback for a
+  close that answered "not now".
 - `"reload"` — flips `m_reloadRequested` on the registry.
   `ConsumeReloadRequest()` is a one-shot consume used by embedders
   (wfrontend's `SweepLoop`) to evict every web-client session the owner
   holds, forcing clients through `/login` against the freshly-loaded
-  metadata.
+  metadata. On desktop the per-session `NotifyReload` reaches the window
+  instead (below).
+
+### A kick has to reach the OWNER, not just the bookkeeping (2026-08-03)
+
+`"kick"` used to submit `Remove@Urgent` and nothing else. `ProcessRemove` is the
+teardown of the session RECORD — state to `Stopping`, worker queue dropped, locks
+released, row deleted — and it says nothing to whoever is USING that session. So a
+kicked client lost its row and vanished from Active Users (which read as success)
+while its window carried on living without a session; the same held for a web tab,
+whose `ibWebSession` and frame survived the delete.
+
+`ibSession::Close(true)` is the door that does both, in order: it raises the
+force-exit flag the interpreter polls (`ibProcUnit::Execute`, every few opcodes)
+and calls `OnClose(force)`, which each session kind answers for itself — the
+desktop session hops to the main thread and closes the frame, a web client queues
+its tab's destroy. Teardown then follows by itself: the owner dies, its holder is
+released, and that release IS the `Remove`. `CloseAll` already went through
+`Close(force)`; only the kick did not.
+
+**The user is owed a sentence.** A window that vanishes under the user's hands
+reads as a crash, so the kick writes a reason onto the session (`SetReason`, the
+setter beside the existing `Reason()`), and the desktop frontend's `OnForceExit`
+listener shows it before the frame goes. An ordinary process shutdown force-closes
+its sessions too and leaves the reason empty — there the listener stays quiet,
+because a user pressing [X] needs no explanation. The web has no equivalent yet:
+the reason sits on the session, but the browser only sees the 401 and the login
+form.
+
+**Reload means come back, not go away.** The desktop listener used to say "the
+application will close — re-open it from the launcher". It now re-launches the
+same binary through `appData->RunApplication` (the door the designer uses to start
+a client, which rebuilds the connection arguments and carries the session's own
+credentials) and only then closes — so the user finds their application running
+against the metadata that just landed. Spawn happens BEFORE the close for the
+obvious reason that afterwards there is no code left to spawn anything; the two
+processes overlap for the moment the new one spends starting. On web there is
+nothing to restart — the client is a browser and its "new session" is the re-login
+the eviction forces.
 
 Three entry points share one UPDATE path (`WriteSessionSignal` in
 `sessionRegistry.cpp`):

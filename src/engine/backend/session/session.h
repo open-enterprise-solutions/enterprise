@@ -572,6 +572,13 @@ public:
 	// reason to producers. Returned by value to avoid exposing the mutex.
 	wxString Reason() const;
 
+	// Same string, set WITHOUT a state change — for a close that owes the
+	// user an explanation. An admin kick writes it here before Close(true);
+	// the frontend's force-exit listener shows it and stays silent when it
+	// is empty (an ordinary process shutdown force-closes too, and that one
+	// explains itself by the user having asked for it).
+	void SetReason(const wxString& reason);
+
 	// Access mode — set once by the application at startup, before any
 	// session is created.
 	//

@@ -1624,22 +1624,40 @@ void ibSessionRegistry::JobCheckSignal()
 		          << " value='" << (const char*)p.signal.ToUTF8().data() << "'");
 
 		if (p.signal == wxT("kick")) {
-			// Find the own session and submit Remove@Urgent. Normally the
-			// owner's holder release does this; here the admin request
-			// takes that role.
 			auto it = m_own.find(p.guid);
 			if (auto target = it != m_own.end() ? it->second.Share() : nullptr) {
-				// Cooperative cancel before Remove — gives the running
-				// script a chance to unwind via ibBackendInterruptException
-				// at the next opcode, so OnExit / pool drain runs against
-				// an idle worker rather than racing a still-executing task.
+				// Cooperative cancel first — gives the running script a chance to unwind via
+				// ibBackendInterruptException at the next opcode, so the close below runs against an idle
+				// worker rather than racing a still-executing task.
 				if (m_workerPool)
 					m_workerPool->CancelSession(target.get());
 
-				ibRegistryRequest rm;
-				rm.kind    = ibRegistryRequestKind::Remove;
-				rm.session = target;
-				Submit(std::move(rm), ibPriority::Urgent);
+				// THE USER IS OWED A SENTENCE. Their window is about to vanish under their hands, and a
+				// window that vanishes silently reads as a crash. The reason rides on the session itself,
+				// where the frontend's force-exit listener reads it; an ordinary shutdown leaves it empty
+				// and says nothing, because the user closing the app already knows why it closed.
+				target->SetReason(_("Your session has been closed by the administrator."));
+
+				// A KICK MUST REACH THE OWNER, NOT JUST THE BOOKKEEPING. Remove is the teardown of the
+				// session RECORD — state to Stopping, worker queue dropped, locks released, row deleted —
+				// and it says nothing to whoever is USING the session. So a kicked desktop client lost its
+				// row (and vanished from Active Users, which read as success) while its window carried on
+				// living without a session. Close(true) is the door that does both, in order: it raises the
+				// force-exit flag the interpreter polls and calls OnClose(force), which for a desktop
+				// session hops to the main thread and closes the frame. See ibSession::RequestForceExit —
+				// "normally you call Close(true) instead". CloseAll already went through Close(force);
+				// only the kick did not.
+				//
+				// Teardown then follows by itself: the window dies, its holder is released, and that
+				// release IS the Remove. Submitting one here as well would race that path — it stays only
+				// as the fallback for a close that answered "not now", which under force should not happen
+				// but costs nothing to cover (a windowless session whose OnClose declined).
+				if (!target->Close(true)) {
+					ibRegistryRequest rm;
+					rm.kind    = ibRegistryRequestKind::Remove;
+					rm.session = target;
+					Submit(std::move(rm), ibPriority::Urgent);
+				}
 			}
 		}
 		else if (p.signal == wxT("reload")) {

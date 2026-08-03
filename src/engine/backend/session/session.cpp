@@ -1047,6 +1047,12 @@ wxString ibSession::Reason() const
 	return m_reason;
 }
 
+void ibSession::SetReason(const wxString& reason)
+{
+	std::lock_guard<std::mutex> lk(m_mtx);
+	m_reason = reason;
+}
+
 void ibSession::Transition(ibSessionState next, const wxString& reason)
 {
 	{
