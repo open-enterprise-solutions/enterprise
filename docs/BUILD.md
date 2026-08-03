@@ -250,7 +250,11 @@ MSBuild solution only; they are not yet wired into the CMake build.
 - wxWidgets is built from the submodule via `add_subdirectory()` — no system wxWidgets needed
 - Backend links against `wx::base`, `wx::core`, `wx::net`, `wx::xml`, `wx::propgrid`, `wx::aui`, `wx::stc`
 - Firebird embedded is not available via Homebrew; use SQLite for local development
-- App bundles (`designer.app`, `enterprise.app`) are created automatically by CMake
+- App bundles (`designer.app`, `enterprise.app`) are created automatically by CMake, and this
+  path is **exercised, not merely declared**: they have been built on a real Mac, with the
+  icon placed into `Resources` and `Info.plist` filled in (`CFBundleIdentifier`,
+  `CFBundleExecutable`, icon name). Treat the `if(APPLE)` branches in the designer /
+  enterprise / launcher CMake files as working code, not scaffolding
 
 ---
 

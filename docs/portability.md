@@ -274,6 +274,8 @@ Two lessons about *silencing* itself, both learned the hard way here:
 
 Still open, in order of weight: **the web is absent from CMake entirely** (`wenterprise-server`
 has no `CMakeLists.txt`, `wfrontend` is filtered out of the frontend glob) — so breaking it keeps
-all four jobs green; `designer` compiles `mainFrameDesignerCmd.cpp`, a dead legacy main-frame the
+all four jobs green. That was not a discovery: [BUILD.md](BUILD.md) has said "the web runtime
+targets build under the MSBuild solution only" all along. What is new is only the consequence,
+now that CI builds the applications everywhere else; `designer` compiles `mainFrameDesignerCmd.cpp`, a dead legacy main-frame the
 `.vcxproj` excludes, which means the two build systems produce different binaries; and 936
 `-Woverloaded-virtual` plus ~100 unmarked `override` declarations across 27 property headers.
