@@ -229,8 +229,14 @@ body is not checked at all. Thirteen failures were ten unread files plus three r
 
 ### Not yet proven anywhere
 
-- ~~**ARM64.**~~ **Closed 2026-08-03** by the macOS arm64 job — see § 3. The portable
-  `ibNumber` carry fallback now executes on a real AArch64 CPU, not only compiles.
+- **ARM64 — compiles, does not yet RUN.** The macOS arm64 job builds backend and frontend
+  (2026-08-03), so the portable `ibNumber` carry fallback is compiled by a third toolchain on a
+  second architecture. It has still **never been executed** there: every run so far stopped in
+  the build, before ctest. Until that job reaches its test step, AArch64 remains proven for
+  compilation only — and compilation is the half that matters least here. What is specific to
+  this CPU shows up at run time: `char` is UNSIGNED, the memory model is weaker than x86's (a
+  missing atomic ordering is no longer hidden), and alignment differs where a type's natural
+  alignment drove the layout. None of that is a compile error anywhere.
 
 ---
 
