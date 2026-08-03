@@ -11,6 +11,13 @@
 #ifndef _WX_DATAVIEW_H_BASE_
 #define _WX_DATAVIEW_H_BASE_
 
+// VENDORED (wxWidgets dataview base classes, wxWindows licence) — see the note in
+// datavgen.h: a system header, because inline definitions here warn in every
+// including TU and a source-level -w cannot reach them.
+#if defined(__GNUC__) || defined(__clang__)
+#  pragma GCC system_header
+#endif
+
 #include <wx/defs.h>
 
 #if wxUSE_DATAVIEWCTRL

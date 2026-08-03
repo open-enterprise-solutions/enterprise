@@ -131,8 +131,8 @@ public:
 			const ibActionID selected = actionDesc.GetSystemAction();
 			if (selected != wxNOT_FOUND) {
 				for (unsigned int i = 0; i < collection.GetCount(); i++) {
-					const ibActionID& id = collection.GetID(i);
-					if (selected == collection.GetID(i)) {
+					const ibActionID& id = collection.GetID(i);   // read once, compared below
+					if (selected == id) {
 						const ibPictureDescription& pictureDesc = collection.GetPictureByID(actionDesc.GetSystemAction());
 						if (pictureDesc.IsEmptyPicture())
 							return wxNullBitmap;
@@ -154,8 +154,8 @@ public:
 			const ibActionID selected = actionDesc.GetSystemAction();
 			if (selected != wxNOT_FOUND) {
 				for (unsigned int i = 0; i < collection.GetCount(); i++) {
-					const ibActionID& id = collection.GetID(i);
-					if (selected == collection.GetID(i)) {
+					const ibActionID& id = collection.GetID(i);   // read once, compared below
+					if (selected == id) {
 						return collection.GetCaptionByID(selected);
 					}
 				}
@@ -170,8 +170,8 @@ public:
 			const ibActionID selected = actionDesc.GetSystemAction();
 			if (selected != wxNOT_FOUND) {
 				for (unsigned int i = 0; i < collection.GetCount(); i++) {
-					const ibActionID& id = collection.GetID(i);
-					if (selected == collection.GetID(i)) {
+					const ibActionID& id = collection.GetID(i);   // read once, compared below
+					if (selected == id) {
 						return collection.GetCaptionByID(selected);
 					}
 				}
@@ -186,8 +186,8 @@ public:
 			const ibActionID selected = actionDesc.GetSystemAction();
 			if (selected != wxNOT_FOUND) {
 				for (unsigned int i = 0; i < collection.GetCount(); i++) {
-					const ibActionID& id = collection.GetID(i);
-					if (selected == collection.GetID(i)) {
+					const ibActionID& id = collection.GetID(i);   // read once, compared below
+					if (selected == id) {
 						const ibPictureDescription& pictureDesc = collection.GetPictureByID(actionDesc.GetSystemAction());
 						if (pictureDesc.IsEmptyPicture())
 							return ibRepresentation::ibRepresentation_PictureAndText;

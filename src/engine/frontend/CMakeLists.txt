@@ -35,6 +35,12 @@ add_library(frontend SHARED ${FRONTEND_SOURCES})
 # style is not ours to correct, and the volume hides our own: 150 of the 168 -Wreorder
 # lines in the 2026-08-02 CI run came from win/ctrls/dataview alone.
 #
+# NOTE the limit of this, learned from a CI log rather than guessed: COMPILE_OPTIONS on
+# a SOURCE file applies to that .cpp only. A vendored HEADER with inline definitions --
+# dataview/datavgen.h is the loud one -- warns inside every OUR .cpp that includes it,
+# where this flag is not in effect. Those headers carry `#pragma GCC system_header`
+# instead; that is the only thing that silences a header at its own definition site.
+#
 # docs/wx-fork.md is the inventory of what is forked and why.
 # ---------------------------------------------------------------------------
 set(FRONTEND_VENDORED_SOURCES ${FRONTEND_SOURCES})

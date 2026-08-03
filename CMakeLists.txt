@@ -198,8 +198,22 @@ else()
     # from the vendored forks, which compile quiet per the rule above.
     add_compile_options(-Wno-unknown-pragmas -Wno-attributes)
 
+    # Clang adds a third one of the same kind, and it is the loudest yet: the first
+    # macOS build produced 67,318 warning lines, of which 66,563 — 99% — were
+    # -Winconsistent-missing-override. GCC has no equivalent in -Wall, so this is
+    # new information, but not information anyone can act on in that volume: the
+    # property hierarchy marks roughly half its overrides, the headers reach most
+    # of the backend, and every unmarked one reprints in every TU that includes
+    # them. It buried the four classes that DID matter (an undefined inline, ten
+    # NULL-vs-non-pointer comparisons, 649 hidden virtuals, and the one real
+    # error). Silenced to keep the next real finding visible — marking the
+    # overrides is a separate pass over ~100 declarations in 27 headers, and is
+    # worth doing: `override` is what catches a base signature drifting.
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        add_compile_options(-Wno-deprecated-declarations)
+        add_compile_options(
+            -Wno-inconsistent-missing-override
+            -Wno-deprecated-declarations
+        )
     endif()
 endif()
 

@@ -234,7 +234,7 @@ private:
 				}
 			}
 			else {
-				wxPGProperty* catId = m_pg->Append(new wxPropertyCategory(nextCat->GetLabel(), nextCat->GetName()));
+				m_pg->Append(new wxPropertyCategory(nextCat->GetLabel(), nextCat->GetName()));   // the category is the point; the handle is not used
 				AddItems(nextCat->GetName(), obj, nextCat, properties);
 			}
 		}
@@ -306,7 +306,7 @@ private:
 				}
 			}
 			else {
-				wxPGProperty* catId = m_pg->Append(new wxPropertyCategory(nextCat->GetLabel(), nextCat->GetName()));
+				m_pg->Append(new wxPropertyCategory(nextCat->GetLabel(), nextCat->GetName()));   // the category is the point; the handle is not used
 				AddItems(nextCat->GetName(), obj, nextCat, events);
 			}
 		}

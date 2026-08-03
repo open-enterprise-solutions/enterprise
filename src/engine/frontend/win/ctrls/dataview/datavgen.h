@@ -10,6 +10,15 @@
 #ifndef __GENERICDATAVIEWCTRLH__
 #define __GENERICDATAVIEWCTRLH__
 
+// VENDORED (wxWidgets generic dataview, wxWindows licence). Marked a system header so
+// its diagnostics stay out of OUR logs: the classes here are defined inline, so every
+// warning reprinted in every TU that includes it -- 160 lines in one CI run, all from
+// upstream code we do not correct. Per-file -w does NOT cover this; that flag applies
+// to the .cpp being compiled, and these come from the header itself.
+#if defined(__GNUC__) || defined(__clang__)
+#  pragma GCC system_header
+#endif
+
 #include <wx/defs.h>
 #include <wx/object.h>
 #include <wx/compositewin.h>
