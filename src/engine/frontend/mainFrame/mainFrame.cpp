@@ -47,8 +47,12 @@ ibFrontendMainFrame::ibFrontendMainFrame(ibSessionHolder&& holder,
 	long style,
 	const wxString& strName) : ibBackendDocFrame(std::move(holder)),
 	ibDocParentFrameAnyBase(this),
-	m_objectInspector(nullptr), m_mainFrameToolbar(nullptr), m_docToolbar(nullptr),
-	m_callRaiseFrame(false), m_callUpdateFrameManager(false)
+	// Declaration order (mainFrame.h): m_objectInspector, … m_callRaiseFrame,
+	// m_callUpdateFrameManager, m_mainFrameToolbar, m_docToolbar. Members are constructed
+	// in that order whatever this list says, so the list follows it.
+	m_objectInspector(nullptr),
+	m_callRaiseFrame(false), m_callUpdateFrameManager(false),
+	m_mainFrameToolbar(nullptr), m_docToolbar(nullptr)
 {
 	Create(title, pos, size, style | wxNO_FULL_REPAINT_ON_RESIZE);
 

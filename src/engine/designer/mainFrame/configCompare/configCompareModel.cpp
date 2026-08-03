@@ -229,7 +229,11 @@ void ibDataViewMetaDiffModel::GetValue(wxVariant& variant,
 		// Mixed states render as unchecked for now (tri-state would
 		// need a custom toggle renderer).
 		if (rec.IsMergeCandidate())
-			variant = wxVariant(m_selected[idx]);
+			// static_cast, because m_selected is a std::vector<bool>: indexing it yields a
+			// PROXY (std::vector<bool>::reference), not a bool, and libc++ offers several
+			// equally good conversions from it — wxVariant(bool) / (int) / (wxAny) — so the
+			// call is ambiguous there while it compiles on MSVC and libstdc++.
+			variant = wxVariant(static_cast<bool>(m_selected[idx]));
 		else if (HasMergeCandidateDescendant(idx))
 			variant = wxVariant(IsAllDescendantsSelected(idx));
 		else

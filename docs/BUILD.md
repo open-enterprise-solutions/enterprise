@@ -351,9 +351,11 @@ were never compiled by it at all — a break in an executable's own sources reac
 before it reached the pipeline. The step is cheap: backend and frontend are already built by
 the steps above it.
 
-Current state (2026-08-02, job logs): **both Linux and Windows green at the same count — 914/914**
-(Linux 98.7 s, Windows 140.1 s; the GUI job 26/26 under Xvfb). What the GCC introduction cost and
-the rules that came out of it are in [portability.md](portability.md).
+Current state (2026-08-03, job logs): **Linux and Windows green at 919/919** (Linux 107 s /
+~33 min job, Windows 137 s / ~37 min), GUI **26/26** under Xvfb, and both platforms now link
+every application. macOS arm64 is the fastest of the three at **~20 min** and is working through
+its first runs — six defects it surfaced, and what the noise hid, are in
+[portability.md § 3](portability.md).
 
 **The macOS job is not a first compile.** A colleague has been building the tree on a Mac locally
 — which is why [portability.md § 3](portability.md) listed macOS as "not in CI" rather than as

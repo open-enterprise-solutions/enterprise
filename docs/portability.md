@@ -156,16 +156,20 @@ including the instances the compiler had not reached yet.
 
 ## 2. Platform status
 
+Measured from the CI job logs of 2026-08-03, not from recollection.
+
 | Platform | Build | Suite | Notes |
 |---|---|---|---|
-| **Windows x64** (MSVC, Ninja) | green | **914/914** | Matches the local `.sln` build exactly |
+| **Windows x64** (MSVC, Ninja) | green, **applications linked** | **919/919** (137 s) | Matches the local `.sln` build exactly. Job ~37 min |
 | **Windows x86** (MSVC, `.sln`) | green | — | The shipping build |
-| **Linux x64** (GCC 11, libstdc++, wxGTK) | green | **914/914** | Identical count to Windows — same tests, same result |
-| **GUI (Linux, Xvfb)** | green | **26/26** | `libfrontend.so` links; the runtime-form suite passes under Xvfb |
-| **macOS 14 arm64** (Apple Clang, libc++, wxOSX) | in CI as of 2026-08-03 | pending its first run | Was already building locally on a colleague's Mac; the job makes that standing rather than remembered. ARM64, libc++, wxOSX — three differences at once, and the only place `guid.cpp`'s CFUUID branch compiles |
+| **Linux x64** (GCC 11, libstdc++, wxGTK) | green, **applications linked** | **919/919** (107 s) | Identical count to Windows — same tests, same result. Job ~33 min |
+| **GUI (Linux, Xvfb)** | green | **26/26** (1.9 s) | `libfrontend.so` links; the runtime-form suite passes under Xvfb |
+| **macOS 14 arm64** (Apple Clang, libc++, wxOSX) | backend + frontend green; designer in progress | pending | **Fastest of the three: ~20 min against Linux 33 and Windows 37** — three-core M1 at `"jobs": 3`, half the parallelism the Windows preset uses. Six defects found on its first runs, listed in § 3 |
 
 The engine — backend, compiler, interpreter, query engine, all five drivers — is cross-platform
-as of 2026-08-02. Two toolchains, two standard libraries, two 64-bit models, one result.
+as of 2026-08-02, and as of 2026-08-03 so are the **applications**: `enterprise`, `designer`,
+`daemon`, `launcher`, `codeRunner` and `simplePlugin` link on Linux and Windows in CI. Three
+toolchains, three standard libraries, two 64-bit models, two CPU architectures, one result.
 
 What that claim does **not** cover, so nobody reads more into the table than it says:
 
@@ -225,8 +229,45 @@ body is not checked at all. Thirteen failures were ten unread files plus three r
 
 ### Not yet proven anywhere
 
-- **ARM64.** `ibNumber` uses `_addcarry_u32` / `_subborrow_u32` under MSVC on x86/x64 and a
-  portable fallback everywhere else. That fallback has **never been executed by the suite** — only
-  compiled. An ARM job (`ubuntu-24.04-arm`, free for public repos) would run the exact-decimal
-  tests over it, and does so without dragging in Clang / libc++ / wxOSX at the same time, which is
-  what makes it a cleaner first step than macOS.
+- ~~**ARM64.**~~ **Closed 2026-08-03** by the macOS arm64 job — see § 3. The portable
+  `ibNumber` carry fallback now executes on a real AArch64 CPU, not only compiles.
+
+---
+
+## 3. What the third toolchain found on its first day (2026-08-03)
+
+Apple Clang on AArch64 is the third compiler, the third standard library and the second CPU at
+once. It paid for itself immediately, and — this is the part worth remembering — **none of what
+it found was new**. Every one of these had been sitting in the tree, invisible for want of an
+observer:
+
+| Finding | Class |
+|---|---|
+| `getrandom()` called on macOS | a two-way `#if` where the platform needs three (§ 1.4) |
+| ten `NULL` compared against non-pointers | Firebird handles are `unsigned int`; wx `Parse*` return `bool` |
+| `CheckIndex` declared `inline`, defined in a `.cpp`, called from a header | a promise no TU could keep |
+| three `SetPropVal` overrides missing the base's `const` | not overrides at all — they HID the virtual |
+| `wxVariant(m_selected[idx])` over a `std::vector<bool>` | indexing yields a PROXY; libc++ finds the conversion ambiguous |
+| two `wxCharts` include guards checking one macro and defining another | the header is not guarded at all |
+
+**The noise mattered as much as the findings.** The first macOS run produced 67,318 warning
+lines, of which 66,563 were `-Winconsistent-missing-override` — the property hierarchy marks
+about half its overrides, and every unmarked one reprints in each TU that includes the header.
+Silencing that one class (Clang only; GCC has no equivalent in `-Wall`) took the log to ~1,200
+lines and made the six findings above visible. They had all been present in the first log too.
+
+Two lessons about *silencing* itself, both learned the hard way here:
+
+- `COMPILE_OPTIONS` on a **source file** cannot quiet a **header**. Vendored `datavgen.h` defines
+  its classes inline, so it warned inside our TUs, where that flag does not apply — 429
+  `-Wreorder` lines survived a setting meant to remove them. `#pragma GCC system_header` in the
+  header is what works; it took the same class to 3.
+- Silence the vendor, fix ours. Of the same batch, `objinspect.h` and `toolBar.h` were **our**
+  headers, and one of them was re-reading `collection.GetID(i)` twice per loop iteration while
+  leaving the first read unused.
+
+Still open, in order of weight: **the web is absent from CMake entirely** (`wenterprise-server`
+has no `CMakeLists.txt`, `wfrontend` is filtered out of the frontend glob) — so breaking it keeps
+all four jobs green; `designer` compiles `mainFrameDesignerCmd.cpp`, a dead legacy main-frame the
+`.vcxproj` excludes, which means the two build systems produce different binaries; and 936
+`-Woverloaded-virtual` plus ~100 unmarked `override` declarations across 27 property headers.
