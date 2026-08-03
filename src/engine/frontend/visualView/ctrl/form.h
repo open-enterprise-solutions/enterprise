@@ -314,21 +314,20 @@ public:
 	virtual wxString GetControlTitle() const;
 
 	ibValue GetCreatedValue() const { return m_createdValue; }
-	ibValue GetChangedValue() const { return m_changedValue; }
 
-	// One-shot consume - read and reset.  NotifyCreate/NotifyChange set
-	// these to drive position-to-new on the next UpdateForm.  Without
-	// clearing, every subsequent UpdateForm (manual Refresh, sort, idle
-	// reset) sees the same value and re-positions, bouncing the user's
-	// later selection back to the create / change row.
+	// One-shot consume - read and reset.  NotifyCreate sets this to drive
+	// position-to-new on the next UpdateForm.  Without clearing, every
+	// subsequent UpdateForm (manual Refresh, sort, idle reset) sees the
+	// same value and re-positions, bouncing the user's later selection
+	// back to the create row.
+	//
+	// There is no changedValue twin any more: a CHANGE carries no position
+	// anchor, because the current row survives a refresh as a refcounted
+	// node and re-locates itself by row-key.  Only a create — a row that
+	// did not exist to stand on — moves the user.
 	ibValue ConsumeCreatedValue() {
 		ibValue v = m_createdValue;
 		m_createdValue = wxEmptyValue;
-		return v;
-	}
-	ibValue ConsumeChangedValue() {
-		ibValue v = m_changedValue;
-		m_changedValue = wxEmptyValue;
 		return v;
 	}
 
@@ -504,7 +503,6 @@ private:
 	void OnIdleHandler(wxTimerEvent& event);
 
 	ibValue					m_createdValue;
-	ibValue					m_changedValue;
 
 	ibFormID		m_formType;
 	ibUniqueKey				m_formKey;

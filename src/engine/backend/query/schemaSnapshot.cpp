@@ -263,13 +263,32 @@ wxString ColName(const ibBackendQueryColumn* col)
 // (no table line, since it owns no create here).
 int CreateTable(ibStructureBatch& batch, const ibSchemaTable& t, ibRestructureInfo* report)
 {
+	// A TABLE IS BORN WITH ITS SCAFFOLD, AND A TABLE WITHOUT ONE IS BORN WITH ITS OWN COLUMNS. SQL has no
+	// `CREATE TABLE x ()` — Firebird answers "Token unknown ... )" and the whole config apply aborts. That is
+	// what a REGISTER became when its rowData-blob scaffold was dropped (2026-08-02): identity there floats over
+	// the dimensions, it has no row-key column, so the create carried nothing and no new register could be
+	// created at all (existing ones were unaffected — they diff through AlterTable). The logical columns then
+	// ride the create instead of a follow-up ADD each. `CreateIndex` has guarded its empty case all along.
+	bool columnsRodeTheCreate = false;
 	if (!t.m_external) {
-		batch.CreateTable(t.m_scaffold);
+		std::vector<const ibBackendQueryColumn*> createWith = t.m_scaffold;
+		if (createWith.empty()) {
+			for (const ibSchemaColumn& c : t.m_columns)
+				createWith.push_back(c.m_column);
+			columnsRodeTheCreate = true;
+		}
+		// Still nothing? Then there is no table to speak of — a register declared with no fields at all. Emitting
+		// the create anyway is the very statement that fails; skip it and let the NEXT apply create the table once
+		// the user gives it a dimension (the differ sees it missing from the baseline and comes back here).
+		if (createWith.empty())
+			return 1;
+		batch.CreateTable(createWith);
 		if (report != nullptr)
 			report->AppendInfo(_("Create table ") + LedgerName(t));
 	}
 	for (const ibSchemaColumn& c : t.m_columns) {
-		DiffColumnInto(batch, c.m_column, nullptr);
+		if (!columnsRodeTheCreate)
+			DiffColumnInto(batch, c.m_column, nullptr);
 		if (report != nullptr && t.m_external)
 			report->AppendInfo(_("Add ") + ColName(c.m_column) + _(" to ") + LedgerName(t));
 	}

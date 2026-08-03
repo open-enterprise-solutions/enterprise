@@ -636,21 +636,17 @@ void ibValueModelTableBox::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxpar
 					m_dataViewSelected = true;
 				}
 
-				if (line == nullptr) {
-					// Always consume changedValue when no createdValue /
-					// ownerControl line was resolved.  Post-edit save on a
-					// row already selected (m_tableCurrentLine != nullptr)
-					// needs this path: NotifyChange from manager-save
-					// fires `ownerForm->m_changedValue` with the row's
-					// fresh identity, and we replace the stale current
-					// line with a stub matching the new identity.
-					// ConsumeChangedValue clears the field, so the next
-					// OnUpdated cycle won't re-position uninitialized.
-					const ibValue changedValue = m_formOwner->ConsumeChangedValue();
-					if (!changedValue.IsEmpty()) {
-						line = ResolveLineByValue(m_tableModel, changedValue);
-					}
-				}
+				// NO changedValue BRANCH. Re-writing an EXISTING element used to re-position the list on it,
+				// which yanked the user off the row they were standing on whenever an object form was saved
+				// while the list was browsed elsewhere. It is gone rather than gated, because the knowledge it
+				// carried is no longer needed anywhere: the current row is a REFCOUNTED node that survives the
+				// wipe, and it re-locates itself in the new batch by its own row-key (PagedRefresh stamps it
+				// into m_pagedRestoreFocus, OnPagedFetchResetComplete matches it via IsEqualTo). The channel
+				// dates from when a row had to be SEARCHED for after a refresh. A CREATE still earns its
+				// branch above — that row did not exist, so there was nothing to stand on and nothing to
+				// re-locate. Known edge left open deliberately: editing a register record's KEY changes the
+				// row's identity, so the old row-key no longer matches and focus drops — by then it is a
+				// different row, and "stay on it" is a fiction.
 
 				// Initial-open sync. On first populate the ctrl highlights the top row VISUALLY, but that
 				// programmatic selection fires no wxEVT_DATAVIEW_SELECTION_CHANGED, so m_tableCurrentLine

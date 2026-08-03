@@ -301,7 +301,6 @@ void ibValueForm::NotifyCreate(const ibValue& vCreated)
 	if (ownerForm != nullptr) {
 
 		ownerForm->m_createdValue = vCreated;
-		ownerForm->m_changedValue = wxEmptyValue;
 
 		ownerForm->UpdateForm();
 	}
@@ -317,8 +316,10 @@ void ibValueForm::NotifyChange(const ibValue& vChanged)
 
 	if (ownerForm != nullptr) {
 
+		// A CHANGE ONLY MEANS "RE-READ". No position anchor travels with it any more (see tableBox's OnUpdated):
+		// the row already exists and the list re-locates its own current row by row-key. Clearing a PENDING
+		// create anchor stays — a save that follows a create must not re-fire the create's positioning.
 		ownerForm->m_createdValue = wxEmptyValue;
-		ownerForm->m_changedValue = vChanged;
 
 		ownerForm->UpdateForm();
 	}
@@ -335,7 +336,6 @@ void ibValueForm::NotifyDelete(const ibValue& vChanged)
 	if (ownerForm != nullptr) {
 
 		ownerForm->m_createdValue = wxEmptyValue;
-		ownerForm->m_changedValue = wxEmptyValue;
 
 		ownerForm->UpdateForm();
 	}

@@ -246,6 +246,22 @@ This restores the per-list "find by key" the deleted family models did. The gene
 a catalog / document row (one guid) but never a register row (multi-column key) — which is why a register list
 dropped its selection on a value change until the key build moved onto the descriptor.
 
+**Only an identity that APPEARED or MOVED positions the list (2026-08-03).** There used to be a second
+channel beside `createdValue`: `NotifyChange` stamped `m_changedValue` and the list re-positioned onto the
+saved element. It moved the cursor off whatever row the user was standing on whenever an object form was
+saved while the list was browsed elsewhere — an object form stays open, so this was ordinary. The channel is
+GONE, not gated: the knowledge it carried is no longer needed, because the current row is a refcounted node
+that survives the wipe and re-locates itself in the new batch by its own row-key (`PagedRefresh` stamps it
+into `m_pagedRestoreFocus`; `OnPagedFetchResetComplete` matches it via `IsEqualTo`). It dates from when a row
+had to be SEARCHED for after a refresh. `NotifyChange` now means exactly "re-read".
+
+What still earns an anchor is an identity the list cannot find: one that did not exist (a create), or one
+that MOVED. The second is a register: its key floats over its dimensions, so editing a dimension does not
+modify a record, it replaces it — the old key is gone from the table. `WriteRegister` therefore compares the
+key composite across `SaveData` (which rewrites it in place via `SetKeyValues`) and reports `newObject ||
+keyMoved` through `NotifyCreate`. For the list that is the truth: the row it held is gone and this one is
+new. A plain re-write leaves every key where it was and sends no anchor at all.
+
 **A stub answers for its identity too (2026-08-03).** That stub does not just travel to the bootstrap — it
 BECOMES the current row (`ApplyCurrentLine`), and it stays current until the user clicks, because the
 bootstrap's own `Select` is programmatic and fires no `SELECTION_CHANGED`. `GetItemKey` decoded identity from

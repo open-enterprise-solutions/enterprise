@@ -103,6 +103,12 @@ bool ibValueRecordManagerObjectInformationRegister::WriteRegister(bool replace)
 
 				bool newObject = ibValueRecordManagerObjectInformationRegister::IsNewObject();
 
+				// A REGISTER'S KEY FLOATS OVER ITS DIMENSIONS, so editing one does not modify a record — it
+				// REPLACES it: the old key is gone from the table and a row under a new key is what remains.
+				// SaveData rewrites m_objGuid's composite in place (SetKeyValues), so the previous one has to be
+				// taken now, before the write.
+				const ibRowMetaValues keyBefore = m_objGuid.GetKeyValues();
+
 				if (!SaveData()) {
 					scope.SafeRollBackTransaction();
 					ibBackendCoreException::Error(_("Register '%s': failed to store the record"),
@@ -116,7 +122,14 @@ bool ibValueRecordManagerObjectInformationRegister::WriteRegister(bool replace)
 
 				ibBackendValueForm* const valueForm = GetForm();
 
-				if (newObject && valueForm != nullptr) valueForm->NotifyCreate(GetValue());
+				// WHICH NEWS THE LIST NEEDS is not "was this new" but "can the list still find the row it knows".
+				// It identifies rows by their key, so only an identity that APPEARED or MOVED is worth an anchor;
+				// a plain re-write leaves every key where it was and must not drag the user's cursor to it (an
+				// object form sits open while the list is browsed elsewhere). A key change is, for the list,
+				// exactly a create: the row it held is gone, this one is new.
+				const bool keyMoved = !newObject && m_objGuid.GetKeyValues() != keyBefore;
+
+				if ((newObject || keyMoved) && valueForm != nullptr) valueForm->NotifyCreate(GetValue());
 				else if (valueForm != nullptr) valueForm->NotifyChange(GetValue());
 			}
 

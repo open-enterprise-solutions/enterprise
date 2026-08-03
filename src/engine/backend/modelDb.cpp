@@ -94,6 +94,15 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// DynamicRead OFF (the safety fallback): serve the WHOLE list from the RAM snapshot — materialise it once, then
 	// page + group it IN MEMORY (RunStoragePage), bypassing the keyset cursor entirely.
 	if (!IsDynamicRead()) {
+		// A RESET IS A RE-READ, and the snapshot must obey it. Its cheap re-check keys off the VIEW GENERATION,
+		// which only a filter / sort / explicit RefetchAll bumps — a save does not touch it. So the one path that
+		// matters most, "an object form wrote a row and the list re-pulls" (UpdateForm -> SchedulePagedRefresh ->
+		// a Reset fetch), found the snapshot still valid and served the PRE-SAVE rows: with DynamicRead off a
+		// created element never appeared and an edited one kept its old cells until the user happened to sort or
+		// filter. Forward / Backward keep reusing the materialisation — a scroll is not a re-read, and paging in
+		// RAM is the whole point of this mode.
+		if (dir == ibFetchDirection::Reset)
+			m_snapshotValid = false;
 		EnsureSnapshot();
 		return RunStoragePage(m_snapshot, m_snapshotComposer, parent, anchor, count, dir, out);
 	}

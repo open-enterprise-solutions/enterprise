@@ -91,6 +91,17 @@ properties (which may legitimately be named `Type`/`Id`/`Predefined`).
   (`schemaSnapshot`/`structureBatch`/`structureBuilder`, ~15 sites) has the same
   latent pattern — by-demand.
 
+- **A table is born from its SCAFFOLD, so a table without one was born empty** (found 2026-08-03).
+  `CreateTable` in the differ (`schemaSnapshot.cpp`) emits the DDL from `t.m_scaffold` and ADDs the
+  logical columns afterwards. That held while every table had a row-key scaffold column — until the
+  register's `rowData` blob was dropped (2026-08-02) as dead weight. A register's identity floats over
+  its dimensions and it owns no row-key column, so its create carried nothing: `CREATE TABLE X ()`,
+  which SQL has no syntax for (Firebird: *Token unknown — line 1, column 39, `)`*) and the whole
+  config apply aborted. Only NEW registers were affected; existing ones diff through `AlterTable`.
+  Now a scaffold-less table is created WITH its logical columns (and they skip the follow-up ADD);
+  a table with nothing at all is not created — the next apply picks it up once it has a field.
+  `CreateIndex` had guarded its empty case all along; the create had no such guard.
+
 ### Still deferred (unchanged from the direction)
 File-tree / ZIP **reader** provider (folder-tree → nodes, for GitHub navigation;
 write-side derives folders from `clsid`+`Name` in the provider, no marker on nodes);

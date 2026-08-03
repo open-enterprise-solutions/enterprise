@@ -321,6 +321,13 @@ kinds (§1) meet.
 - **Invalidation is free.** The snapshot re-materialises only when the view generation moves — a refresh /
   filter / sort change bumps it, a scroll does not. Scrolling reuses the snapshot; a settings change reloads
   it. (The silent `AddValue` bumps the counter per row, so the generation is captured AFTER the fill.)
+- **A RESET re-reads it, generation or not (2026-08-03).** Free invalidation was too free: the generation is
+  bumped by `RefetchAll` alone — sort, filter, settings — and a SAVE bumps nothing. So the path that matters
+  most, an object form writing a row and the list re-pulling (`UpdateForm` → `SchedulePagedRefresh` → a Reset
+  fetch), found the snapshot still valid and kept serving the pre-save rows: with dynamic read OFF a created
+  element never appeared and an edited one showed its old cells until the user happened to sort. A Reset IS
+  the re-read, so `RunComposerPage` drops `m_snapshotValid` on it; Forward / Backward keep reusing the
+  materialisation, because a scroll is not a re-read and RAM paging is the whole point of this mode.
 - **The toggle** is the dynamic list's `DynamicRead` designer property (default = live). OFF is the safety
   net for when cursor paging misbehaves, or a small / stable list where liveness doesn't matter — at the
   cost of loading the whole result into memory and a static (refresh-to-update) view. A self-hierarchy
