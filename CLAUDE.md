@@ -8,6 +8,19 @@ This file gives an AI assistant (Claude Code or similar) the context needed to w
 
 **Open Enterprise Solutions (OES)** is a C++17 cross-platform low-code enterprise application platform. It lets developers define business applications through metadata (object types, forms, modules) and a built-in scripting language, without writing low-level code.
 
+**"Cross-platform" here is measured, not aspirational.** As of 2026-08-03 the platform core —
+metadata, the language and its compiler, the bytecode interpreter, the query engine, the database
+layer and the form layer — builds from one code base and passes an **identical 919-test suite**
+under three toolchains on two architectures: MSVC on Windows x64, GCC on Linux x64, and Apple
+Clang on macOS 14 **arm64**. All four CI jobs green, every application (`enterprise`, `designer`,
+`daemon`, `launcher`, `codeRunner`, `simplePlugin`) linked on every platform.
+
+Two boundaries, so the claim is not read wider than it is: the **web** targets
+(`wenterprise-server`, `wfrontend`) build under the MSBuild solution only and are absent from
+CMake, so they are Windows-only in practice; and of the five drivers, all compile everywhere but
+only **SQLite executes** in CI — Firebird and PostgreSQL load their clients at run time, which
+the runners do not have. Details and the day's findings: [docs/portability.md](docs/portability.md).
+
 The runtime executes compiled bytecode, renders forms through wxWidgets, and stores all application data in a relational database (Firebird by default).
 
 ---

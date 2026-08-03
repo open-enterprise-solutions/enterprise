@@ -160,11 +160,20 @@ Measured from the CI job logs of 2026-08-03, not from recollection.
 
 | Platform | Build | Suite | Notes |
 |---|---|---|---|
-| **Windows x64** (MSVC, Ninja) | green, **applications linked** | **919/919** (137 s) | Matches the local `.sln` build exactly. Job ~37 min |
+| **Windows x64** (MSVC, Ninja) | green, **applications linked** | **919/919** (132 s) | Matches the local `.sln` build exactly. Job ~37 min |
 | **Windows x86** (MSVC, `.sln`) | green | — | The shipping build |
-| **Linux x64** (GCC 11, libstdc++, wxGTK) | green, **applications linked** | **919/919** (107 s) | Identical count to Windows — same tests, same result. Job ~33 min |
+| **Linux x64** (GCC 11, libstdc++, wxGTK) | green, **applications linked** | **919/919** (96.6 s) | Identical count to Windows — same tests, same result. Job ~33 min |
 | **GUI (Linux, Xvfb)** | green | **26/26** (1.9 s) | `libfrontend.so` links; the runtime-form suite passes under Xvfb |
-| **macOS 14 arm64** (Apple Clang, libc++, wxOSX) | backend + frontend green; designer in progress | pending | **Fastest of the three: ~20 min against Linux 33 and Windows 37** — three-core M1 at `"jobs": 3`, half the parallelism the Windows preset uses. Six defects found on its first runs, listed in § 3 |
+| **macOS 14 arm64** (Apple Clang, libc++, wxOSX) | green, **applications linked** | **919/919** (163 s) | Same count as the other two — a third toolchain, a third standard library and a second CPU agreeing on every test. **Fastest job of the three: ~22 min against Linux 33 and Windows 37**, on a three-core M1 at `"jobs": 3` — half the parallelism the Windows preset uses. Six defects found on its first runs, listed in § 3 |
+
+**The GUI on macOS is known to work, by hand rather than by CI.** A colleague develops on a Mac:
+designer and the enterprise runtime run there, forms render, the app bundles carry their icon.
+That is why the port cost six small defects and not a rewrite — the ground had been walked before
+CI ever saw it. What the macOS job adds is not discovery but **retention**: it turns "builds on
+one machine, when someone remembers to try" into "builds on every commit, for everyone". The
+still-missing half is a GUI job there (the harness needs a window server, and the headless story
+on macOS is not Xvfb), so on that platform CI covers the build and the backend suite, and a human
+covers the screen.
 
 The engine — backend, compiler, interpreter, query engine, all five drivers — is cross-platform
 as of 2026-08-02, and as of 2026-08-03 so are the **applications**: `enterprise`, `designer`,
@@ -229,14 +238,14 @@ body is not checked at all. Thirteen failures were ten unread files plus three r
 
 ### Not yet proven anywhere
 
-- **ARM64 — compiles, does not yet RUN.** The macOS arm64 job builds backend and frontend
-  (2026-08-03), so the portable `ibNumber` carry fallback is compiled by a third toolchain on a
-  second architecture. It has still **never been executed** there: every run so far stopped in
-  the build, before ctest. Until that job reaches its test step, AArch64 remains proven for
-  compilation only — and compilation is the half that matters least here. What is specific to
-  this CPU shows up at run time: `char` is UNSIGNED, the memory model is weaker than x86's (a
-  missing atomic ordering is no longer hidden), and alignment differs where a type's natural
-  alignment drove the layout. None of that is a compile error anywhere.
+- ~~**ARM64.**~~ **Closed 2026-08-03, and this time by execution, not by a build.** The macOS
+  arm64 job ran the whole suite: **919/919 in 163 s**, all applications linked. That is the half
+  that mattered — everything specific to this CPU is invisible to a compiler and shows up only at
+  run time: `char` is UNSIGNED, the memory model is weaker than x86's (a missing atomic ordering
+  is no longer hidden by the hardware), and alignment differs where a type's natural alignment
+  drove the layout. Ninety-five `ibNumber` tests executed there, `NumberLayout.SizeofIs` and
+  `NumberLayout.AlignofIs` among them, so the portable carry fallback — the one MSVC never takes,
+  since `_addcarry_u32` covers x86 — is now exercised on real AArch64 rather than merely compiled.
 
 ---
 
