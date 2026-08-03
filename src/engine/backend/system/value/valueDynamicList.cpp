@@ -276,7 +276,22 @@ ibUniqueKey ibValueDynamicList::GetItemKey(const ibDataViewItem& item) const
 	if (node == nullptr)
 		return ibUniqueKey();
 	const ibQueryableSourceDescriptor* holder = GetSourceDescriptor();
-	return holder != nullptr ? holder->GetItemKey(node->GetTableValues()) : ibUniqueKey();
+	if (holder == nullptr)
+		return ibUniqueKey();
+	// A RESTORE STUB IS A ROW WE KNOW THE KEY OF, not a row without one. FindRowValue answers with a key-only
+	// node (m_rowKey set, no cells) and that node becomes the current row after a save — the bootstrap's Select
+	// is programmatic and fires no SELECTION_CHANGED, so nothing replaces it until the user clicks. Decoding
+	// identity from the CELLS alone therefore returned nothing and every by-key command (Copy / Edit / Delete /
+	// MarkAsDelete) silently did nothing on a freshly created element. Resolve the row by its key first — the
+	// SAME point lookup the keyset anchor and the breadcrumb walk already run on a stub — and decode identity
+	// from what comes back. One question ("what row is this?"), one existing answer, asked in a third place.
+	if (node->IsKeyOnlyAnchor()) {
+		ibRowMetaValues resolved;
+		for (const auto& cell : ResolveAnchorByKey(node->GetRowKey()))
+			resolved.insert_or_assign(cell.first, cell.second);
+		return holder->GetItemKey(resolved);
+	}
+	return holder->GetItemKey(node->GetTableValues());
 }
 
 // Selection-restore after a child-form save (createdValue / changedValue → the current row is re-found): the list

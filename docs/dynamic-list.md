@@ -246,6 +246,19 @@ This restores the per-list "find by key" the deleted family models did. The gene
 a catalog / document row (one guid) but never a register row (multi-column key) — which is why a register list
 dropped its selection on a value change until the key build moved onto the descriptor.
 
+**A stub answers for its identity too (2026-08-03).** That stub does not just travel to the bootstrap — it
+BECOMES the current row (`ApplyCurrentLine`), and it stays current until the user clicks, because the
+bootstrap's own `Select` is programmatic and fires no `SELECTION_CHANGED`. `GetItemKey` decoded identity from
+the node's CELLS, which a stub has none of, so every by-key command — Copy / Edit / Delete / MarkAsDelete,
+all of which open with `if (!key.IsOk()) return` — silently did nothing on a just-created element. Reported
+as "add an element, then try to clone it: no reaction", clearing as soon as any row was clicked.
+
+The stub is not a row without a key; it is a row that is NOTHING BUT its key. So `GetItemKey` resolves the
+row by that key first (`ResolveAnchorByKey` — the SAME point lookup the keyset anchor and
+`BuildAncestorBreadcrumb` already run on a stub) and decodes identity from what comes back. One question,
+one existing answer, asked in a third place — and because it sits on the model rather than on the desktop
+TableBox, the web front gets it for free.
+
 ### Source metaobject + icon / caption (via the queryable)
 
 The list vends `GetSourceMetaObject()` (its `ibSourceDataObject` override) THROUGH the queryable —

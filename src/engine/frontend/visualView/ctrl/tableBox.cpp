@@ -267,16 +267,23 @@ void ibValueModelTableBox::ApplyCurrentLine(
 		else {
 			const ibDataViewItem item = line->GetLineItem();
 			if (item.IsOk()) {
-				// Select() itself routes to the bootstrap-restore
-				// channel for paged models when the row isn't yet
-				// in the tree (stub case) — see ibDataViewCtrl::Select.
-				dataViewCtrl->UnselectAllRows();
+				// NOTHING IS UNSELECTED AHEAD OF THE FRAME THAT REPLACES IT. Select() itself
+				// drops the old highlight (single-sel) in the same call that puts the new one
+				// up — but ONLY when the row is already in the buffer. For a paged model the
+				// row usually is NOT: Select routes the item into the bootstrap-restore channel
+				// and the highlight lands when the fetch answers, a whole query later. Clearing
+				// here first left that interval with no current row at all — the cursor
+				// vanishing and then reappearing elsewhere, which is the flicker the rest of
+				// the paged path (wipe + fill under one freeze, see PagedRefresh) already
+				// avoids. The old row now keeps its highlight until OnPagedFetchResetComplete
+				// swaps both inside the same frozen frame.
 				dataViewCtrl->Select(item);
 				if (focus) {
-					// SetCurrentItem moves keyboard focus / edit-on-Enter
-					// anchor; EnsureVisible scrolls the viewport.  Both
-					// skipped on `focus=false` — selection highlight only.
-					dataViewCtrl->SetCurrentItem(item);
+					// Select already moved the keyboard focus / edit-on-Enter anchor
+					// (ChangeCurrentRow) — under single-sel SetCurrentItem IS Select, so calling
+					// it here was the same work twice, and on a paged model a second stamp into
+					// the restore channel can bump the fetch generation and cost an extra
+					// round-trip. Only the viewport scroll is left to do.
 					dataViewCtrl->EnsureVisible(item);
 				}
 			}
