@@ -171,14 +171,14 @@ CVALUE_BYTYPE(wxLongLong_t, ibValueTypes::TYPE_DATE, m_dData);
 // String ctors — m_pStr is a pooled-heap ibString, allocated only for a
 // non-empty string (empty stays nullptr = no allocation). char* keeps the
 // historical wxString(char*) conversion (NOT ibString's UTF-8 path).
-ibValue::ibValue(char* cParam)
+ibValue::ibValue(const char* cParam)
 	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_pRef(nullptr), m_refCount(0)
 {
 	if (cParam && *cParam) m_pStr = new ibString(wxString(cParam));
 	DEBUG_VALUE_CREATE();
 }
 
-ibValue::ibValue(wchar_t* cParam)
+ibValue::ibValue(const wchar_t* cParam)
 	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_pRef(nullptr), m_refCount(0)
 {
 	if (cParam && *cParam) m_pStr = new ibString(cParam);
@@ -419,6 +419,26 @@ void ibValue::operator = (const wxString& cParam)
 	if (!cParam.IsEmpty()) m_pStr = new ibString(cParam);   // empty → nullptr, no alloc
 }
 
+// Character POINTERS assign as strings. Without these two, `value = "text"` and
+// `value = wxEmptyString` picked operator=(bool) — pointer-to-bool is a standard
+// conversion and outranks the user-defined one to wxString — and quietly produced
+// Boolean TRUE. Same trap the const ibValue* overload was added for.
+void ibValue::operator = (const char* cParam)
+{
+	Reset();
+
+	m_typeClass = ibValueTypes::TYPE_STRING;
+	if (cParam && *cParam) m_pStr = new ibString(wxString(cParam));
+}
+
+void ibValue::operator = (const wchar_t* cParam)
+{
+	Reset();
+
+	m_typeClass = ibValueTypes::TYPE_STRING;
+	if (cParam && *cParam) m_pStr = new ibString(cParam);
+}
+
 void ibValue::operator = (ibString&& cParam)
 {
 	Reset();
@@ -441,7 +461,7 @@ void ibValue::operator=(ibValue&& cParam)
 
 void ibValue::operator = (ibValueTypes type)
 {
-	ibValueTypes typeClass = m_typeClass; ibValue objValue(*this);
+	ibValue objValue(*this);
 
 	switch (type)
 	{
@@ -674,6 +694,8 @@ void ibValue::SetData(const ibValue& varValue)
 		if (m_pRef != nullptr)
 			m_pRef->SetData(varValue);
 		return;
+	default:
+		break;      // every other type is handled by the tail below
 	}
 
 	SetValue(varValue);
@@ -694,6 +716,8 @@ bool ibValue::GetBoolean() const
 	case ibValueTypes::TYPE_CONST_REFFER:
 	case ibValueTypes::TYPE_REFFER:
 		return m_pRef->GetBoolean();
+	default:
+		break;      // every other type is not boolean-convertible — false below
 	}
 
 	return false;
@@ -722,6 +746,8 @@ ibNumber ibValue::GetNumber() const
 	case ibValueTypes::TYPE_CONST_REFFER:
 	case ibValueTypes::TYPE_REFFER:
 		return m_pRef->GetNumber();
+	default:
+		break;      // every other type has no numeric payload — zero below
 	}
 
 	return 0;
@@ -748,7 +774,9 @@ wxString ibValue::GetString() const
 	case ibValueTypes::TYPE_CONST_REFFER:
 	case ibValueTypes::TYPE_REFFER:
 		return m_pRef ? m_pRef->GetString() : wxString(wxEmptyString);
-	};
+	default:
+		break;      // object kinds present as their class name — tail below
+	}
 
 	return GetClassName();
 }
@@ -798,7 +826,9 @@ wxLongLong_t ibValue::GetDate() const
 	case ibValueTypes::TYPE_CONST_REFFER:
 	case ibValueTypes::TYPE_REFFER:
 		return m_pRef->GetDate();
-	};
+	default:
+		break;      // every other type carries no date — emptyDate below
+	}
 
 	return emptyDate;
 }
@@ -888,7 +918,9 @@ bool ibValue::IsEmpty() const
 	case ibValueTypes::TYPE_CONST_REFFER:
 	case ibValueTypes::TYPE_REFFER:
 		return m_pRef ? m_pRef->IsEmpty() : true;
-	};
+	default:
+		break;      // TYPE_EMPTY / TYPE_NULL and anything new — empty below
+	}
 
 	return true;
 }
@@ -1002,7 +1034,8 @@ int ibValue::CompareValueLS(const ibValue& cParam) const
 	case ibValueTypes::TYPE_ITERATOR: { const wxString a = GetString(), b = cParam.GetString(); return a < b ? -1 : (b < a ? 1 : 0); }
 	case ibValueTypes::TYPE_CONST_REFFER:
 	case ibValueTypes::TYPE_REFFER:   return m_pRef->CompareValueLS(cParam);
-	};
+	default:                          break;   // EMPTY / NULL already returned above
+	}
 
 	return 0;
 }
@@ -1046,7 +1079,11 @@ bool ibValue::CompareValueEQ(const ibValue& cParam) const
 	case ibValueTypes::TYPE_CONST_REFFER:
 	case ibValueTypes::TYPE_REFFER:
 		return m_pRef->CompareValueEQ(cParam);
-	};
+	case ibValueTypes::TYPE_LAST:
+		break;      // sentinel, never a live tag. Deliberately NOT `default:` —
+		            // this switch covers every real type, so a new one must show
+		            // up here as a warning rather than silently compare unequal.
+	}
 
 	return false;
 }
@@ -1082,7 +1119,9 @@ bool ibValue::CompareValueNE(const ibValue& cParam) const
 	case ibValueTypes::TYPE_CONST_REFFER:
 	case ibValueTypes::TYPE_REFFER:
 		return m_pRef->CompareValueNE(cParam);
-	};
+	case ibValueTypes::TYPE_LAST:
+		break;      // sentinel — see CompareValueEQ above for why this is not `default:`
+	}
 
 	return false;
 }
@@ -1097,6 +1136,8 @@ const ibValue& ibValue::operator+(const ibValue& cParam)
 	case ibValueTypes::TYPE_DATE:
 		m_dData = m_dData + cParam.GetDate();
 		break;
+	default:
+		break;      // '+' is defined for number and date only; others unchanged
 	}
 
 	return *this;
@@ -1112,6 +1153,8 @@ const ibValue& ibValue::operator-(const ibValue& cParam)
 	case ibValueTypes::TYPE_DATE:
 		m_dData = m_dData - cParam.GetDate();
 		break;
+	default:
+		break;      // '-' is defined for number and date only; others unchanged
 	}
 	return *this;
 }

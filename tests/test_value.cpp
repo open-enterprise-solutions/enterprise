@@ -101,6 +101,54 @@ TEST(ValueTest, EmptyString) {
     EXPECT_TRUE(v.GetString().IsEmpty());
 }
 
+// ---------------------------------------------------------------------------
+// Character POINTERS must land as strings, not as Boolean.
+//
+// Every test above hands ibValue a wxString, which is exactly why none of them
+// caught this: a raw `const char*` / `const wchar_t*` has a STANDARD conversion
+// to bool, which outranks the user-defined one to wxString. With the string
+// ctors declared `char*` (non-const), `ibValue v = wxEmptyString` — and
+// wxEmptyString IS a `const wxChar*` — silently produced Boolean TRUE, and
+// GetString() then answered "True" instead of "". That reached a user as a
+// document numbered "True0000001" (2026-08-03).
+//
+// The same trap had already been found once for `const ibValue*` and closed
+// with an overload there; these pin the character-pointer half of the family.
+// ---------------------------------------------------------------------------
+
+TEST(ValueTest, EmptyStringPointerIsStringNotBoolean) {
+    ibValue v = wxEmptyString;
+    EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_STRING);
+    EXPECT_TRUE(v.GetString().IsEmpty());
+    EXPECT_NE(v.GetString(), wxT("True"));
+}
+
+TEST(ValueTest, WideLiteralIsStringNotBoolean) {
+    ibValue v = wxT("text");
+    EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_STRING);
+    EXPECT_EQ(v.GetString(), wxT("text"));
+}
+
+TEST(ValueTest, NarrowLiteralIsStringNotBoolean) {
+    ibValue v = "narrow";
+    EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_STRING);
+    EXPECT_EQ(v.GetString(), wxT("narrow"));
+}
+
+TEST(ValueTest, AssignEmptyStringPointerIsStringNotBoolean) {
+    ibValue v(ibNumber(1));
+    v = wxEmptyString;
+    EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_STRING);
+    EXPECT_TRUE(v.GetString().IsEmpty());
+}
+
+TEST(ValueTest, AssignWideLiteralIsStringNotBoolean) {
+    ibValue v(ibNumber(1));
+    v = wxT("assigned");
+    EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_STRING);
+    EXPECT_EQ(v.GetString(), wxT("assigned"));
+}
+
 // ===========================================================================
 // TYPE_DATE
 // ===========================================================================

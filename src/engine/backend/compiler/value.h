@@ -733,8 +733,13 @@ public:
 	ibValue(const wxDateTime& cParam); //date
 	ibValue(int nYear, int nMonth, int nDay, unsigned short nHour = 0, unsigned short nMinute = 0, unsigned short nSecond = 0); //date
 
-	ibValue(char* sParam); //string
-	ibValue(wchar_t* sParam); //string
+	// CONST char pointers, and that const is load-bearing. Declared as `char*` these
+	// did not match a `const char*` argument at all, so `ibValue v = wxEmptyString`
+	// (wxEmptyString IS a `const wxChar*`) fell through to ibValue(bool) — pointer-to-bool
+	// is a STANDARD conversion and beats the user-defined one to wxString — and the value
+	// became Boolean TRUE. Same trap, same shape, as the const ibValue* overload below.
+	ibValue(const char* sParam); //string
+	ibValue(const wchar_t* sParam); //string
 	ibValue(const wxStringImpl& sParam); //string
 	ibValue(const wxString& sParam); //string
 	ibValue(ibString&& sParam); //string — native move (runtime string functions)
@@ -767,6 +772,11 @@ public:
 	void operator = (const wxDateTime& cParam);
 	void operator = (wxLongLong_t cParam);
 	void operator = (const wxString& cParam);
+	// Character pointers — see the ctor note above. A string literal or wxEmptyString
+	// on the right-hand side has no wxString overload to bind to without these, and
+	// pointer-to-bool wins the resolution.
+	void operator = (const char* cParam);
+	void operator = (const wchar_t* cParam);
 	void operator = (ibString&& cParam);   // native string assign — moves into m_pStr, no wxString round-trip
 
 	void operator = (ibValueTypes cParam);
