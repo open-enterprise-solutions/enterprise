@@ -1033,7 +1033,19 @@ void ibSessionRegistry::ProcessAdd(ibRegistryRequest& req)
 	// designer's INSERTed row, so the exclusion policy permits the second
 	// instance. Refresh is on this thread (consumer), so it can't deadlock
 	// with itself.
-	try { JobRefreshSnapshot(); } catch (...) { /* swallowed: best-effort pre-policy refresh, stale snapshot is acceptable here */ }
+	//
+	// COALESCED, because the refresh is a full SELECT of sys_session and this is the thread every
+	// session queues its Add and Remove behind. A snapshot taken moments ago cannot have gone stale
+	// in the meantime, so re-reading the table for a second Add in the same instant buys nothing —
+	// and when sessions are created in quick succession it is the difference between a registry
+	// that keeps up and one the whole application waits on.
+	//
+	// The race this guards stays closed: it is about a second application STARTING UP, which is
+	// seconds of work away, not milliseconds. Deliberately says nothing about WHO is being added —
+	// the registry has no business knowing which of its sessions belong to a schedule.
+	if (SnapshotOlderThan(std::chrono::milliseconds(500))) {
+		try { JobRefreshSnapshot(); } catch (...) { /* swallowed: best-effort pre-policy refresh, stale snapshot is acceptable here */ }
+	}
 
 	// Policy veto chain — first reject wins.
 	for (auto& p : m_policies) {
@@ -1159,6 +1171,25 @@ void ibSessionRegistry::ProcessDetach(ibRegistryRequest& req)
 	s.TransitionAuth(ibAuthState::Anonymous);
 }
 
+void ibSessionRegistry::DeleteOwnSessionRow(ibSession& s)
+{
+	// Nothing was ever taken in (an unlisted rented read, or a registry that does not own
+	// sys_session), so there is nothing to give back.
+	if (!m_ownsSysSession || !s.Inserted())
+		return;
+
+	// The SESSION's connection, never the registry's write connection: this runs on whichever
+	// thread is closing the session, and two threads sharing one connection is how a driver-level
+	// race is bought. The session owns exactly one connection and it is idle by now — the work it
+	// was doing is over, that is why we are here.
+	ibDatabaseConnectionHolder* const holder = s.Holder();
+	if (holder == nullptr)
+		return;
+
+	if (DeleteSessionRow(*holder, s.GetId()))
+		s.SetInserted(false);   // ProcessRemove then skips its own DELETE — one row, one statement
+}
+
 void ibSessionRegistry::ProcessRemove(ibRegistryRequest& req)
 {
 	if (!req.session) return;
@@ -1240,6 +1271,13 @@ void ibSessionRegistry::ProcessRemove(ibRegistryRequest& req)
 				m_own.erase(it);
 		}
 	}
+
+	// (No snapshot refresh here — tried on 2026-08-03 and REVERTED. It made Active Users drop a
+	//  closed session immediately, and cost a full SELECT of sys_session on the registry thread for
+	//  EVERY session close. A job on a short interval closes a session every tick, so the thread
+	//  that also serves interactive sessions never got a quiet moment and the UI stopped answering.
+	//  The periodic refresh already tells the truth within one tick, and the DELETE above is what
+	//  peer processes actually read.)
 
 	s.Transition(ibSessionState::Gone);
 }
@@ -1777,6 +1815,10 @@ void ibSessionRegistry::JobRefreshSnapshot()
 		m_refreshFailedLastTick.store(true, std::memory_order_release);
 		return;
 	}
+
+	// The table has just been read — stamp it, so an on-demand refresh a moment from now can see
+	// that there is nothing to gain by reading it again (SnapshotOlderThan).
+	m_snapshotAt = std::chrono::steady_clock::now();
 
 	// Recovery edge — previous tick failed, this one succeeded. That
 	// almost always means we just rode through an FB leader handoff:

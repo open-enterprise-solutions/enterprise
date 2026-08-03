@@ -192,6 +192,27 @@ TEST(JobSchedule, NextAllowedAfter_ReturnsTheMomentItselfWhenAlreadyAllowed)
 	EXPECT_EQ(ibJobScheduleRules::NextAllowedAfter(s, inside), inside);
 }
 
+TEST(JobSchedule, NextAllowedAfter_KeepsSecondsWhenTheCalendarAllows)
+{
+	// SUB-MINUTE intervals. An allowed moment comes back untouched — seconds included — because
+	// "at or after" means exactly that. Rounding up to the next whole minute (which the search does
+	// once the calendar refuses) turned "every 4 seconds" into one run a minute, on the :00.
+	ibJobScheduleDescription s = ibJobScheduleDescription::EverySeconds(4);
+	wxDateTime moment = At(2026, wxDateTime::Aug, 3, 10, 0);
+	moment.SetSecond(37);
+	EXPECT_EQ(ibJobScheduleRules::NextAllowedAfter(s, moment), moment);
+}
+
+TEST(JobSchedule, NextAllowedAfter_StillRoundsToTheMinuteWhenItHasToSearch)
+{
+	// The other half of the same rule: a REFUSED moment starts the walk at the next whole minute,
+	// because minutes are all the calendar's own fields can name.
+	ibJobScheduleDescription s = ibJobScheduleDescription::Nightly(2, 5);
+	wxDateTime outside = At(2026, wxDateTime::Aug, 3, 9, 0);
+	outside.SetSecond(37);
+	EXPECT_EQ(ibJobScheduleRules::NextAllowedAfter(s, outside), At(2026, wxDateTime::Aug, 4, 2, 0));
+}
+
 TEST(JobSchedule, NextAllowedAfter_MovesForwardToTheWindow)
 {
 	ibJobScheduleDescription s = ibJobScheduleDescription::Nightly(2, 5);

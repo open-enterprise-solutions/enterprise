@@ -286,8 +286,18 @@ wxDateTime ibJobScheduleRules::NextAllowedAfter(const ibJobScheduleDescription& 
 	if (!notBefore.IsValid())
 		return wxInvalidDateTime;
 
-	// Whole seconds are noise here — the finest thing a schedule names is a
-	// minute, so search minute by minute from the next whole one.
+	// SECOND-LEVEL precision wherever the calendar permits it. A moment that already qualifies IS
+	// the answer — that is the "not before, never only at" contract — so it comes back untouched,
+	// seconds and all. The minute-by-minute walk below is only for the case where the calendar
+	// REFUSES this moment, and minutes are all the calendar's own fields can name anyway.
+	//
+	// Without this, any interval shorter than a minute was silently rounded up to the next whole
+	// one: "every 4 seconds" ran once a minute on the :00, which reads as a job ignoring its own
+	// schedule rather than as a documented limit.
+	if (IsAllowed(self, notBefore))
+		return notBefore;
+
+	// From here the moment is disallowed, so the search starts at the next whole minute.
 	wxDateTime moment = notBefore;
 	moment.SetSecond(0);
 	moment.SetMillisecond(0);

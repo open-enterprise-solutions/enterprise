@@ -552,6 +552,23 @@ void ibSession::Teardown()
 	auto& reg = *regPtr;
 	if (reg.IsFatal())
 		return;
+
+	// SAY GOODBYE OURSELVES, before queueing anything. We are closing normally, so the row we put
+	// in sys_session goes now — one DELETE, on this thread, over our own connection.
+	//
+	// Leaving it to the Remove below would keep the row alive for as long as the registry thread
+	// takes to reach it, and that thread serves every session in the process. Meanwhile the row is
+	// what everyone else reads: peers poll sys_session, and a row that is still there means a
+	// session that is still running. Sessions that come and go quickly — a job on a short interval
+	// creates one per run — would otherwise pile up as rows nobody has got round to deleting.
+	//
+	// If we never reach this line (killed, crashed, power cut) the row stays and the stale sweep
+	// reaps it. That is the difference between a normal close and an abnormal one, and it is worth
+	// having.
+	reg.DeleteOwnSessionRow(*this);
+
+	// The Remove still follows: it drops the index entry, fires disconnect listeners and releases
+	// the worker queue — bookkeeping that touches no database, so the shared thread barely feels it.
 	ibRegistryRequest req;
 	req.kind    = ibRegistryRequestKind::Remove;
 	req.session = shared_from_this();

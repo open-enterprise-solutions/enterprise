@@ -43,6 +43,7 @@ public:
 			clsid == g_metaRoleCLSID ||
 			clsid == g_metaSectionCLSID ||
 			clsid == g_metaCommonCommandCLSID ||
+			clsid == g_metaScheduledJobCLSID ||
 			clsid == g_metaPictureCLSID ||
 			clsid == g_metaLanguageCLSID ||
 			clsid == g_metaConstantCLSID ||

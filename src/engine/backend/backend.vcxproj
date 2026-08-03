@@ -186,6 +186,7 @@
     <ClInclude Include="metaCollection\enumeration\metaEnumObject.h" />
     <ClInclude Include="metaCollection\metaSectionObject.h" />
     <ClInclude Include="metaCollection\metaCommandObject.h" />
+    <ClInclude Include="metaCollection\metaScheduledJobObject.h" />
     <ClInclude Include="metaCollection\metaObjectComposite.h" />
     <ClInclude Include="metaCollection\metaFormObject.h" />
     <ClInclude Include="metaCollection\metaSpreadsheetObject.h" />
@@ -285,6 +286,8 @@
     <ClInclude Include="propertyManager\property\propertyDynamicList.h" />
     <ClInclude Include="propertyManager\property\propertyDynamicSource.h" />
     <ClInclude Include="propertyManager\property\propertyGeneration.h" />
+    <ClInclude Include="propertyManager\property\propertySchedule.h" />
+    <ClInclude Include="propertyManager\property\variant\variantSchedule.h" />
     <ClInclude Include="propertyManager\property\propertyModule.h" />
     <ClInclude Include="propertyManager\property\propertyNumber.h" />
     <ClInclude Include="propertyManager\property\propertyList.h" />
@@ -514,6 +517,9 @@
     <ClCompile Include="metaCollection\metaCommandObject.cpp" />
     <ClCompile Include="metaCollection\metaCommandObjectMenu.cpp" />
     <ClCompile Include="metaCollection\metaCommandObject_res.cpp" />
+    <ClCompile Include="metaCollection\metaScheduledJobObject.cpp" />
+    <ClCompile Include="metaCollection\metaScheduledJobObjectMenu.cpp" />
+    <ClCompile Include="metaCollection\metaScheduledJobObject_res.cpp" />
     <ClCompile Include="metaCollection\metaSectionObjectMenu.cpp" />
     <ClCompile Include="metaCollection\metaSectionObject_res.cpp" />
     <ClCompile Include="metaCollection\metaModuleObject.cpp" />
@@ -695,6 +701,7 @@
     <ClCompile Include="propertyManager\property\propertyDynamicList.cpp" />
     <ClCompile Include="propertyManager\property\propertyDynamicSource.cpp" />
     <ClCompile Include="propertyManager\property\propertyGeneration.cpp" />
+    <ClCompile Include="propertyManager\property\propertySchedule.cpp" />
     <ClCompile Include="propertyManager\property\propertyModule.cpp" />
     <ClCompile Include="propertyManager\property\propertyNumber.cpp" />
     <ClCompile Include="propertyManager\property\propertyList.cpp" />
@@ -716,6 +723,7 @@
     <ClCompile Include="propertyManager\property\variant\variantDynamicSource.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantForm.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantGen.cpp" />
+    <ClCompile Include="propertyManager\property\variant\variantSchedule.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantModule.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantNumber.cpp" />
     <ClCompile Include="propertyManager\property\variant\variantOwner.cpp" />

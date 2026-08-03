@@ -29,6 +29,7 @@ constexpr ibClassID g_metaCommonModuleCLSID = metadata_to_clsid("MD_CMOD");
 constexpr ibClassID g_metaCommonFormCLSID = metadata_to_clsid("MD_CFRM");
 constexpr ibClassID g_metaCommonTemplateCLSID = metadata_to_clsid("MD_CTMP");
 constexpr ibClassID g_metaCommonCommandCLSID = metadata_to_clsid("MD_CMD");    // COMMON command (config-level, like CommonForm)
+constexpr ibClassID g_metaScheduledJobCLSID = metadata_to_clsid("MD_SJOB");   // PREDEFINED scheduled job — serves the configuration, one of it (docs/scheduled-jobs.md)
 
 constexpr ibClassID g_metaRoleCLSID = metadata_to_clsid("MD_ROLE");
 constexpr ibClassID g_metaSectionCLSID = metadata_to_clsid("MD_SSYST");

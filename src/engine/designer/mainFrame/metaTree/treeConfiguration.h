@@ -106,6 +106,7 @@ private:
 	wxTreeItemId m_treePICTURES;
 	wxTreeItemId m_treeINTERFACES;
 	wxTreeItemId m_treeCOMMANDS;
+	wxTreeItemId m_treeSCHEDULED_JOBS;
 	wxTreeItemId m_treeROLES;
 	wxTreeItemId m_treeLANGUAGES;
 

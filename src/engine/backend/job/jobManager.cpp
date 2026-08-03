@@ -158,7 +158,13 @@ bool ibJobManager::IsDue(const ibJobEntry& e, std::chrono::steady_clock::time_po
 	// is that its calendar allows any moment, so the interval from registration is the whole answer.
 	const ibJobScheduleDescription& sched = e.m_desc.m_schedule;
 	wxDateTime countFrom;
-	if (e.m_everRun) {
+	if (e.m_retryAt.IsValid()) {
+		// A RETRY counts from its own moment, not from the interval — the previous pass did not
+		// happen, so there is no gap between runs to space out. The calendar below still applies:
+		// a second chance must not sneak the job into an hour its window forbids.
+		countFrom = e.m_retryAt;
+	}
+	else if (e.m_everRun) {
 		countFrom = e.m_lastRunAt.IsValid() ? e.m_lastRunAt : e.m_registeredAtWall;
 		countFrom += wxTimeSpan::Seconds(sched.m_intervalSeconds);
 	}
@@ -184,7 +190,7 @@ bool ibJobManager::IsDue(const ibJobEntry& e, std::chrono::steady_clock::time_po
 	return (now - e.m_lastRun) >= std::chrono::seconds(sched.m_intervalSeconds);
 }
 
-void ibJobManager::HarvestFinished(ibJobEntry& e)
+void ibJobManager::HarvestFinished(ibJobEntry& e, std::vector<std::shared_ptr<ibSessionHolder>>& release)
 {
 	if (!FutureReady(e.m_future))
 		return;
@@ -200,6 +206,28 @@ void ibJobManager::HarvestFinished(ibJobEntry& e)
 		                          : ibJobOutcome::Failed;
 		e.m_workRemains = ok && e.m_result->m_more.load(std::memory_order_acquire);
 
+		// RETRY BOOKKEEPING, decided here because this is where the verdict lands.
+		//
+		//   succeeded — the streak is over: refill the allowance and drop any pending attempt.
+		//   failed    — spend one attempt if any are left, and put the job ahead of its schedule.
+		//   skipped   — a peer ran it; that is not our failure and costs no attempt.
+		//
+		// Note it is the ATTEMPT that is scheduled, not the failure that is remembered: once the
+		// attempts run out the job simply returns to its ordinary schedule, still marked Failed for
+		// whoever reads the list.
+		if (e.m_outcome == ibJobOutcome::Succeeded) {
+			e.m_retriesLeft = e.m_desc.m_retryCount;
+			e.m_retryAt     = wxDateTime();
+		}
+		else if (e.m_outcome == ibJobOutcome::Failed && e.m_retriesLeft > 0) {
+			--e.m_retriesLeft;
+			const int wait = e.m_desc.m_retryIntervalSeconds > 0 ? e.m_desc.m_retryIntervalSeconds : 1;
+			e.m_retryAt = wxDateTime::Now() + wxTimeSpan::Seconds(wait);
+		}
+		else {
+			e.m_retryAt = wxDateTime();
+		}
+
 		std::lock_guard<std::mutex> lk(e.m_result->m_mtx);
 		e.m_error = e.m_result->m_error;
 		if (!ok)
@@ -211,11 +239,12 @@ void ibJobManager::HarvestFinished(ibJobEntry& e)
 	// future's destructor.
 	try { e.m_future.get(); } catch (...) {}
 
-	// THE SESSION GOES NOW — the run is over, so its session has no reason to
-	// exist. Done here rather than inside the task because Teardown waits behind
-	// the session's own queue, and this thread is not on it.
+	// THE SESSION GOES — the run is over, so it has no reason to exist. Not done here, though:
+	// releasing a holder runs Teardown, which waits behind the session's own queue, and this is
+	// called with the manager's mutex held. HANDED OUT instead, for the caller to drop once the
+	// lock is gone (Tick). The entry lets go of it now, so nothing else can reach it.
 	if (e.m_runSession) {
-		e.m_runSession->Reset();
+		release.push_back(std::move(e.m_runSession));
 		e.m_runSession.reset();
 	}
 
@@ -475,6 +504,10 @@ bool ibJobManager::Launch(ibJobEntry& e)
 		// one tick later at the outside, and off this session's worker.
 		claim.Release();
 	});
+
+	// The pending attempt has been taken — a new failure will schedule the next one. Cleared HERE
+	// rather than on the verdict, so a retry that is still waiting survives an intervening tick.
+	e.m_retryAt = wxDateTime();
 
 	e.m_runSession = runSession;   // released by HarvestFinished, off the worker
 	e.m_result    = std::move(result);
@@ -851,6 +884,8 @@ bool ibJobManager::Register(ibJobDescription desc)
 
 	auto entry = std::make_unique<ibJobEntry>();
 	entry->m_desc = std::move(desc);
+	// The allowance starts full — a job declared today has spent no attempts.
+	entry->m_retriesLeft = entry->m_desc.m_retryCount;
 	m_entries.push_back(std::move(entry));
 	return true;
 }
@@ -886,8 +921,9 @@ ibSessionHolder ibJobManager::OpenRunSession(const ibJobDescription& desc)
 	// same RLS, same result as if they had run it themselves. The identity is
 	// installed without a password: `Login` is already split into the check and the
 	// commit, and only the commit applies here.
+	ibSessionRegistry* const registry = ibApplicationData::GetSessionRegistry();
+
 	if (desc.m_runAsUser.isValid()) {
-		ibSessionRegistry* const registry = ibApplicationData::GetSessionRegistry();
 		// BY GUID, never by name: a user can be renamed, and a schedule that
 		// resolved by name would then either stop running or — worse — find
 		// somebody else who now holds that name.
@@ -906,6 +942,18 @@ ibSessionHolder ibJobManager::OpenRunSession(const ibJobDescription& desc)
 		registry->InstallUser(holder.Get(), info, wxEmptyString);
 		registry->NotifyAuthenticated(holder.Get());
 	}
+	else if (desc.m_origin == ibJobOrigin::Configuration && registry != nullptr) {
+		// NO USER NAMED — and that is a legitimate state, not an error: nobody's job runs with the
+		// FULL view, because no identity means no RLS policy is built for it. Same reading as a
+		// platform job, arrived at from the other side.
+		//
+		// It still needs a RUNTIME, though, and that is the whole reason this branch exists. A
+		// configuration's body is SCRIPT, and the root module is built on the Authenticated
+		// notification — so an anonymous job that skipped this call had nothing to call into and
+		// failed every tick with "the session has no runtime". Notify without installing anyone:
+		// authenticated as nobody is exactly what is meant here.
+		registry->NotifyAuthenticated(holder.Get());
+	}
 
 	return holder;
 }
@@ -917,16 +965,29 @@ bool ibJobManager::Unregister(const wxString& name)
 	bool              found = false;
 
 	{
-		std::lock_guard<std::mutex> lk(m_mtx);
+		std::unique_lock<std::mutex> lk(m_mtx);
 		for (auto it = m_entries.begin(); it != m_entries.end(); ++it) {
 			if ((*it)->m_desc.m_name != name)
 				continue;
 			found = true;
+
+			// WAIT OUT A LAUNCH IN PROGRESS. A tick marks an entry m_inFlight and then works on it
+			// with the lock released (Tick explains why it must). Erasing it now would destroy the
+			// object that launch is still writing into.
+			ibJobEntry* const entry = it->get();
+			m_inFlightCv.wait(lk, [this, entry] { return m_stopped || !entry->m_inFlight; });
+
+			// The vector may have been re-shuffled while we waited; find it again by name.
+			it = std::find_if(m_entries.begin(), m_entries.end(),
+			                  [&name](const std::unique_ptr<ibJobEntry>& slot) { return slot->m_desc.m_name == name; });
+			if (it == m_entries.end())
+				break;   // somebody else removed it while we waited — still "found"
+
 			// Move the future and the holder OUT, then wait outside the lock: the
 			// running body may call back into the manager, and the session must not
 			// die before its task finishes with it.
 			pending = std::move((*it)->m_future);
-						m_entries.erase(it);
+			m_entries.erase(it);
 			break;
 		}
 	}
@@ -992,27 +1053,70 @@ int ibJobManager::Tick()
 {
 	const auto now = std::chrono::steady_clock::now();
 
-	std::lock_guard<std::mutex> lk(m_mtx);
-	if (m_stopped)
-		return 0;
+	// DECIDING IS CHEAP, RUNNING IS NOT — and only the deciding may hold the lock.
+	//
+	// m_mtx also guards Register, and Register is NOT a bootstrap-only call: the Firebird driver
+	// declares its maintenance job from Open(), so EVERY connection taken out of the pool goes
+	// through it. Opening a form compiles a module, which loads bytecode, which builds a query
+	// builder, which checks out a connection — and there the form met this mutex.
+	//
+	// Held across the whole loop, the way this used to be, that mutex covered a session teardown
+	// (which waits behind the session's own queue, up to seconds) and a session create (which waits
+	// on the registry thread). With a job on a short interval it was almost never free, and the
+	// application froze on it while the schedule looked perfectly healthy.
+	//
+	// So: under the lock, decide and mark. Outside it, do the work.
+	std::vector<ibJobEntry*>                      toLaunch;
+	std::vector<std::shared_ptr<ibSessionHolder>> toRelease;   // released below, off the lock
+	{
+		std::lock_guard<std::mutex> lk(m_mtx);
+		if (m_stopped)
+			return 0;
 
-	// Forget background runs that have finished — they are watched only so Stop()
-	// can reach them, and a finished one has nothing left to reach.
-	m_background.erase(
-		std::remove_if(m_background.begin(), m_background.end(),
-		               [](const std::weak_ptr<ibBackgroundRun>& w) { return w.expired(); }),
-		m_background.end());
+		// Forget background runs that have finished — they are watched only so Stop()
+		// can reach them, and a finished one has nothing left to reach.
+		m_background.erase(
+			std::remove_if(m_background.begin(), m_background.end(),
+			               [](const std::weak_ptr<ibBackgroundRun>& w) { return w.expired(); }),
+			m_background.end());
+
+		for (auto& slot : m_entries) {
+			ibJobEntry& e = *slot;
+
+			// A job the previous tick is still launching outside the lock: its fields are being
+			// written by that tick, so nothing here may touch it.
+			if (e.m_inFlight)
+				continue;
+
+			HarvestFinished(e, toRelease);
+			if (IsRunning(e))
+				continue;
+			if (!IsDue(e, now))
+				continue;
+
+			// Claim it for this tick. Unregister and Stop wait for the flag to clear, so the entry
+			// cannot go away underneath the launch below.
+			e.m_inFlight = true;
+			toLaunch.push_back(&e);
+		}
+	}
+
+	// The two expensive things, both without the lock. Releasing a holder tears its session down;
+	// launching creates one.
+	toRelease.clear();
 
 	int started = 0;
-	for (auto& slot : m_entries) {
-		ibJobEntry& e = *slot;
+	for (ibJobEntry* e : toLaunch) {
+		bool ok = false;
+		try { ok = Launch(*e); }
+		catch (...) { /* a launch failure is this job's problem, not the schedule's */ }
 
-		HarvestFinished(e);
-		if (IsRunning(e))
-			continue;
-		if (!IsDue(e, now))
-			continue;
-		if (Launch(e))
+		{
+			std::lock_guard<std::mutex> lk(m_mtx);
+			e->m_inFlight = false;
+		}
+		m_inFlightCv.notify_all();
+		if (ok)
 			++started;
 	}
 	return started;
@@ -1020,6 +1124,10 @@ int ibJobManager::Tick()
 
 bool ibJobManager::RunNow(const wxString& name)
 {
+	// Declared BEFORE the lock guard so it is destroyed AFTER it — the previous run's session is
+	// torn down with the mutex already released (see Tick).
+	std::vector<std::shared_ptr<ibSessionHolder>> toRelease;
+
 	std::lock_guard<std::mutex> lk(m_mtx);
 	if (m_stopped)
 		return false;
@@ -1028,7 +1136,10 @@ bool ibJobManager::RunNow(const wxString& name)
 	if (e == nullptr)
 		return false;
 
-	HarvestFinished(*e);
+	if (e->m_inFlight)
+		return false;   // a tick is launching it right now
+
+	HarvestFinished(*e, toRelease);
 	if (IsRunning(*e))
 		return false;   // already going — a manual run does not queue behind it
 
@@ -1128,6 +1239,8 @@ void ibJobManager::Stop()
 		for (auto& run : alive) run->Wait();
 	}
 
+	// The tick thread is joined by now, so no entry can still be m_inFlight — nothing to wait for
+	// here. The notify is for anyone parked in Unregister: m_stopped releases them.
 	std::vector<std::unique_ptr<ibJobEntry>> doomed;
 	{
 		std::lock_guard<std::mutex> lk(m_mtx);
@@ -1136,6 +1249,7 @@ void ibJobManager::Stop()
 		m_stopped = true;
 		doomed.swap(m_entries);
 	}
+	m_inFlightCv.notify_all();
 
 	// Wait outside the lock. Each run owns its own session inside its task, so
 	// waiting for the task IS waiting for the session to be let go — there is no

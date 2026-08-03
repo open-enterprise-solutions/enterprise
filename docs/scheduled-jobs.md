@@ -1,9 +1,14 @@
 # Scheduled jobs — the metadata over the job manager
 
-> **Status (2026-08-03): DESIGN.** The engine underneath is built and running — see
-> [job-manager.md](job-manager.md). What this file describes does **not** exist yet: the
-> metaobjects that DECLARE a job, the runtime that runs their module, and the window that
-> lists them. Written so the work can start without re-deriving the model.
+> **Status (2026-08-03): the PREDEFINED half is built and running.** A `ScheduledJob` metaobject
+> lives under Common, carries a manager module with `JobProcessing`, a schedule edited in a
+> four-tab dialog, a use flag and retry-on-failure; it registers with `ibJobManager` when the
+> configuration runs and withdraws when it closes. Exercised live on a file base at a one-second
+> interval: `session opened → job finished → session closed` per run, and a script error surfaces
+> as `Job '<name>' failed: Divide by zero` in the registration journal.
+>
+> Still DESIGN, not code: the parameterized metatype (§ 3 onwards), the "run as" property, the job
+> list window (§ 9), and the `sys_job`-side override of schedules (§ 8).
 >
 > Where something is a decision rather than code, it says so.
 
@@ -48,11 +53,25 @@ The first three are one scale: a schedule plus a body. The fourth is not a job a
 rented run serving a paged read, it has no name and no schedule, and it must stay out of the
 list (a list scroll creates them by the dozen; in a job window they would be pure noise).
 
-**Anonymity is a platform privilege, not a property of "having no instances."** A totals fold
-read through someone's row filter would fold a subset and produce wrong sums, so it runs with no
-user at all. A *configuration's* predefined job is application code and must not inherit that:
-running it unattended with no identity is RLS quietly switched off. The two axes — what it
-serves, and whether it has instances — are independent, and the metatype fixes only the second.
+**"Runs as nobody" is a legitimate state, not a hole** (revised 2026-08-03). No identity means no
+row filter is built, so the job sees everything — and for most unattended work that is exactly
+what is wanted; the overwhelming majority of scheduled jobs anywhere run with full rights and
+nobody arranges otherwise. Naming a user is the option, not the obligation, and it buys one thing:
+the job then sees precisely what that user sees, RLS included. A default ROLE that an unnamed job
+inherits is the natural next step, and it slots in without changing any of this.
+
+For the platform's own jobs the same state is a requirement rather than a preference: a totals
+fold read through somebody's row filter would fold a subset and write wrong sums.
+
+⚠️ Whatever the identity, the job still needs a RUNTIME — the root module is built on the
+Authenticated notification, so an anonymous job that skipped it had nothing to call into and
+failed every tick. `OpenRunSession` therefore notifies either way and only the InstallUser half is
+conditional.
+
+**No password is involved, by construction.** `Login` is already split into AuthenticateUser (the
+check) and InstallUser (the commit), and a job uses only the commit — nobody is typing anything,
+and storing a service password to re-verify what the configuration already declared would be a
+secret kept for no reason.
 
 ---
 
@@ -540,6 +559,40 @@ Phase 1 is a working vertical slice; nothing in it is rewritten by what follows.
 
 ---
 
+## 11a. What building the predefined half actually cost
+
+Recorded because none of these were visible from the design, and each cost a live run to find.
+
+- **A silent `false` is the worst possible failure.** The body first reported "cannot run" the same
+  way it reports "nothing left to do" — so a job that never executed a line was journalled as
+  `completed`, every interval, looking exactly like the feature working. Every refusal in the body
+  throws now, and that is what made the next two findings visible at all.
+- **A job with no user got no RUNTIME.** `OpenRunSession` installs the identity and only then
+  notifies Authenticated, and it is that notification which builds the root module. An anonymous
+  job therefore had nothing to call into. Anonymous is a legitimate state (§ 2), so the fix was to
+  notify either way and leave only the InstallUser half conditional.
+- **A sub-minute interval was rounded up to the minute.** `NextAllowedAfter` zeroed the seconds
+  before searching, so "every 4 seconds" ran once a minute on the `:00`. An already-allowed moment
+  now comes back untouched; the minute-by-minute walk applies only when the calendar refuses.
+  Pinned by two tests.
+- ⚠️ **`Register` is on the connection path, and the tick held its mutex.** The Firebird driver
+  declares its maintenance job from `Open()`, so every checkout from the pool calls `Register` —
+  opening a form reaches it through compile → bytecode cache → query builder → checkout. Meanwhile
+  `Tick` held the same mutex across a session teardown (which waits) and a session create (which
+  waits on the registry thread). With a job on a short interval the UI simply stopped answering.
+  The tick now decides under the lock and works outside it, with an in-flight flag so `Unregister`
+  cannot destroy an entry mid-launch. **A mutex that a hot path shares with a slow one is the bug,
+  not the symptom** — two earlier attempts (keeping the session alive, skipping a snapshot read)
+  treated the symptom and were reverted.
+- **A session now deletes its own `sys_session` row on a normal close**, on its own thread and its
+  own connection, instead of waiting for the queued Remove. Peers read the table, not intentions;
+  and a row left behind is exactly what marks an abnormal exit for the sweep.
+- **Do not repeat the job name inside an error.** The journal line already opens with
+  `Job '<name>' failed:`; repeating it made entries long enough to be elided in the middle, which
+  ate the part that said what went wrong.
+
+---
+
 ## 12. Traps
 
 - **`ReadData` and `WriteData` in the same commit as the property.** `SplitTotals` was declared
@@ -550,8 +603,11 @@ Phase 1 is a working vertical slice; nothing in it is rewritten by what follows.
 - **The Designer must not execute jobs.** `OnBeforeRunMetaObject` fires there too; gate on the run
   mode (`appData->DesignerMode()`, as `ibValueCommandDataObject` already does) or the Designer
   starts running the configuration's code on a schedule.
-- **An empty "run as" means anonymous, which means seeing everything.** Fine for a platform job,
-  wrong for a configuration's — refuse registration instead.
+- **An empty "run as" means full rights — and that is the intended default**, not a refusal (§ 2).
+  What it must NOT mean is a session without a runtime: the root module is built on the
+  Authenticated notification, so that notification happens whether or not a user was installed.
+  Skipping it produced a job that failed on every single tick with "the session has no runtime",
+  and — before the body started throwing — reported those failures as `completed`.
 - **Additive predefined-attribute contract.** Every override calls its parent first; a level that
   forgot once made a column vanish from the runtime silently.
 - **Writing the outcome is a database write under the job's user.** A user who may run a job but

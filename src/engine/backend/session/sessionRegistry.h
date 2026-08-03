@@ -777,6 +777,35 @@ private:
 	// rare (~3s), readers may be frequent (polling dialogs).
 	mutable std::shared_mutex                              m_snapshotMtx;
 	std::unique_ptr<ibSessionSnapshot>         m_snapshot;
+
+	// WHEN the snapshot above was last read from the table. Only the registry thread touches it
+	// (JobRefreshSnapshot writes it, SnapshotOlderThan reads it), so it needs no lock of its own.
+	//
+	// It exists so an on-demand refresh can be COALESCED: the refresh is a full SELECT, and a
+	// snapshot taken a moment ago cannot have gone stale since. Without this, a burst of session
+	// creations turns into a burst of full table reads on the one thread every session waits on.
+	std::chrono::steady_clock::time_point      m_snapshotAt {};
+
+	// Has the snapshot aged past `age`? True when it was never taken.
+	bool SnapshotOlderThan(std::chrono::milliseconds age) const {
+		return m_snapshotAt == std::chrono::steady_clock::time_point{} ||
+		       (std::chrono::steady_clock::now() - m_snapshotAt) >= age;
+	}
+
+	// THE SESSION'S OWN GOODBYE — the only caller is ibSession::Teardown, on a NORMAL close.
+	//
+	// The session deletes its OWN sys_session row right there: on its own thread, over its own
+	// connection, one statement. It does not wait for the Remove it also queues, because that
+	// request sits behind everything else on the registry's single thread — and while it waits, the
+	// row is still in the table, which is the only thing any other process can read. A session that
+	// has ended but whose row lingers is indistinguishable from one still running, and whoever
+	// looks next counts it as live.
+	//
+	// A session that never gets here — killed, crashed, power lost — leaves its row behind, and
+	// that is precisely the signal the stale sweep exists to find. This is what makes a normal
+	// close and an abnormal one stop looking alike.
+	void DeleteOwnSessionRow(ibSession& s);
+	friend class ibSession;
 };
 
 // ---------------------------------------------------------------------

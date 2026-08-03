@@ -175,6 +175,26 @@ struct BACKEND_API ibJobDescription {
 	// due immediately rather than one interval later, so a restart does not skip
 	// a pass.
 	ibJobScheduleDescription m_schedule;
+
+	// WHAT HAPPENS AFTER A FAILURE — retry, or wait out the schedule?
+	//
+	// Without this a job that failed because a network blinked waits its whole interval before
+	// trying again, and for a nightly job that means tomorrow. Most real failures of unattended
+	// work are transient, so a handful of quick attempts recovers what a schedule cannot.
+	//
+	// Deliberately NOT the same thing as the dosage answer: `true` from the body means "this pass
+	// did its share, there is more to do", while a retry means "the pass did not happen at all".
+	// Both re-queue the job ahead of its interval, and they must stay distinguishable — one is
+	// progress, the other is a second chance.
+	//
+	// 0 = no retry (the default): a failure waits for the next scheduled moment, which is the right
+	// answer for work that is not idempotent. The count is reset by a successful pass, so a job
+	// failing once a week does not eventually exhaust its attempts and go quiet.
+	int m_retryCount = 0;
+
+	// Seconds between attempts. Only read when m_retryCount > 0. Small on purpose: a retry is for a
+	// blink, and anything that needs minutes is better served by the schedule itself.
+	int m_retryIntervalSeconds = 10;
 };
 
 // How the last run ended. Kept for SCHEDULED jobs, which repeat and therefore
@@ -432,6 +452,20 @@ private:
 		// Set from the body's return value: the previous pass left work behind, so
 		// the interval is skipped and the job is due on the next tick.
 		bool                                  m_workRemains = false;
+
+		// RETRY STATE (ibJobDescription::m_retryCount). m_retriesLeft is the allowance remaining for
+		// the CURRENT streak of failures — refilled by a successful pass, so a job that fails once a
+		// week never runs out. m_retryAt is when the next attempt is due; invalid means the job is on
+		// its ordinary schedule and nothing is being retried.
+		int                                   m_retriesLeft = 0;
+		wxDateTime                            m_retryAt;
+
+		// A TICK IS WORKING ON THIS ENTRY OUTSIDE THE LOCK — launching it, which creates a session
+		// and can wait on the registry. Set under m_mtx before the lock is dropped and cleared under
+		// it afterwards; Unregister and Stop wait for it, so an entry can never be destroyed while a
+		// launch is still writing to it. (Deciding what to run must not hold the mutex that Register
+		// needs — every pooled connection goes through Register, so holding it froze the UI.)
+		bool                                  m_inFlight = false;
 		// WHAT THE RUN ANSWERED, filled ON THE WORKER as the run ends — not at the
 		// next tick. The worker knows the outcome at the moment it happens; making
 		// the schedule discover it later would leave a finished job reading as
@@ -475,7 +509,11 @@ private:
 
 	// Drain a finished future so the exception it may hold is logged rather than
 	// swallowed by the future's destructor. No-op while the run is still going.
-	static void HarvestFinished(ibJobEntry& e);
+	//
+	// The run's SESSION is handed to `release` rather than dropped here: dropping it tears the
+	// session down, which waits, and this runs under m_mtx. The caller releases it once the lock
+	// is gone.
+	static void HarvestFinished(ibJobEntry& e, std::vector<std::shared_ptr<ibSessionHolder>>& release);
 
 	// Open the session a run happens on. One per run: created when the run starts,
 	// released when it ends, so a job that works for ten seconds every six hours does
@@ -525,6 +563,10 @@ private:
 	// weak_ptr, so watching cannot by itself keep a finished run alive; expired
 	// entries are swept on the next tick.
 	std::vector<std::weak_ptr<ibBackgroundRun>> m_background;
+
+	// Signalled when a tick finishes launching an entry and clears its m_inFlight. Unregister and
+	// Stop wait on it, so they never destroy an entry a launch is still writing to.
+	std::condition_variable                   m_inFlightCv;
 
 	std::thread                               m_thread;
 	std::condition_variable                   m_tickCv;

@@ -513,6 +513,9 @@
     <ClInclude Include="propertyManager\property\propertyGeneration.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
+    <ClInclude Include="propertyManager\property\propertySchedule.h">
+      <Filter>propertyManager\property</Filter>
+    </ClInclude>
     <ClInclude Include="propertyManager\property\propertyCommandSource.h">
       <Filter>propertyManager\property</Filter>
     </ClInclude>
@@ -650,6 +653,9 @@
     <ClInclude Include="metaCollection\metaCommandObject.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
+    <ClInclude Include="metaCollection\metaScheduledJobObject.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
     <ClInclude Include="metadataDataProcessor.h" />
     <ClInclude Include="metadataReport.h" />
     <ClInclude Include="pictureDescription.h" />
@@ -657,6 +663,9 @@
       <Filter>propertyManager\property\variant</Filter>
     </ClInclude>
     <ClInclude Include="propertyManager\property\variant\variantForm.h">
+      <Filter>propertyManager\property\variant</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\variant\variantSchedule.h">
       <Filter>propertyManager\property\variant</Filter>
     </ClInclude>
     <ClInclude Include="propertyManager\property\variant\variantGen.h">
@@ -1515,6 +1524,9 @@
     <ClCompile Include="propertyManager\property\propertyGeneration.cpp">
       <Filter>propertyManager\property</Filter>
     </ClCompile>
+    <ClCompile Include="propertyManager\property\propertySchedule.cpp">
+      <Filter>propertyManager\property</Filter>
+    </ClCompile>
     <ClCompile Include="propertyManager\property\propertyCommandSource.cpp">
       <Filter>propertyManager\property</Filter>
     </ClCompile>
@@ -1649,6 +1661,15 @@
     <ClCompile Include="metaCollection\metaCommandObject_res.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
+    <ClCompile Include="metaCollection\metaScheduledJobObject.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaScheduledJobObjectMenu.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaScheduledJobObject_res.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
     <ClCompile Include="metaCollection\metaModuleObjectProperty.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
@@ -1663,6 +1684,9 @@
       <Filter>propertyManager\property\variant</Filter>
     </ClCompile>
     <ClCompile Include="propertyManager\property\variant\variantGen.cpp">
+      <Filter>propertyManager\property\variant</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\variant\variantSchedule.cpp">
       <Filter>propertyManager\property\variant</Filter>
     </ClCompile>
     <ClCompile Include="propertyManager\property\variant\variantModule.cpp">

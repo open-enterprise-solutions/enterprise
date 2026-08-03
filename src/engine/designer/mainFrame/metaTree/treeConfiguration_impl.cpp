@@ -19,6 +19,7 @@
 
 #define interfacesName _("Sections")
 #define commandsName _("Common commands")
+#define scheduledJobsName _("Scheduled jobs")
 #define rolesName _("Roles")
 #define picturesName _("Pictures")
 #define languagesName _("Languages")
@@ -1547,6 +1548,8 @@ void ibMetadataTree::InitTree()
 
 	m_treeTEMPLATES = AppendGroupItem(m_treeCOMMON, g_metaCommonTemplateCLSID, commonTemplatesName);
 
+	m_treeSCHEDULED_JOBS = AppendGroupItem(m_treeCOMMON, g_metaScheduledJobCLSID, scheduledJobsName);
+
 	m_treePICTURES = AppendGroupItem(m_treeCOMMON, g_metaPictureCLSID, picturesName);
 
 	// Sections come AFTER the common items — a top-level navigation grouping, not a common asset.
@@ -1617,6 +1620,8 @@ void ibMetadataTree::ClearTree()
 		m_metaTreeCtrl->DeleteChildren(m_treeINTERFACES);
 	if (m_treeCOMMANDS.IsOk())
 		m_metaTreeCtrl->DeleteChildren(m_treeCOMMANDS);
+	if (m_treeSCHEDULED_JOBS.IsOk())
+		m_metaTreeCtrl->DeleteChildren(m_treeSCHEDULED_JOBS);
 	if (m_treeROLES.IsOk())
 		m_metaTreeCtrl->DeleteChildren(m_treeROLES);
 	if (m_treePICTURES.IsOk())
@@ -1727,6 +1732,26 @@ void ibMetadataTree::FillData()
 
 	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeTEMPLATES))
 		m_metaTreeCtrl->Delete(m_treeTEMPLATES);
+
+	//****************************************************************
+	//*                      Scheduled jobs                          *
+	//****************************************************************
+	for (auto scheduledJob : m_metaData->GetAnyArrayObject(g_metaScheduledJobCLSID)) {
+
+		if (scheduledJob->IsDeleted())
+			continue;
+
+		const wxString& strName = scheduledJob->GetName();
+
+		if (!m_strSearch.IsEmpty()
+			&& strName.Find(m_strSearch) < 0)
+			continue;
+
+		AppendItem(m_treeSCHEDULED_JOBS, scheduledJob);
+	}
+
+	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeSCHEDULED_JOBS))
+		m_metaTreeCtrl->Delete(m_treeSCHEDULED_JOBS);
 
 	//****************************************************************
 	//*                          Pictures							 *
