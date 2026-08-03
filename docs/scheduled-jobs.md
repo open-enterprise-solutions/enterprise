@@ -73,7 +73,7 @@ property*.
 | base | `ibValueMetaObject` — flat, like a command | `ibValueMetaObjectRecordDataMutableRef` |
 | instances | none | rows, created in the enterprise |
 | reference / card / list / filters | no | yes |
-| cost | small — a copy of `CommonCommand` | medium — a copy of Document |
+| cost | small — a copy of `CommonCommand` | ~600–800 lines, mostly mechanical (below) |
 
 **What they share is not duplicated.** Both hold a module and both answer one verb. That is
 lifted into a small data-free interface — "I have a job module" — exactly as the command
@@ -108,17 +108,57 @@ job declares `eExecuteValue` the same way — load by key, run the module, recor
 The descriptor is `ibRuntimeModuleDataObject` (`backend/moduleInfo.h`) — the base that gives a
 value its own `ibProcUnit`, compilation and named calls.
 
+How many modules each kind has follows from whether it has an object at all:
+
+**Execution always lives in the MANAGER module**, for both declaring kinds. What differs is
+whether there is a second half:
+
+| | Modules |
+|---|---|
+| Platform | none — the body is C++ |
+| Predefined | manager (execute) |
+| Parameterized | manager (execute) + object (write) |
+| Tenant | none |
+
+A predefined job has no data object, so there is nothing for a write module to hang on — not a
+missing feature, an absent question.
+
 - **Platform** — no descriptor at all. The body is a C++ `ibJobBody`; `FoldTotals`
   (`backend/job/platformJobs.cpp`) is a plain function with no script in sight.
-- **Predefined** — its own descriptor, a literal copy of `ibValueCommandDataObject`:
-  `InitializeRuntime()` → `Compile()` → `Run(true)` → `ExecAsProc("Execute")`. `Run(true)`
-  executes the module's top level, so **module variables are initialised there and live for the
-  whole run** — which is what makes a start hook unnecessary.
-- **Parameterized** — **nothing to write.** `ibValueRecordDataObject` already *is* an
-  `ibRuntimeModuleDataObject` (`metaCollection/partial/commonObject.h`) and its
-  `GetMetaForCompile()` already returns the object module. Load the job by reference and it
-  arrives with a runtime attached; `ExecAsProc("Execute")` on it makes `ThisObject` the job row
-  itself. Exactly how a document runs its posting handler.
+- **Predefined** — a manager module, and therefore probably **no descriptor of its own**. Manager
+  modules register with the module manager (`metaCollection/metaCommandObject.cpp` says so while
+  explaining why a command's private module does not), so this one is compiled with the session's
+  modules and execution is a call on the job's manager rather than a transient compile. That is
+  the difference from a command, whose module is deliberately private and needs
+  `ibValueCommandDataObject` to run at all.
+
+  ⚠️ **Confirm this with one check when implementing.** A manager value vends its module
+  (`metaCollection/partial/catalogManager.h`), but the exact C++ path for invoking it was not
+  traced. If it turns out awkward, the fallback is the command's descriptor, copied verbatim.
+- **Parameterized** — **two modules, and the split is not arbitrary.** The **manager module**
+  holds the execution: `Execute(Ref)`, taking the job's own reference. The **object module**
+  holds the write logic (may this be saved?), exactly as a constant's `RecordModule` does.
+  Nothing new is written for either — `ibValueRecordDataObject` already *is* an
+  `ibRuntimeModuleDataObject` (`metaCollection/partial/commonObject.h`) for the object side, and
+  the manager module is an ordinary declared module on the metaobject
+  (`m_propertyManagerModule`, typed `ibValueMetaObjectCommonModule`).
+
+  Why execution belongs to the manager: the scheduler knows the **metaobject**, not a row, so
+  the entry point is a type-level operation and the reference is its argument. Writing is always
+  about one instance, so it stays on the object.
+
+  Three consequences, all wanted. Manager modules **register with the module manager** — the
+  comment explaining why a command's private module does not says so outright
+  (`metaCollection/metaCommandObject.cpp`) — therefore it is compiled **once per session**, not
+  once per row: a hundred and fifty exchanges cost one compile and a hundred and fifty calls. Its
+  module-level variables live for the whole session, which is the "initialise once" behaviour
+  without holding a session between runs. And it is resolvable by name, so the same entry can be
+  called by hand while debugging instead of waiting for a tick.
+
+  **No state in the manager module** — it is where the call is implemented, not where anything is
+  kept. The rule is not cosmetic: the module lives for the whole session while a row lives for one
+  iteration, so anything stored there is shared by **every** row the run touches and leaks into
+  the next one. Per-row state belongs in procedure locals.
 - **Tenant** — no runtime by construction. It is not authenticated and asks for no root module;
   that is the whole reason renting is cheap.
 
@@ -126,6 +166,15 @@ value its own `ibProcUnit`, compilation and named calls.
 
 A parameterized job takes **no parameters**. It is started with a reference to itself, and that
 is enough — everything it needs is its own attributes, read on its own side.
+
+**So the signature never changes.** `Execute(Ref)` stays the same whether the job has one
+dimension or ten attributes and a tabular section: nothing is passed, everything is read. No call
+site — the scheduler, the list command, a future business process — knows or needs to know how a
+job is parameterized. Contrast the usual arrangement, where a job's parameters are a positional
+array kept in step with the metadata by hand, and the drift shows up in production.
+
+It also empties the transfer gate of work: the one value crossing the session boundary is a
+reference, which always travels. "Passed a value table into a job" stops being expressible.
 
 This is not a simplification, it is what the value gate already requires: a reference travels
 between sessions, a loaded object does not, and the comment on that refusal names the remedy
@@ -170,15 +219,112 @@ recognises the row in a list. So the ancestor is the shared one
 | Reference, DeletionMark, DataVersion | Description, Active, Schedule, LastRun, Outcome | Number, Date, Posted (a document's — a setting has no date) |
 | | | Code, Parent, IsFolder, PredefinedName (a catalog's) |
 
-**Hierarchy is left out on purpose.** Grouping here is done by dynamic-list filters — by
-counterparty, by state, by schedule — which beats folders for this data. Adding Parent and
-IsFolder later is what the additive predefined-attribute contract is for; removing them later
-would be a data migration.
+**Hierarchy IS taken** (revised 2026-08-03). Folders are how a person groups their own jobs, and
+they are not dead weight here: the dynamic list already has a hierarchical view mode, and the
+query engine already reads a source's hierarchy for grouped totals. So one declaration buys
+grouping in the list *and* grouping in reports.
+
+That also settles the ancestor: inherit from the **hierarchical** catalog base
+(`ibValueMetaObjectRecordDataHierarchyMutableRef`) rather than from `MutableRef`, and folder
+forms, the AddFolder command and the parent machinery arrive already written. Code and
+PredefinedName come along unused — an acceptable price for what is saved.
 
 **Two verbs, one right — for now.** A document's Post runs under the same `Write` right as saving
 it, and the job inherits that. Worth revisiting rather than assuming: "edit the exchange settings"
 and "run the exchange by hand" are plausibly different roles. The mechanism is next door — a
 command declares its own `Use` role through `CreateRole`.
+
+---
+
+## 5b. What a job row carries — and why it is queryable
+
+Beyond its dimensions and attributes, a parameterized job stores its own scheduling state as
+ordinary columns:
+
+| Column | Why it is a column and not a computed value |
+|---|---|
+| **LastRun** | the schedule is a pure function of (last run, now), so the row needs its own |
+| **NextRun** | see below — this is what makes "who is due" an indexed query |
+| **Schedule** — an `ibJobScheduleDescription` value, written through its own serialiser | editable in the card and settable from script; see the note below on what is queryable |
+| **Active** | switching one instance off must not require the Designer |
+| **Outcome / Error** | the last verdict, next to the row it belongs to |
+
+**A folder has none of these, and that costs nothing to say.** Attribute usage is an existing
+property — `ibItemMode` (`Items` / `Folders` / `FoldersAndItems`,
+`metaCollection/attribute/metaAttributeObjectEnum.h`), the same one a catalog uses to mark Code,
+Description and Parent as `Folder_Item`. `Items` is the default, so schedule, active, LastRun,
+NextRun, outcome and every dimension are unavailable on a folder without a line being written; a
+folder's card shows Description and Parent, like any catalog group.
+
+⚠️ That is a MODEL and form fact, not a storage one: items and folders share one table and the
+columns exist on a folder row, merely empty. Uniqueness still has to be filtered by `IsFolder` —
+attribute usage does not do that job.
+
+### The schedule is stored as a description, and NextRun is its queryable projection
+
+Revised 2026-08-03, after `jobSchedule.{h,cpp}` was reworked. The structure now holds **fourteen**
+fields, not six — month days counted from the end, the Nth weekday of the month, every-N-weeks /
+every-N-months with a fixed anchor, and a stop-after minute — and it arrives with its own storage
+door, `ibJobScheduleDescriptionMemory::ReadNode / WriteNode`, shaped like every other description
+in the tree ([descriptions.md](descriptions.md)).
+
+Two consequences for us:
+
+- **The schedule property needs no serialisation of its own.** `ibPropertySchedule` holds an
+  `ibJobScheduleDescription` inside its variant data and delegates `ReadNodeValue` /
+  `WriteNodeValue` to that door. Less work than planned, and it cannot drift from the engine's own
+  format.
+- **Do not spread fourteen columns across the job table for the sake of filtering.** The projection
+  people actually query is *when will this run next* — and that is `NextRun`, which is a column
+  already. Ordering a list by "soonest", finding everything due in the next hour, spotting rows that
+  have stalled: all of it goes through `NextRun`, not through the weekday mask.
+
+Script still edits the schedule directly (`job.Schedule.Interval = 600; job.Write()`), because the
+description is a plain value on the object — the write is what recomputes `NextRun`.
+
+### ⚠️ NextRun is stored here, and the engine deliberately does not store it
+
+`ibJobState` computes the next run and says why storing it is wrong: one more thing that can
+disagree with reality after a restart or a clock change (`backend/job/jobManager.h`). That
+reasoning holds for a **process observation**. A job ROW is a different case, and the reason to
+store it is not the report:
+
+With the column, the body selects `WHERE Active AND NextRun <= now` — an indexed read of the rows
+that are due. Without it, every tick must load every row and evaluate its schedule. At a hundred
+and fifty exchanges that is the difference between an index seek and a full scan, per tick.
+
+So this is a **move of the computation**, not a duplicate of it: the schedule is evaluated once,
+after a run, instead of N times per tick. It stays correct only under one rule, and the rule is
+not optional:
+
+- recompute `NextRun` **when the row is written** (a schedule edit must take effect), and
+- recompute it **after every execution**;
+- treat an empty `NextRun` as due — so a row that somehow missed a recompute runs and repairs
+  itself rather than going quiet forever.
+
+The computation itself is already written:
+
+```
+NextRun = ibJobScheduleRules::NextAllowedAfter(schedule, LastRun + interval)
+```
+
+Not simply `LastRun + interval`: a schedule is interval **and** calendar joined by AND, so the
+interval says "no earlier than" and the calendar moves that to the next permitted window and day.
+Without the second half, an hourly job with a 02:00–05:00 window would be scheduled for 14:00.
+
+This is deliberately the **same formula the manager uses** for a job as a whole
+([job-schedule-parameters.md](job-schedule-parameters.md), "the due moment"): count from the last
+run plus the interval, then let the calendar carry it forward. A time of day therefore reads as
+*not before*, never as *only at* — a night run missed because the machine was off happens late in
+the morning instead of vanishing. Rows must inherit that property, not invent a stricter one.
+
+⚠️ Two ways this produces an empty value, and both must be visible rather than silent:
+
+- `NextAllowedAfter` returns an invalid date when nothing matches within a year — a schedule
+  naming February 31st. Show it on the card; left alone, "empty means due" turns that row into a
+  job that runs on every tick.
+- **A folder always has an empty NextRun.** The due-selection must exclude folders explicitly
+  (`Active AND NOT IsFolder AND NextRun <= now`), or every folder is picked up as due.
 
 ---
 
@@ -226,6 +372,12 @@ Three traps that come with it, all real:
   constraint per column. Marking Organisation unique on its own would forbid a second exchange for
   the same organisation (a shop and a marketplace), which is an ordinary case. Nor does a dimension
   need a "check uniqueness" property: declaring it a dimension already says that.
+- **Folders break a plain unique index**, since every folder has empty dimensions and therefore
+  collides with every other folder. The same predicate that decides what runs decides what is
+  checked: `NOT IsFolder`, a flag inherited from the hierarchical base rather than invented here.
+  At the database level that means a partial index (PostgreSQL / SQLite have one, Firebird does it
+  by expression, MySQL cannot), so treat the index as a backstop where the driver allows it and do
+  the check on write. **Open question, not a settled one.**
 - **Empty values.** An empty reference is a zero guid rather than SQL NULL, so behaviour should
   be uniform across drivers — but this must be checked on a live base, because if any driver
   stores it as NULL the check silently stops working (several NULLs are allowed in a unique
@@ -239,12 +391,14 @@ A hundred and fifty rows are **not** a hundred and fifty registrations. Each reg
 session, a session owns one connection, `m_maxJobs` defaults to 4 and the connection pool caps
 at 32 — per-row registration hits that wall immediately.
 
-Instead: **the metaobject is registered once**; its body reads its own active rows, asks each
-one whether its schedule is due, and runs them in turn.
+Instead: **the metaobject is registered once**; its body selects the rows that are due
+(`Active AND NextRun <= now`, § 5b) and runs them in turn.
 
-This works because `ibJobSchedule` was designed with no clock of its own — its header states that
-everything in it is a pure function of (last run, now). So the body can evaluate a *row's*
-schedule against that row's own last-run column, with no second scheduler.
+This works because the schedule has no clock of its own — since the 2026-08-03 rework the data
+(`ibJobScheduleDescription`) and its meaning (`ibJobScheduleRules`, static and pure) are separate
+classes, precisely so a rule can be asked about any moment without a manager standing behind it. So
+the body evaluates a *row's* schedule against that row's own last-run column, with no second
+scheduler.
 
 Consequences, all of them wanted:
 
@@ -271,7 +425,8 @@ lives in the database.
 - **Parameterized** — the row is the value. The metaobject's property seeds a new row.
 - **Predefined and platform** — no row exists, so the value goes to **`sys_job`**: it is already
   keyed by job name and already shared across processes (`appDataQuery.cpp`). Today it carries
-  name, last run and computer; it gains *active* plus the flat schedule fields.
+  name, last run and computer; it gains *active*, a *NextRun*, and the schedule written through
+  `ibJobScheduleDescriptionMemory` — one field, not fourteen columns (§ 5b).
 
 `sys_job` stays deliberately minimal in the sense its comment means: what is **shared** goes
 there, while outcome and next-run remain per-process observations in `ibJobState`. A schedule
@@ -329,6 +484,31 @@ reads as unfinished.
 
 ---
 
+## 9a. Reporting comes free — for the parameterized half
+
+A parameterized job is an ordinary reference object with its own table, so it is an ordinary
+source for the query engine. "How often did the exchange run per organisation", "which jobs fail
+most", "whose last run is older than a day" are reports over ordinary data, with nothing
+contributed by this subsystem. The same reason the list and its filters cost nothing.
+
+**Predefined jobs are NOT part of that yet.** Their state lives in `sys_job`, a service table the
+query engine does not know; there is no precedent in the tree for exposing a system table as an
+L3 source (the journal, for instance, is read by its own reader rather than by a query). Making
+it one is small work, but it is work. Until then: full reports over parameterized jobs, window
+and journal for the rest.
+
+### Why not store predefined jobs the way constants are stored
+
+Tempting, and wrong. A constant lives as a **column** of the single-row `sys_const`
+(`fld<metaID>`), so every new constant is an ALTER, the table grows sideways, and "show them all"
+means pivoting columns into rows.
+
+Predefined jobs already live as **rows** in `sys_job`, one per name. A new job is an INSERT, "all
+jobs" is a SELECT, and the shape matches the parameterized half — so one window and one report can
+read both uniformly. The constant layout would be a step back from what already exists.
+
+---
+
 ## 10. Journal — already written
 
 No document-journal metatype exists in the platform, and none is needed here. The manager already
@@ -344,7 +524,8 @@ whole metaobject saved.
    `OnBeforeRunMetaObject` / removal on `OnBeforeCloseMetaObject`, name = metaobject name.
    *Check:* visible in the tree, module opens in the code editor, `RunJob("Name")` from script
    runs it, `job/finished` lands in the journal.
-2. **Schedule.** `ibPropertySchedule` + `ibVariantDataSchedule` over the existing `ibJobSchedule`.
+2. **Schedule.** `ibPropertySchedule` + `ibVariantDataSchedule` over `ibJobScheduleDescription`,
+   with node I/O delegated to `ibJobScheduleDescriptionMemory` (§ 5b — no serialiser of our own).
    Write the dialog as a **standalone `wxDialog`** from the start — it has two consumers, the
    inspector adapter and the button on a job card. Building it inside the adapter (as
    `advpropGeneration` does) guarantees rewriting it for the second one.
