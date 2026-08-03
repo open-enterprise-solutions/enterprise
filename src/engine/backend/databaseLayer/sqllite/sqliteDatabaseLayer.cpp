@@ -26,6 +26,7 @@ const ibDialectDictionary& ibDatabaseLayerSQLite::Dialect()
 		d.m_rowLockNoWaitSuffix = wxEmptyString;      // (no row lock at all -> nothing to make non-blocking)
 		d.m_indexListQuery = wxT("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = ?");   // differ introspects existing indexes
 		d.m_rowIdColumn    = wxT("rowid");            // physical row id for the pre-UNIQUE dedup (keep one row per key)
+		d.m_returningClause = wxT("RETURNING");       // SQLite 3.35+; the embedded engine here is 3.48
 		// type map (SQLite is dynamically typed; these set column affinity)
 		d.m_typeBoolean       = wxT("INTEGER");
 		d.m_typeBigInt        = wxT("INTEGER");   // SQLite INTEGER is 64-bit

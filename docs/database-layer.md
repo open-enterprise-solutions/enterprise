@@ -119,6 +119,29 @@ An empty base used purely as an identity — it keeps `session.h` out of the dat
 and leaves room for non-session holders. See [connection-pool.md](connection-pool.md) and
 [compute-server-tiering.md](compute-server-tiering.md).
 
+### 3.1 Two return values a driver owes, and what they are NOT
+
+**The affected-row count.** `RunQuery` / a prepared statement's `RunQuery` return the number of
+rows the statement touched. `DATABASE_LAYER_QUERY_RESULT_ERROR` is `0` — which is also a
+legitimate count (DDL, a `SET`, an `UPDATE` whose `WHERE` matched nothing), so **testing a return
+value against that constant asks a question it cannot answer**. Failure is signalled by
+`ThrowDatabaseException`, and that is the only reliable signal.
+
+This was not theoretical: Firebird's `DoRunQuery` and PostgreSQL's both returned a hardcoded `1`
+(PostgreSQL even read `PQcmdTuples` and threw the parse away), while SQLite, MySQL and ODBC
+reported the truth — so the same script call answered differently per driver, and the call sites
+that compared against the sentinel only ever "worked" because of the fake `1`. Fixed 2026-08-03;
+`databaseErrorCodes.h` carries the rule. Firebird's `execute_immediate` path has no statement
+handle, so no `isc_info_sql_records` round trip is possible there — it reports `0` and says so;
+every DML goes through the prepared path, whose wrapper reads the real counts.
+
+**`RETURNING`.** A write can hand back columns from the rows it wrote:
+`m_returningClause` in `ibDialectDictionary` (`"RETURNING"` on Firebird, PostgreSQL and
+SQLite 3.35+; **empty** on MySQL / ODBC). Empty means the renderer **throws** rather than
+emulating it — the stand-in (write, then `SELECT`) drops exactly the atomicity that makes it worth
+asking for. Built at L2 with `ibReturning(dml, {cols})` and run with `ExecuteReturning`, which
+yields a cursor like any `SELECT`. See [query-engine-layers.md § L2](query-engine-layers.md).
+
 ---
 
 ## 4. Drivers

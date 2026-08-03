@@ -39,6 +39,7 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 		// UPDATE OR INSERT … MATCHING (pk) — no separate update body.
 		d.m_upsertTemplate   = wxT("UPDATE OR INSERT INTO {table} ({columns}) VALUES ({values}) MATCHING ({keys})");
 		d.m_upsertUpdateItem = wxEmptyString;
+		d.m_returningClause  = wxT("RETURNING");      // FB 2.1+
 		d.m_features.m_window = true;                 // FB3+
 		d.m_features.m_rollup = true;                 // GROUP BY ROLLUP(...) — FB5 (vendored: security5.fdb)
 		// type map
@@ -928,7 +929,13 @@ int ibDatabaseLayerFirebird::DoRunQuery(const wxString& strQuery, bool bParseQue
 		wxArrayString::iterator start = QueryArray.begin();
 		wxArrayString::iterator stop = QueryArray.end();
 
-		long rows = 1;
+		// isc_dsql_execute_immediate hands back no statement handle, so there is no
+		// isc_info_sql_records round-trip to ask for a row count — this path reports 0,
+		// the same as the other drivers report for a statement that touches no rows.
+		// It is not a stand-in for DML: every INSERT/UPDATE/DELETE goes through the
+		// prepared-statement path, whose wrapper does read the real counts.
+		// Failure arrives as the exception thrown below, never as a return value.
+		const long rows = 0;
 		if (QueryArray.size() > 0)
 		{
 			bool bQuickieTransaction = false;
@@ -1072,7 +1079,7 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 				}
 			} // End check if there are more than one query in the array
 
-			isc_tr_handle pQueryTransaction = NULL;
+			isc_tr_handle pQueryTransaction = 0;
 			bool bManageTransaction = false;
 			if (bQuickieTransaction)
 			{
@@ -1098,7 +1105,7 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 				pQueryTransaction = m_pTransaction;
 			}
 
-			isc_stmt_handle pStatement = NULL;
+			isc_stmt_handle pStatement = 0;
 			isc_db_handle pDatabase = m_pDatabase;
 			int nReturn = m_pInterface->GetIscDsqlAllocateStatement()(*(ISC_STATUS_ARRAY*)m_pStatus, &pDatabase, &pStatement);
 			m_pDatabase = pDatabase;

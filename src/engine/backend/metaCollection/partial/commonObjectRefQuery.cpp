@@ -15,6 +15,7 @@
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/databaseLayer/connectionScope.h"
 #include "backend/databaseLayer/databaseErrorCodes.h"
+#include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door — the sequence bump is built here
 #include "backend/backend_form.h"
 #include "backend/logger/logger.h"
 
@@ -479,12 +480,15 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 	// save so rollback rolls back both — no orphan sequence values on
 	// failure. ses_query throws if there's no current session or its
 	// connection is closed.
-	const auto db = ses_query;   // shared_ptr<ibDatabaseLayer>
-
-	const int driver = db->GetDatabaseLayerType();
-	if (driver != DATABASELAYER_FIREBIRD && driver != DATABASELAYER_POSTGRESQL)
-		ibBackendCoreException::Error(_("GenerateNextIdentifier requires Firebird or PostgreSQL"
-			" - atomic UPDATE...RETURNING is not portable to other backends."));
+	// Everything below goes through L2. The builder's default ctor takes the connection the
+	// CURRENT SESSION is bound to, so the increment still shares the outer document-save TX —
+	// a rollback rolls back the sequence bump with it, no orphan values.
+	//
+	// Which engines this works on is no longer a driver list here: the atomicity rests on
+	// RETURNING, so the dialect that owns the clause owns the answer (m_returningClause).
+	// That admits SQLite as well now, and gives MySQL / ODBC one honest error from the
+	// renderer instead of a hardcoded name check that drifts from the dialects.
+	ibDatabaseQueryBuilder q;
 
 	// Period bucket — parking value for now; per-type periodicity (catalog
 	// vs document) is a future feature.
@@ -502,84 +506,107 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 		const wxString tableName = m_metaObject->GetPhysicalTableName();
 		const wxString fieldBase = attribute->GetPhysicalName();
 		ibNumber maxFound = 0;
-		if (attribute->ContainType(ibValueTypes::TYPE_NUMBER)) {
-			const wxString numField = fieldBase + wxT("_N");
-			ibDatabaseResultSet* rs = db->RunQueryWithResults(
-				wxT("SELECT MAX(%s) FROM %s;"), numField, tableName);
-			if (rs != nullptr) {
-				if (rs->Next() && !rs->IsFieldNull(1))
-					maxFound = rs->GetResultNumber(1);
-				db->CloseResultSet(rs);
-			}
-		} else if (attribute->ContainType(ibValueTypes::TYPE_STRING)) {
-			const wxString strField = fieldBase + wxT("_S");
-			ibStatementGuard st(db, db->PrepareStatement(
-				wxT("SELECT MAX(%s) FROM %s WHERE %s LIKE ?;"),
-				strField, tableName, strField));
-			if (st) {
-				st->SetParamString(1, strPrefix + wxT("%"));
-				ibDatabaseResultSet* rs = st->RunQueryWithResults();
-				if (rs != nullptr) {
-					if (rs->Next() && !rs->IsFieldNull(1)) {
-						const wxString maxCode = rs->GetResultString(1);
-						if (maxCode.length() > strPrefix.length()) {
-							long parsed = 0;
-							maxCode.Mid(strPrefix.length()).ToLong(&parsed);
-							if (parsed > 0) maxFound = parsed;
-						}
-					}
-					db->CloseResultSet(rs);
-				}
-			}
+
+		const bool isNumber = attribute->ContainType(ibValueTypes::TYPE_NUMBER);
+		const bool isString = !isNumber && attribute->ContainType(ibValueTypes::TYPE_STRING);
+		if (!isNumber && !isString)
+			return maxFound;
+
+		const wxString field = fieldBase + (isNumber ? wxT("_N") : wxT("_S"));
+
+		// SELECT MAX(<field>) FROM <table> [WHERE <field> LIKE '<prefix>%'] — one shape, the
+		// string arm just adds the prefix filter. Aggregate with no group keys = one row.
+		ibQueryRelPtr source = ibScan(tableName);
+		if (isString)
+			source = ibFilter(std::move(source),
+				ibBinOp(ibQueryBinOp::Like, ibCol(field), ibConst(ibValue(strPrefix + wxT("%")))));
+
+		ibQueryIR ir;
+		ir.m_root = ibAggregate(std::move(source),
+			{ { ibFunc(wxT("MAX"), { ibCol(field) }), wxT("maxValue") } }, {});
+
+		ibQueryResult rs = q.ExecuteIR(ir);
+		if (!rs.Next())
+			return maxFound;
+
+		const ibValue maxValue = rs.GetValue(1);
+		if (maxValue.IsNull())
+			return maxFound;    // empty table — start from zero
+
+		if (isNumber)
+			return maxValue.GetNumber();
+
+		const wxString maxCode = maxValue.GetString();
+		if (maxCode.length() > strPrefix.length()) {
+			long parsed = 0;
+			maxCode.Mid(strPrefix.length()).ToLong(&parsed);
+			if (parsed > 0) maxFound = parsed;
 		}
 		return maxFound;
 	};
 
-	// FB / PG: single-statement UPDATE...RETURNING is atomic. The row
-	// is locked, incremented and returned in one shot — concurrent
-	// sessions (incl. cross-machine) sequentialise through the DB row
-	// lock with no race window between SELECT and UPSERT. Two attempts:
-	//   1) UPDATE...RETURNING — row exists → done.
-	//   2) Bootstrap-scan + INSERT. INSERT may PK-conflict if another
-	//      session inserted first; the next loop iteration's UPDATE arm
-	//      then succeeds with the racing session's value + 1.
+	// Two attempts:
+	//   1) UPDATE … RETURNING — the row exists → done.
+	//   2) Bootstrap-scan + INSERT. The INSERT may PK-conflict if another session
+	//      inserted first; the next iteration's UPDATE arm then succeeds with that
+	//      session's value + 1.
+	//
+	// The sequence row's identity, shared by both arms.
+	const auto keyPredicate = [&]() {
+		return ibBinOp(ibQueryBinOp::And,
+			ibBinOp(ibQueryBinOp::And,
+				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("interval")),  ibConst(ibValue(interval))),
+				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("meta_guid")), ibConst(ibValue(m_metaObject->GetDocPath())))),
+			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("prefix")),    ibConst(ibValue(strPrefix))));
+	};
+
 	ibNumber resultCode = 1;
 	bool gotCode = false;
 	for (int attempt = 0; attempt < 2 && !gotCode; ++attempt) {
-		ibStatementGuard upd(db, db->PrepareStatement(
-			wxT("UPDATE %s SET number = number + 1 WHERE interval = ? AND meta_guid = ? AND prefix = ? RETURNING number;"),
-			sequence_table));
-		if (upd) {
-			upd->SetParamInt(1, interval);
-			upd->SetParamString(2, m_metaObject->GetDocPath());
-			upd->SetParamString(3, strPrefix);
-			ibDatabaseResultSet* rs = upd->RunQueryWithResults();
-			if (rs != nullptr) {
-				if (rs->Next() && !rs->IsFieldNull(1)) {
-					resultCode = rs->GetResultNumber(1);
+		// UPDATE … SET number = number + 1 … RETURNING number. One statement, so the row is
+		// locked, incremented and read in a single shot — concurrent sessions (including
+		// cross-machine) sequentialise through the DB row lock, with no window between a
+		// SELECT and a write for anyone to slip into.
+		{
+			ibQueryResult rs = q.ExecuteReturning(
+				ibReturning(
+					ibUpdate(sequence_table,
+						{ { wxT("number"), ibBinOp(ibQueryBinOp::Add, ibCol(wxT("number")), ibConst(ibValue(1))) } },
+						keyPredicate()),
+					{ wxT("number") }));
+
+			if (rs.Next()) {
+				const ibValue number = rs.GetValue(1);
+				if (!number.IsNull()) {
+					resultCode = number.GetNumber();
 					gotCode = true;
 				}
-				db->CloseResultSet(rs);
 			}
 		}
 		if (gotCode) break;
 
-		// Row missing — bootstrap from data table and INSERT.
+		// No row yet — bootstrap from the data table and INSERT. A racing session may have
+		// inserted first, in which case this conflicts on the PK and the next iteration's
+		// UPDATE arm succeeds with that session's value + 1.
 		const ibNumber candidate = scanDataMax() + 1;
-		ibStatementGuard ins(db, db->PrepareStatement(
-			wxT("INSERT INTO %s (interval, meta_guid, prefix, number) VALUES (?, ?, ?, ?);"),
-			sequence_table));
-		if (ins) {
-			ins->SetParamInt(1, interval);
-			ins->SetParamString(2, m_metaObject->GetDocPath());
-			ins->SetParamString(3, strPrefix);
-			ins->SetParamNumber(4, candidate);
-			if (ins->RunQuery() != DATABASE_LAYER_QUERY_RESULT_ERROR) {
+		try {
+			// The bootstrap INSERT must land its one row. Asking for the count rather than
+			// comparing against DATABASE_LAYER_QUERY_RESULT_ERROR: that constant is 0, which
+			// is a row count, not a failure — see databaseErrorCodes.h.
+			if (q.Execute(ibInsert(sequence_table, {
+					{ wxT("interval"),  ibConst(ibValue(interval)) },
+					{ wxT("meta_guid"), ibConst(ibValue(m_metaObject->GetDocPath())) },
+					{ wxT("prefix"),    ibConst(ibValue(strPrefix)) },
+					{ wxT("number"),    ibConst(ibValue(candidate)) },
+				})) >= 1) {
 				resultCode = candidate;
 				gotCode = true;
 			}
-			// else: PK conflict from a racing session's bootstrap
-			// → loop, UPDATE arm now succeeds.
+		}
+		catch (const ibBackendException&) {
+			// PK conflict from a racing session's bootstrap — the constraint violation now
+			// arrives as an exception (L1 signals failure by throwing), so it is caught here
+			// rather than read off a return code. Fall through to the retry.
 		}
 	}
 

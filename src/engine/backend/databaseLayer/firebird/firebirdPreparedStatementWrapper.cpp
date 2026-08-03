@@ -11,7 +11,7 @@ ibPreparedStatementFirebirdWrapper::ibPreparedStatementFirebirdWrapper(ibInterfa
 	m_pDatabase = pDatabase;
 	m_pTransaction = pTransaction;
 
-	m_pStatement = NULL;
+	m_pStatement = 0;
 	m_pParameters = NULL;
 	m_pParameterCollection = NULL;
 	m_bManageStatement = true;

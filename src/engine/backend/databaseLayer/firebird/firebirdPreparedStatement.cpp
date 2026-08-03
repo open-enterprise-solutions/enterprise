@@ -37,7 +37,7 @@ void ibPreparedStatementFirebird::Close()
 	if (m_bManageTransaction && m_pTransaction)
 	{
 		int nReturn = m_pInterface->GetIscCommitTransaction()(m_Status, &m_pTransaction);
-		m_pTransaction = NULL;
+		m_pTransaction = 0;
 		if (nReturn != 0)
 		{
 			InterpretErrorCodes();
@@ -114,7 +114,6 @@ ibPreparedStatementFirebird* ibPreparedStatementFirebird::CreateStatement(ibInte
 			ibDatabaseLayerException::Throw(
 				ibBackendDatabaseException::Kind::Unknown,
 				nCode, wxEmptyString, msg);
-			return pStatement;
 		}
 
 		pStatement->SetManageTransaction(true);
@@ -157,7 +156,6 @@ ibPreparedStatementFirebird* ibPreparedStatementFirebird::CreateStatement(ibInte
 			ibDatabaseLayerException::Throw(
 				ibBackendDatabaseException::Kind::Unknown,
 				nCode, wxEmptyString, msg);
-			return pStatement;
 }
 		start++;
 }

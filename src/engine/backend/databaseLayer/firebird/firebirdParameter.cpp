@@ -232,7 +232,7 @@ bool ibDatabaseParameterFirebird::ResetBlob(isc_db_handle database, isc_tr_handl
 		return false;
 
 	//m_BlobId = NULL;
-	m_pBlob = NULL;
+	m_pBlob = 0;
 	ISC_STATUS_ARRAY    status;              /* status vector */
 	void* pData = m_BufferValue.GetData();
 	int nDataLength = m_nBufferLength;//m_BufferValue.GetDataLen();
@@ -247,7 +247,6 @@ bool ibDatabaseParameterFirebird::ResetBlob(isc_db_handle database, isc_tr_handl
 			ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode),
 			/*sqlState*/ wxEmptyString,
 			ibDatabaseLayerFirebird::TranslateErrorCodeToString(m_pInterface, nSqlCode, status));
-		return false;
 	}
 
 	int dataFetched = 0;
@@ -264,7 +263,6 @@ bool ibDatabaseParameterFirebird::ResetBlob(isc_db_handle database, isc_tr_handl
 				ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode),
 				/*sqlState*/ wxEmptyString,
 				ibDatabaseLayerFirebird::TranslateErrorCodeToString(m_pInterface, nSqlCode, status));
-			return false;
 		}
 
 		dataFetched += segLen;
@@ -281,7 +279,6 @@ bool ibDatabaseParameterFirebird::ResetBlob(isc_db_handle database, isc_tr_handl
 			ibDatabaseLayerFirebird::TranslateErrorCode(nSqlCode),
 			/*sqlState*/ wxEmptyString,
 			ibDatabaseLayerFirebird::TranslateErrorCodeToString(m_pInterface, nSqlCode, status));
-		return false;
 	}
 
 	m_pParameter->sqldata = (char*)&m_BlobId;

@@ -56,6 +56,16 @@ dictionary, and neither knows anything about metadata:
   A structured **`ibQueryIR`** (never raw SQL) with a full vocabulary — Scan/Filter/Project/Sort/
   Limit/Join/Aggregate/Subquery/Distinct/Union, expressions, DDL, DML — rendered generically
   through `ibDialectDictionary`.
+
+  A write can also hand back what it wrote: `ibReturning(dml, {cols})` +
+  `ExecuteReturning` yields a **cursor over the affected rows**, exactly like a SELECT. This is
+  what makes "bump a counter and read the new value" ONE statement, hence atomic — no window
+  between a read and a write for a concurrent session to slip into. The spelling is the dialect's
+  (`m_returningClause`: Firebird, PostgreSQL, SQLite 3.35+); a driver without one **throws**
+  `UnsupportedNode` rather than emulate it, because write-then-SELECT loses the atomicity that
+  was the entire point. `GenerateNextIdentifier` (`sys_sequence`) is the first tenant — it was
+  the last raw-L1 holdout on the write path, kept there precisely because RETURNING had no L2
+  form.
 - **L2-2 — the materialization renderer** (`databaseMaterializeBuilder`). An `ibMaterializeSpec` →
   the trigger / view statements that maintain a **derived** table, rendered through the driver's
   second dictionary, `ibMaterializationDialect`. It also RENDERS THE READ (`RenderMaterializedRead`

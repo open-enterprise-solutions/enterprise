@@ -6,6 +6,8 @@
 #include "backend/databaseLayer/databaseErrorCodes.h"
 #include "backend/databaseLayer/databaseLayerException.h"
 
+#include <cstdlib>   // std::strtol — the affected-row count off libpq's ASCII buffer
+
 // The PostgreSQL SQL dialect lives WITH its driver — no central factory, no
 // type-switch. Static so a test (or anyone) can read it WITHOUT constructing
 // the driver (no libpq); the virtual GetDialect() just exposes it to L2.
@@ -32,6 +34,7 @@ const ibDialectDictionary& ibDatabaseLayerPostgres::Dialect()
 		d.m_analyzePrefix     = wxT("ANALYZE");   // ANALYZE <t> — refresh planner stats (temps aren't autovacuumed)
 		d.m_indexListQuery = wxT("SELECT indexname FROM pg_indexes WHERE tablename = LOWER(?)");   // differ introspects existing indexes
 		d.m_rowIdColumn    = wxT("ctid");         // physical row id for the pre-UNIQUE dedup (keep one row per key)
+		d.m_returningClause = wxT("RETURNING");   // PostgreSQL has had it since 8.2
 		// Period truncation. date_trunc names seven of the ten units directly; the other three are
 		// offsets from the start of the enclosing unit:
 		//   TenDays  — the 1st / 11th / 21st. The offset is CAPPED at 2 because a 31-day month
@@ -352,9 +355,16 @@ bool ibDatabaseLayerPostgres::Open()
 
 		if (!DatabaseExists(m_strDatabase))
 		{
-			bool result = DoRunQuery("CREATE DATABASE " + m_strDatabase, false) != DATABASE_LAYER_QUERY_RESULT_ERROR;
-			if (!result)
+			// CREATE DATABASE affects no rows, so its return value is 0 and carries no verdict.
+			// Failure arrives as an exception from DoRunQuery — that is what decides here.
+			// (This used to compare the return against DATABASE_LAYER_QUERY_RESULT_ERROR, which
+			// is 0; it only ever passed because the driver reported a hardcoded 1.)
+			try {
+				DoRunQuery("CREATE DATABASE " + m_strDatabase, false);
+			}
+			catch (const ibBackendException&) {
 				return false;
+			}
 			DoRunQuery("GRANT ALL PRIVILEGES ON DATABASE " + m_strDatabase + " to " + m_strUser, false);
 		}
 	}
@@ -499,9 +509,18 @@ int ibDatabaseLayerPostgres::DoRunQuery(const wxString& strQuery, bool WXUNUSED(
 	}
 	else
 	{
-		const wxString& rowsAffected = ConvertFromUnicodeStream(m_pInterface->GetPQcmdTuples()(pResultCode));
-		long rows = 1;
-		//rowsAffected.ToLong(&rows);
+		// Affected-row count, as the other drivers report it. PQcmdTuples is empty for any
+		// statement that touches no rows (DDL, SET, ...) — that reads as 0, which is the
+		// truth, not an error. Failure arrives as the exception thrown above.
+		//
+		// Read straight off the libpq buffer: it is an ASCII decimal digit string, so it
+		// needs neither the charset conversion nor a wxString. The old code built that
+		// wxString and then threw it away with the parse commented out — this does less
+		// work than either version.
+		const char* const cmdTuples = m_pInterface->GetPQcmdTuples()(pResultCode);
+		long rows = 0;
+		if (cmdTuples != nullptr && *cmdTuples != '\0')
+			rows = std::strtol(cmdTuples, nullptr, 10);
 		m_pInterface->GetPQclear()(pResultCode);
 		return (int)rows;
 	}

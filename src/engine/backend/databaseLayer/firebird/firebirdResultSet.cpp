@@ -10,8 +10,8 @@ ibDatabaseResultSetFirebird::ibDatabaseResultSetFirebird(ibInterfaceFirebird* pI
 {
 	m_pInterface = pInterface;
 	m_pDatabase = 0;
-	m_pTransaction = NULL;
-	m_pStatement = NULL;
+	m_pTransaction = 0;
+	m_pStatement = 0;
 	m_pFields = NULL;
 	m_bManageStatement = false;
 	m_bManageTransaction = false;
@@ -68,7 +68,7 @@ void ibDatabaseResultSetFirebird::Close()
 	{
 		int nReturn = m_pInterface->GetIscCommitTransaction()(m_Status, &m_pTransaction);
 		// We're done with the transaction, so set it to NULL so that we know that a new transaction must be started if we run any queries
-		m_pTransaction = NULL;
+		m_pTransaction = 0;
 		if (nReturn != 0)
 		{
 			InterpretErrorCodes();
@@ -80,7 +80,7 @@ void ibDatabaseResultSetFirebird::Close()
 	if (m_bManageStatement && m_pStatement)
 	{
 		int nReturn = m_pInterface->GetIscDsqlFreeStatement()(m_Status, &m_pStatement, DSQL_drop);
-		m_pStatement = NULL;
+		m_pStatement = 0;
 		if (nReturn != 0)
 		{
 			InterpretErrorCodes();
@@ -438,7 +438,7 @@ void* ibDatabaseResultSetFirebird::GetResultBlob(int nField, wxMemoryBuffer& buf
 		if (nType == SQL_BLOB)
 		{
 			ISC_QUAD blobId = *(ISC_QUAD*)pVar->sqldata;
-			isc_blob_handle pBlob = NULL;
+			isc_blob_handle pBlob = 0;
 			char szSegment[128];
 			unsigned short nSegmentLength;
 			m_pInterface->GetIscOpenBlob2()(m_Status, &m_pDatabase, &m_pTransaction, &pBlob, &blobId, 0, NULL);

@@ -313,6 +313,25 @@ int ibDatabaseQueryBuilder::Execute(const ibDmlStatement& dml, const std::vector
 	return stmt->RunQuery();
 }
 
+ibQueryResult ibDatabaseQueryBuilder::ExecuteReturning(const ibDmlStatement& dml,
+                                                       const std::vector<ibValue>& externalParams)
+{
+	std::shared_ptr<ibDatabaseLayer> conn = m_scope.shared();
+	if (!conn)
+		ibBackendQueryException::Throw(ibBackendQueryException::Kind::NoConnection,
+			_("Query layer could not obtain a database connection from the holder."));
+
+	if (dml.m_returning.empty())
+		ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
+			_("ExecuteReturning needs a RETURNING column list — use ibReturning(), or Execute() for a plain write."));
+
+	ibQueryRenderer renderer(conn->GetDialect());
+
+	// Same door as a SELECT from here on: a RETURNING write yields a cursor, so it runs
+	// through the shared rendered-statement helper and comes back as an ibQueryResult.
+	return ibRunRendered(conn, renderer.RenderDML(dml), externalParams);
+}
+
 // ==========================================================================
 // ibQueryResult
 // ==========================================================================
@@ -1067,6 +1086,21 @@ ibRenderedQuery ibQueryRenderer::RenderDML(const ibDmlStatement& dml)
 		sql.Replace(wxT("{update}"),  update);
 		break;
 	}
+	}
+
+	// RETURNING — appended last, after every kind, because that is where all three dialects
+	// that have it put the clause. A driver without one throws instead of emulating: the
+	// stand-in (write, then SELECT) loses the atomicity that is the whole reason to ask.
+	if (!dml.m_returning.empty()) {
+		if (m_dialect.m_returningClause.IsEmpty())
+			ibBackendQueryException::Throw(ibBackendQueryException::Kind::UnsupportedNode,
+				_("This database has no RETURNING clause, and emulating it would not be atomic."));
+
+		sql += wxT(" ") + m_dialect.m_returningClause + wxT(" ");
+		for (size_t i = 0; i < dml.m_returning.size(); ++i) {
+			if (i) sql += wxT(", ");
+			sql += QuoteIdent(dml.m_returning[i]);
+		}
 	}
 
 	m_out.m_sql = sql;

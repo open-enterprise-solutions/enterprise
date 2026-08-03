@@ -719,6 +719,12 @@ struct ibDmlStatement
 	ibQueryRelPtr         m_selectSource;
 	std::vector<wxString> m_insertColumns;
 
+	// RETURNING — columns the statement hands back from the rows it wrote. Empty (default) =
+	// a plain write with no cursor. Set it through ibReturning() and run the statement with
+	// ibDatabaseQueryBuilder::ExecuteReturning, which is the overload that yields a cursor.
+	// The spelling lives in the dialect (m_returningClause); a driver without one throws.
+	std::vector<wxString> m_returning;
+
 	explicit ibDmlStatement(ibDmlKind kind) : m_kind(kind) {}
 };
 
@@ -757,6 +763,19 @@ inline ibDmlStatement ibDelete(const wxString& table, ibQueryExprPtr where = nul
 	s.m_table = table;
 	s.m_where = std::move(where);
 	return s;
+}
+
+// Ask a write to hand back columns from the rows it wrote:
+//
+//     ibReturning(ibUpdate(table, { { wxT("number"), … } }, where), { wxT("number") })
+//
+// A modifier rather than a parameter on every factory: RETURNING is orthogonal to WHICH
+// write it is, and threading it through ibInsert / ibUpdate / ibDelete / ibUpsert would
+// have put an empty vector in every existing call site. Run it with ExecuteReturning.
+inline ibDmlStatement ibReturning(ibDmlStatement dml, std::vector<wxString> columns)
+{
+	dml.m_returning = std::move(columns);
+	return dml;
 }
 
 // UPSERT: INSERT the row, or UPDATE it in place when a row with the same
@@ -958,6 +977,13 @@ public:
 	                                       const std::vector<ibValue>& externalParams = {});
 	int Execute(const ibDdlStatement& ddl);
 	int Execute(const ibDmlStatement& dml, const std::vector<ibValue>& externalParams = {});
+
+	// A write that hands back what it wrote — the statement must carry a RETURNING list
+	// (ibReturning), and it yields a cursor over the affected rows, exactly like a SELECT.
+	// Empty cursor = the write matched nothing, which is how a caller distinguishes
+	// "updated it" from "there was no such row" WITHOUT a second round trip.
+	[[nodiscard]] ibQueryResult ExecuteReturning(const ibDmlStatement& dml,
+	                                              const std::vector<ibValue>& externalParams = {});
 
 	// --- render-once / execute-many (build-once perf path, §19/§20) -------
 	// Render an IR to dialect SQL + bind plan WITHOUT running. Borrows the

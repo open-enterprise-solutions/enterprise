@@ -4,6 +4,8 @@
 
 #include "backend/databaseLayer/databaseErrorCodes.h"
 
+#include <cstdlib>   // std::strtol — the affected-row count off libpq's ASCII buffer
+
 ibPreparedStatementPostgresWrapper::ibPreparedStatementPostgresWrapper(ibInterfacePostgres* pInterface, PGconn* pDatabase, const wxString& strSQL, const wxString& strStatementName)
 	: ibDatabaseErrorReporter(), m_strSQL(strSQL), m_strStatementName(strStatementName)
 {
@@ -108,8 +110,12 @@ int ibPreparedStatementPostgresWrapper::DoRunQuery()
 
 		if (GetErrorCode() == DATABASE_LAYER_OK)
 		{
-			wxString rowsAffected = ConvertFromUnicodeStream(m_pInterface->GetPQcmdTuples()(pResult));
-			rowsAffected.ToLong(&nRows);
+			// Straight off libpq's ASCII buffer — this runs on every DML statement, and the
+			// count is a decimal digit string, so neither the charset conversion nor the
+			// wxString it fed was buying anything. Matches DoRunQuery in the layer.
+			const char* const cmdTuples = m_pInterface->GetPQcmdTuples()(pResult);
+			if (cmdTuples != nullptr && *cmdTuples != '\0')
+				nRows = std::strtol(cmdTuples, nullptr, 10);
 		}
 		m_pInterface->GetPQclear()(pResult);
 	}

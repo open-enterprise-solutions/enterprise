@@ -15,9 +15,15 @@
 #define DATABASE_LAYER_UNSUPPORTED_OPERATION 11
 #define DATABASE_LAYER_ERROR_LOADING_LIBRARY 12
 
-// Using 0 for now since this is replacing a
-//  boolean for the return code and we don't want
-//  to break existing code
+// NOT a failure signal for RunQuery / a prepared statement's RunQuery.
+//
+// Those return the AFFECTED-ROW COUNT, and 0 is a legitimate count: DDL, a SET, an UPDATE
+// whose WHERE matched nothing. A driver reports failure by THROWING (ThrowDatabaseException),
+// so testing a return value against this constant asks the wrong question — it cannot tell a
+// successful statement that touched no rows from a failed one.
+//
+// The value stays 0 for the inherited call sites that still return it as their own "no" (an
+// early exit before any statement ran). Do not add new ones.
 #define DATABASE_LAYER_QUERY_RESULT_ERROR 0
 
 #endif // __DATABASE_ERROR_CODES_H__

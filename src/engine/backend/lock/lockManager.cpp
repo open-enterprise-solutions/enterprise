@@ -193,7 +193,7 @@ ibLockHandle ibLockManager::Acquire(const std::vector<ibLockItem>& items,
 					{ wxT("acquiredAt"),  ibConst(ibValue(nowUtc)) },
 					{ wxT("userName"),    ibConst(ibValue(ownerName)) },
 					{ wxT("computer"),    ibConst(ibValue(ownerComputer)) },
-				})) == DATABASE_LAYER_QUERY_RESULT_ERROR) {
+				})) < 1) {   // the lock row must land; 0 is a row count, not a failure code
 				q.RollBack();
 				ibBackendCoreException::Error(
 					_("ibLockManager: failed to insert sys_lock row."));

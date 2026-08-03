@@ -142,6 +142,17 @@ struct ibDialectDictionary
 	wxString m_upsertTemplate   = wxT("INSERT INTO {table} ({columns}) VALUES ({values}) ON CONFLICT ({keys}) DO UPDATE SET {update}");
 	wxString m_upsertUpdateItem = wxT("{col} = excluded.{col}");
 
+	// RETURNING — a write that hands back column values from the rows it just wrote, so
+	// "modify, then read what it became" is ONE statement instead of two. That matters
+	// beyond convenience: a sequence bump (UPDATE ... SET n = n + 1 RETURNING n) is atomic
+	// this way, with no window between the write and the read for another session to slip
+	// into. Firebird, PostgreSQL and SQLite (3.35+) all spell it "RETURNING".
+	//
+	// EMPTY (default — MySQL / ODBC) = the driver has no such form. The renderer THROWS
+	// UnsupportedNode rather than emulate it, because the emulation (write, then SELECT)
+	// silently drops exactly the atomicity the caller asked for.
+	wxString m_returningClause;
+
 	// Identifier quoting — <open><name><close>. Default = NONE (bare identifiers, and
 	// avoids Firebird turning quoted names case-sensitive). Opt-in: set to "\"" (ANSI).
 	wxString m_identQuoteOpen;
