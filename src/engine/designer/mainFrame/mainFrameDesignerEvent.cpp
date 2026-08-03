@@ -14,6 +14,10 @@
 
 #include <wx/filename.h>
 
+#include "backend/session/session.h"           // ibSession::Current — whose row to skip when counting peers
+#include "backend/session/sessionRegistry.h"   // GetClusterSnapshot — who else is connected right now
+#include "backend/session/sessionSnapshot.h"   // ibSessionSnapshot — the returned list, by value
+
 namespace {
 // Show a backend-level error chain in a single message box. Used by
 // designer save / load / structure-update paths after a backend
@@ -30,15 +34,43 @@ void ShowBackendErrorChain(wxWindow* parent,
 		body += wxT("\n\n");
 		body += detail;
 	}
+	// The chain must ADD to what was already said, not repeat it. `detail` is the caught exception's own
+	// description, and that same exception pushed itself onto the per-thread chain in its constructor — so a
+	// failure with a single cause printed its one sentence twice, under a heading announcing a "chain" of
+	// one. Drain unconditionally (the chain is per-thread state and must not leak into the next operation),
+	// then show only what the user has not just read.
 	const auto chain = ibBackendException::DrainLastErrors();
-	if (!chain.empty()) {
+	wxString extra;
+	for (std::size_t i = 0; i < chain.size(); ++i) {
+		if (chain[i] == detail || chain[i] == heading)
+			continue;
+		extra += wxT("\n");
+		extra += chain[i];
+	}
+	if (!extra.IsEmpty()) {
 		body += wxT("\n\n--- backend error chain ---");
-		for (std::size_t i = 0; i < chain.size(); ++i) {
-			body += wxT("\n");
-			body += chain[i];
-		}
+		body += extra;
 	}
 	wxMessageBox(body, caption, wxOK | wxCENTRE | wxICON_ERROR, parent);
+}
+
+// How many sessions BESIDES this one are live right now, across the cluster. Read from the registry's
+// snapshot — the same list Active Users shows — refreshed here so the answer is current rather than up
+// to a tick old (a user who just left must not keep the designer waiting). Zero means the apply can
+// proceed without asking anybody anything.
+int CountOtherLiveSessions()
+{
+	auto* reg = ibApplicationData::GetSessionRegistry();
+	if (reg == nullptr)
+		return 0;
+	const ibSession* self = ibSession::Current();
+	const wxString ownId = self != nullptr ? self->GetId() : wxString();
+	const ibSessionSnapshot snapshot = reg->GetClusterSnapshot();
+	int others = 0;
+	for (unsigned int i = 0; i < snapshot.GetSessionCount(); ++i)
+		if (snapshot.GetSession(i) != ownId)
+			++others;
+	return others;
 }
 } // namespace
 
@@ -291,6 +323,53 @@ void ibFrontendMainFrameDesigner::OnUpdateConfiguration(wxCommandEvent& event)
 				_("Failed to save database!"));
 
 			return;
+		}
+
+		// WHO ELSE IS IN HERE, AND DOES IT MATTER? Asked BEFORE the apply opens its transaction, so a
+		// refusal costs nothing and there is nothing to roll back. Two facts decide it: whether anyone
+		// else is connected, and whether this apply would touch the DATABASE at all. A change that lives
+		// in modules and forms moves no table under anybody — it can go in while people work, and they
+		// meet it when they next log in. A change that writes DDL cannot, and the honest answer then is
+		// not an error but a choice: wait for them to leave and retry, or cancel and go clear them out.
+		//
+		// Nobody else connected — nothing to ask; straight on, exactly as before.
+		while (canSave) {
+			const int others = CountOtherLiveSessions();
+			if (others == 0)
+				break;
+
+			// The buttons SAY what they do — "Yes / No" on a question this consequential leaves the user
+			// deciding what "no" meant. wxMessageBox cannot relabel, hence the dialog object.
+			// (ASCII only in these literals: the file compiles as ANSI, and a typographic dash reached the
+			// dialog as mojibake — seen live as "dynamically вЂ".)
+			if (activeMetaData->IsDynamicUpdateAvailable()) {
+				wxMessageDialog dlg(this,
+					wxString::Format(
+						_("%d other session(s) are connected.\n\n"
+						  "This update changes no database structure, so it can be applied dynamically. "
+						  "Connected users keep working and pick the new configuration up when they log in again."),
+						others),
+					wxTheApp->GetAppDisplayName(), wxYES_NO | wxCANCEL | wxCENTRE | wxICON_QUESTION);
+				dlg.SetYesNoCancelLabels(_("Update dynamically"), _("Try again"), _("Cancel"));
+				const int answer = dlg.ShowModal();
+				if (answer == wxID_YES) break;               // go ahead, no exclusive will be asked for
+				if (answer == wxID_NO)  continue;            // re-count: they may have left by now
+				canSave = false;                             // cancelled
+				break;
+			}
+
+			wxMessageDialog dlg(this,
+				wxString::Format(
+					_("%d other session(s) are connected.\n\n"
+					  "This update changes the database structure, which requires exclusive mode. "
+					  "It cannot be applied dynamically."),
+					others),
+				wxTheApp->GetAppDisplayName(), wxYES_NO | wxCENTRE | wxICON_EXCLAMATION);
+			dlg.SetYesNoLabels(_("Try again"), _("Cancel"));
+			if (dlg.ShowModal() == wxID_YES)
+				continue;                                    // re-count and ask again
+			canSave = false;
+			break;
 		}
 
 		// stage two - update database

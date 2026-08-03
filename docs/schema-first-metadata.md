@@ -102,6 +102,37 @@ properties (which may legitimately be named `Type`/`Id`/`Predefined`).
   a table with nothing at all is not created — the next apply picks it up once it has a field.
   `CreateIndex` had guarded its empty case all along; the create had no such guard.
 
+### Dynamic update — applying a configuration to a LIVE database (2026-08-03)
+
+Exclusive (monopoly) mode used to be demanded at the TOP of the apply, before the diff had run —
+so editing a module was refused for the same reason as adding a column, while the refusal text
+promised the opposite ("code-only changes can be saved without it"). Two changes make the promise
+true:
+
+- **The demand moved to whoever writes DDL.** `ibStructureBatch::Flush` raises
+  `RequireExclusiveForDDL` only when the batch actually has steps. A batch with none asks nobody, so
+  a code-only apply goes through while people work. This also covers changes that move metadata but
+  not the database — another type on a composite attribute that keeps living in the same reference
+  columns: the diff emits no step, so no demand. The criterion stops being "what did the user
+  change" and becomes "is there anything to run", which cannot drift from the truth because it IS
+  the truth.
+- **The designer asks first, and knows what to ask.** `SameStructure(baseline, target)`
+  (`schemaSnapshot.cpp`) compares the two snapshots the apply would diff — tables by id, columns by
+  id + type set, indexes by the differ's own `SameIndex`, derived-table regeneration — and
+  `ibMetaDataConfigurationBase::IsDynamicUpdateAvailable()` puts that in front of the apply. With
+  other sessions connected: structure untouched → *Update dynamically / Try again / Cancel*;
+  structure moving → *Try again / Cancel*, no dynamic option. Nobody connected → straight through,
+  as before. The question is asked BEFORE the transaction opens, so a refusal rolls nothing back.
+
+`SameStructure` is a comparison, deliberately NOT a dry run of the differ: a differ with a
+"count, do not execute" mode is one missed branch away from writing to a live database during what
+the caller believed was a question. A wrong "same" is caught downstream — the DDL gate still fires
+when a step materialises.
+
+⚠ **What a dynamic update means for the people connected:** they keep running the metadata image
+they logged in with, and meet the new configuration on their next login — see `session-registry.md`
+for the reminder that tells them so. Nothing partial happens: the image is whole, just older.
+
 ### Still deferred (unchanged from the direction)
 File-tree / ZIP **reader** provider (folder-tree → nodes, for GitHub navigation;
 write-side derives folders from `clsid`+`Name` in the provider, no marker on nodes);

@@ -4,6 +4,7 @@
 #include "backend/query/queryable.h"                      // ibBackendQueryable — GetQueryTableName / GetMetaData
 #include "backend/query/queryColumn.h"                    // ibBackendQueryColumn — GetTypeDesc / GetPhysicalName
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door — ibUpdate / ibDelete / Execute (the type-removal data cleanups)
+#include "backend/restructureInfo.h"                      // RequireExclusiveForDDL — demanded here, by the code that writes DDL
 
 #include <set>
 
@@ -97,6 +98,24 @@ void ibStructureBatch::Ddl(const ibDdlStatement& ddl)
 
 int ibStructureBatch::Flush(ibSchemaBuilder& schema)
 {
+	// MONOPOLY IS OWED BY WHOEVER WRITES DDL, NOT BY WHOEVER PRESSED "UPDATE". The gate used to sit at the
+	// top of the save (ibStructureBuilder::OnBeforeSave), so editing a module demanded exclusive mode as
+	// loudly as adding a dimension — and the error message promised the opposite ("code-only changes can be
+	// saved without it"). Here the question answers itself: a batch with no steps has nothing to execute, so
+	// nobody asks, and a code-only apply goes through while people work.
+	//
+	// This also covers the cases where metadata moved but the DATABASE did not — adding another type to a
+	// composite attribute, say, which keeps living in the same reference columns. No rule has to know that;
+	// the diff simply emits no step, and no step means no demand. The criterion stops being "what did the
+	// user change" and becomes "is there anything to run", which cannot drift from the truth because it IS
+	// the truth.
+	//
+	// Idempotent per apply: the gate returns immediately once exclusive is held (ts_acquiredByGate /
+	// ExclusiveMode), so the per-table flushes after the first cost nothing. Seed INSERTs are not counted —
+	// they are DML, and data writes are what exclusive mode exists to keep OTHERS from doing, not us.
+	if (!m_steps.empty())
+		ibRestructureInfo::RequireExclusiveForDDL();
+
 	const bool multiClause = schema.AlterTableMultiClause();
 
 	// A pending run of consecutive same-op column clauses, folded into one ALTER on flush.

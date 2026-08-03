@@ -401,6 +401,58 @@ static void ApplyMaterialization(ibSchemaBuilder& schema, const ibSchemaTable* o
 		report->AppendInfo(_("Rebuild totals maintenance for ") + LedgerName(t));
 }
 
+bool SameStructure(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& target)
+{
+	// No baseline = a fresh database: everything is new, so nothing is the same.
+	if (baseline == nullptr)
+		return target.Tables().empty();
+
+	// A table on either side that the other does not have is a create or a drop.
+	for (const ibSchemaTable& old : baseline->Tables())
+		if (!old.m_external && target.Find(old.m_id) == nullptr)
+			return false;
+
+	for (const ibSchemaTable& cur : target.Tables()) {
+		const ibSchemaTable* old = baseline->Find(cur.m_id);
+		if (old == nullptr)
+			return false;                                   // new table
+
+		// Columns by MODEL ID, the same key the differ matches on; a column present on one side only is an
+		// add or a drop, and a matched pair differs when its type set does — which is exactly the condition
+		// DiffColumnInto tests before it emits anything. Adding a type to a COMPOSITE attribute that already
+		// carries a reference lands here as "same type set is not same" only when the physical layout really
+		// moves; when it does not, the type descriptions compare equal and the table stays unchanged.
+		if (old->m_columns.size() != cur.m_columns.size())
+			return false;
+		for (const ibSchemaColumn& c : cur.m_columns) {
+			const ibSchemaColumn* o = FindColumn(old->m_columns, c.m_id);
+			if (o == nullptr || o->m_column == nullptr || c.m_column == nullptr)
+				return false;
+			if (!(o->m_column->GetTypeDesc() == c.m_column->GetTypeDesc()))
+				return false;
+		}
+
+		// Indexes by name + shape (SameIndex is the differ's own test).
+		if (old->m_indexes.size() != cur.m_indexes.size())
+			return false;
+		for (const ibSchemaIndex& i : cur.m_indexes) {
+			const ibSchemaIndex* o = nullptr;
+			for (const ibSchemaIndex& cand : old->m_indexes)
+				if (cand.m_name == i.m_name) { o = &cand; break; }
+			if (o == nullptr || !SameIndex(*o, i))
+				return false;
+		}
+
+		// A derived table whose maintenance would be rebuilt is database work too.
+		if (cur.m_derived != old->m_derived)
+			return false;
+		if (cur.m_derived && ibDerivedState::NeedsRegeneration(old, cur))
+			return false;
+	}
+
+	return true;
+}
+
 int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& target, ibDatabaseConnectionHolder* holder, ibRestructureInfo* report)
 {
 	int retCode = 1;

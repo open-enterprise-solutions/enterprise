@@ -107,10 +107,15 @@ public:
 	//special delete and create 
 	virtual bool ReCreateDatabase() { return false; }
 
-	//special save 
+	//special save
 	virtual bool OnBeforeSaveDatabase(int flags) { return false; }
 	virtual bool OnSaveDatabase(int flags) { return false; }
 	virtual bool OnAfterSaveDatabase(bool roolback, int flags) { return false; }
+
+	// Can this configuration be applied to a LIVE database — with people connected, without exclusive
+	// mode? See the Storage override. The base answers "no": a container that cannot say for sure must
+	// not invite a dynamic update.
+	virtual bool IsDynamicUpdateAvailable() const { return false; }
 
 	//load/save form file
 	bool LoadConfigFromFile(const wxString& strFileName);
@@ -354,10 +359,19 @@ public:
 
 	////////////////////////////////////////////////////////////////
 
-	//special save 
+	//special save
 	virtual bool OnBeforeSaveDatabase(int flags);
 	virtual bool OnSaveDatabase(int flags);
 	virtual bool OnAfterSaveDatabase(bool roolback, int flags);
+
+	// TRUE when the change lives entirely in modules, forms and properties: nobody's tables move under
+	// the people who are working, and they meet the new configuration when they next log in. FALSE means
+	// the apply will write DDL, and DDL means exclusive mode.
+	//
+	// Answered by comparing the two schema snapshots OnSaveDatabase would diff (the saved baseline + the
+	// edited config) — see SameStructure. Asked BEFORE the apply starts, so the designer can offer the
+	// choice instead of refusing; the apply keeps its own gate either way (ibStructureBatch::Flush).
+	virtual bool IsDynamicUpdateAvailable() const override;
 
 	//special clear 
 	virtual bool ReCreateDatabase();

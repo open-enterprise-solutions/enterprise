@@ -116,6 +116,19 @@ bool ibMetaDataConfigurationStorage::OnBeforeSaveDatabase(int flags)
 	return true;
 }
 
+bool ibMetaDataConfigurationStorage::IsDynamicUpdateAvailable() const
+{
+	// The SAME pair OnSaveDatabase hands the differ, compared instead of applied. Cheap: both snapshots
+	// are built from metadata already in memory, no database is touched, and the comparison holds no
+	// connection — asking must never be able to change anything.
+	const ibSchemaSnapshot target = BuildSchemaSnapshot();
+	const bool hasBaseline = (m_configMetadata != nullptr && m_configMetadata->GetCommonMetaObject() != nullptr);
+	if (!hasBaseline)
+		return false;   // fresh database — everything is about to be created, so nothing is "the same"
+	const ibSchemaSnapshot baseline = m_configMetadata->BuildSchemaSnapshot();
+	return SameStructure(&baseline, target);
+}
+
 bool ibMetaDataConfigurationStorage::OnSaveDatabase(int flags)
 {
 	if (!db_query->IsActiveTransaction())

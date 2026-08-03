@@ -20,21 +20,13 @@ bool ibStructureBuilder::OnBeforeSave()
 {
 	m_changes.Clear();
 
-	// DDL needs DB-wide exclusive (monopoly) — acquire it first; a failure aborts the save (recorded to
-	// the change log for the apply UI). All exception types are caught: the gate delegates to the session
-	// registry, which has its own error paths (queue rejection / session-not-registered race).
-	try {
-		ibRestructureInfo::RequireExclusiveForDDL();
-	} catch (const ibBackendException& e) {
-		m_changes.AppendError(e.GetErrorDescription());
-		return false;
-	} catch (const std::exception& e) {
-		m_changes.AppendError(wxString::FromUTF8(e.what()));
-		return false;
-	} catch (...) {
-		m_changes.AppendError(_("Unknown error acquiring exclusive mode"));
-		return false;
-	}
+	// NO EXCLUSIVE DEMANDED HERE ANY MORE. It used to be taken unconditionally at this point, before the
+	// diff had run — so a save that touched only modules and forms was refused for the same reason as one
+	// that adds a column, and the refusal text contradicted itself by saying code-only changes need no
+	// exclusive. The demand moved to ibStructureBatch::Flush, which raises it only when there are DDL steps
+	// to execute; a save with nothing to run now goes through while other people are connected. The failure
+	// therefore arrives later, from inside the open transaction — which is already handled: the DDL paths
+	// throw, and OnAfterSave(rollback) rolls the build back.
 
 	// Discard a leftover unfinished build — roll back its straggling transaction so this save starts clean.
 	if (Conn()->IsActiveTransaction())

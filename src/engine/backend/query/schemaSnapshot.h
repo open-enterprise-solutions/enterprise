@@ -317,4 +317,19 @@ private:
 BACKEND_API int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& target,
                               ibDatabaseConnectionHolder* holder = nullptr, ibRestructureInfo* report = nullptr);
 
+// Do these two snapshots describe the SAME physical structure? Tables by id, their columns by id + type,
+// their indexes, and a derived table's materialisation spec. Answers the one question the apply flow asks
+// BEFORE it starts: is there anything here that has to be written into the database, or does the change
+// live entirely in modules, forms and properties?
+//
+// It is a comparison of the DECLARED structure, not a rehearsal of the differ — a rehearsal would mean a
+// second mode inside the differ, where the same path sometimes executes and sometimes does not, and one
+// missed branch there writes to a live database during what the caller believed was a question. The
+// comparison cannot do that: it holds no connection and calls nothing.
+//
+// A wrong "same" is caught downstream — the DDL gate in ibStructureBatch::Flush still demands exclusive
+// mode when a step does materialise. So this answers what the DIALOG needs, and the apply keeps its own
+// truth.
+BACKEND_API bool SameStructure(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& target);
+
 #endif // !__SCHEMA_SNAPSHOT_H__
