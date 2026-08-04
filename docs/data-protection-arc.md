@@ -322,6 +322,142 @@ signal; 2 bytes → many collisions the platform filters after decryption, and a
 analyse. It is set by measurement, not by guess — and it is the one number in this arc that is a
 genuine policy choice rather than a technical one.
 
+### 6.8 Declared length is not stored width — and the spread already says so
+
+`String(20)` is a **semantic** declaration: twenty characters is what the user may type, what
+validation enforces, what the form shows. It has never been a statement about bytes in a table — a
+reference is declared as one attribute and stored as **two** physical fields (`_RRRef` guid +
+`_RTRef` clsid). Encryption is the same decoration, applied to a different attribute.
+
+The mechanism is already the single authority: `DescribeColumnLayout` decomposes one logical column
+into `ibColumnSlot`s, each with a role, a canonical type and a suffix drawn from the one
+`ibFieldSuffix(role)` map. Encryption therefore adds **no new concept** — it changes what the spread
+produces:
+
+| | Cleartext spread | Encrypted spread |
+|---|---|---|
+| value slot | `_S`, `ibCanonicalKind::String(20)` | `_S`, **`Binary(computed)`** |
+| companion | — | **`_BIX`, `Binary(8)`** — new role `BlindIndex` |
+
+**The stored width, computed and deterministic:**
+
+```
+width = 2 (algo + key version) + 12 (nonce) + pad32(max_bytes(declared_length)) + 16 (tag)
+```
+
+| Declared | UTF-8 worst case | Padded | Stored | Inflation |
+|---|---:|---:|---:|---:|
+| `String(120)` | 480 | 480 | **510** | ×1.06 |
+| `String(10)` | 40 | 64 | **94** | ×2.4 |
+| `String(2)` | 8 | 32 | **62** | ×7.75 |
+
+The fixed 30 bytes vanish on a long field and dominate a short one. In absolute terms it is nothing;
+what matters is that the width is *computed*, so the DDL is exact rather than guessed.
+
+**An unbounded string is the easy case, not the hard one.** It is already `ibCanonicalKind::Blob`,
+a Blob has no declared width, so `ibEncryptedWidth` is never called: encrypt the content, store it
+in the same Blob. Nothing to translate.
+
+**The binding limit is the ROW, not the column.** A `String(1024)` becomes 4 126 bytes, which fits
+any engine's binary column — but fifteen such fields do not fit a *record*: Firebird caps a record
+near 64 KB and MySQL at 65 535 bytes regardless of types (PostgreSQL escapes via TOAST). Worse, the
+failure surfaces unevenly — at `CREATE` on one engine, at the first `INSERT` on another, i.e. after
+a restructuring that appeared to succeed.
+
+So the check is **per table, not per column**: sum every slot's width and compare against
+`m_maxRowWidth`, a third tenant of the dialect dictionary beside `m_maxBinaryWidth` /
+`m_maxIndexWidth`. And it is a mandatory pre-flight line — *"after enabling, a record of table X
+would be 71 KB against a 64 KB limit; these fields must move to Blob."*
+
+**Where the `Binary` → `Blob` threshold sits, and why not lower.** A Blob is not free: Firebird
+stores it in a separate segment, so reading one is an extra operation — noticeably more expensive
+for a field shown in a list. Hence: **`Binary` while the record budget allows, `Blob` when it does
+not, or when no length was declared.** That decision needs the whole slot set of the table, so it
+belongs in lowering, not in the width function. Search is indifferent either way — the companion is
+8 fixed bytes and the ciphertext is never indexed.
+
+**Megabyte values are chunked.** For attachments and scans, one GCM seal over the whole value forces
+the entire plaintext into memory and forbids partial reads. Encrypt in 64 KB blocks, each with its
+own nonce and the block index bound as associated data so blocks cannot be reordered or spliced.
+
+**And an honesty the padding cannot buy.** Padding to 32 bytes makes "2 characters" and "10
+characters" indistinguishable — that is what defeats the word-length attack of § 6.2. It does
+nothing comparable for a 900-byte comment, where ±32 bytes still separates a short note from a long
+one. Hiding that would need power-of-two buckets and a real space cost. It is not worth it: for long
+fields the length joins the residual leak of § 9, alongside row counts and timing. The leak that
+mattered — the pattern of word lengths in a name — is closed; the leak that remains says only how
+much someone wrote.
+
+**Where the translation lives, and the three rules it must obey.** The mapping *declared → stored* is
+one pure function beside the spread — `ibEncryptedWidth(declaredLength, level, algoVersion)` — and
+nothing else in the tree may compute a width:
+
+- **Deterministic, or restructuring never converges.** Same inputs, same number, forever. If the
+  width is computed even slightly differently on a second run, `DiffSnapshots` sees a type change
+  where nothing changed and emits an ALTER on every apply — a table that rebuilds itself for eternity.
+- **The algorithm version comes from the SCHEMA, not from the running code.** Store it in the column
+  snapshot and feed *that* to the width function. Otherwise the day a cipher parameter changes
+  (a different nonce size, a different tag), a platform upgrade silently recomputes every width and
+  turns a routine update into a full-database restructuring for every customer at once. Migrating to
+  a new algorithm version then becomes what it should be: an explicit, per-column, scheduled change.
+- **Capacity is checked on write, never truncated.** Widths are computed from the worst case (4 bytes
+  per character), so a real value always fits — but the codec still verifies and raises a readable
+  error rather than storing a value it cannot return. On read, plaintext longer than the declared
+  length is a corruption / wrong-key signal, and a cheap sanity check.
+
+L2 sees none of this. It receives an `ibDdlColumn` carrying `Binary(510)` and renders it through the
+dialect's TYPE-MAP, exactly as it renders any other canonical type — that a `String(120)` stands
+behind it is a metadata question, answered above and never asked below.
+
+Three consequences, each of which bites if missed:
+
+- **The declared length stays the user-facing contract.** Validation, truncation, form width and
+  script semantics all continue to speak of 20 characters. Nothing above the spread may ever read
+  the physical width — the same discipline that keeps a reference one attribute rather than two.
+- **The companion slot appends at the END of the spread.** `columnLayout.h` states the field order
+  is byte-identical to the historical one and **load-bearing** — the keyset anchor must match the
+  first `ORDER BY` field. Inserting a slot in the middle silently moves that anchor.
+- **Flipping the bit is an ordinary schema change.** The spread changes → the snapshot changes →
+  `DiffSnapshots` emits a type ALTER plus an ADD COLUMN plus an index, exactly as it would for a
+  retyped attribute. No separate path, and the client-side re-encryption pass (§ 11.3) is the data
+  half of the same delta.
+
+**Width limits belong to the dialect, not to an `#ifdef`.** Firebird caps `VARBINARY` near 32 765
+bytes and an index key at about a quarter page; MySQL allows 65 535 but only 3 072 bytes of index
+key; PostgreSQL's `bytea` is unbounded. `ibDialectDictionary` vends `m_maxBinaryWidth` /
+`m_maxIndexWidth`, and lowering refuses at apply time with a readable message instead of failing on
+the first `INSERT`. One more tenant in the dictionary that exists for precisely this class of
+question.
+
+And the width question never reaches the index: **ciphertext is never indexed**, the companion is —
+and a truncated HMAC is the same 8 bytes whether the field was declared as 2 characters or 120.
+
+### 6.9 Low cardinality defeats the blind index — a property of the data, not of the cipher
+
+A short field usually means a small value space: a region code, an operation type, a sex, a status.
+The cipher stays sound and the HMAC stays uncomputable without the key — and the protection is still
+worthless, because the companion column will hold **a handful of distinct digests with a recognisable
+distribution**. Sex → two digests at roughly 50/50. Region code → twenty digests whose frequencies
+match public statistics. The attacker does not break anything; he labels the digests by matching
+distributions, in minutes.
+
+No stronger cipher fixes this. It is a property of the data.
+
+| Distinct values | Levels allowed |
+|---|---|
+| high (names, addresses, numbers) | 1 / 2 / 3 |
+| **low (under ~1000)** | **3 only** (no companion) or **0** |
+
+The platform can decide this itself — `COUNT(DISTINCT …)` over the existing rows — and report it in
+the same pre-flight warning (§ 10.1):
+
+> *"Attribute «Region code»: 24 distinct values across 180 000 rows. A search index on such a field
+> exposes its distribution — only level 3 (no search) or level 0 is available here."*
+
+This is the pre-flight warning doing something no competitor's does: warning not that a **function**
+will be lost, but that the **protection would be illusory**. Allowing the switch here would ship a
+false sense of security, which is worse than shipping none.
+
 ---
 
 ## 7. Keys — envelope, escrow, rotation
