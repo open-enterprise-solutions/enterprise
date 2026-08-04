@@ -90,12 +90,23 @@ bool ibValueMetaObjectScheduledJob::RegisterJob()
 	if (manager == nullptr)
 		return true;   // launcher / pre-bootstrap — nothing to declare against
 
-	if (!IsUsed())
-		return true;   // declared but switched off: visible in the tree, absent from the schedule
-
+	// SWITCHED OFF IS NOT ABSENT — the same rule a parameterized row follows, and it is stated
+	// here because the two halves must answer "Execute" identically.
+	//
+	// This used to return before registering, and the consequence was silent: the manager's handle
+	// on a job is its name, script's Execute resolves that name by key, and an unregistered job has
+	// none — so "run this once and watch what happens", the very next thing one does after
+	// switching a job off, answered false and did nothing. Registered-but-inactive is a different
+	// state from not-there: IsDue refuses it, RunNow still finds it.
 	ibJobDescription desc;
+	desc.m_active   = IsUsed();
 	desc.m_origin   = ibJobOrigin::Configuration;
 	desc.m_name     = GetJobName();
+	// The base keys this job's settings and its clock by the metaobject's GUID — the identity that
+	// is unique across configurations and survives everything a name or a numeric id does not:
+	// a rename, an unload / reload, a copy of the configuration onto another base. The name is
+	// what a person reads; the guid is what the row IS.
+	desc.m_key      = GetGuid();
 	desc.m_schedule = GetSchedule();
 	desc.m_retryCount = GetRetryCount();
 	desc.m_retryIntervalSeconds = GetRetryInterval();
@@ -124,6 +135,14 @@ bool ibValueMetaObjectScheduledJob::RegisterJob()
 		wxLogDebug(wxT("scheduled job '%s' was not registered"), GetJobName());
 		return true;
 	}
+
+	// THE BASE OWNS THE SWITCH HERE — Register adopts sys_job, and that is the point: switching a
+	// misbehaving job off must be possible in the enterprise, without editing a configuration on a
+	// production base. The one thing the base may NOT do is switch on what the configuration has
+	// withdrawn: `Use = false` means this code is not to run at all, not "run it unless somebody
+	// says otherwise". So the withdrawal is restated after registering, and only the withdrawal.
+	if (!IsUsed())
+		manager->ApplySettings(GetGuid(), false, GetSchedule());
 
 	return true;
 }
@@ -173,6 +192,12 @@ bool ibValueMetaObjectScheduledJob::OnSaveMetaObject(int flags)
 
 bool ibValueMetaObjectScheduledJob::OnDeleteMetaObject()
 {
+	// NOTHING IS FORGOTTEN HERE. This event is the Designer's "delete" — a mark on a metaobject
+	// that the user may still walk away from by not saving. Dropping the job's record on it would
+	// throw away the settings and the clock of a job that is, so far, still there.
+	//
+	// The moment a job REALLY ceases to exist is the restructuring, in its own transaction; the
+	// records of jobs that did not survive it are swept then (see the sweep at start-up).
 	if (!(*m_propertyJobModule)->OnDeleteMetaObject())
 		return false;
 	return ibValueMetaObject::OnDeleteMetaObject();
@@ -249,4 +274,8 @@ bool ibValueMetaObjectScheduledJob::WriteData(ibDataNode& node) const
 //*                       Register in runtime                           *
 //***********************************************************************
 
-METADATA_TYPE_REGISTER(ibValueMetaObjectScheduledJob, "ScheduledJob", g_metaScheduledJobCLSID);
+// The registered NAME is the predefined kind's, not the family's: "ScheduledJob" now belongs to
+// the PARAMETERIZED metatype, which is the one a configuration mostly declares and the one a
+// script names (ScheduledJobs.<Name>). Only the name moved — the clsid is unchanged, so every
+// stored configuration keeps loading exactly as before.
+METADATA_TYPE_REGISTER(ibValueMetaObjectScheduledJob, "PredefinedJob", g_metaScheduledJobCLSID);

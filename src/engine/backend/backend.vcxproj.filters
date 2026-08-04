@@ -393,6 +393,12 @@
     <ClInclude Include="metaCollection\partial\catalog.h">
       <Filter>metaCollection\partial</Filter>
     </ClInclude>
+    <ClInclude Include="metaCollection\partial\parameterizedJob.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\partial\parameterizedJobManager.h">
+      <Filter>metaCollection\partial</Filter>
+    </ClInclude>
     <ClInclude Include="metaCollection\partial\catalogManager.h">
       <Filter>metaCollection\partial</Filter>
     </ClInclude>
@@ -580,6 +586,9 @@
       <Filter>system\value</Filter>
     </ClInclude>
     <ClInclude Include="system\value\valueGuid.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
+    <ClInclude Include="system\value\valueJob.h">
       <Filter>system\value</Filter>
     </ClInclude>
     <ClInclude Include="system\value\valueMap.h">
@@ -1263,6 +1272,27 @@
     <ClCompile Include="metaCollection\partial\catalogMetadata.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
+    <ClCompile Include="metaCollection\partial\parameterizedJobAction.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\parameterizedJobManager.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\parameterizedJobMetadata.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\parameterizedJobMetadata_res.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\parameterizedJobRegistration.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\parameterizedJobMetadataMenu.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\parameterizedJobObject.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
     <ClCompile Include="metaCollection\partial\catalogMetadata_res.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
@@ -1599,6 +1629,9 @@
     <ClCompile Include="system\value\valueGuid.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
+    <ClCompile Include="system\value\valueJob.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
     <ClCompile Include="system\value\valueMap.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
@@ -1825,10 +1858,19 @@
     <ClCompile Include="job\jobManager.cpp">
       <Filter>job</Filter>
     </ClCompile>
+    <ClCompile Include="job\jobBackground.cpp">
+      <Filter>job</Filter>
+    </ClCompile>
+    <ClCompile Include="job\jobRegister.cpp">
+      <Filter>job</Filter>
+    </ClCompile>
     <ClCompile Include="job\platformJobs.cpp">
       <Filter>job</Filter>
     </ClCompile>
     <ClCompile Include="job\jobSchedule.cpp">
+      <Filter>job</Filter>
+    </ClCompile>
+    <ClCompile Include="job\jobScheduleRules.cpp">
       <Filter>job</Filter>
     </ClCompile>
     <ClCompile Include="utils\passwordHash.cpp">

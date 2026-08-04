@@ -1,16 +1,23 @@
 # Scheduled jobs — the metadata over the job manager
 
-> **Status (2026-08-03): the PREDEFINED half is built and running.** A `ScheduledJob` metaobject
-> lives under Common, carries a manager module with `JobProcessing`, a schedule edited in a
-> four-tab dialog, a use flag and retry-on-failure; it registers with `ibJobManager` when the
-> configuration runs and withdraws when it closes. Exercised live on a file base at a one-second
-> interval: `session opened → job finished → session closed` per run, and a script error surfaces
-> as `Job '<name>' failed: Divide by zero` in the registration journal.
+> **Status (2026-08-04): BOTH halves are built and running.** Two metatypes, registered under the
+> names a configuration sees: `PredefinedJob` (flat, under Common) and `ScheduledJob` (the
+> parameterized one — a hierarchical reference object with rows, folders and a card). They share
+> the tree branch *Common → Scheduled jobs*, predefined declared first so it renders above.
 >
-> Still DESIGN, not code: the parameterized metatype (§ 3 onwards), the "run as" property, the job
-> list window (§ 9), and the `sys_job`-side override of schedules (§ 8).
+> Exercised live on a file base: per-row scheduling (`session opened kind=ScheduledJob → job
+> finished → session closed` per row, each on its own schedule), manual `Execute` as a background
+> run (`kind=BackgroundJob`, with its own journal line), a schedule edited from the card through a
+> hyperlinked static text, and a script error surfacing as `Job '<name>' failed: <reason>` in the
+> registration journal.
 >
-> Where something is a decision rather than code, it says so.
+> **Where the built thing differs from this design, the section says so inline.** The three that
+> matter: registration is **per row**, not one-per-metaobject (§ 7); `LastRun` and `NextRun` are
+> **generated on read**, not stored columns (§ 5b); `sys_job` became the **register of every job
+> there is**, keyed by guid (§ 8).
+>
+> Still DESIGN, not code: dimensions and the uniqueness index (§ 6), the "run as" property on a
+> row, and the job list window (§ 9).
 
 ---
 
@@ -257,16 +264,21 @@ command declares its own `Use` role through `CreateRole`.
 
 ## 5b. What a job row carries — and why it is queryable
 
-Beyond its dimensions and attributes, a parameterized job stores its own scheduling state as
-ordinary columns:
+Beyond its attributes, a parameterized job carries its own scheduling state. **As built, only two
+of these are stored** — the other two are answered on read, and the section below the table says
+why the design's reasoning did not survive contact with the register:
 
-| Column | Why it is a column and not a computed value |
+| Requisite | As built |
 |---|---|
-| **LastRun** | the schedule is a pure function of (last run, now), so the row needs its own |
-| **NextRun** | see below — this is what makes "who is due" an indexed query |
-| **Schedule** — an `ibJobScheduleDescription` value, written through its own serialiser | editable in the card and settable from script; see the note below on what is queryable |
-| **Active** | switching one instance off must not require the Designer |
-| **Outcome / Error** | the last verdict, next to the row it belongs to |
+| **Active** | STORED — a boolean column; switching one instance off must not require the Designer |
+| **Schedule** | STORED — an `ibValueSchedule` in its own column (blob, `ibColumnRole::Schedule`, `_SCH`), written through `ibJobScheduleDescription`'s own buffer codec |
+| **LastRun** | GENERATED — read from `sys_job` by the row's guid (§ 8), so there is no second copy to disagree with the register |
+| **NextRun** | GENERATED — a pure function of (schedule, last run), computed when asked |
+| **Outcome / Error** | NOT BUILT — the verdict lives in the journal (`job/finished`, `job/failed`), which every kind of job already writes to |
+
+Both generated values are answered in one place, `ibValueRecordDataObjectParameterizedJob::
+GetValueByMetaID`, which intercepts the two metaIDs before the ordinary column read. A folder
+answers the empty date for both: a group is not a job.
 
 **A folder has none of these, and that costs nothing to say.** Attribute usage is an existing
 property — `ibItemMode` (`Items` / `Folders` / `FoldersAndItems`,
@@ -301,7 +313,27 @@ Two consequences for us:
 Script still edits the schedule directly (`job.Schedule.Interval = 600; job.Write()`), because the
 description is a plain value on the object — the write is what recomputes `NextRun`.
 
-### ⚠️ NextRun is stored here, and the engine deliberately does not store it
+### ⚠️ NextRun is NOT stored — the design below argued it should be, and the register settled it
+
+**Revised 2026-08-04, after building it.** What follows was the reasoning for a stored `NextRun`
+column, and the premise it rests on — *every tick must load every row and evaluate its schedule* —
+turned out to be false. Registration is per row (§ 7), so the manager holds each row's schedule in
+memory and a tick is a comparison per entry, not a query at all. The indexed `WHERE NextRun <= now`
+read had nothing left to make faster.
+
+What remained was the cost of keeping it true: recompute on write, recompute after every run, and
+a repair rule for rows that missed one. All of that to store an answer that
+`ibJobScheduleRules::NextAllowedAfter` gives for free from two values already in hand. So the
+column went and the computation stayed where it always was — read the shared last run, evaluate
+the schedule, answer. It cannot go stale after a restart, a clock change or a schedule edit,
+because there is nothing to go stale.
+
+The formula below is still exactly the one used (`ComputeNextRun`), and the two ⚠️ notes at the
+end of this section still hold — an unsatisfiable schedule reads as the empty date, and a folder
+has no next run.
+
+<details>
+<summary>The original argument for storing it (kept — the reasoning is sound where a body iterates rows)</summary>
 
 `ibJobState` computes the next run and says why storing it is wrong: one more thing that can
 disagree with reality after a restart or a clock change (`backend/job/jobManager.h`). That
@@ -337,6 +369,8 @@ run plus the interval, then let the calendar carry it forward. A time of day the
 *not before*, never as *only at* — a night run missed because the machine was off happens late in
 the morning instead of vanishing. Rows must inherit that property, not invent a stricter one.
 
+</details>
+
 ⚠️ Two ways this produces an empty value, and both must be visible rather than silent:
 
 - `NextAllowedAfter` returns an invalid date when nothing matches within a year — a schedule
@@ -348,6 +382,12 @@ the morning instead of vanishing. Rows must inherit that property, not invent a 
 ---
 
 ## 6. Instances are keyed by REFERENCE
+
+> **As built (2026-08-04): the reference key is there, the dimensions are not.** A row is
+> identified by its guid, and that is what the register, the claim and the manager entry are all
+> keyed on. Dimensions as a second kind of child, and the uniqueness index over them, remain
+> design — a job's attributes are ordinary attributes today. The section below is the plan for
+> when that is built; nothing in it is contradicted by what exists.
 
 Because a parameterized job is a reference object, the question "what tells two instances apart"
 is already answered — the reference does. No composite primary key has to be assembled.
@@ -404,13 +444,40 @@ Three traps that come with it, all real:
 
 ---
 
-## 7. Registration — one per metaobject, the body iterates
+## 7. Registration — one per ROW (revised 2026-08-04)
 
-A hundred and fifty rows are **not** a hundred and fifty registrations. Each registration holds a
-session, a session owns one connection, `m_maxJobs` defaults to 4 and the connection pool caps
-at 32 — per-row registration hits that wall immediately.
+**The design said one registration per metaobject. What was built is one per row, and the wall it
+was avoiding turned out to be in the wrong place.**
 
-Instead: **the metaobject is registered once**; its body selects the rows that are due
+The argument against per-row registration was: a registration holds a session, a session owns a
+connection, `m_maxJobs` defaults to 4 and the pool caps at 32. Every step of that is true except
+the first — a registration is a *declaration*, and `ibJobManager::Register` says so outright: no
+session, no database, no metadata. The session is materialised on first launch and released when
+the run ends. So a hundred and fifty declared rows cost a hundred and fifty descriptions in a
+vector, and nothing else.
+
+That left `m_maxJobs`, which really was counting the wrong thing: it capped how many jobs could
+be **declared**. It now caps how many may **run at once** — which is what the resource argument
+was always about (a session, a connection), and what a hundred and fifty rows on the same minute
+would otherwise do to the pool. They may all be registered; each comes due on its own schedule,
+and the tick starts as many as the cap allows and leaves the rest due for the next one.
+
+What per-row registration buys, and what a single iterating body could not have given:
+
+- **A row is a job in its own right.** It has its own key (its guid), its own record in the
+  register, its own claim, its own last run and its own entry in the manager — so "run this one
+  now", "switch this one off" and "when did this one last run" are all answerable without
+  loading anything.
+- **The cross-process claim lands on the ROW.** `Job.<rowGuid>`, not `Job.<metaobjectName>` — see
+  § 7a, which is the whole reason it matters.
+- **The registration census is one query at start-up** (`RegisterJobs` walks the non-folder rows
+  once, when the configuration runs) and one call per write afterwards (`RegisterRow` from
+  `WriteObject`, `UnregisterRow` from `DeleteObject`). The tick never reads the table.
+
+<details>
+<summary>The original one-registration design (kept — it is what a job with true parameters, rather than rows, would still do)</summary>
+
+**the metaobject is registered once**; its body selects the rows that are due
 (`Active AND NextRun <= now`, § 5b) and runs them in turn.
 
 This works because the schedule has no clock of its own — since the 2026-08-03 rework the data
@@ -434,6 +501,42 @@ Consequences, all of them wanted:
 manager: unregister + register that name at write time. The alternative — making the tick re-read
 the table — would turn a tick that currently costs two comparisons into a database round trip.
 
+</details>
+
+⚠️ **Re-registering means UPDATE IN PLACE, not unregister-then-register.** `RegisterRow` calls
+`ApplySettings` first and only falls through to `Register` when the row is not yet known. The
+reason is not tidiness: the write path can be reached *from inside a run of that same row*, and
+`Unregister` waits for the entry's future — which would be waiting for the run doing the waiting.
+
+---
+
+## 7a. One row, many machines — what makes this safe on a file base
+
+A file base has no server: every copy of the application that opened it registers the same rows
+off the same table and ticks its own schedule. Two desks with the configuration open are two
+schedulers for one set of jobs, and neither knows about the other.
+
+Three existing mechanisms already answer this, and the parameterized half simply uses them:
+
+| Question | Answer | Where |
+|---|---|---|
+| may I run this row now? | take `Job.<rowGuid>` in `sys_lock` — refused means a peer has it | `Launch`, gated on `desc.m_exclusive` |
+| did somebody just run it? | the shared clock in `sys_job`, read before a session is even opened | `Launch`, `ReadSharedLastRun` |
+| who is running what right now? | the cluster session snapshot — every job runs on a listed session of its own | Active Users |
+
+**Each ROW is exclusive; different rows are not.** That is the distinction the flag carries: two
+exchanges running side by side is the ordinary case, the same exchange running twice is the thing
+that must not happen — and since the claim is keyed on the row's guid, one line of configuration
+says exactly that.
+
+A server base changes nothing about the mechanism. There simply happens to be one process holding
+the schedule, so the claim is never contended.
+
+⚠️ **`Execute` by hand does NOT take the claim** — it is a background run, deliberately outside
+the schedule (§ 8a). Pressing it while the same row is running elsewhere in the cluster runs it
+twice. Known and accepted for a person's explicit "run this now"; if it ever needs closing, the
+claim is next door and the key is the same.
+
 ---
 
 ## 8. Schedule — the configuration declares, the base holds
@@ -442,14 +545,80 @@ the table — would turn a tick that currently costs two comparisons into a data
 lives in the database.
 
 - **Parameterized** — the row is the value. The metaobject's property seeds a new row.
-- **Predefined and platform** — no row exists, so the value goes to **`sys_job`**: it is already
-  keyed by job name and already shared across processes (`appDataQuery.cpp`). Today it carries
-  name, last run and computer; it gains *active*, a *NextRun*, and the schedule written through
-  `ibJobScheduleDescriptionMemory` — one field, not fourteen columns (§ 5b).
+- **Predefined and platform** — no row exists, so the value goes to **`sys_job`**.
 
 `sys_job` stays deliberately minimal in the sense its comment means: what is **shared** goes
 there, while outcome and next-run remain per-process observations in `ibJobState`. A schedule
 setting is a shared fact, so it belongs; a status is not, so it does not.
+
+### As built (2026-08-04): `sys_job` is the REGISTER of every job there is
+
+Not a table of overrides for the kinds that have nowhere else to live — **one shape of record for
+all three kinds**, platform, predefined and parameterized alike:
+
+| Column | |
+|---|---|
+| `jobKey` | **guid, primary key** — the metaobject's guid for a predefined job, the ROW's guid for a parameterized one, a fixed literal for each platform job |
+| `jobName` | a caption, and only that. It may change; nothing is keyed on it |
+| `active` | the switch. A job switched off KEEPS its record — variant chosen deliberately (see below) |
+| `schedule` | the schedule as a blob, through `ibJobScheduleDescription::WriteBuffer` |
+| `lastRun`, `computer` | the shared clock and who last ran it |
+
+**Why the key is a guid, not the name.** A name is a caption a person edits; identity that moves
+when somebody fixes a typo is identity that loses its history. The guid is what the row, the
+metaobject and the claim (`Job.<key>`) all already have.
+
+**Deleting versus switching off.** A row that is switched off keeps its record — that is what lets
+its card still show when it last ran and when it would run next, which is precisely what one looks
+at before switching it back on. Only a **deleted** row loses its record
+(`UnregisterRow(forgetState = true)`).
+
+⚠️ **Who owns the switch and the schedule depends on whether there is a card.** For a predefined
+or a platform job the register IS the owner — that is the whole point of § 8, since there is no
+row to ask. For a parameterized ROW the card is the owner and the register is the projection.
+`ibJobManager::Register` adopts whatever `sys_job` holds, so the row states its own opinion
+straight after registering (`ApplySettings`). Without that line a row switched off — or given a
+new schedule — kept running with the register's old answer until somebody re-saved it, because
+the re-save path went through `ApplySettings` and the start-up census did not.
+
+⚠️ **`WriteSharedLastRun` is UPDATE-only.** A run stamps a record that registration already
+created; it never inserts one. An insert there would resurrect the record of a job that had been
+deleted, on the way out of its last run.
+
+**Orphan sweep, and where it belongs.** Records whose job no longer exists are deleted by
+`PurgeSharedState`, called once from `RunDatabase` after the metadata resolve — the single moment
+at which every surviving job has declared itself. Deliberately NOT hung off the Designer's delete:
+deleting a metaobject there is reversible until the restructuring is applied, and a sweep that
+believed the Designer would drop the record of a job that still exists. The sweep declines
+entirely when it knows of no live jobs at all, rather than concluding that everything is an
+orphan.
+
+---
+
+## 8a. Execute — a background run, always
+
+`Execute` on a job's card or in its list is not "the schedule, early". It is a one-off run asked
+for by a person, so it goes where one-off work goes: `ibJobManager::StartBackground`, a session of
+its own, started and forgotten.
+
+That answers three things at once, and each of them was a reason:
+
+- **Active or not makes no difference.** A switched-off job still runs when a person asks — the
+  schedule was never consulted. (This is why every row is registered whatever its switch says: the
+  switch is read by `IsDue`, not by the registration.)
+- **The window does not freeze** for the length of an exchange.
+- **The work is not on the caller's session.** A job's work belongs on a job session with its own
+  connection, its own identity, its own row in Active Users and its own line in the journal. Run
+  inline it would borrow the window's session and appear nowhere.
+
+The two steps inside the run are the same ones the scheduled body performs, in the same order —
+run the handler, stamp the last run — so a run by hand and a run by calendar leave the row in
+identical states. The card's dates move when the run finishes and the card is next refreshed.
+
+⚠️ **A forgotten run must still report.** A background run keeps its error inside its handle, and
+nobody holds this one — so the body journals `job/finished` and `job/failed` itself. Without that
+line a broken handler is indistinguishable from a job that ran and did nothing, which is the one
+failure mode a scheduled job must never have.
 
 What the enterprise overrides is the schedule and the *active* flag — and **switching a
 misbehaving job off is the main case**, not an edge one. Without a base-side value that requires
@@ -489,6 +658,11 @@ base the jobs run on the server and a thin client cannot see its local state. Co
 instead: declared jobs from metadata and tables (shared), "when did it last run" from `sys_job`
 (shared), "is it running now" from the cluster session snapshot — a run sets its session's
 activity to `job: <name>`, which is exactly what Active Users already reads.
+
+**The register makes most of that composition unnecessary now** (2026-08-04): `sys_job` already
+holds every job of every kind, with its name, its switch, its schedule and its last run, keyed by
+guid and shared across the cluster. The window is a read of that table plus the session snapshot
+for "running right now" — the drill-down table below is unchanged.
 
 Drill-down, three row kinds:
 
@@ -557,6 +731,11 @@ whole metaobject saved.
 
 Phase 1 is a working vertical slice; nothing in it is rewritten by what follows.
 
+**Where the phases actually stand (2026-08-04):** 1 and 2 done; 3 (run as) done for the predefined
+half, not for a row; 4 not built — but the `sys_job` half of it landed as the register (§ 8); 5
+done except the uniqueness index, and with per-row registration in place of the iterating body
+(§ 7).
+
 ---
 
 ## 11a. What building the predefined half actually cost
@@ -593,6 +772,57 @@ Recorded because none of these were visible from the design, and each cost a liv
 
 ---
 
+## 11b. What building the parameterized half cost
+
+Same rule as above: recorded because none of it was visible from the design.
+
+- **A job session has no frame, and writing an object asks the form layer.** Stamping the last run
+  through the object meant the run reached for the UI and died with
+  `Context functions are not available!`. That guard is CORRECT — a server-side session must not
+  reach for a window at all — so the fix was to stop asking: the stamp goes to `sys_job`, which is
+  where the shared clock lives anyway. **Relaxing the guard was tried first and reverted.** A
+  guard that fires is evidence about the caller, not about the guard.
+- **Loading the row a second time to stamp it bumped its version under the open card.** Pressing
+  Execute twice produced *"data was changed by another user"* on a card nobody else had touched.
+  Splitting run from stamp was not enough; writing the stamp outside the object layer was.
+- **The job ran and did nothing, silently.** `RunHandler` looked for the manager module in the
+  session's root module manager; a configuration's manager module lives where
+  `ibValueManagerDataObject::CallAsProc` looks — `ibSession::EditModuleManagerFor(metaData)`.
+  Same failure shape as the predefined half's "no runtime": a job that appears to run.
+- **A background run released its session from its own worker.** The last reference died inside
+  the run's own task, and `ibSession::Teardown` queues a task on that session's queue and waits
+  for it — waiting behind oneself. It also made every background job invisible in Active Users:
+  the row existed for a few milliseconds, and the cluster snapshot is taken once a second. The
+  manager now holds the run and takes its session back on a tick, exactly as the scheduled path
+  does with `m_runSession` / `HarvestFinished`. **The same defect, found twice in one subsystem,
+  is a shape to sweep for, not a bug to fix once.**
+- **A reader that reports success on nothing.** `ReadBuffer` answered `true` for an empty blob
+  (overwriting the caller's schedule with a default whose interval is zero — one that can never
+  run) and for a TRUNCATED one (the chain's result was computed and then discarded, so half a
+  schedule was handed back as a whole one). Both now refuse and leave the caller's value alone;
+  what "no bytes" means belongs to the caller, not to the codec. **Found by writing the test, not
+  by watching the product** — the round-trip case had passed all along.
+- **`Execute` on a switched-off PREDEFINED job did nothing**, while the same button on a
+  switched-off row worked. `Use = false` returned before registering, and script's Execute resolves
+  a job by key through the manager — an unregistered job has no name to find. Predefined jobs now
+  register whatever the switch says, and restate the withdrawal after registering (the base may
+  switch a job OFF, but must not switch on what the configuration has withdrawn).
+- **A switched-off row ran anyway — until it was re-saved.** Two halves of one mistake: the row's
+  description never SAID it was inactive (it left `m_active` at its default and trusted `Register`
+  to adopt the register a moment later), and `Register` adopted a record left over from when the
+  row was still on. Writing the row went through `ApplySettings` and therefore worked, which is
+  what made it look like "it does not save the flag". **When a fix works on one path and not on
+  another, the two paths disagree about who owns the value** — that, not the flag, was the bug.
+- ⚠️ **`RunNow` held the manager's mutex across `Launch`** — the very thing `Tick` was rewritten
+  to stop doing (§ 11a). Creating a session takes a pooled connection, and taking one goes through
+  the Firebird driver's `Open()`, which calls `Register`, which wants that mutex. Found by
+  auditing the neighbours of the fix above rather than by a crash.
+- **A tree-wide header plus an incremental build is vtable skew.** Adding one virtual to
+  `backend_mainFrame.h` produced an access violation in `PrintSpreadsheetDocument` — a function
+  nobody had touched. Clean rebuild. (Already recorded under § 12; it cost a dump to rediscover.)
+
+---
+
 ## 12. Traps
 
 - **`ReadData` and `WriteData` in the same commit as the property.** `SplitTotals` was declared
@@ -618,3 +848,80 @@ Recorded because none of these were visible from the design, and each cost a liv
   foreign vtable and a fully privileged user got a read-only form. A job is an object that can
   execute — not part job, part catalog entry held together by casts. The record module is named
   after that precedent: `RecordModule`, the same property a constant declares.
+
+---
+
+## 13. Picking this up again — the tails, with their entry points
+
+Written 2026-08-04, when the arc was put down working. Each item says WHAT is missing, WHY it was
+left, WHERE the code goes in, and WHAT already exists next door — so the next session starts by
+editing rather than by reading.
+
+**Nothing here blocks use.** Both metatypes run, are scheduled per row, survive a restart, and
+report themselves in the journal. These are the edges.
+
+### 13a. The job list window — the one gap a user can see
+
+Platform and predefined jobs are visible NOWHERE but the journal: the parameterized half has its
+own list (it is a reference object), the other two have no window at all.
+
+- **Go in at** `frontend/docView/templates/` — copy `docViewAuditLog.{h,cpp}`, which is the
+  precedent for a tool tab that is not a metaobject (plain template, no CLSID, invisible to
+  File → New, opened from the Enterprise menu in `mainFrame/mainFrameEnterpriseEvent.cpp`).
+- **The model is already there**: `sys_job` holds every job of every kind (key, name, switch,
+  schedule, last run, computer), and `ibJobManager::Snapshot()` adds this process's outcome plus
+  `m_key` / `m_active` (the two fields added for exactly this). "Running right now" comes from the
+  cluster session snapshot, the way Active Users reads it.
+- **Drill-down**: parameterized → the ordinary card; predefined and platform → a small card with
+  schedule + active only.
+- Reading `sys_job` cross-process is what makes this honest on a server base, where the jobs run
+  somewhere else — do NOT build it on `Snapshot()` alone.
+
+### 13b. The schedule cannot be edited in a browser
+
+`ibValueSchedule::ShowValue` asks the frame for `ShowScheduleEditor`, and only
+`ibFrontendMainFrame` (desktop) implements it — `frontend/mainFrame/mainFrameParts.cpp`. The web
+frame inherits the base `return false`, and in the web build the static text renders as
+`ibWebStaticText`, which has no click at all (`visualView/ctrl/statictext.cpp`, the `OES_USE_WEB`
+branch).
+
+Two halves, both small, and they are the same shape every other web control needs: a widget that
+raises the click, and a web-side implementation of the editor door.
+
+### 13c. `Execute` by hand does not take the row's claim
+
+The scheduled path claims `Job.<rowGuid>` in `sys_lock` before running; the manual one goes
+straight to `StartBackground` (`parameterizedJobObject.cpp`, `ExecuteJob`). On a file base that
+means a person can start a row that is already running on another machine.
+
+Deliberate so far — "run this now" is an instruction, not a request. If it should change, the
+lock and the key are already there; the only real decision is what a busy row answers: wait,
+refuse, or run anyway.
+
+### 13d. Dimensions and the uniqueness index (§ 6)
+
+Not built. A job's attributes are ordinary attributes, so nothing stops two rows for the same
+organisation. § 6 has the whole design including the three traps (deletion mark holds the key,
+no-dimensions degenerates to one row, folders break a plain unique index).
+
+- **Go in at** `ibValueMetaObjectDimension` (`metaCollection/dimension/`) for the child kind, and
+  `ContributeTables` for the index — `ibSchemaIndex { m_name; m_columns; m_unique }` in
+  `query/schemaSnapshot.h` is the declaration the differ turns into DDL.
+
+### 13e. Smaller edges
+
+| Tail | Where | Note |
+|---|---|---|
+| "Run as" on a ROW | `parameterizedJobRegistration.cpp`, `RegisterRow` sets `desc.m_runAsUser` from the current user | predefined has the same limit; a property holding a guid + the selection mode of `ibDialogUserList` is the whole job |
+| Retry is per metaobject, not per row | `RegisterRow` reads `m_propertyRetryCount` / `m_propertyRetryInterval` off the metatype | one stubborn exchange cannot have its own policy |
+| "Reset the schedule to the configuration's value" | `ibJobManager::Register` — the base wins once a record exists (⚠ noted there) | needs a place to press it, i.e. 13a |
+| Thin client | `ExecuteJob` assumes the object method runs where a job manager exists | not exercised live |
+
+### 13f. Settled — do not reopen
+
+- **Outcome / Error are NOT columns.** The verdict lives in the journal, which every kind of job
+  already writes to; a column would be a second copy of it per row.
+- **`NextRun` is not stored** (§ 5b) — the premise for storing it died with per-row registration.
+- **`m_maxJobs` caps concurrent runs**, not declarations.
+- **The register may switch a job OFF, never ON** what the configuration withdrew (`Use = false`).
+- **The row owns its switch and schedule; the register owns them for kinds without a card.**

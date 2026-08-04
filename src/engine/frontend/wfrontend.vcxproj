@@ -171,6 +171,7 @@
     <ClCompile Include="visualView\ctrl\button_res.cpp" />
     <ClCompile Include="visualView\ctrl\buttonEvent.cpp" />
     <ClCompile Include="visualView\ctrl\statictext.cpp" />
+    <ClCompile Include="visualView\ctrl\statictextEvent.cpp" />
     <ClCompile Include="visualView\ctrl\statictext_res.cpp" />
     <ClCompile Include="visualView\ctrl\textctrl.cpp" />
     <ClCompile Include="visualView\ctrl\textctrlEvent.cpp" />

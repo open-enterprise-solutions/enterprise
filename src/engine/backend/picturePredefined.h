@@ -34,6 +34,10 @@ constexpr ibPictureID g_picSaveCLSID = picture_to_clsid("PC_SAVE");
 constexpr ibPictureID g_picPostCLSID = picture_to_clsid("PC_POST");
 constexpr ibPictureID g_picMarkAsDeleteCLSID = picture_to_clsid("PC_MDEL");
 constexpr ibPictureID g_picGenerateCLSID = picture_to_clsid("PC_GENTE");
+// RUN A SCHEDULED JOB NOW — an alarm clock, not the posting tick: what the button does is start
+// unattended work ahead of its schedule, and borrowing Post's picture would say "this records
+// something", which it does not.
+constexpr ibPictureID g_picExecuteJobCLSID = picture_to_clsid("PC_JOBRN");
 constexpr ibPictureID g_picPrintCLSID = picture_to_clsid("PC_PRINT");
 constexpr ibPictureID g_picHierarchyCLSID = picture_to_clsid("PC_HRCHY");
 

@@ -29,6 +29,10 @@ const wxString kUuid = wxT("uuid");   // the leading row-key column (records / t
 // FORMAT constant (was the rt_ref_chunk macro in metaObject.h): must stay 0x800060 for dump compat.
 const u64 rt_ref_chunk = 0x800060;
 
+// The schedule-blob wire chunk id — the _SCH field's payload tag in the dump stream. A new id
+// beside the reference one; a dump written before schedules existed simply never carries it.
+const u64 schedule_chunk = 0x800061;
+
 // --- structure -> mover parameters ---------------------------------------------------------------
 
 // The metadata context — off the table's queryable (every column of the table shares it).
@@ -236,6 +240,15 @@ void ibDataMover::BinaryToStatement(const ibBackendQueryColumn* col, const ibMet
 			case ibColumnRole::Date:   statement->SetParamDate(p++, wxLongLong(reader.r_u64())); break;
 			case ibColumnRole::String: statement->SetParamString(p++, reader.r_stringZ()); break;
 			case ibColumnRole::Enum:   statement->SetParamInt(p++, reader.r_s32()); break;
+			case ibColumnRole::Schedule: {
+				// The schedule travels as its own blob chunk, the same shape the reference pair
+				// uses below — one chunk, one cell, so a truncated stream is caught by the reader
+				// rather than by the column that happens to be bound next.
+				wxMemoryBuffer scheduleBuffer;
+				reader.r_chunk(schedule_chunk, scheduleBuffer);
+				statement->SetParamBlob(p++, scheduleBuffer.GetData(), scheduleBuffer.GetDataLen());
+				break;
+			}
 			default:                                                                  break;
 			}
 		},
@@ -301,6 +314,13 @@ void ibDataMover::BinaryFromResult(const ibBackendQueryColumn* col, const ibMeta
 		writer.w_s32(td.ContainType(ibValueTypes::TYPE_ENUM)
 		             ? result.GetResultInt(f + ibFieldSuffix(ibColumnRole::Enum)) : wxNOT_FOUND);
 		break;
+	case ibFieldTypes_Schedule: {
+		wxMemoryBuffer scheduleBuffer;
+		if (td.ContainType(g_valueScheduleCLSID))
+			result.GetResultBlob(f + ibFieldSuffix(ibColumnRole::Schedule), scheduleBuffer);
+		writer.w_chunk(schedule_chunk, scheduleBuffer);
+		break;
+	}
 	case ibFieldTypes_Reference:
 		if (ibColumnCodec::HasReference(col)) {
 			wxMemoryBuffer bufferData;

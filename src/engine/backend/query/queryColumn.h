@@ -33,6 +33,12 @@ enum ibFieldTypes {
 	ibFieldTypes_Null,
 	ibFieldTypes_Enum,
 	ibFieldTypes_Reference,
+	// A SCHEDULE (JobSchedule) — a value object stored whole, in its own blob field. It is here
+	// rather than folded into one of the tags above because it is neither a primitive nor a
+	// reference: nothing points at it, it has no row of its own, and it is read back by
+	// deserialising the blob. The tag is APPENDED, never inserted — it is persisted in every
+	// composite column's _TYPE field, so a renumbering would re-read old rows as another type.
+	ibFieldTypes_Schedule,
 };
 
 // (ibSQLField — the structured "_TYPE + per-type field" projection — is REMOVED. Its analog is the

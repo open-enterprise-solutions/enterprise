@@ -6,6 +6,7 @@
 #include "form.h"
 #include "formAttribute.h"
 #include "backend/appData.h"
+#include "backend/system/value/valueJob.h"   // g_valueScheduleCLSID — a schedule requisite builds as static text
 #include "backend/metaData.h"
 #include "frontend/docView/docView.h"
 #include "backend/srcDataObject.h"
@@ -137,6 +138,25 @@ void ibValueForm::BuildForm(const ibFormID& formType)
 						checkbox->EnableWindow(nextSourceExplorer.IsEnabled());
 						checkbox->VisibleWindow(nextSourceExplorer.IsVisible());
 						checkbox->SetSource({ mainAttrId, nextSourceExplorer.GetSourceId() });
+					}
+					// (g_valueScheduleCLSID — backend/system/value/valueJob.h, included at the top)
+					// A SCHEDULE is shown, not typed. There is nothing sensible to put in an edit
+					// box — the value is fourteen fields — so the auto-built control is the static
+					// text, which renders the schedule as its own sentence ("Every 10 minutes,
+					// 02:00-05:00, Mon") and opens the four-tab editor when clicked.
+					else if (nextSourceExplorer.GetClsidList().size() == 1
+						&& nextSourceExplorer.ContainType(g_valueScheduleCLSID)) {
+						ibValueStaticText* staticText =
+							dynamic_cast<ibValueStaticText*>(ibValueForm::CreateControl(wxT("Statictext")));
+						staticText->SetControlName(nextSourceExplorer.GetSourceName());
+						// The caption comes from the METADATA — "Schedule", not the widget's own
+						// "Static text" placeholder. That placeholder exists for a decoration
+						// somebody dropped on a form; a bound control is named by what it shows,
+						// exactly as a text box is.
+						staticText->SetCaption(wxEmptyString);
+						staticText->EnableWindow(nextSourceExplorer.IsEnabled());
+						staticText->VisibleWindow(nextSourceExplorer.IsVisible());
+						staticText->SetSource({ mainAttrId, nextSourceExplorer.GetSourceId() });
 					}
 					else {
 

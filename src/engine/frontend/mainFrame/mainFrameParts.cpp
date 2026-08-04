@@ -285,6 +285,42 @@ bool ibFrontendMainFrame::PrintSpreadsheetDocument(const wxObjectDataPtr<ibBacke
 	return printer.Print(this, printout.get(), true);
 }
 
+#include "frontend/win/dlgs/jobSchedule/jobScheduleSettings.h"
+
+// Schedule support
+//
+// The backend hands over the value and gets back "did it change" — it never learns that a wxDialog
+// was involved, and this side never learns what the schedule belongs to. The dialog edits a BUFFER
+// and writes back only on OK, so Cancel really cancels; the caller therefore does not have to keep
+// a copy of its own to undo from.
+bool ibFrontendMainFrame::ShowScheduleEditor(ibJobScheduleDescription& schedule)
+{
+	ibDialogJobSchedule dialog(this, schedule);
+
+	// CANCEL IS THE ONLY "NOTHING HAPPENED". OK means the user said yes to what is in the window,
+	// and that is the whole signal — comparing the old schedule with the new one to decide whether
+	// it "really" changed is second-guessing them, and it is what every other editor here refrains
+	// from doing.
+	if (dialog.ShowModal() != wxID_OK)
+		return false;
+
+	schedule = dialog.GetSchedule();
+
+	// OK MARKS THE FORM. The edit happened in a modal window of its own, so nothing was typed into
+	// the card and nothing else would ever notice — the value would sit changed in memory and be
+	// lost on close without so much as a question.
+	//
+	// It is done HERE because this is the only place that knows. A control cannot tell "the value
+	// changed" from "somebody looked at a linked object and closed it": opening a reference shows
+	// a whole card, and the reference is the same reference afterwards. The window that did the
+	// editing holds the fact, so it is the one that reports it — through the ordinary form lookup,
+	// not through a return value nobody upstream could interpret.
+	if (ibBackendValueForm* const form = ActiveWindow())
+		form->Modify(true);
+
+	return true;
+}
+
 #pragma endregion 
 
 ibPropertyObject* ibFrontendMainFrame::GetProperty() const

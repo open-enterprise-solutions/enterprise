@@ -32,6 +32,9 @@ void ibFirebirdMaintenanceJob::Register()
 	{
 		ibJobDescription sweep;
 		sweep.m_name     = wxT("firebird.sweep");
+		// A fixed guid, minted once — a platform job has no metaobject to take one from, and the
+		// key must survive the name being improved. See platformJobs.cpp for the same rule.
+		sweep.m_key      = ibGuid(wxT("6d1a8f30-0000-4a00-9e00-000000000002"));
 		sweep.m_origin   = ibJobOrigin::Platform;
 		sweep.m_body     = &ibFirebirdMaintenanceJob::RunSweep;
 		sweep.m_schedule = ibJobScheduleDescription::EverySeconds(kSweepEverySeconds);
@@ -44,6 +47,7 @@ void ibFirebirdMaintenanceJob::Register()
 		// an out-of-window tick costs nothing at all — no session, no claim, no clock write.
 		ibJobDescription backup;
 		backup.m_name     = wxT("firebird.backup");
+		backup.m_key      = ibGuid(wxT("6d1a8f30-0000-4a00-9e00-000000000003"));
 		backup.m_origin   = ibJobOrigin::Platform;
 		backup.m_body     = &ibFirebirdMaintenanceJob::RunBackupRestore;
 		backup.m_schedule = ibJobScheduleDescription::Nightly(kBackupWindowStart, kBackupWindowEnd);

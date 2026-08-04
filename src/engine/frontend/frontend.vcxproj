@@ -137,6 +137,7 @@
     <ClCompile Include="visualView\ctrl\staticline.cpp" />
     <ClCompile Include="visualView\ctrl\staticline_res.cpp" />
     <ClCompile Include="visualView\ctrl\statictext.cpp" />
+    <ClCompile Include="visualView\ctrl\statictextEvent.cpp" />
     <ClCompile Include="visualView\ctrl\statictext_res.cpp" />
     <ClCompile Include="visualView\ctrl\tableBox.cpp" />
     <ClCompile Include="visualView\ctrl\tableBoxAction.cpp" />
@@ -678,6 +679,7 @@
     <ClInclude Include="win\ctrls\controlButton.h" />
     <ClInclude Include="win\ctrls\controlCheckboxEditor.h" />
     <ClInclude Include="win\ctrls\controlStaticText.h" />
+    <ClInclude Include="win\ctrls\controlStaticTextValue.h" />
     <ClInclude Include="win\ctrls\controlTextEditor.h" />
     <ClInclude Include="win\ctrls\dataview\headerctrlg.h" />
     <ClInclude Include="win\ctrls\tableView.h" />

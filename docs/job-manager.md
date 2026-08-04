@@ -177,6 +177,25 @@ Most of this is assembly, not construction.
 
 ## 4. Anatomy
 
+### Where the code lives (split 2026-08-04)
+
+One header, `backend/job/jobManager.h`, and one per subject beneath it — the file names are the
+answer to "which of the three things is this?":
+
+| File | Holds |
+|---|---|
+| `jobManager.cpp` | the SCHEDULE — declare, tick, launch, harvest, run-now, stop |
+| `jobRegister.cpp` | the REGISTER — `sys_job`: settings, the shared clock, the orphan sweep |
+| `jobBackground.cpp` | BACKGROUND runs — `ibBackgroundRun`, both `StartBackground` overloads, tenancy |
+| `platformJobs.cpp` | the engine's OWN jobs, declared in one place and started from there |
+| `jobSchedule.cpp` | the schedule as DATA — validity, equality, the storage door |
+| `jobScheduleRules.cpp` | what a schedule MEANS — allowed? describe? next moment after? |
+
+The same cut on the metadata side (`metaCollection/partial/`): `parameterizedJobMetadata.cpp` is
+the metatype, `parameterizedJobRegistration.cpp` is the seam where a ROW becomes a job (register,
+run, stamp), `parameterizedJobMetadata_res.cpp` is save/load, `parameterizedJobObject.cpp` the row
+object, `parameterizedJobAction.cpp` its commands.
+
 ```
 tick source                 job manager                  worker pool
 ───────────                 ───────────                  ───────────
@@ -200,9 +219,20 @@ compute server  ─┘                     │                        via ibSess
 reverse declaration order, and the manager holds session holders whose release goes through
 the registry.
 
-**Sessions are held, not re-created.** A session costs `Connect` → auth → `EnsureRoot` →
-`CompileRoot`, and the last one compiles the root module. Per tick that is unaffordable, so
-the holder lives in the schedule entry and is reused.
+**One session PER RUN** (corrected 2026-08-04 — this used to say sessions were held between runs
+and reused, which is neither what the code does nor what § 4b describes two screens below). A
+session costs `Connect` → auth → `EnsureRoot` → `CompileRoot`, so it is not built at registration
+time either: `Register` is a declaration and nothing else. The session is materialised on first
+launch and released when the run ends — a job that works ten seconds every six hours must not hold
+a pooled connection for the other five hours and fifty minutes.
+
+**The release happens off the run's own worker**, and that is not an optimisation. `ibSession::
+Teardown` queues an empty task on the session's own queue and waits for it, so dropping the last
+reference from inside a task of that session is waiting behind oneself. Scheduled runs park the
+holder in `m_runSession` and let `HarvestFinished` drop it from the tick; background runs are held
+in `m_background` and released the same way, from the tick. A visible side effect worth keeping:
+the `sys_session` row outlives the work by up to a tick, so a run that took two milliseconds is
+still caught by the once-a-second cluster snapshot and shows in Active Users.
 
 **Concurrency is the number of sessions.** A session owns exactly one connection, and
 `AcquireFreeConnection` is deliberately not mirrored on it. Two things in parallel means two
@@ -211,6 +241,12 @@ sessions — never two holders on one.
 **The manager caps its own sessions.** `ibConnectionPool` blocks in `Checkout` once `maxSize`
 is reached, so unbounded background sessions would eventually stall interactive work on a
 connection wait. The cap belongs to the manager: the pool cannot know who matters more.
+
+⚠️ **`m_maxJobs` counts CONCURRENT RUNS, not registrations** (changed 2026-08-04, when the
+parameterized metatype started registering one entry per row). Capping declarations was capping
+the wrong thing — a declaration is a description in a vector, while a run is a session and a
+connection. A hundred and fifty rows may all be registered; each comes due on its own schedule,
+the tick starts as many as the cap allows and leaves the rest due for the next one.
 
 ---
 
@@ -543,9 +579,10 @@ tell working from stuck, and a run that ends by construction cannot.
 
 - `ibJobDescription` (name, body, interval, optional day window) + `ibJobBody`, whose **return
   value is dosage**: `true` means work remains and the job is due again on the next tick.
-- `Register` builds the session up front and refuses cleanly — duplicate name, incomplete
-  description, cap reached, no application data. Rejections land in front of the caller at
-  bootstrap rather than as silence at tick time.
+- `Register` is a **declaration**: no session, no database, no metadata (the "builds the session
+  up front" wording was corrected 2026-08-04 along with the cap, § 4). It refuses cleanly —
+  duplicate name, incomplete description, unusable schedule, no application data. Rejections land
+  in front of the caller at bootstrap rather than as silence at tick time.
 - `Tick` harvests finished runs (logging what a body threw), skips what is still running, and
   launches what is due. It never waits.
 - `RunNow` ignores interval and window; `Stop` waits out in-flight runs before dropping each
@@ -575,8 +612,10 @@ tell working from stuck, and a run that ends by construction cannot.
 - **Cross-process synchronisation — two mechanisms, two questions.** The pool's per-session
   lease only rules out a second run inside one process.
 
-  `sys_lock` / `Job.<name>` answers *is somebody running it right now*. `sys_job.lastRun`
-  answers *has it already run recently*. Neither alone suffices: without the claim two
+  `sys_lock` / `Job.<key>` answers *is somebody running it right now* — keyed on the job's
+  **guid** since 2026-08-04 (the metaobject's for a predefined job, the ROW's for a parameterized
+  one), because a name is a caption a person edits and identity must not move with it.
+  `sys_job.lastRun` answers *has it already run recently*. Neither alone suffices: without the claim two
   processes start together; without the shared clock each keeps its own and the job fires once
   per process per interval. A refused claim is not an error and is not logged — the job is
   simply skipped until its next tick.
@@ -596,6 +635,16 @@ tell working from stuck, and a run that ends by construction cannot.
   PostgreSQL / SQLite `ON CONFLICT`, MySQL's implicit key) and closing that difference is what
   that level is for. Hand-rolling an UPDATE-then-INSERT fallback would have put a driver
   question inside a scheduler.
+
+  **It is now the REGISTER of every job there is** (2026-08-04): `jobKey` (guid, PK), `jobName`,
+  `active`, `schedule` (blob), `lastRun`, `computer` — one shape of record for platform,
+  predefined and parameterized rows alike. Registration writes the record whatever the switch
+  says; a run only stamps it, and `WriteSharedLastRun` is therefore **UPDATE-only** — an insert
+  there would resurrect the record of a job deleted while it was running. Records whose job no
+  longer exists are removed by `PurgeSharedState`, called once after the metadata resolve, when
+  every surviving job has declared itself. The read/write API is
+  `ReadSharedSettings` / `WriteSharedSettings` / `ReadSharedLastRun` / `WriteSharedLastRun` /
+  `ForgetSharedState`, all static: a caller with a key needs no manager.
 - **Observable state** — `ibJobState` / `Snapshot()`: outcome (`Never` / `Running` /
   `Succeeded` / `Failed` / `Skipped`), last-run wall clock, error text, and a **computed** next
   run. Scheduling itself runs off a steady clock so moving the system clock cannot make a job

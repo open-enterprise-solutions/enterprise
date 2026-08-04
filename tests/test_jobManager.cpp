@@ -327,25 +327,119 @@ TEST(JobManager, RegisterRejectsDuplicateName) {
     EXPECT_EQ(1u, manager.Count());
 }
 
-TEST(JobManager, RegisterRefusesPastTheCap) {
-    // Each job holds a session, and a session holds a connection out of a pool
-    // whose Checkout blocks when exhausted — so the cap is a refusal at
-    // registration, not a deferral discovered later as silence.
+TEST(JobManager, TheCapCountsRunsNotDeclarations) {
+    // CHANGED 2026-08-04, when the parameterized metatype started declaring one job PER ROW.
+    //
+    // The cap used to refuse registrations, on the reasoning that each job holds a session and a
+    // session holds a pooled connection. The first step of that is false: a registration is a
+    // DESCRIPTION — no session, no database, no metadata — and the session is built on first
+    // launch and released when the run ends. What must be capped is how many run AT ONCE, which
+    // is what the tick enforces; a hundred and fifty rows may all be declared and each comes due
+    // on its own schedule.
     ibJobManager manager(ib::AppDataCtorToken{});
     manager.SetMaxJobs(2);
 
-    for (int i = 0; i < 2; ++i) {
+    for (int i = 0; i < 5; ++i) {
         ibJobDescription desc;
         desc.m_name = wxString::Format(wxT("job-%d"), i);
         desc.m_body = [](ibSession*) { return false; };
-        EXPECT_TRUE(manager.Register(desc));
+        EXPECT_TRUE(manager.Register(desc)) << "declaration " << i << " was refused by the run cap";
     }
 
-    ibJobDescription overflow;
-    overflow.m_name = wxT("one-too-many");
-    overflow.m_body = [](ibSession*) { return false; };
-    EXPECT_FALSE(manager.Register(overflow));
-    EXPECT_EQ(2u, manager.Count());
+    EXPECT_EQ(5u, manager.Count());
+    EXPECT_EQ(2u, manager.GetMaxJobs());   // the cap itself is untouched — it just means something else
+    EXPECT_EQ(0u, manager.RunningCount());
+}
+
+TEST(JobManager, SnapshotReportsTheSwitch) {
+    // A switched-off job STAYS registered — that is what keeps "Execute" answerable on it — so
+    // "declared" and "on the schedule" are two different answers and the snapshot must carry both.
+    ibJobManager manager(ib::AppDataCtorToken{});
+
+    ibJobDescription off;
+    off.m_name   = wxT("switched-off");
+    off.m_active = false;
+    off.m_body   = [](ibSession*) { return false; };
+    ASSERT_TRUE(manager.Register(off));
+
+    const auto snapshot = manager.Snapshot();
+    ASSERT_EQ(1u, snapshot.size());
+    EXPECT_FALSE(snapshot[0].m_active);
+}
+
+TEST(JobManager, ApplySettingsStatesTheOwnersOpinion) {
+    // The row (or whoever owns the setting) says what it wants through this door, and the entry
+    // takes it IN PLACE — unregister-then-register would drop a session a run may be using, and
+    // would reset the moment the job was registered, turning "I changed the schedule" into "the
+    // job forgot it ever ran".
+    ibJobManager manager(ib::AppDataCtorToken{});
+
+    const ibGuid key = wxNewUniqueGuid;
+    ibJobDescription desc;
+    desc.m_name     = wxT("owned-by-its-row");
+    desc.m_key      = key;
+    desc.m_active   = true;
+    desc.m_schedule = ibJobScheduleDescription::EverySeconds(60);
+    desc.m_body     = [](ibSession*) { return false; };
+    ASSERT_TRUE(manager.Register(desc));
+
+    EXPECT_TRUE(manager.ApplySettings(key, false, ibJobScheduleDescription::EverySeconds(900)));
+
+    const auto snapshot = manager.Snapshot();
+    ASSERT_EQ(1u, snapshot.size());
+    EXPECT_FALSE(snapshot[0].m_active);
+    EXPECT_NE(wxNOT_FOUND, snapshot[0].m_schedule.Find(wxT("15")));   // "Every 15 minutes"
+
+    // A key nobody declared is not an error to raise — it is a "no" to act on: the caller then
+    // registers instead, which is exactly what RegisterRow does.
+    EXPECT_FALSE(manager.ApplySettings(wxNewUniqueGuid, true, ibJobScheduleDescription::EverySeconds(60)));
+}
+
+TEST(JobManager, JobsAreFoundByKeyNotByName) {
+    // The key is the identity, the name is the caption. A rename must not lose a job's settings,
+    // its clock or its claim — so every lookup that matters goes through the guid.
+    ibJobManager manager(ib::AppDataCtorToken{});
+
+    const ibGuid key = wxNewUniqueGuid;
+    ibJobDescription desc;
+    desc.m_name = wxT("ScheduledJob1.a-row");
+    desc.m_key  = key;
+    desc.m_body = [](ibSession*) { return false; };
+    ASSERT_TRUE(manager.Register(desc));
+
+    EXPECT_EQ(wxT("ScheduledJob1.a-row"), manager.FindNameByKey(key));
+    EXPECT_TRUE(manager.FindNameByKey(wxNewUniqueGuid).IsEmpty());
+
+    const auto snapshot = manager.Snapshot();
+    ASSERT_EQ(1u, snapshot.size());
+    EXPECT_EQ(key, snapshot[0].m_key);
+
+    ASSERT_TRUE(manager.Unregister(wxT("ScheduledJob1.a-row")));
+    EXPECT_TRUE(manager.FindNameByKey(key).IsEmpty());
+}
+
+TEST(JobManager, UnregisterByPrefixWithdrawsEveryRowOfOneMetaobject) {
+    // How a parameterized job leaves when its configuration closes: the rows were declared as
+    // "<JobName>.<rowGuid>", and by then the table may no longer be readable — so the manager is
+    // asked what it holds instead of the database.
+    ibJobManager manager(ib::AppDataCtorToken{});
+
+    for (int i = 0; i < 3; ++i) {
+        ibJobDescription row;
+        row.m_name = wxString::Format(wxT("Exchange.%d"), i);
+        row.m_key  = wxNewUniqueGuid;
+        row.m_body = [](ibSession*) { return false; };
+        ASSERT_TRUE(manager.Register(row));
+    }
+
+    ibJobDescription other;
+    other.m_name = wxT("SomethingElse.0");
+    other.m_body = [](ibSession*) { return false; };
+    ASSERT_TRUE(manager.Register(other));
+
+    EXPECT_EQ(3u, manager.UnregisterByPrefix(wxT("Exchange.")));
+    EXPECT_EQ(1u, manager.Count());
+    EXPECT_EQ(0u, manager.UnregisterByPrefix(wxT("Exchange.")));   // nothing left to withdraw
 }
 
 TEST(JobManager, UnregisterDropsTheJob) {

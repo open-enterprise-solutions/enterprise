@@ -77,6 +77,10 @@ public:
 	virtual bool ShowSpreadsheetDocument(const wxString& strTitle, wxObjectDataPtr<ibBackendSpreadsheetObject>& spreadSheetDocument) override;
 	virtual bool PrintSpreadsheetDocument(const wxObjectDataPtr<ibBackendSpreadsheetObject>& doc, bool showPrintDlg = true) override;
 
+	// Schedule support — the same door the spreadsheet uses: the backend hands the value over, this
+	// side opens the window that knows how to edit it.
+	virtual bool ShowScheduleEditor(ibJobScheduleDescription& schedule) override;
+
 #pragma endregion 
 
 	virtual void RefreshFrame() override;

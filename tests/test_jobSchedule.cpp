@@ -297,3 +297,84 @@ TEST(JobSchedule, Serialization_AbsentFieldsKeepTheirDefaults)
 	EXPECT_EQ(s.m_weekdayOrdinal,       ibJobOrdinal_None);
 	EXPECT_TRUE(ibJobScheduleRules::IsAllowed(s, At(2026, wxDateTime::Aug, 3, 14, 0)));   // "any" really means any
 }
+
+// ---------------------------------------------------------------------------
+// The BUFFER door — the same description as opaque bytes.
+//
+// This is the one the storage layers use: the schedule column of a job row
+// (ibColumnRole::Schedule) and the `schedule` blob of sys_job. The node door
+// above serves the metadata tree; this one serves the database, and the two
+// must agree about the meaning or a schedule edited in a card would come back
+// different from the one the manager runs.
+// ---------------------------------------------------------------------------
+
+TEST(JobSchedule, Buffer_RoundTripsEveryField)
+{
+	ibJobScheduleDescription src = ibJobScheduleDescription::Nightly(2, 5);
+	src.m_intervalSeconds    = 7 * 24 * 3600;
+	src.m_stopAfterMinute    = ibJobScheduleDescription::AtTime(4, 30);
+	src.m_daysOfWeek         = ibJobWeekDay_Friday;
+	src.m_daysOfMonth        = (1u << 0) | (1u << 14);
+	src.m_daysOfMonthFromEnd = (1u << 0);
+	src.m_months             = (1u << 0) | (1u << 6);
+	src.m_weekdayOrdinal     = ibJobOrdinal_Last;
+	src.m_everyNWeeks        = 2;
+	src.m_everyNMonths       = 3;
+	src.m_periodAnchor       = At(2026, wxDateTime::Jan, 5, 12, 0);
+	src.m_activeFrom         = At(2026, wxDateTime::Jan, 1);
+	src.m_activeTo           = At(2027, wxDateTime::Jan, 1);
+
+	wxMemoryBuffer blob;
+	ibJobScheduleDescriptionMemory::WriteBuffer(blob, src);
+	ASSERT_GT(blob.GetDataLen(), 0u);
+
+	ibJobScheduleDescription dst;
+	ASSERT_TRUE(ibJobScheduleDescriptionMemory::ReadBuffer(blob.GetData(), blob.GetDataLen(), dst));
+	EXPECT_TRUE(dst == src);
+	EXPECT_EQ(dst.m_periodAnchor, src.m_periodAnchor);   // dates travel as ms, not as text
+	EXPECT_EQ(dst.m_activeFrom,   src.m_activeFrom);
+	EXPECT_EQ(dst.m_activeTo,     src.m_activeTo);
+}
+
+TEST(JobSchedule, Buffer_KeepsAnInvalidDateInvalid)
+{
+	// An empty date is a legitimate value — "no validity range" — and it must not come back as
+	// some epoch moment, which would gate the job to a range nobody declared.
+	ibJobScheduleDescription src = ibJobScheduleDescription::EverySeconds(600);
+	ASSERT_FALSE(src.m_activeFrom.IsValid());
+
+	wxMemoryBuffer blob;
+	ibJobScheduleDescriptionMemory::WriteBuffer(blob, src);
+
+	ibJobScheduleDescription dst;
+	dst.m_activeFrom = At(2020, wxDateTime::Jan, 1);   // dirty, to prove the read overwrites it
+	ASSERT_TRUE(ibJobScheduleDescriptionMemory::ReadBuffer(blob.GetData(), blob.GetDataLen(), dst));
+
+	EXPECT_FALSE(dst.m_activeFrom.IsValid());
+	EXPECT_FALSE(dst.m_activeTo.IsValid());
+	EXPECT_FALSE(dst.m_periodAnchor.IsValid());
+}
+
+TEST(JobSchedule, Buffer_RefusesWhatItCannotRead)
+{
+	// A refusal, never a half-filled schedule: the caller keeps the declaration's own value, which
+	// is the difference between "the register said nothing" and "the register said: never run".
+	ibJobScheduleDescription dst = ibJobScheduleDescription::EverySeconds(600);
+
+	EXPECT_FALSE(ibJobScheduleDescriptionMemory::ReadBuffer(nullptr, 0, dst));
+
+	const unsigned char empty[1] = { 0 };
+	EXPECT_FALSE(ibJobScheduleDescriptionMemory::ReadBuffer(empty, 0, dst));
+
+	// A version this build does not know — a base written by a newer one.
+	const unsigned char future[8] = { 99, 0, 0, 0, 0, 0, 0, 0 };
+	EXPECT_FALSE(ibJobScheduleDescriptionMemory::ReadBuffer(future, sizeof(future), dst));
+
+	// Right version, truncated body.
+	wxMemoryBuffer blob;
+	ibJobScheduleDescriptionMemory::WriteBuffer(blob, ibJobScheduleDescription::Nightly(2, 5));
+	ASSERT_GT(blob.GetDataLen(), 4u);
+	EXPECT_FALSE(ibJobScheduleDescriptionMemory::ReadBuffer(blob.GetData(), 3, dst));
+
+	EXPECT_EQ(600, dst.m_intervalSeconds);   // untouched by every refusal above
+}

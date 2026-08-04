@@ -109,6 +109,19 @@ void ibDialogFunctionAll::BuildTree()
 		m_treeCtrlElements->AppendItem(accountingRegisters, accountingRegister->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(accountingRegister));
 	}
 
+	// SCHEDULED JOBS come LAST, and deliberately so. They are reachable — somebody has to be able
+	// to open the list, look at a schedule, run one by hand — but they are administration, not the
+	// work this window is opened for. Putting them under the accounting registers is what keeps
+	// them from being the first thing an operator's eye lands on.
+	//
+	// The PREDEFINED half is absent here on purpose: it has no list to open. Its settings live in
+	// the job window and in ScheduledJobs.Predefined, not behind an icon that opens nothing.
+	wxTreeItemId scheduledJobs = AppendGroupItem(root, g_metaParameterizedJobCLSID, _("Scheduled jobs"));
+	for (auto scheduledJob : activeMetaData->GetAnyArrayObject(g_metaParameterizedJobCLSID)) {
+		const int imageIndex = imageList->Add(scheduledJob->GetIcon());
+		m_treeCtrlElements->AppendItem(scheduledJobs, scheduledJob->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(scheduledJob));
+	}
+
 	m_treeCtrlElements->ExpandAll();
 }
 

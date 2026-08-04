@@ -5,6 +5,7 @@
 
 #include "backend/backend_mainFrame.h"
 #include "backend/appData.h"
+#include "backend/job/jobManager.h"   // the job records are swept once the surviving jobs are known
 
 // ms_instance / Get / Initialize / Destroy retired — ownership moved
 // to ibApplicationData::m_activeMetaData (a unique_ptr). The fabric
@@ -241,6 +242,17 @@ bool ibMetaDataConfigurationFile::RunDatabase(int flags)
 		wxLogError(err.GetErrorDescription());
 		return false;
 	}
+
+	// SWEEP THE JOB RECORDS — here, and nowhere earlier.
+	//
+	// sys_job holds a row per job: its schedule, its switch, when it last ran. A job that was
+	// deleted in the Designer leaves one behind, and the moment to notice is exactly this one —
+	// the resolve pass has just finished, so every job that still exists has announced itself,
+	// and whatever is left in the table belongs to something that did not survive the
+	// restructuring. Doing it at the Designer's delete instead would throw the record away while
+	// the user could still walk away without saving.
+	if (ibJobManager* const jobs = ibApplicationData::GetJobManager())
+		jobs->PurgeSharedState();
 
 	// Success — keep the image (LoadGuard.Commit): its presence IS the open state.
 	load.Commit();

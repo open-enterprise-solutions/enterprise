@@ -400,6 +400,9 @@ private:
 	// scheduled jobs; independent table, not part of TableAlreadyCreated()'s
 	// init contract, so existing databases pick it up on next open.
 	static void CreateTableJob();
+	// Additive — gives sys_job its settings columns (active / schedule) on a base created before
+	// jobs had any. Nullable, and a NULL active reads as ON: silence must never switch a job off.
+	static void MigrateTableJob();
 	static void MigrateTableSession();
 	// Additive — creates sys_bytecode_cache if missing. Runs in any
 	// runMode after the existing-tables gate, so DBs initialised before

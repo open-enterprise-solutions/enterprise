@@ -62,6 +62,10 @@ constexpr ibClassID g_metaDataProcessorCLSID = metadata_to_clsid("MD_DPR");
 constexpr ibClassID g_metaReportCLSID = metadata_to_clsid("MD_RPT");
 constexpr ibClassID g_metaInformationRegisterCLSID = metadata_to_clsid("MD_INFR");
 constexpr ibClassID g_metaAccumulationRegisterCLSID = metadata_to_clsid("MD_ACCR");
+// PARAMETERIZED scheduled job — serves the DATA: a reference object whose ROWS are its instances,
+// beside the predefined kind above (docs/scheduled-jobs.md § 3). A main-branch object, not a
+// common one, precisely because it has a table, a reference and a card.
+constexpr ibClassID g_metaParameterizedJobCLSID = metadata_to_clsid("MD_PJOB");
 
 //ACCOUNTING OBJECTS
 constexpr ibClassID g_metaChartOfCharacteristicTypesCLSID = metadata_to_clsid("MD_CHRC");

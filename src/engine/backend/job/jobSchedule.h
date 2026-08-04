@@ -39,6 +39,7 @@
 
 #include <cstdint>
 
+#include <wx/buffer.h>
 #include <wx/datetime.h>
 
 class ibDataValue;   // storage door — see ibJobScheduleDescriptionMemory at the bottom
@@ -216,6 +217,18 @@ class BACKEND_API ibJobScheduleDescriptionMemory {
 public:
 	static bool ReadNode(const ibDataValue& value, ibJobScheduleDescription& schedule);
 	static bool WriteNode(ibDataValue& value, const ibJobScheduleDescription& schedule);
+
+	// THE COLUMN form of the same schedule — a flat little-endian blob, because a schedule that
+	// lives in a ROW (a parameterized job's own Schedule requisite) is written by the column codec,
+	// which binds a blob, not a node tree. Same door, second spelling: the node form stays the
+	// metadata format, this is the data one, and both are here so neither can be written twice.
+	//
+	// Layout: version u8, then the fields in declaration order (ints as s32, dates as s64 ms since
+	// the wxDateTime epoch; 0 = invalid / unbounded). VERSIONED because a row outlives a release:
+	// a reader older than the blob stops at the fields it knows, and every field it did not read
+	// keeps its default — which here always means "not restricted".
+	static void WriteBuffer(wxMemoryBuffer& out, const ibJobScheduleDescription& schedule);
+	static bool ReadBuffer(const void* data, size_t length, ibJobScheduleDescription& schedule);
 };
 
 #endif // !__IB_JOB_SCHEDULE_H__

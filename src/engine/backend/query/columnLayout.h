@@ -37,7 +37,8 @@ enum class ibColumnRole : uint8_t {
 	String,          // _S
 	Enum,            // _E
 	ReferenceType,   // _RTRef — the reference target's clsid (BIGINT)
-	ReferenceId      // _RRRef — the reference value (pure guid blob; type is _RTRef)
+	ReferenceId,     // _RRRef — the reference value (pure guid blob; type is _RTRef)
+	Schedule         // _SCH   — a JobSchedule, serialised whole (blob); see ibFieldTypes_Schedule
 };
 
 // One physical field of a logical column (the layout decomposition unit).

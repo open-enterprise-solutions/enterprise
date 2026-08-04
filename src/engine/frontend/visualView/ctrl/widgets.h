@@ -69,11 +69,65 @@ public:
 
 #include <wx/stattext.h>
 
-class ibValueStaticText : public ibValueWindow {
+// STATIC TEXT — a caption, and OPTIONALLY a value read from a source.
+//
+// Bound to a source it stops being decoration and becomes the cheapest possible view of a value:
+// it shows the value's presentation, draws itself as a LINK, and a click opens that value's own
+// form. Any value in the base reachable by a dotted path can be put behind it, so "show me the
+// organisation of this exchange, and let me open it" costs one control and no code.
+//
+// The source is OPTIONAL, which is the whole difference from a text box: an unbound static text is
+// still a caption and still renders. That is also why it never auto-provisions an attribute the
+// way the bindable controls do — a caption that silently invented a form attribute would be a
+// surprise, not a convenience.
+class ibValueStaticText : public ibValueWindow,
+	public ibTypeControlFactory {
 	public:
 
 	void SetCaption(const wxString& caption) { m_propertyTitle->SetValue(caption); }
 	wxString GetCaption() const { return m_propertyTitle->GetValueAsTranslateString(); }
+
+	////////////////////////////////////////////////////////////////////////////////////////
+	void SetSource(const ibMetaID& id) { m_propertySource->SetValue(id); }
+	void SetSource(const std::vector<ibSourceId>& path) { m_propertySource->SetValue(ibSourceDescription(path)); }
+	////////////////////////////////////////////////////////////////////////////////////////
+
+	// Available sources = the owning form's attributes of THIS control's kind.
+	virtual bool GetSourceList(std::vector<ibBackendFormAttributeValue*>& out) const override;
+
+	//Get source object
+	virtual ibSourceObject* GetSourceObject() const;
+
+	virtual ibSourceDescription& GetSourceDesc() const override { return m_propertySource->GetValueAsSourceDesc(); }
+
+	// NEVER "missing" — an unbound static text is a caption, and captions render. Answering true
+	// here would hide every plain label on every form (window.cpp gates Show on it).
+	virtual bool IsSourceMissing() const override { return false; }
+
+	//Get source attribute
+	virtual const ibBackendSourceColumn* GetSourceAttributeObject() const {
+		return m_propertySource->GetSourceAttributeObject();
+	}
+
+	//get form owner
+	virtual ibValueForm* GetOwnerForm() const { return m_formOwner; }
+
+	//get metaData
+	virtual const ibMetaData* GetMetaData() const;
+
+	//get type description
+	virtual ibTypeDescription& GetTypeDesc() const { return m_propertySource->GetValueAsTypeDesc(); }
+
+	// Read-only by nature: this control shows a value, it does not edit one. SetControlValue is
+	// therefore absent rather than a no-op — a writer that silently does nothing is worse than one
+	// that is not there.
+	virtual bool HasValueInControl() const { return !m_propertySource->IsEmptyProperty(); }
+	virtual bool GetControlValue(ibValue& pvarControlVal) const;
+
+	// THE CAPTION — the same rule the text box and the checkbox follow: the Title property when it
+	// is filled, otherwise the bound field's synonym. So a bound static text is captioned by the
+	// metadata and nobody has to type "Counterparty" next to a field already called that.
+	virtual wxString GetControlTitle() const;
 
 	ibValueStaticText();
 
@@ -92,10 +146,28 @@ class ibValueStaticText : public ibValueWindow {
 	virtual bool WriteData(ibDataNode& node) const;
 
 protected:
+
+	// The click — opens the bound value's own form. Nothing happens when there is no source: a
+	// caption is not a link, and the widget is not in link mode to begin with.
+	void OnHyperlinkClicked(wxCommandEvent& event);
+
 	ibPropertyCategory* m_categoryStaticText = ibPropertyObject::CreatePropertyCategory(wxT("StaticText"), _("Static text"));
 	ibPropertyBoolean* m_propertyMarkup = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryStaticText, wxT("Markup"), _("Markup"), true);
 	ibPropertyUInteger* m_propertyWrap = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categoryStaticText, wxT("Wrap"), _("Wrap"), 0);
 	ibPropertyTString* m_propertyTitle = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryStaticText, wxT("Title"), _("Title"), wxT("Static text"));
+	// Where the caption sits relative to the value — the checkbox's property, same enum and same
+	// default, because a form mixing the two must not have to explain why they differ.
+	ibPropertyEnum<ibValueEnumTitleLocation>* m_propertyTitleLocation = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumTitleLocation>>(m_categoryStaticText, wxT("TitleLocation"), _("Title location"), ibTitleLocation::eLeft);
+
+	// ANY type — a static text shows whatever it is pointed at, so nothing is filtered out here.
+	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
+	ibPropertySource* m_propertySource = ibPropertyObject::CreateProperty<ibPropertySource>(m_categoryData, wxT("Source"), _("Source"), ibValueTypes::TYPE_EMPTY);
+
+	// The SAME event the text box raises before it opens a value, with the same standard-processing
+	// switch: a configuration that wants to open something else — or nothing — says so here, and
+	// does not have to learn a second name because this control is a label rather than an editor.
+	ibPropertyCategory* m_propertyEvent = ibPropertyObject::CreatePropertyCategory(wxT("Event"), _("Event"));
+	ibEventControl* m_eventOpening = ibPropertyObject::CreateEvent<ibEventControl>(m_propertyEvent, wxT("Opening"), _("Opening"), wxArrayString{ wxT("Control"), wxT("StandartProcessing") });
 };
 
 #include <wx/textctrl.h>

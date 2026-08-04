@@ -1133,6 +1133,12 @@ public:
 
 	/////////////////////////////////////////////////////////////////////////
 
+	// OPEN THIS VALUE — its card, its editor, whatever window it has.
+	//
+	// It reports nothing back: whether anything CHANGED is known only to the window that did the
+	// editing, and that window is the one that says so (the schedule editor marks the form on OK).
+	// A caller here cannot tell "the value changed" from "somebody looked at a linked object and
+	// closed it" — a reference opens a whole card and is the same reference afterwards.
 	virtual void ShowValue();
 
 	/////////////////////////////////////////////////////////////////////////

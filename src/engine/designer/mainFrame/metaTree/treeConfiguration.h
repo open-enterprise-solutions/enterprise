@@ -106,6 +106,10 @@ private:
 	wxTreeItemId m_treePICTURES;
 	wxTreeItemId m_treeINTERFACES;
 	wxTreeItemId m_treeCOMMANDS;
+	// Scheduled jobs are ONE branch with two kinds inside it: the predefined ones (a sub-branch,
+	// always rendered first, because a configuration declares few of them and they never grow with
+	// the data) and the parameterized ones under it, as ordinary items of the branch itself.
+	wxTreeItemId m_treeJOBS;
 	wxTreeItemId m_treeSCHEDULED_JOBS;
 	wxTreeItemId m_treeROLES;
 	wxTreeItemId m_treeLANGUAGES;

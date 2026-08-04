@@ -205,6 +205,8 @@
     <ClInclude Include="metaCollection\partial\accountingRegisterManager.h" />
     <ClInclude Include="metaCollection\partial\catalog.h" />
     <ClInclude Include="metaCollection\partial\catalogManager.h" />
+    <ClInclude Include="metaCollection\partial\parameterizedJob.h" />
+    <ClInclude Include="metaCollection\partial\parameterizedJobManager.h" />
     <ClInclude Include="metaCollection\partial\chartOfAccounts.h" />
     <ClInclude Include="metaCollection\partial\chartOfAccountsSubcontoTable.h" />
     <ClInclude Include="metaCollection\partial\chartOfAccountsEnum.h" />
@@ -334,6 +336,7 @@
     <ClInclude Include="system\value\valueFile.h" />
     <ClInclude Include="system\value\valueFont.h" />
     <ClInclude Include="system\value\valueGuid.h" />
+    <ClInclude Include="system\value\valueJob.h" />
     <ClInclude Include="system\value\valueMap.h" />
     <ClInclude Include="system\value\valueOLE.h" />
     <ClInclude Include="system\value\valuePicture.h" />
@@ -392,8 +395,11 @@
     <ClCompile Include="lock\lockKeyHash.cpp" />
     <ClCompile Include="lock\lockManager.cpp" />
     <ClCompile Include="job\jobManager.cpp" />
+    <ClCompile Include="job\jobBackground.cpp" />
+    <ClCompile Include="job\jobRegister.cpp" />
     <ClCompile Include="job\platformJobs.cpp" />
     <ClCompile Include="job\jobSchedule.cpp" />
+    <ClCompile Include="job\jobScheduleRules.cpp" />
     <ClCompile Include="system\value\valueBackgroundJob.cpp" />
     <ClCompile Include="backend_core.cpp" />
     <ClCompile Include="backend_mainFrame.cpp" />
@@ -563,6 +569,13 @@
     <ClCompile Include="metaCollection\partial\catalogMetadataMenu.cpp" />
     <ClCompile Include="metaCollection\partial\catalogMetadataProperty.cpp" />
     <ClCompile Include="metaCollection\partial\catalogMetadata_res.cpp" />
+    <ClCompile Include="metaCollection\partial\parameterizedJobAction.cpp" />
+    <ClCompile Include="metaCollection\partial\parameterizedJobManager.cpp" />
+    <ClCompile Include="metaCollection\partial\parameterizedJobMetadata.cpp" />
+    <ClCompile Include="metaCollection\partial\parameterizedJobMetadata_res.cpp" />
+    <ClCompile Include="metaCollection\partial\parameterizedJobRegistration.cpp" />
+    <ClCompile Include="metaCollection\partial\parameterizedJobMetadataMenu.cpp" />
+    <ClCompile Include="metaCollection\partial\parameterizedJobObject.cpp" />
     <ClCompile Include="metaCollection\partial\catalogObject.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfAccountsAction.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfAccountsEnum.cpp" />
@@ -747,6 +760,7 @@
     <ClCompile Include="system\value\valueFile.cpp" />
     <ClCompile Include="system\value\valueFont.cpp" />
     <ClCompile Include="system\value\valueGuid.cpp" />
+    <ClCompile Include="system\value\valueJob.cpp" />
     <ClCompile Include="system\value\valueMap.cpp" />
     <ClCompile Include="system\value\valueOLE.cpp" />
     <ClCompile Include="system\value\valuePicture.cpp" />

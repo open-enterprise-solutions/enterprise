@@ -110,6 +110,10 @@ void ibRegisterPlatformJobs()
 
 	ibJobDescription fold;
 	fold.m_name = wxT("totals.fold");
+	// The engine's own jobs have no metaobject, so their key is a guid MINTED ONCE and written
+	// here. A literal rather than a hash of the name: the key must not move when the name is
+	// improved, and a constant in the source is the only kind of stability nothing can derive away.
+	fold.m_key  = ibGuid(wxT("6d1a8f30-0000-4a00-9e00-000000000001"));
 	fold.m_body = &FoldTotals;
 	// Six hours, and no day window. Folding is cheap next to a rebuild (it reads
 	// the totals table, never the movements) and explicitly safe while people

@@ -20,6 +20,7 @@
 #define interfacesName _("Sections")
 #define commandsName _("Common commands")
 #define scheduledJobsName _("Scheduled jobs")
+#define predefinedJobsName _("Predefined jobs")
 #define rolesName _("Roles")
 #define picturesName _("Pictures")
 #define languagesName _("Languages")
@@ -264,6 +265,7 @@ wxTreeItemId ibMetadataTree::FillItem(ibValueMetaObject* metaItem, const wxTreeI
 	else if (metaItem->GetClassType() == g_metaReportCLSID) AddReportItem(metaItem, createdItem);
 	else if (metaItem->GetClassType() == g_metaInformationRegisterCLSID) AddInformationRegisterItem(metaItem, createdItem);
 	else if (metaItem->GetClassType() == g_metaAccumulationRegisterCLSID) AddAccumulationRegisterItem(metaItem, createdItem);
+	else if (metaItem->GetClassType() == g_metaParameterizedJobCLSID) AddCatalogItem(metaItem, createdItem);   // a job row IS a catalog entry with a second verb
 	else if (metaItem->GetClassType() == g_metaChartOfCharacteristicTypesCLSID) AddCatalogItem(metaItem, createdItem);
 	else if (metaItem->GetClassType() == g_metaChartOfAccountsCLSID) AddCatalogItem(metaItem, createdItem);
 	else if (metaItem->GetClassType() == g_metaAccountingRegisterCLSID) AddAccumulationRegisterItem(metaItem, createdItem);
@@ -1548,7 +1550,14 @@ void ibMetadataTree::InitTree()
 
 	m_treeTEMPLATES = AppendGroupItem(m_treeCOMMON, g_metaCommonTemplateCLSID, commonTemplatesName);
 
-	m_treeSCHEDULED_JOBS = AppendGroupItem(m_treeCOMMON, g_metaScheduledJobCLSID, scheduledJobsName);
+	// SCHEDULED JOBS stay under COMMON — unattended work belongs to the configuration as a whole,
+	// not to any one business object, which is exactly what this umbrella means. One branch, two
+	// kinds inside it: the branch itself holds the PARAMETERIZED jobs (it is their metatype's group
+	// node, so File → New reaches them the usual way), and the PREDEFINED ones live in a sub-branch
+	// declared FIRST, which is what puts them above — a configuration declares a handful of those
+	// and they never multiply with the data, while the parameterized list is the one that grows.
+	m_treeJOBS = AppendGroupItem(m_treeCOMMON, g_metaParameterizedJobCLSID, scheduledJobsName);
+	m_treeSCHEDULED_JOBS = AppendGroupItem(m_treeJOBS, g_metaScheduledJobCLSID, predefinedJobsName);
 
 	m_treePICTURES = AppendGroupItem(m_treeCOMMON, g_metaPictureCLSID, picturesName);
 
@@ -1620,8 +1629,10 @@ void ibMetadataTree::ClearTree()
 		m_metaTreeCtrl->DeleteChildren(m_treeINTERFACES);
 	if (m_treeCOMMANDS.IsOk())
 		m_metaTreeCtrl->DeleteChildren(m_treeCOMMANDS);
-	if (m_treeSCHEDULED_JOBS.IsOk())
-		m_metaTreeCtrl->DeleteChildren(m_treeSCHEDULED_JOBS);
+	// The jobs branch holds the predefined sub-branch, so clearing the branch clears both —
+	// InitTree re-creates the pair.
+	if (m_treeJOBS.IsOk())
+		m_metaTreeCtrl->DeleteChildren(m_treeJOBS);
 	if (m_treeROLES.IsOk())
 		m_metaTreeCtrl->DeleteChildren(m_treeROLES);
 	if (m_treePICTURES.IsOk())
@@ -1734,7 +1745,7 @@ void ibMetadataTree::FillData()
 		m_metaTreeCtrl->Delete(m_treeTEMPLATES);
 
 	//****************************************************************
-	//*                      Scheduled jobs                          *
+	//*         Scheduled jobs — predefined first, then the rows      *
 	//****************************************************************
 	for (auto scheduledJob : m_metaData->GetAnyArrayObject(g_metaScheduledJobCLSID)) {
 
@@ -1752,6 +1763,26 @@ void ibMetadataTree::FillData()
 
 	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeSCHEDULED_JOBS))
 		m_metaTreeCtrl->Delete(m_treeSCHEDULED_JOBS);
+
+	// The parameterized ones are ordinary reference objects, so they unfold exactly like a catalog
+	// — attributes, tabular sections, forms, commands, templates — through the same AddCatalogItem.
+	for (auto parameterizedJob : m_metaData->GetAnyArrayObject(g_metaParameterizedJobCLSID)) {
+
+		if (parameterizedJob->IsDeleted())
+			continue;
+
+		const wxString& strName = parameterizedJob->GetName();
+
+		if (!m_strSearch.IsEmpty()
+			&& strName.Find(m_strSearch) < 0)
+			continue;
+
+		AddCatalogItem(parameterizedJob,
+			AppendItem(m_treeJOBS, parameterizedJob));
+	}
+
+	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeJOBS))
+		m_metaTreeCtrl->Delete(m_treeJOBS);
 
 	//****************************************************************
 	//*                          Pictures							 *

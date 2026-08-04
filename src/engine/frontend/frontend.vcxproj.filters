@@ -677,6 +677,9 @@
     <ClCompile Include="visualView\ctrl\statictext.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
+    <ClCompile Include="visualView\ctrl\statictextEvent.cpp">
+      <Filter>visualView\ctrl</Filter>
+    </ClCompile>
     <ClCompile Include="visualView\ctrl\statictext_res.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
@@ -1606,6 +1609,9 @@
       <Filter>win\ctrls</Filter>
     </ClInclude>
     <ClInclude Include="win\ctrls\controlStaticText.h">
+      <Filter>win\ctrls</Filter>
+    </ClInclude>
+    <ClInclude Include="win\ctrls\controlStaticTextValue.h">
       <Filter>win\ctrls</Filter>
     </ClInclude>
     <ClInclude Include="docView\templates\docViewSpreadsheet.h">

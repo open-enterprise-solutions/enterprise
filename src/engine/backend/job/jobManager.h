@@ -126,6 +126,20 @@ struct BACKEND_API ibJobDescription {
 	// second copy of a job that must not run twice.
 	wxString   m_name;
 
+	// THE STABLE KEY — what the base stores its settings and its shared clock under, and what the
+	// cross-process claim names.
+	//
+	// It is NOT the name. A configuration's job is identified by its metaobject GUID — the identity
+	// that survives a rename, an unload / reload, and a copy of the configuration onto another
+	// base. Keying the row by the name would mean that renaming a job silently orphans its
+	// settings and its last-run — the job then looks brand new and fires at once, and the row that
+	// held "switched off" is still in the table pointing at nothing.
+	//
+	// A PLATFORM job has no metaobject, so it carries a FIXED guid minted once and written into
+	// platformJobs.cpp — not its name. One type for every job's key means the table has one kind
+	// of value in that column and no reader has to ask which sort of key it is looking at.
+	ibGuid     m_key;
+
 	ibJobBody  m_body;
 
 	// WHO it runs AS — the difference that actually separates the three kinds.
@@ -176,6 +190,16 @@ struct BACKEND_API ibJobDescription {
 	// a pass.
 	ibJobScheduleDescription m_schedule;
 
+	// IS IT SWITCHED ON? The declaration's schedule keeps existing either way — an inactive job is
+	// still registered, still listed, and still runnable BY HAND (RunNow ignores this, as it
+	// ignores the calendar). Only the tick reads it.
+	//
+	// Why the manager holds it rather than the metadata: switching a misbehaving job off at 3 a.m.
+	// must not mean opening the Designer against a production base. The value therefore lives in
+	// the database (sys_job), seeded from the declaration the first time the job is seen, and the
+	// base wins from then on.
+	bool m_active = true;
+
 	// WHAT HAPPENS AFTER A FAILURE — retry, or wait out the schedule?
 	//
 	// Without this a job that failed because a network blinked waits its whole interval before
@@ -217,6 +241,14 @@ enum class ibJobOutcome {
 // A job's observable state — what an administration list would show.
 struct BACKEND_API ibJobState {
 	wxString     m_name;
+	// The KEY this job answers to — the metaobject's guid for a predefined job, the row's for a
+	// parameterized one, a fixed literal for each of the engine's own. It is what sys_job, the
+	// cross-process claim and every "run this one" are keyed on; the name is the caption.
+	ibGuid       m_key;
+	// IS IT ON THE SCHEDULE — a switched-off job stays registered (so it can still be run by hand)
+	// and is simply never due, so "declared" and "running on its schedule" are two different
+	// answers and a list that shows only the first tells half the truth.
+	bool         m_active = true;
 	ibJobOutcome m_outcome = ibJobOutcome::Never;
 	// Wall clock, for display. The scheduling itself runs off a steady clock so a
 	// system-clock adjustment cannot make a job fire twice or stall for hours;
@@ -300,6 +332,12 @@ public:
 	// A run already in flight is NOT cancelled — the entry waits for it, so the
 	// session stays alive exactly as long as the work using it.
 	bool Unregister(const wxString& name);
+
+	// Drop every job whose name starts with `prefix`; returns how many went. The parameterized
+	// scheduled job registers one entry PER ROW under "<JobName>.<rowGuid>", and when its
+	// configuration closes it has to withdraw all of them without re-reading a table it may no
+	// longer be able to read. Same waiting rule as Unregister: a run in flight is not cancelled.
+	std::size_t UnregisterByPrefix(const wxString& prefix);
 
 	// Start the manager's OWN tick thread. Idempotent.
 	//
@@ -520,13 +558,88 @@ private:
 	// not hold a pooled connection for the other six.
 	ibSessionHolder OpenRunSession(const ibJobDescription& desc);
 
-	// The SHARED clock (sys_job), read and written under the cross-process claim.
-	// The claim says "nobody is running it now"; this says "nobody ran it
-	// recently" — and only the two together make N processes on one base behave
-	// like one scheduler. Best-effort: a database that cannot answer must not
-	// stop a job, since silently skipping housekeeping is worse than repeating it.
-	static wxDateTime ReadSharedLastRun(const wxString& name);
-	static void       WriteSharedLastRun(const wxString& name, const wxDateTime& when);
+public:
+
+	// ONE JOB'S RECORD IN THE REGISTER — the whole row of sys_job, for every kind of job there is.
+	//
+	// A platform job, a predefined one and one ROW of a parameterized one are all described by
+	// exactly this: who it is (the guid), what it is called, whether it is on, when it is due, and
+	// when it last ran. That is why there is one struct and not one per kind — the register is the
+	// list of what actually runs on this base, and its entries are the same shape whatever
+	// declared them.
+	struct ibJobSettings {
+		ibGuid                   m_key;         // identity — the metaobject's guid, or a row's own
+		wxString                 m_name;        // display name, so the table reads for a person
+		bool                     m_active = true;
+		ibJobScheduleDescription m_schedule;
+		wxDateTime               m_lastRun;      // read-only for a caller — the shared clock
+		wxString                 m_computer;     // who ran it last, for diagnostics
+		bool                     m_found = false;   // was there a row at all? (seed-on-first-sight)
+
+		bool IsOk() const { return m_key.isValid(); }
+	};
+
+	// Read / write the base-side settings of a job by name. Public because the JOB SETTINGS VALUE
+	// (script's PredefinedJobs.<Name>) is exactly a view on this row: one door, so the scheduler
+	// and the card cannot hold different opinions about whether a job is on.
+	// Both keyed by the job's STABLE key, never by its name — a renamed job must keep its settings
+	// and its clock, and an orphaned row that still says "switched off" is exactly what keying by
+	// the name produces.
+	static ibJobSettings ReadSharedSettings(const ibGuid& key);
+	static bool          WriteSharedSettings(const ibJobSettings& settings);
+
+	// FORGET a job entirely — drop its row from sys_job. For a job that no longer exists: a
+	// parameterized row that was deleted takes its settings and its clock with it, so a later row
+	// that happens to be created is genuinely new and does not inherit a stranger's "switched off"
+	// or "ran a minute ago".
+	static void ForgetSharedState(const ibGuid& key);
+
+	// "THIS JOB EXISTS, it is simply not on the schedule" — a switched-off row, a job whose Use
+	// flag is clear. They keep their record (and with it their last run, which is what one looks
+	// at before switching something back on), so the sweep below must not take them for orphans.
+	// Noted by whoever wrote the record; forgotten when the manager stops.
+	void NoteLiveKey(const ibGuid& key);
+
+	// SWEEP THE ORPHANS — drop every sys_job row whose key is neither a registered job's, nor
+	// noted live, nor in `alsoLive`, and report how many went.
+	//
+	// This is the ONLY place records are cleaned up in bulk, and it is deliberately not the
+	// Designer's delete: that event is a MARK on a metaobject, and the user may still close
+	// without saving. A job ceases to exist at the RESTRUCTURING, which drops its table in its own
+	// transaction — and the honest way to notice is afterwards, at start-up, when what survived is
+	// exactly what registered.
+	//
+	// `alsoLive` is what is alive but NOT registered: a row switched off, a job whose Use flag is
+	// clear. They keep their settings and their clock — switching something off must not erase
+	// when it last ran, which is precisely what one looks at before switching it back on.
+	std::size_t PurgeSharedState(const std::vector<ibGuid>& alsoLive = {});
+
+	// THE SHARED CLOCK, public alongside the settings above — sys_job is the ONE record every kind
+	// of job keeps, and a parameterized ROW is a job like any other: it stamps its run here and
+	// reads its last run from here, instead of keeping a second copy in its own table that could
+	// disagree. Keyed by the job's guid; the display name rides along so the table stays readable.
+	//
+	// Best-effort by design: a database that cannot answer must not stop a job, since silently
+	// skipping work is worse than repeating it.
+	static wxDateTime ReadSharedLastRun(const ibGuid& key);
+	static void       WriteSharedLastRun(const ibGuid& key, const wxString& name, const wxDateTime& when);
+
+	// Apply settings to a REGISTERED job, at once — no re-registration, because the entry holds a
+	// session and dropping it would end a run in flight. Returns false when the key is unknown.
+	bool ApplySettings(const ibGuid& key, bool active, const ibJobScheduleDescription& schedule);
+
+	// The job registered under this key, by NAME — what a settings value needs to run one by hand
+	// (RunNow is keyed by name, because that is the manager's own identity for an entry).
+	wxString FindNameByKey(const ibGuid& key) const;
+
+private:
+
+	// (ReadSharedLastRun / WriteSharedLastRun are PUBLIC, declared with the settings pair above:
+	//  the claim answers "nobody is running it now", the clock answers "nobody ran it recently",
+	//  and only the two together make N processes on one base behave like one scheduler.)
+
+	// The key a job's shared row lives under. One place, so a rename can never reach the storage.
+	static ibGuid KeyOf(const ibJobDescription& desc) { return desc.m_key; }
 
 	// Submit the body. Caller holds m_mtx; the submit itself does not block.
 	bool Launch(ibJobEntry& e);
@@ -536,11 +649,18 @@ private:
 	mutable std::mutex                        m_mtx;
 	std::vector<std::unique_ptr<ibJobEntry>>  m_entries;
 
-	// Default sized against ibConnectionPool's maxSize of 32: a handful of jobs
-	// leaves the great majority of connections for sessions that have users behind
-	// them. Hosts that know better call SetMaxJobs. (Two platform jobs are
-	// registered at startup — totals.fold and firebird.maintenance — so this is
-	// the room a configuration's own scheduled jobs have before it must be raised.)
+	// HOW MANY RUN AT ONCE — not how many may be declared.
+	//
+	// Every run holds a session and a session holds one pooled connection, so this is sized
+	// against ibConnectionPool's maxSize of 32: a handful of concurrent runs leaves the great
+	// majority of connections for sessions that have users behind them. Hosts that know better
+	// call SetMaxJobs.
+	//
+	// Registration is NOT capped, and that is what makes a parameterized job affordable: each of
+	// its active rows registers itself, so a hundred and fifty exchanges are a hundred and fifty
+	// entries — each asleep until its own schedule says otherwise, and a sleeping job costs two
+	// timestamp comparisons per tick. What the cap does is stop them from all waking together;
+	// the ones over the line stay due and are taken on a later tick.
 	std::size_t                               m_maxJobs = 4;
 
 	bool                                      m_stopped = false;
@@ -551,18 +671,30 @@ private:
 	// looking is indistinguishable from one with nothing to do.
 	void ThreadBody();
 
-	// Background runs this manager started, watched but NOT owned. The owner is
-	// whoever holds the value script was handed — or nobody, when it was started
-	// and forgotten, in which case the task itself keeps it alive until it ends.
+	// Background runs this manager started — held until they finish, then let go
+	// on a tick. The caller may or may not keep the handle it was given (a run
+	// started and forgotten is the ordinary case), so this list is what guarantees
+	// the run reaches its end and gives its session back in an orderly way.
 	//
-	// Why watch them at all: when the manager goes down, everything it started
-	// goes with it. A background run outliving its manager would be work nobody
-	// is watching, on a session nobody will close, against a database that is
-	// being torn down — Stop() cancels them and waits.
+	// Why hold rather than watch: the session must be released OFF ITS OWN WORKER.
+	// ibSession::Teardown queues an empty task on that session's queue and waits
+	// for it, so dropping the last reference from inside the run's own task means
+	// waiting behind oneself — the same reason the scheduled path keeps
+	// m_runSession and releases it in HarvestFinished. It also means a run that
+	// took two milliseconds still has a sys_session row when the next cluster
+	// snapshot is taken, so a background job SHOWS in Active Users instead of
+	// vanishing between refreshes.
 	//
-	// weak_ptr, so watching cannot by itself keep a finished run alive; expired
-	// entries are swept on the next tick.
-	std::vector<std::weak_ptr<ibBackgroundRun>> m_background;
+	// And when the manager goes down, everything it started goes with it: a run
+	// outliving its manager would be work nobody is watching, on a session nobody
+	// will close, against a database that is being torn down — Stop() cancels them
+	// and waits.
+	std::vector<std::shared_ptr<ibBackgroundRun>> m_background;
+
+	// Keys that EXIST but are not registered — switched-off rows and jobs whose Use flag is clear.
+	// Kept only so the orphan sweep can tell "nobody declared this" from "declared, switched off";
+	// nothing schedules from this list.
+	std::vector<ibGuid>                       m_liveKeys;
 
 	// Signalled when a tick finishes launching an entry and clears its m_inFlight. Unregister and
 	// Stop wait on it, so they never destroy an entry a launch is still writing to.

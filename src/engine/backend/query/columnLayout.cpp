@@ -29,6 +29,7 @@ const wxString& ibFieldSuffix(ibColumnRole role)
 		{ ibColumnRole::Enum,          wxT("_E")     },
 		{ ibColumnRole::ReferenceType, wxT("_RTRef") },
 		{ ibColumnRole::ReferenceId,   wxT("_RRRef") },
+		{ ibColumnRole::Schedule,      wxT("_SCH")   },
 	};
 	static const wxString s_empty;
 	const auto it = s_suffix.find(role);
@@ -45,6 +46,7 @@ int ibPersistedTypeTag(ibColumnRole role)
 	case ibColumnRole::Enum:          return ibFieldTypes_Enum;
 	case ibColumnRole::ReferenceType: return ibFieldTypes_Reference;
 	case ibColumnRole::ReferenceId:   return ibFieldTypes_Reference;
+	case ibColumnRole::Schedule:      return ibFieldTypes_Schedule;
 	default:                          return ibFieldTypes_Empty;   // Raw / Discriminator carry no tag
 	}
 }
@@ -142,6 +144,13 @@ std::vector<ibColumnSlot> DescribeColumnLayout(const ibBackendQueryColumn* col)
 	pushPrim(ibValueTypes::TYPE_STRING,  ibColumnRole::String,  wxString());
 	pushPrim(ibValueTypes::TYPE_ENUM,    ibColumnRole::Enum,    wxT("0"));
 
+	// _SCH — a schedule, serialised whole. A BLOB rather than fourteen columns: what people
+	// actually filter on is WHEN THIS RUNS NEXT, and that is a date column of its own on the job
+	// row (docs/scheduled-jobs.md § 5b) — spreading the weekday mask across the table would buy
+	// a predicate nobody writes and cost an ALTER every time the schedule grows a field.
+	if (td.ContainType(g_valueScheduleCLSID))
+		slots.push_back(makeSlot(ibColumnRole::Schedule, ibTypeBlob(), wxString(), false));
+
 	// Reference pair — _RTRef (target clsid, BIGINT) + _RRRef (pure guid blob, fixed-width
 	// BINARY so it is indexable for the dot-walk = join). Present when ANY clsid in the type
 	// is a reference target.
@@ -191,7 +200,16 @@ void ibColumnCodec::WriteValue(const ibBackendQueryColumn* col, const ibMetaData
 	// (the codec's variant tags are the global ibFieldTypes_* names — query/queryColumn.h)
 	// WRITE needs NO metadata: the reference slot is gated by the clsid KIND (IsReference) and the
 	// blob comes off the value itself. metaData stays on the signature only to mirror ReadValue.
-	const int tag = ibColumnSpread::TagForValueType(cValue.GetType());
+	const int tag = ibColumnSpread::TagForValue(cValue);
+
+	// Schedule payload — serialised once, bound at the _SCH slot. Read off the value itself, like
+	// the reference blob below: no metadata, no session.
+	wxMemoryBuffer scheduleBlob;
+	if (tag == ibFieldTypes_Schedule) {
+		ibValueSchedule* schedule = nullptr;
+		if (cValue.ConvertToValue(schedule) && schedule != nullptr)
+			ibJobScheduleDescriptionMemory::WriteBuffer(scheduleBlob, schedule->GetSchedule());
+	}
 
 	// Reference payload — resolved once, bound at the _RTRef/_RRRef slots. A non-reference value
 	// (or an unconvertible reffer) leaves it empty, so the pair binds 0 / NULL.
@@ -216,6 +234,9 @@ void ibColumnCodec::WriteValue(const ibBackendQueryColumn* col, const ibMetaData
 			case ibColumnRole::Date:    statement->SetParamDate(p++, cValue.GetDate()); break;
 			case ibColumnRole::String:  statement->SetParamString(p++, cValue.GetString()); break;
 			case ibColumnRole::Enum:    statement->SetParamInt(p++, cValue.GetInteger()); break;
+			case ibColumnRole::Schedule:
+				statement->SetParamBlob(p++, scheduleBlob.GetData(), scheduleBlob.GetDataLen());
+				break;
 			default:                                                                        break;
 			}
 		},
@@ -254,6 +275,21 @@ bool ibColumnCodec::ReadField(const wxString& fieldName, int fieldType,
 	case ibFieldTypes_Null:
 		retValue = ibValue(ibValueTypes::TYPE_NULL);   // fresh NULL — releases any prior reffer/string in the slot (operator=(ibValueTypes) would leak it)
 		return true;
+	case ibFieldTypes_Schedule:
+	{
+		// The blob IS the value. An empty or unreadable one yields a DEFAULT schedule rather than
+		// an empty value: a row whose cell was never written must still answer "when am I due",
+		// and the description's own defaults are that answer (every one of them = "not restricted").
+		wxMemoryBuffer bufferData;
+		result.GetResultBlob(fieldName, bufferData);
+
+		ibJobScheduleDescription schedule;
+		ibJobScheduleDescriptionMemory::ReadBuffer(bufferData.GetData(), bufferData.GetDataLen(), schedule);
+
+		ibValuePtr<ibValueSchedule> created(new ibValueSchedule(schedule));
+		retValue = created;
+		return true;
+	}
 	case ibFieldTypes_Enum:
 	{
 		wxASSERT(metaData);
@@ -356,6 +392,8 @@ bool ibColumnCodec::ReadValue(const wxString& fieldName,
 	case ibFieldTypes_Null:
 		retValue = ibValue(ibValueTypes::TYPE_NULL);   // fresh NULL — releases any prior reffer/string in the slot (operator=(ibValueTypes) would leak it)
 		return true;
+	case ibFieldTypes_Schedule:
+		return ReadField(fieldName + ibFieldSuffix(ibColumnRole::Schedule), ibFieldTypes_Schedule, col, metaData, retValue, result, createData);
 	case ibFieldTypes_Enum:
 		return ReadField(fieldName + ibFieldSuffix(ibColumnRole::Enum), ibFieldTypes_Enum, col, metaData, retValue, result, createData);
 	case ibFieldTypes_Reference:

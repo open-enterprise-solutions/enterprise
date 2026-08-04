@@ -54,6 +54,7 @@ public:
 			clsid == g_metaReportCLSID ||
 			clsid == g_metaInformationRegisterCLSID ||
 			clsid == g_metaAccumulationRegisterCLSID ||
+			clsid == g_metaParameterizedJobCLSID ||
 			clsid == g_metaChartOfCharacteristicTypesCLSID ||
 			clsid == g_metaChartOfAccountsCLSID ||
 			clsid == g_metaAccountingRegisterCLSID

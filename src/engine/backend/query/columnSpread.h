@@ -11,6 +11,7 @@
 #include "backend/query/columnLayout.h"   // ibColumnRole / ibPersistedTypeTag / ibColumnCodec::HasReference / ibQueryStatement
 #include "backend/backend_core.h"          // emptyDate
 #include "backend/compiler/value.h"        // ibValueTypes
+#include "backend/system/value/valueJob.h"   // g_valueScheduleCLSID — the one value object stored whole
 
 namespace ibColumnSpread {
 
@@ -28,6 +29,17 @@ inline ibFieldTypes TagForValueType(ibValueTypes vt)
 	case ibValueTypes::TYPE_ENUM:    return ibFieldTypes_Enum;
 	default:                         return ibFieldTypes_Reference;
 	}
+}
+
+// The tag an ibVALUE stores — the type answers for every primitive, and the CLSID answers for the
+// one value object a column stores whole. Asking the class first is what keeps a schedule from
+// being written as a reference: TYPE_VALUE falls into the default arm above, which is "not a
+// primitive, therefore a reference", and a schedule is neither.
+inline ibFieldTypes TagForValue(const ibValue& value)
+{
+	if (value.GetClassType() == g_valueScheduleCLSID)
+		return ibFieldTypes_Schedule;
+	return TagForValueType(value.GetType());
 }
 
 // Bind a primitive slot's PLACEHOLDER — the value it carries when it is NOT the active type
@@ -70,6 +82,15 @@ void DriveSpread(const ibBackendQueryColumn* col, int tag,
 	primitive(ibValueTypes::TYPE_DATE,    ibColumnRole::Date);
 	primitive(ibValueTypes::TYPE_STRING,  ibColumnRole::String);
 	primitive(ibValueTypes::TYPE_ENUM,    ibColumnRole::Enum);
+
+	// The schedule slot sits between the primitives and the reference pair — the same place
+	// DescribeColumnLayout puts it, and that order is the keyset anchor, so the two must be read
+	// as one thing. Its "absent" form is an empty blob, bound by the caller: a NULL there would
+	// read back as a corrupt schedule rather than as no schedule.
+	if (td.ContainType(g_valueScheduleCLSID)) {
+		if (tag == ibFieldTypes_Schedule) bindActive(ibColumnRole::Schedule, pos);
+		else                              st->SetParamNull(pos++);
+	}
 
 	if (ibColumnCodec::HasReference(col)) {
 		bindRef(ibColumnRole::ReferenceType, pos);

@@ -62,6 +62,9 @@ static const wxString s_markAsDelete_16_png = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQC
 
 /* PNG */
 static const wxString s_generate_16_png = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAxUlEQVR4nGNgwALSKvv/Y8PplRP+p1f0t2LTgwJAirEBkHh+w1RUQ/yqtv7Hhv2rtv5fvOsmhgGPnr78n9c4DWRIO9yA7u0fMDBIPKxxF4ohMJehGOKHx4ADtz7+D2/a+X/RrhtwA5BxRtWE/3gNuP3pP4Yh6F5iwGcAMg6o3kqaAd1YDASBKTMXkGdA9/YPYE1mDr5wQ/AaYObgixeDDKHIgNkLlpHvhdkLlpEfiLPmQzSTZQC2DEaSAahZjkBmwoaxGQAA9QWfmKdjey8AAAAASUVORK5CYII=";
+// An alarm clock — "start this unattended work now". Deliberately not Post's tick: a job run
+// records nothing, and a picture that says otherwise is read before the caption is.
+static const wxString s_executeJob_16_png = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAGpSURBVDhPrVI5SwNBFLa0tLS09AdYWNqI/oHgzgbnJauTmTWKB0E8Ghsh4IFYKHggHlgFbRQVRBQVD5SgohDwIAoK0RBTeKDFyFuNMrNLKj94sPP2fd+8974pKPgPGAZUE0JH9Xw+EAI9pgkB52CadNE0QRJCp/RCL/yQsT7uJACg0DTpCgZ+YxgGtDAmljkXcc7EBiHQAQBF3wJ0Csm5868Iht8PFZzZycmJkfftzSV5Gt+S+7urcnZm/DMUEikc96f+j5wD/mxtac0mr47lx2vSFamHc9nd1Zm1LFGrc50OGOMP97cnCinR266cn9MJKUTDk88HxYoAzoht6rfuVJS5OllbiUnLCk0rArgonFUv9hK4TBxIVsevFYFgoD6LM+rFbVWVcmgwKi/OtpU82qgIoF24cV3g7uZYzs+NyQCAbAzbTg73ZFnsUREACPYtxOZcAl6B9uIbUQRqaqDEtsOZl+yVi6BHJBLJ+P1QrgggKGWRgf7oWz4RfGCci2Gd+4u6II82NTWn0ZHcUtH7o8N15+a85BwIgVK0FZ3BbVNqvfKQvefV9hfwNtIAKuPB7AAAAABJRU5ErkJggg==";
 
 /* PNG */
 static const wxString s_user_16_png = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAACXBIWXMAAAsTAAALEwEAmpwYAAABqUlEQVR4nJWPS0sCURiG5yf0B/oprdqYl4zSXVEt2pR0ddR2LUIwEnJROk2Ut0Yog6II07zlOEXlKoiiG0RElkXWZHRh3jhCQhea6YUHDt933odzKOqX+E0aI9er3w+YNK9Bk6442621UUrjN2mM8/2N4mXYjrcUg8eIC2HaWAp2624CndpaWUGor76QX3QA/FSZh4gLF3PDIEKuR1eQf0GXRpIyLF6TbpxxQ5inmxC2GZF2dMDXpYaswNepxoLVAK5Xj+hIO65yTrxfexFztoHsFAkuthzAXeAL4qlHuUAq+H8IpNuAMkHcq9vJLbU/fxeQWcJbvy0rSM7oq+Iz2nzxZKxSLp64EJ/W5smOUpL1KXVbyt+A/J69DDnHplWt1H+yxqoknjOADzUhyqrk/07SP56utjDCqIURClG2Duc5Gue7dFlAZlZGcJI71G8ZYLItlsnskzt29rJ6VEIiM4t1n6FMMhPE6nEJZGf1ZEtmD9/8pUxP8DWD7Ka4cihi4wp/snwggtwlnYpgkN0UQrs3suVPQjvXRCJUBGY3f2+e4PEv3Pw9KX8ATqWhV8LSw0cAAAAASUVORK5CYII=";
@@ -117,6 +120,7 @@ void RegisterAllBackendPicture()
 	::RegisterBackendPicture(wxT("Post"), g_picPostCLSID, s_post_16_png);
 	::RegisterBackendPicture(wxT("MarkAsDelete"), g_picMarkAsDeleteCLSID, s_markAsDelete_16_png);
 	::RegisterBackendPicture(wxT("Generate"), g_picGenerateCLSID, s_generate_16_png);
+	::RegisterBackendPicture(wxT("ExecuteJob"), g_picExecuteJobCLSID, s_executeJob_16_png);
 	::RegisterBackendPicture(wxT("Print"), g_picPrintCLSID, s_print_16_png);
 	::RegisterBackendPicture(wxT("Hierarchy"), g_picHierarchyCLSID, s_hierarchy_16_png);
 

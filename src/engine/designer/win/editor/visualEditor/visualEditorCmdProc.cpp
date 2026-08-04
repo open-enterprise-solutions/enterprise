@@ -10,6 +10,7 @@
 #include "frontend/mainFrame/objinspect/objinspect.h"
 
 #include "backend/propertyManager/propertyManager.h"
+#include "backend/system/value/valueJob.h"   // g_valueScheduleCLSID — a dropped schedule builds as static text
 
 #include "frontend/visualView/ctrl/formAttribute.h"   // ibFormAttributeValue (form attribute add command)
 #include "frontend/visualView/ctrl/formCommand.h"      // ibFormCommandValue (ibEditorSelection command ctor upcast)
@@ -1005,6 +1006,11 @@ static wxString ResolveDropControlClass(ibValueForm* form, const ibSourceDescrip
 		return wxT("Tablebox");
 	if (typeDesc.GetClsidCount() == 1 && typeDesc.ContainType(ibValueTypes::TYPE_BOOLEAN))
 		return wxT("Checkbox");
+	// A SCHEDULE is shown, not typed — the static text renders it as its own sentence and opens
+	// the four-tab editor on a click. Same choice the runtime auto-build makes (formObject.cpp),
+	// so dropping one and generating one give the same form.
+	if (typeDesc.GetClsidCount() == 1 && typeDesc.ContainType(g_valueScheduleCLSID))
+		return wxT("Statictext");
 	return wxT("Textctrl");
 }
 

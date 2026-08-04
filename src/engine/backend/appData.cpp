@@ -581,6 +581,8 @@ bool ibApplicationData::CreateFileAppDataEnv(ibRunMode runMode, const wxString& 
 			// jobs are declared below, so their first tick already has somewhere
 			// to look.
 			ibApplicationData::CreateTableJob();
+			// … and its settings columns, for a base created before jobs had any.
+			ibApplicationData::MigrateTableJob();
 
 			if (!SetLocaleAppDataEnv(strLocale))
 				return false;

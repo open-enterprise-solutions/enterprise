@@ -127,11 +127,48 @@ void ibApplicationData::CreateTableJob()
 	if (!q.TableExists(job_table)) {
 
 		q.Execute(ibCreateTable(job_table, {
-			{ wxT("jobName"),  ibTypeString(128), false, true,  wxEmptyString },   // primary key — the job's registered name
+			// PRIMARY KEY — the job's GUID, not its name. A configuration's job carries its
+			// metaobject's guid (which survives a rename, an unload / reload and a copy onto
+			// another base); a platform job carries a fixed one minted once in platformJobs.cpp.
+			// One kind of value in the column, so no reader has to ask which sort of key it is
+			// looking at — and keying by the display name would orphan a renamed job's settings
+			// and its clock, leaving a row that still says "switched off" pointing at nothing.
+			// Native UUID on PostgreSQL, CHAR(36) elsewhere — the dialect TYPE-MAP picks.
+			{ wxT("jobKey"),   ibTypeGuid(),      false, true,  wxEmptyString },
+			{ wxT("jobName"),  ibTypeString(128), true,  false, wxEmptyString },   // display name, for a person reading the table
 			{ wxT("lastRun"),  ibTypeDate(),      true,  false, wxEmptyString },   // wall clock, shared across processes
 			{ wxT("computer"), ibTypeString(128), false, false, wxEmptyString },   // who ran it last, for diagnostics
+			// The two SETTINGS a base holds — what the enterprise may change without opening the
+			// Designer. They are here and not in the metadata because switching a misbehaving job
+			// off at 3 a.m. must not mean editing the configuration on a production base; and for
+			// the engine's OWN jobs there is no configuration to edit at all.
+			{ wxT("active"),   ibTypeBoolean(),   true,  false, wxEmptyString },   // NULL = on (a row older than the column)
+			{ wxT("schedule"), ibTypeBlob(),      true,  false, wxEmptyString },   // ibJobScheduleDescriptionMemory blob
 		}));
 	}
+}
+
+// sys_job schema move — the key went from the display NAME to the job's stable key, and the table
+// gained its settings columns (active / schedule) on 2026-08-04.
+//
+// The old rows are DROPPED rather than converted, and deliberately: everything sys_job holds is
+// re-derivable — the settings are re-seeded from the declaration on the next Register, and the
+// clock's only loss is that each job may run once more than it strictly had to. A conversion would
+// have to guess which metaobject an old name meant, and a wrong guess silently applies one job's
+// "switched off" to another. (Alpha: there is no installed base to migrate.)
+void ibApplicationData::MigrateTableJob()
+{
+	ibDatabaseQueryBuilder qi;
+	if (!qi.TableExists(job_table))
+		return;
+
+	wxArrayString cols = qi.GetColumns(job_table);
+	for (const wxString& c : cols)
+		if (c.IsSameAs(wxT("jobKey"), false))
+			return;   // already on the keyed schema
+
+	qi.Execute(ibDropTable(job_table));
+	CreateTableJob();
 }
 
 // Additive column migration for sys_session. Existing databases created
