@@ -330,7 +330,11 @@ bool ibJobManager::Launch(ibJobEntry& e)
 			? ibApplicationData::GetLockManager() : nullptr) {
 			try {
 				std::vector<ibLockItem> items;
-				items.push_back(ibLockItem::ForNamespace(wxT("Job.") + KeyOf(desc),
+				// `.str()` spelled out, and the literal wrapped: a bare `wxT("Job.") + guid` is a
+				// wchar_t array plus a class, which MSVC resolves through ibGuid's conversion and
+				// GCC refuses outright (portability.md — the compilers disagree about which
+				// implicit conversions a built-in operator may reach for).
+				items.push_back(ibLockItem::ForNamespace(wxString(wxT("Job.")) + KeyOf(desc).str(),
 				                                          ibLockMode::Exclusive));
 				ibJobSessionLockHolder owner(session, desc.m_name);
 				claim = locks->Acquire(items, {}, &owner);
