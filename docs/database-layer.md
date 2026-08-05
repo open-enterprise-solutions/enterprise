@@ -105,6 +105,28 @@ The upstream library had no notion of pooling, scoping or RAII — those are add
 | `ibDatabaseConnectionHolder` | `connectionHolder.h` | identity tag for "can reserve a connection across threads" |
 | `ibResultSetGuard` / `ibStatementGuard` | `databaseLayer.h` | RAII over result sets / statements |
 
+### ⚠ A result set has TWO owners — use the guard
+
+`RunQueryWithResults` hands the caller a pointer **and registers it with the layer**, which
+closes whatever is still registered when it goes away. So the caller does not own it alone,
+and a plain `delete` — including `std::unique_ptr<ibDatabaseResultSet>` — leaves that
+registration pointing at freed memory.
+
+The damage lands nowhere near the mistake: every test passes, and the process dies at
+teardown when the layer's destructor walks its list. The only hint in the log is one debug
+line, `ResultSet NOT closed and cleaned up by the ibDatabaseLayer dtor`, printed just before
+the crash. It read as a leak warning and was in fact the crash announcing itself
+(`oes_pg_dialect_test`, SIGSEGV in CI on 2026-08-05).
+
+`ibResultSetGuard` exists for exactly this: it calls `Close()` **and** `CloseResultSet()`, so
+both owners agree the object is gone.
+
+```cpp
+ibResultSetGuard rs(db, db->RunQueryWithResults(wxT("SELECT …")));
+if (rs && rs->Next())
+    value = rs->GetResultString(1);
+```
+
 `ibDatabaseConnectionHolder` is worth reading as a design note in its own right:
 
 ```

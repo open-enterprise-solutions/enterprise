@@ -113,9 +113,17 @@ TEST_F(PostgresDialect, NumericSurvivesTheRoundTripUnrounded)
 	s_db->RunQuery(wxT("CREATE TABLE oes_dialect_numeric (v NUMERIC(28,10))"));
 	s_db->RunQuery(wxT("INSERT INTO oes_dialect_numeric (v) VALUES (12345678901234.1234567891)"));
 
-	std::unique_ptr<ibDatabaseResultSet> rs(
+	// ibResultSetGuard, NOT unique_ptr. A result set is owned by the LAYER as well
+	// as by the caller: RunQueryWithResults registers it, and the layer closes
+	// whatever is still registered when it goes away. Deleting it directly leaves
+	// that registration pointing at freed memory, and the layer's destructor walks
+	// into it — the process then dies AFTER the last test passes, which is exactly
+	// how this read (all four green, then SIGSEGV at teardown, with only
+	// "ResultSet NOT closed and cleaned up by the ibDatabaseLayer dtor" as a hint).
+	// The guard calls Close() and CloseResultSet(), so both owners agree.
+	ibResultSetGuard rs(s_db,
 		s_db->RunQueryWithResults(wxT("SELECT v FROM oes_dialect_numeric")));
-	ASSERT_NE(nullptr, rs);
+	ASSERT_TRUE(static_cast<bool>(rs));
 	ASSERT_TRUE(rs->Next());
 
 	EXPECT_EQ(wxT("12345678901234.1234567891"), rs->GetResultString(1));
@@ -136,9 +144,9 @@ TEST_F(PostgresDialect, TimestampComesBackAsTheSameInstant)
 	stmt->SetParamDate(1, written);
 	stmt->RunQuery();
 
-	std::unique_ptr<ibDatabaseResultSet> rs(
+	ibResultSetGuard rs(s_db,
 		s_db->RunQueryWithResults(wxT("SELECT v FROM oes_dialect_stamp")));
-	ASSERT_NE(nullptr, rs);
+	ASSERT_TRUE(static_cast<bool>(rs));
 	ASSERT_TRUE(rs->Next());
 
 	const wxDateTime read = rs->GetResultDate(1);
@@ -165,9 +173,9 @@ TEST_F(PostgresDialect, BlobBytesAreReturnedIntact)
 	stmt->SetParamBlob(1, payload, sizeof(payload));
 	stmt->RunQuery();
 
-	std::unique_ptr<ibDatabaseResultSet> rs(
+	ibResultSetGuard rs(s_db,
 		s_db->RunQueryWithResults(wxT("SELECT v FROM oes_dialect_blob")));
-	ASSERT_NE(nullptr, rs);
+	ASSERT_TRUE(static_cast<bool>(rs));
 	ASSERT_TRUE(rs->Next());
 
 	wxMemoryBuffer readBack;
@@ -191,9 +199,9 @@ TEST_F(PostgresDialect, UpsertUpdatesInsteadOfDuplicating)
 	s_db->RunQuery(wxT("INSERT INTO oes_dialect_upsert (k, v) VALUES ('key', 2) ")
 		wxT("ON CONFLICT (k) DO UPDATE SET v = EXCLUDED.v"));
 
-	std::unique_ptr<ibDatabaseResultSet> rs(
+	ibResultSetGuard rs(s_db,
 		s_db->RunQueryWithResults(wxT("SELECT count(*) AS c, max(v) AS m FROM oes_dialect_upsert")));
-	ASSERT_NE(nullptr, rs);
+	ASSERT_TRUE(static_cast<bool>(rs));
 	ASSERT_TRUE(rs->Next());
 
 	EXPECT_EQ(1, rs->GetResultInt(1)) << "upsert inserted a second row";
