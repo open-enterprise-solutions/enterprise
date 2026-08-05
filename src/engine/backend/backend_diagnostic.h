@@ -44,7 +44,16 @@ enum class ibDiagnosticKind {
 	Runtime,
 };
 
-struct BACKEND_API ibDiagnostic {
+// NOT BACKEND_API either, and for the same reason as ibDiagnosticSink below —
+// plus one of its own. Every member is defined right here (wxString, vector,
+// an inline IsOk) with nothing out of line to export, and ibPluginScript::Check
+// hands a std::vector<ibDiagnostic> BACK to a plugin BY VALUE: exporting the
+// type would make the copy and the destructor the plugin performs resolve
+// through __imp_, so the first plugin to call Check would fail to link exactly
+// the way simplePlugin did on 2026-08-05. Only the registry below is exported —
+// it has real out-of-line statics, and it is the one thing a plugin reaches
+// through a capability instead of directly.
+struct ibDiagnostic {
 
 	// ONE FRAME of the call stack, as data. The engine already formats these
 	// into "3: ModuleName (#line 12)"; the pair is what that sentence is made
@@ -91,7 +100,18 @@ struct BACKEND_API ibDiagnostic {
 
 // WHO IS LISTENING. Implemented by whoever wants failures as data — a headless
 // check, a test, a plugin (the AI-facing service is meant to be one).
-class BACKEND_API ibDiagnosticSink {
+//
+// DELIBERATELY NOT BACKEND_API. Every member is pure virtual or a defaulted
+// destructor, so there is nothing to export — while marking it exported makes
+// MSVC resolve even the defaulted constructor/destructor through __imp_ in
+// every TU that derives from it. A plugin does not link backend's import
+// library (that is the whole point of the capability boundary in
+// plugin/pluginHost.h — it reaches the host through a vtable it was handed,
+// not through symbols), so the export attribute broke exactly the one caller
+// the comment above promises: simplePlugin failed to link with two unresolved
+// externals. Same rule as docs/portability.md § 1.3, seen from the other side:
+// an interface implemented OUTSIDE the DLL must not be exported.
+class ibDiagnosticSink {
 public:
 	virtual ~ibDiagnosticSink() = default;
 	// Called on the thread that failed, inside the error path. Keep it short

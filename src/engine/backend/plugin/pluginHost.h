@@ -35,6 +35,14 @@
 // lookup. Declared here rather than in pluginManager.h so the definition in
 // pluginHost.cpp sees this declaration: without it the function is compiled
 // without the export attribute and nothing outside backend.dll can call it.
+//
+// This free function IS exported — the host process calls it. The capability
+// CLASSES below are not: every member of each is pure virtual or a defaulted
+// destructor, so there is nothing to export, while the attribute would make
+// MSVC resolve those defaults through __imp_ in any TU that derives from one.
+// A plugin links no import library of ours by design (see the boundary note
+// above) — it is handed a vtable and calls through it. See the same rule and
+// what breaking it cost in backend_diagnostic.h (ibDiagnosticSink).
 BACKEND_API ibPluginHost* ibPluginHostInstance();
 
 // Capability names. Literals rather than an enum: the boundary is C strings,
@@ -47,7 +55,7 @@ BACKEND_API ibPluginHost* ibPluginHostInstance();
 // ---------------------------------------------------------------------------
 // diagnostics — listen to failures as data
 // ---------------------------------------------------------------------------
-class BACKEND_API ibPluginDiagnostics {
+class ibPluginDiagnostics {
 public:
 	virtual ~ibPluginDiagnostics() = default;
 
@@ -61,7 +69,7 @@ public:
 // ---------------------------------------------------------------------------
 // script — compile a module text and report what is wrong with it
 // ---------------------------------------------------------------------------
-class BACKEND_API ibPluginScript {
+class ibPluginScript {
 public:
 	virtual ~ibPluginScript() = default;
 
@@ -82,7 +90,7 @@ public:
 // ---------------------------------------------------------------------------
 // metadata — read the shape of the open configuration
 // ---------------------------------------------------------------------------
-class BACKEND_API ibPluginMetadata {
+class ibPluginMetadata {
 public:
 	virtual ~ibPluginMetadata() = default;
 

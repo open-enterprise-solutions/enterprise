@@ -58,8 +58,16 @@ size_t ibPluginManager::LoadAll()
 	for (const wxString& path : files) {
 
 		auto lib = std::make_unique<wxDynamicLibrary>();
-		if (!lib->Load(path, wxDL_DEFAULT | wxDL_QUIET))
+		if (!lib->Load(path, wxDL_DEFAULT | wxDL_QUIET)) {
+			// Quiet in the UI, never quiet altogether. A stray DLL in the folder
+			// legitimately fails to load and must not disturb anyone — but so does
+			// OUR plugin when a dependency is missing or a symbol went unresolved,
+			// and that one used to vanish without a trace. Same file, same branch;
+			// only the log tells them apart afterwards.
+			wxLogDebug("Plugin candidate '%s' did not load — missing dependency or "
+				"unresolved symbol; skipped.", path);
 			continue;
+		}
 
 		// Suppress wx's error log when GetSymbol misses — every unrelated DLL
 		// in the folder will legitimately not export our plugin entry point
