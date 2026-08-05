@@ -105,26 +105,33 @@ The upstream library had no notion of pooling, scoping or RAII — those are add
 | `ibDatabaseConnectionHolder` | `connectionHolder.h` | identity tag for "can reserve a connection across threads" |
 | `ibResultSetGuard` / `ibStatementGuard` | `databaseLayer.h` | RAII over result sets / statements |
 
-### ⚠ A result set has TWO owners — use the guard
+### ⚠ Result sets AND statements have TWO owners — use the guards
 
-`RunQueryWithResults` hands the caller a pointer **and registers it with the layer**, which
-closes whatever is still registered when it goes away. So the caller does not own it alone,
-and a plain `delete` — including `std::unique_ptr<ibDatabaseResultSet>` — leaves that
-registration pointing at freed memory.
+`RunQueryWithResults` and `PrepareStatement` hand the caller a pointer **and register it with
+the layer**, which closes whatever is still registered when it goes away. So the caller does
+not own it alone, and a plain `delete` — including `std::unique_ptr<ibDatabaseResultSet>` or
+`std::unique_ptr<ibPreparedStatement>` — leaves that registration pointing at freed memory.
 
 The damage lands nowhere near the mistake: every test passes, and the process dies at
 teardown when the layer's destructor walks its list. The only hint in the log is one debug
-line, `ResultSet NOT closed and cleaned up by the ibDatabaseLayer dtor`, printed just before
-the crash. It read as a leak warning and was in fact the crash announcing itself
-(`oes_pg_dialect_test`, SIGSEGV in CI on 2026-08-05).
+line — `ResultSet NOT closed and cleaned up by the ibDatabaseLayer dtor`, or
+`PreparedStatement NOT closed and cleaned up by the DatabaseLayer dtor` — printed just before
+the crash. It reads as a leak warning and is in fact the crash announcing itself
+(`oes_pg_dialect_test`, SIGSEGV in CI on 2026-08-05: once for a result set, then again the
+same day for a statement the fix had left behind).
 
-`ibResultSetGuard` exists for exactly this: it calls `Close()` **and** `CloseResultSet()`, so
-both owners agree the object is gone.
+`ibResultSetGuard` / `ibStatementGuard` exist for exactly this: the first calls `Close()`
+**and** `CloseResultSet()`, the second calls `CloseStatement()`, so both owners agree the
+object is gone.
 
 ```cpp
 ibResultSetGuard rs(db, db->RunQueryWithResults(wxT("SELECT …")));
 if (rs && rs->Next())
     value = rs->GetResultString(1);
+
+ibStatementGuard stmt(db, db->PrepareStatement(wxT("INSERT INTO t (v) VALUES (?)")));
+stmt->SetParamInt(1, 42);
+stmt->RunQuery();
 ```
 
 `ibDatabaseConnectionHolder` is worth reading as a design note in its own right:

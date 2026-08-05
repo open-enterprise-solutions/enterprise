@@ -136,9 +136,12 @@ TEST_F(PostgresDialect, TimestampComesBackAsTheSameInstant)
 	s_db->RunQuery(wxT("DROP TABLE IF EXISTS oes_dialect_stamp"));
 	s_db->RunQuery(wxT("CREATE TABLE oes_dialect_stamp (v TIMESTAMP)"));
 
-	std::unique_ptr<ibPreparedStatement> stmt(
+	// ibStatementGuard for the same reason the result set has one: PrepareStatement
+	// registers the statement with the LAYER, so deleting it directly leaves that
+	// registration dangling and the layer's dtor walks into freed memory.
+	ibStatementGuard stmt(s_db,
 		s_db->PrepareStatement(wxT("INSERT INTO oes_dialect_stamp (v) VALUES (?)")));
-	ASSERT_NE(nullptr, stmt);
+	ASSERT_TRUE(static_cast<bool>(stmt));
 
 	const wxDateTime written(4, wxDateTime::Aug, 2026, 16, 33, 48);
 	stmt->SetParamDate(1, written);
@@ -167,9 +170,9 @@ TEST_F(PostgresDialect, BlobBytesAreReturnedIntact)
 
 	const unsigned char payload[] = { 0x00, 0x01, 0xFE, 0xFF, 0x7F, 0x80, 0x0A, 0x0D };
 
-	std::unique_ptr<ibPreparedStatement> stmt(
+	ibStatementGuard stmt(s_db,
 		s_db->PrepareStatement(wxT("INSERT INTO oes_dialect_blob (v) VALUES (?)")));
-	ASSERT_NE(nullptr, stmt);
+	ASSERT_TRUE(static_cast<bool>(stmt));
 	stmt->SetParamBlob(1, payload, sizeof(payload));
 	stmt->RunQuery();
 
