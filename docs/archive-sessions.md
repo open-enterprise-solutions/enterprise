@@ -24,7 +24,7 @@ a topic doc and add a row above once the work is stable.
 
 Decisions to remember (cross-cutting):
 - **Persistence layer** for AOT (`SerializeAOT`/`DeserializeAOT`, `byteCodeAOT.cpp`) landed
-  2026-05-02; format version drifts as opcodes shift — `kAOTFormatVersion = 18` (verify in
+  2026-05-02; format version drifts as opcodes shift — `kAOTFormatVersion = 20` (verify in
   `byteCodeAOT.cpp`). DB schema + Load/Save have since landed (`sys_bytecode_cache` via
   `appDataQuery.cpp:161`, DAO in `compiler/cache/byteCodeCache.cpp`, live on the compile path in
   `moduleInfo.cpp`); only Attach-time batch-load is still pending.

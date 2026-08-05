@@ -370,6 +370,37 @@ the register AND the temp-promoted value-table / multi-source cases; Firebird is
 
 ---
 
+## What a handler compares against — session parameters
+
+A policy narrows rows by something: the current organisation, the period, the warehouse this
+user may see. That value has to exist somewhere for the length of the session, and it must not
+be writable by the code being restricted — otherwise the filter is bypassed in one assignment.
+
+**Session parameters** are that place ([session-parameters.md](session-parameters.md)):
+declared in metadata, filled once by the session module (which runs inside
+`ibAccessTrustScope`, *before* the policy is built), and refused to every later write.
+
+```c
+Procedure OnAccessRead(Source, Operation, Allowed)
+{
+    Source = Source.Where(Function(x) { Return x.Organisation = SessionParameters.Organisation; });
+    Allowed = True;
+}
+```
+
+Note what does **not** happen here: nothing declares a query parameter and nothing substitutes a
+name into a template. The lambda **captures** `SessionParameters.Organisation`, and the captured
+value reaches the query as a `&parameter` on its own — the decorator shape gives that for free.
+Session parameters exist for the *storage* and the *write refusal*, not for the substitution.
+
+> ⚠️ The examples above and below spell `CurrentUser()`. **No such function exists** — the script
+> can only ask `UserName()`, a string. Linking a configuration's own user catalogue on a name is
+> fragile (a rename breaks it silently), so the intended shape is a session parameter holding the
+> reference, filled by the module. Until that lands, read `CurrentUser()` in this document as
+> pseudocode.
+
+---
+
 ## Current state & limitations
 
 Read-restriction **confirmed working live** — both the explicit `Source.Where(…)` form and the

@@ -136,7 +136,12 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 // v19 (2026-08-05): a parameter's default-value descriptor lost its type NAME —
 // the bytecode already carries the type as a class id, and a name is spelled from
 // that id only when a message needs one.
-constexpr uint16_t kAOTFormatVersion = 19;
+// v20 (2026-08-05): the global context gained a member — `SessionParameters` — and
+// the configuration root gained a second module property, the session module. A blob
+// compiled before either existed resolved its names against the smaller context, and
+// a cached one is served without ever asking whether that context still holds. Bump
+// so every module recompiles against the context as it is now.
+constexpr uint16_t kAOTFormatVersion = 20;
 constexpr uint16_t kAOTFlagPortable  = 0x0001;       // unused — host-endian today
 
 // Sentinel for an over-large collection — guards Deserialize against

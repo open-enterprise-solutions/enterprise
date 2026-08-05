@@ -354,6 +354,11 @@ public:
 	// m_root. Called after metadata->RunDatabase() has populated common-
 	// module descriptors in metadata's ibModuleStorage. Returns false
 	// if root isn't allocated or compile fails.
+	// Runs the configuration's session module (SetSessionParameters) inside a trusted
+	// window, before the access policy is built — the policy filters by what it sets.
+	// Every kind of session passes through here, including jobs, which never see
+	// beforeStart / onStart.
+	void SetSessionParameters();
 	bool CompileRoot();
 
 	// Symmetric teardown — DestroyMainModule on the root mm without
@@ -864,6 +869,45 @@ private:
 	// survives a handler throw). Per-session, never process-global: a trusted
 	// window on one web session must not lift enforcement on another.
 	bool m_accessTrusted = false;
+
+	// SESSION PARAMETERS — declared in metadata, filled once by the session module,
+	// read everywhere. Keyed by the parameter's NAME, which is what a script writes.
+	//
+	// They live on the SESSION and nowhere else: two users signed in at the same
+	// moment work under different organisations, and a process-wide store would let
+	// one of them answer for the other. Isolation here is structural, not a rule
+	// anybody has to keep.
+	std::map<wxString, ibValue> m_sessionParameters;
+
+	// WRITABLE ONLY WHILE THE SESSION MODULE RUNS. Not "frozen afterwards" — closed
+	// by default, opened for the length of that one call and closed again:
+	//
+	//     read       — always, from anywhere
+	//     write      — only inside SetSessionParameters
+	//     write else — raises, before and after alike
+	//
+	// This is the whole protection, and it needs no rights to enforce. Row access is
+	// filtered by these values, so a later assignment — from a report a user wrote
+	// themselves, say — would be a way around the policy. "Nobody may write them"
+	// cannot be got around by running under a different role, while "only the right
+	// code may" would have to be checked, and every check has a way past it.
+	//
+	// It RAISES rather than ignoring the write: a silently dropped assignment leaves
+	// a configuration author certain the value was set, and the row filter says
+	// otherwise somewhere far away.
+	bool m_sessionParametersOpen = false;
+
+public:
+
+	// Read one, by the name a script used. Answers an empty value for a name that
+	// was never declared — the caller sees Undefined, which is what an unset
+	// parameter is.
+	ibValue GetSessionParameter(const wxString& name) const;
+	// Write one. Refused (raises) once the session module has returned — see the
+	// freeze note above.
+	void SetSessionParameter(const wxString& name, const ibValue& value);
+
+private:
 
 	// Lambda executor — see GetLambdaRuntime() for semantics. Allocated
 	// in CreateRoot; SetParent(m_root's procUnit) is wired lazily on

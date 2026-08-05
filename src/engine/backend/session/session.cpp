@@ -665,6 +665,18 @@ bool ibSession::CompileRoot()
 	// short-circuit), so no external wantsRuntime check is needed.
 	m_root->AttachRuntime(this);
 
+	// SESSION PARAMETERS — filled BEFORE the access policy exists, and that order is the whole
+	// point: the policy filters rows by what this module sets, so it has to run first. It also
+	// runs for EVERY kind of session — client, web, background and scheduled job alike — which is
+	// why it lives here and not beside beforeStart / onStart, events only an interactive client
+	// ever fires.
+	//
+	// Inside a TRUSTED window: the module reads data itself (find the organisation for this user,
+	// the period, whatever this configuration parameterises access by), and at this moment there is
+	// nothing to filter that read by. Without the scope it would either be refused or, worse,
+	// filtered by half-set values. The same door the role modules use for the same reason.
+	SetSessionParameters();
+
 	// RLS — build the session's access policy HERE, right AFTER runtime bring-up: the role modules
 	// attach as common modules DURING AttachRuntime, so their procUnits (FindCommonModule -> GetProcUnit)
 	// are only live NOW — the policy ctor resolves + caches them once. Still before the session serves

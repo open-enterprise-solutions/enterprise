@@ -96,6 +96,7 @@ wxString ibMetaDiffWalker::GroupLabelFor(ibClassID clsid)
 	if (clsid == g_metaCommonFormCLSID)                 return _("Common forms");
 	if (clsid == g_metaCommonTemplateCLSID)             return _("Common templates");
 	if (clsid == g_metaScheduledJobCLSID)               return _("Predefined jobs");
+	if (clsid == g_metaSessionParameterCLSID)           return _("Session parameters");
 	if (clsid == g_metaParameterizedJobCLSID)           return _("Scheduled jobs");
 	if (clsid == g_metaSectionCLSID)                  return _("Sections");
 	if (clsid == g_metaRoleCLSID)                       return _("Roles");
@@ -150,6 +151,7 @@ int ibMetaDiffWalker::GroupOrderRank(ibClassID clsid)
 		// configuration tree.
 		{ g_metaParameterizedJobCLSID,            35 },
 		{ g_metaScheduledJobCLSID,                36 },
+		{ g_metaSessionParameterCLSID,            37 },
 		{ g_metaPictureCLSID,                     40 },
 		{ g_metaSectionCLSID,                   50 },
 		{ g_metaRoleCLSID,                        60 },

@@ -22,6 +22,7 @@
 #define commandsName _("Common commands")
 #define scheduledJobsName _("Scheduled jobs")
 #define predefinedJobsName _("Predefined jobs")
+#define sessionParametersName _("Session parameters")
 #define rolesName _("Roles")
 #define picturesName _("Pictures")
 #define languagesName _("Languages")
@@ -1559,6 +1560,11 @@ void ibMetadataTree::InitTree()
 	// and they never multiply with the data, while the parameterized list is the one that grows.
 	m_treeJOBS = AppendGroupItem(m_treeCOMMON, g_metaParameterizedJobCLSID, scheduledJobsName);
 	m_treeSCHEDULED_JOBS = AppendGroupItem(m_treeJOBS, g_metaScheduledJobCLSID, predefinedJobsName);
+
+	// SESSION PARAMETERS sit beside the jobs, under COMMON, for the same reason those do: they
+	// belong to the configuration as a whole and to no business object. Each one is an ATTRIBUTE
+	// whose owner is the session — declared here, set once by the session module, read everywhere.
+	m_treeSESSION_PARAMETERS = AppendGroupItem(m_treeCOMMON, g_metaSessionParameterCLSID, sessionParametersName);
 
 	m_treePICTURES = AppendGroupItem(m_treeCOMMON, g_metaPictureCLSID, picturesName);
 

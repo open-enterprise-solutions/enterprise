@@ -1,7 +1,7 @@
 # Lambda closure capture
 
 > **Status**: LANDED 2026-05-11..12 — Phase A/B/C/D/F all in working
-> tree. AOT v18 (read `byteCodeAOT.cpp::kAOTFormatVersion`; v10 at the
+> tree. AOT v20 (read `byteCodeAOT.cpp::kAOTFormatVersion`; v10 at the
 > closure landing, bumped since). Build clean Debug/x86. Working copy
 > uncommitted (experimental arc per convention).
 >
@@ -184,7 +184,7 @@ Outer function returns:
 | Runtime — OPER_LFUNC | populate lambda's `m_capturedFrames` from enclosing frames |
 | Runtime — OPER_CALL_LAMBDA | wire `m_pppArrayList[1..N]` to captured frames' locals |
 | OPER_GET / OPER_SET | unchanged — already dispatch on `depth` |
-| AOT | `m_needsHeapFrame` per fn serialized (**v18 in tree** — read `byteCodeAOT.cpp::kAOTFormatVersion`; v10 at closure-capture landing, bumped since by a CLSID encoding switch (v12), the LINQ push-down lambda-AST payload (v14), kind-typed CLSIDs (16), the `restrict`-pushdown-AST fix (17) and the shortLet-peephole codegen fix (18)) |
+| AOT | `m_needsHeapFrame` per fn serialized (**v20 in tree** — read `byteCodeAOT.cpp::kAOTFormatVersion`; v10 at closure-capture landing, bumped since by a CLSID encoding switch (v12), the LINQ push-down lambda-AST payload (v14), kind-typed CLSIDs (16), the `restrict`-pushdown-AST fix (17) and the shortLet-peephole codegen fix (18), a parameter default losing its type name (19) and the session-parameter context member (20)) |
 | Debugger Locals | walk lambda's `m_capturedFrames`, render with origin fn name |
 
 **Zero new opcodes**. Zero new compile-side `Find*` helpers. Single boolean per fn, single vector per lambda (small).

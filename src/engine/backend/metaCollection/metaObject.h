@@ -30,6 +30,10 @@ constexpr ibClassID g_metaCommonFormCLSID = metadata_to_clsid("MD_CFRM");
 constexpr ibClassID g_metaCommonTemplateCLSID = metadata_to_clsid("MD_CTMP");
 constexpr ibClassID g_metaCommonCommandCLSID = metadata_to_clsid("MD_CMD");    // COMMON command (config-level, like CommonForm)
 constexpr ibClassID g_metaScheduledJobCLSID = metadata_to_clsid("MD_SJOB");   // PREDEFINED scheduled job — serves the configuration, one of it (docs/scheduled-jobs.md)
+// A SESSION PARAMETER — an attribute whose owner is the session rather than a table. Declared
+// here beside the jobs because that is where it sits in the tree: configuration-level, no data
+// of its own, set once per session by the session module (docs/access-policy-rls.md).
+constexpr ibClassID g_metaSessionParameterCLSID = metadata_to_clsid("MD_SPRM");
 
 constexpr ibClassID g_metaRoleCLSID = metadata_to_clsid("MD_ROLE");
 constexpr ibClassID g_metaSectionCLSID = metadata_to_clsid("MD_SSYST");

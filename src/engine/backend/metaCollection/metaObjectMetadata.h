@@ -1,4 +1,4 @@
-﻿#ifndef __METAOBJECT_METADATA_H__
+#ifndef __METAOBJECT_METADATA_H__
 #define __METAOBJECT_METADATA_H__
 
 #include "metaObject.h"
@@ -21,6 +21,7 @@ class BACKEND_API ibValueMetaObjectConfiguration : public ibValueMetaObject {
 	enum
 	{
 		ID_METATREE_OPEN_INIT_MODULE = 19000,
+		ID_METATREE_OPEN_SESSION_MODULE,
 		ID_METATREE_EDIT_HOME_PAGE,
 	};
 
@@ -44,6 +45,7 @@ public:
 			clsid == g_metaSectionCLSID ||
 			clsid == g_metaCommonCommandCLSID ||
 			clsid == g_metaScheduledJobCLSID ||
+			clsid == g_metaSessionParameterCLSID ||
 			clsid == g_metaPictureCLSID ||
 			clsid == g_metaLanguageCLSID ||
 			clsid == g_metaConstantCLSID ||
@@ -123,6 +125,11 @@ public:
 
 	virtual const ibValueMetaObjectModule* GetObjectModule() const { return m_propertyModuleConfiguration->GetMetaObject(); }
 
+	// The session module — where SetSessionParameters lives. Null-safe by the same
+	// rule as the configuration module: a configuration that declares no session
+	// parameters simply has an empty one.
+	const class ibValueMetaObjectManagerModule* GetSessionModule() const { return m_propertyModuleSession->GetMetaObject(); }
+
 protected:
 
 	//load & save metaData from DB
@@ -157,6 +164,25 @@ private:
 	ibHomePageDescription m_homePage;
 
 	ibPropertyInnerModule<ibValueMetaObjectModule>* m_propertyModuleConfiguration = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(m_categoryContext, wxT("ConfigurationModule"), _("Configuration module"));
+
+	// THE SESSION MODULE — a second module on the root, and the only place a session
+	// parameter may be written. It carries one procedure, SetSessionParameters, run
+	// once per session before anything reads data: the values it sets are what row
+	// access is filtered by, so they have to exist before the first query and stay
+	// unchanged after it.
+	//
+	// Separate from the configuration module rather than another handler inside it,
+	// because the two run at different moments and for different audiences. The
+	// configuration module speaks to an interactive client — BeforeStart can refuse
+	// a login, OnStart opens the desktop — and never runs for a background job. This
+	// one runs for EVERY session, job included, and runs earlier.
+	// A MANAGER module, not a plain one — and that is not a style choice. A plain
+	// ibValueMetaObjectModule never registers itself with the module storage, so it
+	// is never compiled into a session and its procedure can never be called: the
+	// module would exist in the tree, open in the editor, and quietly do nothing.
+	// A manager module registers (AddCommonModule) and is compiled once with the
+	// session's modules, which is exactly what a scheduled job's handler relies on.
+	ibPropertyInnerModule<ibValueMetaObjectManagerModule>* m_propertyModuleSession = ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(m_categoryContext, wxT("SessionModule"), _("Session module"));
 
 	ibPropertyCategory* m_propertyPresetValues = ibPropertyObject::CreatePropertyCategory(wxT("PresetValues"), _("Preset values"));
 	ibPropertyList* m_propertyDefRole = ibPropertyObject::CreateProperty<ibPropertyList>(m_propertyPresetValues, wxT("DefaultRole"), _("Default role"), _("Default configuration role"), &ibValueMetaObjectConfiguration::FillRoleList);

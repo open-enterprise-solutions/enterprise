@@ -111,6 +111,7 @@ private:
 	// the data) and the parameterized ones under it, as ordinary items of the branch itself.
 	wxTreeItemId m_treeJOBS;
 	wxTreeItemId m_treeSCHEDULED_JOBS;
+	wxTreeItemId m_treeSESSION_PARAMETERS;
 	wxTreeItemId m_treeROLES;
 	wxTreeItemId m_treeLANGUAGES;
 

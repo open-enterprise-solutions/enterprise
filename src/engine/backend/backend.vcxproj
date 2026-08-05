@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -190,6 +190,7 @@
     <ClInclude Include="metaCollection\metaSectionObject.h" />
     <ClInclude Include="metaCollection\metaCommandObject.h" />
     <ClInclude Include="metaCollection\metaScheduledJobObject.h" />
+    <ClInclude Include="metaCollection\metaSessionParameterObject.h" />
     <ClInclude Include="metaCollection\metaObjectComposite.h" />
     <ClInclude Include="metaCollection\metaFormObject.h" />
     <ClInclude Include="metaCollection\metaSpreadsheetObject.h" />
@@ -395,6 +396,7 @@
     <ClCompile Include="diagnostics\leakTracker.cpp" />
     <ClCompile Include="session\designerExclusivePolicy.cpp" />
     <ClCompile Include="session\session.cpp" />
+    <ClCompile Include="session\sessionParameters.cpp" />
     <ClCompile Include="session\sessionHolder.cpp" />
     <ClCompile Include="session\sessionRegistry.cpp" />
     <ClCompile Include="session\sessionSnapshot.cpp" />
@@ -533,6 +535,8 @@
     <ClCompile Include="metaCollection\metaCommandObjectMenu.cpp" />
     <ClCompile Include="metaCollection\metaCommandObject_res.cpp" />
     <ClCompile Include="metaCollection\metaScheduledJobObject.cpp" />
+    <ClCompile Include="metaCollection\metaSessionParameterObject.cpp" />
+    <ClCompile Include="metaCollection\metaSessionParameterObject_res.cpp" />
     <ClCompile Include="metaCollection\metaScheduledJobObjectMenu.cpp" />
     <ClCompile Include="metaCollection\metaScheduledJobObject_res.cpp" />
     <ClCompile Include="metaCollection\metaSectionObjectMenu.cpp" />

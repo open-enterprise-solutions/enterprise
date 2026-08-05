@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClInclude Include="backend.h" />
@@ -668,6 +668,9 @@
       <Filter>metaCollection</Filter>
     </ClInclude>
     <ClInclude Include="metaCollection\metaScheduledJobObject.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\metaSessionParameterObject.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
     <ClInclude Include="metadataDataProcessor.h" />
@@ -1711,6 +1714,12 @@
     <ClCompile Include="metaCollection\metaScheduledJobObject.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
+    <ClCompile Include="metaCollection\metaSessionParameterObject.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaSessionParameterObject_res.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
     <ClCompile Include="metaCollection\metaScheduledJobObjectMenu.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
@@ -1844,6 +1853,9 @@
       <Filter>plugin</Filter>
     </ClCompile>
     <ClCompile Include="session\session.cpp">
+      <Filter>session</Filter>
+    </ClCompile>
+    <ClCompile Include="session\sessionParameters.cpp">
       <Filter>session</Filter>
     </ClCompile>
     <ClCompile Include="session\sessionHolder.cpp">

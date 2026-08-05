@@ -59,6 +59,7 @@ enterprise/
 │   ├── report-engine.md      # Report metaobject + spreadsheet document (runtime shape)
 │   ├── command-interface.md  # Interface metaobject = subsystem + command bar
 │   ├── job-manager.md        # scheduled + background work — the engine (built)
+│   ├── session-parameters.md # values that exist once per session — metatype, module, write window
 │   ├── scheduled-jobs.md     # the metadata over it: two metatypes, one verb (BUILT)
 │   ├── plugins.md           # plugin ABI 2 — capability boundary (diagnostics / script / metadata)
 │   ├── script-language.md    # THE LANGUAGE REFERENCE — dialects, keywords, LINQ, global API
@@ -182,7 +183,7 @@ Every class in the metadata and value system is identified by an `ibClassID` (`u
 - **Dynamic metaobject values**: body = the **metaID itself** (constructive, no hash → `(kind, metaID)` unique BY CONSTRUCTION); kind = the metatype (`reference_to_clsid(metaID)` / `object_to_clsid` / `manager_to_clsid` / `list_to_clsid` / … / `externalObject_to_clsid`, mirroring `ibCtorObjectMetaType`). The old `"R_42"` name-hash grammar is gone.
 - `string_to_clsid()` is **removed** — every callsite uses a per-kind generator. `make_clsid(name, kind)` is the common entry; `make_clsid(name, ibClassKind_None)` is the escape for synthetic, unregistered ids (config-compare umbrellas, tool ids).
 
-CLSIDs appear in serialised configuration files and the DB; the kind-typing changed every value, so the AOT cache version was bumped to `kAOTFormatVersion` = 16 (now 18 — 17 for the `restrict`-pushdown-AST fix, 18 for the shortLet-peephole codegen fix, see `docs/compiler-pipeline.md` §3.1) and persisted CLSID blobs regenerate. Uniqueness: dynamic is constructive (impossible to collide); static is hash-bodied but collision is only possible WITHIN a kind among the tens of names there (negligible) and is caught by the registry's duplicate-clsid check. Tests: `tests/test_clsid.cpp`.
+CLSIDs appear in serialised configuration files and the DB; the kind-typing changed every value, so the AOT cache version was bumped to `kAOTFormatVersion` = 16 (now 20 — 17 for the `restrict`-pushdown-AST fix, 18 for the shortLet-peephole codegen fix, 19 for a parameter default losing its type name, 20 for the session-parameter context member, see `docs/compiler-pipeline.md` §3.1) and persisted CLSID blobs regenerate. Uniqueness: dynamic is constructive (impossible to collide); static is hash-bodied but collision is only possible WITHIN a kind among the tens of names there (negligible) and is caught by the registry's duplicate-clsid check. Tests: `tests/test_clsid.cpp`.
 
 ### 7. Metadata open/close — `ibMetaImage`
 
@@ -328,6 +329,13 @@ The 11 business object types and their C++ classes:
 | ChartOfCharacteristicTypes | `ibValueMetaObjectChartOfCharacteristicTypes` | `metaCollection/partial/chartOfCharacteristicTypes.h` |
 | ChartOfAccounts | `ibValueMetaObjectChartOfAccounts` | `metaCollection/partial/chartOfAccounts.h` |
 | AccountingRegister | `ibValueMetaObjectAccountingRegister` | `metaCollection/partial/accountingRegister.h` |
+
+One further metatype is neither a business object nor stored anywhere: **`SessionParameter`** — an
+`ibValueMetaObjectAttribute` whose owner is the SESSION rather than a table. Declared under Common
+beside the jobs, set once per session by the **session module** (a second module property on the
+configuration root, `SetSessionParameters`), and writable nowhere else — a write outside that module
+raises, which is what row-level access can be filtered by safely. Reached as `SessionParameters.<Name>`
+([docs/session-parameters.md](docs/session-parameters.md)).
 
 Five further registered metatypes are **not** top-level business objects: `ExternalDataProcessor`,
 `ExternalReport`, `SubcontoKindsTable`, `AccumulationRegisterTotals` (the totals table became a

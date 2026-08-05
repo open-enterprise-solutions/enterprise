@@ -92,7 +92,7 @@ session and the implementation phase plan. Verified against tree on
 >   per-descriptor `m_binder` with `SetVar` for per-execute binding.
 >   Replaces compile-time `AddContextVariable` staging.
 > - **13-17** — AOT cache pipeline landed. The blob (de)serialiser is
->   `backend/compiler/byteCodeAOT.cpp` (`kAOTFormatVersion = 18`
+>   `backend/compiler/byteCodeAOT.cpp` (`kAOTFormatVersion = 20`
 >   currently — `byteCodeAOT.cpp:136`; bumped on each opcode-layout
 >   change, e.g. CES + closure-capture + LINQ shifts); the cache-row /
 >   table layer is `backend/compiler/cache/byteCodeCache.{h,cpp}`:
@@ -611,7 +611,7 @@ Brief summary:
 >   for step 10 — designer without runtimes); `ibSession::EnsureRoot()`
 >   + 3-phase `NotifyAuthenticated` — root-mm ownership on session.
 > - **Steps 13-17 — AOT cache pipeline landed** (blob serialiser
->   `backend/compiler/byteCodeAOT.cpp`, `kAOTFormatVersion = 18`;
+>   `backend/compiler/byteCodeAOT.cpp`, `kAOTFormatVersion = 20`;
 >   cache-row layer `backend/compiler/cache/byteCodeCache.{h,cpp}`).
 >   UPSERT row per descriptor, dependency registry,
 >   Designer Save / Delete cascading invalidate. Only automated

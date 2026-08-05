@@ -99,7 +99,8 @@ enum
 	enChartsOfCharacteristicTypes,
 	enChartsOfAccounts,
 	enAccountingRegisters,
-	enScheduledJobs
+	enScheduledJobs,
+	enSessionParameters
 };
 
 void ibValueGlobalContextManager::FillMembers(ibMemberTable& helper) const
@@ -120,8 +121,12 @@ void ibValueGlobalContextManager::FillMembers(ibMemberTable& helper) const
 	// ONE entry point for scheduled work, two forks inside it — Predefined and Parameterized. See
 	// ibValueScheduledJobsManager above for why both live behind one name.
 	helper.AppendProp(wxT("ScheduledJobs"));
+	// The configuration's own declared parameters of this session. Read anywhere,
+	// written only by the session module (metaSessionParameterObject.h).
+	helper.AppendProp(wxT("SessionParameters"));
 }
 
+#include "backend/metaCollection/metaSessionParameterObject.h"   // the metatype AND the value it yields
 #include "backend/metaCollection/partial/dataProcessorManager.h"
 #include "backend/metaCollection/partial/dataReportManager.h"
 
@@ -170,6 +175,9 @@ bool ibValueGlobalContextManager::GetPropVal(const long lPropNum, ibValue& pvarP
 		return true;
 	case enScheduledJobs:
 		pvarPropVal = new ibValueScheduledJobsManager(m_metaData);
+		return true;
+	case enSessionParameters:
+		pvarPropVal = new ibValueSessionParameters(m_metaData);
 		return true;
 	}
 
