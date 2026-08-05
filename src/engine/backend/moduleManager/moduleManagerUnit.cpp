@@ -10,23 +10,27 @@
 #include "backend/session/session.h"
 
 
-// Lightweight (managerless) — what the designer compile cache builds for autocomplete.
-ibValueModuleManager::ibValueModuleUnit::ibValueModuleUnit(ibValueMetaObjectModuleBase *moduleObject, bool managerModule) :
+// A common module sits directly under the manager that owns it, and it is the ctor
+// that says so — for the runtime and the designer alike, because the chain does the
+// same work in both. Downwards it carries the scope a module compiles against
+// (ibCompileModule::Compile reads the parent's root context); upwards it is what
+// GetSession() walks from a nested script, with no ambient ibSessionScope needed.
+//
+// This used to be two ctors, one of them managerless, and the designer got that one:
+// its units stood outside the chain, so the editor's syntax check resolved no global
+// name in any common module while the runtime compiled the same text without a word.
+ibValueModuleManager::ibValueModuleUnit::ibValueModuleUnit(ibValueModuleManager *moduleManager, ibValueMetaObjectModuleBase *moduleObject, bool managerModule) :
 	ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true),
 	ibRuntimeModuleDataObject(m_members, this, new ibCompileCommonModule(moduleObject)),
 	m_moduleObject(moduleObject)
 {
+	SetParent(moduleManager);
 }
 
-// Runtime — wires the owning manager into the parent chain (GetSession() walks).
 ibValueModuleRuntimeManager::ibValueRuntimeModuleUnit::ibValueRuntimeModuleUnit(ibValueModuleRuntimeManager *moduleManager, ibValueMetaObjectModuleBase *moduleObject, bool managerModule) :
-	ibValueModuleUnit(moduleObject, managerModule),
+	ibValueModuleUnit(moduleManager, moduleObject, managerModule),
 	m_moduleManager(moduleManager)
 {
-	// Parent chain in the runtime tree — common module sits directly
-	// under its owning root module manager. Enables GetSession() walks
-	// from nested scripts without relying on ambient ibSessionScope.
-	SetParent(moduleManager);
 }
 
 ibValueModuleManager::ibValueModuleUnit::~ibValueModuleUnit()

@@ -41,7 +41,11 @@ public:
 
 		// No default ctor — the ibRuntimeModuleDataObject base requires the owning
 		// value's helper + a compile module (no default descriptor ctor exists).
-		ibValueModuleUnit(ibValueMetaObjectModuleBase* moduleObject, bool managerModule = false);
+		//
+		// The manager is not optional. A unit compiles against its parent's scope, so
+		// one built without a manager can only fail to resolve every name outside
+		// itself — which is what a managerless variant used to hand the designer.
+		ibValueModuleUnit(ibValueModuleManager* moduleManager, ibValueMetaObjectModuleBase* moduleObject, bool managerModule = false);
 		virtual ~ibValueModuleUnit();
 
 		//get common module

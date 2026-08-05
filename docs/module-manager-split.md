@@ -24,7 +24,7 @@ unit type). The split removes the runtime from the designer's path entirely.
 
 ```
 ibValueModuleManager                         — LIGHTWEIGHT base
-  │   nested: ibValueModuleUnit (managerless, no ProcUnit), ibValueMetadataUnit
+  │   nested: ibValueModuleUnit (no ProcUnit — but parented, see below), ibValueMetadataUnit
   │   holds: "Manager" singleton, m_metaManager, named context
   │   (the m_listGlConstValue registry was removed — globals live in the compile
   │    module's m_listExternValue; see the Bind-API section below)
@@ -141,6 +141,35 @@ no compilation, predictable designer-owned lifetime.
 across kinds). Pure unit, no database. The behavioural half (which manager a real
 Catalog/Document parents to, common-module registration through
 `OnBeforeRunMetaObject`, reload lifetime) is exercised by the designer at runtime.
+
+## The unit takes its manager (2026-08-05)
+
+`ibValueModuleUnit` had two constructors: a runtime one that took the owning
+manager and called `SetParent(moduleManager)`, and a lightweight *managerless*
+one — the one the designer used. That second variant is gone; the single ctor
+takes the manager and parents the unit, and `ibValueRuntimeModuleUnit` just
+forwards its own.
+
+The parent is not bookkeeping. `ibRuntimeModuleDataObject::SetParent` cascades
+into the compile layer, and compiling a module inherits the root scope from
+exactly there:
+
+```cpp
+m_rootContext->m_parentContext = m_parentModule->m_rootContext;   // ibCompileModule::Compile
+```
+
+With no parent that line never runs, so **Syntax control resolved no global name
+in any common module** — `Catalogs`, `ScheduledJobs`, `SessionParameters`, the
+root module's own exports — reporting `Var is not found` on text the runtime
+compiled and ran without complaint. The editor's check does compile: `SyntaxControl`
+(`frontend/win/editor/codeEditor/codeEditor.cpp`) calls `Compile()` on the cached
+unit's compile module.
+
+⚠ That last point qualifies crash-log entry 2 below: the designer does not compile
+units *at registration*, but it does compile the edited one on demand, and now with
+a parent — so the parent-recompile walk (`Compile()`, guarded by `m_changedCode`)
+is reachable from the editor again. It has not misbehaved since, but that walk is
+where the historical `GetFullName` AV came from.
 
 ## Crash log (closed during the arc)
 

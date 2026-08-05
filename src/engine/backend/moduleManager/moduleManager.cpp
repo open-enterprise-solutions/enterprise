@@ -578,7 +578,7 @@ bool ibValueModuleManagerDesigner::DestroyMainModule()
 bool ibValueModuleManagerDesigner::AddCommonModule(ibValueMetaObjectCommonModule* commonModule, bool managerModule, bool runModule)
 {
 	ibValuePtr<ibValueModuleUnit> moduleValue(
-		new ibValueModuleUnit(commonModule, managerModule));
+		new ibValueModuleUnit(this, commonModule, managerModule));
 
 	// Index by meta-object in the compile cache (editor lookups go here).
 	if (auto* cc = m_metaManager->GetMetaData()->GetCompileCache()) {
