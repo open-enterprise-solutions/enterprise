@@ -128,6 +128,37 @@ class BACKEND_API ibValueMetaObject :
 	public ibAccessObject, public ibInterfaceObject {
 	public:
 
+	// WHAT THIS METATYPE HAS — one set of flags, declared by the class itself.
+	//
+	// A catalog has references, objects and a manager; a register has a manager
+	// and record sets; an enumeration has references and a manager and no object
+	// at all. Each of those used to be (or would have become) its own boolean
+	// constant — s_hasReference, s_hasObject, s_hasManager — every one of them a
+	// separate name a new metatype could forget to override. One set says it all,
+	// and a class that adds something ORs it onto its base's set, so "a document
+	// is a reference plus an object" is written exactly that way.
+	//
+	// It says what the metatype HAS, not what it can do — the moment it starts
+	// meaning the second thing it becomes a bag of unrelated bits.
+	//
+	// constexpr: the whole thing is answered at compile time (metaCtor.h asks it
+	// with `if constexpr`), so no byte of this reaches the running program.
+	enum ibMetaFeature : unsigned {
+		ibMetaFeature_None      = 0,
+		ibMetaFeature_Reference = 1u << 0,   // has references  → `<Name>Ref` family
+		ibMetaFeature_Object    = 1u << 1,   // has data objects
+		ibMetaFeature_Manager   = 1u << 2,   // has a manager
+		ibMetaFeature_RecordSet = 1u << 3,   // has record sets (the registers)
+		// A SELECTION — a cursor over the stored rows. Deliberately its own bit
+		// and not derived from anything: an ENUMERATION has references and yet no
+		// selection (its values are written in the configuration, not rows to walk),
+		// while a REGISTER has no reference and does have one. Either derivation
+		// would have been wrong for one of them.
+		ibMetaFeature_Selection = 1u << 4,
+	};
+
+	// Nothing by default — a form, a template, a role has none of it.
+	static constexpr unsigned s_features = ibMetaFeature_None;
 
 public:
 

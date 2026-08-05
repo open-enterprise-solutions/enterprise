@@ -31,7 +31,7 @@ ibParamUnit ibCompileContext::CreateVariable(const wxString& strPrefix)
 */
 
 ibParamUnit ibCompileContext::AddVariable(const wxString& strVarName,
-	const wxString& typeVar, bool exportVar, bool contextVar, bool tempVar)
+	const ibClassID& typeVar, bool exportVar, bool contextVar, bool tempVar)
 {
 
 	// Dup-check is OWN-scope only — direct find_if on m_listVariable.
@@ -69,7 +69,7 @@ ibParamUnit ibCompileContext::AddVariable(const wxString& strVarName,
 
 	//determine the number and type of the variable
 	variable.m_numArray = 0;
-	variable.m_strType = typeVar;
+	variable.m_clsid = typeVar;
 	variable.m_numIndex = numVariable;
 
 
@@ -128,7 +128,7 @@ ibParamUnit ibCompileContext::GetVariable(const wxString& strVarName, bool bFind
 				return false;
 			out.m_numArray = blockReturn ? (long long)DEF_VAR_TEMP : (long long)depth;
 			out.m_numIndex = cur->m_numVariable;
-			out.m_strType = cur->m_strType;
+			out.m_clsid = cur->m_clsid;
 			return true;
 		};
 
@@ -262,7 +262,7 @@ ibParamUnit ibCompileContext::GetVariable(const wxString& strVarName, bool bFind
 						ibParamUnit variable;
 						variable.m_numArray = 1;
 						variable.m_numIndex = rootVar->m_numVariable;
-						variable.m_strType  = rootVar->m_strType;
+						variable.m_clsid  = rootVar->m_clsid;
 						currentVariable = rootVar;
 						return variable;
 					}
@@ -279,7 +279,7 @@ ibParamUnit ibCompileContext::GetVariable(const wxString& strVarName, bool bFind
 		// itself delegates RETURN_BLOCK -> parent (mirroring CreateVariable),
 		// so implicit `name = expr` inside `{ }` lands in the enclosing
 		// fn/module ctx automatically — no walk-target gymnastics here.
-		return AddVariable(strVarName, wxEmptyString, contextVar, contextVar, tempVar);
+		return AddVariable(strVarName, 0, contextVar, contextVar, tempVar);
 	}
 
 	wxASSERT(currentVariable);
@@ -298,13 +298,13 @@ ibParamUnit ibCompileContext::GetVariable(const wxString& strVarName, bool bFind
 		variable.m_numArray = 0;
 
 	variable.m_numIndex = currentVariable->m_numVariable;
-	variable.m_strType = currentVariable->m_strType;
+	variable.m_clsid = currentVariable->m_clsid;
 
 	return variable;
 }
 
 void ibCompileContext::PushVariable(const wxString& strVarName, const wxString& strContextVar, unsigned int numVariable,
-	const wxString& typeVar, bool exportVar, bool contextVar, bool tempVar)
+	const ibClassID& typeVar, bool exportVar, bool contextVar, bool tempVar)
 {
 	// Entries are keyed by m_strRealName via case-insensitive find_if (no
 	// upper-normalization). Renderers (debugger / PrepareNames) show the
@@ -330,7 +330,7 @@ void ibCompileContext::PushVariable(const wxString& strVarName, const wxString& 
 	currentVariable->m_strContext = strContextVar;  //variable for which the attribute is called
 
 	currentVariable->m_bTempVar = tempVar;
-	currentVariable->m_strType = typeVar;
+	currentVariable->m_clsid = typeVar;
 	currentVariable->m_numVariable = numVariable;
 	// Stamp the scope-nesting depth at the call site. Runtime
 	// debugger Locals filter compares this against an ibRunContext-side

@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -203,6 +203,7 @@
     <ClCompile Include="mainFrame\local\localWindow.cpp" />
     <ClCompile Include="mainFrame\mainFrameDesigner.cpp" />
     <ClCompile Include="mainFrame\mainFrameDesignerParts.cpp" />
+    <ClCompile Include="mainFrame\vcs\gitPanel.cpp" />
     <ClCompile Include="mainFrame\mainFrameDesignerEvent.cpp" />
     <ClCompile Include="mainFrame\mainFrameDesignerMenu.cpp" />
     <ClCompile Include="mainFrame\metatree\treeConfiguration.cpp" />
@@ -252,6 +253,7 @@
     <ClInclude Include="mainFrame\debugger\debugClientImpl.h" />
     <ClInclude Include="mainFrame\local\localWindow.h" />
     <ClInclude Include="mainFrame\mainFrameDesigner.h" />
+    <ClInclude Include="mainFrame\vcs\gitPanel.h" />
     <ClInclude Include="mainFrame\metatree\treeConfiguration.h" />
     <ClInclude Include="mainFrame\metatree\treeDataProcessor.h" />
     <ClInclude Include="mainFrame\metatree\treeDataReport.h" />

@@ -329,6 +329,7 @@ public:
 	const ibUserInfo& GetUserInfo() const;
 
 	wxString GetComputerName() const { return m_strComputer; }
+	const wxString& GetFile() const { return m_strFile; } // file-mode config/db path (VCS working copy root)
 
 	wxString GetLocale() const { return m_locale.GetCanonicalName(); }
 

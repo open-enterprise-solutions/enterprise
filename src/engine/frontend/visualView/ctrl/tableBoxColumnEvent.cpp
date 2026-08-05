@@ -96,50 +96,20 @@ void ibValueModelTableBoxColumn::OnSelectButtonPressed(wxCommandEvent& event)
 {
 	ibValue standartProcessing = true;
 	ibValueControl::CallAsEvent(m_eventStartChoice, GetValue(), standartProcessing);
-	if (standartProcessing.GetBoolean()) {
-		ibValue selValue; GetControlValue(selValue); bool setType = false;
-		if (selValue.GetType() == ibValueTypes::TYPE_EMPTY) {
-			const ibClassID& clsid = GetDataType();
-			if (clsid != 0) {
-				const ibMetaData* metaData = GetMetaData();
-				wxASSERT(metaData);
-				if (metaData->IsRegisterCtor(clsid)) {
-					SetControlValue(
-						metaData->CreateObject(clsid)
-					);
-				}
-			}
-			setType = true;
-		}
-		if (!setType) {
-			ibDataViewColumnObject* columnObject =
-				dynamic_cast<ibDataViewColumnObject*>(GetWxObject());
-			wxASSERT(columnObject);
-			ibDataViewValueRenderer* columnRenderer = columnObject->GetRenderer();
-			wxASSERT(columnRenderer);
-			const ibClassID& clsid = selValue.GetClassType();
-			if (!ibTypeControlFactory::QuickChoice(this, clsid, columnRenderer->GetEditorCtrl())) {
-				const ibMetaData* metaData = GetMetaData();
-				wxASSERT(metaData);
-				const ibCtorMetaValueType* so = metaData->GetTypeCtor(clsid);
-				if (so != nullptr && so->GetMetaTypeCtor() == ibCtorObjectMetaType_Reference) {
-					const ibValueMetaObject* metaObject = so->GetMetaObject();
-					if (metaObject != nullptr) {
-						const ibMetaID& id = m_propertyChoiceForm->GetValueAsInteger();
-						if (id != wxNOT_FOUND) {
-							const ibMetaData* metaData = GetMetaData();
-							const ibValueMetaObject* foundedObject = metaData != nullptr
-								? metaData->FindAnyObjectByFilter(id) : nullptr;
-							metaObject->ProcessChoice(this, foundedObject != nullptr ? foundedObject->GetName() : wxString(), GetSelectMode());
-						}
-						else {
-							metaObject->ProcessChoice(this, wxEmptyString, GetSelectMode());
-						}
-					}
-				}
-			}
-		}
-	}
+	if (!standartProcessing.GetBoolean())
+		return;
+
+	// THE ONE ROUTE (ibTypeControlFactory::ChooseValue) — the column already knew
+	// how to ask for its type; that knowledge stays here, as the answer to
+	// GetDataType, while the sequence itself is no longer a third copy of it.
+	ibDataViewColumnObject* columnObject = dynamic_cast<ibDataViewColumnObject*>(GetWxObject());
+	ibDataViewValueRenderer* columnRenderer = columnObject != nullptr ? columnObject->GetRenderer() : nullptr;
+	const ibMetaID& formId = m_propertyChoiceForm->GetValueAsInteger();
+	const ibMetaData* metaData = GetMetaData();
+	const ibValueMetaObject* choiceForm = (formId != wxNOT_FOUND && metaData != nullptr)
+		? metaData->FindAnyObjectByFilter(formId) : nullptr;
+	ibTypeControlFactory::ChooseValue(this, choiceForm,
+		columnRenderer != nullptr ? columnRenderer->GetEditorCtrl() : nullptr);
 }
 
 void ibValueModelTableBoxColumn::OnOpenButtonPressed(wxCommandEvent& event)

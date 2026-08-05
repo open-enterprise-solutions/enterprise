@@ -5,6 +5,7 @@
 
 #include "backend/backend_exception.h"
 
+#include "backend/backend_diagnostic.h"   // the failure as DATA — built here, text assembled from it
 #include "backend/metadataConfiguration.h"
 #include "backend/debugger/debugServer.h"
 #include "backend/appData.h"
@@ -252,7 +253,8 @@ void ibBackendException::ProcessError(const ibBackendException& err, const ibByt
 			ibBackendException::ProcessExceptionError(strFileName,
 				strModuleName, strDocPath,
 				error.m_numString, isEvalMode ? error.m_numLine : error.m_numLine + 1,
-				strCodeError, wxNOT_FOUND, err.GetErrorDescription()
+				strCodeError, wxNOT_FOUND, err.GetErrorDescription(),
+				ibDiagnosticKind::Runtime   // reached from procUnit's catch — the code ran
 			);
 		}
 		else {
@@ -260,7 +262,8 @@ void ibBackendException::ProcessError(const ibBackendException& err, const ibByt
 			ibBackendException::ProcessExceptionError(strFileName,
 				strModuleName, strDocPath,
 				error.m_numString, error.m_numLine + 1,
-				wxEmptyString, wxNOT_FOUND, err.GetErrorDescription()
+				wxEmptyString, wxNOT_FOUND, err.GetErrorDescription(),
+				ibDiagnosticKind::Runtime
 			);
 		}
 
@@ -279,8 +282,11 @@ void ibBackendException::ProcessError(const wxString& strFileName,
 	const wxString& strCodeError, const int codeError, const wxString& strErrorDesc)
 {
 	//throw this exception
+	// COMPILE side: the only caller is ibCompileCode::DoSetError, i.e. the text
+	// was refused before it ever ran.
 	ibBackendCoreException::Error(
-		ibBackendException::ProcessExceptionError(strFileName, strModuleName, strDocPath, currPos, currLine, strCodeError, codeError, strErrorDesc));
+		ibBackendException::ProcessExceptionError(strFileName, strModuleName, strDocPath, currPos, currLine, strCodeError, codeError, strErrorDesc,
+			ibDiagnosticKind::Compile));
 }
 
 ////////////////////////////////////////////////////////////////////
@@ -288,14 +294,52 @@ void ibBackendException::ProcessError(const wxString& strFileName,
 wxString ibBackendException::ProcessExceptionError(const wxString& strFileName,
 	const wxString& strModuleName, const wxString& strDocPath,
 	const unsigned int currPos, const unsigned int currLine,
-	const wxString& strCodeError, const int codeError, const wxString& strErrorDesc)
+	const wxString& strCodeError, const int codeError, const wxString& strErrorDesc,
+	const ibDiagnosticKind kind)
 {
-	wxString strErrorMessage;
-
 	const bool isEvalMode = ibBackendException::IsEvalMode();
+
+	// THE RECORD FIRST, the sentence after. Everything below — the message, the
+	// call-stack text, the line the dialog jumps to — is assembled from these
+	// fields, so a reader of the record and a reader of the message can never
+	// be told two different things.
+	ibDiagnostic diagnostic;
+	diagnostic.m_kind = kind;
+	diagnostic.m_fileName = strFileName;
+	diagnostic.m_moduleName = strModuleName;
+	diagnostic.m_docPath = strDocPath;
+	diagnostic.m_line = currLine;
+	diagnostic.m_position = currPos;
+	diagnostic.m_code = codeError;
+	diagnostic.m_message = codeError > 0 ? ibBackendException::Format(codeError, strErrorDesc) : strErrorDesc;
+	diagnostic.m_codeLine = isEvalMode ? wxString(wxEmptyString) : strCodeError;
+
+	// THE STACK IS COLLECTED WHETHER OR NOT ANYONE IS LOOKING. It used to be
+	// gathered inside the "is there a frame" branch, so a failure in a job, a
+	// background run or a headless check — precisely the ones nobody watches —
+	// reported no stack at all. Walking it costs a few string formats, and only
+	// on a path that has already failed.
+	if (!isEvalMode) {
+		auto* puState = ibSession::GetPUState();
+		const unsigned int frameCount = puState ? puState->GetCountRunContext() : 0;
+		for (unsigned int i = 0; i < frameCount; i++) {
+			const ibRunContext* stackContext = puState->GetRunContext(i);
+			wxASSERT(stackContext);
+			const ibByteCode* stackByteCode = stackContext->GetByteCode();
+			wxASSERT(stackByteCode);
+			ibDiagnostic::Frame frame;
+			frame.m_module = stackByteCode->m_strModuleName;
+			frame.m_line = stackByteCode->m_listCode[stackContext->m_lCurLine].m_numLine + 1;
+			diagnostic.m_stack.push_back(std::move(frame));
+		}
+	}
+
+	ibDiagnostics::Publish(diagnostic);
+
+	wxString strErrorMessage;
 	strErrorMessage += wxT("{") + strModuleName + wxT("(") + (isEvalMode ? wxString(wxT(" ")) : wxString::Format(wxT("%i"), currLine)) + wxT(")}: ");
-	strErrorMessage += (codeError > 0 ? ibBackendException::Format(codeError, strErrorDesc) : strErrorDesc) + wxT("\n");
-	strErrorMessage += (isEvalMode ? wxString(wxEmptyString) : strCodeError);
+	strErrorMessage += diagnostic.m_message + wxT("\n");
+	strErrorMessage += diagnostic.m_codeLine;
 
 	if (isEvalMode) strErrorMessage.Replace(wxT('\n'), wxT(' '));
 
@@ -307,20 +351,13 @@ wxString ibBackendException::ProcessExceptionError(const wxString& strFileName,
 		auto* frame = ibSession::CurrentFrame();
 
 		if (frame != nullptr) {
-			// set stack
+			// The call-stack TEXT, rendered from the record above.
 			wxString strStackMessage;
-
-			auto* puState = ibSession::GetPUState();
-			const unsigned int frameCount = puState ? puState->GetCountRunContext() : 0;
-			for (unsigned int i = 0; i < frameCount; i++) {
-				const ibRunContext* stackContext = puState->GetRunContext(i);
-				wxASSERT(stackContext);
-				const ibByteCode* stackByteCode = stackContext->GetByteCode();
-				wxASSERT(stackByteCode);
+			for (std::size_t i = 0; i < diagnostic.m_stack.size(); i++) {
 				strStackMessage += wxString::Format(wxT("\n%i: %s (#line %d)"),
-					i + 1,
-					stackByteCode->m_strModuleName,
-					stackByteCode->m_listCode[stackContext->m_lCurLine].m_numLine + 1
+					static_cast<int>(i) + 1,
+					diagnostic.m_stack[i].m_module,
+					diagnostic.m_stack[i].m_line
 				);
 			}
 

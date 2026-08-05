@@ -165,7 +165,7 @@ void ibCompileCode::PrepareModuleData()
 	// Pass 1: external values — kind=External on the bc mirror. Binder
 	// fills the slot at runtime; pre-flight verifies clsid match.
 	for (auto& externValue : m_listExternValue) {
-		m_rootContext->AddVariable(externValue.first, wxEmptyString, true);
+		m_rootContext->AddVariable(externValue.first, 0, true);
 		const ibClassID clsid = externValue.second ? externValue.second->GetClassType() : ibClassID(0);
 		stampOnContext(externValue.first, [&](ibCompileContext::ibVariable& v) {
 			v.m_kind  = ibVarKind::External;
@@ -178,7 +178,7 @@ void ibCompileCode::PrepareModuleData()
 	// required/type pre-flight); the module reads/writes it as a normal local
 	// (e.g. a constant's Value backed by &m_constValue).
 	for (auto& localValue : m_listLocalValue) {
-		m_rootContext->AddVariable(localValue.first, wxEmptyString, false);
+		m_rootContext->AddVariable(localValue.first, 0, false);
 	}
 
 	// Pass 2: context values — currently all self-referencing.
@@ -187,7 +187,7 @@ void ibCompileCode::PrepareModuleData()
 	// these into m_listVar with kind=Context so the binder treats them
 	// as required and resolve walks them visibility-aware.
 	for (auto& contextValue : m_listContextValue) {
-		m_rootContext->AddVariable(contextValue.first, wxEmptyString, true, true);
+		m_rootContext->AddVariable(contextValue.first, 0, true, true);
 		bool scoped = false;
 		ibClassID clsid = 0;
 		if (contextValue.second.m_value) {
@@ -783,33 +783,80 @@ bool ibCompileCode::Compile(const wxString& strCode)
 	return false;
 }
 
+// LOOK AHEAD for a type name in a declaration position, WITHOUT consuming it.
+//
+// The grammar is `[modifier] Type name [= default]`, and the type may be:
+//
+//   Boolean value                      — a primitive, all this used to accept
+//   Array rows                         — any registered value / control class
+//   CatalogRef.Номенклатура item       — a metadata type, i.e. TWO lexems and a dot
+//
+// The last form is why this exists: a reference type's registered name IS
+// "<Kind>Ref.<Name>" (objCtor.h), so once the name is assembled the ordinary
+// registry answers whether it is a type. Nothing new has to know about it.
+//
+// THE IDENTIFIER AFTER IT IS PART OF THE TEST, and that is not defensive
+// programming — it is what keeps the extension from changing the meaning of
+// existing code. `Array` alone may well be an identifier somebody uses; `Array
+// rows` cannot be anything but a declaration. Deciding on the type name alone
+// was safe while only five reserved primitives qualified, and stops being safe
+// the moment every registered class does.
+//
+// `outName` receives the assembled name; `outLexemCount` how many lexems it
+// spans (1 or 3), so the caller can consume exactly that many.
 bool ibCompileCode::IsTypeVar(const wxString& strType)
 {
-	if (!strType.IsEmpty()) {
-		if (ibValue::IsRegisterCtor(strType, ibCtorObjectType::ibCtorObjectType_object_primitive))
-			return true;
-	}
-	const ibLexem& lex = PreviewGetLexem();
-	if (ibValue::IsRegisterCtor(lex.m_strData, ibCtorObjectType::ibCtorObjectType_object_primitive))
-		return true;
-	return false;
+	// NAMED FORM — the caller already has the word and only asks whether it names
+	// a type. Any REGISTERED type counts: the narrowing to the five primitives was
+	// left from when only those could be declared, and a type that exists has as
+	// much right to be written down as `Number` has.
+	if (!strType.IsEmpty())
+		return ibValue::IsRegisterCtor(strType);
+
+	// LOOK-AHEAD FORM — "does a declaration start here?", asked before a single
+	// lexem is consumed.
+	//
+	// A DECLARATION IS TWO IDENTIFIERS: a registered type name, then the variable
+	// name. That second identifier is what keeps the widening safe — `Array rows`
+	// declares, while `Array = 5` assigns to a variable that happens to be called
+	// Array. Deciding on the type name alone was safe while five reserved words
+	// qualified, and stops being safe the moment every registered class does.
+	const int first = m_numCurrentCompile + 1;
+	if (first + 1 >= static_cast<int>(m_listLexem.size()))
+		return false;
+	if (m_listLexem[first].m_lexType != IDENTIFIER
+	 || m_listLexem[first + 1].m_lexType != IDENTIFIER)
+		return false;
+
+	// `AnyRef`, `CatalogRef`, `AnyControl` need no special case: they are
+	// REGISTERED types like any other (typeAny.cpp, metaCtor.h), differing only in
+	// that they create nothing and admit a whole family.
+	return ibValue::IsRegisterCtor(m_listLexem[first].m_strData);
 }
 
-wxString ibCompileCode::GetTypeVar(const wxString& strType)
+ibClassID ibCompileCode::GetTypeVar(const wxString& strType)
 {
+	// THE ID, NOT THE NAME. Everything downstream — the gate, the typed-opcode
+	// choice, the bytecode — speaks class ids; handing back a name would only mean
+	// resolving it again, later, somewhere else.
 	if (!strType.IsEmpty()) {
-		if (!ibValue::IsRegisterCtor(strType, ibCtorObjectType::ibCtorObjectType_object_primitive)) {
+		// Unknown to the registry — that, and only that, is a bad type name.
+		if (!ibValue::IsRegisterCtor(strType)) {
 			SetError(ERROR_TYPE_DEF);
-			return wxEmptyString;
+			return 0;
 		}
-		return strType.Upper();
+		return ibValue::GetIDObjectFromString(strType);
 	}
+
+	// The unnamed form follows IsTypeVar(), which already looked ahead and said
+	// yes — so the next lexem IS the type name. Re-deciding here would be the same
+	// question asked twice, and the two answers could drift.
 	const ibLexem& lex = GETLexem();
-	if (!ibValue::IsRegisterCtor(lex.m_strData, ibCtorObjectType::ibCtorObjectType_object_primitive)) {
+	if (lex.m_lexType != IDENTIFIER || !ibValue::IsRegisterCtor(lex.m_strData)) {
 		SetError(ERROR_TYPE_DEF);
-		return wxEmptyString;
+		return 0;
 	}
-	return stringUtils::MakeUpper(lex.m_strData);
+	return ibValue::GetIDObjectFromString(lex.m_strData);
 }
 
 /**
@@ -822,9 +869,9 @@ wxString ibCompileCode::GetTypeVar(const wxString& strType)
 
 bool ibCompileCode::CompileDeclaration(ibCompileContext* context)
 {
-	const ibLexem& lex = PreviewGetLexem(); wxString strType;
+	const ibLexem& lex = PreviewGetLexem(); ibClassID typeClsid = 0;
 	if (lex.m_lexType == IDENTIFIER) {
-		strType = GetTypeVar(); // typed setting of variables
+		typeClsid = GetTypeVar(); // typed setting of variables
 	}
 	else {
 		GETKeyWord(KEY_VAR);
@@ -896,7 +943,7 @@ bool ibCompileCode::CompileDeclaration(ibCompileContext* context)
 
 		// there was no variable declaration yet - add
 		ibParamUnit variable =
-			context->AddVariable(strRealName, strType, bExport);
+			context->AddVariable(strRealName, typeClsid, bExport);
 
 		// Stamp the access enum onto the just-created variable so Protected is
 		// distinguishable from Private at resolve time. The parent-chain
@@ -984,7 +1031,12 @@ bool ibCompileCode::CompileModule()
 		const ibLexem& lex = PreviewGetLexem();
 		if (lex.m_lexType == ERRORTYPE) break;
 
-		if ((KEYWORD == lex.m_lexType && lex.m_numData == KEY_VAR) || (IDENTIFIER == lex.m_lexType && IsTypeVar(lex.m_strData))) {
+		// IsTypeVar() with NO argument — the look-ahead form. Passing the lexem's
+		// text asks the cast-position question instead ("is this word a
+		// primitive"), which is what limited declarations to the five primitives:
+		// a value class or a dotted metadata type never reached CompileDeclaration
+		// and was parsed as an expression, failing on the missing '='.
+		if ((KEYWORD == lex.m_lexType && lex.m_numData == KEY_VAR) || (IDENTIFIER == lex.m_lexType && IsTypeVar())) {
 			if (!m_onlyFunction) {
 				CompileDeclaration(mainContext); // load variable declaration
 			}
@@ -1427,8 +1479,7 @@ bool ibCompileCode::ParseFunctionSignature(ibCompileContext* context,
 	while (!IsNextDelimeter(')')) {
 
 		// check for typing
-		const wxString typeVar = IsTypeVar() ?
-			GetTypeVar() : wxString(wxEmptyString);
+		const ibClassID typeVar = IsTypeVar() ? GetTypeVar() : 0;
 
 		ibCompileContext::ibFunction::ibParamVariable cVariable;
 		if (IsNextKeyWord(KEY_VAL)) {
@@ -1439,7 +1490,7 @@ bool ibCompileCode::ParseFunctionSignature(ibCompileContext* context,
 		const wxString& strRealName = GETIdentifier(true);
 
 		cVariable.m_strName = strRealName;
-		cVariable.m_strType = typeVar;
+		cVariable.m_clsid = typeVar;
 
 		std::shared_ptr<ibCompileContext::ibVariable> foundedVar = nullptr;
 
@@ -1543,7 +1594,7 @@ bool ibCompileCode::EmitFunctionBody(ibCompileContext* /*context*/,
 		ibParamUnit variable;
 		variable.m_numArray = 0;
 		variable.m_numIndex = i;
-		variable.m_strType = createdFunction->m_listParam[i].m_strType;
+		variable.m_clsid = createdFunction->m_listParam[i].m_clsid;
 		AddTypeSet(variable);
 	}
 
@@ -3065,7 +3116,7 @@ void ibCompileCode::CompileLinqJoin(ibCompileContext* linqCtx,
 
 	// (1) tmp_isEmpty = !hashSlot. Untyped OPER_NOT writes BOOLEAN
 	// via SetTypeBoolean(IsEmptyValue) — TYPE_EMPTY → true, otherwise
-	// false. Compile-side m_strType stays empty so no +TYPE_DELTA
+	// false. Compile-side m_clsid stays 0 so no +TYPE_DELTA
 	// inference fires (kept on the untyped IsEmpty path).
 	const ibParamUnit tmpIsEmpty = linqCtx->CreateVariable();
 	{
@@ -3162,41 +3213,41 @@ void ibCompileCode::CompileLinqJoin(ibCompileContext* linqCtx,
 
 void ibCompileCode::AddTypeSet(const ibParamUnit& variable)
 {
-	if (!variable.m_strType.IsEmpty()) {
+	if (variable.m_clsid != 0) {
 		ibByteUnit code;
 		AddLineInfo(code);
 		code.m_numOper = OPER_SET_TYPE;
 		code.m_param1 = variable;
-		code.m_param2.m_numArray = ibValue::GetIDObjectFromString(variable.m_strType);
+		code.m_param2.m_numArray = variable.m_clsid;
 		m_cByteCode.m_listCode.emplace_back(std::move(code));
 	}
 }
 
-// macro checking variable Var for type Str
-#define CheckTypeDef(var,type) if(wxStrlen(type) > 0)\
+// macro checking variable Var against an expected type (by CLASS ID)
+#define CheckTypeDef(var,typeClsid) if((typeClsid) != 0)\
 	{\
-		if(!stringUtils::CompareString(var.m_strType, type)){\
-			if (ibValue::CompareObjectName(type, ibValueTypes::TYPE_BOOLEAN)) SetError(ERROR_BAD_TYPE_EXPRESSION_B);\
-			else if (ibValue::CompareObjectName(type, ibValueTypes::TYPE_NUMBER)) SetError(ERROR_BAD_TYPE_EXPRESSION_N);\
-			else if (ibValue::CompareObjectName(type, ibValueTypes::TYPE_STRING)) SetError(ERROR_BAD_TYPE_EXPRESSION_S);\
-			else if (ibValue::CompareObjectName(type, ibValueTypes::TYPE_DATE)) SetError(ERROR_BAD_TYPE_EXPRESSION_D);\
+		if(var.m_clsid != (typeClsid)){\
+			if ((typeClsid) == g_valueBooleanCLSID) SetError(ERROR_BAD_TYPE_EXPRESSION_B);\
+			else if ((typeClsid) == g_valueNumberCLSID) SetError(ERROR_BAD_TYPE_EXPRESSION_N);\
+			else if ((typeClsid) == g_valueStringCLSID) SetError(ERROR_BAD_TYPE_EXPRESSION_S);\
+			else if ((typeClsid) == g_valueDateCLSID) SetError(ERROR_BAD_TYPE_EXPRESSION_D);\
 			else SetError(ERROR_BAD_TYPE_EXPRESSION);\
 		}\
-		if (ibValue::CompareObjectName(type, ibValueTypes::TYPE_NUMBER)) code.m_numOper+=TYPE_DELTA1;\
-		else if (ibValue::CompareObjectName(type, ibValueTypes::TYPE_STRING)) code.m_numOper+=TYPE_DELTA2;\
-		else if (ibValue::CompareObjectName(type, ibValueTypes::TYPE_DATE)) code.m_numOper+=TYPE_DELTA3;\
-        else if (ibValue::CompareObjectName(type, ibValueTypes::TYPE_BOOLEAN)) code.m_numOper+=TYPE_DELTA4;\
+		if ((typeClsid) == g_valueNumberCLSID) code.m_numOper+=TYPE_DELTA1;\
+		else if ((typeClsid) == g_valueStringCLSID) code.m_numOper+=TYPE_DELTA2;\
+		else if ((typeClsid) == g_valueDateCLSID) code.m_numOper+=TYPE_DELTA3;\
+        else if ((typeClsid) == g_valueBooleanCLSID) code.m_numOper+=TYPE_DELTA4;\
 	}
 
 // macro for adjusting the operation by variable type
 // if it is typed, then the typed operation will be performed
 #define CorrectTypeDef(sKey)\
-if(!sKey.m_strType.IsEmpty())\
+if(sKey.m_clsid != 0)\
 {\
-	if (ibValue::CompareObjectName(sKey.m_strType, ibValueTypes::TYPE_NUMBER)) code.m_numOper+=TYPE_DELTA1;\
-	else if (ibValue::CompareObjectName(sKey.m_strType, ibValueTypes::TYPE_STRING)) code.m_numOper+=TYPE_DELTA2;\
-	else if (ibValue::CompareObjectName(sKey.m_strType, ibValueTypes::TYPE_DATE)) code.m_numOper+=TYPE_DELTA3;\
-    else if (ibValue::CompareObjectName(sKey.m_strType, ibValueTypes::TYPE_BOOLEAN))  code.m_numOper+=TYPE_DELTA4;\
+	if (sKey.m_clsid == g_valueNumberCLSID) code.m_numOper+=TYPE_DELTA1;\
+	else if (sKey.m_clsid == g_valueStringCLSID) code.m_numOper+=TYPE_DELTA2;\
+	else if (sKey.m_clsid == g_valueDateCLSID) code.m_numOper+=TYPE_DELTA3;\
+    else if (sKey.m_clsid == g_valueBooleanCLSID)  code.m_numOper+=TYPE_DELTA4;\
 	else SetError(ERROR_BAD_TYPE_EXPRESSION);\
 }
 
@@ -3408,6 +3459,18 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 		}
 		else {
 
+			// A TYPED DECLARATION INSIDE A BODY. Only `Var x` used to be caught
+			// here (the KEY_VAR case above), so `Boolean cancel;` in the middle of
+			// a procedure was parsed as an expression and failed on the missing
+			// '='. The look-ahead requires an identifier after the type, so an
+			// ordinary statement that starts with a variable of the same name is
+			// unaffected.
+			if (IDENTIFIER == lex.m_lexType && IsTypeVar()) {
+				if (!CompileDeclaration(context))
+					return false;
+				continue;
+			}
+
 			const ibLexem& nextLexem = GetLexem();
 			if (IDENTIFIER == nextLexem.m_lexType) {
 
@@ -3486,8 +3549,8 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 						code.m_numOper = OPER_LET;
 						AddLineInfo(code);
 
-						CheckTypeDef(expression, variable.m_strType);
-						variable.m_strType = expression.m_strType;
+						CheckTypeDef(expression, variable.m_clsid);
+						variable.m_clsid = expression.m_clsid;
 
 						bool bShortLet = false; int n = 0;
 
@@ -3864,7 +3927,7 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 			}
 		}
 		if (IsTypeVar(strRealName)) {
-			variable.m_strType = GetTypeVar(strRealName);	// this is a type cast
+			variable.m_clsid = GetTypeVar(strRealName);	// this is a type cast
 		}
 		numIsSet = 0;
 	}
@@ -4253,8 +4316,8 @@ bool ibCompileCode::CompileFor(ibCompileContext* context)
 	ibParamUnit variable = context->GetVariable(strRealName);
 
 	// check variable type
-	if (!variable.m_strType.IsEmpty()) {
-		if (!ibValue::CompareObjectName(variable.m_strType, ibValueTypes::TYPE_NUMBER)) {
+	if (variable.m_clsid != 0) {
+		if (variable.m_clsid != g_valueNumberCLSID) {
 			SetError(ERROR_NUMBER_TYPE);
 			return false;
 		}
@@ -4271,8 +4334,8 @@ bool ibCompileCode::CompileFor(ibCompileContext* context)
 	m_cByteCode.m_listCode.emplace_back(std::move(code0));
 
 	// check value type
-	if (!variable.m_strType.IsEmpty()) {
-		if (!ibValue::CompareObjectName(variable2.m_strType, ibValueTypes::TYPE_NUMBER)) {
+	if (variable.m_clsid != 0) {
+		if (variable2.m_clsid != g_valueNumberCLSID) {
 			SetError(ERROR_BAD_TYPE_EXPRESSION);
 			return false;
 		}
@@ -4532,7 +4595,7 @@ ibParamUnit ibCompileCode::FindConst(const ibValue& constData)
 		m_cByteCode.m_listConst.emplace_back(constData);
 		m_listHashConst.insert_or_assign(strConstant, variable.m_numIndex + 1);
 	}
-	variable.m_strType = GetTypeVar(constData.GetClassName());
+	variable.m_clsid = GetTypeVar(constData.GetClassName());
 	return variable;
 }
 
@@ -4553,7 +4616,7 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 	if ((lex.m_lexType == KEYWORD && lex.m_numData == KEY_NOT) || (lex.m_lexType == DELIMITER && lex.m_numData == '!')) {
 
 		variable = context->CreateVariable();
-		variable.m_strType = ibValue::GetNameObjectFromVT(ibValueTypes::TYPE_BOOLEAN, true);
+		variable.m_clsid = g_valueBooleanCLSID;
 
 		AddTypeSet(variable);
 
@@ -4563,8 +4626,8 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 		code.m_numOper = OPER_NOT;
 		AddLineInfo(code);
 
-		if (!variable2.m_strType.IsEmpty()) {
-			CheckTypeDef(variable2, ibValue::GetNameObjectFromVT(ibValueTypes::TYPE_BOOLEAN));
+		if (variable2.m_clsid != 0) {
+			CheckTypeDef(variable2, g_valueBooleanCLSID);
 		}
 
 		code.m_param1 = variable;
@@ -4758,10 +4821,10 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 		if (lex.m_numData == '+') { // do nothing (ignore)
 			ibByteUnit code;
 			variable = GetExpression(context, 100);   // super high priority!
-			if (!variable.m_strType.IsEmpty()) {
-				CheckTypeDef(variable, ibValue::GetNameObjectFromVT(ibValueTypes::TYPE_NUMBER));
+			if (variable.m_clsid != 0) {
+				CheckTypeDef(variable, g_valueNumberCLSID);
 			}
-			variable.m_strType = ibValue::GetNameObjectFromVT(ibValueTypes::TYPE_NUMBER, true);
+			variable.m_clsid = g_valueNumberCLSID;
 			return variable;
 		}
 		else {
@@ -4770,13 +4833,13 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 			AddLineInfo(code);
 			code.m_numOper = OPER_INVERT;
 
-			if (!variable.m_strType.IsEmpty()) {
-				CheckTypeDef(variable, ibValue::GetNameObjectFromVT(ibValueTypes::TYPE_NUMBER));
+			if (variable.m_clsid != 0) {
+				CheckTypeDef(variable, g_valueNumberCLSID);
 			}
 
 			code.m_param2 = variable;
 			variable = context->CreateVariable();
-			variable.m_strType = ibValue::GetNameObjectFromVT(ibValueTypes::TYPE_NUMBER, true);
+			variable.m_clsid = g_valueNumberCLSID;
 			AddTypeSet(variable);
 			code.m_param1 = variable;
 			m_cByteCode.m_listCode.emplace_back(std::move(code));
@@ -4860,7 +4923,7 @@ delimOperation:
 				ibParamUnit puVariable3 = GetExpression(context, numCurPriority);
 
 				if (puVariable3.m_numArray != DEF_VAR_TEMP && puVariable3.m_numArray != DEF_VAR_CONST) { // extra. checking for prohibited operations
-					if (ibValue::CompareObjectName(puVariable2.m_strType, ibValueTypes::TYPE_STRING)) {
+					if (puVariable2.m_clsid == g_valueStringCLSID) {
 						if (OPER_DIV == code.m_numOper
 							|| OPER_MOD == code.m_numOper
 							|| OPER_MULT == code.m_numOper
@@ -4873,13 +4936,13 @@ delimOperation:
 				}
 
 				if (puVariable2.m_numArray != DEF_VAR_CONST && puVariable2.m_numArray != DEF_VAR_TEMP) { // constants are not checked - because they are typified by default
-					CheckTypeDef(puVariable3, puVariable2.m_strType);
+					CheckTypeDef(puVariable3, puVariable2.m_clsid);
 				}
 
-				puVariable1.m_strType = puVariable2.m_strType;
+				puVariable1.m_clsid = puVariable2.m_clsid;
 
 				if (code.m_numOper >= OPER_GT && code.m_numOper <= OPER_NE) {
-					puVariable1.m_strType = ibValue::GetNameObjectFromVT(ibValueTypes::TYPE_BOOLEAN, true);
+					puVariable1.m_clsid = g_valueBooleanCLSID;
 				}
 
 				code.m_param1 = puVariable1;

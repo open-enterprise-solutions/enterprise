@@ -1,0 +1,2284 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>OES Web</title>
+<style>
+/* Window chrome: title bar + status bar wrap the sidebar+main area.
+   Body is flex-column so the middle row stretches; titlebar / statusbar
+   are auto-sized strips. Mirrors desktop wxFrame's menubar+content+
+   statusbar layout. */
+body{margin:0;font:14px/1.4 system-ui,sans-serif;display:flex;
+  flex-direction:column;height:100vh;color:#222}
+#titlebar{flex:0 0 auto;background:linear-gradient(#3b50a0,#2f4189);
+  color:#fff;padding:5px 12px;display:flex;align-items:center;gap:16px;
+  font-size:.92em;border-bottom:1px solid #1f2f70;user-select:none}
+#app-title{font-weight:600;letter-spacing:.02em;font-size:.95em;
+  display:inline-flex;align-items:center;gap:6px}
+#app-title::before{content:'';width:14px;height:14px;border-radius:3px;
+  background:linear-gradient(#ffffff,#c8d3ee);display:inline-block;
+  box-shadow:0 0 0 1px rgba(255,255,255,.35) inset}
+#menubar{display:flex;gap:1px;flex:1 1 auto;min-width:0}
+#menubar button{background:transparent;border:0;color:#fff;
+  padding:3px 10px;cursor:pointer;border-radius:3px;font:inherit;
+  line-height:1.2}
+#menubar button:hover:not(:disabled){background:rgba(255,255,255,.18)}
+#menubar button:active:not(:disabled){background:rgba(255,255,255,.28)}
+#app-row{flex:1 1 auto;display:flex;min-height:0;overflow:hidden}
+#sidebar{width:260px;border-right:1px solid #ccc;padding:10px;
+  overflow:auto;background:#f7f7f7;flex:0 0 260px;box-sizing:border-box}
+#main{flex:1 1 auto;padding:12px;overflow:auto;min-width:0;min-height:0;
+  display:flex;flex-direction:column}
+#statusbar{flex:0 0 auto;background:#ececec;border-top:1px solid #c0c0c0;
+  padding:2px 12px;font-size:.82em;color:#555;display:flex;gap:14px;
+  min-height:20px;align-items:center;user-select:none}
+#statusbar > .sep{width:1px;height:14px;background:#c0c0c0}
+#statusbar #status{margin:0}
+/* Status bar tabs: small toggle buttons (e.g. "Output") that show /
+   hide attached panels. Active state when the matching panel is open;
+   matches the GUI's docked-pane tab strip behaviour. */
+.sb-tab{background:transparent;border:1px solid transparent;color:#555;
+  padding:0 8px;margin:0;cursor:pointer;border-radius:3px;
+  font:inherit;font-size:.95em;height:18px;display:inline-flex;
+  align-items:center;line-height:1}
+.sb-tab:hover{background:#dde2ea;color:#222}
+.sb-tab.active{background:#3b50a0;color:#fff;border-color:#2f4189}
+.sb-tab.active:hover{background:#4561b2}
+/* Output panel — sits between #app-row and #statusbar. Hidden by
+   default; OES.output(msg) appends a line and opens it. Click on the
+   header (or × button) hides. Mirrors desktop's "Output" / log window
+   role: script Message() / wxLogMessage destinations land here. */
+#outputpanel{flex:0 0 auto;display:none;flex-direction:column;
+  background:#f7f8fa;border-top:1px solid #c0c0c0;height:180px;
+  min-height:60px;max-height:50vh}
+#outputpanel.shown{display:flex}
+#output-header{flex:0 0 auto;padding:4px 10px;background:#e6e9ee;
+  border-bottom:1px solid #c0c0c0;display:flex;align-items:center;
+  gap:8px;font-weight:600;color:#444;font-size:.85em;user-select:none;
+  cursor:pointer}
+#output-header:hover{background:#dde2ea}
+#output-title{flex:1 1 auto}
+#output-close{width:18px;height:18px;flex:0 0 18px;border-radius:50%;
+  border:0;background:transparent;cursor:pointer;color:#666;
+  font:700 13px/1 Arial,sans-serif;display:inline-flex;
+  align-items:center;justify-content:center;padding:0}
+#output-close:hover{background:#d73a3a;color:#fff}
+#output-body{flex:1 1 auto;overflow:auto;padding:4px 10px;
+  background:#fff;font:12px/1.4 Consolas,"SF Mono",Menlo,monospace;
+  color:#222}
+.output-line{padding:1px 0;white-space:pre-wrap;word-wrap:break-word}
+.output-line .ts{color:#9aa1ad;margin-right:8px;user-select:none}
+.output-line.warn{color:#a66700;background:#fff8e6}
+.output-line.error{color:#a22;background:#fcebeb}
+.output-line.debug{color:#888}
+/* Resize handle along the top edge of the output panel — drag to
+   adjust height. The handle has zero visual footprint until hover. */
+#output-resize{position:absolute;left:0;right:0;top:0;height:4px;
+  cursor:ns-resize}
+#outputpanel{position:relative}
+#output-resize:hover{background:rgba(59,80,160,.25)}
+/* Browser-style tab strip: flat bottom border on the active tab merges
+   with the content area so it reads as one surface. Inactive tabs sit
+   slightly lower and darker — same visual language as Chrome/Firefox/
+   VS Code, which most users will recognise. */
+/* tabs-row: flex container holding the scroll buttons + the scrollable
+   tab strip. Buttons collapse to 0 width when not needed (scroll fits
+   entirely) so narrow windows don't waste horizontal space. */
+#tabs-row{display:flex;align-items:stretch;background:#ececec;border-bottom:1px solid #bbb;padding-top:6px}
+.tabs-scroll{flex:0 0 auto;border:none;background:transparent;color:#555;
+  cursor:pointer;padding:0 6px;font:700 14px/1 Arial,sans-serif;
+  align-self:stretch;display:none}
+.tabs-scroll:hover{color:#000;background:#dcdcdc}
+.tabs-scroll.visible{display:inline-flex;align-items:center}
+#tabs{display:flex;gap:1px;margin:0;padding:0 8px 0;flex:1 1 auto;
+  overflow-x:auto;scroll-behavior:smooth;scrollbar-width:none}
+#tabs::-webkit-scrollbar{display:none}
+.tab{padding:4px 10px 5px;border:1px solid #bbb;border-bottom:none;
+  border-radius:6px 6px 0 0;background:#dcdcdc;font-size:.9em;
+  cursor:pointer;display:inline-flex;align-items:center;gap:6px;
+  color:#444;position:relative;top:1px;max-width:240px;
+  flex:0 0 auto; /* don't shrink in the overflow-x flex container */
+  transition:background .1s,color .1s}
+.tab:hover{background:#e8e8e8;color:#222}
+.tab.active{background:#fff;color:#000;border-color:#bbb;top:0;
+  box-shadow:0 -1px 0 #fff inset;z-index:1}
+/* Icon sits on the LEFT of the title (horizontal flow) — matches the
+   way Chrome / VS Code / desktop wxAUI render their tabs. No icon
+   → the row collapses to text only without a layout shift. */
+.tab-body{display:flex;flex-direction:row;align-items:center;
+  gap:6px;min-width:0;cursor:pointer}
+.tab-icon{width:16px;height:16px;object-fit:contain;flex:0 0 auto;
+  image-rendering:-webkit-optimize-contrast}
+.tab .tab-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  max-width:200px;cursor:pointer;line-height:1.2}
+/* Active tab title: bold so the current pane is obvious even at a
+   glance. Modified gains a leading '*' on top of that (same sentinel
+   desktop uses to flag unsaved state). */
+.tab.active .tab-title{font-weight:700}
+.tab.modified .tab-title{font-weight:700}
+.tab.modified .tab-title::before{content:'* '}
+/* Close button: square so width==height at rest, flex-centered glyph so
+   the × never drifts off the centreline when the tab padding changes.
+   Font-size kept sub-em so ×'s visual weight matches the title text
+   above, and box-sizing:border-box means hover's border/background
+   don't jump the geometry. */
+.tab-close{box-sizing:border-box;width:16px;height:16px;flex:0 0 16px;
+  display:inline-flex;align-items:center;justify-content:center;
+  border-radius:50%;cursor:pointer;color:#888;font:700 14px/1 Arial,sans-serif;
+  padding:0;margin-left:2px;transition:background .1s,color .1s;
+  user-select:none}
+.tab-close:hover{background:#d73a3a;color:#fff}
+h3{margin:.6em 0 .3em;font-size:.9em;color:#555;text-transform:uppercase;letter-spacing:.04em}
+ul{list-style:none;padding:0;margin:0}
+li{padding:4px 6px;cursor:pointer;border-radius:3px}
+li:hover{background:#e3e9f0}
+/* Sidebar Interfaces (subsystems) section: list of collapsible groups,
+   each with an icon + name header and a list of clickable items. Hidden
+   when the configuration has no Interfaces. Matches desktop's
+   ibSubSystemWindow role. */
+#interfaces.hidden{display:none}
+#interfaces .iface-btn{display:flex;align-items:center;gap:8px;
+  width:100%;text-align:left;padding:6px 8px;margin:1px 0;
+  background:transparent;border:1px solid transparent;border-radius:4px;
+  cursor:pointer;font:inherit;color:#2a3142}
+#interfaces .iface-btn:hover{background:#e3e9f0;border-color:#c0c8d4}
+#interfaces .iface-btn:active{background:#d0d8e4}
+#interfaces .iface-icon{width:18px;height:18px;flex-shrink:0;object-fit:contain}
+/* Host is flex column + full height so proportion-based growth on
+   inner controls actually has room to expand into. Without this, the
+   host was block-level with natural height and `flex-grow:1` on a
+   child textctrl couldn't stretch because the parent chain had no
+   defined height to share. */
+/* #tab-body sits below #tabs-row inside flex-col #main and takes the
+   remaining height so .form-host's flex chain reaches the bottom of
+   the content area. min-height:0 is mandatory for nested flex
+   children to actually shrink below their content size. */
+#tab-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+/* form-host stretches to fill #tab-body (which is itself flex-col +
+   flex:1 inside #main → #app-row → body), so the hardcoded
+   100vh-90px is no longer needed — the new layout (titlebar +
+   app-row + statusbar) does the math via flex grow chain. */
+.form-host{border:1px solid #ddd;border-radius:4px;padding:10px;
+  display:flex;flex-direction:column;min-height:0;flex:1 1 auto}
+.form-host > .boxsizer{flex:1;min-height:0}
+/* align-items:flex-start so children stay at their natural cross-axis
+   size by default. wxSizer semantics: a vertical sizer does NOT stretch
+   children across the panel unless wxEXPAND is set — the default flex
+   `align-items:stretch` would give every child full width, which is
+   not what desktop does. applyLayout overrides per-child with
+   align-self:stretch when wxEXPAND is present. */
+.boxsizer{display:flex;gap:6px;margin:4px 0;align-items:flex-start}
+.boxsizer.vert{flex-direction:column}
+.boxsizer.horz{flex-direction:row}
+/* Label-column alignment: TextCtrl (and any future labelrow control)
+   wraps in flex row [label, input-group] via class `.labelrow`. After
+   the parent vertical box-sizer renders, JS measures each label's
+   natural width and sets min-width = max across siblings → all inputs
+   start at the same x. Flex layout stays intact; wxSizer's per-child
+   proportion/flag/border still apply through applyLayout. Equivalent
+   in effect to desktop's ibVisualHost::CalculateLabelSize. */
+.labelrow{display:flex;align-items:stretch;gap:6px;min-height:0}
+.gridsizer{display:grid;gap:6px;margin:4px 0}
+.staticboxsizer{border:1px solid #bbb;border-radius:4px;padding:8px;margin:4px 0}
+.staticboxsizer>legend{padding:0 6px;color:#555;font-weight:600}
+/* pre-line preserves explicit \n in the caption while still wrapping
+   at whitespace. Desktop's static text control draws multi-line
+   captions natively; the default <span> textContent collapses
+   newlines into a single space, so without this a two-line label
+   shows as one run. */
+.statictext{display:inline-block;padding:2px 0;white-space:pre-line}
+/* Standalone buttons: platform-native-ish look with subtle gradient
+   + hover/active shades. Matches the toolbar tool styling closely so
+   the whole form reads as one control surface. */
+button.ctrl{padding:5px 14px;border:1px solid #b5bfcc;border-radius:3px;
+  background:linear-gradient(#fafbfc,#eef1f5);font:inherit;color:#222;
+  cursor:pointer;min-width:72px}
+button.ctrl:hover:not(:disabled){background:linear-gradient(#f2f6fc,#dde6f0);
+  border-color:#8fa7c8}
+button.ctrl:active:not(:disabled){background:#c6d5e8;border-color:#6b88ae}
+button.ctrl:disabled{opacity:.55;cursor:default}
+input.ctrl{padding:3px 6px;border:1px solid #aaa;border-radius:3px}
+/* Text editor group: input + inline side-buttons share one border,
+   mirroring desktop ibControlTextEditor where the Select/Open/Clear
+   glyphs sit INSIDE the control's frame. Inner input has no own
+   border; buttons are borderless icon-style buttons hugging the
+   right edge. Hover highlights each button individually. */
+/* Fixed flex-basis on the input group so side-buttons (… / × / open)
+   eat from the input's space rather than extending the whole group.
+   `flex:0 0 200px` pins width to 200px regardless of how many buttons
+   sit inside; input has `min-width:0` so it shrinks to give them room.
+   Mirrors desktop ibControlTextEditor where adding a side button
+   doesn't change the control's outer width — only the inner input
+   shrinks. */
+.texted{display:flex;align-items:stretch;border:1px solid #aaa;
+  border-radius:3px;background:#fff;overflow:hidden;min-height:0;
+  flex:0 0 200px}
+/* input/textarea and side-buttons inherit colour from the .texted
+   group, so the fg/bg pushed inline by TextCtrl.render reaches them.
+   background:transparent lets the group's bg show through uniformly
+   across input + button strip. */
+.texted > input,.texted > textarea{border:0;padding:3px 6px;outline:none;
+  font:inherit;color:inherit;background:transparent;
+  flex:1;min-width:0;min-height:0;resize:none}
+.texted > button{border:0;border-left:1px solid rgba(0,0,0,.08);
+  padding:0 8px;cursor:pointer;font:inherit;color:inherit;
+  background:transparent;flex-shrink:0}
+.texted > button:hover:not(:disabled){background:rgba(0,0,0,.06)}
+.texted > button:active:not(:disabled){background:rgba(0,0,0,.12)}
+.toolbar{display:flex;align-items:center;gap:2px;background:#eef1f4;border:1px solid #c9ced3;border-radius:3px;padding:3px 4px;margin:2px 0}
+.tool{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border:1px solid transparent;border-radius:3px;background:transparent;font:inherit;color:inherit;cursor:pointer;line-height:1.3}
+.tool:hover:not(:disabled){background:#dde6f0;border-color:#b5c4d6}
+.tool:active:not(:disabled){background:#c6d5e8;border-color:#90a9c7}
+.tool:disabled{opacity:.5;cursor:default}
+.tool .tool-icon{display:inline-block;width:16px;height:16px;flex-shrink:0;vertical-align:middle}
+.tool span.tool-icon{background:#9aa5b1;border-radius:2px}
+.tool img.tool-icon{object-fit:contain}
+.tool.tool-picture-only{padding:3px 6px}
+.toolseparator{display:inline-block;width:1px;height:18px;background:#c9ced3;margin:0 3px}
+#status{font-size:.85em;color:#888;margin-top:8px}
+/* Top-right network indicator: shown after 500ms of in-flight work
+   (loading spinner) or on fetch failure (connection-lost banner).
+   Fixed position so the form below never jitters as it appears. */
+/* Anchored just below the titlebar (≈30px) so the loading / error
+   banner doesn't overlap the title strip. */
+#netStatus{position:fixed;top:38px;right:12px;padding:5px 12px;border-radius:4px;
+  font-size:.85em;display:none;z-index:1000;box-shadow:0 1px 3px rgba(0,0,0,.1);
+  transition:opacity .15s}
+#netStatus.loading{background:#eef2ff;color:#3b50a0;border:1px solid #c4cfed}
+#netStatus.error{background:#fce5e5;color:#8a2e2e;border:1px solid #e6aaaa}
+#netStatus.debug-paused{background:#fff4e0;color:#a04020;border:1px solid #f0c0a0}
+#netStatus .dot{display:inline-block;width:8px;height:8px;border-radius:50%;
+  margin-right:6px;vertical-align:middle}
+#netStatus.loading .dot{background:#6a84e0;animation:pulse 1s infinite}
+#netStatus.error .dot{background:#c43b3b}
+#netStatus.debug-paused .dot{background:#d06030;animation:pulse 1.2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+/* Full-page overlay that hides the initial "Pick a form" placeholder
+   and the tab-bar building up in parallel fetches. Removed in one go
+   after login + loadForms + refreshTabs + paintActiveTab all resolve,
+   so the user sees either nothing or the finished layout — no
+   mid-construction flicker. */
+#bootOverlay{position:fixed;inset:0;background:#fff;z-index:2000;
+  display:flex;align-items:center;justify-content:center;
+  transition:opacity .15s}
+#bootOverlay.hide{opacity:0;pointer-events:none}
+.bootSpinner{width:36px;height:36px;border:3px solid #c8c8c8;
+  border-top-color:#3b50a0;border-radius:50%;
+  animation:bootSpin 1s linear infinite}
+@keyframes bootSpin{to{transform:rotate(360deg)}}
+/* Debug indicator inside the sidebar status line. Reuses #status's
+   existing real estate ("connecting..." / "connected") rather than
+   adding a separate overlay or badge. */
+#status .dbg{display:inline-block;margin-left:6px;padding:1px 6px;
+  border-radius:4px;font-size:.78em;letter-spacing:.04em;font-weight:600}
+#status .dbg.mode{background:#fdecea;color:#a04020;border:1px solid #f0c0b0}
+#status .dbg.paused{background:#a04020;color:#fff;border:1px solid #802010}
+/* Credentials prompt — shown when GET /auth-info says hasUsers=true.
+   Stacked on top of bootOverlay; both disappear together once login
+   succeeds and the initial fetches finish. */
+#authOverlay{position:fixed;inset:0;background:#f3f5f9;z-index:2100;
+  display:flex;align-items:center;justify-content:center}
+#authOverlay.hide{display:none}
+#authForm{background:#fff;padding:24px 28px;border-radius:8px;
+  box-shadow:0 8px 24px rgba(0,0,0,.14);min-width:280px;
+  display:flex;flex-direction:column;gap:10px;font-size:.92em}
+#authForm h3{margin:0 0 4px;font-weight:600}
+#authForm label{display:flex;flex-direction:column;gap:4px;color:#444}
+#authForm input{padding:6px 8px;border:1px solid #c3c9d1;border-radius:4px;
+  font-size:1em}
+#authForm input:focus{outline:2px solid #3b50a0;outline-offset:-1px;border-color:#3b50a0}
+#authError{color:#a22;font-size:.9em;min-height:1.1em}
+#authError.hide{visibility:hidden}
+#authForm button{padding:8px;background:#3b50a0;color:#fff;border:0;
+  border-radius:4px;font-size:1em;cursor:pointer;margin-top:4px}
+#authForm button:hover{background:#2f4189}
+/* Big rotating-circle loader shown centred on the content area while
+   a request is in flight > 500ms OR the host hasn't painted its tree
+   yet. Fixed-position + offset by sidebar width so it sits over the
+   main area (body is a flex row); semi-transparent so the previous
+   tree stays faintly visible underneath, pointer-events:none so
+   clicks still reach the DOM below once they become interactive. */
+/* Spinner overlay covers the main content area only — offset by
+   titlebar (top) / statusbar (bottom) / sidebar (left) so the chrome
+   stays visible while a request is in flight. Approx offsets — slight
+   overlap at the seam is acceptable. */
+#spinner{position:fixed;top:32px;left:260px;right:0;bottom:22px;display:none;
+  align-items:center;justify-content:center;background:rgba(255,255,255,.6);
+  z-index:100;pointer-events:none}
+/* Modal dialog framework — foundation for notifications, filter forms,
+   any blocking interaction. Each open dialog pushes a backdrop +
+   dialog box; multiple can stack (each layer increments z-index).
+   Backdrop dims the page; dialog sits centred with shadow + rounded
+   corners. API in JS: OES.showDialog({title, body, buttons, onClose}). */
+.modal-backdrop{position:fixed;inset:0;background:rgba(15,20,35,.42);
+  z-index:3000;display:flex;align-items:center;justify-content:center;
+  animation:modalFadeIn .12s ease-out}
+@keyframes modalFadeIn{from{opacity:0}to{opacity:1}}
+.modal-dialog{background:#fff;border-radius:6px;
+  box-shadow:0 10px 40px rgba(0,0,0,.28),0 2px 6px rgba(0,0,0,.18);
+  min-width:280px;max-width:min(640px,calc(100vw - 48px));
+  max-height:calc(100vh - 60px);display:flex;flex-direction:column;
+  animation:modalSlideIn .14s ease-out;overflow:hidden}
+@keyframes modalSlideIn{from{transform:translateY(-8px);opacity:0}
+  to{transform:translateY(0);opacity:1}}
+.modal-header{padding:10px 14px;background:linear-gradient(#f7f9fc,#eef2f7);
+  border-bottom:1px solid #d8dde6;display:flex;align-items:center;
+  gap:8px;font-weight:600;color:#2a3142;font-size:.95em;
+  user-select:none;cursor:move}
+/* `.dragging` is added during an active drag so the cursor stays
+   "move" everywhere on the page (mouse may leave the header strip
+   while still tracking). Also disables CSS animations so the
+   slide-in transform doesn't fight the inline left/top update. */
+.modal-dialog.dragging{animation:none}
+body.modal-dragging,body.modal-dragging *{cursor:move !important;user-select:none !important}
+.modal-title{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.modal-close{width:22px;height:22px;flex:0 0 22px;border-radius:50%;
+  border:0;background:transparent;cursor:pointer;color:#666;
+  font:700 14px/1 Arial,sans-serif;display:inline-flex;
+  align-items:center;justify-content:center;padding:0;
+  transition:background .1s,color .1s}
+.modal-close:hover{background:#d73a3a;color:#fff}
+.modal-body{padding:14px 16px;overflow:auto;flex:1 1 auto;
+  min-height:0;line-height:1.45;color:#222;white-space:pre-line}
+.modal-footer{padding:8px 12px;background:#f4f6fa;border-top:1px solid #dde2eb;
+  display:flex;gap:8px;justify-content:flex-end;flex:0 0 auto}
+.modal-button{padding:5px 16px;border:1px solid #b5bfcc;border-radius:3px;
+  background:linear-gradient(#fafbfc,#eef1f5);font:inherit;color:#222;
+  cursor:pointer;min-width:80px;line-height:1.3}
+.modal-button:hover:not(:disabled){background:linear-gradient(#f2f6fc,#dde6f0);
+  border-color:#8fa7c8}
+.modal-button:active:not(:disabled){background:#c6d5e8;border-color:#6b88ae}
+.modal-button.primary{background:linear-gradient(#4561b2,#3b50a0);
+  border-color:#2f4189;color:#fff}
+.modal-button.primary:hover:not(:disabled){background:linear-gradient(#5773c2,#4561b2)}
+.modal-button.primary:active:not(:disabled){background:#2f4189;border-color:#243574}
+.modal-button:disabled{opacity:.55;cursor:default}
+/* Fields container inside dialog body — declarative `fields[]` option.
+   Layout: vertical stack of labelrows. Reuses .labelrow / .statictext
+   for visual parity with main form rendering; native inputs styled to
+   match `.texted` look (single border, no padding clash). Width
+   defaults to natural; user can set fieldWidth in opts. */
+.modal-fields{display:flex;flex-direction:column;gap:8px}
+.modal-fields > .labelrow{align-items:center}
+.modal-fields .statictext{flex-shrink:0;min-width:0}
+.modal-fields input[type=text],.modal-fields input[type=number],
+.modal-fields input[type=password],.modal-fields textarea,
+.modal-fields select{padding:4px 8px;border:1px solid #aaa;
+  border-radius:3px;font:inherit;color:#222;background:#fff;
+  min-width:180px;box-sizing:border-box}
+.modal-fields textarea{min-height:60px;resize:vertical}
+.modal-fields input:focus,.modal-fields textarea:focus,
+.modal-fields select:focus{outline:2px solid #3b50a0;outline-offset:-1px;
+  border-color:#3b50a0}
+.modal-fields label.checkboxrow{display:inline-flex;align-items:center;
+  gap:6px;cursor:pointer}
+#spinner.show{display:flex}
+#spinner .ring{width:42px;height:42px;border:4px solid #dbe3f0;
+  border-top-color:#3b50a0;border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style></head><body>
+<!-- Title bar: app caption + slot for menubar (populated when /functions
+     and other dropdown sources land). Sits above everything; mirrors
+     desktop wxFrame's menubar area. -->
+<header id="titlebar">
+  <span id="app-title">OES Enterprise</span>
+  <nav id="menubar"></nav>
+</header>
+<!-- app-row: middle stretchable section containing sidebar + main. -->
+<div id="app-row">
+  <aside id="sidebar">
+    <!-- Subsystem navigation populated from /interfaces. Interfaces own
+         the sidebar — opening forms by metaID happens through them
+         (and "All functions" in the titlebar as a fallback). -->
+    <div id="interfaces" class="hidden"></div>
+  </aside>
+  <main id="main">
+    <div id="tabs-row">
+      <button id="tabs-prev" class="tabs-scroll" type="button" aria-label="Scroll tabs left">&#8249;</button>
+      <div id="tabs"></div>
+      <button id="tabs-next" class="tabs-scroll" type="button" aria-label="Scroll tabs right">&#8250;</button>
+    </div>
+    <div id="tab-body"><p>Pick a form on the left.</p></div>
+  </main>
+</div>
+<!-- Output panel: hidden by default; OES.output(msg) appends a line
+     and opens it. Click on header collapses; close X removes it. -->
+<section id="outputpanel">
+  <div id="output-resize" title="Drag to resize"></div>
+  <div id="output-header" id-title="Click to hide">
+    <span id="output-title">Output</span>
+    <button id="output-close" type="button" aria-label="Close output">&times;</button>
+  </div>
+  <div id="output-body"></div>
+</section>
+<!-- Status bar: thin strip at the bottom. Connection / session state
+     lives on the left; right side reserved for future per-form fields.
+     Mirrors desktop wxFrame's status bar. The "Output" sb-tab toggles
+     the output panel above — matches GUI's docked-pane tab pattern. -->
+<footer id="statusbar">
+  <span id="status">connecting&hellip;</span>
+  <span class="sep"></span>
+  <button id="output-tab" class="sb-tab" type="button" aria-pressed="false">Output</button>
+</footer>
+<div id="bootOverlay"><div class="bootSpinner"></div></div>
+<div id="authOverlay" class="hide">
+  <form id="authForm" autocomplete="on">
+    <h3>Login</h3>
+    <label>User <input id="authUser" name="user" type="text" autocomplete="username" autofocus></label>
+    <label>Password <input id="authPwd" name="password" type="password" autocomplete="current-password"></label>
+    <div id="authError" class="hide">Login failed</div>
+    <button type="submit">Sign in</button>
+  </form>
+</div>
+<script>
+const API=location.pathname.replace(/\/$/,'');
+
+// Tab-close cleanup: on pagehide fire a sendBeacon to /logout so the
+// server DELETEs the session row immediately instead of waiting for the
+// 2-minute idle-timeout sweep. The historic race with reload-GET / is
+// no longer a concern — the server's GET / handler re-mints the
+// session for an unknown id (cookie or header), so a beacon-destroyed
+// session followed by a reload-GET lands on a fresh same-id session
+// instead of the "half-destroyed" one from before. The 2-minute
+// idle-timeout stays as belt-and-suspenders for browsers that drop
+// beacons (Safari edge cases, Task Manager kill, tab crash).
+const status=document.getElementById('status');
+const main=document.getElementById('tab-body');
+const tabsBar=document.getElementById('tabs');
+
+// Top-right network-status indicator. Two states:
+//   loading — at least one request has been in flight > 500ms (hides
+//             the momentary sub-second fetches that would otherwise
+//             flicker the banner on every click).
+//   error   — last completed fetch failed (network down, !r.ok, or
+//             fetch itself threw). Sticky until a subsequent success
+//             clears it, so an intermittent poll failure is visible
+//             even after it resolves.
+const netStatus=document.createElement('div');
+netStatus.id='netStatus';
+netStatus.innerHTML='<span class="dot"></span><span class="txt"></span>';
+document.body.appendChild(netStatus);
+const netStatusTxt=netStatus.querySelector('.txt');
+function showNetStatus(cls,text){
+  netStatus.className=cls;
+  netStatusTxt.textContent=text;
+  netStatus.style.display='block';
+}
+function hideNetStatus(){ netStatus.style.display='none'; }
+
+// Big centred spinner over the main content area — shows when the
+// browser is waiting for a server response (host still painting,
+// command still running). Raised after the same 500ms threshold so
+// sub-second clicks stay flicker-free.
+const spinner=document.createElement('div');
+spinner.id='spinner';
+spinner.innerHTML='<div class="ring"></div>';
+// Fixed-position overlay — append to body so main.innerHTML=''
+// during tree rebuilds doesn't wipe the spinner out.
+document.body.appendChild(spinner);
+function showSpinner(){ spinner.classList.add('show'); }
+function hideSpinner(){ spinner.classList.remove('show'); }
+
+// Modal dialog framework. Opens a centred dialog with a darkened
+// backdrop; stacks if called repeatedly. Foundation for notifications,
+// filter forms, any blocking interaction.
+//
+// API:
+//   const dlg = OES.showDialog({
+//     title:  'Confirm',
+//     body:   'Are you sure?',            // string or HTMLElement
+//     buttons: [
+//       {label:'OK',     primary:true, onClick:(d)=>{ ... ; d.close(); }},
+//       {label:'Cancel', onClick:(d)=>d.close()}
+//     ],
+//     onClose: ()=>{ ... },               // fires after close
+//     dismissible: true                   // Esc + backdrop click → close
+//   });
+//   dlg.close();                          // programmatic close
+//   dlg.bodyEl, dlg.footerEl              // for follow-up DOM tweaks
+//
+// Defaults: single "OK" primary button that closes; dismissible:true.
+const openDialogStack = [];
+function showDialog(opts){
+  opts = opts || {};
+  const dismissible = opts.dismissible !== false;
+  const backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop';
+  // Stack z-index above previous backdrops so a nested dialog visually
+  // covers its opener — start at 3000 (matching CSS), each new layer +10.
+  backdrop.style.zIndex = String(3000 + openDialogStack.length * 10);
+  const dlg = document.createElement('div');
+  dlg.className = 'modal-dialog';
+  dlg.setAttribute('role','dialog');
+  dlg.setAttribute('aria-modal','true');
+  // Header
+  const header = document.createElement('div');
+  header.className = 'modal-header';
+  const titleEl = document.createElement('span');
+  titleEl.className = 'modal-title';
+  titleEl.textContent = opts.title || '';
+  header.appendChild(titleEl);
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'modal-close';
+  closeBtn.setAttribute('aria-label','Close');
+  closeBtn.textContent = '×';
+  closeBtn.style.cursor = 'pointer';   // override header's move-cursor
+  header.appendChild(closeBtn);
+  dlg.appendChild(header);
+  // Drag by header: switch to position:absolute on first mousedown, then
+  // update left/top inline as the mouse moves. Backdrop stays
+  // flex-centred so any siblings (none today) still centre; only this
+  // dialog drops out of the flow. Constraint: keep at least 40px of
+  // header inside the viewport on each side so the close button stays
+  // reachable.
+  header.addEventListener('mousedown', (e)=>{
+    if (e.button !== 0) return;                       // primary button only
+    if (e.target.closest('.modal-close')) return;     // not the X
+    e.preventDefault();
+    const rect = dlg.getBoundingClientRect();
+    dlg.style.position = 'absolute';
+    dlg.style.left = rect.left + 'px';
+    dlg.style.top  = rect.top  + 'px';
+    dlg.style.margin = '0';
+    dlg.classList.add('dragging');
+    document.body.classList.add('modal-dragging');
+    const offX = e.clientX - rect.left;
+    const offY = e.clientY - rect.top;
+    function onMove(ev){
+      const w = dlg.offsetWidth, h = dlg.offsetHeight;
+      let nx = ev.clientX - offX;
+      let ny = ev.clientY - offY;
+      // Clamp: title strip always partially visible.
+      const minX = 40 - w, maxX = window.innerWidth - 40;
+      const minY = 0,      maxY = window.innerHeight - 40;
+      if (nx < minX) nx = minX; else if (nx > maxX) nx = maxX;
+      if (ny < minY) ny = minY; else if (ny > maxY) ny = maxY;
+      dlg.style.left = nx + 'px';
+      dlg.style.top  = ny + 'px';
+    }
+    function onUp(){
+      dlg.classList.remove('dragging');
+      document.body.classList.remove('modal-dragging');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup',   onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup',   onUp);
+  });
+  // Body — accepts string OR HTMLElement OR (with opts.fields) a
+  // declarative form spec. Order: optional body text first, then fields.
+  const bodyEl = document.createElement('div');
+  bodyEl.className = 'modal-body';
+  if (opts.body instanceof HTMLElement) bodyEl.appendChild(opts.body);
+  else if (opts.body != null) {
+    const textNode = document.createElement('div');
+    textNode.textContent = String(opts.body);
+    bodyEl.appendChild(textNode);
+  }
+  // Field controls — populated via opts.fields[]. Each entry:
+  //   {name, type, label, value, options?, placeholder?, disabled?}
+  //   type ∈ 'text' | 'number' | 'password' | 'textarea' | 'checkbox' | 'select'
+  // Field elements are stored on `fieldEls[name]`; their current values
+  // are reachable via `handle.values` getter (reads from DOM at access
+  // time so any user edits are reflected).
+  const fieldEls = {};
+  if (Array.isArray(opts.fields) && opts.fields.length > 0) {
+    const formEl = document.createElement('div');
+    formEl.className = 'modal-fields';
+    for (const f of opts.fields) {
+      const row = document.createElement('div');
+      row.className = 'labelrow';
+      row.dataset.labelrow = '1';
+      const lbl = document.createElement('span');
+      lbl.className = 'statictext';
+      lbl.textContent = f.label || '';
+      row.appendChild(lbl);
+      let inputEl;
+      const t = f.type || 'text';
+      if (t === 'checkbox') {
+        // Checkbox sits in column 2 (the input area) as a label-wrapped
+        // input so the click target is the whole row including caption.
+        // Here `lbl` is the column-1 caption; the checkbox itself goes
+        // bare into the input cell.
+        inputEl = document.createElement('input');
+        inputEl.type = 'checkbox';
+        inputEl.checked = !!f.value;
+        row.appendChild(inputEl);
+      } else if (t === 'select') {
+        inputEl = document.createElement('select');
+        for (const opt of (f.options || [])) {
+          const o = document.createElement('option');
+          o.value = String(opt.value);
+          o.textContent = opt.label != null ? opt.label : String(opt.value);
+          if (String(opt.value) === String(f.value)) o.selected = true;
+          inputEl.appendChild(o);
+        }
+        row.appendChild(inputEl);
+      } else if (t === 'textarea') {
+        inputEl = document.createElement('textarea');
+        if (f.value != null) inputEl.value = String(f.value);
+        if (f.placeholder) inputEl.placeholder = f.placeholder;
+        row.appendChild(inputEl);
+      } else {
+        inputEl = document.createElement('input');
+        inputEl.type = (t === 'number' || t === 'password') ? t : 'text';
+        if (f.value != null) inputEl.value = String(f.value);
+        if (f.placeholder) inputEl.placeholder = f.placeholder;
+        row.appendChild(inputEl);
+      }
+      if (f.disabled) inputEl.disabled = true;
+      if (f.name) fieldEls[f.name] = { el: inputEl, type: t };
+      formEl.appendChild(row);
+    }
+    bodyEl.appendChild(formEl);
+  }
+  dlg.appendChild(bodyEl);
+  // Footer with buttons.
+  const footerEl = document.createElement('div');
+  footerEl.className = 'modal-footer';
+  const handle = {
+    backdrop, dialog: dlg, bodyEl, footerEl, fieldEls, close,
+    // Read current field values fresh from the DOM on each access —
+    // captures whatever the user typed/toggled up to the moment of read.
+    get values() {
+      const v = {};
+      for (const name in fieldEls) {
+        const { el, type } = fieldEls[name];
+        v[name] = (type === 'checkbox') ? el.checked
+                : (type === 'number')   ? (el.value === '' ? null : Number(el.value))
+                : el.value;
+      }
+      return v;
+    }
+  };
+  const btnDefs = Array.isArray(opts.buttons) && opts.buttons.length > 0
+    ? opts.buttons : [{label:'OK', primary:true, onClick:close}];
+  for (const def of btnDefs) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'modal-button' + (def.primary ? ' primary' : '');
+    b.textContent = def.label || 'OK';
+    if (def.disabled) b.disabled = true;
+    b.onclick = () => {
+      if (typeof def.onClick === 'function') def.onClick(handle);
+      else close();
+    };
+    footerEl.appendChild(b);
+  }
+  dlg.appendChild(footerEl);
+  backdrop.appendChild(dlg);
+  // Dismissal hooks.
+  closeBtn.onclick = close;
+  if (dismissible){
+    backdrop.addEventListener('mousedown', (e) => {
+      // Only close on actual backdrop click (not inside the dialog).
+      if (e.target === backdrop) close();
+    });
+  }
+  document.body.appendChild(backdrop);
+  openDialogStack.push(handle);
+  // Auto-focus primary button (or first enabled button) so Enter
+  // commits the default action.
+  const primary = footerEl.querySelector('.modal-button.primary:not(:disabled)')
+    || footerEl.querySelector('.modal-button:not(:disabled)');
+  if (primary) primary.focus();
+  function close(){
+    // Idempotent — closing twice is a no-op.
+    const idx = openDialogStack.indexOf(handle);
+    if (idx === -1) return;
+    openDialogStack.splice(idx, 1);
+    backdrop.remove();
+    if (typeof opts.onClose === 'function') opts.onClose();
+  }
+  return handle;
+}
+
+// Global Esc handler — closes the topmost dialog if it allows dismissal.
+// Attached once; no-op when the stack is empty.
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || openDialogStack.length === 0) return;
+  const top = openDialogStack[openDialogStack.length - 1];
+  // Dialogs without dismissible:true track their state via onClose only;
+  // close() respects that semantically (no special blocking logic here
+  // since the caller controls onClose). For now, Esc always closes.
+  top.close();
+});
+// Convenience wrappers.
+//   OES.alert(text, title?)            — single OK button.
+//   OES.confirm(text, onYes, title?)   — Yes/No; onYes fires on Yes.
+//   OES.prompt(text, onSubmit, opts?)  — single-field text input; onSubmit
+//                                        receives the entered string.
+// All resolve via the same showDialog machinery, so dragging /
+// stacking / Esc-to-close behave consistently.
+function alertDialog(text, title){
+  return showDialog({title: title || '', body: text});
+}
+function confirmDialog(text, onYes, title){
+  return showDialog({
+    title: title || '',
+    body: text,
+    buttons: [
+      {label:'Да', primary:true, onClick:(d)=>{ d.close(); if (typeof onYes === 'function') onYes(); }},
+      {label:'Нет', onClick:(d)=>d.close()}
+    ]
+  });
+}
+function promptDialog(text, onSubmit, opts){
+  opts = opts || {};
+  return showDialog({
+    title: opts.title || '',
+    body: text,
+    fields: [{name:'value', type:'text', label:'', value: opts.initial || '', placeholder: opts.placeholder || ''}],
+    buttons: [
+      {label:'OK', primary:true, onClick:(d)=>{
+        const v = d.values.value;
+        d.close();
+        if (typeof onSubmit === 'function') onSubmit(v);
+      }},
+      {label:'Отмена', onClick:(d)=>d.close()}
+    ]
+  });
+}
+// Exposed on window so script-callable handlers + console testing can
+// reach it. Same surface point we'll grow for output(), notify() etc.
+window.OES = window.OES || {};
+window.OES.showDialog = showDialog;
+window.OES.alert      = alertDialog;
+window.OES.confirm    = confirmDialog;
+window.OES.prompt     = promptDialog;
+
+// Output panel — append messages to a collapsible log strip at the
+// bottom. First append auto-opens it; clicking the header (or × button)
+// hides. Drag the top edge to resize. Mirrors desktop's wxLogMessage
+// destination for script Message() / diagnostic output.
+//
+// API:
+//   OES.output(msg, level?)         // append; level ∈ '' | 'warn' | 'error' | 'debug'
+//   OES.log / OES.warn / OES.error  // level shortcuts
+//   OES.output.clear()              // wipe lines
+//   OES.output.show() / hide() / toggle()
+const outputPanel = document.getElementById('outputpanel');
+const outputBody  = document.getElementById('output-body');
+const outputHdr   = document.getElementById('output-header');
+const outputClose = document.getElementById('output-close');
+const outputResize= document.getElementById('output-resize');
+function pad2(n){ return String(n).padStart(2,'0'); }
+function timestamp(){
+  const d = new Date();
+  return pad2(d.getHours())+':'+pad2(d.getMinutes())+':'+pad2(d.getSeconds());
+}
+function outputAppend(msg, level){
+  const line = document.createElement('div');
+  line.className = 'output-line' + (level ? (' ' + level) : '');
+  const ts = document.createElement('span');
+  ts.className = 'ts';
+  ts.textContent = timestamp();
+  line.appendChild(ts);
+  // Plain text for safety; if a future use case needs HTML
+  // formatting (links, bold), add a separate {html:'…'} branch.
+  line.appendChild(document.createTextNode(msg == null ? '' : String(msg)));
+  outputBody.appendChild(line);
+  outputBody.scrollTop = outputBody.scrollHeight;
+  // Auto-open + sync status-bar tab so a backend-driven message
+  // (Message() etc.) makes the panel + tab light up together.
+  outputShow();
+}
+function syncOutputTab(){
+  const shown = outputPanel.classList.contains('shown');
+  outputTab.classList.toggle('active', shown);
+  outputTab.setAttribute('aria-pressed', shown ? 'true' : 'false');
+}
+function outputClear(){ outputBody.innerHTML = ''; }
+function outputHide(){ outputPanel.classList.remove('shown'); syncOutputTab(); }
+function outputShow(){ outputPanel.classList.add('shown');    syncOutputTab(); }
+function outputToggle(){
+  outputPanel.classList.toggle('shown');
+  syncOutputTab();
+}
+// Status-bar tab is the primary toggle (matches GUI docked-pane tab).
+// The × in the header still hides for users who want to dismiss
+// without scanning the statusbar. Clicking the header itself does
+// NOT hide — that conflicts with selecting text inside the panel.
+const outputTab = document.getElementById('output-tab');
+outputTab.addEventListener('click', outputToggle);
+outputClose.addEventListener('click', outputHide);
+// Drag-to-resize from top edge. Mousedown on the handle starts tracking;
+// mousemove updates panel height in px (clamped to min/max).
+outputResize.addEventListener('mousedown', (e) => {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  const startY = e.clientY;
+  const startH = outputPanel.offsetHeight;
+  function onMove(ev){
+    const dy = startY - ev.clientY;     // dragging up grows the panel
+    let h = startH + dy;
+    if (h < 60) h = 60;
+    if (h > Math.floor(window.innerHeight * 0.7)) h = Math.floor(window.innerHeight * 0.7);
+    outputPanel.style.height = h + 'px';
+  }
+  function onUp(){
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+});
+// Function-with-methods pattern: OES.output is callable (append) AND
+// carries control methods. Matches console.log(...) ergonomics.
+outputAppend.clear  = outputClear;
+outputAppend.show   = outputShow;
+outputAppend.hide   = outputHide;
+outputAppend.toggle = outputToggle;
+window.OES.output = outputAppend;
+window.OES.log    = (m) => outputAppend(m, '');
+window.OES.warn   = (m) => outputAppend(m, 'warn');
+window.OES.error  = (m) => outputAppend(m, 'error');
+window.OES.debug  = (m) => outputAppend(m, 'debug');
+
+// Surfaces a backend exception response (the JSON shape produced by
+// wfrontend.cpp::ExceptionToJson) to the user — dialog for "you need
+// to do something" cases (lock conflict, forbidden), toast for
+// "something went wrong" cases (script exception), silence for
+// interrupted (user pressed cancel — they already know). Returns
+// true when the payload was an error response (caller should skip
+// the success render path), false otherwise. See docs/record-locks.md.
+window.OES.handleBackendError = (j) => {
+  if (!j || typeof j !== 'object' || !j.error) return false;
+  const msg = j.message || '';
+  switch (j.error) {
+    case 'lock_conflict':
+      if (j.kind === 'version_changed') {
+        OES.alert(msg || 'Объект был изменён другим пользователем. Перечитайте.',
+                  'Конфликт версий');
+      } else {
+        // row_lock_timeout — short blocking conflict, not a state mismatch.
+        // Toast (not dialog) so user can retry without ceremony.
+        OES.error(msg || 'Объект сейчас редактируется другим пользователем. Попробуйте позже.');
+      }
+      break;
+    case 'forbidden':
+      OES.alert(msg || 'Недостаточно прав для выполнения операции.',
+                'Доступ запрещён');
+      break;
+    case 'interrupted':
+      // User pressed Cancel — silent. Server-side ibBackendInterruptException.
+      break;
+    case 'script_exception':
+    default:
+      OES.error(msg || 'Ошибка выполнения операции.');
+      break;
+  }
+  return true;
+};
+
+let inflight=0, loadingTimer=null, lastError=false;
+// Set by pollDebugStatus from /debug-status. dbgMode reflects wes
+// process-wide --debug; dbgPaused reflects this tab's session being
+// parked at a breakpoint. Used by beginRequest below to relabel the
+// loading banner — when scripts may stop on a breakpoint, "Загрузка…"
+// is misleading; "В режиме отладки" / "Отладчик: пауза" tells the user
+// the real reason the UI is waiting.
+let dbgMode   = false;
+let dbgPaused = false;
+// Threshold chosen so the common triad (poll + user click fetching
+// back-to-back) completes under it on a healthy connection. Anything
+// slower than this is genuinely worth a spinner. Polls are ~5ms,
+// /tab close ~230ms, /action ~200ms — so 800ms only fires on real lag.
+const LOADING_THRESHOLD_MS = 800;
+function beginRequest(){
+  // Fresh in-flight session → reset the timer to measure from now,
+  // not from a poll that finished long ago.
+  if(inflight===0 && loadingTimer){ clearTimeout(loadingTimer); loadingTimer=null; }
+  inflight++;
+  if(loadingTimer) return;
+  loadingTimer=setTimeout(()=>{
+    loadingTimer=null;
+    if(inflight>0 && !lastError && !dbgPaused){
+      // Relabel as "В режиме отладки" when wes was started with
+      // --debug — any stall in this state likely means a breakpoint
+      // is about to fire (or just fired) on the script thread.
+      showNetStatus(dbgMode ? 'debug-paused' : 'loading',
+                    dbgMode ? 'В режиме отладки' : 'Загрузка…');
+      showSpinner();
+    }
+  }, LOADING_THRESHOLD_MS);
+}
+function endRequest(ok){
+  inflight=Math.max(0,inflight-1);
+  if(inflight===0 && loadingTimer){ clearTimeout(loadingTimer); loadingTimer=null; }
+  if(ok){
+    lastError=false;
+    if(inflight===0 && !dbgPaused){ hideNetStatus(); hideSpinner(); }
+  } else {
+    lastError=true;
+    if(!dbgPaused) showNetStatus('error','Нет связи с сервером');
+    if(inflight===0) hideSpinner();
+  }
+}
+
+
+// Per-tab session id. Lives in sessionStorage, which is scoped to a
+// single browser tab — every new tab (or window) starts with its own
+// fresh id, so the server can back each tab with a distinct ibWebSession.
+// Cookie-only clients still work via the legacy fallback on the server,
+// but all fetches we make here attach X-OES-Session so the server routes
+// us correctly.
+function genTabSid(){
+  // Dashed UUID form — identical to ibGuid::str() on the server so
+  // this one string serves as X-OES-Session header, oes_session
+  // cookie, SessionManager map key, and sys_session.session PK.
+  // crypto.randomUUID is the modern path; the fallback hand-rolls
+  // a v4-ish layout so ancient browsers still produce a parsable
+  // UUID shape.
+  if (crypto && crypto.randomUUID) return crypto.randomUUID();
+  const hex = Array.from({length:32},()=>((Math.random()*16)|0).toString(16)).join('');
+  return hex.slice(0,8) + '-' + hex.slice(8,12) + '-4' + hex.slice(13,16)
+    + '-' + ((8 + ((Math.random()*4)|0)).toString(16)) + hex.slice(17,20)
+    + '-' + hex.slice(20,32);
+}
+let tabSid = sessionStorage.getItem('oes_tab_sid') || genTabSid();
+sessionStorage.setItem('oes_tab_sid', tabSid);
+
+// "Duplicate tab" copies sessionStorage verbatim — both tabs boot
+// with the same oes_tab_sid, slam the same server-side ibWebSession,
+// and the user sees cross-talk (one tab's tabs strip reflecting the
+// other's clicks). Detect collisions via a BroadcastChannel handshake:
+// on startup each tab pings its sid, any other tab with the same sid
+// claims ownership, and the later arrival rotates to a fresh sid and
+// hard-reloads so the rest of the page re-inits cleanly.
+if (typeof BroadcastChannel !== 'undefined') {
+  const bc = new BroadcastChannel('oes-tab-sid');
+  let conflicted = false;
+  bc.onmessage = (ev) => {
+    if (!ev.data || ev.data.sid !== tabSid) return;
+    if (ev.data.type === 'ping') {
+      bc.postMessage({ type: 'claim', sid: tabSid });
+    } else if (ev.data.type === 'claim') {
+      conflicted = true;
+    }
+  };
+  bc.postMessage({ type: 'ping', sid: tabSid });
+  setTimeout(() => {
+    if (conflicted) {
+      tabSid = genTabSid();
+      sessionStorage.setItem('oes_tab_sid', tabSid);
+      // Clean reload — server mints a fresh session on the first hit
+      // with the new tabSid. The original tab keeps its session intact.
+      location.reload();
+    }
+  }, 150);
+}
+
+// Thin fetch wrapper — tracks in-flight count + last-success state so
+// the banner can reflect them. Injects X-OES-Session on every request
+// so the server picks the tab-local session over the shared cookie.
+async function netFetch(url, opts){
+  beginRequest();
+  const o = Object.assign({}, opts || {});
+  o.headers = Object.assign({}, o.headers || {}, { 'X-OES-Session': tabSid });
+  try {
+    const r=await fetch(url, o);
+    endRequest(r.ok);
+    return r;
+  } catch (e) {
+    endRequest(false);
+    throw e;
+  }
+}
+
+// Best-effort tab-close cleanup. pagehide (and the legacy beforeunload
+// fallback) fire both on close and on reload/navigation, but the
+// server's GET / mints a fresh session for an unknown id, so a racing
+// reload just lands on a clean slate with the same tabSid — no broken
+// state. sendBeacon is queued by the browser and delivered even after
+// the page unloads; we pass ?sid because beacon can't attach headers.
+window.addEventListener('pagehide', () => {
+  try {
+    navigator.sendBeacon(
+      API + '/logout?sid=' + encodeURIComponent(tabSid));
+  } catch (e) { /* best-effort */ }
+});
+
+// In-flight guard so overlapping refresh calls don't race on the DOM.
+// The server-side /session is authoritative, so dropping a concurrent
+// call is safe — the first one's result already reflects current state.
+let refreshingTabs=false;
+// metaGeneration captured on first successful /session read. Set to
+// null until the first /session response arrives. See showSessionLost
+// for how it distinguishes "config changed" from "session lost".
+let initialMetaGen = null;
+// Apply window chrome (title, status text) and drain backend-pushed
+// notifications (messages, clearMessages flag) from a /session JSON
+// response. Idempotent — calling repeatedly with the same payload is
+// safe; the message queue is drained server-side, so each poll only
+// sees the deltas since the last drain.
+function applyChromeFromSession(info){
+  if (!info || typeof info !== 'object') return;
+  // Backend SetTitle takes precedence over the static "OES Enterprise"
+  // placeholder; empty string falls back to the placeholder so a
+  // session that hasn't called SetTitle still shows something useful.
+  if (typeof info.title === 'string'){
+    const t = info.title || 'OES Enterprise';
+    const appTitle = document.getElementById('app-title');
+    if (appTitle) appTitle.textContent = t;
+    // Browser tab title — keep the "OES Web" branding when backend
+    // hasn't set its own.
+    document.title = info.title ? info.title : 'OES Web';
+  }
+  // Status text: only override when backend pushed something non-empty.
+  // The frontend's own "connecting…" / "connected" indicator stays as
+  // long as backend doesn't claim the strip.
+  if (info.statusText){
+    const statusEl = document.getElementById('status');
+    if (statusEl) statusEl.textContent = info.statusText;
+  }
+  // ClearMessage first (wipe before appending fresh lines), then the
+  // accumulated messages in order. Each level → OES.output level
+  // string: 1=info, 2=warn, 3=error.
+  if (info.clearMessages){
+    OES.output.clear();
+  }
+  if (Array.isArray(info.messages)){
+    for (const m of info.messages){
+      const level = (m.level === 2) ? 'warn' : (m.level === 3) ? 'error' : '';
+      OES.output(m.text == null ? '' : String(m.text), level);
+    }
+  }
+  // "All functions" titlebar button visibility — backend reports the
+  // current user's AccessRight_ModeAllFunction role. The button lives
+  // in #menubar and is created lazily on first poll that allows it.
+  if (info.accessAllFunctions === true) {
+    ensureAllFunctionsButton();
+  } else if (info.accessAllFunctions === false) {
+    const btn = document.getElementById('mb-all-functions');
+    if (btn) btn.remove();
+  }
+  // Pending modal — backend's ShowModalMessage is parked on this id.
+  // Render a dialog with buttons derived from the wx style bitmask;
+  // POST /modal-reply/<id> with the chosen wx code on click. Track the
+  // shown modal id so a poll that returns the same modal doesn't reopen
+  // the dialog (server keeps the modal in queue until we reply).
+  applyPendingModal(info.modal || null);
+}
+
+// wx style flag constants (match wx/defs.h). Used to derive the dialog
+// button set from the raw style int sent by backend.
+const WX_OK     = 0x0004;
+const WX_CANCEL = 0x0010;
+const WX_YES    = 0x2000;
+const WX_NO     = 0x4000;
+
+let currentModalId     = null;
+let currentModalHandle = null;
+function applyPendingModal(modal){
+  // No modal pending — close any leftover dialog (server resolved or
+  // session changed).
+  if (!modal || !modal.id){
+    if (currentModalHandle){
+      currentModalHandle.close();
+      currentModalHandle = null;
+      currentModalId = null;
+    }
+    return;
+  }
+  // Already showing — do nothing (server will keep echoing until reply).
+  if (currentModalId === modal.id) return;
+  // Switching to a different modal — close the stale one first.
+  if (currentModalHandle){
+    currentModalHandle.close();
+    currentModalHandle = null;
+  }
+  currentModalId = modal.id;
+  const style = modal.style | 0;
+  let replied = false;
+  function postReply(code){
+    if (replied) return;
+    replied = true;
+    const body = new URLSearchParams({result: String(code)});
+    fetch(API + '/modal-reply/' + encodeURIComponent(modal.id), {
+      method:'POST', credentials:'same-origin',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body: body.toString()
+    }).catch(()=>{ /* network blip — next poll re-queues */ });
+  }
+  // Buttons from style bitmask:
+  //   wxYES + wxNO          → Да / Нет (Yes default)
+  //   wxOK alone            → OK
+  //   wxOK + wxCANCEL       → OK / Отмена
+  //   + wxCANCEL anywhere   → adds Отмена
+  const buttons = [];
+  if (style & WX_YES) buttons.push({label:'Да', primary:true,
+    onClick: (d)=>{ postReply(WX_YES); d.close(); }});
+  if (style & WX_NO)  buttons.push({label:'Нет',
+    onClick: (d)=>{ postReply(WX_NO); d.close(); }});
+  if ((style & WX_OK) || buttons.length === 0)
+    buttons.unshift({label:'OK', primary: buttons.length === 0,
+      onClick: (d)=>{ postReply(WX_OK); d.close(); }});
+  if (style & WX_CANCEL) buttons.push({label:'Отмена',
+    onClick: (d)=>{ postReply(WX_CANCEL); d.close(); }});
+  currentModalHandle = OES.showDialog({
+    title: modal.caption || '',
+    body:  modal.message || '',
+    buttons: buttons,
+    onClose: () => {
+      // Esc / × / dismiss → wxCANCEL (or wxNO, or 0) so the parked
+      // worker unblocks instead of replaying the dialog forever.
+      const fallback = (style & WX_CANCEL) ? WX_CANCEL
+                     : (style & WX_NO)     ? WX_NO
+                     : 0;
+      postReply(fallback);
+      currentModalHandle = null;
+      currentModalId = null;
+    }
+  });
+}
+
+
+// "All functions" menubar button — lazy-create on first allowed poll.
+// Clicking fetches the metadata tree and shows it in a dialog; clicking
+// an item POSTs /open-meta/<id> and the active host refreshes from the
+// response.
+function ensureAllFunctionsButton(){
+  if (document.getElementById('mb-all-functions')) return;
+  const btn = document.createElement('button');
+  btn.id = 'mb-all-functions';
+  btn.type = 'button';
+  btn.textContent = 'Все функции';
+  btn.onclick = openAllFunctionsDialog;
+  document.getElementById('menubar').appendChild(btn);
+}
+
+async function openAllFunctionsDialog(){
+  // Fetch the tree fresh each open — metadata can change between opens
+  // (designer reload), and the dialog is rare enough that the round-trip
+  // cost is negligible.
+  let data;
+  try {
+    const r = await netFetch(API+'/functions', {credentials:'same-origin'});
+    if (!r.ok) return;
+    data = await r.json();
+  } catch (e) { return; }
+  if (!data || !data.allowed) return;
+  // Build a body element: collapsible <details> per group with icon +
+  // caption, items nested with their own icons. Click on an item →
+  // POST /open-meta/<id>, replace active host, close dialog.
+  const body = document.createElement('div');
+  // Vertical scrolling lives on the outer .modal-body (overflow:auto
+  // + flex:1 + dialog max-height:calc(100vh-60px)). A second
+  // overflow:auto here would create a nested scroll context and
+  // sometimes clipped content; just hint width.
+  body.style.cssText = 'min-width:420px';
+  for (const g of (data.groups || [])) {
+    if (!g.items || g.items.length === 0) continue;
+    const det = document.createElement('details');
+    det.open = true;   // groups expanded by default, matching desktop's ExpandAll
+    det.style.cssText = 'margin:2px 0';
+    const sum = document.createElement('summary');
+    sum.style.cssText = 'font-weight:600;color:#3b50a0;cursor:pointer;'
+      + 'padding:4px 0;display:flex;align-items:center;gap:6px;'
+      + 'list-style:none;user-select:none';
+    // Hide native ▶/▼ marker; use our own ▸/▾ in front of the caption so
+    // it sits flush with the icon. Webkit needs a separate selector to
+    // suppress the disclosure triangle.
+    const marker = document.createElement('span');
+    marker.style.cssText = 'width:10px;font-size:.8em;color:#888';
+    marker.textContent = det.open ? '▾' : '▸';
+    det.addEventListener('toggle', () => { marker.textContent = det.open ? '▾' : '▸'; });
+    sum.appendChild(marker);
+    if (g.icon){
+      const ic = document.createElement('img');
+      ic.src = g.icon; ic.alt = '';
+      ic.style.cssText = 'width:16px;height:16px;flex-shrink:0';
+      sum.appendChild(ic);
+    }
+    const cap = document.createElement('span');
+    cap.textContent = g.name || '';
+    sum.appendChild(cap);
+    det.appendChild(sum);
+    for (const it of g.items) {
+      const row = document.createElement('div');
+      row.style.cssText = 'padding:3px 8px 3px 28px;cursor:pointer;'
+        + 'border-radius:3px;display:flex;align-items:center;gap:6px';
+      row.onmouseenter = () => row.style.background = '#eef2f7';
+      row.onmouseleave = () => row.style.background = '';
+      if (it.icon){
+        const ic = document.createElement('img');
+        ic.src = it.icon; ic.alt = '';
+        ic.style.cssText = 'width:16px;height:16px;flex-shrink:0';
+        row.appendChild(ic);
+      }
+      const lbl = document.createElement('span');
+      lbl.textContent = it.synonym || it.name || '#'+it.id;
+      row.appendChild(lbl);
+      row.onclick = async () => {
+        try {
+          const r = await netFetch(API+'/open-meta/'+it.id, {
+            method:'POST', credentials:'same-origin'
+          });
+          if (r.ok) {
+            const text = await r.text();
+            if (text && text !== '{}') applyActiveJsonText(text);
+            // Also refresh tabs / chrome so the new tab + title shows.
+            refreshTabs();
+          }
+        } catch (e) { /* ignore network blip */ }
+        handle.close();
+      };
+      det.appendChild(row);
+    }
+    body.appendChild(det);
+  }
+  // Suppress the native disclosure triangle inside <summary> (webkit/blink
+  // needs the pseudo-element rule). Inject once into the document head.
+  if (!document.getElementById('all-fn-style')){
+    const st = document.createElement('style');
+    st.id = 'all-fn-style';
+    st.textContent = 'details > summary::-webkit-details-marker{display:none}';
+    document.head.appendChild(st);
+  }
+  const handle = OES.showDialog({
+    title: 'Все функции',
+    body:  body,
+    buttons: [{label:'Закрыть', onClick:(d)=>d.close()}]
+  });
+}
+
+async function refreshTabs(){
+  if(refreshingTabs) return;
+  refreshingTabs=true;
+  try{
+  const info=await netFetch(API+'/session',{credentials:'same-origin'}).then(r=>r.json());
+  applyChromeFromSession(info);
+  // Capture the initial metaGeneration the first time we see it so
+  // later 401s can report "configuration changed" instead of a generic
+  // "session lost" when the server bumped it.
+  if (initialMetaGen === null && info && typeof info.metaGeneration === 'number')
+    initialMetaGen = info.metaGeneration;
+  tabsBar.innerHTML='';
+  // Dedup by index in case the server ever returns duplicates — cheap
+  // defence that keeps the strip in one-to-one correspondence with
+  // distinct backend tabs.
+  const seen=new Set();
+  (info.tabs||[]).filter(t=>{ const k=(t.index|0); if(seen.has(k)) return false; seen.add(k); return true; }).forEach((t,i)=>{
+    const el=document.createElement('div');
+    el.className='tab'+(i===info.activeTab?' active':'')+(t.modified?' modified':'');
+    // Column-wrap: icon on top, title below. Matches desktop tab convention
+    // (wxAuiMDIChildFrame paints icon then caption). No icon → column
+    // collapses to text-only, no layout jump.
+    const body=document.createElement('span');
+    body.className='tab-body';
+    if(t.hasIcon){
+      const ico=document.createElement('img');
+      ico.className='tab-icon';
+      // <img src> can't attach X-OES-Session, so pass the per-tab
+      // session id via query string — server prefers it over cookie.
+      ico.src=API+'/tab/'+i+'/icon?sid='+encodeURIComponent(tabSid);
+      ico.alt='';
+      body.appendChild(ico);
+    }
+    const label=document.createElement('span');
+    label.className='tab-title';
+    const title=(t.formName||t.title||'#'+i);
+    label.textContent=title;
+    body.title=title;  // full name on hover when truncated
+    body.appendChild(label);
+    body.onclick=async()=>{
+      // Optimistic active highlight: repaint the bar locally so the
+      // click feels instant. No refreshTabs — switching tabs doesn't
+      // change the tabs list, so another GET /session would be wasted;
+      // polling reconciles server-side changes within 2s anyway.
+      document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+      el.classList.add('active');
+      const tree=await netFetch(API+'/tab/'+i,{method:'POST',credentials:'same-origin'}).then(r=>r.json());
+      if(tree&&!tree.error){
+        main.innerHTML='';
+        main.appendChild(render(tree));
+      }
+    };
+    el.appendChild(body);
+    const close=document.createElement('span');
+    close.className='tab-close';
+    close.textContent='\u00d7';
+    close.title='Close tab';
+    close.onclick=async(e)=>{
+      e.stopPropagation();
+      const t0=performance.now();
+      const wasActive=el.classList.contains('active');
+      // Re-resolve the tab's index at click time: closing an earlier
+      // tab shifts every later tab's index down by one on the server
+      // (m_tabs.erase), but the captured `i` from forEach is frozen.
+      // Using the stale `i` can target a non-existent tab → server
+      // returns "{}" and the real tab silently survives, so next F5
+      // shows the "ghost" back (user reports "Pick a form on the left"
+      // alternating). Derive the current index from the DOM position
+      // instead — refreshTabs rebuilt the strip in server order, so
+      // the DOM index == server index.
+      const realIndex=Array.from(tabsBar.children).indexOf(el);
+      el.remove();
+      if(wasActive) main.innerHTML='';
+      const tFetchStart=performance.now();
+      const r=await netFetch(API+'/tab/'+realIndex,{method:'DELETE',credentials:'same-origin'});
+      const tFetchEnd=performance.now();
+      const tree=await r.json();
+      const tJsonEnd=performance.now();
+      if(tree&&!tree.error&&Object.keys(tree).length>0){
+        main.innerHTML='';
+        main.appendChild(render(tree));
+      }
+      const tRenderEnd=performance.now();
+      if (wasActive) {
+        const siblings=tabsBar.querySelectorAll('.tab');
+        if (siblings.length>0) siblings[siblings.length-1].classList.add('active');
+      }
+      // Re-fetch the tab strip so the remaining tabs get their
+      // indices refreshed to match the server's new numbering. Without
+      // this, the next click still carries stale `i` values.
+      refreshTabs();
+      console.log(`close tab ${realIndex}: total=${(tRenderEnd-t0).toFixed(1)}ms`
+        + ` fetch=${(tFetchEnd-tFetchStart).toFixed(1)}ms`
+        + ` json=${(tJsonEnd-tFetchEnd).toFixed(1)}ms`
+        + ` render=${(tRenderEnd-tJsonEnd).toFixed(1)}ms`
+        + ` inflight_now=${inflight}`);
+    };
+    el.appendChild(close);
+    tabsBar.appendChild(el);
+  });
+  } finally { refreshingTabs=false; }
+}
+
+
+async function login(user, password){
+  const body = new URLSearchParams({user:user||'',password:password||''});
+  const r = await netFetch(API+'/login',
+    {method:'POST',body,credentials:'same-origin'});
+  return r.ok;
+}
+// GET /auth-info. Decides between open-access auto-login (empty sys_user
+// → server's /login passes through empty creds) and a credentials form
+// (sys_user populated — we must ask the user). Failure to reach the
+// endpoint is treated as "no auth required" so a stale fetch doesn't
+// block a working configuration.
+async function authInfo(){
+  try {
+    const r = await fetch(API+'/auth-info',{credentials:'same-origin'});
+    if (!r.ok) return { hasUsers: false };
+    return await r.json();
+  } catch (e) { return { hasUsers: false }; }
+}
+// Show #authOverlay, resolve the returned promise on successful login.
+// Repeated wrong creds clear the password input and flash the error.
+function promptLogin(){
+  return new Promise(resolve => {
+    const overlay = document.getElementById('authOverlay');
+    const form    = document.getElementById('authForm');
+    const userEl  = document.getElementById('authUser');
+    const pwdEl   = document.getElementById('authPwd');
+    const errEl   = document.getElementById('authError');
+    overlay.classList.remove('hide');
+    userEl.focus();
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      errEl.classList.add('hide');
+      const ok = await login(userEl.value, pwdEl.value);
+      if (ok) {
+        overlay.classList.add('hide');
+        resolve(true);
+        return;
+      }
+      pwdEl.value = '';
+      errEl.classList.remove('hide');
+      pwdEl.focus();
+    });
+  });
+}
+// loadForms is retained as no-op for now — Interfaces own the sidebar.
+// /forms endpoint stays available for diagnostic / future use.
+async function loadForms(){}
+async function openForm(id){
+  const tree=await netFetch(API+'/form/'+id,{credentials:'same-origin'}).then(r=>r.json());
+  main.innerHTML='';
+  main.appendChild(render(tree));
+  refreshTabs();
+}
+// Subsystem navigation — sidebar's Interfaces block. Mirrors desktop's
+// ibSubSystemWindow: a row of buttons (one per interface). Click opens
+// a popup with command sections (Default / Create / Combined / Reports
+// / Service); each section lists assigned metadata items. Click an
+// item → /open-meta (same path as "All functions" double-click).
+async function loadInterfaces(){
+  const root = document.getElementById('interfaces');
+  if (!root) return;
+  let data;
+  try {
+    const r = await netFetch(API+'/interfaces',{credentials:'same-origin'});
+    if (!r.ok) return;
+    data = await r.json();
+  } catch (e) { return; }
+  const ifaces = (data && data.interfaces) || [];
+  root.innerHTML = '';
+  if (ifaces.length === 0) {
+    root.classList.add('hidden');
+    return;
+  }
+  root.classList.remove('hidden');
+  const header = document.createElement('h3');
+  header.textContent = 'Sections';
+  root.appendChild(header);
+  for (const iface of ifaces) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'iface-btn';
+    if (iface.icon){
+      const ic = document.createElement('img');
+      ic.className = 'iface-icon'; ic.src = iface.icon; ic.alt = '';
+      btn.appendChild(ic);
+    }
+    const cap = document.createElement('span');
+    cap.textContent = iface.synonym || iface.name || '#'+iface.id;
+    btn.appendChild(cap);
+    btn.onclick = () => showInterfacePopup(iface);
+    root.appendChild(btn);
+  }
+}
+
+// Popup with command sections + items for a single interface. Renders
+// via OES.showDialog (draggable, dismissible). Click an item → POST
+// /open-meta, refresh active host + tabs, close popup.
+function showInterfacePopup(iface){
+  const body = document.createElement('div');
+  body.style.cssText = 'min-width:380px';
+  const sections = iface.sections || [];
+  if (sections.length === 0) {
+    const p = document.createElement('div');
+    p.style.cssText = 'color:#888;padding:8px';
+    p.textContent = 'No items in this section.';
+    body.appendChild(p);
+  }
+  for (const sec of sections) {
+    const det = document.createElement('details');
+    det.open = (sec.section === 100);
+    det.style.cssText = 'margin:2px 0';
+    const sum = document.createElement('summary');
+    sum.style.cssText = 'font-weight:600;color:#3b50a0;cursor:pointer;'
+      + 'padding:4px 0;display:flex;align-items:center;gap:6px;'
+      + 'list-style:none;user-select:none';
+    const marker = document.createElement('span');
+    marker.style.cssText = 'width:10px;font-size:.8em;color:#888';
+    marker.textContent = det.open ? '▾' : '▸';
+    det.addEventListener('toggle', () => { marker.textContent = det.open ? '▾' : '▸'; });
+    sum.appendChild(marker);
+    const cap = document.createElement('span');
+    cap.textContent = sec.name || '';
+    sum.appendChild(cap);
+    det.appendChild(sum);
+    for (const it of (sec.items || [])) {
+      const row = document.createElement('div');
+      row.style.cssText = 'padding:3px 8px 3px 28px;cursor:pointer;'
+        + 'border-radius:3px;display:flex;align-items:center;gap:6px';
+      row.onmouseenter = () => row.style.background = '#eef2f7';
+      row.onmouseleave = () => row.style.background = '';
+      if (it.icon){
+        const ic = document.createElement('img');
+        ic.src = it.icon; ic.alt = '';
+        ic.style.cssText = 'width:16px;height:16px;flex-shrink:0';
+        row.appendChild(ic);
+      }
+      const lbl = document.createElement('span');
+      lbl.textContent = it.synonym || it.name || '#'+it.id;
+      row.appendChild(lbl);
+      row.onclick = async () => {
+        try {
+          // sec.section is the raw ibInterfaceCommandType: 100=Default
+          // (browse/list), 150=Create (new-record form), 151=List, 152=
+          // Select. Backend's Execute branches on it.
+          const body = new URLSearchParams({cmd: String(sec.section|0)});
+          const r = await netFetch(API+'/open-meta/'+it.id, {
+            method:'POST', credentials:'same-origin',
+            headers:{'Content-Type':'application/x-www-form-urlencoded'},
+            body: body.toString()
+          });
+          if (r.ok) {
+            const text = await r.text();
+            if (text && text !== '{}') applyActiveJsonText(text);
+            refreshTabs();
+          }
+        } catch (e) { /* ignore */ }
+        handle.close();
+      };
+      det.appendChild(row);
+    }
+    body.appendChild(det);
+  }
+  const handle = OES.showDialog({
+    title: iface.synonym || iface.name || '',
+    body:  body,
+    buttons: [{label:'Закрыть', onClick:(d)=>d.close()}]
+  });
+}
+// Per-type control classes. Each owns its own render(node)->HTMLElement
+// — new control = new class here, no need to touch the central switch.
+// The registry at the bottom maps ibWebWindow::GetControlType() strings
+// to the class that knows how to draw them.
+
+class BaseControl{
+  render(node){
+    const el=document.createElement('div');
+    el.style.cssText='border:1px dashed #ccc;padding:4px;margin:2px 0;font-size:.85em;color:#888';
+    el.textContent='['+node.type+']';
+    return el;
+  }
+  // Shared post-pass applied by the dispatcher to every node.
+  // Applies shown/enabled plus the visual-style fields pushed from
+  // ibValueWindow::UpdateWindow (fg/bg/font/tooltip) — one place so
+  // every control gets them without per-class code.
+  applyCommon(el,node){
+    if(node.shown===false) el.style.display='none';
+    if(node.enabled===false){
+      // Native form controls (input/button/select/textarea) carry a
+      // 'disabled' DOM property — flipping it blocks user interaction.
+      // For wrappers (TextCtrl's outer <div> with input+buttons inside)
+      // walk all descendant interactive controls and disable them too,
+      // plus dim the wrap and kill pointer events so the whole row
+      // reads as non-interactive.
+      if('disabled' in el) el.disabled=true;
+      else {
+        el.style.opacity='.5';
+        el.style.pointerEvents='none';
+        const inner=el.querySelectorAll('input,button,select,textarea');
+        for(const c of inner) c.disabled=true;
+      }
+    }
+    if(node.fg) el.style.color=node.fg;
+    if(node.bg) el.style.backgroundColor=node.bg;
+    if(node.font){
+      if(node.font.size)   el.style.fontSize=node.font.size+'pt';
+      if(node.font.family) el.style.fontFamily=node.font.family;
+      if(node.font.bold)   el.style.fontWeight='bold';
+      if(node.font.italic) el.style.fontStyle='italic';
+      if(node.font.underline) el.style.textDecoration='underline';
+    }
+    if(node.tooltip) el.title=node.tooltip;
+    if(node.minSize){
+      if(node.minSize.w) el.style.minWidth =node.minSize.w+'px';
+      if(node.minSize.h) el.style.minHeight=node.minSize.h+'px';
+    }
+    if(node.maxSize){
+      if(node.maxSize.w) el.style.maxWidth =node.maxSize.w+'px';
+      if(node.maxSize.h) el.style.maxHeight=node.maxSize.h+'px';
+    }
+  }
+}
+
+class HostControl extends BaseControl{
+  render(){ const el=document.createElement('div');el.className='form-host';return el; }
+}
+class BoxSizer extends BaseControl{
+  // orient: wxHORIZONTAL=4, wxVERTICAL=8.
+  render(node){
+    const el=document.createElement('div');
+    el.className='boxsizer '+(node.orient===8?'vert':'horz');
+    return el;
+  }
+}
+class WrapSizer extends BaseControl{
+  render(){
+    const el=document.createElement('div');
+    el.className='boxsizer horz';el.style.flexWrap='wrap';
+    return el;
+  }
+}
+class StaticBoxSizer extends BaseControl{
+  render(node){
+    const el=document.createElement('fieldset');el.className='staticboxsizer';
+    const lg=document.createElement('legend');lg.textContent=node.label||'';
+    el.appendChild(lg);
+    return el;
+  }
+}
+class GridSizer extends BaseControl{
+  render(node){
+    const el=document.createElement('div');el.className='gridsizer';
+    el.style.gridTemplateColumns=`repeat(${Math.max(1,node.cols||1)},auto)`;
+    return el;
+  }
+}
+class StaticText extends BaseControl{
+  render(node){
+    const el=document.createElement('span');el.className='statictext';
+    el.textContent=node.label||'';
+    return el;
+  }
+}
+class Button extends BaseControl{
+  render(node){
+    const el=document.createElement('button');el.className='ctrl';
+    // Representation (0=Auto, 1=Text, 2=Picture, 3=PictureAndText) —
+    // server resolves Auto before pushing, so 0 shouldn't arrive. Picture
+    // is a data:image/png;base64 URI straight from ibBackendPicture.
+    const rep=node.representation;
+    const wantPic=node.hasPicture && node.picture && rep!==1;
+    const wantText=rep!==2;
+    if(wantPic){
+      const img=document.createElement('img');
+      img.src=node.picture;img.alt='';
+      img.style.cssText='height:1em;vertical-align:middle;'+(wantText?'margin-right:4px;':'');
+      el.appendChild(img);
+    }
+    if(wantText) el.appendChild(document.createTextNode(node.label||''));
+    if(node.id){
+      el.onclick=async()=>{
+        const r=await netFetch(API+'/action/'+node.id,{method:'POST',credentials:'same-origin'});
+        if(r.ok){
+          const tree=await r.json();
+          if(tree&&!tree.error){ main.innerHTML=''; main.appendChild(render(tree)); }
+          else OES.handleBackendError(tree);
+        }
+      };
+    }
+    return el;
+  }
+}
+
+class TextCtrl extends BaseControl{
+  render(node){
+    const multi=!!node.multilineMode;
+    // Outer row: label (prefix) + input-group (input + side buttons
+    // sharing one border). Matches desktop ibControlTextEditor layout
+    // where the caption sits left-of-frame and the Select/Open/Clear
+    // glyphs sit INSIDE the frame flush to the right edge.
+    const wrap=document.createElement('div');
+    // .labelrow → display:flex (label + input row). data-labelrow is
+    // the selector hook for the post-render label-width alignment pass
+    // (alignLabelsIn): empty placeholder span when no node.label is set
+    // still participates in the max-width measurement so all sibling
+    // inputs start at the same x. Mirrors desktop's
+    // ibVisualHost::CalculateLabelSize which reserves a slot for every
+    // ibControlDynamicBorder regardless of caption presence.
+    wrap.className='labelrow';
+    wrap.dataset.labelrow='1';
+    const lbl=document.createElement('span');
+    lbl.className='statictext';
+    lbl.textContent=node.label||'';
+    lbl.style.flexShrink='0';
+    lbl.style.alignSelf='center';
+    wrap.appendChild(lbl);
+    // Input group — shared border wraps input + inline side-buttons.
+    const group=document.createElement('div');
+    group.className='texted';
+    // No inline flex — .texted's CSS pins flex-basis to 200px so the
+    // group keeps a fixed width regardless of side-button count.
+    // data-ctrl-id lets post-render refocus logic (e.g. after Clear)
+    // find the specific input even though main.innerHTML was replaced.
+    if(node.id) group.dataset.ctrlId=node.id;
+    // .texted has a hardcoded #fff background that would otherwise mask
+    // the fg/bg that applyCommon just set on the outer wrap. Push node
+    // colours onto the group directly so the input (background:transparent)
+    // inherits through.
+    if(node.bg) group.style.backgroundColor=node.bg;
+    if(node.fg) group.style.color=node.fg;
+    const el=document.createElement(multi?'textarea':'input');
+    // No .ctrl class — border/padding is on .texted now.
+    if(!multi) el.type=node.passwordMode?'password':'text';
+    el.value=node.value||'';
+    // commit declared at render scope so side-button handlers below
+    // can removeEventListener it before teardown — prevents a racing
+    // synthetic 'change' on the about-to-be-removed input.
+    let commit=null;
+    if(node.id){
+      // Commit on blur + Enter. wxEVT_CONTROL_TEXT_INPUT per-keystroke
+      // would be noisy for HTTP; send once when the user is done.
+      commit=async()=>{
+        const body=new URLSearchParams({value:el.value});
+        const r=await netFetch(API+'/change/'+node.id,{
+          method:'POST',credentials:'same-origin',
+          headers:{'Content-Type':'application/x-www-form-urlencoded'},
+          body:body.toString()
+        });
+        if(r.ok){
+          const tree=await r.json();
+          if(tree&&!tree.error){ main.innerHTML=''; main.appendChild(render(tree)); }
+          else OES.handleBackendError(tree);
+        }
+      };
+      el.addEventListener('change',commit);
+      if(!multi){
+        el.addEventListener('keydown',ev=>{ if(ev.key==='Enter'){ ev.preventDefault(); commit(); } });
+      }
+    }
+    group.appendChild(el);
+    // Desktop ibControlTextEditor side buttons: Select (…), Open (▷),
+    // Clear (×). Rendered INSIDE the input group's border, flush to
+    // the right, same shared-frame look as desktop. Each click fires
+    // /fire/<id>/<kind> → ibWebTextCtrl::HandleRequest → FireCommand
+    // → ibValueTextCtrl's OnSelect/Open/ClearButtonPressed handler.
+    const makeSideBtn=(label,kind,title)=>{
+      const btn=document.createElement('button');
+      btn.type='button';
+      btn.textContent=label;
+      btn.title=title;
+      // Prevent focus theft: without this the input blurs on mousedown,
+      // which fires its 'change' listener and POSTs /change concurrently
+      // with our /fire. The two requests race — user saw Clear needing
+      // two clicks because /change arrived AFTER /fire and re-set the
+      // just-cleared value. preventDefault on mousedown keeps focus on
+      // the input, no blur, no change event, no race.
+      btn.addEventListener('mousedown', e => e.preventDefault());
+      btn.onclick=async()=>{
+        // Detach the input's commit listener BEFORE the fetch. When the
+        // response's innerHTML='' removes the input, some browsers fire a
+        // synthetic 'change' on the dirty node — that would POST /change
+        // with uncommitted text right after /fire cleared it. User saw
+        // Clear leaving a partial prefix of a long typed string. Removing
+        // the listener makes the teardown silent.
+        if(commit) el.removeEventListener('change', commit);
+        const r=await netFetch(API+'/fire/'+node.id+'/'+kind,
+          {method:'POST',credentials:'same-origin'});
+        if(r.ok){
+          const tree=await r.json();
+          if(tree&&!tree.error&&Object.keys(tree).length>0){
+            main.innerHTML=''; main.appendChild(render(tree));
+            // Clear refocuses the (now empty) input with cursor at 0 —
+            // matches desktop ibControlTextEditor::SetInsertionPoint(wxNOT_FOUND).
+            if(kind==='buttonClear'){
+              const ed=main.querySelector(`[data-ctrl-id="${node.id}"] input, [data-ctrl-id="${node.id}"] textarea`);
+              if(ed){ ed.focus(); try{ ed.setSelectionRange(0,0); }catch(_){ } }
+            }
+          }
+          // Select/Open buttons can spawn a new tab (selector form, related
+          // record open). Refresh the tab strip immediately instead of
+          // waiting for the next 2s /session poll — otherwise the new tab
+          // doesn't show up until the user clicks somewhere else.
+          if(kind==='buttonSelect'||kind==='buttonOpen') refreshTabs();
+        }
+      };
+      group.appendChild(btn);
+    };
+    if(node.id && node.showSelectButton) makeSideBtn('…','buttonSelect','Select');
+    if(node.id && node.showOpenButton)   makeSideBtn('▷','buttonOpen','Open');
+    if(node.id && node.showClearButton)  makeSideBtn('×','buttonClear','Clear');
+    wrap.appendChild(group);
+    return wrap;
+  }
+}
+
+class Toolbar extends BaseControl{
+  // Container. The children render themselves (Tool / ToolSeparator);
+  // the toolbar's job is just to lay them out horizontally on a
+  // panel-style strip background.
+  render(){ const el=document.createElement('div');el.className='toolbar';return el; }
+}
+
+class Tool extends BaseControl{
+  // Representation modes from the server (ibRepresentation enum):
+  //   0 Auto  — server resolves before sending; browser never sees 0
+  //   1 Text            — label only, no icon
+  //   2 Picture         — icon only, no label
+  //   3 PictureAndText  — icon + label
+  //
+  // node.picture, when present, is a data:image/png;base64,... URI
+  // produced server-side via ibBackendPicture::CreateBase64Image.
+  // hasPicture=true with empty node.picture falls back to a CSS block.
+  render(node){
+    const el=document.createElement('button');el.className='tool';
+    el.type='button';
+
+    const rep = node.representation|0;
+    const showIcon = (rep === 2 || rep === 3) && !!node.hasPicture;
+    // Picture mode = icon only, Text = label only, PictureAndText =
+    // both, Auto (0) resolved server-side.
+    const showText = !!node.label && (rep === 1 || rep === 3);
+    if (rep === 2 && node.hasPicture) el.classList.add('tool-picture-only');
+
+    if (showIcon) {
+      if (node.picture) {
+        // Server-encoded PNG data URI — render directly.
+        const ic = document.createElement('img');
+        ic.className = 'tool-icon';
+        ic.src = node.picture;
+        ic.alt = node.label || '';
+        el.appendChild(ic);
+      } else {
+        // Placeholder when hasPicture is true but no data — e.g. a
+        // picture ref that didn't resolve to a bitmap.
+        const ic = document.createElement('span');
+        ic.className = 'tool-icon';
+        el.appendChild(ic);
+      }
+    }
+    if (showText) {
+      const lbl = document.createElement('span');
+      lbl.textContent = node.label;
+      el.appendChild(lbl);
+    }
+    if (node.enabled===false) el.disabled=true;
+    if(node.id){
+      el.onclick=async()=>{
+        const r=await netFetch(API+'/action/'+node.id,{method:'POST',credentials:'same-origin'});
+        if(r.ok){
+          const tree=await r.json();
+          if(tree&&!tree.error){
+            main.innerHTML='';
+            if(Object.keys(tree).length>0) main.appendChild(render(tree));
+          }
+          else OES.handleBackendError(tree);
+          // Tool actions can close / open / switch forms (ActionClose,
+          // custom scripts that call OpenForm). Refresh the tab strip
+          // so the dying tab disappears immediately instead of waiting
+          // for the next 2s poll tick — fast now that localhost
+          // requests redirect to 127.0.0.1 (no IPv6 fallback tax).
+          refreshTabs();
+        }
+      };
+    }
+    return el;
+  }
+}
+
+class ToolSeparator extends BaseControl{
+  render(){ const el=document.createElement('span');el.className='toolseparator';return el; }
+}
+
+class CheckBox extends BaseControl{
+  render(node){
+    const wrap=document.createElement('label');wrap.className='ctrl checkbox';
+    const el=document.createElement('input');el.type='checkbox';
+    el.checked=!!node.value;
+    if(node.id){
+      el.addEventListener('change',async()=>{
+        const body=new URLSearchParams({checked:el.checked?'1':'0'});
+        const r=await netFetch(API+'/toggle/'+node.id,{
+          method:'POST',credentials:'same-origin',
+          headers:{'Content-Type':'application/x-www-form-urlencoded'},
+          body:body.toString()
+        });
+        if(r.ok){
+          const tree=await r.json();
+          if(tree&&!tree.error){ main.innerHTML=''; main.appendChild(render(tree)); }
+          else OES.handleBackendError(tree);
+        }
+      });
+    }
+    wrap.appendChild(el);
+    if(node.label){ const s=document.createElement('span');s.textContent=' '+node.label;wrap.appendChild(s); }
+    return wrap;
+  }
+}
+
+
+const renderers={
+  'visualHost':    new HostControl(),
+  'mdiChild':      new HostControl(),
+  'boxsizer':      new BoxSizer(),
+  'wrapsizer':     new WrapSizer(),
+  'staticboxsizer':new StaticBoxSizer(),
+  'gridsizer':     new GridSizer(),
+  'statictext':    new StaticText(),
+  'button':        new Button(),
+  'textctrl':      new TextCtrl(),
+  'checkbox':      new CheckBox(),
+  'toolbar':       new Toolbar(),
+  'tool':          new Tool(),
+  'toolseparator': new ToolSeparator(),
+};
+const fallback=new BaseControl();
+
+// wx layout flag constants (match wx/defs.h) — used to turn each
+// child's "layout": {proportion, flag, border} hint into CSS on its
+// flex container. proportion -> flex-grow, wxEXPAND -> flex-grow=1,
+// wxLEFT/RIGHT/UP/DOWN + border -> per-side margin, wxALIGN_* ->
+// align-self on the main/cross axis.
+const WX_LEFT=0x0010, WX_RIGHT=0x0020, WX_TOP=0x0040, WX_BOTTOM=0x0080;
+const WX_ALIGN_RIGHT=0x0200, WX_ALIGN_CENTER_H=0x0100;
+const WX_ALIGN_BOTTOM=0x0400, WX_ALIGN_CENTER_V=0x0800;
+const WX_EXPAND=0x2000;
+
+function applyLayout(el, layout){
+  if(!layout) return;
+  const p=layout.proportion|0, f=layout.flag|0, b=layout.border|0;
+  // Main axis: proportion > 0 → share the remaining space.
+  // Cross axis: only wxEXPAND stretches. proportion alone does NOT
+  // imply cross-axis growth — desktop wxSizer treats them as
+  // independent axes (form1 textctrl: prop=1, no EXPAND → grows
+  // vertically, width stays natural).
+  if(p>0) el.style.flexGrow=String(p);
+  if(f & WX_EXPAND) el.style.alignSelf='stretch';
+  if(b>0){
+    if(f & WX_LEFT)   el.style.marginLeft  =b+'px';
+    if(f & WX_RIGHT)  el.style.marginRight =b+'px';
+    if(f & WX_TOP)    el.style.marginTop   =b+'px';
+    if(f & WX_BOTTOM) el.style.marginBottom=b+'px';
+  }
+  // Explicit align flags override the default flex-start.
+  if(f & WX_ALIGN_CENTER_V || f & WX_ALIGN_CENTER_H) el.style.alignSelf='center';
+  else if(f & WX_ALIGN_RIGHT || f & WX_ALIGN_BOTTOM) el.style.alignSelf='flex-end';
+}
+
+function render(node){
+  if(!node||typeof node!=='object') return document.createTextNode('');
+  const ctrl=renderers[node.type]||fallback;
+  const el=ctrl.render(node);
+  ctrl.applyCommon(el,node);
+  for(const kid of (node.children||[])){
+    const childEl=render(kid);
+    applyLayout(childEl, kid.layout);
+    el.appendChild(childEl);
+  }
+  // Label-row post-processing for box-sizers. After the browser lays
+  // out (rAF), walk direct [data-labelrow] children and decide:
+  //   • Vertical sizer with ≥1 labelled sibling → set min-width on every
+  //     label = max non-empty label width across siblings, so all
+  //     trailing controls align on the same x. Equivalent in effect to
+  //     desktop's ibVisualHost::CalculateLabelSize.
+  //   • Horizontal sizer, or all-empty vertical sizer → hide the empty
+  //     placeholder spans so the flex gap doesn't add visible indent
+  //     before each input.
+  // Flex layout itself stays intact; wxSizer's per-child proportion/
+  // flag/border still apply through applyLayout.
+  // Form-level label-column alignment lands on the host root — single
+  // post-render pass walks the form tree once, mirroring desktop's
+  // ibVisualHost::CalculateAndApply: every label-bearing control gets
+  // min-width = global max, EXCEPT within a horizontal sizer where only
+  // the FIRST labelrow takes the column (subsequent siblings keep their
+  // natural width, the column "breaks" — see Apply()'s
+  // `parentSizer == wxHORIZONTAL → maxLabelWidth = wxNOT_FOUND` reset
+  // in visualHost.cpp).
+  if(node.type==='visualHost' || node.type==='mdiChild'){
+    requestAnimationFrame(()=>alignLabelsGlobal(el));
+  }
+  return el;
+}
+
+// Idempotent (re-running resets minWidth/display first).
+function alignLabelsGlobal(rootEl){
+  if(!rootEl) return;
+  const labels=rootEl.querySelectorAll('[data-labelrow] > .statictext');
+  for(const lbl of labels){
+    lbl.style.minWidth='';
+    lbl.style.display='';
+  }
+  if(labels.length===0) return;
+  // Global max across all captioned labels (any nesting depth).
+  let maxW=0;
+  for(const lbl of labels){
+    if(lbl.textContent.length>0 && lbl.offsetWidth>maxW) maxW=lbl.offsetWidth;
+  }
+  if(maxW===0){
+    // Nothing captioned anywhere — hide empty placeholders so flex gap
+    // doesn't leak a visible indent.
+    for(const lbl of labels){
+      if(lbl.textContent.length===0) lbl.style.display='none';
+    }
+    return;
+  }
+  // Walk tree, applying maxW only to the eligible labels: within each
+  // horizontal sizer, only the first labelrow gets the column; the rest
+  // get their placeholders hidden so the column "breaks" at that point.
+  applyLabelColumnWalk(rootEl, maxW, null);
+}
+
+function applyLabelColumnWalk(node, maxW, parentOrient){
+  // parentOrient: 'horz' / 'vert' / null (non-sizer container — transparent).
+  let horzColumnTaken=false;
+  for(const c of node.children){
+    const cls=c.classList;
+    if(cls && cls.contains('boxsizer')){
+      const childOrient=cls.contains('horz') ? 'horz' : 'vert';
+      applyLabelColumnWalk(c, maxW, childOrient);
+    } else if(c.dataset && c.dataset.labelrow){
+      const lbl=c.querySelector(':scope > .statictext');
+      if(lbl){
+        if(parentOrient==='horz' && horzColumnTaken){
+          // Column already consumed by an earlier sibling in this horz
+          // sizer — hide empty placeholder so it doesn't leave a visible
+          // gap before the input.
+          if(lbl.textContent.length===0) lbl.style.display='none';
+        } else {
+          lbl.style.minWidth=maxW+'px';
+          if(parentOrient==='horz') horzColumnTaken=true;
+        }
+      }
+    } else {
+      // Transparent container (host root, non-sizer wrapper) — recurse
+      // with the same orientation context.
+      applyLabelColumnWalk(c, maxW, parentOrient);
+    }
+  }
+}
+
+
+// Poll the active host every few seconds so timer-driven updates
+// surface between user actions. Diff by JSON string to avoid pointless
+// DOM rebuilds. Pauses when the tab is hidden (visibility API) — no
+// point fetching when the user isn't looking. Replace-on-change keeps
+// the server's state authoritative; pending local edits on form
+// inputs are preserved by the browser between polls only up to the
+// next mismatch, which is the expected desktop-like behaviour.
+let lastActiveJson = null;
+async function pollActive(){
+  if (inflight > 0) return;
+  const t0 = performance.now();
+  try {
+    const r = await netFetch(API+'/active', {credentials:'same-origin'});
+    const tFetch = performance.now();
+    // 401 = session expired / server restarted / idle-timeout evicted.
+    // Show a sticky banner with a reload button and stop polling — the
+    // user has to reload to mint a fresh session + re-run OnStart.
+    if (r.status === 401) { showSessionLost(); return; }
+    if (!r.ok) { console.log(`poll /active: fetch=${(tFetch-t0).toFixed(1)}ms NOT OK`); return; }
+    const text = await r.text();
+    const tText = performance.now();
+    if (text === lastActiveJson || text === '{}') {
+      if (tText - t0 > 300)
+        console.log(`poll /active: fetch=${(tFetch-t0).toFixed(1)}ms read=${(tText-tFetch).toFixed(1)}ms (no change)`);
+      return;
+    }
+    lastActiveJson = text;
+    const tree = JSON.parse(text);
+    const tParse = performance.now();
+    if (tree && !tree.error) {
+      main.innerHTML = '';
+      main.appendChild(render(tree));
+    }
+    const tRender = performance.now();
+    if (tRender - t0 > 300)
+      console.log(`poll /active: fetch=${(tFetch-t0).toFixed(1)}ms read=${(tText-tFetch).toFixed(1)}ms parse=${(tParse-tText).toFixed(1)}ms render=${(tRender-tParse).toFixed(1)}ms`);
+  } catch (e) {
+    console.log(`poll /active failed after ${(performance.now()-t0).toFixed(1)}ms`, e);
+  }
+}
+// Poll /session in parallel with /active to pick up backend-pushed
+// chrome updates (SetTitle / SetStatusText / Message / ClearMessage /
+// BackendError) between user-driven actions. Same 2s cadence — within
+// one poll-tick of any backend push. Drained server-side, so this
+// won't replay the same lines repeatedly.
+async function pollChrome(){
+  try {
+    const r = await netFetch(API+'/session', {credentials:'same-origin'});
+    if (!r.ok) return;
+    applyChromeFromSession(await r.json());
+  } catch (e) { /* network blip — try again next tick */ }
+}
+let pollTimer = null;
+function startPolling(){
+  if (pollTimer) return;
+  pollTimer = setInterval(() => { pollActive(); pollChrome(); }, 2000);
+}
+function stopPolling(){
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+}
+
+// Live updates via Server-Sent Events.
+// Server pushes "data: <json>" frames when state changes (button click,
+// timer tick, tab switch, script refresh). Falls back to 2s polling when
+// EventSource is missing, connection errors, or the tab becomes hidden
+// (SSE costs one open socket per tab — no point keeping it alive while
+// the user isn't looking).
+let liveSource = null;
+function applyActiveJsonText(text){
+  if (text === lastActiveJson || text === '{}' || !text) return;
+  lastActiveJson = text;
+  try {
+    const tree = JSON.parse(text);
+    if (tree && !tree.error) {
+      main.innerHTML = '';
+      main.appendChild(render(tree));
+    }
+  } catch (e) {
+    console.log('sse parse failed', e);
+  }
+}
+function startLive(){
+  if (liveSource) return;
+  if (typeof EventSource === 'undefined') { startPolling(); return; }
+  try {
+    liveSource = new EventSource(API + '/stream', { withCredentials: true });
+  } catch (e) {
+    console.log('SSE unavailable, falling back to polling', e);
+    startPolling();
+    return;
+  }
+  // SSE event = a server-side mutation happened. Apply the host tree
+  // first, then fetch /session for chrome updates (title, status,
+  // messages) the same event likely produced. Single round-trip latency
+  // instead of waiting for the 2s pollChrome tick.
+  liveSource.onmessage = ev => { applyActiveJsonText(ev.data); pollChrome(); };
+  liveSource.onerror = () => {
+    // Either the server dropped us or the network flapped. Tear down
+    // the EventSource and fall back to polling — polling renews the
+    // error banner via netFetch on each failed cycle, so the user sees
+    // the status. When the network recovers, the page reload (or next
+    // startLive call on visibilitychange) re-upgrades to SSE.
+    if (liveSource) { liveSource.close(); liveSource = null; }
+    startPolling();
+  };
+  // If we upgrade to SSE mid-session, make sure the polling loop isn't
+  // also firing — doubles up on server work and fights with lastActiveJson.
+  stopPolling();
+}
+function stopLive(){
+  if (liveSource) { liveSource.close(); liveSource = null; }
+}
+
+// Session-lost banner — fires when /active returns 401 (server restart,
+// idle-timeout eviction, or explicit destroy). Blocks the page so the
+// user doesn't keep typing into inputs whose commits will silently fail,
+// and offers a one-click reload to mint a fresh session.
+let sessionLostShown = false;
+async function checkMetaChanged(){
+  // Best-effort — the /session endpoint carries metaGeneration even
+  // when the session is gone (auth=false stub still includes it), so
+  // this works both for live-session drift and post-eviction.
+  try {
+    const info = await netFetch(API+'/session', {credentials:'same-origin'}).then(r=>r.json());
+    if (info && typeof info.metaGeneration === 'number') {
+      if (initialMetaGen === null) initialMetaGen = info.metaGeneration;
+      return info.metaGeneration !== initialMetaGen;
+    }
+  } catch (_) {}
+  return false;
+}
+async function showSessionLost(){
+  if (sessionLostShown) return;
+  sessionLostShown = true;
+  stopPolling(); stopLive();
+  const configChanged = await checkMetaChanged();
+  const overlay = document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.4);'
+    +'display:flex;align-items:center;justify-content:center;z-index:9999';
+  const box = document.createElement('div');
+  box.style.cssText='background:#fff;padding:20px 24px;border-radius:6px;'
+    +'box-shadow:0 6px 30px rgba(0,0,0,.3);max-width:400px;text-align:center';
+  const msg = document.createElement('p');
+  msg.textContent = configChanged
+    ? 'Конфигурация обновлена. Обновите страницу, чтобы продолжить работу с новой версией.'
+    : 'Сессия потеряна. Сервер перезапущен или сессия истекла.';
+  msg.style.cssText='margin:0 0 16px 0;font-size:14px;color:#333';
+  const btn = document.createElement('button');
+  btn.textContent='Обновить страницу';
+  btn.className='ctrl';
+  btn.onclick=()=>location.reload();
+  box.appendChild(msg); box.appendChild(btn);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+}
+document.addEventListener('visibilitychange', ()=>{
+  if (document.hidden) { stopLive(); stopPolling(); }
+  else { startLive(); }
+});
+
+// On session start, OnStart may have opened forms (auto-populated tabs)
+// before the walker ever ran — /active alone returns a bare visualHost
+// with no children. POST /tab/<active> forces CreateAndUpdateVisualHost
+// on the active tab's host and returns its tree, so the body paints on
+// first load without waiting for a user click. No-op when the session
+// has no tabs.
+async function paintActiveTab(){
+  const info=await netFetch(API+'/session',{credentials:'same-origin'}).then(r=>r.json());
+  if(!info||!info.tabs||info.tabs.length===0) return;
+  const active=info.activeTab|0;
+  const tree=await netFetch(API+'/tab/'+active,{method:'POST',credentials:'same-origin'}).then(r=>r.json());
+  if(tree&&!tree.error&&Object.keys(tree).length>0){
+    main.innerHTML='';
+    main.appendChild(render(tree));
+  }
+}
+
+// Tab strip overflow controls. The strip is overflow-x:auto; when the
+// combined width of all tabs exceeds the container, reveal ‹ › buttons
+// that scrollBy half a strip-width per click. ResizeObserver catches
+// both window resizes and tab-count changes.
+(function(){
+  const prev = document.getElementById('tabs-prev');
+  const next = document.getElementById('tabs-next');
+  if (!prev || !next || !tabsBar) return;
+  const step = () => Math.max(80, tabsBar.clientWidth * 0.6);
+  prev.addEventListener('click', () => tabsBar.scrollBy({ left: -step(), behavior: 'smooth' }));
+  next.addEventListener('click', () => tabsBar.scrollBy({ left:  step(), behavior: 'smooth' }));
+  const sync = () => {
+    const overflowing = tabsBar.scrollWidth > tabsBar.clientWidth + 1;
+    prev.classList.toggle('visible', overflowing);
+    next.classList.toggle('visible', overflowing);
+  };
+  new ResizeObserver(sync).observe(tabsBar);
+  new MutationObserver(sync).observe(tabsBar, { childList: true });
+  tabsBar.addEventListener('scroll', sync, { passive: true });
+  sync();
+})();
+
+(async()=>{
+  const bootOverlay = document.getElementById('bootOverlay');
+  // Step 1: find out whether we need to prompt for credentials.
+  const info = await authInfo();
+  // Step 2: authenticate.
+  // Open-access (no sys_user rows): loop auto-login until it succeeds.
+  // The server's timed_mutex may reject under rapid-F5 contention;
+  // retrying rather than falling to the form is correct because an
+  // empty-creds form can't collect anything useful.
+  // Populated sys_user: show the credentials form; promptLogin loops
+  // internally until /login accepts the creds.
+  let authenticated = false;
+  if (!info.hasUsers) {
+    authenticated = await login('', '');
+  }
+  if (!authenticated) {
+    await promptLogin();   // resolves only on successful /login
+    authenticated = true;
+  }
+  status.textContent = 'connected';
+  // Step 3: initial fetches in parallel so the boot overlay hides only
+  // after sidebar, tab strip, and active host have all landed — user
+  // sees a finished page rather than elements popping in one by one.
+  await Promise.all([
+    loadForms().catch(() => {}),
+    loadInterfaces().catch(() => {}),
+    refreshTabs().catch(() => {}),
+    paintActiveTab().catch(() => {}),
+  ]);
+  startLive();
+  if (bootOverlay) {
+    bootOverlay.classList.add('hide');
+    setTimeout(() => bootOverlay.remove(), 200);
+  }
+  // Debug indicator: a "DEBUG" pill in the sidebar status line while
+  // the wes process is in --debug mode. When this tab's session parks
+  // at a breakpoint, also takes over the top netStatus banner with
+  // "Отладчик: пауза" so the generic "Загрузка…" doesn't mask the real
+  // reason. Polls /debug-status; cheap (in-memory flag check on wes).
+  const dbgPill = document.createElement('span');
+  dbgPill.className = 'dbg';
+  dbgPill.style.display = 'none';
+  status.appendChild(dbgPill);
+  let dbgState = { debugMode: false, paused: false };
+  async function pollDebugStatus(){
+    try {
+      const r = await fetch(API+'/debug-status',{credentials:'same-origin'});
+      if (!r.ok) return;
+      const next = await r.json();
+      if (next.debugMode === dbgState.debugMode && next.paused === dbgState.paused)
+        return;
+      dbgState = next;
+      dbgPaused = next.paused;
+      dbgMode   = next.debugMode;
+      if (next.paused) {
+        dbgPill.textContent = 'PAUSED';
+        dbgPill.className = 'dbg paused';
+        dbgPill.style.display = '';
+        showNetStatus('debug-paused','Отладчик: пауза');
+        hideSpinner();
+      } else {
+        if (next.debugMode) {
+          dbgPill.textContent = 'DEBUG';
+          dbgPill.className = 'dbg mode';
+          dbgPill.style.display = '';
+        } else {
+          dbgPill.style.display = 'none';
+        }
+        // Resume — clear the paused banner. inflight keeps its own
+        // loading state, so it'll re-flash if a request is still slow.
+        if (inflight === 0) hideNetStatus();
+      }
+    } catch (e) { /* network blip — try again next tick */ }
+  }
+  setInterval(pollDebugStatus, 500);
+  pollDebugStatus();
+})();
+</script></body></html>

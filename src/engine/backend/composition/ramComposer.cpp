@@ -17,6 +17,107 @@
 // order (index i ↔ storage node i). A field path is split into a HEAD storage column + a dotted TAIL walked over
 // references per row (ibRamValueStorage::ResolveField). A path whose head is not a storage column is skipped: an
 // unevaluable filter passes (never hides a row), an unevaluable sort drops out.
+// ---------------------------------------------------------------------------
+// The filter TREE, evaluated over a RAM row
+// ---------------------------------------------------------------------------
+//
+// A DB source hands the condition to the engine and the engine lowers it. RAM
+// has no engine — the rows are right here — so the same AST is evaluated
+// directly against them. Same tree, same meaning; only the machinery differs.
+//
+// Without this the tree would be applied on a DB list and SILENTLY IGNORED on a
+// RAM one — the same filter narrowing one list and not the other, which reads as
+// "the filter is broken" and cannot be told apart from an empty result.
+
+namespace {
+
+// A side of a comparison, as a value: a Column reads the row, a Param and a
+// Literal read themselves. Anything else (an arithmetic node, a function) is a
+// shape the RAM path does not evaluate yet — the caller treats that as "cannot
+// answer" rather than guessing.
+bool RamSideValue(const ibQueryAstExpr& side, const ibRamValueStorage* storage, long row,
+	const std::map<wxString, ibValue>& params, ibValue& out)
+{
+	switch (side.m_kind) {
+	case ibQueryAstExprKind::Column: {
+		wxString path;
+		for (const wxString& seg : side.m_path)
+			path += path.IsEmpty() ? seg : wxT(".") + seg;
+		ibMetaID col; std::vector<wxString> tail;
+		if (storage == nullptr || !storage->SplitField(path, col, tail))
+			return false;
+		out = storage->ResolveField(row, col, tail);
+		return true;
+	}
+	case ibQueryAstExprKind::Param: {
+		const auto it = params.find(side.m_paramName);
+		if (it == params.end())
+			return false;
+		out = it->second;
+		return true;
+	}
+	case ibQueryAstExprKind::Literal:
+		out = side.m_literal;
+		return true;
+	default:
+		return false;
+	}
+}
+
+// Evaluate the condition for one row. `unknown` means the shape was not one this
+// path understands — the row is KEPT, because hiding rows on the strength of a
+// condition nobody evaluated is the one outcome a user cannot debug.
+bool RamEvalCondition(const ibQueryAstExpr& expr, const ibRamValueStorage* storage, long row,
+	const std::map<wxString, ibValue>& params, bool& unknown)
+{
+	switch (expr.m_kind) {
+	case ibQueryAstExprKind::Logical: {
+		if (!expr.m_lhs || !expr.m_rhs) { unknown = true; return true; }
+		const bool lhs = RamEvalCondition(*expr.m_lhs, storage, row, params, unknown);
+		const bool rhs = RamEvalCondition(*expr.m_rhs, storage, row, params, unknown);
+		return expr.m_isOr ? (lhs || rhs) : (lhs && rhs);
+	}
+	case ibQueryAstExprKind::Not: {
+		if (!expr.m_lhs) { unknown = true; return true; }
+		return !RamEvalCondition(*expr.m_lhs, storage, row, params, unknown);
+	}
+	case ibQueryAstExprKind::Compare: {
+		ibValue lhs, rhs;
+		if (!expr.m_lhs || !expr.m_rhs
+		 || !RamSideValue(*expr.m_lhs, storage, row, params, lhs)
+		 || !RamSideValue(*expr.m_rhs, storage, row, params, rhs)) {
+			unknown = true; return true;
+		}
+		switch (expr.m_cmp) {
+		case ibQueryCompareOp::Ne: return lhs != rhs;
+		case ibQueryCompareOp::Lt: return lhs <  rhs;
+		case ibQueryCompareOp::Le: return lhs <= rhs;
+		case ibQueryCompareOp::Gt: return lhs >  rhs;
+		case ibQueryCompareOp::Ge: return lhs >= rhs;
+		default:                   return lhs == rhs;
+		}
+	}
+	case ibQueryAstExprKind::Like: {
+		ibValue lhs, rhs;
+		if (!expr.m_lhs || !expr.m_rhs
+		 || !RamSideValue(*expr.m_lhs, storage, row, params, lhs)
+		 || !RamSideValue(*expr.m_rhs, storage, row, params, rhs)) {
+			unknown = true; return true;
+		}
+		// Same translation the flat RAM path uses — SQL wildcards to wx ones.
+		wxString pat = rhs.GetString();
+		pat.Replace(wxT("%"), wxT("*")); pat.Replace(wxT("_"), wxT("?"));
+		const bool matched = lhs.GetString().Lower().Matches(pat.Lower());
+		return expr.m_negated ? !matched : matched;
+	}
+	default:
+		unknown = true;
+		return true;
+	}
+}
+
+} // namespace
+
 std::vector<long> ibDataRamComposer::ComputeOrder() const
 {
 	if (m_storage == nullptr)
@@ -49,6 +150,15 @@ std::vector<long> ibDataRamComposer::ComputeOrder() const
 	rows.reserve(static_cast<size_t>(n));
 	for (long r = 0; r < n; ++r) {
 		bool pass = true;
+
+		// THE TREE, when there is one — evaluated first because it is the whole
+		// condition, not one line of it.
+		if (m_filterAst) {
+			bool unknown = false;
+			if (!RamEvalCondition(*m_filterAst, m_storage, r, m_params, unknown))
+				continue;
+		}
+
 		for (const RamFilter& f : filters) {
 			const ibValue cell = m_storage->ResolveField(r, f.m_col, f.m_tail);
 			bool ok;

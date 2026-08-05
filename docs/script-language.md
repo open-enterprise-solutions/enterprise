@@ -121,6 +121,90 @@ Function Total(rows)
 - `Protected` is the object→its-forms direction: a catalog's object module exposes a name to
   the forms of that catalog, but not to the whole configuration.
 
+### 4a. Declared types (widened 2026-08-04)
+
+The declaration grammar is `[modifier] Type name [= default]` — the type comes **before** the
+name, as it always has:
+
+```oes
+Boolean cancel = True;               // a primitive
+Array rows;                          // any registered value class
+CatalogRef.Номенклатура item;        // a metadata type
+
+Procedure Handle(Val CatalogRef.Номенклатура item, Boolean cancel)
+```
+
+Until 2026-08-04 only the five primitives were accepted here. Now **any registered type** is,
+including the dotted metadata form — and no new vocabulary was invented for it: a reference type's
+registered name already *is* `<Kind>Ref.<Name>` (`objCtor.h`), the same string the type system and
+serialisation use. The compiler resolves the name through the one registry every type registers
+itself in, so an unknown type is a **compile error**, not an empty value at run time.
+
+**Types are optional and absence means "anything".** Existing untyped code is untouched.
+
+⚠️ **The identifier after the type is part of the grammar**, and that is what keeps the widening
+safe. `Array rows` is a declaration; `Array = 5` is an assignment to a variable that happens to be
+called `Array`. Deciding on the type name alone was safe while five reserved primitives qualified,
+and stops being safe the moment every registered class does.
+
+**What this buys.** A declared parameter documents the call for every caller at once, and it is
+what lets tooling — the editor's completion, a headless checker, an assistant generating code —
+know what a routine takes without reading its body and guessing.
+
+### 4b. Barrier types — declaring a FAMILY
+
+A signature often wants to say something wider than one type and still true:
+
+```oes
+Procedure OnClick(AnyControl element)
+Function  Describe(AnyRef link)
+Procedure Store(Any payload)          // says "anything", rather than leaving it unsaid
+```
+
+| | Accepts |
+|---|---|
+| `Any` | anything — declared, restricting nothing |
+| `AnyRef` | any reference (catalog, document, chart of accounts…) |
+| `AnyObject` | any data object |
+| `AnyManager` | any manager |
+| `AnyControl` | any form control |
+| `AnyValue` | any general-purpose value class (array, structure, value table) |
+| `AnyEnum` | any enumeration |
+| `CatalogRef`, `DocumentRef`, … | any reference **of one metatype** |
+
+These are **registered types that create nothing** — no value is ever "an AnyControl". The name
+exists to be declared, and the type acts as a BARRIER: its gate lets a whole family through,
+including members that do not exist yet.
+
+**Two scopes, and they arrive differently.** The `Any*` ones belong to the platform and are
+registered once; membership is the KIND of a value's class, one comparison. The metatype families —
+`CatalogRef`, `DocumentRef`, `ChartOfAccountsRef`, and whatever ships next — arrive WITH their
+metatype, on its registration, so nobody maintains a list; and because a reference's class id says
+WHICH metaobject rather than which kind of one, they record their members: a catalog reference joins
+`CatalogRef` as it is registered. A catalog added years from now is a `CatalogRef` the moment it
+exists, and a document reference is refused there.
+
+```oes
+Function Post(DocumentRef doc)               // any document reference
+Function Describe(CatalogRef item)           // any catalog reference, whichever catalog
+Function Handle(CatalogRef.Номенклатура it)  // exactly one catalog's reference
+```
+
+**Why the prefix.** Plain `Control` would become ambiguous the day a configuration registers a class
+by that name, and the ambiguity would be silent — a declaration that meant "any control" would
+quietly start meaning "that one class". `Any` in front cannot be squatted; and because these are
+real registered types, the registry itself refuses a configuration that tries to reuse a name.
+
+**Only the kinds that appear in real signatures are listed.** A kind nobody declares would be a
+name kept forever for no reason; the language is easier to grow than to shrink.
+
+⚠️ **Empty always fits.** A parameter nobody passed, a reference not yet filled in, a result nobody
+produced — all are the empty value. The declaration says what the value *is* when there is one; it
+does not promise there is one. Checking presence stays with the code that cares.
+
+**Lists are deliberately absent** from the table: the platform has one list type, the dynamic list,
+and a family of one is not a family.
+
 ---
 
 ## 5. Control flow

@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClCompile Include="syntaxHelper\helpChooserDialog.cpp">
@@ -33,6 +33,12 @@
     </ClCompile>
     <ClCompile Include="mainFrame\objinspect\objinspect.cpp">
       <Filter>mainFrame\objinspect</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\listSettings\filterTreeModel.cpp">
+      <Filter>win\dlgs\listSettings</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\listSettings\listSettings.cpp">
+      <Filter>win\dlgs\listSettings</Filter>
     </ClCompile>
     <ClCompile Include="win\dlgs\userItem.cpp">
       <Filter>win\dlgs</Filter>
@@ -988,6 +994,12 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="win\dlgs\listSettings\filterTreeModel.h">
+      <Filter>win\dlgs\listSettings</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\listSettings\listSettings.h">
+      <Filter>win\dlgs\listSettings</Filter>
+    </ClInclude>
     <ClInclude Include="syntaxHelper\helpChooserDialog.h">
       <Filter>syntaxHelper</Filter>
     </ClInclude>
@@ -1864,6 +1876,9 @@
     </Filter>
     <Filter Include="win\dlgs">
       <UniqueIdentifier>{0F7CB570-C767-4C50-B602-646AC313AA62}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlgs\listSettings">
+      <UniqueIdentifier>{9d2c51ab-73f4-4a6e-8c15-2ad7e40b96c1}</UniqueIdentifier>
     </Filter>
     <Filter Include="win\dlgs\formSelector">
       <UniqueIdentifier>{592190AE-DAB6-446E-9BA6-0669461C3AE5}</UniqueIdentifier>

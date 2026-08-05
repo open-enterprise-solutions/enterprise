@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -321,6 +321,7 @@
     <ClCompile Include="win\dlgs\about.cpp" />
     <ClCompile Include="win\dlgs\activeUser.cpp" />
     <ClCompile Include="win\dlgs\applyChange.cpp" />
+    <ClCompile Include="win\dlgs\listSettings\filterTreeModel.cpp" />
     <ClCompile Include="win\dlgs\listSettings\listSettings.cpp" />
     <ClCompile Include="win\dlgs\jobSchedule\jobScheduleSettings.cpp" />
     <ClCompile Include="session\guiSession.cpp" />
@@ -698,6 +699,7 @@
     <ClInclude Include="win\dlgs\about.h" />
     <ClInclude Include="win\dlgs\activeUser.h" />
     <ClInclude Include="win\dlgs\applyChange.h" />
+    <ClInclude Include="win\dlgs\listSettings\filterTreeModel.h" />
     <ClInclude Include="win\dlgs\listSettings\listSettings.h" />
     <ClInclude Include="win\dlgs\jobSchedule\jobScheduleSettings.h" />
     <ClInclude Include="session\guiSession.h" />

@@ -372,7 +372,6 @@ TEST(ByteCodeAOT, ListFuncWithLocalsAndParams) {
 		p.m_clsid  = 0x111;
 		p.m_defaultValue.m_numArray = -1;
 		p.m_defaultValue.m_numIndex = -1;
-		p.m_defaultValue.m_strType  = wxT("Number");
 		p.m_strName = wxT("a");
 		fn.m_listParam.push_back(p);
 	}
@@ -382,7 +381,6 @@ TEST(ByteCodeAOT, ListFuncWithLocalsAndParams) {
 		p.m_clsid  = 0;
 		p.m_defaultValue.m_numArray = 5;
 		p.m_defaultValue.m_numIndex = 7;
-		p.m_defaultValue.m_strType  = wxT("String");
 		p.m_strName = wxT("b");
 		fn.m_listParam.push_back(p);
 	}
@@ -418,7 +416,6 @@ TEST(ByteCodeAOT, ListFuncWithLocalsAndParams) {
 	EXPECT_FALSE(a.m_listParam[0].m_bByRef);
 	EXPECT_TRUE(a.m_listParam[1].m_bByRef);
 	EXPECT_EQ(a.m_listParam[0].m_clsid, (ibClassID)0x111);
-	EXPECT_EQ(a.m_listParam[0].m_defaultValue.m_strType, wxT("Number"));
 	EXPECT_EQ(a.m_listParam[1].m_defaultValue.m_numArray, 5);
 	EXPECT_EQ(a.m_listParam[1].m_defaultValue.m_numIndex, 7);
 	EXPECT_EQ(a.m_listParam[0].m_strName, wxT("a"));

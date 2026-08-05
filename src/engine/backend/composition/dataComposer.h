@@ -133,6 +133,22 @@ public:
 	// RAM resolves the path to a column and compares the row's value). `op` is the comparison spelling.
 	ibDataComposer& Filter(const wxString& path, const wxString& op, const ibValue& value);
 
+	// A CONDITION THAT IS ALREADY AN AST — what a filter tree really produces
+	// (listFilter.h) and what `Restrict` compiles to. Handed over as it is, it
+	// never becomes text and never gets parsed back: the composer ANDs it into
+	// the WHERE of its own parsed query.
+	//
+	// The round trip through text was not wrong, only pointless — rendering an
+	// expression so the parser can rebuild the same expression. It also risked
+	// being lossy in the one direction that matters: anything the renderer spells
+	// differently from what the parser accepts would fail far from its cause.
+	ibDataComposer& FilterAst(const ibQueryAstExprPtr& condition);
+
+	// Register a value and get the &parameter NAME that carries it (without the
+	// leading &). Public because the one who BUILDS the condition is the one who
+	// knows which values it mentions — a filter tree names them as it goes.
+	wxString AddParam(const ibValue& value);
+
 	// A sort line — DB → ORDER BY; RAM → an in-place multi-key compare, in call order.
 	ibDataComposer& Sort(const wxString& path, bool ascending = true);
 
@@ -156,6 +172,9 @@ public:
 	// sees the new state.
 	void   ClearFilters() { m_filters.clear(); }
 	size_t FilterCount() const { return m_filters.size(); }
+	// The flat reading of a filter — path, operator, value. The TREE has no such
+	// reading (that is the point of it) and is not in this list at all: it lives
+	// as an AST beside it, so a caller that wants the tree reads the tree.
 	bool   GetFilterAt(size_t i, wxString& path, wxString& op, ibValue& value) const {
 		if (i >= m_filters.size()) return false;
 		path = m_filters[i].m_path; op = m_filters[i].m_op;
@@ -249,6 +268,12 @@ protected:
 
 	std::vector<wxString>    m_selected;   // projection (names / dot-walk paths); empty = all
 	std::vector<FilterItem>  m_filters;
+	// The tree's condition, kept apart from the flat lines: it is ANDed into the
+	// WHERE after the parse, so it needs no text form at all.
+	ibQueryAstExprPtr        m_filterAst;
+	// Bumped whenever it changes — the parse cache is keyed on the rendered text,
+	// which says nothing about a condition that never becomes text.
+	unsigned int             m_filterAstVersion = 0;
 	std::vector<SortItem>    m_sorts;
 	std::vector<TotalItem>   m_totals;
 	std::vector<TotalByItem> m_totalBy;
@@ -306,6 +331,9 @@ private:
 	bool BuildPageSignature(const ibReadPageRequest& page, wxString& signature) const;
 
 	mutable wxString                             m_renderedText;   // the AST's key
+	// …and the other half of that key: the tree condition never becomes text, so
+	// the text alone would say "nothing changed" after the whole filter was rewritten.
+	mutable unsigned int                         m_renderedFilterAstVersion = 0;
 	mutable ibQuerySelectPtr                     m_ast;
 	mutable std::shared_ptr<ibRenderedPageCache> m_pageCache;
 	// Set by Execute when a TOTALS fetch took the server-side single-level GROUP-BY keyset page (not the detail

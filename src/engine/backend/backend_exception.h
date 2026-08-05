@@ -69,6 +69,10 @@ enum { //Error message numbers
 
 #include "backend/backend.h"
 
+// Forward-declared rather than included: this is a wide header, and the failure
+// RECORD (diagnostic.h) is only named here, never used by value.
+enum class ibDiagnosticKind;
+
 class BACKEND_API ibBackendException {
 protected:
 
@@ -194,10 +198,18 @@ private:
 
 	//error handling routines
 	static const wxString& GetErrorDesc(int codeError);
+	// Builds the diagnostic (see diagnostic.h), publishes it to whoever
+	// subscribed, and returns the human-facing text ASSEMBLED FROM IT — the
+	// text is a projection of the record, never the other way round.
+	//
+	// The kind is the caller's to state: a compile error means the text never
+	// ran, a runtime one means it did, and no amount of looking at the message
+	// tells them apart.
 	static wxString ProcessExceptionError(const wxString& strFileName,
 		const wxString& strModuleName, const wxString& strDocPath,
 		const unsigned int currPos, const unsigned int currLine,
-		const wxString& strCodeLineError, const int codeError, const wxString& strErrorDesc // error code from compile module
+		const wxString& strCodeLineError, const int codeError, const wxString& strErrorDesc, // error code from compile module
+		const ibDiagnosticKind kind
 	);
 
 #if !wxUSE_UTF8_LOCALE_ONLY

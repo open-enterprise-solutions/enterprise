@@ -1204,7 +1204,7 @@ start_label:
 						ibBackendCoreException::Error(
 							_("Lambda call: m_listParam shorter than paramCount at param %ld"), i);
 					}
-					const ibParamUnit& puDef = bfn->m_listParam[i].m_defaultValue;
+					const ibParamRunUnit& puDef = bfn->m_listParam[i].m_defaultValue;
 					if (puDef.m_numArray == DEF_VAR_SKIP) {
 						const wxString& nm = (i < (long)bfn->m_listParam.size())
 							? bfn->m_listParam[i].m_strName
@@ -1245,8 +1245,28 @@ start_label:
 					--pContext->m_currentScopeDepth;
 				break;
 			case OPER_SET_TYPE:
-				variable1.SetType(ibValue::GetVTByID(array2));
+			{
+				// A DECLARED TYPE MEETING A VALUE — one question, two outcomes.
+				//
+				// The TYPE answers whether the value may pass (AllowValue on its
+				// runtime factory). It may, and the value is left exactly as it is; it
+				// may not, and that is a type mismatch — raised here rather than
+				// converted around, because a declaration states what a value IS and
+				// is not a request to change it.
+				//
+				// Nothing here knows which types say yes to what. A barrier admitting a
+				// whole family (`AnyRef`, `CatalogRef`), a class admitting only itself,
+				// a plugin's type admitting whatever it likes — all answer the same
+				// question, so a family that grows later needs no edit in the
+				// interpreter. This used to be a chain of special cases; it is one call.
+				const ibCtorAbstractType* typeCtor = ibValue::GetAvailableCtor(array2);
+				if (typeCtor == nullptr || !typeCtor->AllowValue(variable1.GetClassType())) {
+					ibBackendCoreException::Error(
+						_("Type mismatch: a value of type '%s' does not fit the declared type '%s'"),
+						variable1.GetClassName(), ibValue::GetNameObjectFromID(array2));
+				}
 				break;
+			}
 				//Operators for working with typed data
 				//NUMBER
 			case OPER_ADD + TYPE_DELTA1: variable1.m_fData = cvariable2.m_fData + cvariable3.m_fData; break;
@@ -1315,8 +1335,16 @@ start_label:
 				// Boolean-tier NOT — the typed path a `Not (comparison)` lambda hits. Kleene
 				// NOT(UNKNOWN)=UNKNOWN under the LINQ three-valued flag (the comparison left an
 				// empty/UNKNOWN operand); else the usual two-valued boolean NOT.
+				//
+				// THE OPERATOR TYPES ITS OWN RESULT. Writing m_bData alone assumed the slot
+				// had already been made BOOLEAN — which a declared type used to do as a side
+				// effect of OPER_SET_TYPE. A declared type is a GATE (it permits a write, it
+				// does not convert), so nothing types the slot beforehand any more: an
+				// untyped slot took the value and stayed EMPTY, and the row read as no
+				// result at all. Both branches here now say what they produced, exactly as
+				// the untyped tier does through SetTypeBoolean.
 				if (ts_threeValuedNullCompare && IsNullOperand(cvariable2)) variable1.m_typeClass = ibValueTypes::TYPE_NULL;   // UNKNOWN == SQL NULL (IsNullOperand keys on TYPE_NULL)
-				else variable1.m_bData = !cvariable2.m_bData;
+				else SetTypeBoolean(variable1, !cvariable2.m_bData);
 				break;
 			case OPER_INVERT + TYPE_DELTA4: variable1.m_bData = !cvariable2.m_bData; break;
 			case OPER_EQ + TYPE_DELTA4: variable1.m_bData = (cvariable2.m_bData == cvariable3.m_bData); break;

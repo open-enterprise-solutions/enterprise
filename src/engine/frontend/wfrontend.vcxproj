@@ -250,4 +250,22 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
-</Project>
+  <!--
+    Web-client stage. Pack $(SolutionDir)webClient\ into $(OutDir)web\client.wpk
+    (zip, DEFLATE) so a release carries one file beside the binary, exactly the
+    way syntaxHelper\(locale)\ becomes help\(locale).hlk (backend.vcxproj,
+    StageSyntaxHelperContent - same reasoning, same writer).
+
+    A DEV RUN DOES NOT NEED THIS. webClient.cpp walks up from the executable and
+    reads webClient\client.html straight out of the source tree, so editing the
+    client is a save-and-reload rather than a rebuild. The pack is what
+    production uses, and it wins over a loose directory when both exist.
+  -->
+  <Target Name="StageWebClient" AfterTargets="Build"
+          Inputs="$(SolutionDir)webClient\**\*"
+          Outputs="$(OutDir)web\.pack-stamp.txt">
+    <MakeDir Directories="$(OutDir)web" />
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;Add-Type -A 'System.IO.Compression.FileSystem'; if (Test-Path '$(OutDir)web\client.wpk') { Remove-Item '$(OutDir)web\client.wpk' -Force }; [IO.Compression.ZipFile]::CreateFromDirectory('$(SolutionDir)webClient', '$(OutDir)web\client.wpk', 'Optimal', 0)&quot;"
+          WorkingDirectory="$(SolutionDir)" />
+    <Touch Files="$(OutDir)web\.pack-stamp.txt" AlwaysCreate="true" />
+  </Target></Project>

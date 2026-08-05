@@ -133,7 +133,10 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 // in-place append, O(n^2) -> O(n)). COMPILER-OUTPUT change, payload layout identical
 // — bump so cached blobs recompile to the fused form (old blobs still execute
 // correctly, just without the optimisation).
-constexpr uint16_t kAOTFormatVersion = 18;
+// v19 (2026-08-05): a parameter's default-value descriptor lost its type NAME —
+// the bytecode already carries the type as a class id, and a name is spelled from
+// that id only when a message needs one.
+constexpr uint16_t kAOTFormatVersion = 19;
 constexpr uint16_t kAOTFlagPortable  = 0x0001;       // unused — host-endian today
 
 // Sentinel for an over-large collection — guards Deserialize against
@@ -309,7 +312,6 @@ bool WriteParam(ibWriterMemory& w, const ibByteCode::ibByteParam& p) {
 	w.w_u8(p.m_bByRef ? 1 : 0);
 	w.w_u64((uint64_t)p.m_clsid);
 	WriteParamRun(w, p.m_defaultValue);
-	w.w_stringZ(p.m_defaultValue.m_strType);
 	w.w_stringZ(p.m_strName);
 	return true;
 }
@@ -318,7 +320,6 @@ void ReadParam(const ibReaderMemory& r, ibByteCode::ibByteParam& p) {
 	p.m_bByRef = (r.r_u8() != 0);
 	p.m_clsid  = (ibClassID)r.r_u64();
 	ReadParamRun(r, p.m_defaultValue);
-	r.r_stringZ(p.m_defaultValue.m_strType);
 	r.r_stringZ(p.m_strName);
 }
 

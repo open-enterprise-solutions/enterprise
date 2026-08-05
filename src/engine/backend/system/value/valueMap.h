@@ -3,6 +3,7 @@
 
 #include "backend/compiler/value.h"
 
+
 class BACKEND_API ibValueContainer : public ibValueDynamicMembers {
 	public:
 private:
@@ -84,6 +85,12 @@ public:
 	virtual std::shared_ptr<ibValueIteratorState> CreateIterator() override;
 
 protected:
+
+	// Packing — CONTENTS only: a pair is two child nodes (valueMap.cpp). A
+	// structure inherits this unchanged; it differs in what it accepts as a KEY,
+	// not in how it is written, and the header already says which it was.
+	virtual bool DoSerialize(class ibDataNode& node) const override;
+	virtual bool DoDeserialize(const class ibDataNode& node) override;
 
 	struct ContainerComparator {
 		bool operator()(const ibValue& lhs, const ibValue& rhs) const;

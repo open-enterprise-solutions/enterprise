@@ -499,8 +499,35 @@ public:
 
 #pragma region serialization
 
-	wxString Serialize(const ibValue& cValue);
-	ibValue Deserialize(const wxString& strValue);
+	// THE ENTRY POINT for packing a value. A caller takes the metadata it wants
+	// and asks it; a value itself is BLIND to metadata and stays that way.
+	//
+	// What only a metadata can do is turn a class id back into an instance of a
+	// CONFIGURATION type — a catalog reference, a document reference, an enum
+	// member — whose id is derived from a metaID no static table could know.
+	// Everything else it REDIRECTS to the value level
+	// (compiler/valueSerialization.h), which owns the reading mechanism and the
+	// built-in classes. A type nobody has reads back empty: schema-on-read.
+	//
+	// INSTANCE methods, not static: these run on the metadata the caller already
+	// chose, and it is THAT configuration's ctor registry a reference has to
+	// come from. Reaching for a global "active" configuration would be a second
+	// answer to a question the caller already answered.
+	//
+	// The node is the same tree metadata itself is written through, so every
+	// provider comes for free: binary for storage, JSON for a wire or a dump.
+	//
+	// FAILURE IS AN EXCEPTION, never a quiet empty. A value with no packed form,
+	// a type nobody has — the caller asked for a value and there isn't one, so
+	// it is told rather than handed something that looks like a legitimate
+	// empty.
+	//
+	// Bytes are the PROVIDER's business, not a second pair of methods here: a
+	// caller that wants a blob writes this node through ibBinaryProvider, a
+	// caller that wants text through the JSON one, exactly as the metadata
+	// itself is saved.
+	void Serialize(const ibValue& cValue, class ibDataNode& node) const;
+	ibValue Deserialize(const class ibDataNode& node) const;
 
 #pragma endregion
 

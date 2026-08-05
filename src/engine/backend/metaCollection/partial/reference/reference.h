@@ -133,6 +133,15 @@ public:
 	// GetValueByMetaID / SetValueByMetaID above already satisfy both bases; these resolve the rest.
 	// GetGuid overrides BOTH ibValueDataObject's (concrete) and ibSourceDataObject's (pure).
 	virtual ibUniqueKey GetGuid() const override { return m_objGuid; }
+
+protected:
+
+	// Packing — identity only: the header carries the type, so the contents are
+	// the guid (reference.cpp). The OBJECT never travels.
+	virtual bool DoSerialize(class ibDataNode& node) const override;
+	virtual bool DoDeserialize(const class ibDataNode& node) override;
+
+public:
 	virtual ibClassID GetSourceClassType() const override { return GetClassType(); }
 	virtual wxString GetSourceCaption() const override { return GetString(); }
 	virtual void SourceIncrRef() override { ibValue::IncrRef(); }

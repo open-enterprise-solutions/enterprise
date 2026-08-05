@@ -94,6 +94,30 @@ std::shared_ptr<ibReaderMemory> readerHeaderMemory(reader.open_chunk(headerBlock
 `ibNumber` uses the same discipline for its own payload (`kIbNumberChunk` —
 [../CLAUDE.md](../CLAUDE.md) §2a).
 
+### ⚠ A reader BORROWS its bytes
+
+`ibReaderMemory` keeps the pointer it is given and never owns a copy. `ibWriterMemory::buffer()`,
+by contrast, hands back a `wxMemoryBuffer` **by value**. Putting the two together directly —
+
+```cpp
+ibReaderMemory reader(writer.buffer());   // the temporary dies at the semicolon
+```
+
+— leaves the reader on freed memory, and the failure surfaces nowhere near the mistake: the chunk
+lengths come back as garbage, and the first sized read walks off the heap as an access violation
+inside `memcpy`, with nothing on the stack naming this line. It cost a full debugger session to
+find once (`MetaDataSerialize.TheTreeIS_WhatTravels`, 2026-08-05).
+
+The rvalue overload is therefore **deleted** in `fs.h`, so the mistake is now a compile error
+rather than a rule to remember. Hold the buffer, then read it:
+
+```cpp
+const wxMemoryBuffer blob = writer.buffer();
+ibReaderMemory reader(blob);
+```
+
+Every other call site in the tree already uses the `(data, size)` form over a live object.
+
 ---
 
 ## 3. Compression
@@ -159,6 +183,96 @@ starts pulling third-party*) — the same class of question, unresolved.
 
 ---
 
+## 4a. Values pack themselves — one mechanism, any provider (2026-08-04)
+
+A value used to serialize to a STRING and only to a string, which meant a composite could not
+serialize at all: an array or a structure has no honest text form, so settings could hold a number
+but not a list of them.
+
+Now there is one mechanism and it writes an **ibDataNode** — the same tree metadata is written
+through. What comes out is the provider's business: binary for storage and transport, JSON for
+exchange and for a human reading a dump. Text is a RENDERING of the node, not a second
+implementation every type had to maintain. Another format later is another provider, and nothing in
+any value changes.
+
+**The split is what keeps it honest:**
+
+| Method | Who | What |
+|---|---|---|
+| `ibValue::Serialize` / `Deserialize` | the BASE, once | the header: the `IsTransferable` gate, then the type |
+| `DoSerialize` / `DoDeserialize` | the CHILD | its own contents — and its elements are asked the same question, so the walk continues by itself |
+
+The default knows the **primitives and nothing else**, which is all the base can honestly claim. A
+mutable value — a form, an open object, a lambda — overrides nothing and is refused by the gate
+before any of this runs.
+
+### A value is blind to metadata
+
+The value layer does not know that metadata exists — no `activeMetaData`, no include of
+`metadataConfiguration.h` under `backend/compiler`. A value packs and unpacks ITSELF; who holds the
+registry of types is somebody else's question.
+
+Creating a value FROM a node is **`ibValue::FromNode`** — one static mechanism, in one place: read
+the type, create through the VALUE registry, hand the new value the whole node. Both doors end here.
+
+What the header SAYS is a smaller question and lives apart, in the narrow
+**`compiler/valueSerialization.h`** (`ibReadNodeType`), because it changes with the reading format
+rather than with `ibValue`, and `value.h` is included by half the engine.
+
+### The door is the metadata
+
+```cpp
+metaData->Serialize(value, node);          // a value in, a filled tree out
+ibValue value = metaData->Deserialize(node);   // a tree in, a live value out
+```
+
+A caller takes the metadata it wants — the active one, or any other — and asks it. Instance methods,
+not static: it is THAT configuration's ctor registry a catalog reference has to come from.
+
+Bytes are not a second pair of methods. A caller that wants a blob writes the node through
+`ibBinaryProvider`, one that wants text through `ibJsonProvider` — exactly how the metadata itself is
+saved.
+
+**The redirect is one line.** The door asks `GetTypeCtor` — its OWN registry, deliberately not
+`IsRegisterCtor`, which already answers for `ibValue`'s registry too and would swallow the question.
+Not mine → `return ibValue::FromNode(node)`, and everything past that point happens once, in the one
+mechanism, for both doors.
+
+### Failure is an exception, never a quiet empty
+
+If neither the configuration nor the value registry has the type, the read RAISES
+(`ibBackendCoreException`). Same for a value that cannot be created, cannot read its own contents, or
+— on the writing side — has no packed form at all.
+
+An empty value would be indistinguishable from one that legitimately IS empty, and would surface
+three layers away as a blank field nobody can explain. The caller asked for a value; there is none;
+saying so is the only honest answer.
+
+### What is implemented
+
+- **array** — elements as child nodes; the declared count is a cross-check, the children are the loop bound
+- **container / structure** — pairs; an odd number of children is refused
+- **reference** — identity only: the metaID **and** the guid. The object never travels; the far side
+  re-reads it under its own rights.
+
+**Why a reference writes its metaID.** A reference's class id is DERIVED from the metaobject's
+metaID, so within one base either identifies the type. Across bases they part company: a copy of the
+base can number the same catalog differently, and a stored setting would then restore a reference
+pointing at whatever type happens to hold that id — silently, and at the wrong table. The class id
+stays in the header as the fast path; the metaID is what the reader consults when the fast path is
+not enough. A mismatch is refused; an absent metaID (0) is an older record, not a disagreement.
+
+⚠️ **The node has a fixed set of codecs** (string, bool, s32, blob, guid, ibNumber, wxDateTime) and
+none for a 64-bit integer: the type is stored as text, which also makes the JSON dump readable.
+
+⚠️ **A reference inside a container** is read at the value level, where configuration types do not
+exist — so it raises rather than degrading. Reading such a value goes through the metadata door.
+
+Tests: `ValueSerialize.*` and `MetaDataSerialize.*` in `tests/test_compiler.cpp`. The latter stand in
+for a configuration with a small `ibMetaData` subclass — enough to pin the contract of the door
+without a database behind it.
+
+---
 ## 5. Honest remainder
 
 - `fileSystem/` should be `io/` (§ header note).

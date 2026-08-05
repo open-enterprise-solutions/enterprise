@@ -78,6 +78,15 @@ public:
 	virtual void DispatchLinqMethod(ibLinqMethod method, ibValue& ret,
 	                                ibValue** args, long n) override;
 
+protected:
+
+	// Packing — CONTENTS only (the header is the base's). Each element becomes a
+	// child node and is asked the same question, so the walk continues itself.
+	virtual bool DoSerialize(class ibDataNode& node) const override;
+	virtual bool DoDeserialize(const class ibDataNode& node) override;
+
+public:
+
 	//����������� ������
 	void Add(const ibValue& varValue) {
 		m_listValue.push_back(varValue);

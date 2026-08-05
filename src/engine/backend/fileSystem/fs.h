@@ -260,6 +260,16 @@ public:
 	{
 	}
 
+	// A READER BORROWS ITS BYTES — it keeps the buffer's pointer and never owns a
+	// copy. Handing it a temporary therefore leaves it reading freed memory the
+	// moment the full expression ends, and the damage surfaces far away: the
+	// length fields come back as garbage and the first sized read walks off the
+	// heap (an access violation inside memcpy, with nothing on the stack pointing
+	// here). ibWriterMemory::buffer() returns BY VALUE, so `ibReaderMemory
+	// reader(writer.buffer())` is exactly that mistake — and it is the reason this
+	// deletion exists rather than a comment asking people not to.
+	ibReaderMemory(wxMemoryBuffer&&, int = 0) = delete;
+
 	ibReaderMemory(void* _data, int _size, int _iterpos = 0) :
 		ibReader(_data, _size, _iterpos)
 	{

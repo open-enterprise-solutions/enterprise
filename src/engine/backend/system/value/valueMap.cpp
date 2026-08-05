@@ -324,6 +324,57 @@ bool ibValueStructure::Property(const ibValue& varKeyValue, ibValue& cValueFound
 	return ibValueContainer::Property(varKeyValue, cValueFound);
 }
 
+
+
+////////////////////////////////////////////////////////////////////////////
+// Serialization — the container packs its pairs, each side packs itself
+////////////////////////////////////////////////////////////////////////////
+//
+// Header from the base; contents here. A pair is two child nodes, and both are
+// asked the same question the container was — so nesting needs no special case.
+//
+// A STRUCTURE inherits this unchanged: it differs in what it accepts as a KEY,
+// not in how it is written, and the header already says which of the two it was.
+
+#include "backend/serialize/dataBuilder.h"
+
+
+bool ibValueContainer::DoSerialize(ibDataNode& node) const
+{
+	node.SetValue(wxT("n"), (s32)m_containerValues.size());
+
+	for (const auto& pair : m_containerValues) {
+		ibDataNode& keyNode = node.AddChild(pair.first.GetClassType(), 0);
+		if (!pair.first.Serialize(keyNode))
+			return false;   // one unpackable side voids the container
+		ibDataNode& valueNode = node.AddChild(pair.second.GetClassType(), 0);
+		if (!pair.second.Serialize(valueNode))
+			return false;
+	}
+
+	return true;
+}
+
+bool ibValueContainer::DoDeserialize(const ibDataNode& node)
+{
+	m_containerValues.clear();
+	m_members.Invalidate();
+
+	const std::vector<ibDataNode>& children = node.Children();
+	// Pairs, so an ODD number of children means the blob was cut between a key
+	// and its value — refuse rather than drop the dangling one.
+	if ((children.size() % 2) != 0)
+		return false;
+
+	for (std::size_t i = 0; i + 1 < children.size(); i += 2) {
+		const ibValue key = ibValue::FromNode(children[i]);
+		const ibValue value = ibValue::FromNode(children[i + 1]);
+		m_containerValues.insert_or_assign(key, value);
+	}
+
+	return (s32)m_containerValues.size() == node.GetValue<s32>(wxT("n"));
+}
+
 //**********************************************************************
 //*                       Runtime register                             *
 //**********************************************************************

@@ -205,6 +205,7 @@ public:
 	{
 		return false;
 	}
+
 	virtual wxWindow* CreateEditorCtrl(wxWindow* WXUNUSED(parent),
 		wxRect WXUNUSED(labelRect),
 		const wxVariant& WXUNUSED(value))

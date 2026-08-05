@@ -12,6 +12,48 @@
 #include "frontend/win/ctrls/dynamicBorder.h"
 #include "frontend/visualView/ctrl/frame.h"
 
+// See typeControl.h — the single Select-button route.
+bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue,
+	const ibValueMetaObject* choiceForm, wxWindow* parent)
+{
+	ibTypeControlFactory* factory = dynamic_cast<ibTypeControlFactory*>(ownerValue);
+	if (ownerValue == nullptr || factory == nullptr)
+		return false;
+
+	ibValue current;
+	ownerValue->GetControlValue(current);
+
+	// UNDEFINED = the type is not settled yet. GetDataType answers it — from the
+	// metadata by default, asking the user only when the cell admits more than one
+	// type, and overridden outright by a cell that already knows (a filter's left
+	// side is always a field).
+	if (current.GetType() == ibValueTypes::TYPE_EMPTY) {
+		const ibClassID clsid = factory->GetDataType();
+		const ibMetaData* metaData = factory->GetMetaData();
+		if (clsid == 0 || metaData == nullptr || !metaData->IsRegisterCtor(clsid))
+			return false;   // the user closed the type choice
+		current = metaData->CreateObject(clsid);
+		ownerValue->SetControlValue(current);
+		// and keep going: the editor for that type opens now, not on a second click
+	}
+
+	// THE VALUE OF THAT TYPE: the built-in quick choice first (it knows a boolean,
+	// an enumeration, a reference), then the metaobject's own selection form.
+	const ibClassID clsid = current.GetClassType();
+
+	if (ibTypeControlFactory::QuickChoice(ownerValue, clsid, parent))
+		return true;
+
+	const ibMetaData* metaData = factory->GetMetaData();
+	const ibCtorMetaValueType* so = metaData != nullptr ? metaData->GetTypeCtor(clsid) : nullptr;
+	if (so != nullptr && so->GetMetaTypeCtor() == ibCtorObjectMetaType_Reference) {
+		if (const ibValueMetaObject* metaObject = so->GetMetaObject())
+			return metaObject->ProcessChoice(ownerValue,
+				choiceForm != nullptr ? choiceForm->GetName() : wxString(), factory->GetSelectMode());
+	}
+	return false;
+}
+
 bool ibTypeControlFactory::SimpleChoice(ibControlFrame* ownerValue, const ibClassID& clsid, wxWindow* parent) {
 
 	ibValueTypes valType = ibValue::GetVTByID(clsid);

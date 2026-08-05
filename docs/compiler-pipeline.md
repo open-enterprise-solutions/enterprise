@@ -264,7 +264,51 @@ enters the editor's read path"* ([module-manager-split.md](module-manager-split.
 
 ---
 
-## 7. Honest remainder
+## 7. A failure leaves as DATA — `ibDiagnostic` (landed 2026-08-04)
+
+Both links of the chain fail the same way, and both report through one funnel:
+`ibBackendException::ProcessExceptionError`. The compile side arrives from
+`ibCompileCode::DoSetError` (text refused before it ever ran); the runtime side from
+`ibProcUnit`'s catch, with the failing `ibByteUnit` in hand.
+
+**What changed:** that funnel used to produce one assembled sentence —
+`{Module(42)}: Divide by zero` — and everything downstream read it the way a person does. The
+position was never missing; it was just never assembled. `ProcessError` already took file, module,
+doc path, position and line as arguments, and the debug protocol has carried the same fields for
+years (`ibDebugData`, `ibDebugLineData`).
+
+Now the funnel builds `ibDiagnostic` (`backend/backend_diagnostic.h`) and **the message is
+assembled from it**, never the other way round:
+
+| Field | |
+|---|---|
+| `m_kind` | `Compile` / `Runtime` — a compile error means the text never ran; nothing in the message says that |
+| `m_docPath` | the module's guid — the only stable address, and the one the designer navigates by |
+| `m_moduleName`, `m_fileName` | what a person reads; the file is set for external reports / data processors |
+| `m_line`, `m_position` | 1-based line; offset into the module text (a column derives from it later without touching any producer) |
+| `m_code` | the engine's error code — machine-readable identity that a translated message does not change |
+| `m_message`, `m_codeLine` | the failure without the `{Module(42)}:` decoration, and the offending source line |
+| `m_stack` | frames as `{module, line}` pairs |
+
+**Delivery is a sink, not a return value** (`ibDiagnostics::Subscribe` / `Publish`): a failure is
+reported from deep inside the interpreter, and the stack between it and whoever cares is not ours
+to change. Subscribers are process-wide because errors happen wherever they happen — a job session,
+a compile in the designer, a background run — and a sink threaded through all of those would be
+threaded through none. Publishing is best-effort: a sink that throws is swallowed, because an
+exception is already unwinding.
+
+Three consumers, one record: the **dialog** (text built from the record, `frame->BackendError`
+unchanged), the **debugger** (as before), and a **headless caller** — a build step, a test, or an
+AI assistant asking "compile this and tell me what is wrong", which is the consumer that cannot
+exist while the answer is prose.
+
+⚠️ **The stack is now collected whether or not anyone is looking.** It used to be gathered inside
+the "is there a frame" branch, so failures in a job, a background run or a headless check — exactly
+the ones nobody watches — reported no stack at all.
+
+---
+
+## 8. Honest remainder
 
 - **`ms_listDefine` is process-global** (§2) — verify before relying on `#Define` under the
   multi-session web host.

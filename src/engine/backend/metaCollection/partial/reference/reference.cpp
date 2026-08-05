@@ -517,3 +517,66 @@ bool ibValueReferenceDataObject::CallAsFunc(const long lMethodNum, ibValue& pvar
 
 	return false;
 }
+////////////////////////////////////////////////////////////////////////////
+// Serialization — a reference travels as IDENTITY
+////////////////////////////////////////////////////////////////////////////
+//
+// The header already carries the type, so the contents are just the guid. NOT
+// the object: an object belongs to a session and a connection, and the far side
+// re-reads it under its OWN rights — which is exactly why a job is handed a
+// reference rather than a loaded object.
+//
+// An empty reference writes an empty guid and comes back as an empty reference
+// OF THAT TYPE, not as an untyped nothing: a reference that has not been filled
+// in is still a reference, and the far side must be able to compare and assign
+// it without a type error.
+
+#include "backend/serialize/dataBuilder.h"
+
+bool ibValueReferenceDataObject::DoSerialize(ibDataNode& node) const
+{
+	// THE metaID, not only the class id.
+	//
+	// A reference's class id is DERIVED from the metaobject's metaID, so within
+	// one configuration either identifies the type. Across configurations they
+	// part company: the same catalog can carry a different id in a copy of the
+	// base, and a stored setting or an exchange parcel then restores a reference
+	// pointing at whatever type happens to hold that id — silently, and to the
+	// wrong table.
+	//
+	// Writing the metaID as well makes the identity say what it means: this type,
+	// of this metaobject. The class id stays in the header for the fast path;
+	// this is what a reader consults when the fast path is not enough.
+	if (m_metaObject != nullptr)
+		node.SetValue(wxT("m"), (s32)m_metaObject->GetMetaID());
+
+	node.SetValue(wxT("g"), m_reference_impl != nullptr
+		? ibGuid(m_reference_impl->m_guid).str()
+		: wxString());
+	return true;
+}
+
+bool ibValueReferenceDataObject::DoDeserialize(const ibDataNode& node)
+{
+	if (m_reference_impl == nullptr)
+		return false;
+
+	// THE metaID DECIDES, when it was written. We were created from the class id
+	// in the header, which is the fast path and is enough within one base; this
+	// is the check that the type we were created as is the type that was stored.
+	// A mismatch means the id landed on a different metaobject in this base —
+	// refuse rather than hand back a reference into the wrong table.
+	//
+	// Absent (0) is not a mismatch: it is a value written before the metaID went
+	// into the payload, and the class id is all it ever had.
+	const ibMetaID storedMetaId = (ibMetaID)node.GetValue<s32>(wxT("m"));
+	if (storedMetaId != 0 && m_metaObject != nullptr
+		&& storedMetaId != m_metaObject->GetMetaID())
+		return false;
+
+	// A malformed guid reads as the empty one rather than raising: the header
+	// was well formed, so this is data from a base that knew something we do
+	// not — degrade, do not fail the whole read.
+	m_reference_impl->m_guid = ibGuid(node.GetValue<wxString>(wxT("g")));
+	return true;
+}

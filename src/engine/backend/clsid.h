@@ -191,6 +191,7 @@ constexpr ibClassID externalManager_to_clsid     (ibClassID metaID) { return mak
 
 // --- stateless kind reads — no metadata, no registry, just the high byte ---
 constexpr ibClassKind clsid_kind (ibClassID c) { return static_cast<ibClassKind>(static_cast<unsigned char>(c >> 56)); }
+
 constexpr bool IsReference     (ibClassID c) { return clsid_kind(c) == ibClassKind_Reference; }
 constexpr bool IsList          (ibClassID c) { return clsid_kind(c) == ibClassKind_List; }
 constexpr bool IsObject        (ibClassID c) { return clsid_kind(c) == ibClassKind_Object || clsid_kind(c) == ibClassKind_ExternalObject; }

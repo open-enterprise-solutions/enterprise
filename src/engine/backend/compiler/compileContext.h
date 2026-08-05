@@ -121,13 +121,14 @@ struct ibCompileContext {
 		// debugger Locals visibility.
 		int m_scopeDepth = 0;
 		unsigned int m_numVariable;
-		// Target class id for External / Context entries — used by the
-		// runtime pre-flight to verify the bound ibValue matches the
-		// declared type. Stamped in PrepareModuleData from the live
-		// extern / context value's GetClassType(). 0 for plain Locals
-		// (no static type).
-		ibClassID m_clsid;
-		wxString m_strType; // Value type
+		// THE TYPE, as a class id — 0 when there is none.
+		//
+		// Two things that used to be told apart now share it, because they are
+		// the same fact: the type DECLARED in the source (`Number x`), and the
+		// type of the value an External / Context entry is bound to (stamped in
+		// PrepareModuleData from the live value's GetClassType(), read by the
+		// runtime pre-flight). Both answer "what is this slot".
+		ibClassID m_clsid = 0;
 		wxString m_strRealName; // Real variable name (canonical identifier)
 		wxString m_strContext; //name of the context variable
 
@@ -168,14 +169,18 @@ struct ibCompileContext {
 			// passed in by the caller).
 			ibParamVariable(const wxString& strParamName, const ibByteCode::ibByteParam& bp)
 				: m_bByRef(bp.m_bByRef),
-				  m_strName(strParamName),
-				  m_puValue(bp.m_defaultValue)
+				  m_strName(strParamName)
 			{
+				// The bytecode carries the descriptor, not the type name (byteCode.h):
+				// the compile side keeps its own m_clsid, which is a compile-time
+				// concern and never travelled in the bytecode to begin with.
+				m_puValue.m_numArray = bp.m_defaultValue.m_numArray;
+				m_puValue.m_numIndex = bp.m_defaultValue.m_numIndex;
 			}
 
 			bool m_bByRef;
 			wxString m_strName; // Variable name
-			wxString m_strType; // Value type
+			ibClassID m_clsid = 0;   // declared type; 0 = untyped
 			ibParamUnit m_puValue; // Default value
 		};
 
@@ -260,7 +265,7 @@ struct ibCompileContext {
 		bool m_needsHeapFrame = false;
 
 		wxString m_strRealName; //Function name (canonical)
-		wxString m_strType; //type (in English notation), if it is a typed function
+		ibClassID m_clsid = 0;   // declared return type; 0 = untyped
 		wxString m_strContext; //name of the context variable
 
 		unsigned int m_lVarCount;// number of local variables
@@ -361,11 +366,11 @@ struct ibCompileContext {
 	void CreateLabels();
 
 	ibParamUnit CreateVariable(const wxString& strPrefix = wxT("@temp_"));
-	ibParamUnit AddVariable(const wxString& strVarName, const wxString& strType = wxEmptyString, bool bExport = false, bool bContext = false, bool bTempVar = false);
+	ibParamUnit AddVariable(const wxString& strVarName, const ibClassID& typeClsid = 0, bool bExport = false, bool bContext = false, bool bTempVar = false);
 	ibParamUnit GetVariable(const wxString& strVarName, bool bFindInParent = true, bool bCheckError = false, bool bContext = false, bool bTempVar = false);
 
 	void PushVariable(const wxString& strVarName, const wxString& strContextVar, unsigned int numVariable,
-		const wxString& typeVar = wxEmptyString, bool exportVar = true, bool contextVar = true, bool tempVar = false);
+		const ibClassID& typeClsid = 0, bool exportVar = true, bool contextVar = true, bool tempVar = false);
 	void PushFunction(const wxString& strFuncName, const wxString& strContextVar, const wxString& strShortDescription, unsigned int numFunction,
 		bool hasRetVal = true, int argCount = 0);
 

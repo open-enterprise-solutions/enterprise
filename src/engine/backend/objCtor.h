@@ -3,6 +3,7 @@
 
 #include "backend/compiler/typeCtor.h"
 #include "backend/objCtorDefs.h"
+#include "backend/metaCtor.h"   // ibCtorMetaAnyReference — the per-metatype family a reference joins
 #include "backend/metaCollection/partial/commonObject.h"
 
 class ibCtorMetaValueType : public ibCtorAbstractType {
@@ -78,10 +79,23 @@ protected:
 	ibValueMetaObjectRecordDataRef* m_metaObject;
 };
 
+// Registering a reference also tells its FAMILY that it exists: `CatalogRef`
+// learns this catalog's reference the moment the reference itself appears, and
+// forgets it when it goes. That is what lets the family answer "is this one of
+// mine" with no metadata lookup — see ibCtorMetaAnyReference (metaCtor.h).
 #define registerReference()\
-	m_metaData->RegisterCtor(new ibCtorMetaValueTypeReference(this))
+	{\
+		ibCtorMetaValueTypeReference* refCtor = new ibCtorMetaValueTypeReference(this);\
+		m_metaData->RegisterCtor(refCtor);\
+		if (ibCtorMetaAnyReference* anyRef = ib_find_any_reference(GetClassName()))\
+			anyRef->AddMember(refCtor->GetClassType());\
+	}
 #define unregisterReference()\
-	m_metaData->UnRegisterCtor(generate_class_name(prefixReference))
+	{\
+		if (ibCtorMetaAnyReference* anyRef = ib_find_any_reference(GetClassName()))\
+			anyRef->RemoveMember(reference_to_clsid(GetMetaID()));\
+		m_metaData->UnRegisterCtor(generate_class_name(prefixReference));\
+	}
 
 //object class
 class ibCtorMetaValueTypeObject :

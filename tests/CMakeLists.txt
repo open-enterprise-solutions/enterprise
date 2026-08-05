@@ -46,6 +46,7 @@ add_executable(oes_tests
     test_firebirdLease.cpp
     test_logger.cpp
     test_dbTaxonomy.cpp
+    test_gitService.cpp
     test_metadataSerialize.cpp
     test_metadataTree.cpp
     test_dataNode.cpp
@@ -391,3 +392,48 @@ set_target_properties(oes_frontend_runtime_test PROPERTIES
 )
 
 gtest_discover_tests(oes_frontend_runtime_test)
+
+# ---------------------------------------------------------------------------
+# PostgreSQL dialect — EXECUTED against a real server (integration scope).
+#
+# Everything else in the suite runs on SQLite, which pins semantics but cannot
+# pin the half that depends on the server: numeric precision, timestamps, blob
+# escaping, the dialect's own upsert. PostgreSQL is what production runs on, so
+# that half was unchecked until this target.
+#
+# Skips itself when OES_PG_USER is unset, so it is a no-op locally and a real
+# test in CI, where a postgres service container supplies the connection:
+#
+#   cmake --build build --target oes_pg_dialect_test --config Debug
+#   OES_PG_USER=postgres OES_PG_PASSWORD=postgres ./bin/oes_pg_dialect_test
+#
+# Only built when the driver itself is compiled in — without OES_USE_POSTGRESQL
+# the layer is absent and the target would not link.
+# ---------------------------------------------------------------------------
+if(OES_USE_POSTGRESQL)
+    add_executable(oes_pg_dialect_test test_postgresDialect.cpp)
+
+    target_link_libraries(oes_pg_dialect_test
+        PRIVATE
+            backend
+            GTest::gtest
+            GTest::gtest_main
+    )
+
+    target_compile_definitions(oes_pg_dialect_test PRIVATE OES_TESTING)
+
+    target_include_directories(oes_pg_dialect_test PRIVATE
+        "${CMAKE_SOURCE_DIR}/src"
+        "${CMAKE_SOURCE_DIR}/src/engine"
+        "${CMAKE_SOURCE_DIR}/src/engine/backend"
+    )
+
+    set_target_properties(oes_pg_dialect_test PROPERTIES
+        CXX_STANDARD          17
+        CXX_STANDARD_REQUIRED ON
+        BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
+        INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
+    )
+
+    gtest_discover_tests(oes_pg_dialect_test)
+endif()

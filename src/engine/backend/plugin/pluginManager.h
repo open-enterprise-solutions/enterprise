@@ -10,6 +10,7 @@
 #include "backend/appDataCtorToken.h"
 #include "backend/plugin/pluginApi.h"
 
+
 #include <wx/dynlib.h>
 #include <memory>
 #include <vector>

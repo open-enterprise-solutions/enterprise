@@ -92,7 +92,7 @@ static void CallLambdaWithArgs(ibValueFunction& fn, ibValue** argPtrs,
 			ibBackendCoreException::Error(
 				_("LINQ: lambda m_listParam shorter than paramCount at %ld"), i);
 		}
-		const ibParamUnit& puDef = bfn->m_listParam[i].m_defaultValue;
+		const ibParamRunUnit& puDef = bfn->m_listParam[i].m_defaultValue;
 		if (puDef.m_numArray == DEF_VAR_SKIP) {
 			const wxString& nm = (i < (long)bfn->m_listParam.size())
 				? bfn->m_listParam[i].m_strName

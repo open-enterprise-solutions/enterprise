@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClCompile Include="mainApp.cpp" />
@@ -14,6 +14,9 @@
     </ClCompile>
     <ClCompile Include="mainFrame\mainFrameDesignerParts.cpp">
       <Filter>mainFrame</Filter>
+    </ClCompile>
+    <ClCompile Include="mainFrame\vcs\gitPanel.cpp">
+      <Filter>mainFrame\vcs</Filter>
     </ClCompile>
     <ClCompile Include="docManager\docManager.cpp">
       <Filter>docManager</Filter>
@@ -150,6 +153,9 @@
     <ClInclude Include="mainFrame\mainFrameDesigner.h">
       <Filter>mainFrame</Filter>
     </ClInclude>
+    <ClInclude Include="mainFrame\vcs\gitPanel.h">
+      <Filter>mainFrame\vcs</Filter>
+    </ClInclude>
     <ClInclude Include="docManager\docManager.h">
       <Filter>docManager</Filter>
     </ClInclude>
@@ -262,6 +268,9 @@
     </Filter>
     <Filter Include="mainFrame\debugger">
       <UniqueIdentifier>{fe3f1769-61f3-4769-a64d-92911c0f4120}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mainFrame\vcs">
+      <UniqueIdentifier>{c4a7e015-8d3b-42f6-b0d1-5e93a27c6f48}</UniqueIdentifier>
     </Filter>
     <Filter Include="win">
       <UniqueIdentifier>{eeb061da-1a61-46bf-8977-9cb8aaf2337b}</UniqueIdentifier>

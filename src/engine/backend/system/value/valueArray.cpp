@@ -292,6 +292,54 @@ bool ibValueArray::SetAt(const ibValue& varKeyValue, const ibValue& varValue)//a
 	return true;
 }
 
+
+
+////////////////////////////////////////////////////////////////////////////
+// Serialization — the array packs its elements, and they pack themselves
+////////////////////////////////////////////////////////////////////////////
+//
+// The header (the type) is written by the base; this fills in the contents. Each
+// element becomes a CHILD NODE and is asked the same question — so the walk
+// continues by itself, one class deep at a time, and this class never learns
+// what its elements contain.
+//
+// No lengths, no separators: the tree carries the structure that a flat string
+// would have had to encode by hand.
+
+#include "backend/serialize/dataBuilder.h"
+
+
+bool ibValueArray::DoSerialize(ibDataNode& node) const
+{
+	node.SetValue(wxT("n"), (s32)m_listValue.size());
+
+	for (const ibValue& element : m_listValue) {
+		ibDataNode& child = node.AddChild(element.GetClassType(), 0);
+		// AN ELEMENT THAT CANNOT TRAVEL VOIDS THE ARRAY. Writing a hole instead
+		// would restore into something that looks whole and quietly lost a row —
+		// the failure nobody notices until a report comes up short.
+		if (!element.Serialize(child))
+			return false;
+	}
+
+	return true;
+}
+
+bool ibValueArray::DoDeserialize(const ibDataNode& node)
+{
+	m_listValue.clear();
+
+	// The declared count is a CROSS-CHECK, not the loop bound: the children are
+	// what actually exist, and trusting a number over the structure is how a
+	// truncated blob turns into a silently shorter array.
+	const s32 declared = node.GetValue<s32>(wxT("n"));
+
+	for (const ibDataNode& child : node.Children())
+		m_listValue.push_back(ibValue::FromNode(child));
+
+	return (s32)m_listValue.size() == declared;
+}
+
 //**********************************************************************
 //*                       Runtime register                             *
 //**********************************************************************

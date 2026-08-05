@@ -1,83 +1,82 @@
 #include "metaData.h"
 
-wxString ibMetaData::Serialize(const ibValue& cValue)
+#include "serialize/dataBuilder.h"
+#include "compiler/valueSerialization.h"
+#include "backend_exception.h"
+
+////////////////////////////////////////////////////////////////////////////
+// Value serialization — the metadata's half of it
+////////////////////////////////////////////////////////////////////////////
+//
+// THE ENTRY POINT is here:
+//
+//   metaData->Serialize(value, node);         // a value in, a filled tree out
+//   value = metaData->Deserialize(node);      // a tree in, a live value out
+//
+// A caller takes the metadata it wants — the active one, or any other — and
+// asks it. A value itself is blind to metadata and stays that way.
+//
+// The tree, not bytes: what it becomes is the PROVIDER's business — binary for
+// storage and transport, JSON for a wire or for a human reading a dump — the
+// same way the metadata itself is saved. A second pair of methods taking a
+// buffer would be that choice made twice.
+//
+// What only a metadata can do is turn a class id back into an instance of a
+// CONFIGURATION type — a catalog reference, a document reference, an enum
+// member — whose id is derived from a metaID no static table could know.
+//
+// Everything else it REDIRECTS to ibValue::FromNode, which is THE mechanism:
+// the same one a caller with no configuration in play reaches directly. This
+// file is a step in front of it, never a copy of it.
+//
+// And when neither has the type, that mechanism THROWS. The caller asked for a
+// value; there is no value; saying so is the only honest answer. A quiet empty
+// would be a lie that surfaces three layers away as a blank field nobody can
+// explain.
+////////////////////////////////////////////////////////////////////////////
+
+void ibMetaData::Serialize(const ibValue& cValue, ibDataNode& node) const
 {
-	wxString strSerialize;
-	if (cValue.Serialize(strSerialize)) {
-
-		wxString str;
-
-		str << wxT("S: OES Serialize;;;");
-		str << wxT("C:") << cValue.GetClassType() << wxT(";;;");
-		str << wxT("L:") << strSerialize.Length() << wxT(";;;");
-		str << wxT("D:") << strSerialize << wxT(";;;");
-		str << wxT("E: OES Serialize;;;");
-
-		return str;
-	}
-
-	return wxEmptyString;
+	// Writing needs nothing from the configuration — a value knows its own type
+	// and its own contents. A refusal here is IsTransferable saying no (a form,
+	// an open object, a lambda) or a type with no packed form at all.
+	if (!cValue.Serialize(node))
+		ibBackendCoreException::Error(_("The value '%s' cannot be serialized"),
+			cValue.GetClassName());
 }
 
-#include <wx/tokenzr.h>
-
-ibValue ibMetaData::Deserialize(const wxString& strValue)
+ibValue ibMetaData::Deserialize(const ibDataNode& node) const
 {
+	const ibClassID classType = ibReadNodeType(node);
+
+	// MY OWN REGISTRY, asked directly — GetTypeCtor, not IsRegisterCtor, because
+	// the latter already answers for ibValue's registry too and would swallow
+	// the very question being asked here.
+	//
+	// Not mine: straight to the ONE mechanism. Everything past this point —
+	// creation, the contents, the refusals — happens there, once, for both
+	// doors.
+	if (GetTypeCtor(classType) == nullptr)
+		return ibValue::FromNode(node);
+
 	ibValue createdValue;
-
-	// Parse OES Serialize format:
-	// S: OES Serialize;;;C:<classType>;;;L:<length>;;;D:<data>;;;E: OES Serialize;;;
-
-	wxStringTokenizer tokenizer(strValue, wxT(";;;"));
-
-	wxString header;      // "S: OES Serialize"
-	wxString classStr;    // "C:<classType>"
-	wxString lengthStr;   // "L:<length>"
-	wxString dataStr;     // "D:<data>"
-
-	if (tokenizer.HasMoreTokens()) header = tokenizer.GetNextToken();
-	if (tokenizer.HasMoreTokens()) classStr = tokenizer.GetNextToken();
-	if (tokenizer.HasMoreTokens()) lengthStr = tokenizer.GetNextToken();
-	if (tokenizer.HasMoreTokens()) dataStr = tokenizer.GetNextToken();
-
-	// Validate header
-	if (header.Trim() != wxT("S: OES Serialize"))
-		return wxEmptyValue;
-
-	// Extract class type
-	ibClassID classType = 0;
-	if (classStr.StartsWith(wxT("C:"))) {
-		wxString clsidStr = classStr.Mid(2);
-		// Parse into wx's own type, then convert. ToULongLong writes through an
-		// `unsigned long long*` specifically, and ibClassID is uint64_t — the same width
-		// but a different type on LP64, so its address does not fit the parameter.
-		unsigned long long parsed = 0;
-		if (clsidStr.ToULongLong(&parsed))
-			classType = static_cast<ibClassID>(parsed);
-	}
-
-	// Extract data
-	wxString data;
-	if (dataStr.StartsWith(wxT("D:")))
-		data = dataStr.Mid(2);
-
-	if (classType == 0 && data.IsEmpty())
-		return wxEmptyValue;
-
-	// Create value of the appropriate type and deserialize
 	try {
-		if (classType != 0)
-			createdValue = ibMetaData::CreateObject(classType);
-		else
-			createdValue = ibMetaData::CreateObject(g_valueStringCLSID);
+		createdValue = CreateObject(classType);
 	}
-	catch (...)
-	{
-		return wxEmptyValue;
+	catch (const ibBackendException&) {
+		throw;
+	}
+	catch (...) {
+		ibBackendCoreException::Error(_("Failed to create a value of type '%s'"),
+			ibValue::GetNameObjectFromID(classType));
 	}
 
-	if (createdValue.Deserialize(data))
-		return createdValue;
+	// CREATED, THEN HANDED THE WHOLE NODE — a reference sorts out its metaID and
+	// guid, an array its elements. This layer never learns what they contain,
+	// only whether they managed.
+	if (!createdValue.Deserialize(node))
+		ibBackendCoreException::Error(_("Failed to read the contents of a value of type '%s'"),
+			ibValue::GetNameObjectFromID(classType));
 
-	return wxEmptyValue;
+	return createdValue;
 }

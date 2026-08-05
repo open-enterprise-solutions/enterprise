@@ -125,6 +125,102 @@ header names them as the next adopters — same three lookups, same shape.
 
 ---
 
+## 3a. The full cycle — who registers what, and when
+
+The two registries above are the WHERE. This is the WHEN, end to end, because that is the part
+that cannot be read off any single file.
+
+### The metatype registers itself — once, at process start
+
+`METADATA_TYPE_REGISTER(ibValueMetaObjectCatalog, "Catalog", g_metaCatalogCLSID)` (`catalogMetadata.cpp`,
+bottom of file) creates a static `ibCtorMetaType<T>` in the VALUE factory. Static initialisation:
+this happens before any configuration exists, and it is what makes `Catalog` a name the compiler
+knows.
+
+`ibValue::RegisterCtor` then raises the **registration event** on it:
+
+```cpp
+virtual void CallEvent(ibCtorObjectTypeEvent event) {      // metaCtor.h
+    if (event == ibCtorObjectTypeEvent_Register) {
+        T::OnRegisterObject(GetClassName(), this);         // the metatype's own hook
+        RegisterAnyReference();                            // …and its family, if it has references
+    }
+    …
+}
+```
+
+That event is the right place for anything a METATYPE owns — as opposed to anything one catalog
+owns. `CatalogRef` (the family barrier, §5b) is registered exactly here, which is why it is
+declarable in a configuration that has no catalogs yet.
+
+⚠️ **The event fires BEFORE the ctor is inserted into the registry** (`valueFactory.cpp`:
+`CallEvent` then `registry->Register`). Nested registration from inside the event is therefore safe
+— it completes before the outer insert.
+
+### What a metatype HAS — `s_features`
+
+`RegisterAnyReference` does not consult a list of reference-bearing metatypes. Each metaobject class
+declares its own set (`ibValueMetaObject::s_features`, `metaObject.h`), and everything deriving it
+inherits:
+
+| class | set |
+|---|---|
+| `ibValueMetaObject` | `None` — form, template, role |
+| `ibValueMetaObjectRecordDataRef` | `Reference \| Manager` — an **enumeration stops here** |
+| `ibValueMetaObjectRecordDataMutableRef` | `+ Object \| Selection` — catalog, document, charts |
+| `ibValueMetaObjectRegisterData` | `Manager \| RecordSet \| Selection` — **no reference at all** |
+| `ibValueMetaObjectRecordDataExt` | `Object \| Manager` — data processor, report |
+
+Read with `if constexpr`, so it costs nothing at run time and a metatype that grows a capability
+says so in one place. The bits line up with the `register*()` calls below — that is the invariant
+worth keeping: a set that claims something nobody registers is a lie the compiler cannot catch.
+
+### The metaOBJECT registers its types — per configuration, on run
+
+When a configuration runs, every metaobject gets `OnBeforeRunMetaObject`, and that is where the
+per-object ctors enter the METADATA factory (`objCtor.h` macros):
+
+```cpp
+registerReference();   // ibCtorMetaValueTypeReference → "CatalogRef.Номенклатура"
+registerManager();     // ibCtorMetaValueTypeManager   → "CatalogManager.Номенклатура"
+registerObject();      // … and Selection / RecordSet / TabularSection / RecordKey by kind
+```
+
+`registerReference()` also tells the FAMILY that this reference exists (`AddMember`), and
+`unregisterReference()` takes it back — which is how `CatalogRef` answers "is this one of mine"
+without a metadata lookup on the hot path.
+
+`OnAfterCloseMetaObject` unregisters. And because the whole `m_factoryCtors` lives on `ibMetaImage`,
+closing the configuration drops every metadata ctor at once — the per-object unregister matters only
+while the configuration stays open (deleting an object in the designer).
+
+### Looking a type up — the two registries together
+
+```cpp
+ibMetaData::IsRegisterCtor(clsid)   // MY registry OR ibValue's   ← "does this type exist at all"
+ibMetaData::CreateObjectRef(clsid)  // MY ctor      OR ibValue's   ← same fallback
+ibMetaData::GetTypeCtor(clsid)      // MY registry ONLY            ← "is this MINE"
+```
+
+⚠️ **The fallback is inside the factory, not around it** (`metadataFactory.cpp`). Asking
+`IsRegisterCtor` when you meant "is this mine" always answers yes, and any redirect built on it is
+dead code that looks alive. Use `GetTypeCtor` for ownership; `IsRegisterCtor` for existence.
+
+### Creating a value from stored data
+
+```
+ibMetaData::Deserialize(node)          // the door: read the type, try MY registry
+        ↓ not mine
+ibValue::FromNode(node)                // the mechanism: the value-level registry
+        ↓ nobody has it
+ibBackendCoreException                 // never a quiet empty
+```
+
+The configuration types (a reference, an enum member) exist only in the first; everything built-in
+in the second. See [serialization-io.md §4a](serialization-io.md).
+
+---
+
 ## 4. `ibQueryableFactory` — query sources, and why it is different
 
 `backend/query/queryableFactory.h`. Owned by `ibApplicationData`, reached through the
@@ -268,6 +364,73 @@ virtual void   CallEvent(ibCtorObjectTypeEvent event) {
 
 ---
 
+## 5a. A type is the GATE — `AllowValue` (landed 2026-08-05, replaces `CastValue`)
+
+`ibCtorAbstractType` carries one virtual, and it takes a **class id** — not a value:
+
+```cpp
+virtual bool AllowValue(const ibClassID& clsid) const { return clsid == GetClassType(); }
+```
+
+- **`true`** — let it through, unconditionally: nothing else runs, no conversion, no type
+  description, no metadata.
+- **`false`** — not allowed as it stands; the caller falls back to the full conversion path,
+  which converts or refuses.
+
+**The default is the plain comparison** — the answer for almost every type, and the cheapest one:
+a class-id comparison instead of building a type description per assignment.
+
+**Why it lives on the registrar.** A type is the only thing that knows what it accepts, and the list
+of types is *open* — a metaobject registers one per configuration, a plugin can register more. A
+central switch would need editing for every new type and would be silently incomplete for the ones
+it never heard of. Here a new type brings its rule with it.
+
+**Caller:** the interpreter's `OPER_SET_TYPE`, i.e. a declared type applied to a slot
+([script-language.md §4a](script-language.md)) — and it is the WHOLE of that opcode. The gate says
+yes and the value is left exactly as it is; the gate says no and the interpreter raises a type
+mismatch. There is no third branch: no primitive tag, no `AdjustValue`, no conversion attempted
+behind the author's back.
+
+⚠️ **A declaration no longer converts** (changed 2026-08-05). `Number x = "5"` is a type error
+rather than a silent parse, and a declaration does not apply the type's qualifiers (scale, length)
+either. A declaration states what a value IS; asking for a conversion is a different verb and reads
+differently in the source.
+
+⚠️ **Absence passes every gate.** An unset variable carries the `Undefined` class — not id 0 — so
+`ib_clsid_is_absent()` answers for both spellings. Without it `Number x;` with no initialiser would
+be a type error, which is why the check lives in one place rather than in each override.
+
+### 5b. Barrier types — the families
+
+The overrides are the **barriers**: registered types that create nothing and exist to be declared.
+
+| | Where | Gate |
+|---|---|---|
+| `Any` | `compiler/typeAny.cpp` | everything |
+| `AnyRef`, `AnyObject`, `AnyManager`, `AnyControl`, `AnyValue`, `AnyEnum` | `compiler/typeAny.cpp` | `clsid_kind(clsid) == kind` — one byte |
+| `CatalogRef`, `DocumentRef`, `EnumerationRef`, … | `metaCtor.h` | membership in a recorded set |
+
+**The metatype families arrive with their metatype.** `ibCtorMetaType<T>::CallEvent(Register)`
+registers `<Name>Ref` when `T::s_hasReference` is true — a `static constexpr bool` that
+`ibValueMetaObjectRecordDataRef` flips on and every reference-bearing metatype inherits. Nobody
+keeps a list of which metatypes those are; a new one gets its family the day it derives the base.
+
+**Membership is recorded, not derived.** A reference's class id is `(kind Reference, body = metaID)`
+— the metaID says *which* metaobject, not which *kind* of one, so the kind cannot separate a
+catalog's reference from a document's. So `registerReference()` tells the family
+(`AddMember`) and `unregisterReference()` takes it back. The gate stays a set lookup: no metadata
+on the hot path, and the distinction the declaration promised is actually enforced.
+
+⚠️ **Lists have no barrier** — the platform has one list type, the dynamic list, and a family of
+one is not a family.
+
+**What this replaced.** The families used to be an *encoding*: a class id with an empty body, plus
+`IsAnyOfKind` and a branch in the interpreter. That shape could not express a family narrower than a
+kind (so "any catalog reference" was impossible), and every site that met one needed a special case.
+All of it — `make_clsid_any`, `kIbClsidAny`, `ibClassKind_AnyKind`, `IsAnyOfKind`, the interpreter
+branch, the parser's special name resolution — is gone.
+
+---
 ## 6. Related ctor files
 
 `characteristicCtor.{h,cpp}` · `constantCtor.{h,cpp}` · `compiler/enumFactory.{h,cpp}` ·

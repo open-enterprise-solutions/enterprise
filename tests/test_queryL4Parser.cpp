@@ -315,3 +315,112 @@ TEST(QueryL4Parser, UnionAll_FlagPerBranch)
 	EXPECT_FALSE(sel->m_unions[0]->m_unionAll);   // plain UNION — dedupes
 	EXPECT_TRUE(sel->m_unions[1]->m_unionAll);    // UNION ALL — keeps duplicates
 }
+
+// ===========================================================================
+// The RETURN TRIP — AST back to query text (queryRender.{h,cpp})
+//
+// A constructor that can only GENERATE text is used once: the moment a query is
+// edited by hand it can no longer read it. These tests pin the property that
+// makes it a tool instead — text -> AST -> text -> AST, with the second AST
+// equal to the first.
+//
+// Equality is checked by RE-RENDERING, not by comparing structs: two renders
+// that agree mean the second parse understood everything the first one did.
+// Byte-identity with the ORIGINAL source is deliberately not the contract —
+// comments, line breaks and redundant parentheses belong to the author and the
+// AST does not keep them.
+// ===========================================================================
+
+#include "backend/query/queryRender.h"
+
+namespace {
+
+// text -> AST -> text -> AST -> text; the last two must agree.
+void ExpectRoundTrip(const wxString& source)
+{
+	ibQuerySelectPtr first = Parse(source);
+	ASSERT_NE(nullptr, first) << "source did not parse: " << source.ToStdString();
+
+	const wxString once = ibRenderQuery(*first);
+
+	ibQuerySelectPtr second = Parse(once);
+	ASSERT_NE(nullptr, second) << "rendered text did not parse back:\n" << once.ToStdString();
+
+	const wxString twice = ibRenderQuery(*second);
+	EXPECT_EQ(once, twice)
+		<< "round trip is not stable\nfirst:\n" << once.ToStdString()
+		<< "\nsecond:\n" << twice.ToStdString();
+}
+
+} // namespace
+
+TEST(QueryRender, PlainSelectRoundTrips) {
+	ExpectRoundTrip(wxT("SELECT Ref, Description FROM Catalog.Products"));
+}
+
+TEST(QueryRender, StarAndAliasRoundTrip) {
+	ExpectRoundTrip(wxT("SELECT * FROM Catalog.Products AS p"));
+	ExpectRoundTrip(wxT("SELECT p.Ref AS link FROM Catalog.Products AS p"));
+}
+
+TEST(QueryRender, DistinctAndTopSurvive) {
+	ExpectRoundTrip(wxT("SELECT TOP 10 DISTINCT Ref FROM Catalog.Products"));
+}
+
+TEST(QueryRender, PredicatePrecedenceIsPreserved) {
+	// THE CASE THAT MATTERS. The AST has no parentheses — the author's are
+	// consumed by the parser — so rendering without them would re-associate on
+	// the next parse: `a AND (b OR c)` coming back as `a AND b OR c` is a
+	// different query, and a silent one.
+	ExpectRoundTrip(wxT("SELECT Ref FROM Catalog.Products WHERE Code = \"1\" AND (Name = \"a\" OR Name = \"b\")"));
+	ExpectRoundTrip(wxT("SELECT Ref FROM Catalog.Products WHERE (Code = \"1\" OR Code = \"2\") AND Name = \"a\""));
+}
+
+TEST(QueryRender, PredicateFormsRoundTrip) {
+	ExpectRoundTrip(wxT("SELECT Ref FROM Catalog.Products WHERE Name LIKE \"a%\""));
+	ExpectRoundTrip(wxT("SELECT Ref FROM Catalog.Products WHERE Name NOT LIKE \"a%\""));
+	ExpectRoundTrip(wxT("SELECT Ref FROM Catalog.Products WHERE Code IN (\"1\", \"2\", \"3\")"));
+	ExpectRoundTrip(wxT("SELECT Ref FROM Catalog.Products WHERE Owner IS NULL"));
+	ExpectRoundTrip(wxT("SELECT Ref FROM Catalog.Products WHERE Owner IS NOT NULL"));
+	ExpectRoundTrip(wxT("SELECT Ref FROM Catalog.Products WHERE Price BETWEEN 10 AND 20"));
+	ExpectRoundTrip(wxT("SELECT Ref FROM Catalog.Products WHERE NOT (Code = \"1\")"));
+}
+
+TEST(QueryRender, ParametersAndAggregatesRoundTrip) {
+	ExpectRoundTrip(wxT("SELECT SUM(Price) AS total FROM Catalog.Products WHERE Owner = &owner"));
+	ExpectRoundTrip(wxT("SELECT COUNT(*) AS rows FROM Catalog.Products"));
+}
+
+TEST(QueryRender, JoinsRoundTrip) {
+	ExpectRoundTrip(wxT("SELECT p.Ref FROM Catalog.Products AS p LEFT JOIN Catalog.Units AS u ON p.Unit = u.Ref"));
+	// An OMITTED ON is not `ON TRUE`: it means join-by-reference, and writing one
+	// in would turn an auto-join into a cross join.
+	ExpectRoundTrip(wxT("SELECT p.Ref FROM Catalog.Products AS p INNER JOIN Catalog.Units AS u"));
+}
+
+TEST(QueryRender, GroupHavingOrderRoundTrip) {
+	ExpectRoundTrip(wxT("SELECT Owner, SUM(Price) AS total FROM Catalog.Products ")
+		wxT("GROUP BY Owner HAVING SUM(Price) > 100 ORDER BY Owner DESC"));
+}
+
+TEST(QueryRender, SubqueryAndUnionRoundTrip) {
+	ExpectRoundTrip(wxT("SELECT Ref FROM Catalog.Products WHERE Owner IN (SELECT Ref FROM Catalog.Owners)"));
+	ExpectRoundTrip(wxT("SELECT Ref FROM Catalog.Products UNION ALL SELECT Ref FROM Catalog.Archive"));
+}
+
+TEST(QueryRender, CaseRoundTrips) {
+	ExpectRoundTrip(wxT("SELECT CASE WHEN Price > 100 THEN \"big\" ELSE \"small\" END AS size FROM Catalog.Products"));
+}
+
+TEST(QueryRender, TotalsRoundTrip) {
+	ExpectRoundTrip(wxT("SELECT Owner, Price FROM Catalog.Products TOTALS SUM(Price) BY Owner"));
+	ExpectRoundTrip(wxT("SELECT Owner, Price FROM Catalog.Products TOTALS SUM(Price) BY Owner HIERARCHY"));
+}
+
+TEST(QueryRender, ExpressionAloneRenders) {
+	// For a constructor's filter row or a diagnostic naming the offending term.
+	ibQuerySelectPtr select = Parse(wxT("SELECT Ref FROM Catalog.Products WHERE Code = \"1\""));
+	ASSERT_NE(nullptr, select);
+	ASSERT_NE(nullptr, select->m_where);
+	EXPECT_EQ(wxT("Code = \"1\""), ibRenderQueryExpr(*select->m_where));
+}

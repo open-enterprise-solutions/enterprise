@@ -34,6 +34,21 @@ public:
 	virtual const ibBackendSourceColumn* GetSourceAttributeObject() const = 0;
 	//////////////////////////////////////////////////
 
+	// THE ONE ROUTE every value editor walks when its Select button is pressed:
+	//
+	//   Undefined      -> GetDataType() decides the type (asking only when the cell
+	//                     admits more than one) and the value is created;
+	//   typed value    -> the quick choice for that type, and if the type has none,
+	//                     the metaobject's own selection form.
+	//
+	// Written ONCE here rather than in each control: a text control on a form, a
+	// table column and a filter cell are the same conversation with the user, and
+	// the second copy of it is where they start to differ by accident.
+	// `choiceForm` — the selection form the caller wants opened (a text control and a
+	// table column each carry one as a property); null = the metaobject's own.
+	static bool ChooseValue(ibControlFrame* ownerValue,
+		const class ibValueMetaObject* choiceForm = nullptr, wxWindow* parent = nullptr);
+
 	static bool SimpleChoice(ibControlFrame* ownerValue, const ibClassID& clsid, wxWindow* parent);
 
 	static bool QuickChoice(ibControlFrame* ownerValue, const ibClassID& clsid, wxWindow* parent);

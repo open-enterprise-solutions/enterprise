@@ -75,7 +75,19 @@ wxString ibDatabaseResultSetPostgres::GetResultString(int nField)
 	wxString strValue = wxEmptyString;
 	if (m_bBinaryResults)
 	{
-		wxLogError(wxT("Not implemented\n"));
+		// BINARY RESULTS ARE NOT DECODED HERE — and this must be an exception,
+		// not a log line. Logging and returning an empty value hands the caller a
+		// plausible answer for a column it never read: an empty string, a zero, a
+		// false. On PostgreSQL — the production engine — that is a wrong number in
+		// a report nobody traces back to a driver that quietly declined.
+		//
+		// Nothing turns binary mode on today (m_bBinaryResults is never set), so
+		// this raises only if somebody enables it before implementing the decode.
+		ibDatabaseLayerException::Throw(
+			ibBackendDatabaseException::Kind::Unknown,
+			DATABASE_LAYER_ERROR,
+			/*sqlState*/ wxEmptyString,
+			wxT("PostgreSQL: binary result decoding is not implemented"));
 	}
 	else
 	{
@@ -96,7 +108,19 @@ long long ibDatabaseResultSetPostgres::GetResultLong(int nField)
 	long long nValue = 0;
 	if (m_bBinaryResults)
 	{
-		wxLogError(wxT("Not implemented\n"));
+		// BINARY RESULTS ARE NOT DECODED HERE — and this must be an exception,
+		// not a log line. Logging and returning an empty value hands the caller a
+		// plausible answer for a column it never read: an empty string, a zero, a
+		// false. On PostgreSQL — the production engine — that is a wrong number in
+		// a report nobody traces back to a driver that quietly declined.
+		//
+		// Nothing turns binary mode on today (m_bBinaryResults is never set), so
+		// this raises only if somebody enables it before implementing the decode.
+		ibDatabaseLayerException::Throw(
+			ibBackendDatabaseException::Kind::Unknown,
+			DATABASE_LAYER_ERROR,
+			/*sqlState*/ wxEmptyString,
+			wxT("PostgreSQL: binary result decoding is not implemented"));
 	}
 	else
 	{
@@ -118,7 +142,19 @@ bool ibDatabaseResultSetPostgres::GetResultBool(int nField)
 	bool bValue = false;
 	if (m_bBinaryResults)
 	{
-		wxLogError(wxT("Not implemented\n"));
+		// BINARY RESULTS ARE NOT DECODED HERE — and this must be an exception,
+		// not a log line. Logging and returning an empty value hands the caller a
+		// plausible answer for a column it never read: an empty string, a zero, a
+		// false. On PostgreSQL — the production engine — that is a wrong number in
+		// a report nobody traces back to a driver that quietly declined.
+		//
+		// Nothing turns binary mode on today (m_bBinaryResults is never set), so
+		// this raises only if somebody enables it before implementing the decode.
+		ibDatabaseLayerException::Throw(
+			ibBackendDatabaseException::Kind::Unknown,
+			DATABASE_LAYER_ERROR,
+			/*sqlState*/ wxEmptyString,
+			wxT("PostgreSQL: binary result decoding is not implemented"));
 	}
 	else
 	{
@@ -219,7 +255,19 @@ double ibDatabaseResultSetPostgres::GetResultDouble(int nField)
 	double dblValue = 0;
 	if (m_bBinaryResults)
 	{
-		wxLogError(wxT("Not implemented\n"));
+		// BINARY RESULTS ARE NOT DECODED HERE — and this must be an exception,
+		// not a log line. Logging and returning an empty value hands the caller a
+		// plausible answer for a column it never read: an empty string, a zero, a
+		// false. On PostgreSQL — the production engine — that is a wrong number in
+		// a report nobody traces back to a driver that quietly declined.
+		//
+		// Nothing turns binary mode on today (m_bBinaryResults is never set), so
+		// this raises only if somebody enables it before implementing the decode.
+		ibDatabaseLayerException::Throw(
+			ibBackendDatabaseException::Kind::Unknown,
+			DATABASE_LAYER_ERROR,
+			/*sqlState*/ wxEmptyString,
+			wxT("PostgreSQL: binary result decoding is not implemented"));
 	}
 	else
 	{
@@ -238,7 +286,19 @@ ibNumber ibDatabaseResultSetPostgres::GetResultNumber(int nField)
 	ibNumber dblValue = 0;
 	if (m_bBinaryResults)
 	{
-		wxLogError(wxT("Not implemented\n"));
+		// BINARY RESULTS ARE NOT DECODED HERE — and this must be an exception,
+		// not a log line. Logging and returning an empty value hands the caller a
+		// plausible answer for a column it never read: an empty string, a zero, a
+		// false. On PostgreSQL — the production engine — that is a wrong number in
+		// a report nobody traces back to a driver that quietly declined.
+		//
+		// Nothing turns binary mode on today (m_bBinaryResults is never set), so
+		// this raises only if somebody enables it before implementing the decode.
+		ibDatabaseLayerException::Throw(
+			ibBackendDatabaseException::Kind::Unknown,
+			DATABASE_LAYER_ERROR,
+			/*sqlState*/ wxEmptyString,
+			wxT("PostgreSQL: binary result decoding is not implemented"));
 	}
 	else
 	{

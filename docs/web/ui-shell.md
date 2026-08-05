@@ -249,3 +249,33 @@ TableBox web port lands.
 | `src/engine/frontend/visualView/ctrl/formObject.cpp` | `BuildForm` ifdef removed (runs on both); `toolBar.h` / `tableBox.h` now unconditionally included. |
 | `src/engine/frontend/visualView/ctrl/tableBox.{h,cpp}` + `tableBoxColumn.cpp` + `tableBox_res.cpp` + `tableBoxColumn_res.cpp` | Web stubs added under per-method `#ifdef OES_USE_WEB`; added to `wfrontend.vcxproj`. |
 | `src/engine/frontend/visualView/ctrl/tableBox.h` | Sidebar stubs for `ibDataViewSelectionMode` / `ibDataViewViewMode` enums under `OES_USE_WEB`; direct include of `compiler/enumUnit.h` (no longer transitively pulled in via `tableView.h`). |
+
+---
+
+## The client is loaded, not compiled in (2026-08-04)
+
+It used to be a 2 300-line raw string literal inside `webClient.cpp`, split into five pieces to get
+under MSVC's ~16 KB per-literal cap. Now it lives in `webClient/client.html` and `webClient.cpp`
+finds it, using the same resolution the syntax helper uses for its corpus:
+
+1. `<exe>/web/client.wpk` — a zip; what a release ships.
+2. `<exe>/web/client.html` — unpacked beside the binary; what an administrator edits on a live
+   installation without touching the platform.
+3. **Walk up from `<exe>` looking for `webClient/`** — the development tree, bounded at six levels.
+
+The third is the one that matters day to day: a dev run reads the file being edited, so changing
+the client is a save and a reload rather than a rebuild of `backend` + `wfrontend`. During the web
+phase — when this file is edited constantly — that is the difference between an afternoon and a
+week.
+
+**Packing** happens in `wfrontend.vcxproj`, target `StageWebClient`, modelled on
+`StageSyntaxHelperContent`: `webClient/` → `$(OutDir)web/client.wpk`, DEFLATE, stamped so it re-runs
+only when the sources change. The pack wins over a loose directory when both are present.
+
+**A missing client is said out loud** — the loader serves a page naming the three places it looked,
+rather than a blank screen. A deployment that forgot to copy the pack is a mistake worth reading,
+not a mystery.
+
+⚠️ The result is cached for the process's lifetime: the client is served on every page load and
+re-reading 100 KB per request would be a self-inflicted slowdown. A dev run therefore picks up
+changes on restart — the same granularity a rebuild used to give.

@@ -311,6 +311,13 @@ enum ibObjectMode {
 class BACKEND_API ibValueMetaObjectRecordDataExt : public ibValueMetaObjectRecordData {
 	public:
 
+	// AN OBJECT AND A MANAGER, and no reference — a data processor or a report is
+	// something you OPEN and RUN, not something other data points at. It stores
+	// no rows of its own, so there is nothing to reference; the external variants
+	// (external data processor / external report) inherit exactly this.
+	static constexpr unsigned s_features =
+		ibMetaFeature_Object | ibMetaFeature_Manager;
+
 #pragma region access_generic
 	virtual bool AccessRight_Show() const { return AccessRight_Use(); }
 	virtual bool AccessRight_Modify() const { return true; }
@@ -384,6 +391,14 @@ private:
 //meta object with reference
 class BACKEND_API ibValueMetaObjectRecordDataRef : public ibValueMetaObjectRecordData, public ibBackendQueryableHolder {
 	public:
+
+	// A REFERENCE AND A MANAGER — the least a reference-bearing metatype has.
+	// Every one of them registers both (OnBeforeRunMetaObject: registerReference
+	// + registerManager), and an ENUMERATION stops exactly here: it has
+	// references to its values and a manager to reach them, and no object,
+	// because there is nothing to open and edit.
+	static constexpr unsigned s_features =
+		ibMetaFeature_Reference | ibMetaFeature_Manager;
 
 protected:
 	//ctor
@@ -642,6 +657,16 @@ public: \
 
 //meta object with reference and deletion mark
 class BACKEND_API ibValueMetaObjectRecordDataMutableRef : public ibValueMetaObjectRecordDataRef {
+public:
+	// …AN OBJECT AND A SELECTION. What separates a catalog or a document from an
+	// enumeration: its rows are stored, so they are opened and edited
+	// (registerObject) and they can be walked (registerSelection). An enumeration
+	// has neither — which is why both bits are added HERE and not on the
+	// reference-bearing base it shares with one.
+	static constexpr unsigned s_features =
+		ibValueMetaObjectRecordDataRef::s_features
+		| ibMetaFeature_Object | ibMetaFeature_Selection;
+
 	public:
 protected:
 	//ctor
@@ -1033,6 +1058,14 @@ private:
 class BACKEND_API ibValueMetaObjectRegisterData :
 	public ibValueMetaObjectGenericData, public ibBackendQueryableHolder {
 	public:
+
+	// A MANAGER, RECORD SETS AND A SELECTION, and no reference at all — a register
+	// has no identity of its own to point at: its rows belong to whatever recorded
+	// them. That is exactly why `InformationRegisterRef` must not exist, and why
+	// the family registration skips it without anybody listing the exceptions.
+	static constexpr unsigned s_features =
+		ibMetaFeature_Manager | ibMetaFeature_RecordSet | ibMetaFeature_Selection;
+
 protected:
 	ibValueMetaObjectRegisterData();
 	virtual ~ibValueMetaObjectRegisterData();

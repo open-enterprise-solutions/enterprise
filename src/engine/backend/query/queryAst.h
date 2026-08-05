@@ -132,7 +132,10 @@ struct ibQueryOrderItem
 
 // How a TOTALS-BY dimension unfolds (mirrors the L3 door's ibDimensionKind, kept
 // here so the AST stays L3-free; the lowering maps it across).
-enum class ibQueryDimUnfold { Elements, Hierarchy, HierarchyOnly };
+// PLAIN enum, not enum class: it is a registered runtime enumeration now
+// (ibValueEnumGroupKind), and ibValueEnumeration<T> converts its value to a number.
+// Qualified use (ibQueryDimUnfold::Elements) stays legal either way.
+enum ibQueryDimUnfold { Elements, Hierarchy, HierarchyOnly };
 
 // One TOTALS-BY level: the dimension column + how it unfolds. Levels apply IN ORDER
 // (each yields a subtotal node; the root is the grand total). -> door TotalBy(col, dim).

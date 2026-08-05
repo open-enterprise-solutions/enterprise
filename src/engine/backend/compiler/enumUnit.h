@@ -132,7 +132,16 @@ protected:
 		virtual wxString GetClassName() const override { return ibValue::GetNameObjectFromID(m_clsid); }
 
 		//type conversion
-		virtual wxString GetString() const override { return m_name; }
+		// THE DESCRIPTION IS WHAT A PERSON READS — "Равно", not "Equal". The NAME is
+		// the identifier a script writes (`ComparisonKind.Equal`) and what a saved
+		// setting round-trips; presenting it in a picker or a cell makes the form
+		// speak in identifiers. Falls back to the name when a member was declared
+		// without a description, so nothing is ever blank.
+		virtual wxString GetString() const override {
+			return m_description.IsEmpty() ? m_name : m_description;
+		}
+		// The identifier, for whoever needs it as such.
+		const wxString& GetEnumMemberName() const { return m_name; }
 		virtual ibNumber GetNumber() const override { return m_value; }
 
 	private:

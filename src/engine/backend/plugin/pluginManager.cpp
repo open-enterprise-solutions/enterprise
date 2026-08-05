@@ -3,6 +3,7 @@
 /////////////////////////////////////////////////////////////////////////////
 
 #include "pluginManager.h"
+#include "pluginHost.h"   // ibPluginHostInstance — what initialize() receives
 
 #include <wx/filename.h>
 #include <wx/stdpaths.h>
@@ -86,7 +87,12 @@ size_t ibPluginManager::LoadAll()
 			init_fn = reinterpret_cast<ibPluginInitializeFn>(
 				lib->GetSymbol(wxT("oes_plugin_initialize")));
 		}
-		if (init_fn && init_fn(/*hostContext*/ nullptr) != 0) {
+		// THE HOST, not NULL (ABI 2). One C struct with a `query` function; the
+		// plugin asks it for the capabilities it needs — see pluginHost.h. A
+		// plugin that wanted something the host does not offer is expected to
+		// return non-zero here, and it is then unloaded without shutdown being
+		// called: it never finished starting, so it has nothing to tear down.
+		if (init_fn && init_fn(ibPluginHostInstance()) != 0) {
 			wxLogDebug("Plugin '%s' initialize() failed", path);
 			continue;
 		}

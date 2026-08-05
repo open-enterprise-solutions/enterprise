@@ -326,8 +326,13 @@ protected:
 	bool PushCallFunction(const std::shared_ptr<ibCallFunction>& function);
 	bool GetFunction(const wxString& strName, std::shared_ptr<ibCompileContext::ibFunction>& function, int* pNumFunction = nullptr);
 
+	// Look ahead for a type name in a DECLARATION position without consuming it.
+	// Handles the one-lexem form ("Boolean flag") and the dotted metadata form
+	// ("CatalogRef.Item value"), and requires an identifier after the type — so
+	// extending this beyond the five primitives cannot change what existing code
+	// means.
 	bool IsTypeVar(const wxString& sVariable = wxEmptyString);
-	wxString GetTypeVar(const wxString& sVariable = wxEmptyString);
+	ibClassID GetTypeVar(const wxString& sVariable = wxEmptyString);
 	void AddTypeSet(const ibParamUnit& sVariable);
 
 	const int GetConstString(const wxString& strConstName);

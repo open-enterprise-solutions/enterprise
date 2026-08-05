@@ -3,6 +3,18 @@
 
 #include "backend/compiler/value.h"
 #include "backend/guid.h"
+#include "backend/compiler/value.h"     // ibValue::GetIDObjectFromString — the type registry
+
+// A TYPE NAME AS WRITTEN → its class id; nothing declared → no id.
+//
+// One vocabulary: `Array`, `AnyRef` and `CatalogRef` resolve the same way,
+// because a barrier IS a registered type. The registry RAISES on a name nobody
+// has, and that raise is the point — a declared type that does not exist must
+// fail at compile time rather than become an empty value at run time.
+inline ibClassID ib_type_clsid(const wxString& typeName)
+{
+	return typeName.IsEmpty() ? 0 : ibValue::GetIDObjectFromString(typeName);
+}
 
 //*******************************************************************************
 
@@ -84,7 +96,15 @@ struct ibParamRunUnit {
 };
 
 struct ibParamUnit : ibParamRunUnit {
-	wxString	 m_strType;			//variable type in English notation (in case of explicit typing)
+	// THE DECLARED TYPE, as a class id — 0 when nothing was declared.
+	//
+	// It used to be the type's NAME. A name is a second currency: it has to be
+	// compared case-insensitively, it has to be resolved before it can be used
+	// for anything, and two spellings of the same type are two different strings.
+	// The id is what every consumer actually wants — the gate, the typed-opcode
+	// choice, the bytecode mirrors — and the name is spelled back from it
+	// (ibValue::GetNameObjectFromID) only when a human has to read it.
+	ibClassID    m_clsid = 0;
 };
 
 //storing one program step
@@ -118,7 +138,13 @@ struct ibByteCode {
 	struct ibByteParam {
 		bool        m_bByRef       = false;
 		ibClassID   m_clsid        = 0;        // 0 = dynamic; for CHECK_TYPE
-		ibParamUnit m_defaultValue;             // m_numArray = DEF_VAR_SKIP if none
+		// The default-value DESCRIPTOR — slot coordinates only. It used to be an
+		// ibParamUnit, which drags a TYPE NAME along; the bytecode already has the
+		// type as m_clsid above, and the runtime reads nothing but m_numArray /
+		// m_numIndex here. A name is for a message to a human, and that one is
+		// spelled from the id (ibValue::GetNameObjectFromID) at the moment it is
+		// needed — not carried in every parameter of every compiled function.
+		ibParamRunUnit m_defaultValue;          // m_numArray = DEF_VAR_SKIP if none
 		// Original-cased parameter name. Folded in from the former
 		// parallel ibByteFunction::m_listParamRealName vector — the name
 		// now travels with the param's own data (debugger SendStack +
@@ -205,16 +231,14 @@ struct ibByteCode {
 		// Construct from compile-side ibVariable. Templated to keep
 		// byteCode.h free of compileContext.h — instantiated at the
 		// mirror site (compileCode.cpp, which includes both headers).
-		// CompileVar must expose: m_numVariable, m_strType, m_kind,
+		// CompileVar must expose: m_numVariable, m_clsid, m_kind,
 		// m_bScoped, m_strRealName, m_strContext, m_scopeDepth, m_clsid.
 		// Temps are filtered out at the mirror site — they never reach
 		// bc-level structs.
 		template<typename CompileVar>
 		explicit ibByteCodeVarInfo(const CompileVar& v)
 			: m_slotIndex(v.m_numVariable),
-			  m_clsid(v.m_clsid != 0
-			          ? v.m_clsid
-			          : (v.m_strType.IsEmpty() ? 0 : ibValue::GetIDObjectFromString(v.m_strType))),
+			  m_clsid(v.m_clsid),
 			  m_bScoped(v.m_bScoped),
 			  m_strRealName(v.m_strRealName),
 			  m_scopeDepth(v.m_scopeDepth),
@@ -321,17 +345,15 @@ struct ibByteCode {
 		// Construct from compile-side ibFunction. Templated to keep
 		// byteCode.h free of compileContext.h — instantiated at the
 		// CompileFunction finalize site (compileCode.cpp). CompileFn
-		// must expose: m_listParam (each with .m_bByRef, .m_strType,
+		// must expose: m_listParam (each with .m_bByRef, .m_clsid,
 		// .m_puValue, .m_strName), m_lVarCount, m_kind,
-		// m_bCodeRet, m_strType, m_strRealName, m_strContext.
+		// m_bCodeRet, m_clsid, m_strRealName, m_strContext.
 		template<typename CompileFn>
 		ibByteFunction(long lAddress, const CompileFn& src)
 			: m_lCodeLine(lAddress),
 			  m_bCodeRet(src.m_bCodeRet),
 			  m_lVarCount(src.m_lVarCount),
-			  m_returnClsid(src.m_strType.IsEmpty()
-				? 0
-				: ibValue::GetIDObjectFromString(src.m_strType)),
+			  m_returnClsid(src.m_clsid),
 			  m_kind(src.m_kind),
 			  m_needsHeapFrame(src.m_needsHeapFrame),
 			  m_strRealName(src.m_strRealName),
@@ -341,10 +363,10 @@ struct ibByteCode {
 			for (const auto& p : src.m_listParam) {
 				ibByteParam bp;
 				bp.m_bByRef       = p.m_bByRef;
-				bp.m_clsid        = p.m_strType.IsEmpty()
-					? 0
-					: ibValue::GetIDObjectFromString(p.m_strType);
-				bp.m_defaultValue = p.m_puValue;
+				bp.m_clsid        = p.m_clsid;
+				// Slot coordinates only — the type came across as m_clsid above.
+				bp.m_defaultValue.m_numArray = p.m_puValue.m_numArray;
+				bp.m_defaultValue.m_numIndex = p.m_puValue.m_numIndex;
 				bp.m_strName      = p.m_strName;
 				m_listParam.push_back(bp);
 			}

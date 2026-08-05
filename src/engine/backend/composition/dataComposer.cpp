@@ -83,12 +83,26 @@ ibDataComposer& ibDataComposer::Select(const wxString& nameOrPath)
 	return *this;
 }
 
-ibDataComposer& ibDataComposer::Filter(const wxString& path, const wxString& op, const ibValue& value)
+wxString ibDataComposer::AddParam(const ibValue& value)
 {
-	// The value travels as an auto-named &parameter — never inlined into the text.
+	// The value travels as an auto-named &parameter — never inlined into the
+	// text. That is what keeps a string value from being read as syntax and a
+	// date from being read in somebody's locale.
 	const wxString param = wxString::Format(wxT("__f%d"), m_autoParam++);
 	m_params[param] = value;
-	m_filters.push_back({ path, op, param });
+	return param;
+}
+
+ibDataComposer& ibDataComposer::Filter(const wxString& path, const wxString& op, const ibValue& value)
+{
+	m_filters.push_back({ path, op, AddParam(value) });
+	return *this;
+}
+
+ibDataComposer& ibDataComposer::FilterAst(const ibQueryAstExprPtr& condition)
+{
+	m_filterAst = condition;
+	++m_filterAstVersion;
 	return *this;
 }
 
@@ -273,14 +287,35 @@ wxString ValueSig(const ibValue& v)
 
 void ibDataDBComposer::EnsureAst() const
 {
+	// The cache key is the rendered text PLUS the tree condition's version: that
+	// condition never becomes text, so the text alone would say "nothing changed"
+	// after the user rewrote the whole filter.
 	const wxString text = RenderText();
-	if (m_ast != nullptr && text == m_renderedText)
-		return;   // the same rendered text — the cached parse stands
+	if (m_ast != nullptr && text == m_renderedText && m_filterAstVersion == m_renderedFilterAstVersion)
+		return;   // same query, same condition — the cached parse stands
 
 	m_ast = ibQueryParser().Parse(text);
 	if (m_ast == nullptr)
 		ibBackendCoreException::Error(_("Composer: the rendered query failed to parse"));
+
+	// THE TREE'S CONDITION GOES IN AS AN AST, ANDed with whatever the query text
+	// already asked for. No rendering, no re-parsing — the expression the filter
+	// built is the expression the engine lowers.
+	if (m_filterAst) {
+		if (m_ast->m_where) {
+			ibQueryAstExprPtr both = ibQueryAstExpr::Make(ibQueryAstExprKind::Logical);
+			both->m_isOr = false;
+			both->m_lhs = m_ast->m_where;
+			both->m_rhs = m_filterAst;
+			m_ast->m_where = both;
+		}
+		else {
+			m_ast->m_where = m_filterAst;
+		}
+	}
+
 	m_renderedText = text;
+	m_renderedFilterAstVersion = m_filterAstVersion;
 }
 
 bool ibDataDBComposer::BuildPageSignature(const ibReadPageRequest& page, wxString& signature) const

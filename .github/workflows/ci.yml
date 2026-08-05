@@ -134,6 +134,70 @@ jobs:
         run: cmake --build --preset windows-x64-debug
 
   # ---------------------------------------------------------------------------
+  # PostgreSQL — the only job that talks to a REAL server.
+  #
+  # Every other job runs the suite on SQLite, which pins semantics but cannot pin
+  # the half that belongs to the server: numeric precision, timestamps, blob
+  # escaping, the dialect's own upsert spelling. PostgreSQL is what production
+  # runs on and SQLite is kept for tests and the log, so that half was unchecked.
+  #
+  # The service container supplies the connection through the environment; the
+  # target skips itself when OES_PG_USER is unset, which is what makes the same
+  # binary a no-op on a developer machine.
+  # ---------------------------------------------------------------------------
+  tests-postgres:
+    name: Dialect (PostgreSQL, Debug)
+    runs-on: ubuntu-22.04
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: oes_test
+        ports:
+          - 5432:5432
+        # Without the health check the build can reach the test before the server
+        # finishes its first start, and the failure reads as a driver bug.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      # libpq-dev on top of the usual set: the driver loads libpq at run time, so
+      # the client library has to be present for the test to connect at all.
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build ccache pkg-config \
+            libgtk-3-dev libsqlite3-dev uuid-dev libpq-dev
+
+      - name: Configure
+        run: cmake --preset linux-debug -DBUILD_TESTING=ON -DOES_USE_POSTGRESQL=ON
+
+      - name: Build the dialect target
+        run: cmake --build --preset linux-debug --target oes_pg_dialect_test
+
+      - name: Run
+        working-directory: build/linux-debug
+        env:
+          OES_PG_HOST: 127.0.0.1
+          OES_PG_PORT: 5432
+          OES_PG_DB: oes_test
+          OES_PG_USER: postgres
+          OES_PG_PASSWORD: postgres
+        run: ./bin/Debug/oes_pg_dialect_test --gtest_color=no
+
+  # ---------------------------------------------------------------------------
   # The GUI harness is a SEPARATE job, and separate on purpose: it links
   # frontend.dll, needs a live wxApp, and runs headless under Xvfb. Its failure
   # mode (a hung modal on an assert) is different in kind from a backend test's,

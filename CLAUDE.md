@@ -59,7 +59,8 @@ enterprise/
 │   ├── report-engine.md      # Report metaobject + spreadsheet document (runtime shape)
 │   ├── command-interface.md  # Interface metaobject = subsystem + command bar
 │   ├── job-manager.md        # scheduled + background work — the engine (built)
-│   ├── scheduled-jobs.md     # DESIGN — the metadata over it: two metatypes, one verb
+│   ├── scheduled-jobs.md     # the metadata over it: two metatypes, one verb (BUILT)
+│   ├── plugins.md           # plugin ABI 2 — capability boundary (diagnostics / script / metadata)
 │   ├── script-language.md    # THE LANGUAGE REFERENCE — dialects, keywords, LINQ, global API
 │   ├── form-engine.md        # RUNTIME forms — build, identity (the form key), open, close
 │   ├── home-page.md          # the start page — one tab, N runtime forms (composite doc/view)
@@ -368,9 +369,15 @@ stored as the 64-bit `ibClassID` hash.
 
 ### ibValue Serialization
 
-`src/engine/backend/compiler/valueSerialization.cpp` — `DoSerialize`/`DoDeserialize` for primitive types (Boolean, Number, String, Date). Used for client-server data exchange.
+A value packs itself into an **`ibDataNode`** — the same tree metadata is written through, so every provider (binary, JSON) comes for free and a text form is a rendering rather than a second implementation. The old `S: OES Serialize;;;…` string envelope is **gone** (2026-08-04).
 
-`src/engine/backend/metadataSerialization.cpp` — `ibMetaData::Serialize`/`Deserialize` wraps values in OES Serialize format: `S: OES Serialize;;;C:<classType>;;;L:<length>;;;D:<data>;;;E: OES Serialize;;;`
+- `compiler/value.h` — `Serialize(node)` / `Deserialize(node)` write and read the HEADER (the `IsTransferable` gate, then the type); the virtual `DoSerialize` / `DoDeserialize` are the CHILD's contents. The default knows the primitives only; composites override and ask their elements the same question.
+- `compiler/valueSerialization.cpp` — `ibValue::FromNode(node)`, THE mechanism for turning a node into a value: read the type, create through the value registry, hand over the whole node.
+- `metadataSerialization.cpp` — `ibMetaData::Serialize(value, node)` / `Deserialize(node)`, the DOOR. It creates the types only a configuration has (references, enum members — ids derived from metaIDs) and redirects everything else to `ibValue::FromNode`. A value is blind to metadata.
+- **Failure raises** (`ibBackendCoreException`): a type nobody has, a value that cannot be created or read, a value with no packed form. Never a quiet empty — that is indistinguishable from a legitimately empty value.
+- Bytes are the provider's choice at the callsite (`ibBinaryProvider` / `ibJsonProvider`), not a second pair of methods.
+
+See `docs/serialization-io.md` §4a.
 
 ---
 

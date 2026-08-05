@@ -299,6 +299,7 @@
     </ClInclude>
     <ClInclude Include="backend_mainFrame.h" />
     <ClInclude Include="backend_exception.h" />
+    <ClInclude Include="backend_diagnostic.h" />
     <ClInclude Include="diagnostics\crashGuard.h">
       <Filter>diagnostics</Filter>
     </ClInclude>
@@ -567,6 +568,9 @@
     <ClInclude Include="compiler\value.h">
       <Filter>compiler</Filter>
     </ClInclude>
+    <ClInclude Include="compiler\valueSerialization.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
     <ClInclude Include="system\systemEnum.h">
       <Filter>system</Filter>
     </ClInclude>
@@ -750,7 +754,11 @@
       <Filter>propertyManager\property</Filter>
     </ClInclude>
     <ClInclude Include="characteristicCtor.h" />
-    <ClInclude Include="plugin\pluginApi.h">
+    <ClInclude Include="vcs\gitService.h">
+      <Filter>vcs</Filter>
+    </ClInclude>
+    <ClInclude Include="plugin\pluginApi.h" />
+    <ClInclude Include="plugin\pluginHost.h">
       <Filter>plugin</Filter>
     </ClInclude>
     <ClInclude Include="plugin\pluginManager.h">
@@ -937,6 +945,9 @@
     <ClCompile Include="compiler\procContext.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
+    <ClCompile Include="compiler\typeAny.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
     <ClCompile Include="compiler\procUnit.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
@@ -1078,6 +1089,7 @@
     </ClCompile>
     <ClCompile Include="backend_mainFrame.cpp" />
     <ClCompile Include="backend_exception.cpp" />
+    <ClCompile Include="backend_diagnostic.cpp" />
     <ClCompile Include="diagnostics\crashGuard.cpp">
       <Filter>diagnostics</Filter>
     </ClCompile>
@@ -1822,7 +1834,11 @@
       <Filter>propertyManager\property</Filter>
     </ClCompile>
     <ClCompile Include="characteristicCtor.cpp" />
-    <ClCompile Include="plugin\pluginManager.cpp">
+    <ClCompile Include="vcs\gitService.cpp">
+      <Filter>vcs</Filter>
+    </ClCompile>
+    <ClCompile Include="plugin\pluginManager.cpp" />
+    <ClCompile Include="plugin\pluginHost.cpp">
       <Filter>plugin</Filter>
     </ClCompile>
     <ClCompile Include="session\session.cpp">
@@ -2031,6 +2047,9 @@
     <Filter Include="plugin">
       <UniqueIdentifier>{6b3a8c2e-1f5d-4f4d-9c2a-9f5b1a3d4e6f}</UniqueIdentifier>
     </Filter>
+    <Filter Include="vcs">
+      <UniqueIdentifier>{7b1f4d92-3c65-4a18-9d4e-8f2a6c07b311}</UniqueIdentifier>
+    </Filter>
     <Filter Include="session">
       <UniqueIdentifier>{d4f2a1b8-3e9c-4b5a-8d7f-1c2e3a4b5c6d}</UniqueIdentifier>
     </Filter>
@@ -2164,6 +2183,7 @@
     <ClCompile Include="query\queryLexer.cpp">
       <Filter>query</Filter>
     </ClCompile>
+    <ClCompile Include="query\queryRender.cpp" />
     <ClCompile Include="query\queryParser.cpp">
       <Filter>query</Filter>
     </ClCompile>
@@ -2178,6 +2198,12 @@
     </ClCompile>
     <ClCompile Include="query\queryableFactory.cpp">
       <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="composition\compositionField.cpp">
+      <Filter>composition</Filter>
+    </ClCompile>
+    <ClCompile Include="composition\listFilter.cpp">
+      <Filter>composition</Filter>
     </ClCompile>
     <ClCompile Include="composition\dataComposer.cpp">
       <Filter>composition</Filter>
@@ -2296,6 +2322,7 @@
     <ClInclude Include="query\queryAst.h">
       <Filter>query</Filter>
     </ClInclude>
+    <ClInclude Include="query\queryRender.h" />
     <ClInclude Include="query\queryParser.h">
       <Filter>query</Filter>
     </ClInclude>
@@ -2310,6 +2337,12 @@
     </ClInclude>
     <ClInclude Include="query\queryableFactory.h">
       <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="composition\compositionField.h">
+      <Filter>composition</Filter>
+    </ClInclude>
+    <ClInclude Include="composition\listFilter.h">
+      <Filter>composition</Filter>
     </ClInclude>
     <ClInclude Include="composition\dataComposer.h">
       <Filter>composition</Filter>

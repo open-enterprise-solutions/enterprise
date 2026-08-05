@@ -52,6 +52,13 @@ public:
 
 	//get value control and guid 
 	virtual bool GetControlValue(ibValue& pvarControlVal) const { return false; }
+	// ...AND WRITE IT BACK. The pair belongs together: the shared value-choice route
+	// (ibTypeControlFactory::ChooseValue) holds an ibControlFrame*, reads the current
+	// value through the getter above and puts the chosen one back through this. With
+	// only the getter here, everything that edited a value had to be reached through
+	// its concrete type — which is why the sequence was copied per control instead of
+	// written once. Default arg = clear (what "empty" means is the type's business).
+	virtual bool SetControlValue(const ibValue& varControlVal = ibValue()) { return false; }
 	virtual ibGuid GetControlGuid() const { return ibGuid::newGuid(); }
 
 	//get owner form 

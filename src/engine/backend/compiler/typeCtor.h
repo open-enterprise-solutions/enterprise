@@ -1,7 +1,7 @@
 #ifndef _TYPE_CTOR_H__
 #define _TYPE_CTOR_H__
 
-#include "backend/clsid.h"      // ibClassID, ib_clsid_hash
+#include "backend/backend_core.h"   // ibClassID, ib_clsid_hash, g_valueUndefinedCLSID
 #include <typeinfo>             // std::type_info — Phase 3 pilot (typeid registry)
 
 class ibValue;
@@ -80,8 +80,33 @@ public:
 	// forward to their T, metadata ctors derive it from their meta-kind (List / TabularSection
 	// / RecordSet). Lets selection / form-build ask the factory instead of a source explorer.
 	virtual bool IsTableValue() const { return false; }
-};
 
+	// THE GATE, and the ONLY question asked when a declared type meets a value:
+	// may a value of this class pass as this type?
+	//
+	//   true  — IT PASSES, exactly as it is. No conversion, no type description,
+	//           no metadata: the value was already what the declaration asks for.
+	//   false — TYPE MISMATCH. The caller raises; it does not go looking for a
+	//           conversion that might make it fit, because a declaration is a
+	//           statement about what the value IS, not a request to change it.
+	//
+	// The default is the plain comparison plus ABSENCE (see the .cpp): an unset
+	// variable is every type and none, and refusing it would make `Number x;`
+	// an error. A type overrides only when its rule is genuinely wider — a
+	// barrier (`AnyRef`, `CatalogRef`) admits a whole family.
+	//
+	// Why the TYPE answers rather than a switch somewhere: the list of types is
+	// open — a plugin can register one. A central switch would have to be edited
+	// for every new type and would be silently incomplete for the ones it never
+	// heard of.
+	// UNDEFINED PASSES: an unset variable, a parameter nobody passed. The
+	// declaration says what the value IS when there is one; it does not promise
+	// there is one (script-language.md §4a) — refusing it would make `Number x;`
+	// a type error.
+	virtual bool AllowValue(const ibClassID& clsid) const {
+		return clsid == g_valueUndefinedCLSID || clsid == GetClassType();
+	}
+};
 class ibCtorValueTypeBase : public ibCtorAbstractType {
 	wxString m_className;
 	const std::type_info* m_typeInfo;   // typeid(T) — registry runtime type key

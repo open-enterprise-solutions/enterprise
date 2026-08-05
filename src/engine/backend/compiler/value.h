@@ -977,6 +977,7 @@ public:
 	// this is the SOURCE ROLE. A reference is never a table; a table is never a reference.
 	static bool IsTableValue() { return false; }
 
+
 	static std::vector<ibCtorAbstractType*> GetListCtorsByType(ibCtorObjectType objectType = ibCtorObjectType::ibCtorObjectType_object_value);
 
 	//static event 
@@ -997,8 +998,41 @@ public:
 	void FromDate(int& nYear, int& nMonth, int& nDay, int& DayOfWeek, int& DayOfYear, int& WeekOfYear) const;
 
 #pragma region serialization
-	bool Serialize(wxString& strValue) const { return DoSerialize(strValue); }
-	bool Deserialize(const wxString& strValue) { return DoDeserialize(strValue); }
+
+	// THE HEADER IS THE BASE'S JOB, the contents are the children's (DoSerialize,
+	// further down). Serialize writes what every value has — its type — and then
+	// asks the value to fill in what only it knows; Deserialize mirrors it.
+	//
+	// Splitting it this way is what keeps a new type honest: it overrides one
+	// method, describes only its own contents, and cannot forget to write the
+	// type or spell the header differently from everybody else.
+	//
+	// WHY A NODE. ibDataNode is the same tree metadata is written through, and it
+	// already has providers: binary for storage, JSON for a wire or a dump. One
+	// description of what a value IS, and the choice of representation stays with
+	// the provider — a text form is a rendering, not a second implementation.
+	//
+	// A value is BLIND to metadata: it packs and unpacks ITSELF and never reaches
+	// for a configuration.
+	bool Serialize(class ibDataNode& node) const;
+	bool Deserialize(const class ibDataNode& node);
+
+	// CREATING a value from a node — THE mechanism, in one place.
+	//
+	// A reader holding a node has no value yet, so the type in the header has to
+	// become an instance. That is a registry question, and this answers it from
+	// the VALUE registry: the built-in classes, the ones that exist whether or
+	// not a configuration is open.
+	//
+	// A metadata is a step in FRONT of this, not a copy of it: it creates the
+	// types only it has — a catalog reference, an enum member, whose ids come
+	// from metaIDs no static table knows — and redirects everything else here.
+	// One mechanism, reached from both doors.
+	//
+	// THROWS when the type is registered nowhere, when creation fails, or when
+	// the value cannot read its own contents. An empty would be
+	// indistinguishable from a value that legitimately IS empty.
+	static ibValue FromNode(const class ibDataNode& node);
 #pragma endregion
 
 	//Virtual methods:
@@ -1428,8 +1462,22 @@ public:
 protected:
 
 #pragma region serialization
-	virtual bool DoSerialize(wxString& strValue) const;
-	virtual bool DoDeserialize(const wxString& strValue);
+
+	// CONTENTS — the override point, the other half of the pair declared above.
+	//
+	// The base knows the PRIMITIVES and nothing else, which is all it can
+	// honestly claim. A composite (array, structure, reference) fills its own
+	// child nodes and asks its elements the same question, so the walk continues
+	// by itself, one class at a time.
+	//
+	// A MUTABLE value — a form, an open object, a lambda — overrides nothing and
+	// is refused by IsTransferable before any of this runs.
+	//
+	// Returns false when this value has no packed form: said out loud rather
+	// than written as something else.
+	virtual bool DoSerialize(class ibDataNode& node) const;
+	virtual bool DoDeserialize(const class ibDataNode& node);
+
 #pragma endregion
 private:
 	// NOTE: this sits at the END of the class, so under MSVC's declaration-order

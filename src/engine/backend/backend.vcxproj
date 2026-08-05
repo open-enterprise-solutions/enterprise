@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -41,6 +41,7 @@
     <ClInclude Include="logger\loggerWriter.h" />
     <ClInclude Include="backend_spreadsheet.h" />
     <ClInclude Include="backend_exception.h" />
+    <ClInclude Include="backend_diagnostic.h" />
     <ClInclude Include="diagnostics\crashGuard.h" />
     <ClInclude Include="diagnostics\leakTracker.h" />
     <ClInclude Include="session\designerExclusivePolicy.h" />
@@ -85,6 +86,7 @@
     <ClInclude Include="compiler\translateCode.h" />
     <ClInclude Include="compiler\typeCtor.h" />
     <ClInclude Include="compiler\value.h" />
+    <ClInclude Include="compiler\valueSerialization.h" />
     <ClInclude Include="databaseLayer\databaseErrorCodes.h" />
     <ClInclude Include="databaseLayer\databaseErrorReporter.h" />
     <ClInclude Include="databaseLayer\connectionPool.h" />
@@ -244,6 +246,7 @@
     <ClInclude Include="query\queryKeywords.h" />
     <ClInclude Include="query\queryLexer.h" />
     <ClInclude Include="query\queryAst.h" />
+    <ClInclude Include="query\queryRender.h" />
     <ClInclude Include="query\queryParser.h" />
     <ClInclude Include="query\queryLowering.h" />
     <ClInclude Include="query\queryRewrite.h" />
@@ -251,6 +254,7 @@
     <ClInclude Include="query\queryableFactory.h" />
     <ClInclude Include="composition\dataComposer.h" />
     <ClInclude Include="composition\listFetchDriver.h" />
+    <ClInclude Include="composition\compositionField.h" />
     <ClInclude Include="composition\listFilter.h" />
     <ClInclude Include="system\value\valueComposer.h" />
     <ClInclude Include="system\value\valueQuery.h" />
@@ -353,7 +357,9 @@
     <ClInclude Include="typeconv.h" />
     <ClInclude Include="typeDescription.h" />
     <ClInclude Include="uniqueKey.h" />
+    <ClInclude Include="vcs\gitService.h" />
     <ClInclude Include="plugin\pluginApi.h" />
+    <ClInclude Include="plugin\pluginHost.h" />
     <ClInclude Include="plugin\pluginManager.h" />
     <ClInclude Include="utils\md5.hpp" />
     <ClInclude Include="utils\sha256.hpp" />
@@ -382,6 +388,7 @@
     <ClCompile Include="backend.cpp" />
     <ClCompile Include="backend_spreadsheet.cpp" />
     <ClCompile Include="backend_exception.cpp" />
+    <ClCompile Include="backend_diagnostic.cpp" />
     <ClCompile Include="diagnostics\crashGuard.cpp" />
     <ClCompile Include="diagnostics\leakTracker.cpp" />
     <ClCompile Include="session\designerExclusivePolicy.cpp" />
@@ -638,6 +645,7 @@
     <ClCompile Include="metaCollection\partial\informationRegisterObject.cpp" />
     <ClCompile Include="query\dataQueryBuilder.cpp" />
     <ClCompile Include="query\queryLexer.cpp" />
+    <ClCompile Include="query\queryRender.cpp" />
     <ClCompile Include="query\queryParser.cpp" />
     <ClCompile Include="query\queryLowering.cpp" />
     <ClCompile Include="query\queryRewrite.cpp" />
@@ -645,6 +653,7 @@
     <ClCompile Include="query\queryableFactory.cpp" />
     <ClCompile Include="composition\dataComposer.cpp" />
     <ClCompile Include="composition\ramComposer.cpp" />
+    <ClCompile Include="composition\compositionField.cpp" />
     <ClCompile Include="composition\listFilter.cpp" />
     <ClCompile Include="system\value\valueComposer.cpp" />
     <ClCompile Include="system\value\valueQuery.cpp" />
@@ -781,7 +790,10 @@
     <ClCompile Include="modelView.cpp" />
     <ClCompile Include="typeDescription.cpp" />
     <ClCompile Include="uniqueKey.cpp" />
+    <ClCompile Include="compiler\typeAny.cpp" />
+    <ClCompile Include="vcs\gitService.cpp" />
     <ClCompile Include="plugin\pluginManager.cpp" />
+    <ClCompile Include="plugin\pluginHost.cpp" />
     <ClCompile Include="utils\md5.cpp" />
     <ClCompile Include="utils\sha256.cpp" />
     <ClCompile Include="utils\passwordHash.cpp" />

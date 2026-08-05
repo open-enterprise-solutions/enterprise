@@ -455,3 +455,57 @@ TEST(RuntimeTest, ModuleVariablePersistsAcrossCalls) {
 	ASSERT_TRUE(pu.GetPropVal(wxT("counter"), v));
 	EXPECT_EQ(v.GetInteger(), 3);
 }
+
+// // ===========================================================================
+// Declared types at RUNTIME — the slot is adjusted through the type factory
+//
+// The compiler emits OPER_SET_TYPE for a typed declaration; the interpreter
+// used to answer it with SetType(GetVTByID(clsid)) — the primitive path. Since
+// 2026-08-04 a NON-primitive declared type goes through
+// ibValueTypeDescription::AdjustValue instead, the same door a stored attribute
+// uses on write.
+//
+// These pin what must NOT change while that door is in the way: a declared
+// primitive still holds exactly what it was given (an empty qualifier set means
+// "unspecified", not "scale 0"), and writing to the slot twice is ordinary.
+// ===========================================================================
+
+TEST(DeclaredTypesRuntime, DeclaredNumberIsNotRounded) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc, wxT("Number x public; x = 1.5;")));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue val;
+	ASSERT_TRUE(pu.GetPropVal(wxT("x"), val));
+	EXPECT_EQ(ibValueTypes::TYPE_NUMBER, val.GetType());
+	EXPECT_EQ(wxT("1.5"), val.GetString());
+}
+
+TEST(DeclaredTypesRuntime, DeclaredBooleanHoldsBoolean) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc, wxT("Boolean flag public; flag = True;")));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue val;
+	ASSERT_TRUE(pu.GetPropVal(wxT("flag"), val));
+	EXPECT_EQ(ibValueTypes::TYPE_BOOLEAN, val.GetType());
+	EXPECT_TRUE(val.GetBoolean());
+}
+
+TEST(DeclaredTypesRuntime, WritingTwiceIsOrdinary) {
+	// The type is applied on every write, so re-application has to be harmless —
+	// that is what lets the interpreter skip any "was this adjusted already" flag.
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc, wxT("Number x public; x = 1; x = 7;")));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue val;
+	ASSERT_TRUE(pu.GetPropVal(wxT("x"), val));
+	EXPECT_EQ(7, val.GetInteger());
+}
