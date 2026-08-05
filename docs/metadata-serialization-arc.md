@@ -63,7 +63,7 @@ Landed (since built and shipped — the "unbuilt working copy" caveats below are
 - **Config load now RUNs the freshly-loaded tree.** The run was moved from the
   (base-non-virtual, never-dispatched-through-`ibMetaDataConfigurationBase*`)
   `LoadConfigFromFile` override onto the shared virtual `LoadConfigFromBuffer`. Without it an
-  imported `.mcf` was replaced but never run → its per-type ctors stayed unregistered →
+  imported `.oap` was replaced but never run → its per-type ctors stayed unregistered →
   restructure's `metaData->GetTypeCtor(clsid)` missed reference/enum types → a reference attr
   was read as string → `ALTER TABLE … DROP fldNNNN_S` on a non-existent column → **FB -607**.
   The redundant explicit `RunDatabase()` after `LoadConfigFromBuffer` in `appData::LoadDatabase`
@@ -252,7 +252,7 @@ Diagnosis was a hex-logged `LoadCommonTree` (want-clsid vs the file's data-block
   The config-vs-external flag difference is **intentional, not a bug** — it tracks where each
   kind commits:
   - **config** — real commit is the DB apply (`OnSaveDatabase`, `saveConfigFlag` → OnSave
-    fires); its file/`.obk` write (`SaveConfigToBuffer`, `saveToFileFlag`) is an **export** →
+    fires); its file/`.osv` write (`SaveConfigToBuffer`, `saveToFileFlag`) is an **export** →
     OnSave skipped, no debug/AOT churn.
   - **external DP / Report** — `SaveDatabase()` is a no-op (no DB; the file IS the storage), so
     `SaveToFile` (`saveConfigFlag`) **is** the commit → OnSave fires correctly (persist debug

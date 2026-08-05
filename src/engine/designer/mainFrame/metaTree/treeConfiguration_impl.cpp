@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "treeConfiguration.h"
+#include "backend/fileKind.h"   // extensions live in one table, not at each call site
 #include "frontend/mainFrame/objinspect/objinspect.h"
 #include "frontend/docView/docView.h"
 #include "backend/appData.h"
@@ -575,7 +576,7 @@ void ibMetadataTree::InsertItem()
 	if (hSelItem == m_treeDATAPROCESSORS) {
 
 		wxFileDialog openFileDialog(this, _("Open data processor file"), "", "",
-			_("Data processor files (*.edp)|*.edp"), wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+			ibFileFilter(ibFileKind::Tool), wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 
 		if (openFileDialog.ShowModal() == wxID_CANCEL)
 			return;     // the user changed idea...
@@ -596,7 +597,7 @@ void ibMetadataTree::InsertItem()
 	}
 	else {
 		wxFileDialog openFileDialog(this, _("Open report file"), "", "",
-			"report files (*.erp)|*.erp", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+			ibFileFilter(ibFileKind::Report), wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 
 		if (openFileDialog.ShowModal() == wxID_CANCEL)
 			return;     // the user changed idea...
@@ -626,7 +627,7 @@ void ibMetadataTree::ReplaceItem()
 	if (currentMetaObject->GetClassType() == g_metaDataProcessorCLSID) {
 
 		wxFileDialog openFileDialog(this, _("Open data processor file"), "", "",
-			"data processor files (*.edp)|*.edp", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+			ibFileFilter(ibFileKind::Tool), wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 
 		if (openFileDialog.ShowModal() == wxID_CANCEL)
 			return;     // the user changed idea...
@@ -651,7 +652,7 @@ void ibMetadataTree::ReplaceItem()
 	else
 	{
 		wxFileDialog openFileDialog(this, _("Open report file"), "", "",
-			"report files (*.erp)|*.erp", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+			ibFileFilter(ibFileKind::Report), wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 
 		if (openFileDialog.ShowModal() == wxID_CANCEL)
 			return;     // the user changed idea...
@@ -690,7 +691,7 @@ void ibMetadataTree::SaveItem()
 	if (currentMetaObject->GetClassType() == g_metaDataProcessorCLSID) {
 
 		wxFileDialog saveFileDialog(this, _("Open data processor file"), "", "",
-			"data processor files (*.edp)|*.edp", wxFD_SAVE);
+			ibFileFilter(ibFileKind::Tool), wxFD_SAVE);
 
 		saveFileDialog.SetFilename(m_metaTreeCtrl->GetItemText(m_metaTreeCtrl->GetSelection()));
 
@@ -706,7 +707,7 @@ void ibMetadataTree::SaveItem()
 	}
 	else {
 		wxFileDialog saveFileDialog(this, _("Open report file"), "", "",
-			"report files (*.erp)|*.erp", wxFD_SAVE);
+			ibFileFilter(ibFileKind::Report), wxFD_SAVE);
 
 		saveFileDialog.SetFilename(m_metaTreeCtrl->GetItemText(m_metaTreeCtrl->GetSelection()));
 

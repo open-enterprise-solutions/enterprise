@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "mainFrameDesigner.h"
+#include "backend/fileKind.h"   // extensions live in one table, not at each call site
 
 #include "backend/appData.h"
 #include "backend/backend_exception.h"
@@ -409,7 +410,7 @@ void ibFrontendMainFrameDesigner::OnUpdateConfiguration(wxCommandEvent& event)
 void ibFrontendMainFrameDesigner::OnLoadDatabase(wxCommandEvent& event)
 {
 	wxFileDialog openFileDialog(this, _("Open database file"), "", "",
-		"Database files (*.obk)|*.obk", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+		ibFileFilter(ibFileKind::Save), wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 
 	if (openFileDialog.ShowModal() == wxID_CANCEL)
 		return;     // the user changed idea...
@@ -464,7 +465,7 @@ void ibFrontendMainFrameDesigner::OnLoadDatabase(wxCommandEvent& event)
 void ibFrontendMainFrameDesigner::OnSaveDatabase(wxCommandEvent& event)
 {
 	wxFileDialog saveFileDialog(this, _("Save database file"), "", "",
-		"Database files (*.obk)|*.obk", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+		ibFileFilter(ibFileKind::Save), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
 	if (saveFileDialog.ShowModal() == wxID_CANCEL)
 		return;     // the user changed idea...
 
@@ -516,7 +517,7 @@ void ibFrontendMainFrameDesigner::OnConfiguration(wxCommandEvent& event)
 	if (wxID_DESIGNER_CONFIGURATION_LOAD_FROM_FILE == event.GetId())
 	{
 		wxFileDialog openFileDialog(this, _("Open configuration file"), "", "",
-			wxT("Configuration files (*.mcf)|*.mcf"), wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+			ibFileFilter(ibFileKind::Application), wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 
 		if (openFileDialog.ShowModal() == wxID_CANCEL)
 			return;     // the user changed idea...
@@ -541,7 +542,7 @@ void ibFrontendMainFrameDesigner::OnConfiguration(wxCommandEvent& event)
 	else if (wxID_DESIGNER_CONFIGURATION_SAVE_TO_FILE == event.GetId())
 	{
 		wxFileDialog saveFileDialog(this, _("Save configuration file"), "", "",
-			wxT("Configuration files (*.mcf)|*.mcf"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+			ibFileFilter(ibFileKind::Application), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
 		if (saveFileDialog.ShowModal() == wxID_CANCEL)
 			return;     // the user changed idea...
 
@@ -557,7 +558,7 @@ void ibFrontendMainFrameDesigner::OnConfiguration(wxCommandEvent& event)
 		// when this scope exits; we don't mutate activeMetaData here.
 		wxFileDialog openFileDialog(this, _("Choose configuration file to compare with"),
 			"", "",
-			wxT("Configuration files (*.mcf)|*.mcf"),
+			ibFileFilter(ibFileKind::Application),
 			wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 
 		if (openFileDialog.ShowModal() == wxID_CANCEL)
@@ -646,13 +647,13 @@ void ibFrontendMainFrameDesigner::OnConfiguration(wxCommandEvent& event)
 		// transient ibMetaDataConfigurationFile instances and diff.
 		// Neither side is activeMetaData; activeMetaData stays untouched.
 		wxFileDialog dlgA(this, _("Choose left configuration file"),
-			"", "", wxT("Configuration files (*.mcf)|*.mcf"),
+			"", "", ibFileFilter(ibFileKind::Application),
 			wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 		if (dlgA.ShowModal() == wxID_CANCEL)
 			return;
 
 		wxFileDialog dlgB(this, _("Choose right configuration file"),
-			"", "", wxT("Configuration files (*.mcf)|*.mcf"),
+			"", "", ibFileFilter(ibFileKind::Application),
 			wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 		if (dlgB.ShowModal() == wxID_CANCEL)
 			return;

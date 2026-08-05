@@ -17,7 +17,7 @@ Three items under **Configuration**, each producing the same compare view with d
 
 | Menu item | Left root | Right root | Push target |
 |---|---|---|---|
-| Compare with file... | `activeMetaData` | transient `ibMetaDataConfigurationFile` loaded from `.mcf` | the same `.mcf` (Push direction available) |
+| Compare with file... | `activeMetaData` | transient `ibMetaDataConfigurationFile` loaded from `.oap` | the same `.oap` (Push direction available) |
 | Compare with database configuration | `activeMetaData` | `ibMetaDataConfigurationStorage::GetConfiguration()` (the in-memory DB baseline) | none (Push hidden — the DB-side mutation has no immediate persistence path) |
 | Compare two files... | transient file A | transient file B | file B (left save callback is a V2 enhancement) |
 

@@ -23,7 +23,7 @@ designs):
 
 - **live config → DB rows** (`sys_config_entry`): the table *is* the container, the PK index
   the directory, a transaction the atomic commit, a row the entry;
-- **file boundary → an archive** (`.mcf` / export; ZIP by default, any format — tar/7z/ISO/…):
+- **file boundary → an archive** (`.oap` / export; ZIP by default, any format — tar/7z/ISO/…):
   the archive's table of contents is the directory, a file the entry, per-entry deflate the
   compression.
 
@@ -49,7 +49,7 @@ storage** differ. Everything below is this one model specialized to the two back
 OES always has a database, so do **not** build a custom container-blob with an internal
 directory + free-list for `sys_config`. A relational table already gives, for free, what a
 container format hand-rolls: a directory (the PK index), per-entry addressing, atomic
-updates (a DB transaction), and block allocation. The **file export** variant (`.mcf`, no DB)
+updates (a DB transaction), and block allocation. The **file export** variant (`.oap`, no DB)
 gets the same "directory + per-entry blocks" for free from a **ZIP archive** — see the file
 variant below; no hand-rolled container format on either side.
 
@@ -118,12 +118,12 @@ whole-blob swap.
    it over the rows; the file-export variant over a container-blob-with-directory. Save/Load
    talk to the interface, not the table.
 
-6. **File export (`.mcf`)** — no DB → use a standard **archive container with one file per
+6. **File export (`.oap`)** — no DB → use a standard **archive container with one file per
    entry**, not a hand-rolled format. Any directory-of-files archive works (ZIP / tar / 7z /
    ISO / …) — that is the point of hiding it behind `ibConfigContainer`: the archive's own
    table of contents *is* the directory/manifest, and per-entry compression comes for free.
    **ZIP is the pragmatic default** only because `wx` already ships `wxZipOutputStream` /
-   `wxZipInputStream` and the `.obk` format already uses it (`appData::SaveDatabase` /
+   `wxZipInputStream` and the `.osv` format already uses it (`appData::SaveDatabase` /
    `LoadDatabase` write/read `config` / `user` / `data` entries sequentially) — so the file
    variant is the natural generalization of an existing path: replace the single `config`
    entry with one entry per top-level object. Swapping ZIP for another format later is an
@@ -160,8 +160,8 @@ whole-blob swap.
   Migration runs here.
 - **P4 — designer lazy load**: fault-in object entries on access; the type / reference
   resolver faults the target entry in by GUID.
-- **P5 — file export container**: `.mcf` as an archive container behind `ibConfigContainer`
-  (ZIP default via the existing `wxZip*` / `.obk` path; format pluggable — tar/7z/ISO/…),
+- **P5 — file export container**: `.oap` as an archive container behind `ibConfigContainer`
+  (ZIP default via the existing `wxZip*` / `.osv` path; format pluggable — tar/7z/ISO/…),
   one file per top-level object; optional lazy file load.
 
 ## Risks

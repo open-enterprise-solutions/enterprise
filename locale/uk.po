@@ -5153,3 +5153,29 @@ msgstr "Сесію втрачено. Сервер перезапущено аб�
 #: src/engine/frontend/web/webClient.cpp
 msgid "Reload page"
 msgstr "Оновити сторінку"
+
+#. File-kind descriptions (fileKind.cpp -> file dialogs).
+
+#: src/engine/backend/fileKind.cpp
+msgid "Application files"
+msgstr "Файли застосунку"
+
+#: src/engine/backend/fileKind.cpp
+msgid "Tool files"
+msgstr "Файли інструментів"
+
+#: src/engine/backend/fileKind.cpp
+msgid "Report files"
+msgstr "Файли звітів"
+
+#: src/engine/backend/fileKind.cpp
+msgid "Table files"
+msgstr "Файли таблиць"
+
+#: src/engine/backend/fileKind.cpp
+msgid "Log files"
+msgstr "Файли журналу"
+
+#: src/engine/backend/fileKind.cpp
+msgid "Data files"
+msgstr "Файли даних"

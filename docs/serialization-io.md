@@ -94,6 +94,40 @@ std::shared_ptr<ibReaderMemory> readerHeaderMemory(reader.open_chunk(headerBlock
 `ibNumber` uses the same discipline for its own payload (`kIbNumberChunk` —
 [../CLAUDE.md](../CLAUDE.md) §2a).
 
+### File kinds — one table, `backend/fileKind.h`
+
+What a file is called is answered in one place, not at each dialog. A kind knows its
+extension and how a file dialog should describe it; `ibFileMask` / `ibFileFilter` /
+`ibFileExtension` are what the six call sites ask.
+
+| Kind | Extension | What travels in it |
+|---|---|---|
+| `Application` | **`.oap`** | the whole application — metadata, module code, forms, rights |
+| `Tool` | **`.otl`** | an external tool (formerly "data processor") |
+| `Report` | **`.orp`** | an external report |
+| `Table` | **`.oxl`** | a spreadsheet document |
+| `Log` | **`.olg`** | the platform's own journal |
+| `Save` | **`.osv`** | a data dump — the base written out, restorable elsewhere |
+
+**The names are ours.** `o` marks the family; the two letters after it come from the word
+*we* use for the thing, not from a neighbouring product's abbreviation. That is the whole
+rule, and it is why the set reads as one set.
+
+**Application, not schema.** The file carries module *code*, and no reading of the word
+schema covers code — `schema` also already means the shape of the database tables in a few
+hundred places in this tree. A file that contains an application is called an application.
+
+**No legacy names.** `.mcf` `.edp` `.erp` `.obk` are gone rather than accepted-on-read: the
+platform is pre-release, there is no installed base to carry, and carrying one would mean
+every dialog offering two names for one thing forever. A file made before the rename opens
+after being renamed.
+
+**An extension is a hint, not proof.** The signature belongs INSIDE the file; this table is
+where the pairing (kind → signature → extension → provider) will be stated once signatures
+land.
+
+---
+
 ### ⚠ A reader BORROWS its bytes
 
 `ibReaderMemory` keeps the pointer it is given and never owns a copy. `ibWriterMemory::buffer()`,

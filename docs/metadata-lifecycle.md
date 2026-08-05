@@ -196,7 +196,7 @@ side effects until commit):
 | Operation | Staging | Single commit point | OnSave fires? |
 |---|---|---|---|
 | Save → config blob (Apply) | `ibWriterMemory` buffer | DB UPSERT inside the apply TX | **yes** (`saveConfigFlag`) |
-| Export → file (`.obk` / `.mcf`) | `ibWriterMemory` buffer | temp file + `std::filesystem::rename` | no (`saveToFileFlag` = export) |
+| Export → file (`.osv` / `.oap`) | `ibWriterMemory` buffer | temp file + `std::filesystem::rename` | no (`saveToFileFlag` = export) |
 | Delete (object removal) | — | DB TX (DDL rollback) → `DeleteSubtree` → `OnDeleteMetaObject` | — |
 
 ---

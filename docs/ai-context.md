@@ -246,7 +246,7 @@ Drill into these only when the task touches the specific area.
 |---|---|
 | Project bootstrap, layers, modules | `docs/ARCHITECTURE.md` |
 | Build / clone / submodules | `docs/BUILD.md` |
-| Configuration Compare / Merge (`.mcf`) | `docs/configuration-compare.md` |
+| Configuration Compare / Merge (`.oap`) | `docs/configuration-compare.md` |
 | OES script — full language | `docs/lambda.md`, `docs/closure-capture.md`, `docs/linq.md`, `docs/eval-scope-refactor.md` |
 | Query language / L2–L5 engine (LINQ → SQL) | `docs/query-language-arc.md` |
 | Data composition (L5 filter/sort/group) | `docs/data-composer.md`, `docs/ram-composer-decoupling.md` |

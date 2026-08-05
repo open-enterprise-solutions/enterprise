@@ -300,6 +300,7 @@
     <ClInclude Include="backend_mainFrame.h" />
     <ClInclude Include="backend_exception.h" />
     <ClInclude Include="backend_diagnostic.h" />
+    <ClInclude Include="fileKind.h" />
     <ClInclude Include="diagnostics\crashGuard.h">
       <Filter>diagnostics</Filter>
     </ClInclude>
@@ -1090,6 +1091,7 @@
     <ClCompile Include="backend_mainFrame.cpp" />
     <ClCompile Include="backend_exception.cpp" />
     <ClCompile Include="backend_diagnostic.cpp" />
+    <ClCompile Include="fileKind.cpp" />
     <ClCompile Include="diagnostics\crashGuard.cpp">
       <Filter>diagnostics</Filter>
     </ClCompile>

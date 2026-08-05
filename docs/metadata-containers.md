@@ -104,7 +104,7 @@ Four levels, each adding exactly what its role needs:
 | Class | Adds | Why it exists |
 |---|---|---|
 | `ibMetaDataConfigurationBase` | `AccessRight_*` (Administration / DataAdministration / ExclusiveMode / …), the **restructure ledger** (`m_restructureInfo`, static `GetRestructureInfo()`), `GetConfigMD5/Name/Guid`, `LoadConfigFromFile/SaveConfigToFile`, `OnInitialize/OnDestroy` (appData lifecycle), config-type | only a *configuration* restructures; the ledger records real CREATE/ALTER/DROP + validation warnings |
-| `ibMetaDataConfigurationFile` | `m_commonObject : ibValuePtr<ibValueMetaObjectConfiguration>`, `m_md5Hash`, `RunDatabase/CloseDatabase`, `LoadCommonTree/BuildFreshRoot`, access-rights **delegate to `m_commonObject`**, `IsFullAccess` | **public ctor** — instantiated directly by Designer document views to inspect a stand-alone `.obk` (per-document scratch, *not* the coordinator) |
+| `ibMetaDataConfigurationFile` | `m_commonObject : ibValuePtr<ibValueMetaObjectConfiguration>`, `m_md5Hash`, `RunDatabase/CloseDatabase`, `LoadCommonTree/BuildFreshRoot`, access-rights **delegate to `m_commonObject`**, `IsFullAccess` | **public ctor** — instantiated directly by Designer document views to inspect a stand-alone `.osv` (per-document scratch, *not* the coordinator) |
 | `ibMetaDataConfiguration` | `LoadConfigFromBuffer` that **additionally RUNs** the tree (register ctors before any DDL apply — else `GetTypeCtor` misses reference/enum types → bogus ALTER → FB-607), `LoadDatabase`, owns **`m_debugServer`** (one per process, the `debugServer` macro reads its slot), `m_metaGuid`; config-type = Load | the appData-owned **active runtime metadata**; private ctor gated on `ib::AppDataCtorToken` |
 | `ibMetaDataConfigurationStorage` | composes an **inner `m_configMetadata`** (an `ibMetaDataConfiguration` = the *saved* baseline), `IsConfigSave() = CompareMetadata(baseline)`, RunDatabase/CloseDatabase **cascade to the inner baseline**, sequence data | the Designer's **active edit config** — edits are diffed against the saved baseline (see [configuration-compare.md](configuration-compare.md)) |
 
@@ -163,7 +163,7 @@ why the external containers reuse ~95% of the config engine.
   active metadata; reach it via `activeMetaData`). Its runtime is on the **session**, not here.
 - Designer editing a config → **`ibMetaDataConfigurationStorage`** (has the compile cache + the
   saved baseline; `IsConfigSave()` compares against it).
-- Designer inspecting a stand-alone `.obk` file → **`ibMetaDataConfigurationFile`** (public ctor,
+- Designer inspecting a stand-alone `.osv` file → **`ibMetaDataConfigurationFile`** (public ctor,
   load-only).
 - An external `.epf` / `.erf` opened at runtime (`Create(path)`) or in the Designer →
   **`ibMetaDataDataProcessor`** / **`ibMetaDataReport`** (file-backed, own runtime).

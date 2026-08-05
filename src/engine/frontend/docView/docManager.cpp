@@ -43,6 +43,7 @@
 #include <wx/filename.h>
 #include <wx/scopeguard.h>
 #include <memory>
+#include "backend/fileKind.h"   // extensions live in one table, not at each call site
 
 wxIMPLEMENT_ABSTRACT_CLASS(ibDocTemplate, wxObject);
 
@@ -300,7 +301,7 @@ void ibDocManager::RegisterDefaultTemplates()
 		ibTEMPLATE_VISIBLE);
 
 	AddDocTemplate(g_metaTemplateCLSID,
-		_("Spreadsheet document"), wxT("*.oxl"), wxT("oxl"),
+		_("Spreadsheet document"), ibFileMask(ibFileKind::Table), ibFileExtension(ibFileKind::Table),
 		_("Spreadsheet Doc"), _("Spreadsheet View"),
 		CLASSINFO(ibSpreadsheetFileDocument), CLASSINFO(ibSpreadsheetEditView),
 		ibTEMPLATE_VISIBLE);
