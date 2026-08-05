@@ -16,6 +16,11 @@ debugging tools wired into the web build. Update as the prototype moves.
 - [`open-issues.md`](open-issues.md) — active TODOs and known bugs:
   unregistered control types, desktop-only singletons still being hit,
   follow-up control ports.
+- [`client-protocol.md`](client-protocol.md) — **DESIGN, no code yet**: the wire
+  contract the client and `wenterprise-server` are meant to speak — commands
+  batched into numbered packets, one frame per batch, acknowledged counters with
+  retransmit, and the client-side queue that coalesces and predicts. Written for
+  slow links, where the cost is round trips rather than bytes.
 - [`conventions.md`](conventions.md) — web-specific code conventions:
   `ibValuePtr` usage, `OES_USE_WEB` ifdef policy, JS per-type control
   renderers on the client.
