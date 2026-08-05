@@ -4,7 +4,7 @@ Any event (a control's `OnChange`, a form's `beforeClose`, a **command's Action*
 per-binding and dispatched by plain polymorphism:
 
 1. **Undefined** — nothing bound; firing is a no-op (the event proceeds).
-2. **Named** — the classic handler: a form-module procedure called *по старинке*, bound by name. **Serialised.**
+2. **Named** — the classic handler: a form-module procedure called the old-fashioned way, bound by name. **Serialised.**
 3. **Lambda** — an anonymous function attached at runtime (`ThisForm.OnChange = Function(...) EndFunction`).
    **Transient** — a runtime value, not serialised.
 

@@ -70,9 +70,9 @@ enum { eGroupField = 1, eGroupKind };
 // target ids for lazy expansion.
 struct ibSourceFieldNode : public wxTreeItemData {
 	wxString              m_path;          // technical: Reference.Number — what the query is built from
-	// READABLE, and accumulated the SAME way: "Ссылка.Номер". A field two hops deep
-	// presented by its leaf alone ("Номер") loses the only thing that says WHICH
-	// number it is — which is why a dot-walked field read as a plain one.
+	// READABLE, and accumulated the SAME way: "Reference.Number". A field two hops
+	// deep presented by its leaf alone ("Number") loses the only thing that says
+	// WHICH number it is — which is why a dot-walked field read as a plain one.
 	wxString              m_presentation;
 	ibMetaID              m_leafId = wxNOT_FOUND;
 	ibTypeDescription     m_type;

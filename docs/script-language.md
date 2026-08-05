@@ -129,9 +129,9 @@ name, as it always has:
 ```oes
 Boolean cancel = True;               // a primitive
 Array rows;                          // any registered value class
-CatalogRef.Номенклатура item;        // a metadata type
+CatalogRef.Goods item;        // a metadata type
 
-Procedure Handle(Val CatalogRef.Номенклатура item, Boolean cancel)
+Procedure Handle(Val CatalogRef.Goods item, Boolean cancel)
 ```
 
 Until 2026-08-04 only the five primitives were accepted here. Now **any registered type** is,
@@ -187,7 +187,7 @@ exists, and a document reference is refused there.
 ```oes
 Function Post(DocumentRef doc)               // any document reference
 Function Describe(CatalogRef item)           // any catalog reference, whichever catalog
-Function Handle(CatalogRef.Номенклатура it)  // exactly one catalog's reference
+Function Handle(CatalogRef.Goods it)  // exactly one catalog's reference
 ```
 
 **Why the prefix.** Plain `Control` would become ambiguous the day a configuration registers a class

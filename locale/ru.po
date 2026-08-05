@@ -5249,3 +5249,65 @@ msgstr "Запуск OES"
 
 #~ msgid "wetyu"
 #~ msgstr "ветю"
+
+#. Web client captions (webClient.cpp -> the client's L dictionary).
+
+#: src/engine/frontend/web/webClient.cpp
+msgid "No"
+msgstr "Нет"
+
+#: src/engine/frontend/web/webClient.cpp
+msgid "All functions"
+msgstr "Все функции"
+
+#: src/engine/frontend/web/webClient.cpp
+msgid "Loading…"
+msgstr "Загрузка…"
+
+#: src/engine/frontend/web/webClient.cpp
+msgid "Debug mode"
+msgstr "В режиме отладки"
+
+#: src/engine/frontend/web/webClient.cpp
+msgid "Debugger: paused"
+msgstr "Отладчик: пауза"
+
+#: src/engine/frontend/web/webClient.cpp
+msgid "No connection to the server"
+msgstr "Нет связи с сервером"
+
+#: src/engine/frontend/web/webClient.cpp
+msgid "Version conflict"
+msgstr "Конфликт версий"
+
+#: src/engine/frontend/web/webClient.cpp
+msgid "The object was changed by another user. Re-read it."
+msgstr "Объект был изменён другим пользователем. Перечитайте."
+
+#: src/engine/frontend/web/webClient.cpp
+msgid "The object is being edited by another user. Try again later."
+msgstr "Объект сейчас редактируется другим пользователем. Попробуйте позже."
+
+#: src/engine/frontend/web/webClient.cpp
+msgid "Access denied"
+msgstr "Доступ запрещён"
+
+#: src/engine/frontend/web/webClient.cpp
+msgid "You do not have the rights to perform this operation."
+msgstr "Недостаточно прав для выполнения операции."
+
+#: src/engine/frontend/web/webClient.cpp
+msgid "The operation failed."
+msgstr "Ошибка выполнения операции."
+
+#: src/engine/frontend/web/webClient.cpp
+msgid "The configuration has been updated. Reload the page to continue with the new version."
+msgstr "Конфигурация обновлена. Обновите страницу, чтобы продолжить работу с новой версией."
+
+#: src/engine/frontend/web/webClient.cpp
+msgid "The session was lost. The server restarted or the session expired."
+msgstr "Сессия потеряна. Сервер перезапущен или сессия истекла."
+
+#: src/engine/frontend/web/webClient.cpp
+msgid "Reload page"
+msgstr "Обновить страницу"

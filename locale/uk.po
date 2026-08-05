@@ -5091,3 +5091,65 @@ msgstr "Не вдалося запустити wenterprise-server: %s"
 #: src/engine/launcher/launcher.h:49
 msgid "Launch OES"
 msgstr "Запуск OES"
+
+#. Web client captions (webClient.cpp -> the client's L dictionary).
+
+#: src/engine/frontend/web/webClient.cpp
+msgid "No"
+msgstr "Ні"
+
+#: src/engine/frontend/web/webClient.cpp
+msgid "All functions"
+msgstr "Усі функції"
+
+#: src/engine/frontend/web/webClient.cpp
+msgid "Loading…"
+msgstr "Завантаження…"
+
+#: src/engine/frontend/web/webClient.cpp
+msgid "Debug mode"
+msgstr "У режимі налагодження"
+
+#: src/engine/frontend/web/webClient.cpp
+msgid "Debugger: paused"
+msgstr "Налагоджувач: пауза"
+
+#: src/engine/frontend/web/webClient.cpp
+msgid "No connection to the server"
+msgstr "Немає зв'язку із сервером"
+
+#: src/engine/frontend/web/webClient.cpp
+msgid "Version conflict"
+msgstr "Конфлікт версій"
+
+#: src/engine/frontend/web/webClient.cpp
+msgid "The object was changed by another user. Re-read it."
+msgstr "Об'єкт було змінено іншим користувачем. Перечитайте."
+
+#: src/engine/frontend/web/webClient.cpp
+msgid "The object is being edited by another user. Try again later."
+msgstr "Об'єкт зараз редагує інший користувач. Спробуйте пізніше."
+
+#: src/engine/frontend/web/webClient.cpp
+msgid "Access denied"
+msgstr "Доступ заборонено"
+
+#: src/engine/frontend/web/webClient.cpp
+msgid "You do not have the rights to perform this operation."
+msgstr "Недостатньо прав для виконання операції."
+
+#: src/engine/frontend/web/webClient.cpp
+msgid "The operation failed."
+msgstr "Помилка виконання операції."
+
+#: src/engine/frontend/web/webClient.cpp
+msgid "The configuration has been updated. Reload the page to continue with the new version."
+msgstr "Конфігурацію оновлено. Оновіть сторінку, щоб продовжити роботу з новою версією."
+
+#: src/engine/frontend/web/webClient.cpp
+msgid "The session was lost. The server restarted or the session expired."
+msgstr "Сесію втрачено. Сервер перезапущено або сесія завершилася."
+
+#: src/engine/frontend/web/webClient.cpp
+msgid "Reload page"
+msgstr "Оновити сторінку"

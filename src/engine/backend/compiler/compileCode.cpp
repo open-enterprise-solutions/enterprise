@@ -789,7 +789,7 @@ bool ibCompileCode::Compile(const wxString& strCode)
 //
 //   Boolean value                      — a primitive, all this used to accept
 //   Array rows                         — any registered value / control class
-//   CatalogRef.Номенклатура item       — a metadata type, i.e. TWO lexems and a dot
+//   CatalogRef.Goods item              — a metadata type, i.e. TWO lexems and a dot
 //
 // The last form is why this exists: a reference type's registered name IS
 // "<Kind>Ref.<Name>" (objCtor.h), so once the name is assembled the ordinary

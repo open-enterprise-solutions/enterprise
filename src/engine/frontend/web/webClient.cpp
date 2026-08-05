@@ -32,6 +32,7 @@
 #include <wx/wfstream.h>
 #include <wx/zipstrm.h>
 
+#include <cstring>
 #include <mutex>
 #include <string>
 
@@ -143,6 +144,94 @@ std::string LoadClient()
 	return std::string();
 }
 
+// ---------------------------------------------------------------------------
+//  Captions — translated HERE, so the client never carries a second catalog
+// ---------------------------------------------------------------------------
+//
+// THE CAPTIONS LIVE HERE AND NOWHERE ELSE. This pass replaces the
+// `<!--OES_I18N-->` marker with the table below run through `_()`, so the web
+// surface reads the SAME gettext catalogs as every desktop caption
+// (locale/*.po -> lang/<code>/open_es.mo): one file for a translator, one road
+// for the platform.
+//
+// The client deliberately carries no English fallback of its own. A copy of a
+// string is a second currency for one value — the pair drifts the first time
+// either side is edited, and the drift shows up as a caption that is right in
+// one language and stale in the other.
+//
+// Adding a caption: a row here, `L.<key>` in the client.
+
+const char* const kI18nMarker = "<!--OES_I18N-->";
+
+// A JS string literal, single-quoted: the injected block sits inside HTML, so a
+// caption containing a quote or a newline must not be able to end the script.
+std::string JsQuote(const wxString& text)
+{
+	const wxScopedCharBuffer utf8 = text.utf8_str();
+	std::string out("'");
+	for (const char* p = utf8.data(); p != nullptr && *p != '\0'; ++p) {
+		switch (*p) {
+		case '\'': out += "\\'";  break;
+		case '\\': out += "\\\\"; break;
+		case '\n': out += "\\n";  break;
+		case '\r': break;
+		// `</script>` inside a literal ends the block in an HTML parser, whatever
+		// the quoting — the slash is what has to go.
+		case '<':  out += "\\x3C"; break;
+		default:   out += *p;     break;
+		}
+	}
+	out += "'";
+	return out;
+}
+
+std::string TranslatedDictionary()
+{
+	// Source strings are ENGLISH and identical to the client's defaults — that is
+	// what makes them one msgid rather than two.
+	const struct { const char* key; wxString text; } kCaptions[] = {
+		{ "yes",             _("Yes") },
+		{ "no",              _("No") },
+		{ "cancel",          _("Cancel") },
+		{ "close",           _("Close") },
+		{ "allFunctions",    _("All functions") },
+		{ "loading",         _("Loading…") },
+		{ "debugMode",       _("Debug mode") },
+		{ "debuggerPaused",  _("Debugger: paused") },
+		{ "noConnection",    _("No connection to the server") },
+		{ "versionConflict", _("Version conflict") },
+		{ "objectChanged",   _("The object was changed by another user. Re-read it.") },
+		{ "objectLocked",    _("The object is being edited by another user. Try again later.") },
+		{ "accessDenied",    _("Access denied") },
+		{ "noRights",        _("You do not have the rights to perform this operation.") },
+		{ "operationFailed", _("The operation failed.") },
+		{ "configUpdated",   _("The configuration has been updated. Reload the page to continue with the new version.") },
+		{ "sessionLost",     _("The session was lost. The server restarted or the session expired.") },
+		{ "reloadPage",      _("Reload page") },
+	};
+
+	std::string out("<script>window.OES=window.OES||{};window.OES.L={");
+	for (std::size_t i = 0; i < WXSIZEOF(kCaptions); ++i) {
+		if (i != 0)
+			out += ',';
+		out += kCaptions[i].key;
+		out += ':';
+		out += JsQuote(kCaptions[i].text);
+	}
+	out += "};</script>";
+	return out;
+}
+
+// The marker is replaced ONCE, on the cached copy — the page is served on every
+// load and the active UI language does not change under a running process.
+std::string WithCaptions(std::string html)
+{
+	const std::size_t at = html.find(kI18nMarker);
+	if (at == std::string::npos)
+		return html;   // a client that does not ask for captions keeps its own
+	return html.replace(at, std::strlen(kI18nMarker), TranslatedDictionary());
+}
+
 // SAID OUT LOUD, not served blank. A missing client is a deployment mistake —
 // the pack was not copied, the directory was not shipped — and an empty page
 // sends whoever sees it looking in the wrong place.
@@ -164,7 +253,7 @@ extern "C" WFRONTEND_API const char* wfrontendClientHTML()
 	static std::string    s_client;
 
 	std::call_once(s_once, [] {
-		s_client = LoadClient();
+		s_client = WithCaptions(LoadClient());
 	});
 
 	return s_client.empty() ? kMissingClient : s_client.c_str();

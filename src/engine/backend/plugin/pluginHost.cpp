@@ -120,7 +120,7 @@ public:
 		// The SAME node tree the binary format serialises, rendered as JSON:
 		// one description of the object, two ways of writing it down. The type
 		// resolver turns config-specific class ids back into portable names
-		// ("CatalogRef.Номенклатура"), which is the half that makes the answer
+		// ("CatalogRef.Goods"), which is the half that makes the answer
 		// readable by anything other than this process.
 		ibDataNode node;
 		if (!found->BuildDataNode(node))

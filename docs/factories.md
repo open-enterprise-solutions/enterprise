@@ -181,8 +181,8 @@ When a configuration runs, every metaobject gets `OnBeforeRunMetaObject`, and th
 per-object ctors enter the METADATA factory (`objCtor.h` macros):
 
 ```cpp
-registerReference();   // ibCtorMetaValueTypeReference → "CatalogRef.Номенклатура"
-registerManager();     // ibCtorMetaValueTypeManager   → "CatalogManager.Номенклатура"
+registerReference();   // ibCtorMetaValueTypeReference → "CatalogRef.Goods"
+registerManager();     // ibCtorMetaValueTypeManager   → "CatalogManager.Goods"
 registerObject();      // … and Selection / RecordSet / TabularSection / RecordKey by kind
 ```
 

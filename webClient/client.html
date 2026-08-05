@@ -1,5 +1,10 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><title>OES Web</title>
+<!-- OES_I18N — the server replaces this line with the caption dictionary run
+     through the platform's gettext catalogs. Left as it is (a plain comment) the
+     client falls back to the English defaults further down, so a client served
+     by anything else still works. -->
+<!--OES_I18N-->
 <style>
 /* Window chrome: title bar + status bar wrap the sidebar+main area.
    Body is flex-column so the middle row stretches; titlebar / statusbar
@@ -429,6 +434,26 @@ body.modal-dragging,body.modal-dragging *{cursor:move !important;user-select:non
   </form>
 </div>
 <script>
+// ---------------------------------------------------------------------------
+// CAPTIONS COME FROM THE BACKEND. The client spells none of them.
+//
+// They used to be inline, in Russian: the source stopped being English like the
+// rest of the tree, and the product could not be shipped in another language
+// without editing the client. Keeping English defaults here would have been the
+// other mistake — the same string in two places, and the pair drifts the first
+// time one side is edited.
+//
+// So there is one source: `webClient.cpp` runs each caption through `_()` and
+// injects this dictionary in place of the `<!--OES_I18N-->` marker, which puts
+// the web surface on the platform's ordinary gettext catalogs
+// (locale/*.po -> lang/<code>/open_es.mo) — the same road every desktop caption
+// takes, one file for a translator.
+//
+// Adding a caption: add it to the table in webClient.cpp and use `L.<key>` here.
+// ---------------------------------------------------------------------------
+window.OES = window.OES || {};
+const L = window.OES.L || (window.OES.L = {});
+
 const API=location.pathname.replace(/\/$/,'');
 
 // Tab-close cleanup: on pagehide fire a sendBeacon to /logout so the
@@ -717,8 +742,8 @@ function confirmDialog(text, onYes, title){
     title: title || '',
     body: text,
     buttons: [
-      {label:'Да', primary:true, onClick:(d)=>{ d.close(); if (typeof onYes === 'function') onYes(); }},
-      {label:'Нет', onClick:(d)=>d.close()}
+      {label:L.yes, primary:true, onClick:(d)=>{ d.close(); if (typeof onYes === 'function') onYes(); }},
+      {label:L.no, onClick:(d)=>d.close()}
     ]
   });
 }
@@ -734,7 +759,7 @@ function promptDialog(text, onSubmit, opts){
         d.close();
         if (typeof onSubmit === 'function') onSubmit(v);
       }},
-      {label:'Отмена', onClick:(d)=>d.close()}
+      {label:L.cancel, onClick:(d)=>d.close()}
     ]
   });
 }
@@ -847,24 +872,24 @@ window.OES.handleBackendError = (j) => {
   switch (j.error) {
     case 'lock_conflict':
       if (j.kind === 'version_changed') {
-        OES.alert(msg || 'Объект был изменён другим пользователем. Перечитайте.',
-                  'Конфликт версий');
+        OES.alert(msg || L.objectChanged,
+                  L.versionConflict);
       } else {
         // row_lock_timeout — short blocking conflict, not a state mismatch.
         // Toast (not dialog) so user can retry without ceremony.
-        OES.error(msg || 'Объект сейчас редактируется другим пользователем. Попробуйте позже.');
+        OES.error(msg || L.objectLocked);
       }
       break;
     case 'forbidden':
-      OES.alert(msg || 'Недостаточно прав для выполнения операции.',
-                'Доступ запрещён');
+      OES.alert(msg || L.noRights,
+                L.accessDenied);
       break;
     case 'interrupted':
       // User pressed Cancel — silent. Server-side ibBackendInterruptException.
       break;
     case 'script_exception':
     default:
-      OES.error(msg || 'Ошибка выполнения операции.');
+      OES.error(msg || L.operationFailed);
       break;
   }
   return true;
@@ -874,8 +899,8 @@ let inflight=0, loadingTimer=null, lastError=false;
 // Set by pollDebugStatus from /debug-status. dbgMode reflects wes
 // process-wide --debug; dbgPaused reflects this tab's session being
 // parked at a breakpoint. Used by beginRequest below to relabel the
-// loading banner — when scripts may stop on a breakpoint, "Загрузка…"
-// is misleading; "В режиме отладки" / "Отладчик: пауза" tells the user
+// loading banner — when scripts may stop on a breakpoint, the plain
+// "Loading…" is misleading; the debug captions tell the user
 // the real reason the UI is waiting.
 let dbgMode   = false;
 let dbgPaused = false;
@@ -893,11 +918,11 @@ function beginRequest(){
   loadingTimer=setTimeout(()=>{
     loadingTimer=null;
     if(inflight>0 && !lastError && !dbgPaused){
-      // Relabel as "В режиме отладки" when wes was started with
+      // Relabel as the debug-mode caption when wes was started with
       // --debug — any stall in this state likely means a breakpoint
       // is about to fire (or just fired) on the script thread.
       showNetStatus(dbgMode ? 'debug-paused' : 'loading',
-                    dbgMode ? 'В режиме отладки' : 'Загрузка…');
+                    dbgMode ? L.debugMode : L.loading);
       showSpinner();
     }
   }, LOADING_THRESHOLD_MS);
@@ -910,7 +935,7 @@ function endRequest(ok){
     if(inflight===0 && !dbgPaused){ hideNetStatus(); hideSpinner(); }
   } else {
     lastError=true;
-    if(!dbgPaused) showNetStatus('error','Нет связи с сервером');
+    if(!dbgPaused) showNetStatus('error',L.noConnection);
     if(inflight===0) hideSpinner();
   }
 }
@@ -1101,19 +1126,19 @@ function applyPendingModal(modal){
     }).catch(()=>{ /* network blip — next poll re-queues */ });
   }
   // Buttons from style bitmask:
-  //   wxYES + wxNO          → Да / Нет (Yes default)
+  //   wxYES + wxNO          → Yes / No (Yes default)
   //   wxOK alone            → OK
-  //   wxOK + wxCANCEL       → OK / Отмена
-  //   + wxCANCEL anywhere   → adds Отмена
+  //   wxOK + wxCANCEL       → OK / Cancel
+  //   + wxCANCEL anywhere   → adds Cancel
   const buttons = [];
-  if (style & WX_YES) buttons.push({label:'Да', primary:true,
+  if (style & WX_YES) buttons.push({label:L.yes, primary:true,
     onClick: (d)=>{ postReply(WX_YES); d.close(); }});
-  if (style & WX_NO)  buttons.push({label:'Нет',
+  if (style & WX_NO)  buttons.push({label:L.no,
     onClick: (d)=>{ postReply(WX_NO); d.close(); }});
   if ((style & WX_OK) || buttons.length === 0)
     buttons.unshift({label:'OK', primary: buttons.length === 0,
       onClick: (d)=>{ postReply(WX_OK); d.close(); }});
-  if (style & WX_CANCEL) buttons.push({label:'Отмена',
+  if (style & WX_CANCEL) buttons.push({label:L.cancel,
     onClick: (d)=>{ postReply(WX_CANCEL); d.close(); }});
   currentModalHandle = OES.showDialog({
     title: modal.caption || '',
@@ -1142,7 +1167,7 @@ function ensureAllFunctionsButton(){
   const btn = document.createElement('button');
   btn.id = 'mb-all-functions';
   btn.type = 'button';
-  btn.textContent = 'Все функции';
+  btn.textContent = L.allFunctions;
   btn.onclick = openAllFunctionsDialog;
   document.getElementById('menubar').appendChild(btn);
 }
@@ -1236,9 +1261,9 @@ async function openAllFunctionsDialog(){
     document.head.appendChild(st);
   }
   const handle = OES.showDialog({
-    title: 'Все функции',
+    title: L.allFunctions,
     body:  body,
-    buttons: [{label:'Закрыть', onClick:(d)=>d.close()}]
+    buttons: [{label:L.close, onClick:(d)=>d.close()}]
   });
 }
 
@@ -1511,7 +1536,7 @@ function showInterfacePopup(iface){
   const handle = OES.showDialog({
     title: iface.synonym || iface.name || '',
     body:  body,
-    buttons: [{label:'Закрыть', onClick:(d)=>d.close()}]
+    buttons: [{label:L.close, onClick:(d)=>d.close()}]
   });
 }
 // Per-type control classes. Each owns its own render(node)->HTMLElement
@@ -2149,11 +2174,11 @@ async function showSessionLost(){
     +'box-shadow:0 6px 30px rgba(0,0,0,.3);max-width:400px;text-align:center';
   const msg = document.createElement('p');
   msg.textContent = configChanged
-    ? 'Конфигурация обновлена. Обновите страницу, чтобы продолжить работу с новой версией.'
-    : 'Сессия потеряна. Сервер перезапущен или сессия истекла.';
+    ? L.configUpdated
+    : L.sessionLost;
   msg.style.cssText='margin:0 0 16px 0;font-size:14px;color:#333';
   const btn = document.createElement('button');
-  btn.textContent='Обновить страницу';
+  btn.textContent=L.reloadPage;
   btn.className='ctrl';
   btn.onclick=()=>location.reload();
   box.appendChild(msg); box.appendChild(btn);
@@ -2241,7 +2266,7 @@ async function paintActiveTab(){
   // Debug indicator: a "DEBUG" pill in the sidebar status line while
   // the wes process is in --debug mode. When this tab's session parks
   // at a breakpoint, also takes over the top netStatus banner with
-  // "Отладчик: пауза" so the generic "Загрузка…" doesn't mask the real
+  // the paused caption, so the generic "Loading…" does not mask the real
   // reason. Polls /debug-status; cheap (in-memory flag check on wes).
   const dbgPill = document.createElement('span');
   dbgPill.className = 'dbg';
@@ -2262,7 +2287,7 @@ async function paintActiveTab(){
         dbgPill.textContent = 'PAUSED';
         dbgPill.className = 'dbg paused';
         dbgPill.style.display = '';
-        showNetStatus('debug-paused','Отладчик: пауза');
+        showNetStatus('debug-paused',L.debuggerPaused);
         hideSpinner();
       } else {
         if (next.debugMode) {

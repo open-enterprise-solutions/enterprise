@@ -132,7 +132,8 @@ protected:
 		virtual wxString GetClassName() const override { return ibValue::GetNameObjectFromID(m_clsid); }
 
 		//type conversion
-		// THE DESCRIPTION IS WHAT A PERSON READS — "Равно", not "Equal". The NAME is
+		// THE DESCRIPTION IS WHAT A PERSON READS — the caption in their own
+		// language, translated, not the identifier behind it. The NAME is
 		// the identifier a script writes (`ComparisonKind.Equal`) and what a saved
 		// setting round-trips; presenting it in a picker or a cell makes the form
 		// speak in identifiers. Falls back to the name when a member was declared

@@ -340,8 +340,8 @@ void ibFrontendMainFrameDesigner::OnUpdateConfiguration(wxCommandEvent& event)
 
 			// The buttons SAY what they do — "Yes / No" on a question this consequential leaves the user
 			// deciding what "no" meant. wxMessageBox cannot relabel, hence the dialog object.
-			// (ASCII only in these literals: the file compiles as ANSI, and a typographic dash reached the
-			// dialog as mojibake — seen live as "dynamically вЂ".)
+			// (ASCII only in these literals: the file compiles as ANSI, so a typographic dash reached the
+			// dialog as mojibake - its UTF-8 bytes shown one per character.)
 			if (activeMetaData->IsDynamicUpdateAvailable()) {
 				wxMessageDialog dlg(this,
 					wxString::Format(

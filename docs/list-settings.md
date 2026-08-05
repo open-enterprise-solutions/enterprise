@@ -95,7 +95,8 @@ That is not decoration. A registered enumeration:
   (and no form has to keep its order in step with an enum by hand);
 * is what a script writes (`ComparisonKind.Equal`);
 * round-trips through a saved setting **by number**, while presenting itself by
-  its description ("Равно"), so renaming a caption never breaks stored data;
+  its description (the translated caption a user reads), so renaming a caption
+  never breaks stored data;
 * costs nothing to add a member to — the picker follows.
 
 A grouping's kind was the last plain enum here, and while it was one it simply

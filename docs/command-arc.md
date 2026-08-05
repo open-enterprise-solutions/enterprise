@@ -73,8 +73,8 @@
 >   image). This is a conscious deviation forced by the const-wall on the frame's `GetMetaData`,
 >   matching how `wfrontend` / `mainFrame` already execute command items.
 > - **AutoFill surfaces object commands.** With AutoFill on, a form's command bar auto-adds the
->   owner object's own commands (via `GetCommandArrayObject`) as transient buttons — "автогенерация
->   учитывает команды объекта". General-command placement is still *plan*.
+>   owner object's own commands (via `GetCommandArrayObject`) as transient buttons — auto-generation
+>   accounts for the object's own commands. General-command placement is still *plan*.
 
 ---
 
@@ -253,7 +253,7 @@ The **config-root** owns more than the desktop: also the **section-panel order**
 functionality). **Roles and functional options are wired in their own arc, not this one.**
 Functional options are not command-specific — they gate data and controls too. The command
 door **honors** the gates; it does **not** own them. Folding them into the command metaobject
-would impose one устав on residents it does not fit (§10). Here they are just a gate the
+would impose one charter on residents it does not fit (§10). Here they are just a gate the
 placement query consults — leave the hook, wire the mechanism separately.
 
 ---
@@ -274,13 +274,13 @@ is required. Kin to `feedback_srcdataobject_metadata_free`.
 
 ---
 
-## 10. Governing principle — do not impose one устав on all commands
+## 10. Governing principle — do not impose one charter on all commands
 
 **Unify only when the single system serves every tenant well.** The command door is worth
 merging into one command + one hop + one placement **only because** it can be made good for
 all four sources, all three topologies, and all three surfaces at once. If any tenant would
 be served badly by the shared rule, do not force the rule on it — split, or leave it out,
-rather than impose a uniform устав that half the residents suffer under. This is the
+rather than impose a uniform charter that half the residents suffer under. This is the
 coherence test for the whole arc, not a nicety.
 
 ---
