@@ -182,9 +182,9 @@ responsive (recompile-on-edit for autocomplete / name-binding is milliseconds).
 ## 4. Positioning + acceleration ladder
 
 The interpreter is a **bytecode VM with a boxed `ibValue`, no JIT** — same class as CPython,
-Ruby YARV, and 1С (~50–300× over native C). Reference orders of magnitude (different machines,
+Ruby YARV, and the business-scripting runtimes of this class (~50–300× over native C). Reference orders of magnitude (different machines,
 approximate): ~2× slower than CPython (30 years of interpreter tuning), ~5–7× slower than Lua 5
-(register-VM, the interpreter-speed benchmark), same league as 1С or faster.
+(register-VM, the interpreter-speed benchmark), the same league as its peers or faster.
 
 Assessment: **healthy for its class** — overhead is uniform (×200–220 across three independent
 scenarios, a health sign), and the absolute cost is trivial for a server-centric domain (heavy

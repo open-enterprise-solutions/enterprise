@@ -166,7 +166,7 @@ TEST(QueryL4Parser, JoinInnerAndLeft)
 
 TEST(QueryL4Parser, TotalsByDimensions)
 {
-	// TOTALS <aggregates> BY <dimension levels> — hierarchical subtotals (1С ИТОГИ … ПО …).
+	// TOTALS <aggregates> BY <dimension levels> — hierarchical subtotals.
 	auto sel = Parse(wxT("SELECT Client, Amount FROM Document.Sales "
 	                     "ORDER BY Client "
 	                     "TOTALS SUM(Amount), MAX(Date) BY Client, Store Hierarchy"));
@@ -269,7 +269,7 @@ TEST(QueryL4Parser, ModuloIsArithmetic)
 }
 
 // ===========================================================================
-// TOP n — row limit on the SELECT core (1С «ПЕРВЫЕ»)
+// TOP n — row limit on the SELECT core.
 // ===========================================================================
 
 TEST(QueryL4Parser, TopN_ParsedOnCore)

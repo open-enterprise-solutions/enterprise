@@ -1156,8 +1156,8 @@ TEST(QuerySelector, Hierarchy_FoldsSnapshot_SubtotalsFromOneSnapshot)
 	EXPECT_FALSE(root.m_children[1]->m_hasChildren);                         // E3 leaf
 }
 
-// Sub-selection без WithSource рецепта inert — no DB hit, empty sub-Selector (the eager-only guard).
-// The live sub-selection (Выборка → под-Выборка) runs at runtime over a real holder.
+// A sub-selection without a WithSource recipe is inert — no DB hit, empty sub-Selector (the eager-only guard).
+// The live sub-selection (a selector nested in a selector) runs at runtime over a real holder.
 TEST(QuerySelector, Select_NoSource_EmptyAndNoDbHit)
 {
 	TestCol keyCol(wxT("key"), KEY_ID), parentCol(wxT("parent"), HPARENT), amtCol(wxT("amount"), HAMT);

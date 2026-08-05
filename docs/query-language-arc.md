@@ -2744,7 +2744,7 @@ full-spread `ExecuteAggregate`. Regression guard: `QueryComposerGate.GroupLevelP
 
 ## Update 2026-07-17 — `value(...)` literal reference constant + expression ORDER BY + constant JOIN ON
 
-**`value(<Kind>.<Name>.<Member>)` — a literal reference constant (1C `ЗНАЧЕНИЕ`).** New keyword `VALUE`
+**`value(<Kind>.<Name>.<Member>)` — a literal reference constant.** New keyword `VALUE`
 (`queryKeywords.h` / `queryLexer.cpp`), parsed in `ParsePrimary` into a new AST kind `Value` carrying the
 dotted meta-path (`queryAst.h`). The name is NOT resolved at parse time (the AST stays metadata-free) — resolution
 happens at LOWERING, where the config is in scope, exactly like a source name. `value(Catalog.Currencies.EmptyRef)`

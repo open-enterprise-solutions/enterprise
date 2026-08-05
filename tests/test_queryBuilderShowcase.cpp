@@ -193,7 +193,7 @@ TEST(QueryBuilderShowcase, KeysetCursor_GuidIsBoundNotInlined)
 }
 
 // ===========================================================================
-// Aggregation (ИТОГИ): the fluent door's GroupBy() + Project() emit an Aggregate
+// Aggregation (TOTALS): the fluent door's GroupBy() + Project() emit an Aggregate
 // IR node from Build() — the register-balance / turnover compute shape, dialect-free.
 // ===========================================================================
 namespace {
@@ -223,8 +223,8 @@ TEST(QueryBuilderShowcase, Aggregate_GroupBySumOrdered)
 
 // ===========================================================================
 // JOIN composition: the fluent door's Join() chains a FROM-tree source. This is
-// the physical shape the L3 dot-walk lowers to — "Номенклатура.Производитель.
-// Наименование" becomes a catalog ⋈ producer-catalog join on the reference GUID
+// the physical shape the L3 dot-walk lowers to — a two-hop path such as
+// "Goods.Producer.Name" becomes a catalog ⋈ producer-catalog join on the reference GUID
 // column (fldN_RRRef) = the producer's row key (uuid). Columns are QUALIFIED by
 // source table (ibCol(table, name)) and the projection is ALIASED so same-named
 // physical columns across the two tables stay distinct in the cursor.

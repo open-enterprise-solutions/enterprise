@@ -4,10 +4,10 @@
 > *subsystem* concept, and how a metaobject ends up as a command on a bar.
 > This document describes code that **already exists**; it is a map, not a plan.
 >
-> *Naming:* the metatype is **`ibValueMetaObjectSection`** ("Section" / RU «Раздел»). 1C splits
+> *Naming:* the metatype is **`ibValueMetaObjectSection`** ("Section" / RU «Раздел»). Some platforms split
 > a *subsystem* (structural grouping) from the *section* it raises in the command interface; we
 > collapse both into one metaobject (§1), so it is named for what the user actually sees — a
-> **section** of the application — rather than carried over as the 1C "subsystem" term. The
+> **section** of the application — rather than carrying over the inherited "subsystem" term. The
 > serialised clsid key stays `MD_SSYST` (an opaque wire id — renaming it would break configs).
 
 ---

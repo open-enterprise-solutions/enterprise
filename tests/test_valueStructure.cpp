@@ -2,7 +2,7 @@
 // OES Enterprise — ibValueStructure tests
 //
 // ibValueStructure (backend/system/value/valueMap.h) is the script Structure:
-// a STRING-keyed ibValueContainer (1C-style `New Structure("F1, F2", v1, v2)`).
+// a STRING-keyed ibValueContainer (`New Structure("F1, F2", v1, v2)`).
 // Keys must be strings; lookup via the non-throwing Property. Pure (no DB).
 // =============================================================================
 

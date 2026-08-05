@@ -3,7 +3,7 @@
 // grouping field, the aggregates folded at every level. Pure (no DB, no appData) — it runs
 // straight on ibQueryComposer::BuildTotalsTree over a hand-built ibQueryRamTable.
 //
-// Scenario — `ИТОГИ Регион, Продукт ПО Сумма(Количество)`:
+// Scenario — `TOTALS Sum(Quantity) BY Region, Product`:
 //   North/Apple 10, North/Apple 5, North/Pear 3, South/Apple 7
 // expected tree:
 //   root (grand) = 25
@@ -108,7 +108,7 @@ TEST(QueryTotals, HierarchicalSubtotalsTree)
 	EXPECT_TRUE(NumEq(south.m_children[0]->m_values.at(AGG0), 7));
 }
 
-// A leaf-less ИТОГИ (no group fields) collapses to a single grand-total root.
+// A leaf-less TOTALS (no group fields) collapses to a single grand-total root.
 TEST(QueryTotals, GrandTotalOnlyWhenNoGroups)
 {
 	const ibMetaID AMOUNT = 3;

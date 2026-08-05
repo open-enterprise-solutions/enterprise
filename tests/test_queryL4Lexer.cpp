@@ -105,7 +105,7 @@ TEST(QueryL4Lexer, UnionAndCaseKeywords)
 	EXPECT_TRUE(t[6].IsKeyword(ibQueryKeyword::End));
 }
 
-// NOTE: Cyrillic metaobject / attribute identifiers (Номенклатура, Склад) are
+// NOTE: non-ASCII metaobject / attribute identifiers are
 // validated end-to-end by the runtime codeRunner smoke (step 5), where the real
 // config drives them — kept out of this gated golden test to avoid source-encoding
 // fragility (MSVC reads non-BOM sources in the ANSI codepage unless /utf-8 is set).

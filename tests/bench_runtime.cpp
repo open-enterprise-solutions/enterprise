@@ -343,7 +343,7 @@ TEST(NumberBench, DISABLED_Arithmetic) {
         RowOes("mul 30x30 digits (heap)", oes, "ns");
     }
     {
-        // 200 fractional digits — the 1C-style high-precision tier.
+        // 200 fractional digits — the high-precision tier accounting work needs.
         wxString big(wxT("0.")); for (int i = 0; i < 200; ++i) big += wxChar(wxT('0') + (i % 9) + 1);
         const ibNumber a(big), b(wxString(wxT("3")));
         const double oes = TimeNsPerOp(N / 20, [&](long){ ibNumber c = a; c *= b; g_sink += (uint64_t)c.IsHeap(); });
