@@ -934,23 +934,25 @@ int ibDatabaseLayerFirebird::DoRunQuery(const wxString& strQuery, bool bParseQue
 				if (nReturn != 0)
 				{
 					InterpretErrorCodes();
-					// Roll back the in-progress TX. When we own it
-					// (bQuickieTransaction), go through the public
-					// RollBack so the base class's m_txDepth counter
-					// drops to 0 and the pool's TX-pin clears — without
-					// this, a failed DDL leaves IsActiveTransaction()
-					// true forever and trips checks like
-					// OnBeforeSaveDatabase. When the caller owns the
-					// TX (bQuickieTransaction == false), driver-level
-					// rollback only — caller's own depth is theirs to
-					// resolve.
-					if (bQuickieTransaction) {
+					// A FAILED STATEMENT REPORTS; IT DOES NOT DECIDE. Every other driver — Postgres,
+					// MySQL, ODBC — answers a failed statement with ThrowDatabaseException() and
+					// leaves the transaction to whoever opened it. Firebird was the exception, and
+					// the exception is what broke restructuring.
+					//
+					// It used to roll the CALLER's transaction back natively (isc_rollback_transaction
+					// on the raw handle), on the reasoning that "the caller's own depth is theirs to
+					// resolve". It is not resolvable: nothing tells the caller its transaction is
+					// gone. The base's depth counter stayed up, IsActiveTransaction() kept answering
+					// true over a dead handle, the rollback in OnAfterSave rolled back nothing — and
+					// everything issued in between ran with no transaction at all, committing as it
+					// went. That is how a failed apply left the schema ahead of the configuration
+					// with no way back.
+					//
+					// Only OUR OWN transaction is ours to close, and that goes through the public
+					// RollBack so the base keeps its own books (databaseLayer.h: drivers must not
+					// touch m_txDepth themselves).
+					if (bQuickieTransaction)
 						RollBack();
-					} else {
-						isc_tr_handle pTr = m_pTransaction;
-						m_pInterface->GetIscRollbackTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pTr);
-						m_pTransaction = 0;
-					}
 
 					ThrowDatabaseException();
 					return DATABASE_LAYER_QUERY_RESULT_ERROR;
@@ -1079,9 +1081,14 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 			{
 				InterpretErrorCodes();
 
-				// Manually try to rollback the transaction rather than calling the member RollBack function
-				//  so that we can ignore the error messages
-				m_pInterface->GetIscRollbackTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction);
+				// OURS TO CLOSE, or nobody's: bManageTransaction is true only when this call started
+				// the transaction. A caller-owned one is left alone and the exception below reports
+				// the failure — the same contract every other driver keeps (Postgres / MySQL / ODBC
+				// throw and never touch the transaction). Rolling back the caller's transaction from
+				// here left the base class's depth counter high over a dead handle, so later work ran
+				// outside any transaction and committed as it went.
+				if (bManageTransaction)
+					m_pInterface->GetIscRollbackTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction);
 
 				ThrowDatabaseException();
 				return NULL;
@@ -1093,9 +1100,14 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 			{
 				InterpretErrorCodes();
 
-				// Manually try to rollback the transaction rather than calling the member RollBack function
-				//  so that we can ignore the error messages
-				m_pInterface->GetIscRollbackTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction);
+				// OURS TO CLOSE, or nobody's: bManageTransaction is true only when this call started
+				// the transaction. A caller-owned one is left alone and the exception below reports
+				// the failure — the same contract every other driver keeps (Postgres / MySQL / ODBC
+				// throw and never touch the transaction). Rolling back the caller's transaction from
+				// here left the base class's depth counter high over a dead handle, so later work ran
+				// outside any transaction and committed as it went.
+				if (bManageTransaction)
+					m_pInterface->GetIscRollbackTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction);
 
 				ThrowDatabaseException();
 				return NULL;
@@ -1114,9 +1126,14 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 				free(pOutputSqlda);
 				InterpretErrorCodes();
 
-				// Manually try to rollback the transaction rather than calling the member RollBack function
-				//  so that we can ignore the error messages
-				m_pInterface->GetIscRollbackTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction);
+				// OURS TO CLOSE, or nobody's: bManageTransaction is true only when this call started
+				// the transaction. A caller-owned one is left alone and the exception below reports
+				// the failure — the same contract every other driver keeps (Postgres / MySQL / ODBC
+				// throw and never touch the transaction). Rolling back the caller's transaction from
+				// here left the base class's depth counter high over a dead handle, so later work ran
+				// outside any transaction and committed as it went.
+				if (bManageTransaction)
+					m_pInterface->GetIscRollbackTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction);
 
 				ThrowDatabaseException();
 				return NULL;
@@ -1135,9 +1152,14 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 					free(pOutputSqlda);
 					InterpretErrorCodes();
 
-					// Manually try to rollback the transaction rather than calling the member RollBack function
-					//  so that we can ignore the error messages
-					m_pInterface->GetIscRollbackTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction);
+					// OURS TO CLOSE, or nobody's: bManageTransaction is true only when this call started
+					// the transaction. A caller-owned one is left alone and the exception below reports
+					// the failure — the same contract every other driver keeps (Postgres / MySQL / ODBC
+					// throw and never touch the transaction). Rolling back the caller's transaction from
+					// here left the base class's depth counter high over a dead handle, so later work ran
+					// outside any transaction and committed as it went.
+					if (bManageTransaction)
+						m_pInterface->GetIscRollbackTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction);
 
 					ThrowDatabaseException();
 					return NULL;
@@ -1152,9 +1174,14 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 				SetErrorCode(pResultSet->GetErrorCode());
 				SetErrorMessage(pResultSet->GetErrorMessage());
 
-				// Manually try to rollback the transaction rather than calling the member RollBack function
-				//  so that we can ignore the error messages
-				m_pInterface->GetIscRollbackTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction);
+				// OURS TO CLOSE, or nobody's: bManageTransaction is true only when this call started
+				// the transaction. A caller-owned one is left alone and the exception below reports
+				// the failure — the same contract every other driver keeps (Postgres / MySQL / ODBC
+				// throw and never touch the transaction). Rolling back the caller's transaction from
+				// here left the base class's depth counter high over a dead handle, so later work ran
+				// outside any transaction and committed as it went.
+				if (bManageTransaction)
+					m_pInterface->GetIscRollbackTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction);
 
 				// Swallow any throw from the result-set dtor — we are
 				// already on the error path; the original isc_dsql_*
@@ -1171,9 +1198,14 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 			{
 				InterpretErrorCodes();
 
-				// Manually try to rollback the transaction rather than calling the member RollBack function
-				//  so that we can ignore the error messages
-				m_pInterface->GetIscRollbackTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction);
+				// OURS TO CLOSE, or nobody's: bManageTransaction is true only when this call started
+				// the transaction. A caller-owned one is left alone and the exception below reports
+				// the failure — the same contract every other driver keeps (Postgres / MySQL / ODBC
+				// throw and never touch the transaction). Rolling back the caller's transaction from
+				// here left the base class's depth counter high over a dead handle, so later work ran
+				// outside any transaction and committed as it went.
+				if (bManageTransaction)
+					m_pInterface->GetIscRollbackTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction);
 
 				// Swallow any throw from the result-set dtor — the
 				// isc_dsql_execute failure above is the user-visible

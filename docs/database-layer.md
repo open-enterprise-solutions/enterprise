@@ -173,6 +173,32 @@ yields a cursor like any `SELECT`. See [query-engine-layers.md § L2](query-engi
 
 ---
 
+## 3a. A failed statement reports; it does not decide (2026-08-06)
+
+One rule, and every driver now keeps it: **a statement that fails throws
+(`ThrowDatabaseException`) and leaves the transaction to whoever opened it.** Only a
+transaction the driver started itself does it close, and then through the public
+`RollBack()` so the base keeps its own books — `databaseLayer.h` says it outright,
+*drivers must not touch `m_txDepth` / `m_txAborted`*.
+
+Postgres, MySQL and ODBC always did this. Firebird did not: in eight places it rolled
+the CALLER's transaction back natively (`isc_rollback_transaction` on the raw handle),
+reasoning that "the caller's own depth is theirs to resolve". It is not resolvable —
+nothing tells the caller its transaction is gone. The depth counter stayed up,
+`IsActiveTransaction()` kept answering true over a dead handle, so the rollback that
+followed rolled back nothing and **everything issued in between ran with no transaction
+at all, committing as it went**.
+
+That is how a failed configuration apply left the schema ahead of the configuration with
+no way back: by the time the DDL landed it was not inside a transaction. The two rollbacks
+that remain in that driver are the legitimate ones — `DoRollBack` itself, and the
+best-effort one before `isc_detach_database` (a connection cannot be detached with an open
+transaction).
+
+⚠ Not covered by a test. It is on the path of every configuration update, which makes it
+the most valuable fixture missing from the suite ([ROADMAP.md](ROADMAP.md), metadata test
+coverage).
+
 ## 4. Drivers
 
 Present in the tree:
