@@ -96,9 +96,13 @@ void ibValueMetaObjectRecordDataMutableRef::ContributeTables(ibSchemaSnapshot& o
 	ibSchemaTable& t = out.CreateSchemaTable(GetQueryable());
 	const ibBackendQueryColumn* uuid = t.Scaffold(ibRawDBColumn::Guid(wxT("uuid")));   // uuid row-key
 
-	for (const auto object : GetPredefinedAttributeArrayObject())
-		t.Add(object);
-	for (const auto object : GetAttributeArrayObject())
+	// THE GENERIC LIST, not predefined + own: it is the one that also carries the common
+	// attributes this object was checked into. They are columns like any other — but they
+	// are NOT in GetAttributeArrayObject, because that list answers "what did a person add
+	// to this object", and the designer tree shows it. A common attribute is not shown
+	// there, for the same reason Code and Description are not: it belongs to the
+	// declaration, not to this object.
+	for (const auto object : GetGenericAttributeArrayObject())
 		t.Add(object);
 
 	t.Index(t.m_name + wxT("_INDEX"), { uuid }, true);                        // uuid uniqueness (replaced the old PRIMARY KEY)
@@ -107,8 +111,9 @@ void ibValueMetaObjectRecordDataMutableRef::ContributeTables(ibSchemaSnapshot& o
 
 	// Per-attribute secondary indexes (plain + predefined: Code / Description / Parent / ...) —
 	// the row reference is the additional-order column. Each carries its own Indexing flag.
-	ContributeAttributeIndexes(t, GetAttributeArrayObject(), GetDataReference());
-	ContributeAttributeIndexes(t, GetPredefinedAttributeArrayObject(), GetDataReference());
+	// Same list as the columns above — each attribute carries its own Indexing flag, and a
+	// common attribute may be indexed exactly like the object's own.
+	ContributeAttributeIndexes(t, GetGenericAttributeArrayObject(), GetDataReference());
 
 	// --- tabular sections — each its own table ---
 	for (const auto tab : GetTableArrayObject()) {
@@ -244,7 +249,7 @@ const ibBackendQueryColumn* ibRecordQueryable::ResolveColumnByName(const wxStrin
 	// The attribute by name AS a column (an attribute IS-A ibBackendQueryColumn). The L3
 	// surface returns a column; the DB provider static_casts it back to the attribute when
 	// it needs the field machinery — the queryable itself names no attribute on its contract.
-	return m_meta->FindObjectByFilter<ibValueMetaObjectAttributeBase>(name, { g_metaAttributeCLSID, g_metaPredefinedAttributeCLSID });
+	return m_meta->FindObjectByFilter<ibValueMetaObjectAttributeBase>(name, { g_metaAttributeCLSID, g_metaPredefinedAttributeCLSID, g_metaCommonAttributeColumnCLSID });
 }
 std::vector<const ibBackendQueryColumn*> ibRecordQueryable::GetColumns() const {
 	// All generic attributes (predefined + plain) — each IS-A column. Drives SELECT * of a

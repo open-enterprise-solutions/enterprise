@@ -12,22 +12,11 @@
 class ibInterfaceEditor : public wxWindow {
 
 	wxTreeItemId m_treeMETADATA;
-	wxTreeItemId m_treeCOMMON; //special tree
 
-	wxTreeItemId m_treeFORMS;
-	wxTreeItemId m_treeCOMMANDS;   // general commands — check one INTO this section so it renders in the section menu
-
-	wxTreeItemId m_treeCONSTANTS;
-
-	wxTreeItemId m_treeCATALOGS;
-	wxTreeItemId m_treeDOCUMENTS;
-	wxTreeItemId m_treeDATAPROCESSORS;
-	wxTreeItemId m_treeREPORTS;
-	wxTreeItemId m_treeINFORMATION_REGISTERS;
-	wxTreeItemId m_treeACCUMULATION_REGISTERS;
-	wxTreeItemId m_treeCHARTS_OF_CHARACTERISTIC_TYPES;
-	wxTreeItemId m_treeCHARTS_OF_ACCOUNTS;
-	wxTreeItemId m_treeACCOUNTING_REGISTERS;
+	// One group per metatype, created on demand by GroupFor and captioned from the type
+	// registry — the fourteen named branches this class used to declare are gone with the
+	// blocks that filled them.
+	std::map<ibClassID, wxTreeItemId> m_groups;
 
 	ibValueMetaObject* m_metaInterface;
 
@@ -49,15 +38,8 @@ protected:
 
 private:
 
-	wxTreeItemId AppendGroupItem(const wxTreeItemId& parent,
-		const ibClassID& clsid, const wxString& name = wxEmptyString) const {
-		const ibCtorAbstractType* typeCtor = ibValue::GetAvailableCtor(clsid);
-		wxASSERT(typeCtor);
-		wxImageList* imageList = m_interfaceCtrl->GetImageList();
-		wxASSERT(imageList);
-		const int imageIndex = imageList->Add(typeCtor->GetClassIcon());
-		return m_interfaceCtrl->AppendItem(parent, name.IsEmpty() ? typeCtor->GetClassName() : name, imageIndex, imageIndex, nullptr);
-	}
+	// A group per metatype, created on first use.
+	wxTreeItemId GroupFor(const ibClassID& clsid);
 
 	wxTreeItemId AppendItem(const wxTreeItemId& parent,
 		ibValueMetaObject* metaObject) {
@@ -94,10 +76,21 @@ public:
 			if (const wxTreeItemMetaData* d = dynamic_cast<wxTreeItemMetaData*>(m_interfaceCtrl->GetItemData(sel)))
 				m_keepSelObj = d->GetMetaObject();
 		m_keepSelNode = wxTreeItemId();
+
+		// ONE FRAME — same reason as the form's attribute tree: the rebuild tears the tree
+		// down and refills it, and un-frozen that is visible as a collapse followed by a
+		// re-appear. Events are muted for the churn (DeleteAllItems / SelectItem raise
+		// native selection and focus events nobody wants mid-rebuild).
+		m_interfaceCtrl->Freeze();
+		m_interfaceCtrl->SetEvtHandlerEnabled(false);
+
 		ClearInterface();
 		FillData();
 		if (m_keepSelNode.IsOk())
 			m_interfaceCtrl->SelectItem(m_keepSelNode);       // a metaobject row — restored by identity
+
+		m_interfaceCtrl->SetEvtHandlerEnabled(true);
+		m_interfaceCtrl->Thaw();
 	}
 
 	void SetReadOnly(bool readOnly = true) {

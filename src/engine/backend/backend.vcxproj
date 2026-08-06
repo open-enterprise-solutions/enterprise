@@ -191,6 +191,7 @@
     <ClInclude Include="metaCollection\metaCommandObject.h" />
     <ClInclude Include="metaCollection\metaScheduledJobObject.h" />
     <ClInclude Include="metaCollection\metaSessionParameterObject.h" />
+    <ClInclude Include="metaCollection\metaCommonAttributeObject.h" />
     <ClInclude Include="metaCollection\metaObjectComposite.h" />
     <ClInclude Include="metaCollection\metaFormObject.h" />
     <ClInclude Include="metaCollection\metaSpreadsheetObject.h" />
@@ -333,6 +334,7 @@
     <ClInclude Include="tabularDataObject.h" />
     <ClInclude Include="stringUtils.h" />
     <ClInclude Include="interfaceHelper.h" />
+    <ClInclude Include="compositionHelper.h" />
     <ClInclude Include="system\systemEnum.h" />
     <ClInclude Include="system\systemManager.h" />
     <ClInclude Include="system\systemManagerEnum.h" />
@@ -537,6 +539,9 @@
     <ClCompile Include="metaCollection\metaScheduledJobObject.cpp" />
     <ClCompile Include="metaCollection\metaSessionParameterObject.cpp" />
     <ClCompile Include="metaCollection\metaSessionParameterObject_res.cpp" />
+    <ClCompile Include="metaCollection\metaCommonAttributeObject.cpp" />
+    <ClCompile Include="metaCollection\metaCommonAttributeObjectMenu.cpp" />
+    <ClCompile Include="metaCollection\metaCommonAttributeObject_res.cpp" />
     <ClCompile Include="metaCollection\metaScheduledJobObjectMenu.cpp" />
     <ClCompile Include="metaCollection\metaScheduledJobObject_res.cpp" />
     <ClCompile Include="metaCollection\metaSectionObjectMenu.cpp" />
@@ -764,6 +769,7 @@
     <ClCompile Include="propertyManager\property\variant\variantType.cpp" />
     <ClCompile Include="roleHelper.cpp" />
     <ClCompile Include="interfaceHelper.cpp" />
+    <ClCompile Include="compositionHelper.cpp" />
     <ClCompile Include="system\systemManager.cpp" />
     <ClCompile Include="system\systemManagerEnum.cpp" />
     <ClCompile Include="system\systemManagerFunc.cpp" />

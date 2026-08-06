@@ -71,10 +71,10 @@ legal terms. They survive the criterion because the name says what is inside.
 | Now | Proposed | Why it clarifies | Script-visible? |
 |---|---|---|---|
 | Субконто / `Subconto1..3` | **Разрез аналитики** / `AccountDimension1..3` | The word means nothing outside one vendor's product; underneath it is the legal *аналитический учёт*. | **yes** — breaking |
-| План видов характеристик / `ChartOfCharacteristicTypes` | **Виды аналитики** / `DimensionTypes` | The least readable name in the taxonomy. Nobody thinks in it — people say "where do I add a subconto". It is the catalogue of what may serve as a dimension; the new name says that, and pairs with `AccountDimension` so the two read as one mechanism. | **yes** — breaking |
-| Табличная часть / `TabularSection` | **Таблица** / `Table` | The tree **already** shows `Tables` (`g_metaTableCLSID`) while the code says `TabularSection` — the inconsistency exists today. "Part of an object" needs no adjective: a tabular section cannot exist outside its owner, appears only under it in the tree, and is always written through it (`Документ.Товары`). The adjective charges syllables for information the reader already has. | no — kind label |
+| ~~План видов характеристик / `ChartOfCharacteristicTypes`~~ | **stays** — decided 2026-08-06 | Twice revised, twice toward keeping it: a bare `DimensionTypes` breaks the **`План *` family** (план счетов, план видов …, план обмена — a naming system, not a coincidence), and `ChartOfDimensionTypes` keeps the family but still spends recognition to restate what the tree already teaches on the first day. It stays as it is. | — |
+| ~~Ярлык дерева `Tables`~~ | **stays** — decided 2026-08-06 | The term `TabularSection` stays, and so does the label. Note for whenever this is revisited: the Russian for it is **«табличные части»**, never «табличные секции» — a transliteration of the English is a worse name than the mismatch it would fix. | — |
 | Sub-conto kinds tables | **Таблицы разрезов** / `Dimension tables` | tail of the first row | no |
-| Обработка / `DataProcessor` | **Инструмент** / `Tool` | `DataProcessor` names the *mechanism* (so does a report, so does a document when posted). The metaobject is *a thing the user runs to get something done*. `Tool` names the purpose, and sits symmetrically beside `Report`. | **yes** — breaking |
+| Обработка / `DataProcessor` | **Инструмент** / `Tool` — ⏸️ **UNDECIDED** | `DataProcessor` names the *mechanism* (so does a report, so does a document when posted), and `Tool` names the purpose, symmetrically beside `Report`. Held 2026-08-06: *обработка* is defensible — it does process data — and the objection to `Tool` is that it is **general to the point of saying little**. This is the one rename on the list that trades an honest-but-broad name for another broad name, so it is the weakest case here. If it is not clearly better, § 1 says leave it. | **yes** — breaking |
 | `dataReport.*` / `dataProcessor.*` | `report.*` / `tool.*` | The `data` prefix is on exactly these two of eleven metatypes — `catalog.*`, `document.*`, `constant.*` carry none. It is an accident, not a family convention, and `Data` distinguishes nothing (a catalog is data too). Symmetry by **subtraction**. | no — file names |
 
 Already applied: **Конфигуратор → Дизайнер**, **Подсистема → Раздел / `Section`**.
@@ -88,6 +88,16 @@ Already applied: **Конфигуратор → Дизайнер**, **Подси
   the command subsystem, *хозяйственная операция*, scheduled jobs, background services.
 - `DataReports` / `DataTools` — symmetric with each other, asymmetric with the other nine
   metatypes. See the last row above.
+- **`Table` for Табличная часть — rejected 2026-08-06, and it was on this list as a proposal
+  until then.** Two reasons, either one sufficient. **The word is taken:**
+  `VALUE_TYPE_REGISTER(ibValueModelTable, "Table", …)` — a table of values, a type a script
+  creates on its own. Registering the metatype under the same word would put a standalone thing
+  and a dependent one behind one name, the exact ambiguity this document avoids elsewhere.
+  **And the adjective is the meaning, not decoration:** it is tabular, but it is a *part* — it
+  cannot exist without its owner, and "table" is precisely the word that drops that. The earlier
+  argument ("the reader already knows it belongs to an object") had it backwards: the name is
+  what carries the dependency once the reader is somewhere else — a signature, an error message,
+  a document written by someone who is not looking at the tree.
 - Renaming **Регистр накопления / сведений** — descriptive names that work; renaming them
   differentiates without clarifying, which is the thing this document exists to prevent.
 
@@ -158,3 +168,93 @@ last.
 **Sequencing.** File renames touch `backend.vcxproj`, which the command-interface arc is editing.
 Do the file-level part in one pass after that arc converges, together with the
 `Subconto` → `AccountDimension` rename, rather than across it.
+
+---
+
+## 7. Execution plan (measured 2026-08-06)
+
+### 7.1 The one fact that makes this cheap
+
+A metatype's identity is its **clsid**, and the clsid comes from an opaque key, never from the
+registered name:
+
+```cpp
+constexpr ibClassID g_metaDataProcessorCLSID = metadata_to_clsid("MD_DPR");   // identity
+METADATA_TYPE_REGISTER(ibValueMetaObjectDataProcessor, "DataProcessor", g_metaDataProcessorCLSID);
+//                                                      ^ the name — free to change
+```
+
+So a rename does **not** touch serialised configurations, the database, or any persisted blob.
+What it does touch is everything that spells the name out: **module texts** written against it,
+and the places the platform itself types it as a string. That is the whole cost, and it is why
+this gets more expensive with every configuration written and never cheaper.
+
+### 7.2 The five layers a rename passes through
+
+| # | Layer | Where | Breaks what |
+|---|---|---|---|
+| 1 | **Registry name** | `METADATA_TYPE_REGISTER(..., "<name>", clsid)` | metadata lookups by name |
+| 2 | **Script collection** | `moduleManager/globalContextManager.cpp` — `AppendProp` + the `en*` enum + the ctor switch | **module texts** — the breaking layer |
+| 3 | **Designer label** | `designer/mainFrame/metaTree/treeConfiguration_impl.cpp` `#define`s, plus `locale/ru.po` + `locale/uk.po` | nothing — display only |
+| 4 | **C++ symbols** | class names, `g_meta*CLSID` constant names | nothing — pure source churn |
+| 5 | **File names** | `metaCollection/partial/*`, `backend.vcxproj` + `.filters` | build if the project files miss a file |
+
+Layers 1-3 are the rename. Layers 4-5 are hygiene that keeps the code readable afterwards, and
+they are what makes the diff large — they can lag behind, but not by much, or the code stops
+matching the product.
+
+### 7.3 Volume, per rename
+
+| Rename | Status (2026-08-06) | Files | Occurrences |
+|---|---|---|---|
+| `Subconto` → `AccountDimension` | ✅ **accepted — the only one** | 11 | 253 |
+| `ChartOfCharacteristicTypes` | ❌ stays | — | — |
+| `TabularSection` / tree label | ❌ stays | — | — |
+| `DataProcessor` → `Tool` | ⏸️ held — probably stays | — | — |
+
+**The plan survived one item out of four, and that is the plan working, not failing.** Each of the
+three that fell was measured against § 1 — *rename what the domain expert does not think in, keep
+what they do* — and each turned out to be on the "keep" side: a family of names (`План *`), a word
+whose adjective carries the meaning (табличная **часть**), and a broad name that would have been
+traded for another broad name. What is left is the one term that means nothing outside a single
+vendor's product, which is exactly the shape a rename is supposed to have.
+
+### 7.4 Order — smallest blast radius first
+
+Each step is its own commit, builds clean, and keeps the suite green before the next begins.
+
+| Step | What | Why here |
+|---|---|---|
+| **1** | `Subconto` → `AccountDimension` | 11 files, 253 occurrences. Script-breaking (`Subconto1..3` are written in module texts), free of database consequences (§ 7.1). |
+| **2** | Tree order (§ 4) | One table of ranks in `metaCollection/metaDiff.cpp`. Independent — can go first, or alone if step 1 slips. |
+| — | `dataReport.*` / `dataProcessor.*` → `report.*` / `tool.*` | **Unscheduled**: these file renames only make sense alongside the type rename, which is held. |
+
+⚠️ With the chart of characteristic types keeping its name, the mechanism is described by two
+vocabularies: *виды характеристик* in the catalogue, *разрез аналитики* on the account. That is
+survivable — a bookkeeper does say "аналитика по счёту" and "виды характеристик" — but it means the
+link between them now lives in the documentation and the UI rather than in a shared word. Worth
+knowing before step 1, not a reason to stop it.
+
+### 7.5 Verification after each step
+
+1. `msbuild enterprise.sln /p:Configuration=Debug /p:Platform=x86 /m` — green.
+2. The suite (currently 1069) — green.
+3. **Open a configuration in the designer and run Syntax control on a module that uses the renamed
+   name.** The compiler resolves global-context names at compile time, so a missed layer-2 site
+   shows up here and nowhere else — a stale name simply reports "Var is not found".
+4. Grep for the old name: zero hits outside `docs/` and this file's history.
+
+### 7.6 Open decisions — needed before step 1
+
+| # | Question | Why it blocks |
+|---|---|---|
+| 1 | `Subconto1..3` are **numbered** attributes — does the number stay part of the name (`AccountDimension1..3`), or does the rename also collapse them into one collection? | it is the shape of the name, and changing it later is a second breaking rename |
+| 2 | Do the Russian/Ukrainian labels ship in the same commit as the rename, or follow? | `locale/*.po` are translated by hand; a rename with stale translations shows the old word in the tree |
+
+### 7.7 What this plan deliberately excludes
+
+**Already-shipped module texts.** There are none — no configuration has shipped, which is exactly
+why this is scheduled now. If that changes before the plan runs, add a step: "rename with reference
+update" over module texts (§ 6 names it as needed alongside type annotations), because after the
+first outside configuration exists, a rename stops being a source edit and becomes a conversation
+with someone who owes us nothing.

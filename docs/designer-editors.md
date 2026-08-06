@@ -132,10 +132,48 @@ editor's processor ([form-editor.md § 3.2](form-editor.md)).
 
 ---
 
+## 2a. Three tree editors, one shape (2026-08-06)
+
+The role editor, the section editor and the common-attribute editor all answer the same
+kind of question — *which objects does this apply to* — and all three now build their tree
+the same way: **walk the metadata, group by metatype, caption and icon from the type
+registry.**
+
+```cpp
+for (ibValueMetaObject* object : metaData->GetAnyArrayObject()) {
+    if (object == nullptr || object->IsDeleted()) continue;
+    if (!qualifies(object)) continue;
+    AppendItem(GroupFor(object->GetClassType()), object);   // group created on first use
+}
+```
+
+Each editor previously declared thirteen-to-fifteen named branches (`m_treeCATALOGS`,
+`m_treeDOCUMENTS`, …), created them in `Init`, deleted them in `Clear`, and filled them
+with a dozen near-identical blocks. The cost was not the length: **a metatype added later
+was simply absent** until somebody remembered to add a branch — silently, and in the role
+editor's case that means part of a configuration left unprotected.
+
+What "qualifies" is asked of the object, never listed:
+
+| Editor | Question | Where it lives |
+|---|---|---|
+| roles | `GetRoleCount() > 0` | `ibAccessObject` — already knew |
+| sections | `IsInterfaceAllowed()` | `ibInterfaceObject`, beside `SetInterface` |
+| common attributes | `IsCompositionAllowed()` | `ibCompositionObject` ([common-attributes.md](common-attributes.md)) |
+
+⚠ Converting the role editor **widens what it shows**: commands, jobs and session parameters
+declare rights and now appear, where before they were invisible to it. That is a behaviour
+change worth verifying rather than assuming.
+
+All three rebuilds are wrapped identically — `Freeze()` + `SetEvtHandlerEnabled(false)`
+around clear-and-refill, restoring the selected row by identity. Muting events is not
+cosmetic: `DeleteAllItems` / `SelectItem` raise native selection and focus events, and the
+app follows focus by switching the active tab.
+
 ## 3. Role editor — `ibRoleEditor : wxSplitterWindow`
 
-`designer/win/editor/roleEditor/` — ~430 lines. A splitter: the object tree on one side,
-its rights on the other.
+`designer/win/editor/roleEditor/` — a splitter: the object tree on one side, its rights on
+the other. The tree is built as in § 2a.
 
 Rights are declared **on the metaobject**, not in the editor
 ([command-interface.md § 2](command-interface.md)):
@@ -151,24 +189,33 @@ member to the metaobject, and the editor picks it up. Enforcement is elsewhere:
 `AccessRight` / `IsInRole` in script ([system-functions.md § 2.12](system-functions.md)),
 and RLS at the query door ([access-policy-rls.md](access-policy-rls.md)).
 
-## 4. Interface editor — `ibInterfaceEditor : wxWindow`
+## 4. Section editor — `ibInterfaceEditor : wxWindow`
 
-`designer/win/editor/interfaceEditor/` — ~340 lines. Edits the **Interface** metaobject —
-which is the platform's subsystem ([command-interface.md](command-interface.md)).
+`designer/win/editor/interfaceEditor/` — edits the **Section** metaobject (the class keeps
+the older "interface" name, [command-interface.md](command-interface.md)). Tree as in § 2a.
 
 Opened as a document via `docViewInterface.{h,cpp}`, like every other editor
 ([metadata-tree.md § 4](metadata-tree.md)).
+
+## 4a. Common-attribute editor — `ibCommonAttributeCompositionEditor : wxWindow`
+
+`designer/win/editor/commonAttributeEditor/` + `docViewCommonAttribute.{h,cpp}`. Checking an
+object in creates a real attribute inside it; unchecking removes it. The full mechanism is
+[common-attributes.md](common-attributes.md).
 
 ---
 
 ## 5. Honest remainder
 
-- **`ibRoleEditor` is a `wxSplitterWindow`, `ibInterfaceEditor` is a `wxWindow`, the code
-  editor is a `wxStyledTextCtrl`, the form editor is a `wxAuiNotebook`.** Each editor
-  inherits whatever wx class it happened to need — there is no common editor base. That is
-  honest for their sizes (340 / 430 / 6 600 / 5 400 lines) but means "all editors" is not a
-  type, only a folder.
-- The role and interface editors are the two smallest and least documented surfaces in the
-  Designer; both were read only at class level for this document.
+- **`ibRoleEditor` is a `wxSplitterWindow`, the other two tree editors are `wxWindow`, the
+  code editor is a `wxStyledTextCtrl`, the form editor is a `wxAuiNotebook`.** Each editor
+  inherits whatever wx class it happened to need — there is no common editor base. After
+  § 2a the three tree editors share a *shape* (walk, group, ask) but still not a type: the
+  loop, `GroupFor` and the freeze wrapper are written out in each. That is the next
+  subtraction available here, and it was not taken because two of the three had just been
+  rewritten and a base class extracted from a fresh pattern tends to fit only the last case
+  seen.
+- Enforcement of rights is elsewhere, not in the editor: `IsAllowed()` during the metadata
+  walk, `AccessRight` / `IsInRole` in script, RLS at the query door.
 - `ExpectDelimeter` is spelled with an `e` (`Delimeter`) throughout the parser — a rename
   candidate.

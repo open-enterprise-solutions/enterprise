@@ -161,6 +161,11 @@ private:
 
 class BACKEND_API ibValueMetaObjectAttributePredefined : public ibValueMetaObjectAttributeBase {
 	public:
+
+	// (NOT SHOWN under its owner, and it needs no flag saying so: no owner ACCEPTS this
+	// clsid as a child — ResolveChild lists attribute, tabular section, form, template,
+	// command — so FilterChild already answers no. A predefined attribute is part of the
+	// metatype's definition, not of the configuration.)
 private:
 
 	ibValueMetaObjectAttributePredefined(const wxString& name, const wxString& synonym, const wxString& comment, bool fillCheck, const ibValue& defValue, ibItemMode itemMode, ibSelectMode selectMode, ibIndexingMode indexingMode = ibIndexingMode::ibIndexingMode_DontIndex)

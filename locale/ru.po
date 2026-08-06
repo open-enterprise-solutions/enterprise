@@ -5337,3 +5337,25 @@ msgstr "Файлы журнала"
 #: src/engine/backend/fileKind.cpp
 msgid "Data files"
 msgstr "Файлы данных"
+
+#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp
+#: src/engine/backend/metaCollection/metaDiff.cpp
+msgid "Common attributes"
+msgstr "Общие реквизиты"
+
+#: src/engine/backend/metaCollection/metaCommonAttributeObject.cpp
+msgid "Open common attributes composition"
+msgstr "Открыть состав общих реквизитов"
+
+#: src/engine/backend/metaCollection/metaCommonAttributeObject.cpp
+msgid "Go to common attribute"
+msgstr "Перейти к общему реквизиту"
+
+#: src/engine/designer/mainFrame/metaTree/treeConfiguration_impl.cpp
+#: src/engine/backend/metaCollection/metaDiff.cpp
+msgid "Session parameters"
+msgstr "Параметры сеанса"
+
+#: src/engine/backend/metaCollection/metaObjectMetadataMenu.cpp
+msgid "Open session module"
+msgstr "Открыть модуль сеанса"

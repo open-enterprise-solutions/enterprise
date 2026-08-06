@@ -45,6 +45,9 @@
     <ClCompile Include="win\editor\interfaceEditor\interfaceEditor.cpp">
       <Filter>win\editor\interfaceEditor</Filter>
     </ClCompile>
+    <ClCompile Include="win\editor\commonAttributeEditor\commonAttributeEditor.cpp">
+      <Filter>win\editor\commonAttributeEditor</Filter>
+    </ClCompile>
     <ClCompile Include="win\editor\roleEditor\roleEditor.cpp">
       <Filter>win\editor\roleEditor</Filter>
     </ClCompile>
@@ -109,6 +112,9 @@
       <Filter>docManager\templates</Filter>
     </ClCompile>
     <ClCompile Include="docManager\templates\docViewInterface.cpp">
+      <Filter>docManager\templates</Filter>
+    </ClCompile>
+    <ClCompile Include="docManager\templates\docViewCommonAttribute.cpp">
       <Filter>docManager\templates</Filter>
     </ClCompile>
     <ClCompile Include="docManager\templates\docViewMetaFile.cpp">
@@ -177,6 +183,9 @@
     <ClInclude Include="win\editor\interfaceEditor\interfaceEditor.h">
       <Filter>win\editor\interfaceEditor</Filter>
     </ClInclude>
+    <ClInclude Include="win\editor\commonAttributeEditor\commonAttributeEditor.h">
+      <Filter>win\editor\commonAttributeEditor</Filter>
+    </ClInclude>
     <ClInclude Include="win\editor\roleEditor\roleEditor.h">
       <Filter>win\editor\roleEditor</Filter>
     </ClInclude>
@@ -226,6 +235,9 @@
       <Filter>docManager\templates</Filter>
     </ClInclude>
     <ClInclude Include="docManager\templates\docViewInterface.h">
+      <Filter>docManager\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docManager\templates\docViewCommonAttribute.h">
       <Filter>docManager\templates</Filter>
     </ClInclude>
     <ClInclude Include="docManager\templates\docViewMetaFile.h">
@@ -292,6 +304,9 @@
     </Filter>
     <Filter Include="win\editor\interfaceEditor">
       <UniqueIdentifier>{7c154e02-e0fe-4b7c-a23a-0a9a58117ed6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\editor\commonAttributeEditor">
+      <UniqueIdentifier>{3f6c1a84-9b52-4a37-8d1e-27c4f0b6a915}</UniqueIdentifier>
     </Filter>
     <Filter Include="win\editor\roleEditor">
       <UniqueIdentifier>{1ad7d1dd-d4f4-4d64-b86d-649c849b6089}</UniqueIdentifier>

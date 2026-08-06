@@ -49,6 +49,7 @@ add_executable(oes_tests
     test_gitService.cpp
     test_metadataSerialize.cpp
     test_metadataTree.cpp
+    test_commonAttribute.cpp
     test_dataNode.cpp
     test_jsonProvider.cpp
     test_queryRenderer.cpp

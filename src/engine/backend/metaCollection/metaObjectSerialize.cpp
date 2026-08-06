@@ -46,6 +46,12 @@ bool ibValueMetaObject::SaveNode(ibDataNode& node) const
 		return false;
 	node.SetValue(wxT("Roles"), roleWriter.buffer());
 
+	// composition — its own field, beside interface and roles rather than inside either
+	ibWriterMemory compositionWriter;
+	if (!SaveComposition(compositionWriter))
+		return false;
+	node.SetValue(wxT("Composition"), compositionWriter.buffer());
+
 	return WriteData(node);
 }
 
@@ -75,6 +81,12 @@ bool ibValueMetaObject::LoadNode(const ibDataNode& node)
 	if (roleBuf.GetDataLen()) {
 		ibReaderMemory reader(roleBuf);
 		if (!LoadRole(reader))
+			return false;
+	}
+	wxMemoryBuffer compositionBuf = node.GetValue<wxMemoryBuffer>(wxT("Composition"));
+	if (compositionBuf.GetDataLen()) {
+		ibReaderMemory reader(compositionBuf);
+		if (!LoadComposition(reader))
 			return false;
 	}
 

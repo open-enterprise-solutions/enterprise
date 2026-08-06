@@ -23,6 +23,7 @@
 #define scheduledJobsName _("Scheduled jobs")
 #define predefinedJobsName _("Predefined jobs")
 #define sessionParametersName _("Session parameters")
+#define commonAttributesName _("Common attributes")
 #define rolesName _("Roles")
 #define picturesName _("Pictures")
 #define languagesName _("Languages")
@@ -280,7 +281,7 @@ wxTreeItemId ibMetadataTree::FillItem(ibValueMetaObject* metaItem, const wxTreeI
 		for (auto attribute : metaItemRecord->GetAttributeArrayObject()) {
 			if (attribute->IsDeleted())
 				continue;
-			if (attribute->GetClassType() == g_metaPredefinedAttributeCLSID)
+			if (!attribute->IsAcceptedByParent())
 				continue;
 			AppendItem(createdItem, attribute);
 		}
@@ -895,7 +896,7 @@ void ibMetadataTree::AddCatalogItem(ibValueMetaObject* metaObject, const wxTreeI
 		if (attribute->IsDeleted())
 			continue;
 
-		if (attribute->GetClassType() == g_metaPredefinedAttributeCLSID)
+		if (!attribute->IsAcceptedByParent())
 			continue;
 
 		//const wxString strName = attribute->GetName();
@@ -929,7 +930,7 @@ void ibMetadataTree::AddCatalogItem(ibValueMetaObject* metaObject, const wxTreeI
 			if (attribute->IsDeleted())
 				continue;
 
-			if (attribute->GetClassType() == g_metaPredefinedAttributeCLSID)
+			if (!attribute->IsAcceptedByParent())
 				continue;
 
 			//const wxString strName = attribute->GetName();
@@ -993,7 +994,7 @@ void ibMetadataTree::AddDocumentItem(ibValueMetaObject* metaObject, const wxTree
 		if (attribute->IsDeleted())
 			continue;
 
-		if (attribute->GetClassType() == g_metaPredefinedAttributeCLSID)
+		if (!attribute->IsAcceptedByParent())
 			continue;
 
 		//const wxString strName = attribute->GetName();
@@ -1026,7 +1027,7 @@ void ibMetadataTree::AddDocumentItem(ibValueMetaObject* metaObject, const wxTree
 			if (attribute->IsDeleted())
 				continue;
 
-			if (attribute->GetClassType() == g_metaPredefinedAttributeCLSID)
+			if (!attribute->IsAcceptedByParent())
 				continue;
 
 			//const wxString strName = attribute->GetName();
@@ -1149,7 +1150,7 @@ void ibMetadataTree::AddDataProcessorItem(ibValueMetaObject* metaObject, const w
 		if (attribute->IsDeleted())
 			continue;
 
-		if (attribute->GetClassType() == g_metaPredefinedAttributeCLSID)
+		if (!attribute->IsAcceptedByParent())
 			continue;
 
 		//const wxString strName = attribute->GetName();
@@ -1182,7 +1183,7 @@ void ibMetadataTree::AddDataProcessorItem(ibValueMetaObject* metaObject, const w
 			if (attribute->IsDeleted())
 				continue;
 
-			if (attribute->GetClassType() == g_metaPredefinedAttributeCLSID)
+			if (!attribute->IsAcceptedByParent())
 				continue;
 
 			//const wxString strName = attribute->GetName();
@@ -1245,7 +1246,7 @@ void ibMetadataTree::AddReportItem(ibValueMetaObject* metaObject, const wxTreeIt
 		if (attribute->IsDeleted())
 			continue;
 
-		if (attribute->GetClassType() == g_metaPredefinedAttributeCLSID)
+		if (!attribute->IsAcceptedByParent())
 			continue;
 
 		//const wxString strName = attribute->GetName();
@@ -1277,7 +1278,7 @@ void ibMetadataTree::AddReportItem(ibValueMetaObject* metaObject, const wxTreeIt
 			if (attribute->IsDeleted())
 				continue;
 
-			if (attribute->GetClassType() == g_metaPredefinedAttributeCLSID)
+			if (!attribute->IsAcceptedByParent())
 				continue;
 
 			//const wxString strName = attribute->GetName();
@@ -1340,7 +1341,7 @@ void ibMetadataTree::AddInformationRegisterItem(ibValueMetaObject* metaObject, c
 		if (metaDimension->IsDeleted())
 			continue;
 
-		if (metaDimension->GetClassType() == g_metaPredefinedAttributeCLSID)
+		if (!metaDimension->IsAcceptedByParent())
 			continue;
 
 		//const wxString strName = metaDimension->GetName();
@@ -1359,7 +1360,7 @@ void ibMetadataTree::AddInformationRegisterItem(ibValueMetaObject* metaObject, c
 		if (metaResource->IsDeleted())
 			continue;
 
-		if (metaResource->GetClassType() == g_metaPredefinedAttributeCLSID)
+		if (!metaResource->IsAcceptedByParent())
 			continue;
 
 		//const wxString strName = metaResource->GetName();
@@ -1378,7 +1379,7 @@ void ibMetadataTree::AddInformationRegisterItem(ibValueMetaObject* metaObject, c
 		if (attribute->IsDeleted())
 			continue;
 
-		if (attribute->GetClassType() == g_metaPredefinedAttributeCLSID)
+		if (!attribute->IsAcceptedByParent())
 			continue;
 
 		//const wxString strName = attribute->GetName();
@@ -1440,7 +1441,7 @@ void ibMetadataTree::AddAccumulationRegisterItem(ibValueMetaObject* metaObject, 
 		if (metaDimension->IsDeleted())
 			continue;
 
-		if (metaDimension->GetClassType() == g_metaPredefinedAttributeCLSID)
+		if (!metaDimension->IsAcceptedByParent())
 			continue;
 
 		//const wxString strName = metaDimension->GetName();
@@ -1459,7 +1460,7 @@ void ibMetadataTree::AddAccumulationRegisterItem(ibValueMetaObject* metaObject, 
 		if (metaResource->IsDeleted())
 			continue;
 
-		if (metaResource->GetClassType() == g_metaPredefinedAttributeCLSID)
+		if (!metaResource->IsAcceptedByParent())
 			continue;
 
 		//const wxString strName = metaResource->GetName();
@@ -1478,7 +1479,7 @@ void ibMetadataTree::AddAccumulationRegisterItem(ibValueMetaObject* metaObject, 
 		if (attribute->IsDeleted())
 			continue;
 
-		if (attribute->GetClassType() == g_metaPredefinedAttributeCLSID)
+		if (!attribute->IsAcceptedByParent())
 			continue;
 
 		//const wxString strName = attribute->GetName();
@@ -1565,6 +1566,11 @@ void ibMetadataTree::InitTree()
 	// belong to the configuration as a whole and to no business object. Each one is an ATTRIBUTE
 	// whose owner is the session — declared here, set once by the session module, read everywhere.
 	m_treeSESSION_PARAMETERS = AppendGroupItem(m_treeCOMMON, g_metaSessionParameterCLSID, sessionParametersName);
+
+	// COMMON ATTRIBUTES — declared here, carried by many objects. Under COMMON for the same
+	// reason as the two above: the declaration belongs to the configuration. What it puts into
+	// each object is a child of THAT object and appears there, in its own attribute list.
+	m_treeCOMMON_ATTRIBUTES = AppendGroupItem(m_treeCOMMON, g_metaCommonAttributeCLSID, commonAttributesName);
 
 	m_treePICTURES = AppendGroupItem(m_treeCOMMON, g_metaPictureCLSID, picturesName);
 
@@ -1790,6 +1796,49 @@ void ibMetadataTree::FillData()
 
 	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeJOBS))
 		m_metaTreeCtrl->Delete(m_treeJOBS);
+
+	//****************************************************************
+	//*                     Session parameters                       *
+	//****************************************************************
+	// Without this loop the branch exists but stays empty after a reload: a newly created
+	// one is put into the tree by the create path itself, so it LOOKS saved until the
+	// configuration is reopened and the fill has nothing to say about it.
+	for (auto sessionParameter : m_metaData->GetAnyArrayObject(g_metaSessionParameterCLSID)) {
+
+		if (sessionParameter->IsDeleted())
+			continue;
+
+		const wxString& strName = sessionParameter->GetName();
+
+		if (!m_strSearch.IsEmpty()
+			&& strName.Find(m_strSearch) < 0)
+			continue;
+
+		AppendItem(m_treeSESSION_PARAMETERS, sessionParameter);
+	}
+
+	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeSESSION_PARAMETERS))
+		m_metaTreeCtrl->Delete(m_treeSESSION_PARAMETERS);
+
+	//****************************************************************
+	//*                     Common attributes                        *
+	//****************************************************************
+	for (auto commonAttribute : m_metaData->GetAnyArrayObject(g_metaCommonAttributeCLSID)) {
+
+		if (commonAttribute->IsDeleted())
+			continue;
+
+		const wxString& strName = commonAttribute->GetName();
+
+		if (!m_strSearch.IsEmpty()
+			&& strName.Find(m_strSearch) < 0)
+			continue;
+
+		AppendItem(m_treeCOMMON_ATTRIBUTES, commonAttribute);
+	}
+
+	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeCOMMON_ATTRIBUTES))
+		m_metaTreeCtrl->Delete(m_treeCOMMON_ATTRIBUTES);
 
 	//****************************************************************
 	//*                          Pictures							 *

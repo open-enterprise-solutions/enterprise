@@ -68,7 +68,11 @@ Per `treeConfiguration_impl.cpp` (`AddCatalogItem`), some sub-object types are i
 - `g_metaManagerCLSID` (manager module)
 - `g_metaPredefinedAttributeCLSID` (predefined items — folded into properties listing)
 
-`IsSkippedSubGroupClsid` filters them in `WalkPair` before group emission.
+`WalkPair` filters them before group emission — since 2026-08-06 by **asking the owner**
+(`child->IsAcceptedByParent()` → `FilterChild`) rather than by a list of clsids. The three
+above are exactly the children no owner accepts: it does not create them, so it does not
+host them, so they do not belong under it. The old `IsSkippedSubGroupClsid` was a second
+copy of a rule the designer tree already had, and its own comment said so.
 
 ---
 

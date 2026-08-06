@@ -256,6 +256,20 @@ protected:
 		std::vector<ibValueMetaObjectAttributeBase*>& array) const {
 		return false;
 	}
+
+	// COMMON ATTRIBUTES — the copies a declaration under Common has placed in this object.
+	// One function, not a per-class contract like the predefined one above: predefined
+	// attributes are named members of each class and every class must list its own, while
+	// these are ordinary children and one walk finds them everywhere.
+	//
+	// It sits beside the predefined fill and merges into the same generic list, so
+	// everything downstream — the table builder and its indexes, save and read, the query
+	// generator, the form — meets an attribute and asks it the usual questions.
+	virtual bool FillArrayObjectByCommonAttribute(
+		std::vector<ibValueMetaObjectAttributeBase*>& array) const {
+		return FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(
+			array, { g_metaCommonAttributeColumnCLSID });
+	}
 };
 
 #endif

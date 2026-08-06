@@ -127,97 +127,52 @@ void ibRoleEditor::AddInterfaceItem(ibValueMetaObject* metaObject, const wxTreeI
 	}
 }
 
+
 #include "frontend/artProvider/artProvider.h"
 
 void ibRoleEditor::InitRole()
 {
+	m_groups.clear();
+
 	const ibCtorAbstractType* typeCtor = ibValue::GetAvailableCtor(g_metaCommonMetadataCLSID);
 	wxASSERT(typeCtor);
 
 	wxImageList* imageList = m_roleCtrl->GetImageList();
-	const int imageIndex = imageList->Add(typeCtor->GetClassIcon());
-	m_treeMETADATA = m_roleCtrl->AddRoot(_("Configuration"), imageIndex, imageIndex, new wxTreeItemMetaData(activeMetaData->GetCommonMetaObject()));
+	int imageIndex = imageList->Add(typeCtor->GetClassIcon());
+	m_treeMETADATA = m_roleCtrl->AddRoot(_("Configuration"), imageIndex, imageIndex,
+		new wxTreeItemMetaData(activeMetaData->GetCommonMetaObject()));
 
-	//*****************************************************************************************************
-	//*                                      Common objects                                               *
-	//*****************************************************************************************************
-
-	const int imageCommonIndex = imageList->Add(wxArtProvider::GetIcon(wxART_COMMON_FOLDER, wxART_METATREE));
-	m_treeCOMMON = m_roleCtrl->AppendItem(m_treeMETADATA, commonName, imageCommonIndex, imageCommonIndex);
-
-	///////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	m_treeFORMS = AppendGroupItem(m_treeCOMMON, g_metaCommonFormCLSID, commonFormsName);
-	m_treeINTERFACES = AppendGroupItem(m_treeCOMMON, g_metaSectionCLSID, interfacesName);
-
-	//*****************************************************************************************************
-	//*                                      Custom objects                                               *
-	//*****************************************************************************************************
-
-	m_treeCONSTANTS = AppendGroupItem(m_treeMETADATA, g_metaConstantCLSID, constantsName);
-	m_treeCATALOGS = AppendGroupItem(m_treeMETADATA, g_metaCatalogCLSID, catalogsName);
-	m_treeDOCUMENTS = AppendGroupItem(m_treeMETADATA, g_metaDocumentCLSID, documentsName);
-
-	m_treeDATAPROCESSORS = AppendGroupItem(m_treeMETADATA, g_metaDataProcessorCLSID, dataProcessorName);
-	m_treeREPORTS = AppendGroupItem(m_treeMETADATA, g_metaReportCLSID, reportsName);
-
-	m_treeINFORMATION_REGISTERS = AppendGroupItem(m_treeMETADATA, g_metaInformationRegisterCLSID, informationRegisterName);
-	m_treeACCUMULATION_REGISTERS = AppendGroupItem(m_treeMETADATA, g_metaAccumulationRegisterCLSID, accumulationRegisterName);
-	m_treeCHARTS_OF_CHARACTERISTIC_TYPES = AppendGroupItem(m_treeMETADATA, g_metaChartOfCharacteristicTypesCLSID, chartsOfCharacteristicTypesName);
-	m_treeCHARTS_OF_ACCOUNTS = AppendGroupItem(m_treeMETADATA, g_metaChartOfAccountsCLSID, chartsOfAccountsName);
-	m_treeACCOUNTING_REGISTERS = AppendGroupItem(m_treeMETADATA, g_metaAccountingRegisterCLSID, accountingRegistersName);
-
-	//Set item bold and name
-	m_roleCtrl->SetItemText(m_treeMETADATA, _("Configuration"));
 	m_roleCtrl->SetItemBold(m_treeMETADATA);
-
-	m_roleCtrl->ExpandAll();
 }
 
 void ibRoleEditor::ClearRole() {
 
-	//*****************************************************************************************************
-	//*                                      Common objects                                               *
-	//*****************************************************************************************************
-
-	if (m_treeFORMS.IsOk())
-		m_roleCtrl->DeleteChildren(m_treeFORMS);
-
-	if (m_treeINTERFACES.IsOk())
-		m_roleCtrl->DeleteChildren(m_treeINTERFACES);
-
-	if (m_treeCONSTANTS.IsOk())
-		m_roleCtrl->DeleteChildren(m_treeCONSTANTS);
-
-	//*****************************************************************************************************
-	//*                                      Custom objects                                               *
-	//*****************************************************************************************************
-
-	if (m_treeCATALOGS.IsOk())
-		m_roleCtrl->DeleteChildren(m_treeCATALOGS);
-	if (m_treeDOCUMENTS.IsOk())
-		m_roleCtrl->DeleteChildren(m_treeDOCUMENTS);
-
-	if (m_treeDATAPROCESSORS.IsOk())
-		m_roleCtrl->DeleteChildren(m_treeDATAPROCESSORS);
-	if (m_treeREPORTS.IsOk())
-		m_roleCtrl->DeleteChildren(m_treeREPORTS);
-	if (m_treeINFORMATION_REGISTERS.IsOk())
-		m_roleCtrl->DeleteChildren(m_treeINFORMATION_REGISTERS);
-	if (m_treeACCUMULATION_REGISTERS.IsOk())
-		m_roleCtrl->DeleteChildren(m_treeACCUMULATION_REGISTERS);
-	if (m_treeCHARTS_OF_CHARACTERISTIC_TYPES.IsOk())
-		m_roleCtrl->DeleteChildren(m_treeCHARTS_OF_CHARACTERISTIC_TYPES);
-	if (m_treeCHARTS_OF_ACCOUNTS.IsOk())
-		m_roleCtrl->DeleteChildren(m_treeCHARTS_OF_ACCOUNTS);
-	if (m_treeACCOUNTING_REGISTERS.IsOk())
-		m_roleCtrl->DeleteChildren(m_treeACCOUNTING_REGISTERS);
-
-	//delete all items
+	// The groups are whatever FillData created last time, from the metadata — wiping the
+	// tree wipes them with it, so there is nothing to enumerate here.
 	m_roleCtrl->DeleteAllItems();
-
-	//Initialize tree
 	InitRole();
+}
+
+wxTreeItemId ibRoleEditor::GroupFor(const ibClassID& clsid)
+{
+	auto found = m_groups.find(clsid);
+	if (found != m_groups.end())
+		return found->second;
+
+	// FROM THE TYPE REGISTRY — the icon and the caption the metatype registered for itself.
+	const ibCtorAbstractType* typeCtor = ibValue::GetAvailableCtor(clsid);
+	if (typeCtor == nullptr)
+		return m_treeMETADATA;
+
+	wxImageList* imageList = m_roleCtrl->GetImageList();
+	wxASSERT(imageList);
+	const int imageIndex = imageList->Add(typeCtor->GetClassIcon());
+
+	const wxTreeItemId group = m_roleCtrl->AppendItem(
+		m_treeMETADATA, typeCtor->GetClassName(), imageIndex, imageIndex, nullptr);
+
+	m_groups.emplace(clsid, group);
+	return group;
 }
 
 void ibRoleEditor::FillData()
@@ -229,114 +184,29 @@ void ibRoleEditor::FillData()
 
 	m_roleCtrl->SetItemText(m_treeMETADATA, commonObject->GetName());
 
-	//****************************************************************
-	//*                          CommonForms                         *
-	//****************************************************************
-	for (auto commonForm : metaData->GetAnyArrayObject(g_metaCommonFormCLSID)) {
-		if (commonForm->IsDeleted())
+	// ASKED, NOT LISTED — and the question here is the one this editor exists for: does
+	// this object HAVE any rights? An object with no rights has nothing to grant or deny,
+	// so it has no row; one that declares even a single right appears, under a group named
+	// by its own metatype.
+	//
+	// This replaces a dozen near-identical blocks, one per metatype, each with a
+	// pre-created branch of its own. A metatype that declares rights now shows up here on
+	// its own — previously it was invisible to the role editor until somebody added a
+	// block, which is a silent way to leave part of a configuration unprotected.
+	for (ibValueMetaObject* object : metaData->GetAnyArrayObject()) {
+		if (object == nullptr || object->IsDeleted())
 			continue;
-		AppendItem(m_treeFORMS, commonForm);
-	}
-
-	//****************************************************************
-	//*                          Interfaces							 *
-	//****************************************************************
-	for (auto commonInterface : metaData->GetAnyArrayObject(g_metaSectionCLSID)) {
-		if (commonInterface->IsDeleted())
-			continue;	
-		AddInterfaceItem(commonInterface,
-			AppendItem(m_treeINTERFACES, commonInterface));
-	}
-
-	//****************************************************************
-	//*                          Constants                           *
-	//****************************************************************
-	for (auto constant : metaData->GetAnyArrayObject(g_metaConstantCLSID)) {
-		if (constant->IsDeleted())
+		if (object->GetRoleCount() == 0)
 			continue;
-		AppendItem(m_treeCONSTANTS, constant);
+
+		const wxTreeItemId item = AppendItem(GroupFor(object->GetClassType()), object);
+
+		// A section nests: sub-sections are rights-bearing in their own right, and they
+		// live under their parent rather than beside it.
+		if (object->GetClassType() == g_metaSectionCLSID)
+			AddInterfaceItem(object, item);
 	}
 
-	//****************************************************************
-	//*                        Catalogs                              *
-	//****************************************************************
-	for (auto catalog : metaData->GetAnyArrayObject(g_metaCatalogCLSID)) {
-		if (catalog->IsDeleted())
-			continue;
-		AppendItem(m_treeCATALOGS, catalog);
-	}
-
-	//****************************************************************
-	//*                        Documents                             *
-	//****************************************************************
-	for (auto document : metaData->GetAnyArrayObject(g_metaDocumentCLSID)) {
-		if (document->IsDeleted())
-			continue;
-		AppendItem(m_treeDOCUMENTS, document);
-	}
-
-	//****************************************************************
-	//*                          Data processor                      *
-	//****************************************************************
-	for (auto dataProcessor : metaData->GetAnyArrayObject(g_metaDataProcessorCLSID)) {
-		if (dataProcessor->IsDeleted())
-			continue;
-		AppendItem(m_treeDATAPROCESSORS, dataProcessor);
-	}
-
-	//****************************************************************
-	//*                          Report			                     *
-	//****************************************************************
-	for (auto report : metaData->GetAnyArrayObject(g_metaReportCLSID)) {
-		if (report->IsDeleted())
-			continue;
-		AppendItem(m_treeREPORTS, report);
-	}
-
-	//****************************************************************
-	//*                          Information register			     *
-	//****************************************************************
-	for (auto informationRegister : metaData->GetAnyArrayObject(g_metaInformationRegisterCLSID)) {
-		if (informationRegister->IsDeleted())
-			continue;
-		AppendItem(m_treeINFORMATION_REGISTERS, informationRegister);
-	}
-
-	//****************************************************************
-	//*                          Accumulation register			     *
-	//****************************************************************
-	for (auto accumulationRegister : metaData->GetAnyArrayObject(g_metaAccumulationRegisterCLSID)) {
-		if (accumulationRegister->IsDeleted())
-			continue;
-		AppendItem(m_treeACCUMULATION_REGISTERS, accumulationRegister);
-	}
-
-	//****************************************************************
-	//*                          Charts of characteristic types      *
-	//****************************************************************
-	for (auto chartOfCharacteristicTypes : metaData->GetAnyArrayObject(g_metaChartOfCharacteristicTypesCLSID)) {
-		if (chartOfCharacteristicTypes->IsDeleted())
-			continue;
-		AppendItem(m_treeCHARTS_OF_CHARACTERISTIC_TYPES, chartOfCharacteristicTypes);
-	}
-
-	//****************************************************************
-	//*                          Charts of accounts                  *
-	//****************************************************************
-	for (auto chartOfAccounts : metaData->GetAnyArrayObject(g_metaChartOfAccountsCLSID)) {
-		if (chartOfAccounts->IsDeleted())
-			continue;
-		AppendItem(m_treeCHARTS_OF_ACCOUNTS, chartOfAccounts);
-	}
-
-	//****************************************************************
-	//*                          Accounting register                 *
-	//****************************************************************
-	for (auto accountingRegister : metaData->GetAnyArrayObject(g_metaAccountingRegisterCLSID)) {
-		if (accountingRegister->IsDeleted())
-			continue;
-		AppendItem(m_treeACCOUNTING_REGISTERS, accountingRegister);
-	}
-
+	m_roleCtrl->ExpandAll();
 	m_checkCtrl->Enable(m_metaRole->IsEnabled());
 }

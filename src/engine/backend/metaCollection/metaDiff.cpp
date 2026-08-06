@@ -65,17 +65,10 @@ bool IsStructuralProperty(const ibProperty* prop) {
 		|| dynamic_cast<const ibPropertySource*>(prop) != nullptr;
 }
 
-// Sub-object CLSIDs the standard metadata tree explicitly hides under a
-// Catalog/Document/etc. (see treeConfiguration_impl.cpp AddCatalogItem:
-// predefined attributes are filtered out of the Attributes group;
-// object modules / manager modules are not shown at all — their
-// content lives in the parent's properties already). Mirror that here
-// so the diff tree reads the same way.
-bool IsSkippedSubGroupClsid(ibClassID clsid) {
-	return clsid == g_metaPredefinedAttributeCLSID
-		|| clsid == g_metaModuleCLSID
-		|| clsid == g_metaManagerCLSID;
-}
+// (The list that used to live here — predefined attributes, object modules, manager
+// modules — is gone. Whether a child belongs under its owner is the owner's OWN answer
+// (ibValueMetaObject::IsAcceptedByParent -> FilterChild), so the diff tree and the
+// designer tree can no longer drift apart, and a new kind of child needs no line here.)
 }
 
 // g_diffCommonUmbrellaClsid / g_diffPropertiesGroupClsid are now header-defined
@@ -97,6 +90,10 @@ wxString ibMetaDiffWalker::GroupLabelFor(ibClassID clsid)
 	if (clsid == g_metaCommonTemplateCLSID)             return _("Common templates");
 	if (clsid == g_metaScheduledJobCLSID)               return _("Predefined jobs");
 	if (clsid == g_metaSessionParameterCLSID)           return _("Session parameters");
+	if (clsid == g_metaCommonAttributeCLSID)            return _("Common attributes");
+	// The copy inside an object compares under the same caption — what a reader wants to see
+	// there is "this object carries a common attribute", not a second kind of thing.
+	if (clsid == g_metaCommonAttributeColumnCLSID)         return _("Common attributes");
 	if (clsid == g_metaParameterizedJobCLSID)           return _("Scheduled jobs");
 	if (clsid == g_metaSectionCLSID)                  return _("Sections");
 	if (clsid == g_metaRoleCLSID)                       return _("Roles");
@@ -152,6 +149,7 @@ int ibMetaDiffWalker::GroupOrderRank(ibClassID clsid)
 		{ g_metaParameterizedJobCLSID,            35 },
 		{ g_metaScheduledJobCLSID,                36 },
 		{ g_metaSessionParameterCLSID,            37 },
+		{ g_metaCommonAttributeCLSID,             38 },
 		{ g_metaPictureCLSID,                     40 },
 		{ g_metaSectionCLSID,                   50 },
 		{ g_metaRoleCLSID,                        60 },
@@ -327,14 +325,14 @@ void ibMetaDiffWalker::WalkPair(
 	if (left != nullptr) {
 		for (unsigned int i = 0; i < left->GetChildCount(); ++i) {
 			ibValueMetaObject* lc = left->GetChild(i);
-			if (lc != nullptr && !IsSkippedSubGroupClsid(lc->GetClassType()))
+			if (lc != nullptr && lc->IsAcceptedByParent())
 				addClsid(lc->GetClassType());
 		}
 	}
 	if (right != nullptr) {
 		for (unsigned int j = 0; j < right->GetChildCount(); ++j) {
 			ibValueMetaObject* rc = right->GetChild(j);
-			if (rc != nullptr && !IsSkippedSubGroupClsid(rc->GetClassType()))
+			if (rc != nullptr && rc->IsAcceptedByParent())
 				addClsid(rc->GetClassType());
 		}
 	}

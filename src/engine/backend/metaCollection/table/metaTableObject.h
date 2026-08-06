@@ -114,6 +114,9 @@ public:
 
 	virtual std::vector<ibValueMetaObjectAttributeBase*> GetGenericAttributeArrayObject(
 		std::vector<ibValueMetaObjectAttributeBase*>& array) const {
+		// No common attributes here: a tabular section is not part of any composition
+		// (ResolveChild does not accept the copy, so one could be neither created nor saved
+		// in it). Calling the fill anyway would have looked like support and been a dead end.
 		FillArrayObjectByPredefinedAttribute(array);
 		FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(array, { g_metaAttributeCLSID });
 		return array;
@@ -125,6 +128,9 @@ public:
 	//any
 	std::vector<ibValueMetaObjectAttributeBase*> GetAnyAttributeArrayObject(
 		std::vector<ibValueMetaObjectAttributeBase*> array = std::vector<ibValueMetaObjectAttributeBase*>()) const {
+		// No common attributes here: a tabular section is not part of any composition
+		// (ResolveChild does not accept the copy, so one could be neither created nor saved
+		// in it). Calling the fill anyway would have looked like support and been a dead end.
 		FillArrayObjectByPredefinedAttribute(array);
 		FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(array, { g_metaAttributeCLSID });
 		return array;

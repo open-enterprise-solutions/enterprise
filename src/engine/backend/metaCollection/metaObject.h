@@ -9,6 +9,7 @@
 #include "backend/restructureInfo.h"
 
 #include "backend/interfaceHelper.h"
+#include "backend/compositionHelper.h"
 #include "backend/roleHelper.h"
 
 #include "backend/metaCollection/metaObjectEnum.h"   // ibSelectMode — ProcessChoice takes it
@@ -56,6 +57,14 @@ constexpr ibClassID g_metaResourceCLSID = metadata_to_clsid("MD_RESS");
 
 //SPECIAL OBJECTS
 constexpr ibClassID g_metaPredefinedAttributeCLSID = metadata_to_clsid("MD_DATT");
+
+// A COMMON ATTRIBUTE — declared once under Common, carried by many objects. Two ids, because
+// there are two things: the DECLARATION a person writes, and the COPY it puts inside every
+// object that is checked into its composition. The copy is a real child with its own metaID —
+// that is what gives it a column of its own (fld<metaId>) and takes it through restructuring
+// with its owner, exactly as any attribute goes.
+constexpr ibClassID g_metaCommonAttributeCLSID = metadata_to_clsid("MD_CATT");
+constexpr ibClassID g_metaCommonAttributeColumnCLSID = metadata_to_clsid("MD_CATC");
 
 //MAIN OBJECTS
 constexpr ibClassID g_metaConstantCLSID = metadata_to_clsid("MD_CONS");
@@ -129,7 +138,7 @@ class BACKEND_API ibValueMetaObject :
 	public ibValueDynamicMembers,
 
 	public ibPropertyObjectHelper<ibValueMetaObject>,
-	public ibAccessObject, public ibInterfaceObject {
+	public ibAccessObject, public ibInterfaceObject, public ibCompositionObject {
 	public:
 
 	// WHAT THIS METATYPE HAS — one set of flags, declared by the class itself.
@@ -341,6 +350,23 @@ public:
 	// Bool view of ResolveChild for the many filter-only call sites (copy/serialize walkers):
 	// a resolved clsid is > 0; 0 means the child is not allowed.
 	bool FilterChild(const ibClassID& clsid) const { return ResolveChild(clsid) > 0; }
+
+	// (May this object be part of a composition? — ibCompositionObject::IsCompositionAllowed,
+	// compositionHelper.h. The question lives with the mechanism that asks it.)
+
+	// DOES THIS SHOW UP UNDER ITS OWNER? Not a new rule — FilterChild above already knows:
+	// a child the owner does not accept is one it never created and cannot host, so it has
+	// no business being listed under it. Predefined attributes, object modules and manager
+	// modules are exactly that set.
+	//
+	// This is only the convenience form, asked from the child's side. Before it, the
+	// designer tree spelled `GetClassType() == g_metaPredefinedAttributeCLSID` out TEN
+	// times, once per metatype branch, and configuration-compare kept a second list of
+	// clsids whose own comment admitted it was mirroring the first.
+	bool IsAcceptedByParent() const {
+		const ibValueMetaObject* const owner = GetParent();
+		return owner == nullptr || owner->FilterChild(GetClassType());
+	}
 
 	//process choice
 	virtual bool ProcessChoice(ibBackendControlFrame* ownerValue,

@@ -30,6 +30,9 @@ class BACKEND_API ibValueMetaObjectConstant :
 	public ibValueMetaObjectGenericData, public ibBackendTypeConfigFactory, public ibBackendQueryableHolder {
 	public:
 
+	// A constant belongs in a section too — it is a thing a person opens and edits.
+	virtual bool IsInterfaceAllowed() const override { return true; }
+
 	// ============================================================================
 	// The constant's VALUE COLUMN — the physical half of a constant, and nothing else.
 	//

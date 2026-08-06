@@ -239,6 +239,10 @@ class BACKEND_API ibValueMetaObjectCommonForm :
 	public ibValueMetaObjectFormBase, public ibBackendCommandItem {
 	public:
 
+	// A common form can be checked into a section — it opens from the navigation panel.
+	// (A form belonging to an object cannot: it is reached through that object.)
+	virtual bool IsInterfaceAllowed() const override { return true; }
+
 #pragma region access_generic
 	virtual bool AccessRight_Show() const { return AccessRight_Use(); }
 	virtual bool AccessRight_Modify() const { return AccessRight_Use(); }

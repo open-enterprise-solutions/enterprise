@@ -44,6 +44,14 @@ public:
 
 	bool IsSetInterface(const ibMetaID& id) const { return m_interfaces.find(id) != m_interfaces.end(); }
 
+	// MAY THIS BE CHECKED INTO A SECTION? Asked of the object, so the section editor builds
+	// its tree by walking the metadata instead of naming every branch by hand — a metatype
+	// that arrives later answers for itself.
+	//
+	// No by default: what a section shows is a navigation surface, and something with no
+	// list and no command has nothing to contribute to one.
+	virtual bool IsInterfaceAllowed() const { return false; }
+
 	virtual ~ibInterfaceObject() {}
 	virtual ibInterfaceCommandSection GetCommandSection() const { return ibInterfaceCommandSection::ibInterfaceCommandSection_Default; }
 

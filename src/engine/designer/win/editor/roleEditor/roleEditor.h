@@ -14,22 +14,11 @@
 class ibRoleEditor : public wxSplitterWindow {
 
 	wxTreeItemId m_treeMETADATA;
-	wxTreeItemId m_treeCOMMON; //special tree
 
-	wxTreeItemId m_treeFORMS;
-	wxTreeItemId m_treeINTERFACES;
-
-	wxTreeItemId m_treeCONSTANTS;
-
-	wxTreeItemId m_treeCATALOGS;
-	wxTreeItemId m_treeDOCUMENTS;
-	wxTreeItemId m_treeDATAPROCESSORS;
-	wxTreeItemId m_treeREPORTS;
-	wxTreeItemId m_treeINFORMATION_REGISTERS;
-	wxTreeItemId m_treeACCUMULATION_REGISTERS;
-	wxTreeItemId m_treeCHARTS_OF_CHARACTERISTIC_TYPES;
-	wxTreeItemId m_treeCHARTS_OF_ACCOUNTS;
-	wxTreeItemId m_treeACCOUNTING_REGISTERS;
+	// One group per metatype, created on demand by GroupFor and captioned from the type
+	// registry — the thirteen named branches this class used to declare are gone with the
+	// blocks that filled them.
+	std::map<ibClassID, wxTreeItemId> m_groups;
 
 	ibValueMetaObject* m_metaRole;
 
@@ -60,15 +49,8 @@ protected:
 
 private:
 
-	wxTreeItemId AppendGroupItem(const wxTreeItemId& parent,
-		const ibClassID& clsid, const wxString& name = wxEmptyString) const {
-		const ibCtorAbstractType* typeCtor = ibValue::GetAvailableCtor(clsid);
-		wxASSERT(typeCtor);
-		wxImageList* imageList = m_roleCtrl->GetImageList();
-		wxASSERT(imageList);
-		const int imageIndex = imageList->Add(typeCtor->GetClassIcon());
-		return m_roleCtrl->AppendItem(parent, name.IsEmpty() ? typeCtor->GetClassName() : name, imageIndex, imageIndex, nullptr);
-	}
+	// A group per metatype, created on first use.
+	wxTreeItemId GroupFor(const ibClassID& clsid);
 
 	wxTreeItemId AppendItem(const wxTreeItemId& parent,
 		ibValueMetaObject* metaObject) {
@@ -99,12 +81,21 @@ public:
 			if (const wxTreeItemMetaData* d = dynamic_cast<wxTreeItemMetaData*>(m_roleCtrl->GetItemData(sel)))
 				m_keepSelObj = d->GetMetaObject();
 		m_keepSelNode = wxTreeItemId();
+
+		// ONE FRAME — the rebuild empties the tree and refills it, and unfrozen that shows
+		// as a collapse followed by a re-appear. Same pattern as the form's attribute tree.
+		m_roleCtrl->Freeze();
+		m_roleCtrl->SetEvtHandlerEnabled(false);
+
 		ClearRole();
 		FillData();
 		if (m_keepSelNode.IsOk())
 			m_roleCtrl->SelectItem(m_keepSelNode);            // a metaobject row — restored by identity
 		else if (m_keepSelObj != nullptr && m_treeMETADATA.IsOk())
 			m_roleCtrl->SelectItem(m_treeMETADATA);           // the config root (built in InitRole, not via AppendItem)
+
+		m_roleCtrl->SetEvtHandlerEnabled(true);
+		m_roleCtrl->Thaw();
 	}
 
 	void SetReadOnly(bool readOnly = true) {

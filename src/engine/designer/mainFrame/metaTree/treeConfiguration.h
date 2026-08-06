@@ -112,6 +112,7 @@ private:
 	wxTreeItemId m_treeJOBS;
 	wxTreeItemId m_treeSCHEDULED_JOBS;
 	wxTreeItemId m_treeSESSION_PARAMETERS;
+	wxTreeItemId m_treeCOMMON_ATTRIBUTES;
 	wxTreeItemId m_treeROLES;
 	wxTreeItemId m_treeLANGUAGES;
 

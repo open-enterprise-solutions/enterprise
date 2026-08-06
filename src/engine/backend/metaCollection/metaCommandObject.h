@@ -171,6 +171,10 @@ class BACKEND_API ibValueMetaObjectCommonCommand : public ibValueMetaObjectComma
 public:
 	ibValueMetaObjectCommonCommand(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString)
 		: ibValueMetaObjectCommand(name, synonym, comment) {}
+
+	// A general command checked into a section renders in that section's menu and runs
+	// from there — which is the whole reason the section editor lists commands at all.
+	virtual bool IsInterfaceAllowed() const override { return true; }
 };
 
 //********************************************************************************************

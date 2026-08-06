@@ -548,8 +548,9 @@ The diff *presentation* adds two policies (`metaCollection/metaDiff.cpp`):
   containing object's own Same/Changed row already reports any difference. Listing them
   would duplicate it.
 
-(`IsSkippedSubGroupClsid` mirrors what the metadata tree hides — predefined attributes,
-object/manager modules — so the diff tree reads like the navigator.)
+(Both the diff tree and the navigator now ask the same question — `IsAcceptedByParent()`,
+i.e. the owner's `FilterChild` — so they cannot drift apart. Each used to carry its own
+answer: ten hand-written clsid tests in the tree, a mirroring list in the compare walker.)
 
 ---
 

@@ -60,6 +60,7 @@ enterprise/
 │   ├── command-interface.md  # Interface metaobject = subsystem + command bar
 │   ├── job-manager.md        # scheduled + background work — the engine (built)
 │   ├── session-parameters.md # values that exist once per session — metatype, module, write window
+│   ├── common-attributes.md  # one declaration, many objects — composition, the copy, propagation
 │   ├── scheduled-jobs.md     # the metadata over it: two metatypes, one verb (BUILT)
 │   ├── plugins.md           # plugin ABI 2 — capability boundary (diagnostics / script / metadata)
 │   ├── script-language.md    # THE LANGUAGE REFERENCE — dialects, keywords, LINQ, global API
@@ -329,6 +330,12 @@ The 11 business object types and their C++ classes:
 | ChartOfCharacteristicTypes | `ibValueMetaObjectChartOfCharacteristicTypes` | `metaCollection/partial/chartOfCharacteristicTypes.h` |
 | ChartOfAccounts | `ibValueMetaObjectChartOfAccounts` | `metaCollection/partial/chartOfAccounts.h` |
 | AccountingRegister | `ibValueMetaObjectAccountingRegister` | `metaCollection/partial/accountingRegister.h` |
+
+A **`CommonAttribute`** is declared once under Common and then exists as a real attribute inside
+every object checked into its **composition** — its own metaID, its own column, its own place in
+restructuring. The copy (`CommonAttributeColumn`) delegates its type to the declaration and cannot
+be edited where it sits. Membership rides `ibCompositionObject` (`backend/compositionHelper.h`) — a
+mechanism of its own, deliberately not the section one ([docs/common-attributes.md](docs/common-attributes.md)).
 
 One further metatype is neither a business object nor stored anywhere: **`SessionParameter`** — an
 `ibValueMetaObjectAttribute` whose owner is the SESSION rather than a table. Declared under Common

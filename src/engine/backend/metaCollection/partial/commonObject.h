@@ -161,11 +161,19 @@ class BACKEND_API ibValueMetaObjectRecordData
 	: public ibValueMetaObjectGenericData {
 	public:
 
+	// EVERY STORED KIND MAY GO INTO A SECTION — catalogs and documents, processors and
+	// reports, all three register families. This is the line they share, so the answer is
+	// given once here instead of being spelled out as a branch per metatype in the editor.
+	virtual bool IsInterfaceAllowed() const override { return true; }
 
 public:
 
 	virtual ibClassID ResolveChild(const ibClassID& clsid) const {
 		if (clsid == g_metaAttributeCLSID)
+			return clsid;
+		// A common attribute's copy — gated by the object's own answer, not by a list kept
+		// elsewhere. Only a declaration under Common ever creates one.
+		if (clsid == g_metaCommonAttributeColumnCLSID && IsCompositionAllowed())
 			return clsid;
 		// RAM owner (processor / report): either tabular-section variant maps to MD_TBL.
 		if (clsid == g_metaTableCLSID || clsid == g_metaTableRefCLSID)
@@ -202,11 +210,12 @@ public:
 	virtual std::vector<ibValueMetaObjectAttributeBase*> GetGenericAttributeArrayObject(
 		std::vector<ibValueMetaObjectAttributeBase*>& array) const {
 		FillArrayObjectByPredefinedAttribute(array);
+		FillArrayObjectByCommonAttribute(array);
 		FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(array, { g_metaAttributeCLSID });
 		return array;
 	}
 
-	//table 
+	//table
 	std::vector<ibValueMetaObjectTableData*> GetGenericTableArrayObject() const {
 		std::vector<ibValueMetaObjectTableData*> array;
 		return GetGenericTableArrayObject(array);
@@ -242,7 +251,12 @@ public:
 	//attribute
 	std::vector<ibValueMetaObjectAttributeBase*> GetAttributeArrayObject(
 		std::vector<ibValueMetaObjectAttributeBase*> array = std::vector<ibValueMetaObjectAttributeBase*>()) const {
-		FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(array, { g_metaAttributeCLSID });
+		// The copies belong here: an object's attributes ARE its own plus the common ones it
+		// carries, and this is the list the RUNTIME reads to build a form
+		// (ibValueRecordDataObjectCatalog::GetSourceExplorer walks it). Hiding them from the
+		// DESIGNER TREE is a display decision and belongs where the tree is drawn — taking
+		// them out of this list took them out of the form as well.
+		FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(array, { g_metaAttributeCLSID, g_metaCommonAttributeColumnCLSID });
 		return array;
 	}
 
@@ -259,7 +273,7 @@ public:
 	//any attribute 
 	template <typename _T1>
 	ibValueMetaObjectAttributeBase* FindAnyAttributeObjectByFilter(const _T1& id) const {
-		return FindObjectByFilter<ibValueMetaObjectAttributeBase>(id, { g_metaAttributeCLSID, g_metaPredefinedAttributeCLSID });
+		return FindObjectByFilter<ibValueMetaObjectAttributeBase>(id, { g_metaAttributeCLSID, g_metaPredefinedAttributeCLSID, g_metaCommonAttributeColumnCLSID });
 	}
 
 	//attribute 
@@ -453,6 +467,9 @@ public:
 	//(processors/reports keep the RAM MD_TBL via the base RecordData::ResolveChild).
 	virtual ibClassID ResolveChild(const ibClassID& clsid) const {
 		if (clsid == g_metaAttributeCLSID)
+			return clsid;
+		// Same gate as the RAM owner above — the object answers for itself.
+		if (clsid == g_metaCommonAttributeColumnCLSID && IsCompositionAllowed())
 			return clsid;
 		// reference owner (catalog / document): either tabular-section variant maps to MD_TBLR.
 		if (clsid == g_metaTableCLSID || clsid == g_metaTableRefCLSID)
@@ -666,6 +683,13 @@ public:
 	static constexpr unsigned s_features =
 		ibValueMetaObjectRecordDataRef::s_features
 		| ibMetaFeature_Object | ibMetaFeature_Selection;
+
+	// COMMON ATTRIBUTES LAND HERE — on the line a catalog and a document share, which is
+	// the line that has stored, editable rows to put a column on. Registers and the
+	// unstored kinds (processors, reports) are deliberately left out: for a register it is
+	// a decision about data separation that has not been taken, and an unstored object has
+	// no table at all.
+	virtual bool IsCompositionAllowed() const override { return true; }
 
 	public:
 protected:
@@ -902,6 +926,9 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 	virtual ibClassID ResolveChild(const ibClassID& clsid) const {
 		if (clsid == g_metaAttributeCLSID)
 			return clsid;
+		// Same gate as the RAM owner above — the object answers for itself.
+		if (clsid == g_metaCommonAttributeColumnCLSID && IsCompositionAllowed())
+			return clsid;
 		// reference owner (catalog / document): either tabular-section variant maps to MD_TBLR.
 		if (clsid == g_metaTableCLSID || clsid == g_metaTableRefCLSID)
 			return g_metaTableRefCLSID;
@@ -1116,6 +1143,7 @@ public:
 	virtual std::vector<ibValueMetaObjectAttributeBase*> GetGenericAttributeArrayObject(
 		std::vector<ibValueMetaObjectAttributeBase*>& array) const {
 		FillArrayObjectByPredefinedAttribute(array);
+		FillArrayObjectByCommonAttribute(array);
 		FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(array, { g_metaDimensionCLSID, g_metaResourceCLSID, g_metaAttributeCLSID });
 		return array;
 	}
@@ -1134,6 +1162,7 @@ public:
 	std::vector<ibValueMetaObjectAttributeBase*> GetAnyAttributeArrayObject(
 		std::vector<ibValueMetaObjectAttributeBase*> array = std::vector<ibValueMetaObjectAttributeBase*>()) const {
 		FillArrayObjectByPredefinedAttribute(array);
+		FillArrayObjectByCommonAttribute(array);
 		FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(array, { g_metaDimensionCLSID, g_metaResourceCLSID, g_metaAttributeCLSID });
 		return array;
 	}
@@ -1155,6 +1184,9 @@ public:
 	//attribute
 	std::vector<ibValueMetaObjectAttributeBase*> GetAttributeArrayObject(
 		std::vector<ibValueMetaObjectAttributeBase*> array = std::vector<ibValueMetaObjectAttributeBase*>()) const {
+		// The copies come along: the designer tree lists what an object HAS, and a common
+		// attribute it carries is one of those — visible where it lives, and edited only
+		// where it was declared.
 		FillArrayObjectByFilter<ibValueMetaObjectAttributeBase>(array, { g_metaAttributeCLSID });
 		return array;
 	}
@@ -1188,7 +1220,7 @@ public:
 	//any attribute 
 	template <typename _T1>
 	ibValueMetaObjectAttributeBase* FindAnyAttributeObjectByFilter(const _T1& id) const {
-		return FindObjectByFilter<ibValueMetaObjectAttributeBase>(id, { g_metaDimensionCLSID, g_metaResourceCLSID, g_metaAttributeCLSID, g_metaPredefinedAttributeCLSID });
+		return FindObjectByFilter<ibValueMetaObjectAttributeBase>(id, { g_metaDimensionCLSID, g_metaResourceCLSID, g_metaAttributeCLSID, g_metaPredefinedAttributeCLSID, g_metaCommonAttributeColumnCLSID });
 	}
 
 	//dimension

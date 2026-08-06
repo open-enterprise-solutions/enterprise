@@ -661,6 +661,7 @@
     </ClInclude>
     <ClInclude Include="value_cast.h" />
     <ClInclude Include="interfaceHelper.h" />
+    <ClInclude Include="compositionHelper.h" />
     <ClInclude Include="metaCollection\metaSectionObject.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
@@ -671,6 +672,9 @@
       <Filter>metaCollection</Filter>
     </ClInclude>
     <ClInclude Include="metaCollection\metaSessionParameterObject.h">
+      <Filter>metaCollection</Filter>
+    </ClInclude>
+    <ClInclude Include="metaCollection\metaCommonAttributeObject.h">
       <Filter>metaCollection</Filter>
     </ClInclude>
     <ClInclude Include="metadataDataProcessor.h" />
@@ -1693,6 +1697,7 @@
     </ClCompile>
     <ClCompile Include="value_cast.cpp" />
     <ClCompile Include="interfaceHelper.cpp" />
+    <ClCompile Include="compositionHelper.cpp" />
     <ClCompile Include="metaCollection\metaSectionObject_res.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
@@ -1718,6 +1723,15 @@
       <Filter>metaCollection</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\metaSessionParameterObject_res.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaCommonAttributeObject.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaCommonAttributeObjectMenu.cpp">
+      <Filter>metaCollection</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\metaCommonAttributeObject_res.cpp">
       <Filter>metaCollection</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\metaScheduledJobObjectMenu.cpp">
