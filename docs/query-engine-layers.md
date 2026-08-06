@@ -174,6 +174,15 @@ Three front-ends, all lowering into the **one** L3 door — L4 **lives on L3** (
 
 - **L4-1 — text query language** (`query/queryLexer|Parser|Lowering`): the greenfield query text
   → AST → lowering. The foundation the others reuse.
+  **The way back exists too** — `query/queryRender.{h,cpp}`, AST → query text, and it is what
+  makes a query constructor a tool rather than a one-shot generator: a constructor that can only
+  GENERATE text stops being useful the moment somebody edits the query by hand. Complete over the
+  AST — every field of `ibQuerySelect` (DISTINCT / SELECT * / TOP / projections / FROM / joins /
+  WHERE / GROUP BY / HAVING / ORDER BY / TOTALS with its levels / UNION) and all 14 expression
+  kinds, subqueries and `HIERARCHY` included. Two rules hold the trip together: keywords come from
+  the active keyword table (so a localized table renders what it parses), and nothing is invented
+  or dropped. Pinned by 36 round-trip cases in `tests/test_queryL4Parser.cpp`, checked by
+  re-rendering rather than struct comparison; `composition/listFilter.cpp` already relies on it.
 - **L4-2 — LINQ push-down** (`compiler/lambdaQueryAst`, `ibValueQueryable`, the `Data.*` root):
   a script `.Where(...).Join(...)` lambda body is re-parsed into a ready **L4-1 `ibQueryAstExpr`**
   and lowered through the same L4-1 builders — **no second engine**. See [linq.md](linq.md).

@@ -136,10 +136,20 @@ role and section editors were converted to as well ([designer-editors.md](design
 
 ## 9. Not built
 
-- **Data separation.** A common attribute is a column today; a *separator* additionally means
-  an automatic condition on every query, a component in the numbering key (`sys_sequence`
-  already carries a spare "period bucket" slot) and first place in the indexes. That is a
-  second arc, and it is what would make registers answer `IsCompositionAllowed()` = true.
+- **Numbering within a value.** Codes and document numbers are unique across the whole base;
+  with several organisations in one base each usually numbers from one. That would be one
+  more component in the sequence key, and it does not exist yet.
+
+  (Not to be confused with `interval` in `GenerateNextIdentifier`: that is the numbering
+  PERIOD's granularity, written as a number — which digits of a date the counter resets on.
+  A different question entirely, and nothing to do with common attributes.)
+
+  Note what is NOT missing here. A separate "data separator" type — a condition forced into
+  every query, impossible to bypass — would be a second currency for something this platform
+  already has: a `Restrict` policy over this column against a session parameter arrives at
+  the source as a decorator, so it cannot be written around either
+  ([access-policy-rls.md](access-policy-rls.md)). Common attribute + session parameter + RLS
+  is the whole of data separation; a separator metatype would only duplicate it.
 - **Orphan cleanup.** Pasting a carrying object into a *different* configuration leaves a copy
   whose declaration id resolves to nothing; it answers an empty type and contributes no
   column, but nobody removes it.

@@ -111,6 +111,18 @@ time (full list and the rules that prevent them: [portability.md](portability.md
 
 ---
 
+### Already built — do not re-plan these
+
+Written down because each was proposed again after it existed. Check here before scheduling
+work on the query tiers.
+
+| Thought to be missing | Actually in the tree |
+|---|---|
+| **AST → query text** (the "first stone" of a query constructor: read an existing query, show it, take an edit, write it back) | `query/queryRender.{h,cpp}` — complete over the AST: every `ibQuerySelect` field and all 14 expression kinds, subqueries, `TOTALS … BY … HIERARCHY`, `UNION`. Keywords come from the active table, nothing invented or dropped. 36 round-trip cases in `tests/test_queryL4Parser.cpp`; `composition/listFilter.cpp` uses it today. **Verified complete 2026-08-06** — the remaining constructor work is the SHELL (tabs, preview, apply), not the round trip |
+| Row-level filtering that cannot be written around | `Restrict` policy on the Role, applied at the L3 door as a decorator ([access-policy-rls.md](access-policy-rls.md)). With a common attribute + a session parameter this IS data separation — a separate "separator" metatype would duplicate it |
+
+---
+
 ## 3. Design only — no code
 
 Do not treat these as "nearly done"; they are captured thinking.
