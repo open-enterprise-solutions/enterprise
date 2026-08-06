@@ -150,6 +150,15 @@ class BACKEND_API ibValueMetaObjectCommonAttributeColumn : public ibValueMetaObj
 		return ibValueMetaObjectAttribute::IsAllowed() && src != nullptr && src->IsAllowed();
 	}
 
+	// Deleted WITH its declaration, and asked as such everywhere — the designer tree,
+	// configuration-compare and the schema snapshot all read this rather than IsAllowed.
+	// An unbound copy (declaration gone, or pasted in from another configuration) reads as
+	// deleted too, which is what makes its column disappear with no sweep to write.
+	virtual bool IsDeleted() const override {
+		const ibValueMetaObjectCommonAttribute* const src = GetSource();
+		return ibValueMetaObjectAttribute::IsDeleted() || src == nullptr || src->IsDeleted();
+	}
+
 	//support icons
 	virtual wxIcon GetIcon() const;
 	static wxIcon GetIconGroup();

@@ -246,16 +246,38 @@ public:
 
 public:
 
-	bool IsAllowed() const {
+	// VIRTUAL, because a metaobject's liveness is not always its own. A common attribute's
+	// copy is allowed only while the declaration that put it there is (metaCommonAttributeObject.h),
+	// and everything that builds anything filters on this — FillArrayObjectByFilter tests it
+	// first, so it is the one gate that makes a dropped declaration drop its columns.
+	//
+	// It was non-virtual, and the override further down (ibValueMetaObjectAttributeBase, from
+	// the column base) only caught calls made THROUGH a column pointer. Every metadata walk
+	// holds ibValueMetaObject*, so those calls went to this body and the override never ran —
+	// caught by CommonAttribute.CopyStopsBeingAllowedWithItsDeclaration, and the same shape as
+	// GetName, which is still non-virtual and is why the copy has to STORE its name.
+	virtual bool IsAllowed() const {
 		return IsEnabled()
 			&& !IsDeleted();
 	}
 
-	bool IsEnabled() const {
+	// Virtual for the same reason as IsAllowed below: these three answer "does this object
+	// count right now", and for an object whose existence depends on another one the honest
+	// answer is not in its own flags. Non-virtual, an override here would be invisible to
+	// every metadata walk — they all hold ibValueMetaObject*.
+	//
+	// ⚠ HOT PATH. All three are called per child by every metadata walk
+	// (FillArrayObjectByFilter tests IsAllowed before anything else), so these are now
+	// virtual calls inside the tightest loop in the metadata layer. Measured cost: none
+	// observed — the walks allocate vectors anyway, which dwarfs a vtable hop. If a profile
+	// ever points here, the fix is to cache the derived answer on the deriving object
+	// (invalidated when its source changes) rather than to make these non-virtual again:
+	// the correctness they buy is not optional.
+	virtual bool IsEnabled() const {
 		return (m_metaFlags & metaDisableFlag) == 0;
 	}
 
-	bool IsDeleted() const {
+	virtual bool IsDeleted() const {
 		return (m_metaFlags & metaDeletedFlag) != 0;
 	}
 

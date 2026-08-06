@@ -110,6 +110,7 @@ from the menu; all of them go through `RemoveMetaObject` → `OnBeforeCloseMetaO
 | **uncheck** an object | copy removed, membership cleared |
 | **delete** the declaration | every copy removed, every carrier's membership cleared |
 | **delete a carrying object** | its copy goes with it as an ordinary child; nothing to notify |
+| **mark the declaration deleted** | every copy reads as deleted and not allowed **in the same instant** — `IsDeleted` / `IsAllowed` ask the source. No pass, no list |
 | **copy/paste an object** | both halves travel: the composition set rides the common header, the copy rides as a child |
 
 ## 7. The editor
