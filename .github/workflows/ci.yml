@@ -269,25 +269,80 @@ jobs:
       # It is the line past which the process is STUCK, and crossing it prints every
       # thread's stack — the one thing a hang on someone else's machine cannot
       # otherwise tell us — and then fails the job in minutes instead of ninety.
+      #
+      # ⚠ AND IT MUST BE THE RIGHT PROCESS. The first two bounded runs printed a stack
+      # of ONE frame — `wait4`, in a thread named "xvfb-run" — because the watchdog
+      # found its pid with `pgrep -f '[o]es_frontend_runtime_test' | head -n1`, and
+      # BOTH processes match that: `-f` reads the whole command line, and the wrapper's
+      # command line is `xvfb-run -a ./bin/Debug/oes_frontend_runtime_test`. `head -n1`
+      # then takes the lower pid, which is always the parent — so it picked the wrapper
+      # every single time, deterministically. It also killed the wrapper and left the
+      # real process alive, for the runner to reap as an orphan two lines later.
+      #
+      # The wrapper is gone rather than the match tightened: with Xvfb started here,
+      # `$!` IS the process under test and nothing has to be guessed. `bt full` because
+      # a hang in someone else's teardown is worth its locals.
       - name: Run under Xvfb
         working-directory: build/linux-debug
         run: |
           set -uo pipefail
-          xvfb-run -a ./bin/Debug/oes_frontend_runtime_test &
-          runner=$!
-          (
-            sleep 600
-            stuck=$(pgrep -f '[o]es_frontend_runtime_test' | head -n1)
-            if [ -n "$stuck" ]; then
-              echo "=== alive after 600s (3s is the honest runtime) — every thread, pid $stuck ==="
-              sudo gdb -p "$stuck" -batch -ex 'thread apply all bt' 2>&1 || true
-              sudo kill -9 "$stuck" || true
+          Xvfb :99 -screen 0 1280x1024x24 &
+          xvfb=$!
+          # Wait for the display SOCKET, not for a guess at how long Xvfb takes: starting
+          # the suite early makes the harness skip every test, and a suite that asserted
+          # nothing must never read as a pass (checked again after the run).
+          for _ in $(seq 1 100); do [ -e /tmp/.X11-unix/X99 ] && break; sleep 0.1; done
+          export DISPLAY=:99
+
+          # One bounded run. $1 = log, $2 = seconds to wait, rest = extra gtest arguments.
+          run_suite() {
+            local log="$1" bound="$2"; shift 2
+            ./bin/Debug/oes_frontend_runtime_test "$@" > "$log" 2>&1 &
+            local runner=$!
+            (
+              sleep "$bound"
+              if kill -0 "$runner" 2>/dev/null; then
+                echo "=== alive after ${bound}s (3s is the honest runtime) — every thread, pid $runner ==="
+                sudo gdb -p "$runner" -batch -ex 'thread apply all bt full' 2>&1 || true
+                sudo kill -9 "$runner" || true
+              fi
+            ) &
+            local watchdog=$!
+            wait "$runner"; local status=$?
+            kill "$watchdog" 2>/dev/null || true
+            cat "$log"
+            return $status
+          }
+
+          run_suite gui.log 600; status=$?
+
+          # THE CONTROL RUN — and only when there is something to explain.
+          #
+          # A hang that appears after a batch is a question about WHAT the batch added, and
+          # the cheapest instrument that answers it is the same binary with the new sets
+          # taken out. Reading the code first produced two confident theories that both
+          # died on inspection (the job manager's tick thread — stopped by
+          # DestroyAppDataEnv; queued window deletion — wx deletes directly when no event
+          # loop runs, see wx/app.h), which is the argument for measuring rather than a
+          # third theory. The bound is short here: three seconds is the honest runtime,
+          # so anything past three minutes is already stuck and the job has a ceiling.
+          if [ $status -ne 0 ]; then
+            echo "=== control run: the same binary WITHOUT the sets 3e453bf2 added ==="
+            if run_suite gui-control.log 180 \
+                 --gtest_filter=-CodeEditorFix.*:QueryCaseFix.*:QueryConstructorReadOnly.*; then
+              echo "::error::Exits cleanly without CodeEditorFix / QueryCaseFix / QueryConstructorReadOnly — the hang belongs to what those tests build."
+            else
+              echo "::error::Hangs without them too — the cause sits below the new tests; read the stack above."
             fi
-            kill -9 "$runner" 2>/dev/null || true
-          ) &
-          watchdog=$!
-          wait "$runner"; status=$?
-          kill "$watchdog" 2>/dev/null || true
+          fi
+
+          kill "$xvfb" 2>/dev/null || true
+          # A display that never came up SKIPS the whole suite and exits 0. Green with
+          # nothing asserted is the failure mode this job exists to prevent.
+          if grep -q 'GUI wxApp unavailable' gui.log; then
+            echo "::error::Xvfb never came up — the suite skipped instead of running." >&2
+            exit 1
+          fi
           exit $status
 
   # ---------------------------------------------------------------------------
