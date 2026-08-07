@@ -284,7 +284,7 @@ Metadata object hierarchy. Every business object type extends `ibValueMetaObject
 
 | File | Class | Role |
 |---|---|---|
-| `systemManager.h/cpp` | `ibSystemManager` | Built-in function dispatcher; registers 89 functions + 6 procedures = 95 built-ins (count drifts as features land; grep `AppendFunc\|AppendProc` for the live total) |
+| `systemManager.h/cpp` | `ibSystemManager` | Built-in function dispatcher; registers 92 functions + 6 procedures = 98 built-ins as of 2026-08-08 (count drifts as features land; grep `AppendFunc\|AppendProc` for the live total) |
 | `systemEnum.h` | enums | System-level enumeration constants |
 
 ### `src/engine/frontend/visualView/`

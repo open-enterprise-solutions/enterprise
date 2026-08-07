@@ -376,7 +376,7 @@ Depth, pushdown and what is executed where: [linq.md](linq.md) and
 
 ---
 
-## 10. The global API — 89 functions + 6 procedures
+## 10. The global API — 92 functions + 6 procedures
 
 Available in every module without qualification. Signatures below are the ones the platform
 itself publishes (they drive the syntax helper), so they are exact.

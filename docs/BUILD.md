@@ -346,7 +346,7 @@ Paths use the `oesPlatform` macro (`Win32` for `x86`, `Win64` for `x64`):
 |---|---|---|
 | **Tests (Linux, Debug)** | ubuntu-22.04 | The backend suite (`oes_tests`) passes. The primary signal. |
 | **Build (Windows, x64 Debug)** | windows-2022 | The shipping platform still compiles under MSVC, and the suite passes there too. |
-| **GUI tests (Linux, Xvfb)** | ubuntu-22.04 | `oes_frontend_runtime_test` — links `frontend.dll`, needs a live wxApp, runs under `xvfb-run`. Separate job: its failure mode (a modal on an assert) is unlike a backend test's. |
+| **GUI tests (Linux, Xvfb)** | ubuntu-22.04 | `oes_frontend_runtime_test` — links `frontend.dll`, needs a live wxApp. Separate job: its failure mode (a modal on an assert, or a process that passes every test and then does not exit) is unlike a backend test's. Xvfb is started by the step itself rather than through `xvfb-run`, so `$!` is the process under test — see the § below on what the wrapper cost. |
 | **Tests (macOS 14, arm64, Debug)** | macos-14 | The third toolchain, and a different CPU with it: AArch64 (unsigned `char`, a weaker memory model, its own alignment), Apple libc++ rather than libstdc++, and wx against Cocoa instead of GTK — including the `APPLE` branch of `guid.cpp` (CFUUID) that nothing else compiles. Added 2026-08-03. |
 
 Every job also runs a **Build the applications** step. Until 2026-08-03 CI built only test
@@ -355,9 +355,16 @@ were never compiled by it at all — a break in an executable's own sources reac
 before it reached the pipeline. The step is cheap: backend and frontend are already built by
 the steps above it.
 
-Current state (2026-08-03, job logs): **all four jobs green.** Linux **919/919** (96.6 s, job
-~33 min), Windows **919/919** (132 s, ~37 min), macOS arm64 **919/919** (163 s, ~22 min — the
-fastest of the three), GUI **26/26** under Xvfb. Every platform links every application.
+State on 2026-08-03, the day the matrix first agreed (job logs): **all four jobs green.** Linux
+**919/919** (96.6 s, job ~33 min), Windows **919/919** (132 s, ~37 min), macOS arm64 **919/919**
+(163 s, ~22 min — the fastest of the three), GUI **26/26** under Xvfb. Every platform links every
+application.
+
+State on 2026-08-07: the suite has grown to **1166** and the GUI job to **38**, and the three
+general jobs still report the same number as each other — which is the property being watched;
+919 was never the property. That run was **red on all three at once** (1157/1166): nine
+`JobManager` cases, one cause in the engine rather than in any toolchain, fixed the same day
+(ROADMAP § 1b). The GUI job did not exit — see below.
 
 Three toolchains, three standard libraries, two CPU architectures, one identical test count.
 The six defects the macOS toolchain surfaced on its first runs — and what the warning noise was

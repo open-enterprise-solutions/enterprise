@@ -665,6 +665,10 @@ through the *same* `ibQuery` door:
   closes them exactly as it closed `FIRST` vs `LIMIT`. Prime migration targets:
   `accumulationRegisterQuery.cpp` (CreateAndUpdate{Balances,Turnover}TableDB),
   `metaAttributeObjectQuery.cpp` (composite-field column DDL).
+
+  > **Both targets are gone from the tree** (verified 2026-08-08): the migration this paragraph
+  > proposed happened, and the DDL it names is rendered by L2 today. Kept as the record of what
+  > the ladder was built to replace — do not go looking for the files.
 The door, holder binding, dictionary-driven render, RAII and error model are
 already built and reused; only the node sets + their render branches + the DDL
 type-map dictionary fields are added.

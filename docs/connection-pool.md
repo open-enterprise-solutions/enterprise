@@ -576,7 +576,7 @@ declare a static `ibSingleConnectionHolder` and pass its address to
 | `metadataConfigurationQuery.cpp` | Save/Load TX spans multiple methods (OnBeforeSave → OnSave → OnAfterSave). Works via TX TL pinning (thread-level). Migration possible but needs careful scope-as-member refactor. Low priority — config save blocks main thread anyway. |
 | `systemManagerFunc.cpp` | Runtime `BeginTransaction/Commit/RollBack` built-ins — **intentionally bare**. These are transparent forwarders for script-side TX API; adding a scope wrapper would create a per-call checkout, breaking the thread-sticky semantic the counter layer relies on. |
 | `*Manager_impl.cpp` (catalog, document, register managers) | Read-only `FindByCode` / `FindByName` etc. No TX. Migration gives parallelism but isn't correctness-critical. Low priority. |
-| `objectListQuery.cpp`, `*MetadataQuery.cpp` | Read-only SELECTs. Same as above. |
+| ~~`objectListQuery.cpp`~~, `*MetadataQuery.cpp` | Read-only SELECTs. Same as above. `objectListQuery.cpp` no longer exists (2026-08-08): the whole `partial/list/` directory went when the dynamic list moved onto the composer + `RunComposerPage` — see [table-model.md](table-model.md). |
 
 ### Direct-checkout consumers (post 2026-04-28: via own holder + AcquireFreeConnection)
 

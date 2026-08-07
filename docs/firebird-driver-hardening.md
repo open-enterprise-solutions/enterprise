@@ -236,7 +236,8 @@ yet — feature is parked, ready when there's profile-driven motivation.
 
 ## Cross-DB note: `ibTxOptions::readOnly`
 
-Added to `ibDatabaseLayer.h` (base struct). Drivers other than FB
+Added to `databaseLayer.h` (base struct — the file is named after the header, not after the
+class `ibDatabaseLayer` it declares). Drivers other than FB
 ignore the flag — documented in the struct comment. PostgreSQL is
 the next candidate to honour it (`SET TRANSACTION READ ONLY`),
 straightforward to add when profile demands.

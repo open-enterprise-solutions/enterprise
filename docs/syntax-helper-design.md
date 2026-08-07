@@ -143,7 +143,7 @@ desktop designer.
   (`src/engine/backend/system/systemManager.cpp:113`) — registers the
   built-ins via `helper.AppendFunc(name, argCount, signature)` /
   `AppendProc(...)` (the bind-in-ctor model, post `PrepareNames → bind`
-  arc). **95** `AppendFunc`/`AppendProc` calls today (89 + 6, at
+  arc). **98** `AppendFunc`/`AppendProc` calls as of 2026-08-08 (92 + 6, at
   `systemManager.cpp:115`); the number drifts
   as built-ins land, so the Phase 1 generator pulls live counts —
   grep `AppendFunc\|AppendProc` for the current total.

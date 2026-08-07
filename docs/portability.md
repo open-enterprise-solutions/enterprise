@@ -190,6 +190,13 @@ Measured from the CI job logs of 2026-08-03, not from recollection.
 | **GUI (Linux, Xvfb)** | green | **26/26** (1.9 s) | `libfrontend.so` links; the runtime-form suite passes under Xvfb |
 | **macOS 14 arm64** (Apple Clang, libc++, wxOSX) | green, **applications linked** | **919/919** (163 s) | Same count as the other two — a third toolchain, a third standard library and a second CPU agreeing on every test. **Fastest job of the three: ~22 min against Linux 33 and Windows 37**, on a three-core M1 at `"jobs": 3` — half the parallelism the Windows preset uses. Six defects found on its first runs, listed in § 3 |
 
+**The counts moved, and what they are for did not.** On 2026-08-07 the three general jobs ran
+**1166** each and the GUI job **38**. The figure above is kept as the day the matrix first
+agreed; the property being watched was never "919" but *the three platforms reporting the same
+number*, which they still do. That run was red on all three at once — nine `JobManager` cases
+against one engine-side cause, not a portability fault — and the GUI job passed all 38 and then
+failed to exit, which is § 4.
+
 **The GUI on macOS is known to work, by hand rather than by CI.** A colleague develops on a Mac:
 designer and the enterprise runtime run there, forms render, the app bundles carry their icon.
 That is why the port cost six small defects and not a rewrite — the ground had been walked before
@@ -312,3 +319,44 @@ targets build under the MSBuild solution only" all along. What is new is only th
 now that CI builds the applications everywhere else; `designer` compiles `mainFrameDesignerCmd.cpp`, a dead legacy main-frame the
 `.vcxproj` excludes, which means the two build systems produce different binaries; and 936
 `-Woverloaded-virtual` plus ~100 unmarked `override` declarations across 27 property headers.
+
+---
+
+## 4. The GUI job — a hang that is not a portability fault, and a watchdog that watched the wrong process
+
+**The hang.** `oes_frontend_runtime_test` passes every assertion in about three seconds, prints
+`Global test environment tear-down`, and then does not exit. Linux/GTK only — the same binary
+exits cleanly on Windows, where the whole local suite (1208 with nothing excluded) runs to the
+end. The teardown is two lines, `ibWxGuiEnvironment::TearDown` in `tests/frontendFix.h`:
+`wxTheApp->OnExit()` then `wxEntryCleanup()`. The process is inside one of them; **which one is
+not yet known**, and the reason it is not known is the rest of this section.
+
+**Why three runs produced no evidence.** The step bounds the run at 600 s and, on crossing it,
+takes every thread's stack — the one thing a hang on a machine you do not have cannot otherwise
+tell you. It found its victim like this:
+
+```bash
+stuck=$(pgrep -f '[o]es_frontend_runtime_test' | head -n1)
+```
+
+Both processes match that. `-f` reads the **whole command line**, and the wrapper's command line
+is `xvfb-run -a ./bin/Debug/oes_frontend_runtime_test`; `head -n1` then takes the lower pid,
+which is always the parent. So it attached to `xvfb-run` — a shell script — and printed one
+frame, `wait4`, waiting for the very process the stack was supposed to describe. It then killed
+the wrapper, leaving the real process alive for the runner to reap as an orphan two lines later.
+Deterministic, not unlucky: the same thing would happen on the tenth run as on the first.
+
+**The rules this leaves.**
+
+- A watchdog must hold the pid of the process it is watching, not search for it by a pattern
+  that its own launcher also matches. The wrapper is now gone — the step starts `Xvfb :99`
+  itself, so `$!` **is** the process under test.
+- Wait for the display **socket** (`/tmp/.X11-unix/X99`), not for a guess at how long Xvfb takes.
+  The harness `GTEST_SKIP`s every test when the toolkit cannot come up, so starting early turns
+  the job green while asserting nothing. The step now greps its own output for that skip and
+  fails on it.
+- When a hang appears after a batch, the cheapest instrument is the same binary with the new
+  test sets removed. Reading the code first produced two confident theories that both died on
+  inspection — the job manager's tick thread (`DestroyAppDataEnv` stops it, and it predates the
+  batch) and queued window deletion (`wx/app.h`: with no event loop running, `Destroy()` deletes
+  **directly**) — which is the argument for measuring instead of writing a third.

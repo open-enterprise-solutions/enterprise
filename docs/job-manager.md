@@ -645,6 +645,33 @@ tell working from stuck, and a run that ends by construction cannot.
   every surviving job has declared itself. The read/write API is
   `ReadSharedSettings` / `WriteSharedSettings` / `ReadSharedLastRun` / `WriteSharedLastRun` /
   `ForgetSharedState`, all static: a caller with a key needs no manager.
+
+  **A write answers with THREE outcomes, and that is the interesting part** (2026-08-07).
+  `WriteSharedSettings` returns `ibJobManager::ibWriteOutcome`:
+
+  | Outcome | Means | What a caller does with it |
+  |---|---|---|
+  | `Written` | the row is in the base | carry on |
+  | `NoBase` | no connection to write through — **nobody has been asked anything yet** | the seed carries on silently; a declaration must be possible before, or entirely without, a database |
+  | `Refused` | the base HAD its say and the row did not land | raise, and name the job |
+
+  It used to be a `bool`, and a `bool` cannot carry two facts. Both spellings of "it did not
+  take" collapsed into `false`, so every caller had to choose ONE behaviour for both — and
+  whichever it chose was wrong half the time. Staying quiet hid an INSERT rejected by a `NOT
+  NULL` column for an evening (the entry in [ROADMAP § 1b](ROADMAP.md)); raising instead took
+  down **nine tests on three platforms at once**, because a unit-test process has no database
+  and every successful registration threw. L2 had always known the difference — it throws
+  `ibBackendQueryException::Kind::NoConnection` — and that knowledge was dying in a
+  `catch (...)`.
+
+  Two consequences worth keeping:
+
+  - `Register` asks `KeyOf(desc).isValid()` before it reads or seeds anything. The register is
+    keyed by guid and a name is only a caption, so a keyless job has no row to read and none to
+    seed. Every job the platform declares carries a key — a minted literal for the engine's own,
+    the metaobject's guid for a configuration's, the row's own for a parameterized one.
+  - `ReadSharedSettings` has no such split and keeps its `catch (...)`: an unreadable row is NO
+    OPINION, and the declaration's own values stand. **Only a write can be refused.**
 - **Observable state** — `ibJobState` / `Snapshot()`: outcome (`Never` / `Running` /
   `Succeeded` / `Failed` / `Skipped`), last-run wall clock, error text, and a **computed** next
   run. Scheduling itself runs off a steady clock so moving the system clock cannot make a job

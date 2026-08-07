@@ -316,6 +316,13 @@ every list view on the day of the switch.
   right place to add dialect routing — the generator emits
   per-driver SQL from a single high-level intent.
 
+  > **Superseded, and the answer went further than this note asked** (verified 2026-08-08).
+  > Three of those four files no longer exist; dialect routing is not "added" anywhere near a
+  > metadata generator. It lives at **L2**, where a structured `ibQueryIR` is rendered through
+  > the driver's own `ibDialectDictionary` — one door down, no per-call-site branches, and the
+  > `*Manager_impl.cpp` survivors reach it through the L3 door rather than assembling SQL.
+  > See [query-engine-layers.md](query-engine-layers.md).
+
 **What still leaks dialect-specific syntax:**
 
 | Construct | FB | PostgreSQL | MSSQL | Portable form |

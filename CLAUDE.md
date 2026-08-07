@@ -8,12 +8,18 @@ This file gives an AI assistant (Claude Code or similar) the context needed to w
 
 **Open Enterprise Solutions (OES)** is a C++17 cross-platform low-code enterprise application platform. It lets developers define business applications through metadata (object types, forms, modules) and a built-in scripting language, without writing low-level code.
 
-**"Cross-platform" here is measured, not aspirational.** As of 2026-08-03 the platform core —
-metadata, the language and its compiler, the bytecode interpreter, the query engine, the database
-layer and the form layer — builds from one code base and passes an **identical 919-test suite**
-under three toolchains on two architectures: MSVC on Windows x64, GCC on Linux x64, and Apple
-Clang on macOS 14 **arm64**. All four CI jobs green, every application (`enterprise`, `designer`,
-`daemon`, `launcher`, `codeRunner`, `simplePlugin`) linked on every platform.
+**"Cross-platform" here is measured, not aspirational.** The platform core — metadata, the
+language and its compiler, the bytecode interpreter, the query engine, the database layer and the
+form layer — builds from one code base and runs an **identical suite** under three toolchains on
+two architectures: MSVC on Windows x64, GCC on Linux x64, and Apple Clang on macOS 14 **arm64**.
+Every application (`enterprise`, `designer`, `daemon`, `launcher`, `codeRunner`, `simplePlugin`)
+links on every platform.
+
+The suite GROWS, so the number here is a reading and not a property: **919** on 2026-08-03 when
+the three jobs first agreed, **1166** on 2026-08-07 (1197 `TEST` cases live in `tests/`; CI's
+`ctest -E` holds back the two targets that need a display or a live PostgreSQL, and runs them in
+jobs of their own — the GUI suite is 38). Locally, with nothing excluded, `ctest` reports 1208.
+Read the current figure off the last run rather than from here.
 
 Two boundaries, so the claim is not read wider than it is: the **web** targets
 (`wenterprise-server`, `wfrontend`) build under the MSBuild solution only and are absent from
@@ -77,7 +83,7 @@ enterprise/
 │   ├── metadata-containers.md # the ibMetaData family — mechanism + varieties (config vs external DP/Report)
 │   ├── form-editor.md        # visual designer — panels, undo/redo, drag-to-create
 │   ├── spreadsheet-editor.md # the grid behind templates and report output
-│   ├── system-functions.md   # the global script API — 89 functions + 6 procedures
+│   ├── system-functions.md   # the global script API — 92 functions + 6 procedures
 │   ├── database-modes.md     # file vs server base — where each puts its artefacts
 │   ├── debugger-architecture.md # TCP transport, why the debuggee is the server
 │   ├── database-layer.md     # driver abstraction — lineage, what's ours, adding a driver
@@ -402,7 +408,7 @@ See `docs/serialization-io.md` §4a.
 
 - **Opcodes:** defined in `src/engine/backend/compiler/codeDef.h` as `OPER_*` enumerators. Call-family: `OPER_CALL` (stack-frame named call), `OPER_CALL_CLOSURE` (named call with heap-promoted frame — callee has an inner lambda capturing locals), `OPER_CALL_METHOD` (per-class method dispatched by name string), `OPER_CALL_LINQ` (universal pipeline op dispatched by `ibLinqMethod` enum id, no string lookup), `OPER_CALL_LAMBDA` (dynamic call — target read from a slot at runtime, must wrap an `ibValueFunction`). Lambda body fences `OPER_LFUNC` (the active materialiser) / `OPER_ENDLFUNC`. (`OPER_FUNC_PTR` is retired — `OPER_LFUNC` materialises the lambda value.)
 - **Keywords:** 61, defined as `KEY_*` enumerators (`KEY_IF`=0 … `KEY_RESTRICT`) in the same file — includes access modifiers (`Public`/`Private`/`Protected`), preprocessor (`#Define`/`#Ifdef`/…), the LINQ block (`From`/`Where`/`Select`/`Join`/`Group`/…) and the access-policy filter (`Restrict`). The matching token strings are `s_listKeyWord[]` in `translateCode.cpp`, in lock-step index order with the enum.
-- **Built-in globals:** 89 functions + 6 procedures = 95, registered in `ibSystemManager` (`src/engine/backend/system/systemManager.cpp`); count drifts as features land — grep `AppendFunc\|AppendProc` for the live total
+- **Built-in globals:** 92 functions + 6 procedures = 98 as of 2026-08-08, registered in `ibSystemManager` (`src/engine/backend/system/systemManager.cpp`); count drifts as features land — grep `AppendFunc\|AppendProc` for the live total
 - **Syntax modes:** VES (`If…Then…EndIf`, Visual-Basic-style, a legacy business-scripting dialect) and CES (`if (…) { … }`, C-flavoured); both compile to the same bytecode. Mode is process-global on `ibCompileCode::SetCodeStyle()` / `GetCodeStyle()`. **CES is the default** for new configurations (2026-05-10); existing serialised configs preserve their stored Syntax. Wire token in metadata enum still reads `vbs` for back-compat — user-visible label is `ves`.
 - **Anonymous functions:** `Function(args) ... EndFunction` and `Procedure(args) ... EndProcedure` (or CES `Function(args) { … }`) work as expressions — assignable to slots, callable through variables. Backed by `ibValueFunction` (inline class in `procUnit.cpp` near `ibValueIterator`, CLSID `VL_FUNC`). Lambda's compile-context return kind is `RETURN_LAMBDA_FUNCTION` / `RETURN_LAMBDA_PROCEDURE` (`compileCode.h`). Eval-in-lambda resolves outer frames via splice in `CompileExpression` (lambda-shim's `m_pppArrayList[1..]` → eval's `[2..]`). **Closure capture landed 2026-05-11..12** (per-frame heap promotion): the compiler marks the enclosing function `m_needsHeapFrame` and emits `OPER_CALL_CLOSURE`; at runtime the lambda holds `std::vector<std::shared_ptr<ibRunContext>> m_capturedFrames` and outer-function locals resolve at depth ≥ 1. See `docs/lambda.md`, `docs/closure-capture.md`.
 - **Debugger port:** 1650 (`defaultDebuggerPort` in `src/engine/backend/debugger/debugDefs.h`)

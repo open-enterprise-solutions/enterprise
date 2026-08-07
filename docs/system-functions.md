@@ -2,7 +2,8 @@
 
 > **Scope:** `ibValueSystemFunction` (`backend/system/systemManager.{h,cpp}`,
 > `systemManagerFunc.cpp`) — the built-ins every script module can call without qualifying
-> anything. **89 functions + 6 procedures** as of 2026-07-15.
+> anything. **92 functions + 6 procedures** as of 2026-08-08 — count it, never recall it:
+> `grep -c 'AppendFunc *(' systemManager.cpp` and the same for `AppendProc`.
 > Companions: [../CLAUDE.md](../CLAUDE.md) (compiler quick reference),
 > [name-binding.md](name-binding.md), [syntax-helper-design.md](syntax-helper-design.md).
 > This is foundation code — it predates most arcs in this folder and everything rides on it.
