@@ -257,7 +257,12 @@ bool ibValuePredefinedJobs::ibValueJobRow::CallAsFunc(const long lMethodNum, ibV
 		// result meant `job.Write()` answered TRUE over a setting that had not been stored: the
 		// schedule looked changed until the next restart put the old one back. Applying the live
 		// half after a failed write would make that lie last exactly one session.
-		if (!ibJobManager::WriteSharedSettings(settings))
+		// Both non-Written outcomes raise here, and that is not the seed's rule.
+		// A seed is the platform offering a starting value; this is a PERSON having
+		// asked for a change and being answered `true`. "There was no base to write
+		// to" is just as much a lie to them as "the base refused" — the setting is
+		// not stored either way, and the live half below would outlive it by one session.
+		if (ibJobManager::WriteSharedSettings(settings) != ibJobManager::ibWriteOutcome::Written)
 			ibBackendCoreException::Error(
 				_("the schedule of '%s' could not be written to the base"), m_jobName);
 

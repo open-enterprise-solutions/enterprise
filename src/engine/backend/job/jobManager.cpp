@@ -489,7 +489,13 @@ bool ibJobManager::Register(ibJobDescription desc)
 	// ⚠ A schedule changed in the Designer therefore does NOT reach a base that already has the
 	// row. Correct for a default, surprising in practice — the job list needs a "reset to the
 	// configuration's value" action, or the first support call is about exactly this.
-	{
+	//
+	// ASKED, NOT ASSUMED: the row is found BY THE KEY, so a job that has none has no row to read
+	// and none to seed — the register is keyed by guid, and a name is a caption. Every job the
+	// platform declares carries one (a minted literal for the engine's own, the metaobject's guid
+	// for a configuration's, the row's own for a parameterized one), so this skips nothing real;
+	// what it stops is asking the base a question that has no subject.
+	if (KeyOf(desc).isValid()) {
 		const ibJobSettings stored = ReadSharedSettings(KeyOf(desc));
 		if (stored.m_found) {
 			desc.m_active = stored.m_active;
@@ -504,11 +510,9 @@ bool ibJobManager::Register(ibJobDescription desc)
 			seed.m_name = desc.m_name;
 			seed.m_active = desc.m_active;
 			seed.m_schedule = desc.m_schedule;
-			// ⚠⚠ THE RESULT IS NOT DISCARDED. WriteSharedSettings returns false rather than raising,
-			// on the stated reasoning that "the caller decides whether that matters" — and this
-			// caller decided nothing, it dropped the value on the floor. A base whose sys_job cannot
-			// be written is a base where no job's settings survive a restart, and where the very
-			// first thing the platform does on opening it has silently failed.
+			// ⚠⚠ THE RESULT IS NOT DISCARDED. A base whose sys_job cannot be written is a base
+			// where no job's settings survive a restart, and where the very first thing the
+			// platform does on opening it has silently failed.
 			//
 			// It cost a whole evening: an INSERT rejected by a NOT NULL column threw, was caught
 			// inside the write, returned false HERE, and startup carried on as if nothing had
@@ -519,7 +523,13 @@ bool ibJobManager::Register(ibJobDescription desc)
 			// Raising puts that sentence in front of them: every ibBackendException records its own
 			// description, and the startup path drains the whole chain into one dialog. So this adds
 			// the ONE fact the chain is missing — WHICH job the platform choked on.
-			if (!WriteSharedSettings(seed))
+			//
+			// ⚠ But ONLY when the base had its say. Registering must stay possible with no database
+			// at all (see the note below, and JobManager.RegisterNeedsNoApplicationData): the seed
+			// is what a base that has never seen this job starts from, not a precondition for
+			// declaring one. Raising on NoBase turned "there is nothing to seed yet" into a failed
+			// bring-up — which is the same conflation this used to make in the other direction.
+			if (WriteSharedSettings(seed) == ibWriteOutcome::Refused)
 				ibBackendCoreException::Error(
 					_("the scheduled job '%s' could not be recorded in the base"), desc.m_name);
 		}
@@ -530,6 +540,10 @@ bool ibJobManager::Register(ibJobDescription desc)
 	// the database opens), and at that moment there is no metadata, no user and
 	// no reason to spend a Connect on a job that may not come due for six hours.
 	// The session is materialised on first launch instead; see EnsureSession.
+	//
+	// The seed above is the one thing that DOES touch the base, and it is deliberately
+	// optional: with no connection it is skipped and the declaration stands, so a job
+	// can be declared before — or entirely without — a database.
 	std::lock_guard<std::mutex> lk(m_mtx);
 	if (m_stopped || Find(desc.m_name) != nullptr)
 		return false;

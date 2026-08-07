@@ -8,6 +8,8 @@
 // sys_job goes through the L2 door: it renders the dialect (upsert above all) so
 // nothing here has to ask which driver it is on.
 #include "backend/databaseLayer/databaseQueryBuilder.h"
+// ibBackendQueryException — the write tells "no connection" from "the base said no" by its Kind.
+#include "backend/databaseLayer/databaseLayerException.h"
 
 #include <algorithm>
 
@@ -151,10 +153,10 @@ ibJobManager::ibJobSettings ibJobManager::ReadSharedSettings(const ibGuid& key)
 	return settings;
 }
 
-bool ibJobManager::WriteSharedSettings(const ibJobSettings& settings)
+ibJobManager::ibWriteOutcome ibJobManager::WriteSharedSettings(const ibJobSettings& settings)
 {
 	if (!settings.IsOk())
-		return false;   // no key, no record — there is nothing this row would be about
+		return ibWriteOutcome::Refused;   // no key, no record — there is nothing this row would be about
 
 	try {
 		wxMemoryBuffer blob;
@@ -179,13 +181,25 @@ bool ibJobManager::WriteSharedSettings(const ibJobSettings& settings)
 				ibValue(settings.m_active),
 			});
 
-		return true;
+		return ibWriteOutcome::Written;
+	}
+	catch (const ibBackendQueryException& err) {
+		// NO BASE IS NOT A REFUSAL, and this is the whole reason the outcome has three values.
+		// L2 already knows the difference — it throws NoConnection when the holder has nothing to
+		// give — and that knowledge died in a catch-all one line further down. A declaration made
+		// before a database is open (a unit test, the platform's own list at bring-up) has not been
+		// refused anything; it has not been asked yet.
+		if (err.GetKind() == ibBackendQueryException::Kind::NoConnection)
+			return ibWriteOutcome::NoBase;
+
+		// Any other query-tier fault is ours and the row did not land — a refusal.
+		return ibWriteOutcome::Refused;
 	}
 	catch (...) {
 		// A lost settings write is a setting that did not stick. Reported rather than raised — the
 		// caller decides whether that matters (a seed can be retried on the next registration; a
 		// deliberate "switch this off" is something a person should hear about).
-		return false;
+		return ibWriteOutcome::Refused;
 	}
 }
 

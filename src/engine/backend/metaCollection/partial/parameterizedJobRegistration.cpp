@@ -194,10 +194,13 @@ bool ibValueMetaObjectParameterizedJob::RegisterRow(const ibGuid& objGuid, bool 
 	record.m_name = GetRowJobName(objGuid);
 	record.m_active = active && IsUsed();
 	record.m_schedule = schedule;
-	const bool recorded = ibJobManager::WriteSharedSettings(record);
-	if (!recorded) {
+	if (ibJobManager::WriteSharedSettings(record) == ibJobManager::ibWriteOutcome::Refused) {
 		// The register did not take the setting. Say so — a switch that did not stick is exactly
 		// the failure a person must not discover by watching a job they turned off keep running.
+		//
+		// NoBase is not that failure and is not reported: this runs at bring-up, where a row
+		// declared before the connection is up has been asked nothing. Logging it would train
+		// whoever reads the log to ignore the line that matters.
 		wxLogDebug(wxT("job row '%s': the register refused the settings write"), presentation);
 	}
 

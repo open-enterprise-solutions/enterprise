@@ -579,14 +579,30 @@ public:
 		bool IsOk() const { return m_key.isValid(); }
 	};
 
+	// WHAT BECAME OF A SETTINGS WRITE — three answers, because a bool cannot carry two facts.
+	//
+	// "It did not take" used to mean both "there is no base to write to" and "the base looked at
+	// this row and said no", and every caller had to pick ONE behaviour for both. Whichever it
+	// picked was wrong half the time: silence hid a rejected INSERT for a whole evening, and
+	// raising took down every job declared before a database was open. The two are different
+	// events and now say so.
+	enum class ibWriteOutcome {
+		Written,   // the row is in the base
+		NoBase,    // no connection to write through — nobody has been told anything yet
+		Refused,   // the base HAD its say and the row did not land: a real failure
+	};
+
 	// Read / write the base-side settings of a job by name. Public because the JOB SETTINGS VALUE
 	// (script's PredefinedJobs.<Name>) is exactly a view on this row: one door, so the scheduler
 	// and the card cannot hold different opinions about whether a job is on.
 	// Both keyed by the job's STABLE key, never by its name — a renamed job must keep its settings
 	// and its clock, and an orphaned row that still says "switched off" is exactly what keying by
 	// the name produces.
-	static ibJobSettings ReadSharedSettings(const ibGuid& key);
-	static bool          WriteSharedSettings(const ibJobSettings& settings);
+	//
+	// A read has no such split: an unreadable row is NO OPINION either way, and the declaration's
+	// own values stand. Only a write can be refused.
+	static ibJobSettings   ReadSharedSettings(const ibGuid& key);
+	static ibWriteOutcome  WriteSharedSettings(const ibJobSettings& settings);
 
 	// FORGET a job entirely — drop its row from sys_job. For a job that no longer exists: a
 	// parameterized row that was deleted takes its settings and its clock with it, so a later row
