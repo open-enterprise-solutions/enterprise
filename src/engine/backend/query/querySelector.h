@@ -68,6 +68,15 @@ public:
 	{
 		m_totalLevels = levels; m_aggregates = aggs; return *this;
 	}
+	// THE OVERALL LEVEL — walk the tree's ROOT as a row, above every dimension. It is a WALK
+	// setting, not a fold one: the root's aggregates are already computed either way
+	// (BuildDimensionTree — "grand total in-place"), and this only decides whether anyone sees them
+	// as a row instead of having to ask GetTotal() for each column by hand.
+	ibSelector& WithTotals(const std::vector<ibTotalLevel>& levels,
+		const std::vector<ibDataQueryBuilder::AggregateItem>& aggs, bool overall)
+	{
+		m_totalLevels = levels; m_aggregates = aggs; m_totalsOverall = overall; return *this;
+	}
 
 	// EAGER fold: the whole snapshot → the node tree per the TRAVERSAL kind. Subtotals from THIS snapshot.
 	//   Direct            → flat: each row a leaf node;
@@ -82,7 +91,12 @@ public:
 		if (m_kind == ibSelectKind::ibSelectKind_Direct)
 			return BuildFlat();
 
-		if (!m_totalLevels.empty()) {
+		// ⚠ OVERALL ALONE IS STILL A TOTALS FOLD. `TOTALS COUNT(x) BY OVERALL` asks for one row over
+		// everything and names no dimension — so the levels are empty, and without this the walk fell
+		// through to the manual/unit-test fallback below and folded by a null column. The dimension
+		// tree handles it exactly: FoldDimLevel returns at once with nothing to fold, and the root
+		// still gets the whole-snapshot aggregates, which IS the row that was asked for.
+		if (!m_totalLevels.empty() || m_totalsOverall) {
 			// Self-hierarchy fast path: a SINGLE Hierarchy level on the source's OWN parent column is
 			// ROW-keyed (each catalog row is a node) — that is BuildHierarchyTree, rowKey from the
 			// queryable (already in the snapshot), NO extra query.
@@ -201,6 +215,12 @@ private:
 		if (m_walk) return;
 		m_walk = std::make_unique<ibSelectorTree>(Build());
 		m_visits.clear();
+		// THE ROOT IS THE OVERALL ROW, and it comes FIRST — pre-order, and there is nothing above it.
+		// Normally the walk starts at the root's CHILDREN: the root is the fold over everything, which
+		// is a total, not a dimension value, and a report that did not ask for it would find a
+		// mysterious empty first row. Asked for, it is exactly the row the author wanted.
+		if (m_totalsOverall)
+			m_visits.push_back(&m_walk->Root());
 		FlattenPreOrder(m_walk->Root(), m_visits);
 		m_pos = -1;
 	}
@@ -216,6 +236,7 @@ private:
 	const ibBackendQueryColumn* m_parentKeyCol = nullptr;
 	std::vector<const ibBackendQueryColumn*>       m_groupFields;   // grouping fold (manual ByGroups)
 	std::vector<ibTotalLevel>                      m_totalLevels;   // totals dimensions (from the door, via WithTotals)
+	bool                                           m_totalsOverall = false;  // walk the ROOT as a row (BY OVERALL)
 	std::vector<ibDataQueryBuilder::AggregateItem> m_aggregates;
 
 	// sub-selection recipe (Select(kind) only)

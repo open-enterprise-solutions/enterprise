@@ -567,7 +567,7 @@ ibSessionHolder ibJobManager::OpenRunSession(const ibJobDescription& desc)
 			// Named a user who is not there: refuse rather than run the job
 			// anonymously. Falling back to full rights is how a scheduled job ends
 			// up seeing more than its author ever could.
-			wxLogDebug(wxT("job '%s': user %s not found — the job will not run"),
+			wxLogDebug(wxT("job '%s': user %s not found - the job will not run"),
 			           desc.m_name, desc.m_runAsUser.str());
 			return ibSessionHolder();
 		}

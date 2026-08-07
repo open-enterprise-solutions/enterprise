@@ -1638,7 +1638,7 @@ bool ibDatabaseLayerFirebird::ReconnectIfLeaderChanged()
 	// to catch, rollback their logical TX, and retry from scratch.
 	if (m_pTransaction != 0) {
 		wxLogError(wxT("ibDatabaseLayerFirebird: leader handoff during ")
-		           wxT("active transaction (was %s, now %s) — caller must ")
+		           wxT("active transaction (was %s, now %s) - caller must ")
 		           wxT("rollback and retry"),
 		           m_currentConnectUrl, currentLeaderUrl);
 		SetErrorCode(DATABASE_LAYER_ERROR_LOADING_LIBRARY);

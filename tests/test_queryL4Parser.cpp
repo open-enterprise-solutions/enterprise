@@ -180,6 +180,25 @@ TEST(QueryL4Parser, TotalsByDimensions)
 	EXPECT_EQ(sel->m_totalsBy[0].m_unfold, ibQueryDimUnfold::Elements);   // no keyword => Elements
 	EXPECT_EQ(sel->m_totalsBy[1].m_expr->m_path[0], wxT("Store"));
 	EXPECT_EQ(sel->m_totalsBy[1].m_unfold, ibQueryDimUnfold::Hierarchy);  // explicit HIERARCHY
+	EXPECT_TRUE(sel->m_totalsBy[0].m_alias.IsEmpty());                    // no name given => the column's own
+}
+
+// A DIMENSION LEVEL CAN BE NAMED. Without it, two levels over the same column answer to the same
+// name and one of them wins — which is the whole reason the alias exists (ibQueryTotalDim::m_alias).
+TEST(QueryL4Parser, TotalsDimensionAlias)
+{
+	auto sel = Parse(wxT("SELECT Client, Amount FROM Document.Sales "
+	                     "TOTALS SUM(Amount) BY Date HIERARCHY AS Period, Client AS Buyer"));
+	ASSERT_EQ(sel->m_totalsBy.size(), 2u);
+	EXPECT_EQ(sel->m_totalsBy[0].m_expr->m_path[0], wxT("Date"));
+	EXPECT_EQ(sel->m_totalsBy[0].m_unfold, ibQueryDimUnfold::Hierarchy);   // the unfold stays the dimension's
+	EXPECT_EQ(sel->m_totalsBy[0].m_alias, wxT("Period"));                  // the alias is the LEVEL's
+	EXPECT_EQ(sel->m_totalsBy[1].m_alias, wxT("Buyer"));
+
+	// The bare form (no AS) reads the same way — an identifier after a dimension can only be its name.
+	auto bare = Parse(wxT("SELECT Amount FROM Document.Sales TOTALS SUM(Amount) BY Client Buyer"));
+	ASSERT_EQ(bare->m_totalsBy.size(), 1u);
+	EXPECT_EQ(bare->m_totalsBy[0].m_alias, wxT("Buyer"));
 }
 
 TEST(QueryL4Parser, SyntaxErrorThrows)
@@ -408,6 +427,23 @@ TEST(QueryRender, SubqueryAndUnionRoundTrip) {
 	ExpectRoundTrip(wxT("SELECT Ref FROM Catalog.Products UNION ALL SELECT Ref FROM Catalog.Archive"));
 }
 
+// A PROJECTION IS AN EXPRESSION. The constructor's expression editor writes any of them into a
+// field, so the parser has to read any of them back — else the window produces text its own engine
+// refuses, which is the one thing this arc must never do.
+TEST(QueryL4Parser, SelectListTakesAPredicate)
+{
+	auto sel = Parse(wxT("SELECT DeletionMark IS NULL AS Deleted, Code FROM Catalog.Products"));
+	ASSERT_EQ(sel->m_projections.size(), 2u);
+	EXPECT_EQ(sel->m_projections[0].m_expr->m_kind, ibQueryAstExprKind::IsNull);
+	EXPECT_EQ(sel->m_projections[0].m_alias, wxT("Deleted"));
+	EXPECT_EQ(sel->m_projections[1].m_expr->m_kind, ibQueryAstExprKind::Column);
+}
+
+TEST(QueryRender, PredicateProjectionRoundTrips) {
+	ExpectRoundTrip(wxT("SELECT DeletionMark IS NULL AS Deleted FROM Catalog.Products"));
+	ExpectRoundTrip(wxT("SELECT Price > 100 AS Expensive, Code FROM Catalog.Products"));
+}
+
 TEST(QueryRender, CaseRoundTrips) {
 	ExpectRoundTrip(wxT("SELECT CASE WHEN Price > 100 THEN \"big\" ELSE \"small\" END AS size FROM Catalog.Products"));
 }
@@ -415,6 +451,11 @@ TEST(QueryRender, CaseRoundTrips) {
 TEST(QueryRender, TotalsRoundTrip) {
 	ExpectRoundTrip(wxT("SELECT Owner, Price FROM Catalog.Products TOTALS SUM(Price) BY Owner"));
 	ExpectRoundTrip(wxT("SELECT Owner, Price FROM Catalog.Products TOTALS SUM(Price) BY Owner HIERARCHY"));
+	// The level's NAME survives the trip — written with AS, so the render cannot be read back as a
+	// second dimension.
+	ExpectRoundTrip(wxT("SELECT Owner, Price FROM Catalog.Products TOTALS SUM(Price) BY Owner AS Seller"));
+	ExpectRoundTrip(wxT("SELECT Owner, Price FROM Catalog.Products "
+	                    "TOTALS SUM(Price) BY Owner HIERARCHY AS Seller, Code AS Article"));
 }
 
 TEST(QueryRender, ExpressionAloneRenders) {
@@ -423,4 +464,297 @@ TEST(QueryRender, ExpressionAloneRenders) {
 	ASSERT_NE(nullptr, select);
 	ASSERT_NE(nullptr, select->m_where);
 	EXPECT_EQ(wxT("Code = \"1\""), ibRenderQueryExpr(*select->m_where));
+}
+
+// ===========================================================================
+//  The constructor's own surface — ALLOWED / FOR UPDATE / INTO / DROP, the
+//  PACKAGE, and a lone expression parsed back.
+//
+//  Every one of these exists because a constructor tab edits it, and each is
+//  pinned the same way the rest of the language is: what the renderer writes,
+//  the parser reads. A constructor that emits a clause its own parser cannot
+//  read back is the one failure mode that makes the tool abandoned.
+// ===========================================================================
+
+namespace {
+
+ibQueryPackage ParsePkg(const wxString& text)
+{
+	ibQueryParser parser;
+	return parser.ParsePackage(text);
+}
+
+// text -> package -> text -> package -> text; the last two must agree.
+void ExpectPackageRoundTrip(const wxString& source)
+{
+	const ibQueryPackage first = ParsePkg(source);
+	const wxString once = ibRenderQueryPackage(first);
+
+	const ibQueryPackage second = ParsePkg(once);
+	const wxString twice = ibRenderQueryPackage(second);
+
+	EXPECT_EQ(once, twice)
+		<< "package round trip is not stable\nfirst:\n" << once.ToStdString()
+		<< "\nsecond:\n" << twice.ToStdString();
+}
+
+} // namespace
+
+TEST(QueryL4Parser, AllowedIsParsedAndIsNotTheDefault)
+{
+	auto plain = Parse(wxT("SELECT Ref FROM Catalog.Products"));
+	ASSERT_NE(nullptr, plain);
+	EXPECT_FALSE(plain->m_allowed) << "ALLOWED must never be the default — a quiet refusal is a lie";
+
+	auto allowed = Parse(wxT("SELECT ALLOWED Ref FROM Catalog.Products"));
+	ASSERT_NE(nullptr, allowed);
+	EXPECT_TRUE(allowed->m_allowed);
+}
+
+TEST(QueryL4Parser, AllowedComposesWithTopAndDistinct)
+{
+	auto sel = Parse(wxT("SELECT ALLOWED TOP 10 DISTINCT Ref FROM Catalog.Products"));
+	ASSERT_NE(nullptr, sel);
+	EXPECT_TRUE(sel->m_allowed);
+	EXPECT_EQ(10, sel->m_top);
+	EXPECT_TRUE(sel->m_distinct);
+}
+
+TEST(QueryL4Parser, ForUpdateIsParsedAndIsNotTheDefault)
+{
+	auto plain = Parse(wxT("SELECT Ref FROM Catalog.Products"));
+	ASSERT_NE(nullptr, plain);
+	EXPECT_FALSE(plain->m_forUpdate);
+
+	auto locked = Parse(wxT("SELECT Ref FROM Catalog.Products WHERE Code = \"1\" FOR UPDATE"));
+	ASSERT_NE(nullptr, locked);
+	EXPECT_TRUE(locked->m_forUpdate);
+}
+
+TEST(QueryL4Parser, ForWithoutUpdateIsASyntaxError)
+{
+	EXPECT_THROW(Parse(wxT("SELECT Ref FROM Catalog.Products FOR")), ibBackendException);
+}
+
+TEST(QueryL4Parser, IntoNamesTheTempTable)
+{
+	auto sel = Parse(wxT("SELECT Ref, Price INTO Sales FROM Document.Orders"));
+	ASSERT_NE(nullptr, sel);
+	EXPECT_EQ(wxT("Sales"), sel->m_intoTemp);
+	ASSERT_EQ(2u, sel->m_projections.size());
+	ASSERT_EQ(2u, sel->m_from.m_name.size());
+}
+
+TEST(QueryL4Parser, IntoWithoutANameIsASyntaxError)
+{
+	EXPECT_THROW(Parse(wxT("SELECT Ref INTO FROM Document.Orders")), ibBackendException);
+}
+
+TEST(QueryL4Parser, ATempTableIsABareNameAsASource)
+{
+	// The point of INTO: the NEXT statement selects from that name with no <Kind>. prefix,
+	// because a temp table has no metaclass — it is what the previous statement left.
+	auto sel = Parse(wxT("SELECT Ref FROM Sales"));
+	ASSERT_NE(nullptr, sel);
+	ASSERT_EQ(1u, sel->m_from.m_name.size());
+	EXPECT_EQ(wxT("Sales"), sel->m_from.m_name[0]);
+}
+
+TEST(QueryL4Parser, SingleStatementIsAPackageOfOne)
+{
+	const ibQueryPackage pkg = ParsePkg(wxT("SELECT Ref FROM Catalog.Products"));
+	ASSERT_EQ(1u, pkg.m_statements.size());
+	EXPECT_NE(nullptr, pkg.SingleSelect());
+	EXPECT_FALSE(pkg.m_statements[0].IsDrop());
+}
+
+TEST(QueryL4Parser, EmptyTextIsAnEmptyPackageNotAnError)
+{
+	// The constructor opens on nothing and builds from nothing — the same road as
+	// building from something, just with a shorter start.
+	const ibQueryPackage pkg = ParsePkg(wxEmptyString);
+	EXPECT_TRUE(pkg.m_statements.empty());
+	EXPECT_EQ(nullptr, pkg.SingleSelect());
+}
+
+TEST(QueryL4Parser, PackageKeepsStatementsInWrittenOrder)
+{
+	const ibQueryPackage pkg = ParsePkg(
+		wxT("SELECT Ref INTO Sales FROM Document.Orders;")
+		wxT("SELECT Ref FROM Sales;")
+		wxT("DROP Sales"));
+
+	ASSERT_EQ(3u, pkg.m_statements.size());
+	EXPECT_EQ(wxT("Sales"), pkg.m_statements[0].m_select->m_intoTemp);
+	EXPECT_EQ(wxT("Sales"), pkg.m_statements[1].m_select->m_from.m_name[0]);
+	EXPECT_TRUE(pkg.m_statements[2].IsDrop());
+	EXPECT_EQ(wxT("Sales"), pkg.m_statements[2].m_dropTemp);
+
+	// A package of several is NOT a single query — the single-statement door says so
+	// rather than silently swallowing everything after the first ';'.
+	EXPECT_EQ(nullptr, pkg.SingleSelect());
+}
+
+TEST(QueryL4Parser, SingleQueryDoorRefusesAPackage)
+{
+	EXPECT_THROW(Parse(wxT("SELECT Ref FROM Catalog.Products; SELECT Ref FROM Catalog.Goods")),
+		ibBackendException);
+}
+
+TEST(QueryL4Parser, ATrailingSeparatorIsPunctuationNotAStatement)
+{
+	auto sel = Parse(wxT("SELECT Ref FROM Catalog.Products;"));
+	EXPECT_NE(nullptr, sel);
+
+	const ibQueryPackage pkg = ParsePkg(wxT("SELECT Ref FROM Catalog.Products;"));
+	EXPECT_EQ(1u, pkg.m_statements.size());
+}
+
+TEST(QueryL4Parser, DropWithoutANameIsASyntaxError)
+{
+	EXPECT_THROW(ParsePkg(wxT("DROP")), ibBackendException);
+}
+
+TEST(QueryL4Parser, AnExpressionParsesOnItsOwn)
+{
+	// The constructor's "arbitrary condition" cell: a hand-typed predicate is read by
+	// THIS parser, never by a hand-rolled checker beside it.
+	ibQueryParser parser;
+	ibQueryAstExprPtr expr = parser.ParseExpression(wxT("Price >= 100 AND Code LIKE \"A%\""));
+	ASSERT_NE(nullptr, expr);
+	EXPECT_EQ(ibQueryAstExprKind::Logical, expr->m_kind);
+	EXPECT_FALSE(expr->m_isOr);
+}
+
+TEST(QueryL4Parser, AnEmptyExpressionIsNullNotAnError)
+{
+	ibQueryParser parser;
+	EXPECT_EQ(nullptr, parser.ParseExpression(wxEmptyString));
+}
+
+TEST(QueryL4Parser, ABrokenExpressionThrowsFromTheEngine)
+{
+	ibQueryParser parser;
+	EXPECT_THROW(parser.ParseExpression(wxT("Price >= ")), ibBackendException);
+	EXPECT_THROW(parser.ParseExpression(wxT("Price 100")), ibBackendException);
+}
+
+TEST(QueryRender, AllowedAndForUpdateRoundTrip) {
+	ExpectRoundTrip(wxT("SELECT ALLOWED Ref FROM Catalog.Products"));
+	ExpectRoundTrip(wxT("SELECT ALLOWED TOP 5 DISTINCT Ref FROM Catalog.Products"));
+	ExpectRoundTrip(wxT("SELECT Ref FROM Catalog.Products WHERE Price > 10 FOR UPDATE"));
+	ExpectRoundTrip(wxT("SELECT Ref FROM Catalog.Products ORDER BY Ref ASC FOR UPDATE"));
+}
+
+TEST(QueryRender, IntoRoundTrips) {
+	ExpectRoundTrip(wxT("SELECT Ref, Price INTO Sales FROM Document.Orders WHERE Price > 0"));
+}
+
+// ';' SEPARATES the statements of a package and does NOT terminate the last one — a query must not
+// grow a semicolon it was never written with. A trailing one typed by hand is still READ.
+TEST(QueryRender, PackageStatementsAreSemicolonSeparated)
+{
+	const wxString one = ibRenderQueryPackage(ParsePkg(wxT("SELECT Ref FROM Catalog.Products")));
+	EXPECT_EQ(wxNOT_FOUND, one.Find(wxT(';')));
+
+	const wxString many = ibRenderQueryPackage(ParsePkg(
+		wxT("SELECT Ref INTO Tmp FROM Catalog.Products; SELECT Ref FROM Tmp")));
+	EXPECT_EQ(1u, many.Freq(wxT(';')));
+	EXPECT_FALSE(many.EndsWith(wxT(";")));
+
+	// A trailing ';' on the way IN is accepted and simply not written back out.
+	const wxString trailing = ibRenderQueryPackage(ParsePkg(wxT("SELECT Ref FROM Catalog.Products;")));
+	EXPECT_EQ(wxNOT_FOUND, trailing.Find(wxT(';')));
+
+	ExpectPackageRoundTrip(wxT("SELECT Ref INTO Tmp FROM Catalog.Products; SELECT Ref FROM Tmp"));
+}
+
+TEST(QueryRender, PackageRoundTrips) {
+	ExpectPackageRoundTrip(
+		wxT("SELECT Ref, Price INTO Sales FROM Document.Orders;")
+		wxT("SELECT Ref FROM Sales WHERE Price > 100 ORDER BY Ref ASC;")
+		wxT("DROP Sales"));
+}
+
+TEST(QueryRender, RenderedPackageTextParsesBackAsThatPackage) {
+	// The whole contract in one assertion: the constructor hands its text to the
+	// ENGINE's parser, and the engine reads back exactly the statements it wrote.
+	ibQueryPackage built;
+	{
+		ibQueryAstStatement into;
+		into.m_select = Parse(wxT("SELECT Ref INTO Sales FROM Document.Orders"));
+		built.m_statements.push_back(into);
+
+		ibQueryAstStatement read;
+		read.m_select = Parse(wxT("SELECT ALLOWED Ref FROM Sales"));
+		built.m_statements.push_back(read);
+
+		ibQueryAstStatement drop;
+		drop.m_dropTemp = wxT("Sales");
+		built.m_statements.push_back(drop);
+	}
+
+	const ibQueryPackage reparsed = ParsePkg(ibRenderQueryPackage(built));
+	ASSERT_EQ(3u, reparsed.m_statements.size());
+	EXPECT_EQ(wxT("Sales"), reparsed.m_statements[0].m_select->m_intoTemp);
+	EXPECT_TRUE(reparsed.m_statements[1].m_select->m_allowed);
+	EXPECT_EQ(wxT("Sales"), reparsed.m_statements[2].m_dropTemp);
+}
+
+// ===========================================================================
+//  Regressions found by auditing the arc of 2026-08-06 — every one is a clause
+//  an EXISTING pass did not know about, which is the silent kind.
+// ===========================================================================
+
+TEST(QueryL4Parser, IntoInsideANestedTableIsRefused)
+{
+	// A nested query is not a statement. INTO materialises a PACKAGE's temp table, so inside a
+	// source it would be a silent no-op — and a silent no-op in something written deliberately is
+	// worse than a refusal.
+	EXPECT_THROW(Parse(wxT("SELECT Code FROM (SELECT Code INTO t FROM Catalog.Products) AS x")),
+		ibBackendException);
+}
+
+TEST(QueryL4Parser, ForUpdateInsideANestedTableIsRefused)
+{
+	EXPECT_THROW(Parse(wxT("SELECT Code FROM (SELECT Code FROM Catalog.Products FOR UPDATE) AS x")),
+		ibBackendException);
+}
+
+TEST(QueryL4Parser, ANestedTableWithoutThoseWordsStillParses)
+{
+	// The refusal above must be about the two words, not about nested tables.
+	auto sel = Parse(wxT("SELECT Code FROM (SELECT Code FROM Catalog.Products) AS x"));
+	ASSERT_NE(nullptr, sel);
+	EXPECT_NE(nullptr, sel->m_from.m_subquery);
+}
+
+// ===========================================================================
+//  INDEX BY — the columns a materialised temp table is indexed by.
+// ===========================================================================
+
+TEST(QueryL4Parser, IndexByNamesTheColumns)
+{
+	auto sel = Parse(wxT("SELECT Ref, Code INTO Sales FROM Document.Orders INDEX BY Ref, Code"));
+	ASSERT_NE(nullptr, sel);
+	ASSERT_EQ(2u, sel->m_indexBy.size());
+	EXPECT_EQ(wxT("Ref"),  sel->m_indexBy[0]->m_path.back());
+	EXPECT_EQ(wxT("Code"), sel->m_indexBy[1]->m_path.back());
+}
+
+TEST(QueryL4Parser, IndexByWithoutIntoIsRefused)
+{
+	// An index over a table nobody is making could only describe something that does not exist —
+	// a silent no-op, and the loudest kind of wrong in a query written for speed.
+	EXPECT_THROW(Parse(wxT("SELECT Ref FROM Document.Orders INDEX BY Ref")), ibBackendException);
+}
+
+TEST(QueryL4Parser, IndexByNeedsBy)
+{
+	EXPECT_THROW(Parse(wxT("SELECT Ref INTO Sales FROM Document.Orders INDEX Ref")), ibBackendException);
+}
+
+TEST(QueryRender, IndexByRoundTrips) {
+	ExpectRoundTrip(wxT("SELECT Ref, Code INTO Sales FROM Document.Orders INDEX BY Ref, Code"));
+	ExpectRoundTrip(wxT("SELECT Ref INTO Sales FROM Document.Orders WHERE Code > 1 INDEX BY Ref"));
 }

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -250,6 +250,8 @@
     <ClInclude Include="query\queryLexer.h" />
     <ClInclude Include="query\queryAst.h" />
     <ClInclude Include="query\queryRender.h" />
+    <ClInclude Include="query\queryConstructorModel.h" />
+    <ClInclude Include="query\queryTempStore.h" />
     <ClInclude Include="query\queryParser.h" />
     <ClInclude Include="query\queryLowering.h" />
     <ClInclude Include="query\queryRewrite.h" />
@@ -657,6 +659,8 @@
     <ClCompile Include="query\dataQueryBuilder.cpp" />
     <ClCompile Include="query\queryLexer.cpp" />
     <ClCompile Include="query\queryRender.cpp" />
+    <ClCompile Include="query\queryConstructorModel.cpp" />
+    <ClCompile Include="query\queryTempStore.cpp" />
     <ClCompile Include="query\queryParser.cpp" />
     <ClCompile Include="query\queryLowering.cpp" />
     <ClCompile Include="query\queryRewrite.cpp" />

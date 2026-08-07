@@ -64,7 +64,7 @@ size_t ibPluginManager::LoadAll()
 			// OUR plugin when a dependency is missing or a symbol went unresolved,
 			// and that one used to vanish without a trace. Same file, same branch;
 			// only the log tells them apart afterwards.
-			wxLogDebug("Plugin candidate '%s' did not load — missing dependency or "
+			wxLogDebug("Plugin candidate '%s' did not load - missing dependency or "
 				"unresolved symbol; skipped.", path);
 			continue;
 		}

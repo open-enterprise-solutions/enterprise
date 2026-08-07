@@ -62,6 +62,16 @@ public:
 	// End token. Throws ibBackendCoreException (line / position) on a lex error.
 	std::vector<ibQueryToken> Tokenize(const wxString& queryText);
 
+	// IS THIS A NAME THE LANGUAGE CAN CARRY? Asked of the LEXER, because what an identifier is is
+	// the lexer's definition and nobody else's — a second set of rules written in a dialog would
+	// disagree with it the day either changed, and the disagreement would surface as a query the
+	// constructor accepted and the engine then refused.
+	//
+	// True only for text that lexes as EXACTLY ONE identifier: no spaces, no punctuation, not a
+	// keyword, not empty. This is what every place that accepts a NAME asks — a projection alias, a
+	// table alias, a totals level's name, a temporary table's name.
+	static bool IsIdentifier(const wxString& text);
+
 protected:
 	// The base body is a no-op (the script compiler overrides it). We THROW so a
 	// malformed numeric / string / date literal does not silently return false.

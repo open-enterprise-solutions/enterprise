@@ -226,6 +226,50 @@ Function OnAccessRead(Source, Operation)
 
 ---
 
+## Coverage — every terminal of the door, and which of them enforce
+
+The door has nine terminals. Enforcement lives on ALL of them; anything that must NOT be filtered
+says so at the callsite with `WithAccessPolicy(nullptr)`.
+
+| Terminal | Enforces | Note |
+|---|---|---|
+| `Execute(req)` | yes | the plain read |
+| `Execute(req, cache, sig)` | yes | the list / paging read |
+| `SelectAggregate()` | **yes — since 2026-08-06** | see below |
+| `SelectAggregatePage()` | **yes — since 2026-08-06** | the group-level page |
+| `SelectTotals()` | **yes — since 2026-08-06** | no caller today; guarded anyway |
+| `Insert` / `Upsert` / `Update` / `Delete` | yes | two stages each (Table, then Value) |
+
+⚠ **The aggregate leak (found by Max, 2026-08-06, by reading; fixed the same day).** The three read
+terminals above went straight to the composer, so:
+
+```
+SELECT Amount FROM Catalog.X        -> policy applied (refused, or empty under ALLOWED)
+SELECT SUM(Amount) FROM Catalog.X   -> policy NOT applied
+```
+
+An inference leak: sums and counts over rows the reader may not see, with `SELECT ALLOWED` inert on
+that path too. It was not caught deeper down — `BuildSpec()` carries no policy and the whole composer
+(`queryProvider.cpp`) names it nowhere. The user query really lands there (`queryLowering.cpp` —
+`SelectAggregate` for a flat aggregate, `SelectAggregatePage` for a group page), and so does the
+script surface (`Queryable.Count`).
+
+**`ALLOWED` + aggregate is answered explicitly**, because the two shapes mean different things:
+
+- **no `GROUP BY`** — one row of ZEROS. `SELECT SUM(x) FROM T` returns a row whatever T holds, and
+  the honest sum of nothing you may see is zero. Answering with no rows would say "there is no such
+  question".
+- **with `GROUP BY`** — an EMPTY result, which is already right: no visible rows, no groups.
+- **`SelectTotals`** — no softening. A totals TREE has no empty form that is not a lie about its
+  shape, so a refusal stays a refusal.
+
+**System reads say so out loud.** `ibDerivedState` (totals regeneration / verification / collapse)
+routes every builder through one `SystemQuery(holder)` helper that clears the policy, because
+recomputing STORED totals from the rows the caller happens to see would leave numbers that are wrong
+for everyone afterwards — silently. The rule cannot be inferred: the door pulls the policy from the
+CURRENT SESSION, and a background job runs under the identity of whoever queued it, so it has both.
+`commonObjectRecordSetQuery`'s physical-existence probe was already marked this way.
+
 ## Write path
 
 Every builder write asks its own stage method, and the object-write layer picks the verb from the

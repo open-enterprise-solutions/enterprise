@@ -323,7 +323,7 @@ ibQueryResult ibDatabaseQueryBuilder::ExecuteReturning(const ibDmlStatement& dml
 
 	if (dml.m_returning.empty())
 		ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
-			_("ExecuteReturning needs a RETURNING column list — use ibReturning(), or Execute() for a plain write."));
+			_("ExecuteReturning needs a RETURNING column list - use ibReturning(), or Execute() for a plain write."));
 
 	ibQueryRenderer renderer(conn->GetDialect());
 
@@ -680,6 +680,8 @@ wxString ibQueryRenderer::RenderExpr(const ibQueryExprPtr& expr)
 
 	case ibQueryExprKind::Func: {
 		wxString s = expr->m_name + wxT("(");
+		if (expr->m_distinct)
+			s += wxT("DISTINCT ");   // COUNT(DISTINCT col) — one spelling, every dialect
 		for (size_t i = 0; i < expr->m_args.size(); ++i) {
 			if (i) s += wxT(", ");
 			s += RenderExpr(expr->m_args[i]);

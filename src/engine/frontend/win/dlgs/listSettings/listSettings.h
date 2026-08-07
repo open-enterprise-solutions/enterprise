@@ -7,6 +7,7 @@
 #include <wx/combobox.h>
 #include <wx/choice.h>
 #include <wx/textctrl.h>
+#include <wx/stc/stc.h>
 #include <wx/checkbox.h>
 
 #include "backend/composition/listFilter.h"
@@ -47,10 +48,9 @@ public:
 	// model's composer (ibCommitSettingsToComposer + NotifyReset).
 	static bool ShowListSettingsDialog(ibValueModel* model);
 
-	// The renderer reaches back into the dialog for the buffer filter list and
-	// the dataview selection (historically ported from the old filter dialog).
-	ibValueFilterList* GetFilterList() const;
-	// The filter as the TREE it is — the root group everything hangs under.
+	// The filter as the TREE it is — the root group everything hangs under. (There was a second
+	// accessor beside it handing out the flat LIST, left over from the old filter dialog; the tree
+	// is the shape the filter actually has, and nothing asked for the other one any more.)
 	class ibValueFilterGroup* GetFilterRoot() const;
 	ibValueSortList*   GetOrderList() const;
 	ibValueGroupList*  GetGroupList() const;
@@ -103,6 +103,9 @@ private:
 	// and land the cursor on the line the user just acted on — a command whose
 	// result you have to go and find again reads as a command that did nothing.
 	void RefreshFilterTree(const ibValue& select = ibValue());
+	// Open the filter on its root and every group under it. Runs on the NEXT turn of the event loop
+	// (RefreshFilterTree posts it): expanding a row the view has not fetched yet does nothing.
+	void ExpandFilterTree();
 	void AddFilterForField(const wxTreeItemId& item);
 	void OnFilterFieldActivated(wxTreeEvent&);
 	void OnFilterAdd(wxCommandEvent&);   // add the SELECTED available-field as a filter row
@@ -116,7 +119,13 @@ private:
 	void OnFilterItemActivated(ibDataViewEvent&);
 
 	// ---- SORT tab. The order IS the setting here, hence the move commands. ----
-	class ibValueSortItem* OrderLineAt(const ibDataViewItem& row) const;
+	// THE ROW INDEX, which is all this dialog needs.
+	//
+	// (`OrderLineAt`, which handed back the line OBJECT, is gone. On a live list there is none —
+	// GetItem mints a transient and returns a raw pointer nobody owns — so every cell that asked
+	// leaked one per repaint, and every cell that WROTE through it lost the edit. Reading and
+	// writing both go through the list's own path / direction accessors now.)
+	size_t OrderIndexAt(const ibDataViewItem& row) const;
 	void AddOrderForField(const wxTreeItemId& item);
 	void OnOrderFieldActivated(wxTreeEvent&);
 	void OnOrderAdd(wxCommandEvent&);
@@ -144,10 +153,19 @@ private:
 	ibValueDynamicList*  m_list;       // non-null only on the dynamic-list path (source + composer); null for a plain model
 	ibValuePtr<ibValueListSettings> m_settings;   // the dialog's OWN transactional BUFFER (load from composer on open, commit on OK)
 
-	// Query tab (dynamic-list only) — arbitrary-query source: enable flag + query text. Edits the list's own
-	// UseCustomQuery / CustomQuery properties (not the settings buffer); applied to m_list on OK.
+	// Query tab (dynamic-list only) — the arbitrary query that lives OVER the list's main table. Edits
+	// the list's own UseCustomQuery / CustomQuery properties (not the settings buffer). Applied AT ONCE
+	// rather than on OK, because every other tab's field picker depends on it: change the query and the
+	// filters, sorts and groupings must be offering the new fields before you walk over to them.
 	wxCheckBox* m_queryUseCheck = nullptr;
-	wxTextCtrl* m_queryText      = nullptr;
+	// The arbitrary query, in the SAME styled editor the constructor uses — one language, one look.
+	class wxStyledTextCtrl* m_queryText = nullptr;
+	class wxButton* m_queryBuild = nullptr;   // opens the query constructor ON this text and writes back into it
+	class wxStaticText* m_queryError = nullptr;   // the ENGINE's verdict, verbatim; hidden when the query resolves
+
+	// Push the query onto the list and rebuild everything that depends on it (the three field trees,
+	// the error line). Called when the flag is toggled and when the editor loses focus.
+	void ApplyQueryToList();
 
 	// Filter — runtime-driven dataview (Use / Field / Comparison / Value).
 	ibDataViewCtrl* m_filterView   = nullptr;

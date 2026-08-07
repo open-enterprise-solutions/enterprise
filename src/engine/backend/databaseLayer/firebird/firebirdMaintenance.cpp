@@ -22,7 +22,7 @@ void ResolveCredentials(const ibFirebirdMaintenance::ServiceConnection& conn,
                         wxString& user, wxString& pwd) {
 	if (conn.username.IsEmpty() || conn.password.IsEmpty()) {
 		wxLogWarning(wxT("ibFirebirdMaintenance: empty credentials, falling ")
-		             wxT("back to SYSDBA/masterkey — set real creds for ")
+		             wxT("back to SYSDBA/masterkey - set real creds for ")
 		             wxT("production deploys"));
 	}
 	user = conn.username.IsEmpty() ? wxT("SYSDBA")    : conn.username;
@@ -417,7 +417,7 @@ wxString ibFirebirdMaintenance::StatusToString(Status s) {
 		case Status::StartFailed:            return wxT("service_start failed (bad SPB?)");
 		case Status::QueryFailed:            return wxT("service_query mid-operation failed");
 		case Status::Timeout:                return wxT("operation didn't complete in time budget");
-		case Status::RestoreFailed:          return wxT("restore step failed — original file kept under .bak");
+		case Status::RestoreFailed:          return wxT("restore step failed - original file kept under .bak");
 		case Status::IOError:                return wxT("local file rename/delete failed");
 	}
 	return wxT("(unknown)");

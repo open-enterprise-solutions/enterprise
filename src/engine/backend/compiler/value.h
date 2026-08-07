@@ -359,7 +359,7 @@ public:
 			static_assert(std::is_base_of<M, C>::value || std::is_same<M, C>::value,
 				"Bind: the filler's class must be the object's class or a base of it");
 			wxASSERT_MSG(static_cast<const void*>(static_cast<const ibValue*>(obj)) == static_cast<const void*>(obj),
-				wxT("ibValue must be the FIRST base (offset 0) of a member-binding class — see PROJECT INVARIANT above; make the ibValue-holding base first"));
+				wxT("ibValue must be the FIRST base (offset 0) of a member-binding class - see PROJECT INVARIANT above; make the ibValue-holding base first"));
 			m_binders.push_back(ibBoundNames{ static_cast<const ibValue*>(obj), nullptr, static_cast<ibNameFiller>(fn) });
 			m_buildState = kStale;
 		}

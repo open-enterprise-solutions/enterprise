@@ -220,3 +220,36 @@ TEST(QueryRewrite, NoFlatten_InnerTop)
 		wxT("SELECT Code FROM (SELECT TOP 10 Code FROM Catalog.Products) AS s"));
 	EXPECT_TRUE(sel->m_from.m_subquery != nullptr);
 }
+
+TEST(QueryRewrite, NoFlatten_InnerAllowed)
+{
+	// ALLOWED merged away would turn "show me what I may see" back into a refusal — and the query
+	// would still run, which is what makes this the silent kind of wrong. (The parser refuses INTO
+	// and FOR UPDATE inside a source, so ALLOWED is the one of the three that can reach here.)
+	auto sel = ParseAndRewrite(
+		wxT("SELECT Code FROM (SELECT ALLOWED Code FROM Catalog.Products) AS s"));
+	ASSERT_TRUE(sel->m_from.m_subquery != nullptr);
+	EXPECT_TRUE(sel->m_from.m_subquery->m_allowed);
+}
+
+TEST(QueryRewrite, FlattenStillHappensWithoutThoseWords)
+{
+	// The guard above must be about the clause, not about flattening.
+	auto sel = ParseAndRewrite(
+		wxT("SELECT Code FROM (SELECT Code FROM Catalog.Products) AS s"));
+	EXPECT_TRUE(sel->m_from.m_subquery == nullptr);
+}
+
+TEST(QueryRewrite, CloneCarriesTheStatementWords)
+{
+	// The rewrite works on a deep clone; a POD field the clone forgot would be dropped from every
+	// execution while the parse still showed it.
+	ibQueryParser parser;
+	ibQuerySelectPtr ast = parser.Parse(
+		wxT("SELECT ALLOWED Code FROM Catalog.Products WHERE Code = \"1\" FOR UPDATE"));
+	ASSERT_TRUE(ast != nullptr);
+
+	ibQuerySelectPtr rewritten = ibQueryRewrite::Rewrite(*ast);
+	EXPECT_TRUE(rewritten->m_allowed);
+	EXPECT_TRUE(rewritten->m_forUpdate);
+}

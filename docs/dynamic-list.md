@@ -95,9 +95,15 @@ visible settings container (≈ a SettingsComposer):
   is `ibValueEnumSortDirection`.
 - **Group** — `ibValueGroupList` (field paths).
 `ibValueListSettings` itself holds only those three — `m_filter` / `m_order` / `m_group`
-(`composition/listFilter.h`). The **source config** is not on it: `UseCustomQuery` /
-`GetQueryText` / `GetKeyFields` are virtuals on `ibBackendQueryableHolder`
-(`query/queryable.h`), and the list's own switch is the property `m_propertyUseCustomQuery`.
+(`composition/listFilter.h`). The **source config** is not on it either: the main table is the
+list's `Source` property and the arbitrary query over it is `m_propertyUseCustomQuery` /
+`m_propertyCustomQuery`, both on the LIST — which is where the thing the user edits belongs.
+
+⚠ All three lists are read and written through the **facade** (`Count` / `Get…` / `Add`), never off
+the buffer fields: in facade mode the lines live in the COMPOSER and the buffer is empty, so a sort
+or a grouping set on a live list used to have nothing to write and never reached the disk
+(fixed 2026-08-07). A sort line and a grouping line travel as DATA — a path plus its direction, a
+path plus its unfold kind — because unlike the filter TREE there is no line object in facade mode.
 
 The settings object is a **transactional dialog buffer**, moved between it and the composer by
 one pair (`composition/listFilter.h`):
@@ -122,8 +128,11 @@ is bypassed, and the grouping field is ANY query-result field, not the table's p
 - Detail rows page in portions (the shared `ibReadPageRequest`); a whole group level loads at
   once for now (group-level paging is a follow-up).
 
-`ibBackendQueryableHolder` (`query/queryable.h`) carries the source config
-(`UseCustomQuery` / `GetQueryText` / `GetKeyFields`) for the holder model.
+(The holder's `UseCustomQuery` / `GetQueryText` / `GetKeyFields` virtuals are GONE, 2026-08-07 -
+never overridden, never called. They came from a reading in which an arbitrary query REPLACED the
+main table, so the holder had to say which of the two it was and, having no table, be told its key
+by hand. The main table is always there now and the query lives over it, so the key is its PK by
+construction.)
 
 ## Designer + form
 

@@ -51,6 +51,25 @@ bool IsCollapsible(const ibSchemaTable& t)
 	return true;
 }
 
+// ⚠ EVERY read and write in this file is SYSTEM work, and the access policy must not touch any of
+// it. This recomputes STORED totals: filtered by the caller's rights it would rebuild them from the
+// rows that caller happens to see, and everyone afterwards would read numbers that are simply
+// wrong — silently, because a wrong total does not look like an error. The write half is the same
+// argument from the other side: clearing and re-writing the derived table is not the user's edit.
+//
+// SAID OUT LOUD, not inferred. The door pulls the policy from the CURRENT SESSION, and a background
+// job runs under the identity of whoever queued it — so it has a session and a policy, and any rule
+// of the form "no session = system" would be false exactly here.
+//
+// One helper rather than nine marks: nine copies of a decision drift, and the ninth is the one
+// somebody adds without the comment.
+ibDataQueryBuilder SystemQuery(ibDatabaseConnectionHolder* holder)
+{
+	ibDataQueryBuilder query(holder);
+	query.WithAccessPolicy(nullptr);
+	return query;
+}
+
 } // namespace
 
 namespace ibDerivedState {
@@ -114,7 +133,7 @@ bool Regenerate(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder
 	// same dialect map the trigger uses. That identity is the point: two separate notions of "start
 	// of the month" would make a rebuilt row land on a different key than the trigger would have
 	// produced, silently splitting rows the trigger had merged.
-	ibDataQueryBuilder read(holder);
+	ibDataQueryBuilder read = SystemQuery(holder);
 	read.From(spec.m_source);
 
 	if (!spec.m_periodColumn.IsEmpty() && spec.m_periodSource != nullptr)
@@ -133,7 +152,7 @@ bool Regenerate(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder
 	//    and both steps sit inside the caller's restructuring transaction, so a failure rolls the old
 	//    rows back rather than leaving the table empty.
 	{
-		ibDataQueryBuilder clear(holder);
+		ibDataQueryBuilder clear = SystemQuery(holder);
 		clear.From(derived.m_queryable);
 		if (!clear.Delete())
 			return false;
@@ -143,7 +162,7 @@ bool Regenerate(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder
 	//    rebuild would otherwise collide on the key, and upsert also makes a retried rebuild
 	//    idempotent.
 	while (rows.Next()) {
-		ibDataQueryBuilder write(holder);
+		ibDataQueryBuilder write = SystemQuery(holder);
 		write.From(derived.m_queryable);
 
 		if (!spec.m_periodColumn.IsEmpty())
@@ -211,7 +230,7 @@ bool Collapse(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder)
 	// 1. READ one row per (key, shard) straight off the TOTALS table — never the movements. This
 	//    re-packs figures that are already correct instead of recomputing them, which is the whole
 	//    reason it is affordable next to a rebuild.
-	ibDataQueryBuilder read(holder);
+	ibDataQueryBuilder read = SystemQuery(holder);
 	read.From(derived.m_queryable);
 
 	if (hasPeriod)
@@ -300,7 +319,7 @@ bool Collapse(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder)
 			// atomic or a crash between them doubles / loses the figure — hence the caller's
 			// transaction, and hence folding one key at a time so that transaction stays short.
 			{
-				ibDataQueryBuilder add(holder);
+				ibDataQueryBuilder add = SystemQuery(holder);
 				Aim(add, absorber);
 				for (size_t n = 0; n < spec.m_deltas.size(); n++)
 					add.AddValue(spec.m_deltas[n].m_column, src.m_sums[n]);
@@ -308,7 +327,7 @@ bool Collapse(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder)
 					return false;
 			}
 			{
-				ibDataQueryBuilder sub(holder);
+				ibDataQueryBuilder sub = SystemQuery(holder);
 				Aim(sub, src.m_shard);
 				for (size_t n = 0; n < spec.m_deltas.size(); n++)
 					sub.AddValue(spec.m_deltas[n].m_column, ibValue(-src.m_sums[n].GetNumber()));
@@ -321,7 +340,7 @@ bool Collapse(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder)
 			// is still owed to the total, and the next pass folds it. Deleting on the shard number
 			// alone (what the first version did) is exactly the write that would swallow it.
 			{
-				ibDataQueryBuilder drop(holder);
+				ibDataQueryBuilder drop = SystemQuery(holder);
 				Aim(drop, src.m_shard);
 				for (const ibSchemaDelta& d : spec.m_deltas)
 					drop.Where(d.m_column, ibValue(0.0));
@@ -384,7 +403,7 @@ int VerifyLastPeriod(const ibSchemaTable& derived, ibDatabaseConnectionHolder* h
 	// movements that truncate into prevStart lie in [prevStart, curStart).
 	std::map<wxString, std::vector<ibValue>> fromSource;
 	{
-		ibDataQueryBuilder read(holder);
+		ibDataQueryBuilder read = SystemQuery(holder);
 		read.From(spec.m_source);
 		read.WhereCompare(spec.m_periodSource, ibQueryFilterOp::GreaterEqual, ibValue(prevStart));
 		read.WhereCompare(spec.m_periodSource, ibQueryFilterOp::Less,         ibValue(curStart));
@@ -401,7 +420,7 @@ int VerifyLastPeriod(const ibSchemaTable& derived, ibDatabaseConnectionHolder* h
 	// shards, which is the same thing the read view does, so a split table is compared as one figure.
 	std::map<wxString, std::vector<ibValue>> fromTotals;
 	{
-		ibDataQueryBuilder read(holder);
+		ibDataQueryBuilder read = SystemQuery(holder);
 		read.From(derived.m_queryable);
 		read.Where(periodCol, ibValue(prevStart));
 		for (const ibBackendQueryColumn* k : spec.m_keys)

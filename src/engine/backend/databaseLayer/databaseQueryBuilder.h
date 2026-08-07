@@ -110,6 +110,11 @@ struct ibQueryExpr
 	// Param: index into the externally-supplied bind values (>= 0).
 	int m_paramIndex = -1;
 
+	// Func: fold over DISTINCT values of the argument — `COUNT(DISTINCT col)`. Standard SQL and
+	// spelled identically by every dialect this layer writes for, so it rides the generic renderer
+	// rather than becoming a per-driver branch.
+	bool m_distinct = false;
+
 	// BinOp: operator + operands.
 	ibQueryBinOp m_binOp = ibQueryBinOp::Eq;
 	std::shared_ptr<ibQueryExpr> m_lhs;
@@ -195,11 +200,13 @@ inline ibQueryExprPtr ibBinOp(ibQueryBinOp op, ibQueryExprPtr lhs, ibQueryExprPt
 	return e;
 }
 
-inline ibQueryExprPtr ibFunc(const wxString& name, std::vector<ibQueryExprPtr> args = {})
+inline ibQueryExprPtr ibFunc(const wxString& name, std::vector<ibQueryExprPtr> args = {},
+	bool distinct = false)
 {
 	auto e = std::make_shared<ibQueryExpr>(ibQueryExprKind::Func);
 	e->m_name = name;
 	e->m_args = std::move(args);
+	e->m_distinct = distinct;
 	return e;
 }
 

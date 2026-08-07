@@ -40,6 +40,20 @@ enum class ibQueryAstExprKind
 	Func,      // SUM/MIN/MAX/AVG(arg) | COUNT(*|arg)   (m_func, m_arg / m_star)
 	Arith,     // lhs <+ - * / %> rhs   (m_arith)
 	Case,      // CASE WHEN p THEN e … [ELSE e] END   (m_cases, m_else)
+	// ⭐ CAST(<expr> AS <Kind>.<Name>) — the expression in m_arg, the TARGET TYPE in m_path.
+	//
+	// It exists for one job, and it is not conversion: a COMPOSITE reference (a register's recorder,
+	// a characteristic's value) names several types, so the engine refuses to walk THROUGH it —
+	// there is no one set of fields behind it. Naming which type is meant makes the walk possible:
+	//
+	//     CAST(Recorder AS Document.Order).Number
+	//
+	// ⚠ A WALK AFTER A CAST IS A COLUMN, not a Cast: `CAST(x AS T).A.B` parses as a Column whose
+	// m_path is {A, B} and whose m_arg is the Cast. That is deliberate — the resolver already walks
+	// a Column's path from a starting queryable, and the cast only says WHICH queryable to start on.
+	// One shape, and every dot-walk mechanism downstream (SelectPath, ExpandDotWalkJoins, the RAM
+	// join) works on it unchanged.
+	Cast,
 	Compare,   // lhs <cmp> rhs      (m_cmp)
 	Like,      // lhs [NOT] LIKE rhs (m_negated)
 	In,        // lhs [NOT] IN (list | subquery)  (m_negated, m_list / m_subquery)
@@ -68,6 +82,13 @@ struct ibQueryAstExpr
 
 	ibQueryKeyword        m_func = ibQueryKeyword::None;  // Func: Sum/Count/Min/Max/Avg
 	bool                  m_star = false;                 // Func: COUNT(*)
+	// Func: fold over DISTINCT values of the argument — `COUNT(DISTINCT Board)` asks how many
+	// different boards, not how many rows have one.
+	//
+	// ⚠ NOT the SELECT's own DISTINCT (ibQuerySelect::m_distinct). That one asks whether two whole
+	// ROWS are the same; this asks whether two VALUES of one column are — different questions, and
+	// a query may perfectly well want one, the other, or both.
+	bool                  m_distinctArg = false;
 	ibQueryAstExprPtr        m_arg;                          // Func argument
 
 	ibQueryCompareOp      m_cmp = ibQueryCompareOp::Eq;   // Compare
@@ -113,6 +134,16 @@ struct ibQuerySource
 	std::shared_ptr<ibQuerySelect>  m_subquery;   // nested SELECT (set => this source is a subquery)
 	std::vector<ibQueryAstExprPtr>     m_args;        // source-call args: Balance(&Period, &Filter) — value exprs (param / literal)
 	wxString                        m_alias;
+
+	// ⭐ A TABLE HANDED IN FROM OUTSIDE: `FROM &Goods`, where `Goods` is a bound parameter holding a
+	// value table. m_name still carries the name (one segment), and THIS says where it comes from.
+	//
+	// Why a sigil rather than "look it up and see": `&` already means "this came from outside" in
+	// every other position in this language, so it means the same thing here — one mark, one
+	// meaning. Without it a bare `FROM Goods` could be a temp table the package made, a bound table,
+	// or a metaobject, and WHICH ONE would be decided by the order the resolver happens to look. A
+	// query has to read as what it is.
+	bool                            m_parameter = false;
 };
 
 enum class ibQueryJoinKindAst { Inner, Left, Right, Full };
@@ -143,6 +174,11 @@ struct ibQueryTotalDim
 {
 	ibQueryAstExprPtr   m_expr;                                  // dimension column path
 	ibQueryDimUnfold m_unfold = ibQueryDimUnfold::Elements;
+	// The name this LEVEL is read back under. A totals tree is walked by level and each level's
+	// value is asked for by name, so a dimension needs one of its own — without it two levels over
+	// the same column (Date by month, Date by day) answer to the same name and one of them wins.
+	// Empty = the column's own name, which is right for the ordinary single-level case.
+	wxString         m_alias;
 };
 
 // The whole SELECT statement.
@@ -150,6 +186,24 @@ struct ibQuerySelect
 {
 	bool                           m_distinct = false;
 	bool                           m_selectAll = false;     // SELECT *
+	// SELECT ALLOWED — "give me what I may see, do not refuse me". Where the access policy says NO
+	// outright, the read yields nothing for that source instead of raising ibBackendAccessException.
+	// DELIBERATELY not the default: a refusal is normally TOLD, never mimed as an empty selection, and
+	// only the author of a list / a choice form / a composite-type report knows the quiet form is honest
+	// here. (docs/query-constructor.md §5 — ALLOWED.)
+	bool                           m_allowed = false;
+	// FOR UPDATE — this SELECT does not merely read, it HOLDS the rows it returned until the transaction
+	// ends. Rendered by the driver dialect (m_rowLockSuffix: FOR UPDATE / WITH LOCK); reaches it as
+	// ibReadPageRequest::m_lockForUpdate. The read-then-write pair inside one transaction is what it buys.
+	bool                           m_forUpdate = false;
+	// INTO <name> — MATERIALISE this result under a name instead of returning it. The statement then
+	// yields a ROW COUNT (there is no table to hand back — it went into the temp), and later statements
+	// of the same package select FROM that name. Empty = an ordinary select. (docs §5 — query batch.)
+	wxString                       m_intoTemp;
+	// INDEX BY … — the columns the temp table this statement makes is indexed by, so the statements
+	// that read it find rows instead of scanning for them. Meaningless without INTO (a table nobody
+	// keeps cannot be looked things up in), and the parser says so rather than accepting it quietly.
+	std::vector<ibQueryAstExprPtr> m_indexBy;
 	long                           m_top = 0;               // SELECT TOP n — row limit on THIS core (0 = none).
 	                                                        // On the first core of a UNION it limits the WHOLE
 	                                                        // union (like the trailing ORDER BY); on a later
@@ -172,6 +226,18 @@ struct ibQuerySelect
 	bool                           m_hasTotals = false;
 	std::vector<ibQueryAstExprPtr>    m_totalsAggregates;      // SUM(x), MAX(y), … (aggregate Func nodes)
 	std::vector<ibQueryTotalDim>   m_totalsBy;              // dimension levels (in order)
+	// OVERALL — the level above every dimension: ONE row folding the whole result.
+	//
+	// ⚠ A FLAG, NOT A LEVEL IN THE LIST ABOVE, and deliberately. A dimension level is a column and a
+	// place in an order; the overall is neither — it has no column, and its position is fixed (there
+	// is nothing above "everything"). Putting it in the list would add a member whose expression is
+	// absent and whose order carries no meaning, and every walk of the dimensions would have to step
+	// around it.
+	//
+	// It asks the runtime for nothing new: the fold already computes the whole-snapshot aggregates
+	// into the tree's ROOT (ibQueryComposer::BuildDimensionTree — "grand total in-place"). What this
+	// says is whether that root is WALKED as a row, instead of only being reachable by GetTotal().
+	bool                           m_totalsOverall = false;
 
 	// UNION — additional SELECT branches stacked vertically (same projection). The first branch is THIS
 	// select (its core); each entry here is a further branch. ORDER BY / TOTALS on this select apply to
@@ -180,5 +246,39 @@ struct ibQuerySelect
 };
 
 using ibQuerySelectPtr = std::shared_ptr<ibQuerySelect>;
+
+// ==========================================================================
+// A PACKAGE — several statements written together, sent in ONE trip and answered by an ARRAY of
+// results addressed by position (docs/query-constructor.md §5 — query batch). Three properties make
+// it more than a transport saving:
+//
+//   * statements run IN WRITTEN ORDER;
+//   * each sees what the previous ones left — in practice a temp table (statement 2 selects INTO
+//     `Sales`, statement 3 selects FROM `Sales`);
+//   * the returned array is HETEROGENEOUS by position: a plain select yields its table, a
+//     select-into-temp yields the row count.
+//
+// A statement is EITHER a select (possibly INTO a temp table) OR a drop of one. The drop exists
+// because a package's temp tables live for the WHOLE package: releasing early inside a long package
+// has to be sayable out loud rather than left to scope.
+// ==========================================================================
+struct ibQueryAstStatement
+{
+	ibQuerySelectPtr m_select;     // the SELECT (null on a drop statement)
+	wxString         m_dropTemp;   // DROP <name> — release a temp table early (empty on a select)
+
+	bool IsDrop() const { return !m_dropTemp.IsEmpty(); }
+};
+
+struct ibQueryPackage
+{
+	std::vector<ibQueryAstStatement> m_statements;
+
+	// A package of one plain select is what an ordinary query IS — so a caller that
+	// only ever wanted a single statement asks for it here rather than indexing.
+	ibQuerySelectPtr SingleSelect() const {
+		return m_statements.size() == 1 ? m_statements.front().m_select : nullptr;
+	}
+};
 
 #endif

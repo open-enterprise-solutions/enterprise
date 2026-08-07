@@ -312,7 +312,7 @@ int WrapStartup(const wxString& exeName, std::function<int()> body)
 {
 	auto report = [&exeName](const wxString& msg) {
 		LogStartupError(exeName, msg);
-		PlatformNativeMessage(wxT("OES ") + exeName + wxT(" — startup error"), msg);
+		PlatformNativeMessage(wxT("OES ") + exeName + wxT(" - startup error"), msg);
 	};
 	try {
 		return body();

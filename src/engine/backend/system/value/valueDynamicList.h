@@ -10,6 +10,7 @@
 #include "backend/propertyManager/property/propertyDynamicList.h"  // ibPropertyDynamicList — the "Settings" → "Open" action
 #include "backend/propertyManager/property/propertyBoolean.h"  // ibPropertyBoolean — the "arbitrary query" flag
 #include "backend/propertyManager/property/propertyString.h"   // ibPropertyString — the custom query text
+#include "backend/query/queryLowering.h"              // ibQueryLowering::OutputColumn — what the arbitrary query produces
 
 class ibBackendQueryable;
 class ibBackendQueryColumn;
@@ -67,14 +68,33 @@ public:
 	void SetCustomQuery(const wxString& queryText);
 	const ibBackendQueryable* GetSourceQueryable() const { return m_propertySource->GetQueryable(); }
 
-	// --- arbitrary-query mode ------------------------------------------------
-	// The source is a QUERY TEXT (composer.FromText) instead of a metaobject. Toggled by the flag (serialised);
-	// the text is edited on the settings dialog's first "Query" tab. RebuildSource picks FromText vs FromSource by
-	// this flag; WriteProperty serialises the query text instead of requiring a picked metaobject source.
+	// --- the arbitrary query, ON TOP of the main table -------------------------
+	//
+	// ⚠ THE MAIN TABLE IS ALWAYS THERE. It is not an alternative to the query, it is what the list
+	// IS: the source of the COMMANDS (open a row, create, mark for deletion), of the icon and the
+	// caption, and of the value a choice hands back. A list with no main table would be a grid of
+	// numbers nobody could do anything with.
+	//
+	// The arbitrary query lives OVER it — an implicit join, in Max's words. What it changes is what
+	// the list READS and therefore which columns it offers; what it cannot change is whose rows they
+	// are. Both are serialised, always, and neither replaces the other.
+	//
+	// Ticking the flag GENERATES a starting query over the main table (SeedArbitraryQuery), because
+	// an empty text is not a query and a person switching this on means "let me change what is read",
+	// not "let me start from a blank page". Unticking clears it — the main table alone is the read.
 	bool     IsArbitraryQuery() const { return m_propertyUseCustomQuery->GetValueAsBoolean(); }
-	void     SetArbitraryQuery(bool use) { m_propertyUseCustomQuery->SetValue(use); }
+	void     SetArbitraryQuery(bool use);
 	wxString GetArbitraryQueryText() const { return m_propertyCustomQuery->GetValueAsString(); }
 	void     SetArbitraryQueryText(const wxString& text) { m_propertyCustomQuery->SetValue(text); }
+
+	// THE QUERY THE MAIN TABLE WOULD WRITE FOR ITSELF — `SELECT <fields> FROM <the main table>`. The
+	// starting point when the flag goes on, and empty when there is no main table to write it over.
+	wxString SeedArbitraryQuery() const;
+
+	// WHY THE ARBITRARY QUERY PRODUCES NOTHING — the ENGINE's own words, empty when it resolved.
+	// (What it DOES produce is asked for as the model's columns, the way a host asks any list what
+	// it has; there was a second accessor handing out the raw schema, and nobody used it.)
+	const wxString& GetArbitraryQueryError() const { return m_queryError; }
 	// Re-apply the source (metaobject OR arbitrary query) onto the composer — the settings dialog's "Query" tab
 	// calls this after editing the flag / text (SetValue does not fire OnPropertyChanged).
 	void     ApplySource() { RebuildSource(); }
@@ -210,9 +230,24 @@ private:
 	// queryable). Called when the source is (re)set / picked / loaded.
 	void RebuildSource();
 
+	// DROP THE FILTER / SORT / GROUPING LINES whose field the list no longer has — run after every
+	// rebuild, so removing the arbitrary query takes its columns' settings with it. By RESOLUTION,
+	// never by chasing the change: the same rule that handles a table removed from the query, an
+	// attribute renamed, a metaobject deleted.
+	void PruneUnresolvedSettings();
+
 	// The dynamic list uses the ONE base composer (GetModelComposer()) AND the ONE base settings buffer
 	// (GetListSettings() → m_listSettings) — no subclass holds its own. (The duplicate m_settings was removed.)
 	ibValuePtr<ibValueModelColumnCollection> m_columns;   // queryable-derived columns
+
+	// WHAT THE ARBITRARY QUERY PRODUCES, and what went wrong if it produces nothing. Rebuilt on every
+	// RebuildSource — which is what makes the pickers follow the text: change the query, and the
+	// filters / sorts / groupings are offering the new fields the moment the change is applied.
+	//
+	// The schema OWNS its synthetic columns (OutputColumn::m_ownedCol), so it outlives the door that
+	// resolved it — which it has to: nothing here reads rows, the columns are just being named.
+	std::vector<ibQueryLowering::OutputColumn> m_querySchema;
+	wxString                                   m_queryError;   // the ENGINE's words, verbatim; empty = it resolved
 
 	// Folder-flag column for the hierarchical display (folder rows = drillable containers). Non-owning — points at
 	// the metaobject's queryable column, handed in by ibCreateHierarchyList. Null on a flat / non-folder list.

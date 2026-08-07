@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "queryRewrite.h"
+#include "queryRender.h"   // ibQueryOutputName - the one answer to "what is this column called"
 
 #include <functional>
 #include <map>
@@ -57,6 +58,8 @@ ibQuerySelectPtr CloneSelect(const ibQuerySelect& s)
 	for (ibQueryAstExprPtr& g : c->m_groupBy)
 		g = CloneExpr(g);
 	c->m_having = CloneExpr(c->m_having);
+	for (ibQueryAstExprPtr& index : c->m_indexBy)
+		index = CloneExpr(index);
 	for (ibQueryOrderItem& o : c->m_orderBy)
 		o.m_expr = CloneExpr(o.m_expr);
 	for (ibQueryAstExprPtr& t : c->m_totalsAggregates)
@@ -157,6 +160,15 @@ ibQueryAstExprPtr NormalizeNeg(const ibQueryAstExprPtr& e)
 void WalkColumns(const ibQueryAstExprPtr& e, const std::function<void(ibQueryAstExpr&)>& fn)
 {
 	if (!e) return;
+	// ⚠ A COLUMN ROOTED ON A CAST IS NOT THIS SOURCE'S COLUMN. `CAST(x AS T).A` walks the fields of
+	// T, so its path names nothing the flattening could substitute an inner projection for — mapping
+	// `A` onto an output name of the subquery would rewrite it into a column of the wrong table.
+	// The cast's own argument IS this source's, so the walk descends into it instead.
+	if (e->m_kind == ibQueryAstExprKind::Column && e->m_arg
+	    && e->m_arg->m_kind == ibQueryAstExprKind::Cast) {
+		WalkColumns(e->m_arg->m_arg, fn);
+		return;
+	}
 	if (e->m_kind == ibQueryAstExprKind::Column) { fn(*e); return; }
 	WalkColumns(e->m_arg, fn);
 	WalkColumns(e->m_lhs, fn);
@@ -206,6 +218,10 @@ bool InnerIsFlattenable(const ibQuerySelect& inner)
 	if (inner.m_distinct || !inner.m_groupBy.empty() || inner.m_having)         return false;
 	if (!inner.m_orderBy.empty())                                               return false;
 	if (inner.m_top > 0)                                                        return false;   // TOP limits the inner rows — merging would lose it
+	// The statement words the inner may carry. Merging them away is the SILENT kind of wrong:
+	// ALLOWED would become a refusal the author asked not to have, FOR UPDATE would stop holding
+	// the rows, INTO would stop materialising anything — and the query would still run.
+	if (inner.m_allowed || inner.m_forUpdate || !inner.m_intoTemp.IsEmpty())    return false;
 	if (inner.m_selectAll) return true;
 	for (const ibQueryProjection& p : inner.m_projections) {
 		if (p.m_star) return false;
@@ -233,10 +249,8 @@ void FlattenFrom(ibQuerySelect& s)
 	std::map<wxString, std::vector<wxString>, NoCaseLess> aliasMap;
 	if (!inner.m_selectAll) {
 		for (const ibQueryProjection& p : inner.m_projections) {
-			const wxString name = !p.m_alias.empty()
-				? p.m_alias
-				: (p.m_expr->m_path.empty() ? wxString() : p.m_expr->m_path.back());
-			if (!name.empty()) aliasMap[name] = p.m_expr->m_path;
+			const wxString name = ibQueryOutputName(p);   // the file even says so at its include
+			if (!name.empty() && p.m_expr) aliasMap[name] = p.m_expr->m_path;
 		}
 	}
 
@@ -278,9 +292,8 @@ void FlattenFrom(ibQuerySelect& s)
 	// A bare-Column projection's output name must survive the substitution (SELECT pn
 	// would otherwise be re-derived from the substituted path's leaf). Stamp it first.
 	for (ibQueryProjection& p : s.m_projections)
-		if (p.m_alias.empty() && p.m_expr && p.m_expr->m_kind == ibQueryAstExprKind::Column
-			&& !p.m_expr->m_path.empty())
-			p.m_alias = p.m_expr->m_path.back();
+		if (p.m_alias.empty())
+			p.m_alias = ibQueryOutputName(p);   // its NATURAL name, written down before the path moves
 
 	// Substitute an outer column reference: strip the subquery alias qualifier, then
 	// replace an output name with its inner path (the tail of a dot-walk rides along).
@@ -333,6 +346,67 @@ void FlattenFrom(ibQuerySelect& s)
 // The pass — bottom-up over every SELECT scope
 //////////////////////////////////////////////////////////////////////
 
+// Does this condition fold rows — i.e. does an aggregate call appear anywhere inside it?
+bool MentionsAggregate(const ibQueryAstExprPtr& e)
+{
+	if (!e)
+		return false;
+	if (e->m_kind == ibQueryAstExprKind::Func && ibIsAggregateKeyword(e->m_func))
+		return true;
+	// NOT into a nested SELECT: an aggregate in a subquery folds THAT query's rows, and moving the
+	// outer condition on its account would filter the wrong thing.
+	if (e->m_subquery)
+		return false;
+	for (const ibQueryAstExprPtr& child : { e->m_lhs, e->m_rhs, e->m_arg, e->m_low, e->m_high, e->m_else })
+		if (MentionsAggregate(child)) return true;
+	for (const ibQueryAstExprPtr& item : e->m_list)
+		if (MentionsAggregate(item)) return true;
+	for (const auto& branch : e->m_cases)
+		if (MentionsAggregate(branch.first) || MentionsAggregate(branch.second)) return true;
+	return false;
+}
+
+// ⭐ RULE: A CONDITION OVER A FOLDED VALUE IS A HAVING, WHEREVER IT WAS WRITTEN.
+//
+// `WHERE` filters ROWS and `HAVING` filters GROUPS — a real distinction, and one the author of a
+// query should not have to carry. The constructor's Conditions tab offers the aggregate fields
+// beside the plain ones (they are all fields of the result), so a condition over `SUM(Qty)` gets
+// written where every other condition is written. Left there it reached the row filter, which has
+// no aggregates to filter by, and came back as an error about a query the window itself composed.
+//
+// The move is per AND-TERM, because that is the granularity at which the two filters compose:
+// `WHERE Warehouse = &W AND SUM(Qty) > 100` is a row filter and a group filter written together,
+// and splitting it is not a change of meaning — a group filter applied after a row filter is what
+// the query says either way.
+//
+// ⚠ AN `OR` ACROSS THE TWO MOVES WHOLE, AND IS NEVER SPLIT. `WHERE A = 1 OR SUM(x) > 5` is one
+// term: splitting it into a row filter and a group filter would change which rows survive, and
+// leaving it behind is not an option either — anything naming an aggregate can only be evaluated
+// after the fold. So the whole term goes, and `A` must be a group key for it to resolve there,
+// which is the engine's own check to make.
+void MoveAggregateTermsToHaving(ibQuerySelect& s)
+{
+	if (!s.m_where)
+		return;
+
+	std::vector<ibQueryAstExprPtr> terms;
+	ibQueryFlattenAnd(s.m_where, terms);
+
+	std::vector<ibQueryAstExprPtr> rows, groups;
+	for (const ibQueryAstExprPtr& term : terms)
+		(MentionsAggregate(term) ? groups : rows).push_back(term);
+
+	if (groups.empty())
+		return;   // nothing folded — the WHERE is a row filter, as written
+
+	s.m_where = ibQueryFoldAnd(rows);   // null when every term moved, which is correct: no row filter
+	// An existing HAVING keeps its place and the moved terms join it — the author may have written
+	// both, and one must not silently replace the other.
+	if (s.m_having)
+		groups.insert(groups.begin(), s.m_having);
+	s.m_having = ibQueryFoldAnd(groups);
+}
+
 void RewriteSelectInPlace(ibQuerySelect& s)
 {
 	// Children first: a flattenable child collapses before the parent looks at it.
@@ -345,6 +419,7 @@ void RewriteSelectInPlace(ibQuerySelect& s)
 	if (s.m_where) {
 		s.m_where = NormalizeNeg(s.m_where);
 		WalkInSubqueries(s.m_where, RewriteSelectInPlace);   // IN (SELECT …) — own scope
+		MoveAggregateTermsToHaving(s);
 	}
 
 	FlattenFrom(s);
@@ -361,4 +436,168 @@ ibQuerySelectPtr ibQueryRewrite::Rewrite(const ibQuerySelect& ast)
 	ibQuerySelectPtr clone = CloneSelect(ast);
 	RewriteSelectInPlace(*clone);
 	return clone;
+}
+
+// The clone WITHOUT the rules — see the header. Same walker, so a copy can never drift from what
+// the pass considers a complete tree.
+ibQuerySelectPtr ibQueryRewrite::Clone(const ibQuerySelect& ast)
+{
+	return CloneSelect(ast);
+}
+
+void ibQueryFlattenAnd(const ibQueryAstExprPtr& expr, std::vector<ibQueryAstExprPtr>& out)
+{
+	if (!expr)
+		return;
+	// Anything that is not an AND is ONE condition — including an OR, which is a condition and not
+	// a list of them. That is why an OR row shows in the constructor as a single (arbitrary) line.
+	if (expr->m_kind == ibQueryAstExprKind::Logical && !expr->m_isOr) {
+		ibQueryFlattenAnd(expr->m_lhs, out);
+		ibQueryFlattenAnd(expr->m_rhs, out);
+		return;
+	}
+	out.push_back(expr);
+}
+
+void ibQueryMoveAggregateConditionsToHaving(ibQuerySelect& select)
+{
+	MoveAggregateTermsToHaving(select);
+}
+
+ibQueryAstExprPtr ibQueryFoldAnd(const std::vector<ibQueryAstExprPtr>& rows)
+{
+	ibQueryAstExprPtr folded;
+	for (const ibQueryAstExprPtr& row : rows) {
+		if (!row) continue;
+		if (!folded) { folded = row; continue; }
+		auto node = ibQueryAstExpr::Make(ibQueryAstExprKind::Logical);
+		node->m_isOr = false;
+		node->m_lhs = folded;
+		node->m_rhs = row;
+		folded = node;
+	}
+	return folded;
+}
+
+// ===========================================================================
+//  NAMING — what the host calls when it ADDS, so CheckNames never has to refuse
+// ===========================================================================
+
+namespace {
+
+// (The name a source answers to is ibQuerySourceName — queryRender.h, one answer for the whole
+// product. It used to be written out here as well, and in six other places.)
+
+// Does this segment name a SOURCE of the select, rather than open a walk?
+bool NamesASource(const ibQuerySelect& select, const wxString& segment)
+{
+	if (ibQuerySourceName(select.m_from).IsSameAs(segment, false))
+		return true;
+	for (const ibQueryAstJoin& join : select.m_joins)
+		if (ibQuerySourceName(join.m_source).IsSameAs(segment, false))
+			return true;
+	return false;
+}
+
+} // namespace
+
+wxString ibQueryProposedName(const ibQuerySelect& select, const ibQueryProjection& projection)
+{
+	if (!projection.m_alias.IsEmpty())
+		return projection.m_alias;
+	if (!projection.m_expr || projection.m_expr->m_kind != ibQueryAstExprKind::Column)
+		return wxEmptyString;
+
+	const std::vector<wxString>& path = projection.m_expr->m_path;
+	if (path.empty())
+		return wxEmptyString;
+
+	// The qualifier goes; the walk stays. `Catalog1.Reference.PredefinedName` -> `ReferencePredefinedName`.
+	const size_t first = (path.size() > 1 && NamesASource(select, path[0])) ? 1 : 0;
+
+	// A legal identifier by construction: every segment already is one.
+	wxString name;
+	for (size_t i = first; i < path.size(); ++i)
+		name += path[i];
+	return name;
+}
+
+void ibQueryEnsureUniqueName(ibQuerySelect& select, ibQueryProjection& projection)
+{
+	auto taken = [&select, &projection](const wxString& name) {
+		for (const ibQueryProjection& other : select.m_projections)
+			if (&other != &projection && ibQueryProposedName(select, other).IsSameAs(name, false))
+				return true;
+		return false;
+	};
+
+	const wxString wanted = ibQueryProposedName(select, projection);
+	if (wanted.IsEmpty()) {
+		// The default NAME, not a default suffix: `Field` numbered from 1. The counter runs over
+		// what is already there, exactly as the duplicate numbering below does, so the two cannot
+		// hand out the same name.
+		for (unsigned int n = 1; ; ++n) {
+			const wxString candidate = wxString::Format(_("Field%u"), n);
+			if (!taken(candidate)) {
+				projection.m_alias = candidate;
+				return;
+			}
+		}
+	}
+
+	// ⚠ A NAME THAT IS NOT THE NATURAL ONE HAS TO BE WRITTEN DOWN.
+	//
+	// The natural name of a projection is the LEAF of its path (ibQueryOutputName) — that is what
+	// the language reads it back by when no alias is given. For a WALK the leaf is the wrong word:
+	// `Reference.PredefinedName` and `PredefinedName` are two different columns whose leaf is the
+	// same, and leaving both unaliased makes the engine refuse the query for duplicate output names.
+	//
+	// So the walk's name is stored AS AN ALIAS even when nothing collides yet. Computing a name and
+	// then not writing it was the whole defect: the query still said `Catalog1.Reference.PredefinedName`
+	// with no alias, so everything downstream — the field map, the check, the result — went on calling
+	// it `PredefinedName`.
+	if (projection.m_alias.IsEmpty() && !ibQueryOutputName(projection).IsSameAs(wanted, false))
+		projection.m_alias = wanted;
+
+	if (!taken(wanted))
+		return;
+
+	for (unsigned int n = 1; ; ++n) {
+		const wxString candidate = wanted + wxString::Format(wxT("%u"), n);
+		if (!taken(candidate)) {
+			projection.m_alias = candidate;
+			return;
+		}
+	}
+}
+
+wxString ibQueryUniqueSourceAlias(const ibQuerySelect& select, const wxString& wanted,
+                                  const ibQuerySource* except)
+{
+	if (wanted.IsEmpty())
+		return wanted;
+
+	std::vector<const ibQuerySource*> sources;
+	sources.push_back(&select.m_from);
+	for (const ibQueryAstJoin& join : select.m_joins)
+		sources.push_back(&join.m_source);
+
+	// THE NAME A SOURCE ANSWERS TO — its alias when it has one, else the last segment of its path.
+	auto taken = [&sources, except](const wxString& name) {
+		for (const ibQuerySource* source : sources) {
+			if (source == nullptr || source == except)
+				continue;
+			if (ibQuerySourceName(*source).IsSameAs(name, false))
+				return true;
+		}
+		return false;
+	};
+
+	if (!taken(wanted))
+		return wanted;
+	for (unsigned int n = 1; ; ++n) {
+		const wxString candidate = wanted + wxString::Format(wxT("%u"), n);
+		if (!taken(candidate))
+			return candidate;
+	}
 }

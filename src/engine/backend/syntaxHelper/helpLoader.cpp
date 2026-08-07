@@ -529,7 +529,7 @@ LoadSource(const wxString&               localeCode,
 			err.bucketPath = source->DisplayRoot();
 			err.severity   = ibHelpLoadSeverity::kFatal;
 			err.message    = wxString::Format(
-			    wxT("Duplicate id '%s' within source corpus — second occurrence dropped."),
+			    wxT("Duplicate id '%s' within source corpus - second occurrence dropped."),
 			    e.id);
 			localErrors.push_back(std::move(err));
 			continue;
@@ -600,7 +600,7 @@ ibHelpLoadResult LoadHelpCorpus(const wxString& localeCode,
 		ibHelpLoadError e;
 		e.severity = ibHelpLoadSeverity::kFatal;
 		e.message  = wxString::Format(
-		    wxT("Help corpus construction failed: %s — falling back to empty."),
+		    wxT("Help corpus construction failed: %s - falling back to empty."),
 		    Utf8(ex.what()));
 		result.errors.push_back(std::move(e));
 		result.corpus.reset();

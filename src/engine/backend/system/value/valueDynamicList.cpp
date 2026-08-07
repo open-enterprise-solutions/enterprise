@@ -5,6 +5,9 @@
 // (listFetchDriver.h / session.h(ses_query) / modelView.h(s_constIgnoreParent) includes removed — they were
 //  only for the deleted RunPage/ibDynamicListProvider; the fetch lives in the base RunComposerPage now.)
 #include "backend/query/queryColumn.h"               // ibBackendQueryColumn::GetColumnId
+#include "backend/query/queryParser.h"               // the arbitrary query is READ by the engine's own parser
+#include "backend/query/queryRender.h"               // ibRenderQuery / ibQueryColumnFromPath — the seed query, written out
+#include "backend/backend_exception.h"               // the engine's verdict on a query that will not resolve
 #include "backend/srcDataObject.h"                      // ibSourceExplorer
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject — GetItemKey row guid
 #include "backend/serialize/dataBuilder.h"            // ibDataNode (object-level save/load)
@@ -41,6 +44,41 @@ public:
 				m_cols.push_back(new ColInfo(c));
 	}
 	virtual ~ibDynamicListColumns() { for (auto* c : m_cols) delete c; }
+
+	virtual ibValueModelColumnInfo* GetColumnInfo(unsigned int idx) const override {
+		return idx < m_cols.size() ? m_cols[idx] : nullptr;
+	}
+	virtual unsigned int GetColumnCount() const override { return static_cast<unsigned int>(m_cols.size()); }
+
+private:
+	std::vector<ColInfo*> m_cols;
+};
+
+// The same collection over an ARBITRARY QUERY's output schema. A query's column is an
+// ibBackendQueryColumn exactly as a queryable's is (the lowering hands one back for every output,
+// synthesising it where the column is computed), so this is the same class with a different way in
+// — not a second idea of what a column is.
+class ibQuerySchemaColumns : public ibValueModelCursor::ibValueModelColumnCollection {
+public:
+	class ColInfo : public ibValueModelColumnInfo {
+	public:
+		ColInfo(wxString name, const ibBackendQueryColumn* col) : m_name(std::move(name)), m_col(col) {}
+		virtual unsigned int GetColumnID() const override { return m_col != nullptr ? m_col->GetColumnId() : 0; }
+		// THE QUERY'S NAME FOR IT, not the underlying column's. `Owner.Code AS Supplier` is called
+		// `Supplier` here and nowhere else — that is the whole point of writing the query.
+		virtual wxString GetColumnName() const override { return m_name; }
+		virtual wxString GetColumnCaption() const override { return m_name; }
+		virtual const ibTypeDescription GetColumnType() const override { return m_col != nullptr ? m_col->GetTypeDesc() : ibTypeDescription(); }
+	private:
+		wxString                    m_name;
+		const ibBackendQueryColumn* m_col;
+	};
+
+	explicit ibQuerySchemaColumns(const std::vector<ibQueryLowering::OutputColumn>& schema) {
+		for (const ibQueryLowering::OutputColumn& oc : schema)
+			m_cols.push_back(new ColInfo(oc.m_name, oc.m_col));
+	}
+	virtual ~ibQuerySchemaColumns() { for (auto* c : m_cols) delete c; }
 
 	virtual ibValueModelColumnInfo* GetColumnInfo(unsigned int idx) const override {
 		return idx < m_cols.size() ? m_cols[idx] : nullptr;
@@ -113,15 +151,40 @@ void ibValueDynamicList::RebuildSource()
 	// FROM against THIS config, not the global factory. (A metaobject source binds by queryable below — no lookup.)
 	m_composer.SetMetaData(GetSourceMetaData());
 
-	// Arbitrary-query mode: the source is a QUERY TEXT — bind the composer straight to it. Columns come from the
-	// query RESULT, not a metaobject (the computed-source frontier — that + the runtime fetch is the "rest" to
-	// finish; design-time config + serialisation stand now).
-	if (IsArbitraryQuery()) {
+	// THE ARBITRARY QUERY, OVER THE MAIN TABLE. The query decides what is READ and therefore which
+	// columns exist; the main table — resolved above and left untouched — decides whose rows they are,
+	// which is what the commands, the icon and the choice value hang off. Neither replaces the other.
+	//
+	// The columns come from the ENGINE describing the text (resolve, do not run), so the moment the
+	// query changes the list is offering the new fields: to its columns, and through GetSourceExplorer
+	// to every picker in the settings dialog. That was the gap — the composer took the text and
+	// nothing downstream knew what came out of it.
+	m_querySchema.clear();
+	m_queryError.clear();
+	if (IsArbitraryQuery() && !GetArbitraryQueryText().IsEmpty()) {
 		m_composer.FromText(GetArbitraryQueryText());
-		m_columns = nullptr;   // TODO: derive columns from the query-result queryable
+
+		// The names resolve against the SOURCE's config, the same one the composer was just handed.
+		const ibSourceMetaDataScope scope(GetSourceMetaData());
+		try {
+			ibQueryParser parser;
+			const ibQuerySelectPtr ast = parser.Parse(GetArbitraryQueryText());
+			if (ast)
+				ibQueryLowering::DescribeOutput(*ast, {}, m_querySchema);
+		}
+		catch (const ibBackendException& error) {
+			// AT ONCE, AND IN THE ENGINE'S WORDS. A query that cannot be described is a query that
+			// cannot be run, and finding that out when the list is first opened — in front of a user
+			// rather than its author — is the thing worth avoiding.
+			m_queryError = error.GetErrorDescription();
+			m_querySchema.clear();
+		}
+		m_columns = new ibQuerySchemaColumns(m_querySchema);   // ibValuePtr owns
+		PruneUnresolvedSettings();   // the query decides which fields exist; the settings follow it
 		NotifyReset();
 		return;
 	}
+
 	// Rebuild columns + composer from the current source (the property's queryable, resolved above).
 	m_columns = (queryable != nullptr) ? new ibDynamicListColumns(queryable) : nullptr;   // ibValuePtr owns
 	if (queryable != nullptr) {
@@ -134,11 +197,113 @@ void ibValueDynamicList::RebuildSource()
 		// lives on the base buffer GetListSettings() (untouched here); only the composer source changed.
 		RefreshComposerSettings();
 	}
+	PruneUnresolvedSettings();   // ...and a source change decides it too
 }
 
 void ibValueDynamicList::SetCustomQuery(const wxString& queryText)
 {
 	m_composer.FromText(queryText);   // the dynamic list's own DB composer (FromText is DB-only)
+}
+
+// THE QUERY THE MAIN TABLE WOULD WRITE FOR ITSELF. Not a template with a hole in it — a real query
+// over the real source, rendered by the same renderer the constructor round-trips through, so what
+// appears when the box is ticked is something that already runs and can be opened in the constructor
+// on the spot.
+//
+// Every column, spelled out rather than `SELECT *`: the point of switching this on is to CHANGE what
+// is read, and changing a list of fields you can see is an edit, while changing a star is a rewrite.
+wxString ibValueDynamicList::SeedArbitraryQuery() const
+{
+	const ibBackendQueryable* queryable = GetSourceQueryable();
+	if (queryable == nullptr)
+		return wxEmptyString;
+
+	// THE NAME THE LANGUAGE KNOWS IT BY — `Catalog.Products`, the descriptor's own namespace and name,
+	// which is exactly what the lowering resolves a FROM against. Not GetQueryName(): that is the
+	// physical table, and a query written against a physical table would be a query the config cannot
+	// be restructured under.
+	const ibQueryableSourceDescriptor* descriptor = GetSourceDescriptor();
+	if (descriptor == nullptr || descriptor->GetName().IsEmpty())
+		return wxEmptyString;
+
+	ibQuerySelect select;
+	if (!descriptor->GetNamespace().IsEmpty())
+		select.m_from.m_name.push_back(descriptor->GetNamespace());
+	select.m_from.m_name.push_back(descriptor->GetName());
+
+	// ⚠ NAMED, AND EVERY FIELD QUALIFIED BY THAT NAME — `Catalog.Products AS Products`, then
+	// `Products.Code`. Not decoration: a bare `Code` is unambiguous only until a SECOND table joins,
+	// and at that moment EVERY field written before it becomes ambiguous at once. The engine then
+	// refuses them, the refresh drops what no longer resolves, and the whole field list disappears in
+	// one gesture that had nothing to do with those fields. (Seen live: adding one field from the
+	// catalogue collapsed a seeded query to `SELECT *`.)
+	//
+	// This is the same rule the query constructor holds to when IT adds a table, and the seed has to
+	// hold to it too — a starting query that breaks on the first edit is worse than no starting query.
+	select.m_from.m_alias = descriptor->GetName();
+	const wxString prefix = select.m_from.m_alias + wxT(".");
+
+	for (const ibBackendQueryColumn* column : queryable->GetColumns()) {
+		if (column == nullptr || column->GetName().IsEmpty() || !column->IsAllowed())
+			continue;
+		ibQueryProjection projection;
+		projection.m_expr = ibQueryColumnFromPath(prefix + column->GetName());
+		select.m_projections.push_back(std::move(projection));
+	}
+	if (select.m_projections.empty())
+		select.m_selectAll = true;   // a source that vends no columns: read it whole rather than read nothing
+
+	return ibRenderQuery(select);
+}
+
+// TICKING IT SEEDS, UNTICKING IT CLEARS. The flag is not a mode with its own empty state: switching
+// it on means "let me change what is read", so there is something to change; switching it off means
+// the main table alone is the read, so the text goes rather than lying in wait for the next tick.
+void ibValueDynamicList::SetArbitraryQuery(bool use)
+{
+	if (use == IsArbitraryQuery())
+		return;
+
+	m_propertyUseCustomQuery->SetValue(use);
+	if (use) {
+		if (GetArbitraryQueryText().IsEmpty())
+			m_propertyCustomQuery->SetValue(SeedArbitraryQuery());
+	}
+	else {
+		m_propertyCustomQuery->SetValue(wxEmptyString);
+	}
+	RebuildSource();   // SetValue does not fire OnPropertyChanged - the columns and the pickers follow HERE
+}
+
+// DROP THE SETTINGS WHOSE FIELD THE LIST NO LONGER HAS.
+//
+// Taking the arbitrary query away takes its columns with it, and a filter, a sort or a grouping over
+// one of those is left pointing at nothing. Same for a table dropped out of the query, an attribute
+// renamed in the configuration, a metaobject deleted.
+//
+// ⚠ NOTHING CHASES THE CHANGE. The list re-asks "does this still resolve?" after every rebuild, and
+// what does not, goes. A cleanup hung off the untick would cover the untick and nothing else.
+//
+// The answer comes from the SOURCE EXPLORER, which is the same list the pickers are built from — so
+// what a person can still choose and what the list still keeps are one answer, not two.
+void ibValueDynamicList::PruneUnresolvedSettings()
+{
+	const ibSourceExplorer* explorer = GetSourceExplorer();
+	if (explorer == nullptr || explorer->GetHelperCount() == 0)
+		return;   // nothing to check against is not a verdict — leave the settings alone
+
+	m_composer.PruneUnresolvedSettings([explorer](const wxString& path) {
+		// THE FIRST SEGMENT is what has to exist here: the rest is a reference walk, and a walk
+		// resolves through the metadata of whatever the first segment turned out to be.
+		const wxString head = path.BeforeFirst(wxT('.'));
+		if (head.IsEmpty())
+			return true;
+		for (unsigned int i = 0; i < explorer->GetHelperCount(); ++i)
+			if (const ibSourceExplorer* node = explorer->GetHelper(i))
+				if (node->GetSourceName().IsSameAs(head, false))
+					return true;
+		return false;
+	});
 }
 
 void ibValueDynamicList::RefreshComposerSettings()
@@ -369,6 +534,38 @@ const ibSourceExplorer* ibValueDynamicList::GetSourceExplorer() const
 	// forwards the fill to the metaobject — the same one that lists/runs commands and resolves select.
 	if (const ibQueryableSourceDescriptor* holder = GetSourceDescriptor())
 		holder->FillSourceExplorer(m_sourceExplorer);
+
+	// …AND WHAT THE ARBITRARY QUERY ADDS ON TOP. The main table's fields are there because the list is
+	// that table; the query's output columns are there because that is what the list actually shows —
+	// and a field a person can SEE in the list but cannot filter, sort or group by is the defect Max
+	// reported ("I add fields to the query and I do not see them in the filters").
+	//
+	// Added, not substituted: a query that renames `Owner.Code` to `Supplier` still leaves every field
+	// of the main table reachable, because the row is still a row of that table.
+	//
+	// (A name the main table already offers is not added twice — the explorer would show one field
+	// under two entries that mean the same column.)
+	for (const ibQueryLowering::OutputColumn& column : m_querySchema) {
+		if (column.m_name.IsEmpty())
+			continue;
+		bool already = false;
+		for (unsigned int i = 0; i < m_sourceExplorer.GetHelperCount() && !already; ++i)
+			if (const ibSourceExplorer* node = m_sourceExplorer.GetHelper(i))
+				already = node->GetSourceName().IsSameAs(column.m_name, false);
+		if (already)
+			continue;
+
+		// The column's own DESCRIPTOR when the query did not rename it — that is what carries the
+		// synonym and the binding, so a plain projection reads in the pickers exactly as the field
+		// does. A RENAMED one (`Owner.Code AS Supplier`) is appended by name and type: the new name is
+		// the query's, and it belongs to no attribute to borrow a synonym from.
+		if (column.m_col != nullptr && column.m_col->GetName().IsSameAs(column.m_name, false))
+			m_sourceExplorer.AppendColumn(column.m_col);
+		else
+			m_sourceExplorer.AppendColumn(column.m_name,
+				column.m_col != nullptr ? column.m_col->GetColumnId() : wxNOT_FOUND,
+				column.m_col != nullptr ? column.m_col->GetTypeDesc() : ibTypeDescription());
+	}
 	// The list's DEFAULT view rides onto the explorer: a Choice list stamps the choice flag the form auto-build copies
 	// onto the mainTableBox (where it serialises per-form). A Normal list leaves it off. This is the ONE propagation.
 	m_sourceExplorer.SetChoiceMode(m_view == ibDynamicListView_Choice);
@@ -416,8 +613,12 @@ const ibMetaData* ibValueDynamicList::GetSourceMetaData() const
 // (Filter dim==value per drilled level + TotalBy the next), and its hierarchy branch the self-hierarchy tree.
 // The old per-list keyset provider + ibDynamicListNode + the native page.m_hierarchyCol tree are gone — a tree is
 // a hierarchy GROUPING over the composer now, not a parent-column page scope.
-// ⚠ FromText (SetCustomQuery): RunComposerPage requires GetSourceQueryable() != null, so a custom-text source
-//   must vend a queryable to page through here (the computed-source frontier) — FromSource sources work today.
+// (The old ⚠ here — "RunComposerPage requires GetSourceQueryable() != null, so a custom-text source must vend a
+//  queryable to page through" — is answered by the MAIN TABLE being mandatory. The list always has its queryable;
+//  the arbitrary query changes what is READ, never whose rows they are. The composer wraps the author's text as a
+//  nested source when there are settings over it (ibDataDBComposer::RenderText), so the paged read is the ordinary
+//  one. What the query MUST carry for a row to be openable is the main table's key columns — which is why the
+//  seed (SeedArbitraryQuery) selects every column rather than a chosen few.)
 
 // --- settings surface -------------------------------------------------------
 
@@ -474,12 +675,13 @@ void ibValueDynamicList::OnPropertyChanged(ibProperty* property, const wxVariant
 // Source property + the settings (Filter/Order/Group) held OUTSIDE the property set.
 bool ibValueDynamicList::ReadProperty(const ibDataNode& node)
 {
-	// The flag chooses the source: an arbitrary query TEXT, or a picked metaobject (both serialised).
+	// BOTH, ALWAYS. The main table is what the list IS (its commands, its icon, the value a choice
+	// hands back), and the arbitrary query is what it READS — so neither is written in place of the
+	// other. An older blob that stored only one loads with the other simply absent, which is the same
+	// state as "not set".
 	m_propertyUseCustomQuery->ReadNodeValue(node.GetProperty(m_propertyUseCustomQuery->GetName()));
-	if (IsArbitraryQuery())
-		m_propertyCustomQuery->ReadNodeValue(node.GetProperty(m_propertyCustomQuery->GetName()));
-	else
-		m_propertySource->ReadNodeValue(node.GetProperty(m_propertySource->GetName()));   // resolves the queryable from the id
+	m_propertySource->ReadNodeValue(node.GetProperty(m_propertySource->GetName()));   // resolves the queryable from the id
+	m_propertyCustomQuery->ReadNodeValue(node.GetProperty(m_propertyCustomQuery->GetName()));
 	RebuildSource();
 
 	GetListSettings()->ReadData(node);   // node → buffer; then commit buffer → composer (the store)
@@ -496,25 +698,28 @@ bool ibValueDynamicList::ReadProperty(const ibDataNode& node)
 
 bool ibValueDynamicList::WriteProperty(ibDataNode& node) const
 {
-	// The flag first — it decides which source half is serialised.
 	node.SetProperty(m_propertyUseCustomQuery->GetName(), m_propertyUseCustomQuery->GetNodeValue());
-	if (IsArbitraryQuery()) {
-		// Arbitrary query: serialise the query TEXT — there is no metaobject source to require.
-		node.SetProperty(m_propertyCustomQuery->GetName(), m_propertyCustomQuery->GetNodeValue());
-	}
-	else {
-		// The Source property's write FAILS when no queryable is picked
-		// (ibPropertyDynamicSource::WriteNodeValue) — forbid serialising an INCOMPLETE, column-less
-		// list that would resolve to nothing on load. Propagate that verdict; the form attribute
-		// drops the whole node on false.
-		ibDataValue value;
-		if (!m_propertySource->WriteNodeValue(value))
-			return false;
-		node.SetProperty(m_propertySource->GetName(), value);
-	}
 
-	// GetListSettings() is the live FACADE over the composer (the store), so this serialises the composer's
-	// current Filter/Order/Group directly. (WriteData/ReadData item round-trip is still a TODO stub.)
+	// ⚠ THE MAIN TABLE IS REQUIRED, arbitrary query or not. The Source property's write FAILS when no
+	// queryable is picked (ibPropertyDynamicSource::WriteNodeValue) — forbid serialising an INCOMPLETE
+	// list, which without a main table would load as a grid nobody can act on: no commands, no icon,
+	// no value to hand back from a choice. Propagate that verdict; the form attribute drops the whole
+	// node on false.
+	//
+	// (It used to be an EITHER/OR, and that was the mistake: a query was allowed to stand IN PLACE OF
+	// the source, which took the list's identity away along with its data.)
+	ibDataValue value;
+	if (!m_propertySource->WriteNodeValue(value))
+		return false;
+	node.SetProperty(m_propertySource->GetName(), value);
+
+	// …and the query over it, when there is one.
+	node.SetProperty(m_propertyCustomQuery->GetName(), m_propertyCustomQuery->GetNodeValue());
+
+	// GetListSettings() is the live FACADE over the composer (the store), so this serialises the
+	// composer's current Filter, Order AND Group — all three, through the facade's own Count/Get/Add.
+	// (It wrote the filter alone until 2026-08-07: sort and grouping live in the composer in facade
+	// mode, the buffer fields it read were empty, and a sort set on a live list never reached disk.)
 	GetListSettings()->WriteData(node);
 
 	// Default view — written implicitly as a hidden intrinsic field (see ibDynamicListView).

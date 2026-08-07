@@ -195,7 +195,7 @@ std::string TranslatedDictionary()
 		{ "cancel",          _("Cancel") },
 		{ "close",           _("Close") },
 		{ "allFunctions",    _("All functions") },
-		{ "loading",         _("Loading…") },
+		{ "loading",         _("Loading...") },
 		{ "debugMode",       _("Debug mode") },
 		{ "debuggerPaused",  _("Debugger: paused") },
 		{ "noConnection",    _("No connection to the server") },

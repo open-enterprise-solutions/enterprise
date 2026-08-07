@@ -195,7 +195,7 @@ ibClassID ibValue::GetTypeIDByRef(const ibValue* objectRef)
 		return GetTypeIDByRef(typeid(*objectRef));
 	default:
 		wxFAIL_MSG(wxString::Format(
-			wxT("GetTypeIDByRef: unhandled object tag %d — add it to the typeid switch"),
+			wxT("GetTypeIDByRef: unhandled object tag %d - add it to the typeid switch"),
 			static_cast<int>(objectRef->m_typeClass)));
 		return 0;
 	}

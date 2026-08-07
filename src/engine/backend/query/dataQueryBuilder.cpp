@@ -11,6 +11,7 @@
 
 #include "dataQueryBuilder.h"
 #include "queryProvider.h"                                           // ibBackendQueryProvider abstraction (NO L2 — the door runs through it)
+#include "queryRamTable.h"                                           // ibQueryRamTable — the empty selection an ALLOWED read yields on a refusal
 #include "backend/session/session.h"                                 // ibSession::Current()->Holder()
 #include "backend/guid.h"                                            // ibGuid -> wxString (WhereKey / WhereKeyIn)
 #include "backend/backend_exception.h"                               // ibBackendAccessException
@@ -332,29 +333,34 @@ ibDataQueryBuilder& ibDataQueryBuilder::GroupByExpr(const ibQueryColumnExprPtr& 
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::Aggregate(AggregateFn fn,
-	const ibBackendQueryColumn* col, const wxString& alias)
+	const ibBackendQueryColumn* col, const wxString& alias, bool distinct)
 {
 	// Route to the current context: Totals() → the TotalBy common set, else the GroupBy set.
-	(m_aggInTotals ? m_totalAggregates : m_aggregates).push_back(AggregateItem{ fn, col, alias, {} });
+	AggregateItem item{ fn, col, alias, {} };
+	item.m_distinct = distinct;
+	(m_aggInTotals ? m_totalAggregates : m_aggregates).push_back(std::move(item));
 	return *this;
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::Aggregate(AggregateFn fn,
-	const std::vector<const ibBackendQueryColumn*>& path, const wxString& alias)
+	const std::vector<const ibBackendQueryColumn*>& path, const wxString& alias, bool distinct)
 {
 	if (path.empty()) return *this;
-	if (path.size() == 1) return Aggregate(fn, path.front(), alias);     // not a dot-walk — plain aggregate input
-	(m_aggInTotals ? m_totalAggregates : m_aggregates).push_back(AggregateItem{ fn, path.back(), alias, path });
+	if (path.size() == 1) return Aggregate(fn, path.front(), alias, distinct);   // not a dot-walk — plain input
+	AggregateItem item{ fn, path.back(), alias, path };
+	item.m_distinct = distinct;
+	(m_aggInTotals ? m_totalAggregates : m_aggregates).push_back(std::move(item));
 	return *this;
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::Aggregate(AggregateFn fn,
-	const ibQueryColumnExprPtr& expr, const wxString& alias)
+	const ibQueryColumnExprPtr& expr, const wxString& alias, bool distinct)
 {
 	// COMPUTED aggregate input — SUM(Qty * Price). The provider lowers m_expr via BuildColumnExpr.
 	if (!expr) return *this;
 	AggregateItem item{ fn, nullptr, alias, {} };
 	item.m_expr = expr;
+	item.m_distinct = distinct;
 	(m_aggInTotals ? m_totalAggregates : m_aggregates).push_back(std::move(item));
 	return *this;
 }
@@ -539,8 +545,15 @@ std::vector<const ibBackendQueryColumn*> ibDataQueryBuilder::MaterialiseColumns(
 void ibDataQueryBuilder::StampResult(ibDataQueryResult& r) const
 {
 	r.SetMaterialiseColumns(MaterialiseColumns());
-	r.SetTotals(m_totals, m_totalAggregates);
+	r.SetTotals(m_totals, m_totalAggregates, m_totalsOverall);
 	r.SetSource(m_holder, m_queryable, m_selectCols, m_conditions);   // lazy sub-selections + ref-dimension resolution
+}
+
+// An empty temp table, as a result. Nothing here knows WHY the caller wants one — that
+// judgement (a closed source under SELECT ALLOWED) belongs to the layer that read the flag.
+ibDataQueryResult ibMakeEmptyQueryResult(const ibBackendQueryable* queryable)
+{
+	return ibDataQueryResult(ibQueryRamTable{}, queryable);
 }
 
 ibDataQueryResult ibDataQueryBuilder::Execute(const ibReadPageRequest& req) const
@@ -551,8 +564,14 @@ ibDataQueryResult ibDataQueryBuilder::Execute(const ibReadPageRequest& req) cons
 		// The policy folds its restriction and lets us through, or refuses — and a refusal is
 		// told, never mimed as an empty selection: it either threw with its own words, or said
 		// false and the same exception is raised here.
-		if (!m_policy->CheckSelect(guarded, ibAccessStage::Table))
+		//
+		// UNLESS the author wrote SELECT ALLOWED, which is exactly the sentence "show me what I
+		// may see": the refusal then becomes an empty read and the query carries on.
+		if (!m_policy->CheckSelect(guarded, ibAccessStage::Table)) {
+			if (m_allowed)
+				return ibMakeEmptyQueryResult(m_queryable);
 			ibBackendAccessException::Error(_("reading"));
+		}
 		return guarded.Execute(req);                  // L4-1 + L4-2 both land here
 	}
 	ibDataQueryResult r = ibQueryComposer::ExecuteRead(BuildSpec(), req);
@@ -567,8 +586,11 @@ ibDataQueryResult ibDataQueryBuilder::Execute(const ibReadPageRequest& req,
 	if (m_policy != nullptr) {
 		ibDataQueryBuilder guarded(*this);
 		guarded.m_policy = nullptr;
-		if (!m_policy->CheckSelect(guarded, ibAccessStage::Table))          // the list / paging path lands here too
+		if (!m_policy->CheckSelect(guarded, ibAccessStage::Table)) {        // the list / paging path lands here too
+			if (m_allowed)
+				return ibMakeEmptyQueryResult(m_queryable);
 			ibBackendAccessException::Error(_("reading"));
+		}
 		return guarded.Execute(req, cache, signature);
 	}
 	ibDataQueryResult r = ibQueryComposer::ExecuteReadCached(BuildSpec(), req, cache, signature);
@@ -576,8 +598,50 @@ ibDataQueryResult ibDataQueryBuilder::Execute(const ibReadPageRequest& req,
 	return r;
 }
 
+// ONE ROW OF ZEROS — what a refused AGGREGATE yields under SELECT ALLOWED when there is nothing to
+// group by. `SELECT SUM(x) FROM T` returns one row whatever T holds, so answering with NO rows says
+// "there is no such question", while the honest answer to "sum of what you may see" over nothing you
+// may see is a sum of nothing: zero. (With a GROUP BY the empty result IS right — no groups.)
+static ibDataQueryResult MakeZeroAggregateResult(const std::vector<ibAggregateItem>& aggregates,
+                                                 const ibBackendQueryable* queryable)
+{
+	ibQueryRamTable table;
+	ibMetaID id = 1;
+	for (const ibAggregateItem& aggregate : aggregates)
+		table.AddColumn(id++, aggregate.m_alias, ibTypeDescription());
+
+	const long row = table.AppendRow();
+	id = 1;
+	for (size_t i = 0; i < aggregates.size(); ++i)
+		table.SetCell(row, id++, ibValue(ibNumber(0)));
+
+	return ibDataQueryResult(std::move(table), queryable);
+}
+
+// THE POLICY GUARDS EVERY READ, and an AGGREGATE is a read. It was guarded on the plain terminals
+// only, which meant `SELECT Amount FROM X` was refused while `SELECT SUM(Amount) FROM X` answered —
+// an inference leak: totals and counts over rows the reader may not see, with SELECT ALLOWED
+// silently inert on that path too. (Found by Max, 2026-08-06, by reading; confirmed by the absence
+// of any policy mention in BuildSpec and in the whole composer.)
+//
+// A read that must NOT be filtered says so where it is written, with WithAccessPolicy(nullptr) —
+// the verb that already exists for the policy's own set computation. Totals regeneration is the
+// case that matters: filtered by the caller's rights it would recompute stored totals from the rows
+// that caller happens to see, and wrong totals do not look like an error.
 ibDataQueryResult ibDataQueryBuilder::SelectAggregate() const
 {
+	if (m_policy != nullptr) {
+		ibDataQueryBuilder guarded(*this);
+		guarded.m_policy = nullptr;
+		if (!m_policy->CheckSelect(guarded, ibAccessStage::Table)) {
+			if (m_allowed)
+				return m_groupBy.empty() && m_groupExprs.empty()
+					? MakeZeroAggregateResult(m_aggregates, m_queryable)
+					: ibMakeEmptyQueryResult(m_queryable);
+			ibBackendAccessException::Error(_("reading"));
+		}
+		return guarded.SelectAggregate();
+	}
 	return ibQueryComposer::ExecuteAggregate(BuildSpec());
 }
 
@@ -586,11 +650,36 @@ ibDataQueryResult ibDataQueryBuilder::SelectAggregate() const
 // the unpaged all-groups aggregate. The single-scalar-dim TOTALS drill uses this instead of the detail fold.
 ibDataQueryResult ibDataQueryBuilder::SelectAggregatePage(const ibReadPageRequest& page) const
 {
+	if (m_policy != nullptr) {
+		ibDataQueryBuilder guarded(*this);
+		guarded.m_policy = nullptr;
+		if (!m_policy->CheckSelect(guarded, ibAccessStage::Table)) {
+			// A PAGE OF GROUPS always groups — so an empty page is the right refusal here, and the
+			// zero row above would be a group that does not exist.
+			if (m_allowed)
+				return ibMakeEmptyQueryResult(m_queryable);
+			ibBackendAccessException::Error(_("reading"));
+		}
+		return guarded.SelectAggregatePage(page);
+	}
 	return ibQueryComposer::ExecuteGroupLevelPage(BuildSpec(), page);
 }
 
+// GUARDED TOO, though nothing calls it today. A read terminal with no policy on it is a loaded gun:
+// the first caller gets an unchecked read and no one notices, because nothing looks wrong.
 ibSelectorTree ibDataQueryBuilder::SelectTotals() const
 {
+	if (m_policy != nullptr) {
+		ibDataQueryBuilder guarded(*this);
+		guarded.m_policy = nullptr;
+		if (!m_policy->CheckSelect(guarded, ibAccessStage::Table)) {
+			// A TOTALS TREE has no empty form to hand back that is not a lie about its shape, so
+			// ALLOWED cannot soften this one: an empty tree and a tree of zeros say different
+			// things, and neither is "you may not read this".
+			ibBackendAccessException::Error(_("reading"));
+		}
+		return guarded.SelectTotals();
+	}
 	return ibQueryComposer::ExecuteTotals(BuildSpec());
 }
 

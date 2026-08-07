@@ -140,7 +140,7 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(const wxString& p
 			const int dot = procedureName.Find('.', /*fromEnd*/ true);
 			if (dot == wxNOT_FOUND) {
 				ibBackendCoreException::Error(
-					_("Background job: '%s' must name the module — ModuleName.MethodName"),
+					_("Background job: '%s' must name the module - ModuleName.MethodName"),
 					procedureName);
 			}
 			const wxString moduleName = procedureName.Left(dot);

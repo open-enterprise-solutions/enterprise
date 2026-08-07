@@ -9,8 +9,10 @@
 // names stay as strings; resolution is the lowering's job (queryLowering).
 //
 // Grammar (EN canon; keywords are locale-table driven — queryKeywords.h):
-//   statement:= selectCore { UNION [ALL] selectCore } [ORDER BY orderList] [TOTALS …]
-//   selectCore := SELECT [DISTINCT] selList FROM source { join }
+//   package  := statement { ';' statement }            (a trailing ';' is allowed)
+//   statement:= DROP name
+//             | selectCore { UNION [ALL] selectCore } [ORDER BY orderList] [TOTALS …] [FOR UPDATE]
+//   selectCore := SELECT [ALLOWED] [TOP n] [DISTINCT] selList [INTO name] FROM source { join }
 //                 [WHERE predicate] [GROUP BY exprList [HAVING predicate]]
 //   totalDim := columnPath [HIERARCHY | ELEMENTS]
 //   selList  := '*' | proj { ',' proj }
@@ -50,7 +52,20 @@ public:
 	ibQueryParser() = default;
 
 	// Lex + parse the text into a SELECT statement AST. Throws on a lex / syntax error.
+	// ONE statement — text holding a package (or a bare DROP) is a syntax error here, so an
+	// existing single-query caller cannot silently swallow the rest of a package.
 	ibQuerySelectPtr Parse(const wxString& queryText);
+
+	// Lex + parse a PACKAGE — one or more statements separated by ';'. A single select parses
+	// to a package of one, so this is the general door: the constructor validates through it,
+	// which is what keeps the check the ENGINE's rather than a second, softer opinion.
+	ibQueryPackage ParsePackage(const wxString& queryText);
+
+	// ONE expression on its own — the inverse of ibRenderQueryExpr, for a constructor's
+	// "arbitrary condition" cell and anywhere else a fragment is authored by hand. Same
+	// parser, same errors: a free-typed predicate is read by the engine, never by a
+	// hand-rolled mini-checker beside it.
+	ibQueryAstExprPtr ParseExpression(const wxString& exprText);
 
 private:
 	std::vector<ibQueryToken> m_toks;
@@ -65,13 +80,13 @@ private:
 	void   ExpectKw(ibQueryKeyword kw, const wxChar* what);
 	bool   AcceptPunct(wxChar c);
 	void   ExpectPunct(wxChar c, const wxChar* what);
-	bool   AcceptOp(const wxChar* op);
 	// Reports a syntax error: formats line / position and throws
 	// ibBackendCoreException (always throws — any code after a Fail() call is
 	// logically unreachable, mirroring the codebase's "Error(); return false;" idiom).
 	void   Fail(const ibQueryToken& at, const wxString& msg) const;
 
 	// --- productions -----------------------------------------------------
+	ibQueryAstStatement           ParseStatement();         // one package statement: a DROP or a full SELECT
 	ibQuerySelectPtr           ParseSelectStatement();   // a full SELECT (+ UNION branches + trailing ORDER/TOTALS)
 	ibQuerySelectPtr           ParseSelectCore();        // one SELECT body up to HAVING (a UNION branch)
 	void                       ParseSelectList(ibQuerySelect& sel);
@@ -91,6 +106,9 @@ private:
 	ibQueryAstExprPtr             ParsePrimary();
 	ibQueryAstExprPtr             ParseAggregate();   // SUM/COUNT/... ( ... )
 	ibQueryAstExprPtr             ParseValueConstant();// VALUE( <Kind>.<Name>.<Member> ) — literal reference constant
+	// CAST( <expr> AS <Kind>.<Name> ) [ . field ... ] - narrow a composite reference so the walk a
+	// composite forbids becomes possible. A trailing path makes the result a COLUMN rooted on the cast.
+	ibQueryAstExprPtr             ParseCast();
 	ibQueryAstExprPtr             ParseCase();        // CASE WHEN … THEN … [ELSE …] END
 };
 

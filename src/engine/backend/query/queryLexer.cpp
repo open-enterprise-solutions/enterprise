@@ -28,10 +28,17 @@ static const ibQueryKeyWordEntry s_queryKeyWordsEN[] =
 	{ ibQueryKeyword::Having,   wxT("HAVING")   },
 	{ ibQueryKeyword::Distinct, wxT("DISTINCT") },
 	{ ibQueryKeyword::Top,      wxT("TOP")      },
+	{ ibQueryKeyword::Allowed,  wxT("ALLOWED")  },
+	{ ibQueryKeyword::Into,     wxT("INTO")     },
+	{ ibQueryKeyword::Drop,     wxT("DROP")     },
+	{ ibQueryKeyword::Index,    wxT("INDEX")    },
+	{ ibQueryKeyword::For,      wxT("FOR")      },
+	{ ibQueryKeyword::Update,   wxT("UPDATE")   },
 	{ ibQueryKeyword::Totals,   wxT("TOTALS")   },
 	{ ibQueryKeyword::Hierarchy,    wxT("HIERARCHY")     },
 	{ ibQueryKeyword::HierarchyOnly,wxT("HIERARCHYONLY") },
 	{ ibQueryKeyword::Elements, wxT("ELEMENTS") },
+	{ ibQueryKeyword::Overall,  wxT("OVERALL")  },
 	{ ibQueryKeyword::Join,     wxT("JOIN")     },
 	{ ibQueryKeyword::Inner,    wxT("INNER")    },
 	{ ibQueryKeyword::Left,     wxT("LEFT")     },
@@ -62,6 +69,7 @@ static const ibQueryKeyWordEntry s_queryKeyWordsEN[] =
 	{ ibQueryKeyword::Max,      wxT("MAX")      },
 	{ ibQueryKeyword::Avg,      wxT("AVG")      },
 	{ ibQueryKeyword::Value,    wxT("VALUE")    },
+	{ ibQueryKeyword::Cast,     wxT("CAST")     },
 };
 
 namespace {
@@ -98,12 +106,52 @@ ibQueryKeyword ibFindQueryKeyword(const wxString& upperWord)
 	return it != m.end() ? it->second : ibQueryKeyword::None;
 }
 
+bool ibIsAggregateKeyword(ibQueryKeyword kw)
+{
+	switch (kw) {
+	case ibQueryKeyword::Sum:
+	case ibQueryKeyword::Count:
+	case ibQueryKeyword::Min:
+	case ibQueryKeyword::Max:
+	case ibQueryKeyword::Avg:
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool ibDistinctMattersFor(ibQueryKeyword aggregate)
+{
+	switch (aggregate) {
+	case ibQueryKeyword::Sum:
+	case ibQueryKeyword::Avg:
+	case ibQueryKeyword::Count:
+		return true;   // duplicates carry weight
+	default:
+		return false;  // MIN / MAX answer the same value however often it occurs
+	}
+}
+
 const wxString& ibQueryKeywordText(ibQueryKeyword kw)
 {
 	static const wxString s_empty;
 	const std::map<ibQueryKeyword, wxString>& m = TextByKeyword();
 	auto it = m.find(kw);
 	return it != m.end() ? it->second : s_empty;
+}
+
+// THE WHOLE ACTIVE TABLE, for the editor's highlighting. Asked of the table rather than typed out
+// again: a keyword added to the language lights up the day it is added, and a localized table
+// lights up ITS words — a hand-written list in the editor would highlight last year's language.
+wxString ibAllQueryKeywords()
+{
+	wxString out;
+	for (const ibQueryKeyWordEntry& entry : s_queryKeyWordsEN) {
+		if (!out.IsEmpty())
+			out += wxT(" ");
+		out += entry.m_text;
+	}
+	return out;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -128,6 +176,27 @@ wxChar ibQueryLexer::PeekRawByte() const
 	if (pos < GetBufferSize())
 		return m_strBuffer[pos];
 	return wxChar(0);
+}
+
+// THE LEXER'S OWN ANSWER, not a second opinion about it. Anything that lexes as one identifier and
+// nothing else is a name the language can carry; everything else — a space, a dot, a bracket, a
+// keyword, an empty string — is not. A lex error is simply "no": the caller asked whether this can
+// be a name, and being unlexable is the loudest possible no.
+bool ibQueryLexer::IsIdentifier(const wxString& text)
+{
+	if (text.IsEmpty())
+		return false;
+
+	try {
+		ibQueryLexer lexer;
+		const std::vector<ibQueryToken> tokens = lexer.Tokenize(text);
+		return tokens.size() == 2                                   // the identifier + End
+			&& tokens[0].m_kind == ibQueryTokenKind::Ident
+			&& tokens[0].m_text.IsSameAs(text, true);               // it consumed the WHOLE text
+	}
+	catch (const ibBackendException&) {
+		return false;
+	}
 }
 
 std::vector<ibQueryToken> ibQueryLexer::Tokenize(const wxString& queryText)

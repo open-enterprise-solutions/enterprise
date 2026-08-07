@@ -83,12 +83,25 @@ shape every collection here follows.
 | Name | Key | | C++ |
 |---|---|---|---|
 | `Query` | `VL_QURY` | **V** | `ibValueQueryExec` |
+| `TempTablesManager` | `VL_TTMG` | **V** | `ibValueTempTablesManager` |
 | `QueryResult` | `VL_QRES` | S | `ibValueQueryResult` |
 | `QuerySelect` | `VL_QSEL` | S | `ibValueQuerySelect` |
 | `Queryable` | `VL_QRBL` | S | `ibValueQueryable` |
 | `QueryDecorator` | `VL_QDEC` | S | `ibValueQueryDecorator` |
 
-You build a `Query`; everything downstream is handed to you. `Queryable` is the universal
+You build a `Query`; everything downstream is handed to you. Its text is always a **package** —
+an ordinary one-statement query is a package of one — so there are two verbs over one mechanism:
+`ExecuteBatch()` returns an `Array` of results BY POSITION (a plain select yields its
+`QueryResult`, a `SELECT … INTO` yields the row COUNT, a `DROP` yields nothing), and `Execute()`
+is simply the first of them. No branch about which kind of text was handed in, and no verb that
+sometimes returns a table and sometimes a number ([query-constructor.md](query-constructor.md) §5c).
+
+`TempTablesManager` decides **how long a temp table lives**. Unset, the tables a query makes die
+with it; set (`Query.TempTablesManager = manager`), they are kept by the manager and any other
+query attached to the same one reads them by name. One verb — `Close()` — because that is the one
+decision there is to make about them.
+
+`Queryable` is the universal
 source contract ([query-language-arc.md](query-language-arc.md)); `QueryDecorator` is what
 RLS decorates a query with ([access-policy-rls.md](access-policy-rls.md)).
 

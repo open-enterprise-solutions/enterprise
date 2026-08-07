@@ -149,6 +149,12 @@ protected:
 				return ibBackendPicture::GetImageFromBase64(s_down_32_png, size);
 			else if (id == wxART_SORT)
 				return ibBackendPicture::GetImageFromBase64(s_sort_32_png, size);
+			else if (id == wxART_QUERY_CONSTRUCTOR)
+				return ibBackendPicture::GetImageFromBase64(s_query_constructor_32_png, size);
+			else if (id == wxART_TEMP_TABLE)
+				return ibBackendPicture::GetImageFromBase64(s_temp_table_32_png, size);
+			else if (id == wxART_NESTED_QUERY)
+				return ibBackendPicture::GetImageFromBase64(s_nested_query_32_png, size);
 
 			return wxNullBitmap;
 		}

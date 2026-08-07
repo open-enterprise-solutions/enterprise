@@ -101,7 +101,13 @@ namespace
 		// wider than the corresponding column (this is how Explorer behaves).
 		const int fitting = ctrl->GetSizeFromTextSize(ctrl->GetTextExtent(ctrl->GetValue())).x;
 		const int current = ctrl->GetSize().x;
-		const int maxwidth = ctrl->GetSize().x - ctrl->GetPosition().x;
+		// ⚠ THE ROOM LEFT IN THE PARENT, not the editor's own width minus its own x. That was the
+		// bug: for a column far from the left edge the subtraction went NEGATIVE (a 160-wide cell at
+		// x=380 gave -220), the editor was sized to it, and an editor with no width is an editor
+		// nobody can see. It looked exactly like "this cell refuses to open" — and only ever for
+		// columns after the first, which is why the leftmost cell of every grid always worked.
+		const int maxwidth = (parent != nullptr ? parent->GetSize().x : ctrl->GetSize().x)
+		                     - ctrl->GetPosition().x;
 
 		// Adjust size so that it fits all content. Don't change anything if the
 		// allocated space is already larger than needed and don't extend wxDVC's

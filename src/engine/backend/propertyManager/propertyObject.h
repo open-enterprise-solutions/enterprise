@@ -416,7 +416,7 @@ public:
 	/// null GUIDs. Reach the const overload through a const pointer unless you truly own a
 	/// mutable metaData. Guard so the trap surfaces in debug instead of corrupting data.
 	virtual ibMetaData* GetMetaData() {
-		wxFAIL_MSG(wxT("ibPropertyObject::GetMetaData(): non-const overload not overridden — ")
+		wxFAIL_MSG(wxT("ibPropertyObject::GetMetaData(): non-const overload not overridden - ")
 			wxT("call the const one (through a const pointer); this returns null."));
 		return nullptr;
 	}

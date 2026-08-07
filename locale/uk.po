@@ -5201,3 +5201,351 @@ msgstr "Параметри сеансу"
 #: src/engine/backend/metaCollection/metaObjectMetadataMenu.cpp
 msgid "Open session module"
 msgstr "Відкрити модуль сеансу"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Query constructor"
+msgstr "Конструктор запиту"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Tables and fields"
+msgstr "Таблиці та поля"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Conditions"
+msgstr "Умови"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Totals"
+msgstr "Підсумки"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Unions"
+msgstr "Об'єднання"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Advanced"
+msgstr "Додатково"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Links"
+msgstr "Зв'язки"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Check query"
+msgstr "Перевірити запит"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Query text"
+msgstr "Текст запиту"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Query package"
+msgstr "Пакет запитів"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Add query"
+msgstr "Додати запит"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Add drop"
+msgstr "Додати знищення"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Nested table"
+msgstr "Вкладена таблиця"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Edit nested"
+msgstr "Змінити вкладену"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Alias"
+msgstr "Псевдонім"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Aggregate field"
+msgstr "Агрегатне поле"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Condition"
+msgstr "Умова"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Field"
+msgstr "Поле"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Direction"
+msgstr "Напрямок"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Add branch"
+msgstr "Додати гілку"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Edit branch"
+msgstr "Змінити гілку"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Keep duplicates"
+msgstr "Зберігати дублікати"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Function"
+msgstr "Функція"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Link"
+msgstr "Зв'язок"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Temporary tables"
+msgstr "Тимчасові таблиці"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Fields"
+msgstr "Поля"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "This query"
+msgstr "Цей запит"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Elements"
+msgstr "Елементи"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Hierarchy only"
+msgstr "Лише ієрархія"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Ascending"
+msgstr "За зростанням"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Descending"
+msgstr "За спаданням"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Inner"
+msgstr "Лише збіжні"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Grouping fields"
+msgstr "Поля групування"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Aggregate fields"
+msgstr "Агрегатні поля"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Grouping levels"
+msgstr "Рівні групування"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Unfold"
+msgstr "Розгортання"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "No duplicates"
+msgstr "Без дублікатів"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "First"
+msgstr "Перші"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Branch"
+msgstr "Гілка"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Statement"
+msgstr "Оператор"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Order by"
+msgstr "Упорядкувати за"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Grouping field"
+msgstr "Поле групування"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Grouping level"
+msgstr "Рівень групування"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "No errors found."
+msgstr "Помилок не знайдено."
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "All from the left"
+msgstr "Усі з лівої"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "All from the right"
+msgstr "Усі з правої"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "All from both"
+msgstr "Усі з обох"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Only matching rows"
+msgstr "Лише збіжні рядки"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "(by reference)"
+msgstr "(за посиланням)"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "(nested table)"
+msgstr "(вкладена таблиця)"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Drop temporary table"
+msgstr "Знищити тимчасову таблицю"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Temporary table"
+msgstr "Тимчасова таблиця"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "The query engine reads this query."
+msgstr "Рушій запитів читає цей запит."
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Field, comparison and value"
+msgstr "Поле, порівняння та значення"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Arbitrary expression"
+msgstr "Довільний вираз"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "A condition cannot be empty."
+msgstr "Умова не може бути порожньою."
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Lock the rows for update"
+msgstr "Блокувати рядки для зміни"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Put the result into a temporary table"
+msgstr "Помістити результат у тимчасову таблицю"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Allowed only (skip what may not be read instead of refusing)"
+msgstr "Лише дозволені (пропускати недоступне замість відмови)"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Query kind"
+msgstr "Вид запиту"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Create a temporary table"
+msgstr "Створення тимчасової таблиці"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Drop a temporary table"
+msgstr "Знищення тимчасової таблиці"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Open the selection"
+msgstr "Відкрити виділене"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "No errors found in the selection."
+msgstr "У виділеному фрагменті помилок не знайдено."
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Edit the nested query"
+msgstr "Змінити вкладений запит"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Unions / Aliases"
+msgstr "Об'єднання / Псевдоніми"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Does"
+msgstr "Дія"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "selects"
+msgstr "вибирає"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "makes the temp table %s"
+msgstr "створює тимчасову таблицю %s"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "drops the temp table %s"
+msgstr "знищує тимчасову таблицю %s"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Grouping field"
+msgstr "Поле групування"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Indexed field"
+msgstr "Індексоване поле"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Totals kind"
+msgstr "Тип підсумків"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Totals field"
+msgstr "Підсумкове поле"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Expression"
+msgstr "Вираз"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Grand totals"
+msgstr "Загальні підсумки"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "The root of a totals tree IS the grand total — it is always produced."
+msgstr "Корінь дерева підсумків і є загальний підсумок — він формується завжди."
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Total by the selected field"
+msgstr "Підсумки за вибраним полем"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Remove the grouping level"
+msgstr "Прибрати рівень групування"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Total the selected field"
+msgstr "Підбивати підсумок за вибраним полем"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Remove the totals field"
+msgstr "Прибрати підсумкове поле"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "The name in the first column is the field's ALIAS — what the result calls it, and what every branch is lined up by. Type over it to rename the output field."
+msgstr "Ім'я в першій колонці — це псевдонім поля: як результат його називає і за чим вирівнюються всі гілки об'єднання. Введіть нове ім'я, щоб перейменувати поле результату."
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Query batch"
+msgstr "Пакет запитів"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Field%u"
+msgstr "Поле%u"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "TempTable%u"
+msgstr "ТимчасоваТаблиця%u"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "Duplicate branch"
+msgstr "Дублювати гілку"
+
+#: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
+msgid "There is no temporary table to drop yet: an earlier statement of this package has to make one first."
+msgstr "Знищувати поки нічого: тимчасову таблицю має створити більш ранній запит пакета."

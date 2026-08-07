@@ -61,6 +61,7 @@ enterprise/
 │   ├── job-manager.md        # scheduled + background work — the engine (built)
 │   ├── session-parameters.md # values that exist once per session — metatype, module, write window
 │   ├── common-attributes.md  # one declaration, many objects — composition, the copy, propagation
+│   ├── query-constructor.md  # the shell over the AST: nine tabs, package, temp tables, ALLOWED (BUILT)
 │   ├── scheduled-jobs.md     # the metadata over it: two metatypes, one verb (BUILT)
 │   ├── plugins.md           # plugin ABI 2 — capability boundary (diagnostics / script / metadata)
 │   ├── script-language.md    # THE LANGUAGE REFERENCE — dialects, keywords, LINQ, global API

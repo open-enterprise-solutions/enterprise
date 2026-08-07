@@ -123,7 +123,7 @@ int ibAppEnterprise::DoOnRun()
 			_("Cannot start enterprise.exe - no infobase specified.\n\n"
 			  "Provide one of:\n"
 			  "  --file=<path>          (Firebird embedded / SQLite file)\n"
-			  "  --server=<host> --db=<name> [--dbport=…] [--user=…] [--password=…]\n\n"
+			  "  --server=<host> --db=<name> [--dbport=...] [--user=...] [--password=...]\n\n"
 			  "Or launch through launcher.exe to pick a saved infobase."),
 			_("OES Enterprise"),
 			wxOK | wxICON_ERROR

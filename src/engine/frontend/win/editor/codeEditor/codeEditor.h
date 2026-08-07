@@ -409,6 +409,42 @@ public:
 	// word boundary.
 	wxString GetIdentifierUnderCursor();
 
+	// THE STRING LITERAL THE CARET SITS IN, as a span of the document. A query written in a module
+	// lives in a literal — usually a multi-line one, quoted and with `|` continuation markers — so
+	// anything that wants to work on that query has three jobs before it can start: find the
+	// literal's bounds, take the TEXT out of its spelling, and put it back the same way.
+	//
+	// These three are that, and they are here rather than in the constructor because they are facts
+	// about the SCRIPT's spelling of a string, which is the editor's subject, not the query
+	// language's. Found() is false when the caret is not inside a literal — the same shape
+	// GetIdentifierUnderCursor has, so the menu item beside it gates the same way.
+	struct StringLiteralSpan
+	{
+		int      m_start = -1;   // document position of the opening quote
+		int      m_end   = -1;   // document position just past the closing quote
+		wxString m_text;         // the string's VALUE — quotes stripped, "" unescaped, `|` markers removed
+		bool     Found() const { return m_start >= 0 && m_end > m_start; }
+	};
+	// NOT const: reading the document and the caret goes through wxStyledTextCtrl's own non-const
+	// accessors, and casting that away to decorate this one with `const` would be lying about the
+	// object to satisfy a keyword.
+	StringLiteralSpan GetStringLiteralUnderCursor();
+
+	// Write `text` back into `span`, spelled as the script spells a multi-line string: quoted,
+	// inner quotes doubled, every line after the first opened with `|` and indented to the opening
+	// quote. Replaces exactly that literal and nothing around it.
+	void ReplaceStringLiteral(const StringLiteralSpan& span, const wxString& text);
+
+	// The same spelling, written at `position` where there was no literal at all — so a tool that
+	// AUTHORS a query can be reached from anywhere in a module, not only from inside an existing
+	// string. Without this the constructor would only ever be able to edit a query somebody had
+	// already typed by hand, which is the wrong way round.
+	void InsertStringLiteral(int position, const wxString& text);
+
+	// How the script spells `text` as one string literal, indented under `indent`. Shared by the
+	// two above so the quoting rule lives in one place.
+	static wxString SpellStringLiteral(const wxString& text, const wxString& indent);
+
 	// Custom right-click menu: standard Cut/Copy/Paste/SelectAll +
 	// "Look up in Syntax Helper". The Look-Up item posts
 	// wxID_FRONTEND_SYNTAX_HELPER_LOOKUP up the parent chain so the

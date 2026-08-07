@@ -21,7 +21,7 @@
 //     script name + IntelliSense help. Consumed by FindLinqMethodByName
 //     (compile-side resolver) and the frontend codeEditor autocomplete
 //     loader (always offer the LINQ surface after `.`).
-//   - ibValue::FindLinqMethodByName — script-name → enum resolver, used
+//   - ibValue::FindLinqMethodByName — script-name -> enum resolver, used
 //     by the compile-side at chain-method emit time (compileCode.cpp).
 //
 // Reached at runtime through the OPER_CALL_LINQ handler in procUnit.cpp,
@@ -285,7 +285,7 @@ private:
 };
 
 // OrderBy node — materialise upstream into a vector, sort by
-// key extracted via λ(elem). Semantically "lazy" (returns
+// key extracted via fn(elem). Semantically "lazy" (returns
 // ibValueQuery) but materialises on first MoveNext — sorting
 // requires the full sequence in hand. ascending only for now;
 // descending = OrderByDescending follow-up (or chain .Reverse()).
@@ -348,7 +348,7 @@ private:
 	long                                       m_pos        = 0;
 };
 
-// GroupBy node — bucket upstream by key extracted via λ(elem).
+// GroupBy node — bucket upstream by key extracted via fn(elem).
 // On first MoveNext drain upstream + build ordered buckets, then
 // emit one `Structure{Key, Values:Array}` per group. Key equality
 // uses ibValue::operator< on the key (stable / total order; same
@@ -421,8 +421,8 @@ private:
 };
 
 // Join node — inner equi-join. Build hash map from `inner` keyed
-// by rightKey(λ); for each outer row, look up by leftKey(λ),
-// project matched pairs via projection(outer, inner) → row.
+// by rightKey(fn); for each outer row, look up by leftKey(fn),
+// project matched pairs via projection(outer, inner) -> row.
 // Iterator emits ZERO results when a left row has no match
 // (unmatched-left dropped — inner join semantics). Multi-match
 // supported via stateful inner-bucket cursor across MoveNext.
@@ -448,7 +448,7 @@ public:
 		// look up bucket (O(log N) via std::map; could be replaced
 		// with std::unordered_map keyed on ibValue::GetString if N
 		// huge). Stateful inner-bucket cursor across MoveNext calls
-		// for multi-match (one outer matches K inner rows → K
+		// for multi-match (one outer matches K inner rows -> K
 		// result rows). Reset m_curBucket = nullptr at start of new
 		// outer iteration; current keeps incrementing m_bucketIdx
 		// until bucket exhausted, then advance outer.
@@ -979,7 +979,7 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 			CopyValue(ret, ibValue(new ibValueQuery(std::move(pipeline))));
 			break;
 		}
-		case M::SkipWhile: // SkipWhile(λ)
+		case M::SkipWhile: // SkipWhile(fn)
 		{
 			ibValueFunction* fn = (n >= 1 && args && args[0]) ? AsFunction(args[0]) : nullptr;
 			if (fn == nullptr) ibBackendCoreException::Error(_("LINQ: SkipWhile requires a predicate function"));
@@ -987,7 +987,7 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 			CopyValue(ret, ibValue(new ibValueQuery(std::move(pipeline))));
 			break;
 		}
-		case M::TakeWhile: // TakeWhile(λ)
+		case M::TakeWhile: // TakeWhile(fn)
 		{
 			ibValueFunction* fn = (n >= 1 && args && args[0]) ? AsFunction(args[0]) : nullptr;
 			if (fn == nullptr) ibBackendCoreException::Error(_("LINQ: TakeWhile requires a predicate function"));
@@ -1053,7 +1053,7 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 			break;
 		}
 		case M::Single:           // exactly one; throw if 0 or >1
-		case M::SingleOrDefault:  // 0 → empty, exactly 1 → value, >1 → throw
+		case M::SingleOrDefault:  // 0 -> empty, exactly 1 -> value, >1 -> throw
 		{
 			ibValue current, first;
 			long count = 0;
@@ -1146,7 +1146,7 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 			CopyValue(ret, acc);
 			break;
 		}
-		case M::WhereIndexed: // WhereIndexed(λ)
+		case M::WhereIndexed: // WhereIndexed(fn)
 		{
 			ibValueFunction* fn = (n >= 1 && args && args[0]) ? AsFunction(args[0]) : nullptr;
 			if (fn == nullptr)
@@ -1155,7 +1155,7 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 			CopyValue(ret, ibValue(new ibValueQuery(std::move(pipeline))));
 			break;
 		}
-		case M::SelectIndexed: // SelectIndexed(λ)
+		case M::SelectIndexed: // SelectIndexed(fn)
 		{
 			ibValueFunction* fn = (n >= 1 && args && args[0]) ? AsFunction(args[0]) : nullptr;
 			if (fn == nullptr)
@@ -1209,21 +1209,21 @@ void ibValue::DispatchLinqMethod(ibLinqMethod method, ibValue& ret,
 const std::vector<ibValue::ibLinqMethodInfo>& ibValue::GetLinqMethodTable() {
 	using M = ibValue::ibLinqMethod;
 	static const std::vector<ibLinqMethodInfo> table = {
-		{ M::Where,              L"Where",              L"Filter elements by a predicate λ(elem) → bool" },
-		{ M::Select,             L"Select",             L"Project each element through λ(elem) → newElem" },
+		{ M::Where,              L"Where",              L"Filter elements by a predicate fn(elem) -> bool" },
+		{ M::Select,             L"Select",             L"Project each element through fn(elem) -> newElem" },
 		{ M::Count,              L"Count",              L"Return total element count (drains the sequence)" },
 		{ M::ToArray,            L"ToArray",            L"Materialise the pipeline into an Array" },
 		{ M::First,              L"First",              L"Return the first element; throws if empty" },
 		{ M::Any,                L"Any",                L"True iff the sequence has at least one element" },
 		{ M::Distinct,           L"Distinct",           L"Filter duplicates (uses ibValue equality)" },
-		{ M::OrderBy,            L"OrderBy",            L"Sort ascending by λ(elem) → key" },
-		{ M::OrderByDescending,  L"OrderByDescending",  L"Sort descending by λ(elem) → key" },
-		{ M::GroupBy,            L"GroupBy",            L"Group by λ(elem) → key; emits Structure{Key, Values}" },
+		{ M::OrderBy,            L"OrderBy",            L"Sort ascending by fn(elem) -> key" },
+		{ M::OrderByDescending,  L"OrderByDescending",  L"Sort descending by fn(elem) -> key" },
+		{ M::GroupBy,            L"GroupBy",            L"Group by fn(elem) -> key; emits Structure{Key, Values}" },
 		{ M::Join,               L"Join",               L"Inner equi-join: Join(inner, leftKey, rightKey, projection)" },
 		{ M::Skip,               L"Skip",               L"Skip the first n elements" },
 		{ M::Take,               L"Take",               L"Take at most n elements from the front" },
-		{ M::SkipWhile,          L"SkipWhile",          L"Skip leading elements while λ(elem) holds" },
-		{ M::TakeWhile,          L"TakeWhile",          L"Take leading elements while λ(elem) holds" },
+		{ M::SkipWhile,          L"SkipWhile",          L"Skip leading elements while fn(elem) holds" },
+		{ M::TakeWhile,          L"TakeWhile",          L"Take leading elements while fn(elem) holds" },
 		{ M::Reverse,            L"Reverse",            L"Reverse the sequence (materialises upstream)" },
 		{ M::Concat,             L"Concat",             L"Concatenate with another iterable" },
 		{ M::Union,              L"Union",              L"Concat + Distinct" },
@@ -1238,15 +1238,15 @@ const std::vector<ibValue::ibLinqMethodInfo>& ibValue::GetLinqMethodTable() {
 		{ M::ElementAtOrDefault,  L"ElementAtOrDefault",  L"Return the n-th element or Empty" },
 		{ M::Contains,            L"Contains",            L"True iff the sequence contains the given value" },
 		{ M::SequenceEqual,       L"SequenceEqual",       L"Element-wise equality vs another iterable" },
-		{ M::Aggregate,           L"Aggregate",           L"Fold via Aggregate(seed, λ(acc, elem) → acc)" },
-		{ M::WhereIndexed,        L"WhereIndexed",        L"Filter with index — λ(elem, index) → bool" },
-		{ M::SelectIndexed,       L"SelectIndexed",       L"Project with index — λ(elem, index) → newElem" },
+		{ M::Aggregate,           L"Aggregate",           L"Fold via Aggregate(seed, fn(acc, elem) -> acc)" },
+		{ M::WhereIndexed,        L"WhereIndexed",        L"Filter with index - fn(elem, index) -> bool" },
+		{ M::SelectIndexed,       L"SelectIndexed",       L"Project with index - fn(elem, index) -> newElem" },
 		{ M::ToTable,             L"ToTable",             L"Materialise a data source into a value table (Queryable)" },
 	};
 	return table;
 }
 
-// LINQ method-name → enum resolver. Linear scan through the metadata
+// LINQ method-name -> enum resolver. Linear scan through the metadata
 // table — 32 entries; the compile-side calls this once per chain-method
 // emit, runtime never. Case-insensitive match per OES convention.
 long ibValue::FindLinqMethodByName(const wxString& name) {

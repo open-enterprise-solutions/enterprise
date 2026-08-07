@@ -488,14 +488,13 @@ public:
 	// columns / identity / parent all come from it; family-blind, register ≡ ref).
 	virtual const ibBackendQueryable* GetQueryable() const = 0;
 
-	// --- dynamic-list source configuration (the "Query" surface). A plain holder
-	// is a fixed main-table source; a custom-query holder overrides these.
-	//   UseCustomQuery → read from QueryText instead of the main table directly.
-	//   KeyFields      → the keyset columns when the query has no natural PK
-	//                    (empty = Auto: derive from the main table's GetPrimaryKeyColumns).
-	virtual bool UseCustomQuery() const { return false; }
-	virtual wxString GetQueryText() const { return wxEmptyString; }
-	virtual std::vector<wxString> GetKeyFields() const { return {}; }
+	// (`UseCustomQuery` / `GetQueryText` / `GetKeyFields` REMOVED 2026-08-07 — never overridden,
+	// never called. They came from an earlier reading in which an arbitrary query REPLACED the main
+	// table, so the holder had to be asked which of the two it was and, having no table, to be told
+	// its key by hand. That reading is gone: the main table is ALWAYS there and the query lives over
+	// it, so the key is the main table's PK by construction and there is no second case to ask about.
+	// The arbitrary query itself lives on the LIST, as its own properties, which is where the thing
+	// the user edits belongs. See docs/query-constructor.md §7c.)
 };
 
 // ==========================================================================

@@ -79,9 +79,13 @@ enum class ibAggregateFn { Sum, Count, Min, Max, Avg };
 // provider joins the path and qualifies m_col (== m_path.back()) by the join alias. Empty = plain column.
 // m_expr (set) = the aggregate input is a COMPUTED expression (SUM(Qty * Price)) — the provider lowers
 // it via BuildColumnExpr; m_col stays null, m_path empty. Single-source DB aggregates only (gated).
+// m_distinct = fold over DISTINCT values of the input — `COUNT(DISTINCT Board)`: how many different
+// boards, not how many rows have one. A property of THIS aggregate, not of the SELECT (the
+// statement's own DISTINCT is a different question about the whole row).
 struct ibAggregateItem { ibAggregateFn m_fn; const ibBackendQueryColumn* m_col; wxString m_alias;
                          std::vector<const ibBackendQueryColumn*> m_path;
-                         ibQueryColumnExprPtr m_expr; };
+                         ibQueryColumnExprPtr m_expr;
+                         bool m_distinct = false; };
 // One TotalBy dimension level — the field to roll up by + how it unfolds. Levels apply IN ORDER.
 struct ibTotalLevel    { const ibBackendQueryColumn* m_col; ibDimensionKind m_dim; };
 
@@ -181,11 +185,13 @@ public:
 	// The door also stamps the totals config — the TotalBy dimension levels (in order) + the common
 	// totals aggregate set — so result.Select(kind) folds by them automatically (no manual fold on
 	// the Selector). (docs/query-language-arc.md §22.1b)
-	void SetTotals(std::vector<ibTotalLevel> levels, std::vector<ibAggregateItem> aggregates);
+	void SetTotals(std::vector<ibTotalLevel> levels, std::vector<ibAggregateItem> aggregates,
+		bool overall = false);
 
 	// The stamped totals config — read by result.Select(kind) to configure the Selector's fold.
 	const std::vector<ibTotalLevel>&    TotalLevels()     const { return m_totalLevels; }
 	const std::vector<ibAggregateItem>& TotalAggregates() const { return m_totalAggregates; }
+	bool                                TotalsOverall()   const { return m_totalsOverall; }
 
 	// The door also stamps the SOURCE (holder + queryable + select list + filter) so the Selector can
 	// run LAZY sub-selections (selection.Select() re-Executes a node's children) and resolve a
@@ -203,6 +209,7 @@ private:
 	std::vector<const ibBackendQueryColumn*> m_matColumns;   // columns a Select(mode) drains into the snapshot
 	std::vector<ibTotalLevel>    m_totalLevels;              // totals dimensions (stamped by the door)
 	std::vector<ibAggregateItem> m_totalAggregates;          // common totals aggregate set
+	bool                         m_totalsOverall = false;    // walk the tree's ROOT as a row (BY OVERALL)
 	// source recipe (for lazy sub-selections + reference-dimension resolution)
 	ibDatabaseConnectionHolder*  m_srcHolder    = nullptr;
 	const ibBackendQueryable*    m_srcQueryable = nullptr;
@@ -461,13 +468,16 @@ public:
 		ibValue                     m_value;
 	};
 
-	ibDataQueryBuilder& Aggregate(AggregateFn fn, const ibBackendQueryColumn* col, const wxString& alias);
+	ibDataQueryBuilder& Aggregate(AggregateFn fn, const ibBackendQueryColumn* col, const wxString& alias,
+		bool distinct = false);
 	// Aggregate over a reference DOT-WALK leaf — SUM(Producer.Weight). The provider joins the path and
 	// qualifies the leaf by the join alias; read back by alias like any aggregate.
-	ibDataQueryBuilder& Aggregate(AggregateFn fn, const std::vector<const ibBackendQueryColumn*>& path, const wxString& alias);
+	ibDataQueryBuilder& Aggregate(AggregateFn fn, const std::vector<const ibBackendQueryColumn*>& path, const wxString& alias,
+		bool distinct = false);
 	// Aggregate over a COMPUTED expression — SUM(Qty * Price). The provider lowers the input via
 	// BuildColumnExpr. Single-source DB aggregates only (gated at the L4 lowering).
-	ibDataQueryBuilder& Aggregate(AggregateFn fn, const ibQueryColumnExprPtr& expr, const wxString& alias);
+	ibDataQueryBuilder& Aggregate(AggregateFn fn, const ibQueryColumnExprPtr& expr, const wxString& alias,
+		bool distinct = false);
 	ibDataQueryBuilder& Sum  (const ibBackendQueryColumn* col, const wxString& alias) { return Aggregate(AggregateFn::Sum,   col,     alias); }
 	ibDataQueryBuilder& Min  (const ibBackendQueryColumn* col, const wxString& alias) { return Aggregate(AggregateFn::Min,   col,     alias); }
 	ibDataQueryBuilder& Max  (const ibBackendQueryColumn* col, const wxString& alias) { return Aggregate(AggregateFn::Max,   col,     alias); }
@@ -491,6 +501,16 @@ public:
 
 	// SELECT DISTINCT — collapse duplicate output rows (SELECT DISTINCT). Applies to the read.
 	ibDataQueryBuilder& Distinct() { m_distinct = true; return *this; }
+
+	// SELECT ALLOWED — "give me what I may see, do not refuse me". A refusal from the access
+	// policy stops being an exception and becomes an EMPTY read (ibMakeEmptyQueryResult).
+	//
+	// ⚠ NEVER a default, and the asymmetry is the point: a report that quietly shows fewer rows
+	// because of rights is a report that lies quietly, so the platform's normal answer to "you may
+	// not read this" is to SAY so. This flag turns that sentence into "there is nothing here",
+	// which is only honest when the author asked for it — a list, a choice form, a report over a
+	// composite type where one closed branch must not stop the rest.
+	ibDataQueryBuilder& Allowed(bool allowed = true) { m_allowed = allowed; return *this; }
 	// Row limit for the AGGREGATE terminal (SELECT TOP n + GROUP BY): the DB path renders the
 	// dialect LIMIT, the RAM fold truncates after grouping. Plain reads ride the page request
 	// instead (ibReadPageRequest::m_count) — this is only for the unpaged SelectAggregate.
@@ -504,6 +524,11 @@ public:
 	// (Parent.Code) does not clash by metaID with the row's own attribute. The caller owns dimCol.
 	ibDataQueryBuilder& TotalByDotWalk(const std::vector<const ibBackendQueryColumn*>& path,
 		const ibBackendQueryColumn* dimCol, const wxString& alias, ibDimensionKind dim);
+	// THE OVERALL LEVEL — one row above every dimension, folding the whole result.
+	//
+	// It adds no level and asks for no extra pass: the fold already rolls the whole snapshot into the
+	// tree's ROOT. This says the root is WALKED as a row rather than only reachable by GetTotal().
+	ibDataQueryBuilder& TotalsOverall(bool on = true) { m_totalsOverall = on; return *this; }
 
 	// HAVING — post-aggregation filter on an aggregate (HAVING SUM(qty) > 100). It
 	// references the aggregate EXPRESSION (portable), not the output alias. Several
@@ -711,8 +736,10 @@ private:
 	std::vector<HavingItem>       m_having;         // .Having()
 	std::vector<ibTotalLevel>     m_totals;         // .TotalBy(field, dim) — totals dimensions, in order
 	std::vector<AggregateItem>    m_totalAggregates;// .Totals().Sum()… — TotalBy common aggregate set
+	bool                          m_totalsOverall = false;   // .TotalsOverall() — the level above every dimension
 	bool                          m_aggInTotals = false;  // routing flag: .Aggregate → totals set when Totals() active
 	bool                          m_distinct    = false;  // .Distinct() — SELECT DISTINCT
+	bool                          m_allowed     = false;  // .Allowed() — a policy refusal yields an EMPTY read instead of throwing
 	long                          m_top         = 0;      // .Top() — aggregate-terminal row limit (0 = all groups)
 	std::vector<ibDotWalkColumn>  m_dotWalks;       // .SelectPath()
 	std::vector<ibDotWalkColumn>  m_dimWalks;       // .TotalByDotWalk() — a dot-walk TOTALS dimension: the provider
@@ -738,6 +765,12 @@ private:
 	// Stamp the materialise-columns + totals config onto a freshly executed result.
 	void StampResult(ibDataQueryResult& r) const;
 };
+
+// An EMPTY selection — a temp table with nothing in it, handed back as an ordinary result.
+// The ONE thing L3 vends for a caller that has to answer "there is nothing here" (an ALLOWED
+// read whose source the policy closed): building one by hand up there would mean a second
+// opinion about what an empty result IS, and there is only room for one.
+BACKEND_API [[nodiscard]] ibDataQueryResult ibMakeEmptyQueryResult(const ibBackendQueryable* queryable = nullptr);
 
 // ==========================================================================
 // ibDataQuerySpec — the door's accumulated query as a VALUE the provider reads.

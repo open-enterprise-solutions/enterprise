@@ -256,7 +256,7 @@ void ibDialogHomePageEditor::OnCommandMenu(wxCommandEvent& event)
 		// The height is a share of the column, not pixels — 0 keeps the item equal to the
 		// other unset ones.
 		const long height = wxGetNumberFromUser(
-			_("Height share of the column (0 — same as the others)"),
+			_("Height share of the column (0 - same as the others)"),
 			_("Height"), _("Home page workspace"), (long)item.m_height, 0, 100, this);
 
 		if (height >= 0) {

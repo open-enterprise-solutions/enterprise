@@ -397,7 +397,7 @@ private:
 			//    from an admin console).
 			auto* reloadReg = ibApplicationData::GetSessionRegistry();
 			if (reloadReg != nullptr && reloadReg->ConsumeReloadRequest()) {
-				std::cerr << "[signal] reload directive — evicting "
+				std::cerr << "[signal] reload directive - evicting "
 				          << "all user sessions" << std::endl;
 				std::vector<std::string> ids;
 				{
@@ -451,7 +451,7 @@ private:
 		std::cerr << "[metadata] file_guid changed: "
 		          << lastObservedMetaGuid.ToUTF8().data() << " -> "
 		          << currentGuid.ToUTF8().data()
-		          << " — evicting all user sessions + reloading compile" << std::endl;
+		          << " - evicting all user sessions + reloading compile" << std::endl;
 		lastObservedMetaGuid = currentGuid;
 		// Bump the generation so clients polling /session can detect
 		// that their compile context is stale even though the 401 that
@@ -496,20 +496,20 @@ private:
 		if (activeMetaData != nullptr) {
 			try {
 				if (!activeMetaData->CloseDatabase(forceCloseFlag)) {
-					std::cerr << "[metadata] CloseDatabase FAILED — server restart required" << std::endl;
+					std::cerr << "[metadata] CloseDatabase FAILED - server restart required" << std::endl;
 				}
 				else if (!activeMetaData->LoadDatabase()) {
-					std::cerr << "[metadata] LoadDatabase FAILED — server restart required" << std::endl;
+					std::cerr << "[metadata] LoadDatabase FAILED - server restart required" << std::endl;
 				}
 				else if (!activeMetaData->RunDatabase()) {
-					std::cerr << "[metadata] RunDatabase FAILED — server restart required" << std::endl;
+					std::cerr << "[metadata] RunDatabase FAILED - server restart required" << std::endl;
 				}
 				else {
 					std::cerr << "[metadata] recompile OK; next login picks up new config" << std::endl;
 				}
 			}
 			catch (...) {
-				std::cerr << "[metadata] reload threw — server restart required" << std::endl;
+				std::cerr << "[metadata] reload threw - server restart required" << std::endl;
 			}
 		}
 	}

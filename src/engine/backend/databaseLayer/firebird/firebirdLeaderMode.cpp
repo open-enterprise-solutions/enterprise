@@ -295,7 +295,7 @@ ibFirebirdLeaderMode::Status ibFirebirdLeaderMode::InitForDatabase(const wxStrin
 		// user's Output Window adds startup noise without anything they
 		// can act on.
 		ibFb::LogThreadSafe(wxString::Format(
-			wxT("ibFirebirdLeaderMode: local path %s — running ")
+			wxT("ibFirebirdLeaderMode: local path %s - running ")
 			wxT("STANDALONE (single-process embedded)"),
 			dbPath));
 		Status s;
@@ -341,7 +341,7 @@ ibFirebirdLeaderMode::Status ibFirebirdLeaderMode::InitForDatabase(const wxStrin
 		const wxString uncHost = (slashIdx >= 0) ? rest.Left(slashIdx) : rest;
 		preferLeader = uncHost.IsSameAs(::wxGetHostName(), /*caseSensitive*/ false);
 		ibFb::LogThreadSafe(wxString::Format(
-			wxT("ibFirebirdLeaderMode: dbPath host '%s' vs local '%s' — ")
+			wxT("ibFirebirdLeaderMode: dbPath host '%s' vs local '%s' - ")
 			wxT("preferLeader=%d"),
 			uncHost, ::wxGetHostName(), (int)preferLeader));
 	}
@@ -415,7 +415,7 @@ ibFirebirdLeaderMode::Status ibFirebirdLeaderMode::InitForDatabase(const wxStrin
 			st.dbPath.Clear();
 			Status s;
 			s.errorMessage = cur.valid
-				? wxT("Leader holds the lease but reports no TCP port — ")
+				? wxT("Leader holds the lease but reports no TCP port - ")
 				  wxT("leader is in degraded embedded-only mode and cannot ")
 				  wxT("accept follower connections.")
 				: wxT("Lease file unreadable or empty after retry.");

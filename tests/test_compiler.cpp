@@ -1620,3 +1620,72 @@ TEST(FilterAst, TheTextIsJustTheAstRendered) {
 
 	EXPECT_EQ(ibRenderQueryExpr(*ast), ibRenderFilterTree(composer, root));
 }
+
+// ===========================================================================
+//  The settings lists have TWO modes, and an edit must survive both
+// ===========================================================================
+//
+// These pin the family of defects that cost three separate hunts: the dialog was written against
+// BUFFER mode (the line is an object you can reach into), and on a LIVE list there is no line
+// object at all — the store is the composer. Sort and grouping never reached the disk, an edit
+// wrote into a transient and was lost, and reading the line object on a grouping crashed.
+//
+// Buffer mode is what a test can reach without a model, and it is where SetLine's other promise
+// lives: the edited line KEEPS ITS POSITION. Order is the meaning of these lists.
+
+TEST(ListSettingsLines, ASortLineIsEditedInPlaceAndKeepsItsPosition) {
+	ibValuePtr<ibValueSortList> order(new ibValueSortList());
+	order->Add(wxT("Date"));
+	order->Add(wxT("Number"));
+	order->Add(wxT("Sum"));
+
+	ASSERT_TRUE(order->SetLine(1, wxT("Code"), ibSortDirection_Descending));
+
+	ASSERT_EQ(3u, order->Count());
+	EXPECT_EQ(wxT("Date"), order->GetField(0));
+	EXPECT_EQ(wxT("Code"), order->GetField(1)) << "the edit landed on the line it was made on";
+	EXPECT_EQ(wxT("Sum"),  order->GetField(2)) << "and moved nothing";
+	EXPECT_EQ(ibSortDirection_Descending, order->GetDirection(1));
+}
+
+TEST(ListSettingsLines, AGroupingLineKeepsItsUnfoldKindOrTakesTheNewOne) {
+	ibValuePtr<ibValueGroupList> group(new ibValueGroupList());
+	group->Add(wxT("Warehouse"));
+	group->Add(wxT("Item"), ibQueryDimUnfold::Hierarchy);
+
+	// The kind alone changes — the field stays. (This is the cell that crashed: it used to read the
+	// line OBJECT to keep the field, and on a live list that object is null.)
+	ASSERT_TRUE(group->SetLine(1, group->GetField(1), ibQueryDimUnfold::HierarchyOnly));
+	EXPECT_EQ(wxT("Item"), group->GetField(1));
+	EXPECT_EQ(ibQueryDimUnfold::HierarchyOnly, group->GetKind(1));
+
+	// …and the field alone changes — the kind stays.
+	ASSERT_TRUE(group->SetLine(1, wxT("Producer"), group->GetKind(1)));
+	EXPECT_EQ(wxT("Producer"), group->GetField(1));
+	EXPECT_EQ(ibQueryDimUnfold::HierarchyOnly, group->GetKind(1));
+	EXPECT_EQ(2u, group->Count());
+}
+
+TEST(ListSettingsLines, SettingsCarrySortAndGroupingToo) {
+	// ⚠ THE DEFECT: WriteData serialised the filter tree and nothing else, so a sort or a grouping
+	// was set, saved, and gone. It reads the three lists through the FACADE now, which is the one
+	// door both modes answer.
+	ibValuePtr<ibValueListSettings> settings(new ibValueListSettings());
+	settings->GetOrder()->Add(wxT("Date"), ibSortDirection_Descending);
+	settings->GetGroup()->Add(wxT("Warehouse"), ibQueryDimUnfold::Hierarchy);
+
+	ibDataNode node(settings->GetClassType(), 0);
+	ASSERT_TRUE(settings->WriteData(node));
+
+	ibValuePtr<ibValueListSettings> loaded(new ibValueListSettings());
+	ASSERT_TRUE(loaded->ReadData(node));
+
+	ASSERT_EQ(1u, loaded->GetOrder()->Count());
+	EXPECT_EQ(wxT("Date"), loaded->GetOrder()->GetField(0));
+	EXPECT_EQ(ibSortDirection_Descending, loaded->GetOrder()->GetDirection(0));
+
+	ASSERT_EQ(1u, loaded->GetGroup()->Count());
+	EXPECT_EQ(wxT("Warehouse"), loaded->GetGroup()->GetField(0));
+	// The UNFOLD KIND travels with it — dropping it would reload every tree as a flat grouping.
+	EXPECT_EQ(ibQueryDimUnfold::Hierarchy, loaded->GetGroup()->GetKind(0));
+}

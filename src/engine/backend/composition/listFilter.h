@@ -98,11 +98,6 @@ enum ibFilterDisplayMode {
 	ibFilterDisplayMode_Inaccessible,   // applied, never shown
 };
 
-// Map a group kind to the language's operator spelling.
-inline wxString FilterGroupKindToOp(ibFilterGroupKind kind) {
-	return kind == ibFilterGroupKind_Or ? wxT("OR") : wxT("AND");
-}
-
 // Runtime enumeration "FilterGroupKind".
 class BACKEND_API ibValueEnumFilterGroupKind : public ibValueEnumeration<ibFilterGroupKind> {
 public:
@@ -464,6 +459,15 @@ public:
 
 	size_t Count() const;
 	ibValueSortItem* GetItem(size_t idx) const;
+	// THE LINE AS DATA — the same pair the grouping list answers with, and for the same reason: in
+	// FACADE mode there is no item OBJECT to ask (GetItem mints a transient one), so a caller that
+	// only wants the line reads it directly. Serialisation is exactly that caller.
+	wxString GetField(size_t idx) const;
+	ibSortDirection GetDirection(size_t idx) const;
+	// CHANGE THE LINE AT idx, in EITHER mode, keeping its POSITION. The dialog edits through this —
+	// reaching for the line OBJECT works only in buffer mode and silently loses the edit on a live
+	// list, where there is none (GetItem mints a transient one).
+	bool SetLine(size_t idx, const wxString& field, ibSortDirection direction);
 	ibValueSortItem* Add(const wxString& field, ibSortDirection direction = ibSortDirection_Ascending);
 	void Clear();
 	// ORDER IS THE POINT of a sort list — "by Date, then by Number" is a different
@@ -513,7 +517,9 @@ public:
 	wxString GetField(size_t idx) const;
 	ibValueCompositionField* GetFieldObject(size_t idx) const;
 	ibQueryDimUnfold GetKind(size_t idx) const;
-	bool IsHierarchy(size_t idx) const { return GetKind(idx) != ibQueryDimUnfold::Elements; }
+	// CHANGE THE LINE AT idx, in EITHER mode, keeping its POSITION. See ibValueSortList::SetLine —
+	// reading the line object here answers NULL on a live list, and passing that on crashed.
+	bool SetLine(size_t idx, const wxString& field, ibQueryDimUnfold kind);
 	void Add(const wxString& field, ibQueryDimUnfold kind = ibQueryDimUnfold::Elements);
 	void Add(ibValueCompositionField* field, ibQueryDimUnfold kind = ibQueryDimUnfold::Elements);
 	void Clear();

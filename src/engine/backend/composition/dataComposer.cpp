@@ -144,15 +144,52 @@ ibDataComposer& ibDataComposer::ClearSettings()
 // render
 //////////////////////////////////////////////////////////////////////
 
+// The nested source's alias when the settings are written over an author's query. ASCII, a legal
+// identifier, and unlikely to collide with anything a person names a table.
+static const wxChar* kAuthorQuerySource = wxT("AuthorQuery");
+
+const wxChar* ibDataDBComposer::AuthorQuerySourceName() { return kAuthorQuerySource; }
+
 wxString ibDataDBComposer::RenderText() const
 {
+	const bool hasSettings = !m_selected.empty() || !m_filters.empty() || !m_sorts.empty()
+	                       || !m_totals.empty() || !m_totalBy.empty();
+
+	if (!m_sourceText.IsEmpty() && !hasSettings)
+		return m_sourceText;   // the author's text, verbatim — nothing is being asked of it
+
+	// ⭐ SETTINGS OVER AN AUTHOR'S QUERY — the seam this used to refuse.
+	//
+	// The author's query is not edited. It becomes a NESTED SOURCE, and the filter, the sort and the
+	// grouping are written OVER it:
+	//
+	//     SELECT * FROM (<the author's query>) AS AuthorQuery WHERE … ORDER BY … TOTALS …
+	//
+	// which is the only reading that is right in every case: a WHERE injected INTO the author's text
+	// would run before their own aggregates, their DISTINCT and their TOP, and would quietly answer a
+	// different question than the one the user typed into the filter.
+	//
+	// Nothing new was needed for it. A subquery source round-trips (queryRender / queryParser), the
+	// lowering realises it (WrapSelectAsQueryable), and the optimizer's FROM-subquery flattening folds
+	// the plain case straight back into ONE server-side SELECT — so a simple author query with a
+	// filter costs exactly what it did before there was a filter. (queryRewrite.h rule 2.)
+	//
+	// The paths the settings name are the query's OUTPUT names, which is what a host offers a person
+	// to pick from (a dynamic list vends them as its column collection) — the same names, both sides.
 	if (!m_sourceText.IsEmpty()) {
-		// The author's text — verbatim, never edited. Settings over an author's query
-		// arrive on the NEXT seam (the subquery wrap) — until then they error clearly
-		// instead of being silently dropped.
-		if (!m_selected.empty() || !m_filters.empty() || !m_sorts.empty() || !m_totals.empty() || !m_totalBy.empty())
-			ibBackendCoreException::Error(_("Composer: settings over an author's query text are not supported yet"));
-		return m_sourceText;
+		wxString authorProj;
+		for (const wxString& name : m_selected) {
+			if (!authorProj.IsEmpty())
+				authorProj += wxT(", ");
+			authorProj += name;
+		}
+		// No explicit selection: everything the nested query yields. `*` and not a reflected list,
+		// because the nested query's columns are ITS business — asking what they are would mean
+		// resolving the text here, and the lowering is about to do that anyway.
+		wxString text = wxT("SELECT ") + (authorProj.IsEmpty() ? wxString(wxT("*")) : authorProj)
+			+ wxT("\nFROM (") + m_sourceText + wxT(") AS ") + kAuthorQuerySource;
+		AppendSettingsClauses(text);
+		return text;
 	}
 
 	if (m_sources.empty())
@@ -217,6 +254,15 @@ wxString ibDataDBComposer::RenderText() const
 	for (size_t i = 1; i < m_sources.size(); ++i)
 		text += wxT(" JOIN ") + m_sources[i].m_namespace + wxT(".") + m_sources[i].m_name;
 
+	AppendSettingsClauses(text);
+	return text;
+}
+
+// WHERE / ORDER BY / TOTALS — the settings, written the same way whichever source they stand over.
+// A composed source and an author's query differ in their FROM and in nothing else: the filter a
+// person set is the same filter, and two spellings of it would be two chances to drift.
+void ibDataDBComposer::AppendSettingsClauses(wxString& text) const
+{
 	for (size_t i = 0; i < m_filters.size(); ++i) {
 		const FilterItem& f = m_filters[i];
 		text += (i == 0 ? wxT(" WHERE ") : wxT(" AND "));
@@ -249,8 +295,6 @@ wxString ibDataDBComposer::RenderText() const
 				text += wxT(" HIERARCHYONLY");
 		}
 	}
-
-	return text;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -440,4 +484,70 @@ bool ibDataDBComposer::Run(ibCompositionDriver& driver)
 
 	driver.OnComplete(hasTotals);
 	return true;
+}
+
+//////////////////////////////////////////////////////////////////////
+// PruneUnresolvedSettings — the settings, re-asked rather than chased
+//////////////////////////////////////////////////////////////////////
+
+int ibDataComposer::PruneUnresolvedSettings(const std::function<bool(const wxString&)>& resolves)
+{
+	if (!resolves)
+		return 0;   // no host answer = no verdict, and no verdict means nothing is dropped
+
+	int dropped = 0;
+
+	// Read the survivors out, then put them back. There is no remove-one on this store by design —
+	// the lines are a LIST the fetch reads in order, and a rebuild keeps that order exact.
+	{
+		std::vector<FilterItem> kept;
+		std::map<wxString, ibValue> keptParams;
+		for (const FilterItem& item : m_filters) {
+			if (!resolves(item.m_path)) { ++dropped; continue; }
+			const auto param = m_params.find(item.m_param);
+			if (param != m_params.end())
+				keptParams.emplace(param->first, param->second);
+			kept.push_back(item);
+		}
+		if (kept.size() != m_filters.size()) {
+			m_filters = std::move(kept);
+			// A parameter belongs to the line that bound it; the ones whose line went are gone with
+			// it. Left behind they would be bound into a query that never mentions them.
+			for (auto it = m_params.begin(); it != m_params.end(); ) {
+				// Only the AUTO-named ones (AddParam: `__f<n>`) belong to a filter line. A parameter the
+				// caller named itself is theirs, and dropping it here would be this pass reaching outside
+				// what it was asked about.
+				it = (it->first.StartsWith(wxT("__f")) && keptParams.find(it->first) == keptParams.end())
+					? m_params.erase(it) : std::next(it);
+			}
+		}
+	}
+
+	{
+		std::vector<SortItem> kept;
+		for (const SortItem& item : m_sorts) {
+			if (!resolves(item.m_path)) { ++dropped; continue; }
+			kept.push_back(item);
+		}
+		if (kept.size() != m_sorts.size())
+			m_sorts = std::move(kept);
+	}
+
+	{
+		std::vector<TotalByItem> kept;
+		for (const TotalByItem& item : m_totalBy) {
+			if (!resolves(item.m_path)) { ++dropped; continue; }
+			kept.push_back(item);
+		}
+		if (kept.size() != m_totalBy.size())
+			m_totalBy = std::move(kept);
+	}
+
+	// The rendered text and its cached parse are keyed by the settings — a dropped line changes both.
+	// The rendered text and its cached parse are keyed by the settings; the version is what tells the
+	// cache the tree changed when the TEXT alone would say it did not.
+	if (dropped > 0)
+		++m_filterAstVersion;
+
+	return dropped;
 }

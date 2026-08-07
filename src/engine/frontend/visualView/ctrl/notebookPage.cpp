@@ -31,6 +31,14 @@ void ibValueNotebookPage::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVi
         notebook->AddPage(page, m_propertyTitle->GetValueAsTranslateString(), false, m_propertyPicture->GetValueAsBitmap());
         page->SetOrientation(m_propertyOrient->GetValueAsInteger());
     }
+    else {
+        // ⚠ A PAGE THAT IS NOT IN THE NOTEBOOK MUST BE HIDDEN. It was built as a CHILD of the
+        // notebook, so leaving it shown does not mean "not on a tab" — it means "drawn at (0, 0)",
+        // which is where the notebook's TAB STRIP is. The page then paints its own contents over
+        // the captions and the strip reads as two words on top of each other.
+        // (Same defect, same day, in the query constructor's SyncNotebookPages.)
+        page->Hide();
+    }
 
     if (visualHost->IsDesignerHost()) {
         page->PushEventHandler(g_visualHostContext->GetHighlightPaintHandler(page));
@@ -54,9 +62,13 @@ void ibValueNotebookPage::OnUpdated(wxObject* wxobject, wxWindow* wxparent, ibVi
     int pos_old = notebook->FindPage((wxWindow*)wxobject);
     if (pos_old != wxNOT_FOUND && pos != pos_old)
         notebook->RemovePage(pos_old);
-   
+
+    // RemovePage DETACHES without hiding — see OnCreated. A page turned invisible therefore has to
+    // be hidden here too, or it goes on painting over the tab strip it was just taken off.
+    ((wxWindow*)wxobject)->Show(m_propertyVisible->GetValueAsBoolean());
+
     if (m_propertyVisible->GetValueAsBoolean()) {
-        
+
         if (pos != pos_old)
             notebook->InsertPage(pos, (wxWindow*)wxobject, m_propertyTitle->GetValueAsTranslateString(), pos_old == wxNOT_FOUND, m_propertyPicture->GetValueAsBitmap());
         

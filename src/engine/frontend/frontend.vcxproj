@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -323,6 +323,16 @@
     <ClCompile Include="win\dlgs\applyChange.cpp" />
     <ClCompile Include="win\dlgs\listSettings\filterTreeModel.cpp" />
     <ClCompile Include="win\dlgs\listSettings\listSettings.cpp" />
+    <ClCompile Include="win\dlgs\queryConstructor\queryConstructor.cpp" />
+    <ClCompile Include="win\dlgs\queryConstructor\queryConstructorFill.cpp" />
+    <ClCompile Include="win\dlgs\queryConstructor\queryConstructorEdit.cpp" />
+    <ClCompile Include="win\dlgs\queryConstructor\queryConstructorText.cpp" />
+    <ClCompile Include="win\dlgs\queryConstructor\queryJoinDiagram.cpp" />
+    <ClCompile Include="win\dlgs\queryConstructor\queryLinkModel.cpp" />
+    <ClCompile Include="win\dlgs\queryConstructor\queryConditionModel.cpp" />
+    <ClCompile Include="win\dlgs\queryConstructor\queryUnionModel.cpp" />
+    <ClCompile Include="win\dlgs\queryConstructor\queryExpressionDialog.cpp" />
+    <ClCompile Include="win\dlgs\queryConstructor\queryCaseDialog.cpp" />
     <ClCompile Include="win\dlgs\jobSchedule\jobScheduleSettings.cpp" />
     <ClCompile Include="session\guiSession.cpp" />
     <ClCompile Include="session\workerPoolGUI.cpp" />
@@ -701,6 +711,17 @@
     <ClInclude Include="win\dlgs\applyChange.h" />
     <ClInclude Include="win\dlgs\listSettings\filterTreeModel.h" />
     <ClInclude Include="win\dlgs\listSettings\listSettings.h" />
+    <ClInclude Include="win\dlgs\queryConstructor\queryConstructor.h" />
+    <ClInclude Include="win\dlgs\queryConstructor\queryJoinDiagram.h" />
+    <ClInclude Include="win\dlgs\queryConstructor\queryLinkModel.h" />
+    <ClInclude Include="win\dlgs\queryConstructor\queryConditionModel.h" />
+    <ClInclude Include="win\dlgs\queryConstructor\queryUnionModel.h" />
+    <ClInclude Include="win\dlgs\queryConstructor\queryGridModel.h" />
+    <ClInclude Include="win\dlgs\queryConstructor\queryFieldTree.h" />
+    <ClInclude Include="win\dlgs\queryConstructor\queryConstructorInternal.h" />
+    <ClInclude Include="win\dlgs\callbackDropTarget.h" />
+    <ClInclude Include="win\dlgs\queryConstructor\queryExpressionDialog.h" />
+    <ClInclude Include="win\dlgs\queryConstructor\queryCaseDialog.h" />
     <ClInclude Include="win\dlgs\jobSchedule\jobScheduleSettings.h" />
     <ClInclude Include="session\guiSession.h" />
     <ClInclude Include="session\workerPoolGUI.h" />

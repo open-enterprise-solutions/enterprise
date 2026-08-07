@@ -759,7 +759,7 @@ void ibValueQueryDecorator::DispatchLinqMethod(ibLinqMethod method, ibValue& ret
 		const std::vector<const ibBackendQueryColumn*> lcols = ibQueryLowering::LowerLambdaColumnPath(m_source, *leftAst);
 		const std::vector<const ibBackendQueryColumn*> rcols = ibQueryLowering::LowerLambdaColumnPath(innerBase, *rightAst);
 		if (lcols.size() != 1 || rcols.size() != 1 || lcols.front() == nullptr || rcols.front() == nullptr)
-			ibBackendCoreException::Error(_("QueryDecorator.Join: each key must be exactly one column — for a multi-hop key restrict with Where(x => x.Ref.Field = …) instead"));
+			ibBackendCoreException::Error(_("QueryDecorator.Join: each key must be exactly one column - for a multi-hop key restrict with Where(x => x.Ref.Field = ...) instead"));
 
 		// DISPATCH by inner kind (docs/access-policy-rls.md — semi-join):
 		if (innerQ != nullptr && innerQ->IsSingleSource()) {

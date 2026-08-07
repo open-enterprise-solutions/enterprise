@@ -1628,6 +1628,15 @@ result walker.
 L3's engine is therefore two stages: **compose** provider-relations into a base
 relation, then **shape** it (aggregate / totals-by / hierarchy) into the result.
 
+**A LEVEL CAN BE NAMED (2026-08-06).** The grammar is
+`TOTALS <aggregates> BY <expr> [HIERARCHY | HIERARCHYONLY] [AS <name>] , …`. The unfold belongs to
+the DIMENSION, the name belongs to the LEVEL it produces — which is why the name is written after
+it. Empty means "the column's own name", right for the ordinary single-level case; the alias
+becomes `OutputColumn::m_name` in the lowering. Without it, two levels over the same column (Date
+by month, Date by day) answer to one name and one of them wins. The bare form (an identifier with
+no `AS`) is accepted too — after a dimension, an identifier can only be its name.
+`ibQueryTotalDim::m_alias`; round-trip tested in `tests/test_queryL4Parser.cpp`.
+
 #### 22.1b LANDED — Selection / Selector engine (2026-06-09, experimental, pre-build)
 
 The result-shaping tier above is implemented as a **two-step, two-axis** model. The query
@@ -2072,7 +2081,10 @@ text ─▶ ibQueryLexer ─▶ tokens ─▶ ibQueryParser ─▶ ibQuerySelect
 
 ### 23.3 Grammar
 ```
-select   := SELECT [DISTINCT] selList FROM source { join }
+package  := statement { ';' statement }            (a trailing ';' is allowed)
+statement:= DROP name                              -- release a temp table the package made
+          | select [FOR UPDATE]
+select   := SELECT [ALLOWED] [TOP n] [DISTINCT] selList [INTO name] FROM source { join }
             [WHERE predicate] [GROUP BY exprList [HAVING predicate]]
             [ORDER BY orderList] [TOTALS aggregate {',' aggregate} BY totalDim {',' totalDim}]
 proj     := (aggregate | columnPath) [ [AS] alias ]
@@ -2082,6 +2094,17 @@ comparison := primary [ cmpOp primary | [NOT] LIKE primary
                       | [NOT] IN '(' … ')' | IS [NOT] NULL | [NOT] BETWEEN primary AND primary ]
 totalDim := columnPath [HIERARCHY | ELEMENTS]
 ```
+**The four clauses added 2026-08-06 with the query constructor** ([query-constructor.md](query-constructor.md) §5c):
+`ALLOWED` — an access refusal yields an EMPTY read instead of raising (never a default: a report
+that quietly shows fewer rows is a report that lies quietly). `FOR UPDATE` — the select HOLDS the
+rows it returned until the transaction ends, rendered by the driver's own `m_rowLockSuffix`.
+`INTO <name>` — materialise the result as a temp table and yield the ROW COUNT instead of a table;
+later statements of the same package select `FROM <name>` (a temp table is a BARE name — it has no
+metaclass, so `ResolveSource` asks the auxiliary registry before the factory). `DROP <name>` —
+release one early. A package runs through `ibQueryLowering::ExecutePackage`, whose temp registry
+lives for the WHOLE package rather than one execution, and answers with results BY POSITION;
+the script surface is `Query.ExecuteBatch()`, with `Query.Execute()` returning the first of them.
+
 `TOTALS … BY …` is the hierarchical-subtotals clause: aggregates
 between `TOTALS` and `BY` roll in-place at each level, the `BY` list is the dimension
 levels in order → door `Totals().Sum(col).TotalBy(col, dim).SelectTotals()`. Distinct
@@ -2892,3 +2915,298 @@ provider's enforcement makes the answer right anyway:
 is bounded by indexing: `key IN (…)` without an index on the join key still scans, it only transfers less.
 And `kSemiJoinMaxKeys = 512` is a guess wearing the same "tune against real numbers" label as
 `kTempTableMinRows` — neither has real numbers yet.
+
+---
+
+## Update 2026-08-07 — L4 grew what the constructor needed, and it stayed in the engine
+
+The query constructor is a shell over this AST ([query-constructor.md](query-constructor.md)); the
+pass that made it usable pushed six things back into the language, because a window that answers a
+question the engine should answer is a second opinion about what a legal query is.
+
+### `FROM` is optional — `SELECT 1` is a query
+
+```
+SELECT 1
+```
+
+parses, renders (no `FROM` keyword written — a clause with nothing after it is invented syntax),
+and RUNS: `ibQueryLowering::ExecuteSourceless` builds a one-row RAM table from the synthetic
+columns the projections describe. A `Column` inside such a query is refused with *"this query reads
+no table"* — the truth, rather than an empty result that looks like data.
+
+Why it matters beyond the constructor: `SELECT <expr>` is how a caller evaluates an expression in
+the query language without inventing a second evaluator, and it is the shape a `VALUES`-style
+literal source will grow from.
+
+### Names, resolved without running — `CheckNames`
+
+```cpp
+BACKEND_API static void ibQueryLowering::CheckNames(const ibQueryPackage&, const params&);
+```
+
+Resolve every name a package mentions — sources, projections, group keys, ORDER BY, index fields,
+totals dimensions, join conditions — and **execute nothing**. Raises with the engine's own wording
+on the first thing that does not resolve, plus one rule the resolver alone can see: **two output
+columns may not share a name**.
+
+Deliberately SILENT where it cannot verify. A select over a source the resolver does not know is
+not an error, it is an unknown — and reporting unknowns as errors is how a checker becomes the
+thing people switch off. (`ORDER BY` is the one lenient list: it may name an output column that is
+not itself a projection.)
+
+### The same question, destructively — `PruneUnresolved`
+
+```cpp
+BACKEND_API static int ibQueryLowering::PruneUnresolved(ibQueryPackage&, const params&);
+```
+
+Walk the package and DROP what no longer resolves; return how many went. This is what a host calls
+after removing a table, and the design point is that **nothing chases the deletion**: a
+hand-written cascade is a list of cases, and the case nobody thought of is the bug. Re-asking "what
+still resolves?" has no cases.
+
+Same guard as the check, and it is the important one: a select whose source cannot be resolved is
+left **entirely alone**. "We do not know" must never delete somebody's work.
+
+### `TOTALS … BY <dim> [HIERARCHY] [AS <name>]`
+
+A totals LEVEL has a name of its own (`ibQueryTotalDim::m_alias`). Two levels over the same column
+— `Date` by month and `Date` by day — are two output columns, and without a name the second
+answers to the first's. Parser, renderer and `OutputColumn::m_name` all carry it; round-tripped
+with and without the `AS`.
+
+### `ExecuteBatch` — every statement yields a position
+
+Renamed from `ExecutePackage`, and the semantics are now total: the result is an array by
+statement position, where a create-temp statement yields a result of **one column, one row**
+holding the row count, and a drop yields `Undefined`. Previously a statement that produced nothing
+readable produced nothing at all, which made the positions meaningless.
+
+### Four answers that were being given more than once
+
+Each of these was written out in two or three places, and each is load-bearing enough that a
+disagreement between the copies would be a silent wrong answer rather than a compile error:
+
+| Answer | Entry | Was |
+|---|---|---|
+| what is this projection called (alias, else the path's leaf, else nothing) | `ibQueryProjectionName` (`queryRender.h`) | 3 copies, two byte-identical. A union lines its branches up by this, a temp table's columns and index are these names, a totals level answers to one, and two projections may not share one |
+| a dotted path as the AST node a query carries | `ibQueryColumnFromPath` (`queryRender.h`) | 6 hand-written splitting loops. The inverse of rendering a column, so it lives beside the render |
+| a predicate's top-level `AND` chain, and its inverse | `ibQueryFlattenAnd` / `ibQueryFoldAnd` (`queryRewrite.h`) | 3 copies — the conditions model, the constructor, the lowering. "What counts as one condition" is one rule |
+| the name a NEW column or table alias gets | `ibQueryEnsureUniqueName` / `ibQueryUniqueSourceAlias` (`queryRewrite.h`) | in the desktop dialog. This is the other half of `CheckNames`: the check refuses collisions, these make sure it never has to. Every host that assembles a query without typing it — the web front, a script, a report's composer — has to number a duplicate the same way |
+
+Plus `ibQueryLexer::IsIdentifier(text)` — *is this a legal name?* answered by tokenizing it and
+demanding exactly one `Ident` spanning the whole string, and `ibAllQueryKeywords()` — the whole
+active keyword table as one string, for a syntax highlighter that must not carry its own copy of
+the spellings.
+
+### Two engine defects the pass turned up
+
+⚠ **The temp-table index was keyed by presentation.** `ibQueryTempTableStore` built and probed its
+value→rows map with `ibValue::GetString()`. For a reference that is the object's *presentation* —
+two different objects can present identically, and the same object can present differently after an
+edit — so an indexed lookup silently returned the wrong rows or none. Both sides now key on
+`GetHashKey()`, which is identity (a reference keys by its guid). **`GetString()` is presentation
+and must never be an identity key.**
+
+⚠ **The access policy was not consulted on three aggregate doors.** `SelectAggregate`,
+`SelectAggregatePage` and `SelectTotals` went straight to the composer, so a policy that filtered
+rows out of `Select` did not filter them out of `SUM` over the same table — a row-level leak by
+arithmetic. All three now take the same guarded path the row doors take (build a trusted copy with
+`WithAccessPolicy(nullptr)`, ask `CheckSelect`, and on refusal either return a zero aggregate or
+raise, per `m_allowed`). Eight tests pin it; the coverage table for all nine door terminals is in
+[access-policy-rls.md](access-policy-rls.md).
+
+---
+
+## Update 2026-08-07 (b) — `CAST`: a narrowing, not a conversion
+
+```
+SELECT CAST(Recorder AS Document.Order).Number FROM AccumulationRegister.Goods
+```
+
+⚠ **Two different things share the word, and only one of them landed.**
+
+`CAST(Recorder AS Document.Order)` **NARROWS** — the value already is of that type, and the cast
+says WHICH of a composite reference's types is meant. `CAST(Code AS Number)` would **CONVERT**, and
+that is a separate feature (refused, see below).
+
+Narrowing is what the engine was missing. A composite reference names several types, so it has no
+single set of fields behind it and `ResolvePath` refuses to walk THROUGH one — correctly, because
+there is no one answer to give. The cast supplies the answer.
+
+### The shape is the design
+
+`CAST(x AS T).A.B` parses as a **Column** whose `m_path` is `{A, B}` and whose ROOT (`m_arg`) is the
+Cast node. A bare `CAST(x AS T)` is a Cast node.
+
+That is not a trick — it is what the construction means, and it is what made this small. The
+resolver already walks a Column's path from a starting queryable; the cast only says which queryable
+to start on. So the chain `ResolvePath` builds is `[the reference column, …, the leaf]` — **exactly**
+the shape `SelectPath`, `ExpandDotWalkJoins` and the RAM join already consume. Nothing downstream
+learned a new trick, and the target type is resolved by the same `ResolveSource` a `FROM` goes
+through, so a cast cannot name what the language could not have named after FROM.
+
+### Two places had to learn the shape — the same class of mistake in both
+
+A cast-rooted column's path names fields of the **target**, not of the source the query is reading:
+
+- `queryRewrite`'s FROM-subquery flattening substitutes an inner projection's output name into outer
+  column paths. Applied to a cast-rooted path it would rewrite a field of the target into a column
+  of the wrong table — so the walk descends into the cast's ARGUMENT instead (that one IS this
+  source's column).
+- `CheckNames`' collector takes a cast-rooted column WHOLE. Descending would hand the checker a path
+  with no source to start on.
+
+### Conversion is refused, and the message says why
+
+The door's expression IR is Column / Const / Arith / Case / PeriodTrunc — there is no cast op, and
+adding one means implementing it in the SQL provider AND the RAM one, in every dialect, with the
+rounding and the failure mode spelled out. A query that parses and then answers something nobody
+chose is worse than a refusal, so `CAST(Code AS Number)` raises:
+
+> CAST narrows a reference to one of its types (Catalog.Products), it does not convert values:
+> 'Number' is not a table
+
+**Tests**: `tests/test_queryNaming.cpp` — `QueryCast.*` (the two shapes, the round trip inside a
+whole query, the render carrying the root back, and a cast with no type refused).
+
+## Update 2026-08-07 (c) — `BY OVERALL`, and a condition that knows which filter it is
+
+Three things the constructor surfaced by being used, all of them holes in the LANGUAGE rather than
+in the window.
+
+### `BY OVERALL` — connect, do not write
+
+The grand-total row looked like a feature to build and was a wire to connect. `BuildDimensionTree`
+has always ended with `ApplyAggregates(tree.Root(), …)` — *grand total in-place* — and the walk
+(`FlattenPreOrder`) has always started at the root's CHILDREN. So the number existed and the row did
+not; the window's checkbox had been sitting there **ticked and disabled**, explaining that the grand
+total "is always produced", which was true of the fold and false of the result.
+
+What landed is the keyword, the flag it sets (`ibQuerySelect::m_totalsOverall`), and one line in the
+walk. Two assumptions had to be relaxed for `BY OVERALL` **alone** — a whole totals query with no
+dimensions at all: the terminal refused a `TOTALS` with an empty `BY`, and `ibSelector::Build()` fell
+through to the manual fallback when the level list was empty, folding by a null column. The
+dimension tree handles zero levels exactly right: `FoldDimLevel` returns at once, and the root still
+carries the aggregates.
+
+A flag rather than a level in `m_totalsBy`: a dimension is a column plus a place in an order, and the
+overall is neither.
+
+### A condition over a folded value is a HAVING
+
+`WHERE` filters rows, `HAVING` filters groups — a real distinction, and one the author of a query
+should not have to carry. The Conditions tab offers aggregate fields beside plain ones (they are all
+fields of the result), so a condition over `SUM(Qty)` was written into `WHERE` and reached the row
+filter, which has no aggregates to filter by.
+
+Now a rewrite rule, per AND-term. An `OR` across the two is left whole — splitting it would change
+which rows survive. And the lowering learned to emit one `Having()` per AND-term instead of reading
+the whole expression as a single comparison; the builder AND-folds them, which it always could.
+
+### The grouping rule reads the tree, not its top
+
+Both halves of it asked what a projection **is** — a bare column, or an aggregate. Correct for `Qty`
+and `SUM(Qty)`, and blind to everything between: `SUM(Price * Qty) / COUNT(*) * 1.2` is neither, and
+was skipped whole, so a free `Price` beside a folded `Qty` in one expression was held to no rule at
+all. One walk (`CollectFoldedAndFree`) answers both halves now, and `AggregatedColumns` is the mirror
+of `UngroupedProjections` — same door, two readings.
+
+**Found and NOT closed: `COUNT(DISTINCT x)`.** The language has `DISTINCT` at `SELECT` level only;
+the aggregate grammar takes `*` or an expression. Closing it is grammar + render + the RAM fold
+(small) **plus the SQL push-down** — `AggregateFnName` feeds `ibFunc(name, args)` at five projection
+sites, and the L2 IR has no DISTINCT modifier. Half-landing it would mean correct numbers in RAM and
+silently wrong ones against a database, which is the one failure mode worth refusing.
+
+### Update 2026-08-07 (d) — the same rule, applied where the AST is held
+
+Three follow-ons, each surfaced by running the window with (c) in it.
+
+**The move has to be visible.** `Rewrite` works on a clone at execution time, so the constructor
+showed a `WHERE` while the engine ran a `HAVING`. The rule is public now
+(`ibQueryMoveAggregateConditionsToHaving`) and the Conditions model calls it in its one write door.
+The tab reads BOTH clauses in consequence — it is "the conditions of this query", and which clause
+each lands in is the engine's answer, shown in the text. Writing back re-folds everything into
+`WHERE` and lets the rule split again, so the trip is reversible.
+
+**`HAVING` is its own clause, not a tail of `GROUP BY`.** The renderer had always written it
+independently; the parser read it only inside the `GROUP BY` block. So the shape the constructor now
+produces by itself — `SELECT … FROM … HAVING SUM(x) = &v`, no grouping — came back as *"unexpected
+text after the query"*, about a keyword sitting in plain view. With no `GROUP BY` the whole result is
+one group, which is the same statement `TOTALS … BY OVERALL` makes in the other clause.
+
+This is the third time in two days that the WRITE side of the round trip was complete and the READ
+side lagged. It is worth naming as a class: the renderer is exercised by every screen refresh, the
+parser only by text that actually takes that shape — so an asymmetry hides until something starts
+generating the shape.
+
+**`OVERALL` is a level, and the window's guards had to learn it.** "Add a grouping level first"
+kept firing with Grand totals ticked — the tick said *there is a level* and the window answered *add
+a level*, which is the window arguing with itself. Its mirror (`DropTotalsIfLevelless`) would have
+thrown the measures away when the last dimension left. The rule did not change; what counts as a
+level did, and both guards had to be told.
+
+**`=` and `<>` in `HAVING`.** `HavingItem` carries a full `ibQueryFilterOp` and always did; the four
+ordered operators were the lowering's switch. `HAVING COUNT(x) = 1` is as ordinary as `> 1`.
+
+### Update 2026-08-07 (e) — `COUNT(DISTINCT x)`, and an estimate that was wrong
+
+(c) closed with this written down as *found and deliberately not closed*: "the L2 IR has no DISTINCT
+modifier… half-landing it would mean correct numbers in RAM and silently wrong ones against a
+database". The fact was right and the COST was wrong. The L2 renderer emits a function as
+`name(args…)`, so the modifier is **one field on `ibQueryExpr` and one line in that renderer** —
+`DISTINCT` inside an aggregate is standard SQL, spelled identically by every dialect this layer
+writes for, so it rides the generic path instead of becoming a per-driver branch.
+
+The whole chain, once measured rather than guessed: keyword (already in the table), parser (read it
+before the argument, where SQL puts it), renderer, the AST flag, the L3 aggregate item, a defaulted
+`distinct` parameter on the three `Aggregate` verbs, four projection sites in `dbTableProvider`, and
+the RAM fold — where DISTINCT counts by `ibValue::GetHashKey()`, the identity, never by the display
+string (two references print the same far more often than they ARE the same).
+
+`COUNT(DISTINCT *)` is refused with a sentence rather than a syntax error: a star names nothing to be
+distinct about.
+
+**The lesson is about the estimate, not the feature.** "Needs the IR to change" was true and became
+"that is a separate arc" without anyone opening the IR. One `grep` at the SQL emitter would have
+shown a five-line change. An estimate made from the SHAPE of a dependency, without reading it, is a
+guess wearing a number.
+
+### Update 2026-08-07 (f) — what the first RUN found
+
+The suite had not been executed since 1071/0/5 — two days and three arcs earlier. Running it turned
+up four defects, and **three of them were in code written during those arcs and never executed**.
+Worth recording in that shape, because "it compiles and the window works" had covered all three.
+
+**`Document.Order` did not parse.** After a `.` the reader demanded an Ident, and `Order` lexes as a
+keyword — as do `Group`, `Index`, `Value`, `Update`, `Count`, `Elements`. A configuration names its
+documents and attributes without consulting our keyword table, and should not have to. Position
+decides: nothing but a name can follow a dot, so a keyword there IS a name. Four `QueryCast` tests
+had been failing on this since the day they were written — they were testing `CAST(Recorder AS
+Document.Order)`, and the language could not read the type.
+
+**`SUM(x) / COUNT(y)` did not parse.** `ParseProjection` branched on the first token — an aggregate
+keyword went straight to `ParseAggregate`, which read the call and stopped, so the slash was
+"unexpected text after the query". The branch was never needed: `ParsePrimary` already routes an
+aggregate, so the ordinary expression grammar reads both. A special case for *starts with* is nearly
+always a parser deciding a shape by its first token instead of parsing it.
+
+Note the order this happened in: `CollectFoldedAndFree` was written to handle free columns inside a
+composite aggregate — a shape the parser could not produce. The rule was finished before the grammar
+that needed it, and only running the tests showed the gap.
+
+**`CAST(x AS T).Field` never worked.** The dot was *recognised* and not *consumed*, so the path
+reader met it as its first token and said "expected a name" about the punctuation it had just
+matched. One `AcceptPunct` instead of `IsPunct`.
+
+**And one test was wrong, not the code.** `WHERE A = 1 OR SUM(x) > 5` moves to `HAVING` ENTIRE —
+anything naming an aggregate can only be evaluated after the fold, so leaving it behind is not an
+option. The comment said "left whole", meaning *not split*; writing the test I read my own words as
+"left in WHERE".
+
+The lesson is not "run the tests" — it is that the three code defects were all in paths **the window
+cannot reach by clicking**. A cast written by hand, a ratio of two folds, a keyword-named metaobject:
+the constructor generates none of them, so the manual loop that found so much this week was blind to
+exactly these. That is the argument for the property test in
+[[reference_query_render_parser_asymmetry]], stated by evidence rather than by worry.

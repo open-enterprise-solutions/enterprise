@@ -142,6 +142,10 @@ wxString RenderExpr(const ibQueryAstExpr& expr)
 	switch (expr.m_kind)
 	{
 	case ibQueryAstExprKind::Column:
+		// A WALK ROOTED ON A CAST writes its root first: `CAST(x AS T).A.B`. The root is in m_arg for
+		// exactly this shape and for nothing else, so a plain column is unaffected.
+		if (expr.m_arg && expr.m_arg->m_kind == ibQueryAstExprKind::Cast)
+			return RenderExpr(*expr.m_arg) + wxT(".") + Join(expr.m_path, wxT("."));
 		return Join(expr.m_path, wxT("."));
 
 	case ibQueryAstExprKind::Literal:
@@ -153,10 +157,15 @@ wxString RenderExpr(const ibQueryAstExpr& expr)
 	case ibQueryAstExprKind::Value:
 		return Kw(ibQueryKeyword::Value) + wxT("(") + Join(expr.m_path, wxT(".")) + wxT(")");
 
+	case ibQueryAstExprKind::Cast:
+		return Kw(ibQueryKeyword::Cast) + wxT("(") + (expr.m_arg ? RenderExpr(*expr.m_arg) : wxString())
+			+ wxT(" ") + Kw(ibQueryKeyword::As) + wxT(" ") + Join(expr.m_path, wxT(".")) + wxT(")");
+
 	case ibQueryAstExprKind::Func:
 	{
 		const wxString arg = expr.m_star ? wxString(wxT("*")) : RenderExpr(*expr.m_arg);
-		return Kw(expr.m_func) + wxT("(") + arg + wxT(")");
+		const wxString distinct = expr.m_distinctArg ? Kw(ibQueryKeyword::Distinct) + wxT(" ") : wxString();
+		return Kw(expr.m_func) + wxT("(") + distinct + arg + wxT(")");
 	}
 
 	case ibQueryAstExprKind::Arith:
@@ -232,7 +241,9 @@ wxString RenderSource(const ibQuerySource& source)
 		out = wxT("(") + RenderSelect(*source.m_subquery, 0) + wxT(")");
 	}
 	else {
-		out = Join(source.m_name, wxT("."));
+		// The `&` goes back on: what it writes, the parser reads — and a table handed in from
+		// outside has to still say so after a round trip.
+		out = (source.m_parameter ? wxT("&") : wxT("")) + Join(source.m_name, wxT("."));
 		if (!source.m_args.empty()) {
 			std::vector<wxString> args;
 			args.reserve(source.m_args.size());
@@ -260,11 +271,19 @@ wxString JoinKindText(ibQueryJoinKindAst kind)
 	return Kw(ibQueryKeyword::Inner);
 }
 
-// One clause per line, no alignment. The text is re-parsed and diffed far more
-// often than it is admired, and clever layout is what makes a diff unreadable.
+// THE CLAUSE KEYWORD ALONE ON ITS LINE, ITS CONTENTS INDENTED UNDER IT. The keyword says what the
+// next lines ARE, so a reader scanning the left edge sees the shape of the query — SELECT, FROM,
+// WHERE, GROUP BY — and reads the details only where they matter. Everything a clause holds is a
+// LIST (columns, sources, keys), and a list one item per line is the form that survives a field
+// being added: one line changes, and the diff says exactly which.
+//
+// No alignment beyond that. The text is re-parsed and diffed far more often than it is admired,
+// and clever layout is what makes a diff unreadable.
 wxString RenderSelect(const ibQuerySelect& select, int indent)
 {
 	const wxString pad(wxT(' '), indent);
+	const wxString item = pad + wxT("\t");        // where a clause's contents live
+	const wxString itemSep = wxT(",\n") + item;   // one item per line
 	wxString out;
 
 	// ORDER AS THE PARSER READS IT: TOP first, then DISTINCT (queryParser.cpp,
@@ -272,11 +291,12 @@ wxString RenderSelect(const ibQuerySelect& select, int indent)
 	// text this very language cannot read back, which is the one failure a
 	// round trip must never have.
 	out += pad + Kw(ibQueryKeyword::Select);
+	if (select.m_allowed)  out += wxT(" ") + Kw(ibQueryKeyword::Allowed);
 	if (select.m_top > 0)  out += wxString::Format(wxT(" %s %ld"), Kw(ibQueryKeyword::Top), select.m_top);
 	if (select.m_distinct) out += wxT(" ") + Kw(ibQueryKeyword::Distinct);
 
 	if (select.m_selectAll || select.m_projections.empty()) {
-		out += wxT(" *");
+		out += wxT("\n") + item + wxT("*");
 	}
 	else {
 		std::vector<wxString> cols;
@@ -288,34 +308,45 @@ wxString RenderSelect(const ibQuerySelect& select, int indent)
 				col += wxT(" ") + Kw(ibQueryKeyword::As) + wxT(" ") + projection.m_alias;
 			cols.push_back(col);
 		}
-		out += wxT(" ") + Join(cols, wxT(", "));
+		out += wxT("\n") + item + Join(cols, itemSep);
 	}
 
-	out += wxT("\n") + pad + Kw(ibQueryKeyword::From) + wxT(" ") + RenderSource(select.m_from);
+	// INTO comes between the projection and FROM — the clause that turns "give me these rows"
+	// into "put these rows there", read in that order.
+	if (!select.m_intoTemp.IsEmpty())
+		out += wxT("\n") + pad + Kw(ibQueryKeyword::Into) + wxT(" ") + select.m_intoTemp;
+
+	// NO TABLE, NO `FROM`. A query being built has no source yet, and writing the keyword over
+	// nothing produced `FROM` followed by emptiness — which the parser then complained about at a
+	// position pointing at thin air ("expected a name"). Left out, the same parser says the true
+	// thing instead: FROM is missing. An incomplete query should read as incomplete, not as broken.
+	const bool hasSource = !select.m_from.m_name.empty() || select.m_from.m_subquery;
+	if (hasSource)
+		out += wxT("\n") + pad + Kw(ibQueryKeyword::From) + wxT("\n") + item + RenderSource(select.m_from);
 
 	for (const auto& join : select.m_joins) {
 		out += wxT("\n") + pad + JoinKindText(join.m_kind) + wxT(" ") + Kw(ibQueryKeyword::Join)
-			+ wxT(" ") + RenderSource(join.m_source);
+			+ wxT("\n") + item + RenderSource(join.m_source);
 		// An omitted ON is not the same as `ON TRUE`: it means "join by reference",
 		// and writing one in would turn an auto-join into a cross join.
 		if (join.m_on)
-			out += wxT(" ") + Kw(ibQueryKeyword::On) + wxT(" ") + RenderExpr(*join.m_on);
+			out += wxT("\n") + item + Kw(ibQueryKeyword::On) + wxT(" ") + RenderExpr(*join.m_on);
 	}
 
 	if (select.m_where)
-		out += wxT("\n") + pad + Kw(ibQueryKeyword::Where) + wxT(" ") + RenderExpr(*select.m_where);
+		out += wxT("\n") + pad + Kw(ibQueryKeyword::Where) + wxT("\n") + item + RenderExpr(*select.m_where);
 
 	if (!select.m_groupBy.empty()) {
-		std::vector<wxString> items;
-		items.reserve(select.m_groupBy.size());
-		for (const auto& item : select.m_groupBy)
-			if (item) items.push_back(RenderExpr(*item));
+		std::vector<wxString> keys;
+		keys.reserve(select.m_groupBy.size());
+		for (const auto& key : select.m_groupBy)
+			if (key) keys.push_back(RenderExpr(*key));
 		out += wxT("\n") + pad + Kw(ibQueryKeyword::Group) + wxT(" ") + Kw(ibQueryKeyword::By)
-			+ wxT(" ") + Join(items, wxT(", "));
+			+ wxT("\n") + item + Join(keys, itemSep);
 	}
 
 	if (select.m_having)
-		out += wxT("\n") + pad + Kw(ibQueryKeyword::Having) + wxT(" ") + RenderExpr(*select.m_having);
+		out += wxT("\n") + pad + Kw(ibQueryKeyword::Having) + wxT("\n") + item + RenderExpr(*select.m_having);
 
 	// UNION branches come BEFORE the trailing ORDER BY / TOTALS, which belong to
 	// the whole union rather than to the last branch.
@@ -327,18 +358,18 @@ wxString RenderSelect(const ibQuerySelect& select, int indent)
 	}
 
 	if (!select.m_orderBy.empty()) {
-		std::vector<wxString> items;
-		items.reserve(select.m_orderBy.size());
-		for (const auto& item : select.m_orderBy) {
-			if (!item.m_expr) continue;
-			wxString text = RenderExpr(*item.m_expr);
+		std::vector<wxString> order;
+		order.reserve(select.m_orderBy.size());
+		for (const auto& line : select.m_orderBy) {
+			if (!line.m_expr) continue;
+			wxString text = RenderExpr(*line.m_expr);
 			// ASC is the default and is written anyway: an explicit direction is
 			// what a reader checks, and the constructor round-trips it either way.
-			text += wxT(" ") + Kw(item.m_ascending ? ibQueryKeyword::Asc : ibQueryKeyword::Desc);
-			items.push_back(text);
+			text += wxT(" ") + Kw(line.m_ascending ? ibQueryKeyword::Asc : ibQueryKeyword::Desc);
+			order.push_back(text);
 		}
 		out += wxT("\n") + pad + Kw(ibQueryKeyword::Order) + wxT(" ") + Kw(ibQueryKeyword::By)
-			+ wxT(" ") + Join(items, wxT(", "));
+			+ wxT("\n") + item + Join(order, itemSep);
 	}
 
 	if (select.m_hasTotals) {
@@ -349,11 +380,14 @@ wxString RenderSelect(const ibQuerySelect& select, int indent)
 
 		out += wxT("\n") + pad + Kw(ibQueryKeyword::Totals);
 		if (!aggregates.empty())
-			out += wxT(" ") + Join(aggregates, wxT(", "));
+			out += wxT("\n") + item + Join(aggregates, itemSep);
 
-		if (!select.m_totalsBy.empty()) {
+		if (!select.m_totalsBy.empty() || select.m_totalsOverall) {
 			std::vector<wxString> dims;
-			dims.reserve(select.m_totalsBy.size());
+			dims.reserve(select.m_totalsBy.size() + 1);
+			// FIRST, because that is where it sits — above every dimension.
+			if (select.m_totalsOverall)
+				dims.push_back(Kw(ibQueryKeyword::Overall));
 			for (const auto& dim : select.m_totalsBy) {
 				if (!dim.m_expr) continue;
 				wxString text = RenderExpr(*dim.m_expr);
@@ -362,11 +396,28 @@ wxString RenderSelect(const ibQuerySelect& select, int indent)
 					text += wxT(" ") + Kw(ibQueryKeyword::Hierarchy);
 				else if (dim.m_unfold == ibQueryDimUnfold::HierarchyOnly)
 					text += wxT(" ") + Kw(ibQueryKeyword::HierarchyOnly);
+				// The LEVEL's name, when it has one of its own. Written with AS, so reading it back
+				// cannot be confused with the next dimension in the list.
+				if (!dim.m_alias.IsEmpty())
+					text += wxT(" ") + Kw(ibQueryKeyword::As) + wxT(" ") + dim.m_alias;
 				dims.push_back(text);
 			}
-			out += wxT(" ") + Kw(ibQueryKeyword::By) + wxT(" ") + Join(dims, wxT(", "));
+			out += wxT("\n") + pad + Kw(ibQueryKeyword::By) + wxT("\n") + item + Join(dims, itemSep);
 		}
 	}
+
+	if (!select.m_indexBy.empty()) {
+		std::vector<wxString> columns;
+		columns.reserve(select.m_indexBy.size());
+		for (const auto& column : select.m_indexBy)
+			if (column) columns.push_back(RenderExpr(*column));
+		out += wxT("\n") + pad + Kw(ibQueryKeyword::Index) + wxT(" ") + Kw(ibQueryKeyword::By)
+			+ wxT("\n") + item + Join(columns, itemSep);
+	}
+
+	// LAST, and only on the outermost statement's own line: FOR UPDATE qualifies the whole read.
+	if (select.m_forUpdate)
+		out += wxT("\n") + pad + Kw(ibQueryKeyword::For) + wxT(" ") + Kw(ibQueryKeyword::Update);
 
 	return out;
 }
@@ -378,7 +429,79 @@ wxString ibRenderQuery(const ibQuerySelect& select)
 	return RenderSelect(select, 0);
 }
 
+wxString ibRenderQueryPackage(const ibQueryPackage& package)
+{
+	// ';' SEPARATES the statements of a package and does NOT terminate the last one. It is the
+	// separator the parser reads back, and a package that ended with one would put a semicolon on
+	// an ordinary query the moment it stopped being alone — which is punctuation the author did not
+	// write and did not ask for. (A trailing ';' typed BY HAND is still accepted on the way in;
+	// ParsePackage allows it. It is simply not what we produce.)
+	wxString out;
+	for (std::size_t i = 0; i < package.m_statements.size(); i++) {
+		const ibQueryAstStatement& statement = package.m_statements[i];
+		// THE SEPARATOR ON A LINE OF ITS OWN. A `;` hanging off the end of the last line of one
+		// statement reads as part of that statement; standing alone between them it reads as what it
+		// is — the boundary. The statements are many lines each, so the boundary has to be as easy
+		// to find as they are.
+		if (i > 0)
+			out += wxT("\n;\n");
+		if (statement.IsDrop())
+			out += Kw(ibQueryKeyword::Drop) + wxT(" ") + statement.m_dropTemp;
+		else if (statement.m_select)
+			out += RenderSelect(*statement.m_select, 0);
+	}
+	return out;
+}
+
 wxString ibRenderQueryExpr(const ibQueryAstExpr& expr)
 {
 	return RenderExpr(expr);
+}
+
+ibQueryAstExprPtr ibQueryColumnFromPath(const wxString& dottedPath)
+{
+	auto column = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
+
+	wxString segment;
+	for (size_t i = 0; i < dottedPath.length(); ++i) {
+		if (dottedPath[i] == wxT('.')) { column->m_path.push_back(segment); segment.clear(); }
+		else                           { segment += dottedPath[i]; }
+	}
+	if (!segment.IsEmpty())
+		column->m_path.push_back(segment);
+
+	return column;
+}
+
+wxString ibQueryOutputName(const ibQueryProjection& projection)
+{
+	if (!projection.m_alias.IsEmpty())
+		return projection.m_alias;
+	if (projection.m_expr && projection.m_expr->m_kind == ibQueryAstExprKind::Column
+	    && !projection.m_expr->m_path.empty())
+		return projection.m_expr->m_path.back();
+	return wxEmptyString;
+}
+
+wxString ibQuerySourceName(const ibQuerySource& source)
+{
+	if (!source.m_alias.IsEmpty())
+		return source.m_alias;
+	return !source.m_name.empty() ? source.m_name.back() : wxString();
+}
+
+wxString ibQuerySourceLabel(const ibQuerySource& source)
+{
+	const wxString name = ibQuerySourceName(source);
+	if (!name.IsEmpty())
+		return name;
+	return source.m_subquery ? wxString(_("(nested table)")) : wxString();
+}
+
+wxString ibQueryDimensionName(const ibQueryTotalDim& dim)
+{
+	if (!dim.m_alias.IsEmpty())
+		return dim.m_alias;
+	return dim.m_expr && dim.m_expr->m_kind == ibQueryAstExprKind::Column && !dim.m_expr->m_path.empty()
+		? dim.m_expr->m_path.back() : wxString();
 }

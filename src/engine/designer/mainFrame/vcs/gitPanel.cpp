@@ -217,7 +217,7 @@ void ibGitPanel::OnStatusActivated(wxListEvent& event)
 	wxDialog dlg(this, wxID_ANY, wxString::Format(_("Diff: %s"), path),
 		wxDefaultPosition, wxSize(700, 500), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
 	wxTextCtrl* txt = new wxTextCtrl(&dlg, wxID_ANY,
-		diff.empty() ? _("(no diff — untracked, binary, or staged)") : diff,
+		diff.empty() ? _("(no diff - untracked, binary, or staged)") : diff,
 		wxDefaultPosition, wxDefaultSize,
 		wxTE_MULTILINE | wxTE_READONLY | wxTE_DONTWRAP);
 	txt->SetFont(wxFont(wxFontInfo().Family(wxFONTFAMILY_TELETYPE)));

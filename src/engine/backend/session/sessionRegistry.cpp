@@ -420,8 +420,8 @@ void ibSessionRegistry::Stop()
 	}
 	const bool detached = m_threadAlive.load(std::memory_order_acquire);
 	if (detached) {
-		wxLogWarning(wxT("registry: m_thread join timed out — detaching ")
-			wxT("(deadlock against an in-flight ProcessRemove → DetachRuntime / ")
+		wxLogWarning(wxT("registry: m_thread join timed out - detaching ")
+			wxT("(deadlock against an in-flight ProcessRemove -> DetachRuntime / ")
 			wxT("listener callback chain). Process will exit anyway."));
 		m_thread.detach();
 	}
@@ -1734,7 +1734,7 @@ void ibSessionRegistry::JobRefreshSnapshot()
 	if (!m_ownsSysSession || !m_writeConn) {
 		static bool warned = false;
 		if (!warned) {
-			SESSION_LOG("[session REFRESH] skip — ownsSysSession="
+			SESSION_LOG("[session REFRESH] skip - ownsSysSession="
 			          << m_ownsSysSession << " writeConn="
 			          << (m_writeConn ? "ok" : "null"));
 			warned = true;
@@ -1832,7 +1832,7 @@ void ibSessionRegistry::JobRefreshSnapshot()
 	//   2. Extend sweep suppression — give peers ~5 s to do the same
 	//      before any pruning happens (kPostHandoffGraceMs below).
 	if (m_refreshFailedLastTick.exchange(false, std::memory_order_acq_rel)) {
-		SESSION_LOG("[session REFRESH] recovered after failure — "
+		SESSION_LOG("[session REFRESH] recovered after failure - "
 		          << "running soft-landing protocol");
 		try { JobHeartbeatOwn(); } catch (...) { /* swallowed: soft-landing heartbeat after refresh recovery — next regular tick will retry */ }
 

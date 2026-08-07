@@ -946,7 +946,123 @@ wxString ibCodeEditor::GetIdentifierUnderCursor()
 	return GetTextRange(start, end);
 }
 
+// ---------------------------------------------------------------------------
+//  The string literal under the caret — the door a query in a module is reached through
+// ---------------------------------------------------------------------------
+
+ibCodeEditor::StringLiteralSpan ibCodeEditor::GetStringLiteralUnderCursor()
+{
+	StringLiteralSpan span;
+
+	// SCAN FROM THE TOP OF THE DOCUMENT, tracking whether we are inside a string. A literal cannot
+	// be recognised by looking around the caret: `""` inside a string is an escaped quote, not a
+	// close followed by an open, and only a scan that started outside can tell the two apart.
+	const wxString text = GetText();
+	const int caret = GetCurrentPos();
+
+	int start = -1;
+	for (int i = 0; i < static_cast<int>(text.length()); ++i) {
+		if (text[i] != wxT('"'))
+			continue;
+
+		if (start < 0) {
+			start = i;                       // opening quote
+			continue;
+		}
+		if (i + 1 < static_cast<int>(text.length()) && text[i + 1] == wxT('"')) {
+			++i;                             // "" — an escaped quote, still inside
+			continue;
+		}
+
+		// A closing quote: this literal spans [start, i]. The caret counts as inside when it sits
+		// anywhere from the opening quote to just past the closing one, so a click at either edge
+		// finds the string a person is plainly pointing at.
+		if (caret >= start && caret <= i + 1) {
+			span.m_start = start;
+			span.m_end   = i + 1;
+			break;
+		}
+		start = -1;
+	}
+
+	if (!span.Found())
+		return span;
+
+	// Take the VALUE out of the spelling: drop the quotes, unescape "", and strip the continuation
+	// markers so what comes out is the query language and not the script's rendering of it.
+	for (int i = span.m_start + 1; i < span.m_end - 1; ++i) {
+		if (text[i] == wxT('"') && i + 1 < span.m_end - 1 && text[i + 1] == wxT('"')) {
+			span.m_text += wxT('"');
+			++i;
+			continue;
+		}
+		if (text[i] == wxT('\n')) {
+			span.m_text += wxT('\n');
+			// Everything up to and including the next `|` is the continuation marker and its indent.
+			int j = i + 1;
+			while (j < span.m_end - 1 && (text[j] == wxT(' ') || text[j] == wxT('\t') || text[j] == wxT('\r')))
+				++j;
+			if (j < span.m_end - 1 && text[j] == wxT('|'))
+				i = j;
+			continue;
+		}
+		span.m_text += text[i];
+	}
+	return span;
+}
+
+wxString ibCodeEditor::SpellStringLiteral(const wxString& text, const wxString& indent)
+{
+	// Quoted, inner quotes doubled, and every line after the first opened with `|` under the
+	// opening quote — the script's own spelling of a multi-line string, and what makes a query
+	// written into a module readable rather than one endless line.
+	wxString spelled = wxT("\"");
+	for (size_t i = 0; i < text.length(); ++i) {
+		if (text[i] == wxT('"'))  { spelled += wxT("\"\""); continue; }
+		if (text[i] == wxT('\r')) { continue; }
+		if (text[i] == wxT('\n')) { spelled += wxT("\n") + indent + wxT("|"); continue; }
+		spelled += text[i];
+	}
+	return spelled + wxT("\"");
+}
+
+void ibCodeEditor::ReplaceStringLiteral(const StringLiteralSpan& span, const wxString& text)
+{
+	if (!span.Found())
+		return;
+
+	// The indent of the opening quote — continuation lines line up under it.
+	const int line = LineFromPosition(span.m_start);
+	const int lineStart = PositionFromLine(line);
+	wxString indent;
+	for (int i = lineStart; i < span.m_start; ++i)
+		indent += (GetCharAt(i) == wxT('\t')) ? wxT('\t') : wxT(' ');
+
+	SetTargetStart(span.m_start);
+	SetTargetEnd(span.m_end);
+	ReplaceTarget(SpellStringLiteral(text, indent));
+}
+
+void ibCodeEditor::InsertStringLiteral(int position, const wxString& text)
+{
+	if (position < 0)
+		position = GetCurrentPos();
+
+	// Indented to WHERE THE CARET IS, so a query written into the middle of a procedure lines up
+	// with the code around it instead of starting at column zero.
+	const int line = LineFromPosition(position);
+	const int lineStart = PositionFromLine(line);
+	wxString indent;
+	for (int i = lineStart; i < position; ++i)
+		indent += (GetCharAt(i) == wxT('\t')) ? wxT('\t') : wxT(' ');
+
+	InsertText(position, SpellStringLiteral(text, indent));
+}
+
 #include "frontend/mainFrame/mainFrame.h"  // wxID_FRONTEND_SYNTAX_HELPER_LOOKUP
+#include "frontend/win/dlgs/queryConstructor/queryConstructor.h"   // the constructor, opened on the literal
+#include "frontend/artProvider/artProvider.h"                      // wxART_QUERY_CONSTRUCTOR — the icon, registered not embedded
+#include "backend/metadataConfiguration.h"                         // activeMetaData — the config this module belongs to
 
 void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 {
@@ -960,6 +1076,31 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 	                             _("Look up in Syntax Helper") + wxT("\tRawCtrl+F1"));
 	miLookup->SetBitmap(wxArtProvider::GetBitmap(wxART_HELP_BOOK, wxART_MENU));
 	miLookup->Enable(!identifier.IsEmpty());
+
+	// ITS SIBLING: the query constructor, gated the same way and by the same kind of question —
+	// "is the caret standing on something I can work with". For the lookup that is an identifier;
+	// for the constructor it is a string literal, because a query in a module lives in one.
+	const StringLiteralSpan literal = GetStringLiteralUnderCursor();
+	const int caret = GetCurrentPos();
+	// FENCED ON BOTH SIDES. It is neither a help lookup nor a clipboard verb — it opens a whole
+	// window over the caret, and a menu reads by its groups.
+	menu.AppendSeparator();
+	wxMenuItem* miConstruct = menu.Append(wxID_ANY, _("Query constructor"));
+	miConstruct->SetBitmap(wxArtProvider::GetBitmap(wxART_QUERY_CONSTRUCTOR, wxART_FRONTEND,
+		FromDIP(wxSize(16, 16))));
+	// ALWAYS AVAILABLE. Gating it on "the caret is inside a string" made the constructor a tool for
+	// EDITING a query somebody had already typed, which is the wrong way round — the first query is
+	// the one you most want help writing. Standing on a literal it opens on that query and writes
+	// back into it; standing anywhere else it opens empty and INSERTS the result at the caret.
+	// (A module that cannot be changed still opens it, read-only: a query one may not edit is still
+	// one worth reading, and refusing would hide the only view of it there is.)
+	menu.Bind(wxEVT_MENU, [this, literal, caret](wxCommandEvent&) {
+		wxString text = literal.m_text;
+		if (!ibShowQueryConstructor(this, text, activeMetaData, !IsEditable()))
+			return;
+		if (literal.Found()) ReplaceStringLiteral(literal, text);
+		else                 InsertStringLiteral(caret, text);
+	}, miConstruct->GetId());
 
 	menu.AppendSeparator();
 

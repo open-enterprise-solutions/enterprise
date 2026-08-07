@@ -35,7 +35,7 @@ struct LeaseFileV1 {
 #pragma pack(pop)
 
 static_assert(sizeof(LeaseFileV1) == 4 + 4 + 8 + 8 + 4 + 2 + 64 + 4,
-              "LeaseFileV1 layout drifted — readers and writers must agree");
+              "LeaseFileV1 layout drifted - readers and writers must agree");
 
 constexpr uint32_t kLeaseFileSize = sizeof(LeaseFileV1);
 
@@ -91,7 +91,7 @@ bool WriteLeaseFile(
 		// followers' next-read sees consistent state. Log to surface
 		// SMB-disconnect / disk-full conditions that would otherwise
 		// leave followers reading the prior generation forever.
-		wxLogWarning(wxT("ibFirebirdLease: FlushFileBuffers failed: %lu — ")
+		wxLogWarning(wxT("ibFirebirdLease: FlushFileBuffers failed: %lu - ")
 		             wxT("followers may see stale state until next write"),
 		             (unsigned long)GetLastError());
 	}
@@ -100,7 +100,7 @@ bool WriteLeaseFile(
 	if (lseek(fd, 0, SEEK_SET) < 0) return false;
 	ssize_t wrote = write(fd, &in, kLeaseFileSize);
 	if (fsync(fd) < 0) {
-		wxLogWarning(wxT("ibFirebirdLease: fsync failed: %d — followers ")
+		wxLogWarning(wxT("ibFirebirdLease: fsync failed: %d - followers ")
 		             wxT("may see stale state until next write"), errno);
 	}
 	return wrote == (ssize_t)kLeaseFileSize;

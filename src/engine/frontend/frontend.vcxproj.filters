@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClCompile Include="syntaxHelper\helpChooserDialog.cpp">
@@ -39,6 +39,36 @@
     </ClCompile>
     <ClCompile Include="win\dlgs\listSettings\listSettings.cpp">
       <Filter>win\dlgs\listSettings</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\queryConstructor\queryConstructor.cpp">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\queryConstructor\queryConstructorFill.cpp">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\queryConstructor\queryConstructorEdit.cpp">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\queryConstructor\queryConstructorText.cpp">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\queryConstructor\queryJoinDiagram.cpp">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\queryConstructor\queryLinkModel.cpp">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\queryConstructor\queryConditionModel.cpp">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\queryConstructor\queryUnionModel.cpp">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\queryConstructor\queryExpressionDialog.cpp">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\queryConstructor\queryCaseDialog.cpp">
+      <Filter>win\dlgs\queryConstructor</Filter>
     </ClCompile>
     <ClCompile Include="win\dlgs\userItem.cpp">
       <Filter>win\dlgs</Filter>
@@ -1000,6 +1030,39 @@
     <ClInclude Include="win\dlgs\listSettings\listSettings.h">
       <Filter>win\dlgs\listSettings</Filter>
     </ClInclude>
+    <ClInclude Include="win\dlgs\queryConstructor\queryConstructor.h">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\queryConstructor\queryJoinDiagram.h">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\queryConstructor\queryLinkModel.h">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\queryConstructor\queryConditionModel.h">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\queryConstructor\queryUnionModel.h">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\queryConstructor\queryGridModel.h">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\queryConstructor\queryFieldTree.h">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\queryConstructor\queryConstructorInternal.h">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\callbackDropTarget.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\queryConstructor\queryExpressionDialog.h">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\queryConstructor\queryCaseDialog.h">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClInclude>
     <ClInclude Include="syntaxHelper\helpChooserDialog.h">
       <Filter>syntaxHelper</Filter>
     </ClInclude>
@@ -1879,6 +1942,9 @@
     </Filter>
     <Filter Include="win\dlgs\listSettings">
       <UniqueIdentifier>{9d2c51ab-73f4-4a6e-8c15-2ad7e40b96c1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlgs\queryConstructor">
+      <UniqueIdentifier>{a4f1c2d7-6b3e-4f18-9c22-5d0e7a1b3f64}</UniqueIdentifier>
     </Filter>
     <Filter Include="win\dlgs\formSelector">
       <UniqueIdentifier>{592190AE-DAB6-446E-9BA6-0669461C3AE5}</UniqueIdentifier>

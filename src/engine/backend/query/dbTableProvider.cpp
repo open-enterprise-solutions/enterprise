@@ -1233,7 +1233,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteAggregate(const ibDataQuerySpec& spe
 				args.push_back(ibMetaIRBuilder::BuildColumnExpr(queryable, a.m_expr, mainQual));
 			else
 				args.push_back(a.m_col != nullptr ? qualCol(qual, FirstSqlFieldOfColumn(a.m_col)) : ibCol(wxT("*")));
-			projection.push_back(ibQueryProjItem{ ibFunc(AggregateFnName(a.m_fn), std::move(args)), a.m_alias });
+			projection.push_back(ibQueryProjItem{ ibFunc(AggregateFnName(a.m_fn), std::move(args), a.m_distinct), a.m_alias });
 		}
 		q.Project(std::move(projection));
 
@@ -1457,7 +1457,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteGroupLevelPage(const ibDataQuerySpec
 		for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates) {
 			std::vector<ibQueryExprPtr> args;
 			args.push_back(a.m_col != nullptr ? ibCol(FirstSqlFieldOfColumn(a.m_col)) : ibCol(wxT("*")));
-			projection.push_back(ibQueryProjItem{ ibFunc(AggregateFnName(a.m_fn), std::move(args)), a.m_alias });
+			projection.push_back(ibQueryProjItem{ ibFunc(AggregateFnName(a.m_fn), std::move(args), a.m_distinct), a.m_alias });
 		}
 		q.Project(std::move(projection));
 
@@ -1524,7 +1524,7 @@ ibDataQueryResult ibDbTableProvider::ExecuteColocatedAggregate(const ibDataQuery
 		for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates) {
 			std::vector<ibQueryExprPtr> args;
 			args.push_back(a.m_col != nullptr ? ibCol(qual(a.m_col), FirstSqlFieldOfColumn(a.m_col)) : ibCol(wxT("*")));
-			projection.push_back(ibQueryProjItem{ ibFunc(AggregateFnName(a.m_fn), std::move(args)), a.m_alias });
+			projection.push_back(ibQueryProjItem{ ibFunc(AggregateFnName(a.m_fn), std::move(args), a.m_distinct), a.m_alias });
 		}
 		q.Project(std::move(projection));
 
@@ -1879,7 +1879,7 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 	for (const ibDataQueryBuilder::AggregateItem& a : *spec.m_aggregates) {
 		std::vector<ibQueryExprPtr> args;
 		args.push_back(a.m_col != nullptr ? colExpr(a.m_col) : ibCol(wxT("*")));
-		projection.push_back(ibQueryProjItem{ ibFunc(AggregateFnName(a.m_fn), std::move(args)), a.m_alias });
+		projection.push_back(ibQueryProjItem{ ibFunc(AggregateFnName(a.m_fn), std::move(args), a.m_distinct), a.m_alias });
 	}
 
 	ibQueryExprPtr having;

@@ -1,5 +1,8 @@
 #include "frontend/win/dlgs/listSettings/listSettings.h"
 #include "frontend/win/dlgs/listSettings/filterTreeModel.h"   // the filter is a TREE — model + column ids
+#include "frontend/win/dlgs/queryConstructor/queryConstructor.h"   // the Query tab's constructor button
+#include "frontend/win/dlgs/callbackDropTarget.h"                  // the same-process drag: the source knows what moved
+#include <wx/stc/stc.h>                                            // the arbitrary query is shown in the styled editor
 #include "backend/metaCollection/metaObjectComposite.h"
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
@@ -33,6 +36,7 @@
 #include <wx/menu.h>
 #include <wx/imaglist.h>
 #include <wx/stattext.h>
+#include <wx/wupdlock.h>   // the field trees are REBUILT when the query changes - rebuild them unseen
 #include <wx/app.h>
 
 // Filter-tab COMMANDS — raised by the toolbar and by the context menu alike, so
@@ -191,17 +195,6 @@ static void ibStyleSettingsGrid(ibDataViewCtrl* view)
 //  Cell renderers — the value cell each tab edits through
 // ===========================================================================
 
-
-// Drop target for a tab's right-hand composition panel: a field dragged from the LEFT
-// tree (remembered as m_dragItem) is added to that tab's list on drop. The text payload
-// only exists to enable DnD; the field itself comes from m_dragItem (same-process drag).
-class ibFieldDropTarget : public wxTextDropTarget {
-public:
-	explicit ibFieldDropTarget(std::function<void()> onDrop) : m_onDrop(std::move(onDrop)) {}
-	bool OnDropText(wxCoord, wxCoord, const wxString&) override { if (m_onDrop) m_onDrop(); return true; }
-private:
-	std::function<void()> m_onDrop;
-};
 
 // THE ROW-VALUE CELL — one cell for every editable thing on the Sort and Group
 // tabs. A sort line has a FIELD and a DIRECTION; a grouping line has a FIELD and a
@@ -883,11 +876,6 @@ ibDialogListSettings::ibDialogListSettings(wxWindow* parent, ibValueModel* model
 	Bind(wxEVT_BUTTON, &ibDialogListSettings::OnOk, this, wxID_OK);
 }
 
-ibValueFilterList* ibDialogListSettings::GetFilterList() const
-{
-	return m_settings != nullptr ? m_settings->GetFilter() : nullptr;
-}
-
 ibValueSortList* ibDialogListSettings::GetOrderList() const
 {
 	return m_settings != nullptr ? m_settings->GetOrder() : nullptr;
@@ -931,19 +919,98 @@ wxWindow* ibDialogListSettings::BuildQueryPage(wxWindow* parent)
 	wxPanel* page = new wxPanel(parent, wxID_ANY);
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 
+	wxBoxSizer* header = new wxBoxSizer(wxHORIZONTAL);
 	m_queryUseCheck = new wxCheckBox(page, wxID_ANY, _("Arbitrary query"));
-	sizer->Add(m_queryUseCheck, 0, wxALL, FromDIP(6));
+	header->Add(m_queryUseCheck, 0, wxALIGN_CENTER_VERTICAL);
+	header->AddStretchSpacer();
 
-	m_queryText = new wxTextCtrl(page, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE | wxHSCROLL);
+	// THE CONSTRUCTOR OPENS ON THIS VERY TEXT and writes back into it. That is the whole round trip
+	// — parse, edit, render — and wiring it here first means it is exercised against a real list
+	// from the day it exists, rather than against a mock-up.
+	m_queryBuild = new wxButton(page, wxID_ANY, _("Query constructor"));
+	m_queryBuild->Enable(false);   // meaningful only when the flag is on, like the text
+	m_queryBuild->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+		if (m_queryText == nullptr)
+			return;
+		wxString text = m_queryText->GetText();
+		if (!ibShowQueryConstructor(this, text, SourceMetaData()))
+			return;
+		m_queryText->SetText(text);
+		ApplyQueryToList();   // a query built in the constructor changes the pickers the same way a typed one does
+	});
+	header->Add(m_queryBuild, 0, wxALIGN_CENTER_VERTICAL);
+	sizer->Add(header, 0, wxEXPAND | wxALL, FromDIP(6));
+
+	// THE SAME STYLED EDITOR as the query constructor's text pane: SQL lexer, the language's own
+	// keyword set, the engine's font and colours, line numbers. An arbitrary query is query text
+	// wherever it is shown, and showing it as grey characters HERE while it is highlighted THERE is
+	// the same language wearing two faces.
+	m_queryText = new wxStyledTextCtrl(page, wxID_ANY);
+	ibStyleQueryText(m_queryText);
 	m_queryText->Enable(false);   // meaningful only when the flag is on
 	sizer->Add(m_queryText, 1, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, FromDIP(6));
 
+	// THE ENGINE'S OWN WORDS, under the text it is about. Shown only when there is something to say;
+	// there is no second, softer opinion here about what a valid query is.
+	m_queryError = new wxStaticText(page, wxID_ANY, wxEmptyString);
+	m_queryError->SetForegroundColour(*wxRED);
+	m_queryError->Hide();
+	sizer->Add(m_queryError, 0, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, FromDIP(6));
+
+	// TICK IT AND A QUERY APPEARS. The list writes the starting query over its own main table
+	// (SeedArbitraryQuery) — because switching this on means "let me change what is read", and a blank
+	// page is not a starting point, it is a question about syntax. Unticking takes it away again: the
+	// main table alone is the read, and a text left lying around would come back on the next tick
+	// carrying edits nobody remembers making.
 	m_queryUseCheck->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent& e) {
-		if (m_queryText != nullptr) m_queryText->Enable(e.IsChecked());
+		if (m_queryText  != nullptr) m_queryText->Enable(e.IsChecked());
+		if (m_queryBuild != nullptr) m_queryBuild->Enable(e.IsChecked());
+		if (m_list == nullptr)
+			return;
+		m_list->SetArbitraryQuery(e.IsChecked());
+		if (m_queryText != nullptr)
+			m_queryText->SetText(m_list->GetArbitraryQueryText());   // the seed, or empty
+		ApplyQueryToList();
+	});
+
+	// AND THE PICKERS FOLLOW THE TEXT. On leaving the editor the query is applied and every field
+	// tree in this dialog is rebuilt — so a field added to the query is there to filter, sort and
+	// group by without closing anything. Losing focus rather than every keystroke: a half-typed query
+	// does not resolve, and reporting that on every character would be noise.
+	m_queryText->Bind(wxEVT_KILL_FOCUS, [this](wxFocusEvent& event) {
+		event.Skip();
+		ApplyQueryToList();
 	});
 
 	page->SetSizer(sizer);
 	return page;
+}
+
+// APPLY THE QUERY AND REBUILD WHAT DEPENDS ON IT. One place, because "the query changed" has exactly
+// one consequence: the list reads something else, so the fields on offer are something else.
+//
+// The ENGINE's verdict is shown as it came. A query that cannot be described cannot be run, and
+// finding that out here — in front of its author — is the whole point of describing it early.
+void ibDialogListSettings::ApplyQueryToList()
+{
+	if (m_list == nullptr || m_queryUseCheck == nullptr)
+		return;
+
+	if (m_queryText != nullptr && m_queryUseCheck->GetValue())
+		m_list->SetArbitraryQueryText(m_queryText->GetText());
+	m_list->ApplySource();
+
+	PopulateFieldTree(m_filterFieldTree);
+	PopulateFieldTree(m_orderFieldTree);
+	PopulateFieldTree(m_groupFieldTree);
+
+	const wxString error = m_list->GetArbitraryQueryError();
+	if (m_queryError != nullptr) {
+		m_queryError->SetLabel(error);
+		m_queryError->Show(!error.IsEmpty());
+		if (m_queryError->GetParent() != nullptr)
+			m_queryError->GetParent()->Layout();
+	}
 }
 
 wxWindow* ibDialogListSettings::BuildFilterPage(wxWindow* parent)
@@ -1001,6 +1068,19 @@ wxWindow* ibDialogListSettings::BuildFilterPage(wxWindow* parent)
 	ibStyleSettingsGrid(m_filterView);
 	m_filterView->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED, &ibDialogListSettings::OnFilterItemActivated, this);
 
+	// ⚠⚠ AND AGAIN WHEN THE DIALOG IS SHOWN. The expansion posted from the load
+	// (RefreshFilterTree -> CallAfter) runs while the window is still being BUILT: the control has
+	// not fetched a single row yet, so expanding its root is a no-op and a reopened settings window
+	// showed the filter folded shut — exactly the state that reads as "nothing set".
+	//
+	// Show is the first moment the rows genuinely exist, and one more turn of the loop after it is
+	// where they have been laid out. Both are posted, so neither is a paint inside a paint.
+	Bind(wxEVT_SHOW, [this](wxShowEvent& event) {
+		event.Skip();
+		if (event.IsShown())
+			CallAfter(&ibDialogListSettings::ExpandFilterTree);
+	});
+
 	// (NO local choice lists any more. A comparison and a display mode are
 	// registered ENUMERATIONS — ComparisonKind / FilterDisplayMode in listFilter.h
 	// — so their members and captions live there, once. Spelling them again here
@@ -1057,7 +1137,7 @@ wxWindow* ibDialogListSettings::BuildFilterPage(wxWindow* parent)
 	m_filterFieldTree->Bind(wxEVT_TREE_ITEM_EXPANDING, &ibDialogListSettings::OnFieldTreeExpanding, this);
 	m_filterFieldTree->Bind(wxEVT_TREE_ITEM_ACTIVATED, &ibDialogListSettings::OnFilterFieldActivated, this);
 	m_filterFieldTree->Bind(wxEVT_TREE_BEGIN_DRAG, &ibDialogListSettings::OnFieldTreeBeginDrag, this);
-	rightPane->SetDropTarget(new ibFieldDropTarget([this]{ AddFilterForField(m_dragItem); }));
+	rightPane->SetDropTarget(new ibCallbackDropTarget([this]{ AddFilterForField(m_dragItem); }));
 
 	// The toolbar and the context menu raise the SAME command ids, so both roads
 	// end in one handler.
@@ -1105,17 +1185,30 @@ wxWindow* ibDialogListSettings::BuildOrderPage(wxWindow* parent)
 	m_orderView->AppendColumn(new ibDataViewColumn(_("Field"),
 		new ibRowValueCellRenderer(this,
 			[this](const ibDataViewItem& row) -> ibValue {
-				ibValueSortItem* line = OrderLineAt(row);
-				return line != nullptr ? ibValue(line->GetFieldObject()) : ibValue();
+				// ⚠ BUILT FROM THE PATH, not taken off a line object. On a live list GetItem MINTS one and
+				// hands back a raw pointer nobody owns — the cells ask this while painting, so it leaked
+				// once per repaint. A field built here is owned by the ibValue that wraps it.
+				ibValueSortList* o = GetOrderList();
+				const size_t idx = OrderIndexAt(row);
+				if (o == nullptr || idx >= o->Count())
+					return ibValue();
+				const wxString path = o->GetField(idx);
+				return path.IsEmpty() ? ibValue() : ibValue(new ibValueCompositionField(path));
 			},
 			[this](const ibDataViewItem& row, const ibValue& value) {
-				ibValueSortItem* line = OrderLineAt(row);
-				if (line == nullptr)
+				ibValueSortList* o = GetOrderList();
+				const size_t idx = OrderIndexAt(row);
+				if (o == nullptr || idx >= o->Count())
 					return;
-				// CLEARING SENDS AN EMPTY VALUE, and an empty value fails the cast —
-				// so testing only "did it convert" made "×" do nothing at all.
+				// CLEARING SENDS AN EMPTY VALUE, and an empty value fails the cast — so testing only
+				// "did it convert" made the clear button do nothing at all.
+				//
+				// ⚠ THROUGH SetLine, not through the line OBJECT. On a LIVE list there is no line
+				// object — GetItem mints a transient one — so writing into it lost the edit without
+				// a word. Same door the grouping cells use, and the same reason.
 				ibValueCompositionField* field = nullptr;
-				line->SetField(value.ConvertToValue(field) ? field : nullptr);
+				const bool chosen = value.ConvertToValue(field) && field != nullptr;
+				o->SetLine(idx, chosen ? field->GetPath() : wxString(), o->GetDirection(idx));
 				if (m_orderModel != nullptr) m_orderModel->ResetFromList();
 			}),
 		eOrderField, wxNOT_FOUND, wxAlignment::wxALIGN_LEFT));
@@ -1123,14 +1216,17 @@ wxWindow* ibDialogListSettings::BuildOrderPage(wxWindow* parent)
 	m_orderView->AppendColumn(new ibDataViewColumn(_("Direction"),
 		new ibRowValueCellRenderer(this,
 			[this](const ibDataViewItem& row) -> ibValue {
-				ibValueSortItem* line = OrderLineAt(row);
-				return line != nullptr
-					? ibValue::CreateEnumObject<ibValueEnumSortDirection>(line->GetDirection())
+				ibValueSortList* o = GetOrderList();
+				const size_t idx = OrderIndexAt(row);
+				return (o != nullptr && idx < o->Count())
+					? ibValue::CreateEnumObject<ibValueEnumSortDirection>(o->GetDirection(idx))
 					: ibValue();
 			},
 			[this](const ibDataViewItem& row, const ibValue& value) {
-				if (ibValueSortItem* line = OrderLineAt(row))
-					line->SetDirection(value.ConvertToEnumValue<ibSortDirection>());
+				ibValueSortList* o = GetOrderList();
+				const size_t idx = OrderIndexAt(row);
+				if (o != nullptr && idx < o->Count())
+					o->SetLine(idx, o->GetField(idx), value.ConvertToEnumValue<ibSortDirection>());
 				if (m_orderModel != nullptr) m_orderModel->ResetFromList();
 			}),
 		eOrderDir, wxNOT_FOUND, wxAlignment::wxALIGN_LEFT));
@@ -1171,7 +1267,7 @@ wxWindow* ibDialogListSettings::BuildOrderPage(wxWindow* parent)
 	m_orderFieldTree->Bind(wxEVT_TREE_ITEM_EXPANDING, &ibDialogListSettings::OnFieldTreeExpanding, this);
 	m_orderFieldTree->Bind(wxEVT_TREE_ITEM_ACTIVATED, &ibDialogListSettings::OnOrderFieldActivated, this);
 	m_orderFieldTree->Bind(wxEVT_TREE_BEGIN_DRAG, &ibDialogListSettings::OnFieldTreeBeginDrag, this);
-	rightPane->SetDropTarget(new ibFieldDropTarget([this]{ AddOrderForField(m_dragItem); }));
+	rightPane->SetDropTarget(new ibCallbackDropTarget([this]{ AddOrderForField(m_dragItem); }));
 
 	// DOUBLE CLICK OPENS THE EDITOR — the grid sends an ACTIVATE for it, and without
 	// this binding the cell could only be opened with F2 (the filter tab had it, the
@@ -1227,12 +1323,11 @@ wxWindow* ibDialogListSettings::BuildGroupPage(wxWindow* parent)
 				if (g == nullptr || idx >= g->Count())
 					return;
 				// An empty value CLEARS the line's field (same reason as the sort tab).
+				// ⚠ SetLine, not Remove+Add: the second MOVES the edited line to the end, and order is the
+				// meaning of a grouping list ("by Warehouse, then by Item" is not the other report).
 				ibValueCompositionField* field = nullptr;
-				const bool chosen = value.ConvertToValue(field);
-				const ibQueryDimUnfold kind = g->GetKind(idx);
-				g->Remove(idx);
-				if (chosen) g->Add(field, kind);
-				else        g->Add(wxEmptyString, kind);
+				const bool chosen = value.ConvertToValue(field) && field != nullptr;
+				g->SetLine(idx, chosen ? field->GetPath() : wxString(), g->GetKind(idx));
 				if (m_groupModel != nullptr) m_groupModel->ResetFromList();
 			}),
 		eGroupField, wxNOT_FOUND, wxAlignment::wxALIGN_LEFT));
@@ -1249,10 +1344,18 @@ wxWindow* ibDialogListSettings::BuildGroupPage(wxWindow* parent)
 				ibValueGroupList* g = GetGroupList();
 				const size_t idx = GroupIndexAt(row);
 				if (g != nullptr && idx < g->Count()) {
-					ibValueCompositionField* field = g->GetFieldObject(idx);
-					const ibQueryDimUnfold kind = value.ConvertToEnumValue<ibQueryDimUnfold>();
-					g->Remove(idx);
-					g->Add(field, kind);
+					// ⚠⚠ BY PATH, NOT BY OBJECT — this line CRASHED the designer.
+					//
+					// A grouping list has two modes, and in FACADE mode (a live list, the composer is
+					// the store) there IS no line object: GetFieldObject returns null on purpose, since
+					// it used to mint one per repaint and leak it. Reading it here and handing it to
+					// Add(field, kind) dereferenced null the moment somebody changed the kind of a
+					// grouping on a real list — "added a field, switched it to HierarchyOnly, crash".
+					//
+					// GetField(idx) is the accessor BOTH modes answer, and a grouping line IS a path
+					// plus a kind — so the line is rebuilt from what it is, not from an object that
+					// only exists half the time.
+					g->SetLine(idx, g->GetField(idx), value.ConvertToEnumValue<ibQueryDimUnfold>());
 				}
 				if (m_groupModel != nullptr) m_groupModel->ResetFromList();
 			}),
@@ -1292,7 +1395,7 @@ wxWindow* ibDialogListSettings::BuildGroupPage(wxWindow* parent)
 	m_groupFieldTree->Bind(wxEVT_TREE_ITEM_EXPANDING, &ibDialogListSettings::OnFieldTreeExpanding, this);
 	m_groupFieldTree->Bind(wxEVT_TREE_ITEM_ACTIVATED, &ibDialogListSettings::OnGroupFieldActivated, this);
 	m_groupFieldTree->Bind(wxEVT_TREE_BEGIN_DRAG, &ibDialogListSettings::OnFieldTreeBeginDrag, this);
-	rightPane->SetDropTarget(new ibFieldDropTarget([this]{ AddGroupForField(m_dragItem); }));
+	rightPane->SetDropTarget(new ibCallbackDropTarget([this]{ AddGroupForField(m_dragItem); }));
 
 	m_groupView->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED, [this](ibDataViewEvent& e) {
 		if (m_groupView != nullptr)
@@ -1327,9 +1430,11 @@ void ibDialogListSettings::LoadFromSettings()
 	if (m_list != nullptr && m_queryUseCheck != nullptr) {
 		m_queryUseCheck->SetValue(m_list->IsArbitraryQuery());
 		if (m_queryText != nullptr) {
-			m_queryText->SetValue(m_list->GetArbitraryQueryText());
+			m_queryText->SetText(m_list->GetArbitraryQueryText());
 			m_queryText->Enable(m_list->IsArbitraryQuery());
 		}
+		if (m_queryBuild != nullptr)
+			m_queryBuild->Enable(m_list->IsArbitraryQuery());   // the constructor follows the text it edits
 	}
 	if (m_settings == nullptr)
 		return;
@@ -1344,13 +1449,10 @@ void ibDialogListSettings::LoadFromSettings()
 
 void ibDialogListSettings::ApplyToSettings()
 {
-	// Query tab (dynamic-list only) — apply the arbitrary-query flag + text onto the list, then re-apply the source.
-	if (m_list != nullptr && m_queryUseCheck != nullptr) {
-		m_list->SetArbitraryQuery(m_queryUseCheck->GetValue());
-		if (m_queryText != nullptr)
-			m_list->SetArbitraryQueryText(m_queryText->GetValue());
-		m_list->ApplySource();
-	}
+	// Query tab (dynamic-list only) — the flag and the text are applied AS THEY CHANGE (the field
+	// pickers on the other tabs are built from them), so this is the last word rather than the only
+	// one: it catches a text edited and then OK'd without the editor ever losing focus.
+	ApplyQueryToList();
 	// Every tab edits its buffer list IN PLACE through its model — nothing to copy back here.
 	// The buffer is committed to the composer on OK (ibCommitSettingsToComposer).
 }
@@ -1379,13 +1481,27 @@ void ibDialogListSettings::PopulateFieldTree(wxTreeCtrl* tree)
 {
 	if (tree == nullptr)
 		return;
+	// ⚠ REBUILT, not built once. Changing the arbitrary query changes which fields exist, and this
+	// runs again to say so — so the old rows go first.
+	//
+	// ⚠⚠ AND THE ROOT IS REUSED, never re-added. `DeleteAllItems` does NOT destroy the root of a
+	// wxTR_HIDE_ROOT tree — MSW keeps a VIRTUAL root object for it — so a second `AddRoot` walks
+	// straight into `assert "!m_pVirtualRoot" failed in AddRoot(): tree can have only a single root`.
+	// Building the tree once hid this; rebuilding it on every query change is what found it.
+	wxWindowUpdateLocker hold(tree);
+
+	wxTreeItemId root = tree->GetRootItem();
+	if (root.IsOk())
+		tree->DeleteChildren(root);   // the rows go, the root the control insists on stays
+	else
+		root = tree->AddRoot(wxEmptyString);
+
 	// Attribute icon (index 0) on every field — same icon the source-explorer picker uses.
 	wxImageList* imgs = new wxImageList(16, 16);
 	imgs->Add(ibValue::GetIconGroup());
 	tree->AssignImageList(imgs);
 
 	const ibMetaData* metaData = SourceMetaData();
-	const wxTreeItemId root = tree->AddRoot(wxEmptyString);
 
 	if (m_list != nullptr) {
 		if (const auto* explorer = m_list->GetSourceExplorer())
@@ -1676,6 +1792,33 @@ void ibDialogListSettings::OnListContextMenu(ibDataViewEvent& evt)
 // ===========================================================================
 
 
+// OPEN ON THE ROOT, AND ON EVERY GROUP UNDER IT. A collapsed root hides the whole filter behind one
+// line that reads as "nothing set", and a collapsed inner group hides the conditions the author just
+// wrote. A filter is short by nature — there is nothing here worth folding away, and a person who
+// wants it folded can fold it.
+//
+// ⚠ DEPTH-FIRST, PARENT BEFORE CHILD: a container's children do not exist for the view until its
+// parent is open, so asking a grandchild to expand first does nothing at all.
+void ibDialogListSettings::ExpandFilterTree()
+{
+	if (m_filterModel == nullptr || m_filterView == nullptr)
+		return;
+
+	const ibDataViewItem rootItem = m_filterModel->RootItem();
+	if (!rootItem.IsOk())
+		return;
+
+	std::function<void(const ibDataViewItem&)> openAll = [&](const ibDataViewItem& parent) {
+		m_filterView->Expand(parent);
+		ibDataViewItemArray children;
+		m_filterModel->GetFirstFetch(parent, ibDataViewItem(), -1, children);
+		for (const ibDataViewItem& child : children)
+			if (m_filterModel->IsContainer(child))
+				openAll(child);
+	};
+	openAll(rootItem);
+}
+
 void ibDialogListSettings::RefreshFilterTree(const ibValue& select)
 {
 	// A STRUCTURAL change (added, removed, grouped) is not a value change: rows
@@ -1690,11 +1833,19 @@ void ibDialogListSettings::RefreshFilterTree(const ibValue& select)
 	// rows when the tree is the same one, so this costs nothing on an edit.
 	m_filterModel->SetRoot(GetFilterRoot());
 
-	// OPEN ON THE ROOT. It is a row now, and a collapsed one hides the whole
-	// filter behind a single line that reads as "nothing set".
-	const ibDataViewItem rootItem = m_filterModel->RootItem();
-	if (rootItem.IsOk())
-		m_filterView->Expand(rootItem);
+	// OPEN ON THE ROOT, AND ON EVERY GROUP UNDER IT. A collapsed root hides the whole filter behind
+	// one line that reads as "nothing set", and a collapsed inner group hides the conditions the
+	// author just wrote. A filter is short by nature — there is nothing here worth folding away, and
+	// a person who wants it folded can fold it.
+	//
+	// ⚠ EXPANDING IS DEPTH-FIRST AND AFTER THE ROOT: a container's children do not exist for the
+	// view until its parent is open, so asking a grandchild to expand before its parent does nothing
+	// at all. That is why the root alone was not enough.
+	// ⚠⚠ ON THE NEXT TURN OF THE EVENT LOOP, not here. Expanding a row the view has not FETCHED yet
+	// is a no-op — and during a refresh (and on the very first load, before the first paint) it has
+	// not. Called inline, the root stayed shut and read as "no filter"; CallAfter puts it after the
+	// control has settled, which is the same lesson the cell editor taught in the constructor.
+	CallAfter(&ibDialogListSettings::ExpandFilterTree);
 
 	// Rows only exist once fetched, so this asks AFTER the model re-read them.
 	const ibDataViewItem sel = m_filterModel->ItemFor(select);
@@ -1926,11 +2077,12 @@ void ibDialogListSettings::OnFilterItemActivated(ibDataViewEvent& event)
 // ===========================================================================
 
 
-ibValueSortItem* ibDialogListSettings::OrderLineAt(const ibDataViewItem& row) const
+// THE ROW'S INDEX, which is what an EDIT needs — the line OBJECT above is for READING only, and on
+// a live list it is a transient that nothing owns. The grouping tab has the same pair.
+size_t ibDialogListSettings::OrderIndexAt(const ibDataViewItem& row) const
 {
-	ibValueSortList* o = GetOrderList();
 	const size_t id = reinterpret_cast<size_t>(row.GetID());
-	return (o != nullptr && id > 0 && id <= o->Count()) ? o->GetItem(id - 1) : nullptr;
+	return id > 0 ? id - 1 : (size_t)-1;
 }
 
 // Add the chosen available field to the sort list (default Ascending; direction is edited

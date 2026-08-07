@@ -58,11 +58,14 @@ add_executable(oes_tests
     test_queryTotals.cpp
     test_queryL2.cpp
     test_queryComposer.cpp
+    test_queryAccessPolicy.cpp
     test_queryParity.cpp
     test_queryJoinParity.cpp
     test_queryL3Vocab.cpp
     test_queryL4Lexer.cpp
     test_queryL4Parser.cpp
+    test_queryConstructor.cpp
+    test_queryNaming.cpp
     test_queryRewrite.cpp
     test_lambdaRecorder.cpp
     test_queryValueMembers.cpp
@@ -364,6 +367,7 @@ add_executable(oes_frontend_runtime_test
     test_frontendDocView.cpp
     test_frontendVisualHost.cpp
     test_frontendControls.cpp
+    test_frontendQueryConstructor.cpp
 )
 
 target_link_libraries(oes_frontend_runtime_test

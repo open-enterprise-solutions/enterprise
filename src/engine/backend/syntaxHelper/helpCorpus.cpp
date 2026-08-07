@@ -197,7 +197,7 @@ void ibHelpCorpus::BuildIndexes() {
 			ibHelpLoadError w;
 			w.severity = ibHelpLoadSeverity::kFatal;
 			w.message  = wxString::Format(
-			    wxT("Internal: duplicate id '%s' reached BuildIndexes — entry dropped from index."),
+			    wxT("Internal: duplicate id '%s' reached BuildIndexes - entry dropped from index."),
 			    e.id);
 			m_loadErrors.push_back(std::move(w));
 			continue;

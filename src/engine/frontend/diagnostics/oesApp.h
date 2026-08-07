@@ -170,7 +170,7 @@ public:
 		// Surface a platform-native message + TerminateProcess.
 		if (!wxIsMainThread()) {
 			const wxString exe = GetExeName();
-			const wxString caption = wxT("OES ") + exe + wxT(" — fatal error");
+			const wxString caption = wxT("OES ") + exe + wxT(" - fatal error");
 			const wxString msg = wxString::Format(
 				wxT("A fatal error occurred on a background thread (tid=%lu).\n\n")
 				wxT("A crash dump has been saved to:\n%s\n\n")
@@ -204,7 +204,7 @@ protected:
 	{
 		ibCrashGuard::LogStartupError(exeName, message);
 
-		const wxString caption = wxT("OES ") + exeName + wxT(" — startup error");
+		const wxString caption = wxT("OES ") + exeName + wxT(" - startup error");
 #ifdef __WXMSW__
 		// Always platform-native during startup — wx state may be
 		// half-initialised and wxMessageBox can re-enter the broken

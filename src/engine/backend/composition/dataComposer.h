@@ -37,6 +37,7 @@
 #include "backend/query/queryLowering.h"   // ibQueryLowering::OutputColumn (+ ibBackendQueryColumn)
 
 #include <wx/string.h>
+#include <functional>   // PruneUnresolvedSettings asks the HOST whether a path still resolves
 #include <map>
 #include <memory>
 #include <vector>
@@ -195,6 +196,21 @@ public:
 		path = m_totalBy[i].m_path; kind = m_totalBy[i].m_kind; return true;
 	}
 
+	// DROP EVERY SETTING WHOSE FIELD THE SOURCE NO LONGER HAS. Returns how many went.
+	//
+	// ⚠ BY RESOLUTION, NEVER BY CHASING THE CHANGE. A filter over a field that only the arbitrary
+	// query provided has to go when that query is taken away — and so does one over a table removed
+	// from the query, a renamed attribute, a deleted metaobject. A cleanup hung off each of those
+	// events is a list of cases, and the case nobody thought of is the bug; re-asking "does this
+	// still resolve?" has no cases. (The same idea as ibQueryLowering::PruneUnresolved, one layer up.)
+	//
+	// `resolves` is asked about the setting's PATH, whole. The composer has no idea what a field is —
+	// that is the host's knowledge, and handing the question out is what keeps this layer blind.
+	//
+	// ⚠ And the same promise: what cannot be VERIFIED is left alone. A host that cannot answer must
+	// return true, because "we do not know" must never delete somebody's work.
+	int PruneUnresolvedSettings(const std::function<bool(const wxString& path)>& resolves);
+
 	// --- transient scope (per-fetch drill overlay) ---------------------------------
 	// The ONE genuinely per-fetch thing is the drill of the browsed parent (each expand fetches ITS children,
 	// so the scope can't be a persistent setting). RunComposerPage marks the scope, adds the scope Filter(s) +
@@ -228,9 +244,6 @@ public:
 
 	// --- output -------------------------------------------------------------------
 
-	// The attached output place — non-owning; a long-lived consumer wires it once and calls Run() on refresh.
-	ibDataComposer& SetDriver(ibCompositionDriver* driver) { m_driver = driver; return *this; }
-
 	// The config this query runs ON BEHALF OF — threaded into the lowering so a by-name metaobject source resolves
 	// through THIS config's factory (sources register per-config). Set by whoever binds the source (the dynamic list
 	// from its own config; the script query from the running one). Null = a sourceless / transient-only composer.
@@ -240,8 +253,11 @@ public:
 	// The driver-walk seam — the DB composer renders + walks the query to the driver. The RAM composer does NOT
 	// use it (the list display calls ComputeOrder + returns the LIVE nodes), so the base default is a no-op and
 	// ibDataRamComposer does not override it — L5-2 is self-contained, NO tie to L5-1 (SQL) / L4-1 (text).
+	//
+	// ONE Run, AND IT TAKES ITS DRIVER. There was a second, no-argument one over a stored driver
+	// that a `SetDriver` filled — a whole second way to say where the output goes, and nobody ever
+	// used it. Every caller has the driver in hand at the point of the call.
 	virtual bool Run(ibCompositionDriver& /*driver*/) { return false; }
-	bool Run() { return m_driver != nullptr && Run(*m_driver); }
 
 protected:
 	struct FilterItem
@@ -281,7 +297,6 @@ protected:
 	std::map<wxString, ibValue> m_params;
 	int                         m_autoParam = 0;   // auto-name counter for filter values
 
-	ibCompositionDriver* m_driver = nullptr;
 	const class ibMetaData* m_metaData = nullptr;   // config the query resolves by-name sources against (SetMetaData)
 };
 
@@ -308,10 +323,22 @@ public:
 	// the CustomQuery feature.
 	bool HasCustomText() const { return !m_sourceText.IsEmpty(); }
 
+	// THE NAME AN AUTHOR'S QUERY ANSWERS TO once the settings are written over it — the alias of the
+	// nested source in `SELECT * FROM (<their query>) AS AuthorQuery WHERE …`. Exposed because a host
+	// that qualifies a filter path has to spell the same word the render does.
+	static const wxChar* AuthorQuerySourceName();
+
 	bool HasSource() const override { return !m_sourceText.IsEmpty() || !m_sources.empty(); }
 
 	// Render the schema into L4-1 text (the debug view / the AI seam). Throws when it does not render.
 	wxString RenderText() const;
+
+private:
+	// WHERE / ORDER BY / TOTALS — appended the same way over a composed source and over an author's
+	// query, because they ARE the same settings.
+	void AppendSettingsClauses(wxString& text) const;
+
+public:
 
 	// Render -> parse -> lower -> run. Fills the output schema; `hasTotals` reports a folded (TOTALS) result.
 	ibDataQueryResult Execute(std::vector<ibQueryLowering::OutputColumn>& schema, bool& hasTotals) const;

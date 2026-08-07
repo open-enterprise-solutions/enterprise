@@ -6,8 +6,7 @@
 #include "backend/metadataConfiguration.h"   // activeMetaData + ibMetaData::Deserialize — the DOOR for configuration types
 #include "backend/query/queryRender.h"   // ibRenderQueryExpr — the AST writes itself out, brackets and all
 
-#include <algorithm>
-#include <wx/tokenzr.h>   // the field path travels as segments   // std::sort — GroupChildren keeps the chosen lines in order
+#include <algorithm>   // std::sort — GroupChildren keeps the chosen lines in order
 
 // READING GOES THROUGH THE DOOR, not straight to the mechanism.
 // ibValue::FromNode only knows the process-wide value registry; a filter holds
@@ -982,16 +981,85 @@ bool ibValueListSettings::GetPropVal(const long lPropNum, ibValue& pvarPropVal) 
 // Object-level node save/load — called by the dynamic list's ReadData/WriteData so the
 // settings persist on the form. TODO(spike): (de)serialize Filter/Order/Group items as
 // child nodes — the seam is here; item-level round-trip is the remaining harden.
+// ⚠ SORT AND GROUP ARE READ AND WRITTEN THROUGH THE FACADE (Count / Get… / Add), never off the
+// buffer fields — and that is the whole of the defect this replaced.
+//
+// These lists have TWO modes. In BUFFER mode (the settings dialog) the lines live in m_items; in
+// FACADE mode (a live model) they live in the COMPOSER, which is the store, and m_items is empty.
+// Write used to serialise the filter tree and nothing else, so a sort or a grouping set on a live
+// list had nothing to write and simply never reached the disk — set it, save, reopen, gone.
+//
+// Asking the facade makes one door for both modes: the dialog's buffer and the model's composer
+// answer the same three questions, and neither is named here.
+//
+// ⚠ AND THE LINES ARE DATA, NOT OBJECTS. The filter packs itself because a filter TREE is an object
+// in both modes; a sort line is not — GetFieldObject deliberately returns null in facade mode (it
+// used to mint one per repaint and leak it). So a line travels as what it IS: a path plus its
+// direction, a path plus its unfold kind. Nothing has to exist for it to be written.
+namespace {
+
+const wxChar* const kOrderNode = wxT("Order");
+const wxChar* const kGroupNode = wxT("Group");
+const wxChar* const kFieldName = wxT("Field");
+const wxChar* const kDirName   = wxT("Ascending");
+const wxChar* const kKindName  = wxT("Kind");
+
+} // namespace
+
 bool ibValueListSettings::ReadData(const ibDataNode& node)
 {
-	// A settings record written before the tree existed simply has no such child
-	// — the filter reads back empty, which is what it was.
+	// THE FILTER TREE is the only METAOBJECT child here — it packs itself, so it goes into the child
+	// list. Sort and grouping are NAMED children (ibDataNode::Child / FindChild), which live in the
+	// PROPERTIES area and never appear in Children() at all.
+	//
+	// ⚠ That is what makes this scan safe, and it is worth writing down because it looks unsafe: the
+	// worry was that once sort and grouping lie beside the filter, "the first child that converts"
+	// becomes a lottery. They do not lie beside it — they are somewhere else entirely. Matching on
+	// the child's clsid instead was tried and it matched nothing: a value writes its type INTO the
+	// node when it serialises, and the node's own chunk id is not the concrete value's.
+	//
+	// A settings record written before a part existed simply has no such child, and that part reads
+	// back empty — which is what it was.
+	// ⚠⚠ THE VALUE IS HELD IN A NAMED LOCAL, and that is not style — it is the difference between
+	// working and a use-after-free.
+	//
+	// `ConvertToValue` hands back a RAW pointer INTO the value. Written as
+	// `if (ibReadFilterValue(child).ConvertToValue(root))` the ibValue is a TEMPORARY: it dies at the
+	// end of the condition, taking the object with it, and the body then stores a pointer to freed
+	// memory. It survived for a long time only because the body was `SetFilterRoot(root); return;` —
+	// nothing ran in between to reuse the memory. Adding one statement after it (a `break`, so the
+	// sort and grouping could be read next) was enough for the tree to come back EMPTY.
+	//
+	// The rule: an ibValue you take a pointer out of must outlive the pointer.
 	for (const ibDataNode& child : node.Children()) {
 		const ibValue restored = ibReadFilterValue(child);
 		ibValueFilterGroup* root = nullptr;
 		if (restored.ConvertToValue(root)) {
 			SetFilterRoot(root);   // the flat door follows the tree it stands for
-			return true;
+			break;
+		}
+	}
+
+	if (const ibDataNode* order = node.FindChild(kOrderNode)) {
+		GetOrder()->Clear();
+		for (const ibDataNode& line : order->Children()) {
+			const wxString field = line.GetValue<wxString>(kFieldName);
+			if (field.IsEmpty())
+				continue;
+			GetOrder()->Add(field, line.GetValue<s32>(kDirName) != 0
+				? ibSortDirection_Ascending : ibSortDirection_Descending);
+		}
+	}
+
+	if (const ibDataNode* group = node.FindChild(kGroupNode)) {
+		GetGroup()->Clear();
+		for (const ibDataNode& line : group->Children()) {
+			const wxString field = line.GetValue<wxString>(kFieldName);
+			if (field.IsEmpty())
+				continue;
+			// THE UNFOLD KIND TRAVELS WITH IT. A hierarchy grouping IS what makes the list a tree;
+			// dropping the kind would reload every tree as a flat grouping and look like data loss.
+			GetGroup()->Add(field, static_cast<ibQueryDimUnfold>(line.GetValue<s32>(kKindName)));
 		}
 	}
 	return true;
@@ -999,12 +1067,40 @@ bool ibValueListSettings::ReadData(const ibDataNode& node)
 
 bool ibValueListSettings::WriteData(ibDataNode& node) const
 {
-	// THE TREE IS THE FILTER. It packs itself (the root group, children and all),
-	// so the settings only say where it goes. Sort and grouping still travel as
-	// the flat lists they are.
-	if (m_filterRoot)
-		return ibValue(static_cast<ibValueFilterGroup*>(m_filterRoot))
-			.Serialize(node.AddChild(m_filterRoot->GetClassType(), 0));
+	// THE TREE IS THE FILTER. It packs itself (the root group, children and all), so the settings
+	// only say where it goes.
+	if (m_filterRoot) {
+		if (!ibValue(static_cast<ibValueFilterGroup*>(m_filterRoot))
+				.Serialize(node.AddChild(m_filterRoot->GetClassType(), 0)))
+			return false;
+	}
+
+	ibValueSortList*  order = GetOrder();   // both are const accessors — the cast was doing nothing
+	ibValueGroupList* group = GetGroup();
+
+	if (order != nullptr && order->Count() > 0) {
+		ibDataNode& sub = node.Child(kOrderNode);
+		for (size_t i = 0; i < order->Count(); ++i) {
+			const wxString field = order->GetField(i);
+			if (field.IsEmpty())
+				continue;
+			ibDataNode& line = sub.AddChild(value_to_clsid("VL_SORTI"), static_cast<ibMetaID>(i));
+			line.SetValue<wxString>(kFieldName, field);
+			line.SetValue<s32>(kDirName, order->GetDirection(i) == ibSortDirection_Ascending ? 1 : 0);
+		}
+	}
+
+	if (group != nullptr && group->Count() > 0) {
+		ibDataNode& sub = node.Child(kGroupNode);
+		for (size_t i = 0; i < group->Count(); ++i) {
+			const wxString field = group->GetField(i);
+			if (field.IsEmpty())
+				continue;
+			ibDataNode& line = sub.AddChild(make_clsid(wxT("GroupLine"), ibClassKind_None), static_cast<ibMetaID>(i));
+			line.SetValue<wxString>(kFieldName, field);
+			line.SetValue<s32>(kKindName, static_cast<s32>(group->GetKind(i)));
+		}
+	}
 	return true;
 }
 
@@ -1049,14 +1145,14 @@ void ibLoadSettingsFromComposer(ibValueListSettings* settings, const ibDataCompo
 	// serialisation), so the buffer is a real copy and Cancel still discards.
 	if (ibValueFilterGroup* root = settings->GetFilterRoot()) {
 		root->Clear();
-		const ibValueFilterGroup* liveRoot = live != nullptr ? live->GetFilterRoot() : nullptr;
+		ibValueFilterGroup* liveRoot = live != nullptr ? live->GetFilterRoot() : nullptr;
 		if (liveRoot != nullptr && liveRoot->Count() > 0) {
 			// THE NODE IS CREATED WITH ITS TYPE, like every other packed value: a
 			// default-constructed node is not a node the tree can be written into,
 			// and the copy came back empty — which is what left the settings form
 			// blank over a list that was very obviously filtered.
 			ibDataNode packed(liveRoot->GetClassType(), 0);
-			if (ibValue(const_cast<ibValueFilterGroup*>(liveRoot)).Serialize(packed)) {
+			if (ibValue(liveRoot).Serialize(packed)) {
 				// THE UNPACKED VALUE IS HELD, not read out of a temporary. A value
 				// owns what it wraps: `FromNode(packed).ConvertToValue(copy)` frees
 				// the tree at the end of that expression, so `copy` was already
@@ -1120,15 +1216,11 @@ void ibLoadSettingsFromComposer(ibValueListSettings* settings, const ibDataCompo
 static ibQueryAstExprPtr BuildFilterSide(ibDataComposer& composer, const ibValue& side)
 {
 	ibValueCompositionField* field = nullptr;
-	if (side.ConvertToValue(field)) {
-		ibQueryAstExprPtr e = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
+	if (side.ConvertToValue(field))
 		// The path travels as SEGMENTS — that is what the lowering dot-walks to
-		// build its joins; one glued string would have to be split again.
-		wxStringTokenizer parts(field->GetPath(), wxT("."));
-		while (parts.HasMoreTokens())
-			e->m_path.push_back(parts.GetNextToken());
-		return e;
-	}
+		// build its joins; one glued string would have to be split again. Splitting it is
+		// the RENDERER's, so a dotted path becomes a column the one way everywhere.
+		return ibQueryColumnFromPath(field->GetPath());
 
 	ibQueryAstExprPtr e = ibQueryAstExpr::Make(ibQueryAstExprKind::Param);
 	e->m_paramName = composer.AddParam(side);
@@ -1349,3 +1441,90 @@ VALUE_TYPE_REGISTER(ibValueSortItem,      "SortItem",     value_to_clsid("VL_SOR
 VALUE_TYPE_REGISTER(ibValueSortList,      "SortList",     value_to_clsid("VL_SORTL"));
 VALUE_TYPE_REGISTER(ibValueGroupList,     "GroupList",    value_to_clsid("VL_GRPL"));
 VALUE_TYPE_REGISTER(ibValueListSettings,  "ListSettings", value_to_clsid("VL_LSET"));
+
+// THE LINE AS DATA, in both modes — see the declaration. The composer keeps a path plus a
+// direction; the buffer keeps an item that holds the same two things.
+wxString ibValueSortList::GetField(size_t idx) const {
+	if (const ibDataComposer* c = Composer()) {
+		wxString path; bool ascending = true;
+		return c->GetSortAt(idx, path, ascending) ? path : wxString();
+	}
+	return idx < m_items.size() ? m_items[idx]->GetField() : wxString();
+}
+
+ibSortDirection ibValueSortList::GetDirection(size_t idx) const {
+	if (const ibDataComposer* c = Composer()) {
+		wxString path; bool ascending = true;
+		if (!c->GetSortAt(idx, path, ascending))
+			return ibSortDirection_Ascending;
+		return ascending ? ibSortDirection_Ascending : ibSortDirection_Descending;
+	}
+	return idx < m_items.size() ? m_items[idx]->GetDirection() : ibSortDirection_Ascending;
+}
+
+// ⭐ CHANGE A LINE WHERE IT STANDS — the ONE door for editing one, and the answer to a whole family
+// of defects rather than to one of them.
+//
+// These lists have two modes. In BUFFER mode the line is an OBJECT and a caller could reach in and
+// set its field. In FACADE mode the store is the composer and there IS no line object: GetItem mints
+// a transient one and GetFieldObject deliberately answers null. Every cell in the settings dialog was
+// written against the first mode, so on a LIVE list:
+//
+//   * editing a sort's field or direction wrote into a temporary and was silently LOST;
+//   * changing a grouping's kind read a null object and CRASHED (Max, 2026-08-07: "added a field,
+//     switched it to HierarchyOnly, crash").
+//
+// A line is a PATH plus one more fact, in both modes — so it is set as that, and the store decides
+// how. ⚠ POSITION IS KEPT: order is the meaning of these lists ("by Date, then by Number" is not the
+// other sort), and a remove-then-add would move the edited line to the end.
+bool ibValueSortList::SetLine(size_t idx, const wxString& field, ibSortDirection direction) {
+	if (ibDataComposer* c = Composer()) {
+		std::vector<std::pair<wxString, bool>> lines;
+		for (size_t i = 0; i < c->SortCount(); ++i) {
+			wxString path; bool ascending = true;
+			if (!c->GetSortAt(i, path, ascending))
+				continue;
+			if (i == idx) { path = field; ascending = direction == ibSortDirection_Ascending; }
+			lines.emplace_back(path, ascending);
+		}
+		if (idx >= lines.size())
+			return false;
+		c->ClearSorts();
+		for (const auto& line : lines)
+			c->Sort(line.first, line.second);
+		if (m_onChange) m_onChange();
+		return true;
+	}
+	if (idx >= m_items.size())
+		return false;
+	// BUFFER mode holds a line OBJECT, and its field is a composition FIELD value — so the path is
+	// wrapped into one. An empty path clears it, which is what the clear button sends.
+	m_items[idx]->SetField(field.IsEmpty() ? nullptr : new ibValueCompositionField(field));
+	m_items[idx]->SetDirection(direction);
+	return true;
+}
+
+bool ibValueGroupList::SetLine(size_t idx, const wxString& field, ibQueryDimUnfold kind) {
+	if (ibDataComposer* c = Composer()) {
+		std::vector<std::pair<wxString, ibQueryDimUnfold>> lines;
+		for (size_t i = 0; i < c->GroupCount(); ++i) {
+			wxString path; ibQueryDimUnfold k = ibQueryDimUnfold::Elements;
+			if (!c->GetGroupAt(i, path, k))
+				continue;
+			if (i == idx) { path = field; k = kind; }
+			lines.emplace_back(path, k);
+		}
+		if (idx >= lines.size())
+			return false;
+		c->ClearGroups();
+		for (const auto& line : lines)
+			c->TotalBy(line.first, line.second);
+		if (m_onChange) m_onChange();
+		return true;
+	}
+	if (idx >= m_items.size())
+		return false;
+	m_items[idx].m_field = new ibValueCompositionField(field);
+	m_items[idx].m_kind  = kind;
+	return true;
+}

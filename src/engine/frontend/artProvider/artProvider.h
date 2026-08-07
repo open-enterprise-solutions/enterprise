@@ -71,5 +71,20 @@
 #define wxART_DOWN					wxART_MAKE_ART_ID(wxART_DOWN)
 
 #define wxART_SORT					wxART_MAKE_ART_ID(wxART_SORT)
+// The query constructor — REGISTERED here rather than dropped into the code editor's marker
+// bitmaps, because an icon in the provider is one anything can ask for by id (a toolbar, a
+// menu, a metadata tree row) while one embedded in a control's own resource file belongs to
+// that control and is copied by whoever needs it next.
+#define wxART_QUERY_CONSTRUCTOR		wxART_MAKE_ART_ID(wxART_QUERY_CONSTRUCTOR)
+
+// A TEMPORARY TABLE. It is a source like any other from the next statement point of view, so it
+// wants a picture like any other - and it is not a metatype, so it has no registered class icon to
+// borrow one from. Here rather than in the constructor because the tree is not the only place a
+// temp table will be shown.
+#define wxART_TEMP_TABLE			wxART_MAKE_ART_ID(wxART_TEMP_TABLE)
+
+// A NESTED QUERY - a query standing where a table would. Same argument as the temp table above: it
+// is a source with no metatype behind it, so it carries its own picture rather than borrowing one.
+#define wxART_NESTED_QUERY			wxART_MAKE_ART_ID(wxART_NESTED_QUERY)
 
 #endif

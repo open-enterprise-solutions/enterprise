@@ -1382,6 +1382,11 @@ ibValue AggregateOne(const ibDataQueryBuilder::AggregateItem& a, const ibQueryRa
 	// Every column aggregate IGNORES NULL operands (SQL semantics): COUNT(col) counts
 	// non-null rows, SUM/AVG fold only non-null (AVG divides by the non-null count),
 	// MIN/MAX skip NULL. A NULL row no longer inflates the result or wins MIN.
+	// DISTINCT — count each different VALUE once. Keyed by the value's identity, never by its
+	// presentation: two references display the same string far more often than they are the same
+	// reference, and a display-keyed count would quietly merge them.
+	std::set<wxString> seen;
+
 	ibNumber sum(0); long n = 0; ibValue best; bool have = false;
 	for (long i : idx) {
 		// A COMPUTED aggregate input (SUM(Qty * Price), MAX(CASE …)) evaluates its expression per row;
@@ -1389,6 +1394,8 @@ ibValue AggregateOne(const ibDataQueryBuilder::AggregateItem& a, const ibQueryRa
 		const ibValue v = a.m_expr ? EvalColumnExprRow(a.m_expr.get(), TC, i) : RamCell(TC, i, a.m_col);
 		if (RamIsNullValue(v))
 			continue;
+		if (a.m_distinct && !seen.insert(v.GetHashKey()).second)
+			continue;   // already folded this value
 		switch (a.m_fn) {
 		case Fn::Count:             ++n; break;
 		case Fn::Sum: case Fn::Avg: sum = sum + v.GetNumber(); ++n; break;
@@ -2729,10 +2736,12 @@ void ibDataQueryResult::SetMaterialiseColumns(std::vector<const ibBackendQueryCo
 	m_matColumns = std::move(cols);
 }
 
-void ibDataQueryResult::SetTotals(std::vector<ibTotalLevel> levels, std::vector<ibAggregateItem> aggregates)
+void ibDataQueryResult::SetTotals(std::vector<ibTotalLevel> levels, std::vector<ibAggregateItem> aggregates,
+	bool overall)
 {
 	m_totalLevels     = std::move(levels);
 	m_totalAggregates = std::move(aggregates);
+	m_totalsOverall   = overall;
 }
 
 void ibDataQueryResult::SetSource(ibDatabaseConnectionHolder* holder, const ibBackendQueryable* queryable,
@@ -2760,7 +2769,7 @@ ibSelector ibDataQueryResult::Select(ibSelectKind mode)
 			if (c != nullptr) snapshot.SetCell(r, c->GetColumnId(), m_source->Value(c));
 	}
 	ibSelector s(std::move(snapshot), mode);
-	s.WithTotals(m_totalLevels, m_totalAggregates);                             // fold by the door's TotalBy config
+	s.WithTotals(m_totalLevels, m_totalAggregates, m_totalsOverall);            // fold by the door's TotalBy config
 	s.WithSource(m_srcHolder, m_srcQueryable, m_srcSelectCols, m_srcConditions);  // enable lazy sub-selections
 	return s;
 }

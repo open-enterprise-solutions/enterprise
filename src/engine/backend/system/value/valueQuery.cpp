@@ -5,7 +5,9 @@
 #include "valueQuery.h"
 
 #include "backend/query/queryParser.h"
+#include "valueArray.h"                  // ibValueArray — a package answers with results BY POSITION
 #include "backend/compiler/typeCtor.h"   // VALUE_TYPE_REGISTER / SYSTEM_TYPE_REGISTER / ENUM_TYPE_REGISTER
+#include "backend/backend_exception.h"   // ibBackendCoreException — a wrong TempTablesManager is told, not ignored
 #include "backend/appData.h"             // appData->DesignerMode()
 
 //////////////////////////////////////////////////////////////////////
@@ -16,31 +18,58 @@ void ibValueQueryExec_BindNames(ibValue::ibMemberTable& helper, const ibValue* /
 {
 	helper.AppendConstructor(1, wxT("Query(text : string)"));
 	helper.AppendProc(wxT("SetParameter"), 2, wxT("SetParameter(name : string, value)"));
+	// TWO VERBS OVER ONE MECHANISM. Every query runs as a package — an ordinary query is a package
+	// of one — so Execute() is simply "the first result", and ExecuteBatch() hands back the whole
+	// array to be indexed. No branch about which kind of text this is, and no verb that sometimes
+	// returns a table and sometimes a number.
 	helper.AppendFunc(wxT("Execute"), wxT("Execute()"));
+	helper.AppendFunc(wxT("ExecuteBatch"), wxT("ExecuteBatch()"));
+	// WHERE this query's temp tables live. Left unset they die with the execution; set to a
+	// TempTablesManager they outlive it and other queries attached to the same manager read them.
+	helper.AppendProp(wxT("TempTablesManager"), true, true, ibValueQueryExec::enPropTempTablesManager);
+}
+
+//////////////////////////////////////////////////////////////////////
+// ibValueTempTablesManager — script "TempTablesManager"
+//////////////////////////////////////////////////////////////////////
+
+void ibValueTempTablesManager_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
+{
+	helper.AppendConstructor(0, wxT("TempTablesManager()"));
+	// ONE VERB, because there is one decision to make about a set of temp tables: keep them, or
+	// let them go. Everything else about them is said in the query text.
+	helper.AppendProc(wxT("Close"), wxT("Close()"));
+}
+
+bool ibValueTempTablesManager::CallAsProc(const long lMethodNum, ibValue** /*paParams*/, const long /*lSizeArray*/)
+{
+	if (lMethodNum != enClose)
+		return false;
+	m_store->Close();
+	return true;
 }
 
 bool ibValueQueryExec::Init(ibValue** paParams, const long lSizeArray)
 {
 	m_text = (lSizeArray >= 1) ? paParams[0]->GetString() : wxString();
+	m_package = ibQueryPackage();
 
-	// An empty query is a valid, AST-less object: its method surface (SetParameter / Execute) comes from
-	// the static bind, NOT from the AST — so `New Query()` still completes and introspects. Execute() on an
-	// AST-less Query yields an empty QueryResult.
-	if (m_text.IsEmpty()) {
-		m_ast = nullptr;
+	// An empty query is a valid, statement-less object: its method surface (SetParameter / Execute /
+	// ExecuteBatch) comes from the static bind, NOT from the AST — so `New Query()` still completes
+	// and introspects. Execute() on a statement-less Query yields an empty QueryResult.
+	if (m_text.IsEmpty())
 		return true;
-	}
 
 	// Designer: tolerate a malformed / half-typed query so the value (and its method chain) stays reachable
 	// for autocomplete. Runtime: a syntax error throws ibBackendException (line:pos) as before.
 	if (appData->DesignerMode()) {
-		try { m_ast = ibQueryParser().Parse(m_text); }
-		catch (const ibBackendException&) { m_ast = nullptr; }
+		try { m_package = ibQueryParser().ParsePackage(m_text); }
+		catch (const ibBackendException&) { m_package = ibQueryPackage(); }
 		return true;
 	}
 
-	m_ast = ibQueryParser().Parse(m_text);
-	return m_ast != nullptr;
+	m_package = ibQueryParser().ParsePackage(m_text);
+	return !m_package.m_statements.empty();
 }
 
 bool ibValueQueryExec::CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray)
@@ -54,34 +83,113 @@ bool ibValueQueryExec::CallAsProc(const long lMethodNum, ibValue** paParams, con
 	return false;
 }
 
+// EVERY query runs as a package. An ordinary one-statement query is a package of one, so there is a
+// single execution path here and no branch about which kind of text was handed in.
+//
+// The array is addressed BY POSITION, in the order the statements were written, and each position
+// answers with what its statement produced: a plain select its QueryResult; a select INTO a temp
+// table a result of ONE column and ONE row holding the number of records placed there; a drop the
+// UNDEFINED value, because a drop produces no result. The statements see each other's temp tables;
+// that is what makes a package worth writing rather than merely tidy.
+bool ibValueQueryExec::RunPackage(std::vector<ibValue>& out)
+{
+	if (m_package.m_statements.empty())
+		return false;
+
+	// The manager, when one was given. Without it the store below is the package's own and the
+	// tables die with this call — which is the right default: a temp table nobody is keeping is a
+	// temp table nobody can accidentally read later.
+	ibValueTempTablesManager* manager = nullptr;
+	ibQueryTempTableStore* store = nullptr;
+	if (!m_tempTables.IsEmpty() && m_tempTables.ConvertToValue(manager) && manager != nullptr)
+		store = manager->GetStore();
+
+	try {
+		for (ibQueryLowering::PackageResult& r : ibQueryLowering::ExecutePackage(m_package, m_params, store)) {
+			// ONE KIND PER POSITION, and only two of them. A statement that produced a table hands
+			// back a RESULT — including a create-temp statement, whose result is one column and one
+			// row holding the record count. A DROP has no result at all and hands back the UNDEFINED
+			// value. Nothing in the array is a bare number, so walking it needs no branch.
+			if (r.m_result != nullptr)
+				out.push_back(new ibValueQueryResult(std::move(*r.m_result), std::move(r.m_schema), r.m_hasTotals));
+			else
+				out.push_back(ibValue());   // a drop: a position with no result
+		}
+		return true;
+	}
+	catch (...) {
+		if (!appData->DesignerMode())
+			throw;   // runtime: the package fails at the statement that failed, with THAT statement's message
+		// designer: editing / autocomplete has no live session to read from, and a session-less read can throw
+		// beyond ibBackendException — degrade instead of failing, so the .Execute().Select()… chain stays
+		// introspectable. (The editor's own eval would otherwise swallow the throw and leave the chain object
+		// undefined → no Select in the dropdown.)
+		out.clear();
+		return false;
+	}
+}
+
 bool ibValueQueryExec::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
                                   ibValue** /*paParams*/, const long /*lSizeArray*/)
 {
-	if (lMethodNum != enExecute)
+	if (lMethodNum != enExecute && lMethodNum != enExecuteBatch)
 		return false;
 
-	if (m_ast) {
-		// Run the read; a TOTALS query stamps the fold config on the result. res.Select() turns it into the
-		// walkable selection (flat OR grouped). One pipeline: Query.Execute() -> QueryResult -> .Select().
-		try {
-			std::vector<ibQueryLowering::OutputColumn> schema;
-			ibDataQueryResult r = m_ast->m_hasTotals ? ibQueryLowering::ExecuteTotals(*m_ast, m_params, schema)
-			                                         : ibQueryLowering::Execute(*m_ast, m_params, schema);
-			pvarRetValue = new ibValueQueryResult(std::move(r), std::move(schema), m_ast->m_hasTotals);
+	std::vector<ibValue> results;
+	RunPackage(results);
+
+	// ExecuteBatch() — the whole array, indexed by the position each statement was written at.
+	if (lMethodNum == enExecuteBatch) {
+		pvarRetValue = new ibValueArray(results);
+		return true;
+	}
+
+	// Execute() — THE FIRST RESULT, which for an ordinary query is the only one. Not a special
+	// path: the same package ran, this verb just names the position instead of handing back an
+	// array the caller would index with a constant zero every time.
+	if (!results.empty()) {
+		ibValueQueryResult* first = nullptr;
+		if (results.front().ConvertToValue(first) && first != nullptr) {
+			pvarRetValue = results.front();
 			return true;
-		}
-		catch (...) {
-			if (!appData->DesignerMode())
-				throw;   // runtime: surface the real execution error (rethrows the in-flight exception, type intact)
-			// designer: editing / autocomplete has no live session to read from, and a session-less read can throw
-			// beyond ibBackendException — degrade to an empty (method-only) result instead of failing, so the
-			// .Execute().Select()… chain stays introspectable. (The editor's own eval would otherwise swallow the
-			// throw and leave the chain object undefined → no Select in the dropdown.)
 		}
 	}
 
-	// AST-less (empty query) OR designer-degraded — an empty QueryResult keeps the method chain alive.
+	// Statement-less (empty query), designer-degraded, or a first statement that is a DROP (which
+	// has no result) — an empty QueryResult keeps the method chain alive.
 	pvarRetValue = new ibValueQueryResult();
+	return true;
+}
+
+// A STATIC member table indexes properties by POSITION — there is no per-instance table to carry
+// a data tag, so the index IS the identity (the ibValuePoint / ibValueColour convention).
+bool ibValueQueryExec::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
+{
+	if (lPropNum != enPropTempTablesManager)
+		return false;
+	pvarPropVal = m_tempTables;
+	return true;
+}
+
+bool ibValueQueryExec::SetPropVal(const long lPropNum, const ibValue& varPropVal)
+{
+	if (lPropNum != enPropTempTablesManager)
+		return false;
+
+	// Clearing it is meaningful and therefore allowed: the query goes back to owning its own
+	// temp tables for the length of one run.
+	if (varPropVal.IsEmpty()) {
+		m_tempTables = ibValue();
+		return true;
+	}
+
+	// Anything else must BE a manager. A query told to put its tables somewhere that cannot hold
+	// them would otherwise fail much later, at a statement that reads a name nothing filled.
+	ibValueTempTablesManager* manager = nullptr;
+	if (!varPropVal.ConvertToValue(manager) || manager == nullptr)
+		ibBackendCoreException::Error(_("TempTablesManager expects a TempTablesManager value"));
+
+	m_tempTables = varPropVal;
 	return true;
 }
 
@@ -255,6 +363,9 @@ bool ibValueQuerySelect::SetPropVal(const long /*lPropNum*/, const ibValue& /*va
 //**********************************************************************
 
 VALUE_TYPE_REGISTER(ibValueQueryExec, "Query", value_to_clsid("VL_QURY"));
+// CREATABLE (`New TempTablesManager()`) — it is a thing an author makes and holds, not something
+// the platform hands back, so it registers as a value type like Query does.
+VALUE_TYPE_REGISTER(ibValueTempTablesManager, "TempTablesManager", value_to_clsid("VL_TTMG"));
 SYSTEM_TYPE_REGISTER(ibValueQueryResult, "QueryResult", system_to_clsid("VL_QRES"));
 SYSTEM_TYPE_REGISTER(ibValueQuerySelect, "QuerySelect", system_to_clsid("VL_QSEL"));
 ENUM_TYPE_REGISTER(ibValueEnumQuerySelectKind, "QueryResultIteration", enum_to_clsid("EN_QSEL"));
