@@ -152,6 +152,55 @@ Three consequences worth stating:
 
 ---
 
+## 4a. The AOT cache — validity is a **key**, not a check
+
+A compiled `ibByteCode` is stored in `sys_bytecode_cache` so the next session skips the
+parser. Everything about it follows from one decision: **the row is looked up by what it was
+compiled against**, so bytecode from an earlier state of the configuration is not found and
+rejected — it is not found.
+
+```
+key:  (descriptor_id, config_md5)     lookup, not a comparison
+row:  descriptor_id PRIMARY KEY, bytecode_version, config_md5, bc_blob
+```
+
+`config_md5` is `ibMetaData::GetConfigMD5()` — the MD5 of the serialised configuration,
+recomputed on every load and every save. Module text and metadata shape are both inside it,
+so a renamed attribute, a changed type, an edited module or a base touched by another tool
+all move the digest together.
+
+**Who writes it.** The runtime — `enterprise`, `daemon`, `wes` — lazily, on the first call to
+each descriptor (`ibRuntimeModuleDataObject::Compile`). Whoever gets there first compiles and
+saves; everyone after reads. The **Designer never writes it at all** (`DesignerMode()` returns
+before the compile path), so an editing session neither fills nor pollutes the cache.
+
+**Saving is self-invalidating.** A save recomputes the digest, and every row written under the
+previous one falls out of reach in that instant — no `DELETE` has to run, and nobody has to
+remember to run one. `Invalidate()` remains as hygiene (reclaiming a blob), no longer as
+correctness. The first runtime session after a deployment pays one compile per module it
+actually calls; the rest read.
+
+**Two questions it deliberately does not answer with a lock.** Two sessions may compile the
+same descriptor at once: each compiles into its own `ibByteCode`, so the duplicate is wasted
+work rather than corruption, and `descriptor_id` being the primary key settles the write —
+one INSERT wins, the loser's key violation surfaces as "save failed" and its neighbour's row
+stands. A cross-process compile lock would buy one saved compile and cost a serialised
+startup plus a holder that can die without releasing.
+
+**Our build changing is a separate question**, answered separately: `DeserializeAOT` checks
+the blob's magic and `kAOTFormatVersion` (§3.1). The digest tracks the *configuration*; the
+format version tracks *us*.
+
+> ⚠ This replaced "a row is valid as long as it exists", propped up by Designer-side
+> `Invalidate` hooks. The header of `byteCodeAOT.cpp` had long described a fingerprint of
+> `source_hash + metadata_version + compiler_version + kind_bindings_hash` and the code
+> checked **none of them** — so anything that changed the meaning of the bytecode without
+> touching the module text kept serving the stale blob. It cost half a day twice before the
+> cause was suspected at all, which is the real price of a stale cache: not the wrong answer,
+> but that the wrong answer looks like a bug in whatever you were actually working on.
+
+---
+
 ## 5. Execute — the scope chain is flattened
 
 `ibProcUnit` is the stack machine (`Execute()` dispatches on `ibByteUnit::m_numOper`;

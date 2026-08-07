@@ -43,6 +43,31 @@ Undocumented-until-now subsystems, mapped 2026-07-15:
 
 ---
 
+## 1b. Silent failures made loud — 2026-08-07 session
+
+Every entry here was found by RUNNING the platform, and every one had the same shape: the code
+reported success while doing nothing, so the symptom surfaced far from the cause. They are grouped
+because the lesson is the grouping — none of them was a wrong computation.
+
+| What was silent | What it cost | Now |
+|---|---|---|
+| `Update()` returning `affected >= 0` — a rewrite that matched no row reported success | A form said "saved", the object advanced its in-memory `DataVersion`, the row never changed — so the SECOND save accused another user of a change nobody made, and the edit had evaporated | A **key-only** rewrite that touches nothing raises and names the source; a `.Where(...)`-narrowed one stays quiet (an empty set is an answer) |
+| AOT bytecode cache validated **only** its format version, while its own header described a four-part fingerprint it never checked | Half a day, twice, chasing a bug in whatever was being worked on rather than in the cache | Row is looked up by `(descriptor_id, config_md5)` — the configuration's digest. A save makes every earlier row unreachable; `Invalidate()` is hygiene, not correctness. [compiler-pipeline.md § 4a](compiler-pipeline.md) |
+| `ibRegisterPlatformJobs()` stood ABOVE the `CREATE TABLE sys_job` it reads, and the server path never created the table at all | `enterprise.exe` could not open ANY base, including a fresh one, and closed without a window (`CreateFileAppDataEnv` **throws**, and only "returned false" was handled) | Both paths read `sys_lock → sys_job → migrate → declare`; bring-up failure is caught and shown with the infobase path |
+| `ibMetaData::GenerateNewID` recomputed `max(metaID)+1`, so a deleted object's number returned to circulation — and the physical column name is `fld<metaID>` | A new attribute asked for a column name a dropped one still owned → `RDB$INDEX_15` violation, permanently | A monotonic counter, seeded once per load and reset on `Commit()`; same for control ids (`ibValueFrame::GenerateNewID`) |
+| `DATABASE_LAYER_QUERY_RESULT_ERROR == 0` read as failure — it is an affected-row COUNT | Pure-DDL restructuring changes 0 rows, so a successful apply declared itself failed and skipped re-reading the baseline; from then on the saved configuration no longer described the base it is diffed against | The three comparisons removed; errors arrive as exceptions, which is where they have arrived for a long time |
+| A stored count in a blob was trusted (`ibSourceDescriptionMemory` and two siblings) | Reads past the end of the buffer — an assert in Debug, somebody else's memory presented as a clsid in Release | Bounds checked before each read; a bad blob yields an EMPTY description, not invented data |
+| `sys_session.exclusive` left NULL by the INSERT and 0 by the release path | Two spellings of "not exclusive" in one table — harmless today only because the driver reports NULL as 0 | `NOT NULL DEFAULT 0` in the DDL and written explicitly when the row is born |
+| A hierarchy root compared the parent only to the zero sentinel | `NULL = <blob>` is UNKNOWN, so rows whose column was added by a restructuring fell out of the ROOT level: visible flat, present nowhere in the tree | `IS NULL OR = sentinel`. A third spelling (old 20-byte layout) is named at the call site and belongs to migration, not to the predicate |
+| Deleting a folder deleted one row | Children kept pointing at a guid that no longer exists | Delete clears the reference to itself in its children, in the same transaction |
+| The GUI CI step had no timeout while its siblings run `ctest --timeout 300` | A hang after every test passed ate the whole 90-minute job twice, and the red said "timed out" — which reads as "too slow to compile" and was not what happened | Bounded at 10 minutes (the honest runtime is 3 seconds); crossing it dumps every thread's stack via `gdb` and fails the job |
+
+⚠ The wxWidgets cleanup hang itself (`wxEntryCleanup` after a green suite, Linux/GTK only — the same
+binary exits cleanly on Windows) is **not fixed**; the CI change makes it report instead of consuming
+the job. Next run names the culprit with a stack.
+
+---
+
 ## 1a. Unblocked and verified — 2026-08-02 session
 
 Everything in this section was **built and run**, not reasoned about. Solution `Debug|x86`
@@ -122,6 +147,8 @@ work on the query tiers.
 |---|---|
 | **AST → query text** (the "first stone" of a query constructor: read an existing query, show it, take an edit, write it back) | `query/queryRender.{h,cpp}` — complete over the AST: every `ibQuerySelect` field and all 15 expression kinds, subqueries, `TOTALS … BY [OVERALL,] … HIERARCHY`, `CAST`, `UNION`. Keywords come from the active table, nothing invented or dropped. 36 round-trip cases in `tests/test_queryL4Parser.cpp`; `composition/listFilter.cpp` uses it today. **Verified complete 2026-08-06** — the remaining constructor work is the SHELL (tabs, preview, apply), not the round trip |
 | Row-level filtering that cannot be written around | `Restrict` policy on the Role, applied at the L3 door as a decorator ([access-policy-rls.md](access-policy-rls.md)). With a common attribute + a session parameter this IS data separation — a separate "separator" metatype would duplicate it |
+| **A way to keep old behaviour for existing users** — "we will need a compatibility mode / an upgrade path once there are real installations" | The configuration already DECLARES its version: category `Compatibility`, property `Version`, enum `ibValueEnumVersion` over the `ibProgramVersion` ladder, read through `ibMetaData::GetVersion()` and serialised with the metadata ([compatibility-version.md](compatibility-version.md)). ⚠ Groundwork: **nothing branches on it yet** (verified 2026-08-07), so the first branch sets the pattern — gate the SCHEMA contribution and the behaviour in the same change |
+| **A migration engine** — a per-release upgrade script that brings an existing base to the new shape | `DiffSnapshots` + `ibStructureBuilder` already are one. The compatibility mode is a metadata property, so raising it re-runs the ordinary apply: the target snapshot is rebuilt through the newer branches and the diff IS the migration. A second per-release mechanism would describe the same difference twice and drift from it |
 
 ---
 

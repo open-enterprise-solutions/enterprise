@@ -124,6 +124,26 @@ backing-blind (a DB cursor **or** a RAM table, chosen once in `MakeProvider`). F
 | **L3-3** | **data mover** — `ibDataMover` (`query/dataMover`) dumps / restores the **rows** | **metadata** |
 | **L3-4** | **regeneration** — `ibDerivedState` (`query/derivedStateBuilder`) rebuilds a **derived** table from its source | derived state |
 
+**A rewrite that hit nothing is a MISS, and the door says so.** `Update()` reports `affected >= 0`,
+so nought rows once read as success — and a write keyed on a row that cannot be found is not "zero
+rows written", it is a key that did not match. The door now separates the two by what the caller
+asked: a rewrite keyed on the PRIMARY KEY alone addresses ONE named row, so nought raises; a caller
+that narrowed with `.Where(...)` asked a question about a SET, and an empty set is a legitimate
+answer. The distinction is not decoration — the silent version let a form report "saved" while the
+object advanced its in-memory `DataVersion` and the row stayed untouched, so the NEXT save accused
+another user of a change nobody had made. See `ibDataQueryBuilder::RaiseIfKeyedRewriteMissed`.
+
+**Which config a by-name source resolves through is always the CALLER's answer.**
+`ibSourceMetaDataScope` carries it for one execution; `GetFactory()` consults that scope and then
+the global base factory, and **nothing process-wide in between** — metaobject sources register into
+the factory of the configuration they belong to, so "whichever config is active" is a different
+question from "which config does this query mean". Four callers answer it: the composer and the
+dynamic list from their own metadata, the constructor from the open one, and a hand-written
+`New Query("… FROM Catalog.X")` from the SESSION it runs in (the session was opened for a
+configuration and holds it fixed — `GetManagerModule()->GetMetaManager()->GetMetaData()`). One place
+asks, so a new caller that forgets fails identically everywhere instead of quietly resolving against
+somebody else's configuration.
+
 **L3-4 composes, it does not invent.** Regeneration is `read the source grouped by the totals key,
 write the aggregate back` — the L3-1 door's aggregate read plus its write core, no new query
 primitive. It groups the period by `PeriodTrunc` through the SAME dialect map the maintenance

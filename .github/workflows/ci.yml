@@ -215,15 +215,18 @@ jobs:
     runs-on: ubuntu-22.04
     # 90, matching the sibling job below. These jobs build wxWidgets from scratch every time (see
     # the note at the top of this file — the obvious build-directory cache LIES with Ninja), so the
-    # wall clock is dominated by a constant that has nothing to do with our tree, and the margin
-    # under 60 was thin. The query constructor added ~20 frontend translation units, each pulling in
-    # the wx headers, and that was enough to cross it: the job stopped compiling and started timing
-    # out — a red signal that says nothing about the code.
+    # wall clock is dominated by a constant that has nothing to do with our tree.
     #
-    # ⚠ This buys time, it does not fix the cause. The real fix is the COMPILER cache this file
-    # already names and already installs (`ccache` is in the apt list of three jobs and wired into
-    # none of them): keyed on preprocessed input rather than timestamps, so it cannot serve the
-    # stale object a directory cache can.
+    # ⚠ The raise itself was a MISREADING, kept only because the sibling has the same number. The
+    # job was not running out of compile time: the build finishes in ~26 minutes and every test
+    # passes three seconds later — the rest was the run step hanging in cleanup with no bound on it.
+    # Raising 60 to 90 bought the hang thirty more minutes to sit in. The bound now lives on the run
+    # step, where the hang is; THIS number is only the outer envelope.
+    #
+    # The real build-time fix remains the COMPILER cache this file already names and already
+    # installs (`ccache` is in the apt list of three jobs and wired into none of them): keyed on
+    # preprocessed input rather than timestamps, so it cannot serve the stale object a directory
+    # cache can.
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
@@ -235,7 +238,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential cmake ninja-build ccache pkg-config \
+            build-essential cmake ninja-build ccache pkg-config gdb \
             libgtk-3-dev libsqlite3-dev uuid-dev xvfb
 
       - name: Configure
@@ -251,9 +254,41 @@ jobs:
       # The harness SKIPs every test when the toolkit cannot come up, so a
       # display-less runner reports skips, not failures — Xvfb is what turns
       # those skips back into real assertions.
+      #
+      # ⚠ BOUNDED — and when it is not, it says WHY before it dies.
+      #
+      # This was the one unbounded run in the file. Its siblings go through
+      # `ctest --timeout 300`, which fails the test that hangs; this step exec'd the
+      # binary directly, so a process that never exits ate the entire job. It did,
+      # twice: all 38 tests passed in three seconds, `Global test environment
+      # tear-down` printed, and then nothing for an hour. The red said "timed out",
+      # which reads as "too slow to compile" and is not what happened — the hang is
+      # in wxEntryCleanup, AFTER every assertion has already passed.
+      #
+      # Ten minutes is not a performance budget; three seconds is the honest runtime.
+      # It is the line past which the process is STUCK, and crossing it prints every
+      # thread's stack — the one thing a hang on someone else's machine cannot
+      # otherwise tell us — and then fails the job in minutes instead of ninety.
       - name: Run under Xvfb
         working-directory: build/linux-debug
-        run: xvfb-run -a ./bin/Debug/oes_frontend_runtime_test
+        run: |
+          set -uo pipefail
+          xvfb-run -a ./bin/Debug/oes_frontend_runtime_test &
+          runner=$!
+          (
+            sleep 600
+            stuck=$(pgrep -f '[o]es_frontend_runtime_test' | head -n1)
+            if [ -n "$stuck" ]; then
+              echo "=== alive after 600s (3s is the honest runtime) — every thread, pid $stuck ==="
+              sudo gdb -p "$stuck" -batch -ex 'thread apply all bt' 2>&1 || true
+              sudo kill -9 "$stuck" || true
+            fi
+            kill -9 "$runner" 2>/dev/null || true
+          ) &
+          watchdog=$!
+          wait "$runner"; status=$?
+          kill "$watchdog" 2>/dev/null || true
+          exit $status
 
   # ---------------------------------------------------------------------------
   # macOS on ARM — the third toolchain, and the one that is a different CPU as
