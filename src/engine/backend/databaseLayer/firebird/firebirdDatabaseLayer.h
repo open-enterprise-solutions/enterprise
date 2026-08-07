@@ -143,6 +143,10 @@ public:
 	bool RunSweepNow(const std::atomic<bool>* cancelToken);
 	bool RunBackupRestoreNow(const std::atomic<bool>* cancelToken);
 
+	// May WE maintain this base ourselves? See m_localMaintenanceEligible below — decided here,
+	// acted on by the startup sequence once sys_job exists.
+	bool IsLocalMaintenanceEligible() const { return m_localMaintenanceEligible; }
+
 protected:
 
 	// query database
@@ -192,6 +196,12 @@ private:
 	// release it, so a reaped donor connection cannot dangle the worker's pointer.
 	std::shared_ptr<ibInterfaceFirebird> m_pInterface;
 #endif
+
+	// Is this base one WE may maintain ourselves — a local standalone file, not leader-mode, not a
+	// remote server? Decided at Open, because the driver is what knows; ACTED ON by the startup
+	// sequence after sys_job exists. Declaring a job writes a row, and Open runs before there is
+	// anywhere to write it — see the note at the assignment.
+	bool m_localMaintenanceEligible = false;
 
 	wxString m_strServer;
 	wxString m_strDatabase;

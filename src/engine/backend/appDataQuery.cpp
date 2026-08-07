@@ -62,7 +62,10 @@ void ibApplicationData::CreateTableSession()
 			{ wxT("pid"),             ibTypeInteger(),   false, false, wxEmptyString },
 			{ wxT("address"),         ibTypeString(256), false, false, wxEmptyString },
 			{ wxT("currentActivity"), ibTypeString(128), false, false, wxEmptyString },
-			{ wxT("exclusive"),       ibTypeInteger(),   false, false, wxEmptyString },
+			// NOT NULL with a default: "not exclusive" gets ONE spelling, decided by the column rather
+			// than by whoever wrote the row. A nullable flag has two (NULL and 0) and they agree only
+			// as long as every reader remembers to make them agree.
+			{ wxT("exclusive"),       ibTypeInteger(),   true,  false, wxT("0") },
 		}));
 		// Indexes ride with the just-created table — no "if not exists" (redundant here, and
 		// unsupported by Firebird), so the per-driver fork collapses to three plain CREATE INDEX.
@@ -136,14 +139,26 @@ void ibApplicationData::CreateTableJob()
 			// Native UUID on PostgreSQL, CHAR(36) elsewhere — the dialect TYPE-MAP picks.
 			{ wxT("jobKey"),   ibTypeGuid(),      false, true,  wxEmptyString },
 			{ wxT("jobName"),  ibTypeString(128), true,  false, wxEmptyString },   // display name, for a person reading the table
-			{ wxT("lastRun"),  ibTypeDate(),      true,  false, wxEmptyString },   // wall clock, shared across processes
+			// ⚠⚠ THE THIRD FLAG IS `m_notNull`, NOT "nullable" — and the four columns below were
+			// written as though it were the latter. Every one of them describes something a job
+			// that has NEVER RUN does not have, so every one of them must ACCEPT NULL:
+			//
+			//   lastRun  — there is no clock reading before the first run;
+			//   active   — its own comment says "NULL = on (a row older than the column)";
+			//   schedule — a row written before the column existed carries none.
+			//
+			// Declared NOT NULL, the seed INSERT that Register() writes for a job it has never seen
+			// died on the first one: "validation error for column SYS_JOB.LASTRUN, value *** null
+			// ***". Which is to say enterprise.exe could not open a database at all — the flags said
+			// the opposite of what the comments beside them promised.
+			{ wxT("lastRun"),  ibTypeDate(),      false, false, wxEmptyString },   // wall clock, shared across processes
 			{ wxT("computer"), ibTypeString(128), false, false, wxEmptyString },   // who ran it last, for diagnostics
 			// The two SETTINGS a base holds — what the enterprise may change without opening the
 			// Designer. They are here and not in the metadata because switching a misbehaving job
 			// off at 3 a.m. must not mean editing the configuration on a production base; and for
 			// the engine's OWN jobs there is no configuration to edit at all.
-			{ wxT("active"),   ibTypeBoolean(),   true,  false, wxEmptyString },   // NULL = on (a row older than the column)
-			{ wxT("schedule"), ibTypeBlob(),      true,  false, wxEmptyString },   // ibJobScheduleDescriptionMemory blob
+			{ wxT("active"),   ibTypeBoolean(),   false, false, wxEmptyString },   // NULL = on (a row older than the column)
+			{ wxT("schedule"), ibTypeBlob(),      false, false, wxEmptyString },   // ibJobScheduleDescriptionMemory blob
 		}));
 	}
 }
@@ -209,6 +224,12 @@ void ibApplicationData::MigrateTableSession()
 	// exclusive — process-wide monopoly marker; cluster-aware gate in ProcessAdd /
 	// ProcessSetExclusive reads peer rows to detect another process holding it.
 	if (!has(wxT("exclusive")))       addColumn(wxT("exclusive"),       ibTypeInteger());
+
+	// NO BACK-FILL FOR THE ROWS. A column added to a populated table arrives NULL everywhere, which
+	// normally means an old base carries two spellings of one fact for good — but not this table: every
+	// row here belongs to a LIVE session and is deleted when that session ends (or swept when its
+	// heartbeat stops). The NULLs empty themselves within seconds of a restart, and the writer states
+	// the value from birth, so there is nothing left for a migration to repair.
 }
 
 // Bring up sys_bytecode_cache. Independent of the user/session/event
@@ -224,8 +245,20 @@ void ibApplicationData::MigrateTableSession()
 void ibApplicationData::MigrateTableBytecodeCache()
 {
 	ibDatabaseQueryBuilder q;
-	if (q.TableExists(bytecode_cache_table))
-		return;
+	if (q.TableExists(bytecode_cache_table)) {
+		// …UNLESS IT IS THE OLD SHAPE. A cache has no history worth migrating: every row can be
+		// recomputed from the source it was derived from, so a table that predates `config_md5` is
+		// DROPPED and rebuilt rather than ALTERed. One statement, no back-fill, and no base can carry
+		// rows whose validity nothing can judge.
+		wxArrayString cols = q.GetColumns(bytecode_cache_table);
+		bool hasFingerprint = false;
+		for (std::size_t i = 0; i < cols.GetCount(); ++i)
+			if (cols[i].CmpNoCase(wxT("config_md5")) == 0) { hasFingerprint = true; break; }
+		if (hasFingerprint)
+			return;
+		try { q.Execute(ibDropTable(bytecode_cache_table)); }
+		catch (...) { return; }   // cannot drop → leave the old table; Load/Save degrade to a miss
+	}
 
 	try {
 		// bc_blob's BLOB renders as BYTEA on PostgreSQL and BLOB on every other driver
@@ -233,6 +266,10 @@ void ibApplicationData::MigrateTableBytecodeCache()
 		q.Execute(ibCreateTable(bytecode_cache_table, {
 			{ wxT("descriptor_id"),    ibTypeString(36), false, true,  wxEmptyString },
 			{ wxT("bytecode_version"), ibTypeString(36), true,  false, wxEmptyString },
+			// WHAT THE BYTECODE WAS COMPILED AGAINST — the configuration's own digest, recomputed on
+			// every save. It is part of the LOOKUP, not a field somebody has to remember to compare:
+			// a row written under an earlier configuration is simply not found. See byteCodeCache.h.
+			{ wxT("config_md5"),       ibTypeString(32), true,  false, wxEmptyString },
 			{ wxT("bc_blob"),          ibTypeBlob(),     true,  false, wxEmptyString },
 		}));
 	}

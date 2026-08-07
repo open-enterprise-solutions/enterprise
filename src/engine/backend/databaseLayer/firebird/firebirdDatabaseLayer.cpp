@@ -659,14 +659,20 @@ bool ibDatabaseLayerFirebird::Open()
 	// file. Followers must not touch the shared DB at all. Remote
 	// `server:db` mode delegates maintenance to whoever owns the
 	// remote server.
-	if (m_strServer.IsEmpty()
-	 && ibFirebirdLeaderMode::CurrentRole() == ibFirebirdLeaderMode::Role::Standalone) {
-		// Put the work on the schedule and hand over everything else: the manager
-		// gives the job a session, borrows a connection through it, wraps the call
-		// and claims the job across processes. None of that is Firebird's business,
-		// so none of it lives here — one line, not a lifecycle.
-		ibFirebirdMaintenanceJob::Register();
-	}
+	// ⚠⚠ THE REGISTRATION USED TO HAPPEN HERE, AND IT COULD NOT WORK FROM HERE.
+	//
+	// Declaring a job WRITES to the database: the manager reads sys_job for a stored schedule and
+	// seeds a row when there is none. This is `Open()` — it runs before ibApplicationData exists,
+	// before the connection pool is initialised, and long before the startup sequence creates
+	// sys_job. So the very first thing a fresh base did was fail to record `firebird.sweep`, out of
+	// a call stack that has no business writing rows at all.
+	//
+	// Eligibility is still the DRIVER's knowledge (a local standalone file base, not leader-mode,
+	// not a remote server), so the test stays; only the ACTION moved. See
+	// ibApplicationData::CreateFileAppDataEnv — it registers after the tables, which is the only
+	// place that can honestly promise they exist.
+	m_localMaintenanceEligible = m_strServer.IsEmpty()
+		&& ibFirebirdLeaderMode::CurrentRole() == ibFirebirdLeaderMode::Role::Standalone;
 
 	return true;
 }
@@ -989,7 +995,11 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 	if (m_pDatabase != 0)
 	{
 		wxCharBuffer sqlDebugBuffer = ConvertToUnicodeStream(strQuery);
-#if DEBUG
+		// `#ifdef`, not `#if` — the sibling path above uses the former, and with DEBUG defined as an
+		// empty macro (`/D DEBUG`) `#if DEBUG` is not "on", it is a preprocessor error or a silent
+		// zero depending on the compiler. Two spellings of one switch mean one of them is off and
+		// nobody notices which.
+#ifdef DEBUG
 		wxLogDebug(wxT("Running query: \"%s\""), (const char*)sqlDebugBuffer);
 #endif
 		wxArrayString QueryArray = ParseQueries(strQuery);
@@ -1238,6 +1248,19 @@ ibPreparedStatement* ibDatabaseLayerFirebird::DoPrepareStatement(const wxString&
 	// the new firebird.exe handle, not the dead one — see DoRunQuery
 	// for the rationale.
 	ReconnectIfLeaderChanged();
+
+	// ⚠ THE SAME LINE THE TWO DIRECT PATHS PRINT, and it was missing from the one that matters most.
+	// Everything on a hot path — every list page, every keyset tick — goes through a PREPARED
+	// statement, precisely so the text stays byte-identical while only the bound anchor changes. So
+	// the queries one most needs to read were the only ones never shown, and a list returning the
+	// wrong rows could not be diagnosed from the log at all: DDL printed, ad-hoc SELECTs printed,
+	// the actual page query printed nothing.
+#ifdef DEBUG
+	{
+		const wxCharBuffer sqlDebugBuffer = ConvertToUnicodeStream(strQuery);
+		wxLogDebug(wxT("Prepared query: \"%s\""), (const char*)sqlDebugBuffer);
+	}
+#endif
 
 	ibPreparedStatementFirebird* pStatement = ibPreparedStatementFirebird::CreateStatement(m_pInterface.get(), m_pDatabase, m_pTransaction, strQuery, GetEncoding());
 	if (pStatement && (pStatement->GetErrorCode() != DATABASE_LAYER_OK))

@@ -111,29 +111,51 @@ int ibAppDesigner::DoOnRun()
 		}
 	}
 
-	if (m_strFile.IsEmpty()) {
-		ret = appDataCreateServer(ibRunMode::eDESIGNER_MODE,
-			m_strServer, m_strPort, m_strUser, m_strPassword, m_strDatabase, m_strLocale
-		);
+	wxString thrown;   // what escaped, when it was not an ibBackendException (those record themselves)
+
+	// ⚠ THE BRING-UP CAN THROW — see enterprise/mainApp.cpp for the whole argument. A raised
+	// exception walked out past the reporting below and closed the process with no message at all.
+	try {
+		if (m_strFile.IsEmpty()) {
+			ret = appDataCreateServer(ibRunMode::eDESIGNER_MODE,
+				m_strServer, m_strPort, m_strUser, m_strPassword, m_strDatabase, m_strLocale
+			);
+		}
+		else {
+			ret = appDataCreateFile(ibRunMode::eDESIGNER_MODE,
+				m_strFile, m_strLocale
+			);
+		}
 	}
-	else {
-		ret = appDataCreateFile(ibRunMode::eDESIGNER_MODE,
-			m_strFile, m_strLocale
-		);
+	catch (const ibBackendException&) {
+		ret = false;   // already recorded in the chain, drained below
+	}
+	catch (const std::exception& e) {
+		ret = false;
+		thrown = wxString::FromUTF8(e.what());
+	}
+	catch (...) {
+		ret = false;
+		thrown = _("an unknown failure");
 	}
 
 	if (!ret) {
-		// Same chain-aware reporting as enterprise.exe — see there.
+		// Same chain-aware reporting as enterprise.exe — see there, including why this says
+		// something even when the chain is empty.
 		const std::vector<wxString> chain = ibBackendException::DrainLastErrors();
-		if (!chain.empty()) {
-			wxString combined;
-			for (std::size_t i = 0; i < chain.size(); ++i) {
-				if (!combined.IsEmpty()) combined += wxT("\n--\n");
-				combined += chain[i];
-			}
-			wxMessageBox(combined, _("OES Designer - startup error"),
-				wxOK | wxICON_ERROR);
+		wxString combined;
+		for (std::size_t i = 0; i < chain.size(); ++i) {
+			if (!combined.IsEmpty()) combined += wxT("\n--\n");
+			combined += chain[i];
 		}
+		if (combined.IsEmpty())
+			combined = thrown;
+		if (combined.IsEmpty())
+			combined = _("The infobase could not be opened, and the failure carried no description.");
+		combined += wxT("\n\n") + (m_strFile.IsEmpty()
+			? m_strServer + wxT(" / ") + m_strDatabase : m_strFile);
+
+		wxMessageBox(combined, _("OES Designer - startup error"), wxOK | wxICON_ERROR);
 		return 1;
 	}
 

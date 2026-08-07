@@ -504,7 +504,24 @@ bool ibJobManager::Register(ibJobDescription desc)
 			seed.m_name = desc.m_name;
 			seed.m_active = desc.m_active;
 			seed.m_schedule = desc.m_schedule;
-			WriteSharedSettings(seed);
+			// ⚠⚠ THE RESULT IS NOT DISCARDED. WriteSharedSettings returns false rather than raising,
+			// on the stated reasoning that "the caller decides whether that matters" — and this
+			// caller decided nothing, it dropped the value on the floor. A base whose sys_job cannot
+			// be written is a base where no job's settings survive a restart, and where the very
+			// first thing the platform does on opening it has silently failed.
+			//
+			// It cost a whole evening: an INSERT rejected by a NOT NULL column threw, was caught
+			// inside the write, returned false HERE, and startup carried on as if nothing had
+			// happened — so the person running it saw a program that closed with no message, and
+			// the actual Firebird sentence ("validation error for column SYS_JOB.LASTRUN") existed
+			// only in a debugger.
+			//
+			// Raising puts that sentence in front of them: every ibBackendException records its own
+			// description, and the startup path drains the whole chain into one dialog. So this adds
+			// the ONE fact the chain is missing — WHICH job the platform choked on.
+			if (!WriteSharedSettings(seed))
+				ibBackendCoreException::Error(
+					_("the scheduled job '%s' could not be recorded in the base"), desc.m_name);
 		}
 	}
 

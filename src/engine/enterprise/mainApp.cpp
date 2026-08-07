@@ -108,15 +108,43 @@ int ibAppEnterprise::DoOnRun()
 	// here is far easier to diagnose than the assertion behind it.
 	bool ret = false;
 
-	if (!m_strFile.IsEmpty()) {
-		ret = appDataCreateFile(ibRunMode::eRUNTIME_MODE,
-			m_strFile, m_strLocale
-		);
-	}
-	else if (!m_strServer.IsEmpty() && !m_strDatabase.IsEmpty()) {
-		ret = appDataCreateServer(ibRunMode::eRUNTIME_MODE,
+	// ⚠⚠ BRINGING THE DATABASE UP CAN THROW, and this used to handle only the case where it
+	// RETURNED false. A raised ibBackendException walked straight out of DoOnRun, past every line
+	// below that exists to explain a failed start, and the process ended with no window and no
+	// message — which is the worst thing a program can do to the person running it. It is also
+	// exactly how the engine reports: driver errors, a missing table, a failed migration all THROW.
+	//
+	// Catching here rather than deeper: the chain of descriptions is already recorded (every
+	// ibBackendException records itself when constructed), so the only thing missing was arriving
+	// at the code that prints it.
+	auto bringUp = [&]() -> bool {
+		if (!m_strFile.IsEmpty()) {
+			return appDataCreateFile(ibRunMode::eRUNTIME_MODE,
+				m_strFile, m_strLocale
+			);
+		}
+		return appDataCreateServer(ibRunMode::eRUNTIME_MODE,
 			m_strServer, m_strPort, m_strUser, m_strPassword, m_strDatabase, m_strLocale
 		);
+	};
+
+	wxString thrown;   // what escaped, when it was not an ibBackendException (those record themselves)
+
+	if (!m_strFile.IsEmpty() || (!m_strServer.IsEmpty() && !m_strDatabase.IsEmpty())) {
+		try {
+			ret = bringUp();
+		}
+		catch (const ibBackendException&) {
+			ret = false;   // its words are already in the chain, drained and shown below
+		}
+		catch (const std::exception& e) {
+			ret = false;
+			thrown = wxString::FromUTF8(e.what());
+		}
+		catch (...) {
+			ret = false;
+			thrown = _("an unknown failure");
+		}
 	}
 	else {
 		wxMessageBox(
@@ -137,15 +165,24 @@ int ibAppEnterprise::DoOnRun()
 		// thrown deep in the bring-up after the real root cause already
 		// failed (e.g. metadata-load wraps a driver-level FB error).
 		const std::vector<wxString> chain = ibBackendException::DrainLastErrors();
-		if (!chain.empty()) {
-			wxString combined;
-			for (std::size_t i = 0; i < chain.size(); ++i) {
-				if (!combined.IsEmpty()) combined += wxT("\n--\n");
-				combined += chain[i];
-			}
-			wxMessageBox(combined, _("OES Enterprise - startup error"),
-				wxOK | wxICON_ERROR);
+		wxString combined;
+		for (std::size_t i = 0; i < chain.size(); ++i) {
+			if (!combined.IsEmpty()) combined += wxT("\n--\n");
+			combined += chain[i];
 		}
+		// ⚠ ALWAYS SAY SOMETHING. This was guarded by `if (!chain.empty())`, so a failure that
+		// recorded no description closed the process with no window and no message — the person
+		// running it learns only that nothing happened. "It failed and did not say why" is poor,
+		// and still infinitely better than silence: it tells them where to look and that the
+		// program knows it failed.
+		if (combined.IsEmpty())
+			combined = thrown;
+		if (combined.IsEmpty())
+			combined = _("The infobase could not be opened, and the failure carried no description.");
+		combined += wxT("\n\n") + (m_strFile.IsEmpty()
+			? m_strServer + wxT(" / ") + m_strDatabase : m_strFile);
+
+		wxMessageBox(combined, _("OES Enterprise - startup error"), wxOK | wxICON_ERROR);
 		return 1;
 	}
 

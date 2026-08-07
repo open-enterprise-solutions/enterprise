@@ -936,6 +936,13 @@ static bool InsertSessionRow(ibDatabaseConnectionHolder& holder, const ibSession
 			{ wxT("pid"),     ibConst(ibValue(id.m_pid)) },
 			{ wxT("address"), ibConst(ibValue(id.m_address)) },
 			{ wxT("kind"),    ibConst(ibValue(int(s.GetKind()))) },
+			// …AND `exclusive` = 0, EXPLICITLY. A session that never takes monopoly mode used to leave
+			// this column NULL for its whole life, while one that took it and let it go left 0 — two
+			// spellings of "not exclusive" in one table. Nothing reads them apart TODAY (the driver
+			// reports NULL as 0), but a fact with two spellings is answered by whoever asks NEXT, and
+			// the next asker may be SQL, where `exclusive <> 1` and `IS NULL` part company. The row
+			// says it from birth instead of acquiring the answer later.
+			{ wxT("exclusive"), ibConst(ibValue(0)) },
 		}, ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("session")), ibConst(ibValue(s.GetId())))));
 	} catch (...) { /* legacy schema — fine */ }
 

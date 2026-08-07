@@ -252,7 +252,14 @@ bool ibValuePredefinedJobs::ibValueJobRow::CallAsFunc(const long lMethodNum, ibV
 		// BOTH halves, in this order: the row is what survives a restart, the live entry is what
 		// the next tick reads. Writing only the row would leave a job running on a schedule nobody
 		// can see any more; applying only in memory would lose the change on close.
-		ibJobManager::WriteSharedSettings(settings);
+		//
+		// ⚠ AND THE ROW MUST TAKE, or the in-memory half is a lie with a lifetime. Discarding the
+		// result meant `job.Write()` answered TRUE over a setting that had not been stored: the
+		// schedule looked changed until the next restart put the old one back. Applying the live
+		// half after a failed write would make that lie last exactly one session.
+		if (!ibJobManager::WriteSharedSettings(settings))
+			ibBackendCoreException::Error(
+				_("the schedule of '%s' could not be written to the base"), m_jobName);
 
 		if (ibJobManager* const manager = ibApplicationData::GetJobManager())
 			manager->ApplySettings(m_jobKey, m_active, m_schedule);

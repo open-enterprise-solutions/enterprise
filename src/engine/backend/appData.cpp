@@ -35,6 +35,7 @@
 // needs no guard.
 #ifdef OES_USE_FIREBIRD
 #include "backend/databaseLayer/firebird/firebirdDatabaseLayer.h"
+#include "backend/databaseLayer/firebird/firebirdMaintenanceScheduler.h"   // registered by the startup sequence, not by Open
 #endif
 #ifdef OES_USE_POSTGRESQL
 #include "backend/databaseLayer/postgres/postgresDatabaseLayer.h"
@@ -600,6 +601,13 @@ bool ibApplicationData::CreateFileAppDataEnv(ibRunMode runMode, const wxString& 
 			// point either, so EVERY first run of enterprise.exe raised "Table unknown SYS_JOB" out
 			// of CreateFileAppDataEnv and never reached a window.
 			ibRegisterPlatformJobs();
+
+			// …and the Firebird driver's OWN maintenance, for the same reason and one layer deeper:
+			// it used to declare itself from inside ibDatabaseLayerFirebird::Open — before this
+			// object exists, before the pool is up, before sys_job is created. WHETHER this base is
+			// ours to maintain is the driver's answer; WHEN to act on it is this sequence's.
+			if (db->IsLocalMaintenanceEligible())
+				ibFirebirdMaintenanceJob::Register();
 
 			return true;
 		}
