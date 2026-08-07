@@ -552,13 +552,6 @@ bool ibApplicationData::CreateFileAppDataEnv(ibRunMode runMode, const wxString& 
 			// minIdle clones grow lazily and shrink on idle timeout.
 			s_instance->m_connectionPool->Init(db, 32, PickConnectionMinIdle(runMode));
 
-			// The platform's own scheduled work is declared HERE, not by each host:
-			// a database is open, so the jobs have something to be about, and every
-			// host that opens one gets the same list without repeating it in its
-			// own main. Declaring is cheap — no session, no metadata; a job builds
-			// those on its first run.
-			ibRegisterPlatformJobs();
-
 			if (runMode == ibRunMode::eDESIGNER_MODE && !ibApplicationData::TableAlreadyCreated()) {
 				ibApplicationData::CreateTableSession();
 				ibApplicationData::CreateTableUser();
@@ -577,9 +570,7 @@ bool ibApplicationData::CreateFileAppDataEnv(ibRunMode runMode, const wxString& 
 			// sys_lock — long-held pessimistic lock table. Idempotent
 			// CREATE so existing DBs pick it up on startup.
 			ibApplicationData::CreateTableLock();
-			// sys_job — the shared last-run clock. Created before the platform's
-			// jobs are declared below, so their first tick already has somewhere
-			// to look.
+			// sys_job — the shared last-run clock.
 			ibApplicationData::CreateTableJob();
 			// … and its settings columns, for a base created before jobs had any.
 			ibApplicationData::MigrateTableJob();
@@ -591,6 +582,24 @@ bool ibApplicationData::CreateFileAppDataEnv(ibRunMode runMode, const wxString& 
 			// first Audit row (session.opened) can fire on the next
 			// Authenticate.
 			s_instance->CreateLogger();
+
+			// ⚠⚠ DECLARED AFTER ITS TABLE EXISTS, and that is the whole point of the position.
+			//
+			// The platform's own scheduled work is declared HERE, not by each host: a database is
+			// open, so the jobs have something to be about, and every host that opens one gets the
+			// same list without repeating it in its own main. Declaring is cheap — no session, no
+			// metadata; a job builds those on its first run.
+			//
+			// But declaring is NOT read-free: Register() asks sys_job for a stored schedule so a
+			// setting made in the Designer survives, and seeds a row when there is none. This call
+			// used to stand ~25 lines ABOVE, before CreateTableJob — while the comment there claimed
+			// the table was "created before the platform's jobs are declared below". The comment
+			// described the INTENDED order and the code did the other one.
+			//
+			// It was not an old-database problem. A base created from scratch has no sys_job at this
+			// point either, so EVERY first run of enterprise.exe raised "Table unknown SYS_JOB" out
+			// of CreateFileAppDataEnv and never reached a window.
+			ibRegisterPlatformJobs();
 
 			return true;
 		}
@@ -628,10 +637,6 @@ bool ibApplicationData::CreateServerAppDataEnv(ibRunMode runMode, const wxString
 			// Beyond minIdle clones grow lazily and shrink on idle timeout.
 			s_instance->m_connectionPool->Init(db, 32, PickConnectionMinIdle(runMode));
 
-			// Same as the file branch above — the platform's job list belongs to
-			// whoever opened the database, not to whichever executable did it.
-			ibRegisterPlatformJobs();
-
 			if (!SetLocaleAppDataEnv(strLocale))
 				return false;
 
@@ -648,6 +653,20 @@ bool ibApplicationData::CreateServerAppDataEnv(ibRunMode runMode, const wxString
 
 			ibApplicationData::MigrateTableSession();
 			ibApplicationData::MigrateTableBytecodeCache();
+			// ⚠ THE SAME STARTUP TABLES AS THE FILE BRANCH, and they were missing here entirely.
+			// Idempotent CREATEs, so an existing base picks them up on the next start — which is
+			// exactly the reasoning the file branch already carries. sys_lock was created only
+			// inside the designer-on-a-fresh-base arm above, and sys_job was never created on this
+			// path at all, while the job registration below reads it.
+			ibApplicationData::CreateTableLock();
+			ibApplicationData::CreateTableJob();
+			ibApplicationData::MigrateTableJob();
+
+			// LAST IN THE TABLE BLOCK, for the reason spelled out in the file branch: declaring a
+			// job READS sys_job, so nothing may declare one before every table it touches exists.
+			// The platform's job list belongs to whoever opened the database, not to whichever
+			// executable did it.
+			ibRegisterPlatformJobs();
 
 			// Audit + trace logger. In server-mode the log directory
 			// (…\OES\<tag>\logs, holding oes_YYYY_MM.olg)

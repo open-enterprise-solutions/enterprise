@@ -213,7 +213,18 @@ jobs:
   tests-gui-linux:
     name: GUI tests (Linux, Xvfb)
     runs-on: ubuntu-22.04
-    timeout-minutes: 60
+    # 90, matching the sibling job below. These jobs build wxWidgets from scratch every time (see
+    # the note at the top of this file — the obvious build-directory cache LIES with Ninja), so the
+    # wall clock is dominated by a constant that has nothing to do with our tree, and the margin
+    # under 60 was thin. The query constructor added ~20 frontend translation units, each pulling in
+    # the wx headers, and that was enough to cross it: the job stopped compiling and started timing
+    # out — a red signal that says nothing about the code.
+    #
+    # ⚠ This buys time, it does not fix the cause. The real fix is the COMPILER cache this file
+    # already names and already installs (`ccache` is in the apt list of three jobs and wired into
+    # none of them): keyed on preprocessed input rather than timestamps, so it cannot serve the
+    # stale object a directory cache can.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
         with:
