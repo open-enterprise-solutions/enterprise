@@ -3210,3 +3210,43 @@ cannot reach by clicking**. A cast written by hand, a ratio of two folds, a keyw
 the constructor generates none of them, so the manual loop that found so much this week was blind to
 exactly these. That is the argument for the property test in
 [[reference_query_render_parser_asymmetry]], stated by evidence rather than by worry.
+
+### Update 2026-08-07 (g) — the property test, and what it found in one run
+
+`tests/test_queryRoundTrip.cpp`: a seeded generator walks the AST, and the property is the one the
+whole constructor rests on — `render(parse(render(ast))) == render(ast)`. Both sides are RENDERED
+because there is no deep equality on the AST and text is the contract anyway; a query that survives
+one trip but changes on the second is exactly a query the constructor would corrupt on a second
+open.
+
+It found two more defects on its first run, both of which every hand-written case had missed.
+
+**A string literal could not end a line.** The shared lexer's string reader treats a newline as the
+start of a CONTINUED literal (`"line one` / `|line two"`). It ran that branch even when the string
+had already CLOSED, clobbering `next_pos` back to the literal's own start — so the lexer resumed
+INSIDE the string it had just read and everything after tokenised as garbage, surfacing as a lexical
+error some lines later.
+
+It survived because it needs a string to be the LAST TOKEN ON A LINE. In script text a quote is
+nearly always followed by `;` or `)`; query text was only ever tested on ONE line. But the renderer
+prints a clause per line, so `WHERE` / `Code = "A"` / `GROUP BY …` — an entirely ordinary query the
+constructor writes by itself — could not be read back. Fixed in `translateCode.cpp`: a closed string
+ends at its quote.
+
+**`CAST(x AS T).Order` still failed** after the dot-keyword fix, because the walk after a cast calls
+the path reader from a FRESH position — so its first segment hit the first-segment rule, not the
+after-a-dot one. The dot had already been consumed; the rule is the same. `ParseDottedName` now
+takes `firstMayBeKeyword` and the cast-walk passes it.
+
+**And the generator caught itself.** `TheGeneratorReallyProducesTheAwkwardShapes` asserts that the
+shapes which actually broke — a reserved word as a name, a walk after a cast, arithmetic over calls,
+`BY OVERALL` — all OCCUR across the seeds. It failed: `BY OVERALL` had never been generated once in
+400 seeds. The cause was the LCG's low bits, which barely vary, read directly by `% 2` and `% 4`; the
+output is mixed now. The round-trip property had passed on all 400 of those seeds, which is the
+whole danger — **a generator that quietly produces less than it claims makes a green run mean less
+than it looks.** A property test needs a test of its own coverage, or it is a ritual.
+
+**A limit recorded, not smuggled in:** a reserved word as the FIRST segment of an UNQUALIFIED path
+(`SELECT Order`) is still refused. Qualified (`Products.Order`) works, and the constructor always
+qualifies. Widening it would mean telling a bare keyword apart from every clause that starts with
+one — a grammar decision, not a bug fix, and not one to make under a generator run.

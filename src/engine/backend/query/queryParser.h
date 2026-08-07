@@ -95,7 +95,9 @@ private:
 	void                       ParseJoins(ibQuerySelect& sel);
 	void                       ParseOrderBy(ibQuerySelect& sel);
 	void                       ParseTotals(ibQuerySelect& sel);
-	std::vector<wxString>      ParseDottedName();
+	// `firstMayBeKeyword` — the caller has ALREADY consumed a dot, so this path is a CONTINUATION and
+	// its first segment obeys the after-a-dot rule like every later one (CAST(x AS T).Order).
+	std::vector<wxString>      ParseDottedName(bool firstMayBeKeyword = false);
 
 	ibQueryAstExprPtr             ParsePredicate();   // OR level
 	ibQueryAstExprPtr             ParseAnd();

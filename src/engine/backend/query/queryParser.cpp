@@ -471,10 +471,11 @@ void ibQueryParser::ParseTotals(ibQuerySelect& sel)
 	} while (AcceptPunct(wxT(',')));
 }
 
-std::vector<wxString> ibQueryParser::ParseDottedName()
+std::vector<wxString> ibQueryParser::ParseDottedName(bool firstMayBeKeyword)
 {
 	std::vector<wxString> parts;
-	if (Cur().m_kind != ibQueryTokenKind::Ident)
+	if (Cur().m_kind != ibQueryTokenKind::Ident
+	    && !(firstMayBeKeyword && Cur().m_kind == ibQueryTokenKind::Keyword))
 		Fail(Cur(), _("expected a name"));
 	parts.push_back(Next().m_text);
 	while (AcceptPunct(wxT('.'))) {
@@ -824,6 +825,6 @@ ibQueryAstExprPtr ibQueryParser::ParseCast()
 	auto column = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
 	column->m_line = tk.m_line; column->m_col = tk.m_col;
 	column->m_arg  = cast;              // the walk starts HERE, not on a source alias
-	column->m_path = ParseDottedName(); // …and continues through these
+	column->m_path = ParseDottedName(/*firstMayBeKeyword*/true); // …and continues through these
 	return column;
 }

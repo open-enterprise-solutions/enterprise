@@ -66,6 +66,7 @@ add_executable(oes_tests
     test_queryL4Parser.cpp
     test_queryConstructor.cpp
     test_queryNaming.cpp
+    test_queryRoundTrip.cpp
     test_queryRewrite.cpp
     test_lambdaRecorder.cpp
     test_queryValueMembers.cpp

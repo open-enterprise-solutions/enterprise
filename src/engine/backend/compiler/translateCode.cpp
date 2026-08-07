@@ -791,6 +791,21 @@ bool ibTranslateCode::GetString(wxString* strString) const
 		i_utf8_offset += i_utf8_step;
 #endif	
 		if (c == wxT('\n')) {
+			// ⚠⚠ A CLOSED STRING ENDS AT ITS QUOTE. This branch exists for the CONTINUED string —
+			//     "line one
+			//     |line two"
+			// — where the newline is part of the literal and the next line opens with `|`. When the
+			// string has already closed (count_char == 2), the newline after it belongs to whatever
+			// follows, and running this branch clobbered `next_pos` back to the string's own start,
+			// leaving the lexer to resume INSIDE the literal it had just read. Everything after that
+			// point tokenised as garbage and surfaced as a lexical error some lines later.
+			//
+			// It survived because it needs a string to be the LAST TOKEN ON A LINE: in script text a
+			// quote is nearly always followed by `;` or `)`, and query text was only ever tested on
+			// ONE line. The renderer prints a clause per line, so `WHERE\n\tCode = "A"\nGROUP BY …`
+			// — an entirely ordinary query — could not be read back.
+			if (count_char >= 2)
+				break;
 			if (strString != nullptr) strString->Append(wxT('\n'));
 			next_pos = m_currentPos + 1;
 #ifdef UTF8_LEXEM_TRANSLATE
