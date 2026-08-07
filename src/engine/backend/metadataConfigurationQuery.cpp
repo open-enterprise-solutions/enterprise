@@ -202,13 +202,12 @@ bool ibMetaDataConfigurationStorage::OnSaveDatabase(int flags)
 		// alongside validation warnings/errors). The builder owns the delta; metadata just reads it out.
 		GetRestructureInfo().Absorb(m_structureBuilder.GetChanges());
 
-		if (structRet == DATABASE_LAYER_QUERY_RESULT_ERROR) {
-#if _USE_SAVE_METADATA_IN_TRANSACTION == 1
-			db_query->RollBack(); return false;
-#else
-			return false;
-#endif
-		}
+		// ⚠ NOT A FAILURE TEST. `structRet` is an affected-row count, and 0 is what a pure-DDL delta
+		// returns — a restructuring that only added a column changes no ROWS and is entirely
+		// successful. A real failure arrives as an exception, which the catch at the end of this
+		// function turns into a rollback + rethrow. Testing == 0 here rolled back good work and
+		// reported it as broken, on exactly the applies that touched structure and nothing else.
+		(void)structRet;
 	}
 
 	//common data
@@ -280,14 +279,31 @@ bool ibMetaDataConfigurationStorage::OnAfterSaveDatabase(bool roolback, int flag
 	// TX (the just-created tables are now durable). Metadata no longer touches Commit / RollBack here.
 	const int afterRet = m_structureBuilder.OnAfterSave(roolback);
 
+	// ⚠⚠ ZERO IS NOT AN ERROR. `DATABASE_LAYER_QUERY_RESULT_ERROR` is 0, and 0 is what every DDL
+	// statement and every cleanup that matched no rows legitimately returns — it means "the database
+	// changed nothing", not "the database failed". Failure travels as an EXCEPTION now; this test is
+	// a leftover from the era of return codes, and it reads success as catastrophe.
+	//
+	// Where that leftover bit: it sits AFTER the commit. The restructuring transaction is already
+	// durable by the time this line runs, so answering "failed" here skips the baseline reload below
+	// — and from that moment the saved configuration this engine diffs against no longer describes
+	// the database it is diffing FOR. Every later apply computes its delta from a snapshot the base
+	// left behind: removing a common attribute emits nothing (the baseline never had the column), so
+	// the column stays; adding it back emits ADD, and Firebird answers with a unique-key violation
+	// on RDB$RELATION_FIELDS. Permanently — the two only drift further apart with each attempt.
+	//
+	// So: the ONLY question that decides the baseline is whether the transaction COMMITTED.
 	if (roolback)
-		return afterRet != DATABASE_LAYER_QUERY_RESULT_ERROR;
-
-	if (afterRet == DATABASE_LAYER_QUERY_RESULT_ERROR)
-		return false;
+		return true;   // rolled back — nothing committed, nothing to re-read, and no failure to report
 
 	// Metadata-side post-commit: reload the just-committed config in a FRESH transaction (the builder
 	// already committed the restructuring one).
+	//
+	// ⚠ REACHED WHATEVER `afterRet` SAID. It is not a verdict on the commit — the commit happened
+	// before it was produced, and what it reports on is the Firebird seed flush that follows. A
+	// failure THERE is a data problem in tables that already exist; it must not leave this engine
+	// holding a baseline the database has moved on from.
+	(void)afterRet;   // read for its meaning below, never as a reason to skip the re-read
 	if ((flags & saveConfigFlag) != 0) {
 
 #if _USE_SAVE_METADATA_IN_TRANSACTION == 1
@@ -342,8 +358,9 @@ bool ibMetaDataConfigurationStorage::ReCreateDatabase()
 
 	const int recreateRet = m_structureBuilder.Recreate(target);
 	GetRestructureInfo().Absorb(m_structureBuilder.GetChanges());
-	if (recreateRet == DATABASE_LAYER_QUERY_RESULT_ERROR)
-		return false;
+	// Same reading as the incremental path: 0 is an affected-row count, not a verdict. Recreate rolls
+	// back and rethrows on a real failure, so reaching this line at all means it worked.
+	(void)recreateRet;
 
 	ResetSequence();
 	return true;

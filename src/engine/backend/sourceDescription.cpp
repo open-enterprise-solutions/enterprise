@@ -12,8 +12,27 @@
 bool ibSourceDescriptionMemory::LoadData(ibReaderMemory& reader, ibSourceDescription& srcDesc)
 {
 	srcDesc.ClearSource();
+
+	// ⚠⚠ THE COUNT IS A CLAIM, NOT A GUARANTEE. It comes out of a stored blob, and a blob can be
+	// shorter than it says — written by a build whose hop had no TYPE yet, truncated, or simply not
+	// a source description at all. Trusting it walked the reader off the end of the buffer, which in
+	// a debug build is an assert nobody can act on ("m_pos + cnt <= m_size") and in a release build
+	// is reading whatever memory follows and calling it a class id.
+	//
+	// Caught opening a saved form: a text control's source property, several levels down
+	// ibValueFrame::LoadNode. What a bad blob deserves is an empty description — the control then
+	// binds to nothing, which is visible and harmless — not a crash and not invented data.
+	if (reader.elapsed() < static_cast<int>(sizeof(u32)))
+		return true;   // nothing stored at all
+
 	const unsigned int count = reader.r_u32();
+
+	// ONE HOP = id (u32) + type (u64). Ask before reading each, so a blob that ends early stops here
+	// with the hops it really had rather than fabricating the rest.
+	const int kHopBytes = static_cast<int>(sizeof(u32) + sizeof(u64));
 	for (unsigned int i = 0; i < count; i++) {
+		if (reader.elapsed() < kHopBytes)
+			break;
 		const ibSourceId id = (ibSourceId)reader.r_u32();
 		const ibClassID type = (ibClassID)reader.r_u64();   // expected type (undefined where the hop imposes none)
 		srcDesc.AppendSource(id, type);

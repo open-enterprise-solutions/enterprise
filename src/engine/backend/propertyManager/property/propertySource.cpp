@@ -153,8 +153,16 @@ bool ibPropertySource::PasteNodeValue(const ibDataValue& value)
 	ibSourceDescription& desc = GetValueAsSourceDesc();
 	desc.ClearSource();
 	ibReaderMemory reader(data);
+	if (reader.elapsed() < static_cast<int>(sizeof(u32)))
+		return true;
 	const unsigned int count = reader.r_u32();
 	for (unsigned int i = 0; i < count; i++) {
+		// A HOP HERE IS VARIABLE-LENGTH (a tag, then either a guid string or a raw id, then the same
+		// again for the type), so the only honest guard is "is there anything left at all" before
+		// each field-group. A blob shorter than its own count stops with the hops it really had —
+		// the same rule as sourceDescription.cpp, where reading past the end was found first.
+		if (reader.eof())
+			break;
 		ibSourceId id = wxNOT_FOUND;
 		if (reader.r_u8() == kHopGuid) {
 			const ibGuid guid(reader.r_stringZ());
@@ -164,6 +172,10 @@ bool ibPropertySource::PasteNodeValue(const ibDataValue& value)
 			id = (ibSourceId)reader.r_u32();
 		}
 		ibClassID type = g_valueUndefinedCLSID;
+		if (reader.eof()) {                 // id read, type missing — take the hop as typeless
+			desc.AppendSource(id, type);
+			break;
+		}
 		if (reader.r_u8() == kTypeMeta) {
 			const ibClassKind kind = (ibClassKind)reader.r_u8();
 			const ibGuid typeGuid(reader.r_stringZ());

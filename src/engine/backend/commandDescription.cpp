@@ -12,9 +12,18 @@ bool ibCommandDescriptionMemory::LoadData(ibReaderMemory& reader, ibCommandDescr
 {
 	cmdDesc.ClearCommand();
 	cmdDesc.SetCommandType(ibInterfaceCommandType_Default);
+	// The stored count is a CLAIM — a blob can be shorter than it says. The eof-guard below already
+	// admits that (it lets a pre-object-item blob end early); the loop has to admit it too, or a
+	// short one walks the reader past the end of the buffer. See sourceDescription.cpp for the same
+	// guard and the crash that asked for it.
+	if (reader.elapsed() < static_cast<int>(sizeof(u32)))
+		return true;
 	const unsigned int count = reader.r_u32();
-	for (unsigned int i = 0; i < count; i++)
+	for (unsigned int i = 0; i < count; i++) {
+		if (reader.elapsed() < static_cast<int>(sizeof(u32)))
+			break;
 		cmdDesc.AppendCommand((ibMetaID)reader.r_u32());
+	}
 	// Object-item command TYPE trails the id path (eof-guard: a pre-object-item blob leaves it Default).
 	if (!reader.eof())
 		cmdDesc.SetCommandType((ibInterfaceCommandType)reader.r_u32());

@@ -224,11 +224,21 @@ ibValue* ibCompileValueCache::FindParentCompileModuleRef(const ibValueMetaObject
 //ID's 
 ibMetaID ibMetaData::GenerateNewID() const
 {
-	const ibValueMetaObject* commonObject = GetCommonMetaObject();
-	wxASSERT(commonObject);
-	ibMetaID id = commonObject->GetMetaID() + 1;
-	DoGenerateNewID(id, commonObject);
-	return id;
+	// SEED ONCE, THEN COUNT. The walk still decides where the numbering starts — a configuration
+	// just loaded must continue past its highest existing id — but it runs once per open image
+	// instead of once per new object, and what it produces is a floor, not an answer.
+	if (m_nextMetaId == 0) {
+		const ibValueMetaObject* commonObject = GetCommonMetaObject();
+		wxASSERT(commonObject);
+		ibMetaID id = commonObject->GetMetaID() + 1;
+		DoGenerateNewID(id, commonObject);
+		m_nextMetaId = id;
+	}
+
+	// ⚠ NEVER BACKWARDS. An id whose object was deleted does NOT return to the pool, and that is the
+	// whole point: the physical column is named `fld<id>`, so re-issuing an id re-issues a column
+	// NAME the database may still be holding. See the note on the declaration.
+	return m_nextMetaId++;
 }
 
 void ibMetaData::DoGenerateNewID(ibMetaID& id, const ibValueMetaObject* top) const

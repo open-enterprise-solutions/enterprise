@@ -540,6 +540,18 @@ protected:
 	bool m_expanded = true; // is expanded in the object tree, allows for saving to file
 
 	ibFormID	 m_controlId;
+
+	// ⭐ THE OWNER FORM'S id counter — meaningful ONLY on the form (every control asks its owner).
+	//
+	// Same rewrite, same two reasons, as ibMetaData::GenerateNewID: the id used to be max(every id
+	// in the control tree) + 1, recomputed on every new control. That is O(n) per control for a
+	// question a counter answers in O(1) — and it puts a DELETED control's id straight back into
+	// circulation, so a new control can be born holding the number something else still refers to.
+	// Less destructive than the metadata twin (a control id never becomes a column name, and does
+	// not survive the session), but wrong in the same way and for the same reason.
+	//
+	// 0 = not seeded; the first request walks the tree once to find the floor.
+	ibFormID	 m_nextControlId = 0;
 	ibGuid				 m_controlGuid;
 
 	ibValuePtr<ibValueEventContainer> m_valEventContainer;
