@@ -69,6 +69,21 @@ const ibMetaData* ibSourceMetaDataScope::Get()
 	return t_sourceMetaData;
 }
 
+// WHOSE sources this query sees: the config in scope, else the global base factory (common / plugin
+// sources only — launcher, codeRunner before it opens anything). Nothing process-wide is consulted in
+// between ON PURPOSE: "which configuration" is a question the CALLER can always answer, and every
+// caller now does — the composer and the dynamic list from their own metadata, the constructor from
+// the open one, a script query from the session it runs in. One place asks, so a new caller that
+// forgets fails the same way everywhere instead of quietly resolving against someone else's config.
+ibQueryableFactory* ibSourceMetaDataScope::GetFactory()
+{
+	if (const ibMetaData* md = t_sourceMetaData)
+		if (ibQueryableFactory* factory = md->GetSourceFactory())
+			return factory;
+
+	return ibApplicationData::GetQueryableFactory();
+}
+
 namespace {
 
 // The output-column descriptor the runtime reads back — used unqualified throughout this namespace.
@@ -139,13 +154,8 @@ const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map
 	if (const ibBackendQueryable* tmp = ibTempSourceScope::Find(name))
 		return tmp;
 
-	// Resolve through the config the query runs ON BEHALF OF (threaded in by the composer) — metaobject sources
-	// register per-config now, and that factory descends to the global one internally (future plugin sources). No
-	// config in scope → knock on the global base factory directly (the common/plugin one).
-	const ibMetaData* md = ibSourceMetaDataScope::Get();
-	ibQueryableFactory* factory = md != nullptr ? md->GetSourceFactory() : nullptr;
-	if (factory == nullptr)
-		factory = ibApplicationData::GetQueryableFactory();
+	// Resolve through the config the query runs ON BEHALF OF — see ibSourceMetaDataScope::GetFactory for the order.
+	ibQueryableFactory* factory = ibSourceMetaDataScope::GetFactory();
 	if (factory == nullptr) {
 		Fail(0, 0, _("the query engine is not available (no application data)"));
 		return nullptr;
@@ -483,8 +493,7 @@ ibValue EvalValue(const ibQueryAstExpr& e, const std::map<wxString, ibValue>& pa
 		wxString name = e.m_path[1];
 		for (size_t i = 2; i + 1 < e.m_path.size(); ++i) name += wxT(".") + e.m_path[i];
 
-		const ibMetaData* md = ibSourceMetaDataScope::Get();
-		ibQueryableFactory* factory = md != nullptr ? md->GetSourceFactory() : ibApplicationData::GetQueryableFactory();
+		ibQueryableFactory* factory = ibSourceMetaDataScope::GetFactory();
 		if (factory == nullptr)
 			Fail(e.m_line, e.m_col, _("the query engine is not available (no application data)"));
 		const ibBackendQueryable* q = factory->Resolve(ns, name);

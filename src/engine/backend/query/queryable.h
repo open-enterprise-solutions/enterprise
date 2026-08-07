@@ -74,6 +74,7 @@ private:
 };
 
 class ibMetaData;   // the config a query runs on behalf of — its factory resolves by-name metaobject sources
+class ibQueryableFactory;
 
 // ibSourceMetaDataScope — the CONFIG a query runs ON BEHALF OF, for the duration of one execution. The composer sets
 // it (from its metadata) before lowering; ResolveSource resolves a by-name metaobject source through THIS config's
@@ -86,6 +87,11 @@ public:
 
 	// The config in force for THIS execution, or null (no scope / a sourceless composer).
 	static const ibMetaData* Get();
+
+	// THE factory a by-name source resolves through: this scope, else the active configuration, else the global
+	// base one. Everything that resolves a source asks HERE — a hand-written query in a module sets no scope and
+	// still means the config it lives in.
+	static ibQueryableFactory* GetFactory();
 
 	ibSourceMetaDataScope(const ibSourceMetaDataScope&) = delete;
 	ibSourceMetaDataScope& operator=(const ibSourceMetaDataScope&) = delete;

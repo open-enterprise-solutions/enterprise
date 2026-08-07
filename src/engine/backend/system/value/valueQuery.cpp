@@ -9,10 +9,40 @@
 #include "backend/compiler/typeCtor.h"   // VALUE_TYPE_REGISTER / SYSTEM_TYPE_REGISTER / ENUM_TYPE_REGISTER
 #include "backend/backend_exception.h"   // ibBackendCoreException — a wrong TempTablesManager is told, not ignored
 #include "backend/appData.h"             // appData->DesignerMode()
+#include "backend/session/session.h"     // ibSession::Current — the session knows WHICH config it was opened for
+#include "backend/moduleManager/moduleManager.h"  // GetMetaManager()->GetMetaData() — that config, held
 
 //////////////////////////////////////////////////////////////////////
 // ibValueQueryExec — script "Query"
 //////////////////////////////////////////////////////////////////////
+
+// WHOSE sources a hand-written query sees.
+//
+// Metaobject sources register into the factory of the config they belong to (ibMetaData::RegisterSource
+// — "into THIS config's OWN factory"), and the resolver finds them through whatever config is in scope.
+// Three callers set that scope from a config they already hold: the composer, the dynamic list, the
+// constructor. A query written by hand in a module — New Query("… FROM Catalog.Catalog1") — was the
+// fourth, and had nobody: it fell through to the global base factory, where no catalog has ever
+// registered, and came back "unknown metaobject kind 'Catalog'" for a name the constructor reads
+// without a murmur.
+//
+// It does not need a new field, and it must not consult anything process-wide. The SESSION was opened
+// FOR a configuration and holds it fixed — the same metadata the "Metadata" and "Data" globals are
+// built from. Two sessions on two configurations each answer with their own; a background job answers
+// with the one it runs under.
+static const ibMetaData* ibQuerySessionConfig()
+{
+	const ibSession* session = ibSession::Current();
+	if (session == nullptr)
+		return nullptr;   // designer eval / no session — the caller degrades, it does not guess
+
+	const ibValueModuleManagerRuntimeConfiguration* mm = session->GetManagerModule();
+	if (mm == nullptr)
+		return nullptr;
+
+	const ibValueModuleManager::ibValueMetadataUnit* unit = mm->GetMetaManager();
+	return unit != nullptr ? unit->GetMetaData() : nullptr;
+}
 
 void ibValueQueryExec_BindNames(ibValue::ibMemberTable& helper, const ibValue* /*ctx*/)
 {
@@ -103,6 +133,14 @@ bool ibValueQueryExec::RunPackage(std::vector<ibValue>& out)
 	ibQueryTempTableStore* store = nullptr;
 	if (!m_tempTables.IsEmpty() && m_tempTables.ConvertToValue(manager) && manager != nullptr)
 		store = manager->GetStore();
+
+	// The config this query's by-name sources resolve against. An outer scope wins — a query run from
+	// inside something that already said which config it means (a composer) belongs to THAT one, not to
+	// whatever session happens to be current.
+	const ibMetaData* config = ibSourceMetaDataScope::Get();
+	if (config == nullptr)
+		config = ibQuerySessionConfig();
+	const ibSourceMetaDataScope resolveAgainst(config);
 
 	try {
 		for (ibQueryLowering::PackageResult& r : ibQueryLowering::ExecutePackage(m_package, m_params, store)) {
