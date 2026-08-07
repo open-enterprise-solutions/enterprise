@@ -539,7 +539,7 @@ wxWindow* ibDialogQueryConstructor::BuildTablesPage(wxWindow* parent)
 		if (select == nullptr || row >= select->m_projections.size())
 			return wxEmptyString;
 		const ibQueryProjection& projection = select->m_projections[row];
-		return projection.m_expr ? ibRenderQueryExpr(*projection.m_expr) : wxEmptyString;
+		return projection.m_expr ? ibRenderQueryExpr(*projection.m_expr) : wxString();
 	});
 	m_fieldModel->SetWriter([this](unsigned int row, unsigned int, const wxString& text) -> bool {
 		ibQuerySelect* select = Current();
@@ -1095,7 +1095,7 @@ wxWindow* ibDialogQueryConstructor::BuildOrderPage(wxWindow* parent)
 			return wxEmptyString;
 		const ibQueryOrderItem& item = select->m_orderBy[row];
 		if (col == kGridCol1)
-			return item.m_expr ? ibRenderQueryExpr(*item.m_expr) : wxEmptyString;
+			return item.m_expr ? ibRenderQueryExpr(*item.m_expr) : wxString();
 		return ibQueryKeywordText(item.m_ascending ? ibQueryKeyword::Asc : ibQueryKeyword::Desc);
 	});
 	m_orderModel->SetWriter([this](unsigned int row, unsigned int col, const wxString& text) -> bool {
@@ -1202,7 +1202,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 			return wxEmptyString;
 		const ibQueryTotalDim& dim = select->m_totalsBy[row];
 		if (col == kGridCol1)
-			return dim.m_expr ? ibRenderQueryExpr(*dim.m_expr) : wxEmptyString;
+			return dim.m_expr ? ibRenderQueryExpr(*dim.m_expr) : wxString();
 		if (col == kGridCol2)
 			return ibQueryKeywordText(dim.m_unfold == ibQueryDimUnfold::Hierarchy ? ibQueryKeyword::Hierarchy
 				: dim.m_unfold == ibQueryDimUnfold::HierarchyOnly ? ibQueryKeyword::HierarchyOnly

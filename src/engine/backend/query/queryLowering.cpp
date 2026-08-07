@@ -19,6 +19,11 @@
 #include "backend/model.h"            // ibComparisonType
 #include "backend/backend_exception.h"    // ibBackendCoreException
 
+// ⚠ NAMED, NOT INHERITED. std::find / std::remove_if arrived in this file with the grouping and
+// prune passes; MSVC hands <algorithm> over transitively and GCC/Clang do not, so the Windows build
+// stayed green while the other three CI jobs could not compile it. See docs/portability.md.
+#include <algorithm>
+
 // --- the AUXILIARY per-query temp-source registry (decl in queryable.h) ------------
 // Thread-local so concurrent sessions don't see each other's transient sources; RAII so a
 // query leaves no trace once it finishes. ResolveSource consults it before the metaobject

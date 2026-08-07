@@ -98,8 +98,10 @@ public:
 			wxT("Order"), wxT("Group"), wxT("Value"), wxT("Count"), wxT("Index"), wxT("Update"),
 			wxT("Elements"), wxT("Date")
 		};
+		// ⚠ BOTH BRANCHES ARE wxString. A ternary mixing `wxString` with a `const wxChar*` compiles
+		// on MSVC and is AMBIGUOUS to Clang and ill-typed to GCC — each can convert either way.
 		return Chance(2) ? SafeName()
-		                 : s_reserved[Below(static_cast<unsigned int>(std::size(s_reserved)))];
+		                 : wxString(s_reserved[Below(static_cast<unsigned int>(std::size(s_reserved)))]);
 	}
 
 	wxString SourceName()

@@ -12,6 +12,10 @@
 #include <wx/settings.h>
 #include <wx/msgdlg.h>
 
+// NAMED, NOT INHERITED — std::max / std::min in the layout pass. MSVC hands <algorithm> over
+// transitively through the wx headers above; GCC and Clang do not. (docs/portability.md)
+#include <algorithm>
+
 namespace {
 
 // Layout constants. Deliberately fixed rather than measured per box: a diagram whose boxes change

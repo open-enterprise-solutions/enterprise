@@ -66,6 +66,30 @@ so a method of that enclosing class may not default an argument to `Nested{}` or
 spelling fixes it — the type has to move to namespace scope. `ibDbTxOptions` did, keeping an
 in-class alias so `ibDatabaseLayer::ibTxOptions` still reads the same.
 
+### 1.5a A ternary may not mix `wxString` with `const wxChar*`
+
+```cpp
+return projection.m_expr ? ibRenderQueryExpr(*projection.m_expr) : wxEmptyString;   // MSVC only
+return Chance(2) ? SafeName() : s_reserved[i];                                      // MSVC only
+```
+
+MSVC picks a conversion and moves on. **GCC** refuses outright — *"operands to `?:` have different
+types `wxString` and `const wxChar*`"* — and **Clang** refuses for the opposite reason, that it can
+convert *either* way: *"conditional expression is ambiguous"*. The two toolchains disagree about
+why, and agree that it does not compile.
+
+It is easy to write without noticing because neither operand looks like a raw pointer: `wxEmptyString`
+is one, and so is any element of a `static const wxChar* []` table. Make both branches `wxString` —
+`wxString()` instead of `wxEmptyString`, `wxString(table[i])` instead of `table[i]`.
+
+⚠ `wxT("a") : wxT("b")` is FINE — both branches are the same type. The hazard is only the MIXED
+pair, which is why a grep for `: wxEmptyString` finds one shape of it and misses the other. Search
+for the CLASS (a ternary whose branches are a wxString-valued call and a literal/table entry), not
+for one spelling.
+
+This one shipped four times in a single batch — three in one dialog, one in a new test — and every
+one of them compiled clean on `Debug|x86`. It is invisible to the local build by construction.
+
 ### 1.6 The small ones, each of which cost a round trip
 
 | Construct | Why it fails elsewhere |
