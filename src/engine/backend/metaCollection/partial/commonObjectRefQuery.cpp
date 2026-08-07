@@ -378,6 +378,34 @@ bool ibValueRecordDataObjectRef::DeleteData()
 			return false;
 
 	}
+	// A CHILD DOES NOT OUTLIVE ITS PARENT STILL POINTING AT IT.
+	//
+	// Deleting a folder used to delete exactly one row, so every child kept a reference to a guid that
+	// no longer exists. The value itself is honest about that — an unresolved reference reads back as
+	// "Not found <type:guid>" (ibValueReferenceDataObject::GetString) — but the LIST cannot place such a
+	// row anywhere: the root asks for a parent that is NULL or the zero sentinel, and a folder asks for
+	// its own key, and this one is neither. The row exists, is counted, and is visible nowhere.
+	//
+	// The moment a reference BECOMES broken is the only moment it is known for certain, and we are
+	// already inside the delete's transaction. So the children are re-parented to nothing right here —
+	// one UPDATE against the table's own parent column. Nothing has to test for existence on the read
+	// side afterwards, which is the cost the alternative (a correlated NOT EXISTS in every list query)
+	// would put on every row of every page forever.
+	//
+	// Only the OWN hierarchy is cleared — the parent column of this very table. References to this
+	// object from ELSEWHERE are a different question (referential integrity), and answering it here
+	// would be answering it in the dark.
+	ibValueMetaObjectRecordDataHierarchyMutableRef* hierarchy = nullptr;
+	if (m_metaObject->ConvertToValue(hierarchy) && hierarchy != nullptr) {
+		if (const ibValueMetaObjectAttributePredefined* parent = hierarchy->GetDataParent()) {
+			ibDataQueryBuilder()
+				.From(m_metaObject->GetQueryable())
+				.Where(parent, ibValue(ibValueReferenceDataObject::CreateRaw(m_metaObject, m_objGuid)))
+				.SetValue(parent, parent->CreateValue())
+				.Update();
+		}
+	}
+
 	// Delete the main row through the L3 door — WHERE uuid = <guid>, no statement / L2 visible.
 	// Best-effort like the prior path (it ignored the result).
 	ibDataQueryBuilder()

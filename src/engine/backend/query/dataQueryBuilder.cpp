@@ -719,6 +719,35 @@ bool ibDataQueryBuilder::Upsert() const
 	return ibQueryComposer::ExecuteWrite(BuildSpec(), WriteKind::Upsert) >= 0;
 }
 
+// A REWRITE THAT HIT NOTHING IS A MISS ON THE KEY, NOT A WRITE OF ZERO ROWS — AND IT MUST SAY SO.
+//
+// `Update()` used to answer `affected >= 0`, so nought rows read as success. The form said "saved",
+// the object advanced its in-memory version marker on commit, and the row was never touched: the next
+// save then compared the advanced marker against the untouched row and reported "data was changed by
+// another user" — about a change that had never happened, on a base with one user. That was the
+// visible half. The invisible half was worse: edits simply evaporated.
+//
+// It happens whenever the key bytes on hand do not match the key bytes stored. Live case: a table
+// created before ibReference lost its trailing metaID keeps 20-byte _RRRef values with the old tag,
+// the rewrite keys on that very column with today's 16-byte blob, and nothing matches — for those
+// rows the object could be read and deleted (DELETE keys off uuid) but never changed.
+//
+// The distinction that keeps this honest: a rewrite keyed on the PRIMARY KEY alone addresses ONE
+// named row, so nought means the row is gone or unreachable — raise. A caller that narrowed with
+// .Where(...) asked a QUESTION about a set, and an empty set is a legitimate answer — stay quiet.
+// (That is the shape of "clear my children's parent": no children is not a failure.)
+void ibDataQueryBuilder::RaiseIfKeyedRewriteMissed(long affected) const
+{
+	if (affected != 0)
+		return;                       // wrote something, or the driver reported failure (< 0) — not this question
+	if (!m_conditions.empty() || m_predicate)
+		return;                       // a narrowed rewrite: an empty set is an answer, not a miss
+
+	ibBackendCoreException::Error(
+		_("'%s': the row to rewrite was not found by its key - nothing was written"),
+		m_queryable != nullptr ? m_queryable->GetQueryName() : wxString(wxT("?")));
+}
+
 bool ibDataQueryBuilder::Update() const
 {
 	// REWRITE of an existing row — ONE guarded UPDATE: SET the columns, WHERE the key AND the folded RLS
@@ -737,9 +766,12 @@ bool ibDataQueryBuilder::Update() const
 		// table, the count means nothing and the policy waves it through.
 		if (!m_policy->CheckUpdate(guarded, ibAccessStage::Value, affected))
 			ibBackendAccessException::Error(_("changing a record"));
+		RaiseIfKeyedRewriteMissed(affected);
 		return affected >= 0;
 	}
-	return ibQueryComposer::ExecuteWrite(BuildSpec(), WriteKind::Update) >= 0;
+	const long affected = ibQueryComposer::ExecuteWrite(BuildSpec(), WriteKind::Update);
+	RaiseIfKeyedRewriteMissed(affected);
+	return affected >= 0;
 }
 
 bool ibDataQueryBuilder::Delete() const

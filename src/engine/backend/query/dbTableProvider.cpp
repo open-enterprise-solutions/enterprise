@@ -1050,12 +1050,52 @@ ibQueryExprPtr ibMetaIRBuilder::BuildParentRefPredicate(const ibBackendQueryable
 			return ibBinOp(ibQueryBinOp::Eq, ibColQ(mainQual, refDataField), blob);
 		return ibBinOp(ibQueryBinOp::Eq, ibColQ(mainQual, refDataField), ibConst(parentKey));
 	}
-	// Root level: the EMPTY parent reference — a zero guid, the sentinel stored for a parentless row. All rows
-	// of this single hierarchy table share the type (the _RTRef column), so an all-zero _RRRef finds exactly the
-	// roots. (A non-reference hierarchy's roots would compare inline; none exist yet.)
+	// Root level: the row has NO PARENT — and that has TWO spellings in the column, so the predicate must
+	// accept both or it silently hides rows.
+	//
+	//   * the zero-guid SENTINEL, written by the paths that store an empty reference explicitly;
+	//   * SQL NULL, in a row where the field was never written — a column added by a restructuring to
+	//     rows that already existed, or a row written before the hierarchy column was there at all.
+	//
+	// ⚠⚠ IT USED TO BE THE SENTINEL ALONE, as a binary equality — and `NULL = <blob>` is UNKNOWN, not
+	// true, so every null-parent row fell out of the ROOT level. Flat mode carries no parent predicate,
+	// so the same list showed everything flat and lost part of itself the moment it became a tree: rows
+	// that belong to nobody, visible nowhere, with no folder to expand to find them. Reported exactly
+	// that way — "as soon as the hierarchy appears, some elements disappear".
+	//
+	// All rows of this single hierarchy table share the type (the _RTRef column), so the _RRRef test
+	// alone identifies the roots. (A non-reference hierarchy's roots would compare inline; none exist.)
 	ibReference ref{ ibGuidImpl{} };
-	return ibBinOp(ibQueryBinOp::Eq, ibColQ(mainQual, refDataField),
-	               ibConstBlob(&ref, sizeof(ibReference)));
+	ibQueryExprPtr rootTest = OrFold(
+		ibIsNull(ibColQ(mainQual, refDataField), false),
+		ibBinOp(ibQueryBinOp::Eq, ibColQ(mainQual, refDataField),
+		        ibConstBlob(&ref, sizeof(ibReference))));
+
+	// ⚠ A THIRD SPELLING EXISTS IN OLD BASES, AND IT IS NOT THIS PREDICATE'S JOB TO ABSORB IT.
+	//
+	// Rows were found whose parent field holds neither NULL nor the sentinel this builds. Measured,
+	// not guessed: in a base created before `sizeof(ibReference)` went 20 → 16 (the metaID moved out
+	// to the _RTRef column), the column is still 20 bytes wide and every value written back then
+	// carries the metaID in its tail — an EMPTY parent reads `00…00 ec030000`, a real one
+	// `<guid> ec030000`. Today's code binds 16 bytes, the server pads with zeroes, and the compare
+	// matches rows written since and none written before. Those rows are invisible in the tree,
+	// unwritable (the rewrite keys on the same column) and yet readable and deletable.
+	//
+	// It was tempting to widen the ROOT test until they fell into it — the first attempt did exactly
+	// that with `OR NOT EXISTS (SELECT … FROM <same table> WHERE key = <main>.<parent>)`, emptied the
+	// list completely and was reverted (the outer scan carries no alias here, so the correlated
+	// reference bound to the subquery's own table). It would also have been the wrong cure: the
+	// parent is not dangling, it is EMPTY in an older layout, and a per-row existence subquery on
+	// every page forever is a heavy price for a defect that belongs to a moment in the past.
+	//
+	// The two real answers, both elsewhere:
+	//   * a genuine dangling parent — a folder that was deleted — no longer happens: deleting an
+	//     object clears the reference to itself in its children, in the same transaction
+	//     (ibValueRecordDataObjectRef::DeleteData);
+	//   * old-layout rows are a MIGRATION, which is what the declared compatibility version exists
+	//     for (docs/compatibility-version.md). A change to a physical constant with data already in
+	//     the field needs a rung and a branch — not a predicate that carries the past forever.
+	return rootTest;
 }
 
 ibQueryExprPtr ibMetaIRBuilder::BuildKeyInPredicate(const ibBackendQueryable* queryable,

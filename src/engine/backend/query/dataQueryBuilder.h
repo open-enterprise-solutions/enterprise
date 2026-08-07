@@ -697,6 +697,10 @@ public:
 	bool Update() const;
 	bool Delete() const;
 
+	// A key-only rewrite that touched no row missed its key — raise. A narrowed one (.Where) may
+	// legitimately match nothing and stays quiet. See the body for the case that made this necessary.
+	void RaiseIfKeyedRewriteMissed(long affected) const;
+
 	// L3-native write kind — the public surface never names the L2 statement
 	// (ibQueryStatement::Kind is translated to this only inside the .cpp).
 	enum class WriteKind { Insert, Upsert, Update, Delete };

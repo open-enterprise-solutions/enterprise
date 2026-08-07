@@ -882,6 +882,27 @@ void ibDataViewCtrl::DispatchPagedFetch(ibFetchDirection dir, int batch)
 		if (req->m_backfill == 0 && req->m_restoreFromSelection && viewport > 1)
 			req->m_backfill = viewport;
 
+		// ⚠⚠ ANY PAGE THAT STARTS AT A CURSOR MUST READ WHAT IS ABOVE IT. Not "an anchored refresh",
+		// not "a selection restore" — ANY of them, because nothing else ever will.
+		//
+		// The page begins at the cursor, so the rows before it are simply not in the buffer, and the
+		// only retry below fires when the fetch returns NOTHING — this one returns a full screen.
+		// The list then quietly lacks its beginning, refreshing does not help (keeping the position
+		// is the whole point of the cursor), and only something that rebuilds the model — a
+		// restructuring, or restarting — brings the rows back.
+		//
+		// ⚠ AND THE CURSOR IS NOT ALWAYS THE ANCHOR. It is selection, else anchor, else SAVED FOCUS
+		// (see where m_cursor is computed). Guarding on the anchor alone left the commonest case
+		// open — switching the view mode, where there is no anchor and the focus becomes the cursor:
+		// a list of ten showed seven, missing exactly the three above the focused row. The rule has
+		// to name the CONDITION (a page starting somewhere other than the top) rather than one of
+		// the reasons for it.
+		//
+		// One backward page, once, per such fetch.
+		if (req->m_backfill == 0 && viewport > 1
+		    && (req->m_restoreAnchor.IsOk() || req->m_savedFocus.IsOk() || req->m_restoreSelection.IsOk()))
+			req->m_backfill = viewport;
+
 		// ARMED, SO DISARM NOW. The flag goes down at dispatch, not when the answer
 		// lands: idle fires every pass and would otherwise start a second reset over
 		// the first. What discards an OVERTAKEN answer is the generation stamp.
