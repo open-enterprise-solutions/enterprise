@@ -8,6 +8,7 @@
 #include "appData.h"                 // DesignerMode() guard in Compile()
 #include "backend/compiler/cache/byteCodeCache.h"              // AOT cache Load / Save
 #include "backend/metaCollection/metaModuleObject.h"  // ibValueMetaObjectModuleBase full type for GetGuid/GetClassType
+#include "backend/metaData.h"                         // ibMetaData::GetConfigMD5 — the cache key's second half
 
 // The single ctor is inline in moduleInfo.h (it must reference ExportThunk +
 // BindTail). Only the dtor lives out-of-line.
@@ -187,8 +188,13 @@ bool ibRuntimeModuleDataObject::Compile()
 	// (b) Cache miss → fall through to compile-from-source. Single
 	//     unified assemble path at the bottom — descriptor doesn't
 	//     care which arm produced bc.
+	// WHAT THIS BYTECODE WOULD BE COMPILED AGAINST, as one value. It is part of the cache KEY, so a
+	// row saved under any earlier state of the configuration is not found at all — see byteCodeCache.h.
+	const ibMetaData* const owner = meta != nullptr ? meta->GetMetaData() : nullptr;
+	const wxString configMd5 = owner != nullptr ? owner->GetConfigMD5() : wxString();
+
 	bool ready = false;
-	if (meta != nullptr && ibByteCodeCache::Load(bc, meta->GetGuid())) {
+	if (meta != nullptr && ibByteCodeCache::Load(bc, meta->GetGuid(), configMd5)) {
 		if (bc.ResolveAndVerifyDependencies()) {
 			// Restore live pointers AOT skipped on serialize. m_parent
 			// points at the parent compile module's bytecode —
@@ -236,7 +242,7 @@ bool ibRuntimeModuleDataObject::Compile()
 		// constants) or DB error; the runtime keeps the live bc and
 		// the next session pays the recompile cost again.
 		if (meta != nullptr)
-			ibByteCodeCache::Save(bc);
+			ibByteCodeCache::Save(bc, configMd5);
 	}
 
 	// Publish bc in the process-wide registry. Dependents resolving

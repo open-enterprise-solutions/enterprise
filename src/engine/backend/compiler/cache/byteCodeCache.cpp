@@ -23,7 +23,7 @@
 // try/catch turns into a cache miss → recompile — the same graceful degradation
 // as the old `db_query == nullptr` guard. See docs/query-language-arc.md §17.
 
-bool ibByteCodeCache::Save(const ibByteCode& bc)
+bool ibByteCodeCache::Save(const ibByteCode& bc, const wxString& configMd5)
 {
 	if (db_query == nullptr) return false;
 	if (!db_query->TableExists(bytecode_cache_table)) return false;
@@ -43,11 +43,28 @@ bool ibByteCodeCache::Save(const ibByteCode& bc)
 	// connection, so there is no cross-connection isolation concern.
 	try {
 		ibDatabaseQueryBuilder q;
+		// WEED THE PREVIOUS CONFIGURATIONS OUT, ONCE. Rows keyed on an older digest can never be found
+		// again — which is the whole point — but "never found" is not "gone". The table cannot GROW
+		// without bound (descriptor_id is its primary key, so one row per descriptor, and a recompile
+		// replaces it), yet a descriptor the new configuration never compiles — a module that was
+		// deleted, or simply one nobody has called yet — keeps a blob nothing can ever use. This is
+		// the first moment the new digest is known to be real: a compile just succeeded under it. The
+		// guard keeps it to one statement per digest per process, so the ordinary path stays a
+		// DELETE-by-key plus an INSERT.
+		static wxString s_weededFor;
+		if (s_weededFor != configMd5) {
+			s_weededFor = configMd5;
+			try {
+				q.Execute(ibDelete(bytecode_cache_table,
+					ibBinOp(ibQueryBinOp::Ne, ibCol(wxT("config_md5")), ibConst(ibValue(configMd5)))));
+			} catch (...) { /* hygiene, not correctness — a stale row is unreachable either way */ }
+		}
 		q.Execute(ibDelete(bytecode_cache_table,
 			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("descriptor_id")), ibConst(ibValue(descIdStr)))));
 		q.Execute(ibInsert(bytecode_cache_table, {
 			{ wxT("descriptor_id"),    ibConst(ibValue(descIdStr)) },
 			{ wxT("bytecode_version"), ibConst(ibValue(bcVerStr)) },
+			{ wxT("config_md5"),       ibConst(ibValue(configMd5)) },
 			{ wxT("bc_blob"),          ibConstBlob(blob.GetData(),
 			                                       static_cast<size_t>(blob.GetDataLen())) },
 		}));
@@ -56,7 +73,7 @@ bool ibByteCodeCache::Save(const ibByteCode& bc)
 	return true;
 }
 
-bool ibByteCodeCache::Load(ibByteCode& outBc, const ibGuid& descId)
+bool ibByteCodeCache::Load(ibByteCode& outBc, const ibGuid& descId, const wxString& configMd5)
 {
 	if (db_query == nullptr) return false;
 	if (!db_query->TableExists(bytecode_cache_table)) return false;
@@ -64,14 +81,23 @@ bool ibByteCodeCache::Load(ibByteCode& outBc, const ibGuid& descId)
 	wxASSERT(descId.isValid());
 
 	try {
-		// SELECT bc_blob FROM <t> WHERE descriptor_id = <descId>
+		// SELECT bc_blob FROM <t> WHERE descriptor_id = <descId> AND config_md5 = <configMd5>
+		//
+		// THE FINGERPRINT IS PART OF THE KEY, not a field somebody compares afterwards. A row written
+		// against an earlier configuration is not "found and rejected" — it is not found. That removes
+		// the whole class of "somebody forgot the check" and makes a save self-invalidating: saving
+		// recomputes the configuration's digest, so every previously cached row falls out of reach in
+		// the same instant, without a single DELETE having to run first.
 		ibDatabaseQueryBuilder q;
 		ibQueryIR ir(
 			ibProject(
 				ibFilter(
 					ibScan(bytecode_cache_table),
-					ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("descriptor_id")),
-					        ibConst(ibValue(wxString(descId))))),
+					ibBinOp(ibQueryBinOp::And,
+					        ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("descriptor_id")),
+					                ibConst(ibValue(wxString(descId)))),
+					        ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("config_md5")),
+					                ibConst(ibValue(configMd5))))),
 				{ { ibCol(wxT("bc_blob")), wxEmptyString } }));
 
 		ibQueryResult res = q.ExecuteIR(ir);   // RAII: closes cursor + statement

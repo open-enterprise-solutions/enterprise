@@ -10,11 +10,29 @@
 // methods are no-ops if the cache table doesn't exist (defensive against
 // fresh DBs where Migrate hasn't run yet).
 //
-// Validity: a row is considered valid as long as it exists. The contract
-// for keeping cache honest sits on the Designer side — OnSaveMetaObject /
-// OnDeleteMetaObject hook Invalidate(descId) on every change. Bytecode
-// format drift is caught by ibByteCode::DeserializeAOT's magic / format-
-// version check (returns false ⇒ Load reports miss ⇒ recompile).
+// VALIDITY IS A KEY, NOT A CHECK. A row is looked up by (descriptor_id,
+// config_md5) — the configuration's own digest, recomputed on every load
+// and every save. Bytecode compiled against an earlier configuration is
+// therefore not "found and rejected"; it is not found, and the caller
+// takes the ordinary compile path. Saving the configuration produces a new
+// digest and every previously cached row falls out of reach in that same
+// instant, with no DELETE needing to run and nobody needing to remember to
+// run it. Invalidate() stays as hygiene (reclaiming space), no longer as
+// correctness.
+//
+// This replaced a validity rule of "the row exists", propped up by
+// Designer-side Invalidate hooks. The header of byteCodeAOT.cpp had long
+// DESCRIBED a fingerprint of source_hash + metadata_version +
+// compiler_version + kind_bindings_hash and the code checked none of them,
+// so anything that changed the meaning of the bytecode without touching
+// the module text — a renamed attribute, a changed type, a base opened by
+// a second tool — kept serving the stale blob. It cost half a day twice.
+// One digest of the whole configuration covers every one of those causes,
+// because the module text and the metadata shape are both inside it.
+//
+// Bytecode format drift stays caught separately by DeserializeAOT's magic
+// / format-version check — that one is about OUR build changing, not the
+// configuration's.
 ////////////////////////////////////////////////////////////////////////////
 
 #ifndef __IB_BYTECODE_CACHE_H__
@@ -34,7 +52,9 @@ public:
 	//
 	// Returns false on serialization failure or DB error. Caller is
 	// expected to log via the surrounding compile path.
-	static bool Save(const ibByteCode& bc);
+	// `configMd5` — ibMetaData::GetConfigMD5() of the configuration this bytecode was compiled
+	// against. Stored with the row and required to find it again.
+	static bool Save(const ibByteCode& bc, const wxString& configMd5);
 
 	// Try to populate `outBc` from cache. Returns:
 	//   true  — row found, blob deserialized successfully. outBc is
@@ -43,7 +63,7 @@ public:
 	//   false — no row, or DeserializeAOT rejected the blob (magic /
 	//           format-version mismatch). Caller treats as miss and
 	//           recompiles from source.
-	static bool Load(ibByteCode& outBc, const ibGuid& descId);
+	static bool Load(ibByteCode& outBc, const ibGuid& descId, const wxString& configMd5);
 
 	// DELETE the cache row for one descriptor. Used by Designer's
 	// OnSaveMetaObject / OnDeleteMetaObject hooks to keep the cache

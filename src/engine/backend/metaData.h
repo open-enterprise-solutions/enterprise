@@ -230,6 +230,12 @@ private:
 
 class BACKEND_API ibMetaData {
 	void DoGenerateNewID(ibMetaID& id, const ibValueMetaObject* top) const;
+
+	// The next id to hand out — see GenerateNewID. 0 = not seeded yet (the first call walks the tree
+	// once); reset to 0 whenever a new image is built, because a different configuration numbers
+	// from its own tree. `mutable` for the same reason GenerateNewID is const: minting an id changes
+	// no metadata, only the bookkeeping that keeps it unique.
+	mutable ibMetaID m_nextMetaId = 0;
 public:
 
 	ibMetaData() :
@@ -297,6 +303,13 @@ public:
 
 	virtual void SetVersion(const ibVersionID& version) = 0;
 	virtual ibVersionID GetVersion() const = 0;
+
+	// THE STATE OF THIS METADATA AS ONE VALUE — the MD5 of the serialised configuration, recomputed on
+	// every load and every save. A configuration answers with it; containers that have no such digest
+	// (external DataProcessor / Report, each its own file) answer empty. Anything derived FROM the
+	// metadata and stored outside it — compiled bytecode, above all — keys on this, so a save produces
+	// a new key and every artefact of the previous state simply stops being found.
+	virtual wxString GetConfigMD5() const { return wxEmptyString; }
 
 	virtual wxString GetFileName() const { return wxEmptyString; }
 	virtual const ibValueMetaObject* GetCommonMetaObject() const { return nullptr; }
@@ -490,7 +503,27 @@ public:
 	ibGuid  GuidByMetaId(const ibMetaID& id)  const;   // metaId -> stable guid (null if absent / not allowed)
 	ibMetaID MetaIdByGuid(const ibGuid& guid) const;   // guid -> live metaId (wxNOT_FOUND if unresolved)
 
-	//ID's
+	// ⭐ A METAID IS HANDED OUT ONCE PER OPEN CONFIGURATION, AND NEVER AGAIN.
+	//
+	// It used to be computed as max(every id in the live tree) + 1, on every call. Two things were
+	// wrong with that, and the second one broke databases:
+	//
+	//   * it walked the WHOLE tree per new object — O(n) for a question a counter answers in O(1);
+	//   * an id came BACK INTO CIRCULATION the moment its object left the tree. A metaobject's
+	//     physical column is named after its id (`fld<id>`), so a recycled id is a recycled COLUMN
+	//     NAME. Check a common attribute out and back in and the new copy asks for the same
+	//     `fld1073` the old one had — which is fine while every removal reaches the database, and
+	//     permanently fatal the moment one does not: from then on every apply tries to ADD a column
+	//     the table already has, and Firebird answers with a unique-key violation on
+	//     RDB$RELATION_FIELDS. Found by toggling one common attribute ten or fifteen times.
+	//
+	// Deleted objects are MARKED, not detached, so the old walk did hold their ids — until
+	// DeleteSubtree purged them, and the id fell free again. A counter needs no such timing: it
+	// only ever goes up.
+	//
+	// Seeded lazily from the tree the first time it is asked (so a configuration just loaded
+	// continues after its highest id) and reset when a new image is built — a different
+	// configuration is a different numbering.
 	ibMetaID GenerateNewID() const;
 
 	//generate new name
@@ -622,6 +655,10 @@ protected:
 	public:
 		explicit LoadGuard(ibMetaData* meta) : m_meta(meta) {
 			wxASSERT(m_meta->m_image == nullptr);   // must be closed first — else a run-without-close
+			// A NEW TREE NUMBERS ITSELF. The id counter is seeded from whatever this load brings in,
+			// so it must forget the previous configuration's high-water mark — otherwise a base
+			// opened after a larger one would start issuing ids from the OTHER one's ceiling.
+			m_meta->m_nextMetaId = 0;
 			// The image ctor builds its own designer infrastructure via the owner's
 			// CreateDesignerCache() (cache + manager; nullptr for non-designer kinds).
 			m_meta->m_image = std::make_shared<ibMetaImage>(m_meta);
@@ -630,7 +667,18 @@ protected:
 			if (!m_committed)
 				m_meta->m_image.reset();   // drop → load rolled back (frees ctors + cache + manager)
 		}
-		void Commit() { m_committed = true; }   // keep the image — it is now the live config
+		void Commit() {
+			m_committed = true;   // keep the image — it is now the live config
+			// ⚠⚠ AND FORGET THE SEED, because a seed taken DURING the load was taken from a tree that
+			// was not finished. The counter is filled lazily on the first request; if that request
+			// arrives mid-load (something creating a default object while the rest is still being
+			// read), the floor is the maximum of a PARTIAL tree — below ids that arrive afterwards.
+			// The old walk-every-time generator recovered by itself once the load finished; a
+			// counter cannot, and would keep issuing ids that already belong to something for the
+			// rest of the session. Clearing it here means the first request after a completed load
+			// re-seeds from the whole tree.
+			m_meta->m_nextMetaId = 0;
+		}
 		LoadGuard(const LoadGuard&) = delete;
 		LoadGuard& operator=(const LoadGuard&) = delete;
 	};
