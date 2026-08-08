@@ -5707,3 +5707,19 @@ msgstr "Дублировать ветвь"
 #: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
 msgid "There is no temporary table to drop yet: an earlier statement of this package has to make one first."
 msgstr "Уничтожать пока нечего: временную таблицу должен создать более ранний запрос пакета."
+
+#: src/engine/backend/metaCollection/metaRoleObject.h
+msgid "Access"
+msgstr "Доступ"
+
+#: src/engine/backend/metaCollection/metaRoleObject.h
+msgid "Composition"
+msgstr "Комбинирование"
+
+#: src/engine/backend/metaCollection/metaRoleObject.h
+msgid "Permitting"
+msgstr "Разрешающая"
+
+#: src/engine/backend/metaCollection/metaRoleObject.h
+msgid "Restricting"
+msgstr "Ограничивающая"

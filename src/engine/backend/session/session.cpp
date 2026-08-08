@@ -44,6 +44,15 @@ namespace {
 // names the right; it does not re-implement it.
 typedef bool (ibValueMetaObjectGenericData::*RightPredicate)() const;
 
+// One of the user's roles as the policy needs it: the module's procUnit and HOW the role combines
+// with the others. A union role ADDS to what is permitted (one admitting the row is enough); an
+// intersection role GRANTS NOTHING and SUBTRACTS (its restriction must hold whatever the others
+// admitted) — see ibRoleCompositionMode in metaRoleObject.h.
+struct ibRolePolicyUnit {
+	std::shared_ptr<ibProcUnit> m_proc;
+	ibRoleCompositionMode m_mode = ibRoleCompositionMode_Union;
+};
+
 class ibRuntimeAccessPolicy : public ibAccessPolicy
 {
 public:
@@ -71,7 +80,7 @@ public:
 			if (unit == nullptr)
 				continue;
 			if (const std::shared_ptr<ibProcUnit> proc = unit->GetProcUnit())
-				m_roleProcs.push_back(proc);
+				m_roleProcs.push_back(ibRolePolicyUnit{ proc, userRole.m_mode });   // the membership says how to compare
 		}
 	}
 
@@ -242,9 +251,19 @@ private:
 	// exception, or Allowed=False) OR it throws, the role FAILED -> DENY. A handler that is ABSENT
 	// (CallAsFunc returns false) is different — that role simply imposes no restriction -> ALLOW
 	// (migration-safe). A mistake thus over-restricts (visible), never exposes.
-	// Multi-role = OR (a user sees a row allowed by ANY role): a role granting full access (no handler, or
-	// succeeded with no restriction) opens the whole OR; a restricting role contributes its predicate; a
-	// FAILED role contributes NOTHING (does not widen); EVERY role failing -> the door denies outright.
+	// Multi-role folds by the role's own COMPOSITION MODE (ibRoleCompositionMode, a property of the role):
+	//
+	//     (union1 OR union2 …) AND intersection1 AND intersection2 …
+	//
+	// A UNION role is an ordinary right — a user sees a row allowed by ANY of them: one granting full
+	// access (succeeded with no restriction) opens the whole OR; a restricting one contributes its
+	// predicate; a FAILED one contributes NOTHING (does not widen); ALL of them failing -> deny.
+	// An INTERSECTION role grants nothing and SUBTRACTS: its restriction is AND-ed whatever the union
+	// admitted, so it is the one shape a second role cannot widen past — a data separator (organisation /
+	// division / clearance) declared ONCE instead of copied into every role. A failed intersection role
+	// denies outright, because a requirement that could not be established must not relax into nothing.
+	// The order roles are assigned in never changes the answer (OR commutes among the unions, AND among
+	// the intersections, and the shape between the groups is fixed) — unlike an ACL with DENY.
 	// TODO(perf): the module is a per-query template — JIT-compile it (hot path); do NOT cache its RESULT.
 	void ApplyToSource(ibDataQueryBuilder& query, const ibBackendQueryable* source,
 	                   const wxString& operation) const
@@ -259,7 +278,7 @@ private:
 		// The restricting roles' module procUnits were resolved ONCE in the ctor (post-compile, pre-run)
 		// and cached for the session's life; Apply already returned when the list is empty, so at least one
 		// role restricts here.
-		const std::vector<std::shared_ptr<ibProcUnit>>& procs = m_roleProcs;
+		const std::vector<ibRolePolicyUnit>& procs = m_roleProcs;
 
 		// Run one role's handler over a base decorator on `target`. The decorator folds Join/Where into
 		// `target` as a SIDE EFFECT; the handler signals its verdict by setting the by-ref `Allowed` arg to
@@ -293,7 +312,9 @@ private:
 
 		if (procs.size() == 1) {
 			// ONE restricting role — folds straight into the query (real source: pages + pushes down).
-			switch (runRole(procs.front(), query)) {
+			// The same for both composition modes: a lone union role IS the whole permission, and a lone
+			// intersection role is a plain AND, which is what folding into the query already means.
+			switch (runRole(procs.front().m_proc, query)) {
 			case RoleOutcome::Failed:    // loud fail-closed deny — say which source and which operation
 				ibBackendAccessException::Error(wxString::Format(_("%s on '%s' was refused by the role's access policy"),
 					operation, sourceName));
@@ -315,71 +336,113 @@ private:
 		// (a handler that runs, succeeds, and folds NO restriction) opens the OR. Terminal: if NO role
 		// participated (all handler-less) there is no RLS here -> ALLOW (migration-safe, matches the single-role
 		// NoHandler path); if roles participated but ALL failed -> fail-closed DENY.
-		bool anyParticipated = false;                     // any role RAN a handler (restrict / full-grant / fail)
-		std::vector<ibQueryPredicatePtr> rolePredicates;
-		for (const std::shared_ptr<ibProcUnit>& proc : procs) {
+		// ONE role, run against a per-role SCRATCH over the same source, reduced to the predicate it
+		// folded. The scratch keeps the main query untouched while the role is being asked, which is what
+		// lets the two buckets be combined differently without either seeing the other's fold. A null
+		// predicate with a Succeeded outcome means the role folded NOTHING — an explicit full grant.
+		const auto predicateOf = [&](const std::shared_ptr<ibProcUnit>& proc, RoleOutcome& outcome) -> ibQueryPredicatePtr {
 			ibDataQueryBuilder scratch;
 			scratch.From(source);
 			scratch.WithAccessPolicy(nullptr);            // trusted: the scratch is only mined for its predicate
-			const RoleOutcome outcome = runRole(proc, scratch);
+			outcome = runRole(proc, scratch);
+			if (outcome != RoleOutcome::Succeeded)
+				return nullptr;
 
-			if (outcome == RoleOutcome::NoHandler)
-				continue; // no handler -> this role does not participate -> NEUTRAL (does not widen, does not deny)
-			anyParticipated = true;
-			if (outcome == RoleOutcome::Failed)
-				continue; // fail-closed: a failed role admits no rows -> contributes NOTHING to the OR
-
-			// Succeeded — fold its restriction into the OR.
 			std::vector<const ibBackendQueryable*> scratchSources;
 			scratch.GetSources(scratchSources);
-			if (scratchSources.size() > 1) {
-				// JOIN-based role — a join can't be OR-folded as SQL, so MATERIALISE the rows it admits:
-				// project the source key of the joined result and OR-fold `key = v` over those keys (mirrors
-				// the query language's `key IN (subquery)` lowering). No key to reduce onto -> fail closed.
-				const std::vector<const ibBackendQueryColumn*> keyCols = source->GetPrimaryKeyColumns();
-				if (keyCols.empty() || keyCols.front() == nullptr)
-					ibBackendAccessException::Error(wxString::Format(
-						_("%s on '%s': the role restricts it through a join, but the source has no key to reduce onto"),
-						operation, sourceName));
-				const ibBackendQueryColumn* keyCol = keyCols.front();
-				scratch.Select(keyCol, wxT("v"));
-				ibDataQueryResult r = scratch.Execute(ibReadPageRequest{});
-				ibQueryPredicatePtr admitted;
-				while (r.Next()) {
-					ibQueryCondition c;
-					c.m_col = keyCol; c.m_value = r.GetColumn(wxT("v")); c.m_op = ibQueryFilterOp::Equal;
-					ibQueryPredicatePtr eq = ibQueryPredicate::Leaf(c);
-					admitted = admitted ? ibQueryPredicate::Compose(ibQueryPredicateKind::Or, admitted, eq) : eq;
-				}
-				if (!admitted)   // the role admits NO rows -> a contradiction, so its OR branch is FALSE
-					admitted = ibQueryPredicate::Compose(ibQueryPredicateKind::And,
-						ibQueryPredicate::Null(keyCol, false), ibQueryPredicate::Null(keyCol, true));
-				rolePredicates.push_back(admitted);
-				continue;
+			if (scratchSources.size() <= 1)
+				return scratch.GetWherePredicate();       // WHERE-only role (null = folded nothing)
+
+			// JOIN-based role — a join can't be OR-folded as SQL, so MATERIALISE the rows it admits:
+			// project the source key of the joined result and OR-fold `key = v` over those keys (mirrors
+			// the query language's `key IN (subquery)` lowering). No key to reduce onto -> fail closed.
+			const std::vector<const ibBackendQueryColumn*> keyCols = source->GetPrimaryKeyColumns();
+			if (keyCols.empty() || keyCols.front() == nullptr)
+				ibBackendAccessException::Error(wxString::Format(
+					_("%s on '%s': the role restricts it through a join, but the source has no key to reduce onto"),
+					operation, sourceName));
+			const ibBackendQueryColumn* keyCol = keyCols.front();
+			scratch.Select(keyCol, wxT("v"));
+			ibDataQueryResult r = scratch.Execute(ibReadPageRequest{});
+			ibQueryPredicatePtr admitted;
+			while (r.Next()) {
+				ibQueryCondition c;
+				c.m_col = keyCol; c.m_value = r.GetColumn(wxT("v")); c.m_op = ibQueryFilterOp::Equal;
+				ibQueryPredicatePtr eq = ibQueryPredicate::Leaf(c);
+				admitted = admitted ? ibQueryPredicate::Compose(ibQueryPredicateKind::Or, admitted, eq) : eq;
 			}
-			ibQueryPredicatePtr pred = scratch.GetWherePredicate();
-			if (!pred)
-				return;   // succeeded with NO Join and NO Where -> EXPLICIT full grant -> the OR is unrestricted
-			rolePredicates.push_back(pred);
+			if (!admitted)   // the role admits NO rows -> a contradiction, so its branch is FALSE
+				admitted = ibQueryPredicate::Compose(ibQueryPredicateKind::And,
+					ibQueryPredicate::Null(keyCol, false), ibQueryPredicate::Null(keyCol, true));
+			return admitted;
+		};
+
+		bool unionParticipated = false;                   // a UNION role RAN a handler (restrict / grant / fail)
+		bool unionUnrestricted = false;                    // one of them granted with no restriction at all
+		std::vector<ibQueryPredicatePtr> unionPredicates;
+		std::vector<ibQueryPredicatePtr> intersectionPredicates;
+
+		for (const ibRolePolicyUnit& roleUnit : procs) {
+			RoleOutcome outcome = RoleOutcome::NoHandler;
+			const ibQueryPredicatePtr pred = predicateOf(roleUnit.m_proc, outcome);
+
+			// A role with NO handler for this op says nothing about this source and is NEUTRAL in EITHER
+			// mode: it does not widen the OR (the multi-role fail-open footgun) and does not impose a
+			// requirement. That neutrality is also what keeps a separator over "Organisation" from hiding
+			// every catalogue that has no such attribute.
+			if (outcome == RoleOutcome::NoHandler)
+				continue;
+
+			if (roleUnit.m_mode == ibRoleCompositionMode_Intersection) {
+				// A requirement that could not be ESTABLISHED is not "no requirement". A handler that threw
+				// or never granted must not RELAX the separator it stands for, so — unlike a failed union
+				// role, which merely contributes nothing — a failed intersection role denies outright.
+				if (outcome == RoleOutcome::Failed)
+					ibBackendAccessException::Error(wxString::Format(
+						_("%s on '%s' was refused by a restricting role's access policy"), operation, sourceName));
+				if (pred)
+					intersectionPredicates.push_back(pred);
+				continue;                                 // succeeded, folded nothing -> requires nothing
+			}
+
+			unionParticipated = true;
+			if (outcome == RoleOutcome::Failed)
+				continue;    // fail-closed: a failed role admits no rows -> contributes NOTHING to the OR
+			if (!pred) {
+				unionUnrestricted = true;                 // EXPLICIT full grant -> the OR is unrestricted
+				continue;                                 // …but the intersections below still apply
+			}
+			unionPredicates.push_back(pred);
 		}
 
-		if (!anyParticipated)
-			return;                                       // no role implements RLS here -> migration-safe ALLOW
-		if (rolePredicates.empty())                       // roles participated but ALL failed -> fail-closed deny
-			ibBackendAccessException::Error(wxString::Format(
-				_("%s on '%s' was refused by every role's access policy"), operation, sourceName));
+		// The UNION half narrows only when at least one permitting role SPOKE. If none did (all
+		// handler-less), the table right granted at the gate is the whole permission and nothing is folded
+		// here — migration-safe, and the same answer the single-role NoHandler path gives. Note this is why
+		// an empty union is TRUE rather than the empty set: the door has a separate right-on-the-table
+		// stage, so a union role narrows an already-permitted table instead of granting it.
+		if (unionParticipated && !unionUnrestricted) {
+			if (unionPredicates.empty())                  // roles participated but ALL failed -> fail-closed
+				ibBackendAccessException::Error(wxString::Format(
+					_("%s on '%s' was refused by every role's access policy"), operation, sourceName));
+			ibQueryPredicatePtr orPred = unionPredicates.front();
+			for (size_t i = 1; i < unionPredicates.size(); ++i)
+				orPred = ibQueryPredicate::Compose(ibQueryPredicateKind::Or, orPred, unionPredicates[i]);
+			query.Where(orPred);                          // (role1 WHERE) OR (role2 WHERE) OR …
+		}
 
-		ibQueryPredicatePtr orPred = rolePredicates.front();
-		for (size_t i = 1; i < rolePredicates.size(); ++i)
-			orPred = ibQueryPredicate::Compose(ibQueryPredicateKind::Or, orPred, rolePredicates[i]);
-		query.Where(orPred);                              // (role1 WHERE) OR (role2 WHERE) OR …
+		// The INTERSECTION half applies ALWAYS — that is what makes it a separator rather than a right.
+		// Where() AND-folds, so each one narrows whatever survived the union half and the ones before it,
+		// and the ORDER the roles were assigned in cannot change the answer.
+		for (const ibQueryPredicatePtr& pred : intersectionPredicates)
+			query.Where(pred);
 	}
 
 	ibSession*        m_session;
 	const ibMetaData* m_metaData;   // the session's config metadata — resolves role metaobjects (config-level)
-	// The current user's role-module procUnits — resolved ONCE in the ctor (built post-compile, pre-run)
-	// and held for the session's whole life (roles are fixed while it lives). Empty = no restricting role.
-	std::vector<std::shared_ptr<ibProcUnit>> m_roleProcs;
+	// The current user's role-module procUnits, each with its composition mode — resolved ONCE in the
+	// ctor (built post-compile, pre-run) and held for the session's whole life (roles are fixed while
+	// it lives). Empty = no restricting role.
+	std::vector<ibRolePolicyUnit> m_roleProcs;
 	// Serialises the role-module run — see Apply. Mutable because applying a policy
 	// is const from the door's side; the lock is what makes that true when a rented
 	// run borrows this object onto another thread.

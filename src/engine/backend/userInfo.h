@@ -12,6 +12,7 @@
 
 #include "backend/backend.h"
 #include "backend/backend_core.h"
+#include "backend/roleHelper.h"   // ibRoleCompositionMode — how a role combines (the role layer owns it)
 
 #include <vector>
 
@@ -28,6 +29,11 @@ struct BACKEND_API ibUserInfo {
 		wxString m_strRoleGuid;
 		wxString m_strRoleName;
 		ibRoleID m_miRoleId = wxNOT_FOUND;
+		// HOW this role combines with the user's others (ibRoleCompositionMode) — it travels WITH the
+		// membership, in the same chunk as the id, so a reader gets the identifier and how to compare
+		// it in one read and resolves nothing. A row written before this field ends after the id and
+		// the entry keeps Union, which is the behaviour that row had.
+		ibRoleCompositionMode m_mode = ibRoleCompositionMode_Union;
 	};
 
 	bool IsOk() const { return !m_strUserGuid.IsEmpty(); }

@@ -39,19 +39,50 @@ bool ibAccessObject::AccessRight(const ibRole* role, const ibRoleUserInfo& roleI
 	const bool defValue = role->GetDefValue();
 	bool access = defValue;
 
-	// Several roles UNION: any role that grants the right wins (granting is what a role is for),
-	// and a role silent about it falls back to the right's default rather than to whatever the
-	// previously examined role happened to say.
-	for (const auto rid : roleInfo.m_arrayRole) {
-		access = defValue;
+	// What THIS role says about the right, or nothing at all. "Never flipped in the editor" has no
+	// entry, and that silence is what both folds read as neutral.
+	const auto statedBy = [&](const ibRoleID& rid, bool& stated) -> bool {
+		stated = false;
 		const auto iterator_role = m_valRoles.find(rid);
-		if (iterator_role != m_valRoles.end()) {
-			const auto iterator = std::find_if(iterator_role->second.begin(), iterator_role->second.end(),
-				[role](const auto& pair) { return stringUtils::CompareString(role->GetName(), pair.first); });
-			if (iterator != iterator_role->second.end())
-				access = iterator->second;
-		}
+		if (iterator_role == m_valRoles.end())
+			return false;
+		const auto iterator = std::find_if(iterator_role->second.begin(), iterator_role->second.end(),
+			[role](const auto& pair) { return stringUtils::CompareString(role->GetName(), pair.first); });
+		if (iterator == iterator_role->second.end())
+			return false;
+		stated = true;
+		return iterator->second;
+	};
+
+	// The UNION pass — any permitting role that grants the right wins, and a role silent about it
+	// falls back to the right's default rather than to whatever the previously examined role said.
+	// A restricting role takes no part: it grants nothing (see the second pass).
+	for (const auto& userRole : roleInfo.m_arrayRole) {
+		if (!userRole.IsUnion())
+			continue;
+		bool stated = false;
+		const bool value = statedBy(userRole.m_id, stated);
+		access = stated ? value : defValue;
 		if (access) break;
+	}
+
+	// The INTERSECTION pass — restricting roles SUBTRACT from whatever the union granted, which is
+	// the object-level twin of the RLS fold (docs/access-policy-rls.md, § Multi-role). An explicit
+	// True here means "I do not object", never "I allow": only an explicit False is an answer that
+	// changes anything, and silence stays neutral — otherwise a separator role would strip every
+	// right in the configuration the moment it was created.
+	//
+	// Order is irrelevant: one denial is enough and denial is terminal, so the sequence a user's
+	// roles were assigned in cannot change the answer — the property an ACL with DENY does not have.
+	for (const auto& userRole : roleInfo.m_arrayRole) {
+		if (userRole.IsUnion())
+			continue;
+		bool stated = false;
+		const bool value = statedBy(userRole.m_id, stated);
+		if (stated && !value) {
+			access = false;                               // an explicit denial — terminal
+			break;
+		}
 	}
 
 	return access;

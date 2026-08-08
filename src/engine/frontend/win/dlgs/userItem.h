@@ -22,19 +22,23 @@
 #include <wx/stattext.h>
 
 #include "backend/backend_core.h"
+#include "backend/roleHelper.h"   // ibRoleCompositionMode — the membership carries how the role combines
 
 #include "frontend/win/ctrls/checktree.h"
 #include "frontend/win/theme/luna_tabart.h"
 
 class ibDialogUserItem : public wxDialog {
 
-	struct CDataUserRole {
+	struct ibDataUserRole {
 		wxString m_strRoleGuid;
 		wxString m_strRoleName;
 		ibRoleID m_miRoleId;
+		// Read off the role metaobject beside its name, and written into the membership: the stored
+		// row then says both WHICH role and HOW it combines (ibRoleCompositionMode).
+		ibRoleCompositionMode m_mode = ibRoleCompositionMode_Union;
 	};
 
-	struct CDataUserLanguageItem {
+	struct ibDataUserLanguageItem {
 		wxString m_strLanguageGuid;
 		wxString m_strLanguageName;
 		wxString m_strLanguageCode;
@@ -53,8 +57,8 @@ private:
 
 	wxString m_strUserPassword;
 
-	std::map<wxTreeItemId, CDataUserRole> m_roleArray;
-	std::map<int, CDataUserLanguageItem> m_languageArray;
+	std::map<wxTreeItemId, ibDataUserRole> m_roleArray;
+	std::map<int, ibDataUserLanguageItem> m_languageArray;
 
 	wxAuiNotebook* m_mainNotebook;
 	wxPanel* m_main;

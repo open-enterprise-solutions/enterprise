@@ -345,6 +345,9 @@ public:
 
 #pragma endregion
 
+	// The user's roles, each carrying WHAT IT IS: the id and how to combine it
+	// (ibRoleCompositionMode). Both travel together in the sys_user row, so nothing here resolves
+	// anything — the membership already says how it is to be compared.
 	const std::vector<ibUserInfo::ibUserRole>& GetUserRoleArray() const;
 
 #pragma region language

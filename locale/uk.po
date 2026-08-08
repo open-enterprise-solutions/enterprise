@@ -5549,3 +5549,19 @@ msgstr "Дублювати гілку"
 #: src/engine/frontend/win/dlgs/queryConstructor/queryConstructor.cpp
 msgid "There is no temporary table to drop yet: an earlier statement of this package has to make one first."
 msgstr "Знищувати поки нічого: тимчасову таблицю має створити більш ранній запит пакета."
+
+#: src/engine/backend/metaCollection/metaRoleObject.h
+msgid "Access"
+msgstr "Доступ"
+
+#: src/engine/backend/metaCollection/metaRoleObject.h
+msgid "Composition"
+msgstr "Комбінування"
+
+#: src/engine/backend/metaCollection/metaRoleObject.h
+msgid "Permitting"
+msgstr "Дозвільна"
+
+#: src/engine/backend/metaCollection/metaRoleObject.h
+msgid "Restricting"
+msgstr "Обмежувальна"

@@ -132,10 +132,11 @@ ibDialogUserItem::ibDialogUserItem(wxWindow* parent, wxWindowID id, const wxStri
 	const wxTreeItemId& root = m_choiceRole->AddRoot(wxT(""));
 
 	for (const auto object : activeMetaData->GetAnyArrayObject<ibValueMetaObjectRole>(g_metaRoleCLSID)) {
-		CDataUserRole entry;
+		ibDataUserRole entry;
 		entry.m_strRoleGuid = object->GetDocPath();
 		entry.m_strRoleName = object->GetName();
 		entry.m_miRoleId = object->GetMetaID();
+		entry.m_mode = object->GetRoleCompositionMode();
 		const int image = imageList->Add(object->GetIcon());
 		const wxTreeItemId& id = m_choiceRole->AppendItem(root, object->GetSynonym(), image, image);
 		m_choiceRole->SetItemState(id, ibCheckTree::UNCHECKED);
@@ -145,7 +146,7 @@ ibDialogUserItem::ibDialogUserItem(wxWindow* parent, wxWindowID id, const wxStri
 	m_choiceLanguage = new wxChoice(m_other, wxID_ANY, wxDefaultPosition, wxDefaultSize);
 	for (const auto object : activeMetaData->GetAnyArrayObject<ibValueMetaObjectLanguage>(g_metaLanguageCLSID)) {
 
-		CDataUserLanguageItem entry;
+		ibDataUserLanguageItem entry;
 		entry.m_strLanguageGuid = object->GetDocPath();
 		entry.m_strLanguageCode = object->GetLangCode();
 
@@ -240,7 +241,7 @@ ibDialogUserItem::ibDialogUserItem(wxWindow* parent, wxWindowID id, const wxStri
 
 			const int selection = m_choiceLanguage->GetSelection();
 			if (selection != wxNOT_FOUND) {
-				const CDataUserLanguageItem& info = m_languageArray.at(selection);
+				const ibDataUserLanguageItem& info = m_languageArray.at(selection);
 				userInfo.m_strLanguageGuid = info.m_strLanguageGuid;
 				userInfo.m_strLanguageName = info.m_strLanguageName;
 				userInfo.m_strLanguageCode = info.m_strLanguageCode;
@@ -253,11 +254,12 @@ ibDialogUserItem::ibDialogUserItem(wxWindow* parent, wxWindowID id, const wxStri
 
 			while (item.IsOk()) {
 				if (ibCheckTree::CHECKED == m_choiceRole->GetItemState(item)) {
-					const CDataUserRole& info = m_roleArray.at(item);
+					const ibDataUserRole& info = m_roleArray.at(item);
 					auto& entry = userInfo.m_roleArray.emplace_back();
 					entry.m_strRoleGuid = info.m_strRoleGuid;
 					entry.m_strRoleName = info.m_strRoleName;
 					entry.m_miRoleId = info.m_miRoleId;
+					entry.m_mode = info.m_mode;
 					// Parenthesised as it always behaved: a role grants the right only if it carries
 					// BOTH administration flags, and any one such role is enough for the user.
 					access_right = access_right || (commonObject->AccessRight_Administration(info.m_miRoleId) &&

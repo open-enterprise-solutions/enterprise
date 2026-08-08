@@ -148,9 +148,11 @@ bool ibValueMetaObject::IsFullAccess() const
 
 ibRoleUserInfo ibValueMetaObject::GetUserRoleInfo() const
 {
+	// Each role arrives carrying WHAT IT IS — the id and how to combine it, stamped once when the
+	// session compiled its root. Nothing to look up here.
 	ibRoleUserInfo roleInfo;
-	for (auto role : appData->GetUserRoleArray())
-		roleInfo.m_arrayRole.emplace_back(role.m_miRoleId);
+	for (const auto& role : appData->GetUserRoleArray())
+		roleInfo.m_arrayRole.emplace_back(role.m_miRoleId, role.m_mode);
 	return roleInfo;
 }
 

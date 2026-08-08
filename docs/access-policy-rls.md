@@ -106,25 +106,77 @@ decorator. Multi-company / soft-delete / audit are other policies over the same 
 
 ---
 
-## Multi-role — OR
+## Multi-role — the composition mode
 
-The user's role procUnits are resolved once (see *Hot path* below). One restricting role folds
-straight into the query. Several roles **OR** their restrictions (a user sees a row allowed by **any**
-of their roles):
+The user's role procUnits are resolved once (see *Hot path* below). One restricting role folds straight
+into the query. Several roles fold by **each role's own composition mode** — a property on the role
+(`ibRoleCompositionMode`, `metaCollection/metaRoleObject.h`), enumeration `RoleCompositionMode`:
 
-- A **Where-only role** contributes its predicate; the predicates are OR-combined and added as one
-  `query.Where(P1 OR P2 …)` — the real source is kept, so the query still pages.
+| Mode | Label in the tree | Fold | Means |
+|---|---|---|---|
+| `Union` (**default**) | Permitting | `∪` — OR among themselves | an ordinary right: it ADDS to what is permitted, one admitting the row is enough |
+| `Intersection` | Restricting | `∩` — AND over everything | it GRANTS NOTHING and SUBTRACTS: its restriction must hold whatever the union roles admitted |
+
+```
+rows = (union1 OR union2 …) AND intersection1 AND intersection2 …
+```
+
+**Why the second mode exists.** With OR alone, a data separator (organisation / division / clearance)
+has to be repeated inside every role, and assigning one more role can always widen past it. As an
+intersection role it is declared **once** and nothing can widen past it — which is also why the
+combinatorics add instead of multiplying: N rights + M separators = N+M roles, not N×M.
+
+**The order roles are assigned in never changes the answer** — OR commutes among the unions, AND among
+the intersections, and the shape between the two groups is fixed. This is the property an ACL with
+`DENY` does not have, and it is what keeps "why can't I see this row" answerable: either no permitting
+role admitted it, or one named restricting role subtracted it — both with a breakpoint in a module.
+
+A third `Deny` mode would add no expressive power: it is an intersection whose condition is negated.
+
+**The same mode folds the RIGHTS on the object**, not only the row predicates — `ibAccessObject::AccessRight`
+(`backend/roleHelper.cpp`) runs a union pass and then an intersection pass over the one role list. It needed no
+new stored state: a right's value is kept only where it was actually flipped in the editor, otherwise the
+right's own default answers, so "this role never said anything about this right" was already expressible. A
+restricting role grants nothing there either — an explicit `True` means "I do not object"; only an explicit
+`False` takes the right away, and it is terminal. The mode itself therefore lives in the role layer
+(`ibRoleCompositionMode`, `backend/roleHelper.h`) rather than in the Role metaobject, which only carries it as
+a property; a caller collecting the user's roles asks the base (`GetRoleCompositionMode`) and never learns the
+Role metatype.
+
+**The editor needs no third checkbox state.** Every right in the tree declares its default as `true` (19
+`CreateRole` calls, none passing `false`), so "never set" and "explicitly allowed" both paint as a tick and
+both behave identically — neither takes anything away. Only a CLEARED box is an act, and on a restricting
+role it reads exactly as the role's label says. A freshly created restricting role therefore subtracts
+nothing until someone clears a specific right, and until the first such role exists the intersection pass
+finds no participants and does not run at all.
+
+Per-role behaviour inside that formula:
+
+- A **Where-only role** contributes its predicate. Union predicates are OR-combined and added as one
+  `query.Where(P1 OR P2 …)`; each intersection predicate is added as its own `query.Where(P)`, which
+  AND-folds. The real source is kept in both cases, so the query still pages.
 - A **join-based role** cannot be OR-folded as SQL (the SQL IR has `IN (list)` but no `IN (subquery)`),
   so it is reduced by **materialising** the source keys it admits: run the join once, collect the
   admitted keys, fold `key = v OR …` (mirrors the query language's `key IN (subquery)` lowering). The
   materialisation runs during the Table stage of `CheckSelect`, before the main query executes — sequential, not
   nested.
-- A role that **succeeds** (sets `Allowed = True`) with **no restriction**, or a role with **no handler**,
-  grants full access → the whole OR is left unrestricted.
-- A **failed** role (threw / swallowed / never set `Allowed`) contributes **nothing** — it does *not*
-  widen the OR (a failed role must not read as "allow all"), and if **every** role fails the door denies
-  outright. The `Allowed` verdict is what distinguishes "grant full access" from "failed" — without it a
-  failed role in an OR would silently open everything.
+- A role with **no handler** for the operation says nothing about this source and is **NEUTRAL in either
+  mode**: it neither widens the OR (the multi-role fail-open footgun) nor imposes a requirement. That
+  neutrality is what stops a separator over `Organisation` from hiding every catalogue that has no such
+  attribute — the whole of the NSI.
+- A role that **succeeds** (sets `Allowed = True`) with **no restriction** is an explicit full grant: a
+  union role leaves the OR unrestricted; an intersection role simply requires nothing. The intersections
+  still apply either way.
+- A **failed** role (threw / swallowed / never set `Allowed`) is where the two modes deliberately
+  diverge. A failed **union** role contributes **nothing** — it does *not* widen the OR, and if every
+  union role fails the door denies outright. A failed **intersection** role **denies outright on its
+  own**: a requirement that could not be established must not relax into no requirement, or a throwing
+  handler would WIDEN what a separator was there to narrow.
+- **An empty union is TRUE, not the empty set.** If no union role spoke, the table right granted at the
+  Table stage is the whole permission and nothing is folded here (migration-safe). This differs from
+  Postgres RLS, where `RESTRICTIVE` without `PERMISSIVE` shows nothing — there is no separate
+  right-on-the-table stage there, whereas here a union role narrows an already-permitted table rather
+  than granting it.
 
 ---
 

@@ -10,6 +10,36 @@
 class BACKEND_API ibAccessObject;
 
 //********************************************************************************************
+//*                                  Role composition                                        *
+//********************************************************************************************
+
+// How a role COMBINES with the user's other roles. It lives HERE, at the top of the role layer,
+// because both users of it are below the metadata: the runtime role list (ibRoleUserInfo) and the
+// rights fold (ibAccessObject::AccessRight). The Role METAOBJECT only carries it as a property.
+//
+// Named after the SET operation rather than the boolean one, because that is what the fold does:
+//
+//   Union        - the role ADDS to what is permitted; one of them granting is enough. An ordinary
+//                  right, and the DEFAULT — anything that does not say otherwise is one, so an
+//                  existing configuration behaves exactly as it did.
+//   Intersection - the role GRANTS NOTHING and SUBTRACTS: what it denies stays denied whatever the
+//                  union roles granted, and no further role can widen past it. This is what a data
+//                  SEPARATOR is (organisation / division / clearance): declared once instead of
+//                  copied into every role, so rights and separators ADD (N+M) instead of
+//                  multiplying (N×M).
+//
+// The verdict is (union1 OR union2 …) AND intersection1 AND intersection2 …, so the ORDER roles are
+// assigned in never changes the answer — unlike an ACL with DENY, where it decides the outcome. A
+// third "deny" mode would add no expressive power: it is an intersection with a negated condition.
+//
+// A role that says NOTHING participates in neither fold. Without that neutrality a separator would
+// strip every right / hide every table it was never told about.
+enum ibRoleCompositionMode {
+	ibRoleCompositionMode_Union,
+	ibRoleCompositionMode_Intersection
+};
+
+//********************************************************************************************
 //*										 Role												 *
 //********************************************************************************************
 
@@ -47,15 +77,33 @@ private:
 	bool m_defValue;  // the answer when nothing was ever set for this right
 };
 
+// ONE of the user's roles at run time: which role, and how it combines. A single list of these —
+// splitting them into two would state the same fact twice and let the halves drift.
+struct ibUserRoleEntry {
+
+	ibUserRoleEntry() {}
+	ibUserRoleEntry(const ibRoleID& id, const ibRoleCompositionMode& mode = ibRoleCompositionMode_Union)
+		: m_id(id), m_mode(mode) {}
+
+	bool IsUnion() const { return m_mode == ibRoleCompositionMode_Union; }
+
+	ibRoleID m_id = wxNOT_FOUND;
+	ibRoleCompositionMode m_mode = ibRoleCompositionMode_Union;
+};
+
 struct ibRoleUserInfo {
 
 	ibRoleUserInfo() {}
-	ibRoleUserInfo(const ibRoleID& id) : m_arrayRole({ id }) {}
-	ibRoleUserInfo(const std::vector<ibRoleID>& array) : m_arrayRole(array) {}
+	ibRoleUserInfo(const ibRoleID& id) : m_arrayRole({ ibUserRoleEntry(id) }) {}
+	ibRoleUserInfo(const std::vector<ibUserRoleEntry>& array) : m_arrayRole(array) {}
 
 	bool IsSetRole() const { return m_arrayRole.size() > 0; }
 
-	std::vector<ibRoleID> m_arrayRole;
+	// The user's roles, each carrying its own composition mode (see ibRoleCompositionMode above).
+	// A restricting role participates only where it SAYS something: "never flipped in the editor" is
+	// already distinguishable from "cleared" — the value map holds an entry only for a right that was
+	// actually set (see ibAccessObject::AccessRight) — so neutrality needs no new stored state.
+	std::vector<ibUserRoleEntry> m_arrayRole;
 };
 
 #include "backend/fileSystem/fs.h"
@@ -64,6 +112,11 @@ class BACKEND_API ibAccessObject {
 public:
 
 	virtual ~ibAccessObject();
+
+	// How THIS object combines when it is used as a role. Union for everything that is not a role —
+	// asked through the base so a caller collecting the user's roles never has to know the Role
+	// metatype (the Role metaobject overrides it from its own property).
+	virtual ibRoleCompositionMode GetRoleCompositionMode() const { return ibRoleCompositionMode_Union; }
 
 	bool AccessRight(const ibRole* role) const { return AccessRight(role, GetUserRoleInfo()); }
 	bool AccessRight(const wxString& strRoleName) const { return AccessRight(strRoleName, GetUserRoleInfo()); }

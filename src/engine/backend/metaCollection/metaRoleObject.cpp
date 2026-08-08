@@ -97,6 +97,11 @@ bool ibValueMetaObjectRole::WriteData(ibDataNode& node) const
 		return false;
 
 	node.SetProperty(m_propertyRoleModule->GetName(), m_propertyRoleModule->GetNodeValue());
+	// A property that is not written here does not exist past the session that set it — the
+	// SplitTotals lesson. For a restricting role the symptom would be the worst kind: after a
+	// reload it would silently become a permitting one, so the restriction disappears and the
+	// visibility WIDENS.
+	node.SetProperty(m_propertyComposition->GetName(), m_propertyComposition->GetNodeValue());
 	return true;
 }
 
@@ -106,6 +111,10 @@ bool ibValueMetaObjectRole::ReadData(const ibDataNode& node)
 		return false;
 
 	m_propertyRoleModule->ReadNodeValue(node.GetProperty(m_propertyRoleModule->GetName()));
+	// Absent in a configuration written before this property existed — the node returns an empty
+	// value and the property keeps its Union default, which is exactly the old behaviour. No
+	// compatibility-version branch is needed for that reason.
+	m_propertyComposition->ReadNodeValue(node.GetProperty(m_propertyComposition->GetName()));
 	return true;
 }
 
@@ -114,3 +123,6 @@ bool ibValueMetaObjectRole::ReadData(const ibDataNode& node)
 //***********************************************************************
 
 METADATA_TYPE_REGISTER(ibValueMetaObjectRole, "Role", g_metaRoleCLSID);
+
+//add new enumeration
+ENUM_TYPE_REGISTER(ibValueEnumRoleCompositionMode, "RoleCompositionMode", enum_to_clsid("EN_RLCM"));

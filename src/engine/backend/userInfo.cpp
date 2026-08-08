@@ -52,6 +52,12 @@ void ReadRoleChunk(const wxMemoryBuffer& buffer, ibUserInfo& info)
 		try {
 			entry.m_strRoleGuid = reader.r_stringZ();
 			entry.m_miRoleId    = reader.r_s32();
+			// The composition mode travels WITH the membership, exactly like the id. Rows written
+			// before it exists simply end here, and the entry keeps its Union default — which is the
+			// behaviour those rows had. Checked rather than caught so one short row does not abandon
+			// the roles that follow it.
+			if (!reader.eof())
+				entry.m_mode = static_cast<ibRoleCompositionMode>(reader.r_s32());
 			info.m_roleArray.emplace_back(std::move(entry));
 		} catch (...) {
 			// Buffer truncated or malformed past this point — stop
@@ -87,6 +93,7 @@ wxMemoryBuffer WriteRoleChunk(const ibUserInfo& info)
 	for (const auto& role : info.m_roleArray) {
 		writer.w_stringZ(role.m_strRoleGuid);
 		writer.w_s32(role.m_miRoleId);
+		writer.w_s32(role.m_mode);
 	}
 	return writer.buffer();
 }
