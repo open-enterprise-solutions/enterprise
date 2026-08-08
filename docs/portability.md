@@ -328,8 +328,7 @@ now that CI builds the applications everywhere else; `designer` compiles `mainFr
 `Global test environment tear-down`, and then does not exit. Linux/GTK only — the same binary
 exits cleanly on Windows, where the whole local suite (1208 with nothing excluded) runs to the
 end. The teardown is two lines, `ibWxGuiEnvironment::TearDown` in `tests/frontendFix.h`:
-`wxTheApp->OnExit()` then `wxEntryCleanup()`. The process is inside one of them; **which one is
-not yet known**, and the reason it is not known is the rest of this section.
+`wxTheApp->OnExit()` then `wxEntryCleanup()`. The second one, as the stack below finally showed.
 
 **Why three runs produced no evidence.** The step bounds the run at 600 s and, on crossing it,
 takes every thread's stack — the one thing a hang on a machine you do not have cannot otherwise
@@ -360,3 +359,36 @@ Deterministic, not unlucky: the same thing would happen on the tenth run as on t
   inspection — the job manager's tick thread (`DestroyAppDataEnv` stops it, and it predates the
   batch) and queued window deletion (`wx/app.h`: with no event loop running, `Destroy()` deletes
   **directly**) — which is the argument for measuring instead of writing a third.
+
+**The answer (2026-08-07).** With the watchdog attached to the right pid, one run named it:
+
+```
+ibWxGuiEnvironment::TearDown  ->  wxEntryCleanup  ->  wxApp::CleanUp
+  ->  wxLog::SetActiveTarget(nullptr)  ->  wxLogGui::Flush   (nMsgCount = 21)
+  ->  wxLogDialog::ShowModal  ->  gtk_main  ->  poll(timeout = -1)
+```
+
+A GUI `wxApp` installs **`wxLogGui`**, and that target does not print warnings — it buffers them
+and pours the whole batch into a **modal** `wxLogDialog` when the log target is taken down, which
+`wxApp::CleanUp` does with `delete wxLog::SetActiveTarget(nullptr)`. That happens *after* the last
+test has passed, so the suite is green, the exit code never arrives, and no assertion is involved
+anywhere. It is not a portability fault and not the new tests: any warning at all is enough, and
+the batch merely loaded more icons. All 21 messages were the same one — libpng's
+`iCCP: known incorrect sRGB profile`.
+
+Three things came out of it, in the order they matter:
+
+- **The harness suppresses the log target too**, not just asserts and CRT reports:
+  `delete wxLog::SetActiveTarget(new wxLogStderr())` right after `wxEntryStart`. stderr has no OK
+  button, and wx still deletes the target itself in `CleanUp`. The general rule the harness now
+  follows: headless, *any deferred flush in a GUI build is a modal window*.
+- **The step's shell is `bash -e`** (the Actions default; `set -uo pipefail` in the body does not
+  undo it), so `wait "$runner"; status=$?` aborted the script at the `wait` — which is why the run
+  that produced the stack printed no `gui.log`, ran no control run, and never reached the
+  skipped-suite check. It is `wait "$runner" || status=$?` now. A diagnostic that only runs on
+  failure has to survive the failure.
+- **The warnings had a source worth removing**: six wxInclude-generated PNGs in
+  `frontend/win/editor/codeEditor/res/bitmaps_res.h` carried a Photoshop `iCCP` chunk libpng
+  rejects. The chunk is ancillary and carries its own CRC, so dropping it needs no re-encode —
+  verified pixel-identical on all six, and the header went from 128 KB to 29 KB. A sweep over the
+  other embedded images (71 base64 PNGs, 5 `.png`, 23 `.ico`) found no second carrier.

@@ -28,6 +28,7 @@
 #include <wx/app.h>
 #include <wx/init.h>
 #include <wx/debug.h>   // wxSetAssertHandler
+#include <wx/log.h>     // wxLogStderr — the default wxLogGui is a MODAL flush
 
 #ifdef _WIN32
 #include <crtdbg.h>
@@ -68,8 +69,18 @@ public:
 		wxApp::SetInstance(new ibFrontendTestApp());
 		int argc = 0;
 		m_ok = wxEntryStart(argc, static_cast<wxChar**>(nullptr));
-		if (m_ok)
+		if (m_ok) {
+			// The last dialog left, and the one that actually hung CI: a GUI wxApp
+			// installs wxLogGui, which does not print warnings — it BUFFERS them and
+			// pours the whole batch into a modal wxLogDialog when the log target goes
+			// away (wxApp::CleanUp -> wxLog::SetActiveTarget(nullptr) -> Flush). That
+			// happens inside wxEntryCleanup below, AFTER the last test passed, so the
+			// suite is green and the process never exits. Any warning at all is enough
+			// (libpng's "iCCP: known incorrect sRGB profile" on our icons is one).
+			// stderr has no OK button.
+			delete wxLog::SetActiveTarget(new wxLogStderr());
 			m_ok = wxTheApp->CallOnInit();
+		}
 	}
 	void TearDown() override {
 		if (m_ok) {

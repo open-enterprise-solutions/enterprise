@@ -308,13 +308,19 @@ jobs:
               fi
             ) &
             local watchdog=$!
-            wait "$runner"; local status=$?
+            # `|| status=$?`, not `; status=$?`: the step's shell is `bash -e`, so a
+            # non-zero `wait` (137 when the watchdog kills a hung run) aborts the whole
+            # script THERE — which is why the first stack came with no gui.log and no
+            # control run. The bare `$?` never got read.
+            local status=0
+            wait "$runner" || status=$?
             kill "$watchdog" 2>/dev/null || true
             cat "$log"
             return $status
           }
 
-          run_suite gui.log 600; status=$?
+          status=0
+          run_suite gui.log 600 || status=$?
 
           # THE CONTROL RUN — and only when there is something to explain.
           #
