@@ -448,11 +448,17 @@ jobs:
   benchmarks-linux:
     name: Benchmarks (Linux, Release) — record only
     runs-on: ubuntu-22.04
-    # NOT on every push: this is the only job that builds Release, which means
-    # building wxWidgets from scratch — ~16 minutes before the benches even
-    # start. It records numbers, it does not gate anything, so it runs on demand
-    # and on the release branch rather than on every commit to develop.
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/master'
+    # Runs on the BRANCH THE WORK HAPPENS ON. This is the only job that builds
+    # Release — wxWidgets from scratch, ~16 minutes before the benches even start —
+    # and it was held back to master for that reason, which meant the numbers only
+    # ever appeared long after the change that moved them. A performance figure is
+    # worth what it is worth NEXT TO the commit it belongs to, so develop pays the
+    # minutes. It still gates nothing (`|| true` on the run, no threshold), so a
+    # slow or noisy bench cannot fail anything; it only records.
+    #
+    # Pull requests are deliberately NOT included: a PR would run it a second time
+    # for the same commits already measured on develop.
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/master'
     steps:
       - uses: actions/checkout@v5
         with:
