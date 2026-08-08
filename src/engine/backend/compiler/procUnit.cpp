@@ -1879,7 +1879,9 @@ bool ibProcUnit::SetPropVal(const wxString& strPropName, const ibValue& varPropV
 	else {
 		const long lPropPos = m_cCurContext.GetLocalCount();
 		m_cCurContext.SetLocalCount(lPropPos + 1);
-		m_cCurContext.m_cLocVars[lPropPos] = ibValue(strPropName);
+		// (was: m_cLocVars[lPropPos] = ibValue(strPropName) — a no-op. The next line
+		// overwrites the very same slot, and above MAX_STATIC_VAR it wrote into the
+		// inline buffer while m_pRefLocVars pointed at the heap.)
 		*m_cCurContext.m_pRefLocVars[lPropPos] = varPropVal;
 	}
 	return true;

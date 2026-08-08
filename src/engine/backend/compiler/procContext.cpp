@@ -7,10 +7,10 @@
 
 ibRunContextSmall::~ibRunContextSmall()
 {
-	if (m_lVarCount > MAX_STATIC_VAR) {
-		wxDELETEA(m_pLocVars);
-		wxDELETEA(m_pRefLocVars);
-	}
+	// Inline slots are placement-constructed, so they must be destroyed by hand
+	// — including when an exception unwinds through a live frame. DestroyLocals
+	// is the single place that knows which storage was used.
+	DestroyLocals();
 }
 
 //*************************************************************************************************
@@ -19,11 +19,7 @@ ibRunContextSmall::~ibRunContextSmall()
 
 ibRunContext::~ibRunContext()
 {
-	//erase loc vars 
-	if (m_lVarCount > MAX_STATIC_VAR) {
-		wxDELETEA(m_pLocVars);
-		wxDELETEA(m_pRefLocVars);
-	}
+	DestroyLocals();
 }
 
 const ibByteCode* ibRunContext::GetByteCode() const

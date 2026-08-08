@@ -324,9 +324,9 @@ Two effects worth naming, neither of them speed: the loop reads as opcodes inste
 formatting, and every runtime error is now visible as a list next to the compiler's — which is
 also what makes them translatable in one place.
 
-### 5.6 Call frame — measured, NOT fixed
+### 5.6 Call frame — LANDED 2026-08-08
 
-The largest remaining gap, left deliberately as an arc rather than an evening's edit.
+The largest single win of the day, and the last one found by measuring rather than guessing.
 
 A call costs **335.8 ns** while an arithmetic opcode is ~15 ns. `ibRunContextSmall` holds
 `ibValue m_cLocVars[MAX_STATIC_VAR]` (25) plus a pointer row, and `ibValue` has a virtual
@@ -340,18 +340,42 @@ Measured (`tests/bench_runtime.cpp`, `DISABLED_FrameCost`, min-of-4):
 | 25 `ibValue` — what every call builds today | **149.8** |
 | 3 `ibValue` — what a typical function uses | **20.5** |
 
-**~45% of a call is spent on slots nobody reads.** Building only the used ones (raw storage +
-placement new — the CPython 3.11 "zero-cost frames" move) would put recursion at ~206 ns (−39%)
-and LINQ, which pays three calls per element, at ~520 ns (−43%). Bigger than everything landed
-above, combined.
+**~45% of a call was spent on slots nobody reads.**
 
-Two caveats that must travel with the number. The measurement is **indirect** —
-`ibRunContextSmall`'s destructor is not exported, so a test TU cannot build the frame; what is
-timed is its core, the `ibValue` array, not the pointer row alongside it. And the fix hands
-lifetime management to us **inside the interpreter**, where exceptions are a working mechanism
-(every `Raise`, every script `try`, every session cancel unwinds through a live frame). Today the
-compiler destroys those 25 objects on unwind; with placement new that becomes our job. Needs its
-own tests — an exception thrown mid-frame, and deep recursion — before it needs its optimisation.
+Both frames (`ibRunContextSmall` and `ibRunContext`) now hold RAW storage —
+`alignas(ibValue) unsigned char m_cLocStorage[sizeof(ibValue) * MAX_STATIC_VAR]` — and construct
+only the declared slots via placement new. The pointer row lost its `= {}` for the same reason:
+zeroing 25 pointers to use three is the same waste in miniature. This is the CPython 3.11
+"zero-cost frames" move.
+
+Result (min-of-4, no LTCG, against the state right before this change):
+
+| scenario | before | after | Δ |
+|---|---|---|---|
+| host→script | 360.7 | **223.8** | **−38%** |
+| recursion | 318.2 | **226.5** | **−29%** |
+| LINQ | 903 | **711.9** | **−21%** |
+| arith loop | 71.7 | 71.1 | control — barely calls |
+
+Call overhead over native: **×220 → ×154** (recursion), **×205 → ×130** (host→script).
+
+**Which frame matters, and why the first attempt showed nothing.** Applying this to
+`ibRunContextSmall` alone moved not a single number — its call sites ask for
+`std::max(argCount, MAX_STATIC_VAR)`, i.e. 25 regardless (`procUnit.cpp` OPER_CALL_METHOD /
+OPER_NEW), so there was nothing to save. `OPER_CALL` asks for the function's REAL local count
+(`ibRunContext cRunContext(index3)`), and that is where the win lives. If those two call sites are
+ever revisited, the `max(...)` is the thing to question.
+
+**Lifetime is ours now.** `DestroyLocals` is the single place that knows whether storage came from
+the heap or the inline buffer; both destructors and `SetLocalCount` funnel through it. That
+matters because an exception unwinding through a live frame is a working mechanism here — every
+`Raise`, every script `try`, every session cancel — and the compiler no longer destroys those
+slots for us. The suite (1102, including closure-capture and try/except paths) stayed green
+across the change; a dedicated exception-mid-frame test would still be worth adding.
+
+Two things this did NOT touch: `method resolve` (its frame is the `max(...)` one) and the
+`ibValue` virtual destructor itself, which is what makes each slot cost ~6 ns to build and tear
+down. Dropping the vptr from `ibValue` would be the next tier — and a far larger change.
 
 ### 5.4 What measuring this cost, methodologically
 
