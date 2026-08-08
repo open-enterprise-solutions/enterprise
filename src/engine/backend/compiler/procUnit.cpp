@@ -905,6 +905,20 @@ start_label:
 					: std::max((long)array3, paramCount));
 				cRunContext.m_lParamCount = array3;
 
+				// THE INVARIANT the frame sizing above exists for: every slot the
+				// method may reach by its own declared arity is constructed, so a
+				// call that passes fewer arguments hands it an empty value rather
+				// than uninitialised memory. Implementations index paParams[i]
+				// without checking lSizeArray, and this is what makes that safe.
+				//
+				// What it cannot cover is a method reading PAST its own GetNParams
+				// — a mismatch between what it declares and what it does. The
+				// caller has no way to know that; only a test can catch it, see
+				// tests/test_methodArity.cpp.
+				wxASSERT_MSG(paramCount == wxNOT_FOUND
+					|| cRunContext.GetLocalCount() >= paramCount,
+					wxT("call frame smaller than the method's declared arity"));
+
 				// too many parameters — per-class methods have a meaningful
 				// compile-time GetNParams.
 				{

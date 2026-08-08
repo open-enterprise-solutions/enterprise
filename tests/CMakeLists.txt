@@ -74,6 +74,7 @@ add_executable(oes_tests
     test_queryPredicate.cpp
     test_queryColumnExpr.cpp
     test_linqMethod.cpp
+    test_methodArity.cpp
     test_queryLinqExec.cpp
     test_queryComputedDotWalk.cpp
     test_queryComputedServer.cpp
