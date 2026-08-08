@@ -886,13 +886,28 @@ start_label:
 				if (lMethodNum < 0)
 					CheckAndError(variable2, funcName);
 
-				ibRunContextSmall cRunContext(std::max(array3, MAX_STATIC_VAR));
+				// The frame must cover what the METHOD may read, not merely what
+				// the caller passed: implementations index paParams[0..GetNParams)
+				// without consulting the count they were given (ibValueArray::Add
+				// does `*paParams[0]` outright), and the arity check below only
+				// catches TOO MANY arguments, never too few. So a slot the method
+				// can reach must exist and be empty rather than absent.
+				//
+				// This used to be std::max(array3, MAX_STATIC_VAR) — 25 slots for
+				// every method call, whatever its arity, which is what made the
+				// frame work land nowhere on this path (docs/runtime-perf.md §5.6).
+				// The method's own arity is the honest bound, and it is already
+				// being fetched for the check. wxNOT_FOUND means "arity unknown",
+				// and there the old blanket 25 is the only safe answer.
+				const long paramCount = pVariable2->GetNParams(lMethodNum);
+				ibRunContextSmall cRunContext(paramCount == wxNOT_FOUND
+					? std::max((long)array3, (long)MAX_STATIC_VAR)
+					: std::max((long)array3, paramCount));
 				cRunContext.m_lParamCount = array3;
 
 				// too many parameters — per-class methods have a meaningful
 				// compile-time GetNParams.
 				{
-					const long paramCount = pVariable2->GetNParams(lMethodNum);
 					if (paramCount < cRunContext.m_lParamCount)
 						Raise(ERROR_MANY_PARAMS, funcName, funcName);
 					else if (paramCount == wxNOT_FOUND && cRunContext.m_lParamCount == 0)
