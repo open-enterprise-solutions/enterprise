@@ -130,23 +130,25 @@ const ibValue& ResolveReadOuter(int slot, int idx, ibValue*** pppArrayList, bool
 // Three overloads because the argument differs, not the mechanism: none, a name
 // already at hand, or a value whose text has to be spelled (GetString runs HERE,
 // off the hot path).
+// Overload, not folded into the variadic form below, and MEASURED rather than
+// argued: a call site written as Raise(CODE, value.GetString()) evaluates
+// GetString() in the CALLER — argument evaluation is the caller's job, noinline
+// or not — so the temporary wxString is constructed and destroyed inside
+// Execute. Trying it across the 8 array sites cost 1600 bytes and 44 calls in
+// Execute (29328 -> 30928, 613 -> 657). Taking the ibValue as-is keeps the
+// conversion behind the call.
+IB_NOINLINE void Raise(int code, const ibValue& value);
+
 template <class... Args>
 IB_NOINLINE void Raise(int code, Args&&... args)
 {
 	ibBackendCoreException::Error(code, std::forward<Args>(args)...);
 }
 
-// NOT folded into the variadic above, and the distinction is load-bearing: this
-// overload calls GetString() INSIDE itself, off the hot path. Forwarding an
-// ibValue instead would put the wxString construction back at the call site —
-// inside Execute — which is exactly what moving the raises out was for.
 IB_NOINLINE void Raise(int code, const ibValue& value)
 {
 	ibBackendCoreException::Error(code, value.GetString());
 }
-
-// Both sit in OPER_CALL_METHOD / OPER_CALL — the hottest branches after the
-// arithmetic ones, and the two that LINQ and recursion run through per element.
 
 
 IB_FORCEINLINE ibValue& ResolveWrite(int slot, int idx,
