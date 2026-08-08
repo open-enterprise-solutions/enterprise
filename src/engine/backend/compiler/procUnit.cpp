@@ -127,24 +127,20 @@ const ibValue& ResolveReadOuter(int slot, int idx, ibValue*** pppArrayList, bool
 // a wxString from a literal — which is the whole point: an inline _("…") drags
 // wxString + wxFormatString construction into the interpreting loop.
 //
-// Three overloads because the argument differs, not the mechanism: none, a name
-// already at hand, or a value whose text has to be spelled (GetString runs HERE,
-// off the hot path).
-// Overload, not folded into the variadic form below, and MEASURED rather than
-// argued: a call site written as Raise(CODE, value.GetString()) evaluates
-// GetString() in the CALLER — argument evaluation is the caller's job, noinline
-// or not — so the temporary wxString is constructed and destroyed inside
-// Execute. Trying it across the 8 array sites cost 1600 bytes and 44 calls in
-// Execute (29328 -> 30928, 613 -> 657). Taking the ibValue as-is keeps the
-// conversion behind the call.
-IB_NOINLINE void Raise(int code, const ibValue& value);
-
+// The variadic form covers arguments already at hand; the ibValue one below
+// covers a value whose text still has to be spelled.
 template <class... Args>
 IB_NOINLINE void Raise(int code, Args&&... args)
 {
 	ibBackendCoreException::Error(code, std::forward<Args>(args)...);
 }
 
+// Takes the value AS IS on purpose, and the reason is measured rather than
+// argued: a call site written Raise(CODE, value.GetString()) evaluates
+// GetString() in the CALLER — argument evaluation belongs to the caller,
+// noinline or not — so the temporary wxString is built and destroyed inside
+// Execute. Across the 8 array sites that cost 1600 bytes and 44 calls
+// (29328 -> 30928, 613 -> 657 wx-side 112 -> 120).
 IB_NOINLINE void Raise(int code, const ibValue& value)
 {
 	ibBackendCoreException::Error(code, value.GetString());
