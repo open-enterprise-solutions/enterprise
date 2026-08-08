@@ -448,6 +448,11 @@ jobs:
   benchmarks-linux:
     name: Benchmarks (Linux, Release) — record only
     runs-on: ubuntu-22.04
+    # NOT on every push: this is the only job that builds Release, which means
+    # building wxWidgets from scratch — ~16 minutes before the benches even
+    # start. It records numbers, it does not gate anything, so it runs on demand
+    # and on the release branch rather than on every commit to develop.
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/master'
     steps:
       - uses: actions/checkout@v5
         with:
@@ -461,8 +466,12 @@ jobs:
             build-essential cmake ninja-build ccache pkg-config \
             libgtk-3-dev libsqlite3-dev uuid-dev
 
+      # Same driver flags as the Debug suite job. They are not optional: the test
+      # target links tests that call into the drivers directly (test_queryRenderer
+      # uses ibDatabaseLayerPostgres::Dialect()), so without them the link fails
+      # on undefined references after ~16 minutes of compiling.
       - name: Configure
-        run: cmake --preset linux-release -DBUILD_TESTING=ON
+        run: cmake --preset linux-release -DBUILD_TESTING=ON -DOES_USE_FIREBIRD=ON -DOES_USE_POSTGRESQL=ON
 
       - name: Build the bench target
         run: cmake --build --preset linux-release --target oes_tests
