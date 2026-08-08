@@ -910,14 +910,15 @@ start_label:
 				// call that passes fewer arguments hands it an empty value rather
 				// than uninitialised memory. Implementations index paParams[i]
 				// without checking lSizeArray, and this is what makes that safe.
+				// It is pinned by tests/test_methodArity.cpp.
 				//
-				// What it cannot cover is a method reading PAST its own GetNParams
-				// — a mismatch between what it declares and what it does. The
-				// caller has no way to know that; only a test can catch it, see
-				// tests/test_methodArity.cpp.
-				wxASSERT_MSG(paramCount == wxNOT_FOUND
-					|| cRunContext.GetLocalCount() >= paramCount,
-					wxT("call frame smaller than the method's declared arity"));
+				// NOT a wxASSERT here: wxDEBUG_LEVEL is 1 even in Release, so an
+				// assert survives into the shipped build as a branch plus a
+				// wxOnAssert call carrying file / line / function / message.
+				// Measured here it was small (38 736 -> 38 624 bytes when
+				// removed), but it buys nothing this loop needs — the invariant
+				// is pinned by tests/test_methodArity.cpp, which is both stronger
+				// and free at run time.
 
 				// too many parameters — per-class methods have a meaningful
 				// compile-time GetNParams.

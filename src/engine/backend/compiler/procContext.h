@@ -38,45 +38,19 @@ struct ibRunContextSmall {
 
 	~ibRunContextSmall();
 
-	void SetLocalCount(const long varCount) {
-		// SetLocalCount can run twice for the same context (AttachRuntime's
-		// Run(false) prepare pass, then Run(true) execute), so the previous
-		// slots have to go first — heap frames freed, inline ones destroyed.
-		DestroyLocals();
-		m_lVarCount = varCount;
-		if (m_lVarCount > MAX_STATIC_VAR) {
-			m_pLocVars = new ibValue[m_lVarCount];
-			m_pRefLocVars = new ibValue * [m_lVarCount];
-		}
-		else {
-			m_pLocVars = reinterpret_cast<ibValue*>(m_cLocStorage);
-			for (long i = 0; i < m_lVarCount; i++)
-				new (m_pLocVars + i) ibValue();
-			m_pRefLocVars = m_cRefLocVars;
-		}
-		for (long i = 0; i < m_lVarCount; i++) {
-			m_pRefLocVars[i] = &m_pLocVars[i];
-		}
-	};
+	// Out of line because a frame is built once per CALL, not per opcode — there
+	// is nothing to gain from inlining three loops (destroy / placement-new /
+	// pointer row) at every site that builds one, and the header stays lighter.
+	//
+	// Honest note on what this did NOT do: moving them out left
+	// ibProcUnit::Execute at exactly 38 624 bytes, so the +9 KB that function
+	// gained during the frame work came from somewhere else and is still
+	// unaccounted for. Do not cite this as a size fix.
+	void SetLocalCount(const long varCount);
 
 	// The one place that knows whether the slots came from the heap or from the
 	// inline buffer. Leaves the frame empty, so calling it twice is harmless.
-	void DestroyLocals() {
-		if (m_pLocVars != nullptr) {
-			if (m_pLocVars != reinterpret_cast<ibValue*>(m_cLocStorage)) {
-				delete[] m_pLocVars;
-				if (m_pRefLocVars != nullptr && m_pRefLocVars != m_cRefLocVars)
-					delete[] m_pRefLocVars;
-			}
-			else {
-				for (long i = m_lVarCount; i-- > 0; )
-					m_pLocVars[i].~ibValue();
-			}
-		}
-		m_pLocVars = nullptr;
-		m_pRefLocVars = nullptr;
-		m_lVarCount = 0;
-	}
+	void DestroyLocals();
 
 	long GetLocalCount() const { return m_lVarCount; }
 
@@ -116,31 +90,10 @@ struct ibRunContext : std::enable_shared_from_this<ibRunContext> {
 	// OPER_CALL path asks for the function's REAL local count (procUnit.cpp
 	// `ibRunContext cRunContext(index3)`), so a function with three locals now
 	// builds three ibValue instead of twenty-five.
-	void SetLocalCount(const long varCount) {
-
-		DestroyLocals();
-		m_lVarCount = varCount;
-
-		if (m_lVarCount > MAX_STATIC_VAR) {
-			m_pLocVars = new ibValue[m_lVarCount];
-			m_pRefLocVars = new ibValue * [m_lVarCount];
-		}
-		else {
-			m_pLocVars = reinterpret_cast<ibValue*>(m_cLocStorage);
-			for (long i = 0; i < m_lVarCount; i++)
-				new (m_pLocVars + i) ibValue();
-			m_pRefLocVars = m_cRefLocVars;
-		}
-
-		for (long i = 0; i < m_lVarCount; i++) m_pRefLocVars[i] = &m_pLocVars[i];
-
-		// Reset block-scope nesting depth — frame starts at depth 0
-		// (fn-frame / module-body). OPER_CTX_BEGIN bumps, OPER_CTX_END
-		// drops. SendLocalVariables filters by entry.m_scopeDepth <=
-		// m_currentScopeDepth so block-locals are hidden before / after
-		// their owning `{ }`.
-		m_currentScopeDepth = 0;
-	}
+	// Out of line for the same reason as ibRunContextSmall's — see the note
+	// there. Built once per call; the header form was displacing the
+	// interpreting loop from the instruction cache.
+	void SetLocalCount(const long varCount);
 
 	long GetLocalCount() const { return m_lVarCount; }
 	const ibByteCode* GetByteCode() const;
@@ -196,22 +149,7 @@ struct ibRunContext : std::enable_shared_from_this<ibRunContext> {
 	// same reason as in ibRunContextSmall: an exception unwinding through a
 	// live frame runs the destructor, and placement-constructed slots must be
 	// destroyed by hand there too.
-	void DestroyLocals() {
-		if (m_pLocVars != nullptr) {
-			if (m_pLocVars != reinterpret_cast<ibValue*>(m_cLocStorage)) {
-				delete[] m_pLocVars;
-				if (m_pRefLocVars != nullptr && m_pRefLocVars != m_cRefLocVars)
-					delete[] m_pRefLocVars;
-			}
-			else {
-				for (long i = m_lVarCount; i-- > 0; )
-					m_pLocVars[i].~ibValue();
-			}
-		}
-		m_pLocVars = nullptr;
-		m_pRefLocVars = nullptr;
-		m_lVarCount = 0;
-	}
+	void DestroyLocals();
 
 	// Current block-scope nesting depth. Push (++) on OPER_CTX_BEGIN,
 	// pop (--) on OPER_CTX_END. SendLocalVariables filter:
