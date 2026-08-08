@@ -300,10 +300,15 @@ TEST(RuntimeBench, DISABLED_MethodResolve) {
     ibCompileCode cc(wxT("test"), wxT("memory"), false);
     ASSERT_TRUE(Build(cc,
         wxT("Function Resolve(n) Public\n")
+        // Get, NOT Count: Count is an ibLinqMethod, so the compiler emits
+        // OPER_CALL_LINQ for it and the runtime dispatches on an enum id with
+        // no name lookup at all — the opposite of what this bench is for. Get
+        // is an ordinary method, so it goes OPER_CALL_METHOD -> FindMethod ->
+        // the hash index (Array surfaces 15 methods, above kFindIndexMin).
         wxT("  var arr; arr = New Array; arr.Add(1);\n")
         wxT("  var i; i = 0; var s; s = 0;\n")
-        wxT("  While i < n Do s = s + arr.Count(); i = i + 1; EndDo;\n")
-        wxT("  Return s;\n")
+        wxT("  While i < n Do s = arr.Get(0); i = i + 1; EndDo;\n")
+        wxT("  Return i;\n")
         wxT("EndFunction\n")));
     ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
     ibValue argN((int)n), ret;
