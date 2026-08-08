@@ -190,12 +190,37 @@ Assessment: **healthy for its class** — overhead is uniform across independent
 sign), and the absolute cost is trivial for a server-centric domain (heavy work — queries, volume —
 lives in the C++ core, not the script; the script holds business rules).
 
-⚠ The figures in this section predate LTCG (§5) and the ratios in them are stale in **both**
-directions — see §5.3. Post-LTCG the interpreter runs ~16–24 ns per opcode on `arith`, which is
-the CPython band rather than "2× behind it". One caveat belongs with any such comparison: CPython
-and Lua loop over machine `int`/`double`, while every OES arithmetic op is **exact decimal**
-(`ibNumber`). The like-for-like comparison is against Python's `decimal`, not its `int` — and that
-one has never been measured here. Do it before quoting a position.
+⚠ The figures in this section predate the 2026-08-08 work (§5) and are stale. What replaces them
+is below — and unlike everything above, the comparison is now **measured on one machine** rather
+than quoted from elsewhere.
+
+### 4a. Measured against CPython, same machine (2026-08-08)
+
+The scenario is identical in both: `while i < n: s = s + i; i = i + 1` — two arithmetic ops and a
+comparison per iteration. Python 3.9.13, min-of-4; `tests/scripts` equivalent for OES.
+
+| | ns/iteration | semantics |
+|---|---|---|
+| native C++ `int64` | **0.7** | machine integer |
+| Python 3.9 `int` | **41.4** | arbitrary-precision integer |
+| **OES** | **71.9** | **exact decimal** |
+| Python 3.9 `decimal` | **95.1** | exact decimal |
+
+**Like-for-like — against `decimal`, the type that actually matches `ibNumber` — OES is ~32%
+faster than CPython.** Against Python's `int` it is 1.74× slower, but that type cannot represent
+money without loss, so the comparison flatters the wrong side.
+
+Worth recording that this reading is what the day's work bought: at the morning's 116.2 ns the
+same row read *slower* than Python's `decimal` (95.1); it now reads faster.
+
+Two caveats. Python **3.9**, not 3.11+ — the adaptive-specialising interpreter (3.11) would put
+`int` near 30 ns and `decimal` near 70–80, which narrows the gap without reversing it. And this is
+one scenario: strings, calls and collections have their own profiles.
+
+Class placement, in ns per instruction, everything below from literature rather than measurement
+here: Lua 5.4 5–10 (register VM), CPython 3.11+ 10–20, **OES ~12–18**, PHP 8 (no JIT) 15–30,
+Ruby YARV (no JIT) 20–40. JIT engines (LuaJIT, JVM, .NET, V8) are a different class at ×1–10 over
+native and are not reachable without one.
 
 Acceleration ladder, **by need, not now** (profile gives no reason — the runtime is not, and is
 unlikely to become, the bottleneck):
@@ -373,9 +398,51 @@ matters because an exception unwinding through a live frame is a working mechani
 slots for us. The suite (1102, including closure-capture and try/except paths) stayed green
 across the change; a dedicated exception-mid-frame test would still be worth adding.
 
-Two things this did NOT touch: `method resolve` (its frame is the `max(...)` one) and the
-`ibValue` virtual destructor itself, which is what makes each slot cost ~6 ns to build and tear
-down. Dropping the vptr from `ibValue` would be the next tier — and a far larger change.
+### 5.7 Method-call frame — sized by arity (2026-08-08)
+
+`OPER_CALL_METHOD` built its frame as `std::max(argCount, MAX_STATIC_VAR)` — 25 slots per method
+call whatever the arity — which is why §5.6 landed nothing on this path.
+
+The 25 was **not** laziness. Method implementations index `paParams[0..GetNParams)` without
+consulting the count they were handed (`ibValueArray::Add` does `*paParams[0]` outright), and the
+check above them only catches too MANY arguments, never too few — so a slot the method can reach
+has to exist and be empty rather than absent. But the method's own arity is the honest bound for
+that, and it was already being fetched two lines below.
+
+**LINQ 711.9 → 566.5 ns/element (−20%)**, ranges disjoint. The arithmetic checks out: `arr.Add(i)`
+per element, 24 fewer `ibValue` at ~6 ns each ≈ 144 ns predicted, 145 ns observed.
+`paramCount == wxNOT_FOUND` keeps the blanket 25 — with the arity unknown there is nothing better
+to bound by.
+
+Separately, and not a performance point: that implementations do not check the arity they were
+given means correctness rests on the CALLER having sized the frame. The bound is exact now instead
+of generous, so the guarantee is unchanged — but the check belongs in one place rather than
+resting on a frame being oversized.
+
+### 5.8 Where the call cost actually is
+
+With both frames fixed, the three call-ish scenarios converge — and that convergence is the
+finding:
+
+| path | ns/call |
+|---|---|
+| script function call (`recursion`) | 226.5 |
+| method call **with name resolution** (`arr.Get(0)`) | **220.0** |
+| LINQ dispatch by enum id, no lookup (`arr.Count()`) | 244.6 |
+
+**Name resolution does not dominate.** A method call that searches the hash index costs the same
+as a plain function call that searches nothing. Whatever remains in those ~220 ns is the call
+mechanism itself — argument marshalling, context setup, dispatch — not the lookup.
+
+This retires the `ibString`-on-name-resolution idea for good: it optimised a lookup that is not
+where the time goes. (It was abandoned earlier the same day for a *wrong* reason — the scenario
+used to judge it called `arr.Count()`, an `ibLinqMethod`, which resolves no name at all. A bench
+that measures something other than its name is worse than a missing one: a missing bench makes you
+look, a mislabelled one makes you conclude.)
+
+The remaining tier is the `ibValue` virtual destructor — ~6 ns per slot to build and tear down,
+paid by every frame and every temporary. Dropping the vptr is a far larger change than anything
+here and needs its own arc.
 
 ### 5.4 What measuring this cost, methodologically
 
