@@ -317,6 +317,91 @@ TEST(RuntimeBench, DISABLED_MethodResolve) {
     SUCCEED();
 }
 
+// --- a shape closer to GENERATED code -------------------------------------
+// The five scenarios above are microbenchmarks: a tight arithmetic loop, a
+// recursion, a concatenation. They were chosen for what stresses the
+// interpreter, not for what real configuration code looks like — and least of
+// all for what a model writes.
+//
+// Generated code has a different profile: it builds records rather than
+// querying them, walks collections in memory rather than grouping in SQL, and
+// reaches fields through the dot far more often than it does arithmetic. This
+// row is that shape — build N structures, then walk them summing two fields —
+// so the mix is New + method calls + OPER_GET_A + arithmetic, in the
+// proportions generated code actually produces.
+//
+// Reported per ROW, so the number is "what one record costs to build and
+// process", which is the unit a configuration author thinks in.
+TEST(RuntimeBench, DISABLED_RecordWalk) {
+    const long n = 20000;
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("Function Walk(n) Public\n")
+        wxT("  var rows; rows = New Array;\n")
+        wxT("  var i; i = 0;\n")
+        wxT("  While i < n Do\n")
+        wxT("    var row; row = New Structure;\n")
+        wxT("    row.Insert(\"Qty\", i);\n")
+        wxT("    row.Insert(\"Price\", 2);\n")
+        wxT("    rows.Add(row);\n")
+        wxT("    i = i + 1;\n")
+        wxT("  EndDo;\n")
+        wxT("  var total; total = 0; var j; j = 0;\n")
+        wxT("  While j < n Do\n")
+        wxT("    var r; r = rows.Get(j);\n")
+        wxT("    total = total + r.Qty * r.Price;\n")
+        wxT("    j = j + 1;\n")
+        wxT("  EndDo;\n")
+        wxT("  Return total;\n")
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+    // Scaling probe: per-row cost must stay FLAT as n grows. If it climbs with
+    // n, something in the path is quadratic — a growing collection copied per
+    // append, or a linear lookup per access.
+    for (long rows : { 2500L, 5000L, 10000L, 20000L }) {
+        ibValue argN((int)rows), ret;
+        const double tot = BestTotalNs(3, [&]{ pu.CallAsFunc(wxT("Walk"), ret, argN); g_sink += (uint64_t)ret.GetInteger(); });
+        std::ostringstream label;
+        label << "record build+walk n=" << rows << " (ns/row)";
+        RowOes(label.str().c_str(), tot / double(rows), "ns", tot);
+    }
+    SUCCEED();
+}
+
+// --- breaking the record walk into its parts ------------------------------
+// RecordWalk came out at ~35 us per row while each of its ~8 operations
+// measures ~200 ns elsewhere — an 18x discrepancy that no single opcode
+// explains. Rather than guess, each step is timed on its own here, at the same
+// n, so the expensive one names itself.
+TEST(RuntimeBench, DISABLED_RecordParts) {
+    const long n = 5000;
+    struct Part { const char* name; const wxChar* body; };
+    const Part parts[] = {
+        { "New Structure only",
+          wxT("Function P(n) Public\n var i; i = 0;\n While i < n Do var s; s = New Structure; i = i + 1; EndDo;\n Return i;\nEndFunction\n") },
+        { "New + 2 Insert",
+          wxT("Function P(n) Public\n var i; i = 0;\n While i < n Do var s; s = New Structure; s.Insert(\"Qty\", i); s.Insert(\"Price\", 2); i = i + 1; EndDo;\n Return i;\nEndFunction\n") },
+        { "Array.Add only",
+          wxT("Function P(n) Public\n var a; a = New Array; var i; i = 0;\n While i < n Do a.Add(i); i = i + 1; EndDo;\n Return i;\nEndFunction\n") },
+        { "Array.Get only",
+          wxT("Function P(n) Public\n var a; a = New Array; a.Add(1); var i; i = 0; var v;\n While i < n Do v = a.Get(0); i = i + 1; EndDo;\n Return i;\nEndFunction\n") },
+        { "dot access on Structure",
+          wxT("Function P(n) Public\n var s; s = New Structure; s.Insert(\"Qty\", 3); var i; i = 0; var v;\n While i < n Do v = s.Qty; i = i + 1; EndDo;\n Return i;\nEndFunction\n") },
+    };
+    for (const Part& p : parts) {
+        ibCompileCode cc(wxT("test"), wxT("memory"), false);
+        if (!Build(cc, p.body)) { std::cout << "  (compile failed: " << p.name << ")\n"; continue; }
+        ibProcUnit pu;
+        if (![&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }()) {
+            std::cout << "  (execute failed: " << p.name << ")\n"; continue;
+        }
+        ibValue argN((int)n), ret;
+        const double tot = BestTotalNs(3, [&]{ pu.CallAsFunc(wxT("P"), ret, argN); g_sink += (uint64_t)ret.GetInteger(); });
+        RowOes(p.name, tot / double(n), "ns", tot);
+    }
+    SUCCEED();
+}
+
 // --- what a call frame costs, on its own ----------------------------------
 // recursion measures 318 ns/call while an arithmetic opcode is ~15 ns, so the
 // call is worth ~21 opcodes and nothing in the suite says why. ibRunContextSmall

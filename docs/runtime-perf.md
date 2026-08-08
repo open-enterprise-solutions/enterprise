@@ -455,3 +455,43 @@ hard way:
 - **Baseline the TARGET scenario first.** The `ibString`-on-name-resolution branch was abandoned
   after one clean measurement showed its own target case 4% *slower* — a measurement that could
   have been taken before writing any of it.
+
+### 5.9 Type-name resolution — the one the microbenchmarks could not see (2026-08-08)
+
+The largest defect of the day, found only after the harness gained a scenario shaped like
+GENERATED code rather than like a microbenchmark.
+
+`ibCtorRegistry::Find(const wxString&)` resolved a type name by **scanning every registered ctor**
+and comparing with `stringUtils::CompareString` — which takes `ToStdWstring()` of BOTH sides, i.e.
+two heap allocations per comparison. With ~180 registered types that is ~360 allocations to answer
+one question. And `OPER_NEW` asks it **at runtime, for every object a script creates**
+(`procUnit.cpp` → `CreateObject(className, …)`).
+
+The comment above the function said the opposite, which is why it survived: *"name -> LINEAR scan
+(NOT very hot: compile-time resolution of CreateObject(Name))"*. An assumption written down as a
+fact, never checked.
+
+Fixed by giving the name its own index, keyed on the folded name (`m_byName`). Measured
+(`DISABLED_RecordParts`, min-of-3):
+
+| | before | after | factor |
+|---|---|---|---|
+| `New Structure` | 18 495.8 ns | **606.8** | **30.5×** |
+| `New` + 2 × `Insert` | 27 557.8 | 4 086.3 | 6.7× |
+| dot access on Structure | 1 399.5 | 536.1 | 2.6× |
+| `Array.Get` | 608.3 | 217.8 | 2.8× |
+| **one record, build + walk** | **35 892** | **7 280** | **4.9×** |
+
+`ibCtorRegistry` is a template with two users — the value factory (`valueFactory.cpp`) and the
+per-image metadata factory (`metaData.h`, `m_factoryCtors`) — so the same fix covers creating
+metaobjects by type name, not just script values.
+
+**Why six microbenchmarks missed it for a whole day.** None of them creates objects in a loop:
+`arith`, `recursion` and `string concat` work on values that already exist, and LINQ builds its
+array once. The cost was invisible by construction. It surfaced within minutes of adding a
+scenario that builds records and walks them — the shape generated code actually has, and the shape
+an AI-first platform will run most of.
+
+The lesson is about the harness, not the registry: **a benchmark suite measures the shapes you
+thought of.** Scenarios should be chosen from what the platform will really execute, not from what
+stresses the interpreter most cleanly.
