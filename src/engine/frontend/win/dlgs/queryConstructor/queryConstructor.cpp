@@ -8,9 +8,20 @@
 using namespace queryctor;
 
 
-// THE QUERY TEXT, STYLED. The SQL lexer is Scintilla's own and our language is SQL-shaped, so the
-// colouring costs one call — and the KEYWORD SET comes from the language's own table, so a word
-// added to the grammar lights up the day it is added and a localized table lights up its own words.
+// THE QUERY TEXT, STYLED. The KEYWORD SET comes from the language's own table, so a word added to
+// the grammar lights up the day it is added and a localized table lights up its own words.
+//
+// The lexer is the C one, not Scintilla's SQL one, and the reason is COMMENTS. Our query language
+// takes its comment form from the shared lexer (ibTranslateCode::SkipSpaces) — `//` to end of line,
+// and nothing else. Scintilla's SQL lexer knows the opposite set: it colours `--` and `/* … */`, and
+// leaves `//` plain. So the SQL lexer painted as a comment what the engine would refuse, and painted
+// as code what the engine ignores — a pane that teaches the wrong language. The C lexer's line
+// comment IS ours.
+//
+// One residue, stated rather than hidden: the C lexer also colours a `/* … */` block, which the
+// engine does not accept. Making the two agree exactly means either teaching the engine block
+// comments — a change to the SHARED lexer, so it would land in the script language too — or forking
+// the vendored SQL lexer. Neither is worth it for a form the language does not have.
 //
 // The font and the colours are the ENGINE'S defaults (ibFontColorSettings, default-constructed —
 // the same object the code editor styles itself from), so this pane looks like every other place
@@ -20,7 +31,7 @@ void ibStyleQueryText(wxStyledTextCtrl* text)
 	const ibFontColorSettings settings;
 	wxFont font = settings.GetFont();
 
-	text->SetLexer(wxSTC_LEX_SQL);
+	text->SetLexer(wxSTC_LEX_CPP);
 	text->SetKeyWords(0, ibAllQueryKeywords());
 
 	// STYLE_DEFAULT first, then StyleClearAll — the cascade carries the font and the base colours to
@@ -33,19 +44,23 @@ void ibStyleQueryText(wxStyledTextCtrl* text)
 	text->StyleClearAll();
 
 	const ibFontColorSettings::Colors keyword = settings.GetColors(ibFontColorSettings::DisplayItem_Keyword);
-	text->StyleSetForeground(wxSTC_SQL_WORD, keyword.foreColor);
-	text->StyleSetBold(wxSTC_SQL_WORD, keyword.bold);
-	text->StyleSetForeground(wxSTC_SQL_STRING,
+	text->StyleSetForeground(wxSTC_C_WORD, keyword.foreColor);
+	text->StyleSetBold(wxSTC_C_WORD, keyword.bold);
+	text->StyleSetForeground(wxSTC_C_STRING,
 		settings.GetColors(ibFontColorSettings::DisplayItem_String).foreColor);
-	text->StyleSetForeground(wxSTC_SQL_CHARACTER,
+	// A DATE literal is written in apostrophes ('20260101'), which the C lexer reads as a character
+	// constant — so it takes the string colour, the way the pane's reader means it.
+	text->StyleSetForeground(wxSTC_C_CHARACTER,
 		settings.GetColors(ibFontColorSettings::DisplayItem_String).foreColor);
-	text->StyleSetForeground(wxSTC_SQL_NUMBER,
+	text->StyleSetForeground(wxSTC_C_NUMBER,
 		settings.GetColors(ibFontColorSettings::DisplayItem_Number).foreColor);
-	text->StyleSetForeground(wxSTC_SQL_COMMENT,
-		settings.GetColors(ibFontColorSettings::DisplayItem_Comment).foreColor);
-	text->StyleSetForeground(wxSTC_SQL_COMMENTLINE,
-		settings.GetColors(ibFontColorSettings::DisplayItem_Comment).foreColor);
-	text->StyleSetForeground(wxSTC_SQL_OPERATOR,
+	// The three comment styles the C lexer can emit — `//` is the one our language has, the other two
+	// cost nothing to colour and keep a pasted block from looking like broken code.
+	const ibFontColorSettings::Colors comment = settings.GetColors(ibFontColorSettings::DisplayItem_Comment);
+	text->StyleSetForeground(wxSTC_C_COMMENTLINE, comment.foreColor);
+	text->StyleSetForeground(wxSTC_C_COMMENT, comment.foreColor);
+	text->StyleSetForeground(wxSTC_C_COMMENTDOC, comment.foreColor);
+	text->StyleSetForeground(wxSTC_C_OPERATOR,
 		settings.GetColors(ibFontColorSettings::DisplayItem_Operator).foreColor);
 
 	// LINE NUMBERS. The engine reports where it stopped as `line N (position M)` — that is the whole
