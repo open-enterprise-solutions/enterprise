@@ -15,6 +15,7 @@
 #include "appData.h"
 
 #include <algorithm>
+#include <utility>   // std::forward — the variadic Raise below
 
 // Operand resolution for the bytecode interpreter. Three slot kinds:
 //   slot <= 0           — local frame (mutable).
@@ -36,7 +37,7 @@ namespace {
 // a lambda has no parent-module frame, so depth ≥ 2 lands on null. The
 // guards convert the segfault into an ibBackendException so the watch
 // panel surfaces an error message instead of taking down the process.
-inline ibValue*** kResolveOuterFrame(int slot, ibValue*** pppArrayList, bool bDelta)
+inline ibValue*** ResolveOuterFrame(int slot, ibValue*** pppArrayList, bool bDelta)
 {
 	const int depth = slot + (bDelta ? 1 : 0);
 	if (pppArrayList == nullptr || depth < 0)
@@ -44,16 +45,33 @@ inline ibValue*** kResolveOuterFrame(int slot, ibValue*** pppArrayList, bool bDe
 	return &pppArrayList[depth];
 }
 
-inline ibValue& ResolveWrite(int slot, int idx,
-							  ibValue** pRefLocVars,
-							  ibValue*** pppArrayList,
-							  bool bDelta)
+// Operand resolution is hot/cold split, and the reason is visible in the
+// disassembly rather than deduced: before the split, ResolveWrite and
+// ResolveRead were the two most-called targets inside ibProcUnit::Execute —
+// 163 and 100 call sites — and they stayed calls even under whole-program
+// optimisation, which inlined ibNumber::Compare in the same function.
+//
+// They carried `inline` and were ignored, because a body containing
+// ibBackendCoreException::Error (varargs formatting + gettext) is far past
+// any inliner's budget, and the /GS stack-cookie prologue that came with it
+// made the frame bigger still. The common case, meanwhile, is ONE line: a
+// slot in the current frame. Every operand of every opcode paid a call with
+// a security-cookie prologue to run it.
+//
+// Split keeps the frame-local (and, for reads, the constant-pool) case in the
+// inlineable part and pushes the outer-frame walk and every raise out of line.
+// Behaviour is identical — the cold helper is reached on exactly the inputs
+// the old body would have fallen through to.
+
+// --- cold halves: the outer-frame walk and every raise ---------------------
+// Defined FIRST so the hot wrappers below can call them without a forward
+// declaration — one signature per function instead of two kept in step by hand.
+
+ibValue& ResolveWriteOuter(int slot, int idx, ibValue*** pppArrayList, bool bDelta)
 {
-	if (slot <= 0)
-		return *pRefLocVars[idx];
 	if (slot == DEF_VAR_CONST)
 		ibBackendCoreException::Error(_("Attempt to write to a constant value"));
-	auto* row = kResolveOuterFrame(slot, pppArrayList, bDelta);
+	auto* row = ResolveOuterFrame(slot, pppArrayList, bDelta);
 	if (row == nullptr || *row == nullptr || (*row)[idx] == nullptr) {
 		ibBackendCoreException::Error(
 			_("Outer frame not bound at depth %d / idx %d (eval inside lambda?)"),
@@ -62,7 +80,86 @@ inline ibValue& ResolveWrite(int slot, int idx,
 	return *(*row)[idx];
 }
 
-inline const ibValue& ResolveRead(int slot, int idx,
+const ibValue& ResolveReadOuter(int slot, int idx, ibValue*** pppArrayList, bool bDelta)
+{
+	auto* row = ResolveOuterFrame(slot, pppArrayList, bDelta);
+	if (row == nullptr || *row == nullptr || (*row)[idx] == nullptr) {
+		ibBackendCoreException::Error(
+			_("Outer frame not bound at depth %d / idx %d (eval inside lambda?)"),
+			slot + (bDelta ? 1 : 0), idx);
+	}
+	return *(*row)[idx];
+}
+
+// `inline` alone is not enough here and the disassembly says so: after the
+// split above, ibProcUnit::Execute was byte-for-byte the same size and still
+// carried the 163 + 100 calls. With 263 call sites in a function already 27 KB
+// long, the inliner's size budget declines even a two-instruction body — so the
+// split had added an indirection without removing the call. Forcing it is the
+// point of the split, not a decoration.
+#if defined(_MSC_VER)
+#  define IB_FORCEINLINE __forceinline
+#  define IB_NOINLINE    __declspec(noinline)
+#elif defined(__GNUC__) || defined(__clang__)
+#  define IB_FORCEINLINE inline __attribute__((always_inline))
+#  define IB_NOINLINE    __attribute__((noinline))
+#else
+#  define IB_FORCEINLINE inline
+#  define IB_NOINLINE
+#endif
+
+// --- raise helpers ---------------------------------------------------------
+// Every ibBackendCoreException::Error(_("…"), arg) expands, at the call site,
+// into wxString + wxFormatString construction and destruction. Inside
+// ibProcUnit::Execute that added up to ~163 wx calls scattered through the
+// interpreting loop — code that never runs in a healthy execution but is
+// permanently part of the function: it inflates it (33 KB), competes for the
+// instruction cache and constrains register allocation around the opcodes that
+// DO run.
+//
+// Same medicine as the Resolve* split, and found the same way — by reading the
+// disassembly of Execute rather than guessing. The formatting moves behind a
+// noinline call, so an opcode's failure path costs one instruction here and the
+// message machinery lives out of the loop.
+// One raise entry point, not a family. The message is selected by CODE from the
+// table the exception layer already owns (backend_exception.h enum +
+// gs_listErrorString), so the call site carries a constant instead of building
+// a wxString from a literal — which is the whole point: an inline _("…") drags
+// wxString + wxFormatString construction into the interpreting loop.
+//
+// Three overloads because the argument differs, not the mechanism: none, a name
+// already at hand, or a value whose text has to be spelled (GetString runs HERE,
+// off the hot path).
+template <class... Args>
+IB_NOINLINE void Raise(int code, Args&&... args)
+{
+	ibBackendCoreException::Error(code, std::forward<Args>(args)...);
+}
+
+// NOT folded into the variadic above, and the distinction is load-bearing: this
+// overload calls GetString() INSIDE itself, off the hot path. Forwarding an
+// ibValue instead would put the wxString construction back at the call site —
+// inside Execute — which is exactly what moving the raises out was for.
+IB_NOINLINE void Raise(int code, const ibValue& value)
+{
+	ibBackendCoreException::Error(code, value.GetString());
+}
+
+// Both sit in OPER_CALL_METHOD / OPER_CALL — the hottest branches after the
+// arithmetic ones, and the two that LINQ and recursion run through per element.
+
+
+IB_FORCEINLINE ibValue& ResolveWrite(int slot, int idx,
+							  ibValue** pRefLocVars,
+							  ibValue*** pppArrayList,
+							  bool bDelta)
+{
+	if (slot <= 0)
+		return *pRefLocVars[idx];
+	return ResolveWriteOuter(slot, idx, pppArrayList, bDelta);
+}
+
+IB_FORCEINLINE const ibValue& ResolveRead(int slot, int idx,
 								   ibValue** pRefLocVars,
 								   ibValue*** pppArrayList,
 								   const ibByteCode* pByteCode,
@@ -72,13 +169,7 @@ inline const ibValue& ResolveRead(int slot, int idx,
 		return *pRefLocVars[idx];
 	if (slot == DEF_VAR_CONST)
 		return pByteCode->m_listConst[idx];
-	auto* row = kResolveOuterFrame(slot, pppArrayList, bDelta);
-	if (row == nullptr || *row == nullptr || (*row)[idx] == nullptr) {
-		ibBackendCoreException::Error(
-			_("Outer frame not bound at depth %d / idx %d (eval inside lambda?)"),
-			slot + (bDelta ? 1 : 0), idx);
-	}
-	return *(*row)[idx];
+	return ResolveReadOuter(slot, idx, pppArrayList, bDelta);
 }
 
 } // namespace
@@ -347,7 +438,7 @@ inline void DivValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cV
 	if (cValue1.m_typeClass == ibValueTypes::TYPE_NUMBER) {
 		const ibNumber& flNumber3 = cValue3.GetNumber();
 		if (flNumber3.IsZero())
-			ibBackendCoreException::Error(_("Divide by zero"));
+			Raise(ERROR_DIVIDE_BY_ZERO);
 		cValue1.m_fData = cValue2.GetNumber() / flNumber3;
 	}
 	else {
@@ -362,7 +453,7 @@ inline void ModValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cV
 	if (cValue1.m_typeClass == ibValueTypes::TYPE_NUMBER) {
 		const ibNumber num3 = cValue3.GetNumber();
 		if (num3.IsZero())
-			ibBackendCoreException::Error(_("Divide by zero"));
+			Raise(ERROR_DIVIDE_BY_ZERO);
 		const ibNumber num2 = cValue2.GetNumber();
 		cValue1.m_fData = num2 % num3;
 	}
@@ -440,13 +531,18 @@ inline void CompareValueNE(ibValue& cValue1, const ibValue& cValue2, const ibVal
 // them as well. Math + compare helpers stay below (only Execute uses
 // them).
 
-#define CheckAndError(variable, name)\
-{\
- if(!variable.IsReference())\
- ibBackendCoreException::Error(_("No attribute or method found '%s' - a variable is not an aggregate object"), name);\
- else\
- ibBackendCoreException::Error(_("Aggregate object field not found '%s'"), name);\
+// Was a macro that expanded BOTH raises at each of its three call sites, i.e.
+// six formatted-message blocks inside the interpreting loop. The message choice
+// is a property of the failure, not of the opcode, so it belongs in one
+// out-of-line place — see the raise-helper note above.
+IB_NOINLINE void RaiseMemberNotFound(const ibValue& variable, const wxString& name)
+{
+	// Which of the two it is depends on the VALUE, not on the opcode — so the
+	// choice belongs here rather than at each of the three call sites.
+	Raise(variable.IsReference() ? ERROR_MEMBER_NOT_FOUND : ERROR_MEMBER_NOT_AGGREGATE, name);
 }
+
+#define CheckAndError(variable, name) RaiseMemberNotFound(variable, name)
 
 //Index arrays
 inline bool SetArrayValue(ibValue& cValue1, const ibValue& cValue2, ibValue& cValue3)
@@ -728,7 +824,7 @@ start_label:
 				const wxString& strPropName = m_pByteCode->m_listConst[index2].GetString();
 				const long lPropNum = variable1.FindProp(strPropName);
 				if (lPropNum < 0) CheckAndError(variable1, strPropName);
-				if (!variable1.IsPropWritable(lPropNum)) ibBackendCoreException::Error(_("Object field not writable (%s)"), strPropName);
+				if (!variable1.IsPropWritable(lPropNum)) Raise(ERROR_PROP_NOT_WRITABLE, strPropName);
 				variable1.SetPropVal(lPropNum, GetValue(cvariable3));
 			} break;
 			case OPER_GET_A://get attribute
@@ -738,7 +834,7 @@ start_label:
 				const wxString& strPropName = m_pByteCode->m_listConst[index3].GetString();
 				const long lPropNum = variable2.FindProp(strPropName);
 				if (lPropNum < 0) CheckAndError(variable2, strPropName);
-				if (!variable2.IsPropReadable(lPropNum)) ibBackendCoreException::Error(_("Object field not readable (%s)"), strPropName);
+				if (!variable2.IsPropReadable(lPropNum)) Raise(ERROR_PROP_NOT_READABLE, strPropName);
 				// Scope-local props (ThisObject / ThisForm / RegisterRecords)
 				// are bc-internal: host's own code reaches them through
 				// its own m_listVar (compile-time), not through chain
@@ -747,7 +843,7 @@ start_label:
 				// watch should not be able to walk into a foreign
 				// object's "self" handle.
 				if (m_pByteCode->m_bExpressionOnly && variable2.IsPropScoped(lPropNum))
-					ibBackendCoreException::Error(_("Object field is scope-local (%s)"), strPropName);
+					Raise(ERROR_PROP_SCOPE_LOCAL, strPropName);
 				ibValue vRet; bool result = variable2.GetPropVal(lPropNum, vRet);
 				if (result && vRet.IsReference())
 					*pRetValue = vRet;
@@ -800,9 +896,9 @@ start_label:
 				{
 					const long paramCount = pVariable2->GetNParams(lMethodNum);
 					if (paramCount < cRunContext.m_lParamCount)
-						ibBackendCoreException::Error(ERROR_MANY_PARAMS, funcName, funcName);
+						Raise(ERROR_MANY_PARAMS, funcName, funcName);
 					else if (paramCount == wxNOT_FOUND && cRunContext.m_lParamCount == 0)
-						ibBackendCoreException::Error(ERROR_MANY_PARAMS, funcName, funcName);
+						Raise(ERROR_MANY_PARAMS, funcName, funcName);
 				}
 
 				//load parameters
@@ -839,14 +935,14 @@ start_label:
 						ibValue* pNextVariable2 = &variable2;
 						lCodeLine--;
 						if (pRetValue == pNextVariable2)
-							ibBackendCoreException::Error(ERROR_USE_PROCEDURE_AS_FUNCTION, funcName, funcName);
+							Raise(ERROR_USE_PROCEDURE_AS_FUNCTION, funcName, funcName);
 					}
 					else if (m_pByteCode->m_listCode[lCodeLine + 1].m_numOper == OPER_RET) {
 						lCodeLine++;
 						ibValue* pNextVariable1 = &variable1;
 						lCodeLine--;
 						if (pRetValue == pNextVariable1)
-							ibBackendCoreException::Error(ERROR_USE_PROCEDURE_AS_FUNCTION, funcName, funcName);
+							Raise(ERROR_USE_PROCEDURE_AS_FUNCTION, funcName, funcName);
 					}
 					pVariable2->CallAsProc(lMethodNum, cRunContext.m_pRefLocVars, cRunContext.m_lParamCount);
 				} break;
@@ -974,11 +1070,11 @@ start_label:
 			}
 			case OPER_SET_ARRAY:
 				if (!SetArrayValue(variable1, cvariable2, GetValue(cvariable3)))
-					ibBackendCoreException::Error(_("Cannot set array value '%s'"), cvariable3.GetString());
+					Raise(ERROR_ARRAY_SET, cvariable3);
 				break; //setting the array value
 			case OPER_GET_ARRAY:
 				if (!GetArrayValue(variable1, variable2, cvariable3))
-					ibBackendCoreException::Error(_("Cannot get array value '%s'"), cvariable3.GetString());
+					Raise(ERROR_ARRAY_GET, cvariable3);
 				break; //getting the array value
 			case OPER_GOTO: case OPER_ENDTRY:
 			{
@@ -1271,8 +1367,8 @@ start_label:
 				//NUMBER
 			case OPER_ADD + TYPE_DELTA1: variable1.m_fData = cvariable2.m_fData + cvariable3.m_fData; break;
 			case OPER_SUB + TYPE_DELTA1: variable1.m_fData = cvariable2.m_fData - cvariable3.m_fData; break;
-			case OPER_DIV + TYPE_DELTA1: if (cvariable3.m_fData.IsZero()) { ibBackendCoreException::Error(_("Divide by zero")); } variable1.m_fData = cvariable2.m_fData / cvariable3.m_fData; break;
-			case OPER_MOD + TYPE_DELTA1: if (cvariable3.m_fData.IsZero()) { ibBackendCoreException::Error(_("Divide by zero")); } variable1.m_fData = cvariable2.m_fData.Round() % cvariable3.m_fData.Round(); break;
+			case OPER_DIV + TYPE_DELTA1: if (cvariable3.m_fData.IsZero()) { Raise(ERROR_DIVIDE_BY_ZERO); } variable1.m_fData = cvariable2.m_fData / cvariable3.m_fData; break;
+			case OPER_MOD + TYPE_DELTA1: if (cvariable3.m_fData.IsZero()) { Raise(ERROR_DIVIDE_BY_ZERO); } variable1.m_fData = cvariable2.m_fData.Round() % cvariable3.m_fData.Round(); break;
 			case OPER_MULT + TYPE_DELTA1: variable1.m_fData = cvariable2.m_fData * cvariable3.m_fData; break;
 			case OPER_LET + TYPE_DELTA1: variable1.m_fData = cvariable2.m_fData; break;
 			case OPER_NOT + TYPE_DELTA1: variable1.m_fData = cvariable2.m_fData.IsZero(); break;
@@ -1285,11 +1381,11 @@ start_label:
 			case OPER_LE + TYPE_DELTA1: variable1.m_fData = (cvariable2.m_fData <= cvariable3.m_fData); break;
 			case OPER_SET_ARRAY + TYPE_DELTA1:
 				if (!SetArrayValue(variable1, cvariable2, GetValue(cvariable3)))
-					ibBackendCoreException::Error(_("Cannot set array value '%s'"), cvariable3.GetString());
+					Raise(ERROR_ARRAY_SET, cvariable3);
 				break;//set array value
 			case OPER_GET_ARRAY + TYPE_DELTA1:
 				if (!GetArrayValue(variable1, variable2, cvariable3))
-					ibBackendCoreException::Error(_("Cannot get array value '%s'"), cvariable3.GetString());
+					Raise(ERROR_ARRAY_GET, cvariable3);
 				break; //getting the array value
 			case OPER_IF + TYPE_DELTA1: if (cvariable1.m_fData.IsZero()) lCodeLine = index2 - 1; break;
 				//STRING
@@ -1297,18 +1393,18 @@ start_label:
 			case OPER_LET + TYPE_DELTA2: variable1.SetString(cvariable2.GetString()); break;
 			case OPER_SET_ARRAY + TYPE_DELTA2:
 				if (!SetArrayValue(variable1, cvariable2, GetValue(cvariable3)))
-					ibBackendCoreException::Error(_("Cannot set array value '%s'"), cvariable3.GetString());
+					Raise(ERROR_ARRAY_SET, cvariable3);
 				break; //set array value
 			case OPER_GET_ARRAY + TYPE_DELTA2:
 				if (!GetArrayValue(variable1, variable2, cvariable3))
-					ibBackendCoreException::Error(_("Cannot get array value '%s'"), cvariable3.GetString());
+					Raise(ERROR_ARRAY_GET, cvariable3);
 				break; //getting the array value
 			case OPER_IF + TYPE_DELTA2: if (cvariable1.IsEmpty()) lCodeLine = index2 - 1; break;
 				//DATE
 			case OPER_ADD + TYPE_DELTA3: variable1.m_dData = cvariable2.m_dData + cvariable3.m_dData; break;
 			case OPER_SUB + TYPE_DELTA3: variable1.m_dData = cvariable2.m_dData - cvariable3.m_dData; break;
-			case OPER_DIV + TYPE_DELTA3: if (cvariable3.m_dData == 0) { ibBackendCoreException::Error(_("Divide by zero")); } variable1.m_dData = cvariable2.m_dData / cvariable3.GetInteger(); break;
-			case OPER_MOD + TYPE_DELTA3: if (cvariable3.m_dData == 0) { ibBackendCoreException::Error(_("Divide by zero")); } variable1.m_dData = (int)cvariable2.m_dData % cvariable3.GetInteger(); break;
+			case OPER_DIV + TYPE_DELTA3: if (cvariable3.m_dData == 0) { Raise(ERROR_DIVIDE_BY_ZERO); } variable1.m_dData = cvariable2.m_dData / cvariable3.GetInteger(); break;
+			case OPER_MOD + TYPE_DELTA3: if (cvariable3.m_dData == 0) { Raise(ERROR_DIVIDE_BY_ZERO); } variable1.m_dData = (int)cvariable2.m_dData % cvariable3.GetInteger(); break;
 			case OPER_MULT + TYPE_DELTA3: variable1.m_dData = cvariable2.m_dData * cvariable3.m_dData; break;
 			case OPER_LET + TYPE_DELTA3: variable1.m_dData = cvariable2.m_dData; break;
 			case OPER_NOT + TYPE_DELTA3: variable1.m_dData = ~cvariable2.m_dData; break;
@@ -1321,11 +1417,11 @@ start_label:
 			case OPER_LE + TYPE_DELTA3: variable1.m_dData = (cvariable2.m_dData <= cvariable3.m_dData); break;
 			case OPER_SET_ARRAY + TYPE_DELTA3:
 				if (!SetArrayValue(variable1, cvariable2, GetValue(cvariable3)))
-					ibBackendCoreException::Error(_("Cannot set array value '%s'"), cvariable3.GetString());
+					Raise(ERROR_ARRAY_SET, cvariable3);
 				break; //setting the array value
 			case OPER_GET_ARRAY + TYPE_DELTA3:
 				if (!GetArrayValue(variable1, variable2, cvariable3))
-					ibBackendCoreException::Error(_("Cannot get array value '%s'"), cvariable3.GetString());
+					Raise(ERROR_ARRAY_GET, cvariable3);
 				break; //getting the array value
 			case OPER_IF + TYPE_DELTA3: if (!cvariable1.m_dData) lCodeLine = index2 - 1; break;
 				//BOOLEAN

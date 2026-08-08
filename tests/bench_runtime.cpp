@@ -288,6 +288,65 @@ TEST(RuntimeBench, DISABLED_LinqPipe) {
     SUCCEED();
 }
 
+// --- method resolve on a WIDE surface: ns per obj.Method() ----------------
+// Every scenario above resolves names against a tiny surface (host->script
+// looks one function up in a table of one), so all of them take
+// ibMemberTable's linear path. Array surfaces 15 methods — above
+// kFindIndexMin (12) — so this one goes through the hash INDEX instead, which
+// is where a lookup used to pay `name.Upper().ToStdWstring()`. Without this
+// row the suite cannot see a change to name resolution at all.
+TEST(RuntimeBench, DISABLED_MethodResolve) {
+    const long n = 200000;
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("Function Resolve(n) Public\n")
+        wxT("  var arr; arr = New Array; arr.Add(1);\n")
+        wxT("  var i; i = 0; var s; s = 0;\n")
+        wxT("  While i < n Do s = s + arr.Count(); i = i + 1; EndDo;\n")
+        wxT("  Return s;\n")
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+    ibValue argN((int)n), ret;
+    const double oesTot = BestTotalNs(5, [&]{ pu.CallAsFunc(wxT("Resolve"), ret, argN); g_sink += (uint64_t)ret.GetInteger(); });
+    RowOes("method resolve (ns/call)", oesTot / double(n), "ns", oesTot);
+    SUCCEED();
+}
+
+// --- what a call frame costs, on its own ----------------------------------
+// recursion measures 318 ns/call while an arithmetic opcode is ~15 ns, so the
+// call is worth ~21 opcodes and nothing in the suite says why. ibRunContextSmall
+// carries `ibValue m_cLocVars[MAX_STATIC_VAR]` (25) plus a pointer row of the
+// same length, and ibValue has a virtual destructor — so entering ANY function
+// value-initialises 25 objects and leaving it runs 25 destructors, whether the
+// function declares three locals or twenty-five.
+//
+// The baseline column is the honest counterfactual: the same work if only the
+// slots actually used were built. The gap between the two IS the upper bound on
+// what a zero-cost-frame rewrite (raw storage + placement new, the CPython 3.11
+// move) could return — measured, not argued.
+TEST(RuntimeBench, DISABLED_FrameCost) {
+    const long n = 500000;
+
+    // ibRunContextSmall's dtor is not exported from backend.dll, so the frame
+    // cannot be built from a test TU. Measured instead is what the frame IS at
+    // its core: MAX_STATIC_VAR (25) ibValue objects constructed and destroyed,
+    // against the 3 a typical function actually declares.
+    const double frame = TimeNsPerOp(n, [&](long i){
+        ibValue slots[MAX_STATIC_VAR];             // what every call builds today
+        g_sink += (uint64_t)(i & 1);
+        (void)slots;
+    });
+
+    const double used = TimeNsPerOp(n, [&](long i){
+        ibValue slots[3];                          // only what the function uses
+        g_sink += (uint64_t)(i & 1);
+        (void)slots;
+    });
+
+    Row("call frame (ns)", frame, used, "ns", frame * double(n), used * double(n));
+    SUCCEED();
+}
+
 // ===========================================================================
 // NumberBench — ibNumber directly, vs int64 / double baselines
 // ===========================================================================

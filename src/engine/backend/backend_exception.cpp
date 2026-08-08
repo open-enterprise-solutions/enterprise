@@ -175,6 +175,16 @@ static wxString gs_listErrorString[] =
 	_("Date value expected"),//ERROR_BAD_TYPE_EXPRESSION_D
 
 	_("Variable type does not support this operation"),//ERROR_TYPE_OPERATION
+
+	// --- runtime (the interpreting loop) — lock-step with the enum ----------
+	_("Divide by zero"),//ERROR_DIVIDE_BY_ZERO
+	_("Cannot set array value '%s'"),//ERROR_ARRAY_SET
+	_("Cannot get array value '%s'"),//ERROR_ARRAY_GET
+	_("Object field not writable (%s)"),//ERROR_PROP_NOT_WRITABLE
+	_("Object field not readable (%s)"),//ERROR_PROP_NOT_READABLE
+	_("Object field is scope-local (%s)"),//ERROR_PROP_SCOPE_LOCAL
+	_("No attribute or method found '%s' - a variable is not an aggregate object"),//ERROR_MEMBER_NOT_AGGREGATE
+	_("Aggregate object field not found '%s'"),//ERROR_MEMBER_NOT_FOUND
 };
 
 //////////////////////////////////////////////////////////////////////

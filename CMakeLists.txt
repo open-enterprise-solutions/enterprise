@@ -81,6 +81,53 @@ option(OES_FB_LOCALSERVER  "Enable Firebird out-of-process local server (Phase 6
 # SQLite is always available (embedded sources in the project).
 
 # ---------------------------------------------------------------------------
+# Link-time code generation (Release)
+# ---------------------------------------------------------------------------
+#
+# The interpreter's hot loop crosses translation units on nearly every opcode:
+# ibProcUnit::Execute (procUnit.cpp) calls ibNumber::Compare / operator+= /
+# operator*= (fnumber.cpp) for the arithmetic and ibByteCode::Find* /
+# ibValue::Find* for name resolution. Their fast paths are a handful of
+# instructions each — ibNumber::Compare's is TryImmInts plus one int64
+# three-way compare — but without whole-program view the compiler cannot see
+# any of those bodies, so every one costs a real call plus the register spill
+# a call forces.
+#
+# Measured 2026-08-08, Release x64 MSVC 19.42, min-of-4, quiet machine
+# (tests/bench_runtime.cpp). Ranges did not overlap on any of these four:
+#   arith loop      116.2 -> 95.0 ns   (-18%)
+#   method resolve  297.8 -> 251.1 ns  (-16%)
+#   LINQ            1029  -> 936 ns    (-9%)
+#   recursion       364.1 -> 345.2 ns  (-5%)
+# host->script and string concat landed inside their own run-to-run spread and
+# are NOT claimed. Full oes_tests suite stayed green (1102 passed / 0 failed),
+# which is the check that matters here: LTCG reorders and inlines across the
+# module boundary, so the destruction order of ibApplicationData, the inline
+# registry variables and the pointer-to-member in ibMemberTable are all
+# exercised under it.
+#
+# ON for MSVC only, because that is where the numbers above were taken. GCC and
+# Clang would use -flto, which is a different implementation with a different
+# link-time cost, and the CI budget for the Linux / macOS jobs has not been
+# measured against it — turn the option on there once it has been.
+if(MSVC)
+    option(OES_ENABLE_LTO "Link-time code generation for Release builds" ON)
+else()
+    option(OES_ENABLE_LTO "Link-time code generation for Release builds" OFF)
+endif()
+
+if(OES_ENABLE_LTO)
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT OES_IPO_SUPPORTED OUTPUT OES_IPO_MESSAGE)
+    if(OES_IPO_SUPPORTED)
+        set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+        message(STATUS "LTO/LTCG ............ ON (Release)")
+    else()
+        message(STATUS "LTO/LTCG ............ unsupported: ${OES_IPO_MESSAGE}")
+    endif()
+endif()
+
+# ---------------------------------------------------------------------------
 # Sanitizers
 # ---------------------------------------------------------------------------
 #

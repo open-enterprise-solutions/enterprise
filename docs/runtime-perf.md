@@ -186,17 +186,181 @@ Ruby YARV, and the business-scripting runtimes of this class (~50–300× over n
 approximate): ~2× slower than CPython (30 years of interpreter tuning), ~5–7× slower than Lua 5
 (register-VM, the interpreter-speed benchmark), the same league as its peers or faster.
 
-Assessment: **healthy for its class** — overhead is uniform (×200–220 across three independent
-scenarios, a health sign), and the absolute cost is trivial for a server-centric domain (heavy
-work — queries, volume — lives in the C++ core, not the script; the script holds business rules).
+Assessment: **healthy for its class** — overhead is uniform across independent scenarios (a health
+sign), and the absolute cost is trivial for a server-centric domain (heavy work — queries, volume —
+lives in the C++ core, not the script; the script holds business rules).
+
+⚠ The figures in this section predate LTCG (§5) and the ratios in them are stale in **both**
+directions — see §5.3. Post-LTCG the interpreter runs ~16–24 ns per opcode on `arith`, which is
+the CPython band rather than "2× behind it". One caveat belongs with any such comparison: CPython
+and Lua loop over machine `int`/`double`, while every OES arithmetic op is **exact decimal**
+(`ibNumber`). The like-for-like comparison is against Python's `decimal`, not its `int` — and that
+one has never been measured here. Do it before quoting a position.
 
 Acceleration ladder, **by need, not now** (profile gives no reason — the runtime is not, and is
 unlikely to become, the bottleneck):
 
 1. **Hot-loop check trim** — DONE (this doc), −10%, portable.
-2. **computed-goto dispatch** — +10–30% on GCC/Clang, but a GNU extension **MSVC does not support**
+2. **Link-time code generation** — DONE 2026-08-08 (§5). The rung that was missing from this list
+   entirely, and the largest single win so far: −18% arith, −16% method resolve, no source change.
+3. **computed-goto dispatch** — +10–30% on GCC/Clang, but a GNU extension **MSVC does not support**
    (would need an `#ifdef` fork or a clang-cl build of `procUnit.cpp`).
-3. **register-VM** — the no-JIT ceiling (Lua-style). A big rewrite (codegen + interpreter + AOT
+4. **register-VM** — the no-JIT ceiling (Lua-style). A big rewrite (codegen + interpreter + AOT
    bump); note the operand addressing is already `(array, index)` three-address, i.e. register-style,
    so the main register-VM win (no operand stack traffic) is largely already present.
-4. **JIT** — 1–5×, maximum cost.
+5. **JIT** — 1–5×, maximum cost.
+
+---
+
+## 5. Cross-TU calls — the rung this list was missing (2026-08-08)
+
+The ladder above jumped from "trim the loop header" straight to "rewrite the VM", and skipped the
+thing that turned out to matter most: **the hot loop leaves its translation unit on nearly every
+opcode**, and until 2026-08-08 nothing let the compiler see across that boundary.
+
+`ibProcUnit::Execute` lives in `procUnit.cpp`. The arithmetic helpers it calls (`AddValue`,
+`ResolveRead`, …) are in the same file and were always visible — but the work they delegate to is
+not: `ibNumber::Compare` / `operator+=` in `fnumber.cpp`, `ibByteCode::Find*` in `byteCode.cpp`.
+A call the compiler cannot see through is not expensive because of the jump (~1 ns); it is
+expensive because it **forces the optimiser to spill registers and re-read memory afterwards**,
+and it cancels unrolling around itself.
+
+### 5.1 LTCG (`CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE`)
+
+Release x64 MSVC 19.42, min-of-4, quiet machine. Ranges did not overlap on any of the four:
+
+| scenario | before | with LTCG | Δ |
+|---|---|---|---|
+| arith loop | 116.2 ns | **95.0** | −18% |
+| method resolve | 297.8 ns | **251.1** | −16% |
+| LINQ | 1029 ns | **936** | −9% |
+| recursion | 364.1 ns | **345.2** | −5% |
+
+`host->script` and `string concat` landed inside their own run-to-run spread and are **not**
+claimed. Full `oes_tests` stayed green (1102 passed / 0 failed) — the check that matters, since
+LTCG inlines and reorders across the module boundary that `~ibApplicationData`'s destruction
+order, the inline registry variables and `ibMemberTable`'s pointer-to-member all depend on.
+
+Enabled for **MSVC only** (`OES_ENABLE_LTO`, `CMakeLists.txt`): GCC/Clang would use `-flto`, whose
+link-time cost against the CI budget has not been measured.
+
+### 5.1a The one that mattered — operand resolution (2026-08-08)
+
+LTCG was not the biggest win of the day; it was the one that pointed at the biggest.
+Disassembling `ibProcUnit::Execute` in both builds showed the two most-called targets inside
+it — **163 and 100 call sites** — surviving *even under whole-program optimisation*, while
+`ibNumber::Compare` (7 sites) was inlined away. They were `ResolveWrite` / `ResolveRead`: the
+functions behind the `variable1` / `cvariable2` macros, i.e. **one call per operand of every
+opcode**.
+
+Both carried `inline` and the compiler ignored it — a body holding
+`ibBackendCoreException::Error` (varargs + gettext) is past any inliner's budget, and it dragged
+a /GS stack-cookie prologue along. The common case is ONE line: a slot in the current frame.
+
+Split (frame-local case inline, outer-frame walk + raises in `…Outer`) alone changed **nothing**:
+`Execute` came out byte-for-byte identical, 27 232 bytes, same 263 calls — the size budget
+declined a two-instruction body across 263 sites. Only `IB_FORCEINLINE` on top of the split did
+it. Measured against the same-day baseline, min-of-4, no LTCG:
+
+| scenario | before | after | Δ |
+|---|---|---|---|
+| arith loop | 116.2 | **71.7** | **−37%** |
+| string concat | 89.2 | **62.5** | **−30%** |
+| method resolve | 297.8 | **236.8** | **−19%** |
+| recursion | 364.1 | **318.2** | −11% |
+| LINQ | 1029 | **903** | −10% |
+
+Overhead over native: **×175 → ×105**. Roughly **13.7 M script operations/sec**; a million
+operations in 0.07 s. Suite green throughout (1102 passed). And it beat LTCG — which is the
+point: this holds on every toolchain, with no flag and no 7-minute link.
+
+A second, smaller pass moved 23 raise sites out of the loop body (the `_("…")` texts were
+expanding into `wxString` + `wxFormatString` construction inside `Execute` — 163 wx calls
+counted in the disassembly). `Execute` went 33 312 → 29 328 bytes, wx calls 163 → 112. Timing
+gain was within noise; the reason to keep it is that the loop now reads as opcodes rather than
+message formatting. Those texts moved into the error-code table the exception layer already
+owned (`backend_exception.h` enum + `gs_listErrorString`), reached through one `Raise(code, …)`
+entry point — see §5.5.
+
+### 5.2 Hot/cold split — the portable half
+
+LTCG is a build flag, so it does not hold where it is off. The same effect is bought permanently by
+putting the **fast path** in the header and leaving the cold branch in the `.cpp` — the shape
+`TryImmInts` already had, now applied to its callers (`ibNumber::Compare`) and to the primitives it
+itself calls (`ImmMantissa`, `ImmExp` — both were out-of-line, so the "fast path" was paying four
+cross-module calls per number operation to run a shift and a mask).
+
+On top of LTCG this adds nothing (the linker already did it). Without LTO, all six scenarios
+improved by 2–6%, but **run-to-run spread that day was 7–20% and the ranges overlap** — the honest
+reading is "signal, not measurement": six of six improving by chance is ~1.6%, so the direction is
+probably real while the magnitude is at the limit of what this harness can resolve.
+
+### 5.3 Reading the numbers after LTCG
+
+The `×native` column is **no longer comparable to earlier entries in this document**: LTCG
+optimised the native baseline too (0.7–0.8 ns → 0.3 ns on `arith`), so ratios jumped to ×293–312
+while OES itself got faster. Compare absolute nanoseconds, not the ratio.
+
+### 5.5 One raise entry point
+
+The runtime's own error texts used to be spelled inline as `_("…")` at ~20 sites inside
+`Execute`. They now live in the table the exception layer already owned — the `enum` in
+`backend_exception.h` and `gs_listErrorString` in `backend_exception.cpp`, kept in lock-step the
+same way `s_listKeyWord` is — reached through one entry point in `procUnit.cpp`:
+
+```cpp
+template <class... Args> IB_NOINLINE void Raise(int code, Args&&... args);
+IB_NOINLINE void Raise(int code, const ibValue& value);   // NOT folded in — see below
+```
+
+The second overload exists for one reason: it calls `GetString()` **inside itself**, off the hot
+path. Forwarding an `ibValue` through the variadic form would put the `wxString` construction
+back at the call site, inside the loop — which is what moving the raises out was for. (`ibValue`
+has no implicit conversion to `wxString`, only `GetString()`, so the variadic form does not even
+compile on it. Partial specialisation of function templates is illegal in C++; the overload IS
+the idiomatic mechanism here.)
+
+Two effects worth naming, neither of them speed: the loop reads as opcodes instead of message
+formatting, and every runtime error is now visible as a list next to the compiler's — which is
+also what makes them translatable in one place.
+
+### 5.6 Call frame — measured, NOT fixed
+
+The largest remaining gap, left deliberately as an arc rather than an evening's edit.
+
+A call costs **335.8 ns** while an arithmetic opcode is ~15 ns. `ibRunContextSmall` holds
+`ibValue m_cLocVars[MAX_STATIC_VAR]` (25) plus a pointer row, and `ibValue` has a virtual
+destructor — so entering ANY function value-initialises 25 objects and leaving it runs 25
+destructors, whatever the function declares.
+
+Measured (`tests/bench_runtime.cpp`, `DISABLED_FrameCost`, min-of-4):
+
+| | ns |
+|---|---|
+| 25 `ibValue` — what every call builds today | **149.8** |
+| 3 `ibValue` — what a typical function uses | **20.5** |
+
+**~45% of a call is spent on slots nobody reads.** Building only the used ones (raw storage +
+placement new — the CPython 3.11 "zero-cost frames" move) would put recursion at ~206 ns (−39%)
+and LINQ, which pays three calls per element, at ~520 ns (−43%). Bigger than everything landed
+above, combined.
+
+Two caveats that must travel with the number. The measurement is **indirect** —
+`ibRunContextSmall`'s destructor is not exported, so a test TU cannot build the frame; what is
+timed is its core, the `ibValue` array, not the pointer row alongside it. And the fix hands
+lifetime management to us **inside the interpreter**, where exceptions are a working mechanism
+(every `Raise`, every script `try`, every session cancel unwinds through a live frame). Today the
+compiler destroys those 25 objects on unwind; with placement new that becomes our job. Needs its
+own tests — an exception thrown mid-frame, and deep recursion — before it needs its optimisation.
+
+### 5.4 What measuring this cost, methodologically
+
+Nine rebuilds; two produced knowledge. The other seven tested guesses — a conversion, a scratch
+buffer, where to declare an accessor — and all of those guesses were wrong. Two rules earned the
+hard way:
+
+- **Measure the harness before the change.** Spread was 7–20% on this machine; anything below ~10%
+  is undecidable here, and no number of rebuilds fixes that.
+- **Baseline the TARGET scenario first.** The `ibString`-on-name-resolution branch was abandoned
+  after one clean measurement showed its own target case 4% *slower* — a measurement that could
+  have been taken before writing any of it.

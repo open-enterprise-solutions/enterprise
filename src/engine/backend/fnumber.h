@@ -84,9 +84,39 @@ public:
 	ibNumber& operator=(const ibNumber& o);
 	ibNumber& operator=(ibNumber&& o) noexcept;
 
-	ibNumber& operator+=(const ibNumber& rhs);
-	ibNumber& operator-=(const ibNumber& rhs);
-	ibNumber& operator*=(const ibNumber& rhs);
+	// Hot/cold split, same shape as Compare below. The immediate-integer path is
+	// a gate plus one int64 op and lands in the header so any caller can inline
+	// it; the BigImpl path stays in fnumber.cpp behind AddBig / SubBig / MulBig.
+	// Results are bit-identical either way — the fast path only fires when it
+	// fits immediate, which is the same condition the cold path would settle on.
+	ibNumber& operator+=(const ibNumber& rhs) {
+		// 47-bit + 47-bit can't overflow int64; store if the sum fits immediate.
+		int64_t am, bm;
+		if (TryImmInts(rhs, am, bm)) {
+			const int64_t r = am + bm;
+			if (CanBeImmediate(r, 0)) { StoreImmediate(r, 0); return *this; }
+		}
+		return AddBig(rhs);
+	}
+	ibNumber& operator-=(const ibNumber& rhs) {
+		int64_t am, bm;
+		if (TryImmInts(rhs, am, bm)) {
+			const int64_t r = am - bm;
+			if (CanBeImmediate(r, 0)) { StoreImmediate(r, 0); return *this; }
+		}
+		return SubBig(rhs);
+	}
+	ibNumber& operator*=(const ibNumber& rhs) {
+		// int32-range operands keep the product below 2^62 (no int64 overflow);
+		// anything wider falls through to the BigImpl multiply.
+		int64_t am, bm;
+		if (TryImmInts(rhs, am, bm)
+			&& am >= INT32_MIN && am <= INT32_MAX && bm >= INT32_MIN && bm <= INT32_MAX) {
+			const int64_t r = am * bm;
+			if (CanBeImmediate(r, 0)) { StoreImmediate(r, 0); return *this; }
+		}
+		return MulBig(rhs);
+	}
 	ibNumber& operator/=(const ibNumber& rhs);
 	ibNumber& operator%=(const ibNumber& rhs);
 	ibNumber& operator++();           // pre-increment
@@ -99,7 +129,18 @@ public:
 	friend ibNumber operator/(ibNumber a, const ibNumber& b) { a /= b; return a; }
 	friend ibNumber operator%(ibNumber a, const ibNumber& b) { a %= b; return a; }
 
-	int  Compare(const ibNumber& rhs) const;
+	// Hot/cold split. The immediate-integer path is TryImmInts plus one three-way
+	// compare, and EVERY loop condition (`i < n`) in every script goes through
+	// here; keeping it in the header lets the caller's compiler see it without
+	// depending on whole-program view. The BigImpl branch stays out of line —
+	// inlining it would put a decimal long-compare into every call site for the
+	// rare case. Same shape TryImmInts itself already uses.
+	int Compare(const ibNumber& rhs) const {
+		int64_t am, bm;
+		if (TryImmInts(rhs, am, bm))
+			return (am > bm) - (am < bm);
+		return CompareBig(rhs);
+	}
 
 	bool operator==(const ibNumber& r) const { return Compare(r) == 0; }
 	bool operator!=(const ibNumber& r) const { return Compare(r) != 0; }
@@ -216,9 +257,26 @@ private:
 	void Clear() noexcept;
 
 	bool     IsImmediate() const { return (m_payload & 1ULL) != 0; }
-	int64_t  ImmMantissa() const;
-	int      ImmExp()      const;
-	BigImpl* HeapPtr()     const;
+	// Inline, NOT out-of-line: TryImmInts below calls ImmExp() twice and
+	// ImmMantissa() twice, and TryImmInts is the gate of every arithmetic and
+	// comparison fast path — so a body left in the .cpp costs four cross-module
+	// calls on every number operation the interpreter performs, to run a shift
+	// and a mask. Whole-program optimisation removes those calls, but only where
+	// it is enabled (MSVC Release); the header form holds on every toolchain and
+	// every configuration, which is the point.
+	int64_t ImmMantissa() const {
+		// Arithmetic right-shift on int64_t sign-extends, restoring the 47-bit
+		// signed mantissa to a full int64_t value.
+		return static_cast<int64_t>(m_payload) >> kImmMantShift;
+	}
+	int ImmExp() const {
+		const uint64_t mask = (1ULL << kImmExpBits) - 1;
+		int64_t e = static_cast<int64_t>((m_payload >> kImmExpShift) & mask);
+		if (e & (1LL << (kImmExpBits - 1))) e -= (1LL << kImmExpBits);
+		return static_cast<int>(e);
+	}
+
+	BigImpl* HeapPtr()     const;   // cold — reached through LoadBig, not the fast path
 
 	// Both operands inline integers (exp10 == 0)? Returns their mantissas in
 	// (a, b). Shared gate for the immediate-integer fast paths in the
@@ -232,10 +290,34 @@ private:
 		return false;
 	}
 
-	static bool     CanBeImmediate(int64_t mant, int32_t exp10) noexcept;
-	static uint64_t PackImmediate(int64_t mant, int32_t exp10) noexcept;
+	// Cold half of Compare — both operands are not plain immediate integers.
+	int CompareBig(const ibNumber& rhs) const;
 
-	void StoreImmediate(int64_t mant, int32_t exp10) noexcept;
+	// Inline for the same reason as ImmMantissa / ImmExp above: they are the
+	// STORE half of every arithmetic fast path (operator+= and friends, now
+	// defined in this header), so leaving them in the .cpp would put the call
+	// back on the path the split exists to shorten.
+	static bool CanBeImmediate(int64_t mant, int32_t exp10) noexcept {
+		return mant >= kImmMantMin && mant <= kImmMantMax
+		    && exp10 >= kImmExpMin && exp10 <= kImmExpMax;
+	}
+	static uint64_t PackImmediate(int64_t mant, int32_t exp10) noexcept {
+		const uint64_t mantU = static_cast<uint64_t>(mant) & ((1ULL << kImmMantBits) - 1);
+		const uint64_t expU  = static_cast<uint64_t>(exp10) & ((1ULL << kImmExpBits) - 1);
+		return (mantU << kImmMantShift) | (expU << kImmExpShift) | 1ULL;
+	}
+
+	void StoreImmediate(int64_t mant, int32_t exp10) noexcept {
+		m_payload = PackImmediate(mant, exp10);
+	}
+
+	// Cold halves — both operands outside the immediate-integer tier, so the
+	// BigImpl machinery (LoadBig / AlignExp / StoreBig) runs. Deliberately left
+	// out of line: inlining a decimal long-add into every call site would trade
+	// the rare case against the instruction cache the common case lives in.
+	ibNumber& AddBig(const ibNumber& rhs);
+	ibNumber& SubBig(const ibNumber& rhs);
+	ibNumber& MulBig(const ibNumber& rhs);
 	void StoreHeap(BigImpl* p) noexcept;
 
 	// One body per signedness, shared by the long / long long constructor pair above.

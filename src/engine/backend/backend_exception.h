@@ -64,6 +64,22 @@ enum { //Error message numbers
 	ERROR_BAD_TYPE_EXPRESSION_D,
 	ERROR_TYPE_OPERATION,
 
+	// --- runtime (the interpreting loop) -----------------------------------
+	// Everything above is raised by the COMPILER; these are raised by
+	// ibProcUnit::Execute. They live in the same table on purpose: the texts
+	// were previously spelled inline as _("…") at ~20 sites inside the loop,
+	// which put wxString + wxFormatString construction into the hot function
+	// (see docs/runtime-perf.md §5). A code is a constant at the call site.
+	// Keep in lock-step with gs_listErrorString in backend_exception.cpp.
+	ERROR_DIVIDE_BY_ZERO,
+	ERROR_ARRAY_SET,
+	ERROR_ARRAY_GET,
+	ERROR_PROP_NOT_WRITABLE,
+	ERROR_PROP_NOT_READABLE,
+	ERROR_PROP_SCOPE_LOCAL,
+	ERROR_MEMBER_NOT_AGGREGATE,
+	ERROR_MEMBER_NOT_FOUND,
+
 	LastError
 };
 

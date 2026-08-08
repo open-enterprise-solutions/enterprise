@@ -442,42 +442,15 @@ namespace
 
 // ---- bit packing ---------------------------------------------------------------------
 
-bool ibNumber::CanBeImmediate(int64_t mant, int32_t exp10) noexcept
-{
-	return mant >= kImmMantMin && mant <= kImmMantMax
-	    && exp10 >= kImmExpMin && exp10 <= kImmExpMax;
-}
+// CanBeImmediate / PackImmediate moved to fnumber.h — the store half of every
+// arithmetic fast path, which now lives in the header with its operators.
 
-uint64_t ibNumber::PackImmediate(int64_t mant, int32_t exp10) noexcept
-{
-	const uint64_t mantU = static_cast<uint64_t>(mant) & ((1ULL << kImmMantBits) - 1);
-	const uint64_t expU  = static_cast<uint64_t>(exp10) & ((1ULL << kImmExpBits) - 1);
-	return (mantU << kImmMantShift) | (expU << kImmExpShift) | 1ULL;
-}
-
-int64_t ibNumber::ImmMantissa() const
-{
-	// Arithmetic right-shift on int64_t sign-extends, restoring the 47-bit signed
-	// mantissa to a full int64_t value.
-	return static_cast<int64_t>(m_payload) >> kImmMantShift;
-}
-
-int ibNumber::ImmExp() const
-{
-	const uint64_t mask = (1ULL << kImmExpBits) - 1;
-	int64_t e = static_cast<int64_t>((m_payload >> kImmExpShift) & mask);
-	if (e & (1LL << (kImmExpBits - 1))) e -= (1LL << kImmExpBits);
-	return static_cast<int>(e);
-}
+// ImmMantissa / ImmExp moved to fnumber.h — they are the innermost step of
+// TryImmInts, which every arithmetic and comparison fast path goes through.
 
 ibNumber::BigImpl* ibNumber::HeapPtr() const
 {
 	return reinterpret_cast<BigImpl*>(static_cast<uintptr_t>(m_payload));
-}
-
-void ibNumber::StoreImmediate(int64_t mant, int32_t exp10) noexcept
-{
-	m_payload = PackImmediate(mant, exp10);
 }
 
 void ibNumber::StoreHeap(BigImpl* p) noexcept
@@ -670,14 +643,11 @@ void ibNumber::StoreBig(const BigImpl& src)
 
 // ---- arithmetic ----------------------------------------------------------------------
 
-ibNumber& ibNumber::operator+=(const ibNumber& rhs)
+// Cold halves of the compound operators — the immediate-integer fast paths live
+// in fnumber.h (see operator+= there) and reach these only when they miss.
+
+ibNumber& ibNumber::AddBig(const ibNumber& rhs)
 {
-	// 47-bit + 47-bit can't overflow int64; store if the sum fits immediate.
-	int64_t am, bm;
-	if (TryImmInts(rhs, am, bm)) {
-		const int64_t r = am + bm;
-		if (CanBeImmediate(r, 0)) { StoreImmediate(r, 0); return *this; }
-	}
 	BigImpl a, b;
 	LoadBig(a);
 	rhs.LoadBig(b);
@@ -687,13 +657,8 @@ ibNumber& ibNumber::operator+=(const ibNumber& rhs)
 	return *this;
 }
 
-ibNumber& ibNumber::operator-=(const ibNumber& rhs)
+ibNumber& ibNumber::SubBig(const ibNumber& rhs)
 {
-	int64_t am, bm;
-	if (TryImmInts(rhs, am, bm)) {
-		const int64_t r = am - bm;
-		if (CanBeImmediate(r, 0)) { StoreImmediate(r, 0); return *this; }
-	}
 	BigImpl a, b;
 	LoadBig(a);
 	rhs.LoadBig(b);
@@ -703,16 +668,8 @@ ibNumber& ibNumber::operator-=(const ibNumber& rhs)
 	return *this;
 }
 
-ibNumber& ibNumber::operator*=(const ibNumber& rhs)
+ibNumber& ibNumber::MulBig(const ibNumber& rhs)
 {
-	// int32-range operands keep the product below 2^62 (no int64 overflow);
-	// anything wider falls through to the BigImpl multiply.
-	int64_t am, bm;
-	if (TryImmInts(rhs, am, bm)
-		&& am >= INT32_MIN && am <= INT32_MAX && bm >= INT32_MIN && bm <= INT32_MAX) {
-		const int64_t r = am * bm;
-		if (CanBeImmediate(r, 0)) { StoreImmediate(r, 0); return *this; }
-	}
 	BigImpl a, b;
 	LoadBig(a);
 	rhs.LoadBig(b);
@@ -759,13 +716,10 @@ ibNumber ibNumber::operator-() const
 	return r;
 }
 
-int ibNumber::Compare(const ibNumber& rhs) const
+// Cold half only — the immediate-integer fast path moved into the header
+// (see ibNumber::Compare there), so a caller resolves `i < n` without a call.
+int ibNumber::CompareBig(const ibNumber& rhs) const
 {
-	// Fast path: both immediate integers — a direct int64 three-way compare, no
-	// BigImpl. Every loop condition (`i < n`) and integer comparison hits this.
-	int64_t am, bm;
-	if (TryImmInts(rhs, am, bm))
-		return (am > bm) - (am < bm);
 	BigImpl a, b;
 	LoadBig(a);
 	rhs.LoadBig(b);
