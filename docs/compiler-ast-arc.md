@@ -117,15 +117,17 @@ implementations. The design question is not "how do we put everything on the tre
 is the cheapest layer that can answer each question**, because they run at wildly different
 frequencies.
 
-| consumer | today | needs | tier |
-|---|---|---|---|
-| syntax highlighting | `ibCodeEditor::HighlightSyntaxAndCalculateFoldLevel` over the lexeme stream (`SetLexer(wxSTC_LEX_CONTAINER)` — OES colours it itself) | token class only | **lexemes** |
-| folding | the same pass — `m_fp.RecalcFoldLevel()`, fed by `KEYWORD` lexems | nesting, not meaning | **lexemes** |
-| symbol list (functions / procedures / vars / lambdas) | `codeEditorParser.cpp` → `ibModuleElement{name, kind, lineStart, lineEnd}` | declaration nodes + their spans | **syntax tree** |
-| LINQ / query constructor (planned) | — | tree + render back to text | **syntax tree** |
-| IntelliSense | `codeEditorInterpreter.cpp` (2 816 lines) | tree + resolved values | **semantic model** |
-| SQL pushdown | `lambdaQueryAst.cpp` (349 lines) | tree + resolved values | **semantic model** |
-| bytecode | `compileCode.cpp` | tree + emission | **semantic model** |
+| consumer | today | needs | tier | moves? |
+|---|---|---|---|---|
+| **translator** (lexer + preprocessor) | `ibTranslateCode` — already incremental | — | produces tier 1 | **no — unchanged** |
+| **syntax highlighting** | its own range-scoped re-lex through the scratch translator `m_tc` (`SetLexer(wxSTC_LEX_CONTAINER)` — OES colours it itself) | token class over a range | lexemes | **stays at tier 1, but should read the SHARED cache** — see §3d; the second translator instance goes away |
+| **folding** | `m_fp`, fed `KEYWORD` lexems from the shared cache | nesting, not meaning | lexemes | **no** |
+| **context help** | part of `codeEditorInterpreter.cpp` | the resolved value under the caret | semantic model | **with IntelliSense** — it is a second question to the same model, not a separate consumer (LSP calls the pair `hover` / `signatureHelp`) |
+| **symbol list** (functions / procedures / vars / lambdas) | `codeEditorParser.cpp` → `ibModuleElement{name, kind, lineStart, lineEnd}` | a list of declarations | syntax tree | **no — deliberately left alone**; it is answered fine today, and the rule of this section is that a consumer climbs only when the tier below cannot answer it |
+| **LINQ constructor** (the point of the arc) | — | tree + render → text, **and** scope resolution | syntax tree **+** semantic model | **new — it is the acceptance test (§3f-pre)** |
+| **IntelliSense** | `codeEditorInterpreter.cpp` (2 816 lines) | tree + resolved values, PATH | semantic model | **yes** |
+| **SQL pushdown** | `lambdaQueryAst.cpp` (349 lines) | tree + resolved values, PATH | semantic model | **yes — deleted, step 2** |
+| **compiler / interpreter** | `compileCode.cpp` (4 984 lines) | tree + emission, TOTAL | semantic model | **yes** |
 
 Three tiers, and the split is a **performance** layering as much as a conceptual one, because the
 three run at three frequencies: per keystroke over the visible region (tier 1), per edit and
@@ -141,6 +143,257 @@ answer its question**, never because the tree is new and interesting.
 That leaves the actual consolidation smaller than it first looks: the symbol list and the
 constructor take tier 2, and the three implementations that genuinely duplicate each other —
 IntelliSense, pushdown, bytecode — meet at tier 3.
+
+---
+
+## 3b. Why the duplication was inevitable: everyone *is-a* translator
+
+```
+ibTranslateCode                          lexer + preprocessor; already incremental —
+│                                        PrepareLexem(line, ±lines, ±len) patches the
+│                                        lexeme array for one edit
+├── ibCompileCode → ibCompileModule      parse + emit bytecode
+├── ibPrecompileCode      (frontend)     parse again → IntelliSense
+└── ibParserModule        (frontend)     parse again → symbol list
+    ibFoldLevelParser                    not a subclass; eats KEYWORD lexems → fold points
+    ibCodeEditor::m_tc                   a SECOND translator instance, re-lexes a text range
+                                         for styling
+    lambdaQueryAst                       parses a lexeme span → ibQueryAstExpr
+```
+
+**Inheritance is the cause.** To reach the lexemes you must *become* a translator, and once you are
+one, walking them yourself is the path of least resistance. Nothing here was careless; the shape
+made duplication the cheap option.
+
+The structural move is therefore not "add a tree" but **stop inheriting, start consuming**: the
+artefacts become values that are passed, not base classes that are derived.
+
+```
+text → ibTranslateCode ──► lexeme stream ──┬─► highlighting      (tier 1, per keystroke)
+        (unchanged)                        └─► folding           (tier 1, per keystroke)
+                              │
+                       ibSyntaxTree  (NEW) ─┬─► symbol list      (tier 2, per edit)
+                    fragment-tolerant,      └─► render → text    (tier 2, constructor)
+                    error-local, spans
+                              │
+                     ibSemanticModel (NEW) ─┬─► IntelliSense     (tier 3, PATH)
+                     resolution over        ├─► SQL pushdown     (tier 3, PATH)
+                     the tree               └─► bytecode         (tier 3, TOTAL)
+```
+
+`ibCompileCode` stops deriving from the translator and becomes a consumer of a tree like everyone
+else. That is the one change that makes the duplication *impossible* rather than merely discouraged.
+
+## 3c. The two modes — PATH and TOTAL, and why there is still only one resolver
+
+The distinction that makes this work, stated as the requirement it is:
+
+- **PATH** — resolve only what one node depends on. Anything unresolvable becomes `unknown` and
+  propagates. Nothing else in the module has to be well-formed. This is IntelliSense at a caret,
+  and it is pushdown of one lambda.
+- **TOTAL** — every node must resolve; a failure is an error. This is bytecode emission, and it is
+  the **only** consumer that needs it.
+
+The consequence worth writing down: **PATH is the general case and TOTAL is the special one.**
+TOTAL is PATH applied to every node, plus a policy that says `unknown` is fatal. So this is one
+resolver with a policy parameter, not two engines that must be kept in step — which is exactly what
+went wrong the first time.
+
+## 3d. One cache, many readers — the constraint the arc must not break
+
+The editor already works this way, and it is not an optimisation to be re-litigated: **one shared
+result is computed and then patched; every consumer reuses it rather than recomputing.**
+
+| | source | when |
+|---|---|---|
+| shared lexeme cache | `m_precompileModule`'s array | full pass on module open; afterwards **patched** per edit: `PrepareLexem(line, ±lines, ±len)` |
+| folding | reads that cache (`KEYWORD` lexems → fold points) | reuse only |
+| IntelliSense | reads that cache | reuse only |
+| highlighting | today: its **own** range-scoped lex through the scratch translator `m_tc`, driven by Scintilla's `OnStyleNeeded` | per visible range |
+
+**Highlighting should join the readers.** The cache already holds every token's class and position,
+and positions are already maintained under patching — so styling a range becomes a binary search
+into a position-sorted array plus an iterate, which is strictly cheaper than re-lexing the range.
+The scratch translator `m_tc` disappears with it, leaving one lexing path instead of two. Ordering
+already works: the edit handler patches the cache before Scintilla asks for styling.
+
+### Who owns the cache
+
+The natural reading of "IntelliSense patches it, everyone else reads it" puts the cache on the
+IntelliSense object — which is where it sits today (`ibPrecompileCode` owns the lexeme array and
+`PrepareLexem` patches it). That has two consequences worth avoiding:
+
+- **an inverted dependency** — highlighting, the cheapest and most frequent consumer, would depend
+  on the most expensive one;
+- **it is exactly why the LINQ constructor cannot reach the data** (§3f-pre, blocker 1):
+  `ibPrecompileCode` lives in `frontend/…/codeEditor/` and is bound to `ibCodeEditor`, so anything
+  that is not the editor has to drag the editor along or copy it.
+
+So: **one writer, many readers — but the writer is the document, not a consumer.** A module-level
+source model owns the lexeme cache and, later, the tree; it exposes one write door (`patch(edit)`,
+called by the editor on text change) and read doors for tokens-in-range, fold points, declarations,
+and tree + resolution. IntelliSense stops being the owner and becomes a reader like the rest, and
+the constructor can reach the same model without an editor in the picture.
+
+This is the same conclusion as §3b — stop inheriting, start consuming — arrived at from the caching
+side instead of the parsing side.
+
+**Why this is a hard requirement and not a preference.** The compiler measures ~160 K lines/s
+(parse + emit, [runtime-perf.md](runtime-perf.md) §6). A 100 K-line module therefore costs on the
+order of half a second for a full pass — per keystroke that is not slow, it is unusable. Lexing
+alone is cheaper than that, but not cheap enough to do globally on every edit, which is exactly why
+the incremental path exists.
+
+**So the rule for this arc: the tree must not become a second thing that is recomputed globally.**
+It inherits the same lifecycle as the lexeme cache — a full parse when the module is opened, and a
+**spliced node** on every edit thereafter. An arc that produced a correct tree by reparsing 100 K
+lines per keystroke would be a regression against what exists today, however clean the tree looked.
+
+Folding and highlighting are also the reason §3a leaves them where they are: they already consume
+the cheapest thing that answers them, one of them by reuse and one by a scoped pass, and moving
+either onto the tree would make a per-keystroke path depend on a per-edit one.
+
+### The patch unit moves up a layer, and gets cheaper
+
+Today the patch unit is the lexeme array. With a tree carrying spans it becomes a **node**:
+
+1. Patch the lexeme array as today (unchanged).
+2. Find the smallest node whose span contains the edit.
+3. Re-parse **that span only**; splice the new subtree in.
+4. Invalidate resolution on that subtree.
+
+This is *less* work than today, not more: currently an edit re-runs the whole precompile walk over
+the patched array. The prerequisite is that every node stores its lexeme span — which the debugger's
+line map needs anyway (§5).
+
+Step 4 is the one to be careful with: an edit inside one function can change what a *later*
+function sees (a new export). Start with the conservative rule — patch the syntax tree, drop
+resolution for the whole module — because parsing is the expensive half and resolution is lazy by
+construction. Narrow it later, with a measurement.
+
+**The pathological case, named up front.** An edit that changes *block structure* — deleting an
+`EndIf`, typing a `}` — moves everything after it into a different node, so "the smallest node
+containing the edit" is the wrong unit: it is correct only while the edit stays inside one block.
+
+The practical answer is to make **the enclosing function the patch unit**, not the smallest node. A
+function is a natural boundary, is usually tens of lines rather than thousands, and the editor
+already tracks exactly these boundaries — `ibFoldLevelParser` has `FoldProcedure` / `FoldFunction`
+among its kinds. Re-parsing one function per edit is bounded work regardless of module size, which
+is the property that matters at 100 K lines. Only an edit outside every function (a module-level
+declaration) falls back to a full parse, and those are rare.
+
+The unbalanced-fragment case then needs no special handling in the parser: the function being
+edited parses into a partial subtree with an unclosed node, resolution over it is error-local
+(§5.2), and everything outside that function is untouched and still correct.
+
+---
+
+## 3e. The plan, step by step
+
+Each step has a gate, and steps 1–3 do not touch IntelliSense at all — the editor keeps working
+while the foundation lands.
+
+| # | step | gate |
+|---|---|---|
+| **0** | **Freeze the contract.** A corpus of modules, compiled, with the emitted `ibByteCode` hashed into a test. | the hash test itself — this is what makes every later step safe |
+| **1** | **Expression tree, compiler-internal.** `GetExpression` splits into `ParseExpression` → node and `EmitExpression` → opcodes. Slot allocation moves into Emit (§5.1). | corpus hashes unchanged, byte for byte |
+| **2** | **Delete `lambdaQueryAst.cpp`.** Pushdown reads the real tree instead of re-parsing lexemes. | `test_lambdaRecorder` green, plus new cases for shapes that used to bail — **first visible payoff, and it is a query-performance one** |
+| **3** | **Declarations + spans.** Function / procedure / variable declaration nodes — the semantic model has to know what is declared, and spans are what make incremental patching (§3d) and the debugger's line map work. `ibParserModule` is **not** migrated: the symbol list keeps its own walk. | declarations present and spans correct — *not* "symbol list identical", because the symbol list does not move |
+| **4** | **The semantic model.** `ibPrecompileCode`'s resolution logic moves onto the tree as the shared resolver with the PATH/TOTAL policy (§3c). The big one, last on purpose. | IntelliSense answers identical on a corpus of caret positions |
+| **5** | **Statements.** Only if it earns it. | corpus hashes unchanged |
+
+---
+
+## 3f-pre. The LINQ constructor is the arc's acceptance test
+
+Hold the plan this way rather than as "five steps and then, hopefully, something". The LINQ
+constructor needs every part of the semantic model and nothing else does — so if it works, the arc
+is done.
+
+**Where it differs from the query constructor, exactly.** A query constructor's sources are
+**metadata**: pick `Catalog.Contractors` and the field list comes from the configuration,
+statically, with no code involved. A LINQ constructor's sources are **values in scope**:
+`from x in <expr>`, where `<expr>` may be a local, a parameter, a session parameter, or a call into
+a common module. That single difference is the whole difference between reading metadata and
+running a semantic model.
+
+Its three questions, and where each is answered:
+
+| question | answered by | exists? |
+|---|---|---|
+| what is in scope at this point? | semantic model, PATH mode | **no — step 4** |
+| what does this source expression denote? | the same resolver | **no — step 4** |
+| what fields / methods can be taken off that value? | `ibMemberTable` (`compiler/value.h`) — names, param counts, help text, `Readable`/`Writable`/`Scoped` flags | **yes, already, and in the backend** |
+
+So no new field extractor is needed; the door IntelliSense already uses is the door the constructor
+needs. What is missing is only that today it cannot be reached without *being* the editor's
+precompiler.
+
+**Same discipline as the query constructor: the engine is the only judge.** That window composes
+text and hands it to `ibQueryParser::ParsePackage`, showing the engine's own words verbatim
+([query-constructor.md](query-constructor.md)). The LINQ constructor must do the same — compose
+script text and hand it to the compiler — which means it also needs render(tree) → script text.
+That is tier 2 on top of tier 3, and it is precisely why this feature is the culmination rather
+than another consumer.
+
+**Narrower on one axis, wider on the other.** It does *not* need totals or batching (the query
+constructor's `TOTALS`, the `;`-package). It *does* need scope resolution, which the query one
+never needed. Worth stating so nobody rebuilds totals into it by symmetry.
+
+This gives step 4 a better acceptance criterion than "IntelliSense answers identically": **inside a
+half-written LINQ block, offer the members of the source expression at the caret.** That is a test
+that can be written.
+
+### Where IntelliSense and the query constructor become one thing
+
+This is the convergence the feature forces, and the reason it reads as a wall.
+
+"What can I take from this source" has **two** answers in the codebase today:
+
+- the query side — source → `DescribeOutput` → columns, each with an id and a type;
+- the script side — value → `ibMemberTable` → properties and methods, with `Readable`/`Writable`/
+  `Scoped` flags, arity and help text.
+
+In a LINQ constructor the source may be either, and the user must not be able to feel the seam.
+That is not a UI problem: it is one question with two mechanisms and nowhere for them to meet.
+
+The meeting place is not a bridge between metadata and values, because in OES **metaobjects already
+are values** (`ibValueMetaObject : ibValue`). It is a single door asked of a value — `ibMemberTable`
+— and the mechanism for *"a value whose member surface is computed per instance at runtime"* is
+already built and already in use: `ibValueDynamicMembers` + `BindContainerNames(helper, ctx)` +
+`Invalidate()`, which is how `ibValueContainer` publishes a Structure's keys as members.
+
+The concrete gap: **`ibValueQueryable` derives from plain `ibValue`, not from
+`ibValueDynamicMembers`** — so a queryable publishes no member surface, and its columns are
+reachable only through the query-side path. Filling a queryable's member table from its own output
+description is what makes the two lists one: **one door, two fillers**, not a new abstraction.
+
+Worth noting for sequencing: this piece is a *value-system* change and is largely independent of
+the tree. It can land before or beside the arc, and on its own it would let IntelliSense offer the
+columns of a queryable in scope — a cheap early win that also de-risks step 4.
+
+> **Hard rule the constructor forces.** Resolving `from x in GetContractors()` must **not execute**
+> user code to answer a UI question. PATH resolution answers with the *shape* a value has, never by
+> invoking. The precedent already exists as `m_calcValue` — the debugger-watch path computes,
+> the autocomplete path does not — and in the model it stops being a flag on a walker and becomes a
+> property of the mode: **only an explicit watch may evaluate.**
+
+---
+
+## 3f. One decision to take before designing the nodes
+
+**Does the LINQ constructor have to preserve the user's formatting?**
+
+The query constructor renders from the AST and *regenerates* text — comments and spacing are not
+preserved, and nobody minds, because a query literal is usually machine-shaped anyway. Script LINQ
+sits inside hand-written code a person owns and formats.
+
+If round-tripping must preserve formatting, the tree has to be **full-fidelity**: every space,
+newline and comment attached as trivia, and every node able to reproduce its exact source text.
+That is a materially bigger node design and it cannot be retrofitted cheaply. If regeneration is
+acceptable — as it is for queries — the tree stays lean.
+
+This is a product decision, not a technical one, and it should be made before step 1.
 
 ---
 
