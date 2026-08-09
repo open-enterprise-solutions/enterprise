@@ -748,36 +748,15 @@ bool ibSession::CompileRoot()
 	if (!m_accessPolicy && !appData->DesignerMode())
 		m_accessPolicy = std::make_unique<ibRuntimeAccessPolicy>(this, activeMetaData);
 
-	// Lambda executor — m_root's procUnit is live after AttachRuntime,
-	// so SetParent target is valid. ibValueFunction's Execute resolves
-	// this through ibSession::GetLambdaRuntime().
-	//
-	// Custom frame array layout: regular ProcUnit setup puts own
-	// m_cCurContext at m_pppArrayList[0] AND [1] (duplicate, since
-	// runtime slot indices start at 1 with bDelta=false). The shim
-	// has no own locals — lambda body's frame is per-call cRunContext
-	// — so we substitute root's frame for the [0,1] pair. That way
-	// lambda compile's depth=1 stamping (lambda discipline walks bc
-	// chain to topmost = root, single increment) lands directly on
-	// root mm's bound slots: Catalogs / Documents / Manager / system
-	// functions all resolve at depth=1 without an offset hack.
+	// Lambda executor — m_root's procUnit is live after AttachRuntime, so it is
+	// available to borrow from. ibValueFunction's Execute resolves this through
+	// ibSession::GetLambdaRuntime(). The unit hosts no module of its own (a lambda
+	// body's frame is the per-call cRunContext), so it runs in root's scope —
+	// BorrowScopeFrom is the whole of what the session knows about frame layout.
 	if (m_lambdaRuntime == nullptr) {
 		if (auto rootPu = m_root->GetProcUnit()) {
 			m_lambdaRuntime = std::make_unique<ibProcUnit>();
-			m_lambdaRuntime->SetParent(rootPu.get());
-
-			ibProcUnit* shim = m_lambdaRuntime.get();
-			const unsigned int n = shim->GetParentCount();
-			shim->m_ppArrayCode = new ibProcUnit*[n + 1];
-			shim->m_ppArrayCode[0] = shim;
-			shim->m_pppArrayList = new ibValue**[n + 2];
-			shim->m_pppArrayList[0] = rootPu->m_cCurContext.m_pRefLocVars;
-			shim->m_pppArrayList[1] = rootPu->m_cCurContext.m_pRefLocVars;
-			for (unsigned int i = 0; i < n; i++) {
-				ibProcUnit* p = shim->GetParent(i);
-				shim->m_ppArrayCode[i + 1] = p;
-				shim->m_pppArrayList[i + 2] = p->m_cCurContext.m_pRefLocVars;
-			}
+			m_lambdaRuntime->BorrowScopeFrom(rootPu.get());
 		}
 	}
 

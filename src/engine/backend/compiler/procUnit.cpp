@@ -263,6 +263,35 @@ void ibProcUnit::Reset()
 	m_bExecuted = false;
 }
 
+void ibProcUnit::BuildScopeChain(ibValue** localScope)
+{
+	const unsigned int nParentCount = GetParentCount();
+
+	m_ppArrayCode = new ibProcUnit * [nParentCount + 1];
+	m_ppArrayCode[0] = this;
+
+	m_pppArrayList = new ibValue * *[nParentCount + 2];
+	m_pppArrayList[0] = localScope;
+	m_pppArrayList[1] = localScope;//start with 1, because 0 means local context
+
+	for (unsigned int i = 0; i < nParentCount; i++) {
+		ibProcUnit* pCurUnit = GetParent(i);
+		m_ppArrayCode[i + 1] = pCurUnit;
+		m_pppArrayList[i + 2] = pCurUnit->m_cCurContext.m_pRefLocVars;
+	}
+}
+
+void ibProcUnit::BorrowScopeFrom(ibProcUnit* donor)
+{
+	wxASSERT(donor != nullptr);
+	if (donor == nullptr)
+		return;
+
+	Reset();//idempotent: a second call re-borrows instead of leaking the first arrays
+	SetParent(donor);
+	BuildScopeChain(donor->m_cCurContext.m_pRefLocVars);
+}
+
 //**************************************************************************************************************
 //*                                              stack support                                                 *
 //**************************************************************************************************************
@@ -1595,20 +1624,7 @@ void ibProcUnit::Execute(const ibByteCode& cByteCode, ibByteBinder& br, ibValue*
 	m_cCurContext.SetLocalCount(cByteCode.m_lVarCount);
 	m_cCurContext.m_lStart = cByteCode.m_lStartModule;
 
-	unsigned int nParentCount = GetParentCount();
-
-	m_ppArrayCode = new ibProcUnit * [nParentCount + 1];
-	m_ppArrayCode[0] = this;
-
-	m_pppArrayList = new ibValue * *[nParentCount + 2];
-	m_pppArrayList[0] = m_cCurContext.m_pRefLocVars;
-	m_pppArrayList[1] = m_cCurContext.m_pRefLocVars;//start with 1, because 0 means local context
-
-	for (unsigned int i = 0; i < nParentCount; i++) {
-		ibProcUnit* pCurUnit = GetParent(i);
-		m_ppArrayCode[i + 1] = pCurUnit;
-		m_pppArrayList[i + 2] = pCurUnit->m_cCurContext.m_pRefLocVars;
-	}
+	BuildScopeChain(m_cCurContext.m_pRefLocVars);
 	} // end frame allocation (bNeedsBuild) — structure reused on a repeat Execute
 
 	// Pre-flight runs on EVERY Execute, including the reused-frame pass: it copies

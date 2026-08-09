@@ -10,7 +10,6 @@ struct ibProcUnitState;   // procUnitState.h — forward decl; full type via ibS
 // access to ibProcUnit::m_pByteCode for the swap-and-restore pattern
 // in its Execute() implementation.
 class ibValueFunction;
-class ibSession;
 
 // Invoke a lambda value with N positional arguments from host (C++) code.
 // `callable` must wrap (directly or through TYPE_REFFER) an ibValueFunction;
@@ -29,10 +28,6 @@ class BACKEND_API ibProcUnit {
 public:
 
 	friend class ibValueFunction;
-	// ibSession::CompileRoot wires the per-session lambda runtime
-	// shim's frame array directly — needs access to m_pppArrayList /
-	// m_ppArrayCode / m_cCurContext.
-	friend class ibSession;
 
 	//Constructors/destructors
 	ibProcUnit() : m_numAutoDeleteParent(0),
@@ -75,6 +70,15 @@ public:
 
 	unsigned int GetParentCount() const { return m_procParent.size(); }
 	const ibByteCode* GetByteCode() const { return m_pByteCode; }
+
+	// Parent onto `donor` and run in ITS scope rather than one of our own: slots
+	// [0] and [1], which a normal unit fills with its own locals, point at the
+	// donor's bound frame instead. For a unit that hosts no module — the session's
+	// lambda runtime, whose per-call frame is the caller's ibRunContext — that is
+	// what makes depth=1 resolution land directly on the donor's slots (Catalogs /
+	// Documents / Manager / system functions) with no offset hack.
+	// compiler-pipeline.md §6.
+	void BorrowScopeFrom(ibProcUnit* donor);
 
 	// Execute(bytecode, binder, retVal). Bytecode is a pure template
 	// (m_listVar entries with kind ∈ {External, Context} declare the
@@ -145,6 +149,13 @@ public:
 	// caller decide on the null-handling policy explicitly.
 
 protected:
+
+	// Flatten the parent chain into the indexable scope chain this unit runs on
+	// (§5 of compiler-pipeline.md): m_ppArrayCode = the modules, m_pppArrayList =
+	// their frames. `localScope` fills the two local-context slots — own frame on
+	// the normal path, the donor's on the borrowed one (BorrowScopeFrom). The only
+	// difference between the two.
+	void BuildScopeChain(ibValue** localScope);
 
 	//attributes:
 	int m_numAutoDeleteParent; //flag for deleting the parent module
