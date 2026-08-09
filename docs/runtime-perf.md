@@ -495,3 +495,84 @@ an AI-first platform will run most of.
 The lesson is about the harness, not the registry: **a benchmark suite measures the shapes you
 thought of.** Scenarios should be chosen from what the platform will really execute, not from what
 stresses the interpreter most cleanly.
+
+---
+
+## 6. Full-suite reading, 2026-08-09 — a CONFIRMATION run
+
+Taken after the process-wide-static cleanup of the same day (§6a). **Methodology is weaker than
+every figure above it**: these are single runs, best of three, on a machine that was not quiet,
+where §§1–5 are min-of-4/5 on a quiet one. Min-of-3 systematically loses to min-of-4, so read the
+table as "nothing moved", not as a delta — a real before/after needs the pre-change binary built
+on the same machine in the same hour, which was not done.
+
+| | 2026-08-09 | previous entry | reading |
+|---|---|---|---|
+| arith loop (ns/iter) | 76.7 | 71.1 (§5.6) | within methodology gap; the ONLY line where the spread (±1.7%) is tighter than the difference — worth a real A/B before anyone calls it a regression |
+| recursion (ns/call) | 243.2 | 226.5 | noise (±14% run-to-run) |
+| host→script (ns/call) | 238.3 | 223.8 | noise |
+| string concat (ns/append) | 70.0 | 63.1 | noise; the O(n) property (§1b) holds — ×42–48 over native, not ×1145 |
+| LINQ build+pipe (ns/el) | 574.6 | 566.5 | unchanged |
+| method resolve (ns/call) | 227.1 | 220.0 | unchanged |
+| call frame (ns) | 151.2 (×6.9 over native) | §5.6 | unchanged |
+| `New Structure` | 612.5 | 606.8 (§5.9) | unchanged |
+| `New` + 2 × `Insert` | 3 874.3 | 4 086.3 | unchanged |
+| dot access on Structure | 549.8 | 536.1 | unchanged |
+| `Array.Add` / `Array.Get` | 211.6 / 224.4 | 217.8 (Get) | unchanged |
+| record build + walk (ns/row) | 7 093 → 7 377 (n = 2 500 → 20 000) | 7 280 | unchanged, and **linear** — 4 % growth over an 8× row count |
+| `ibNumber` add / mul / cmp / div-exact | ×3.2 / ×3.3 / ×1.4 / ×2.5 | §3 | unchanged |
+| `ibNumber` ToString | ×0.6 (faster than `snprintf`) | §3 | unchanged |
+| `ibString` vs `wxString` | ×0.55 / 0.37 / 0.38 / 0.24 / 0.35 | §3 | unchanged |
+| compiler (200 funcs) | 142K / 160K / 167K / 161K lines/s | ~100K (§3, 2026-07-18) | see below |
+
+**`ParserBench` is the noisiest instrument in the harness** — 18 % spread on the large module and
+31 % on the small one between runs of the *same binary*. Any compile-side claim needs repeated runs;
+a single figure from it means nothing. The move from ~100K to 140–167K lines/s spans three weeks of
+work and cannot be attributed to any one change without an A/B.
+
+**The dispatch lever is spent.** `DISABLED_DumpBytecode` shows the arith body compiles to five
+opcodes — `LS, IF, ADD, ADD, GOTO`, and no codegen can emit fewer — so 76.7 ns / 5 ≈ **15.4 ns per
+opcode**. It also shows the `shortLet` fusion alive (`ADD p1(0,1) p2(0,1)`: destination aliases the
+left operand, §1b). With the headroom on threaded dispatch already down to ×1.3–1.5, further work
+on *how* an opcode is dispatched has little left to give.
+
+**Where the weight actually is.** Not dispatch, not arithmetic, not strings — `Structure`.
+`Insert` costs ~1 630 ns against `Array.Add`'s 212 (**×8 for the same job**), and a field read
+through the dot costs 550 ns, i.e. **36 opcodes' worth for one field access**. Record walk is
+7.1–7.4 µs/row ≈ 135 K rows/s, which is the figure a report on real data will be judged by.
+
+The mechanism is visible in `system/value/valueMap.h`: `ibValueContainer` stores
+`std::map<const ibValue, ibValue, ContainerComparator>` — **the key is a full `ibValue`**, so every
+field access boxes the name into a value (heap, for a string) and walks a tree whose every
+comparison is an `ibValue` comparison. On top of that, each mutation calls `m_members.Invalidate()`,
+dropping the dynamic-member table the dot goes through, which is then rebuilt lazily — and
+build-then-read is exactly the record-walk shape. `Array` is faster because its key is an index: no
+boxing, no comparator, no member table. **This, not the compiler, is the remaining runtime target.**
+
+### 6a. Process-wide mutable statics — the cleanup measured above (2026-08-09)
+
+Not a performance arc; a correctness one, on the same files. Lazy `if (empty()) Fill()` init of
+shared tables is unsafe once sessions compile concurrently, which lazy compilation made real.
+
+- **`ibTranslateCode::ms_listDefine`** — now `static const`, parent links are `const` pointers
+  (see [compiler-pipeline.md](compiler-pipeline.md) §2).
+- **The keyword table** — was a public mutable `ms_listHashKeyWord` that every `ibTranslateCode`
+  ctor topped up behind `if (size() == 0) LoadKeyWords()`, where `LoadKeyWords` opens with
+  `clear()`. A `wxModule` that appeared to preload it at startup declared neither
+  `wxDECLARE_DYNAMIC_CLASS` nor `wxIMPLEMENT_DYNAMIC_CLASS`, so it was never registered and never
+  ran — the table was in fact built by whichever ctor got there first. Now a build-once function
+  static inside its one reader, `IsKeyWord`. Two sibling file-statics (`s_listHelpDescription`,
+  `s_listHashKeyword`) were filled and never read: removed.
+- **`gs_operPriority`** — same shape, worse consequence: a reader could see a slot the filler had
+  not reached, and a zero priority does not crash, it mis-associates the expression. Now
+  `constexpr`, built by the compiler; `InitializeCompileModule()` and its four call sites are gone.
+- **`static ibValue cVal`** ×2 in `backend_spreadsheet.cpp` — scratch locals made static; an
+  `ibValue` holding a `TYPE_REFFER` makes concurrent renders race on a refcount. Now ordinary
+  locals.
+- **`s_weededFor`** (`byteCodeCache.cpp`) — a `wxString` compare-and-set on every session's compile
+  path; now under a mutex, with the DELETE outside the lock.
+
+Two allocations left the compile path with it: `IsKeyWord` no longer upper-cases every identifier
+into a throw-away `wxString` (case folding moved into the map comparator, `ibCaseFoldLess`), and
+`FindDefine` does one `find` per scope instead of two linear scans of the map. Predicted to show up
+in `ParserBench` and nowhere else — unverified, for the noise reason above.

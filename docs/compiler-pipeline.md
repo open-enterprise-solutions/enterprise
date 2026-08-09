@@ -44,24 +44,34 @@ The part worth knowing: **the preprocessor lives here**, and a define is not tex
 
 ```cpp
 class ibDefineCollection {
-    void SetParent(ibDefineCollection* parent);
-    ibLexemList* GetDefine(const wxString& strName);
-    void SetDefine(const wxString& strName, ibLexemList*);
+    void SetParent(const ibDefineCollection* parent);        // ← reads go UP, writes never do
+    const ibLexemList* FindDefine(const wxString& strName) const;
+    void SetDefine(const wxString& strName, const ibLexemList* src);
     void SetDefine(const wxString& strName, const wxString& strValue);
 private:
-    std::map<wxString, ibLexemList*> m_defineList;   // ← arrays of LEXEMES, not strings
-    ibDefineCollection* m_parentDefine;
+    std::map<wxString, ibLexemList, ibCaseFoldLess> m_defineList;  // ← arrays of LEXEMES, not strings
+    const ibDefineCollection* m_parentDefine;
 };
-static ibDefineCollection ms_listDefine;             // ← PROCESS-WIDE
+static const ibDefineCollection ms_listDefine;               // ← PROCESS-WIDE, and IMMUTABLE
 ```
 
 - **A define expands to lexemes, not to characters.** `#Define` substitution happens in
   token space, so a macro cannot produce a half-token or break the line map that
-  breakpoints depend on.
-- **Defines nest** (`SetParent`) — a lookup walks up to the parent collection.
-- **`ms_listDefine` is `static`** — the define table is *process-wide*, not per-module or
-  per-session. That is worth knowing under `wenterprise-server.exe`, where one process
-  serves many sessions.
+  breakpoints depend on. Expansion copies the stored lexemes and stamps the COPY with the
+  use site's position — the dictionary entry is shared with every other expansion and with
+  the defining module, so writing into it is never correct.
+- **Defines nest** (`SetParent`) — a lookup walks up the chain: module → parent module →
+  … → the process-wide root.
+- **Reads walk the chain; writes never leave the local map** (2026-08-09). Defining a name
+  an ancestor already holds SHADOWS it locally. Before, `SetDefine` resolved its destination
+  through the chain-walking lookup and so OVERWROTE the ancestor's entry — a module quietly
+  rewriting its parent's `#Define`.
+- **`ms_listDefine` is `static` AND `const`.** The root is process-wide — which matters under
+  `wenterprise-server.exe`, where one process serves many sessions — so it is immutable by
+  type, not by discipline: the parent link is a `const` pointer, and nothing reachable from a
+  compile path can write above itself. That is what makes shared state safe here without a
+  lock. Seeding platform or plugin defines into the root would mean un-`const`ing it
+  deliberately, which is the moment to answer "seeded when, by whom, before which session".
 
 `ibLexem` reaches back into the translator (`GetModuleName` / `GetDocPath` /
 `GetFileName`) through friendship — which is how an error or breakpoint in an included
@@ -250,10 +260,14 @@ The chain above is inert. What turns it into a running application:
    resolve from any module below it.
 5. **Binding** — `ibByteBinder` supplies the `External` / `Context` slots each bytecode
    declared (§4). This is where a template becomes *this session's* code.
-6. **Lambdas** get a per-session shim: `m_lambdaRuntime : unique_ptr<ibProcUnit>`, wired to
-   the root's procUnit on first `GetLambdaRuntime()`. `ibSession::CompileRoot` reaches into
-   `m_pppArrayList` / `m_ppArrayCode` / `m_cCurContext` directly — hence
-   `friend class ibSession` on `ibProcUnit`.
+6. **Lambdas** get a per-session executor: `m_lambdaRuntime : unique_ptr<ibProcUnit>`, attached to
+   the root's procUnit in `ibSession::CompileRoot` via `ibProcUnit::BorrowScopeFrom(donor)`. It
+   hosts no module of its own — a lambda body's frame is the per-call `ibRunContext` — so the two
+   local-context slots (`m_pppArrayList[0]` and `[1]`, which a normal unit fills with its own
+   locals) point at the DONOR's frame. That is the whole difference between the shim and the
+   normal build, and it is why lambda compile's depth=1 stamping lands directly on root's bound
+   slots (Catalogs / Documents / Manager / system functions) with no offset hack. Both paths run
+   the same `BuildScopeChain(localScope)` (§5); the session never touches the layout itself.
 7. **Execution** — a form event, a script call, a scheduled job enters `Execute()` /
    `CallAsFunc` on the right unit. Sessionless callers fall back to a
    `thread_local ibProcUnitState`.
