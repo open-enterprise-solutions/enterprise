@@ -56,9 +56,10 @@ void CalculateBuildId()
 
 unsigned int GetBuildId()
 {
-	if (s_buildID == 0) {
-		CalculateBuildId();
-	}
-
-	return s_buildID;
+	// Computed from __DATE__, so every caller would compute the same number — the
+	// old `if (s_buildID == 0) CalculateBuildId();` raced only to the same answer.
+	// Still a check-then-fill on shared state; a function-local static gets the
+	// one-time, thread-safe initialisation from the language instead.
+	static const unsigned int s_id = [] { CalculateBuildId(); return s_buildID; }();
+	return s_id;
 }

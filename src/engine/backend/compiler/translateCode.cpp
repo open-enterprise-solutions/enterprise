@@ -12,12 +12,10 @@
 //empty lexem  
 const ibLexem gs_nullLexem = {};
 
-//keywords 
-static std::map<wxString, void*> s_listHelpDescription; //description of keywords and system functions
-static std::map<wxString, void*> s_listHashKeyword;
+const ibTranslateCode::ibDefineCollection ibTranslateCode::ms_listDefine; //root of every module's define chain — immutable, see translateCode.h
 
-ibTranslateCode::ibDefineCollection ibTranslateCode::ms_listDefine; //global array of definitions
-std::map<wxString, void*> ibTranslateCode::ms_listHashKeyWord; //list of keywords
+// (s_listHelpDescription / s_listHashKeyword lived here too — two more process-wide
+// maps that LoadKeyWords filled and nothing ever read. Removed.)
 
 //////////////////////////////////////////////////////////////////////
 // Global array
@@ -105,61 +103,42 @@ struct ibKeyWords s_listKeyWord[] =
 // Construction/Destruction
 //////////////////////////////////////////////////////////////////////
 
+// The map folds case in its comparator (ibCaseFoldLess), so these are plain
+// O(log n) lookups by the name as written — where the old code ran a linear
+// std::find_if over the whole map, calling CompareString on each entry, for
+// every identifier in every module.
+
 void ibTranslateCode::ibDefineCollection::RemoveDef(const wxString& strName)
 {
-	auto iterator = std::find_if(m_defineList.begin(), m_defineList.end(),
-		[strName](const auto& pair) { return stringUtils::CompareString(pair.first, strName); }
-	);
-
-	if (iterator != m_defineList.end()) m_defineList.erase(iterator);
+	m_defineList.erase(strName);
 }
 
-bool ibTranslateCode::ibDefineCollection::HasDefine(const wxString& strName) const
+const ibLexemList* ibTranslateCode::ibDefineCollection::FindDefine(const wxString& strName) const
 {
-	auto iterator = std::find_if(m_defineList.begin(), m_defineList.end(),
-		[strName](const auto& pair) { return stringUtils::CompareString(pair.first, strName); }
-	);
-
-	if (iterator != m_defineList.end()) return true;
-
-	static int nLevel = 0;
-
-	nLevel++;
-
-	if (nLevel > MAX_OBJECTS_LEVEL) ibBackendCoreException::Error(_("Recursive module call (#3)"));
-
-	//find in parent
-	bool result = false;
-	if (m_parentDefine != nullptr)
-		result = m_parentDefine->HasDefine(strName);
-	nLevel--;
-	return result;
-}
-
-ibLexemList* ibTranslateCode::ibDefineCollection::GetDefine(const wxString& strName)
-{
-	auto iterator = std::find_if(m_defineList.begin(), m_defineList.end(),
-		[strName](const auto& pair) { return stringUtils::CompareString(pair.first, strName); }
-	);
-
-	if (iterator != m_defineList.end()) return iterator->second;
-
-	//find in parent
-	if (m_parentDefine != nullptr && m_parentDefine->HasDefine(strName))
-		return m_parentDefine->GetDefine(strName);
-
-	ibLexemList* lexList = new ibLexemList();
-	m_defineList[stringUtils::MakeUpper(strName)] = lexList;
-	return lexList;
-}
-
-void ibTranslateCode::ibDefineCollection::SetDefine(const wxString& strName, ibLexemList* src)
-{
-	ibLexemList* dst = GetDefine(strName);
-	dst->clear();
-	if (src != nullptr) {
-		for (unsigned int i = 0; i < src->size(); i++) dst->push_back(*src[i].data());
+	// Iterative walk — the chain is a parent list, not a tree, so recursion bought
+	// nothing and its depth guard was a function-local `static` counter: shared by
+	// every thread, and left incremented when the throw below unwound past it.
+	int nLevel = 0;
+	for (const ibDefineCollection* scope = this; scope != nullptr; scope = scope->m_parentDefine) {
+		if (++nLevel > MAX_OBJECTS_LEVEL) ibBackendCoreException::Error(_("Recursive module call (#3)"));
+		auto iterator = scope->m_defineList.find(strName);
+		if (iterator != scope->m_defineList.end()) return &iterator->second;
 	}
+
+	return nullptr;
+}
+
+void ibTranslateCode::ibDefineCollection::SetDefine(const wxString& strName, const ibLexemList* src)
+{
+	// Always OUR map. The previous version resolved the destination through the
+	// chain-walking lookup, so redefining a name an ancestor held overwrote the
+	// ANCESTOR's entry — a module rewriting its parent's #Define, and, the moment
+	// anything seeded the static root, one session rewriting every other's.
+	ibLexemList& dst = m_defineList[strName];
+	if (src != nullptr)
+		dst = *src;
+	else
+		dst.clear();
 }
 
 void ibTranslateCode::ibDefineCollection::SetDefine(const wxString& strName, const wxString& strValue)
@@ -217,8 +196,6 @@ m_defineList(nullptr),
 m_bAutoDeleteDefList(false),
 m_nModePreparing(LEXEM_ADD)
 {
-	//prepare keyword buffer
-	if (ms_listHashKeyWord.size() == 0) LoadKeyWords(); //only once
 }
 
 ibTranslateCode::ibTranslateCode(const wxString& strModuleName, const wxString& strDocPath) : m_current_lex(this),
@@ -227,7 +204,6 @@ m_bAutoDeleteDefList(false),
 m_nModePreparing(LEXEM_ADD),
 m_strModuleName(strModuleName), m_strDocPath(strDocPath)
 {
-	if (ms_listHashKeyWord.size() == 0) LoadKeyWords();
 }
 
 ibTranslateCode::ibTranslateCode(const wxString& strFileName) : m_current_lex(this),
@@ -236,34 +212,11 @@ m_bAutoDeleteDefList(false),
 m_nModePreparing(LEXEM_ADD),
 m_strFileName(strFileName)
 {
-	if (ms_listHashKeyWord.size() == 0) LoadKeyWords();
 }
 
 ibTranslateCode::~ibTranslateCode()
 {
 	if (m_bAutoDeleteDefList) wxDELETE(m_defineList);
-}
-
-/**
-* prepare keyword buffer
-*/
-
-void ibTranslateCode::LoadKeyWords()
-{
-	ms_listHashKeyWord.clear();
-
-	for (unsigned int i = 0; i < sizeof(s_listKeyWord) / sizeof(s_listKeyWord[0]); i++)
-	{
-		const wxString& strEng = stringUtils::MakeUpper(s_listKeyWord[i].m_strKeyWord);
-		// The map stores a small integer IN the pointer slot. Widen it through intptr_t
-		// first: a direct (void*)(int) is a cast between different sizes on 64-bit and
-		// GCC warns accordingly.
-		ms_listHashKeyWord[strEng] = reinterpret_cast<void*>(static_cast<intptr_t>(i + 1));
-
-		//add to array for parser
-		s_listHashKeyword[strEng] = (void*)1;
-		s_listHelpDescription[strEng] = &s_listKeyWord[i].m_strShortDescription;
-	}
 }
 
 // `IsAllowedKey` is declared on ibTranslateCode but its body lives in
@@ -1008,13 +961,26 @@ bool ibTranslateCode::IsEnd() const
 
 int ibTranslateCode::IsKeyWord(const wxString& strKeyWord)
 {
-	// Keys in ms_listHashKeyWord are stored uppercase at load time
-	// (see LoadKeyWords — stringUtils::MakeUpper on every entry). Looking the
-	// query up by the same normalisation lets us use std::map::find's
-	// O(log N) instead of a full linear scan on every lexer token.
-	auto it = ms_listHashKeyWord.find(stringUtils::MakeUpper(strKeyWord));
-	if (it != ms_listHashKeyWord.end()) {
-		const int idx = static_cast<int>(reinterpret_cast<intptr_t>(it->second)) - 1;
+	// The inverse of s_listKeyWord: spelling -> the number this returns. Built ONCE,
+	// on first use, and const from then on.
+	//
+	// It used to be a mutable static that every ibTranslateCode ctor topped up
+	// behind `if (ms_listHashKeyWord.size() == 0) LoadKeyWords()` — an unguarded
+	// check-then-fill, where LoadKeyWords opens with clear(). Two sessions compiling
+	// at once could both see it empty, and a third could be reading the map while
+	// one of them wiped it. A function-local static gets the one-time, thread-safe
+	// initialisation from the language itself (C++11 [stmt.dcl]/4) — and, sitting
+	// in its one caller, needs no accessor to reach it.
+	static const std::map<wxString, int, ibCaseFoldLess> s_keyWordNumber = [] {
+		std::map<wxString, int, ibCaseFoldLess> listNumber;
+		for (int i = 0; i < static_cast<int>(WXSIZEOF(s_listKeyWord)); i++)
+			listNumber[s_listKeyWord[i].m_strKeyWord] = i;
+		return listNumber;
+	}();
+
+	auto it = s_keyWordNumber.find(strKeyWord);//case-folded by the map's comparator
+	if (it != s_keyWordNumber.end()) {
+		const int idx = it->second;
 		// Code-style gate: hides VES-only block-fence keywords (Then /
 		// Do / End*) when CES is active. Body lives in compileCode.cpp
 		// so the gate reads gs_codeStyle without flipping the include
@@ -1031,16 +997,15 @@ int ibTranslateCode::IsKeyWord(const wxString& strKeyWord)
 
 wxString ibTranslateCode::GetKeyWord(int k)
 {
-	auto it = std::find_if(ms_listHashKeyWord.begin(), ms_listHashKeyWord.end(),
-		[k](const std::pair<const wxString, void*>& pair) -> bool {
-			return k == static_cast<int>(reinterpret_cast<intptr_t>(pair.second)) - 1;
-		}
-	);
+	// s_listKeyWord IS the inverse — index straight into it instead of scanning the
+	// map for the entry pointing back at k. It also spells the keyword the way the
+	// language does (PascalCase), where the map used to be keyed upper-cased and
+	// this returned "ENDPROCEDURE"; compileCode.cpp already reads the array
+	// directly for the same reason when it names a keyword in an error.
+	if (k < 0 || k >= static_cast<int>(WXSIZEOF(s_listKeyWord)))
+		return wxEmptyString;
 
-	if (it != ms_listHashKeyWord.end())
-		return it->first;
-
-	return wxEmptyString;
+	return s_listKeyWord[k].m_strKeyWord;
 }
 
 /**
@@ -1109,20 +1074,31 @@ bool ibTranslateCode::PrepareLexem()
 			if (GetWord(s, strOrig)) {
 
 				//processing user definitions (#define)
-				if (m_defineList->HasDefine(s)) {
-					ibLexemList* pDef = m_defineList->GetDefine(s);
-					for (unsigned int i = 0; i < pDef->size(); i++) {
-						ibLexem* m_current_lex = pDef[i].data();
-						m_current_lex->m_numString = m_currentPos;
-						m_current_lex->m_numLine = m_currentLine;//for breakpoints
+				// One chain walk, not the HasDefine-then-GetDefine pair.
+				if (const ibLexemList* pDef = m_defineList->FindDefine(s)) {
+					for (const ibLexem& lexDef : *pDef) {
+						// COPY first, stamp the copy. The old code stamped position and
+						// back-pointer into the STORED definition and copied afterwards,
+						// so every expansion rewrote the dictionary entry it was reading
+						// — shared with each later use of the name and, up the chain,
+						// with the defining module itself.
+						//
+						// (It also indexed as `pDef[i].data()`, pointer arithmetic on the
+						// LIST pointer rather than into the list: correct for the first
+						// lexem by coincidence, reading a nonexistent vector object for
+						// every one after it — so any define longer than a single lexem,
+						// `#Define MAX 10 + 5`, was undefined behaviour.)
+						m_listLexem.push_back(lexDef);
+						ibLexem& lexUse = m_listLexem.back();
+						lexUse.m_numString = m_currentPos;
+						lexUse.m_numLine = m_currentLine;//for breakpoints
 #ifdef UTF8_LEXEM_TRANSLATE
-						m_current_lex->m_numUtf8String = m_currentUtf8Pos;
+						lexUse.m_numUtf8String = m_currentUtf8Pos;
 #endif
 						// Rebind to consumer's translate so source attribution
 						// follows the expansion site (consumer's module name /
 						// doc path), not the original definition's.
-						m_current_lex->m_translateCode = this;
-						m_listLexem.push_back(*m_current_lex);
+						lexUse.m_translateCode = this;
 					}
 					continue;
 				}
@@ -1387,6 +1363,13 @@ void ibTranslateCode::PrepareFromCurrent(int nMode, const wxString& strName)
 	translate.PrepareLexem();
 
 	if (nMode == LEXEM_ADDDEF) {
+		// Re-anchor BEFORE storing, for the same reason LEXEM_ADD does below: the
+		// local `translate` dies with this call, so the stored definition would sit
+		// in the table holding back-pointers into a dead object. It used to be
+		// papered over at expansion, which stamped `this` into the stored lexems —
+		// that write is gone now (expansion stamps its own copy), so the entry has
+		// to go in clean. translate.m_strModuleName was set to ours above.
+		for (ibLexem& lex : translate.m_listLexem) lex.m_translateCode = this;
 		m_defineList->SetDefine(strName, &translate.m_listLexem);
 		m_currentLine = translate.m_currentLine;
 	}
@@ -1464,17 +1447,11 @@ size_t ibTranslateCode::CalcAllocSize() const {
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include <wx/module.h>
-
-class wxOESKeywordModule : public wxModule
-{
-public:
-	wxOESKeywordModule() : wxModule() {}
-	virtual bool OnInit() {
-		ibTranslateCode::LoadKeyWords();
-		return true;
-	}
-	virtual void OnExit() {}
-private:
-};
+// A wxModule subclass used to sit here to preload the keyword table at startup.
+// It declared neither wxDECLARE_DYNAMIC_CLASS nor wxIMPLEMENT_DYNAMIC_CLASS —
+// wxModule::RegisterModules finds candidates through wxClassInfo, so without them
+// the class was never instantiated and OnInit never ran (compare wxFrontendModule
+// in frontend/artProvider/artProvider.cpp, which has both). The table was in fact
+// being built by whichever ibTranslateCode ctor got there first. IsKeyWord's own
+// static now does the same job on first use, once, without a module to register.
 

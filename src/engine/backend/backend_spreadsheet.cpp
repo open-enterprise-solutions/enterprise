@@ -487,7 +487,11 @@ wxString ibBackendSpreadsheetObject::ComputeStringValueFromParameters(const wxSt
 						strTemplateValue.substr(start_pos + 1, end_pos - start_pos - 1);
 					if (!token.empty()) {
 
-						static ibValue cVal;
+						// NOT static — this is scratch for one call. Shared, an ibValue
+						// holding a TYPE_REFFER makes concurrent renders race on its
+						// refcount, and even one thread clobbers it if GetParameter
+						// re-enters. Constructing one is cheap; the static was not a win.
+						ibValue cVal;
 						if (GetParameter(token, cVal))
 							strTemplateValue.replace(start_pos, end_pos - start_pos + 1, cVal.GetString());
 						else
@@ -514,7 +518,7 @@ wxString ibBackendSpreadsheetObject::ComputeStringValueFromParameters(const wxSt
 	}
 	else if (type == ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter) {
 
-		static ibValue cVal;
+		ibValue cVal;//scratch for one call — see the sibling above
 		if (!strValue.IsEmpty() && GetParameter(strValue, cVal))
 			return ibBackendLocalization::CreateLocalizationRawLocText(cVal.GetString());
 

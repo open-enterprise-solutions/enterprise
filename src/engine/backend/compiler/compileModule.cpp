@@ -9,8 +9,6 @@ ibCompileModule::ibCompileModule(const ibValueMetaObjectModuleBase* moduleObject
 	ibCompileCode(moduleObject->GetFullName(), moduleObject->GetDocPath(), onlyFunction),
 	m_moduleObject(moduleObject)
 {
-	InitializeCompileModule();
-
 	m_cByteCode.m_strModuleName = m_moduleObject->GetFullName();
 
 	m_strModuleName = m_moduleObject->GetFullName();

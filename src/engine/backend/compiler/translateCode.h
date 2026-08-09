@@ -8,11 +8,28 @@
 #include <execution>
 #include <map>
 #include <vector>
+#include <wctype.h>
 
 #include "backend/backend_exception.h"
 
 #include "codeDef.h"
 #include "value.h"
+
+// Ordering for the lexer's name tables — keywords and #Define alike. Both are
+// matched case-insensitively, and both are consulted for EVERY identifier the
+// lexer meets, so the folding belongs in the comparator: the alternative is
+// upper-casing the query into a throw-away wxString once per token, per table.
+struct ibCaseFoldLess {
+	bool operator()(const wxString& lhs, const wxString& rhs) const noexcept {
+		auto itLhs = lhs.begin(), itRhs = rhs.begin();
+		for (; itLhs != lhs.end() && itRhs != rhs.end(); ++itLhs, ++itRhs) {
+			const wxUint32 chLhs = ::towupper((*itLhs).GetValue());
+			const wxUint32 chRhs = ::towupper((*itRhs).GetValue());
+			if (chLhs != chRhs) return chLhs < chRhs;
+		}
+		return itRhs != rhs.end();//lhs ran out first, so it is the shorter one
+	}
+};
 
 //List of keywords
 struct ibKeyWords {
@@ -220,28 +237,45 @@ class BACKEND_API ibTranslateCode {
 	// — those fields are protected, so grant friendship.
 	friend struct ibLexem;
 
-	//class for storing user definitions
+	// A module's #Define table, and one link of the scope chain: module ->
+	// parent module -> ... -> the process-wide root (ms_listDefine).
+	//
+	// READS walk the chain; WRITES never leave the local map. Defining a name an
+	// ancestor already holds SHADOWS it here rather than overwriting the ancestor's
+	// entry — the parent link is a `const` pointer, so that is enforced by the type
+	// and not by discipline. That is what makes the static root safe to share across
+	// sessions compiling concurrently: nothing reachable from a compile path can
+	// write above itself, so the shared state is immutable and needs no lock. If the
+	// platform (or a plugin) ever needs to seed defines into the root, it has to
+	// un-const it deliberately — which is the moment to answer "seeded when, by whom,
+	// before which session" rather than to discover the answer under load.
 	class ibDefineCollection {
 	public:
 		ibDefineCollection() : m_parentDefine(nullptr) {};
-		~ibDefineCollection() { Clear(); }
 
 		void Clear() { m_defineList.clear(); }
-		void SetParent(ibDefineCollection* parent) { m_parentDefine = parent; }
+		void SetParent(const ibDefineCollection* parent) { m_parentDefine = parent; }
 
+		// #Undef — local only, symmetric with SetDefine: an ancestor's define
+		// is not ours to remove.
 		void RemoveDef(const wxString& strName);
-		bool HasDefine(const wxString& strName) const;
-		ibLexemList* GetDefine(const wxString& strName);
-		void SetDefine(const wxString& strName, ibLexemList*);
+		bool HasDefine(const wxString& strName) const { return FindDefine(strName) != nullptr; }
+		// The lookup, chain-walking and read-only: nullptr when nobody defines the
+		// name. Callers expand from the returned list by COPY — it is a dictionary
+		// entry shared with every other expansion site, not scratch space.
+		const ibLexemList* FindDefine(const wxString& strName) const;
+		void SetDefine(const wxString& strName, const ibLexemList* src);
 		void SetDefine(const wxString& strName, const wxString& strValue);
 
 	private:
 
-		std::map<wxString, ibLexemList*> m_defineList;//contains arrays of lexemes	
-		ibDefineCollection* m_parentDefine;
+		std::map<wxString, ibLexemList, ibCaseFoldLess> m_defineList;//name -> its lexemes, owned by value
+		const ibDefineCollection* m_parentDefine;
 	};
 
-	static ibDefineCollection ms_listDefine;
+	// The root every module chain ends at. Empty for the whole process lifetime
+	// today; const so it stays that way by construction — see ibDefineCollection.
+	static const ibDefineCollection ms_listDefine;
 
 public:
 
@@ -345,8 +379,10 @@ public:
 
 public:
 
-	static std::map<wxString, void*> ms_listHashKeyWord;
-	static void LoadKeyWords();
+	// The keyword index used to live here as a public static map, filled by a
+	// public LoadKeyWords() that every ctor called behind an `if (empty())` check.
+	// It is derived from s_listKeyWord and nothing else, and has exactly one reader,
+	// so it is now a build-once immutable table living inside IsKeyWord itself.
 
 	// Per-keyword availability gate. Reads the active code-style and
 	// hides VES-only block-fence keywords (Then / Do / EndIf / EndDo /

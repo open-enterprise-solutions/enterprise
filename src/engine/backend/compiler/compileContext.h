@@ -350,14 +350,18 @@ struct ibCompileContext {
 			m_numDoNumber--;
 			return;
 		}
+		// (*pList)[i] — NOT `*pList[i].data()`, which is pointer arithmetic on the
+		// VECTOR pointer: right for i == 0 by coincidence, a nonexistent vector
+		// object for every element after it. A loop with two Continues (or two
+		// Breaks) patched its second jump address into a garbage bytecode index.
 		for (unsigned int i = 0; i < pListC->size(); i++) {
-			cByteCode.m_listCode[*pListC[i].data()].m_param1.m_numIndex = gotoContinue;
+			cByteCode.m_listCode[(*pListC)[i]].m_param1.m_numIndex = gotoContinue;
 		}
 		for (unsigned int i = 0; i < pListB->size(); i++) {
-			cByteCode.m_listCode[*pListB[i].data()].m_param1.m_numIndex = gotoBreak;
+			cByteCode.m_listCode[(*pListB)[i]].m_param1.m_numIndex = gotoBreak;
 		}
 		m_listContinue.erase(m_numDoNumber);
-		m_listContinue.erase(m_numDoNumber);
+		m_listBreak.erase(m_numDoNumber);   // was a second erase of m_listContinue — m_listBreak kept a dangling entry
 		delete pListC;
 		delete pListB;
 		m_numDoNumber--;

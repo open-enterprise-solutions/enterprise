@@ -95,7 +95,9 @@ public:
 
 public:
 
-	static void InitializeCompileModule();
+	// InitializeCompileModule() lived here — every ctor called it to fill the
+	// operator-priority table behind a sentinel check. The table is a constant,
+	// so it now builds itself once at load time; see compileCode.cpp.
 	static void SetCodeStyle(short codeStyle);
 	static short GetCodeStyle();
 

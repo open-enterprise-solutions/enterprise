@@ -5,6 +5,8 @@
 
 #include "byteCodeCache.h"
 
+#include <mutex>
+
 #include "backend/appData.h"
 #include "backend/compiler/byteCode.h"
 #include "backend/databaseLayer/databaseLayer.h"
@@ -51,9 +53,24 @@ bool ibByteCodeCache::Save(const ibByteCode& bc, const wxString& configMd5)
 		// the first moment the new digest is known to be real: a compile just succeeded under it. The
 		// guard keeps it to one statement per digest per process, so the ordinary path stays a
 		// DELETE-by-key plus an INSERT.
+		// The guard is process-wide but reached from every session's compile path, so
+		// the compare-and-set takes a lock: two threads assigning one wxString is a
+		// torn string, not merely a duplicated DELETE. The statement itself runs
+		// outside the lock — it is a database round-trip, and correctness only needs
+		// "exactly one thread wins the digest".
+		static std::mutex s_weedMutex;
 		static wxString s_weededFor;
-		if (s_weededFor != configMd5) {
-			s_weededFor = configMd5;
+
+		bool bWeedNow = false;
+		{
+			std::lock_guard<std::mutex> lock(s_weedMutex);
+			if (s_weededFor != configMd5) {
+				s_weededFor = configMd5;
+				bWeedNow = true;
+			}
+		}
+
+		if (bWeedNow) {
 			try {
 				q.Execute(ibDelete(bytecode_cache_table,
 					ibBinOp(ibQueryBinOp::Ne, ibCol(wxT("config_md5")), ibConst(ibValue(configMd5)))));

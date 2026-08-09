@@ -17,8 +17,42 @@
 //                           Constants
 //////////////////////////////////////////////////////////////////////
 
-// array of mathematical operation priorities
-static std::array<int, 256> gs_operPriority = { 0 };
+// Array of mathematical operation priorities, indexed by a lexem's m_numData
+// (delimiter character code, or a KEY_* id for the two word operators).
+//
+// It used to be filled by InitializeCompileModule(), which every ibCompileCode ctor
+// called behind `if (gs_operPriority[last]) return;` — the last slot doubling as an
+// "already filled" sentinel. Unguarded check-then-fill: two sessions compiling at
+// once both see the sentinel clear and both write, and a third can read a slot the
+// filler has not reached yet. A zero priority there does not crash, it silently
+// mis-associates the expression — `a + b * c` compiled with the wrong tree. Built
+// once, before main, and const from then on, that cannot happen.
+// Being a constant, it can be built by the COMPILER — constexpr rather than a
+// load-time initialiser, so there is no initialisation order to reason about either.
+static constexpr std::array<int, 256> MakeOperPriority()
+{
+	std::array<int, 256> listPriority = {};
+
+	listPriority['+'] = 10;
+	listPriority['-'] = 10;
+	listPriority['*'] = 30;
+	listPriority['/'] = 30;
+	listPriority['%'] = 30;
+	listPriority['!'] = 50;
+
+	listPriority[KEY_OR] = 1;
+	listPriority[KEY_AND] = 2;
+
+	listPriority['>'] = 3;
+	listPriority['<'] = 3;
+	listPriority['='] = 3;
+
+	listPriority[listPriority.size() - 1] = 1;//was the sentinel; kept so index 255 reads as it did
+
+	return listPriority;
+}
+
+static constexpr std::array<int, 256> gs_operPriority = MakeOperPriority();
 
 // set code style by file extension
 // CES is the default — modern brace/paren syntax with `;` terminators.
@@ -43,8 +77,6 @@ ibCompileCode::ibCompileCode() :
 	m_rootContext(new ibCompileContext(this)),
 	m_changedCode(false)
 {
-	InitializeCompileModule();
-
 	// we do not look for local variables in parent contexts!
 	m_rootContext->m_numFindLocalInParent = 0;
 }
@@ -55,8 +87,6 @@ ibCompileCode::ibCompileCode(const wxString& strModuleName, const wxString& strD
 	m_rootContext(new ibCompileContext(this)),
 	m_changedCode(false)
 {
-	InitializeCompileModule();
-
 	// we do not look for local variables in parent contexts!
 	m_rootContext->m_numFindLocalInParent = 0;
 }
@@ -67,8 +97,6 @@ ibCompileCode::ibCompileCode(const wxString& strFileName) :
 	m_rootContext(new ibCompileContext(this)),
 	m_changedCode(false)
 {
-	InitializeCompileModule();
-
 	// we do not look for local variables in parent contexts!
 	m_rootContext->m_numFindLocalInParent = 0;
 }
@@ -81,28 +109,6 @@ ibCompileCode::~ibCompileCode()
 	m_listContextValue.clear();
 
 	wxDELETE(m_rootContext);
-}
-
-void ibCompileCode::InitializeCompileModule()
-{
-	if (gs_operPriority[gs_operPriority.size() - 1])
-		return;
-
-	gs_operPriority['+'] = 10;
-	gs_operPriority['-'] = 10;
-	gs_operPriority['*'] = 30;
-	gs_operPriority['/'] = 30;
-	gs_operPriority['%'] = 30;
-	gs_operPriority['!'] = 50;
-
-	gs_operPriority[KEY_OR] = 1;
-	gs_operPriority[KEY_AND] = 2;
-
-	gs_operPriority['>'] = 3;
-	gs_operPriority['<'] = 3;
-	gs_operPriority['='] = 3;
-
-	gs_operPriority[gs_operPriority.size() - 1] = 1;
 }
 
 void ibCompileCode::SetCodeStyle(short codeStyle)
