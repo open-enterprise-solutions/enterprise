@@ -38,6 +38,7 @@ struct ibKeyWords s_listKeyWord[] =
 	{"Not"},
 	{"And"},
 	{"Or"},
+	{"Mod"},
 	{"Procedure"},
 	{"EndProcedure"},
 	{"Function"},
@@ -98,6 +99,15 @@ struct ibKeyWords s_listKeyWord[] =
 	{"Into"},
 	{"Restrict"},
 };
+
+// THIS TABLE AND THE KEY_* ENUM ARE ONE THING IN TWO PLACES, and the translator
+// looks a keyword up by INDEX — s_listKeyWord[KEY_MOD]. A comment asking the next
+// person to keep them in step is not a guard: adding an enumerator without its
+// string shifts every name after it by one, so `Mod` starts spelling `Procedure`
+// and the failure surfaces as a mis-parsed module, nowhere near the edit.
+static_assert(WXSIZEOF(s_listKeyWord) == LastKeyWord,
+	"s_listKeyWord and the KEY_* enum (codeDef.h) must stay in lock-step: "
+	"one entry per enumerator, in the same order.");
 
 //////////////////////////////////////////////////////////////////////
 // Construction/Destruction
@@ -1122,7 +1132,13 @@ bool ibTranslateCode::PrepareLexem()
 				}
 				else {
 
-					if (k >= 0) {
+					// AFTER A DOT, A KEYWORD IS A MEMBER NAME. `sel.Where(...)`,
+					// `q.Select(...)` — the contextual LINQ words are ordinary
+					// method names in a property position, and classifying them
+					// as KEYWORD there breaks both the parse and the editor's
+					// completion after `sel.`. The lexer already knows what came
+					// before it; asking is cheaper than reclassifying later.
+					if (k >= 0 && !PreviousLexemIsDot()) {
 						m_current_lex.m_lexType = KEYWORD;
 						m_current_lex.m_numData = k;
 					}

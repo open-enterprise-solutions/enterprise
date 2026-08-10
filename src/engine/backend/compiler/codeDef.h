@@ -175,6 +175,24 @@ enum { // numbers of keywords (in strict sequence as the values ​​themselves
 	KEY_NOT,
 	KEY_AND,
 	KEY_OR,
+	// `a Mod b` — the second spelling of `%`, beside the operator words it
+	// behaves like. Three places have to agree, and two of them are easy to miss:
+	// s_listKeyWord[] (translateCode.cpp, same index — a static_assert holds the
+	// two lists in lock-step), gs_operPriority (compileCode.cpp — 30, with `*`
+	// and `/`), and the WORD-OPERATOR GATE in GetExpression, which names And / Or
+	// / Mod explicitly. Without that last one the priority entry is never read
+	// and an expression simply stops at the word.
+	//
+	// gs_operPriority is one 256-entry array indexed by m_numData — a delimiter
+	// CHARACTER for `%`, a keyword ID for `Mod` — so the two do share an index
+	// space. It is harmless only because that gate filters by lexeme type first;
+	// the ids that collide with `'>'` or `'='` are never looked up. Keep the
+	// placement here anyway: an id of 16 collides with nothing, and the next
+	// person should not have to re-derive why it is safe.
+	//
+	// Keyword ids never reach the bytecode (the AOT format has none), so
+	// inserting mid-list is free apart from that lock-step.
+	KEY_MOD,
 	KEY_PROCEDURE,
 	KEY_ENDPROCEDURE,
 	KEY_FUNCTION,

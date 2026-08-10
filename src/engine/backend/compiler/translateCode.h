@@ -306,6 +306,17 @@ public:
 
 	bool PrepareLexem();
 
+	// Was the token just emitted a `.`? Asked while classifying the NEXT word:
+	// in a property position (`sel.Where`, `q.Select`) a contextual keyword is a
+	// member NAME, and stamping it KEYWORD there breaks the parse and the
+	// editor's completion after the dot. The lexer already holds what it emitted;
+	// asking costs nothing and is decided at the one place that classifies.
+	bool PreviousLexemIsDot() const {
+		return !m_listLexem.empty()
+			&& m_listLexem.back().m_lexType == DELIMITER
+			&& m_listLexem.back().m_numData == (short)'.';
+	}
+
 protected:
 	void SetError(int codeError, unsigned int currPos, const wxString& errorDesc = wxEmptyString) const;
 	void SetError(int codeError,

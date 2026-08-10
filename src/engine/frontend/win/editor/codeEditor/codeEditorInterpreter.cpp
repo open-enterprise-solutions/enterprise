@@ -502,7 +502,11 @@ bool ibPrecompileCode::PrepareLexem()
 				}
 				else {
 
-					if (k >= 0) {
+					// After a `.` a keyword is a MEMBER NAME — `sel.Where(...)`.
+					// The same rule as ibTranslateCode::PrepareLexem; this reader
+					// is a second copy of that classifier and has to hold it too,
+					// or completion after a dot sees a keyword and offers nothing.
+					if (k >= 0 && !PreviousLexemIsDot()) {
 						m_current_lex.m_lexType = KEYWORD;
 						m_current_lex.m_numData = k;
 					}
@@ -729,7 +733,11 @@ void ibPrecompileCode::PrepareLexem(unsigned int line, int line_offset, const in
 				}
 				else {
 
-					if (k >= 0) {
+					// After a `.` a keyword is a MEMBER NAME — `sel.Where(...)`.
+					// The same rule as ibTranslateCode::PrepareLexem; this reader
+					// is a second copy of that classifier and has to hold it too,
+					// or completion after a dot sees a keyword and offers nothing.
+					if (k >= 0 && !PreviousLexemIsDot()) {
 						m_current_lex.m_lexType = KEYWORD;
 						m_current_lex.m_numData = k;
 					}
