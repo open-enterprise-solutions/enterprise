@@ -13,7 +13,8 @@
 
 #include <wx/debug.h>   // wxSetAssertHandler — no modal dialogs in a batch run
 #include <wx/log.h>     // wxLogStderr — the default target FLUSHES MODALLY
-#include <wx/init.h>    // wxInitializer — held for the whole binary, see below
+#include <wx/init.h>    // wxInitializer — held for the whole RUN, see below
+#include <memory>       // unique_ptr — the initializer must NOT be a static-init member
 #ifdef _WIN32
 #include <crtdbg.h>
 #endif
@@ -53,8 +54,17 @@ const ::testing::Environment* const g_vesCodeStyleEnv =
 // Same treatment, one place, applied whatever --gtest_filter selects.
 class HeadlessAssertEnvironment : public ::testing::Environment {
 public:
-	// wx STAYS UP FOR THE WHOLE BINARY, and this member is the reason the two
-	// settings below hold.
+	// wx STAYS UP FOR THE WHOLE TEST RUN, and this is the reason the settings
+	// below hold.
+	//
+	// ⚠ IT IS CREATED IN SetUp, NOT AS A PLAIN MEMBER. This object is built by a
+	// static initialiser (AddGlobalTestEnvironment(new …) below), so a
+	// `wxInitializer` member would run wxEntryStart BEFORE main and wxEntryCleanup
+	// during static DESTRUCTION, with part of the environment already gone. Under
+	// GTK that is fatal: `--gtest_list_tests` — which runs no test and no
+	// environment — died with "pure virtual method called", and CMake's
+	// gtest_discover_tests failed the whole build on Linux while Windows and macOS
+	// stayed green. SetUp/TearDown bracket the RUN, which is what was wanted.
 	//
 	// Fixtures bring wx up per test (a `wxInitializer` member — eight files do
 	// it). wxInitialize/wxUninitialize are REFERENCE COUNTED (gs_nInitCount,
@@ -69,9 +79,13 @@ public:
 	// mid-suite cleanup happens at all. Registering harder, or re-arming per
 	// fixture, treats the symptom; nothing may be re-established on a hot path
 	// in the ENGINE to satisfy a test binary.
-	wxInitializer m_wxInit;
+	std::unique_ptr<wxInitializer> m_wxInit;
+
+	void TearDown() override { m_wxInit.reset(); }
 
 	void SetUp() override {
+		m_wxInit = std::make_unique<wxInitializer>();
+
 #ifdef _WIN32
 		_CrtSetReportMode(_CRT_ERROR,  _CRTDBG_MODE_FILE); _CrtSetReportFile(_CRT_ERROR,  _CRTDBG_FILE_STDERR);
 		_CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE); _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);

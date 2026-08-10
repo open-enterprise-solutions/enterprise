@@ -111,8 +111,19 @@ void RowOes(const char* name, double oes, const char* unit, double oesWallNs = 0
     std::cout << "\n";
 }
 
-bool Build(ibCompileCode& cc, const wxString& src) {
-    try { return cc.Compile(src); } catch (...) { return false; }
+// NAMES ITS FAILURE. A benchmark that will not compile printed "Actual: false"
+// and nothing else — which is how DISABLED_LinqJoin sat red in CI while the
+// numbers around it were read as fine. The compiler knows why; keep the message.
+::testing::AssertionResult Build(ibCompileCode& cc, const wxString& src) {
+    try {
+        if (cc.Compile(src))
+            return ::testing::AssertionSuccess();
+        return ::testing::AssertionFailure() << "Compile() returned false without raising";
+    } catch (const ibBackendException& err) {
+        return ::testing::AssertionFailure() << err.GetErrorDescription().ToStdString();
+    } catch (...) {
+        return ::testing::AssertionFailure() << "unknown exception";
+    }
 }
 
 } // namespace
@@ -469,8 +480,15 @@ TEST(RuntimeBench, DISABLED_LinqJoin) {
         wxT("  outer = New Array; inner = New Array; var i; i = 0;\n")
         wxT("  While i < n Do outer.Add(i); inner.Add(i); i = i + 1; EndDo;\n")
         wxT("EndProcedure\n")
+        // THROUGH A VARIABLE, because a method call on a PARENTHESISED expression
+        // is not part of this language: `(expr).Method()` fails to parse whatever
+        // the expression is — `(1 + 2).ToString()` and `(a).Count()` die the same
+        // way ("Keyword or identifier expected"). Postfix applies to an
+        // identifier, not to an arbitrary primary. The query itself is fine; only
+        // the shorthand was, and it came from a compiler that is no longer here.
         wxT("Function Pipe() Public\n")
-        wxT("  Return (from a in outer join b in inner on a equals b select a).Count();\n")
+        wxT("  var q; q = from a in outer join b in inner on a equals b select a;\n")
+        wxT("  Return q.Count();\n")
         wxT("EndFunction\n")));
     ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
 
