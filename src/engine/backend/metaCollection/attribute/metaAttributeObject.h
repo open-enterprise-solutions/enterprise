@@ -16,6 +16,12 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 	public ibValueMetaObject, public ibBackendTypeConfigFactory, public ibBackendQueryColumn {
 	public:
 
+	// A METAOBJECT COLUMN WEARS ITS OWN PICTURE. The column face asks (queryColumn.h), the
+	// metaobject answers with the icon its class registered — so a dimension, a resource and a
+	// plain attribute are told apart by whoever draws them, and neither the drawer nor this class
+	// holds a list of kinds: each level already overrides GetIcon() for its own tree.
+	wxIcon GetColumnIcon() const override { return GetIcon(); }
+
 	// (The whole SQL-field façade — GetSQLFieldName / GetCompositeSQLFieldName / GetExcludeSQLFieldName /
 	//  GetSQLFieldCount / GetSQLFieldData, plus the ibFieldTypes / ibSQLField re-exports — is GONE. An
 	//  attribute is just an ibBackendQueryColumn; its physical fields come from the column-layout tier

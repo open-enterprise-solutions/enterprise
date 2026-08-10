@@ -85,6 +85,13 @@ namespace queryctor {
 //  held on the other side of the DLL boundary. Both ask now.)
 
 
+// A RENAME CARRIES ITS REFERENCES. Every field written against a table starts with that table's
+// NAME, and the AST stores those paths as written — so changing the alias without rewriting them
+// leaves ten broken references behind one deliberate edit. Rewrites this select only: an alias is
+// scoped to the query that declares it, and a union branch means its own table by the same word.
+// Body in queryConstructorFill.cpp, beside the collect walk it mirrors.
+void ibQueryRenameSourceReferences(ibQuerySelect& select, const wxString& from, const wxString& to);
+
 // An aggregate projection is one whose expression IS an aggregate call — the Grouping tab's
 // second list is that subset of the projections, not a list of its own.
 inline bool IsAggregateProjection(const ibQueryProjection& projection)

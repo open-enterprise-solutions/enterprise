@@ -40,6 +40,11 @@ public:
 	wxString GetName() const override;
 	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
 	const ibBackendQueryable* GetQueryable() const { return &m_queryable; }   // the metaobject's GetQueryable() forwards here
+	// WHAT COLUMNS THIS SECTION HAS, asked without reading a row — the query constructor's
+	// catalogue and every other reader of a source's shape. A tabular section answers with its own
+	// attributes (line number + the columns declared in it); left unanswered, the base filled
+	// nothing and a section stood in the tree as a leaf that could be joined and selected from.
+	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
 private:
 	ibValueMetaObjectTableDataRef* m_meta;
 	ibTabularQueryable             m_queryable;

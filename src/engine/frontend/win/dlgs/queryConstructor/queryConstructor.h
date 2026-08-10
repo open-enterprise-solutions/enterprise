@@ -353,9 +353,26 @@ private:
 		class wxImageList* m_images = nullptr;
 		int                m_field  = wxNOT_FOUND;   // the plain attribute picture
 		std::map<wxString, int> m_byKind;             // metatype name -> index in THIS list
+		// A COLUMN'S OWN PICTURE, keyed by the picture itself. There is no name to key on here —
+		// the column hands over an icon, not a kind — and the icons are shared statics, so the
+		// same dimension picture arrives as the same object every time and a handful of entries
+		// covers a tree of any size.
+		std::vector<std::pair<wxIcon, int>> m_byIcon;
 	};
+	// A TABLE NOBODY USES is dropped ON THE WAY OUT (OnOk), never during editing — see the body.
+	// Nothing else is ever removed behind the author's back: a name that no longer resolves stays
+	// in the query and the engine says so on the verdict line.
+	void DropUnusedTables();
+
 	TreeIcons PrepareIcons(wxTreeCtrl* tree) const;
 	int KindIcon(TreeIcons& icons, const wxString& kind) const;
+	// THE PICTURE FOR ONE FIELD — its own if the column gave one, the plain field picture if not.
+	// Nothing here reads a metatype: the column already answered (ibBackendSourceColumn::GetColumnIcon).
+	int FieldIcon(TreeIcons& icons, const ibQueryConstructorField& field) const;
+	// The same question for a row of ANY grid in this window: a column answers with its own
+	// picture, a dot-walk with the picture of the field it ends on, an expression with none (the
+	// grid's plain one is then used). Body in queryConstructorFill.cpp.
+	wxIcon IconOfExpr(const ibQueryAstExprPtr& expr) const;
 
 	// (A field row is built and unfolded by ibQueryAddFieldNode / ibQueryExpandFieldNode in
 	// queryFieldTree.h — the same pair the expression editor's tree uses.)

@@ -1485,13 +1485,30 @@ bool BuildCheckSources(const ibQuerySelect& ast, const std::map<wxString, ibValu
 		if (source->m_name.empty())
 			return false;   // a query with no table yet — being written, not wrong
 
-		// ResolveSource raises for a name nothing answers to (a temp table outside its package is
-		// exactly that case), and being unable to resolve is NOT the same as the query being wrong.
+		// ⚠ TWO DIFFERENT SILENCES, and telling them apart is the whole point.
+		//
+		// A ONE-SEGMENT name is a temp table. It may legitimately be made by a statement this check
+		// cannot see (another package, a caller's manager), so failing to resolve it means "cannot
+		// verify" — and inventing an error there would be worse than saying nothing.
+		//
+		// A QUALIFIED name (Kind.Name) is a metaobject, resolved through the config's own factory.
+		// If the factory does not know it, the object is GONE — deleted or renamed — and that is not
+		// "cannot verify", that is the query naming something that does not exist. Swallowing it is
+		// how a query goes on looking healthy after the table under it was deleted: the fields are
+		// still listed, the verdict line still says the engine reads the query, and the first sign
+		// of trouble arrives when somebody runs it.
 		const ibBackendQueryable* queryable = nullptr;
 		try { queryable = ResolveSource(*source, params); }
-		catch (const ibBackendException&) { return false; }
-		if (queryable == nullptr)
+		catch (const ibBackendException&) {
+			if (source->m_name.size() > 1)
+				throw;      // the engine's own words, its own position — carried up verbatim
+			return false;   // a temp table this check cannot see
+		}
+		if (queryable == nullptr) {
+			if (source->m_name.size() > 1)
+				ibBackendCoreException::Error(_("Table '%s' does not exist"), ibQuerySourceName(*source));
 			return false;
+		}
 
 		ibSourceBinding binding;
 		binding.m_alias = source->m_alias;

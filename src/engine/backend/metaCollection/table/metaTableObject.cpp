@@ -43,6 +43,18 @@ const ibBackendQueryable* ibTabularSourceDescriptor::CreateQueryable(ibValue** /
 	return &m_queryable;
 }
 
+void ibTabularSourceDescriptor::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+{
+	if (m_meta == nullptr)
+		return;
+	// THE SECTION'S OWN ATTRIBUTES — the same list its queryable exposes as columns, because an
+	// attribute IS a column. Asked of the metaobject rather than restated here, so a column added
+	// to the section tomorrow shows up with nothing edited in this file.
+	for (const ibValueMetaObjectAttributeBase* attribute : m_meta->GetGenericAttributeArrayObject())
+		if (attribute != nullptr)
+			explorer.AppendColumn(attribute, /*enabled*/ true, /*visible*/ true);
+}
+
 ibTypeDescription ibValueMetaObjectTableData::GetTypeDesc() const
 {
 	const ibCtorMetaValueType* typeCtor = m_metaData->GetTypeCtor(this, ibCtorObjectMetaType::ibCtorObjectMetaType_TabularSection);

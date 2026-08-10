@@ -27,6 +27,12 @@ public:
 	wxString GetNamespace() const override;
 	wxString GetName() const override;
 	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
+	// WHAT COLUMNS THIS TABLE HAS, asked without running it — the catalogue of a query
+	// constructor, and any other reader that wants the shape rather than the rows. Answered
+	// from the VIEW's shape, which is metadata-only, so no companion is built and no database
+	// is touched. (Left unimplemented, the base returns nothing, and a virtual table shows in
+	// the tree as a childless leaf — visible, addable, and with no field to select.)
+	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
 private:
 	ibValueMetaObjectAccumulationRegister* m_reg;
 	std::unique_ptr<ibBalanceQueryable>    m_companion;
@@ -40,6 +46,7 @@ public:
 	wxString GetNamespace() const override;
 	wxString GetName() const override;
 	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
+	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
 private:
 	ibValueMetaObjectAccumulationRegister* m_reg;
 	std::unique_ptr<ibTurnoverQueryable>   m_companion;
@@ -56,6 +63,7 @@ public:
 	wxString GetNamespace() const override;
 	wxString GetName() const override;
 	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
+	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
 private:
 	ibValueMetaObjectAccumulationRegister*          m_reg;
 	std::unique_ptr<ibBalanceAndTurnoverQueryable>  m_companion;
@@ -505,6 +513,26 @@ private:
 
 // --- L4 descriptor method bodies (the register + balance / turnover companions are complete) ---
 
+// THE SHAPE OF A VIRTUAL TABLE, for the three descriptors at once. A balance / turnover table
+// exposes the columns of its VIEW, and that view's column set is built from the register's own
+// dimensions and resources (accumulationRegisterSchema.cpp) and cached — metadata only, so this
+// answer costs nothing and works on a base that has never been opened. Deliberately NOT the
+// companion's GetColumns(): in RAM mode a companion navigates through the register itself and
+// would report the MOVEMENT columns, which is the one answer that would mislead here.
+inline void ibFillExplorerFromRegisterView(const ibValueMetaObjectAccumulationRegister* reg,
+	const wxString& viewName, ibValueMetaObjectAccumulationRegister::ibViewShape shape,
+	ibSourceDataObject::ibSourceExplorer& explorer)
+{
+	if (reg == nullptr)
+		return;
+	const ibBackendQueryable* view = reg->GetViewQueryable(viewName, shape);
+	if (view == nullptr)
+		return;
+	for (const ibBackendQueryColumn* col : view->GetColumns())
+		if (col != nullptr)
+			explorer.AppendColumn(col);
+}
+
 inline ibAccumRegisterBalanceDescriptor::~ibAccumRegisterBalanceDescriptor() = default;
 
 inline wxString ibAccumRegisterBalanceDescriptor::GetNamespace() const
@@ -523,6 +551,12 @@ inline const ibBackendQueryable* ibAccumRegisterBalanceDescriptor::CreateQueryab
 	const ibValue filter = (lSizeArray > 1 && paParams != nullptr && paParams[1] != nullptr) ? *paParams[1] : ibValue();
 	m_companion = std::make_unique<ibBalanceQueryable>(m_reg, period, filter);
 	return m_companion.get();
+}
+
+inline void ibAccumRegisterBalanceDescriptor::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+{
+	ibFillExplorerFromRegisterView(m_reg, m_reg->GetBalanceViewName(),
+		ibValueMetaObjectAccumulationRegister::ibViewShape::Balance, explorer);
 }
 
 inline ibAccumRegisterTurnoverDescriptor::~ibAccumRegisterTurnoverDescriptor() = default;
@@ -544,6 +578,12 @@ inline const ibBackendQueryable* ibAccumRegisterTurnoverDescriptor::CreateQuerya
 	const ibValue filter = (lSizeArray > 2 && paParams != nullptr && paParams[2] != nullptr) ? *paParams[2] : ibValue();
 	m_companion = std::make_unique<ibTurnoverQueryable>(m_reg, begin, end, filter);
 	return m_companion.get();
+}
+
+inline void ibAccumRegisterTurnoverDescriptor::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+{
+	ibFillExplorerFromRegisterView(m_reg, m_reg->GetTurnoverViewName(),
+		ibValueMetaObjectAccumulationRegister::ibViewShape::Turnovers, explorer);
 }
 
 inline ibAccumRegisterBalanceAndTurnoverDescriptor::~ibAccumRegisterBalanceAndTurnoverDescriptor() = default;
@@ -582,6 +622,12 @@ inline const ibBackendQueryable* ibAccumRegisterBalanceAndTurnoverDescriptor::Cr
 
 	m_companion = std::make_unique<ibBalanceAndTurnoverQueryable>(m_reg, begin, end, unit, unitGiven, filter);
 	return m_companion.get();
+}
+
+inline void ibAccumRegisterBalanceAndTurnoverDescriptor::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+{
+	ibFillExplorerFromRegisterView(m_reg, m_reg->GetBalanceAndTurnoverViewName(),
+		ibValueMetaObjectAccumulationRegister::ibViewShape::BalanceAndTurnovers, explorer);
 }
 
 //********************************************************************************************

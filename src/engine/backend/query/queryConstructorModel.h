@@ -76,6 +76,11 @@ struct ibQueryConstructorField
 	// WHAT IT HOLDS. The explorer node already knows; carrying it here is what lets a host ask a
 	// type question (which aggregates fit this field?) without walking the metadata itself.
 	ibTypeDescription m_type;
+	// HOW IT LOOKS, taken from the COLUMN (ibBackendSourceColumn::GetColumnIcon) rather than
+	// decided by the shell: a dimension, a resource and a plain attribute each answer with their
+	// own, and a shell that draws them holds no list of kinds. Null only for a field standing
+	// behind no column at all — the drawer then uses its default picture.
+	wxIcon m_icon;
 };
 
 class BACKEND_API ibQueryConstructorModel

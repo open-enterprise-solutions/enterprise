@@ -1046,6 +1046,63 @@ done rather than a limit of the setup.
 
 ---
 
+## 5a. Pass 8 (2026-08-10) — sources that answer, and a window that stops tidying
+
+Everything here was found by running the window, and every fix but one turned out to be a source
+declining to answer a question it already knew.
+
+**"What columns do you have" moved to the QUERY half of a descriptor.** `FillSourceExplorer` lived
+on `ibMetaCommandDescriptor` — the *list* descriptor. A source that is only queryable (a constant,
+first among them) therefore inherited the base's empty default: it stood in the catalogue as a table
+with no fields, addable to a query and offering nothing to select. It now lives on
+`ibMetaQueryDescriptor`, because asking what a source holds has nothing to do with whether it can be
+shown as a list. The same gap, in its own places:
+
+| Source | Was | Now |
+|---|---|---|
+| a package's TEMP table | a childless leaf — the catalogue never asked the model, which could answer (`GetFields` resolves a temp name to the projection of the statement that makes it) | fields, draggable like any table's |
+| register virtual tables (`.Balance` / `.Turnovers` / `.BalanceAndTurnovers`, the slices) | the descriptors never overrode `FillSourceExplorer` | answered from the VIEW's shape (`GetViewQueryable`) — metadata only, no companion built, no database touched. ⚠ deliberately NOT the companion's `GetColumns()`: in RAM mode a companion navigates through the register itself and would report the MOVEMENT columns |
+| tabular sections | same | their own attributes |
+| a constant | same, plus the column was named after the constant (`Constant1.Constant1`) | `Constant1.Value` — the table is the constant, the column is its value; caption is the system word `Value`, untranslated, so it cannot say one thing while the text says another |
+
+Registration follows the same rule: a turnover-only accumulation register no longer registers
+`.Balance` / `.BalanceAndTurnovers` at all. Its view carries no opening / closing / expense column,
+so those were two tables in every catalogue answering with dimensions and not one resource column.
+
+**Pictures are asked of the column, never deduced.** `ibBackendSourceColumn::GetColumnIcon()` —
+default is the plain attribute picture, and a column that IS a metaobject answers with the one its
+metatype registered. So a dimension stops looking like a resource without anybody keeping a list of
+kinds: a new kind arrives dressed the day it overrides an icon. Carried into every tree AND every
+grid in the window (a grid asks per row now, not per column); an aggregate wears its argument's
+picture, an expression keeps the plain one.
+
+**The window stopped tidying behind the author.** `FillAll` ran `PruneUnresolved` before showing
+anything, and the verdict line — filled afterwards, by asking the engine about the already-tidied
+package — therefore always answered "the engine reads this query" while a column had quietly gone.
+Silence plus a clean bill of health is the worst combination a window can have. Now:
+
+- **what is written stays written**, and the engine says what is wrong with it, in its own words at
+  its own position;
+- name checking no longer swallows an unresolvable SOURCE. A one-segment name is a temp table this
+  check genuinely cannot see (silence is right); a qualified `Kind.Name` that the factory does not
+  know means the object is GONE — deleted or renamed — and that is reported. (Deletion itself
+  already worked: `RemoveMetaObject` → `OnBeforeCloseMetaObject` → `UnregisterSource`. Marking for
+  deletion IS unloading the piece; nothing needed a second "am I alive" flag.)
+- the ONE thing still removed is a table nobody uses — an unfinished gesture, not a mistake — and
+  only **on OK**. Between adding a table and picking its first field it is unused by definition, so
+  tidying on every refill would delete it under the hand that just added it. Use counts as: a field,
+  a condition, a `HAVING`, a grouping, an order, an `INDEX BY`, a totals aggregate, or **the `ON` of
+  any neighbouring join** — the last one matters, or `A JOIN B ON B.Ref = A.Ref` would lose B and
+  change what the query returns. The `FROM` is never removed; `SELECT *` disables the sweep.
+
+**Renaming a table carries its references.** An alias is what the rest of the query calls a table
+by, and the AST stores those paths as written — so changing it alone turned every one of them into a
+name resolving to nothing. The rewrite mirrors the unused-table walk exactly (same rule about which
+paths name a source), takes the old name BEFORE the edit (clearing an alias is a rename too), and
+stays in THIS select: a union branch means its own table by the same word.
+
+---
+
 ## 6. What this must not become
 
 - **A generator that cannot read.** The moment a hand-edited query stops being loadable,

@@ -62,15 +62,31 @@ public:
 		m_icon = icon;
 	}
 
+	// A PICTURE PER ROW, when the rows are not all the same kind of thing. The field grids list
+	// dimensions, resources, plain attributes and free expressions side by side; one picture for
+	// the whole column drew them as if they were interchangeable, while the tree three inches to
+	// the left told them apart. Asked per row, and answered by whoever knows the row — the same
+	// column that answered in the tree (ibBackendSourceColumn::GetColumnIcon).
+	// Unset, or answering an invalid icon, falls back to the column-wide one.
+	using IconReader = std::function<wxIcon(unsigned int row)>;
+	void SetIconReader(IconReader reader) { m_iconReader = std::move(reader); }
+
 	void GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const override
 	{
 		if (!m_reader)
 			return;
 
 		const wxString text = m_reader(row, col);
-		if (col == m_iconColumn && m_icon.IsOk()) {
-			variant << ibDataViewIconText(text, m_icon);
-			return;
+		if (col == m_iconColumn) {
+			const wxIcon icon = m_iconReader ? m_iconReader(row) : wxNullIcon;
+			if (icon.IsOk()) {
+				variant << ibDataViewIconText(text, icon);
+				return;
+			}
+			if (m_icon.IsOk()) {
+				variant << ibDataViewIconText(text, m_icon);
+				return;
+			}
 		}
 		variant = text;
 	}
@@ -89,7 +105,8 @@ private:
 	Writer                m_writer;
 	std::function<void()> m_onChanged;
 	unsigned int          m_iconColumn = 0;   // 0 is the fork's reserved column — never a real one
-	wxIcon                m_icon;
+	wxIcon                m_icon;             // the column-wide fallback
+	IconReader            m_iconReader;       // per row, when the rows differ in kind
 };
 
 #endif // __QUERY_GRID_MODEL_H__

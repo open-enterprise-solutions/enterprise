@@ -15,7 +15,14 @@
 // --- vended queryable — the constant's single-row (sys_const) table navigation ---
 // The constant is the queryable's only column AND its one-row table; resolution by
 // name / id yields the constant itself (m_meta), the value comes via GetValueAttribute.
-const ibBackendQueryColumn* ibConstantQueryable::ResolveColumnByName(const wxString& name) const { return name == m_meta->GetName() ? m_meta->GetValueColumn() : nullptr; }   // the constant HAS one column
+// The constant HAS one column, and it answers to the name that column reports — `Value`. Asking the
+// column itself (rather than repeating the literal here) is what keeps the resolver and the catalogue
+// from ever disagreeing about what the field is called.
+const ibBackendQueryColumn* ibConstantQueryable::ResolveColumnByName(const wxString& name) const
+{
+	const ibValueMetaObjectConstant::ibValueMetaObjectConstantColumn* column = m_meta->GetValueColumn();
+	return column != nullptr && name.IsSameAs(column->GetName(), false) ? column : nullptr;
+}
 wxString ibConstantQueryable::GetQueryTableName() const { return m_meta->GetPhysicalTableName(); }
 ibGuid ibConstantQueryable::GetQueryTableGuid() const { return m_meta->GetGuid(); }
 ibMetaID ibConstantQueryable::GetQueryTableId() const { return m_meta->GetMetaID(); }

@@ -108,16 +108,23 @@ void ibDialogQueryConstructor::FillAll()
 	Freeze();
 	SetEvtHandlerEnabled(false);
 
-	// ⚠ WHAT NO LONGER RESOLVES IS DROPPED FIRST, before anything is shown or rendered. Removing a
-	// table BREAKS the paths that led through it — that is what removal is — and this is where the
-	// break is noticed: the pass does not reach them, so they are neither displayed nor written.
+	// ⚠ NOTHING THAT DOES NOT RESOLVE IS THROWN AWAY HERE ANY MORE.
 	//
-	// One rule, every cause: a table removed here, an attribute renamed in the configuration, a
-	// metaobject deleted, a temp table no longer made. It never touches what it cannot verify.
-	{
-		const ibSourceMetaDataScope resolveAgainst(m_metaData);
-		ibQueryLowering::PruneUnresolved(m_package, std::map<wxString, ibValue>());
-	}
+	// This used to run PruneUnresolved before anything was shown, so a field whose table had been
+	// deleted — or a name with a typo in it — simply vanished from the query. Worse, the verdict
+	// line under the text is filled AFTERWARDS, by asking the engine about the already-tidied
+	// package: it therefore always answered "the engine reads this query", while the work had
+	// quietly lost a column. Silence plus a clean bill of health is the one combination that
+	// teaches a person to trust a window that is wrong.
+	//
+	// The rule now: WHAT IS WRITTEN STAYS WRITTEN, and the engine SAYS what is wrong with it —
+	// its own words, its own position (AskEngine → CheckNames, inside the metadata scope). A
+	// broken query must read as broken.
+	//
+	// The one thing still removed is a table nobody uses — an unfinished gesture rather than a
+	// mistake — and that happens on OK (DropUnusedTables), never here: between adding a table and
+	// choosing its first field it is unused by definition, and tidying on every refill would take
+	// it away under the hand that just added it.
 
 	m_filling = true;
 	FillPackage();
@@ -306,6 +313,188 @@ ibDialogQueryConstructor::TreeIcons ibDialogQueryConstructor::PrepareIcons(wxTre
 	return icons;
 }
 
+// THE PICTURE FOR ONE EXPRESSION, wherever an expression is listed — fields, groupings, order,
+// index, totals. A COLUMN wears its own picture (a dimension, a resource, a plain attribute); a
+// dot-walk wears the picture of what it ENDS on, because `Producer.Region.Name` is that field seen
+// from here; and anything that is not a column — `23 + 3456`, an aggregate call — is not a field at
+// all, so it takes the grid's plain one.
+//
+// One answer, asked by every grid, so a row cannot look like one kind of thing in the tree and
+// another kind three inches to the right.
+wxIcon ibDialogQueryConstructor::IconOfExpr(const ibQueryAstExprPtr& expr) const
+{
+	if (!expr || expr->m_kind != ibQueryAstExprKind::Column || expr->m_path.empty())
+		return wxNullIcon;
+
+	const ibQuerySelect* select = Current();
+	if (select == nullptr)
+		return wxNullIcon;
+
+	const ibSourceMetaDataScope resolveAgainst(m_metaData);
+	const ibQueryConstructorField field =
+		m_model.FieldOfPath(*select, expr->m_path, m_package, m_statement);
+	return field.m_icon;
+}
+
+// ===========================================================================
+//  A table nobody uses
+// ===========================================================================
+
+// EVERY SOURCE THE QUERY NAMES — the first segment of every column path, wherever an expression can
+// stand. Only a Column's path names a source: a Cast's path is a TYPE and a Value's is a meta-path,
+// so both are walked through (their m_arg) without their own path being read. A subquery's sources
+// are its own business and are not collected here.
+static void ibQueryCollectMentioned(const ibQueryAstExprPtr& expr, std::set<wxString>& out)
+{
+	if (!expr)
+		return;
+
+	if (expr->m_kind == ibQueryAstExprKind::Column && !expr->m_path.empty())
+		out.insert(expr->m_path.front().Lower());
+
+	ibQueryCollectMentioned(expr->m_arg,  out);
+	ibQueryCollectMentioned(expr->m_lhs,  out);
+	ibQueryCollectMentioned(expr->m_rhs,  out);
+	ibQueryCollectMentioned(expr->m_low,  out);
+	ibQueryCollectMentioned(expr->m_high, out);
+	ibQueryCollectMentioned(expr->m_else, out);
+	for (const ibQueryAstExprPtr& item : expr->m_list)
+		ibQueryCollectMentioned(item, out);
+	for (const auto& branch : expr->m_cases) {
+		ibQueryCollectMentioned(branch.first,  out);
+		ibQueryCollectMentioned(branch.second, out);
+	}
+}
+
+// THE MIRROR OF THE COLLECT ABOVE: rewrite the source a path starts on. Same walk, same rule about
+// which paths name a source (a Column's, and only a Column's) — so the two can never disagree about
+// what counts as a reference.
+static void ibQueryRenameMentioned(const ibQueryAstExprPtr& expr, const wxString& from, const wxString& to)
+{
+	if (!expr)
+		return;
+
+	if (expr->m_kind == ibQueryAstExprKind::Column && !expr->m_path.empty()
+	    && expr->m_path.front().IsSameAs(from, false))
+		expr->m_path.front() = to;
+
+	ibQueryRenameMentioned(expr->m_arg,  from, to);
+	ibQueryRenameMentioned(expr->m_lhs,  from, to);
+	ibQueryRenameMentioned(expr->m_rhs,  from, to);
+	ibQueryRenameMentioned(expr->m_low,  from, to);
+	ibQueryRenameMentioned(expr->m_high, from, to);
+	ibQueryRenameMentioned(expr->m_else, from, to);
+	for (const ibQueryAstExprPtr& item : expr->m_list)
+		ibQueryRenameMentioned(item, from, to);
+	for (const auto& branch : expr->m_cases) {
+		ibQueryRenameMentioned(branch.first,  from, to);
+		ibQueryRenameMentioned(branch.second, from, to);
+	}
+}
+
+// RENAMING A TABLE CARRIES ITS REFERENCES. An alias is what the rest of the query calls that table
+// by, so changing it without touching the paths written against it turns every one of them into a
+// name that resolves to nothing — the author renames one thing and breaks ten, none of which they
+// were looking at.
+//
+// ⚠ THIS SELECT ONLY. An alias is scoped to the query it is declared in: a union branch and a
+// nested subquery have their own tables, and a branch that happens to use the same word means its
+// own table by it. Descending would rename somebody else's reference to somebody else's table.
+void queryctor::ibQueryRenameSourceReferences(ibQuerySelect& select, const wxString& from, const wxString& to)
+{
+	if (from.IsEmpty() || to.IsEmpty() || from.IsSameAs(to, false))
+		return;
+
+	for (ibQueryProjection& projection : select.m_projections)
+		ibQueryRenameMentioned(projection.m_expr, from, to);
+	ibQueryRenameMentioned(select.m_where,  from, to);
+	ibQueryRenameMentioned(select.m_having, from, to);
+	for (ibQueryAstExprPtr& key : select.m_groupBy)
+		ibQueryRenameMentioned(key, from, to);
+	for (ibQueryOrderItem& order : select.m_orderBy)
+		ibQueryRenameMentioned(order.m_expr, from, to);
+	for (ibQueryAstExprPtr& key : select.m_indexBy)
+		ibQueryRenameMentioned(key, from, to);
+	for (ibQueryAstExprPtr& aggregate : select.m_totalsAggregates)
+		ibQueryRenameMentioned(aggregate, from, to);
+	for (ibQueryTotalDim& dimension : select.m_totalsBy)
+		ibQueryRenameMentioned(dimension.m_expr, from, to);
+	// The JOIN CONDITIONS name both sides — renaming one of them is exactly what this is for.
+	for (ibQueryAstJoin& join : select.m_joins)
+		ibQueryRenameMentioned(join.m_on, from, to);
+}
+
+// DROP THE JOINS NOBODY USES. Adding a table and then selecting nothing from it is an unfinished
+// gesture, not a mistake — so it goes quietly, unlike a name that does not resolve (which stays and
+// is spoken about). An INNER JOIN with no ON and no field of its own is worse than pointless: it
+// multiplies the rows of a query whose author never asked it to.
+//
+// ⚠ THE FIRST TABLE STAYS. Removing the FROM would leave the query with no source at all, which is
+// not tidying but destruction — and it is exactly the state a query is in while its author is still
+// choosing fields.
+//
+// ⚠ RUN ON OK, NOT ON EVERY REFILL. A table is unused for the whole moment between adding it and
+// picking its first field; tidying continuously would delete it under the hand that just added it.
+static void ibQueryDropUnusedIn(ibQuerySelect& select)
+{
+	for (const std::shared_ptr<ibQuerySelect>& branch : select.m_unions)
+		if (branch)
+			ibQueryDropUnusedIn(*branch);
+
+	if (select.m_selectAll)
+		return;   // SELECT * reads every table there is; none of them is unused
+
+	std::set<wxString> used;
+	for (const ibQueryProjection& projection : select.m_projections)
+		ibQueryCollectMentioned(projection.m_expr, used);
+	ibQueryCollectMentioned(select.m_where,  used);
+	ibQueryCollectMentioned(select.m_having, used);
+	for (const ibQueryAstExprPtr& key : select.m_groupBy)
+		ibQueryCollectMentioned(key, used);
+	for (const ibQueryOrderItem& order : select.m_orderBy)
+		ibQueryCollectMentioned(order.m_expr, used);
+	for (const ibQueryAstExprPtr& key : select.m_indexBy)
+		ibQueryCollectMentioned(key, used);
+	for (const ibQueryAstExprPtr& aggregate : select.m_totalsAggregates)
+		ibQueryCollectMentioned(aggregate, used);
+	// A JOIN'S OWN CONDITION COUNTS as use: `A JOIN B ON B.Ref = A.Ref` uses B even when no field of
+	// B is selected, and dropping it would silently change what the query returns.
+	for (const ibQueryAstJoin& join : select.m_joins)
+		ibQueryCollectMentioned(join.m_on, used);
+
+	select.m_joins.erase(std::remove_if(select.m_joins.begin(), select.m_joins.end(),
+		[&used](const ibQueryAstJoin& join) {
+			const wxString name = ibQuerySourceName(join.m_source);
+			return !name.IsEmpty() && used.find(name.Lower()) == used.end();
+		}), select.m_joins.end());
+}
+
+void ibDialogQueryConstructor::DropUnusedTables()
+{
+	for (ibQueryAstStatement& statement : m_package.m_statements)
+		if (statement.m_select)
+			ibQueryDropUnusedIn(*statement.m_select);
+}
+
+// THE PICTURE FOR ONE FIELD. The column already answered what it looks like
+// (ibBackendSourceColumn::GetColumnIcon — an attribute by default, a dimension / a resource when
+// the metaobject says so), so this only has to put that picture in THIS tree's list and remember
+// where. Nothing here knows a metatype name, and nothing switches over a kind: a new kind of
+// column arrives dressed on the day it overrides the icon, with this file untouched.
+int ibDialogQueryConstructor::FieldIcon(TreeIcons& icons, const ibQueryConstructorField& field) const
+{
+	if (icons.m_images == nullptr || !field.m_icon.IsOk())
+		return icons.m_field;
+
+	for (const std::pair<wxIcon, int>& known : icons.m_byIcon)
+		if (known.first.IsSameAs(field.m_icon))
+			return known.second;
+
+	const int index = icons.m_images->Add(field.m_icon);
+	icons.m_byIcon.emplace_back(field.m_icon, index);
+	return index;
+}
+
 // The plain-field picture in a tree's own list. Index 0 BY CONSTRUCTION — PrepareIcons adds it
 // first to a fresh list — which is what lets a lazily-expanded node draw the same icon as the rows
 // that were there from the start, without rebuilding the list and restyling every row.
@@ -428,7 +617,7 @@ void ibDialogQueryConstructor::FillSourceTree()
 		// out of the catalogue means "read this table and select this field", so the row has to know
 		// which table that is, at every level of the unfold.
 		for (const ibQueryConstructorField& field : m_model.GetFields(asSource, m_package, m_statement))
-			ibQueryAddFieldNode(m_sourceTree, table, field, icons.m_field, -1, wxEmptyString, source.m_path);
+			ibQueryAddFieldNode(m_sourceTree, table, field, FieldIcon(icons, field), -1, wxEmptyString, source.m_path);
 	}
 
 	// AND THE PACKAGE'S OWN TEMP TABLES, at the bottom beside the metaobject sources — because a
@@ -444,9 +633,20 @@ void ibDialogQueryConstructor::FillSourceTree()
 
 		const wxTreeItemId group = m_sourceTree->AppendItem(root, _("Temporary tables"),
 			tempIcon, tempIcon);
-		for (const ibQueryConstructorSource& temp : temps)
-			m_sourceTree->AppendItem(group, temp.m_presentation, tempIcon, tempIcon,
-				new ibQueryTreeNode(temp.m_path, true));
+		for (const ibQueryConstructorSource& temp : temps) {
+			const wxTreeItemId table = m_sourceTree->AppendItem(group, temp.m_presentation,
+				tempIcon, tempIcon, new ibQueryTreeNode(temp.m_path, true));
+
+			// AND ITS FIELDS, exactly as a permanent table gets them above. A temp table was the
+			// one source in this tree that stood as a childless leaf, so it could be added to the
+			// query but nothing could be selected FROM it and no field could be dragged out of it —
+			// which reads as "temp tables do not work". The model already answers the question:
+			// GetFields resolves a temp NAME to the projection of the statement that creates it.
+			ibQuerySource asSource;
+			asSource.m_name = temp.m_path;
+			for (const ibQueryConstructorField& field : m_model.GetFields(asSource, m_package, m_statement))
+				ibQueryAddFieldNode(m_sourceTree, table, field, FieldIcon(icons, field), -1, wxEmptyString, temp.m_path);
+		}
 		m_sourceTree->Expand(group);
 	}
 }
@@ -477,7 +677,7 @@ void ibDialogQueryConstructor::FillTables()
 		// projections, a temp one through the statement that made it — and this loop does not know
 		// which of the three it is talking to.
 		for (const ibQueryConstructorField& field : m_model.GetFields(source, m_package, m_statement))
-			ibQueryAddFieldNode(m_tables, node, field, icons.m_field, static_cast<int>(i), wxEmptyString);
+			ibQueryAddFieldNode(m_tables, node, field, FieldIcon(icons, field), static_cast<int>(i), wxEmptyString);
 		m_tables->Expand(node);
 	}
 
@@ -576,7 +776,7 @@ void ibDialogQueryConstructor::FillFieldSources()
 				? m_model.GetQualifiedFields(source, m_package, m_statement)
 				: m_model.GetFields(source, m_package, m_statement);
 			for (const ibQueryConstructorField& field : fields)
-				ibQueryAddFieldNode(tree, table, field, icons.m_field, static_cast<int>(i), wxEmptyString);
+				ibQueryAddFieldNode(tree, table, field, FieldIcon(icons, field), static_cast<int>(i), wxEmptyString);
 			tree->Expand(table);
 		}
 	}

@@ -81,6 +81,13 @@ public:
 		const ibTypeDescription& GetTypeDesc() const { return m_sourceInfo.m_typeDesc; }   // node's Type (structure-hop reads the reference target)
 		const ibBackendSourceColumn* GetColumn() const { return m_sourceInfo.m_col; }      // descriptor (the leaf WalkSource returns); null for a plain-value node
 
+		// THE NODE'S PICTURE, asked of the column it was built from — so a dimension and a resource
+		// are drawn apart without the drawer knowing either word. Null when the node stands behind
+		// no column (a plain-value node); the reader then draws its own default.
+		wxIcon GetSourceIcon() const {
+			return m_sourceInfo.m_col != nullptr ? m_sourceInfo.m_col->GetColumnIcon() : wxNullIcon;
+		}
+
 
 		bool IsEnabled()      const { return (m_sourceInfo.m_flags & eSrcEnabled) != 0; }
 		bool IsVisible()      const { return (m_sourceInfo.m_flags & eSrcVisible) != 0; }

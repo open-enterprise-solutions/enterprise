@@ -585,6 +585,12 @@ wxWindow* ibDialogQueryConstructor::BuildTablesPage(wxWindow* parent)
 	// So: the cell SHOWS it, the editor CHANGES it. (The names are the other way round — an alias
 	// is typed where it stands, because a name is not an expression.)
 	m_fieldModel->SetIconColumn(kGridCol1, ibValue::GetIconGroup());
+	// PER ROW: the column already said what it looks like; this only carries the answer.
+	m_fieldModel->SetIconReader([this](unsigned int row) -> wxIcon {
+		const ibQuerySelect* select = Current();
+		return select != nullptr && row < select->m_projections.size()
+			? IconOfExpr(select->m_projections[row].m_expr) : wxNullIcon;
+	});
 	m_fields->AppendColumn(IconColumn(_("Field"), kGridCol1, FromDIP(240)));   // fits its pane — see the totals grid
 	// EditItem is inert on an inert column, so the double-click lands here instead.
 	m_fields->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED,
@@ -749,6 +755,11 @@ wxWindow* ibDialogQueryConstructor::BuildGroupingPage(wxWindow* parent)
 	});
 	m_grouping = MakeGrid(keysPane, m_groupingModel, [this] { FillAll(); });
 	m_groupingModel->SetIconColumn(kGridCol1, ibValue::GetIconGroup());
+	m_groupingModel->SetIconReader([this](unsigned int row) -> wxIcon {
+		const ibQuerySelect* select = Current();
+		return select != nullptr && row < select->m_groupBy.size()
+			? IconOfExpr(select->m_groupBy[row]) : wxNullIcon;
+	});
 	m_grouping->AppendColumn(IconColumn(_("Grouping field"), kGridCol1, FromDIP(420)));
 	m_grouping->SetDropTarget(new ibCallbackDropTarget([this] { wxCommandEvent e; OnAddGrouping(e); }));
 	keys->Add(m_grouping, 1, wxEXPAND | wxALL, FromDIP(3));
@@ -849,6 +860,14 @@ wxWindow* ibDialogQueryConstructor::BuildGroupingPage(wxWindow* parent)
 	});
 	m_aggregates = MakeGrid(aggPane, m_aggregateModel, [this] { FillAll(); });
 	m_aggregateModel->SetIconColumn(kGridCol1, ibValue::GetIconGroup());
+	// AN AGGREGATE WEARS ITS ARGUMENT PICTURE: what SUM(x) is about is x.
+	m_aggregateModel->SetIconReader([this](unsigned int row) -> wxIcon {
+		const ibQuerySelect* select = Current();
+		const std::vector<size_t> rows = AggregateRows();
+		if (select == nullptr || row >= rows.size()) return wxNullIcon;
+		const ibQueryAstExprPtr& expr = select->m_projections[rows[row]].m_expr;
+		return expr ? IconOfExpr(expr->m_arg) : wxNullIcon;
+	});
 	m_aggregates->AppendColumn(IconColumn(_("Summed field"), kGridCol1, FromDIP(320)));
 	// ⭐ THE AGGREGATES THAT FIT THIS ROW'S FIELD — asked of the engine, per row. A string field
 	// offers Count / Min / Max and no Sum, because there is no sum of strings; a number offers all
@@ -1046,6 +1065,11 @@ wxWindow* ibDialogQueryConstructor::BuildIndexPage(wxWindow* parent)
 	});
 	m_indexFields = MakeGrid(rightPane, m_indexModel, [this] { FillAll(); });
 	m_indexModel->SetIconColumn(kGridCol1, ibValue::GetIconGroup());
+	m_indexModel->SetIconReader([this](unsigned int row) -> wxIcon {
+		const ibQuerySelect* select = Current();
+		return select != nullptr && row < select->m_indexBy.size()
+			? IconOfExpr(select->m_indexBy[row]) : wxNullIcon;
+	});
 	m_indexFields->AppendColumn(IconColumn(_("Indexed field"), kGridCol1, FromDIP(420)));
 	m_indexFields->SetDropTarget(new ibCallbackDropTarget([this] { wxCommandEvent e; OnAddIndexField(e); }));
 	right->Add(m_indexFields, 1, wxEXPAND | wxALL, FromDIP(3));
@@ -1137,6 +1161,11 @@ wxWindow* ibDialogQueryConstructor::BuildOrderPage(wxWindow* parent)
 	m_order = MakeGrid(rightPane, m_orderModel, [this] { FillAll(); });
 	AttachContextMenu(m_order, bar);
 	m_orderModel->SetIconColumn(kGridCol1, ibValue::GetIconGroup());
+	m_orderModel->SetIconReader([this](unsigned int row) -> wxIcon {
+		const ibQuerySelect* select = Current();
+		return select != nullptr && row < select->m_orderBy.size()
+			? IconOfExpr(select->m_orderBy[row].m_expr) : wxNullIcon;
+	});
 	m_order->AppendColumn(IconColumn(_("Field"), kGridCol1, FromDIP(380)));
 	// TWO WORDS, and the language owns both — a choice, not a typed word.
 	m_order->AppendColumn(ChoiceColumn(_("Direction"), kGridCol2, FromDIP(140),
@@ -1299,6 +1328,11 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 	// The picture and the choice renderer are back: neither was ever the cause, and taking them out
 	// cost a working cell for a guess. (Sorry, Max — that one was mine.)
 	m_totalsDimensionModel->SetIconColumn(kGridCol1, ibValue::GetIconGroup());
+	m_totalsDimensionModel->SetIconReader([this](unsigned int row) -> wxIcon {
+		const ibQuerySelect* select = Current();
+		return select != nullptr && row < select->m_totalsBy.size()
+			? IconOfExpr(select->m_totalsBy[row].m_expr) : wxNullIcon;
+	});
 	m_totalsDimensions->AppendColumn(IconColumn(_("Grouping field"), kGridCol1, FromDIP(250)));
 	// THE UNFOLD IS A TYPE (a registered runtime enumeration — see ibQueryDimUnfold), so the cell
 	// offers its three words and nothing else.
@@ -1411,6 +1445,12 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 	m_totalsAggregates = MakeGrid(aggPane, m_totalsAggregateModel, [this] { FillAll(); });
 	AttachContextMenu(m_totalsAggregates, aggBar);
 	m_totalsAggregateModel->SetIconColumn(kGridCol1, ibValue::GetIconGroup());
+	m_totalsAggregateModel->SetIconReader([this](unsigned int row) -> wxIcon {
+		const ibQuerySelect* select = Current();
+		if (select == nullptr || row >= select->m_totalsAggregates.size()) return wxNullIcon;
+		const ibQueryAstExprPtr& expr = select->m_totalsAggregates[row];
+		return expr ? IconOfExpr(expr->m_arg) : wxNullIcon;
+	});
 	m_totalsAggregates->AppendColumn(IconColumn(_("Totals field"), kGridCol1, FromDIP(240)));
 	// ⭐ READY EXPRESSIONS TO PICK FROM, AND THE EDITOR FOR EVERYTHING ELSE.
 	//

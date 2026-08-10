@@ -385,7 +385,14 @@ void ibDialogQueryConstructor::OnTableAliasEditEnd(wxTreeEvent& event)
 	if (!alias.IsEmpty() && select != nullptr)
 		alias = ibQueryUniqueSourceAlias(*select, alias, source);
 
+	// EVERY PATH WRITTEN AGAINST THIS TABLE FOLLOWS IT. The name is taken BEFORE the change and the
+	// new one after, because "the name of a source" is the alias when there is one and the table's
+	// own last segment when there is not — clearing an alias is a rename too, in the other
+	// direction, and the references have to come back with it.
+	const wxString oldName = ibQuerySourceName(*source);
 	source->m_alias = alias;
+	if (select != nullptr)
+		ibQueryRenameSourceReferences(*select, oldName, ibQuerySourceName(*source));
 	// The label is rebuilt from the AST by the refill — letting the tree keep the typed text would
 	// leave `p` where `Catalog.Products (p)` belongs.
 	event.Veto();

@@ -235,11 +235,19 @@ bool ibValueMetaObjectAccumulationRegister::OnAfterRunMetaObject(int flags)
 		return false;
 
 	// Custom virtual-table descriptors (balances / turnovers). The base records descriptor is registered by
-	// ibValueMetaObjectRegisterData::OnAfterRunMetaObject below. Register ALWAYS — the factory is PER-CONFIG
-	// (in the metadata), so a read-only DB load (onlyLoadFlag) still registers its OWN sources into its OWN factory.
-	m_metaData->RegisterSource(&m_balance);
+	// ibValueMetaObjectRegisterData::OnAfterRunMetaObject below. Registered into the config's OWN factory —
+	// it is per-config, so a read-only DB load (onlyLoadFlag) still registers its own sources.
+	//
+	// ⚠ ONLY THE TABLES THIS REGISTER ACTUALLY HAS. A turnover-only register keeps no balance: its
+	// view carries no opening / closing / expense column at all (accumulationRegisterSchema.cpp gates
+	// them on eBalances). Registering `.Balance` and `.BalanceAndTurnovers` for it anyway put two
+	// tables in every catalogue that answered with dimensions and not one resource column — a source
+	// a person can pick, join and select nothing from. What a register does not have, it does not offer.
 	m_metaData->RegisterSource(&m_turnover);
-	m_metaData->RegisterSource(&m_balanceAndTurnover);
+	if (GetRegisterType() == ibRegisterType::eBalances) {
+		m_metaData->RegisterSource(&m_balance);
+		m_metaData->RegisterSource(&m_balanceAndTurnover);
+	}
 
 	if (auto* cc = m_metaData->GetCompileCache()) {
 
@@ -257,6 +265,11 @@ bool ibValueMetaObjectAccumulationRegister::OnAfterRunMetaObject(int flags)
 
 bool ibValueMetaObjectAccumulationRegister::OnBeforeCloseMetaObject()
 {
+	// ⚠ ALL THREE, UNCONDITIONALLY — deliberately not mirroring the registration's condition. The
+	// register type can be changed while the configuration is open, and a close that asked the
+	// CURRENT type would leave behind whatever was registered under the previous one. Unregistering
+	// something never registered is a no-op (the factory just does not find it), so the asymmetry
+	// costs nothing and removes a whole class of dangling descriptor.
 	m_metaData->UnregisterSource(&m_balance);
 	m_metaData->UnregisterSource(&m_turnover);
 	m_metaData->UnregisterSource(&m_balanceAndTurnover);

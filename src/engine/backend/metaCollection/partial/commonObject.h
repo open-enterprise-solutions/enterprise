@@ -111,6 +111,17 @@ public:
 	// The contained queryable — the metaobject's GetQueryable() forwards here (stable for the object's life).
 	const ibBackendQueryable* GetQueryable() const { return &m_queryable; }
 
+	// WHAT COLUMNS THIS SOURCE HAS — forwarded to the metaobject, which is the only one that knows.
+	//
+	// ⚠ THIS BELONGS TO THE QUERY HALF, not to the command one. It used to live on
+	// ibMetaCommandDescriptor, so every source that is ONLY queryable — a constant, first among
+	// them — answered the base's empty default: it appeared in a catalogue as a table with no
+	// fields, could be added to a query and offered nothing to select. Asking what a source holds
+	// has nothing to do with whether it can be shown as a list.
+	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override {
+		m_meta->FillSourceExplorer(explorer);
+	}
+
 	// Restore ROW-KEY from a row's identity VALUE — read the source's PRIMARY-KEY columns off it (the SAME columns
 	// the fetch stamps into a node's m_rowKey, so the restore stub matches). UNIVERSAL via the source hop gate: a
 	// record's reference yields its self-reference, a register's record-manager decomposes into its composite key.
@@ -148,7 +159,8 @@ public:
 	// ROW DATA / presentation
 	ibValue GetSelectValue(const ibRowMetaValues& rowValues) const override { return this->m_meta->GetSelectValue(rowValues); }
 	ibUniqueKey GetItemKey(const ibRowMetaValues& rowValues) const override { return this->m_meta->GetItemKey(rowValues); }
-	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override { this->m_meta->FillSourceExplorer(explorer); }
+	// (FillSourceExplorer is INHERITED from the query descriptor — asking a source what it holds is
+	//  a query question, and a source that is not a list has it too.)
 	// COMMAND INTERFACE
 	void GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const override { this->m_meta->GetCommandCollection(formType, commands); }
 	void CallAsCommand(ibActionID id, const ibUniqueKey& anchor, const ibUniqueKey& key, ibBackendValueForm* srcForm) const override { this->m_meta->CallAsCommand(id, anchor, key, srcForm); }

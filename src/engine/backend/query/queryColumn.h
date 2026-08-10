@@ -18,6 +18,8 @@
 
 #include "backend/typeDescription.h"    // ibTypeDescription (the column's L3 type)
 
+#include <wx/icon.h>                    // wxIcon — the column's own picture (GetColumnIcon)
+
 #include <vector>
 
 // ibFieldTypes — the persisted VARIANT TAG stored in a composite column's _TYPE field: which of
@@ -85,6 +87,17 @@ public:
 	// overrides — a deleted or access-denied field is not. The metadata-agnostic source explorer
 	// gates on THIS instead of poking the metaobject.
 	virtual bool IsAllowed() const { return true; }
+
+	// THE COLUMN'S OWN PICTURE — asked of the column, never deduced by the reader. The default is
+	// the plain ATTRIBUTE picture from the icon library, so every column is dressed even when it
+	// stands behind no metaobject (a view's column, a temp table's); a column that IS a metaobject
+	// answers with whatever picture its own metatype registered. That is what keeps a dimension
+	// from looking like a resource without anybody, anywhere, keeping a list of kinds and a switch
+	// over it — a metatype added tomorrow is dressed the day it registers an icon.
+	//
+	// Body in metaAttributeObject_res.cpp, next to the icon it returns: this header must not pull
+	// the metadata tree in (the attribute metaobject includes THIS file).
+	virtual wxIcon GetColumnIcon() const;
 };
 
 class BACKEND_API ibBackendQueryColumn : public ibBackendSourceColumn

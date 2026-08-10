@@ -57,13 +57,28 @@ class BACKEND_API ibValueMetaObjectConstant :
 			: ibValueMetaObjectAttributeBase(), m_owner(owner) {
 		}
 
-		virtual wxString GetName() const { return m_owner != nullptr ? m_owner->GetName() : wxString(); }
+		// `Constant.Rate.Value` — the COLUMN is called Value, not the constant's own name. A
+		// constant is one row with one column, and naming that column after the table produced
+		// `Constant1.Constant1`: a path that says the same word twice and names the thing you are
+		// standing on rather than what you are reading off it. The table is the constant; the
+		// column is its value. (Physical storage is untouched — the field is still `fld<metaID>`,
+		// keyed on the constant's id, so nothing in the schema moves.)
+		static const wxChar* ValueColumnName() { return wxT("Value"); }
+		virtual wxString GetName() const { return ValueColumnName(); }
 
 		// The SYNONYM has to be delegated explicitly, and the reason is a trap worth naming: the base
 		// derives it from GetName(), but ibValueMetaObject::GetName() is NOT virtual — only the query
 		// column's is. So the base reads its OWN empty name, generates an empty synonym from it, and
 		// the form loses the field's caption while everything else keeps working.
-		virtual wxString GetSynonym() const override { return m_owner != nullptr ? m_owner->GetSynonym() : wxString(); }
+		// THE CAPTION IS THE COLUMN'S OWN NAME — `Value`, untranslated. Handing back the constant's
+		// synonym drew the field under `Constant1` as another `Constant1`: the tree said the same
+		// word twice and nothing said what the node was. And `Value` is a SYSTEM name — the word the
+		// query itself writes — so it is not run through the translation table: a caption that says
+		// one thing while the text underneath says another is worse than an untranslated word.
+		// (Delegated explicitly rather than left to the base: the base derives its synonym from
+		// GetName(), and ibValueMetaObject::GetName() is not virtual — only the query column's is —
+		// so the base would read its own empty name and the caption would vanish.)
+		virtual wxString GetSynonym() const override { return ValueColumnName(); }
 
 		// `fld<metaID>` — the SAME rule the attribute base applied when the constant itself was the
 		// column, keyed on the CONSTANT's id. This is the second half of "sys_const does not move":
@@ -87,6 +102,17 @@ class BACKEND_API ibValueMetaObjectConstant :
 	friend class ibConstantQueryable;
 
 	const ibValueMetaObjectConstantColumn* GetValueColumn() const { return m_column; }
+
+	// THE ONE COLUMN, offered to whoever asks what this source holds — the query constructor's
+	// catalogue, a form's field picker, anything reading a source's shape. A constant reads as
+	// `Constant.<Name>.Value`, and from there onwards by the value's own type, so the single node
+	// carries the column's type description and a reference walks further by dot.
+	// Without this the descriptor forwards to a base that fills nothing, and a constant stands in
+	// the tree as a leaf with no field to select — visible, addable, and useless.
+	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const {
+		if (m_column != nullptr)
+			explorer.AppendColumn(m_column, /*enabled*/ true, /*visible*/ true);
+	}
 
 	// --- the composite face — answered directly now, with no cast anywhere --------------------
 	//

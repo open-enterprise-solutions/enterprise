@@ -306,6 +306,7 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetFields(
 			field.m_referenceClsid = SingleReferenceOf(node->GetClsidList());
 			field.m_reference      = field.m_referenceClsid != 0;
 			field.m_type           = node->GetTypeDesc();
+			field.m_icon           = node->GetSourceIcon();   // the column's own picture, asked not deduced
 			out.push_back(std::move(field));
 		}
 		break;

@@ -25,6 +25,11 @@ public:
 	wxString GetNamespace() const override;
 	wxString GetName() const override;
 	const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
+	// WHAT COLUMNS A SLICE HAS, without running it. A slice REPORTS the register's own columns —
+	// its companion does not redirect navigation, unlike the accumulation register's views — so the
+	// answer is the register's, asked once and not restated here. Without this the base answers
+	// nothing and the slice stands in a catalogue as a leaf with no fields to select.
+	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
 private:
 	ibValueMetaObjectInformationRegister* m_reg;
 	wxString                              m_suffix;
@@ -337,6 +342,13 @@ const ibBackendQueryable* ibInfoRegisterSliceDescriptor<TSlice>::CreateQueryable
 	const ibValue filter = (lSizeArray > 1 && paParams != nullptr && paParams[1] != nullptr) ? *paParams[1] : ibValue();
 	m_companion = std::make_unique<TSlice>(m_reg, period, filter);
 	return m_companion.get();
+}
+
+template <typename TSlice>
+void ibInfoRegisterSliceDescriptor<TSlice>::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+{
+	if (m_reg != nullptr)
+		m_reg->FillSourceExplorer(explorer);
 }
 
 //********************************************************************************************
