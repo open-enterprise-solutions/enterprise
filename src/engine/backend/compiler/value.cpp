@@ -1357,10 +1357,8 @@ void ibValue::ibMemberTable::Build()
 		else if (b.m_memberFn != nullptr)
 			(b.m_ctx->*b.m_memberFn)(*this);
 	};
-	for (const auto& b : m_binders)
-		if (!b.m_tail) run(b);
-	for (const auto& b : m_binders)
-		if (b.m_tail) run(b);   // module exports last — keeps fixed-method indices stable
+	ForEachBinder([&run](const auto& b) { if (!b.m_tail) run(b); });
+	ForEachBinder([&run](const auto& b) { if (b.m_tail)  run(b); });   // module exports last — keeps fixed-method indices stable
 	// Release — pairs with the acquire load in EnsureBuilt(), so any thread that sees
 	// kBuilt (fast path or the wait loop) also sees every m_props/m_methods write above.
 	m_buildState.store(kBuilt, std::memory_order_release);

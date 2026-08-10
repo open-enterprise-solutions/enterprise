@@ -110,7 +110,7 @@ public:
 		};
 
 		// Bit-flags for prop visibility / mutability.
-		enum ibPropFlags : unsigned int {
+		enum ibPropFlags : unsigned char {
 			eProp_None     = 0,
 			eProp_Readable = 1u << 0,
 			eProp_Writable = 1u << 1,
@@ -129,7 +129,7 @@ public:
 			// callsites and any prop that needs eProp_Scoped or other
 			// non-readable/writable bits.
 			ibMemberTableProperty(const wxString& strPropName, unsigned int flags, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
-				: m_fieldName(strPropName), m_flags(flags), m_lAlias(lPropAlias), m_lData(lData)
+				: m_fieldName(strPropName), m_lData(lData), m_lAlias((int16_t)lPropAlias), m_flags((uint8_t)flags)
 			{
 			}
 
@@ -139,8 +139,8 @@ public:
 			// callsite. Old props default to non-scoped.
 			ibMemberTableProperty(const wxString& strPropName, bool readable, bool writable, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
 				: m_fieldName(strPropName),
-				  m_flags((readable ? eProp_Readable : 0u) | (writable ? eProp_Writable : 0u)),
-				  m_lAlias(lPropAlias), m_lData(lData)
+				  m_lData(lData), m_lAlias((int16_t)lPropAlias),
+				  m_flags((uint8_t)((readable ? eProp_Readable : 0u) | (writable ? eProp_Writable : 0u)))
 			{
 			}
 
@@ -149,8 +149,8 @@ public:
 			// over OR'd flag literals (ThisObject / ThisForm / etc).
 			ibMemberTableProperty(const wxString& strPropName, bool readable, bool writable, bool scoped, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
 				: m_fieldName(strPropName),
-				  m_flags((readable ? eProp_Readable : 0u) | (writable ? eProp_Writable : 0u) | (scoped ? eProp_Scoped : 0u)),
-				  m_lAlias(lPropAlias), m_lData(lData)
+				  m_lData(lData), m_lAlias((int16_t)lPropAlias),
+				  m_flags((uint8_t)((readable ? eProp_Readable : 0u) | (writable ? eProp_Writable : 0u) | (scoped ? eProp_Scoped : 0u)))
 			{
 			}
 
@@ -158,13 +158,27 @@ public:
 			bool IsWritable() const { return (m_flags & eProp_Writable) != 0; }
 			bool IsScoped()   const { return (m_flags & eProp_Scoped)   != 0; }
 
+			// WIDTH BY WHAT THE FIELD CARRIES, not by habit. These two were both
+			// `long` and are not the same kind of thing at all:
+			//
+			//   m_lData  — a METAID (SetValueByMetaID / IsDataReference read it).
+			//              Full width, stays.
+			//   m_lAlias — a small tag: eProcUnit / eProperty / eTable, the largest
+			//              being g_aliasExport = 1000. Sixteen bits with room to
+			//              spare.
+			//
+			// One type serving both is why narrowing the flags alone bought nothing
+			// earlier: the saving vanished into the field beside it. Ordered wide to
+			// narrow, the whole tail now fits the pointer's own alignment slack —
+			// 8 + 4 + 2 + 1 = 15, so the record is 16 bytes where it was 24.
 			wxString m_fieldName;
-			unsigned int m_flags = eProp_Readable | eProp_Writable;
-			long m_lAlias, m_lData;
+			long     m_lData;
+			int16_t  m_lAlias;
+			uint8_t  m_flags = eProp_Readable | eProp_Writable;
 		};
 
 		// Bit-flags for method capabilities — counterpart to ibPropFlags.
-		enum ibMethodFlags : unsigned int {
+		enum ibMethodFlags : unsigned char {
 			eMethod_None      = 0,
 			eMethod_HasReturn = 1u << 0,   // function (returns) vs procedure (no return)
 			eMethod_Scoped    = 1u << 1,   // bc-local — invisible to children
@@ -173,25 +187,33 @@ public:
 		struct ibMemberTableMethod {
 
 			ibMemberTableMethod(const wxString& strMethodName, const wxString& strHelper, const long paramCount, unsigned int flags, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
-				: m_fieldName(strMethodName), m_strHelper(strHelper), m_paramCount(paramCount), m_flags(flags), m_lAlias(lPropAlias), m_lData(lData)
+				: m_fieldName(strMethodName), m_strHelper(strHelper), m_lData(lData), m_lAlias((int16_t)lPropAlias), m_paramCount((int8_t)paramCount), m_flags((uint8_t)flags)
 			{
 			}
 
 			// Legacy ctor — convert hasRet bool into the flags word.
 			ibMemberTableMethod(const wxString& strMethodName, const wxString& strHelper, const long paramCount, bool hasRet, const long lPropAlias = wxNOT_FOUND, const long lData = wxNOT_FOUND)
-				: m_fieldName(strMethodName), m_strHelper(strHelper), m_paramCount(paramCount),
-				  m_flags(hasRet ? eMethod_HasReturn : 0u), m_lAlias(lPropAlias), m_lData(lData)
+				: m_fieldName(strMethodName), m_strHelper(strHelper), m_lData(lData),
+				  m_lAlias((int16_t)lPropAlias), m_paramCount((int8_t)paramCount),
+				  m_flags((uint8_t)(hasRet ? eMethod_HasReturn : 0u))
 			{
 			}
 
 			bool HasReturn() const { return (m_flags & eMethod_HasReturn) != 0; }
 			bool IsScoped()  const { return (m_flags & eMethod_Scoped)    != 0; }
 
+			// Same split as the property record above: m_lData is a metaID and keeps
+			// its width, the rest are small tags. Declared arity in this whole tree
+			// tops out at FOUR, so a byte is not tight — it is three orders of
+			// magnitude of headroom. Wide to narrow: 8 + 8 + 4 + 2 + 1 + 1 = 24,
+			// exactly two pointers plus a full 8-byte tail, no padding — where the
+			// record used to be 32.
 			wxString m_fieldName;
 			wxString m_strHelper;
-			long m_paramCount = 0;
-			unsigned int m_flags = 0;
-			long m_lAlias, m_lData;
+			long     m_lData  = wxNOT_FOUND;
+			int16_t  m_lAlias = wxNOT_FOUND;
+			int8_t   m_paramCount = 0;
+			uint8_t  m_flags = 0;
 		};
 
 		// props & methods (the built surface). Constructors (a value may surface
@@ -239,9 +261,57 @@ public:
 			}
 		};
 		// Contributors, invoked by Build() in bind order — EXCEPT tail-flagged ones,
-		// which Build() runs last (a descriptor's module exports). Folding the tail in
-		// here drops a whole inline ibBoundNames field from every helper.
-		std::vector<ibBoundNames> m_binders;
+		// which Build() runs last (a descriptor's module exports).
+		//
+		// ONE SLOT INLINE, and the vector only past it. Measured shape of the list:
+		// every ctor binds exactly once, so a value has ONE contributor; a derived
+		// that also binds a base filler has two, and nothing in the tree binds more
+		// than that except a descriptor's module exports. The list is also
+		// write-once — `Unbind` on a member table has no callsite at all — and its
+		// contents are constant per TYPE: same function pointer, same order, only
+		// `ctx` differs, and `ctx` is always the owner.
+		//
+		// So a `std::vector` here was a heap allocation per VALUE for a single
+		// element known at compile time. Every Structure, every record object,
+		// every form paid it at construction — and a composite pipeline row is a
+		// fresh Structure per ROW. The slot costs ~32 bytes inline and removes that
+		// malloc/free pair; the vector stays for the rare second binder and
+		// allocates nothing while empty.
+		ibBoundNames m_binder0;
+		std::vector<ibBoundNames> m_binders;   // overflow only — entries 2..N
+		uint8_t m_binderCount = 0;
+
+		// The ONE place that knows the storage is split. Everything else asks.
+		void AddBinder(const ibBoundNames& b) {
+			if (m_binderCount == 0) m_binder0 = b;
+			else                    m_binders.push_back(b);
+			++m_binderCount;
+			m_buildState = kStale;
+		}
+		bool HasBinder(const ibBoundNames& b) const {
+			if (m_binderCount > 0 && m_binder0 == b) return true;
+			for (const auto& e : m_binders) if (e == b) return true;
+			return false;
+		}
+		// Rebuilds the list minus whatever `drop` selects. Order is preserved,
+		// which matters: Build() runs contributors in bind order.
+		template<class Pred>
+		void RemoveBinderIf(Pred drop) {
+			std::vector<ibBoundNames> kept;
+			kept.reserve(m_binderCount);
+			if (m_binderCount > 0 && !drop(m_binder0)) kept.push_back(m_binder0);
+			for (const auto& e : m_binders) if (!drop(e)) kept.push_back(e);
+
+			m_binderCount = 0;
+			m_binders.clear();
+			for (const auto& e : kept) AddBinder(e);
+			m_buildState = kStale;
+		}
+		template<class F>
+		void ForEachBinder(F&& f) const {
+			if (m_binderCount > 0) f(m_binder0);
+			for (const auto& e : m_binders) f(e);
+		}
 		// Build state. A rebuild may be triggered SEQUENTIALLY by any thread (the owner
 		// in normal runtime; the debugger inspecting cross-thread), but NEVER in PARALLEL
 		// for the same helper — two threads clearing+appending m_props/m_methods at once
@@ -321,19 +391,16 @@ public:
 		// Free contributor (type-invariant / Shared). Idempotent BindOnce lets a
 		// base and a derived each register their own with no guard flag.
 		void Bind(ibNameBinder fn, const ibValue* ctx = nullptr) {
-			m_binders.push_back(ibBoundNames{ ctx, fn, nullptr });
-			m_buildState = kStale;
+			AddBinder(ibBoundNames{ ctx, fn, nullptr });
 		}
 		void BindOnce(ibNameBinder fn, const ibValue* ctx = nullptr) {
 			const ibBoundNames b{ ctx, fn, nullptr };
-			for (const auto& e : m_binders) if (e == b) return;
-			m_binders.push_back(b);
-			m_buildState = kStale;
+			if (HasBinder(b)) return;
+			AddBinder(b);
 		}
 		void Unbind(ibNameBinder fn, const ibValue* ctx = nullptr) {
 			const ibBoundNames b{ ctx, fn, nullptr };
-			m_binders.erase(std::remove(m_binders.begin(), m_binders.end(), b), m_binders.end());
-			m_buildState = kStale;
+			RemoveBinderIf([&b](const ibBoundNames& e) { return e == b; });
 		}
 		// Member contributor: a const method of the owning value. `obj` is the
 		// value (typically `this` in its ctor); Build() runs (obj->*fn)(helper),
@@ -360,14 +427,12 @@ public:
 				"Bind: the filler's class must be the object's class or a base of it");
 			wxASSERT_MSG(static_cast<const void*>(static_cast<const ibValue*>(obj)) == static_cast<const void*>(obj),
 				wxT("ibValue must be the FIRST base (offset 0) of a member-binding class - see PROJECT INVARIANT above; make the ibValue-holding base first"));
-			m_binders.push_back(ibBoundNames{ static_cast<const ibValue*>(obj), nullptr, static_cast<ibNameFiller>(fn) });
-			m_buildState = kStale;
+			AddBinder(ibBoundNames{ static_cast<const ibValue*>(obj), nullptr, static_cast<ibNameFiller>(fn) });
 		}
 		template<class C, class M>
 		void Unbind(const C* obj, void (M::*fn)(ibMemberTable&) const) {
 			const ibBoundNames b{ static_cast<const ibValue*>(obj), nullptr, static_cast<ibNameFiller>(fn) };
-			m_binders.erase(std::remove(m_binders.begin(), m_binders.end(), b), m_binders.end());
-			m_buildState = kStale;
+			RemoveBinderIf([&b](const ibBoundNames& e) { return e == b; });
 		}
 		// Tail contributor — Build() runs it AFTER every non-tail binder, so its entries
 		// land at the END of the surface regardless of bind order. Used for a
@@ -375,13 +440,11 @@ public:
 		// (index-based CallAsFunc). Set by the ibRuntimeModuleDataObject ctor. Only one
 		// tail is expected; replace any existing one so a re-bind stays idempotent.
 		void BindTail(ibNameBinder fn, const ibValue* ctx = nullptr) {
-			m_binders.erase(std::remove_if(m_binders.begin(), m_binders.end(),
-				[](const ibBoundNames& b) { return b.m_tail; }), m_binders.end());
-			m_binders.push_back(ibBoundNames{ ctx, fn, nullptr, /*tail=*/true });
-			m_buildState = kStale;
+			RemoveBinderIf([](const ibBoundNames& b) { return b.m_tail; });
+			AddBinder(ibBoundNames{ ctx, fn, nullptr, /*tail=*/true });
 		}
 		bool HasBinders() const {
-			return !m_binders.empty();
+			return m_binderCount > 0;
 		}
 		// Rebuild the name surface from the bound contributors, in bind order.
 		// No-op when nothing is bound, so it is SAFE on a helper still populated
