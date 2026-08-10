@@ -145,6 +145,7 @@ ibDialogQueryExpression::ibDialogQueryExpression(wxWindow* parent, const wxStrin
 	ibStyleQueryText(m_text);
 	if (existing)
 		m_text->SetText(ibRenderQueryExpr(*existing));
+		ibMarkQueryParameters(m_text);
 	// A DROP LANDS WHERE IT WAS DROPPED. The field travels as its own text, so the drop needs only
 	// to put the caret under the mouse and write it — no payload format of our own.
 	// WHERE IT WAS DROPPED, not where the caret happened to be. A field dragged into the middle of a
@@ -237,6 +238,12 @@ void ibDialogQueryExpression::FillLanguageTree()
 			leaf(functions, call, call);
 		}
 	}
+
+	// ⭐ THE SUBSTITUTION, beside the folds — and NOT beside `IS NULL`, which is a different thing
+	// wearing nearly the same word. `IS NULL` ASKS (a predicate, in a condition); `ISNULL(a, b)`
+	// ANSWERS WITH SOMETHING ELSE (a value, in an expression). Filed where each is used, so the two
+	// are chosen apart rather than confused by proximity.
+	leaf(functions, Kw(ibQueryKeyword::IsNull) + wxT("(, )"), Kw(ibQueryKeyword::IsNull) + wxT("(, )"));
 
 	const wxTreeItemId operators = group(_("Operators"));
 	// Comparison glyphs are punctuation — the lexer reads them from characters, not a table, so
@@ -380,6 +387,7 @@ wxString ibDialogQueryExpression::GetText() const
 void ibDialogQueryExpression::SetText(const wxString& text)
 {
 	m_text->SetText(text);
+	ibMarkQueryParameters(m_text);
 	m_text->GotoPos(m_text->GetLastPosition());   // the caret lands where the writing continues
 	m_text->SetFocus();
 }

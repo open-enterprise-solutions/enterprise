@@ -13,7 +13,22 @@
 void ibQueryConditionModel::SetContent(ibQuerySelect* select)
 {
 	m_select = select;
-	Reset(static_cast<unsigned int>(Rows().size()));
+	const size_t count = Rows().size();
+	// ⚠ GROWN, NOT REBUILT. `assign` here wiped the switches on every fill — and a fill follows every
+	// edit, including the one that SET a switch, so ticking "Arbitrary" turned itself back off in the
+	// same breath. Whether a row is written by hand is the author's answer and outlives the refill.
+	m_freehand.resize(count, false);
+	Reset(static_cast<unsigned int>(count));
+}
+
+bool ibQueryConditionModel::IsArbitrary(unsigned int row) const
+{
+	// THE OBSERVATION FIRST. A condition that cannot be read as field · comparison · value IS
+	// arbitrary whoever ticks what — the switch can only ever ADD freedom, never take away a shape
+	// the condition does not have.
+	if (!IsSimple(RowAt(row)))
+		return true;
+	return row < m_freehand.size() && m_freehand[row];
 }
 
 std::vector<ibQueryAstExprPtr> ibQueryConditionModel::Rows() const
@@ -46,6 +61,9 @@ void ibQueryConditionModel::SetRows(const std::vector<ibQueryAstExprPtr>& rows)
 	// author looking at a WHERE while the engine ran a HAVING. Same rule, applied where the AST is
 	// actually held, so the text says what the query is.
 	ibQueryMoveAggregateConditionsToHaving(*m_select);
+	// The switch belongs to the ROW, and the rows are these — so the flags follow the list's length.
+	// Growing keeps what was set (an edit does not un-ask for free text); shrinking drops the tail.
+	m_freehand.resize(rows.size(), false);
 	Reset(static_cast<unsigned int>(rows.size()));
 	if (m_onChanged)
 		m_onChanged();
@@ -83,7 +101,7 @@ void ibQueryConditionModel::GetValueByRow(wxVariant& variant, unsigned row, unsi
 		variant = wxString::Format(wxT("%u"), row + 1);
 		break;
 	case kConditionColArbitrary:
-		variant = !IsSimple(condition);
+		variant = IsArbitrary(row);
 		break;
 	case kConditionColText:
 		variant = ibRenderQueryExpr(*condition);
@@ -95,9 +113,34 @@ void ibQueryConditionModel::GetValueByRow(wxVariant& variant, unsigned row, unsi
 
 bool ibQueryConditionModel::SetValueByRow(const wxVariant& variant, unsigned row, unsigned col)
 {
-	// "Arbitrary" is an OBSERVATION about the condition, not a setting on it — ticking it could only
-	// mean "rewrite this into something I cannot decompose", which is not an edit anybody means. The
-	// number is the row's position. Neither is written.
+	// ⭐ "ARBITRARY" SWITCHES THE EDITOR, not the condition. Ticked, the cell beside it is free text
+	// with the "..." into the expression editor; cleared, it is a drop-down of the conditions the
+	// engine can build over this query's fields. The query text is the same either way — which is
+	// what makes it a presentation flag and not a property of the query.
+	//
+	// Clearing it on a condition that CANNOT be read as field · comparison · value is refused rather
+	// than obeyed: obeying could only mean rewriting the author's `CASE …` or `a.x = b.y` into a
+	// shape it does not have. The observation is the answer there, and the box says so by going
+	// straight back on.
+	if (col == kConditionColArbitrary) {
+		const bool wanted = variant.GetBool();
+		if (!wanted && !IsSimple(RowAt(row))) {
+			if (m_onError)
+				m_onError(_("this condition is not a field, a comparison and a value: it can only be written by hand"));
+			return false;
+		}
+		if (row >= m_freehand.size())
+			m_freehand.resize(row + 1, false);
+		m_freehand[row] = wanted;
+		// ⚠ THE ROW REDRAWS; THE WORLD DOES NOT. `m_onChanged` is "the AST changed" — it re-renders the
+		// text and refills every tab, which resets this grid and takes the SELECTION with it. Ticking a
+		// box that changes nothing about the query left nothing selected, so the very next Delete had
+		// no row to work on: "the conditions are broken, I cannot delete".
+		RowChanged(row);
+		return true;
+	}
+
+	// The number is the row's position — read, never written.
 	if (col != kConditionColText)
 		return false;
 

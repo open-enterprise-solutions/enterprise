@@ -92,6 +92,11 @@ namespace queryctor {
 // Body in queryConstructorFill.cpp, beside the collect walk it mirrors.
 void ibQueryRenameSourceReferences(ibQuerySelect& select, const wxString& from, const wxString& to);
 
+// A TABLE IS REMOVED, and everything written against it goes with it — its fields, the conditions
+// that named it, the links that mentioned it. Explicit, because removal is: a path that breaks for
+// any OTHER reason stays where it is and the engine speaks about it.
+void ibQueryDropSourceReferences(ibQuerySelect& select, const wxString& source);
+
 // An aggregate projection is one whose expression IS an aggregate call — the Grouping tab's
 // second list is that subset of the projections, not a list of its own.
 inline bool IsAggregateProjection(const ibQueryProjection& projection)
@@ -223,10 +228,15 @@ class ibExpressionCellRenderer : public ibDataViewCustomRenderer
 public:
 	using Choices = std::function<wxArrayString()>;
 	using Expand  = std::function<bool(wxString& text)>;   // "..." — true when it changed the text
+	// ⭐ IS THIS ROW WRITTEN BY HAND? Asked per row, because "arbitrary" is a switch on the ROW and
+	// not on the column. Null = every row is free, which is what the links and the totals want.
+	using Freeform = std::function<bool()>;
 
-	ibExpressionCellRenderer(Choices choices, Expand expand, ibDataViewCellMode mode)
+	ibExpressionCellRenderer(Choices choices, Expand expand, ibDataViewCellMode mode,
+	                         Freeform freeform = nullptr)
 		: ibDataViewCustomRenderer(wxT("string"), mode, wxALIGN_LEFT)
-		, m_choices(std::move(choices)), m_expand(std::move(expand)) {}
+		, m_choices(std::move(choices)), m_expand(std::move(expand))
+		, m_freeform(std::move(freeform)) {}
 
 	bool HasEditorCtrl() const override { return true; }
 
@@ -235,21 +245,45 @@ public:
 		wxPanel* host = new wxPanel(parent, wxID_ANY, rect.GetTopLeft(), rect.GetSize());
 		wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
 
-		const wxArrayString words = m_choices ? m_choices() : wxArrayString();
-		wxComboBox* combo = new wxComboBox(host, wxID_ANY, value.GetString(),
-			wxDefaultPosition, wxDefaultSize, words);
+		// ⭐ TWO SHAPES, ONE CELL — and the ROW decides which. Free, it is an editable box with the
+		// "..." beside it: the author writes the condition. Not free, it is a CLOSED list of what the
+		// engine can build over this query's fields, and neither typing nor the editor is offered —
+		// because a row that says it is not arbitrary and then lets anything be typed into it is a
+		// switch that does not switch anything.
+		const bool freeform = !m_freeform || m_freeform();
+
+		wxArrayString words = m_choices ? m_choices() : wxArrayString();
+
+		// ⚠⚠ WHAT THE ROW ALREADY HOLDS IS ALWAYS IN THE LIST — the same rule ibRowChoiceRenderer
+		// above states, and leaving it out of this cell is what made conditions disappear.
+		//
+		// A CLOSED list (the switch cleared) cannot show a string that is not one of its entries: the
+		// selection silently fails, the box comes up EMPTY, and closing it writes that empty back. An
+		// empty condition means "delete this row" to the model — so a condition the author never
+		// touched vanished simply because the engine's offer did not happen to contain it word for
+		// word. A cell never loses what it holds.
+		const wxString held = value.GetString();
+		if (!held.IsEmpty() && words.Index(held, false) == wxNOT_FOUND)
+			words.Insert(held, 0);
+
+		wxComboBox* combo = new wxComboBox(host, wxID_ANY, held,
+			wxDefaultPosition, wxDefaultSize, words, freeform ? 0 : wxCB_READONLY);
+		if (!freeform)
+			combo->SetStringSelection(held);   // a read-only box shows its SELECTION, not its text
 		row->Add(combo, 1, wxEXPAND);
 
 		// THE DOOR OUT OF THE LIST, right next to it. Square and narrow: it is a way through, not a
 		// verb of its own.
-		wxButton* more = new wxButton(host, wxID_ANY, wxT("..."), wxDefaultPosition,
-			host->FromDIP(wxSize(24, 20)));
-		more->Bind(wxEVT_BUTTON, [this, combo](wxCommandEvent&) {
-			wxString text = combo->GetValue();
-			if (m_expand && m_expand(text))
-				combo->SetValue(text);
-		});
-		row->Add(more, 0, wxEXPAND);
+		if (freeform) {
+			wxButton* more = new wxButton(host, wxID_ANY, wxT("..."), wxDefaultPosition,
+				host->FromDIP(wxSize(24, 20)));
+			more->Bind(wxEVT_BUTTON, [this, combo](wxCommandEvent&) {
+				wxString text = combo->GetValue();
+				if (m_expand && m_expand(text))
+					combo->SetValue(text);
+			});
+			row->Add(more, 0, wxEXPAND);
+		}
 
 		host->SetSizer(row);
 		host->Layout();
@@ -262,6 +296,12 @@ public:
 			return false;
 		for (wxWindow* child : editor->GetChildren())
 			if (wxComboBox* combo = dynamic_cast<wxComboBox*>(child)) {
+				// ⚠ A CLOSED BOX WITH NOTHING SELECTED WRITES NOTHING. Refusing here is the second
+				// half of the guard above: even if a list somehow arrives without the held value in
+				// it, the cell declines to answer rather than answering "empty" — which downstream
+				// reads as "delete this row". Losing work must not be reachable by accident.
+				if (combo->HasFlag(wxCB_READONLY) && combo->GetSelection() == wxNOT_FOUND)
+					return false;
 				value = combo->GetValue();
 				return true;
 			}
@@ -282,6 +322,7 @@ public:
 private:
 	Choices  m_choices;
 	Expand   m_expand;
+	Freeform m_freeform;
 	wxString m_text;
 };
 

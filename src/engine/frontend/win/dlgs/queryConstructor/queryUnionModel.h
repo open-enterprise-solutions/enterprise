@@ -49,6 +49,7 @@ public:
 
 	void GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const override;
 	bool SetValueByRow(const wxVariant& variant, unsigned row, unsigned col) override;
+
 	bool IsEnabledByRow(unsigned row, unsigned col) const override;
 
 private:
@@ -73,20 +74,44 @@ public:
 	// The field NAME is the alias — writing it names the field of the RESULT.
 	bool SetValueByRow(const wxVariant& variant, unsigned row, unsigned col) override;
 
+	// THE PICTURE FOR A ROW, answered by the host (which can reach the model that reaches the
+	// column). The union's rows are output FIELDS; drawing them without the picture every other
+	// field list shows made the same thing look like two different things in two tabs.
+	void SetIconReader(std::function<wxIcon(unsigned int row)> reader) { m_iconReader = std::move(reader); }
+
 	void SetOnChanged(std::function<void()> onChanged) { m_onChanged = std::move(onChanged); }
 	// WHY A RENAME WAS REFUSED, said AT THE MOMENT it is refused. A cell that silently keeps its old
 	// text teaches nothing — the author retypes the same thing and gets the same nothing.
 	void SetOnError(std::function<void(const wxString&)> onError) { m_onError = std::move(onError); }
 
+	// ⭐ WHICH BRANCH A COLUMN IS, and the branch itself. Column 0 is the alias; column N + 1 is
+	// branch N, where branch 0 is THIS query and the rest are the unions.
+	ibQuerySelect* BranchSelectAt(unsigned int branch) const;
+
+	// The fields that branch could supply — asked of the host, which is the only one that can reach
+	// the metadata. Used to fill the branch cells' drop-downs: a union is LINED UP by hand here.
+	using BranchFields = std::function<wxArrayString(unsigned int branch)>;
+	void SetBranchFields(BranchFields fields) { m_branchFields = std::move(fields); }
+	wxArrayString FieldsOfBranch(unsigned int branch) const {
+		return m_branchFields ? m_branchFields(branch) : wxArrayString();
+	}
+
 private:
 	std::function<void()> m_onChanged;
 	std::function<void(const wxString&)> m_onError;
+	std::function<wxIcon(unsigned int)>  m_iconReader;   // the row's own picture, asked of the host
 	// What a branch offers under `name`, as the text a reader recognises, or empty when it has none.
 	wxString ColumnOf(const ibQuerySelect& branch, const wxString& name) const;
+	// Point a branch at one of its own fields for this output row; empty UNLINES the field it held —
+	// the field keeps its expression and moves to a row of its own rather than being destroyed.
+	bool SetBranchColumn(unsigned int row, unsigned int branch, const wxString& field);
+	// The wanted name if no branch is using it, else the same with a number — `Code`, `Code1`, …
+	wxString FreeOutputName(const wxString& wanted) const;
 
 	ibQuerySelect*        m_select = nullptr;
 	std::vector<wxString> m_names;
 	unsigned int          m_branchCount = 0;
+	BranchFields          m_branchFields;
 };
 
 #endif // __QUERY_UNION_MODEL_H__

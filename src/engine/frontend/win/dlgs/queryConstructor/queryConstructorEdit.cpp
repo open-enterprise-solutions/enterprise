@@ -91,8 +91,11 @@ void ibDialogQueryConstructor::ShowBranchStrip()
 	// A STRIP IS FOR MOVING BETWEEN THINGS, so each hides where its things are being CONFIGURED
 	// instead — the branches on Unions, the statements on Query batch — and where there is only one
 	// of them to move between.
+	// ⚠ AND TOTALS ARE NOT PER BRANCH. They are taken over the WHOLE union — every branch collapsed
+	// into one relation — so there is no such thing as "the totals of branch 2", and a strip offering
+	// to switch to it says there is. The tab is about the result; the result has no branches.
 	const bool showBranches = m_branchStrip->GetPageCount() > 1
-		&& tab != _("Unions / Aliases") && tab != _("Query batch");
+		&& tab != _("Unions / Aliases") && tab != _("Query batch") && tab != _("Totals");
 	const bool showBatch = m_batchStrip != nullptr && m_batchStrip->GetPageCount() > 1
 		&& tab != _("Query batch");
 
@@ -306,6 +309,487 @@ void ibDialogQueryConstructor::OnMoveStatement(int delta)
 
 // THE SAME VERBS AS THE TOOLBAR, on the thing itself. A rename is reached ON the table, and the
 // menu item raises the tree's own label editor — one renaming mechanism, not a dialog beside it.
+// ===========================================================================
+//  Virtual-table parameters
+// ===========================================================================
+
+// THE WINDOW A VIRTUAL TABLE OPENS. One row per declared parameter, in the order the source
+// declared them — because that order IS the call: `Balance(<moment>, <condition>)`.
+//
+// It knows no parameter by name and no table by kind. It asks the source what it takes
+// (DescribeParameters), lays out that many rows, and hands each one an editor chosen by the
+// parameter's KIND: a value is typed (a scalar settled before the query runs — a parameter, a
+// literal, a computation over them), a condition opens the ordinary expression editor over the
+// fields THAT SOURCE admits in a condition. Add a parameter to a source tomorrow and a row appears
+// here with nothing edited in this file.
+class ibDialogVirtualTableParameters : public wxDialog
+{
+public:
+	ibDialogVirtualTableParameters(wxWindow* parent,
+	                               const std::vector<ibQuerySourceParameter>& parameters,
+	                               const std::vector<ibQueryAstExprPtr>& current,
+	                               const std::vector<ibQueryConstructorField>& conditionFields,
+	                               const ibMetaData* metaData, bool readOnly)
+		: wxDialog(parent, wxID_ANY, _("Virtual table parameters"), wxDefaultPosition, wxDefaultSize,
+		           wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
+		, m_parameters(parameters), m_conditionFields(conditionFields)
+		, m_metaData(metaData), m_readOnly(readOnly)
+	{
+		wxBoxSizer* root = new wxBoxSizer(wxVERTICAL);
+		wxFlexGridSizer* rows = new wxFlexGridSizer(3, FromDIP(4), FromDIP(6));
+		rows->AddGrowableCol(1, 1);
+		// ⚠ AND THE CONDITION ROWS GROW WITH THE WINDOW. Without this the dialog stretches and the
+		// code pane stays the size it was born, leaving a field one can barely write in above a
+		// growing patch of nothing. Collected while the rows are built and declared after, because
+		// a row cannot be made growable before it exists.
+		std::vector<size_t> growable;
+
+		for (size_t i = 0; i < m_parameters.size(); ++i) {
+			const ibQuerySourceParameter& parameter = m_parameters[i];
+
+			rows->Add(new wxStaticText(this, wxID_ANY, parameter.m_name + wxT(":")), 0,
+				parameter.m_condition ? wxALIGN_TOP | wxTOP : wxALIGN_CENTER_VERTICAL, FromDIP(4));
+
+			const wxString written =
+				i < current.size() && current[i] ? ibRenderQueryExpr(*current[i]) : wxString();
+
+			Row row;
+			if (parameter.m_condition) {
+				// A CONDITION IS CODE, so it gets the pane every other piece of query text in this
+				// window gets: keywords coloured, parameters marked, several lines to write on.
+				// `Warehouse = &Store AND Item = &Item` in a one-line plain box reads as a string
+				// rather than as language, and nothing tells the author that `&Store` is a value
+				// arriving from outside.
+				row.m_code = new wxStyledTextCtrl(this, wxID_ANY, wxDefaultPosition,
+					wxSize(FromDIP(360), FromDIP(90)));
+				ibStyleQueryText(row.m_code);
+				row.m_code->SetText(written);
+				ibMarkQueryParameters(row.m_code);
+				row.m_code->SetReadOnly(m_readOnly);
+				rows->Add(row.m_code, 1, wxEXPAND);
+				growable.push_back(i);
+			}
+			else if (!parameter.m_choices.empty()) {
+				// ⭐⭐ A CLOSED SET IS A LIST, NOT A LINE TO TYPE INTO. The periodicity a turnover rolls
+				// up to is one of a dozen words the SOURCE declares; there is nothing to write here
+				// that is not in that list, and a free box invited exactly the typo the engine would
+				// then refuse. The list comes from `DescribeParameters` — the source's own vocabulary,
+				// not a second copy kept in this window.
+				//
+				// AND THE FIRST ENTRY IS WHAT HAPPENS WHEN NOTHING IS CHOSEN. Left out, the source
+				// uses its default; showing it spelled out is the difference between an empty box a
+				// person has to know the meaning of and one that says what it will do.
+				// ⚠ NOT SET IS SHOWN AS NOTHING. An entry reading "<not set: Period>" is the window
+				// narrating its own state back at the author — the box is empty, that IS the message,
+				// and the default is the SOURCE's business until somebody overrides it.
+				wxArrayString words;
+				words.Add(wxEmptyString);
+				for (const wxString& choice : parameter.m_choices)
+					words.Add(choice);
+
+				row.m_choice = new wxChoice(this, wxID_ANY, wxDefaultPosition,
+					wxSize(FromDIP(360), -1), words);
+				row.m_choice->Enable(!m_readOnly);
+				// What the call already carries — a quoted word, so it is a value the language can
+				// write and the source can read. Unquoted for the list.
+				wxString current = written;
+				current.Replace(wxT("\""), wxEmptyString);
+				current.Trim(true).Trim(false);
+				if (current.IsEmpty() || !row.m_choice->SetStringSelection(current))
+					row.m_choice->SetSelection(0);
+				rows->Add(row.m_choice, 1, wxEXPAND);
+			}
+			else {
+				// ⭐ THE SAME EDITOR, ONE LINE HIGH. A moment is one expression, but it is the SAME
+				// language as the condition beside it — `&Period`, `BegOfMonth(&Date)` — and it was
+				// the only box in this window written in the dialog font, with no colour and no mark
+				// on the `&`. Beside a coloured code pane it read as something else entirely: an
+				// orphan, a plain string field that had wandered in.
+				//
+				// One kind of editor, two heights. What differs between a value and a condition is
+				// how much room it needs and whether the "..." is offered, not what it IS.
+				row.m_code = new wxStyledTextCtrl(this, wxID_ANY, wxDefaultPosition,
+					wxSize(FromDIP(360), FromDIP(24)));
+				ibStyleQueryText(row.m_code);
+				// …AND NO LINE NUMBER ON ONE LINE. The margin earns its room where the engine can
+				// point at a line; over a single expression it is a column of "1" and nothing else.
+				row.m_code->SetMarginWidth(0, 0);
+				row.m_code->SetUseHorizontalScrollBar(false);
+				row.m_code->SetText(written);
+				ibMarkQueryParameters(row.m_code);
+				row.m_code->SetReadOnly(m_readOnly);
+				rows->Add(row.m_code, 1, wxEXPAND);
+			}
+			m_boxes.push_back(row);
+
+			// ⚠ THE BUTTON BELONGS TO A CONDITION ONLY. A value is one line and typing it is the
+			// shortest path; a condition is an expression over fields, and sending somebody to type
+			// it blind — when the editor with those very fields exists — is how a window gets a
+			// reputation. A value row keeps the column so the boxes line up.
+			if (parameter.m_condition && !m_readOnly) {
+				wxButton* open = new wxButton(this, wxID_ANY, wxT("..."),
+					wxDefaultPosition, wxSize(FromDIP(28), -1));
+				open->Bind(wxEVT_BUTTON, [this, row](wxCommandEvent&) { EditCondition(row); });
+				rows->Add(open, 0);
+			}
+			else {
+				rows->AddSpacer(0);
+			}
+		}
+
+		for (size_t rowIndex : growable)
+			rows->AddGrowableRow(static_cast<int>(rowIndex), 1);
+
+		root->Add(rows, 1, wxEXPAND | wxALL, FromDIP(8));
+		root->Add(CreateStdDialogButtonSizer(m_readOnly ? wxCANCEL : (wxOK | wxCANCEL)), 0,
+			wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, FromDIP(8));
+		SetSizerAndFit(root);
+		SetMinSize(GetSize());   // fitted size is the FLOOR: shrinking below it hides the buttons
+	}
+
+	// THE ARGUMENTS AS EXPRESSIONS, in declaration order. An empty box means "not given" and travels
+	// as a null — the source then reads its own default, exactly as it does for a call written by
+	// hand with fewer arguments.
+	//
+	// ⚠ PARSED BY THE ENGINE, and a refusal is the engine's sentence shown as it is. The window has
+	// no opinion about what a valid expression is; there is one parser and it already answers.
+	bool TakeArguments(std::vector<ibQueryAstExprPtr>& out, wxString& error) const
+	{
+		out.clear();
+		for (const Row& row : m_boxes) {
+			wxString text = row.Text();
+			text.Trim(true).Trim(false);
+			if (text.IsEmpty()) {
+				out.push_back(nullptr);
+				continue;
+			}
+			try {
+				ibQueryParser parser;
+				out.push_back(parser.ParseExpression(text));
+			}
+			catch (const ibBackendException& e) {
+				error = e.GetErrorDescription();
+				return false;
+			}
+		}
+		// ⚠ POSITIONS ARE KEPT, INCLUDING EMPTY ONES IN THE MIDDLE — the source reads its arguments
+		// by position, so dropping an empty moment would hand the condition to the moment's slot.
+		// Only a tail of nothing goes: `Balance(&Period)` and `Balance(&Period, )` mean the same,
+		// and the shorter one is what a person would write.
+		while (!out.empty() && !out.back())
+			out.pop_back();
+		return true;
+	}
+
+private:
+	// ONE ROW'S EDITOR. Every row is the same control — the query text's own pane — because every
+	// row holds the same language; a value gets one line of it and a condition several.
+	struct Row
+	{
+		wxStyledTextCtrl* m_code   = nullptr;
+		wxChoice*         m_choice = nullptr;   // a closed set of values (the source declared one)
+
+		wxString Text() const {
+			if (m_choice != nullptr) {
+				// ENTRY 0 IS "not set" — the argument is left out and the source uses its default.
+				//
+				// ⚠ AND THE WORD GOES IN BARE, not quoted. `Turnovers(, , Hour, )` is how this call
+				// reads everywhere; a quoted `"Hour"` is a string, and the query text usually lives
+				// inside a script string literal, where every quote doubles — so it reached the
+				// module as `""Hour""`. A member of a closed set is a NAME, and names are written
+				// without quotes.
+				const int picked = m_choice->GetSelection();
+				return picked <= 0 ? wxString() : m_choice->GetString(picked);
+			}
+			return m_code != nullptr ? m_code->GetText() : wxString();
+		}
+		void SetText(const wxString& text) const {
+			if (m_code != nullptr) { m_code->SetText(text); ibMarkQueryParameters(m_code); }
+		}
+	};
+
+	void EditCondition(const Row& row)
+	{
+		ibQueryAstExprPtr existing;
+		wxString text = row.Text();
+		text.Trim(true).Trim(false);
+		if (!text.IsEmpty()) {
+			try { ibQueryParser parser; existing = parser.ParseExpression(text); }
+			catch (const ibBackendException&) { existing = nullptr; }   // unparsable so far: start from the text
+		}
+
+		ibDialogQueryExpression dialog(this, _("Condition"), m_conditionFields, existing,
+			m_metaData, m_readOnly);
+		if (existing == nullptr && !text.IsEmpty())
+			dialog.SetText(text);
+		if (dialog.ShowModal() == wxID_OK)
+			row.SetText(dialog.GetText());
+	}
+
+	std::vector<ibQuerySourceParameter>  m_parameters;
+	std::vector<ibQueryConstructorField> m_conditionFields;
+	std::vector<Row>                     m_boxes;
+	const ibMetaData*                    m_metaData = nullptr;
+	bool                                 m_readOnly = false;
+};
+
+// THE TABLE THE CURSOR STANDS ON, or null. Reading the selection is three checks that every verb
+// over the table pane repeats; naming them once is the difference between a verb and a ritual.
+ibQuerySource* ibDialogQueryConstructor::SelectedSource() const
+{
+	if (m_tables == nullptr)
+		return nullptr;
+	const wxTreeItemId item = m_tables->GetSelection();
+	if (!item.IsOk())
+		return nullptr;
+	const ibQueryTreeNode* node = dynamic_cast<ibQueryTreeNode*>(m_tables->GetItemData(item));
+	if (node == nullptr || node->m_sourceIndex < 0 || !node->m_field.IsEmpty())
+		return nullptr;   // a FIELD row is not a table
+
+	const std::vector<ibQuerySource*> sources = CurrentSources();
+	return static_cast<size_t>(node->m_sourceIndex) < sources.size()
+		? sources[static_cast<size_t>(node->m_sourceIndex)] : nullptr;
+}
+
+// THE READY CONDITIONS — every field of the query compared to a parameter of its own name, which is
+// what a condition is nine times out of ten and what the tab already generates when a field is
+// added. Offered as a LIST so the tenth time can be typed or written in the editor instead.
+wxArrayString ibDialogQueryConstructor::ConditionChoices() const
+{
+	wxArrayString out;
+	// ⚠ THE EMPTY ENTRY IS THE WAY OUT. An empty condition DELETES the row (the model says so), and
+	// with the switch cleared the cell is a closed list — so without a blank in it there was no way
+	// to clear a condition at all: the text could not be selected and erased, and the list had
+	// nothing that meant "none". Deleting from the toolbar still works; this is the same verb where
+	// the hand already is.
+	out.Add(wxEmptyString);
+	for (const ibQueryConstructorField& field : AvailableFields()) {
+		wxString parameter = field.m_name;
+		parameter.Replace(wxT("."), wxEmptyString);   // `Catalog1.Code` -> &Catalog1Code
+		out.Add(field.m_name + wxT(" = &") + parameter);
+	}
+	return out;
+}
+
+// THE "..." — the expression editor over the query's fields, opened on what the cell holds. Same
+// door as the links' condition and the virtual table's, so a condition is written one way here.
+bool ibDialogQueryConstructor::EditConditionText(wxString& text)
+{
+	ibQueryAstExprPtr existing;
+	wxString written = text;
+	written.Trim(true).Trim(false);
+	if (!written.IsEmpty()) {
+		try { ibQueryParser parser; existing = parser.ParseExpression(written); }
+		catch (const ibBackendException&) { existing = nullptr; }
+	}
+
+	ibDialogQueryExpression dialog(this, _("Condition"), AvailableFields(), existing,
+		m_metaData, !CanEdit());
+	if (existing == nullptr && !written.IsEmpty())
+		dialog.SetText(written);
+	if (dialog.ShowModal() != wxID_OK)
+		return false;
+
+	text = dialog.GetText();
+	return true;
+}
+
+// ADD A LINK BY HAND — the verb this tab did not have. A link used to exist only as a side effect
+// of adding a table, so two things were unreachable: joining a table already in the query, and
+// writing a SECOND condition between the same pair (which the engine now accepts — an ON is split
+// by AND, the first comparison being the key).
+//
+// The new row joins the last table in the query and starts with NO condition, which in this
+// language means "join by the reference between them" — a definition, not a hole. Filling it in is
+// the row's own business, and the cell now has both the list and the "..." to do it with.
+void ibDialogQueryConstructor::OnAddLink(wxCommandEvent&)
+{
+	if (!CanEdit())
+		return;
+
+	ibQuerySelect* select = Current();
+	if (select == nullptr)
+		return;
+
+	// ⚠⚠ THIS VERB ADDS A LINK. IT DOES NOT ADD A TABLE.
+	//
+	// It used to append a join — and a join IS a table in this AST, so "add link" quietly duplicated
+	// the last source under a fresh alias. That is what put a second copy of a table in the query
+	// nobody asked for, and it is also what crashed: two bindings over one virtual-table descriptor,
+	// whose companion the second resolve destroyed under the first (fixed in queryableFactory.h, but
+	// the duplicate had no business existing either).
+	//
+	// A link is written ON a table the query already reads. So: find one that carries none, and open
+	// a row on it. The tables themselves are the Tables tab's business, start to finish.
+	if (m_linkModel == nullptr)
+		return;
+
+	const size_t target = m_linkModel->FirstUnlinked();
+	if (target == static_cast<size_t>(-1)) {
+		wxMessageBox(select->m_joins.empty()
+			? _("Add a second table first: a link is written between two tables the query reads.")
+			: _("Every table of this query already carries a link."),
+			GetTitle(), wxOK | wxICON_INFORMATION, this);
+		return;
+	}
+
+	m_linkModel->BeginLink(target);
+	FillAll();
+}
+
+// THE TABLES A LINK ROW MAY NAME — the sources the query actually reads, and nothing else. Minus
+// the one standing on the other side of the same row: a table linked to itself is not a link.
+//
+// ⚠ THIS IS THE SHALLOW HALF of the question. Whether two particular tables CAN be joined — a
+// virtual table with no explicit condition, a shape the multi-source path does not carry — is the
+// ENGINE's knowledge, not the grid's, and today it is only told at execution time ("this
+// multi-source shape is a follow-up"). Offering a pair the engine will refuse is exactly the kind
+// of promise this window should not make; the honest fix is a door on the lowering that answers
+// "can these two be joined", asked here. Until then the list stays truthful about what it knows.
+wxArrayString ibDialogQueryConstructor::LinkTableChoices(bool leftSide) const
+{
+	wxArrayString out;
+	const ibQuerySelect* select = Current();
+	if (select == nullptr || m_links == nullptr || m_linkModel == nullptr)
+		return out;
+
+	// THE ROW IS A LINK; the table it is written on is its join. (A row is no longer a join index —
+	// the grid lists links, not tables.)
+	const size_t join = m_linkModel->JoinIndexOf(m_linkModel->GetRow(m_links->GetSelection()));
+	const wxString other = join < select->m_joins.size()
+		? (leftSide ? ibQuerySourceName(select->m_joins[join].m_source)
+		            : ibQuerySourceName(select->m_from))
+		: wxString();
+
+	for (const ibQuerySource* source : CurrentSources()) {
+		if (source == nullptr)
+			continue;
+		const wxString name = ibQuerySourceName(*source);
+		if (name.IsEmpty() || name.IsSameAs(other, false))
+			continue;
+		out.Add(name);
+	}
+	return out;
+}
+
+// THE READY LINKS for the selected join — the shapes worth one click. Left empty on purpose when
+// nothing obvious offers itself: a list of guesses is worse than none, and the "..." is right there.
+wxArrayString ibDialogQueryConstructor::LinkConditionChoices() const
+{
+	wxArrayString out;
+	const ibQuerySelect* select = Current();
+	if (select == nullptr || m_links == nullptr)
+		return out;
+
+	// The row is asked the way every other verb over this grid asks it — through the model, which is
+	// what turns a selected ITEM into an index.
+	const size_t row = m_linkModel->JoinIndexOf(m_linkModel->GetRow(m_links->GetSelection()));
+	if (row >= select->m_joins.size())
+		return out;
+
+	// NOT SET is the first entry, and it is a real answer — a table can sit in a query with no link
+	// on it at all. Picking it clears the condition; it does not remove the table.
+	out.Add(wxEmptyString);
+
+	const wxString left  = ibQuerySourceName(select->m_from);
+	const wxString right = ibQuerySourceName(select->m_joins[row].m_source);
+	if (left.IsEmpty() || right.IsEmpty())
+		return out;
+
+	const std::vector<ibQueryConstructorField> leftFields =
+		m_model.GetFields(select->m_from, m_package, m_statement);
+	const std::vector<ibQueryConstructorField> rightFields =
+		m_model.GetFields(select->m_joins[row].m_source, m_package, m_statement);
+
+	// ⭐ EVERY PAIR THAT CAN STAND ON EITHER SIDE OF `=`, AND THE ENGINE DECIDES WHICH THOSE ARE.
+	//
+	// The list used to hold only pairs with the SAME NAME, which is a guess dressed as a rule: the
+	// link people actually write is `Catalog1.Reference = Register.Dimension1`, and no same-name test
+	// will ever offer it. So the fields are crossed and the pair is kept when their TYPE DESCRIPTIONS
+	// meet — the engine's own answer to "can these two be compared", asked of the type each field
+	// carries. A field whose type is unknown is not filtered out: not knowing is not the same as no.
+	//
+	// SAME-NAMED PAIRS COME FIRST because they are right more often than not, and a drop-down is read
+	// from the top.
+	const auto typesMeet = [](const ibTypeDescription& a, const ibTypeDescription& b) {
+		if (!a.IsOk() || !b.IsOk())
+			return true;   // unknown on either side — do not pretend to know better than the engine
+		for (unsigned int i = 0; i < a.GetClsidCount(); ++i)
+			if (b.ContainType(a.GetByIdx(i)))
+				return true;
+		return false;
+	};
+
+	wxArrayString rest;
+	for (const ibQueryConstructorField& l : leftFields)
+		for (const ibQueryConstructorField& r : rightFields) {
+			if (!typesMeet(l.m_type, r.m_type))
+				continue;
+			const wxString pair = left + wxT(".") + l.m_name + wxT(" = ") + right + wxT(".") + r.m_name;
+			if (l.m_name.IsSameAs(r.m_name, false))
+				out.Add(pair);
+			else
+				rest.Add(pair);
+		}
+	WX_APPEND_ARRAY(out, rest);
+	return out;
+}
+
+// THE "..." — the ordinary expression editor, over BOTH tables' fields, because a link is a sentence
+// about two tables and writing one with only half the vocabulary is the reason people gave up on
+// this cell and went to the text.
+bool ibDialogQueryConstructor::EditLinkCondition(wxString& text)
+{
+	const ibQuerySelect* select = Current();
+	if (select == nullptr)
+		return false;
+
+	ibQueryAstExprPtr existing;
+	wxString written = text;
+	written.Trim(true).Trim(false);
+	if (!written.IsEmpty()) {
+		try { ibQueryParser parser; existing = parser.ParseExpression(written); }
+		catch (const ibBackendException&) { existing = nullptr; }
+	}
+
+	ibDialogQueryExpression dialog(this, _("Link condition"), AvailableFields(), existing,
+		m_metaData, !CanEdit());
+	if (existing == nullptr && !written.IsEmpty())
+		dialog.SetText(written);
+	if (dialog.ShowModal() != wxID_OK)
+		return false;
+
+	text = dialog.GetText();
+	return true;
+}
+
+void ibDialogQueryConstructor::OnTableParameters(wxCommandEvent&)
+{
+	ibQuerySource* source = SelectedSource();
+	if (source == nullptr)
+		return;
+
+	const std::vector<ibQuerySourceParameter> parameters = m_model.GetSourceParameters(*source);
+	if (parameters.empty())
+		return;   // an ordinary table takes none — the menu item is not offered for one
+
+	ibDialogVirtualTableParameters dialog(this, parameters, source->m_args,
+		m_model.GetConditionFields(*source), m_metaData, !CanEdit());
+
+	if (dialog.ShowModal() != wxID_OK)
+		return;
+
+	std::vector<ibQueryAstExprPtr> arguments;
+	wxString error;
+	if (!dialog.TakeArguments(arguments, error)) {
+		wxMessageBox(error, _("Query"), wxOK | wxICON_ERROR, this);
+		return;
+	}
+
+	source->m_args = std::move(arguments);
+	FillAll();   // the text rebuilds itself — the renderer has always written the argument list
+}
+
 void ibDialogQueryConstructor::OnTableContextMenu(wxTreeEvent& event)
 {
 	if (!CanEdit())
@@ -318,10 +802,20 @@ void ibDialogQueryConstructor::OnTableContextMenu(wxTreeEvent& event)
 	const ibQueryTreeNode* node = dynamic_cast<ibQueryTreeNode*>(m_tables->GetItemData(item));
 	const bool isTable = node != nullptr && node->m_sourceIndex >= 0 && node->m_field.IsEmpty();
 
-	enum { kAdd = wxID_HIGHEST + 1, kRename, kNested, kRemove };
+	// THE ITEM APPEARS ONLY WHERE THERE IS SOMETHING TO SET. A virtual table declares its
+	// parameters; an ordinary one declares none, and a greyed-out "parameters" on every table
+	// would teach people that the word means nothing here.
+	const ibQuerySource* source = isTable ? SelectedSource() : nullptr;
+	const bool hasParameters = source != nullptr && !m_model.GetSourceParameters(*source).empty();
+
+	enum { kAdd = wxID_HIGHEST + 1, kRename, kNested, kRemove, kParameters };
 	wxMenu menu;
 	menu.Append(kAdd, _("Add table"));
 	menu.Append(kNested, _("Nested table"));
+	if (hasParameters) {
+		menu.AppendSeparator();
+		menu.Append(kParameters, _("Virtual table parameters..."));
+	}
 	menu.AppendSeparator();
 	menu.Append(kRename, _("Rename table..."))->Enable(isTable);
 	menu.Append(kRemove, _("Delete"))->Enable(isTable);
@@ -331,6 +825,7 @@ void ibDialogQueryConstructor::OnTableContextMenu(wxTreeEvent& event)
 		case kAdd:    { wxCommandEvent unused; OnAddTable(unused); break; }
 		case kNested: { wxCommandEvent unused; OnAddNestedTable(unused); break; }
 		case kRemove: { wxCommandEvent unused; OnRemoveTable(unused); break; }
+		case kParameters: { wxCommandEvent unused; OnTableParameters(unused); break; }
 		case kRename: if (item.IsOk()) m_tables->EditLabel(item); break;
 		default: break;
 		}
@@ -466,10 +961,22 @@ void ibDialogQueryConstructor::AddTableSources(const std::vector<std::vector<wxS
 		// path says where it came from; the alias is what the rest of the query calls it, and every
 		// qualified field is written against it. Generating it means the text reads the way it will
 		// be read, and a second copy of the same table is numbered instead of clashing.
-		source.m_alias = ibQueryUniqueSourceAlias(*select, path.empty() ? wxString() : path.back(), nullptr);
+		// ⚠ A VIRTUAL TABLE CARRIES THE NAME OF WHAT IT IS A VIEW OF. The last segment alone gave
+		// `Turnovers`, `SliceLast`, `Balance` — and with two registers in one query, two tables both
+		// called `Turnovers`, so neither the reader nor the numbering could say WHOSE. The kind is
+		// dropped (it is the catalogue's business, not the query's) and the object's own name is kept:
+		// `AccumulationRegister1Turnovers`, `InformationRegister1SliceLast`.
+		//
+		// A plain table is untouched — `Catalog.Catalog1` is two segments and its name IS the last one.
+		wxString name = path.empty() ? wxString() : path.back();
+		if (path.size() >= 3)
+			name = path[path.size() - 2] + path.back();
+		source.m_alias = ibQueryUniqueSourceAlias(*select, name, nullptr);
 
-		// The FIRST table is the FROM; every one after it is a join whose ON is left empty, which
-		// means "follow the reference between them" — not a cross join.
+		// The FIRST table is the FROM; every one after it is a join with NO CONDITION — because a table
+		// just added has no link, and no link is a complete state: the tables are multiplied, and what
+		// narrows them is a condition. A link is written on the Links tab, by hand, and nothing here
+		// writes one on the author's behalf.
 		if (select->m_from.m_name.empty() && !select->m_from.m_subquery) {
 			select->m_from = source;
 		}
@@ -526,7 +1033,7 @@ void ibDialogQueryConstructor::OnAddNestedTable(wxCommandEvent&)
 		ibQueryAstJoin join;
 		join.m_source = source;
 		join.m_kind = ibQueryJoinKindAst::Inner;
-		select->m_joins.push_back(join);
+		select->m_joins.push_back(join);   // no link yet — see the note in AddTablesToQuery
 	}
 	FillAll();
 }
@@ -573,6 +1080,13 @@ void ibDialogQueryConstructor::OnRemoveTable(wxCommandEvent&)
 	if (node == nullptr || node->m_sourceIndex < 0)
 		return;
 
+	// THE NAME IT WAS KNOWN BY, read BEFORE it is erased — everything written against this table is
+	// written against that name.
+	const std::vector<ibQuerySource*> sources = CurrentSources();
+	const wxString departing = static_cast<size_t>(node->m_sourceIndex) < sources.size()
+		&& sources[static_cast<size_t>(node->m_sourceIndex)] != nullptr
+		? ibQuerySourceName(*sources[static_cast<size_t>(node->m_sourceIndex)]) : wxString();
+
 	if (node->m_sourceIndex == 0) {
 		// Removing the FROM promotes the first join into its place — a query with joins but no
 		// primary source is not a query, and silently keeping one would produce text nothing reads.
@@ -590,15 +1104,19 @@ void ibDialogQueryConstructor::OnRemoveTable(wxCommandEvent&)
 			select->m_joins.erase(select->m_joins.begin() + static_cast<long>(index));
 	}
 
-	// ⚠ NOTHING IS CHASED DOWN AND DELETED HERE, deliberately. Removing the table BREAKS the paths
-	// that led through it — that is simply what removal is — and the pass that recomputes what the
-	// query HAS (ibQueryLowering::PruneUnresolved, run on every refill) then does not reach them,
-	// so they are not shown and not written. The cascade falls out of resolution instead of being
-	// re-implemented per verb.
+	// ⭐ AND EVERYTHING WRITTEN AGAINST IT GOES WITH IT — its fields, the conditions that named it,
+	// the links that mentioned it.
 	//
-	// The difference matters: a path can break for reasons this verb never sees — an attribute
-	// renamed in the configuration, a metaobject deleted, a temp table no longer made. One rule
-	// driven by RESOLUTION covers all of them; a cleanup hung off the delete button covers one.
+	// ⚠ THIS USED TO BE LEFT TO RESOLUTION, and the note here said so: a broken path is simply not
+	// resolved, so it is neither shown nor written. That was true while a prune ran on every refill.
+	// It does not run any more — what fails to resolve now STAYS and the engine speaks about it,
+	// which is right for a renamed attribute and wrong for a table the author has just deleted. The
+	// query was left naming a source that is not in it, and the verdict line complained about an
+	// attribute whose table the author had removed on purpose.
+	//
+	// The two rules are different and both are wanted: REMOVAL cascades (it was asked for), and
+	// anything that breaks for its own reasons is reported, not tidied away.
+	ibQueryDropSourceReferences(*select, departing);
 	FillAll();
 }
 
@@ -875,6 +1393,22 @@ void ibDialogQueryConstructor::OnEditLink(wxCommandEvent&)
 	EditJoinAt(static_cast<size_t>(row));
 }
 
+void ibDialogQueryConstructor::OnCopyLink(wxCommandEvent&)
+{
+	if (!CanEdit() || m_linkModel == nullptr || m_links == nullptr)
+		return;
+
+	// The model does the copying — it is the one that knows which table has no link yet. What it
+	// cannot do is TELL somebody, so the two ways this can come to nothing are answered here.
+	if (m_linkModel->CopyLink(m_linkModel->GetRow(m_links->GetSelection()))) {
+		FillAll();
+		return;
+	}
+	wxMessageBox(_("Select a link to copy. It lands on the first table that has none: "
+	               "if every table already carries one, there is nowhere to put it."),
+		GetTitle(), wxOK | wxICON_INFORMATION, this);
+}
+
 void ibDialogQueryConstructor::OnRemoveLink(wxCommandEvent&)
 {
 	if (!CanEdit())
@@ -883,13 +1417,11 @@ void ibDialogQueryConstructor::OnRemoveLink(wxCommandEvent&)
 	ibQuerySelect* select = Current();
 	if (select == nullptr || m_linkModel == nullptr || m_links == nullptr)
 		return;
-	const long row = static_cast<long>(m_linkModel->GetRow(m_links->GetSelection()));
-	if (row < 0 || static_cast<size_t>(row) >= select->m_joins.size())
-		return;
-	// Deleting a link deletes the TABLE it joined: a joined table with no join is not a thing the
-	// query can express, and leaving one behind would be leaving the query in a state its own text
-	// cannot describe.
-	select->m_joins.erase(select->m_joins.begin() + row);
+	// ⭐ A LINK IS A CONDITION, NOT THE TABLE. Deleting it takes the ROW away and leaves the table in
+	// the query — two tables with no link between them is an ordinary thing to write. This verb used
+	// to erase the join ENTRY, which took the table with it, so removing a link the author had merely
+	// got wrong silently removed a table they had chosen, and every field of it along with it.
+	m_linkModel->RemoveLink(m_linkModel->GetRow(m_links->GetSelection()));
 	FillAll();
 }
 
@@ -976,23 +1508,78 @@ void ibDialogQueryConstructor::OnAddAggregate(wxCommandEvent&)
 	if (select == nullptr)
 		return;
 
-	// THE SAME EDITOR, seeded with the call. An aggregate is an expression; the palette already
-	// holds SUM/COUNT/MIN/MAX/AVG from the keyword table, and the alias is set where every other
-	// projection sets one — the Fields tab, because an aggregate IS a projection.
-	ibDialogQueryExpression dialog(this, _("Aggregate field"), AvailableFields(), nullptr,
-		m_metaData, m_readOnly);
-	dialog.SetText(SeededAggregate(SelectedFieldOf(m_groupingSource)));
-	if (dialog.ShowModal() != wxID_OK)
+	// ⭐ THE CHEAP GESTURE STAYS CHEAP — the same rule the conditions already follow. Moving a field
+	// into the aggregates means "fold this", and the fold is CHOSEN from what the field's type can be
+	// folded by, not written in a modal. The window that opened here made the ordinary act — sum this
+	// column — cost a dialog, an expression to read, and an OK, for a call the grid can offer whole.
+	//
+	// The Function cell beside the row is where it is changed afterwards, out of the very same list
+	// (the engine's AggregatesFor), so nothing is decided here that cannot be undecided in one click.
+	const std::vector<wxString> fields = SelectedFieldsOf(m_groupingSource);
+	if (fields.empty())
 		return;
 
-	ibQueryProjection projection;
-	projection.m_expr = dialog.GetExpression();
-	if (!projection.m_expr)
-		return;
-	select->m_selectAll = false;
-	ibQueryEnsureUniqueName(*select, projection);
-	select->m_projections.push_back(projection);
-	FillAll();
+	const ibSourceMetaDataScope resolveAgainst(m_metaData);
+	bool added = false;
+	for (const wxString& field : fields) {
+		ibQueryProjection projection;
+		projection.m_expr = SeededAggregateFor(*select, field);
+		if (!projection.m_expr)
+			continue;
+		select->m_selectAll = false;
+		ibQueryEnsureUniqueName(*select, projection);
+		select->m_projections.push_back(projection);
+		added = true;
+	}
+	if (added)
+		FillAll();
+}
+
+// ⭐ THE FOLD THIS FIELD CAN TAKE, asked of the ENGINE. `AggregatesFor(type)` is the same list the
+// Function cell drops down and the same one CheckNames refuses by, so a seeded row can never be a
+// row the query rejects: a string opens as COUNT because there is no sum of strings, a number opens
+// as SUM because that is what a number is folded by nine times in ten.
+//
+// Returns null when the field cannot be folded at all (nothing offered) or does not parse — the
+// caller skips it rather than inventing a call.
+ibQueryAstExprPtr ibDialogQueryConstructor::SeededAggregateFor(const ibQuerySelect& select,
+                                                               const wxString& field)
+{
+	if (field.IsEmpty())
+		return nullptr;
+
+	ibQueryAstExprPtr argument;
+	try {
+		ibQueryParser parser;
+		argument = parser.ParseExpression(field);
+	}
+	catch (const ibBackendException&) {
+		return nullptr;   // a name this window wrote that the engine will not read — say nothing
+	}
+	if (!argument)
+		return nullptr;
+
+	ibTypeDescription type;   // unknown by default — and unknown offers everything
+	if (argument->m_kind == ibQueryAstExprKind::Column)
+		type = m_model.TypeOfPath(select, argument->m_path, m_package, m_statement);
+
+	const std::vector<ibQueryKeyword> offered = ibQueryLowering::AggregatesFor(type);
+	if (offered.empty())
+		return nullptr;
+	// SUM when the type has one, otherwise whatever the engine offers first (COUNT, for the types
+	// that cannot be added up). The list is the engine's order, so "first" is its preference.
+	ibQueryKeyword chosen = offered.front();
+	for (ibQueryKeyword keyword : offered)
+		if (keyword == ibQueryKeyword::Sum) { chosen = keyword; break; }
+
+	try {
+		ibQueryParser parser;
+		return parser.ParseExpression(ibQueryKeywordText(chosen) + wxT("(") + field + wxT(")"));
+	}
+	catch (const ibBackendException& error) {
+		ShowEngineError(error.GetErrorDescription());
+		return nullptr;
+	}
 }
 
 void ibDialogQueryConstructor::OnRemoveAggregate(wxCommandEvent&)
@@ -1222,21 +1809,25 @@ void ibDialogQueryConstructor::OnAddTotalsAggregate(wxCommandEvent&)
 		return;
 	}
 
-	// SEEDED FROM THE FIELD STANDING ON THIS TAB'S OWN TREE. It read the Grouping tab's tree before,
-	// which is a different tab's selection — so on Totals it opened with nothing and the field had
-	// to be typed by hand.
-	ibDialogQueryExpression dialog(this, _("Totals"), AvailableFields(), nullptr,
-		m_metaData, m_readOnly);
-	dialog.SetText(SeededAggregate(SelectedFieldOf(m_totalsSource)));
-	if (dialog.ShowModal() != wxID_OK)
-		return;
-	ibQueryAstExprPtr aggregate = dialog.GetExpression();
-	if (!aggregate)
+	// CHOSEN, NOT WRITTEN — the same rule as the grouping aggregates, from THIS tab's own tree. The
+	// row lands as the fold its field's type takes, and the Expression cell beside it (list, text,
+	// "...") is where it is changed. A modal for `SUM(Qty)` is a modal for the thing people do most.
+	const std::vector<wxString> fields = SelectedFieldsOf(m_totalsSource);
+	if (fields.empty())
 		return;
 
-	select->m_hasTotals = true;
-	select->m_totalsAggregates.push_back(aggregate);
-	FillAll();
+	const ibSourceMetaDataScope resolveAgainst(m_metaData);
+	bool added = false;
+	for (const wxString& field : fields) {
+		ibQueryAstExprPtr aggregate = SeededAggregateFor(*select, field);
+		if (!aggregate)
+			continue;
+		select->m_hasTotals = true;
+		select->m_totalsAggregates.push_back(aggregate);
+		added = true;
+	}
+	if (added)
+		FillAll();
 }
 
 // EDIT THIS TOTALS LINE — the same arbitrary-expression editor, opened over the aggregate that is
@@ -1502,6 +2093,22 @@ void ibDialogQueryConstructor::OnCopyUnionBranch(wxCommandEvent&)
 	copy->m_unions.clear();     // a branch has no branches of its own
 	copy->m_intoTemp.clear();   // and it materialises nothing: that belongs to the statement
 	copy->m_indexBy.clear();
+
+	// ⚠ AND NEITHER THE ORDERING NOR THE TOTALS COME WITH IT. They read as part of the select they
+	// are written on, but they belong to the WHOLE union: the text carries one trailing `ORDER BY`
+	// after the last branch, and one `TOTALS`. A branch that kept its own rendered them a second time
+	// in the middle of the union, and the engine stopped at the first of them —
+	//     Query syntax error at line 56: unexpected text after the query
+	// — over a query the author had done nothing to but press Copy.
+	//
+	// FOR UPDATE goes for the same reason: it is a lock over the statement's result, not over one
+	// branch's rows.
+	copy->m_orderBy.clear();
+	copy->m_hasTotals = false;
+	copy->m_totalsAggregates.clear();
+	copy->m_totalsBy.clear();
+	copy->m_totalsOverall = false;
+	copy->m_forUpdate = false;
 	select->m_unions.push_back(copy);
 	FillAll();
 }

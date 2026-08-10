@@ -57,6 +57,17 @@ public:
 	// and anything else that wants to know cannot disagree.
 	static bool IsSimple(const ibQueryAstExprPtr& condition);
 
+	// ⭐ "ARBITRARY" IS A SWITCH, AND IT SWITCHES THE ROW'S EDITOR — never the query text.
+	//
+	// Off, the row is chosen: the cell drops down the conditions the engine can build over the fields
+	// this query has, and nothing else can be typed. On, the row is WRITTEN: the same cell becomes
+	// free text with the "..." into the expression editor.
+	//
+	// The answer is the OBSERVATION unless the author has said otherwise — a condition that cannot be
+	// read as field · comparison · value is arbitrary whatever anybody ticks, which is why turning the
+	// switch off refuses rather than mangling the condition into a shape it does not have.
+	bool IsArbitrary(unsigned int row) const;
+
 	void SetOnChanged(std::function<void()> onChanged) { m_onChanged = std::move(onChanged); }
 	// Where the ENGINE'S complaint goes when a condition typed into a cell does not parse. The model
 	// does not judge the text and does not reword what it is told — it hands the message on.
@@ -68,6 +79,10 @@ public:
 
 private:
 	ibQuerySelect*        m_select = nullptr;   // borrowed
+	// The rows the author has asked to write by hand. Kept BY INDEX and only for rows whose condition
+	// is simple — a stored "yes" on a row that is arbitrary anyway would say nothing, and the
+	// observation is the answer there.
+	std::vector<bool>     m_freehand;
 	std::function<void()> m_onChanged;
 	std::function<void(const wxString&)> m_onError;
 };

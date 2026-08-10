@@ -126,6 +126,25 @@ void ibDialogQueryConstructor::FillAll()
 	// choosing its first field it is unused by definition, and tidying on every refill would take
 	// it away under the hand that just added it.
 
+	// ⭐ EVERY GRID KEEPS ITS PLACE.
+	//
+	// A refill Resets every model, and a Reset clears the control's selection — so after ANY edit
+	// there was no selected row, and the verb that came next had nothing to work on. From outside
+	// that is "I cannot delete the condition": the Delete button was fine, the row under it was gone.
+	//
+	// A virtual list model's item IS its row (id = row + 1), so keeping the item and putting it back
+	// is the whole of it — no bookkeeping, no per-grid code. A row that the edit removed is not
+	// re-selected: the count is asked first, because selecting a row that no longer exists is how a
+	// grid starts answering questions about nothing.
+	ibDataViewCtrl* const grids[] = {
+		m_fields, m_links, m_conditions, m_grouping, m_aggregates, m_order,
+		m_indexFields, m_totalsAggregates, m_totalsDimensions, m_unions, m_unionFields,
+	};
+	std::vector<ibDataViewItem> kept;
+	kept.reserve(WXSIZEOF(grids));
+	for (ibDataViewCtrl* grid : grids)
+		kept.push_back(grid != nullptr ? grid->GetSelection() : ibDataViewItem());
+
 	m_filling = true;
 	FillPackage();
 	FillTables();
@@ -141,6 +160,16 @@ void ibDialogQueryConstructor::FillAll()
 	FillAdvanced();
 	m_filling = false;
 	FillPreview();
+
+	for (size_t i = 0; i < WXSIZEOF(grids); ++i) {
+		if (grids[i] == nullptr || !kept[i].IsOk())
+			continue;
+		const ibDataViewVirtualListModel* model =
+			dynamic_cast<const ibDataViewVirtualListModel*>(grids[i]->GetModel());
+		if (model == nullptr || model->GetRow(kept[i]) >= model->GetCount())
+			continue;   // the row this was standing on is gone — leave nothing selected rather than something else
+		grids[i]->Select(kept[i]);
+	}
 
 	SetEvtHandlerEnabled(true);
 	Thaw();
@@ -258,8 +287,18 @@ void ibDialogQueryConstructor::SyncNotebookPages()
 	if (same)
 		return;
 
-	const wxString selected = m_notebook->GetPageCount() > 0
-		? m_notebook->GetPageText(m_notebook->GetSelection()) : wxString();
+	// ⭐ THE TAB THE AUTHOR CHOSE, not merely the one showing.
+	//
+	// Switching branches refills, and a branch with one table has no Links tab — so the set changes,
+	// the title is not found, and the selection drops to the first page. From outside that is the
+	// window jumping about while you flip between Query 1 and Query 2, and switching back does not
+	// bring you home either, because by then "the one showing" is the first one.
+	//
+	// So the LAST DELIBERATE choice is remembered (m_wantedTab, set by the page-changed handler when
+	// a person moved it) and restored the moment that tab exists again. What is showing right now is
+	// the fallback, for the first pass when nothing has been chosen yet.
+	const wxString selected = !m_wantedTab.IsEmpty() ? m_wantedTab
+		: (m_notebook->GetPageCount() > 0 ? m_notebook->GetPageText(m_notebook->GetSelection()) : wxString());
 
 	// ⚠ ONLY THE DIFFERENCE. Tearing the whole strip down and building it again is what made the
 	// window FLICKER every time the query kind changed — a kind switch adds one tab and removes
@@ -422,6 +461,78 @@ void queryctor::ibQueryRenameSourceReferences(ibQuerySelect& select, const wxStr
 	// The JOIN CONDITIONS name both sides — renaming one of them is exactly what this is for.
 	for (ibQueryAstJoin& join : select.m_joins)
 		ibQueryRenameMentioned(join.m_on, from, to);
+}
+
+// ⭐⭐ A TABLE IS GONE, AND SO IS EVERYTHING WRITTEN AGAINST IT.
+//
+// Removing a table used to leave its fields in the selection, its links in the list and its columns
+// in the conditions — on the reasoning that a broken path is simply not RESOLVED and therefore not
+// shown. That reasoning had a mechanism under it (a prune on every refill) and the mechanism is
+// gone: what does not resolve now STAYS and is spoken about, which is right for a typo and wrong
+// here. The result was a query full of `SliceLast.Dimension2` naming a table nobody could see, and a
+// red line about an attribute the author had already removed the source of.
+//
+// So removal cascades EXPLICITLY, from the verb that removed. Only what NAMES the departed table
+// goes; everything else is left exactly as written — including things that are broken for their own
+// reasons, which remain the engine's to talk about.
+//
+// Same walk as the rename above, so the two cannot disagree about what counts as a reference.
+static bool ibQueryMentions(const ibQueryAstExprPtr& expr, const wxString& source)
+{
+	std::set<wxString> named;
+	ibQueryCollectMentioned(expr, named);
+	return named.find(source.Lower()) != named.end();
+}
+
+void queryctor::ibQueryDropSourceReferences(ibQuerySelect& select, const wxString& source)
+{
+	if (source.IsEmpty())
+		return;
+
+	const auto mentions = [&source](const ibQueryAstExprPtr& expr) { return ibQueryMentions(expr, source); };
+
+	select.m_projections.erase(
+		std::remove_if(select.m_projections.begin(), select.m_projections.end(),
+			[&](const ibQueryProjection& p) { return mentions(p.m_expr); }),
+		select.m_projections.end());
+	if (select.m_projections.empty())
+		select.m_selectAll = true;   // a query that selects nothing reads everything, as it did at birth
+
+	// THE CONDITIONS ARE A LIST, and only the terms that named the table go — the rest of the AND
+	// chain is somebody's work and has nothing to do with this removal.
+	const auto dropTerms = [&](ibQueryAstExprPtr& clause) {
+		std::vector<ibQueryAstExprPtr> terms;
+		ibQueryFlattenAnd(clause, terms);
+		terms.erase(std::remove_if(terms.begin(), terms.end(), mentions), terms.end());
+		clause = ibQueryFoldAnd(terms);
+	};
+	dropTerms(select.m_where);
+	dropTerms(select.m_having);
+
+	const auto dropExprs = [&](std::vector<ibQueryAstExprPtr>& list) {
+		list.erase(std::remove_if(list.begin(), list.end(), mentions), list.end());
+	};
+	dropExprs(select.m_groupBy);
+	dropExprs(select.m_indexBy);
+	dropExprs(select.m_totalsAggregates);
+
+	select.m_orderBy.erase(
+		std::remove_if(select.m_orderBy.begin(), select.m_orderBy.end(),
+			[&](const ibQueryOrderItem& o) { return mentions(o.m_expr); }),
+		select.m_orderBy.end());
+	select.m_totalsBy.erase(
+		std::remove_if(select.m_totalsBy.begin(), select.m_totalsBy.end(),
+			[&](const ibQueryTotalDim& d) { return mentions(d.m_expr); }),
+		select.m_totalsBy.end());
+
+	// AND THE LINKS THAT NAMED IT. The join ENTRY of the departed table is erased by the verb (it IS
+	// the table); what is cleared here is a link written on ANOTHER table that mentioned this one —
+	// a sentence about two tables, one of which is no longer in the query.
+	for (ibQueryAstJoin& join : select.m_joins)
+		if (mentions(join.m_on)) {
+			join.m_on = nullptr;
+			join.m_kind = ibQueryJoinKindAst::Inner;   // the kind belongs to the link
+		}
 }
 
 // DROP THE JOINS NOBODY USES. Adding a table and then selecting nothing from it is an unfinished
@@ -708,28 +819,6 @@ void ibDialogQueryConstructor::FillLinks()
 	if (m_linkModel != nullptr)
 		m_linkModel->SetContent(select, tableNames);
 
-	// The DIAGRAM is refilled from the same AST in the same breath — two views, one refill, so
-	// they cannot show different things.
-	if (m_diagram != nullptr) {
-		std::vector<ibQueryJoinDiagram::Table> tables;
-		if (select != nullptr) {
-			const std::vector<ibQuerySource*> sources = CurrentSources();
-			for (size_t i = 0; i < sources.size(); ++i) {
-				const ibQuerySource& source = *sources[i];
-				if (source.m_name.empty() && !source.m_subquery)
-					continue;
-				ibQueryJoinDiagram::Table table;
-				table.m_sourceIndex = static_cast<int>(i);
-				// The name a CONDITION writes — the alias where there is one, else the last segment.
-				table.m_title = ibQuerySourceLabel(source);
-				for (const ibQueryConstructorField& field : m_model.GetFields(source, m_package, m_statement))
-					table.m_fields.push_back(field.m_name);
-				tables.push_back(std::move(table));
-			}
-		}
-		m_diagram->SetReadOnly(m_readOnly);
-		m_diagram->SetContent(select, std::move(tables));
-	}
 }
 
 // ONE ANSWER, SHOWN FOUR TIMES. Grouping, Conditions, Order and Index all ask "which fields does
@@ -737,12 +826,57 @@ void ibDialogQueryConstructor::FillLinks()
 // fields. A flat list of qualified names was the first shape and it hid the thing a person is
 // actually looking for — which table a field belongs to.
 
-// The head start an aggregate opens with: `SUM(Field)` when a field is selected, `SUM()` when not.
-// SUM because it is what an aggregate is asked for nine times in ten; the palette holds the rest,
-// and the word comes from the keyword table like every other word this window writes.
-wxString ibDialogQueryConstructor::SeededAggregate(const wxString& field)
+// (`SeededAggregate` stood here — a fixed `SUM(Field)` for the modal that opened when a field was
+//  moved into the aggregates. Both callers now ASK the engine which folds the field's type takes and
+//  add the row without a window: SeededAggregateFor, in queryConstructorEdit.cpp.)
+
+// ⭐ THE STAR, WRITTEN OUT. Every select of the package — and every union branch of each — that says
+// `*` and lists nothing gets one projection per field its tables offer.
+//
+// The fields are asked of the same model everything else asks, so a nested table answers with its
+// own projections and a virtual table with what its arguments make of it. Qualified, because a bare
+// name breaks the moment a second table joins.
+//
+// ⚠ ONLY WHERE THERE IS A TABLE TO ASK. `SELECT 1` has no source and its star means nothing to
+// expand; leaving it alone is what keeps such a query openable.
+void ibDialogQueryConstructor::ExpandStars()
 {
-	return ibQueryKeywordText(ibQueryKeyword::Sum) + wxT("(") + field + wxT(")");
+	const ibSourceMetaDataScope resolveAgainst(m_metaData);
+
+	const std::function<void(ibQuerySelect&)> expand = [&](ibQuerySelect& select) {
+		for (const ibQuerySelectPtr& branch : select.m_unions)
+			if (branch)
+				expand(*branch);
+
+		if (!select.m_selectAll || !select.m_projections.empty())
+			return;
+
+		std::vector<const ibQuerySource*> sources{ &select.m_from };
+		for (const ibQueryAstJoin& join : select.m_joins)
+			sources.push_back(&join.m_source);
+
+		for (const ibQuerySource* source : sources) {
+			if (source == nullptr || (source->m_name.empty() && !source->m_subquery))
+				continue;
+			for (const ibQueryConstructorField& field :
+			         m_model.GetQualifiedFields(*source, m_package, m_statement)) {
+				ibQueryProjection projection;
+				try {
+					ibQueryParser parser;
+					projection.m_expr = parser.ParseExpression(field.m_name);
+				}
+				catch (const ibBackendException&) { continue; }
+				if (projection.m_expr)
+					select.m_projections.push_back(projection);
+			}
+		}
+		if (!select.m_projections.empty())
+			select.m_selectAll = false;   // it lists them now; the star has been spent
+	};
+
+	for (ibQueryAstStatement& statement : m_package.m_statements)
+		if (statement.m_select)
+			expand(*statement.m_select);
 }
 
 void ibDialogQueryConstructor::FillFieldSources()
@@ -757,6 +891,65 @@ void ibDialogQueryConstructor::FillFieldSources()
 		TreeIcons icons = PrepareIcons(tree);
 		const wxTreeItemId root = tree->AddRoot(wxEmptyString);
 
+		// ⭐⭐ TOTALS ARE TAKEN OVER THE RESULT, so the Totals tab offers the RESULT'S fields — the
+		// aliases, the very table the Unions tab shows.
+		//
+		// Every other tab here narrows or arranges the rows as they are READ, so it asks about the
+		// source tables. Totals happen after all of that, over one relation: with a union, over every
+		// branch at once. Showing source fields there was wrong twice over — it offered columns of
+		// table 2 that the result does not carry under that name, and it hid the output field that IS
+		// what a total is counted by.
+		// ⚠ THE RESULT'S FIELDS STAND FIRST AND FLAT — no heading over them. They are what a total is
+		// taken by, so they are the answer to this tab's question, and putting them inside a folder
+		// made them one option among others instead of the obvious one.
+		//
+		// The tables go BELOW, under "All fields" — because they are still reachable (a total may be
+		// taken over something the result does not carry under its own name), just not the first
+		// thing offered.
+		wxTreeItemId tablesUnder = root;
+		if (tree == m_totalsSource) {
+			const ibQuerySelect* select = Current();
+			// ⭐ AND EACH RESULT FIELD KEEPS WHAT IT IS. Built from a name alone, these rows carried
+			// no type and no reference — so the picker had nothing to unfold and drew every one of
+			// them as a plain field, including the references. The description is taken from the
+			// SOURCE field it stands for, which is the same answer the other tabs show.
+			const std::vector<ibQueryConstructorField> available = AvailableFields();
+			if (select != nullptr)
+				for (const ibQueryProjection& projection : select->m_projections) {
+					ibQueryConstructorField field;
+					const wxString written = projection.m_expr ? ibRenderQueryExpr(*projection.m_expr) : wxString();
+					wxString shown = ibQueryOutputName(projection);
+					if (shown.IsEmpty())
+						shown = written;
+					if (shown.IsEmpty())
+						continue;
+					// ⚠ THE LABEL IS THE ALIAS; THE PATH IS THE SOURCE. The row shows what the result
+					// calls this field, and carries what the query has to WRITE to reach it — a total
+					// over `Catalog1.Parent.Description` is one the engine resolves, over
+					// `Parent.Description` it is not. (The node's path comes from m_name, its caption
+					// from m_presentation; that split is what makes both true at once.)
+					field.m_name         = written.IsEmpty() ? shown : written;
+					field.m_presentation = shown;
+
+					// A plain column stands for a field of a table, and that field knows its type,
+					// its picture and whether it can be walked into. An expression stands for nothing
+					// but itself and stays a leaf.
+					if (projection.m_expr && projection.m_expr->m_kind == ibQueryAstExprKind::Column)
+						for (const ibQueryConstructorField& source : available)
+							if (source.m_name.IsSameAs(written, false)) {
+								field.m_reference       = source.m_reference;
+								field.m_referenceClsid  = source.m_referenceClsid;
+								field.m_type            = source.m_type;
+								field.m_icon            = source.m_icon;
+								break;
+							}
+					ibQueryAddFieldNode(tree, root, field, FieldIcon(icons, field), 0, wxEmptyString);
+				}
+			const int allIcon = (select != nullptr) ? KindIcon(icons, KindOfSource(select->m_from)) : -1;
+			tablesUnder = tree->AppendItem(root, _("All fields"), allIcon, allIcon,
+				new ibQueryTreeNode(0, wxEmptyString));
+		}
+
 		const std::vector<ibQuerySource*> sources = CurrentSources();
 		const bool qualify = true;   // a bare name breaks the moment a table joins
 		for (size_t i = 0; i < sources.size(); ++i) {
@@ -767,8 +960,12 @@ void ibDialogQueryConstructor::FillFieldSources()
 			// THE GROUP HEADER IS THE TABLE, by the name the query calls it — `Catalog1`, not
 			// `Catalog.Catalog1 (Catalog1)`. It is a heading over its own fields, and the path it
 			// came from is the catalogue's business, one tab away.
+			// ⚠ UNDER `tablesUnder`, NOT UNDER THE ROOT. On the Totals tab that is the "All fields"
+			// node — I created it and then went on appending the tables beside it, so the node stood
+			// empty while the tables sat at the top level next to the result fields. Everywhere else
+			// `tablesUnder` IS the root, and nothing changes.
 			const int tableIcon = KindIcon(icons, KindOfSource(source));
-			const wxTreeItemId table = tree->AppendItem(root, ibQuerySourceLabel(source), tableIcon, tableIcon,
+			const wxTreeItemId table = tree->AppendItem(tablesUnder, ibQuerySourceLabel(source), tableIcon, tableIcon,
 				new ibQueryTreeNode(static_cast<int>(i), wxEmptyString));
 			// The name a CONDITION writes: qualified when more than one table is in play, because
 			// that is what the query text must carry to be unambiguous.
@@ -777,7 +974,10 @@ void ibDialogQueryConstructor::FillFieldSources()
 				: m_model.GetFields(source, m_package, m_statement);
 			for (const ibQueryConstructorField& field : fields)
 				ibQueryAddFieldNode(tree, table, field, FieldIcon(icons, field), static_cast<int>(i), wxEmptyString);
-			tree->Expand(table);
+			// Expanded on the tabs where the tables ARE the answer; folded under "All fields", where
+			// they are the second place to look and opening all of them buries the result's own list.
+			if (tablesUnder == root)
+				tree->Expand(table);
 		}
 	}
 }
@@ -984,11 +1184,29 @@ void ibDialogQueryConstructor::FillUnions()
 		// CALLED WHAT IT IS. The header said "Field name", so a person looking for the aliases saw a
 		// column of names identical to the branch columns and concluded there were none. It is the
 		// ALIAS — the output field's name — and it is typed into.
-		m_unionFields->AppendColumn(TextColumn(_("Alias"), kUnionColName, FromDIP(220), true));
+		// ⚠ ICON-TEXT, AND STILL EDITABLE. The model hands this cell a picture with its text (these
+		// rows are the output FIELDS), and a plain text renderer cannot read that value — it drew an
+		// EMPTY cell for every row whose field resolved to an icon, which is the worst possible way
+		// to fail: the ones that stayed visible were exactly the ones nothing was found for.
+		// Editable because this is the one place an output field is named.
+		m_unionFields->AppendColumn(new ibDataViewColumn(_("Alias"),
+			new ibDataViewIconTextRenderer(ibDataViewIconTextRenderer::GetDefaultType(),
+				wxDATAVIEW_CELL_EDITABLE),
+			kUnionColName, FromDIP(220), wxAlignment::wxALIGN_LEFT));
+		// ⭐ EACH BRANCH CELL IS A CHOICE OF THAT BRANCH'S OWN FIELDS. A union is lined up BY HAND —
+		// two branches over different tables rarely spell the same field the same way, and reading
+		// the line-up off by name is right often enough to be misleading. The empty entry is an
+		// answer too: this branch supplies nothing here, and the column is NULL for its rows.
 		for (unsigned int branch = 0; branch < m_unionFieldModel->BranchCount(); ++branch)
 			m_unionFields->AppendColumn(new ibDataViewColumn(
 				wxString::Format(_("Query %u"), branch + 1),
-				new ibDataViewTextRenderer(),
+				new ibRowChoiceRenderer([this, branch]() -> wxArrayString {
+					wxArrayString words;
+					words.Add(wxEmptyString);   // supplies nothing -> NULL
+					const wxArrayString fields = m_unionFieldModel->FieldsOfBranch(branch);
+					WX_APPEND_ARRAY(words, fields);
+					return words;
+				}, m_readOnly ? wxDATAVIEW_CELL_INERT : wxDATAVIEW_CELL_EDITABLE),
 				kUnionColName + 1 + branch, FromDIP(220), wxAlignment::wxALIGN_LEFT));
 	}
 }
@@ -1012,6 +1230,7 @@ void ibDialogQueryConstructor::FillPreview()
 	const bool wasFilling = m_filling;
 	m_filling = true;
 	m_preview->SetText(ibRenderQueryPackage(m_package));
+	ibMarkQueryParameters(m_preview);   // the marks go with the text they marked
 	m_filling = wasFilling;
 	ShowEngineVerdict();
 }
@@ -1034,6 +1253,32 @@ bool ibDialogQueryConstructor::AcceptName(const wxString& name, const wxString& 
 			  "with no spaces or punctuation."), name, what),
 		_("Query constructor"), wxOK | wxICON_WARNING, this);
 	return false;
+}
+
+// ⭐⭐ ONE VERDICT, FOR THE LINE AND FOR THE BUTTON.
+//
+// "Is this query sound" has TWO sources, and the line under the tabs shows both: what the ENGINE says
+// about the query, and the one thing only the WINDOW knows — a link the author started and left
+// empty. The engine cannot see that one: two tables with no link is a complete query (they are
+// multiplied), so "no link" and "a link I have not finished" are the same AST, and the difference
+// lives in this window's own state.
+//
+// It was asked in two places with two different definitions: the line showed both, OK consulted only
+// the engine. So a query glowing red closed without a word — which is the shape that teaches people
+// the red line is decoration. Asked once here, both places get the same answer by construction.
+bool ibDialogQueryConstructor::Verdict(wxString& message) const
+{
+	const wxString unfinished = m_linkModel != nullptr ? m_linkModel->UnfinishedLink() : wxString();
+	if (!unfinished.IsEmpty()) {
+		// ⚠ ASCII ONLY IN A STRING LITERAL. The sources carry no BOM, so MSVC reads them in the
+		// system codepage: an em dash typed here reached the screen as "вЂ”". Dashes belong in
+		// comments, where nobody renders them.
+		message = wxString::Format(
+			_("the link on '%s' has no condition: write one, or delete the link. Two tables with no "
+			  "link between them are simply multiplied."), unfinished);
+		return false;
+	}
+	return AskEngine(message);
 }
 
 bool ibDialogQueryConstructor::AskEngine(wxString& message) const
@@ -1074,7 +1319,7 @@ void ibDialogQueryConstructor::ShowEngineVerdict()
 		return;
 
 	wxString message;
-	const bool valid = AskEngine(message);
+	const bool valid = Verdict(message);
 	m_status->SetForegroundColour(valid
 		? wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT)
 		: wxColour(0xC0, 0x30, 0x30));

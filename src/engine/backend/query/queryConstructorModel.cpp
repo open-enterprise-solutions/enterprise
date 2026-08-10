@@ -285,8 +285,17 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetFields(
 		    || !descriptor->GetName().IsSameAs(name, false))
 			continue;
 
+		// ⭐ ASKED WITH THE CALL'S ARGUMENTS, because for a parameterized table they decide the columns
+		// (a register's turnovers reads at the granularity its periodicity names). Only the arguments
+		// that are LITERAL are known here — one written as `&Period` has no value until the query
+		// runs, and the source then answers with everything it can offer, which is the honest shape
+		// for "not decided yet".
+		std::vector<ibValue> args;
+		for (const ibQueryAstExprPtr& arg : source.m_args)
+			args.push_back(arg && arg->m_kind == ibQueryAstExprKind::Literal ? arg->m_literal : ibValue());
+
 		ibSourceDataObject::ibSourceExplorer explorer;
-		descriptor->FillSourceExplorer(explorer);
+		descriptor->FillSourceExplorer(explorer, args);
 
 		for (unsigned int i = 0; i < explorer.GetHelperCount(); ++i) {
 			const ibSourceDataObject::ibSourceExplorer* node = explorer.GetHelper(i);
@@ -349,6 +358,63 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetReferenceFields
 		field.m_reference      = field.m_referenceClsid != 0;
 		field.m_type           = node->GetTypeDesc();
 		field.m_source         = sourceLabel;   // the walk stays under the table it started from
+		out.push_back(std::move(field));
+	}
+	return out;
+}
+
+// THE DESCRIPTOR BEHIND A SOURCE, or null. Both parameter questions need it, and neither should
+// repeat the namespace/name split that finding it takes.
+static ibQueryableSourceDescriptor* DescriptorOf(ibQueryableFactory* factory, const ibQuerySource& source)
+{
+	if (factory == nullptr || source.m_name.size() < 2 || source.m_subquery)
+		return nullptr;
+
+	const wxString ns = source.m_name[0];
+	wxString name = source.m_name[1];
+	for (size_t i = 2; i < source.m_name.size(); ++i)
+		name += wxT(".") + source.m_name[i];   // `Register.Stock.Balance` — the virtual table is the third segment
+
+	for (ibQueryableSourceDescriptor* descriptor : factory->GetDescriptors())
+		if (descriptor != nullptr && descriptor->GetNamespace().IsSameAs(ns, false)
+		    && descriptor->GetName().IsSameAs(name, false))
+			return descriptor;
+	return nullptr;
+}
+
+std::vector<ibQuerySourceParameter> ibQueryConstructorModel::GetSourceParameters(const ibQuerySource& source) const
+{
+	std::vector<ibQuerySourceParameter> out;
+	if (ibQueryableSourceDescriptor* descriptor = DescriptorOf(Factory(), source))
+		descriptor->DescribeParameters(out);
+	return out;
+}
+
+std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetConditionFields(const ibQuerySource& source) const
+{
+	std::vector<ibQueryConstructorField> out;
+	ibQueryableSourceDescriptor* descriptor = DescriptorOf(Factory(), source);
+	if (descriptor == nullptr)
+		return out;
+
+	// ⚠ THE CONDITION'S OWN SET, not the source's output. A balance RETURNS its resources and is
+	// FILTERED BY its dimensions only — the engine reading a balance sees nothing but the
+	// dimensions, so offering a resource here would offer a filter it cannot honour.
+	ibSourceDataObject::ibSourceExplorer explorer;
+	descriptor->FillConditionExplorer(explorer);
+
+	for (unsigned int i = 0; i < explorer.GetHelperCount(); ++i) {
+		const ibSourceDataObject::ibSourceExplorer* node = explorer.GetHelper(i);
+		if (node == nullptr || node->IsTableSection())
+			continue;
+
+		ibQueryConstructorField field;
+		field.m_name           = node->GetSourceName();
+		field.m_presentation   = node->GetSourceSynonym().IsEmpty() ? node->GetSourceName() : node->GetSourceSynonym();
+		field.m_referenceClsid = SingleReferenceOf(node->GetClsidList());
+		field.m_reference      = field.m_referenceClsid != 0;
+		field.m_type           = node->GetTypeDesc();
+		field.m_icon           = node->GetSourceIcon();
 		out.push_back(std::move(field));
 	}
 	return out;

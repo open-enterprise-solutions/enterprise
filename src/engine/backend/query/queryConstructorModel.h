@@ -94,6 +94,18 @@ public:
 	// the metaclass kind, so the tree's top level is whatever the factory actually holds.
 	std::vector<ibQueryConstructorSource> GetSources() const;
 
+	// WHAT ARGUMENTS THIS SOURCE TAKES, in order — empty for an ordinary table, non-empty for a
+	// virtual one (a register's balance / turnovers, an information register's slice). The shell
+	// shows a parameter window only when this answers something, so a table that takes none never
+	// grows a menu item about parameters it does not have.
+	std::vector<ibQuerySourceParameter> GetSourceParameters(const ibQuerySource& source) const;
+
+	// THE FIELDS A CONDITION PARAMETER MAY NAME — asked of the source, not decided here. A balance
+	// answers with its dimensions only (a resource it folded cannot be filtered before folding); a
+	// slice answers with everything it carries. Same shape as GetFields, so the expression editor
+	// takes it without knowing which source it came from.
+	std::vector<ibQueryConstructorField> GetConditionFields(const ibQuerySource& source) const;
+
 	// The temp tables `package` has DECLARED so far, in the order they are made. These belong to the
 	// package being edited, not to the metadata — which is why they are a separate question with the
 	// package as its argument, and why the tree is fed from two places (docs §5b).

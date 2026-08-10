@@ -206,7 +206,28 @@ private:
 	// refuses the edit — its name is the metadata's, not the author's.
 	void OnTableAliasEditBegin(wxTreeEvent&);
 	void OnTableAliasEditEnd(wxTreeEvent&);
-	void OnTableContextMenu(wxTreeEvent&);   // add / nested / rename / delete, on the table itself
+	void OnTableContextMenu(wxTreeEvent&);   // add / nested / rename / delete / parameters, on the table itself
+	// THE TABLE THE CURSOR STANDS ON — null on a field row or an empty selection.
+	class ibQuerySource* SelectedSource() const;
+	// VIRTUAL TABLE PARAMETERS — one row per parameter the SOURCE declares, in its order. Offered
+	// only where a source declares any, and it decides both the rows and what a condition may name.
+	void OnTableParameters(wxCommandEvent&);
+
+	// THE LINK CONDITION CELL. The ready links of the selected row (a reference between the two
+	// tables, the obvious key pairs) — and the "..." that opens the ordinary expression editor over
+	// BOTH tables' fields, which is what writing an arbitrary link means.
+	wxArrayString LinkConditionChoices() const;
+	bool          EditLinkCondition(wxString& text);
+	// THE TABLES THIS ROW MAY JOIN — the query's live sources, minus the one already chosen on the
+	// other side. `leftSide` says which cell is asking.
+	wxArrayString LinkTableChoices(bool leftSide) const;
+	// ADD A LINK BY HAND. Until now a link existed only because a table was added — so joining a
+	// table already in the query, or writing a second condition between the same pair, had no verb.
+	void OnAddLink(wxCommandEvent&);
+	// THE CONDITION CELL — the ready shapes over the query's fields, and the "..." that opens the
+	// expression editor on whatever is written there.
+	wxArrayString ConditionChoices() const;
+	bool          EditConditionText(wxString& text);
 	void OnAddTable(wxCommandEvent&);
 	// HOW A TABLE JOINS THE QUERY — the first becomes the FROM, the rest are joins with no ON
 	// ("follow the reference between them"), each named as it arrives. A plain function on purpose:
@@ -230,6 +251,9 @@ private:
 	// added, which is the Tables tab's verb.)
 
 	void OnEditLink(wxCommandEvent&);
+	// Copy this link onto the first table that has none — a second link is usually the first with a
+	// name changed, and retyping the condition is the work this saves.
+	void OnCopyLink(wxCommandEvent&);
 	void OnRemoveLink(wxCommandEvent&);
 	// ONE editor for a join, reached from the list's row and the diagram's line alike.
 	void EditJoinAt(size_t index);
@@ -291,6 +315,9 @@ private:
 	// constructor keeps being used. Focus loss re-parses; a syntax error is REPORTED and the text
 	// left alone, so nobody loses what they typed to a stray keystroke.
 	void OnPreviewFocusLost(wxFocusEvent&);
+	// The text at full height, in a window of its own — the pane under the tabs is gone, and this is
+	// where it went. Borrows m_preview while open and hands it back, so there is still one text.
+	void OnShowQueryText(wxCommandEvent&);
 	void OnCheck(wxCommandEvent&);
 	// Open the SELECTED fragment as a query of its own, read-only — the way to look at one nested
 	// query, one union branch or one statement without the rest of the text around it.
@@ -311,6 +338,11 @@ private:
 	// what it says, because a second opinion would be one more thing to keep in step with the
 	// language, and it would be wrong the day the language moved.
 	bool AskEngine(wxString& message) const;
+
+	// THE VERDICT ITSELF — the engine's answer PLUS the one fact only this window holds (a link
+	// started and left empty). Asked by the line under the tabs and by OK, so the two can never
+	// disagree about whether the query is sound.
+	bool Verdict(wxString& message) const;
 	void ShowEngineVerdict();   // the status line under the text, refreshed on every edit
 
 	// ---- helpers --------------------------------------------------------
@@ -319,7 +351,13 @@ private:
 	std::vector<ibQueryConstructorField> AvailableFields() const;
 	// The same answer, shown on the left of each of those tabs.
 	void FillFieldSources();   // fills all four field trees from the chosen tables
-	static wxString SeededAggregate(const wxString& field);   // what an aggregate opens with
+
+	// `SELECT *` written out as the fields it stands for — once, on opening. A star is a promise
+	// about a shape nobody wrote down, and this window is where a shape is written down.
+	void ExpandStars();
+	// THE FOLD A FIELD OPENS AS — the engine's own list for that field's type, so a seeded row is
+	// never a row the query would refuse. Null when the field cannot be folded or cannot be read.
+	ibQueryAstExprPtr SeededAggregateFor(const ibQuerySelect& select, const wxString& field);
 	// WHICH projections the Grouping tab's lower pane is about — the ones whose expression is an
 	// aggregate call. Decided in one place, so the grid, its model and its verbs cannot disagree
 	// about which projection a row stands for.
@@ -408,6 +446,12 @@ private:
 	int                      m_unionBranch = -1;   // -1 = the statement itself
 
 	bool                     m_filling = false;   // re-entrancy guard: filling widgets must not collect
+
+	// THE TAB A PERSON CHOSE, by title. The tab SET follows the statement (a branch with one table
+	// has no Links), so switching branches can take the current tab away — and the window then landed
+	// on the first one and stayed there. Remembered here, it is returned to the moment it exists
+	// again. Written only by a deliberate change, never by a refill.
+	wxString                 m_wantedTab;
 
 	class ibDataViewCtrl*   m_statements     = nullptr;   // the package — one row per statement
 	class ibQueryGridModel* m_statementModel = nullptr;
@@ -544,5 +588,14 @@ FRONTEND_API bool ibShowQueryConstructorFor(wxWindow* parent, ibQuerySelectPtr& 
 // constructor's text, the expression editor's) and two of them styled separately would drift into
 // two different-looking editors for one language.
 FRONTEND_API void ibStyleQueryText(class wxStyledTextCtrl* text);
+
+// The indicator `&name` is painted with. An INDICATOR and not a style, because the lexer owns the
+// styles and repaints them; indicators are drawn on top and survive re-lexing.
+constexpr int kQueryParameterIndicator = 8;
+
+// MARK EVERY `&name` — call after the pane's text changes, since the marks go with the text they
+// marked. A parameter is a value handed in from outside, and reading exactly like a column of the
+// query is how somebody spends a while wondering why "that field" cannot be found.
+FRONTEND_API void ibMarkQueryParameters(class wxStyledTextCtrl* text);
 
 #endif // __QUERY_CONSTRUCTOR_DLG_H__

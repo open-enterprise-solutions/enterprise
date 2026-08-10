@@ -74,6 +74,63 @@ void ibStyleQueryText(wxStyledTextCtrl* text)
 	text->SetMarginWidth(1, 0);
 	text->SetTabWidth(4);
 	text->SetUseHorizontalScrollBar(true);
+
+	// A PARAMETER IS ITS OWN THING and must read as one. `&Store` is not an identifier of this query
+	// — it is a value handed in from outside — and the C lexer, which is what colours the rest,
+	// knows nothing about the ampersand: it paints `&` as an operator and `Store` as plain text, so
+	// a parameter looked exactly like a column. Marked with an INDICATOR rather than a style,
+	// because the lexer owns the styles and would repaint over anything set there; an indicator is
+	// drawn on top and survives re-lexing. The colour is the preprocessor slot — the same one the
+	// code editor uses for "this is substituted, not evaluated here".
+	text->IndicatorSetStyle(kQueryParameterIndicator, wxSTC_INDIC_TEXTFORE);
+	text->IndicatorSetForeground(kQueryParameterIndicator,
+		settings.GetColors(ibFontColorSettings::DisplayItem_Preprocessor).foreColor);
+
+	// AND RE-MARKED AS IT IS TYPED. Marking only where the text is set programmatically leaves a
+	// parameter plain until something else happens to refill the pane — the colour arrives late,
+	// which reads as a glitch rather than as a rule. The lexer repaints on every change; this
+	// follows it, because an indicator is not restored by the lexer.
+	text->Bind(wxEVT_STC_CHANGE, [text](wxStyledTextEvent& event) {
+		event.Skip();
+		ibMarkQueryParameters(text);
+	});
+}
+
+// MARK EVERY `&name` IN THE PANE. Called after the text is set — the indicator has to be re-applied
+// then, because the text it marked is gone. Scanning here rather than asking the lexer keeps this
+// independent of which lexer the pane uses; the rule is the language's own and fits in one line of
+// prose: an ampersand followed by a name.
+void ibMarkQueryParameters(wxStyledTextCtrl* text)
+{
+	if (text == nullptr)
+		return;
+
+	// WALKED IN SCINTILLA'S OWN POSITIONS, which are BYTES. Scanning a wxString instead would put
+	// the mark left of the word the moment a parameter is named in Cyrillic, because two bytes go
+	// to one character — and the bug would only show up for people whose names are not ASCII.
+	// A byte >= 0x80 is part of a name here for the same reason: it is the tail of such a character.
+	const int length = text->GetTextLength();
+	text->SetIndicatorCurrent(kQueryParameterIndicator);
+	text->IndicatorClearRange(0, length);
+
+	for (int pos = 0; pos + 1 < length; ++pos) {
+		if (text->GetCharAt(pos) != '&')
+			continue;
+
+		int end = pos + 1;
+		for (; end < length; ++end) {
+			const int ch = text->GetCharAt(end);
+			const bool nameChar = (ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'Z')
+				|| (ch >= 'a' && ch <= 'z') || ch == '_' || ch >= 0x80;
+			if (!nameChar)
+				break;
+		}
+		if (end == pos + 1)
+			continue;   // a bare ampersand is not a parameter
+
+		text->IndicatorFillRange(pos, end - pos);
+		pos = end - 1;
+	}
 }
 
 wxToolBar* ibDialogQueryConstructor::MakeToolBar(wxWindow* parent)
@@ -269,7 +326,15 @@ ibDialogQueryConstructor::ibDialogQueryConstructor(wxWindow* parent, const ibQue
 	m_notebook = new wxNotebook(this, wxID_ANY);
 	// The branch strip follows the tab: switching branches is meaningless where the branches
 	// themselves are being configured.
-	m_notebook->Bind(wxEVT_NOTEBOOK_PAGE_CHANGED, [this](wxBookCtrlEvent& e) { ShowBranchStrip(); e.Skip(); });
+	m_notebook->Bind(wxEVT_NOTEBOOK_PAGE_CHANGED, [this](wxBookCtrlEvent& e) {
+		// A DELIBERATE move is remembered; one made by a refill is not. Without the guard the window
+		// would "choose" whatever a rebuild happened to land on, and the tab a person picked would be
+		// forgotten by the very event that lost it.
+		if (!m_filling && e.GetSelection() != wxNOT_FOUND)
+			m_wantedTab = m_notebook->GetPageText(static_cast<size_t>(e.GetSelection()));
+		ShowBranchStrip();
+		e.Skip();
+	});
 	// The order: what the query READS first, then how it is narrowed, then how it is presented —
 	// with the package LAST, because it is the thing the other tabs belong to rather than another
 	// aspect of one query.
@@ -318,42 +383,48 @@ ibDialogQueryConstructor::ibDialogQueryConstructor(wxWindow* parent, const ibQue
 
 	outer->Add(upper, 1, wxEXPAND);
 
-	// THE TEXT, BESIDE THE TABS AND NOT BEHIND A BUTTON. The round trip IS the feature; showing it
-	// continuously teaches the language instead of hiding it. And it is EDITABLE: type here, leave
-	// the field, and the tabs rebuild from what the engine read.
-	wxStaticBoxSizer* previewBox = new wxStaticBoxSizer(wxVERTICAL, this, _("Query text"));
-	// A CODE EDITOR, not a text box. The round trip is the feature and the text is on screen the
-	// whole time, so it should read like code: keywords apart from names, strings apart from
-	// numbers. wxStyledTextCtrl has an SQL lexer already — our language is SQL-shaped, so the lexer
-	// is right for it and nothing here has to know how to colour anything.
-	m_preview = new wxStyledTextCtrl(previewBox->GetStaticBox(), wxID_ANY,
-		wxDefaultPosition, FromDIP(wxSize(-1, 150)));
+	// ⭐ THE TEXT HAS ITS OWN WINDOW, and the tabs get the room back.
+	//
+	// It used to sit under the tabs the whole time, on the argument that showing the round trip
+	// teaches the language. It does — but a fifth of the window spent on eight visible lines of a
+	// forty-line query teaches very little, and those eight lines are the SELECT list, which is the
+	// least interesting part of any query. The round trip is not lost: it is one button away, at full
+	// height, where the text can actually be read and edited.
+	//
+	// The control itself stays a child of this dialog, hidden. It is where the text LIVES — every
+	// fill writes to it, the selection verbs read it — and the window borrows it while it is open.
+	// One control, one text, no second copy to keep in step.
+	m_preview = new wxStyledTextCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize);
 	ibStyleQueryText(m_preview);
 	m_preview->Bind(wxEVT_KILL_FOCUS, &ibDialogQueryConstructor::OnPreviewFocusLost, this);
-	previewBox->Add(m_preview, 1, wxEXPAND | wxALL, FromDIP(4));
+	m_preview->Show(false);
 
-	// THE ENGINE'S ANSWER, SHOWN AS IT CAME. Not "there is a problem on the Conditions tab" — the
+	// THE ENGINE'S ANSWER STAYS IN SIGHT. Not "there is a problem on the Conditions tab" — the
 	// parser's own line and position, printed. A layer that rewords the core's diagnostics is a
-	// layer that will eventually word them wrongly.
-	m_status = new wxStaticText(previewBox->GetStaticBox(), wxID_ANY, wxEmptyString);
-	previewBox->Add(m_status, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, FromDIP(4));
-
-	outer->Add(previewBox, 0, wxEXPAND | wxLEFT | wxRIGHT, FromDIP(6));
+	// layer that will eventually word them wrongly. It is one line, and it is the one thing under the
+	// tabs that has to be readable without opening anything.
+	// ⚠ `wxST_NO_AUTORESIZE`, OR THE LINE KEEPS THE TAIL OF THE LAST MESSAGE. Without it the control
+	// SHRINKS to each new label, and the strip it vacates is never repainted by anybody — so a short
+	// verdict ("The query engine reads this query.") left the end of the previous, longer one
+	// standing beside it, and the two read as one piece of nonsense.
+	//
+	// Fixed width means the control owns the whole line and erases all of it on every paint.
+	m_status = new wxStaticText(this, wxID_ANY, wxEmptyString,
+		wxDefaultPosition, wxDefaultSize, wxST_NO_AUTORESIZE);
+	outer->Add(m_status, 0, wxEXPAND | wxLEFT | wxRIGHT, FromDIP(10));
 
 	wxBoxSizer* buttons = new wxBoxSizer(wxHORIZONTAL);
+	// THE DOOR TO THE TEXT. Open whether or not the query is sound — reading what the constructor
+	// wrote is exactly what a person does when it is NOT sound.
+	wxButton* queryText = new wxButton(this, wxID_ANY, _("Query text..."));
+	queryText->Bind(wxEVT_BUTTON, &ibDialogQueryConstructor::OnShowQueryText, this);
+	buttons->Add(queryText, 0, wxRIGHT, FromDIP(6));
+
 	// Checking stays available when the query may only be read — asking the engine whether a query
 	// is sound is a way of READING it, and the answer is worth having whether or not it can be fixed.
 	wxButton* check = new wxButton(this, wxID_ANY, _("Check query"));
 	check->Bind(wxEVT_BUTTON, &ibDialogQueryConstructor::OnCheck, this);
 	buttons->Add(check, 0, wxRIGHT, FromDIP(6));
-
-	// DEBUG A PIECE ON ITS OWN. Select a fragment in the text — a nested query, one branch of a
-	// union, a single statement of a package — and open it as a query of its own. Nothing is
-	// written back: it is a side window for looking at a part in isolation, which is the thing a
-	// long query is hardest to do inside.
-	wxButton* openSelection = new wxButton(this, wxID_ANY, _("Open the selection"));
-	openSelection->Bind(wxEVT_BUTTON, &ibDialogQueryConstructor::OnOpenSelection, this);
-	buttons->Add(openSelection, 0, wxRIGHT, FromDIP(6));
 	buttons->AddStretchSpacer();
 	// No OK where there is nothing to accept — one button that closes, and no promise that
 	// something was kept.
@@ -375,8 +446,24 @@ ibDialogQueryConstructor::ibDialogQueryConstructor(wxWindow* parent, const ibQue
 			m_preview->SetReadOnly(true);
 	}
 
+	// ⭐⭐ `SELECT *` IS OPENED AS THE FIELDS IT STANDS FOR.
+	//
+	// The star is a promise about a shape nobody has written down — and this window is where a shape
+	// is written down. Left as a star, the Fields pane is EMPTY over a query that plainly selects
+	// something, and every tab that offers the result's fields (Totals, the union line-up) has
+	// nothing to offer. Expanded, the author sees exactly what the query returns and can take one
+	// away, which is the whole reason to open the constructor on such a query.
+	//
+	// Done ONCE, on opening: after this the projections are the author's own, and nothing here
+	// re-expands anything.
+	ExpandStars();
+
 	FillSourceTree();
 	FillAll();
+
+	// (A query the engine cannot read never gets this far: ibShowQueryConstructor refuses to open on
+	//  one, with the engine's own words. A warning shown here, over an opened window, was the half
+	//  measure that replaced.)
 }
 
 // THE PACKAGE IS A TAB, and the tabs edit whichever statement it has selected. It was a side strip
@@ -625,26 +712,23 @@ wxWindow* ibDialogQueryConstructor::BuildLinksPage(wxWindow* parent)
 {
 	wxPanel* page = new wxPanel(parent);
 
-	wxSplitterWindow* splitter = new wxSplitterWindow(page, wxID_ANY,
-		wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3DSASH);
-	splitter->SetMinimumPaneSize(FromDIP(80));
-
-	wxPanel* topPane = new wxPanel(splitter);
-	wxBoxSizer* top = new wxBoxSizer(wxVERTICAL);
-	top->Add(new wxStaticText(topPane, wxID_ANY,
-		_("Drag a field onto a field to join the tables. Double-click a line to change the join.")),
-		0, wxALL, FromDIP(3));
-	m_diagram = new ibQueryJoinDiagram(topPane);
-	m_diagram->SetOnChanged([this] { FillAll(); });
-	m_diagram->SetOnEditJoin([this](size_t join) { EditJoinAt(join); });
-	top->Add(m_diagram, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, FromDIP(3));
-	topPane->SetSizer(top);
-
-	wxPanel* bottomPane = new wxPanel(splitter);
+	// ⚠ THE DIAGRAM IS GONE. It drew the two tables as boxes to drag a field between — a second way
+	// to say what the row below says, and the row says it better now that both tables are chosen
+	// from drop-downs and the condition has the expression editor behind its "...". Two pictures of
+	// one thing cost a splitter, a refill and a drag protocol, and taught nothing the grid does not.
+	wxPanel* bottomPane = page;
 	wxBoxSizer* bottom = new wxBoxSizer(wxVERTICAL);
 	wxToolBar* bar = MakeToolBar(bottomPane);
-	AddTool(bar, _("Condition"), wxART_EDIT, [this](wxCommandEvent& e) { OnEditLink(e); });
-	AddTool(bar, _("Delete"),    wxART_DELETE,    [this](wxCommandEvent& e) { OnRemoveLink(e); });
+	// A LINK IS MADE HERE TOO, not only by adding a table. Joining a table that is already in the
+	// query — or writing a second condition between the same pair — had no verb at all: the only
+	// way to get a link was to add a source, which is a different act with a different meaning.
+	AddTool(bar, _("Add link"),  wxART_NEW,    [this](wxCommandEvent& e) { OnAddLink(e); });
+	// A SECOND LINK IS USUALLY THE FIRST ONE WITH A NAME CHANGED. Copying it onto the next unlinked
+	// table and editing the cell is one gesture where retyping the whole condition was several.
+	AddTool(bar, _("Copy link"), wxASCII_STR(wxART_COPY),
+		[this](wxCommandEvent& e) { OnCopyLink(e); });
+	AddTool(bar, _("Condition"), wxART_EDIT,   [this](wxCommandEvent& e) { OnEditLink(e); });
+	AddTool(bar, _("Delete"),    wxART_DELETE, [this](wxCommandEvent& e) { OnRemoveLink(e); });
 	bar->Realize();
 	bottom->Add(bar, 0, wxEXPAND);
 
@@ -658,31 +742,55 @@ wxWindow* ibDialogQueryConstructor::BuildLinksPage(wxWindow* parent)
 	m_linkModel->SetOnError([this](const wxString& message) { ShowEngineError(message); });
 	m_links->AssociateModel(m_linkModel);
 
-	// The table cells are NOT typed into: which tables a query reads is the Tables tab's verb, and a
-	// name typed here would have to invent one of adding or removing a source.
-	m_links->AppendColumn(TextColumn(_("Table 1"), kLinkColLeftTable, FromDIP(210)));
+	// THE TABLES ARE CHOSEN, NOT TYPED. Which tables the query reads is the Tables tab's verb — a
+	// name typed here would have to invent adding or removing a source — but WHICH of the tables
+	// already in the query this link joins is exactly this row's business, and a drop-down is what
+	// says so. The list is the live sources, minus the one picked on the other side: a table joined
+	// to itself in one row is not a link, it is a typo the grid should not have offered.
+	m_links->AppendColumn(new ibDataViewColumn(_("Table 1"),
+		new ibRowChoiceRenderer([this]() -> wxArrayString { return LinkTableChoices(/*leftSide*/true); }),
+		kLinkColLeftTable, FromDIP(210), wxAlignment::wxALIGN_LEFT));
 	m_links->AppendColumn(new ibDataViewColumn(_("All"),
 		new ibDataViewToggleRenderer(ibDataViewToggleRenderer::GetDefaultType(), wxDATAVIEW_CELL_ACTIVATABLE),
 		kLinkColAllLeft, FromDIP(44), wxAlignment::wxALIGN_CENTER));
-	m_links->AppendColumn(TextColumn(_("Table 2"), kLinkColRightTable, FromDIP(210)));
+	m_links->AppendColumn(new ibDataViewColumn(_("Table 2"),
+		new ibRowChoiceRenderer([this]() -> wxArrayString { return LinkTableChoices(/*leftSide*/false); }),
+		kLinkColRightTable, FromDIP(210), wxAlignment::wxALIGN_LEFT));
 	m_links->AppendColumn(new ibDataViewColumn(_("All"),
 		new ibDataViewToggleRenderer(ibDataViewToggleRenderer::GetDefaultType(), wxDATAVIEW_CELL_ACTIVATABLE),
 		kLinkColAllRight, FromDIP(44), wxAlignment::wxALIGN_CENTER));
-	m_links->AppendColumn(TextColumn(_("Link condition"), kLinkColCondition, FromDIP(340), true));
+	// ⭐ THE SWITCH, BEFORE THE CONDITION IT SWITCHES. Cleared, the cell beside it is a closed list of
+	// the field pairs these two tables offer; ticked, it is free text with the "..." into the
+	// expression editor. Neither changes the query — only which of the two ways this row is written.
+	m_links->AppendColumn(new ibDataViewColumn(_("Arbitrary"),
+		new ibDataViewToggleRenderer(ibDataViewToggleRenderer::GetDefaultType(),
+			m_readOnly ? wxDATAVIEW_CELL_INERT : wxDATAVIEW_CELL_ACTIVATABLE),
+		kLinkColArbitrary, FromDIP(80), wxAlignment::wxALIGN_CENTER));
+	// THE LINK CONDITION IS AN EXPRESSION, and it gets the cell that says so: a list of the ready
+	// links beside a "..." into the full editor — the same cell the totals use, not a second one.
+	//
+	// A plain text column made the arbitrary link unreachable: `a.x = b.y` had to be typed blind,
+	// `a.x = b.y AND a.z = b.w` even more so, and the fields of the two tables were three tabs away
+	// while typing it. The engine now accepts an arbitrary ON (queryLowering splits it: the first
+	// comparison is the join key, the rest are conditions), so the cell has to be able to write one.
+	m_links->AppendColumn(new ibDataViewColumn(_("Link condition"),
+		new ibExpressionCellRenderer(
+			[this]() -> wxArrayString { return LinkConditionChoices(); },
+			[this](wxString& text) -> bool { return EditLinkCondition(text); },
+			wxDATAVIEW_CELL_EDITABLE,
+			[this]() -> bool {
+				if (m_linkModel == nullptr || m_links == nullptr)
+					return true;
+				return m_linkModel->IsArbitrary(m_linkModel->GetRow(m_links->GetSelection()));
+			}),
+		kLinkColCondition, FromDIP(340), wxAlignment::wxALIGN_LEFT));
 
-	// The condition cell opens IN PLACE like every other editable cell; the full expression editor
-	// is the toolbar's "Condition" verb. (The diagram's line still opens the editor — there is no
-	// cell to type into there.)
+	// The condition cell opens IN PLACE like every other editable cell; the "..." inside it is the
+	// full expression editor, and the toolbar's "Condition" verb is the same door for the keyboard.
 	EditOnActivate(m_links);
 	AttachContextMenu(m_links, bar);
 	bottom->Add(m_links, 1, wxEXPAND | wxALL, FromDIP(3));
-	bottomPane->SetSizer(bottom);
-
-	splitter->SplitHorizontally(topPane, bottomPane, FromDIP(260));
-
-	wxBoxSizer* pageSizer = new wxBoxSizer(wxVERTICAL);
-	pageSizer->Add(splitter, 1, wxEXPAND | wxALL, FromDIP(4));
-	page->SetSizer(pageSizer);
+	page->SetSizer(bottom);
 	return page;
 }
 
@@ -976,19 +1084,46 @@ wxWindow* ibDialogQueryConstructor::BuildConditionsPage(wxWindow* parent)
 	m_conditions->AppendColumn(new ibDataViewColumn(wxT("#"),
 		new ibDataViewTextRenderer(ibDataViewTextRenderer::GetDefaultType(), wxDATAVIEW_CELL_INERT),
 		kConditionColNumber, FromDIP(40), wxAlignment::wxALIGN_RIGHT));   // the row's position, not a field
-	// ⚠ NO "ARBITRARY" COLUMN. It was a tick-box that could not be ticked — an OBSERVATION about the
-	// row ("this cannot be read as field · comparison · value") wearing the shape of a switch, and a
-	// checkbox that refuses the mouse reads as broken whatever it was meant to say.
+	// ⭐ "ARBITRARY" IS A SWITCH NOW, and it has something to switch. It stood here once as an
+	// OBSERVATION — a tick-box that could not be ticked, which reads as broken whatever it meant —
+	// and was taken out for that reason. What was missing was the other half: a shape to switch TO.
 	//
-	// It also had nothing to switch TO. The "simple mode" it would have toggled away from is gone on
-	// purpose: three editors collapsed into ONE expression editor, and every condition is now free
-	// text that the engine parses. What the column observed, the Condition cell already shows.
-	//
-	// (If the reference's *field · comparison · value* columns are wanted back, that is a different
-	// thing to build — three columns with a typed VALUE cell — not this checkbox.)
-	// TYPED INTO WHERE IT STANDS. The full editor is still a double-click away for anything that
-	// does not fit a line, but changing `Price > 100` to `Price > 200` should not need a window.
-	m_conditions->AppendColumn(TextColumn(_("Condition"), kConditionColText, FromDIP(600), true));
+	// Cleared, the condition is CHOSEN out of what the engine can build over this query's fields.
+	// Ticked, it is WRITTEN — free text with the "..." into the expression editor. The query text is
+	// identical either way, which is what makes this a property of the row's editor and not of the
+	// query. A condition that cannot be decomposed keeps the box ticked whoever clears it: that one
+	// is still the observation, and the model says so rather than mangling the condition.
+	m_conditions->AppendColumn(new ibDataViewColumn(_("Arbitrary"),
+		new ibDataViewToggleRenderer(ibDataViewToggleRenderer::GetDefaultType(),
+			m_readOnly ? wxDATAVIEW_CELL_INERT : wxDATAVIEW_CELL_ACTIVATABLE),
+		kConditionColArbitrary, FromDIP(80), wxAlignment::wxALIGN_CENTER));
+	// TYPED INTO WHERE IT STANDS. The full editor is still behind the "..." for anything that does
+	// not fit a line, but changing `Price > 100` to `Price > 200` should not need a window.
+	// THE SAME CELL AS THE LINKS' CONDITION — a list of the ready shapes, editable text, and the
+	// "..." into the expression editor. A plain text column meant an arbitrary condition had to be
+	// typed blind with the fields on the other side of the window, which is the state this tab was
+	// in: the row said `Catalog1.DataVersion = &DataVersion` and there was no way to make it say
+	// anything else without retyping it by hand.
+	m_conditions->AppendColumn(new ibDataViewColumn(_("Condition"),
+		new ibExpressionCellRenderer(
+			[this]() -> wxArrayString { return ConditionChoices(); },
+			[this](wxString& text) -> bool { return EditConditionText(text); },
+			wxDATAVIEW_CELL_EDITABLE,
+			// The row is asked the way every other verb over this grid asks it — through the model,
+			// which is what turns a selected ITEM into an index.
+			[this]() -> bool {
+				if (m_conditionModel == nullptr || m_conditions == nullptr)
+					return true;
+				return m_conditionModel->IsArbitrary(
+					m_conditionModel->GetRow(m_conditions->GetSelection()));
+			}),
+		kConditionColText, FromDIP(520), wxAlignment::wxALIGN_LEFT));
+
+	// AND THE CELL HAS TO OPEN. This grid is built by hand rather than through MakeGrid, so it never
+	// got the one line that answers a double-click by editing the cell — the expression cell was there
+	// with its "..." inside and nothing could reach it. A cell you cannot open is a cell that is not
+	// there; the tab read as "the condition cannot be changed".
+	EditOnActivate(m_conditions);
 
 	// ⚠ THE ONE PANE THAT HAD NO DROP TARGET. Every other list in the window accepted a dragged
 	// field; this one silently did not, so the gesture that works everywhere else did nothing here.
@@ -1504,9 +1639,15 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 		},
 		m_readOnly ? wxDATAVIEW_CELL_INERT : wxDATAVIEW_CELL_EDITABLE),
 		kGridCol2, FromDIP(320), wxAlignment::wxALIGN_LEFT));
-	// …AND THE WAY OUT OF THE LIST. The same editor the rest of the window uses, over this row.
-	m_totalsAggregates->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED,
-		[this](ibDataViewEvent&) { wxCommandEvent e; OnEditTotalsAggregate(e); });
+	// …AND THE WAY OUT OF THE LIST IS THE "...", not the double-click.
+	//
+	// ⚠ THIS BINDING USED TO OPEN THE DIALOG, and that is why the "..." could not be reached: MakeGrid
+	// already answers an activation by OPENING THE CELL, a handler bound later runs FIRST, and neither
+	// one skips — so the double-click went to the window and the cell (the only thing that carries the
+	// button) never opened. Two doors onto the same expression, and the one nearer the mouse won.
+	//
+	// One gesture, one meaning, and the same everywhere in this window: a double-click opens the CELL;
+	// the "..." inside it opens the EDITOR. The toolbar's Edit verb is the same door for the keyboard.
 	m_totalsAggregates->SetDropTarget(new ibCallbackDropTarget([this] { wxCommandEvent e; OnAddTotalsAggregate(e); }));
 	aggs->Add(m_totalsAggregates, 1, wxEXPAND | wxALL, FromDIP(3));
 	aggRow->Add(aggs, 1, wxEXPAND);
@@ -1593,6 +1734,31 @@ wxWindow* ibDialogQueryConstructor::BuildUnionsPage(wxWindow* parent)
 		wxDV_ROW_LINES | wxDV_SINGLE);
 	m_unionFieldModel = new ibQueryUnionFieldModel();
 	m_unionFieldModel->SetOnChanged([this] { FillAll(); });
+	// WHAT A BRANCH CAN SUPPLY — its own tables' fields, asked of the same model every other field
+	// list in this window asks. The model holds the AST; only the host reaches the metadata.
+	m_unionFieldModel->SetBranchFields([this](unsigned int branch) -> wxArrayString {
+		wxArrayString words;
+		const ibQuerySelect* select = m_unionFieldModel->BranchSelectAt(branch);
+		if (select == nullptr)
+			return words;
+		const ibSourceMetaDataScope resolveAgainst(m_metaData);
+		const auto add = [&](const ibQuerySource& source) {
+			const wxString table = ibQuerySourceName(source);
+			for (const ibQueryConstructorField& field : m_model.GetFields(source, m_package, m_statement))
+				words.Add(table.IsEmpty() ? field.m_name : table + wxT(".") + field.m_name);
+		};
+		add(select->m_from);
+		for (const ibQueryAstJoin& join : select->m_joins)
+			add(join.m_source);
+		return words;
+	});
+	// THE OUTPUT FIELDS WEAR THEIR PICTURES, like the field list on every other tab: these rows are
+	// the union's result columns, and the first branch's projections are what they are made of.
+	m_unionFieldModel->SetIconReader([this](unsigned int row) -> wxIcon {
+		const ibQuerySelect* select = Current();
+		return select != nullptr && row < select->m_projections.size()
+			? IconOfExpr(select->m_projections[row].m_expr) : wxNullIcon;
+	});
 	// A REFUSED RENAME IS TOLD, not left on the verdict line at the far edge of the window: the eyes
 	// are on the cell, and the cell is about to put its old text back.
 	m_unionFieldModel->SetOnError([this](const wxString& message) {

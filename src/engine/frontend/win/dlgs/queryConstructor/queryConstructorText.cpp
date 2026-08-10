@@ -71,6 +71,63 @@ void ibDialogQueryConstructor::OnPreviewFocusLost(wxFocusEvent& event)
 	AdoptText(typed, /*reportModally*/ false);
 }
 
+// ⭐ THE TEXT, AT FULL HEIGHT, IN A WINDOW OF ITS OWN.
+//
+// The pane this replaces borrowed a fifth of the constructor to show eight lines of a query that is
+// usually four times that. Here it gets the whole window, which is what reading — and editing — a
+// query text actually needs.
+//
+// THE CONTROL IS BORROWED, NOT COPIED. `m_preview` stays the one place the text lives (every fill
+// writes to it, every selection verb reads it); this window reparents it in while it is open and
+// hands it back on the way out. A second editor would mean two texts and a rule about which one is
+// right — the bug this window exists to avoid.
+void ibDialogQueryConstructor::OnShowQueryText(wxCommandEvent&)
+{
+	if (m_preview == nullptr)
+		return;
+
+	wxDialog window(this, wxID_ANY, _("Query text"), wxDefaultPosition,
+		FromDIP(wxSize(860, 600)), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
+
+	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+	m_preview->Reparent(&window);
+	m_preview->Show(true);
+	sizer->Add(m_preview, 1, wxEXPAND | wxALL, window.FromDIP(6));
+
+	wxBoxSizer* buttons = new wxBoxSizer(wxHORIZONTAL);
+	// DEBUG A PIECE ON ITS OWN — and it belongs HERE, because a selection only exists where the text
+	// is. On the main window it was a button that could only ever say "select some text first".
+	wxButton* openSelection = new wxButton(&window, wxID_ANY, _("Open the selection"));
+	openSelection->Bind(wxEVT_BUTTON, &ibDialogQueryConstructor::OnOpenSelection, this);
+	buttons->Add(openSelection, 0, wxRIGHT, window.FromDIP(6));
+	wxButton* check = new wxButton(&window, wxID_ANY, _("Check query"));
+	check->Bind(wxEVT_BUTTON, &ibDialogQueryConstructor::OnCheck, this);
+	buttons->Add(check, 0, wxRIGHT, window.FromDIP(6));
+	buttons->AddStretchSpacer();
+	buttons->Add(window.CreateStdDialogButtonSizer(wxCLOSE), 0);
+	sizer->Add(buttons, 0, wxEXPAND | wxALL, window.FromDIP(6));
+
+	window.SetSizer(sizer);
+	window.Bind(wxEVT_BUTTON, [&window](wxCommandEvent&) { window.EndModal(wxID_CLOSE); }, wxID_CLOSE);
+	window.ShowModal();
+
+	// ⚠ HANDED BACK BEFORE THE WINDOW DIES, or it goes down with it as one of its children — and the
+	// constructor is left holding a pointer to a destroyed control.
+	// ⚠ HIDDEN AFTER THE REPARENT, not before. A control handed back to the dialog is a plain child
+	// that belongs to no sizer, and a visible one of those sits at (0, 0) — straight over the
+	// notebook's tab strip. That is the `Fielbles and fields` overlay, written up in FillAll; the
+	// order of these two lines is the whole of the difference.
+	const wxString typed = m_preview->GetText();
+	m_preview->Reparent(this);
+	m_preview->Show(false);
+
+	// AND WHAT WAS TYPED IS ADOPTED, through the same door the pane used when it lost focus: the
+	// engine reads the text and the tabs rebuild from what it read. A text that does not parse leaves
+	// everything alone and says so on the verdict line.
+	if (CanEdit() && typed != ibRenderQueryPackage(m_package))
+		AdoptText(typed, /*reportModally*/ false);
+}
+
 void ibDialogQueryConstructor::OnCheck(wxCommandEvent&)
 {
 	// A SELECTION IS CHECKED ON ITS OWN. In a long query the interesting question is usually about
@@ -166,6 +223,26 @@ void ibDialogQueryConstructor::OnOk(wxCommandEvent&)
 		return;
 	}
 
+	// ⭐⭐ AND THE ENGINE HAS TO READ IT, not merely parse it — but leaving is the AUTHOR'S call,
+	// made knowing the price.
+	//
+	// Parsing says the text is well-formed; it says nothing about whether the names in it exist. A
+	// query left with a field from a table that was removed parses perfectly and then fails at the
+	// only moment that costs something — when somebody runs it, somewhere else, later.
+	//
+	// A hard refusal here would be wrong for a different reason: there are moments when the author
+	// genuinely wants the text out, broken, to finish it by hand. What they must not do is walk into
+	// that unknowingly — because a broken query DOES NOT REOPEN in this window (the constructor
+	// refuses it at the door, in the engine's own words). So the question names exactly that.
+	wxString complaint;
+	if (!Verdict(complaint)) {
+		if (wxMessageBox(complaint + wxT("\n\n")
+				+ _("Keep this query anyway? The constructor will not open on it again - it will "
+				    "report this error instead, and the query will have to be repaired as text."),
+				GetTitle(), wxYES_NO | wxICON_WARNING, this) != wxYES)
+			return;
+	}
+
 	EndModal(wxID_OK);
 }
 
@@ -201,17 +278,34 @@ void ibDialogQueryConstructor::SetSubQueryMode()
 
 bool ibShowQueryConstructor(wxWindow* parent, wxString& queryText, const ibMetaData* metaData, bool readOnly)
 {
+	// ⭐⭐ ONE REFUSAL, ONE QUESTION — the two halves of "the engine cannot read this" said together.
+	//
+	// There are two ways a stored query can be unusable here, and they used to speak separately: the
+	// text may not PARSE, or it may parse and NAME something that does not exist. Two dialogs in a
+	// row over one broken query is the window telling the same story twice, and the second one
+	// arrived after the author had already answered the first.
+	//
+	// So both are one gate now: the engine's own words, and the same offer under them — start from an
+	// empty query, or leave the text alone. Refusing outright would be worse: the query would be
+	// unopenable with no way forward from inside the window.
 	ibQueryPackage package;
 	if (!queryText.Trim(true).Trim(false).IsEmpty()) {
-		// Text that does not parse is still worth opening on — but not silently: the author is told
-		// what the engine could not read, and the constructor starts from a blank query rather than
-		// pretending it understood.
+		wxString complaint;
 		try {
 			ibQueryParser parser;
 			package = parser.ParsePackage(queryText);
+
+			// …AND THE NAMES IN IT, by the same resolver the execution uses. Parsing only judges the
+			// grammar; a query selecting a field of a table that was deleted parses perfectly.
+			const ibSourceMetaDataScope resolveAgainst(metaData);
+			ibQueryLowering::CheckNames(package, std::map<wxString, ibValue>());
 		}
 		catch (const ibBackendException& e) {
-			if (wxMessageBox(wxString(e.GetErrorDescription()) + wxT("\n\n")
+			complaint = e.GetErrorDescription();
+		}
+
+		if (!complaint.IsEmpty()) {
+			if (wxMessageBox(complaint + wxT("\n\n")
 					+ _("Open the constructor on an empty query? The existing text will be replaced only if you press OK."),
 					_("Query constructor"), wxYES_NO | wxICON_WARNING, parent) != wxYES)
 				return false;
