@@ -361,7 +361,7 @@ Each opcode has type-specialised variants selected by adding `TYPE_DELTA1` (numb
 
 ### Keyword Inventory
 
-61 keywords defined in `KEY_*` enumerators (`codeDef.h`, `KEY_IF=0` … `KEY_RESTRICT`, before the `LastKeyWord` sentinel), in lock-step with `s_listKeyWord[]` in `translateCode.cpp`. Groups:
+62 keywords defined in `KEY_*` enumerators (`codeDef.h`, `KEY_IF=0` … `KEY_RESTRICT`, before the `LastKeyWord` sentinel), in lock-step with `s_listKeyWord[]` in `translateCode.cpp`. Groups:
 - Control / structure — `KEY_IF`, `KEY_FOR`, `KEY_FOREACH`, `KEY_WHILE`, `KEY_PROCEDURE`, `KEY_FUNCTION`, `KEY_TRY`, `KEY_EXCEPT`, `KEY_ENDTRY`, `KEY_RAISE`, `KEY_RETURN`, `KEY_NEW`, …
 - Access modifiers (leading) — `KEY_PUBLIC` (was `Export`), `KEY_PRIVATE`, `KEY_PROTECTED`
 - Preprocessor — `KEY_DEFINE`, `KEY_UNDEF`, `KEY_IFDEF`, `KEY_IFNDEF`, `KEY_ELSEDEF`, `KEY_ENDIFDEF`, `KEY_REGION`, `KEY_ENDREGION`

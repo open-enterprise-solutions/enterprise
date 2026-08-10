@@ -576,3 +576,49 @@ Two allocations left the compile path with it: `IsKeyWord` no longer upper-cases
 into a throw-away `wxString` (case folding moved into the map comparator, `ibCaseFoldLess`), and
 `FindDefine` does one `find` per scope instead of two linear scans of the map. Predicted to show up
 in `ParserBench` and nowhere else — unverified, for the noise reason above.
+
+---
+
+## 7. After the AST arc was reverted (2026-08-10)
+
+The tree-compiler arc was reverted the same day it was measured (§1e). The runtime work done
+during it does not depend on the tree, so it was carried onto the canonical compiler as a patch
+and re-measured here. **Method:** Release, min-of-5, machine quiet, nothing else building —
+`oes_tests --gtest_also_run_disabled_tests --gtest_filter=*RuntimeBench*`.
+
+| row | 2026-08-08 evening | 2026-08-10 final | Δ |
+|---|---:|---:|---:|
+| arith loop (ns/iter) | 71.1 | 73.4 | +3.2% |
+| string concat (ns/app) | 63.1 | 65.3 | +3.5% |
+| method resolve (ns/call) | 220.0 | 201.4 | −8.5% |
+| host→script (ns/call) | 223.8 | **174.0** | **−22.3%** |
+| recursion (ns/call) | 226.5 | **179.6** | **−20.7%** |
+| LINQ build+pipe (ns/el) | 566.5 | **425.2** | **−24.9%** |
+
+**Read it by the shape, not the size.** Every row that costs a CALL fell by about a fifth;
+every row without one stands still (the +3% pair is inside run-to-run spread). That is the
+signature of the change: all of it is frame-entry cost, not instruction cost.
+
+- the empty `std::map` in every frame (`procContext.h` `m_listEval` → `std::vector`) — MSVC
+  allocates the tree's sentinel node in the DEFAULT CONSTRUCTOR, so an empty map member is a heap
+  allocation per call;
+- eight `ibSession::Current()` per invocation → resolved once (`ibSession::PUStateOf`);
+- `ibProcStackGuard` re-resolving the state per guard → resolved once;
+- six copies of the argument-load loop → one `LOAD_ARG_CONST` macro.
+
+Reproduced three times across the day, each min-of-5, with different builds in between. The
+distribution held every time, which is what makes it a result rather than a session artefact.
+
+**What it does NOT say.** The instruction-level standing is unchanged since 2026-08-08: `arith
+loop` is the row that maps to "ns per instruction", and it did not move. Nothing here improves
+the position against CPython — that was §5's work.
+
+**A caveat on the ratio.** This harness reports `native=0.7 ns/iter` for the arithmetic loop, and
+the derived "×N over native" therefore rests on a quantity measured worse than the thing it
+divides: today it reads ×117 where 2026-08-08 recorded ×103. The per-row deltas are comparable
+across days; the RATIO is not, until the native baseline is measured on its own terms.
+
+**Still untouched by both days — the data path.** `record build+walk` is ~5300 ns/row,
+`ibMemberTable::Build` is 25% of a join run (§1g), and the join index pays ×6.6 on probe for an
+`ibValue` key against a `long` one (§1f-bis). One element of data still costs what thirty
+interpreter iterations do.

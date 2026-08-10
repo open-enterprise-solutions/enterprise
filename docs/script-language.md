@@ -53,7 +53,8 @@ Everything below is written in CES; the VES form is given where it differs.
 | boolean | `True` / `False` | |
 | absent value | `Undefined` | the empty value (`TYPE_EMPTY`) |
 | database null | `Null` | distinct from `Undefined` |
-| label (for `GoTo`) | `~LabelName` | `~` marks the label |
+| label — definition | `~LabelName:` | the **colon** defines it; the `~` is dropped by the lexer |
+| label — jump | `GoTo ~LabelName;` | same name, tilde optional there too |
 | identifiers | letters/digits/underscore | case-insensitive keywords; **PascalCase** is the house style |
 
 `Undefined` vs `Null` is a real distinction: `Undefined` is "no value at all", `Null` is a
@@ -71,6 +72,13 @@ by index, so `s_listKeyWord[]` and `KEY_*` must stay in lock-step.
 `While` `GoTo` `Continue` `Break`
 
 **Logic** — `Not` `And` `Or`
+
+**Arithmetic, as a word** — `Mod`. The second spelling of `%`, with the same precedence (30, beside
+`*` and `/`) and the same emission. Reserved like `And` / `Or` / `Not`, so it cannot name a
+variable. Three places must agree for a word operator to work: the `KEY_*` enum, `s_listKeyWord[]`
+at the same index (a `static_assert` holds those two together), and the word-operator gate in
+`GetExpression` — without the last one the precedence entry is never consulted and an expression
+simply stops at the word.
 
 **Routines** — `Procedure` `EndProcedure` `Function` `EndFunction` `Return` `Val`
 
@@ -91,6 +99,26 @@ by index, so `s_listKeyWord[]` and `KEY_*` must stay in lock-step.
 
 ## 4. Declarations
 
+### Module order is part of the grammar
+
+A module is read in two sections, in this order:
+
+1. **declarations** — `Var`, then `Function` / `Procedure`, in any mix;
+2. **the executable body** — everything else.
+
+The FIRST statement closes the declaration section. A `Function` written after an
+assignment is therefore met as a statement and refused with *"Expected program operators"* —
+an error that names the symptom, not the rule, so it reads as a broken function rather than
+a misplaced one. Put the body last:
+
+```oes
+Var total;                       // 1. declarations
+Function Echo(s) Public
+  Return s;
+EndFunction
+total = Echo("x");               // 2. body
+```
+
 ```oes
 Var counter;                 // module- or routine-local variable
 Public Var sharedTotal;      // exported: visible to other modules
@@ -98,10 +126,15 @@ Protected Var forChildren;   // visible to children (an object → its forms)
 Private Var localOnly;       // module-local (the default; explicit intent)
 ```
 
-The same three modifiers apply to routines:
+The same three modifiers apply to routines — but on a routine the modifier goes **after the
+signature**, not before it. A leading `Public Procedure …` does not compile: the module's
+declaration loop breaks on the unexpected keyword and the body reader then meets the
+declaration as a statement, reporting *"Unexpected program code termination"* somewhere past
+the end of the file. (A `Var` takes it in front — `Public Var total;` — which is exactly why
+the routine form is easy to get wrong.)
 
 ```oes
-Public Procedure Recalculate(document, Val mode)
+Procedure Recalculate(document, Val mode) Public
 {
     …
 }
@@ -241,6 +274,13 @@ For i = 1 To 10 Do … EndDo
 Foreach item In collection Do … EndDo
 Try … Except … Endtry
 ```
+
+> **`Foreach` is ONE word.** There is no `For Each` in this language — `Each` is not a
+> keyword and never was. `For` opens the counted loop (`For i = 1 To 10 Do`) and `Foreach`
+> opens the iterating one; they are two different keywords, not one keyword and a modifier.
+> Written as two words the compiler reads `Each` as the loop variable and stops at the
+> missing `=` (`Symbol expected '='`), which points at the wrong thing entirely. Five corpus
+> fixtures carried that spelling for months without ever being compiled.
 
 `Continue` / `Break` behave as expected. `GoTo ~Label` exists and jumps to a `~Label` mark —
 it is legacy; do not generate it.

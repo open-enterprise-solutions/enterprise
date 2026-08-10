@@ -43,6 +43,30 @@ Undocumented-until-now subsystems, mapped 2026-07-15:
 
 ---
 
+## 1c. The AST arc, attempted and reverted — 2026-08-10 session
+
+The tree-compiler arc was built and rolled back the same week; the analysis of what the missing
+tree costs still stands, the METHOD did not. Full account in
+[compiler-ast-arc.md](compiler-ast-arc.md) §0 — including why a rewritten reader, rather than a
+moved one, produced every regression that followed.
+
+What the week returned, all of it on the canonical compiler:
+
+| Found | What it was | Now |
+|---|---|---|
+| `x++` gave the NEW value and never stored | the assignment fold rewrote the destination of the LAST instruction, having checked only that the result was a temp and the opcode arithmetic — never that this instruction produced that temp. `taken = i++` pointed the increment at `taken` | the fold compares the destination with the expression's slot; 19 sibling rewrites swept, all of them jump back-patches at a remembered index |
+| a label at the top of a body was never found | address `0` and "not declared" were the same answer — `m_listLabelDef[name]` via `operator[]`, tested with `!currLine`. The report blamed the `Goto` | presence, not value (`find()`), on both the resolve and the duplicate check; the lookup also stopped INSERTING keys |
+| `Знач` gave a shallow copy | the callee mutated the caller's composite value; the field driving it was named `m_bByRef` and meant the exact opposite | a real `Clone()`, and the field renamed `m_bByValue`. Wire format unchanged |
+| every `obj.Method(arg)` reported ZERO arguments | a runtime half carried over from the tree emitter read the caller's count from `m_param4`, which this compiler never writes — so `arr.Sum(selector)` silently summed without the selector | reads `array3`, this emitter's convention. Caught by the carried test net |
+| four language rules were wrong in the reference | `Foreach` written as two words; a routine's access modifier shown leading; a label documented as `~name` with no colon; module section order unstated | all four corrected in [script-language.md](script-language.md), each with the misleading error it produces |
+
+Also: frame-entry cost down about a fifth on every call-bearing benchmark row
+([runtime-perf.md](runtime-perf.md) §7), the test binary now holds ONE `wxInitializer` for its
+lifetime — which removed a modal hang and took the suite from 167 s to 11.7 s — and the compile
+helpers in the test suites report the engine's error text instead of a bare `false`.
+
+---
+
 ## 1b. Silent failures made loud — 2026-08-07 session
 
 Every entry here was found by RUNNING the platform, and every one had the same shape: the code

@@ -1,6 +1,65 @@
 # Compiler AST — the arc
 
-**Status: PLAN. Nothing applied.** Reconnaissance done 2026-08-09; no code was changed for it.
+**Status: ATTEMPTED AND REVERTED (2026-08-10). The problem stands; the method was wrong.**
+
+The arc was built and then rolled back the same week. What follows is still the analysis of what
+the absent tree costs — that part held up — but read §0 first: it says what actually happened,
+which of the claims below survived contact, and what replaces the method.
+
+---
+
+## 0. What the attempt cost, and what it bought
+
+**The method was the mistake.** The reading half was REWRITTEN rather than moved. The single-pass
+reader demanded its tokens (`GETKeyWord(KEY_THEN)` — take it or raise); the rewrite asked for them
+(`if (IsNextKeyWord(KEY_THEN)) GetLexem();`). It also replaced the block's exit rule — the
+single-pass `default: return true`, where any unhandled keyword ends the block and the CALLER
+demands its fence — with a hand-written list of terminators. Between those two, VES stopped being
+a dialect: `if x { … }` with no `Then` and no `EndIf` passed the syntax check clean.
+
+Every regression that followed was of that shape, not of the tree's:
+
+- fences optional in VES; braces accepted there too (the dialect gate ran one way only);
+- a braceless CES body swallowed the statements after it (the one-statement rule was dropped);
+- `If … ElseIf … EndIf` would have demanded two `EndIf` (ElseIf read as a statement of its own);
+- `Procedure … EndFunction` became legal (the closer stopped matching the opener);
+- the method name went into the pool upper-cased, so a missing `Message` was reported as
+  `'MESSAGE'`;
+- the caller's argument count was replaced by the declared count, so `Message("text")` was told a
+  status argument had been supplied.
+
+**What it bought, measured:** net −1863 lines, two files removed
+(`codeEditorInterpreterContext.cpp`, `compileContextLinqData.h`), and IntelliSense's private
+lexeme cursor deleted. **What it did not buy:** any measurable performance
+([runtime-perf.md](runtime-perf.md) §1e — the arc cost nothing and gained nothing).
+
+**What survived the revert, and is the real return on the week:**
+
+- the **script corpus** (`tests/test_scriptCorpus.cpp`) — 4 defects, including `ibNumber(double)`
+  under a non-invariant locale and a correlated join;
+- the **emission contract** (`tests/test_compilerContract.cpp`) and the **shape suite**
+  (`tests/test_compileTree.cpp`) — the net that then caught a regression introduced by the
+  carry-over itself;
+- the **runtime work** — frame-entry cost, carried onto the canonical compiler and re-measured
+  ([runtime-perf.md](runtime-perf.md) §7): every call-bearing row about a fifth cheaper;
+- two defects found in the canonical compiler once attention was free:
+  the assignment fold rewriting an instruction that did not produce its temp (`x++` returned the
+  new value and never stored), and a label address of 0 being indistinguishable from "not
+  declared" (a label at the top of a body was never found).
+
+**The method that replaces it.** Do not write a second reader. The compile module already builds a
+tree — it just prints it straight to bytecode. Give the SAME reader a second output, or carry the
+extra information on the bytecode itself and slice it away at the boundary; the runtime already
+takes a pointer to base, and the AOT writer already knows only base fields, so the strip is
+structural rather than a step someone can forget. And the editor does not need a stored model at
+all: `m_onlyFunction` compiles heads without bodies, `ibCompileEval` compiles ONE expression in an
+existing scope, and between them a caret is served without ever compiling broken text.
+
+The rest of this document is the 2026-08-09 reconnaissance, unchanged.
+
+---
+
+**Original status line: PLAN. Nothing applied.** Reconnaissance done 2026-08-09; no code was changed for it.
 
 The script compiler is single-pass recursive descent that emits `ibByteUnit` records as it
 parses, with no intermediate tree ([compiler-pipeline.md](compiler-pipeline.md) §3). That was a
