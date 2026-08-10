@@ -1103,6 +1103,96 @@ stays in THIS select: a union branch means its own table by the same word.
 
 ---
 
+## 5f. Pass 9 (2026-08-10/11) — the window offers, the engine judges
+
+The longest run of the window so far, dictated defect by defect while it was open. The engine half
+is written up in [query-language-arc.md](query-language-arc.md) (the product as a comma, links that
+contradict one another, a nested table's output schema); what follows is what changed in the shell,
+and the through-line is one sentence: **the window offers what is possible and never decides what
+was meant.**
+
+### Every place a value is written has the same door
+
+Conditions and Totals had a cell you could type in and no way to reach the expression editor. Now
+all three doors lead to the same control the rest of the window already uses: a double-click opens
+the CELL, the `…` button opens the expression editor, and the toolbar verb is the keyboard route to
+the same place. Not a second editor "for conditions" — the same one, because a condition is an
+expression and the moment there are two of them they start disagreeing.
+
+`ISNULL(, )` joined the palette beside `IS NULL`, so both are reachable without knowing they exist.
+
+### An aggregate is CHOSEN, not written
+
+Dragging a field into Grouping or Totals opened the arbitrary-expression window and asked the author
+to write `SUM(…)` by hand — over a field whose type already says which folds are possible. The row
+now lands as the fold its type allows and the **Function** cell changes it afterwards, from the list
+the ENGINE gives for that type. Writing an expression is still available; it is no longer the toll
+for the ordinary case.
+
+### The Links tab is about LINKS
+
+Three separate confusions, one cause — the tab was quietly acting on tables:
+
+* adding a table CREATED a link (an empty one, which then went red);
+* deleting a link DELETED the table;
+* a link could not be added by hand at all in some states.
+
+A link is now added, re-pointed and deleted by the author alone. Two tables mean only that the tab
+has something to show. **Copying** a link is the copy verb the window already had, not a new button.
+
+Deleting a TABLE, by contrast, cascades: every field, condition, grouping, order and link written
+against it goes with it. Nothing tracks that — the walk is the same one the unused-table sweep and
+the rename rewrite use, which is why it agrees with them.
+
+### Unions — a column is mapped, and unmapping is not deleting
+
+A union branch's column is a dropdown over what that branch can offer; empty means `NULL`, which is
+the honest reading of "this branch has no such field". The one that had to be got right is
+**clearing** a cell: the field is not deleted, it is UNLINED — it leaves the shared row and becomes
+a row of its own, keeping its own name (numbered on collision). Deleting it would throw away work
+the author did in another branch, which is the opposite of what "remove this from the mapping" says.
+
+TOTALS over a union is over the WHOLE union: the tab carries no branch strip, and the totals are
+built over the alias table the union publishes.
+
+### `SELECT *` is expanded when the query is opened
+
+A star is a request for every column the query can see, so the window shows them — otherwise the
+grid is empty on a query that selects everything, and the author's first act is to re-type what the
+text already said.
+
+### Virtual tables ask for their parameters properly
+
+The parameter dialog is one editor plus choice rows: the periodicity is a DROPDOWN whose list comes
+from the source (not from a list kept in the window), and the alias offered for a virtual table
+carries the register's name — `AccumulationRegister1Turnovers`, not a bare `Turnovers` that says
+nothing once two registers are in the query. Which fields the table then has follows from the
+periodicity: see [register-totals-strategy.md](register-totals-strategy.md).
+
+### One dialog, not two, when a query cannot be read
+
+Opening a broken query showed an error window and then a second window asking what to do. Now it is
+a single gate: the engine's message, and "open on an empty query?" — Yes / No.
+
+### Small ones, all found by running it
+
+| symptom | cause |
+|---|---|
+| "cannot delete" on a row that was plainly selected | `Reset()` cleared the grid selection on every refill; the selected item is kept and restored across `FillAll` (11 grids) |
+| a condition's value vanished when typed by hand | a read-only combo whose value was not in its list committed an EMPTY string, which the model read as "delete this row" — the held value is always in the list now, and an empty commit from a read-only combo is refused |
+| the verdict line kept a stale tail | `wxST_NO_AUTORESIZE` |
+| pages jumped when switching between statements of a package | the tab that had been open was not remembered (`m_wantedTab`) |
+| an em dash arrived on screen as `вЂ”` | a non-ASCII character inside `_()`; the sources have no BOM and MSVC reads them in the system codepage. ASCII only in literals |
+
+### What this pass did NOT do
+
+Left open on purpose, and each one is a piece of work rather than a polish: reordering a run of
+inner joins so a link may name a table added later; the periodicity shorthand on turnovers;
+periodicity and fill method as registered enumerations instead of a word list declared by the
+source; a filter structure written in script code converting into the same condition.
+
+---
+
 ## 6. What this must not become
 
 - **A generator that cannot read.** The moment a hand-edited query stops being loadable,

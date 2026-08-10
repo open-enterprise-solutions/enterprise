@@ -3254,3 +3254,197 @@ than it looks.** A property test needs a test of its own coverage, or it is a ri
 (`SELECT Order`) is still refused. Qualified (`Products.Order`) works, and the constructor always
 qualifies. Widening it would mean telling a bare keyword apart from every clause that starts with
 one — a grammar decision, not a bug fix, and not one to make under a generator run.
+
+---
+
+## Update 2026-08-10/11 — a link either exists or it does not, and a nested table publishes its output
+
+A day of running the constructor against the engine. Most of what follows is the ENGINE half: the
+window only made the questions arrive, and nearly every answer belonged down here, because the same
+text typed into the query editor deserves the same answer as the same text built from the tabs.
+
+### The product is a comma, and a `JOIN` always carries an `ON`
+
+Two tables with nothing said about how they meet are MULTIPLIED. That is not an error and not an
+omission — it is a complete, ordinary query, and the language has always had a way to write it:
+
+```
+FROM Products, Characteristics
+```
+
+So the comma came back. `,` in `FROM` parses to an `ibQueryAstJoin` with `m_on == nullptr`, the
+renderer prints that join back as a comma, and the lowering sends it to `CrossJoin`. Symmetrically,
+`JOIN` now REQUIRES its `ON` (`ExpectKw(On, …)`).
+
+What went away with it is **auto-join-by-reference**: a `JOIN` whose `ON` was omitted used to mean
+"find the link yourself, one side probably references the other". Two costs, and the second is the
+one that matters:
+
+* the same text meant different things depending on what the metadata happened to hold that day;
+* a query could not say "multiply these" at all, because the syntax for it was already taken.
+
+One shape, one meaning: a link is written, or there is none and the tables multiply.
+
+### A link written as a condition is still a link — `ibQueryRewrite::LiftJoinConditions`
+
+`FROM A, B WHERE A.x = B.y` is how a join was written before anyone spelled `JOIN`, and it is what
+the constructor produces when the author leaves the Links tab alone and writes the relation on the
+Conditions tab. The door underneath takes a join key as TWO COLUMNS and a row filter as
+COLUMN&nbsp;`<op>`&nbsp;VALUE, so that term could not travel the WHERE road at all — the engine
+answered *"expected a literal or a parameter as the comparison value"* about a perfectly ordinary
+sentence.
+
+It is moved to where the engine can read it, under three rules that all say "do not change what was
+written":
+
+* **only a join that has no link yet** — one that already carries an `ON` is the author's;
+* **only an INNER join** — in an OUTER one `ON` and `WHERE` are genuinely different stages (`ON`
+  pre-filters the null-padded side, `WHERE` removes the padded rows afterwards), so moving the term
+  would change the answer;
+* **never a guess** — only a term naming both sides by their table (`A.x = B.y`) moves. A bare column
+  says nothing about which table it stands on, and this pass does not resolve names.
+
+The receiving join is the LATER of the two sources: a join relates its own source to something
+already in the tree, and the tree is built left to right.
+
+### The links must not contradict one another — `CheckJoinsAreConsistent`
+
+A join condition is a sentence about TWO tables. Two ways of writing one are not links at all, and
+both are easy to write by hand and invisible afterwards:
+
+| written | why it is not a link |
+|---|---|
+| a table joined to ITSELF (every column roots in the same source) | whatever it filters, it says nothing about how the two tables meet — the join stays unconstrained |
+| a condition that never MENTIONS the table it is written on | a filter in a join's clothes: for an INNER join it happens to behave like `WHERE`, for an OUTER one it does NOT — the same text means two things depending on a box ticked elsewhere |
+| a link naming a table added LATER | the tree is built left to right; the name is not in scope yet |
+
+No `ON` is checked for nothing at all (there is no link, and that is allowed), and a literal `ON`
+(`ON TRUE`) is left alone — that is a product spelled out loud.
+
+Said in the engine and not in the constructor's grid, because it is a fact about the QUERY.
+
+### A field left over from a table that is gone
+
+Deleting a table cascades — everything written against it goes with it — but a query can also be
+OPENED after the table under it was deleted, and then the fields are still there in the text. Two
+places learned to say so: `ResolvePath`, when a qualifier resolves to nothing, and `CheckSelectNames`
+when a query has NO TABLES AT ALL and still selects `SliceLast.Dimension2`. The second one used to
+pass silently — "cannot verify" is the right silence for a temp table this check cannot see, but a
+query with nothing to verify against is not unverifiable, it is plainly wrong.
+
+### An unset parameter is not an error while the query is being written
+
+`&Period` with no value is the NORMAL state of a query under construction, and the verdict line went
+red over it. The cause was one path doing two jobs: `ResolveSource` evaluated the argument VALUES
+even when it was only being asked whether the NAMES resolve. On the checking path a missing
+parameter now yields an empty value and the check goes on being about names.
+
+The same door learned a second thing: an argument that is a BARE WORD against a parameter with a
+closed set of choices (`…Turnovers(&From, &To, Day)`) is read as the word it is, not as a column
+named `Day` that no table has.
+
+### `ISNULL(value, replacement)` — read as the `CASE` it is
+
+`IS [NOT] NULL` already existed as a predicate (`WHERE NOT Reference IS NULL` and
+`WHERE Reference IS NOT NULL` both parse). What was missing was the FUNCTION, and it is not a new
+node kind:
+
+```
+ISNULL(a, b)   ->   CASE WHEN a IS NULL THEN b ELSE a END
+```
+
+built in `ParseIsNullCall`, sharing the same expression node for both mentions of `a`. One
+evaluator, one lowering, one renderer, one set of tests — a second node type would have needed all
+of them again to mean exactly this.
+
+### ⭐⭐ A nested table publishes its OUTPUT, not the door's internals
+
+The one that took the longest, and the one that was a CLASS rather than a case.
+
+`SELECT … FROM (SELECT InformationRegister1.Attribute1.Code AS Attribute1Code … GROUP BY …) AS T`
+answered `unknown attribute 'Attribute1Code'` about a field the inner query plainly declares.
+
+A projection reaches the door in FOUR shapes, and only the first two were being published:
+
+| shape | how the door records it | was published? |
+|---|---|---|
+| a plain column | in the select list, under its own name | yes |
+| an explicit alias | select list + alias | yes |
+| a dot-walk (`Ref.Field`) | `m_dotWalks` — no column of its own, only an output name | no |
+| an aggregate / a GROUP BY key / a computed expression | aggregate list / group list / `m_selectExprs` — or nothing at all | no |
+
+`ibSubqueryQueryable` was DERIVING its exposed columns from the builder's internals and, finding an
+empty select list, fell back to the primary source's own columns — the register's, which of course
+hold no `Attribute1Code`.
+
+The authoritative answer was already being computed and thrown away one line earlier:
+`WrapSelectAsQueryable` calls `PopulateBuilder(…, innerSchema, …)`, and `innerSchema` IS the output
+schema of that select. It is now handed to the wrapper (`ibSubqueryOutput`: name · column · alias ·
+object prefix · type), which stops guessing. Three consequences worth naming:
+
+* **the type travels.** A published column carries the SCHEMA's type, not the type of whatever
+  column it happens to read through — a reference with no type is not a reference, and the outer
+  query could not walk into it. (The same lesson the temp table taught: `docs` §, `m_type` on
+  `OutputColumn`.)
+* **one read rule instead of two.** `ComputeRows` had grown a positional aggregate path beside an
+  alias-aware plain path. Both are now the SAME three-way rule the selection reader uses: object
+  prefix → alias → column. Two readings of one schema is how they drift apart.
+* **depth is free.** A nested table inside a nested table publishes its output the same way, because
+  the wrapper of the inner one is built from ITS schema.
+
+### A query that GROUPS is a query that FOLDS
+
+The next wall the same query hit, once it could be named: `Field 'fld1077_TYPE' not found in the
+resultset`.
+
+`GROUP BY Ref` with no `SUM` beside it is still a fold — a `DISTINCT` over the keys, one row per key
+— and it must run the UNPAGED, full-spread read. The wrapper decided "does this fold?" by looking at
+the AGGREGATE list alone, found it empty, and took the paged road; the paged projection drops the
+`_TYPE` field a reference is reassembled from, so the row read died on a field the SELECT never
+listed. The provider knows this shape and guards it (`CanPageGroupLevel` refuses a multi-field
+dimension for exactly this reason) — but a guard placed after the wrong turn only makes the wrong
+turn quieter.
+
+Swept as a class: every other site that decides this (`dbTableProvider` 1327 / 1426 / 1718) already
+asks about **both** the group keys and the aggregates. The wrapper was the last one asking about
+half of it.
+
+### A GROUP BY key covers what it walks into
+
+`GROUP BY Producer` fixes `Producer.Region` for every row of the group — one reference value, one
+region. So the completeness check accepts a key that is a PREFIX of a projected path, and the author
+is not made to list the children of a key he has already grouped by.
+
+SQL does not know that and would refuse the projection, so the lowering adds the walked leaf to the
+server's GROUP BY itself. Grouping additionally by a value that cannot vary inside the group changes
+no result — it is a spelling the server requires, not a decision about the query.
+
+### ⭐⭐ The output schema outlives the door, so it may not point into it
+
+The crash the same run produced, found in a dump: an access violation in
+`ibRamTableResultSource::Value`, on `mov eax,[edx]` — the **vtable pointer of the column itself** was
+`0xcdcd0001`. Not freed memory (`0xdddddddd`), but memory the allocator had already handed to
+somebody else. The stack said the rest: it was the DEBUGGER's thread, expanding a selection value in
+a watch window long after the query had returned.
+
+A subquery wrapper is built for ONE run and owns the columns it publishes; `subOwners` is a local of
+`ExecuteImpl` and releases them on return. The OUTPUT SCHEMA, by contrast, travels out with the
+selection and is read afterwards — by a script reading a field, by the debugger minutes later.
+
+It survived only while a nested table published its SOURCE's columns, which the metadata owns. The
+day it began publishing its own output honestly — an alias, a dot-walk, a computed expression, all
+allocated by the wrapper — every such schema entry became a pointer into somebody else's memory.
+**Publishing honestly did not create the hazard; it made a latent one reachable.**
+
+Nothing the schema does needs the door: an entry needs an ID to find its cell, a NAME and a TYPE. So
+it takes a snapshot of exactly those three, owned by the schema itself through the same
+`OutputColumn::m_ownedCol` a synthetic totals measure already used. A metadata-owned column is left
+alone — it outlives the schema by construction. Applied at every exit where the owner is local and
+the schema escapes: `ExecuteImpl` (both terminals), `DescribeOutput`, `ExecuteTotals`, `LowerUnion`.
+
+### Still open (named, not smuggled)
+
+* a run of INNER joins is not REORDERED, so a link may not name a table added after it;
+* the periodicity shorthand on turnovers (`…Turnovers(&From, &To, Month)`) is still refused by the
+  lowering — see [register-totals-strategy.md](register-totals-strategy.md);
+* a filter structure written in script code does not yet convert into the same condition.

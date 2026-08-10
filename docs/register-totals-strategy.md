@@ -1018,6 +1018,60 @@ matters:
    release valve already exists — `m_ddlCommitBeforeData`, the barrier that already defers data
    writes past the DDL commit.
 
+## The READ side, as the constructor found it (2026-08-10/11)
+
+Everything above is about maintaining the totals. This section is about the other half — the virtual
+tables a query names — and it is written from a run of the query constructor against them, which is
+the first time anybody asked them the ordinary questions.
+
+**A virtual table answers about its own columns from the VIEW's shape.** `FillSourceExplorer` on the
+register's query descriptor reads `GetViewQueryable(...)` — the column set built from the register's
+own dimensions and resources, metadata only. No companion is constructed and no database is touched,
+so the answer costs nothing and works on a base that has never been opened. Deliberately NOT the
+companion's `GetColumns()`: in RAM mode a companion navigates through the register itself and would
+report the MOVEMENT columns, which is the one answer that would mislead.
+
+**A dimension in a view IS the dimension.** The view's columns are plain (name, type, id) triples,
+which is right for what is genuinely derived — `PeriodMonth`, `Resource1Turnover` have no metadata
+behind them. It is wrong for a dimension: handed over as a synthetic triple it lost its picture and,
+visibly, the fact that it holds a REFERENCE — so the same dimension could be unfolded on the register
+one node up and not inside the view. The metaobject is handed over where there is one, keyed by the
+id the view builder promised to keep.
+
+**⭐ The periodicity decides which columns EXIST.** It is not a filter applied afterwards; it is the
+grouping key of the fold, so it determines what the table has to show:
+
+| periodicity | the table's period columns |
+|---|---|
+| *(nothing)* | none — the interval is read WHOLE: one row per key, begin to end, with no date on it |
+| `Auto` | every projection the table can make (`Period`, `PeriodSecond` … `PeriodYear`) — nothing decided, the author picks |
+| a unit (`Month`) | one column: `Period`, rolled to that unit. Months asked for, months given — the finer projections are not part of that reading |
+| `Recorder` | the period and the document it came from |
+| `Record` | the period, the document, and the line within it |
+
+The distinction that had to be got right is **nothing** vs **Auto**: they are opposites. Nothing
+asked for means no period at all, and showing a `Period` column over a reading that carries no date
+is the window promising a value the rows will not have. An argument written as a PARAMETER counts as
+undecided, like `Auto` — the shape a query is drawn against must be the widest one it might turn out
+to have, never a guess at which.
+
+**A register offers only the tables its type can fill.** A turnover-only accumulation register no
+longer registers `.Balance` / `.BalanceAndTurnovers` at all — its view has no opening, closing or
+expense column, so those were two tables in every catalogue answering with dimensions and not one
+resource. The mirror on the information register: **no periodicity means no slices** — there is no
+"as of" without a date to be as-of (`SyncSliceSources`, run from the metaobject's own run / reload).
+
+**The parameters are declared by the SOURCE.** `DescribeParameters` gives the begin / end /
+periodicity / [fill method] / condition set per virtual table, with the periodicity as a CLOSED set
+of choices; the constructor's dialog renders that, rather than keeping a list of its own. An argument
+written as a bare word (`…Turnovers(&From, &To, Month)`) is read as the word it is, not as a column
+named `Month` that no table has.
+
+**Still open here:** the periodicity shorthand on turnovers is accepted by the source and still
+refused by the lowering; `Recorder` / `LineNumber` need the movements-level read path; and the
+periodicity and fill-method word lists want to be REGISTERED enumerations, edited by quick choice,
+rather than words a source declares.
+
 ## Open questions
 
 - **Seed / predefined data on Apply.** Whatever idempotent seed path
