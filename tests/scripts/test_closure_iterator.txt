@@ -12,7 +12,7 @@ arr.Add(20)
 arr.Add(30)
 
 var sum = 0
-For Each x In arr Do
+Foreach x In arr Do
     sum = sum + x
 EndDo
 Message(sum)   // expect 60
@@ -20,7 +20,7 @@ Message(sum)   // expect 60
 // LINQ pipeline tail also uses iterator dispatch:
 var result = arr.Where(Function(x) Return x >= 20 EndFunction).ToArray()
 Message("filtered count=" + result.Count())  // expect 2
-For Each v In result Do
+Foreach v In result Do
     Message(v)
 EndDo
 // expect 20, 30

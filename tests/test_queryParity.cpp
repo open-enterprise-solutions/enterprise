@@ -7,7 +7,7 @@
 // ran. NULL / three-valued logic is the worst offender.
 //
 // This harness loads ONE fixture into both a real (in-memory) SQLite database and
-// an ibQueryRamTable, then for each filter compares:
+// an ibQueryRamTable, then foreach filter compares:
 //   RAM  = ibQueryComposer::FilterRows(table, predicate).RowCount()
 //   SQL  = SELECT COUNT(*) FROM t WHERE <equivalent clause>
 //

@@ -12,6 +12,8 @@
 #include <gtest/gtest.h>
 
 #include <wx/debug.h>   // wxSetAssertHandler — no modal dialogs in a batch run
+#include <wx/log.h>     // wxLogStderr — the default target FLUSHES MODALLY
+#include <wx/init.h>    // wxInitializer — held for the whole binary, see below
 #ifdef _WIN32
 #include <crtdbg.h>
 #endif
@@ -51,6 +53,24 @@ const ::testing::Environment* const g_vesCodeStyleEnv =
 // Same treatment, one place, applied whatever --gtest_filter selects.
 class HeadlessAssertEnvironment : public ::testing::Environment {
 public:
+	// wx STAYS UP FOR THE WHOLE BINARY, and this member is the reason the two
+	// settings below hold.
+	//
+	// Fixtures bring wx up per test (a `wxInitializer` member — eight files do
+	// it). wxInitialize/wxUninitialize are REFERENCE COUNTED (gs_nInitCount,
+	// wx/src/common/init.cpp), so the LAST one out runs wxEntryCleanup — in the
+	// middle of the suite. That teardown wipes wx's image handlers
+	// (wxImageModule::OnExit -> wxImage::CleanUpHandlers) AND destroys the active
+	// log target, after which wx falls back to wxLogOutputBest, which prefers a
+	// MessageBox. So a later test decoding an icon raised a warning that became a
+	// MODAL DIALOG — a hang with a green suite behind it.
+	//
+	// Holding one initializer here keeps the count off zero for the run, so no
+	// mid-suite cleanup happens at all. Registering harder, or re-arming per
+	// fixture, treats the symptom; nothing may be re-established on a hot path
+	// in the ENGINE to satisfy a test binary.
+	wxInitializer m_wxInit;
+
 	void SetUp() override {
 #ifdef _WIN32
 		_CrtSetReportMode(_CRT_ERROR,  _CRTDBG_MODE_FILE); _CrtSetReportFile(_CRT_ERROR,  _CRTDBG_FILE_STDERR);
@@ -60,6 +80,21 @@ public:
 		// wxASSERT -> nothing. The condition still tells us something in a
 		// debugger; in a batch run it must not block.
 		wxSetAssertHandler(nullptr);
+
+		// THE THIRD DOOR, and the one that actually hung the runner. A wx
+		// WARNING is not an assert: with no log target set, wx installs one
+		// that BUFFERS and flushes into a modal box when the target goes away.
+		// The GUI fixture handles its own case (tests/frontendFix.h, after
+		// wxEntryStart, because a wxApp installs wxLogGui of its own), but a
+		// backend test that makes wx warn had nothing at all. stderr has no
+		// OK button.
+		delete wxLog::SetActiveTarget(new wxLogStderr());
+
+		// Image handlers are NOT registered here. backend.dll already does it from
+		// a static ctor at DLL load (picturePredefined.cpp), and the initializer
+		// above is what makes that hold — with wx up for the whole run, nothing
+		// calls wxEntryCleanup mid-suite to wipe them. Registering again only
+		// prints a screenful of "Adding duplicate image handler".
 	}
 };
 const ::testing::Environment* const g_headlessAssertEnv =

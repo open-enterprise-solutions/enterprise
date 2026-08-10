@@ -24,6 +24,6 @@ var result = projected.ToArray()
 
 Message("count=" + result.Count())
 
-For Each v In result Do
+Foreach v In result Do
     Message(v)
 EndDo

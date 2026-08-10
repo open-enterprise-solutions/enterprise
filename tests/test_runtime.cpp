@@ -18,24 +18,178 @@
 #include "backend/compiler/byteCode.h"
 #include "backend/compiler/value.h"
 #include "backend/system/systemManager.h"   // ibValueSystemFunction — IsNull / ValueIsFilled impls
+#include "backend/compiler/procUnitState.h"   // m_errorPlace — which opcode raised
+#include "backend/session/session.h"
+#include "backend/appData.h"                // the built-in dispatcher reads appData on entry
+
+#include <wx/init.h>
+#include <wx/image.h>  // wxInitAllImageHandlers — wx decodes nothing until registered
+#include <wx/log.h>    // wxLogStderr — a wx warning must not become a modal box                        // wxInitializer — wxBase before appData
 
 namespace {
 
-bool TryCompile(ibCompileCode& cc, const wxString& src) {
+// ===========================================================================
+// CALLING A BUILT-IN NEEDS APPLICATION DATA
+//
+// `ibValueSystemFunction::CallAsFunc` opens with `if (!appData->DesignerMode())`
+// — before any dispatch, on a global that a bare backend test binary leaves
+// NULL. So every built-in call access-violates here, and that is why nothing in
+// this tree had ever executed one: not a policy, a wall.
+//
+// A real host always has it, so this is the test's job and not the engine's.
+// The same wall stands in front of ibValueContainer (six sites), which is why
+// the Structure benchmarks throw.
+//
+// Cost of not knowing this: seven builds spent proving the compiler innocent.
+// The layer split that found it took one — call the value directly, no
+// interpreter, and see the fault survive.
+// ===========================================================================
+struct BuiltInRuntime : ::testing::Test {
+	// wx FIRST. CreateAppDataEnv brings up the session registry and the
+	// connection pool, both of which use wxBase; without an initializer it
+	// faults inside SetUp, which reads as "the test is broken" rather than
+	// "the environment was never started". Same order as test_jobTenancy.cpp.
+	wxInitializer m_wxInit;
+
+	void SetUp() override {
+		if (!m_wxInit.IsOk())
+			GTEST_SKIP() << "wxBase init failed (no wxApp host)";
+
+		// IMAGE HANDLERS, because a decoder that was never registered cannot
+		// decode. Bringing up application data builds the metadata configuration,
+		// which fills the language list, which loads icons through
+		// `wxImage::LoadFile` — and wx ships with NO handlers until something
+		// registers them. A GUI app does it at startup; a bare wxBase binary does
+		// not, so every icon reports "Unknown image data format".
+		//
+		// The data is fine. Reading that message as a broken resource was wrong.
+		wxInitAllImageHandlers();
+
+		// AND NO MODAL DIALOGS, whatever else warns. wx's default log target is
+		// wxLogGui, where a warning IS a MessageBox — in a headless run that is
+		// not a failure but a HANG, and the report says "timed out" without
+		// naming anything. Same trap the GUI harness hit; same remedy.
+		if (wxLog::GetActiveTarget() != nullptr)
+			delete wxLog::SetActiveTarget(new wxLogStderr());
+
+		if (ibApplicationData::Get() == nullptr
+		 && !ibApplicationData::CreateAppDataEnv(ibRunMode::eRUNTIME_MODE))
+			GTEST_SKIP() << "appData env unavailable headless";
+	}
+};
+
+// A FAILURE HAS TO SAY WHAT IT WAS.
+//
+// This returned a bare `bool`, so `ASSERT_TRUE(TryCompile(...))` printed
+// "Actual: false" and nothing else — the compiler had the message and the test
+// threw it away. Every diagnosis then started by re-running the source by hand
+// to find out what it objected to.
+//
+// ::testing::AssertionResult streams its reason into the gtest report and
+// converts to bool, so no callsite changes and no second helper to remember.
+::testing::AssertionResult TryCompile(ibCompileCode& cc, const wxString& src) {
 	try {
-		return cc.Compile(src);
+		if (cc.Compile(src))
+			return ::testing::AssertionSuccess();
+		return ::testing::AssertionFailure() << "Compile() returned false without raising";
+	} catch (const ibBackendException& err) {
+		return ::testing::AssertionFailure() << err.GetErrorDescription().ToStdString();
 	} catch (...) {
-		return false;
+		return ::testing::AssertionFailure() << "unknown exception";
 	}
 }
 
-bool TryExecute(ibProcUnit& pu, const ibByteCode& bc) {
+// A COMPILER THAT KEEPS ITS PARENT, assembled on the TEST side.
+//
+// `Compile()` opens with `Reset()`, which clears the bytecode's parent link, so
+// SetParent-then-Compile resolves nothing across the boundary. In the product
+// `ibCompileModule::Compile` re-establishes the link mid-compile from its
+// metaobject; a test has no metaobject, and teaching the base class to remember
+// the parent was tried and reverted (it duplicates the bytecode's declared single
+// source of truth and trades a loud failure for a silent stale one).
+//
+// So the link is re-established here instead, in the one window where it is
+// correct — after Reset, before any name is resolved. This is the same five steps
+// ibCompileCode::Compile(strCode) runs, with SetParent inserted at step two; four
+// of the five are public and CompileModule() is protected, which a subclass may
+// call. Nothing in the compiler changes to make a test work.
+class ParentedCompiler : public ibCompileCode {
+public:
+	explicit ParentedCompiler(const wxString& strName)
+		: ibCompileCode(strName, wxT("memory"), false) {}
+
+	// Names its failure, like TryCompile. Unguarded, a compile error raised here
+	// left gtest with "Unknown C++ exception thrown in the test body" — the
+	// exception is not a std::exception, so gtest cannot even print its text, and
+	// the one thing that knew what was wrong was thrown away at the boundary.
+	::testing::AssertionResult CompileUnder(ibCompileCode* parent, const wxString& src) {
+		try {
+			Reset();
+			if (parent != nullptr)
+				SetParent(parent);
+			Load(src);
+			if (!PrepareLexem())
+				return ::testing::AssertionFailure() << "PrepareLexem() failed";
+			PrepareModuleData();
+			if (!CompileModule())
+				return ::testing::AssertionFailure() << "CompileModule() returned false without raising";
+			return ::testing::AssertionSuccess();
+		} catch (const ibBackendException& err) {
+			return ::testing::AssertionFailure() << err.GetErrorDescription().ToStdString();
+		} catch (...) {
+			return ::testing::AssertionFailure() << "unknown exception";
+		}
+	}
+};
+
+// The same thing, but it SAYS what went wrong. A bare false costs a rebuild to
+// find out, and the last three compile failures here each cost one.
+bool TryCompileNamed(ibCompileCode& cc, const wxString& src, wxString& outError) {
+	try {
+		if (cc.Compile(src))
+			return true;
+		outError = wxT("Compile() returned false without raising");
+	} catch (const ibBackendException& err) {
+		outError = err.GetErrorDescription();
+	} catch (...) {
+		outError = wxT("unknown exception");
+	}
+	return false;
+}
+
+// Same rule for the run: a script that raised must report WHAT it raised, or
+// "Actual: false" is all anyone ever learns from a broken pipeline.
+::testing::AssertionResult TryExecute(ibProcUnit& pu, const ibByteCode& bc) {
 	try {
 		pu.Execute(bc);
-		return true;
+		return ::testing::AssertionSuccess();
+	} catch (const ibBackendException& err) {
+		return ::testing::AssertionFailure() << err.GetErrorDescription().ToStdString();
 	} catch (...) {
-		return false;
+		return ::testing::AssertionFailure() << "unknown exception";
 	}
+}
+
+// BOUND, and the failure SAYS WHAT IT WAS.
+//
+// Two differences from TryExecute, both learned the hard way. It goes through
+// `CreateBinder()`, which is what fills the slots a module DECLARES as bindings
+// — every case above binds nothing, so the plain overload suits them, but a
+// module that says `Message(...)` names a context whose slot must be filled or
+// the run refuses before the first opcode ("Required binding not provided").
+// And it reports the raise, because a bare `false` is the least useful sentence
+// available and reading the engine to guess which one fired costs a day.
+bool RunBound(ibCompileCode& cc, ibProcUnit& pu, wxString& outError) {
+	try {
+		ibByteBinder binder = cc.CreateBinder();
+		pu.Execute(cc.m_cByteCode, binder);
+		return true;
+	} catch (const ibBackendException& err) {
+		outError = err.GetErrorDescription();
+	} catch (...) {
+		outError = wxT("unknown exception");
+	}
+	return false;
 }
 
 } // namespace
@@ -508,4 +662,716 @@ TEST(DeclaredTypesRuntime, WritingTwiceIsOrdinary) {
 	ibValue val;
 	ASSERT_TRUE(pu.GetPropVal(wxT("x"), val));
 	EXPECT_EQ(7, val.GetInteger());
+}
+// ===========================================================================
+// A CLOSURE WRITING BACK INTO ITS CAPTURED SLOT
+//
+// `i = i + 1` inside a lambda, where `i` belongs to the enclosing function's
+// heap-promoted frame. It is the one assignment whose destination is NOT in the
+// current frame, so it is the one that tells whether writing an operation's
+// result straight into its destination (compileCode.cpp, EmitAssign) survives
+// the outer-frame walk — every other assignment resolves through
+// `pRefLocVars[idx]` and would pass either way.
+//
+// Found by running tests/scripts/test_closure_counter.txt, which had never been
+// executed by anything: the whole closure suite tested that such a module
+// COMPILES.
+// ===========================================================================
+
+TEST(RuntimeTest, ClosureWritesBackIntoItsCapturedSlot) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("Function MakeCounter()\n")
+		wxT("  var i; i = 0;\n")
+		wxT("  Return Function()\n")
+		wxT("           i = i + 1;\n")
+		wxT("           Return i;\n")
+		wxT("         EndFunction;\n")
+		wxT("EndFunction\n")
+		// `public` because GetPropVal reads EXPORT vars only — a plain module var
+		// is private to the module and invisible to a host by design.
+		wxT("var c public; var a public; var b public;\n")
+		wxT("c = MakeCounter();\n")
+		wxT("a = c();\n")
+		wxT("b = c();\n")));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue valA, valB;
+	ASSERT_TRUE(pu.GetPropVal(wxT("a"), valA));
+	ASSERT_TRUE(pu.GetPropVal(wxT("b"), valB));
+
+	// The point is the SECOND call: a counter that always answers 1 has a live
+	// lambda and a dead capture.
+	EXPECT_EQ(valA.GetInteger(), 1);
+	EXPECT_EQ(valB.GetInteger(), 2);
+}
+
+// ===========================================================================
+// A BUILT-IN GLOBAL CALLED WITH FEWER ARGUMENTS THAN IT DECLARES
+//
+// `Message` declares two parameters (text, status) and every script passes one.
+// A call emits one argument opcode per DECLARED parameter, so the missing tail
+// is padded with the DEF_VAR_DEFAULT sentinel — a NEGATIVE index that the
+// OPER_SETCONST branch of OPER_CALL_METHOD used to hand straight to the const
+// pool, walking off the vector.
+//
+// Nothing caught it because nothing in tests/ had ever EXECUTED a built-in
+// global — the suites bound them so scripts would compile, and stopped there.
+// Found by running tests/scripts/*.txt for the first time.
+// ===========================================================================
+
+TEST_F(BuiltInRuntime, ABuiltInGlobalTakesFewerArgumentsThanItDeclares) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+
+	// The host binds the global API as a transparent scope, exactly as
+	// codeRunner and the corpus do. It must outlive the ProcUnit.
+	ibValueSystemFunction valueSystem;
+	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+
+	ASSERT_TRUE(TryCompile(cc, wxT("Message(\"boom\");")));
+
+	ibProcUnit pu;
+	wxString strError;
+	EXPECT_TRUE(RunBound(cc, pu, strError))
+		<< "an omitted optional argument must leave the slot empty, not index the const pool with -2 — "
+		<< strError.ToStdString();
+}
+
+// ===========================================================================
+// A BUILT-IN FUNCTION AS THE ARGUMENT OF A BUILT-IN PROCEDURE
+//
+// `Message(Sqrt(16))` — two context-method calls, the inner one supplying the
+// outer one's argument. It access-violates: not a raised error, a hardware
+// fault, which no `catch (...)` in a host will stop.
+//
+// Found by tests/scripts/test_math_suite.txt, whose first sixteen lines run and
+// whose seventeenth kills the process. Nothing had ever executed a built-in at
+// all, so nesting two of them had never happened either.
+// ===========================================================================
+
+TEST_F(BuiltInRuntime, ABuiltInFunctionSuppliesABuiltInProcedureArgument) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+
+	ibValueSystemFunction valueSystem;
+	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+
+	ASSERT_TRUE(TryCompile(cc, wxT("Message(Sqrt(16));")));
+
+	ibProcUnit pu;
+	wxString strError;
+	EXPECT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+}
+
+// ===========================================================================
+// x++ / x-- — the POSTFIX contract: yield the old value, then store the new
+//
+// Not covered anywhere until now (test_number.cpp's PostIncrement is C++'s
+// operator on ibNumber, not the language's). It matters more than it looks: the
+// increment is emitted as `ADD x, x, 1`, where the destination IS the left
+// operand — the aliasing shape every arithmetic handler had to be taught to
+// survive when assignment started writing its own destination.
+// ===========================================================================
+
+TEST(RuntimeTest, PostfixIncrementYieldsTheOldValueThenStores) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var i public; var taken public; var j public; var back public;\n")
+		wxT("i = 5;\n")
+		wxT("taken = i++;\n")     // taken = 5, i = 6
+		wxT("j = 5;\n")
+		wxT("back = j--;\n")));   // back = 5, j = 4
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("taken"), v)); EXPECT_EQ(v.GetInteger(), 5);
+	ASSERT_TRUE(pu.GetPropVal(wxT("i"),     v)); EXPECT_EQ(v.GetInteger(), 6);
+	ASSERT_TRUE(pu.GetPropVal(wxT("back"),  v)); EXPECT_EQ(v.GetInteger(), 5);
+	ASSERT_TRUE(pu.GetPropVal(wxT("j"),     v)); EXPECT_EQ(v.GetInteger(), 4);
+}
+
+// ===========================================================================
+// WHAT `Message("boom")` ACTUALLY COMPILES TO
+//
+// Not a test — a printout, DISABLED by default. Three hypotheses about this one
+// line were argued from reading the emitter and all three were wrong; the
+// operands are a fact and take one run to obtain.
+//
+//   oes_tests --gtest_also_run_disabled_tests --gtest_filter=*DumpBuiltInCall*
+// ===========================================================================
+
+TEST_F(BuiltInRuntime, DISABLED_DumpBuiltInCall) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+
+	ibValueSystemFunction valueSystem;
+	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+
+	ASSERT_TRUE(TryCompile(cc, wxT("Message(\"boom\");")));
+
+	const ibByteCode& bc = cc.m_cByteCode;
+
+	std::printf("vars %u\n", (unsigned)bc.m_listVar.size());
+	for (const auto& v : bc.m_listVar)
+		std::printf("  kind=%d slot=%d name=%s\n",
+			(int)v.m_kind, (int)(long)v,
+			(const char*)v.m_strRealName.ToUTF8());
+
+	// The CONTENTS, not just the count. An operand names a const-pool index, so
+	// "const 2" says nothing about whether index 0 holds what the call thinks it
+	// holds — which is the only question left once the opcodes read correctly.
+	std::printf("const %u\n", (unsigned)bc.m_listConst.size());
+	for (size_t i = 0; i < bc.m_listConst.size(); i++)
+		std::printf("  [%u] type=%d text=%s\n", (unsigned)i,
+			(int)bc.m_listConst[i].GetType(),
+			(const char*)bc.m_listConst[i].GetString().ToUTF8());
+	std::printf("code %u\n", (unsigned)bc.m_listCode.size());
+	for (size_t i = 0; i < bc.m_listCode.size(); i++) {
+		const ibByteUnit& u = bc.m_listCode[i];
+		std::printf("  %2u op=%d p1(%d,%d) p2(%d,%d) p3(%d,%d) p4(%d,%d)\n",
+			(unsigned)i, (int)u.m_numOper,
+			(int)u.m_param1.m_numArray, (int)u.m_param1.m_numIndex,
+			(int)u.m_param2.m_numArray, (int)u.m_param2.m_numIndex,
+			(int)u.m_param3.m_numArray, (int)u.m_param3.m_numIndex,
+			(int)u.m_param4.m_numArray, (int)u.m_param4.m_numIndex);
+	}
+	SUCCEED();
+}
+
+// ===========================================================================
+// THE ARITY A BUILT-IN IS TOLD IT RECEIVED
+//
+// A call emits one argument opcode per DECLARED parameter and passes the
+// DECLARED count as lSizeArray. Implementations read that count to decide
+// whether an optional argument was supplied —
+//
+//     Message(paParams[0]->GetString(),
+//             lSizeArray > 1 ? paParams[1]->ConvertToEnumValue<...>() : default)
+//
+// — so a padded, never-written slot is read as if the caller had passed it.
+// These two cases separate "built-ins are broken" from "OMITTED built-in
+// arguments are broken", which three rounds of reading the emitter did not.
+// ===========================================================================
+
+TEST_F(BuiltInRuntime, ABuiltInProcedureWithEveryArgumentWritten) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ibValueSystemFunction valueSystem;
+	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+
+	// TWO messages, both with only the text — the omitted-status shape, twice,
+	// so a state left behind by the first call would show. A literal status
+	// cannot be written here: it is an ENUM, and a number in its place raises
+	// "Variable type does not support this operation" quite correctly.
+	ASSERT_TRUE(TryCompile(cc, wxT("Message(\"boom\"); Message(\"again\");")));
+
+	ibProcUnit pu;
+	wxString strError;
+	EXPECT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+}
+
+TEST_F(BuiltInRuntime, ABuiltInFunctionWithEveryArgumentWritten) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ibValueSystemFunction valueSystem;
+	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+
+	// Sqrt takes exactly one; if THIS crashes the receiver is at fault, and if
+	// it runs the fault is the omitted-argument path and nothing else.
+	ASSERT_TRUE(TryCompile(cc, wxT("var r public; r = Sqrt(16);")));
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("r"), v));
+	EXPECT_EQ(v.GetInteger(), 4);
+}
+
+// ===========================================================================
+// THE HOST VALUE ITSELF — no compiler, no bytecode, no interpreter
+//
+// Four script-level cases all die the same way, which says the fault is shared
+// and says nothing about WHERE. This calls ibValueSystemFunction the way the
+// interpreter would, straight from C++: resolve the method by name, read its
+// arity, invoke it. If this crashes, the built-in surface is unusable in a bare
+// backend binary and the interpreter is innocent; if it passes, the fault is in
+// the call path and the surface is fine.
+//
+// Splitting the LAYER rather than guessing the CAUSE — three cause-guesses in a
+// row were wrong, and each cost a build.
+// ===========================================================================
+
+TEST_F(BuiltInRuntime, TheBuiltInSurfaceAnswersDirectly) {
+	ibValueSystemFunction valueSystem;
+
+	const long numSqrt = valueSystem.FindMethod(wxT("Sqrt"));
+	ASSERT_GE(numSqrt, 0) << "the global API does not know its own name";
+
+	const long numParams = valueSystem.GetNParams(numSqrt);
+	std::printf("Sqrt: method=%ld params=%ld hasRet=%d\n",
+		numSqrt, numParams, (int)valueSystem.HasRetVal(numSqrt));
+
+	ibValue  arg((int)16);
+	ibValue  ret;
+	ibValue* params[] = { &arg };
+
+	// THE SAME COMPUTATION, HERE. NumberMath.SqrtApproxFour is green, but it runs
+	// BEFORE any fixture brings up application data — so "ibNumber::Sqrt works"
+	// has only ever been established in a process that differs from this one.
+	// Computing it in place is what tells the two apart.
+	const ibNumber direct = ibNumber(16).Sqrt();
+	std::printf("direct sqrt(16) = %s\n", (const char*)direct.ToString().ToUTF8());
+
+	std::printf("arg: type=%d text=%s\n",
+		(int)arg.GetType(), (const char*)arg.GetString().ToUTF8());
+
+	ASSERT_TRUE(valueSystem.CallAsFunc(numSqrt, ret, params, 1));
+
+	// PRINTED THROUGH GetString, which is known to work on this value, because
+	// GetInteger is GetNumber().ToInt() and that is two suspects in one read:
+	// "Sqrt returned zero" and "the root is right but the conversion is not"
+	// are different defects and this tells them apart.
+	std::printf("ret: type=%d text=%s int=%d\n",
+		(int)ret.GetType(), (const char*)ret.GetString().ToUTF8(), (int)ret.GetInteger());
+
+	EXPECT_EQ(ret.GetInteger(), 4);
+}
+
+// ===========================================================================
+// A FRESH ibValue(int) MUST ALREADY BE ITS NUMBER
+//
+// `Sqrt(16)` returned 0 until a printf read the value's type and text first,
+// and then returned 4 — the read was the only difference between two runs of
+// the same binary. So something about a freshly constructed numeric value is
+// not settled until it is touched, and every built-in that takes a number is
+// downstream of it.
+//
+// Two calls, one untouched value and one read first. If they disagree, the
+// defect is exactly here and nowhere in the eight layers above it.
+// ===========================================================================
+
+TEST_F(BuiltInRuntime, AFreshNumericValueIsUsableWithoutBeingReadFirst) {
+	ibValueSystemFunction valueSystem;
+	const long numSqrt = valueSystem.FindMethod(wxT("Sqrt"));
+	ASSERT_GE(numSqrt, 0);
+
+	// UNTOUCHED — straight from the constructor into the call.
+	{
+		ibValue  arg((int)16);
+		ibValue  ret;
+		ibValue* params[] = { &arg };
+		ASSERT_TRUE(valueSystem.CallAsFunc(numSqrt, ret, params, 1));
+		EXPECT_EQ(ret.GetInteger(), 4)
+			<< "a number that has not been read yet is not yet a number";
+	}
+
+	// READ FIRST — the same value, after asking it what it is.
+	{
+		ibValue  arg((int)16);
+		(void)arg.GetType();
+		(void)arg.GetString();
+		ibValue  ret;
+		ibValue* params[] = { &arg };
+		ASSERT_TRUE(valueSystem.CallAsFunc(numSqrt, ret, params, 1));
+		EXPECT_EQ(ret.GetInteger(), 4);
+	}
+}
+
+// ===========================================================================
+// A PIPELINE LAMBDA THAT CAPTURES A MODULE VARIABLE
+//
+// `nums.Sum(Function(x) Return x * k EndFunction)` where `k` is declared at
+// module level. Two corpus scripts die on exactly this with "Attempt to write
+// to a constant value", and the suspicion is that it is not a third defect but
+// the SAME one as the nested-join failure: capture on the pipeline invoke path,
+// which builds a C-stack frame and never promotes
+// (procUnitLinq.cpp, CallLambdaWithArgs — see the note there).
+//
+// Written to find out, not to assert a belief. If it reproduces, three corpus
+// failures collapse into one arc; if it passes, the two scripts fail for some
+// other reason and I have been reading a coincidence.
+// ===========================================================================
+
+TEST(RuntimeTest, APipelineLambdaCapturesAModuleVariable) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var k public; var nums public; var r public;\n")
+		wxT("k = 3;\n")
+		wxT("nums = New Array;\n")
+		wxT("nums.Add(10); nums.Add(20);\n")
+		wxT("r = nums.Sum(Function(x) Return x * k EndFunction);\n")));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("r"), v));
+	EXPECT_EQ(v.GetInteger(), 90) << "(10 + 20) * 3 — the captured k must reach the selector";
+}
+
+// The same call with NOTHING CAPTURED. It answered 30 above — the plain sum,
+// i.e. the selector did not run — and that is a different symptom from the two
+// corpus scripts, which RAISE. So this pair separates "capture is lost" from
+// "the selector is ignored", which one test could not.
+TEST(RuntimeTest, APipelineSelectorRunsWithoutCapturingAnything) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var nums public; var r public;\n")
+		wxT("nums = New Array;\n")
+		wxT("nums.Add(10); nums.Add(20);\n")
+		wxT("r = nums.Sum(Function(x) Return x * 3 EndFunction);\n")));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("r"), v));
+	EXPECT_EQ(v.GetInteger(), 90)
+		<< "a selector with no capture at all — if this is 30 the selector is ignored "
+		   "outright and capture has nothing to do with it";
+}
+
+// ===========================================================================
+// `var k = 3` AT MODULE LEVEL — declaration and assignment in one line
+//
+// Two corpus scripts raise "Attempt to write to a constant value" on exactly
+// this line, and every runtime test here writes the separated form
+// (`var k public; k = 3;`) which works. The reader splits the joined form on
+// purpose: the declaration takes only the keyword and the NAME stays in the
+// module body so the assignment is read there as the assignment it is
+// (translateAST.cpp, BuildModuleDeclarations). This asks whether the halves still
+// name the same slot.
+// ===========================================================================
+
+TEST(RuntimeTest, AModuleVarDeclaredAndAssignedInOneLine) {
+	// `var k public = 3` does NOT compile — the modifier has no place in the
+	// joined form — so the corpus spelling is used as written and the value is
+	// read through a neighbour that IS exported.
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc, wxT("var k = 3;\nvar r public; r = k + 1;\n")));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("r"), v));
+	EXPECT_EQ(v.GetInteger(), 4) << "the declaration and the assignment must name one slot";
+}
+
+// ===========================================================================
+// THE JOINED `var` FORM WITHOUT A TERMINATOR
+//
+// Bisecting test_aggregations_selector.txt names line 30 — `var k = 3` — with
+// the preceding twenty-nine lines present; the same line ALONE runs. The one
+// difference from every test here is the terminator: the corpus is VES and ends
+// statements with a newline, and the reader deliberately cuts the declaration at
+// the keyword so the assignment stays in the body. Where the cut lands is
+// exactly what a missing `;` can change.
+//
+// Two cases so the answer is not a guess: one joined declaration, then a second
+// one after it.
+// ===========================================================================
+
+TEST(RuntimeTest, AJoinedVarWithoutATerminator) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var k = 3\n")
+		wxT("var r public\n")
+		wxT("r = k + 1\n")));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("r"), v));
+	EXPECT_EQ(v.GetInteger(), 4);
+}
+
+TEST(RuntimeTest, ASecondJoinedVarAfterAFirstOne) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var nums = New Array\n")
+		wxT("var k = 3\n")
+		wxT("var r public\n")
+		wxT("r = k + 1\n")));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("r"), v));
+	EXPECT_EQ(v.GetInteger(), 4) << "a joined declaration following another one";
+}
+
+// ===========================================================================
+// A MODULE `var x = …` AFTER A PIPELINE LAMBDA
+//
+// Four lines, produced by bisecting and then minimising
+// test_aggregations_selector.txt (ScriptCorpus.DISABLED_BisectFirstFailingLine)
+// while requiring the SAME error text at every reduction step. Five hand-built
+// repros of the named line had all passed, because every one of them left out
+// the thing that matters: a lambda emitted BEFORE the declaration.
+//
+// A lambda's body is emitted inline behind an OPER_LFUNC / OPER_ENDLFUNC fence,
+// and the module body continues after it. The suspicion is that a declaration
+// read after that fence gets a slot from the wrong context — but the point of
+// this case is to hold the shape, not the theory.
+// ===========================================================================
+
+TEST_F(BuiltInRuntime, AModuleVarAfterAPipelineLambda) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+
+	ibValueSystemFunction valueSystem;
+	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var orders = New Array\n")
+		wxT("Message(orders.Average(Function(o) Return o.Amount EndFunction))\n")
+		wxT("var k = 3\n")
+		wxT("var r public\n")
+		wxT("r = k\n")));
+
+	// The operands, printed, because the last three explanations of a failure
+	// this shape were all wrong and the tape settles it in one read.
+	const ibByteCode& bc = cc.m_cByteCode;
+	std::printf("vars %u\n", (unsigned)bc.m_listVar.size());
+	for (const auto& var : bc.m_listVar)
+		std::printf("  kind=%d slot=%d name=%s\n",
+			(int)var.m_kind, (int)(long)var, (const char*)var.m_strRealName.ToUTF8());
+	for (size_t i = 0; i < bc.m_listCode.size(); i++) {
+		const ibByteUnit& unit = bc.m_listCode[i];
+		std::printf("  %2u op=%d line=%u p1(%d,%d) p2(%d,%d) p3(%d,%d)\n",
+			(unsigned)i, (int)unit.m_numOper, (unsigned)unit.m_numLine,
+			(int)unit.m_param1.m_numArray, (int)unit.m_param1.m_numIndex,
+			(int)unit.m_param2.m_numArray, (int)unit.m_param2.m_numIndex,
+			(int)unit.m_param3.m_numArray, (int)unit.m_param3.m_numIndex);
+	}
+
+	ibProcUnit pu;
+	wxString strError;
+	const bool bRan = RunBound(cc, pu, strError);
+
+	// WHICH INSTRUCTION raised it. The tape above is correct, so the fault is in
+	// execution, and the opcode index says whether the run was where the emitter
+	// put it — a stray argument opcode executed as a top-level instruction would
+	// land in the dispatcher's default, since OPER_SET / OPER_SETCONST have no
+	// case of their own outside a call's argument loop.
+	if (!bRan) {
+		if (auto* state = ibSession::GetPUState())
+			std::printf("raised at opcode %ld\n", (long)state->m_errorPlace.m_errorLine);
+	}
+
+	ASSERT_TRUE(bRan) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("r"), v));
+	EXPECT_EQ(v.GetInteger(), 3);
+}
+
+// ===========================================================================
+// A LAMBDA INSIDE A PIPELINE LAMBDA, CAPTURING ITS PARAMETER
+//
+// `SelectMany(x => src.Select(y => x + y))` — the inner lambda reads the outer
+// one's parameter. This is what a query block's second binding compiles to, and
+// `test_linq_nested_join.txt` dies on it with "a variable is not an aggregate
+// object", i.e. the captured row arrives as nothing.
+//
+// The suspected cause is that the pipeline invoke path (procUnitLinq.cpp,
+// CallLambdaWithArgs) builds a C-stack frame and never honours
+// `m_needsHeapFrame`, so the inner lambda's weak_from_this() on the outer frame
+// is already expired. Promoting it was tried once and made things worse; the
+// note there says not to re-apply without a repro that fails first.
+//
+// This is that repro.
+// ===========================================================================
+
+// ✅ FIXED 2026-08-10, and this test is what judged the fix.
+//
+// It sat DISABLED through two failed attempts, both of which promoted the frame
+// to the heap and stopped there. The missing half was the ARGUMENTS: the pipeline
+// invoke path binds each parameter to the caller's `ibValue` by POINTER, and under
+// a pipeline those point into the iterator state, which dies before a captured
+// frame does. A promoted frame then read its own parameters through a dangling
+// pointer — that was the access violation, not the capture machinery. A frame that
+// can be captured now COPIES its arguments (`procUnitLinq.cpp`,
+// `CallLambdaWithArgs`).
+//
+// The emission side was verified separately rather than inferred from this test
+// going green: `RuntimeBench.DISABLED_DumpNestedLambda` shows the compiler flags
+// only the OUTER lambda `m_needsHeapFrame`, and that the inner body reads `x` at
+// frame depth 1 — exactly where `ibValueFunction::Execute` installs
+// `m_capturedFrames[0]`. The two halves agree by construction.
+TEST(RuntimeTest, ALambdaInsideAPipelineLambdaSeesTheOuterParameter) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var a public; var r public;\n")
+		wxT("a = New Array;\n")
+		wxT("a.Add(10); a.Add(20);\n")
+		// The inner filter compares against the OUTER parameter, so the count
+		// itself says whether the capture arrived: a = [10, 20], and
+		//   x=10 -> y > 10 -> {20} -> 1
+		//   x=20 -> y > 20 -> {}   -> 0
+		// A lost capture reads x as nothing, every y passes, and the count is 4.
+		wxT("r = a.SelectMany(Function(x)\n")
+		wxT("      Return a.Where(Function(y) Return y > x EndFunction);\n")
+		wxT("    EndFunction).Count();\n")));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("r"), v));
+	EXPECT_EQ(v.GetInteger(), 1)
+		<< "4 means the inner lambda never saw the outer lambda's x";
+}
+
+// ===========================================================================
+// A LITERAL PASSED ACROSS A MODULE BOUNDARY COMES FROM THE CALLER'S POOL
+//
+// `OPER_SETCONST` carries two different things and looks identical either way:
+//   - a literal written at the CALL SITE      -> the CALLER's constant pool
+//   - a parameter DEFAULT compiled with the callee -> the CALLEE's pool
+//
+// The runtime read the callee's pool for both. Inside one module those are the
+// same object, so every existing test agreed; a call into a PARENT module read
+// whatever the parent happened to hold at the caller's index.
+//
+// This is the shape that catches it: the parent's pool is deliberately padded so
+// index 0 there is NOT what the child passes. A wrong-pool read returns the
+// parent's first constant instead of the caller's string, which is a wrong value
+// rather than a crash — the reason it could sit unnoticed.
+//
+// The two modules are assembled the way the DESCRIPTOR assembles them — compile
+// each, link them, hand the bytecode to a ProcUnit — rather than by teaching the
+// compiler a new trick. See ParentedCompiler above for the one window in which
+// the parent link has to be re-applied, and why it is done on this side.
+// ===========================================================================
+TEST(RuntimeTest, ALiteralArgumentToAParentModuleFunctionKeepsItsValue) {
+	// The PARENT. The three pads land in its pool ahead of anything else, so a
+	// read of "the callee's pool at the caller's index" returns one of them —
+	// a wrong VALUE rather than a crash, which is why this could sit unnoticed.
+	ParentedCompiler ccGlobal(wxT("global"));
+	// MODULE ORDER IS PART OF THE LANGUAGE: declarations first — `Var`, then
+	// `Function` / `Procedure` — and the executable body last. The first
+	// statement CLOSES the declaration section (CompileModule's loop breaks on
+	// it), so a function written after an assignment is met as a statement and
+	// refused: "Expected program operators". The pads are still the first entries
+	// in the pool, which is what this test needs — `Echo` contributes no
+	// constants of its own.
+	ASSERT_TRUE(ccGlobal.CompileUnder(nullptr,
+		wxT("var padA public; var padB public; var padC public;\n")
+		// `Public` goes AFTER the signature on a function — the modifier that makes
+		// it visible past this module's edge (ResolveFunctionAt filters IsLocal()
+		// entries once depth crosses the boundary).
+		wxT("Function Echo(s) Public\n")
+		wxT("  Return s;\n")
+		wxT("EndFunction\n")
+		wxT("padA = \"WRONG-A\"; padB = \"WRONG-B\"; padC = \"WRONG-C\";\n")));
+
+	// The CHILD. Its parent survives its own Reset because CompileUnder re-applies
+	// the link after it, which is the window ibCompileModule::Compile uses too.
+	ParentedCompiler ccLocal(wxT("local"));
+	ASSERT_TRUE(ccLocal.CompileUnder(&ccGlobal,
+		wxT("var r public;\n")
+		wxT("r = Echo(\"CALLER\");\n")));
+
+	ibProcUnit puGlobal;
+	ASSERT_TRUE(TryExecute(puGlobal, ccGlobal.m_cByteCode));
+
+	ibProcUnit puLocal;
+	puLocal.SetParent(&puGlobal);
+	wxString strError;
+	ASSERT_TRUE(RunBound(ccLocal, puLocal, strError)) << strError.ToStdString();
+
+	ibValue r;
+	ASSERT_TRUE(puLocal.GetPropVal(wxT("r"), r));
+	EXPECT_EQ(r.GetString(), wxT("CALLER"))
+		<< "a WRONG-* value here means the argument was read from the callee's pool";
+}
+
+// ===========================================================================
+// `Mod` AND `%` ARE ONE OPERATOR
+//
+// Two spellings, deliberately: the VES dialect reads like Visual Basic, where
+// modulo is a word, and `And` / `Or` / `Not` already arrive as keywords through
+// the same table. Adding `Mod` there means it inherits precedence (30, with `*`
+// and `/`), associativity and emission with nothing added downstream — which is
+// exactly what this test checks, by making the two spellings meet in one
+// expression where a precedence difference would show up as a wrong number.
+//
+// The price is that `Mod` is now reserved and cannot name a variable. That is
+// the same price `And` / `Or` / `Not` already cost.
+// ===========================================================================
+TEST(RuntimeTest, ModAndPercentAreTheSameOperator) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var a public; var b public; var c public;\n")
+		wxT("a = 17 Mod 5;\n")            // 2
+		wxT("b = 17 % 5;\n")              // 2
+		// The discriminating shape. At the `*` level and left-associative:
+		//     (20 Mod 6) * 2 == 2 * 2 == 4
+		// If `Mod` bound any looser it would read
+		//      20 Mod (6 * 2) == 20 Mod 12 == 8
+		// so 4 and 8 tell the two apart in one number.
+		wxT("c = 20 Mod 6 * 2;\n")));
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue a, b, c;
+	ASSERT_TRUE(pu.GetPropVal(wxT("a"), a));
+	ASSERT_TRUE(pu.GetPropVal(wxT("b"), b));
+	ASSERT_TRUE(pu.GetPropVal(wxT("c"), c));
+	EXPECT_EQ(a.GetInteger(), 2);
+	EXPECT_EQ(b.GetInteger(), 2) << "`%` and `Mod` must agree";
+	EXPECT_EQ(c.GetInteger(), 4) << "`Mod` must bind at the `*` level, left-associative";
+}
+
+// ===========================================================================
+// A CORRELATED JOIN — the inner source is read off the row
+//
+// `join m in c.Meta` names a different sequence for every c, so the hash join
+// has nothing to build its table from before the first row. The compiler lowers
+// it to `from m in c.Meta where <pred>`, which is the same rows in the same
+// order for an inner join, and the SelectMany + Where path already works.
+//
+// The assertion is the CONCATENATION, not the count: a count of 3 would also
+// come out of pairing every key with every meta and filtering wrongly, whereas
+// "AaBbCc" can only be produced by the right key meeting the right row.
+// ===========================================================================
+TEST(RuntimeTest, ACorrelatedJoinPairsEachKeyWithItsOwnRowsMeta) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var cats public; var r public;\n")
+		wxT("var k1 = New Array; k1.Add(\"a\"); k1.Add(\"b\");\n")
+		wxT("var m1 = New Array;\n")
+		wxT("m1.Add(New Structure(\"Id, Tag\", \"a\", \"A\"));\n")
+		wxT("m1.Add(New Structure(\"Id, Tag\", \"b\", \"B\"));\n")
+		wxT("var k2 = New Array; k2.Add(\"c\");\n")
+		wxT("var m2 = New Array;\n")
+		wxT("m2.Add(New Structure(\"Id, Tag\", \"c\", \"C\"));\n")
+		// A second category, so a table built once from the FIRST one would show
+		// up as a missing "Cc" rather than as merely reordered output.
+		wxT("cats = New Array;\n")
+		wxT("cats.Add(New Structure(\"Keys, Meta\", k1, m1));\n")
+		wxT("cats.Add(New Structure(\"Keys, Meta\", k2, m2));\n")
+		wxT("var q = from c in cats\n")
+		wxT("        from k in c.Keys\n")
+		wxT("        join m in c.Meta on k equals m.Id\n")
+		wxT("        select m.Tag + k;\n")
+		wxT("r = \"\";\n")
+		wxT("Foreach t In q Do\n")
+		wxT("  r = r + t;\n")
+		wxT("EndDo\n")));
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("r"), v));
+	EXPECT_EQ(v.GetString(), wxT("AaBbCc"));
 }

@@ -79,6 +79,7 @@ public:
 			// (libpng's "iCCP: known incorrect sRGB profile" on our icons is one).
 			// stderr has no OK button.
 			delete wxLog::SetActiveTarget(new wxLogStderr());
+
 			m_ok = wxTheApp->CallOnInit();
 		}
 	}

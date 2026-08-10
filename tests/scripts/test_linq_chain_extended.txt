@@ -14,13 +14,13 @@ nums.Add(2)
 nums.Add(6)
 
 var sorted = nums.OrderBy(Function(x) Return x EndFunction).ToArray()
-For Each v In sorted Do
+Foreach v In sorted Do
     Message(v)   // 1 1 2 3 4 5 6 9
 EndDo
 
 Message("=== T2 OrderByDescending ===")
 var desc = nums.OrderByDescending(Function(x) Return x EndFunction).ToArray()
-For Each v In desc Do
+Foreach v In desc Do
     Message(v)   // 9 6 5 4 3 2 1 1
 EndDo
 
@@ -34,13 +34,13 @@ orders.Add(New Structure("Country, Amount", "UK",     25))
 
 var groups = orders.GroupBy(Function(o) Return o.Country EndFunction).ToArray()
 Message("group count=" + groups.Count())
-For Each g In groups Do
+Foreach g In groups Do
     Message(g.Key + " items=" + g.Values.Count())
 EndDo
 
 Message("=== T4 Chain: OrderBy + Where + Select ===")
 var pipeline = nums.OrderBy(Function(x) Return x EndFunction).Where(Function(x) Return x > 2 EndFunction).Select(Function(x) Return x * 10 EndFunction).ToArray()
-For Each v In pipeline Do
+Foreach v In pipeline Do
     Message(v)   // 30 40 50 60 90
 EndDo
 
@@ -57,14 +57,14 @@ sales.Add(New Structure("CustId, Amount", 1, 300))
 
 var joined = customers.Join(sales, Function(c) Return c.Id EndFunction, Function(s) Return s.CustId EndFunction, Function(c, s) Return c.Name + ":" + s.Amount EndFunction).ToArray()
 Message("join count=" + joined.Count())
-For Each r In joined Do
+Foreach r In joined Do
     Message(r)   // Alice:100, Bob:200, Alice:300
 EndDo
 
 Message("=== T6 Closure capture in selector ===")
 var threshold = 3
 var sortedFiltered = nums.OrderBy(Function(x) Return x EndFunction).Where(Function(x) Return x >= threshold EndFunction).ToArray()
-For Each v In sortedFiltered Do
+Foreach v In sortedFiltered Do
     Message(v)   // 3 4 5 6 9
 EndDo
 

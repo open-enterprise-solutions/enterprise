@@ -368,7 +368,7 @@ TEST(ByteCodeAOT, ListFuncWithLocalsAndParams) {
 
 	{
 		ibByteCode::ibByteParam p;
-		p.m_bByRef = false;
+		p.m_bByValue = false;
 		p.m_clsid  = 0x111;
 		p.m_defaultValue.m_numArray = -1;
 		p.m_defaultValue.m_numIndex = -1;
@@ -377,7 +377,7 @@ TEST(ByteCodeAOT, ListFuncWithLocalsAndParams) {
 	}
 	{
 		ibByteCode::ibByteParam p;
-		p.m_bByRef = true;
+		p.m_bByValue = true;
 		p.m_clsid  = 0;
 		p.m_defaultValue.m_numArray = 5;
 		p.m_defaultValue.m_numIndex = 7;
@@ -413,8 +413,8 @@ TEST(ByteCodeAOT, ListFuncWithLocalsAndParams) {
 	EXPECT_EQ(a.m_strRealName,     wxT("Calculate"));
 
 	ASSERT_EQ(a.m_listParam.size(),         2u);
-	EXPECT_FALSE(a.m_listParam[0].m_bByRef);
-	EXPECT_TRUE(a.m_listParam[1].m_bByRef);
+	EXPECT_FALSE(a.m_listParam[0].m_bByValue);
+	EXPECT_TRUE(a.m_listParam[1].m_bByValue);
 	EXPECT_EQ(a.m_listParam[0].m_clsid, (ibClassID)0x111);
 	EXPECT_EQ(a.m_listParam[1].m_defaultValue.m_numArray, 5);
 	EXPECT_EQ(a.m_listParam[1].m_defaultValue.m_numIndex, 7);
