@@ -271,13 +271,16 @@ public:
 				if (!cell->IsEmptyValue()) arrParameter.insert(cell->m_value);
 			}
 			else if (cell->m_fillSetType == ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate) {
-				if (!cell->IsEmptyValue()) for (auto s : ParseBrackets(cell->m_value)) if (!s.IsEmpty()) arrParameter.insert(s);
+				// BY REFERENCE — a name-surface binder runs on every rebuild, and this
+				// copied a wxString per token. Same shape as valueMap.cpp's container
+				// binder, which a profile put at 25% of a join.
+				if (!cell->IsEmptyValue()) for (const auto& s : ParseBrackets(cell->m_value)) if (!s.IsEmpty()) arrParameter.insert(s);
 			}
 
 			if (!cell->IsEmptyParameter()) arrParameter.insert(cell->m_detailsParameter);
 		}
 
-		for (auto p : arrParameter) helper.AppendProp(p);
+		for (const auto& p : arrParameter) helper.AppendProp(p);
 	}
 
 private:

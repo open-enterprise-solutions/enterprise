@@ -535,8 +535,25 @@ ibNumber::ibNumber(double v)
 	if (!std::isfinite(v)) return;  // NaN / Inf collapse to zero.
 	wchar_t buf[64];
 	const int n = std::swprintf(buf, sizeof(buf) / sizeof(buf[0]), L"%.17g", v);
+	if (n <= 0)
+		return;
+
+	// `%g` PRINTS THE DECIMAL SEPARATOR OF THE PROCESS LOCALE, and the parser
+	// below reads only the dot. A host sets a locale on startup
+	// (ibApplicationData -> wxLocale::Init -> setlocale), so under any language
+	// that separates with a comma — Russian, Ukrainian, German, French — this
+	// produced "0,25", the parse failed, and the value stayed silently ZERO.
+	//
+	// Which killed every double-seeded computation in the class: Sqrt, Ln, Exp,
+	// Log, Pow all seed their Newton iteration with `ibNumber(1.0 / …)`, so
+	// Sqrt(16) returned 0 on a Russian desktop and 4 in the test suite. The
+	// suite never created application data, so it never left the C locale, and
+	// no arithmetic test could see it.
+	wxString strDigits(buf, static_cast<size_t>(n));
+	strDigits.Replace(wxT(","), wxT("."));
+
 	BigImpl big;
-	if (n > 0 && TryParseString(wxString(buf, static_cast<size_t>(n)), big))
+	if (TryParseString(strDigits, big))
 		StoreBig(big);
 }
 

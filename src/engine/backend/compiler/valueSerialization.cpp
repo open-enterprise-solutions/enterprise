@@ -40,6 +40,59 @@ const wxChar* const kFieldClsid = wxT("t");   // the type — written and read F
 const wxChar* const kFieldData  = wxT("v");   // the primitive payload
 } // namespace
 
+//////////////////////////////////////////////////////////////////////
+// COPYING — the DEFAULT road, which is the same road as travelling
+//
+// `Val` means the parameter gets a copy. `Clone` is virtual, so a type may say
+// how it copies itself; this is what it gets when it says nothing.
+//
+// A copy of anything that is not a primitive is: pack it, then create it from
+// what was packed. Creation goes through the value registry, so the class's
+// registered constructor runs and the new instance reads its own contents back.
+//
+// Putting the default here rather than beside a `Copy` of its own is the point:
+// a value that cannot be written cannot be duplicated either, and both facts
+// come from the same override pair (DoSerialize / DoDeserialize). A type that
+// wants a different copy overrides Clone; a type that wants none does not have
+// to write a refusal, because not being transferable already is one.
+//////////////////////////////////////////////////////////////////////
+
+ibValue ibValue::Clone() const
+{
+	switch (m_typeClass) {
+	case ibValueTypes::TYPE_EMPTY:
+	case ibValueTypes::TYPE_NULL:
+	case ibValueTypes::TYPE_BOOLEAN:
+	case ibValueTypes::TYPE_NUMBER:
+	case ibValueTypes::TYPE_STRING:
+	case ibValueTypes::TYPE_DATE:
+		return *this;   // the payload IS the value; no node, no allocation
+	default:
+		break;
+	}
+
+	// The gate, asked before the work: a form, a running object, a lambda — the
+	// things a session owns — say no here, and say it through the reffer hop, so
+	// an alias to one cannot answer on its behalf.
+	if (!IsTransferable()) {
+		ibBackendCoreException::Error(
+			_("A value of type \"%s\" cannot be copied — it belongs to its session"),
+			GetClassName());
+	}
+
+	ibDataNode node;
+	if (!Serialize(node)) {
+		ibBackendCoreException::Error(
+			_("A value of type \"%s\" cannot be copied — it has no packed form"),
+			GetClassName());
+	}
+
+	// FromNode throws on its own terms — a type registered nowhere, a creation
+	// that fails, contents that cannot be read. Those are the same three
+	// failures, and they are reported once, here.
+	return FromNode(node);
+}
+
 bool ibValue::Serialize(ibDataNode& node) const
 {
 	// THE GATE, not a second opinion: IsTransferable already answers "may this

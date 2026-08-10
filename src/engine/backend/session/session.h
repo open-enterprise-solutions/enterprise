@@ -574,7 +574,20 @@ public:
 	// sid threaded through.
 	//
 	// Returns nullptr when no session is bound on this thread.
-	static ibProcUnitState* GetPUState();
+	static ibProcUnitState* GetPUState() { return PUStateOf(Current()); }
+
+	// THE SAME ANSWER, WHEN THE CALLER ALREADY HOLDS THE SESSION.
+	//
+	// GetPUState() is Current() plus a member address, and Current() is a
+	// shared_lock on a shared_mutex, a thread-id hash into an unordered_map and a
+	// weak_ptr::lock — two atomic read-modify-writes at least. A caller that has
+	// just called Current() for its own reasons should not pay for it twice.
+	//
+	// `ibProcUnit::Execute` did exactly that: it resolved Current() for the cancel
+	// flag and then GetPUState() for the state, and the ibProcStackGuard built one
+	// line earlier resolved it a third time — three lookups per call for one
+	// answer that cannot change while the call runs.
+	static ibProcUnitState* PUStateOf(ibSession* session);
 
 	// State accessors — lock-free reads.
 	ibSessionState State() const { return m_state.load(std::memory_order_acquire); }

@@ -997,6 +997,14 @@ void ibSession::UnbindSession(ibSession* s)
 	}
 }
 
+// A sessionless FRAME fallback lived here — a raw thread_local pointer with a
+// setter, so a host with no session could still say where output goes. It was
+// never once called: nothing in the tree set it, and the seam it promised was
+// documented rather than used. A host that wants to catch output overrides the
+// context value that DECLARES the output verb, which is one mechanism instead of
+// two and has no lifetime to get wrong. (`ts_fallbackPUState` below is the real
+// one and stays: it holds STATE by value, not a pointer somebody must remember
+// to take back.)
 ibBackendDocFrame* ibSession::CurrentFrame()
 {
 	ibSession* s = Current();
@@ -1020,17 +1028,24 @@ ibBackendDocFrame* ibSession::CurrentFrame()
 	return s->GetFrame();
 }
 
-ibProcUnitState* ibSession::GetPUState()
+ibProcUnitState* ibSession::PUStateOf(ibSession* session)
 {
-	if (ibSession* s = Current())
-		return &s->m_procUnitState;
+	if (session != nullptr)
+		return &session->m_procUnitState;
 
-	// Sessionless fallback — codeRunner.exe (and any other host that
-	// runs ad-hoc scripts without a session, e.g. command-line script
-	// runners) needs a real ibProcUnitState to back m_currentRunModule
-	// / m_runContext stack / error_place during Compile + Execute.
-	// thread_local so concurrent sessionless callers each get their
-	// own state — no shared mutation, no race.
+	// Sessionless fallback — codeRunner.exe, the test binary, and any other host
+	// that runs ad-hoc scripts without a session needs a real ibProcUnitState to
+	// back m_currentRunModule / the run-context stack / error_place during Compile
+	// + Execute. thread_local so concurrent sessionless callers each get their own
+	// — no shared mutation, no race.
+	//
+	// It lives HERE rather than in GetPUState because this is the function that
+	// answers "given the session (or the lack of one), which state?". The first
+	// version delegated to GetPUState() instead, which calls Current() — so a
+	// caller who had already resolved the session to nullptr paid for a SECOND
+	// resolution to be told the same thing. That is exactly the case the test and
+	// benchmark binaries run in, which is why a profile of them showed the whole
+	// point of this function not firing.
 	static thread_local ibProcUnitState ts_fallbackPUState;
 	return &ts_fallbackPUState;
 }

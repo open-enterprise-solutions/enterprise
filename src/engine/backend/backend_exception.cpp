@@ -473,16 +473,37 @@ wxString ibBackendException::FindErrorCodeLine(const wxString& strBuffer, unsign
 	unsigned int startPos = 0;
 	unsigned int endPos = sizeText;
 
-	for (unsigned int i = (currPos == sizeText ? currPos - 1 : currPos); i > 0; i--) {
-		if (strBuffer[i] == wxT('\n')) {
+	// EITHER TERMINATOR ENDS A LINE. The scans used to look for '\n' only, and the
+	// editor hands over a buffer that can be '\r'-terminated — no match, so both
+	// bounds stayed at the extremes and the "line" became the whole file: the error
+	// for `Message("Hello world!");` came back carrying two more lines glued to it.
+	const auto IsEol = [](wxUniChar c) { return c == wxT('\n') || c == wxT('\r'); };
+
+	// THE MARKER STAYS WHERE THE CALLER PUT IT; only the SEARCH steps back.
+	//
+	// An error is reported at the END of the last lexeme read — deliberately, so
+	// the excerpt reads "…this much was understood <<?>> and here it stopped". That
+	// position is very often the terminator itself, and then the two scans disagree
+	// by one: the backward one steps PAST it (startPos = 671) while the forward one
+	// stops ON it (endPos = 670). startPos > endPos, and `currPos - startPos` is
+	// UNSIGNED, so the length wrapped to 4294967295 and Mid returned the rest of the
+	// file. Measured, not guessed: currPos=670 bufLen=12683 start=671 end=670
+	// len=12019 — 285 lines of source printed as an error message.
+	const unsigned int scanPos =
+		(currPos > 0 && currPos < sizeText && IsEol(strBuffer[currPos])) ? currPos - 1
+		: (currPos >= sizeText && sizeText > 0) ? sizeText - 1
+		: currPos;
+
+	for (unsigned int i = scanPos; i > 0; i--) {
+		if (IsEol(strBuffer[i])) {
 			startPos = i + 1;
 			break;
 		};
 	}
 
 	//look for the end of the line where the translation error message is returned
-	for (unsigned int i = currPos; i < sizeText; i++) {
-		if (strBuffer[i] == wxT('\n')) {
+	for (unsigned int i = scanPos; i < sizeText; i++) {
+		if (IsEol(strBuffer[i])) {
 			endPos = i; break;
 		};
 	}
@@ -491,7 +512,17 @@ wxString ibBackendException::FindErrorCodeLine(const wxString& strBuffer, unsign
 	// this string (compileCode's currPos/currLine pair, the handler's error.m_numLine), and
 	// theirs comes from the parser rather than from counting newlines in a buffer. This
 	// function returns the line's TEXT, marked at the offending position, and nothing else.
-	wxString strError = wxString::Format(wxT("%s <<?>> %s"), strBuffer.Mid(startPos, currPos - startPos), strBuffer.Mid(currPos, endPos - currPos));
+	// BOUNDED BY CONSTRUCTION, not by the caller's good behaviour. Every length
+	// below is a subtraction of unsigned positions, so one out-of-order bound does
+	// not shorten the excerpt — it returns the rest of the file.
+	if (startPos > currPos) startPos = currPos;
+	if (endPos   < currPos) endPos   = currPos;
+	if (endPos   > sizeText) endPos  = sizeText;
+
+	wxString strError = wxString::Format(wxT("%s <<?>> %s"),
+		strBuffer.Mid(startPos, currPos - startPos),
+		strBuffer.Mid(currPos, endPos - currPos));
+
 	strError.Replace(wxT("\r"), wxEmptyString);
 	strError.Replace(wxT("\t"), wxT(" "));
 

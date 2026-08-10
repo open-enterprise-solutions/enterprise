@@ -6,11 +6,42 @@
 #include "valueMap.h"
 #include "backend/backend_exception.h"
 
+#include <cwctype>   // towupper — portable case fold for the key comparator
+
+
+// CASE-INSENSITIVE, WITHOUT BUILDING TWO STRINGS TO FIND OUT.
+//
+// It read `MakeUpper(lhs.GetString()) < MakeUpper(rhs.GetString())`: two
+// wxStrings materialised and two uppercased copies allocated on EVERY
+// comparison, and a std::map does O(log n) of them per lookup. Invisible while
+// nothing hot used a Structure — and then a query block's second binding made
+// the pipeline row a Structure, which put this on the per-row path and a join
+// measured 4715 ns/row (docs/runtime-perf.md §1f).
+//
+// The scratch overload of GetString returns the stored ibString by reference for
+// a string value, so the walk below allocates nothing. `towupper` rather than a
+// platform `wcsicmp`: the tree builds under MSVC, GCC and Clang.
+static int CompareStringNoCase(const ibString& a, const ibString& b)
+{
+	const wchar_t* pa = a.wc_str();
+	const wchar_t* pb = b.wc_str();
+
+	for (; *pa != L'\0' && *pb != L'\0'; ++pa, ++pb) {
+		const wint_t ca = std::towupper(static_cast<wint_t>(*pa));
+		const wint_t cb = std::towupper(static_cast<wint_t>(*pb));
+		if (ca != cb)
+			return ca < cb ? -1 : 1;
+	}
+
+	if (*pa == *pb) return 0;
+	return (*pa == L'\0') ? -1 : 1;
+}
 
 bool ibValueContainer::ContainerComparator::operator() (const ibValue& lhs, const ibValue& rhs) const {
 	if (lhs.GetType() == ibValueTypes::TYPE_STRING
 		&& rhs.GetType() == ibValueTypes::TYPE_STRING) {
-		return stringUtils::MakeUpper(lhs.GetString()) < stringUtils::MakeUpper(rhs.GetString());
+		ibString scratchL, scratchR;
+		return CompareStringNoCase(lhs.GetString(scratchL), rhs.GetString(scratchR)) < 0;
 	}
 	else {
 		return lhs < rhs;
@@ -85,7 +116,16 @@ void ibValueContainer::BindContainerNames(ibMemberTable& helper, const ibValue* 
 		helper.AppendFunc(wxT("Insert"), 2, wxT("Insert(key : any, value : any)"));
 	}
 
-	for (auto keyValue : self->m_containerValues) {
+	// BY REFERENCE. This iterated BY VALUE, so every rebuild copy-constructed and
+	// destroyed a `pair<const ibValue, ibValue>` per member — two ibValues, and an
+	// ibValue holding a string key allocates. It reads only the key.
+	//
+	// That is not a micro-detail here: a sampled profile of a query-block join put
+	// `ibMemberTable::Build` at 25% of the entire run, its allocations dominated by
+	// wxString and ibValue construction. Every composite pipeline row is a fresh
+	// Structure whose member surface is built once and thrown away, so this loop
+	// runs per ROW. See docs/runtime-perf.md §1g.
+	for (const auto& keyValue : self->m_containerValues) {
 		const ibValue& cValKey = keyValue.first;
 		if (!cValKey.IsEmpty()) {
 			helper.AppendProp(cValKey.GetString());

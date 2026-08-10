@@ -1113,26 +1113,27 @@ public:
 
 	virtual ibValue GetValue(bool getThis = false) const;
 
-	// Produce a fresh, independent copy of the value. For simple types
-	// (Boolean / Number / String / Date / Null / Empty) the data is
-	// value-copied — caller can mutate without touching the source.
-	// Aggregate / reference types must override to provide their own
-	// clone semantics; the base default returns an undefined value to
-	// surface "tried to clone something that doesn't support it" as
-	// an empty result rather than a silent share.
-	virtual ibValue Clone() const {
-		switch (m_typeClass) {
-		case ibValueTypes::TYPE_EMPTY:
-		case ibValueTypes::TYPE_NULL:
-		case ibValueTypes::TYPE_BOOLEAN:
-		case ibValueTypes::TYPE_NUMBER:
-		case ibValueTypes::TYPE_STRING:
-		case ibValueTypes::TYPE_DATE:
-			return *this;  // value-copy of the simple-type payload
-		default:
-			return ibValue();  // no own clone — undefined
-		}
-	}
+	// A FRESH, INDEPENDENT COPY — the verb behind `Val`.
+	//
+	// VIRTUAL, because copying is a type's own business: anything deriving from
+	// ibValue must be able to state how it duplicates itself, and some types have
+	// a cheaper or a truer answer than the default one.
+	//
+	// THE DEFAULT IS A MECHANISM, not a refusal. A primitive is its own copy.
+	// Anything else copies THE WAY IT TRAVELS: it packs itself into a node and is
+	// then CREATED from what it packed, which runs the registered constructor for
+	// its class and hands the new instance its own contents back. So a type that
+	// already describes DoSerialize / DoDeserialize gets a correct copy without
+	// writing one, a plugin's type copies exactly as a built-in one does, and
+	// "can this value be duplicated" has the same answer as "can it be stored".
+	//
+	// AND IT RAISES when there is no mechanism and the value is not a primitive —
+	// a form, a running object, a lambda. It used to return an EMPTY value there,
+	// which is worse than the share it was avoiding: indistinguishable from a
+	// value that legitimately is empty. `Val form` is a mistake and is told so at
+	// the call, rather than compiling, running and quietly aliasing until the day
+	// it matters.
+	virtual ibValue Clone() const;
 
 	virtual bool GetBoolean() const;
 	virtual int GetInteger() const { return GetNumber().ToInt(); }
@@ -1368,6 +1369,7 @@ public:
 		WhereIndexed,
 		SelectIndexed,
 		ToTable,        // materialise into the built-in value table (data sources / Queryable)
+		SelectMany,     // flatten: fn(elem) -> a source, and its elements are yielded in turn
 	};
 
 	// Method-table entry — enum id + script-side name + one-line help

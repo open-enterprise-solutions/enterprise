@@ -2,6 +2,8 @@
 #define __PROC_CONTEXT__H__
 
 #include <memory>
+#include <utility>
+#include <vector>
 
 #include "byteCode.h"
 #include "compileContext.h"
@@ -158,7 +160,21 @@ struct ibRunContext : std::enable_shared_from_this<ibRunContext> {
 	// level) show until execution enters a `{ }` block.
 	int m_currentScopeDepth = 0;
 
-	std::map<wxString, std::shared_ptr<ibProcUnitEvaluate>> m_listEval;
+	// A VECTOR, AND EMPTY IT COSTS NOTHING. This was a std::map, which on MSVC
+	// allocates its sentinel node in the DEFAULT CONSTRUCTOR — so every frame paid
+	// one heap allocation and one free for a container that is empty unless a
+	// debugger is evaluating a watch. A frame is built per function call and per
+	// pipeline lambda invocation, so a thin lambda paid it per ELEMENT.
+	//
+	// Measured, not assumed (xperf, DISABLED_LinqOneLambda): `~ibRunContext` was
+	// 15.7% of the run, `operator new` 96% called from CallLambdaWithArgs,
+	// `_free_base` 93% from ~ibRunContext, and a `_Tree_val::_Erase_tree` in the
+	// destructor named the container. See docs/runtime-perf.md §1h.
+	//
+	// It was never used as a map either: the only lookup is a linear `find_if`
+	// with a case-insensitive compare, and the only write happens when that scan
+	// found nothing. A vector is what the code was already doing.
+	std::vector<std::pair<wxString, std::shared_ptr<ibProcUnitEvaluate>>> m_listEval;
 };
 
 #endif // ! _PROC_CONTEXT__H__

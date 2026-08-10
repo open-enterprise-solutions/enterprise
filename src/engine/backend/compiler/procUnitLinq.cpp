@@ -76,14 +76,47 @@ static void CallLambdaWithArgs(ibValueFunction& fn, ibValue** argPtrs,
 	}
 
 
-	ibRunContext cRunContext(lambdaVarCount);
+	// A FRAME THAT CAN BE CAPTURED MUST OWN ITS ARGUMENTS.
+	//
+	// `SelectMany(x => src.Where(y => y > x))` — the inner lambda reads the outer
+	// one's parameter, which is what a query block's second binding compiles to.
+	// The capture is established at OPER_LFUNC by walking the frame chain and
+	// keeping every ancestor whose `weak_from_this()` still locks; a stack frame
+	// never locks, so a lambda materialised under a pipeline captured nothing and
+	// `x` arrived empty.
+	//
+	// Promotion alone was tried twice and crashed the corpus, which is why the
+	// note here used to say "not the fix". The missing half was the ARGUMENTS.
+	// Below, the fast path binds each parameter to the caller's ibValue by
+	// POINTER — and under a pipeline those point into the iterator state
+	// (`ibValueJoinState::m_curOuter` and friends), objects that die with the
+	// pipeline. A captured frame outlives it, so the pointer dangles: the AV was
+	// the frame reading its own parameters after the pipeline had gone, not the
+	// capture machinery downstream.
+	//
+	// So the promoted frame COPIES its arguments into its own slots instead of
+	// pointing at the caller's. It costs one ibValue copy per argument on the path
+	// that needs it, and nothing at all on the path that does not — a lambda with
+	// no inner lambda is not flagged and still binds by pointer.
+	const bool bHeapFrame = bfn->m_needsHeapFrame;
+
+	std::shared_ptr<ibRunContext> spHeapCtx;
+	ibRunContext                  stackCtx(bHeapFrame ? wxNOT_FOUND : (int)lambdaVarCount);
+	if (bHeapFrame)
+		spHeapCtx = std::make_shared<ibRunContext>((int)lambdaVarCount);
+
+	ibRunContext& cRunContext = bHeapFrame ? *spHeapCtx : stackCtx;
+
 	cRunContext.m_lStart          = bfn->m_lCodeLine + 1;
 	cRunContext.m_lParamCount     = lambdaParamCount;
 	cRunContext.m_currentFunction = bfn;
 
-	// Bind first argCount params to the host-supplied refs.
-	for (long i = 0; i < argCount; ++i)
-		cRunContext.m_pRefLocVars[i] = argPtrs[i];
+	for (long i = 0; i < argCount; ++i) {
+		if (bHeapFrame)
+			CopyValue(cRunContext.m_pLocVars[i], *argPtrs[i]);   // the frame owns it
+		else
+			cRunContext.m_pRefLocVars[i] = argPtrs[i];
+	}
 
 	// Fill missing tail params from compile-time defaults.
 	const ibByteCode* pLocalByteCode = fn.GetParentBc();
@@ -282,6 +315,89 @@ public:
 private:
 	std::shared_ptr<ibValueIteratorState> m_upstream;
 	ibValueFunction                       m_projection;
+};
+
+// FLATTEN — the projection yields a SOURCE per element, and its elements are
+// handed on in turn. This is what a second `from` in a query block means
+// (`from x in a from y in b` iterates b for every x), and it is a pipeline
+// operator like any other rather than a nested loop the compiler hand-rolls.
+//
+// The inner iterator is held between calls, because MoveNext must resume where
+// the last one left off; when it runs dry the next outer element opens a new one.
+class ibValueSelectManyState : public ibValueIteratorState {
+public:
+	ibValueSelectManyState(std::shared_ptr<ibValueIteratorState> upstream,
+	                       ibValueFunction projection)
+		: m_upstream(std::move(upstream))
+		, m_projection(projection)
+	{
+	}
+
+	// The pair-projecting form: `SelectMany(x => src, (x, y) => …)`.
+	ibValueSelectManyState(std::shared_ptr<ibValueIteratorState> upstream,
+	                       ibValueFunction projection, ibValueFunction result)
+		: m_upstream(std::move(upstream))
+		, m_projection(projection)
+		, m_result(result)
+		, m_hasResult(true)
+	{
+	}
+
+	bool MoveNext(ibValue& current) override {
+		if (!m_upstream) {
+			return false;
+		}
+		for (;;) {
+			if (m_inner && m_inner->MoveNext(current)) {
+				// WITH A RESULT SELECTOR, a flattened element is not the answer —
+				// the PAIR is. `from x in a from y in b` reads both x and y after
+				// it, so the row that leaves has to carry both, and only this
+				// state still holds the outer one.
+				//
+				// The same shape ibValueJoinState already uses for its projection.
+				// Without it the compiler had to nest a lambda inside the
+				// collection selector to reach the outer row, and a lambda nested
+				// inside a pipeline lambda loses its capture
+				// (RuntimeTest.DISABLED_ALambdaInsideAPipelineLambdaSeesTheOuterParameter).
+				if (m_hasResult) {
+					ibValue elem = current;
+					CallLambdaWith2Args(m_result, m_curOuter, elem, current);
+				}
+				return true;
+			}
+			ibValue outer;
+			if (!m_upstream->MoveNext(outer)) {
+				return false;
+			}
+			m_curOuter = outer;
+			ibValue inner;
+			CallLambdaWithArg(m_projection, outer, inner);
+			// A projection that does not yield a source contributes nothing —
+			// refusing is not the floor here, skipping is: one bad row must not
+			// end the sequence.
+			m_inner = inner.CreateIterator();
+		}
+	}
+
+	void Reset() override {
+		m_inner.reset();
+		if (m_upstream) m_upstream->Reset();
+	}
+
+	bool PeekSample(ibValue& /*current*/) const override {
+		return false;
+	}
+
+private:
+	std::shared_ptr<ibValueIteratorState> m_upstream;
+	std::shared_ptr<ibValueIteratorState> m_inner;
+	ibValueFunction                       m_projection;
+
+	// Only when a result selector was given: the outer element the inner
+	// sequence is currently being drawn from.
+	ibValueFunction                       m_result;
+	ibValue                               m_curOuter;
+	bool                                  m_hasResult = false;
 };
 
 // OrderBy node — materialise upstream into a vector, sort by
@@ -847,6 +963,7 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 		// === Pipeline operators (require lambda arg, return ibValueQuery) ===
 		case M::Where:
 		case M::Select:
+		case M::SelectMany:
 		{
 			if (n < 1 || args == nullptr || args[0] == nullptr) {
 				ibBackendCoreException::Error(_("LINQ: method requires a function argument"));
@@ -860,6 +977,14 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 			std::shared_ptr<ibValueIteratorState> pipeline;
 			if (method == M::Where) {
 				pipeline = std::make_shared<ibValueWhereState>(std::move(upstream), *fn);
+			} else if (method == M::SelectMany) {
+				// `SelectMany(collectionSelector [, resultSelector])`. The second
+				// form projects the PAIR, which is what a second `from` in a query
+				// block needs: both rows stay in scope after it.
+				ibValueFunction* resultFn = (n > 1 && args[1] != nullptr) ? AsFunction(args[1]) : nullptr;
+				pipeline = resultFn != nullptr
+					? std::make_shared<ibValueSelectManyState>(std::move(upstream), *fn, *resultFn)
+					: std::make_shared<ibValueSelectManyState>(std::move(upstream), *fn);
 			} else {
 				pipeline = std::make_shared<ibValueSelectState>(std::move(upstream), *fn);
 			}
@@ -1242,6 +1367,7 @@ const std::vector<ibValue::ibLinqMethodInfo>& ibValue::GetLinqMethodTable() {
 		{ M::WhereIndexed,        L"WhereIndexed",        L"Filter with index - fn(elem, index) -> bool" },
 		{ M::SelectIndexed,       L"SelectIndexed",       L"Project with index - fn(elem, index) -> newElem" },
 		{ M::ToTable,             L"ToTable",             L"Materialise a data source into a value table (Queryable)" },
+		{ M::SelectMany,          L"SelectMany",          L"Flatten - fn(elem) -> a source, whose elements are yielded in turn" },
 	};
 	return table;
 }
