@@ -496,12 +496,24 @@ void ibCompileContext::CreateLabels()
 		const wxString& strName = m_listLabel[i]->m_strName;
 		const int oldLine = m_listLabel[i]->m_numLine;
 
-		//look for such a label in the list of declared labels
-		unsigned int currLine = m_listLabelDef[strName];
-		if (!currLine) {
+		// PRESENCE, NOT VALUE. Zero was doing two jobs here: it is a legitimate
+		// address (a label as the FIRST statement of a body registers
+		// `m_listCode.size() - 1`, which is 0 right after the frame opcode) and it
+		// was also the "not declared" answer, because operator[] default-builds a
+		// zero for a key nobody put there. So a label at the top of a procedure
+		// was never found — `Goto ~again` reported "Label not defined" about a
+		// label defined two lines above it, and the report blamed the jump.
+		//
+		// find() also stops the lookup from INSERTING the missing key, which is
+		// what operator[] did on every unresolved use.
+		const auto itLabel = m_listLabelDef.find(strName);
+		if (itLabel == m_listLabelDef.end()) {
 			m_compileModule->m_numCurrentCompile = m_listLabel[i]->m_numError;
-			m_compileModule->SetError(ERROR_LABEL_DEFINE, strName); // duplicate label definitions occurred
+			m_compileModule->SetError(ERROR_LABEL_DEFINE, strName); // the label was never declared
+			continue;
 		}
+
+		const unsigned int currLine = itLabel->second;
 
 		// write the address of the label:
 		m_compileModule->m_cByteCode.m_listCode[oldLine].m_param1.m_numIndex = currLine + 1;

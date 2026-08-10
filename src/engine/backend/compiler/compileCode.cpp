@@ -42,6 +42,8 @@ static constexpr std::array<int, 256> MakeOperPriority()
 
 	listPriority[KEY_OR] = 1;
 	listPriority[KEY_AND] = 2;
+	// `Mod` binds exactly as `%` does — the same operator spelled with a word.
+	listPriority[KEY_MOD] = 30;
 
 	listPriority['>'] = 3;
 	listPriority['<'] = 3;
@@ -1292,7 +1294,7 @@ bool ibCompileCode::PushCallFunction(const std::shared_ptr<ibCallFunction>& call
 				defaultValue = true;
 			}
 			else {  //��� �������� ��������
-				paramCode.m_param2.m_numIndex = foundedFunc->m_listParam[i].m_bByRef;
+				paramCode.m_param2.m_numIndex = foundedFunc->m_listParam[i].m_bByValue;
 			}
 		}
 		else {
@@ -1490,7 +1492,7 @@ bool ibCompileCode::ParseFunctionSignature(ibCompileContext* context,
 		ibCompileContext::ibFunction::ibParamVariable cVariable;
 		if (IsNextKeyWord(KEY_VAL)) {
 			GETKeyWord(KEY_VAL);
-			cVariable.m_bByRef = true;
+			cVariable.m_bByValue = true;
 		}
 
 		const wxString& strRealName = GETIdentifier(true);
@@ -1586,14 +1588,14 @@ bool ibCompileCode::EmitFunctionBody(ibCompileContext* /*context*/,
 		AddLineInfo(declParam);
 		declParam.m_numOper = OPER_FUNC_PARAM;
 		declParam.m_param1.m_numIndex = (long)i;
-		declParam.m_param1.m_numArray = createdFunction->m_listParam[i].m_bByRef ? 1 : 0;
+		declParam.m_param1.m_numArray = createdFunction->m_listParam[i].m_bByValue ? 1 : 0;
 		declParam.m_param2 = createdFunction->m_listParam[i].m_puValue;
 		m_cByteCode.m_listCode.emplace_back(std::move(declParam));
 	}
 
 	// Type-check stamping for typed params — kept separate. The legacy
 	// OPER_SET/SETCONST decoration that used to sit between FUNC_PARAM
-	// and AddTypeSet is gone: its full payload (m_puValue, m_bByRef)
+	// and AddTypeSet is gone: its full payload (m_puValue, m_bByValue)
 	// now lives on OPER_FUNC_PARAM, and runtime never read those
 	// OPER_SETs anyway (Execute had no case for them — fall-through NOP).
 	for (unsigned int i = 0; i < createdFunction->m_listParam.size(); i++) {
@@ -3484,8 +3486,11 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 					context->m_numTempVar = 0;
 
 				if (IsNextDelimeter(':')) {// this is a label task encountered
-					unsigned int pLabel = context->m_listLabelDef[nextLexem.m_strData];
-					if (pLabel > 0) {
+					// PRESENCE, NOT VALUE — the same trap as in CreateLabels. Address
+					// 0 is legitimate (a label as the first statement of a body), so
+					// `> 0` would miss a genuine duplicate there, and operator[] would
+					// insert the key while asking. Ask whether it is declared.
+					if (context->m_listLabelDef.find(nextLexem.m_strData) != context->m_listLabelDef.end()) {
 						SetError(ERROR_IDENTIFIER_DUPLICATE, nextLexem.m_strData);// duplicate label definitions occurred
 						return false;
 					}
@@ -3560,9 +3565,26 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 
 						bool bShortLet = false; int n = 0;
 
+						// THE LAST INSTRUCTION MUST BE THE ONE THAT PRODUCED THIS TEMP.
+						//
+						// The fold rewrites that instruction's destination so it writes
+						// straight into the target, skipping a copy. It asked only two
+						// things — is the result a temp, is the last opcode arithmetic —
+						// and ASSUMED the last instruction was the one that filled the
+						// temp. When it is not, the fold redirects a write meant for
+						// somewhere else.
+						//
+						// `taken = i++` is that case: the expression's value is a temp
+						// filled by an OPER_LET, and the last instruction is the
+						// increment `ADD i, i, 1`. The fold pointed that ADD at `taken`,
+						// so `taken` got 6 (the incremented value, not the old one) and
+						// `i` was never stored at all — both halves of `x++` wrong from
+						// one missing question.
 						if (DEF_VAR_TEMP == expression.m_numArray) { //reduce only temporary variables
 							n = m_cByteCode.m_listCode.size() - 1;
-							if (n >= 0) {
+							if (n >= 0
+							 && m_cByteCode.m_listCode[n].m_param1.m_numArray == expression.m_numArray
+							 && m_cByteCode.m_listCode[n].m_param1.m_numIndex == expression.m_numIndex) {
 								int nOperation = m_cByteCode.m_listCode[n].m_numOper % TYPE_DELTA1;
 								nOperation = nOperation % TYPE_DELTA1;
 								if (OPER_MULT == nOperation ||
@@ -4868,7 +4890,14 @@ delimOperation:
 		return variable;
 
 	// we look to see if there are any further operators for performing actions on this variable
-	if ((prevLexem.m_lexType == DELIMITER && prevLexem.m_numData != ';') || (prevLexem.m_lexType == KEYWORD && prevLexem.m_numData == KEY_AND) || (prevLexem.m_lexType == KEYWORD && prevLexem.m_numData == KEY_OR)) {
+	// THE WORD OPERATORS ARE NAMED HERE, and this list is the gate: a KEYWORD not
+	// in it stops the expression, whatever gs_operPriority holds for its id. That
+	// is also what makes the table's shared index space (delimiter codes AND
+	// keyword ids in one 256-entry array) harmless for every other keyword.
+	if ((prevLexem.m_lexType == DELIMITER && prevLexem.m_numData != ';')
+	 || (prevLexem.m_lexType == KEYWORD && prevLexem.m_numData == KEY_AND)
+	 || (prevLexem.m_lexType == KEYWORD && prevLexem.m_numData == KEY_OR)
+	 || (prevLexem.m_lexType == KEYWORD && prevLexem.m_numData == KEY_MOD)) {
 		if (prevLexem.m_numData >= 0 && prevLexem.m_numData <= 255) {
 			const int numCurPriority = gs_operPriority[prevLexem.m_numData];
 			if (nPriority < numCurPriority) { // �ompare the priorities of the left (previous operation) and the currently running operation
@@ -4890,6 +4919,11 @@ delimOperation:
 					SetOper(OPER_SUB);
 				}
 				else if (next_lex.m_numData == '%') {
+					SetOper(OPER_MOD);
+				}
+				// The word form of the same operator, beside And / Or which are
+				// already read here as keywords rather than delimiters.
+				else if (next_lex.m_numData == KEY_MOD) {
 					SetOper(OPER_MOD);
 				}
 				else if (next_lex.m_numData == KEY_AND) {

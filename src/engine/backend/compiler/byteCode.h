@@ -136,7 +136,12 @@ struct ibByteCode {
 	// — caller must supply an arg or fail. Other values feed
 	// OPER_SETCONST when caller omits the arg.
 	struct ibByteParam {
-		bool        m_bByRef       = false;
+		// Declared `Val` — the argument is COPIED into the callee's slot.
+		// Parameters are by reference by default, so this bit is set only by the
+		// keyword. It was called `m_bByRef` and meant the exact opposite of its
+		// name: the compiler wrote it at `Val` and the runtime copied on 1.
+		// Wire format is unchanged (one u8), so no AOT version moves.
+		bool        m_bByValue     = false;
 		ibClassID   m_clsid        = 0;        // 0 = dynamic; for CHECK_TYPE
 		// The default-value DESCRIPTOR — slot coordinates only. It used to be an
 		// ibParamUnit, which drags a TYPE NAME along; the bytecode already has the
@@ -345,7 +350,7 @@ struct ibByteCode {
 		// Construct from compile-side ibFunction. Templated to keep
 		// byteCode.h free of compileContext.h — instantiated at the
 		// CompileFunction finalize site (compileCode.cpp). CompileFn
-		// must expose: m_listParam (each with .m_bByRef, .m_clsid,
+		// must expose: m_listParam (each with .m_bByValue, .m_clsid,
 		// .m_puValue, .m_strName), m_lVarCount, m_kind,
 		// m_bCodeRet, m_clsid, m_strRealName, m_strContext.
 		template<typename CompileFn>
@@ -362,7 +367,7 @@ struct ibByteCode {
 			m_listParam.reserve(src.m_listParam.size());
 			for (const auto& p : src.m_listParam) {
 				ibByteParam bp;
-				bp.m_bByRef       = p.m_bByRef;
+				bp.m_bByValue       = p.m_bByValue;
 				bp.m_clsid        = p.m_clsid;
 				// Slot coordinates only — the type came across as m_clsid above.
 				bp.m_defaultValue.m_numArray = p.m_puValue.m_numArray;

@@ -314,7 +314,7 @@ void ReadVarInfo(const ibReaderMemory& r, ibByteCode::ibByteCodeVarInfo& v) {
 }
 
 bool WriteParam(ibWriterMemory& w, const ibByteCode::ibByteParam& p) {
-	w.w_u8(p.m_bByRef ? 1 : 0);
+	w.w_u8(p.m_bByValue ? 1 : 0);
 	w.w_u64((uint64_t)p.m_clsid);
 	WriteParamRun(w, p.m_defaultValue);
 	w.w_stringZ(p.m_strName);
@@ -322,7 +322,7 @@ bool WriteParam(ibWriterMemory& w, const ibByteCode::ibByteParam& p) {
 }
 
 void ReadParam(const ibReaderMemory& r, ibByteCode::ibByteParam& p) {
-	p.m_bByRef = (r.r_u8() != 0);
+	p.m_bByValue = (r.r_u8() != 0);
 	p.m_clsid  = (ibClassID)r.r_u64();
 	ReadParamRun(r, p.m_defaultValue);
 	r.r_stringZ(p.m_strName);

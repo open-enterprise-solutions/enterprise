@@ -159,7 +159,7 @@ struct ibCompileContext {
 	{
 		struct ibParamVariable
 		{
-			ibParamVariable() : m_bByRef(false) {
+			ibParamVariable() : m_bByValue(false) {
 				m_puValue.m_numArray = -1;
 				m_puValue.m_numIndex = -1;
 			}
@@ -168,7 +168,7 @@ struct ibCompileContext {
 			// real-cased name (now carried on ibByteParam::m_strName,
 			// passed in by the caller).
 			ibParamVariable(const wxString& strParamName, const ibByteCode::ibByteParam& bp)
-				: m_bByRef(bp.m_bByRef),
+				: m_bByValue(bp.m_bByValue),
 				  m_strName(strParamName)
 			{
 				// The bytecode carries the descriptor, not the type name (byteCode.h):
@@ -178,7 +178,7 @@ struct ibCompileContext {
 				m_puValue.m_numIndex = bp.m_defaultValue.m_numIndex;
 			}
 
-			bool m_bByRef;
+			bool m_bByValue;
 			wxString m_strName; // Variable name
 			ibClassID m_clsid = 0;   // declared type; 0 = untyped
 			ibParamUnit m_puValue; // Default value
