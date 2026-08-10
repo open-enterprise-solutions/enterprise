@@ -140,7 +140,15 @@ public:
 
 	ibCompileContext* m_rootContext; // root context 
 
-	int				m_numCurrentCompile;		// current position in the token array
+	// Cursor over m_listLexem — "before the first token" is -1, and the
+	// INITIALISER is the only thing that says so on the eval path. A module
+	// compile is set up by CompileModule(), which opens by parking the cursor;
+	// ibProcUnit::CompileExpression (watch / Evaluate / Execute) never calls it
+	// — it goes PrepareLexem → GetExpression directly. With the field left
+	// uninitialised that walk started from heap garbage, so the first GETLexem
+	// read past the end of the token array and every watch expression, `4`
+	// included, came back as "Module code expected".
+	int				m_numCurrentCompile = wxNOT_FOUND;	// current position in the token array
 	bool			m_changedCode;
 
 	// Compile-mode predicate. Default false (regular module compile).

@@ -1375,3 +1375,69 @@ TEST(RuntimeTest, ACorrelatedJoinPairsEachKeyWithItsOwnRowsMeta) {
 	ASSERT_TRUE(pu.GetPropVal(wxT("r"), v));
 	EXPECT_EQ(v.GetString(), wxT("AaBbCc"));
 }
+
+// ===========================================================================
+// THE EVAL PATH HAS A CURSOR OF ITS OWN
+//
+// `ibProcUnit::CompileExpression` — the one door behind the debugger's watch
+// panel, `Evaluate(...)` and `Execute(...)` — goes PrepareLexem → GetExpression
+// and never runs CompileModule(), which is where a module compile parks the
+// lexem cursor at -1. The field carried no initialiser, so the eval walk began
+// at whatever the heap held: the first GETLexem read past the end of the token
+// array and raised ERROR_CODE_DEFINE ("Module code expected") for EVERY watch
+// expression — `q.Execute()` and the literal `4` alike.
+//
+// Nothing caught it because nothing in tests/ had ever gone through eval: the
+// path is reachable from a script only via the two built-ins below.
+//
+// A CONSTANT expression on purpose — it needs no name resolution, so a failure
+// here is the cursor and cannot be scope binding.
+// ===========================================================================
+
+TEST_F(BuiltInRuntime, EvaluateComputesAConstantExpression) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+
+	ibValueSystemFunction valueSystem;
+	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+
+	ASSERT_TRUE(TryCompile(cc, wxT("var a public; a = Evaluate(\"2 + 2\");")));
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("a"), v));
+
+	// A failed eval comes back as the string "<error: …>" (ibProcUnit::Evaluate's
+	// reportFailure), so print the value rather than only its number — "expected
+	// 4, actual 0" would hide the reason the engine already knows.
+	EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_NUMBER)
+		<< "eval returned " << v.GetString().ToStdString();
+	EXPECT_EQ(v.GetInteger(), 4);
+}
+
+// The same door, now with a NAME in the expression: the eval frame resolves it
+// out of the host's frame (pppArrayList[1], wired by CompileExpression). Split
+// from the case above so a scope-chain failure cannot be read as a cursor one.
+TEST_F(BuiltInRuntime, EvaluateReadsAVariableOfTheHostModule) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+
+	ibValueSystemFunction valueSystem;
+	cc.AddContextVariable(wxT("System"), &valueSystem, true);
+
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("var k public; var a public;\n")
+		wxT("k = 40;\n")
+		wxT("a = Evaluate(\"k + 2\");\n")));
+
+	ibProcUnit pu;
+	wxString strError;
+	ASSERT_TRUE(RunBound(cc, pu, strError)) << strError.ToStdString();
+
+	ibValue v;
+	ASSERT_TRUE(pu.GetPropVal(wxT("a"), v));
+	EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_NUMBER)
+		<< "eval returned " << v.GetString().ToStdString();
+	EXPECT_EQ(v.GetInteger(), 42);
+}

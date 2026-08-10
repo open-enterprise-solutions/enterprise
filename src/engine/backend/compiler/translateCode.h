@@ -468,15 +468,20 @@ protected:
 	wxString m_strDocPath; // unique path to the document
 	wxString m_strFileName; // path to the file (if external processing)
 
-	unsigned int m_bufferSize;//size of the original text
+	// Reading position over m_strBuffer. Clear() — reached through Load() — resets
+	// all four, so every path that loads text before parsing it is covered; the
+	// INITIALISERS are what covers a reader that runs before any text arrives.
+	// Left uninitialised, the same shape on ibCompileCode's lexem cursor made the
+	// whole eval / watch path answer "Module code expected".
+	unsigned int m_bufferSize = 0;//size of the original text
 
 	//original and upper text :
 	wxStringImpl m_strBuffer, m_strBUFFER;
 
-	mutable unsigned int m_currentPos; //current position of the processed text
-	mutable unsigned int m_currentLine; //current line of the processed text
+	mutable unsigned int m_currentPos = 0; //current position of the processed text
+	mutable unsigned int m_currentLine = 0; //current line of the processed text
 #ifdef UTF8_LEXEM_TRANSLATE
-	mutable unsigned int m_currentUtf8Pos; //current raw position of the processed text
+	mutable unsigned int m_currentUtf8Pos = 0; //current raw position of the processed text
 #endif // UTF8_LEXEM_TRANSLATE
 
 	//intermediate array with lexemes:
