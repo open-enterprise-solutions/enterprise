@@ -232,6 +232,19 @@ backs it is no longer hypothetical — it is declared and applied for the accumu
 — but the accounting register contributes no totals of its own yet. See
 [register-totals-strategy.md](register-totals-strategy.md).
 
+**Inventoried and decided 2026-08-10 — [accounting-register-arc.md](accounting-register-arc.md).**
+The diagnosis is not "half-built" but *built to a previous generation of the engine*: this register
+predates the query engine, which is why it composes SQL as strings. Four of its five layers are
+intact (metamodel, chart of accounts + CCT, writing, forms), and the movements table is ALREADY a
+query source — so a trial balance is expressible as an ordinary query today. What is broken is one
+link (the value slot is typed as the KIND slot) and one habit: `AccountType`, the accounting flags
+and `SummaryOnly` are all declared, serialised, walked through the lifecycle — and read by nobody.
+The arc records the decisions (naming `AccountDimension`/«Аналитика»; slot count declared by the
+chart of accounts; correspondence as a register property; kind stored beside value; addressing by
+kind; per-call output schema) and an audit showing that almost everything needed already exists to
+be connected — including the exact precedent for a property-driven attribute set in
+`accumulationRegister.h`.
+
 ### 4.2 Web — the control surface is roughly one third ported
 
 Re-verified against `frontend/wfrontend.vcxproj` + each control's `OES_USE_WEB` branch on
