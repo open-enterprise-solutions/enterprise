@@ -412,9 +412,17 @@ TEST(QueryRender, ParametersAndAggregatesRoundTrip) {
 
 TEST(QueryRender, JoinsRoundTrip) {
 	ExpectRoundTrip(wxT("SELECT p.Ref FROM Catalog.Products AS p LEFT JOIN Catalog.Units AS u ON p.Unit = u.Ref"));
-	// An OMITTED ON is not `ON TRUE`: it means join-by-reference, and writing one
-	// in would turn an auto-join into a cross join.
-	ExpectRoundTrip(wxT("SELECT p.Ref FROM Catalog.Products AS p INNER JOIN Catalog.Units AS u"));
+	// ⭐ A PRODUCT IS A COMMA. Two tables with nothing said about how they meet are MULTIPLIED, and
+	// that is an ordinary, complete query written the way it has always been written.
+	ExpectRoundTrip(wxT("SELECT p.Ref FROM Catalog.Products AS p, Catalog.Units AS u"));
+}
+
+// …and a JOIN always carries its ON. The omitted-ON shorthand used to mean "find the link yourself,
+// one side probably references the other" — which made the same text mean different things depending
+// on what the metadata held that day, AND took the syntax a product needed. One shape, one meaning.
+TEST(QueryL4Parser, AJoinWithoutOnIsRefused) {
+	EXPECT_THROW(Parse(wxT("SELECT p.Ref FROM Catalog.Products AS p INNER JOIN Catalog.Units AS u")),
+	             ibBackendException);
 }
 
 TEST(QueryRender, GroupHavingOrderRoundTrip) {

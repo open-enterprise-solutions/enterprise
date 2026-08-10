@@ -30,10 +30,15 @@ public:
 	// answer is the register's, asked once and not restated here. Without this the base answers
 	// nothing and the slice stands in a catalogue as a leaf with no fields to select.
 	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
+	// Slice(moment, condition). The condition may name ANYTHING the slice carries — unlike a
+	// balance, a slice folds nothing: it picks one row per key, and every column of that row is
+	// still a column, attributes included. So FillConditionExplorer is left at the base, which
+	// answers with the whole source.
+	void DescribeParameters(std::vector<ibQuerySourceParameter>& out) const override;
 private:
 	ibValueMetaObjectInformationRegister* m_reg;
 	wxString                              m_suffix;
-	std::unique_ptr<TSlice>               m_companion;   // call-scoped, owned here
+	// (no companion member: the base owns what MakeCompanion builds — queryableFactory.h)
 };
 
 class ibValueMetaObjectInformationRegister : public ibValueMetaObjectRegisterData {
@@ -88,6 +93,11 @@ public:
 	virtual bool OnDeleteMetaObject();
 
 	//for designer 
+	// Register / unregister `.SliceLast` and `.SliceFirst` from the periodicity as it is NOW. A slice
+	// is defined by the period, so a non-periodic register has none — and periodicity is a property
+	// that can be switched after the register has run.
+	void SyncSliceSources();
+
 	virtual bool OnReloadMetaObject();
 
 	//module manager is started or exit 
@@ -340,8 +350,9 @@ const ibBackendQueryable* ibInfoRegisterSliceDescriptor<TSlice>::CreateQueryable
 	// build the call-scoped slice companion from the params (as-of period, dimension filter) and own it
 	const ibValue period = (lSizeArray > 0 && paParams != nullptr && paParams[0] != nullptr) ? *paParams[0] : ibValue();
 	const ibValue filter = (lSizeArray > 1 && paParams != nullptr && paParams[1] != nullptr) ? *paParams[1] : ibValue();
-	m_companion = std::make_unique<TSlice>(m_reg, period, filter);
-	return m_companion.get();
+	// Built and KEPT by the base — the same call gives the same object back, and two slices as of two
+	// different dates in one query both stay alive (queryableFactory.h, MakeCompanion).
+	return this->template MakeCompanion<TSlice>(paParams, lSizeArray, m_reg, period, filter);
 }
 
 template <typename TSlice>
@@ -349,6 +360,21 @@ void ibInfoRegisterSliceDescriptor<TSlice>::FillSourceExplorer(ibSourceDataObjec
 {
 	if (m_reg != nullptr)
 		m_reg->FillSourceExplorer(explorer);
+}
+
+template <typename TSlice>
+void ibInfoRegisterSliceDescriptor<TSlice>::DescribeParameters(std::vector<ibQuerySourceParameter>& out) const
+{
+	ibQuerySourceParameter moment;
+	moment.m_name = wxT("Period");
+	if (m_reg != nullptr && m_reg->GetRegisterPeriod() != nullptr)
+		moment.m_type = m_reg->GetRegisterPeriod()->GetTypeDesc();
+	out.push_back(moment);
+
+	ibQuerySourceParameter condition;
+	condition.m_name      = wxT("Condition");
+	condition.m_condition = true;
+	out.push_back(condition);
 }
 
 //********************************************************************************************

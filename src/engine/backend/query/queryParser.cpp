@@ -367,11 +367,30 @@ ibQuerySource ibQueryParser::ParseSource()
 	else {
 		s.m_name = ParseDottedName();
 
-		// optional source-call args — Balance(&Period, &Filter): value exprs handed to the
-		// queryable's CreateQueryable (e.g. a register virtual table's as-of period / filter).
+		// optional source-call args — `Balance(&Period, Warehouse = &Store)`: the arguments a virtual
+		// table is built from (its as-of moment, its condition), handed to CreateQueryable.
+		//
+		// ⚠ A FULL EXPRESSION PER ARGUMENT, not a primary. An argument is not always a bare `&name`:
+		// a moment can be computed (`BegOfMonth(&Date)`) and a CONDITION is a predicate
+		// (`Warehouse = &Store AND Item = &Item`). Reading only a primary swallowed the first token
+		// and then demanded `)` — `SliceLast(Resource2 = &Resource2)` failed at the `=`, complaining
+		// about a bracket, which points at the wrong end of the problem entirely.
+		//
+		// The comma stays the separator: it is not an operator in this language, so the expression
+		// parser stops at it on its own.
 		if (AcceptPunct(wxT('('))) {
 			if (!Cur().IsPunct(wxT(')'))) {
-				do { s.m_args.push_back(ParsePrimary()); } while (AcceptPunct(wxT(',')));
+				// AN OMITTED ARGUMENT KEEPS ITS PLACE — `Balance(, Warehouse = &W)` means "no moment,
+				// this condition", and `Turnovers(&From, &To, , Warehouse = &W)` skips only the
+				// periodicity. The arguments are positional, so a missing one has to be written as
+				// nothing between commas; reading it as absent would shift every later argument into
+				// the wrong slot.
+				do {
+					if (Cur().IsPunct(wxT(',')) || Cur().IsPunct(wxT(')')))
+						s.m_args.push_back(nullptr);
+					else
+						s.m_args.push_back(ParsePredicate());
+				} while (AcceptPunct(wxT(',')));
 			}
 			ExpectPunct(wxT(')'), wxT("')' after the source arguments"));
 		}
@@ -391,6 +410,23 @@ ibQuerySource ibQueryParser::ParseSource()
 void ibQueryParser::ParseJoins(ibQuerySelect& sel)
 {
 	for (;;) {
+		// ⭐⭐ A COMMA IS THE PRODUCT — `FROM A, B`, the oldest way there is of saying "both tables,
+		// nothing said about how they meet". It parses to a join with NO condition, which is exactly
+		// what the lowering already reads as a cross join.
+		//
+		// It exists so that JOIN never has to mean it. Written as `JOIN B` with nothing after it, "no
+		// link" and "a link somebody stopped writing" are the same text, and the reader cannot tell
+		// them apart — which is why a bare JOIN is refused below. The comma says the first out loud;
+		// JOIN then always carries its ON.
+		if (Cur().IsPunct(wxT(','))) {
+			++m_pos;
+			ibQueryAstJoin product;
+			product.m_kind = ibQueryJoinKindAst::Inner;
+			product.m_source = ParseSource();
+			sel.m_joins.push_back(std::move(product));
+			continue;
+		}
+
 		ibQueryJoinKindAst kind;
 		if      (AcceptKw(ibQueryKeyword::Inner)) {                                   ExpectKw(ibQueryKeyword::Join, wxT("JOIN")); kind = ibQueryJoinKindAst::Inner; }
 		else if (AcceptKw(ibQueryKeyword::Left))  { AcceptKw(ibQueryKeyword::Outer); ExpectKw(ibQueryKeyword::Join, wxT("JOIN")); kind = ibQueryJoinKindAst::Left;  }
@@ -402,8 +438,13 @@ void ibQueryParser::ParseJoins(ibQuerySelect& sel)
 		ibQueryAstJoin j;
 		j.m_kind = kind;
 		j.m_source = ParseSource();
-		if (AcceptKw(ibQueryKeyword::On))
-			j.m_on = ParsePredicate();
+		// ⚠ AND A JOIN ALWAYS CARRIES ITS CONDITION. `JOIN B` with nothing after it reads as a
+		// sentence somebody stopped writing, and it used to be accepted — silently meaning the
+		// product, which the comma above now says properly. Whoever wants every combination writes
+		// the comma, or `ON TRUE`; whoever forgot the keys is told, here, at the position of the
+		// table they forgot them on.
+		ExpectKw(ibQueryKeyword::On, wxT("ON after JOIN (use a comma for every combination of rows)"));
+		j.m_on = ParsePredicate();
 		sel.m_joins.push_back(std::move(j));
 	}
 }
@@ -657,9 +698,45 @@ ibQueryAstExprPtr ibQueryParser::ParseCase()
 	return n;
 }
 
+// ⭐ `ISNULL(a, b)` — "a, and b where a is nothing". Read as the CASE it is:
+//
+//     CASE WHEN a IS NULL THEN b ELSE a END
+//
+// Nothing below the parser learns a new node: the lowering, every provider and every dialect already
+// carry CASE, so the substitution works the day it is written — including inside an aggregate, a
+// condition or a nested table.
+//
+// ⚠ AND THE SPELLING DOES NOT SURVIVE THE ROUND TRIP: written `ISNULL`, it comes back as the CASE.
+// That is the price of not adding a node, and it is a real one — a reader who wrote the short form
+// finds the long one. Keeping the word would mean its own AST kind, its own rendering and its own
+// lowering; worth doing when the short form earns its keep, not before.
+ibQueryAstExprPtr ibQueryParser::ParseIsNullCall()
+{
+	const ibQueryToken kw = Cur();
+	ExpectKw(ibQueryKeyword::IsNull, wxT("ISNULL"));
+	ExpectPunct(wxT('('), wxT("'(' after ISNULL"));
+	ibQueryAstExprPtr value = ParsePredicate();
+	ExpectPunct(wxT(','), wxT("',' - ISNULL takes the value and what to use when it is null"));
+	ibQueryAstExprPtr fallback = ParsePredicate();
+	ExpectPunct(wxT(')'), wxT("')' after ISNULL"));
+
+	auto isNull = ibQueryAstExpr::Make(ibQueryAstExprKind::IsNull);
+	isNull->m_lhs = value;
+	isNull->m_line = kw.m_line; isNull->m_col = kw.m_col;
+
+	auto n = ibQueryAstExpr::Make(ibQueryAstExprKind::Case);
+	n->m_line = kw.m_line; n->m_col = kw.m_col;
+	n->m_cases.emplace_back(isNull, fallback);
+	n->m_else = value;
+	return n;
+}
+
 ibQueryAstExprPtr ibQueryParser::ParsePrimary()
 {
 	const ibQueryToken& tk = Cur();
+
+	if (tk.IsKeyword(ibQueryKeyword::IsNull))
+		return ParseIsNullCall();
 
 	// parenthesized sub-predicate / arithmetic
 	if (tk.IsPunct(wxT('('))) {

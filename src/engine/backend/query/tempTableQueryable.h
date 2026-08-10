@@ -21,15 +21,31 @@ class ibTempColumn : public ibBackendQueryColumn
 {
 public:
 	ibTempColumn(const wxString& name, const ibTypeDescription& type, ibMetaID modelId)
-		: m_name(name), m_type(type), m_modelId(modelId) {}
+		: m_name(name), m_physical(name), m_type(type), m_modelId(modelId) {}
+
+	// ⭐ THE NAME A QUERY WRITES AND THE NAME THE STORAGE KEEPS ARE TWO DIFFERENT NAMES.
+	//
+	// For a temp table they are the same string and that is right — its columns are named by whoever
+	// made it. A register's TOTALS view is the other case: its columns live in a generated table
+	// (`fld1124_D`, `fld1124_D_Week`, `Resource1_Receipt`), and those names reached the constructor's
+	// catalogue exactly as stored — so the field list of `Turnovers` read as a dump of a physical
+	// schema instead of `Period`, `PeriodWeek`, `Resource1Turnover`.
+	//
+	// One string became two: the renderer keeps asking for the PHYSICAL name (that is the contract
+	// with the generated table, and it must not drift), everybody who shows or resolves a field asks
+	// for the ordinary one.
+	ibTempColumn(const wxString& name, const wxString& physical,
+	             const ibTypeDescription& type, ibMetaID modelId)
+		: m_name(name), m_physical(physical), m_type(type), m_modelId(modelId) {}
 
 	wxString           GetName()         const override { return m_name; }
-	wxString           GetPhysicalName() const override { return m_name; }
+	wxString           GetPhysicalName() const override { return m_physical; }
 	ibTypeDescription& GetTypeDesc()     const override { return m_type; }   // interface returns a non-const ref
 	ibMetaID           GetColumnId()      const override { return m_modelId; }
 
 private:
 	wxString                  m_name;
+	wxString                  m_physical;   // == m_name unless the storage spells it differently
 	mutable ibTypeDescription m_type;     // mutable: GetTypeDesc() is const but returns a non-const ref
 	ibMetaID                  m_modelId;
 };

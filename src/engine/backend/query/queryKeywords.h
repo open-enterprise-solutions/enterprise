@@ -61,6 +61,10 @@ enum class ibQueryKeyword
 	// CASE expression
 	Case, When, Then, Else, End,
 
+	// ISNULL(<expr>, <value when null>) — the substitution, distinct from the `IS NULL` predicate
+	// above. Written as itself and read as a CASE: one spelling for the common case, no new node.
+	IsNull,
+
 	// aggregate functions
 	Sum, Count, Min, Max, Avg,
 

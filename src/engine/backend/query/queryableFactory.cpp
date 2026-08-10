@@ -60,6 +60,12 @@ const ibBackendQueryable* ibQueryableFactory::Resolve(const wxString& ns, const 
 	return it != m_descriptors.end() ? it->second->CreateQueryable(paParams, lSizeArray) : nullptr;
 }
 
+ibQueryableSourceDescriptor* ibQueryableFactory::FindDescriptor(const wxString& ns, const wxString& objectName) const
+{
+	const auto it = m_descriptors.find(Key(ns, objectName));
+	return it != m_descriptors.end() ? it->second : nullptr;
+}
+
 std::vector<ibQueryableSourceDescriptor*> ibQueryableFactory::GetDescriptors() const
 {
 	std::vector<ibQueryableSourceDescriptor*> result;
@@ -96,6 +102,14 @@ const ibBackendQueryable* ibMetaQueryableFactory::Resolve(const wxString& ns, co
 		return q;
 	const ibQueryableFactory* global = ibApplicationData::GetQueryableFactory();
 	return global != nullptr ? global->Resolve(ns, objectName, paParams, lSizeArray) : nullptr;
+}
+
+ibQueryableSourceDescriptor* ibMetaQueryableFactory::FindDescriptor(const wxString& ns, const wxString& objectName) const
+{
+	if (ibQueryableSourceDescriptor* own = ibQueryableFactory::FindDescriptor(ns, objectName))
+		return own;
+	const ibQueryableFactory* global = ibApplicationData::GetQueryableFactory();
+	return global != nullptr ? global->FindDescriptor(ns, objectName) : nullptr;
 }
 
 const ibBackendQueryable* ibMetaQueryableFactory::ResolveById(ibMetaID tableId) const

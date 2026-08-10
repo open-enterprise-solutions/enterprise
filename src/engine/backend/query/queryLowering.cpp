@@ -100,7 +100,12 @@ ibValue EvalValue(const ibQueryAstExpr& e, const std::map<wxString, ibValue>& pa
 
 // Resolve the FROM / JOIN source namespace.name to a queryable through the source
 // factory appData owns (built-in metaobject families + plugin / external sources).
-const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map<wxString, ibValue>& params)
+//
+// `conditionsOut` collects the CONDITION arguments of a virtual table — the ones this function
+// must not evaluate (see below). Null when the caller has nowhere to put them: name checking, for
+// instance, only wants to know whether the source resolves at all.
+const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map<wxString, ibValue>& params,
+                                        std::vector<ibQueryAstExprPtr>* conditionsOut = nullptr)
 {
 	// A TEMP TABLE IS A BARE NAME. `SELECT … INTO Sales` then `FROM Sales` — no <Kind>. prefix,
 	// because a temp table has no metaclass to name: it is what the previous statement left.
@@ -167,9 +172,91 @@ const ibBackendQueryable* ResolveSource(const ibQuerySource& src, const std::map
 
 	// Source-call args (Balance(&Period, …)) -> the descriptor's CreateQueryable. The companion copies
 	// them by value (e.g. ibBalanceQueryable stores m_period), so these locals may die after Resolve.
+	//
+	// ⚠ NOT EVERY ARGUMENT IS A VALUE. A source declares what its arguments MEAN
+	// (DescribeParameters), and a CONDITION one is a predicate over the table's own columns —
+	// evaluating it here would ask for the value of `Warehouse = &Store` with no row to read it
+	// from. So the condition is NOT evaluated: it is handed back to the caller, which qualifies it
+	// with this source's alias and ANDs it into the WHERE. From there the ordinary machinery does
+	// the rest — plain conditions are pushed INTO ComputeRows, so a balance filters by its
+	// dimension before folding rather than after.
+	//
+	// Its slot still travels, as an empty value: the descriptor reads its arguments by position,
+	// and an empty filter is what "no filter" has always looked like to it.
+	std::vector<ibQuerySourceParameter> declared;
+	if (ibQueryableSourceDescriptor* descriptor = factory->FindDescriptor(ns, name))
+		descriptor->DescribeParameters(declared);
+
+	// ⚠ A CONDITION SLOT TAKES EITHER SHAPE, and the shape decides the road — not the declaration.
+	// `Balance(&P, Warehouse = &W)` is a predicate and becomes a condition; `Balance(&P, &Filter)`
+	// hands the source a VALUE (the filter structure it has always understood) and must keep doing
+	// so. Sending a bare `&Filter` into the WHERE produced `WHERE &Filter`, which is not a condition
+	// at all — the engine said "unsupported WHERE expression" about text nobody wrote that way.
+	const auto isPredicate = [](const ibQueryAstExpr& e) {
+		switch (e.m_kind) {
+		case ibQueryAstExprKind::Compare:
+		case ibQueryAstExprKind::Logical:
+		case ibQueryAstExprKind::Not:
+		case ibQueryAstExprKind::In:
+		case ibQueryAstExprKind::Like:
+		case ibQueryAstExprKind::Between:
+		case ibQueryAstExprKind::IsNull:
+			return true;
+		default:
+			return false;   // a parameter, a literal, a computation — a VALUE for the source
+		}
+	};
+
 	std::vector<ibValue>  argVals;
-	for (const ibQueryAstExprPtr& a : src.m_args)
-		argVals.push_back(EvalValue(*a, params));
+	for (size_t i = 0; i < src.m_args.size(); ++i) {
+		const bool isCondition = i < declared.size() && declared[i].m_condition
+			&& src.m_args[i] && isPredicate(*src.m_args[i]);
+		if (isCondition) {
+			if (conditionsOut != nullptr)
+				conditionsOut->push_back(src.m_args[i]);
+			argVals.push_back(ibValue());
+			continue;
+		}
+		if (!src.m_args[i]) {
+			argVals.push_back(ibValue());
+			continue;
+		}
+
+		// ⭐ A CLOSED SET IS NAMED, NOT QUOTED. `Turnovers(, , Hour, )` — the periodicity is a MEMBER
+		// of the set the source declared, and a member is written the way every name in this language
+		// is written: bare. The parser has no way to know that slot is special, so it reads `Hour` as
+		// a one-segment column path; here, where the DECLARATION is at hand, it is read back as the
+		// word it is.
+		//
+		// (It was written quoted for exactly one build. A quoted word is a string, and the query text
+		// usually lives inside a script string literal where quotes double — so it reached the module
+		// as `""Hour""` and read as a mistake, which it was.)
+		if (i < declared.size() && !declared[i].m_condition && !declared[i].m_choices.empty()
+		    && src.m_args[i]->m_kind == ibQueryAstExprKind::Column
+		    && src.m_args[i]->m_path.size() == 1) {
+			ibValue word;
+			word.SetString(src.m_args[i]->m_path.front());
+			argVals.push_back(word);
+			continue;
+		}
+
+		// ⚠ CHECKING NAMES IS NOT RUNNING. `conditionsOut == nullptr` is the checking path (nobody
+		// asked for the conditions because nobody is going to execute them), and there a parameter
+		// with no value is NORMAL: the constructor is where a query is WRITTEN, and its parameters
+		// are set by the code that later runs it. Raising there painted the verdict line red over a
+		// query that is perfectly well-formed — telling the author to fix something that is not
+		// theirs to fix here.
+		//
+		// At execution the same missing value still raises, in EvalValue's own words: that is where
+		// it genuinely is a mistake.
+		if (conditionsOut == nullptr) {
+			try { argVals.push_back(EvalValue(*src.m_args[i], params)); }
+			catch (const ibBackendException&) { argVals.push_back(ibValue()); }
+		}
+		else {
+			argVals.push_back(EvalValue(*src.m_args[i], params));
+		}
+	}
 	std::vector<ibValue*> argPtrs;
 	for (ibValue& v : argVals)
 		argPtrs.push_back(&v);
@@ -209,7 +296,9 @@ const ibBackendQueryable* OwnerOfBareColumn(const std::vector<ibSourceBinding>& 
 {
 	const ibBackendQueryable* owner = nullptr;
 	for (const ibSourceBinding& s : sources)
-		if (s.m_q->ResolveColumnByName(name) != nullptr) {
+		// A binding with no queryable behind it is skipped, not dereferenced — same reason as the
+		// guard in ResolvePath: this runs over queries that are still being written.
+		if (s.m_q != nullptr && s.m_q->ResolveColumnByName(name) != nullptr) {
 			if (owner != nullptr)
 				Fail(line, col, wxString::Format(
 					_("ambiguous attribute '%s': it is in more than one source: qualify it with an alias (e.g. a.%s)"),
@@ -337,8 +426,42 @@ std::vector<const ibBackendQueryColumn*> ResolvePath(const std::vector<ibSourceB
 		const ibBackendQueryable* aliased = SourceForAlias(sources, path[0]);
 		if (aliased != nullptr) { cur = aliased; i = 1; }
 	}
-	if (i == 0)   // unqualified — start on the source that owns the first segment
-		if (const ibBackendQueryable* q = OwnerOfBareColumn(sources, path[0], e.m_line, e.m_col)) cur = q;   // ambiguous -> Fail
+	if (i == 0) {   // unqualified — start on the source that owns the first segment
+		if (const ibBackendQueryable* q = OwnerOfBareColumn(sources, path[0], e.m_line, e.m_col)) {
+			cur = q;   // ambiguous -> Fail, inside
+		}
+		else if (path.size() >= 2) {
+			// ⭐ A QUALIFIED NAME WHOSE QUALIFIER IS NOTHING — `SliceLast.Dimension2` in a query that
+			// no longer reads SliceLast. The first segment is neither a source alias nor a column of
+			// any source, so this is not a dot-walk that went wrong somewhere in the middle: it is a
+			// FIELD LEFT OVER from a table that is gone.
+			//
+			// Said as itself, and with what to do about it. "unknown attribute 'SliceLast'" named the
+			// segment the resolver happened to stop on and left the reader to work out that the thing
+			// to delete is the whole field — which is the one thing the message could have said.
+			wxString field;
+			for (size_t k = 0; k < path.size(); ++k)
+				field += (k > 0 ? wxT(".") : wxT("")) + path[k];
+			Fail(e.m_line, e.m_col, wxString::Format(
+				_("'%s' is left over from a table this query does not read: remove the field, or add "
+				  "'%s' back to the tables"), field, path[0]));
+		}
+	}
+
+	// ⚠ THERE MAY BE NO SOURCE TO WALK FROM, and that is a QUERY the author is in the middle of
+	// writing — not a state this function may assume away. `cur` starts as the first source, and a
+	// select with none (or one whose source did not resolve) leaves it null; the loop below then
+	// dereferenced it and the process went down. It is exactly the everyday path: the constructor
+	// re-asks the engine after EVERY edit, so adding a table or a link to a query that is not yet
+	// whole ran straight through here.
+	//
+	// An error is the honest answer and the window already knows how to show one — the verdict line
+	// under the tabs, in the engine's own words.
+	if (cur == nullptr) {
+		Fail(e.m_line, e.m_col, wxString::Format(_("'%s' belongs to no table of this query"),
+			path.empty() ? wxString() : path[0]));
+		return {};
+	}
 
 	for (size_t k = i; k < path.size(); ++k) {
 		const ibBackendQueryColumn* col = cur->ResolveColumnByName(path[k]);
@@ -911,6 +1034,42 @@ private:
 	ibMetaID                  m_id;
 };
 
+// ⭐⭐ THE SCHEMA OUTLIVES THE DOOR, SO IT MAY NOT POINT INTO IT.
+//
+// A subquery wrapper is built for ONE run and owns the columns it publishes; `subOwners` releases
+// them the moment the lowering returns. The OUTPUT SCHEMA, by contrast, travels out with the
+// selection and is read long afterwards — a script reading a field, a watch window in the debugger
+// expanding the selection minutes later.
+//
+// It survived only while a nested table published its SOURCE's columns, which the metadata owns and
+// which outlive everything. The day it began publishing its own output honestly — an alias, a
+// dot-walk, a computed expression, all allocated by the wrapper — every such schema entry became a
+// pointer into memory the allocator had already handed to somebody else. That is not a rare race:
+// the first read after the query returns is already too late.
+//
+// Nothing the schema does needs the door. An entry needs an ID to find its cell, a NAME, and a TYPE
+// — so it takes a snapshot of exactly those three, owned by the schema itself, through the same
+// `m_ownedCol` a synthetic totals measure already uses. Where the column belongs to the METADATA
+// nothing is copied: it outlives the schema by construction.
+void DetachSchemaFromRunSources(std::vector<OutputColumn>& schema, const ibSubqueryOwner& owner)
+{
+	if (owner.empty())
+		return;
+	for (OutputColumn& oc : schema) {
+		if (oc.m_col == nullptr || oc.m_ownedCol != nullptr)
+			continue;
+		bool diesWithTheRun = false;
+		for (const std::unique_ptr<ibSubqueryQueryable>& wrapper : owner)
+			if (wrapper != nullptr && wrapper->OwnsColumnStorage(oc.m_col)) { diesWithTheRun = true; break; }
+		if (!diesWithTheRun)
+			continue;
+		auto snapshot = std::make_shared<ibSyntheticOutputColumn>(
+			oc.m_col->GetName(), oc.m_col->GetTypeDesc(), oc.m_col->GetColumnId());
+		oc.m_col      = snapshot.get();
+		oc.m_ownedCol = snapshot;
+	}
+}
+
 // The raw read-type of a PLAIN SCALAR column (string / number / date / bool, single CLSID). Returns false
 // for a reference / enum / composite leaf — those are not single-field scalars and cannot ride a synthetic
 // raw column (a multi-type totals dimension is a separate feature).
@@ -951,16 +1110,68 @@ wxString OutputNameFor(const ibQuerySelect& select, const ibQueryProjection& p, 
 // list living to the return statement is enough (no cross-call lifetime). (docs §22 / §23)
 bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>& params,
                      const std::vector<ibSourceBinding>& sources, ibDataQueryBuilder& b,
-                     std::vector<OutputColumn>& outSchema, bool asSubquery);
+                     std::vector<OutputColumn>& outSchema, bool asSubquery,
+                     const std::vector<ibQueryAstExprPtr>& sourceConditions = std::vector<ibQueryAstExprPtr>());
 
 // Resolve a FROM / source to a queryable: a plain metaobject source via the factory, or a nested
 // SELECT wrapped in ibSubqueryQueryable (built recursively, its own FROM resolved the same way).
+// QUALIFY A CONDITION WRITTEN INSIDE A SOURCE CALL. Its identifiers name THAT source's own columns
+// — `Balance(&P, Warehouse = &W)` means the balance's Warehouse — but once the condition joins the
+// query's WHERE it stands among every other source, so each path gets the source's name in front.
+// Works on a CLONE: the author's AST keeps what they wrote, and the text goes on rendering it inside
+// the brackets where they put it.
+ibQueryAstExprPtr QualifyToSource(const ibQueryAstExprPtr& expr, const wxString& sourceName)
+{
+	if (!expr)
+		return nullptr;
+
+	// COPIES AS IT QUALIFIES — one pass, not a clone followed by a rewrite. The author's AST is left
+	// exactly as written (the text goes on rendering the condition inside the brackets), and nothing
+	// here duplicates the optimizer's cloner: this builds the expression it needs.
+	ibQueryAstExprPtr copy = std::make_shared<ibQueryAstExpr>(*expr);
+
+	// Only a Column's path names a source; a Cast's path is a TYPE and a Value's a meta-path, so
+	// both keep theirs untouched and are followed through their argument instead.
+	if (copy->m_kind == ibQueryAstExprKind::Column && !copy->m_path.empty()
+	    && !sourceName.IsEmpty() && !copy->m_path.front().IsSameAs(sourceName, false))
+		copy->m_path.insert(copy->m_path.begin(), sourceName);
+
+	copy->m_arg  = QualifyToSource(expr->m_arg,  sourceName);
+	copy->m_lhs  = QualifyToSource(expr->m_lhs,  sourceName);
+	copy->m_rhs  = QualifyToSource(expr->m_rhs,  sourceName);
+	copy->m_low  = QualifyToSource(expr->m_low,  sourceName);
+	copy->m_high = QualifyToSource(expr->m_high, sourceName);
+	copy->m_else = QualifyToSource(expr->m_else, sourceName);
+
+	copy->m_list.clear();
+	for (const ibQueryAstExprPtr& item : expr->m_list)
+		copy->m_list.push_back(QualifyToSource(item, sourceName));
+
+	copy->m_cases.clear();
+	for (const auto& branch : expr->m_cases)
+		copy->m_cases.emplace_back(QualifyToSource(branch.first, sourceName),
+		                           QualifyToSource(branch.second, sourceName));
+	return copy;
+}
+
 const ibBackendQueryable* ResolveFrom(const ibQuerySource& src,
                                       const std::map<wxString, ibValue>& params,
-                                      ibSubqueryOwner& owner)
+                                      ibSubqueryOwner& owner,
+                                      std::vector<ibQueryAstExprPtr>* conditionsOut = nullptr)
 {
-	if (!src.m_subquery)
-		return ResolveSource(src, params);
+	if (!src.m_subquery) {
+		// A virtual table's CONDITION argument comes back here rather than being evaluated: it is a
+		// predicate over the table's own columns, and it is applied by ANDing it into the WHERE —
+		// from where the ordinary machinery pushes plain conditions INTO ComputeRows, so a balance
+		// filters before folding rather than after.
+		std::vector<ibQueryAstExprPtr> own;
+		const ibBackendQueryable* q = ResolveSource(src, params, &own);
+		if (conditionsOut != nullptr)
+			for (const ibQueryAstExprPtr& condition : own)
+				if (ibQueryAstExprPtr qualified = QualifyToSource(condition, ibQuerySourceName(src)))
+					conditionsOut->push_back(qualified);
+		return q;
+	}
 	return WrapSelectAsQueryable(*src.m_subquery, params, owner);   // FROM (SELECT …) AS alias
 }
 
@@ -972,7 +1183,8 @@ const ibBackendQueryable* ResolveFrom(const ibQuerySource& src,
 // column directly. Returns whether the query is in aggregate mode (GROUP BY / aggregate projection).
 bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>& params,
                      const std::vector<ibSourceBinding>& sources, ibDataQueryBuilder& b,
-                     std::vector<OutputColumn>& outSchema, bool asSubquery)
+                     std::vector<OutputColumn>& outSchema, bool asSubquery,
+                     const std::vector<ibQueryAstExprPtr>& sourceConditions)
 {
 	const bool multiSource      = sources.size() > 1;
 	const bool explicitProjection = asSubquery || multiSource;
@@ -1144,6 +1356,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 
 	// GROUP BY — plain column OR a reference dot-walk leaf (GROUP BY Producer.Region). The path overload
 	// routes size-1 to a plain key; the provider joins a longer path (single source only — JOIN is A1).
+	std::vector<std::vector<const ibBackendQueryColumn*>> groupKeys;   // resolved, for the walk rule below
 	for (const ibQueryAstExprPtr& g : ast.m_groupBy) {
 		const std::vector<const ibBackendQueryColumn*> gcols = ResolvePath(sources, *g);
 		// A dot-walk GROUP BY over a COMPUTED source is RAM-joined by the provider (ExecuteAggregate resolves
@@ -1152,6 +1365,39 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 			b.GroupBy(ExpandDotWalkJoins(b, RootForPath(sources, *g), gcols, dwJoined, dwAliasSeq, *g));   // JOIN -> expand ref path
 		else
 			b.GroupBy(gcols);
+		groupKeys.push_back(gcols);
+	}
+
+	// ⭐ A WALK IS FIXED BY WHAT IT WALKS FROM. Group by `Producer` and `Producer.Region` comes with it:
+	// one reference value per group, so one region — the field cannot vary inside the group, and making
+	// the author list every child of a key he already grouped by is asking him to repeat what he said.
+	//
+	// SQL does not know that, and would refuse the projection ("must appear in the GROUP BY"). So the
+	// key it needs is added HERE, where the fact is known. Grouping additionally by a value that cannot
+	// vary within the group changes no result — it is a spelling the server requires, not a decision.
+	if (aggregate && !ast.m_selectAll) {
+		for (const ibQueryProjection& projection : ast.m_projections) {
+			const ibQueryAstExpr* e = projection.m_expr.get();
+			if (e == nullptr || e->m_kind != ibQueryAstExprKind::Column || e->m_path.size() < 2)
+				continue;
+			const std::vector<const ibBackendQueryColumn*> pcols = ResolvePath(sources, *e);
+			bool extendsAKey = false;
+			for (const std::vector<const ibBackendQueryColumn*>& key : groupKeys) {
+				if (key.empty() || key.size() >= pcols.size())
+					continue;   // an EXACT key is already grouped; a longer one is not this key's child
+				bool prefix = true;
+				for (size_t k = 0; k < key.size() && prefix; ++k)
+					prefix = (key[k] == pcols[k]);
+				if (prefix) { extendsAKey = true; break; }
+			}
+			if (!extendsAKey)
+				continue;
+			if (pcols.size() > 1 && multiSource)
+				b.GroupBy(ExpandDotWalkJoins(b, RootForPath(sources, *e), pcols, dwJoined, dwAliasSeq, *e));
+			else
+				b.GroupBy(pcols);
+			groupKeys.push_back(pcols);   // a second projection walking the same leaf must not add it twice
+		}
 	}
 
 	// HAVING — aggregate <op> value (ordered ops only; the door's filter-op set has no = / <>)
@@ -1216,6 +1462,23 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 			b.Where(BuildWherePredicate(sources, *ast.m_where, params, allowDotWalk || computedPrimary));
 	}
 
+	// A VIRTUAL TABLE'S CONDITION ARGUMENT lands here, alongside the written WHERE and by exactly the
+	// same road. `Balance(&P, Warehouse = &W)` says "compute the balance over this slice", and the
+	// slice IS a condition — so once it is qualified with its source's name (QualifyToSource) there
+	// is nothing left to distinguish it from a condition the author typed in WHERE.
+	//
+	// That is the point: from here the ordinary machinery carries it, and plain conditions are pushed
+	// INTO ComputeRows. The balance therefore filters BEFORE folding, which is what an argument of the
+	// table means and what a WHERE over the finished result could not do.
+	for (const ibQueryAstExprPtr& condition : sourceConditions) {
+		if (!condition)
+			continue;
+		if (IsFlatAndWhere(*condition))
+			LowerFlatWhere(b, sources, *condition, params, allowDotWalk || computedPrimary);
+		else
+			b.Where(BuildWherePredicate(sources, *condition, params, allowDotWalk || computedPrimary));
+	}
+
 	// ORDER BY — plain column or reference dot-walk leaf. A COMPUTED source resolves the dot-walk leaf in
 	// RAM (ibComputedProvider::ResolveComputedDotWalks joins it, keyed by GetColumnId; the RAM sort keys on
 	// s.m_col == the leaf), so ORDER BY a reference field is allowed there too — the physical path SQL-joins
@@ -1266,15 +1529,33 @@ const ibBackendQueryable* WrapSelectAsQueryable(const ibQuerySelect& sel,
 
 	std::vector<OutputColumn> innerSchema;
 	const std::vector<ibSourceBinding> innerSources{ { sel.m_from.m_alias, qi } };
-	// An AGGREGATE inner (GROUP BY / aggregate projections) is fine: the wrapper detects it from the
-	// builder, exposes the group keys + a synthetic column per aggregate alias, and ComputeRows runs
-	// SelectAggregate. The outer's pushed-down conditions post-filter the materialised rows.
+	// A FOLDING inner (GROUP BY, with or without aggregate projections) is fine: the wrapper reads the
+	// fold off the builder and ComputeRows runs SelectAggregate — the unpaged, full-spread read a
+	// grouped query needs. The outer's pushed-down conditions post-filter the materialised rows.
 	PopulateBuilder(sel, params, innerSources, inner, innerSchema, /*asSubquery*/true);
 
 	// ibSubqueryQueryable copies the inner door (shares its owned raw columns via shared_ptr), so the
 	// local 'inner' may die here — the copy is self-sufficient. The wrapper itself lives in 'owner'.
 	// sel.m_top (SELECT TOP n in the branch / subquery) limits the materialised rows.
-	auto wrapped = std::unique_ptr<ibSubqueryQueryable>(new ibSubqueryQueryable(inner, sel.m_top));
+	// ⭐ THE WRAPPER IS TOLD ITS OUTPUT. `innerSchema` is exactly what this select produces — the name
+	// of each field and how it is read — and it was being thrown away, leaving the wrapper to work the
+	// same thing out from the door's internals. It could not: a dot-walk has no column of its own, a
+	// GROUP BY key never enters the select list, a computed expression has neither. Each of those came
+	// back as "unknown attribute" about a field the inner query plainly names.
+	std::vector<ibSubqueryOutput> published;
+	published.reserve(innerSchema.size());
+	for (const OutputColumn& oc : innerSchema) {
+		ibSubqueryOutput out;
+		out.m_name         = oc.m_name;
+		out.m_col          = oc.m_col;
+		out.m_alias        = oc.m_byAlias ? oc.m_alias : wxString();
+		out.m_objectPrefix = oc.m_objectPrefix;
+		out.m_type         = oc.m_type;
+		published.push_back(out);
+	}
+
+	auto wrapped = std::unique_ptr<ibSubqueryQueryable>(
+		new ibSubqueryQueryable(inner, sel.m_top, published));
 	const ibBackendQueryable* result = wrapped.get();
 	owner.push_back(std::move(wrapped));
 	return result;
@@ -1341,9 +1622,10 @@ ibDataQueryResult LowerUnion(const ibQuerySelect& ast, const std::map<wxString, 
 // (ExecuteImpl) and the totals (ExecuteTotals) single-/JOIN-source paths, so every JOIN feature lives in ONE
 // place. The caller has already taken the UNION path (its own vertical stack) before calling this.
 void BuildSourceTree(const ibQuerySelect& ast, const std::map<wxString, ibValue>& params,
-                     ibSubqueryOwner& owner, std::vector<ibSourceBinding>& sources, ibDataQueryBuilder& b)
+                     ibSubqueryOwner& owner, std::vector<ibSourceBinding>& sources, ibDataQueryBuilder& b,
+                     std::vector<ibQueryAstExprPtr>* sourceConditions)
 {
-	const ibBackendQueryable* q0 = ResolveFrom(ast.m_from, params, owner);
+	const ibBackendQueryable* q0 = ResolveFrom(ast.m_from, params, owner, sourceConditions);
 	sources.push_back({ ast.m_from.m_alias, q0 });
 	b.From(q0, ast.m_from.m_alias);
 
@@ -1365,7 +1647,7 @@ void BuildSourceTree(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 			continue;
 		}
 
-		const ibBackendQueryable* qi = ResolveFrom(j.m_source, params, owner);
+		const ibBackendQueryable* qi = ResolveFrom(j.m_source, params, owner, sourceConditions);
 		const wxString alias = j.m_source.m_alias;
 		RequireAliasFree(sources, alias, 0, 0);   // duplicate alias -> Fail
 		sources.push_back({ alias, qi });
@@ -1373,8 +1655,23 @@ void BuildSourceTree(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 			b.CrossJoin(qi, kind, alias);   // ON TRUE -> cross join (cartesian)
 		}
 		else if (j.m_on) {
-			if (j.m_on->m_kind != ibQueryAstExprKind::Compare)
-				Fail(j.m_on->m_line, j.m_on->m_col, _("a JOIN ON clause must be a single comparison (a.x <op> b.y) or TRUE (cross join)"));
+			// AN ARBITRARY LINK CONDITION — `ON a.x = b.y AND a.z = b.w`, which is what the constructor's
+			// "custom" link writes. The builder carries ONE join key, so the condition is split: the
+			// first comparison IS the key, the rest are filters. They are equivalent for an INNER join
+			// and NOT for an outer one, where a condition in ON pre-filters the null-padded side and the
+			// same condition in WHERE removes the padded rows afterwards — so the extra terms are only
+			// accepted on an INNER join, and an outer one is told to move them itself rather than being
+			// quietly given a different result.
+			std::vector<ibQueryAstExprPtr> onTerms;
+			ibQueryFlattenAnd(j.m_on, onTerms);
+			if (onTerms.empty())
+				onTerms.push_back(j.m_on);
+			if (onTerms.size() > 1 && kind != ibQueryJoinKind::Inner)
+				Fail(j.m_on->m_line, j.m_on->m_col, _("an outer JOIN ON must be a single comparison: write the other conditions in WHERE"));
+
+			const ibQueryAstExprPtr on = onTerms.front();
+			if (on->m_kind != ibQueryAstExprKind::Compare)
+				Fail(on->m_line, on->m_col, _("a JOIN ON clause must compare two sides (a.x <op> b.y), or be TRUE for a cross join"));
 			// A CONSTANT side (&parameter / value(...) / literal) makes the ON a FILTER, not a join key —
 			// `JOIN b ON b.x <op> &p` is, by SQL, a cross join filtered on b.x (Max: params/values usable in a JOIN
 			// ON like anywhere a value goes). Emit it as cross-join + WHERE on the column side. Filter-in-ON differs
@@ -1426,7 +1723,21 @@ void BuildSourceTree(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 			}
 		}
 		else {
-			b.Join(qi, kind, alias);   // auto-join by reference
+			// ⭐⭐ NO LINK MEANS THE PRODUCT. A link either exists or it does not; where it does not,
+			// every row of one table stands against every row of the other — add Products and Features
+			// and you asked for count(Products) × count(Features). It is an ordinary thing to write,
+			// and what narrows it is a condition.
+			//
+			// It used to auto-join by reference here — the engine looked for a reference between the
+			// tables and quietly joined on it. That is a link nobody wrote: invisible in the text,
+			// absent from the constructor's list of links, and impossible to remove because there was
+			// nothing to remove. Worse, the same query meant different things depending on whether
+			// some column happened to refer to the other table.
+			//
+			// (The reference walk is not lost. It is what a dot-walk IS — `Order.Client.Name` — and
+			// the named ref-path join above, both of which SAY so. What is gone is the guess.)
+			//
+			b.CrossJoin(qi, kind, alias);
 		}
 	}
 }
@@ -1466,8 +1777,19 @@ void CheckSelectNames(const ibQuerySelect& ast, const std::map<wxString, ibValue
 // The sources of one select, resolved for CHECKING. Anything that cannot be resolved without
 // RUNNING — a package's temp table, a nested query — makes this select unverifiable and the check
 // falls silent on it rather than inventing an error. The nested query is still checked itself.
+//
+// ⚠ ONE DOOR, TWO READINGS — and only ONE of them is allowed to accuse. CheckNames is the VERDICT:
+// a qualified name the factory does not know is a table that is GONE and it says so, loudly. Its
+// two siblings (PruneUnresolved, UngroupedProjections) are asking what WORK IS LEFT, and their
+// published promise is that the unverifiable answers empty. Raising at them turns "I cannot check
+// this" into an exception the caller never asked for — with no application data at all (a headless
+// host, a bare test binary) the very first source raises and a plain `SELECT Code, Name` — which
+// owes no grouping whatsoever — dies before the rule is even read.
+//
+// So the accusation is the CALLER's to ask for. `reportMissing` says which reading this is; the
+// silent one still returns false, which every caller already handles as "nothing can be said".
 bool BuildCheckSources(const ibQuerySelect& ast, const std::map<wxString, ibValue>& params,
-                       std::vector<ibSourceBinding>& out)
+                       std::vector<ibSourceBinding>& out, bool reportMissing = true)
 {
 	std::vector<const ibQuerySource*> sources;
 	sources.push_back(&ast.m_from);
@@ -1479,8 +1801,11 @@ bool BuildCheckSources(const ibQuerySelect& ast, const std::map<wxString, ibValu
 			return false;
 
 		if (source->m_subquery) {
-			CheckSelectNames(*source->m_subquery, params);   // on its own terms
-			return false;                                    // its columns are not ours to verify
+			// Same split: the nested select is VERDICT work. A caller that only asked what is left
+			// to do must not be handed the nested query's refusal either.
+			if (reportMissing)
+				CheckSelectNames(*source->m_subquery, params);   // on its own terms
+			return false;                                        // its columns are not ours to verify
 		}
 		if (source->m_name.empty())
 			return false;   // a query with no table yet — being written, not wrong
@@ -1500,12 +1825,12 @@ bool BuildCheckSources(const ibQuerySelect& ast, const std::map<wxString, ibValu
 		const ibBackendQueryable* queryable = nullptr;
 		try { queryable = ResolveSource(*source, params); }
 		catch (const ibBackendException&) {
-			if (source->m_name.size() > 1)
+			if (reportMissing && source->m_name.size() > 1)
 				throw;      // the engine's own words, its own position — carried up verbatim
-			return false;   // a temp table this check cannot see
+			return false;   // a temp table this check cannot see — or a reading that does not accuse
 		}
 		if (queryable == nullptr) {
-			if (source->m_name.size() > 1)
+			if (reportMissing && source->m_name.size() > 1)
 				ibBackendCoreException::Error(_("Table '%s' does not exist"), ibQuerySourceName(*source));
 			return false;
 		}
@@ -1633,13 +1958,132 @@ std::vector<ibQueryAstExprPtr> CollectUngrouped(const ibQuerySelect& ast,
 			bool grouped = false;
 			// SAME COLUMN, whichever way it is written: `Products.Code` and `Code` are one column
 			// when one table owns it, so the comparison is on the resolved LEAF, not on the text.
-			for (const std::vector<const ibBackendQueryColumn*>& key : keyCols)
-				if (!key.empty() && key == projCols) { grouped = true; break; }
+			//
+			// ⭐ …AND A KEY COVERS WHAT IT WALKS INTO. `GROUP BY Producer` fixes `Producer.Region` for
+			// every row of the group, so a key that is a PREFIX of the projected path is enough. The
+			// lowering adds the leaf to the server's GROUP BY itself (a spelling SQL requires); asking
+			// the author for it here would be demanding he repeat what he has already said.
+			for (const std::vector<const ibBackendQueryColumn*>& key : keyCols) {
+				if (key.empty() || key.size() > projCols.size())
+					continue;
+				bool prefix = true;
+				for (size_t k = 0; k < key.size() && prefix; ++k)
+					prefix = (key[k] == projCols[k]);
+				if (prefix) { grouped = true; break; }
+			}
 			if (!grouped)
 				out.push_back(ColumnCopy(*column));
 		}
 	}
 	return out;
+}
+
+// ⭐⭐ THE LINKS MUST NOT CONTRADICT ONE ANOTHER, and it is the ENGINE that says so.
+//
+// A join condition is a sentence about TWO tables. Two ways of writing one are not links at all, and
+// both are easy to write by hand and impossible to see afterwards:
+//
+//   * a table joined to ITSELF — every column of the condition roots in the same source. Whatever it
+//     filters, it says nothing about how the two tables meet, and the join is left unconstrained.
+//   * a condition that never MENTIONS the table it is written on. That is a filter wearing a join's
+//     clothes: for an INNER join it happens to behave like one in WHERE, for an OUTER join it does
+//     NOT (it pre-filters the null-padded side), so the same text means two different things
+//     depending on a box ticked elsewhere. The language has a place for a filter, and it is WHERE.
+//
+// Said here rather than in the constructor's grid because it is a fact about the QUERY, not about
+// the window: the same text typed into the query editor deserves the same answer.
+void CheckJoinsAreConsistent(const ibQuerySelect& ast, const std::vector<ibSourceBinding>& sources)
+{
+	// WHICH source a column path stands on, BY POSITION — because position is what one of the rules
+	// below is about. -1 when nothing answers: that is an UNKNOWN COLUMN, which the ordinary name
+	// check reports in its own words, so this one stays quiet about it.
+	const auto rootOf = [&sources](const ibQueryAstExpr& e) -> int {
+		if (e.m_path.empty())
+			return -1;
+		if (e.m_path.size() >= 2)
+			for (size_t i = 0; i < sources.size(); ++i)
+				if (!sources[i].m_alias.IsEmpty() && sources[i].m_alias.IsSameAs(e.m_path[0], false))
+					return static_cast<int>(i);
+		for (size_t i = 0; i < sources.size(); ++i)
+			if (sources[i].m_q != nullptr && sources[i].m_q->ResolveColumnByName(e.m_path[0]) != nullptr)
+				return static_cast<int>(i);
+		return -1;
+	};
+
+	for (size_t i = 0; i < ast.m_joins.size(); ++i) {
+		const ibQueryAstJoin& join = ast.m_joins[i];
+		// ⚠ NO LINK IS NOT A MISTAKE, AND NOTHING HERE IS CHECKED ABOUT IT. A link either exists or it
+		// does not; where it does not, the two tables are multiplied, and that is a complete, ordinary
+		// query. This check is about links that CONTRADICT one another — where there is none, there is
+		// nothing to contradict.
+		//
+		// (It refused one for a while, on the reading that a bare JOIN looks unfinished. It does not:
+		// adding two tables and linking neither is the first thing anybody does, and the red line
+		// under the tabs said the query was broken while it was merely young.)
+		//
+		// ⚠ AND THERE IS NO EXCEPTION FOR THE KIND EITHER. An outer join with no condition was refused
+		// here for one build, on the reading that "all rows of X" is a sentence about a link. It is —
+		// but a KIND left behind on a table whose link was deleted is not the author saying anything,
+		// it is a leftover, and the red line then appeared over a Links tab with no rows in it at all.
+		// The leftover is fixed where it is made (the kind goes back to inner with the link); nothing
+		// is checked about a condition nobody wrote.
+		if (!join.m_on)
+			continue;
+		// `ON TRUE` is the product said out loud — the same thing, so the same silence.
+		if (join.m_on->m_kind == ibQueryAstExprKind::Literal)
+			continue;
+
+		// The table this link is written ON: sources[0] is the FROM, joins[k] is sources[k + 1].
+		const int bound = static_cast<int>(i) + 1;
+		if (bound >= static_cast<int>(sources.size()))
+			continue;
+
+		std::vector<const ibQueryAstExpr*> columns;
+		CollectColumns(join.m_on, columns);
+
+		bool mentionsJoined = false;
+		bool mentionsOther  = false;
+		for (const ibQueryAstExpr* column : columns) {
+			const int root = column != nullptr ? rootOf(*column) : -1;
+			if (root < 0)
+				continue;   // unknown column — the name check owns that complaint
+
+			// ⭐⭐ AND IT MAY NAME MORE THAN THE TWO SIDES — but only tables the query has ALREADY
+			// read. A link over three tables is an ordinary thing to write (`a.x = b.y AND a.z =
+			// c.w`): the sources are joined left to right, so everything before this one is standing
+			// there to be compared against.
+			//
+			// What cannot work is naming a table that comes AFTER: at the moment this join is made
+			// that table has not been read, and there is nothing to compare with. The reader cannot
+			// see the difference — both look like a table of the same query — so the ORDER is what
+			// makes two tables compatible here, and the engine is the one that knows it.
+			if (root > bound)
+				Fail(join.m_on->m_line, join.m_on->m_col, wxString::Format(
+					_("the link on '%s' refers to '%s', which this query reads AFTER it: a link can "
+					  "only relate tables that are already read — move the table earlier, or write "
+					  "this as a condition"),
+					ibQuerySourceName(join.m_source),
+					ibQuerySourceName(ast.m_joins[static_cast<size_t>(root) - 1].m_source)));
+
+			if (root == bound) mentionsJoined = true;
+			else               mentionsOther  = true;
+		}
+
+		if (!mentionsJoined && !mentionsOther)
+			continue;   // nothing resolved — say nothing rather than guess
+
+		if (!mentionsJoined)
+			Fail(join.m_on->m_line, join.m_on->m_col, wxString::Format(
+				_("this link says nothing about '%s': a condition that does not relate the joined "
+				  "table is a filter, and belongs in the conditions"),
+				ibQuerySourceName(join.m_source)));
+
+		if (!mentionsOther)
+			Fail(join.m_on->m_line, join.m_on->m_col, wxString::Format(
+				_("'%s' is linked to itself: a link relates TWO tables, so each side has to stand "
+				  "on a different one"),
+				ibQuerySourceName(join.m_source)));
+	}
 }
 
 void CheckSelectNames(const ibQuerySelect& ast, const std::map<wxString, ibValue>& params)
@@ -1655,8 +2099,36 @@ void CheckSelectNames(const ibQuerySelect& ast, const std::map<wxString, ibValue
 		if (branch) CheckSelectNames(*branch, params);
 
 	std::vector<ibSourceBinding> sources;
-	if (!BuildCheckSources(ast, params, sources))
+	if (!BuildCheckSources(ast, params, sources)) {
+		// ⚠ SILENCE IS FOR "CANNOT VERIFY", NOT FOR "NOTHING TO VERIFY AGAINST".
+		//
+		// A one-segment name may be a temp table made by a statement this check cannot see, so a
+		// query whose sources did not resolve is left alone rather than accused. But a query with NO
+		// TABLE AT ALL that still selects `SliceLast.Dimension2` is not unverifiable — it is plainly
+		// wrong, and every one of its qualified fields is a leftover from a table that is gone.
+		//
+		// It passed silently, and the verdict line said the engine reads it. That is the one sentence
+		// this window must never say untruthfully.
+		const bool noTables = ast.m_joins.empty()
+			&& ast.m_from.m_name.empty() && !ast.m_from.m_subquery;
+		if (noTables) {
+			std::vector<const ibQueryAstExpr*> columns;
+			for (const ibQueryProjection& projection : ast.m_projections)
+				CollectColumns(projection.m_expr, columns);
+			for (const ibQueryAstExpr* column : columns)
+				if (column != nullptr && column->m_path.size() >= 2) {
+					wxString field;
+					for (size_t k = 0; k < column->m_path.size(); ++k)
+						field += (k > 0 ? wxT(".") : wxT("")) + column->m_path[k];
+					Fail(column->m_line, column->m_col, wxString::Format(
+						_("this query reads no table, yet '%s' is selected from one: remove the field, "
+						  "or add '%s' to the tables"), field, column->m_path[0]));
+				}
+		}
 		return;   // unverifiable — silence, never a false error
+	}
+
+	CheckJoinsAreConsistent(ast, sources);
 
 	// TWO LISTS, because one clause may legitimately name something the tables do not have.
 	//
@@ -1846,7 +2318,7 @@ int PruneSelect(ibQuerySelect& ast, const std::map<wxString, ibValue>& params)
 		if (branch) dropped += PruneSelect(*branch, params);
 
 	std::vector<ibSourceBinding> sources;
-	if (!BuildCheckSources(ast, params, sources))
+	if (!BuildCheckSources(ast, params, sources, /*reportMissing=*/false))
 		return dropped;   // unverifiable — leave it whole
 
 	auto gone = [&](bool resolves) { if (!resolves) ++dropped; return !resolves; };
@@ -1951,7 +2423,7 @@ std::vector<ibQueryAstExprPtr> ibQueryLowering::UngroupedProjections(
 	// host reading this as "the work still to do" would otherwise add group keys to a query nobody
 	// could resolve.
 	std::vector<ibSourceBinding> sources;
-	if (!BuildCheckSources(ast, params, sources))
+	if (!BuildCheckSources(ast, params, sources, /*reportMissing=*/false))
 		return {};
 
 	try {
@@ -2306,12 +2778,14 @@ void ibQueryLowering::DescribeOutput(const ibQuerySelect& astIn,
 
 	std::vector<ibSourceBinding> sources;
 	ibDataQueryBuilder b;
-	BuildSourceTree(ast, params, subOwners, sources, b);
+	std::vector<ibQueryAstExprPtr> sourceConditions;   // conditions written INSIDE a virtual table call
+	BuildSourceTree(ast, params, subOwners, sources, b, &sourceConditions);
 
 	// AND HERE IT STOPS. PopulateBuilder is where names become columns and the output schema is
 	// decided; the terminal below it (Execute / SelectAggregate) is where rows are read. Describing
 	// is the first half without the second.
-	PopulateBuilder(ast, params, sources, b, outSchema, /*asSubquery*/false);
+	PopulateBuilder(ast, params, sources, b, outSchema, /*asSubquery*/false, sourceConditions);
+	DetachSchemaFromRunSources(outSchema, subOwners);   // the description leaves; the sources do not
 }
 
 ibDataQueryResult ibQueryLowering::ExecuteImpl(const ibQuerySelect& astIn,
@@ -2343,24 +2817,30 @@ ibDataQueryResult ibQueryLowering::ExecuteImpl(const ibQuerySelect& astIn,
 
 	// UNION — stack the branches vertically (the composer realizes it). The branch queryables live in
 	// subOwners through the materialising terminal inside LowerUnion.
-	if (!ast.m_unions.empty())
-		return LowerUnion(ast, params, outSchema, subOwners);
+	if (!ast.m_unions.empty()) {
+		ibDataQueryResult stacked = LowerUnion(ast, params, outSchema, subOwners);
+		DetachSchemaFromRunSources(outSchema, subOwners);   // the schema leaves; the branches do not
+		return stacked;
+	}
 
 	std::vector<ibSourceBinding> sources;
 	ibDataQueryBuilder b;
-	BuildSourceTree(ast, params, subOwners, sources, b);
+	std::vector<ibQueryAstExprPtr> sourceConditions;
+	BuildSourceTree(ast, params, subOwners, sources, b, &sourceConditions);
 
 	// SELECT ALLOWED — carried to the door, which owns what a refusal turns into.
 	b.Allowed(ast.m_allowed);
 
-	const bool aggregate = PopulateBuilder(ast, params, sources, b, outSchema, /*asSubquery*/false);
+	const bool aggregate = PopulateBuilder(ast, params, sources, b, outSchema, /*asSubquery*/false, sourceConditions);
 
 	if (aggregate) {
 		// SELECT TOP n + GROUP BY — the door's aggregate-terminal row limit: the DB / co-located
 		// paths render the dialect LIMIT, the RAM fold truncates after grouping.
 		if (ast.m_top > 0)
 			b.Top(ast.m_top);
-		return b.SelectAggregate();
+		ibDataQueryResult aggregated = b.SelectAggregate();
+		DetachSchemaFromRunSources(outSchema, subOwners);   // the schema leaves; the sources do not
+		return aggregated;
 	}
 
 	// The external envelope drives the cursor; a `TOP n` in the text still caps the
@@ -2373,7 +2853,9 @@ ibDataQueryResult ibQueryLowering::ExecuteImpl(const ibQuerySelect& astIn,
 	// (FOR UPDATE / WITH LOCK) from there. Nothing new below L2: the driver half was built.
 	if (ast.m_forUpdate)
 		page.m_lockForUpdate = true;
-	return cache != nullptr ? b.Execute(page, *cache, signature) : b.Execute(page);
+	ibDataQueryResult rows = cache != nullptr ? b.Execute(page, *cache, signature) : b.Execute(page);
+	DetachSchemaFromRunSources(outSchema, subOwners);   // the schema leaves; the sources do not
+	return rows;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -2406,6 +2888,9 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	// dimension / aggregate resolution below reads through `sources`. (docs/query-language-arc.md §22.1b)
 	std::vector<ibSourceBinding> sources;
 	ibDataQueryBuilder b;
+	// Conditions written INSIDE a virtual table's call — collected here so the totals read applies
+	// them exactly as the flat read does (see PopulateBuilder).
+	std::vector<ibQueryAstExprPtr> totalsSourceConditions;
 
 	if (!ast.m_unions.empty()) {
 		// UNION — stack the branches vertically (mirrors LowerUnion). The whole-union output = the FIRST
@@ -2431,7 +2916,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	}
 	else {
 		// FROM + JOINs / single source -- shared with the non-totals read path (BuildSourceTree).
-		BuildSourceTree(ast, params, owner, sources, b);
+		BuildSourceTree(ast, params, owner, sources, b, &totalsSourceConditions);
 	}
 
 	// SELECT ALLOWED reaches the totals read the same way — a report over a composite type is
@@ -2462,7 +2947,9 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 					b.Where(BuildWherePredicate(sources, *ast.m_where, params, /*allowDotWalk*/false));
 			}
 			*outServerGroupedLevel = true;
-			return b.SelectAggregatePage(page);   // server-side GROUP BY + keyset + LIMIT -> the page's groups
+			ibDataQueryResult groups = b.SelectAggregatePage(page);   // server-side GROUP BY + keyset + LIMIT
+			DetachSchemaFromRunSources(outSchema, owner);             // the schema leaves; the sources do not
+			return groups;
 		}
 	}
 
@@ -2591,6 +3078,20 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 			b.Where(BuildWherePredicate(sources, *ast.m_where, params, /*allowDotWalk*/false));
 	}
 
+	// AND THE VIRTUAL TABLE'S OWN CONDITION, by the same road as the flat read (PopulateBuilder).
+	// A totals query reads its rows through this builder like any other, so an argument written
+	// inside `Balance(&P, Warehouse = &W)` has to reach it here too — otherwise the same query
+	// would filter when read plainly and not filter when read with TOTALS, which is the kind of
+	// difference nobody would think to look for.
+	for (const ibQueryAstExprPtr& condition : totalsSourceConditions) {
+		if (!condition)
+			continue;
+		if (IsFlatAndWhere(*condition))
+			LowerFlatWhere(b, sources, *condition, params, /*allowDotWalk*/false);
+		else
+			b.Where(BuildWherePredicate(sources, *condition, params, /*allowDotWalk*/false));
+	}
+
 	// One read → one snapshot, with the TotalBy config STAMPED on the result; the runtime's
 	// QueryResult.Select() folds it (ByGroupsHierarchy) — no second query, so detail and subtotal
 	// cannot skew. The synthetic measure columns live in outSchema (m_ownedCol), which travels with the
@@ -2604,5 +3105,7 @@ ibDataQueryResult ibQueryLowering::ExecuteTotals(const ibQuerySelect& astIn,
 	// FOR UPDATE reaches the DETAIL read — the one that actually touches rows. A subtotal holds
 	// nothing of its own, so locking the detail is what the word can honestly mean here.
 	if (ast.m_forUpdate) topPage.m_lockForUpdate = true;
-	return b.Execute(topPage);
+	ibDataQueryResult detail = b.Execute(topPage);
+	DetachSchemaFromRunSources(outSchema, owner);   // the schema leaves; the sources do not
+	return detail;
 }

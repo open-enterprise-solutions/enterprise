@@ -259,18 +259,69 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 	// One question, asked once: the turnovers view carries the period column, the balance
 	// views do not. (There was a `withBalances` twin here, never read — it was just this
 	// predicate negated, so the shape it described is the `else` of every `if (withPeriod)`.)
-	const bool withPeriod = (shape == ibViewShape::Turnovers);
+	// ⚠ BALANCE-AND-TURNOVERS CARRIES THE PERIOD TOO. It reports a row PER PERIOD — that is the whole
+	// point of it, and the reference shape has `Period` and its coarser projections exactly as the
+	// turnovers do. Only a plain BALANCE has none: it is one moment, not an interval cut into units,
+	// so there is nothing for a period column to say.
+	const bool withPeriod = (shape == ibViewShape::Turnovers
+	                      || shape == ibViewShape::BalanceAndTurnovers);
+
+	// ⚠⚠ THE CACHE IS KEYED BY WHAT IT WAS BUILT FROM, not merely by name.
+	//
+	// It used to return whatever was built first and never look again — and a view is built from the
+	// register's dimensions and resources, which are read into the metaobject at load time. Ask once
+	// before they are there and the answer is a table with nothing in it but the period columns, kept
+	// for the life of the session: the constructor's catalogue showed `Turnovers` and
+	// `BalanceAndTurnovers` as period-only, with no dimension and no resource anywhere.
+	//
+	// It was not even a stable bug — WHO asks first decides. Declaring the virtual tables' parameters
+	// moved the first ask earlier, and a shape that had been right became empty with nothing said
+	// about columns changed.
+	//
+	// So the count it was built from is remembered, and a mismatch rebuilds. That also fixes the
+	// quieter half of the same hole: adding a dimension in the designer left every reader looking at
+	// the old shape until the process was restarted.
+	// ⚠ THE SIGNATURE IS THE SHAPE, NOT THE COUNT. Counting the dimensions and resources caught a
+	// column being ADDED and missed one being CHANGED — give a dimension a reference type and the
+	// count is what it was, so the stale view kept the old type and the catalogue would not unfold it.
+	// Names and types, in order: that is what a view IS.
+	wxString shapeNow;
+	const auto sign = [&shapeNow](const ibValueMetaObjectAttributeBase* attribute) {
+		if (attribute == nullptr)
+			return;
+		shapeNow += attribute->GetName() + wxT(":");
+		const ibTypeDescription& type = attribute->GetTypeDesc();
+		for (unsigned int i = 0; i < type.GetClsidCount(); ++i)
+			shapeNow += wxString::Format(wxT("%llu,"), static_cast<unsigned long long>(type.GetByIdx(i)));
+		shapeNow += wxT(";");
+	};
+	sign(GetRegisterPeriod());
+	for (const auto dimension : GetDimensionArrayObject()) sign(dimension);
+	for (const auto resource  : GetResourceArrayObject())  sign(resource);
 
 	const auto cached = m_viewSources.find(viewName);
-	if (cached != m_viewSources.end())
-		return cached->second.get();
+	if (cached != m_viewSources.end()) {
+		if (cached->second.m_builtFrom == shapeNow)
+			return cached->second.m_view.get();
+		// ⚠ THE OLD ONE IS RETIRED, NOT DESTROYED. Somebody may still be reading through a pointer
+		// handed out earlier; a view that dies under a live reader is an access violation, and this
+		// subsystem has already produced one of those today (queryableFactory.h, MakeCompanion).
+		m_retiredViews.push_back(std::move(cached->second.m_view));
+		m_viewSources.erase(cached);
+	}
 
 	std::vector<ibTempColumn> columns;
 	ibMetaID synthetic = 0x50000000u;   // the view's own column ids — a band clear of any metaID
 
 	if (withPeriod) {
-		const wxString periodName = ibRegValueField(GetRegisterPeriod());
-		columns.push_back(ibTempColumn(periodName, GetRegisterPeriod()->GetTypeDesc(), synthetic++));
+		// ⭐ TWO NAMES, AND THEY ARE NOT THE SAME NAME. The generated table stores `fld1124_D`; a query
+		// says `Period`. Handing the storage name out as the column's name put the physical schema
+		// straight into the constructor's field list — `fld1124_D_TenDays` beside `Resource1_Receipt`
+		// — and made the table impossible to write against by hand.
+		const wxString periodName  = GetRegisterPeriod()->GetName();       // what a query writes
+		const wxString periodField = ibRegValueField(GetRegisterPeriod()); // what the table keeps
+		columns.push_back(ibTempColumn(periodName, periodField,
+		                               GetRegisterPeriod()->GetTypeDesc(), synthetic++));
 
 		// The coarser projections the view exposes alongside the stored period. DERIVED from the
 		// stored granularity, not listed by hand: the renderer emits exactly the units above it, and
@@ -284,9 +335,13 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 			{ ibTotalsPeriod::Month,    wxT("Month")    }, { ibTotalsPeriod::Quarter,  wxT("Quarter")  },
 			{ ibTotalsPeriod::HalfYear, wxT("HalfYear") }, { ibTotalsPeriod::Year,     wxT("Year")     },
 		};
+		// The NAME loses the underscore (`PeriodWeek` is one word, the way every other field of this
+		// language is); the PHYSICAL name keeps it, because that spelling is the contract with the
+		// renderer and must not move.
 		for (const auto& u : kUnits)
 			if (u.first > GetTotalsPeriodUnit())
-				columns.push_back(ibTempColumn(periodName + wxT("_") + u.second,
+				columns.push_back(ibTempColumn(periodName + u.second,
+				                               periodField + wxT("_") + u.second,
 				                               GetRegisterPeriod()->GetTypeDesc(), synthetic++));
 	}
 
@@ -294,43 +349,54 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 	// Value(dimension) exactly as it would on the movements table — the view is interchangeable
 	// with the register as a source, not a parallel vocabulary.
 	for (const auto dimension : GetDimensionArrayObject())
-		columns.push_back(ibTempColumn(ibRegValueField(dimension), dimension->GetTypeDesc(), dimension->GetMetaID()));
+		columns.push_back(ibTempColumn(dimension->GetName(), ibRegValueField(dimension),
+		                               dimension->GetTypeDesc(), dimension->GetMetaID()));
 
 	// Per-resource columns, by shape. A turnover-only register (no record type) has no expense side
 	// and no balance to report, so those columns simply do not exist for it.
 	const bool withSign = (GetRegisterType() == ibRegisterType::eBalances);
-	auto add = [&](const wxString& name, const ibValueMetaObjectAttributeBase* res) {
-		columns.push_back(ibTempColumn(name, res->GetTypeDesc(), synthetic++));
+	// `add` takes the SUFFIX and spells both names from it: `Resource1Turnover` for a query to write,
+	// `Resource1_Turnover` for the table to keep. One place, so the pair cannot drift.
+	auto add = [&](const ibValueMetaObjectAttributeBase* res, const wxString& suffix) {
+		columns.push_back(ibTempColumn(res->GetName() + suffix,
+		                               res->GetName() + wxT("_") + suffix,
+		                               res->GetTypeDesc(), synthetic++));
 	};
 
 	for (const auto res : GetResourceArrayObject()) {
-		const wxString base = res->GetName();
 		switch (shape) {
 			case ibViewShape::Balance:
-				if (withSign) add(base + wxT("_Balance"), res);
+				if (withSign) add(res, wxT("Balance"));
 				break;
 
+			// ⚠ A TURNOVER-ONLY REGISTER HAS NEITHER SIDE. Receipt and expense are what a movement's
+			// SIGN means, and a register that keeps no balance has no sign: its records only add up.
+			// So it reports the turnover and nothing else — `Receipt` was being offered here always,
+			// which put a column on such a register that could never hold anything but the turnover
+			// again under a different name.
 			case ibViewShape::Turnovers:
-				add(base + wxT("_Receipt"), res);
-				if (withSign) add(base + wxT("_Expense"), res);
-				add(base + wxT("_Turnover"), res);
+				if (withSign) {
+					add(res, wxT("Receipt"));
+					add(res, wxT("Expense"));
+				}
+				add(res, wxT("Turnover"));
 				break;
 
 			// The symbiosis: the turnover part AND the balance on each side of it. One row per key
 			// carrying what entered, what moved, and what remains — assembled from the turnovers
 			// surface by conditional sums, not stored anywhere.
 			case ibViewShape::BalanceAndTurnovers:
-				if (withSign) add(base + wxT("_OpeningBalance"), res);
-				add(base + wxT("_Receipt"), res);
-				if (withSign) add(base + wxT("_Expense"), res);
-				add(base + wxT("_Turnover"), res);
-				if (withSign) add(base + wxT("_ClosingBalance"), res);
+				if (withSign) add(res, wxT("OpeningBalance"));
+				add(res, wxT("Receipt"));
+				if (withSign) add(res, wxT("Expense"));
+				add(res, wxT("Turnover"));
+				if (withSign) add(res, wxT("ClosingBalance"));
 				break;
 		}
 	}
 
 	auto q = std::make_unique<ibDbTempTableQueryable>(viewName, std::move(columns), GetMetaData());
 	const ibBackendQueryable* raw = q.get();
-	m_viewSources.emplace(viewName, std::move(q));
+	m_viewSources.emplace(viewName, ibRegisterViewCache{ std::move(q), shapeNow });
 	return raw;
 }

@@ -67,6 +67,19 @@ BACKEND_API ibQueryAstExprPtr ibQueryFoldAnd(const std::vector<ibQueryAstExprPtr
 // teaches people to distrust it. Same rule, one spelling, applied by whoever holds the AST.
 BACKEND_API void ibQueryMoveAggregateConditionsToHaving(ibQuerySelect& select);
 
+// ⭐⭐ "NO LINK" IS SPELLED `TRUE`, and that is why these are here rather than written out wherever
+// somebody needs a boolean.
+//
+// A join with NO condition at all is a hole in the text: the reader cannot tell whether the author
+// meant every combination of rows or simply had not finished. So the engine refuses one, and the
+// product is written down — `JOIN X ON TRUE` — which says the same thing out loud and reads the
+// same to the parser, the constructor and the person.
+//
+// The constructor SHOWS such a join as an unlinked table (no row on the Links tab) and its cell as
+// empty; the text carries the word. One shape, two honest readings.
+BACKEND_API ibQueryAstExprPtr ibQueryTrueLiteral();
+BACKEND_API bool ibQueryIsTrueLiteral(const ibQueryAstExprPtr& expr);
+
 // ===========================================================================
 //  NAMING — the other half of ibQueryLowering::CheckNames
 // ===========================================================================

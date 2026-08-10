@@ -407,6 +407,80 @@ void MoveAggregateTermsToHaving(ibQuerySelect& s)
 	s.m_having = ibQueryFoldAnd(groups);
 }
 
+// ⭐⭐ A LINK WRITTEN AS A CONDITION IS STILL A LINK.
+//
+// Two tables with nothing said about how they meet are MULTIPLIED — every row of one against every
+// row of the other — and the way that product is narrowed is a condition: `FROM A, B WHERE A.x =
+// B.y`, which is how a join was written before anyone spelled JOIN. It is also what the constructor
+// produces when the author leaves the Links tab alone and writes the relation on the Conditions tab.
+//
+// The door underneath takes a join key as TWO COLUMNS and a filter as COLUMN <op> VALUE, so such a
+// term could not go down the WHERE road at all: the engine answered "expected a literal or a
+// parameter as the comparison value" about a perfectly ordinary sentence. Here it is moved to where
+// the engine can read it — the ON of the join it relates — and the query means exactly what it said.
+//
+// TWO GUARDS, and both are about not changing what was written:
+//   * ONLY A JOIN THAT HAS NO LINK YET. One that already carries an ON is the author's, untouched.
+//   * ONLY AN INNER JOIN. In an OUTER one, ON and WHERE are genuinely different: ON pre-filters the
+//     null-padded side, WHERE removes the padded rows afterwards. Moving the term there would give
+//     a different answer, so it stays where it was written.
+//
+// And it never GUESSES: only a term that names both sides by their table (`A.x = B.y`) is moved. A
+// bare column says nothing about which table it stands on, and this pass does not resolve names —
+// that is the lowering's job, further down, with the metadata in hand.
+void LiftJoinConditions(ibQuerySelect& s)
+{
+	if (s.m_joins.empty() || !s.m_where)
+		return;
+
+	const auto nameOf = [](const ibQuerySource& source) -> wxString {
+		if (!source.m_alias.IsEmpty())
+			return source.m_alias;
+		return source.m_name.empty() ? wxString() : source.m_name.back();
+	};
+
+	std::vector<wxString> names;   // 0 = the FROM, i + 1 = joins[i]
+	names.push_back(nameOf(s.m_from));
+	for (const ibQueryAstJoin& join : s.m_joins)
+		names.push_back(nameOf(join.m_source));
+
+	const auto sourceOf = [&names](const ibQueryAstExpr& e) -> int {
+		if (e.m_kind != ibQueryAstExprKind::Column || e.m_path.size() < 2)
+			return -1;
+		for (size_t i = 0; i < names.size(); ++i)
+			if (!names[i].IsEmpty() && names[i].IsSameAs(e.m_path[0], false))
+				return static_cast<int>(i);
+		return -1;
+	};
+
+	std::vector<ibQueryAstExprPtr> terms;
+	ibQueryFlattenAnd(s.m_where, terms);
+
+	std::vector<ibQueryAstExprPtr> kept;
+	for (const ibQueryAstExprPtr& term : terms) {
+		bool lifted = false;
+		if (term && term->m_kind == ibQueryAstExprKind::Compare && term->m_lhs && term->m_rhs) {
+			const int left  = sourceOf(*term->m_lhs);
+			const int right = sourceOf(*term->m_rhs);
+			if (left >= 0 && right >= 0 && left != right) {
+				// The LATER of the two is the one whose ON can hold it: a join relates its own source
+				// to something already in the tree, and the tree is built left to right.
+				const size_t later = static_cast<size_t>(left > right ? left : right);
+				if (later > 0 && later <= s.m_joins.size()) {
+					ibQueryAstJoin& join = s.m_joins[later - 1];
+					if (!join.m_on && join.m_kind == ibQueryJoinKindAst::Inner) {
+						join.m_on = term;
+						lifted = true;
+					}
+				}
+			}
+		}
+		if (!lifted)
+			kept.push_back(term);
+	}
+	s.m_where = ibQueryFoldAnd(kept);
+}
+
 void RewriteSelectInPlace(ibQuerySelect& s)
 {
 	// Children first: a flattenable child collapses before the parent looks at it.
@@ -420,6 +494,9 @@ void RewriteSelectInPlace(ibQuerySelect& s)
 		s.m_where = NormalizeNeg(s.m_where);
 		WalkInSubqueries(s.m_where, RewriteSelectInPlace);   // IN (SELECT …) — own scope
 		MoveAggregateTermsToHaving(s);
+		// AFTER the aggregate move (a fold belongs in HAVING and is nobody's join key) and BEFORE
+		// FlattenFrom, which may bring a subquery's own joins up into this list.
+		LiftJoinConditions(s);
 	}
 
 	FlattenFrom(s);
@@ -443,6 +520,21 @@ ibQuerySelectPtr ibQueryRewrite::Rewrite(const ibQuerySelect& ast)
 ibQuerySelectPtr ibQueryRewrite::Clone(const ibQuerySelect& ast)
 {
 	return CloneSelect(ast);
+}
+
+ibQueryAstExprPtr ibQueryTrueLiteral()
+{
+	ibQueryAstExprPtr e = std::make_shared<ibQueryAstExpr>();
+	e->m_kind = ibQueryAstExprKind::Literal;
+	// Through the KEYWORD, exactly as the parser builds it — so the value the constructor writes and
+	// the value a typed `TRUE` produces are the same value, not two that happen to agree today.
+	e->m_literal.SetBoolean(ibQueryKeywordText(ibQueryKeyword::True));
+	return e;
+}
+
+bool ibQueryIsTrueLiteral(const ibQueryAstExprPtr& expr)
+{
+	return expr && expr->m_kind == ibQueryAstExprKind::Literal && expr->m_literal.GetBoolean();
 }
 
 void ibQueryFlattenAnd(const ibQueryAstExprPtr& expr, std::vector<ibQueryAstExprPtr>& out)

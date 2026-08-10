@@ -231,6 +231,60 @@ private:
 	ibMetaID m_id;
 };
 
+// ⭐⭐ A COLUMN OF THE INNER QUERY, SEEN UNDER ITS OUTPUT NAME.
+//
+// A nested table's columns are its OUTPUT — `… AS Attribute1Code` is what the outer query can write,
+// and the only thing it can write. The exposed set was the inner columns themselves, so an aliased
+// projection appeared under the underlying column's name (`Code`) and the outer query asking for the
+// alias was told there is no such attribute — about a name the inner query plainly declares.
+//
+// Renaming in place is not possible (the same column object belongs to its own table and is read
+// through it), so the two questions are separated: this answers "what is it called out here", and
+// the value is fetched through the real column it stands for.
+class ibSubqueryAliasColumn final : public ibBackendQueryColumn
+{
+public:
+	ibSubqueryAliasColumn(const wxString& alias, const ibBackendQueryColumn* from, ibMetaID id)
+		: m_alias(alias), m_from(from), m_id(id) {}
+
+	wxString GetName() const override { return m_alias; }
+	wxString GetPhysicalName() const override { return m_from != nullptr ? m_from->GetPhysicalName() : m_alias; }
+	// The TYPE is the column's own — an alias renames, it does not re-type.
+	ibTypeDescription& GetTypeDesc() const override { return m_from->GetTypeDesc(); }
+	ibMetaID GetColumnId() const override { return m_id; }
+
+private:
+	wxString                    m_alias;
+	const ibBackendQueryColumn* m_from = nullptr;
+	ibMetaID                    m_id;
+};
+
+// A COMPUTED projection of the inner query — `a * b`, a CASE — seen from outside under its alias.
+//
+// ⚠ ITS TYPE IS UNKNOWN, and that is said rather than guessed: the door records a computed select as
+// expression + alias and nothing else, so there is no column to take a type from. An EMPTY type
+// description is how this engine already spells "unknown" — the places that ask (which aggregates
+// fit, can this be unfolded) treat it as "offer everything" instead of believing a wrong answer.
+class ibSubqueryExprColumn final : public ibBackendQueryColumn
+{
+public:
+	ibSubqueryExprColumn(const wxString& alias, ibMetaID id) : m_alias(alias), m_id(id) {}
+	// …and WITH a type where the schema knows one — an aggregate over a typed column, a constant
+	// projection. Empty stays "unknown"; what is known travels.
+	ibSubqueryExprColumn(const wxString& alias, ibMetaID id, const ibTypeDescription& type)
+		: m_alias(alias), m_type(type), m_id(id) {}
+
+	wxString GetName() const override { return m_alias; }
+	wxString GetPhysicalName() const override { return m_alias; }
+	ibTypeDescription& GetTypeDesc() const override { return m_type; }
+	ibMetaID GetColumnId() const override { return m_id; }
+
+private:
+	wxString                  m_alias;
+	mutable ibTypeDescription m_type;   // empty = unknown; GetTypeDesc returns a non-const ref
+	ibMetaID                  m_id;
+};
+
 // One pushed-down outer condition against a materialised RAM cell — the aggregate
 // subquery's post-filter (the condition references POST-aggregation output, HAVING
 // semantics, so it cannot ride the inner WHERE). LIKE translates % / _ to wx wildcards.
@@ -263,28 +317,133 @@ bool MatchRamCondition(const ibValue& cell, const ibQueryCondition& c)
 ibSubqueryQueryable::ibSubqueryQueryable(const ibDataQueryBuilder& inner, long topCount)
 	: m_inner(std::make_unique<ibDataQueryBuilder>(inner)), m_top(topCount)
 {
+	// ⭐ A QUERY THAT GROUPS IS A QUERY THAT FOLDS, whether or not it also aggregates. `GROUP BY Ref`
+	// with no SUM beside it is a DISTINCT over the keys — one row per key — and it has to run the same
+	// UNPAGED, full-spread GROUP BY. Read as a page instead, the projection drops the `_TYPE` field a
+	// reference is reassembled from, and the read dies on a field the SELECT never listed
+	// ("Field 'fldNNNN_TYPE' not found in the resultset"). The provider guards that shape already
+	// (CanPageGroupLevel); the fold is decided HERE, so the guard is never reached with the wrong read.
 	const auto& aggs = m_inner->GetAggregates();
-	m_aggregate = !aggs.empty();
+	m_aggregate = !aggs.empty() || !m_inner->GetGroupBy().empty();
 	if (m_aggregate) {
 		// AGGREGATE shape: exposed columns = the GROUP BY keys (real columns, by name) + one
 		// owned synthetic numeric column per aggregate alias.
 		for (const ibBackendQueryColumn* g : m_inner->GetGroupBy())
 			if (g != nullptr) m_columns.push_back(g);
+		for (const ibBackendQueryColumn* g : m_inner->GetGroupBy())
+			if (g != nullptr) { m_readFrom.push_back(g); m_readAlias.push_back(wxEmptyString); }
 		ibMetaID nextId = kSubqueryAggColumnBase;
 		for (const ibDataQueryBuilder::AggregateItem& a : aggs) {
 			auto col = std::make_shared<ibSubqueryAggColumn>(a.m_alias, nextId++);
 			m_ownedColumns.push_back(col);
 			m_columns.push_back(col.get());
+			m_readFrom.push_back(nullptr);
+			m_readAlias.push_back(a.m_alias);
 		}
+		m_readPrefix.assign(m_columns.size(), wxEmptyString);
 		return;
 	}
 	const auto& selectCols = m_inner->GetSelectColumns();
 	if (!selectCols.empty()) {
-		for (const auto& sc : selectCols)
-			if (sc.first != nullptr) m_columns.push_back(sc.first);
+		// AN ALIAS IS THE NAME OUT HERE. Where the inner query gave one, that is what the outer query
+		// writes — and the value still comes from the real column (m_readFrom, parallel to m_columns).
+		ibMetaID nextId = kSubqueryAggColumnBase + 0x1000u;
+		for (const auto& sc : selectCols) {
+			if (sc.first == nullptr)
+				continue;
+			if (!sc.second.IsEmpty() && sc.second != sc.first->GetName()) {
+				auto col = std::make_shared<ibSubqueryAliasColumn>(sc.second, sc.first, nextId++);
+				m_ownedColumns.push_back(col);
+				m_columns.push_back(col.get());
+			}
+			else {
+				m_columns.push_back(sc.first);
+			}
+			m_readFrom.push_back(sc.first);
+			m_readAlias.push_back(wxEmptyString);
+		}
 	}
 	else if (const ibBackendQueryable* primary = m_inner->GetPrimarySource()) {
 		m_columns = primary->GetColumns();
+		m_readFrom = m_columns;
+		m_readAlias.assign(m_columns.size(), wxEmptyString);
+	}
+
+	// ⭐ THE DOT-WALKED SELECTIONS, under their aliases. They never reach the select list — the door
+	// records them separately and the result gives them back BY ALIAS — so they need their own pass,
+	// and their own way of being read.
+	ibMetaID walkId = kSubqueryAggColumnBase + 0x2000u;
+	for (const ibDotWalkColumn& walk : m_inner->GetDotWalks()) {
+		if (walk.m_alias.IsEmpty() || walk.m_path.empty() || walk.m_path.back() == nullptr)
+			continue;
+		auto col = std::make_shared<ibSubqueryAliasColumn>(walk.m_alias, walk.m_path.back(), walkId++);
+		m_ownedColumns.push_back(col);
+		m_columns.push_back(col.get());
+		m_readFrom.push_back(nullptr);
+		m_readAlias.push_back(walk.m_alias);
+	}
+
+	// ⭐ AND THE COMPUTED ONES — arithmetic, CASE. A third list, a third way in, and the same rule:
+	// what the inner query publishes under a name, the outer query can name.
+	//
+	// (This is the whole class, walked once instead of a fix per report: a projection reaches the
+	// door as a plain column, a dot-walk, an aggregate or an expression, and a nested table has to
+	// publish all four. Two of them were missing.)
+	ibMetaID exprId = kSubqueryAggColumnBase + 0x3000u;
+	for (const ibQueryColumnSelect& computed : m_inner->GetSelectExprs()) {
+		if (computed.m_alias.IsEmpty())
+			continue;
+		auto col = std::make_shared<ibSubqueryExprColumn>(computed.m_alias, exprId++);
+		m_ownedColumns.push_back(col);
+		m_columns.push_back(col.get());
+		m_readFrom.push_back(nullptr);
+		m_readAlias.push_back(computed.m_alias);
+	}
+
+	m_readPrefix.assign(m_columns.size(), wxEmptyString);   // derived here: no schema, so no spread to reassemble
+}
+
+// ⭐⭐ TOLD ITS OUTPUT, not guessing it. Every published column comes from the inner select's schema:
+// the name it is known by out here, and where its value comes from — a real column, or an alias the
+// door answers to. That covers all four kinds of projection at once (plain, dot-walk, aggregate,
+// computed) because the schema IS what the inner query produces, whichever way each one got there.
+ibSubqueryQueryable::ibSubqueryQueryable(const ibDataQueryBuilder& inner, long topCount,
+                                         const std::vector<ibSubqueryOutput>& outputs)
+	: m_inner(std::make_unique<ibDataQueryBuilder>(inner)), m_top(topCount)
+{
+	// Grouping folds, with or without an aggregate beside it — same rule as the derived ctor above,
+	// and the reason it matters is written there.
+	m_aggregate = !m_inner->GetAggregates().empty() || !m_inner->GetGroupBy().empty();
+
+	ibMetaID nextId = kSubqueryAggColumnBase + 0x4000u;
+	for (const ibSubqueryOutput& out : outputs) {
+		if (out.m_name.IsEmpty())
+			continue;
+
+		// THE SIMPLE CASE: a real column that already answers to this name IS the published column.
+		if (out.m_alias.IsEmpty() && out.m_objectPrefix.IsEmpty()
+		    && out.m_col != nullptr && out.m_col->GetName() == out.m_name) {
+			m_columns.push_back(out.m_col);
+			m_readFrom.push_back(out.m_col);
+			m_readAlias.push_back(wxEmptyString);
+			m_readPrefix.push_back(wxEmptyString);
+			continue;
+		}
+
+		// Otherwise a thin column carries the NAME and the TYPE, and the value is fetched the way the
+		// schema says. The type is taken from the schema rather than from the column, because those are
+		// different questions: a dot-walk leaf is read by alias yet still holds THAT column's type, and
+		// a reference with no type is not a reference — the outer query could not walk into it.
+		std::shared_ptr<ibBackendQueryColumn> col = out.m_col != nullptr
+			? std::static_pointer_cast<ibBackendQueryColumn>(
+			      std::make_shared<ibSubqueryAliasColumn>(out.m_name, out.m_col, nextId++))
+			: std::static_pointer_cast<ibBackendQueryColumn>(
+			      std::make_shared<ibSubqueryExprColumn>(out.m_name, nextId++, out.m_type));
+		m_ownedColumns.push_back(col);
+		m_columns.push_back(col.get());
+		m_readFrom.push_back(out.m_col);
+		m_readAlias.push_back(out.m_objectPrefix.IsEmpty() ? out.m_alias : wxString());
+		m_readPrefix.push_back(out.m_objectPrefix);
 	}
 }
 
@@ -306,22 +465,31 @@ ibQueryRamTable ibSubqueryQueryable::ComputeRows(const std::vector<ibQueryCondit
 	for (const ibBackendQueryColumn* col : m_columns)
 		if (col != nullptr) t.AddColumn(col->GetColumnId(), col->GetName(), col->GetTypeDesc());
 
+	// ⭐ ONE READ RULE for every shape, the same three-way rule the selection reader uses: a reference /
+	// enum / composite leaf is REASSEMBLED from its prefixed field spread, an aliased projection (a
+	// dot-walk, an aggregate, a computed expression) is asked for BY NAME, everything else comes through
+	// its real column. Which of the three applies was decided when the exposed set was built — here it
+	// is only obeyed, so the aggregate path and the plain path cannot drift apart.
+	auto readCell = [this](const ibDataQueryResult& sel, size_t i) -> ibValue {
+		if (i < m_readPrefix.size() && !m_readPrefix[i].IsEmpty() && m_readFrom[i] != nullptr)
+			return sel.GetColumnObject(m_readPrefix[i], m_readFrom[i]);
+		if (i < m_readAlias.size() && !m_readAlias[i].IsEmpty())
+			return sel.GetColumn(m_readAlias[i]);
+		if (i < m_readFrom.size() && m_readFrom[i] != nullptr)
+			return sel.GetValue(m_readFrom[i]);
+		return ibValue();
+	};
+
 	if (m_aggregate) {
 		// AGGREGATE inner — run SelectAggregate; group keys read by column, aggregate aliases by
 		// name. The outer's pushed-down conditions reference POST-aggregation output (HAVING
 		// semantics), so they apply as a RAM post-filter here, never on the inner WHERE.
-		const std::vector<ibDataQueryBuilder::AggregateItem>& aggs = m_inner->GetAggregates();
-		const std::vector<const ibBackendQueryColumn*>&       groups = m_inner->GetGroupBy();
-
 		ibDataQueryResult sel = m_inner->SelectAggregate();
 		long emitted = 0;
 		std::vector<ibValue> rowVals(m_columns.size());
 		while (sel.Next()) {
-			size_t k = 0;
-			for (const ibBackendQueryColumn* g : groups)
-				rowVals[k++] = sel.GetValue(g);
-			for (const ibDataQueryBuilder::AggregateItem& a : aggs)
-				rowVals[k++] = sel.GetColumn(a.m_alias);
+			for (size_t i = 0; i < m_columns.size(); ++i)
+				rowVals[i] = m_columns[i] != nullptr ? readCell(sel, i) : ibValue();
 
 			bool keep = true;
 			for (const ibQueryCondition& c : extra) {
@@ -352,8 +520,14 @@ ibQueryRamTable ibSubqueryQueryable::ComputeRows(const std::vector<ibQueryCondit
 	ibDataQueryResult sel = q.Execute(page);
 	while (sel.Next()) {
 		const long r = t.AppendRow();
-		for (const ibBackendQueryColumn* col : m_columns)
-			if (col != nullptr) t.SetCell(r, col->GetColumnId(), sel.GetValue(col));
+		// ⚠ READ THE WAY THE SCHEMA SAYS, STORE UNDER THE EXPOSED COLUMN. Where the inner query gave an
+		// alias the two differ, and asking the result for the alias column would find nothing — the
+		// result knows the inner query's own columns, not the names it publishes them under.
+		for (size_t i = 0; i < m_columns.size(); ++i) {
+			if (m_columns[i] == nullptr)
+				continue;
+			t.SetCell(r, m_columns[i]->GetColumnId(), readCell(sel, i));
+		}
 	}
 	return t;
 }
@@ -384,25 +558,6 @@ bool IsSingleSource(const ibDataQuerySpec& spec)
 {
 	throw std::logic_error("ibQueryComposer: this multi-source shape (N-way / nested / UNION / "
 	                       "auto-join) is a follow-up; today: two-leaf JOIN on explicit columns, in RAM");
-}
-
-// Columns the query references that a LEAF owns (select-list outputs + Where columns +
-// the join keys), deduped — what to materialise for that leaf.
-std::vector<const ibBackendQueryColumn*> LeafColumns(const ibDataQuerySpec& spec,
-                                                     const ibBackendQueryable* leaf,
-                                                     const ibQueryNode* join)
-{
-	std::vector<const ibBackendQueryColumn*> cols;
-	auto add = [&](const ibBackendQueryColumn* c) {
-		if (c == nullptr || !leaf->OwnsColumn(c)) return;
-		for (const auto* e : cols) if (e == c) return;
-		cols.push_back(c);
-	};
-	for (const auto& s : *spec.m_selectCols) add(s.first);
-	for (const ibQueryCondition& c : *spec.m_conditions) add(c.m_col);
-	add(join->m_on.m_colL);
-	add(join->m_on.m_colR);
-	return cols;
 }
 
 // The spec's Where conditions a leaf owns (by object) — pushed down into a JOIN leaf's

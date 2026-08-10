@@ -149,6 +149,9 @@ bool ibValueMetaObjectInformationRegister::OnDeleteMetaObject()
 
 bool ibValueMetaObjectInformationRegister::OnReloadMetaObject()
 {
+	// The periodicity may have just been switched — which decides whether this register has slices
+	// at all. Asked again here, where a designer edit lands.
+	SyncSliceSources();
 
 	if (auto* cc = m_metaData->GetCompileCache()) {
 
@@ -189,10 +192,14 @@ bool ibValueMetaObjectInformationRegister::OnAfterRunMetaObject(int flags)
 		return false;
 
 	// Custom virtual-table descriptors (slices). The base records descriptor is registered by
-	// ibValueMetaObjectRegisterData::OnAfterRunMetaObject below. Register ALWAYS — the factory is PER-CONFIG
-	// (in the metadata), so a read-only DB load (onlyLoadFlag) still registers its OWN sources into its OWN factory.
-	m_metaData->RegisterSource(&m_sliceLast);
-	m_metaData->RegisterSource(&m_sliceFirst);
+	// ibValueMetaObjectRegisterData::OnAfterRunMetaObject below. Registered into the config's OWN
+	// factory — it is per-config, so a read-only DB load (onlyLoadFlag) still registers its own sources.
+	//
+	// ⚠ AND ONLY WHERE A SLICE MEANS ANYTHING. A slice is "the record in force AS OF a moment" — it
+	// is defined by the period, and a non-periodic register has none. Registering them anyway put
+	// `SliceLast` and `SliceFirst` in the catalogue of every register, including the ones where the
+	// question cannot be asked; and non-periodic is the DEFAULT, so that was most of them.
+	SyncSliceSources();
 
 	if (!(*m_propertyObjectModule)->OnAfterRunMetaObject(flags))
 		return false;
@@ -213,6 +220,28 @@ bool ibValueMetaObjectInformationRegister::OnAfterRunMetaObject(int flags)
 	}
 
 	return ibValueMetaObjectRegisterData::OnAfterRunMetaObject(flags);
+}
+
+// ⭐ WHETHER THIS REGISTER HAS SLICES AT ALL, ASKED AGAIN RATHER THAN REMEMBERED.
+//
+// The answer is its PERIODICITY, and periodicity is a property the designer can switch. Decided once
+// when the metaobject ran, a register turned periodic afterwards would offer no slices until the
+// process restarted, and one turned non-periodic would go on offering slices it cannot compute.
+//
+// So the pair is dropped and re-registered from the answer as it is NOW. Unregistering what is not
+// there is a no-op, which is what makes the same call right on run and on reload alike.
+void ibValueMetaObjectInformationRegister::SyncSliceSources()
+{
+	if (m_metaData == nullptr)
+		return;
+
+	m_metaData->UnregisterSource(&m_sliceLast);
+	m_metaData->UnregisterSource(&m_sliceFirst);
+
+	if (HasPeriod()) {
+		m_metaData->RegisterSource(&m_sliceLast);
+		m_metaData->RegisterSource(&m_sliceFirst);
+	}
 }
 
 bool ibValueMetaObjectInformationRegister::OnBeforeCloseMetaObject()

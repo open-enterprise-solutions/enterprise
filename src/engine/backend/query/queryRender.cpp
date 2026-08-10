@@ -245,10 +245,15 @@ wxString RenderSource(const ibQuerySource& source)
 		// outside has to still say so after a round trip.
 		out = (source.m_parameter ? wxT("&") : wxT("")) + Join(source.m_name, wxT("."));
 		if (!source.m_args.empty()) {
+			// ⚠ AN OMITTED ARGUMENT KEEPS ITS PLACE. The arguments are POSITIONAL — the source reads
+			// the second one as its condition whatever the first one is — so skipping an empty one
+			// while writing would slide every later argument up a slot: `Balance(, Warehouse = &W)`
+			// would come back as `Balance(Warehouse = &W)` and the condition would arrive where the
+			// moment belongs. Empty stays empty, and the commas count the positions.
 			std::vector<wxString> args;
 			args.reserve(source.m_args.size());
 			for (const auto& arg : source.m_args)
-				if (arg) args.push_back(RenderExpr(*arg));
+				args.push_back(arg ? RenderExpr(*arg) : wxString());
 			out += wxT("(") + Join(args, wxT(", ")) + wxT(")");
 		}
 	}
@@ -325,12 +330,21 @@ wxString RenderSelect(const ibQuerySelect& select, int indent)
 		out += wxT("\n") + pad + Kw(ibQueryKeyword::From) + wxT("\n") + item + RenderSource(select.m_from);
 
 	for (const auto& join : select.m_joins) {
+		// ⭐⭐ NO CONDITION IS WRITTEN AS A COMMA — `FROM A, B`, the product. A `JOIN` with nothing
+		// after it says the same thing to the machine and something else entirely to a reader: it is
+		// indistinguishable from a sentence somebody stopped writing, which is why the parser now
+		// refuses one.
+		//
+		// ⚠ AND THE TWO HALVES MUST LAND TOGETHER. I taught the parser to require ON and left this
+		// writing `JOIN X` — so the constructor produced text its own parser threw back at it, on a
+		// query nobody had touched. A round trip is only a round trip when both directions agree.
+		if (!join.m_on) {
+			out += wxT(",\n") + item + RenderSource(join.m_source);
+			continue;
+		}
 		out += wxT("\n") + pad + JoinKindText(join.m_kind) + wxT(" ") + Kw(ibQueryKeyword::Join)
 			+ wxT("\n") + item + RenderSource(join.m_source);
-		// An omitted ON is not the same as `ON TRUE`: it means "join by reference",
-		// and writing one in would turn an auto-join into a cross join.
-		if (join.m_on)
-			out += wxT("\n") + item + Kw(ibQueryKeyword::On) + wxT(" ") + RenderExpr(*join.m_on);
+		out += wxT("\n") + item + Kw(ibQueryKeyword::On) + wxT(" ") + RenderExpr(*join.m_on);
 	}
 
 	if (select.m_where)

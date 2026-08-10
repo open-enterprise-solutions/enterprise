@@ -627,6 +627,14 @@ public:
 	// source (.From()). A subquery-as-source derives its columns from these: the select
 	// list when given, else the primary source's full column set. (docs §22 nested subquery)
 	const std::vector<std::pair<const ibBackendQueryColumn*, wxString>>& GetSelectColumns() const { return m_selectCols; }
+	// …AND THE DOT-WALKED ONES. `SelectPath({Attribute1, Code}, "Attribute1Code")` does not go into
+	// the select list — it is recorded here and read back BY ALIAS — so a subquery-as-source that
+	// looked only at the list above published none of them, and the outer query naming one was told
+	// there is no such attribute. A nested table's columns are its whole output, both kinds.
+	const std::vector<ibDotWalkColumn>& GetDotWalks() const { return m_dotWalks; }
+	// …AND THE COMPUTED ONES (arithmetic, CASE), for the same reason: a nested table publishes every
+	// kind of projection its inner query names, not just the ones that happen to be plain columns.
+	const std::vector<ibQueryColumnSelect>& GetSelectExprs() const { return m_selectExprs; }
 	const ibBackendQueryable* GetPrimarySource() const { return m_queryable; }
 
 	// Every source LEAF the query reads — the primary From plus every Join / Union branch,

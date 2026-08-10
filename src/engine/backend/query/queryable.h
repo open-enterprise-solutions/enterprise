@@ -315,6 +315,29 @@ struct ibQueryColumnSelect
 	wxString             m_alias;
 };
 
+// ⭐⭐ ONE PUBLISHED COLUMN OF A NESTED QUERY — the name the outer world uses, and how to read it.
+//
+// A nested table's columns ARE its output, and the lowering already computes that output exactly
+// (the schema it hands back from every select). Deriving them a second time from the door's internals
+// is what went wrong three times over: a plain column arrives under its own name, a DOT-WALK under an
+// alias with no column of its own, a COMPUTED expression the same, and a GROUP BY key without ever
+// entering the select list at all. Four shapes, four chances to miss one — and each miss looked like
+// "unknown attribute" about a name the inner query plainly declares.
+//
+// So the wrapper is TOLD its output instead of guessing it.
+struct ibSubqueryOutput
+{
+	wxString                    m_name;            // what the outer query writes
+	const ibBackendQueryColumn* m_col = nullptr;   // read through this column…
+	wxString                    m_alias;           // …or by this name, when the door has no column for it
+	// …or, for a reference / enum / composite leaf, reassembled from the field spread projected under
+	// this prefix. THE SAME THREE-WAY RULE the selection reader uses (queryLowering, MaterialiseInto):
+	// prefix first, then alias, then the column. A nested table reads its rows the one way its own
+	// schema is read, or the value arrives as one field of an object instead of the object.
+	wxString                    m_objectPrefix;
+	ibTypeDescription           m_type;            // empty = unknown (a computed expression)
+};
+
 // ==========================================================================
 
 class BACKEND_API ibBackendQueryable
@@ -524,6 +547,10 @@ public:
 	// aggregate alias, ComputeRows runs SelectAggregate, and the outer's pushed-down conditions apply
 	// as a RAM post-filter (they reference POST-aggregation output — HAVING semantics).
 	explicit ibSubqueryQueryable(const ibDataQueryBuilder& inner, long topCount = 0);
+	// …AND THE HONEST ONE: built from the inner select's OUTPUT SCHEMA, which is what this table
+	// publishes. The derivation above stays for callers that have no schema at hand.
+	ibSubqueryQueryable(const ibDataQueryBuilder& inner, long topCount,
+	                    const std::vector<ibSubqueryOutput>& outputs);
 	~ibSubqueryQueryable() override;                                 // out-of-line — unique_ptr of an incomplete type
 
 	const ibBackendQueryColumn* Column(const wxString& name) const {
@@ -535,6 +562,14 @@ public:
 	bool OwnsColumn(const ibBackendQueryColumn* col) const override {
 		for (const ibBackendQueryColumn* c : m_columns)
 			if (c == col) return true;
+		return false;
+	}
+	// …and the narrower question: did this wrapper ALLOCATE the column, so that it DIES with the
+	// wrapper? A published column may equally be the inner source's own — owned by the metadata and
+	// outliving everything. Anything that keeps a column pointer past the run must tell the two apart.
+	bool OwnsColumnStorage(const ibBackendQueryColumn* col) const {
+		for (const std::shared_ptr<ibBackendQueryColumn>& c : m_ownedColumns)
+			if (c.get() == col) return true;
 		return false;
 	}
 	const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override { return Column(name); }
@@ -554,6 +589,16 @@ public:
 private:
 	std::unique_ptr<ibDataQueryBuilder>      m_inner;     // the nested query (owned by value via the heap)
 	std::vector<const ibBackendQueryColumn*> m_columns;   // exposed columns (select list / SELECT * / group keys + agg aliases)
+	// WHERE EACH EXPOSED COLUMN'S VALUE COMES FROM — parallel to m_columns. They differ exactly where
+	// the inner query gave an ALIAS: the outer world sees the alias, the row is read through the real
+	// column. (Empty on the aggregate path, which reads by group key / alias itself.)
+	std::vector<const ibBackendQueryColumn*> m_readFrom;
+	// …and the ones read BY ALIAS instead: a dot-walked selection has no column of its own in the
+	// door, only an output name. Non-empty here means "ask the result for this name".
+	std::vector<wxString>                    m_readAlias;
+	// …and the ones REASSEMBLED from a field spread: a reference / enum / composite leaf is not one
+	// field but several, projected under this prefix. Non-empty wins over both of the above.
+	std::vector<wxString>                    m_readPrefix;
 	// AGGREGATE inner query support: owned synthetic columns for the aggregate aliases (raw numeric,
 	// unique model ids), the mode flag, and the optional row limit (SELECT TOP n in the branch).
 	std::vector<std::shared_ptr<ibBackendQueryColumn>> m_ownedColumns;

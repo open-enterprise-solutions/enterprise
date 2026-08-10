@@ -193,6 +193,25 @@ bool ibValueMetaObjectAccumulationRegister::OnDeleteMetaObject()
 
 bool ibValueMetaObjectAccumulationRegister::OnReloadMetaObject()
 {
+	// ⭐⭐ WHICH TABLES THIS REGISTER OFFERS IS DECIDED BY ITS TYPE, AND THE TYPE CAN CHANGE.
+	//
+	// The registration below (OnAfterRunMetaObject) already asks — `.Balance` and
+	// `.BalanceAndTurnovers` only for a register that keeps balances. But it asks ONCE, when the
+	// metaobject runs. Switch the register to turnovers afterwards and the two tables stay
+	// registered: the catalogue goes on offering a balance the register no longer has, and the
+	// property panel and the query constructor say different things about the same object.
+	//
+	// So the answer is re-taken on reload, which is what a designer edit ends in. Unregistering is
+	// unconditional (removing what is not there is a no-op) and registering follows the type as it
+	// is NOW — same rule, asked again rather than remembered.
+	if (m_metaData != nullptr) {
+		m_metaData->UnregisterSource(&m_balance);
+		m_metaData->UnregisterSource(&m_balanceAndTurnover);
+		if (GetRegisterType() == ibRegisterType::eBalances) {
+			m_metaData->RegisterSource(&m_balance);
+			m_metaData->RegisterSource(&m_balanceAndTurnover);
+		}
+	}
 
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		ibValueRecordSetObjectAccumulationRegister* recordSet = nullptr;

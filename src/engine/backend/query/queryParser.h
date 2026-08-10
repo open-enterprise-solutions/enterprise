@@ -112,6 +112,7 @@ private:
 	// composite forbids becomes possible. A trailing path makes the result a COLUMN rooted on the cast.
 	ibQueryAstExprPtr             ParseCast();
 	ibQueryAstExprPtr             ParseCase();        // CASE WHEN … THEN … [ELSE …] END
+	ibQueryAstExprPtr             ParseIsNullCall();  // ISNULL(a, b) — read as the CASE it is
 };
 
 #endif

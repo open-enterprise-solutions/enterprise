@@ -152,7 +152,10 @@ struct ibQueryAstJoin
 {
 	ibQuerySource      m_source;
 	ibQueryJoinKindAst m_kind = ibQueryJoinKindAst::Inner;
-	ibQueryAstExprPtr     m_on;     // ON predicate (null = auto-join by reference)
+	// ON predicate. NULL = no link — the two tables are multiplied (a cross join), which is what
+	// "two tables and nothing said about how they meet" means. The one exception is a named
+	// reference-path source (`JOIN root.ref AS x`), which carries the relation in its own name.
+	ibQueryAstExprPtr     m_on;
 };
 
 struct ibQueryOrderItem

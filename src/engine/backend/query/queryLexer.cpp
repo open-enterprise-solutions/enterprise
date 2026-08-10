@@ -63,6 +63,7 @@ static const ibQueryKeyWordEntry s_queryKeyWordsEN[] =
 	{ ibQueryKeyword::Then,     wxT("THEN")     },
 	{ ibQueryKeyword::Else,     wxT("ELSE")     },
 	{ ibQueryKeyword::End,      wxT("END")      },
+	{ ibQueryKeyword::IsNull,   wxT("ISNULL")   },
 	{ ibQueryKeyword::Sum,      wxT("SUM")      },
 	{ ibQueryKeyword::Count,    wxT("COUNT")    },
 	{ ibQueryKeyword::Min,      wxT("MIN")      },
