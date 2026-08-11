@@ -397,10 +397,10 @@ private:
 		// covers a tree of any size.
 		std::vector<std::pair<wxIcon, int>> m_byIcon;
 	};
-	// A TABLE NOBODY USES is dropped ON THE WAY OUT (OnOk), never during editing — see the body.
-	// Nothing else is ever removed behind the author's back: a name that no longer resolves stays
-	// in the query and the engine says so on the verdict line.
-	void DropUnusedTables();
+	// NOTHING IS EVER REMOVED behind the author's back — not a table with no link (that is a
+	// PRODUCT, and it reads exactly like one somebody forgot about), and not a name that no longer
+	// resolves (it stays in the query and the engine says so on the verdict line). What a table's
+	// own DELETION takes with it is a different verb, and it is explicit: ibQueryDropSourceReferences.
 
 	TreeIcons PrepareIcons(wxTreeCtrl* tree) const;
 	int KindIcon(TreeIcons& icons, const wxString& kind) const;

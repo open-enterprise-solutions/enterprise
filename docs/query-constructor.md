@@ -1088,12 +1088,9 @@ Silence plus a clean bill of health is the worst combination a window can have. 
   know means the object is GONE — deleted or renamed — and that is reported. (Deletion itself
   already worked: `RemoveMetaObject` → `OnBeforeCloseMetaObject` → `UnregisterSource`. Marking for
   deletion IS unloading the piece; nothing needed a second "am I alive" flag.)
-- the ONE thing still removed is a table nobody uses — an unfinished gesture, not a mistake — and
-  only **on OK**. Between adding a table and picking its first field it is unused by definition, so
-  tidying on every refill would delete it under the hand that just added it. Use counts as: a field,
-  a condition, a `HAVING`, a grouping, an order, an `INDEX BY`, a totals aggregate, or **the `ON` of
-  any neighbouring join** — the last one matters, or `A JOIN B ON B.Ref = A.Ref` would lose B and
-  change what the query returns. The `FROM` is never removed; `SELECT *` disables the sweep.
+- ⛔ the one thing that *was* still removed — a table nobody uses — is **gone as of pass 9**, and the
+  reason is a decision rather than a cleanup. See “Nothing is removed behind the author’s back”
+  below.
 
 **Renaming a table carries its references.** An alias is what the rest of the query calls a table
 by, and the AST stores those paths as written — so changing it alone turned every one of them into a
@@ -1183,6 +1180,28 @@ a single gate: the engine's message, and "open on an empty query?" — Yes / No.
 | the verdict line kept a stale tail | `wxST_NO_AUTORESIZE` |
 | pages jumped when switching between statements of a package | the tab that had been open was not remembered (`m_wantedTab`) |
 | an em dash arrived on screen as `вЂ”` | a non-ASCII character inside `_()`; the sources have no BOM and MSVC reads them in the system codepage. ASCII only in literals |
+
+### Nothing is removed behind the author's back
+
+The sweep that dropped, on OK, a table with no link and no field of its own is **gone**. It read
+such a table as an unfinished gesture — "added it and never got round to using it" — and that
+reading was true right up until the PRODUCT became a sentence in this language.
+
+`FROM A, B` says *multiply these*. "I meant a product" and "I changed my mind" are the **same AST**;
+nothing in the text tells them apart. So the sweep was guessing, and guessing wrong meant silently
+changing **how many rows the query returns** — the one edit a window may never make on its own. The
+rule was already known inside the sweep: it exempted a table named by a neighbouring `ON` for
+exactly this reason, then broke the rule for the case that had no `ON` at all.
+
+A table nobody wants is one click to delete. A result quietly multiplied — or quietly not — is found
+a week later, on the numbers.
+
+What a table's own DELETION takes with it is a different verb and stays explicit
+(`ibQueryDropSourceReferences`): fields, conditions, groupings, orders, and the links that named it.
+A link written on ANOTHER table that mentions the departed one has its `ON` cleared and its kind
+reset to INNER — the kind belongs to the link, not to the table. A table missing from the METADATA
+is a third thing again: the query still names `Kind.Name`, the factory does not know it, and that is
+reported rather than tidied.
 
 ### What this pass did NOT do
 

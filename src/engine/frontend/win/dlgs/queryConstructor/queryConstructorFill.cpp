@@ -121,10 +121,13 @@ void ibDialogQueryConstructor::FillAll()
 	// its own words, its own position (AskEngine → CheckNames, inside the metadata scope). A
 	// broken query must read as broken.
 	//
-	// The one thing still removed is a table nobody uses — an unfinished gesture rather than a
-	// mistake — and that happens on OK (DropUnusedTables), never here: between adding a table and
-	// choosing its first field it is unused by definition, and tidying on every refill would take
-	// it away under the hand that just added it.
+	// ⭐ AND NOTHING IS REMOVED AT ALL ANY MORE. A table with no link and no field of its own used to
+	// be swept away on OK as an unfinished gesture. That reading died with the decision that a
+	// PRODUCT is a sentence: `FROM A, B` says "multiply these", and "I added a table and changed my
+	// mind" is the SAME AST. The two cannot be told apart, so guessing meant silently changing how
+	// many rows a query returns — the one thing this window must never do. Deleting a table the
+	// author no longer wants is one click; a result quietly divided by the row count of another
+	// table is found a week later, on the numbers.
 
 	// ⭐ EVERY GRID KEEPS ITS PLACE.
 	//
@@ -375,35 +378,6 @@ wxIcon ibDialogQueryConstructor::IconOfExpr(const ibQueryAstExprPtr& expr) const
 	return field.m_icon;
 }
 
-// ===========================================================================
-//  A table nobody uses
-// ===========================================================================
-
-// EVERY SOURCE THE QUERY NAMES — the first segment of every column path, wherever an expression can
-// stand. Only a Column's path names a source: a Cast's path is a TYPE and a Value's is a meta-path,
-// so both are walked through (their m_arg) without their own path being read. A subquery's sources
-// are its own business and are not collected here.
-static void ibQueryCollectMentioned(const ibQueryAstExprPtr& expr, std::set<wxString>& out)
-{
-	if (!expr)
-		return;
-
-	if (expr->m_kind == ibQueryAstExprKind::Column && !expr->m_path.empty())
-		out.insert(expr->m_path.front().Lower());
-
-	ibQueryCollectMentioned(expr->m_arg,  out);
-	ibQueryCollectMentioned(expr->m_lhs,  out);
-	ibQueryCollectMentioned(expr->m_rhs,  out);
-	ibQueryCollectMentioned(expr->m_low,  out);
-	ibQueryCollectMentioned(expr->m_high, out);
-	ibQueryCollectMentioned(expr->m_else, out);
-	for (const ibQueryAstExprPtr& item : expr->m_list)
-		ibQueryCollectMentioned(item, out);
-	for (const auto& branch : expr->m_cases) {
-		ibQueryCollectMentioned(branch.first,  out);
-		ibQueryCollectMentioned(branch.second, out);
-	}
-}
 
 // THE MIRROR OF THE COLLECT ABOVE: rewrite the source a path starts on. Same walk, same rule about
 // which paths name a source (a Column's, and only a Column's) — so the two can never disagree about
@@ -476,6 +450,32 @@ void queryctor::ibQueryRenameSourceReferences(ibQuerySelect& select, const wxStr
 // goes; everything else is left exactly as written — including things that are broken for their own
 // reasons, which remain the engine's to talk about.
 //
+// EVERY SOURCE THE QUERY NAMES — the first segment of every column path, wherever an expression can
+// stand. Only a Column's path names a source: a Cast's path is a TYPE and a Value's is a meta-path,
+// so both are walked through (their m_arg) without their own path being read. A subquery's sources
+// are its own business and are not collected here.
+static void ibQueryCollectMentioned(const ibQueryAstExprPtr& expr, std::set<wxString>& out)
+{
+	if (!expr)
+		return;
+
+	if (expr->m_kind == ibQueryAstExprKind::Column && !expr->m_path.empty())
+		out.insert(expr->m_path.front().Lower());
+
+	ibQueryCollectMentioned(expr->m_arg,  out);
+	ibQueryCollectMentioned(expr->m_lhs,  out);
+	ibQueryCollectMentioned(expr->m_rhs,  out);
+	ibQueryCollectMentioned(expr->m_low,  out);
+	ibQueryCollectMentioned(expr->m_high, out);
+	ibQueryCollectMentioned(expr->m_else, out);
+	for (const ibQueryAstExprPtr& item : expr->m_list)
+		ibQueryCollectMentioned(item, out);
+	for (const auto& branch : expr->m_cases) {
+		ibQueryCollectMentioned(branch.first,  out);
+		ibQueryCollectMentioned(branch.second, out);
+	}
+}
+
 // Same walk as the rename above, so the two cannot disagree about what counts as a reference.
 static bool ibQueryMentions(const ibQueryAstExprPtr& expr, const wxString& source)
 {
@@ -535,57 +535,20 @@ void queryctor::ibQueryDropSourceReferences(ibQuerySelect& select, const wxStrin
 		}
 }
 
-// DROP THE JOINS NOBODY USES. Adding a table and then selecting nothing from it is an unfinished
-// gesture, not a mistake — so it goes quietly, unlike a name that does not resolve (which stays and
-// is spoken about). An INNER JOIN with no ON and no field of its own is worse than pointless: it
-// multiplies the rows of a query whose author never asked it to.
+// ⛔ THE SWEEP THAT USED TO STAND HERE IS GONE, and the reason is a decision rather than a cleanup.
 //
-// ⚠ THE FIRST TABLE STAYS. Removing the FROM would leave the query with no source at all, which is
-// not tidying but destruction — and it is exactly the state a query is in while its author is still
-// choosing fields.
+// It removed, on OK, a table with no link and no field of its own — reading that as "the author
+// added it and never got round to using it". Then the PRODUCT became a sentence in this language:
+// `FROM A, B` is how you say "multiply these", written with the comma that has always meant it.
 //
-// ⚠ RUN ON OK, NOT ON EVERY REFILL. A table is unused for the whole moment between adding it and
-// picking its first field; tidying continuously would delete it under the hand that just added it.
-static void ibQueryDropUnusedIn(ibQuerySelect& select)
-{
-	for (const std::shared_ptr<ibQuerySelect>& branch : select.m_unions)
-		if (branch)
-			ibQueryDropUnusedIn(*branch);
-
-	if (select.m_selectAll)
-		return;   // SELECT * reads every table there is; none of them is unused
-
-	std::set<wxString> used;
-	for (const ibQueryProjection& projection : select.m_projections)
-		ibQueryCollectMentioned(projection.m_expr, used);
-	ibQueryCollectMentioned(select.m_where,  used);
-	ibQueryCollectMentioned(select.m_having, used);
-	for (const ibQueryAstExprPtr& key : select.m_groupBy)
-		ibQueryCollectMentioned(key, used);
-	for (const ibQueryOrderItem& order : select.m_orderBy)
-		ibQueryCollectMentioned(order.m_expr, used);
-	for (const ibQueryAstExprPtr& key : select.m_indexBy)
-		ibQueryCollectMentioned(key, used);
-	for (const ibQueryAstExprPtr& aggregate : select.m_totalsAggregates)
-		ibQueryCollectMentioned(aggregate, used);
-	// A JOIN'S OWN CONDITION COUNTS as use: `A JOIN B ON B.Ref = A.Ref` uses B even when no field of
-	// B is selected, and dropping it would silently change what the query returns.
-	for (const ibQueryAstJoin& join : select.m_joins)
-		ibQueryCollectMentioned(join.m_on, used);
-
-	select.m_joins.erase(std::remove_if(select.m_joins.begin(), select.m_joins.end(),
-		[&used](const ibQueryAstJoin& join) {
-			const wxString name = ibQuerySourceName(join.m_source);
-			return !name.IsEmpty() && used.find(name.Lower()) == used.end();
-		}), select.m_joins.end());
-}
-
-void ibDialogQueryConstructor::DropUnusedTables()
-{
-	for (ibQueryAstStatement& statement : m_package.m_statements)
-		if (statement.m_select)
-			ibQueryDropUnusedIn(*statement.m_select);
-}
+// And "I meant a product" and "I changed my mind" are the SAME AST. Nothing in the text tells them
+// apart, so the sweep was guessing — and guessing wrong meant silently changing HOW MANY ROWS the
+// query returns, which is the one edit no window may make behind an author's back. (The sweep knew
+// this rule: it exempted a table named by a neighbouring `ON` for exactly that reason, and then
+// broke it for the case that had no `ON` at all.)
+//
+// A table nobody wants is one click to delete. A result quietly multiplied — or quietly not — is
+// found a week later, on the numbers.
 
 // THE PICTURE FOR ONE FIELD. The column already answered what it looks like
 // (ibBackendSourceColumn::GetColumnIcon — an attribute by default, a dimension / a resource when

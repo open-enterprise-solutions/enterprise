@@ -206,11 +206,9 @@ void ibDialogQueryConstructor::OnOk(wxCommandEvent&)
 			return;
 	}
 
-	// A TABLE NOBODY USES GOES NOW, on the way out — not while the query is being built, where
-	// "unused" is simply the state of a table whose fields have not been picked yet. Here it means
-	// what it says: the author is done, and this source contributes nothing to the result while an
-	// unconditional join still multiplies it.
-	DropUnusedTables();
+	// NOTHING IS REMOVED HERE. A table with no link used to be swept away on the way out; a product
+	// is a sentence now (`FROM A, B`), and it is written exactly like a table somebody forgot about.
+	// See ibDialogQueryConstructor::FillAll for why guessing between them is not allowed.
 
 	// The last word belongs to the engine: render, and hand the text to the parser. What comes back
 	// IS what leaves this dialog, so the caller can never receive text the engine has not read.
