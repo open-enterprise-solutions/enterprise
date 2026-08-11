@@ -16,6 +16,41 @@
 #include "backend/session/session.h"
 #include "backend/query/dbTableProvider.h"   // ibDbTableProvider::SetValueAttribute — DB write decomposition
 
+// ⭐⭐ THE SCALE BELONGS TO THE RESOURCE, THE PRECISION TO THE FOLD.
+//
+// These reads cast every aggregate, and they used to cast it to a BARE `NUMERIC` — which on Firebird
+// means `NUMERIC(9,0)` by the standard: nine digits, no fraction, stored as a 32-bit integer. Every
+// balance and every turnover of this register was therefore rounded to whole units and capped at nine
+// digits, silently. (The accumulation register never had this: it goes through the L2 IR, and the
+// dialect spells a number as `NUMERIC(%d,%d)` — always with both.)
+//
+// `NUMERIC(18,6)` would fix the rounding and keep a second hardcode — one from before a resource
+// could state its own type. And `NUMERIC(18, <scale>)` would keep HALF of it: 18 is not a law
+// either. It is the dialect-1/3 ceiling; Firebird 4 raised NUMERIC to 38 digits on INT128, and this
+// platform already speaks that (ibNumber::To128Bytes exists for exactly those columns). An author who
+// declares a register resource as 20 digits with 10 after the point is asking for something the
+// engine can give.
+//
+// So BOTH numbers come from the resource — the operator declared them, and nothing here knows better.
+// The fallback is used only when nothing was declared at all.
+//
+// ⚠ AND THE SPELLING BELONGS TO THE DIALECT, not to this file. A totals manager that writes
+// `NUMERIC(p,s)` itself has L1 leaking into it — the word differs per engine (the dictionary's own
+// default is `DECIMAL`), and a second place that knows it is a second place to get it wrong. So the
+// numbers are decided here and the WORD is asked for: `m_typeNumberPattern` is the same pattern the
+// L2 renderer fills for a canonical ibTypeNumber, which is what keeps the hand-written SQL in this
+// file and the generated SQL everywhere else from spelling one type two ways.
+static wxString ibRegFoldNumeric(const ibValueMetaObjectAttributeBase* res)
+{
+	int precision = res != nullptr ? static_cast<int>(res->GetTypeDesc().GetPrecision()) : 0;
+	int scale     = res != nullptr ? static_cast<int>(res->GetTypeDesc().GetScale())     : 0;
+	if (precision <= 0)      precision = 18;          // nothing declared — a dialect-3 NUMERIC's own width
+	if (scale < 0)           scale = 0;
+	if (scale > precision)   scale = precision;       // the engine requires 0 <= scale <= precision
+
+	return wxString::Format(db_query->GetDialect().m_typeNumberPattern, precision, scale);
+}
+
 ibValue ibValueManagerDataObjectAccountingRegister::Balance(const ibValue& cPeriod, const ibValue& cAccount, const ibValue& cFilter)
 {
 	if (ses_query != nullptr && !ses_query->IsOpen())
@@ -146,7 +181,7 @@ ibValue ibValueManagerDataObjectAccountingRegister::Balance(const ibValue& cPeri
 		sqlQuery += " CAST(SUM(CASE WHEN " + recordTypeField + " = 0.0"
 			" THEN   " + resourceField + " "
 			" ELSE - " + resourceField + " END"
-			" ) AS NUMERIC) AS " + resourceField + "_Balance_";
+			" ) AS " + ibRegFoldNumeric(object) + ") AS " + resourceField + "_Balance_";
 	}
 
 	// FROM table
@@ -198,7 +233,7 @@ ibValue ibValueManagerDataObjectAccountingRegister::Balance(const ibValue& cPeri
 		sqlQuery += orCase + " CAST(SUM(CASE WHEN " + recordTypeField + " = 0.0"
 			" THEN   " + resourceField + ""
 			" ELSE - " + resourceField + " END"
-			" ) AS NUMERIC) " + orCaseEnd + " <> 0.0";
+			" ) AS " + ibRegFoldNumeric(object) + ") " + orCaseEnd + " <> 0.0";
 		firstHaving = false;
 	}
 
@@ -380,11 +415,11 @@ ibValue ibValueManagerDataObjectAccountingRegister::Turnovers(const ibValue& cBe
 		sqlQuery += " CAST(SUM(CASE WHEN " + recordTypeField + " = 0.0"
 			" THEN   " + resourceField + " "
 			" ELSE   0.0 END"
-			" ) AS NUMERIC) AS " + resourceField + "_TurnoverDr_,";
+			" ) AS " + ibRegFoldNumeric(object) + ") AS " + resourceField + "_TurnoverDr_,";
 		sqlQuery += " CAST(SUM(CASE WHEN " + recordTypeField + " = 0.0"
 			" THEN   0.0 "
 			" ELSE   " + resourceField + " END"
-			" ) AS NUMERIC) AS " + resourceField + "_TurnoverCr_";
+			" ) AS " + ibRegFoldNumeric(object) + ") AS " + resourceField + "_TurnoverCr_";
 	}
 
 	// FROM table
@@ -438,11 +473,11 @@ ibValue ibValueManagerDataObjectAccountingRegister::Turnovers(const ibValue& cBe
 		sqlQuery += orCase + " CAST(SUM(CASE WHEN " + recordTypeField + " = 0.0"
 			" THEN   " + resourceField + ""
 			" ELSE   0.0 END"
-			" ) AS NUMERIC) " + orCaseEnd + " <> 0.0";
+			" ) AS " + ibRegFoldNumeric(object) + ") " + orCaseEnd + " <> 0.0";
 		sqlQuery += " OR(CAST(SUM(CASE WHEN " + recordTypeField + " = 0.0"
 			" THEN   0.0"
 			" ELSE   " + resourceField + " END"
-			" ) AS NUMERIC)) <> 0.0";
+			" ) AS " + ibRegFoldNumeric(object) + ")) <> 0.0";
 		firstHaving = false;
 	}
 
@@ -561,7 +596,7 @@ ibValue ibValueManagerDataObjectAccountingRegister::DrCrTurnovers(const ibValue&
 	for (const auto object : m_metaObject->GetResourceArrayObject()) {
 		const wxString resourceField = ibRegValueField(object);
 		sqlQuery += ", dr." + ibRegTypeField(object);
-		sqlQuery += ", CAST(SUM(dr." + resourceField + ") AS NUMERIC) AS " + resourceField + "_Amount_";
+		sqlQuery += ", CAST(SUM(dr." + resourceField + ") AS " + ibRegFoldNumeric(object) + ") AS " + resourceField + "_Amount_";
 	}
 
 	// FROM with self-join on Recorder
@@ -601,7 +636,7 @@ ibValue ibValueManagerDataObjectAccountingRegister::DrCrTurnovers(const ibValue&
 		wxString orCase = (!firstHaving ? "OR (" : "");
 		wxString orCaseEnd = (!firstHaving ? ")" : "");
 		sqlQuery += orCase + " CAST(SUM(dr." + ibRegValueField(object)
-			+ ") AS NUMERIC) " + orCaseEnd + " <> 0.0";
+			+ ") AS " + ibRegFoldNumeric(object) + ") " + orCaseEnd + " <> 0.0";
 		firstHaving = false;
 	}
 
@@ -804,19 +839,19 @@ ibValue ibValueManagerDataObjectAccountingRegister::BalanceAndTurnovers(const ib
 		sqlQuery += " CAST(SUM(CASE WHEN " + recordTypeField + " = 0.0"
 			" THEN   " + resourceField + " "
 			" ELSE - " + resourceField + " END"
-			" ) AS NUMERIC) AS " + resourceField + "_OpeningBalance_,";
+			" ) AS " + ibRegFoldNumeric(object) + ") AS " + resourceField + "_OpeningBalance_,";
 
 		// TurnoverDr = 0 (no turnovers in opening balance query)
-		sqlQuery += " CAST(0.0 AS NUMERIC) AS " + resourceField + "_TurnoverDr_,";
+		sqlQuery += " CAST(0.0 AS " + ibRegFoldNumeric(object) + ") AS " + resourceField + "_TurnoverDr_,";
 
 		// TurnoverCr = 0
-		sqlQuery += " CAST(0.0 AS NUMERIC) AS " + resourceField + "_TurnoverCr_,";
+		sqlQuery += " CAST(0.0 AS " + ibRegFoldNumeric(object) + ") AS " + resourceField + "_TurnoverCr_,";
 
 		// ClosingBalance = same as opening (will be summed with turnovers in outer query)
 		sqlQuery += " CAST(SUM(CASE WHEN " + recordTypeField + " = 0.0"
 			" THEN   " + resourceField + " "
 			" ELSE - " + resourceField + " END"
-			" ) AS NUMERIC) AS " + resourceField + "_ClosingBalance_";
+			" ) AS " + ibRegFoldNumeric(object) + ") AS " + resourceField + "_ClosingBalance_";
 	}
 
 	// FROM table - opening balance subquery
@@ -871,25 +906,25 @@ ibValue ibValueManagerDataObjectAccountingRegister::BalanceAndTurnovers(const ib
 		sqlQuery += "," + ibRegTypeField(object) + ", ";
 
 		// OpeningBalance = 0 (no opening balance in turnover query)
-		sqlQuery += " CAST(0.0 AS NUMERIC) AS " + resourceField + "_OpeningBalance_,";
+		sqlQuery += " CAST(0.0 AS " + ibRegFoldNumeric(object) + ") AS " + resourceField + "_OpeningBalance_,";
 
 		// TurnoverDr = SUM(CASE RecordType=Debit THEN Amount ELSE 0 END)
 		sqlQuery += " CAST(SUM(CASE WHEN " + recordTypeField + " = 0.0"
 			" THEN   " + resourceField + " "
 			" ELSE   0.0 END"
-			" ) AS NUMERIC) AS " + resourceField + "_TurnoverDr_,";
+			" ) AS " + ibRegFoldNumeric(object) + ") AS " + resourceField + "_TurnoverDr_,";
 
 		// TurnoverCr = SUM(CASE RecordType=Credit THEN Amount ELSE 0 END)
 		sqlQuery += " CAST(SUM(CASE WHEN " + recordTypeField + " = 0.0"
 			" THEN   0.0 "
 			" ELSE   " + resourceField + " END"
-			" ) AS NUMERIC) AS " + resourceField + "_TurnoverCr_,";
+			" ) AS " + ibRegFoldNumeric(object) + ") AS " + resourceField + "_TurnoverCr_,";
 
 		// ClosingBalance = SUM(CASE Debit THEN +Amount ELSE -Amount END)
 		sqlQuery += " CAST(SUM(CASE WHEN " + recordTypeField + " = 0.0"
 			" THEN   " + resourceField + " "
 			" ELSE - " + resourceField + " END"
-			" ) AS NUMERIC) AS " + resourceField + "_ClosingBalance_";
+			" ) AS " + ibRegFoldNumeric(object) + ") AS " + resourceField + "_ClosingBalance_";
 	}
 
 	// FROM table - turnovers subquery
@@ -941,10 +976,10 @@ ibValue ibValueManagerDataObjectAccountingRegister::BalanceAndTurnovers(const ib
 	for (const auto object : m_metaObject->GetResourceArrayObject()) {
 		const wxString resourceField = ibRegValueField(object);
 		outerQuery += "," + ibRegTypeField(object);
-		outerQuery += ", CAST(SUM(" + resourceField + "_OpeningBalance_) AS NUMERIC) AS " + resourceField + "_OpeningBalance_";
-		outerQuery += ", CAST(SUM(" + resourceField + "_TurnoverDr_) AS NUMERIC) AS " + resourceField + "_TurnoverDr_";
-		outerQuery += ", CAST(SUM(" + resourceField + "_TurnoverCr_) AS NUMERIC) AS " + resourceField + "_TurnoverCr_";
-		outerQuery += ", CAST(SUM(" + resourceField + "_ClosingBalance_) AS NUMERIC) AS " + resourceField + "_ClosingBalance_";
+		outerQuery += ", CAST(SUM(" + resourceField + "_OpeningBalance_) AS " + ibRegFoldNumeric(object) + ") AS " + resourceField + "_OpeningBalance_";
+		outerQuery += ", CAST(SUM(" + resourceField + "_TurnoverDr_) AS " + ibRegFoldNumeric(object) + ") AS " + resourceField + "_TurnoverDr_";
+		outerQuery += ", CAST(SUM(" + resourceField + "_TurnoverCr_) AS " + ibRegFoldNumeric(object) + ") AS " + resourceField + "_TurnoverCr_";
+		outerQuery += ", CAST(SUM(" + resourceField + "_ClosingBalance_) AS " + ibRegFoldNumeric(object) + ") AS " + resourceField + "_ClosingBalance_";
 	}
 
 	outerQuery += " FROM (" + sqlQuery + ") AS T1";
@@ -977,10 +1012,10 @@ ibValue ibValueManagerDataObjectAccountingRegister::BalanceAndTurnovers(const ib
 		wxString orCaseEnd = (!firstHaving ? ")" : "");
 		const wxString resourceField = ibRegValueField(object);
 
-		outerQuery += orCase + " CAST(SUM(" + resourceField + "_OpeningBalance_) AS NUMERIC) " + orCaseEnd + " <> 0.0";
-		outerQuery += " OR(CAST(SUM(" + resourceField + "_TurnoverDr_) AS NUMERIC)) <> 0.0";
-		outerQuery += " OR(CAST(SUM(" + resourceField + "_TurnoverCr_) AS NUMERIC)) <> 0.0";
-		outerQuery += " OR(CAST(SUM(" + resourceField + "_ClosingBalance_) AS NUMERIC)) <> 0.0";
+		outerQuery += orCase + " CAST(SUM(" + resourceField + "_OpeningBalance_) AS " + ibRegFoldNumeric(object) + ") " + orCaseEnd + " <> 0.0";
+		outerQuery += " OR(CAST(SUM(" + resourceField + "_TurnoverDr_) AS " + ibRegFoldNumeric(object) + ")) <> 0.0";
+		outerQuery += " OR(CAST(SUM(" + resourceField + "_TurnoverCr_) AS " + ibRegFoldNumeric(object) + ")) <> 0.0";
+		outerQuery += " OR(CAST(SUM(" + resourceField + "_ClosingBalance_) AS " + ibRegFoldNumeric(object) + ")) <> 0.0";
 
 		firstHaving = false;
 	}

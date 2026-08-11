@@ -732,3 +732,18 @@ Three properties make this the right shape rather than a workaround:
 - **it is where the per-call schema comes from** — the requested kind list decides both how many
   such expressions exist and what they are called, which is exactly §7's "output schema follows
   the arguments".
+
+### 7.2 A fold must name the resource's own type (2026-08-11)
+
+The dr/cr readings summed money through a bare `CAST(… AS NUMERIC)`. On Firebird a bare `NUMERIC`
+**is `NUMERIC(9,0)`** — the fractional part is not rounded away at the edge of a long calculation,
+it is dropped on every fold, and a total over nine digits overflows. 24 such casts existed across
+the accounting register's queries.
+
+They now go through `ibRegFoldNumeric(resource)`, which spells the type from **the resource's own
+declared precision and scale** through the dialect's `m_typeNumberPattern` — the same pattern the
+DDL uses to create the column. The cast can no longer disagree with the storage it reads, because
+both are the same sentence about the same attribute.
+
+The general rule: **a cast that names a type the schema already declares is a second declaration**,
+and the two only stay equal while nobody edits either. Ask the attribute.
