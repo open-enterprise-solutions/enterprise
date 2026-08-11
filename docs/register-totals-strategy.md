@@ -1072,6 +1072,87 @@ refused by the lowering; `Recorder` / `LineNumber` need the movements-level read
 periodicity and fill-method word lists want to be REGISTERED enumerations, edited by quick choice,
 rather than words a source declares.
 
+## The demolition (2026-08-11) — one place for a complex query, and it is not here
+
+The read side stopped computing. `ComputeBalance` / `ComputeTurnover` / `ComputeBalanceAndTurnover`
+used to build the whole aggregate by hand in L2 IR — a signed `CASE` per resource, a `HAVING`, a
+`GROUP BY` over physical field names, a `CAST` to pin the result type. Every line of it recomputed,
+from the movements, what the trigger had already computed and stored.
+
+**Why it was there at all** is the only thing that made it defensible: it was written when there was
+no way to materialise totals and no query engine. It computed them the simplest way available at the
+time. That time has passed.
+
+### The rule
+
+**A complex query is legitimate in exactly one place: the materialisation.** That is **L3-2**
+(structure — the derived table and its triggers) and **L3-4** (regeneration). The algorithm lives in
+the trigger, which maintains and regenerates. Everyone else **sees views** — and a view is an
+ordinary named relation, indistinguishable from a table to the engine, joinable like one. So reading
+a total needs nothing but the door.
+
+### What each reading is now
+
+| reading | what it does |
+|---|---|
+| **Turnovers** | `From(turnovers view)` → period range → condition → `GROUP BY` dimensions (+ the truncated period when a granularity was asked for) → `SUM` of the view's own figures |
+| **Balance** | reads the **turnovers** view folded up to a moment and publishes the **balance** shape: `<Resource>Turnover` summed up to the date IS `<Resource>Balance` |
+| **BalanceAndTurnovers** | two reads of the same view (before the interval, and inside it) plus the forward roll — the one thing still computed here, because a period opening where the previous closed is sequential by nature and cannot be a query |
+
+The honest boundary is stated rather than worked around: **no view, no totals.** A driver that cannot
+maintain derived state has no trigger, so it has nothing to read; the gate is `HasMaterializedViews()`.
+
+### What died with it
+
+The signed `CASE`s, the `HAVING` folded through `OR`, the grouping over `ibRegFieldsOf`, the physical
+name spelling, and the numeric pin. That last one is worth naming: it existed to stop a hand-built
+`CAST` from narrowing money — a bare `NUMERIC` is `NUMERIC(9,0)` on Firebird — and it is unnecessary
+the moment nothing casts, because the view stores each figure in the resource's own declared type.
+
+Five includes went with them, **L2-1 among them**: a reading that reads a view has nothing to build.
+
+### Two names, one place each
+
+A view column carries both spellings — `Resource1Turnover` for a query, `Resource1_Turnover` for the
+table — and the pair is built once, in the schema. So the readings ask rather than spell: the logical
+suffixes are constants (`ibRegFigure`), the physical name comes from the column
+(`ibRegPhysicalOf`). The **period** is deliberately not in that list: its column is named after the
+register's own period attribute, so the name belongs to the metadata. That distinction was found by
+making the list — the readings had been writing `"Period"` as a literal.
+
+### Argument order — what is always given, then what is sometimes, then what is almost never
+
+`Balance(period, filter)`, `Turnovers(begin, end, filter, periodicity, fillMethod)` — the shape is
+the same for the manager call and the virtual table, and the order is a frequency ranking rather than
+a taxonomy: **the period is the question** (a balance without a moment is not a balance), the
+**filter narrows it**, and the **refinements past that are the ones nobody writes** — a periodicity
+or a fill method is asked for by a caller who wants a series instead of a number.
+
+Named slots (`ibRegArg`) hold the positions and `static_assert`s pin the ordering, so a slot cannot
+be renumbered in one register and not another. This is a user-visible contract: the position is what
+a script writes.
+
+### A filter is a structure that converts into a predicate
+
+One converter (`ibRegFilterPredicate`, templated in `registerQueryLowering.h`) for the accumulation
+register, the information register, and the accounting register when it comes. Five hand-written
+structure walks became none. Past the converter there are no structures, only conditions.
+
+The predicate has **two producers**: the query text, where parsing IS the conversion
+(`WHERE Warehouse = &Warehouse`), and this converter. One form, two entrances. Carrying the structure
+instead of converting it would have made a second currency only one entrance could spend.
+
+### The information register, by the same rules
+
+Its slice moved to `informationRegisterMetadataSlice.cpp` and its filter to the shared converter.
+It gets **no view**, and that is a decision rather than an omission: a slice is *the record nearest a
+moment*, so the answer depends on the moment asked for. A materialised surface can hold what does not
+depend on the question; a sum does not, a slice does. The register's table is its source.
+
+Its slice also stopped being parameterised by two strings (`"MAX"`/`"MIN"` and `"<="`/`">="`) that
+could disagree, and whose parser defaulted silently on anything it did not recognise. One enum —
+`ibSliceEnd::Last` / `First` — and both halves are derived from it.
+
 ## Open questions
 
 - **Seed / predefined data on Apply.** Whatever idempotent seed path

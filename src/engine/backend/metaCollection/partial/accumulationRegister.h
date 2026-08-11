@@ -6,6 +6,11 @@
 #include "backend/stringUtils.h"   // CompareString — the one case-insensitive name comparison
 #include "backend/query/queryable.h"          // ibComputedRegisterQueryable<TReg> — shared base for the balance / turnover virtual tables
 #include "backend/query/tempTableQueryable.h" // ibDbTempTableQueryable — a named physical relation; what a VIEW is to L3
+// The register-shared lowering: ibRegFilterPredicate / ibRegFlatLeaves / ibRegCompositeIR. Shared on
+// purpose — an information register filters its dimensions by exactly the same rule, and an
+// accounting register will too; a copy per register is how three registers come to disagree about
+// what a filter is.
+#include "backend/metaCollection/partial/registerQueryLowering.h"
 
 #include <map>
 #include <memory>
@@ -195,8 +200,14 @@ public:
 	// companion queryables (friends) call these through m_reg; each returns a RAM table
 	// the L3 door reads. Mirrors the information register's ComputeSlice. Period bound:
 	// balance = as-of "<="; turnover = [begin, end].
-	ibQueryRamTable ComputeBalance(const ibValue& cPeriod, const ibValue& cFilter) const;
-	ibQueryRamTable ComputeTurnover(const ibValue& cBegin, const ibValue& cEnd, const ibValue& cFilter) const;
+	ibQueryRamTable ComputeBalance(const ibValue& cPeriod, const ibQueryPredicatePtr& cFilter) const;
+	// ⭐ THE PERIODICITY IS THE GROUPING KEY OF THE FOLD, not a filter applied after it. `unitGiven`
+	// false = one row per key over the whole interval; true = one row per key AND per period of
+	// `unit`, the period travelling out as a `Period` column. Any unit is legitimate here because
+	// this reads the MOVEMENTS, which carry the real instant — the stored-totals floor limits the
+	// view's projections, not this.
+	ibQueryRamTable ComputeTurnover(const ibValue& cBegin, const ibValue& cEnd, const ibQueryPredicatePtr& cFilter,
+	                                ibTotalsPeriod unit = ibTotalsPeriod::Month, bool unitGiven = false) const;
 
 	// Balance AND turnover, per period at `unit` granularity: opening / receipt / expense /
 	// turnover / closing per resource. Built from TWO server-side aggregates — the balance as it
@@ -204,7 +215,7 @@ public:
 	// forward in memory, because each period's opening balance is the previous period's closing.
 	// That running step is inherently sequential, but it walks PERIODS (tens), not movements.
 	ibQueryRamTable ComputeBalanceAndTurnover(const ibValue& cBegin, const ibValue& cEnd,
-	                                          ibTotalsPeriod unit, const ibValue& cFilter) const;
+	                                          ibTotalsPeriod unit, const ibQueryPredicatePtr& cFilter) const;
 
 	///////////////////////////////////////////////////////////////////
 	//  Materialised read surface — the totals bundle and the views over it
@@ -464,57 +475,101 @@ private:
 // Which one is in use is invisible upstream: the same columns, the same rows, the same numbers.
 // ============================================================================
 
+// ⭐⭐ ONE TOTALS COMPANION, THREE READINGS.
+//
+// Balance, Turnovers and BalanceAndTurnovers are not three kinds of table. They are one virtual table
+// over one register, read three ways — and what actually differs between them is exactly two things:
+// WHICH SHAPE each publishes, and WHAT it computes. Everything else (which provider vends the rows,
+// which columns a query may name) was written out three times, and three copies of one answer is how
+// they came to disagree: the navigation swung with the road on one of them and not on the others.
+//
+// So the shape is DECLARED by each reading and the shared answers live here, once.
+class BACKEND_API ibAccumulationTotalsQueryable : public ibComputedRegisterQueryable<ibValueMetaObjectAccumulationRegister> {
+public:
+	using ibViewShape = ibValueMetaObjectAccumulationRegister::ibViewShape;
+
+	ibAccumulationTotalsQueryable(const ibValueMetaObjectAccumulationRegister* reg, ibViewShape shape)
+		: ibComputedRegisterQueryable(reg), m_shape(shape) {}
+
+	// ⚠ THE OUTPUT SHAPE, NOT THE READ SOURCE — and the two are genuinely different. A balance is
+	// FOLDED OUT OF the turnovers surface, so it reads one view and publishes another; that is why
+	// each reading still names its own source in GetSourceRelation while the shape it publishes is
+	// declared once, here.
+	//
+	// Metadata only: the view queryable is built from the register's dimensions and resources without
+	// touching a database, so it is the right answer on the materialised road AND the live one.
+	virtual const ibBackendQueryable* NavigationSource() const override;
+	// Materialised => the ordinary PHYSICAL provider, so the source behaves like any relation.
+	virtual ibBackendQueryProvider& GetProvider() const override;
+
+protected:
+	ibViewShape m_shape;
+};
+
 // balance — resource balances as of a date.
-class BACKEND_API ibBalanceQueryable : public ibComputedRegisterQueryable<ibValueMetaObjectAccumulationRegister> {
+class BACKEND_API ibBalanceQueryable : public ibAccumulationTotalsQueryable {
 public:
 	ibBalanceQueryable(const ibValueMetaObjectAccumulationRegister* reg,
-	                   const ibValue& period = ibValue(), const ibValue& filter = ibValue())
-		: ibComputedRegisterQueryable(reg), m_period(period), m_filter(filter) {}
+	                   const ibValue& period = ibValue(), const ibQueryPredicatePtr& filter = nullptr)
+		: ibAccumulationTotalsQueryable(reg, ibViewShape::Balance), m_period(period), m_filter(filter) {}
 
 	virtual bool IsComputedInRam() const override { return !m_reg->HasMaterializedViews(); }
-	virtual ibBackendQueryProvider& GetProvider() const override;
 	virtual ibQueryRelPtr GetSourceRelation(const wxString& alias) const override;
-	virtual const ibBackendQueryable* NavigationSource() const override;
 
 	virtual ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override;
 private:
 	ibValue m_period;   // as-of date
-	ibValue m_filter;   // dimension-name -> value structure
+	ibQueryPredicatePtr m_filter;   // the condition, already converted (ibRegFilterPredicate)
 };
 
 // turnover — resource turnovers (and receipts / expenses) over [begin, end].
-class BACKEND_API ibTurnoverQueryable : public ibComputedRegisterQueryable<ibValueMetaObjectAccumulationRegister> {
+class BACKEND_API ibTurnoverQueryable : public ibAccumulationTotalsQueryable {
 public:
+	// `unitGiven` false = no periodicity was asked for: ONE row per key over the whole interval.
+	// True = a row per key AND per period of `unit` — the same shape BalanceAndTurnovers reports,
+	// with only the turnover side of it.
 	ibTurnoverQueryable(const ibValueMetaObjectAccumulationRegister* reg,
 	                    const ibValue& begin = ibValue(), const ibValue& end = ibValue(),
-	                    const ibValue& filter = ibValue())
-		: ibComputedRegisterQueryable(reg), m_begin(begin), m_end(end), m_filter(filter) {}
+	                    const ibQueryPredicatePtr& filter = nullptr,
+	                    ibTotalsPeriod unit = ibTotalsPeriod::Month, bool unitGiven = false)
+		: ibAccumulationTotalsQueryable(reg, ibViewShape::Turnovers),
+		  m_begin(begin), m_end(end), m_filter(filter),
+		  m_unit(unit), m_unitGiven(unitGiven) {}
 
-	virtual bool IsComputedInRam() const override { return !m_reg->HasMaterializedViews(); }
-	virtual ibBackendQueryProvider& GetProvider() const override;
+	// The materialised surface holds turnovers at the STORED grain, so an unperiodised read IS the
+	// view. A PERIODISED one folds over a different key and is served by the live path, which groups
+	// by the truncated period — the same routing BalanceAndTurnovers makes, and for the same reason:
+	// accepting the parameter and answering at the wrong grain would return a plausible wrong number.
+	//
+	// Safe to route now because a companion navigates through its VIEW'S SHAPE on both roads
+	// (NavigationSource) and the RAM table is seeded from that same shape — so the columns a query
+	// names are there whichever road the read takes.
+	virtual bool IsComputedInRam() const override { return m_unitGiven || !m_reg->HasMaterializedViews(); }
 	virtual ibQueryRelPtr GetSourceRelation(const wxString& alias) const override;
-	virtual const ibBackendQueryable* NavigationSource() const override;
 
 	virtual ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override;
 private:
-	ibValue m_begin;
-	ibValue m_end;
-	ibValue m_filter;
+	ibValue        m_begin;
+	ibValue        m_end;
+	ibQueryPredicatePtr m_filter;
+	ibTotalsPeriod m_unit;       // the READ granularity — a query parameter, not a schema property
+	bool           m_unitGiven;
 };
 
 // balance AND turnover — per period over [begin, end], rolled up to `unit`. Reports, per resource,
 // the opening balance / receipt / expense / turnover / closing balance. Not a third stored shape:
 // it is the balance readings and the turnover reading presented side by side, which is exactly why
 // it needs no storage of its own.
-class BACKEND_API ibBalanceAndTurnoverQueryable : public ibComputedRegisterQueryable<ibValueMetaObjectAccumulationRegister> {
+class BACKEND_API ibBalanceAndTurnoverQueryable : public ibAccumulationTotalsQueryable {
 public:
 	// `unitGiven` false = no periodicity was asked for: report ONE row per key over the whole
 	// interval. True = break the interval into periods of `unit`.
 	ibBalanceAndTurnoverQueryable(const ibValueMetaObjectAccumulationRegister* reg,
 	                              const ibValue& begin = ibValue(), const ibValue& end = ibValue(),
 	                              ibTotalsPeriod unit = ibTotalsPeriod::Month, bool unitGiven = false,
-	                              const ibValue& filter = ibValue())
-		: ibComputedRegisterQueryable(reg), m_begin(begin), m_end(end), m_unit(unit),
+	                              const ibQueryPredicatePtr& filter = nullptr)
+		: ibAccumulationTotalsQueryable(reg, ibViewShape::BalanceAndTurnovers),
+		  m_begin(begin), m_end(end), m_unit(unit),
 		  m_unitGiven(unitGiven), m_filter(filter) {}
 
 	// The server path answers the UNPERIODISED question — one row per key, opening / turnover /
@@ -526,9 +581,7 @@ public:
 	// admitted — it is the alternative to accepting the parameter and silently ignoring it, which
 	// is what this did before and which would have returned a plausible, wrong single row.
 	virtual bool IsComputedInRam() const override { return m_unitGiven || !m_reg->HasMaterializedViews(); }
-	virtual ibBackendQueryProvider& GetProvider() const override;
 	virtual ibQueryRelPtr GetSourceRelation(const wxString& alias) const override;
-	virtual const ibBackendQueryable* NavigationSource() const override;
 
 	virtual ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override;
 private:
@@ -536,7 +589,7 @@ private:
 	ibValue        m_end;
 	ibTotalsPeriod m_unit;     // the READ granularity — a query parameter, not a schema property
 	bool           m_unitGiven;
-	ibValue        m_filter;
+	ibQueryPredicatePtr m_filter;
 };
 
 // --- L4 descriptor method bodies (the register + balance / turnover companions are complete) ---
@@ -646,22 +699,105 @@ inline void ibReadRegisterPeriodicity(const ibValue& given, ibTotalsPeriod& unit
 
 // The word a unit is written as — the same spelling the parameter offers and the view's projection
 // columns are named after, so a message can name a column and be right about it.
+// ⭐⭐ THE UNIT VOCABULARY, WRITTEN ONCE.
+//
+// The same ten words were in three places: a `switch` here, a table in the schema builder (which
+// spells the view's projection columns), and a hand-written list of choices in DescribeParameters.
+// Three copies of one dictionary, and each reader of a word would have gone on compiling while the
+// other two changed — the drift would have shown up as a column nobody could name.
+//
+// ⚠ The ORDER matters and is not alphabetical: it is coarseness, ascending. The schema offers only
+// the projections COARSER than what the totals store (`u > GetTotalsPeriodUnit()`) — an hour cannot
+// be recovered from a day already summed — and that comparison is on the enum, so the enum's order
+// is the meaning. Keep new units in their place on that scale.
+inline const std::vector<std::pair<ibTotalsPeriod, wxString>>& ibRegisterUnits()
+{
+	static const std::vector<std::pair<ibTotalsPeriod, wxString>> s_units = {
+		{ ibTotalsPeriod::Second,   wxT("Second")   }, { ibTotalsPeriod::Minute,   wxT("Minute")   },
+		{ ibTotalsPeriod::Hour,     wxT("Hour")     }, { ibTotalsPeriod::Day,      wxT("Day")      },
+		{ ibTotalsPeriod::Week,     wxT("Week")     }, { ibTotalsPeriod::TenDays,  wxT("TenDays")  },
+		{ ibTotalsPeriod::Month,    wxT("Month")    }, { ibTotalsPeriod::Quarter,  wxT("Quarter")  },
+		{ ibTotalsPeriod::HalfYear, wxT("HalfYear") }, { ibTotalsPeriod::Year,     wxT("Year")     },
+	};
+	return s_units;
+}
+
+// The word a unit is written as — a lookup in that one table, not a second switch over it.
 inline wxString ibRegisterUnitWord(ibTotalsPeriod unit)
 {
-	switch (unit) {
-	case ibTotalsPeriod::Second:   return wxT("Second");
-	case ibTotalsPeriod::Minute:   return wxT("Minute");
-	case ibTotalsPeriod::Hour:     return wxT("Hour");
-	case ibTotalsPeriod::Day:      return wxT("Day");
-	case ibTotalsPeriod::Week:     return wxT("Week");
-	case ibTotalsPeriod::TenDays:  return wxT("TenDays");
-	case ibTotalsPeriod::Month:    return wxT("Month");
-	case ibTotalsPeriod::Quarter:  return wxT("Quarter");
-	case ibTotalsPeriod::HalfYear: return wxT("HalfYear");
-	case ibTotalsPeriod::Year:     return wxT("Year");
-	}
+	for (const std::pair<ibTotalsPeriod, wxString>& u : ibRegisterUnits())
+		if (u.first == unit)
+			return u.second;
 	return wxString();
 }
+
+// ⭐⭐ THE ARGUMENTS HAVE NAMES, AND THE NAMES ARE THESE.
+//
+// A virtual table's call is read by POSITION, and the positions differ per table — Balance takes two,
+// Turnovers four, BalanceAndTurnovers five. Written as `paParams[2]` at the callsite, that is a
+// number nobody can check: when the periodicity was declared, it took slot 2 and pushed the filter to
+// 3, and the code kept reading the filter out of 2 — handing the source a WORD where a filter belongs
+// and losing the filter entirely. It compiled, it ran, and it was silently wrong.
+//
+// Naming them puts the order in ONE place, beside DescribeParameters which declares the same order to
+// the outside. Two lists that must agree, kept adjacent, is the least a positional call can ask for.
+namespace ibRegBalanceArg   { enum { Period = 0, Filter = 1, Count }; }
+namespace ibRegTurnoverArg  { enum { Begin = 0, End = 1, Filter = 2, Periodicity = 3, Count }; }
+namespace ibRegBalTurnArg   { enum { Begin = 0, End = 1, Filter = 2, Periodicity = 3, FillMethod = 4, Count }; }
+
+// ⭐ AND THE ONE RULE ACROSS ALL THREE: PERIOD, THEN CONDITION, THEN THE REFINEMENTS.
+//
+// Every table asks for its period first — a moment, or an interval. Then the condition, because
+// filtering is what a reader almost always wants and almost never wants to count commas to reach.
+// The periodicity and the fill method come LAST precisely because they are the ones nobody states as
+// a rule: an argument that is usually left out belongs where leaving it out costs nothing.
+//
+// A new parameter is therefore appended AFTER the refinements or inserted among them — never before
+// the condition, which would silently shift every existing call's filter into a slot that means
+// something else. That is exactly how the periodicity once pushed the filter aside and nobody noticed.
+//
+// Stated to the compiler rather than to the reader, because a convention that is only written down is
+// a convention that gets broken by the person who did not read it. `DescribeParameters` declares this
+// same order to the outside world and sits a few lines below — the two lists must agree.
+static_assert(ibRegBalanceArg::Filter  == ibRegBalanceArg::Count - 1,  "the condition follows the period");
+static_assert(ibRegTurnoverArg::Filter == ibRegTurnoverArg::Begin + 2, "the condition follows the period");
+static_assert(ibRegBalTurnArg::Filter  == ibRegBalTurnArg::Begin + 2,  "the condition follows the period");
+static_assert(ibRegTurnoverArg::Periodicity > ibRegTurnoverArg::Filter, "refinements come last");
+static_assert(ibRegBalTurnArg::Periodicity  > ibRegBalTurnArg::Filter,  "refinements come last");
+static_assert(ibRegBalTurnArg::FillMethod   > ibRegBalTurnArg::Filter,  "refinements come last");
+
+// ONE reader for a slot: present, non-null, in range — or an empty value, which every reading below
+// treats as "not asked for".
+// ⭐⭐ THE FIGURE SUFFIXES, IN ONE PLACE.
+//
+// A view builds its columns as `<Resource>` + a suffix; the readings spell the same word again to
+// aggregate them; the manager spells it a third time to name a column in the value table it returns.
+// Three spellings of one name, and the day one of them changes the other two go on compiling and
+// answer with nothing — which is how `Resource1_Turnover` and `Resource1Turnover` came to be two
+// different columns for one figure.
+//
+// ⚠ The PERIOD is deliberately NOT here. Its column is named after the register's own period
+// attribute (`GetRegisterPeriod()->GetName()`), so the name belongs to the metadata, not to this
+// list — writing `"Period"` as a literal works only for a register whose attribute happens to be
+// called that.
+namespace ibRegFigure {
+	inline constexpr const wxChar* Turnover       = wxT("Turnover");
+	inline constexpr const wxChar* Receipt        = wxT("Receipt");
+	inline constexpr const wxChar* Expense        = wxT("Expense");
+	inline constexpr const wxChar* Balance        = wxT("Balance");
+	inline constexpr const wxChar* OpeningBalance = wxT("OpeningBalance");
+	inline constexpr const wxChar* ClosingBalance = wxT("ClosingBalance");
+}
+
+inline ibValue ibRegArg(ibValue** paParams, long lSizeArray, int slot)
+{
+	return (paParams != nullptr && slot < lSizeArray && paParams[slot] != nullptr)
+		? *paParams[slot] : ibValue();
+}
+
+// ⚠ The filter converter and the leaf walker moved to registerQueryLowering.h — they are the SAME
+// question for every register (an information register filters its dimensions exactly as this one
+// does), and a copy per register is how two registers come to disagree about what a filter is.
 
 inline ibAccumRegisterBalanceDescriptor::~ibAccumRegisterBalanceDescriptor() = default;
 
@@ -677,8 +813,9 @@ inline wxString ibAccumRegisterBalanceDescriptor::GetName() const
 
 inline const ibBackendQueryable* ibAccumRegisterBalanceDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray)
 {
-	const ibValue period = (lSizeArray > 0 && paParams != nullptr && paParams[0] != nullptr) ? *paParams[0] : ibValue();
-	const ibValue filter = (lSizeArray > 1 && paParams != nullptr && paParams[1] != nullptr) ? *paParams[1] : ibValue();
+	const ibValue period = ibRegArg(paParams, lSizeArray, ibRegBalanceArg::Period);
+	// The runtime value becomes the condition right here, at the door — everything below sees a predicate.
+	const ibQueryPredicatePtr filter = ibRegFilterPredicate(m_reg, ibRegArg(paParams, lSizeArray, ibRegBalanceArg::Filter));
 	// Built and KEPT by the base — the same call gives the same object back, and a query that reads
 	// this table twice keeps both alive (queryableFactory.h, MakeCompanion).
 	return MakeCompanion<ibBalanceQueryable>(paParams, lSizeArray, m_reg, period, filter);
@@ -733,53 +870,27 @@ inline wxString ibAccumRegisterTurnoverDescriptor::GetName() const
 
 inline const ibBackendQueryable* ibAccumRegisterTurnoverDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray)
 {
-	// ⚠ THE SLOTS ARE (begin, end, periodicity, condition) — the periodicity sits THIRD, and the
-	// condition moved to fourth with it. Reading the filter out of slot 2, as this did while the
-	// parameter was undeclared, would hand the source a word where a filter belongs the moment
-	// anybody set the periodicity in the window that now offers it.
-	const ibValue begin  = (lSizeArray > 0 && paParams != nullptr && paParams[0] != nullptr) ? *paParams[0] : ibValue();
-	const ibValue end    = (lSizeArray > 1 && paParams != nullptr && paParams[1] != nullptr) ? *paParams[1] : ibValue();
-	const ibValue period = (lSizeArray > 2 && paParams != nullptr && paParams[2] != nullptr) ? *paParams[2] : ibValue();
-	const ibValue filter = (lSizeArray > 3 && paParams != nullptr && paParams[3] != nullptr) ? *paParams[3] : ibValue();
+	const ibValue begin  = ibRegArg(paParams, lSizeArray, ibRegTurnoverArg::Begin);
+	const ibValue end    = ibRegArg(paParams, lSizeArray, ibRegTurnoverArg::End);
+	const ibValue period = ibRegArg(paParams, lSizeArray, ibRegTurnoverArg::Periodicity);
+	const ibQueryPredicatePtr filter = ibRegFilterPredicate(m_reg, ibRegArg(paParams, lSizeArray, ibRegTurnoverArg::Filter));
 
-	// The turnovers companion reads the interval WHOLE — one row per key. A granularity is a
-	// different computation (a row per unit), and the one that does it is BalanceAndTurnovers; until
-	// this table learns it, asking is answered rather than ignored.
+	// ⭐ THE PERIODICITY IS THE GROUPING KEY OF THE FOLD. Nothing = the interval read WHOLE, one row
+	// per key; a unit = a row per key AND per period, the period travelling out as `Period`.
+	//
+	// This used to REFUSE and hand the reader the query to write by hand ("select PeriodMonth and
+	// group by it") — true advice, and still a boundary standing in front of a table that could
+	// plainly do what was asked. The fold is the one BalanceAndTurnovers already performs, and the
+	// parameter reaches it now.
+	//
+	// No floor applies. The stored totals are kept per day and that limits the VIEW's period
+	// projections, but a periodised read is served from the MOVEMENTS, which carry the real instant —
+	// so an hour is as answerable as a month.
 	ibTotalsPeriod unit = ibTotalsPeriod::Month;
 	bool unitGiven = false;
 	ibReadRegisterPeriodicity(period, unit, unitGiven);
-	// ⚠ AND THE REFUSAL NAMES THE WAY THROUGH, because there is one. A periodised turnover is a sum
-	// per period, and the period projections are COLUMNS of this very table (`PeriodMonth`,
-	// `PeriodWeek`, …): grouping by one of them and summing the resources IS that reading, written
-	// out. What the parameter would add is the shorthand, not the ability.
-	//
-	// A message that only says "not built" leaves somebody stuck at a table that can plainly do what
-	// they asked; this one hands them the query.
-	if (unitGiven) {
-		// ⚠ AND THE ADVICE HAS TO BE TRUE. A projection column exists only for a unit COARSER than
-		// what the totals store: the floor is the day, so `PeriodWeek` and `PeriodMonth` are there
-		// and `PeriodHour` is not — an hour cannot be recovered from a day that has already been
-		// summed. Pointing at a column that does not exist is worse than saying nothing; the reader
-		// tries it and gets a second, stranger error.
-		const wxString reg = m_reg != nullptr ? m_reg->GetName() : wxString(wxT("Register"));
-		const ibTotalsPeriod floor = m_reg != nullptr ? m_reg->GetTotalsPeriodUnit() : ibTotalsPeriod::Day;
-		if (unit < floor)
-			ibBackendCoreException::Error(
-				_("'%s' is finer than the totals this register stores (they are kept per %s), so it "
-				  "cannot come from them at all: read the register's own records over the interval "
-				  "and group them"),
-				period.GetType() == TYPE_STRING ? period.GetString() : wxString(),
-				ibRegisterUnitWord(floor));
-		ibBackendCoreException::Error(
-			_("this table has no periodicity shorthand yet. Write the same reading directly: select "
-			  "'%s.%s' and group by it, summing the resources; or use BalanceAndTurnovers, which "
-			  "folds the periods itself"),
-			reg,
-			unit == floor ? wxString(wxT("Period"))
-			              : wxT("Period") + ibRegisterUnitWord(unit));
-	}
 
-	return MakeCompanion<ibTurnoverQueryable>(paParams, lSizeArray, m_reg, begin, end, filter);
+	return MakeCompanion<ibTurnoverQueryable>(paParams, lSizeArray, m_reg, begin, end, filter, unit, unitGiven);
 }
 
 inline void ibAccumRegisterTurnoverDescriptor::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
@@ -907,13 +1018,22 @@ inline void ibReadRegisterPeriodicity(const ibValue& given, ibTotalsPeriod& unit
 // missing the engine says so precisely, in its own words — and that is the right place for it.
 inline void ibAppendRegisterPeriodicityParameter(std::vector<ibQuerySourceParameter>& out)
 {
+	// ⚠ A WORD, NOT A REGISTERED TYPE — and that was tried and dropped on purpose (2026-08-11).
+	//
+	// Turning this into an enumeration looked right by the usual rule ("a closed set is a type"), and
+	// it is wrong here for a reason the rule does not cover: the value is written in the query text as
+	// a KEYWORD (`…Turnovers(&From, &To, Month)`). A registered type would add a SECOND spelling of the
+	// same thing — `RegisterPeriodicity.Month` beside `Month` — plus a clsid that is permanent the
+	// moment any data carries it. Two spellings and an irreversible key, bought for a list of thirteen
+	// words that has exactly one reader. The list IS the closed set, and the source declares it.
 	ibQuerySourceParameter periodicity;
-	periodicity.m_name    = wxT("Periodicity");
-	periodicity.m_choices = {
-		wxT("Period"), wxT("Record"), wxT("Recorder"),
-		wxT("Second"), wxT("Minute"), wxT("Hour"), wxT("Day"), wxT("Week"), wxT("TenDays"),
-		wxT("Month"), wxT("Quarter"), wxT("HalfYear"), wxT("Year"), wxT("Auto"),
-	};
+	periodicity.m_name = wxT("Periodicity");
+	// The units come from the ONE vocabulary; the four that are not units are named here because
+	// that is what they are — `Period` and `Auto` are answers about the shape of the reading, and
+	// `Record` / `Recorder` name a movement's own identity rather than a calendar interval.
+	periodicity.m_choices = { wxT("Period"), wxT("Record"), wxT("Recorder"), wxT("Auto") };
+	for (const std::pair<ibTotalsPeriod, wxString>& u : ibRegisterUnits())
+		periodicity.m_choices.push_back(u.second);
 	// ⚠ NO DEFAULT, because there is no value that stands in for "left out". Empty is its own answer:
 	// the interval read whole, no period column, one row per key. Writing `Period` in the box would
 	// mean something different — a row PER PERIOD — so a default here would quietly change the query
@@ -924,9 +1044,10 @@ inline void ibAppendRegisterPeriodicityParameter(std::vector<ibQuerySourceParame
 
 inline void ibAccumRegisterTurnoverDescriptor::DescribeParameters(std::vector<ibQuerySourceParameter>& out) const
 {
+	// PERIOD, CONDITION, then the refinements — see ibRegTurnoverArg for why that order.
 	ibFillRegisterIntervalParameters(m_reg, out);
-	ibAppendRegisterPeriodicityParameter(out);
 	ibAppendRegisterConditionParameter(out);
+	ibAppendRegisterPeriodicityParameter(out);
 }
 
 // A TURNOVER IS FILTERED BY ITS DIMENSIONS, never by a resource — the same rule as the balance, and
@@ -955,16 +1076,15 @@ inline wxString ibAccumRegisterBalanceAndTurnoverDescriptor::GetName() const
 
 inline const ibBackendQueryable* ibAccumRegisterBalanceAndTurnoverDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray)
 {
-	// (begin, end, periodicity, filter). Periodicity is the READ granularity and rides here rather
-	// than on the metaobject — one register serves monthly, weekly and quarterly readings of the
-	// same data with no schema change. Absent = Month.
-	const ibValue begin  = (lSizeArray > 0 && paParams != nullptr && paParams[0] != nullptr) ? *paParams[0] : ibValue();
-	const ibValue end    = (lSizeArray > 1 && paParams != nullptr && paParams[1] != nullptr) ? *paParams[1] : ibValue();
-	const ibValue period = (lSizeArray > 2 && paParams != nullptr && paParams[2] != nullptr) ? *paParams[2] : ibValue();
-	// ⚠ (begin, end, periodicity, FILL METHOD, condition) — five slots. The condition is FIFTH; it
-	// was read from the fourth while the fill method was undeclared.
-	const ibValue fill   = (lSizeArray > 3 && paParams != nullptr && paParams[3] != nullptr) ? *paParams[3] : ibValue();
-	const ibValue filter = (lSizeArray > 4 && paParams != nullptr && paParams[4] != nullptr) ? *paParams[4] : ibValue();
+	// Periodicity is the READ granularity and rides here rather than on the metaobject — one register
+	// serves monthly, weekly and quarterly readings of the same data with no schema change.
+	// Absent = Month. The condition is FIFTH; it was read from the fourth while the fill method was
+	// undeclared, which is precisely why these slots have names now.
+	const ibValue begin  = ibRegArg(paParams, lSizeArray, ibRegBalTurnArg::Begin);
+	const ibValue end    = ibRegArg(paParams, lSizeArray, ibRegBalTurnArg::End);
+	const ibValue period = ibRegArg(paParams, lSizeArray, ibRegBalTurnArg::Periodicity);
+	const ibValue fill   = ibRegArg(paParams, lSizeArray, ibRegBalTurnArg::FillMethod);
+	const ibQueryPredicatePtr filter = ibRegFilterPredicate(m_reg, ibRegArg(paParams, lSizeArray, ibRegBalTurnArg::Filter));
 
 	// ⚠ THE DEFAULT IS THE ONE WITH THE BOUNDARIES, and that is what this table produces: each row
 	// carries the balance as its period opens and as it closes. Asking for MOVEMENTS ONLY is the
@@ -1021,20 +1141,20 @@ inline void ibAccumRegisterBalanceAndTurnoverDescriptor::FillSourceExplorer(
 // declared now so the argument is reachable and the window can show it.
 inline void ibAccumRegisterBalanceAndTurnoverDescriptor::DescribeParameters(std::vector<ibQuerySourceParameter>& out) const
 {
+	// PERIOD, CONDITION, then the refinements — see ibRegBalTurnArg for why that order.
 	ibFillRegisterIntervalParameters(m_reg, out);
+	ibAppendRegisterConditionParameter(out);
 	ibAppendRegisterPeriodicityParameter(out);
 
 	ibQuerySourceParameter fillMethod;
 	fillMethod.m_name    = wxT("FillMethod");
-	fillMethod.m_choices = { wxT("MovementsAndBoundaries"), wxT("Movements") };
+	fillMethod.m_choices = { wxT("MovementsAndBoundaries"), wxT("Movements") };   // a word, see the periodicity
 	// ⭐ LEFT OUT, THE BOUNDARIES ARE THERE. This table exists to say where the quantity STOOD as the
 	// period opened and as it closed; a reading without those is a narrower thing somebody asks for
 	// on purpose, not the natural state of it. So the empty box means movements AND boundaries, and
 	// the list is ordered the same way — what happens by default reads first.
 	fillMethod.m_default = wxT("MovementsAndBoundaries");
 	out.push_back(fillMethod);
-
-	ibAppendRegisterConditionParameter(out);
 }
 
 inline void ibAccumRegisterBalanceAndTurnoverDescriptor::FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const

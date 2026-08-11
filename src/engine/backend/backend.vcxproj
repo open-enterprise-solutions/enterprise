@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -569,6 +569,7 @@
     <ClCompile Include="metaCollection\partial\accumulationRegisterEnum.cpp" />
     <ClCompile Include="metaCollection\partial\accumulationRegisterManager.cpp" />
     <ClCompile Include="metaCollection\partial\accumulationRegisterManager_impl.cpp" />
+    <ClCompile Include="metaCollection\partial\accumulationRegisterMetadataTotals.cpp" />
     <ClCompile Include="metaCollection\partial\accumulationRegisterMetadata.cpp" />
     <ClCompile Include="metaCollection\partial\accumulationRegisterMetadataMenu.cpp" />
     <ClCompile Include="metaCollection\partial\accumulationRegisterMetadataProperty.cpp" />
@@ -651,6 +652,7 @@
     <ClCompile Include="metaCollection\partial\informationRegisterEnum.cpp" />
     <ClCompile Include="metaCollection\partial\informationRegisterManager.cpp" />
     <ClCompile Include="metaCollection\partial\informationRegisterManager_impl.cpp" />
+    <ClCompile Include="metaCollection\partial\informationRegisterMetadataSlice.cpp" />
     <ClCompile Include="metaCollection\partial\informationRegisterMetadata.cpp" />
     <ClCompile Include="metaCollection\partial\informationRegisterMetadataMenu.cpp" />
     <ClCompile Include="metaCollection\partial\informationRegisterMetadataProperty.cpp" />

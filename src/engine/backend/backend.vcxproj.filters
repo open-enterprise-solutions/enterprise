@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClInclude Include="backend.h" />
@@ -1239,6 +1239,9 @@
     <ClCompile Include="metaCollection\partial\accumulationRegisterManager_impl.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
+    <ClCompile Include="metaCollection\partial\accumulationRegisterMetadataTotals.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
     <ClCompile Include="metaCollection\partial\accumulationRegisterMetadata.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
@@ -1477,6 +1480,9 @@
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\informationRegisterManager.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\informationRegisterMetadataSlice.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\informationRegisterManager_impl.cpp">

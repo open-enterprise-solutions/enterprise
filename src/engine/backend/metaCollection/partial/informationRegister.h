@@ -4,12 +4,21 @@
 #include "commonObject.h"
 #include "informationRegisterEnum.h"
 #include "backend/query/queryable.h"   // ibComputedRegisterQueryable<TReg> — shared base for the slice / balance / turnover virtual tables
+// The register-shared lowering: ibRegFilterPredicate / ibRegFlatLeaves / ibRegCompositeIR. An
+// information register filters its dimensions by the same rule an accumulation register does, and an
+// accounting register will too — so the rule lives in one file for all three.
+#include "backend/metaCollection/partial/registerQueryLowering.h"
 
 #include <memory>
 
 class ibValueMetaObjectInformationRegister;
 class ibSliceLastQueryable;
 class ibSliceFirstQueryable;
+
+// WHICH END OF THE INTERVAL a slice takes — the last record at or before the moment, or the first at
+// or after it. The one fact that distinguishes the two slices; everything else (which way the period
+// is compared, which end of a key's periods is the boundary) is derived from it, in one place.
+enum class ibSliceEnd { Last, First };
 
 // L4 virtual-table source descriptor for the information register's slices — templated on the
 // slice companion (ibSliceLastQueryable / ibSliceFirstQueryable). Owned by the register as a
@@ -259,11 +268,10 @@ private:
 	ibPropertyEnum<ibValueEnumWriteRegisterMode>* m_propertyWriteMode = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumWriteRegisterMode>>(m_categoryData, wxT("WriteMode"), _("Write mode"), ibWriteRegisterMode::eIndependent);
 
 	// THE one place the period-slice is computed — the register's OWN SQL knowledge
-	// (table / dimensions / the MAX/MIN self-join). The slice companion queryable
-	// (ibSliceQueryable, a friend) calls it through m_reg; the period bound
-	// parameterises it: last = MAX / "<=", first = MIN / ">=". Returns the slice table.
-	ibQueryRamTable ComputeSlice(const ibValue& cPeriod, const ibValue& cFilter,
-	                             const wxString& aggregateFn, const wxString& compareOp) const;
+	// (table / dimensions / the boundary self-join). The slice companion queryable
+	// (ibSliceQueryable, a friend) calls it through m_reg, and ONE parameter says which slice this
+	// is: the aggregate and the comparison both follow from it. Returns the slice table.
+	ibQueryRamTable ComputeSlice(const ibValue& cPeriod, const ibQueryPredicatePtr& cFilter, ibSliceEnd end) const;
 
 	friend class ibSliceQueryable;
 	friend class ibValueRecordSetObjectInformationRegister;
@@ -297,38 +305,45 @@ private:
 class BACKEND_API ibSliceQueryable : public ibComputedRegisterQueryable<ibValueMetaObjectInformationRegister> {
 public:
 	ibSliceQueryable(const ibValueMetaObjectInformationRegister* reg,
-	                 const ibValue& period = ibValue(), const ibValue& filter = ibValue())
+	                 const ibValue& period = ibValue(), const ibQueryPredicatePtr& filter = nullptr)
 		: ibComputedRegisterQueryable(reg), m_period(period), m_filter(filter) {}
 
-	virtual wxString AggregateFn() const = 0;   // "MAX" (last) / "MIN" (first)
-	virtual wxString CompareOp()   const = 0;   // "<="  (last) / ">="  (first)
+	// ⭐⭐ ONE QUESTION: WHICH END OF THE INTERVAL.
+	//
+	// A slice is the record nearest a moment — the LAST one at or before it, or the FIRST one at or
+	// after it. Everything else follows from that single fact: which way the period is compared, and
+	// which end of a key's periods is the boundary.
+	//
+	// It used to travel as TWO STRINGS handed down separately (`"MAX"`/`"MIN"` and `"<="`/`">="`),
+	// re-parsed at the bottom by a chain of string comparisons. Two spellings of one fact: either
+	// could be changed without the other, and the chain quietly defaulted to `<=` for anything it did
+	// not recognise — so a typo in one of them produced a wrong slice rather than an error.
+	virtual ibSliceEnd End() const = 0;
 
 	// the slice's rows — computed from the ctor filters through the register's ComputeSlice.
 	virtual ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override;
 
 protected:
 	ibValue m_period;   // as-of date (the "filter before Where")
-	ibValue m_filter;   // dimension-name -> value structure
+	ibQueryPredicatePtr m_filter;   // the condition, already converted (ibRegFilterPredicate)
 };
 
 // last slice — most recent record on or before the date.
 class BACKEND_API ibSliceLastQueryable : public ibSliceQueryable {
 public:
 	ibSliceLastQueryable(const ibValueMetaObjectInformationRegister* reg,
-	                     const ibValue& period = ibValue(), const ibValue& filter = ibValue())
+	                     const ibValue& period = ibValue(), const ibQueryPredicatePtr& filter = nullptr)
 		: ibSliceQueryable(reg, period, filter) {}
-	virtual wxString AggregateFn() const override { return wxT("MAX"); }
-	virtual wxString CompareOp()   const override { return wxT("<="); }
+	virtual ibSliceEnd End() const override { return ibSliceEnd::Last; }
 };
 
 // first slice — earliest record on or after the date.
 class BACKEND_API ibSliceFirstQueryable : public ibSliceQueryable {
 public:
 	ibSliceFirstQueryable(const ibValueMetaObjectInformationRegister* reg,
-	                      const ibValue& period = ibValue(), const ibValue& filter = ibValue())
+	                      const ibValue& period = ibValue(), const ibQueryPredicatePtr& filter = nullptr)
 		: ibSliceQueryable(reg, period, filter) {}
-	virtual wxString AggregateFn() const override { return wxT("MIN"); }
-	virtual wxString CompareOp()   const override { return wxT(">="); }
+	virtual ibSliceEnd End() const override { return ibSliceEnd::First; }
 };
 
 // ibInfoRegisterSliceDescriptor — method bodies (the register + slice companions are complete here).
@@ -349,7 +364,10 @@ const ibBackendQueryable* ibInfoRegisterSliceDescriptor<TSlice>::CreateQueryable
 {
 	// build the call-scoped slice companion from the params (as-of period, dimension filter) and own it
 	const ibValue period = (lSizeArray > 0 && paParams != nullptr && paParams[0] != nullptr) ? *paParams[0] : ibValue();
-	const ibValue filter = (lSizeArray > 1 && paParams != nullptr && paParams[1] != nullptr) ? *paParams[1] : ibValue();
+	// The runtime value becomes the condition right here, at the door — the same converter every
+	// register uses, so everything below sees a predicate.
+	const ibQueryPredicatePtr filter = ibRegFilterPredicate(m_reg,
+		(lSizeArray > 1 && paParams != nullptr && paParams[1] != nullptr) ? *paParams[1] : ibValue());
 	// Built and KEPT by the base — the same call gives the same object back, and two slices as of two
 	// different dates in one query both stay alive (queryableFactory.h, MakeCompanion).
 	return this->template MakeCompanion<TSlice>(paParams, lSizeArray, m_reg, period, filter);

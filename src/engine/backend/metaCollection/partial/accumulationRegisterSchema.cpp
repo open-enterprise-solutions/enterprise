@@ -328,17 +328,12 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 		// a hand-written list would silently drift the moment that granularity changes — naming a
 		// column the view does not have is how a reader gets NULLs instead of an error. The suffixes
 		// must match the renderer's spelling, because that name IS the contract between the two.
-		static const std::pair<ibTotalsPeriod, const wxChar*> kUnits[] = {
-			{ ibTotalsPeriod::Second,   wxT("Second")   }, { ibTotalsPeriod::Minute,   wxT("Minute")   },
-			{ ibTotalsPeriod::Hour,     wxT("Hour")     }, { ibTotalsPeriod::Day,      wxT("Day")      },
-			{ ibTotalsPeriod::Week,     wxT("Week")     }, { ibTotalsPeriod::TenDays,  wxT("TenDays")  },
-			{ ibTotalsPeriod::Month,    wxT("Month")    }, { ibTotalsPeriod::Quarter,  wxT("Quarter")  },
-			{ ibTotalsPeriod::HalfYear, wxT("HalfYear") }, { ibTotalsPeriod::Year,     wxT("Year")     },
-		};
+		// The unit vocabulary is ibRegisterUnits() — one table, so the word this column is named after
+		// and the word a query writes for the same granularity cannot part company.
 		// The NAME loses the underscore (`PeriodWeek` is one word, the way every other field of this
 		// language is); the PHYSICAL name keeps it, because that spelling is the contract with the
 		// renderer and must not move.
-		for (const auto& u : kUnits)
+		for (const auto& u : ibRegisterUnits())
 			if (u.first > GetTotalsPeriodUnit())
 				columns.push_back(ibTempColumn(periodName + u.second,
 				                               periodField + wxT("_") + u.second,
@@ -366,7 +361,7 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 	for (const auto res : GetResourceArrayObject()) {
 		switch (shape) {
 			case ibViewShape::Balance:
-				if (withSign) add(res, wxT("Balance"));
+				if (withSign) add(res, ibRegFigure::Balance);
 				break;
 
 			// ⚠ A TURNOVER-ONLY REGISTER HAS NEITHER SIDE. Receipt and expense are what a movement's
@@ -376,21 +371,21 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 			// again under a different name.
 			case ibViewShape::Turnovers:
 				if (withSign) {
-					add(res, wxT("Receipt"));
-					add(res, wxT("Expense"));
+					add(res, ibRegFigure::Receipt);
+					add(res, ibRegFigure::Expense);
 				}
-				add(res, wxT("Turnover"));
+				add(res, ibRegFigure::Turnover);
 				break;
 
 			// The symbiosis: the turnover part AND the balance on each side of it. One row per key
 			// carrying what entered, what moved, and what remains — assembled from the turnovers
 			// surface by conditional sums, not stored anywhere.
 			case ibViewShape::BalanceAndTurnovers:
-				if (withSign) add(res, wxT("OpeningBalance"));
-				add(res, wxT("Receipt"));
-				if (withSign) add(res, wxT("Expense"));
-				add(res, wxT("Turnover"));
-				if (withSign) add(res, wxT("ClosingBalance"));
+				if (withSign) add(res, ibRegFigure::OpeningBalance);
+				add(res, ibRegFigure::Receipt);
+				if (withSign) add(res, ibRegFigure::Expense);
+				add(res, ibRegFigure::Turnover);
+				if (withSign) add(res, ibRegFigure::ClosingBalance);
 				break;
 		}
 	}

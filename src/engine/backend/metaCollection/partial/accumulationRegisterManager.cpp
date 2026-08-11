@@ -30,7 +30,7 @@ void ibValueManagerDataObjectAccumulationRegister::FillManagerMethods(ibMemberTa
 	helper.AppendFunc(wxT("CreateRecordSet"), wxT("CreateRecordSet()"));
 	helper.AppendFunc(wxT("CreateRecordKey"), wxT("CreateRecordKey()"));
 	helper.AppendFunc(wxT("Balance"), 2, wxT("Balance(period, filter...)"));
-	helper.AppendFunc(wxT("Turnovers"), 4, wxT("Turnovers(beginOfPeriod, endOfPeriod, filter...)"));
+	helper.AppendFunc(wxT("Turnovers"), 4, wxT("Turnovers(beginOfPeriod, endOfPeriod, filter, periodicity)"));
 	helper.AppendFunc(wxT("Select"), wxT("Select()"));
 	helper.AppendFunc(wxT("GetForm"), 3, wxT("GetForm(string, owner, guid)"));
 	// NOTE: no GetRecordForm here — accumulation register has no record form
@@ -53,11 +53,21 @@ bool ibValueManagerDataObjectAccumulationRegister::CallAsFunc(const long lMethod
 	case eCreateRecordKey:
 		pvarRetValue = new ibValueRecordKeyObject(m_metaObject);
 		return true;
-	case eBalance: pvarRetValue = lSizeArray > 1 ?
-		ibValueManagerDataObjectAccumulationRegister::Balance(*paParams[0], *paParams[1]) : ibValueManagerDataObjectAccumulationRegister::Balance(*paParams[0]);
+	// ⚠ BY NAMED SLOT, AND BY VALUE. This read the arguments positionally with a `lSizeArray > n ?`
+	// fork per arity — and in one branch passed `paParams[1]` where a VALUE is wanted. That compiles:
+	// ibValue has an implicit constructor from ibValue*, so the argument silently became a REFFER
+	// wrapping the pointer rather than the value itself. One reader out of two, in the same call.
+	//
+	// ibRegArg answers "absent" for a slot nobody passed, so the arity forks go too.
+	case eBalance:
+		pvarRetValue = Balance(ibRegArg(paParams, lSizeArray, ibRegBalanceArg::Period),
+		                       ibRegArg(paParams, lSizeArray, ibRegBalanceArg::Filter));
 		return true;
-	case eTurnover: pvarRetValue = lSizeArray > 2 ?
-		ibValueManagerDataObjectAccumulationRegister::Turnovers(*paParams[0], paParams[1], paParams[2]) : ibValueManagerDataObjectAccumulationRegister::Turnovers(*paParams[0], *paParams[1]);
+	case eTurnover:
+		pvarRetValue = Turnovers(ibRegArg(paParams, lSizeArray, ibRegTurnoverArg::Begin),
+		                         ibRegArg(paParams, lSizeArray, ibRegTurnoverArg::End),
+		                         ibRegArg(paParams, lSizeArray, ibRegTurnoverArg::Filter),
+		                         ibRegArg(paParams, lSizeArray, ibRegTurnoverArg::Periodicity));
 		return true;
 	case eSelect:
 		pvarRetValue = new ibValueSelectorRegisterDataObject(m_metaObject);
