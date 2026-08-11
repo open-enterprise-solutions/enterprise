@@ -87,6 +87,7 @@ add_executable(oes_tests
     test_materializationDialect.cpp
     test_databaseMaterializeBuilder.cpp
     test_periodFold.cpp
+    test_registerReadRules.cpp
     test_totalsViewParity.cpp
     test_totalsNumericParity.cpp
     test_uniqueKey.cpp

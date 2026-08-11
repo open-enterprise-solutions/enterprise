@@ -1243,6 +1243,71 @@ The window-side half (fields dropped when the arguments narrow the table, and th
 actually reaching this refusal over nested and temp sources) is in
 [query-constructor.md](query-constructor.md) §5g.
 
+## Reversal (2026-08-11) - the absence of an assumption, not a feature
+
+A reversal is a MIRROR movement with a negative amount: the receipt of 10 is undone by a receipt of
+-10, the expense of 10 by an expense of -10. Who writes that entry is the configuration's business
+(a manual operation, a specialised payroll or personnel document); what the platform owes is that
+the minus adds up honestly.
+
+It does, and there is no code for it. Nowhere in the register path is there a branch asking "is this
+a reversal?" - which is precisely why it works on both sides for free:
+
+  * the RECORD TYPE says WHICH figure a movement belongs to,
+  * the SIGN says WHAT it does to that figure.
+
+Two orthogonal things, and the delta keeps them apart by construction:
+
+```
+qty_in  += CASE WHEN rectype = 0 THEN {row}.qty ELSE 0 END
+qty_out += CASE WHEN rectype = 0 THEN 0 ELSE {row}.qty END
+```
+
+A negative amount lands in its own figure and reduces it. So a reversed expense returns to zero and
+does NOT become a receipt - which are different statements, and only the first one is true. Written
+the other way (a reversed expense recorded as an income), the stock would come back into the
+warehouse instead of the expense being unsaid, and the turnover would GROW by 20 where the answer is
+nothing.
+
+Verified rather than assumed: the type system has no "non-negative" qualifier at all (a numeric
+attribute declares precision and scale, nothing else), storage is a signed `NUMERIC(p,s)`, and there
+is no sign check on the write path. Nothing has to be relaxed for this to work; nothing may be
+tightened without breaking it.
+
+### A row with nothing to report is not a row
+
+`+10` then `-10` folds every figure of a key to zero, and a line of zeros claiming something
+happened is worse than no line: the totals would list every key ever touched. So the reading drops
+it - and the rule is **"any figure non-zero"**, never "the net is zero":
+
+| movements | Receipt | Expense | Turnover | the row |
+|---|---|---|---|---|
+| receipt 10, expense 10 | 10 | 10 | 0 | **stays** - something did happen |
+| receipt 10, receipt -10 | 0 | 0 | 0 | **goes** - it undid itself |
+
+⚠ **THE RULE BELONGS TO THE READING, NOT TO THE VIEW.** The view stores rows per period and per arm;
+the reading is what folds them into the answer, so it is the only thing that knows a figure's FINAL
+value. A `HAVING` inside the view would drop a stored zero that a movement row was about to offset,
+and keep a total that netted to zero across the two arms - wrong in both directions.
+
+It is therefore set on all three readings (`m_dropZeroRows` on the balance, turnover and
+balance-and-turnover reads) and in the RAM twins of each. The balance-and-turnover fold can only
+apply it AFTER the roll-forward: until then a row's closing balance is not known, and a key carried
+in with stock and untouched in the interval has zeros in every movement figure while being a
+perfectly good row.
+
+### The trace lives in the movements
+
+A reversal affects the figure and says nothing about itself - which is the point, and also the
+limit. To SEE that one happened, the reader expands to the recorder and the line number, and that is
+exactly what the movement arm carries (see "Below the grain"). Totals answer *how much*; only the
+movements answer *what was done and undone*.
+
+Tests: `tests/test_totalsNumericParity.cpp` (a live engine, both sides reversed, a reversal a month
+later, and a receipt met by an expense that must NOT vanish) and
+`tests/test_databaseMaterializeBuilder.cpp` (the drop renders as OR over the reportable figures,
+windowed columns excluded, `HAVING` or `WHERE` depending on whether anything merged).
+
 ## Open questions
 
 - **Seed / predefined data on Apply.** Whatever idempotent seed path

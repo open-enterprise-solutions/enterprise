@@ -485,6 +485,26 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 		keyCols.push_back(dimension->GetMetaID());
 	FoldBalancesForward(retTable, keyCols, periodId, slots, opening);
 
+	// ⭐⭐ AND A KEY WITH NOTHING TO REPORT IS NOT A ROW — the same answer the balance and the turnover
+	// readings give, said here for the third of them.
+	//
+	// ⚠ ONLY AFTER THE ROLL-FORWARD, because until then a row's closing balance is not known: a key
+	// carried in with stock and untouched in the interval has zeros in every MOVEMENT figure and is a
+	// perfectly good row. Judged one pass earlier, every one of those would have vanished.
+	//
+	// The rule is "any figure non-zero", so a reversal (`+10` then `-10`) drops the row entirely while
+	// receipt 10 against expense 10 keeps it: something happened there, and the figures say so.
+	for (long row = retTable.RowCount() - 1; row >= 0; --row) {
+		bool anyNonZero = false;
+		for (const auto& slot : slots)
+			for (const ibMetaID id : { slot.m_opening, slot.m_receipt, slot.m_expense,
+			                           slot.m_turnover, slot.m_closing })
+				if (!(retTable.GetCell(row, id).GetNumber() == ibNumber()))
+					anyNonZero = true;
+		if (!slots.empty() && !anyNonZero)
+			retTable.EraseRow(row);
+	}
+
 	return retTable;
 }
 
@@ -721,6 +741,20 @@ ibQueryRelPtr ibTurnoverQueryable::GetSourceRelation(const wxString& alias) cons
 	// filter ARE the read.
 	ibMaterializeReadSpec r;
 	r.m_view         = m_reg->GetTurnoverViewName();
+	// ⭐⭐ A REVERSAL LEAVES NOTHING TO REPORT. `+10` then `-10` on the same key folds every figure to
+	// zero, and a row of zeros is not a turnover — it is a movement that undid itself. The figure IS
+	// affected (that is what a reversal is for); what a reader must not get is a line claiming
+	// something happened. To SEE that it happened, the tree is expanded to the recorder and the line
+	// number, which is exactly what the movement arm carries.
+	//
+	// ⚠ ON THE READING, NOT ON THE VIEW. The view stores rows per period and per arm; the reading is
+	// what folds them into the answer, so it is the only place that knows a figure's FINAL value. A
+	// HAVING inside the view would drop a stored zero that a movement row was about to offset, and
+	// keep a total that netted to zero across the two arms — wrong in both directions.
+	//
+	// ⚠ THE RULE IS "ANY FIGURE NON-ZERO", not "the net is zero": receipt 10 with expense 10 nets to
+	// zero and MUST stay, because something did happen. Only an all-zero row goes.
+	r.m_dropZeroRows = true;   // the RAM oracle (ComputeTurnover) has always said this
 	r.m_periodColumn = ibRegValueField(m_reg->GetRegisterPeriod());
 	r.m_from         = ibReadRegisterBound(m_begin).m_date;
 	r.m_to           = ibReadRegisterBound(m_end).m_date;
@@ -771,6 +805,9 @@ ibQueryRelPtr ibBalanceAndTurnoverQueryable::GetSourceRelation(const wxString& a
 	r.m_to           = ibReadRegisterBound(m_end).m_date;
 	r.m_keyColumns   = ReadKeys(m_reg);
 	r.m_filters      = ReadFilters(m_reg, m_filter);
+	// Same rule as the turnover reading above — and here the opening and closing balances count as
+	// figures too, so a key carried in with a balance still reports even if nothing moved.
+	r.m_dropZeroRows = true;
 
 	// ⭐ EITHER END MAY REACH BELOW THE GRAIN — "turnovers between this document and that one" is
 	// the question, and both ends of it name a moment. Ask for whole days and the stored rows answer

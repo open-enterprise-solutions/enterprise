@@ -49,6 +49,12 @@ public:
 	                                                             const Row& r = m_rows[static_cast<size_t>(row)];
 	                                                             const auto it = r.find(id); return it != r.end() ? it->second : ibValue(); }
 	long    RowCount() const                                  { return static_cast<long>(m_rows.size()); }
+	// A row taken back out. A fold that only knows a row is empty AFTER the last pass (an opening
+	// balance rolled forward, a reversal that netted every figure to nothing) has no other way to
+	// unsay it, and building a second table to copy the survivors into would say the same thing at
+	// twice the cost.
+	void    EraseRow(long row)                                { if (row >= 0 && row < RowCount())
+	                                                                m_rows.erase(m_rows.begin() + static_cast<size_t>(row)); }
 
 private:
 	std::vector<ibQueryRamColumn> m_columns;

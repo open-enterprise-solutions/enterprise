@@ -327,3 +327,68 @@ TEST_F(TotalsFix, FractionalQuantitiesSurvive)
 	EXPECT_NEAR(Cell(MJAN, wxT("W1"), wxT("qty_in")), 0.3, 1e-9);
 	ExpectParity("fractional quantities");
 }
+
+// ⭐⭐ A REVERSAL COLLAPSES THE FIGURE INSTEAD OF GROWING IT.
+//
+// `+10` then `-10` on the same side is a storno. The sign travels with the VALUE, not with the
+// record type, so the second movement REDUCES the receipt -- it does not become an expense. Written
+// the other way the totals would report received 10 and spent 10: two events where none happened,
+// and a turnover of 20 where the answer is nothing.
+//
+// The oracle is the same one every test here uses: re-aggregate the movements and compare.
+TEST_F(TotalsFix, AReversalReducesItsOwnSideRatherThanTheOther)
+{
+	if (!ready) return;
+	Move(1, JAN,  wxT("W1"),  10, kIn);
+	Move(2, JAN2, wxT("W1"), -10, kIn);   // the storno
+
+	EXPECT_DOUBLE_EQ(Cell(MJAN, wxT("W1"), wxT("qty_in")),  0.0);
+	EXPECT_DOUBLE_EQ(Cell(MJAN, wxT("W1"), wxT("qty_out")), 0.0);   // NOT 10 -- it is not an expense
+	ExpectParity("a reversal on the receipt side");
+}
+
+// AND THE RULE IS SYMMETRIC: an EXPENSE is reversed exactly as a receipt is, on its own side. There
+// is no privileged direction here -- the record type says which figure a movement belongs to, and the
+// sign says what it does to that figure. Written asymmetrically (a reversed expense becoming a
+// receipt), stock would come back into the warehouse instead of the expense being unsaid.
+TEST_F(TotalsFix, AnExpenseIsReversedOnItsOwnSideToo)
+{
+	if (!ready) return;
+	Move(1, JAN,  wxT("W1"),  10, kIn);
+	Move(2, JAN2, wxT("W1"),  10, kOut);
+	Move(3, FEB,  wxT("W1"), -10, kOut);   // the storno of the expense
+
+	EXPECT_DOUBLE_EQ(Cell(MJAN, wxT("W1"), wxT("qty_in")),   10.0);
+	EXPECT_DOUBLE_EQ(Cell(MJAN, wxT("W1"), wxT("qty_out")),  10.0);
+	EXPECT_DOUBLE_EQ(Cell(MFEB, wxT("W1"), wxT("qty_out")), -10.0);   // NOT a receipt of 10
+	EXPECT_DOUBLE_EQ(Cell(MFEB, wxT("W1"), wxT("qty_in")),    0.0);
+	ExpectParity("a reversal on the expense side");
+}
+
+// AND IT REALLY IS ONLY THE NET THAT VANISHES. A receipt of 10 against an expense of 10 also nets
+// to zero, and that row must NOT disappear: something happened, and both figures say so. This is
+// why the drop rule reads "any figure non-zero" rather than "the net is zero".
+TEST_F(TotalsFix, ReceiptAgainstExpenseIsNotAReversal)
+{
+	if (!ready) return;
+	Move(1, JAN,  wxT("W1"), 10, kIn);
+	Move(2, JAN2, wxT("W1"), 10, kOut);
+
+	EXPECT_DOUBLE_EQ(Cell(MJAN, wxT("W1"), wxT("qty_in")),  10.0);
+	EXPECT_DOUBLE_EQ(Cell(MJAN, wxT("W1"), wxT("qty_out")), 10.0);
+	ExpectParity("a receipt met by an expense");
+}
+
+// A reversal that lands in ANOTHER period leaves both periods honest: the first still holds what it
+// held, the second carries the negative. Backdating is what makes this worth pinning -- a storno is
+// most often written after the fact.
+TEST_F(TotalsFix, AReversalInALaterPeriodStaysInThatPeriod)
+{
+	if (!ready) return;
+	Move(1, JAN, wxT("W1"),  10, kIn);
+	Move(2, FEB, wxT("W1"), -10, kIn);
+
+	EXPECT_DOUBLE_EQ(Cell(MJAN, wxT("W1"), wxT("qty_in")),  10.0);
+	EXPECT_DOUBLE_EQ(Cell(MFEB, wxT("W1"), wxT("qty_in")), -10.0);
+	ExpectParity("a reversal a month later");
+}

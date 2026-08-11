@@ -440,6 +440,64 @@ TEST(MaterializeRenderer, AMovementOnlyColumnIsNullOnTheStoredArm) {
 }
 
 // =============================================================================
+// A ROW WITH NOTHING TO REPORT IS NOT A ROW — and this is what a reversal looks like.
+//
+// A storno is a movement entered with the sign turned round: receipt +10, then receipt -10. It does
+// not ADD to the other side (that would grow the turnover by 20 and report two events); it reduces
+// the figure it belongs to, and the key folds back to nothing. What must not survive is a line of
+// zeros claiming something happened -- the figure is affected, and to SEE that it happened the
+// reader expands to the recorder and the line number.
+//
+// The rule is "ANY figure non-zero", not "the net is zero": receipt 10 against expense 10 nets to
+// zero and MUST stay, because something did happen there.
+// =============================================================================
+
+TEST(MaterializeRenderer, ARowSurvivesIfAnyFigureIsNonZero) {
+    Fixture f;
+    f.spec.m_views[0].m_dropZeroRows = true;
+    const wxString text = CreateText(RenderSqlite(f.spec));
+
+    // OR, never AND: an item with quantity 0 and amount 5 still reports.
+    EXPECT_TRUE(text.Contains(wxT(" OR ")));
+    EXPECT_TRUE(text.Contains(wxT("<> 0")));
+    // One test per reportable figure -- the plain sums and the difference.
+    EXPECT_EQ(3, CountOf(text, wxT("<> 0")));
+}
+
+TEST(MaterializeRenderer, NoZeroRowTestIsEmittedWhenNotAskedFor) {
+    Fixture f;   // m_dropZeroRows is false in the fixture
+    const wxString text = CreateText(RenderSqlite(f.spec));
+    EXPECT_FALSE(text.Contains(wxT("<> 0")));
+}
+
+// A WINDOWED FIGURE CANNOT BE TESTED HERE -- a window may not appear in HAVING, and a running
+// balance is one. Counting it in would make the whole bundle unloadable rather than merely wrong.
+TEST(MaterializeRenderer, TheRunningBalanceIsLeftOutOfTheZeroRowTest) {
+    Fixture f;
+    f.spec.m_views[0].m_dropZeroRows = true;
+    const wxString text = CreateText(RenderSqlite(f.spec));
+
+    const int windows = CountOf(text, wxT("OVER ("));
+    EXPECT_GT(windows, 0);                        // the running sums are there...
+    EXPECT_FALSE(text.Contains(wxT(") <> 0 OR SUM(qty_in - qty_out) OVER")));   // ...and not in the test
+}
+
+// Grouped, the test is a HAVING; ungrouped, the same test is a WHERE. One rule, and the clause it
+// belongs in follows from whether anything actually merged.
+TEST(MaterializeRenderer, TheZeroRowTestGoesWhereTheGroupingPutIt) {
+    Fixture grouped;
+    grouped.spec.m_views[0].m_dropZeroRows = true;
+    grouped.spec.m_views[0].m_withPeriod   = false;   // periodless collapses -- see PeriodlessViewCollapsesAndSums
+    EXPECT_TRUE(CreateText(RenderSqlite(grouped.spec)).Contains(wxT("HAVING ")));
+
+    Fixture flat;
+    flat.spec.m_views[0].m_dropZeroRows = true;       // unsplit + per period: nothing merges
+    const wxString text = CreateText(RenderSqlite(flat.spec));
+    EXPECT_TRUE (text.Contains(wxT("WHERE ")));
+    EXPECT_FALSE(text.Contains(wxT("HAVING ")));
+}
+
+// =============================================================================
 // ibNextPeriodStart — where a stored row stops covering.
 //
 // The twin of ibTruncateToPeriod, and the reason a reading whose lower boundary falls INSIDE a
