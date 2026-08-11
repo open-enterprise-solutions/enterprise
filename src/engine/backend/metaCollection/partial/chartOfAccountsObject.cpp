@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "chartOfAccounts.h"
+#include "backend/system/value/valuePointInTime.h"   // the moment an object can be asked for
 #include "backend/metaData.h"
 #include "backend/appData.h"
 #include "backend/session/session.h"
@@ -80,12 +81,18 @@ const ibSourceExplorer* ibValueRecordDataObjectChartOfAccounts::GetSourceExplore
 // WriteObject / DeleteObject inherited from
 // ibValueRecordDataObjectHierarchyRef — see commonObjectRefQuery.cpp.
 
-enum Func { enIsNew = 0, enCopy, enFill, enWrite, enDelete, enModified, enGetForm, enGetTemplate, enGetMetadata, enLock, enUnlock };
+enum Func { enPointInTime, enIsNew, enCopy, enFill, enWrite, enDelete, enModified, enGetForm, enGetTemplate, enGetMetadata, enLock, enUnlock };
 
 void ibValueRecordDataObjectChartOfAccounts::FillMethods(ibMemberTable& helper) const
 {
 	// Own methods; the data members come from the base FillDataMembers. Order is
 	// load-bearing — CallAsFunc switches on the method index (enIsNew = 0 …).
+	// ⭐ THE MOMENT, ON EVERY REFERENCE-BASED FAMILY. Being addressed by a reference is the whole
+	// qualification: an element of this kind has a place in the data's history, so it can be named
+	// as a moment -- for a period boundary, for an ordering, for "everything up to THIS one". The
+	// families with a date of their own add it; the rest carry the reference alone, which is an
+	// identity with no point on a timeline rather than a date invented to fill the slot.
+	helper.AppendFunc(wxT("PointInTime"), wxT("PointInTime()"));
 	helper.AppendFunc(wxT("IsNew"), wxT("IsNew()"));
 	helper.AppendFunc(wxT("Copy"), wxT("Copy()"));
 	helper.AppendFunc(wxT("Fill"), 1, wxT("Fill(object)"));
@@ -127,6 +134,9 @@ bool ibValueRecordDataObjectChartOfAccounts::CallAsFunc(const long lMethodNum, i
 	case enFill: FillObject(*paParams[0]); return true;
 	case enWrite: WriteObject(); return true;
 	case enDelete: DeleteObject(); return true;
+	case enPointInTime:
+		pvarRetValue = new ibValuePointInTime(wxDateTime(), GetReference());
+		return true;
 	case enModified: pvarRetValue = m_objModified; return true;
 	case Func::enGetForm: pvarRetValue = GetFormValue(lSizeArray > 0 ? paParams[0]->GetString() : wxString(wxEmptyString), lSizeArray > 1 ? paParams[1]->ConvertToType<ibBackendControlFrame>() : nullptr); return true;
 	case Func::enGetTemplate: pvarRetValue = m_metaObject->GetTemplate(paParams[0]->GetString()); return true;

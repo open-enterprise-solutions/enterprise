@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "chartOfCharacteristicTypes.h"
+#include "backend/system/value/valuePointInTime.h"   // the moment an object can be asked for
 #include "backend/metaData.h"
 
 #include "backend/appData.h"
@@ -100,7 +101,8 @@ const ibSourceExplorer* ibValueRecordDataObjectChartOfCharacteristicTypes::GetSo
 // ibValueRecordDataObjectHierarchyRef — see commonObjectRefQuery.cpp.
 
 enum Func {
-	enIsNew = 0,
+	enPointInTime,
+	enIsNew,
 	enCopy,
 	enFill,
 	enWrite,
@@ -121,6 +123,12 @@ void ibValueRecordDataObjectChartOfCharacteristicTypes::FillMethods(ibMemberTabl
 {
 	// Own methods; the data members come from the base FillDataMembers. Order is
 	// load-bearing — CallAsFunc switches on the method index (enIsNew = 0 …).
+	// ⭐ THE MOMENT, ON EVERY REFERENCE-BASED FAMILY. Being addressed by a reference is the whole
+	// qualification: an element of this kind has a place in the data's history, so it can be named
+	// as a moment -- for a period boundary, for an ordering, for "everything up to THIS one". The
+	// families with a date of their own add it; the rest carry the reference alone, which is an
+	// identity with no point on a timeline rather than a date invented to fill the slot.
+	helper.AppendFunc(wxT("PointInTime"), wxT("PointInTime()"));
 	helper.AppendFunc(wxT("IsNew"), wxT("IsNew()"));
 	helper.AppendFunc(wxT("Copy"), wxT("Copy()"));
 	helper.AppendFunc(wxT("Fill"), 1, wxT("Fill(object)"));
@@ -193,6 +201,9 @@ bool ibValueRecordDataObjectChartOfCharacteristicTypes::CallAsFunc(const long lM
 		return true;
 	case enDelete:
 		DeleteObject();
+		return true;
+	case enPointInTime:
+		pvarRetValue = new ibValuePointInTime(wxDateTime(), GetReference());
 		return true;
 	case enModified:
 		pvarRetValue = m_objModified;

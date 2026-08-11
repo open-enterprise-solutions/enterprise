@@ -54,6 +54,7 @@ add_executable(oes_tests
     test_metadataTree.cpp
     test_commonAttribute.cpp
     test_dataNode.cpp
+    test_pointInTime.cpp
     test_jsonProvider.cpp
     test_queryRenderer.cpp
     test_queryLifecycle.cpp

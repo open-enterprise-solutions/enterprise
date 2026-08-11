@@ -5,6 +5,7 @@
 
 #include "document.h"
 #include "backend/metaData.h"
+#include "backend/system/value/valuePointInTime.h"   // the moment an object can be asked for
 
 #include "backend/appData.h"
 #include "backend/session/session.h"
@@ -139,6 +140,7 @@ const ibMetaDescription* ibValueRecordDataObjectDocument::GetRecordDescription()
 ///////////////////////////////////////////////////////////////////////////////
 
 enum Func {
+	ePointInTime,
 	eIsNew,
 	eCopy,
 	eFill,
@@ -156,6 +158,10 @@ void ibValueRecordDataObjectDocument::FillMethods(ibMemberTable& helper) const
 {
 	// Document's own methods; the data members come from the base FillDataMembers.
 	// Order is load-bearing — CallAsFunc switches on the method index (eIsNew = 0 …).
+	// ⭐ THE SAME MOMENT THE REFERENCE VENDS. An object is asked when it is exactly as its reference
+	// is, and both answer with the pair already assembled -- one question, one answer, whichever
+	// hand it is asked from.
+	helper.AppendFunc(wxT("PointInTime"), wxT("PointInTime()"));
 	helper.AppendFunc(wxT("IsNew"), wxT("IsNew()"));
 	helper.AppendFunc(wxT("Copy"), wxT("Copy()"));
 	helper.AppendFunc(wxT("Fill"), 1, wxT("Fill(object : any)"));
@@ -234,6 +240,17 @@ bool ibValueRecordDataObjectDocument::CallAsFunc(const long lMethodNum, ibValue&
 	case eDelete:
 		DeleteObject();
 		return true;
+	case ePointInTime: {
+		ibValueMetaObjectDocument* metaDocRef = nullptr;
+		wxDateTime when;
+		if (m_metaObject->ConvertToValue(metaDocRef) && metaDocRef != nullptr) {
+			const ibValue& date = GetValueByMetaID(*metaDocRef->GetDocumentDate());
+			if (date.GetType() == ibValueTypes::TYPE_DATE)
+				when = date.GetDateTime();
+		}
+		pvarRetValue = new ibValuePointInTime(when, GetReference());
+		return true;
+	}
 	case eModified:
 		pvarRetValue = m_objModified;
 		return true;

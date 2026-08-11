@@ -42,6 +42,11 @@ void ibValueMetaObjectRecordDataMutableRef::FillSourceExplorer(ibSourceDataObjec
 		const bool hidden = IsDataReference(id) || IsDataDeletionMark(id) || IsDataVersion(id);
 		explorer.AppendColumn(a, /*enabled*/true, /*visible*/ !hidden);
 	}
+
+	// ⭐ THE MOMENT, APPENDED BY HAND — and that is the whole point of it. It is deliberately absent
+	// from the generic list (the list that becomes columns, object members and form fields), so this
+	// is the ONE place it surfaces: the field tree a query is written against.
+	explorer.AppendColumn(GetPointInTime(), /*enabled*/true, /*visible*/true);
 }
 
 // CATALOG variant — reference / deletion mark / data version / predefined name / parent / is-folder hidden;
@@ -55,6 +60,9 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::FillSourceExplorer(ibSource
 		                 || IsDataPredefinedName(id) || IsDataParent(id) || IsDataFolder(id);
 		explorer.AppendColumn(a, /*enabled*/true, /*visible*/ !hidden);
 	}
+
+	// Same as the flat variant above — the moment reaches the query and nothing else.
+	explorer.AppendColumn(GetPointInTime(), /*enabled*/true, /*visible*/true);
 }
 
 // SELECT value — a record's picker value = its REFERENCE cell, read from the row's DEFAULT columns by the

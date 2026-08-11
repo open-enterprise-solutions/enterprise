@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "reference.h"
+#include "backend/system/value/valuePointInTime.h"   // the moment a reference can be asked for
 #include "backend/metaData.h"
 #include "backend/objCtor.h"   // ibCtorMetaValueType::GetMetaTypeCtor / ibCtorObjectMetaType_Reference — ConvertToMetaIds
 #include "backend/metaCollection/partial/commonObject.h"
@@ -404,7 +405,8 @@ enum Func {
 	enIsEmpty = 0,
 	enGetMetadata,
 	enGetObject,
-	enGetGuid
+	enGetGuid,
+	enPointInTime
 };
 
 void ibValueReferenceDataObject::FillMembers(ibMemberTable& helper) const
@@ -416,6 +418,11 @@ void ibValueReferenceDataObject::FillMembers(ibMemberTable& helper) const
 		helper.AppendFunc(wxT("GetMetadata"), wxT("GetMetadata()"));
 		helper.AppendFunc(wxT("GetObject"), wxT("GetObject()"));
 		helper.AppendFunc(wxT("GetGuid"), wxT("GetGuid()"));
+		// ⭐ THE MOMENT COMES WITH THE REFERENCE, for the families that can HAVE one: a catalog
+		// element, a document, a chart. It arrives already assembled, so nobody writes
+		// `New PointInTime(doc.Date, doc.Ref)` by hand and gets the pair wrong. An enumeration value
+		// is not offered it at all — it has no place in the data's history to point at.
+		helper.AppendFunc(wxT("PointInTime"), wxT("PointInTime()"));
 
 		wxString objectName;
 
@@ -513,6 +520,17 @@ bool ibValueReferenceDataObject::CallAsFunc(const long lMethodNum, ibValue& pvar
 	case enGetGuid:
 		pvarRetValue = new ibValueGuid(m_objGuid);
 		return true;
+	case enPointInTime: {
+		// A REFERENCE'S MOMENT IS ITS IDENTITY; the DATE is added by the family that has one (the
+		// document overrides this method with its own date). No virtual asking every class "do you
+		// have a date" and no list of the ones that do -- the two classes each answer for themselves.
+		//
+		// It carries THIS reference, not a copy: `GetValue(true)` is the verb for handing out this
+		// very value, where a second ibValueReferenceDataObject over the same (type, guid) would be
+		// a second object for one identity -- the thing a reference exists to prevent.
+		pvarRetValue = new ibValuePointInTime(wxDateTime(), GetValue(true));
+		return true;
+	}
 	}
 
 	return false;

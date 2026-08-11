@@ -605,6 +605,12 @@
     <ClInclude Include="system\value\valuePoint.h">
       <Filter>system\value</Filter>
     </ClInclude>
+    <ClInclude Include="system\value\valuePointInTime.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
+    <ClInclude Include="system\value\valueBoundary.h">
+      <Filter>system\value</Filter>
+    </ClInclude>
     <ClInclude Include="system\value\valueSize.h">
       <Filter>system\value</Filter>
     </ClInclude>
@@ -1666,6 +1672,12 @@
       <Filter>system\value</Filter>
     </ClCompile>
     <ClCompile Include="system\value\valuePoint.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
+    <ClCompile Include="system\value\valuePointInTime.cpp">
+      <Filter>system\value</Filter>
+    </ClCompile>
+    <ClCompile Include="system\value\valueBoundary.cpp">
       <Filter>system\value</Filter>
     </ClCompile>
     <ClCompile Include="system\value\valueSize.cpp">

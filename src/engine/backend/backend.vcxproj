@@ -351,6 +351,8 @@
     <ClInclude Include="system\value\valueOLE.h" />
     <ClInclude Include="system\value\valuePicture.h" />
     <ClInclude Include="system\value\valuePoint.h" />
+    <ClInclude Include="system\value\valuePointInTime.h" />
+    <ClInclude Include="system\value\valueBoundary.h" />
     <ClInclude Include="system\value\valueSize.h" />
     <ClInclude Include="system\value\valueSpreadsheet.h" />
     <ClInclude Include="system\value\valueDatabase.h" />
@@ -792,6 +794,8 @@
     <ClCompile Include="system\value\valueOLE.cpp" />
     <ClCompile Include="system\value\valuePicture.cpp" />
     <ClCompile Include="system\value\valuePoint.cpp" />
+    <ClCompile Include="system\value\valuePointInTime.cpp" />
+    <ClCompile Include="system\value\valueBoundary.cpp" />
     <ClCompile Include="system\value\valueSize.cpp" />
     <ClCompile Include="system\value\valueSpreadsheet.cpp" />
     <ClCompile Include="system\value\valueDatabaseLayer.cpp" />

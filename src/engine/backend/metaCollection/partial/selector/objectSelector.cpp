@@ -135,7 +135,7 @@ void ibValueSelectorRecordDataObject::FillMembers(ibMemberTable& helper) const
 		);
 	}
 
-	helper.AppendProp(wxT("Reference"), m_metaObject->GetMetaID());
+	helper.AppendProp(wxT("Ref"), m_metaObject->GetMetaID());
 }
 
 bool ibValueSelectorRecordDataObject::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)

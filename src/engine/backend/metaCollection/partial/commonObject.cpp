@@ -244,7 +244,21 @@ ibValueMetaObjectRecordDataRef::~ibValueMetaObjectRecordDataRef()
 bool ibValueMetaObjectRecordDataRef::ReadData(const ibDataNode& node)
 {
 	m_propertyQuickChoice->ReadNodeValue(node.GetProperty(m_propertyQuickChoice->GetName()));
-	m_propertyAttributeReference->ReadNodeValue(node.GetProperty(m_propertyAttributeReference->GetName()));
+
+	// ⭐⭐ THE NAME A PROPERTY IS STORED UNDER IS ITS KEY, NOT ITS LABEL.
+	//
+	// This field is called `Ref` now — one spelling for what a script writes, a query names and the
+	// field tree shows. But every configuration saved before that keeps the node under the OLD word,
+	// and a load that only asks for the new one finds nothing: the attribute stays in its default
+	// state, metaID and all, and the first symptom is a query against a column called `fld0_RRRef`
+	// that no table has. Two floors from the rename, in the server's words.
+	//
+	// So the old name is still READ and only the new one is WRITTEN: opening a configuration
+	// migrates it, saving it settles the migration, and nobody is asked to do anything.
+	ibDataValue reference = node.GetProperty(m_propertyAttributeReference->GetName());
+	if (reference.IsEmpty())
+		reference = node.GetProperty(wxT("Reference"));   // saved before the rename
+	m_propertyAttributeReference->ReadNodeValue(reference);
 	return true;
 }
 

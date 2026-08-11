@@ -198,6 +198,46 @@ Vended by metaobjects rather than declared in `system/value/`:
 `ExternalManagerReport` is the external-report entry point
 ([metadata-tree.md § 5.2](metadata-tree.md)).
 
+### 2.12 Position in time — `PointInTime` · `Boundary` (+ the `BoundaryKind` enumeration)
+
+Two values that exist so a reading can say WHERE it stops with the precision the domain uses.
+
+**`PointInTime(date [, reference])`** — a date and, optionally, the record sitting at it. A date
+alone cannot separate three documents written the same day, and the whole of accounting is built on
+"everything up to THIS document", so the moment carries both and ORDERS by the pair: the date first,
+the reference as the tiebreak within it.
+
+The order is one method — `CompareValueLS`. That is the primitive the comparison operators, the RAM
+sort floor and the register cut's tuple all go through, so a moment orders identically in a script,
+in a sorted collection and in the SQL a boundary lowers to. Two rules make it usable as a boundary:
+
+- an **unset** moment is the smallest, exactly as NULL is;
+- a moment with **no reference** precedes everything recorded in its instant — it IS the instant,
+  and nothing in it has happened yet. That is what lets a bare date open an interval without
+  dropping the day's first document.
+
+Compared with a plain DATE, the date alone decides: a date is a moment whose reference is not set,
+so the two are ONE order rather than two that could disagree. EQUALITY stays type-strict — a date is
+ordered WITH a moment and is not one.
+
+It is vended, not assembled: every reference-addressed family answers `PointInTime()` (a catalog
+element, a document, a chart) with the value already set, so nobody writes
+`New PointInTime(doc.Date, doc.Ref)` by hand and gets the pair wrong. Families with no date of their
+own carry the reference alone — an identity with no point on a timeline, which is honest where an
+invented date would not be. An enumeration value has none at all: it is a name in the configuration,
+identical before and after every write.
+
+**`Boundary(position, BoundaryKind.Including | .Excluding)`** — a position plus which side of it is
+meant. The position is a date or a moment, so a boundary adds nothing to WHERE a reading stops and
+only answers whether the row sitting exactly there is in or out. `Excluding` is what makes "the
+balance BEFORE this document" expressible; without it the only way to ask is to name the document
+before it, which the caller usually does not know and which stops being the right answer the moment
+somebody inserts a movement between them.
+
+Every register boundary reads through one function, so `Balance(date)`, `Balance(moment)` and
+`Balance(Boundary(moment, Excluding))` travel one road
+([register-totals-strategy.md](register-totals-strategy.md) § "Below the grain").
+
 ---
 
 ## 3. Honest remainder

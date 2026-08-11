@@ -81,7 +81,6 @@ class BACKEND_API ibValueRecordSetObject;
 // the global using-alias makes the bare name resolve, so no forward-decl here.
 
 //special names
-#define guidName wxT("uuid")
 
 //********************************************************************************************
 //*                                  Factory & metaData                                      *
@@ -418,6 +417,7 @@ private:
 class BACKEND_API ibValueMetaObjectRecordDataRef : public ibValueMetaObjectRecordData, public ibBackendQueryableHolder {
 	public:
 
+
 	// A REFERENCE AND A MANAGER — the least a reference-bearing metatype has.
 	// Every one of them registers both (OnBeforeRunMetaObject: registerReference
 	// + registerManager), and an ENUMERATION stops exactly here: it has
@@ -569,7 +569,7 @@ protected:
 	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
 	ibPropertyCategory* m_categoryPresentation = ibPropertyObject::CreatePropertyCategory(wxT("Presentation"), _("Presentation"));
 	ibPropertyBoolean* m_propertyQuickChoice = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryPresentation, wxT("QuickChoice"), _("Quick choice"), false);
-	ibPropertyContainer<>* m_propertyAttributeReference = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateSpecialType(wxT("Reference"), _("Reference"), wxEmptyString, ibValue::GetIDByVT(ibValueTypes::TYPE_EMPTY)));
+	ibPropertyContainer<>* m_propertyAttributeReference = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateSpecialType(wxT("Ref"), _("Ref"), wxEmptyString, ibValue::GetIDByVT(ibValueTypes::TYPE_EMPTY)));
 
 	// the L4 source descriptor — CONTAINS the vended queryable (stable for this metaobject's
 	// life) and is registered with the factory on run / close. GetQueryable() forwards to it.
@@ -687,6 +687,8 @@ public: \
 //meta object with reference and deletion mark
 class BACKEND_API ibValueMetaObjectRecordDataMutableRef : public ibValueMetaObjectRecordDataRef {
 public:
+
+
 	// …AN OBJECT AND A SELECTION. What separates a catalog or a document from an
 	// enumeration: its rows are stored, so they are opened and edited
 	// (registerObject) and they can be walked (registerSelection). An enumeration
@@ -726,6 +728,23 @@ public:
 
 	ibValueMetaObjectAttributePredefined* GetDataDeletionMark() const { return m_propertyAttributeDeletionMark->GetMetaObject(); }
 	bool IsDataDeletionMark(const ibMetaID& id) const { return id == (*m_propertyAttributeDeletionMark)->GetMetaID(); }
+
+	// ⭐⭐ THE POINT IN TIME — a registered member of this layer, and of this layer only.
+	//
+	// Declared here because everything stored and editable — a catalog element, a document, a chart
+	// — sits somewhere in the data's history and can be named as a moment. An ENUMERATION value
+	// cannot: it is a name in the configuration, identical before and after every write.
+	// Enumerations derive from ibValueMetaObjectRecordDataRef directly, so they are outside this by
+	// CONSTRUCTION rather than by a check somebody has to remember to write.
+	//
+	// ⚠ IT REACHES THE QUERY AND NOTHING ELSE. Deliberately absent from
+	// FillArrayObjectByPredefinedAttribute, which is the list that becomes columns, object members
+	// and form fields — so this attribute gets no storage, appears on no form, and is not part of
+	// what a record is. It is a way to ASK, not a thing to keep: the date and the reference it is
+	// built from are already stored, and storing their pair again would be two answers to one
+	// question.
+	ibValueMetaObjectAttributePredefined* GetPointInTime() const { return m_propertyAttributePointInTime->GetMetaObject(); }
+	bool IsPointInTime(const ibMetaID& id) const { return id == (*m_propertyAttributePointInTime)->GetMetaID(); }
 
 	// DOCUMENT variant — reference / deletion mark / data version hidden; number / date / posted / attributes
 	// visible. Fills its columns directly by its own predicates. Body in commonObjectAction.cpp.
@@ -821,6 +840,9 @@ protected:
 	ibPropertyGeneration* m_propertyGeneration = ibPropertyObject::CreateProperty<ibPropertyGeneration>(m_categoryData, wxT("ListGeneration"), _("List generation"));
 	ibPropertyContainer<>* m_propertyAttributeDataVersion = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateString(wxT("DataVersion"), _("Data version"), wxEmptyString, 12, ibItemMode_Folder_Item));
 	ibPropertyContainer<>* m_propertyAttributeDeletionMark = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateBoolean(wxT("DeletionMark"), _("Deletion mark"), wxEmptyString));
+	// The moment — registered like the mark above, typed as the PointInTime value. See GetPointInTime
+	// for why it never joins the predefined list.
+	ibPropertyContainer<>* m_propertyAttributePointInTime = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateSpecialType(wxT("PointInTime"), _("Point in time"), wxEmptyString, value_to_clsid(wxT("PointInTime"))));
 
 	// Read/Write/Delete role triplet emitted by IB_DECLARE_RWD_ROLE_TRIPLET
 	// above (in the public access region).
