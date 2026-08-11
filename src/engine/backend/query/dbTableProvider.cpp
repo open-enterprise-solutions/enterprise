@@ -75,11 +75,78 @@ bool IsReferenceValued(const ibBackendQueryColumn* col)
 // catalog it IS the uuid column. No GetRowKeyColumn: the row-key is just the identity tail now,
 // the same real-column mechanism a register's composite identity already rides. A register has a
 // composite identity and never takes the single-key (row-key condition / key-IN) paths.
-wxString RowKeyField(const ibBackendQueryable* queryable)
+const ibBackendQueryColumn* RowKeyColumn(const ibBackendQueryable* queryable)
 {
 	const std::vector<ibQuerySortItem> ids = queryable->GetIdentitySort();
-	return (ids.empty() || ids.back().m_col == nullptr) ? wxString()
-	                                                    : FirstSqlFieldOfColumn(ids.back().m_col);
+	return ids.empty() ? nullptr : ids.back().m_col;
+}
+
+wxString RowKeyField(const ibBackendQueryable* queryable)
+{
+	const ibBackendQueryColumn* key = RowKeyColumn(queryable);
+	return key == nullptr ? wxString() : FirstSqlFieldOfColumn(key);
+}
+
+// Is this column the raw GUID key — a row's uuid, stored as the same sixteen bytes a reference key
+// is (see RawType in columnLayout.cpp)?
+bool IsRawGuidColumn(const ibBackendQueryColumn* col)
+{
+	return col != nullptr && col->IsRawColumn()
+	    && static_cast<const ibRawDBColumn*>(col)->GetRawType() == ibRawDBColumn::RawType::Guid;
+}
+
+// ⭐⭐ A VALUE COMPARED AGAINST A COLUMN IS SPELLED IN THAT COLUMN'S FORM.
+//
+// A guid reaches this layer as TEXT — that is how a script writes it and how the runtime carries it
+// — while the column stores sixteen bytes. Handed over as text it would compare 36 characters
+// against a binary key and match NOTHING: not an error, not an empty result with a reason, just a
+// row that is there and is never found. So the const is built FOR THE COLUMN, in one helper every
+// comparison goes through, rather than at each site remembering which columns are keys.
+//
+// The reference twin of this is ReferenceKeyBlob further down; both produce the same storage byte
+// order, which is what makes `uuid = <ref>_RRRef` a real binary compare.
+// Encode a REFERENCE value into its physical _RRRef blob for a keyset compare — SELF-CONTAINED, no metadata:
+// the target metaID is the clsid BODY (dynamic reference clsid = kind|metaID), the guid comes off the value's
+// own reference object, laid out + byte-swapped EXACTLY as the stored _RRRef (mirrors BuildParentRefPredicate).
+// So `_RRRef OP <blob>` is a real BINARY compare — same bytes the column stores, same order ORDER BY _RRRef
+// sorts. Returns nullptr when v is not a reference (a scalar rides inline).
+ibQueryExprPtr ReferenceKeyBlob(const ibValue& v)
+{
+	ibValueReferenceDataObject* refObj = nullptr;
+	if (!v.ConvertToValue(refObj) || refObj == nullptr)
+		return nullptr;
+	// The _RRRef blob is the PURE guid (type is the _RTRef column, compared separately if a query needs it —
+	// but a globally-unique guid identifies the object on its own). Write the guid in the field-normalized
+	// storage byte order so `_RRRef OP blob` agrees byte-for-byte with the server's ORDER BY _RRRef.
+	ibReference ref{ ibGuidImpl{} };
+	const auto& be = refObj->GetGuid().GetGuid().bytes();
+	auto* p = reinterpret_cast<unsigned char*>(&ref.m_guid);
+	p[0] = be[3]; p[1] = be[2]; p[2] = be[1]; p[3] = be[0];
+	p[4] = be[5]; p[5] = be[4];
+	p[6] = be[7]; p[7] = be[6];
+	for (int i = 8; i < 16; ++i) p[i] = be[i];
+	return ibConstBlob(&ref, sizeof(ibReference));
+}
+
+ibQueryExprPtr ColumnConst(const ibBackendQueryColumn* col, const ibValue& v)
+{
+	if (col == nullptr || !col->IsRawColumn())
+		return ibConst(v);
+
+	const ibRawDBColumn::RawType raw = static_cast<const ibRawDBColumn*>(col)->GetRawType();
+
+	// A KEY column and a single-target REFERENCE column store the same thing — sixteen bytes of
+	// identity — so both compare as bytes. The value may arrive either way: a reference (a script
+	// wrote `WHERE Section.Ref = doc`) or a guid's text (a row key handed round as a string), and
+	// both spell the same key.
+	if (raw != ibRawDBColumn::RawType::Guid && raw != ibRawDBColumn::RawType::Reference)
+		return ibConst(v);
+
+	if (ibQueryExprPtr fromReference = ReferenceKeyBlob(v))
+		return fromReference;
+
+	const ibReference key{ ibGuid(v.GetString()) };
+	return ibConstBlob(&key, sizeof(ibReference));
 }
 
 // The dot-walk self-reference field — the Reference-typed (_RRRef pure guid blob) physical field
@@ -625,10 +692,11 @@ ibQueryExprPtr ibMetaIRBuilder::BuildConditionExpr(const ibBackendQueryable* que
 		// .WhereKeyIn(), one IN instead of an OR-chain), else the column's first physical field. An EMPTY set
 		// falls through here ON PURPOSE — L2-1 already renders `x IN ()` as `1 = 0`
 		// (QueryRenderer.In_EmptyListIsConstantFalse), so "matches nothing" stays decided in ONE place.
+		const ibBackendQueryColumn* inCol = c.m_col != nullptr ? c.m_col : RowKeyColumn(queryable);
 		std::vector<ibQueryExprPtr> vals;
 		vals.reserve(c.m_values.size());
 		for (const ibValue& v : c.m_values)
-			vals.push_back(ibConst(v));
+			vals.push_back(ColumnConst(inCol, v));
 		return ibIn(ibColQ(mainQual, c.m_col == nullptr ? RowKeyField(queryable) : FirstSqlFieldOfColumn(c.m_col)),
 		            std::move(vals));
 	}
@@ -644,7 +712,8 @@ ibQueryExprPtr ibMetaIRBuilder::BuildConditionExpr(const ibBackendQueryable* que
 	if (c.m_col == nullptr) {
 		// Row-key condition — a lookup by the row's own key (uuid, the identity tail), never
 		// LIKE. No GetRowKeyColumn: the key field comes off GetIdentitySort like any column.
-		return ibBinOp(op, ibColQ(mainQual, RowKeyField(queryable)), ibConst(c.m_value));
+		return ibBinOp(op, ibColQ(mainQual, RowKeyField(queryable)),
+		               ColumnConst(RowKeyColumn(queryable), c.m_value));
 	}
 	if (op == ibQueryBinOp::Eq && !c.m_col->IsRawColumn()) {
 		// METADATA-column equality — decompose across ALL the column's physical fields (composite
@@ -672,7 +741,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildConditionExpr(const ibBackendQueryable* que
 	}
 	// RAW column (direct single physical field) OR ordered / inequality / LIKE compare —
 	// the field name derives from the column itself (physical, type), no attribute needed.
-	return ibBinOp(op, ibColQ(mainQual, FirstSqlFieldOfColumn(c.m_col)), ibConst(c.m_value));
+	return ibBinOp(op, ibColQ(mainQual, FirstSqlFieldOfColumn(c.m_col)), ColumnConst(c.m_col, c.m_value));
 }
 
 ibQueryExprPtr ibMetaIRBuilder::BuildFilterPredicate(const ibBackendQueryable* queryable,
@@ -931,29 +1000,6 @@ std::vector<ibQuerySortKey> ibMetaIRBuilder::BuildSortKeys(const ibBackendQuerya
 	return keys;
 }
 
-// Encode a REFERENCE value into its physical _RRRef blob for a keyset compare — SELF-CONTAINED, no metadata:
-// the target metaID is the clsid BODY (dynamic reference clsid = kind|metaID), the guid comes off the value's
-// own reference object, laid out + byte-swapped EXACTLY as the stored _RRRef (mirrors BuildParentRefPredicate).
-// So `_RRRef OP <blob>` is a real BINARY compare — same bytes the column stores, same order ORDER BY _RRRef
-// sorts. Returns nullptr when v is not a reference (a scalar rides inline).
-static ibQueryExprPtr ReferenceKeyBlob(const ibValue& v)
-{
-	ibValueReferenceDataObject* refObj = nullptr;
-	if (!v.ConvertToValue(refObj) || refObj == nullptr)
-		return nullptr;
-	// The _RRRef blob is the PURE guid (type is the _RTRef column, compared separately if a query needs it —
-	// but a globally-unique guid identifies the object on its own). Write the guid in the field-normalized
-	// storage byte order so `_RRRef OP blob` agrees byte-for-byte with the server's ORDER BY _RRRef.
-	ibReference ref{ ibGuidImpl{} };
-	const auto& be = refObj->GetGuid().GetGuid().bytes();
-	auto* p = reinterpret_cast<unsigned char*>(&ref.m_guid);
-	p[0] = be[3]; p[1] = be[2]; p[2] = be[1]; p[3] = be[0];
-	p[4] = be[5]; p[5] = be[4];
-	p[6] = be[7]; p[7] = be[6];
-	for (int i = 8; i < 16; ++i) p[i] = be[i];
-	return ibConstBlob(&ref, sizeof(ibReference));
-}
-
 ibQueryExprPtr ibMetaIRBuilder::BuildAnchorPredicate(const ibBackendQueryable* /*queryable*/,
                                                      const std::vector<ibQuerySortItem>& sorts,
                                                      const std::vector<ibValue>& values,
@@ -983,9 +1029,9 @@ ibQueryExprPtr ibMetaIRBuilder::BuildAnchorPredicate(const ibBackendQueryable* /
 	auto inclusiveOp = [&](bool asc) { return (forward == asc) ? ibQueryBinOp::Ge : ibQueryBinOp::Le; };
 
 	auto valueAt = [&](size_t i) -> ibValue { return i < values.size() ? values[i] : ibValue(); };
-	auto operand = [&](const ibValue& v) -> ibQueryExprPtr {
+	auto operand = [&](const ibBackendQueryColumn* col, const ibValue& v) -> ibQueryExprPtr {
 		if (ibQueryExprPtr blob = ReferenceKeyBlob(v)) return blob;   // reference -> real _RRRef binary blob
-		return ibConst(v);                                            // scalar (uuid string / number / date / bool)
+		return ColumnConst(col, v);                                   // the raw uuid key -> its bytes; else inline
 	};
 
 	// Flatten each sort column into its comparison TERMS: a scalar is one term; a REFERENCE is two — the
@@ -997,7 +1043,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildAnchorPredicate(const ibBackendQueryable* /
 		const ibBackendQueryColumn* col = cols[i].col;
 		const bool     asc = cols[i].asc;
 		const ibValue  v   = valueAt(i);
-		terms.push_back({ ibColQ(mainQual, FirstSqlFieldOfColumn(col)), operand(v), asc });
+		terms.push_back({ ibColQ(mainQual, FirstSqlFieldOfColumn(col)), operand(col, v), asc });
 		if (IsReferenceValued(col)) {
 			ibValueReferenceDataObject* refObj = nullptr;
 			const ibClassID clsid = (v.ConvertToValue(refObj) && refObj != nullptr) ? refObj->GetClassType() : 0;
@@ -2215,7 +2261,14 @@ static void BindWriteValue(ibQueryStatement& stmt, const ibBackendQueryColumn* c
 	if (col->IsRawColumn()) {
 		switch (static_cast<const ibRawDBColumn*>(col)->GetRawType()) {
 			case ibRawDBColumn::RawType::String:    stmt.SetParamString(pos++, v.GetString());  break;
-			case ibRawDBColumn::RawType::Guid:      stmt.SetParamString(pos++, v.GetString());  break;
+			case ibRawDBColumn::RawType::Guid: {
+				// The guid's STORAGE form, which is the reference key's form — one representation, so
+				// a row key and a reference to that row are byte-comparable. The text spelling is a
+				// rendering for humans and never reaches the column.
+				const ibReference key{ ibGuid(v.GetString()) };
+				stmt.SetParamBlob(pos++, &key, sizeof(ibReference));
+				break;
+			}
 			case ibRawDBColumn::RawType::Number:    stmt.SetParamNumber(pos++, v.GetNumber());  break;
 			case ibRawDBColumn::RawType::Date:      stmt.SetParamDate  (pos++, v.GetDate());    break;
 			case ibRawDBColumn::RawType::Boolean:   stmt.SetParamBool  (pos++, v.GetBoolean()); break;
@@ -2868,13 +2921,30 @@ public:
 			const wxString f = col->GetPhysicalName();
 			switch (static_cast<const ibRawDBColumn*>(col)->GetRawType()) {
 				case ibRawDBColumn::RawType::String:    return ibValue(m_cursor.GetResultString(f));
-				case ibRawDBColumn::RawType::Guid:      return ibValue(m_cursor.GetResultString(f));
+				case ibRawDBColumn::RawType::Guid: {
+					// The write side's twin: sixteen bytes back into a guid, handed on in the text
+					// form every caller of a raw key already expects.
+					wxMemoryBuffer bytes;
+					m_cursor.GetResultBlob(f, bytes);
+					if (bytes.GetDataLen() < sizeof(ibReference))
+						return ibValue();
+					const ibReference* key = static_cast<const ibReference*>(bytes.GetData());
+					return ibValue(wxString(ibGuid(key->m_guid)));
+				}
 				case ibRawDBColumn::RawType::Number:    return ibValue(m_cursor.GetResultNumber(f));
 				case ibRawDBColumn::RawType::Date:      return ibValue(m_cursor.GetResultDate(f));
 				case ibRawDBColumn::RawType::Boolean:   return ibValue(m_cursor.GetResultBool(f));
-				// Reference / Blob — the read twin of BindWriteValue's two cases: unreachable, and
-				// blocked on ibValue having no binary tag. See the comment there.
-				case ibRawDBColumn::RawType::Reference: return ibValue(m_cursor.GetResultString(f));
+				case ibRawDBColumn::RawType::Reference: {
+					// ⭐⭐ THE BYTES ARE AN IDENTITY; THE TYPE IS METADATA. A single-target reference
+					// column stores only the row key, because which KIND of row it points at is a
+					// property of the table, not of the row. The assembly itself belongs to the CODEC
+					// — this asks the column what it points at and hands both to it.
+					wxMemoryBuffer bytes;
+					m_cursor.GetResultBlob(f, bytes);
+					return ReadSingleTargetReference(m_metaData,
+						static_cast<const ibRawDBColumn*>(col)->GetRawTarget(), bytes);
+				}
+				// Blob — still unreachable, and blocked on ibValue having no binary tag.
 				case ibRawDBColumn::RawType::Blob:      return ibValue(m_cursor.GetResultString(f));
 			}
 			return ibValue();

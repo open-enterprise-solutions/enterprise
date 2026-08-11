@@ -56,6 +56,19 @@ struct ibColumnSlot {
 // Raw -> empty (the column is its own field, no suffix).
 BACKEND_API const wxString& ibFieldSuffix(ibColumnRole role);
 
+// ⭐⭐ THE ROW KEY — ONE NAME, AND IT SAYS WHAT THE COLUMN IS.
+//
+// Every table carries a key identifying its row, and it holds exactly what a REFERENCE to that row
+// holds: sixteen bytes of pure identity. So it is named the way a reference key is — `Row` plus the
+// reference-id suffix, spelled through the same table every other physical field goes through — and
+// the resemblance stops being a coincidence a reader has to notice.
+//
+// It used to be the literal `"uuid"`, typed out at nine call sites and, at six of them, with the
+// wrong KIND beside it (`String`, while the column was declared `Guid`). Both mistakes are the same
+// mistake: a name repeated is a name that can differ. Ask for the column, not for its spelling.
+BACKEND_API const wxString& ibRowKeyField();
+BACKEND_API ibRawDBColumn   ibRowKeyColumn();
+
 // The authority. Decompose a logical column into its physical fields, derived purely
 // from (physical name, type descriptor) — NO metadata: the reference slot is gated by the
 // clsid KIND (IsReference), not a metadata lookup. Order: TYPE, B, N, D, S, E, RTRef, RRRef
@@ -83,6 +96,19 @@ BACKEND_API std::vector<ibColumnSlot> ColumnValueSlots(const ibBackendQueryColum
 // The column's FIRST value slot — the field a scalar comparison / sort / anchor rides. Empty name
 // and Raw role when the column spreads to nothing.
 BACKEND_API ibColumnSlot FirstValueSlot(const ibBackendQueryColumn* col);
+
+// ⭐ A REFERENCE READ FROM ONE KEY FIELD, with the target type supplied by the COLUMN.
+//
+// The ordinary reference is a PAIR — `_RTRef` says which type, `_RRRef` which row — because the
+// value may point at several kinds. A single-target column cannot: a tabular section belongs to one
+// owner, so the type is a property of the table and storing it per row would repeat one constant on
+// every line. The bytes are the identity; the type is metadata.
+//
+// It lives HERE, with the rest of the value <-> field codec, and not at the call site: assembling a
+// reference needs the reference class, and a query provider that included it would be reaching a
+// floor up into the metadata partials for one read.
+BACKEND_API ibValue ReadSingleTargetReference(const ibMetaData* metaData, const ibClassID& target,
+                                              const wxMemoryBuffer& keyBytes);
 
 // The persisted _TYPE discriminator value a layout role stores (the ibFieldTypes tag — the wire
 // format, kept here in the tier, not on the attribute). Used to clear rows whose stored type was

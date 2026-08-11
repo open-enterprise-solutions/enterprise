@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "tabularSection.h"
+#include "backend/query/columnLayout.h"   // ibRowKeyColumn — the row key, named in one place
 
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/query/dataQueryBuilder.h"            // L3 — read + write door (From/SetValue/Where/Insert/Delete) + ibRawDBColumn
@@ -13,7 +14,53 @@
 // The adapter is parent-agnostic — the parent uuid is a query filter (WhereKey at
 // read time) — so the persistent meta vends it via the common GetQueryable() interface
 // and a transient (data-processor / report) parent simply never queries it.
-const ibBackendQueryColumn* ibTabularQueryable::ResolveColumnByName(const wxString& name) const { return m_meta->FindAnyAttributeObjectByFilter(name); }
+// ⭐⭐ THE OWNER, AS A FIELD OF THE SECTION.
+//
+// A section's rows are keyed to their owner by the row key it stores — the SAME sixteen bytes the
+// owner's own reference is. So the link that was only ever a physical detail becomes a field a query
+// can name: `Ref` selects the owner and joins to it, and neither the author nor the engine needs a
+// second column to make that possible.
+//
+// The target type is CONSTANT — a section belongs to one owner — so it rides on the column and never
+// on the row. Built once and kept, because a queryable hands out column POINTERS and a temporary
+// would leave every caller holding a dangling one.
+const ibBackendQueryColumn* ibTabularQueryable::OwnerRefColumn() const
+{
+	if (!m_ownerRef) {
+		const ibValueMetaObject* owner = m_meta != nullptr ? m_meta->GetParent() : nullptr;
+
+		// ⚠ IT NEEDS AN IDENTITY, NOT JUST A NAME. Column ownership across joined sources is decided
+		// by the column's ID, precisely because two sources can expose fields of the SAME name — and
+		// every section's owner field is called `Ref`. Left at zero (the scaffold id), two sections
+		// joined in one query would each claim the other's, and the read would take a field off the
+		// wrong leaf. Derived from the SECTION's own metaID, so it is unique by construction; the
+		// high bit keeps it clear of the attribute ids in the same table.
+		//
+		// The id is safe to mint here because this column is VENDED, never DECLARED: the section's
+		// table contributes `uuid` as a scaffold, so the schema differ never sees this one.
+		const ibMetaID identity = m_meta != nullptr ? (m_meta->GetMetaID() | 0x20000000) : 0;
+
+		m_ownerRef.reset(new ibRawDBColumn(ibRawDBColumn::Reference(ibRowKeyField(),
+			owner != nullptr ? reference_to_clsid(owner->GetMetaID()) : 0, wxT("Ref"), identity)));
+	}
+	return m_ownerRef.get();
+}
+
+const ibBackendQueryColumn* ibTabularQueryable::ResolveColumnByName(const wxString& name) const
+{
+	if (name.IsSameAs(wxT("Ref"), false))
+		return OwnerRefColumn();
+	return m_meta->FindAnyAttributeObjectByFilter(name);
+}
+
+std::vector<const ibBackendQueryColumn*> ibTabularQueryable::GetColumns() const
+{
+	std::vector<const ibBackendQueryColumn*> columns;
+	columns.push_back(OwnerRefColumn());
+	for (const auto attribute : m_meta->GetGenericAttributeArrayObject())
+		columns.push_back(attribute);
+	return columns;
+}
 wxString ibTabularQueryable::GetQueryTableName() const { return m_meta->GetPhysicalTableName(); }
 ibGuid ibTabularQueryable::GetQueryTableGuid() const { return m_meta->GetGuid(); }
 wxString ibTabularQueryable::GetQueryName()      const { return m_meta->GetName(); }
@@ -42,7 +89,7 @@ bool ibValueTabularSectionDataObjectRef::LoadData(const ibGuid& srcGuid, bool cr
 		ibDataQueryBuilder q;
 		// WHERE uuid = srcGuid (the parent filter is a plain raw-column condition, NOT a row-key
 		// sentinel — the tabular identity tail is the line number), ORDER BY line number.
-		q.From(m_metaTable->GetQueryable()).Where(ibRawDBColumn::String(wxT("uuid")), ibValue(wxString(srcGuid)));
+		q.From(m_metaTable->GetQueryable()).Where(ibRowKeyColumn(), ibValue(wxString(srcGuid)));
 		ibReadPageRequest page;
 		page.m_count = 0;   // all lines
 		ibDataQueryResult selection = q.Execute(page);
@@ -106,7 +153,7 @@ bool ibValueTabularSectionDataObjectRef::SaveData()
 		ibDataQueryBuilder q;
 		q.WithAccessPolicy(nullptr)
 			.From(m_metaTable->GetQueryable())
-			.SetValue(ibRawDBColumn::String(wxT("uuid")), ibValue(m_objectValue->GetGuid()));
+			.SetValue(ibRowKeyColumn(), ibValue(m_objectValue->GetGuid()));
 		for (const auto object : m_metaTable->GetGenericAttributeArrayObject()) {
 			if (!m_metaTable->IsNumberLine(object->GetMetaID())) {
 				ibComposerNode* node = GetViewData<ibComposerNode>(GetItem(row));
@@ -135,7 +182,7 @@ bool ibValueTabularSectionDataObjectRef::DeleteData()
 	ibDataQueryBuilder()
 		.WithAccessPolicy(nullptr)
 		.From(m_metaTable->GetQueryable())
-		.Where(ibRawDBColumn::String(wxT("uuid")), ibValue(m_objectValue->GetGuid()))
+		.Where(ibRowKeyColumn(), ibValue(m_objectValue->GetGuid()))
 		.Delete();
 	return true;
 }

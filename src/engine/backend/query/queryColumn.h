@@ -163,7 +163,12 @@ public:
 	ibRawDBColumn(const wxString& field, RawType type, ibMetaID modelId = 0)
 		: m_field(field), m_type(type), m_modelId(modelId) {}
 
-	wxString              GetName()         const override { return m_field; }
+	// ⭐ TWO NAMES WHERE THEY DIFFER, one where they do not. A scaffold column is its own field and
+	// says so under one name. A column PUBLISHED to a query is a different case: `Ref` is what an
+	// author writes, `uuid` is what the table keeps, and handing the storage spelling out as the
+	// name puts the physical schema into the field tree — the exact mistake the register's view
+	// columns were fixed for.
+	wxString              GetName()         const override { return m_name.IsEmpty() ? m_field : m_name; }
 	wxString              GetPhysicalName() const override { return m_field; }
 	ibTypeDescription&    GetTypeDesc()     const override { return m_typeDesc; }   // interface returns a non-const ref
 	ibMetaID              GetColumnId()      const override { return m_modelId; }   // 0 = scaffold, never diffed
@@ -175,7 +180,25 @@ public:
 	// type to maintain (these are static factories, not subclasses). One per RawType.
 	static ibRawDBColumn String   (const wxString& field, ibMetaID id = 0) { return ibRawDBColumn(field, RawType::String, id);    }
 	static ibRawDBColumn Number   (const wxString& field, ibMetaID id = 0) { return ibRawDBColumn(field, RawType::Number, id);    }
-	static ibRawDBColumn Reference(const wxString& field) { return ibRawDBColumn(field, RawType::Reference); }
+	// ⭐ A REFERENCE STORED AS ONE FIELD, WITH A CONSTANT TARGET.
+	//
+	// The ordinary reference column is a PAIR — `_RTRef` (which type) beside `_RRRef` (which row) —
+	// because the value may point at several kinds. This one cannot: a tabular section belongs to
+	// exactly one owner, so the type is known from the metadata and storing it per row would be a
+	// column repeating one constant a million times. The target rides on the column instead, and the
+	// codec reads a real reference out of the sixteen bytes it finds.
+	static ibRawDBColumn Reference(const wxString& field, const ibClassID& target = 0,
+	                               const wxString& name = wxEmptyString, ibMetaID modelId = 0)
+	{
+		ibRawDBColumn col(field, RawType::Reference, modelId);
+		col.m_name = name;
+		if (target != 0)
+			col.m_typeDesc.SetDefaultMetaType(target);
+		return col;
+	}
+
+	// What this column points at — 0 when it is not a single-target reference.
+	ibClassID GetRawTarget() const { const auto& list = m_typeDesc.GetClsidList(); return list.empty() ? 0 : list.front(); }
 	static ibRawDBColumn Date     (const wxString& field, ibMetaID id = 0) { return ibRawDBColumn(field, RawType::Date, id);      }
 	static ibRawDBColumn Boolean  (const wxString& field) { return ibRawDBColumn(field, RawType::Boolean);   }
 	static ibRawDBColumn Guid     (const wxString& field) { return ibRawDBColumn(field, RawType::Guid);      }
@@ -183,6 +206,7 @@ public:
 
 private:
 	wxString                  m_field;
+	wxString                  m_name;    // what a QUERY writes; empty = the field is its own name
 	RawType                   m_type;
 	ibMetaID                  m_modelId;   // 0 = scaffold: created with its table, never migrated
 	mutable ibTypeDescription m_typeDesc;   // mutable: GetTypeDesc() is const but returns a non-const ref

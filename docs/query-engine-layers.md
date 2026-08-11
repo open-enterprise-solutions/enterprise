@@ -118,6 +118,16 @@ turns the door's calls into L2-1 IR. Alongside it:
   suffix table (`_TYPE`, `_N`, `_RTRef`, …). Metadata-free: the reference pair is gated by the clsid
   KIND, not a metadata lookup.
 
+  ⭐ **The row key is the same sixteen bytes a reference key is** (2026-08-11). It used to be a
+  guid's TEXT — `VARCHAR(36)` on every row of every table and in every index over them — while a
+  reference stored the identical guid as `_RRRef BINARY(16)`. Two spellings of one identity could
+  never be compared, so a tabular section's link to its owner, a dot-walk and a hand-written join
+  had nothing to meet on. Now `ibRowKeyColumn()` / `ibRowKeyField()` name it once (`Row` + the
+  reference-id suffix, spelled through the same table), the raw codec binds and reads it as bytes,
+  and `uuid = <ref>_RRRef` is a real binary compare. The name was previously typed out at nine call
+  sites — six of them with the WRONG kind beside it (`String`, while every declaration said `Guid`),
+  which is what a repeated name costs.
+
   ⭐ **The role travels with the name.** A consumer that must know what a field IS — a reference id
   needs its `_RTRef` clsid as an ordering tiebreak, a counter scan wants the number field, a
   composite predicate compares tag fields with `=` whatever the caller asked for — asks

@@ -122,7 +122,7 @@ bool ibValueRecordDataObjectRef::LockAndCheckDataVersion(bool bump)
 		ibDataQueryBuilder q;
 		q.WithAccessPolicy(nullptr)   // row LOCK + version read is a physical concurrency op, not a user read:
 		 .From(m_metaObject->GetQueryable())   // lock the RAW row regardless of RLS visibility (RLS is enforced by
-		 .Where(ibRawDBColumn::String(wxT("uuid")), ibValue(wxString(m_objGuid)));   // the guarded UPDATE below)
+		 .Where(ibRowKeyColumn(), ibValue(wxString(m_objGuid)));   // the guarded UPDATE below)
 		ibReadPageRequest page;
 		page.m_count         = 1;
 		page.m_lockForUpdate = true;
@@ -316,7 +316,7 @@ bool ibValueRecordDataObjectRef::SaveData()
 	// holder, so it joins the outer document-save TX.
 	ibDataQueryBuilder writer;
 	writer.From(m_metaObject->GetQueryable())
-	      .SetValue(ibRawDBColumn::String(wxT("uuid")), ibValue(m_objGuid));   // row-key value
+	      .SetValue(ibRowKeyColumn(), ibValue(m_objGuid));   // row-key value
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 		ibValue value;
 		if (m_metaObject->IsDataReference(object->GetMetaID())) {
@@ -411,7 +411,7 @@ bool ibValueRecordDataObjectRef::DeleteData()
 	// Best-effort like the prior path (it ignored the result).
 	ibDataQueryBuilder()
 		.From(m_metaObject->GetQueryable())
-		.Where(ibRawDBColumn::String(wxT("uuid")), ibValue(m_objGuid))
+		.Where(ibRowKeyColumn(), ibValue(m_objGuid))
 		.Delete();
 	return true;
 }

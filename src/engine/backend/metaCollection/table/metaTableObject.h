@@ -4,6 +4,9 @@
 #include "backend/metaCollection/metaObjectComposite.h"
 #include "backend/query/queryable.h"
 #include "backend/query/queryableFactory.h"   // ibQueryableSourceDescriptor (the tabular L4 source descriptor)
+#include "backend/query/queryColumn.h"         // ibRawDBColumn — the section's owner reference, as a field
+
+#include <memory>
 
 class ibValueMetaObjectRecordData;
 class ibValueMetaObjectTableData;       // RAM-only tabular section (processors / reports)
@@ -16,15 +19,21 @@ class ibValueMetaObjectTableDataRef;    // DB-backed tabular section (reference 
 class BACKEND_API ibTabularQueryable : public ibBackendQueryable {
 public:
 	explicit ibTabularQueryable(const ibValueMetaObjectTableDataRef* meta) : m_meta(meta) {}
-	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override;   // attribute-by-name AS a column
+	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override;   // attribute-by-name AS a column + the owner Ref
+	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override;                   // the section's own attributes + Ref
 	virtual wxString GetQueryTableName() const override;
 	virtual ibGuid GetQueryTableGuid() const override;
 	virtual wxString GetQueryName() const override;   // the section's user-facing name (change ledger)
 	virtual ibMetaID GetQueryTableId() const override;
 	virtual const ibMetaData* GetMetaData() const override;                  // metadata context for column-based value reads
 	virtual std::vector<ibQuerySortItem> GetIdentitySort() const override;   // { line number } — parent uuid is a plain filter
+	// The owner reference, as a field of the section — built on demand, kept because a queryable
+	// hands out column POINTERS.
+	const ibBackendQueryColumn* OwnerRefColumn() const;
+
 private:
-	const ibValueMetaObjectTableDataRef* m_meta;
+	const ibValueMetaObjectTableDataRef*    m_meta;
+	mutable std::unique_ptr<ibRawDBColumn>  m_ownerRef;
 };
 
 // ibTabularSourceDescriptor — the DB-backed tabular section's L4 source descriptor. Like the

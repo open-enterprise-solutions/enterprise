@@ -3474,6 +3474,36 @@ clone before resolving, or the constructor would report a forward reference the 
 hits. The rest of the optimizer rephrases the query, and a check must not judge a rephrasing the
 author cannot see.
 
+### A tabular section's OWNER, as a field (2026-08-11)
+
+A section's rows were keyed to their owner by the row key it stores — a physical detail invisible to
+anyone writing a query. So a line of a document could not be joined back to the document it belongs
+to without leaving the query language, and a report over lines could not name the document.
+
+It is now a published field, `Reference`, and it works because the two sides finally hold the same
+bytes: the row key moved to `BINARY(16)` — the identical form a reference key has always used
+([query-engine-layers.md](query-engine-layers.md), the layout tier) — so
+`section.<key> = owner.<ref>_RRRef` is a real binary compare rather than 36 characters against a
+binary key.
+
+Three properties make it a field rather than a workaround:
+
+- **the target type is CONSTANT.** A section belongs to exactly one owner, so which KIND of row the
+  key points at is a property of the table and never of the row. It rides on the COLUMN
+  (`ibRawDBColumn::Reference(field, target, name)` — a reference stored as ONE field), where storing
+  it per row would repeat one constant on every line.
+- **the codec returns a REFERENCE**, not a guid and not a string: `ReadSingleTargetReference` sits
+  with the rest of the value↔field codec and hands back a value the engine dot-walks, presents and
+  compares like any other reference. It lives there rather than at the call site because assembling
+  a reference needs the reference class, and a query provider that included it would be reaching a
+  floor up into the metadata partials for one read.
+- **it has its own identity.** Column ownership across joined sources is decided by the column's ID,
+  precisely because two sources can expose fields of the same name — and every section's owner field
+  is called `Reference`. Left at the scaffold id, two sections joined in one query would each claim
+  the other's, and the read would take a field off the wrong leaf. The id derives from the section's
+  own metaID; minting one is safe because this column is VENDED, never DECLARED — the section's
+  table still contributes its key as a scaffold, so the schema differ never sees it.
+
 ### Still open (named, not smuggled)
 
 * the periodicity shorthand on turnovers (`…Turnovers(&From, &To, Month)`) is still refused by the

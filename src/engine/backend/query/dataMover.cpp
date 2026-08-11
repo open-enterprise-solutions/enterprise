@@ -23,7 +23,9 @@
 
 namespace {
 
-const wxString kUuid = wxT("uuid");   // the leading row-key column (records / tabular sections)
+// The leading row-key column (records / tabular sections) — asked of the layout tier, the one place
+// it is named. See ibRowKeyField.
+const wxString& kUuid = ibRowKeyField();
 
 // The reference-blob wire chunk id — the _RTRef/_RRRef pair's payload tag in the dump stream. A
 // FORMAT constant (was the rt_ref_chunk macro in metaObject.h): must stay 0x800060 for dump compat.

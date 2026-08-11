@@ -36,6 +36,19 @@ const wxString& ibFieldSuffix(ibColumnRole role)
 	return it != s_suffix.end() ? it->second : s_empty;
 }
 
+const wxString& ibRowKeyField()
+{
+	// Built from the ONE suffix table rather than written out: the row key and a reference key are
+	// the same sixteen bytes, and they stay spelled alike because they are spelled from one place.
+	static const wxString s_field = wxT("Row") + ibFieldSuffix(ibColumnRole::ReferenceId);
+	return s_field;
+}
+
+ibRawDBColumn ibRowKeyColumn()
+{
+	return ibRawDBColumn::Guid(ibRowKeyField());
+}
+
 int ibPersistedTypeTag(ibColumnRole role)
 {
 	switch (role) {
@@ -97,7 +110,17 @@ ibColumnType RawType(const ibBackendQueryColumn* col)
 	case ibRawDBColumn::RawType::Reference: return ibTypeBinary(reference_size_t);   // _RRRef fixed key
 	case ibRawDBColumn::RawType::Date:    return ibTypeDate();
 	case ibRawDBColumn::RawType::Boolean: return ibTypeBoolean();
-	case ibRawDBColumn::RawType::Guid:    return ibTypeGuid();   // the uuid row-key
+	// ⭐⭐ THE ROW KEY IS THE SAME SIXTEEN BYTES A REFERENCE KEY IS.
+	//
+	// It used to be a guid's TEXT — 36 characters, on every row of every table, and in every index
+	// over them. The bytes were already available (a reference stores exactly this guid as
+	// _RRRef BINARY(16), on all five drivers), so the text form cost 20 bytes a row to say the same
+	// thing in a form nothing could compare against the reference key.
+	//
+	// Making them one representation is what lets a row's uuid be COMPARED with a reference to that
+	// row: a tabular section's link to its owner, a dot-walk, a join written by hand. Two spellings
+	// of one identity could never meet; one spelling meets itself.
+	case ibRawDBColumn::RawType::Guid:    return ibTypeBinary(reference_size_t);   // the uuid row-key
 	case ibRawDBColumn::RawType::Blob:    return ibTypeBlob();   // a register's rowData
 	}
 	return ibTypeString(255);
@@ -208,6 +231,17 @@ std::vector<wxString> ColumnValueFields(const ibBackendQueryColumn* col)
 // Lives here, next to the layout, so the field SHAPE (DescribeColumnLayout) and the field VALUES
 // (this codec) share one home. The persisted variant tag (ibFieldTypes) stays local to this TU.
 // ==========================================================================
+
+ibValue ReadSingleTargetReference(const ibMetaData* metaData, const ibClassID& target,
+                                  const wxMemoryBuffer& keyBytes)
+{
+	if (metaData == nullptr || target == 0 || keyBytes.GetDataLen() < sizeof(ibReference))
+		return ibValue();
+
+	ibValuePtr<ibValueReferenceDataObject> reference(
+		ibValueReferenceDataObject::Create(metaData, target, const_cast<void*>(keyBytes.GetData())));
+	return reference != nullptr ? ibValue(reference) : ibValue();
+}
 
 bool ibColumnCodec::HasReference(const ibBackendQueryColumn* col)
 {
