@@ -1212,6 +1212,75 @@ source; a filter structure written in script code converting into the same condi
 
 ---
 
+## 5g. Pass 10 (2026-08-11) - the granularity decides the columns, and silence is not an answer
+
+Found by running it: a turnovers read whose periodicity had been removed still selected `.Period`,
+and the verdict line said the engine reads the query. It did not. The field simply was not in the
+result - a query that names a field and gets neither the field nor a complaint, which is the worst
+of the three possible answers a reader can give.
+
+### The rule, in one place, asked by both sides
+
+A register's read granularity is not decoration; it decides which columns the reading HAS. Nothing
+asked for reads the interval whole - no period column at all. A unit gives the period rolled to it
+and nothing coarser. `Recorder` and `Record` add the movement's own identity, which exists on no
+other reading.
+
+The window already offered fields by that rule (`ibRegisterViewColumnFits`). The ENGINE did not
+enforce it, so the two could disagree about the same sentence. The reading now refuses a column its
+granularity does not produce (`ibRegisterFoldOffersColumn`, asked with the register's own attribute
+names), and the resolver raises `unknown attribute` naming the field. One rule, two readers, no
+second spelling.
+
+Changing a table's arguments changes which columns it has, so the fields that no longer exist go
+with the change (`ibQueryDropMissingFields`) - the same act as deleting a table, one level down, and
+the author's own. That is the half which means nobody has to see the refusal for a field they
+removed themselves.
+
+### Three things kept the check from reaching the refusal
+
+- **A bare word in a choice slot parses as a COLUMN, not a literal.** `Turnovers(&From, &To, Record)`
+  writes the periodicity the way this language writes every keyword - unquoted. Reading only
+  literals, the window read that as "no periodicity given" and offered the widest shape while the
+  query asked for the narrowest, so picking `Record` changed nothing on screen. The lowering's rule
+  (a single-segment identifier in a slot whose parameter declares CHOICES is that word) is now asked
+  in the window too.
+- **One unverifiable source no longer makes a query unverifiable.** Meeting a nested select in the
+  FROM, the name check answered "cannot verify" for the WHOLE query and dropped every source beside
+  it - so the register standing next to it went unchecked. The unreadable source now stays in the
+  list with nothing behind it: its position is kept (the join rules read sources by position), its
+  columns are left alone, everything else is checked as strictly as before.
+- **One name for a source, on both roads.** The check bound a source by its written alias alone,
+  while the renderer, the constructor and therefore the author call it `ibQuerySourceName` - the
+  alias if written, the last segment of the name if not. A field of an unaliased table could not be
+  attributed to it in the very text this product generates. Both the check and the execution bind by
+  that one name now.
+
+### The distinction that had collapsed
+
+A binding with no queryable answers null exactly as a missing one does, and the two mean opposite
+things: a table that is GONE (say so, loudly) and a table that is THERE but unreadable (say
+nothing). `ResolvePath` asks them apart (`SourceIsOpaque`) - conflated, a perfectly good field of a
+nested query was reported as left over from a table the query does not read. `ORDER BY` gets the
+same rule, which it lacked for no reason.
+
+The lesson generalises past this file: an accusation belongs where it is PRINTED, not at one of the
+callers. Guarding a single call site left `ORDER BY` still accusing.
+
+### And the caret waits in the box the window was opened for
+
+Four dialogs landed their focus on the OK button, so the first keystroke went nowhere and the author
+had to click into the very field the window exists for: the expression editor, the CASE branches,
+the source arguments, and the query text pane. The caret arrives at the END of what is written
+rather than selecting it - a caret that opens with the whole expression highlighted destroys it on
+the first character typed. The text pane is the exception and keeps its caret where it stood, since
+a span selected there is what "Open the selection" reads.
+
+On `wxEVT_INIT_DIALOG`, not in the constructor: the modal show sets the initial focus itself, after
+the constructor has run, and takes it back.
+
+---
+
 ## 6. What this must not become
 
 - **A generator that cannot read.** The moment a hand-edited query stops being loadable,

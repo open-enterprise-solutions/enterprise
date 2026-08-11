@@ -1225,6 +1225,24 @@ second instead would guess at the storage grain and would still include a docume
 second — the very row the caller said to leave out. The side travels down to the tuple, so inside one
 instant the named document itself falls out while everything before it in that instant stays.
 
+## A reading refuses the column its granularity does not produce (2026-08-11)
+
+The fold is a READ parameter, not a schema property, and it decides which columns the reading has -
+the same rule the field tree offers by (`ibRegisterViewColumnFits`), now also asked of the reading
+itself (`ibRegisterFoldOffersColumn`, accumulationRegister.h). The turnover and
+balance-and-turnover companions override `ResolveColumnByName` and `GetColumns` with it.
+
+Why the companion and not the view: a VIEW's vocabulary holds every projection the surface can make
+- that is what a view is - so resolving through it accepted `Period` on a reading that folds the
+interval whole, and the reading then produced no such column. Nothing raised. Refusing at the
+companion, which is the thing that CARRIES the fold, makes the resolver say `unknown attribute`
+naming the field, which is what an author who changed the periodicity and left the old fields behind
+needs to be told.
+
+The window-side half (fields dropped when the arguments narrow the table, and the name check
+actually reaching this refusal over nested and temp sources) is in
+[query-constructor.md](query-constructor.md) §5g.
+
 ## Open questions
 
 - **Seed / predefined data on Apply.** Whatever idempotent seed path
