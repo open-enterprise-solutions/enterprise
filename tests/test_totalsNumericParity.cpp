@@ -105,13 +105,21 @@ struct TotalsFix : ::testing::Test
 
 	// THE ORACLE: aggregate the movements directly, truncating the period exactly as the
 	// dialect's Month rule does. Anything the totals disagree with is a totals bug.
+	//
+	// The HAVING mirrors FromTotals' WHERE: a group whose figures cancel to (0, 0) is
+	// excluded on BOTH sides, so the parity is over the rows that actually carry a figure.
+	// Without it the oracle keeps a zero GROUP (GROUP BY produces one for any movements)
+	// while the maintained side drops the zero ROW — a false mismatch on exactly the
+	// receipt-plus-reversal case, and the one the comment on FromTotals already describes.
 	Totals FromMovements()
 	{
 		return Read(wxT(
 			"SELECT strftime('%Y-%m-01 00:00:00', period_) AS p, wh AS w,"
 			"       SUM(CASE WHEN rectype_ = 0 THEN qty ELSE 0 END) AS a,"
 			"       SUM(CASE WHEN rectype_ = 0 THEN 0 ELSE qty END) AS b"
-			"  FROM Reg7 GROUP BY p, w"));
+			"  FROM Reg7 GROUP BY p, w"
+			"  HAVING SUM(CASE WHEN rectype_ = 0 THEN qty ELSE 0 END) <> 0"
+			"      OR SUM(CASE WHEN rectype_ = 0 THEN 0 ELSE qty END) <> 0"));
 	}
 
 	// The maintained side, with all-zero keys dropped: a key whose movements cancel out
