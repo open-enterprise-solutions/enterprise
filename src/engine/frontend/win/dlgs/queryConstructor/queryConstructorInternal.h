@@ -97,6 +97,11 @@ void ibQueryRenameSourceReferences(ibQuerySelect& select, const wxString& from, 
 // any OTHER reason stays where it is and the engine speaks about it.
 void ibQueryDropSourceReferences(ibQuerySelect& select, const wxString& source);
 
+// ⭐⭐ A UNION IS PADDED, NOT REFUSED. Every branch ends up selecting the same fields, in the same
+// order; a branch that has no column for one of them selects an EMPTY value under that name.
+// Applied on the way out of the dialog, so the query it hands back is one the engine can read.
+void ibQueryPadUnionBranches(ibQuerySelect& select);
+
 // An aggregate projection is one whose expression IS an aggregate call — the Grouping tab's
 // second list is that subset of the projections, not a list of its own.
 inline bool IsAggregateProjection(const ibQueryProjection& projection)

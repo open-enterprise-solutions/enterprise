@@ -209,6 +209,14 @@ void ibDialogQueryConstructor::OnOk(wxCommandEvent&)
 	// NOTHING IS REMOVED HERE. A table with no link used to be swept away on the way out; a product
 	// is a sentence now (`FROM A, B`), and it is written exactly like a table somebody forgot about.
 	// See ibDialogQueryConstructor::FillAll for why guessing between them is not allowed.
+	//
+	// One thing is ADDED, though: a union whose branches select different fields is padded so every
+	// branch selects the same ones (queryctor::ibQueryPadUnionBranches). Adding is not guessing —
+	// the field is one the author put in another branch, and an empty value is the only thing the
+	// branch without it could mean.
+	for (ibQueryAstStatement& statement : m_package.m_statements)
+		if (statement.m_select)
+			queryctor::ibQueryPadUnionBranches(*statement.m_select);
 
 	// The last word belongs to the engine: render, and hand the text to the parser. What comes back
 	// IS what leaves this dialog, so the caller can never receive text the engine has not read.

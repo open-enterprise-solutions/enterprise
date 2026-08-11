@@ -2014,11 +2014,19 @@ void ibDialogQueryConstructor::OnAddUnionBranch(wxCommandEvent&)
 	if (select == nullptr)
 		return;
 
+	// ⭐ A BRANCH IS A TAB, NOT A SECOND WINDOW. It used to open a nested constructor and add the
+	// branch only if that window was accepted — so "add a branch" meant "fill a whole query now, in
+	// a dialog on top of a dialog", and cancelling it left nothing behind. A branch is part of THIS
+	// query: it appears beside the others and is edited where every other query is edited.
+	//
+	// Empty rather than `SELECT *`: a star has no field list to line up, and lining fields up is the
+	// entire reason a union has a tab of its own.
 	ibQuerySelectPtr branch = std::make_shared<ibQuerySelect>();
-	branch->m_selectAll = true;
-	if (!ibShowQueryConstructorFor(this, branch, m_metaData, m_readOnly))
-		return;
 	select->m_unions.push_back(branch);
+
+	// And the tabs land on it — adding something and being left looking at what you had is the
+	// gesture nobody reads as "it worked".
+	m_unionBranch = static_cast<int>(select->m_unions.size()) - 1;
 	FillAll();
 }
 

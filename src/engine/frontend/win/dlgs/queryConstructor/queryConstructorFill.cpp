@@ -484,6 +484,96 @@ static bool ibQueryMentions(const ibQueryAstExprPtr& expr, const wxString& sourc
 	return named.find(source.Lower()) != named.end();
 }
 
+// ⭐⭐ EVERY BRANCH SELECTS THE SAME FIELDS — the dialog makes that true rather than complaining.
+//
+// A union lines its branches up BY NAME, so a field one branch has and another lacks is not a
+// mistake to report: it is a field the second branch has nothing to put under. The answer written
+// by hand is always the same — select an empty value there — and it is the answer nobody enjoys
+// typing across five branches and twelve fields.
+//
+// So the fields are collected across ALL branches (the first branch's order first, then whatever a
+// later one adds, appended in the order it appears — which is why a field that exists only in the
+// second part shows up at the bottom and takes ITS name), and any branch missing one gains an empty
+// projection under that name. What a branch already had keeps its place and its expression: padding
+// only ever ADDS.
+//
+// The engine refuses a ragged union with a clear message (queryLowering, LowerUnion). This is what
+// makes that message something an author sees only when they wrote the query by hand.
+void queryctor::ibQueryPadUnionBranches(ibQuerySelect& select)
+{
+	if (select.m_unions.empty())
+		return;
+
+	// Every branch, the query itself first.
+	std::vector<ibQuerySelect*> branches;
+	branches.push_back(&select);
+	for (const ibQuerySelectPtr& u : select.m_unions)
+		if (u) branches.push_back(u.get());
+
+	// A branch that selects * has no field list to line up — padding it would invent columns for a
+	// shape only the source knows. Left exactly as written.
+	for (const ibQuerySelect* b : branches)
+		for (const ibQueryProjection& p : b->m_projections)
+			if (p.m_star)
+				return;
+
+	// The output names, in the order a reader meets them.
+	std::vector<wxString> names;
+	const auto known = [&names](const wxString& name) {
+		for (const wxString& n : names)
+			if (n.IsSameAs(name, false)) return true;
+		return false;
+	};
+	for (const ibQuerySelect* b : branches)
+		for (const ibQueryProjection& p : b->m_projections) {
+			const wxString name = ibQueryOutputName(p);
+			if (!name.IsEmpty() && !known(name))
+				names.push_back(name);
+		}
+
+	// ⭐ THE SAME FIELDS IN THE SAME ORDER — each branch's list is REBUILT against the names above,
+	// not merely topped up. Appending would leave the second branch selecting its own field first
+	// and the borrowed ones after, so two branches of one union would read in two different orders:
+	// legible to nobody, and for a plain SQL union (which lines up by POSITION) the difference
+	// between a result and a mess.
+	//
+	// What a branch already had keeps its expression — only its PLACE is decided here. What it
+	// lacked becomes an EMPTY value: not a zero and not a blank string (those are values somebody
+	// could mistake for data), but the query saying this branch has nothing here.
+	for (ibQuerySelect* b : branches) {
+		std::vector<ibQueryProjection> ordered;
+		ordered.reserve(names.size());
+
+		for (const wxString& name : names) {
+			bool found = false;
+			for (const ibQueryProjection& p : b->m_projections)
+				if (ibQueryOutputName(p).IsSameAs(name, false)) {
+					ibQueryProjection kept = p;
+					kept.m_alias = name;   // the union lines up by this word, so it is written out
+					ordered.push_back(std::move(kept));
+					found = true;
+					break;
+				}
+			if (found)
+				continue;
+
+			ibQueryProjection filler;
+			filler.m_expr = std::make_shared<ibQueryAstExpr>();
+			filler.m_expr->m_kind = ibQueryAstExprKind::Literal;
+			filler.m_alias = name;
+			ordered.push_back(std::move(filler));
+		}
+
+		// A projection nobody could name (no alias, no derivable one) keeps its place at the end
+		// rather than being dropped: this function lines fields up, it does not remove any.
+		for (const ibQueryProjection& p : b->m_projections)
+			if (ibQueryOutputName(p).IsEmpty())
+				ordered.push_back(p);
+
+		b->m_projections = std::move(ordered);
+	}
+}
+
 void queryctor::ibQueryDropSourceReferences(ibQuerySelect& select, const wxString& source)
 {
 	if (source.IsEmpty())

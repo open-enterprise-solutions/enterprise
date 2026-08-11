@@ -1603,8 +1603,34 @@ ibDataQueryResult LowerUnion(const ibQuerySelect& ast, const std::map<wxString, 
 
 	// Each branch carries its UNION-vs-ALL flag: plain UNION dedupes the accumulated rows at its
 	// operator (SQL left-assoc semantics), UNION ALL keeps duplicates.
-	for (const std::shared_ptr<ibQuerySelect>& u : ast.m_unions)
-		b.Union(WrapSelectAsQueryable(*u, params, owner), wxEmptyString, /*keepDuplicates*/ u->m_unionAll);
+	//
+	// ⭐⭐ EVERY BRANCH SELECTS THE SAME NUMBER OF COLUMNS, and this is where that is checked.
+	//
+	// Unchecked, a mismatch reached the SERVER, which answered in its own words about its own
+	// generated column names — a message that names nothing the author wrote and points at no line
+	// of their query. Worse, some engines do not refuse at all: they line the columns up by position
+	// and hand back a result where one branch's value sits under another branch's heading, which is
+	// not an error anywhere and is wrong everywhere.
+	//
+	// So the count is compared here, against the FIRST branch (whose columns are the union's own
+	// output), and the complaint names both numbers and the branch that differs.
+	int branchNumber = 1;
+	for (const std::shared_ptr<ibQuerySelect>& u : ast.m_unions) {
+		const ibBackendQueryable* bn = WrapSelectAsQueryable(*u, params, owner);
+		branchNumber++;
+
+		size_t width = 0;
+		for (const ibBackendQueryColumn* c : bn->GetColumns())
+			if (c != nullptr) width++;
+
+		if (width != outSchema.size())
+			Fail(0, 0, wxString::Format(
+				_("UNION branch %d selects %u column(s) while the first selects %u - every branch of a "
+				  "union must select the same columns, in the same order"),
+				branchNumber, static_cast<unsigned int>(width), static_cast<unsigned int>(outSchema.size())));
+
+		b.Union(bn, wxEmptyString, /*keepDuplicates*/ u->m_unionAll);
+	}
 
 	// ORDER BY on the whole union — resolve against the first branch's columns (by name).
 	const std::vector<ibSourceBinding> usrc{ { wxEmptyString, b0 } };

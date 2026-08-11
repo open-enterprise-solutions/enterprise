@@ -89,10 +89,6 @@ void ibQueryUnionFieldModel::SetContent(ibQuerySelect* select)
 		return;
 	}
 
-	// THE OUTPUT FIELDS ARE THE FIRST BRANCH'S. Not a merge of every branch's columns: the union's
-	// result IS the first branch's shape, and a row for a name only the third branch has would
-	// promise a column the query does not produce.
-	//
 	// ⚠ ONE ROW PER PROJECTION — including the ones with NO name yet. This grid used to be built by
 	// collecting NAMES, so a projection that had none (`SELECT 1`, any expression, an aggregate
 	// before it is named) was silently absent from the only place an alias can be typed. The fields
@@ -100,6 +96,32 @@ void ibQueryUnionFieldModel::SetContent(ibQuerySelect* select)
 	// and the name is what the row SHOWS, not what makes it exist.
 	for (const ibQueryProjection& projection : m_select->m_projections)
 		m_names.push_back(ibQueryOutputName(projection));
+
+	// ⭐⭐ AND THE FIELDS ONLY A LATER BRANCH HAS — at the BOTTOM, in the order they appear.
+	//
+	// This used to show the first branch's fields alone, on the reasoning that the union's result IS
+	// the first branch's shape. That stopped being true when the dialog started PADDING on the way
+	// out: a field added to the second branch becomes a field of the result, with an empty value on
+	// the branches that lack it. Showing only the first branch's meant the field just added was
+	// nowhere on the tab whose whole job is lining fields up — it appeared after a reopen, which is
+	// the answer that teaches an author the window is lying to them.
+	//
+	// It takes ITS name from the branch that has it, which is why it lands at the bottom rather than
+	// pushing anything aside: the first branch's order is what the result already reads by.
+	for (const ibQuerySelectPtr& branch : m_select->m_unions) {
+		if (!branch)
+			continue;
+		for (const ibQueryProjection& projection : branch->m_projections) {
+			const wxString name = ibQueryOutputName(projection);
+			if (name.IsEmpty())
+				continue;
+			bool known = false;
+			for (const wxString& already : m_names)
+				if (already.IsSameAs(name, false)) { known = true; break; }
+			if (!known)
+				m_names.push_back(name);
+		}
+	}
 
 	m_branchCount = static_cast<unsigned int>(m_select->m_unions.size() + 1);
 	Reset(static_cast<unsigned int>(m_names.size()));
@@ -208,6 +230,16 @@ void ibQueryUnionFieldModel::GetValueByRow(wxVariant& variant, unsigned row, uns
 	if (branchIndex >= m_branchCount)
 		return;
 
+	// ⚠ A ROW IS NOT ALWAYS A PROJECTION OF THE FIRST BRANCH. The rows past its projections are the
+	// fields only a LATER branch has (see SetContent) — the first branch has nothing standing on
+	// them until the padding runs on the way out, so its cell is read BY NAME like any other
+	// branch's. Indexing the projections by row number here read past the end of the vector.
+	if (branchIndex == 0 && row >= m_select->m_projections.size()) {
+		const wxString column = ColumnOf(*m_select, m_names[row]);
+		variant = column.IsEmpty() ? wxString(_("<none>")) : column;
+		return;
+	}
+
 	// BRANCH 0 IS THIS QUERY, and its cell is the projection standing on this row — no lookup, no
 	// name needed. Looking it up by name showed `<none>` beside a field the query plainly selects,
 	// for the only reason that the field had not been given a name yet.
@@ -251,6 +283,40 @@ void ibQueryUnionFieldModel::GetValueByRow(wxVariant& variant, unsigned row, uns
 // The mapping is stored where the engine reads it — as a PROJECTION of that branch named after the
 // output field. Nothing new is invented to hold it: the lowering lines branches up by name, so
 // naming the projection IS the mapping.
+// ⭐⭐ A BRANCH'S FIELD STANDS UNDER ONE OUTPUT NAME.
+//
+// Lining a union up is a CORRESPONDENCE, not a copy: each branch says which of its own fields
+// answers under each field of the result. Leave the same column standing under two names and the
+// grid is showing something a union cannot mean — the branches are matched BY NAME, so one column
+// answering under two of them is not "selected twice", it is ambiguous.
+//
+// So assigning a field takes it OFF whatever row it stood on: that row keeps its own name and reads
+// NULL for this branch, which is exactly what it now means. Moving, rather than duplicating, is also
+// the gesture a person makes here — they drag a field from one line to another and expect the line
+// they left to empty.
+//
+// (Selecting one column twice under two names is legitimate SQL and stays possible — on the FIELDS
+// tab, where adding a field is what the gesture means. Here it is not what anyone is asking for.)
+static void UnlineFieldElsewhere(ibQuerySelect* target, const wxString& field, size_t keep)
+{
+	if (target == nullptr || field.IsEmpty())
+		return;
+
+	for (size_t i = 0; i < target->m_projections.size(); ++i) {
+		if (i == keep || !target->m_projections[i].m_expr)
+			continue;
+		if (!ibRenderQueryExpr(*target->m_projections[i].m_expr).IsSameAs(field, false))
+			continue;
+
+		ibQueryProjection none;
+		none.m_expr = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
+		none.m_expr->m_literal.SetType(ibValueTypes::TYPE_NULL);
+		none.m_alias = ibQueryOutputName(target->m_projections[i]);
+		target->m_projections[i] = none;
+		return;   // it stood on one row; it stands on one row
+	}
+}
+
 bool ibQueryUnionFieldModel::SetBranchColumn(unsigned int row, unsigned int branch, const wxString& field)
 {
 	ibQuerySelect* target = BranchSelectAt(branch);
@@ -262,8 +328,33 @@ bool ibQueryUnionFieldModel::SetBranchColumn(unsigned int row, unsigned int bran
 	// BRANCH 0 IS THIS QUERY, and its cell is the projection standing on this row — no lookup by
 	// name, because the row IS that projection (and it may not have a name yet).
 	if (branch == 0) {
-		if (row >= target->m_projections.size())
-			return false;
+		// ⭐⭐ A ROW PAST THIS BRANCH'S PROJECTIONS is a field only a LATER branch has, and picking a
+		// field for it is how the first branch joins in: it GAINS a projection under that output
+		// name. It used to be refused here, so the one cell that had something to say — "this branch
+		// supplies X under the name the other branch introduced" — was the one cell that could not
+		// be filled in.
+		if (row >= target->m_projections.size()) {
+			if (field.IsEmpty())
+				return true;   // already `<none>`, and there is nothing here to unline
+
+			ibQueryProjection added;
+			try {
+				ibQueryParser parser;
+				added.m_expr = parser.ParseExpression(field);
+			}
+			catch (const ibBackendException& error) {
+				if (m_onError) m_onError(error.GetErrorDescription());
+				return false;
+			}
+			added.m_alias = outputName;
+
+			// It stands on ONE row — see UnlineFieldElsewhere.
+			UnlineFieldElsewhere(target, field, target->m_projections.size());
+
+			target->m_projections.push_back(std::move(added));
+			if (m_onChanged) m_onChanged();
+			return true;
+		}
 
 		// ⭐⭐ CLEARING THE FIRST BRANCH UNLINES IT TOO — and it takes one more step than the others,
 		// because the ROWS ARE this branch's projections. Rename it away and the row goes with it,
@@ -302,6 +393,7 @@ bool ibQueryUnionFieldModel::SetBranchColumn(unsigned int row, unsigned int bran
 			if (m_onError) m_onError(error.GetErrorDescription());
 			return false;
 		}
+		UnlineFieldElsewhere(target, field, row);   // it stands on ONE row
 		if (m_onChanged) m_onChanged();
 		return true;
 	}
@@ -370,12 +462,14 @@ bool ibQueryUnionFieldModel::SetBranchColumn(unsigned int row, unsigned int bran
 	if (at < target->m_projections.size()) {
 		target->m_projections[at].m_expr = expr;
 		target->m_projections[at].m_alias = outputName;
+		UnlineFieldElsewhere(target, field, at);
 	}
 	else {
 		ibQueryProjection projection;
 		projection.m_expr  = expr;
 		projection.m_alias = outputName;   // named after the output field — that IS the line-up
 		target->m_selectAll = false;       // it selects specific fields now, not everything
+		UnlineFieldElsewhere(target, field, target->m_projections.size());
 		target->m_projections.push_back(projection);
 	}
 	if (m_onChanged) m_onChanged();
@@ -453,7 +547,33 @@ bool ibQueryUnionFieldModel::SetValueByRow(const wxVariant& variant, unsigned ro
 	// ⚠ BY ROW, NOT BY NAME. The row IS the projection — which is the whole point of the change:
 	// looking the projection up by its old name could not find one that had no name, so the fields
 	// that needed an alias were exactly the ones this refused to give one to.
-	m_select->m_projections[row].m_alias = name;
+	//
+	// ⚠ EXCEPT PAST THE FIRST BRANCH'S PROJECTIONS. Those rows are fields only a LATER branch has;
+	// the first branch has nothing standing on them yet, so the alias is set on the projection that
+	// actually carries the name, wherever it lives. Indexing the first branch by row number there
+	// walked off the end of the vector — the same mistake the cell reader made.
+	if (row < m_select->m_projections.size()) {
+		m_select->m_projections[row].m_alias = name;
+	}
+	else {
+		const wxString previous = m_names[row];
+		bool renamed = false;
+		for (const ibQuerySelectPtr& branch : m_select->m_unions) {
+			if (!branch)
+				continue;
+			for (ibQueryProjection& projection : branch->m_projections)
+				if (ibQueryOutputName(projection).IsSameAs(previous, false)) {
+					projection.m_alias = name;
+					renamed = true;
+					break;
+				}
+			if (renamed)
+				break;
+		}
+		if (!renamed)
+			return refuse(wxString::Format(
+				_("'%s' is not a field of any branch any more — reopen the tab"), previous));
+	}
 	m_names[row] = name;
 	if (m_onChanged)
 		m_onChanged();

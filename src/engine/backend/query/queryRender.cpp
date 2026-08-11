@@ -20,6 +20,12 @@ wxString Kw(ibQueryKeyword kw)
 wxString RenderExpr(const ibQueryAstExpr& expr);
 wxString RenderSelect(const ibQuerySelect& select, int indent);
 
+// ⭐ A NESTED QUERY IS SHIFTED ONE STEP. Rendered flush against its parent it reads as a second
+// query that happens to be inside a bracket; shifted, the nesting is visible at a glance — which is
+// the only thing the reader of a generated query has to go on. One step, so depth stays legible
+// rather than marching off the right edge.
+constexpr int kNestedIndent = 4;
+
 wxString Join(const std::vector<wxString>& parts, const wxString& separator)
 {
 	wxString out;
@@ -187,7 +193,9 @@ wxString RenderExpr(const ibQueryAstExpr& expr)
 		if (expr.m_negated) out += wxT(" ") + Kw(ibQueryKeyword::Not);
 		out += wxT(" ") + Kw(ibQueryKeyword::In) + wxT(" (");
 		if (expr.m_subquery) {
-			out += RenderSelect(*expr.m_subquery, 0);
+			// An IN subquery is a nested query like any other — shifted so the bracket's contents do
+			// not read as a continuation of the condition.
+			out += wxT("\n") + RenderSelect(*expr.m_subquery, kNestedIndent) + wxT("\n");
 		}
 		else {
 			std::vector<wxString> items;
@@ -234,11 +242,15 @@ wxString RenderExpr(const ibQueryAstExpr& expr)
 	return wxEmptyString;
 }
 
-wxString RenderSource(const ibQuerySource& source)
+wxString RenderSource(const ibQuerySource& source, int indent)
 {
 	wxString out;
 	if (source.m_subquery) {
-		out = wxT("(") + RenderSelect(*source.m_subquery, 0) + wxT(")");
+		// The brackets stay on the parent's line; everything between them belongs to the child, so
+		// it is rendered at the child's own indent and closes back at the parent's.
+		const wxString pad(wxT(' '), indent);
+		out = wxT("(\n") + RenderSelect(*source.m_subquery, indent + kNestedIndent)
+		    + wxT("\n") + pad + wxT(")");
 	}
 	else {
 		// The `&` goes back on: what it writes, the parser reads — and a table handed in from
@@ -327,7 +339,8 @@ wxString RenderSelect(const ibQuerySelect& select, int indent)
 	// thing instead: FROM is missing. An incomplete query should read as incomplete, not as broken.
 	const bool hasSource = !select.m_from.m_name.empty() || select.m_from.m_subquery;
 	if (hasSource)
-		out += wxT("\n") + pad + Kw(ibQueryKeyword::From) + wxT("\n") + item + RenderSource(select.m_from);
+		out += wxT("\n") + pad + Kw(ibQueryKeyword::From) + wxT("\n") + item
+		     + RenderSource(select.m_from, indent + kNestedIndent);
 
 	for (const auto& join : select.m_joins) {
 		// ⭐⭐ NO CONDITION IS WRITTEN AS A COMMA — `FROM A, B`, the product. A `JOIN` with nothing
@@ -339,11 +352,11 @@ wxString RenderSelect(const ibQuerySelect& select, int indent)
 		// writing `JOIN X` — so the constructor produced text its own parser threw back at it, on a
 		// query nobody had touched. A round trip is only a round trip when both directions agree.
 		if (!join.m_on) {
-			out += wxT(",\n") + item + RenderSource(join.m_source);
+			out += wxT(",\n") + item + RenderSource(join.m_source, indent + kNestedIndent);
 			continue;
 		}
 		out += wxT("\n") + pad + JoinKindText(join.m_kind) + wxT(" ") + Kw(ibQueryKeyword::Join)
-			+ wxT("\n") + item + RenderSource(join.m_source);
+			+ wxT("\n") + item + RenderSource(join.m_source, indent + kNestedIndent);
 		out += wxT("\n") + item + Kw(ibQueryKeyword::On) + wxT(" ") + RenderExpr(*join.m_on);
 	}
 
