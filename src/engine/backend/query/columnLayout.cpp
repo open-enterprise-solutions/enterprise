@@ -82,11 +82,15 @@ ibColumnType PrimitiveType(ibValueTypes vt, const ibTypeDescription& td)
 	}
 }
 
+// Reached only under `col->IsRawColumn()` — the column has already SAID what it is, so the cast
+// asks for the type it carries rather than deciding identity (which is the column's own answer,
+// never a cast's). A column that claims raw without being one falls back instead of raising: the
+// caller is a DDL description, and a wrong-but-valid type is repairable where a throw is not.
 ibColumnType RawType(const ibBackendQueryColumn* col)
 {
 	const auto* raw = dynamic_cast<const ibRawDBColumn*>(col);
 	if (raw == nullptr)
-		return ibTypeString(255);   // unknown raw column — a safe default; raw DDL is rare
+		return ibTypeString(255);
 	switch (raw->GetRawType()) {
 	case ibRawDBColumn::RawType::String:  return ibTypeString(255);
 	case ibRawDBColumn::RawType::Number:  return ibTypeNumber(18, 0);
@@ -171,12 +175,31 @@ std::vector<ibColumnSlot> DescribeColumnLayout(const ibBackendQueryColumn* col)
 // overrides (raw -> its one field; an attribute / temp column -> its composite spread): the role
 // model already encodes each column's storage shape. A free TIER helper, not a column method — only
 // the DB provider asks it (sort / group-by / key field expansion); the column stays a pure descriptor.
+bool ibIsValueRole(ibColumnRole role)
+{
+	return role != ibColumnRole::Discriminator && role != ibColumnRole::ReferenceType;
+}
+
+std::vector<ibColumnSlot> ColumnValueSlots(const ibBackendQueryColumn* col)
+{
+	std::vector<ibColumnSlot> out;
+	for (ibColumnSlot& slot : DescribeColumnLayout(col))
+		if (ibIsValueRole(slot.m_role))
+			out.push_back(std::move(slot));
+	return out;
+}
+
+ibColumnSlot FirstValueSlot(const ibBackendQueryColumn* col)
+{
+	std::vector<ibColumnSlot> slots = ColumnValueSlots(col);
+	return slots.empty() ? ibColumnSlot() : std::move(slots.front());
+}
+
 std::vector<wxString> ColumnValueFields(const ibBackendQueryColumn* col)
 {
 	std::vector<wxString> out;
-	for (const ibColumnSlot& slot : DescribeColumnLayout(col))
-		if (slot.m_role != ibColumnRole::Discriminator && slot.m_role != ibColumnRole::ReferenceType)
-			out.push_back(slot.m_name);
+	for (const ibColumnSlot& slot : ColumnValueSlots(col))
+		out.push_back(slot.m_name);
 	return out;
 }
 

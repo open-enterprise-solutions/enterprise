@@ -23,6 +23,7 @@
 #include "backend/metaCollection/partial/reference/reference.h"
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
 #include "backend/query/dataQueryBuilder.h"      // L3 door — record read / write / delete via the universal entry
+#include "backend/query/columnLayout.h"          // the layout tier — a column's physical fields AND their roles
 
 #include "backend/system/systemManager.h"
 #include "backend/backend_exception.h"
@@ -532,7 +533,6 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 	// shape used by SaveData; we want the raw per-type sub-column.
 	auto scanDataMax = [&]() -> ibNumber {
 		const wxString tableName = m_metaObject->GetPhysicalTableName();
-		const wxString fieldBase = attribute->GetPhysicalName();
 		ibNumber maxFound = 0;
 
 		const bool isNumber = attribute->ContainType(ibValueTypes::TYPE_NUMBER);
@@ -540,7 +540,14 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 		if (!isNumber && !isString)
 			return maxFound;
 
-		const wxString field = fieldBase + (isNumber ? wxT("_N") : wxT("_S"));
+		// The per-type sub-column, asked of the layout by its ROLE. Spelling the suffix here made
+		// this a second writer of the lettering — and one that would keep compiling after a change.
+		const ibColumnRole role = isNumber ? ibColumnRole::Number : ibColumnRole::String;
+		wxString field;
+		for (const ibColumnSlot& slot : DescribeColumnLayout(attribute))
+			if (slot.m_role == role) { field = slot.m_name; break; }
+		if (field.IsEmpty())
+			return maxFound;
 
 		// SELECT MAX(<field>) FROM <table> [WHERE <field> LIKE '<prefix>%'] — one shape, the
 		// string arm just adds the prefix filter. Aggregate with no group keys = one row.

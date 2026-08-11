@@ -112,6 +112,21 @@ turns the door's calls into L2-1 IR. Alongside it:
 - **`ibTempSourceScope`** (`query/queryable.h`) — the thread-local, per-query registry for
   transient queryables (RAM / temp tables). **L5 registers at L4, L4 resolves directly, L3 needs
   nothing** — the temp-table seam.
+- **The column-layout tier** (`query/columnLayout.h`) — how ONE logical column spreads into physical
+  fields, and the only place the lettering exists. `DescribeColumnLayout(col)` returns the slots in
+  bind order — each slot a `{name, role, type}` — and `ibFieldSuffix(role)` is the single role →
+  suffix table (`_TYPE`, `_N`, `_RTRef`, …). Metadata-free: the reference pair is gated by the clsid
+  KIND, not a metadata lookup.
+
+  ⭐ **The role travels with the name.** A consumer that must know what a field IS — a reference id
+  needs its `_RTRef` clsid as an ordering tiebreak, a counter scan wants the number field, a
+  composite predicate compares tag fields with `=` whatever the caller asked for — asks
+  `ColumnValueSlots` / `FirstValueSlot` and reads `m_role`. Handing out names alone left those
+  consumers only one way to ask the question: match the tail of the string
+  (`field.EndsWith("_RRRef")`), or rebuild the suffix from the type — the layout re-derived in a
+  place that could never be told when the lettering changed. **The lettering is spelled in
+  `ibFieldSuffix` and nowhere else**; a `grep` for a bare `"_RRRef"` outside this tier is a defect
+  report.
 
 ### L3 — the source-agnostic door (`ibDataQueryBuilder`, `query/dataQueryBuilder`)
 Reads **every family** (catalog / document / register / constant / tabular) through the queryable,

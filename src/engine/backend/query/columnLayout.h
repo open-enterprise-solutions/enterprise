@@ -62,10 +62,27 @@ BACKEND_API const wxString& ibFieldSuffix(ibColumnRole role);
 // — the same fixed order the write / read codec binds in. A raw column = one slot as-is.
 BACKEND_API std::vector<ibColumnSlot> DescribeColumnLayout(const ibBackendQueryColumn* col);
 
+// Whether a role CARRIES the column's value, as opposed to TAGGING what the value is (_TYPE, and a
+// reference's _RTRef). This is the one split ColumnValueFields filters by, named so a consumer can
+// ask it of a slot it already holds.
+BACKEND_API bool ibIsValueRole(ibColumnRole role);
+
 // A column's VALUE field names — its layout slots minus the _TYPE discriminator and the reference
 // TYPE id (the value-carrying roles). Metadata-free, derived over DescribeColumnLayout. The DB
 // provider asks this for sort / group-by / key field expansion; the column stays a pure descriptor.
 BACKEND_API std::vector<wxString> ColumnValueFields(const ibBackendQueryColumn* col);
+
+// ⭐ THE SAME FIELDS, WITH THEIR ROLE STILL ATTACHED. A consumer that must know what a field IS —
+// a reference id needs its _RTRef tiebreak, a counter scan wants the number field — reads m_role.
+// It exists because the suffix lettering kept escaping this tier: whoever got names only had no way
+// left to ask the question except to match the tail of the string (`EndsWith("_RRRef")`), which is
+// the layout re-derived by spelling, in a place that cannot be told when the lettering changes.
+// Give the role alongside the name and the question is answerable where it is asked.
+BACKEND_API std::vector<ibColumnSlot> ColumnValueSlots(const ibBackendQueryColumn* col);
+
+// The column's FIRST value slot — the field a scalar comparison / sort / anchor rides. Empty name
+// and Raw role when the column spreads to nothing.
+BACKEND_API ibColumnSlot FirstValueSlot(const ibBackendQueryColumn* col);
 
 // The persisted _TYPE discriminator value a layout role stores (the ibFieldTypes tag — the wire
 // format, kept here in the tier, not on the attribute). Used to clear rows whose stored type was

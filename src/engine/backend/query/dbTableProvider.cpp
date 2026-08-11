@@ -45,23 +45,29 @@ namespace {
 // must match the FIRST ORDER BY field, which BuildSortKeys emits in exactly this order
 // (a composite attribute's declaration order is NOT this order). No primitive present
 // => the column is a reference and yields its _RRRef (pure guid) blob.
+// The column's first VALUE field — the one a scalar comparison / sort / anchor rides. It is the
+// layout tier's answer verbatim: this used to walk the clsid list and spell the suffix itself, a
+// second copy of the B/N/D/S/E/RRRef ordering that only agreed with the codec's bind order for as
+// long as nobody edited one of the two. Ask the slot; a caller that needs to know WHAT the field is
+// reads the role beside it rather than the tail of the name.
+ibColumnSlot FirstValueSlotOf(const ibBackendQueryColumn* col)
+{
+	ibColumnSlot slot = FirstValueSlot(col);
+	if (slot.m_name.IsEmpty())
+		slot.m_name = col->GetPhysicalName();   // a column that spreads to nothing IS its own field
+	return slot;
+}
+
 wxString FirstSqlFieldOfColumn(const ibBackendQueryColumn* col)
 {
-	const wxString base = col->GetPhysicalName();
-	const auto& clsids = col->GetTypeDesc().GetClsidList();
-	if (clsids.empty())
-		return base;
-	auto has = [&](ibValueTypes vt) {
-		for (const auto c : clsids)
-			if (ibValue::GetVTByID(c) == vt) return true;
-		return false;
-	};
-	if (has(ibValueTypes::TYPE_BOOLEAN)) return base + wxT("_B");
-	if (has(ibValueTypes::TYPE_NUMBER))  return base + wxT("_N");
-	if (has(ibValueTypes::TYPE_DATE))    return base + wxT("_D");
-	if (has(ibValueTypes::TYPE_STRING))  return base + wxT("_S");
-	if (has(ibValueTypes::TYPE_ENUM))    return base + wxT("_E");
-	return base + wxT("_RRRef");   // reference -> the pure guid blob
+	return FirstValueSlotOf(col).m_name;
+}
+
+// Whether the column's value is a REFERENCE — its identity is (guid, type), so an ordering or an
+// anchor over it needs the _RTRef clsid as a tiebreak.
+bool IsReferenceValued(const ibBackendQueryColumn* col)
+{
+	return FirstValueSlotOf(col).m_role == ibColumnRole::ReferenceId;
 }
 
 // The row-key physical field of a single-key source (catalog / document: the uuid). Read off the
@@ -321,41 +327,24 @@ ibValue ReadScalarByAlias(const ibBackendQueryColumn* col, const wxString& alias
 
 // --- shared co-location gate (the JOIN read fast path AND the aggregate fast path) -------------
 
-// --- auto-join key derivation (Join(b) without explicit on-columns) --------------------------------
-// A source's self-reference column (the front of GetPrimaryKeyColumns — its data-reference _RRRef) —
-// the auto-join binds a referencing column to THIS.
-const ibBackendQueryColumn* ColocatedSelfRef(const ibBackendQueryable* q)
-{
-	const std::vector<const ibBackendQueryColumn*> keys = q->GetPrimaryKeyColumns();
-	return keys.empty() ? nullptr : keys.front();
-}
+// ⛔ THE AUTO-JOIN KEY DERIVATION STOOD HERE, and it is gone with the thing that fed it.
+//
+// It answered the question "these two tables were joined with no ON — which columns did the author
+// mean?" by looking for a column on one side whose reference resolves to the other. That question no
+// longer exists: a JOIN in this language always carries its ON, and two tables with nothing said
+// between them are a PRODUCT written with a comma. The only producer of a keyless, non-cross join
+// node was `ibDataQueryBuilder::Join(queryable, kind, alias)`, removed with it.
+//
+// Worth remembering WHY it went rather than just that it did: the derivation made the same query text
+// mean different things depending on what the metadata happened to hold — add a reference between two
+// catalogs and a query that multiplied them yesterday joins them today, silently.
 
-// A column of `from` whose reference resolves to `to` — the referencing side of an auto-join.
-const ibBackendQueryColumn* ColocatedRefColumnTo(const ibBackendQueryable* from, const ibBackendQueryable* to)
-{
-	for (const ibBackendQueryColumn* c : from->GetColumns())
-		if (c != nullptr && from->GetProvider().ResolveReferenceTarget(from, c) == to) return c;
-	return nullptr;
-}
-
-// ONE join node's keys: explicit on-columns, else DERIVED by reference — derivation only when BOTH
-// children are Source leaves (a referencing column on one matched to the other's self-reference); a
-// node with a sub-join child needs explicit keys. False when neither given nor derivable.
+// ONE join node's keys — explicit on-columns, and nothing else. False when they are not both there
+// (a cross join, or a computed ON), which the co-location gate reads as "not this fast path".
 bool ResolveNodeKeys(const ibQueryNode* node, const ibBackendQueryColumn*& onL, const ibBackendQueryColumn*& onR)
 {
 	onL = node->m_on.m_colL; onR = node->m_on.m_colR;
-	if (onL != nullptr && onR != nullptr) return true;
-	const ibQueryNode* nL = node->m_left.get();
-	const ibQueryNode* nR = node->m_right.get();
-	if (nL == nullptr || nR == nullptr ||
-	    nL->m_kind != ibQueryNode::Kind::Source || nR->m_kind != ibQueryNode::Kind::Source)
-		return false;
-	const ibBackendQueryable* qL = nL->m_queryable;
-	const ibBackendQueryable* qR = nR->m_queryable;
-	if (qL == nullptr || qR == nullptr) return false;
-	if (const ibBackendQueryColumn* lref = ColocatedRefColumnTo(qL, qR)) { onL = lref; onR = ColocatedSelfRef(qR); return onR != nullptr; }
-	if (const ibBackendQueryColumn* rref = ColocatedRefColumnTo(qR, qL)) { onR = rref; onL = ColocatedSelfRef(qL); return onL != nullptr; }
-	return false;
+	return onL != nullptr && onR != nullptr;
 }
 
 // Every JOIN node in the tree has resolvable keys?
@@ -931,7 +920,7 @@ std::vector<ibQuerySortKey> ibMetaIRBuilder::BuildSortKeys(const ibBackendQuerya
 		// type as the tiebreak so an empty reference (all-zero guid) of type A orders distinctly from one of
 		// type B — in lockstep with BuildAnchorPredicate and CompareValueLS (reference clsids order by metaID).
 		// A single-type / self-reference column has a constant _RTRef, so this is a harmless no-op there.
-		if (FirstSqlFieldOfColumn(s.m_col).EndsWith(wxT("_RRRef"))) {
+		if (IsReferenceValued(s.m_col)) {
 			ibQuerySortKey k;
 			k.m_expr = ibColQ(mainQual, s.m_col->GetPhysicalName() + ibFieldSuffix(ibColumnRole::ReferenceType));
 			k.m_dir  = asc ? ibQuerySortDir::Asc : ibQuerySortDir::Desc;
@@ -1009,7 +998,7 @@ ibQueryExprPtr ibMetaIRBuilder::BuildAnchorPredicate(const ibBackendQueryable* /
 		const bool     asc = cols[i].asc;
 		const ibValue  v   = valueAt(i);
 		terms.push_back({ ibColQ(mainQual, FirstSqlFieldOfColumn(col)), operand(v), asc });
-		if (FirstSqlFieldOfColumn(col).EndsWith(wxT("_RRRef"))) {
+		if (IsReferenceValued(col)) {
 			ibValueReferenceDataObject* refObj = nullptr;
 			const ibClassID clsid = (v.ConvertToValue(refObj) && refObj != nullptr) ? refObj->GetClassType() : 0;
 			terms.push_back({ ibColQ(mainQual, col->GetPhysicalName() + ibFieldSuffix(ibColumnRole::ReferenceType)),
