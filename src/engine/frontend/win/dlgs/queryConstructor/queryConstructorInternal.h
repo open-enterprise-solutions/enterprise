@@ -102,6 +102,12 @@ void ibQueryDropSourceReferences(ibQuerySelect& select, const wxString& source);
 // Applied on the way out of the dialog, so the query it hands back is one the engine can read.
 void ibQueryPadUnionBranches(ibQuerySelect& select);
 
+// ⭐⭐ THE FIELDS A SOURCE NO LONGER HAS go with the change that removed them. `available` is what
+// the source offers NOW; everything this query wrote about that source and is not in it is dropped,
+// clause by clause, exactly as deleting the table drops what named it.
+void ibQueryDropMissingFields(ibQuerySelect& select, const wxString& source,
+                              const std::set<wxString>& available);
+
 // An aggregate projection is one whose expression IS an aggregate call — the Grouping tab's
 // second list is that subset of the projections, not a list of its own.
 inline bool IsAggregateProjection(const ibQueryProjection& projection)

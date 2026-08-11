@@ -16,6 +16,13 @@
 #include <memory>
 
 class ibValueMetaObjectAccumulationRegister;
+
+// Whether a reading at this granularity produces that column — DEFINED further down, beside the rule
+// it asks (ibRegisterViewColumnFits); declared here because the companions below refuse a column by
+// it before that point.
+inline bool ibRegisterFoldOffersColumn(const ibValueMetaObjectAccumulationRegister* reg,
+	const wxString& columnName, const ibRegFold& fold);
+
 class ibBalanceQueryable;
 class ibTurnoverQueryable;
 class ibBalanceAndTurnoverQueryable;
@@ -546,6 +553,32 @@ public:
 	virtual bool IsComputedInRam() const override { return !m_fold.IsWholeInterval() || !m_reg->HasMaterializedViews(); }
 	virtual ibQueryRelPtr GetSourceRelation(const wxString& alias) const override;
 
+	// ⭐⭐ A COLUMN THE GRANULARITY DOES NOT PRODUCE IS NOT A COLUMN OF THIS READING.
+	//
+	// The VIEW's vocabulary holds every projection the surface can make — that is what a view is —
+	// so resolving through it accepted `PeriodMonth` on a reading that folds the interval whole, and
+	// the reading then produced no such column. Nothing raised: the field simply was not in the
+	// result. A query that names a field and gets neither the field nor a complaint is the worst of
+	// the three possible answers.
+	//
+	// Refusing here makes the resolver raise "unknown attribute" NAMING the field — which is what an
+	// author who changed the periodicity and left the old fields behind needs to be told.
+	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override
+	{
+		return ibRegisterFoldOffersColumn(m_reg, name, m_fold)
+			? ibAccumulationTotalsQueryable::ResolveColumnByName(name) : nullptr;
+	}
+
+	// SELECT * asks the same question of every column, so it is answered the same way.
+	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override
+	{
+		std::vector<const ibBackendQueryColumn*> out;
+		for (const ibBackendQueryColumn* col : ibAccumulationTotalsQueryable::GetColumns())
+			if (col != nullptr && ibRegisterFoldOffersColumn(m_reg, col->GetName(), m_fold))
+				out.push_back(col);
+		return out;
+	}
+
 	virtual ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override;
 private:
 	ibValue        m_begin;
@@ -580,6 +613,22 @@ public:
 	virtual bool IsComputedInRam() const override { return !m_fold.IsWholeInterval() || !m_reg->HasMaterializedViews(); }
 	virtual ibQueryRelPtr GetSourceRelation(const wxString& alias) const override;
 
+	// Same rule as the turnover reading — see ibTurnoverQueryable::ResolveColumnByName.
+	virtual const ibBackendQueryColumn* ResolveColumnByName(const wxString& name) const override
+	{
+		return ibRegisterFoldOffersColumn(m_reg, name, m_fold)
+			? ibAccumulationTotalsQueryable::ResolveColumnByName(name) : nullptr;
+	}
+
+	virtual std::vector<const ibBackendQueryColumn*> GetColumns() const override
+	{
+		std::vector<const ibBackendQueryColumn*> out;
+		for (const ibBackendQueryColumn* col : ibAccumulationTotalsQueryable::GetColumns())
+			if (col != nullptr && ibRegisterFoldOffersColumn(m_reg, col->GetName(), m_fold))
+				out.push_back(col);
+		return out;
+	}
+
 	virtual ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override;
 private:
 	ibValue        m_begin;
@@ -599,9 +648,14 @@ private:
 // ⭐⭐ THE PERIODICITY DECIDES WHICH COLUMNS EXIST, and this is the rule, written where the columns
 // are handed out:
 //
-//     empty / Auto   every projection the table can make — Period, PeriodSecond … PeriodYear,
-//                    and (once the movements path exists) Recorder and LineNumber. Nothing has been
-//                    decided, so everything is on offer and the author picks.
+//     empty          NOTHING. The interval is read WHOLE — one row per key, begin to end — so
+//                    there is no period, and therefore no recorder and no line either: a row that
+//                    covers a whole interval was not written by any one document.
+//     Auto           every projection the table can make — Period, PeriodSecond … PeriodYear,
+//                    Recorder and LineNumber. Nothing has been DECIDED, so everything is on offer
+//                    and the author picks. (Including an argument written as a parameter, whose
+//                    value only exists at run time: the shape a query is drawn against must be the
+//                    widest it might turn out to have, never a guess at which.)
 //     Period         one column: the period itself.
 //     a unit         one column: the period, rolled to that unit. Months asked for, months given —
 //                    the finer projections are not part of that reading and showing them would
@@ -609,12 +663,23 @@ private:
 //     Recorder       the period and the document it came from.
 //     Record         the period, the document, and the line within it.
 //
-// `unit` empty means "not decided" — including an argument written as a parameter, whose value only
-// exists at run time. That is deliberately the same case as Auto: the shape a query is drawn against
-// must be the widest one it might turn out to have, never a guess at which.
+// ⚠ THE RECORDER IS NOT A DIMENSION, and that is why it is decided here too. It exists on a row
+// only when the reading is AT a movement's own identity — Recorder, Record, or the undecided Auto.
+// Offering it beside a monthly turnover promises a document per row where the row is a month's
+// worth of them.
 inline bool ibRegisterViewColumnFits(const wxString& columnName, const wxString& periodName,
-	const ibRegFold& fold)
+	const ibRegFold& fold, const wxString& recorderName = wxEmptyString,
+	const wxString& lineName = wxEmptyString)
 {
+	// The movement's own identity — present only where a row IS a movement (or a document's worth).
+	if (!recorderName.IsEmpty() && stringUtils::CompareString(columnName, recorderName))
+		return fold.m_kind == ibRegGranularity::Auto
+		    || fold.m_kind == ibRegGranularity::Recorder
+		    || fold.m_kind == ibRegGranularity::Record;
+	if (!lineName.IsEmpty() && stringUtils::CompareString(columnName, lineName))
+		return fold.m_kind == ibRegGranularity::Auto
+		    || fold.m_kind == ibRegGranularity::Record;
+
 	// Not a period projection (a dimension, a resource) — always there, whatever the granularity.
 	if (!columnName.StartsWith(periodName))
 		return true;
@@ -635,6 +700,21 @@ inline bool ibRegisterViewColumnFits(const wxString& columnName, const wxString&
 	// Anything else names ONE granularity, and the reading then has ONE period column — `Period`,
 	// rolled to it. The coarser projections are not part of that reading.
 	return stringUtils::CompareString(columnName, periodName);
+}
+
+// ⭐⭐ DOES THIS READING PRODUCE THAT COLUMN? The same rule the field tree offers by, asked with the
+// register's own names — so a reader and a writer of the query cannot disagree about which columns
+// a chosen granularity has.
+inline bool ibRegisterFoldOffersColumn(const ibValueMetaObjectAccumulationRegister* reg,
+	const wxString& columnName, const ibRegFold& fold)
+{
+	if (reg == nullptr || reg->GetRegisterPeriod() == nullptr)
+		return true;
+
+	const bool subordinate = reg->HasRecorder();
+	return ibRegisterViewColumnFits(columnName, reg->GetRegisterPeriod()->GetName(), fold,
+		subordinate && reg->GetRegisterRecorder()   != nullptr ? reg->GetRegisterRecorder()->GetName()   : wxString(),
+		subordinate && reg->GetRegisterLineNumber() != nullptr ? reg->GetRegisterLineNumber()->GetName() : wxString());
 }
 
 inline void ibFillExplorerFromRegisterView(const ibValueMetaObjectAccumulationRegister* reg,
@@ -679,7 +759,9 @@ inline void ibFillExplorerFromRegisterView(const ibValueMetaObjectAccumulationRe
 	for (const ibBackendQueryColumn* col : view->GetColumns()) {
 		if (col == nullptr)
 			continue;
-		if (!periodName.IsEmpty() && !ibRegisterViewColumnFits(col->GetName(), periodName, fold))
+		if (!periodName.IsEmpty() && !ibRegisterViewColumnFits(col->GetName(), periodName, fold,
+				reg->HasRecorder() && reg->GetRegisterRecorder()   != nullptr ? reg->GetRegisterRecorder()->GetName()   : wxString(),
+				reg->HasRecorder() && reg->GetRegisterLineNumber() != nullptr ? reg->GetRegisterLineNumber()->GetName() : wxString()))
 			continue;
 		if (const ibValueMetaObjectAttributeBase* attribute = attributeById(col->GetColumnId()))
 			explorer.AppendColumn(attribute, /*enabled*/ true, /*visible*/ true);

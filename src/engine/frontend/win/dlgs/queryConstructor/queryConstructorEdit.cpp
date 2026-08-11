@@ -787,6 +787,18 @@ void ibDialogQueryConstructor::OnTableParameters(wxCommandEvent&)
 	}
 
 	source->m_args = std::move(arguments);
+
+	// ⭐ AND THE FIELDS THAT NO LONGER EXIST GO WITH THE CHANGE. New arguments can NARROW a virtual
+	// table (a turnover read whole has no period column, and no recorder), and the fields written
+	// against the old shape would otherwise stay in the query naming columns their own source does
+	// not have. Following through on the author's own act — not tidying up after them.
+	if (ibQuerySelect* select = Current()) {
+		std::set<wxString> available;
+		for (const ibQueryConstructorField& field : m_model.GetFields(*source, m_package, m_statement))
+			available.insert(field.m_name);
+		queryctor::ibQueryDropMissingFields(*select, ibQuerySourceName(*source), available);
+	}
+
 	FillAll();   // the text rebuilds itself — the renderer has always written the argument list
 }
 

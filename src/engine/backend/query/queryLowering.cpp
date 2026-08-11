@@ -279,6 +279,23 @@ struct ibSourceBinding
 	const ibBackendQueryable*   m_q = nullptr;
 };
 
+// ⭐⭐ IS THIS A SOURCE THIS RESOLVER CANNOT SEE INTO? A nested select, a temp table made by a
+// statement outside this check — the query READS it, its columns are simply not knowable here.
+//
+// It has to be asked apart from "is there a source called that", because a binding with no queryable
+// answers null to both and the two mean opposite things: one is a table that is GONE (say so, loudly)
+// and the other is a table that is THERE (say nothing). Conflating them is how a perfectly good field
+// of a nested query got reported as left over from a table the query does not read.
+bool SourceIsOpaque(const std::vector<ibSourceBinding>& sources, const wxString& name)
+{
+	if (name.IsEmpty())
+		return false;
+	for (const ibSourceBinding& binding : sources)
+		if (binding.m_q == nullptr && !binding.m_alias.IsEmpty() && binding.m_alias.IsSameAs(name, false))
+			return true;
+	return false;
+}
+
 // Find the source an alias names, or null if the first path segment is not a known alias.
 const ibBackendQueryable* SourceForAlias(const std::vector<ibSourceBinding>& sources, const wxString& alias)
 {
@@ -430,11 +447,15 @@ std::vector<const ibBackendQueryColumn*> ResolvePath(const std::vector<ibSourceB
 		if (const ibBackendQueryable* q = OwnerOfBareColumn(sources, path[0], e.m_line, e.m_col)) {
 			cur = q;   // ambiguous -> Fail, inside
 		}
-		else if (path.size() >= 2) {
+		else if (path.size() >= 2 && !SourceIsOpaque(sources, path[0])) {
 			// ⭐ A QUALIFIED NAME WHOSE QUALIFIER IS NOTHING — `SliceLast.Dimension2` in a query that
 			// no longer reads SliceLast. The first segment is neither a source alias nor a column of
 			// any source, so this is not a dot-walk that went wrong somewhere in the middle: it is a
 			// FIELD LEFT OVER from a table that is gone.
+			//
+			// ⚠ …AND NOT ONE THIS RESOLVER MERELY CANNOT SEE INTO. `SDFGH.Dimension1` over a nested
+			// query named SDFGH is the table standing right there in the FROM; accusing it of being
+			// gone painted the verdict line red over a query with nothing wrong with it.
 			//
 			// Said as itself, and with what to do about it. "unknown attribute 'SliceLast'" named the
 			// segment the resolver happened to stop on and left the reader to work out that the thing
@@ -458,6 +479,11 @@ std::vector<const ibBackendQueryColumn*> ResolvePath(const std::vector<ibSourceB
 	// An error is the honest answer and the window already knows how to show one — the verdict line
 	// under the tabs, in the engine's own words.
 	if (cur == nullptr) {
+		// Same distinction one more time: with an unreadable source in the query, a name this resolver
+		// cannot place may perfectly well be that table's, and silence is the only honest answer.
+		for (const ibSourceBinding& binding : sources)
+			if (binding.m_q == nullptr)
+				return cols;
 		Fail(e.m_line, e.m_col, wxString::Format(_("'%s' belongs to no table of this query"),
 			path.empty() ? wxString() : path[0]));
 		return {};
@@ -1652,7 +1678,12 @@ void BuildSourceTree(const ibQuerySelect& ast, const std::map<wxString, ibValue>
                      std::vector<ibQueryAstExprPtr>* sourceConditions)
 {
 	const ibBackendQueryable* q0 = ResolveFrom(ast.m_from, params, owner, sourceConditions);
-	sources.push_back({ ast.m_from.m_alias, q0 });
+	// ⭐⭐ ONE NAME FOR A SOURCE, HERE TOO. `ibQuerySourceName` — the alias if written, the last
+	// segment of the name if not — is what the renderer writes and what the constructor matches on,
+	// so it is the name the AUTHOR sees. Binding by `m_alias` alone made `BalanceAndTurnovers.Period`
+	// resolvable only when somebody had written `AS`, and unresolvable in the very text this product
+	// generates.
+	sources.push_back({ ibQuerySourceName(ast.m_from), q0 });
 	b.From(q0, ast.m_from.m_alias);
 
 	int refJoinSeq = 0;   // synthetic aliases for the intermediate segments of a named ref-join
@@ -1674,8 +1705,11 @@ void BuildSourceTree(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 		}
 
 		const ibBackendQueryable* qi = ResolveFrom(j.m_source, params, owner, sourceConditions);
-		const wxString alias = j.m_source.m_alias;
-		RequireAliasFree(sources, alias, 0, 0);   // duplicate alias -> Fail
+		const wxString alias = ibQuerySourceName(j.m_source);   // same one name — see the FROM above
+		// ⚠ ASKED OF THE WRITTEN ALIAS, not of the name it falls back to. This rule is about an author
+		// writing one `AS` twice; two unaliased reads of the same table are a different (and older)
+		// shape, and refusing them here would be this change picking up a quarrel that is not its own.
+		RequireAliasFree(sources, j.m_source.m_alias, 0, 0);   // duplicate alias -> Fail
 		sources.push_back({ alias, qi });
 		if (j.m_on && j.m_on->m_kind == ibQueryAstExprKind::Literal && j.m_on->m_literal.GetBoolean()) {
 			b.CrossJoin(qi, kind, alias);   // ON TRUE -> cross join (cartesian)
@@ -1814,8 +1848,30 @@ void CheckSelectNames(const ibQuerySelect& ast, const std::map<wxString, ibValue
 //
 // So the accusation is the CALLER's to ask for. `reportMissing` says which reading this is; the
 // silent one still returns false, which every caller already handles as "nothing can be said".
+
+// A source this check cannot know the columns of — held in the list so positions stay true, with
+// nothing behind it. Every reader here already skips a binding with no queryable.
+ibSourceBinding Opaque(const ibQuerySource& source)
+{
+	ibSourceBinding binding;
+	binding.m_alias = ibQuerySourceName(source);
+	return binding;   // m_q stays null — that is what makes it opaque
+}
+// ⭐⭐ AND ONE UNVERIFIABLE SOURCE DOES NOT MAKE A QUERY UNVERIFIABLE.
+//
+// This answered "cannot verify" for the WHOLE query the moment ONE source was a nested select — and
+// a nested select is an ordinary thing to write: `FROM (SELECT …) AS T, AccumulationRegister.R.
+// BalanceAndTurnovers(…)`. Everything standing beside it went unchecked with it, so a field the
+// register plainly does not produce sailed through and the verdict line said the engine reads the
+// query. The one sentence this window must never say untruthfully, said because of the table NEXT to
+// the one at fault.
+//
+// `tolerateOpaque` keeps the unverifiable source IN THE LIST instead, with no queryable behind it:
+// its position is preserved (the join rules read sources by position), its columns are left alone,
+// and every other source is checked exactly as strictly as before.
 bool BuildCheckSources(const ibQuerySelect& ast, const std::map<wxString, ibValue>& params,
-                       std::vector<ibSourceBinding>& out, bool reportMissing = true)
+                       std::vector<ibSourceBinding>& out, bool reportMissing = true,
+                       bool tolerateOpaque = false)
 {
 	std::vector<const ibQuerySource*> sources;
 	sources.push_back(&ast.m_from);
@@ -1831,10 +1887,19 @@ bool BuildCheckSources(const ibQuerySelect& ast, const std::map<wxString, ibValu
 			// to do must not be handed the nested query's refusal either.
 			if (reportMissing)
 				CheckSelectNames(*source->m_subquery, params);   // on its own terms
-			return false;                                        // its columns are not ours to verify
+			// Its COLUMNS are not ours to verify — the sources beside it still are.
+			if (!tolerateOpaque)
+				return false;
+			out.push_back(Opaque(*source));
+			continue;
 		}
-		if (source->m_name.empty())
-			return false;   // a query with no table yet — being written, not wrong
+		if (source->m_name.empty()) {
+			// A source still being written: unverifiable, not wrong. Same treatment.
+			if (!tolerateOpaque)
+				return false;
+			out.push_back(Opaque(*source));
+			continue;
+		}
 
 		// ⚠ TWO DIFFERENT SILENCES, and telling them apart is the whole point.
 		//
@@ -1853,20 +1918,36 @@ bool BuildCheckSources(const ibQuerySelect& ast, const std::map<wxString, ibValu
 		catch (const ibBackendException&) {
 			if (reportMissing && source->m_name.size() > 1)
 				throw;      // the engine's own words, its own position — carried up verbatim
-			return false;   // a temp table this check cannot see — or a reading that does not accuse
+			// A temp table this check cannot see — or a reading that does not accuse.
+			if (!tolerateOpaque)
+				return false;
+			out.push_back(Opaque(*source));
+			continue;
 		}
 		if (queryable == nullptr) {
 			if (reportMissing && source->m_name.size() > 1)
 				ibBackendCoreException::Error(_("Table '%s' does not exist"), ibQuerySourceName(*source));
-			return false;
+			if (!tolerateOpaque)
+				return false;
+			out.push_back(Opaque(*source));
+			continue;
 		}
 
+		// ⭐⭐ THE NAME A SOURCE ANSWERS TO IS ibQuerySourceName — the alias if one is written, the
+		// last segment of the name if not. That is what the renderer writes, what the constructor
+		// matches on, and what the author therefore SEES; binding by `m_alias` alone meant this check
+		// could not attribute `BalanceAndTurnovers.Period` to the table one line above it unless the
+		// author had happened to write `AS`. Two readers of one sentence, and only one of them right.
 		ibSourceBinding binding;
-		binding.m_alias = source->m_alias;
+		binding.m_alias = ibQuerySourceName(*source);
 		binding.m_q     = queryable;
 		out.push_back(binding);
 	}
-	return !out.empty();
+	// At least one source this check can actually stand on. All-opaque is the old silence, unchanged.
+	for (const ibSourceBinding& binding : out)
+		if (binding.m_q != nullptr)
+			return true;
+	return false;
 }
 
 // WHICH PROJECTIONS ARE NEITHER A GROUP KEY NOR INSIDE AN AGGREGATE — the rule itself, over sources
@@ -2137,7 +2218,7 @@ void CheckSelectNames(const ibQuerySelect& astAsWritten, const std::map<wxString
 		if (branch) CheckSelectNames(*branch, params);
 
 	std::vector<ibSourceBinding> sources;
-	if (!BuildCheckSources(ast, params, sources)) {
+	if (!BuildCheckSources(ast, params, sources, /*reportMissing=*/true, /*tolerateOpaque=*/true)) {
 		// ⚠ SILENCE IS FOR "CANNOT VERIFY", NOT FOR "NOTHING TO VERIFY AGAINST".
 		//
 		// A one-segment name may be a temp table made by a statement this check cannot see, so a
@@ -2198,8 +2279,36 @@ void CheckSelectNames(const ibQuerySelect& astAsWritten, const std::map<wxString
 
 	// THE SAME RESOLVER THE EXECUTION USES. Its words are the ones the user sees — there is no
 	// second definition here of what a known field is.
+	// ⚠ A COLUMN THIS CHECK CANNOT ATTRIBUTE TO A VERIFIABLE SOURCE IS LEFT ALONE. With an opaque
+	// source in the query (a nested select), a name it does not recognise may perfectly well be one of
+	// THAT table's columns — inventing an error about it would be the old blanket silence's mistake
+	// made in the other direction. Everything that DOES land on a source this check knows is checked.
+	bool anyOpaque = false;
+	for (const ibSourceBinding& binding : sources)
+		if (binding.m_q == nullptr)
+			anyOpaque = true;
+
+	const auto checkable = [&sources, anyOpaque](const ibQueryAstExpr& column) {
+		if (!anyOpaque)
+			return true;   // nothing to be uncertain about
+		if (column.m_path.empty())
+			return false;
+		// Qualified: the source it names decides — known table, checked; opaque one, silent.
+		for (const ibSourceBinding& binding : sources)
+			if (!binding.m_alias.IsEmpty() && binding.m_alias.IsSameAs(column.m_path[0], false))
+				return binding.m_q != nullptr;
+		// Unqualified: checked only if a source this check KNOWS owns it. Otherwise it may be the
+		// opaque table's, and nothing can be said.
+		for (const ibSourceBinding& binding : sources)
+			if (binding.m_q != nullptr && binding.m_q->ResolveColumnByName(column.m_path[0]) != nullptr)
+				return true;
+		return false;
+	};
+
 	for (const ibQueryAstExpr* column : strict) {
 		if (column == nullptr || column->m_path.empty())
+			continue;
+		if (!checkable(*column))
 			continue;
 		ResolvePath(sources, *column);   // raises "unknown attribute" / "ambiguous attribute"
 	}
@@ -2235,7 +2344,7 @@ void CheckSelectNames(const ibQuerySelect& astAsWritten, const std::map<wxString
 		if (column->m_path.size() == 1)
 			for (const wxString& name : outputs)
 				if (name.IsSameAs(column->m_path[0], false)) { namesAnOutput = true; break; }
-		if (!namesAnOutput)
+		if (!namesAnOutput && checkable(*column))
 			ResolvePath(sources, *column);
 	}
 

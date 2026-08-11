@@ -287,12 +287,42 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetFields(
 
 		// ⭐ ASKED WITH THE CALL'S ARGUMENTS, because for a parameterized table they decide the columns
 		// (a register's turnovers reads at the granularity its periodicity names). Only the arguments
-		// that are LITERAL are known here — one written as `&Period` has no value until the query
-		// runs, and the source then answers with everything it can offer, which is the honest shape
-		// for "not decided yet".
+		// that are KNOWN HERE count — one written as `&Period` has no value until the query runs, and
+		// the source then answers with everything it can offer, which is the honest shape for "not
+		// decided yet".
+		//
+		// ⭐⭐ A CHOICE IS WRITTEN AS A BARE WORD, and it parses as a COLUMN. `Turnovers(&From, &To,
+		// Record)` says Record the way the language says every keyword — unquoted — so the parser
+		// hands back an identifier, not a literal. Read only literals and the periodicity is silently
+		// "not given": the window then offered the widest shape while the query asked for the
+		// narrowest, and picking `Record` changed nothing on screen.
+		//
+		// This is the SAME rule the lowering applies (queryLowering, the source-argument walk): a
+		// single-segment identifier in a slot whose parameter declares CHOICES is that word. Two
+		// readers of one sentence, and they now read it the same way.
+		std::vector<ibQuerySourceParameter> declared;
+		descriptor->DescribeParameters(declared);
+
 		std::vector<ibValue> args;
-		for (const ibQueryAstExprPtr& arg : source.m_args)
-			args.push_back(arg && arg->m_kind == ibQueryAstExprKind::Literal ? arg->m_literal : ibValue());
+		for (size_t i = 0; i < source.m_args.size(); ++i) {
+			const ibQueryAstExprPtr& arg = source.m_args[i];
+			if (!arg) {
+				args.push_back(ibValue());
+				continue;
+			}
+			if (arg->m_kind == ibQueryAstExprKind::Literal) {
+				args.push_back(arg->m_literal);
+				continue;
+			}
+			if (i < declared.size() && !declared[i].m_choices.empty()
+			    && arg->m_kind == ibQueryAstExprKind::Column && arg->m_path.size() == 1) {
+				ibValue word;
+				word.SetString(arg->m_path.front());
+				args.push_back(word);
+				continue;
+			}
+			args.push_back(ibValue());
+		}
 
 		ibSourceDataObject::ibSourceExplorer explorer;
 		descriptor->FillSourceExplorer(explorer, args);

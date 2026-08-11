@@ -574,6 +574,92 @@ void queryctor::ibQueryPadUnionBranches(ibQuerySelect& select)
 	}
 }
 
+// ⭐⭐ CHANGING A TABLE'S PARAMETERS CHANGES WHICH COLUMNS IT HAS, and the fields that no longer
+// exist go with the change.
+//
+// This is the same act as deleting a table, one level down: the AUTHOR did it, explicitly, and the
+// consequence is theirs. Leaving the fields behind is what produced the worst answer the engine can
+// give — a query naming a column its own source does not have. (It now REFUSES that rather than
+// passing over it; this is the half that means nobody has to see the refusal for a field they
+// removed themselves.)
+//
+// ⚠ ONLY the fields OF THAT SOURCE, and only the ones it no longer offers. A name it still has, a
+// name belonging to another table, an expression nobody can resolve — untouched. Removal here is
+// narrow on purpose: the constructor does not clean up after the author, it follows through on what
+// the author just did.
+void queryctor::ibQueryDropMissingFields(ibQuerySelect& select, const wxString& source,
+                                         const std::set<wxString>& available)
+{
+	if (source.IsEmpty())
+		return;
+
+	// Does this expression name a field of `source` that is gone? Walks the whole tree, because a
+	// vanished field can sit anywhere an expression can — inside a CASE, under an aggregate.
+	std::function<bool(const ibQueryAstExprPtr&)> lost = [&](const ibQueryAstExprPtr& expr) -> bool {
+		if (!expr)
+			return false;
+
+		if (expr->m_kind == ibQueryAstExprKind::Column && expr->m_path.size() >= 2
+		    && expr->m_path[0].IsSameAs(source, false)) {
+			// The field as the source names it — the first segment past the table. A dot-walk
+			// (`Recorder.Date`) hangs off that same field, so it goes with it.
+			const wxString field = expr->m_path[1];
+			bool has = false;
+			for (const wxString& name : available)
+				if (name.IsSameAs(field, false)) { has = true; break; }
+			if (!has)
+				return true;
+		}
+
+		if (lost(expr->m_lhs) || lost(expr->m_rhs) || lost(expr->m_arg)
+		    || lost(expr->m_low) || lost(expr->m_high) || lost(expr->m_else))
+			return true;
+		for (const ibQueryAstExprPtr& item : expr->m_list)
+			if (lost(item))
+				return true;
+		for (const auto& branch : expr->m_cases)
+			if (lost(branch.first) || lost(branch.second))
+				return true;
+		return false;
+	};
+
+	select.m_projections.erase(
+		std::remove_if(select.m_projections.begin(), select.m_projections.end(),
+			[&](const ibQueryProjection& p) { return lost(p.m_expr); }),
+		select.m_projections.end());
+
+	const auto dropTerms = [&](ibQueryAstExprPtr& clause) {
+		std::vector<ibQueryAstExprPtr> terms;
+		ibQueryFlattenAnd(clause, terms);
+		terms.erase(std::remove_if(terms.begin(), terms.end(), lost), terms.end());
+		clause = ibQueryFoldAnd(terms);
+	};
+	dropTerms(select.m_where);
+	dropTerms(select.m_having);
+
+	const auto dropExprs = [&](std::vector<ibQueryAstExprPtr>& list) {
+		list.erase(std::remove_if(list.begin(), list.end(), lost), list.end());
+	};
+	dropExprs(select.m_groupBy);
+	dropExprs(select.m_indexBy);
+	dropExprs(select.m_totalsAggregates);
+
+	select.m_orderBy.erase(
+		std::remove_if(select.m_orderBy.begin(), select.m_orderBy.end(),
+			[&](const ibQueryOrderItem& o) { return lost(o.m_expr); }),
+		select.m_orderBy.end());
+	select.m_totalsBy.erase(
+		std::remove_if(select.m_totalsBy.begin(), select.m_totalsBy.end(),
+			[&](const ibQueryTotalDim& d) { return lost(d.m_expr); }),
+		select.m_totalsBy.end());
+
+	for (ibQueryAstJoin& join : select.m_joins)
+		if (lost(join.m_on)) {
+			join.m_on = nullptr;
+			join.m_kind = ibQueryJoinKindAst::Inner;
+		}
+}
+
 void queryctor::ibQueryDropSourceReferences(ibQuerySelect& select, const wxString& source)
 {
 	if (source.IsEmpty())

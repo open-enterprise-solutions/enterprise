@@ -39,16 +39,23 @@
 // all; a unit = `Period`, rolled to it. That is `ibRegisterViewColumnFits` — the same rule the source
 // explorer answers with, so what the catalogue offers and what the read returns cannot drift.
 static void SeedRamTableFromView(ibQueryRamTable& table, const ibBackendQueryable* view,
-                                 const ibValueMetaObjectAttributeBase* period, const ibRegFold& fold)
+                                 const ibValueMetaObjectAccumulationRegister* reg, const ibRegFold& fold)
 {
 	if (view == nullptr)
 		return;
 
+	const ibValueMetaObjectAttributeBase* period = reg != nullptr ? reg->GetRegisterPeriod() : nullptr;
 	const wxString periodName = period != nullptr ? period->GetName() : wxString();
+
+	// The movement's own identity travels with the same rule the field tree uses — a row that covers
+	// a whole interval was written by no one document, so it carries neither.
+	const bool subordinate = reg != nullptr && reg->HasRecorder();
+	const wxString recorderName = subordinate && reg->GetRegisterRecorder()   != nullptr ? reg->GetRegisterRecorder()->GetName()   : wxString();
+	const wxString lineName     = subordinate && reg->GetRegisterLineNumber() != nullptr ? reg->GetRegisterLineNumber()->GetName() : wxString();
 	for (const ibBackendQueryColumn* col : view->GetColumns()) {
 		if (col == nullptr)
 			continue;
-		if (!periodName.IsEmpty() && !ibRegisterViewColumnFits(col->GetName(), periodName, fold))
+		if (!periodName.IsEmpty() && !ibRegisterViewColumnFits(col->GetName(), periodName, fold, recorderName, lineName))
 			continue;
 		table.AddColumn(col->GetColumnId(), col->GetName(), col->GetTypeDesc());
 	}
@@ -116,7 +123,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalance(const ibVa
 	// is the whole of what a balance is.
 	const ibBackendQueryable* source = GetViewQueryable(GetTurnoverViewName(), ibViewShape::Turnovers);
 	SeedRamTableFromView(retTable, GetViewQueryable(GetBalanceViewName(), ibViewShape::Balance),
-	                     GetRegisterPeriod(), ibRegFold());
+	                     this, ibRegFold());
 	if (source == nullptr)
 		return retTable;
 
@@ -227,7 +234,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibV
 	// The table this returns IS the view's shape (ids, names, types), filtered by which period
 	// columns this reading actually carries.
 	ibQueryRamTable retTable;
-	SeedRamTableFromView(retTable, view, GetRegisterPeriod(), cFold);
+	SeedRamTableFromView(retTable, view, this, cFold);
 
 	const wxString periodName = GetRegisterPeriod() != nullptr ? GetRegisterPeriod()->GetName() : wxString();
 	const ibBackendQueryColumn* periodCol = view->ResolveColumnByName(periodName);
@@ -349,7 +356,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 	ibQueryRamTable retTable;
 	SeedRamTableFromView(retTable,
 	                     GetViewQueryable(GetBalanceAndTurnoverViewName(), ibViewShape::BalanceAndTurnovers),
-	                     GetRegisterPeriod(), cFold);
+	                     this, cFold);
 	if (source == nullptr)
 		return retTable;
 
