@@ -481,6 +481,110 @@ void LiftJoinConditions(ibQuerySelect& s)
 	s.m_where = ibQueryFoldAnd(kept);
 }
 
+// ⭐⭐ THE ORDER OF THE TABLES IS THE ENGINE'S BUSINESS, NOT THE AUTHOR'S.
+//
+// Sources are joined left to right, so a link may only relate tables already read. Add a table and
+// then link it to one added AFTER it and the query is refused — correctly, but for a reason the
+// author has no way to see: both are tables of the same query, and nothing on the screen says one
+// of them is "later". Ordering them by hand is bookkeeping the engine can do.
+//
+// So a RUN of INNER joins is reordered until every link stands on tables already in scope.
+//
+// TWO THINGS IT WILL NOT DO, and both are about not changing what was written:
+//   * AN OUTER JOIN NEVER MOVES, and it ends the run. Position IS meaning there: which side gets
+//     null-padded, and what a later link sees of the padded rows, both depend on where it sits.
+//     Only INNER commutes.
+//   * A CYCLE IS LEFT ALONE. If no remaining join can be satisfied, the rest keep their order and
+//     the consistency check says so in its own words — inventing an order for a query that has no
+//     valid one would replace a clear complaint with a silent wrong answer.
+//
+// Names, not positions: a link mentions tables BY NAME, so what matters is which names are in scope
+// when it is made. That also makes the pass safe to run twice (it is idempotent on a sound query).
+void ReorderInnerJoins(ibQuerySelect& s)
+{
+	if (s.m_joins.size() < 2)
+		return;
+
+	const auto nameOf = [](const ibQuerySource& source) -> wxString {
+		if (!source.m_alias.IsEmpty())
+			return source.m_alias;
+		return source.m_name.empty() ? wxString() : source.m_name.back();
+	};
+
+	// The names a link mentions — qualified paths only, for the same reason LiftJoinConditions reads
+	// only those: a bare column says nothing about which table it stands on, and this pass does not
+	// resolve names. Walks the whole predicate, so `a.x = b.y AND a.z = c.w` names all three.
+	std::function<void(const ibQueryAstExprPtr&, std::vector<wxString>&)> mentions =
+		[&mentions](const ibQueryAstExprPtr& e, std::vector<wxString>& out) {
+		if (!e)
+			return;
+		if (e->m_kind == ibQueryAstExprKind::Column && e->m_path.size() >= 2)
+			out.push_back(e->m_path.front());
+		mentions(e->m_arg, out);  mentions(e->m_lhs, out);  mentions(e->m_rhs, out);
+		mentions(e->m_low, out);  mentions(e->m_high, out); mentions(e->m_else, out);
+		for (const ibQueryAstExprPtr& item : e->m_list) mentions(item, out);
+		for (const auto& branch : e->m_cases) { mentions(branch.first, out); mentions(branch.second, out); }
+		// A nested SELECT has its own scope — the names inside it say nothing about THIS query's order.
+	};
+
+	std::vector<ibQueryAstJoin> out;
+	out.reserve(s.m_joins.size());
+
+	std::vector<wxString> inScope;
+	inScope.push_back(nameOf(s.m_from));
+
+	size_t i = 0;
+	while (i < s.m_joins.size()) {
+		// An OUTER join is a fence: everything before it is settled, it stays where it is.
+		if (s.m_joins[i].m_kind != ibQueryJoinKindAst::Inner) {
+			inScope.push_back(nameOf(s.m_joins[i].m_source));
+			out.push_back(s.m_joins[i]);
+			++i;
+			continue;
+		}
+
+		// The run of consecutive INNER joins starting here.
+		size_t end = i;
+		while (end < s.m_joins.size() && s.m_joins[end].m_kind == ibQueryJoinKindAst::Inner)
+			++end;
+
+		std::vector<ibQueryAstJoin> pending(s.m_joins.begin() + i, s.m_joins.begin() + end);
+		while (!pending.empty()) {
+			size_t pick = pending.size();   // none
+			for (size_t k = 0; k < pending.size(); ++k) {
+				std::vector<wxString> named;
+				mentions(pending[k].m_on, named);
+				const wxString own = nameOf(pending[k].m_source);
+				bool satisfied = true;
+				for (const wxString& n : named) {
+					if (n.IsSameAs(own, false))
+						continue;
+					bool known = false;
+					for (const wxString& have : inScope)
+						if (have.IsSameAs(n, false)) { known = true; break; }
+					if (!known) { satisfied = false; break; }
+				}
+				if (satisfied) { pick = k; break; }
+			}
+			if (pick == pending.size()) {
+				// A cycle, or a link naming something outside this query. Leave the remainder as
+				// written — the complaint belongs to the check, with the author's own order in it.
+				for (const ibQueryAstJoin& rest : pending) {
+					inScope.push_back(nameOf(rest.m_source));
+					out.push_back(rest);
+				}
+				break;
+			}
+			inScope.push_back(nameOf(pending[pick].m_source));
+			out.push_back(pending[pick]);
+			pending.erase(pending.begin() + pick);
+		}
+		i = end;
+	}
+
+	s.m_joins.swap(out);
+}
+
 void RewriteSelectInPlace(ibQuerySelect& s)
 {
 	// Children first: a flattenable child collapses before the parent looks at it.
@@ -498,6 +602,10 @@ void RewriteSelectInPlace(ibQuerySelect& s)
 		// FlattenFrom, which may bring a subquery's own joins up into this list.
 		LiftJoinConditions(s);
 	}
+
+	// AFTER the lift, because a term moved into an empty ON changes which tables that link names —
+	// and therefore where it may stand.
+	ReorderInnerJoins(s);
 
 	FlattenFrom(s);
 }
@@ -520,6 +628,13 @@ ibQuerySelectPtr ibQueryRewrite::Rewrite(const ibQuerySelect& ast)
 ibQuerySelectPtr ibQueryRewrite::Clone(const ibQuerySelect& ast)
 {
 	return CloneSelect(ast);
+}
+
+ibQuerySelectPtr ibQueryRewrite::ReorderJoins(const ibQuerySelect& ast)
+{
+	ibQuerySelectPtr clone = CloneSelect(ast);
+	ReorderInnerJoins(*clone);
+	return clone;
 }
 
 ibQueryAstExprPtr ibQueryTrueLiteral()

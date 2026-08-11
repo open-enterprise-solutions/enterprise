@@ -47,11 +47,6 @@ ibDataQueryBuilder& ibDataQueryBuilder::From(const ibBackendQueryable* queryable
 	return *this;
 }
 
-ibDataQueryBuilder& ibDataQueryBuilder::Join(const ibBackendQueryable* queryable, ibQueryJoinKind kind, const wxString& alias)
-{
-	return Join(queryable, nullptr, nullptr, kind, alias);   // auto-join by reference (dot-walk style)
-}
-
 ibDataQueryBuilder& ibDataQueryBuilder::Join(const ibBackendQueryable* queryable,
 	const ibBackendQueryColumn* onLeft, const ibBackendQueryColumn* onRight,
 	ibQueryJoinKind kind, const wxString& alias)

@@ -253,3 +253,77 @@ TEST(QueryRewrite, CloneCarriesTheStatementWords)
 	EXPECT_TRUE(rewritten->m_allowed);
 	EXPECT_TRUE(rewritten->m_forUpdate);
 }
+
+//////////////////////////////////////////////////////////////////////
+// Rule — a run of INNER joins is ordered so every link stands on
+// tables already read. The author writes tables in the order they
+// think of them; which one has to come first is the engine's problem.
+//////////////////////////////////////////////////////////////////////
+
+namespace {
+// The name a source is known by in the FROM list — the alias where there is one.
+wxString JoinedName(const ibQuerySelect& sel, size_t index)
+{
+	const ibQuerySource& source = sel.m_joins[index].m_source;
+	if (!source.m_alias.IsEmpty())
+		return source.m_alias;
+	return source.m_name.empty() ? wxString() : source.m_name.back();
+}
+} // namespace
+
+TEST(QueryRewrite, InnerJoinNamingALaterTable_IsMovedAfterIt)
+{
+	// `b` is linked to `c`, which is written after it. Both joins are INNER, so the order is the
+	// engine's to choose and `c` has to be read first.
+	auto sel = ParseAndRewrite(
+		wxT("SELECT b.Code FROM Catalog.Products AS a ")
+		wxT("INNER JOIN Catalog.Units AS b ON b.Owner = c.Ref ")
+		wxT("INNER JOIN Catalog.Owners AS c ON c.Ref = a.Owner"));
+
+	ASSERT_EQ(sel->m_joins.size(), 2u);
+	EXPECT_EQ(JoinedName(*sel, 0), wxT("c"));
+	EXPECT_EQ(JoinedName(*sel, 1), wxT("b"));
+}
+
+TEST(QueryRewrite, AnOuterJoinIsAFence_NothingCrossesIt)
+{
+	// The same shape with `c` joined LEFT. Position is meaning for an outer join — which side is
+	// null-padded, and what a later link sees of the padded rows — so it does not move, and `b`
+	// cannot jump over it. The query stays as written and the consistency check owns the complaint.
+	auto sel = ParseAndRewrite(
+		wxT("SELECT b.Code FROM Catalog.Products AS a ")
+		wxT("INNER JOIN Catalog.Units AS b ON b.Owner = c.Ref ")
+		wxT("LEFT JOIN Catalog.Owners AS c ON c.Ref = a.Owner"));
+
+	ASSERT_EQ(sel->m_joins.size(), 2u);
+	EXPECT_EQ(JoinedName(*sel, 0), wxT("b"));
+	EXPECT_EQ(JoinedName(*sel, 1), wxT("c"));
+}
+
+TEST(QueryRewrite, ACycleIsLeftExactlyAsWritten)
+{
+	// `b` needs `c` and `c` needs `b`: there is no order in which both links stand on tables already
+	// read. Inventing one would replace a clear complaint with a silent wrong answer.
+	auto sel = ParseAndRewrite(
+		wxT("SELECT b.Code FROM Catalog.Products AS a ")
+		wxT("INNER JOIN Catalog.Units AS b ON b.Owner = c.Ref ")
+		wxT("INNER JOIN Catalog.Owners AS c ON c.Ref = b.Owner"));
+
+	ASSERT_EQ(sel->m_joins.size(), 2u);
+	EXPECT_EQ(JoinedName(*sel, 0), wxT("b"));
+	EXPECT_EQ(JoinedName(*sel, 1), wxT("c"));
+}
+
+TEST(QueryRewrite, AlreadyOrderedJoins_AreLeftAlone)
+{
+	// The pass must be idempotent on a sound query — a reorder that shuffled a correct FROM would
+	// change the plan under every existing query for no reason.
+	auto sel = ParseAndRewrite(
+		wxT("SELECT b.Code FROM Catalog.Products AS a ")
+		wxT("INNER JOIN Catalog.Units AS b ON b.Owner = a.Ref ")
+		wxT("INNER JOIN Catalog.Owners AS c ON c.Ref = b.Owner"));
+
+	ASSERT_EQ(sel->m_joins.size(), 2u);
+	EXPECT_EQ(JoinedName(*sel, 0), wxT("b"));
+	EXPECT_EQ(JoinedName(*sel, 1), wxT("c"));
+}

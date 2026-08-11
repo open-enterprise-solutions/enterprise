@@ -3285,6 +3285,14 @@ one that matters:
 
 One shape, one meaning: a link is written, or there is none and the tables multiply.
 
+**And the door lost the same door.** `ibDataQueryBuilder` still carried a keyless
+`Join(queryable, kind, alias)` overload — the C++ side of exactly the removed sentence, which
+derived the keys from whichever column happened to reference the other table
+(`ResolveNodeKeys`' auto-derivation). It is gone: the door's `Join` takes an `ibJoinOn`, and
+`ResolveNodeKeys` now resolves only keys somebody named. A language cannot stop guessing while the
+API underneath it still guesses — the second door would have been the one place the removed meaning
+survived, reachable from every C++ caller and invisible to the parser test that pinned the removal.
+
 ### A link written as a condition is still a link — `ibQueryRewrite::LiftJoinConditions`
 
 `FROM A, B WHERE A.x = B.y` is how a join was written before anyone spelled `JOIN`, and it is what
@@ -3442,9 +3450,32 @@ it takes a snapshot of exactly those three, owned by the schema itself through t
 alone — it outlives the schema by construction. Applied at every exit where the owner is local and
 the schema escapes: `ExecuteImpl` (both terminals), `DescribeOutput`, `ExecuteTotals`, `LowerUnion`.
 
+### The order of the tables is the engine's business
+
+A link may only relate tables already read, because sources are joined left to right. Written
+against a table added LATER it was refused — correctly, and for a reason the author has no way to
+see: both are tables of the same query, and nothing on the screen says one of them is "later".
+
+So a RUN of INNER joins is now reordered until every link stands on tables already in scope
+(`ibQueryRewrite::ReorderInnerJoins`). Two things it will not do, and both are about not changing
+what was written:
+
+* **an OUTER join never moves, and it ends the run.** Position IS meaning there — which side gets
+  null-padded, and what a later link sees of the padded rows. Only INNER commutes.
+* **a cycle is left exactly as written.** If no remaining join can be satisfied, the author's order
+  survives and the consistency check says so in its own words. Inventing an order for a query that
+  has no valid one would replace a clear complaint with a silent wrong answer.
+
+It works on NAMES rather than positions — a link names tables, so what matters is which names are in
+scope when it is made — which also makes the pass idempotent on a query that was already sound.
+
+And the CHECK judges what will RUN: `CheckSelectNames` applies this one rule (and only this one) to a
+clone before resolving, or the constructor would report a forward reference the execution never
+hits. The rest of the optimizer rephrases the query, and a check must not judge a rephrasing the
+author cannot see.
+
 ### Still open (named, not smuggled)
 
-* a run of INNER joins is not REORDERED, so a link may not name a table added after it;
 * the periodicity shorthand on turnovers (`…Turnovers(&From, &To, Month)`) is still refused by the
   lowering — see [register-totals-strategy.md](register-totals-strategy.md);
 * a filter structure written in script code does not yet convert into the same condition.

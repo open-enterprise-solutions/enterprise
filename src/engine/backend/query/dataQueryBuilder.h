@@ -238,9 +238,13 @@ enum class ibJoinCompareOp { Eq, Ne, Lt, Le, Gt, Ge };
 // express it live in one cohesive place. By convention: m_cross = cartesian (ON TRUE); else m_exprL/m_exprR
 // set = a COMPUTED theta join (a.x+1 <op> b.y), always RAM nested-loop — no column key to qualify against a
 // leaf's table; else m_colL/m_colR = explicit key columns (Eq -> hash, other m_op -> theta), co-locatable
-// either way; all null and not cross = an auto-join by reference (dot-walk style).
+// either way.
+//
+// ⚠ THERE IS NO FOURTH CASE ANY MORE. "All null and not cross" used to mean an auto-join by
+// reference, worked out from the metadata — which made one query text mean different things as the
+// metadata changed. Nothing produces that shape now; an ON is written or the join is a product.
 struct ibJoinOn {
-	const ibBackendQueryColumn*  m_colL  = nullptr;   // explicit key columns (both null + !cross = auto-join by reference)
+	const ibBackendQueryColumn*  m_colL  = nullptr;   // explicit key columns
 	const ibBackendQueryColumn*  m_colR  = nullptr;
 	ibJoinCompareOp              m_op    = ibJoinCompareOp::Eq;   // Eq -> hash; non-Eq -> theta (server-side when co-located)
 	ibQueryColumnExprPtr         m_exprL;                         // computed ON: LEFT-side expr (presence -> theta)
@@ -356,9 +360,9 @@ public:
 	// b vertically (same projection). The door builds an ibQueryNode TREE; the composer
 	// realizes it over each leaf's provider — co-located into one SQL where possible,
 	// else materialised + stitched. (docs/query-language-arc.md §22.1)
-	ibDataQueryBuilder& Join(const ibBackendQueryable* queryable,
-	                         ibQueryJoinKind kind = ibQueryJoinKind::Inner,
-	                         const wxString& alias = wxEmptyString);                            // auto-join by reference
+	// ⛔ NO KEYLESS OVERLOAD. `Join(b)` used to mean "work the link out from a reference" — removed
+	// with the derivation behind it. A join carries its ON; a product is CrossJoin, and in the
+	// language it is written with a comma.
 	ibDataQueryBuilder& Join(const ibBackendQueryable* queryable,
 	                         const ibBackendQueryColumn* onLeft, const ibBackendQueryColumn* onRight,
 	                         ibQueryJoinKind kind = ibQueryJoinKind::Inner,

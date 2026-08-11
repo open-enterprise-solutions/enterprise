@@ -45,6 +45,13 @@ public:
 	// duplicating a union branch — wants exactly that and emphatically not the rewriting. Running
 	// Rewrite() for a copy would hand the author back a query rephrased behind their back.
 	static ibQuerySelectPtr Clone(const ibQuerySelect& ast);
+
+	// THE JOIN REORDER ALONE — a clone whose runs of INNER joins are ordered so every link stands on
+	// tables already read, and nothing else touched. Rewrite() does this as one of its rules; this
+	// door exists for the CHECK, which must judge the query that will RUN rather than the text as
+	// typed. Without it the constructor reports a forward reference the execution never sees.
+	// An OUTER join never moves and a cycle is left as written — see the pass for why.
+	static ibQuerySelectPtr ReorderJoins(const ibQuerySelect& ast);
 };
 
 // A PREDICATE'S TOP-LEVEL `AND` CHAIN, AND ITS INVERSE. A WHERE is a LIST of conditions to whoever

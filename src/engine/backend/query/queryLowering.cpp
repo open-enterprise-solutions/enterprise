@@ -2086,8 +2086,20 @@ void CheckJoinsAreConsistent(const ibQuerySelect& ast, const std::vector<ibSourc
 	}
 }
 
-void CheckSelectNames(const ibQuerySelect& ast, const std::map<wxString, ibValue>& params)
+void CheckSelectNames(const ibQuerySelect& astAsWritten, const std::map<wxString, ibValue>& params)
 {
+	// ⭐ JUDGE WHAT WILL RUN, NOT WHAT WAS TYPED. The execution reorders a run of INNER joins so a
+	// link may name a table added after it (ibQueryRewrite::ReorderJoins — an OUTER join never moves,
+	// a cycle is left alone). Checking the text in its written order would report a forward reference
+	// the engine never hits, which is the worst kind of complaint: true about the sentence, false
+	// about the query, and impossible for the author to act on.
+	//
+	// Only that one rule is applied. The rest of the optimizer rephrases the query, and a check must
+	// not judge a rephrasing the author cannot see.
+	const ibQuerySelectPtr ordered = astAsWritten.m_joins.size() > 1
+		? ibQueryRewrite::ReorderJoins(astAsWritten) : nullptr;
+	const ibQuerySelect& ast = ordered ? *ordered : astAsWritten;
+
 	// A nested SELECT anywhere in an expression is checked with ITS own sources.
 	auto checkNested = [&params](const ibQueryAstExprPtr& e) {
 		std::vector<const ibQueryAstExpr*> unusedColumns;
