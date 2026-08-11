@@ -176,6 +176,19 @@ ibDialogQueryCase::ibDialogQueryCase(wxWindow* parent,
 	SetSizer(outer);
 	Bind(wxEVT_BUTTON, &ibDialogQueryCase::OnOk, this, wxID_OK);
 
+	// The branches are what this window is for, so the keyboard starts there rather than on OK —
+	// same rule as the expression editor beside it. An empty CASE has nothing to stand on yet, so
+	// the ELSE box takes it: that is the one line already writable.
+	Bind(wxEVT_INIT_DIALOG, [this](wxInitDialogEvent& event) {
+		event.Skip();
+		if (m_readOnly)
+			return;
+		if (m_branches.empty())
+			m_elseBox->SetFocus();
+		else
+			m_grid->SetFocus();
+	});
+
 	ShowBranches();
 }
 

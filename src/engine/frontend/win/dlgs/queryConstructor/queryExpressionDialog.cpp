@@ -143,9 +143,10 @@ ibDialogQueryExpression::ibDialogQueryExpression(wxWindow* parent, const wxStrin
 	// grey characters.
 	m_text = new wxStyledTextCtrl(this, wxID_ANY, wxDefaultPosition, FromDIP(wxSize(-1, 150)));
 	ibStyleQueryText(m_text);
-	if (existing)
+	if (existing) {
 		m_text->SetText(ibRenderQueryExpr(*existing));
 		ibMarkQueryParameters(m_text);
+	}
 	// A DROP LANDS WHERE IT WAS DROPPED. The field travels as its own text, so the drop needs only
 	// to put the caret under the mouse and write it — no payload format of our own.
 	// WHERE IT WAS DROPPED, not where the caret happened to be. A field dragged into the middle of a
@@ -204,6 +205,24 @@ ibDialogQueryExpression::ibDialogQueryExpression(wxWindow* parent, const wxStrin
 		Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { EndModal(wxID_CANCEL); }, wxID_CLOSE);
 	}
 	Bind(wxEVT_BUTTON, &ibDialogQueryExpression::OnOk, this, wxID_OK);
+
+	// ⭐⭐ THE CARET IS ALREADY IN THE TEXT WHEN THE WINDOW OPENS. This dialog exists to write ONE
+	// thing; opening it and landing the focus on the OK button means the first keystroke goes
+	// nowhere and the author has to click into the very box the window was opened for.
+	//
+	// AT THE END of what is already written, not selecting it — a caret that arrives with the whole
+	// expression highlighted destroys it on the first character typed. The same place the editor
+	// puts it after every other insertion, so the continuation point is one habit.
+	//
+	// ⚠ ON INIT_DIALOG, not in the constructor: the modal show sets the initial focus itself, after
+	// the constructor has run, and would take it back.
+	Bind(wxEVT_INIT_DIALOG, [this](wxInitDialogEvent& event) {
+		event.Skip();   // the dialog still transfers its data
+		if (m_readOnly)
+			return;
+		m_text->SetFocus();
+		m_text->GotoPos(m_text->GetLastPosition());
+	});
 }
 
 // ---------------------------------------------------------------------------

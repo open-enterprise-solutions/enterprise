@@ -445,6 +445,26 @@ public:
 			wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, FromDIP(8));
 		SetSizerAndFit(root);
 		SetMinSize(GetSize());   // fitted size is the FLOOR: shrinking below it hides the buttons
+
+		// AND THE FIRST BOX A PERSON CAN WRITE IN HAS THE KEYBOARD. Opening a window to fill in the
+		// arguments and having to click into the first field first is the same small tax the
+		// expression editor used to charge; the answer is the same one.
+		Bind(wxEVT_INIT_DIALOG, [this](wxInitDialogEvent& event) {
+			event.Skip();
+			if (m_readOnly)
+				return;
+			for (const Row& row : m_boxes) {
+				if (row.m_code != nullptr) {
+					row.m_code->SetFocus();
+					row.m_code->GotoPos(row.m_code->GetLastPosition());
+					return;
+				}
+				if (row.m_choice != nullptr) {
+					row.m_choice->SetFocus();
+					return;
+				}
+			}
+		});
 	}
 
 	// THE ARGUMENTS AS EXPRESSIONS, in declaration order. An empty box means "not given" and travels

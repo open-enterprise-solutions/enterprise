@@ -109,6 +109,16 @@ void ibDialogQueryConstructor::OnShowQueryText(wxCommandEvent&)
 
 	window.SetSizer(sizer);
 	window.Bind(wxEVT_BUTTON, [&window](wxCommandEvent&) { window.EndModal(wxID_CLOSE); }, wxID_CLOSE);
+
+	// AND THE TEXT HAS THE KEYBOARD, same rule as every other editor in this constructor: a window
+	// opened to write in must not spend its first keystroke on a button.
+	//
+	// ⚠ THE CARET STAYS WHERE IT WAS. This pane is the one the author may have SELECTED a span in --
+	// "Open the selection" reads exactly that -- so it is focused without being moved.
+	window.Bind(wxEVT_INIT_DIALOG, [this](wxInitDialogEvent& event) {
+		event.Skip();
+		m_preview->SetFocus();
+	});
 	window.ShowModal();
 
 	// ⚠ HANDED BACK BEFORE THE WINDOW DIES, or it goes down with it as one of its children — and the
