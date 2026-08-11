@@ -94,7 +94,7 @@ void ibValueMetaObjectRecordDataMutableRef::ContributeTables(ibSchemaSnapshot& o
 {
 	// --- the record's main table ---
 	ibSchemaTable& t = out.CreateSchemaTable(GetQueryable());
-	const ibBackendQueryColumn* uuid = t.Scaffold(ibRawDBColumn::Guid(wxT("uuid")));   // uuid row-key
+	const ibBackendQueryColumn* uuid = t.Scaffold(ibRowKeyColumn());   // uuid row-key
 
 	// THE GENERIC LIST, not predefined + own: it is the one that also carries the common
 	// attributes this object was checked into. They are columns like any other — but they
@@ -118,7 +118,7 @@ void ibValueMetaObjectRecordDataMutableRef::ContributeTables(ibSchemaSnapshot& o
 	// --- tabular sections — each its own table ---
 	for (const auto tab : GetTableArrayObject()) {
 		ibSchemaTable& tt = out.CreateSchemaTable(tab->GetQueryable());
-		const ibBackendQueryColumn* tabUuid = tt.Scaffold(ibRawDBColumn::Guid(wxT("uuid")));
+		const ibBackendQueryColumn* tabUuid = tt.Scaffold(ibRowKeyColumn());
 		for (const auto object : tab->GetGenericAttributeArrayObject())
 			tt.Add(object);
 		tt.Index(tt.m_name + wxT("_INDEX"), { tabUuid });                     // tabular uuid index — NOT unique (repeats per owner)
@@ -132,7 +132,7 @@ void ibValueMetaObjectRecordDataEnumRef::ContributeTables(ibSchemaSnapshot& out)
 {
 	// The enum table is just the uuid key — the enum VALUES are its SEED rows (data), not columns.
 	ibSchemaTable& t = out.CreateSchemaTable(GetQueryable());
-	const ibBackendQueryColumn* uuid = t.Scaffold(ibRawDBColumn::Guid(wxT("uuid")));
+	const ibBackendQueryColumn* uuid = t.Scaffold(ibRowKeyColumn());
 	t.Index(t.m_name + wxT("_INDEX"), { uuid }, true);
 
 	// SEED rows: one per enum value, uuid only (no cells) — the builder diffs by uuid (new -> insert,
@@ -176,6 +176,26 @@ void ibValueMetaObjectRegisterData::ContributeTables(ibSchemaSnapshot& out) cons
 	}
 	if (!idxCols.empty())
 		t.Index(t.m_name + wxT("_INDEX"), idxCols, true);
+
+	// ⭐⭐ THE PERIOD IS A READ PATH, NOT A KEY — and a subordinate register had no index on it.
+	//
+	// Its key is (Recorder, LineNumber), which answers "the lines of this document" and nothing else.
+	// Every reading that matters asks the opposite question: the movements of an INTERVAL. Those are
+	// the sub-grain tail of a totals read ("the balance at noon" = the stored total at midnight plus
+	// today's movements), the boundary that names a document, and any direct read of the register
+	// over dates. Without this index each of them is a full scan of the movements — bounded by the
+	// register's whole history rather than by the day asked for, which is the difference between a
+	// range read and a table that grows until reports stop.
+	//
+	// (Period, Recorder) in that order, because it is the order a moment is COMPARED in
+	// (ibValuePointInTime::CompareValueLS): the same index serves "up to this instant" and "up to
+	// this document within the instant", and the second needs no re-sort.
+	//
+	// ⚠ NOT the line number. It already rides the key index above, where it is asked for; on its own
+	// it is a small integer repeated across every document — an index the planner would never choose
+	// and every INSERT would pay for. A fold over the tail sums lines, and a sum has no order.
+	if (HasRecorder() && GetRegisterPeriod() != nullptr && GetRegisterRecorder() != nullptr)
+		t.Index(t.m_name + wxT("_PIX"), { GetRegisterPeriod(), GetRegisterRecorder() });
 
 	// Per-field secondary indexes. Dimensions, resources, attributes and predefined all carry the
 	// Indexing flag (each is-a ibValueMetaObjectAttribute), so GetGenericAttributeArrayObject covers
@@ -269,7 +289,10 @@ std::vector<ibQuerySortItem> ibRecordQueryable::GetIdentitySort() const {
 	// real recorder/line/dimension columns (no null sentinel, no GetRowKeyColumn special case;
 	// Pass 1 of BuildSortKeys consumes it uniformly). uuid stays as this rudiment key-column
 	// until it is cleaned up; the function-local static gives a stable address for the sort item.
-	static const ibRawDBColumn s_uuidKey(guidName, ibRawDBColumn::RawType::String);
+	// The row key, asked of the layout tier — this used to name it a second time AND with the wrong
+	// kind (String, while every declaration of the column says Guid), which is exactly what a repeated
+	// name costs.
+	static const ibRawDBColumn s_uuidKey = ibRowKeyColumn();
 	return { ibQuerySortItem{ &s_uuidKey, true } };
 }
 // The uniqueness key (UPSERT match + dot-walk self-reference + row identity) — the data-reference

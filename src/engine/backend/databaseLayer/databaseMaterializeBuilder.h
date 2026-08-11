@@ -83,6 +83,24 @@ struct ibMaterializeView
 	bool     m_withPeriod   = true;    // project the period + every coarser unit as its own column
 	bool     m_dropZeroRows = false;   // HAVING <any column> <> 0 — "no value means no row"
 	std::vector<ibMaterializeViewColumn> m_columns;
+
+	// ⭐⭐ THE SECOND ARM — the rows the stored table does not carry YET.
+	//
+	// A maintained total is complete only up to the grain it is stored at: everything that happened
+	// inside the current period is in the MOVEMENTS and nowhere else. So the view can offer both
+	// halves as one relation — the stored rows UNION ALL the movements, each movement contributing
+	// exactly what it contributed to the total (the delta expressions, unchanged).
+	//
+	// The renderer does not know what that buys. It is a union of two row sources with one column
+	// list, and the caller decides where to cut between them: a reader takes stored rows below some
+	// boundary and movement rows above it, and neither half is counted twice. Ask for a boundary at
+	// or above the stored grain and the movement arm matches nothing — it costs a scan the planner
+	// prunes, which is why this can be the ONE relation both kinds of question read.
+	bool m_withMovements = false;
+
+	// Columns that exist only on the movement arm — the recorder's fields, a line number. NULL on
+	// the stored arm, which is also what tells the two apart without a flag column of its own.
+	std::vector<wxString> m_movementColumns;
 };
 
 // Everything L2-2 needs to render the maintenance bundle. Pure names and SQL fragments: the
@@ -243,6 +261,44 @@ struct ibMaterializeReadSpec
 
 	std::vector<ibMaterializeReadColumn> m_columns;
 	bool m_dropZeroRows = false;           // keep only rows where some reported figure is non-zero
+
+	// --- where to cut between a union view's two arms -------------------------------------------
+	// A view may carry the movements alongside the stored rows (ibMaterializeView::m_withMovements).
+	// Both halves describe the same figures, so a read that took them all would count the current
+	// grain TWICE. These say where the cut goes, and the caller has resolved every value already.
+
+	// The column that is NULL on the stored arm — empty means this view has one arm and no cut.
+	wxString m_markColumn;
+
+	// Where the stored arm ENDS: the start of the grain holding the upper boundary. INVALID is not
+	// "no boundary" — it means the question does not reach below the stored grain, so the movement
+	// arm is excluded outright, which is also the cheapest way to say "sleep".
+	ibValue m_floor;
+
+	// Where the stored arm BEGINS: the first WHOLE grain at or after the lower boundary. An interval
+	// that starts at noon cannot take today's stored row — it holds the morning too — so the head of
+	// such an interval comes from the movements exactly as its tail does. Invalid = the read is
+	// open-ended below (a balance), and the stored arm starts wherever the data does.
+	ibValue m_headSplit;
+
+	// The lower boundary's tail past the period, when it names a document. Same shape and order as
+	// m_boundaryTail, compared the other way round.
+	std::vector<std::pair<wxString, ibQueryExprPtr>> m_boundaryHead;
+
+	// Whether each boundary's own position is OUTSIDE the interval — "everything BEFORE this
+	// document" rather than "up to and including it". It changes one operator per side, and getting
+	// it wrong is wrong by exactly one document, which is the kind of wrong nobody notices.
+	bool m_toExcluding   = false;
+	bool m_fromExcluding = false;
+
+	// The boundary's tail past the period, compared in order: the recorder's fields, when the
+	// boundary names a document rather than an instant. Three documents can share a date, and this
+	// is what tells them apart — in the same order the value type compares them by.
+	//
+	// EXPRESSIONS rather than values, because a reference's key is bound as opaque BYTES: the caller
+	// decomposes the boundary through the same write codec the rows were stored with, and hands over
+	// what came out. L2-2 compares a column against a node and asks nothing about what is inside it.
+	std::vector<std::pair<wxString, ibQueryExprPtr>> m_boundaryTail;
 };
 
 // Build the relation for such a read. Returns a subquery relation — the caller drops it straight

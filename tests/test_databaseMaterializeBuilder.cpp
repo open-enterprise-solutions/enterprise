@@ -377,3 +377,109 @@ TEST(MaterializeRenderer, LeavesNoPlaceholdersBehind) {
     EXPECT_FALSE(all.Contains(wxT("{")));
     EXPECT_FALSE(all.Contains(wxT("}")));
 }
+
+// =============================================================================
+// THE MOVEMENT ARM — a view that carries what the totals do not hold yet.
+//
+// A maintained total is complete only down to the grain it is stored at. Everything inside the
+// current grain lives in the movements, so the view offers both halves as ONE relation and the
+// reader cuts between them. What these tests guard is the half that cannot announce itself: an arm
+// rendered with a different column list, or a movement whose contribution is computed by a second
+// expression that has quietly drifted from the trigger's.
+// =============================================================================
+
+TEST(MaterializeRenderer, WithoutTheArmTheViewReadsOnlyTheStoredTable) {
+    Fixture f;
+    const wxString text = CreateText(RenderSqlite(f.spec));
+    EXPECT_FALSE(text.Contains(wxT("UNION ALL")));
+}
+
+TEST(MaterializeRenderer, TheMovementArmIsAUnionOverTheSourceTable) {
+    Fixture f;
+    f.spec.m_views[0].m_withMovements = true;
+    const wxString text = CreateText(RenderSqlite(f.spec));
+
+    EXPECT_TRUE(text.Contains(wxT("UNION ALL")));
+    EXPECT_TRUE(text.Contains(wxT(" FROM Reg7")));      // the movements
+    EXPECT_TRUE(text.Contains(wxT(" FROM Reg7_T")));    // and the totals, still
+}
+
+// ⭐ THE CONTRIBUTION IS THE TRIGGER'S OWN EXPRESSION, not a second one that means the same today.
+// The arm computes each figure from spec.m_deltas — so a movement counted in the tail and the same
+// movement counted into the total are the same arithmetic BY CONSTRUCTION.
+TEST(MaterializeRenderer, TheArmComputesFiguresFromTheDeltaExpressions) {
+    Fixture f;
+    f.spec.m_views[0].m_withMovements = true;
+    const wxString text = CreateText(RenderSqlite(f.spec));
+
+    // The delta's own CASE, now over the source table rather than over {row}.
+    EXPECT_TRUE(text.Contains(wxT("CASE WHEN Reg7.rectype_ = 0 THEN Reg7.qty ELSE 0 END")));
+    EXPECT_TRUE(text.Contains(wxT("CASE WHEN Reg7.rectype_ = 0 THEN 0 ELSE Reg7.qty END")));
+    EXPECT_FALSE(text.Contains(wxT("{row}")));
+}
+
+// The period on the movement arm is the RAW instant: truncating it there would answer at the very
+// grain the arm exists to go below.
+TEST(MaterializeRenderer, TheArmKeepsTheRawInstantAsItsPeriod) {
+    Fixture f;
+    f.spec.m_views[0].m_withMovements = true;
+    const wxString text = CreateText(RenderSqlite(f.spec));
+    EXPECT_TRUE(text.Contains(wxT("Reg7.period_ AS period_")));
+}
+
+// A movement-only column is NULL on the stored arm — which is also how a reader tells the two
+// apart, with no flag column invented for it.
+TEST(MaterializeRenderer, AMovementOnlyColumnIsNullOnTheStoredArm) {
+    Fixture f;
+    f.spec.m_views[0].m_withMovements   = true;
+    f.spec.m_views[0].m_movementColumns = { wxT("recorder_RRRef") };
+    const wxString text = CreateText(RenderSqlite(f.spec));
+
+    EXPECT_TRUE(text.Contains(wxT("NULL AS recorder_RRRef")));
+    EXPECT_TRUE(text.Contains(wxT("Reg7.recorder_RRRef")));
+}
+
+// =============================================================================
+// ibNextPeriodStart — where a stored row stops covering.
+//
+// The twin of ibTruncateToPeriod, and the reason a reading whose lower boundary falls INSIDE a
+// grain cannot take that grain's stored row. Both walk the calendar rather than adding fixed
+// lengths, because months differ in length and the ten-day bucket that ends a month is not ten
+// days long. An off-by-one here loses or duplicates a whole grain of movements.
+// =============================================================================
+
+TEST(TotalsPeriod, NextDayStartIsTheFollowingMidnight) {
+    const wxDateTime noon(15, wxDateTime::Mar, 2026, 12, 30, 5);
+    EXPECT_EQ(wxDateTime(16, wxDateTime::Mar, 2026),
+              ibNextPeriodStart(noon, ibTotalsPeriod::Day));
+}
+
+TEST(TotalsPeriod, NextMonthStartCrossesAMonthOfAnyLength) {
+    EXPECT_EQ(wxDateTime(1, wxDateTime::Mar, 2026),
+              ibNextPeriodStart(wxDateTime(28, wxDateTime::Feb, 2026, 23, 59, 59), ibTotalsPeriod::Month));
+    EXPECT_EQ(wxDateTime(1, wxDateTime::Feb, 2026),
+              ibNextPeriodStart(wxDateTime(31, wxDateTime::Jan, 2026), ibTotalsPeriod::Month));
+}
+
+// The third ten-day bucket runs to the END of the month, so what follows it is the 1st of the next
+// month — not "ten days later", which would open a fourth bucket the truncation never produces.
+TEST(TotalsPeriod, TheLastTenDayBucketIsFollowedByTheNextMonth) {
+    EXPECT_EQ(wxDateTime(1, wxDateTime::Feb, 2026),
+              ibNextPeriodStart(wxDateTime(31, wxDateTime::Jan, 2026), ibTotalsPeriod::TenDays));
+    EXPECT_EQ(wxDateTime(11, wxDateTime::Jan, 2026),
+              ibNextPeriodStart(wxDateTime(5, wxDateTime::Jan, 2026), ibTotalsPeriod::TenDays));
+    EXPECT_EQ(wxDateTime(21, wxDateTime::Jan, 2026),
+              ibNextPeriodStart(wxDateTime(20, wxDateTime::Jan, 2026), ibTotalsPeriod::TenDays));
+}
+
+// A moment already ON a grain edge still moves to the NEXT one: the reading that asks for it wants
+// the grain it starts, not the one it ends.
+TEST(TotalsPeriod, AMomentOnTheEdgeStillMovesForward) {
+    const wxDateTime midnight(3, wxDateTime::Apr, 2026);
+    EXPECT_EQ(midnight, ibTruncateToPeriod(midnight, ibTotalsPeriod::Day));
+    EXPECT_EQ(wxDateTime(4, wxDateTime::Apr, 2026), ibNextPeriodStart(midnight, ibTotalsPeriod::Day));
+}
+
+TEST(TotalsPeriod, AnInvalidMomentStaysInvalid) {
+    EXPECT_FALSE(ibNextPeriodStart(wxDateTime(), ibTotalsPeriod::Day).IsValid());
+}

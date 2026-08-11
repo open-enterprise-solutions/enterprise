@@ -39,7 +39,7 @@
 // all; a unit = `Period`, rolled to it. That is `ibRegisterViewColumnFits` — the same rule the source
 // explorer answers with, so what the catalogue offers and what the read returns cannot drift.
 static void SeedRamTableFromView(ibQueryRamTable& table, const ibBackendQueryable* view,
-                                 const ibValueMetaObjectAttributeBase* period, const wxString& unitWord)
+                                 const ibValueMetaObjectAttributeBase* period, const ibRegFold& fold)
 {
 	if (view == nullptr)
 		return;
@@ -48,10 +48,32 @@ static void SeedRamTableFromView(ibQueryRamTable& table, const ibBackendQueryabl
 	for (const ibBackendQueryColumn* col : view->GetColumns()) {
 		if (col == nullptr)
 			continue;
-		if (!periodName.IsEmpty() && !ibRegisterViewColumnFits(col->GetName(), periodName, unitWord))
+		if (!periodName.IsEmpty() && !ibRegisterViewColumnFits(col->GetName(), periodName, fold))
 			continue;
 		table.AddColumn(col->GetColumnId(), col->GetName(), col->GetTypeDesc());
 	}
+}
+
+// ⭐⭐ THE VIEW HAS TWO ARMS, SO EVERY READER MUST SAY WHICH ONE IT WANTS.
+//
+// The turnovers view carries the stored rows AND the movements that came after them (the sub-grain
+// tail). That is what lets a balance stop at noon or at a document -- and it is also why a reader
+// that says NOTHING would get every movement of the current grain twice: once rolled into the
+// total, once as itself. There is no safe default here: silence is the wrong answer, not the
+// neutral one, and it is wrong in the direction that looks plausible.
+//
+// These readings fold whole intervals at the stored grain, so they take the stored arm. Sub-grain
+// precision belongs to the boundary reads (FillArmCut), which is where the floor lives.
+static void RestrictToStoredArm(ibDataQueryBuilder& b,
+                                const ibValueMetaObjectAccumulationRegister* reg,
+                                const ibBackendQueryable* view)
+{
+	if (reg == nullptr || view == nullptr || !reg->HasRecorder() || reg->GetRegisterRecorder() == nullptr)
+		return;
+
+	const ibBackendQueryColumn* mark = view->ResolveColumnByName(reg->GetRegisterRecorder()->GetName());
+	if (mark != nullptr)
+		b.Where(ibQueryPredicate::Null(mark, /*negated*/ false));
 }
 
 // ⛔ THE NUMERIC PIN IS GONE TOO, and its absence is the point: it existed to stop a hand-built
@@ -94,7 +116,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalance(const ibVa
 	// is the whole of what a balance is.
 	const ibBackendQueryable* source = GetViewQueryable(GetTurnoverViewName(), ibViewShape::Turnovers);
 	SeedRamTableFromView(retTable, GetViewQueryable(GetBalanceViewName(), ibViewShape::Balance),
-	                     GetRegisterPeriod(), wxString());
+	                     GetRegisterPeriod(), ibRegFold());
 	if (source == nullptr)
 		return retTable;
 
@@ -104,6 +126,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalance(const ibVa
 	ibDataQueryBuilder b;
 	b.From(source);
 	b.WithAccessPolicy(nullptr);   // a total filtered by the caller's rights is a wrong total
+	RestrictToStoredArm(b, this, source);
 
 	if (periodCol != nullptr && !cPeriod.IsEmpty())
 		b.WhereCompare(periodCol, ibQueryFilterOp::LessEqual, cPeriod);
@@ -178,12 +201,12 @@ ibQueryRamTable ibBalanceQueryable::ComputeRows(const std::vector<ibQueryConditi
 
 ibQueryRamTable ibTurnoverQueryable::ComputeRows(const std::vector<ibQueryCondition>& /*extra*/) const
 {
-	return m_reg->ComputeTurnover(m_begin, m_end, m_filter, m_unit, m_unitGiven);
+	return m_reg->ComputeTurnover(m_begin, m_end, m_filter, m_fold);
 }
 
 ibQueryRamTable ibBalanceAndTurnoverQueryable::ComputeRows(const std::vector<ibQueryCondition>& /*extra*/) const
 {
-	return m_reg->ComputeBalanceAndTurnover(m_begin, m_end, m_unit, m_filter);
+	return m_reg->ComputeBalanceAndTurnover(m_begin, m_end, m_fold, m_filter);
 }
 // ⭐⭐ THE READING IS A READING. Nothing is recomputed here.
 //
@@ -195,7 +218,7 @@ ibQueryRamTable ibBalanceAndTurnoverQueryable::ComputeRows(const std::vector<ibQ
 // that surface's shop window, and a view is an ordinary named relation — so this asks the door for
 // it exactly as any query would, and the only thing left here is WHICH rows and HOW they fold.
 ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibValue& cBegin, const ibValue& cEnd, const ibQueryPredicatePtr& cFilter,
-                                                                       ibTotalsPeriod unit, bool unitGiven) const
+                                                                       const ibRegFold& cFold) const
 {
 	const ibBackendQueryable* view = GetViewQueryable(GetTurnoverViewName(), ibViewShape::Turnovers);
 	if (view == nullptr)
@@ -204,14 +227,14 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibV
 	// The table this returns IS the view's shape (ids, names, types), filtered by which period
 	// columns this reading actually carries.
 	ibQueryRamTable retTable;
-	SeedRamTableFromView(retTable, view, GetRegisterPeriod(),
-	                     unitGiven ? ibRegisterUnitWord(unit) : wxString());
+	SeedRamTableFromView(retTable, view, GetRegisterPeriod(), cFold);
 
 	const wxString periodName = GetRegisterPeriod() != nullptr ? GetRegisterPeriod()->GetName() : wxString();
 	const ibBackendQueryColumn* periodCol = view->ResolveColumnByName(periodName);
 
 	ibDataQueryBuilder b;
 	b.From(view);
+	RestrictToStoredArm(b, this, view);
 	// ⚠ NOT FILTERED BY THE CALLER'S RIGHTS. Totals read through a right-limited view would report
 	// figures computed from the rows that caller happens to see, and a wrong total does not look
 	// like an error.
@@ -242,8 +265,15 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibV
 			? view->ResolveColumnByName(dimension->GetName()) : nullptr;
 		if (onView != nullptr) { keyCols.push_back(onView); b.GroupBy(onView); }
 	}
-	if (unitGiven && periodCol != nullptr)
-		b.GroupByExpr(ibQueryColumnExpr::PeriodTrunc(ibQueryColumnExpr::Col(periodCol), unit), periodName);
+	// ⭐ A CALENDAR FOLD TRUNCATES; THE REGISTER'S OWN PERIOD DOES NOT. `Period` groups by the column
+	// as it stands -- which is a different reading from "the interval whole", and used to be the same
+	// one because a bool could not hold the difference.
+	if (periodCol != nullptr) {
+		if (cFold.IsCalendar())
+			b.GroupByExpr(ibQueryColumnExpr::PeriodTrunc(ibQueryColumnExpr::Col(periodCol), cFold.m_unit), periodName);
+		else if (cFold.m_kind == ibRegGranularity::Period)
+			b.GroupBy(periodCol);
+	}
 
 	// SUM every figure the view reports. Which ones exist is the view's business — a turnover-only
 	// register simply has no receipt or expense column, and nothing here needs to know that rule.
@@ -281,7 +311,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibV
 			const long row = retTable.AppendRow();
 			for (const ibBackendQueryColumn* key : keyCols)
 				retTable.SetCell(row, key->GetColumnId(), sel.GetValue(key));
-			if (unitGiven)
+			if (cFold.HasPeriod())
 				retTable.SetByName(row, periodName, sel.GetColumn(periodName));
 			for (size_t i = 0; i < figures.size(); i++)
 				retTable.SetByName(row, figures[i], values[i]);
@@ -307,7 +337,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeTurnover(const ibV
 // — by the time rows reach the fold, both arrive as a receipt / expense pair per period.
 // ============================================================================
 ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover(
-	const ibValue& cBegin, const ibValue& cEnd, ibTotalsPeriod unit, const ibQueryPredicatePtr& cFilter) const
+	const ibValue& cBegin, const ibValue& cEnd, const ibRegFold& cFold, const ibQueryPredicatePtr& cFilter) const
 {
 	const bool withSign = (GetRegisterType() == ibRegisterType::eBalances);
 
@@ -319,7 +349,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 	ibQueryRamTable retTable;
 	SeedRamTableFromView(retTable,
 	                     GetViewQueryable(GetBalanceAndTurnoverViewName(), ibViewShape::BalanceAndTurnovers),
-	                     GetRegisterPeriod(), ibRegisterUnitWord(unit));
+	                     GetRegisterPeriod(), cFold);
 	if (source == nullptr)
 		return retTable;
 
@@ -356,6 +386,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 	auto openRead = [&](ibDataQueryBuilder& b) {
 		b.From(source);
 		b.WithAccessPolicy(nullptr);   // a total filtered by the caller's rights is a wrong total
+		RestrictToStoredArm(b, this, source);
 		for (const auto& leaf : leaves)
 			if (const ibBackendQueryColumn* onView = leaf.first != nullptr
 					? source->ResolveColumnByName(leaf.first->GetName()) : nullptr)
@@ -406,7 +437,10 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 		if (periodCol != nullptr) {
 			if (!cBegin.IsEmpty()) b.WhereCompare(periodCol, ibQueryFilterOp::GreaterEqual, cBegin);
 			if (!cEnd.IsEmpty())   b.WhereCompare(periodCol, ibQueryFilterOp::LessEqual,    cEnd);
-			b.GroupByExpr(ibQueryColumnExpr::PeriodTrunc(ibQueryColumnExpr::Col(periodCol), unit), periodName);
+			if (cFold.IsCalendar())
+				b.GroupByExpr(ibQueryColumnExpr::PeriodTrunc(ibQueryColumnExpr::Col(periodCol), cFold.m_unit), periodName);
+			else if (cFold.m_kind == ibRegGranularity::Period)
+				b.GroupBy(periodCol);
 		}
 		for (const auto res : resources) {
 			if (const ibBackendQueryColumn* col = source->ResolveColumnByName(res->GetName() + ibRegFigure::Receipt))
@@ -538,6 +572,101 @@ std::vector<wxString> ReadKeys(const ibValueMetaObjectAccumulationRegister* reg)
 
 } // namespace
 
+// ⭐⭐ WHERE THIS READ CUTS BETWEEN THE TOTALS AND THE MOVEMENTS.
+//
+// The turnovers view carries both: stored rows up to the grain it keeps (a day), and the movements
+// themselves for everything after. Which half answers depends entirely on WHERE the question stops:
+//
+//   at the grain or above it   the totals are complete -- the movement arm is excluded outright, and
+//                              a reading of a month costs exactly what it costs today;
+//   inside the grain           the totals are complete up to the grain's START, and the rest of the
+//                              answer is this grain's movements up to the boundary;
+//   at a DOCUMENT              the same, plus the tail that separates documents sharing one instant.
+//
+// The floor is what keeps a movement from being counted twice -- once by the trigger that rolled it
+// into today's total, once by itself. It is computed through `ibTruncateToPeriod`, the RAM twin of
+// the truncation the trigger renders, because a floor that disagreed with the stored key by one
+// second would drop or duplicate a whole grain.
+// The recorder's fields carrying a boundary's document, decomposed by the WRITE codec: the same
+// decomposition the rows were stored through, so the comparison rides exactly the fields the index
+// is built on. The discriminator is dropped -- it says what KIND of value this is, which is the same
+// for every recorder and would only make the tuple one constant longer.
+static std::vector<std::pair<wxString, ibQueryExprPtr>> RecorderTuple(
+	const ibValueMetaObjectAccumulationRegister* reg,
+	const std::vector<ibColumnSlot>& slots, const ibValue& recorder)
+{
+	std::vector<std::pair<wxString, ibQueryExprPtr>> tuple;
+
+	std::vector<wxString> fields;
+	for (const ibColumnSlot& slot : slots)
+		fields.push_back(slot.m_name);
+
+	ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
+	int pos = 1;
+	ibColumnCodec::WriteValue(reg->GetRegisterRecorder(), reg->GetMetaData(), recorder, &capture, pos);
+	const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
+
+	for (size_t i = 0; i < slots.size() && i < consts.size(); i++) {
+		if (slots[i].m_role == ibColumnRole::Discriminator || !consts[i])
+			continue;
+		tuple.push_back({ slots[i].m_name, consts[i] });
+	}
+	return tuple;
+}
+
+static void FillArmCut(ibMaterializeReadSpec& read,
+                       const ibValueMetaObjectAccumulationRegister* reg,
+                       const ibRegBound& upper,
+                       const ibRegBound& lower = ibRegBound())
+{
+	if (reg == nullptr || !reg->HasRecorder() || reg->GetRegisterRecorder() == nullptr)
+		return;   // this view has one arm; there is nothing to cut
+
+	const std::vector<ibColumnSlot> slots = DescribeColumnLayout(reg->GetRegisterRecorder());
+	if (slots.empty())
+		return;
+
+	// A stored row has no recorder, so any of its fields is NULL there -- the mark is the row's own
+	// answer to "which arm am I", with no flag column invented for it.
+	read.m_markColumn = slots.front().m_name;
+
+	const ibTotalsPeriod grain = reg->GetTotalsPeriodUnit();
+
+	// ⭐ A BOUNDARY REACHES BELOW THE GRAIN when it falls inside one, or when it names a document.
+	// Anything else -- a date on a grain edge, no date at all -- is answered by the stored rows
+	// whole, and the movement arm is left excluded. The trigger keeps the CURRENT grain's row up to
+	// date, so "no boundary" is not stale: it is complete at grain resolution.
+	const auto reachesInside = [&](const ibRegBound& b, wxDateTime& moment) {
+		if (b.m_date.GetType() != TYPE_DATE)
+			return false;
+		moment = b.m_date.GetDateTime();
+		return b.HasRecorder() || ibTruncateToPeriod(moment, grain) != moment;
+	};
+
+	wxDateTime upperMoment, lowerMoment;
+	const bool cutUpper = reachesInside(upper, upperMoment);
+	const bool cutLower = reachesInside(lower, lowerMoment);
+	if (!cutUpper && !cutLower)
+		return;
+
+	// The stored arm ends where the upper boundary's grain begins. With no upper boundary at all it
+	// still ends somewhere -- at the LOWER boundary's grain -- because the only reason the arm is
+	// cut at all is that one end of the interval is partial.
+	read.m_toExcluding   = upper.m_excluding;
+	read.m_fromExcluding = lower.m_excluding;
+	read.m_floor = ibValue(ibTruncateToPeriod(cutUpper ? upperMoment : lowerMoment, grain));
+	if (cutUpper && upper.HasRecorder())
+		read.m_boundaryTail = RecorderTuple(reg, slots, upper.m_recorder);
+
+	// The stored arm begins at the first WHOLE grain at or after the lower boundary: the grain the
+	// boundary falls INTO holds movements before it as well, so it cannot be taken as a row.
+	if (cutLower) {
+		read.m_headSplit = ibValue(ibNextPeriodStart(lowerMoment, grain));
+		if (lower.HasRecorder())
+			read.m_boundaryHead = RecorderTuple(reg, slots, lower.m_recorder);
+	}
+}
+
 ibQueryRelPtr ibBalanceQueryable::GetSourceRelation(const wxString& alias) const
 {
 	if (IsComputedInRam())
@@ -546,13 +675,19 @@ ibQueryRelPtr ibBalanceQueryable::GetSourceRelation(const wxString& alias) const
 	// A balance AS OF A DATE is the turnovers folded up to that moment. The date cannot live in a
 	// view, so it lives in this read — which is exactly why the surface is queried rather than
 	// stored per date.
+	// ⭐ THE BOUNDARY MAY NAME A DOCUMENT, not just a date. Three documents can carry one date, and
+	// "the balance as of THIS one" is the question accounting actually asks; a date alone answers
+	// about a moment nobody named.
+	const ibRegBound bound = ibReadRegisterBound(m_period);
+
 	ibMaterializeReadSpec r;
 	r.m_view          = m_reg->GetTurnoverViewName();
 	r.m_periodColumn  = ibRegValueField(m_reg->GetRegisterPeriod());
-	r.m_to            = m_period;
+	r.m_to            = bound.m_date;
 	r.m_keyColumns    = ReadKeys(m_reg);
 	r.m_filters       = ReadFilters(m_reg, m_filter);
 	r.m_dropZeroRows  = true;   // no stock means NO ROW, matching the live path
+	FillArmCut(r, m_reg, bound);
 
 	// Names asked for, not spelled: the balance view knows what it publishes, the turnovers view knows
 	// what it stores.
@@ -580,10 +715,15 @@ ibQueryRelPtr ibTurnoverQueryable::GetSourceRelation(const wxString& alias) cons
 	ibMaterializeReadSpec r;
 	r.m_view         = m_reg->GetTurnoverViewName();
 	r.m_periodColumn = ibRegValueField(m_reg->GetRegisterPeriod());
-	r.m_from         = m_begin;
-	r.m_to           = m_end;
+	r.m_from         = ibReadRegisterBound(m_begin).m_date;
+	r.m_to           = ibReadRegisterBound(m_end).m_date;
 	r.m_keyColumns   = ReadKeys(m_reg);
 	r.m_filters      = ReadFilters(m_reg, m_filter);
+
+	// ⭐ EITHER END MAY REACH BELOW THE GRAIN — "turnovers between this document and that one" is
+	// the question, and both ends of it name a moment. Ask for whole days and the stored rows answer
+	// alone; ask for noon-to-noon and only the two partial ends come from the movements.
+	FillArmCut(r, m_reg, ibReadRegisterBound(m_end), ibReadRegisterBound(m_begin));
 
 	// Straight through: what the view publishes IS what this reading reports, so both sides of every
 	// pair are the same column — and neither side is typed out.
@@ -620,10 +760,15 @@ ibQueryRelPtr ibBalanceAndTurnoverQueryable::GetSourceRelation(const wxString& a
 	ibMaterializeReadSpec r;
 	r.m_view         = m_reg->GetTurnoverViewName();
 	r.m_periodColumn = ibRegValueField(m_reg->GetRegisterPeriod());
-	r.m_from         = m_begin;
-	r.m_to           = m_end;
+	r.m_from         = ibReadRegisterBound(m_begin).m_date;
+	r.m_to           = ibReadRegisterBound(m_end).m_date;
 	r.m_keyColumns   = ReadKeys(m_reg);
 	r.m_filters      = ReadFilters(m_reg, m_filter);
+
+	// ⭐ EITHER END MAY REACH BELOW THE GRAIN — "turnovers between this document and that one" is
+	// the question, and both ends of it name a moment. Ask for whole days and the stored rows answer
+	// alone; ask for noon-to-noon and only the two partial ends come from the movements.
+	FillArmCut(r, m_reg, ibReadRegisterBound(m_end), ibReadRegisterBound(m_begin));
 
 	// ⭐ THE PHYSICAL NAMES ARE ASKED FOR, NOT SPELLED. Every one of these used to be written by hand
 	// as `<Resource>` + `"_OpeningBalance"` — the storage spelling, typed out a fourth time, in a file

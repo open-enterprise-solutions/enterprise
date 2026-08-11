@@ -32,6 +32,9 @@ class ibDatabaseConnectionHolder;
 // in here would tie the structure snapshot to the navigation contract for one field.
 struct ibQueryColumnExpr;
 using  ibQueryColumnExprPtr = std::shared_ptr<ibQueryColumnExpr>;
+// Same reasoning for the guard's regeneration form — a predicate rather than a value expression.
+struct ibQueryPredicate;
+using  ibQueryPredicatePtr  = std::shared_ptr<ibQueryPredicate>;
 class ibMetaDataConfigurationBase;
 class ibRestructureInfo;
 class ibStructureBatch;
@@ -144,6 +147,17 @@ struct ibSchemaMaterialize
 	// Empty = unconditional. The accounting register's debit / credit split is the reason it exists.
 	wxString m_guard;
 
+	// ⭐⭐ THE SAME CONDITION, IN THE FORM EACH CONSUMER SPEAKS.
+	//
+	// The trigger needs SQL over {row}; the REGENERATOR builds a query IR and cannot parse text. A
+	// guard with only the first form is a rule the rebuild does not know: the trigger would keep
+	// inactive movements out while a regeneration quietly let them in, and the two would disagree
+	// about the same register with nothing to show for it but different numbers.
+	//
+	// Both forms are declared together, from one line at the schema, for the same reason the deltas
+	// are (see ibSchemaDelta): what cannot be derived from the other must be stated beside it.
+	ibQueryPredicatePtr m_guardExpr;
+
 	// SPLIT TOTALS — how many shard rows one logical key is spread across, to relieve write
 	// contention on a hot key. 1 = not split (the default today: without the fold running on a
 	// schedule the read pays O(N) shards on every row forever, so splitting is for registers PROFILED
@@ -191,7 +205,10 @@ struct ibSchemaMaterialize
 		m_views.push_back(std::move(v));
 		return m_views.back();
 	}
-	ibSchemaMaterialize& Guard(const wxString& expr) { m_guard = expr; return *this; }
+	ibSchemaMaterialize& Guard(const wxString& expr, const ibQueryPredicatePtr& regenExpr = nullptr)
+	{
+		m_guard = expr; m_guardExpr = regenExpr; return *this;
+	}
 	ibSchemaMaterialize& Split(unsigned int shards)  { m_shards = shards > 0 ? shards : 1; return *this; }
 };
 

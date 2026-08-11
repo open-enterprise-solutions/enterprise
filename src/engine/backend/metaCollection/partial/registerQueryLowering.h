@@ -12,6 +12,178 @@
 #include "backend/query/dbTableProvider.h"   // ibDbTableProvider::SetValueAttribute — the DB write decomposition
 #include "backend/query/columnLayout.h"      // the column-layout tier: ColumnFieldNames / ColumnFieldList / etc.
 #include "backend/system/value/valueMap.h"   // ibValueStructure — the sugar ibRegFilterPredicate converts
+#include "backend/system/value/valuePointInTime.h"   // ibValuePointInTime — a boundary that names a document
+#include "backend/system/value/valueBoundary.h"       // ibValueBoundary — the position AND which side of it
+#include "backend/stringUtils.h"             // CompareString — the one case-insensitive name comparison
+
+// --- the boundary a reading was asked to stand at --------------------------------------------------
+// ⭐⭐ A BOUNDARY IS A DATE, OR A DATE AND THE DOCUMENT AT IT.
+//
+// "The balance on the 5th" and "the balance as of THIS document" are the same question asked at two
+// precisions, and the second is not a luxury: three documents can carry one date, and a balance that
+// cannot separate them answers about a moment nobody asked for. A PointInTime carries the pair, so
+// the boundary is read from it rather than assembled at each callsite.
+//
+// ⚠ A boundary WITH a recorder cannot be answered by a totals view. Rolling movements up by period
+// is exactly what drops the recorder, so the surface has no column to compare against — the reading
+// has to stand on the MOVEMENTS. That is not a limitation of the view; it is what a view IS.
+struct ibRegBound {
+	ibValue m_date;          // the instant -- always the coarse half of the comparison
+	ibValue m_recorder;      // the document AT that instant, when one was named
+	bool    m_excluding = false;   // is the position itself OUTSIDE the interval?
+
+	bool IsEmpty()      const { return m_date.IsEmpty(); }
+	bool HasRecorder()  const { return !m_recorder.IsEmpty(); }
+};
+
+// Reads a boundary argument: a PointInTime yields both halves, anything else IS the date. One
+// function, so a moment written in a script and a moment written in a query mean the same thing.
+inline ibRegBound ibReadRegisterBound(const ibValue& given)
+{
+	ibRegBound bound;
+
+	// ⭐ A BOUNDARY WRAPS A POSITION; it does not replace one. Unwrapped first and then read exactly
+	// as a bare position would be, so `Balance(d)`, `Balance(moment)` and `Balance(Boundary(moment,
+	// Excluding))` travel one road and differ only in which side of the position is meant.
+	ibValueBoundary* boundary = nullptr;
+	if (given.ConvertToValue(boundary) && boundary != nullptr) {
+		bound = ibReadRegisterBound(boundary->m_value);
+		bound.m_excluding = (boundary->m_kind == ibBoundaryKind_Excluding);
+		return bound;
+	}
+
+	ibValuePointInTime* moment = nullptr;
+	if (given.ConvertToValue(moment) && moment != nullptr) {
+		if (moment->m_date.IsValid())
+			bound.m_date = ibValue(moment->m_date);
+		bound.m_recorder = moment->m_reference;
+		return bound;
+	}
+
+	bound.m_date = given;
+	return bound;
+}
+
+// --- the granularity a reading was asked to fold by ------------------------------------------------
+// ⭐⭐ THE UNIT VOCABULARY, WRITTEN ONCE.
+//
+// The same ten words used to sit in three places: a `switch` in the reader, a table in the schema
+// builder (which spells the view's projection columns), and a list of choices in DescribeParameters.
+// Three copies of one dictionary, and each reader of a word would have gone on compiling while the
+// other two changed — the drift shows up as a column nobody can name.
+//
+// ⚠ The ORDER matters and is not alphabetical: it is coarseness, ascending. The schema offers only
+// the projections COARSER than what the totals store (`u > GetTotalsPeriodUnit()`) — an hour cannot
+// be recovered from a day already summed — and that comparison is on the enum, so the enum's order
+// is the meaning. Keep new units in their place on that scale.
+//
+// Shared rather than accumulation-only: an accounting register reports turnovers by month by the
+// same words, and a second copy is how two registers come to disagree about what "Quarter" means.
+inline const std::vector<std::pair<ibTotalsPeriod, wxString>>& ibRegisterUnits()
+{
+	static const std::vector<std::pair<ibTotalsPeriod, wxString>> s_units = {
+		{ ibTotalsPeriod::Second,   wxT("Second")   }, { ibTotalsPeriod::Minute,   wxT("Minute")   },
+		{ ibTotalsPeriod::Hour,     wxT("Hour")     }, { ibTotalsPeriod::Day,      wxT("Day")      },
+		{ ibTotalsPeriod::Week,     wxT("Week")     }, { ibTotalsPeriod::TenDays,  wxT("TenDays")  },
+		{ ibTotalsPeriod::Month,    wxT("Month")    }, { ibTotalsPeriod::Quarter,  wxT("Quarter")  },
+		{ ibTotalsPeriod::HalfYear, wxT("HalfYear") }, { ibTotalsPeriod::Year,     wxT("Year")     },
+	};
+	return s_units;
+}
+
+// The word a unit is written as — a lookup in that one table, not a second switch over it.
+inline wxString ibRegisterUnitWord(ibTotalsPeriod unit)
+{
+	for (const std::pair<ibTotalsPeriod, wxString>& u : ibRegisterUnits())
+		if (u.first == unit)
+			return u.second;
+	return wxString();
+}
+
+// ⭐⭐ WHAT THE READING WAS ASKED TO FOLD BY — the WORD's MEANING, decided once.
+//
+// A periodicity arrives as a word (`Month`, `Period`, `Recorder`, left out). Five different answers
+// live in that one argument, and they were being carried as a PAIR — `(ibTotalsPeriod unit, bool
+// unitGiven)`. Two values hold two answers, so the moment there was a third the code had to pick
+// which two to keep: `Period` and "left out" were both read as `unitGiven == false`, even though the
+// parameter's own description says they are different questions ("the interval whole, one row per
+// key" against "a row PER PERIOD"). Nothing was broken by a mistake — the shape had no room.
+//
+// So the answer is a TYPE, and the reading asks it what it means rather than reconstructing the
+// meaning from a flag. The word itself stays a word ([[the periodicity is not a registered
+// enumeration]]): this classifies it, it does not replace it.
+enum class ibRegGranularity {
+	Whole,      // nothing asked for — one row per key over the whole interval, no period column
+	Auto,       // asked for explicitly and left UNDECIDED — every projection stays on offer
+	Period,     // a row per the register's OWN period, exactly as stored
+	Calendar,   // a row per calendar unit — the unit is in m_unit
+	Recorder,   // a row per DOCUMENT — read from the movements, not from a rolled-up total
+	Record      // a row per movement LINE — likewise
+};
+
+struct ibRegFold {
+	ibRegGranularity m_kind = ibRegGranularity::Whole;
+	ibTotalsPeriod   m_unit = ibTotalsPeriod::Month;   // meaningful when m_kind == Calendar
+
+	// ⚠ WHOLE AND AUTO READ THE SAME AND OFFER DIFFERENTLY. Neither folds by a period, so the
+	// reading treats them alike; but "left out" means the table has NO period column, while `Auto`
+	// means nobody has decided yet and every projection the table can make stays on offer. Two
+	// answers, and collapsing them is how a window promises a column the rows will not carry.
+	bool IsWholeInterval()        const { return m_kind == ibRegGranularity::Whole || m_kind == ibRegGranularity::Auto; }
+	bool OffersEveryProjection()  const { return m_kind == ibRegGranularity::Auto; }
+
+	// A calendar fold groups by a TRUNCATED period; the register's own period groups by the column
+	// as it stands. Both put a period column in the answer, which is why they are asked together.
+	bool IsCalendar()    const { return m_kind == ibRegGranularity::Calendar; }
+	bool HasPeriod()     const { return m_kind == ibRegGranularity::Calendar || m_kind == ibRegGranularity::Period; }
+
+	// ⭐ THE MOVEMENTS ANSWER THIS ONE. A recorder is not a calendar interval — no rolled-up total
+	// carries it, because rolling up is exactly what drops it. So the reading stands on the
+	// register's own table instead of its view, and that is a property of the fold, asked here.
+	bool FromMovements() const { return m_kind == ibRegGranularity::Recorder || m_kind == ibRegGranularity::Record; }
+	bool HasLineNumber() const { return m_kind == ibRegGranularity::Record; }
+};
+
+// The word -> the fold. CASE-INSENSITIVE THROUGH THE ONE HELPER THE ENGINE ALREADY USES —
+// `stringUtils::CompareString`, the same one the bytecode resolver and the value system compare
+// names by. A second spelling of "the same word" is how two parts of a program start disagreeing
+// about what a name is. A number is accepted as the unit's ordinal (the composer's own form).
+inline ibRegFold ibReadRegisterFold(const ibValue& given)
+{
+	ibRegFold fold;
+
+	if (given.GetType() == TYPE_NUMBER) {
+		const long n = given.GetInteger();
+		if (n >= static_cast<long>(ibTotalsPeriod::Second) && n <= static_cast<long>(ibTotalsPeriod::Year)) {
+			fold.m_kind = ibRegGranularity::Calendar;
+			fold.m_unit = static_cast<ibTotalsPeriod>(n);
+		}
+		return fold;
+	}
+
+	if (given.GetType() != TYPE_STRING)
+		return fold;   // absent, or something this argument does not take: the interval whole
+
+	const wxString word = given.GetString();
+	if (word.IsEmpty())
+		return fold;
+	if (stringUtils::CompareString(word, wxT("Auto")))     { fold.m_kind = ibRegGranularity::Auto;     return fold; }
+	if (stringUtils::CompareString(word, wxT("Period")))   { fold.m_kind = ibRegGranularity::Period;   return fold; }
+	if (stringUtils::CompareString(word, wxT("Recorder"))) { fold.m_kind = ibRegGranularity::Recorder; return fold; }
+	if (stringUtils::CompareString(word, wxT("Record")))   { fold.m_kind = ibRegGranularity::Record;   return fold; }
+
+	for (const std::pair<ibTotalsPeriod, wxString>& u : ibRegisterUnits()) {
+		if (stringUtils::CompareString(word, u.second)) {
+			fold.m_kind = ibRegGranularity::Calendar;
+			fold.m_unit = u.first;
+			return fold;
+		}
+	}
+
+	ibBackendCoreException::Error(
+		_("periodicity '%s' is not one of: Period, Record, Recorder, Auto, Second..Year"), word);
+	return fold;
+}
 
 // --- register-side convenience over the column-layout tier ---------------------------------------
 // An attribute IS an ibBackendQueryColumn; the tier functions take (col, metaData). These thin

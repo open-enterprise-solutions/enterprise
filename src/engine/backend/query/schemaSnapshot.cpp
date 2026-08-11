@@ -213,7 +213,7 @@ void EraseSeedRow(ibStructureBatch& batch, const ibSchemaTable& t, const wxStrin
 	const wxString table = t.m_name;
 	ibDatabaseConnectionHolder* h = holder != nullptr ? holder : db_query->GetHolder();
 	batch.Insert([table, uuid, h]() -> bool {
-		ibQueryStatement del(ibQueryStatement::Kind::Delete, table, { wxT("uuid") }, {}, h);
+		ibQueryStatement del(ibQueryStatement::Kind::Delete, table, { ibRowKeyField() }, {}, h);
 		del.SetParamString(1, uuid);
 		del.RunQuery();    // a real failure THROWS; deleting a row that isn't there (0 rows) is not an error
 		return true;

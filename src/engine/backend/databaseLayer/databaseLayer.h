@@ -110,6 +110,13 @@ enum class ibTotalsPeriod
 // fixed-length arithmetic, exactly as the SQL expressions do.
 BACKEND_API wxDateTime ibTruncateToPeriod(const wxDateTime& moment, ibTotalsPeriod unit);
 
+// The start of the NEXT period after the one holding `moment` — the first instant a stored row of
+// that grain no longer covers. A read whose lower boundary falls inside a grain cannot use that
+// grain's stored row (it holds the part before the boundary too), so it starts at this instant and
+// takes the head from the movements instead. Calendar-walking for the same reason as the truncation:
+// months differ in length, and the ten-day bucket ending a month is not ten days long.
+BACKEND_API wxDateTime ibNextPeriodStart(const wxDateTime& moment, ibTotalsPeriod unit);
+
 struct ibDialectDictionary
 {
 	// --- declarative facts (close the large majority of divergence) -------

@@ -136,6 +136,11 @@ bool Regenerate(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder
 	ibDataQueryBuilder read = SystemQuery(holder);
 	read.From(spec.m_source);
 
+	// The guard the trigger accumulates under — applied here too, or a rebuild would produce totals
+	// the trigger would never have produced. Same condition, one declaration, two forms.
+	if (spec.m_guardExpr)
+		read.Where(spec.m_guardExpr);
+
 	if (!spec.m_periodColumn.IsEmpty() && spec.m_periodSource != nullptr)
 		read.GroupByExpr(ibQueryColumnExpr::PeriodTrunc(ibQueryColumnExpr::Col(spec.m_periodSource), spec.m_periodUnit),
 		                 spec.m_periodColumn);

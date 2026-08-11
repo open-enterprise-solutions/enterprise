@@ -35,6 +35,51 @@
 // through m_reg, so BOTH the runtime (the manager's Slice* / Get*) and the L3 door
 // (ComputeRows, when it materialises a query) reach this one compute — no parallel
 // paths. The period bound is the only difference: last = MAX / "<=", first = MIN / ">=".
+// The recorder's IDENTITY field — the reference id, asked by ROLE. Not "the first value field":
+// a reference spreads to _TYPE, _RTRef, _RRRef, and the one that identifies the row is the last of
+// those. Empty when the register has no recorder.
+static wxString RecorderIdField(const ibValueMetaObjectInformationRegister* meta)
+{
+	const ibValueMetaObjectAttributeBase* recorder = meta->HasRecorder() ? meta->GetRegisterRecorder() : nullptr;
+	if (recorder == nullptr)
+		return wxString();
+
+	for (const ibColumnSlot& slot : DescribeColumnLayout(recorder))
+		if (slot.m_role == ibColumnRole::ReferenceId)
+			return slot.m_name;
+	return wxString();
+}
+
+// ⭐ WHERE THE SLICE STOPS — an instant, or an instant AND the document at it.
+//
+// A register SUBORDINATE TO A RECORDER can hold several records under one period for one key, so a
+// date alone cannot say which of them the slice is taken before: three documents on one day are
+// three different answers. The recorder separates them, compared after the period and in the same
+// order the moment value compares by — one order, so the server and the runtime cannot disagree
+// about which document came first.
+//
+// Without a recorder (an independent register) the period IS the key, and the plain comparison is
+// the whole boundary.
+static ibQueryExprPtr SliceBoundaryPredicate(const ibValueMetaObjectInformationRegister* meta,
+                                             const ibMetaData* metaData,
+                                             const ibValueMetaObjectAttributeBase* periodAttr,
+                                             const ibRegBound& bound, bool last, ibQueryBinOp periodOp)
+{
+	const ibQueryExprPtr plain = ibRegCompositeIR(periodAttr, metaData, bound.m_date, periodOp);
+	if (!bound.HasRecorder() || !meta->HasRecorder() || meta->GetRegisterRecorder() == nullptr)
+		return plain;
+
+	// Strictly past the instant, OR inside it and no later than the document named.
+	const ibQueryBinOp strictly = last ? ibQueryBinOp::Lt : ibQueryBinOp::Gt;
+	const ibQueryBinOp within   = periodOp;   // carries the Including / Excluding side already
+
+	return ibBinOp(ibQueryBinOp::Or,
+		ibRegCompositeIR(periodAttr, metaData, bound.m_date, strictly),
+		ibBinOp(ibQueryBinOp::And,
+			ibRegCompositeIR(periodAttr, metaData, bound.m_date, ibQueryBinOp::Eq),
+			ibRegCompositeIR(meta->GetRegisterRecorder(), metaData, bound.m_recorder, within)));
+}
+
 ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 	const ibValue& cPeriod, const ibQueryPredicatePtr& cFilter, ibSliceEnd end) const
 {
@@ -75,12 +120,28 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 		// two strings passed in separately, the pair could disagree — and the chain that parsed them
 		// defaulted silently, so a typo produced a wrong slice instead of a complaint.
 		const bool last = (end == ibSliceEnd::Last);
-		const ibQueryBinOp periodOp   = last ? ibQueryBinOp::Le : ibQueryBinOp::Ge;
 		const wxString     aggregateFn = last ? wxT("MAX") : wxT("MIN");
+
+		// ⭐⭐ A SLICE STOPS WHERE A BALANCE STOPS, so it reads its boundary the same way: a bare date,
+		// a moment naming a document, or a Boundary saying which side of that position is meant. One
+		// function for every entrance (ibReadRegisterBound), so `SliceLast(date)` and
+		// `SliceLast(Boundary(moment, Excluding))` differ only in what they mean, never in how they
+		// are read.
+		const ibRegBound bound = ibReadRegisterBound(cPeriod);
+
+		// EXCLUDING opens the comparison rather than nudging the value — the same rule the register
+		// cut follows, and for the same reason: moving the instant instead would guess at the grain
+		// and still admit whatever was recorded within it.
+		const ibQueryBinOp periodOp = last
+			? (bound.m_excluding ? ibQueryBinOp::Lt : ibQueryBinOp::Le)
+			: (bound.m_excluding ? ibQueryBinOp::Gt : ibQueryBinOp::Ge);
 
 		// Level 1 — boundary period per dimension key (aggregate subquery T1). The period
 		// TYPE is grouped + projected bare; the period value is aggregated (MAX / MIN);
 		// dimensions + resources are grouped + projected (the slice key).
+		//
+		// A register SUBORDINATE TO A RECORDER needs one more level after this one — see the tie
+		// break below: the boundary period alone does not name a single row there.
 		std::vector<ibQueryProjItem> l1proj;
 		std::vector<ibQueryExprPtr>  groupKeys;
 		const std::vector<wxString> periodFields = ibRegFieldsOf(periodAttr);
@@ -105,29 +166,73 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 		ibDatabaseQueryBuilder l1;
 		l1.From(table)
 		  .Where(ibRegCompositeIR(meta->GetRegisterActive(), GetMetaData(), ibValue(true), ibQueryBinOp::Eq))
-		  .Where(ibRegCompositeIR(periodAttr, GetMetaData(), cPeriod, periodOp))
+		  .Where(SliceBoundaryPredicate(meta, GetMetaData(), periodAttr, bound, last, periodOp))
 		  .Project(l1proj);
 		for (const ibQueryExprPtr& gk : groupKeys) l1.GroupBy(gk);
 
-		// Level 2 — join the boundary back to the table for the full record. ON equates
-		// every period / dimension / resource field of T1 (boundary) and T2 (table); the
-		// projection is T2's same fields (aliased to the bare name -> materialise by name).
+		// The fields the boundary is keyed by — the same set at every level below.
 		std::vector<const ibValueMetaObjectAttributeBase*> joinAttrs;
 		joinAttrs.push_back(periodAttr);
 		for (const auto object : meta->GetDimensionArrayObject()) joinAttrs.push_back(object);
 		for (const auto object : meta->GetResourceArrayObject())  joinAttrs.push_back(object);
 
+		std::vector<wxString> keyFields;
+		for (const auto a : joinAttrs)
+			for (const wxString& f : ibRegFieldsOf(a))
+				keyFields.push_back(f);
+
+		// ⭐⭐ THE PERIOD DOES NOT PICK A ROW WHEN THE REGISTER IS SUBORDINATE TO A RECORDER.
+		//
+		// There the key is recorder + line, so several records can sit under one period for one
+		// dimension set — three documents on one day are three different answers, and MAX(period)
+		// has nothing to choose between them. It would return whichever the engine happened to join
+		// first: never an error, never the same one twice, and wrong in a way nobody would question.
+		//
+		// So a second level breaks the tie among the rows AT the boundary period, by the RECORDER —
+		// in the same direction the slice reads (the greatest for a last slice, the least for a
+		// first) and by the same key a moment compares references with, the reference id.
+		//
+		// An independent register never reaches this: its key IS the period plus the dimensions, so
+		// the boundary already names one row.
+		ibQueryRelPtr boundary = ibSubquery(l1.Build().m_root, wxT("T1"));
+		const wxString recorderId = RecorderIdField(meta);
+
+		if (!recorderId.IsEmpty()) {
+			ibQueryExprPtr tiePred;
+			std::vector<ibQueryProjItem> tieProj;
+			std::vector<ibQueryExprPtr>  tieKeys;
+			for (const wxString& f : keyFields) {
+				ibQueryExprPtr eq = ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("B"), f), ibCol(wxT("R"), f));
+				tiePred = tiePred ? ibBinOp(ibQueryBinOp::And, tiePred, eq) : eq;
+				tieProj.push_back(ibQueryProjItem{ ibCol(wxT("B"), f), f });
+				tieKeys.push_back(ibCol(wxT("B"), f));
+			}
+			tieProj.push_back(ibQueryProjItem{
+				ibFunc(aggregateFn, { ibCol(wxT("R"), recorderId) }), recorderId });
+
+			ibDatabaseQueryBuilder tie;
+			tie.From(ibSubquery(l1.Build().m_root, wxT("B")))
+			   .Join(ibScan(table, wxT("R")), tiePred, ibQueryJoinType::Inner)
+			   .Project(tieProj);
+			for (const ibQueryExprPtr& gk : tieKeys) tie.GroupBy(gk);
+
+			boundary = ibSubquery(tie.Build().m_root, wxT("T1"));
+			keyFields.push_back(recorderId);   // the join below now equates the recorder too
+		}
+
+		// Level 2 — join the boundary back to the table for the full record. ON equates
+		// every keyed field of T1 (boundary) and T2 (table); the projection is T2's same
+		// fields (aliased to the bare name -> materialise by name).
 		ibQueryExprPtr onPred;
 		std::vector<ibQueryProjItem> l2proj;
-		for (const auto a : joinAttrs)
-			for (const wxString& f : ibRegFieldsOf(a)) {
-				ibQueryExprPtr eq = ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("T1"), f), ibCol(wxT("T2"), f));
-				onPred = onPred ? ibBinOp(ibQueryBinOp::And, onPred, eq) : eq;
-				l2proj.push_back(ibQueryProjItem{ ibCol(wxT("T2"), f), f });
-			}
+		for (const wxString& f : keyFields) {
+			ibQueryExprPtr eq = ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("T1"), f), ibCol(wxT("T2"), f));
+			onPred = onPred ? ibBinOp(ibQueryBinOp::And, onPred, eq) : eq;
+			l2proj.push_back(ibQueryProjItem{ ibCol(wxT("T2"), f), f });
+		}
 
 		ibDatabaseQueryBuilder l2;
-		l2.From(ibSubquery(l1.Build().m_root, wxT("T1")))
+		l2.From(boundary)
 		  .Join(ibScan(table, wxT("T2")), onPred, ibQueryJoinType::Inner)
 		  .Project(l2proj);
 

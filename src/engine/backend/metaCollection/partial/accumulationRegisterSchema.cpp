@@ -125,6 +125,23 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 	// nothing from daily rows, and one that must answer hourly cannot use them. Introducing it later
 	// is a property plus a regeneration — the mechanism already reads this value rather than assuming.
 	m.Period(periodField, GetRegisterPeriod(), wxT("{row}.") + periodField, GetTotalsPeriodUnit());
+
+	// ⭐⭐ AN INACTIVE MOVEMENT EXISTS AND COUNTS FOR NOTHING.
+	//
+	// Active is what separates a record that is THERE from a record that is IN FORCE: an entry
+	// written but not in effect still occupies its row, still shows in the register, and must not
+	// move a single figure. Flip the flag and the same row starts counting — nothing is rewritten,
+	// the totals simply include it from then on.
+	//
+	// Declared as the delta's GUARD, which is the one place that meaning belongs: the trigger then
+	// accumulates only what is in force, and the movement arm of the view reads under the same
+	// condition. Filtering it in each READING instead would be the same rule written in as many
+	// places as there are readings — and the day one of them forgot, an inactive entry would show up
+	// in exactly one report.
+	if (const ibValueMetaObjectAttributeBase* active = GetRegisterActive()) {
+		m.Guard(wxT("{row}.") + ibRegValueField(active),
+			ibQueryPredicate::Leaf(ibQueryCondition{ active, ibQueryFilterOp::Equal, ibValue(true) }));
+	}
 	for (const auto dimension : GetDimensionArrayObject())
 		m.Key(dimension);
 
@@ -201,6 +218,32 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 	// TURNOVERS — per period: what came in, what went out, and the net.
 	{
 		ibMaterializeView& v = m.View(GetTurnoverViewName(), /*withPeriod*/ true);
+
+		// ⭐⭐ THE SECOND ARM: THIS VIEW ALSO CARRIES THE MOVEMENTS.
+		//
+		// A maintained total is complete only down to the grain it is stored at (a day). Everything
+		// that happened INSIDE the current day is in the movements and nowhere else — so a balance
+		// "at noon" is the stored total at midnight plus this morning's movements, and there is no
+		// third place to get the second half from.
+		//
+		// Rather than a second relation and a fold in memory, the view offers both halves as ONE
+		// relation: the stored rows UNION ALL the movements, each movement contributing exactly what
+		// it contributed to the total (the same delta expressions the trigger accumulates through).
+		// A reader takes stored rows BELOW the grain boundary and movement rows above it, so nothing
+		// is counted twice; ask a question at the grain or coarser and the movement arm matches
+		// nothing at all.
+		//
+		// The recorder and the line number ride along because they are what makes a row's own
+		// identity readable — and what a boundary INSIDE one instant compares against, when three
+		// documents share a date and have to be told apart.
+		if (HasRecorder() && GetRegisterRecorder() != nullptr && GetRegisterLineNumber() != nullptr) {
+			v.m_withMovements = true;
+			for (const wxString& f : ColumnFieldNames(GetRegisterRecorder()))
+				v.m_movementColumns.push_back(f);
+			for (const wxString& f : ColumnFieldNames(GetRegisterLineNumber()))
+				v.m_movementColumns.push_back(f);
+		}
+
 		for (const Pair& p : pairs) {
 			v.m_columns.push_back({ p.m_name + wxT("_Receipt"),  p.m_in,  wxString(), ibMaterializeAgg::Value });
 			if (p.m_out.IsEmpty()) {
@@ -346,6 +389,17 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 	for (const auto dimension : GetDimensionArrayObject())
 		columns.push_back(ibTempColumn(dimension->GetName(), ibRegValueField(dimension),
 		                               dimension->GetTypeDesc(), dimension->GetMetaID()));
+
+	// The movement arm's own identity — published EXACTLY as a dimension is (its own metaID, its own
+	// type), because that is what it is on the source table: a real attribute of the register. Null
+	// on every stored row, which is also how a reader tells the two arms apart. Only the turnovers
+	// view carries them; a balance view has no arm to distinguish.
+	if (withPeriod && HasRecorder() && GetRegisterRecorder() != nullptr && GetRegisterLineNumber() != nullptr) {
+		columns.push_back(ibTempColumn(GetRegisterRecorder()->GetName(), ibRegValueField(GetRegisterRecorder()),
+		                               GetRegisterRecorder()->GetTypeDesc(), GetRegisterRecorder()->GetMetaID()));
+		columns.push_back(ibTempColumn(GetRegisterLineNumber()->GetName(), ibRegValueField(GetRegisterLineNumber()),
+		                               GetRegisterLineNumber()->GetTypeDesc(), GetRegisterLineNumber()->GetMetaID()));
+	}
 
 	// Per-resource columns, by shape. A turnover-only register (no record type) has no expense side
 	// and no balance to report, so those columns simply do not exist for it.

@@ -13,6 +13,37 @@
 // the mirroring is the requirement: if these two ever disagree, the same query returns different
 // numbers depending on whether the read pushed down or folded in memory — a discrepancy that looks
 // like a rounding bug and is not one.
+wxDateTime ibNextPeriodStart(const wxDateTime& moment, ibTotalsPeriod unit)
+{
+	if (!moment.IsValid())
+		return moment;
+
+	const wxDateTime start = ibTruncateToPeriod(moment, unit);
+	switch (unit) {
+		case ibTotalsPeriod::Second:   return start + wxTimeSpan::Seconds(1);
+		case ibTotalsPeriod::Minute:   return start + wxTimeSpan::Minutes(1);
+		case ibTotalsPeriod::Hour:     return start + wxTimeSpan::Hours(1);
+		case ibTotalsPeriod::Day:      return start + wxDateSpan::Days(1);
+		case ibTotalsPeriod::Week:     return start + wxDateSpan::Weeks(1);
+		case ibTotalsPeriod::TenDays: {
+			// The third bucket runs to the END of the month, however long that is — so what follows
+			// it is the 1st of the next month, not "ten days later". Same cap as the truncation,
+			// read from the other side.
+			if (start.GetDay() >= 21) {
+				wxDateTime first = start;
+				first.SetDay(1);
+				return first + wxDateSpan::Months(1);
+			}
+			return start + wxDateSpan::Days(10);
+		}
+		case ibTotalsPeriod::Month:    return start + wxDateSpan::Months(1);
+		case ibTotalsPeriod::Quarter:  return start + wxDateSpan::Months(3);
+		case ibTotalsPeriod::HalfYear: return start + wxDateSpan::Months(6);
+		case ibTotalsPeriod::Year:     return start + wxDateSpan::Years(1);
+	}
+	return start;
+}
+
 wxDateTime ibTruncateToPeriod(const wxDateTime& moment, ibTotalsPeriod unit)
 {
 	if (!moment.IsValid())
@@ -296,19 +327,81 @@ wxString Fold(const wxString& column, bool collapsing)
 // information does not exist, and a column silently repeating the month under the name "day" would
 // be worse than its absence.
 void AppendPeriodColumns(const ibMaterializeSpec& spec, const ibDialectDictionary& dialect,
-                         std::vector<wxString>& select, std::vector<wxString>& groupBy)
+                         std::vector<wxString>& select, std::vector<wxString>& groupBy,
+                         const wxString& periodExpr = wxEmptyString)
 {
 	if (spec.m_periodColumn.IsEmpty())
 		return;
-	select.push_back(spec.m_periodColumn);
-	groupBy.push_back(spec.m_periodColumn);
+
+	// The period reads differently per ARM: a stored row carries it in its own column, a movement
+	// carries the raw instant. Everything else -- the projections, their names, the grouping -- is
+	// the same sentence over whichever expression that is, which is why the arm passes it in rather
+	// than each arm growing its own copy of this walk.
+	const wxString base = periodExpr.IsEmpty() ? spec.m_periodColumn : periodExpr;
+
+	select.push_back(base + (periodExpr.IsEmpty() ? wxString() : (wxT(" AS ") + spec.m_periodColumn)));
+	groupBy.push_back(base);
 	for (const ibTotalsPeriod unit : g_units) {
 		if (unit <= spec.m_periodUnit)
 			continue;
-		const wxString expr = Truncate(dialect, unit, spec.m_periodColumn);
+		const wxString expr = Truncate(dialect, unit, base);
 		select.push_back(expr + wxT(" AS ") + spec.m_periodColumn + wxT("_") + UnitSuffix(unit));
 		groupBy.push_back(expr);
 	}
+}
+
+// ---------------------------------------------------------------------------
+// The movement arm of a union view: every movement, as the contribution it makes.
+//
+// It is rendered from `spec.m_deltas` -- the very expressions the trigger accumulates through -- so
+// a movement counted here and the same movement counted into the totals are the same arithmetic by
+// construction, not by two files agreeing. Nothing in this function knows what the figures mean.
+//
+// The period is the RAW instant rather than a truncation: that is the whole reason this arm exists.
+// The stored arm answers down to the grain; below it, only a movement knows when it happened.
+// ---------------------------------------------------------------------------
+wxString RenderMovementArm(const ibMaterializeSpec& spec,
+                           const ibMaterializeView& view,
+                           const ibDialectDictionary& dialect)
+{
+	auto overRow = [&](wxString e) { return Fill(std::move(e), wxT("row"), spec.m_source); };
+
+	// What a movement contributes to a stored column -- looked up, never re-derived. A column with
+	// no delta contributes nothing, which is the honest answer for a scaffold column.
+	auto contribution = [&](const wxString& column) -> wxString {
+		for (const ibMaterializeDelta& d : spec.m_deltas)
+			if (d.m_column == column)
+				return wxT("(") + overRow(d.m_valueExpr) + wxT(")");
+		return wxT("0");
+	};
+
+	std::vector<wxString> select, unusedGroupBy;
+	if (view.m_withPeriod)
+		AppendPeriodColumns(spec, dialect, select, unusedGroupBy, overRow(spec.m_periodSourceExpr));
+	for (const wxString& k : spec.m_keyColumns)
+		select.push_back(spec.m_source + wxT(".") + k);
+
+	for (const ibMaterializeViewColumn& c : view.m_columns) {
+		const wxString a = contribution(c.m_columnA);
+		const wxString b = c.m_columnB.IsEmpty() ? wxString() : contribution(c.m_columnB);
+		const wxString diff = b.IsEmpty() ? a : (wxT("(") + a + wxT(" - ") + b + wxT(")"));
+
+		// ⚠ A RUNNING FORM HAS NO MEANING ON THIS ARM. A running sum is defined over the ordered
+		// stored rows; a movement is one row of the tail. A view that needs both is two views.
+		select.push_back(diff + wxT(" AS ") + c.m_alias);
+	}
+
+	for (const wxString& c : view.m_movementColumns)
+		select.push_back(spec.m_source + wxT(".") + c);
+
+	// The SAME guard the trigger accumulates under. The stored arm holds only what was in force
+	// (the trigger saw to that); the movement arm has to apply the condition itself, or the tail
+	// would add rows the totals below it deliberately never counted.
+	wxString body = wxT("SELECT ") + Join(select, wxT(", ")) + wxT(" FROM ") + spec.m_source;
+	if (!spec.m_guard.IsEmpty())
+		body += wxT(" WHERE ") + overRow(spec.m_guard);
+
+	return body;
 }
 
 // ---------------------------------------------------------------------------
@@ -379,6 +472,11 @@ wxString RenderView(const ibMaterializeSpec& spec,
 		}
 	}
 
+	// A movement-only column is absent from the stored arm, and NULL is how a union says so. It is
+	// also what tells the arms apart downstream: a row with no recorder came from the totals.
+	for (const wxString& c : view.m_movementColumns)
+		select.push_back(wxT("NULL AS ") + c);
+
 	// GROUP BY only when something actually merges (see `collapses` above). An unsplit,
 	// period-carrying view already holds one row per key, and grouping it would buy nothing while
 	// costing the engine a sort or a hash on every single read.
@@ -389,6 +487,9 @@ wxString RenderView(const ibMaterializeSpec& spec,
 		body += wxT(" HAVING ") + nonZero;
 	else if (!nonZero.IsEmpty())
 		body += wxT(" WHERE ") + nonZero;   // nothing was grouped, so the same test belongs in WHERE
+
+	if (view.m_withMovements)
+		body += wxT(" UNION ALL ") + RenderMovementArm(spec, view, dialect);
 
 	return Fill(Fill(mat.m_createViewTemplate, wxT("name"), view.m_name), wxT("body"), body);
 }
@@ -519,6 +620,58 @@ ibQueryExprPtr WhenPredicate(const ibMaterializeReadSpec& spec, ibMaterializeWhe
 
 } // namespace
 
+// (a, b, c) <= (x, y, z) spelled out: a < x OR (a = x AND (b < y OR (b = y AND c <= z))). Every
+// engine takes it, and it is the SAME order the boundary value compares by — one order, so a
+// balance computed on the server and one computed in memory cannot disagree about which of two
+// documents at the same instant came first.
+static ibQueryExprPtr TupleCompare(const std::vector<std::pair<wxString, ibQueryExprPtr>>& tail,
+                                   size_t i, bool atMost, bool excluding = false)
+{
+	const ibQueryExprPtr col = tail[i].second ? ibCol(tail[i].first) : nullptr;
+	const ibQueryExprPtr val = tail[i].second;
+	if (col == nullptr)
+		return nullptr;
+
+	if (i + 1 == tail.size()) {
+		const ibQueryBinOp last = excluding ? (atMost ? ibQueryBinOp::Lt : ibQueryBinOp::Gt)
+		                                    : (atMost ? ibQueryBinOp::Le : ibQueryBinOp::Ge);
+		return ibBinOp(last, col, val);
+	}
+
+	const ibQueryExprPtr rest = TupleCompare(tail, i + 1, atMost, excluding);
+	return ibBinOp(ibQueryBinOp::Or,
+		ibBinOp(atMost ? ibQueryBinOp::Lt : ibQueryBinOp::Gt, col, val),
+		ibBinOp(ibQueryBinOp::And, ibBinOp(ibQueryBinOp::Eq, col, val), rest));
+}
+
+// "at this instant, no later than this document" -- the period compared first, the tuple only when
+// the instants are equal. That is the whole of what a moment adds to a date.
+static ibQueryExprPtr BoundedByMoment(const ibQueryExprPtr& period, const ibValue& at,
+                                      const std::vector<std::pair<wxString, ibQueryExprPtr>>& tail,
+                                      bool atMost, bool excluding)
+{
+	// EXCLUDING moves the operator, not the value. Nudging the instant by a second instead would be
+	// a guess about the storage grain, and it would still include a document recorded in that
+	// second — the very row the caller said to leave out.
+	const ibQueryBinOp closed = atMost ? ibQueryBinOp::Le : ibQueryBinOp::Ge;
+	const ibQueryBinOp open   = atMost ? ibQueryBinOp::Lt : ibQueryBinOp::Gt;
+
+	const ibQueryExprPtr edge = ibConst(at);
+	const ibQueryExprPtr plain = ibBinOp(excluding ? open : closed, period, edge);
+	if (tail.empty())
+		return plain;
+
+	// Inside the same instant the tail decides — and EXCLUDING there means the named document
+	// itself is out, so its own comparison opens while everything before it stays in.
+	const ibQueryExprPtr inside = TupleCompare(tail, 0, atMost, excluding);
+	if (!inside)
+		return plain;
+
+	return ibBinOp(ibQueryBinOp::Or,
+		ibBinOp(open, period, edge),
+		ibBinOp(ibQueryBinOp::And, ibBinOp(ibQueryBinOp::Eq, period, edge), inside));
+}
+
 ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const wxString& alias)
 {
 	const ibQueryExprPtr zero = ibConst(ibValue(0.0));
@@ -571,6 +724,55 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const wx
 		q.Where(ibBinOp(ibQueryBinOp::Le, ibCol(spec.m_periodColumn), ibConst(spec.m_to)));
 	if (!anyAggregate && spec.m_from.GetType() == TYPE_DATE && !spec.m_periodColumn.IsEmpty())
 		q.Where(ibBinOp(ibQueryBinOp::Ge, ibCol(spec.m_periodColumn), ibConst(spec.m_from)));
+
+	// ⭐⭐ THE CUT BETWEEN THE ARMS — the one place this whole arrangement can lie.
+	//
+	// Stored rows are complete up to the grain boundary; movements carry everything after it. Take
+	// stored rows BELOW the floor and movement rows from the floor onward and each movement is
+	// counted exactly once — by the trigger below the line, by itself above it. Drop the floor and
+	// the current grain arrives twice, which reads as a balance that is quietly too large.
+	if (!spec.m_markColumn.IsEmpty() && !spec.m_periodColumn.IsEmpty()) {
+		const ibQueryExprPtr period    = ibCol(spec.m_periodColumn);
+		const ibQueryExprPtr fromTotal = ibIsNull(ibCol(spec.m_markColumn));
+
+		if (spec.m_floor.GetType() != TYPE_DATE) {
+			// The question stops at the grain or above it. The movements have nothing to add that
+			// the totals do not already hold, so the arm is excluded — one predicate, and the
+			// planner never touches that side of the union.
+			q.Where(fromTotal);
+		}
+		else {
+			// THE STORED ARM TAKES WHOLE GRAINS ONLY -- those that begin at or after the head split
+			// and end before the floor. A partial grain at either end is the movements' business,
+			// because a stored row cannot be asked for half of itself.
+			ibQueryExprPtr stored = ibBinOp(ibQueryBinOp::And, fromTotal,
+				ibBinOp(ibQueryBinOp::Lt, period, ibConst(spec.m_floor)));
+			if (spec.m_headSplit.GetType() == TYPE_DATE)
+				stored = ibBinOp(ibQueryBinOp::And, stored,
+					ibBinOp(ibQueryBinOp::Ge, period, ibConst(spec.m_headSplit)));
+
+			// THE MOVEMENT ARM TAKES THE PARTIAL ENDS -- and only them. Written as one range minus
+			// the middle rather than two ranges, because two ranges OVERLAP when the whole interval
+			// fits inside a single grain, and an overlap here is a movement counted twice.
+			ibQueryExprPtr moved = ibIsNull(ibCol(spec.m_markColumn), /*negated*/ true);
+
+			ibQueryExprPtr ends = ibBinOp(ibQueryBinOp::Ge, period, ibConst(spec.m_floor));
+			if (spec.m_headSplit.GetType() == TYPE_DATE)
+				ends = ibBinOp(ibQueryBinOp::Or, ends,
+					ibBinOp(ibQueryBinOp::Lt, period, ibConst(spec.m_headSplit)));
+			moved = ibBinOp(ibQueryBinOp::And, moved, ends);
+
+			// The boundaries themselves: an instant, or an instant AND the document at it.
+			if (spec.m_to.GetType() == TYPE_DATE)
+				moved = ibBinOp(ibQueryBinOp::And, moved,
+					BoundedByMoment(period, spec.m_to, spec.m_boundaryTail, /*atMost*/ true, spec.m_toExcluding));
+			if (spec.m_from.GetType() == TYPE_DATE)
+				moved = ibBinOp(ibQueryBinOp::And, moved,
+					BoundedByMoment(period, spec.m_from, spec.m_boundaryHead, /*atMost*/ false, spec.m_fromExcluding));
+
+			q.Where(ibBinOp(ibQueryBinOp::Or, stored, moved));
+		}
+	}
 
 	for (const auto& f : spec.m_filters)
 		q.Where(ibBinOp(ibQueryBinOp::Eq, ibCol(f.first), ibConst(f.second)));

@@ -105,11 +105,9 @@ ibValue ibValueManagerDataObjectAccumulationRegister::Turnovers(const ibValue& c
 
 	// The periodicity is read the way the QUERY side reads it — one function, so a word written in a
 	// script and the same word written in a query mean the same thing.
-	ibTotalsPeriod unit = ibTotalsPeriod::Month;
-	bool unitGiven = false;
-	ibReadRegisterPeriodicity(cPeriodicity, unit, unitGiven);
+	const ibRegFold fold = ibReadRegisterFold(cPeriodicity);
 
-	ibTurnoverQueryable turnover(m_metaObject, cBeginOfPeriod, cEndOfPeriod, ibRegFilterPredicate(m_metaObject, cFilter), unit, unitGiven);
+	ibTurnoverQueryable turnover(m_metaObject, cBeginOfPeriod, cEndOfPeriod, ibRegFilterPredicate(m_metaObject, cFilter), fold);
 	ibDataQueryResult selection = ibDataQueryBuilder().From(&turnover).Execute(ibReadPageRequest{});
 	return SelectionToTurnoverTable(selection, m_metaObject);
 }

@@ -1153,6 +1153,78 @@ Its slice also stopped being parameterised by two strings (`"MAX"`/`"MIN"` and `
 could disagree, and whose parser defaulted silently on anything it did not recognise. One enum —
 `ibSliceEnd::Last` / `First` — and both halves are derived from it.
 
+## Below the grain: the movement arm (2026-08-11)
+
+A maintained total is complete only down to the grain it is stored at. The trigger keeps the CURRENT
+period's row up to date, so "no boundary at all" is never stale — but the row is a whole day, and a
+question that stops inside that day has no column to read. Everything that happened between the
+grain's start and the moment asked for lives in the MOVEMENTS and nowhere else.
+
+That gap is what made two ordinary accounting questions unanswerable:
+
+- **the balance as of a DOCUMENT.** Three documents can carry one date; a balance that cannot
+  separate them answers about a moment nobody asked for.
+- **the balance at 12:00**, which the daily totals could only answer to the nearest day — silently.
+
+### One relation, two arms
+
+The turnovers view now carries both halves: the stored rows `UNION ALL` the movements, each movement
+contributing exactly what it contributed to the total. The contribution is not re-derived — it is
+`spec.m_deltas`, the same expressions the trigger accumulates through and the regenerator rebuilds
+from, so a movement counted in the tail and the same movement counted into the total are the same
+arithmetic BY CONSTRUCTION rather than by two files agreeing.
+
+The movement arm keeps the RAW instant as its period (truncating it would answer at the very grain
+the arm exists to go below) and carries the recorder and line number, which are NULL on the stored
+arm — that is also how a reader tells the arms apart, with no flag column invented for it.
+
+### The cut, and why it is the one place this can lie
+
+A reader takes **stored rows below the floor** and **movement rows from the floor onward**, where the
+floor is the start of the grain holding the boundary (`ibTruncateToPeriod`, the RAM twin of the
+truncation the trigger renders — a floor disagreeing with the stored key by one second would drop or
+duplicate a whole grain). Each movement is then counted exactly once: by the trigger below the line,
+by itself above it. Drop the floor and the current grain arrives twice, which reads as a balance
+quietly too large.
+
+An interval cuts at BOTH ends: the stored arm takes only WHOLE grains (from the first grain at or
+after the lower boundary — `ibNextPeriodStart` — up to the floor of the upper one), and the movements
+supply the two partial ends. Written as one range minus the middle rather than two ranges, because
+two ranges overlap when the whole interval fits inside a single grain, and an overlap here is a
+movement counted twice.
+
+⚠ **Every reader must name an arm.** There is no safe default: a reading that says nothing gets the
+current grain twice, and it is wrong in the direction that looks plausible. Interval readings take
+the stored arm explicitly (`RestrictToStoredArm`); boundary readings take the cut (`FillArmCut`).
+
+### When the arm sleeps
+
+Ask at the grain or coarser and the movement arm is excluded outright by one predicate the planner
+prunes — a turnover per day over last month costs exactly what it cost before. It wakes only when the
+boundary reaches below the grain: a time inside it, or a moment naming a document.
+
+### Inside one instant
+
+Documents sharing an instant are separated by a tuple: `period < to OR (period = to AND recorder
+<= to.recorder)`, the recorder's fields decomposed through the same write codec the rows were stored
+with — so the comparison rides exactly the fields the index is built on, and in the same order
+`ibValuePointInTime::CompareValueLS` uses. One order, so a balance computed on the server and one
+computed in memory cannot disagree about which of two documents came first.
+
+⚠ **The index this needs.** A subordinate register's key is `(Recorder, LineNumber)`, which answers
+"the lines of this document" and nothing else. Every reading here asks the opposite question — the
+movements of an INTERVAL — so the movements table now declares `(Period, Recorder)`, in that order
+because it is the order a moment is compared in. Without it each sub-grain read is a full scan
+bounded by the register's whole history rather than by the day asked for.
+
+### The boundary
+
+`Boundary(position, Including | Excluding)` wraps a date or a moment and says whether the row sitting
+exactly there is in or out. Excluding moves the OPERATOR, not the value: nudging the instant by a
+second instead would guess at the storage grain and would still include a document recorded in that
+second — the very row the caller said to leave out. The side travels down to the tuple, so inside one
+instant the named document itself falls out while everything before it in that instant stays.
+
 ## Open questions
 
 - **Seed / predefined data on Apply.** Whatever idempotent seed path
