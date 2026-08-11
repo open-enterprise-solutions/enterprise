@@ -622,3 +622,67 @@ across days; the RATIO is not, until the native baseline is measured on its own 
 `ibMemberTable::Build` is 25% of a join run (§1g), and the join index pays ×6.6 on probe for an
 `ibValue` key against a `long` one (§1f-bis). One element of data still costs what thirty
 interpreter iterations do.
+
+---
+
+## 8. The LINQ join is a nested loop (2026-08-11)
+
+Release x64, quiet machine. The interpreter is unchanged — `arith loop` 71.8 ns/iter against the
+71.1 / 73.4 recorded above, `string concat` 63.4 against 63.1 — so this section is about one line
+only, and it is not a regression in anything measured before.
+
+### The reading
+
+| n | ns/row | total | **ns per compared pair** (÷n) |
+|---:|---:|---:|---:|
+| 250 | 9 414 | 2.35 ms | 37.7 |
+| 1 000 | 33 449 | 33.4 ms | 33.4 |
+| 4 000 | 130 484 | 522 ms | 32.6 |
+| 16 000 | 546 829 | **8.75 s** | 34.2 |
+
+The cost **per pair is constant**, so every outer row walks the whole inner side: a nested loop,
+O(n²). The scaling loop was written as a discriminator and its own comment named the three outcomes
+— flat (constant per-row work), +log N (tree comparisons), **linear in n (something is O(N) per row,
+and THAT is the bug)**. The measurement landed on the third.
+
+### What it is not
+
+* **Not the container and not the comparator** — 33 ns per pair is already cheap.
+* **Not the index**, which is measured in the same run and is nearly flat: an `ibValue` probe goes
+  280.8 ns at n=2000 → 329.5 at n=16000 (×1.17 for ×8 of n); build 476.8 → 628.8. An indexed row at
+  n=16000 would cost about **1 µs instead of 547** — roughly ×550. The machinery exists and the join
+  does not use it.
+* **Not a general degradation** — the control is flat: `record build+walk` reads 5436 / 5512 / 5581 /
+  5584 ns at n = 2500 / 5000 / 10000 / 20000.
+
+### The constant part, which dominates only at small n
+
+Three lambda invocations per row (~90 ns each: `one lambda` 104 ns/el against `no lambda` 8.4) plus
+one composite row: `New + 2 Insert` 3264 ns, `struct build 3 fields` 1603 ns, field read 331 ns. At
+n=250 that is 17–35 % of a row; at n=16000 it is 0.5 %.
+
+### The ×16 gap against the bench's own comment — and why it is NOT a regression
+
+The comment beside this bench records **3973 ns/row at n=2000**; the line now reads **65 276**. The
+arithmetic invited a regression story: 3973 is almost exactly the constant per-row work above, i.e.
+the shape of a join that WAS using an index.
+
+**The history says otherwise, and it says it cheaply.** `valueQueryable.cpp` — the join executor —
+was last touched on **2026-08-07**, three days BEFORE the 3973 was written down (`12c588d5`,
+2026-08-10). Between that commit and today the only change anywhere in the path is six lines in
+`ibMemberTable::Build` (`506640f7`, the `ForEachBinder` refactor), and it cannot be worth ×16 or the
+Structure lines would have moved with it — they did not (`record build+walk` 5436–5584 ns against
+~5300 historically; `New + 2 Insert` and `struct build` in range).
+
+**The same code cannot be both numbers.** So 3973 was measured under conditions this run does not
+reproduce, and a bisect would burn a Release build to confirm that nothing changed. What stands on
+today's measurement alone is the shape: the join is a nested loop, and the index beside it is unused.
+
+⚠ Method, not blame: a figure recorded in a comment carries no build, no machine and no date, so it
+cannot be compared with a later one. The numbers that ARE comparable in this document all name the
+configuration they were taken under.
+
+### What comes after the index
+
+The **key type**, as already recorded in §1f-bis: probe 45.2 ns for a `long` key against 329.5 for
+an `ibValue` one (**×7.3**), build 179.6 against 628.8.
