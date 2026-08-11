@@ -686,3 +686,61 @@ configuration they were taken under.
 
 The **key type**, as already recorded in §1f-bis: probe 45.2 ns for a `long` key against 329.5 for
 an `ibValue` one (**×7.3**), build 179.6 against 628.8.
+
+## 6. The container is a hash now, not a tree with a mirrored key surface (2026-08-11)
+
+The join / group hash and every script `Structure` are `ibValueContainer`. It carried three
+faults, each a mark of code written on the fly, and each fixed here.
+
+**The store was a red-black tree with an allocating comparator.** `std::map<ibValue, ibValue,
+ContainerComparator>`, where the comparator materialised and upper-cased BOTH keys on every
+comparison, and a lookup does O(log n) of them. Now a `std::vector<pair>` (insertion order — a
+stable index for the property protocol, a deterministic iteration order) beside an
+`std::unordered_map` keyed by the ibValue itself: one hash probe, and the hash / equality read the
+key's identity IN PLACE (zero-copy for a string), so a string lookup allocates nothing.
+
+**Keys were mirrored into the member table to fake `container.key`.** That is a Structure feature —
+named fields — leaking into a map, and it made building an n-key container **O(n²)**: every Insert
+invalidated the member surface, and the next access rebuilt it O(size). Keys are DATA now: they
+live in the store and are resolved by `FindProp` / `GetPropVal` (overridden) straight off it. The
+member table carries only the fixed methods and is built once.
+
+**A band-aid had grown over the symptom** — an `@Index` container subtype with an
+`m_omitKeyMembers` flag, the LINQ join / group hashes opting out of the key surface. Deleted whole;
+a plain Container is now O(1) and needs no variant.
+
+Measured, Release, `DISABLED_LinqJoin` (integer keys, so the container is the variable):
+
+| n | before (O(n²)) | after (hash) |
+|---|---|---|
+| 250 | 11 227 | 2 118 |
+| 1 000 | 36 911 | 2 248 |
+| 4 000 | 140 468 | 2 356 |
+| 16 000 | **577 565** | **2 425** |
+
+Flat — O(1) — and **238×** at n=16 000. Group-by, the same store, is flat too. The full suite
+(1269 tests) stays green; the change touches the property protocol every `object.member` runs
+through, so that number is the guard.
+
+### Two correctness fixes that rode with it
+
+- **A block `join` fans out on a repeated inner key.** It used to die: the hash was a Container and
+  `Insert` threw on a duplicate, so an inner table with repeating join keys (orders per customer)
+  raised out of the whole query. The hash maps a key to a bucket of rows now, one result row per
+  match, like the `.Join()` executor and SQL.
+- **A block `skip` / `take` no longer crashes inside a function.** The module-init pass that
+  pre-stamps MODULE-level types walked INTO named-function bodies (it skipped only lambda fences,
+  not `FUNC` / `ENDFUNC`) and applied a function-local `SET_TYPE` against the smaller module frame —
+  an out-of-range read, latent until a clause grew the function's local count. The pass steps over
+  function bodies now, exactly as the dispatch loop already did.
+
+### The boundary, honestly
+
+The store went tree → hash and the key surface went O(size)-per-mutation → nothing; those were the
+wins, and they are multiples. The last string allocation on a lookup (the `wstring` the old index
+key needed) is gone too, but that one shows up **in the noise** — a field read is dominated by
+interpreter dispatch and ibValue copies, not one allocation. And it does nothing for INTEGER keys
+(the join/group bench): there the cost is the number → string identity, whose real fix is a native
+numeric hash, which runs into `ibNumber` canonicality (1 vs 1.0) — a percent for a risk, not taken.
+The key type remains the lever §1f-bis names (`ibValue` probe ×7.3 a `long`'s); the container no
+longer is.

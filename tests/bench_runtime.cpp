@@ -524,6 +524,114 @@ TEST(RuntimeBench, DISABLED_LinqJoin) {
     SUCCEED();
 }
 
+// --- a query block with NO join, at scale — isolates the base pipeline ------
+//
+// `from a in outer select a` — one foreach over the source, one Add per row,
+// no index, no probe, no bucket. If THIS is linear-in-n per row too, the
+// quadratic the join bench shows is NOT the join: it is the block's own
+// per-row machinery (the source iterator or the result Array.Add), and the
+// join is innocent. If this is flat, the join adds the quadratic. The cut the
+// join scale bench above could not make on its own.
+TEST(RuntimeBench, DISABLED_LinqBlockSelectScale) {
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("var outer public;\n")
+        wxT("Procedure Fill(n) Public\n")
+        wxT("  outer = New Array; var i; i = 0;\n")
+        wxT("  While i < n Do outer.Add(i); i = i + 1; EndDo;\n")
+        wxT("EndProcedure\n")
+        wxT("Function Pipe() Public\n")
+        wxT("  var q; q = from a in outer select a;\n")
+        wxT("  Return q.Count();\n")
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+    ibValue ret;
+    for (long rows : { 250L, 1000L, 4000L, 16000L }) {
+        ibValue argRows((int)rows), retScale;
+        pu.CallAsProc(wxT("Fill"), argRows);
+        const double tot = BestTotalNs(3, [&]{
+            pu.CallAsFunc(wxT("Pipe"), retScale); g_sink += (uint64_t)retScale.GetInteger(); });
+        std::ostringstream label;
+        label << "block select n=" << rows << " (ns/row)";
+        RowOes(label.str().c_str(), tot / double(rows), "ns", tot);
+    }
+    SUCCEED();
+}
+
+// --- join with a FIXED inner, varying outer — build-once vs rebuild ---------
+//
+// The base pipeline is flat and the map probe is ~log N, so a build-once index
+// makes the join O(n log n); the join scale bench measures O(n^2). The missing
+// O(N) per row can only be a per-outer-row REBUILD of the index. This isolates
+// it: inner is fixed at 2000, only outer grows, and the row is per OUTER row.
+//   build once  -> the 2000-row build amortises over more outer rows as outer
+//                  grows, so ns/outer-row FALLS.
+//   rebuild     -> every outer row pays the whole 2000-row build, so
+//                  ns/outer-row stays FLAT and high, independent of outer.
+TEST(RuntimeBench, DISABLED_LinqJoinFixedInner) {
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("var outer public; var inner public;\n")
+        wxT("Procedure FillInner(n) Public\n")
+        wxT("  inner = New Array; var i; i = 0;\n")
+        wxT("  While i < n Do inner.Add(i); i = i + 1; EndDo;\n")
+        wxT("EndProcedure\n")
+        wxT("Procedure FillOuter(n) Public\n")
+        wxT("  outer = New Array; var i; i = 0;\n")
+        wxT("  While i < n Do outer.Add(i); i = i + 1; EndDo;\n")
+        wxT("EndProcedure\n")
+        wxT("Function Pipe() Public\n")
+        wxT("  var q; q = from a in outer join b in inner on a equals b select a;\n")
+        wxT("  Return q.Count();\n")
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+    ibValue argInner((int)2000), ret;
+    pu.CallAsProc(wxT("FillInner"), argInner);
+    for (long outerN : { 250L, 1000L, 4000L, 16000L }) {
+        ibValue argOuter((int)outerN), retScale;
+        pu.CallAsProc(wxT("FillOuter"), argOuter);
+        const double tot = BestTotalNs(3, [&]{
+            pu.CallAsFunc(wxT("Pipe"), retScale); g_sink += (uint64_t)retScale.GetInteger(); });
+        std::ostringstream label;
+        label << "join inner=2000 outer=" << outerN << " (ns/outer-row)";
+        RowOes(label.str().c_str(), tot / double(outerN), "ns", tot);
+    }
+    SUCCEED();
+}
+
+// --- a query block GROUP BY at high cardinality — the same index, verified --
+//
+// group-by builds the SAME kind of key->bucket hash the join does (per-row
+// Property + Insert), so it carried the same O(N^2) member-table thrash. One
+// distinct group per row is the worst case (every row inserts, every insert
+// invalidates the surface, every next row rebuilds it). If the @Index fix took,
+// this is flat per row; a plain Container makes it grow linearly with n.
+TEST(RuntimeBench, DISABLED_LinqGroupByScale) {
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("var src public;\n")
+        wxT("Procedure Fill(n) Public\n")
+        wxT("  src = New Array; var i; i = 0;\n")
+        wxT("  While i < n Do src.Add(i); i = i + 1; EndDo;\n")
+        wxT("EndProcedure\n")
+        wxT("Function Pipe() Public\n")
+        wxT("  var q; q = from a in src group a by a into g select g;\n")
+        wxT("  Return q.Count();\n")
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+    ibValue ret;
+    for (long rows : { 250L, 1000L, 4000L, 16000L }) {
+        ibValue argRows((int)rows), retScale;
+        pu.CallAsProc(wxT("Fill"), argRows);
+        const double tot = BestTotalNs(3, [&]{
+            pu.CallAsFunc(wxT("Pipe"), retScale); g_sink += (uint64_t)retScale.GetInteger(); });
+        std::ostringstream label;
+        label << "group by n=" << rows << " (ns/row)";
+        RowOes(label.str().c_str(), tot / double(rows), "ns", tot);
+    }
+    SUCCEED();
+}
+
 // --- the join INDEX on its own, with no interpreter above it --------------
 //
 // ibValueJoinState calls its index `m_hash`, but it is a

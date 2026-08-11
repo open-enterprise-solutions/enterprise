@@ -315,7 +315,6 @@ protected:
 	// pending-trampoline state — each level emits trampolines for its
 	// own joins only.
 	void CompileLinqJoin(ibCompileContext* linqCtx,
-	                     std::vector<int>& whereSkipIps,
 	                     std::vector<ibLinqPendingJoin>& pendingJoins);
 
 	bool CompileDeclaration(ibCompileContext* context);

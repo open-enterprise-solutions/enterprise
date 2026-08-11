@@ -1928,15 +1928,28 @@ void ibProcUnit::Execute(const ibByteCode& cByteCode, ibByteBinder& br, ibValue*
 	unsigned int lFinish = m_pByteCode->m_listCode.size();
 	ibValue** pRefLocVars = m_cCurContext.m_pRefLocVars;
 
-	// Only MODULE-level OPER_SET_TYPE is initialised here. A lambda body is inlined into the
-	// parent bc between OPER_LFUNC / OPER_ENDLFUNC and carries its OWN OPER_SET_TYPE whose slots
-	// index the LAMBDA frame, not this module frame — skip those (the main interpreter skips the
-	// whole fence on module-init too, see codeDef.h). A typed lambda temp (e.g. `Not (...)` emits
-	// a BOOLEAN temp) otherwise resolved a lambda slot against the module frame -> out of range -> AV.
-	// Resolve from THIS opcode (`byte`), not the stale main-loop `curCode` the variable1/array2 macros read.
+	// Only MODULE-level OPER_SET_TYPE is initialised here. Both a named FUNCTION body
+	// (OPER_FUNC … OPER_ENDFUNC) and an anonymous lambda (OPER_LFUNC … OPER_ENDLFUNC) are
+	// inlined into this same bc, and each carries its OWN OPER_SET_TYPE whose slots index
+	// ITS frame, not this module frame. Those are applied when the function / lambda runs
+	// (the dispatch loop's OPER_SET_TYPE case + OPER_FUNC skip mirror this exactly), so the
+	// module-init walk must step OVER both bodies. Applying a function-local typed temp
+	// against the smaller module frame reads pRefLocVars out of range -> AV — latent until a
+	// clause (e.g. a LINQ `skip` block) grows the function's local count enough to push the
+	// index past the module frame. Resolve from THIS opcode (`byte`), not the stale main-loop
+	// `curCode` the variable1/array2 macros read.
 	int lambdaDepth = 0;
 	for (unsigned int lCodeLine = 0; lCodeLine < lFinish; lCodeLine++) {
 		const ibByteUnit& byte = m_pByteCode->m_listCode[lCodeLine];
+		if (byte.m_numOper == OPER_FUNC) {
+			// Skip the whole named-function body — same walk the dispatch loop makes
+			// on a module-init pass (OPER_FUNC case). Its SET_TYPEs belong to the
+			// function's own frame, applied when it is called.
+			while (lCodeLine < lFinish &&
+			       m_pByteCode->m_listCode[lCodeLine].m_numOper != OPER_ENDFUNC)
+				lCodeLine++;
+			continue;
+		}
 		if (byte.m_numOper == OPER_LFUNC) { ++lambdaDepth; continue; }
 		if (byte.m_numOper == OPER_ENDLFUNC) { if (lambdaDepth > 0) --lambdaDepth; continue; }
 		if (lambdaDepth == 0 && byte.m_numOper == OPER_SET_TYPE) {

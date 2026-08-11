@@ -2335,20 +2335,31 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 
 
 	// Multiple WHERE clauses are allowed (each emits its own OPER_IF);
-	// all skip-targets back-patch to the same post-Add ip below.
-	// JOIN-miss OPER_IFs also push here — single "skip current row,
-	// continue iter" patch point for both clause kinds.
+	// all skip-targets back-patch to the same post-Add ip below — which,
+	// once joins opened bucket loops, is the INNERMOST bucket's
+	// NEXT_ITER: "skip this joined row, take the next match". JOIN-miss
+	// OPER_IFs do NOT share this target (a miss never opened its bucket
+	// loop) — they live on the pending join and are patched per join in
+	// the close section.
 	std::vector<int> whereSkipIps;
 
+	// SKIP's "drop this row" GOTOs when joins opened bucket loops at
+	// this level: the level continue would abandon the outer row's
+	// remaining matches, making skip count OUTER rows instead of result
+	// rows. Patched in the close section to the innermost bucket
+	// continue — the same target whereSkipIps gets. Without joins SKIP
+	// keeps registering into the loop's continue list as before.
+	std::vector<int> skipContinueGotoIps;
+
 	// JOIN clauses appear after `from`, before tail clauses (C# grammar).
-	// Each emits per-iter lookup inline in outer body + records an
-	// ibLinqPendingJoin for the trampoline (hash build) emitted after
-	// outer NEXT_ITER. Multiple joins at the same level are allowed.
-	// The "if !found, skip-to-next-iter" OPER_IF goes into whereSkipIps
-	// directly so end-of-body patches both clause kinds uniformly.
+	// Each emits per-iter lookup + its bucket FOREACH inline in outer
+	// body + records an ibLinqPendingJoin for the trampoline (hash
+	// build) emitted after outer NEXT_ITER. Multiple joins at the same
+	// level are allowed; their bucket loops nest in clause order and are
+	// closed innermost-first in the close section.
 	while (IsNextKeyWord(KEY_JOIN)) {
 		GETKeyWord(KEY_JOIN);
-		CompileLinqJoin(context, whereSkipIps, pendingJoins);
+		CompileLinqJoin(context, pendingJoins);
 	}
 
 	if (IsNextKeyWord(KEY_FROM)) {
@@ -2480,8 +2491,15 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 				c.m_numOper = OPER_GOTO;
 				m_cByteCode.m_listCode.emplace_back(std::move(c));
 				const int gotoIp = (int)m_cByteCode.m_listCode.size() - 1;
-				auto* pList = context->m_listContinue[context->m_numDoNumber];
-				if (pList != nullptr) pList->emplace_back(gotoIp);
+				if (!pendingJoins.empty()) {
+					// Inside bucket loops "drop this row" continues the
+					// INNERMOST bucket, so skip counts JOINED rows.
+					skipContinueGotoIps.push_back(gotoIp);
+				}
+				else {
+					auto* pList = context->m_listContinue[context->m_numDoNumber];
+					if (pList != nullptr) pList->emplace_back(gotoIp);
+				}
 			}
 			m_cByteCode.m_listCode[skipIfIp].m_param2.m_numIndex =
 				(long)m_cByteCode.m_listCode.size();
@@ -2571,6 +2589,9 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 				ibByteUnit c; AddLineInfo(c);
 				c.m_numOper = OPER_NEW;
 				c.m_param1 = data.m_groupsContainer;
+				// The group hash — a Container keyed by the group key, built by per-row
+				// Property + Insert. A Container now stores its keys in a hash index (not
+				// a rebuilt member surface), so this is O(N log N) with no special type.
 				c.m_param2.m_numIndex = GetConstString(wxT("Container"));
 				c.m_param2.m_numArray = 0;
 				m_cByteCode.m_listCode.emplace_back(std::move(c));
@@ -2876,6 +2897,50 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 		}
 	}
 
+	// === Close the bucket loops — innermost join first ===
+	// A fall-through from the body's Add continues the INNERMOST bucket;
+	// each exhausted bucket FOREACH jumps past its own NEXT_ITER, into
+	// the next-outer bucket's close, and finally into the level's own
+	// NEXT_ITER below. The leaf branch's whereSkipIps / DISTINCT targets
+	// already point at the first close emitted here (= the innermost
+	// continue), which is exactly "skip this joined row, take the next
+	// match" — the fan-out analogue of the old "skip to next iter".
+	std::vector<long> bucketCloseIp(pendingJoins.size(), 0);
+	for (size_t k = pendingJoins.size(); k-- > 0; ) {
+		const ibLinqPendingJoin& pj = pendingJoins[k];
+		bucketCloseIp[k] = (long)m_cByteCode.m_listCode.size();
+		{
+			ibByteUnit c; AddLineInfo(c);
+			c.m_numOper = OPER_NEXT_ITER;
+			c.m_param1 = pj.bucketItSlot;
+			c.m_param2.m_numIndex = pj.bucketForeachIp;
+			m_cByteCode.m_listCode.emplace_back(std::move(c));
+		}
+		m_cByteCode.m_listCode[pj.bucketForeachIp].m_param4.m_numIndex =
+			(long)m_cByteCode.m_listCode.size();
+	}
+	// A join-miss must NOT land on the innermost continue — that would
+	// resume a bucket iterator this row never opened. It lands on the
+	// PREVIOUS join's continue (whose loop IS open at that point), and
+	// the first join's miss lands past every close, on the level's own
+	// NEXT_ITER. The equality re-check, by contrast, fires INSIDE its
+	// own open loop, so it continues its OWN bucket.
+	for (size_t k = 0; k < pendingJoins.size(); ++k) {
+		m_cByteCode.m_listCode[pendingJoins[k].missIfIp].m_param2.m_numIndex =
+			(k > 0) ? bucketCloseIp[k - 1]
+			        : (long)m_cByteCode.m_listCode.size();
+		if (pendingJoins[k].recheckIfIp >= 0)
+			m_cByteCode.m_listCode[pendingJoins[k].recheckIfIp].m_param2.m_numIndex =
+				bucketCloseIp[k];
+	}
+	// SKIP's "drop this row" continues the innermost bucket, so skip
+	// counts joined rows rather than outer ones.
+	if (!skipContinueGotoIps.empty()) {
+		const long innermostContinue = bucketCloseIp[pendingJoins.size() - 1];
+		for (const int gotoIp : skipContinueGotoIps)
+			m_cByteCode.m_listCode[gotoIp].m_param1.m_numIndex = innermostContinue;
+	}
+
 	// === Close this level's loop ===
 	{
 		ibByteUnit c; AddLineInfo(c);
@@ -2901,7 +2966,9 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 		m_cByteCode.m_listCode[pj.placeholderGotoIp].m_param1.m_numIndex =
 			trampolineLabel;
 
-		// hashSlot = New("Container") — first-iter init of the dict.
+		// hashSlot = New("Container") — the join hash, keyed by the join key, its
+		// value the bucket Array. A Container keeps its keys in a hash index now, so
+		// the per-row Property + Insert build is O(N log N) — no special index type.
 		{
 			ibByteUnit c; AddLineInfo(c);
 			c.m_numOper = OPER_NEW;
@@ -2950,7 +3017,61 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 		const ibParamUnit k2Slot = GetExpression(linqCtx);
 		m_numCurrentCompile = savedCursorK2;
 
-		// hashSlot.Insert(k2Slot, bindSlot) — OPER_CALL_METHOD with 2 args.
+		const ibParamUnit buildFoundSlot    = linqCtx->CreateVariable();
+		const ibParamUnit buildNotFoundSlot = linqCtx->CreateVariable();
+
+		// Lookup-or-create the key's bucket, then Add the row into it —
+		// the same emitted shape GROUP BY uses. A repeated key lands in
+		// the existing bucket instead of hitting Container::Insert's
+		// duplicate refusal (which raised out of the whole query), and
+		// the lookup site fans out over the bucket.
+		//   found = hashSlot.Property(k2Slot, bucketSlot)
+		{
+			ibByteUnit c; AddLineInfo(c);
+			c.m_numOper = OPER_CALL_METHOD;
+			c.m_param1 = buildFoundSlot;
+			c.m_param2 = pj.hashSlot;
+			c.m_param3.m_numIndex = GetConstString(wxT("Property"));
+			c.m_param3.m_numArray = 2;
+			m_cByteCode.m_listCode.emplace_back(std::move(c));
+		}
+		{
+			ibByteUnit c; AddLineInfo(c);
+			c.m_numOper = OPER_SET;
+			c.m_param1 = k2Slot;
+			m_cByteCode.m_listCode.emplace_back(std::move(c));
+		}
+		{
+			ibByteUnit c; AddLineInfo(c);
+			c.m_numOper = OPER_SET;
+			c.m_param1 = pj.bucketSlot;
+			m_cByteCode.m_listCode.emplace_back(std::move(c));
+		}
+		//   notFound = NOT found; OPER_IF notFound → skipCreate (jumps when found)
+		{
+			ibByteUnit c; AddLineInfo(c);
+			c.m_numOper = OPER_NOT;
+			c.m_param1 = buildNotFoundSlot;
+			c.m_param2 = buildFoundSlot;
+			m_cByteCode.m_listCode.emplace_back(std::move(c));
+		}
+		const int createSkipIfIp = (int)m_cByteCode.m_listCode.size();
+		{
+			ibByteUnit c; AddLineInfo(c);
+			c.m_numOper = OPER_IF;
+			c.m_param1 = buildNotFoundSlot;
+			c.m_param2.m_numIndex = 0;   // back-patched past the create branch
+			m_cByteCode.m_listCode.emplace_back(std::move(c));
+		}
+		//   create branch: bucketSlot = New("Array"); hashSlot.Insert(k2Slot, bucketSlot)
+		{
+			ibByteUnit c; AddLineInfo(c);
+			c.m_numOper = OPER_NEW;
+			c.m_param1 = pj.bucketSlot;
+			c.m_param2.m_numIndex = GetConstString(wxT("Array"));
+			c.m_param2.m_numArray = 0;
+			m_cByteCode.m_listCode.emplace_back(std::move(c));
+		}
 		{
 			ibByteUnit c; AddLineInfo(c);
 			c.m_numOper = OPER_CALL_METHOD;
@@ -2964,6 +3085,25 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 			ibByteUnit c; AddLineInfo(c);
 			c.m_numOper = OPER_SET;
 			c.m_param1 = k2Slot;
+			m_cByteCode.m_listCode.emplace_back(std::move(c));
+		}
+		{
+			ibByteUnit c; AddLineInfo(c);
+			c.m_numOper = OPER_SET;
+			c.m_param1 = pj.bucketSlot;
+			m_cByteCode.m_listCode.emplace_back(std::move(c));
+		}
+		//   skipCreate:
+		m_cByteCode.m_listCode[createSkipIfIp].m_param2.m_numIndex =
+			(long)m_cByteCode.m_listCode.size();
+		//   bucketSlot.Add(bindSlot)
+		{
+			ibByteUnit c; AddLineInfo(c);
+			c.m_numOper = OPER_CALL_METHOD;
+			c.m_param1 = linqCtx->CreateVariable();   // throwaway ret
+			c.m_param2 = pj.bucketSlot;
+			c.m_param3.m_numIndex = GetConstString(wxT("Add"));
+			c.m_param3.m_numArray = 1;
 			m_cByteCode.m_listCode.emplace_back(std::move(c));
 		}
 		{
@@ -3010,7 +3150,6 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 }
 
 void ibCompileCode::CompileLinqJoin(ibCompileContext* linqCtx,
-	std::vector<int>& whereSkipIps,
 	std::vector<ibLinqPendingJoin>& pendingJoins)
 {
 	// KEY_JOIN already consumed by caller. Grammar:
@@ -3021,8 +3160,9 @@ void ibCompileCode::CompileLinqJoin(ibCompileContext* linqCtx,
 	//   2. OPER_IF tmp_isEmpty, skipLabel   (jump on hashSlot non-empty)
 	//   3. OPER_GOTO trampolineLabel        (placeholder, back-patched)
 	//   4. skipLabel:
-	//   5. found = hashSlot.Property(K1, bindSlot)
-	//   6. OPER_IF found, end-of-body        (back-patched via whereSkipIps)
+	//   5. found = hashSlot.Property(K1, bucketSlot)
+	//   6. OPER_IF found, past-this-bucket   (pj.missIfIp, patched at close)
+	//   7. bucket FOREACH over bucketSlot    (the fan-out; body runs per match)
 	//
 	// T and K2 lex ranges saved by parse-and-discard so the trampoline
 	// (emitted after outer NEXT_ITER) can replay them in the build
@@ -3076,8 +3216,9 @@ void ibCompileCode::CompileLinqJoin(ibCompileContext* linqCtx,
 
 	GETKeyWord(KEY_ON);
 
-	// Bind b in the linq scope. Slot persists across iterations; on
-	// each outer iter it's overwritten by hashSlot.Property's out-param.
+	// Bind b in the linq scope. Slot persists across iterations; the
+	// bucket FOREACH writes the current matching inner row into it (and
+	// the trampoline reuses it as the inner build-loop iter var).
 	pj.bindSlot = linqCtx->GetVariable(joinName);
 
 	// Parse K1 inline — emits at current ip (outer body, per-iter).
@@ -3164,9 +3305,11 @@ void ibCompileCode::CompileLinqJoin(ibCompileContext* linqCtx,
 	pj.skipLabelIp = (int)m_cByteCode.m_listCode.size();
 	m_cByteCode.m_listCode[condIfIp].m_param2.m_numIndex = pj.skipLabelIp;
 
-	// (5) found = hashSlot.Property(K1, bindSlot)
-	// Property writes the matched value into its 2nd-arg slot (bindSlot)
-	// on hit; returns false on miss (bindSlot left as previous content).
+	// (5) found = hashSlot.Property(K1, bucketSlot)
+	// A key maps to a BUCKET (Array of every matching inner row), so
+	// Property hands back the bucket, never a row; returns false on
+	// miss (bucketSlot left as previous content, never iterated).
+	pj.bucketSlot = linqCtx->CreateVariable();
 	const ibParamUnit foundSlot = linqCtx->CreateVariable();
 	{
 		ibByteUnit c; AddLineInfo(c);
@@ -3186,22 +3329,89 @@ void ibCompileCode::CompileLinqJoin(ibCompileContext* linqCtx,
 	{
 		ibByteUnit c; AddLineInfo(c);
 		c.m_numOper = OPER_SET;
-		c.m_param1 = pj.bindSlot;
+		c.m_param1 = pj.bucketSlot;
 		m_cByteCode.m_listCode.emplace_back(std::move(c));
 	}
 
-	// (6) OPER_IF found, end-of-body  — on miss (foundSlot=false),
-	// jump past the Add. End-of-body back-patches via whereSkipIps,
-	// shared with WHERE clauses at this level.
-	const int missSkipIp = (int)m_cByteCode.m_listCode.size();
+	// (6) OPER_IF found — on miss (foundSlot=false) jump PAST this
+	// join's bucket loop: into the previous join's continue, or the
+	// level NEXT_ITER for the first join. The target exists only once
+	// the close section has emitted the bucket NEXT_ITERs, so it is
+	// recorded on pj and patched there — NOT in whereSkipIps, whose
+	// single shared target (the innermost continue) would resume a
+	// bucket iterator this row never opened.
+	pj.missIfIp = (int)m_cByteCode.m_listCode.size();
 	{
 		ibByteUnit c; AddLineInfo(c);
 		c.m_numOper = OPER_IF;
 		c.m_param1 = foundSlot;
-		c.m_param2.m_numIndex = 0;   // back-patched at end of body
+		c.m_param2.m_numIndex = 0;   // back-patched in the close section
 		m_cByteCode.m_listCode.emplace_back(std::move(c));
 	}
-	whereSkipIps.push_back(missSkipIp);
+
+	// (7)+(8) the bucket loop — the fan-out itself. The rest of the
+	// body (further joins, wheres, the Add) sits INSIDE it, so one
+	// outer row emits one result row per matching inner row, exactly
+	// like the `.Join()` executor. Slot names carry the emit ip so
+	// joins at different levels of a nested `from` can never share a
+	// loop cell.
+	{
+		const int unique = (int)m_cByteCode.m_listCode.size();
+		pj.bucketInSlot = linqCtx->GetVariable(
+			wxString::Format(wxT("@jbkt_in_%d"), unique), true, false, false, true);
+		pj.bucketItSlot = linqCtx->GetVariable(
+			wxString::Format(wxT("@jbkt_it_%d"), unique), true, false, false, true);
+	}
+	{
+		ibByteUnit c; AddLineInfo(c);
+		c.m_numOper = OPER_LET;
+		c.m_param1 = pj.bucketInSlot;
+		c.m_param2 = pj.bucketSlot;
+		m_cByteCode.m_listCode.emplace_back(std::move(c));
+	}
+	pj.bucketForeachIp = (int)m_cByteCode.m_listCode.size();
+	{
+		ibByteUnit c; AddLineInfo(c);
+		c.m_numOper = OPER_FOREACH;
+		c.m_param1 = pj.bindSlot;
+		c.m_param2 = pj.bucketInSlot;
+		c.m_param3 = pj.bucketItSlot;
+		m_cByteCode.m_listCode.emplace_back(std::move(c));
+	}
+
+	// (9) re-check the join equality per match, with the LANGUAGE's own
+	// comparison. The Container's key comparator is looser than the
+	// script `equals` — string keys compare case-insensitively — so keys
+	// the language tells apart can land in one bucket. Rather than grow
+	// a second index type, the loop re-evaluates K2 on the matched row
+	// and drops a row the comparison refuses, continuing THIS bucket
+	// exactly like a failed `where`. This is also what keeps the block
+	// spelling semantically identical to the `.Join()` executor, whose
+	// map compares with ibValue's own ordering.
+	{
+		const int savedCursorRecheck = m_numCurrentCompile;
+		m_numCurrentCompile = pj.k2LexStart;
+		const ibParamUnit k2vSlot = GetExpression(linqCtx);
+		m_numCurrentCompile = savedCursorRecheck;
+
+		const ibParamUnit eqSlot = linqCtx->CreateVariable();
+		{
+			ibByteUnit c; AddLineInfo(c);
+			c.m_numOper = OPER_EQ;
+			c.m_param1 = eqSlot;
+			c.m_param2 = k1Slot;
+			c.m_param3 = k2vSlot;
+			m_cByteCode.m_listCode.emplace_back(std::move(c));
+		}
+		pj.recheckIfIp = (int)m_cByteCode.m_listCode.size();
+		{
+			ibByteUnit c; AddLineInfo(c);
+			c.m_numOper = OPER_IF;   // jumps on false → this bucket's continue (patched at close)
+			c.m_param1 = eqSlot;
+			c.m_param2.m_numIndex = 0;
+			m_cByteCode.m_listCode.emplace_back(std::move(c));
+		}
+	}
 
 	// Push binding so subsequent clauses see `b` via standard linq
 	// context lookup. Origin FromJoin in case future clauses (e.g.

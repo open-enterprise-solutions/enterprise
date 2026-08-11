@@ -5,47 +5,54 @@
 
 #include "valueMap.h"
 #include "backend/backend_exception.h"
+#include "backend/appData.h"
 
-#include <cwctype>   // towupper — portable case fold for the key comparator
+#include <cwctype>   // towupper — inline case fold, no allocation
 
 
-// CASE-INSENSITIVE, WITHOUT BUILDING TWO STRINGS TO FIND OUT.
-//
-// It read `MakeUpper(lhs.GetString()) < MakeUpper(rhs.GetString())`: two
-// wxStrings materialised and two uppercased copies allocated on EVERY
-// comparison, and a std::map does O(log n) of them per lookup. Invisible while
-// nothing hot used a Structure — and then a query block's second binding made
-// the pipeline row a Structure, which put this on the per-row path and a join
-// measured 4715 ns/row (docs/runtime-perf.md §1f).
-//
-// The scratch overload of GetString returns the stored ibString by reference for
-// a string value, so the walk below allocates nothing. `towupper` rather than a
-// platform `wcsicmp`: the tree builds under MSVC, GCC and Clang.
-static int CompareStringNoCase(const ibString& a, const ibString& b)
+// The key's identity as a wide C-string. A STRING value (the overwhelmingly
+// common case) is read ZERO-COPY through its own buffer; a number / reference is
+// materialised into `scratch` from its hash identity (text / guid — NOT the
+// display string of a reference). The pointer is valid for the key's lifetime
+// (string) or `scratch`'s (materialised), which is the duration of the caller.
+const wchar_t* ibValueContainer::Identity(const ibValue& key, ibString& scratch)
 {
-	const wchar_t* pa = a.wc_str();
-	const wchar_t* pb = b.wc_str();
-
-	for (; *pa != L'\0' && *pb != L'\0'; ++pa, ++pb) {
-		const wint_t ca = std::towupper(static_cast<wint_t>(*pa));
-		const wint_t cb = std::towupper(static_cast<wint_t>(*pb));
-		if (ca != cb)
-			return ca < cb ? -1 : 1;
-	}
-
-	if (*pa == *pb) return 0;
-	return (*pa == L'\0') ? -1 : 1;
+	if (key.GetType() == ibValueTypes::TYPE_STRING)
+		return key.GetString(scratch).wc_str();
+	scratch = key.GetHashKey();   // wxString -> ibString (rare path)
+	return scratch.wc_str();
 }
 
-bool ibValueContainer::ContainerComparator::operator() (const ibValue& lhs, const ibValue& rhs) const {
-	if (lhs.GetType() == ibValueTypes::TYPE_STRING
-		&& rhs.GetType() == ibValueTypes::TYPE_STRING) {
-		ibString scratchL, scratchR;
-		return CompareStringNoCase(lhs.GetString(scratchL), rhs.GetString(scratchR)) < 0;
+// FNV-1a over the upper-folded identity — case-insensitive, allocation-free for a
+// string key. Shares Identity with KeyEq so equal keys always hash equal.
+size_t ibValueContainer::KeyHash::operator()(const ibValue& k) const
+{
+	ibString scratch;
+	const wchar_t* p = Identity(k, scratch);
+	size_t h = 1469598103934665603ULL;            // FNV-1a offset basis (64-bit)
+	for (; *p != L'\0'; ++p) {
+		h ^= (size_t)std::towupper((wint_t)*p);
+		h *= 1099511628211ULL;                    // FNV-1a prime
 	}
-	else {
-		return lhs < rhs;
-	}
+	return h;
+}
+
+// Case-insensitive comparison of the two identities, in place — no string built.
+bool ibValueContainer::KeyEq::operator()(const ibValue& a, const ibValue& b) const
+{
+	ibString sa, sb;
+	const wchar_t* pa = Identity(a, sa);
+	const wchar_t* pb = Identity(b, sb);
+	for (; *pa != L'\0' && *pb != L'\0'; ++pa, ++pb)
+		if (std::towupper((wint_t)*pa) != std::towupper((wint_t)*pb))
+			return false;
+	return *pa == *pb;   // equal only if both ended together
+}
+
+long ibValueContainer::IndexOf(const ibValue& key) const
+{
+	const auto it = m_index.find(key);
+	return it != m_index.end() ? (long)it->second : wxNOT_FOUND;
 }
 
 //**********************************************************************
@@ -88,9 +95,10 @@ ibValueContainer::ibValueContainer() : ibValueDynamicMembers(ibValueTypes::TYPE_
 
 ibValueContainer::ibValueContainer(const std::map<ibValue, ibValue>& containerValues) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, true) {
 	m_members.Bind(&BindContainerNames, this);
-	for (auto& cntVal : containerValues) {
-		m_containerValues.insert_or_assign(cntVal.first, cntVal.second);
-	}
+	// SetAt, not Insert: the source map may hold keys this container folds together
+	// (its keys are case-insensitive), and a build should keep the last, not throw.
+	for (const auto& cntVal : containerValues)
+		ibValueContainer::SetAt(cntVal.first, cntVal.second);
 }
 
 ibValueContainer::ibValueContainer(bool readOnly) : ibValueDynamicMembers(ibValueTypes::TYPE_VALUE, readOnly) {
@@ -98,11 +106,11 @@ ibValueContainer::ibValueContainer(bool readOnly) : ibValueDynamicMembers(ibValu
 }
 
 ibValueContainer::~ibValueContainer() {
-	m_containerValues.clear();
 }
 
-//������ � �������� ��� � ���������� ��������
-//������������ ��������� ������
+// The FIXED method surface — methods only. It no longer publishes the keys, so
+// it is type-invariant (given the read-only flag), built ONCE, and never rebuilt
+// on a data mutation. The keys are the store's job (FindProp / GetPropName).
 void ibValueContainer::BindContainerNames(ibMemberTable& helper, const ibValue* ctx)
 {
 	const ibValueContainer* self = static_cast<const ibValueContainer*>(ctx);
@@ -115,36 +123,39 @@ void ibValueContainer::BindContainerNames(ibMemberTable& helper, const ibValue* 
 		helper.AppendFunc(wxT("Delete"), 1, wxT("Delete(key : any)"));
 		helper.AppendFunc(wxT("Insert"), 2, wxT("Insert(key : any, value : any)"));
 	}
-
-	// BY REFERENCE. This iterated BY VALUE, so every rebuild copy-constructed and
-	// destroyed a `pair<const ibValue, ibValue>` per member — two ibValues, and an
-	// ibValue holding a string key allocates. It reads only the key.
-	//
-	// That is not a micro-detail here: a sampled profile of a query-block join put
-	// `ibMemberTable::Build` at 25% of the entire run, its allocations dominated by
-	// wxString and ibValue construction. Every composite pipeline row is a fresh
-	// Structure whose member surface is built once and thrown away, so this loop
-	// runs per ROW. See docs/runtime-perf.md §1g.
-	for (const auto& keyValue : self->m_containerValues) {
-		const ibValue& cValKey = keyValue.first;
-		if (!cValKey.IsEmpty()) {
-			helper.AppendProp(cValKey.GetString());
-		}
-	}
 }
 
-bool ibValueContainer::SetPropVal(const long lPropNum, const ibValue& varPropVal)
+// ---- the key surface, straight off the store --------------------------------
+// FindProp is the `container.key` resolver: a hash probe, not a member-table
+// scan. GetNProps / GetPropName / Get / SetPropVal are the index side of the
+// same store, used by the interpreter after FindProp and by introspection.
+
+long ibValueContainer::FindProp(const wxString& strPropName) const
 {
-	return SetAt(
-		GetPropName(lPropNum), varPropVal
-	);
+	return IndexOf(ibValue(strPropName));
+}
+
+wxString ibValueContainer::GetPropName(const long lPropNum) const
+{
+	if (lPropNum < 0 || lPropNum >= (long)m_entries.size())
+		return wxEmptyString;
+	return m_entries[lPropNum].first.GetString();
 }
 
 bool ibValueContainer::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	return GetAt(
-		GetPropName(lPropNum), pvarPropVal
-	);
+	if (lPropNum < 0 || lPropNum >= (long)m_entries.size())
+		return false;
+	pvarPropVal = m_entries[lPropNum].second;
+	return true;
+}
+
+bool ibValueContainer::SetPropVal(const long lPropNum, const ibValue& varPropVal)
+{
+	if (lPropNum < 0 || lPropNum >= (long)m_entries.size())
+		return false;
+	m_entries[lPropNum].second = varPropVal;
+	return true;
 }
 
 bool ibValueContainer::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray)
@@ -176,74 +187,86 @@ bool ibValueContainer::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, 
 
 void ibValueContainer::Delete(const ibValue& varKeyValue)
 {
-	m_members.Invalidate();
-	m_containerValues.erase(varKeyValue);
+	const long idx = IndexOf(varKeyValue);
+	if (idx < 0)
+		return;
+	// Erase keeps insertion order, so every entry after the hole moves down one
+	// slot — and so does its index. Rebuilding the map for the tail is simpler
+	// (and less error-prone) than patching each shifted entry in place. Delete is
+	// the rare operation; the common build / read paths stay O(1).
+	m_entries.erase(m_entries.begin() + idx);
+	m_index.clear();
+	for (size_t i = 0; i < m_entries.size(); ++i)
+		m_index.emplace(m_entries[i].first, i);
 }
-
-#include "backend/appData.h"
 
 void ibValueContainer::Insert(const ibValue& varKeyValue, const ibValue& cValue)
 {
-	std::map<const ibValue, ibValue>::iterator it = m_containerValues.find(varKeyValue);
-	if (it != m_containerValues.end()) {
+	if (m_index.find(varKeyValue) != m_index.end()) {
 		if (!appData->DesignerMode())
 			ibBackendCoreException::Error(_("Key '%s' is already using!"), varKeyValue.GetString());
 		return;
 	}
-	m_members.Invalidate();
-	m_containerValues.insert_or_assign(varKeyValue, cValue);
+	m_index.emplace(varKeyValue, m_entries.size());
+	m_entries.emplace_back(varKeyValue, cValue);
 }
 
 bool ibValueContainer::Property(const ibValue& varKeyValue, ibValue& cValueFound)
 {
-	std::map<const ibValue, ibValue>::iterator itFound = m_containerValues.find(varKeyValue);
-	if (itFound != m_containerValues.end()) {
-		cValueFound = itFound->second;
-		return true;
-	}
-	return false;
+	const long idx = IndexOf(varKeyValue);
+	if (idx < 0)
+		return false;
+	cValueFound = m_entries[idx].second;
+	return true;
 }
 
 std::shared_ptr<ibValueIteratorState> ibValueContainer::CreateIterator()
 {
-	using MapT = std::decay_t<decltype(m_containerValues)>;
+	using EntriesT = std::decay_t<decltype(m_entries)>;
 	class State : public ibValueIteratorState {
 	public:
-		explicit State(const MapT& m) : m_map(m), m_it(m.begin()) {}
+		explicit State(const EntriesT& e) : m_entries(e) {}
 		bool MoveNext(ibValue& current) override {
-			if (m_started) ++m_it; else m_started = true;
-			if (m_it == m_map.end()) return false;
-			ibValue valueCopy = m_it->second;
+			if (m_started) ++m_pos; else m_started = true;
+			if (m_pos >= m_entries.size()) return false;
+			ibValue valueCopy = m_entries[m_pos].second;
 			current = ibValue(static_cast<ibValue*>(
-				new ibValueReturnContainer(
-					m_it->first, valueCopy)));
+				new ibValueReturnContainer(m_entries[m_pos].first, valueCopy)));
 			return true;
 		}
-		void Reset() override { m_it = m_map.begin(); m_started = false; }
+		void Reset() override { m_pos = 0; m_started = false; }
 		bool PeekSample(ibValue& current) const override {
-			current = ibValue(static_cast<ibValue*>(
-				new ibValueReturnContainer()));
+			current = ibValue(static_cast<ibValue*>(new ibValueReturnContainer()));
 			return true;
 		}
 	private:
-		const MapT& m_map;
-		MapT::const_iterator m_it;
+		const EntriesT& m_entries;
+		size_t m_pos = 0;
 		bool m_started = false;
 	};
-	return std::make_shared<State>(m_containerValues);
+	return std::make_shared<State>(m_entries);
 }
 
 bool ibValueContainer::SetAt(const ibValue& varKeyValue, const ibValue& varValue)
 {
-	ibValueContainer::Insert(varKeyValue, varValue);
+	// Assign by key: overwrite an existing entry, create it otherwise. (Insert,
+	// the script verb, still refuses a duplicate; `[key] = v` is the put.)
+	const long idx = IndexOf(varKeyValue);
+	if (idx >= 0)
+		m_entries[idx].second = varValue;
+	else {
+		m_index.emplace(varKeyValue, m_entries.size());
+		m_entries.emplace_back(varKeyValue, varValue);
+	}
 	return true;
 }
 
 bool ibValueContainer::GetAt(const ibValue& varKeyValue, ibValue& pvarValue)
 {
-	std::map<const ibValue, ibValue>::const_iterator itFound = m_containerValues.find(varKeyValue);
-	if (itFound != m_containerValues.end()) {
-		pvarValue = itFound->second; return true;
+	const long idx = IndexOf(varKeyValue);
+	if (idx >= 0) {
+		pvarValue = m_entries[idx].second;
+		return true;
 	}
 	if (!appData->DesignerMode())
 		ibBackendCoreException::Error(_("Key '%s' not found!"), varKeyValue.GetString());
@@ -381,14 +404,14 @@ bool ibValueStructure::Property(const ibValue& varKeyValue, ibValue& cValueFound
 
 bool ibValueContainer::DoSerialize(ibDataNode& node) const
 {
-	node.SetValue(wxT("n"), (s32)m_containerValues.size());
+	node.SetValue(wxT("n"), (s32)m_entries.size());
 
-	for (const auto& pair : m_containerValues) {
-		ibDataNode& keyNode = node.AddChild(pair.first.GetClassType(), 0);
-		if (!pair.first.Serialize(keyNode))
+	for (const auto& entry : m_entries) {
+		ibDataNode& keyNode = node.AddChild(entry.first.GetClassType(), 0);
+		if (!entry.first.Serialize(keyNode))
 			return false;   // one unpackable side voids the container
-		ibDataNode& valueNode = node.AddChild(pair.second.GetClassType(), 0);
-		if (!pair.second.Serialize(valueNode))
+		ibDataNode& valueNode = node.AddChild(entry.second.GetClassType(), 0);
+		if (!entry.second.Serialize(valueNode))
 			return false;
 	}
 
@@ -397,8 +420,7 @@ bool ibValueContainer::DoSerialize(ibDataNode& node) const
 
 bool ibValueContainer::DoDeserialize(const ibDataNode& node)
 {
-	m_containerValues.clear();
-	m_members.Invalidate();
+	Clear();
 
 	const std::vector<ibDataNode>& children = node.Children();
 	// Pairs, so an ODD number of children means the blob was cut between a key
@@ -409,10 +431,10 @@ bool ibValueContainer::DoDeserialize(const ibDataNode& node)
 	for (std::size_t i = 0; i + 1 < children.size(); i += 2) {
 		const ibValue key = ibValue::FromNode(children[i]);
 		const ibValue value = ibValue::FromNode(children[i + 1]);
-		m_containerValues.insert_or_assign(key, value);
+		Insert(key, value);
 	}
 
-	return (s32)m_containerValues.size() == node.GetValue<s32>(wxT("n"));
+	return (s32)m_entries.size() == node.GetValue<s32>(wxT("n"));
 }
 
 //**********************************************************************

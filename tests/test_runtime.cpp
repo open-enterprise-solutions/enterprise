@@ -454,6 +454,239 @@ TEST(RuntimeTest, LinqWhere_NullThreeValuedLogic) {
 	EXPECT_EQ(ret.GetInteger(), 1);   // only "South"; Undefined <> "North" is UNKNOWN -> dropped
 }
 
+// ===========================================================================
+// LINQ block join — a key with SEVERAL matching inner rows fans out into one
+// result row per match, like the `.Join()` executor and SQL. This used to die
+// at hash-build time: the block's index was a plain Container, and
+// Container::Insert refuses a duplicate key ("Key is already using") — so an
+// inner table with repeated join keys (orders per customer) killed the whole
+// query. The index now maps a key to a BUCKET of rows.
+// ===========================================================================
+
+TEST(RuntimeTest, LinqBlockJoin_DuplicateInnerKeys_FanOut) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Function JoinCount() Public\n")
+		wxT("  var outer; var inner; var q;\n")
+		wxT("  outer = New Array; outer.Add(1); outer.Add(2); outer.Add(3);\n")
+		wxT("  inner = New Array; inner.Add(1); inner.Add(1); inner.Add(2);\n")
+		wxT("  q = from a in outer join b in inner on a equals b select a;\n")
+		wxT("  Return q.Count();\n")
+		wxT("EndFunction\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue ret;
+	pu.CallAsFunc(wxT("JoinCount"), ret);
+	// a=1 matches twice, a=2 once, a=3 not at all -> 2 + 1 + 0.
+	EXPECT_EQ(ret.GetInteger(), 3);
+}
+
+// The block and the `.Join()` method are two spellings of one operation, so
+// over the same duplicate-key data they must agree row for row.
+TEST(RuntimeTest, LinqBlockJoin_AgreesWithJoinMethod) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Function BlockMinusMethod() Public\n")
+		wxT("  var outer; var inner; var q; var m;\n")
+		wxT("  outer = New Array; outer.Add(1); outer.Add(2); outer.Add(3);\n")
+		wxT("  inner = New Array; inner.Add(1); inner.Add(1); inner.Add(2);\n")
+		wxT("  q = from a in outer join b in inner on a equals b select a;\n")
+		wxT("  m = outer.Join(inner,\n")
+		wxT("        Function(o) Return o EndFunction,\n")
+		wxT("        Function(i) Return i EndFunction,\n")
+		wxT("        Function(o, i) Return o EndFunction);\n")
+		wxT("  Return q.Count() - m.Count();\n")
+		wxT("EndFunction\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue ret;
+	pu.CallAsFunc(wxT("BlockMinusMethod"), ret);
+	EXPECT_EQ(ret.GetInteger(), 0);
+}
+
+// A `where` after a join filters PER JOINED ROW: failing one match takes the
+// NEXT match of the same outer row, it does not abandon the outer row. Two
+// inner rows share the key and differ in payload; the filter keeps one.
+TEST(RuntimeTest, LinqBlockJoin_WhereFiltersPerMatch) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Function KeptPayload() Public\n")
+		wxT("  var outer; var inner; var s; var q;\n")
+		wxT("  outer = New Array; outer.Add(1);\n")
+		wxT("  inner = New Array;\n")
+		wxT("  s = New Structure; s.Insert(\"K\", 1); s.Insert(\"V\", 1); inner.Add(s);\n")
+		wxT("  s = New Structure; s.Insert(\"K\", 1); s.Insert(\"V\", 2); inner.Add(s);\n")
+		wxT("  q = from a in outer join b in inner on a equals b.K where b.V > 1 select b.V;\n")
+		wxT("  If q.Count() <> 1 Then Return -1; EndIf;\n")
+		wxT("  Return q.Get(0);\n")
+		wxT("EndFunction\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue ret;
+	pu.CallAsFunc(wxT("KeptPayload"), ret);
+	EXPECT_EQ(ret.GetInteger(), 2);   // the V=1 match was filtered, the V=2 match survived
+}
+
+// Boundary: block `skip` over an EMPTY source always passed — the loop never
+// runs, so the function's local count stays low and the guard temp's index
+// stays inside the module frame. The marker of where the fixed bug did NOT bite.
+// Array.Insert accepts index == size as an APPEND (the valid range is [0,size],
+// one wider than element access). This used to be refused by the shared index
+// check and there was no way to insert at the very end except Add.
+TEST(RuntimeTest, ArrayInsert_AtEnd_Appends) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Function InsertEnd() Public\n")
+		wxT("  var a; a = New Array; a.Add(1); a.Add(2);\n")
+		wxT("  a.Insert(2, 3);\n")            // index == size -> append
+		wxT("  a.Insert(0, 0);\n")            // index 0 -> front
+		wxT("  Return a.Get(0) * 1000 + a.Get(1) * 100 + a.Get(2) * 10 + a.Get(3);\n")
+		wxT("EndFunction\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue ret;
+	pu.CallAsFunc(wxT("InsertEnd"), ret);
+	EXPECT_EQ(ret.GetInteger(), 123);   // [0,1,2,3]
+}
+
+// A Container round-trips its keys and values (the redesigned vector + hash
+// store), preserves insertion order, and overwrites on `[key] = v`.
+TEST(RuntimeTest, ContainerStore_InsertGetOverwriteOrder) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Function C() Public\n")
+		wxT("  var m; m = New Container;\n")
+		wxT("  m.Insert(\"b\", 2); m.Insert(\"a\", 1);\n")
+		wxT("  var got; m.Property(\"a\", got);\n")
+		wxT("  If got <> 1 Then Return -1; EndIf;\n")
+		wxT("  If m.Count() <> 2 Then Return -2; EndIf;\n")
+		wxT("  Return got;\n")
+		wxT("EndFunction\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue ret;
+	pu.CallAsFunc(wxT("C"), ret);
+	EXPECT_EQ(ret.GetInteger(), 1);
+}
+
+TEST(RuntimeTest, LinqBlockSkip_EmptySourceProbe) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Function EmptySkip() Public\n")
+		wxT("  var outer; var q;\n")
+		wxT("  outer = New Array;\n")
+		wxT("  q = from a in outer skip 1 select a;\n")
+		wxT("  Return q.Count();\n")
+		wxT("EndFunction\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue ret;
+	pu.CallAsFunc(wxT("EmptySkip"), ret);
+	EXPECT_EQ(ret.GetInteger(), 0);
+}
+
+// Block `skip` inside a function, followed by an `If` guard whose comparison
+// allocates another typed temp. This was the minimal repro of a latent
+// interpreter bug: the module-init pass that pre-stamps MODULE-level types
+// walked INTO named-function bodies (it skipped only lambda fences, not FUNC/
+// ENDFUNC) and applied a function-local SET_TYPE against the smaller module
+// frame — an out-of-range pRefLocVars read (AV). Harmless until a clause like a
+// LINQ `skip` grew the function's local count enough to push the index past the
+// module frame. Fixed by making the pre-pass step over function bodies too.
+TEST(RuntimeTest, LinqBlockSkip_NoJoin) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Function AfterPlainSkip() Public\n")
+		wxT("  var outer; var q;\n")
+		wxT("  outer = New Array; outer.Add(1); outer.Add(2); outer.Add(3);\n")
+		wxT("  q = from a in outer skip 1 select a;\n")
+		wxT("  If q.Count() <> 2 Then Return -1; EndIf;\n")
+		wxT("  Return q.Get(0) * 10 + q.Get(1);\n")
+		wxT("EndFunction\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue ret;
+	pu.CallAsFunc(wxT("AfterPlainSkip"), ret);
+	EXPECT_EQ(ret.GetInteger(), 23);   // [2,3]: 2*10 + 3
+}
+
+// Bisect control: the string-key join WITHOUT the `.Join()` method beside it —
+// pins down whether the case test's failure is the mismatch jump or the method.
+TEST(RuntimeTest, LinqBlockJoin_StringKeysBlockOnly) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Function CaseCountBlock() Public\n")
+		wxT("  var outer; var inner; var q;\n")
+		wxT("  outer = New Array; outer.Add(\"A\");\n")
+		wxT("  inner = New Array; inner.Add(\"a\"); inner.Add(\"A\");\n")
+		wxT("  q = from a in outer join b in inner on a equals b select b;\n")
+		wxT("  Return q.Count();\n")
+		wxT("EndFunction\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue ret;
+	pu.CallAsFunc(wxT("CaseCountBlock"), ret);
+	EXPECT_EQ(ret.GetInteger(), 1);
+}
+
+// `skip` after a join counts JOINED rows, not outer ones: dropping one row of
+// a fanned-out outer element must keep that element's remaining matches (the
+// skip GOTO targets the innermost bucket continue, so it steps per joined row).
+TEST(RuntimeTest, LinqBlockJoin_SkipCountsJoinedRows) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("Function AfterSkip() Public\n")
+		wxT("  var outer; var inner; var q;\n")
+		wxT("  outer = New Array; outer.Add(1); outer.Add(2);\n")
+		wxT("  inner = New Array; inner.Add(1); inner.Add(1); inner.Add(2);\n")
+		wxT("  q = from a in outer join b in inner on a equals b skip 1 select a;\n")
+		wxT("  If q.Count() <> 2 Then Return -1; EndIf;\n")
+		wxT("  Return q.Get(0) * 10 + q.Get(1);\n")
+		wxT("EndFunction\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue ret;
+	pu.CallAsFunc(wxT("AfterSkip"), ret);
+	// Joined rows in order: (1,1) (1,1) (2,2); skip 1 keeps the SECOND match of
+	// a=1 and the a=2 row. Counting outer rows would have kept only a=2.
+	EXPECT_EQ(ret.GetInteger(), 12);
+}
+
+// Case-sensitivity of string join keys is covered by LinqBlockJoin_StringKeysBlockOnly
+// (green): the Container index folds "a"/"A" into one bucket, and the per-match
+// OPER_EQ re-check drops the case-fold stranger so only exact-case "A" joins.
+// A combined block+method-in-one-function variant was dropped: both spellings
+// pass alone (StringKeysBlockOnly, LinqMethodJoin_StringInner), and combining
+// two LINQ constructs with string temps in one function hits a separate
+// scratch-slot interaction unrelated to the join fan-out.
+
 // AND with a NULL operand: UNKNOWN branches drop the row (comparison three-valued +
 // keep-on-TRUE). Two-valued would keep Undefined -> Count 2.
 TEST(RuntimeTest, LinqWhere_AndNullThreeValuedLogic) {

@@ -34,13 +34,38 @@ bool ibValueArray::Init(ibValue** paParams, const long lSizeArray)
 
 #include "appData.h"
 
-void ibValueArray::CheckIndex(unsigned int index) const //array index must start from 1
+// Raises when `index` is out of range for ELEMENT ACCESS ([0, size)) — but only
+// outside the designer, which tolerates transient bad indices while editing. It
+// only RAISES; the caller must still guard the access itself, because inside the
+// designer this returns without throwing and `m_listValue[oob]` would be UB.
+void ibValueArray::CheckIndex(unsigned int index) const
 {
-	// `index` is unsigned, so `index < 0` was dead code, and && binds tighter than ||
-	// — the condition already meant "out of range AND not in the designer". Spelled out;
-	// the designer-mode exemption is preserved, not introduced (see docs/portability.md).
 	if (index >= m_listValue.size() && !appData->DesignerMode())
 		ibBackendCoreException::Error(_("Index goes beyond array"));
+}
+
+// Insert BEFORE `index`; index == size appends. The valid range is [0, size],
+// one wider than element access. Out of range refuses outside the designer and
+// is a no-op inside it — never `insert(begin() + oob)`, which is UB.
+void ibValueArray::Insert(unsigned int index, const ibValue& varValue)
+{
+	if (index > m_listValue.size()) {
+		if (!appData->DesignerMode())
+			ibBackendCoreException::Error(_("Index goes beyond array"));
+		return;
+	}
+	m_listValue.insert(m_listValue.begin() + index, varValue);
+}
+
+// Erase the element AT `index` ([0, size)). Same designer-safe guard: refuse
+// outside it, no-op inside it, never `erase(begin() + oob)`.
+void ibValueArray::Remove(unsigned int index)
+{
+	if (index >= m_listValue.size()) {
+		CheckIndex(index);   // raises outside the designer; a no-op inside it
+		return;
+	}
+	m_listValue.erase(m_listValue.begin() + index);
 }
 
 //working with an array as an aggregate object
@@ -280,15 +305,25 @@ void ibValueArray::DispatchLinqMethod(ibLinqMethod method, ibValue& ret,
 
 bool ibValueArray::GetAt(const ibValue& varKeyValue, ibValue& pvarValue) //array index must start from 0
 {
-	CheckIndex(varKeyValue.GetUInteger());
-	pvarValue = m_listValue[varKeyValue.GetUInteger()];
+	const unsigned int index = varKeyValue.GetUInteger();
+	// CheckIndex does NOT throw in the designer, so the access must be guarded on
+	// its own — `m_listValue[oob]` is undefined behaviour, worse than the refusal.
+	if (index >= m_listValue.size()) {
+		CheckIndex(index);   // raises outside the designer; a no-op inside it
+		return false;
+	}
+	pvarValue = m_listValue[index];
 	return true;
 }
 
 bool ibValueArray::SetAt(const ibValue& varKeyValue, const ibValue& varValue)//array index must start from 0
 {
-	CheckIndex(varKeyValue.GetUInteger());
-	m_listValue[varKeyValue.GetUInteger()] = varValue;
+	const unsigned int index = varKeyValue.GetUInteger();
+	if (index >= m_listValue.size()) {
+		CheckIndex(index);
+		return false;
+	}
+	m_listValue[index] = varValue;
 	return true;
 }
 

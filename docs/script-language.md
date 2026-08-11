@@ -387,6 +387,12 @@ Var report =
 Clauses: `from … in` (entry) · `join … in … on … equals …` · `where` · `group … by … into …` ·
 `orderby … [ascending|descending]` · `skip` / `take` · `distinct` · `select` (projection).
 
+`join` is an inner equi-join with fan-out: one result row per MATCHING inner row (an inner
+table with repeated keys multiplies, exactly like the `.Join()` method and SQL), and an outer
+row with no match is dropped. A `where` after a `join` filters per joined row — failing one
+match takes the next match of the same outer row — and `skip` / `take` count joined rows the
+same way. String keys compare case-sensitively, like the language's `equals` itself.
+
 **`restrict`** is the access-policy filter — the same shape, applied as a row-level rule rather
 than a user query ([access-policy-rls.md](access-policy-rls.md)).
 

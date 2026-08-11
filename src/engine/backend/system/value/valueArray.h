@@ -87,15 +87,15 @@ protected:
 
 public:
 
-	//����������� ������
+	// Append to the end.
 	void Add(const ibValue& varValue) {
 		m_listValue.push_back(varValue);
 	}
 
-	void Insert(unsigned int index, const ibValue& varValue) {
-		CheckIndex(index);
-		m_listValue.insert(m_listValue.begin() + index, varValue);
-	}
+	// Insert BEFORE `index`; index == size appends. Out of range refuses outside
+	// the designer and does nothing inside it — never an out-of-bounds insert.
+	// Defined in the .cpp so the bounds guard can use appData / the exception.
+	void Insert(unsigned int index, const ibValue& varValue);
 
 	unsigned int Count() const {
 		return m_listValue.size();
@@ -138,8 +138,13 @@ public:
 	// pushed to a parallel array alongside the projected value.
 	void SortByKeys(const ibValueArray& keys, bool descending = false) {
 		const size_t n = m_listValue.size();
-		if (keys.m_listValue.size() != n)
-			return;   // caller bug — silently skip to avoid breaking LINQ pipeline
+		if (keys.m_listValue.size() != n) {
+			// The keys array is built lock-step with this one (LINQ `orderby`), so a
+			// length mismatch is an emitter bug, not runtime data. Catch it in Debug;
+			// stay graceful in Release rather than sort against a short key array.
+			wxFAIL_MSG(wxT("SortByKeys: keys length does not match the array"));
+			return;
+		}
 		std::vector<size_t> idx(n);
 		for (size_t i = 0; i < n; ++i) idx[i] = i;
 		if (descending)
@@ -154,13 +159,9 @@ public:
 		m_listValue = std::move(sorted);
 	}
 
-	void Remove(unsigned int index) {
-		CheckIndex(index);
-		// Erase the element AT `index` (CheckIndex validated it). The previous
-		// std::find(..., index) erased the first element whose VALUE equalled
-		// `index` — a remove-by-value bug under a remove-by-index name.
-		m_listValue.erase(m_listValue.begin() + index);
-	}
+	// Erase the element AT `index`. Out of range refuses outside the designer and
+	// does nothing inside it (never an out-of-bounds erase). Defined in the .cpp.
+	void Remove(unsigned int index);
 
 	void Clear() {
 		m_listValue.clear();

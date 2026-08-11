@@ -29,6 +29,15 @@ struct ibLinqBinding {
 };
 
 // Pending join — deferred-emission record for `join b in T on K1 equals K2`.
+//
+// A key maps to a BUCKET (an Array of every matching inner row), never to one
+// row: an inner table with repeated keys is the ordinary case (orders per
+// customer), and a single-value dict either loses rows or refuses the
+// duplicate outright — Container::Insert raises on a repeated key, which used
+// to kill the whole query at hash-build time. The bucket loop below is the
+// fan-out: one outer row joins K inner rows into K result rows, same as the
+// `.Join()` method executor (ibValueJoinState) and SQL.
+//
 // At per-iter lookup site (inside outer foreach body), we emit:
 //   1. tmp_isEmpty = !hashSlot         (OPER_NOT)
 //   2. OPER_IF tmp_isEmpty, skip_label (fall through on first iter,
@@ -37,14 +46,27 @@ struct ibLinqBinding {
 //                                       to trampoline body in
 //                                       CompileLinqBlock's tail)
 //   4. skip_label:                     (= ip right after the GOTO)
-//   5. found = hashSlot.Property(K1, b)
-//   6. OPER_IF found, next_iter        (existing whereSkipIps)
+//   5. found = hashSlot.Property(K1, bucketSlot)
+//   6. OPER_IF found, past-this-bucket (missIfIp — patched at close:
+//                                       the PREVIOUS join's continue,
+//                                       or the level NEXT_ITER for
+//                                       the first join)
+//   7. OPER_LET bucketInSlot = bucketSlot
+//   8. OPER_FOREACH b in bucketInSlot  (bucketForeachIp; the rest of
+//                                       the body runs once per match)
+//
+// CompileLinqBlock's close section emits, per join in REVERSE order
+// (innermost bucket loop first), NEXT_ITER back to (8) and patches
+// (8)'s exhaustion jump past it — so a finished bucket falls into the
+// next-outer bucket's NEXT_ITER and finally into the level's own.
 //
 // At trampoline emit time (after outer NEXT_ITER, before
 // foreach m_param4 patch — i.e. OUTSIDE outer body, reachable only
 // via absolute-ip GOTO):
-//   7. trampoline_label: emit hash build using T_lex/K2_lex replay
-//   8. OPER_GOTO skip_label  (return into body after first build)
+//   9. trampoline_label: emit hash build using T_lex/K2_lex replay —
+//      per inner row, lookup-or-create the key's bucket Array and
+//      Add the row into it (the same emitted shape GROUP BY uses)
+//  10. OPER_GOTO skip_label  (return into body after first build)
 //
 // Lex ranges (m_lexStart..m_lexEnd) are saved by parse-and-discard
 // during the join clause: we call GetExpression to advance the
@@ -54,7 +76,17 @@ struct ibLinqBinding {
 // advances cursor to end, which we then restore.
 struct ibLinqPendingJoin {
 	ibParamUnit hashSlot;             // persistent: holds the New("Container")
-	ibParamUnit bindSlot;             // persistent: holds matched-row from Property
+	ibParamUnit bindSlot;             // persistent: the current matched inner row (bucket iter var)
+	ibParamUnit bucketSlot;           // the key's bucket Array — Property's out-param at lookup,
+	                                  // and the build temp inside the trampoline
+	ibParamUnit bucketInSlot;         // @jbkt_in_* — OPER_LET cell the bucket FOREACH reads
+	ibParamUnit bucketItSlot;         // @jbkt_it_* — the bucket FOREACH's iterator state
+	int         bucketForeachIp = -1; // the bucket OPER_FOREACH header (close patches m_param4)
+	int         missIfIp        = -1; // the join-miss OPER_IF (close patches its target)
+	int         recheckIfIp     = -1; // the per-match key equality re-check OPER_IF — drops a row
+	                                  // the language's `equals` refuses but the Container's looser
+	                                  // key comparator let into the bucket (close patches its
+	                                  // target to THIS bucket's continue)
 	int         tLexStart    = 0;     // inner-source expression token range
 	int         tLexEnd      = 0;
 	int         k2LexStart   = 0;     // inner key (K2 references b)
