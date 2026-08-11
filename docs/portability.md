@@ -90,6 +90,33 @@ for one spelling.
 This one shipped four times in a single batch — three in one dialog, one in a new test — and every
 one of them compiled clean on `Debug|x86`. It is invisible to the local build by construction.
 
+### 1.5b Two string overloads and a literal — the ambiguity MSVC ranks away
+
+```cpp
+recorder.SetString(wxT("a document"));   // MSVC only
+```
+
+`wxT("…")` is a `const wchar_t[]`, and the candidates were `SetString(const wxString&)` and
+`SetString(ibString&&)`. The literal reaches **either** through exactly one user-defined
+conversion, so neither wins: **GCC** — *"call of overloaded `SetString(const wchar_t [11])` is
+ambiguous"* — and **Clang** — *"call to member function `SetString` is ambiguous"*. MSVC ranks the
+pair and compiles, so this is invisible to `Debug|x86` by construction, like § 1.5a.
+
+Fix it at the DECLARATION, never at the callsite. Declaring the pointer forms makes a literal an
+exact match and the ambiguity cannot recur for any future caller:
+
+```cpp
+bool SetString(const char* sParam)    { return SetString(wxString(sParam)); }
+bool SetString(const wchar_t* sParam) { return SetString(wxString(sParam)); }
+```
+
+`ibValue`'s constructors and `operator=` already carried these forms — for the neighbouring trap,
+where a pointer with no exact match converts to **bool** (a standard conversion beats the
+user-defined one to `wxString`, and `ibValue v = wxEmptyString` became Boolean TRUE). The rule is
+the same in both directions: **a type that accepts strings must accept character pointers
+explicitly.** The hazard is the CLASS — any overload set holding two string-constructible
+parameter types — not the one spelling `SetString`.
+
 ### 1.6 The small ones, each of which cost a round trip
 
 | Construct | Why it fails elsewhere |

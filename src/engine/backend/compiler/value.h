@@ -1169,6 +1169,15 @@ public:
 	virtual bool SetDate(const wxString& strValue);
 	virtual bool SetString(const wxString& strValue);
 	virtual bool SetString(ibString&& strValue);   // native — steals the buffer, no wxString round-trip
+	// Character pointers — the same trap the ctor note above describes, one door further along.
+	// With only the two overloads above visible, a string literal reaches EITHER of them through
+	// exactly one user-defined conversion, so `SetString(wxT("x"))` is AMBIGUOUS to GCC and Clang
+	// while MSVC ranks it and compiles — invisible to the local build by construction. The ctor
+	// and operator= closed this by declaring the pointer forms; the setter had not.
+	// Non-virtual on purpose: they forward to the virtual wxString overload, so a derived type
+	// still decides what a string assignment means.
+	bool SetString(const char* sParam) { return SetString(wxString(sParam)); }
+	bool SetString(const wchar_t* sParam) { return SetString(wxString(sParam)); }
 
 	virtual bool FindValue(const wxString& findData, std::vector<ibValue>& listValue) const;
 
