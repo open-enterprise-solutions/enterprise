@@ -7,24 +7,32 @@
 #include <wx/statbox.h>
 #include <wx/statline.h>
 
+#include <map>
+
 #include "mainFrame/metaTree/treeConfiguration.h"
 #include "backend/metadataDataProcessor.h"
  
-class ibDataProcessorTree : public ibMetaDataTree {
+class ibDataProcessorTree : public ibMetaTreeBase {
 	wxDECLARE_DYNAMIC_CLASS(ibDataProcessorTree);
 
 private:
 
+	// The ROOT — the data processor itself, not a group.
 	wxTreeItemId m_treeDATAPROCESSORS;
 
-	wxTreeItemId m_treeATTRIBUTES;
-	wxTreeItemId m_treeTABLES;
-	wxTreeItemId m_treeFORM;
-	wxTreeItemId m_treeTEMPLATES;
+	// THE GROUP NODES, keyed by the metatype each stands for — same shape as the configuration
+	// tree (treeConfiguration.h), and for the same reason: the layout is one table in the .cpp,
+	// and every pass over the tree reads it instead of a hand-kept list of fields.
+	std::map<ibClassID, wxTreeItemId> m_groups;
+
+	wxTreeItemId Group(const ibClassID& clsid) const {
+		const auto it = m_groups.find(clsid);
+		return it != m_groups.end() ? it->second : wxTreeItemId();
+	}
 
 private:
 
-	bool m_initialized;
+	bool m_initialized = false;
 
 private:
 
@@ -50,21 +58,17 @@ private:
 		return 0;
 	}
 
+	// THE NEAREST METAOBJECT AT OR ABOVE a group row — see the twin note in treeConfiguration.h.
 	ibValueMetaObject* GetMetaIdentifier() const {
 		wxTreeItemId parentItem = GetSelectionIdentifier();
-		wxTreeItemData* item = m_metaTreeCtrl->GetItemData(parentItem);
-		if (item != nullptr) {
-			ibTreeDataClassIdentifier* item_clsid = dynamic_cast<ibTreeDataClassIdentifier*>(item);
-			if (item_clsid != nullptr) {
-				while (parentItem != nullptr) {
-					wxTreeItemData* item = m_metaTreeCtrl->GetItemData(parentItem);
-					if (item != nullptr) {
-						ibValueMetaObject* parent = GetMetaObject(parentItem);
-						if (parent != nullptr) return parent;
-					}
-					parentItem = m_metaTreeCtrl->GetItemParent(parentItem);
-				}
-			}
+		wxTreeItemData* const data = m_metaTreeCtrl->GetItemData(parentItem);
+		if (dynamic_cast<ibTreeDataClassIdentifier*>(data) == nullptr)
+			return nullptr;
+
+		while (parentItem != nullptr) {
+			ibValueMetaObject* parent = GetMetaObject(parentItem);
+			if (parent != nullptr) return parent;
+			parentItem = m_metaTreeCtrl->GetItemParent(parentItem);
 		}
 		return nullptr;
 	}
@@ -81,19 +85,21 @@ protected:
 
 protected:
 
-	wxStaticText* m_nameCaption;
-	wxStaticText* m_synonymCaption;
-	wxStaticText* m_commentCaption;
-	wxStaticText* m_defaultForm;
-	wxTextCtrl* m_nameValue;
-	wxTextCtrl* m_synonymValue;
-	wxTextCtrl* m_commentValue;
-	wxChoice* m_defaultFormValue;
+	// Initialised HERE: the default constructor (reachable through wxDECLARE_DYNAMIC_CLASS) set
+	// none of these, and the destructor dereferences every one of them.
+	wxStaticText* m_nameCaption = nullptr;
+	wxStaticText* m_synonymCaption = nullptr;
+	wxStaticText* m_commentCaption = nullptr;
+	wxStaticText* m_defaultForm = nullptr;
+	wxTextCtrl* m_nameValue = nullptr;
+	wxTextCtrl* m_synonymValue = nullptr;
+	wxTextCtrl* m_commentValue = nullptr;
+	wxChoice* m_defaultFormValue = nullptr;
 
-	wxButton* m_buttonModule;
+	wxButton* m_buttonModule = nullptr;
 
 	class ibDataProcessorTreeCtrl : public wxTreeCtrl {
-		wxDECLARE_DYNAMIC_CLASS(ibMetadataTree);
+		wxDECLARE_DYNAMIC_CLASS(ibDataProcessorTreeCtrl);   // used to name the configuration tree — copy-paste
 	private:
 
 		ibDataProcessorTree* m_ownerTree;
@@ -176,8 +182,8 @@ protected:
 		wxDECLARE_EVENT_TABLE();
 	};
 
-	ibDataProcessorTreeCtrl* m_metaTreeCtrl;
-	ibMetaDataDataProcessor* m_metaData;
+	ibDataProcessorTreeCtrl* m_metaTreeCtrl = nullptr;
+	ibMetaDataDataProcessor* m_metaData = nullptr;
 
 private:
 
@@ -231,6 +237,10 @@ private:
 			new wxTreeItemMetaData(metaObject)
 		);
 	}
+
+	// HUB — append a command node and, recursively, its sub-commands. A data processor owns
+	// commands exactly as it does inside a configuration; this tree simply had no node for them.
+	void AppendCommandNode(const wxTreeItemId& parent, ibValueMetaObject* command);
 
 	void ActivateItem(const wxTreeItemId& item);
 

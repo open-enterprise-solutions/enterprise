@@ -234,7 +234,7 @@ bool ibValueMetaObjectReport::OnBeforeCloseMetaObject()
 
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		if (ibValueMetaObjectRecordDataExt::OnBeforeCloseMetaObject())
-			return cc->RemoveCompileModule(m_propertyObjectModule->GetMetaObject());
+			{ cc->RemoveCompileModule(m_propertyObjectModule->GetMetaObject()); return true; }
 		return false;
 	}
 

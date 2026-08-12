@@ -196,6 +196,12 @@ public:
 	template <typename Key> bool                 HasCtor(const Key& key)  const { return m_factoryCtors.Find(key) != nullptr; }
 	template <typename Fn>   void                ForEachCtor(Fn&& fn)     const { m_factoryCtors.ForEach(std::forward<Fn>(fn)); }
 
+	// A METAOBJECT WAS RENAMED — the names its ctors compute have changed. This registry is the
+	// one that holds them (the global value factory holds the STATIC types, whose names never
+	// move), so the staleness belongs here. Nothing is rebuilt now: the next lookup by name does
+	// it, once, however many objects were renamed.
+	void InvalidateCtorNames() const { m_factoryCtors.InvalidateNames(); }
+
 	// Module-storage + compile-cache accessors. ibMetaData exposes these as a facade
 	// (GetModuleStorage / GetCompileCache), null-checking the image for the closed
 	// state; on a live image module storage is always valid, the compile cache nullptr
@@ -374,6 +380,16 @@ public:
 	void UnRegisterCtor(ibCtorMetaValueType*& typeCtor);
 
 	void UnRegisterCtor(const wxString& className);
+
+	// UNREGISTER BY IDENTITY — the door every metatype's teardown uses. A metaobject's clsid is
+	// CONSTRUCTIVE (its body IS the metaID), so it is the one key that a rename cannot move; the
+	// by-name overload above computes its key from the CURRENT name, which is why teardown after a
+	// rename used to ask for a name nobody had registered and raise in the middle of a close.
+	void UnRegisterCtor(const ibClassID& clsid);
+
+	// Mark the ctor NAME cache stale — see ibMetaImage::InvalidateCtorNames. Safe on a closed
+	// metadata (no image ⇒ nothing registered ⇒ nothing to recompute).
+	void InvalidateCtorNames() const;
 
 	virtual bool IsRegisterCtor(const wxString& className) const;
 	virtual bool IsRegisterCtor(const wxString& className, ibCtorObjectType objectType) const;

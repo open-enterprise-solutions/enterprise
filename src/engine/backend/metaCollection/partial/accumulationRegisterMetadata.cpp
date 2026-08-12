@@ -307,8 +307,7 @@ bool ibValueMetaObjectAccumulationRegister::OnBeforeCloseMetaObject()
 
 		if (ibValueMetaObjectRegisterData::OnBeforeCloseMetaObject()) {
 
-			if (!cc->RemoveCompileModule(m_propertyObjectModule->GetMetaObject()))
-				return false;
+			cc->RemoveCompileModule(m_propertyObjectModule->GetMetaObject());
 
 			return true;
 		}

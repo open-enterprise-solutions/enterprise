@@ -318,11 +318,20 @@ bool ibPropertyObject::PasteProperty(ibReaderMemory& reader)
 	if (!builder.Load(ibBinaryProvider(), reader))
 		return false;
 
+	// PASTE IS A MERGE BY NAME, and the loop is over the TARGET's properties for that reason: what
+	// both sides have is carried over, what only the source has is dropped, and what only the
+	// TARGET has KEEPS ITS DEFAULT. That last case is why the absent value is skipped instead of
+	// being handed over as an empty ibDataValue — a property type that (rightly) refuses an empty
+	// value made the whole paste fail, so pasting a Document onto a Constant died instead of
+	// copying the properties the two do share. "Nothing arrived" is not "an empty value arrived".
 	if (const ibDataNode* propsNode = builder.Root().FindChild(wxT("props"))) {
 		for (unsigned int idx = 0; idx < GetPropertyCount(); idx++) {
 			ibProperty* prop = GetProperty(idx);
 			wxASSERT(prop);
-			if (!prop->PasteNodeValue(propsNode->GetProperty(prop->GetName())))
+			const ibDataValue* incoming = propsNode->FindProperty(prop->GetName());
+			if (incoming == nullptr)
+				continue;
+			if (!prop->PasteNodeValue(*incoming))
 				return false;
 		}
 	}
@@ -330,7 +339,10 @@ bool ibPropertyObject::PasteProperty(ibReaderMemory& reader)
 		for (unsigned int idx = 0; idx < GetEventCount(); idx++) {
 			ibEvent* event = GetEvent(idx);
 			wxASSERT(event);
-			if (!event->PasteNodeValue(eventsNode->GetProperty(event->GetName())))
+			const ibDataValue* incoming = eventsNode->FindProperty(event->GetName());
+			if (incoming == nullptr)
+				continue;
+			if (!event->PasteNodeValue(*incoming))
 				return false;
 		}
 	}

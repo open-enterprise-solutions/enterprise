@@ -27,13 +27,29 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <fstream>
 #include <functional>
 #include <iomanip>
 #include <iostream>
 #include <map>
+#include <new>
 #include <sstream>
 #include <string>
 #include <vector>
+
+// Resident-set probe for the million-row bench. NOMINMAX because this file uses
+// std::min and windows.h would macro it away.
+#ifdef _WIN32
+#  define NOMINMAX
+#  define WIN32_LEAN_AND_MEAN
+#  include <windows.h>
+#  include <psapi.h>
+#  ifdef _MSC_VER
+#    pragma comment(lib, "psapi.lib")
+#  endif
+#elif defined(__linux__)
+#  include <unistd.h>
+#endif
 
 #include "backend/compiler/compileCode.h"
 #include "backend/compiler/procUnit.h"
@@ -100,6 +116,34 @@ void Row(const char* name, double oes, double base, const char* unit,
         std::cout << "   [run: oes=" << FmtWall(oesWallNs)
                   << (baseWallNs > 0 ? "  native=" + FmtWall(baseWallNs) : std::string()) << "]";
     std::cout << "\n";
+}
+
+// Resident set of THIS process, in bytes. Returns 0 where the platform has no
+// cheap probe, and the caller prints "n/a" rather than a zero that would read as
+// "used no memory" — an unmeasurable reading is named, never silently folded in.
+size_t ResidentBytes() {
+#if defined(_WIN32)
+    PROCESS_MEMORY_COUNTERS pmc{};
+    if (::GetProcessMemoryInfo(::GetCurrentProcess(), &pmc, sizeof(pmc)))
+        return (size_t)pmc.WorkingSetSize;
+    return 0;
+#elif defined(__linux__)
+    std::ifstream statm("/proc/self/statm");            // field 2 = resident pages
+    size_t totalPages = 0, residentPages = 0;
+    if (statm >> totalPages >> residentPages)
+        return residentPages * (size_t)sysconf(_SC_PAGESIZE);
+    return 0;
+#else
+    return 0;   // macOS would need mach task_info — not worth the dependency here
+#endif
+}
+
+std::string FmtBytes(size_t bytes) {
+    if (bytes == 0) return "n/a";
+    std::ostringstream o; o << std::fixed << std::setprecision(1);
+    if (bytes < (size_t(1) << 20)) o << double(bytes) / 1024.0 << "KB";
+    else                           o << double(bytes) / (1024.0 * 1024.0) << "MB";
+    return o.str();
 }
 
 // OES-only row (no meaningful native equivalent, e.g. 200-digit decimal).
@@ -629,6 +673,177 @@ TEST(RuntimeBench, DISABLED_LinqGroupByScale) {
         label << "group by n=" << rows << " (ns/row)";
         RowOes(label.str().c_str(), tot / double(rows), "ns", tot);
     }
+    SUCCEED();
+}
+
+// --- does the flat per-row cost survive a MILLION rows? --------------------
+//
+// Every scale bench above stops at 16 000, and "flat up to 16k" is a different
+// statement from "flat at a million". Three mechanisms cannot bend the curve at
+// 16k BY CONSTRUCTION and come into range 62x further out:
+//
+//   * the member table rebuilds a wxString per row, so a million records lean on
+//     the allocator rather than on the pipeline;
+//   * the join index is a red-black tree (see JoinIndexContainer below), and a
+//     million ibValue keys stop fitting the cache the probe was measured inside;
+//   * a million live ibValue is a million refcount pairs.
+//
+// So carrying the 16k number out to 1M is arithmetic, not a reading. This makes
+// it a reading. n=16000 is repeated here ON PURPOSE: it re-measures what
+// LinqBlockSelectScale / LinqJoin / LinqGroupByScale / RecordWalk already print,
+// in the same process on the same machine, so the million-row figures compare
+// against an anchor from THIS run instead of a number remembered from another
+// one — the lesson the join arc already cost us once.
+//
+// Resident set is sampled beside the time because memory is the mechanism most
+// likely to break the flatness; a time-only answer would leave exactly the half
+// in question unmeasured. It is the process working set, so it reads as a
+// high-water mark — allocators keep freed pages rather than returning them.
+//
+// Heavy by construction (tens of seconds). Best-of-1-after-warmup at n >= 250000,
+// so the two largest points carry more scheduler noise than the small ones. A
+// scale that runs out of memory NAMES itself and stops the escalation instead of
+// taking the bench job down — where it stops is the answer too.
+TEST(RuntimeBench, DISABLED_MillionRowScale) {
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("var src public; var inner public;\n")
+        wxT("Procedure Fill(n) Public\n")
+        wxT("  src = New Array; inner = New Array; var i; i = 0;\n")
+        wxT("  While i < n Do src.Add(i); inner.Add(i); i = i + 1; EndDo;\n")
+        wxT("EndProcedure\n")
+        // Hands the arrays back before the process reports its last reading, so
+        // the tail figure is not one scale's rows sitting on the next one's.
+        wxT("Procedure Drop() Public\n")
+        wxT("  src = New Array; inner = New Array;\n")
+        wxT("EndProcedure\n")
+        wxT("Function SelectOnly() Public\n")
+        wxT("  var q; q = from a in src select a;\n")
+        wxT("  Return q.Count();\n")
+        wxT("EndFunction\n")
+        wxT("Function JoinKeys() Public\n")
+        wxT("  var q; q = from a in src join b in inner on a equals b select a;\n")
+        wxT("  Return q.Count();\n")
+        wxT("EndFunction\n")
+        wxT("Function GroupKeys() Public\n")
+        wxT("  var q; q = from a in src group a by a into g select g;\n")
+        wxT("  Return q.Count();\n")
+        wxT("EndFunction\n")
+        // Verbatim the RecordWalk body, so its 2500..20000 series and this one
+        // are the same measurement carried further out.
+        wxT("Function Walk(n) Public\n")
+        wxT("  var rows; rows = New Array;\n")
+        wxT("  var i; i = 0;\n")
+        wxT("  While i < n Do\n")
+        wxT("    var row; row = New Structure;\n")
+        wxT("    row.Insert(\"Qty\", i);\n")
+        wxT("    row.Insert(\"Price\", 2);\n")
+        wxT("    rows.Add(row);\n")
+        wxT("    i = i + 1;\n")
+        wxT("  EndDo;\n")
+        wxT("  var total; total = 0; var j; j = 0;\n")
+        wxT("  While j < n Do\n")
+        wxT("    var r; r = rows.Get(j);\n")
+        wxT("    total = total + r.Qty * r.Price;\n")
+        wxT("    j = j + 1;\n")
+        wxT("  EndDo;\n")
+        wxT("  Return total;\n")
+        wxT("EndFunction\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+
+    struct Shape { const char* label; const wxChar* fn; bool takesRows; };
+    static const Shape shapes[] = {
+        { "select",            wxT("SelectOnly"), false },
+        { "join",              wxT("JoinKeys"),   false },
+        { "group by",          wxT("GroupKeys"),  false },
+        { "record build+walk", wxT("Walk"),       true  },
+    };
+    static const long scales[] = { 16000L, 64000L, 250000L, 1000000L };
+    constexpr size_t kShapes = sizeof(shapes) / sizeof(shapes[0]);
+    constexpr size_t kScales = sizeof(scales) / sizeof(scales[0]);
+
+    double nsPerRow[kShapes][kScales] = {};   // 0 == this point was never reached
+    double wallNs[kShapes][kScales] = {};
+    size_t residentAt[kScales] = {};
+
+    const size_t residentBase = ResidentBytes();
+    for (size_t s = 0; s < kScales; ++s) {
+        const long rows = scales[s];
+        const int repeats = rows <= 64000L ? 3 : 1;
+        ibValue argRows((int)rows), ret;
+        pu.CallAsProc(wxT("Fill"), argRows);
+
+        bool scaleCompleted = true;
+        for (size_t k = 0; k < kShapes && scaleCompleted; ++k) {
+            try {
+                const double tot = BestTotalNs(repeats, [&] {
+                    if (shapes[k].takesRows) pu.CallAsFunc(shapes[k].fn, ret, argRows);
+                    else                     pu.CallAsFunc(shapes[k].fn, ret);
+                    g_sink += (uint64_t)ret.GetInteger();
+                });
+                nsPerRow[k][s] = tot / double(rows);
+                wallNs[k][s] = tot;
+            }
+            catch (const std::bad_alloc&) {
+                std::cout << "  !! " << shapes[k].label << " n=" << rows
+                          << " -- out of memory; larger scales skipped\n";
+                scaleCompleted = false;
+            }
+            catch (const ibBackendException& err) {
+                std::cout << "  !! " << shapes[k].label << " n=" << rows << " raised: "
+                          << err.GetErrorDescription().ToStdString()
+                          << "; larger scales skipped\n";
+                scaleCompleted = false;
+            }
+        }
+        residentAt[s] = ResidentBytes();
+        if (!scaleCompleted)
+            break;
+    }
+    pu.CallAsProc(wxT("Drop"));
+
+    std::cout << "\n[ million-row scale | n=16000 is the anchor, re-measured in THIS process ]\n";
+    for (size_t k = 0; k < kShapes; ++k) {
+        for (size_t s = 0; s < kScales; ++s) {
+            if (nsPerRow[k][s] == 0.0)
+                continue;
+            std::ostringstream label;
+            label << shapes[k].label << " n=" << scales[s] << " (ns/row)";
+            RowOes(label.str().c_str(), nsPerRow[k][s], "ns", wallNs[k][s]);
+        }
+    }
+
+    // THE READING, spelled out: flat means this ratio is ~1. Anything else is
+    // the per-row cost growing with the data, and the shape names which one.
+    std::cout << "\n  [ per-row drift, anchor 16000 -> largest scale reached ]\n";
+    for (size_t k = 0; k < kShapes; ++k) {
+        size_t last = kScales;
+        while (last > 0 && nsPerRow[k][last - 1] == 0.0) --last;
+        if (last == 0 || nsPerRow[k][0] == 0.0)
+            continue;
+        std::ostringstream label;
+        label << shapes[k].label << " 16000->" << scales[last - 1];
+        std::cout << "  " << std::left << std::setw(30) << label.str() << std::right
+                  << "  x" << std::fixed << std::setprecision(2)
+                  << (nsPerRow[k][last - 1] / nsPerRow[k][0]) << " per row\n";
+    }
+
+    std::cout << "\n  [ resident set, process working set -- high-water, not live bytes ]\n";
+    std::cout << "  " << std::left << std::setw(30) << "before any fill" << std::right
+              << "  " << FmtBytes(residentBase) << "\n";
+    for (size_t s = 0; s < kScales; ++s) {
+        if (residentAt[s] == 0)
+            continue;
+        std::ostringstream label;
+        label << "after n=" << scales[s];
+        std::cout << "  " << std::left << std::setw(30) << label.str() << std::right
+                  << "  " << FmtBytes(residentAt[s]);
+        if (residentAt[s] > residentBase)
+            std::cout << "  (+" << FmtBytes(residentAt[s] - residentBase) << ")";
+        std::cout << "\n";
+    }
+    if (ResidentBytes() == 0)
+        std::cout << "  (no cheap resident-set probe on this platform -- time only)\n";
     SUCCEED();
 }
 

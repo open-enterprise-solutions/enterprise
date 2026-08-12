@@ -13,6 +13,7 @@
 #include "backend/databaseLayer/databaseErrorCodes.h"
 #include "backend/serialize/dataBuilder.h"   // ibDataNode — universal structure bridge (BuildDataNode/ApplyDataNode)
 
+
 // SaveNode — write this object into the node. Common header (intrinsics → fields,
 // editable values → props, interface/roles), then per-type WriteData. Every value
 // is in its REAL form, so a JSON view shows `"Name": "Price"`, not a base64 blob.
@@ -231,7 +232,9 @@ bool ibValueMetaObject::CloseSubtree(ibRunPhase phase)
 	const bool ok =
 		phase == ibRunPhase::Before ? OnBeforeCloseMetaObject()
 		                            : OnAfterCloseMetaObject();
-	if (!ok)
-		return false;
-	return true;
+	// ⚠ A refusal here travels up as a bare `false` and arrives at the caller as
+	// "CloseDatabase() == false" — which says the configuration would not close, and nothing at all
+	// about WHICH metaobject stopped it. If this starts happening again, the first thing to add
+	// back is the node's name at THIS line; the stack above only shows the victim.
+	return ok;
 }

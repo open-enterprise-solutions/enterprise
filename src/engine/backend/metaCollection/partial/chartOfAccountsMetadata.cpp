@@ -292,7 +292,7 @@ bool ibValueMetaObjectChartOfAccounts::OnBeforeCloseMetaObject()
 	if (!(*m_propertyManagerModule)->OnBeforeCloseMetaObject()) return false;
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		if (ibValueMetaObjectRecordDataHierarchyMutableRef::OnBeforeCloseMetaObject())
-			return cc->RemoveCompileModule(m_propertyObjectModule->GetMetaObject());
+			{ cc->RemoveCompileModule(m_propertyObjectModule->GetMetaObject()); return true; }
 		return false;
 	}
 	return ibValueMetaObjectRecordDataHierarchyMutableRef::OnBeforeCloseMetaObject();

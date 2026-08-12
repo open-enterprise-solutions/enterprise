@@ -94,4 +94,4 @@ void ibCommonAttributeDocument::Modify(bool modified)
 // ibCommonAttributeEditDocument implementation
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibCommonAttributeEditDocument, ibMetaDocument);
+wxIMPLEMENT_DYNAMIC_CLASS(ibCommonAttributeEditDocument, ibCommonAttributeDocument);

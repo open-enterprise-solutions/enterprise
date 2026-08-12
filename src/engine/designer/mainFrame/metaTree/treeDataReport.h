@@ -7,23 +7,30 @@
 #include <wx/statbox.h>
 #include <wx/statline.h>
 
+#include <map>
+
 #include "mainFrame/metaTree/treeConfiguration.h"
 #include "backend/metadataReport.h"
 
-class ibDataReportTree : public ibMetaDataTree {
+class ibDataReportTree : public ibMetaTreeBase {
 	wxDECLARE_DYNAMIC_CLASS(ibDataReportTree);
 private:
 
+	// The ROOT — the report itself, not a group.
 	wxTreeItemId m_treeREPORTS;
 
-	wxTreeItemId m_treeATTRIBUTES;
-	wxTreeItemId m_treeTABLES;
-	wxTreeItemId m_treeFORM;
-	wxTreeItemId m_treeTEMPLATES;
+	// THE GROUP NODES, keyed by the metatype each stands for — see the twin note in
+	// treeDataProcessor.h.
+	std::map<ibClassID, wxTreeItemId> m_groups;
+
+	wxTreeItemId Group(const ibClassID& clsid) const {
+		const auto it = m_groups.find(clsid);
+		return it != m_groups.end() ? it->second : wxTreeItemId();
+	}
 
 private:
 
-	bool m_initialized;
+	bool m_initialized = false;
 
 private:
 
@@ -49,21 +56,17 @@ private:
 		return 0;
 	}
 
+	// THE NEAREST METAOBJECT AT OR ABOVE a group row — see the twin note in treeConfiguration.h.
 	ibValueMetaObject* GetMetaIdentifier() const {
 		wxTreeItemId parentItem = GetSelectionIdentifier();
-		wxTreeItemData* item = m_metaTreeCtrl->GetItemData(parentItem);
-		if (item != nullptr) {
-			ibTreeDataClassIdentifier* item_clsid = dynamic_cast<ibTreeDataClassIdentifier*>(item);
-			if (item_clsid != nullptr) {
-				while (parentItem != nullptr) {
-					wxTreeItemData* item = m_metaTreeCtrl->GetItemData(parentItem);
-					if (item != nullptr) {
-						ibValueMetaObject* parent = GetMetaObject(parentItem);
-						if (parent != nullptr) return parent;
-					}
-					parentItem = m_metaTreeCtrl->GetItemParent(parentItem);
-				}
-			}
+		wxTreeItemData* const data = m_metaTreeCtrl->GetItemData(parentItem);
+		if (dynamic_cast<ibTreeDataClassIdentifier*>(data) == nullptr)
+			return nullptr;
+
+		while (parentItem != nullptr) {
+			ibValueMetaObject* parent = GetMetaObject(parentItem);
+			if (parent != nullptr) return parent;
+			parentItem = m_metaTreeCtrl->GetItemParent(parentItem);
 		}
 		return nullptr;
 	}
@@ -80,19 +83,20 @@ protected:
 
 protected:
 
-	wxStaticText* m_nameCaption;
-	wxStaticText* m_synonymCaption;
-	wxStaticText* m_commentCaption;
-	wxStaticText* m_defaultForm;
-	wxTextCtrl* m_nameValue;
-	wxTextCtrl* m_synonymValue;
-	wxTextCtrl* m_commentValue;
-	wxChoice* m_defaultFormValue;
+	// Initialised HERE — see the twin note in treeDataProcessor.h.
+	wxStaticText* m_nameCaption = nullptr;
+	wxStaticText* m_synonymCaption = nullptr;
+	wxStaticText* m_commentCaption = nullptr;
+	wxStaticText* m_defaultForm = nullptr;
+	wxTextCtrl* m_nameValue = nullptr;
+	wxTextCtrl* m_synonymValue = nullptr;
+	wxTextCtrl* m_commentValue = nullptr;
+	wxChoice* m_defaultFormValue = nullptr;
 
-	wxButton* m_buttonModule;
+	wxButton* m_buttonModule = nullptr;
 
 	class ibDataReportTreeCtrl : public wxTreeCtrl {
-		wxDECLARE_DYNAMIC_CLASS(ibMetadataTree);
+		wxDECLARE_DYNAMIC_CLASS(ibDataReportTreeCtrl);   // used to name the configuration tree — copy-paste
 	private:
 		ibDataReportTree* m_ownerTree;
 		ibMetaView* m_metaView;
@@ -173,8 +177,8 @@ protected:
 		wxDECLARE_EVENT_TABLE();
 	};
 
-	ibDataReportTreeCtrl* m_metaTreeCtrl;
-	ibMetaDataReport* m_metaData;
+	ibDataReportTreeCtrl* m_metaTreeCtrl = nullptr;
+	ibMetaDataReport* m_metaData = nullptr;
 
 private:
 
@@ -183,7 +187,7 @@ private:
 		wxASSERT(typeCtor);
 		wxImageList* imageList = m_metaTreeCtrl->GetImageList();
 		wxASSERT(imageList);
-		int imageIndex = imageList->Add(typeCtor->GetClassIcon());
+		const int imageIndex = imageList->Add(typeCtor->GetClassIcon());
 		return m_metaTreeCtrl->AddRoot(name.IsEmpty() ? typeCtor->GetClassName() : name,
 			imageIndex,
 			imageIndex,
@@ -197,7 +201,7 @@ private:
 		wxASSERT(typeCtor);
 		wxImageList* imageList = m_metaTreeCtrl->GetImageList();
 		wxASSERT(imageList);
-		int imageIndex = imageList->Add(typeCtor->GetClassIcon());
+		const int imageIndex = imageList->Add(typeCtor->GetClassIcon());
 		return m_metaTreeCtrl->AppendItem(parent, name.IsEmpty() ? typeCtor->GetClassName() : name,
 			imageIndex,
 			imageIndex,
@@ -221,7 +225,7 @@ private:
 		ibValueMetaObject* metaObject) const {
 		wxImageList* imageList = m_metaTreeCtrl->GetImageList();
 		wxASSERT(imageList);
-		int imageIndex = imageList->Add(metaObject->GetIcon());
+		const int imageIndex = imageList->Add(metaObject->GetIcon());
 		return m_metaTreeCtrl->AppendItem(parent, metaObject->GetName(),
 			imageIndex,
 			imageIndex,
@@ -229,9 +233,13 @@ private:
 		);
 	}
 
+	// HUB — append a command node and, recursively, its sub-commands. See the twin note in
+	// treeDataProcessor.h.
+	void AppendCommandNode(const wxTreeItemId& parent, ibValueMetaObject* command);
+
 	void ActivateItem(const wxTreeItemId& item);
 
-	ibValueMetaObject* NewItem(const ibClassID& clsid, ibValueMetaObject* parent, bool rubObject = true);
+	ibValueMetaObject* NewItem(const ibClassID& clsid, ibValueMetaObject* parent, bool runObject = true);
 	ibValueMetaObject* CreateItem(bool showValue = true);
 
 	wxTreeItemId FillItem(ibValueMetaObject* metaItem, const wxTreeItemId& item, bool select = true, bool scroll = true);

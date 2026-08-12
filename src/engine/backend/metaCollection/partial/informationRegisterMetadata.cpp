@@ -261,11 +261,9 @@ bool ibValueMetaObjectInformationRegister::OnBeforeCloseMetaObject()
 
 		if (ibValueMetaObjectRegisterData::OnBeforeCloseMetaObject()) {
 
-			if (!cc->RemoveCompileModule(m_metaRecordManager))
-				return false;
+			cc->RemoveCompileModule(m_metaRecordManager);
 
-			if (!cc->RemoveCompileModule(m_propertyObjectModule->GetMetaObject()))
-				return false;
+			cc->RemoveCompileModule(m_propertyObjectModule->GetMetaObject());
 
 			return true;
 		}

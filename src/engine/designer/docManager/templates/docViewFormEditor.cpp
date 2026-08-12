@@ -244,7 +244,7 @@ void ibFormEditView::OnMenuEvent(wxCommandEvent& event)
 // ibModuleDocument: ibDocument and wxTextCtrl married
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_CLASS(ibFormDocument, ibMetaDocument);
+wxIMPLEMENT_CLASS(ibFormDocument, ibValueModuleDocument);
 
 bool ibFormDocument::OnCreate(const wxString& path, long flags)
 {

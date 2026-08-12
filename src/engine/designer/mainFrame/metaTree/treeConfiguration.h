@@ -9,14 +9,27 @@
 #include <wx/srchctrl.h>
 #include <wx/treectrl.h>
 
-class ibMetaDataTree : public wxPanel,
+#include <map>
+
+class ibMetaTreeBase : public wxPanel,
 	public ibBackendMetadataTree {
-	wxDECLARE_ABSTRACT_CLASS(ibMetaDataTree);
+	wxDECLARE_ABSTRACT_CLASS(ibMetaTreeBase);
 public:
 
-	ibMetaDataTree() : wxPanel(), m_docParent(nullptr), m_searchTree(nullptr), m_bReadOnly(false) {}
-	ibMetaDataTree(wxWindow* parent, int id = wxID_ANY) : wxPanel(parent, id), m_docParent(nullptr), m_bReadOnly(false) {}
-	ibMetaDataTree(ibMetaDocument* docParent, wxWindow* parent, int id = wxID_ANY) : wxPanel(parent, id), m_docParent(docParent), m_searchTree(nullptr), m_bReadOnly(false) {}
+	// PAIRED UI STATE SURVIVES AN EARLY EXIT — the same rule as ibClipboardLock and wx's own
+	// wxWindowUpdateLocker. Events are switched off around a total rebuild, and a throw from
+	// InitTree (metadata is read there) used to fly past the switch-back: the navigator stayed
+	// deaf to every click for the rest of the session, with nothing on screen to say why.
+	class ibEventsOff {
+		wxWindow* const m_window;
+	public:
+		explicit ibEventsOff(wxWindow* window) : m_window(window) { m_window->SetEvtHandlerEnabled(false); }
+		~ibEventsOff() { m_window->SetEvtHandlerEnabled(true); }
+	};
+
+	ibMetaTreeBase() : wxPanel(), m_docParent(nullptr), m_searchTree(nullptr), m_bReadOnly(false) {}
+	ibMetaTreeBase(wxWindow* parent, int id = wxID_ANY) : wxPanel(parent, id), m_docParent(nullptr), m_bReadOnly(false) {}
+	ibMetaTreeBase(ibMetaDocument* docParent, wxWindow* parent, int id = wxID_ANY) : wxPanel(parent, id), m_docParent(docParent), m_searchTree(nullptr), m_bReadOnly(false) {}
 
 	virtual ibFormID SelectFormType(ibValueMetaObjectForm* metaObject) const;
 	virtual void Activate();
@@ -85,49 +98,42 @@ protected:
 
 protected:
 
-	wxSearchCtrl* m_searchTree;
-	wxAuiToolBar* m_metaTreeToolbar;
-	ibMetaDocument* m_docParent;
+	// Initialised HERE rather than in each constructor: there are three of them, one of them
+	// (wxWindow*, int) never set m_searchTree, and the destructor calls Destroy() on it.
+	wxSearchCtrl* m_searchTree = nullptr;
+	wxAuiToolBar* m_metaTreeToolbar = nullptr;
+	ibMetaDocument* m_docParent = nullptr;
 
-	bool			m_bReadOnly;
+	bool			m_bReadOnly = false;
 };
 
-class ibMetadataTree : public ibMetaDataTree {
-	wxDECLARE_DYNAMIC_CLASS(ibMetadataTree);
+class ibConfigurationTree : public ibMetaTreeBase {
+	wxDECLARE_DYNAMIC_CLASS(ibConfigurationTree);
 private:
 
 	wxTreeItemId m_treeMETADATA;
 	wxTreeItemId m_treeCOMMON; //special tree
 
-	wxTreeItemId m_treeMODULES;
-	wxTreeItemId m_treeFORMS;
-	wxTreeItemId m_treeTEMPLATES;
+	// THE GROUP NODES, keyed by the metatype each one stands for. Filled by one pass over the
+	// layout table (s_groups in the .cpp), which is the only place that says what groups exist and
+	// in what order; every other pass over the tree — clear, fill, filter — works through this map.
+	//
+	// It replaced twenty-three named fields, and the fields were not merely verbose: each pass over
+	// the tree spelled them out as a list of its own, and the lists drifted (ClearTree's had fallen
+	// three entries behind, invisibly, because that block ran just before DeleteAllItems).
+	std::map<ibClassID, wxTreeItemId> m_groups;
 
-	wxTreeItemId m_treePICTURES;
-	wxTreeItemId m_treeINTERFACES;
-	wxTreeItemId m_treeCOMMANDS;
-	// Scheduled jobs are ONE branch with two kinds inside it: the predefined ones (a sub-branch,
-	// always rendered first, because a configuration declares few of them and they never grow with
-	// the data) and the parameterized ones under it, as ordinary items of the branch itself.
-	wxTreeItemId m_treeJOBS;
-	wxTreeItemId m_treeSCHEDULED_JOBS;
-	wxTreeItemId m_treeSESSION_PARAMETERS;
-	wxTreeItemId m_treeCOMMON_ATTRIBUTES;
-	wxTreeItemId m_treeROLES;
-	wxTreeItemId m_treeLANGUAGES;
+	// The group node standing for a metatype. Invalid when there is none — a real state, not an
+	// error: the search filter drops a group that matched nothing, and the entry goes with it.
+	wxTreeItemId Group(const ibClassID& clsid) const {
+		const auto it = m_groups.find(clsid);
+		return it != m_groups.end() ? it->second : wxTreeItemId();
+	}
 
-	wxTreeItemId m_treeCONSTANTS;
-
-	wxTreeItemId m_treeCATALOGS;
-	wxTreeItemId m_treeDOCUMENTS;
-	wxTreeItemId m_treeENUMERATIONS;
-	wxTreeItemId m_treeDATAPROCESSORS;
-	wxTreeItemId m_treeREPORTS;
-	wxTreeItemId m_treeINFORMATION_REGISTERS;
-	wxTreeItemId m_treeACCUMULATION_REGISTERS;
-	wxTreeItemId m_treeCHARTS_OF_CHARACTERISTIC_TYPES;
-	wxTreeItemId m_treeCHARTS_OF_ACCOUNTS;
-	wxTreeItemId m_treeACCOUNTING_REGISTERS;
+	// (No named field per group. Two callsites need a specific group — "Insert data processor /
+	//  report" and its context menu — and they ask for it by metatype: Group(g_metaReportCLSID).
+	//  A field per group meant twenty-three assignments to serve those two, which is the same
+	//  hand-kept list the layout table exists to remove.)
 
 private:
 
@@ -176,21 +182,19 @@ private:
 		return GetMetaIdentifier(GetSelectionIdentifier());
 	}
 
+	// THE NEAREST METAOBJECT AT OR ABOVE a group row — what a new object gets created under.
+	// The inner `wxTreeItemData* item` that used to sit in the loop shadowed the outer one (C4456)
+	// and answered nothing: GetMetaObject already returns null for a row that carries no metaobject.
 	ibValueMetaObject* GetMetaIdentifier(const wxTreeItemId& id) const {
+		wxTreeItemData* const data = m_metaTreeCtrl->GetItemData(id);
+		if (dynamic_cast<ibTreeDataClassIdentifier*>(data) == nullptr)
+			return nullptr;
+
 		wxTreeItemId parentItem = id;
-		wxTreeItemData* item = m_metaTreeCtrl->GetItemData(parentItem);
-		if (item != nullptr) {
-			ibTreeDataClassIdentifier* item_clsid = dynamic_cast<ibTreeDataClassIdentifier*>(item);
-			if (item_clsid != nullptr) {
-				while (parentItem != nullptr) {
-					wxTreeItemData* item = m_metaTreeCtrl->GetItemData(parentItem);
-					if (item != nullptr) {
-						ibValueMetaObject* parent = GetMetaObject(parentItem);
-						if (parent != nullptr) return parent;
-					}
-					parentItem = m_metaTreeCtrl->GetItemParent(parentItem);
-				}
-			}
+		while (parentItem != nullptr) {
+			ibValueMetaObject* parent = GetMetaObject(parentItem);
+			if (parent != nullptr) return parent;
+			parentItem = m_metaTreeCtrl->GetItemParent(parentItem);
 		}
 		return nullptr;
 	}
@@ -200,13 +204,16 @@ private:
 	ibMetaDataConfigurationBase* m_metaData;
 
 	class ibMetaTreeCtrl : public wxTreeCtrl {
-		wxDECLARE_DYNAMIC_CLASS(ibMetadataTree);
+		// NAMES ITSELF — it used to name the owner tree. The macro ignores its argument, so that
+		// compiled and simply read as a lie; the matching wxIMPLEMENT in the .cpp has always been
+		// the nested class. The same slip was in both external trees and was fixed with this one.
+		wxDECLARE_DYNAMIC_CLASS(ibMetaTreeCtrl);
 
-		class ibMatadataTreeView : public ibMetaView
+		class ibMetaTreeView : public ibMetaView
 		{
 		public:
 
-			ibMatadataTreeView(ibMetaTreeCtrl* tree) : m_ownerTree(tree) {}
+			ibMetaTreeView(ibMetaTreeCtrl* tree) : m_ownerTree(tree) {}
 			virtual void OnActivateView(bool activate, ibView* activeView, ibView* deactiveView) override;
 
 		private:
@@ -214,7 +221,7 @@ private:
 		};
 
 	private:
-		ibMetadataTree* m_ownerTree;
+		ibConfigurationTree* m_ownerTree;
 		ibMetaView* m_metaView;
 	private:
 		wxTreeItemId m_draggedItem;
@@ -239,18 +246,24 @@ private:
 		}
 
 		ibMetaTreeCtrl();
-		ibMetaTreeCtrl(ibMetadataTree* parent);
+		ibMetaTreeCtrl(ibConfigurationTree* parent);
 		virtual ~ibMetaTreeCtrl();
 
 		// this function is called to compare 2 items and should return -1, 0
 		// or +1 if the first item is less than, equal to or greater than the
 		// second one. The base class version performs alphabetic comparison
 		// of item labels (GetText)
+		// ⚠ ASK THE MIXIN, not the concrete node class. `wxTreeItemMetaData` is the payload of a
+		// PLAIN row; a row that is also a group (a tabular section, a section) carries
+		// `wxTreeItemClsidMetaData` instead, and a cast to the concrete class missed it — so
+		// sorting the Tables group did nothing here while the external trees, which have always
+		// asked the mixin, reordered the tabular sections. Sorting a group's contents is what the
+		// button means, so all three now agree on the external trees' behaviour.
 		virtual int OnCompareItems(const wxTreeItemId& item1,
 			const wxTreeItemId& item2) {
 			int ret = wxStrcmp(GetItemText(item1), GetItemText(item2));
-			wxTreeItemMetaData* data1 = dynamic_cast<wxTreeItemMetaData*>(GetItemData(item1));
-			wxTreeItemMetaData* data2 = dynamic_cast<wxTreeItemMetaData*>(GetItemData(item2));
+			ibTreeDataMetaItem* data1 = dynamic_cast<ibTreeDataMetaItem*>(GetItemData(item1));
+			ibTreeDataMetaItem* data2 = dynamic_cast<ibTreeDataMetaItem*>(GetItemData(item2));
 			if (data1 != nullptr && data2 != nullptr && ret > 0) {
 				ibValueMetaObject* metaObject1 = data1->m_metaObject;
 				ibValueMetaObject* metaObject2 = data2->m_metaObject;
@@ -370,7 +383,77 @@ private:
 
 	// HUB — append a command node and, recursively, its sub-commands (a group command holds commands, shown
 	// nested, exactly as a subsystem holds subsystems). Defined in the .cpp — needs the full command type.
-	void AppendCommandNode(const wxTreeItemId& parent, ibValueMetaObject* command);
+	// Returns the node, or an invalid id when the search filter dropped it.
+	wxTreeItemId AppendCommandNode(const wxTreeItemId& parent, ibValueMetaObject* command);
+
+	// FILL ONE GROUP OF AN OBJECT — append what answers the search, then drop the group itself when
+	// the search left it empty. This is what makes the search box a filter rather than a top-level
+	// lookup: the test was written out at every one of these loops and left COMMENTED OUT in all of
+	// them, so a search could find a catalog by name but never an attribute, a form or a template.
+	template <typename TArray>
+	wxTreeItemId AppendObjectGroup(const wxTreeItemId& parent, const ibClassID& groupClsid,
+		const wxString& label, const TArray& objects) {
+		const wxTreeItemId group = AppendGroupItem(parent, groupClsid, label);
+		for (auto object : objects) {
+			if (object->IsDeleted())
+				continue;
+			if (!object->IsAcceptedByParent())
+				continue;
+			if (!MatchesSearch(object))
+				continue;
+			AppendItem(group, object);
+		}
+		if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(group)) {
+			m_metaTreeCtrl->Delete(group);
+			return wxTreeItemId();
+		}
+		return group;
+	}
+
+	// TABULAR SECTIONS — the one group whose rows are groups themselves: each table shows its own
+	// columns. A table survives a search if IT matched or one of its columns did.
+	template <typename TArray>
+	wxTreeItemId AppendTableGroup(const wxTreeItemId& parent, const ibClassID& tableClsid,
+		const wxString& label, const TArray& tables) {
+		const wxTreeItemId group = AppendGroupItem(parent, tableClsid, label);
+		for (auto metaTable : tables) {
+			if (metaTable->IsDeleted())
+				continue;
+			const wxTreeItemId hTable = AppendGroupItem(group, g_metaAttributeCLSID, metaTable);
+			for (auto attribute : metaTable->GetAttributeArrayObject()) {
+				if (attribute->IsDeleted())
+					continue;
+				if (!attribute->IsAcceptedByParent())
+					continue;
+				if (!MatchesSearch(attribute))
+					continue;
+				AppendItem(hTable, attribute);
+			}
+			if (!m_strSearch.IsEmpty() && !MatchesSearch(metaTable)
+				&& !m_metaTreeCtrl->HasChildren(hTable))
+				m_metaTreeCtrl->Delete(hTable);
+		}
+		if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(group)) {
+			m_metaTreeCtrl->Delete(group);
+			return wxTreeItemId();
+		}
+		return group;
+	}
+
+	// COMMANDS — the rows nest, so the filtering is AppendCommandNode's own job; this only decides
+	// whether the group is left standing.
+	template <typename TArray>
+	wxTreeItemId AppendCommandGroup(const wxTreeItemId& parent, const wxString& label,
+		const TArray& commands) {
+		const wxTreeItemId group = AppendGroupItem(parent, g_metaCommandCLSID, label);
+		for (auto metaCommand : commands)
+			AppendCommandNode(group, metaCommand);
+		if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(group)) {
+			m_metaTreeCtrl->Delete(group);
+			return wxTreeItemId();
+		}
+		return group;
+	}
 
 	void ActivateItem(const wxTreeItemId& item);
 
@@ -402,6 +485,18 @@ private:
 	void PrepareContextMenu(wxMenu* menu, const wxTreeItemId& item);
 
 	void ShowContextMenu(wxWindow* eventSrc, const wxTreeItemId& item, const wxPoint& pos);
+
+	// HOW A METAOBJECT UNFOLDS — the one dispatcher, used by the initial fill AND the create path.
+	// Which existing kind a metatype renders AS (a chart of accounts as a catalog, an accounting
+	// register as an accumulation register) is the only real knowledge in it.
+	void ExpandMetaItem(ibValueMetaObject* metaItem, const wxTreeItemId& item);
+
+	// Does this object answer the search box — asked in one place, case-insensitive, name OR synonym.
+	bool MatchesSearch(const ibValueMetaObject* metaObject) const;
+
+	// Close every editor opened from this navigator. Part of LEAVING a configuration — deliberately
+	// not part of ClearTree, which a search runs on every keystroke.
+	void CloseOwnedDocuments();
 
 	void AddInterfaceItem(ibValueMetaObject* obj, const wxTreeItemId& item);
 
@@ -435,10 +530,10 @@ public:
 
 	virtual ibMetaData* GetMetaData() const { return m_metaData; }
 
-	ibMetadataTree();
-	ibMetadataTree(wxWindow* parent, int id = wxID_ANY);
-	ibMetadataTree(ibMetaDocument* docParent, wxWindow* parent, int id = wxID_ANY);
-	virtual ~ibMetadataTree();
+	ibConfigurationTree();
+	ibConfigurationTree(wxWindow* parent, int id = wxID_ANY);
+	ibConfigurationTree(ibMetaDocument* docParent, wxWindow* parent, int id = wxID_ANY);
+	virtual ~ibConfigurationTree();
 
 	void InitTree();
 

@@ -43,6 +43,34 @@ Undocumented-until-now subsystems, mapped 2026-07-15:
 
 ---
 
+## 1d. Identity, and the failures it uncovered — 2026-08-12 session
+
+The Designer's navigator was audited and rewritten (the layout is one table now —
+[metadata-tree.md](metadata-tree.md) §3.1), and the audit kept pulling on one thread: a type was
+**registered under its NAME**, which is a value computed from a metaobject that the user can rename.
+Everything below follows from moving registration onto the **identity** (`ibClassID`) and leaving the
+name as a presentation that is recomputed on demand ([factories.md](factories.md) §2).
+
+| Found | What it was | Now |
+|---|---|---|
+| a renamed object could not be unregistered | the unregister macros keyed on `GetClassName()`, which the rename had already changed — the ctor stayed registered, `CloseDatabase` returned false, the rollback failed and the Designer sat half-open | all 13 macro pairs key on the clsid; the name index drops entries **by value**, and a rename marks it stale instead of re-filing |
+| external DP/Report raised on every close | the same move made a hidden asymmetry visible: they register `externalObject`/`externalManager` ctors (a different KIND of id) and unregistered the ordinary ones. Under the old name-keyed macros both spellings resolved to the same entry | `unregisterExternalObject()` / `unregisterExternalManager()` mirror the register branch |
+| the project's exception was invisible to every generic boundary | `ibBackendException` did not derive from `std::exception`, so `catch (const std::exception&)` let it fall through to `catch (...)` — the message was discarded at the moment something decided to stop | it derives; `what()` returns the description as UTF-8. Handler order is now a language requirement, not a preference ([exceptions.md](exceptions.md)) |
+| pasting a Document onto a Constant died | a property the payload did not carry was handed over as an EMPTY value, which the property type rightly refused — failing the whole paste. "Nothing arrived" and "an empty value arrived" were the same thing | absent values are skipped, so the target keeps its default. Paste is a **merge by name** over the property system — the only standardized surface two different metatypes share ([copy-paste.md](copy-paste.md)) |
+| the debugger stopped showing the current line | `wxDynamicCast` walks the base written by hand in `wxIMPLEMENT_*CLASS`, and eight document classes named a grandparent there — the module interface answered "not a kind of" for every module editor | the declared bases match the real ones; the call site uses C++ `dynamic_cast` ([metadata-tree.md](metadata-tree.md) §4.1) |
+| a failed paste froze the navigator for the session | `Freeze()` / `Thaw()` by hand around code that can throw — the error dialog appeared over a tree that never came back | `wxWindowUpdateLocker`, plus an RAII guard for the event-handler toggle around `InitTree` |
+
+Also swept as classes, not sites: an owning parent's child freed with `wxDELETE` behind its back on a
+failed paste (2 sites), `wxLogError(msg)` passing a description as a format string (2 sites), and
+`what()` bytes handed to a wide `Format` without `FromUTF8`.
+
+**Open, deliberately not started:** 19 sites across 11 metatypes write their close as *"close the
+children, bail on failure, then unregister myself"* — so any child that refuses to close leaves the
+parent's ctors in the registry pointing at a metaobject that is then destroyed. The collapse point is
+that "this metaobject is going away" is known in ONE place, not nineteen.
+
+---
+
 ## 1c. The AST arc, attempted and reverted — 2026-08-10 session
 
 The tree-compiler arc was built and rolled back the same week; the analysis of what the missing

@@ -13,6 +13,53 @@ time** (see "Forms and controls" below).
 
 ---
 
+## Paste is a MERGE BY NAME, not an exact-match restore
+
+The usual shape of copy/paste — the payload names its class, the target is built FROM the payload,
+kinds must agree — is deliberately **not** what this engine does, and the difference is structural
+rather than a matter of taste.
+
+**Why a name-keyed transfer is the only one available.** A metaobject's serialised BYTES are its own:
+its layout, its order, its size, decided by what that metatype happens to store. Between two
+different metaobjects there is nothing to match at that level — not "little in common", but no shared
+frame of reference at all. The **property system is the one standardized surface** every metaobject
+speaks in the same shape: a named value, asked and answered the same way regardless of metatype. So
+the copy travels as an `ibDataNode` tree of name→value (`CopyProperty`: *no per-property byte writer
+— each property yields its node value*), never as the `SaveMeta` blob.
+
+And the target does not RECEIVE a set of properties — it **reuses its own**. It walks the properties
+it already has and asks the payload for each by name; nothing foreign enters it, no layout, no extra
+fields. That is what makes the whole thing work, and the merge semantics below are its consequence.
+
+An exact-match paste makes the clipboard a **second constructor of metaobjects**, running beside the
+one the navigator already has. Two things then decide what class an object is, and the pair has to be
+kept in step: a table of which kinds may be pasted onto which, maintained by hand and falling behind
+exactly the way any hand-kept list does.
+
+The merge keeps a single constructor. **The target's class is decided by where the paste lands** — the
+same decision an ordinary create makes — and the payload only supplies VALUES for properties the
+target already has. `ibPropertyObject::PasteProperty` iterates over the TARGET's properties and pulls
+each one out of the payload **by name**:
+
+- present in both → carried over;
+- only in the source → dropped;
+- only in the target → **keeps its default**, which is why an absent value is SKIPPED rather than
+  handed over as an empty `ibDataValue` (a property type that rightly refuses an empty value would
+  otherwise fail the whole paste — this is what made "paste a Document onto a Constant" die).
+
+The consequence worth naming: **a cross-kind paste is not a special case, it is the general case with
+a smaller intersection.** Document→Document and Document→Constant take the same code path and differ
+only in how much matched. No mode, no branch, no allow-list — and no root class id in the blob
+header, which was tried and removed: nothing could read it without turning a legitimate request into
+a refusal.
+
+**The one honest cost.** What does not match is dropped SILENTLY, and property NAME is the only
+identity there is. Rename a property and an older clipboard payload quietly brings less than it used
+to. That is the price of not having a second currency for "what a metaobject is"; it is a real limit,
+not a bug to be patched with a special case.
+
+---
+
 ## The mechanism
 
 Every metaobject has two mutable guid slots (`metaCollection/metaObject.h`): `m_metaCopyGuid` /
@@ -207,10 +254,67 @@ crash on open.
 
 ---
 
+## The clipboard — one gesture, two currencies
+
+The copy blob above is the engine's private language. But Ctrl+C is a **system-wide** gesture: the
+same keystroke has to mean something to Notepad, to a chat window, to the next application the user
+switches to. So a copied metaobject is put on the clipboard as **two representations of one thing**:
+
+```cpp
+wxDataObjectComposite* composite = new wxDataObjectComposite;
+
+wxCustomDataObject* payload = new wxCustomDataObject(oes_clipboard_metadata);
+payload->SetData(writer.size(), writer.pointer());   // the copy blob — only this engine reads it
+composite->Add(payload);
+
+composite->Add(new wxTextDataObject(metaObject->GetName()), /*preferred*/ true);
+```
+
+**Everyone else sees a string; this configuration sees an object.** Paste into a text editor and the
+name arrives as text — which is what a person means by "copy" outside the designer. Paste into the
+metadata tree and the custom format is found first, so the whole object arrives: attributes, tabular
+sections, forms, their controls, their modules.
+
+Nothing is converted between the two. They are written at the same moment from the same object, and
+the receiver picks the representation it understands — which is exactly what the clipboard was
+designed to do and what a single-format implementation gives up.
+
+Four formats exist, one per copyable kind, so a paste never has to guess what it is holding:
+`oes_clipboard_metadata`, `oes_clipboard_frame` (a form's control subtree),
+`oes_clipboard_interface` (a section), `oes_clipboard_role` (`backend/backend_core.h`).
+
+### The clipboard is a lock, and it is taken as one
+
+`wxTheClipboard->Open()` that never reaches its `Close()` holds the clipboard for **every**
+application in the session until the process exits — it is an OS-wide lock, not a local handle. All
+three metadata trees used to close it inside the branch that succeeded, so two ordinary gestures
+leaked it: Ctrl+C on a **group node** (a row that carries a class id and no metaobject, so the "copy
+this" branch is skipped) and Ctrl+V with anything that is not an OES payload (`Open()` had already
+succeeded when `IsSupported()` said no). It is now an RAII guard —
+`designer/mainFrame/metaTree/clipboardLock.h` — because a guard cannot forget the paths nobody
+wrote down.
+
+### The blob names its own kind
+
+The root of a copy carries its **clsid** in the header (children always did, as the chunk key).
+Paste creates the target from the class id of the tree node it lands on and then compares the two;
+a mismatch is refused with a message.
+
+Without that comparison the kind came **only** from where you dropped it: copying an attribute onto
+the *Constants* group produced a **constant filled with an attribute's properties** — an object
+whose class and contents disagree, named after the thing it was copied from (`Attribute3` as a
+constant). Such an object then fails half-way through its run, is never registered in the compile
+cache, and its close raises — which surfaced days later as a rollback that could not close the
+configuration. A payload that cannot say what it is will eventually be read as something else.
+
+---
+
 ## Files
 
 | Concern | Where |
 |---|---|
+| Clipboard composite (custom + text) + the RAII lock | `designer/mainFrame/metaTree/*Event.cpp`, `.../clipboardLock.h` |
+| Clipboard format names | `backend/backend_core.h` (`oes_clipboard_*`) |
 | Copy/paste guid slots + guards | `metaCollection/metaObject.{h,cpp}` |
 | Copy/paste property hooks (default = raw) | `propertyManager/propertyObject.{h,cpp}` |
 | Source binding — dumb raw serializer | `sourceDescription.{h,cpp}` |

@@ -30,7 +30,7 @@ protected:
 #define registerConstObject()\
 	m_metaData->RegisterCtor(new ibCtorMetaValueTypeConstantObject(this))
 #define unregisterConstObject()\
-	m_metaData->UnRegisterCtor(generate_class_name(prefixObject))
+	m_metaData->UnRegisterCtor(object_to_clsid(GetMetaID()))
 
 //const-manager class 
 class ibCtorMetaValueTypeConstantManager :
@@ -58,6 +58,6 @@ protected:
 #define registerConstManager()\
 	m_metaData->RegisterCtor(new ibCtorMetaValueTypeConstantManager(this))
 #define unregisterConstManager()\
-	m_metaData->UnRegisterCtor(generate_class_name(prefixManager))
+	m_metaData->UnRegisterCtor(manager_to_clsid(GetMetaID()))
 
 #endif 

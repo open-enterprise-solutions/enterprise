@@ -94,4 +94,4 @@ void ibInterfaceDocument::Modify(bool modified)
 // ibInterfaceEditDocument implementation
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibInterfaceEditDocument, ibMetaDocument);
+wxIMPLEMENT_DYNAMIC_CLASS(ibInterfaceEditDocument, ibInterfaceDocument);

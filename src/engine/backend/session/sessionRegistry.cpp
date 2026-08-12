@@ -12,6 +12,7 @@
 #include "workerPool.h"
 #include "workerPoolHeadless.h"
 #include "backend/lock/lockManager.h"
+#include "backend/utils/debugTrace.h"   // ibTraceToFile — Die's reason must survive a GUI build
 
 #include <chrono>
 #include <iostream>
@@ -1965,9 +1966,17 @@ void ibSessionRegistry::ThreadBody() noexcept
 			// their session's cv observe Timeout / state-unchanged.
 		}
 	}
+	// THE PROJECT'S OWN EXCEPTION FIRST — it now DERIVES from std::exception, so the order is what
+	// C++ requires (derived before base) rather than a preference. Before it derived, it landed in
+	// `catch (...)` and died as "unknown": the message it carries, the only thing that says WHAT
+	// went wrong, was thrown away at the exact moment the process decided to stop.
+	catch (const ibBackendException& err) {
+		Die(wxString::Format(wxT("registry-thread backend exception: %s"), err.GetErrorDescription()));
+	}
 	catch (const std::exception& e) {
-		wxString msg = wxString::Format(wxT("registry-thread exception: %s"), e.what());
-		Die(msg);
+		// what() is UTF-8 bytes (that is what the standard door carries) — convert, don't let the
+		// narrow overload re-read them in the current locale and mangle a Cyrillic message.
+		Die(wxString::Format(wxT("registry-thread exception: %s"), wxString::FromUTF8(e.what())));
 	}
 	catch (...) {
 		Die(wxT("registry-thread unknown exception"));
@@ -1985,6 +1994,11 @@ void ibSessionRegistry::Die(const wxString& why)
 	m_threadAlive.store(false, std::memory_order_release);
 
 	// Log first — survives both the soft-fail and the std::terminate paths.
+	//
+	// TO A FILE as well as to stderr: a GUI build has no console, so the stderr line reaches
+	// nobody, and the wxLog flush cannot outrun the std::terminate below. This is the last thing
+	// the process says about why it is stopping — it has to land somewhere readable afterwards.
+	ibTraceToFile(wxT("[session] FATAL: ") + why);
 	std::cerr << "[session] FATAL: " << why.ToUTF8().data() << std::endl;
 	wxLog::FlushActive();
 

@@ -9,6 +9,7 @@
 #include "frontend/mainFrame/mainFrame.h"
 #include "frontend/mainFrame/objinspect/objinspect.h"
 
+#include "backend/backend_exception.h"   // ibBackendException — caught explicitly; it is NOT a std::exception
 #include "backend/propertyManager/propertyManager.h"
 #include "backend/system/value/valueJob.h"   // g_valueScheduleCLSID — a dropped schedule builds as static text
 
@@ -915,9 +916,17 @@ ibValueFrame* ibVisualEditorNotebook::ibVisualEditor::CreateObject(const wxStrin
 			SelectObject(old_selected, true, true);
 		}
 	}
+	// THE PROJECT'S OWN EXCEPTION FIRST — ibBackendException does NOT derive from std::exception,
+	// so without this branch it flies straight past both handlers and out of the event handler.
+	// Creating a control walks the metadata (property manager, attribute / command values), which
+	// is exactly the code that raises it.
+	catch (const ibBackendException& err)
+	{
+		wxLogError(wxT("%s"), err.GetErrorDescription());
+	}
 	catch (const std::exception& ex)
 	{
-		wxLogError(ex.what());
+		wxLogError(wxT("%s"), wxString::FromUTF8(ex.what()));
 	}
 
 	return obj;
@@ -1318,9 +1327,15 @@ bool ibVisualEditorNotebook::ibVisualEditor::PasteObject(ibValueFrame* dstObject
 
 		SelectObject(obj, true, true);
 	}
+	// The project's own exception first — see the twin note above.
+	catch (const ibBackendException& err)
+	{
+		wxLogError(wxT("%s"), err.GetErrorDescription());
+		return false;
+	}
 	catch (const std::exception& ex)
 	{
-		wxLogError(ex.what());
+		wxLogError(wxT("%s"), wxString::FromUTF8(ex.what()));
 		return false;
 	}
 

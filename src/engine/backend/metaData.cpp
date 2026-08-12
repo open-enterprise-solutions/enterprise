@@ -149,6 +149,7 @@ bool ibCompileValueCache::RemoveCompileModule(const ibValueMetaObject* moduleObj
 		m_cache.erase(it);
 		return true;
 	}
+
 	return false;
 }
 

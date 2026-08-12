@@ -1,6 +1,8 @@
 #ifndef _backend_exception_h__
 #define _backend_exception_h__
 
+#include <exception>
+#include <string>
 #include <vector>
 
 enum { //Error message numbers
@@ -89,7 +91,22 @@ enum { //Error message numbers
 // RECORD (diagnostic.h) is only named here, never used by value.
 enum class ibDiagnosticKind;
 
-class BACKEND_API ibBackendException {
+// A std::exception, and it took a crash to make that obvious. Nothing about this class needed
+// the standard base — it carries its own description and every deliberate handler asks for it by
+// name — but everything AROUND it assumes one: `catch (const std::exception&)` is what generic
+// code writes at a boundary (a thread body, an event handler, a top-level guard), and a project
+// exception that does not derive from it lands in `catch (...)`, where the message it carries has
+// nowhere to go. That is how a session-registry thread died reporting "unknown exception" while
+// holding the sentence "Object 'ConstantObject.Attribute3' is not exist".
+//
+// Deriving costs nothing at the throw sites (still thrown by value, caught by const reference)
+// and changes no existing handler: every place that catches both already lists this class FIRST,
+// which is the order C++ requires anyway — derived before base. What it buys is that the places
+// that catch only the standard base now SEE the description instead of losing it.
+//
+// what() returns UTF-8 and is prepared at construction: it must be noexcept, so it cannot be the
+// place where the string is built.
+class BACKEND_API ibBackendException : public std::exception {
 protected:
 
 	class wxFormatErrorString : public wxFormatString {
@@ -130,6 +147,10 @@ public:
 	// polymorphic dynamic-cast/catch-by-base behaviour well-defined across
 	// ibBackendCoreException / ibBackendInterruptException / ibBackendAccessException.
 	virtual ~ibBackendException() = default;
+
+	// THE STANDARD DOOR — same text as GetErrorDescription(), in UTF-8, built once in the
+	// constructor because this override must not throw.
+	const char* what() const noexcept override;
 
 	WX_DEFINE_VARARG_FUNC(static wxString, Format, 1, (const wxFormatErrorString&),
 		DoFormatWchar, DoFormatUtf8);
@@ -236,7 +257,14 @@ private:
 #endif
 
 	mutable bool m_errorHandled;
-	wxString m_strErrorDescription;
+
+	// THE DESCRIPTION, HELD ONCE — as UTF-8 bytes, because that is the representation the
+	// narrower of its two doors can hand out: what() returns a `const char*` into storage that
+	// must outlive the call, and a wxString holds UTF-16 here, so asking it for UTF-8 yields a
+	// temporary buffer that dies on return. Keeping the wxString as well would mean two copies
+	// of one sentence, kept in step by hand; GetErrorDescription() builds its wxString from these
+	// bytes instead, and an exception is never on a hot path.
+	std::string m_errorDescriptionUtf8;
 };
 
 #pragma region _exception_h_

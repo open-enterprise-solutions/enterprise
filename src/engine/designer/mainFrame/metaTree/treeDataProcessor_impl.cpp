@@ -7,13 +7,9 @@
 #include "frontend/mainFrame/mainFrame.h"
 #include "frontend/docView/docView.h"
 #include "backend/appData.h"
+#include "backend/metaCollection/metaCommandObject.h"   // ibValueMetaObjectCommand::GetSubCommands
 
-#define	objectFormsName _("Forms")
-#define	objectModulesName _("Modules")
-#define	objectTemplatesName _("Templates")
-#define objectAttributesName _("Attributes")
-#define objectTablesName _("Tables")
-#define objectEnumerationsName _("Enums")
+#include <cstdint>   // intptr_t — the widening step under the client-data cast
 
 //***********************************************************************
 //*                         metaData                                    * 
@@ -51,9 +47,12 @@ ibValueMetaObject* ibDataProcessorTree::CreateItem(bool showValue)
 		if (showValue) { OpenObjectForm(createdObject); }
 		UpdateToolbar(createdObject, FillItem(createdObject, item,
 			prev_selected == objectInspector->GetSelectedObject(), false));
+		// Notify every open editor that the container gained an object — the same fix the
+		// configuration tree carries: the delete path already did this, the add path did not, so a
+		// newly created command stayed invisible on an open form. It stood here commented out.
 		for (auto& doc : docManager->GetDocumentsVector()) {
 			ibMetaDocument* metaDoc = wxDynamicCast(doc, ibMetaDocument);
-			//if (metaDoc != nullptr) metaDoc->UpdateAllViews();
+			if (metaDoc != nullptr) metaDoc->UpdateAllViews();
 		}
 	}
 
@@ -82,10 +81,16 @@ wxTreeItemId ibDataProcessorTree::FillItem(ibValueMetaObject* metaItem, const wx
 		for (auto attribute : metaItemRecord->GetAttributeArrayObject()) {
 			if (attribute->IsDeleted())
 				continue;
-			if (attribute->GetClassType() == g_metaPredefinedAttributeCLSID)
+			if (!attribute->IsAcceptedByParent())
 				continue;
 			AppendItem(createdItem, attribute);
 		}
+	}
+	// A COMMAND HOLDS COMMANDS — a pasted group command must show what it brought with it, the
+	// same rule the configuration tree's dispatcher applies.
+	else if (metaItem->GetClassType() == g_metaCommandCLSID) {
+		for (auto sub : static_cast<ibValueMetaObjectCommand*>(metaItem)->GetSubCommands())
+			AppendCommandNode(createdItem, sub);
 	}
 
 	m_metaTreeCtrl->InvalidateBestSize();
@@ -109,12 +114,12 @@ void ibDataProcessorTree::EditItem()
 	if (!selection.IsOk())
 		return;
 
-	ibValueMetaObject* m_currObject = GetMetaObject(selection);
+	ibValueMetaObject* currObject = GetMetaObject(selection);
 
-	if (!m_currObject)
+	if (!currObject)
 		return;
 
-	OpenObjectForm(m_currObject);
+	OpenObjectForm(currObject);
 }
 
 void ibDataProcessorTree::RemoveItem()
@@ -124,18 +129,13 @@ void ibDataProcessorTree::RemoveItem()
 	if (!selection.IsOk())
 		return;
 
-	wxTreeItemIdValue m_cookie;
-	wxTreeItemId hItem = m_metaTreeCtrl->GetFirstChild(selection, m_cookie);
-
-	while (hItem)
-	{
-		EraseItem(hItem);
-		hItem = m_metaTreeCtrl->GetNextChild(hItem, m_cookie);
-	}
-
 	ibValueMetaObject* metaObject = GetMetaObject(selection);
-	wxASSERT(metaObject);
-	EraseItem(selection);
+	// NOT AN ASSERT: wxASSERT is compiled out in Release, and a null here reaches RemoveMetaObject
+	// and Delete(selection) — which, on a layout group row, would free a node the group map still
+	// points at. A stale wxTreeItemId answers IsOk() == true, so every later guard would pass.
+	if (metaObject == nullptr)
+		return;
+	EraseItem(selection);   // the row AND everything under it — see EraseItem
 	m_metaData->RemoveMetaObject(metaObject);
 
 	//Delete item from tree
@@ -156,9 +156,21 @@ void ibDataProcessorTree::RemoveItem()
 	UpdateChoiceSelection();
 }
 
+// CLOSE WHAT THIS ROW STANDS FOR, AND EVERYTHING UNDER IT — see the note on the configuration
+// tree's twin. The caller walked the direct children, which are group nodes with no metaobject.
 void ibDataProcessorTree::EraseItem(const wxTreeItemId& item)
 {
+	wxTreeItemIdValue cookie;
+	for (wxTreeItemId child = m_metaTreeCtrl->GetFirstChild(item, cookie); child.IsOk();
+		child = m_metaTreeCtrl->GetNextChild(item, cookie))
+		EraseItem(child);
+
 	ibValueMetaObject* const metaObject = GetMetaObject(item);
+	// NOTHING TO ERASE FOR A GROUP NODE. Without this the comparison below is nullptr == nullptr
+	// for every document that has no metaobject either, and the loop closes unrelated editors.
+	if (metaObject == nullptr)
+		return;
+
 	for (auto& doc : docManager->GetDocumentsVector()) {
 		ibMetaDocument* metaDoc = wxDynamicCast(doc, ibMetaDocument);
 		if (metaDoc != nullptr && metaObject == metaDoc->GetMetaObject()) {
@@ -221,7 +233,7 @@ void ibDataProcessorTree::UpItem()
 		do {
 			if (nextId == nextItem)
 				break;
-			nextId = m_metaTreeCtrl->GetNextChild(nextId, coockie); pos++;
+			nextId = m_metaTreeCtrl->GetNextChild(parentItem, coockie); pos++;
 		} while (nextId.IsOk());
 		ibValueMetaObject* parentObject = metaObject->GetParent();
 		ibValueMetaObject* nextObject = GetMetaObject(nextItem);
@@ -248,7 +260,7 @@ void ibDataProcessorTree::UpItem()
 						swap(tree, nextId, newId);
 					}
 					tree->SetItemData(nextId, nullptr);
-					nextId = tree->GetNextChild(nextId, coockie);
+					nextId = tree->GetNextChild(dst, coockie);
 				}
 				};
 
@@ -279,7 +291,7 @@ void ibDataProcessorTree::DownItem()
 		do {
 			if (nextId == prevItem)
 				break;
-			nextId = m_metaTreeCtrl->GetNextChild(nextId, coockie); pos++;
+			nextId = m_metaTreeCtrl->GetNextChild(parentItem, coockie); pos++;
 		} while (nextId.IsOk());
 		ibValueMetaObject* parentObject = metaObject->GetParent();
 		ibValueMetaObject* prevObject = GetMetaObject(prevItem);
@@ -306,7 +318,7 @@ void ibDataProcessorTree::DownItem()
 						swap(tree, nextId, newId);
 					}
 					tree->SetItemData(nextId, nullptr);
-					nextId = tree->GetNextChild(nextId, coockie);
+					nextId = tree->GetNextChild(dst, coockie);
 				}
 				};
 
@@ -441,7 +453,12 @@ void ibDataProcessorTree::UpdateChoiceSelection()
 	for (auto metaForm : commonMetadata->GetFormArrayObject()) {
 		if (ibValueMetaObjectDataProcessor::eFormDataProcessor != metaForm->GetTypeForm())
 			continue;
-		int selection_id = m_defaultFormValue->Append(metaForm->GetName(), reinterpret_cast<void*>(metaForm->GetMetaID()));
+		// WIDEN FIRST, then reinterpret. `ibMetaID` is a 32-bit int and the client data is a
+		// pointer, so the one-step cast is MSVC C4312 / clang -Wint-to-pointer-cast on every
+		// toolchain. The value round-trips either way; the intermediate is what says so out loud.
+		// The way back already does this (static_cast<ibMetaID>(reinterpret_cast<intptr_t>(…))).
+		int selection_id = m_defaultFormValue->Append(metaForm->GetName(),
+			reinterpret_cast<void*>(static_cast<intptr_t>(metaForm->GetMetaID())));
 		if (commonMetadata->GetDefFormObject() == metaForm->GetMetaID()) {
 			defSelection = selection_id;
 		}
@@ -477,17 +494,48 @@ bool ibDataProcessorTree::RenameMetaObject(ibValueMetaObject* obj, const wxStrin
 	return false;
 }
 
+// HUB — the same shape the configuration tree uses: a group command holds commands, shown nested.
+void ibDataProcessorTree::AppendCommandNode(const wxTreeItemId& parent, ibValueMetaObject* command)
+{
+	if (command == nullptr || command->IsDeleted())
+		return;
+	const wxTreeItemId hCmd = AppendItem(parent, command);
+	if (command->GetClassType() == g_metaCommandCLSID)
+		for (auto sub : static_cast<ibValueMetaObjectCommand*>(command)->GetSubCommands())
+			AppendCommandNode(hCmd, sub);
+}
+
+// THE LAYOUT — one table, read top to bottom, exactly as the configuration tree does it
+// (treeConfiguration_impl.cpp). A data processor edited as a FILE shows the same groups in the same
+// order as the same object edited inside a configuration; saying that once, as data, is what keeps
+// the two from drifting apart again.
+namespace {
+
+struct ibExternalGroupDef {
+	ibClassID   m_clsid;
+	const char* m_label;   // SOURCE string, translated when the node is made (backend/fileKind.cpp rule)
+};
+
+const ibExternalGroupDef s_dataProcessorGroups[] = {
+	{ g_metaAttributeCLSID, wxTRANSLATE("Attributes") },
+	{ g_metaTableCLSID,     wxTRANSLATE("Tables")     },   // RAM tabular sections — a processor is not a reference
+	{ g_metaFormCLSID,      wxTRANSLATE("Forms")      },
+	// Commands — the object owns them here exactly as it does inside a configuration; this tree
+	// simply had no node, so they could be neither seen nor created from a file being edited.
+	{ g_metaCommandCLSID,   wxTRANSLATE("Commands")   },
+	{ g_metaTemplateCLSID,  wxTRANSLATE("Templates")  },
+};
+
+} // namespace
+
 void ibDataProcessorTree::InitTree()
 {
-	m_treeDATAPROCESSORS = AppendRootItem(g_metaDataProcessorCLSID, _("DataProcessor"));
-	// attribute list
-	m_treeATTRIBUTES = AppendGroupItem(m_treeDATAPROCESSORS, g_metaAttributeCLSID, objectAttributesName);
-	// tabular section list
-	m_treeTABLES = AppendGroupItem(m_treeDATAPROCESSORS, g_metaTableCLSID, objectTablesName);
-	// forms
-	m_treeFORM = AppendGroupItem(m_treeDATAPROCESSORS, g_metaFormCLSID, objectFormsName);
-	// templates
-	m_treeTEMPLATES = AppendGroupItem(m_treeDATAPROCESSORS, g_metaTemplateCLSID, objectTablesName);
+	m_treeDATAPROCESSORS = AppendRootItem(g_metaDataProcessorCLSID, _("Data processor"));
+
+	m_groups.clear();
+	for (const ibExternalGroupDef& def : s_dataProcessorGroups)
+		m_groups[def.m_clsid] = AppendGroupItem(m_treeDATAPROCESSORS, def.m_clsid,
+			wxGetTranslation(wxString::FromUTF8(def.m_label)));
 }
 
 void ibDataProcessorTree::ActivateTree()
@@ -511,27 +559,21 @@ void ibDataProcessorTree::ClearTree()
 		}
 	}
 
-	//disable event
-	m_metaTreeCtrl->SetEvtHandlerEnabled(false);
+	// disable events for the whole rebuild - RAII, so a throw from InitTree cannot leave them off
+	const ibEventsOff eventsOff(m_metaTreeCtrl);
 
-	//delete all child item
-	if (m_treeATTRIBUTES.IsOk())
-		m_metaTreeCtrl->DeleteChildren(m_treeATTRIBUTES);
-	if (m_treeTABLES.IsOk())
-		m_metaTreeCtrl->DeleteChildren(m_treeTABLES);
-	if (m_treeFORM.IsOk())
-		m_metaTreeCtrl->DeleteChildren(m_treeFORM);
-	if (m_treeTEMPLATES.IsOk())
-		m_metaTreeCtrl->DeleteChildren(m_treeTEMPLATES);
-
-	//delete all items
+	// The clear is TOTAL: a per-group DeleteChildren pass stood here, immediately before
+	// DeleteAllItems, so nothing it did could survive it. InitTree re-creates the groups from
+	// the layout table, and the map goes with them.
+	m_groups.clear();
+	m_initialized = false;   // the tree is gone; a later Load must re-seed it, not resume
 	m_metaTreeCtrl->DeleteAllItems();
+	if (wxImageList* imageList = m_metaTreeCtrl->GetImageList())
+		imageList->RemoveAll();   // every Append* adds one; nothing ever removed them
 
 	//Initialize tree
 	InitTree();
 
-	//enable event
-	m_metaTreeCtrl->SetEvtHandlerEnabled(true);
 }
 
 void ibDataProcessorTree::FillData()
@@ -541,35 +583,35 @@ void ibDataProcessorTree::FillData()
 	m_metaTreeCtrl->SetItemText(m_treeDATAPROCESSORS, commonMetadata->GetName());
 	m_metaTreeCtrl->SetItemData(m_treeDATAPROCESSORS, new wxTreeItemMetaData(commonMetadata));
 
-	//set value data
-	m_nameValue->SetValue(commonMetadata->GetName());
-	m_synonymValue->SetValue(commonMetadata->GetSynonym());
-	m_commentValue->SetValue(commonMetadata->GetComment());
+	// SEED THE FIELDS, do not pretend the user typed in them. SetValue emits wxEVT_TEXT, which the
+	// constructor connected to OnEditCaptionName — and that handler REGENERATES the synonym from the
+	// name. So filling the name here overwrote a hand-written synonym, and the next line then read
+	// back what had just been destroyed. ChangeValue is the wx call that sets without notifying.
+	m_nameValue->ChangeValue(commonMetadata->GetName());
+	m_synonymValue->ChangeValue(commonMetadata->GetSynonym());
+	m_commentValue->ChangeValue(commonMetadata->GetComment());
 
-	//set default form value 
-	m_defaultFormValue->Clear();
-
-	//append default value 
-	m_defaultFormValue->AppendString(_("<not selected>"));
+	// (the default-form choice is filled by UpdateChoiceSelection at the end of this function —
+	// clearing and seeding it here as well was doing the same work twice)
 
 	// attribute list
 	for (auto attribute : commonMetadata->GetAttributeArrayObject()) {
 		if (attribute->IsDeleted())
 			continue;
-		if (attribute->GetClassType() == g_metaPredefinedAttributeCLSID)
+		if (!attribute->IsAcceptedByParent())
 			continue;
-		AppendItem(m_treeATTRIBUTES, attribute);
+		AppendItem(Group(g_metaAttributeCLSID), attribute);
 	}
 
 	// tabular section list
 	for (auto metaTable : commonMetadata->GetTableArrayObject()) {
 		if (metaTable->IsDeleted())
 			continue;
-		const wxTreeItemId& hItem = AppendGroupItem(m_treeTABLES, g_metaAttributeCLSID, metaTable);
+		const wxTreeItemId& hItem = AppendGroupItem(Group(g_metaTableCLSID), g_metaAttributeCLSID, metaTable);
 		for (auto attribute : metaTable->GetAttributeArrayObject()) {
 			if (attribute->IsDeleted())
 				continue;
-			if (attribute->GetClassType() == g_metaPredefinedAttributeCLSID)
+			if (!attribute->IsAcceptedByParent())
 				continue;
 			AppendItem(hItem, attribute);
 		}
@@ -579,14 +621,18 @@ void ibDataProcessorTree::FillData()
 	for (auto metaForm : commonMetadata->GetFormArrayObject()) {
 		if (metaForm->IsDeleted())
 			continue;
-		AppendItem(m_treeFORM, metaForm);
+		AppendItem(Group(g_metaFormCLSID), metaForm);
 	}
 
-	// tables
+	// commands — nests its sub-commands, skips deleted
+	for (auto metaCommand : commonMetadata->GetCommandArrayObject())
+		AppendCommandNode(Group(g_metaCommandCLSID), metaCommand);
+
+	// templates
 	for (auto metaTemplates : commonMetadata->GetTemplateArrayObject()) {
 		if (metaTemplates->IsDeleted())
 			continue;
-		const wxTreeItemId& hItem = AppendItem(m_treeTEMPLATES, metaTemplates);
+		AppendItem(Group(g_metaTemplateCLSID), metaTemplates);
 	}
 
 	//update choice selection
@@ -599,7 +645,7 @@ void ibDataProcessorTree::FillData()
 	Modify(m_metaData->IsModified());
 
 	//update toolbar 
-	UpdateToolbar(nullptr, m_treeATTRIBUTES);
+	UpdateToolbar(nullptr, Group(g_metaAttributeCLSID));
 }
 
 bool ibDataProcessorTree::Load(ibMetaDataDataProcessor* metaData)
@@ -609,7 +655,7 @@ bool ibDataProcessorTree::Load(ibMetaDataDataProcessor* metaData)
 	m_metaTreeCtrl->Freeze();
 	FillData(); //Fill all data from metaData
 	m_metaData->SetMetaTree(this);
-	m_metaTreeCtrl->SelectItem(m_treeATTRIBUTES);
+	m_metaTreeCtrl->SelectItem(Group(g_metaAttributeCLSID));
 	m_metaTreeCtrl->ExpandAll();
 	m_metaTreeCtrl->Thaw();
 	return true;

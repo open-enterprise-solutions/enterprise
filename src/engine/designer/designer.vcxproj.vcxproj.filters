@@ -174,6 +174,9 @@
     <ClInclude Include="win\dlg\debugItem\debugItem.h">
       <Filter>win\dlg\debugItem</Filter>
     </ClInclude>
+    <ClInclude Include="mainFrame\metatree\clipboardLock.h">
+      <Filter>mainFrame\metaTree</Filter>
+    </ClInclude>
     <ClInclude Include="mainFrame\metatree\treeConfiguration.h">
       <Filter>mainFrame\metaTree</Filter>
     </ClInclude>

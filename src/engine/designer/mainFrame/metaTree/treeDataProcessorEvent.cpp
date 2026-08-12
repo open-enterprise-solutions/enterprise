@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "treeDataProcessor.h"
+#include <wx/wupdlock.h>   // wxWindowUpdateLocker - RAII Freeze/Thaw (a throwing paste must not leave the tree frozen)
 
 void ibDataProcessorTree::ibDataProcessorTreeCtrl::OnLeftDClick(wxMouseEvent& event)
 {
@@ -117,6 +118,7 @@ void ibDataProcessorTree::ibDataProcessorTreeCtrl::OnCommandItem(wxCommandEvent&
 }
 
 #include <wx/clipbrd.h>
+#include "clipboardLock.h"   // the Open/Close pair, taken as a guard — one mechanism, all three trees
 
 void ibDataProcessorTree::ibDataProcessorTreeCtrl::OnCopyItem(wxCommandEvent& event)
 {
@@ -125,7 +127,8 @@ void ibDataProcessorTree::ibDataProcessorTreeCtrl::OnCopyItem(wxCommandEvent& ev
 		return;
 
 	// Write some text to the clipboard
-	if (wxTheClipboard->Open()) {
+	const ibClipboardLock clipboard;   // closes on every path out — see clipboardLock.h
+	if (clipboard.IsOpen()) {
 
 		ibValueMetaObject* metaObject = m_ownerTree->GetMetaObject(item);
 		if (metaObject != nullptr) {
@@ -135,16 +138,14 @@ void ibDataProcessorTree::ibDataProcessorTreeCtrl::OnCopyItem(wxCommandEvent& ev
 
 				wxDataObjectComposite* composite_object = new wxDataObjectComposite;
 				wxCustomDataObject* custom_object = new wxCustomDataObject(oes_clipboard_metadata);
-				custom_object->SetData(dataWritter.size(), dataWritter.pointer()); // the +1 is used to force copy of the \0 character		
+				custom_object->SetData(dataWritter.size(), dataWritter.pointer());
 
 				composite_object->Add(custom_object);
 				composite_object->Add(new wxTextDataObject(metaObject->GetName()), true);
 
-				// tell clipboard 
+				// tell clipboard
 				wxTheClipboard->SetData(composite_object);
 			}
-
-			wxTheClipboard->Close();
 		}
 	}
 
@@ -160,9 +161,13 @@ void ibDataProcessorTree::ibDataProcessorTreeCtrl::OnPasteItem(wxCommandEvent& e
 	if (!item.IsOk())
 		return;
 
-	m_ownerTree->Freeze();
+	// RAII Freeze/Thaw: a throw out of PasteObject (or of the cleanup that follows it) used to
+	// fly past the paired Thaw() and leave the tree frozen and unresponsive for the rest of the
+	// session - the error dialog appeared over a navigator that never came back.
+	wxWindowUpdateLocker freeze(m_ownerTree);
 
-	if (wxTheClipboard->Open()
+	const ibClipboardLock clipboard;
+	if (clipboard.IsOpen()
 		&& wxTheClipboard->IsSupported(oes_clipboard_metadata)) {
 		wxCustomDataObject data(oes_clipboard_metadata);
 		if (wxTheClipboard->GetData(data)) {
@@ -175,16 +180,20 @@ void ibDataProcessorTree::ibDataProcessorTreeCtrl::OnPasteItem(wxCommandEvent& e
 
 			if (metaObject != nullptr) {
 				ibReaderMemory reader(data.GetData(), data.GetDataSize());
+				// FillItem used to run UNCONDITIONALLY here — the one tree of the three that put a
+				// half-pasted object into the navigator. Now the rule is the same everywhere: a
+				// paste that failed leaves nothing behind, in the tree or in the metadata.
 				if (metaObject->PasteObject(reader)) {
+					m_ownerTree->FillItem(metaObject, item, true, false);
 					objectInspector->SelectObject(metaObject);
 				}
-				m_ownerTree->FillItem(metaObject, item);
+				else if (ibMetaData* metaData = m_ownerTree->GetMetaData()) {
+					metaData->RemoveMetaObject(metaObject);
+				}
 			}
 		}
-		wxTheClipboard->Close();
 	}
 
-	m_ownerTree->Thaw();
 	RefreshSelectedItem();
 
 	event.Skip();

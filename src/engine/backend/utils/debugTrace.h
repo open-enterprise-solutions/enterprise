@@ -1,32 +1,59 @@
-////////////////////////////////////////////////////////////////////////////
-//	Author		: Maxim Kornienko
-//	Description : debug-time tracing switches, off unless asked for
-////////////////////////////////////////////////////////////////////////////
-
 #ifndef _DEBUG_TRACE_H__
 #define _DEBUG_TRACE_H__
 
-#include <cstdlib>
+////////////////////////////////////////////////////////////////////////////
+// Debug tracing switches + a file sink
+////////////////////////////////////////////////////////////////////////////
 
-// The live-object traces (ibValue's Create/Delete counter, ibPropertyObject's, the type-factory's
-// register/unregister log) were written for a leak hunt and left ON for every Debug build. One
-// designer run costs ~18000 lines of them, which is 72% of the log — enough that the lines worth
-// reading are the ones you cannot find.
-//
-// Turning them into environment switches keeps the instrument and drops the noise, the same shape
-// the leak tracker already uses (OES_TRACK_*, see designer/mainApp.cpp): dormant by default, one
-// variable away when a question needs it.
-//
-//     set OES_TRACE_VALUES=1     every ibValue construction / destruction, with a live count
-//     set OES_TRACE_PROPS=1      the same for ibPropertyObject
-//     set OES_TRACE_TYPES=1      every value-ctor registered into / removed from the factory
-//
-// Read ONCE into a static: getenv is not free, and these sit on paths that run tens of thousands
-// of times per run.
-inline bool ibDebugTraceEnabled(const char* variable)
+#include <wx/string.h>
+#include <wx/utils.h>
+#include <wx/stdpaths.h>
+#include <wx/filename.h>
+#include <wx/file.h>
+#include <wx/datetime.h>
+
+// IS THIS TRACE ON? Read once, from the environment, so a build does not have to be repeated to
+// answer a question — and so the answer costs one bool test on the hot path rather than a string
+// lookup. OFF unless the variable is present and is not "0" / "false"; callers keep it in a
+// function-local static (`OES_TRACE_VALUES`, `OES_TRACE_TYPES` — see compiler/value.cpp and
+// compiler/valueFactory.cpp, whose counters run either way, only their output is conditional).
+inline bool ibDebugTraceEnabled(const char* envVar)
 {
-	const char* const value = std::getenv(variable);
-	return value != nullptr && *value != '\0' && *value != '0';
+	wxString value;
+	if (!wxGetEnv(wxString::FromUTF8(envVar), &value))
+		return false;
+
+	value.Trim(true).Trim(false).MakeLower();
+	return !value.IsEmpty() && value != wxT("0") && value != wxT("false") && value != wxT("off");
+}
+
+// DIAGNOSTICS THAT SOMEBODY CAN ACTUALLY READ. Writes one line to `oes-debug.log` next to the
+// executable, appending.
+//
+// Deliberately NOT wxLogError / wxLogMessage / wxFAIL_MSG / OutputDebugString: the applications
+// are normally run WITHOUT a debugger attached, so anything sent to the logger or to the debug
+// output is invisible to the person watching the screen — and in a GUI build wxLog even queues
+// the message and shows it later, by which time an assert further up the stack has already fired
+// and named nobody. A file survives the run and can be read (or sent) afterwards.
+//
+// Not a general logging facility and not meant to become one — no levels, no categories. Use it
+// for the answers a diagnostic pass must deliver (WHICH object, WHICH id, WHICH branch), and
+// remove the call when its question is answered.
+inline void ibTraceToFile(const wxString& text)
+{
+	wxFileName traceFile(wxStandardPaths::Get().GetExecutablePath());
+	traceFile.SetFullName(wxT("oes-debug.log"));
+
+	const wxString path = traceFile.GetFullPath();
+
+	wxFile file;
+	const bool opened = wxFileName::FileExists(path)
+		? file.Open(path, wxFile::write_append)
+		: file.Create(path, /*overwrite*/ false);
+	if (!opened)
+		return;
+
+	file.Write(wxDateTime::Now().FormatISOCombined(wxT(' ')) + wxT("  ") + text + wxT("\n"));
 }
 
 #endif

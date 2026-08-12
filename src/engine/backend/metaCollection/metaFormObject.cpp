@@ -373,8 +373,7 @@ bool ibValueMetaObjectForm::OnBeforeCloseMetaObject()
 {
 
 	if (auto* cc = m_metaData->GetCompileCache()) {
-		if (!cc->RemoveCompileModule(this))
-			return false;
+		cc->RemoveCompileModule(this);
 	}
 
 	return ibValueMetaObjectFormBase::OnBeforeCloseMetaObject();

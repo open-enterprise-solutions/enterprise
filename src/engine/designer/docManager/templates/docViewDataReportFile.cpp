@@ -44,7 +44,7 @@ bool ibReportEditView::OnClose(bool deleteWindow)
 	return false;
 }
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibReportFileDocument, ibMetaDocument);
+wxIMPLEMENT_DYNAMIC_CLASS(ibReportFileDocument, ibMetaDataDocument);
 
 bool ibReportFileDocument::OnCreate(const wxString& path, long flags)
 {
@@ -102,6 +102,7 @@ void ibReportFileDocument::Modify(bool modified)
 
 ibDataReportTree* ibReportFileDocument::GetMetaTree() const
 {
-	ibView* view = GetFirstView();
-	return view ? wxDynamicCast(view, ibReportEditView)->GetMetaTree() : nullptr;
+	// GUARD THE CAST, not the pointer that went into it — see the twin in docViewDataProcessorFile.cpp.
+	ibReportEditView* view = wxDynamicCast(GetFirstView(), ibReportEditView);
+	return view != nullptr ? view->GetMetaTree() : nullptr;
 }

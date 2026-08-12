@@ -11,36 +11,18 @@
 #include "backend/appEnv.h"
 #include "backend/metaCollection/metaCommandObject.h"   // ibValueMetaObjectCommand::GetSubCommands (hub — nested commands)
 
-#define metadataName _("Metadata")
+#include <wx/intl.h>  // wxGetTranslation — the layout table holds SOURCE strings, translated on use
+
+#include <iterator>   // std::rbegin / std::rend over the layout table
+
+// The COMMON folder is not a metatype's group — it is the band itself, so its label stays here.
+// Every GROUP label moved into the layout table further down (s_groups), where it sits beside the
+// metatype it names instead of in a block of defines that nothing tied to anything.
 #define commonName _("Common")
 
-#define commonModulesName _("Common modules")
-#define commonFormsName _("Common forms")
-#define commonTemplatesName _("Common templates")
-
-#define interfacesName _("Sections")
-#define commandsName _("Common commands")
-#define scheduledJobsName _("Scheduled jobs")
-#define predefinedJobsName _("Predefined jobs")
-#define sessionParametersName _("Session parameters")
-#define commonAttributesName _("Common attributes")
-#define rolesName _("Roles")
-#define picturesName _("Pictures")
-#define languagesName _("Languages")
-
-#define constantsName _("Constants")
-
-#define catalogsName _("Catalogs")
-#define documentsName _("Documents")
-#define enumerationsName _("Enumerations")
-#define dataProcessorName _("Data processors")
-#define reportsName _("Reports")
-#define informationRegisterName _("Information Registers")
-#define accumulationRegisterName _("Accumulation Registers")
-#define chartsOfCharacteristicTypesName _("Charts of characteristic types")
-#define chartsOfAccountsName _("Charts of accounts")
-#define accountingRegistersName _("Accounting registers")
-
+// The labels of the groups INSIDE an object — attributes, tabular sections, forms, commands,
+// templates. These are still written at each adder, because an adder is what decides that a
+// register shows dimensions and resources while a catalog shows tabular sections.
 #define	objectFormsName _("Forms")
 #define	objectModulesName _("Modules")
 #define	objectTemplatesName _("Templates")
@@ -59,7 +41,7 @@
 #include "frontend/mainFrame/mainFrame.h"
 #include "frontend/win/dlgs/formSelector/formSelector.h"
 
-ibFormID ibMetaDataTree::SelectFormType(ibValueMetaObjectForm* metaObject) const
+ibFormID ibMetaTreeBase::SelectFormType(ibValueMetaObjectForm* metaObject) const
 {
 	ibValueMetaObjectGenericData* parent = dynamic_cast<ibValueMetaObjectGenericData*>(metaObject->GetParent());
 
@@ -73,7 +55,7 @@ ibFormID ibMetaDataTree::SelectFormType(ibValueMetaObjectForm* metaObject) const
 	return dlg.ShowModal();
 }
 
-void ibMetaDataTree::Activate()
+void ibMetaTreeBase::Activate()
 {
 	if (m_docParent == nullptr) {
 		unsigned int count_doc = 0;
@@ -82,7 +64,7 @@ void ibMetaDataTree::Activate()
 	}
 }
 
-void ibMetaDataTree::Modify(bool modify)
+void ibMetaTreeBase::Modify(bool modify)
 {
 	if (m_docParent != nullptr) {
 		m_docParent->Modify(modify);
@@ -92,7 +74,7 @@ void ibMetaDataTree::Modify(bool modify)
 	}
 }
 
-bool ibMetaDataTree::OpenObjectForm(ibValueMetaObject* obj)
+bool ibMetaTreeBase::OpenObjectForm(ibValueMetaObject* obj)
 {
 	ibMetaDocument* foundedDoc = GetDocument(obj);
 	//not found in the list of existing ones
@@ -111,7 +93,7 @@ bool ibMetaDataTree::OpenObjectForm(ibValueMetaObject* obj)
 	return false;
 }
 
-bool ibMetaDataTree::OpenObjectForm(ibValueMetaObject* obj, ibBackendMetaDocument*& doc)
+bool ibMetaTreeBase::OpenObjectForm(ibValueMetaObject* obj, ibBackendMetaDocument*& doc)
 {
 	ibMetaDocument* foundedDoc = GetDocument(obj);
 
@@ -134,7 +116,7 @@ bool ibMetaDataTree::OpenObjectForm(ibValueMetaObject* obj, ibBackendMetaDocumen
 	return false;
 }
 
-bool ibMetaDataTree::CloseObjectForm(ibValueMetaObject* obj)
+bool ibMetaTreeBase::CloseObjectForm(ibValueMetaObject* obj)
 {
 	ibMetaDocument* foundedDoc = GetDocument(obj);
 
@@ -150,7 +132,7 @@ bool ibMetaDataTree::CloseObjectForm(ibValueMetaObject* obj)
 	return false;
 }
 
-ibMetaDocument* ibMetaDataTree::GetDocument(ibValueMetaObject* obj) const
+ibMetaDocument* ibMetaTreeBase::GetDocument(ibValueMetaObject* obj) const
 {
 	for (auto& doc : docManager->GetDocumentsVector()) {
 		ibMetaDocument* metaDoc = wxDynamicCast(doc, ibMetaDocument);
@@ -169,7 +151,7 @@ ibMetaDocument* ibMetaDataTree::GetDocument(ibValueMetaObject* obj) const
 	return nullptr;
 }
 
-void ibMetaDataTree::EditModule(const ibGuid& moduleName, int lineNumber, bool setRunLine)
+void ibMetaTreeBase::EditModule(const ibGuid& moduleName, int lineNumber, bool setRunLine)
 {
 	ibMetaData* metaData = GetMetaData();
 	if (metaData == nullptr)
@@ -189,7 +171,18 @@ void ibMetaDataTree::EditModule(const ibGuid& moduleName, int lineNumber, bool s
 	if (foundedDoc == nullptr)
 		foundedDoc = docManager->OpenObjectForm(metaObject, m_docParent, m_bReadOnly ? ibDOC_READONLY : ibDOC_NEW);
 
-	ibValueModuleDocument* moduleDoc = static_cast<ibValueModuleDocument*>(foundedDoc);
+	// ASK, do not assert by cast. A static_cast never yields null for a live pointer of the wrong
+	// type, so the null check below was checking nothing — and a metaobject whose document is not a
+	// module editor (the debugger can ask for any of them) had SetCurrentLine called on it anyway.
+	//
+	// ⚠ C++ dynamic_cast, NOT wxDynamicCast — the same door debugClientImpl.cpp uses on this very
+	// type. wx RTTI answers from the base written BY HAND in the wxIMPLEMENT macro, and this chain
+	// does not name ibValueModuleDocument: ibModuleDocument declares ibMetaDocument as its base
+	// (docViewModuleEditor.cpp) though it really derives from ibValueModuleDocument, so the
+	// interface is a SIBLING in the wx graph rather than an ancestor. wxDynamicCast therefore
+	// answered null for every module document, and the debugger's current-line arrow never
+	// appeared while breakpoints — which travel another path — kept working.
+	ibValueModuleDocument* moduleDoc = dynamic_cast<ibValueModuleDocument*>(foundedDoc);
 	if (moduleDoc != nullptr) moduleDoc->SetCurrentLine(lineNumber, setRunLine);
 }
 
@@ -197,7 +190,7 @@ void ibMetaDataTree::EditModule(const ibGuid& moduleName, int lineNumber, bool s
 //*								 metaData                               * 
 //***********************************************************************
 
-void ibMetadataTree::ActivateItem(const wxTreeItemId& item)
+void ibConfigurationTree::ActivateItem(const wxTreeItemId& item)
 {
 	ibValueMetaObject* currObject = GetMetaObject(item);
 	if (currObject == nullptr)
@@ -206,12 +199,12 @@ void ibMetadataTree::ActivateItem(const wxTreeItemId& item)
 	OpenObjectForm(currObject);
 }
 
-ibValueMetaObject* ibMetadataTree::NewItem(const ibClassID& clsid, ibValueMetaObject* parent, bool runObject)
+ibValueMetaObject* ibConfigurationTree::NewItem(const ibClassID& clsid, ibValueMetaObject* parent, bool runObject)
 {
 	return m_metaData->CreateMetaObject(clsid, parent, runObject);
 }
 
-ibValueMetaObject* ibMetadataTree::CreateItem(bool showValue)
+ibValueMetaObject* ibConfigurationTree::CreateItem(bool showValue)
 {
 	const wxTreeItemId& item = GetSelectionIdentifier();
 	if (!item.IsOk()) return nullptr;
@@ -245,7 +238,7 @@ ibValueMetaObject* ibMetadataTree::CreateItem(bool showValue)
 	return createdObject;
 }
 
-wxTreeItemId ibMetadataTree::FillItem(ibValueMetaObject* metaItem, const wxTreeItemId& item, bool select, bool scroll)
+wxTreeItemId ibConfigurationTree::FillItem(ibValueMetaObject* metaItem, const wxTreeItemId& item, bool select, bool scroll)
 {
 	m_metaTreeCtrl->Freeze();
 
@@ -260,42 +253,11 @@ wxTreeItemId ibMetadataTree::FillItem(ibValueMetaObject* metaItem, const wxTreeI
 		createdItem = AppendItem(item, metaItem);
 	}
 
-	//Advanced mode
-	if (metaItem->GetClassType() == g_metaCatalogCLSID) AddCatalogItem(metaItem, createdItem);
-	else if (metaItem->GetClassType() == g_metaDocumentCLSID) AddDocumentItem(metaItem, createdItem);
-	else if (metaItem->GetClassType() == g_metaEnumerationCLSID) AddEnumerationItem(metaItem, createdItem);
-	else if (metaItem->GetClassType() == g_metaDataProcessorCLSID) AddDataProcessorItem(metaItem, createdItem);
-	else if (metaItem->GetClassType() == g_metaReportCLSID) AddReportItem(metaItem, createdItem);
-	else if (metaItem->GetClassType() == g_metaInformationRegisterCLSID) AddInformationRegisterItem(metaItem, createdItem);
-	else if (metaItem->GetClassType() == g_metaAccumulationRegisterCLSID) AddAccumulationRegisterItem(metaItem, createdItem);
-	else if (metaItem->GetClassType() == g_metaParameterizedJobCLSID) AddCatalogItem(metaItem, createdItem);   // a job row IS a catalog entry with a second verb
-	else if (metaItem->GetClassType() == g_metaChartOfCharacteristicTypesCLSID) AddCatalogItem(metaItem, createdItem);
-	else if (metaItem->GetClassType() == g_metaChartOfAccountsCLSID) AddCatalogItem(metaItem, createdItem);
-	else if (metaItem->GetClassType() == g_metaAccountingRegisterCLSID) AddAccumulationRegisterItem(metaItem, createdItem);
-
-	else if (metaItem->GetClassType() == g_metaTableCLSID || metaItem->GetClassType() == g_metaTableRefCLSID) {
-
-		ibValueMetaObjectTableData* metaItemRecord = metaItem->ConvertToType<ibValueMetaObjectTableData>();
-		wxASSERT(metaItemRecord);
-
-		for (auto attribute : metaItemRecord->GetAttributeArrayObject()) {
-			if (attribute->IsDeleted())
-				continue;
-			if (!attribute->IsAcceptedByParent())
-				continue;
-			AppendItem(createdItem, attribute);
-		}
-	}
-	else if (metaItem->GetClassType() == g_metaSectionCLSID) {
-		ibValueMetaObjectSection* metaItemRecord = metaItem->ConvertToType<ibValueMetaObjectSection>();
-		for (auto object : metaItemRecord->GetInterfaceArrayObject()) {
-			if (object->IsDeleted())
-				continue;
-			AppendItem(createdItem, object);
-		}
-		for (auto metaCommand : metaItemRecord->GetCommandArrayObject())   // a section owns its own commands
-			AppendCommandNode(createdItem, metaCommand);
-	}
+	// HOW IT UNFOLDS — the same dispatcher the initial fill uses. It used to be a second chain of
+	// `else if` written out here, and the two had drifted: a section created in this path listed
+	// its sub-sections as plain rows and did not recurse, while a section LOADED by FillData went
+	// through AddInterfaceItem and nested properly.
+	ExpandMetaItem(metaItem, createdItem);
 
 	m_metaTreeCtrl->InvalidateBestSize();
 	m_metaTreeCtrl->SetEvtHandlerEnabled(select);
@@ -313,46 +275,50 @@ wxTreeItemId ibMetadataTree::FillItem(ibValueMetaObject* metaItem, const wxTreeI
 
 // HUB — append a command node and, recursively, its sub-commands (a group command holds commands, shown nested,
 // exactly as a subsystem holds subsystems). Skips deleted. The clsid gate makes the cast type-safe.
-void ibMetadataTree::AppendCommandNode(const wxTreeItemId& parent, ibValueMetaObject* command)
+wxTreeItemId ibConfigurationTree::AppendCommandNode(const wxTreeItemId& parent, ibValueMetaObject* command)
 {
 	if (command == nullptr || command->IsDeleted())
-		return;
+		return wxTreeItemId();
 	const wxTreeItemId hCmd = AppendItem(parent, command);
 	if (command->GetClassType() == g_metaCommonCommandCLSID || command->GetClassType() == g_metaCommandCLSID)
 		for (auto sub : static_cast<ibValueMetaObjectCommand*>(command)->GetSubCommands())
 			AppendCommandNode(hCmd, sub);
+
+	// A command survives a search if IT matched or a command under it did — the recursion above has
+	// already answered the second half, because a sub-command that matched nothing removed itself.
+	if (!m_strSearch.IsEmpty() && !MatchesSearch(command) && !m_metaTreeCtrl->HasChildren(hCmd)) {
+		m_metaTreeCtrl->Delete(hCmd);
+		return wxTreeItemId();
+	}
+	return hCmd;
 }
 
-void ibMetadataTree::EditItem()
+void ibConfigurationTree::EditItem()
 {
 	wxTreeItemId selection = m_metaTreeCtrl->GetSelection();
 	if (!selection.IsOk())
 		return;
-	ibValueMetaObject* m_currObject = GetMetaObject(selection);
-	if (!m_currObject)
+	ibValueMetaObject* currObject = GetMetaObject(selection);
+	if (!currObject)
 		return;
 
-	OpenObjectForm(m_currObject);
+	OpenObjectForm(currObject);
 }
 
-void ibMetadataTree::RemoveItem()
+void ibConfigurationTree::RemoveItem()
 {
 	const wxTreeItemId& selection = m_metaTreeCtrl->GetSelection();
 
 	if (!selection.IsOk())
 		return;
 
-	wxTreeItemIdValue m_cookie;
-	wxTreeItemId hItem = m_metaTreeCtrl->GetFirstChild(selection, m_cookie);
-
-	while (hItem) {
-		EraseItem(hItem);
-		hItem = m_metaTreeCtrl->GetNextChild(hItem, m_cookie);
-	}
-
 	ibValueMetaObject* metaObject = GetMetaObject(selection);
-	wxASSERT(metaObject);
-	EraseItem(selection);
+	// NOT AN ASSERT: wxASSERT is compiled out in Release, and a null here reaches RemoveMetaObject
+	// and Delete(selection) — which, on a layout group row, would free a node the group map still
+	// points at. A stale wxTreeItemId answers IsOk() == true, so every later guard would pass.
+	if (metaObject == nullptr)
+		return;
+	EraseItem(selection);   // the row AND everything under it — see EraseItem
 	m_metaData->RemoveMetaObject(metaObject);
 
 	//Delete item from tree
@@ -369,18 +335,31 @@ void ibMetadataTree::RemoveItem()
 	}
 }
 
-void ibMetadataTree::EraseItem(const wxTreeItemId& item)
+// CLOSE WHAT THIS ROW STANDS FOR, AND EVERYTHING UNDER IT. RemoveMetaObject destroys the whole
+// subtree, so an editor open on a form five levels down has to go with it. The caller used to walk
+// the DIRECT children instead — and those are group nodes ("Attributes", "Forms", …) that carry a
+// class id and no metaobject, so the sweep closed exactly nothing and a form editor survived the
+// object it was editing.
+void ibConfigurationTree::EraseItem(const wxTreeItemId& item)
 {
+	wxTreeItemIdValue cookie;
+	for (wxTreeItemId child = m_metaTreeCtrl->GetFirstChild(item, cookie); child.IsOk();
+		child = m_metaTreeCtrl->GetNextChild(item, cookie))
+		EraseItem(child);
+
 	ibValueMetaObject* const metaObject = GetMetaObject(item);
+	if (metaObject == nullptr)
+		return;   // a group node — nothing of its own to close
+
 	for (auto& doc : docManager->GetDocumentsVector()) {
 		ibMetaDocument* metaDoc = wxDynamicCast(doc, ibMetaDocument);
-		if (metaDoc != nullptr && metaObject != nullptr && metaObject == metaDoc->GetMetaObject()) {
+		if (metaDoc != nullptr && metaObject == metaDoc->GetMetaObject()) {
 			metaDoc->DeleteAllViews();
 		}
 	}
 }
 
-void ibMetadataTree::SelectItem()
+void ibConfigurationTree::SelectItem()
 {
 	const wxTreeItemId& selection = m_metaTreeCtrl->GetSelection();
 	ibValueMetaObject* metaObject = GetMetaObject(selection);
@@ -392,7 +371,7 @@ void ibMetadataTree::SelectItem()
 	objectInspector->SelectObject(metaObject);
 }
 
-void ibMetadataTree::PropertyItem()
+void ibConfigurationTree::PropertyItem()
 {
 	const wxTreeItemId& selection = m_metaTreeCtrl->GetSelection();
 	ibValueMetaObject* metaObject = GetMetaObject(selection);
@@ -409,7 +388,7 @@ void ibMetadataTree::PropertyItem()
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void ibMetadataTree::Collapse()
+void ibConfigurationTree::Collapse()
 {
 	const wxTreeItemId& selection = m_metaTreeCtrl->GetSelection();
 	ibTreeData* data =
@@ -418,7 +397,7 @@ void ibMetadataTree::Collapse()
 		data->m_expanded = false;
 }
 
-void ibMetadataTree::Expand()
+void ibConfigurationTree::Expand()
 {
 	const wxTreeItemId& selection = m_metaTreeCtrl->GetSelection();
 	ibTreeData* data =
@@ -429,7 +408,7 @@ void ibMetadataTree::Expand()
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void ibMetadataTree::UpItem()
+void ibConfigurationTree::UpItem()
 {
 	if (appData->GetAppMode() != ibRunMode::eDESIGNER_MODE)
 		return;
@@ -446,7 +425,7 @@ void ibMetadataTree::UpItem()
 		do {
 			if (nextId == nextItem)
 				break;
-			nextId = m_metaTreeCtrl->GetNextChild(nextId, coockie); pos++;
+			nextId = m_metaTreeCtrl->GetNextChild(parentItem, coockie); pos++;
 		} while (nextId.IsOk());
 		ibValueMetaObject* parentObject = metaObject->GetParent();
 		ibValueMetaObject* nextObject = GetMetaObject(nextItem);
@@ -473,7 +452,7 @@ void ibMetadataTree::UpItem()
 						swap(tree, nextId, newId);
 					}
 					tree->SetItemData(nextId, nullptr);
-					nextId = tree->GetNextChild(nextId, coockie);
+					nextId = tree->GetNextChild(dst, coockie);
 				}
 				};
 
@@ -489,7 +468,7 @@ void ibMetadataTree::UpItem()
 	m_metaTreeCtrl->Thaw();
 }
 
-void ibMetadataTree::DownItem()
+void ibConfigurationTree::DownItem()
 {
 	if (appData->GetAppMode() != ibRunMode::eDESIGNER_MODE)
 		return;
@@ -506,7 +485,7 @@ void ibMetadataTree::DownItem()
 		do {
 			if (nextId == prevItem)
 				break;
-			nextId = m_metaTreeCtrl->GetNextChild(nextId, coockie); pos++;
+			nextId = m_metaTreeCtrl->GetNextChild(parentItem, coockie); pos++;
 		} while (nextId.IsOk());
 		ibValueMetaObject* parentObject = metaObject->GetParent();
 		ibValueMetaObject* prevObject = GetMetaObject(prevItem);
@@ -533,7 +512,7 @@ void ibMetadataTree::DownItem()
 						swap(tree, nextId, newId);
 					}
 					tree->SetItemData(nextId, nullptr);
-					nextId = tree->GetNextChild(nextId, coockie);
+					nextId = tree->GetNextChild(dst, coockie);
 				}
 				};
 
@@ -549,7 +528,7 @@ void ibMetadataTree::DownItem()
 	m_metaTreeCtrl->Thaw();
 }
 
-void ibMetadataTree::SortItem()
+void ibConfigurationTree::SortItem()
 {
 	if (appData->GetAppMode() != ibRunMode::eDESIGNER_MODE)
 		return;
@@ -571,11 +550,14 @@ void ibMetadataTree::SortItem()
 #include "backend/metadataDataProcessor.h"
 #include "backend/metadataReport.h"
 
-void ibMetadataTree::InsertItem()
+void ibConfigurationTree::InsertItem()
 {
 	ibValueMetaObject* commonMetaObject = m_metaData->GetCommonMetaObject(); wxTreeItemId hSelItem = m_metaTreeCtrl->GetSelection();
 
-	if (hSelItem == m_treeDATAPROCESSORS) {
+	// ⚠ ASK WHETHER THE GROUP EXISTS, not just whether the ids match: two INVALID wxTreeItemIds
+	// compare equal, and a group is legitimately absent while a search filter is on. The field
+	// used to be unconditionally valid, so this test is new work rather than a port.
+	if (Group(g_metaDataProcessorCLSID).IsOk() && hSelItem == Group(g_metaDataProcessorCLSID)) {
 
 		wxFileDialog openFileDialog(this, _("Open data processor file"), "", "",
 			ibFileFilter(ibFileKind::Tool), wxFD_OPEN | wxFD_FILE_MUST_EXIST);
@@ -621,7 +603,7 @@ void ibMetadataTree::InsertItem()
 	m_metaData->Modify(true);
 }
 
-void ibMetadataTree::ReplaceItem()
+void ibConfigurationTree::ReplaceItem()
 {
 	wxTreeItemId hSelItem = m_metaTreeCtrl->GetSelection();
 	ibValueMetaObject* currentMetaObject = GetMetaObject(m_metaTreeCtrl->GetSelection());
@@ -686,7 +668,7 @@ void ibMetadataTree::ReplaceItem()
 	m_metaData->Modify(true);
 }
 
-void ibMetadataTree::SaveItem()
+void ibConfigurationTree::SaveItem()
 {
 	ibValueMetaObject* currentMetaObject = GetMetaObject(m_metaTreeCtrl->GetSelection());
 
@@ -725,7 +707,7 @@ void ibMetadataTree::SaveItem()
 	}
 }
 
-void ibMetadataTree::CommandItem(unsigned int id)
+void ibConfigurationTree::CommandItem(unsigned int id)
 {
 	if (appData->GetAppMode() != ibRunMode::eDESIGNER_MODE)
 		return;
@@ -738,7 +720,7 @@ void ibMetadataTree::CommandItem(unsigned int id)
 	metaObject->ProcessCommand(id);
 }
 
-void ibMetadataTree::PrepareReplaceMenu(wxMenu* defaultMenu)
+void ibConfigurationTree::PrepareReplaceMenu(wxMenu* defaultMenu)
 {
 	wxMenuItem* menuItem = defaultMenu->Append(ID_METATREE_REPLACE, _("Replace data processor, report..."));
 	menuItem->Enable(!m_bReadOnly);
@@ -748,7 +730,7 @@ void ibMetadataTree::PrepareReplaceMenu(wxMenu* defaultMenu)
 
 #include "frontend/artProvider/artProvider.h"
 
-void ibMetadataTree::PrepareContextMenu(wxMenu* defaultMenu, const wxTreeItemId& item)
+void ibConfigurationTree::PrepareContextMenu(wxMenu* defaultMenu, const wxTreeItemId& item)
 {
 	ibValueMetaObject* metaObject = GetMetaObject(item);
 
@@ -779,8 +761,9 @@ void ibMetadataTree::PrepareContextMenu(wxMenu* defaultMenu, const wxTreeItemId&
 		menuItem->SetBitmap(ibBackendPicture::GetPicture(g_picAddCLSID));
 		menuItem->Enable(!m_bReadOnly);
 
-		if (item == m_treeDATAPROCESSORS
-			|| item == m_treeREPORTS) {
+		// Same rule as InsertItem: an absent group must not match an invalid selection.
+		if ((Group(g_metaDataProcessorCLSID).IsOk() && item == Group(g_metaDataProcessorCLSID))
+			|| (Group(g_metaReportCLSID).IsOk() && item == Group(g_metaReportCLSID))) {
 			defaultMenu->AppendSeparator();
 			wxMenuItem* menuItem = defaultMenu->Append(ID_METATREE_INSERT, _("Insert data processor, report..."));
 			menuItem->Enable(!m_bReadOnly);
@@ -793,7 +776,7 @@ void ibMetadataTree::PrepareContextMenu(wxMenu* defaultMenu, const wxTreeItemId&
 	}
 }
 
-void ibMetadataTree::ShowContextMenu(wxWindow* eventSrc, const wxTreeItemId& item, const wxPoint& pos)
+void ibConfigurationTree::ShowContextMenu(wxWindow* eventSrc, const wxTreeItemId& item, const wxPoint& pos)
 {
 	wxMenu innerMenu;   // stack — PopupMenu does not take ownership, and it blocks until dismissed
 	PrepareContextMenu(&innerMenu, item);
@@ -814,18 +797,18 @@ void ibMetadataTree::ShowContextMenu(wxWindow* eventSrc, const wxTreeItemId& ite
 		{
 			continue;
 		}
-		m_metaTreeCtrl->Bind(wxEVT_MENU, &ibMetadataTree::ibMetaTreeCtrl::OnCommandItem, m_metaTreeCtrl, id);
+		m_metaTreeCtrl->Bind(wxEVT_MENU, &ibConfigurationTree::ibMetaTreeCtrl::OnCommandItem, m_metaTreeCtrl, id);
 		boundIds.push_back(id);
 	}
 
 	m_metaTreeCtrl->PopupMenu(&innerMenu, m_metaTreeCtrl->ScreenToClient(eventSrc->ClientToScreen(pos)));
 
 	for (int id : boundIds) {
-		m_metaTreeCtrl->Unbind(wxEVT_MENU, &ibMetadataTree::ibMetaTreeCtrl::OnCommandItem, m_metaTreeCtrl, id);
+		m_metaTreeCtrl->Unbind(wxEVT_MENU, &ibConfigurationTree::ibMetaTreeCtrl::OnCommandItem, m_metaTreeCtrl, id);
 	}
 }
 
-void ibMetadataTree::UpdateToolbar(ibValueMetaObject* obj, const wxTreeItemId& item)
+void ibConfigurationTree::UpdateToolbar(ibValueMetaObject* obj, const wxTreeItemId& item)
 {
 	m_metaTreeToolbar->EnableTool(ID_METATREE_NEW, item != m_metaTreeCtrl->GetRootItem() && !m_bReadOnly && item != m_treeCOMMON);
 	m_metaTreeToolbar->EnableTool(ID_METATREE_EDIT, obj != nullptr && item != m_metaTreeCtrl->GetRootItem());
@@ -838,7 +821,7 @@ void ibMetadataTree::UpdateToolbar(ibValueMetaObject* obj, const wxTreeItemId& i
 	m_metaTreeToolbar->Refresh();
 }
 
-bool ibMetadataTree::RenameMetaObject(ibValueMetaObject* metaObject, const wxString& newName)
+bool ibConfigurationTree::RenameMetaObject(ibValueMetaObject* metaObject, const wxString& newName)
 {
 	wxTreeItemId curItem = m_metaTreeCtrl->GetSelection();
 
@@ -860,756 +843,307 @@ bool ibMetadataTree::RenameMetaObject(ibValueMetaObject* metaObject, const wxStr
 
 #include "backend/metaCollection/partial/commonObject.h"
 
-void ibMetadataTree::AddInterfaceItem(ibValueMetaObject* metaObject, const wxTreeItemId& hParentID)
+void ibConfigurationTree::AddInterfaceItem(ibValueMetaObject* metaObject, const wxTreeItemId& hParentID)
 {
 	ibValueMetaObjectSection* metaObjectValue = metaObject->ConvertToType<ibValueMetaObjectSection>();
 	wxASSERT(metaObject);
 
+	// SECTIONS NEST, so a section survives a search if IT matched or something inside it did —
+	// the recursion below answers the second half, exactly as it does for commands.
 	for (auto commonInterface : metaObjectValue->GetInterfaceArrayObject()) {
 
 		if (commonInterface->IsDeleted())
 			continue;
 
-		//const wxString& strName = commonInterface->GetName();
+		const wxTreeItemId hSection = AppendGroupItem(hParentID, g_metaSectionCLSID, commonInterface);
+		AddInterfaceItem(commonInterface, hSection);
 
-		//if (!m_strSearch.IsEmpty()
-		//	&& strName.Find(m_strSearch) < 0)
-		//	continue;
-
-		AddInterfaceItem(commonInterface,
-			AppendGroupItem(hParentID, g_metaSectionCLSID, commonInterface));
+		if (!m_strSearch.IsEmpty() && !MatchesSearch(commonInterface)
+			&& !m_metaTreeCtrl->HasChildren(hSection))
+			m_metaTreeCtrl->Delete(hSection);
 	}
 
 	for (auto metaCommand : metaObjectValue->GetCommandArrayObject())   // a section owns its own commands
 		AppendCommandNode(hParentID, metaCommand);
 }
 
-void ibMetadataTree::AddCatalogItem(ibValueMetaObject* metaObject, const wxTreeItemId& hParentID)
+// A REFERENCE OBJECT — attributes, tabular sections, forms, commands, templates. Catalogs and
+// documents render identically, and so do the two charts and a parameterized job (they reach here
+// through ExpandMetaItem, which is where "renders AS a catalog" is written down).
+void ibConfigurationTree::AddCatalogItem(ibValueMetaObject* metaObject, const wxTreeItemId& hParentID)
 {
 	ibValueMetaObjectRecordDataRef* metaObjectValue = metaObject->ConvertToType<ibValueMetaObjectRecordDataRef>();
-	wxASSERT(metaObject);
-
-	// attribute list
-	const wxTreeItemId& hAttributes = AppendGroupItem(hParentID, g_metaAttributeCLSID, objectAttributesName);
-	for (auto attribute : metaObjectValue->GetAttributeArrayObject()) {
-
-		if (attribute->IsDeleted())
-			continue;
-
-		if (!attribute->IsAcceptedByParent())
-			continue;
-
-		//const wxString strName = attribute->GetName();
-
-		//if (!m_strSearch.IsEmpty()
-		//	&& strName.Find(m_strSearch) < 0)
-		//	continue;
-
-		AppendItem(hAttributes, attribute);
-	}
-
-	// tabular section list
-	// tabular sections group. A catalog / document is ALWAYS a reference, so its table is the
-	// DB-backed MD_TBLR; processors / reports are RAM, so MD_TBL. Set explicitly per object kind.
-	const wxTreeItemId& hTables = AppendGroupItem(hParentID, g_metaTableRefCLSID, objectTablesName);
-	for (auto metaTable : metaObjectValue->GetTableArrayObject()) {
-
-		if (metaTable->IsDeleted())
-			continue;
-
-		//const wxString strName = metaTable->GetName();
-
-		//if (!m_strSearch.IsEmpty()
-		//	&& strName.Find(m_strSearch) < 0)
-		//	continue;
-
-		const wxTreeItemId& hItem = AppendGroupItem(hTables, g_metaAttributeCLSID, metaTable);
-
-		for (auto attribute : metaTable->GetAttributeArrayObject()) {
-
-			if (attribute->IsDeleted())
-				continue;
-
-			if (!attribute->IsAcceptedByParent())
-				continue;
-
-			//const wxString strName = attribute->GetName();
-
-			//if (!m_strSearch.IsEmpty()
-			//	&& strName.Find(m_strSearch) < 0)
-			//	continue;
-
-			AppendItem(hItem, attribute);
-		}
-	}
-
-	// forms
-	const wxTreeItemId& hForm = AppendGroupItem(hParentID, g_metaFormCLSID, objectFormsName);
-	for (auto metaForm : metaObjectValue->GetFormArrayObject()) {
-
-		if (metaForm->IsDeleted())
-			continue;
-
-		//const wxString strName = metaForm->GetName();
-
-		//if (!m_strSearch.IsEmpty()
-		//	&& strName.Find(m_strSearch) < 0)
-		//	continue;
-
-		AppendItem(hForm, metaForm);
-	}
-
-	// commands (object scope) — each business object owns its own commands
-	const wxTreeItemId& hCommands = AppendGroupItem(hParentID, g_metaCommandCLSID, objectCommandsName);
-	for (auto metaCommand : metaObjectValue->GetCommandArrayObject())
-		AppendCommandNode(hCommands, metaCommand);   // hub — nests sub-commands, skips deleted
-
-	// tables
-	const wxTreeItemId& hTemplates = AppendGroupItem(hParentID, g_metaTemplateCLSID, objectTemplatesName);
-	for (auto metaTemplate : metaObjectValue->GetTemplateArrayObject()) {
-
-		if (metaTemplate->IsDeleted())
-			continue;
-
-		//const wxString strName = metaTemplate->GetName();
-
-		//if (!m_strSearch.IsEmpty()
-		//	&& strName.Find(m_strSearch) < 0)
-		//	continue;
-
-		AppendItem(hTemplates, metaTemplate);
-	}
-}
-
-void ibMetadataTree::AddDocumentItem(ibValueMetaObject* metaObject, const wxTreeItemId& hParentID)
-{
-	ibValueMetaObjectRecordDataRef* metaObjectValue = metaObject->ConvertToType<ibValueMetaObjectRecordDataRef>();
-
-	wxASSERT(metaObject);
-
-	// attribute list
-	const wxTreeItemId& hAttributes = AppendGroupItem(hParentID, g_metaAttributeCLSID, objectAttributesName);
-	for (auto attribute : metaObjectValue->GetAttributeArrayObject()) {
-
-		if (attribute->IsDeleted())
-			continue;
-
-		if (!attribute->IsAcceptedByParent())
-			continue;
-
-		//const wxString strName = attribute->GetName();
-
-		//if (!m_strSearch.IsEmpty()
-		//	&& strName.Find(m_strSearch) < 0)
-		//	continue;
-
-		AppendItem(hAttributes, attribute);
-	}
-
-	// tabular section list
-	// tabular sections group. A catalog / document is ALWAYS a reference, so its table is the
-	// DB-backed MD_TBLR; processors / reports are RAM, so MD_TBL. Set explicitly per object kind.
-	const wxTreeItemId& hTables = AppendGroupItem(hParentID, g_metaTableRefCLSID, objectTablesName);
-	for (auto metaTable : metaObjectValue->GetTableArrayObject()) {
-
-		if (metaTable->IsDeleted())
-			continue;
-
-		//const wxString strName = metaTable->GetName();
-
-		//if (!m_strSearch.IsEmpty()
-		//	&& strName.Find(m_strSearch) < 0)
-		//	continue;
-
-		const wxTreeItemId& hItem = AppendGroupItem(hTables, g_metaAttributeCLSID, metaTable);
-		for (auto attribute : metaTable->GetAttributeArrayObject()) {
-
-			if (attribute->IsDeleted())
-				continue;
-
-			if (!attribute->IsAcceptedByParent())
-				continue;
-
-			//const wxString strName = attribute->GetName();
-
-			//if (!m_strSearch.IsEmpty()
-			//	&& strName.Find(m_strSearch) < 0)
-			//	continue;
-
-			AppendItem(hItem, attribute);
-		}
-	}
-
-	// forms
-	const wxTreeItemId& hForm = AppendGroupItem(hParentID, g_metaFormCLSID, objectFormsName);
-	for (auto metaForm : metaObjectValue->GetFormArrayObject()) {
-
-		if (metaForm->IsDeleted())
-			continue;
-
-		//const wxString strName = metaForm->GetName();
-
-		//if (!m_strSearch.IsEmpty()
-		//	&& strName.Find(m_strSearch) < 0)
-		//	continue;
-
-		AppendItem(hForm, metaForm);
-	}
-
-	// commands (object scope) — each business object owns its own commands
-	const wxTreeItemId& hCommands = AppendGroupItem(hParentID, g_metaCommandCLSID, objectCommandsName);
-	for (auto metaCommand : metaObjectValue->GetCommandArrayObject())
-		AppendCommandNode(hCommands, metaCommand);   // hub — nests sub-commands, skips deleted
-
-	// tables
-	const wxTreeItemId& hTemplates = AppendGroupItem(hParentID, g_metaTemplateCLSID, objectTemplatesName);
-	for (auto metaTemplate : metaObjectValue->GetTemplateArrayObject()) {
-
-		if (metaTemplate->IsDeleted())
-			continue;
-
-		//const wxString strName = metaTemplate->GetName();
-
-		//if (!m_strSearch.IsEmpty()
-		//	&& strName.Find(m_strSearch) < 0)
-		//	continue;
-
-		AppendItem(hTemplates, metaTemplate);
-	}
-}
-
-void ibMetadataTree::AddEnumerationItem(ibValueMetaObject* metaObject, const wxTreeItemId& hParentID)
-{
-	ibValueMetaObjectRecordDataEnumRef* metaObjectValue = metaObject->ConvertToType <ibValueMetaObjectRecordDataEnumRef>();
 	wxASSERT(metaObjectValue);
 
-	//Enumerations
-	wxTreeItemId hEnums = AppendGroupItem(hParentID, g_metaEnumCLSID, objectEnumerationsName);
-
-	for (auto metaEnumerations : metaObjectValue->GetEnumObjectArray()) {
-
-		if (metaEnumerations->IsDeleted())
-			continue;
-
-		//const wxString strName = metaEnumerations->GetName();
-
-		//if (!m_strSearch.IsEmpty()
-		//	&& strName.Find(m_strSearch) < 0)
-		//	continue;
-
-		AppendItem(hEnums, metaEnumerations);
-	}
-
-	// forms
-	const wxTreeItemId& hForm = AppendGroupItem(hParentID, g_metaFormCLSID, objectFormsName);
-	for (auto metaForm : metaObjectValue->GetFormArrayObject()) {
-
-		if (metaForm->IsDeleted())
-			continue;
-
-		//const wxString strName = metaForm->GetName();
-
-		//if (!m_strSearch.IsEmpty()
-		//	&& strName.Find(m_strSearch) < 0)
-		//	continue;
-
-		AppendItem(hForm, metaForm);
-	}
-
-	// commands (object scope) — each business object owns its own commands
-	const wxTreeItemId& hCommands = AppendGroupItem(hParentID, g_metaCommandCLSID, objectCommandsName);
-	for (auto metaCommand : metaObjectValue->GetCommandArrayObject())
-		AppendCommandNode(hCommands, metaCommand);   // hub — nests sub-commands, skips deleted
-
-	// tables
-	const wxTreeItemId& hTemplates = AppendGroupItem(hParentID, g_metaTemplateCLSID, objectTemplatesName);
-	for (auto metaTemplate : metaObjectValue->GetTemplateArrayObject()) {
-
-		if (metaTemplate->IsDeleted())
-			continue;
-
-		//const wxString strName = metaTemplate->GetName();
-
-		//if (!m_strSearch.IsEmpty()
-		//	&& strName.Find(m_strSearch) < 0)
-		//	continue;
-
-		AppendItem(hTemplates, metaTemplate);
-	}
+	AppendObjectGroup(hParentID, g_metaAttributeCLSID, objectAttributesName,
+		metaObjectValue->GetAttributeArrayObject());
+	// A catalog / document is ALWAYS a reference, so its table is the DB-backed MD_TBLR;
+	// processors / reports are RAM, so MD_TBL. Set explicitly per object kind.
+	AppendTableGroup(hParentID, g_metaTableRefCLSID, objectTablesName,
+		metaObjectValue->GetTableArrayObject());
+	AppendObjectGroup(hParentID, g_metaFormCLSID, objectFormsName,
+		metaObjectValue->GetFormArrayObject());
+	AppendCommandGroup(hParentID, objectCommandsName, metaObjectValue->GetCommandArrayObject());
+	AppendObjectGroup(hParentID, g_metaTemplateCLSID, objectTemplatesName,
+		metaObjectValue->GetTemplateArrayObject());
 }
 
-void ibMetadataTree::AddDataProcessorItem(ibValueMetaObject* metaObject, const wxTreeItemId& hParentID)
+// A DOCUMENT renders exactly as a catalog does — the same five groups in the same order. It keeps
+// an entry point of its own only because the dispatcher names KINDS, not shapes.
+void ibConfigurationTree::AddDocumentItem(ibValueMetaObject* metaObject, const wxTreeItemId& hParentID)
 {
-	ibValueMetaObjectRecordData* metaObjectValue = metaObject->ConvertToType <ibValueMetaObjectRecordData>();
+	AddCatalogItem(metaObject, hParentID);
+}
+
+// AN ENUMERATION has values where the others have attributes and tabular sections.
+void ibConfigurationTree::AddEnumerationItem(ibValueMetaObject* metaObject, const wxTreeItemId& hParentID)
+{
+	ibValueMetaObjectRecordDataEnumRef* metaObjectValue = metaObject->ConvertToType<ibValueMetaObjectRecordDataEnumRef>();
 	wxASSERT(metaObjectValue);
 
-	// attribute list
-	const wxTreeItemId& hAttributes = AppendGroupItem(hParentID, g_metaAttributeCLSID, objectAttributesName);
-	for (auto attribute : metaObjectValue->GetAttributeArrayObject()) {
-
-		if (attribute->IsDeleted())
-			continue;
-
-		if (!attribute->IsAcceptedByParent())
-			continue;
-
-		//const wxString strName = attribute->GetName();
-
-		//if (!m_strSearch.IsEmpty()
-		//	&& strName.Find(m_strSearch) < 0)
-		//	continue;
-
-		AppendItem(hAttributes, attribute);
-	}
-
-	// tabular section list
-	// tabular sections group. A catalog / document is ALWAYS a reference, so its table is the
-	// DB-backed MD_TBLR; processors / reports are RAM, so MD_TBL. Set explicitly per object kind.
-	const wxTreeItemId& hTables = AppendGroupItem(hParentID, g_metaTableCLSID, objectTablesName);
-	for (auto metaTable : metaObjectValue->GetTableArrayObject()) {
-
-		if (metaTable->IsDeleted())
-			continue;
-
-		//const wxString strName = metaTable->GetName();
-
-		//if (!m_strSearch.IsEmpty()
-		//	&& strName.Find(m_strSearch) < 0)
-		//	continue;
-
-		const wxTreeItemId& hItem = AppendGroupItem(hTables, g_metaAttributeCLSID, metaTable);
-		for (auto attribute : metaTable->GetAttributeArrayObject()) {
-
-			if (attribute->IsDeleted())
-				continue;
-
-			if (!attribute->IsAcceptedByParent())
-				continue;
-
-			//const wxString strName = attribute->GetName();
-
-			//if (!m_strSearch.IsEmpty()
-			//	&& strName.Find(m_strSearch) < 0)
-			//	continue;
-
-			AppendItem(hItem, attribute);
-		}
-	}
-
-	// forms
-	const wxTreeItemId& hForm = AppendGroupItem(hParentID, g_metaFormCLSID, objectFormsName);
-	for (auto metaForm : metaObjectValue->GetFormArrayObject()) {
-
-		if (metaForm->IsDeleted())
-			continue;
-
-		//const wxString strName = metaForm->GetName();
-
-		//if (!m_strSearch.IsEmpty()
-		//	&& strName.Find(m_strSearch) < 0)
-		//	continue;
-
-		AppendItem(hForm, metaForm);
-	}
-
-	// commands (object scope) — each business object owns its own commands
-	const wxTreeItemId& hCommands = AppendGroupItem(hParentID, g_metaCommandCLSID, objectCommandsName);
-	for (auto metaCommand : metaObjectValue->GetCommandArrayObject())
-		AppendCommandNode(hCommands, metaCommand);   // hub — nests sub-commands, skips deleted
-
-	// tables
-	const wxTreeItemId& hTemplates = AppendGroupItem(hParentID, g_metaTemplateCLSID, objectTemplatesName);
-	for (auto metaTemplate : metaObjectValue->GetTemplateArrayObject()) {
-
-		if (metaTemplate->IsDeleted())
-			continue;
-
-		//const wxString strName = metaTemplate->GetName();
-
-		//if (!m_strSearch.IsEmpty()
-		//	&& strName.Find(m_strSearch) < 0)
-		//	continue;
-
-		AppendItem(hTemplates, metaTemplate);
-	}
+	AppendObjectGroup(hParentID, g_metaEnumCLSID, objectEnumerationsName,
+		metaObjectValue->GetEnumObjectArray());
+	AppendObjectGroup(hParentID, g_metaFormCLSID, objectFormsName,
+		metaObjectValue->GetFormArrayObject());
+	AppendCommandGroup(hParentID, objectCommandsName, metaObjectValue->GetCommandArrayObject());
+	AppendObjectGroup(hParentID, g_metaTemplateCLSID, objectTemplatesName,
+		metaObjectValue->GetTemplateArrayObject());
 }
 
-void ibMetadataTree::AddReportItem(ibValueMetaObject* metaObject, const wxTreeItemId& hParentID)
+// A DATA PROCESSOR — the same five groups as a catalog, except that its tabular sections live in
+// RAM (MD_TBL) rather than in the database (MD_TBLR). That one clsid is the whole difference.
+void ibConfigurationTree::AddDataProcessorItem(ibValueMetaObject* metaObject, const wxTreeItemId& hParentID)
 {
 	ibValueMetaObjectRecordData* metaObjectValue = metaObject->ConvertToType<ibValueMetaObjectRecordData>();
 	wxASSERT(metaObjectValue);
 
-	// attribute list
-	const wxTreeItemId& hAttributes = AppendGroupItem(hParentID, g_metaAttributeCLSID, objectAttributesName);
-	for (auto attribute : metaObjectValue->GetAttributeArrayObject()) {
-
-		if (attribute->IsDeleted())
-			continue;
-
-		if (!attribute->IsAcceptedByParent())
-			continue;
-
-		//const wxString strName = attribute->GetName();
-
-		//if (!m_strSearch.IsEmpty()
-		//	&& strName.Find(m_strSearch) < 0)
-		//	continue;
-
-		AppendItem(hAttributes, attribute);
-	}
-
-	// tabular section list
-	// tabular sections group. A catalog / document is ALWAYS a reference, so its table is the
-	// DB-backed MD_TBLR; processors / reports are RAM, so MD_TBL. Set explicitly per object kind.
-	const wxTreeItemId& hTables = AppendGroupItem(hParentID, g_metaTableCLSID, objectTablesName);
-	for (auto metaTable : metaObjectValue->GetTableArrayObject()) {
-		if (metaTable->IsDeleted())
-			continue;
-
-		//const wxString strName = metaTable->GetName();
-
-		//if (!m_strSearch.IsEmpty()
-		//	&& strName.Find(m_strSearch) < 0)
-		//	continue;
-
-		const wxTreeItemId& hItem = AppendGroupItem(hTables, g_metaAttributeCLSID, metaTable);
-		for (auto attribute : metaTable->GetAttributeArrayObject()) {
-
-			if (attribute->IsDeleted())
-				continue;
-
-			if (!attribute->IsAcceptedByParent())
-				continue;
-
-			//const wxString strName = attribute->GetName();
-
-			//if (!m_strSearch.IsEmpty()
-			//	&& strName.Find(m_strSearch) < 0)
-			//	continue;
-
-			AppendItem(hItem, attribute);
-		}
-	}
-
-	// forms
-	const wxTreeItemId& hForm = AppendGroupItem(hParentID, g_metaFormCLSID, objectFormsName);
-	for (auto metaForm : metaObjectValue->GetFormArrayObject()) {
-
-		if (metaForm->IsDeleted())
-			continue;
-
-		//const wxString strName = metaForm->GetName();
-
-		//if (!m_strSearch.IsEmpty()
-		//	&& strName.Find(m_strSearch) < 0)
-		//	continue;
-
-		AppendItem(hForm, metaForm);
-	}
-
-	// commands (object scope) — each business object owns its own commands
-	const wxTreeItemId& hCommands = AppendGroupItem(hParentID, g_metaCommandCLSID, objectCommandsName);
-	for (auto metaCommand : metaObjectValue->GetCommandArrayObject())
-		AppendCommandNode(hCommands, metaCommand);   // hub — nests sub-commands, skips deleted
-
-	// tables
-	const wxTreeItemId& hTemplates = AppendGroupItem(hParentID, g_metaTemplateCLSID, objectTemplatesName);
-	for (auto metaTemplate : metaObjectValue->GetTemplateArrayObject()) {
-
-		if (metaTemplate->IsDeleted())
-			continue;
-
-		//const wxString strName = metaTemplate->GetName();
-
-		//if (!m_strSearch.IsEmpty()
-		//	&& strName.Find(m_strSearch) < 0)
-		//	continue;
-
-		AppendItem(hTemplates, metaTemplate);
-	}
+	AppendObjectGroup(hParentID, g_metaAttributeCLSID, objectAttributesName,
+		metaObjectValue->GetAttributeArrayObject());
+	AppendTableGroup(hParentID, g_metaTableCLSID, objectTablesName,
+		metaObjectValue->GetTableArrayObject());
+	AppendObjectGroup(hParentID, g_metaFormCLSID, objectFormsName,
+		metaObjectValue->GetFormArrayObject());
+	AppendCommandGroup(hParentID, objectCommandsName, metaObjectValue->GetCommandArrayObject());
+	AppendObjectGroup(hParentID, g_metaTemplateCLSID, objectTemplatesName,
+		metaObjectValue->GetTemplateArrayObject());
 }
 
-void ibMetadataTree::AddInformationRegisterItem(ibValueMetaObject* metaObject, const wxTreeItemId& hParentID)
+void ibConfigurationTree::AddReportItem(ibValueMetaObject* metaObject, const wxTreeItemId& hParentID)
+{
+	AddDataProcessorItem(metaObject, hParentID);   // same shape, down to the RAM tabular sections
+}
+
+// A REGISTER — dimensions and resources where a reference object has tabular sections.
+void ibConfigurationTree::AddInformationRegisterItem(ibValueMetaObject* metaObject, const wxTreeItemId& hParentID)
 {
 	ibValueMetaObjectRegisterData* metaObjectValue = metaObject->ConvertToType<ibValueMetaObjectRegisterData>();
 	wxASSERT(metaObjectValue);
 
-	// dimension list
-	const wxTreeItemId& hDimensions = AppendGroupItem(hParentID, g_metaDimensionCLSID, objectDimensionsName);
-	for (auto metaDimension : metaObjectValue->GetDimensionArrayObject()) {
-
-		if (metaDimension->IsDeleted())
-			continue;
-
-		if (!metaDimension->IsAcceptedByParent())
-			continue;
-
-		//const wxString strName = metaDimension->GetName();
-
-		//if (!m_strSearch.IsEmpty()
-		//	&& strName.Find(m_strSearch) < 0)
-		//	continue;
-
-		AppendItem(hDimensions, metaDimension);
-	}
-
-	// resource list
-	const wxTreeItemId& hResources = AppendGroupItem(hParentID, g_metaResourceCLSID, objectResourcesName);
-	for (auto metaResource : metaObjectValue->GetResourceArrayObject()) {
-
-		if (metaResource->IsDeleted())
-			continue;
-
-		if (!metaResource->IsAcceptedByParent())
-			continue;
-
-		//const wxString strName = metaResource->GetName();
-
-		//if (!m_strSearch.IsEmpty()
-		//	&& strName.Find(m_strSearch) < 0)
-		//	continue;
-
-		AppendItem(hResources, metaResource);
-	}
-
-	// attribute list
-	const wxTreeItemId& hAttributes = AppendGroupItem(hParentID, g_metaAttributeCLSID, objectAttributesName);
-	for (auto attribute : metaObjectValue->GetAttributeArrayObject()) {
-
-		if (attribute->IsDeleted())
-			continue;
-
-		if (!attribute->IsAcceptedByParent())
-			continue;
-
-		//const wxString strName = attribute->GetName();
-
-		//if (!m_strSearch.IsEmpty()
-		//	&& strName.Find(m_strSearch) < 0)
-		//	continue;
-
-		AppendItem(hAttributes, attribute);
-	}
-
-	// forms
-	const wxTreeItemId& hForm = AppendGroupItem(hParentID, g_metaFormCLSID, objectFormsName);
-	for (auto metaForm : metaObjectValue->GetFormArrayObject()) {
-
-		if (metaForm->IsDeleted())
-			continue;
-
-		//const wxString strName = metaForm->GetName();
-
-		//if (!m_strSearch.IsEmpty()
-		//	&& strName.Find(m_strSearch) < 0)
-		//	continue;
-
-		AppendItem(hForm, metaForm);
-	}
-
-	// commands (object scope) — each business object owns its own commands
-	const wxTreeItemId& hCommands = AppendGroupItem(hParentID, g_metaCommandCLSID, objectCommandsName);
-	for (auto metaCommand : metaObjectValue->GetCommandArrayObject())
-		AppendCommandNode(hCommands, metaCommand);   // hub — nests sub-commands, skips deleted
-
-	// tables
-	const wxTreeItemId& hTemplates = AppendGroupItem(hParentID, g_metaTemplateCLSID, objectTemplatesName);
-	for (auto metaTemplate : metaObjectValue->GetTemplateArrayObject()) {
-
-		if (metaTemplate->IsDeleted())
-			continue;
-
-		//const wxString strName = metaTemplate->GetName();
-
-		//if (!m_strSearch.IsEmpty()
-		//	&& strName.Find(m_strSearch) < 0)
-		//	continue;
-
-		AppendItem(hTemplates, metaTemplate);
-	}
+	AppendObjectGroup(hParentID, g_metaDimensionCLSID, objectDimensionsName,
+		metaObjectValue->GetDimensionArrayObject());
+	AppendObjectGroup(hParentID, g_metaResourceCLSID, objectResourcesName,
+		metaObjectValue->GetResourceArrayObject());
+	AppendObjectGroup(hParentID, g_metaAttributeCLSID, objectAttributesName,
+		metaObjectValue->GetAttributeArrayObject());
+	AppendObjectGroup(hParentID, g_metaFormCLSID, objectFormsName,
+		metaObjectValue->GetFormArrayObject());
+	AppendCommandGroup(hParentID, objectCommandsName, metaObjectValue->GetCommandArrayObject());
+	AppendObjectGroup(hParentID, g_metaTemplateCLSID, objectTemplatesName,
+		metaObjectValue->GetTemplateArrayObject());
 }
 
-void ibMetadataTree::AddAccumulationRegisterItem(ibValueMetaObject* metaObject, const wxTreeItemId& hParentID)
+void ibConfigurationTree::AddAccumulationRegisterItem(ibValueMetaObject* metaObject, const wxTreeItemId& hParentID)
 {
-	ibValueMetaObjectRegisterData* metaObjectValue = metaObject->ConvertToType<ibValueMetaObjectRegisterData>();
-	wxASSERT(metaObjectValue);
-
-	// dimension list
-	const wxTreeItemId& hDimensions = AppendGroupItem(hParentID, g_metaDimensionCLSID, objectDimensionsName);
-	for (auto metaDimension : metaObjectValue->GetDimensionArrayObject()) {
-
-		if (metaDimension->IsDeleted())
-			continue;
-
-		if (!metaDimension->IsAcceptedByParent())
-			continue;
-
-		//const wxString strName = metaDimension->GetName();
-
-		//if (!m_strSearch.IsEmpty()
-		//	&& strName.Find(m_strSearch) < 0)
-		//	continue;
-
-		AppendItem(hDimensions, metaDimension);
-	}
-
-	// resource list
-	const wxTreeItemId& hResources = AppendGroupItem(hParentID, g_metaResourceCLSID, objectResourcesName);
-	for (auto metaResource : metaObjectValue->GetResourceArrayObject()) {
-
-		if (metaResource->IsDeleted())
-			continue;
-
-		if (!metaResource->IsAcceptedByParent())
-			continue;
-
-		//const wxString strName = metaResource->GetName();
-
-		//if (!m_strSearch.IsEmpty()
-		//	&& strName.Find(m_strSearch) < 0)
-		//	continue;
-
-		AppendItem(hResources, metaResource);
-	}
-
-	// attribute list
-	const wxTreeItemId& hAttributes = AppendGroupItem(hParentID, g_metaAttributeCLSID, objectAttributesName);
-	for (auto attribute : metaObjectValue->GetAttributeArrayObject()) {
-
-		if (attribute->IsDeleted())
-			continue;
-
-		if (!attribute->IsAcceptedByParent())
-			continue;
-
-		//const wxString strName = attribute->GetName();
-
-		//if (!m_strSearch.IsEmpty()
-		//	&& strName.Find(m_strSearch) < 0)
-		//	continue;
-
-		AppendItem(hAttributes, attribute);
-	}
-
-	// forms
-	const wxTreeItemId& hForm = AppendGroupItem(hParentID, g_metaFormCLSID, objectFormsName);
-	for (auto metaForm : metaObjectValue->GetFormArrayObject()) {
-
-		if (metaForm->IsDeleted())
-			continue;
-
-		//const wxString strName = metaForm->GetName();
-
-		//if (!m_strSearch.IsEmpty()
-		//	&& strName.Find(m_strSearch) < 0)
-		//	continue;
-
-		AppendItem(hForm, metaForm);
-	}
-
-	// commands (object scope) — each business object owns its own commands
-	const wxTreeItemId& hCommands = AppendGroupItem(hParentID, g_metaCommandCLSID, objectCommandsName);
-	for (auto metaCommand : metaObjectValue->GetCommandArrayObject())
-		AppendCommandNode(hCommands, metaCommand);   // hub — nests sub-commands, skips deleted
-
-	// tables
-	const wxTreeItemId& hTemplates = AppendGroupItem(hParentID, g_metaTemplateCLSID, objectTemplatesName);
-	for (auto metaTemplate : metaObjectValue->GetTemplateArrayObject()) {
-
-		if (metaTemplate->IsDeleted())
-			continue;
-
-		//const wxString strName = metaTemplate->GetName();
-
-		//if (!m_strSearch.IsEmpty()
-		//	&& strName.Find(m_strSearch) < 0)
-		//	continue;
-
-		AppendItem(hTemplates, metaTemplate);
-	}
+	AddInformationRegisterItem(metaObject, hParentID);   // same shape — an accounting register too
 }
 
 #include "frontend/artProvider/artProvider.h"
 
-void ibMetadataTree::InitTree()
+////////////////////////////////////////////////////////////////////////////
+// THE LAYOUT — one table, read top to bottom
+////////////////////////////////////////////////////////////////////////////
+//
+// Every group node in the navigator is a row here, and the row is the whole truth about it: the
+// METATYPE it stands for (which already gives it its icon, its "New" and its context menu), the
+// words on it, which band it lives in, and how a member of it is put in. THE ORDER OF THE TABLE
+// IS THE ORDER ON SCREEN — there is no second place that says it, where before there were three
+// (the sequence of AppendGroupItem calls, the sequence of fill loops, and a list of DeleteChildren
+// that had silently fallen three entries behind).
+//
+// This is deliberately a table and NOT YET a walk over the type registry. What a metatype would
+// have to answer for a navigator to draw it without this table is exactly the columns below —
+// writing them out in one place is what makes that question askable. Once a metatype answers it
+// itself (a band + a rank + a label, beside the GetIconGroup it already has), this table goes away
+// and the tree becomes a walk over whatever registered — which is what would let a metatype added
+// later appear here with nothing edited in this file. Same shape as backend_picture.cpp, which
+// already walks ibValue::GetListCtorsByType(object_metadata) for exactly one such answer.
+//
+// ⚠ ORDER MATTERS TWICE: a row that nests inside another group (m_owner) must come AFTER it — the
+// parent node has to exist to hang from.
+
+namespace {
+
+enum class ibMetaBand { Common, Metadata };   // the two bands of the navigator
+
+// HOW A MEMBER OF THE GROUP IS PUT IN. Three shapes and no more: an ordinary row, a row that is
+// itself a group (a section holds sections), and a command (which nests its sub-commands).
+enum class ibMetaRow { Item, Group, Command };
+
+struct ibMetaTreeGroupDef {
+	ibClassID   m_clsid;
+	// The SOURCE string, marked for extraction and left untranslated here: this table is static
+	// data, built before a locale is loaded (same rule as backend/fileKind.cpp).
+	const char* m_label;
+	ibMetaBand  m_band;
+	ibClassID   m_owner;   // 0 = straight in the band; otherwise the group it nests under
+	ibMetaRow   m_row;
+};
+
+const ibMetaTreeGroupDef s_groups[] = {
+	// ——— Common: what belongs to the configuration as a whole and to no business object ———
+	{ g_metaCommonModuleCLSID,    wxTRANSLATE("Common modules"),   ibMetaBand::Common, 0, ibMetaRow::Item    },
+	{ g_metaCommonFormCLSID,      wxTRANSLATE("Common forms"),     ibMetaBand::Common, 0, ibMetaRow::Item    },
+	{ g_metaCommonCommandCLSID,   wxTRANSLATE("Common commands"),  ibMetaBand::Common, 0, ibMetaRow::Command },
+	{ g_metaCommonTemplateCLSID,  wxTRANSLATE("Common templates"), ibMetaBand::Common, 0, ibMetaRow::Item    },
+
+	// SCHEDULED JOBS stay under COMMON — unattended work belongs to the configuration as a whole.
+	// One branch, two kinds inside it: the branch itself holds the PARAMETERIZED jobs (it is their
+	// metatype's group node, so File → New reaches them the usual way), and the PREDEFINED ones
+	// live in a sub-branch declared FIRST, which is what puts them above — a configuration declares
+	// a handful of those and they never multiply with the data, while the parameterized list grows.
+	{ g_metaParameterizedJobCLSID, wxTRANSLATE("Scheduled jobs"),  ibMetaBand::Common, 0, ibMetaRow::Item },
+	{ g_metaScheduledJobCLSID,     wxTRANSLATE("Predefined jobs"), ibMetaBand::Common,
+	  g_metaParameterizedJobCLSID, ibMetaRow::Item },
+
+	// SESSION PARAMETERS sit beside the jobs for the same reason: each is an ATTRIBUTE whose owner
+	// is the session — declared here, set once by the session module, read everywhere.
+	{ g_metaSessionParameterCLSID, wxTRANSLATE("Session parameters"), ibMetaBand::Common, 0, ibMetaRow::Item },
+	// COMMON ATTRIBUTES — declared here, carried by many objects. What the declaration puts INTO
+	// each object is a child of THAT object and appears there, in its own attribute list.
+	{ g_metaCommonAttributeCLSID,  wxTRANSLATE("Common attributes"),  ibMetaBand::Common, 0, ibMetaRow::Item },
+	{ g_metaPictureCLSID,          wxTRANSLATE("Pictures"),           ibMetaBand::Common, 0, ibMetaRow::Item },
+	// Sections come AFTER the common items — a top-level navigation grouping, not a common asset.
+	{ g_metaSectionCLSID,          wxTRANSLATE("Sections"),           ibMetaBand::Common, 0, ibMetaRow::Group },
+	{ g_metaRoleCLSID,             wxTRANSLATE("Roles"),              ibMetaBand::Common, 0, ibMetaRow::Item },
+	{ g_metaLanguageCLSID,         wxTRANSLATE("Languages"),          ibMetaBand::Common, 0, ibMetaRow::Item },
+
+	// ——— Metadata: the business objects a configuration is made of ———
+	{ g_metaConstantCLSID,                   wxTRANSLATE("Constants"),        ibMetaBand::Metadata, 0, ibMetaRow::Item },
+	{ g_metaCatalogCLSID,                    wxTRANSLATE("Catalogs"),         ibMetaBand::Metadata, 0, ibMetaRow::Item },
+	{ g_metaDocumentCLSID,                   wxTRANSLATE("Documents"),        ibMetaBand::Metadata, 0, ibMetaRow::Item },
+	{ g_metaEnumerationCLSID,                wxTRANSLATE("Enumerations"),     ibMetaBand::Metadata, 0, ibMetaRow::Item },
+	{ g_metaDataProcessorCLSID,              wxTRANSLATE("Data processors"),  ibMetaBand::Metadata, 0, ibMetaRow::Item },
+	{ g_metaReportCLSID,                     wxTRANSLATE("Reports"),          ibMetaBand::Metadata, 0, ibMetaRow::Item },
+	{ g_metaInformationRegisterCLSID,        wxTRANSLATE("Information Registers"),  ibMetaBand::Metadata, 0, ibMetaRow::Item },
+	{ g_metaAccumulationRegisterCLSID,       wxTRANSLATE("Accumulation Registers"), ibMetaBand::Metadata, 0, ibMetaRow::Item },
+	{ g_metaChartOfCharacteristicTypesCLSID, wxTRANSLATE("Charts of characteristic types"), ibMetaBand::Metadata, 0, ibMetaRow::Item },
+	{ g_metaChartOfAccountsCLSID,            wxTRANSLATE("Charts of accounts"),      ibMetaBand::Metadata, 0, ibMetaRow::Item },
+	{ g_metaAccountingRegisterCLSID,         wxTRANSLATE("Accounting registers"),    ibMetaBand::Metadata, 0, ibMetaRow::Item },
+};
+
+} // namespace
+
+// HOW A METAOBJECT UNFOLDS — the ONE dispatcher. The initial fill and the create path both come
+// through here, so a kind cannot unfold one way when it is loaded and another way when it is made
+// (they were two separate chains of `else if` before, and they had already drifted apart).
+//
+// The reuse is meaningful and is the only real knowledge in it: a chart of characteristic types
+// and a chart of accounts render AS a catalog, an accounting register AS an accumulation register,
+// a parameterized job AS a catalog entry with a second verb.
+void ibConfigurationTree::ExpandMetaItem(ibValueMetaObject* metaItem, const wxTreeItemId& item)
+{
+	const ibClassID clsid = metaItem->GetClassType();
+
+	if      (clsid == g_metaCatalogCLSID)                    AddCatalogItem(metaItem, item);
+	else if (clsid == g_metaDocumentCLSID)                   AddDocumentItem(metaItem, item);
+	else if (clsid == g_metaEnumerationCLSID)                AddEnumerationItem(metaItem, item);
+	else if (clsid == g_metaDataProcessorCLSID)              AddDataProcessorItem(metaItem, item);
+	else if (clsid == g_metaReportCLSID)                     AddReportItem(metaItem, item);
+	else if (clsid == g_metaInformationRegisterCLSID)        AddInformationRegisterItem(metaItem, item);
+	else if (clsid == g_metaAccumulationRegisterCLSID)       AddAccumulationRegisterItem(metaItem, item);
+	else if (clsid == g_metaParameterizedJobCLSID)           AddCatalogItem(metaItem, item);
+	else if (clsid == g_metaChartOfCharacteristicTypesCLSID) AddCatalogItem(metaItem, item);
+	else if (clsid == g_metaChartOfAccountsCLSID)            AddCatalogItem(metaItem, item);
+	else if (clsid == g_metaAccountingRegisterCLSID)         AddAccumulationRegisterItem(metaItem, item);
+	else if (clsid == g_metaSectionCLSID)                    AddInterfaceItem(metaItem, item);
+
+	// A COMMAND HOLDS COMMANDS. The fill path always knew this (it goes through AppendCommandNode);
+	// the create/paste path did not, so pasting a command that owns sub-commands drew a leaf — the
+	// children were restored in the metadata and stayed invisible until the configuration reopened.
+	else if (clsid == g_metaCommandCLSID || clsid == g_metaCommonCommandCLSID) {
+		for (auto sub : static_cast<ibValueMetaObjectCommand*>(metaItem)->GetSubCommands())
+			AppendCommandNode(item, sub);
+	}
+
+	// A TABULAR SECTION shows its own columns. It reaches this dispatcher from the create path
+	// only — a table is never a top-level group — but it belongs here rather than beside the call,
+	// so "how does a kind unfold" has one answer wherever it is asked.
+	else if (clsid == g_metaTableCLSID || clsid == g_metaTableRefCLSID) {
+		ibValueMetaObjectTableData* metaTable = metaItem->ConvertToType<ibValueMetaObjectTableData>();
+		wxASSERT(metaTable);
+		for (auto attribute : metaTable->GetAttributeArrayObject()) {
+			if (attribute->IsDeleted())
+				continue;
+			if (!attribute->IsAcceptedByParent())
+				continue;
+			AppendItem(item, attribute);
+		}
+	}
+	// Anything else is a leaf row — a module, a form, a picture, a role, a language.
+}
+
+// DOES THIS OBJECT ANSWER THE SEARCH BOX. One predicate, asked in one place, so a filtered tree
+// cannot disagree with itself the way it did when the test was written out at each loop.
+//
+// CASE-INSENSITIVE, and by NAME OR SYNONYM: `Find` is case-sensitive, so typing what is on screen
+// in the wrong case found nothing — and the words a person reads in this tree are the name, while
+// the words they remember are often the synonym.
+bool ibConfigurationTree::MatchesSearch(const ibValueMetaObject* metaObject) const
+{
+	if (m_strSearch.IsEmpty())
+		return true;
+	const wxString needle = m_strSearch.Lower();
+	return metaObject->GetName().Lower().Find(needle) != wxNOT_FOUND
+		|| metaObject->GetSynonym().Lower().Find(needle) != wxNOT_FOUND;
+}
+
+void ibConfigurationTree::InitTree()
 {
 	wxImageList* imageList = m_metaTreeCtrl->GetImageList();
 	wxASSERT(imageList);
 
 	m_treeMETADATA = AppendRootItem(g_metaCommonMetadataCLSID, _("Configuration"));
 
-	//*****************************************************************************************************
-	//*                                      Common objects                                               *
-	//*****************************************************************************************************
-
 	const int imageCommonIndex = imageList->Add(wxArtProvider::GetBitmapBundle(wxART_COMMON_FOLDER, wxART_METATREE).GetBitmap(wxDefaultSize));
 	m_treeCOMMON = m_metaTreeCtrl->AppendItem(m_treeMETADATA, commonName, imageCommonIndex, imageCommonIndex);
 
-	///////////////////////////////////////////////////////////////////////////////////////////////////////
+	m_groups.clear();
+	for (const ibMetaTreeGroupDef& def : s_groups) {
+		const wxTreeItemId parent = def.m_owner != 0
+			? Group(def.m_owner)                                                   // nested (predefined jobs)
+			: (def.m_band == ibMetaBand::Common ? m_treeCOMMON : m_treeMETADATA);
+		wxASSERT(parent.IsOk());   // a nested row placed before its owner — see the table's ⚠
+		m_groups[def.m_clsid] = AppendGroupItem(parent, def.m_clsid,
+			wxGetTranslation(wxString::FromUTF8(def.m_label)));
+	}
 
-	m_treeMODULES = AppendGroupItem(m_treeCOMMON, g_metaCommonModuleCLSID, commonModulesName);
-	m_treeFORMS = AppendGroupItem(m_treeCOMMON, g_metaCommonFormCLSID, commonFormsName);
-	m_treeCOMMANDS = AppendGroupItem(m_treeCOMMON, g_metaCommonCommandCLSID, commandsName);
-
-	m_treeTEMPLATES = AppendGroupItem(m_treeCOMMON, g_metaCommonTemplateCLSID, commonTemplatesName);
-
-	// SCHEDULED JOBS stay under COMMON — unattended work belongs to the configuration as a whole,
-	// not to any one business object, which is exactly what this umbrella means. One branch, two
-	// kinds inside it: the branch itself holds the PARAMETERIZED jobs (it is their metatype's group
-	// node, so File → New reaches them the usual way), and the PREDEFINED ones live in a sub-branch
-	// declared FIRST, which is what puts them above — a configuration declares a handful of those
-	// and they never multiply with the data, while the parameterized list is the one that grows.
-	m_treeJOBS = AppendGroupItem(m_treeCOMMON, g_metaParameterizedJobCLSID, scheduledJobsName);
-	m_treeSCHEDULED_JOBS = AppendGroupItem(m_treeJOBS, g_metaScheduledJobCLSID, predefinedJobsName);
-
-	// SESSION PARAMETERS sit beside the jobs, under COMMON, for the same reason those do: they
-	// belong to the configuration as a whole and to no business object. Each one is an ATTRIBUTE
-	// whose owner is the session — declared here, set once by the session module, read everywhere.
-	m_treeSESSION_PARAMETERS = AppendGroupItem(m_treeCOMMON, g_metaSessionParameterCLSID, sessionParametersName);
-
-	// COMMON ATTRIBUTES — declared here, carried by many objects. Under COMMON for the same
-	// reason as the two above: the declaration belongs to the configuration. What it puts into
-	// each object is a child of THAT object and appears there, in its own attribute list.
-	m_treeCOMMON_ATTRIBUTES = AppendGroupItem(m_treeCOMMON, g_metaCommonAttributeCLSID, commonAttributesName);
-
-	m_treePICTURES = AppendGroupItem(m_treeCOMMON, g_metaPictureCLSID, picturesName);
-
-	// Sections come AFTER the common items — a top-level navigation grouping, not a common asset.
-	m_treeINTERFACES = AppendGroupItem(m_treeCOMMON, g_metaSectionCLSID, interfacesName);
-
-	m_treeROLES = AppendGroupItem(m_treeCOMMON, g_metaRoleCLSID, rolesName);
-
-	m_treeLANGUAGES = AppendGroupItem(m_treeCOMMON, g_metaLanguageCLSID, languagesName);
-
-	//*****************************************************************************************************
-	//*                                      Custom objects                                               *
-	//*****************************************************************************************************
-
-	m_treeCONSTANTS = AppendGroupItem(m_treeMETADATA, g_metaConstantCLSID, constantsName);
-	m_treeCATALOGS = AppendGroupItem(m_treeMETADATA, g_metaCatalogCLSID, catalogsName);
-	m_treeDOCUMENTS = AppendGroupItem(m_treeMETADATA, g_metaDocumentCLSID, documentsName);
-	m_treeENUMERATIONS = AppendGroupItem(m_treeMETADATA, g_metaEnumerationCLSID, enumerationsName);
-	m_treeDATAPROCESSORS = AppendGroupItem(m_treeMETADATA, g_metaDataProcessorCLSID, dataProcessorName);
-	m_treeREPORTS = AppendGroupItem(m_treeMETADATA, g_metaReportCLSID, reportsName);
-
-	m_treeINFORMATION_REGISTERS = AppendGroupItem(m_treeMETADATA, g_metaInformationRegisterCLSID, informationRegisterName);
-	m_treeACCUMULATION_REGISTERS = AppendGroupItem(m_treeMETADATA, g_metaAccumulationRegisterCLSID, accumulationRegisterName);
-	m_treeCHARTS_OF_CHARACTERISTIC_TYPES = AppendGroupItem(m_treeMETADATA, g_metaChartOfCharacteristicTypesCLSID, chartsOfCharacteristicTypesName);
-	m_treeCHARTS_OF_ACCOUNTS = AppendGroupItem(m_treeMETADATA, g_metaChartOfAccountsCLSID, chartsOfAccountsName);
-	m_treeACCOUNTING_REGISTERS = AppendGroupItem(m_treeMETADATA, g_metaAccountingRegisterCLSID, accountingRegistersName);
 
 	//Set item bold and name
 	m_metaTreeCtrl->SetItemText(m_treeMETADATA, _("Configuration"));
 	m_metaTreeCtrl->SetItemBold(m_treeMETADATA);
 }
 
-void ibMetadataTree::ActivateTree()
+void ibConfigurationTree::ActivateTree()
 {
 	if (m_metaData != nullptr)
 		objectInspector->SelectObject(GetMetaObject(m_metaTreeCtrl->GetSelection()));
 }
 
-void ibMetadataTree::ClearTree()
+// CLOSING THE EDITORS IS PART OF *LEAVING A CONFIGURATION*, not of redrawing the tree — and those
+// two used to be the same call. Rebuilding the rows is what a search does on every keystroke, so
+// typing into the search box closed every editor opened from this navigator, and so did deleting
+// the last character (the empty-string search is what restores the full tree).
+void ibConfigurationTree::CloseOwnedDocuments()
 {
 	for (auto& doc : docManager->GetDocumentsVector()) {
 		// docManager->GetDocumentsVector() now mixes ibMetaDocument
@@ -1623,73 +1157,39 @@ void ibMetadataTree::ClearTree()
 			doc->DeleteAllViews();
 		}
 	}
+}
 
-	//disable event
-	m_metaTreeCtrl->SetEvtHandlerEnabled(false);
+void ibConfigurationTree::ClearTree()
+{
+	// disable events for the whole rebuild - RAII, so a throw from InitTree cannot leave them off
+	const ibEventsOff eventsOff(m_metaTreeCtrl);
 
-	//*****************************************************************************************************
-	//*                                      Common objects                                               *
-	//*****************************************************************************************************
+	// THE CLEAR IS TOTAL, and it always was. A per-group DeleteChildren pass used to stand here,
+	// written as a list of nineteen branches — but it ran immediately before DeleteAllItems, so
+	// nothing it did could survive, and the list had fallen three entries behind (session
+	// parameters, common attributes, languages) without any way for that to show. The intent it
+	// carried — "clear the contents on demand" — is what these two lines do, for every group
+	// including the ones nobody remembered to add.
+	m_groups.clear();
 
-	if (m_treeMODULES.IsOk())
-		m_metaTreeCtrl->DeleteChildren(m_treeMODULES);
-	if (m_treeFORMS.IsOk())
-		m_metaTreeCtrl->DeleteChildren(m_treeFORMS);
-	if (m_treeTEMPLATES.IsOk())
-		m_metaTreeCtrl->DeleteChildren(m_treeTEMPLATES);
-
-	if (m_treeINTERFACES.IsOk())
-		m_metaTreeCtrl->DeleteChildren(m_treeINTERFACES);
-	if (m_treeCOMMANDS.IsOk())
-		m_metaTreeCtrl->DeleteChildren(m_treeCOMMANDS);
-	// The jobs branch holds the predefined sub-branch, so clearing the branch clears both —
-	// InitTree re-creates the pair.
-	if (m_treeJOBS.IsOk())
-		m_metaTreeCtrl->DeleteChildren(m_treeJOBS);
-	if (m_treeROLES.IsOk())
-		m_metaTreeCtrl->DeleteChildren(m_treeROLES);
-	if (m_treePICTURES.IsOk())
-		m_metaTreeCtrl->DeleteChildren(m_treePICTURES);
-
-	if (m_treeCONSTANTS.IsOk())
-		m_metaTreeCtrl->DeleteChildren(m_treeCONSTANTS);
-
-	//*****************************************************************************************************
-	//*                                      Custom objects                                               *
-	//*****************************************************************************************************
-
-	if (m_treeCATALOGS.IsOk())
-		m_metaTreeCtrl->DeleteChildren(m_treeCATALOGS);
-	if (m_treeDOCUMENTS.IsOk())
-		m_metaTreeCtrl->DeleteChildren(m_treeDOCUMENTS);
-	if (m_treeENUMERATIONS.IsOk())
-		m_metaTreeCtrl->DeleteChildren(m_treeENUMERATIONS);
-	if (m_treeDATAPROCESSORS.IsOk())
-		m_metaTreeCtrl->DeleteChildren(m_treeDATAPROCESSORS);
-	if (m_treeREPORTS.IsOk())
-		m_metaTreeCtrl->DeleteChildren(m_treeREPORTS);
-	if (m_treeINFORMATION_REGISTERS.IsOk())
-		m_metaTreeCtrl->DeleteChildren(m_treeINFORMATION_REGISTERS);
-	if (m_treeACCUMULATION_REGISTERS.IsOk())
-		m_metaTreeCtrl->DeleteChildren(m_treeACCUMULATION_REGISTERS);
-	if (m_treeCHARTS_OF_CHARACTERISTIC_TYPES.IsOk())
-		m_metaTreeCtrl->DeleteChildren(m_treeCHARTS_OF_CHARACTERISTIC_TYPES);
-	if (m_treeCHARTS_OF_ACCOUNTS.IsOk())
-		m_metaTreeCtrl->DeleteChildren(m_treeCHARTS_OF_ACCOUNTS);
-	if (m_treeACCOUNTING_REGISTERS.IsOk())
-		m_metaTreeCtrl->DeleteChildren(m_treeACCOUNTING_REGISTERS);
-
-	//delete all items
+	// ROWS FIRST, THEN THE LIST THEY INDEX INTO — the twins already do it in this order. A row
+	// holds an INDEX into the image list, so dropping the images while the rows still reference
+	// them leaves every surviving row pointing past the end for as long as the delete pass runs.
 	m_metaTreeCtrl->DeleteAllItems();
+
+	// THE IMAGE LIST IS PART OF THE TREE, so it is cleared with it. Every Append* adds a bitmap and
+	// nothing ever removed one, so each rebuild — and a search is a rebuild — grew the list by the
+	// whole configuration again and kept it for the life of the process. InitTree / FillData re-add
+	// what they need; the indices they hand out are only ever read back from the same pass.
+	if (wxImageList* imageList = m_metaTreeCtrl->GetImageList())
+		imageList->RemoveAll();
 
 	//initialize tree
 	InitTree();
 
-	//enable event 
-	m_metaTreeCtrl->SetEvtHandlerEnabled(true);
 }
 
-void ibMetadataTree::FillData()
+void ibConfigurationTree::FillData()
 {
 	ibValueMetaObject* commonMetadata = m_metaData->GetCommonMetaObject();
 	wxASSERT(commonMetadata);
@@ -1697,480 +1197,62 @@ void ibMetadataTree::FillData()
 	m_metaTreeCtrl->SetItemText(m_treeMETADATA, m_metaData->GetConfigName());
 	m_metaTreeCtrl->SetItemData(m_treeMETADATA, new wxTreeItemMetaData(commonMetadata));
 
-	//****************************************************************
-	//*                          CommonModules                       *
-	//****************************************************************
-	for (auto commonModule : m_metaData->GetAnyArrayObject(g_metaCommonModuleCLSID)) {
+	// ONE PASS OVER THE LAYOUT. Every group asks the metadata for its own kind and puts what comes
+	// back in the way its row says. This was twenty copies of the loop below, one per group, each
+	// with its own spelling of the same three tests — and the copies had already diverged (the
+	// search test was written out in some and left commented out in others).
+	for (const ibMetaTreeGroupDef& def : s_groups) {
 
-		if (commonModule->IsDeleted())
+		const wxTreeItemId group = Group(def.m_clsid);
+		if (!group.IsOk())
 			continue;
 
-		const wxString& strName = commonModule->GetName();
+		for (auto metaObject : m_metaData->GetAnyArrayObject(def.m_clsid)) {
 
-		if (!m_strSearch.IsEmpty()
-			&& strName.Find(m_strSearch) < 0)
-			continue;
+			if (metaObject->IsDeleted())
+				continue;
 
-		AppendItem(m_treeMODULES, commonModule);
+			wxTreeItemId node;
+			switch (def.m_row) {
+			case ibMetaRow::Command:
+				node = AppendCommandNode(group, metaObject);   // hub — nests sub-commands, skips deleted
+				break;
+			case ibMetaRow::Group:
+				// A section holds sections, so its row is a group node in its own right.
+				node = AppendGroupItem(group, def.m_clsid, metaObject);
+				ExpandMetaItem(metaObject, node);
+				break;
+			default:
+				node = AppendItem(group, metaObject);
+				ExpandMetaItem(metaObject, node);
+				break;
+			}
+
+			// AN OBJECT SURVIVES A SEARCH IF IT MATCHED — or if anything inside it did. The unfold
+			// above has already filtered its contents, so "nothing left under it" is the answer to
+			// the second half. This is what makes searching for an attribute name show the catalog
+			// that carries it, instead of finding nothing at all.
+			if (!m_strSearch.IsEmpty() && node.IsOk() && !MatchesSearch(metaObject)
+				&& !m_metaTreeCtrl->HasChildren(node))
+				m_metaTreeCtrl->Delete(node);
+		}
 	}
 
-	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeMODULES))
-		m_metaTreeCtrl->Delete(m_treeMODULES);
-
-	//****************************************************************
-	//*                          CommonForms                         *
-	//****************************************************************
-	for (auto commonForm : m_metaData->GetAnyArrayObject(g_metaCommonFormCLSID)) {
-
-		if (commonForm->IsDeleted())
-			continue;
-
-		const wxString& strName = commonForm->GetName();
-
-		if (!m_strSearch.IsEmpty()
-			&& strName.Find(m_strSearch) < 0)
-			continue;
-
-		AppendItem(m_treeFORMS, commonForm);
+	// A GROUP THAT MATCHED NOTHING GOES AWAY — but ONLY while a search is running. Empty is the
+	// normal state of a group otherwise: it is where an object of that kind gets created, so
+	// hiding it would hide the way in.
+	//
+	// BOTTOM-UP, because a nested group counts as a child of its owner: sweeping top-down left the
+	// jobs branch standing on the strength of a sub-branch that the same pass was about to remove.
+	if (!m_strSearch.IsEmpty()) {
+		for (auto def = std::rbegin(s_groups); def != std::rend(s_groups); ++def) {
+			const wxTreeItemId group = Group(def->m_clsid);
+			if (group.IsOk() && !m_metaTreeCtrl->HasChildren(group)) {
+				m_metaTreeCtrl->Delete(group);
+				m_groups.erase(def->m_clsid);   // the entry goes with the node — no dangling id
+			}
+		}
 	}
-
-	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeFORMS))
-		m_metaTreeCtrl->Delete(m_treeFORMS);
-
-	//****************************************************************
-	//*                          CommonMakets                        *
-	//****************************************************************
-	for (auto commonTemlate : m_metaData->GetAnyArrayObject(g_metaCommonTemplateCLSID)) {
-
-		if (commonTemlate->IsDeleted())
-			continue;
-
-		const wxString& strName = commonTemlate->GetName();
-
-		if (!m_strSearch.IsEmpty()
-			&& strName.Find(m_strSearch) < 0)
-			continue;
-
-		AppendItem(m_treeTEMPLATES, commonTemlate);
-	}
-
-	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeTEMPLATES))
-		m_metaTreeCtrl->Delete(m_treeTEMPLATES);
-
-	//****************************************************************
-	//*         Scheduled jobs — predefined first, then the rows      *
-	//****************************************************************
-	for (auto scheduledJob : m_metaData->GetAnyArrayObject(g_metaScheduledJobCLSID)) {
-
-		if (scheduledJob->IsDeleted())
-			continue;
-
-		const wxString& strName = scheduledJob->GetName();
-
-		if (!m_strSearch.IsEmpty()
-			&& strName.Find(m_strSearch) < 0)
-			continue;
-
-		AppendItem(m_treeSCHEDULED_JOBS, scheduledJob);
-	}
-
-	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeSCHEDULED_JOBS))
-		m_metaTreeCtrl->Delete(m_treeSCHEDULED_JOBS);
-
-	// The parameterized ones are ordinary reference objects, so they unfold exactly like a catalog
-	// — attributes, tabular sections, forms, commands, templates — through the same AddCatalogItem.
-	for (auto parameterizedJob : m_metaData->GetAnyArrayObject(g_metaParameterizedJobCLSID)) {
-
-		if (parameterizedJob->IsDeleted())
-			continue;
-
-		const wxString& strName = parameterizedJob->GetName();
-
-		if (!m_strSearch.IsEmpty()
-			&& strName.Find(m_strSearch) < 0)
-			continue;
-
-		AddCatalogItem(parameterizedJob,
-			AppendItem(m_treeJOBS, parameterizedJob));
-	}
-
-	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeJOBS))
-		m_metaTreeCtrl->Delete(m_treeJOBS);
-
-	//****************************************************************
-	//*                     Session parameters                       *
-	//****************************************************************
-	// Without this loop the branch exists but stays empty after a reload: a newly created
-	// one is put into the tree by the create path itself, so it LOOKS saved until the
-	// configuration is reopened and the fill has nothing to say about it.
-	for (auto sessionParameter : m_metaData->GetAnyArrayObject(g_metaSessionParameterCLSID)) {
-
-		if (sessionParameter->IsDeleted())
-			continue;
-
-		const wxString& strName = sessionParameter->GetName();
-
-		if (!m_strSearch.IsEmpty()
-			&& strName.Find(m_strSearch) < 0)
-			continue;
-
-		AppendItem(m_treeSESSION_PARAMETERS, sessionParameter);
-	}
-
-	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeSESSION_PARAMETERS))
-		m_metaTreeCtrl->Delete(m_treeSESSION_PARAMETERS);
-
-	//****************************************************************
-	//*                     Common attributes                        *
-	//****************************************************************
-	for (auto commonAttribute : m_metaData->GetAnyArrayObject(g_metaCommonAttributeCLSID)) {
-
-		if (commonAttribute->IsDeleted())
-			continue;
-
-		const wxString& strName = commonAttribute->GetName();
-
-		if (!m_strSearch.IsEmpty()
-			&& strName.Find(m_strSearch) < 0)
-			continue;
-
-		AppendItem(m_treeCOMMON_ATTRIBUTES, commonAttribute);
-	}
-
-	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeCOMMON_ATTRIBUTES))
-		m_metaTreeCtrl->Delete(m_treeCOMMON_ATTRIBUTES);
-
-	//****************************************************************
-	//*                          Pictures							 *
-	//****************************************************************
-	for (auto picture : m_metaData->GetAnyArrayObject(g_metaPictureCLSID)) {
-
-		if (picture->IsDeleted())
-			continue;
-
-		const wxString& strName = picture->GetName();
-
-		if (!m_strSearch.IsEmpty()
-			&& strName.Find(m_strSearch) < 0)
-			continue;
-
-		AppendItem(m_treePICTURES, picture);
-	}
-
-	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treePICTURES))
-		m_metaTreeCtrl->Delete(m_treePICTURES);
-
-	//****************************************************************
-	//*                          Interfaces							 *
-	//****************************************************************
-
-	for (auto commonInterface : m_metaData->GetAnyArrayObject(g_metaSectionCLSID)) {
-
-		if (commonInterface->IsDeleted())
-			continue;
-
-		const wxString& strName = commonInterface->GetName();
-
-		if (!m_strSearch.IsEmpty()
-			&& strName.Find(m_strSearch) < 0)
-			continue;
-
-		AddInterfaceItem(commonInterface,
-			AppendGroupItem(m_treeINTERFACES, g_metaSectionCLSID, commonInterface));
-	}
-
-	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeINTERFACES))
-		m_metaTreeCtrl->Delete(m_treeINTERFACES);
-
-	//****************************************************************
-	//*                          Roles								 *
-	//****************************************************************
-	for (auto role : m_metaData->GetAnyArrayObject(g_metaRoleCLSID)) {
-
-		if (role->IsDeleted())
-			continue;
-
-		const wxString& strName = role->GetName();
-
-		if (!m_strSearch.IsEmpty()
-			&& strName.Find(m_strSearch) < 0)
-			continue;
-
-		AppendItem(m_treeROLES, role);
-	}
-
-	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeROLES))
-		m_metaTreeCtrl->Delete(m_treeROLES);
-
-	//****************************************************************
-	//*                          Languages							 *
-	//****************************************************************
-	for (auto language : m_metaData->GetAnyArrayObject(g_metaLanguageCLSID)) {
-
-		if (language->IsDeleted())
-			continue;
-
-		const wxString& strName = language->GetName();
-
-		if (!m_strSearch.IsEmpty()
-			&& strName.Find(m_strSearch) < 0)
-			continue;
-
-		AppendItem(m_treeLANGUAGES, language);
-	}
-
-	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeLANGUAGES))
-		m_metaTreeCtrl->Delete(m_treeLANGUAGES);
-
-	//****************************************************************
-	//*                          Constants                           *
-	//****************************************************************
-	for (auto constant : m_metaData->GetAnyArrayObject(g_metaConstantCLSID)) {
-
-		if (constant->IsDeleted())
-			continue;
-
-		const wxString& strName = constant->GetName();
-
-		if (!m_strSearch.IsEmpty()
-			&& strName.Find(m_strSearch) < 0)
-			continue;
-
-		AppendItem(m_treeCONSTANTS, constant);
-	}
-
-	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeCONSTANTS))
-		m_metaTreeCtrl->Delete(m_treeCONSTANTS);
-
-	//****************************************************************
-	//*                        Commands                              *
-	//****************************************************************
-	for (auto command : m_metaData->GetAnyArrayObject(g_metaCommonCommandCLSID)) {
-
-		if (command->IsDeleted())
-			continue;
-
-		const wxString& strName = command->GetName();
-
-		if (!m_strSearch.IsEmpty()
-			&& strName.Find(m_strSearch) < 0)
-			continue;
-
-		AppendCommandNode(m_treeCOMMANDS, command);   // hub — nests sub-commands
-	}
-
-	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeCOMMANDS))
-		m_metaTreeCtrl->Delete(m_treeCOMMANDS);
-
-	//****************************************************************
-	//*                        Catalogs                              *
-	//****************************************************************
-	for (auto catalog : m_metaData->GetAnyArrayObject(g_metaCatalogCLSID)) {
-
-		if (catalog->IsDeleted())
-			continue;
-
-		const wxString& strName = catalog->GetName();
-
-		if (!m_strSearch.IsEmpty()
-			&& strName.Find(m_strSearch) < 0)
-			continue;
-
-		AddCatalogItem(catalog,
-			AppendItem(m_treeCATALOGS, catalog));
-	}
-
-	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeCATALOGS))
-		m_metaTreeCtrl->Delete(m_treeCATALOGS);
-
-	//****************************************************************
-	//*                        Documents                             *
-	//****************************************************************
-	for (auto document : m_metaData->GetAnyArrayObject(g_metaDocumentCLSID)) {
-
-		if (document->IsDeleted())
-			continue;
-
-		const wxString& strName = document->GetName();
-
-		if (!m_strSearch.IsEmpty()
-			&& strName.Find(m_strSearch) < 0)
-			continue;
-
-		AddDocumentItem(document,
-			AppendItem(m_treeDOCUMENTS, document));
-	}
-
-	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeDOCUMENTS))
-		m_metaTreeCtrl->Delete(m_treeDOCUMENTS);
-
-	//****************************************************************
-	//*                          Enumerations                        *
-	//****************************************************************
-	for (auto enumeration : m_metaData->GetAnyArrayObject(g_metaEnumerationCLSID)) {
-
-		if (enumeration->IsDeleted())
-			continue;
-
-		const wxString& strName = enumeration->GetName();
-
-		if (!m_strSearch.IsEmpty()
-			&& strName.Find(m_strSearch) < 0)
-			continue;
-
-		AddEnumerationItem(enumeration,
-			AppendItem(m_treeENUMERATIONS, enumeration));
-	}
-
-	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeENUMERATIONS))
-		m_metaTreeCtrl->Delete(m_treeENUMERATIONS);
-
-	//****************************************************************
-	//*                          Data processor                      *
-	//****************************************************************
-	for (auto dataProcessor : m_metaData->GetAnyArrayObject(g_metaDataProcessorCLSID)) {
-
-		if (dataProcessor->IsDeleted())
-			continue;
-
-		const wxString& strName = dataProcessor->GetName();
-
-		if (!m_strSearch.IsEmpty()
-			&& strName.Find(m_strSearch) < 0)
-			continue;
-
-		AddDataProcessorItem(dataProcessor,
-			AppendItem(m_treeDATAPROCESSORS, dataProcessor));
-	}
-
-	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeDATAPROCESSORS))
-		m_metaTreeCtrl->Delete(m_treeDATAPROCESSORS);
-
-	//****************************************************************
-	//*                          Report			                     *
-	//****************************************************************
-	for (auto report : m_metaData->GetAnyArrayObject(g_metaReportCLSID)) {
-
-		if (report->IsDeleted())
-			continue;
-
-		const wxString& strName = report->GetName();
-
-		if (!m_strSearch.IsEmpty()
-			&& strName.Find(m_strSearch) < 0)
-			continue;
-
-		AddReportItem(report,
-			AppendItem(m_treeREPORTS, report));
-	}
-
-	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeREPORTS))
-		m_metaTreeCtrl->Delete(m_treeREPORTS);
-
-	//****************************************************************
-	//*                          Information register			     *
-	//****************************************************************
-	for (auto informationRegister : m_metaData->GetAnyArrayObject(g_metaInformationRegisterCLSID)) {
-
-		if (informationRegister->IsDeleted())
-			continue;
-
-		const wxString& strName = informationRegister->GetName();
-
-		if (!m_strSearch.IsEmpty()
-			&& strName.Find(m_strSearch) < 0)
-			continue;
-
-		AddInformationRegisterItem(informationRegister,
-			AppendItem(m_treeINFORMATION_REGISTERS, informationRegister));
-	}
-
-	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeINFORMATION_REGISTERS))
-		m_metaTreeCtrl->Delete(m_treeINFORMATION_REGISTERS);
-
-	//****************************************************************
-	//*                          Accumulation register			     *
-	//****************************************************************
-	for (auto accumulationRegister : m_metaData->GetAnyArrayObject(g_metaAccumulationRegisterCLSID)) {
-
-		if (accumulationRegister->IsDeleted())
-			continue;
-
-		const wxString& strName = accumulationRegister->GetName();
-
-		if (!m_strSearch.IsEmpty()
-			&& strName.Find(m_strSearch) < 0)
-			continue;
-
-		AddAccumulationRegisterItem(accumulationRegister,
-			AppendItem(m_treeACCUMULATION_REGISTERS, accumulationRegister));
-	}
-
-	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeACCUMULATION_REGISTERS))
-		m_metaTreeCtrl->Delete(m_treeACCUMULATION_REGISTERS);
-
-	//****************************************************************
-	//*                          Charts of characteristic types      *
-	//****************************************************************
-	for (auto chartOfCharacteristicTypes : m_metaData->GetAnyArrayObject(g_metaChartOfCharacteristicTypesCLSID)) {
-
-		if (chartOfCharacteristicTypes->IsDeleted())
-			continue;
-
-		const wxString& strName = chartOfCharacteristicTypes->GetName();
-
-		if (!m_strSearch.IsEmpty()
-			&& strName.Find(m_strSearch) < 0)
-			continue;
-
-		AddCatalogItem(chartOfCharacteristicTypes,
-			AppendItem(m_treeCHARTS_OF_CHARACTERISTIC_TYPES, chartOfCharacteristicTypes));
-	}
-
-	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeCHARTS_OF_CHARACTERISTIC_TYPES))
-		m_metaTreeCtrl->Delete(m_treeCHARTS_OF_CHARACTERISTIC_TYPES);
-
-	//****************************************************************
-	//*                          Charts of accounts                  *
-	//****************************************************************
-	for (auto chartOfAccounts : m_metaData->GetAnyArrayObject(g_metaChartOfAccountsCLSID)) {
-
-		if (chartOfAccounts->IsDeleted())
-			continue;
-
-		const wxString& strName = chartOfAccounts->GetName();
-
-		if (!m_strSearch.IsEmpty()
-			&& strName.Find(m_strSearch) < 0)
-			continue;
-
-		AddCatalogItem(chartOfAccounts,
-			AppendItem(m_treeCHARTS_OF_ACCOUNTS, chartOfAccounts));
-	}
-
-	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeCHARTS_OF_ACCOUNTS))
-		m_metaTreeCtrl->Delete(m_treeCHARTS_OF_ACCOUNTS);
-
-	//****************************************************************
-	//*                          Accounting register                 *
-	//****************************************************************
-	for (auto accountingRegister : m_metaData->GetAnyArrayObject(g_metaAccountingRegisterCLSID)) {
-
-		if (accountingRegister->IsDeleted())
-			continue;
-
-		const wxString& strName = accountingRegister->GetName();
-
-		if (!m_strSearch.IsEmpty()
-			&& strName.Find(m_strSearch) < 0)
-			continue;
-
-		AddAccumulationRegisterItem(accountingRegister,
-			AppendItem(m_treeACCOUNTING_REGISTERS, accountingRegister));
-	}
-
-	if (!m_strSearch.IsEmpty() && !m_metaTreeCtrl->HasChildren(m_treeACCOUNTING_REGISTERS))
-		m_metaTreeCtrl->Delete(m_treeACCOUNTING_REGISTERS);
 
 	//set modify
 	Modify(m_metaData->IsModified());
@@ -2179,9 +1261,10 @@ void ibMetadataTree::FillData()
 	UpdateToolbar(commonMetadata, m_treeMETADATA);
 }
 
-bool ibMetadataTree::Load(ibMetaDataConfigurationBase* metaData)
+bool ibConfigurationTree::Load(ibMetaDataConfigurationBase* metaData)
 {
 	m_metaTreeCtrl->Freeze();
+	CloseOwnedDocuments();   // a configuration is being left — its editors go with it
 	ClearTree();
 	m_metaData = metaData ? metaData : appEnv::ActiveMetaData();
 	FillData(); //Fill all data from metaData
@@ -2193,7 +1276,7 @@ bool ibMetadataTree::Load(ibMetaDataConfigurationBase* metaData)
 	return true;
 }
 
-bool ibMetadataTree::Save()
+bool ibConfigurationTree::Save()
 {
 	wxASSERT(m_metaData);
 
@@ -2205,7 +1288,7 @@ bool ibMetadataTree::Save()
 
 /////////////////////////////////////////////////////////////
 
-void ibMetadataTree::Search(const wxString& strSearch)
+void ibConfigurationTree::Search(const wxString& strSearch)
 {
 	m_metaTreeCtrl->Freeze();
 

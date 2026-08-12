@@ -75,12 +75,19 @@ ibValue* ibMetaData::CreateObjectRef(const ibClassID& clsid, ibValue** paParams,
 
 void ibMetaData::RegisterCtor(ibCtorMetaValueType* typeCtor)
 {
+	if (typeCtor == nullptr)   // checked BEFORE the assert below dereferences it
+		return;
+
 	wxASSERT(typeCtor->GetClassType() > 0);
 
-	if (typeCtor != nullptr) {
-
+	{
 		if (ibMetaData::IsRegisterCtor(typeCtor->GetClassType())) {
-			ibBackendCoreException::Error(_("Object '%s' is exist"), typeCtor->GetClassName());
+			// The register*() macros hand us a raw `new`; the raise leaves nobody to free it.
+			// (ibValue's path is covered by value_register's catch — the metadata macros have none.)
+			const wxString className = typeCtor->GetClassName();
+			wxDELETE(typeCtor);
+			ibBackendCoreException::Error(_("Object '%s' is exist"), className);
+			return;
 		}
 
 #ifdef DEBUG
@@ -110,7 +117,9 @@ void ibMetaData::UnRegisterCtor(ibCtorMetaValueType*& typeCtor)
 		typeCtor = nullptr;
 	}
 	else {
-		ibBackendCoreException::Error(_("Object '%s' is not exist"), typeCtor->GetClassName());
+		// typeCtor may BE the null here — say so instead of dereferencing it to build the message.
+		ibBackendCoreException::Error(_("Object '%s' is not exist"),
+			typeCtor != nullptr ? typeCtor->GetClassName() : wxString(wxT("<null>")));
 	}
 }
 
@@ -123,6 +132,25 @@ void ibMetaData::UnRegisterCtor(const wxString& className)
 	}
 
 	UnRegisterCtor(typeCtor);
+}
+
+void ibMetaData::UnRegisterCtor(const ibClassID& clsid)
+{
+	ibCtorMetaValueType* typeCtor = GetTypeCtor(clsid);
+	if (typeCtor == nullptr) {
+		ibBackendCoreException::Error(_("Object with id '%llu' is not exist"), clsid);
+		return;
+	}
+
+	UnRegisterCtor(typeCtor);
+}
+
+void ibMetaData::InvalidateCtorNames() const
+{
+	// No image ⇒ the configuration is closed ⇒ nothing of this metadata is registered, so there is
+	// no cache to bring up to date. (IsConfigOpen() is exactly `m_image != nullptr`.)
+	if (m_image)
+		m_image->InvalidateCtorNames();
 }
 
 bool ibMetaData::IsRegisterCtor(const wxString& className) const

@@ -1010,6 +1010,11 @@ public:
 	static void UnRegisterCtor(ibCtorAbstractType*& typeCtor);
 	static void UnRegisterCtor(const wxString& className);
 
+	// (No unregister-by-clsid and no name invalidation here on purpose: THIS registry holds the
+	//  STATIC types, whose names are compile-time constants and cannot drift. The metaobject types
+	//  — the ones whose name is computed from a renameable object — live in the metadata's own
+	//  registry, which is where both live: ibMetaData::UnRegisterCtor / InvalidateCtorNames.)
+
 	static bool IsRegisterCtor(const wxString& className);
 	static bool IsRegisterCtor(const wxString& className, ibCtorObjectType objectType);
 	static bool IsRegisterCtor(const ibClassID& clsid);

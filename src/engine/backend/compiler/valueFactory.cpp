@@ -136,6 +136,11 @@ void ibValue::UnRegisterCtor(const wxString& className)
 	ibCtorAbstractType* typeCtor = GetAvailableCtor(className);
 
 	if (typeCtor == nullptr) {
+		// LOUD ON PURPOSE. A name that cannot be unregistered was never registered under it, and
+		// that is always a defect upstream — a registration that did not happen, or one whose key
+		// drifted (the registry indexes by the NAME held at registration time, so a rename that
+		// does not re-register leaves the entry behind under the old string). Swallowing it here
+		// would leave the type registry quietly wrong and move the symptom somewhere unrelated.
 		ibBackendCoreException::Error(_("Object '%s' is not exist"), className);
 		return;
 	}

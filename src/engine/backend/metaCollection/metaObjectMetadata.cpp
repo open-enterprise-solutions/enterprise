@@ -187,8 +187,7 @@ bool ibValueMetaObjectConfiguration::OnBeforeCloseMetaObject()
 	// RemoveCommonModule. It used to run in CLOSE-AFTER, which dropped the module
 	// before the un-register phase could still reach it.
 	if (auto* cc = m_metaData->GetCompileCache()) {
-		if (!cc->RemoveCompileModule(m_propertyModuleConfiguration->GetMetaObject()))
-			return false;
+		cc->RemoveCompileModule(m_propertyModuleConfiguration->GetMetaObject());
 		// Holder teardown (DestroyMainModule) is driven by CloseDatabase, symmetric
 		// with the RunDatabase start — not here.
 	}

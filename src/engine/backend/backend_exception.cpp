@@ -202,11 +202,17 @@ static wxString gs_listErrorString[] =
 
 const wxString ibBackendException::GetErrorDescription() const
 {
-	return m_strErrorDescription;
+	return wxString::FromUTF8(m_errorDescriptionUtf8);
+}
+
+const char* ibBackendException::what() const noexcept
+{
+	// The stored bytes themselves — nothing is built here, which is what lets this be noexcept.
+	return m_errorDescriptionUtf8.c_str();
 }
 
 ibBackendException::ibBackendException(const wxString& strErrorDescription)
-	: m_errorHandled(false), m_strErrorDescription(strErrorDescription)
+	: m_errorHandled(false), m_errorDescriptionUtf8(strErrorDescription.utf8_string())
 {
 #ifdef DEBUG
 	wxLogDebug(strErrorDescription);

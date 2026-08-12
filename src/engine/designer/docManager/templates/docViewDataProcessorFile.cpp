@@ -43,7 +43,7 @@ bool ibDataProcessorEditView::OnClose(bool deleteWindow)
 	return false;
 }
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibDataProcessorFileDocument, ibMetaDocument);
+wxIMPLEMENT_DYNAMIC_CLASS(ibDataProcessorFileDocument, ibMetaDataDocument);
 
 bool ibDataProcessorFileDocument::OnCreate(const wxString& path, long flags)
 {
@@ -100,6 +100,8 @@ void ibDataProcessorFileDocument::Modify(bool modified)
 
 ibDataProcessorTree* ibDataProcessorFileDocument::GetMetaTree() const
 {
-	ibView* view = GetFirstView();
-	return view ? wxDynamicCast(view, ibDataProcessorEditView)->GetMetaTree() : nullptr;
+	// GUARD THE CAST, not the pointer that went into it: a first view of another kind makes
+	// wxDynamicCast yield null, and the arrow was applied to it regardless.
+	ibDataProcessorEditView* view = wxDynamicCast(GetFirstView(), ibDataProcessorEditView);
+	return view != nullptr ? view->GetMetaTree() : nullptr;
 }

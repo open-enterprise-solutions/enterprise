@@ -15,11 +15,11 @@ public:
 	virtual void OnDraw(wxDC* dc) override;
 	virtual bool OnClose(bool deleteWindow = true) override;
 
-	ibMetadataTree* GetMetaTree() const {  return m_metaTree; }
+	ibConfigurationTree* GetMetaTree() const {  return m_metaTree; }
 
 protected:
 
-	ibMetadataTree* m_metaTree;
+	ibConfigurationTree* m_metaTree;
 
 	wxDECLARE_DYNAMIC_CLASS(ibMetadataEditView);
 };
@@ -53,7 +53,7 @@ public:
 
 	virtual void Modify(bool mod) override {}
 
-	virtual ibMetadataTree* GetMetaTree() const;
+	virtual ibConfigurationTree* GetMetaTree() const;
 
 protected:
 

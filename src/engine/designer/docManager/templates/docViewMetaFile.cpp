@@ -9,7 +9,7 @@ wxIMPLEMENT_DYNAMIC_CLASS(ibMetadataEditView, ibMetaView);
 bool ibMetadataEditView::OnCreate(ibDocument* docBase, long flags)
 {
 	ibMetaDocument* doc = GetDocument();
-	m_metaTree = new ibMetadataTree(doc, m_viewFrame);
+	m_metaTree = new ibConfigurationTree(doc, m_viewFrame);
 	m_metaTree->SetReadOnly(true);
 
 	return ibView::OnCreate(docBase, flags);
@@ -22,7 +22,7 @@ void ibMetadataEditView::OnActivateView(bool activate, ibView* activeView, ibVie
 
 void ibMetadataEditView::OnDraw(wxDC* WXUNUSED(dc))
 {
-	// nothing to do here, ibMetadataTree draws itself
+	// nothing to do here, ibConfigurationTree draws itself
 }
 
 #include "docManager/docManager.h"
@@ -73,7 +73,7 @@ bool ibMetadataBrowserDocument::OnCloseDocument()
 
 // ----------------------------------------------------------------------------
 
-ibMetadataTree* ibMetadataBrowserDocument::GetMetaTree() const
+ibConfigurationTree* ibMetadataBrowserDocument::GetMetaTree() const
 {
 	ibView* view = GetFirstView();
 	return view ? wxDynamicCast(view, ibMetadataEditView)->GetMetaTree() : nullptr;
@@ -83,7 +83,7 @@ ibMetadataTree* ibMetadataBrowserDocument::GetMetaTree() const
 // ibTextDocument: ibDocument and wxTextCtrl married
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibMetadataFileDocument, ibMetaDocument);
+wxIMPLEMENT_DYNAMIC_CLASS(ibMetadataFileDocument, ibMetadataBrowserDocument);
 
 bool ibMetadataFileDocument::OnCreate(const wxString& path, long flags)
 {

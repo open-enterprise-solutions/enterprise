@@ -28,6 +28,8 @@ FetchContent_MakeAvailable(googletest)
 # ---------------------------------------------------------------------------
 add_executable(oes_tests
     test_clsid.cpp
+    test_ctorRegistry.cpp
+    test_exception.cpp
     test_value.cpp
     test_string.cpp
     bench_string.cpp

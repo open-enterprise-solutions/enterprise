@@ -257,6 +257,7 @@
     <ClInclude Include="mainFrame\local\localWindow.h" />
     <ClInclude Include="mainFrame\mainFrameDesigner.h" />
     <ClInclude Include="mainFrame\vcs\gitPanel.h" />
+    <ClInclude Include="mainFrame\metatree\clipboardLock.h" />
     <ClInclude Include="mainFrame\metatree\treeConfiguration.h" />
     <ClInclude Include="mainFrame\metatree\treeDataProcessor.h" />
     <ClInclude Include="mainFrame\metatree\treeDataReport.h" />

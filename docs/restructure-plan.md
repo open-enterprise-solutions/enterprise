@@ -39,25 +39,21 @@ it is a breaking change. See §2.
 
 ## 3. Wave A — names that can be *wrong*, not just ugly
 
-### A1. ⚠ `ibMetaDataTree` vs `ibMetadataTree`
+### A1. ✅ `ibMetaDataTree` vs `ibMetadataTree` — DONE 2026-08-12
 
-```cpp
-// designer/mainFrame/metaTree/treeConfiguration.h
-:12   class ibMetaDataTree : public wxPanel, public ibBackendMetadataTree { … };  // the BASE
-:95   class ibMetadataTree : public ibMetaDataTree { … };                         // the CONFIG tree
-```
-
-**Two classes, one letter's case apart, 83 lines apart in the same header.** A typo in
-either direction compiles and silently resolves to the wrong class.
-
-**Proposal:**
+Two classes, one letter's case apart, 83 lines apart in the same header; a typo in either
+direction compiled and silently resolved to the wrong class. Applied as proposed:
 
 | From | To | Reason |
 |---|---|---|
 | `ibMetaDataTree` | `ibMetaTreeBase` | it is the panel + contract base, not "the tree" |
 | `ibMetadataTree` | `ibConfigurationTree` | it edits the **configuration** — and it becomes symmetric with its siblings `ibDataReportTree` / `ibDataProcessorTree` ([metadata-tree.md § 2.1](metadata-tree.md)) |
 
-This is the single highest-value rename in the tree. Do it **alone**, in its own commit.
+179 occurrences across 13 files. Three RTTI slips surfaced with it and were fixed in the same
+pass: every nested tree control declared `wxDECLARE_DYNAMIC_CLASS` naming a **different class**
+(the macro ignores its argument, so it compiled and read as a lie), and both external trees named
+`wxPanel` as their wx base instead of the metadata-tree base. Also renamed the nested view class
+`ibMatadataTreeView` → `ibMetaTreeView` (misspelling, § B).
 
 ### A2. `IsCellReadOnly` — a getter with a setter's signature
 
@@ -282,8 +278,8 @@ above a `ibValuePtr dying(*it)` earns its line; `// loop over children` does not
 | Wave | What | Risk | Reviewable by |
 |---|---|---|---|
 | **B** typos | `Sybsystem`, `ExpectDelimeter`, loader name | none | reading |
-| **A1** `ibMetadataTree` | the case-collision rename | **low, high value** | rebuild |
-| **C1** UPPER_SNAKE | contained to `treeConfiguration*` | low | rebuild |
+| ✅ **A1** `ibMetadataTree` | the case-collision rename — **done 2026-08-12** | **low, high value** | rebuild |
+| ◐ **C1** UPPER_SNAKE | the fields **stay for now** — 2026-08-12 they became a *projection* of the keyed layout table rather than the storage ([metadata-tree.md § 3.1](metadata-tree.md)). Renaming them is worth doing only after the order moves onto the metatype, which removes most of them outright | low | rebuild |
 | **D** regions | one style + named standard groups | low | reading |
 | **F** comments | header comments + doc links | none | reading |
 | **E** access specifiers | formatter, 134 classes | low, **huge churn** | rebuild |

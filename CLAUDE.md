@@ -159,9 +159,17 @@ The compiler is a single-pass recursive descent parser with a deferred-call-reso
 ### 5. Throw-By-Value Exception Pattern
 
 Backend exceptions are thrown by value and caught by const reference, standard
-C++ style. `ibBackendException` has a virtual destructor so catching by the
-base class preserves the dynamic type for `dynamic_cast` and downstream
-re-catches.
+C++ style. `ibBackendException` **derives from `std::exception`** (2026-08-12) —
+before that it did not, and every generic boundary (`catch (const std::exception&)`)
+let it fall through to `catch (...)`, where the message it carries was thrown away
+at the exact moment something decided to stop. `what()` returns the description as
+**UTF-8 bytes** held once in the exception; `GetErrorDescription()` returns the
+`wxString`. It has a virtual destructor so catching by the base class preserves the
+dynamic type for `dynamic_cast` and downstream re-catches.
+
+Since it derives, **handler order is required, not preferred**: `ibBackendException`
+before `std::exception`, always. And the description is DATA — `wxLogError(wxT("%s"), …)`,
+never as the format string. Full rules: [docs/exceptions.md](docs/exceptions.md).
 
 ```cpp
 // throw (usually through a static Error() helper that formats the message)

@@ -151,8 +151,19 @@ bool ibValueMetaObjectConstant::OnBeforeCloseMetaObject()
 		// business types. Was OnAfterCloseMetaObject (a pre-phase-split legacy
 		// copy/paste) which fired the after-hook + metaTree->CloseMetaObject in the
 		// before phase, then again in OnAfterCloseMetaObject — double close.
-		if (ibValueMetaObjectGenericData::OnBeforeCloseMetaObject())
-			return cc->RemoveCompileModule(m_propertyModule->GetMetaObject());
+		//
+		// ⚠ THE REMOVAL'S ANSWER IS NOT THE CLOSE'S ANSWER, and returning it was a real defect
+		// (this metatype and twelve others were written the same way). RemoveCompileModule says
+		// "there was an entry" — a MISS means the registration never happened at OPEN time, which
+		// is a bug worth knowing about but says nothing about whether this object can close. Read
+		// as a refusal it stopped CloseSubtree, which stopped CloseDatabase, which failed the whole
+		// rollback and left the designer half-open — one unregistered module taking the
+		// configuration down with it. The miss is traced instead (metaData.cpp), so it is still
+		// visible without being fatal.
+		if (ibValueMetaObjectGenericData::OnBeforeCloseMetaObject()) {
+			cc->RemoveCompileModule(m_propertyModule->GetMetaObject());
+			return true;
+		}
 
 		return false;
 	}

@@ -31,7 +31,17 @@ bool ibValueMetaObject::OnPropertyChanging(ibProperty* property, const wxVariant
 
 void ibValueMetaObject::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
 {
-	if (m_propertyName == property) m_propertySynonym->SetValue(stringUtils::GenerateSynonym(newValue));
+	// THE RENAME IS COMPLETE AT THIS POINT — OnPropertyChanging ran before the value was applied,
+	// so from here every ctor of this metaobject computes a different name than before. Say so and
+	// nothing more: the METADATA's registry marks its by-name cache stale and recomputes it on the
+	// next lookup. The global value factory is deliberately not touched — it holds the STATIC
+	// types, whose names cannot move. Identities (clsid) do not move either, so nothing is
+	// registered again, and this one line covers every metatype there is and every one to come.
+	if (m_propertyName == property) {
+		if (m_metaData != nullptr)
+			m_metaData->InvalidateCtorNames();
+		m_propertySynonym->SetValue(stringUtils::GenerateSynonym(newValue));
+	}
 	wxASSERT(m_metaData);
 	const ibBackendMetadataTree* metadataTree = m_metaData->GetMetaTree();
 	// Metaobject property edit — designer UI repaint. Reach frame via

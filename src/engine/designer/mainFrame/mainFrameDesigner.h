@@ -183,7 +183,7 @@ private:
 	// position across sessions.
 	class ibHelpPaneView* m_helpPane = nullptr;
 
-	ibMetadataTree* m_metaWindow;
+	ibConfigurationTree* m_metaWindow;
 	class ibGitPanel* m_gitPanel = nullptr;
 
 	ibOutputWindow* m_outputWindow;

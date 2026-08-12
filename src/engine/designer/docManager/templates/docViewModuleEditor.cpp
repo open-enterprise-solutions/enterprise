@@ -172,7 +172,12 @@ void ibModuleEditView::OnMenuEvent(wxCommandEvent& event)
 // ibModuleDocument: ibDocument and wxTextCtrl married
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_CLASS(ibModuleDocument, ibMetaDocument);
+// THE SECOND ARGUMENT IS THE HIERARCHY wx BELIEVES IN — it is not documentation. wxDynamicCast /
+// IsKindOf walk THIS chain, not the C++ one, so naming a grandparent here (this line said
+// ibMetaDocument, skipping the real base) makes the skipped class answer "not a kind of" for
+// every instance. That is how the debugger's current-line arrow went missing: the tree asked
+// wxDynamicCast(doc, ibValueModuleDocument) and got null for a module editor.
+wxIMPLEMENT_CLASS(ibModuleDocument, ibValueModuleDocument);
 
 bool ibModuleDocument::OnCreate(const wxString& path, long flags)
 {

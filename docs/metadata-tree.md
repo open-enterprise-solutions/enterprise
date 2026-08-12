@@ -41,10 +41,10 @@ shape as the property system's function-pointer slots
 ([property-system.md § 4](property-system.md)) and the spreadsheet's notifier
 ([report-engine.md § 3](report-engine.md)): **backend declares, frontend implements.**
 
-The Designer's side is `ibMetaDataTree` (`designer/mainFrame/metaTree/treeConfiguration.h`):
+The Designer's side is `ibMetaTreeBase` (`designer/mainFrame/metaTree/treeConfiguration.h`):
 
 ```cpp
-class ibMetaDataTree : public wxPanel, public ibBackendMetadataTree { … };
+class ibMetaTreeBase : public wxPanel, public ibBackendMetadataTree { … };
 ```
 
 — a wxPanel *and* the contract. Note it is a **panel, not a tree control**: the actual
@@ -72,13 +72,14 @@ It is not "the configuration tree, plus two special editors" — it is one repre
 
 | Class | File | Edits |
 |---|---|---|
-| `ibMetadataTree` | `treeConfiguration.{h,cpp,_impl.cpp}` + `treeConfigurationEvent.cpp` | the whole configuration |
+| `ibConfigurationTree` | `treeConfiguration.{h,cpp,_impl.cpp}` + `treeConfigurationEvent.cpp` | the whole configuration |
 | `ibDataReportTree` | `treeDataReport.{h,cpp,_impl.cpp}` + `treeDataReportEvent.cpp` | one **external report** (`.erf`) |
 | `ibDataProcessorTree` | `treeDataProcessor.{h,cpp,_impl.cpp}` + `treeDataProcessorEvent.cpp` | one **external data processor** |
 
-All three derive from `ibMetaDataTree` — the panel + contract from §1. ⚠ Note the base and
-the configuration tree differ **by one letter's case** (`ibMetaDataTree` vs
-`ibMetadataTree`); see §7.
+All three derive from `ibMetaTreeBase` — the panel + contract from §1. **Renamed 2026-08-12**
+(`ibMetaDataTree` → `ibMetaTreeBase`, `ibMetadataTree` → `ibConfigurationTree`): the base and the
+configuration tree used to differ by one letter's case, in the same header, and a typo in either
+direction compiled. This is [restructure-plan.md § A1](restructure-plan.md), done.
 
 Each also owns its own nested `wxTreeCtrl` subclass (`ibMetaTreeCtrl` /
 `ibDataReportTreeCtrl` / `ibDataProcessorTreeCtrl`).
@@ -125,58 +126,63 @@ classifies itself with no `ibMetaData` lookup.
 
 `m_expanded` lives on the base so expansion state survives a rebuild.
 
-### 3.1 The layout is hard-coded — deliberately
+### 3.1 The layout is one table (2026-08-12)
 
-The tree is a **presentation**, and its order is written out by hand. The root groups are
-appended in a fixed sequence (`treeConfiguration_impl.cpp`):
-
-```cpp
-m_treeCONSTANTS      = AppendGroupItem(m_treeMETADATA, g_metaConstantCLSID,    constantsName);
-m_treeCATALOGS       = AppendGroupItem(m_treeMETADATA, g_metaCatalogCLSID,     catalogsName);
-m_treeDOCUMENTS      = AppendGroupItem(m_treeMETADATA, g_metaDocumentCLSID,    documentsName);
-m_treeENUMERATIONS   = AppendGroupItem(m_treeMETADATA, g_metaEnumerationCLSID, enumerationsName);
-m_treeDATAPROCESSORS = AppendGroupItem(m_treeMETADATA, g_metaDataProcessorCLSID, dataProcessorName);
-m_treeREPORTS        = AppendGroupItem(m_treeMETADATA, g_metaReportCLSID,      reportsName);
-
-m_treeINFORMATION_REGISTERS          = AppendGroupItem(m_treeMETADATA, g_metaInformationRegisterCLSID, …);
-m_treeACCUMULATION_REGISTERS         = AppendGroupItem(m_treeMETADATA, g_metaAccumulationRegisterCLSID, …);
-m_treeCHARTS_OF_CHARACTERISTIC_TYPES = AppendGroupItem(m_treeMETADATA, g_metaChartOfCharacteristicTypesCLSID, …);
-m_treeCHARTS_OF_ACCOUNTS             = AppendGroupItem(m_treeMETADATA, g_metaChartOfAccountsCLSID, …);
-m_treeACCOUNTING_REGISTERS           = AppendGroupItem(m_treeMETADATA, g_metaAccountingRegisterCLSID, …);
-```
-
-and each kind's children are built by its own hand-written adder, dispatched on clsid:
+The tree is a **presentation**, and its layout is written down — but in **one place**, as data:
+`s_groups` in `treeConfiguration_impl.cpp`. One row per group node, and the row is the whole
+truth about it:
 
 ```cpp
-if      (metaItem->GetClassType() == g_metaCatalogCLSID)                     AddCatalogItem(metaItem, createdItem);
-else if (metaItem->GetClassType() == g_metaDocumentCLSID)                    AddDocumentItem(metaItem, createdItem);
-else if (metaItem->GetClassType() == g_metaEnumerationCLSID)                 AddEnumerationItem(metaItem, createdItem);
-else if (metaItem->GetClassType() == g_metaDataProcessorCLSID)               AddDataProcessorItem(metaItem, createdItem);
-else if (metaItem->GetClassType() == g_metaReportCLSID)                      AddReportItem(metaItem, createdItem);
-else if (metaItem->GetClassType() == g_metaInformationRegisterCLSID)         AddInformationRegisterItem(metaItem, createdItem);
-else if (metaItem->GetClassType() == g_metaAccumulationRegisterCLSID)        AddAccumulationRegisterItem(metaItem, createdItem);
-else if (metaItem->GetClassType() == g_metaChartOfCharacteristicTypesCLSID)  AddCatalogItem(metaItem, createdItem);          // reuses Catalog
-else if (metaItem->GetClassType() == g_metaChartOfAccountsCLSID)             AddCatalogItem(metaItem, createdItem);          // reuses Catalog
-else if (metaItem->GetClassType() == g_metaAccountingRegisterCLSID)          AddAccumulationRegisterItem(metaItem, createdItem); // reuses AccumulationRegister
+struct ibMetaTreeGroupDef {
+    ibClassID   m_clsid;   // the metatype it stands for — icon, "New", context menu all follow from it
+    const char* m_label;   // wxTRANSLATE-marked source string, translated when the node is made
+    ibMetaBand  m_band;    // Common / Metadata — the two bands of the navigator
+    ibClassID   m_owner;   // 0 = straight in the band; otherwise the group it nests under
+    ibMetaRow   m_row;     // how a member is put in: Item / Group / Command
+};
 ```
 
-**This is a deliberate trade, not neglect.** The display order of metadata is genuinely
-irregular — Constants before Catalogs, Documents after Catalogs, registers grouped apart,
-each kind showing a different set of child groups — and expressing that as data (a
-declarative layout, a per-kind schema) costs more than writing it down. Hard-coding it was
-cheaper and it settled the question.
+**The order of the table is the order on screen.** Before this there were three orders: the
+sequence of `AppendGroupItem` calls in `InitTree`, the sequence of twenty fill loops in
+`FillData`, and a `DeleteChildren` list in `ClearTree` that had silently fallen three entries
+behind (session parameters, common attributes, languages) — invisible, because that block ran
+immediately before `DeleteAllItems` and therefore did nothing at all.
 
-Two things worth noticing before "improving" it:
+`InitTree`, `FillData` and `ClearTree` are now one pass each over that table, and the group nodes
+live in `std::map<ibClassID, wxTreeItemId> m_groups` — the storage and the order.
+
+**The named fields stayed**, as a *projection* of that map: `BindGroupFields()` points
+`m_treeCATALOGS`, `m_treeDATAPROCESSORS`, … at the nodes it holds, after the build and again after
+the search filter removes groups. Reason to keep them: while the order is still written out by
+hand, keying the same twenty-three nodes by clsid buys nothing a name does not — and the two
+external trees are written against names anyway. The map earns its keep the day the order comes
+from the METATYPE and this table disappears; there is nothing to name the fields after then,
+because the set becomes whatever registered.
+
+The split does fix the search path either way: a group the filter drops is erased from the map
+*and* unbound from its field, where a bare field kept pointing at a deleted node.
+
+How a metaobject **unfolds** is one dispatcher, `ExpandMetaItem`, shared by the initial fill and
+the create path. It used to be two chains of `else if`, and they had drifted — a section created
+in the designer listed its sub-sections as flat rows and did not recurse, while a section loaded
+from the configuration nested properly through `AddInterfaceItem`.
+
+Two things worth knowing:
 
 - **The reuse is meaningful.** ChartOfCharacteristicTypes and ChartOfAccounts render *as a
-  Catalog*; AccountingRegister renders *as an AccumulationRegister*. The adders encode
-  "which existing kind does this look like", which is real information about the model.
-- **Only display order is hard-coded.** *What* the children are still comes from the
-  property skeleton ([property-system.md § 5](property-system.md)) — the adders choose how
-  to lay out `FillArrayObjectByFilter` results, they do not own the composition.
+  Catalog*; AccountingRegister renders *as an AccumulationRegister*; a parameterized job renders
+  *as a catalog entry with a second verb*. That is the only real knowledge in the dispatcher.
+- **Only display order is written down.** *What* the children are still comes from the property
+  skeleton ([property-system.md § 5](property-system.md)).
 
-The group members are `m_treeCONSTANTS`, `m_treeCATALOGS`, … — `UPPER_SNAKE` fields, which
-is not the project's `m_camelCase` convention (§7).
+**Why a table and not yet a walk over the type registry.** What a metatype would have to answer
+for the navigator to draw it with no table at all is exactly the columns above — a band, a rank,
+a label, beside the `GetIconGroup()` it already answers. Writing them out in one place is what
+makes that question askable; the registry walk itself already exists and is already used
+(`backend_picture.cpp` walks `ibValue::GetListCtorsByType(object_metadata)` for icons). Moving
+those columns onto the metatype is what would let a metatype added later appear in the tree —
+and in configuration-compare, the role editor, "All functions" and the query constructor, which
+each keep an order of their own today ([metaobject-naming.md § 4](metaobject-naming.md)).
 
 ---
 
@@ -203,6 +209,23 @@ the tree. See [docview-fork.md](docview-fork.md) for the doc/view ownership rule
 `SelectFormType` is the hook for "this metaobject has several form kinds — which one?"
 (it returns an `ibFormID`); `EditPredefinedValues` opens the predefined-values editor for
 hierarchy-capable ref objects, and defaults to a no-op on trees where it makes no sense.
+
+### 4.1 `EditModule` — the debugger's door, and a wx-RTTI trap (2026-08-12)
+
+`ibMetaTreeBase::EditModule(guid, line, setRunLine)` is what the debug client calls to show the
+**current execution line**: find the metaobject, reuse or open its editor, hand the line to
+`ibValueModuleDocument::SetCurrentLine`.
+
+The cast to that interface must be a **C++ `dynamic_cast`**, not `wxDynamicCast`:
+
+> `wxDynamicCast` / `IsKindOf` walk the chain written BY HAND as the second argument of
+> `wxIMPLEMENT_*CLASS`, not the C++ one. Eight document classes named a *grandparent* there —
+> `ibModuleDocument` declared `ibMetaDocument` while really deriving from `ibValueModuleDocument` —
+> so the skipped class answered "not a kind of" for every instance. The arrow silently stopped
+> appearing while breakpoints, which travel another path, kept working.
+
+The declared bases were corrected to the real ones; the rule to keep is that the second macro
+argument is the hierarchy wx *believes in*, and it is not documentation.
 
 ---
 
@@ -304,19 +327,57 @@ is only that the navigator contributes nothing to it.
   the intended owner is `ibExternalOwnerHelper`. The path from `Create` to that helper is
   not visible in this function — worth a runtime pass (open an external report twice, watch
   the container) before trusting it.
-- ⚠ **`ibMetaDataTree` vs `ibMetadataTree` — two classes, one letter's case apart**, in the
-  same header:
-
-  ```cpp
-  class ibMetaDataTree : public wxPanel, public ibBackendMetadataTree { … };  // treeConfiguration.h:12  — the BASE
-  class ibMetadataTree : public ibMetaDataTree                        { … };  // treeConfiguration.h:95  — the CONFIGURATION tree
-  ```
-
-  `MetaData` is the base, `Metadata` is the config tree. A typo in either direction compiles
-  and resolves to the wrong class. This is the single highest-value rename in the
-  navigator — the naming plan's first candidate.
-- Group members are `m_treeCONSTANTS` / `m_treeCATALOGS` / `m_treeINFORMATION_REGISTERS` …
-  — `UPPER_SNAKE` where the project convention is `m_camelCase`
-  ([../CLAUDE.md](../CLAUDE.md) § Naming Conventions).
+- ~~⚠ `ibMetaDataTree` vs `ibMetadataTree` — one letter's case apart~~ — **renamed 2026-08-12**
+  to `ibMetaTreeBase` / `ibConfigurationTree` (§ 2.1). Three RTTI slips came out with it, all
+  from the same copy-paste: each nested tree control declared `wxDECLARE_DYNAMIC_CLASS` naming
+  **another class** (the macro ignores the argument, so it compiled and simply read as a lie),
+  and both external trees declared their wx base as `wxPanel` rather than the metadata-tree base
+  — so wx's own class chain did not know they are metadata trees. Nothing casts through it today;
+  the configuration tree always declared its base correctly.
+- ~~Group members are `m_treeCONSTANTS` / `m_treeCATALOGS` / …~~ — **gone 2026-08-12**, replaced
+  by `m_groups` + `Group(clsid)` (§ 3.1). The two external trees still carry four `UPPER_SNAKE`
+  fields each (`m_treeATTRIBUTES`, `m_treeTABLES`, `m_treeFORM`, `m_treeTEMPLATES`), which is the
+  next thing to fold if those trees are unified with the configuration one.
+- **Fixed the same day, in both external trees** (they are copies of each other, so every defect
+  came in pairs): the Templates group was labelled `objectTablesName` — "Tables" — and the
+  attribute filter still spelled out `GetClassType() == g_metaPredefinedAttributeCLSID`, the form
+  `IsAcceptedByParent()` replaced everywhere else. The sweep that introduced `IsAcceptedByParent`
+  covered the configuration tree's ten sites and stopped there; these six were left behind.
+- **Fixed across all three trees, 2026-08-12** (an audit pass; each defect existed in every copy
+  unless noted):
+  - **The clipboard was left open.** `Close()` sat inside the success branch, so Ctrl+C on a group
+    node (no metaobject) or Ctrl+V with a non-OES payload held it — on MSW that is a session-wide
+    lock for every application until the process exits. Now an RAII guard, `clipboardLock.h`.
+  - **A failed paste left an orphan.** `NewItem` had already created the metaobject; when
+    `PasteObject` failed nothing removed it, so it was saved into the configuration unseen. The
+    three trees also disagreed on what to do — the data-processor one put the half-built object
+    into the navigator, the other two pointed the inspector at an object with no node.
+  - **Deleting an object did not close its children's editors.** The sweep walked the *direct*
+    children, which are group nodes carrying no metaobject, so it closed nothing; `EraseItem` now
+    recurses.
+  - **Every search closed every editor** opened from the navigator: `ClearTree` began by
+    `DeleteAllViews()`, and a search is a rebuild. Split out as `CloseOwnedDocuments`, called from
+    `Load` only.
+  - **The image list only grew** — `Append*` adds a bitmap, nothing ever removed one, so each
+    rebuild (i.e. each keystroke in the search box) re-added the whole configuration for the life
+    of the process.
+  - **`GetNextChild(child, cookie)`** where the API wants the *parent* — 15 sites. wxMSW ignores
+    the argument, the generic implementation does not, and this repo ships a wxUniversal fork.
+  - `EraseItem` had lost its null guard in both copies; `EditModule` used `static_cast` where the
+    null check afterwards could never fire; `GetMetaTree()` guarded the view instead of the
+    `wxDynamicCast` result; the two external trees never cleared the metadata's back-pointer to the
+    tree in their destructors, and their default constructors left every member indeterminate.
+  - In `metaDiff`, **commands had neither a label nor a rank** — the compare tree showed them last,
+    captioned with a raw clsid number.
+- **Still open in the external trees**: they show no **Commands** group, while the same metaobject
+  under a configuration does (`AddDataProcessorItem` / `AddReportItem` create one). The metaobject
+  is the same class and answers `GetCommandArrayObject()` either way, so this is a missing node
+  rather than a missing capability — but turning it on is opening a path, not fixing a typo, and
+  wants a run before it is trusted.
+- **Still open, needs a decision rather than a fix**: `OnCompareItems` casts to
+  `wxTreeItemMetaData` in the configuration tree and to the mixin base `ibTreeDataMetaItem` in both
+  copies. The copies therefore also match group-bearing rows, so sorting the *Tables* group in an
+  external data processor reorders the tabular sections through `ChangeChildPosition`, which the
+  configuration tree refuses to do. One of the two is right; they should not differ.
 - `UpdateChoiceSelection()` is the one contract method with an empty default; which trees
   actually implement it is unverified here.

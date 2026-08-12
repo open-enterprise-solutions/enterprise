@@ -93,4 +93,4 @@ void ibRoleDocument::Modify(bool modified)
 // ibRoleEditDocument implementation
 // ----------------------------------------------------------------------------
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibRoleEditDocument, ibMetaDocument);
+wxIMPLEMENT_DYNAMIC_CLASS(ibRoleEditDocument, ibRoleDocument);

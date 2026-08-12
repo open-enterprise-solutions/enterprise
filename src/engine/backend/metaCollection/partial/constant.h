@@ -186,6 +186,9 @@ public:
 	virtual bool OnBeforeCloseMetaObject();
 	virtual bool OnAfterCloseMetaObject();
 
+	// (No rename hook here: the type registry re-files its NAME index for every metatype in
+	// ibValueMetaObject::RefreshRegisteredTypeNames — the identity is the clsid and never moves.)
+
 	//get table name
 	static wxString GetPhysicalTableName() { return wxT("sys_const"); }
 

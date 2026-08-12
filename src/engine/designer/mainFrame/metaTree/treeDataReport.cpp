@@ -10,12 +10,15 @@
 
 #include "docManager/templates/docViewDataReportFile.h"
 
-wxIMPLEMENT_DYNAMIC_CLASS(ibDataReportTree, wxPanel);
+// ITS REAL BASE. This said wxPanel — true only two steps up, so wx's own class chain did not know
+// this tree IS a metadata tree, and a wxDynamicCast to the base would have come back null. Nothing
+// asks that today; the configuration tree has always declared its base correctly.
+wxIMPLEMENT_DYNAMIC_CLASS(ibDataReportTree, ibMetaTreeBase);
 
 #define ICON_SIZE 16
 
 ibDataReportTree::ibDataReportTree(ibMetaDocument* docParent, wxWindow* parent, wxWindowID id)
-	: ibMetaDataTree(docParent, parent, id), m_metaData(nullptr), m_initialized(false)
+	: ibMetaTreeBase(docParent, parent, id), m_metaData(nullptr), m_initialized(false)
 {
 	this->SetSizeHints(wxDefaultSize, wxDefaultSize);
 
@@ -71,18 +74,7 @@ ibDataReportTree::ibDataReportTree(ibMetaDocument* docParent, wxWindow* parent, 
 
 	wxStaticBoxSizer* sbSizerTree = new wxStaticBoxSizer(new wxStaticBox(this, wxID_ANY, wxT("")), wxVERTICAL);
 
-	m_metaTreeToolbar = new wxAuiToolBar(sbSizerTree->GetStaticBox(), wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_LAYOUT);
-	m_metaTreeToolbar->AddTool(ID_METATREE_NEW, _("New"), wxArtProvider::GetBitmapBundle(wxART_ADD, wxART_FRONTEND, wxSize(16, 16)), _("New item"));
-	m_metaTreeToolbar->AddTool(ID_METATREE_EDIT, _("Edit"), wxArtProvider::GetBitmapBundle(wxART_EDIT, wxART_FRONTEND, wxSize(16, 16)), _("Edit item"));
-	m_metaTreeToolbar->AddTool(ID_METATREE_DELETE, _("Delete"), wxArtProvider::GetBitmapBundle(wxART_DELETE, wxART_FRONTEND, wxSize(16, 16)), _("Delete item"));
-	m_metaTreeToolbar->AddSeparator();
-	m_metaTreeToolbar->AddTool(ID_METATREE_UP, _("Up"), wxArtProvider::GetBitmapBundle(wxART_UP, wxART_FRONTEND, wxSize(16, 16)), _("Up item"));
-	m_metaTreeToolbar->AddTool(ID_METATREE_DOWM, _("Down"), wxArtProvider::GetBitmapBundle(wxART_DOWN, wxART_FRONTEND, wxSize(16, 16)), _("Down item"));
-	m_metaTreeToolbar->AddSeparator();
-	m_metaTreeToolbar->AddTool(ID_METATREE_SORT, _("Sort"), wxArtProvider::GetBitmapBundle(wxART_SORT, wxART_FRONTEND, wxSize(16, 16)), _("Sort item"));
-	m_metaTreeToolbar->Realize();
-
-	m_metaTreeToolbar->SetArtProvider(new wxAuiLunaToolBarArt());
+	CreateToolBar(sbSizerTree->GetStaticBox());   // the base builds it — this was a fifth copy
 
 	sbSizerTree->Add(m_metaTreeToolbar, 0, wxALL | wxEXPAND, 0);
 
@@ -108,15 +100,21 @@ ibDataReportTree::ibDataReportTree(ibMetaDocument* docParent, wxWindow* parent, 
 
 	bSizerMain->Add(sbSizerTree, 1, wxEXPAND, FromDIP(5));
 
-	ibMetaDataReport* metaData = ((ibReportFileDocument*)docParent)->GetMetaData();
-	ibValueMetaObjectReport* commonMeta = metaData->GetReport();
-	const ibValueMetaObjectModule* moduleMeta = commonMeta->GetObjectModule();
-
 	m_buttonModule = new wxButton(this, wxID_ANY, _("Open module"));
 	m_buttonModule->Connect(wxEVT_BUTTON, wxCommandEventHandler(ibDataReportTree::OnButtonModuleClicked), nullptr, this);
-	m_buttonModule->SetBitmap(moduleMeta->GetIcon());
 
-	bSizerMain->Add(m_buttonModule, 0, wxALL);
+	// THE BUTTON'S PICTURE — every step asked rather than assumed; see the twin note in
+	// treeDataProcessor.cpp for why the C-style downcast that stood here was worse than useless.
+	if (const ibReportFileDocument* fileDoc = wxDynamicCast(docParent, ibReportFileDocument)) {
+		if (ibMetaDataReport* metaData = fileDoc->GetMetaData()) {
+			if (ibValueMetaObjectReport* commonMeta = metaData->GetReport()) {
+				if (const ibValueMetaObjectModule* moduleMeta = commonMeta->GetObjectModule())
+					m_buttonModule->SetBitmap(moduleMeta->GetIcon());
+			}
+		}
+	}
+
+	bSizerMain->Add(m_buttonModule, 0, wxALL, 0);
 
 	this->SetSizer(bSizerMain);
 	this->Layout();
@@ -129,6 +127,15 @@ ibDataReportTree::ibDataReportTree(ibMetaDocument* docParent, wxWindow* parent, 
 
 ibDataReportTree::~ibDataReportTree()
 {
+	// LET GO OF THE BACK-POINTER — see the twin note in treeDataProcessor.cpp.
+	if (m_metaData != nullptr)
+		m_metaData->SetMetaTree(nullptr);
+
+	// ASK BEFORE TEARING DOWN. The default constructor is reachable through wxCreateDynamicObject
+	// and leaves every control null; the configuration tree guards exactly this, the twins did not.
+	if (m_nameValue == nullptr || m_metaTreeToolbar == nullptr || m_metaTreeCtrl == nullptr)
+		return;
+
 	m_nameValue->Disconnect(wxEVT_TEXT, wxCommandEventHandler(ibDataReportTree::OnEditCaptionName), nullptr, this);
 	m_synonymValue->Disconnect(wxEVT_TEXT, wxCommandEventHandler(ibDataReportTree::OnEditCaptionSynonym), nullptr, this);
 	m_commentValue->Disconnect(wxEVT_TEXT, wxCommandEventHandler(ibDataReportTree::OnEditCaptionComment), nullptr, this);
@@ -261,12 +268,8 @@ wxEND_EVENT_TABLE()
 ibDataReportTree::ibDataReportTreeCtrl::ibDataReportTreeCtrl()
 	: wxTreeCtrl(), m_ownerTree(nullptr), m_metaView(new ibMetaView)
 {
-	wxAcceleratorEntry entries[2];
-	entries[0].Set(wxACCEL_CTRL, (int)'C', wxID_COPY);
-	entries[1].Set(wxACCEL_CTRL, (int)'V', wxID_PASTE);
-
-	wxAcceleratorTable accel(2, entries);
-	SetAcceleratorTable(accel);
+	// (the accelerator table is set in the real constructor below — it stood here as well, in this
+	// copy only, which is the sort of thing that makes two files stop being the same file)
 
 	//set double buffered
 	SetDoubleBuffered(true);

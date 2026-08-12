@@ -30,6 +30,6 @@ protected:
 #define registerCharacteristic()\
 	m_metaData->RegisterCtor(new ibCtorMetaValueTypeCharacteristic(this))
 #define unregisterCharacteristic()\
-	m_metaData->UnRegisterCtor(generate_class_characteristic_name(prefixCharacteristic))
+	m_metaData->UnRegisterCtor(characteristic_to_clsid(GetMetaID()))
 
 #endif // !__CHAR_CTOR_H__

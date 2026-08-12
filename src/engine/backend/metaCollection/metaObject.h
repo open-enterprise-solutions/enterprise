@@ -185,7 +185,10 @@ public:
 	void SetMetaID(const ibMetaID& id) { m_metaId = id; }
 
 	wxString GetName() const { return m_propertyName->GetValueAsString(); }
-	void SetName(const wxString& strName) { m_propertyName->SetValue(strName); }
+	// THE ONE DOOR THE STORED NAME CHANGES THROUGH — so it is where the metadata registry is told
+	// its by-name cache no longer matches what the ctors compute. Out of line: it reaches into
+	// ibMetaData, which is not complete here.
+	void SetName(const wxString& strName);
 
 	// Typed parent — the parent metaobject cast to parentType through CastValue (the value cast):
 	// a dynamic_cast that, with _USE_CONTROL_VALUECAST, RAISES immediately (ThrowErrorTypeOperation)

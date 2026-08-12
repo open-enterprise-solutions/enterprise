@@ -229,7 +229,7 @@ bool ibValueMetaObjectAccountingRegister::OnBeforeCloseMetaObject()
 	if (!(*m_propertyObjectModule)->OnBeforeCloseMetaObject()) return false;
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		if (ibValueMetaObjectRegisterData::OnBeforeCloseMetaObject()) {
-			if (!cc->RemoveCompileModule(m_propertyObjectModule->GetMetaObject())) return false;
+			cc->RemoveCompileModule(m_propertyObjectModule->GetMetaObject());
 			return true;
 		}
 	}

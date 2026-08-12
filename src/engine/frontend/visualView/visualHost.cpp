@@ -5,6 +5,7 @@
 
 #include "visualHost.h"
 #include "ctrl/window.h"                          // ibValueWindowComposite::BuildLayerParts
+#include "backend/backend_exception.h"            // ibBackendException — named in the control-build catches
 
 //*******************************************************************************************
 //*   WHERE THE CONTROLS ARE KEPT — one index, both builds (see ibControlIndex).             *
@@ -662,8 +663,15 @@ void ibVisualHost::ibContentWindow::CreateContent(const ibValueForm* valueForm)
 			// to SetSizeHints be called.
 			GenerateControl(child, contentWindow, m_frameContentSizer);
 		}
-		catch (std::exception& ex) {
-			wxLogError(ex.what());
+		// The project's exception DERIVES from std::exception now, so this handler sees it — name it
+		// first (C++ requires derived before base) and read its own description. And "%s": the
+		// message is DATA, not a format — an object name carrying a '%' made this read a vararg
+		// that was never passed.
+		catch (const ibBackendException& err) {
+			wxLogError(wxT("%s"), err.GetErrorDescription());
+		}
+		catch (const std::exception& ex) {
+			wxLogError(wxT("%s"), wxString::FromUTF8(ex.what()));
 		}
 	}
 }
@@ -678,8 +686,15 @@ void ibVisualHost::ibContentWindow::UpdateContent(const ibValueForm* valueForm)
 		try {
 			RefreshControl(child, contentWindow, m_frameContentSizer);
 		}
-		catch (std::exception& ex) {
-			wxLogError(ex.what());
+		// The project's exception DERIVES from std::exception now, so this handler sees it — name it
+		// first (C++ requires derived before base) and read its own description. And "%s": the
+		// message is DATA, not a format — an object name carrying a '%' made this read a vararg
+		// that was never passed.
+		catch (const ibBackendException& err) {
+			wxLogError(wxT("%s"), err.GetErrorDescription());
+		}
+		catch (const std::exception& ex) {
+			wxLogError(wxT("%s"), wxString::FromUTF8(ex.what()));
 		}
 	}
 

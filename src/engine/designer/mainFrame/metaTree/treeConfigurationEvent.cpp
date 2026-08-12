@@ -4,8 +4,9 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "treeConfiguration.h"
+#include <wx/wupdlock.h>   // wxWindowUpdateLocker - RAII Freeze/Thaw (a throwing paste must not leave the tree frozen)
 
-void ibMetadataTree::ibMetaTreeCtrl::OnLeftDClick(wxMouseEvent& event)
+void ibConfigurationTree::ibMetaTreeCtrl::OnLeftDClick(wxMouseEvent& event)
 {
 	const wxTreeItemId curItem = HitTest(event.GetPosition());
 	if (curItem.IsOk()) {
@@ -17,19 +18,19 @@ void ibMetadataTree::ibMetaTreeCtrl::OnLeftDClick(wxMouseEvent& event)
 
 #include "frontend/mainFrame/mainFrame.h"
 
-void ibMetadataTree::ibMetaTreeCtrl::OnLeftUp(wxMouseEvent& event)
+void ibConfigurationTree::ibMetaTreeCtrl::OnLeftUp(wxMouseEvent& event)
 {
 	event.Skip();
 }
 
-void ibMetadataTree::ibMetaTreeCtrl::OnLeftDown(wxMouseEvent& event)
+void ibConfigurationTree::ibMetaTreeCtrl::OnLeftDown(wxMouseEvent& event)
 {
 	const wxTreeItemId curItem = HitTest(event.GetPosition());
 	if (curItem.IsOk() && curItem == GetSelection()) m_ownerTree->SelectItem();
 	event.Skip();
 }
 
-void ibMetadataTree::ibMetaTreeCtrl::OnRightUp(wxMouseEvent& event)
+void ibConfigurationTree::ibMetaTreeCtrl::OnRightUp(wxMouseEvent& event)
 {
 #ifdef __WXOSX__
 	// On macOS, context menu is shown from OnRightDown, skip here
@@ -47,7 +48,7 @@ void ibMetadataTree::ibMetaTreeCtrl::OnRightUp(wxMouseEvent& event)
 #endif
 }
 
-void ibMetadataTree::ibMetaTreeCtrl::OnRightDown(wxMouseEvent& event)
+void ibConfigurationTree::ibMetaTreeCtrl::OnRightDown(wxMouseEvent& event)
 {
 	wxTreeItemId curItem = HitTest(event.GetPosition());
 
@@ -64,27 +65,27 @@ void ibMetadataTree::ibMetaTreeCtrl::OnRightDown(wxMouseEvent& event)
 #endif
 }
 
-void ibMetadataTree::ibMetaTreeCtrl::OnRightDClick(wxMouseEvent& event)
+void ibConfigurationTree::ibMetaTreeCtrl::OnRightDClick(wxMouseEvent& event)
 {
 	event.Skip();
 }
 
-void ibMetadataTree::ibMetaTreeCtrl::OnKeyUp(wxKeyEvent& event)
+void ibConfigurationTree::ibMetaTreeCtrl::OnKeyUp(wxKeyEvent& event)
 {
 	event.Skip();
 }
 
-void ibMetadataTree::ibMetaTreeCtrl::OnKeyDown(wxKeyEvent& event)
+void ibConfigurationTree::ibMetaTreeCtrl::OnKeyDown(wxKeyEvent& event)
 {
 	event.Skip();
 }
 
-void ibMetadataTree::ibMetaTreeCtrl::OnMouseMove(wxMouseEvent& event)
+void ibConfigurationTree::ibMetaTreeCtrl::OnMouseMove(wxMouseEvent& event)
 {
 	event.Skip();
 }
 
-void ibMetadataTree::ibMetaTreeCtrl::OnBeginDrag(wxTreeEvent& event) {
+void ibConfigurationTree::ibMetaTreeCtrl::OnBeginDrag(wxTreeEvent& event) {
 
 	wxTreeItemId curItem = event.GetItem();
 	if (!curItem.IsOk())
@@ -103,7 +104,7 @@ void ibMetadataTree::ibMetaTreeCtrl::OnBeginDrag(wxTreeEvent& event) {
 	event.Allow();
 }
 
-void ibMetadataTree::ibMetaTreeCtrl::OnEndDrag(wxTreeEvent& event) {
+void ibConfigurationTree::ibMetaTreeCtrl::OnEndDrag(wxTreeEvent& event) {
 
 	bool copy = ::wxGetKeyState(WXK_CONTROL);
 	wxTreeItemId itemSrc = m_draggedItem, itemDst = event.GetItem();
@@ -145,13 +146,13 @@ void ibMetadataTree::ibMetaTreeCtrl::OnEndDrag(wxTreeEvent& event) {
 	event.Skip();
 }
 
-void ibMetadataTree::ibMetaTreeCtrl::OnStartSearch(wxCommandEvent& event)
+void ibConfigurationTree::ibMetaTreeCtrl::OnStartSearch(wxCommandEvent& event)
 {
 	m_ownerTree->Search(event.GetString()); //Fill all data from metaData
 	event.Skip();
 }
 
-void ibMetadataTree::ibMetaTreeCtrl::OnCancelSearch(wxCommandEvent& event)
+void ibConfigurationTree::ibMetaTreeCtrl::OnCancelSearch(wxCommandEvent& event)
 {
 	const wxString& strSearch = event.GetString();
 	if (strSearch.IsEmpty())
@@ -159,83 +160,85 @@ void ibMetadataTree::ibMetaTreeCtrl::OnCancelSearch(wxCommandEvent& event)
 	event.Skip();
 }
 
-void ibMetadataTree::ibMetaTreeCtrl::OnCreateItem(wxCommandEvent& event)
+void ibConfigurationTree::ibMetaTreeCtrl::OnCreateItem(wxCommandEvent& event)
 {
 	m_ownerTree->CreateItem(); event.Skip();
 }
 
-void ibMetadataTree::ibMetaTreeCtrl::OnItemActivated(wxTreeEvent& event)
+void ibConfigurationTree::ibMetaTreeCtrl::OnItemActivated(wxTreeEvent& event)
 {
 	m_ownerTree->EditItem(); event.Skip();
 }
 
-void ibMetadataTree::ibMetaTreeCtrl::OnEditItem(wxCommandEvent& event)
+void ibConfigurationTree::ibMetaTreeCtrl::OnEditItem(wxCommandEvent& event)
 {
 	m_ownerTree->EditItem(); event.Skip();
 }
 
-void ibMetadataTree::ibMetaTreeCtrl::OnRemoveItem(wxCommandEvent& event)
+void ibConfigurationTree::ibMetaTreeCtrl::OnRemoveItem(wxCommandEvent& event)
 {
 	m_ownerTree->RemoveItem(); event.Skip();
 }
 
-void ibMetadataTree::ibMetaTreeCtrl::OnPropertyItem(wxCommandEvent& event)
+void ibConfigurationTree::ibMetaTreeCtrl::OnPropertyItem(wxCommandEvent& event)
 {
 	m_ownerTree->PropertyItem(); event.Skip();
 }
 
-void ibMetadataTree::ibMetaTreeCtrl::OnUpItem(wxCommandEvent& event)
+void ibConfigurationTree::ibMetaTreeCtrl::OnUpItem(wxCommandEvent& event)
 {
 	m_ownerTree->UpItem();
 	event.Skip();
 }
 
-void ibMetadataTree::ibMetaTreeCtrl::OnDownItem(wxCommandEvent& event)
+void ibConfigurationTree::ibMetaTreeCtrl::OnDownItem(wxCommandEvent& event)
 {
 	m_ownerTree->DownItem();
 	event.Skip();
 }
 
-void ibMetadataTree::ibMetaTreeCtrl::OnSortItem(wxCommandEvent& event)
+void ibConfigurationTree::ibMetaTreeCtrl::OnSortItem(wxCommandEvent& event)
 {
 	m_ownerTree->SortItem();
 	event.Skip();
 }
 
-void ibMetadataTree::ibMetaTreeCtrl::OnInsertItem(wxCommandEvent& event)
+void ibConfigurationTree::ibMetaTreeCtrl::OnInsertItem(wxCommandEvent& event)
 {
 	m_ownerTree->InsertItem();
 	event.Skip();
 }
 
-void ibMetadataTree::ibMetaTreeCtrl::OnReplaceItem(wxCommandEvent& event)
+void ibConfigurationTree::ibMetaTreeCtrl::OnReplaceItem(wxCommandEvent& event)
 {
 	m_ownerTree->ReplaceItem();
 	event.Skip();
 }
 
-void ibMetadataTree::ibMetaTreeCtrl::OnSaveItem(wxCommandEvent& event)
+void ibConfigurationTree::ibMetaTreeCtrl::OnSaveItem(wxCommandEvent& event)
 {
 	m_ownerTree->SaveItem();
 	event.Skip();
 }
 
-void ibMetadataTree::ibMetaTreeCtrl::OnCommandItem(wxCommandEvent& event)
+void ibConfigurationTree::ibMetaTreeCtrl::OnCommandItem(wxCommandEvent& event)
 {
 	m_ownerTree->CommandItem(event.GetId());
 	event.Skip();
 }
 
 #include <wx/clipbrd.h>
+#include "clipboardLock.h"   // the Open/Close pair, taken as a guard — one mechanism, all three trees
 
-void ibMetadataTree::ibMetaTreeCtrl::OnCopyItem(wxCommandEvent& event)
+void ibConfigurationTree::ibMetaTreeCtrl::OnCopyItem(wxCommandEvent& event)
 {
 	const wxTreeItemId& item = GetSelection();
 	if (!item.IsOk())
 		return;
 
 	// Write some text to the clipboard
-	if (wxTheClipboard->Open()) {
+	const ibClipboardLock clipboard;   // closes on every path out — see clipboardLock.h
+	if (clipboard.IsOpen()) {
 
 		ibValueMetaObject* metaObject = m_ownerTree->GetMetaObject(item);
 		if (metaObject != nullptr) {
@@ -245,23 +248,21 @@ void ibMetadataTree::ibMetaTreeCtrl::OnCopyItem(wxCommandEvent& event)
 
 				wxDataObjectComposite* composite_object = new wxDataObjectComposite;
 				wxCustomDataObject* custom_object = new wxCustomDataObject(oes_clipboard_metadata);
-				custom_object->SetData(dataWritter.size(), dataWritter.pointer()); // the +1 is used to force copy of the \0 character		
+				custom_object->SetData(dataWritter.size(), dataWritter.pointer());
 
 				composite_object->Add(custom_object);
 				composite_object->Add(new wxTextDataObject(metaObject->GetName()), true);
 
-				// tell clipboard 
+				// tell clipboard
 				wxTheClipboard->SetData(composite_object);
 			}
-
-			wxTheClipboard->Close();
 		}
 	}
 
 	event.Skip();
 }
 
-void ibMetadataTree::ibMetaTreeCtrl::OnPasteItem(wxCommandEvent& event)
+void ibConfigurationTree::ibMetaTreeCtrl::OnPasteItem(wxCommandEvent& event)
 {
 	if (!m_ownerTree->IsEditable())
 		return;
@@ -270,9 +271,13 @@ void ibMetadataTree::ibMetaTreeCtrl::OnPasteItem(wxCommandEvent& event)
 	if (!item.IsOk())
 		return;
 
-	m_ownerTree->Freeze();
+	// RAII Freeze/Thaw: a throw out of PasteObject (or of the cleanup that follows it) used to
+	// fly past the paired Thaw() and leave the tree frozen and unresponsive for the rest of the
+	// session - the error dialog appeared over a navigator that never came back.
+	wxWindowUpdateLocker freeze(m_ownerTree);
 
-	if (wxTheClipboard->Open() && wxTheClipboard->IsSupported(oes_clipboard_metadata)) {
+	const ibClipboardLock clipboard;
+	if (clipboard.IsOpen() && wxTheClipboard->IsSupported(oes_clipboard_metadata)) {
 
 		wxCustomDataObject data(oes_clipboard_metadata);
 
@@ -286,16 +291,20 @@ void ibMetadataTree::ibMetaTreeCtrl::OnPasteItem(wxCommandEvent& event)
 
 			if (metaObject != nullptr) {
 				ibReaderMemory reader(data.GetData(), data.GetDataSize());
-				if (metaObject->PasteObject(reader))
+				// A PASTE THAT FAILED LEAVES NOTHING BEHIND. The metaobject was already created in
+				// the metadata by NewItem, so a bad payload used to leave it there — unshown when
+				// FillItem was skipped, and saved into the configuration all the same.
+				if (metaObject->PasteObject(reader)) {
 					m_ownerTree->FillItem(metaObject, item, true, false);
-				objectInspector->SelectObject(metaObject);
+					objectInspector->SelectObject(metaObject);
+				}
+				else if (ibMetaData* metaData = m_ownerTree->GetMetaData()) {
+					metaData->RemoveMetaObject(metaObject);
+				}
 			}
 		}
-
-		wxTheClipboard->Close();
 	}
 
-	m_ownerTree->Thaw();
 
 	RefreshSelectedItem();
 	event.Skip();
@@ -304,7 +313,7 @@ void ibMetadataTree::ibMetaTreeCtrl::OnPasteItem(wxCommandEvent& event)
 #include "frontend/docView/docView.h"
 #include "frontend/mainFrame/mainFrameChild.h"
 
-void ibMetadataTree::ibMetaTreeCtrl::OnSetFocus(wxFocusEvent& event)
+void ibConfigurationTree::ibMetaTreeCtrl::OnSetFocus(wxFocusEvent& event)
 {
 	if (docManager != nullptr && event.GetEventType() == wxEVT_SET_FOCUS) {
 
@@ -349,17 +358,17 @@ void ibMetadataTree::ibMetaTreeCtrl::OnSetFocus(wxFocusEvent& event)
 	event.Skip();
 }
 
-void ibMetadataTree::ibMetaTreeCtrl::OnSelecting(wxTreeEvent& event)
+void ibConfigurationTree::ibMetaTreeCtrl::OnSelecting(wxTreeEvent& event)
 {
 	event.Skip();
 }
 
-void ibMetadataTree::ibMetaTreeCtrl::OnSelected(wxTreeEvent& event)
+void ibConfigurationTree::ibMetaTreeCtrl::OnSelected(wxTreeEvent& event)
 {
 	m_ownerTree->SelectItem(); event.Skip();
 }
 
-void ibMetadataTree::ibMetaTreeCtrl::OnCollapsing(wxTreeEvent& event)
+void ibConfigurationTree::ibMetaTreeCtrl::OnCollapsing(wxTreeEvent& event)
 {
 	if (GetRootItem() != event.GetItem()) {
 		m_ownerTree->Collapse(); event.Skip();
@@ -369,7 +378,7 @@ void ibMetadataTree::ibMetaTreeCtrl::OnCollapsing(wxTreeEvent& event)
 	}
 }
 
-void ibMetadataTree::ibMetaTreeCtrl::OnExpanding(wxTreeEvent& event)
+void ibConfigurationTree::ibMetaTreeCtrl::OnExpanding(wxTreeEvent& event)
 {
 	m_ownerTree->Expand(); event.Skip();
 }

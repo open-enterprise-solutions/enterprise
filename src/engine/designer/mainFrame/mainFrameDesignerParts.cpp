@@ -118,7 +118,7 @@ void ibFrontendMainFrameDesigner::CreateMetadataPane()
 	if (m_mgr.GetPane(wxAUI_PANE_METADATA).IsOk())
 		return;
 
-	m_metaWindow = new ibMetadataTree(this, wxID_ANY);
+	m_metaWindow = new ibConfigurationTree(this, wxID_ANY);
 
 	wxAuiPaneInfo paneInfo;
 	paneInfo.Name(wxAUI_PANE_METADATA);

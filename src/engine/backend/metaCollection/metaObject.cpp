@@ -10,6 +10,8 @@
 #include "backend/metaData.h"
 #include "backend/databaseLayer/databaseErrorCodes.h"
 
+#include <wx/log.h>
+
 // Restructure-ledger facade — one call onto the active config's ledger (the static accessor).
 void ibValueMetaObject::RestructureInfo   (const wxString& message) { ibMetaDataConfigurationBase::GetRestructureInfo().AppendInfo(message);    }
 void ibValueMetaObject::RestructureWarning(const wxString& message) { ibMetaDataConfigurationBase::GetRestructureInfo().AppendWarning(message); }
@@ -288,6 +290,11 @@ bool ibValueMetaObject::CopyObject(ibWriterMemory& writer) const
 			ibWriterMemory writerHeaderMemory;
 			writerHeaderMemory.w_s32(copyObject->m_metaData->GetVersion());
 			writerHeaderMemory.w_stringZ(copyObject->m_metaCopyGuid);
+			// NO CLASS ID IN THE HEADER, deliberately. A paste is a MERGE BY NAME (see
+			// ibPropertyObject::PasteProperty): the TARGET's class is decided by where the paste
+			// lands, and the payload only supplies values for the properties the two share —
+			// pasting a Document onto a Constant is a legitimate request, not a mismatch to refuse.
+			// A class id here would only tempt the next reader to compare and reject.
 			writer.w_chunk(headerBlock, writerHeaderMemory.pointer(), writerHeaderMemory.size());
 
 			ibWriterMemory writerChildMemory;
@@ -382,7 +389,11 @@ bool ibValueMetaObject::PasteObject(ibReaderMemory& reader)
 						ibValueMetaObject* metaObject = metaData->CreateMetaObject(clsid, pasteObject, false);
 						if (metaObject != nullptr) {
 							if (!PasteObject(metaObject, *readerMemory)) {
-								wxDELETE(metaObject);
+								// THE PARENT ALREADY OWNS IT — AddChild took the owning reference inside
+								// CreateMetaObject. wxDELETE frees the object behind the owner's back and
+								// leaves the owning vector holding a dangling pointer it releases again
+								// later. Same door CreateMetaObject's own failure path uses.
+								pasteObject->RemoveChild(metaObject);
 								return false;
 							}
 						}
@@ -462,7 +473,11 @@ bool ibValueMetaObject::PasteObject(ibReaderMemory& reader)
 						ibValueMetaObject* metaObject = metaData->CreateMetaObject(clsid, pasteObject, false);
 						if (metaObject != nullptr) {
 							if (!PasteObject(metaObject, *readerMemory)) {
-								wxDELETE(metaObject);
+								// THE PARENT ALREADY OWNS IT — AddChild took the owning reference inside
+								// CreateMetaObject. wxDELETE frees the object behind the owner's back and
+								// leaves the owning vector holding a dangling pointer it releases again
+								// later. Same door CreateMetaObject's own failure path uses.
+								pasteObject->RemoveChild(metaObject);
 								return false;
 							}
 						}
@@ -490,6 +505,20 @@ bool ibValueMetaObject::PasteObject(ibReaderMemory& reader)
 	} pasteGuard{ this };
 
 	return ibControlMemoryReader::PasteAndRunObject(this, reader);
+}
+
+void ibValueMetaObject::SetName(const wxString& strName)
+{
+	m_propertyName->SetValue(strName);
+
+	// EVERY ctor of this metaobject now computes a different name than the one it is filed under.
+	// Say so and nothing more — the registry recomputes the whole view on the next lookup by name.
+	// The object inspector's rename does not come through here (it writes the property and then
+	// calls OnPropertyChanged, which says the same thing); this covers the PROGRAMMATIC renames —
+	// BuildNewName on paste, GetNewName on create, the tree's Save — which previously left the
+	// cache pointing a stale name at a live ctor.
+	if (m_metaData != nullptr)
+		m_metaData->InvalidateCtorNames();
 }
 
 bool ibValueMetaObject::ChangeChildPosition(ibValueMetaObject* object, unsigned int pos)

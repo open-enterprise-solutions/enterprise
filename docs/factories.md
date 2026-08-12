@@ -44,10 +44,23 @@ Three lookups, deliberately unequal:
 |---|---|---|
 | `clsid` | O(1) hash | **hot** — `CreateObject`, `IsRegisterCtor`, VT |
 | `type_info` | O(1) hash | **hot** — a live object identifying itself (`GetClassType`) |
-| `name` | **linear scan** | compile-time `CreateObject("Name")` — low frequency |
+| `name` | O(1) hash, on the **folded** name | **hot** — every `New <Name>` a script runs |
 
-The name scan is linear *on purpose*: OES name comparison is **case-insensitive**, so it
-cannot ride the case-sensitive clsid hash anyway, and it is not a hot path.
+The name index used to be a linear scan, justified here as "compile-time, low frequency". That was
+wrong and measurably so: `OPER_NEW` resolves the class name **at runtime**, on every object a script
+creates, and with ~180 registered types (each comparison allocating twice through
+`stringUtils::CompareString`) a single `New Structure` paid ~360 heap allocations. It has its own
+index now — keyed on the UPPER-CASED name, because OES name comparison is case-insensitive and so
+cannot ride the case-sensitive clsid hash.
+
+**The name index is a CACHE of a computed value, not a store.** A dynamic metatype's ctor derives its
+name from its METAOBJECT (`"CatalogRef." + GetName()`), so a rename changes what every one of them
+answers while the identities (clsid) stay put. Rather than re-file entries per rename,
+`ibValueMetaObject::SetName` (and the object inspector's rename hook) marks the metadata registry's
+cache stale and the next lookup by name rebuilds it in one pass — no list of kinds to keep in step,
+and nothing for the next metatype to forget. Unregister erases the name entry **by value** (find the
+entry pointing AT this clsid), never by recomputed key: after a rename the recomputed key is exactly
+the one that no longer matches.
 
 ### 2.1 Ownership and the two invariants
 

@@ -215,8 +215,20 @@ bool ibValueMetaObjectRecordDataExt::OnBeforeRunMetaObject(int flags)
 
 bool ibValueMetaObjectRecordDataExt::OnAfterCloseMetaObject()
 {
-	unregisterObject();
-	unregisterManager();
+	// MIRROR OF THE RUN BRANCH ABOVE. A ctor is dropped by the identity it was filed under, and
+	// the external pair is filed under a different KIND (externalObject/externalManager), so the
+	// ordinary ids find nothing — UnRegisterCtor then raises "Object with id '…' is not exist",
+	// out of CloseSubtree, and the external processor never finishes closing.
+	// This stayed invisible while the macros keyed on the NAME: the external ctors inherit
+	// GetClassName() from their non-external bases, so both spellings resolved to the same entry.
+	if (IsExternalCreate()) {
+		unregisterExternalObject();
+		unregisterExternalManager();
+	}
+	else {
+		unregisterObject();
+		unregisterManager();
+	}
 
 	return ibValueMetaObjectRecordData::OnAfterCloseMetaObject();
 }

@@ -7,13 +7,9 @@
 #include "frontend/mainFrame/mainFrame.h"
 #include "frontend/docView/docView.h"
 #include "backend/appData.h"
+#include "backend/metaCollection/metaCommandObject.h"   // ibValueMetaObjectCommand::GetSubCommands
 
-#define	objectFormsName _("Forms")
-#define	objectModulesName _("Modules")
-#define	objectTemplatesName _("Templates")
-#define objectAttributesName _("Attributes")
-#define objectTablesName _("Tables")
-#define objectEnumerationsName _("Enums")
+#include <cstdint>   // intptr_t — the widening step under the client-data cast
 
 //***********************************************************************
 //*                         metaData                                    * 
@@ -21,17 +17,17 @@
 
 void ibDataReportTree::ActivateItem(const wxTreeItemId& item)
 {
-	ibValueMetaObject* m_currObject = GetMetaObject(item);
+	ibValueMetaObject* currObject = GetMetaObject(item);
 
-	if (!m_currObject)
+	if (!currObject)
 		return;
 
-	OpenObjectForm(m_currObject);
+	OpenObjectForm(currObject);
 }
 
-ibValueMetaObject* ibDataReportTree::NewItem(const ibClassID& clsid, ibValueMetaObject* parent, bool rubObject)
+ibValueMetaObject* ibDataReportTree::NewItem(const ibClassID& clsid, ibValueMetaObject* parent, bool runObject)
 {
-	return m_metaData->CreateMetaObject(clsid, parent, rubObject);
+	return m_metaData->CreateMetaObject(clsid, parent, runObject);
 }
 
 ibValueMetaObject* ibDataReportTree::CreateItem(bool showValue)
@@ -51,13 +47,11 @@ ibValueMetaObject* ibDataReportTree::CreateItem(bool showValue)
 		if (showValue) { OpenObjectForm(createdObject); }
 		UpdateToolbar(createdObject, FillItem(createdObject, item,
 			prev_selected == objectInspector->GetSelectedObject(), false));
+		// See the twin note in treeDataProcessor_impl.cpp — this loop stood here commented out.
 		for (auto& doc : docManager->GetDocumentsVector()) {
 			ibMetaDocument* metaDoc = wxDynamicCast(doc, ibMetaDocument);
-			//if (metaDoc != nullptr) metaDoc->UpdateAllViews();
+			if (metaDoc != nullptr) metaDoc->UpdateAllViews();
 		}
-
-		if (prev_selected == objectInspector->GetSelectedObject())
-			objectInspector->SelectObject(createdObject);
 	}
 
 	m_metaTreeCtrl->RefreshSelectedItem();
@@ -85,10 +79,15 @@ wxTreeItemId ibDataReportTree::FillItem(ibValueMetaObject* metaItem, const wxTre
 		for (auto attribute : metaItemRecord->GetAttributeArrayObject()) {
 			if (attribute->IsDeleted())
 				continue;
-			if (attribute->GetClassType() == g_metaPredefinedAttributeCLSID)
+			if (!attribute->IsAcceptedByParent())
 				continue;
 			AppendItem(createdItem, attribute);
 		}
+	}
+	// A COMMAND HOLDS COMMANDS — see the twin note in treeDataProcessor_impl.cpp.
+	else if (metaItem->GetClassType() == g_metaCommandCLSID) {
+		for (auto sub : static_cast<ibValueMetaObjectCommand*>(metaItem)->GetSubCommands())
+			AppendCommandNode(createdItem, sub);
 	}
 
 	m_metaTreeCtrl->InvalidateBestSize();
@@ -111,12 +110,12 @@ void ibDataReportTree::EditItem()
 	if (!selection.IsOk())
 		return;
 
-	ibValueMetaObject* m_currObject = GetMetaObject(selection);
+	ibValueMetaObject* currObject = GetMetaObject(selection);
 
-	if (!m_currObject)
+	if (!currObject)
 		return;
 
-	OpenObjectForm(m_currObject);
+	OpenObjectForm(currObject);
 }
 
 void ibDataReportTree::RemoveItem()
@@ -126,30 +125,25 @@ void ibDataReportTree::RemoveItem()
 	if (!selection.IsOk())
 		return;
 
-	wxTreeItemIdValue m_cookie;
-	wxTreeItemId hItem = m_metaTreeCtrl->GetFirstChild(selection, m_cookie);
-
-	while (hItem)
-	{
-		EraseItem(hItem);
-		hItem = m_metaTreeCtrl->GetNextChild(hItem, m_cookie);
-	}
-
 	ibValueMetaObject* metaObject = GetMetaObject(selection);
-	wxASSERT(metaObject);
-	EraseItem(selection);
+	// NOT AN ASSERT: wxASSERT is compiled out in Release, and a null here reaches RemoveMetaObject
+	// and Delete(selection) — which, on a layout group row, would free a node the group map still
+	// points at. A stale wxTreeItemId answers IsOk() == true, so every later guard would pass.
+	if (metaObject == nullptr)
+		return;
+	EraseItem(selection);   // the row AND everything under it — see EraseItem
 	m_metaData->RemoveMetaObject(metaObject);
 
 	//Delete item from tree
 	m_metaTreeCtrl->Delete(selection);
-
-	const wxTreeItemId nextSelection = m_metaTreeCtrl->GetFocusedItem();
 
 	for (auto& doc : docManager->GetDocumentsVector()) {
 		ibMetaDocument* metaDoc = wxDynamicCast(doc, ibMetaDocument);
 		if (metaDoc != nullptr) metaDoc->UpdateAllViews();
 	}
 
+	// Read the focus AFTER the views have caught up — the twin and the configuration tree both do.
+	const wxTreeItemId nextSelection = m_metaTreeCtrl->GetFocusedItem();
 	if (nextSelection.IsOk()) {
 		UpdateToolbar(GetMetaObject(nextSelection), nextSelection);
 	}
@@ -158,9 +152,19 @@ void ibDataReportTree::RemoveItem()
 	UpdateChoiceSelection();
 }
 
+// CLOSE WHAT THIS ROW STANDS FOR, AND EVERYTHING UNDER IT — see the twin in treeDataProcessor_impl.cpp.
 void ibDataReportTree::EraseItem(const wxTreeItemId& item)
 {
+	wxTreeItemIdValue cookie;
+	for (wxTreeItemId child = m_metaTreeCtrl->GetFirstChild(item, cookie); child.IsOk();
+		child = m_metaTreeCtrl->GetNextChild(item, cookie))
+		EraseItem(child);
+
 	ibValueMetaObject* const metaObject = GetMetaObject(item);
+	// NOTHING TO ERASE FOR A GROUP NODE.
+	if (metaObject == nullptr)
+		return;
+
 	for (auto& doc : docManager->GetDocumentsVector()) {
 		ibMetaDocument* metaDoc = wxDynamicCast(doc, ibMetaDocument);
 		if (metaDoc != nullptr && metaObject == metaDoc->GetMetaObject()) {
@@ -224,7 +228,7 @@ void ibDataReportTree::UpItem()
 		do {
 			if (nextId == nextItem)
 				break;
-			nextId = m_metaTreeCtrl->GetNextChild(nextId, coockie); pos++;
+			nextId = m_metaTreeCtrl->GetNextChild(parentItem, coockie); pos++;
 		} while (nextId.IsOk());
 		ibValueMetaObject* parentObject = metaObject->GetParent();
 		ibValueMetaObject* nextObject = GetMetaObject(nextItem);
@@ -251,7 +255,7 @@ void ibDataReportTree::UpItem()
 						swap(tree, nextId, newId);
 					}
 					tree->SetItemData(nextId, nullptr);
-					nextId = tree->GetNextChild(nextId, coockie);
+					nextId = tree->GetNextChild(dst, coockie);
 				}
 				};
 
@@ -282,7 +286,7 @@ void ibDataReportTree::DownItem()
 		do {
 			if (nextId == prevItem)
 				break;
-			nextId = m_metaTreeCtrl->GetNextChild(nextId, coockie); pos++;
+			nextId = m_metaTreeCtrl->GetNextChild(parentItem, coockie); pos++;
 		} while (nextId.IsOk());
 		ibValueMetaObject* parentObject = metaObject->GetParent();
 		ibValueMetaObject* prevObject = GetMetaObject(prevItem);
@@ -309,7 +313,7 @@ void ibDataReportTree::DownItem()
 						swap(tree, nextId, newId);
 					}
 					tree->SetItemData(nextId, nullptr);
-					nextId = tree->GetNextChild(nextId, coockie);
+					nextId = tree->GetNextChild(dst, coockie);
 				}
 				};
 
@@ -446,7 +450,9 @@ void ibDataReportTree::UpdateChoiceSelection()
 		if (ibValueMetaObjectReport::eFormReport != metaForm->GetTypeForm())
 			continue;
 
-		int selection_id = m_defaultFormValue->Append(metaForm->GetName(), reinterpret_cast<void*>(metaForm->GetMetaID()));
+		// WIDEN FIRST, then reinterpret — see the twin note in treeDataProcessor_impl.cpp.
+		int selection_id = m_defaultFormValue->Append(metaForm->GetName(),
+			reinterpret_cast<void*>(static_cast<intptr_t>(metaForm->GetMetaID())));
 
 		if (commonMetadata->GetDefFormObject() == metaForm->GetMetaID()) {
 			defSelection = selection_id;
@@ -480,17 +486,45 @@ bool ibDataReportTree::RenameMetaObject(ibValueMetaObject* obj, const wxString& 
 	return false;
 }
 
+// HUB — see the twin in treeDataProcessor_impl.cpp.
+void ibDataReportTree::AppendCommandNode(const wxTreeItemId& parent, ibValueMetaObject* command)
+{
+	if (command == nullptr || command->IsDeleted())
+		return;
+	const wxTreeItemId hCmd = AppendItem(parent, command);
+	if (command->GetClassType() == g_metaCommandCLSID)
+		for (auto sub : static_cast<ibValueMetaObjectCommand*>(command)->GetSubCommands())
+			AppendCommandNode(hCmd, sub);
+}
+
+// THE LAYOUT — one table, same shape and same order as the data processor's and as the
+// configuration tree's rendering of a report. See the twin note in treeDataProcessor_impl.cpp.
+namespace {
+
+struct ibExternalGroupDef {
+	ibClassID   m_clsid;
+	const char* m_label;
+};
+
+const ibExternalGroupDef s_reportGroups[] = {
+	{ g_metaAttributeCLSID, wxTRANSLATE("Attributes") },
+	{ g_metaTableCLSID,     wxTRANSLATE("Tables")     },
+	{ g_metaFormCLSID,      wxTRANSLATE("Forms")      },
+	{ g_metaCommandCLSID,   wxTRANSLATE("Commands")   },
+	{ g_metaTemplateCLSID,  wxTRANSLATE("Templates")  },
+};
+
+} // namespace
+
 void ibDataReportTree::InitTree()
 {
-	m_treeREPORTS = AppendRootItem(g_metaReportCLSID, _("Reports"));
-	// attribute list
-	m_treeATTRIBUTES = AppendGroupItem(m_treeREPORTS, g_metaAttributeCLSID, objectAttributesName);
-	// tabular section list
-	m_treeTABLES = AppendGroupItem(m_treeREPORTS, g_metaTableCLSID, objectTablesName);
-	// forms
-	m_treeFORM = AppendGroupItem(m_treeREPORTS, g_metaFormCLSID, objectFormsName);
-	// tables
-	m_treeTEMPLATES = AppendGroupItem(m_treeREPORTS, g_metaTemplateCLSID, objectTablesName);
+	// SINGULAR: this tree edits ONE report, and the root is that report.
+	m_treeREPORTS = AppendRootItem(g_metaReportCLSID, _("Report"));
+
+	m_groups.clear();
+	for (const ibExternalGroupDef& def : s_reportGroups)
+		m_groups[def.m_clsid] = AppendGroupItem(m_treeREPORTS, def.m_clsid,
+			wxGetTranslation(wxString::FromUTF8(def.m_label)));
 }
 
 void ibDataReportTree::ActivateTree()
@@ -514,23 +548,21 @@ void ibDataReportTree::ClearTree()
 		}
 	}
 
-	//disable event
-	m_metaTreeCtrl->SetEvtHandlerEnabled(false);
+	// disable events for the whole rebuild - RAII, so a throw from InitTree cannot leave them off
+	const ibEventsOff eventsOff(m_metaTreeCtrl);
 
-	//delete all child item
-	if (m_treeATTRIBUTES.IsOk()) m_metaTreeCtrl->DeleteChildren(m_treeATTRIBUTES);
-	if (m_treeTABLES.IsOk()) m_metaTreeCtrl->DeleteChildren(m_treeTABLES);
-	if (m_treeFORM.IsOk()) m_metaTreeCtrl->DeleteChildren(m_treeFORM);
-	if (m_treeTEMPLATES.IsOk()) m_metaTreeCtrl->DeleteChildren(m_treeTEMPLATES);
-
-	//delete all items
+	// The clear is TOTAL: a per-group DeleteChildren pass stood here, immediately before
+	// DeleteAllItems, so nothing it did could survive it. InitTree re-creates the groups from
+	// the layout table, and the map goes with them.
+	m_groups.clear();
+	m_initialized = false;   // the tree is gone; a later Load must re-seed it, not resume
 	m_metaTreeCtrl->DeleteAllItems();
+	if (wxImageList* imageList = m_metaTreeCtrl->GetImageList())
+		imageList->RemoveAll();   // every Append* adds one; nothing ever removed them
 
 	//initialize tree
 	InitTree();
 
-	//enable event
-	m_metaTreeCtrl->SetEvtHandlerEnabled(true);
 }
 
 void ibDataReportTree::FillData()
@@ -540,35 +572,35 @@ void ibDataReportTree::FillData()
 	m_metaTreeCtrl->SetItemText(m_treeREPORTS, commonMetadata->GetName());
 	m_metaTreeCtrl->SetItemData(m_treeREPORTS, new wxTreeItemMetaData(commonMetadata));
 
-	//set value data
-	m_nameValue->SetValue(commonMetadata->GetName());
-	m_synonymValue->SetValue(commonMetadata->GetSynonym());
-	m_commentValue->SetValue(commonMetadata->GetComment());
+	// SEED THE FIELDS, do not pretend the user typed in them. SetValue emits wxEVT_TEXT, which the
+	// constructor connected to OnEditCaptionName — and that handler REGENERATES the synonym from the
+	// name. So filling the name here overwrote a hand-written synonym, and the next line then read
+	// back what had just been destroyed. ChangeValue is the wx call that sets without notifying.
+	m_nameValue->ChangeValue(commonMetadata->GetName());
+	m_synonymValue->ChangeValue(commonMetadata->GetSynonym());
+	m_commentValue->ChangeValue(commonMetadata->GetComment());
 
-	//set default form value 
-	m_defaultFormValue->Clear();
-
-	//append default value 
-	m_defaultFormValue->AppendString(_("<not selected>"));
+	// (the default-form choice is filled by UpdateChoiceSelection at the end of this function —
+	// clearing and seeding it here as well was doing the same work twice)
 
 	// attribute list
 	for (auto attribute : commonMetadata->GetAttributeArrayObject()) {
 		if (attribute->IsDeleted())
 			continue;
-		if (attribute->GetClassType() == g_metaPredefinedAttributeCLSID)
+		if (!attribute->IsAcceptedByParent())
 			continue;
-		AppendItem(m_treeATTRIBUTES, attribute);
+		AppendItem(Group(g_metaAttributeCLSID), attribute);
 	}
 
 	// tabular section list
 	for (auto metaTable : commonMetadata->GetTableArrayObject()) {
 		if (metaTable->IsDeleted())
 			continue;
-		const wxTreeItemId& hItem = AppendGroupItem(m_treeTABLES, g_metaAttributeCLSID, metaTable);
+		const wxTreeItemId& hItem = AppendGroupItem(Group(g_metaTableCLSID), g_metaAttributeCLSID, metaTable);
 		for (auto attribute : metaTable->GetAttributeArrayObject()) {
 			if (attribute->IsDeleted())
 				continue;
-			if (attribute->GetClassType() == g_metaPredefinedAttributeCLSID)
+			if (!attribute->IsAcceptedByParent())
 				continue;
 			AppendItem(hItem, attribute);
 		}
@@ -578,14 +610,18 @@ void ibDataReportTree::FillData()
 	for (auto metaForm : commonMetadata->GetFormArrayObject()) {
 		if (metaForm->IsDeleted())
 			continue;
-		AppendItem(m_treeFORM, metaForm);
+		AppendItem(Group(g_metaFormCLSID), metaForm);
 	}
 
-	// tables
+	// commands — nests its sub-commands, skips deleted
+	for (auto metaCommand : commonMetadata->GetCommandArrayObject())
+		AppendCommandNode(Group(g_metaCommandCLSID), metaCommand);
+
+	// templates
 	for (auto metaTemplates : commonMetadata->GetTemplateArrayObject()) {
 		if (metaTemplates->IsDeleted())
 			continue;
-		AppendItem(m_treeTEMPLATES, metaTemplates);
+		AppendItem(Group(g_metaTemplateCLSID), metaTemplates);
 	}
 
 	//update choice selection
@@ -598,7 +634,7 @@ void ibDataReportTree::FillData()
 	Modify(m_metaData->IsModified());
 
 	//update toolbar 
-	UpdateToolbar(nullptr, m_treeATTRIBUTES);
+	UpdateToolbar(nullptr, Group(g_metaAttributeCLSID));
 }
 
 bool ibDataReportTree::Load(ibMetaDataReport* metaData)
@@ -608,7 +644,7 @@ bool ibDataReportTree::Load(ibMetaDataReport* metaData)
 	m_metaTreeCtrl->Freeze();
 	FillData(); //Fill all data from metaData
 	m_metaData->SetMetaTree(this);
-	m_metaTreeCtrl->SelectItem(m_treeATTRIBUTES);
+	m_metaTreeCtrl->SelectItem(Group(g_metaAttributeCLSID));
 	m_metaTreeCtrl->ExpandAll();
 	m_metaTreeCtrl->Thaw();
 	return true;
@@ -616,12 +652,12 @@ bool ibDataReportTree::Load(ibMetaDataReport* metaData)
 
 bool ibDataReportTree::Save()
 {
-	ibValueMetaObjectReport* m_commonMetadata = m_metaData->GetReport();
-	wxASSERT(m_commonMetadata);
+	ibValueMetaObjectReport* commonMetadata = m_metaData->GetReport();
+	wxASSERT(commonMetadata);
 
-	m_commonMetadata->SetName(m_nameValue->GetValue());
-	m_commonMetadata->SetSynonym(m_synonymValue->GetValue());
-	m_commonMetadata->SetComment(m_commentValue->GetValue());
+	commonMetadata->SetName(m_nameValue->GetValue());
+	commonMetadata->SetSynonym(m_synonymValue->GetValue());
+	commonMetadata->SetComment(m_commentValue->GetValue());
 
 	wxASSERT(m_metaData);
 

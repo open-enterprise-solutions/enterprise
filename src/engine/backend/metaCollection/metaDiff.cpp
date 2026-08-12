@@ -95,6 +95,10 @@ wxString ibMetaDiffWalker::GroupLabelFor(ibClassID clsid)
 	// there is "this object carries a common attribute", not a second kind of thing.
 	if (clsid == g_metaCommonAttributeColumnCLSID)         return _("Common attributes");
 	if (clsid == g_metaParameterizedJobCLSID)           return _("Scheduled jobs");
+	// Commands — the configuration-wide ones and the ones an object owns. Both were missing here,
+	// so the compare tree showed them under a raw clsid number, ranked after everything else.
+	if (clsid == g_metaCommonCommandCLSID)              return _("Common commands");
+	if (clsid == g_metaCommandCLSID)                    return _("Commands");
 	if (clsid == g_metaSectionCLSID)                  return _("Sections");
 	if (clsid == g_metaRoleCLSID)                       return _("Roles");
 	if (clsid == g_metaPictureCLSID)                    return _("Pictures");
@@ -136,12 +140,13 @@ int ibMetaDiffWalker::GroupOrderRank(ibClassID clsid)
 	// Match the order FillData uses in treeConfiguration_impl.cpp so
 	// the compare tree reads identically to the configuration tree.
 	// Inner-object groups (Attributes, Forms, ...) follow the
-	// AppendGroupItem sequence in each ibMetaDataTree subclass.
+	// AppendGroupItem sequence in each ibMetaTreeBase subclass.
 	struct Rank { ibClassID clsid; int rank; };
 	static const Rank ranks[] = {
 		// Common-level groups (under root config)
 		{ g_metaCommonModuleCLSID,                10 },
 		{ g_metaCommonFormCLSID,                  20 },
+		{ g_metaCommonCommandCLSID,               25 },   // where the navigator puts it: after forms
 		{ g_metaCommonTemplateCLSID,              30 },
 		// Scheduled jobs sit in the COMMON band, where the tree puts them: the branch (35), and
 		// its predefined sub-branch immediately after, so the compare tree reads like the
@@ -178,6 +183,7 @@ int ibMetaDiffWalker::GroupOrderRank(ibClassID clsid)
 		{ g_metaTableRefCLSID,                   351 },
 		{ g_metaSubcontoKindsTableCLSID,         360 },
 		{ g_metaFormCLSID,                       370 },
+		{ g_metaCommandCLSID,                    375 },   // an object's own commands sit between forms and templates
 		{ g_metaTemplateCLSID,                   380 },
 		{ g_metaModuleCLSID,                     390 },
 		{ g_metaManagerCLSID,                    400 },

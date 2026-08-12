@@ -94,7 +94,7 @@ protected:
 	{\
 		if (ibCtorMetaAnyReference* anyRef = ib_find_any_reference(GetClassName()))\
 			anyRef->RemoveMember(reference_to_clsid(GetMetaID()));\
-		m_metaData->UnRegisterCtor(generate_class_name(prefixReference));\
+		m_metaData->UnRegisterCtor(reference_to_clsid(GetMetaID()));\
 	}
 
 //object class
@@ -125,15 +125,13 @@ class ibCtorMetaValueTypeExternalObject :
 	public ibCtorMetaValueTypeObject {
 public:
 
+	// ONE m_classType, THE BASE'S — re-declaring it here (plus a second, never-initialised
+	// m_metaObject) shadowed the base's storage: the ctor above assigned the DERIVED copy while
+	// every inherited accessor kept reading the base's. It worked only because GetClassType() was
+	// overridden to read the shadow; anything else added here would silently see the wrong values.
 	ibCtorMetaValueTypeExternalObject(ibValueMetaObjectRecordData* recordRef) : ibCtorMetaValueTypeObject(recordRef) {
 		m_classType = externalObject_to_clsid(recordRef->GetMetaID());
 	}
-
-	virtual ibClassID GetClassType() const { return m_classType; }
-
-private:
-	ibClassID m_classType;
-	ibValueMetaObjectRecordData* m_metaObject;
 };
 
 #define registerObject()\
@@ -141,7 +139,11 @@ private:
 #define registerExternalObject()\
 	m_metaData->RegisterCtor(new ibCtorMetaValueTypeExternalObject(this))
 #define unregisterObject()\
-	m_metaData->UnRegisterCtor(generate_class_name(prefixObject))
+	m_metaData->UnRegisterCtor(object_to_clsid(GetMetaID()))
+// A ctor is dropped by the identity it was FILED under, and the external pair files itself under
+// a different KIND — so it needs its own unregister, not the ordinary one.
+#define unregisterExternalObject()\
+	m_metaData->UnRegisterCtor(externalObject_to_clsid(GetMetaID()))
 
 //manager class 
 class ibCtorMetaValueTypeManager :
@@ -181,7 +183,9 @@ public:
 #define registerExternalManager()\
 	m_metaData->RegisterCtor(new ibCtorMetaValueTypeExternalManager(this))
 #define unregisterManager()\
-	m_metaData->UnRegisterCtor(generate_class_name(prefixManager))
+	m_metaData->UnRegisterCtor(manager_to_clsid(GetMetaID()))
+#define unregisterExternalManager()\
+	m_metaData->UnRegisterCtor(externalManager_to_clsid(GetMetaID()))
 
 //selection class
 class ibCtorMetaValueTypeSelection :
@@ -209,7 +213,7 @@ protected:
 #define registerSelection()\
 	m_metaData->RegisterCtor(new ibCtorMetaValueTypeSelection(this))
 #define unregisterSelection()\
-	m_metaData->UnRegisterCtor(generate_class_name(prefixSelection))
+	m_metaData->UnRegisterCtor(selection_to_clsid(GetMetaID()))
 
 //tabular section class
 class ibCtorMetaValueTypeTabularSection :
@@ -238,7 +242,7 @@ protected:
 #define registerTabularSection()\
 	m_metaData->RegisterCtor(new ibCtorMetaValueTypeTabularSection(metaObject, this))
 #define unregisterTabularSection()\
-	m_metaData->UnRegisterCtor(generate_class_table_name(prefixTabSection))
+	m_metaData->UnRegisterCtor(tabularSection_to_clsid(GetMetaID()))
 
 //tabular section reference class — the DB-backed tabular owner (ibValueMetaObjectTableDataRef).
 //Same classType/name keying as the RAM variant (one tabular is EITHER RAM or Ref, never both,
@@ -255,7 +259,7 @@ public:
 #define registerTabularSectionReference()\
 	m_metaData->RegisterCtor(new ibCtorMetaValueTypeTabularSectionReference(metaObject, this))
 #define unregisterTabularSectionReference()\
-	m_metaData->UnRegisterCtor(generate_class_table_name(prefixTabSection))
+	m_metaData->UnRegisterCtor(tabularSection_to_clsid(GetMetaID()))
 
 //tabular section string class
 class ibCtorMetaValueTypeTabularSectionString :
@@ -286,7 +290,7 @@ protected:
 #define registerTabularSection_String()\
 	m_metaData->RegisterCtor(new ibCtorMetaValueTypeTabularSectionString(metaObject, this))
 #define unregisterTabularSection_String()\
-	m_metaData->UnRegisterCtor(generate_class_table_name(prefixTabSectionStr))
+	m_metaData->UnRegisterCtor(tabularSectionString_to_clsid(GetMetaID()))
 
 //record key class
 class ibCtorMetaValueTypeRecord :
@@ -314,7 +318,7 @@ protected:
 #define registerRecordKey()\
 	m_metaData->RegisterCtor(new ibCtorMetaValueTypeRecord(this))
 #define unregisterRecordKey()\
-	m_metaData->UnRegisterCtor(generate_class_name(prefixRecordKey))
+	m_metaData->UnRegisterCtor(recordKey_to_clsid(GetMetaID()))
 
 //record manager class
 class ibCtorMetaValueTypeRecordManager :
@@ -342,7 +346,7 @@ protected:
 #define registerRecordManager()\
 	m_metaData->RegisterCtor(new ibCtorMetaValueTypeRecordManager(this))
 #define unregisterRecordManager()\
-	m_metaData->UnRegisterCtor(generate_class_name(prefixRecordManager))
+	m_metaData->UnRegisterCtor(recordManager_to_clsid(GetMetaID()))
 
 //record set class
 class ibCtorMetaValueTypeRecordSet :
@@ -370,7 +374,7 @@ protected:
 #define registerRecordSet()\
 	m_metaData->RegisterCtor(new ibCtorMetaValueTypeRecordSet(this))
 #define unregisterRecordSet()\
-	m_metaData->UnRegisterCtor(generate_class_name(prefixRecordSet))
+	m_metaData->UnRegisterCtor(recordSet_to_clsid(GetMetaID()))
 
 //record set string class
 class ibCtorMetaValueTypeRecordSetString :
@@ -398,6 +402,6 @@ protected:
 #define registerRecordSet_String()\
 	m_metaData->RegisterCtor(new ibCtorMetaValueTypeRecordSetString(this))
 #define unregisterRecordSet_String()\
-	m_metaData->UnRegisterCtor(generate_class_name(prefixRecordSetStr))
+	m_metaData->UnRegisterCtor(recordSetString_to_clsid(GetMetaID()))
 
 #endif 
