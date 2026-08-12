@@ -9,6 +9,13 @@
 #include <cstdint>
 typedef uint64_t ibClassID;
 
+// SELF-CONTAINED: this header's own declarations use wxString (ib_clsid_hash, clsid_to_string,
+// the make_clsid family), so it includes it rather than relying on whoever includes it first
+// having pulled wx in already. It always had that dependency and never declared it — invisible
+// while every includer happened to be a .cpp that included wx earlier, and a hard error the
+// moment a translation unit (a test) reached for it directly. Clang says so; MSVC did not.
+#include <wx/string.h>
+
 //*******************************************************************************************
 //*                       FNV-1a 64 hash — encoding for ibClassID                           *
 //*******************************************************************************************
