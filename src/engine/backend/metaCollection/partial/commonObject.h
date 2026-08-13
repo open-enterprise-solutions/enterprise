@@ -10,6 +10,9 @@
 // take typed enum args. Wrappers (ibValueEnumDocument*) stay private
 // to documentEnum.h; only the plain enum values bleed up.
 #include "backend/metaCollection/partial/documentEnum.h"
+// commonObjectEnum.h carries ibHierarchyType — the shape a hierarchical metaobject declares
+// (parent is a FOLDER, as in a catalog, or parent is an ITEM, as in a chart of accounts).
+#include "backend/metaCollection/partial/commonObjectEnum.h"
 // ibConnectionScope is used by-reference in the Phase A Begin*/Commit*
 // scaffold helper signatures on ibValueRecordDataObjectRef +
 // ibValueRecordSetObject. Pulling the real header here avoids a
@@ -271,10 +274,11 @@ public:
 		return array;
 	}
 
-	//table — both the RAM (MD_TBL) and DB-backed reference (MD_TBLR) variants, collected through the base pointer
+	//table — every tabular-section id (g_tabularSectionCLSIDs, metaObject.h): the RAM and DB-backed
+	// variants plus each predefined section. An id missing from that list is not a table to this walk.
 	std::vector<ibValueMetaObjectTableData*> GetTableArrayObject(
 		std::vector<ibValueMetaObjectTableData*> array = std::vector<ibValueMetaObjectTableData*>()) const {
-		FillArrayObjectByFilter<ibValueMetaObjectTableData>(array, { g_metaTableCLSID, g_metaTableRefCLSID });
+		FillArrayObjectByFilter<ibValueMetaObjectTableData>(array, g_tabularSectionCLSIDs);
 		return array;
 	}
 
@@ -293,10 +297,10 @@ public:
 		return FindObjectByFilter<ibValueMetaObjectAttributeBase>(id, { g_metaAttributeCLSID });
 	}
 
-	//table — RAM (MD_TBL) + DB-backed reference (MD_TBLR)
+	//table — the same id list as GetTableArrayObject
 	template <typename _T1>
 	ibValueMetaObjectTableData* FindTableObjectByFilter(const _T1& id) const {
-		return FindObjectByFilter<ibValueMetaObjectTableData>(id, { g_metaTableCLSID, g_metaTableRefCLSID });
+		return FindObjectByFilter<ibValueMetaObjectTableData>(id, g_tabularSectionCLSIDs);
 	}
 
 #pragma endregion 
@@ -331,6 +335,18 @@ enum ibObjectMode {
 	OBJECT_ITEM = 1,
 	OBJECT_FOLDER
 };
+
+// DOES A FIELD DECLARED FOR `itemMode` BELONG TO A RECORD OF `objMode`?
+//
+// The one sentence that answers it, written once. Every form builder spells this out by hand while
+// laying out its fields (catalog, chart of accounts, chart of characteristic types — the same three
+// lines each time), and the fill check did not spell it at all: a FOLDER was refused over a field
+// its own form never shows it.
+inline bool ibItemModeFits(ibItemMode itemMode, ibObjectMode objMode) {
+	return objMode == ibObjectMode::OBJECT_FOLDER
+		? (itemMode == ibItemMode::ibItemMode_Folder || itemMode == ibItemMode::ibItemMode_Folder_Item)
+		: (itemMode == ibItemMode::ibItemMode_Item   || itemMode == ibItemMode::ibItemMode_Folder_Item);
+}
 
 //meta object with file
 class BACKEND_API ibValueMetaObjectRecordDataExt : public ibValueMetaObjectRecordData {
@@ -404,6 +420,7 @@ public:
 	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;   // { data-reference } — key authority
 	// (ResolveReferenceTarget/Targets moved to ibDbTableProvider — the provider owns metadata.)
 	virtual const ibBackendQueryColumn* GetHierarchyColumn() const override;   // the parent attribute (hierarchy key)
+	virtual bool IsItemHierarchy() const override;                            // forwarded to the metaobject, same as above
 	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const override;   // = m_meta (body in .cpp — the metaobject type is complete there)
 private:
 	const ibValueMetaObjectRecordDataRef* m_meta;
@@ -467,6 +484,11 @@ public:
 	// IS hierarchical by being one). Null on a flat reference; a HIERARCHY overrides it with its parent attribute.
 	// (Folder column removed — folders are a creation-time sort/filter setting, not a structural column.)
 	virtual const ibBackendQueryColumn* GetHierarchyColumn() const { return nullptr; }
+
+	// The hierarchy KIND — same name and meaning as the hierarchy class's own IsItemHierarchy(), which
+	// becomes the override. A flat source has no hierarchy, hence false. (queryable.h — the record
+	// queryable forwards here, same route as the column above.)
+	virtual bool IsItemHierarchy() const { return false; }
 
 	virtual bool HasQuickChoice() const {
 		return m_propertyQuickChoice->GetValueAsBoolean();
@@ -932,6 +954,64 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 	ibValueMetaObjectAttributePredefined* GetDataIsFolder() const { return m_propertyAttributeIsFolder->GetMetaObject(); }
 	virtual bool IsDataFolder(const ibMetaID& id) const { return id == (*m_propertyAttributeIsFolder)->GetMetaID(); }
 
+	// What a parent may be here. Asked wherever a parent is CHOSEN or IMPLIED — the select mode of
+	// the Parent field, the "create inside this node" rule, and the list a folder picker shows.
+	ibHierarchyType GetHierarchyType() const { return m_propertyHierarchyType->GetValueAsEnum(); }
+
+	// An item-subordinated hierarchy (a chart of accounts) has no separate container kind: every
+	// node is the same thing, and any node may hold children. Asking this instead of comparing the
+	// enum keeps the question readable at the call sites that only care which of the two it is.
+	bool IsItemHierarchy() const { return GetHierarchyType() == ibHierarchyType::eItems; }
+
+	// Does the ENGINE navigate a tree here — level fetch, drill, hierarchy folding? Only the two real
+	// hierarchies. SUBORDINATION keeps its parent as ordinary data and answers NO: nothing is built on
+	// it unless someone asks for it in a query or a grouping.
+	bool IsHierarchical() const {
+		const ibHierarchyType type = GetHierarchyType();
+		return type == ibHierarchyType::eItems || type == ibHierarchyType::eFoldersAndItems;
+	}
+
+	// Is there a PARENT FIELD at all? True for the three arrangements that record one; only `None`
+	// has no parent to speak of. Separate from IsHierarchical on purpose — storing a parent and
+	// navigating one are different claims.
+	bool HasParentLink() const { return GetHierarchyType() != ibHierarchyType::eNone; }
+
+	// Are there FOLDERS — a second kind of node whose whole purpose is to contain? Only the
+	// folders-and-items arrangement has them.
+	bool HasFolders() const { return GetHierarchyType() == ibHierarchyType::eFoldersAndItems; }
+
+	// TURN THE DECLARATION INTO THE TWO PREDEFINED ATTRIBUTES IT GOVERNS.
+	//
+	// Parent's SELECT MODE is where every consumer already looks — choosing a parent, drawing the
+	// picker and greying the field all read GetSelectMode(), so none of them has to learn about
+	// hierarchy types.
+	//
+	// And PRESENCE, which is the part a boolean-plus-enum could not express: an attribute that this
+	// arrangement has no use for is not present in this configuration, which is exactly what
+	// metaDisableFlag says (the same flag a catalog with no owner puts on Owner, and an independent
+	// register on Recorder). Being absent, it leaves every metadata walk — so its column leaves the
+	// schema too, and a flat catalog stops carrying a parent it can never fill.
+	void ApplyHierarchyType() {
+		(*m_propertyAttributeParent)->SetSelectMode(HasFolders()
+			? ibSelectMode::ibSelectMode_Folders
+			: ibSelectMode::ibSelectMode_Items);
+
+		auto present = [](ibValueMetaObjectAttributePredefined* attribute, bool exists) {
+			if (attribute == nullptr) return;
+			if (exists) attribute->ClearFlag(metaDisableFlag);
+			else        attribute->SetFlag(metaDisableFlag);
+		};
+		present(GetDataParent(),   HasParentLink());   // nothing to point at only in a flat list
+		present(GetDataIsFolder(), HasFolders());      // no folders unless folders ARE the arrangement
+	}
+
+	// Declared by the OWNER of the hierarchy, so a subclass whose nodes are all of one kind (a chart
+	// of accounts) states it once at construction instead of leaving it to the user to discover.
+	void SetHierarchyType(ibHierarchyType type) {
+		m_propertyHierarchyType->SetValue(type);
+		ApplyHierarchyType();
+	}
+
 	// A catalog / chart IS hierarchical by its class — it returns its parent attribute (the record queryable forwards
 	// here, no cast). Body in commonObjectMetaQuery.cpp (attribute→column upcast complete there).
 	virtual const ibBackendQueryColumn* GetHierarchyColumn() const override;
@@ -957,19 +1037,10 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 	virtual bool ProcessChoice(ibBackendControlFrame* ownerValue,
 		const wxString& strFormName = wxEmptyString, ibSelectMode selMode = ibSelectMode::ibSelectMode_Items) const;
 
-	virtual ibClassID ResolveChild(const ibClassID& clsid) const {
-		if (clsid == g_metaAttributeCLSID)
-			return clsid;
-		// Same gate as the RAM owner above — the object answers for itself.
-		if (clsid == g_metaCommonAttributeColumnCLSID && IsCompositionAllowed())
-			return clsid;
-		// reference owner (catalog / document): either tabular-section variant maps to MD_TBLR.
-		if (clsid == g_metaTableCLSID || clsid == g_metaTableRefCLSID)
-			return g_metaTableRefCLSID;
-		return ibValueMetaObjectGenericData::ResolveChild(clsid);
-	}
+	// ResolveChild — inherited from ibValueMetaObjectRecordDataRef unchanged (it was copied here verbatim,
+	// comments included, and neither intermediate class re-declares it).
 
-	//events: 
+	//events:
 	virtual bool OnCreateMetaObject(ibMetaData* metaData, int flags);
 	virtual bool OnLoadMetaObject(ibMetaData* metaData);
 	virtual bool OnSaveMetaObject(int flags);
@@ -1045,6 +1116,8 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 
 protected:
 
+	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
+
 	// Declare the main table (via the base) + the predefined values as its SEED rows (cells keyed by
 	// column id; the builder diffs by uuid + cells).
 	virtual void ContributeTables(ibSchemaSnapshot& out) const override;
@@ -1067,6 +1140,13 @@ protected:
 		array.push_back(m_propertyAttributePredefined->GetMetaObject());
 		array.push_back(m_propertyAttributeCode->GetMetaObject());
 		array.push_back(m_propertyAttributeDescription->GetMetaObject());
+		// Parent / IsFolder are pushed UNCONDITIONALLY, and that is deliberate for now. ApplyHierarchyType
+		// marks the unused one with metaDisableFlag, but making THIS list obey the mark is not a one-line
+		// change: the readers of the list do not obey it either. ibValueRecordDataObjectHierarchyRef::
+		// ReadData asks GetValueByMetaID for IsFolder on every record it loads, and the schema differ
+		// compares a snapshot built from this list against one taken before the mark was applied - so
+		// dropping the column here asserted on open and emitted an ALTER for a column the table already
+		// had. Retiring a predefined column is its own arc: every walker has to agree at once.
 		array.push_back(m_propertyAttributeParent->GetMetaObject());
 		array.push_back(m_propertyAttributeIsFolder->GetMetaObject());
 		return true;
@@ -1082,6 +1162,23 @@ protected:
 
 		return true;
 	}
+
+	// THE SHAPE OF THE HIERARCHY — what a parent is allowed to be.
+	//
+	// A catalog nests items inside FOLDERS; a chart of accounts subordinates an account to another
+	// ACCOUNT. Both are the same storage (a Parent column and an IsFolder flag), and the display
+	// layer already copes with either — a node is a container when it is a folder OR when it has
+	// children. What differs is only what a Parent field ACCEPTS, so this is a declaration rather
+	// than a second mechanism, and switching it is not a restructuring.
+	//
+	// Default is FoldersAndItems, which is what every existing metaobject already behaves like.
+	//
+	// A CATEGORY OF ITS OWN: under Common this read as one more field beside Name / Synonym / Comment,
+	// while it is the single declaration that decides whether the object has a tree at all, what a
+	// parent may be, and whether Parent and IsFolder exist as columns. It governs an area, so it is
+	// shown as one — and the settings that belong to the same subject have a place to land next to it.
+	ibPropertyCategory* m_categoryHierarchy = ibPropertyObject::CreatePropertyCategory(wxT("Hierarchy"), _("Hierarchy"));
+	ibPropertyEnum<ibValueEnumHierarchyType>* m_propertyHierarchyType = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumHierarchyType>>(m_categoryHierarchy, wxT("HierarchyType"), _("Hierarchy type"), ibHierarchyType::eFoldersAndItems);
 
 	//create default attributes
 	ibPropertyContainer<>* m_propertyAttributePredefined = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateString(wxT("PredefinedName"), _("Predefined name"), wxEmptyString, 150, ibItemMode::ibItemMode_Folder_Item));
@@ -1860,6 +1957,12 @@ protected:
 	virtual bool SaveData();
 	virtual bool DeleteData();
 
+	// WHICH SHAPE THIS RECORD IS. A plain reference object has only one, so it answers ITEM and
+	// every field applies to it; a hierarchical one answers what it actually is. A FACT about the
+	// object, not a question about attributes — what follows from it (which fields belong) is
+	// ibItemModeFits, written once above.
+	virtual ibObjectMode GetObjectMode() const { return ibObjectMode::OBJECT_ITEM; }
+
 	// Optimistic-concurrency Write protection.
 	//
 	// Two-layer defence (see docs/record-locks.md):
@@ -1990,6 +2093,8 @@ public:
 	virtual const ibValueMetaObjectRecordDataHierarchyMutableRef* GetMetaObject() const {
 		return static_cast<const ibValueMetaObjectRecordDataHierarchyMutableRef*>(m_metaObject);
 	}
+
+	virtual ibObjectMode GetObjectMode() const override { return m_objMode; }
 
 	//copy new object
 	virtual ibValueRecordDataObjectRef* CopyObjectValue();
@@ -2270,27 +2375,18 @@ class BACKEND_API ibValueRecordSetObject : public ibValueModelStorage, public ib
 		ibValueRecordSetObjectRegisterColumnCollection(ibValueRecordSetObject* ownerTable);
 		virtual ~ibValueRecordSetObjectRegisterColumnCollection();
 
-		virtual const ibTypeDescription GetColumnType(unsigned int col) const {
-			ibValueRecordSetRegisterColumnInfo* columnInfo = m_listColumnInfo.at(col);
-			wxASSERT(columnInfo);
-			return columnInfo->GetColumnType();
-		}
-
 		virtual ibValueModelColumnInfo* GetColumnInfo(unsigned int idx) const override {
-			if (m_listColumnInfo.size() < idx)
+			if (idx >= m_listColumnInfo.size())   // `size() < idx` let idx == size() through onto end()
 				return nullptr;
 			auto it = m_listColumnInfo.begin();
 			std::advance(it, idx);
 			return it->second;
 		}
 
-		virtual unsigned int GetColumnCount() const override {
-			const ibValueMetaObjectGenericData* metaTable = m_ownerTable->GetMetaObject();
-			wxASSERT(metaTable);
-			std::vector<ibValueMetaObjectAttributeBase*> genArr;
-			const auto obj = metaTable->GetGenericAttributeArrayObject(genArr);
-			return obj.size();
-		}
+		// The collection IS the count: the ctor inserts every generic attribute, keyed by its (unique)
+		// metaID, with no filter. Asking the metaobject again rebuilt a vector on every call - and
+		// GetColumnByID calls this once per iteration, so an id lookup allocated once per column visited.
+		virtual unsigned int GetColumnCount() const override { return m_listColumnInfo.size(); }
 
 		//array support
 		virtual bool SetAt(const ibValue& varKeyValue, const ibValue& varValue) override;

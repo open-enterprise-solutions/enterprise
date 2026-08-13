@@ -1,4 +1,4 @@
-#ifndef _SINGLE_CLASS_H__
+﻿#ifndef _SINGLE_CLASS_H__
 #define _SINGLE_CLASS_H__
 
 #include "backend/compiler/typeCtor.h"
@@ -29,6 +29,7 @@ public:
 
 	virtual ibCtorObjectMetaType GetMetaTypeCtor() const = 0;
 	virtual const ibValueMetaObject* GetMetaObject() const = 0;
+
 
 	// The dot-walk TARGET queryable of this metadata type — non-null only for a REFERENCE ctor (whose
 	// metaobject is a queryable holder). Lets the reference-target resolver reach the queryable by VIRTUAL
@@ -404,4 +405,4 @@ protected:
 #define unregisterRecordSet_String()\
 	m_metaData->UnRegisterCtor(recordSetString_to_clsid(GetMetaID()))
 
-#endif 
+#endif

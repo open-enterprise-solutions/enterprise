@@ -171,15 +171,6 @@ public:
 			return m_listColumnInfo.emplace_back(colInfo);
 		}
 
-		const ibTypeDescription GetColumnType(unsigned int col) const {
-			for (auto& colInfo : m_listColumnInfo) {
-				if (col == colInfo->GetColumnID()) {
-					return colInfo->GetColumnType();
-				}
-			}
-			return ibTypeDescription();
-		}
-
 		virtual void RemoveColumn(unsigned int col) {
 
 			for (long row = 0; row < m_ownerTable->GetRowCount(); row++) {
@@ -194,7 +185,8 @@ public:
 				}
 			);
 
-			m_listColumnInfo.erase(it);
+			if (it != m_listColumnInfo.end())   // an id the collection does not hold: erase(end()) is UB
+				m_listColumnInfo.erase(it);
 		}
 
 		virtual ibValueModelColumnInfo* GetColumnInfo(unsigned int idx) const {
@@ -262,11 +254,19 @@ public:
 		return GetRowAt(GetRow(line));
 	}
 
-	// ibSourceDataObject hop gate. Set: many rows, no single cell -> no-op. Get: the DESIGN-TIME dot-walk steps
-	// by TYPE not value (a value-table has 0..N rows) -> the pinned branch's empty typed twin; out-of-line
-	// because it needs reference.h (CoerceHopType). See valueTable.cpp.
+	// ibSourceDataObject hop gate. Set: many rows, no single cell -> no-op.
 	virtual bool SetValueBySourceHop(const ibSourceHop& hop, const ibValue& value) override { return false; }
-	virtual bool GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const override;
+	using ibTabularDataObject::SetValueBySourceHop;   // the ROW form, hidden by the declaration above
+
+	// THE SAME SIGNATURE LIVES ON TWO UNRELATED BASES, and this class is both of them: ibSourceObject (the
+	// scalar walk: WalkColumns, ResolvePath, GetValueByPath all hold ibSourceDataObject*) and ibTabularObject
+	// (the table). They are separate hierarchies, so they are separate virtual slots, and answering one leaves
+	// the other at its `return false` default. The BODY is the table's, written once for every kind of table;
+	// this bridges the source slot to it. Removing this line does not fail to build - it silently brings back
+	// "<not selected>" on a dotted reference column of a value table.
+	virtual bool GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const override {
+		return ibTabularDataObject::GetValueBySourceHop(hop, out);
+	}
 
 	//set meta/get meta
 	virtual bool SetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, const ibValue& varMetaVal) {

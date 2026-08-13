@@ -4,7 +4,7 @@
 #include "commonObject.h"
 #include "reference/reference.h"
 #include "chartOfAccountsEnum.h"
-#include "chartOfAccountsSubcontoTable.h"
+#include "chartOfAccountsDimensionKindsTable.h"
 #include "backend/propertyManager/property/propertyChartOfCharacteristicTypes.h"
 
 //********************************************************************************************
@@ -47,11 +47,16 @@ public:
 	ibValueMetaObjectAttributePredefined* GetOffBalance() const { return m_propertyAttributeOffBalance->GetMetaObject(); }
 	ibValueMetaObjectAttributePredefined* GetQuantitative() const { return m_propertyAttributeQuantitative->GetMetaObject(); }
 	ibValueMetaObjectAttributePredefined* GetCurrency() const { return m_propertyAttributeCurrency->GetMetaObject(); }
-	ibValueMetaObjectAttributePredefined* GetMaxSubcontoCount() const { return m_propertyAttributeMaxSubcontoCount->GetMetaObject(); }
+	// HOW MANY account dimension slots a register on this chart builds — SCHEMA, and therefore a
+	// property of the chart, not an attribute of an account. A number sitting in a data row cannot
+	// decide how many columns a table has; changing this one is an ordinary restructuring.
+	// How many kinds a given account actually uses is a different question, answered by the row
+	// count of that account's own kinds table.
+	unsigned int GetMaxAccountDimensionCount() const { return m_propertyMaxAccountDimensionCount->GetValueAsUInteger(); }
 
-	ibValueMetaObjectSubcontoKindsTable* GetSubcontoKindsTable() const { return m_propertySubcontoKindsTable->GetMetaObject(); }
+	ibValueMetaObjectAccountDimensionKindsTable* GetAccountDimensionKindsTable() const { return m_propertyAccountDimensionKindsTable->GetMetaObject(); }
 
-	// Chart of Characteristic Types binding (determines available subconto types)
+	// Chart of Characteristic Types binding (determines the values an account dimension may hold)
 	ibPropertyChartOfCharacteristicTypes* GetChartOfCharacteristicTypes() const { return m_propertyChartOfCharacteristicTypes; }
 
 	//default constructor
@@ -113,11 +118,21 @@ public:
 	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue);
 	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue);
 
+	// Declares this chart's tables AND attaches the analytics-ceiling rule to the kinds section, so the
+	// differ can refuse a lowering the data cannot survive before it touches anything. Body in
+	// chartOfAccountsMetadata.cpp.
+	virtual void ContributeTables(class ibSchemaSnapshot& out) const override;
+
+	// Give the analytics-kinds column the reference type its binding names. Called on LOAD, on the user's
+	// PICK and on SAVE — every point the binding can have arrived — because the schema is computed off
+	// these metaobjects and a column typed only at run time made the two disagree.
+	void ApplyAccountDimensionKindType();
+
 protected:
 
 	// Additive contract — chains to HierarchyMutableRef. ChartOfAccounts
 	// appends accounting-specific attributes (AccountType, OffBalance,
-	// Quantitative, Currency, MaxSubcontoCount) on top of the inherited
+	// Quantitative, Currency, MaxAccountDimensionCount) on top of the inherited
 	// Hierarchy + MutableRef set.
 	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const override {
 		ibValueMetaObjectRecordDataHierarchyMutableRef::FillArrayObjectByPredefinedAttribute(array);
@@ -125,13 +140,12 @@ protected:
 		array.push_back(m_propertyAttributeOffBalance->GetMetaObject());
 		array.push_back(m_propertyAttributeQuantitative->GetMetaObject());
 		array.push_back(m_propertyAttributeCurrency->GetMetaObject());
-		array.push_back(m_propertyAttributeMaxSubcontoCount->GetMetaObject());
 		return true;
 	}
 
 	virtual bool FillArrayObjectByPredefinedTable(
 		std::vector<ibValueMetaObjectTableData*>& array) const {
-		array = { m_propertySubcontoKindsTable->GetMetaObject() };
+		array = { m_propertyAccountDimensionKindsTable->GetMetaObject() };
 		return true;
 	}
 
@@ -231,7 +245,10 @@ private:
 	ibPropertyCategory* m_categoryAccounting = ibPropertyObject::CreatePropertyCategory(wxT("Accounting"), _("Accounting"));
 
 	ibPropertyContainer<>* m_propertyAttributeAccountType = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryAccounting,
-		ibValueMetaObjectCompositeData::CreateSpecialType(wxT("AccountType"), _("Account type"), wxEmptyString, g_enumAccountTypeCLSID, false, ibValueEnumAccountType::CreateDefEnumValue()));
+		// Folder_Item like its neighbours: a folder in a chart of accounts is an account that has
+		// children, so it has a side of its own. Leaving it Item-only was an asymmetry against
+		// OffBalance / Quantitative / Currency, which are all declared for both.
+		ibValueMetaObjectCompositeData::CreateSpecialType(wxT("AccountType"), _("Account type"), wxEmptyString, g_enumAccountTypeCLSID, false, ibValueEnumAccountType::CreateDefEnumValue(), ibItemMode::ibItemMode_Folder_Item));
 
 	ibPropertyContainer<>* m_propertyAttributeOffBalance = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryAccounting,
 		ibValueMetaObjectCompositeData::CreateBoolean(wxT("OffBalance"), _("Off-balance"), wxEmptyString, ibItemMode::ibItemMode_Folder_Item));
@@ -242,19 +259,25 @@ private:
 	ibPropertyContainer<>* m_propertyAttributeCurrency = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryAccounting,
 		ibValueMetaObjectCompositeData::CreateBoolean(wxT("Currency"), _("Currency accounting"), wxEmptyString, ibItemMode::ibItemMode_Folder_Item));
 
-	ibPropertyContainer<>* m_propertyAttributeMaxSubcontoCount = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryAccounting,
-		ibValueMetaObjectCompositeData::CreateNumber(wxT("MaxSubcontoCount"), _("Max subconto count"), wxEmptyString, 1, 0, ibItemMode::ibItemMode_Folder_Item));
-
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Chart of Characteristic Types binding (determines subconto types available for this chart of accounts)
+	// Chart of Characteristic Types binding — the CONTOUR: which values an account dimension of this
+	// chart may ever hold. A KIND (a row of the table below) selects from that contour; it never
+	// declares a type of its own.
 	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
 	ibPropertyChartOfCharacteristicTypes* m_propertyChartOfCharacteristicTypes = ibPropertyObject::CreateProperty<ibPropertyChartOfCharacteristicTypes>(m_categoryData, wxT("ChartOfCharacteristicTypes"), _("Chart of characteristic types"));
 
+	// The two answers stand side by side on purpose, because they are different questions:
+	// the chart above says WHICH VALUES an account dimension may hold, this number says HOW MANY
+	// dimension slots exist. Neither is derivable from the other — the same characteristic chart
+	// serves charts of accounts with different analytical depth.
+	ibPropertyUInteger* m_propertyMaxAccountDimensionCount = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categoryData,
+		wxT("MaxAccountDimensionCount"), _("Max account dimension count"), 3);
+
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Predefined tabular section "SubcontoKinds" — own meta class with predefined columns
+	// Predefined tabular section "AccountDimensionKinds" — own meta class with predefined columns
 	// Created manually because ibPropertyContainer template can't pass args to non-default constructor via wxClassInfo
-	ibPropertyContainer<ibValueMetaObjectSubcontoKindsTable>* m_propertySubcontoKindsTable =
-		ibPropertyObject::CreateProperty<ibPropertyContainer<ibValueMetaObjectSubcontoKindsTable>>(m_categoryAccounting, wxT("SubcontoKinds"), _("Subconto kinds"));
+	ibPropertyContainer<ibValueMetaObjectAccountDimensionKindsTable>* m_propertyAccountDimensionKindsTable =
+		ibPropertyObject::CreateProperty<ibPropertyContainer<ibValueMetaObjectAccountDimensionKindsTable>>(m_categoryAccounting, wxT("AccountDimensionKinds"), _("Account dimension kinds"));
 
 	friend class ibValueRecordDataObjectChartOfAccounts;
 	friend class ibMetaData;
@@ -273,6 +296,17 @@ public:
 	// SaveModify / FillObject / CopyObject / WriteObject / DeleteObject
 	// inherited from ibValueRecordDataObjectHierarchyRef and
 	// ibValueRecordDataObjectRef.
+
+	// NO MORE KINDS THAN THERE ARE SLOTS.
+	//
+	// A user adds the analytics an account needs — contractor, contract, later order — and that
+	// works because the slots were sown in advance. Row N+1 has no slot to be written into, so
+	// accepting it would mean accepting a value with nowhere to go.
+	//
+	// Enforced on the WRITE, not in the form: a limit that lives only in the interface is not a
+	// limit — a data processor, an import or a paste writes the same table without passing through
+	// it. The form may refuse earlier for comfort; this is what makes it true.
+	virtual bool SaveData() override;
 
 	// Own methods (data members come from the base FillDataMembers); bound in the ctor.
 	void FillMethods(ibMemberTable& helper) const;

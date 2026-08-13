@@ -41,6 +41,14 @@ enum ibFieldTypes {
 	// deserialising the blob. The tag is APPENDED, never inserted — it is persisted in every
 	// composite column's _TYPE field, so a renumbering would re-read old rows as another type.
 	ibFieldTypes_Schedule,
+	// A TYPE DESCRIPTION — the same shape as the schedule: a value object stored whole in its own
+	// blob field, neither primitive nor reference. It carries a SET OF ADMISSIBLE TYPES with their
+	// qualifiers (a characteristic's own Type) and is read back by deserialising the blob.
+	//
+	// APPENDED AT THE END for the reason stated above — these values are persisted in every
+	// composite column's _TYPE field, so inserting one renumbers every tag after it and old rows
+	// start reading as a different type.
+	ibFieldTypes_TypeDescription,
 };
 
 // (ibSQLField — the structured "_TYPE + per-type field" projection — is REMOVED. Its analog is the

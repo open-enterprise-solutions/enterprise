@@ -1,4 +1,4 @@
-#include "tableBox.h"
+﻿#include "tableBox.h"
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/picturePredefined.h"          // g_pic*CLSID — the TableBox composes the standard command band
 #include "backend/composition/listFilter.h"     // ibValueListSettings::GetFilter()->Add / Clear + ibComparisonKind
@@ -188,7 +188,8 @@ void ibValueModelTableBox::Command_FilterByCurrentColumn()
 	m_tableModel->GetValueByMetaID(sel, colId, value);      // reading a cell value is a plain data op
 	const wxString name = m_tableModel->GetColumnNameByID(colId);
 	if (!name.empty()) {
-		m_tableModel->GetListSettings()->GetFilter()->Add(name, ibComparisonKind_Equal, value);
+		ibValueFilterItem* added =
+			m_tableModel->GetListSettings()->GetFilter()->Add(name, ibComparisonKind_Equal, value);
 		m_tableModel->RefetchAll();
 	}
 }

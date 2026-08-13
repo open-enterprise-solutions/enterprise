@@ -245,6 +245,11 @@ window); and `ClearContent` asks who owns the controls' sizer before dropping it
 - **Several forms in one tab** — the start page. [home-page.md](home-page.md).
 - **How a form is EDITED** — the Designer's visual editor, a different engine over the same
   metaobject. [form-editor.md](form-editor.md).
+- **How a VALUE is chosen** — whether a type can be picked from a short list is one function,
+  `HasQuickChoice(const ibCtorAbstractType*)` (`visualView/ctrl/frame.h`, body in `frame.cpp`), and it
+  is the only place the ctor kinds are walked; the route from there is
+  `ibTypeControlFactory::ChooseValue`, shared by a form control, a table column and the settings
+  dialog's cells. [list-settings.md § 7](list-settings.md).
 
 ---
 

@@ -301,6 +301,7 @@ void ibPGTypeProperty::RefreshChildren()
 #include <wx/spinctrl.h>
 
 #include "frontend/win/ctrls/checktree.h"
+#include "frontend/win/dlgs/typeSelector.h"   // the shared picker — this editor is one of its two callers
 
 wxPGEditorDialogAdapter* ibPGTypeProperty::GetEditorDialog() const
 {
@@ -554,283 +555,26 @@ wxPGEditorDialogAdapter* ibPGTypeProperty::GetEditorDialog() const
 			ibVariantDataAttribute* data = property_cast(dlgProp->GetValue(), ibVariantDataAttribute);
 			if (data == nullptr) return false;
 
-			const ibTypeDescription& typeDesc = data->GetTypeDesc();
-
-			// launch editor dialog
-			wxDialog* dlg = new wxDialog(pg, wxID_ANY, _("Choice type"), wxDefaultPosition, wxDefaultSize,
-				wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER | wxCLIP_CHILDREN);
-
-			dlg->SetFont(pg->GetFont()); // To allow entering chars of the same set as the propGrid
-
-			// Multi-line text editor dialog.
-			const int spacing = wxPropertyGrid::IsSmallScreen() ? 4 : 8;
-			wxBoxSizer* topsizer = new wxBoxSizer(wxVERTICAL);
-			wxBoxSizer* rowsizer = new wxBoxSizer(wxHORIZONTAL);
-
+			// WHICH SHAPE — the only question this editor still answers. Everything that belongs to
+			// that shape, and how it is grouped, is the picker's business.
 			const ibSelectorDataType& selectorDataType = typeFactory->GetFilterDataType();
 
-			wxCheckBox* compositeDataType = new wxCheckBox(dlg, wxID_ANY,
-				_("Composite data type"), wxDefaultPosition, wxDefaultSize);
+			// SINGLE OR COMPOSITE follows the same declaration the old in-place tree read: a table
+			// slot takes one type, everything else may be composite.
+			const bool singleChoice = selectorDataType == ibSelectorDataType::ibSelectorDataType_table;
 
-			compositeDataType->Enable(!dlgProp->HasFlag(wxPGFlags::ReadOnly));
+			// ROUTED TO THE SHARED PICKER — win/dlgs/typeSelector, the same dialog the data side
+			// reaches through its Select button. This editor says only WHICH SHAPE to render; what
+			// belongs to that shape the picker works out from the registry, and no filter narrows it
+			// here because a metadata declaration may name any type the configuration has.
+			ibVariantDataAttribute* clone = data->Clone();
 
-			int style = wxCR_SINGLE_CHECK;
+			if (!ibShowTypeSelector(pg, selectorDataType, std::vector<ibClassID>(), clone->GetTypeDesc(),
+				typeFactory->GetMetaData(), !dlgProp->HasFlag(wxPGFlags::ReadOnly), singleChoice))
+				return false;
 
-			if (selectorDataType == ibSelectorDataType::ibSelectorDataType_any ||
-				selectorDataType == ibSelectorDataType::ibSelectorDataType_reference) {
-				style = wxCR_MULTIPLE_CHECK;
-			}
-
-			if (data != nullptr) {
-				const ibTypeDescription& typeDesc = data->GetTypeDesc();
-				style = typeDesc.GetClsidCount() > 1 ?
-					wxCR_MULTIPLE_CHECK : wxCR_SINGLE_CHECK;
-				compositeDataType->SetValue(
-					typeDesc.GetClsidCount() > 1);
-			}
-			else {
-				compositeDataType->SetValue(style != wxCR_SINGLE_CHECK);
-			}
-
-			compositeDataType->Show(selectorDataType != ibSelectorDataType::ibSelectorDataType_table);
-
-			ibCheckTree* tc = new ibCheckTree(dlg, wxID_ANY,
-				wxDefaultPosition, wxDefaultSize, wxTR_HAS_BUTTONS | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxTR_HIDE_ROOT | style | wxSUNKEN_BORDER | wxTR_TWIST_BUTTONS);
-
-			topsizer->Add(compositeDataType, wxSizerFlags(0).Border(wxALL, spacing));
-			rowsizer->Add(tc, wxSizerFlags(1).Expand().Border(wxALL, spacing));
-			topsizer->Add(rowsizer, wxSizerFlags(1).Expand());
-
-			wxBoxSizer* stringSizer = new wxBoxSizer(wxHORIZONTAL);
-			wxStaticText* stSLength = new wxStaticText(dlg, wxID_ANY, _("Length:"), wxDefaultPosition, wxDefaultSize);
-			stSLength->Wrap(-1);
-			stringSizer->Add(stSLength, 0, wxALL, dlg->FromDIP(5));
-
-			wxSpinCtrl* tcSLength = new wxSpinCtrl(dlg, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, MAX_LENGTH_STRING);
-			stringSizer->Add(tcSLength, 0, wxBOTTOM | wxRIGHT, 0);
-			tcSLength->SetValue(typeDesc.GetLength());
-
-			tcSLength->Bind(wxEVT_COMMAND_SPINCTRL_UPDATED,
-				[data](wxSpinEvent& event)
-				{
-					ibTypeDescription& typeDesc = data->GetTypeDesc();
-					typeDesc.SetString(event.GetValue());
-					event.Skip();
-				}
-			);
-
-			tcSLength->Enable(!dlgProp->HasFlag(wxPGFlags::ReadOnly));
-			topsizer->Add(stringSizer, 0, 0, dlg->FromDIP(5));
-
-			wxBoxSizer* dateSizer = new wxBoxSizer(wxHORIZONTAL);
-			wxStaticText* stDDateFormat = new wxStaticText(dlg, wxID_ANY, _("Date format:"), wxDefaultPosition, wxDefaultSize);
-			stDDateFormat->Wrap(-1);
-			dateSizer->Add(stDDateFormat, 0, wxALL, dlg->FromDIP(5));
-
-			wxArrayString cDDateFormatChoices; auto ch = dlgProp->GetDateTime();
-			for (unsigned int idx = 0; idx < ch.GetCount(); idx++) {
-				cDDateFormatChoices.Add(ch.GetLabel(idx));
-			}
-			wxChoice* cDDateFormat = new wxChoice(dlg, wxID_ANY, wxDefaultPosition, wxDefaultSize, cDDateFormatChoices);
-			cDDateFormat->SetSelection(typeDesc.GetDateFraction());
-			dateSizer->Add(cDDateFormat, 0, wxALL, 0);
-
-			cDDateFormat->Bind(wxEVT_COMMAND_CHOICE_SELECTED,
-				[data](wxCommandEvent& event)
-				{
-					ibTypeDescription& typeDesc = data->GetTypeDesc();
-					typeDesc.SetDate((ibDateFractions)event.GetSelection());
-					event.Skip();
-				}
-			);
-
-			cDDateFormat->Enable(!dlgProp->HasFlag(wxPGFlags::ReadOnly));
-			topsizer->Add(dateSizer, 0, 0, dlg->FromDIP(5));
-
-			wxBoxSizer* numberSizer = new wxBoxSizer(wxHORIZONTAL);
-			wxStaticText* stNLength = new wxStaticText(dlg, wxID_ANY, _("Length:"), wxDefaultPosition, wxDefaultSize);
-			stNLength->Wrap(-1);
-			numberSizer->Add(stNLength, 0, wxALL, dlg->FromDIP(5));
-
-			wxSpinCtrl* tcNLength = new wxSpinCtrl(dlg, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS, 0, MAX_PRECISION_NUMBER);
-			numberSizer->Add(tcNLength, 0, wxBOTTOM | wxRIGHT, 0);
-			tcNLength->SetValue(typeDesc.GetPrecision());
-
-			tcNLength->Bind(wxEVT_COMMAND_SPINCTRL_UPDATED,
-				[data](wxSpinEvent& event)
-				{
-					ibTypeDescription& typeDesc = data->GetTypeDesc();
-					typeDesc.SetNumber(event.GetValue(), typeDesc.GetScale());
-					event.Skip();
-				}
-			);
-
-			tcNLength->Enable(!dlgProp->HasFlag(wxPGFlags::ReadOnly));
-
-			wxStaticText* stNScale = new wxStaticText(dlg, wxID_ANY, _("Scale:"), wxDefaultPosition, wxDefaultSize);
-			stNScale->Wrap(-1);
-			numberSizer->Add(stNScale, 0, wxTOP | wxBOTTOM | wxLEFT, dlg->FromDIP(5));
-
-			wxSpinCtrl* tcNScale = new wxSpinCtrl(dlg, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS);
-			numberSizer->Add(tcNScale, 0, wxRIGHT | wxLEFT, dlg->FromDIP(5));
-			tcNScale->SetValue(typeDesc.GetScale());
-
-			tcNScale->Bind(wxEVT_COMMAND_SPINCTRL_UPDATED,
-				[data](wxSpinEvent& event)
-				{
-					ibTypeDescription& typeDesc = data->GetTypeDesc();
-					unsigned short scale = typeDesc.GetPrecision() > event.GetValue() ?
-						event.GetValue() : typeDesc.GetPrecision();
-
-					typeDesc.SetNumber(typeDesc.GetPrecision(), scale);
-					event.Skip();
-				}
-			);
-
-			tcNScale->Enable(!dlgProp->HasFlag(wxPGFlags::ReadOnly));
-			topsizer->Add(numberSizer, 0, 0, dlg->FromDIP(5));
-
-			tc->SetDoubleBuffered(true);
-
-			wxStdDialogButtonSizer* buttonSizer = dlg->CreateStdDialogButtonSizer(wxOK | wxCANCEL);
-			topsizer->Add(buttonSizer, wxSizerFlags(0).Right().Border(wxBOTTOM | wxRIGHT, spacing));
-
-			compositeDataType->Bind(wxEVT_COMMAND_CHECKBOX_CLICKED,
-				[tc](wxCommandEvent& event)
-				{
-					tc->SetWindowStyle(
-						event.IsChecked() ?
-						wxCR_MULTIPLE_CHECK :
-						wxCR_SINGLE_CHECK
-					);
-					event.Skip();
-				}
-			);
-
-			for (unsigned int i = 0; i < numberSizer->GetItemCount(); i++) { numberSizer->Hide(i); }
-			for (unsigned int i = 0; i < dateSizer->GetItemCount(); i++) { dateSizer->Hide(i); }
-			for (unsigned int i = 0; i < stringSizer->GetItemCount(); i++) { stringSizer->Hide(i); }
-
-			tc->Bind(wxEVT_COMMAND_TREE_SEL_CHANGED,
-				[tc, numberSizer, dateSizer, stringSizer, topsizer](wxTreeEvent& event)
-				{
-					ibTreeItemPropertyData* item = dynamic_cast<ibTreeItemPropertyData*>(tc->GetItemData(event.GetItem()));
-					if (item != nullptr) {
-						const ibClassID& clsid = item->GetClassType();
-						for (unsigned int i = 0; i < numberSizer->GetItemCount(); i++) {
-							numberSizer->Show(i, ibValue::GetVTByID(clsid) == ibValueTypes::TYPE_NUMBER);
-						}
-						for (unsigned int i = 0; i < dateSizer->GetItemCount(); i++) {
-							dateSizer->Show(i, ibValue::GetVTByID(clsid) == ibValueTypes::TYPE_DATE);
-						}
-						for (unsigned int i = 0; i < stringSizer->GetItemCount(); i++) {
-							stringSizer->Show(i, ibValue::GetVTByID(clsid) == ibValueTypes::TYPE_STRING);
-						}
-						topsizer->Layout();
-						tc->Layout();
-					}
-					event.Skip();
-				}
-			);
-
-			const wxTreeItemId& rootItem = tc->AddRoot(wxEmptyString);
-
-			dlg->SetSizer(topsizer);
-			topsizer->SetSizeHints(dlg);
-
-			if (!wxPropertyGrid::IsSmallScreen()) {
-				dlg->SetSize(dlg->FromDIP(wxSize(400, 300)));
-				dlg->Move(pg->GetGoodEditorDialogPosition(prop, dlg->GetSize()));
-			}
-
-			tc->SetFocus();
-
-			// Make an state image list containing small icons
-			tc->AssignImageList(
-				new wxImageList(icon_size, icon_size)
-			);
-
-			if (selectorDataType == ibSelectorDataType::ibSelectorDataType_any) {
-				FillByClsid(ibValue::GetIDByVT(ibValueTypes::TYPE_EMPTY), tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
-			}
-
-			if (selectorDataType == ibSelectorDataType::ibSelectorDataType_any
-				|| selectorDataType == ibSelectorDataType::ibSelectorDataType_reference) {
-				FillByClsid(ibValue::GetIDByVT(ibValueTypes::TYPE_BOOLEAN), tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
-				FillByClsid(ibValue::GetIDByVT(ibValueTypes::TYPE_NUMBER), tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
-				FillByClsid(ibValue::GetIDByVT(ibValueTypes::TYPE_DATE), tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
-				FillByClsid(ibValue::GetIDByVT(ibValueTypes::TYPE_STRING), tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
-			}
-			else if (selectorDataType == ibSelectorDataType::ibSelectorDataType_boolean) {
-				FillByClsid(ibValue::GetIDByVT(ibValueTypes::TYPE_BOOLEAN), tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
-				FillByClsid(ibValue::GetIDByVT(ibValueTypes::TYPE_NUMBER), tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
-			}
-			else if (selectorDataType == ibSelectorDataType::ibSelectorDataType_resource) {
-				FillByClsid(ibValue::GetIDByVT(ibValueTypes::TYPE_NUMBER), tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
-			}
-
-			if (selectorDataType == ibSelectorDataType::ibSelectorDataType_any) {
-				FillByClsid(ibValue::GetIDByVT(ibValueTypes::TYPE_NULL), tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
-			}
-
-			/////////////////////////////////////////////////
-			if (selectorDataType == ibSelectorDataType::ibSelectorDataType_any 
-				|| selectorDataType == ibSelectorDataType::ibSelectorDataType_table) {
-				FillByClsid(g_valueTableCLSID, tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
-				FillByClsid(g_valueDynamicListCLSID, tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
-			}
-			/////////////////////////////////////////////////
-
-			const ibMetaData* metaData = typeFactory->GetMetaData();
-			wxASSERT(metaData);
-			if (metaData != nullptr) {
-				FillByClsid(selectorDataType, metaData, g_metaCatalogCLSID, tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
-				FillByClsid(selectorDataType, metaData, g_metaDocumentCLSID, tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
-				FillByClsid(selectorDataType, metaData, g_metaEnumerationCLSID, tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
-				FillByClsid(selectorDataType, metaData, g_metaChartOfCharacteristicTypesCLSID, tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
-				FillByClsid(selectorDataType, metaData, g_metaChartOfAccountsCLSID, tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
-				if (selectorDataType == ibSelectorDataType::ibSelectorDataType_any) {
-					FillByClsid(selectorDataType, metaData, g_metaDataProcessorCLSID, tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
-					FillByClsid(selectorDataType, metaData, g_metaReportCLSID, tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
-				}
-				if (selectorDataType == ibSelectorDataType::ibSelectorDataType_table) {
-					FillByClsid(selectorDataType, metaData, g_metaInformationRegisterCLSID, tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
-					FillByClsid(selectorDataType, metaData, g_metaAccumulationRegisterCLSID, tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
-					FillByClsid(selectorDataType, metaData, g_metaAccountingRegisterCLSID, tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly));
-				}
-			}
-
-			wxArrayTreeItemIds ids;
-			unsigned int itemCount = tc->GetItems(ids);
-
-			for (auto clsid : typeDesc.GetClsidList()) {
-				bool allowType = true;
-				for (const wxTreeItemId& selItem : ids) {
-					if (selItem.IsOk()) {
-						const ibTreeItemPropertyData* item = dynamic_cast<ibTreeItemPropertyData*>(tc->GetItemData(selItem));
-						if (item != nullptr && clsid == item->GetClassType()) { allowType = false; break; }
-					}
-				}
-				if (allowType) { FillByClsid(metaData, clsid, tc, data, !dlgProp->HasFlag(wxPGFlags::ReadOnly)); }
-			}
-			tc->ExpandAll(); int res = dlg->ShowModal();
-			if (res == wxID_OK) {
-				ibVariantDataAttribute* clone = data->Clone();
-				ibTypeDescription& createdDesc = clone->GetTypeDesc();
-				createdDesc.ClearMetaType();
-				unsigned int selCount = tc->GetSelections(ids);
-				for (const wxTreeItemId& selItem : ids) {
-					if (selItem.IsOk()) {
-						const ibTreeItemPropertyData* item = dynamic_cast<ibTreeItemPropertyData*>(tc->GetItemData(selItem));
-						if (item != nullptr) createdDesc.AppendMetaType(item->GetClassType());
-					}
-				}
-				createdDesc.SetTypeData(typeDesc.GetTypeData());
-				SetValue(clone);
-			}
-
-			dlg->Destroy();
-			return res == wxID_OK;
+			SetValue(clone);
+			return true;
 		}
 	};
 

@@ -595,6 +595,25 @@ bool ibValueReferenceDataObject::DoDeserialize(const ibDataNode& node)
 	// A malformed guid reads as the empty one rather than raising: the header
 	// was well formed, so this is data from a base that knew something we do
 	// not — degrade, do not fail the whole read.
-	m_reference_impl->m_guid = ibGuid(node.GetValue<wxString>(wxT("g")));
+	const ibGuid restored(node.GetValue<wxString>(wxT("g")));
+	m_reference_impl->m_guid = restored;
+
+	// AND THE IDENTITY THE REST OF THE CLASS READS. Writing only the impl left the object
+	// still calling itself NEW (it was constructed empty, from the class id in the header,
+	// and m_newObject was decided there): the guid was right, so the reference filtered,
+	// compared and saved correctly — and presented as an EMPTY STRING, because GetString
+	// answers "" for a new object before it ever looks anything up. A stored list filter
+	// came back with its value invisible while plainly still in force.
+	//
+	// The init flags are cleared first: this object may already have "prepared" itself as the
+	// empty one it was a moment ago, and PrepareRef returns early on that flag. Then it prepares
+	// for real — the same step Create(metaObject, guid) takes, and the step that decides whether
+	// the identity is FOUND. Without it the value would read "Not found" instead of its name,
+	// which is the same defect wearing different clothes.
+	m_objGuid = restored;
+	m_newObject = !restored.isValid();
+	m_initializedRef = false;
+	m_foundedRef = false;
+	PrepareRef(true);
 	return true;
 }

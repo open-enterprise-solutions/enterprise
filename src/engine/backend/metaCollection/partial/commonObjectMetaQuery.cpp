@@ -1,10 +1,10 @@
 ////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
-//	Description : metadata-side schema + data glue. The metaobject DECLARES its
-//	              structure (ContributeTables -> ibSchemaSnapshot, applied by the
-//	              L3-2 schema door) and DELEGATES its row dump / restore to the
-//	              L3-3 mover (ibDataMover): it only vends the table + columns +
-//	              key shape. db_query (the local channel), no ses_query.
+//	Description : metadata-side DATA glue - the queryable face and the row dump /
+//	              restore, DELEGATED to the L3-3 mover (ibDataMover): this file only
+//	              vends the table + columns + key shape. db_query (the local channel),
+//	              no ses_query. The structure DECLARATION (ContributeTables ->
+//	              ibSchemaSnapshot) moved out to commonObjectSchema.cpp.
 ////////////////////////////////////////////////////////////////////////////
 
 #include "commonObject.h"
@@ -65,177 +65,6 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::ResolveQueryConstant(const 
 	return false;
 }
 
-// (SnapshotOf removed: building a snapshot is just `common->ContributeTables(snap)` — the metadata side
-//  does it directly where it drives the builder, keeping the builder itself config-agnostic.)
-
-namespace {
-// One secondary DB index per indexed attribute. Index -> the attribute alone; IndexWithAdditionalOrder ->
-// the attribute plus the row reference, so ordered list browsing reads its order straight off the index.
-// Non-unique — an attribute value repeats. Named <table>_<attrId>_IX (metaID key: stable and short). A
-// register has no single row reference, so its caller passes orderRef = nullptr and the ordered variant
-// degrades to a plain index there.
-void ContributeAttributeIndexes(ibSchemaTable& t,
-	const std::vector<ibValueMetaObjectAttributeBase*>& attributes,
-	const ibBackendQueryColumn* orderRef = nullptr)
-{
-	for (const auto attr : attributes) {
-		const ibIndexingMode mode = attr->GetIndexingMode();
-		if (mode == ibIndexingMode::ibIndexingMode_DontIndex)
-			continue;
-		std::vector<const ibBackendQueryColumn*> cols = { attr };
-		if (mode == ibIndexingMode::ibIndexingMode_IndexWithAdditionalOrder && orderRef != nullptr && orderRef != attr)
-			cols.push_back(orderRef);
-		t.Index(wxString::Format(wxT("%s_%i_IX"), t.m_name, (int)attr->GetColumnId()), std::move(cols));
-	}
-}
-} // namespace
-
-void ibValueMetaObjectRecordDataMutableRef::ContributeTables(ibSchemaSnapshot& out) const
-{
-	// --- the record's main table ---
-	ibSchemaTable& t = out.CreateSchemaTable(GetQueryable());
-	const ibBackendQueryColumn* uuid = t.Scaffold(ibRowKeyColumn());   // uuid row-key
-
-	// THE GENERIC LIST, not predefined + own: it is the one that also carries the common
-	// attributes this object was checked into. They are columns like any other — but they
-	// are NOT in GetAttributeArrayObject, because that list answers "what did a person add
-	// to this object", and the designer tree shows it. A common attribute is not shown
-	// there, for the same reason Code and Description are not: it belongs to the
-	// declaration, not to this object.
-	for (const auto object : GetGenericAttributeArrayObject())
-		t.Add(object);
-
-	t.Index(t.m_name + wxT("_INDEX"), { uuid }, true);                        // uuid uniqueness (replaced the old PRIMARY KEY)
-	if (const ibValueMetaObjectAttributeBase* refAttr = GetDataReference())
-		t.Index(t.m_name + wxT("_REF_UQ"), { refAttr }, true);               // _REF_UQ — the data-reference unique key
-
-	// Per-attribute secondary indexes (plain + predefined: Code / Description / Parent / ...) —
-	// the row reference is the additional-order column. Each carries its own Indexing flag.
-	// Same list as the columns above — each attribute carries its own Indexing flag, and a
-	// common attribute may be indexed exactly like the object's own.
-	ContributeAttributeIndexes(t, GetGenericAttributeArrayObject(), GetDataReference());
-
-	// --- tabular sections — each its own table ---
-	for (const auto tab : GetTableArrayObject()) {
-		ibSchemaTable& tt = out.CreateSchemaTable(tab->GetQueryable());
-		const ibBackendQueryColumn* tabUuid = tt.Scaffold(ibRowKeyColumn());
-		for (const auto object : tab->GetGenericAttributeArrayObject())
-			tt.Add(object);
-		tt.Index(tt.m_name + wxT("_INDEX"), { tabUuid });                     // tabular uuid index — NOT unique (repeats per owner)
-		// Per-attribute secondary indexes on the section's own columns — no single row reference
-		// (browsing is per-owner by line), so the ordered variant degrades to a plain index here.
-		ContributeAttributeIndexes(tt, tab->GetGenericAttributeArrayObject());
-	}
-}
-
-void ibValueMetaObjectRecordDataEnumRef::ContributeTables(ibSchemaSnapshot& out) const
-{
-	// The enum table is just the uuid key — the enum VALUES are its SEED rows (data), not columns.
-	ibSchemaTable& t = out.CreateSchemaTable(GetQueryable());
-	const ibBackendQueryColumn* uuid = t.Scaffold(ibRowKeyColumn());
-	t.Index(t.m_name + wxT("_INDEX"), { uuid }, true);
-
-	// SEED rows: one per enum value, uuid only (no cells) — the builder diffs by uuid (new -> insert,
-	// gone -> delete); there is no per-value content to compare.
-	for (const auto object : GetEnumObjectArray())
-		t.AddRow(object->GetGuid().str(), object->GetFullName());
-}
-
-void ibValueMetaObjectRegisterData::ContributeTables(ibSchemaSnapshot& out) const
-{
-	// No rowData blob scaffold: it was the last trace of single-blob register storage. Nothing
-	// ever wrote or read it (the column was DDL-only), yet the accumulation register folds
-	// t.m_scaffold into its SelfSource projection — so every totals fold and every derived-table
-	// regeneration was selecting an always-NULL column on every movement row. Dropped 2026-08-02.
-	// Existing databases keep the physical column: scaffold columns carry no model id, so the
-	// schema differ does not track them and will not issue a DROP.
-	ibSchemaTable& t = out.CreateSchemaTable(GetQueryable());
-
-	for (const auto object : GetPredefinedAttributeArrayObject())
-		t.Add(object);
-	for (const auto object : GetDimensionArrayObject())
-		t.Add(object);
-	for (const auto object : GetResourceArrayObject())
-		t.Add(object);
-	for (const auto object : GetAttributeArrayObject())
-		t.Add(object);
-
-	// The key index: recorder + line for a subordinate register, else the dimension columns
-	// (period + dimensions when periodic — GetGenericDimensionArrayObject prepends the period).
-	// UNIQUE — these columns ARE the register's key: at most one record per key, same as objects
-	// key on a unique uuid. It is the DB-level guarantee against duplicate rows; the app-level
-	// ExistData probe alone (a fragile string compare) let dimension-key duplicates slip in.
-	std::vector<const ibBackendQueryColumn*> idxCols;
-	if (HasRecorder()) {
-		idxCols.push_back(GetRegisterRecorder());
-		idxCols.push_back(GetRegisterLineNumber());
-	}
-	else {
-		for (const auto object : GetGenericDimensionArrayObject())
-			idxCols.push_back(object);
-	}
-	if (!idxCols.empty())
-		t.Index(t.m_name + wxT("_INDEX"), idxCols, true);
-
-	// ⭐⭐ THE PERIOD IS A READ PATH, NOT A KEY — and a subordinate register had no index on it.
-	//
-	// Its key is (Recorder, LineNumber), which answers "the lines of this document" and nothing else.
-	// Every reading that matters asks the opposite question: the movements of an INTERVAL. Those are
-	// the sub-grain tail of a totals read ("the balance at noon" = the stored total at midnight plus
-	// today's movements), the boundary that names a document, and any direct read of the register
-	// over dates. Without this index each of them is a full scan of the movements — bounded by the
-	// register's whole history rather than by the day asked for, which is the difference between a
-	// range read and a table that grows until reports stop.
-	//
-	// (Period, Recorder) in that order, because it is the order a moment is COMPARED in
-	// (ibValuePointInTime::CompareValueLS): the same index serves "up to this instant" and "up to
-	// this document within the instant", and the second needs no re-sort.
-	//
-	// ⚠ NOT the line number. It already rides the key index above, where it is asked for; on its own
-	// it is a small integer repeated across every document — an index the planner would never choose
-	// and every INSERT would pay for. A fold over the tail sums lines, and a sum has no order.
-	if (HasRecorder() && GetRegisterPeriod() != nullptr && GetRegisterRecorder() != nullptr)
-		t.Index(t.m_name + wxT("_PIX"), { GetRegisterPeriod(), GetRegisterRecorder() });
-
-	// Per-field secondary indexes. Dimensions, resources, attributes and predefined all carry the
-	// Indexing flag (each is-a ibValueMetaObjectAttribute), so GetGenericAttributeArrayObject covers
-	// them all. A register has no single row reference, so the ordered variant degrades to a plain
-	// index here (the dimensions already ride the composite key index above).
-	ContributeAttributeIndexes(t, GetGenericAttributeArrayObject());
-}
-
-void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSnapshot& out) const
-{
-	// STRUCTURE: the base builds the main record table (+ tabular sections) and Adds it to the snapshot.
-	ibValueMetaObjectRecordDataMutableRef::ContributeTables(out);
-
-	// SEED: one row per predefined value, cells bound to the SAME columns the structure declared (the data
-	// reference / name / code / description / isFolder / parent / DeletionMark). The builder diffs by uuid +
-	// cells and writes generically. DeletionMark = false here, so a re-added value reactivates on the next
-	// apply. A reference cell MUST be a reference-typed value — the column codec extracts the reference
-	// binary FROM a reference value (a plain guid string would write NULL); wxNullGuid = a null reference.
-	//
-	// The DATA-REFERENCE cell is the row's OWN reference (guid = its predefined guid = its uuid, this
-	// metaID): it (a) makes the predefined value referenceable by its key, and (b) gives each row a UNIQUE
-	// _RRRef so the data-reference unique index (_REF_UQ) does not see N rows colliding on the NULL default.
-	ibSchemaTable& t = out.Shared(GetMetaID(), GetPhysicalTableName());   // the main table the base just created
-	for (const auto& object : m_predefinedObjectVector) {
-		const wxObjectDataPtr<ibPredefinedValueObject>& parent = object->GetPredefinedParent();
-
-		t.AddRow(object->GetPredefinedGuid().str(), object->GetPredefinedName())
-			.Set(GetDataReference(),
-				ibValuePtr<ibValueReferenceDataObject>(
-					ibValueReferenceDataObject::Create(this, object->GetPredefinedGuid())))
-			.Set(m_propertyAttributePredefined->GetMetaObject(), ibValue(object->GetPredefinedName()))
-			.Set(m_propertyAttributeCode->GetMetaObject(), ibValue(object->GetPredefinedCode()))
-			.Set(m_propertyAttributeDescription->GetMetaObject(), ibValue(object->GetPredefinedDescription()))
-			.Set(m_propertyAttributeIsFolder->GetMetaObject(), ibValue(object->IsPredefinedFolder()))
-			.Set(m_propertyAttributeDeletionMark->GetMetaObject(), ibValue(false))
-			.Set(m_propertyAttributeParent->GetMetaObject(),
-				ibValuePtr<ibValueReferenceDataObject>(
-					ibValueReferenceDataObject::Create(this, parent != nullptr ? parent->GetPredefinedGuid() : wxNullGuid)));
-	}
-}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -311,6 +140,11 @@ const ibBackendQueryColumn* ibRecordQueryable::GetHierarchyColumn() const {
 	// its parent column through a virtual, null on a flat ref. No cast — virtual dispatch down its OWN inheritance.
 	return m_meta->GetHierarchyColumn();
 }
+bool ibRecordQueryable::IsItemHierarchy() const {
+	// Same route as the column above: the metaobject answers from its own declaration, virtual dispatch
+	// down its own inheritance, no cast.
+	return m_meta->IsItemHierarchy();
+}
 
 // The metaobject behind the source — the front reads its icon / presentation off it (via the dynamic list's
 // GetSourceMetaObject → GetSourceQueryable → here). Out-of-line because the metaobject type is only complete in
@@ -323,7 +157,12 @@ const ibValueMetaObjectGenericData* ibRecordQueryable::GetSourceMetaObject() con
 // out-of-line HERE where the attribute type is complete. The record queryable (above) forwards to it. (Folder
 // column removed — folders are a creation-time sort/filter setting, not a structural column.)
 const ibBackendQueryColumn* ibValueMetaObjectRecordDataHierarchyMutableRef::GetHierarchyColumn() const {
-	return GetDataParent();
+	// A FLAT list has no hierarchy column, and this is the one place that has to say so: every tree
+	// behaviour in the engine is gated on this being non-null — the level fetch, the drill, the
+	// parent filter, a TotalBy(...,​ Hierarchy) unfolding through the target's parent map. Answering
+	// with the Parent attribute regardless would leave a flat catalog building a tree over a column
+	// that no longer exists.
+	return IsHierarchical() ? GetDataParent() : nullptr;
 }
 // ResolveReferenceTarget / ResolveReferenceTargets moved to ibDbTableProvider (query/dbTableProvider.cpp)
 // — the ONE provider that owns metadata. The record queryable only vends GetMetaData(); the provider

@@ -345,6 +345,7 @@
     <ClCompile Include="win\dlgs\generation.cpp" />
     <ClCompile Include="win\dlgs\rowHeight.cpp" />
     <ClCompile Include="win\dlgs\selectData.cpp" />
+    <ClCompile Include="win\dlgs\typeSelector.cpp" />
     <ClCompile Include="win\dlgs\userList.cpp" />
     <ClCompile Include="win\dlgs\userItem.cpp" />
     <ClCompile Include="win\editor\gridEditor\gridCellEditor.cpp" />
@@ -736,6 +737,7 @@
     <ClInclude Include="win\dlgs\generation.h" />
     <ClInclude Include="win\dlgs\rowHeight.h" />
     <ClInclude Include="win\dlgs\selectData.h" />
+    <ClInclude Include="win\dlgs\typeSelector.h" />
     <ClInclude Include="win\dlgs\userList.h" />
     <ClInclude Include="win\dlgs\userItem.h" />
     <ClInclude Include="win\editor\gridEditor\gridEditor.h" />

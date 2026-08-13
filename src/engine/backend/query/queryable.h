@@ -458,6 +458,14 @@ public:
 	// Null for a flat / non-record source. Used to unfold a TotalBy(refField, Hierarchy) dimension: the
 	// target catalog's parent-map is read through ITS GetHierarchyColumn. (docs/query-language-arc.md §22.1b)
 	virtual const ibBackendQueryColumn* GetHierarchyColumn() const { return nullptr; }
+
+	// THE HIERARCHY KIND, in the word the metadata uses for it (ibHierarchyType::eItems). An ITEM
+	// hierarchy — a chart of accounts — subordinates an item to an item, so you can go INTO any
+	// element; a folders+items one lets you into a folder only, and an item there is a leaf however
+	// the level was fetched. A level read cannot tell the two apart, it returns rows either way; this
+	// declaration is what does. False for a flat source, which has no levels to begin with.
+	// (Asked once per fetch, not per row.)
+	virtual bool IsItemHierarchy() const { return false; }
 	// (GetFolderColumn REMOVED — folders are a folder-first SORT / IsFolder FILTER set at list creation, not a
 	//  structural queryable column; the special engine mechanism kept is the HIERARCHY, not folders. — Max.)
 

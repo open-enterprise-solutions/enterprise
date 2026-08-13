@@ -22,6 +22,7 @@
 #include <vector>
 #include <deque>
 #include <map>
+#include <functional>   // ibSchemaTable::m_beforeChange — the structural check a table may carry
 
 class ibBackendQueryable;
 class ibMetaData;
@@ -71,7 +72,16 @@ struct ibSchemaSeedRow
 	// Fluent cell binding: row.Set(qc, value) — the link between a column and its value in this row. The
 	// cell is keyed by the column's model id (== metaID for an attribute), so baseline/target rows from
 	// two different config instances still compare cell-for-cell.
-	ibSchemaSeedRow& Set(const ibBackendQueryColumn* qc, const ibValue& value) { m_values[qc->GetColumnId()] = value; return *this; }
+	//
+	// A column the configuration does NOT have is skipped, not written: an arrangement can retire one of
+	// its own columns (a flat catalog has no Parent and no IsFolder), and a seed naming it would fill a
+	// cell for a column the table does not carry. The same IsAllowed the structure walk uses, so the seed
+	// and the columns it writes into cannot disagree.
+	ibSchemaSeedRow& Set(const ibBackendQueryColumn* qc, const ibValue& value) {
+		if (qc != nullptr && qc->IsAllowed())
+			m_values[qc->GetColumnId()] = value;
+		return *this;
+	}
 };
 
 // ==========================================================================
@@ -243,6 +253,22 @@ struct ibSchemaTable
 	// A queryable this table owns (SelfSource) — set only for a table nothing else vends one for.
 	// Empty on every table declared by a metaobject: there m_queryable points at the live config.
 	std::shared_ptr<const ibBackendQueryable>   m_ownedQueryable;
+
+	// A CHECK THIS TABLE CARRIES, evaluated by the differ BEFORE the table is touched. Declaring a
+	// structure is not the same as being allowed to reach it: a chart of accounts that lowers its
+	// analytics ceiling would strand rows on accounts that already hold more, and a change the data
+	// cannot survive must be refused BEFORE any DDL, not discovered halfway through it.
+	//
+	// The check belongs to the declaration for the same reason the columns do — the object that knows
+	// the rule attaches it while contributing, and the differ, which knows nothing about accounts,
+	// simply asks. Returning false appends its own error to the ledger (which greys Apply) and leaves
+	// the table alone. Empty = nothing to ask.
+	std::function<bool(class ibRestructureInfo*)> m_beforeChange;
+
+	// AND ITS PAIR, AFTER. Symmetric by construction and asymmetric in power: BEFORE may refuse, AFTER
+	// may not — by then the table has been changed and there is nothing left to decline. It exists to
+	// SAY things (what was migrated, what the owner did with the new shape), so it returns nothing.
+	std::function<void(class ibRestructureInfo*)> m_afterChange;
 
 	// Scaffold columns (the uuid row-key / a register's rowData) — created WITH the table, never altered.
 	std::vector<const ibBackendQueryColumn*> m_scaffold;

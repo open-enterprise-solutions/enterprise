@@ -11,6 +11,9 @@
 
 #include "frontend/win/ctrls/dynamicBorder.h"
 #include "frontend/visualView/ctrl/frame.h"
+#include "frontend/win/dlgs/typeSelector.h"          // the shared type picker — second caller
+#include "backend/system/value/valueType.h"          // ibValueTypeDescription / g_valueTypeDescriptionCLSID
+#include "backend/metaCollection/partial/chartOfCharacteristicTypes.h"   // the CONTOUR that narrows the picker
 
 // See typeControl.h — the single Select-button route.
 bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue,
@@ -40,6 +43,42 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue,
 	// THE VALUE OF THAT TYPE: the built-in quick choice first (it knows a boolean,
 	// an enumeration, a reference), then the metaobject's own selection form.
 	const ibClassID clsid = current.GetClassType();
+
+	// A TYPE DESCRIPTION is edited by the type picker — the same dialog the metadata editor opens,
+	// reached here through the ordinary Select button. What may be chosen is NOT decided here: the
+	// permitted set comes from the field, which is how a characteristic offers only what its chart
+	// declares, and a filter's right side only what its left side admits.
+	if (clsid == g_valueTypeDescriptionCLSID) {
+		ibValueTypeDescription* typeValue = nullptr;
+		if (current.ConvertToValue(typeValue) && typeValue != nullptr) {
+
+			// A CHARACTERISTIC IS ALWAYS THE REFERENCE SHAPE — everything referenceable plus the
+			// primitives — NARROWED BY THE CHART THAT OWNS THE FIELD.
+			//
+			// The filter is the chart's own composition (TypesOfCharacteristics): a characteristic
+			// may only ever be one of the things its chart declares. Not the FIELD's type — that one
+			// says "this cell holds a type description", which is true and useless as a filter: it
+			// intersects the offered list to nothing.
+			//
+			// The chart is reached the way anything reaches its owner here: the bound attribute
+			// knows its parent metaobject. A field with no such owner (a filter cell, a script
+			// variable) passes no filter and gets the whole shape, which is the honest answer.
+			std::vector<ibClassID> contour;
+			if (const ibValueMetaObjectAttributeBase* attr =
+				dynamic_cast<const ibValueMetaObjectAttributeBase*>(factory->GetSourceAttributeObject())) {
+				if (const ibValueMetaObjectChartOfCharacteristicTypes* chart =
+					dynamic_cast<const ibValueMetaObjectChartOfCharacteristicTypes*>(attr->GetParent()))
+					contour = chart->GetTypesOfCharacteristics().GetClsidList();
+			}
+
+			if (ibShowTypeSelector(parent, ibSelectorDataType::ibSelectorDataType_reference,
+				contour, typeValue->m_typeDesc, factory->GetMetaData())) {
+				ownerValue->SetControlValue(current);
+				return true;
+			}
+		}
+		return false;
+	}
 
 	if (ibTypeControlFactory::QuickChoice(ownerValue, clsid, parent))
 		return true;

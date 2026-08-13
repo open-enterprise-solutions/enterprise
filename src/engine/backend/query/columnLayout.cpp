@@ -8,6 +8,7 @@
 #include "backend/compiler/value.h"  // ibValue accessors + ibValuePtr
 #include "backend/compiler/enumUnit.h"                              // ibValueEnumerationWrapper (enum read)
 #include "backend/system/value/valueType.h"                        // ibValueTypeDescription::AdjustValue (typed-empty)
+#include "backend/system/value/valuePointInTime.h"                 // g_valuePointInTimeCLSID — computed, never a column
 #include "backend/metaCollection/partial/reference/reference.h"    // ibValueReferenceDataObject (reference assembly)
 #include "backend/metaCollection/metaObject.h"                     // ibValueMetaObject (reference reconstruction)
 // ibFieldTypes (the wire tag) now comes from query/queryColumn.h — the codec no longer depends on
@@ -30,6 +31,7 @@ const wxString& ibFieldSuffix(ibColumnRole role)
 		{ ibColumnRole::ReferenceType, wxT("_RTRef") },
 		{ ibColumnRole::ReferenceId,   wxT("_RRRef") },
 		{ ibColumnRole::Schedule,      wxT("_SCH")   },
+		{ ibColumnRole::TypeDescription, wxT("_TD")  },
 	};
 	static const wxString s_empty;
 	const auto it = s_suffix.find(role);
@@ -60,6 +62,7 @@ int ibPersistedTypeTag(ibColumnRole role)
 	case ibColumnRole::ReferenceType: return ibFieldTypes_Reference;
 	case ibColumnRole::ReferenceId:   return ibFieldTypes_Reference;
 	case ibColumnRole::Schedule:      return ibFieldTypes_Schedule;
+	case ibColumnRole::TypeDescription: return ibFieldTypes_TypeDescription;
 	default:                          return ibFieldTypes_Empty;   // Raw / Discriminator carry no tag
 	}
 }
@@ -128,6 +131,19 @@ ibColumnType RawType(const ibBackendQueryColumn* col)
 
 } // namespace
 
+// Two reasons, one answer. Kept here because this is where the layout decides what a column BECOMES
+// physically — so the storage fact and the "can it be compared" fact cannot drift apart.
+//
+//   STORED WHOLE — a schedule, a type description: one BLOB field, and SQL compares no blobs.
+//   NOT STORED AT ALL — the MOMENT (PointInTime), which is computed and has no column behind it. It is
+//   in the field tree so a QUERY can address it, and that is the whole of what it is for.
+bool ibIsComparableType(const ibTypeDescription& typeDesc)
+{
+	return !typeDesc.ContainType(g_valueScheduleCLSID)
+	    && !typeDesc.ContainType(g_valueTypeDescriptionCLSID)
+	    && !typeDesc.ContainType(g_valuePointInTimeCLSID);
+}
+
 std::vector<ibColumnSlot> DescribeColumnLayout(const ibBackendQueryColumn* col)
 {
 	std::vector<ibColumnSlot> slots;
@@ -177,6 +193,13 @@ std::vector<ibColumnSlot> DescribeColumnLayout(const ibBackendQueryColumn* col)
 	// a predicate nobody writes and cost an ALTER every time the schedule grows a field.
 	if (td.ContainType(g_valueScheduleCLSID))
 		slots.push_back(makeSlot(ibColumnRole::Schedule, ibTypeBlob(), wxString(), false));
+
+	// _TD — a type description, serialised whole. This is what a characteristic's own Type is: a
+	// FILTER carrying admissible types and their qualifiers, chosen from what the chart declares.
+	// Stored as one blob for the same reason the schedule is — nothing predicates on it in SQL; it
+	// is read back to narrow what a value slot will accept.
+	if (td.ContainType(g_valueTypeDescriptionCLSID))
+		slots.push_back(makeSlot(ibColumnRole::TypeDescription, ibTypeBlob(), wxString(), false));
 
 	// Reference pair — _RTRef (target clsid, BIGINT) + _RRRef (pure guid blob, fixed-width
 	// BINARY so it is indexable for the dot-walk = join). Present when ANY clsid in the type
@@ -268,6 +291,15 @@ void ibColumnCodec::WriteValue(const ibBackendQueryColumn* col, const ibMetaData
 			ibJobScheduleDescriptionMemory::WriteBuffer(scheduleBlob, schedule->GetSchedule());
 	}
 
+	// Type-description payload — the same arrangement one line up: serialised once here, bound at
+	// the _TD slot below. The value knows its own description; the codec only moves bytes.
+	wxMemoryBuffer typeDescBlob;
+	if (tag == ibFieldTypes_TypeDescription) {
+		ibValueTypeDescription* typeValue = nullptr;
+		if (cValue.ConvertToValue(typeValue) && typeValue != nullptr)
+			ibTypeDescriptionMemory::WriteBuffer(typeDescBlob, typeValue->m_typeDesc);
+	}
+
 	// Reference payload — resolved once, bound at the _RTRef/_RRRef slots. A non-reference value
 	// (or an unconvertible reffer) leaves it empty, so the pair binds 0 / NULL.
 	ibClassID   refClsid = 0;
@@ -293,6 +325,9 @@ void ibColumnCodec::WriteValue(const ibBackendQueryColumn* col, const ibMetaData
 			case ibColumnRole::Enum:    statement->SetParamInt(p++, cValue.GetInteger()); break;
 			case ibColumnRole::Schedule:
 				statement->SetParamBlob(p++, scheduleBlob.GetData(), scheduleBlob.GetDataLen());
+				break;
+			case ibColumnRole::TypeDescription:
+				statement->SetParamBlob(p++, typeDescBlob.GetData(), typeDescBlob.GetDataLen());
 				break;
 			default:                                                                        break;
 			}
@@ -344,6 +379,22 @@ bool ibColumnCodec::ReadField(const wxString& fieldName, int fieldType,
 		ibJobScheduleDescriptionMemory::ReadBuffer(bufferData.GetData(), bufferData.GetDataLen(), schedule);
 
 		ibValuePtr<ibValueSchedule> created(new ibValueSchedule(schedule));
+		retValue = created;
+		return true;
+	}
+	case ibFieldTypes_TypeDescription:
+	{
+		// The blob IS the value, exactly as above. An empty or unreadable cell yields an EMPTY
+		// description rather than the column's own type: a characteristic that names no type is a
+		// defect the write refuses, so reading one back must not manufacture a plausible answer —
+		// it would look like the narrowing worked while admitting everything.
+		wxMemoryBuffer bufferData;
+		result.GetResultBlob(fieldName, bufferData);
+
+		ibTypeDescription typeDesc;
+		ibTypeDescriptionMemory::ReadBuffer(bufferData.GetData(), bufferData.GetDataLen(), typeDesc);
+
+		ibValuePtr<ibValueTypeDescription> created(new ibValueTypeDescription(typeDesc));
 		retValue = created;
 		return true;
 	}
@@ -451,6 +502,8 @@ bool ibColumnCodec::ReadValue(const wxString& fieldName,
 		return true;
 	case ibFieldTypes_Schedule:
 		return ReadField(fieldName + ibFieldSuffix(ibColumnRole::Schedule), ibFieldTypes_Schedule, col, metaData, retValue, result, createData);
+	case ibFieldTypes_TypeDescription:
+		return ReadField(fieldName + ibFieldSuffix(ibColumnRole::TypeDescription), ibFieldTypes_TypeDescription, col, metaData, retValue, result, createData);
 	case ibFieldTypes_Enum:
 		return ReadField(fieldName + ibFieldSuffix(ibColumnRole::Enum), ibFieldTypes_Enum, col, metaData, retValue, result, createData);
 	case ibFieldTypes_Reference:

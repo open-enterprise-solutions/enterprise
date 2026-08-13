@@ -29,9 +29,10 @@ public:
 	// vtable already exists, so this costs neither a word of storage nor a layout change.
 	virtual ~ibValueDataObject() = default;
 
-	//support source set/get data 
+	//support source set/get data
 	virtual bool SetValueByMetaID(const ibMetaID& id, const ibValue& varMetaVal) { return false; }
 	virtual bool GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const { return false; }
+
 
 	//get unique identifier 
 	virtual ibUniqueKey GetGuid() const { return m_objGuid; }

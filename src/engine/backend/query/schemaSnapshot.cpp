@@ -458,6 +458,23 @@ int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& targ
 	int retCode = 1;
 	ibSchemaBuilder schema(holder);
 
+	// ── PASS 1: every table's BEFORE event, ahead of the diff itself ────────────────────────────────
+	// Deliberately NOT a branch inside the change loop below: a rule can be broken by a change the diff
+	// finds NOTHING to do about — lowering a declared limit alters no column, so the loop would never
+	// reach that table and the rule would never be asked. The question "may this be applied at all" is
+	// therefore asked of every declaration first, before a single statement is emitted.
+	//
+	// A refusal stops the whole apply, not just its own table: half a structure is not a state anyone
+	// asked for. Each refusal has already put its reason in the ledger, and they all run, so the user
+	// sees every objection at once instead of one per attempt.
+	bool refused = false;
+	for (const ibSchemaTable& cur : target.Tables()) {
+		if (cur.m_beforeChange && !cur.m_beforeChange(report))
+			refused = true;
+	}
+	if (refused)
+		return 0;
+
 	// Tables present in baseline but gone from target -> DROP (a vanished id).
 	if (baseline != nullptr) {
 		for (const ibSchemaTable& old : baseline->Tables()) {
@@ -488,6 +505,7 @@ int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& targ
 	// Tables in target -> CREATE (new id) or ALTER (matched id). One batch per table.
 	for (const ibSchemaTable& cur : target.Tables()) {
 		const ibSchemaTable* old = baseline != nullptr ? baseline->Find(cur.m_id) : nullptr;
+
 
 		// A DERIVED table whose shape changed is REPLACED, never altered.
 		//
@@ -539,6 +557,15 @@ int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& targ
 		// anything". NeedsRegeneration keeps the common case (a column merely added) free.
 		if (ibDerivedState::NeedsRegeneration(old, cur))
 			ibDerivedState::Regenerate(cur, holder);
+	}
+
+	// ── PASS 3: every table's AFTER event, once the structure is settled ────────────────────────────
+	// The pair of the first pass, and deliberately weaker: by now the tables are as declared, so there
+	// is nothing left to refuse — this is where an owner SAYS what it did, or does the follow-up work
+	// its new shape needs. Still inside the apply transaction, so a rollback takes it along.
+	for (const ibSchemaTable& cur : target.Tables()) {
+		if (cur.m_afterChange)
+			cur.m_afterChange(report);
 	}
 
 	return retCode;   // 1 — success; a real DB error THREW (no return-code error signal in the apply path)

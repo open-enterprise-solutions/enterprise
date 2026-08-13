@@ -26,6 +26,21 @@ ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pI
 
 	m_pParameter->sqltype = SQL_TEXT | 1;
 
+	// NO BUFFER MEANS NO SUCH PARAMETER — say so, do not write into nothing.
+	//
+	// sqldata is allocated by the driver when the statement is DESCRIBED, one slot per placeholder
+	// the prepared SQL actually has. A null here means the bind is addressing a parameter the
+	// statement does not carry — the usual cause being a schema the code believes in and the
+	// database does not (a column added to the layout, the table not yet restructured).
+	//
+	// It used to memcpy straight into it, so that mismatch arrived as an access violation inside
+	// the CRT with nothing on the stack naming a column — a crash where a message belonged.
+	if (m_pParameter->sqldata == nullptr) {
+		ibBackendCoreException::Error(
+			_("Firebird: parameter buffer is not allocated (the prepared statement has no such parameter) — the table structure is likely out of date"));
+		return;
+	}
+
 	// Raw bytes — wxStrncpy treated the buffer as wide chars and on Windows
 	// (wxChar = wchar_t = 2 bytes) walked twice as far as `length`. The
 	// driver hands UTF-8 to FB, so a plain memcpy of `length` bytes is the

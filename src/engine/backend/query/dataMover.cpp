@@ -35,6 +35,11 @@ const u64 rt_ref_chunk = 0x800060;
 // beside the reference one; a dump written before schedules existed simply never carries it.
 const u64 schedule_chunk = 0x800061;
 
+// The type-description-blob wire chunk id — the _TD field's payload tag, next in the same series.
+// The mover is what carries data ACROSS a restructuring: a role the layout emits and the wire codec
+// skips is not merely unwritten, it desynchronises every cell after it in the dump.
+const u64 type_desc_chunk = 0x800062;
+
 // --- structure -> mover parameters ---------------------------------------------------------------
 
 // The metadata context — off the table's queryable (every column of the table shares it).
@@ -251,6 +256,14 @@ void ibDataMover::BinaryToStatement(const ibBackendQueryColumn* col, const ibMet
 				statement->SetParamBlob(p++, scheduleBuffer.GetData(), scheduleBuffer.GetDataLen());
 				break;
 			}
+			case ibColumnRole::TypeDescription: {
+				// Same shape as the schedule one line up — its own chunk, so a truncated stream is
+				// caught here rather than by whichever column binds next.
+				wxMemoryBuffer typeDescBuffer;
+				reader.r_chunk(type_desc_chunk, typeDescBuffer);
+				statement->SetParamBlob(p++, typeDescBuffer.GetData(), typeDescBuffer.GetDataLen());
+				break;
+			}
 			default:                                                                  break;
 			}
 		},
@@ -321,6 +334,13 @@ void ibDataMover::BinaryFromResult(const ibBackendQueryColumn* col, const ibMeta
 		if (td.ContainType(g_valueScheduleCLSID))
 			result.GetResultBlob(f + ibFieldSuffix(ibColumnRole::Schedule), scheduleBuffer);
 		writer.w_chunk(schedule_chunk, scheduleBuffer);
+		break;
+	}
+	case ibFieldTypes_TypeDescription: {
+		wxMemoryBuffer typeDescBuffer;
+		if (td.ContainType(g_valueTypeDescriptionCLSID))
+			result.GetResultBlob(f + ibFieldSuffix(ibColumnRole::TypeDescription), typeDescBuffer);
+		writer.w_chunk(type_desc_chunk, typeDescBuffer);
 		break;
 	}
 	case ibFieldTypes_Reference:

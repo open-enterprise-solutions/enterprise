@@ -1011,6 +1011,18 @@ void ibSessionRegistry::ProcessAdd(ibRegistryRequest& req)
 		return;
 	}
 
+	// ⭐ REFRESH BEFORE REFUSING. This gate used to read the CACHED snapshot while the refresh below sat
+	// after it, so a row that had already gone — the previous designer run's own exclusive row, released
+	// on exit — kept rejecting the next start until something else rebuilt the cache. Restarting the
+	// application "fixed" it, which is the signature of a stale read rather than a busy database.
+	//
+	// A refusal is final here (a peer holder is not tied to our event loop, so we cannot park on it), and
+	// a decision that cannot be revisited may not be taken on a cached picture. The same coalescing as
+	// below keeps this cheap: a snapshot taken moments ago is not re-read.
+	if (SnapshotOlderThan(std::chrono::milliseconds(500))) {
+		try { JobRefreshSnapshot(); } catch (...) { /* best-effort: an unrefreshed snapshot still gates below */ }
+	}
+
 	// Cross-process gate — peer process holds exclusive (visible in our
 	// snapshot). Reject with policy veto: peer holders aren't tied to
 	// our event loop, so parking would deadlock if the peer's release

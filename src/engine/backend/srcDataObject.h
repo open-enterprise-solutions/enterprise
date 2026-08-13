@@ -160,6 +160,18 @@ public:
 			return nullptr;
 		}
 
+		// The NAME form of the same lookup — for the walks that arrive with a written path segment rather
+		// than an id (a RAM filter / sort key, a dotted field typed into a list's settings). CASE-INSENSITIVE,
+		// like every other name resolution in the model layer (GetColumnByName). It exists because three
+		// call sites wrote this loop by hand and only two of them agreed on the case rule: the third
+		// compared exactly, so a filter written `Supplier.region` against a field named `Region` silently
+		// stopped filtering instead of matching. One rule, in one place.
+		const ibSourceExplorer* FindByName(const wxString& name) const {
+			for (size_t i = 0; i < m_arraySource.size(); ++i)
+				if (m_arraySource[i].GetSourceName().IsSameAs(name, false)) return &m_arraySource[i];
+			return nullptr;
+		}
+
 		// In-place refill: drop the children but KEEP capacity (no realloc) and KEEP the owner (bound once
 		// at construction). Only a subclass mutates m_sourceExplorer; external code holds a const ref.
 		void Clear() {

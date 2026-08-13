@@ -3,7 +3,7 @@
 #include "backend/propertyManager/property/propertyModule.h"
 #include "backend/metaCollection/metaModuleObject.h"        // ibPropertyInnerModule<T>
 #include "backend/metaCollection/metaObjectComposite.h"     // ibPropertyContainer<T>
-#include "backend/metaCollection/partial/chartOfAccounts.h" // ibValueMetaObjectSubcontoKindsTable
+#include "backend/metaCollection/partial/chartOfAccounts.h" // ibValueMetaObjectAccountDimensionKindsTable
 #include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frontend/propertyManager/property/private/propertyRegistry.h"
 
@@ -31,6 +31,6 @@ public:
 		// Editor-less BY DESIGN — these carry composition, not an editable value. Declared
 		// so Create() answers null quietly instead of asserting on a forgotten Register.
 		ibPropertyRegistry::RegisterNoEditor<ibPropertyContainer<>>();
-		ibPropertyRegistry::RegisterNoEditor<ibPropertyContainer<ibValueMetaObjectSubcontoKindsTable>>();
+		ibPropertyRegistry::RegisterNoEditor<ibPropertyContainer<ibValueMetaObjectAccountDimensionKindsTable>>();
 	}
 }g_moduleLoader;

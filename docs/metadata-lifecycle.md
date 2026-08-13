@@ -101,6 +101,79 @@ switching is a drop of one plus a create-and-regenerate of the other, never an A
 
 ---
 
+## 2a. The hierarchy kind — one declaration, four arrangements
+
+`ibValueMetaObjectRecordDataHierarchyMutableRef` (catalog, chart of accounts, chart of
+characteristic types, parameterized job) carries one enum property, `HierarchyType`
+(`ibHierarchyType`, `metaCollection/partial/commonObjectEnum.h`), in a property CATEGORY of its own
+(`Hierarchy`, `m_categoryHierarchy`): it decides whether the object has a tree at all, what a parent
+may be, and whether `Parent` and `IsFolder` exist as columns, so it does not read as one more field
+beside Name / Synonym / Comment.
+
+| Stored | Member | Label | Parent field | Folders | Engine navigates a tree |
+|---|---|---|---|---|---|
+| 2 | `eNone` | No subordination | — | — | — |
+| 3 | `eSubordination` | Subordination without hierarchy | yes | — | **no** |
+| 1 | `eItems` | Hierarchy of items | yes | — | yes |
+| 0 | `eFoldersAndItems` | Hierarchy of folders and items | yes | yes | yes |
+
+The property is serialized as its INTEGER, so those numbers are the wire and new members append. The
+editor lists them in the reading order of the table above (`CreateEnumeration`), which is free to
+differ from the storage order. The default is `eFoldersAndItems` — what every metaobject behaved like
+before the enum existed, so an old configuration loads unchanged.
+
+**The line that matters is between `eSubordination` and the two below it.** All three keep the same
+`Parent` column; what differs is whether the ENGINE reads it — the level fetch, the drill, a
+`TotalBy(…, Hierarchy)` unfolding. A chart of accounts is a flat catalog plus "subordinate to an
+account": `ibValueMetaObjectChartOfAccounts`'s constructor states
+`SetHierarchyType(eSubordination)` (`chartOfAccountsMetadata.cpp`) rather than leaving it to the
+user, because recording a parent and navigating one are different claims and a chart makes only the
+first. A catalog keeps the default.
+
+Four predicates, each named for the question its callers ask (`commonObject.h`):
+
+| Predicate | True for | Asked by |
+|---|---|---|
+| `HasParentLink()` | everything but `eNone` | `ApplyHierarchyType` — is there a Parent field at all |
+| `IsHierarchical()` | `eItems`, `eFoldersAndItems` | `GetHierarchyColumn()`, which returns null otherwise — and every tree behaviour is gated on it being non-null; also the list's decision to hide the Parent column (under subordination the parent is the one fact the arrangement exists for, so it stays visible) |
+| `IsItemHierarchy()` | `eItems` | the queryable (`ibRecordQueryable::IsItemHierarchy`) → `modelDb.cpp`: any element is a container; and `CallAsCommand`, where a new node nests INSIDE the anchor instead of beside it |
+| `HasFolders()` | `eFoldersAndItems` | the `AddFolder` command; the Parent field's select mode |
+
+`ApplyHierarchyType()` turns the declaration into the two predefined attributes it governs. It runs
+from three places — `SetHierarchyType`, the property-changed hook (`commonObjectProperty.cpp`) and
+the end of `ReadData` (`commonObject.cpp`) — the last one because a configuration loaded and never
+edited must already say what it declares.
+
+1. **`Parent`'s select mode** — `ibSelectMode_Folders` when there are folders, else
+   `ibSelectMode_Items`. Every consumer already reads `GetSelectMode()`, so the picker, the greying
+   and the "create inside this node" rule learn nothing about hierarchy types.
+2. **Presence** — `metaDisableFlag` on `Parent` unless `HasParentLink()`, on `IsFolder` unless
+   `HasFolders()`.
+
+**`metaDisableFlag` means "not present in this configuration"** (`metaObject.h`) — the same flag a
+catalog with no owner types puts on `Owner` and an independent register on `Recorder`. `IsEnabled()`
+reads it, and `IsAllowed()` = `IsEnabled() && !IsDeleted()` is what everything walking children tests
+first: `FillArrayObjectByFilter`, `ibSourceExplorer::AppendColumn` (a disabled attribute is on no
+form and in no list), `ibSchemaSeedRow::Set` (a predefined row stops binding a cell for a column the
+configuration does not have) and `IsEditable`.
+
+⚠ **The flag does not reach the TABLE today.** Predefined columns are pushed by NAME in
+`FillArrayObjectByPredefinedAttribute`, which never asks `IsAllowed` — so `Parent` and `IsFolder`
+still arrive in `GetGenericAttributeArrayObject`, are still `Add`ed by `ContributeTables`
+(`commonObjectSchema.cpp`), and the differ finds them on both sides and drops nothing. Disabling
+retires the field everywhere a walk over children looks; the physical column outlives it. (Compare
+the catalog's `Owner`, which is gated inside the fill itself — `catalog.h` pushes it only when the
+owner type list is non-empty — and therefore does leave the schema.)
+
+What protects the data on the way down is not the flag but the rule the declaration carries:
+`ContributeTables` attaches an `m_beforeChange` guard that counts rows still holding a parent or
+still marked as folders and refuses the whole apply with a reason in the ledger. The mechanism is in
+[query-engine-layers.md](query-engine-layers.md) § L3; the rules themselves, including why the parent
+test reads `_RTRef != 0` rather than NULL, in
+[accounting-register-arc.md](accounting-register-arc.md) § 5c.
+
+---
+
 ## 3. The node event set
 
 Every phase fires virtual hooks on `ibValueMetaObject` (`metaObject.h`):
@@ -250,6 +323,7 @@ and owns its own runtime.** That single difference explains every branch above.
 | `backend/metaData.h` | `ibMetaData`, `ibMetaImage`, `LoadGuard`, open-state |
 | `backend/metadataConfiguration.{h,cpp}` | config container — `LoadConfigFromFile` / `SaveConfigToFile`, `LoadCommonTree` / `BuildFreshRoot`, the swap |
 | `backend/metaCollection/metaObject.h` | `ibValueMetaObject` — the event set + `RunSubtree` / `CloseSubtree` + `ContributeTables` |
+| `backend/metaCollection/partial/*MetadataSchema.cpp`, `commonObjectSchema.cpp` | one file per family: `ContributeTables` + the restructuring guards its tables carry (file convention: [ARCHITECTURE.md](ARCHITECTURE.md) § `metaCollection/`) |
 | `backend/metaCollection/metaObjectSerialize.cpp` | `BuildDataNode` / `ApplyDataNode` / `SaveNode` / `LoadNode` |
 | `backend/metadataDataProcessor.{h,cpp}`, `backend/metadataReport.{h,cpp}` | external DP / Report containers |
 | `backend/serialize/dataBuilder.{h,cpp}` | `ibDataNode`, `ibBinaryProvider` |

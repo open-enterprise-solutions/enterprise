@@ -494,6 +494,22 @@ public:
 	// attributes — same readable shape everywhere.
 	static bool ReadNode(const ibDataValue& value, ibTypeDescription& typeDesc, const ibMetaData* metaData = nullptr);
 	static bool WriteNode(ibDataValue& value, const ibTypeDescription& typeDesc, const ibMetaData* metaData = nullptr);
+
+	// THE COLUMN form of the same description — a flat blob, because a type description that lives
+	// in a ROW (a characteristic's own Type requisite) is written by the column codec, which binds a
+	// blob, not a node tree. Same door, second spelling: the node form stays the metadata format,
+	// this is the data one, and both live here so neither can be written twice.
+	//
+	// Layout: version u8, then the clsid list (count u32 + u64 each) and the three qualifiers
+	// (number precision/scale, date fractions, string length) as fixed integers. VERSIONED because
+	// a row outlives a release — a reader older than the blob stops at the fields it knows, and what
+	// it did not read keeps its default.
+	//
+	// The clsid is written RAW here, unlike the node form, which also carries a portable type name:
+	// a row belongs to the configuration it was written in, and the name exists for travel between
+	// configurations, which a data column never does.
+	static void WriteBuffer(wxMemoryBuffer& out, const ibTypeDescription& typeDesc);
+	static bool ReadBuffer(const void* data, size_t length, ibTypeDescription& typeDesc);
 };
 
 struct ibMetaDescription {

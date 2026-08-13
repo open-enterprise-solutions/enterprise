@@ -17,6 +17,11 @@ void ibValueMetaObjectAccountingRegister::OnPropertyChanged(ibProperty* property
 			}
 		}
 		(*m_propertyAttributeAccount)->SetDefaultMetaType(typeDesc);
+
+		// The dimension slots follow the binding too — a different chart declares a different
+		// NUMBER of them. Re-typing only Account here was the old asymmetry: the slots kept the
+		// previous chart's shape until the configuration happened to be run again.
+		SyncAccountDimensionSlots();
 	}
 
 	// Enable/disable Account field based on binding

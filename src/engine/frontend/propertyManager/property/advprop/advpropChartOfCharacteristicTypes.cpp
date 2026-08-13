@@ -147,8 +147,11 @@ wxPGEditorDialogAdapter* ibPGChartOfCharacteristicTypesProperty::GetEditorDialog
 			wxBoxSizer* topsizer = new wxBoxSizer(wxVERTICAL);
 			wxBoxSizer* rowsizer = new wxBoxSizer(wxHORIZONTAL);
 
+			// SINGLE CHECK — this binding names exactly one chart of characteristic types, so the
+			// picker must not let two be ticked in the first place. Trimming the result afterwards
+			// would be a lie about what the user did: they saw two accepted and got one.
 			ibCheckTree* tc = new ibCheckTree(dlg, wxID_ANY,
-				wxDefaultPosition, wxDefaultSize, wxTR_HAS_BUTTONS | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxTR_HIDE_ROOT | wxCR_MULTIPLE_CHECK | wxCR_EMPTY_CHECK | wxSUNKEN_BORDER | wxTR_TWIST_BUTTONS);
+				wxDefaultPosition, wxDefaultSize, wxTR_HAS_BUTTONS | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxTR_HIDE_ROOT | wxCR_SINGLE_CHECK | wxCR_EMPTY_CHECK | wxSUNKEN_BORDER | wxTR_TWIST_BUTTONS);
 
 			wxTreeItemId rootItem = tc->AddRoot(wxEmptyString);
 

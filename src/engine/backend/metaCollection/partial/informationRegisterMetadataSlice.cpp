@@ -164,9 +164,17 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 		for (const auto object : meta->GetResourceArrayObject())  addKeyCols(object);
 
 		ibDatabaseQueryBuilder l1;
-		l1.From(table)
-		  .Where(ibRegCompositeIR(meta->GetRegisterActive(), GetMetaData(), ibValue(true), ibQueryBinOp::Eq))
-		  .Where(SliceBoundaryPredicate(meta, GetMetaData(), periodAttr, bound, last, periodOp))
+		l1.From(table);
+
+		// ACTIVE EXISTS ONLY WHERE THE REGISTER IS SUBORDINATE TO A RECORDER — it is contributed by
+		// FillArrayObjectByPredefinedAttribute under that condition, so an INDEPENDENT register (the
+		// default) has no such column. Asking for it anyway produced SQL naming a field the table
+		// does not have; the exception was swallowed by the catch below and the slice came back
+		// EMPTY — which reads as "no data yet", not as "the query was wrong".
+		if (meta->HasRecorder())
+			l1.Where(ibRegCompositeIR(meta->GetRegisterActive(), GetMetaData(), ibValue(true), ibQueryBinOp::Eq));
+
+		l1.Where(SliceBoundaryPredicate(meta, GetMetaData(), periodAttr, bound, last, periodOp))
 		  .Project(l1proj);
 		for (const ibQueryExprPtr& gk : groupKeys) l1.GroupBy(gk);
 

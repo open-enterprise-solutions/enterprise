@@ -1406,20 +1406,20 @@ msgstr "Пасивний"
 msgid "Active/Passive"
 msgstr "Активний/Пасивний"
 
-#: src/engine/backend/metaCollection/partial/chartOfAccountsSubcontoTable.h:53
-msgid "Subconto"
-msgstr "Субконто"
+#: src/engine/backend/metaCollection/partial/chartOfAccountsDimensionKindsTable.h:53
+msgid "Account dimension"
+msgstr "Аналітика"
 
-#: src/engine/backend/metaCollection/partial/chartOfAccountsSubcontoTable.h:57
-msgid "Subconto kind"
-msgstr "Вид субконто"
+#: src/engine/backend/metaCollection/partial/chartOfAccountsDimensionKindsTable.h:57
+msgid "Account dimension kind"
+msgstr "Вид аналітики"
 
-#: src/engine/backend/metaCollection/partial/chartOfAccountsSubcontoTable.h:60
+#: src/engine/backend/metaCollection/partial/chartOfAccountsDimensionKindsTable.h:60
 #: src/engine/backend/metaCollection/partial/commonObject.h:624
 msgid "Order"
 msgstr "Порядок"
 
-#: src/engine/backend/metaCollection/partial/chartOfAccountsSubcontoTable.h:63
+#: src/engine/backend/metaCollection/partial/chartOfAccountsDimensionKindsTable.h:63
 msgid "Summary only"
 msgstr "Лише підсумки"
 
@@ -5565,3 +5565,23 @@ msgstr "Дозвільна"
 #: src/engine/backend/metaCollection/metaRoleObject.h
 msgid "Restricting"
 msgstr "Обмежувальна"
+
+#: src/engine/backend/metaCollection/partial/commonObjectEnum.h
+msgid "No subordination"
+msgstr "Немає підпорядкування"
+
+#: src/engine/backend/metaCollection/partial/commonObjectEnum.h
+msgid "Subordination without hierarchy"
+msgstr "Підпорядкування без ієрархії"
+
+#: src/engine/backend/metaCollection/partial/commonObjectEnum.h
+msgid "Hierarchy of items"
+msgstr "Ієрархія елементів"
+
+#: src/engine/backend/metaCollection/partial/commonObjectEnum.h
+msgid "Hierarchy of folders and items"
+msgstr "Ієрархія папок та елементів"
+
+#: src/engine/backend/metaCollection/partial/commonObject.h
+msgid "Hierarchy type"
+msgstr "Вид ієрархії"

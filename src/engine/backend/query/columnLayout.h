@@ -38,7 +38,12 @@ enum class ibColumnRole : uint8_t {
 	Enum,            // _E
 	ReferenceType,   // _RTRef — the reference target's clsid (BIGINT)
 	ReferenceId,     // _RRRef — the reference value (pure guid blob; type is _RTRef)
-	Schedule         // _SCH   — a JobSchedule, serialised whole (blob); see ibFieldTypes_Schedule
+	Schedule,        // _SCH   — a JobSchedule, serialised whole (blob); see ibFieldTypes_Schedule
+	TypeDescription  // _TD    — a type description, serialised whole (blob). Same reasoning as the
+	                 //          schedule: what it carries is a SET OF ADMISSIBLE TYPES with their
+	                 //          qualifiers, and nothing filters on it in SQL — so spreading it into
+	                 //          columns would buy a predicate nobody writes and cost an ALTER every
+	                 //          time the type system grows. It is read to NARROW a value, in memory.
 };
 
 // One physical field of a logical column (the layout decomposition unit).
@@ -67,6 +72,16 @@ BACKEND_API const wxString& ibFieldSuffix(ibColumnRole role);
 // wrong KIND beside it (`String`, while the column was declared `Guid`). Both mistakes are the same
 // mistake: a name repeated is a name that can differ. Ask for the column, not for its spelling.
 BACKEND_API const wxString& ibRowKeyField();
+
+// CAN THIS COLUMN BE COMPARED AT ALL? A value kept WHOLE — a schedule, a type description — lives in a
+// single BLOB field, and a blob is not something SQL can test for equality or order. Filtering or
+// sorting by such a column therefore cannot be lowered into a query at all: the decomposition compares
+// the column field by field, and its only field is that blob.
+//
+// So the question is asked BEFORE anything is offered: the settings dialog leaves such a column out of
+// the filter and order pickers instead of accepting a condition nobody can execute. Asked of the TYPE,
+// not of a list of clsids at the call site — a value that starts being stored whole answers here.
+BACKEND_API bool ibIsComparableType(const ibTypeDescription& typeDesc);
 BACKEND_API ibRawDBColumn   ibRowKeyColumn();
 
 // The authority. Decompose a logical column into its physical fields, derived purely

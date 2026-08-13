@@ -139,6 +139,17 @@ convenience, it is a bug waiting for its first user.
 itself, children and all, so a saved setting, a copy into the dialog's buffer and
 a future transfer to the web are the same mechanism.
 
+⚠️ **The dialog's buffer is a PACKED COPY**, and that is the same mechanism again:
+`ibLoadSettingsFromComposer` clears the buffer's root and refills it by packing the
+live tree and reading it back. So a value type with no packed form does not
+degrade — it takes the whole filter with it. That is what an enum member did until
+2026-08-13: it could not pack, the refill was skipped, and the settings form opened
+empty over a list that was visibly filtered
+([serialization-io.md § 4a](serialization-io.md)). The neighbouring failure looks
+identical from the outside and is a different defect: a restored REFERENCE that kept
+the guid but still called itself new presented as an empty string, so the row was
+there and the value cell was blank.
+
 ⚠️ **Reading goes through the metadata DOOR** (`ibMetaData::Deserialize`), never
 straight to `ibValue::FromNode`. A filter holds configuration types — a reference
 to a document, an enum member — and those exist only in the metadata's registry.
@@ -164,6 +175,25 @@ This is not a switch in the dialog — it is `ibTypeControlFactory::ChooseValue`
 the SAME route a text control on a form and a table column walk. Three copies of
 that sequence existed; they are one now, and the cell only answers its questions
 (`GetTypeDesc`, `GetDataType`).
+
+**Whether there is a short list at all is ONE function too:**
+
+```cpp
+FRONTEND_API bool HasQuickChoice(const ibCtorAbstractType* typeCtor);   // frame.h, body in frame.cpp
+```
+
+A primitive edits itself, an **enumeration** offers its finite registered members, and a
+metadata type answers through its metaobject — `ibValueMetaObjectRecordDataRef::HasQuickChoice`,
+which is the property a user ticks on a catalog or a chart, and a flat `false` on a document.
+Anything else has no short list to offer. Both callers ask this one function — the form
+control (`ibValueFrame::HasQuickChoice`) and the filter cell — and the cell adds exactly one
+case of its own before it: the composition FIELD on the left, which has a picker (the source
+tree) but no ctor to ask.
+
+It used to be a walk over the ctor KINDS written out at both callsites, and the two
+copies disagreed about enumerations: the same account type dropped its member list in
+a filter and refused to on a form. One walk over the kinds, in one place, is the whole
+fix.
 
 A new line is created **empty**. Taking whatever happens to be selected in the
 field tree invents a condition the user did not ask for — and worse, fixes its
@@ -217,3 +247,17 @@ previously working settings down with it.
 * **`X().ConvertToValue(p)`** — a temporary `ibValue` owns what it wraps and dies
   at the end of the full expression, leaving `p` dangling. Hold the value.
 * **Reading a filter without the metadata door** raises on configuration types.
+
+---
+
+## 11. Open defects
+
+* ⚠ **The filter tree's root group does not expand by default** (open, 2026-08-13). The
+  dialog opens with the root folded shut, which is exactly the state that reads as
+  "nothing set" — the thing §2 says the visible root exists to prevent. **The cause is
+  not found.** The expansion is posted, not called inline (`RefreshFilterTree` →
+  `CallAfter(&ibDialogListSettings::ExpandFilterTree)`, and again from `wxEVT_SHOW`),
+  because expanding a row the view has not FETCHED yet is a no-op; `ExpandFilterTree`
+  itself walks depth-first, parent before child, for the same reason. That is the shape
+  the code is in, and it is not enough. Anyone picking this up starts by establishing
+  WHEN the view has actually fetched the root — not by adding another post.

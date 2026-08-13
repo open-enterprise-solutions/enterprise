@@ -290,20 +290,34 @@ bool ibValueRecordDataObjectRef::SaveData()
 	//check fill attributes — find() so the probe doesn't auto-insert
 	//an empty value into m_listObjectValue.
 	bool fillCheck = true;
+	wxString unfilled;   // the fields that refused, by name — carried up, not only whispered
 	wxASSERT(m_metaObject);
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 		if (!object->FillCheck()) continue;
+		// A REQUIREMENT ONLY BINDS WHERE THE FIELD APPLIES. An attribute declared for items alone
+		// (a characteristic's Type) is not part of a FOLDER, so demanding it there would make
+		// folders unsavable over a field their form never shows.
+		if (!ibItemModeFits(object->GetItemMode(), GetObjectMode())) continue;
 		const auto it = m_listObjectValue.find(object->GetMetaID());
 		if (it == m_listObjectValue.end() || it->second.IsEmpty()) {
 			wxString fillError =
 				wxString::Format(_("""%s"" is a required field"), object->GetSynonym());
 			ibValueSystemFunction::Message(fillError, ibStatusMessage::ibStatusMessage_Information);
+			if (!unfilled.IsEmpty()) unfilled << wxT(", ");
+			unfilled << object->GetSynonym();
 			fillCheck = false;
 		}
 	}
 
-	if (!fillCheck)
+	// THE REFUSAL NAMES ITS FIELDS. The per-field line above goes to the message pane, which is
+	// collapsed by default — so the user was left with "failed to save the object data", a sentence
+	// that says something went wrong and nothing about what to do. Raising here puts the names in
+	// the dialog the user is already looking at.
+	if (!fillCheck) {
+		ibBackendCoreException::Error(_("%s: required fields are not filled: %s"),
+			GetSourceCaption(), unfilled);
 		return false;
+	}
 
 	m_objGuid = m_reference_impl->m_guid;
 

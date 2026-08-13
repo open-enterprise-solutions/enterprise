@@ -1,5 +1,5 @@
 ﻿////////////////////////////////////////////////////////////////////////////
-//	Author		: Tetracode Dev
+//	Author		: Maxim Kornienko
 //	Description : chart of accounts metaData
 ////////////////////////////////////////////////////////////////////////////
 
@@ -8,10 +8,18 @@
 #include "backend/system/value/valueDynamicList.h"   // ibValueDynamicList — the standard list migrates onto the universal dynamic list
 #include "backend/metaData.h"
 #include "backend/moduleManager/moduleManager.h"
+#include "backend/system/systemManager.h"   // ibValueSystemFunction::Message — the message pane, not a dialog
 
 
 ibValueMetaObjectChartOfAccounts::ibValueMetaObjectChartOfAccounts() : ibValueMetaObjectRecordDataHierarchyMutableRef()
 {
+	// AN ACCOUNT RECORDS WHICH ACCOUNT IT SITS UNDER, and that record is not a tree. There is no
+	// separate container kind — every node is an account — but the platform navigates nothing here:
+	// the list is flat, and whoever wants the structure asks for it in a query or a grouping. Stated
+	// here rather than left to the user, because it is not a preference: it is what a chart of
+	// accounts IS. (A catalog keeps the default, folders and items.)
+	SetHierarchyType(ibHierarchyType::eSubordination);
+
 	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeWrite"),  ibContentHelper::eProcedureHelper, { wxT("Cancel") });
 	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("OnWrite"),      ibContentHelper::eProcedureHelper, { wxT("Cancel") });
 	(*m_propertyObjectModule)->SetDefaultProcedure(wxT("BeforeDelete"), ibContentHelper::eProcedureHelper, { wxT("Cancel") });
@@ -123,9 +131,9 @@ bool ibValueMetaObjectChartOfAccounts::WriteData(ibDataNode& node) const
 	node.SetProperty(m_propertyAttributeOffBalance->GetName(), m_propertyAttributeOffBalance->GetNodeValue());
 	node.SetProperty(m_propertyAttributeQuantitative->GetName(), m_propertyAttributeQuantitative->GetNodeValue());
 	node.SetProperty(m_propertyAttributeCurrency->GetName(), m_propertyAttributeCurrency->GetNodeValue());
-	node.SetProperty(m_propertyAttributeMaxSubcontoCount->GetName(), m_propertyAttributeMaxSubcontoCount->GetNodeValue());
+	node.SetProperty(m_propertyMaxAccountDimensionCount->GetName(), m_propertyMaxAccountDimensionCount->GetNodeValue());
 
-	node.SetProperty(m_propertySubcontoKindsTable->GetName(), m_propertySubcontoKindsTable->GetNodeValue());
+	node.SetProperty(m_propertyAccountDimensionKindsTable->GetName(), m_propertyAccountDimensionKindsTable->GetNodeValue());
 
 	node.SetProperty(m_propertyChartOfCharacteristicTypes->GetName(), m_propertyChartOfCharacteristicTypes->GetNodeValue());
 
@@ -147,9 +155,9 @@ bool ibValueMetaObjectChartOfAccounts::ReadData(const ibDataNode& node)
 	m_propertyAttributeOffBalance->ReadNodeValue(node.GetProperty(m_propertyAttributeOffBalance->GetName()));
 	m_propertyAttributeQuantitative->ReadNodeValue(node.GetProperty(m_propertyAttributeQuantitative->GetName()));
 	m_propertyAttributeCurrency->ReadNodeValue(node.GetProperty(m_propertyAttributeCurrency->GetName()));
-	m_propertyAttributeMaxSubcontoCount->ReadNodeValue(node.GetProperty(m_propertyAttributeMaxSubcontoCount->GetName()));
+	m_propertyMaxAccountDimensionCount->ReadNodeValue(node.GetProperty(m_propertyMaxAccountDimensionCount->GetName()));
 
-	m_propertySubcontoKindsTable->ReadNodeValue(node.GetProperty(m_propertySubcontoKindsTable->GetName()));
+	m_propertyAccountDimensionKindsTable->ReadNodeValue(node.GetProperty(m_propertyAccountDimensionKindsTable->GetName()));
 
 	m_propertyChartOfCharacteristicTypes->ReadNodeValue(node.GetProperty(m_propertyChartOfCharacteristicTypes->GetName()));
 
@@ -164,8 +172,7 @@ bool ibValueMetaObjectChartOfAccounts::OnCreateMetaObject(ibMetaData* metaData, 
 		(*m_propertyAttributeOffBalance)->OnCreateMetaObject(metaData, flags) &&
 		(*m_propertyAttributeQuantitative)->OnCreateMetaObject(metaData, flags) &&
 		(*m_propertyAttributeCurrency)->OnCreateMetaObject(metaData, flags) &&
-		(*m_propertyAttributeMaxSubcontoCount)->OnCreateMetaObject(metaData, flags) &&
-		(*m_propertySubcontoKindsTable)->OnCreateMetaObject(metaData, flags) &&
+		(*m_propertyAccountDimensionKindsTable)->OnCreateMetaObject(metaData, flags) &&
 		(*m_propertyObjectModule)->OnCreateMetaObject(metaData, flags) &&
 		(*m_propertyManagerModule)->OnCreateMetaObject(metaData, flags);
 }
@@ -176,21 +183,45 @@ bool ibValueMetaObjectChartOfAccounts::OnLoadMetaObject(ibMetaData* metaData)
 	if (!(*m_propertyAttributeOffBalance)->OnLoadMetaObject(metaData)) return false;
 	if (!(*m_propertyAttributeQuantitative)->OnLoadMetaObject(metaData)) return false;
 	if (!(*m_propertyAttributeCurrency)->OnLoadMetaObject(metaData)) return false;
-	if (!(*m_propertyAttributeMaxSubcontoCount)->OnLoadMetaObject(metaData)) return false;
-	if (!(*m_propertySubcontoKindsTable)->OnLoadMetaObject(metaData)) return false;
+	if (!(*m_propertyAccountDimensionKindsTable)->OnLoadMetaObject(metaData)) return false;
 	if (!(*m_propertyObjectModule)->OnLoadMetaObject(metaData)) return false;
 	if (!(*m_propertyManagerModule)->OnLoadMetaObject(metaData)) return false;
-	return ibValueMetaObjectRecordDataHierarchyMutableRef::OnLoadMetaObject(metaData);
+	if (!ibValueMetaObjectRecordDataHierarchyMutableRef::OnLoadMetaObject(metaData))
+		return false;
+	// The binding is READ by now, so the kind column can take its type here rather than waiting for the
+	// configuration to be run. Between load and run the metadata otherwise described a column the table
+	// does not have (and the save, which happens in between, believed it).
+	ApplyAccountDimensionKindType();
+	return true;
 }
+
 
 bool ibValueMetaObjectChartOfAccounts::OnSaveMetaObject(int flags)
 {
+	// A CHART OF ACCOUNTS WITHOUT A CHART OF CHARACTERISTIC TYPES IS NOT A HALF-CONFIGURED CHART, IT IS A
+	// CONTRADICTION: its analytics kinds table exists to hold ELEMENTS OF THAT CHART, and with no chart the
+	// column has no type, so the section is a set of rows that can name nothing. Refused here, where a data
+	// processor or an import cannot walk around it.
+	// REPORTED, NOT THROWN. A metadata rule the user has not satisfied yet belongs in the message pane
+	// under the editor, the way an enumeration with no values reports itself — a modal box for something
+	// found while saving interrupts the work instead of describing it. The save still refuses.
+	if (m_propertyChartOfCharacteristicTypes->GetValueAsMetaDesc().GetTypeCount() == 0) {
+		ibValueSystemFunction::Message(
+			wxString::Format(_("%s: a chart of characteristic types is required — the account dimension kinds are elements of it"), GetName()),
+			ibStatusMessage::ibStatusMessage_Error);
+		return false;
+	}
+
+
+	// Re-apply before the schema is computed: whatever the user has just picked is what the columns must
+	// describe, and the snapshot is taken off these metaobjects.
+	ApplyAccountDimensionKindType();
+
 	if (!(*m_propertyAttributeAccountType)->OnSaveMetaObject(flags)) return false;
 	if (!(*m_propertyAttributeOffBalance)->OnSaveMetaObject(flags)) return false;
 	if (!(*m_propertyAttributeQuantitative)->OnSaveMetaObject(flags)) return false;
 	if (!(*m_propertyAttributeCurrency)->OnSaveMetaObject(flags)) return false;
-	if (!(*m_propertyAttributeMaxSubcontoCount)->OnSaveMetaObject(flags)) return false;
-	if (!(*m_propertySubcontoKindsTable)->OnSaveMetaObject(flags)) return false;
+	if (!(*m_propertyAccountDimensionKindsTable)->OnSaveMetaObject(flags)) return false;
 	if (!(*m_propertyObjectModule)->OnSaveMetaObject(flags)) return false;
 	if (!(*m_propertyManagerModule)->OnSaveMetaObject(flags)) return false;
 	return ibValueMetaObjectRecordDataHierarchyMutableRef::OnSaveMetaObject(flags);
@@ -202,8 +233,7 @@ bool ibValueMetaObjectChartOfAccounts::OnDeleteMetaObject()
 	if (!(*m_propertyAttributeOffBalance)->OnDeleteMetaObject()) return false;
 	if (!(*m_propertyAttributeQuantitative)->OnDeleteMetaObject()) return false;
 	if (!(*m_propertyAttributeCurrency)->OnDeleteMetaObject()) return false;
-	if (!(*m_propertyAttributeMaxSubcontoCount)->OnDeleteMetaObject()) return false;
-	if (!(*m_propertySubcontoKindsTable)->OnDeleteMetaObject()) return false;
+	if (!(*m_propertyAccountDimensionKindsTable)->OnDeleteMetaObject()) return false;
 	if (!(*m_propertyObjectModule)->OnDeleteMetaObject()) return false;
 	if (!(*m_propertyManagerModule)->OnDeleteMetaObject()) return false;
 	return ibValueMetaObjectRecordDataHierarchyMutableRef::OnDeleteMetaObject();
@@ -227,8 +257,7 @@ bool ibValueMetaObjectChartOfAccounts::OnBeforeRunMetaObject(int flags)
 	if (!(*m_propertyAttributeOffBalance)->OnBeforeRunMetaObject(flags)) return false;
 	if (!(*m_propertyAttributeQuantitative)->OnBeforeRunMetaObject(flags)) return false;
 	if (!(*m_propertyAttributeCurrency)->OnBeforeRunMetaObject(flags)) return false;
-	if (!(*m_propertyAttributeMaxSubcontoCount)->OnBeforeRunMetaObject(flags)) return false;
-	if (!(*m_propertySubcontoKindsTable)->OnBeforeRunMetaObject(flags)) return false;
+	if (!(*m_propertyAccountDimensionKindsTable)->OnBeforeRunMetaObject(flags)) return false;
 	if (!(*m_propertyObjectModule)->OnBeforeRunMetaObject(flags)) return false;
 	if (!(*m_propertyManagerModule)->OnBeforeRunMetaObject(flags)) return false;
 	registerSelection();
@@ -239,38 +268,58 @@ bool ibValueMetaObjectChartOfAccounts::OnBeforeRunMetaObject(int flags)
 	return true;
 }
 
+// THE KIND COLUMN'S TYPE COMES FROM THE BINDING, and must be applied wherever the binding can have
+// arrived: on load, when the user picks the chart, and on run. It used to be applied at RUN only, so
+// between picking a chart and the next configuration run the metadata said one thing and the schema
+// another — the apply then tried to ALTER away a reference slot the table had never grown
+// ("column FLD…_RTREF does not exist").
+//
+// A KIND is an ELEMENT of that chart, so a reference type is right here — and is exactly what must
+// NOT be used for the VALUE slots on the register (those take the chart's composition).
+void ibValueMetaObjectChartOfAccounts::ApplyAccountDimensionKindType()
+{
+	ibValueMetaObjectAccountDimensionKindsTable* kindsTable = m_propertyAccountDimensionKindsTable->GetMetaObject();
+	if (kindsTable == nullptr || m_metaData == nullptr)
+		return;
+
+	ibValueMetaObjectAttributeBase* kindAttr = kindsTable->GetAccountDimensionKind();
+	if (kindAttr == nullptr)
+		return;
+
+	const ibMetaDescription& metaDesc = m_propertyChartOfCharacteristicTypes->GetValueAsMetaDesc();
+	ibTypeDescription typeDesc;
+	for (unsigned int idx = 0; idx < metaDesc.GetTypeCount(); idx++) {
+		const ibValueMetaObject* chartOfCharTypes = m_metaData->FindAnyObjectByFilter(metaDesc.GetByIdx(idx));
+		if (chartOfCharTypes != nullptr) {
+			const ibCtorMetaValueType* so = m_metaData->GetTypeCtor(chartOfCharTypes, ibCtorObjectMetaType::ibCtorObjectMetaType_Reference);
+			wxASSERT(so);
+			typeDesc.AppendMetaType(so->GetClassType());
+		}
+	}
+
+	// A BINDING THAT NAMES SOMETHING NOT LOADED YET IS NOT AN EMPTY BINDING. Load order is nobody's
+	// promise: the chart of accounts may be read before the chart of characteristic types it points at,
+	// and resolving to nothing there would CLEAR the column — the exact drop this method exists to
+	// prevent. So an unresolved binding leaves the column alone; the next call (run, or the user's own
+	// pick) resolves it. Only a genuinely empty binding clears, and that state cannot be saved.
+	if (typeDesc.GetClsidCount() == 0 && metaDesc.GetTypeCount() > 0)
+		return;
+
+	kindAttr->GetTypeDesc().SetDefaultMetaType(typeDesc);
+}
+
 bool ibValueMetaObjectChartOfAccounts::OnAfterRunMetaObject(int flags)
 {
 	if (!(*m_propertyAttributeAccountType)->OnAfterRunMetaObject(flags)) return false;
 	if (!(*m_propertyAttributeOffBalance)->OnAfterRunMetaObject(flags)) return false;
 	if (!(*m_propertyAttributeQuantitative)->OnAfterRunMetaObject(flags)) return false;
 	if (!(*m_propertyAttributeCurrency)->OnAfterRunMetaObject(flags)) return false;
-	if (!(*m_propertyAttributeMaxSubcontoCount)->OnAfterRunMetaObject(flags)) return false;
-	if (!(*m_propertySubcontoKindsTable)->OnAfterRunMetaObject(flags)) return false;
+	if (!(*m_propertyAccountDimensionKindsTable)->OnAfterRunMetaObject(flags)) return false;
 	if (!(*m_propertyObjectModule)->OnAfterRunMetaObject(flags)) return false;
 	if (!(*m_propertyManagerModule)->OnAfterRunMetaObject(flags)) return false;
 
 
-	// Set SubcontoKind column type from ChartOfCharacteristicTypes binding
-	const ibMetaDescription& metaDesc = m_propertyChartOfCharacteristicTypes->GetValueAsMetaDesc();
-	if (m_propertySubcontoKindsTable->GetMetaObject() != nullptr && metaDesc.GetTypeCount() > 0) {
-		ibTypeDescription typeDesc;
-		for (unsigned int idx = 0; idx < metaDesc.GetTypeCount(); idx++) {
-			const ibValueMetaObject* chartOfCharTypes = m_metaData->FindAnyObjectByFilter(metaDesc.GetByIdx(idx));
-			if (chartOfCharTypes != nullptr) {
-				const ibCtorMetaValueType* so = m_metaData->GetTypeCtor(chartOfCharTypes, ibCtorObjectMetaType::ibCtorObjectMetaType_Reference);
-				wxASSERT(so);
-				typeDesc.AppendMetaType(so->GetClassType());
-			}
-		}
-		// Update SubcontoKind column type in predefined table
-		ibValueMetaObjectAttributeBase* kindAttr = (*m_propertySubcontoKindsTable)->GetSubcontoKind();
-		if (kindAttr != nullptr) {
-			kindAttr->GetTypeDesc().SetDefaultMetaType(typeDesc);
-		}
-		// Prevent deletion of predefined tabular section
-		(*m_propertySubcontoKindsTable)->SetFlag(metaDisableFlag);
-	}
+	ApplyAccountDimensionKindType();
 
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		if (ibValueMetaObjectRecordDataHierarchyMutableRef::OnAfterRunMetaObject(flags))
@@ -286,8 +335,7 @@ bool ibValueMetaObjectChartOfAccounts::OnBeforeCloseMetaObject()
 	if (!(*m_propertyAttributeOffBalance)->OnBeforeCloseMetaObject()) return false;
 	if (!(*m_propertyAttributeQuantitative)->OnBeforeCloseMetaObject()) return false;
 	if (!(*m_propertyAttributeCurrency)->OnBeforeCloseMetaObject()) return false;
-	if (!(*m_propertyAttributeMaxSubcontoCount)->OnBeforeCloseMetaObject()) return false;
-	if (!(*m_propertySubcontoKindsTable)->OnBeforeCloseMetaObject()) return false;
+	if (!(*m_propertyAccountDimensionKindsTable)->OnBeforeCloseMetaObject()) return false;
 	if (!(*m_propertyObjectModule)->OnBeforeCloseMetaObject()) return false;
 	if (!(*m_propertyManagerModule)->OnBeforeCloseMetaObject()) return false;
 	if (auto* cc = m_metaData->GetCompileCache()) {
@@ -304,8 +352,7 @@ bool ibValueMetaObjectChartOfAccounts::OnAfterCloseMetaObject()
 	if (!(*m_propertyAttributeOffBalance)->OnAfterCloseMetaObject()) return false;
 	if (!(*m_propertyAttributeQuantitative)->OnAfterCloseMetaObject()) return false;
 	if (!(*m_propertyAttributeCurrency)->OnAfterCloseMetaObject()) return false;
-	if (!(*m_propertyAttributeMaxSubcontoCount)->OnAfterCloseMetaObject()) return false;
-	if (!(*m_propertySubcontoKindsTable)->OnAfterCloseMetaObject()) return false;
+	if (!(*m_propertyAccountDimensionKindsTable)->OnAfterCloseMetaObject()) return false;
 	if (!(*m_propertyObjectModule)->OnAfterCloseMetaObject()) return false;
 	if (!(*m_propertyManagerModule)->OnAfterCloseMetaObject()) return false;
 	unregisterSelection();

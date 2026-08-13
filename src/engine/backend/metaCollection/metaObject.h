@@ -50,7 +50,25 @@ constexpr ibClassID g_metaModuleCLSID = metadata_to_clsid("MD_MOD");
 constexpr ibClassID g_metaManagerCLSID = metadata_to_clsid("MD_MNGR");
 constexpr ibClassID g_metaTableCLSID = metadata_to_clsid("MD_TBL");
 constexpr ibClassID g_metaTableRefCLSID = metadata_to_clsid("MD_TBLR");   // DB-backed tabular section (reference owner); MD_TBL stays RAM-only (processors/reports)
-constexpr ibClassID g_metaSubcontoKindsTableCLSID = metadata_to_clsid("MD_SKTB");
+// The KEY stays "MD_SKTB" deliberately: it is an opaque body key that stored configurations and
+// DB rows already carry, not a name. Renaming it would change every id derived from it.
+constexpr ibClassID g_metaAccountDimensionKindsTableCLSID = metadata_to_clsid("MD_SKTB");
+
+// EVERY id whose class derives from ibValueMetaObjectTableData — the RAM and DB-backed variants plus
+// each PREDEFINED section registered under an id of its own. The metadata walks filter tabular
+// sections by THIS list and then static_cast, because that walk runs per child of every traversal and
+// a type test there would be RTTI on a hot path. The price is that a new predefined section has to be
+// named here — so it is named ONCE, and not spelled out at each call site (missing it is invisible:
+// the section simply stops being a table — no physical table, no node on the form, a null queryable
+// at write time, which is how the analytics-kinds table crashed the save).
+//
+// A constant and not a macro: it sits among the constexpr ids it is made of, it has a type, and it
+// cannot be redefined out from under a translation unit. It IS the walks' parameter type, so every
+// call site keeps its braces and this one passes by name — the backing array of a namespace-scope
+// initializer_list has static storage duration, so there is nothing to outlive.
+inline constexpr std::initializer_list<ibClassID> g_tabularSectionCLSIDs = {
+	g_metaTableCLSID, g_metaTableRefCLSID, g_metaAccountDimensionKindsTableCLSID
+};
 constexpr ibClassID g_metaEnumCLSID = metadata_to_clsid("MD_ENUM");
 constexpr ibClassID g_metaDimensionCLSID = metadata_to_clsid("MD_DMNT");
 constexpr ibClassID g_metaResourceCLSID = metadata_to_clsid("MD_RESS");
@@ -388,7 +406,13 @@ public:
 	// designer tree spelled `GetClassType() == g_metaPredefinedAttributeCLSID` out TEN
 	// times, once per metatype branch, and configuration-compare kept a second list of
 	// clsids whose own comment admitted it was mirroring the first.
+	// DELETED IS PART OF THE SAME ANSWER. Every caller paired this with an `IsDeleted()` line of its
+	// own — four trees, the compare walker — because a child that is gone shows up under its owner
+	// exactly as little as one the owner never accepted. Two spellings of one question is how the
+	// copies drift: adding a branch, you remember the question you came for and not its neighbour.
 	bool IsAcceptedByParent() const {
+		if (IsDeleted())
+			return false;
 		const ibValueMetaObject* const owner = GetParent();
 		return owner == nullptr || owner->FilterChild(GetClassType());
 	}

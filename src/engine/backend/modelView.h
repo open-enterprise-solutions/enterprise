@@ -1,4 +1,4 @@
-#ifndef __MODEL_VIEW_H__
+﻿#ifndef __MODEL_VIEW_H__
 #define __MODEL_VIEW_H__
 
 #include <algorithm>
@@ -434,6 +434,10 @@ public:
 	// knows whether it has children. Subclasses only override when
 	// they store hierarchy outside the row object (e.g. row holds a
 	// flat record + parent lookup uses an external index).
+	//
+	// (A single GetDataViewInfo(item) -> {container, hasChildren, …} door would be better than one
+	//  virtual per question — but this one has eight overriders across the designer, the dataview
+	//  controls and the filter tree, so collapsing it is its own piece of work, not a side effect.)
 	//
 	// The empty (invisible) root is always treated as a container so
 	// BuildTree's initial top-level fetch isn't skipped.

@@ -56,3 +56,18 @@ ibDialogSelectDataType::ibDialogSelectDataType(const ibMetaData*, const std::vec
 ibDialogSelectDataType::~ibDialogSelectDataType() {}
 bool ibDialogSelectDataType::ShowModal(ibClassID&) { return false; }
 void ibDialogSelectDataType::OnListItemSelected(wxListEvent&) {}
+
+// -----------------------------------------------------------------------------
+// ibShowTypeSelector — the shared type picker (win/dlgs/typeSelector), reached from
+// typeControl.cpp when a cell holds a type description. A modal wx dialog, so it has no web port;
+// refusing is the honest answer — the caller reads false as "the user did not choose" and leaves
+// the value alone, which is exactly what happens on Cancel.
+// -----------------------------------------------------------------------------
+
+#include "frontend/win/dlgs/typeSelector.h"
+
+bool ibShowTypeSelector(wxWindow*, ibSelectorDataType, const std::vector<ibClassID>&,
+	ibTypeDescription&, const ibMetaData*, bool, bool)
+{
+	return false;
+}

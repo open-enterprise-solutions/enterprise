@@ -1082,8 +1082,6 @@ void ibConfigurationTree::ExpandMetaItem(ibValueMetaObject* metaItem, const wxTr
 		ibValueMetaObjectTableData* metaTable = metaItem->ConvertToType<ibValueMetaObjectTableData>();
 		wxASSERT(metaTable);
 		for (auto attribute : metaTable->GetAttributeArrayObject()) {
-			if (attribute->IsDeleted())
-				continue;
 			if (!attribute->IsAcceptedByParent())
 				continue;
 			AppendItem(item, attribute);

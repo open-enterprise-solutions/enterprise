@@ -55,7 +55,7 @@ metatypes, and the tree already holds the pattern for both:
 
 | Proposed metatype | Existing structural twin |
 |---|---|
-| **Chart of calculation types** | **Chart of accounts** — a catalog plus predefined attributes plus a *predefined tabular section* (`ibValueMetaObjectSubcontoKindsTable`). A calculation type needs exactly that shape: priority, a *Displaces* section, a *Base* section, a "subject to displacement" flag |
+| **Chart of calculation types** | **Chart of accounts** — a catalog plus predefined attributes plus a *predefined tabular section* (`ibValueMetaObjectAccountDimensionKindsTable`). A calculation type needs exactly that shape: priority, a *Displaces* section, a *Base* section, a "subject to displacement" flag |
 | **Calculation register** | **Information register** — plus predefined attributes (calculation type, validity start / end, registration period) and, most of the value, a generated `.FactualValidity` companion rendering §6.2's day-grain query from the chart's settings |
 
 Folding them in later **removes four of the five costs in §1.1**: the displacement query stops

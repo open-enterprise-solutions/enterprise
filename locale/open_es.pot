@@ -1409,20 +1409,20 @@ msgstr ""
 msgid "Active/Passive"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/chartOfAccountsSubcontoTable.h:53
-msgid "Subconto"
+#: src/engine/backend/metaCollection/partial/chartOfAccountsDimensionKindsTable.h:53
+msgid "Account dimension"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/chartOfAccountsSubcontoTable.h:57
-msgid "Subconto kind"
+#: src/engine/backend/metaCollection/partial/chartOfAccountsDimensionKindsTable.h:57
+msgid "Account dimension kind"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/chartOfAccountsSubcontoTable.h:60
+#: src/engine/backend/metaCollection/partial/chartOfAccountsDimensionKindsTable.h:60
 #: src/engine/backend/metaCollection/partial/commonObject.h:624
 msgid "Order"
 msgstr ""
 
-#: src/engine/backend/metaCollection/partial/chartOfAccountsSubcontoTable.h:63
+#: src/engine/backend/metaCollection/partial/chartOfAccountsDimensionKindsTable.h:63
 msgid "Summary only"
 msgstr ""
 

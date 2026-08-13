@@ -298,11 +298,7 @@ void ibValueDynamicList::PruneUnresolvedSettings()
 		const wxString head = path.BeforeFirst(wxT('.'));
 		if (head.IsEmpty())
 			return true;
-		for (unsigned int i = 0; i < explorer->GetHelperCount(); ++i)
-			if (const ibSourceExplorer* node = explorer->GetHelper(i))
-				if (node->GetSourceName().IsSameAs(head, false))
-					return true;
-		return false;
+		return explorer->FindByName(head) != nullptr;
 	});
 }
 
@@ -395,23 +391,6 @@ bool ibValueDynamicList::GetValueByMetaID(const ibDataViewItem& item, const ibMe
 {
 	ibValueTreeNode* node = GetViewData<ibValueTreeNode>(item);
 	return node != nullptr && node->GetValue(id, pvarMetaVal);
-}
-
-// Scalar hop gate — DESIGN-TIME dot-walk (WalkColumns) only. Like the value-table, the dynamic list holds
-// 0..N query rows, so there is NO single scalar cell to read: the walk steps by TYPE, not value. Hand back the
-// pinned reference branch's empty typed twin (CoerceHopType — the reference builds its OWN twin). The column's
-// CURRENT type is the stale-pin filter, read STRAIGHT off the queryable (its stable column set) — NOT via
-// GetSourceExplorer(), which Reset()s the very explorer WalkColumns is mid-walk on. WITHOUT this override a
-// dotted reference column (List.Ref.Field) reads back "<not selected>" though the picker shows it, because the
-// base ibSourceDataObject::GetValueBySourceHop returns false — the missing twin of ibValueModelTable's.
-bool ibValueDynamicList::GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const
-{
-	ibTypeDescription colType;
-	if (const ibBackendQueryable* q = GetSourceQueryable()) {
-		for (const ibBackendQueryColumn* col : q->GetColumns())
-			if (col != nullptr && col->GetColumnId() == hop.m_id) { colType = col->GetTypeDesc(); break; }
-	}
-	return ibValueReferenceDataObject::CoerceHopType(hop, out, colType, GetSourceMetaData());
 }
 
 ibValueModel::ibValueModelReturnLine* ibValueDynamicList::GetRowAt(const ibDataViewItem& line)
@@ -548,10 +527,7 @@ const ibSourceExplorer* ibValueDynamicList::GetSourceExplorer() const
 	for (const ibQueryLowering::OutputColumn& column : m_querySchema) {
 		if (column.m_name.IsEmpty())
 			continue;
-		bool already = false;
-		for (unsigned int i = 0; i < m_sourceExplorer.GetHelperCount() && !already; ++i)
-			if (const ibSourceExplorer* node = m_sourceExplorer.GetHelper(i))
-				already = node->GetSourceName().IsSameAs(column.m_name, false);
+		const bool already = m_sourceExplorer.FindByName(column.m_name) != nullptr;
 		if (already)
 			continue;
 

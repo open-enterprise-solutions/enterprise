@@ -1,4 +1,4 @@
-#ifndef _BASE__FRAME__H__
+﻿#ifndef _BASE__FRAME__H__
 #define _BASE__FRAME__H__
 
 #include <wx/wx.h>
@@ -73,6 +73,12 @@ public:
 	virtual bool HasQuickChoice() const = 0;
 	virtual void ChoiceProcessing(ibValue& vSelected) = 0;
 };
+
+// CAN A VALUE OF THIS TYPE BE PICKED FROM A SHORT LIST? ONE function, and the only place the ctor kinds
+// are walked. It used to be written out at both callsites — the form control and the filter cell — and the
+// two copies disagreed about enumerations, so the same account type dropped its member list in a filter and
+// refused to on a form. Body in frame.cpp.
+FRONTEND_API bool HasQuickChoice(const class ibCtorAbstractType* typeCtor);
 
 class FRONTEND_API ibValueFrame : public ibValueDynamicMembers,
 	public ibPropertyObjectHelper<ibValueFrame>,

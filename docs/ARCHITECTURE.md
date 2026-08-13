@@ -271,6 +271,37 @@ Per-driver `ClassifyDatabaseError(int nativeCode)` on each `ibDatabaseErrorRepor
 
 Metadata object hierarchy. Every business object type extends `ibValueMetaObject` (defined in `metaObject.h`), which itself extends `ibValue` so metadata objects can be passed as script values.
 
+**One translation unit per ASPECT — `<metatype>Metadata<Aspect>.cpp`.** A metatype's files sit
+together in `metaCollection/partial/`, named after the metatype (the file name follows the metatype,
+not the C++ class: `chartOfAccounts*`, not `ibValueMetaObjectChartOfAccounts*`). The METAOBJECT's
+aspects carry the `Metadata` infix; the runtime value, its manager and its commands do not.
+
+| File | Holds |
+|---|---|
+| `chartOfAccounts.h` | the class declarations |
+| `chartOfAccountsMetadata.cpp` | the metaobject — ctor, lifecycle events, `ReadData` / `WriteData` |
+| `chartOfAccountsMetadataSchema.cpp` | **the database schema** — `ContributeTables` plus the restructuring guards those tables carry |
+| `chartOfAccountsMetadataProperty.cpp` | the property hooks (`OnPropertyChanged`, …) |
+| `chartOfAccountsMetadataMenu.cpp` | the designer context menu |
+| `chartOfAccountsMetadata_res.cpp` | the embedded icons |
+| `chartOfAccountsObject.cpp`, `…Manager.cpp`, `…Manager_impl.cpp`, `…Action.cpp`, `…Enum.{h,cpp}` | the runtime value, its manager, its commands, the enum value types the family registers — none of these is the metaobject, hence no infix |
+
+Aspects in use: `Schema`, `Property`, `Menu`, `_res`, plus three one-of-a-kind readings that earn a
+file each — `accumulationRegisterMetadataTotals.cpp`, `informationRegisterMetadataSlice.cpp`,
+`constantMetadataQuery.cpp`. A base FAMILY is named after its base header instead of a metatype:
+`commonObject.cpp`, `commonObjectSchema.cpp`, `commonObjectProperty.cpp`, `commonObjectAction.cpp`,
+`commonObjectMetaQuery.cpp`, `commonObjectEnum.{h,cpp}`.
+
+**The rule for new code:** everything a metaobject contributes to the database SCHEMA —
+`ContributeTables` and the `m_beforeChange` / `m_afterChange` rules attached to the tables it
+declares — goes in `<metatype>MetadataSchema.cpp`, so "what does this become in the database" is one
+file per metatype rather than a section of a large one. Four exist: `commonObjectSchema.cpp` (the
+record / enum / register / hierarchy families), `accumulationRegisterMetadataSchema.cpp` (the derived
+totals bundle), `chartOfAccountsMetadataSchema.cpp` (the analytics-ceiling rule),
+`constantMetadataSchema.cpp` (one column in the shared external `sys_const`). Declaring the table and
+declaring the rule that guards it are the same statement, so they cannot drift apart —
+[query-engine-layers.md](query-engine-layers.md) § L3.
+
 ### `src/engine/backend/debugger/`
 
 | File | Class | Role |

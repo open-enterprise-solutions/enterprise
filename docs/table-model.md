@@ -10,6 +10,7 @@
 > [dynamic-list.md](dynamic-list.md) (the DB-backed list consumer + the source-command layer),
 > [data-composer.md](data-composer.md) (L5 — the composer a fetch renders),
 > [property-system.md](property-system.md) (a table's columns ARE property objects),
+> [source-object.md](source-object.md) (the dot-walk a table starts — §3a here, §3 there),
 > [connection-pool.md](connection-pool.md) (where the DB fetch's connection comes from),
 > [job-manager.md](job-manager.md) (the rented run a page fetch is).
 >
@@ -131,6 +132,88 @@ accept writes, notify".
 
 `operator==` short-circuits on pointer match, then dispatches to the row's `IsEqualTo` — "same
 business row" is the row's decision, not the model's.
+
+---
+
+## 3a. The dot-walk — the table STARTS it, the source finishes it
+
+`ibValueModel` is an `ibTabularDataObject` (`backend/tabularDataObject.h`), and it is that
+interface's **only derivative** in the product — the tests aside, every table in OES is a model.
+`ibTabularDataObject` is deliberately a light interface and not the model: the walk in
+`srcDataObject.cpp` needs one thing from a table, that it can answer for its own column, and
+naming `ibValueModel` there would leak the whole model layer into a walk that stays
+metadata-free.
+
+A dotted column (`Goods.Item.Name`) is resolved by ONE call:
+
+```cpp
+bool ibTabularDataObject::GetValueByPath(const ibDataViewItem& item,
+    const std::vector<ibSourceHop>& path, size_t from, ibValue& out) const
+{
+    if (from >= path.size())
+        return false;
+    ibValue current;
+    if (!GetValueBySourceHop(item, path[from], current))   // MY row, MY column — nobody else can read this cell
+        return false;
+    return ibSourceDataObject::ResolvePath(current, path, from + 1, out);   // the rest is not the table's business
+}
+```
+
+The split is the point. The **first** hop belongs to the table because only the model knows how
+to read a cell out of an `ibDataViewItem`; every **deeper** hop goes through the shared blind
+loop every dotted path in the engine uses. The table never asks what the cell IS — whatever it
+yielded self-describes the rest ([source-object.md § 3.1](source-object.md)).
+
+The caller is `ibValueModelTableBox::ResolveCellValue`
+(`frontend/visualView/ctrl/tableBox.cpp`), once per visible dotted cell, with `from` = the
+tablebox's own bound prefix length so the tail is row-relative. A column reaching only one hop
+past the prefix is a plain cell the model already serves (`IsPathColumn` requires ≥ 2
+row-relative hops); a column whose path diverges INSIDE the prefix is rooted at a form source
+above the table (the header object) and is resolved once through the form, not per row.
+
+### Three seams, three depths — override the shallowest that suffices
+
+| Seam | Question it answers | Override when |
+|---|---|---|
+| `GetColumnTypeById(id)` | what my column **accepts** | never, normally — `ibValueModel` answers it once off `GetColumnCollection()` |
+| `GetValueBySourceHop(hop, out)` | the row-less **structure** step | your columns step into something that is not a reference |
+| `GetValueBySourceHop(item, hop, out)` | the **per-row value** | a cell is computed rather than stored |
+
+**The shallowest one is already answered for everybody.** `ibValueModel::GetColumnTypeById`
+asks its own column collection — `GetColumnCollection()->GetColumnByID(id)->GetColumnType()` —
+and every model already keeps that collection in step with its truth:
+
+| Model | Its column info's `GetColumnType()` reads |
+|---|---|
+| tabular section (`ibValueTabularSectionColumnInfo`) | the attribute's `GetTypeDesc()` |
+| register recordset (`ibValueRecordSetRegisterColumnInfo`) | the attribute's `GetTypeDesc()` |
+| dynamic list (`ibDynamicListColumns::ColInfo`) | the wrapped queryable column's `GetTypeDesc()` |
+| value table (`ibValueModelTableColumnInfo`) | the `Type` property the user edits |
+
+So a model normally overrides **nothing** to be walked by the dot. This too was briefly said
+three times — three overrides re-scanning the same three collections by hand, which is the loop
+`GetColumnByID` already runs.
+
+The middle seam has a shared body (it builds a reference twin from the column's type; the one
+metadata touch in the whole walk — [source-object.md § 3.3](source-object.md)), and it is
+`virtual` so that a reference stays a *particular* case rather than the law
+([source-object.md § 3.4](source-object.md) names the model this is held open for).
+
+**A model may legitimately answer `false`.** At design time there is no row; if a model cannot
+produce something of the column's type, refusing is the honest answer — the walk stops at that
+hop and the designer simply offers no dot past that column. Fabricating a value so the dot
+"works" would bind a path that resolves to nothing at runtime.
+
+> ⚠ **C++ trap.** Declaring only ONE of the two `GetValueBySourceHop` overloads in a derived
+> model **hides** the other for callers holding the derived type — name lookup stops at the
+> first class that declares the name. `ibValueModel` declares the row-ful one, so today's
+> callers reach the row-less one through an `ibTabularDataObject*` and nothing breaks; the
+> moment a caller holds `ibValueModel*`, the fix is `using ibTabularDataObject::GetValueBySourceHop;`
+> next to the override, not a second body.
+
+An intermediate that is itself a table ends the walk — the shared loop steps through
+`ibSourceDataObject`, which a table is not. See [source-object.md § 3.6](source-object.md) for
+what to do about it (present fields as a source, not as rows).
 
 ---
 
@@ -426,6 +509,8 @@ source-command band. Details: [paging-design.md](paging-design.md) §8.
 | File | Holds |
 |---|---|
 | `backend/modelView.{h,cpp}` | `ibDataViewModel`, `ibDataViewItem`, `ibDataViewObject`, notifier, `ibFetchDirection`, `s_constIgnoreParent` |
+| `backend/tabularDataObject.{h,cpp}` | `ibTabularDataObject` — the two hop gates, the shared row-less body, `GetValueByPath` (§3a) |
+| `backend/srcDataObject.{h,cpp}` | `ibSourceDataObject::ResolvePath` (the shared deep loop) + `WalkColumns` (its design-time twin) |
 | `backend/model.h` + `model.cpp` | `ibValueModel`, the provider bridge, `Get*Fetch` defaults, `RefetchAll`, `ResolveAnchorByKey`, `m_listSettings` |
 | `backend/modelDb.cpp` | `ibValueModelCursor::RunComposerPage` — DB keyset fetch |
 | `backend/modelRam.cpp` | `ibValueModelStorage::RunComposerPage` — RAM in-place fetch; `ibValueModelRamTableBase` |

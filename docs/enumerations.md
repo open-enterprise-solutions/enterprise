@@ -50,6 +50,12 @@ class ibValueEnumerationVariantBase : public ibValue {          // ONE VALUE
     ibValueEnumerationVariantBase() : ibValue(ibValueTypes::TYPE_ENUM, true) {}
     virtual valT GetEnumValue() const = 0;
     virtual void SetEnumValue(const valT& v) = 0;
+
+    // the packed form — the member number under the shared payload key
+    virtual bool DoSerialize(ibDataNode& node) const override {
+        node.SetValue(kValueFieldData, (s32)GetEnumValue());   return true; }
+    virtual bool DoDeserialize(const ibDataNode& node) override {
+        SetEnumValue(static_cast<valT>(node.GetValue<s32>(kValueFieldData)));   return true; }
 };
 
 template <typename valT>
@@ -69,6 +75,13 @@ protected:
     class ibValueEnumerationVariant : public ibValueEnumerationVariantBase<valType> { … };
 };
 ```
+
+**Packing an enum is packing its member** (2026-08-13). The header already carries the type, so the
+member number is the whole of the contents — one override pair on the variant template, and every
+registered enum has a packed form without writing a line. Until it existed the base's switch fell through
+to "a type with contents of its own that did not override this" and answered `false`, which also means
+*uncopyable*: a copy is a pack followed by a create
+([serialization-io.md § 4a](serialization-io.md)).
 
 Read the split as **collection vs member**: `ibValueEnumeration<valT>` is the *type*
 (`ComparisonKind` — the thing that lists its members), and its nested
@@ -303,6 +316,8 @@ as an int.
   enum;
 - serialization as a typed Number, so it diffs and copies
   ([property-system.md § 6](property-system.md));
+- a packed form for the VALUE itself (§2), so a member survives a saved setting, a copy and a
+  transfer — that one is inherited, not written;
 - autocomplete / syntax-helper entries, from the same registration.
 
 **No step 5.** There is no table to update, no switch to extend, no factory to touch. That

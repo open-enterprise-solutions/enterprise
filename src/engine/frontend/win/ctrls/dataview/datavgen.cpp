@@ -1,4 +1,4 @@
-/////////////////////////////////////////////////////////////////////////////
+﻿/////////////////////////////////////////////////////////////////////////////
 // Name:        src/generic/datavgen.cpp
 // Purpose:     ibDataViewCtrl generic implementation
 // Author:      Robert Roebling
@@ -2826,15 +2826,17 @@ bool ibDataViewCtrl::HasChildrenRow(unsigned int row) const
 
 void ibDataViewCtrl::ExpandRow(unsigned int row, bool expandChildren)
 {
-	if (IsList())
-		return;
+	if (IsList()) {
+				return;
+	}
 
 	ibDataViewTreeNode* node = GetTreeNodeByRow(row);
-	if (!node)
-		return;
+	if (!node) {
+				return;
+	}
 
-	return DoExpand(node, row, expandChildren);
-}
+		DoExpand(node, row, expandChildren);
+	}
 
 void
 ibDataViewCtrl::DoExpand(ibDataViewTreeNode* node,
@@ -2844,12 +2846,13 @@ ibDataViewCtrl::DoExpand(ibDataViewTreeNode* node,
 	if (!node->HasChildren())
 		return;
 
+
 	if (!node->IsOpen())
 	{
 		if (!SendExpanderEvent(wxEVT_DATAVIEW_ITEM_EXPANDING, node->GetItem()))
 		{
 			// Vetoed by the event handler.
-			return;
+						return;
 		}
 
 		if (m_rowHeightCache)
@@ -2920,6 +2923,7 @@ void ibDataViewCtrl::CollapseRow(unsigned int row)
 	if (!node)
 		return;
 
+	
 	if (!node->HasChildren())
 		return;
 
@@ -3401,10 +3405,11 @@ void ibDataViewCtrl::BuildTree(ibDataViewModel* model)
 	InvalidateCount();
 }
 
+
 void ibDataViewCtrl::DestroyTree()
 {
 	const size_t kids = (m_root != nullptr) ? m_root->GetChildNodes().size() : 0;
-		if (!IsVirtualList())
+			if (!IsVirtualList())
 	{
 		wxDELETE(m_root);
 		m_countRows = 0;

@@ -1,4 +1,4 @@
-#include "frontend/win/dlgs/listSettings/listSettings.h"
+﻿#include "frontend/win/dlgs/listSettings/listSettings.h"
 #include "frontend/win/dlgs/listSettings/filterTreeModel.h"   // the filter is a TREE — model + column ids
 #include "frontend/win/dlgs/queryConstructor/queryConstructor.h"   // the Query tab's constructor button
 #include "frontend/win/dlgs/callbackDropTarget.h"                  // the same-process drag: the source knows what moved
@@ -8,6 +8,7 @@
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
 
 #include "backend/metadataConfiguration.h"
+#include "backend/query/columnLayout.h"   // ibIsComparableType — a whole-value blob has nothing to compare
 #include "backend/objCtor.h"
 
 #include "frontend/win/ctrls/controlTextEditor.h"
@@ -99,6 +100,11 @@ static void AppendSourceFields(wxTreeCtrl* tree, const wxTreeItemId& parent,
 	for (unsigned int i = 0; i < explorer.GetHelperCount(); ++i) {
 		const auto* col = explorer.GetHelper(i);
 		if (col == nullptr || col->IsTableSection())
+			continue;
+		// A value kept WHOLE (a schedule, a type description) is one BLOB field, and SQL compares no
+		// blobs — a condition on it could never be lowered into the query. Not offered, rather than
+		// offered and then failing when the list is read.
+		if (!ibIsComparableType(col->GetTypeDesc()))
 			continue;
 		ibSourceFieldNode* data = new ibSourceFieldNode();
 		data->m_path     = prefix.IsEmpty() ? col->GetSourceName() : prefix + wxT(".") + col->GetSourceName();
@@ -496,22 +502,10 @@ public:
 		// the platform from ever reaching the type's picker.
 		if (selValue.GetClassType() == g_compositionFieldCLSID)
 			return true;
+		// ASK THE TYPE. This cell is not a form control and has no base to inherit the answer from —
+		// but it does not need one: the ctor answers for itself.
 		const ibCtorAbstractType* so = activeMetaData->GetAvailableCtor(selValue.GetClassType());
-		if (so != nullptr && so->GetObjectTypeCtor() == ibCtorObjectType_object_primitive) {
-			return true;
-		}
-		else if (so != nullptr && so->GetObjectTypeCtor() == ibCtorObjectType_object_enum) {
-			return true;
-		}
-		else if (so != nullptr && so->GetObjectTypeCtor() == ibCtorObjectType_object_meta_value) {
-			const ibCtorMetaValueType* meta_so = dynamic_cast<const ibCtorMetaValueType*>(so);
-			if (meta_so != nullptr) {
-				const ibValueMetaObjectRecordDataRef* metaObject = dynamic_cast<const ibValueMetaObjectRecordDataRef*>(meta_so->GetMetaObject());
-				if (metaObject != nullptr)
-					return metaObject->HasQuickChoice();
-			}
-		}
-		return false;
+		return ::HasQuickChoice(so);   // the free function (frame.h), not this class's own no-arg one
 	}
 
 private:
@@ -1805,8 +1799,9 @@ void ibDialogListSettings::ExpandFilterTree()
 		return;
 
 	const ibDataViewItem rootItem = m_filterModel->RootItem();
-	if (!rootItem.IsOk())
+	if (!rootItem.IsOk()) {
 		return;
+	}
 
 	std::function<void(const ibDataViewItem&)> openAll = [&](const ibDataViewItem& parent) {
 		m_filterView->Expand(parent);

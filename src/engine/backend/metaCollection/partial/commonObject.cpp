@@ -803,6 +803,9 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::WriteData(ibDataNode& node)
 	node.SetProperty(m_propertyAttributeDescription->GetName(), m_propertyAttributeDescription->GetNodeValue());
 	node.SetProperty(m_propertyAttributeParent->GetName(), m_propertyAttributeParent->GetNodeValue());
 	node.SetProperty(m_propertyAttributeIsFolder->GetName(), m_propertyAttributeIsFolder->GetNodeValue());
+	// A property absent from this pair does not survive the session that set it, and the failure is
+	// silent because the default keeps working.
+	node.SetProperty(m_propertyHierarchyType->GetName(), m_propertyHierarchyType->GetNodeValue());
 
 	return ibValueMetaObjectRecordDataMutableRef::WriteData(node);
 }
@@ -829,6 +832,11 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::ReadData(const ibDataNode& 
 	m_propertyAttributeDescription->ReadNodeValue(node.GetProperty(m_propertyAttributeDescription->GetName()));
 	m_propertyAttributeParent->ReadNodeValue(node.GetProperty(m_propertyAttributeParent->GetName()));
 	m_propertyAttributeIsFolder->ReadNodeValue(node.GetProperty(m_propertyAttributeIsFolder->GetName()));
+
+	m_propertyHierarchyType->ReadNodeValue(node.GetProperty(m_propertyHierarchyType->GetName()));
+	// Restate it on the Parent field at once: everything that asks what a parent may be asks the
+	// FIELD, so a configuration loaded and never edited must already say what it declares.
+	ApplyHierarchyType();
 
 	return ibValueMetaObjectRecordDataMutableRef::ReadData(node);
 }
@@ -1582,6 +1590,10 @@ bool ibValueRecordDataObject::SetValueByMetaID(const ibMetaID& id, const ibValue
 	return false;
 }
 
+// THE ASSERT IS THE CONTRACT: every caller of this names a field of THIS object. It is not to be
+// silenced or softened — when it fires, somebody asked the wrong object, and the fix belongs there.
+// A caller that WALKS a path does not reach here for somebody else's field: the walk steps INTO the
+// object that owns it (ibSourceDataObject::WalkColumns), so a table's column is asked of the table.
 bool ibValueRecordDataObject::GetValueByMetaID(const ibMetaID& id, ibValue& pvarMetaVal) const
 {
 	auto it = m_listObjectValue.find(id);
@@ -1596,6 +1608,7 @@ bool ibValueRecordDataObject::GetValueByMetaID(const ibMetaID& id, ibValue& pvar
 // ibSourceDataObject hop gate — reads the id, then filters the pin by the field's LIVE declared type
 // (FindAnyAttributeObjectByFilter -> GetTypeDesc): a composite field's UNDEFINED resolves to the pinned twin,
 // a field retyped away from the pin does not. Empty type (attribute not found) skips the check.
+//
 bool ibValueRecordDataObject::GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const
 {
 	const bool got = GetValueByMetaID(hop.m_id, out);

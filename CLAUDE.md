@@ -325,7 +325,25 @@ All feature work happens on branches cut from `develop`. Pull requests target `d
 | Compile-time constants | `g_` prefix | `g_metaCatalogCLSID` |
 | Macros (singletons) | lower camelCase | `appData`, `db_query`, `activeMetaData`, `debugServer` |
 | File names | camelCase or lowerCamelCase | `compileCode.cpp`, `databaseLayer.h` |
+| Metaobject aspect files | `<metatype>Metadata<Aspect>.cpp` | `chartOfAccountsMetadataSchema.cpp` |
 | CLSID strings | `XX_YYY` pattern | `"MD_CAT"`, `"VL_NUMB"` |
+
+**Per-metatype file split.** A metatype's implementation is one translation unit per ASPECT, all
+beside its header in `metaCollection/partial/` and named after the metatype rather than the C++
+class: `catalogMetadata.cpp` (the metaobject: ctor, lifecycle events, `ReadData` / `WriteData`),
+`catalogMetadataProperty.cpp`, `catalogMetadataMenu.cpp`, `catalogMetadata_res.cpp`. The runtime
+value, its manager and its commands carry no `Metadata` infix (`catalogObject.cpp`,
+`catalogManager.cpp`, `catalogAction.cpp`); a base FAMILY takes its base header's name
+(`commonObjectSchema.cpp`, `commonObjectProperty.cpp`).
+
+**Everything a metaobject contributes to the database SCHEMA goes in
+`<metatype>MetadataSchema.cpp`** — `ContributeTables` plus the `m_beforeChange` / `m_afterChange`
+rules attached to the tables it declares — so the schema story for a metatype is one file, not a
+section of a large one. Four today, and a metatype has one only when it declares something of its
+own: `commonObjectSchema.cpp` (the record / enum / register / hierarchy families — where a catalog's
+and a document's tables come from), `accumulationRegisterMetadataSchema.cpp`,
+`chartOfAccountsMetadataSchema.cpp`, `constantMetadataSchema.cpp`. Full aspect table:
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) § `src/engine/backend/metaCollection/`.
 
 ---
 
@@ -361,7 +379,10 @@ raises, which is what row-level access can be filtered by safely. Reached as `Se
 ([docs/session-parameters.md](docs/session-parameters.md)).
 
 Five further registered metatypes are **not** top-level business objects: `ExternalDataProcessor`,
-`ExternalReport`, `SubcontoKindsTable`, `AccumulationRegisterTotals` (the totals table became a
+`ExternalReport`, `AccountDimensionKindsTable` (renamed from `SubcontoKindsTable` on 2026-08-12 —
+*subconto* was a calque; the concept is an **account dimension**, «аналитика», and its KIND is a
+characteristic. The CLSID key `MD_SKTB` stayed, being an opaque body key rather than a name),
+`AccumulationRegisterTotals` (the totals table became a
 metaobject in its own right on 2026-07-29, rather than a bit on the register's id), and
 `ConstantValueColumn` (same day: a constant stopped BEING a column of `sys_const` and now HAS one —
 it derives `ibValueMetaObjectGenericData`, so the form layer no longer casts it into a class it does

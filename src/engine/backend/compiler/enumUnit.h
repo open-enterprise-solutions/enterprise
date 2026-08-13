@@ -2,6 +2,7 @@
 #define __ENUM_UNIT_H__
 
 #include "value.h"
+#include "backend/serialize/dataBuilder.h"   // ibDataNode - the enum writes its member into one
 
 class BACKEND_API ibValueEnumerationWrapper : public ibValueDynamicMembers {
 public:
@@ -31,6 +32,21 @@ class ibValueEnumerationVariantBase : public ibValue {
 
 	virtual valT GetEnumValue() const = 0;
 	virtual void SetEnumValue(const valT& v) = 0;
+
+	// PACKING AN ENUM IS PACKING ITS MEMBER — the header already carries the type, so the member
+	// number is the whole of the contents. Without this the base's switch fell through to "a type
+	// with contents of its own that did not override this" and answered NO, which means an
+	// enumeration could not be stored ANYWHERE: a saved list filter on an enum column came back
+	// empty (the copy is made by packing, and a refusal left the buffer cleared), and so did every
+	// other setting that happened to hold one. It read as "the filter will not display".
+	virtual bool DoSerialize(class ibDataNode& node) const override {
+		node.SetValue(kValueFieldData, (s32)GetEnumValue());
+		return true;
+	}
+	virtual bool DoDeserialize(const class ibDataNode& node) override {
+		SetEnumValue(static_cast<valT>(node.GetValue<s32>(kValueFieldData)));
+		return true;
+	}
 };
 
 //***************************************************************************************************

@@ -11,7 +11,8 @@
 #include "backend/query/columnLayout.h"   // ibColumnRole / ibPersistedTypeTag / ibColumnCodec::HasReference / ibQueryStatement
 #include "backend/backend_core.h"          // emptyDate
 #include "backend/compiler/value.h"        // ibValueTypes
-#include "backend/system/value/valueJob.h"   // g_valueScheduleCLSID — the one value object stored whole
+#include "backend/system/value/valueJob.h"    // g_valueScheduleCLSID — a value object stored whole
+#include "backend/system/value/valueType.h"   // g_valueTypeDescriptionCLSID — the other one
 
 namespace ibColumnSpread {
 
@@ -39,6 +40,11 @@ inline ibFieldTypes TagForValue(const ibValue& value)
 {
 	if (value.GetClassType() == g_valueScheduleCLSID)
 		return ibFieldTypes_Schedule;
+	// The second value object stored whole — a type description (a characteristic's own Type). Same
+	// reason it is asked by CLSID before the type switch: TYPE_VALUE would otherwise fall into the
+	// "not a primitive, therefore a reference" arm, and it is neither.
+	if (value.GetClassType() == g_valueTypeDescriptionCLSID)
+		return ibFieldTypes_TypeDescription;
 	return TagForValueType(value.GetType());
 }
 
@@ -90,6 +96,17 @@ void DriveSpread(const ibBackendQueryColumn* col, int tag,
 	if (td.ContainType(g_valueScheduleCLSID)) {
 		if (tag == ibFieldTypes_Schedule) bindActive(ibColumnRole::Schedule, pos);
 		else                              st->SetParamNull(pos++);
+	}
+
+	// The type-description slot, on the same footing and in the same place as the schedule. It is
+	// not decoration: this driver is the ONE thing that has to agree, slot for slot, with
+	// DescribeColumnLayout — the column list of the INSERT comes from the layout, the parameters
+	// come from here. A slot the layout emits and the driver skips does not bind a NULL, it binds
+	// EVERYTHING AFTER IT ONE POSITION EARLY, and the last parameter of the statement runs off the
+	// end of the prepared buffer. That is what the driver reported as a null parameter buffer.
+	if (td.ContainType(g_valueTypeDescriptionCLSID)) {
+		if (tag == ibFieldTypes_TypeDescription) bindActive(ibColumnRole::TypeDescription, pos);
+		else                                     st->SetParamNull(pos++);
 	}
 
 	if (ibColumnCodec::HasReference(col)) {

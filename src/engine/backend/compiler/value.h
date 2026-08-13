@@ -39,6 +39,14 @@ public:
 
 extern BACKEND_API const ibValue wxEmptyValue;
 
+// THE PACKED NODE'S TWO FIELD NAMES. Short because they repeat per element in a binary stream,
+// stable because they are what a JSON dump shows — and declared HERE, not in the serialiser, because
+// more than one place writes into that node: the value base writes the primitives, an enumeration
+// writes its member from the template that defines it. Two spellings of the same key is how a value
+// gets written under one name and read under another.
+inline const wxChar* const kValueFieldClsid = wxT("t");   // the type — written and read FIRST
+inline const wxChar* const kValueFieldData  = wxT("v");   // the payload
+
 // Forward declarations for template classes used in ConvertToEnumType/ConvertToEnumValue
 template <typename valT> class ibValueEnumerationBase;
 template <typename valT> class ibValueEnumerationVariantBase;

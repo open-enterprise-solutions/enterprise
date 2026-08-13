@@ -72,6 +72,7 @@ public:
 	virtual wxIcon GetClassIcon() const { return wxNullIcon; }
 
 	virtual ibCtorObjectType GetObjectTypeCtor() const = 0;
+
 	virtual void CallEvent(ibCtorObjectTypeEvent event) {}
 	virtual ibValue* CreateObject() const = 0;
 

@@ -1,4 +1,4 @@
-#ifndef _FILTER_TREE_MODEL_H__
+﻿#ifndef _FILTER_TREE_MODEL_H__
 #define _FILTER_TREE_MODEL_H__
 
 #include "backend/modelView.h"

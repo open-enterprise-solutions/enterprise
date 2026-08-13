@@ -3,6 +3,7 @@
 
 #include "commonObject.h"
 #include "reference/reference.h"
+#include "backend/system/value/valueType.h"   // g_valueTypeDescriptionCLSID — the characteristic's own Type
 
 //********************************************************************************************
 //*                                  Factory & metaData                                      *
@@ -40,6 +41,14 @@ private:
 	}
 
 public:
+
+	// THE CONTOUR — every value a characteristic of this chart may ever take.
+	//
+	// Public because it is what the OUTSIDE asks for: an accounting register types its dimension
+	// VALUE slots by it, and an editor offers it as the permitted set. `GetTypeDesc` says the same
+	// thing but stays protected — it is the type-factory override, an internal contract, and a
+	// caller reaching for it would be borrowing a mechanism instead of asking a question.
+	const ibTypeDescription& GetTypesOfCharacteristics() const { return m_propertyTypesOfCharacteristics->GetValueAsTypeDesc(); }
 
 	ibValueMetaObjectAttributePredefined* GetDataType() const { return m_propertyAttributeType->GetMetaObject(); }
 	virtual bool IsDataType(const ibMetaID& id) const { return id == (*m_propertyAttributeType)->GetMetaID(); }
@@ -213,8 +222,13 @@ private:
 	ibPropertyList* m_propertyDefFormSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormSelect"), _("Default Select Form"), &ibValueMetaObjectChartOfCharacteristicTypes::FillFormSelect);
 	ibPropertyList* m_propertyDefFormFolderSelect = ibPropertyObject::CreateProperty<ibPropertyList>(m_categoryForm, wxT("DefaultFormFolderSelect"), _("Default Folder Select Form"), &ibValueMetaObjectChartOfCharacteristicTypes::FillFormFolderSelect);
 
-	//default array 
-	ibPropertyContainer<>* m_propertyAttributeType = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateSpecialType(wxT("Type"), _("Type"), wxEmptyString, value_to_clsid("VL_TYPED"), ibItemMode::ibItemMode_Item));
+	//default array
+	// THE CHARACTERISTIC'S OWN TYPE — a filter over what this chart declares, held as a type
+	// description rather than a value. FILL-CHECKED: a characteristic must name a concrete type,
+	// and empty is an ERROR rather than "everything the contour allows". Without that, a
+	// characteristic with no type would let a value of any kind into a slot the kind was supposed
+	// to narrow — which is the whole purpose of this second tier.
+	ibPropertyContainer<>* m_propertyAttributeType = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon, ibValueMetaObjectCompositeData::CreateSpecialType(wxT("Type"), _("Type"), wxEmptyString, g_valueTypeDescriptionCLSID, /*fillCheck*/ true, ibValue(), ibItemMode::ibItemMode_Item));
 
 	friend class ibValueRecordDataObjectChartOfCharacteristicTypes;
 	friend class ibMetaData;

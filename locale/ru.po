@@ -1437,24 +1437,23 @@ msgid "Passive"
 msgstr "Пассивный"
 
 #: src/engine/backend/metaCollection/partial/chartOfAccountsEnum.h:24
-#, fuzzy
 msgid "Active/Passive"
-msgstr "Активные пользователи"
+msgstr "Активно-пассивный"
 
-#: src/engine/backend/metaCollection/partial/chartOfAccountsSubcontoTable.h:53
-msgid "Subconto"
-msgstr "Субконто"
+#: src/engine/backend/metaCollection/partial/chartOfAccountsDimensionKindsTable.h:53
+msgid "Account dimension"
+msgstr "Аналитика"
 
-#: src/engine/backend/metaCollection/partial/chartOfAccountsSubcontoTable.h:57
-msgid "Subconto kind"
-msgstr "Вид субконто"
+#: src/engine/backend/metaCollection/partial/chartOfAccountsDimensionKindsTable.h:57
+msgid "Account dimension kind"
+msgstr "Вид аналитики"
 
-#: src/engine/backend/metaCollection/partial/chartOfAccountsSubcontoTable.h:60
+#: src/engine/backend/metaCollection/partial/chartOfAccountsDimensionKindsTable.h:60
 #: src/engine/backend/metaCollection/partial/commonObject.h:624
 msgid "Order"
 msgstr "Порядок"
 
-#: src/engine/backend/metaCollection/partial/chartOfAccountsSubcontoTable.h:63
+#: src/engine/backend/metaCollection/partial/chartOfAccountsDimensionKindsTable.h:63
 msgid "Summary only"
 msgstr "Только итоги"
 
@@ -4092,9 +4091,9 @@ msgstr "Дата"
 msgid "Length"
 msgstr "Длина"
 
-#: src/engine/frontend/propertyManager/property/advprop/advpropType.cpp:555
-msgid "Choice type"
-msgstr "Выберите тип"
+#: src/engine/frontend/win/dlgs/typeSelector.cpp:104
+msgid "Select data type"
+msgstr "Выбор типа данных"
 
 #: src/engine/frontend/propertyManager/property/advprop/advpropType.cpp:568
 msgid "Composite data type"
@@ -5723,3 +5722,23 @@ msgstr "Разрешающая"
 #: src/engine/backend/metaCollection/metaRoleObject.h
 msgid "Restricting"
 msgstr "Ограничивающая"
+
+#: src/engine/backend/metaCollection/partial/commonObjectEnum.h
+msgid "No subordination"
+msgstr "Нет подчинения"
+
+#: src/engine/backend/metaCollection/partial/commonObjectEnum.h
+msgid "Subordination without hierarchy"
+msgstr "Подчинение без иерархии"
+
+#: src/engine/backend/metaCollection/partial/commonObjectEnum.h
+msgid "Hierarchy of items"
+msgstr "Иерархия элементов"
+
+#: src/engine/backend/metaCollection/partial/commonObjectEnum.h
+msgid "Hierarchy of folders and items"
+msgstr "Иерархия папок и элементов"
+
+#: src/engine/backend/metaCollection/partial/commonObject.h
+msgid "Hierarchy type"
+msgstr "Вид иерархии"

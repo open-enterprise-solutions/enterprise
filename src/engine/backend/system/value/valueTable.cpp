@@ -153,7 +153,6 @@ bool ibValueModelTable::GetAt(const ibValue& varKeyValue, ibValue& pvarValue)
 #include "backend/serialize/dataBuilder.h"   // ibDataNode — column collection round-trip
 #include "backend/typeDescription.h"         // ibTypeDescriptionMemory — column type node round-trip
 #include "backend/metadataConfiguration.h"   // ibMetaDataConfigurationBase : ibMetaData — GetActiveMetaData() base cast
-#include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject::CoerceHopType — the reference builds its OWN empty typed twin (type-only step)
 
 const ibMetaData* ibValueModelTable::GetSourceMetaData() const
 {
@@ -161,20 +160,6 @@ const ibMetaData* ibValueModelTable::GetSourceMetaData() const
 	// their targets. Mirrors the dynamic list, which gets real config metaData from its queryable; a value-table
 	// has none of its own, so it falls to active.
 	return ibApplicationData::GetActiveMetaData();
-}
-
-// Scalar hop gate — DESIGN-TIME dot-walk (WalkColumns) only. A value-table holds 0..N rows, so there is NO
-// single scalar cell to read (unlike a record's one field). The walk does not step by VALUE, it steps by TYPE:
-// hand back the pinned branch's empty typed twin. CoerceHopType is the reference's OWN static — the table asks
-// the reference to build itself, it does not fabricate reference logic here. We hand it the LIVE column so the
-// reference validates the pin against the column's CURRENT type: a column RETYPED in the designer leaves a
-// stale pin on a bound path, and CoerceHopType must not resolve the dead old twin. Row count is irrelevant —
-// the twin is type-only, via the active config (a RAM table has no metaobject).
-bool ibValueModelTable::GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const
-{
-	auto* col = m_tableColumnCollection->GetColumnByID(hop.m_id);
-	return ibValueReferenceDataObject::CoerceHopType(
-		hop, out, col != nullptr ? col->GetColumnType() : ibTypeDescription(), GetSourceMetaData());
 }
 
 ibUniqueKey ibValueModelTable::GetGuid() const
@@ -265,15 +250,9 @@ bool ibValueModelTable::ibValueModelTableColumnCollection::CallAsProc(const long
 	{
 	case enRemoveColumn:
 	{
-		wxString columnName = paParams[0]->GetString();
-		auto it = std::find_if(m_listColumnInfo.begin(), m_listColumnInfo.end(),
-			[columnName](ibValueModelTableColumnInfo* colData)
-			{
-				return stringUtils::CompareString(columnName, colData->GetColumnName());
-			});
-		if (it != m_listColumnInfo.end()) {
-			RemoveColumn((*it)->GetColumnID());
-		}
+		const wxString columnName = paParams[0]->GetString();
+		if (ibValueModelColumnInfo* colInfo = GetColumnByName(columnName))
+			RemoveColumn(colInfo->GetColumnID());
 		return true;
 	}
 	}

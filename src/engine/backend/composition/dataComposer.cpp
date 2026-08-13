@@ -458,6 +458,18 @@ bool ibDataDBComposer::Run(ibCompositionDriver& driver)
 	else if (!hasTotals) {
 		// Flat result — the forward cursor; a dot-walk object leaf reassembles from
 		// its prefixed field spread (mirrors the runtime selection's ReadColumn).
+		//
+		// hasChildren = KNOWN TO HAVE CHILDREN, and a flat cursor never knows: finding out costs an
+		// EXISTS per row. So it answers `false` and does not guess.
+		//
+		// It must not be pressed into answering "may this row be entered" either. That was the shape
+		// of the first fix here — a level read reported every row as having children, which is true
+		// of an ITEM hierarchy (a chart of accounts: an account is subordinate to an account) and
+		// false of a folders+items one, where only a folder may be entered. One flag, two meanings,
+		// so every item in a catalog grew an expander.
+		//
+		// Being ENTERABLE is decided where the source is known — the model reads the hierarchy KIND
+		// off the queryable (IsItemHierarchy) and the folder flag off the row, and ORs this in.
 		while (result.Next()) {
 			for (size_t i = 0; i < schema.size(); ++i) {
 				const ibQueryLowering::OutputColumn& oc = schema[i];
@@ -466,7 +478,7 @@ bool ibDataDBComposer::Run(ibCompositionDriver& driver)
 				else
 					row[i] = oc.m_byAlias ? result.GetColumn(oc.m_alias) : result.GetValue(oc.m_col);
 			}
-			driver.OnRow(0, false, row);
+			driver.OnRow(0, /*hasChildren*/false, row);
 		}
 	}
 	else {

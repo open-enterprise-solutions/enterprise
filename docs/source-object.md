@@ -1,13 +1,14 @@
 # Source object — the self-describing data node
 
-> **Scope:** `ibSourceObject` / `ibSourceDataObject` / `ibSourceExplorer`
-> (`backend/srcObject.h`, `backend/srcDataObject.h`) — what a form binds *to*, and how a
-> dotted path walks it.
+> **Scope:** `ibSourceObject` / `ibSourceDataObject` / `ibSourceExplorer` / `ibTabularDataObject`
+> (`backend/srcObject.h`, `backend/srcDataObject.h`, `backend/tabularDataObject.h`) — what a
+> form binds *to*, and how a dotted path walks it.
 > Companions: [form-attribute-binding.md](form-attribute-binding.md) (the binding arc),
+> [table-model.md § 3a](table-model.md) (the table side: which seam a model overrides),
 > [descriptions.md § 3](descriptions.md) (`ibSourceDescription` / `ibSourceHop`),
 > [form-engine.md § 2](form-engine.md) (who BUILDS the source a form gets, per form kind),
 > [form-editor.md § 5](form-editor.md) (drag-to-create).
-> This is foundation code.
+> This is foundation code. The walk (§ 3.1–3.6) describes the code as of **2026-08-13**.
 
 ---
 
@@ -128,6 +129,8 @@ virtual bool GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const { r
 virtual bool SetValueBySourceHop(const ibSourceHop& hop, const ibValue& value)  { return false; }
 
 bool GetValueByPath(const std::vector<ibSourceHop>& path, ibValue& pvarMetaVal) const;   // NOT virtual
+static bool ResolvePath(const ibValue& start, const std::vector<ibSourceHop>& path,
+                        size_t from, ibValue& out);                                      // the shared loop
 ```
 
 **`GetValueByPath` is non-virtual; `GetValueBySourceHop` is the per-source virtual.** The
@@ -143,6 +146,162 @@ hand me the next source".
 `m_owner` on the node is what makes the chain work: it is set by `GetSourceExplorer` and
 names the source the node fetches its **live** value from — so a node is not just a
 description, it knows who to ask.
+
+### 3.1 `ResolvePath` — the blind loop
+
+`ResolvePath` is an inline static in `srcDataObject.h`. It is the ONE deep walk in the
+engine, and its whole body is this:
+
+```cpp
+ibValue current = start;
+for (size_t i = from; i < path.size(); ++i) {
+    ibSourceDataObject* source = nullptr;
+    current.ConvertToValue<ibSourceDataObject>(source);
+    if (source == nullptr)
+        return false;                                    // a primitive mid-path: you cannot dot into it
+    ibValue next;
+    if (!source->GetValueBySourceHop(path[i], next))     // the live value, or the pinned type's empty twin
+        return false;
+    current = next;
+}
+out = current;
+return true;
+```
+
+**The loop consults no metadata.** No id → name, no `FindProp`, no `ibMetaData` at all: each
+value **self-describes the next id**. The loop asks the current value to be an
+`ibSourceDataObject`; if it is, it answers for its own field, and whatever it hands back is
+asked the same question. That is why one loop walks a Catalog reference, a dynamic list's
+queryable column and a RAM value-table column without knowing which is which — and why a hop
+id may be a config metaID in one step and a RAM-local column id in the next.
+
+It is `static` because the start need not be `this`: `GetValueByPath` resolves its own first
+hop and feeds the rest in; a table feeds the row's cell (§ 3.2). The gateway `bool` is "did
+the walk resolve", and `out` is meaningful **only on `true`**.
+
+The command side has the same loop with `ibBackendCommandSender` / `GetCommandByHop`
+substituted — see [command-interface.md](command-interface.md). Two doors of one shape; they
+never share a value.
+
+### 3.2 The two hops of a table — with a row, and without
+
+A table value is per-row, so `ibTabularDataObject` (`backend/tabularDataObject.h`) carries
+the row alongside the hop. There are **two** gates, not one, and the difference is the whole
+design:
+
+| Gate | Question | Who answers |
+|---|---|---|
+| `GetValueBySourceHop(item, hop, out)` | "the value of this column **in this row**" | `ibValueModel` — a direct cell read, `GetValueByMetaID(item, hop.m_id, out)` |
+| `GetValueBySourceHop(hop, out)` | "something **of this column's type**, there is no row" | virtual with a **shared body** in `tabularDataObject.cpp` |
+
+The row-less one is the **structure step**. A form under construction has no rows, and the
+walk does not want a datum anyway: it wants something of the column's type so it can go on
+reading *that* source's own columns. `Goods.Item.Name` resolves in the designer because the
+`Item` column can be stepped into by type; nothing is read from a table that has no rows yet.
+
+The runtime path is the mirror image: `ibTabularDataObject::GetValueByPath(item, path, from,
+out)` resolves `path[from]` off the ROW (only the model can read a cell out of an
+`ibDataViewItem`) and hands `from + 1 …` to `ResolvePath`. See
+[table-model.md § 3a](table-model.md) for the table side and its caller.
+
+The row-less step is written **once**, and the history is why it is worth saying: it existed
+as three identical copies — on the value table, on the dynamic list and on the tabular
+section — each added separately, each after the same symptom, a dotted reference column
+reading back as `<not selected>` though the field picker showed it. A fourth kind of table
+now gets it for free.
+
+The design-time twin of the loop is `WalkColumns` (§ 3.5) — same stepping, collecting the
+leaf column and the dotted name instead of a value.
+
+### 3.3 The one place metadata is touched
+
+The shared row-less body is one line:
+
+```cpp
+bool ibTabularDataObject::GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const
+{
+    return ibValueReferenceDataObject::CoerceHopType(hop, out, GetColumnTypeById(hop.m_id), GetSourceMetaData());
+}
+```
+
+`CoerceHopType(hop, out, filter, metaData)` (`metaCollection/partial/reference/reference.cpp`)
+is the **twin materialiser**: if `out` is not already of the pinned type `hop.m_type`, it
+builds an empty typed reference of that type and substitutes it. It refuses in four cases,
+and each refusal is load-bearing:
+
+| Condition | Why it refuses |
+|---|---|
+| `hop.m_type` is not a reference | nothing to pin — keep whatever the id read gave |
+| `filter` is non-empty and does not contain the pin | the field was **retyped** in the designer; fabricating the old twin would keep a dead path resolving as a phantom |
+| the live value is already of the pinned type | never fabricate over a real value |
+| the pin decodes to no target (`ConvertToMetaIds`) | no metadata, or a pin that is not a resolvable reference |
+
+The `filter` is the table's own answer to "what does this column accept"
+(`GetColumnTypeById`); a metadata-fixed field (record / reference gate — its type cannot be
+retyped at runtime) passes an empty filter and skips the check.
+
+**This is the single point in the dot-walk where `ibMetaData` is involved, and the pointer
+comes from the caller's own `GetSourceMetaData()`.** That is what keeps the source layer
+metadata-free: `srcDataObject` never creates a value and never decodes a clsid; the
+reference — already metadata-bound by nature — owns the creation, and each source hands it
+the metadata it already has (a tabular section its owner metaobject's config, a dynamic list
+the config captured with its source, a RAM value-table the ACTIVE config, since it has none
+of its own). The clsid → target decode is `ConvertToMetaIds`, a **metadata** lookup through
+the class factory, not a kind-byte shortcut off the clsid body — the shortcut misclassified
+composite branches.
+
+### 3.4 A reference is the default, not the law
+
+The shared body builds a **reference** twin. That is one particular way a column can be
+stepped into, and the `virtual` is precisely what keeps it from becoming the rule: a table
+whose columns step differently overrides the row-less gate and materialises its own.
+
+The case this is being held open for is concrete: a **filter / sort model bound to a form**,
+carrying its own Field and Value rows. Its `Value` column has no fixed column type — what it
+accepts is decided by the neighbouring `Field` cell. Such a model cannot answer through
+`GetColumnTypeById` at all, and it must not be handed a reference twin by a mechanism that
+decided on its behalf that every dot in the product is a reference.
+
+Which seam to override, and how deep, is [table-model.md § 3a](table-model.md).
+
+### 3.5 `WalkColumns` — the same walk over the explorer tree
+
+`WalkColumns(path, from, leaf&, outText, outLeafIsTable, outContainerIsTable)`
+(`srcDataObject.cpp`) is the design-time twin: it steps `path[from..]` through the source
+EXPLORERS and collects the leaf descriptor plus the dotted display name. Two node shapes,
+two steps:
+
+- a node **with children** is a container (a tabular section). Its columns live under it in
+  the SAME explorer, so `explorer = node` — but the walk also fetches the section's own value
+  off the owner and keeps it as the `ibTabularDataObject` it converts to. From there the
+  section itself answers for its columns: the step is a real one, through the object the
+  previous hop yielded, instead of keeping the root and asking it about somebody else's rows.
+- a **leaf reference** node hops into the target: whoever the walk is standing on answers —
+  the table it stepped into (its column, row-lessly), else the node's owner — and the value
+  that comes back vends the next explorer. Landing on a non-source ends the walk.
+
+Values produced mid-walk are parked in a local vector so the explorers they vend outlive each
+step; `leaf` points into the owning metaobject and is stable regardless.
+
+`outLeafIsTable` / `outContainerIsTable` report facts a `leaf` pointer cannot carry (a
+section has no column descriptor): whether the leaf is itself a table, and whether it sits
+inside one — which is what decides the control class on a drop.
+
+### 3.6 The known boundary — an intermediate table ends the walk
+
+`ResolvePath` converts every intermediate value to `ibSourceDataObject`. A **table** is not
+one (`ibTabularDataObject` is the parallel contract, § 1), so a hop that lands on a table
+value stops the walk. `Section.Column` works because the table is the START of the walk and
+the table's own gate resolves that first hop; `Ref.Section.Column` does not, because the
+table turns up in the middle.
+
+This is a boundary, not a bug to route around. A model that must be walkable **by the dot**
+should present its fields **as a source** — fields by id, one value each — rather than as
+rows. The moment it is rows, "which row" is a question the path does not carry an answer to.
+
+Pinned by `tests/test_tabularHop.cpp` (the table starts the walk; a primitive cell ends it),
+`tests/test_sourceHopChain.cpp` (row → reference → field, at one and two hops) and
+`tests/test_sourceExplorer.cpp` (design-time `WalkColumns`).
 
 ---
 

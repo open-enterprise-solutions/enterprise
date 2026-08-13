@@ -1,5 +1,5 @@
 ﻿////////////////////////////////////////////////////////////////////////////
-//	Author		: Tetracode Dev
+//	Author		: Maxim Kornienko
 //	Description : chart of characteristic types object
 ////////////////////////////////////////////////////////////////////////////
 
@@ -43,7 +43,17 @@ const ibSourceExplorer* ibValueRecordDataObjectChartOfCharacteristicTypes::GetSo
 		m_sourceExplorer.AppendColumn(metaRef->GetDataCode(), false);
 		m_sourceExplorer.AppendColumn(metaRef->GetDataDescription());
 		m_sourceExplorer.AppendColumn(metaRef->GetDataParent());
-		m_sourceExplorer.AppendColumn(metaRef->GetDataType(), false);
+		// TYPE BELONGS TO AN ITEM, NOT TO A FOLDER — a group of characteristics is not itself a
+		// characteristic and has no type to declare. So the field is offered only where it exists,
+		// by the same rule the write now checks (ibItemModeFits): a folder's form never shows it,
+		// and nothing demands it of a folder.
+		//
+		// It was also appended DISABLED — the `false` the auto-numbered Code carries above, where
+		// being disabled is right. A disabled node builds a disabled control: the text greys, and
+		// with it the Select button, so the only way to give a characteristic its type was gone
+		// while the write still refused to save without one.
+		if (ibItemModeFits(metaRef->GetDataType()->GetItemMode(), m_objMode))
+			m_sourceExplorer.AppendColumn(metaRef->GetDataType());
 	}
 
 	for (const auto object : m_metaObject->GetAttributeArrayObject()) {

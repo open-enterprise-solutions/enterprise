@@ -240,6 +240,27 @@ The default knows the **primitives and nothing else**, which is all the base can
 mutable value — a form, an open object, a lambda — overrides nothing and is refused by the gate
 before any of this runs.
 
+### Packing is also COPYING — no packed form, no copy (2026-08-13)
+
+`ibValue::Clone` is the default copy for everything that is not a primitive: pack the value, then create it
+from the node through the registered ctor (`FromNode`). A primitive returns `*this` — the payload IS the
+value. So the same override pair answers two questions, and a type that overrides neither is not merely
+unsaveable, it is **unduplicatable**.
+
+`TYPE_ENUM` was such a type until 2026-08-13. It fell through the base's switch to "a type with contents of
+its own that did not override this" and answered `false`, so an enumeration could not be stored anywhere:
+
+| Where | What the user saw |
+|---|---|
+| any saved setting holding an enum member | came back empty |
+| the list-settings dialog over a filter on an enum column | an empty settings form over a plainly filtered list |
+
+The second is the sharper case, and it is not about settings. `ibLoadSettingsFromComposer`
+(`backend/composition/listFilter.cpp`) copies the LIVE filter tree into the dialog's edit buffer **by packing
+it**, and it clears the buffer's root before filling it — so a refusal left the buffer cleared and the form
+opened on nothing. Every step was honest, nothing raised, and the answer was wrong: the cost of a `false`
+that no caller is obliged to report.
+
 ### A value is blind to metadata
 
 The value layer does not know that metadata exists — no `activeMetaData`, no include of
@@ -286,8 +307,17 @@ saying so is the only honest answer.
 
 - **array** — elements as child nodes; the declared count is a cross-check, the children are the loop bound
 - **container / structure** — pairs; an odd number of children is refused
+- **enumeration** — the member number, and nothing else: the header already carries the type, so the
+  member IS the contents. The pair sits on `ibValueEnumerationVariantBase`
+  (`compiler/enumUnit.h`), the template every registered enum member instantiates, so no enum
+  declares it ([enumerations.md § 2](enumerations.md)).
 - **reference** — identity only: the metaID **and** the guid. The object never travels; the far side
   re-reads it under its own rights.
+
+**The two field names are shared.** `kValueFieldClsid` (`"t"`) and `kValueFieldData` (`"v"`) are declared
+in **`compiler/value.h`**, not in the serialiser: more than one place writes into a packed node — the enum
+template writes its member from where it is defined — and a value written under one spelling and read
+under another is a value lost.
 
 **Why a reference writes its metaID.** A reference's class id is DERIVED from the metaobject's
 metaID, so within one base either identifies the type. Across bases they part company: a copy of the
@@ -295,6 +325,26 @@ base can number the same catalog differently, and a stored setting would then re
 pointing at whatever type happens to hold that id — silently, and at the wrong table. The class id
 stays in the header as the fast path; the metaID is what the reader consults when the fast path is
 not enough. A mismatch is refused; an absent metaID (0) is an older record, not a disagreement.
+
+### A restored reference recovers its IDENTITY, not just its guid (2026-08-13)
+
+`ibValueReferenceDataObject::DoDeserialize` writes the guid into **both** the inner `ibReference` and the
+object's own `m_objGuid`, decides `m_newObject` from that guid (an empty one restores as an empty reference
+of that type, which IS new), clears `m_initializedRef` / `m_foundedRef`, and then calls `PrepareRef(true)` —
+the same step `Create(metaObject, guid)` takes, and the step that decides whether the identity is FOUND.
+
+Writing only the inner guid left the object still calling itself NEW: it had been constructed empty from
+the class id in the header, and `m_newObject` was decided there. Everything that reads the guid — filtering,
+comparison, saving — was correct, and `GetString()` answered `""`, because it returns an empty string for a
+new object before it looks anything up. A stored list filter came back with its value invisible while
+plainly still in force.
+
+The init flags are cleared **before** `PrepareRef`, which returns early on `m_initializedRef`: the object may
+already have prepared itself as the empty one it was a moment ago. Skipping the preparation swaps one wrong
+presentation for another — the value reads `Not found` instead of its name.
+
+⚠️ A user **enumeration** is a reference family (`ibValueMetaObjectRecordDataEnumRef`), so its members
+travel this road, not the enum one above.
 
 ⚠️ **The node has a fixed set of codecs** (string, bool, s32, blob, guid, ibNumber, wxDateTime) and
 none for a 64-bit integer: the type is stored as text, which also makes the JSON dump readable.

@@ -98,7 +98,13 @@ void ibValueTabularSectionDataObjectBase::CopyValue(const ibDataViewItem& row)
 	if (node == nullptr)
 		return;
 	ibComposerNode* rowData = new ibComposerNode();
-	for (const auto object : m_metaTable->GetAttributeArrayObject()) {
+	// THE GENERIC LIST — the section's own columns AND the predefined ones. GetAttributeArrayObject
+	// answers "what did a person add to this section", which is the right question for the designer
+	// tree and the wrong one for copying a ROW: every other walk over a row (create, read, write —
+	// tabularSection.cpp, tabularSectionQuery.cpp) takes the generic list, and this one did not. A
+	// section whose columns are ALL predefined — a chart of accounts' analytics kinds — therefore
+	// copied nothing at all: the new row arrived with a line number and four empty cells.
+	for (const auto object : m_metaTable->GetGenericAttributeArrayObject()) {
 		if (!m_metaTable->IsNumberLine(object->GetMetaID())) {
 			rowData->AppendTableValue(object->GetMetaID(), node->GetTableValue(object->GetMetaID()));
 		}

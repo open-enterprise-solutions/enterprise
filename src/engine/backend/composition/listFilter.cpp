@@ -1,4 +1,4 @@
-#include "backend/composition/listFilter.h"
+﻿#include "backend/composition/listFilter.h"
 #include "backend/composition/dataComposer.h"
 #include "backend/model.h"             // ibValueModel::GetModelComposer — the FACADE resolves it lazily
 #include "backend/compiler/typeCtor.h"
@@ -1152,7 +1152,8 @@ void ibLoadSettingsFromComposer(ibValueListSettings* settings, const ibDataCompo
 			// and the copy came back empty — which is what left the settings form
 			// blank over a list that was very obviously filtered.
 			ibDataNode packed(liveRoot->GetClassType(), 0);
-			if (ibValue(liveRoot).Serialize(packed)) {
+			const bool packedOk = ibValue(liveRoot).Serialize(packed);
+			if (packedOk) {
 				// THE UNPACKED VALUE IS HELD, not read out of a temporary. A value
 				// owns what it wraps: `FromNode(packed).ConvertToValue(copy)` frees
 				// the tree at the end of that expression, so `copy` was already
@@ -1160,7 +1161,8 @@ void ibLoadSettingsFromComposer(ibValueListSettings* settings, const ibDataCompo
 				// on a root that had been destroyed, and showed nothing.
 				const ibValue restored = ibReadFilterValue(packed);
 				ibValueFilterGroup* copy = nullptr;
-				if (restored.ConvertToValue(copy))
+				const bool gotCopy = restored.ConvertToValue(copy);
+				if (gotCopy)
 					settings->SetFilterRoot(copy);
 			}
 		}

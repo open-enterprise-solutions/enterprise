@@ -142,6 +142,53 @@ this chain. It merely takes the wrong thing from it (§2) and never asks about t
 The chart of characteristic types drives nothing on its own: it hands the register the
 information from which the fields are created, and the restructuring is what acts on it.
 
+**Re-confirmed by the owner 2026-08-12**, in one sentence that names both halves: *the chart of
+accounts governs the dimensions and their COUNT — and the count changes the schema; the chart of
+characteristic types gives the dimension its TYPE, taken from the CCT's own composition.* Two
+sources, two questions, neither answering the other's.
+
+### The count is a CEILING on the account's own table (owner, 2026-08-12)
+
+The two numbers of §4.2 meet at one rule. A user opens an account card and adds the kinds they need
+— Contractor, Contract, and later Order — and that works because the slots were sown in advance.
+So the account's kinds table may hold **no more rows than the declared maximum**: row four has no
+fourth slot to be written into, and accepting it would mean accepting a value with nowhere to go.
+
+Two consequences worth stating before it is built:
+
+- **The check belongs to the WRITE, not to the form.** A limit enforced only while adding a row in
+  the interface is not a limit — a data processor, an import or a paste writes the same table
+  without passing through it. The form may refuse earlier for comfort; the write is what makes it
+  true.
+- **Lowering the maximum below what accounts already use is the interesting case.** Existing rows
+  are data, and the number is schema, so the two can legitimately disagree the moment the number
+  drops. The honest reading is that the surplus rows stop being answerable — their slot is gone —
+  which is the same statement as "the column dropped at the next restructuring", and the owner
+  should be told rather than have rows silently deleted for them.
+
+### As the tree actually stands (verified 2026-08-12)
+
+Three places disagree with that, and each is small:
+
+| What the decision says | What the code does | Where |
+|---|---|---|
+| the count is SCHEMA, declared on the chart-of-accounts metaobject | `MaxSubcontoCount` is a predefined ATTRIBUTE on every account — data, `Number(1,0)`, default 1 — and `GetMaxSubcontoCount()` has **zero callers** | `chartOfAccounts.h:245-246`, accessor `:50` |
+| the register builds N slots from that count | three fixed members, `Subconto1/2/3` | `accountingRegister.h:196-203` |
+| a slot's type is the CCT's `TypesOfCharacteristics` (the contour) | the slot is typed `ibCtorObjectMetaType_Reference` over the CCT — i.e. a reference to a KIND, the same type the `SubcontoKind` column carries | `accountingRegisterMetadata.cpp:196-205`; the right accessor is `chartOfCharacteristicTypes.h:109` |
+
+A fourth, found beside them and not part of the decision: changing the register's `ChartOfAccounts`
+property re-types **only `Account`** — the dimension slots are untouched in `OnPropertyChanged` and
+refresh solely in `OnAfterRunMetaObject`, so they carry the previous chart's type until the
+configuration is run again (`accountingRegisterMetadataProperty.cpp:5-29`). The chart of accounts
+has the mirror of it: its three property handlers are empty pass-throughs, so re-binding the CCT
+does not re-type `SubcontoKind` immediately either (`chartOfAccountsMetadataProperty.cpp:5-18`).
+
+**What each source moves.** The COUNT is a restructuring trigger (columns appear or disappear). The
+CCT's composition is a restructuring trigger too, one level down — the contour IS the slot's type,
+so editing it changes the physical column set of every register downstream. Neither of those is the
+number of kinds a given ACCOUNT uses: that is the row count of its kinds table, ordinary data,
+which changes nothing physical.
+
 Consequences accepted with the decision:
 
 - The count must live on the chart-of-accounts **metaobject** (schema), not — as today — as a
@@ -288,6 +335,33 @@ This is the same lesson as the slot count (§4.2), one level down: the schema is
 what the CCT and the chart of accounts declare, and every input to that function is a
 restructuring trigger.
 
+#### ⚠ NOT VERIFIED: the type-description editor and where its filter comes from
+
+Raised by the owner 2026-08-12, and the audit above stopped one step short of it. A characteristic's
+`Type` attribute is a **specialised value type** (`VL_TYPED`), built the same way the schedule
+attribute was: clicking it opens a type-picking window rather than editing text in place. The
+mechanism exists and is recent.
+
+What has **not** been checked, and is the actual question:
+
+- **the picker's filter.** The window must offer only what the CHART allows — its
+  `TypesOfCharacteristics` — not every type in the configuration. So the editor has to receive the
+  contour from the metaobject that owns the element, and it is unverified whether that path exists
+  or has to be added (the neighbouring precedent is a control asking its neighbour for a type,
+  `ibValueFilterItem::GetRightTypeDescription`);
+- **where the chosen type lands.** It is written into the characteristic itself, so an element ends
+  up carrying a narrower type than the contour — which is exactly the second tier of §4.4 and the
+  thing the movement's value slot should later be narrowed by.
+
+**An empty type is an ERROR, not a default** (owner, 2026-08-12). A characteristic must name a
+concrete type; leaving it unset is not "everything the contour allows" and must not be treated as
+one. So the attribute is fill-checked and the write refuses — a characteristic with no type would
+otherwise let a value of any kind into a slot that was supposed to be narrowed, which is the very
+thing the second tier exists to prevent.
+
+Until both are confirmed by running, the two-tier story (contour narrowed per kind) is design, not
+behaviour — the storage side is built, the editing side is unproven.
+
 #### Who applies the narrowing: the FRONTEND, and the appliance already exists
 
 The value slot is a composite that mirrors the contour exactly; the CCT element beside it IS the
@@ -316,6 +390,13 @@ existing narrowing to a new pair, not about inventing one.
 carrying the same characteristic type — the whole combination the CCT declares as usable. Slots
 do not differ by declaration; what tells them apart is the KIND, which is precisely the separator
 of the pair the register really stores: *kind of characteristic* ↔ *value of characteristic*.
+
+**The two halves take DIFFERENT types, and that is the whole distinction** (owner, 2026-08-12):
+the first column accepts the **characteristic itself** — an ordinary reference to an element of the
+chart of characteristic types, exactly like a reference to a catalog item ("Contractor"); the second
+accepts the **value of that characteristic** — the chart's composition, narrowed by what the chosen
+kind admits ("OOO Romashka"). The first names WHICH breakdown the figure is filed under and acts as
+the filter a reading selects by; the second is what the figure is filed AGAINST.
 
 **A slot is TWO columns, and the kind is stored.** The pair is written to the row as it stands —
 the kind of characteristic beside the value of characteristic — rather than the kind being
@@ -563,6 +644,202 @@ Nothing structural remains open. What is left is wiring and verification:
 
 ---
 
+## 5a. What landed on 2026-08-12 — the groundwork, before the register itself
+
+Written after the fact, from the code. None of it is the accounting register's read path; all of it
+is what that path was going to need.
+
+**Naming.** `Subconto` → `AccountDimension` everywhere — engine, project files, `ru` / `uk` / `pot`,
+files renamed through `git mv`. The CLSID key string (`MD_SKTB`) deliberately stayed: it is an opaque
+body key already sitting in stored configurations, not a name. A stale `fuzzy` translation surfaced
+on the way — `Active/Passive` had been auto-filled as «Активные пользователи».
+
+**The dimension count moved from data to schema.** `MaxAccountDimensionCount` was a predefined
+attribute on every ACCOUNT (a `Number(1,0)`, default 1, read by nobody). It is now a property of the
+chart-of-accounts METAOBJECT — because restructuring reads schema, and a number sitting in a row
+cannot decide how many columns a table has. The attribute is gone, so there is no second number.
+
+**The slots became a vector of PAIRS.** Three fixed members (`Subconto1/2/3`) are replaced by slots
+created from that count, each one a *(kind, value)* pair — `AccountDimension<i>Kind` typed as a
+reference to a characteristic, `AccountDimension<i>` typed by the chart's composition. With
+correspondence on the set doubles into `Dr` / `Cr`, and a credit account appears beside the debit
+one. Slots are created once and REUSED: lowering the count deactivates from the tail rather than
+destroying, because a metaID is the physical column name and a re-issued id is a different column.
+
+**Hierarchy became a declared kind.** `ibHierarchyType` (`FoldersAndItems` / `Items`) on the
+hierarchical base; a chart of accounts states `Items` at construction, since an account is
+subordinate to an ACCOUNT. It is restated on the `Parent` field's select mode — everything that asks
+what a parent may be already asks the field — and the three places that assumed folders (the
+"add folder" command, the "create inside this node" rule, the parent picker) now branch on it.
+
+**The characteristic's own type became storable.** `ibValueTypeDescription` gets a column form: a
+blob, by the same arrangement the schedule uses, with `ibTypeDescriptionMemory::WriteBuffer` /
+`ReadBuffer` beside the node form so neither is written twice. New column role `_TD`, new persisted
+tag appended at the END of `ibFieldTypes` (inserting one renumbers every tag after it and old rows
+read as another type). The attribute is fill-checked: a characteristic with no type is an error, not
+"everything the contour allows".
+
+**A role is not one place, it is a chorus — and the write driver has to sing.** Adding the `_TD`
+slot to `DescribeColumnLayout` is the visible half; the invisible half is `ibColumnSpread::DriveSpread`,
+which binds a column's parameters without materialising the slot vector. The layout supplies the
+INSERT's COLUMN LIST, the driver supplies its PARAMETERS, and nothing checks that the two agree.
+A slot the layout emits and the driver skips does not bind a NULL — it binds **everything after it
+one position early**, so the last parameter of the statement lands past the end of the prepared
+buffer. Saving any characteristic failed with the Firebird driver's "parameter buffer is not
+allocated"; the message was true and pointed at the wrong tier. The same duty falls on the L3-3 wire
+codec (`ibDataMover`, the one that carries rows ACROSS a restructuring, chunk id `0x800062`), and on
+both read arms. The rule to carry: **when a role is added, sweep every site that enumerates roles**
+— the seven `Schedule` mentions are the checklist, and a role with fewer mentions than it has is a
+defect that compiles.
+
+**One type picker, two callers.** The dialog moved out of the property editor into
+`win/dlgs/typeSelector`. Its contract is what the owner stated: a SHAPE to render (one of the five
+selector kinds), an optional FILTER narrowing it, the current description in, the edited one out.
+It sorts what it shows into categories by the id itself and asks the registry for referenceable
+types, so no caller keeps a list of metatypes. The metadata editor passes the shape; a
+characteristic's field passes `reference` plus its own declaration as the filter.
+
+**Guard.** An account may not declare more analytics than the chart allows — checked on WRITE, where
+a data processor or an import cannot walk around it.
+
+**Three defects in the neighbours, found while working here and fixed with it.** They are not
+accounting, but they sat under it: the accounting register was going to copy the first one.
+
+| Defect | What it did |
+|---|---|
+| The accumulation totals filed `recordType = 0` into the RECEIPT column, while `ibRecordType` declares `eExpense` first | every receipt counted as an expense and back; balance came out as `Expense − Receipt`. Both spellings now derive from the enum. See [register-totals-strategy.md](register-totals-strategy.md) |
+| The information register's slice always filtered `Active = TRUE`, but that column exists only under a recorder | an INDEPENDENT periodic register (the default) built SQL naming a field it has not got; the exception was swallowed and the slice returned EMPTY |
+| `Get` was declared with arity 1 while the dispatcher handles `Get(period, filter)` | the periodic form was unreachable from script — the branch existed and could not be entered |
+
+## 5b. Running it — what the first live save found (2026-08-12, evening)
+
+Everything above compiled and read back fine. WRITING was where it came apart, and every defect was
+of the same family: **a declaration that only half the machinery had heard about**. They are listed
+in the order the live run hit them, because that order is itself the lesson — each one was hidden
+behind the previous.
+
+| Defect | What it did | Where the rule now lives |
+|---|---|---|
+| `ibColumnSpread::DriveSpread` bound no parameter for the new `_TD` slot | the INSERT listed the column and the bind skipped it, so every parameter after it went one position early and the last ran off the prepared buffer — the Firebird driver reported a null parameter buffer, one tier away from the cause | the driver walks the same roles as `DescribeColumnLayout`, and the wire codec (`ibDataMover`) too |
+| The analytics-kinds section derived `ibValueMetaObjectTableData` — the base with **no queryable and no physical table** | the write dereferenced a null queryable: an access violation on saving any account with analytics | it derives `ibValueMetaObjectTableDataRef`, the DB-backed variant |
+| `GetTableArrayObject` filtered tabular sections by a **hand-written pair of clsids** | the section, registered under its own id, was not a table to any metadata walk: absent from the schema snapshot, absent from the form | one `g_tabularSectionCLSIDs` beside the ids themselves. Still a list and not a type test — this walk runs per child of every traversal, and RTTI there is not free |
+| The section was marked `SetFlag(metaDisableFlag)` to mean "cannot be deleted" | that flag is read by `IsEnabled()`, so `IsAllowed()` went false and the section fell out of every walk **exactly when a chart of characteristic types was bound** — i.e. whenever it meant anything. `Table unknown CHARTOFACCOUNTS…_VT…` | `metaPredefinedFlag` ("bound to its parent for life"), set by the SECTION on itself at construction |
+| The kinds column took its reference type in `OnAfterRunMetaObject` **only** | between picking a chart and the next configuration run, the metadata described a column the table had never grown; the apply then emitted `ALTER TABLE … DROP fld…_RTRef` and died on a column that does not exist | `ApplyAccountDimensionKindType()`, called on LOAD, on the user's PICK and on SAVE — every point the binding can arrive. An unresolved binding (load order) leaves the column alone; only an empty one clears it |
+| `ExecuteWrite` ended in `catch (...) { return -1; }` | every driver error — no table, no column, a constraint — reached the user as "failed to save the object data". Three rounds were spent guessing what it was | an `ibBackendException` propagates; anything else still degrades to -1 |
+
+**And the designer's own share of it.** A source-explorer node for a tabular SECTION inherits the
+ROOT's owner, so the section's columns report the RECORD as theirs. Dragging a characteristic's field
+into a tablebox therefore asked the record for a value living in the section — it answered "no", the
+pinned twin took over, the column landed correctly, and the value map's assert fired on every pass.
+The read is now gated by the attribute lookup that already ran (`not one of mine → do not ask`), in
+both hop gates. The assert stayed exactly where it was: a warning that shouts on a working path is a
+question asked of the wrong object, not a warning to remove.
+
+Two more of the same family: the analytics-kinds section was appended to the chart of accounts'
+source BY HAND (a patch for the clsid gap above) and, once the gap closed, arrived twice — a
+generated form grew two identical tableboxes; and copying a tabular ROW walked
+`GetAttributeArrayObject` ("what did a person add"), so a section whose columns are ALL predefined
+copied nothing at all.
+
+**And one decision, not a defect.** A chart of accounts now **requires** a chart of characteristic
+types. Its analytics kinds are elements of that chart; with no chart the column has no type, and the
+section becomes rows that can name nothing. Refused on save, where an import cannot walk around it.
+
+**The rule these share.** When a fact is declared in one place, find every place that walks it and
+make them agree — not the one that happened to fail. A role added to the column layout has seven
+sites that enumerate roles; a metatype added to a family has the filters that list ids; a derivation
+has every phase its input can arrive in. Each of the six above compiled perfectly while disagreeing.
+
+### Hierarchy: what may be entered
+
+Landed with the above, and worth separating from folders: **an item hierarchy lets you go into any
+element; a folders+items hierarchy only into a folder.** The level fetch cannot tell them apart — it
+returns rows either way — so the composer no longer answers "does this row have children" (it does
+not know, and finding out costs an EXISTS per row). The model decides, from the source's declared
+kind:
+
+```
+container = a folder  OR  the source is an item hierarchy  OR  children were actually counted
+```
+
+`IsItemHierarchy()` is on the queryable and forwards to the metaobject's own declaration — the same
+word the metadata uses (`ibHierarchyType::eItems`), so no tier invents a second vocabulary.
+
+## 5c. A structure change can now be refused (2026-08-13)
+
+Declaring a structure and being ALLOWED to reach it are different questions, and the differ could only
+answer the first. Two of this arc's own settings quietly delete data when lowered: the analytics
+**ceiling** on a chart of accounts (accounts already holding more kinds lose rows) and the **hierarchy
+kind** on any catalog or chart (`None` retires Parent, anything but folders+items retires IsFolder —
+`ApplyHierarchyType` disables them and the differ drops the columns). Both read like a property edit.
+
+So a table's declaration may now carry its own rule:
+
+```cpp
+struct ibSchemaTable {
+    std::function<bool(ibRestructureInfo*)> m_beforeChange;   // may REFUSE
+    std::function<void(ibRestructureInfo*)> m_afterChange;    // may only SAY
+};
+```
+
+**Two passes around the diff, not a branch inside it.** A rule can be broken by a change the diff finds
+nothing to do about — lowering a declared limit alters no column, so a per-table branch would never be
+reached. Every `m_beforeChange` therefore runs BEFORE the first statement; a refusal stops the whole
+apply (half a structure is not a state anyone asked for) and every rule still runs, so the user sees
+all the objections at once. `m_afterChange` runs when the structure is settled, inside the same
+transaction; it returns `void` on purpose — by then there is nothing left to decline.
+
+**Where the rule lives.** With the declaration, attached while the change tree is being formed: the
+differ knows table shapes and nothing about accounts, and the chart of accounts knows its ceiling and
+nothing about DDL. They meet through one field. The refusal states its own reason into the ledger, and
+`ibRestructureInfo::HasErrors()` — declared long ago and read by nobody — now greys the Apply button.
+
+The pass shape inside `DiffSnapshots`, and what a refusal does to the save transaction once the
+dialog offers only Cancel: [query-engine-layers.md](query-engine-layers.md) § L3. Where each rule is
+attached: `commonObjectSchema.cpp` (hierarchy) and `chartOfAccountsMetadataSchema.cpp` (ceiling) —
+the schema aspect file of each metatype ([ARCHITECTURE.md](ARCHITECTURE.md) § `metaCollection/`).
+
+| Rule | Refuses when |
+|---|---|
+| Analytics ceiling (chart of accounts) | any account holds more kinds than the new number |
+| Parent retired (`None`) | any row has a parent — tested on `_RTRef != 0`, since an empty reference is an all-zero guid and not NULL |
+| Folders retired | any folder exists |
+
+## 5d. What an account SHOWS (2026-08-13)
+
+`ibValueRecordDataObjectChartOfAccounts::GetSourceExplorer` (`chartOfAccountsObject.cpp`) is what a
+generated form is built from. It vends five predefined fields, then the ordinary attribute and
+tabular-section loops every record family runs:
+
+| Field | Why it is there |
+|---|---|
+| **Code** — *editable* | in a chart of accounts the code IS the account (`51`, `60.01`), and it is the first thing a person types when adding one |
+| **Description** | the name |
+| **Parent** | an account is subordinate to an ACCOUNT (item hierarchy, § 5a) |
+| **Account type** | active / passive / active-passive (§ 4.7) |
+| **Off-balance** | a statement about the account, not a way of keeping it (§ 4.6) |
+
+**The code is typed in, not handed out.** A catalog appends its code read-only
+(`AppendColumn(GetDataCode(), false)`) because there it is a serial the system mints; a chart of
+accounts appends it enabled. Copying the catalog's line made an account impossible to name at all.
+
+**Account type had been missing here**, so a generated form showed an account as if it were a plain
+catalog item — code, description, parent — with no way to say which side it lives on. It is a declared
+TYPE (the `AccountType` enumeration), so the form builds the editor from the attribute itself; nothing in
+the explorer spells the three members out.
+
+**Quantitative / Currency are deliberately NOT vended** — and this is the decision, not an omission.
+They are two booleans spelling out ONE fact: *how the account is kept*. That fact wants an accounting
+**KIND** — declared once on the chart and ticked per account, the same shape the analytics kinds already
+have (§ 4.6, "Accounting flags are TWO DECLARED COLLECTIONS"). Putting them on the form as two
+checkboxes would fix the bit-encoded form in the interface before the mechanism that replaces it exists,
+and the interface is the hardest place to take a shape back out of.
+
+⚠ The analytics-kinds section is **not** appended by hand here. It used to be, because that was the only
+way to reach it while its clsid was missing from the tabular-section filter (§ 5b); now that the filter
+knows it, the general loop picks it up, and the hand-written line produced two identical tableboxes on a
+generated form. A special case that outlives the gap it patched becomes a duplicate.
+
 ## 6. Order of work
 
 Grooming first — it is genuinely small, and it makes the register usable before any of the
@@ -654,7 +931,47 @@ accumulation register already vends `.Balance` / `.Turnovers`:
 | `Turnovers` | debit and credit turnover over a period |
 | `DrCrTurnovers` | turnover BETWEEN two accounts — only expressible in correspondence mode (§4.3) |
 | `BalanceAndTurnovers` | opening / debit / credit / closing in one row |
-| chessboard | the correspondence matrix — a fold of `DrCrTurnovers`, not a fifth source |
+| `RecordsWithAccountDimensions` | the movement lines themselves — period, recorder, line — with the dimension slots widened into a column per kind |
+| `AccountDimensions` | the *(kind, value)* pairs a movement carries, decoded — the breakdown a reader joins back to a line |
+| chessboard | the correspondence matrix — a fold of `DrCrTurnovers`, not a further source |
+
+### 7a. Two classes of source, and only one of them is a total (settled 2026-08-12)
+
+The set above is **five virtual tables plus the movements table itself**, and it splits in two by
+what it reads. That split is what keeps the expensive half small:
+
+| Class | Members | Reads | Materialised |
+|---|---|---|---|
+| **folds** | `Balance`, `Turnovers`, `DrCrTurnovers`, `BalanceAndTurnovers` | the totals views | yes — the trigger-maintained bundle |
+| **breakdowns** | `RecordsWithAccountDimensions`, `AccountDimensions` | the MOVEMENTS table | **no, by construction** |
+
+The breakdowns are not an omission from the totals — they are BELOW the grain totals are stored
+at. Recorder and line number are precisely what a fold discards
+([register-totals-strategy.md § 4d-bis](register-totals-strategy.md)), so a table that reports
+them can only be the movements. It therefore needs no trigger, no bundle, no regeneration and no
+parity check: it is a projection of a table that already exists and is already queryable.
+
+**Both breakdowns are the same machinery as §7.1, and that is the whole point.** The slot → kind
+`CASE` assembly is the one genuinely new piece the accounting queryable owes; adding these two
+sources does not add a second one, it gives the first one two more tenants. Four consumers now
+share it: the folds' dimension breakdown, the two breakdown tables, and the field tree that
+offers the columns.
+
+⚠ `DrCrTurnovers` is the one member of the list gated on a DECISION rather than on work — and the
+disabled code shows what happens when the decision is skipped.
+
+`accountingRegisterManager_impl.cpp:603-610` obtains the pair by **self-joining the movements on
+the recorder** — `INNER JOIN … ON dr.Recorder = cr.Recorder`, with `dr.RecordType = 0` and
+`cr.RecordType = 1`. That reads as correspondence and is not: a recorder carrying M debit lines
+and N credit lines yields **M × N pairs**, and each debit amount is then summed N times. It is
+exact only for a document whose posting is a single Dr/Cr pair, which is the shape a real
+configuration leaves behind immediately (any document that debits two accounts from one payment
+already breaks it).
+
+So the choice is not "correspondence or a cheaper equivalent". It is: store both sides on the
+line (§4.3), or do not offer `DrCrTurnovers` at all. A join over a recorder cannot recover which
+debit answered which credit, because that information was never written down — a one-sided model
+discards the pairing at write time, and no read can invent it back.
 
 Two parameters beyond the usual period / account filter:
 
@@ -705,6 +1022,18 @@ construction; it is connection.
 5. the double-entry check per recorder, skipping off-balance accounts.
 
 ### 7.1 The conversion: numbered slots → columns by kind
+
+**Why this is the whole point, in the owner's words (2026-08-12).** What a user edits on an account
+card is the KIND — the type of the slot is fixed by the platform (the characteristic chart's
+composition) and is not theirs to change; the kind they pick travels into the movements with the
+value. Reporting is then built **by kind, never by position**: a reader asks for a breakdown by
+contractor and contract, and it does not matter that on one account the contractor is the second row
+of the kinds table and on another the first. The order in an account's table is data, the requested
+order is the reader's, and the engine reconciles them — which it can only do because each stored row
+says what kind its value was filed under. Take that column away and the question "which slot holds
+the contractor here" has no answer that does not depend on the account's table as it stands TODAY,
+including for rows written before it was last re-ordered.
+
 
 This is the one piece of real machinery the accounting queryable owes, and it is what the stored
 kind (§4.4) exists for. Storage is positional; the result is by kind; and the position of a kind

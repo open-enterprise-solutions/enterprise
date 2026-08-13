@@ -34,7 +34,10 @@ void ibValueManagerDataObjectInformationRegister::FillManagerMethods(ibMemberTab
 	helper.AppendFunc(wxT("CreateRecordSet"), wxT("CreateRecordSet()"));
 	helper.AppendFunc(wxT("CreateRecordManager"), wxT("CreateRecordManager()"));
 	helper.AppendFunc(wxT("CreateRecordKey"), wxT("CreateRecordKey()"));
-	helper.AppendFunc(wxT("Get"), 1, wxT("Get(Filter...)"));
+	// TWO ARGUMENTS, because there are two forms: Get(filter) and Get(period, filter). Declared as
+	// one, the periodic form was unreachable — the interpreter refuses a call with more arguments
+	// than the helper declares, so the branch existed and could not be entered.
+	helper.AppendFunc(wxT("Get"), 2, wxT("Get(Period, Filter...)"));
 	helper.AppendFunc(wxT("GetFirst"), 3, wxT("GetFirst(beginOfPeriod, filter...)"));
 	helper.AppendFunc(wxT("GetLast"), 2, wxT("GetLast(endOfPeriod, filter...)"));
 	helper.AppendFunc(wxT("SliceFirst"), 2, wxT("SliceFirst(beginOfPeriod, filter...)"));

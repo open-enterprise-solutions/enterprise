@@ -58,11 +58,11 @@ ibValue ibRamValueStorage::ResolveField(long row, ibMetaID headCol, const std::v
 		const ibSourceDataObject::ibSourceExplorer* explorer = source->GetSourceExplorer();
 		if (explorer == nullptr)
 			return ibValue();
-		ibMetaID segId = wxNOT_FOUND;                // name → id via the reference-as-source's own columns
-		for (unsigned int i = 0; i < explorer->GetHelperCount(); ++i) {
-			const ibSourceDataObject::ibSourceExplorer* child = explorer->GetHelper(i);
-			if (child != nullptr && child->GetSourceName() == seg) { segId = child->GetSourceId(); break; }
-		}
+		// name → id via the reference-as-source's own columns. Through the explorer's own door, so the
+		// case rule is the model layer's one rule (this loop used to compare exactly, and a segment
+		// written in another case silently ended the walk instead of resolving).
+		const ibSourceDataObject::ibSourceExplorer* child = explorer->FindByName(seg);
+		const ibMetaID segId = child != nullptr ? child->GetSourceId() : wxNOT_FOUND;
 		ibValue next;
 		if (segId == wxNOT_FOUND || !source->GetValueBySourceHop(ibSourceHop{ segId }, next))
 			return ibValue();

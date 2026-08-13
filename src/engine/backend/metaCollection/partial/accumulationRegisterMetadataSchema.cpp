@@ -181,15 +181,26 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 		// The record type splits one movement into the two sides. The accumulate stays
 		// UNCONDITIONAL — only the VALUE branches — so the trigger needs no procedural IF and the
 		// delta template stays the same one every engine uses.
+		//
+		// ⚠ THE TAG IS THE ENUM'S ORDINAL, AND IT IS NOT ZERO FOR RECEIPT. `ibRecordType` declares
+		// Expense first, so a movement stores 0 for an EXPENSE — while the column below is published
+		// as `<Res>_Receipt` and the balance is computed as In − Out. Comparing against 0 therefore
+		// filed every receipt as an expense and inverted the sign of every balance and turnover.
+		//
+		// Spelled through the enum rather than a literal, so the two can no longer disagree: what
+		// goes into the receipt column is the movement whose record type IS Receipt.
 		const wxString recField = ibRegValueField(GetRegisterRecordType());
-		m.Accumulate(cIn,  wxT("CASE WHEN {row}.") + recField + wxT(" = 0 THEN {row}.") + resField + wxT(" ELSE 0 END"),
+		const int receiptTag = static_cast<int>(ibRecordType::eReceipt);
+		const wxString receiptTagText = wxString::Format(wxT("%i"), receiptTag);
+
+		m.Accumulate(cIn,  wxT("CASE WHEN {row}.") + recField + wxT(" = ") + receiptTagText + wxT(" THEN {row}.") + resField + wxT(" ELSE 0 END"),
 			ibQueryColumnExpr::Case(
-				{ { ibQueryPredicate::Leaf(ibQueryCondition{ GetRegisterRecordType(), ibQueryFilterOp::Equal, ibValue(0.0) }),
+				{ { ibQueryPredicate::Leaf(ibQueryCondition{ GetRegisterRecordType(), ibQueryFilterOp::Equal, ibValue(receiptTag) }),
 				    ibQueryColumnExpr::Col(res) } },
 				ibQueryColumnExpr::Const(ibValue(0.0))));
-		m.Accumulate(cOut, wxT("CASE WHEN {row}.") + recField + wxT(" = 0 THEN 0 ELSE {row}.") + resField + wxT(" END"),
+		m.Accumulate(cOut, wxT("CASE WHEN {row}.") + recField + wxT(" = ") + receiptTagText + wxT(" THEN 0 ELSE {row}.") + resField + wxT(" END"),
 			ibQueryColumnExpr::Case(
-				{ { ibQueryPredicate::Leaf(ibQueryCondition{ GetRegisterRecordType(), ibQueryFilterOp::Equal, ibValue(0.0) }),
+				{ { ibQueryPredicate::Leaf(ibQueryCondition{ GetRegisterRecordType(), ibQueryFilterOp::Equal, ibValue(receiptTag) }),
 				    ibQueryColumnExpr::Const(ibValue(0.0)) } },
 				ibQueryColumnExpr::Col(res)));
 

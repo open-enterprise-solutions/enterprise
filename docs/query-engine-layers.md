@@ -196,6 +196,35 @@ events, invoked, never per movement), **L3-2 builds structure**.
 snapshot — one declaration on the node produces both the DDL (L3-2) and the row round-trip (L3-3).
 See [metadata-lifecycle.md](metadata-lifecycle.md) §2, §6.
 
+**A structure change can be REFUSED, and the question is asked BEFORE the diff.** `DiffSnapshots`
+(`query/schemaSnapshot.cpp`) is three passes over the target tables:
+
+```
+PASS 1   every table's m_beforeChange(ibRestructureInfo*) -> bool    nothing emitted yet
+ diff    drop vanished · create / alter · seed · materialise · regenerate
+PASS 3   every table's m_afterChange(ibRestructureInfo*)  -> void    structure settled, same TX
+```
+
+The guard is a PASS and not a branch inside the differ because **a check inside the diff never fires
+when the diff finds nothing to do**: lowering a declared limit alters no column, so the per-table
+loop would never reach that table and the rule would never be asked. Every guard still runs after one
+refuses — the user sees all the objections at once rather than one per attempt — and a single refusal
+returns 0 without a statement emitted, because half a structure is not a state anyone asked for. The
+after-event is the pair of the first and deliberately weaker: by then the tables are as declared, so
+there is nothing left to decline. It returns `void` and exists to SAY things (or to do follow-up work
+the new shape needs), inside the same transaction, so a rollback takes it along.
+
+Both passes walk the TARGET tables only. A table that has VANISHED from the declaration carries no
+rule with it, so a DROP is not something a guard can refuse — only a change to a table somebody still
+declares.
+
+A refusal is not a return code anybody tests: `ibMetaDataConfigurationStorage::OnSaveDatabase`
+deliberately ignores the differ's result (0 is also what a pure-DDL delta returns). It travels as
+ERRORS IN THE LEDGER — `ibRestructureInfo::HasErrors()` disables the Apply button of the change
+dialog (`frontend/win/dlgs/applyChange.cpp`), leaving Cancel as the only exit, which rolls the save
+transaction back. Which rules exist, who attaches them and why they live with the declaration:
+[accounting-register-arc.md](accounting-register-arc.md) §5c.
+
 **When the stitch stays in RAM, the reads still shrink.** A multi-source tree that cannot co-locate
 falls to the RAM stitch (materialise each leaf, join in C++). There the composer passes information
 SIDEWAYS: the side it materialises first has known join-key values, which it pushes into the other

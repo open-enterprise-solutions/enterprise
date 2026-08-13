@@ -20,6 +20,11 @@ void ibValuePointInTime_BindNames(ibValue::ibMemberTable& helper, const ibValue*
 // RAM sort floor and the comparison operators both go through, so overriding that one method
 // gives the whole order -- in scripts, in a sorted collection, and in the query engine's own
 // comparisons.
+// The clsid the layout tier gates on — declared next to the value, the same arrangement as
+// g_valueScheduleCLSID and g_valueTypeDescriptionCLSID. A second place that knows the spelling is a
+// second place to get it wrong.
+constexpr ibClassID g_valuePointInTimeCLSID = value_to_clsid("PointInTime");
+
 class BACKEND_API ibValuePointInTime : public ibValueStaticMembers<&ibValuePointInTime_BindNames>
 {
 public:

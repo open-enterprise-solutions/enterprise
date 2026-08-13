@@ -395,9 +395,7 @@ private:
 		const wxString& label, const TArray& objects) {
 		const wxTreeItemId group = AppendGroupItem(parent, groupClsid, label);
 		for (auto object : objects) {
-			if (object->IsDeleted())
-				continue;
-			if (!object->IsAcceptedByParent())
+			if (!object->IsAcceptedByParent())   // gone, or a kind its owner does not host — one question
 				continue;
 			if (!MatchesSearch(object))
 				continue;
@@ -417,12 +415,14 @@ private:
 		const wxString& label, const TArray& tables) {
 		const wxTreeItemId group = AppendGroupItem(parent, tableClsid, label);
 		for (auto metaTable : tables) {
-			if (metaTable->IsDeleted())
+			// A PREDEFINED section is not shown, by the same rule and the same question as the attributes
+			// below: its owner does not accept that clsid as a child, so it is not something a person put
+			// there and there is nothing to do with it in the tree. The chart of accounts' analytics kinds
+			// are edited on the account, not declared here.
+			if (!metaTable->IsAcceptedByParent())
 				continue;
 			const wxTreeItemId hTable = AppendGroupItem(group, g_metaAttributeCLSID, metaTable);
 			for (auto attribute : metaTable->GetAttributeArrayObject()) {
-				if (attribute->IsDeleted())
-					continue;
 				if (!attribute->IsAcceptedByParent())
 					continue;
 				if (!MatchesSearch(attribute))

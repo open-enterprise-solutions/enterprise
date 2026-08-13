@@ -409,7 +409,7 @@ wxString RenderMovementArm(const ibMaterializeSpec& spec,
 //
 // It composes PRIMITIVES — a shard fold, a difference, a running sum — and never learns what they
 // add up to. "Balance", "turnover", "opening" are metadata's words; an accounting register will
-// compose the same primitives into debit / credit turnovers and per-subconto breakdowns without
+// compose the same primitives into debit / credit turnovers and per-dimension breakdowns without
 // this file gaining a line. That independence is the requirement: level 2 must not know which
 // tables exist above it.
 // ---------------------------------------------------------------------------

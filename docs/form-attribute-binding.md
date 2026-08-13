@@ -227,28 +227,22 @@ sentinel:
   source can't describe itself (an unresolved / empty reference with a null target metaobject).
 - `const ibSourceExplorer* FindById(id)` / `const ibSourceExplorer* GetHelper(idx)` — per-node
   navigation; **nullptr** on miss / out-of-range (no shared empty-node sentinel any more).
-- `void GetReferenceSources(std::vector<ibValue>&)` — the node's TYPED-EMPTY reference source(s): a
-  reference column yields an empty **reference-as-source** PER target type (a composite reference => one
-  each), built from the node's OWN type through the owner source's metaData (the node borrows it — it
-  still stores no metaobject). Type-derived, not a live row read, so it resolves for a collection source
-  (list / section) with no current row. The clsid→target resolution is the shared backend
-  `ibSourceDataObject::ConvertToMetaIds` (the picker calls the same).
+- **The node does not vend typed-empty reference sources any more.** `GetReferenceSources` is GONE: a
+  design-time step into a reference column goes through the SAME hop gate the runtime uses — whichever
+  object the walk stands on answers `GetValueBySourceHop(hop, out)` and hands back the pin's empty typed
+  twin ([source-object.md § 3.2–3.3](source-object.md)). The clsid → target decode stayed shared:
+  `ibValueReferenceDataObject::ConvertToMetaIds`, which the picker calls too.
 
 ### `WalkColumns` — the structure-resolve hop
 
-`WalkColumns(path, from, leaf&, outText)` is the design-time twin of the runtime `ResolvePath`
-value-walk — one mechanism, differing only in typed-empty vs live value. It steps `path[from..]`
-through the explorer tree:
-
-- a **section** node (`GetHelperCount() > 0`) descends into its children in the SAME explorer
-  (`explorer = node`) — a section is an `ibTabularObject`, not a source, so its value can't be hopped;
-- a **reference** node descends into its target's columns: `node->GetReferenceSources()` materialises an
-  empty reference-as-source per target type, and the walk picks the type whose explorer carries the next
-  hop (`FindById(path[i+1])`) — so a COMPOSITE reference resolves to whichever branch owns the field, and
-  a dotted reference of ANY depth resolves (`List.Ref.Sub…`); the chosen reference is parked so its
-  explorer outlives the step;
-- the leaf is `node->GetColumn()` — the neutral `ibBackendSourceColumn` the binding (caption / type)
-  reads, pointing into the owning metaobject.
+`WalkColumns(path, from, leaf&, outText, outLeafIsTable, outContainerIsTable)` is the design-time twin
+of the runtime `ResolvePath` value-walk — one mechanism, differing only in typed-empty vs live value.
+It steps `path[from..]` through the explorer tree: a **container** node (`GetHelperCount() > 0`, a
+tabular section) descends into its children in the SAME explorer AND steps into the section object, which
+answers for its own columns from there on; a **leaf reference** node hops into its target through the hop
+gate. The leaf is `node->GetColumn()` — the neutral `ibBackendSourceColumn` the binding (caption / type)
+reads, pointing into the owning metaobject. Full account, including what is parked to keep the vended
+explorers alive: [source-object.md § 3.5](source-object.md).
 
 `WalkSource` (backend) gates `path[0]` to a holder, then delegates to `WalkColumns(path, 1, …)`.
 
@@ -267,10 +261,11 @@ hop vector fetches the LIVE value through ONE virtual gate, so the walk hops —
   (`ibTypeDescription`) and validates the pin against it (`filter.ContainType(hop.m_type)`): a field RETYPED
   away from the pin (a value-table column changed in the designer) drops the stale pin instead of resolving a
   phantom twin; an EMPTY filter skips the check. The twin's target is decoded via `ConvertToMetaIds` (metadata,
-  NOT a clsid body-mask). Every overriding gate is **out-of-line** and hands the field's live type: a
-  record / manager via `GetMetaObject()->FindAnyAttributeObjectByFilter(id)->GetTypeDesc()`, a value-table via
-  its column's `GetColumnType()`. A **value-table steps by TYPE, not value** — 0..N rows, no single cell, so its
-  gate is JUST the twin (the record's `read-field || twin` degenerates to `twin` alone).
+  NOT a clsid body-mask). Every overriding SCALAR gate is **out-of-line** and hands the field's live type — a
+  record / manager via `GetMetaObject()->FindAnyAttributeObjectByFilter(id)->GetTypeDesc()`. A **table steps by
+  TYPE, not value** when there is no row — 0..N rows, no single cell, so its gate is JUST the twin (the record's
+  `read-field || twin` degenerates to `twin` alone), and that body is written ONCE on `ibTabularDataObject`
+  rather than per model ([source-object.md § 3.2–3.4](source-object.md)).
 - **`ResolvePath(start, path, from, out)`** — the shared deep walk (static, `srcDataObject.cpp`). At each
   hop it converts the current value to `ibSourceDataObject` (a non-source value ends the walk — you cannot
   dot into a primitive) and calls its gate. `GetValueByPath` off a source feeds its own first hop, then
@@ -287,7 +282,8 @@ the form. `GetSourceMetaData` joins the tabular contract (`ibTabularObject`, by 
 `ibSourceObject`): a table WITH a meta object yields its config, one WITHOUT (a dynamic list) falls back to
 the active config, so a reference cell still resolves its target. The gate being virtual is the extension
 point — a table can override how a specific id resolves, and the walk still switches to the source object
-unchanged.
+unchanged. There are three such seams at three depths, and a model overrides the shallowest that suffices
+(normally none): [table-model.md § 3a](table-model.md).
 
 ### Path serialization is RAW — metadata-agnostic, mirroring the walk
 
@@ -703,9 +699,9 @@ moment the designer re-points the main attribute. Callers must not hold it acros
 - **Multi-source** — today it is one main + auxiliary attributes; true N-sources and the
   main-switch semantics ("old main goes empty") are pragmatic, not yet a principled model.
 - **table-dot** — LANDED (including composite). A dotted reference of any depth (`List.Ref.Field`,
-  `Object.Section.Ref.Field`) resolves through `WalkColumns`: each reference hop materialises the node's
-  typed-empty reference-as-source per target type (`GetReferenceSources`) and descends into whichever
-  branch owns the next field — so a COMPOSITE reference (a field of any target type) resolves too. The
+  `Object.Section.Ref.Field`) resolves through `WalkColumns`: each reference hop asks whichever object the
+  walk stands on for the hop, and gets back the pin's empty typed reference-as-source to descend into — so a
+  COMPOSITE reference (a field of any target type) resolves too, the pin naming the branch. The
   picker's nested-section column source resolves likewise — the bound table is walked down `parentPath`
   to the section node and its columns rooted directly (`ProcessTableColumn`). The clsid→target resolution
   is one shared backend helper (`ConvertToMetaIds`), used by both the walk and the picker. A dot-walk INTO a
@@ -715,14 +711,16 @@ moment the designer re-points the main attribute. Callers must not hold it acros
   `CatalogRef.Y`) is intentionally NOT dot-walked — only the reference branches expand. This is by design, not
   a bug (no demand for object-branch dotting; references cover the case). Confirmed with a live composite column.
 - **Value-table design-time dot-walk — LANDED (steps by TYPE).** A value-table has 0..N rows, so the
-  DESIGN-TIME walk (`WalkColumns`, which has no row) cannot step by VALUE. Its scalar gate
-  `GetValueBySourceHop` returns just the pinned branch's empty typed twin via
+  DESIGN-TIME walk (`WalkColumns`, which has no row) cannot step by VALUE. The row-less gate
+  `GetValueBySourceHop(hop, out)` returns just the pinned branch's empty typed twin via
   `ibValueReferenceDataObject::CoerceHopType` — the reference's OWN static, so the table asks the reference to
   build itself, never fabricating reference logic on the table side. The record gate is `read-field || twin`;
   a value-table never has a readable single field, so it is JUST the twin. Row count is irrelevant — the twin
   is type-only. (Earlier this read `<not selected>` because `GetSourceMetaData` was null; it now yields the
-  active config.) **Stale-pin — HANDLED:** the gate passes `CoerceHopType` the column's CURRENT type as a
-  `filter` (`GetColumnByID(hop.m_id)->GetColumnType()`), and the reference validates the pin against it
+  active config.) That body is no longer the value-table's own: it is written ONCE on `ibTabularDataObject`
+  and every kind of table inherits it ([source-object.md § 3.2–3.4](source-object.md)).
+  **Stale-pin — HANDLED:** the gate passes `CoerceHopType` the column's CURRENT type as a
+  `filter` (`GetColumnTypeById(hop.m_id)`, answered off the model's column collection), and the reference validates the pin against it
   (`filter.ContainType(hop.m_type)`). A retyped column no longer lists the pin, so the dead path reads back
   `<not selected>` instead of a phantom twin. The check lives in `CoerceHopType` (the reference side), not the
   table — the table only supplies its column's type. A metadata-fixed field (record / manager / reference gate)

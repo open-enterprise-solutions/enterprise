@@ -46,23 +46,34 @@ void ibValueMetaObjectRecordDataMutableRef::FillSourceExplorer(ibSourceDataObjec
 	// ⭐ THE MOMENT, APPENDED BY HAND — and that is the whole point of it. It is deliberately absent
 	// from the generic list (the list that becomes columns, object members and form fields), so this
 	// is the ONE place it surfaces: the field tree a query is written against.
-	explorer.AppendColumn(GetPointInTime(), /*enabled*/true, /*visible*/true);
+	//
+	// NOT VISIBLE: `visible` is what makes a field a DEFAULT COLUMN, and the moment is not something
+	// anyone wants to read in a list — it is an addressable point for a query to compare against, the
+	// same standing the reference and the deletion mark have above.
+	explorer.AppendColumn(GetPointInTime(), /*enabled*/true, /*visible*/false);
 }
 
 // CATALOG variant — reference / deletion mark / data version / predefined name / parent / is-folder hidden;
 // code / description / attributes visible.
 void ibValueMetaObjectRecordDataHierarchyMutableRef::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
 {
+	// THE PARENT HIDES ONLY WHERE IT IS THE TREE. In a real hierarchy the list SHOWS the structure by
+	// being a tree, so a Parent column beside it repeats what the indentation already says. Under
+	// SUBORDINATION there is no tree: the parent is an ordinary recorded fact ("subordinate to
+	// account"), and hiding it would leave the one thing that arrangement exists for invisible.
+	const bool parentIsTheTree = IsHierarchical();
+
 	for (const ibValueMetaObjectAttributeBase* a : GetGenericAttributeArrayObject()) {
 		if (a == nullptr) continue;
 		const ibMetaID id = a->GetMetaID();
 		const bool hidden = IsDataReference(id) || IsDataDeletionMark(id) || IsDataVersion(id)
-		                 || IsDataPredefinedName(id) || IsDataParent(id) || IsDataFolder(id);
+		                 || IsDataPredefinedName(id) || IsDataFolder(id)
+		                 || (IsDataParent(id) && parentIsTheTree);
 		explorer.AppendColumn(a, /*enabled*/true, /*visible*/ !hidden);
 	}
 
 	// Same as the flat variant above — the moment reaches the query and nothing else.
-	explorer.AppendColumn(GetPointInTime(), /*enabled*/true, /*visible*/true);
+	explorer.AppendColumn(GetPointInTime(), /*enabled*/true, /*visible*/false);
 }
 
 // SELECT value — a record's picker value = its REFERENCE cell, read from the row's DEFAULT columns by the
@@ -169,9 +180,12 @@ void ibValueMetaObjectRecordDataMutableRef::ShowValueByKey(const ibUniqueKey& ke
 // node) — the key-only command interface creates at root for now; the opened form lets the user set parent.
 void ibValueMetaObjectRecordDataHierarchyMutableRef::GetCommandCollection(const ibFormID& formType, std::vector<ibCommandItem>& commands) const
 {
-	// AddFolder goes FIRST (as in the legacy folder list), then the writeable base set. A folders+items hierarchy
-	// has the IsFolder attribute — the metaobject knows it directly (no queryable / GetFolderColumn indirection).
-	if (GetDataIsFolder() != nullptr)
+	// AddFolder goes FIRST (as in the legacy folder list), then the writeable base set. Only the
+	// folders-and-items arrangement offers it: an ITEM hierarchy (a chart of accounts) is a flat list plus
+	// an attribute saying which account this one sits under, and a FLAT list has neither part — in both
+	// there is no second kind of node to create. The DECLARATION is what is asked; the IsFolder attribute
+	// follows it (ApplyHierarchyType disables it where there are no folders).
+	if (HasFolders() && GetDataIsFolder() != nullptr)
 		commands.emplace_back(eAddFolder, wxT("AddFolder"), _("Add folder"), g_picAddFolderCLSID, true);
 	ibValueMetaObjectRecordDataMutableRef::GetCommandCollection(formType, commands);   // Add/Copy/Edit/Delete/MarkAsDelete
 }
@@ -190,10 +204,20 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::CallAsCommand(ibActionID id
 			if (ctxKey.IsOk()) {
 				ibValuePtr<ibValueRecordDataObjectHierarchyRef> sel(CreateObjectValue(ibObjectMode::OBJECT_ITEM, ctxKey.GetGuid()));
 				if (sel != nullptr) {
-					ibValue isFolder;
-					sel->GetValueByMetaID(GetDataIsFolder()->GetMetaID(), isFolder);
-					// folder → its own reference (nest inside); item → its parent (sibling).
-					sel->GetValueByMetaID(isFolder.GetBoolean() ? GetDataReference()->GetMetaID() : GetDataParent()->GetMetaID(), parent);
+					// WHERE THE NEW NODE LANDS depends on what a parent is allowed to be here.
+					//
+					// Folders+items: a folder anchor nests INSIDE it, an item anchor produces a SIBLING —
+					// because an item cannot be a parent at all.
+					// Items: every node may hold children, so the anchor itself is the parent. Falling back
+					// to the anchor's parent here would make "create inside this account" silently create a
+					// neighbour, which is the one outcome that looks like it worked.
+					bool nestInsideAnchor = IsItemHierarchy();
+					if (!nestInsideAnchor) {
+						ibValue isFolder;
+						sel->GetValueByMetaID(GetDataIsFolder()->GetMetaID(), isFolder);
+						nestInsideAnchor = isFolder.GetBoolean();
+					}
+					sel->GetValueByMetaID(nestInsideAnchor ? GetDataReference()->GetMetaID() : GetDataParent()->GetMetaID(), parent);
 				}
 			}
 			const ibObjectMode mode = (id == eAddFolder) ? ibObjectMode::OBJECT_FOLDER : ibObjectMode::OBJECT_ITEM;

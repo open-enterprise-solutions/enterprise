@@ -1,4 +1,4 @@
-#include "filterTreeModel.h"
+﻿#include "filterTreeModel.h"
 
 #include "backend/system/value/valueType.h"   // ibValueTypeDescription::AdjustValue — typed text lands as its type
 
@@ -258,6 +258,7 @@ unsigned int ibFilterTreeModel::GetFirstFetch(const ibDataViewItem& parent, cons
 	ibValueFilterGroup* group = parentNode->GetGroup();
 	if (group == nullptr)
 		return 0;   // a condition has no children
+
 
 	// NOT PAGED, deliberately: a filter is written by a person, so it is tens of
 	// lines at most. Paging here would buy nothing and cost the tree its identity

@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Author		: Tetracode Dev
+//	Author		: Maxim Kornienko
 //	Description : accounting register manager - Balance, Turnovers, DrCrTurnovers, BalanceAndTurnovers
 ////////////////////////////////////////////////////////////////////////////
 
@@ -72,29 +72,29 @@ ibValue ibValueManagerDataObjectAccountingRegister::Balance(const ibValue& cPeri
 		);
 	}
 
-	// Subconto 1-3 columns
+	// Account dimension 1-3 columns
 	{
-		ibValueMetaObjectAttributeBase* attrSubconto1 = m_metaObject->GetRegisterSubconto1();
+		ibValueMetaObjectAttributeBase* attrAccountDimension1 = m_metaObject->GetRegisterAccountDimension(0);
 		colCollection->AddColumn(
-			attrSubconto1->GetName(),
-			attrSubconto1->GetTypeDesc(),
-			attrSubconto1->GetSynonym()
+			attrAccountDimension1->GetName(),
+			attrAccountDimension1->GetTypeDesc(),
+			attrAccountDimension1->GetSynonym()
 		);
 	}
 	{
-		ibValueMetaObjectAttributeBase* attrSubconto2 = m_metaObject->GetRegisterSubconto2();
+		ibValueMetaObjectAttributeBase* attrAccountDimension2 = m_metaObject->GetRegisterAccountDimension(1);
 		colCollection->AddColumn(
-			attrSubconto2->GetName(),
-			attrSubconto2->GetTypeDesc(),
-			attrSubconto2->GetSynonym()
+			attrAccountDimension2->GetName(),
+			attrAccountDimension2->GetTypeDesc(),
+			attrAccountDimension2->GetSynonym()
 		);
 	}
 	{
-		ibValueMetaObjectAttributeBase* attrSubconto3 = m_metaObject->GetRegisterSubconto3();
+		ibValueMetaObjectAttributeBase* attrAccountDimension3 = m_metaObject->GetRegisterAccountDimension(2);
 		colCollection->AddColumn(
-			attrSubconto3->GetName(),
-			attrSubconto3->GetTypeDesc(),
-			attrSubconto3->GetSynonym()
+			attrAccountDimension3->GetName(),
+			attrAccountDimension3->GetTypeDesc(),
+			attrAccountDimension3->GetSynonym()
 		);
 	}
 
@@ -135,15 +135,15 @@ ibValue ibValueManagerDataObjectAccountingRegister::Balance(const ibValue& cPeri
 	// --- Outer SELECT ---
 	wxString sqlQuery = " SELECT ";
 
-	// Account + Subconto 1-3 + Dimensions: the full physical field list of each.
+	// Account + Account dimension 1-3 + Dimensions: the full physical field list of each.
 	sqlQuery += ibRegFieldList(m_metaObject->GetRegisterAccount());
 
-	ibValueMetaObjectAttributeBase* subcontoAttrs[] = {
-		m_metaObject->GetRegisterSubconto1(),
-		m_metaObject->GetRegisterSubconto2(),
-		m_metaObject->GetRegisterSubconto3()
+	ibValueMetaObjectAttributeBase* accountDimensionAttrs[] = {
+		m_metaObject->GetRegisterAccountDimension(0),
+		m_metaObject->GetRegisterAccountDimension(1),
+		m_metaObject->GetRegisterAccountDimension(2)
 	};
-	for (auto subAttr : subcontoAttrs)
+	for (auto subAttr : accountDimensionAttrs)
 		sqlQuery += "," + ibRegFieldList(subAttr);
 
 	for (const auto object : m_metaObject->GetDimensionArrayObject())
@@ -161,10 +161,10 @@ ibValue ibValueManagerDataObjectAccountingRegister::Balance(const ibValue& cPeri
 	// Account in inner select
 	sqlQuery += ibRegFieldList(m_metaObject->GetRegisterAccount());
 
-	// Subconto 1-3 in inner select
-	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto1());
-	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto2());
-	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto3());
+	// Account dimension 1-3 in inner select
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterAccountDimension(0));
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterAccountDimension(1));
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterAccountDimension(2));
 
 	// Dimensions in inner select
 	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
@@ -208,10 +208,10 @@ ibValue ibValueManagerDataObjectAccountingRegister::Balance(const ibValue& cPeri
 	// Group by Account
 	sqlQuery += ibRegFieldList(m_metaObject->GetRegisterAccount());
 
-	// Group by Subconto 1-3
-	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto1());
-	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto2());
-	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto3());
+	// Group by Account dimension 1-3
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterAccountDimension(0));
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterAccountDimension(1));
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterAccountDimension(2));
 
 	// Group by dimensions
 	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
@@ -300,29 +300,29 @@ ibValue ibValueManagerDataObjectAccountingRegister::Turnovers(const ibValue& cBe
 		);
 	}
 
-	// Subconto 1-3 columns
+	// Account dimension 1-3 columns
 	{
-		ibValueMetaObjectAttributeBase* attrSubconto1 = m_metaObject->GetRegisterSubconto1();
+		ibValueMetaObjectAttributeBase* attrAccountDimension1 = m_metaObject->GetRegisterAccountDimension(0);
 		colCollection->AddColumn(
-			attrSubconto1->GetName(),
-			attrSubconto1->GetTypeDesc(),
-			attrSubconto1->GetSynonym()
+			attrAccountDimension1->GetName(),
+			attrAccountDimension1->GetTypeDesc(),
+			attrAccountDimension1->GetSynonym()
 		);
 	}
 	{
-		ibValueMetaObjectAttributeBase* attrSubconto2 = m_metaObject->GetRegisterSubconto2();
+		ibValueMetaObjectAttributeBase* attrAccountDimension2 = m_metaObject->GetRegisterAccountDimension(1);
 		colCollection->AddColumn(
-			attrSubconto2->GetName(),
-			attrSubconto2->GetTypeDesc(),
-			attrSubconto2->GetSynonym()
+			attrAccountDimension2->GetName(),
+			attrAccountDimension2->GetTypeDesc(),
+			attrAccountDimension2->GetSynonym()
 		);
 	}
 	{
-		ibValueMetaObjectAttributeBase* attrSubconto3 = m_metaObject->GetRegisterSubconto3();
+		ibValueMetaObjectAttributeBase* attrAccountDimension3 = m_metaObject->GetRegisterAccountDimension(2);
 		colCollection->AddColumn(
-			attrSubconto3->GetName(),
-			attrSubconto3->GetTypeDesc(),
-			attrSubconto3->GetSynonym()
+			attrAccountDimension3->GetName(),
+			attrAccountDimension3->GetTypeDesc(),
+			attrAccountDimension3->GetSynonym()
 		);
 	}
 
@@ -370,12 +370,12 @@ ibValue ibValueManagerDataObjectAccountingRegister::Turnovers(const ibValue& cBe
 
 	sqlQuery += ibRegFieldList(m_metaObject->GetRegisterAccount());
 
-	ibValueMetaObjectAttributeBase* subcontoAttrs[] = {
-		m_metaObject->GetRegisterSubconto1(),
-		m_metaObject->GetRegisterSubconto2(),
-		m_metaObject->GetRegisterSubconto3()
+	ibValueMetaObjectAttributeBase* accountDimensionAttrs[] = {
+		m_metaObject->GetRegisterAccountDimension(0),
+		m_metaObject->GetRegisterAccountDimension(1),
+		m_metaObject->GetRegisterAccountDimension(2)
 	};
-	for (auto subAttr : subcontoAttrs)
+	for (auto subAttr : accountDimensionAttrs)
 		sqlQuery += "," + ibRegFieldList(subAttr);
 
 	for (const auto object : m_metaObject->GetDimensionArrayObject())
@@ -395,10 +395,10 @@ ibValue ibValueManagerDataObjectAccountingRegister::Turnovers(const ibValue& cBe
 	// Account in inner select
 	sqlQuery += ibRegFieldList(m_metaObject->GetRegisterAccount());
 
-	// Subconto 1-3 in inner select
-	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto1());
-	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto2());
-	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto3());
+	// Account dimension 1-3 in inner select
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterAccountDimension(0));
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterAccountDimension(1));
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterAccountDimension(2));
 
 	// Dimensions in inner select
 	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
@@ -447,10 +447,10 @@ ibValue ibValueManagerDataObjectAccountingRegister::Turnovers(const ibValue& cBe
 	// Group by Account
 	sqlQuery += ibRegFieldList(m_metaObject->GetRegisterAccount());
 
-	// Group by Subconto 1-3
-	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto1());
-	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto2());
-	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto3());
+	// Group by Account dimension 1-3
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterAccountDimension(0));
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterAccountDimension(1));
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterAccountDimension(2));
 
 	// Group by dimensions
 	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
@@ -707,29 +707,29 @@ ibValue ibValueManagerDataObjectAccountingRegister::BalanceAndTurnovers(const ib
 		);
 	}
 
-	// Subconto 1-3 columns
+	// Account dimension 1-3 columns
 	{
-		ibValueMetaObjectAttributeBase* attrSubconto1 = m_metaObject->GetRegisterSubconto1();
+		ibValueMetaObjectAttributeBase* attrAccountDimension1 = m_metaObject->GetRegisterAccountDimension(0);
 		colCollection->AddColumn(
-			attrSubconto1->GetName(),
-			attrSubconto1->GetTypeDesc(),
-			attrSubconto1->GetSynonym()
+			attrAccountDimension1->GetName(),
+			attrAccountDimension1->GetTypeDesc(),
+			attrAccountDimension1->GetSynonym()
 		);
 	}
 	{
-		ibValueMetaObjectAttributeBase* attrSubconto2 = m_metaObject->GetRegisterSubconto2();
+		ibValueMetaObjectAttributeBase* attrAccountDimension2 = m_metaObject->GetRegisterAccountDimension(1);
 		colCollection->AddColumn(
-			attrSubconto2->GetName(),
-			attrSubconto2->GetTypeDesc(),
-			attrSubconto2->GetSynonym()
+			attrAccountDimension2->GetName(),
+			attrAccountDimension2->GetTypeDesc(),
+			attrAccountDimension2->GetSynonym()
 		);
 	}
 	{
-		ibValueMetaObjectAttributeBase* attrSubconto3 = m_metaObject->GetRegisterSubconto3();
+		ibValueMetaObjectAttributeBase* attrAccountDimension3 = m_metaObject->GetRegisterAccountDimension(2);
 		colCollection->AddColumn(
-			attrSubconto3->GetName(),
-			attrSubconto3->GetTypeDesc(),
-			attrSubconto3->GetSynonym()
+			attrAccountDimension3->GetName(),
+			attrAccountDimension3->GetTypeDesc(),
+			attrAccountDimension3->GetSynonym()
 		);
 	}
 
@@ -793,12 +793,12 @@ ibValue ibValueManagerDataObjectAccountingRegister::BalanceAndTurnovers(const ib
 
 	sqlQuery += ibRegFieldList(m_metaObject->GetRegisterAccount());
 
-	ibValueMetaObjectAttributeBase* subcontoAttrs[] = {
-		m_metaObject->GetRegisterSubconto1(),
-		m_metaObject->GetRegisterSubconto2(),
-		m_metaObject->GetRegisterSubconto3()
+	ibValueMetaObjectAttributeBase* accountDimensionAttrs[] = {
+		m_metaObject->GetRegisterAccountDimension(0),
+		m_metaObject->GetRegisterAccountDimension(1),
+		m_metaObject->GetRegisterAccountDimension(2)
 	};
-	for (auto subAttr : subcontoAttrs)
+	for (auto subAttr : accountDimensionAttrs)
 		sqlQuery += "," + ibRegFieldList(subAttr);
 
 	for (const auto object : m_metaObject->GetDimensionArrayObject())
@@ -820,10 +820,10 @@ ibValue ibValueManagerDataObjectAccountingRegister::BalanceAndTurnovers(const ib
 	// Account in inner select
 	sqlQuery += ibRegFieldList(m_metaObject->GetRegisterAccount());
 
-	// Subconto 1-3 in inner select
-	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto1());
-	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto2());
-	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto3());
+	// Account dimension 1-3 in inner select
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterAccountDimension(0));
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterAccountDimension(1));
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterAccountDimension(2));
 
 	// Dimensions in inner select
 	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
@@ -871,9 +871,9 @@ ibValue ibValueManagerDataObjectAccountingRegister::BalanceAndTurnovers(const ib
 	// GROUP BY for opening balance
 	sqlQuery += " GROUP BY ";
 	sqlQuery += ibRegFieldList(m_metaObject->GetRegisterAccount());
-	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto1());
-	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto2());
-	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto3());
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterAccountDimension(0));
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterAccountDimension(1));
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterAccountDimension(2));
 
 	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 		sqlQuery += "," + ibRegFieldList(object);
@@ -890,10 +890,10 @@ ibValue ibValueManagerDataObjectAccountingRegister::BalanceAndTurnovers(const ib
 	// Account in turnovers inner select
 	sqlQuery += ibRegFieldList(m_metaObject->GetRegisterAccount());
 
-	// Subconto 1-3 in turnovers inner select
-	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto1());
-	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto2());
-	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto3());
+	// Account dimension 1-3 in turnovers inner select
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterAccountDimension(0));
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterAccountDimension(1));
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterAccountDimension(2));
 
 	// Dimensions in turnovers inner select
 	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
@@ -945,9 +945,9 @@ ibValue ibValueManagerDataObjectAccountingRegister::BalanceAndTurnovers(const ib
 	// GROUP BY for turnovers
 	sqlQuery += " GROUP BY ";
 	sqlQuery += ibRegFieldList(m_metaObject->GetRegisterAccount());
-	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto1());
-	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto2());
-	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto3());
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterAccountDimension(0));
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterAccountDimension(1));
+	sqlQuery += "," + ibRegFieldList(m_metaObject->GetRegisterAccountDimension(2));
 
 	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 		sqlQuery += "," + ibRegFieldList(object);
@@ -966,7 +966,7 @@ ibValue ibValueManagerDataObjectAccountingRegister::BalanceAndTurnovers(const ib
 
 	outerQuery += ibRegFieldList(m_metaObject->GetRegisterAccount());
 
-	for (auto subAttr : subcontoAttrs)
+	for (auto subAttr : accountDimensionAttrs)
 		outerQuery += "," + ibRegFieldList(subAttr);
 
 	for (const auto object : m_metaObject->GetDimensionArrayObject())
@@ -991,9 +991,9 @@ ibValue ibValueManagerDataObjectAccountingRegister::BalanceAndTurnovers(const ib
 	outerQuery += ibRegFieldList(m_metaObject->GetRegisterAccount());
 	firstOuterGroup = false;
 
-	outerQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto1());
-	outerQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto2());
-	outerQuery += "," + ibRegFieldList(m_metaObject->GetRegisterSubconto3());
+	outerQuery += "," + ibRegFieldList(m_metaObject->GetRegisterAccountDimension(0));
+	outerQuery += "," + ibRegFieldList(m_metaObject->GetRegisterAccountDimension(1));
+	outerQuery += "," + ibRegFieldList(m_metaObject->GetRegisterAccountDimension(2));
 
 	for (const auto object : m_metaObject->GetDimensionArrayObject()) {
 		outerQuery += "," + ibRegFieldList(object);

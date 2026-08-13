@@ -13,7 +13,7 @@ class BACKEND_API ibValueMetaObjectResource : public ibValueMetaObjectAttribute 
 	virtual wxIcon GetIcon() const;
 	static wxIcon GetIconGroup();
 
-	//get data selector 
+	//get data selector
 	virtual ibSelectorDataType GetFilterDataType() const;
 };
 

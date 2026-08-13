@@ -370,7 +370,7 @@ struct ibMaterializationDialect
 	//
 	// {body} is N statements, not one. A single movement can feed SEVERAL totals tables:
 	// an accounting register's line carries a debit side and a credit side, and each side
-	// accumulates into its own turnover table (plus, later, per-subconto breakdowns). One
+	// accumulates into its own turnover table (plus, later, per-dimension breakdowns). One
 	// trigger, several deltas, all inside the one transaction that wrote the movement — so
 	// the multi-table case keeps the same atomicity guarantee as the single-table one, and
 	// needs no coordination anywhere above.

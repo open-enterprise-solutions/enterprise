@@ -330,17 +330,17 @@ bool ibAttributeTree::SelectColumnInInspector(const wxTreeItemId& item)
 	if (cols == nullptr)
 		return false;
 
-	const ibMetaID leaf = path.back().m_id;
-	for (unsigned int i = 0; i < cols->GetColumnCount(); i++) {
-		ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* ci = cols->GetColumnInfo(i);
-		if (ci == nullptr || (ibMetaID)ci->GetColumnID() != leaf)
-			continue;
-		// The concrete column-info IS the property object; reach it via ConvertToValue (it is an ibValue).
-		ibTableColumnInfo* colInfo = nullptr;
-		if (ci->ConvertToValue(colInfo) && colInfo != nullptr) {
-			m_formHandler->SetCurrentElement(colInfo);   // the column IS the property object — reveal via the ONE selector (soft)
-			return true;
-		}
+	// Column ids are unique by construction, so the collection's own by-id door answers this — the hand
+	// scan that stood here differed only in continuing past a column it could not convert, which cannot
+	// find a second one with the same id.
+	ibValueModel::ibValueModelColumnCollection::ibValueModelColumnInfo* ci = cols->GetColumnByID(path.back().m_id);
+	if (ci == nullptr)
+		return false;
+	// The concrete column-info IS the property object; reach it via ConvertToValue (it is an ibValue).
+	ibTableColumnInfo* colInfo = nullptr;
+	if (ci->ConvertToValue(colInfo) && colInfo != nullptr) {
+		m_formHandler->SetCurrentElement(colInfo);   // the column IS the property object — reveal via the ONE selector (soft)
+		return true;
 	}
 	return false;
 }

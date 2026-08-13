@@ -36,17 +36,38 @@ public:
 		return m_propertyAttributeAccount->GetMetaObject();
 	}
 
-	ibValueMetaObjectAttributePredefined* GetRegisterSubconto1() const {
-		return m_propertyAttributeSubconto1->GetMetaObject();
+	// HOW MANY dimension slots this register currently has — the number the chart of accounts
+	// declares, not a constant of the implementation.
+	unsigned int GetAccountDimensionCount() const { return m_accountDimensionCount; }
+
+	// One line = a whole posting (both accounts named) rather than one side of one.
+	bool IsCorrespondence() const { return m_propertyCorrespondence->GetValueAsBoolean(); }
+
+	// A SLOT IS A PAIR, and the two halves take different types.
+	//
+	//   Kind  — a reference to an ELEMENT of the chart of characteristic types ("Contractor").
+	//           It says which breakdown this figure is filed under, and it is what a reading
+	//           filters by.
+	//   Value — the characteristic's VALUE, typed by the chart's own composition ("OOO Romashka").
+	//
+	// The kind is STORED beside the value rather than looked up from the account's kinds table by
+	// position: an old row then still says what its value was a kind OF, so re-ordering an
+	// account's kinds cannot silently change the meaning of data already written — and a reading
+	// needs no join per slot per row.
+	ibValueMetaObjectAttributePredefined* GetRegisterAccountDimension(unsigned int idx) const {
+		return idx < m_accountDimensionCount ? m_accountDimensionSlots[idx] : nullptr;
 	}
 
-	ibValueMetaObjectAttributePredefined* GetRegisterSubconto2() const {
-		return m_propertyAttributeSubconto2->GetMetaObject();
+	ibValueMetaObjectAttributePredefined* GetRegisterAccountDimensionKind(unsigned int idx) const {
+		return idx < m_accountDimensionCount ? m_accountDimensionKinds[idx] : nullptr;
 	}
 
-	ibValueMetaObjectAttributePredefined* GetRegisterSubconto3() const {
-		return m_propertyAttributeSubconto3->GetMetaObject();
-	}
+	// Bring the slot set in line with the chart of accounts. Slots are created once and REUSED:
+	// a metaID is the physical column name (fld<metaID>), so a slot that came back with a fresh id
+	// would be a different column and the data in the old one unreachable. Lowering the count
+	// therefore deactivates from the tail rather than destroying, and raising it again finds the
+	// very same slots waiting. Growth is append-only for the same reason.
+	void SyncAccountDimensionSlots();
 
 	bool IsRegisterRecordType(const ibMetaID& id) const {
 		return id == (*m_propertyAttributeRecordType)->GetMetaID();
@@ -130,11 +151,33 @@ protected:
 		ibValueMetaObjectRegisterData::FillArrayObjectByPredefinedAttribute(array);
 		array.push_back(m_propertyAttributeLineActive->GetMetaObject());
 		array.push_back(m_propertyAttributePeriod->GetMetaObject());
-		array.push_back(m_propertyAttributeRecordType->GetMetaObject());
-		array.push_back(m_propertyAttributeAccount->GetMetaObject());
-		array.push_back(m_propertyAttributeSubconto1->GetMetaObject());
-		array.push_back(m_propertyAttributeSubconto2->GetMetaObject());
-		array.push_back(m_propertyAttributeSubconto3->GetMetaObject());
+		// WHAT A LINE IS MADE OF depends on whether it is one side or a whole posting.
+		//
+		// One-sided: RecordType says which side this row is, and there is a single Account.
+		// Correspondence: the row names BOTH accounts and needs no side flag — which side a figure
+		// belongs to is said by which account it sits against.
+		if (IsCorrespondence()) {
+			array.push_back(m_propertyAttributeAccount->GetMetaObject());   // the DEBIT account
+			if (m_accountCr != nullptr)
+				array.push_back(m_accountCr);
+		}
+		else {
+			array.push_back(m_propertyAttributeRecordType->GetMetaObject());
+			array.push_back(m_propertyAttributeAccount->GetMetaObject());
+		}
+		// Only the ACTIVE slots are part of the object — that is what makes the count a schema
+		// decision: a slot outside it contributes no column, so lowering the number drops one.
+		// Kind first, then value: the pair reads in the order it is filled in.
+		for (unsigned int idx = 0; idx < m_accountDimensionCount; idx++) {
+			array.push_back(m_accountDimensionKinds[idx]);
+			array.push_back(m_accountDimensionSlots[idx]);
+		}
+
+		// The credit side exists only in correspondence mode, and then it is the same shape again.
+		for (unsigned int idx = 0; idx < m_accountDimensionKindsCr.size(); idx++) {
+			array.push_back(m_accountDimensionKindsCr[idx]);
+			array.push_back(m_accountDimensionSlotsCr[idx]);
+		}
 		array.push_back(m_propertyAttributeRecorder->GetMetaObject());
 		array.push_back(m_propertyAttributeLineNumber->GetMetaObject());
 		return true;
@@ -182,6 +225,17 @@ private:
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Chart of Accounts binding — determines the type of Account field
 	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
+	// CORRESPONDENCE — whether a line is one SIDE or a whole POSTING.
+	//
+	// Off: the line carries RecordType (Debit/Credit) and one Account; a posting is two rows under
+	// one recorder. On: the line carries AccountDr and AccountCr with one amount, and the dimension
+	// slots double — because the two sides have independent analytical breakdowns.
+	//
+	// It is a property rather than a preference: a chessboard and correspondence turnovers cannot be
+	// expressed at all by a line that names only one side, and no reading can recover the pairing
+	// afterwards — a join over the recorder produces every debit against every credit.
+	ibPropertyBoolean* m_propertyCorrespondence = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, wxT("Correspondence"), _("Correspondence"), false);
+
 	ibPropertyChartOfAccounts* m_propertyChartOfAccounts = ibPropertyObject::CreateProperty<ibPropertyChartOfAccounts>(m_categoryData, wxT("ChartOfAccounts"), _("Chart of accounts"));
 
 	// Predefined attributes: RecordType (Debit/Credit)
@@ -192,15 +246,48 @@ private:
 	ibPropertyContainer<>* m_propertyAttributeAccount = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon,
 		ibValueMetaObjectCompositeData::CreateEmptyType(wxT("Account"), _("Account"), wxEmptyString, false, ibItemMode::ibItemMode_Item));
 
-	// Predefined attributes: Subconto 1-3 (polymorphic references, type determined by ChartOfCharacteristicTypes linked to account)
-	ibPropertyContainer<>* m_propertyAttributeSubconto1 = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon,
-		ibValueMetaObjectCompositeData::CreateEmptyType(wxT("Subconto1"), _("Subconto 1"), wxEmptyString, false, ibItemMode::ibItemMode_Item));
+	// THE DIMENSION SLOTS — created by SyncAccountDimensionSlots, not declared here.
+	//
+	// The vector holds every slot ever created; m_accountDimensionCount says how many of them are
+	// currently part of the register. The two differ after the chart of accounts lowers its number:
+	// the surplus stays alive (its id belongs to its column for good) and simply stops being
+	// contributed, so the column drops at the next restructuring and comes back untouched if the
+	// number is raised again.
+	// Parallel by construction: index i is one slot, its kind and its value.
+	//
+	// ARITHMETIC, so nobody is surprised at restructuring: one dimension is TWO columns (kind +
+	// value). Six dimensions are twelve columns on a side; with correspondence on there are two
+	// sides, so twenty-four. The value half is itself composite (a type tag plus one column per
+	// admissible type in the contour), which multiplies the physical count again.
+	std::vector<ibValueMetaObjectAttributePredefined*> m_accountDimensionKinds;
+	std::vector<ibValueMetaObjectAttributePredefined*> m_accountDimensionSlots;
 
-	ibPropertyContainer<>* m_propertyAttributeSubconto2 = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon,
-		ibValueMetaObjectCompositeData::CreateEmptyType(wxT("Subconto2"), _("Subconto 2"), wxEmptyString, false, ibItemMode::ibItemMode_Item));
+	// The CREDIT account — created only in correspondence mode, beside the inherited Account, which
+	// then means the debit one. Not a fixed member for the same reason the slots are not: whether
+	// it exists at all is a declaration, and its column has to appear and disappear with it.
+	ibValueMetaObjectAttributePredefined* m_accountCr = nullptr;
 
-	ibPropertyContainer<>* m_propertyAttributeSubconto3 = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryCommon,
-		ibValueMetaObjectCompositeData::CreateEmptyType(wxT("Subconto3"), _("Subconto 3"), wxEmptyString, false, ibItemMode::ibItemMode_Item));
+	// The CREDIT side — populated only in correspondence mode, where one line names both accounts
+	// and therefore carries two independent analytical breakdowns.
+	std::vector<ibValueMetaObjectAttributePredefined*> m_accountDimensionKindsCr;
+	std::vector<ibValueMetaObjectAttributePredefined*> m_accountDimensionSlotsCr;
+
+	unsigned int m_accountDimensionCount = 0;
+
+	// Predefined attributes: the account dimension VALUE slots.
+	//
+	// A slot is a POSITION, not a thing — the same slot holds an item on one account and a
+	// counterparty on another — so the name is numbered and claims nothing more. What gives a
+	// slot meaning is the KIND standing beside it, which lives in data (a row of the account's
+	// AccountDimensionKinds table).
+	//
+	// The TYPE of a slot is the chart of characteristic types' own composition — everything a
+	// characteristic may ever hold. NOT a reference to an element of that chart: an element IS a
+	// kind, and a kind is what the neighbouring column carries. Storing one where the other
+	// belongs would let "Contractors" be written where "OOO Romashka" is meant.
+	//
+	// Their NUMBER is declared by the chart of ACCOUNTS and is therefore schema: changing it is
+	// an ordinary restructuring.
 
 	friend class ibValueRecordSetObjectAccountingRegister;
 	friend class ibMetaData;

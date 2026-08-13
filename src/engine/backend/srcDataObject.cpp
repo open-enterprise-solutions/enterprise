@@ -4,6 +4,11 @@
 
 #include "srcDataObject.h"
 
+// The walk needs ONE thing from a table — that it can answer for its own column without a row. That is
+// ibTabularDataObject, a light interface; ibValueModel (and the whole model layer with it) has no business
+// being named here, and pulling it in was leaking the model into a walk that stays metadata-free.
+#include "backend/tabularDataObject.h"
+
 bool ibSourceDataObject::IsTableSource() const
 {
 	// The source's OWN explorer answers it — a table source builds its root as a tabular section; a scalar
@@ -47,6 +52,10 @@ bool ibSourceDataObject::WalkColumns(const std::vector<ibSourceHop>& path, size_
 	// A reference hop's design-time value is an empty typed reference-as-source; park them so the
 	// explorers they vend (which the next node aliases) outlive each step.
 	std::vector<ibValue> refHolders;
+	// THE TABLE WE ARE STANDING IN, once the walk has stepped into one. Its columns are asked of IT from
+	// there on — the step is a real one, through the object the previous hop yielded, instead of keeping
+	// the root owner and asking it for a field that belongs to somebody else's rows.
+	const ibTabularDataObject* table = nullptr;
 	for (size_t i = from; i < path.size(); ++i) {
 		if (explorer == nullptr)
 			return false;   // ran out of columns mid-path (a primitive can't be dotted into)
@@ -65,25 +74,36 @@ bool ibSourceDataObject::WalkColumns(const std::vector<ibSourceHop>& path, size_
 			break;
 		}
 		if (node->GetHelperCount() > 0) {
-			// CONTAINER node (a tabular section) — its columns are CHILDREN in the SAME explorer.
+			// CONTAINER node (a tabular section) — its columns are CHILDREN in the SAME explorer, and the
+			// section itself is a field of its owner, so STEP INTO IT: from here its columns are ITS
+			// business, and the object it yields is what the next turns ask.
+			ibValue stepped;
+			ibSourceDataObject* owner = node->GetOwner();
+			if (owner != nullptr && owner->GetValueBySourceHop(path[i], stepped)) {
+				refHolders.push_back(stepped);            // park it so the object outlives the walk
+				stepped.ConvertToValue(table);
+			}
 			explorer = node;
 		}
 		else {
-			// REFERENCE field — hop into the target through THE gate (GetValueBySourceHop) off the node's owner
-			// source. srcDataObject stays METADATA-FREE: the record / reference override resolves the id and, for
-			// a composite / empty field, hands back the pinned target's empty typed twin (CoerceHopType lives on
-			// the reference side, not here). A field nested in a tabular section works through the same gate — the
-			// record's id-read just misses (returns false) and the twin takes over. Park it so its explorer lives.
-			ibSourceDataObject* owner = node->GetOwner();
+			// REFERENCE field — hop into the target. Whoever the walk is STANDING ON answers: the table it
+			// stepped into (its column, no row needed), else the node's owner. srcDataObject stays
+			// METADATA-FREE either way — the override resolves the id and, for a composite / empty field,
+			// hands back the pinned type's empty twin (CoerceHopType lives on the value side, not here).
 			ibValue next;
-			if (owner == nullptr || !owner->GetValueBySourceHop(path[i], next))
+			const bool stepped = (table != nullptr)
+				? table->GetValueBySourceHop(path[i], next)
+				: (node->GetOwner() != nullptr && node->GetOwner()->GetValueBySourceHop(path[i], next));
+			if (!stepped)
 				return false;
+
 			ibSourceDataObject* nextSrc = nullptr;
 			next.ConvertToValue<ibSourceDataObject>(nextSrc);
 			if (nextSrc == nullptr)
 				return false;
 			refHolders.push_back(next);
 			explorer = nextSrc->GetSourceExplorer();
+			table = nullptr;   // left the table, standing on what its column referenced
 		}
 	}
 	return true;

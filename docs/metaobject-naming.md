@@ -1,6 +1,7 @@
 # Metaobject naming — the user-visible taxonomy
 
-> **Status: PLAN — nothing applied.** Proposal for review.
+> **Status: PLAN — nothing applied,** except § 3.2, which records a label family already in the
+> product. Proposal for review.
 > Scope: the names a person **sees in the designer tree** and **writes in a script** — the
 > metaobject kinds, their inner parts, and the order they appear in. File/folder naming is a
 > separate plan ([naming-plan.md](naming-plan.md)); this one is about the vocabulary the product
@@ -100,6 +101,39 @@ Already applied: **Конфигуратор → Дизайнер**, **Подси
   a document written by someone who is not looking at the tree.
 - Renaming **Регистр накопления / сведений** — descriptive names that work; renaming them
   differentiates without clarifying, which is the thing this document exists to prevent.
+
+### 3.2 The hierarchy kinds — four labels, one family (in the product, not a plan)
+
+Not a rename — a vocabulary that arrived with a new declaration, and it belongs on this list because
+the words are the user's. A catalog / chart states WHAT A PARENT MAY BE through the `HierarchyType`
+property; its four values are user-visible text
+(`ibValueEnumHierarchyType::CreateEnumeration`, `metaCollection/partial/commonObjectEnum.h`).
+
+| Value | Label | Means |
+|---|---|---|
+| `None` | No subordination | a flat list — no parent field at all |
+| `Subordination` | Subordination without hierarchy | a parent that is ordinary DATA; nothing drills, nothing folds |
+| `Items` | Hierarchy of items | every element may hold elements |
+| `FoldersAndItems` | Hierarchy of folders and items | items live inside folders |
+
+Two decisions worth keeping written down.
+
+- **The four are ONE FAMILY** — each names the arrangement and nothing else. A parenthetical
+  explainer (`"subordination (no hierarchy)"` was the alternative) is rejected: an explainer in one
+  label makes the other three look like they are missing theirs.
+- **The property gets a CATEGORY of its own**, `Hierarchy`, instead of a line under Common. It is
+  the single declaration that decides whether the object has a tree, what a parent may be, and
+  whether `Parent` and `IsFolder` exist as columns — it governs an area, so it is shown as one, and
+  settings on the same subject have somewhere to land next to it.
+
+Against § 1's criterion these are new names rather than renames, and they pass on the same test: each
+says what the arrangement IS, so the label teaches instead of differentiating. The engine side
+(predicates, stored numbers, what each kind does to `Parent` and `IsFolder`) is in
+[metadata-lifecycle.md](metadata-lifecycle.md) § 2a.
+
+⚠ **Untranslated.** `Hierarchy type` and all four labels are absent from `locale/ru.po` and
+`locale/uk.po` as of 2026-08-13 — the designer shows them in English. The category label
+`Hierarchy` is already there from another context.
 
 ---
 

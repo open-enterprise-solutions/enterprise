@@ -103,12 +103,8 @@ public:
 		ibValueTabularSectionDataObjectColumnCollection(ibValueTabularSectionDataObjectBase* ownerTable);
 		virtual ~ibValueTabularSectionDataObjectColumnCollection();
 
-		virtual const ibTypeDescription GetColumnType(unsigned int col) const {
-			return m_listColumnInfo.at(col)->GetColumnType();
-		}
-
 		virtual ibValueModelColumnInfo* GetColumnInfo(unsigned int idx) const {
-			if (m_listColumnInfo.size() < idx)
+			if (idx >= m_listColumnInfo.size())   // `size() < idx` let idx == size() through onto end()
 				return nullptr;
 			auto it = m_listColumnInfo.begin();
 			std::advance(it, idx);

@@ -123,7 +123,7 @@ wxString ibMetaDiffWalker::GroupLabelFor(ibClassID clsid)
 	if (clsid == g_metaManagerCLSID)                    return _("Manager modules");
 	if (clsid == g_metaTableCLSID)                      return _("Tables");
 	if (clsid == g_metaTableRefCLSID)                   return _("Tables");
-	if (clsid == g_metaSubcontoKindsTableCLSID)         return _("Sub-conto kinds tables");
+	if (clsid == g_metaAccountDimensionKindsTableCLSID)         return _("Account dimension kinds tables");
 	if (clsid == g_metaEnumCLSID)                       return _("Enum values");
 	if (clsid == g_metaDimensionCLSID)                  return _("Dimensions");
 	if (clsid == g_metaResourceCLSID)                   return _("Resources");
@@ -181,7 +181,7 @@ int ibMetaDiffWalker::GroupOrderRank(ibClassID clsid)
 		{ g_metaPredefinedAttributeCLSID,        340 },
 		{ g_metaTableCLSID,                      350 },
 		{ g_metaTableRefCLSID,                   351 },
-		{ g_metaSubcontoKindsTableCLSID,         360 },
+		{ g_metaAccountDimensionKindsTableCLSID,         360 },
 		{ g_metaFormCLSID,                       370 },
 		{ g_metaCommandCLSID,                    375 },   // an object's own commands sit between forms and templates
 		{ g_metaTemplateCLSID,                   380 },

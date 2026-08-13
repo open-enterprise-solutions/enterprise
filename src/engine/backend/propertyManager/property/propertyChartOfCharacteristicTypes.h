@@ -16,6 +16,13 @@ public:
 	ibPropertyChartOfCharacteristicTypes(ibPropertyCategory* cat, const wxString& name, const wxString& label) : ibProperty(cat, name, label, CreateVariantData(cat->GetPropertyObject())) {}
 	ibPropertyChartOfCharacteristicTypes(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString) : ibProperty(cat, name, label, helpString, CreateVariantData(cat->GetPropertyObject())) {}
 
+	// THIS BINDING NAMES EXACTLY ONE CHART — always, by what it is, not by a setting.
+	//
+	// A type may legitimately be composite; a binding may not. An owner keeps its analytics in ONE
+	// chart of characteristic types, and naming two would leave "whose composition types the value
+	// slots" unanswerable. There is no case where several are wanted, so there is no switch: the
+	// editor opens as a single choice because that is what the property IS.
+
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;

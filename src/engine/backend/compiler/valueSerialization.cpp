@@ -33,11 +33,12 @@
 // overrides nothing and is refused by IsTransferable before any of this runs.
 ////////////////////////////////////////////////////////////////////////////
 
+// The two field names now live in value.h (kValueFieldClsid / kValueFieldData): more than this
+// file writes into a packed node — an enumeration writes its member from the template that
+// defines it — and a value written under one spelling and read under another is a value lost.
 namespace {
-// Header / payload field names. Short because they repeat per element in a
-// binary stream; stable because they are what a JSON dump shows.
-const wxChar* const kFieldClsid = wxT("t");   // the type — written and read FIRST
-const wxChar* const kFieldData  = wxT("v");   // the primitive payload
+const wxChar* const kFieldClsid = kValueFieldClsid;
+const wxChar* const kFieldData  = kValueFieldData;
 } // namespace
 
 //////////////////////////////////////////////////////////////////////

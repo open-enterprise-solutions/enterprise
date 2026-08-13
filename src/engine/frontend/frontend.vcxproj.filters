@@ -79,6 +79,9 @@
     <ClCompile Include="win\dlgs\selectData.cpp">
       <Filter>win\dlgs</Filter>
     </ClCompile>
+    <ClCompile Include="win\dlgs\typeSelector.cpp">
+      <Filter>win\dlgs</Filter>
+    </ClCompile>
     <ClCompile Include="win\dlgs\rowHeight.cpp">
       <Filter>win\dlgs</Filter>
     </ClCompile>
@@ -1100,6 +1103,9 @@
       <Filter>win\dlgs</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\selectData.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\typeSelector.h">
       <Filter>win\dlgs</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\rowHeight.h">

@@ -353,24 +353,39 @@ std::shared_ptr<ibProcUnit> ibValueFrame::GetFormProcUnit() const
 #include "backend/metaData.h"
 #include "backend/objCtor.h"
 
+// A primitive edits itself, an enumeration offers its finite registered members, a metadata type answers
+// through its metaobject; anything else has no short list to offer. Declared in frame.h.
+bool HasQuickChoice(const ibCtorAbstractType* typeCtor)
+{
+	if (typeCtor == nullptr)
+		return false;
+
+	switch (typeCtor->GetObjectTypeCtor()) {
+	case ibCtorObjectType::ibCtorObjectType_object_primitive:
+	case ibCtorObjectType::ibCtorObjectType_object_enum:
+		return true;
+	case ibCtorObjectType::ibCtorObjectType_object_meta_value: {
+		const ibCtorMetaValueType* metaCtor = dynamic_cast<const ibCtorMetaValueType*>(typeCtor);
+		const ibValueMetaObjectRecordDataRef* metaObject = metaCtor != nullptr
+			? dynamic_cast<const ibValueMetaObjectRecordDataRef*>(metaCtor->GetMetaObject()) : nullptr;
+		return metaObject != nullptr && metaObject->HasQuickChoice();
+	}
+	default:
+		return false;
+	}
+}
+
 bool ibValueFrame::HasQuickChoice() const {
 	const ibMetaData* metaData = GetMetaData();
 	if (metaData == nullptr)
 		return false;
 	ibValue selValue; GetControlValue(selValue);
+	// ASK THE TYPE — one question, one answer, and it lives on the ctor (ibCtorAbstractType::
+	// HasQuickChoice). This used to be a hand-written walk over the ctor KINDS, and the same walk was
+	// written a second time in the filter dialog; the two disagreed about enumerations, so one and the
+	// same account type dropped its member list in a filter and refused to on a form.
 	const ibCtorAbstractType* so = metaData->GetAvailableCtor(selValue.GetClassType());
-	if (so != nullptr && so->GetObjectTypeCtor() == ibCtorObjectType_object_primitive) {
-		return true;
-	}
-	else if (so != nullptr && so->GetObjectTypeCtor() == ibCtorObjectType_object_meta_value) {
-		const ibCtorMetaValueType* meta_so = dynamic_cast<const ibCtorMetaValueType*>(so);
-		if (meta_so != nullptr) {
-			const ibValueMetaObjectRecordDataRef* metaObject = dynamic_cast<const ibValueMetaObjectRecordDataRef*>(meta_so->GetMetaObject());
-			if (metaObject != nullptr)
-				return metaObject->HasQuickChoice();
-		}
-	}
-	return false;
+	return ::HasQuickChoice(so);
 }
 
 //*******************************************************************

@@ -1,5 +1,5 @@
 ﻿////////////////////////////////////////////////////////////////////////////
-//	Author		: Tetracode Dev
+//	Author		: Maxim Kornienko
 //	Description : chart of accounts object
 ////////////////////////////////////////////////////////////////////////////
 
@@ -23,22 +23,95 @@ ibValueRecordDataObjectChartOfAccounts::ibValueRecordDataObjectChartOfAccounts(c
 	m_members.Bind(this, &ibValueRecordDataObjectChartOfAccounts::FillMethods);
 }
 
+bool ibValueRecordDataObjectChartOfAccounts::SaveData()
+{
+	ibValueMetaObjectChartOfAccounts* metaRef = nullptr;
+	if (m_metaObject->ConvertToValue(metaRef) && metaRef != nullptr) {
+
+		ibValueMetaObjectTableData* kindsTable = metaRef->GetAccountDimensionKindsTable();
+		if (kindsTable != nullptr && !kindsTable->IsDeleted()) {
+
+			ibValue tableValue;
+			if (GetValueByMetaID(kindsTable->GetMetaID(), tableValue)) {
+
+				ibValueModel* rows = nullptr;
+				if (tableValue.ConvertToValue(rows) && rows != nullptr) {
+
+					// The ceiling is SCHEMA — declared by this chart, and the register builds that
+					// many columns from it. Refusing here is the only place that cannot be walked
+					// around, and saying the number keeps the message actionable: what the author
+					// has to change is either this table or the declaration.
+					const unsigned int maxCount = metaRef->GetMaxAccountDimensionCount();
+					if (rows->GetRowCount() > static_cast<long>(maxCount))
+						ibBackendCoreException::Error(
+							_("Account \"%s\" declares %i analytics, but the chart of accounts allows %i"),
+							GetString(), (int)rows->GetRowCount(), (int)maxCount);
+
+					// A KIND MAY BE NAMED ONCE. Two rows with the same kind are not two analytics —
+					// they are one, declared twice, and nothing downstream can tell which of them a
+					// movement meant: the register addresses a slot BY ITS KIND, so a repeat makes
+					// the address ambiguous and one of the two silently unreachable. Cheapest here,
+					// where the rows are already in hand and an import cannot go round it.
+					ibValueMetaObjectAttributeBase* kindAttr =
+						metaRef->GetAccountDimensionKindsTable()->GetAccountDimensionKind();
+					if (kindAttr != nullptr) {
+						std::vector<ibValue> seen;
+						for (long line = 0; line < rows->GetRowCount(); line++) {
+							ibValue kind;
+							if (!rows->GetValueByMetaID(rows->GetItem(line), kindAttr->GetMetaID(), kind))
+								continue;
+							if (kind.IsEmpty())
+								continue;   // emptiness is the FILL check's complaint, not this one
+							for (const ibValue& earlier : seen) {
+								if (earlier.CompareValueEQ(kind))
+									ibBackendCoreException::Error(
+										_("Account \"%s\": the analytics kind \"%s\" is declared more than once"),
+										GetString(), kind.GetString());
+							}
+							seen.push_back(kind);
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return ibValueRecordDataObjectHierarchyRef::SaveData();
+}
+
 const ibSourceExplorer* ibValueRecordDataObjectChartOfAccounts::GetSourceExplorer() const
 {
 	m_sourceExplorer.Reset(wxT("Ref"), _("Ref"), m_metaObject->GetMetaID(), GetClassType(), false);
 	ibValueMetaObjectChartOfAccounts* metaRef = nullptr;
 
 	if (m_metaObject->ConvertToValue(metaRef)) {
-		m_sourceExplorer.AppendColumn(metaRef->GetDataCode(), false);
+		// THE CODE IS TYPED IN, not handed out. In a catalog the code is a serial number the system
+		// mints, so it is shown and not edited; in a chart of accounts the code IS the account — "51",
+		// "60.01" — and it is the first thing a person writes when adding one. Locking it made an
+		// account impossible to name at all.
+		m_sourceExplorer.AppendColumn(metaRef->GetDataCode());
 		m_sourceExplorer.AppendColumn(metaRef->GetDataDescription());
 		m_sourceExplorer.AppendColumn(metaRef->GetDataParent());
-		{
-			ibValueMetaObjectTableData* subTbl = metaRef->GetSubcontoKindsTable();
-			if (subTbl != nullptr && !subTbl->IsDeleted()) {
-				ibSourceExplorer& tblNode = m_sourceExplorer.AppendTable(subTbl->GetName(), subTbl->GetSynonym(), subTbl->GetMetaID(), subTbl->GetTypeDesc());
-				for (ibValueMetaObjectAttributeBase* tblCol : subTbl->GetGenericAttributeArrayObject()) tblNode.AppendColumn(tblCol);
-			}
-		}
+		// WHAT KIND OF ACCOUNT THIS IS. It was missing here, so a generated form showed an account as
+		// if it were a plain catalog item — code, description, parent — with no way to say whether it
+		// is active, passive or both. It is a declared TYPE (the AccountType enumeration), so the form
+		// builds the editor from the attribute itself; nothing here spells the three members out.
+		m_sourceExplorer.AppendColumn(metaRef->GetAccountType());
+		// Off-balance belongs beside it: it is not a way of KEEPING the account, it is a statement
+		// about the account itself — this one stands outside the balance — and it is answered once,
+		// per account, like the kind is.
+		m_sourceExplorer.AppendColumn(metaRef->GetOffBalance());
+
+		// Quantitative / Currency are deliberately NOT here, and they are not standard attributes of
+		// an account at all. They are two booleans spelling out ONE fact — how the account is KEPT —
+		// which is an accounting KIND: declared once on the chart and then ticked per account, the
+		// same shape the analytics kinds already have. Putting them on the form as two checkboxes
+		// would fix the bit-encoded form in the interface before that mechanism exists.
+		// (The analytics-kinds section is NOT appended by hand here. It used to be, because it was the
+		//  only way to reach it: its clsid was missing from the tabular-section filter, so the general
+		//  loop below walked straight past it. Now that the filter knows it, adding it here as well
+		//  put the section into the source TWICE — and a generated form grew two identical tableboxes.
+		//  A special case that outlives the gap it patched becomes a duplicate.)
 	}
 	
 	for (const auto object : m_metaObject->GetAttributeArrayObject()) {

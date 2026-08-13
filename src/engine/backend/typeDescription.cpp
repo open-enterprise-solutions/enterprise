@@ -106,3 +106,116 @@ bool ibMetaDescriptionMemory::WriteNode(ibDataValue& value, const ibMetaDescript
 	value = ibDataValue::Array(ids);
 	return true;
 }
+
+//**********************************************************************************************
+//*   THE COLUMN FORM — a type description that lives in a ROW, written by the column codec     *
+//**********************************************************************************************
+
+namespace {
+
+constexpr unsigned char kTypeDescBufferVersion = 1;
+
+void PutU32(wxMemoryBuffer& out, std::uint32_t v)
+{
+	out.AppendByte(static_cast<char>( v        & 0xFF));
+	out.AppendByte(static_cast<char>((v >>  8) & 0xFF));
+	out.AppendByte(static_cast<char>((v >> 16) & 0xFF));
+	out.AppendByte(static_cast<char>((v >> 24) & 0xFF));
+}
+
+void PutU64(wxMemoryBuffer& out, std::uint64_t v)
+{
+	PutU32(out, static_cast<std::uint32_t>(v & 0xFFFFFFFFu));
+	PutU32(out, static_cast<std::uint32_t>(v >> 32));
+}
+
+struct ibTypeDescReader {
+	const unsigned char* m_data = nullptr;
+	size_t               m_size = 0;
+	size_t               m_pos  = 0;
+
+	bool Take(std::uint32_t& value) {
+		if (m_pos + 4 > m_size) return false;
+		value = static_cast<std::uint32_t>(m_data[m_pos])
+		      | (static_cast<std::uint32_t>(m_data[m_pos + 1]) <<  8)
+		      | (static_cast<std::uint32_t>(m_data[m_pos + 2]) << 16)
+		      | (static_cast<std::uint32_t>(m_data[m_pos + 3]) << 24);
+		m_pos += 4;
+		return true;
+	}
+
+	bool Take(std::uint64_t& value) {
+		std::uint32_t low = 0, high = 0;
+		if (!Take(low) || !Take(high)) return false;
+		value = (static_cast<std::uint64_t>(high) << 32) | low;
+		return true;
+	}
+};
+
+} // namespace
+
+void ibTypeDescriptionMemory::WriteBuffer(wxMemoryBuffer& out, const ibTypeDescription& typeDesc)
+{
+	out.SetDataLen(0);
+	out.AppendByte(static_cast<char>(kTypeDescBufferVersion));
+
+	const std::vector<ibClassID>& list = typeDesc.GetClsidList();
+	PutU32(out, static_cast<std::uint32_t>(list.size()));
+	for (const ibClassID& clsid : list)
+		PutU64(out, static_cast<std::uint64_t>(clsid));
+
+	// The three qualifiers, in declaration order. Fixed width each, so a reader that knows this
+	// version can skip forward without parsing what it does not need.
+	PutU32(out, static_cast<std::uint32_t>(typeDesc.m_typeData.m_number.m_precision));
+	PutU32(out, static_cast<std::uint32_t>(typeDesc.m_typeData.m_number.m_scale));
+	PutU32(out, typeDesc.m_typeData.m_number.m_nonNegative ? 1u : 0u);
+	PutU32(out, static_cast<std::uint32_t>(typeDesc.m_typeData.m_date.m_dateTime));
+	PutU32(out, static_cast<std::uint32_t>(typeDesc.m_typeData.m_string.m_length));
+	PutU32(out, static_cast<std::uint32_t>(typeDesc.m_typeData.m_string.m_allowedLength));
+}
+
+bool ibTypeDescriptionMemory::ReadBuffer(const void* data, size_t length, ibTypeDescription& typeDesc)
+{
+	// NO BYTES IS NO OPINION — refuse without touching the caller's value. An empty cell (a row
+	// written before the requisite existed, a NULL column) must not silently replace a description
+	// already in hand with one that admits nothing; what "empty" MEANS belongs to the caller.
+	if (data == nullptr || length == 0)
+		return false;
+
+	ibTypeDescReader reader{ static_cast<const unsigned char*>(data), length, 0 };
+	if (reader.m_size < 1)
+		return false;
+
+	const unsigned char version = reader.m_data[reader.m_pos++];
+	if (version == 0 || version > kTypeDescBufferVersion)
+		return false;   // written by something newer — refuse rather than misread
+
+	std::uint32_t count = 0;
+	if (!reader.Take(count))
+		return false;
+
+	std::vector<ibClassID> list;
+	list.reserve(count);
+	for (std::uint32_t idx = 0; idx < count; idx++) {
+		std::uint64_t clsid = 0;
+		if (!reader.Take(clsid))
+			return false;
+		list.push_back(static_cast<ibClassID>(clsid));
+	}
+
+	std::uint32_t precision = 0, scale = 0, nonNegative = 0, dateFractions = 0, strLength = 0, allowedLength = 0;
+	if (!reader.Take(precision) || !reader.Take(scale) || !reader.Take(nonNegative) ||
+		!reader.Take(dateFractions) || !reader.Take(strLength) || !reader.Take(allowedLength))
+		return false;
+
+	ibTypeDescription::ibTypeData typeData;
+	typeData.m_number = ibQualifierNumber(static_cast<unsigned char>(precision),
+		static_cast<char>(scale), nonNegative != 0);
+	typeData.m_date = ibQualifierDate(static_cast<ibDateFractions>(dateFractions));
+	typeData.m_string = ibQualifierString(static_cast<unsigned short>(strLength),
+		static_cast<ibAllowedLength>(allowedLength));
+
+	typeDesc.SetDefaultMetaType(list);
+	typeDesc.SetTypeData(typeData);
+	return true;
+}

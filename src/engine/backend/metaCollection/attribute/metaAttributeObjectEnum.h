@@ -7,6 +7,7 @@ enum ibItemMode {
 	ibItemMode_Folder_Item
 };
 
+
 // ibSelectMode and its ibValueEnumSelectMode wrapper moved to metaCollection/metaObjectEnum.h
 // — a choice mode belongs to the base metaobject (ProcessChoice takes it), not to attributes.
 // What stays here is genuinely attribute-scoped: how an attribute presents items, and whether

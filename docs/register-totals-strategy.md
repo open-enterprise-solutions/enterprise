@@ -1308,6 +1308,28 @@ later, and a receipt met by an expense that must NOT vanish) and
 `tests/test_databaseMaterializeBuilder.cpp` (the drop renders as OR over the reportable figures,
 windowed columns excluded, `HAVING` or `WHERE` depending on whether anything merged).
 
+## The sign was inverted, and the parity test could not see it (2026-08-12)
+
+`ibRecordType` declares `eExpense` first, so a movement stores **0 for an EXPENSE**. The totals
+declaration filed `recordType = 0` into the `_In` column — and the view publishes `_In` as
+`<Res>_Receipt`, with `Turnover` and `Balance` computed as `In − Out`. So every receipt was counted
+as an expense, every expense as a receipt, and the balance came out as `Expense − Receipt`.
+
+Fixed by comparing against the enum instead of a literal: what goes into the receipt column is the
+movement whose record type IS `eReceipt`. Both spellings — the trigger's text template and the IR
+expression — now derive from the same constant, so they cannot disagree again.
+
+**Why the numeric parity test stayed green through it.** It builds the specification by hand and
+compares the maintained totals against movements re-aggregated *through that same specification*.
+An inversion present on both sides cancels: the test proves the two paths AGREE, never that either
+is right. A test that shares the artefact under test with the oracle can only detect drift between
+them — which is worth having, and is not the same property as correctness.
+
+⚠ **Existing totals are wrong and will not repair themselves.** The shape of the table did not
+change, so `NeedsRegeneration` sees nothing to do; the figures have to be rebuilt deliberately
+(`ibDerivedState::RegenerateAll`). Until they are, stored totals keep the old sign while newly
+written movements accumulate with the new one — the worst of both.
+
 ## Open questions
 
 - **Seed / predefined data on Apply.** Whatever idempotent seed path

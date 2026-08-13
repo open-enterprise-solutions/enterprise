@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -213,8 +213,9 @@
     <ClInclude Include="metaCollection\partial\parameterizedJob.h" />
     <ClInclude Include="metaCollection\partial\parameterizedJobManager.h" />
     <ClInclude Include="metaCollection\partial\chartOfAccounts.h" />
-    <ClInclude Include="metaCollection\partial\chartOfAccountsSubcontoTable.h" />
+    <ClInclude Include="metaCollection\partial\chartOfAccountsDimensionKindsTable.h" />
     <ClInclude Include="metaCollection\partial\chartOfAccountsEnum.h" />
+    <ClInclude Include="metaCollection\partial\commonObjectEnum.h" />
     <ClInclude Include="metaCollection\partial\chartOfAccountsManager.h" />
     <ClInclude Include="metaCollection\partial\chartOfCharacteristicTypes.h" />
     <ClInclude Include="metaCollection\partial\chartOfCharacteristicTypesManager.h" />
@@ -605,7 +606,8 @@
     <ClCompile Include="metaCollection\partial\chartOfAccountsManager.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfAccountsManager_impl.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfAccountsMetadata.cpp" />
-    <ClCompile Include="metaCollection\partial\chartOfAccountsSubcontoTable.cpp" />
+    <ClCompile Include="metaCollection\partial\chartOfAccountsDimensionKindsTable.cpp" />
+    <ClCompile Include="metaCollection\partial\chartOfAccountsMetadataSchema.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfAccountsMetadataMenu.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfAccountsMetadataProperty.cpp" />
     <ClCompile Include="metaCollection\partial\chartOfAccountsMetadata_res.cpp" />
@@ -623,6 +625,7 @@
     <ClCompile Include="metaCollection\partial\constantMetadataMenu.cpp" />
     <ClCompile Include="metaCollection\partial\constantMetadata.cpp" />
     <ClCompile Include="metaCollection\partial\constantMetadataQuery.cpp" />
+    <ClCompile Include="metaCollection\partial\constantMetadataSchema.cpp" />
     <ClCompile Include="metaCollection\partial\constantMetadata_res.cpp" />
     <ClCompile Include="metaCollection\partial\constantObject.cpp" />
     <ClCompile Include="metaCollection\partial\dataProcessorAction.cpp" />
@@ -682,7 +685,7 @@
     <ClCompile Include="query\columnLayout.cpp" />
     <ClCompile Include="query\dataMover.cpp" />
     <ClCompile Include="query\schemaBuilder.cpp" />
-    <ClCompile Include="metaCollection\partial\accumulationRegisterSchema.cpp" />
+    <ClCompile Include="metaCollection\partial\accumulationRegisterMetadataSchema.cpp" />
     <ClCompile Include="query\derivedStateBuilder.cpp" />
     <ClCompile Include="query\queryRamTable.cpp" />
     <ClCompile Include="query\schemaSnapshot.cpp" />
@@ -691,10 +694,12 @@
     <ClCompile Include="query\tempTableManager.cpp" />
     <ClCompile Include="system\value\valueDynamicList.cpp" />
     <ClCompile Include="metaCollection\partial\commonObject.cpp" />
+    <ClCompile Include="metaCollection\partial\commonObjectEnum.cpp" />
     <ClCompile Include="metaCollection\partial\commonObjectAction.cpp" />
     <ClCompile Include="metaCollection\partial\commonObjectModel.cpp" />
     <ClCompile Include="metaCollection\partial\commonObjectProperty.cpp" />
     <ClCompile Include="metaCollection\partial\commonObjectMetaQuery.cpp" />
+    <ClCompile Include="metaCollection\partial\commonObjectSchema.cpp" />
     <ClCompile Include="metaCollection\partial\commonObjectRefQuery.cpp" />
     <ClCompile Include="metaCollection\partial\commonObjectManagerQuery.cpp" />
     <ClCompile Include="metaCollection\partial\commonObjectRecordSetQuery.cpp" />

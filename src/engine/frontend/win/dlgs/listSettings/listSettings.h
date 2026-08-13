@@ -1,4 +1,4 @@
-#ifndef __LIST_SETTINGS_DLG_H__
+﻿#ifndef __LIST_SETTINGS_DLG_H__
 #define __LIST_SETTINGS_DLG_H__
 
 #include <wx/dialog.h>

@@ -77,8 +77,6 @@ wxTreeItemId ibDataReportTree::FillItem(ibValueMetaObject* metaItem, const wxTre
 		wxASSERT(metaItemRecord);
 
 		for (auto attribute : metaItemRecord->GetAttributeArrayObject()) {
-			if (attribute->IsDeleted())
-				continue;
 			if (!attribute->IsAcceptedByParent())
 				continue;
 			AppendItem(createdItem, attribute);
@@ -585,8 +583,6 @@ void ibDataReportTree::FillData()
 
 	// attribute list
 	for (auto attribute : commonMetadata->GetAttributeArrayObject()) {
-		if (attribute->IsDeleted())
-			continue;
 		if (!attribute->IsAcceptedByParent())
 			continue;
 		AppendItem(Group(g_metaAttributeCLSID), attribute);
@@ -594,12 +590,10 @@ void ibDataReportTree::FillData()
 
 	// tabular section list
 	for (auto metaTable : commonMetadata->GetTableArrayObject()) {
-		if (metaTable->IsDeleted())
+		if (!metaTable->IsAcceptedByParent())   // predefined section — same rule as the attributes above
 			continue;
 		const wxTreeItemId& hItem = AppendGroupItem(Group(g_metaTableCLSID), g_metaAttributeCLSID, metaTable);
 		for (auto attribute : metaTable->GetAttributeArrayObject()) {
-			if (attribute->IsDeleted())
-				continue;
 			if (!attribute->IsAcceptedByParent())
 				continue;
 			AppendItem(hItem, attribute);

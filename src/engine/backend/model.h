@@ -380,6 +380,16 @@ public:
 		virtual ibValueModelColumnInfo* GetColumnByID(unsigned int col) const;
 		virtual ibValueModelColumnInfo* GetColumnByName(const wxString& colName) const;
 
+		// THE COLUMN'S TYPE BY ID — one body over GetColumnByID, and NOT virtual, because a column's type
+		// is a property of the column and not of the collection holding it. It used to be written three
+		// times: the value-table's hand loop (same test, same order, same answer), and two map lookups on
+		// the section / register collections that had NO callers and would have THROWN on a miss — three
+		// bodies, two miss behaviours. A miss is empty, everywhere.
+		const ibTypeDescription GetColumnType(unsigned int col) const {
+			ibValueModelColumnInfo* colInfo = GetColumnByID(col);
+			return colInfo != nullptr ? colInfo->GetColumnType() : ibTypeDescription();
+		}
+
 		virtual ibValueModelColumnInfo* GetColumnInfo(unsigned int idx) const = 0;
 		virtual unsigned int GetColumnCount() const = 0;
 
@@ -743,6 +753,18 @@ public:
 	virtual ibValueModelReturnLine* GetRowAt(const ibDataViewItem& line) = 0;
 	virtual ibValueModelColumnCollection* GetColumnCollection() const = 0;
 
+	// WHAT THIS COLUMN ACCEPTS (ibTabularDataObject's question, and the structure hop's only input) —
+	// asked of the model's OWN column collection, which every model already keeps in step with its truth:
+	// a tabular section's column info reads the ATTRIBUTE (GetTypeDesc) straight, a dynamic list's wraps
+	// the queryable column, a value-table's holds the type property the user edits. So the answer exists
+	// once, per model, where it is already synchronised — and asking it here means no model has to say it
+	// a second time. (It briefly WAS said a second time: three overrides re-scanning the same three
+	// collections by hand, which is the loop GetColumnByID already runs.)
+	virtual ibTypeDescription GetColumnTypeById(const ibMetaID& id) const override {
+		ibValueModelColumnCollection* colCollection = GetColumnCollection();
+		return colCollection != nullptr ? colCollection->GetColumnType(id) : ibTypeDescription();
+	}
+
 	//set meta/get meta
 	virtual ibMetaID GetColumnIDByName(const wxString colName) const {
 		ibValueModelColumnCollection* colCollection = GetColumnCollection();
@@ -762,16 +784,20 @@ public:
 		ibValueModelColumnCollection* colCollection = GetColumnCollection();
 		if (colCollection == nullptr)
 			return wxEmptyString;
-		for (unsigned int idx = 0; idx < colCollection->GetColumnCount(); ++idx) {
-			ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo = colCollection->GetColumnInfo(idx);
-			if (colInfo != nullptr && colInfo->GetColumnID() == colId)
-				return colInfo->GetColumnName();
-		}
-		return wxEmptyString;
+		ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo = colCollection->GetColumnByID(colId);
+		return colInfo != nullptr ? colInfo->GetColumnName() : wxEmptyString;
 	};
 
 	virtual bool SetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, const ibValue& varMetaVal) = 0;
 	virtual bool GetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, ibValue& cVa) const = 0;
+
+
+	// The hop gate comes in TWO forms — with a row and without one (the structure step) — and declaring only
+	// one of them here would HIDE the other for every caller holding an ibValueModel*. It compiles today only
+	// because the caller that walks structure holds an ibTabularDataObject*; the next one that does not would
+	// get a compile error reading "no such method" rather than "you hid it".
+	using ibTabularDataObject::GetValueBySourceHop;
+	using ibTabularDataObject::SetValueBySourceHop;
 
 	// THE table hop gate (ibTabularDataObject override) — a DIRECT translation: read the row cell by the hop's id.
 	// It only GETS the value; it does NOT hop. The transition tabular-object -> source-object (and the walk on)
