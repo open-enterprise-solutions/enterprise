@@ -1019,7 +1019,17 @@ void ibSessionRegistry::ProcessAdd(ibRegistryRequest& req)
 	// A refusal is final here (a peer holder is not tied to our event loop, so we cannot park on it), and
 	// a decision that cannot be revisited may not be taken on a cached picture. The same coalescing as
 	// below keeps this cheap: a snapshot taken moments ago is not re-read.
+	// ⭐ AND SWEEP THE DEAD FIRST. Refreshing only re-reads the table — it does not ask whether the rows
+	// in it belong to anything still running. A process that ended without unregistering (a designer
+	// closed while it held monopoly, a crash) leaves its row behind, and a refusal built on that row is
+	// a refusal on behalf of nobody: the message names an EMPTY user, and the block clears itself only
+	// when the periodic sweep happens to fire — which is exactly what made it come and go.
+	//
+	// The sweep is what decides liveness (lastActive against the stale window), so it must run BEFORE
+	// the snapshot the gate reads, not on its own timer beside it. Best-effort in both directions: a
+	// sweep that fails leaves the old behaviour rather than blocking a start.
 	if (SnapshotOlderThan(std::chrono::milliseconds(500))) {
+		try { JobSweepStale(); }      catch (...) { /* best-effort: gate below still works on live rows */ }
 		try { JobRefreshSnapshot(); } catch (...) { /* best-effort: an unrefreshed snapshot still gates below */ }
 	}
 
