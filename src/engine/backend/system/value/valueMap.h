@@ -57,6 +57,15 @@ protected:
 	long IndexOf(const ibValue& key) const;
 
 public:
+	// THE PAIRS, IN INSERTION ORDER — read-only, for a consumer that takes a whole map at once rather
+	// than asking key by key (an accounting posting is written as *(kind -> value)* pairs and poured
+	// into the movement's slots). Nothing else about the store is exposed: this is the same order a
+	// script sees when it iterates, so a caller cannot observe an arrangement the language does not.
+	const std::vector<std::pair<ibValue, ibValue>>& Entries() const { return m_entries; }
+
+protected:
+
+public:
 
 	//Attribute -> String key
 	//working with an array as an aggregate object:

@@ -23,6 +23,12 @@ public:
 	// slots" unanswerable. There is no case where several are wanted, so there is no switch: the
 	// editor opens as a single choice because that is what the property IS.
 
+	// NOTHING CHOSEN — asked of the property, not counted at the callsite. A binding that names no
+	// chart is empty in the ordinary sense every other property means by it, so the rules that refuse
+	// an unbound chart of accounts read like every other emptiness check in the codebase instead of
+	// reaching through to a type count.
+	virtual bool IsEmptyProperty() const override { return GetValueAsMetaDesc().GetTypeCount() == 0; }
+
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
