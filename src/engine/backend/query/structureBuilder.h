@@ -51,6 +51,11 @@ private:
 	ibDatabaseLayer* Conn() const;   // m_holder->EnsureConnection(), or db_query when no holder
 	int FlushDeferredFirebird();     // FB two-phase: drain seeds deferred past the DDL commit, own TX (no-op elsewhere)
 
+	// The compensation for that second phase failing: drop what THIS save created, so the physical
+	// schema goes back to what the (unpublished) baseline still describes. Best-effort and silent —
+	// the caller is already carrying the real failure. See the body for what it deliberately cannot undo.
+	void UndoCreatedTables();
+
 	ibDatabaseConnectionHolder* m_holder = nullptr;
 	ibRestructureInfo           m_changes;
 };

@@ -143,6 +143,11 @@ struct ibSchemaMaterialize
 	// column when split). Also the PRIMARY KEY / unique index of the derived table.
 	std::vector<const ibBackendQueryColumn*> m_keys;
 
+	// Set by ibDeclareDerivedKey when the key is too wide for an index on this engine: the physical
+	// column that then CARRIES the key's uniqueness, filled by the delta with a digest of the key's own
+	// values. Empty in the ordinary case, where the index holds the key itself.
+	wxString m_keyHashColumn;
+
 	// The period key: which key column holds the truncated period, and the movement expression it
 	// is truncated FROM. Empty column name = this derived table has no period dimension at all.
 	wxString       m_periodColumn;
@@ -215,10 +220,20 @@ struct ibSchemaMaterialize
 		m_views.push_back(std::move(v));
 		return m_views.back();
 	}
-	ibSchemaMaterialize& Guard(const wxString& expr, const ibQueryPredicatePtr& regenExpr = nullptr)
-	{
-		m_guard = expr; m_guardExpr = regenExpr; return *this;
-	}
+	// ⭐⭐ A SECOND GUARD NARROWS THE FIRST — it does not REPLACE it.
+	//
+	// This assigned, and a correspondence accounting register declares two: "the movement is in force"
+	// (Active) and "this side names an account". The second call overwrote the first, so every totals
+	// table of every correspondence register accumulated INACTIVE movements — a figure that is wrong in
+	// the direction nobody checks, because the rows all look like rows.
+	//
+	// Composing is also what the caller means each time: every guard states a reason this movement does
+	// not belong in this table, and reasons accumulate. Declared in the .cpp because composing the
+	// PREDICATE form needs the complete type, which this header deliberately does not pull in.
+	// (Exported: the body is out of line — composing the PREDICATE form needs the complete type this
+	//  header does not pull in — and a caller outside backend.dll, i.e. the test that pins the
+	//  composition rule, has to reach the same one definition rather than a second inline copy.)
+	BACKEND_API ibSchemaMaterialize& Guard(const wxString& expr, const ibQueryPredicatePtr& regenExpr = nullptr);
 	ibSchemaMaterialize& Split(unsigned int shards)  { m_shards = shards > 0 ? shards : 1; return *this; }
 };
 
@@ -328,6 +343,28 @@ struct ibSchemaTable
 		return m_seed.back();
 	}
 };
+
+// ⭐⭐ DECLARE A DERIVED TABLE'S IDENTITY — the ONE place that decides HOW the key is held unique.
+//
+// The metaobject states WHAT the key is (the columns, in order); this states what the database is
+// given to enforce it with, because that answer depends on the engine and not on the register:
+//
+//   the index holds the key     -> one UNIQUE index over those columns, as it always was
+//   the key is too wide         -> a hash column carrying the identity, UNIQUE over that one field,
+//                                  plus a plain index over the leading columns that DO fit, which is
+//                                  what the delta's match then rides. Without that second index every
+//                                  movement would scan the totals table to find its row
+//
+// Both registers with totals call it, so "how is a totals row identified" is answered once rather than
+// once per register — the previous shape was `t.Index(name + "_PK", keyCols, true)` copied in both,
+// which is also how one of them could have been fixed and the other left behind.
+//
+// `hashColumnId` gives the hash column an IDENTITY, so the differ can ADD it to an existing table and
+// DROP it again when a key narrows — a scaffold column is created with its table and never migrated,
+// which would leave a register that gained an analytic with a table shaped for the old key.
+BACKEND_API void ibDeclareDerivedKey(ibSchemaTable& table, const wxString& tableName,
+                                     const std::vector<const ibBackendQueryColumn*>& keyCols,
+                                     ibMetaID hashColumnId);
 
 class BACKEND_API ibSchemaSnapshot
 {

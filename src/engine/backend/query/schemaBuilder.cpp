@@ -1,12 +1,10 @@
 #include "backend/query/schemaBuilder.h"
 
 #include "backend/appData.h"                              // db_query (the local DDL channel)
-#include "backend/databaseLayer/databaseLayer.h"          // ibDatabaseLayer (GetDialect / RunQuery / Commit / BeginTransaction)
+#include "backend/databaseLayer/databaseLayer.h"          // ibDatabaseLayer (Commit / BeginTransaction)
 #include "backend/databaseLayer/connectionHolder.h"       // ibDatabaseConnectionHolder::EnsureConnection + DdlCreatedTables / DdlDeferredWrites
 #include "backend/databaseLayer/connectionPool.h"         // ibConnectionPool::CurrentHolder (the db_query channel's holder)
-#include "backend/databaseLayer/databaseQueryBuilder.h"   // ibQueryRenderer::RenderDDL + ibDdlStatement (kind / table)
-#include "backend/databaseLayer/preparedStatement.h"      // ibPreparedStatement — the index-introspection query
-#include "backend/databaseLayer/databaseResultSet.h"      // ibDatabaseResultSet — its rows
+#include "backend/databaseLayer/databaseQueryBuilder.h"   // ibDdlStatement (kind / table) + the L2 capability accessors
 #include "backend/logger/logger.h"                        // ibLog->Warn — report the pre-UNIQUE duplicate-key cleanup
 
 ibSchemaBuilder::ibSchemaBuilder(ibDatabaseConnectionHolder* holder)
@@ -28,49 +26,21 @@ ibDatabaseConnectionHolder* ibSchemaBuilder::BarrierHolder() const
 	return m_holder != nullptr ? m_holder : ibConnectionPool::ThreadHolder();
 }
 
+// ⭐ THE FOUR QUESTIONS BELOW ARE L2'S, AND L2 ANSWERS THEM. Each of these used to read a FIELD of
+// the dialect dictionary (`conn()->GetDialect().m_…`) — this tier spelling another tier's vocabulary,
+// which is how a dictionary that changes shape leaves its readers compiling and wrong. They stay as
+// methods because "on MY connection" is what the schema builder means every time, and that is the one
+// thing these add: the connection. (databaseQueryBuilder.h — the capability accessors.)
 bool ibSchemaBuilder::BarrierActive() const
 {
-	return conn()->GetDialect().m_ddlCommitBeforeData;
+	return ibDdlCommitsBeforeData(conn());
 }
 
 bool ibSchemaBuilder::AlterTableMultiClause() const
 {
-	return conn()->GetDialect().m_alterTableMultiClause;
+	return ibAlterTableMultiClause(conn());
 }
 
-bool ibSchemaBuilder::CanIntrospectIndexes() const
-{
-	return !conn()->GetDialect().m_indexListQuery.IsEmpty();
-}
-
-wxArrayString ibSchemaBuilder::PhysicalIndexes(const wxString& table) const
-{
-	wxArrayString names;
-	ibDatabaseLayer* c = conn();
-	const wxString sql = c->GetDialect().m_indexListQuery;
-	if (sql.IsEmpty())
-		return names;
-
-	// One parameterised SELECT (dialect m_indexListQuery; `?` = table name — bound, never spliced) reads
-	// the names of the table's existing indexes (trim the CHAR pad Firebird returns). Best-effort: any
-	// failure yields an empty list, so the differ degrades to its metadata-only diff, never aborts.
-	ibPreparedStatement*  stmt = nullptr;
-	ibDatabaseResultSet*  rs   = nullptr;
-	try {
-		stmt = c->PrepareStatement(sql);
-		if (stmt != nullptr) {
-			stmt->SetParamString(1, table);
-			rs = stmt->RunQueryWithResults();
-			if (rs != nullptr)
-				while (rs->Next())
-					names.Add(rs->GetResultString(1).Trim());
-		}
-	}
-	catch (...) {}
-	if (rs   != nullptr) c->CloseResultSet(rs);
-	if (stmt != nullptr) c->CloseStatement(stmt);
-	return names;
-}
 
 // Before a UNIQUE index is created over EXISTING data, drop duplicate-key rows (keep exactly ONE per key)
 // so CREATE UNIQUE INDEX cannot fail on pre-existing duplicates — the register's uniqueness-by-key, healed
@@ -80,20 +50,36 @@ wxArrayString ibSchemaBuilder::PhysicalIndexes(const wxString& table) const
 // matches a UNIQUE index's NULL rule. Empty row id (MySQL / ODBC) -> skip; the create then fails loudly.
 int ibSchemaBuilder::Execute(const ibDdlStatement& ddl)
 {
-	// On a barrier dialect, remember a freshly CREATEd table — a same-TX write to it must wait for
-	// the commit (it is not yet durable for the prepared-INSERT path).
-	if (ddl.m_kind == ibDdlKind::CreateTable && BarrierActive())
+	// ⭐⭐ ON A BARRIER DIALECT, REMEMBER EVERY TABLE WHOSE SHAPE THIS SAVE CHANGED — not only the ones
+	// it created. A same-TX statement against such a table must wait for the commit: it is the SHAPE
+	// that is not durable yet, and Firebird's prepare answers about the shape it can see.
+	//
+	// ⚠ It used to record CREATE alone, and the case that exposed the difference was an ordinary edit:
+	// add an analytic to a register, and the movements table gets `ALTER TABLE … ADD fld…`. The totals
+	// bundle is then rebuilt, the rebuild READS the movements naming the new column, and the prepare
+	// fails with "Column unknown FLD…" — about a column the very same apply had just added, three
+	// statements earlier. The table existed, so nothing deferred; only its shape was new.
+	//
+	// The question is "did this save change what this table LOOKS like", and every DDL that alters a
+	// table answers yes.
+	const bool shapeChanged = ddl.m_kind == ibDdlKind::CreateTable
+	                       || ddl.m_kind == ibDdlKind::AddColumn
+	                       || ddl.m_kind == ibDdlKind::DropColumn
+	                       || ddl.m_kind == ibDdlKind::AlterColumn
+	                       || ddl.m_kind == ibDdlKind::AlterTable;
+	if (shapeChanged && BarrierActive())
 		if (ibDatabaseConnectionHolder* h = BarrierHolder())
 			h->DdlCreatedTables().insert(ddl.m_table);
-
-	ibDatabaseLayer* c = conn();
-	ibQueryRenderer renderer(c->GetDialect());
 
 	// (No immediate pre-unique-index dedup here: a raw L1 DELETE by table name broke on a barrier dialect —
 	// a table CREATEd in this same DDL TX is not yet visible to a DML statement, so the dedup hit
 	// "table unknown" and aborted the apply. Fresh tables are empty (nothing to dedup); duplicate-healing
 	// for a migration over existing data belongs on the deferred / L2 path, not an eager raw-L1 DELETE.)
-	return c->RunQuery(renderer.RenderDDL(ddl));
+	//
+	// RENDER AND RUN ARE ONE STEP, AND IT IS L2'S. Spelling them here meant building a renderer out of
+	// a dictionary this tier has no other reason to hold — and picking, at this tier, which of the
+	// driver's two run doors a final statement goes through.
+	return ibExecuteDdl(conn(), ddl);
 }
 
 ibDatabaseLayer& ibSchemaBuilder::Connection() const
@@ -111,6 +97,23 @@ bool ibSchemaBuilder::RunOrDefer(const wxString& table, std::function<bool()> wo
 	return work();                 // run now, report its success
 }
 
+bool ibSchemaBuilder::RunOrDefer(const wxString& tableA, const wxString& tableB, std::function<bool()> work)
+{
+	ibDatabaseConnectionHolder* h = BarrierHolder();
+	if (BarrierActive() && h != nullptr
+	    && (h->DdlCreatedTables().count(tableA) != 0 || h->DdlCreatedTables().count(tableB) != 0)) {
+		h->DdlDeferredWrites().push_back(std::move(work));
+		return true;
+	}
+	return work();
+}
+
+std::set<wxString> ibSchemaBuilder::CreatedTables() const
+{
+	ibDatabaseConnectionHolder* h = BarrierHolder();
+	return h != nullptr ? h->DdlCreatedTables() : std::set<wxString>();
+}
+
 bool ibSchemaBuilder::Flush()
 {
 	// The orchestrator has already committed the DDL and opened the data-phase TX; just run the
@@ -118,9 +121,25 @@ bool ibSchemaBuilder::Flush()
 	ibDatabaseConnectionHolder* h = BarrierHolder();
 	if (h == nullptr)
 		return true;
+	// ⭐⭐ A DEFERRED WORK MAY DEFER WORK OF ITS OWN, and the queue must survive that. The regeneration
+	// runs here and asks the barrier the same question again inside itself (the key-hash fill), so a
+	// `for (auto& work : queue)` was iterating a vector that grew under it: the reference dangled at
+	// the next reallocation and the process died in std::function::operator(), with a stack pointing
+	// at the dispatcher rather than at anything that had gone wrong. The nested item would have been
+	// lost anyway — clear() below would have thrown it away unrun.
+	//
+	// Draining by BATCHES answers both: each round takes the queue away, so nothing added during the
+	// round can move what is being walked, and whatever was added becomes the next round. It ends
+	// when a round adds nothing, which is what "the work is finished" means here.
 	bool ok = true;
-	for (auto& work : h->DdlDeferredWrites())
-		if (!work()) { ok = false; break; }
+	while (!h->DdlDeferredWrites().empty()) {
+		std::vector<std::function<bool()>> batch;
+		batch.swap(h->DdlDeferredWrites());
+		for (auto& work : batch)
+			if (!work()) { ok = false; break; }
+		if (!ok)
+			break;
+	}
 	h->DdlDeferredWrites().clear();
 	h->DdlCreatedTables().clear();
 	return ok;

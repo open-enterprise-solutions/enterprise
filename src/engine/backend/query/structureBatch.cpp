@@ -5,6 +5,7 @@
 #include "backend/query/queryColumn.h"                    // ibBackendQueryColumn — GetTypeDesc / GetPhysicalName
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door — ibUpdate / ibDelete / Execute (the type-removal data cleanups)
 #include "backend/restructureInfo.h"                      // RequireExclusiveForDDL — demanded here, by the code that writes DDL
+#include "backend/backend_exception.h"                    // ibBackendCoreException — a refused write stops the apply
 
 #include <set>
 
@@ -48,6 +49,9 @@ void ibStructureBatch::DropColumn(const ibBackendQueryColumn* column)
 		DropField(slot.m_name);
 }
 
+// Each clause, as it is decided — this is the half that says WHICH column the differ believes in.
+// A drop of a field that was never created, or an add of one that exists, is visible here one line
+// before the database refuses it.
 void ibStructureBatch::AddField(const ibColumnSlot& slot)
 {
 	m_steps.push_back(ibAddColumn(m_table, ColumnOf(slot)));
@@ -160,8 +164,16 @@ int ibStructureBatch::Flush(ibSchemaBuilder& schema)
 
 	// Data seeds. RunOrDefer parks them past the DDL commit when this batch's table was just created
 	// on a barrier dialect (the create step above recorded it), and runs them now otherwise.
+	//
+	// ⭐ AND THE ANSWER IS READ. The DDL above reports failure by THROWING, so reaching this line means
+	// the shape is settled; a write that then fails is a real refusal and has to travel the same way.
+	// Dropping it let a seed — or a type-tag cleanup, which rides this same queue — fail silently and
+	// leave the apply believing it had written what it had not. A PARKED write answers true here and
+	// reports for real in the post-commit drain, where the transaction is already gone.
 	for (std::function<bool()>& write : m_inserts)
-		schema.RunOrDefer(m_table, write);
+		if (!schema.RunOrDefer(m_table, write))
+			ibBackendCoreException::Error(
+				_("Failed to write the data of %s - the restructuring was rolled back"), m_table);
 
 	m_steps.clear();
 	m_inserts.clear();
@@ -204,13 +216,27 @@ bool DescContainsClsid(const ibTypeDescription& td, const ibClassID& clsid)
 
 // UPDATE <table> SET <fld>_TYPE = 0 WHERE <fld>_TYPE = <tag> — clear the variant tag of rows whose
 // stored type was just removed (so they read back as undefined, not as a now-missing sub-field).
-int ClearRowsOfType(const wxString& tableName, const wxString& fieldName, int typeTag)
+//
+// ⭐⭐ POURED INTO THE BATCH, NOT RUN HERE. Every ADD / DROP this diff decides on is ACCUMULATED and
+// reaches the database later, at Flush; a cleanup executed on the spot therefore runs against the
+// table as it stood BEFORE the whole restructuring — and asked it about a column the restructuring
+// has not created yet. On Firebird that is "Column unknown FLDnnnn_TYPE" and, since the refusal now
+// stops the apply, the entire restructuring dies on a cleanup for work that had not happened.
+//
+// The batch is the existing answer to exactly this: seed writes already ride it, and it routes them
+// through the DDL barrier so they land after the shape is settled. The order the cleanup needs is
+// preserved either way — the discriminator (_TYPE) is never added or dropped, only the per-type data
+// fields around it are, so clearing it after the drop reads the same as clearing it before.
+void ClearRowsOfType(ibStructureBatch& batch, const wxString& tableName, const wxString& fieldName, int typeTag)
 {
 	const wxString typeCol = fieldName + ibFieldSuffix(ibColumnRole::Discriminator);
-	ibDatabaseQueryBuilder q;
-	return q.Execute(ibUpdate(tableName,
-		{ { typeCol, ibConst(ibValue(0)) } },
-		ibBinOp(ibQueryBinOp::Eq, ibCol(typeCol), ibConst(ibValue(typeTag)))));
+	batch.Insert([tableName, typeCol, typeTag]() {
+		ibDatabaseQueryBuilder q;
+		q.Execute(ibUpdate(tableName,
+			{ { typeCol, ibConst(ibValue(0)) } },
+			ibBinOp(ibQueryBinOp::Eq, ibCol(typeCol), ibConst(ibValue(typeTag)))));
+		return true;   // a 0-row clear is the ordinary case; a real failure THREW
+	});
 }
 
 } // namespace
@@ -256,7 +282,7 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 			// gone -> DROP the field; clear the stale _TYPE tag of rows that held this type.
 			batch.DropField(d.m_name);
 			if (d.m_role != ibColumnRole::Discriminator)
-				ClearRowsOfType(tableName, fieldName, ibPersistedTypeTag(d.m_role));   // a 0-row clear is fine
+				ClearRowsOfType(batch, tableName, fieldName, ibPersistedTypeTag(d.m_role));
 		}
 		else if (!SameSlotType(s->m_type, d.m_type)) {
 			// A date narrowing from Time cannot ALTER in place -> drop + re-add; else ALTER.
@@ -303,7 +329,7 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 	else if (oldHasRef && !newHasRef) {
 		// Field LOST all references -> clear the rows that held one + DROP the shared pair (never a row
 		// DELETE — that wipes records).
-		ClearRowsOfType(tableName, fieldName, ibPersistedTypeTag(ibColumnRole::ReferenceType));
+		ClearRowsOfType(batch, tableName, fieldName, ibPersistedTypeTag(ibColumnRole::ReferenceType));
 		batch.DropField(fieldName + ibFieldSuffix(ibColumnRole::ReferenceType));
 		batch.DropField(fieldName + ibFieldSuffix(ibColumnRole::ReferenceId));
 	}
@@ -312,12 +338,17 @@ int DiffColumnInto(ibStructureBatch& batch, const ibBackendQueryColumn* srcCol, 
 		// clear the stale _TYPE of rows whose stored target (_RTRef) is gone so they read undefined, not dead.
 		const wxString typeCol = fieldName + ibFieldSuffix(ibColumnRole::Discriminator);
 		const wxString refCol  = fieldName + ibFieldSuffix(ibColumnRole::ReferenceType);
-		ibDatabaseQueryBuilder q;
+		// Batched for the same reason as the two cleanups above — it reads columns this very apply
+		// may still be creating.
 		for (auto clsid : removedRef)
-			// clsid is a 64-bit ibClassID — bind through ibNumber, NOT ibValue(wxLongLong_t) (that ctor is Date).
-			q.Execute(ibUpdate(tableName,
-				{ { typeCol, ibConst(ibValue(0)) } },
-				ibBinOp(ibQueryBinOp::Eq, ibCol(refCol), ibConst(ibValue(ibNumber(clsid))))));
+			batch.Insert([tableName, typeCol, refCol, clsid]() {
+				ibDatabaseQueryBuilder q;
+				// clsid is a 64-bit ibClassID — bind through ibNumber, NOT ibValue(wxLongLong_t) (that ctor is Date).
+				q.Execute(ibUpdate(tableName,
+					{ { typeCol, ibConst(ibValue(0)) } },
+					ibBinOp(ibQueryBinOp::Eq, ibCol(refCol), ibConst(ibValue(ibNumber(clsid))))));
+				return true;
+			});
 	}
 	return retCode;   // 1 — success; a real DB error THREW (the affected-row count is not an error signal)
 }

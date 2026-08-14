@@ -234,6 +234,9 @@ ibMetaID ibMetaData::GenerateNewID() const
 		ibMetaID id = commonObject->GetMetaID() + 1;
 		DoGenerateNewID(id, commonObject);
 		m_nextMetaId = id;
+
+		// The seed is the whole question: it is the walk's answer about what the tree CURRENTLY holds,
+		// and an id already given to something the walk cannot see will be handed out a second time.
 	}
 
 	// ⚠ NEVER BACKWARDS. An id whose object was deleted does NOT return to the pool, and that is the

@@ -5,11 +5,26 @@
 #include "backend/query/columnLayout.h"                    // ColumnFieldNames + ibColumnCodec::WriteValue (seed cell spread)
 #include "backend/databaseLayer/databaseQueryBuilder.h"    // ibDropIndex / ibQueryStatement (the seed upsert + uuid delete)
 #include "backend/restructureInfo.h"                        // ibRestructureInfo — the apply-change ledger
+#include "backend/backend_exception.h"                      // ibBackendCoreException — a refusal stops the apply
 #include "backend/query/queryColumn.h"                     // ibBackendQueryColumn::GetName (friendly column name)
 #include "backend/query/queryable.h"                        // ibBackendQueryable::GetQueryName / GetQueryTableName
 #include "backend/databaseLayer/databaseMaterializeBuilder.h"     // L2-2 RenderMaterialization — derived-state triggers + view
 #include "backend/query/derivedStateBuilder.h"              // L3-4 — rebuild derived state after a structure change
 #include "appData.h"                                        // db_query — the local channel the seed writes target
+
+ibSchemaMaterialize& ibSchemaMaterialize::Guard(const wxString& expr, const ibQueryPredicatePtr& regenExpr)
+{
+	// BOTH forms compose, and they must compose together: the trigger reads the text, the regeneration
+	// reads the predicate, and a rule kept by one and not the other is two bodies of numbers that
+	// disagree with nothing to show for it.
+	if (!expr.IsEmpty())
+		m_guard = m_guard.IsEmpty() ? expr : (wxT("(") + m_guard + wxT(") AND (") + expr + wxT(")"));
+	if (regenExpr)
+		m_guardExpr = m_guardExpr
+			? ibQueryPredicate::Compose(ibQueryPredicateKind::And, m_guardExpr, regenExpr)
+			: regenExpr;
+	return *this;
+}
 
 wxString ibSchemaMaterialize::SourceTable() const
 {
@@ -28,6 +43,8 @@ ibMaterializeSpec ibSchemaMaterialize::ToRenderSpec(const wxString& tableName) c
 	out.m_guard            = m_guard;
 	out.m_shards           = m_shards;
 
+	out.m_keyHashColumn    = m_keyHashColumn;
+
 	// A logical column expands to its PHYSICAL fields — a reference dimension is a _RTRef/_RRRef
 	// pair, not one column. Reading the layout tier instead of assuming one field per column is
 	// what keeps reference dimensions working in the totals key.
@@ -39,6 +56,68 @@ ibMaterializeSpec ibSchemaMaterialize::ToRenderSpec(const wxString& tableName) c
 		out.m_deltas.push_back({ d.m_column != nullptr ? d.m_column->GetPhysicalName() : wxString(), d.m_valueExpr });
 
 	return out;
+}
+
+void ibDeclareDerivedKey(ibSchemaTable& table, const wxString& tableName,
+                         const std::vector<const ibBackendQueryColumn*>& keyCols,
+                         ibMetaID hashColumnId)
+{
+	if (keyCols.empty())
+		return;
+
+	const wxString indexName = tableName + wxT("_PK");
+
+	// How wide the key really is — in PHYSICAL fields, which is what an index counts. A reference
+	// column is three of them, so a key of seven columns can be an index of twenty-one segments.
+	size_t fieldCount = 0;
+	for (const ibBackendQueryColumn* col : keyCols)
+		fieldCount += ColumnFieldNames(col).size();
+
+	// The key must be UNIQUE: it is what the delta upserts against, and a duplicate would let two rows
+	// accumulate half the movements each — totals that are individually plausible and jointly wrong.
+	if (db_query == nullptr || !ibKeyNeedsHash(*db_query, fieldCount)) {
+		table.Index(indexName, keyCols, /*unique*/ true);
+		return;
+	}
+
+	// PAST THE ENGINE'S CEILING. The identity moves into one hashed field; the key columns stay
+	// exactly as they are, and the delta goes on matching by them (databaseMaterializeBuilder.cpp),
+	// so a digest collision can only refuse an insert — never merge two keys into one row.
+	// ⚠ THIRTY-TWO, AND THE NUMBER IS LOAD-BEARING. The digest is a 128-bit hash written as hex, so 32
+	// characters hold it exactly — and this column is what an INDEX stands on. Left at the default 255
+	// it created a VARCHAR(255), which in a UTF8 database is 1020 bytes of declared key and passes
+	// Firebird's ceiling (about page_size / 4) on its own: "key size exceeds implementation
+	// restriction", with the data never even reaching it.
+	const ibBackendQueryColumn* hash =
+		table.OwnRaw(ibRawDBColumn::String(KeyHashColumnName(), hashColumnId, 32));
+	table.Add(hash);
+	table.Index(indexName, { hash }, /*unique*/ true);
+	table.m_materialize.m_keyHashColumn = KeyHashColumnName();
+
+	// AND A WAY TO FIND THE ROW. The unique index above answers "is this key already here", not "where
+	// is it": the match runs over the key COLUMNS, and an index over a digest cannot serve a comparison
+	// of the fields it was made from. Without a second index every movement would scan the whole totals
+	// table to find its row — correct, and slower on every posting for the life of the register.
+	//
+	// The leading columns that fit, greedily: the head of a totals key is the period and the account /
+	// the first dimensions, which is where the selectivity is. A key column is taken whole or not at
+	// all — half a reference is not a comparison anything can ride.
+	//
+	// ⚠ ASKED THROUGH L2-2, never read off a dialect from here. A dictionary is the level below's to
+	// read; this floor knows that it wants "as many leading columns as an index will hold" and nothing
+	// about which engine answers.
+	const unsigned int ceiling = ibIndexFieldCapacity(*db_query);
+	std::vector<const ibBackendQueryColumn*> lookup;
+	size_t used = 0;
+	for (const ibBackendQueryColumn* col : keyCols) {
+		const size_t width = ColumnFieldNames(col).size();
+		if (used + width > ceiling)
+			break;
+		lookup.push_back(col);
+		used += width;
+	}
+	if (!lookup.empty())
+		table.Index(tableName + wxT("_KL"), lookup, /*unique*/ false);
 }
 
 const ibSchemaTable* ibSchemaSnapshot::Find(ibMetaID id) const
@@ -88,13 +167,8 @@ const ibSchemaColumn* FindColumn(const std::vector<ibSchemaColumn>& cols, ibMeta
 	return nullptr;
 }
 
-bool HasIndex(const std::vector<ibSchemaIndex>& indexes, const wxString& name)
-{
-	for (const ibSchemaIndex& i : indexes)
-		if (i.m_name == name)
-			return true;
-	return false;
-}
+// (HasIndex removed with the index phases: both halves ask FindIndex now, because both need the
+// index ITSELF to compare shapes, not merely to know that the name is taken.)
 
 const ibSchemaIndex* FindIndex(const std::vector<ibSchemaIndex>& indexes, const wxString& name)
 {
@@ -306,6 +380,28 @@ int AlterTable(ibStructureBatch& batch, const ibSchemaTable& old, const ibSchema
 {
 	int retCode = 1;
 
+	// ⭐⭐ INDEXES COME DOWN FIRST, COLUMNS SECOND, INDEXES BACK UP LAST — and the order is forced by
+	// the engine, not chosen for tidiness. A column that an index stands on cannot be dropped:
+	// Firebird answers "column SHARD_ ... is referenced in index ..._PK" and rolls the apply back.
+	//
+	// Turning split totals OFF is exactly that shape: the shard column leaves the key, so the index
+	// changes (drop + recreate) AND the column disappears. Both steps were planned correctly and
+	// merely run in the wrong order — the drop of the index sat in the index phase, after the column
+	// phase had already failed.
+	//
+	// ⚠ WHY ONLY THE ACCUMULATION REGISTER SHOWED IT. The accounting register's totals table is
+	// re-created wholesale (its key is too wide for an index, so a re-key means DROP TABLE), and a
+	// dropped table takes its indexes with it. The accumulation register's key fits, so it is ALTERed
+	// in place — and only an ALTER can meet this.
+	for (const ibSchemaIndex& o : old.m_indexes) {
+		const ibSchemaIndex* c = FindIndex(cur.m_indexes, o.m_name);
+		if (c == nullptr || !SameIndex(o, *c)) {
+			batch.Ddl(ibDropIndex(o.m_name, cur.m_name));
+			if (report != nullptr)
+				report->AppendInfo((c == nullptr ? _("Remove index ") : _("Rebuild index ")) + o.m_name);
+		}
+	}
+
 	for (const ibSchemaColumn& c : cur.m_columns) {
 		const ibSchemaColumn* o = FindColumn(old.m_columns, c.m_id);
 		const size_t before = batch.StepCount();
@@ -325,41 +421,16 @@ int AlterTable(ibStructureBatch& batch, const ibSchemaTable& old, const ibSchema
 		}
 	}
 
-	// Physical index reconciliation: the baseline is metadata-derived (a re-run of the CURRENT code), so a
-	// code-added index shows in BOTH sides and the metadata diff alone never creates it. When the dialect can
-	// introspect (m_indexListQuery), ask the DB which indexes physically exist and create the declared ones it
-	// is MISSING — through the NORMAL CreateIndex (plain CREATE INDEX; Firebird has no IF NOT EXISTS). Names
-	// compared case-insensitively (FB stores them upper-cased). Without introspection: the metadata diff.
-	wxArrayString physIdx;
-	const bool introspect = schema.CanIntrospectIndexes();
-	if (introspect)
-		physIdx = schema.PhysicalIndexes(cur.m_name);
-	auto physHas = [&](const wxString& n) {
-		for (const wxString& p : physIdx) if (p.IsSameAs(n, false)) return true;
-		return false;
-	};
-
+	// Back up: everything the target declares that is not already standing unchanged. The drops for
+	// the changed ones happened in the first phase, so a rebuild is a create here and nothing else.
 	for (const ibSchemaIndex& i : cur.m_indexes) {
 		const ibSchemaIndex* o = FindIndex(old.m_indexes, i.m_name);
-		const bool needCreate = introspect ? !physHas(i.m_name) : (o == nullptr);
-		if (needCreate) {
+		if (o == nullptr || !SameIndex(*o, i)) {
 			batch.CreateIndex(i.m_name, i.m_columns, i.m_unique);
-			if (report != nullptr)
+			if (report != nullptr && o == nullptr)
 				report->AppendInfo(_("Add index ") + i.m_name);
 		}
-		else if (o != nullptr && !SameIndex(*o, i)) {
-			batch.Ddl(ibDropIndex(i.m_name, cur.m_name));   // shape / uniqueness changed -> drop + recreate
-			batch.CreateIndex(i.m_name, i.m_columns, i.m_unique);
-			if (report != nullptr)
-				report->AppendInfo(_("Rebuild index ") + i.m_name);
-		}
 	}
-	for (const ibSchemaIndex& o : old.m_indexes)
-		if (!HasIndex(cur.m_indexes, o.m_name)) {
-			batch.Ddl(ibDropIndex(o.m_name, cur.m_name));
-			if (report != nullptr)
-				report->AppendInfo(_("Remove index ") + o.m_name);
-		}
 
 	return retCode;
 }
@@ -380,7 +451,8 @@ int AlterTable(ibStructureBatch& batch, const ibSchemaTable& old, const ibSchema
 // ...but only when the declaration actually CHANGED, or the installed objects went missing. An
 // apply that touched one register used to announce a rebuild for every register in the
 // configuration, which reads as "everything was recomputed" and buries the one line that matters.
-static void ApplyMaterialization(ibSchemaBuilder& schema, const ibSchemaTable* old, const ibSchemaTable& t,
+static void ApplyMaterialization(ibSchemaBuilder& schema, ibDatabaseConnectionHolder* holder,
+                                 const ibSchemaTable* old, const ibSchemaTable& t,
                                  ibRestructureInfo* report)
 {
 	if (!t.m_derived)
@@ -394,11 +466,58 @@ static void ApplyMaterialization(ibSchemaBuilder& schema, const ibSchemaTable* o
 	if (hasOld)
 		was = old->m_materialize.ToRenderSpec(old->m_name);
 
-	const ibMaterializeApply done = ibApplyMaterialization(
-		schema.Connection(), t.m_materialize.ToRenderSpec(t.m_name), hasOld ? &was : nullptr);
+	// ⭐⭐ THROUGH THE BARRIER, LIKE EVERY OTHER READER OF A SHAPE THIS APPLY JUST CHANGED.
+	//
+	// A trigger body names the columns of the MOVEMENTS table (NEW.fld…_RTRef), and on Firebird a
+	// statement cannot see a shape its own transaction created: the table exists, the column exists,
+	// and CREATE TRIGGER still answers "Column unknown NEW.FLDnnnn_RTRef". Installed inline, the
+	// maintenance failed on every register created from scratch — the one case where the movements
+	// table is guaranteed to be new.
+	//
+	// The barrier already exists for exactly this and was already worded for exactly this ("only its
+	// shape was new", schemaBuilder.cpp); it simply had one reader — the seed writes. The bundle is
+	// the second. Off a barrier dialect RunOrDefer runs it immediately and nothing changes.
+	//
+	// ⭐⭐ KEYED BY BOTH TABLES, and keying it by the source alone is what broke the totals switch.
+	// The trigger READS the movements — that is why the source was named — but it WRITES the totals
+	// table, and the view reads from it. Flipping split totals re-keys the TOTALS table (drop and
+	// create) while leaving the movements untouched, so a barrier watching only the source saw
+	// nothing new and installed the maintenance inside the very transaction that had just recreated
+	// the table it addresses. Both tables are the bundle's shape; both belong in the question.
+	// The two-table overload already existed — it was added for the regeneration and this second
+	// walker of the same fact was left behind.
+	//
+	// The declaration is COPIED into the closure: the snapshot is ephemeral and a deferred install
+	// runs after the caller has let go of it (same reason the L3-4 regeneration copies).
+	const ibMaterializeSpec spec = t.m_materialize.ToRenderSpec(t.m_name);
+	const wxString sourceTable = t.m_materialize.SourceTable();
 
-	if (done == ibMaterializeApply::Rebuilt && report != nullptr)
-		report->AppendInfo(_("Rebuild totals maintenance for ") + LedgerName(t));
+	// TEMPORARY — the bundle says one thing about the shard and the TABLE says another
+	// ("Column unknown T.SHARD_"), so print what each side believes at the moment they are decided.
+
+	// The HOLDER travels, not the connection or the builder: a deferred install runs after this
+	// function — and after the ibSchemaBuilder that started it — has gone, so a captured reference
+	// would dangle. The holder outlives the save and vends the same pinned connection.
+	if (!schema.RunOrDefer(sourceTable, t.m_name, [spec, was, hasOld, holder]() {
+			ibSchemaBuilder deferred(holder);
+			ibApplyMaterialization(deferred.Connection(), spec, hasOld ? &was : nullptr);
+			return true;   // a refusal RAISES from L2-2 (docs/exceptions.md §5a)
+		}))
+		ibBackendCoreException::Error(
+			_("Failed to install the totals maintenance for %s - the restructuring was rolled back"),
+			LedgerName(t));
+
+	// ⚠ REPORTED ONLY WHEN THE DECLARATION ACTUALLY CHANGED — the intent stated at the top of this
+	// function, which had never been carried out. Every apply announced a rebuild for EVERY register
+	// in the configuration, so adding an attribute (which no totals table even carries) printed a
+	// wall of "Rebuild totals maintenance for ..." and buried the one line that mattered. The bundle
+	// is still replaced whole underneath; what changes here is only what the user is told.
+	if (report != nullptr) {
+		if (!hasOld)
+			report->AppendInfo(_("Install totals maintenance for ") + LedgerName(t));
+		else if (!ibMaterializationEquivalent(schema.Connection(), was, spec))
+			report->AppendInfo(_("Rebuild totals maintenance for ") + LedgerName(t));
+	}
 }
 
 bool SameStructure(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& target)
@@ -507,6 +626,31 @@ int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& targ
 		const ibSchemaTable* old = baseline != nullptr ? baseline->Find(cur.m_id) : nullptr;
 
 
+		// ⭐⭐ AND THE MOVEMENTS TABLE HAS DEPENDENTS TOO. The triggers and the view hang on the SOURCE
+		// table and name its columns, so a column leaving it cannot go while they stand: Firebird
+		// answers "cannot delete COLUMN ... there are 4 dependencies" — one per trigger plus the view —
+		// and rolls the whole apply back.
+		//
+		// The case below covers the mirror image (the TOTALS table being replaced) and was mistaken for
+		// the whole story: dropping a dimension or a resource changes the MOVEMENTS, which the totals
+		// table may follow without being re-keyed at all. Same rule, other end of the same edge.
+		//
+		// Nothing is re-installed here: the bundle is replaced whole further down (ApplyMaterialization),
+		// and that install is deferred past the DDL commit, so it lands after these columns are gone.
+		// ⚠ ASKED OF THE BASELINE, because what has to come down is what is STANDING, and what is
+		// standing was declared by the old schema. Walking the TARGET instead misses exactly the case
+		// that matters: an accumulation register that switches its kind leaves the previous totals
+		// table un-maintained in the new schema, so the target no longer calls it derived — and the
+		// triggers that actually hold the movements' columns were never dropped.
+		if (!cur.m_derived && old != nullptr && baseline != nullptr) {
+			for (const ibSchemaTable& dependent : baseline->Tables()) {
+				if (!dependent.m_derived || dependent.m_materialize.SourceTable() != cur.m_name)
+					continue;
+				ibDropMaterialization(schema.Connection(),
+				                      dependent.m_materialize.ToRenderSpec(dependent.m_name));
+			}
+		}
+
 		// A DERIVED table whose shape changed is REPLACED, never altered.
 		//
 		// It holds no information of its own — every row is a function of the movements, and the
@@ -527,12 +671,24 @@ int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& targ
 			old = nullptr;   // from here it is a CREATE, and everything below follows from that
 		}
 
+		// ⚠ A TABLE THAT STOPS BEING MAINTAINED WOULD KEEP ITS TRIGGERS — they hang on the SOURCE table
+		// and only mention this one by name, so neither the "table vanished" nor the "shape changed"
+		// path above covers it. There is deliberately no handling here, because nothing in the tree
+		// produces that transition any more: a register declares its derived tables and their
+		// maintenance unconditionally, and what varies is the delta's GUARD, not the declaration
+		// (accountingRegisterMetadataSchema.cpp). If a future metatype ever does flip Derived() off on
+		// a table it keeps, this is where dropping the old bundle belongs.
+
 		// Keyed by the queryable when there IS one — it vends the metadata the field diff needs. A
 		// DERIVED table has no metaobject behind it (it is declared BY one, but is not one), so it
 		// is keyed by name instead; its columns are raw fields that need no metadata to diff.
 		ibStructureBatch batch = (cur.m_queryable != nullptr)
 			? ibStructureBatch(cur.m_queryable)
 			: ibStructureBatch(cur.m_name);
+
+		// The differ's VERDICT per table, beside the ids that produced it: "create" means the baseline
+		// never had this id, "alter" means both sides have it and the columns are about to be compared.
+
 		if (old == nullptr)
 			CreateTable(batch, cur, report);
 		else
@@ -549,14 +705,46 @@ int DiffSnapshots(const ibSchemaSnapshot* baseline, const ibSchemaSnapshot& targ
 		// replacing beats patching. Note it does NOT populate: the table is created empty and the
 		// trigger only maintains it from here on, so a table with pre-existing movements needs the
 		// L3-4 regeneration pass before its totals mean anything.
-		ApplyMaterialization(schema, old, cur, report);
+		ApplyMaterialization(schema, holder, old, cur, report);
 
 		// L3-4: the bundle above only starts maintaining from NOW. A table created over a source
 		// that already holds movements, or one whose grouping just changed, needs its content
 		// rebuilt — and an empty totals table is not a neutral state, it reads as "no stock of
 		// anything". NeedsRegeneration keeps the common case (a column merely added) free.
-		if (ibDerivedState::NeedsRegeneration(old, cur))
-			ibDerivedState::Regenerate(cur, holder);
+		//
+		// ⭐⭐ AND IT RUNS THROUGH THE BARRIER DOOR — which is the whole of the rule, and replaces a
+		// special case that used to stand here.
+		//
+		// A rebuild READS the source. On an engine that keeps DDL transactional the source is not
+		// readable in the transaction that shaped it — whether this apply CREATED that table or merely
+		// ADDED A COLUMN to it. Both refuse at prepare time, and both name the source as if it were the
+		// problem: "Table unknown …" for the first, "Column unknown FLD…" for the second — about a
+		// column three statements above.
+		//
+		// There USED to be a condition here instead ("skip when the source is being created in this
+		// apply"), and it was a dodge: it silenced one of the two symptoms and left the other armed for
+		// the first person to add a dimension. RunOrDefer answers the actual question — is this table
+		// durable yet — so the rebuild simply waits for the data phase, the same door the SEED writes go
+		// through. On engines without the barrier nothing waits, and a rebuild over a table created
+		// empty a moment ago costs one scan of nothing.
+		if (ibDerivedState::NeedsRegeneration(old, cur)) {
+			// ⚠ A COPY, NOT A REFERENCE. The snapshot is EPHEMERAL — built at save, diffed, discarded —
+			// and a deferred rebuild runs after the DDL commit, which is past the point the caller still
+			// holds it. The table declaration copies cheaply and safely: its owned columns are
+			// shared_ptr and everything else points at the live configuration, which outlives the save.
+			const wxString sourceTable = cur.m_materialize.SourceTable();
+			// The answer is READ. A deferred rebuild returns true here and reports for real in the
+			// post-commit drain (ibSchemaBuilder::Flush), where a failure is a data problem in tables
+			// that already exist. One that runs NOW is still inside the apply transaction, so its
+			// refusal has somewhere to go — and dropping it left the apply believing the totals had
+			// been rebuilt when they had not.
+			// BOTH tables gate this: the rebuild reads the movements and writes the totals, and either
+			// one being new in this transaction makes it unreadable until the DDL commit.
+			if (!schema.RunOrDefer(sourceTable, cur.m_name, [table = cur, holder]() { return ibDerivedState::Regenerate(table, holder); }))
+				ibBackendCoreException::Error(
+					_("Failed to rebuild the totals for %s - the restructuring was rolled back"),
+					LedgerName(cur));
+		}
 	}
 
 	// ── PASS 3: every table's AFTER event, once the structure is settled ────────────────────────────

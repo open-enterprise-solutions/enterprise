@@ -26,7 +26,6 @@
 
 #include "backend.h"
 
-#include <wx/arrstr.h>   // wxArrayString — PhysicalIndexes result
 
 #include <functional>
 #include <set>
@@ -43,8 +42,11 @@ public:
 	// local channel (db_query).
 	explicit ibSchemaBuilder(ibDatabaseConnectionHolder* holder = nullptr);
 
-	// Render the statement through the target's dialect and run it once on the target. A CreateTable
-	// on a barrier dialect records the table as "created this save" (so a same-TX write to it defers).
+	// Render the statement through the target's dialect and run it once on the target. On a barrier
+	// dialect, every DDL that changes a table's SHAPE — CreateTable, AddColumn, DropColumn,
+	// AlterColumn, AlterTable — records that table as not yet durable, so a same-transaction statement
+	// against it defers. Not creation alone: a table that merely GAINED a column is equally unreadable
+	// in the transaction that added it, and the prepare says so about the column rather than the table.
 	int Execute(const ibDdlStatement& ddl);
 
 	// A data write to `table`. On a barrier dialect, if `table` was created in this save's DDL phase
@@ -53,24 +55,29 @@ public:
 	// write site stays agnostic: it hands a self-contained "do the write, return success" closure.
 	bool RunOrDefer(const wxString& table, std::function<bool()> work);
 
+	// ⭐ TWO TABLES, ONE PIECE OF WORK. A totals rebuild READS the movements and WRITES the totals, so
+	// either of them being new in this transaction is enough to make it wait — and keying on one of
+	// the two is a coin toss that loses half the time. It lost on the ordinary case: a register whose
+	// movements already existed and whose totals table had just been re-created ran the rebuild
+	// immediately and met "Table unknown …_DEBITTOTALS".
+	bool RunOrDefer(const wxString& tableA, const wxString& tableB, std::function<bool()> work);
+
 	// Run every deferred write in the CURRENT transaction — call this in the data/seed phase AFTER the
 	// orchestrator has committed the DDL and opened a fresh TX (so the just-created tables are durable).
 	// Returns false if any deferred write failed (the caller rolls back); clears the tracking. On
 	// engines without the barrier the deferred queue is empty, so this is a no-op returning true.
 	bool Flush();
 
+	// WHAT THIS SAVE CREATED — the barrier's own ledger, exposed because the two-phase apply needs it
+	// to compensate: if the phase AFTER the DDL commit fails, these tables are durable while the
+	// baseline still says they do not exist, and dropping them is what keeps the two in step
+	// (ibStructureBuilder::UndoCreatedTables). Empty off a barrier dialect.
+	std::set<wxString> CreatedTables() const;
+
 	// Does the target dialect accept a multi-clause ALTER TABLE (one statement, several ADD/DROP)? The
 	// structure builder folds a batch into one ALTER when true, and into one statement per clause when
 	// not (SQLite). See ibDialectDictionary::m_alterTableMultiClause.
 	bool AlterTableMultiClause() const;
-
-	// Index introspection (ibDialectDictionary::m_indexListQuery). CanIntrospectIndexes() is false when the
-	// dialect has no index-list query (MySQL / ODBC) -> the differ keeps its metadata-only diff. PhysicalIndexes()
-	// returns the NAMES of the indexes that currently exist on `table` (empty when it cannot introspect), so the
-	// differ creates only the declared indexes the DB is physically missing — the retrofit path on engines
-	// without CREATE INDEX IF NOT EXISTS (Firebird).
-	bool CanIntrospectIndexes() const;
-	wxArrayString PhysicalIndexes(const wxString& table) const;
 
 	// The connection this save runs on, for a LEVEL that executes what it rendered — L2-2 applies
 	// its own trigger / view bundle, the same way ibDatabaseQueryBuilder runs the queries it builds.

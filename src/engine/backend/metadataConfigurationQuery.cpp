@@ -236,15 +236,23 @@ bool ibMetaDataConfigurationStorage::OnSaveDatabase(int flags)
 		wxBase64Encode(writerData.pointer(), writerData.size())
 	);
 
-	if ((flags & saveConfigFlag) != 0) {
-
-		// Copy the just-saved config_save → config (whole-table). Both go through L2 — DELETE, then
-		// INSERT … SELECT (ibInsertSelect with an empty projection = SELECT *). Standard SQL, no fork.
-		// Execute returns the affected-row COUNT and signals a real failure by THROWING (caught below) —
-		// a 0 count is NOT an error (an empty config_table on the first save has nothing to delete).
-		q_save.Execute(ibDelete(config_table));
-		q_save.Execute(ibInsertSelect(config_table, {}, ibProject(ibScan(config_save_table))));
-	}
+	// ⭐⭐ THE ACTIVE CONFIGURATION IS *NOT* PUBLISHED HERE ANY MORE — see PublishConfiguration(),
+	// called after the schema is finished.
+	//
+	// config_save holds the edited configuration and is written above, in this transaction, with the
+	// DDL: that pair is atomic and must stay so. `config` is a different thing — it is the ACTIVE
+	// configuration, the one a re-read produces the BASELINE from, and publishing it here declared
+	// the schema finished while one phase of it had not run yet.
+	//
+	// On Firebird the maintenance (triggers, views) and the seeds cannot be built in the same
+	// transaction as the tables they address, so they are deferred past this commit. If that deferred
+	// phase then failed, the active configuration was already durable and ahead of the physical
+	// schema — the differ compared the new configuration against itself, emitted nothing, and the
+	// missing objects could never be built again. That is "the diff drifted", and it is not
+	// recoverable by diffing harder: a differ over two configurations is right to stay silent when
+	// they agree.
+	//
+	// So publication is the LAST step, and it happens only when everything before it worked.
 
 	return db_query->IsActiveTransaction();
 
@@ -308,10 +316,39 @@ bool ibMetaDataConfigurationStorage::OnAfterSaveDatabase(bool roolback, int flag
 
 #if _USE_SAVE_METADATA_IN_TRANSACTION == 1
 		db_query->BeginTransaction();
+
+		// ⭐⭐ PUBLISH FIRST, IN THE SAME TRANSACTION AS THE RE-READ — and only now, because only now
+		// is the schema complete. Everything the apply had to build (structure in the commit above,
+		// maintenance and seeds in the deferred phase after it) has run; a failure in any of them
+		// raised and never reached this line, leaving `config` at the PREVIOUS configuration.
+		//
+		// That is what makes a failed apply repeatable: the active configuration still describes the
+		// database as it actually is, so the next diff sees real work to do instead of comparing the
+		// new configuration against itself and emitting nothing.
+		//
+		// It shares the re-read's transaction deliberately: publication and the baseline it produces
+		// are one fact. Both land or neither does.
+		ibDatabaseQueryBuilder q_publish;
+		q_publish.Execute(ibDelete(config_table));
+		q_publish.Execute(ibInsertSelect(config_table, {}, ibProject(ibScan(config_save_table))));
+
+		// ⭐ THE WHOLE RE-READ IS INSIDE ONE TRANSACTION, SO IT NEEDS ONE ABORT PATH. Loading and running
+		// a configuration compiles modules and reads blobs; any of it can raise, and an exception that
+		// walks out of here leaves this transaction ACTIVE. It then holds locks on the config tables
+		// until the connection dies, and the next apply meets that as a deadlock naming sys_config.
+		// Same class as the commit guard in ibStructureBuilder::OnAfterSave.
+		struct TxGuard {
+			bool m_done = false;
+			~TxGuard() {
+				if (!m_done && db_query->IsActiveTransaction())
+					db_query->RollBack();
+			}
+		} txGuard;
 #endif
 		if (!m_configMetadata->LoadDatabase(onlyLoadFlag)) {
 #if _USE_SAVE_METADATA_IN_TRANSACTION == 1
 			db_query->RollBack();
+			txGuard.m_done = true;
 #else
 			return false;
 #endif
@@ -320,13 +357,16 @@ bool ibMetaDataConfigurationStorage::OnAfterSaveDatabase(bool roolback, int flag
 		if (!m_configNew && !m_configMetadata->RunDatabase()) {
 #if _USE_SAVE_METADATA_IN_TRANSACTION == 1
 			db_query->RollBack();
+			txGuard.m_done = true;
 #else
 			return false;
 #endif
 		}
 
 #if _USE_SAVE_METADATA_IN_TRANSACTION == 1
-		db_query->Commit();
+		if (db_query->IsActiveTransaction())
+			db_query->Commit();
+		txGuard.m_done = true;
 #endif
 		Modify(false);
 
