@@ -1044,9 +1044,24 @@ void ibSessionRegistry::ProcessAdd(ibRegistryRequest& req)
 		if (m_snapshot) {
 			const wxString ownId = s.GetId();
 			const unsigned int n = m_snapshot->GetSessionCount();
+
 			for (unsigned int i = 0; i < n; ++i) {
 				if (m_snapshot->GetSession(i) == ownId) continue;
 				if (m_snapshot->IsExclusive(i)) {
+					// ⭐⭐ A HOLDER WITH NO USER IS NOBODY, AND NOBODY IS NOT WAITED FOR.
+					//
+					// The row is written with the user that opened the session, so an empty name means
+					// the row outlived whoever wrote it — a process killed while holding monopoly. The
+					// stale sweep above clears such rows, but only once the liveness window has passed;
+					// until then this gate refused on behalf of a session that cannot come back, and
+					// the refusal even said so out loud: "user ''".
+					//
+					// Waiting for the window is right for a holder that MIGHT still be working. It is
+					// not right for one that cannot be — nothing will ever release it, and the only
+					// remedy the message offers ("ask them to leave") has nobody to address.
+					if (m_snapshot->GetUserName(i).IsEmpty())
+						continue;
+
 					wxString reason = wxString::Format(
 						_("Another session holds exclusive mode (user '%s')"),
 						m_snapshot->GetUserName(i));

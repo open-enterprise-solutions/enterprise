@@ -32,6 +32,7 @@
 
 #include "procUnit.h"
 #include "procUnitValues.h"   // ibValueFunction full def + AsFunction / AsIterator
+#include "backend/query/queryException.h"   // ibBackendQueryLinqException — the pipeline refuses in its own variety
 #include "procUnitState.h"
 #include "session/session.h"
 
@@ -64,15 +65,15 @@ static void CallLambdaWithArgs(ibValueFunction& fn, ibValue** argPtrs,
 {
 	const ibByteCode::ibByteFunction* bfn = fn.GetFunction();
 	if (bfn == nullptr) {
-		ibBackendCoreException::Error(_("LINQ: lambda value is not initialised"));
+		ibBackendQueryLinqException::Error(_("Lambda value is not initialised"));
 	}
 
 	const long lambdaParamCount = (long)bfn->m_listParam.size();
 	const long lambdaVarCount   = bfn->m_lVarCount;
 
 	if (lambdaParamCount < argCount) {
-		ibBackendCoreException::Error(
-			_("LINQ: lambda must accept at least %ld argument(s)"), argCount);
+		ibBackendQueryLinqException::Error(
+			_("Lambda must accept at least %ld argument(s)"), argCount);
 	}
 
 
@@ -122,16 +123,16 @@ static void CallLambdaWithArgs(ibValueFunction& fn, ibValue** argPtrs,
 	const ibByteCode* pLocalByteCode = fn.GetParentBc();
 	for (long i = argCount; i < lambdaParamCount; i++) {
 		if (i >= (long)bfn->m_listParam.size()) {
-			ibBackendCoreException::Error(
-				_("LINQ: lambda m_listParam shorter than paramCount at %ld"), i);
+			ibBackendQueryLinqException::Error(
+				_("Lambda m_listParam shorter than paramCount at %ld"), i);
 		}
 		const ibParamRunUnit& puDef = bfn->m_listParam[i].m_defaultValue;
 		if (puDef.m_numArray == DEF_VAR_SKIP) {
 			const wxString& nm = (i < (long)bfn->m_listParam.size())
 				? bfn->m_listParam[i].m_strName
 				: wxString::Format(wxT("p%ld"), i);
-			ibBackendCoreException::Error(
-				_("LINQ: lambda missing required argument '%s'"), nm);
+			ibBackendQueryLinqException::Error(
+				_("Lambda missing required argument '%s'"), nm);
 		}
 		CopyValue(cRunContext.m_pLocVars[i], pLocalByteCode->m_listConst[puDef.m_numIndex]);
 	}
@@ -931,7 +932,7 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 	const long realNum = static_cast<long>(method);
 
 	if (self == nullptr) {
-		ibBackendCoreException::Error(_("LINQ: cannot dispatch on null value"));
+		ibBackendQueryLinqException::Error(_("Cannot dispatch on null value"));
 	}
 
 	// Drive source through its standard iterator protocol. Any
@@ -953,7 +954,7 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 			else                         self->CallAsProc(ownNum, args, n);
 			return;
 		}
-		ibBackendCoreException::Error(_("LINQ: value is not iterable"));
+		ibBackendQueryLinqException::Error(_("Value is not iterable"));
 	}
 
 	// Order of cases matches ibValue::ibLinqMethod enum (value.h) +
@@ -966,12 +967,12 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 		case M::SelectMany:
 		{
 			if (n < 1 || args == nullptr || args[0] == nullptr) {
-				ibBackendCoreException::Error(_("LINQ: method requires a function argument"));
+				ibBackendQueryLinqException::Error(_("Method requires a function argument"));
 			}
 			ibValueFunction* fn = AsFunction(args[0]);
 			if (fn == nullptr) {
-				ibBackendCoreException::Error(
-					_("LINQ: argument must be a Function or Procedure value"));
+				ibBackendQueryLinqException::Error(
+					_("Argument must be a Function or Procedure value"));
 			}
 
 			std::shared_ptr<ibValueIteratorState> pipeline;
@@ -1044,10 +1045,10 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 		case M::OrderByDescending: // same but reverse comparator
 		{
 			if (n < 1 || args == nullptr || args[0] == nullptr)
-				ibBackendCoreException::Error(_("LINQ: OrderBy requires a key selector function"));
+				ibBackendQueryLinqException::Error(_("OrderBy requires a key selector function"));
 			ibValueFunction* keyFn = AsFunction(args[0]);
 			if (keyFn == nullptr)
-				ibBackendCoreException::Error(_("LINQ: OrderBy key selector must be a Function value"));
+				ibBackendQueryLinqException::Error(_("OrderBy key selector must be a Function value"));
 			const bool desc = (method == M::OrderByDescending);
 			auto pipeline = std::make_shared<ibValueOrderByState>(std::move(upstream), *keyFn, desc);
 			CopyValue(ret, ibValue(new ibValueQuery(std::move(pipeline))));
@@ -1056,10 +1057,10 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 		case M::GroupBy: // lazy, materialise + ordered buckets
 		{
 			if (n < 1 || args == nullptr || args[0] == nullptr)
-				ibBackendCoreException::Error(_("LINQ: GroupBy requires a key selector function"));
+				ibBackendQueryLinqException::Error(_("GroupBy requires a key selector function"));
 			ibValueFunction* keyFn = AsFunction(args[0]);
 			if (keyFn == nullptr)
-				ibBackendCoreException::Error(_("LINQ: GroupBy key selector must be a Function value"));
+				ibBackendQueryLinqException::Error(_("GroupBy key selector must be a Function value"));
 			auto pipeline = std::make_shared<ibValueGroupByState>(std::move(upstream), *keyFn);
 			CopyValue(ret, ibValue(new ibValueQuery(std::move(pipeline))));
 			break;
@@ -1073,14 +1074,14 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 				break;
 			if (n < 4 || args == nullptr || args[0] == nullptr || args[1] == nullptr
 				|| args[2] == nullptr || args[3] == nullptr)
-				ibBackendCoreException::Error(
-					_("LINQ: Join requires (inner, leftKey, rightKey, projection)"));
+				ibBackendQueryLinqException::Error(
+					_("Join requires (inner, leftKey, rightKey, projection)"));
 			ibValueFunction* leftKeyFn  = AsFunction(args[1]);
 			ibValueFunction* rightKeyFn = AsFunction(args[2]);
 			ibValueFunction* projFn     = AsFunction(args[3]);
 			if (leftKeyFn == nullptr || rightKeyFn == nullptr || projFn == nullptr)
-				ibBackendCoreException::Error(
-					_("LINQ: Join leftKey / rightKey / projection must be Function values"));
+				ibBackendQueryLinqException::Error(
+					_("Join leftKey / rightKey / projection must be Function values"));
 			auto pipeline = std::make_shared<ibValueJoinState>(
 				std::move(upstream), *args[0], *leftKeyFn, *rightKeyFn, *projFn);
 			CopyValue(ret, ibValue(new ibValueQuery(std::move(pipeline))));
@@ -1089,7 +1090,7 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 		case M::Skip: // Skip(n)
 		{
 			if (n < 1 || args == nullptr || args[0] == nullptr)
-				ibBackendCoreException::Error(_("LINQ: Skip requires a count argument"));
+				ibBackendQueryLinqException::Error(_("Skip requires a count argument"));
 			const long count = (long)args[0]->GetNumber().ToInt64();
 			auto pipeline = std::make_shared<ibValueSkipState>(std::move(upstream), count);
 			CopyValue(ret, ibValue(new ibValueQuery(std::move(pipeline))));
@@ -1098,7 +1099,7 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 		case M::Take: // Take(n)
 		{
 			if (n < 1 || args == nullptr || args[0] == nullptr)
-				ibBackendCoreException::Error(_("LINQ: Take requires a count argument"));
+				ibBackendQueryLinqException::Error(_("Take requires a count argument"));
 			const long count = (long)args[0]->GetNumber().ToInt64();
 			auto pipeline = std::make_shared<ibValueTakeState>(std::move(upstream), count);
 			CopyValue(ret, ibValue(new ibValueQuery(std::move(pipeline))));
@@ -1107,7 +1108,7 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 		case M::SkipWhile: // SkipWhile(fn)
 		{
 			ibValueFunction* fn = (n >= 1 && args && args[0]) ? AsFunction(args[0]) : nullptr;
-			if (fn == nullptr) ibBackendCoreException::Error(_("LINQ: SkipWhile requires a predicate function"));
+			if (fn == nullptr) ibBackendQueryLinqException::Error(_("SkipWhile requires a predicate function"));
 			auto pipeline = std::make_shared<ibValueSkipWhileState>(std::move(upstream), *fn);
 			CopyValue(ret, ibValue(new ibValueQuery(std::move(pipeline))));
 			break;
@@ -1115,7 +1116,7 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 		case M::TakeWhile: // TakeWhile(fn)
 		{
 			ibValueFunction* fn = (n >= 1 && args && args[0]) ? AsFunction(args[0]) : nullptr;
-			if (fn == nullptr) ibBackendCoreException::Error(_("LINQ: TakeWhile requires a predicate function"));
+			if (fn == nullptr) ibBackendQueryLinqException::Error(_("TakeWhile requires a predicate function"));
 			auto pipeline = std::make_shared<ibValueTakeWhileState>(std::move(upstream), *fn);
 			CopyValue(ret, ibValue(new ibValueQuery(std::move(pipeline))));
 			break;
@@ -1129,9 +1130,9 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 		case M::Concat: // Concat(other)
 		{
 			if (n < 1 || args == nullptr || args[0] == nullptr)
-				ibBackendCoreException::Error(_("LINQ: Concat requires another iterable"));
+				ibBackendQueryLinqException::Error(_("Concat requires another iterable"));
 			auto bIt = args[0]->CreateIterator();
-			if (!bIt) ibBackendCoreException::Error(_("LINQ: Concat operand is not iterable"));
+			if (!bIt) ibBackendQueryLinqException::Error(_("Concat operand is not iterable"));
 			auto pipeline = std::make_shared<ibValueConcatState>(std::move(upstream), std::move(bIt));
 			CopyValue(ret, ibValue(new ibValueQuery(std::move(pipeline))));
 			break;
@@ -1139,9 +1140,9 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 		case M::Union: // concat + distinct
 		{
 			if (n < 1 || args == nullptr || args[0] == nullptr)
-				ibBackendCoreException::Error(_("LINQ: Union requires another iterable"));
+				ibBackendQueryLinqException::Error(_("Union requires another iterable"));
 			auto bIt = args[0]->CreateIterator();
-			if (!bIt) ibBackendCoreException::Error(_("LINQ: Union operand is not iterable"));
+			if (!bIt) ibBackendQueryLinqException::Error(_("Union operand is not iterable"));
 			auto cat = std::make_shared<ibValueConcatState>(std::move(upstream), std::move(bIt));
 			auto pipeline = std::make_shared<ibValueDistinctState>(std::move(cat));
 			CopyValue(ret, ibValue(new ibValueQuery(std::move(pipeline))));
@@ -1150,7 +1151,7 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 		case M::Intersect: // Intersect(other)
 		{
 			if (n < 1 || args == nullptr || args[0] == nullptr)
-				ibBackendCoreException::Error(_("LINQ: Intersect requires another iterable"));
+				ibBackendQueryLinqException::Error(_("Intersect requires another iterable"));
 			auto pipeline = std::make_shared<ibValueIntersectState>(std::move(upstream), *args[0]);
 			CopyValue(ret, ibValue(new ibValueQuery(std::move(pipeline))));
 			break;
@@ -1158,7 +1159,7 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 		case M::Except: // Except(other)
 		{
 			if (n < 1 || args == nullptr || args[0] == nullptr)
-				ibBackendCoreException::Error(_("LINQ: Except requires another iterable"));
+				ibBackendQueryLinqException::Error(_("Except requires another iterable"));
 			auto pipeline = std::make_shared<ibValueExceptState>(std::move(upstream), *args[0]);
 			CopyValue(ret, ibValue(new ibValueQuery(std::move(pipeline))));
 			break;
@@ -1170,7 +1171,7 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 			bool any = false;
 			while (upstream->MoveNext(current)) any = true;
 			if (!any && method == M::Last)
-				ibBackendCoreException::Error(_("LINQ: Last() on empty sequence"));
+				ibBackendQueryLinqException::Error(_("Last() on empty sequence"));
 			// Always write ret — empty default for OrDefault path,
 			// real value for any() path. CopyValue with TYPE_EMPTY
 			// source resets dst (otherwise caller's slot keeps stale value).
@@ -1188,9 +1189,9 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 				if (count > 1) break;
 			}
 			if (count == 0 && method == M::Single)
-				ibBackendCoreException::Error(_("LINQ: Single() on empty sequence"));
+				ibBackendQueryLinqException::Error(_("Single() on empty sequence"));
 			if (count > 1)
-				ibBackendCoreException::Error(_("LINQ: Single() - sequence contains more than one element"));
+				ibBackendQueryLinqException::Error(_("Single() - sequence contains more than one element"));
 			CopyValue(ret, count == 1 ? first : ibValue());
 			break;
 		}
@@ -1204,11 +1205,11 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 		case M::ElementAtOrDefault: // return empty on OOR
 		{
 			if (n < 1 || args == nullptr || args[0] == nullptr)
-				ibBackendCoreException::Error(_("LINQ: ElementAt requires an index"));
+				ibBackendQueryLinqException::Error(_("ElementAt requires an index"));
 			const long idx = (long)args[0]->GetNumber().ToInt64();
 			if (idx < 0) {
 				if (method == M::ElementAt)
-					ibBackendCoreException::Error(_("LINQ: ElementAt - negative index"));
+					ibBackendQueryLinqException::Error(_("ElementAt - negative index"));
 				CopyValue(ret, ibValue());
 				break;
 			}
@@ -1220,14 +1221,14 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 				++pos;
 			}
 			if (!found && method == M::ElementAt)
-				ibBackendCoreException::Error(_("LINQ: ElementAt - index out of range"));
+				ibBackendQueryLinqException::Error(_("ElementAt - index out of range"));
 			CopyValue(ret, found ? current : ibValue());
 			break;
 		}
 		case M::Contains: // Contains(value)
 		{
 			if (n < 1 || args == nullptr || args[0] == nullptr)
-				ibBackendCoreException::Error(_("LINQ: Contains requires a value argument"));
+				ibBackendQueryLinqException::Error(_("Contains requires a value argument"));
 			const ibValue& target = *args[0];
 			ibValue current;
 			bool found = false;
@@ -1240,9 +1241,9 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 		case M::SequenceEqual: // SequenceEqual(other)
 		{
 			if (n < 1 || args == nullptr || args[0] == nullptr)
-				ibBackendCoreException::Error(_("LINQ: SequenceEqual requires another iterable"));
+				ibBackendQueryLinqException::Error(_("SequenceEqual requires another iterable"));
 			auto bIt = args[0]->CreateIterator();
-			if (!bIt) ibBackendCoreException::Error(_("LINQ: SequenceEqual operand is not iterable"));
+			if (!bIt) ibBackendQueryLinqException::Error(_("SequenceEqual operand is not iterable"));
 			ibValue a, b;
 			bool equal = true;
 			for (;;) {
@@ -1257,10 +1258,10 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 		case M::Aggregate: // Aggregate(seed, reducer)
 		{
 			if (n < 2 || args == nullptr || args[0] == nullptr || args[1] == nullptr)
-				ibBackendCoreException::Error(_("LINQ: Aggregate requires (seed, reducer)"));
+				ibBackendQueryLinqException::Error(_("Aggregate requires (seed, reducer)"));
 			ibValueFunction* reducer = AsFunction(args[1]);
 			if (reducer == nullptr)
-				ibBackendCoreException::Error(_("LINQ: Aggregate reducer must be a Function value"));
+				ibBackendQueryLinqException::Error(_("Aggregate reducer must be a Function value"));
 			ibValue acc = *args[0];
 			ibValue current;
 			while (upstream->MoveNext(current)) {
@@ -1275,7 +1276,7 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 		{
 			ibValueFunction* fn = (n >= 1 && args && args[0]) ? AsFunction(args[0]) : nullptr;
 			if (fn == nullptr)
-				ibBackendCoreException::Error(_("LINQ: WhereIndexed requires a predicate function"));
+				ibBackendQueryLinqException::Error(_("WhereIndexed requires a predicate function"));
 			auto pipeline = std::make_shared<ibValueWhereIndexedState>(std::move(upstream), *fn);
 			CopyValue(ret, ibValue(new ibValueQuery(std::move(pipeline))));
 			break;
@@ -1284,7 +1285,7 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 		{
 			ibValueFunction* fn = (n >= 1 && args && args[0]) ? AsFunction(args[0]) : nullptr;
 			if (fn == nullptr)
-				ibBackendCoreException::Error(_("LINQ: SelectIndexed requires a projection function"));
+				ibBackendQueryLinqException::Error(_("SelectIndexed requires a projection function"));
 			auto pipeline = std::make_shared<ibValueSelectIndexedState>(std::move(upstream), *fn);
 			CopyValue(ret, ibValue(new ibValueQuery(std::move(pipeline))));
 			break;
@@ -1293,13 +1294,13 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 		case M::ToTable:
 			// Meaningful only on a data source (Data.* / Queryable, which overrides the
 			// dispatch) — a plain RAM iterable has no column schema to materialise.
-			ibBackendCoreException::Error(
-				_("LINQ: ToTable is supported on data sources (Data.*) only"));
+			ibBackendQueryLinqException::Error(
+				_("ToTable is supported on data sources (Data.*) only"));
 			break;
 
 		default:
-			ibBackendCoreException::Error(
-				_("LINQ: unknown method index %ld"), realNum);
+			ibBackendQueryLinqException::Error(
+				_("Unknown method index %ld"), realNum);
 	}
 }
 

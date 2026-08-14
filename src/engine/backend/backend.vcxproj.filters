@@ -790,6 +790,9 @@
     <ClInclude Include="session\sessionPolicy.h">
       <Filter>session</Filter>
     </ClInclude>
+    <ClInclude Include="session\sessionException.h">
+      <Filter>session</Filter>
+    </ClInclude>
     <ClInclude Include="session\sessionRegistry.h">
       <Filter>session</Filter>
     </ClInclude>
@@ -1282,6 +1285,12 @@
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\accountingRegisterMetadata.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\accountingRegisterMetadataSchema.cpp">
+      <Filter>metaCollection\partial</Filter>
+    </ClCompile>
+    <ClCompile Include="metaCollection\partial\accountingRegisterMetadataTotals.cpp">
       <Filter>metaCollection\partial</Filter>
     </ClCompile>
     <ClCompile Include="metaCollection\partial\accountingRegisterMetadata_res.cpp">
@@ -1908,6 +1917,9 @@
     <ClCompile Include="session\sessionHolder.cpp">
       <Filter>session</Filter>
     </ClCompile>
+    <ClCompile Include="session\sessionException.cpp">
+      <Filter>session</Filter>
+    </ClCompile>
     <ClCompile Include="session\sessionRegistry.cpp">
       <Filter>session</Filter>
     </ClCompile>
@@ -2257,6 +2269,12 @@
     <ClCompile Include="query\queryLowering.cpp">
       <Filter>query</Filter>
     </ClCompile>
+    <ClCompile Include="query\queryException.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryHierarchy.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
     <ClCompile Include="query\queryRewrite.cpp">
       <Filter>query</Filter>
     </ClCompile>
@@ -2400,6 +2418,15 @@
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\queryLowering.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryException.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryHierarchy.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryUnfold.h">
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\queryRewrite.h">

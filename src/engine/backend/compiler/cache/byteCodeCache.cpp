@@ -119,13 +119,16 @@ bool ibByteCodeCache::Load(ibByteCode& outBc, const ibGuid& descId, const wxStri
 
 		ibQueryResult res = q.ExecuteIR(ir);   // RAII: closes cursor + statement
 		if (res.Next()) {
-			if (ibDatabaseResultSet* rs = res.RawResultSet()) {
-				wxMemoryBuffer blob;
-				rs->GetResultBlob(1, blob);
-				if (blob.GetDataLen() > 0) {
-					ibReaderMemory reader(blob);
-					return outBc.DeserializeAOT(reader);
-				}
+			// The blob is read through the RESULT's own typed accessor, BY NAME. It used to borrow the
+			// raw driver cursor and read field 1 — an L2-1 leak by the header's own words, and the last
+			// caller of it, so the hatch is gone with this line. By name rather than by position for
+			// the ordinary reason: the projection above is what decides which column that is, and a
+			// number here would go on compiling after somebody adds a second one.
+			wxMemoryBuffer blob;
+			res.GetResultBlob(wxT("bc_blob"), blob);
+			if (blob.GetDataLen() > 0) {
+				ibReaderMemory reader(blob);
+				return outBc.DeserializeAOT(reader);
 			}
 		}
 	}

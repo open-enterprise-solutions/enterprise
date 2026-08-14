@@ -218,6 +218,11 @@ ibBackendException::ibBackendException(const wxString& strErrorDescription)
 	wxLogDebug(strErrorDescription);
 #endif // !DEBUG
 
+	// EVERY refusal, in the same file as the ids and the SQL — the point of the trace is the ORDER of
+	// events, and an error that goes only to the log pane cannot be lined up against the statement
+	// that caused it. Written at CONSTRUCTION rather than at the catch site, so it records the ones
+	// that are handled and swallowed too — which is exactly the class of thing this trace exists for.
+
 	if (auto* puState = ibSession::GetPUState())
 		puState->Raise();
 

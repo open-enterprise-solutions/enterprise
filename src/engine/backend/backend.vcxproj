@@ -46,6 +46,7 @@
     <ClInclude Include="diagnostics\crashGuard.h" />
     <ClInclude Include="diagnostics\leakTracker.h" />
     <ClInclude Include="session\designerExclusivePolicy.h" />
+    <ClInclude Include="session\sessionException.h" />
     <ClInclude Include="session\session.h" />
     <ClInclude Include="session\sessionHolder.h" />
     <ClInclude Include="session\sessionPolicy.h" />
@@ -255,6 +256,9 @@
     <ClInclude Include="query\queryTempStore.h" />
     <ClInclude Include="query\queryParser.h" />
     <ClInclude Include="query\queryLowering.h" />
+    <ClInclude Include="query\queryException.h" />
+    <ClInclude Include="query\queryHierarchy.h" />
+    <ClInclude Include="query\queryUnfold.h" />
     <ClInclude Include="query\queryRewrite.h" />
     <ClInclude Include="compiler\lambdaQueryAst.h" />
     <ClInclude Include="query\queryableFactory.h" />
@@ -403,6 +407,7 @@
     <ClCompile Include="diagnostics\leakTracker.cpp" />
     <ClCompile Include="session\designerExclusivePolicy.cpp" />
     <ClCompile Include="session\session.cpp" />
+    <ClCompile Include="session\sessionException.cpp" />
     <ClCompile Include="session\sessionParameters.cpp" />
     <ClCompile Include="session\sessionHolder.cpp" />
     <ClCompile Include="session\sessionRegistry.cpp" />
@@ -582,6 +587,8 @@
     <ClCompile Include="metaCollection\partial\accountingRegisterManager.cpp" />
     <ClCompile Include="metaCollection\partial\accountingRegisterManager_impl.cpp" />
     <ClCompile Include="metaCollection\partial\accountingRegisterMetadata.cpp" />
+    <ClCompile Include="metaCollection\partial\accountingRegisterMetadataSchema.cpp" />
+    <ClCompile Include="metaCollection\partial\accountingRegisterMetadataTotals.cpp" />
     <ClCompile Include="metaCollection\partial\accountingRegisterMetadataMenu.cpp" />
     <ClCompile Include="metaCollection\partial\accountingRegisterMetadataProperty.cpp" />
     <ClCompile Include="metaCollection\partial\accountingRegisterMetadata_res.cpp" />
@@ -670,6 +677,8 @@
     <ClCompile Include="query\queryTempStore.cpp" />
     <ClCompile Include="query\queryParser.cpp" />
     <ClCompile Include="query\queryLowering.cpp" />
+    <ClCompile Include="query\queryException.cpp" />
+    <ClCompile Include="query\queryHierarchy.cpp" />
     <ClCompile Include="query\queryRewrite.cpp" />
     <ClCompile Include="compiler\lambdaQueryAst.cpp" />
     <ClCompile Include="query\queryableFactory.cpp" />

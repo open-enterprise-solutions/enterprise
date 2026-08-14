@@ -3,7 +3,6 @@
 //	Description : Processor unit 
 ////////////////////////////////////////////////////////////////////////////
 
-#include <wx/file.h>   // TEMPORARY — file-backed diagnostic, see the notes at the dumps
 #include "compileCode.h"
 #include "procUnit.h"
 #include "procUnitValues.h"    // ibValueIterator / ibValueFunction / AsFunction / AsIterator
@@ -1707,8 +1706,24 @@ start_label:
 				//DATE
 			case OPER_ADD + TYPE_DELTA3: variable1.m_dData = cvariable2.m_dData + cvariable3.m_dData; break;
 			case OPER_SUB + TYPE_DELTA3: variable1.m_dData = cvariable2.m_dData - cvariable3.m_dData; break;
-			case OPER_DIV + TYPE_DELTA3: if (cvariable3.m_dData == 0) { Raise(ERROR_DIVIDE_BY_ZERO); } variable1.m_dData = cvariable2.m_dData / cvariable3.GetInteger(); break;
-			case OPER_MOD + TYPE_DELTA3: if (cvariable3.m_dData == 0) { Raise(ERROR_DIVIDE_BY_ZERO); } variable1.m_dData = (int)cvariable2.m_dData % cvariable3.GetInteger(); break;
+			// ⚠ A DATE IS 64 BITS, AND BOTH SIDES OF THESE TWO WERE NARROWED TO 32.
+			//
+			// `m_dData` is milliseconds since year 1 — about 6.4e13 for any modern date, so `(int)` kept
+			// the low 32 bits INCLUDING the sign, and the divisor was worse: `GetInteger()` runs through
+			// `ibNumber::ToInt()`, which CLAMPS at 2147483647. Every real date divided by exactly that,
+			// whatever was written. The zero guard reads the raw 64-bit field, so a value of 1..999 passed
+			// it while the clamped divisor came out 0 — an integer division by zero, past the check that
+			// exists to prevent it.
+			//
+			// Both operands are the same field now, and the guard tests what is actually divided by.
+			case OPER_DIV + TYPE_DELTA3:
+				if (cvariable3.m_dData == 0) { Raise(ERROR_DIVIDE_BY_ZERO); }
+				variable1.m_dData = cvariable2.m_dData / cvariable3.m_dData;
+				break;
+			case OPER_MOD + TYPE_DELTA3:
+				if (cvariable3.m_dData == 0) { Raise(ERROR_DIVIDE_BY_ZERO); }
+				variable1.m_dData = cvariable2.m_dData % cvariable3.m_dData;
+				break;
 			case OPER_MULT + TYPE_DELTA3: variable1.m_dData = cvariable2.m_dData * cvariable3.m_dData; break;
 			case OPER_LET + TYPE_DELTA3: variable1.m_dData = cvariable2.m_dData; break;
 			case OPER_NOT + TYPE_DELTA3: variable1.m_dData = ~cvariable2.m_dData; break;

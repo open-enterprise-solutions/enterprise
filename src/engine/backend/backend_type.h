@@ -51,8 +51,27 @@ public:
 	virtual ibValue AdjustValue() const;
 	virtual ibValue AdjustValue(const ibValue& varValue) const;
 
-	//get type description 
+	//get type description
 	virtual ibTypeDescription& GetTypeDesc() const = 0;
+
+	// ⭐⭐ IS THE TYPE FILLED IN — asked HERE, of whoever owns a type description, and never counted
+	// at a callsite.
+	//
+	// It belongs on this factory and nowhere else: the type description is declared here (above), so
+	// this is the one place that can answer for every holder of one — an attribute, a control's
+	// source, a filter's field. Put on a subclass it would answer for that subclass alone, and the
+	// next holder would spell the same question its own way (`GetClsidCount() == 0`,
+	// `!GetTypeDesc().IsOk()`, `GetClsidList().empty()`) — three spellings of one fact, drifting.
+	//
+	// An empty type description is a column no value can ever enter, and every rule that refuses such
+	// a state asks exactly this: a register with no recorder, a chart of accounts with no
+	// characteristic chart, an analytics slot the chart never typed.
+	// NOT virtual: the answer is a function of the type description alone, and GetTypeDesc() — which
+	// IS virtual — already supplies whatever each holder keeps. A virtual here would only offer
+	// subclasses a chance to disagree about what "empty" means, which is the drift this exists to
+	// prevent (and, being inline on a BACKEND_API class, it would demand an out-of-line definition
+	// every DLL that sees the header must link against).
+	bool IsEmptyTypeDesc() const { return !GetTypeDesc().IsOk(); }
 };
 
 //////////////////////////////////////////////////////////////

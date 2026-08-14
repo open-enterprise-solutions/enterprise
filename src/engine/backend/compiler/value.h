@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <atomic>
+#include <type_traits>   // the pointer catch-all below (enable_if / is_base_of / is_same)
 #include <typeinfo>
 #include <unordered_map>
 #include <mutex>
@@ -814,6 +815,29 @@ public:
 	ibValue(const wxStringImpl& sParam); //string
 	ibValue(const wxString& sParam); //string
 	ibValue(ibString&& sParam); //string — native move (runtime string functions)
+
+	// ⭐⭐ ANY OTHER POINTER IS A MISTAKE, AND IT USED TO BECOME `TRUE`.
+	//
+	// Pointer-to-bool is a STANDARD conversion, so an unrelated `Foo*` handed to anything taking an
+	// ibValue beat every user-defined overload here and arrived as Boolean TRUE — silently, and
+	// TRUE-because-non-null looks exactly like a value somebody meant. The `const char*` overloads
+	// above were half of this trap, closed when `wxEmptyString` turned out to be arriving as a
+	// boolean; this is the other half, and it is the general case rather than one more spelling.
+	//
+	// Deleted rather than defined: there is no sensible ibValue to make out of an arbitrary pointer,
+	// so the answer is a compile error naming the callsite.
+	//
+	// What still passes, and why each is exempt:
+	//   * `char*` / `wchar_t*` — a STRING, and the overloads above take them;
+	//   * anything derived from ibValue or ibBackendValue — the two pointer constructors above are
+	//     for exactly those, and a DERIVED pointer would otherwise match this template exactly and
+	//     lose the base overload it was meant for.
+	template <class T, class = typename std::enable_if<
+		!std::is_same<typename std::remove_cv<T>::type, char>::value &&
+		!std::is_same<typename std::remove_cv<T>::type, wchar_t>::value &&
+		!std::is_base_of<ibValue, T>::value &&
+		!std::is_base_of<ibBackendValue, T>::value>::type>
+	ibValue(T*) = delete;
 
 	//destructor:
 	virtual ~ibValue();

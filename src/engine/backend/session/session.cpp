@@ -1,5 +1,6 @@
 #include "session.h"
 #include "sessionRegistry.h"
+#include "sessionException.h"   // the session's own refusals — exclusive held / others active
 
 #include "backend/moduleManager/moduleManager.h"
 #include "backend/metadataConfiguration.h"
@@ -684,10 +685,19 @@ void ibSession::SetExclusive(bool on)
 	switch (r) {
 	case ibExclusiveResult::Granted:
 		return;
+	// ⭐⭐ THE SESSION'S OWN VARIETY, because these are not malfunctions and the caller can act on them.
+	//
+	// Both used to be ibBackendCoreException — "something went wrong" — which is the one thing they
+	// are not: nothing is broken, somebody else is simply in the base. The TYPE now says who refused
+	// and the Kind says which of the two situations it is, so a caller can wait, or offer to ask the
+	// other user to leave, or (the restructuring's case) explain that the apply needs the base to
+	// itself. Told apart by Kind rather than by matching the message text.
 	case ibExclusiveResult::HeldByOther:
-		ibBackendCoreException::Error(_("Another session is in exclusive mode"));
+		ibBackendSessionException::Throw(ibBackendSessionException::Kind::ExclusiveHeld,
+			_("Another session is in exclusive mode"));
 	case ibExclusiveResult::NotSole:
-		ibBackendCoreException::Error(_("Cannot acquire exclusive mode: other sessions are active"));
+		ibBackendSessionException::Throw(ibBackendSessionException::Kind::OthersActive,
+			_("Cannot acquire exclusive mode: other sessions are active"));
 	case ibExclusiveResult::Pending:
 		ibBackendCoreException::Error(_("Exclusive mode request did not complete"));
 	}
@@ -1316,8 +1326,13 @@ ibSessionScope::~ibSessionScope()
 std::shared_ptr<ibDatabaseLayer> ibSession::DatabaseLayer()
 {
 	ibSession* sess = ibSession::Current();
+	// A programming fault at the boundary rather than a condition of the base — something asked for
+	// session-scoped state from a thread that has no session bound. Typed so a caller that can cope
+	// (a job registering itself before a base is open, a test) tells it apart from "the base refused"
+	// without reading the message: jobRegister.cpp already does exactly that one level up.
 	if (sess == nullptr)
-		ibBackendCoreException::Error(_("ses_query: no active session"));
+		ibBackendSessionException::Throw(ibBackendSessionException::Kind::NoSession,
+			_("ses_query: no active session"));
 	// Single entry — holder's EnsureConnection resolves TX > scope >
 	// fresh Checkout (auto-bound as scope). See connectionHolder.h.
 	auto conn = sess->EnsureConnection();

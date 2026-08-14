@@ -785,7 +785,9 @@ public:
 		if (colCollection == nullptr)
 			return wxEmptyString;
 		ibValueModelColumnCollection::ibValueModelColumnInfo* colInfo = colCollection->GetColumnByID(colId);
-		return colInfo != nullptr ? colInfo->GetColumnName() : wxEmptyString;
+		if (colInfo == nullptr)
+			return wxEmptyString;
+		return colInfo->GetColumnName();
 	};
 
 	virtual bool SetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, const ibValue& varMetaVal) = 0;
