@@ -85,7 +85,12 @@ bool ibQueryConditionModel::IsSimple(const ibQueryAstExprPtr& condition)
 	case ibQueryAstExprKind::Compare: return leftIsColumn;
 	case ibQueryAstExprKind::Like:    return leftIsColumn && !condition->m_negated;
 	case ibQueryAstExprKind::IsNull:  return leftIsColumn;
-	case ibQueryAstExprKind::In:      return leftIsColumn && !condition->m_negated && !condition->m_subquery;
+	// ⚠ AN UNFOLD WORD MAKES IT NOT SIMPLE. `x IN HIERARCHY (&p)` reads as field · comparison · value
+	// and is not one: the drop-down has no such comparison, so offering it would mean rebuilding the
+	// row without the word the author wrote — a filter silently widened from a subtree to a list.
+	// Free text is the honest editor until the choices learn the two words.
+	case ibQueryAstExprKind::In:      return leftIsColumn && !condition->m_negated && !condition->m_subquery
+	                                      && condition->m_unfold == ibQueryDimUnfold::Elements;
 	default:                          return false;
 	}
 }

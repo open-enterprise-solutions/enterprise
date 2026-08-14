@@ -104,7 +104,11 @@ public:
 	// answers with its dimensions only (a resource it folded cannot be filtered before folding); a
 	// slice answers with everything it carries. Same shape as GetFields, so the expression editor
 	// takes it without knowing which source it came from.
-	std::vector<ibQueryConstructorField> GetConditionFields(const ibQuerySource& source) const;
+	// Fields admissible in a condition slot. `slot` empty = the general `Condition`; a named slot may
+	// narrow it (an accounting register's account conditions admit ACCOUNTS only — the source consumes
+	// them and folds by them, so a leaf about anything else cannot be applied at all).
+	std::vector<ibQueryConstructorField> GetConditionFields(const ibQuerySource& source,
+	                                                       const wxString& slot = wxEmptyString) const;
 
 	// The temp tables `package` has DECLARED so far, in the order they are made. These belong to the
 	// package being edited, not to the metadata — which is why they are a separate question with the

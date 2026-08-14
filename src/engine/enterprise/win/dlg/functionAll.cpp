@@ -83,16 +83,6 @@ void ibDialogFunctionAll::BuildTree()
 		const int imageIndex = imageList->Add(report->GetIcon());
 		m_treeCtrlElements->AppendItem(reports, report->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(report));
 	}
-	wxTreeItemId informationRegisters = AppendGroupItem(root, g_metaInformationRegisterCLSID, _("Information registers"));
-	for (auto informationRegister : activeMetaData->GetAnyArrayObject(g_metaInformationRegisterCLSID)) {
-		const int imageIndex = imageList->Add(informationRegister->GetIcon());
-		m_treeCtrlElements->AppendItem(informationRegisters, informationRegister->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(informationRegister));
-	}
-	wxTreeItemId accumulationRegisters = AppendGroupItem(root, g_metaAccumulationRegisterCLSID, _("Accumulation registers"));
-	for (auto accumulationRegister : activeMetaData->GetAnyArrayObject(g_metaAccumulationRegisterCLSID)) {
-		const int imageIndex = imageList->Add(accumulationRegister->GetIcon());
-		m_treeCtrlElements->AppendItem(accumulationRegisters, accumulationRegister->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(accumulationRegister));
-	}
 	wxTreeItemId chartsOfCharacteristicTypes = AppendGroupItem(root, g_metaChartOfCharacteristicTypesCLSID, _("Charts of characteristic types"));
 	for (auto chartOfCharacteristicTypes : activeMetaData->GetAnyArrayObject(g_metaChartOfCharacteristicTypesCLSID)) {
 		const int imageIndex = imageList->Add(chartOfCharacteristicTypes->GetIcon());
@@ -102,6 +92,20 @@ void ibDialogFunctionAll::BuildTree()
 	for (auto chartOfAccounts : activeMetaData->GetAnyArrayObject(g_metaChartOfAccountsCLSID)) {
 		const int imageIndex = imageList->Add(chartOfAccounts->GetIcon());
 		m_treeCtrlElements->AppendItem(chartsOfAccounts, chartOfAccounts->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(chartOfAccounts));
+	}
+	// ⭐ THE REGISTERS COME LAST — same reading order as the metadata tree and the compare tree. A
+	// register is expressed in terms of what stands above it: its dimensions, and for an accounting
+	// register the chart of accounts that types the account and every analytics slot. Listing the
+	// registers first put the dependants above the things they depend on.
+	wxTreeItemId informationRegisters = AppendGroupItem(root, g_metaInformationRegisterCLSID, _("Information registers"));
+	for (auto informationRegister : activeMetaData->GetAnyArrayObject(g_metaInformationRegisterCLSID)) {
+		const int imageIndex = imageList->Add(informationRegister->GetIcon());
+		m_treeCtrlElements->AppendItem(informationRegisters, informationRegister->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(informationRegister));
+	}
+	wxTreeItemId accumulationRegisters = AppendGroupItem(root, g_metaAccumulationRegisterCLSID, _("Accumulation registers"));
+	for (auto accumulationRegister : activeMetaData->GetAnyArrayObject(g_metaAccumulationRegisterCLSID)) {
+		const int imageIndex = imageList->Add(accumulationRegister->GetIcon());
+		m_treeCtrlElements->AppendItem(accumulationRegisters, accumulationRegister->GetSynonym(), imageIndex, imageIndex, new ibMetaDataItem(accumulationRegister));
 	}
 	wxTreeItemId accountingRegisters = AppendGroupItem(root, g_metaAccountingRegisterCLSID, _("Accounting registers"));
 	for (auto accountingRegister : activeMetaData->GetAnyArrayObject(g_metaAccountingRegisterCLSID)) {

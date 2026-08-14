@@ -45,6 +45,23 @@ enum ibComparisonKind {
 	ibComparisonKind_GreaterEqual,
 	ibComparisonKind_LessEqual,
 	ibComparisonKind_Contains,   // → LIKE
+
+	// ⭐⭐ «IN» and «IN HIERARCHY» — membership, and membership that walks down.
+	//
+	// APPENDED, never inserted: the kind is serialised by NUMBER in every saved list setting, so a
+	// value taken in the middle would re-read old settings as a different comparison.
+	//
+	// Neither is a new mechanism. The language already has both (queryParser: the IN operator, and
+	// «IN HIERARCHY» told how far down to look), and the AST carries the word on the In node itself
+	// (ibQueryDimUnfold) — so a filter says them by choosing that node, not by growing an operator.
+	// What was missing was a way for a LIST FILTER to say what a query could already say about the
+	// very same data.
+	//
+	// HIERARCHYONLY exists in the language and is deliberately NOT offered here: "the subordinates
+	// without the one that names them" is a question about a tree, and a list filter is not where
+	// anybody asks it — an offered comparison that nobody wants is a menu item to read past.
+	ibComparisonKind_In,
+	ibComparisonKind_InHierarchy,
 };
 
 // Map a comparison kind to the composer's language operator spelling.
@@ -57,6 +74,10 @@ inline wxString ComparisonKindToOp(ibComparisonKind kind) {
 	case ibComparisonKind_GreaterEqual: return wxT(">=");
 	case ibComparisonKind_LessEqual:    return wxT("<=");
 	case ibComparisonKind_Contains:     return wxT("LIKE");
+	// The language's own spelling — the parser reads these back, so the filter and a hand-written
+	// query say the same thing in the same words.
+	case ibComparisonKind_In:          return wxT("IN");
+	case ibComparisonKind_InHierarchy: return wxT("IN HIERARCHY");
 	}
 	return wxT("=");
 }
@@ -148,6 +169,10 @@ public:
 		AddEnumeration(ibComparisonKind_GreaterEqual, wxT("GreaterEqual"), _("Greater or equal"));
 		AddEnumeration(ibComparisonKind_LessEqual,    wxT("LessEqual"),    _("Less or equal"));
 		AddEnumeration(ibComparisonKind_Contains,     wxT("Contains"),     _("Contains"));
+		// The registered enumeration IS the editor's drop-down, so a comparison the language can
+		// express becomes offerable by being named here and nowhere else.
+		AddEnumeration(ibComparisonKind_In,          wxT("In"),          _("In"));
+		AddEnumeration(ibComparisonKind_InHierarchy, wxT("InHierarchy"), _("In hierarchy"));
 	}
 };
 

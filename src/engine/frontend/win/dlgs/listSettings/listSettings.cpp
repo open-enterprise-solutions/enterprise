@@ -611,7 +611,24 @@ private:
 		case kFilterColDisplayMode:
 			item->SetDisplayMode(value.ConvertToEnumValue<ibFilterDisplayMode>());
 			break;
-		case kFilterColRight: item->SetRight(value); break;
+		// ⭐⭐ NORMALISED TO THE FIELD'S TYPE, like every OTHER path that writes this cell.
+		//
+		// What an editor hands back is not always the value the condition is about: picking from a
+		// list yields the LIST ROW, and a row is not a reference. Stored raw it fails validation on
+		// OK — "The value of condition 'Recorder' does not fit the field's type" — with a value the
+		// user did choose correctly, from the picker the field itself opened.
+		//
+		// The two neighbouring writers (the field-change path above, the row-add path below) already
+		// go through AdjustValue; this one was the odd one out. AdjustValue answers what the TYPE
+		// makes of a value — a row becomes the reference it stands for, an empty becomes the type's
+		// own empty — so the cell holds what the comparison will actually be made with.
+		case kFilterColRight:
+			// The FIELD's type decides what the value becomes — that is the whole point, so the type
+			// description leads and the written value follows it (the two-argument overload above
+			// asks only "what does this type consider empty", which is a different question).
+			item->SetRight(ibValueTypeDescription::AdjustValue(
+				item->GetRightTypeDescription(), value, m_dialog->SourceMetaData()));
+			break;
 		default:              item->SetLeft(value);  break;
 		}
 
@@ -1121,7 +1138,11 @@ wxWindow* ibDialogListSettings::BuildFilterPage(wxWindow* parent)
 	rightSizer->Add(m_filterView, 1, wxALL | wxEXPAND, FromDIP(4));
 	rightPane->SetSizer(rightSizer);
 
-	splitter->SplitVertically(leftPane, rightPane, FromDIP(180));
+	// WIDE ENOUGH FOR WHAT THE FIELDS ARE CALLED. At 180 a name like "Account dimension Dr1"
+	// is cut after "Account dimension", so eight distinct slots read as eight identical rows and
+	// the only way to tell them apart is to count positions. The pane is user-resizable; what
+	// changes here is what it shows BEFORE anyone resizes it.
+	splitter->SplitVertically(leftPane, rightPane, FromDIP(260));
 	wxBoxSizer* panelSizer = new wxBoxSizer(wxVERTICAL);
 	panelSizer->Add(splitter, 1, wxEXPAND);
 	panel->SetSizer(panelSizer);
@@ -1252,7 +1273,11 @@ wxWindow* ibDialogListSettings::BuildOrderPage(wxWindow* parent)
 	toolbar->Bind(wxEVT_TOOL, [this](wxCommandEvent&) { MoveOrderLine(-1); }, wxID_UP);
 	toolbar->Bind(wxEVT_TOOL, [this](wxCommandEvent&) { MoveOrderLine(+1); }, wxID_DOWN);
 
-	splitter->SplitVertically(leftPane, rightPane, FromDIP(180));
+	// WIDE ENOUGH FOR WHAT THE FIELDS ARE CALLED. At 180 a name like "Account dimension Dr1"
+	// is cut after "Account dimension", so eight distinct slots read as eight identical rows and
+	// the only way to tell them apart is to count positions. The pane is user-resizable; what
+	// changes here is what it shows BEFORE anyone resizes it.
+	splitter->SplitVertically(leftPane, rightPane, FromDIP(260));
 	wxBoxSizer* panelSizer = new wxBoxSizer(wxVERTICAL);
 	panelSizer->Add(splitter, 1, wxEXPAND);
 	panel->SetSizer(panelSizer);
@@ -1380,7 +1405,11 @@ wxWindow* ibDialogListSettings::BuildGroupPage(wxWindow* parent)
 	toolbar->Bind(wxEVT_TOOL, [this](wxCommandEvent&) { MoveGroupLine(-1); }, wxID_UP);
 	toolbar->Bind(wxEVT_TOOL, [this](wxCommandEvent&) { MoveGroupLine(+1); }, wxID_DOWN);
 
-	splitter->SplitVertically(leftPane, rightPane, FromDIP(180));
+	// WIDE ENOUGH FOR WHAT THE FIELDS ARE CALLED. At 180 a name like "Account dimension Dr1"
+	// is cut after "Account dimension", so eight distinct slots read as eight identical rows and
+	// the only way to tell them apart is to count positions. The pane is user-resizable; what
+	// changes here is what it shows BEFORE anyone resizes it.
+	splitter->SplitVertically(leftPane, rightPane, FromDIP(260));
 	wxBoxSizer* panelSizer = new wxBoxSizer(wxVERTICAL);
 	panelSizer->Add(splitter, 1, wxEXPAND);
 	panel->SetSizer(panelSizer);

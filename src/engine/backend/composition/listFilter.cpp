@@ -1283,10 +1283,24 @@ static ibQueryAstExprPtr BuildFilterItem(ibDataComposer& composer, const ibValue
 	// can do what a LIKE needs instead of being handed an operator it has no
 	// meaning for.
 	const bool isLike = (item->GetComparison() == ibComparisonKind_Contains);
-	ibQueryAstExprPtr e = ibQueryAstExpr::Make(isLike
-		? ibQueryAstExprKind::Like : ibQueryAstExprKind::Compare);
 
-	if (!isLike) {
+	// ⭐⭐ «IN HIERARCHY» IS AN *IN* CARRYING A WORD — one node kind, two comparisons.
+	//
+	// The AST already holds the unfold word on the In node (queryAst.h: `m_unfold`), and L4 resolves
+	// the subtree into the values it stands for before anything below sees it — so both comparisons
+	// reuse the whole mechanism by choosing that node, and «in hierarchy» differs from «in» by the
+	// word alone. An operator of its own would have been a second way to ask what the language asks.
+	const ibComparisonKind comparison = item->GetComparison();
+	const bool isIn = (comparison == ibComparisonKind_In
+	                || comparison == ibComparisonKind_InHierarchy);
+
+	ibQueryAstExprPtr e = ibQueryAstExpr::Make(isLike ? ibQueryAstExprKind::Like
+	                                            : isIn ? ibQueryAstExprKind::In
+	                                                   : ibQueryAstExprKind::Compare);
+	if (comparison == ibComparisonKind_InHierarchy)
+		e->m_unfold = ibQueryDimUnfold::Hierarchy;
+
+	if (!isLike && !isIn) {
 		switch (item->GetComparison()) {
 		case ibComparisonKind_NotEqual:     e->m_cmp = ibQueryCompareOp::Ne; break;
 		case ibComparisonKind_Greater:      e->m_cmp = ibQueryCompareOp::Gt; break;
@@ -1298,7 +1312,15 @@ static ibQueryAstExprPtr BuildFilterItem(ibDataComposer& composer, const ibValue
 	}
 
 	e->m_lhs = BuildFilterSide(composer, item->GetLeft());
-	e->m_rhs = BuildFilterSide(composer, item->GetRight());
+
+	// An IN takes a LIST, not a right-hand operand: one entry here, because a filter row holds one
+	// value. Where that value is itself a list (an array chosen in the cell) the lowering flattens it
+	// — the node is already the set-valued one. The unfold word set above is the whole difference
+	// between «in» and «in hierarchy».
+	if (isIn)
+		e->m_list.push_back(BuildFilterSide(composer, item->GetRight()));
+	else
+		e->m_rhs = BuildFilterSide(composer, item->GetRight());
 	return e;
 }
 

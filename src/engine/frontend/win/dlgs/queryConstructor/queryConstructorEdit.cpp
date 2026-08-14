@@ -328,11 +328,11 @@ public:
 	ibDialogVirtualTableParameters(wxWindow* parent,
 	                               const std::vector<ibQuerySourceParameter>& parameters,
 	                               const std::vector<ibQueryAstExprPtr>& current,
-	                               const std::vector<ibQueryConstructorField>& conditionFields,
+	                               std::function<std::vector<ibQueryConstructorField>(const wxString&)> fieldsForSlot,
 	                               const ibMetaData* metaData, bool readOnly)
 		: wxDialog(parent, wxID_ANY, _("Virtual table parameters"), wxDefaultPosition, wxDefaultSize,
 		           wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
-		, m_parameters(parameters), m_conditionFields(conditionFields)
+		, m_parameters(parameters), m_fieldsForSlot(std::move(fieldsForSlot))
 		, m_metaData(metaData), m_readOnly(readOnly)
 	{
 		wxBoxSizer* root = new wxBoxSizer(wxVERTICAL);
@@ -429,7 +429,7 @@ public:
 			if (parameter.m_condition && !m_readOnly) {
 				wxButton* open = new wxButton(this, wxID_ANY, wxT("..."),
 					wxDefaultPosition, wxSize(FromDIP(28), -1));
-				open->Bind(wxEVT_BUTTON, [this, row](wxCommandEvent&) { EditCondition(row); });
+				open->Bind(wxEVT_BUTTON, [this, row, slot = parameter.m_name](wxCommandEvent&) { EditCondition(row, slot); });
 				rows->Add(open, 0);
 			}
 			else {
@@ -528,7 +528,11 @@ private:
 		}
 	};
 
-	void EditCondition(const Row& row)
+	// `slot` is the PARAMETER being edited: the fields a condition may be written with depend on it —
+	// an accounting register's account slots admit accounts only, while the general Condition admits
+	// the ordinary ones. Asked per slot rather than once for the dialog, which is what made every slot
+	// offer the union and none of them the right set.
+	void EditCondition(const Row& row, const wxString& slot)
 	{
 		ibQueryAstExprPtr existing;
 		wxString text = row.Text();
@@ -538,7 +542,7 @@ private:
 			catch (const ibBackendException&) { existing = nullptr; }   // unparsable so far: start from the text
 		}
 
-		ibDialogQueryExpression dialog(this, _("Condition"), m_conditionFields, existing,
+		ibDialogQueryExpression dialog(this, _("Condition"), m_fieldsForSlot(slot), existing,
 			m_metaData, m_readOnly);
 		if (existing == nullptr && !text.IsEmpty())
 			dialog.SetText(text);
@@ -547,7 +551,9 @@ private:
 	}
 
 	std::vector<ibQuerySourceParameter>  m_parameters;
-	std::vector<ibQueryConstructorField> m_conditionFields;
+	// ASKED PER SLOT, not held as one list: which fields a condition admits is the SOURCE's answer and
+	// it differs between slots (see EditCondition).
+	std::function<std::vector<ibQueryConstructorField>(const wxString& slot)> m_fieldsForSlot;
 	std::vector<Row>                     m_boxes;
 	const ibMetaData*                    m_metaData = nullptr;
 	bool                                 m_readOnly = false;
@@ -794,7 +800,8 @@ void ibDialogQueryConstructor::OnTableParameters(wxCommandEvent&)
 		return;   // an ordinary table takes none — the menu item is not offered for one
 
 	ibDialogVirtualTableParameters dialog(this, parameters, source->m_args,
-		m_model.GetConditionFields(*source), m_metaData, !CanEdit());
+		[this, source](const wxString& slot) { return m_model.GetConditionFields(*source, slot); },
+		m_metaData, !CanEdit());
 
 	if (dialog.ShowModal() != wxID_OK)
 		return;

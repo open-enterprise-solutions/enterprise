@@ -420,7 +420,7 @@ std::vector<ibQuerySourceParameter> ibQueryConstructorModel::GetSourceParameters
 	return out;
 }
 
-std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetConditionFields(const ibQuerySource& source) const
+std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetConditionFields(const ibQuerySource& source, const wxString& slot) const
 {
 	std::vector<ibQueryConstructorField> out;
 	ibQueryableSourceDescriptor* descriptor = DescriptorOf(Factory(), source);
@@ -431,7 +431,7 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetConditionFields
 	// FILTERED BY its dimensions only — the engine reading a balance sees nothing but the
 	// dimensions, so offering a resource here would offer a filter it cannot honour.
 	ibSourceDataObject::ibSourceExplorer explorer;
-	descriptor->FillConditionExplorer(explorer);
+	descriptor->FillConditionExplorer(explorer, slot);
 
 	for (unsigned int i = 0; i < explorer.GetHelperCount(); ++i) {
 		const ibSourceDataObject::ibSourceExplorer* node = explorer.GetHelper(i);
