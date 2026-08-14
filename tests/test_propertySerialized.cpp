@@ -92,15 +92,24 @@ TEST(PropertySerialization, EveryDeclaredPropertyIsReadAndWritten) {
 	const wxString dir = PartialsDir();
 	ASSERT_TRUE(wxDirExists(dir)) << "metatype partials not found at " << dir.ToStdString();
 
-	wxString header;
-	wxDir walker(dir);
-	ASSERT_TRUE(walker.IsOpened());
-
-	bool more = walker.GetFirst(&header, wxT("*.h"), wxDIR_FILES);
-	ASSERT_TRUE(more) << "no metatype headers in " << dir.ToStdString();
+	// ⚠ COLLECT FIRST, WALK AFTER. ONE wxDir cannot drive two traversals: the inner search for
+	// `<stem>Metadata*.cpp` below calls GetFirst on the SAME object, which restarts it with that
+	// filter — so the outer loop would carry on over .cpp files instead of headers and stop after
+	// one step. It fell out as `checked == 0` on Linux (whose directory order differs) while
+	// Windows happened to check one header and pass, hiding it.
+	std::vector<wxString> headers;
+	{
+		wxDir walker(dir);
+		ASSERT_TRUE(walker.IsOpened());
+		wxString header;
+		for (bool more = walker.GetFirst(&header, wxT("*.h"), wxDIR_FILES); more;
+		     more = walker.GetNext(&header))
+			headers.push_back(header);
+	}
+	ASSERT_FALSE(headers.empty()) << "no metatype headers in " << dir.ToStdString();
 
 	size_t checked = 0;
-	for (; more; more = walker.GetNext(&header)) {
+	for (const wxString& header : headers) {
 		wxFileName headerFile(dir, header);
 
 		// ⚠ EVERY UNIT OF THE METATYPE, not just `<name>Metadata.cpp`.
@@ -112,10 +121,13 @@ TEST(PropertySerialization, EveryDeclaredPropertyIsReadAndWritten) {
 		// than no test, because the next real finding is read as noise too.
 		const wxString stem = headerFile.GetName();
 		wxString serialised;
-		wxString unit;
-		for (bool got = walker.GetFirst(&unit, stem + wxT("Metadata*.cpp"), wxDIR_FILES); got;
-		     got = walker.GetNext(&unit)) {
-			serialised += ReadWhole(wxFileName(dir, unit).GetFullPath());
+		{
+			wxDir units(dir);              // its OWN traversal — see the note above
+			wxString unit;
+			for (bool got = units.GetFirst(&unit, stem + wxT("Metadata*.cpp"), wxDIR_FILES); got;
+			     got = units.GetNext(&unit)) {
+				serialised += ReadWhole(wxFileName(dir, unit).GetFullPath());
+			}
 		}
 		if (serialised.IsEmpty())
 			continue;   // not a metatype with a serialisation unit of its own
