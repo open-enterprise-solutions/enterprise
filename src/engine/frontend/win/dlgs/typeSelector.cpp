@@ -298,7 +298,8 @@ bool ibShowTypeSelector(wxWindow* parent, ibSelectorDataType kind,
 
 		wxArrayTreeItemIds ids;
 		tc->GetSelections(ids);
-		for (const wxTreeItemId& item : ids) {
+		// BY VALUE: wxArrayTreeItemIds stores void*, so a reference binds to a per-iteration temporary.
+		for (const wxTreeItemId item : ids) {
 			if (!item.IsOk())
 				continue;
 			const ibTypeItemData* picked = dynamic_cast<ibTypeItemData*>(tc->GetItemData(item));

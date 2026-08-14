@@ -126,7 +126,8 @@ bool TryCompile(ibCompileCode& cc, const wxString& src) {
 }
 
 // Find an opcode in the bytecode body. Returns the count of matches.
-size_t CountOpcode(const ibByteCode& bc, short oper) {
+// Kept for the bytecode-shape assertions even while no live test calls it.
+[[maybe_unused]] size_t CountOpcode(const ibByteCode& bc, short oper) {
 	size_t n = 0;
 	for (const auto& u : bc.m_listCode)
 		if (u.m_numOper == oper) ++n;

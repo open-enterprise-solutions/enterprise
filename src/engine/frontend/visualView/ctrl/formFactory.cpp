@@ -149,11 +149,6 @@ ibValueFrame* ibValueForm::CreateObject(const wxString& className, ibValueFrame*
 	wxString classType = ::GetClassType(className);
 
 	if (controlParent) {
-		bool sizer = false;
-
-		if (classType == wxT("Form")) sizer = true;
-		else if (classType == wxT("Sizer")) sizer = controlParent->GetObjectTypeName() == wxT("Sizer") || controlParent->GetObjectTypeName() == wxT("Form") ? false : true;
-
 		//FIXME! This is a patch to avoid creating the menubar, statusbar and
 		//toolbar types in a form that is not a wxFrame.
 		//The set of types needs to be modified to allow having several kinds

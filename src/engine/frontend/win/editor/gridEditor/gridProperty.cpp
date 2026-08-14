@@ -230,9 +230,6 @@ void ibGridEditor::ibPropertyGridEditorSpreadsheet::OnPropertyRefresh()
 
 void ibGridEditor::ibPropertyGridEditorSpreadsheet::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
 {
-	const int row = m_view->GetGridCursorRow(),
-		col = m_view->GetGridCursorCol();
-
 	for (const ibGridBlockCoords& coords : m_selection)
 		ibPropertyGridEditorSpreadsheet::OnPropertyChanged(property, coords);
 

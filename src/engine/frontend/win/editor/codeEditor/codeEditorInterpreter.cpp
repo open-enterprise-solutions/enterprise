@@ -1003,7 +1003,6 @@ bool ibPrecompileCode::CompileFunction()
 		csFuncName0 = ExpectIdentifier(true);
 	}
 	wxString funcName = stringUtils::MakeUpper(csFuncName0);
-	int nError = m_cursor;
 
 	ibPrecompileFunction* pFunction = new ibPrecompileFunction(funcName, m_activeContext);
 

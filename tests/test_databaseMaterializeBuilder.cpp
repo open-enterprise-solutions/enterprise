@@ -432,10 +432,12 @@ TEST(MaterializeRenderer, TheArmKeepsTheRawInstantAsItsPeriod) {
 TEST(MaterializeRenderer, AMovementOnlyColumnIsNullOnTheStoredArm) {
     Fixture f;
     f.spec.m_views[0].m_withMovements   = true;
-    f.spec.m_views[0].m_movementColumns = { wxT("recorder_RRRef") };
+    // The type travels with the name: the stored arm stands a CAST null in its place, because a bare
+    // NULL has no type for the engine to reconcile the two arms with (see ibMaterializeView).
+    f.spec.m_views[0].m_movementColumns = { { wxT("recorder_RRRef"), ibTypeBinary(16) } };
     const wxString text = CreateText(RenderSqlite(f.spec));
 
-    EXPECT_TRUE(text.Contains(wxT("NULL AS recorder_RRRef")));
+    EXPECT_TRUE(text.Contains(wxT("CAST(NULL AS BLOB) AS recorder_RRRef")));
     EXPECT_TRUE(text.Contains(wxT("Reg7.recorder_RRRef")));
 }
 

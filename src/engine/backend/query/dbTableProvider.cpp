@@ -87,14 +87,6 @@ wxString RowKeyField(const ibBackendQueryable* queryable)
 	return key == nullptr ? wxString() : FirstSqlFieldOfColumn(key);
 }
 
-// Is this column the raw GUID key — a row's uuid, stored as the same sixteen bytes a reference key
-// is (see RawType in columnLayout.cpp)?
-bool IsRawGuidColumn(const ibBackendQueryColumn* col)
-{
-	return col != nullptr && col->IsRawColumn()
-	    && static_cast<const ibRawDBColumn*>(col)->GetRawType() == ibRawDBColumn::RawType::Guid;
-}
-
 // ⭐⭐ A VALUE COMPARED AGAINST A COLUMN IS SPELLED IN THAT COLUMN'S FORM.
 //
 // A guid reaches this layer as TEXT — that is how a script writes it and how the runtime carries it

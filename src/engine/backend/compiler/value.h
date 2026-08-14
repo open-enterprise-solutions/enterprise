@@ -1242,7 +1242,18 @@ public:
 	// value that legitimately is empty. `Val form` is a mistake and is told so at
 	// the call, rather than compiling, running and quietly aliasing until the day
 	// it matters.
-	virtual ibValue Clone() const;
+	// NOT `Clone`, and NOT virtual. `Clone` is the name a C++ class conventionally gives "make me
+	// another object like this one", and half the tree uses it that way (a database layer, a drag
+	// item, a grid attr, a table of values). A base method of that name on ibValue — the root every
+	// value derives from — turns each of those into a HIDDEN overload instead of an unrelated
+	// method, and which copy you get is then decided by the static type of the expression. So the
+	// root takes the name that says what it actually does: copy the VALUE, beside GetValue/SetValue.
+	//
+	// STILL VIRTUAL. The default road is "pack, then create from what was packed", and both halves
+	// are extension points already (DoSerialize / DoDeserialize) with IsTransferable as the refusal
+	// — so most types never touch this. But a type is allowed to state a copy of its own, and that
+	// is a declared contract with a test behind it (ValueClone.ATypeMayStateItsOwnCopy).
+	virtual ibValue CloneValue() const;
 
 	virtual bool GetBoolean() const;
 	virtual int GetInteger() const { return GetNumber().ToInt(); }

@@ -142,7 +142,7 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 // a cached one is served without ever asking whether that context still holds. Bump
 // so every module recompiles against the context as it is now.
 constexpr uint16_t kAOTFormatVersion = 20;
-constexpr uint16_t kAOTFlagPortable  = 0x0001;       // unused — host-endian today
+[[maybe_unused]] constexpr uint16_t kAOTFlagPortable = 0x0001;   // reserved — host-endian today, no reader yet
 
 // Sentinel for an over-large collection — guards Deserialize against
 // reading garbage that pre-allocates GB. Bytecodes have hundreds of

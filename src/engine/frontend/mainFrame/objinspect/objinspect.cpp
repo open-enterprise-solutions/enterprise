@@ -474,9 +474,6 @@ void ibObjectInspector::OnBitmapPropertyChanged(wxCommandEvent& event)
 {
 	wxLogDebug(wxT("OI::BitmapPropertyChanged: %s"), event.GetString().c_str());
 
-	const wxString strPropName = event.GetString().BeforeFirst(':');
-	wxString strPropVal = event.GetString().AfterFirst(':');
-
 	//if (!propVal.IsEmpty()) {
 	//	wxPGBitmapProperty* bp = wxDynamicCast(m_pg->GetPropertyByLabel(strPropName), wxPGBitmapProperty);
 	//	if (bp != nullptr) {

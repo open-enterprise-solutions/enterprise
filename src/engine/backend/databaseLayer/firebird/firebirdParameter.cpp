@@ -247,8 +247,6 @@ ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pI
 	m_pParameter->sqlind = &m_nNullFlag; // NULL indicator
 }
 
-const long TIME_T_FACTOR = 1000l;
-
 ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar, const wxDateTime& dateValue) : m_nParameterType(ibDatabaseParameterFirebird::PARAM_DATETIME)
 {
 	m_pInterface = pInterface;

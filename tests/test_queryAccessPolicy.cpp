@@ -96,7 +96,8 @@ TEST(QueryAccessPolicy, AggregateReadIsRefused)
 	query.WithAccessPolicy(&policy).From(&f.table);
 	query.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, &f.amount, wxT("total"));
 
-	EXPECT_THROW(query.SelectAggregate(), ibBackendException);
+	// (void): the terminals are [[nodiscard]], and here the THROW is the subject, not the result.
+	EXPECT_THROW((void)query.SelectAggregate(), ibBackendException);
 	EXPECT_EQ(1, policy.Asked());   // asked, not bypassed
 }
 
@@ -111,7 +112,7 @@ TEST(QueryAccessPolicy, AggregatePageReadIsRefused)
 	query.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, &f.amount, wxT("total"));
 
 	ibReadPageRequest page;
-	EXPECT_THROW(query.SelectAggregatePage(page), ibBackendException);
+	EXPECT_THROW((void)query.SelectAggregatePage(page), ibBackendException);
 	EXPECT_EQ(1, policy.Asked());
 }
 
@@ -126,7 +127,7 @@ TEST(QueryAccessPolicy, TotalsReadIsRefused)
 	query.WithAccessPolicy(&policy).From(&f.table);
 	query.TotalBy(&f.owner, ibDimensionKind::Elements);
 
-	EXPECT_THROW(query.SelectTotals(), ibBackendException);
+	EXPECT_THROW((void)query.SelectTotals(), ibBackendException);
 }
 
 // ---------------------------------------------------------------------------
@@ -190,7 +191,7 @@ TEST(QueryAccessPolicy, AllowedDoesNotSoftenTotals)
 	query.WithAccessPolicy(&policy).From(&f.table).Allowed();
 	query.TotalBy(&f.owner, ibDimensionKind::Elements);
 
-	EXPECT_THROW(query.SelectTotals(), ibBackendException);
+	EXPECT_THROW((void)query.SelectTotals(), ibBackendException);
 }
 
 // ---------------------------------------------------------------------------
@@ -214,6 +215,6 @@ TEST(QueryAccessPolicy, ClearedPolicyIsNotAsked)
 	query.WithAccessPolicy(nullptr);   // the system read
 
 	// No access exception can come out of the door now: the guard is not there to raise one.
-	try { query.SelectAggregate(); } catch (...) { /* the composer has no DB here — not our subject */ }
+	try { (void)query.SelectAggregate(); } catch (...) { /* the composer has no DB here — not our subject */ }
 	EXPECT_EQ(0, policy.Asked());
 }

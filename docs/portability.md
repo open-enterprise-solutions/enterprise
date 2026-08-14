@@ -126,6 +126,7 @@ parameter types — not the one spelling `SetString`.
 | `cond ? wxString : wxEmptyString` | the arms must agree; `wxEmptyString` is a `const wxChar*` |
 | `enum Foo` in a declaration with no `Foo` in scope | elaborated specifier, legal only if the type is declared |
 | `ibValuePtr<T> p = new T()` | the pointer constructor is `explicit`; copy-init cannot use it |
+| `wxLongLong_t(0)` — a functional cast | off MSVC the alias is **two words** (`long long`), and only a single-word type name can be spelled `T(x)`; use `static_cast<T>(x)` |
 | `ofstream::open(wstring)` | an MSVC extension — POSIX takes UTF-8 bytes |
 
 ### 1.7 A GUI object may not be a file-scope static

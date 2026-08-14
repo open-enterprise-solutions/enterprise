@@ -129,7 +129,6 @@ wxObject* ibValueChartBox::Create(wxWindow* wxparent, ibVisualHost *visualHost)
 
 void ibValueChartBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost *visualHost, bool firstCreated)
 {
-	wxWindow *m_chartBox = dynamic_cast<wxWindow *>(wxobject);
 }
 
 void ibValueChartBox::OnSelected(wxObject* wxobject)

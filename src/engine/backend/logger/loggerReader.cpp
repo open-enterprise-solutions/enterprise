@@ -13,15 +13,6 @@
 
 namespace {
 
-// Convert a ms-since-epoch timestamp to (year, month). Used to map
-// the filter's date range to .olg filenames.
-void MsToYearMonth(wxLongLong_t ms, int& year, int& month)
-{
-    const wxDateTime t((time_t)(ms / 1000));
-    year  = t.GetYear();
-    month = static_cast<int>(t.GetMonth()) + 1;
-}
-
 bool ParseLogFileName(const wxString& name, int& year, int& month)
 {
     // Expected: oes_YYYY_MM.olg

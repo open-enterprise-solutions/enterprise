@@ -93,14 +93,14 @@ TEST(PropertySerialization, EveryDeclaredPropertyIsReadAndWritten) {
 	ASSERT_TRUE(wxDirExists(dir)) << "metatype partials not found at " << dir.ToStdString();
 
 	wxString header;
-	bool found = wxDir::GetFirst(&header, wxT("*.h"), wxDIR_FILES);
-	ASSERT_TRUE(found) << "no metatype headers in " << dir.ToStdString();
-
-	size_t checked = 0;
 	wxDir walker(dir);
 	ASSERT_TRUE(walker.IsOpened());
 
-	for (bool more = walker.GetFirst(&header, wxT("*.h"), wxDIR_FILES); more; more = walker.GetNext(&header)) {
+	bool more = walker.GetFirst(&header, wxT("*.h"), wxDIR_FILES);
+	ASSERT_TRUE(more) << "no metatype headers in " << dir.ToStdString();
+
+	size_t checked = 0;
+	for (; more; more = walker.GetNext(&header)) {
 		wxFileName headerFile(dir, header);
 
 		// ⚠ EVERY UNIT OF THE METATYPE, not just `<name>Metadata.cpp`.

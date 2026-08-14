@@ -64,6 +64,10 @@ void EnsureCrashDir()
 	wxFileName::Mkdir(s_crashDir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
 }
 
+// WINDOWS ONLY, and declared under the same guard as its single caller (the minidump writer).
+// The POSIX handler builds its path with snprintf into a stack buffer, because it runs in a signal
+// context where wxString is not allowed — so off MSW this function has no user at all.
+#ifdef __WXMSW__
 wxString MakeDumpPath(const wxString& kindSuffix, const wxString& extension)
 {
 	EnsureCrashDir();
@@ -84,6 +88,7 @@ wxString MakeDumpPath(const wxString& kindSuffix, const wxString& extension)
 		seq,
 		extension);
 }
+#endif // __WXMSW__
 
 void LogTerminateReason(const wxString& reason)
 {
@@ -162,7 +167,13 @@ void PosixCrashSignalHandler(int sig)
 		const int n = std::snprintf(hdr, sizeof(hdr),
 			"signal=%d  pid=%u  tid=%lu\n",
 			sig, CurrentPidPortable(), CurrentTidPortable());
-		if (n > 0) ::write(fd, hdr, static_cast<size_t>(n));
+		// The result is deliberately not acted on: this runs inside a signal handler for a crash
+		// already in progress, and there is no second way to report a failed write. Named rather
+		// than dropped, because glibc marks write() warn_unused_result.
+		if (n > 0) {
+			const ssize_t written = ::write(fd, hdr, static_cast<size_t>(n));
+			(void)written;
+		}
 
 		void* frames[64];
 		const int nf = ::backtrace(frames, 64);

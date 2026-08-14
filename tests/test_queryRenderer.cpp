@@ -14,7 +14,7 @@
 #ifdef OES_USE_MYSQL
 #include "backend/databaseLayer/mysql/mysqlDatabaseLayer.h"   // MySQL dialect — only when the driver is built
 #endif
-#include "backend/databaseLayer/databaseLayerException.h"   // ibBackendQueryException (AlterColumn-on-SQLite throw)
+#include "backend/query/queryException.h"   // ibBackendQueryException (AlterColumn-on-SQLite throw) — L3-L5, not the DB tier
 
 namespace {
 

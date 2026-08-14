@@ -326,7 +326,7 @@ inline void CopyValue(ibValue& cValue1, ibValue&& cValue2)
 }
 
 // CopyValue from const source — direct field-copy without going
-// through Clone(). Same semantics as the mutable overload: simple
+// through CloneValue(). Same semantics as the mutable overload: simple
 // types are value-copied, TYPE_REFFER shares the m_pRef pointer,
 // TYPE_OLE/ENUM/VALUE alias cValue2 via GetRef() (the aliasing IS
 // the shared-state mechanism for these types). GetRef() is a const

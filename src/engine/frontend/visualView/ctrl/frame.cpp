@@ -272,7 +272,7 @@ ibValueFrame* ibValueFrame::CreatePasteObject(const ibReaderMemory& reader,
 	if (readerHeaderMemory == nullptr)
 		return nullptr;
 
-	const ibVersionID& version = readerHeaderMemory->r_s32();
+	readerHeaderMemory->r_s32();   // version — reserved; READ, because it advances the cursor
 	const ibClassID& clsid = readerHeaderMemory->r_u64();
 
 	return dstForm->NewObject(clsid, dstParent);
@@ -309,8 +309,9 @@ bool ibValueFrame::PasteObject(ibReaderMemory& reader)
 
 	std::shared_ptr <ibReaderMemory>readerHeaderMemory(reader.open_chunk(headerBlock));
 
-	const ibVersionID& version = readerHeaderMemory->r_s32(); //reserved
-	const ibClassID& clsid = readerHeaderMemory->r_u64();
+	// Both are READ, not used: the header's two fields have to leave the cursor past them.
+	readerHeaderMemory->r_s32();   // version — reserved
+	readerHeaderMemory->r_u64();   // clsid — the form below is resolved by name, not by this
 
 	std::shared_ptr <ibReaderMemory> readerChildMemory(reader.open_chunk(childBlock));
 	if (readerChildMemory != nullptr) {

@@ -53,7 +53,9 @@ size_t ibPluginManager::LoadAll()
 	wxArrayString files;
 	wxDir::GetAllFiles(dir, &files, pattern, wxDIR_FILES);
 
-	ScopedSilenceLoadErrors silence;
+	// RAII, not a value: it silences the loader for its whole scope and restores on the way out.
+	// Named only so it HAS a scope — hence maybe_unused rather than a deletion.
+	[[maybe_unused]] ScopedSilenceLoadErrors silence;
 
 	for (const wxString& path : files) {
 

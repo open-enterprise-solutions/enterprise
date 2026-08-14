@@ -242,7 +242,7 @@ before any of this runs.
 
 ### Packing is also COPYING — no packed form, no copy (2026-08-13)
 
-`ibValue::Clone` is the default copy for everything that is not a primitive: pack the value, then create it
+`ibValue::CloneValue` is the default copy for everything that is not a primitive: pack the value, then create it
 from the node through the registered ctor (`FromNode`). A primitive returns `*this` — the payload IS the
 value. So the same override pair answers two questions, and a type that overrides neither is not merely
 unsaveable, it is **unduplicatable**.

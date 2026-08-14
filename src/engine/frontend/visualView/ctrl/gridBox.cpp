@@ -35,7 +35,6 @@ wxObject* ibValueGridBox::Create(wxWindow* wxparent, ibVisualHost* visualHost)
 
 void ibValueGridBox::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVisualHost* visualHost, bool firstCreated)
 {
-	ibGridEditor* gridWindow = dynamic_cast<ibGridEditor*>(wxobject);
 }
 
 void ibValueGridBox::OnSelected(wxObject* wxobject)
@@ -100,7 +99,7 @@ void ibValueGridBox::FillControlMembers(ibMemberTable& helper) const
 
 bool ibValueGridBox::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	const long lPropAlias = m_members.GetPropAlias(lPropNum); bool refreshColumn = false;
+	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eControl) {
 		const long lPropData = m_members.GetPropData(lPropNum);
 		if (lPropData == eGridValue) {

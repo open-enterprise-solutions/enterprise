@@ -2422,10 +2422,8 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 			// Let-clause — `var alias = <expr>` or implicit `alias = <expr>`.
 			// Both emit OPER_LET + push FromLet binding so subsequent
 			// clauses see `alias` via standard context lookup.
-			bool hasExplicitKw = false;
 			if (IsNextKeyWord(KEY_VAR)) {
 				GETKeyWord(KEY_VAR);
-				hasExplicitKw = true;
 			}
 			else {
 				// Implicit — 2-token peek <IDENTIFIER> '='. Identifier
@@ -2752,7 +2750,6 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 				}
 
 				// Field list — `name = expr` pairs separated by `,`.
-				int fieldCount = 0;
 				while (!IsNextDelimeter('}')) {
 					const wxString fieldName = GETIdentifier(true);
 					GETDelimeter('=');
@@ -2784,7 +2781,6 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 						m_cByteCode.m_listCode.emplace_back(std::move(c));
 					}
 
-					++fieldCount;
 					if (IsNextDelimeter(',')) GETDelimeter(',');
 				}
 				GETDelimeter('}');

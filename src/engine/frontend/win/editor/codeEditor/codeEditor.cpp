@@ -877,7 +877,6 @@ void ibCodeEditor::OnKeyDown(wxKeyEvent& event)
 			int line = LineFromPosition(currentPos);
 
 			int startPos = PositionFromLine(line);
-			int endPos = GetLineEndPosition(line);
 
 			int length = currentPos - startPos;
 
@@ -900,7 +899,6 @@ void ibCodeEditor::OnKeyDown(wxKeyEvent& event)
 			int line = LineFromPosition(currentPos);
 
 			int startPos = PositionFromLine(line);
-			int endPos = GetLineEndPosition(line);
 
 			int length = currentPos - startPos;
 

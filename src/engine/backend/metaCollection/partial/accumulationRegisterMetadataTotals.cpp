@@ -747,11 +747,6 @@ ibQueryRelPtr ibBalanceAndTurnoverQueryable::GetSourceRelation(const wxString& a
 	if (out == nullptr || src == nullptr)
 		return nullptr;
 
-	const auto physical = [](const ibBackendQueryable* q, const wxString& logical) -> wxString {
-		const ibBackendQueryColumn* col = q != nullptr ? q->ResolveColumnByName(logical) : nullptr;
-		return col != nullptr ? col->GetPhysicalName() : wxString();
-	};
-
 	for (const auto res : m_reg->GetResourceArrayObject()) {
 		if (res == nullptr)
 			continue;

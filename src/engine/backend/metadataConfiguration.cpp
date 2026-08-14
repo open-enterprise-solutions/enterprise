@@ -176,15 +176,10 @@ wxString ibMetaDataConfigurationFile::GetLangCode() const
 
 bool ibMetaDataConfigurationFile::IsFullAccess() const
 {
-	bool access_right = true;
-
-	for (const auto object : GetAnyArrayObject(g_metaRoleCLSID)) {
-		access_right = false;
-		break;
-	}
-
-	if (access_right)
-		return true;
+	// A loop that only asked whether the collection is EMPTY, and said so through a flag: the
+	// question spelled as itself. (It also read as unreachable code to MSVC.)
+	if (GetAnyArrayObject(g_metaRoleCLSID).empty())
+		return true;   // no roles declared at all — access is not governed by them
 
 	if (m_commonObject != nullptr)
 		return m_commonObject->AccessRight_Administration();

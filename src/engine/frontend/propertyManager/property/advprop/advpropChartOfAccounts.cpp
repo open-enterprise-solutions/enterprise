@@ -150,7 +150,7 @@ wxPGEditorDialogAdapter* ibPGChartOfAccountsProperty::GetEditorDialog() const
 			ibCheckTree* tc = new ibCheckTree(dlg, wxID_ANY,
 				wxDefaultPosition, wxDefaultSize, wxTR_HAS_BUTTONS | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxTR_HIDE_ROOT | wxCR_MULTIPLE_CHECK | wxCR_EMPTY_CHECK | wxSUNKEN_BORDER | wxTR_TWIST_BUTTONS);
 
-			wxTreeItemId rootItem = tc->AddRoot(wxEmptyString);
+			tc->AddRoot(wxEmptyString);   // the root is hidden (wxTR_HIDE_ROOT); only its existence matters
 
 			rowsizer->Add(tc, wxSizerFlags(1).Expand().Border(wxALL, spacing));
 			topsizer->Add(rowsizer, wxSizerFlags(1).Expand());
@@ -188,8 +188,10 @@ wxPGEditorDialogAdapter* ibPGChartOfAccountsProperty::GetEditorDialog() const
 			{
 				ibMetaDescription& metaDesc = clone->GetMetaDesc(); metaDesc.ClearMetaType();
 				wxArrayTreeItemIds ids;
-				unsigned int selCount = tc->GetSelections(ids);
-				for (const wxTreeItemId& selItem : ids) {
+				tc->GetSelections(ids);   // the count is in ids itself
+				// BY VALUE: wxArrayTreeItemIds stores void*, so a `const wxTreeItemId&` here binds to a
+				// temporary built per iteration. The id is a pointer-sized handle — copying is the cheap form.
+				for (const wxTreeItemId selItem : ids) {
 					if (selItem.IsOk()) {
 						wxTreeItemData* dataItem = tc->GetItemData(selItem);
 						if (dataItem && res == wxID_OK) {

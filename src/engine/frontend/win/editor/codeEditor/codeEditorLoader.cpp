@@ -793,7 +793,6 @@ void ibCodeEditor::LoadAutoComplete()
 	int currentPos = GetCurrentPos();
 
 	int wordStartPos = WordStartPosition(currentPos, true);
-	int wordEndPos = WordEndPosition(currentPos, false);
 
 	// Display the autocompletion list
 	int lenEntered = currentPos - wordStartPos;

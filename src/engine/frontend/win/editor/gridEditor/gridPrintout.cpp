@@ -103,7 +103,6 @@ void ibGridEditorPrintout::GetPageInfo(int* minPage, int* maxPage, int* selPageF
 bool ibGridEditorPrintout::DrawPage(wxDC* dc, int page)
 {
 	int columnPages = m_colsPerPage.Count();
-	int rowPages = m_rowsPerPage.Count();
 
 	int colIndex, rowIndex;
 
@@ -348,8 +347,6 @@ void ibGridEditorPrintout::OnPreparePrinting()
 	m_maxWidth /= m_overallScale;
 	m_maxHeight /= m_overallScale;
 
-	const ibSpreadsheetDescription& spreadsheetDesc = m_doc->GetSpreadsheetDesc();
-
 	m_maxWidth -= 100;
 	m_maxHeight -= 100;
 
@@ -464,9 +461,7 @@ wxArrayString ibGridEditorPrintout::GetTextLines(wxDC& dc, const wxString& data,
 {
 	wxArrayString lines;
 
-	wxCoord x = 0, y = 0, curr_x = 0;
-	wxCoord max_x = rect.GetWidth();
-
+	// (The wrapping pass below is commented out; its measuring variables went with it.)
 	dc.SetFont(font);
 
 	//wxStringTokenizer tk(data, _T(" \n\t\r"));

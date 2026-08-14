@@ -267,6 +267,7 @@ public:
 	virtual bool GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const override {
 		return ibTabularDataObject::GetValueBySourceHop(hop, out);
 	}
+	using ibValueModel::GetValueBySourceHop;   // the ROW form (item, hop, out), hidden by the declaration above
 
 	//set meta/get meta
 	virtual bool SetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, const ibValue& varMetaVal) {
@@ -360,7 +361,11 @@ public:
 	void EditRow(const ibDataViewItem& row);
 	void DeleteRow(const ibDataViewItem& row);
 
-	ibValueModelTable* Clone() { return new ibValueModelTable(*this); }
+	// A fresh table object built from the live one — `Clone` in the ordinary C++ sense, the same
+	// sense a database layer or a drag item uses it in. It no longer collides with anything: the
+	// root's packed-form copy is `ibValue::CloneValue`, which is a different operation and now
+	// carries a different name (see value.h).
+	ibValueModelTable* Clone() const { return new ibValueModelTable(*this); }
 	unsigned int Count() { return GetRowCount(); }
 	void Clear();
 

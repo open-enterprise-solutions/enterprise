@@ -44,7 +44,7 @@ const wxChar* const kFieldData  = kValueFieldData;
 //////////////////////////////////////////////////////////////////////
 // COPYING — the DEFAULT road, which is the same road as travelling
 //
-// `Val` means the parameter gets a copy. `Clone` is virtual, so a type may say
+// `Val` means the parameter gets a copy. `CloneValue` is virtual, so a type may say
 // how it copies itself; this is what it gets when it says nothing.
 //
 // A copy of anything that is not a primitive is: pack it, then create it from
@@ -54,11 +54,11 @@ const wxChar* const kFieldData  = kValueFieldData;
 // Putting the default here rather than beside a `Copy` of its own is the point:
 // a value that cannot be written cannot be duplicated either, and both facts
 // come from the same override pair (DoSerialize / DoDeserialize). A type that
-// wants a different copy overrides Clone; a type that wants none does not have
+// wants a different copy overrides CloneValue; a type that wants none does not have
 // to write a refusal, because not being transferable already is one.
 //////////////////////////////////////////////////////////////////////
 
-ibValue ibValue::Clone() const
+ibValue ibValue::CloneValue() const
 {
 	switch (m_typeClass) {
 	case ibValueTypes::TYPE_EMPTY:

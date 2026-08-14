@@ -190,6 +190,7 @@ public:
 	virtual bool GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const override {
 		return ibTabularDataObject::GetValueBySourceHop(hop, out);
 	}
+	using ibValueModel::GetValueBySourceHop;   // the ROW form (item, hop, out), hidden by the declaration above
 
 	virtual wxString GetSourceCaption() const override;
 	// READ — the metadata OF THE CHOSEN SOURCE, taken straight from the VALUE (the picked queryable's metaobject).

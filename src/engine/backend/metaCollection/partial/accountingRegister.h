@@ -855,10 +855,14 @@ private:
 	// Declared with their initialiser HERE rather than assigned in a constructor: every constructor
 	// then brings them into being, and there is no second one to forget — the same way every property
 	// on this class is declared.
-	ibValuePtr<ibValueMetaObjectRegisterTotals> m_totalsDr =
-		CreateMetaObjectAndSetParent<ibValueMetaObjectRegisterTotals>(wxT("DebitTotals"), _("Debit totals"));
-	ibValuePtr<ibValueMetaObjectRegisterTotals> m_totalsCr =
-		CreateMetaObjectAndSetParent<ibValueMetaObjectRegisterTotals>(wxT("CreditTotals"), _("Credit totals"));
+	// ⚠ BRACES, not `=`: ibValuePtr's constructor from a raw T* is explicit, and `=` here is
+	// copy-initialisation, which may not pick an explicit constructor. MSVC accepts it anyway;
+	// GCC and Clang refuse the whole translation unit. Direct-initialisation is the portable
+	// spelling of the same thing (docs/portability.md).
+	ibValuePtr<ibValueMetaObjectRegisterTotals> m_totalsDr {
+		CreateMetaObjectAndSetParent<ibValueMetaObjectRegisterTotals>(wxT("DebitTotals"), _("Debit totals")) };
+	ibValuePtr<ibValueMetaObjectRegisterTotals> m_totalsCr {
+		CreateMetaObjectAndSetParent<ibValueMetaObjectRegisterTotals>(wxT("CreditTotals"), _("Credit totals")) };
 
 	// Built surfaces — the per-call shapes AND the two turnover views, in one cache: they are the same
 	// kind of thing under two names, and both are keyed by a string the builder chooses (the whole

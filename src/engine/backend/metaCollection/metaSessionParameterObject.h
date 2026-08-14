@@ -69,9 +69,14 @@ class BACKEND_API ibValueSessionParameter : public ibValue {
 	// FROM THE SESSION, already adjusted to the declared type. Never set answers the
 	// type's own empty — an empty reference of that kind rather than a bare
 	// Undefined, so a comparison against it narrows the rows to none.
-	ibValue GetValue() const;
+	// AN OVERRIDE of ibValue::GetValue, not a name of its own. `SetValue` below already overrides its
+	// base twin, so reading had to answer in the same voice: while this declared `GetValue()` with no
+	// parameter it HID the base one, and everything reaching a parameter through ibValue got the
+	// HOLDER back while the setter wrote through to the session. `getThis` keeps its base meaning —
+	// hand back this object rather than what is in it.
+	virtual ibValue GetValue(bool getThis = false) const override;
 	// Through the declaration's AdjustValue, and only while the session module runs.
-	void SetValue(const ibValue& value);
+	void SetValue(const ibValue& value) override;
 
 	// Reads AS ITS VALUE: comparing a parameter with a field must compare what is in
 	// it, not the holder.

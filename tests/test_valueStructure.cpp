@@ -76,14 +76,14 @@ TEST(ValueStructure, ClearEmpties) {
 
 TEST(ValueClone, APrimitiveIsItsOwnCopy) {
 	const ibValue num(42);
-	const ibValue copy = num.Clone();
+	const ibValue copy = num.CloneValue();
 	EXPECT_EQ(copy.GetInteger(), 42);
 
 	const ibValue str(wxString(wxT("text")));
-	EXPECT_STREQ(str.Clone().GetString().c_str(), wxT("text"));
+	EXPECT_STREQ(str.CloneValue().GetString().c_str(), wxT("text"));
 
 	const ibValue empty;
-	EXPECT_TRUE(empty.Clone().IsEmpty()) << "an empty value copies to an empty one";
+	EXPECT_TRUE(empty.CloneValue().IsEmpty()) << "an empty value copies to an empty one";
 }
 
 TEST(ValueClone, AStructureCopiesAndTheCopyIsIndependent) {
@@ -92,7 +92,7 @@ TEST(ValueClone, AStructureCopiesAndTheCopyIsIndependent) {
 	ibValueStructure src;
 	src.Insert(Field(wxT("Count")), ibValue(ibNumber(1)));
 
-	const ibValue copy = src.Clone();
+	const ibValue copy = src.CloneValue();
 	ASSERT_FALSE(copy.IsEmpty()) << "a structure has a packed form and must copy";
 	EXPECT_NE(copy.GetRef(), &src) << "a copy that is the same object is not a copy";
 
@@ -120,16 +120,16 @@ TEST(ValueClone, AValueWithNoPackedFormRaises) {
 	// an empty value legitimately copies to an empty one — the refusal only
 	// applies to something that HAS contents and cannot pack them.
 	value.SetType(ibValueTypes::TYPE_VALUE);
-	EXPECT_THROW((void)value.Clone(), ibBackendException);
+	EXPECT_THROW((void)value.CloneValue(), ibBackendException);
 }
 
 TEST(ValueClone, ATypeMayStateItsOwnCopy) {
-	// Clone is virtual precisely so this is possible.
+	// CloneValue is virtual precisely so this is possible.
 	class ibValueOwnCopy : public ibValue {
 	public:
-		virtual ibValue Clone() const override { return ibValue(7); }
+		virtual ibValue CloneValue() const override { return ibValue(7); }
 	};
 
 	ibValueOwnCopy value;
-	EXPECT_EQ(value.Clone().GetInteger(), 7);
+	EXPECT_EQ(value.CloneValue().GetInteger(), 7);
 }

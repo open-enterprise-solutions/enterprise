@@ -463,7 +463,7 @@ void ibFrontendMainFrame::UpdateFrameManager()
 
 	if (m_docManager != nullptr) {
 		for (auto& doc : m_docManager->GetDocumentsVector()) {
-			for (auto& view : doc->GetViewsVector()) view_count++;
+			view_count += (unsigned int)doc->GetViewsVector().size();   // the loop only counted
 		}
 	}
 

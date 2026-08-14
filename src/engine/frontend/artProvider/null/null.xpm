@@ -1,5 +1,5 @@
 /* XPM */
-static const char *s_null_xpm[] = {
+[[maybe_unused]] static const char *s_null_xpm[] = {   // included by two TUs; only one draws with it
 "16 16 11 1",
 " 	c None",
 ".	c #000000",

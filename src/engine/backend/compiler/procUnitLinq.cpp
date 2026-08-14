@@ -206,7 +206,6 @@ public:
 		if (!m_upstream) {
 			return false;
 		}
-		long rowIdx = 0;
 		while (m_upstream->MoveNext(current)) {
 			ibValue result;
 			{
@@ -217,7 +216,6 @@ public:
 				CallLambdaWithArg(m_predicate, current, result);
 			}
 			const bool keep = IsHasValue(result);
-			++rowIdx;
 			if (keep) return true;
 		}
 		return false;
@@ -252,13 +250,11 @@ public:
 		if (!m_upstream) {
 			return false;
 		}
-		long rowIdx = 0;
 		while (m_upstream->MoveNext(current)) {
 			bool found = false;
 			for (const auto& v : m_seen) {
 				if (current == v) { found = true; break; }
 			}
-			++rowIdx;
 			if (!found) {
 				m_seen.push_back(current);
 				return true;
@@ -618,12 +614,10 @@ private:
 		std::shared_ptr<ibValueIteratorState> innerIt = m_innerSrc.CreateIterator();
 		if (!innerIt) return;
 		ibValue elem;
-		long count = 0;
 		while (innerIt->MoveNext(elem)) {
 			ibValue rightK;
 			CallLambdaWithArg(m_rightKey, elem, rightK);
 			m_hash[rightK].push_back(elem);
-			++count;
 		}
 	}
 
@@ -1006,10 +1000,8 @@ static void ibValueLinqDispatchImpl(ibValue* self, ibValue::ibLinqMethod method,
 		{
 			ibValueArray* arr = new ibValueArray();
 			ibValue current;
-			long count = 0;
 			while (upstream->MoveNext(current)) {
 				arr->Add(current);
-				++count;
 			}
 			CopyValue(ret, ibValue(arr));
 			break;

@@ -2422,10 +2422,6 @@ void ibValueRecordDataObjectHierarchyRef::PrepareEmptyObject(const ibValueRecord
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 		if (object->IsDeleted())
 			continue;
-		ibValueMetaObjectAttribute* metaAttr = nullptr; ibItemMode attrUse = ibItemMode::ibItemMode_Folder_Item;
-		if (object->ConvertToValue(metaAttr)) {
-			attrUse = metaAttr->GetItemMode();
-		}
 		if (object != codeAttribute && !m_metaObject->IsDataReference(object->GetMetaID())) {
 			source->GetValueByMetaID(object->GetMetaID(), m_listObjectValue[object->GetMetaID()]);
 		}
@@ -2442,9 +2438,6 @@ void ibValueRecordDataObjectHierarchyRef::PrepareEmptyObject(const ibValueRecord
 	for (const auto object : m_metaObject->GetGenericTableArrayObject()) {
 		if (object->IsDeleted())
 			continue;
-		ibValueMetaObjectTableData* metaTable = nullptr; ibItemMode tableUse = ibItemMode::ibItemMode_Folder_Item;
-		if (object->ConvertToValue(metaTable))
-			tableUse = metaTable->GetTableUse();
 		ibValueTabularSectionDataObjectRef* tableSection = new ibValueTabularSectionDataObjectRef(this, object);
 		if (tableSection->LoadDataFromTable(source->GetTableByMetaID(object->GetMetaID())))
 			m_listObjectValue.insert_or_assign(object->GetMetaID(), tableSection);

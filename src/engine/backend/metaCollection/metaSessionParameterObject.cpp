@@ -14,8 +14,12 @@ ibValueSessionParameter::ibValueSessionParameter(ibValueMetaObjectSessionParamet
 {
 }
 
-ibValue ibValueSessionParameter::GetValue() const
+ibValue ibValueSessionParameter::GetValue(bool getThis) const
 {
+	// The holder itself, when that is what was asked for — same contract as the base.
+	if (getThis)
+		return const_cast<ibValueSessionParameter*>(this);
+
 	const ibSession* const session = ibSession::Current();
 	if (!m_metaObject || session == nullptr)
 		return ibValue();

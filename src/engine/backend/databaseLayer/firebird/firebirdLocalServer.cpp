@@ -273,11 +273,6 @@ int ibFirebirdLocalServer::EnsureStarted() {
 		return 0;
 	}
 
-	// Spawn: `firebird.exe -a -p <port>` — `-a` = standalone (no
-	// service manager required); `-p <port>` = bind to TCP port.
-	const wxString cmd = wxString::Format(
-		wxT("\"%s\" -a -p %d"), fbExe, port);
-
 	// IMPORTANT: not using wxExecute. wxExecute asserts
 	// `wxThread::IsMain()` on BOTH Win32 and POSIX — it's a wx
 	// fundamental constraint, not a platform-specific one (uses
@@ -292,6 +287,12 @@ int ibFirebirdLocalServer::EnsureStarted() {
 	long pid = 0;
 #ifdef __WXMSW__
 	{
+		// Spawn: `firebird.exe -a -p <port>` — `-a` = standalone (no service manager required);
+		// `-p <port>` = bind to TCP port. Built HERE: the POSIX branch below is still a stub and
+		// spawns nothing, so off MSW this string has no reader.
+		const wxString cmd = wxString::Format(
+			wxT("\"%s\" -a -p %d"), fbExe, port);
+
 		STARTUPINFOW si{};
 		si.cb = sizeof(si);
 		PROCESS_INFORMATION pi{};

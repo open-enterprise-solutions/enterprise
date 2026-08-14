@@ -44,7 +44,7 @@ bool ibDialogUserItem::ReadUserData(const ibGuid& userGuid, bool copy)
 			}
 		}
 
-		for (const auto role : userInfo.m_roleArray) {
+		for (const auto& role : userInfo.m_roleArray) {   // by reference — a role is a struct, not a handle
 
 			auto iterator = std::find_if(m_roleArray.begin(), m_roleArray.end(),
 				[role](const auto& pair) { return role.m_strRoleGuid == pair.second.m_strRoleGuid; });
@@ -274,7 +274,7 @@ ibDialogUserItem::ibDialogUserItem(wxWindow* parent, wxWindowID id, const wxStri
 					if (userGuid == m_userGuid)
 						continue;
 					const ibUserInfo userEntry = ibUserInfo::Read(userGuid);
-					for (const auto role : userEntry.m_roleArray) {
+					for (const auto& role : userEntry.m_roleArray) {   // by reference — a role is a struct, not a handle
 						access_right = commonObject->AccessRight_Administration(role.m_miRoleId) &&
 							commonObject->AccessRight_DataAdministration(role.m_miRoleId);
 						if (access_right) break;

@@ -1019,7 +1019,6 @@ void ibGridEditor::OnRowHeight(wxCommandEvent& event)
 	if (result == wxID_OK) {
 		for (auto cell : ibGrid::GetSelectedBlocks()) {
 			for (int row = cell.GetTopRow(); row <= cell.GetBottomRow(); row++) {
-				const int size = ibGrid::GetRowSize(row);
 				ibGrid::SetRowSize(row, rowHeight->GetHeight());
 			}
 		}
@@ -1035,7 +1034,6 @@ void ibGridEditor::OnColWidth(wxCommandEvent& event)
 	if (result == wxID_OK) {
 		for (auto cell : ibGrid::GetSelectedBlocks()) {
 			for (int col = cell.GetLeftCol(); col <= cell.GetRightCol(); col++) {
-				const int size = ibGrid::GetColSize(col);
 				ibGrid::SetColSize(col, colWidth->GetWidth());
 			}
 		}
@@ -1048,14 +1046,12 @@ void ibGridEditor::OnHideCell(wxCommandEvent& event)
 		if (cell.GetLeftCol() > 0 &&
 			cell.GetTopRow() == 0) {
 			for (int col = cell.GetLeftCol(); col <= cell.GetRightCol(); col++) {
-				const int size = ibGrid::GetColSize(col);
 				ibGrid::SetColSize(col, 0);
 			}
 		}
 		else if (cell.GetTopRow() > 0 &&
 			cell.GetLeftCol() == 0) {
 			for (int row = cell.GetTopRow(); row <= cell.GetBottomRow(); row++) {
-				const int size = ibGrid::GetRowSize(row);
 				ibGrid::SetRowSize(row, 0);
 			}
 		}
@@ -1063,13 +1059,11 @@ void ibGridEditor::OnHideCell(wxCommandEvent& event)
 			cell.GetTopRow() == 0) {
 			if (cell.GetBottomRow() == m_numRows - 1) {
 				for (int col = cell.GetLeftCol(); col <= cell.GetRightCol(); col++) {
-					const int size = ibGrid::GetColSize(col);
-					ibGrid::SetColSize(col, 0);
+						ibGrid::SetColSize(col, 0);
 				}
 			}
 			else if (cell.GetRightCol() == m_numCols - 1) {
 				for (int row = cell.GetTopRow(); row <= cell.GetBottomRow(); row++) {
-					const int size = ibGrid::GetRowSize(row);
 					ibGrid::SetRowSize(row, 0);
 				}
 			}
@@ -1088,7 +1082,6 @@ void ibGridEditor::OnShowCell(wxCommandEvent& event)
 				hiddenCol = size == 0;
 			}
 			for (int col = hiddenCol ? 0 : cell.GetLeftCol(); col <= cell.GetRightCol(); col++) {
-				const int size = ibGrid::GetColSize(col);
 				ibGrid::SetColSize(col, wxNOT_FOUND);
 			}
 		}
@@ -1100,7 +1093,6 @@ void ibGridEditor::OnShowCell(wxCommandEvent& event)
 				hiddenRow = size == 0;
 			}
 			for (int row = hiddenRow ? 0 : cell.GetTopRow(); row <= cell.GetBottomRow(); row++) {
-				const int size = ibGrid::GetRowSize(row);
 				ibGrid::SetRowSize(row, wxNOT_FOUND);
 			}
 		}
@@ -1108,13 +1100,11 @@ void ibGridEditor::OnShowCell(wxCommandEvent& event)
 			cell.GetTopRow() == 0) {
 			if (cell.GetBottomRow() == m_numRows - 1) {
 				for (int col = cell.GetLeftCol(); col <= cell.GetRightCol(); col++) {
-					const int size = ibGrid::GetColSize(col);
 					ibGrid::SetColSize(col, wxNOT_FOUND);
 				}
 			}
 			else if (cell.GetRightCol() == m_numCols - 1) {
 				for (int row = cell.GetTopRow(); row <= cell.GetBottomRow(); row++) {
-					const int size = ibGrid::GetRowSize(row);
 					ibGrid::SetRowSize(row, wxNOT_FOUND);
 				}
 			}

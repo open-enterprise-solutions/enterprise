@@ -28,6 +28,9 @@ class BACKEND_API ibValueActionEvent : public ibValueEvent {
 	ibValueActionEvent();
 	ibValueActionEvent(const wxString& eventName, ibActionID eventId);
 private:
-	ibActionID m_eventId;
+	// Kept from the ctor, read by nobody yet — an action event is dispatched BY NAME today
+	// (ibValueEvent::m_eventName), and this id is the handle a caller would need to route one
+	// without the name. Marked rather than dropped, because dropping it loses the argument too.
+	[[maybe_unused]] ibActionID m_eventId;
 };
 #endif

@@ -1104,7 +1104,7 @@ TEST(RuntimeBench, DISABLED_MethodResolve) {
 // Reported per ROW, so the number is "what one record costs to build and
 // process", which is the unit a configuration author thinks in.
 TEST(RuntimeBench, DISABLED_RecordWalk) {
-    const long n = 20000;
+    // No single n here: the scaling probe below drives its own series.
     ibCompileCode cc(wxT("test"), wxT("memory"), false);
     ASSERT_TRUE(Build(cc,
         wxT("Function Walk(n) Public\n")

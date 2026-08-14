@@ -1310,7 +1310,7 @@ start_label:
 						// `someFunc(3, 5)`. Mirrors OPER_CALL_METHOD and OPER_CALL_LAMBDA.
 						if (index2 == 1) {
 							// `Val` — a real copy, or a raise if the type has none.
-							CopyValue(cRunContext.m_pLocVars[i], cvariable1.Clone());
+							CopyValue(cRunContext.m_pLocVars[i], cvariable1.CloneValue());
 						}
 						else if (cvariable1.m_bReadOnly) {
 							// A constant is independent already — nothing to clone.
@@ -1345,7 +1345,7 @@ start_label:
 					}
 					else {
 						if (index2 == 1) {
-							CopyValue(heapCtx->m_pLocVars[i], cvariable1.Clone());
+							CopyValue(heapCtx->m_pLocVars[i], cvariable1.CloneValue());
 						}
 						else if (cvariable1.m_bReadOnly) {
 							CopyValue(heapCtx->m_pLocVars[i], cvariable1);
@@ -1579,7 +1579,7 @@ start_label:
 					}
 					else if (curCode.m_numOper == OPER_SET) {
 						if (index2 == 1) {
-							CopyValue(pNewCtx->m_pLocVars[i], cvariable1.Clone());
+							CopyValue(pNewCtx->m_pLocVars[i], cvariable1.CloneValue());
 						}
 						else if (cvariable1.m_bReadOnly) {
 							CopyValue(pNewCtx->m_pLocVars[i], cvariable1);
@@ -2371,8 +2371,6 @@ bool ibProcUnit::Evaluate(const wxString& strExpression, ibRunContext* pRunConte
 
 bool ibProcUnit::CompileExpression(ibRunContext* pRunContext, ibValue& pvarRetValue, ibCompileCode& cModule, bool bCompileBlock)
 {
-	const ibByteCode* const byteCode = pRunContext->GetByteCode();
-
 	// Eval state (m_bExpressionOnly, m_cByteCode.m_parent, host fn,
 	// m_numFindLocalInParent) is pre-set by ibCompileEval's ctor —
 	// CompileExpression's caller passes a fully-prepared eval module.

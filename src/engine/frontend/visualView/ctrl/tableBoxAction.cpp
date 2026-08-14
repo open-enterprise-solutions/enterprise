@@ -188,8 +188,7 @@ void ibValueModelTableBox::Command_FilterByCurrentColumn()
 	m_tableModel->GetValueByMetaID(sel, colId, value);      // reading a cell value is a plain data op
 	const wxString name = m_tableModel->GetColumnNameByID(colId);
 	if (!name.empty()) {
-		ibValueFilterItem* added =
-			m_tableModel->GetListSettings()->GetFilter()->Add(name, ibComparisonKind_Equal, value);
+		m_tableModel->GetListSettings()->GetFilter()->Add(name, ibComparisonKind_Equal, value);
 		m_tableModel->RefetchAll();
 	}
 }

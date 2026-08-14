@@ -529,8 +529,6 @@ void ibDialogFormEditor::ibDialogFormEditorItemPopupMenu::OnMenuEvent(wxCommandE
 
 void ibDialogFormEditor::ibDialogFormEditorItemPopupMenu::OnUpdateEvent(wxUpdateUIEvent& e)
 {
-	ibValueFrame* currentControl = m_handler->GetSelectedObject();
-
 	switch (e.GetId())
 	{
 	case MENU_MOVE_UP:

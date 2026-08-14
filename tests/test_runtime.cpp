@@ -144,7 +144,7 @@ public:
 
 // The same thing, but it SAYS what went wrong. A bare false costs a rebuild to
 // find out, and the last three compile failures here each cost one.
-bool TryCompileNamed(ibCompileCode& cc, const wxString& src, wxString& outError) {
+[[maybe_unused]] bool TryCompileNamed(ibCompileCode& cc, const wxString& src, wxString& outError) {
 	try {
 		if (cc.Compile(src))
 			return true;

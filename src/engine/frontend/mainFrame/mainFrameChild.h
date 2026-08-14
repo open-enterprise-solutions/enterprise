@@ -232,7 +232,6 @@ protected:
 					bool is_active_in_split = tabCtrl->GetPage(page_tab_idx).active;
 
 					if (is_active_in_split) {
-						const int ctrl_new_page_count = (int)tabCtrl->GetPageCount();
 						if (page_tab_idx > 0 && page_tab_idx < (int)tabCtrl->GetPageCount()) {
 							if (is_curpage) new_active = tabCtrl->GetWindowFromIdx(page_tab_idx - 1);
 						}

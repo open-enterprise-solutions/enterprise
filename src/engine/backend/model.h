@@ -1280,6 +1280,13 @@ public:
 		return SetValueByRow(variant, item, col);
 	}
 
+	// The VALUE forms, which these cell accessors would otherwise hide. A model IS an ibValue, and
+	// ibValue declares GetValue(bool)/SetValue(const ibValue&); a same-named member here removes them
+	// from lookup on every model, so `model.GetValue()` would silently stop resolving. Different
+	// parameter counts — nothing becomes ambiguous, the names simply stay reachable.
+	using ibValue::GetValue;
+	using ibValue::SetValue;
+
 	virtual bool GetAttr(const ibDataViewItem& item, unsigned int col,
 		ibDataViewItemAttr& attr) const {
 		return GetAttrByRow(item, col, attr);

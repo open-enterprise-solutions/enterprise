@@ -49,7 +49,7 @@ void ibValueCheckbox::FillControlMembers(ibMemberTable& helper) const
 
 bool ibValueCheckbox::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	const long lPropAlias = m_members.GetPropAlias(lPropNum); bool refreshColumn = false;
+	const long lPropAlias = m_members.GetPropAlias(lPropNum);
 	if (lPropAlias == eControl) {
 		const long lPropData = m_members.GetPropData(lPropNum);
 		if (lPropData == eControlValue) {

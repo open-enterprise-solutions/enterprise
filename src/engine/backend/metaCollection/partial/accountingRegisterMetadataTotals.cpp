@@ -2193,7 +2193,9 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 	// period's closing), and the order a GROUP BY answers in is the engine's business, not a promise.
 	const size_t periodSlot = withPeriod ? keyColumns.size() : rowColumns.size();
 	const auto periodOf = [&](const ibAcctRow& row) {
-		return periodSlot < row.m_key.size() ? row.m_key[periodSlot].GetDate() : wxLongLong_t(0);
+		// static_cast, not a functional cast: wxLongLong_t is `long long` outside MSVC, and a
+		// two-word type name cannot be spelled `T(0)` (docs/portability.md).
+		return periodSlot < row.m_key.size() ? row.m_key[periodSlot].GetDate() : static_cast<wxLongLong_t>(0);
 	};
 
 	std::vector<std::pair<wxString, ibAcctRow>> ordered;
