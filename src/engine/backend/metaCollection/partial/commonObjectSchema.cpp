@@ -60,16 +60,6 @@ void ibValueMetaObjectRecordDataMutableRef::ContributeTables(ibSchemaSnapshot& o
 	for (const auto object : GetGenericAttributeArrayObject())
 		t.Add(object);
 
-	// TEMPORARY — the column list AS DECLARED, beside the DDL the differ then emits from it. The two
-	// have disagreed all day and the trace could only show the second half: a column dropped without
-	// anything saying whether the declaration had stopped naming it or the diff had simply not seen
-	// it. This is that first half.
-	{
-		wxString declared;
-		for (const auto object : GetGenericAttributeArrayObject())
-			declared += (declared.IsEmpty() ? wxString() : wxT(", ")) + object->GetName();
-	}
-
 	t.Index(t.m_name + wxT("_INDEX"), { uuid }, true);                        // uuid uniqueness (replaced the old PRIMARY KEY)
 	if (const ibValueMetaObjectAttributeBase* refAttr = GetDataReference())
 		t.Index(t.m_name + wxT("_REF_UQ"), { refAttr }, true);               // _REF_UQ — the data-reference unique key
@@ -124,18 +114,6 @@ void ibValueMetaObjectRegisterData::ContributeTables(ibSchemaSnapshot& out) cons
 		t.Add(object);
 	for (const auto object : GetAttributeArrayObject())
 		t.Add(object);
-
-	// TEMPORARY — a REGISTER's declared columns. The record path above has its own line; this is the
-	// other one, and its absence is what hid where the movements column list actually comes from.
-	{
-		wxString declared;
-		for (const auto object : GetPredefinedAttributeArrayObject())
-			declared += (declared.IsEmpty() ? wxString() : wxT(", ")) + object->GetName();
-		for (const auto object : GetDimensionArrayObject())
-			declared += wxT(", ") + object->GetName();
-		for (const auto object : GetResourceArrayObject())
-			declared += wxT(", ") + object->GetName();
-	}
 
 	// The key index: recorder + line for a subordinate register, else the dimension columns
 	// (period + dimensions when periodic — GetGenericDimensionArrayObject prepends the period).

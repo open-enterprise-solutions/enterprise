@@ -1108,6 +1108,30 @@ bool ibValueMetaObjectRegisterData::OnLoadMetaObject(ibMetaData* metaData)
 
 bool ibValueMetaObjectRegisterData::OnSaveMetaObject(int flags)
 {
+	// ⭐⭐ A REGISTER WITH NOTHING IN IT IS NOT A REGISTER — and it is the one shape that cannot
+	// reach the database at all.
+	//
+	// Dimensions say what a record is ABOUT, resources say what it MEASURES, attributes say what
+	// else it carries. With none of the three there is no fact to record: the predefined columns
+	// alone describe an occurrence that states nothing.
+	//
+	// ⚠ AND A TABLE NEEDS AT LEAST ONE COLUMN. An independent register with nothing declared has
+	// none, so the differ correctly computed "every column of this table is gone" and emitted
+	// `ALTER TABLE … DROP <all of them>` — which Firebird answers with "last column in a table
+	// cannot be deleted". That refusal aborts the WHOLE apply, so one half-built register blocked
+	// every other change in the configuration, and the message named neither the register nor the
+	// reason. Refusing at the door turns a dead end into one sentence naming the object.
+	//
+	// Same door and same shape as the enumeration with no values
+	// (`ibValueMetaObjectEnumeration::OnSaveMetaObject`): an empty metaobject is refused where it is
+	// SAVED, by the restructure report, so the message lands in the pane under the editor and no
+	// exception leaves the configuration write transaction open.
+	if (GetDimensionArrayObject().empty() && GetResourceArrayObject().empty()
+		&& GetAttributeArrayObject().empty()) {
+		RestructureError(_("! Doesn't have any dimension, resource or attribute ") + GetFullName());
+		return false;
+	}
+
 	// ⭐⭐ SUBORDINATE TO A RECORDER MEANS THERE HAS TO BE ONE.
 	//
 	// A register that says it is written BY a recorder cannot exist without one: every row it holds

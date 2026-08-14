@@ -492,9 +492,6 @@ static void ApplyMaterialization(ibSchemaBuilder& schema, ibDatabaseConnectionHo
 	const ibMaterializeSpec spec = t.m_materialize.ToRenderSpec(t.m_name);
 	const wxString sourceTable = t.m_materialize.SourceTable();
 
-	// TEMPORARY — the bundle says one thing about the shard and the TABLE says another
-	// ("Column unknown T.SHARD_"), so print what each side believes at the moment they are decided.
-
 	// The HOLDER travels, not the connection or the builder: a deferred install runs after this
 	// function — and after the ibSchemaBuilder that started it — has gone, so a captured reference
 	// would dangle. The holder outlives the save and vends the same pinned connection.
