@@ -1212,6 +1212,9 @@ private:
 	const ibValueMetaObjectRegisterData* m_meta;
 };
 
+// (The totals-table identity holder moved to registerQueryLowering.h, beside the rest of what the
+// three registers share — it is register machinery, not part of the object family.)
+
 //meta object with key
 class BACKEND_API ibValueMetaObjectRegisterData :
 	public ibValueMetaObjectGenericData, public ibBackendQueryableHolder {
@@ -1264,6 +1267,17 @@ public:
 
 	// (The register's uniqueness key — recorder+line+period / period+dimensions — is vended by
 	// its queryable, ibRegisterDataQueryable::GetPrimaryKeyColumns, not a per-attribute flag.)
+
+	// ⭐⭐ WHICH ATTRIBUTE IS THIS COLUMN? — `FindAnyAttributeObjectByFilter(id)`, further down this
+	// class. It exists, it is the ECONOMICAL form (one walk over the children, the id compared as it
+	// goes, a clsid filter deciding what counts — no array built, nothing allocated), and it is the
+	// very function `ibRegisterDataQueryable::ResolveColumnByName` answers a query's column names with.
+	//
+	// Said here because both registers grew a hand-written list to answer it instead — period,
+	// dimensions, resources — and both lists were short: one did not know the recorder or the line
+	// number, the other did not know the analytics slots. An id nobody recognised was then published as
+	// a plain synthetic column, which carries no picture and does not say it holds a REFERENCE, so the
+	// same field unfolded on the register one node up and refused to unfold here.
 
 	///////////////////////////////////////////////////////////////////
 
@@ -1366,10 +1380,17 @@ public:
 		return FindObjectByFilter<ibValueMetaObjectResource>(id, { g_metaResourceCLSID });
 	}
 
-	//attribute
+	// ⚠ THE TEMPLATE ARGUMENT AND THE FILTER MUST NAME THE SAME THING — they said Resource and
+	// Attribute. Copied from the resource finder directly above with only the clsid edited, and nothing
+	// can catch that: inside FindObjectByFilter the child is handed over by an unchecked
+	// `static_cast<_T1*>`, guarded ONLY by this hand-written clsid list. It survived because
+	// Resource : Attribute : AttributeBase is a single chain with ibValueMetaObject first, so the
+	// adjustment happened to be zero — ABI luck, not a guarantee, and the same shape once made a
+	// constant stop being a column (an attribute inherits ibBackendQueryColumn as a LATER base, where
+	// the offset is not zero).
 	template <typename _T1>
 	ibValueMetaObjectAttributeBase* FindAttributeObjectByFilter(const _T1& id) const {
-		return FindObjectByFilter<ibValueMetaObjectResource>(id, { g_metaAttributeCLSID });
+		return FindObjectByFilter<ibValueMetaObjectAttributeBase>(id, { g_metaAttributeCLSID });
 	}
 
 #pragma endregion 

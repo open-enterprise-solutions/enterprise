@@ -17,7 +17,6 @@
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject (materialisation)
 #include "backend/query/dataQueryBuilder.h"                       // L3 write door (predefined seeding) + ibRawDBColumn
-#include "backend/databaseLayer/databaseResultSet.h"              // GetResultString
 #include "backend/objCtor.h"                                      // ibCtorMetaValueType (reference-target resolution)
 #include "backend/metaData.h"                                     // ibMetaData::GetTypeCtor
 #include "backend/databaseLayer/databaseQueryBuilder.h"           // ibDdlStatement / ibQueryStatement / ibQueryResult (L2)
@@ -157,12 +156,23 @@ const ibValueMetaObjectGenericData* ibRecordQueryable::GetSourceMetaObject() con
 // out-of-line HERE where the attribute type is complete. The record queryable (above) forwards to it. (Folder
 // column removed — folders are a creation-time sort/filter setting, not a structural column.)
 const ibBackendQueryColumn* ibValueMetaObjectRecordDataHierarchyMutableRef::GetHierarchyColumn() const {
-	// A FLAT list has no hierarchy column, and this is the one place that has to say so: every tree
-	// behaviour in the engine is gated on this being non-null — the level fetch, the drill, the
-	// parent filter, a TotalBy(...,​ Hierarchy) unfolding through the target's parent map. Answering
-	// with the Parent attribute regardless would leave a flat catalog building a tree over a column
-	// that no longer exists.
-	return IsHierarchical() ? GetDataParent() : nullptr;
+	// ⭐⭐ THE HIERARCHY IS THE PARENT. There is exactly ONE arrangement with no hierarchy — the one
+	// with no parent at all (`None`), where the field is gone rather than merely unused, and where
+	// "in hierarchy" can only ever answer with the value itself. Every other arrangement RECORDS a
+	// parent, and a recorded parent IS a hierarchy: something to walk up and something to fold down.
+	//
+	// ⚠ It used to answer `IsHierarchical()` — the two arrangements the engine NAVIGATES — and that
+	// made one accessor carry two different questions under one null: "is there a parent" and "does
+	// the list drill". A chart of accounts declares Subordination (`chartOfAccountsMetadata.cpp`), so
+	// it answered NO to both, and everything downstream that needed only the FIRST answer went quietly
+	// without: `TOTALS BY <account> HIERARCHY` degraded to a flat grouping, and a filter asking in
+	// hierarchy had to reach around this accessor into the metaobject to get an answer at all. The
+	// enumeration says as much in its own words — *whoever wants the structure asks for it, a query,
+	// a grouping* (`commonObjectEnum.h`) — and this is the accessor they ask.
+	//
+	// A FLAT list still answers null, which is what keeps a tree from being built over a column that
+	// is not there.
+	return HasParentLink() ? GetDataParent() : nullptr;
 }
 // ResolveReferenceTarget / ResolveReferenceTargets moved to ibDbTableProvider (query/dbTableProvider.cpp)
 // — the ONE provider that owns metadata. The record queryable only vends GetMetaData(); the provider

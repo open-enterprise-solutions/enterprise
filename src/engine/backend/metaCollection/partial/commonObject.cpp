@@ -1108,6 +1108,24 @@ bool ibValueMetaObjectRegisterData::OnLoadMetaObject(ibMetaData* metaData)
 
 bool ibValueMetaObjectRegisterData::OnSaveMetaObject(int flags)
 {
+	// ⭐⭐ SUBORDINATE TO A RECORDER MEANS THERE HAS TO BE ONE.
+	//
+	// A register that says it is written BY a recorder cannot exist without one: every row it holds
+	// is owned by a document, its whole write path is "the document posts, the register records", and
+	// the Recorder column's type IS the set of documents that declared they post here. Empty, that
+	// set makes the column admit nothing — so the register can be created, applied and reported on,
+	// and nothing will ever be able to write a single row into it.
+	//
+	// Reported, not thrown, and here rather than on the schema declaration: the same reasoning as the
+	// chart of accounts' missing binding — the message belongs in the pane under the editor, the save
+	// refuses, and no exception leaves the configuration write transaction open.
+	if (HasRecorder() && (*m_propertyAttributeRecorder)->IsEmptyTypeDesc()) {
+		ibValueSystemFunction::Message(
+			wxString::Format(_("%s: no recorder - declare a document that posts into this register, or it can never be written to"), GetName()),
+			ibStatusMessage::ibStatusMessage_Error);
+		return false;
+	}
+
 	if (!(*m_propertyAttributeLineActive)->OnSaveMetaObject(flags))
 		return false;
 
@@ -2311,7 +2329,7 @@ bool ibValueRecordDataObjectHierarchyRef::GetValueByMetaID(const ibMetaID& id, i
 void ibValueRecordDataObjectHierarchyRef::PrepareEmptyObject()
 {
 	m_listObjectValue.clear();
-	//attrbutes can refValue 
+	//attrbutes can refValue
 	for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 		if (object->IsDeleted())
 			continue;

@@ -87,16 +87,9 @@ static void RestrictToStoredArm(ibDataQueryBuilder& b,
 // CAST from narrowing money (a bare NUMERIC is NUMERIC(9,0) on Firebird). Nothing here casts now -
 // the view stores each figure in the resource's own declared type, and reading it keeps that type.
 
-// ⭐ THE STORAGE NAME IS ASKED FOR, NEVER SPELLED. A view column carries both — `Resource1Turnover`
-// for a query, `Resource1_Turnover` for the table — and the pair is built in ONE place
-// (accumulationRegisterSchema). Typing the storage spelling out again here would be a second writing
-// of one name, and this one drifts SILENTLY: a read spec naming a column the view does not have
-// returns NULLs, not an error.
-static wxString ibRegPhysicalOf(const ibBackendQueryable* view, const wxString& logical)
-{
-	const ibBackendQueryColumn* col = view != nullptr ? view->ResolveColumnByName(logical) : nullptr;
-	return col != nullptr ? col->GetPhysicalName() : wxString();
-}
+// (ibRegPhysicalOf — "ask the view for the storage name, never spell it" — moved to
+//  registerQueryLowering.h on 2026-08-13: the accounting register's server reading needs the same
+//  rule, and a rule about not writing a name twice should not itself be written twice.)
 
 // The id the seeding gave a column. The read stores BY ID, and the id belongs to the view — asking
 // the table for it is what keeps this file from knowing how the view numbers its columns.
@@ -430,8 +423,12 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 				for (const ibBackendQueryColumn* key : keyOnView)
 					keyValues.push_back(sel.GetValue(key));
 				std::map<ibMetaID, ibNumber>& row = opening[keyOfValues(keyValues)];
+				// ⚠ KEYED BY THE SLOT THE FOLD CARRIES ITS RUNNING TOTAL UNDER — the TURNOVER column, which
+				// is what FoldBalancesForward reads the seed back by (and what its header states). Keyed by
+				// the opening column instead, the seed was written where nothing ever looked: every key
+				// appeared to start at zero, which is exactly the failure the step above is here to avoid.
 				for (size_t i = 0; i < resources.size(); i++)
-					row[slots[i].m_opening] = sel.GetColumn(resources[i]->GetName() + ibRegFigure::Turnover).GetNumber();
+					row[slots[i].m_turnover] = sel.GetColumn(resources[i]->GetName() + ibRegFigure::Turnover).GetNumber();
 			}
 		}
 		catch (...) {}
@@ -614,85 +611,6 @@ std::vector<wxString> ReadKeys(const ibValueMetaObjectAccumulationRegister* reg)
 // into today's total, once by itself. It is computed through `ibTruncateToPeriod`, the RAM twin of
 // the truncation the trigger renders, because a floor that disagreed with the stored key by one
 // second would drop or duplicate a whole grain.
-// The recorder's fields carrying a boundary's document, decomposed by the WRITE codec: the same
-// decomposition the rows were stored through, so the comparison rides exactly the fields the index
-// is built on. The discriminator is dropped -- it says what KIND of value this is, which is the same
-// for every recorder and would only make the tuple one constant longer.
-static std::vector<std::pair<wxString, ibQueryExprPtr>> RecorderTuple(
-	const ibValueMetaObjectAccumulationRegister* reg,
-	const std::vector<ibColumnSlot>& slots, const ibValue& recorder)
-{
-	std::vector<std::pair<wxString, ibQueryExprPtr>> tuple;
-
-	std::vector<wxString> fields;
-	for (const ibColumnSlot& slot : slots)
-		fields.push_back(slot.m_name);
-
-	ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
-	int pos = 1;
-	ibColumnCodec::WriteValue(reg->GetRegisterRecorder(), reg->GetMetaData(), recorder, &capture, pos);
-	const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
-
-	for (size_t i = 0; i < slots.size() && i < consts.size(); i++) {
-		if (slots[i].m_role == ibColumnRole::Discriminator || !consts[i])
-			continue;
-		tuple.push_back({ slots[i].m_name, consts[i] });
-	}
-	return tuple;
-}
-
-static void FillArmCut(ibMaterializeReadSpec& read,
-                       const ibValueMetaObjectAccumulationRegister* reg,
-                       const ibRegBound& upper,
-                       const ibRegBound& lower = ibRegBound())
-{
-	if (reg == nullptr || !reg->HasRecorder() || reg->GetRegisterRecorder() == nullptr)
-		return;   // this view has one arm; there is nothing to cut
-
-	const std::vector<ibColumnSlot> slots = DescribeColumnLayout(reg->GetRegisterRecorder());
-	if (slots.empty())
-		return;
-
-	// A stored row has no recorder, so any of its fields is NULL there -- the mark is the row's own
-	// answer to "which arm am I", with no flag column invented for it.
-	read.m_markColumn = slots.front().m_name;
-
-	const ibTotalsPeriod grain = reg->GetTotalsPeriodUnit();
-
-	// ⭐ A BOUNDARY REACHES BELOW THE GRAIN when it falls inside one, or when it names a document.
-	// Anything else -- a date on a grain edge, no date at all -- is answered by the stored rows
-	// whole, and the movement arm is left excluded. The trigger keeps the CURRENT grain's row up to
-	// date, so "no boundary" is not stale: it is complete at grain resolution.
-	const auto reachesInside = [&](const ibRegBound& b, wxDateTime& moment) {
-		if (b.m_date.GetType() != TYPE_DATE)
-			return false;
-		moment = b.m_date.GetDateTime();
-		return b.HasRecorder() || ibTruncateToPeriod(moment, grain) != moment;
-	};
-
-	wxDateTime upperMoment, lowerMoment;
-	const bool cutUpper = reachesInside(upper, upperMoment);
-	const bool cutLower = reachesInside(lower, lowerMoment);
-	if (!cutUpper && !cutLower)
-		return;
-
-	// The stored arm ends where the upper boundary's grain begins. With no upper boundary at all it
-	// still ends somewhere -- at the LOWER boundary's grain -- because the only reason the arm is
-	// cut at all is that one end of the interval is partial.
-	read.m_toExcluding   = upper.m_excluding;
-	read.m_fromExcluding = lower.m_excluding;
-	read.m_floor = ibValue(ibTruncateToPeriod(cutUpper ? upperMoment : lowerMoment, grain));
-	if (cutUpper && upper.HasRecorder())
-		read.m_boundaryTail = RecorderTuple(reg, slots, upper.m_recorder);
-
-	// The stored arm begins at the first WHOLE grain at or after the lower boundary: the grain the
-	// boundary falls INTO holds movements before it as well, so it cannot be taken as a row.
-	if (cutLower) {
-		read.m_headSplit = ibValue(ibNextPeriodStart(lowerMoment, grain));
-		if (lower.HasRecorder())
-			read.m_boundaryHead = RecorderTuple(reg, slots, lower.m_recorder);
-	}
-}
 
 ibQueryRelPtr ibBalanceQueryable::GetSourceRelation(const wxString& alias) const
 {
@@ -714,7 +632,7 @@ ibQueryRelPtr ibBalanceQueryable::GetSourceRelation(const wxString& alias) const
 	r.m_keyColumns    = ReadKeys(m_reg);
 	r.m_filters       = ReadFilters(m_reg, m_filter);
 	r.m_dropZeroRows  = true;   // no stock means NO ROW, matching the live path
-	FillArmCut(r, m_reg, bound);
+	ibRegFillArmCut(r, m_reg, bound);
 
 	// Names asked for, not spelled: the balance view knows what it publishes, the turnovers view knows
 	// what it stores.
@@ -764,7 +682,7 @@ ibQueryRelPtr ibTurnoverQueryable::GetSourceRelation(const wxString& alias) cons
 	// ⭐ EITHER END MAY REACH BELOW THE GRAIN — "turnovers between this document and that one" is
 	// the question, and both ends of it name a moment. Ask for whole days and the stored rows answer
 	// alone; ask for noon-to-noon and only the two partial ends come from the movements.
-	FillArmCut(r, m_reg, ibReadRegisterBound(m_end), ibReadRegisterBound(m_begin));
+	ibRegFillArmCut(r, m_reg, ibReadRegisterBound(m_end), ibReadRegisterBound(m_begin));
 
 	// Straight through: what the view publishes IS what this reading reports, so both sides of every
 	// pair are the same column — and neither side is typed out.
@@ -812,7 +730,7 @@ ibQueryRelPtr ibBalanceAndTurnoverQueryable::GetSourceRelation(const wxString& a
 	// ⭐ EITHER END MAY REACH BELOW THE GRAIN — "turnovers between this document and that one" is
 	// the question, and both ends of it name a moment. Ask for whole days and the stored rows answer
 	// alone; ask for noon-to-noon and only the two partial ends come from the movements.
-	FillArmCut(r, m_reg, ibReadRegisterBound(m_end), ibReadRegisterBound(m_begin));
+	ibRegFillArmCut(r, m_reg, ibReadRegisterBound(m_end), ibReadRegisterBound(m_begin));
 
 	// ⭐ THE PHYSICAL NAMES ARE ASKED FOR, NOT SPELLED. Every one of these used to be written by hand
 	// as `<Resource>` + `"_OpeningBalance"` — the storage spelling, typed out a fourth time, in a file

@@ -20,6 +20,7 @@ enum Func {
 	eTurnover,
 	eDrCrTurnover,
 	eBalanceAndTurnover,
+	eRecordsWithAccountDimensions,
 	eSelect,
 	eGetForm,
 	eGetListForm,
@@ -28,12 +29,37 @@ enum Func {
 
 void ibValueManagerDataObjectAccountingRegister::FillManagerMethods(ibMemberTable& helper) const
 {
+	// ⭐⭐ THE ARITY IS ASKED OF THE LAYOUT, NEVER WRITTEN BESIDE IT.
+	//
+	// Hand-written, it drifted the first day: `ibAcctArgs::For` reserves a slot for the credit-side
+	// breakdown in correspondence mode, the numbers here did not, and a script's CONDITION landed in
+	// the kinds slot — read as a breakdown list and silently dropped. Exactly the neighbour's
+	// off-by-one this register's computed layout was built to make impossible, reintroduced one file
+	// away by a literal.
+	//
+	// So the count comes from the same function that reads the call. A parameter added to the layout
+	// changes both ends at once, and there is no second list to forget.
+	const bool correspondence = m_metaObject != nullptr && m_metaObject->IsCorrespondence();
+	const auto arity = [correspondence](ibAcctShape shape) {
+		return static_cast<long>(ibAcctArgs::For(shape, correspondence).m_count);
+	};
+
 	helper.AppendFunc(wxT("CreateRecordSet"), wxT("CreateRecordSet()"));
 	helper.AppendFunc(wxT("CreateRecordKey"), wxT("CreateRecordKey()"));
-	helper.AppendFunc(wxT("Balance"), 3, wxT("Balance(period, account, filter...)"));
-	helper.AppendFunc(wxT("Turnovers"), 4, wxT("Turnovers(beginOfPeriod, endOfPeriod, account, filter...)"));
-	helper.AppendFunc(wxT("DrCrTurnovers"), 4, wxT("DrCrTurnovers(beginOfPeriod, endOfPeriod, account, filter...)"));
-	helper.AppendFunc(wxT("BalanceAndTurnovers"), 4, wxT("BalanceAndTurnovers(beginOfPeriod, endOfPeriod, account, filter...)"));
+	helper.AppendFunc(wxT("Balance"), arity(ibAcctShape::Balance), correspondence
+		? wxT("Balance(period, accountDr, accountCr, accountDimensions, condition)")
+		: wxT("Balance(period, account, accountDimensions, condition)"));
+	helper.AppendFunc(wxT("Turnovers"), arity(ibAcctShape::Turnovers), correspondence
+		? wxT("Turnovers(beginOfPeriod, endOfPeriod, accountDr, accountCr, accountDimensions, condition, periodicity)")
+		: wxT("Turnovers(beginOfPeriod, endOfPeriod, account, accountDimensions, condition, periodicity)"));
+	helper.AppendFunc(wxT("DrCrTurnovers"), arity(ibAcctShape::DrCrTurnovers),
+		wxT("DrCrTurnovers(beginOfPeriod, endOfPeriod, accountDr, accountCr, accountDimensionsDr, accountDimensionsCr, condition)"));
+	helper.AppendFunc(wxT("BalanceAndTurnovers"), arity(ibAcctShape::BalanceAndTurnovers), correspondence
+		? wxT("BalanceAndTurnovers(beginOfPeriod, endOfPeriod, accountDr, accountCr, accountDimensions, condition, periodicity)")
+		: wxT("BalanceAndTurnovers(beginOfPeriod, endOfPeriod, account, accountDimensions, condition, periodicity)"));
+	helper.AppendFunc(wxT("RecordsWithAccountDimensions"), arity(ibAcctShape::Records), correspondence
+		? wxT("RecordsWithAccountDimensions(beginOfPeriod, endOfPeriod, accountDimensionsDr, accountDimensionsCr, condition)")
+		: wxT("RecordsWithAccountDimensions(beginOfPeriod, endOfPeriod, accountDimensions, condition)"));
 	helper.AppendFunc(wxT("Select"), wxT("Select()"));
 	helper.AppendFunc(wxT("GetForm"), 3, wxT("GetForm(string, owner, guid)"));
 	helper.AppendFunc(wxT("GetListForm"), 3, wxT("GetListForm(string, owner, guid)"));
@@ -52,28 +78,25 @@ bool ibValueManagerDataObjectAccountingRegister::CallAsFunc(const long lMethodNu
 	case eCreateRecordKey:
 		pvarRetValue = new ibValueRecordKeyObject(m_metaObject);
 		return true;
+	// ⭐ THE ARGUMENTS TRAVEL AS DATA, not as a ladder of arities. Every one of these used to be a
+	// three-way ternary counting how many parameters arrived and calling a different overload for each
+	// — the same list written four times, and the shape it assumed (period, account, filter) is not
+	// even this register's shape any more. The reading reads the array by its own layout, which is the
+	// only thing that knows what position 3 means for THIS register.
 	case eBalance:
-		pvarRetValue = lSizeArray > 2 ?
-			Balance(*paParams[0], *paParams[1], *paParams[2]) :
-			lSizeArray > 1 ? Balance(*paParams[0], *paParams[1]) : Balance(*paParams[0]);
+		pvarRetValue = Balance(paParams, lSizeArray);
 		return true;
 	case eTurnover:
-		pvarRetValue = lSizeArray > 3 ?
-			Turnovers(*paParams[0], *paParams[1], *paParams[2], *paParams[3]) :
-			lSizeArray > 2 ? Turnovers(*paParams[0], *paParams[1], *paParams[2]) :
-			Turnovers(*paParams[0], *paParams[1]);
+		pvarRetValue = Turnovers(paParams, lSizeArray);
 		return true;
 	case eDrCrTurnover:
-		pvarRetValue = lSizeArray > 3 ?
-			DrCrTurnovers(*paParams[0], *paParams[1], *paParams[2], *paParams[3]) :
-			lSizeArray > 2 ? DrCrTurnovers(*paParams[0], *paParams[1], *paParams[2]) :
-			DrCrTurnovers(*paParams[0], *paParams[1]);
+		pvarRetValue = DrCrTurnovers(paParams, lSizeArray);
 		return true;
 	case eBalanceAndTurnover:
-		pvarRetValue = lSizeArray > 3 ?
-			BalanceAndTurnovers(*paParams[0], *paParams[1], *paParams[2], *paParams[3]) :
-			lSizeArray > 2 ? BalanceAndTurnovers(*paParams[0], *paParams[1], *paParams[2]) :
-			BalanceAndTurnovers(*paParams[0], *paParams[1]);
+		pvarRetValue = BalanceAndTurnovers(paParams, lSizeArray);
+		return true;
+	case eRecordsWithAccountDimensions:
+		pvarRetValue = RecordsWithAccountDimensions(paParams, lSizeArray);
 		return true;
 	case eSelect:
 		pvarRetValue = new ibValueSelectorRegisterDataObject(m_metaObject);

@@ -248,7 +248,15 @@ private:
 		// Folder_Item like its neighbours: a folder in a chart of accounts is an account that has
 		// children, so it has a side of its own. Leaving it Item-only was an asymmetry against
 		// OffBalance / Quantitative / Currency, which are all declared for both.
-		ibValueMetaObjectCompositeData::CreateSpecialType(wxT("AccountType"), _("Account type"), wxEmptyString, g_enumAccountTypeCLSID, false, ibValueEnumAccountType::CreateDefEnumValue(), ibItemMode::ibItemMode_Folder_Item));
+		// ⭐⭐ FILL-CHECKED. An account with no side is an account nothing can be posted to: every
+		// posting asks which side the amount moves, and the answer is this attribute. Left optional it
+		// could be saved empty, and the refusal arrived much later — at posting time, about a document,
+		// naming an account somebody entered weeks earlier.
+		//
+		// Through the ATTRIBUTE's own flag rather than a rule written at the write path: fill-check is
+		// the mechanism the platform already has for "this must be filled in", it shows the field as
+		// required in the form, and a rule of ours would be a second answer to the same question.
+		ibValueMetaObjectCompositeData::CreateSpecialType(wxT("AccountType"), _("Account type"), wxEmptyString, g_enumAccountTypeCLSID, /*fillCheck*/ true, ibValueEnumAccountType::CreateDefEnumValue(), ibItemMode::ibItemMode_Folder_Item));
 
 	ibPropertyContainer<>* m_propertyAttributeOffBalance = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryAccounting,
 		ibValueMetaObjectCompositeData::CreateBoolean(wxT("OffBalance"), _("Off-balance"), wxEmptyString, ibItemMode::ibItemMode_Folder_Item));
@@ -264,13 +272,19 @@ private:
 	// chart may ever hold. A KIND (a row of the table below) selects from that contour; it never
 	// declares a type of its own.
 	ibPropertyCategory* m_categoryData = ibPropertyObject::CreatePropertyCategory(wxT("Data"), _("Data"));
-	ibPropertyChartOfCharacteristicTypes* m_propertyChartOfCharacteristicTypes = ibPropertyObject::CreateProperty<ibPropertyChartOfCharacteristicTypes>(m_categoryData, wxT("ChartOfCharacteristicTypes"), _("Chart of characteristic types"));
+
+	// ⭐ THESE TWO BELONG TO ACCOUNTING, NOT TO "DATA". They are what makes this chart an accounting
+	// one: which values an account's analytics may hold, and how many slots there are. Sitting under
+	// "Data" they were invisible where a reader looks for them — the Accounting section showed the
+	// account's own flags and nothing about its analytics, so the section read as if it were the whole
+	// story and the two questions that shape every register built on this chart were elsewhere.
+	ibPropertyChartOfCharacteristicTypes* m_propertyChartOfCharacteristicTypes = ibPropertyObject::CreateProperty<ibPropertyChartOfCharacteristicTypes>(m_categoryAccounting, wxT("ChartOfCharacteristicTypes"), _("Chart of characteristic types"));
 
 	// The two answers stand side by side on purpose, because they are different questions:
 	// the chart above says WHICH VALUES an account dimension may hold, this number says HOW MANY
 	// dimension slots exist. Neither is derivable from the other — the same characteristic chart
 	// serves charts of accounts with different analytical depth.
-	ibPropertyUInteger* m_propertyMaxAccountDimensionCount = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categoryData,
+	ibPropertyUInteger* m_propertyMaxAccountDimensionCount = ibPropertyObject::CreateProperty<ibPropertyUInteger>(m_categoryAccounting,
 		wxT("MaxAccountDimensionCount"), _("Max account dimension count"), 3);
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////

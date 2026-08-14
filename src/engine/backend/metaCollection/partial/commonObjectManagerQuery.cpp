@@ -1,10 +1,17 @@
-////////////////////////////////////////////////////////////////////////////
+﻿////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
 //	Description : ibValueRecordManagerObject — manager-style operations
 //	              over a record-set (Exist / Read / Save / Delete). Thin
 //	              wrappers over m_recordSet that adapt the unique-key API
-//	              to the manager surface. Session-bound conn via
-//	              ses_query.
+//	              to the manager surface.
+//
+//	              ⚠ NO CONNECTION IS TAKEN HERE ANY MORE. Three functions
+//	              opened with `const auto db = ses_query;` and never read
+//	              it — residue of the pre-L3 code. Not inert: ses_query
+//	              acquires a pool connection and RAISES when there is no
+//	              active session, so a dead local could fail a read that
+//	              needs no database of its own. The record set reaches its
+//	              own connection through the door.
 ////////////////////////////////////////////////////////////////////////////
 
 #include "commonObject.h"
@@ -45,8 +52,6 @@ bool ibValueRecordManagerObject::ExistData()
 
 bool ibValueRecordManagerObject::ReadData(const ibUniqueKeyPair& key)
 {
-	const auto db = ses_query;
-
 	if (m_recordSet->ReadData(key)) {
 		if (m_recordLine == nullptr) {
 			m_recordLine = m_recordSet->GetRowAt(
@@ -61,8 +66,6 @@ bool ibValueRecordManagerObject::ReadData(const ibUniqueKeyPair& key)
 
 bool ibValueRecordManagerObject::SaveData(bool replace)
 {
-	const auto db = ses_query;
-
 	if (m_recordSet->Selected()
 		&& !DeleteData())
 		return false;
@@ -91,7 +94,6 @@ bool ibValueRecordManagerObject::SaveData(bool replace)
 
 bool ibValueRecordManagerObject::DeleteData()
 {
-	const auto db = ses_query;
 	return m_recordSet->DeleteRecordSet();
 }
 

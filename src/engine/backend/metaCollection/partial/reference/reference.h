@@ -123,10 +123,15 @@ public:
 	virtual bool SetValueBySourceHop(const ibSourceHop& hop, const ibValue& value) override { return SetValueByMetaID(hop.m_id, value); }
 	virtual bool GetValueBySourceHop(const ibSourceHop& hop, ibValue& out) const override;   // out-of-line (reference.cpp): needs the referenced metaobject COMPLETE to filter the pin by the field's live type
 
-	//get metaData from object
-	virtual const ibValueMetaObjectRecordData* GetMetaObject() const {
-		return (const ibValueMetaObjectRecordData *)m_metaObject;
-	}
+	// ⚠ OUT OF LINE, AND THAT IS THE POINT. The body was `(const ibValueMetaObjectRecordData*)m_metaObject`
+	// — a C-style cast between two types that are both INCOMPLETE here (this header deliberately does not
+	// reach commonObject.h; the note on GetValueBySourceHop above says the same thing about its own body).
+	// A C-style cast cannot be a static_cast on an incomplete type, so it degraded to reinterpret_cast:
+	// the base adjustment is SKIPPED, and the result is right only while RecordData happens to be the
+	// first base of RecordDataRef. Reordering that base clause — a cosmetic edit — would have returned a
+	// wrong pointer from every reference's GetMetaObject. Defined in reference.cpp, where both types are
+	// complete and the compiler does the arithmetic.
+	virtual const ibValueMetaObjectRecordData* GetMetaObject() const;
 
 	// --- ibSourceDataObject: a reference IS a source object. It vends its TARGET type's explorer,
 	// fueling the recursive dot-walk hop (value -> ConvertToValue<ibSourceDataObject> -> next explorer).

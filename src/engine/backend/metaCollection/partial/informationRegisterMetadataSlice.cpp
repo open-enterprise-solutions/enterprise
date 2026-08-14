@@ -1,4 +1,4 @@
-////////////////////////////////////////////////////////////////////////////
+﻿////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
 //	Description : information register metadata - SLICE: the reading and its virtual table
 ////////////////////////////////////////////////////////////////////////////
@@ -24,7 +24,6 @@
 #include "backend/query/dataQueryBuilder.h"   // L3 door — From(slice) + Select materialises the slice through L3
 #include "backend/query/dbTableProvider.h"    // ibDbTableProvider::GetValueAttribute — the DB value-assembly
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 — structured IR for the slice self-join (ComputeSlice)
-#include "backend/databaseLayer/databaseResultSet.h"      // raw result set for slice materialisation
 #include "backend/metaCollection/partial/registerQueryLowering.h"   // ibRegFieldsOf / ibRegCompositeIR (shared lowering)
 
 
@@ -85,10 +84,7 @@ ibQueryRamTable ibValueMetaObjectInformationRegister::ComputeSlice(
 {
 	const ibValueMetaObjectInformationRegister* meta = this;
 
-	if (ses_query != nullptr && !ses_query->IsOpen())
-		ibBackendCoreException::Error(_("Database is not open!"));
-	else if (ses_query == nullptr)
-		ibBackendCoreException::Error(_("Database is not open!"));
+	ibRequireOpenBase();
 
 	// L3's own table (no runtime ibValueModelTable) — keyed by metaID; the script egress
 	// (SelectionToTable) rebuilds the runtime table from the selection + metadata.

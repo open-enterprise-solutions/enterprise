@@ -1,4 +1,4 @@
-////////////////////////////////////////////////////////////////////////////
+﻿////////////////////////////////////////////////////////////////////////////
 //	Author		: Maxim Kornienko
 //	Description : accumulation register — the derived TOTALS bundle declaration (L3-2)
 ////////////////////////////////////////////////////////////////////////////
@@ -7,6 +7,7 @@
 
 #include "backend/query/schemaSnapshot.h"
 #include "backend/query/queryColumn.h"
+#include "backend/query/columnLayout.h"                          // DescribeColumnLayout -- physical fields WITH their canonical types
 #include "backend/query/tempTableQueryable.h"                       // ibSchemaTableQueryable — the totals table as a source
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
 #include "backend/metaCollection/partial/registerQueryLowering.h"   // ibRegValueField
@@ -61,10 +62,30 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 	const wxString totalsName  = GetRegisterTableNameDB();
 	const wxString periodField = ibRegValueField(GetRegisterPeriod());
 
+	// ⭐⭐ THE INACTIVE KIND'S TABLE IS DECLARED TOO — EMPTY, AND WITHOUT MAINTENANCE.
+	//
+	// Both totals objects are PREDEFINED: whichever kind the register is, the other one is still in
+	// the configuration and visible to both sides of every diff. Declaring only the active table made
+	// the two disagree — object present, table absent — and the disagreement outlived a save:
+	// switching the kind dropped one table, switching back produced "alter" rather than "create"
+	// (the baseline still knew the object), so nothing re-created it and the maintenance was built
+	// against a table that was gone. Exactly what the accounting register's credit side did.
+	//
+	// An empty relation costs storage and nothing else. Only the MAINTENANCE follows the setting,
+	// which is what the setting means: the inactive kind accumulates nothing, so nothing writes here.
+	{
+		const ibRegisterType idleKind = (GetRegisterType() == ibRegisterType::eBalances)
+			? ibRegisterType::eTurnovers : ibRegisterType::eBalances;
+		if (const ibValueMetaObjectTotals* idle = GetTotalsObject(idleKind)) {
+			ibSchemaTable& idleTable = out.Shared(idle->GetMetaID(), GetRegisterTableNameDB(idleKind));
+			idleTable.Scaffold(ibRawDBColumn::Date(periodField));
+			for (const auto dimension : GetDimensionArrayObject())
+				idleTable.Add(dimension);
+		}
+	}
+
 	// The identity comes from the totals METAOBJECT of the active kind — a real metaID, unique by
-	// construction, stable across saves. Declaring one kind is what makes the other's table absent,
-	// so switching the register kind is a DROP plus a CREATE and never an ALTER of a table that was
-	// never there. (See ibValueMetaObjectTotals in accumulationRegister.h for what this replaced.)
+	// construction, stable across saves.
 	const ibValueMetaObjectTotals* totals = GetTotalsObject();
 	ibSchemaTable& t = out.Shared(totals->GetMetaID(), totalsName);
 
@@ -92,19 +113,17 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 	// it belongs to that table, so the table's identity IS the column's — a table id and a column id
 	// are matched in different places and cannot be confused for one another.
 	const bool split = IsTotalsSplitEnabled();
-	if (split) {
-		const ibBackendQueryColumn* shard = t.OwnRaw(ibRawDBColumn::Number(ShardColumnName(), totals->GetMetaID()));
-		t.Add(shard);
-		keyCols.push_back(shard);
-	}
+	const bool sharded = ibRegSplitIntoKey(t, totals, ShardColumnName(), split, keyCols);
 
-	// The key must be UNIQUE: it is what the delta upserts against, and a duplicate would let two
-	// rows accumulate half the movements each — totals that are individually plausible and jointly
-	// wrong.
-	t.Index(totalsName + wxT("_PK"), keyCols, true);
+	// The key is DECLARED here; how the engine is made to hold it unique is decided by
+	// ibDeclareDerivedKey, because that answer depends on the engine rather than on the register — an
+	// index has a segment ceiling, a reference dimension is three physical fields, and five reference
+	// dimensions already pass Firebird's sixteen. Past the ceiling the identity moves into a hash
+	// column and the match still runs over the key columns themselves.
+	ibDeclareDerivedKey(t, totalsName, keyCols, totals->GetMetaID() | 0x40000000);
 
 	ibSchemaMaterialize& m = t.Derived(GetQueryable());
-	m.Split(split ? kTotalsShardCount : 1u);
+	m.Split(sharded ? kTotalsShardCount : 1u);   // the COLUMN decides, not the setting -- see ibRegSplitIntoKey
 
 	// STORED GRANULARITY = DAY, and the choice is load-bearing rather than a default.
 	//
@@ -138,10 +157,13 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 	// condition. Filtering it in each READING instead would be the same rule written in as many
 	// places as there are readings — and the day one of them forgot, an inactive entry would show up
 	// in exactly one report.
-	if (const ibValueMetaObjectAttributeBase* active = GetRegisterActive()) {
-		m.Guard(wxT("{row}.") + ibRegValueField(active),
-			ibQueryPredicate::Leaf(ibQueryCondition{ active, ibQueryFilterOp::Equal, ibValue(true) }));
-	}
+	//
+	// ⚠ THE GUARD IS AN EXPRESSION, AND IT HAS TO BE A BOOLEAN ONE. A "boolean" attribute is stored as
+	// a SMALLINT, so `WHERE NEW.fld…_B` is a field where a condition is required — Firebird answers
+	// "invalid usage of boolean expression" and the whole CREATE TRIGGER fails, taking the
+	// restructuring that emitted it down with it. The comparison is written out for that reason, and
+	// the cost of getting it wrong is asymmetric: nothing READS wrong, the APPLY does not finish.
+	ibRegGuardInForce(m, GetRegisterActive());
 	for (const auto dimension : GetDimensionArrayObject())
 		m.Key(dimension);
 
@@ -161,22 +183,21 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 		// so they are stable across saves and unique within the table — the second one through a
 		// HIGH bit, which is the only range no metaID occupies (they are small sequential integers,
 		// so a low-bit tweak lands on the neighbouring metaobject's id).
+		// The figure is stored in the RESOURCE's own type (ibRegAccumulatorColumn) — declared flat it was
+		// NUMERIC(18,0), so a resource carrying a fraction lost it on the way INTO the totals.
 		const ibMetaID idIn  = res->GetMetaID();
 		const ibMetaID idOut = res->GetMetaID() | 0x40000000;
 
 		if (!withSign) {
 			// No record type — nothing signs a movement, so there is no expense side to keep apart.
-			const ibBackendQueryColumn* c = t.OwnRaw(ibRawDBColumn::Number(inName, idIn));
-			t.Add(c);
+			const ibBackendQueryColumn* c = ibRegAccumulatorColumn(t, inName, idIn, res);
 			m.Accumulate(c, wxT("{row}.") + resField, ibQueryColumnExpr::Col(res));
 			pairs.push_back({ inName, wxString(), res->GetName() });
 			continue;
 		}
 
-		const ibBackendQueryColumn* cIn  = t.OwnRaw(ibRawDBColumn::Number(inName,  idIn));
-		const ibBackendQueryColumn* cOut = t.OwnRaw(ibRawDBColumn::Number(outName, idOut));
-		t.Add(cIn);
-		t.Add(cOut);
+		const ibBackendQueryColumn* cIn  = ibRegAccumulatorColumn(t, inName,  idIn,  res);
+		const ibBackendQueryColumn* cOut = ibRegAccumulatorColumn(t, outName, idOut, res);
 
 		// The record type splits one movement into the two sides. The accumulate stays
 		// UNCONDITIONAL — only the VALUE branches — so the trigger needs no procedural IF and the
@@ -217,13 +238,7 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 	// scaffold period plus every logical column — so the source cannot drift from the schema it
 	// describes. The physical TABLE, deliberately, not one of the views below: a view sums the
 	// shards away, and the fold's whole business is the individual shard rows underneath.
-	{
-		std::vector<const ibBackendQueryColumn*> sourceColumns = t.m_scaffold;
-		for (const ibSchemaColumn& c : t.m_columns)
-			sourceColumns.push_back(c.m_column);
-		t.SelfSource(std::make_shared<ibSchemaTableQueryable>(
-			t.m_name, t.m_id, std::move(sourceColumns), GetMetaData()));
-	}
+	ibRegSelfSourceFromDeclaration(t, GetMetaData());
 
 	// --- the read views, composed from L2-2 primitives ------------------------------------------
 	// TURNOVERS — per period: what came in, what went out, and the net.
@@ -249,10 +264,12 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 		// documents share a date and have to be told apart.
 		if (HasRecorder() && GetRegisterRecorder() != nullptr && GetRegisterLineNumber() != nullptr) {
 			v.m_withMovements = true;
-			for (const wxString& f : ColumnFieldNames(GetRegisterRecorder()))
-				v.m_movementColumns.push_back(f);
-			for (const wxString& f : ColumnFieldNames(GetRegisterLineNumber()))
-				v.m_movementColumns.push_back(f);
+			// Name AND type — the stored arm stands a CAST null in their place (see the accounting
+			// register's twin of this block, and ibMaterializeView::m_movementColumns).
+			for (const ibColumnSlot& s : DescribeColumnLayout(GetRegisterRecorder()))
+				v.m_movementColumns.push_back({ s.m_name, s.m_type });
+			for (const ibColumnSlot& s : DescribeColumnLayout(GetRegisterLineNumber()))
+				v.m_movementColumns.push_back({ s.m_name, s.m_type });
 		}
 
 		for (const Pair& p : pairs) {
@@ -320,52 +337,25 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 	const bool withPeriod = (shape == ibViewShape::Turnovers
 	                      || shape == ibViewShape::BalanceAndTurnovers);
 
-	// ⚠⚠ THE CACHE IS KEYED BY WHAT IT WAS BUILT FROM, not merely by name.
+	// ⚠⚠ THE CACHE IS KEYED BY WHAT IT WAS BUILT FROM, not merely by name — and both halves of that
+	// rule now live in `ibRegSurfaceCache` (registerQueryLowering.h), because all three surface
+	// builders needed them and only the KEY and the COLUMNS differ.
 	//
-	// It used to return whatever was built first and never look again — and a view is built from the
-	// register's dimensions and resources, which are read into the metaobject at load time. Ask once
-	// before they are there and the answer is a table with nothing in it but the period columns, kept
-	// for the life of the session: the constructor's catalogue showed `Turnovers` and
-	// `BalanceAndTurnovers` as period-only, with no dimension and no resource anywhere.
-	//
-	// It was not even a stable bug — WHO asks first decides. Declaring the virtual tables' parameters
-	// moved the first ask earlier, and a shape that had been right became empty with nothing said
-	// about columns changed.
-	//
-	// So the count it was built from is remembered, and a mismatch rebuilds. That also fixes the
-	// quieter half of the same hole: adding a dimension in the designer left every reader looking at
-	// the old shape until the process was restarted.
-	// ⚠ THE SIGNATURE IS THE SHAPE, NOT THE COUNT. Counting the dimensions and resources caught a
-	// column being ADDED and missed one being CHANGED — give a dimension a reference type and the
-	// count is what it was, so the stale view kept the old type and the catalogue would not unfold it.
-	// Names and types, in order: that is what a view IS.
+	// The rule it protects, kept here because this is where it was learned: a view is built from the
+	// register's dimensions and resources, which are read into the metaobject at LOAD time. Asked once
+	// before they are there, a name-keyed cache answers with a table holding nothing but the period
+	// columns — for the life of the session. It was not even a stable bug: WHO asks first decides, and
+	// declaring the virtual tables' parameters moved the first ask earlier, so a shape that had been
+	// right became empty with nothing said about columns changing.
 	wxString shapeNow;
-	const auto sign = [&shapeNow](const ibValueMetaObjectAttributeBase* attribute) {
-		if (attribute == nullptr)
-			return;
-		shapeNow += attribute->GetName() + wxT(":");
-		const ibTypeDescription& type = attribute->GetTypeDesc();
-		for (unsigned int i = 0; i < type.GetClsidCount(); ++i)
-			shapeNow += wxString::Format(wxT("%llu,"), static_cast<unsigned long long>(type.GetByIdx(i)));
-		shapeNow += wxT(";");
-	};
-	sign(GetRegisterPeriod());
-	for (const auto dimension : GetDimensionArrayObject()) sign(dimension);
-	for (const auto resource  : GetResourceArrayObject())  sign(resource);
+	ibRegSignAttribute(shapeNow, GetRegisterPeriod());
+	for (const auto dimension : GetDimensionArrayObject()) ibRegSignAttribute(shapeNow, dimension);
+	for (const auto resource  : GetResourceArrayObject())  ibRegSignAttribute(shapeNow, resource);
 
-	const auto cached = m_viewSources.find(viewName);
-	if (cached != m_viewSources.end()) {
-		if (cached->second.m_builtFrom == shapeNow)
-			return cached->second.m_view.get();
-		// ⚠ THE OLD ONE IS RETIRED, NOT DESTROYED. Somebody may still be reading through a pointer
-		// handed out earlier; a view that dies under a live reader is an access violation, and this
-		// subsystem has already produced one of those today (queryableFactory.h, MakeCompanion).
-		m_retiredViews.push_back(std::move(cached->second.m_view));
-		m_viewSources.erase(cached);
-	}
-
-	std::vector<ibTempColumn> columns;
-	ibMetaID synthetic = 0x50000000u;   // the view's own column ids — a band clear of any metaID
+	// One name is one surface here, so the view's name IS the cache key.
+	return m_surfaces.Obtain(viewName, shapeNow, viewName, GetMetaData(),
+		[&](std::vector<ibTempColumn>& columns, ibMetaID& synthetic)
+	{
 
 	if (withPeriod) {
 		// ⭐ TWO NAMES, AND THEY ARE NOT THE SAME NAME. The generated table stores `fld1124_D`; a query
@@ -375,7 +365,8 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 		const wxString periodName  = GetRegisterPeriod()->GetName();       // what a query writes
 		const wxString periodField = ibRegValueField(GetRegisterPeriod()); // what the table keeps
 		columns.push_back(ibTempColumn(periodName, periodField,
-		                               GetRegisterPeriod()->GetTypeDesc(), synthetic++));
+		                               GetRegisterPeriod()->GetTypeDesc(), synthetic++,
+		                               GetRegisterPeriod()->GetSynonym()));
 
 		// The coarser projections the view exposes alongside the stored period. DERIVED from the
 		// stored granularity, not listed by hand: the renderer emits exactly the units above it, and
@@ -398,18 +389,15 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 	// Value(dimension) exactly as it would on the movements table — the view is interchangeable
 	// with the register as a source, not a parallel vocabulary.
 	for (const auto dimension : GetDimensionArrayObject())
-		columns.push_back(ibTempColumn(dimension->GetName(), ibRegValueField(dimension),
-		                               dimension->GetTypeDesc(), dimension->GetMetaID()));
+		columns.push_back(ibRegAttributeColumn(dimension));
 
 	// The movement arm's own identity — published EXACTLY as a dimension is (its own metaID, its own
 	// type), because that is what it is on the source table: a real attribute of the register. Null
 	// on every stored row, which is also how a reader tells the two arms apart. Only the turnovers
 	// view carries them; a balance view has no arm to distinguish.
 	if (withPeriod && HasRecorder() && GetRegisterRecorder() != nullptr && GetRegisterLineNumber() != nullptr) {
-		columns.push_back(ibTempColumn(GetRegisterRecorder()->GetName(), ibRegValueField(GetRegisterRecorder()),
-		                               GetRegisterRecorder()->GetTypeDesc(), GetRegisterRecorder()->GetMetaID()));
-		columns.push_back(ibTempColumn(GetRegisterLineNumber()->GetName(), ibRegValueField(GetRegisterLineNumber()),
-		                               GetRegisterLineNumber()->GetTypeDesc(), GetRegisterLineNumber()->GetMetaID()));
+		columns.push_back(ibRegAttributeColumn(GetRegisterRecorder()));
+		columns.push_back(ibRegAttributeColumn(GetRegisterLineNumber()));
 	}
 
 	// Per-resource columns, by shape. A turnover-only register (no record type) has no expense side
@@ -417,10 +405,15 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 	const bool withSign = (GetRegisterType() == ibRegisterType::eBalances);
 	// `add` takes the SUFFIX and spells both names from it: `Resource1Turnover` for a query to write,
 	// `Resource1_Turnover` for the table to keep. One place, so the pair cannot drift.
+	// …and a THIRD name with them: the CAPTION. A published figure is read by a person as well as by
+	// a query, and the caption used to be built somewhere else entirely (in the manager, per figure,
+	// spelled by hand) — so the same number had a presentation through the script door and none at
+	// all through the query one. The word comes from the one list that already holds the figures.
 	auto add = [&](const ibValueMetaObjectAttributeBase* res, const wxString& suffix) {
 		columns.push_back(ibTempColumn(res->GetName() + suffix,
 		                               res->GetName() + wxT("_") + suffix,
-		                               res->GetTypeDesc(), synthetic++));
+		                               res->GetTypeDesc(), synthetic++,
+		                               ibRegFigureColumnCaption(res->GetSynonym(), ibRegFigureCaption(suffix))));
 	};
 
 	for (const auto res : GetResourceArrayObject()) {
@@ -455,8 +448,5 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 		}
 	}
 
-	auto q = std::make_unique<ibDbTempTableQueryable>(viewName, std::move(columns), GetMetaData());
-	const ibBackendQueryable* raw = q.get();
-	m_viewSources.emplace(viewName, ibRegisterViewCache{ std::move(q), shapeNow });
-	return raw;
+	});
 }

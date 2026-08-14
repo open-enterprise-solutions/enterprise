@@ -22,6 +22,25 @@ void ibValueMetaObjectAccountingRegister::OnPropertyChanged(ibProperty* property
 		// NUMBER of them. Re-typing only Account here was the old asymmetry: the slots kept the
 		// previous chart's shape until the configuration happened to be run again.
 		SyncAccountDimensionSlots();
+
+		// ⭐ AND THE CREDIT ACCOUNT, WHICH IS A REFERENCE INTO THE SAME CHART. One declaration types
+		// both sides — that is why there is no second chart binding — but only the debit half was
+		// re-typed here, so on a correspondence register the credit account kept an empty type until
+		// a run happened to fix it. Empty means no reference columns: the differ dropped
+		// fld<AccountCr>_RTRef / _RRRef from the movements, and the credit totals trigger, which
+		// reads NEW.fld<AccountCr>_RTRef, could then not be created at all.
+		//
+		// SyncAccountDimensionSlots runs FIRST because turning correspondence on creates the credit
+		// account inside it — typing before that would type something that does not exist yet.
+		if (m_accountCr != nullptr)
+			m_accountCr->GetTypeDesc().SetDefaultMetaType(typeDesc);
+
+		// ⭐ AND THEIR TYPES, IN THE SAME BREATH. Half of that asymmetry survived the last fix: the
+		// slots were CREATED here and TYPED only by the run phase, so a save made in between built
+		// the schema from typeless slots — one discriminator column each and nothing else — while
+		// the configuration saved a moment later carried the types. From then on the two disagree,
+		// and the next apply drops reference columns that were never created.
+		ApplyAccountDimensionSlotTypes();
 	}
 
 	// Enable/disable Account field based on binding

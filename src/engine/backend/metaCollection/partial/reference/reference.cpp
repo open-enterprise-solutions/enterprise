@@ -150,6 +150,15 @@ ibValueReferenceDataObject::~ibValueReferenceDataObject()
 	//);
 }
 
+// THE UPCAST, WHERE BOTH TYPES ARE COMPLETE. In the header they are not (see the note on the
+// declaration), and a C-style cast there was a reinterpret_cast wearing a plainer suit — no base
+// adjustment, correct only while RecordData stays the FIRST base of RecordDataRef. Here the compiler
+// computes the offset, so the base order is free to change without silently returning a wrong object.
+const ibValueMetaObjectRecordData* ibValueReferenceDataObject::GetMetaObject() const
+{
+	return static_cast<const ibValueMetaObjectRecordData*>(m_metaObject);
+}
+
 ibValueReferenceDataObject* ibValueReferenceDataObject::Create(const ibMetaData* metaData, const ibMetaID& id, const ibGuid& objGuid)
 {
 	const ibValueMetaObjectRecordDataRef* metaObject = metaData->FindAnyObjectByFilter<ibValueMetaObjectRecordDataRef>(id);

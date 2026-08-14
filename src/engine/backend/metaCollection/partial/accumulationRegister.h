@@ -17,11 +17,9 @@
 
 class ibValueMetaObjectAccumulationRegister;
 
-// Whether a reading at this granularity produces that column — DEFINED further down, beside the rule
-// it asks (ibRegisterViewColumnFits); declared here because the companions below refuse a column by
-// it before that point.
-inline bool ibRegisterFoldOffersColumn(const ibValueMetaObjectAccumulationRegister* reg,
-	const wxString& columnName, const ibRegFold& fold);
+// (ibRegisterFoldOffersColumn — "does a reading at this granularity produce that column" — is a
+//  TEMPLATE in registerQueryLowering.h now, so it needs no forward declaration here: the include
+//  above brings it in, and it is instantiated per register at the callsite.)
 
 class ibBalanceQueryable;
 class ibTurnoverQueryable;
@@ -140,10 +138,24 @@ public:
 	// The totals table — a DIFFERENT one per register kind, `_T` for balances and `_Tn` for
 	// turnovers, because the two hold genuinely different shapes: a balance register keeps receipt
 	// and expense apart, a turnover-only register has no second side at all.
+	// ⭐⭐ NAMED AFTER THE TOTALS OBJECT — same rule as the accounting register's, and for the same
+	// reason. This used to spell the register's KIND into the name ("_T" for balances, "_Tn" for
+	// turnovers), which made the name a function of a setting: switching the kind renamed the table,
+	// the old name became unspellable, and the drop-then-create the switch relies on could no longer
+	// find what it was supposed to drop.
+	//
+	// The two totals objects are predefined and named BalanceTotals / TurnoverTotals, so their names
+	// carry the meaning without carrying the setting — and they read in a query tool, which "_Tn" does
+	// not. Kept deliberately in step with AccountingRegister's DebitTotals / CreditTotals: two
+	// registers naming the same kind of thing by two different rules is a difference nobody chose.
+	//
+	// ⚠ One-time rename for existing bases, not a migration — an old base must be re-created.
 	wxString GetRegisterTableNameDB(ibRegisterType rType) const {
 		wxASSERT(m_metaId != 0);
-		return wxString::Format(rType == ibRegisterType::eBalances ? wxT("%s%i_T") : wxT("%s%i_Tn"),
-			GetClassName(), GetMetaID());
+		const ibValueMetaObjectTotals* totals = GetTotalsObject(rType);
+		return wxString::Format(wxT("%s%i_%s"), GetClassName(), GetMetaID(),
+			totals != nullptr ? totals->GetName()
+			                  : wxString(rType == ibRegisterType::eBalances ? wxT("BalanceTotals") : wxT("TurnoverTotals")));
 	}
 
 	wxString GetRegisterTableNameDB() const { return GetRegisterTableNameDB(GetRegisterType()); }
@@ -177,13 +189,11 @@ public:
 	// — a name, a label, a category, an editor — and there is nothing here to show or to edit. What
 	// is needed is the reference itself, so that is all it is.
 	// ============================================================================
-	class ibValueMetaObjectTotals : public ibValueMetaObject {
-	public:
-		ibValueMetaObjectTotals(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString,
-			const wxString& comment = wxEmptyString) : ibValueMetaObject(name, synonym, comment) {
-		}
-		virtual ~ibValueMetaObjectTotals() {}
-	};
+	// The class itself now lives beside the register family (commonObject.h,
+	// ibValueMetaObjectRegisterTotals): an accounting register needs the very same identity holder —
+	// two of them, one per side — and a second class with an identical body is how two registers come
+	// to differ in a detail nobody meant to change. The name stays what this register's code calls it.
+	using ibValueMetaObjectTotals = ibValueMetaObjectRegisterTotals;
 
 	// TWO of them, one per register kind — and that is the point of holding the identity here rather
 	// than computing it. A balance register keeps receipt and expense apart, a turnover-only one has
@@ -348,9 +358,23 @@ public:
 
 protected:
 
-	// Additive contract — RegisterData base is empty. AccumulationRegister
-	// appends its line attributes; Balances mode adds the RecordType
-	// (Debit / Credit) flag, Turnovers mode omits it.
+	// Additive contract — RegisterData base is empty. AccumulationRegister appends its line
+	// attributes: when a movement happened, whether it is in force, which way it moves, what wrote
+	// it and on which line.
+	//
+	// ⭐ RECORD TYPE ONLY WHERE IT MEANS SOMETHING. Receipt / expense is a statement about a BALANCE:
+	// it says which way the running figure moves. A turnover-only register keeps no running figure —
+	// every movement is one more thing added to a period's total — so there is no way for a movement
+	// to face, and offering the field would invite a filter over a distinction the register does not
+	// make. (Max, 2026-08-14, deciding it explicitly: «если остатки есть, то мы для оборотов не
+	// выводим вид движения — там это не имеет смысла».)
+	//
+	// ⚠ The column therefore comes and goes with the register kind, and a column that disappears
+	// takes its data with it — the accounting register states that trap in full (accountingRegister.h,
+	// the same method) and answers it by declaring all three columns always. Here the answer is
+	// deliberately the other one, and the difference is that the two register kinds are different
+	// TABLES rather than one table with a flag: switching the kind already drops one totals table and
+	// creates the other, so the movements' record type is not the thing that makes the switch lossy.
 	virtual bool FillArrayObjectByPredefinedAttribute(std::vector<ibValueMetaObjectAttributeBase*>& array) const override {
 		ibValueMetaObjectRegisterData::FillArrayObjectByPredefinedAttribute(array);
 		array.push_back(m_propertyAttributeLineActive->GetMetaObject());
@@ -417,7 +441,10 @@ private:
 	//
 	// (An information register has no counterpart: it holds a slice, not accumulated sums, so there
 	// is nothing to split. An accounting register will carry this same switch.)
-	ibPropertyBoolean* m_propertySplitTotals = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, wxT("SplitTotals"), _("Split totals"), false);
+	// ON by default — same reasoning as the accounting register's: concurrent posting is the ordinary
+	// case, and splitting keeps two writers off the same totals row. Kept in step with it deliberately;
+	// two registers differing in this by accident would be a difference nobody chose.
+	ibPropertyBoolean* m_propertySplitTotals = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryData, wxT("SplitTotals"), _("Split totals"), true);
 
 	// The two totals tables — held for their IDENTITY (see ibValueMetaObjectTotals above). Predefined
 	// children: created with the register in its constructor, pinned to it for life, serialized as
@@ -442,18 +469,10 @@ private:
 
 	// Cached view sources, keyed by view name. Mutable: building one is pure derivation from
 	// metadata, so a const read may fill the cache without the register being logically modified.
-	// A BUILT VIEW AND THE SHAPE IT WAS BUILT FROM. The count is the register's dimensions plus its
-	// resources at build time: a cached view whose register has grown (or was asked for before it had
-	// been read at all) is rebuilt rather than handed out stale. See GetViewQueryable.
-	struct ibRegisterViewCache
-	{
-		std::unique_ptr<ibDbTempTableQueryable> m_view;
-		wxString                                m_builtFrom;   // names + types, in order
-	};
-	mutable std::map<wxString, ibRegisterViewCache> m_viewSources;
-	// Views replaced by a rebuild. Kept because a reader may still hold a pointer into one — the same
-	// lifetime rule the call-scoped companions follow.
-	mutable std::vector<std::unique_ptr<ibDbTempTableQueryable>> m_retiredViews;
+	// THE BUILT VIEWS, and the shape each was built from. The cache, the signature check and the
+	// retirement of a replaced surface are `ibRegSurfaceCache` (registerQueryLowering.h) — one
+	// mechanism for all three surface builders, since only the key and the columns ever differed.
+	mutable ibRegSurfaceCache m_surfaces;
 };
 
 //********************************************************************************************
@@ -639,83 +658,9 @@ private:
 
 // --- L4 descriptor method bodies (the register + balance / turnover companions are complete) ---
 
-// THE SHAPE OF A VIRTUAL TABLE, for the three descriptors at once. A balance / turnover table
-// exposes the columns of its VIEW, and that view's column set is built from the register's own
-// dimensions and resources (accumulationRegisterSchema.cpp) and cached — metadata only, so this
-// answer costs nothing and works on a base that has never been opened. Deliberately NOT the
-// companion's GetColumns(): in RAM mode a companion navigates through the register itself and
-// would report the MOVEMENT columns, which is the one answer that would mislead here.
-// ⭐⭐ THE PERIODICITY DECIDES WHICH COLUMNS EXIST, and this is the rule, written where the columns
-// are handed out:
-//
-//     empty          NOTHING. The interval is read WHOLE — one row per key, begin to end — so
-//                    there is no period, and therefore no recorder and no line either: a row that
-//                    covers a whole interval was not written by any one document.
-//     Auto           every projection the table can make — Period, PeriodSecond … PeriodYear,
-//                    Recorder and LineNumber. Nothing has been DECIDED, so everything is on offer
-//                    and the author picks. (Including an argument written as a parameter, whose
-//                    value only exists at run time: the shape a query is drawn against must be the
-//                    widest it might turn out to have, never a guess at which.)
-//     Period         one column: the period itself.
-//     a unit         one column: the period, rolled to that unit. Months asked for, months given —
-//                    the finer projections are not part of that reading and showing them would
-//                    promise rows the query will not return.
-//     Recorder       the period and the document it came from.
-//     Record         the period, the document, and the line within it.
-//
-// ⚠ THE RECORDER IS NOT A DIMENSION, and that is why it is decided here too. It exists on a row
-// only when the reading is AT a movement's own identity — Recorder, Record, or the undecided Auto.
-// Offering it beside a monthly turnover promises a document per row where the row is a month's
-// worth of them.
-inline bool ibRegisterViewColumnFits(const wxString& columnName, const wxString& periodName,
-	const ibRegFold& fold, const wxString& recorderName = wxEmptyString,
-	const wxString& lineName = wxEmptyString)
-{
-	// The movement's own identity — present only where a row IS a movement (or a document's worth).
-	if (!recorderName.IsEmpty() && stringUtils::CompareString(columnName, recorderName))
-		return fold.m_kind == ibRegGranularity::Auto
-		    || fold.m_kind == ibRegGranularity::Recorder
-		    || fold.m_kind == ibRegGranularity::Record;
-	if (!lineName.IsEmpty() && stringUtils::CompareString(columnName, lineName))
-		return fold.m_kind == ibRegGranularity::Auto
-		    || fold.m_kind == ibRegGranularity::Record;
-
-	// Not a period projection (a dimension, a resource) — always there, whatever the granularity.
-	if (!columnName.StartsWith(periodName))
-		return true;
-
-	// ⚠ NOTHING ASKED FOR MEANS NO PERIOD AT ALL — not "the period, undecided". Left out, this table
-	// reads the interval WHOLE: one row per key, begin to end, with no date on it. That is what the
-	// engine already does (no unit given → no grouping by period), and the column list has to say the
-	// same thing. Showing a `Period` column over a reading that has no period is the window promising
-	// a value the rows will not carry.
-	if (fold.m_kind == ibRegGranularity::Whole)
-		return false;
-
-	// AUTO is the opposite: nothing has been DECIDED, so every projection the table can make is on
-	// offer and the author picks one.
-	if (fold.OffersEveryProjection())
-		return true;
-
-	// Anything else names ONE granularity, and the reading then has ONE period column — `Period`,
-	// rolled to it. The coarser projections are not part of that reading.
-	return stringUtils::CompareString(columnName, periodName);
-}
-
-// ⭐⭐ DOES THIS READING PRODUCE THAT COLUMN? The same rule the field tree offers by, asked with the
-// register's own names — so a reader and a writer of the query cannot disagree about which columns
-// a chosen granularity has.
-inline bool ibRegisterFoldOffersColumn(const ibValueMetaObjectAccumulationRegister* reg,
-	const wxString& columnName, const ibRegFold& fold)
-{
-	if (reg == nullptr || reg->GetRegisterPeriod() == nullptr)
-		return true;
-
-	const bool subordinate = reg->HasRecorder();
-	return ibRegisterViewColumnFits(columnName, reg->GetRegisterPeriod()->GetName(), fold,
-		subordinate && reg->GetRegisterRecorder()   != nullptr ? reg->GetRegisterRecorder()->GetName()   : wxString(),
-		subordinate && reg->GetRegisterLineNumber() != nullptr ? reg->GetRegisterLineNumber()->GetName() : wxString());
-}
+// (The rule below moved to registerQueryLowering.h on 2026-08-13: which columns a GRANULARITY
+//  produces is the same sentence for every register that folds an interval -- day, second,
+//  recorder, line -- and two copies of it are two answers to "does this reading have a Period".)
 
 inline void ibFillExplorerFromRegisterView(const ibValueMetaObjectAccumulationRegister* reg,
 	const wxString& viewName, ibValueMetaObjectAccumulationRegister::ibViewShape shape,
@@ -741,16 +686,18 @@ inline void ibFillExplorerFromRegisterView(const ibValueMetaObjectAccumulationRe
 	//
 	// So the metaobject is handed over where there is one. The id is the key, because the id is
 	// exactly what the view builder promised to keep.
+	//
+	// ⚠ ASKED OF THE REGISTER, NOT LISTED HERE. This used to be a hand-written list — period,
+	// dimensions, resources — and the turnovers view publishes two columns the list did not know: the
+	// RECORDER and the LINE NUMBER (accumulationRegisterMetadataSchema.cpp, the movement arm's own
+	// identity). Wherever the granularity offers those columns (Auto / Recorder / Record) they were
+	// appended as plain synthetic triples, so the recorder lost its picture and stopped saying it
+	// holds a reference — the very loss this comment describes, one row further down the same list.
+	// FindAnyAttributeObjectByFilter is the register's own economical find — one walk over the children
+	// with the id compared as it goes — so an attribute added tomorrow is found without anybody editing
+	// a list, and nothing is allocated per column to answer it.
 	const auto attributeById = [reg](const ibMetaID& id) -> const ibValueMetaObjectAttributeBase* {
-		if (id == 0)
-			return nullptr;
-		if (reg->GetRegisterPeriod() != nullptr && reg->GetRegisterPeriod()->GetMetaID() == id)
-			return reg->GetRegisterPeriod();
-		for (const ibValueMetaObjectAttributeBase* dimension : reg->GetDimensionArrayObject())
-			if (dimension != nullptr && dimension->GetMetaID() == id) return dimension;
-		for (const ibValueMetaObjectAttributeBase* resource : reg->GetResourceArrayObject())
-			if (resource != nullptr && resource->GetMetaID() == id) return resource;
-		return nullptr;
+		return reg->FindAnyAttributeObjectByFilter(id);
 	};
 
 	const wxString periodName = reg->GetRegisterPeriod() != nullptr
@@ -781,29 +728,36 @@ inline void ibFillExplorerFromRegisterView(const ibValueMetaObjectAccumulationRe
 // Naming them puts the order in ONE place, beside DescribeParameters which declares the same order to
 // the outside. Two lists that must agree, kept adjacent, is the least a positional call can ask for.
 namespace ibRegBalanceArg   { enum { Period = 0, Filter = 1, Count }; }
-namespace ibRegTurnoverArg  { enum { Begin = 0, End = 1, Filter = 2, Periodicity = 3, Count }; }
-namespace ibRegBalTurnArg   { enum { Begin = 0, End = 1, Filter = 2, Periodicity = 3, FillMethod = 4, Count }; }
+namespace ibRegTurnoverArg  { enum { Begin = 0, End = 1, Periodicity = 2, Filter = 3, Count }; }
+namespace ibRegBalTurnArg   { enum { Begin = 0, End = 1, Periodicity = 2, FillMethod = 3, Filter = 4, Count }; }
 
-// ⭐ AND THE ONE RULE ACROSS ALL THREE: PERIOD, THEN CONDITION, THEN THE REFINEMENTS.
+// ⭐ AND THE ONE RULE ACROSS ALL THREE: THE PERIOD, THEN HOW IT IS CUT, THEN THE CONDITION.
 //
-// Every table asks for its period first — a moment, or an interval. Then the condition, because
-// filtering is what a reader almost always wants and almost never wants to count commas to reach.
-// The periodicity and the fill method come LAST precisely because they are the ones nobody states as
-// a rule: an argument that is usually left out belongs where leaving it out costs nothing.
+// Every table asks for its period first — a moment, or an interval. What comes next is the
+// arguments that are ABOUT that period: how it is cut into rows, and what to do with a period
+// nothing moved in. The condition follows them, because it is about the ROWS rather than about the
+// interval, and it is the last thing that is true of every reading.
 //
-// A new parameter is therefore appended AFTER the refinements or inserted among them — never before
-// the condition, which would silently shift every existing call's filter into a slot that means
-// something else. That is exactly how the periodicity once pushed the filter aside and nobody noticed.
+// ⚠ CORRECTED 2026-08-13 (owner): the periodicity used to sit LAST, on the argument that an option
+// nobody states belongs where leaving it out is free. That is true of a DEFAULT and false of an
+// ORDER — an author writes the interval and immediately says how to cut it, and the accounting
+// register's own tables (and every reference implementation) put it third. Two registers whose
+// arguments run in different orders are two things to remember instead of one.
+//
+// A new parameter is therefore inserted where it BELONGS by subject, and every call is re-read
+// against the new order — which is safe today only because there are no third-party configurations
+// yet. Moving a slot silently re-reads a query nobody edited: that is exactly how the periodicity
+// once pushed the filter aside and nobody noticed.
 //
 // Stated to the compiler rather than to the reader, because a convention that is only written down is
 // a convention that gets broken by the person who did not read it. `DescribeParameters` declares this
 // same order to the outside world and sits a few lines below — the two lists must agree.
-static_assert(ibRegBalanceArg::Filter  == ibRegBalanceArg::Count - 1,  "the condition follows the period");
-static_assert(ibRegTurnoverArg::Filter == ibRegTurnoverArg::Begin + 2, "the condition follows the period");
-static_assert(ibRegBalTurnArg::Filter  == ibRegBalTurnArg::Begin + 2,  "the condition follows the period");
-static_assert(ibRegTurnoverArg::Periodicity > ibRegTurnoverArg::Filter, "refinements come last");
-static_assert(ibRegBalTurnArg::Periodicity  > ibRegBalTurnArg::Filter,  "refinements come last");
-static_assert(ibRegBalTurnArg::FillMethod   > ibRegBalTurnArg::Filter,  "refinements come last");
+static_assert(ibRegBalanceArg::Filter == ibRegBalanceArg::Count - 1,      "the condition is last");
+static_assert(ibRegTurnoverArg::Periodicity == ibRegTurnoverArg::End + 1, "how the interval is cut follows the interval");
+static_assert(ibRegBalTurnArg::Periodicity  == ibRegBalTurnArg::End + 1,  "how the interval is cut follows the interval");
+static_assert(ibRegBalTurnArg::FillMethod   == ibRegBalTurnArg::Periodicity + 1, "the fill method is about the periods too");
+static_assert(ibRegTurnoverArg::Filter == ibRegTurnoverArg::Count - 1,    "the condition is last");
+static_assert(ibRegBalTurnArg::Filter  == ibRegBalTurnArg::Count - 1,     "the condition is last");
 
 // ONE reader for a slot: present, non-null, in range — or an empty value, which every reading below
 // treats as "not asked for".
@@ -819,21 +773,14 @@ static_assert(ibRegBalTurnArg::FillMethod   > ibRegBalTurnArg::Filter,  "refinem
 // attribute (`GetRegisterPeriod()->GetName()`), so the name belongs to the metadata, not to this
 // list — writing `"Period"` as a literal works only for a register whose attribute happens to be
 // called that.
-namespace ibRegFigure {
-	inline constexpr const wxChar* Turnover       = wxT("Turnover");
-	inline constexpr const wxChar* Receipt        = wxT("Receipt");
-	inline constexpr const wxChar* Expense        = wxT("Expense");
-	inline constexpr const wxChar* Balance        = wxT("Balance");
-	inline constexpr const wxChar* OpeningBalance = wxT("OpeningBalance");
-	inline constexpr const wxChar* ClosingBalance = wxT("ClosingBalance");
-}
+// (The list itself moved to registerQueryLowering.h — the accounting register reports the same
+// figures, differing only in that each has a SIDE, and two copies of the words is how two registers
+// come to disagree about what a column is called.)
 
-inline ibValue ibRegArg(ibValue** paParams, long lSizeArray, int slot)
-{
-	return (paParams != nullptr && slot < lSizeArray && paParams[slot] != nullptr)
-		? *paParams[slot] : ibValue();
-}
-
+// ⚠ ibRegArg moved to registerQueryLowering.h with the rest of the CALL helpers — reading slot N of
+// an argument list is the same question for every register, and the accounting one had written its
+// own (`ArgAt`, in two overloads) under another name.
+//
 // ⚠ The filter converter and the leaf walker moved to registerQueryLowering.h — they are the SAME
 // question for every register (an information register filters its dimensions exactly as this one
 // does), and a copy per register is how two registers come to disagree about what a filter is.
@@ -938,16 +885,8 @@ inline void ibAccumRegisterTurnoverDescriptor::FillSourceExplorer(ibSourceDataOb
 
 // THE PERIODICITY IS THE THIRD ARGUMENT — (begin, end, periodicity, condition). Read as the word the
 // constructor wrote; anything else (a parameter, nothing at all) leaves it empty, which means "not
-// decided" and shows every projection.
-// ⚠ THE NAMED SLOT, NOT A COUNTED ONE. This read `args[2]` — which is the CONDITION's slot, not the
-// periodicity's — so the window offered its columns based on whatever the filter happened to be. The
-// same off-by-one the argument order was named to prevent, surviving in the one place that counted
-// commas instead of asking (see ibRegTurnoverArg).
-inline ibRegFold ibRegisterFoldOfArgs(const std::vector<ibValue>& args, size_t slot)
-{
-	return slot < args.size() ? ibReadRegisterFold(args[slot]) : ibRegFold();
-}
-
+// decided" and shows every projection. `ibRegisterFoldOfArgs` reads it BY THE NAMED SLOT and lives in
+// registerQueryLowering.h with the other call helpers.
 inline void ibAccumRegisterTurnoverDescriptor::FillSourceExplorer(
 	ibSourceDataObject::ibSourceExplorer& explorer, const std::vector<ibValue>& args) const
 {
@@ -956,77 +895,25 @@ inline void ibAccumRegisterTurnoverDescriptor::FillSourceExplorer(
 		ibRegisterFoldOfArgs(args, ibRegTurnoverArg::Periodicity));
 }
 
-// THE INTERVAL A TURNOVER IS COUNTED OVER — the two ends said separately, because they are two
-// different moments and a reader must be able to hand a parameter to each. The type is the
-// register's OWN period type, asked of the attribute rather than written down as "a date".
-inline void ibFillRegisterIntervalParameters(const ibValueMetaObjectAccumulationRegister* reg,
-	std::vector<ibQuerySourceParameter>& out)
+// The interval pair, the condition slot and the periodicity list are the SAME declaration for every
+// register that vends a folded interval — they live in registerQueryLowering.h
+// (ibFillRegisterIntervalParameters / ibAppendRegisterConditionParameter /
+// ibAppendRegisterPeriodicityParameter). The period TYPE is asked of this register's own attribute at
+// the callsite, which is the one part that genuinely differs.
+inline ibTypeDescription ibRegisterPeriodType(const ibValueMetaObjectAccumulationRegister* reg)
 {
-	const ibTypeDescription period =
-		(reg != nullptr && reg->GetRegisterPeriod() != nullptr)
-			? reg->GetRegisterPeriod()->GetTypeDesc() : ibTypeDescription();
-
-	ibQuerySourceParameter begin;
-	begin.m_name = wxT("BeginOfPeriod");
-	begin.m_type = period;
-	out.push_back(begin);
-
-	ibQuerySourceParameter end;
-	end.m_name = wxT("EndOfPeriod");
-	end.m_type = period;
-	out.push_back(end);
+	return (reg != nullptr && reg->GetRegisterPeriod() != nullptr)
+		? reg->GetRegisterPeriod()->GetTypeDesc() : ibTypeDescription();
 }
 
-// AND THE CONDITION, always last and always a condition slot — the same shape a balance has, so
-// one habit covers every virtual table of this register.
-inline void ibAppendRegisterConditionParameter(std::vector<ibQuerySourceParameter>& out)
-{
-	ibQuerySourceParameter condition;
-	condition.m_name      = wxT("Condition");
-	condition.m_condition = true;
-	out.push_back(condition);
-}
-
-
-// ⭐ THE SAME LIST ON BOTH TABLES, because it is the same question: at what granularity is this
-// interval read. Turnovers and balance-and-turnovers both take it.
-//
-// ⚠ I SHORTENED IT ONCE, on the reasoning that a list which offers a unit and then refuses it is
-// worse than a short one. That reasoning is about the ENGINE's gap and the list is about the TABLE:
-// hiding the units made the window quietly disagree with what the table is. Where the computation is
-// missing the engine says so precisely, in its own words — and that is the right place for it.
-inline void ibAppendRegisterPeriodicityParameter(std::vector<ibQuerySourceParameter>& out)
-{
-	// ⚠ A WORD, NOT A REGISTERED TYPE — and that was tried and dropped on purpose (2026-08-11).
-	//
-	// Turning this into an enumeration looked right by the usual rule ("a closed set is a type"), and
-	// it is wrong here for a reason the rule does not cover: the value is written in the query text as
-	// a KEYWORD (`…Turnovers(&From, &To, Month)`). A registered type would add a SECOND spelling of the
-	// same thing — `RegisterPeriodicity.Month` beside `Month` — plus a clsid that is permanent the
-	// moment any data carries it. Two spellings and an irreversible key, bought for a list of thirteen
-	// words that has exactly one reader. The list IS the closed set, and the source declares it.
-	ibQuerySourceParameter periodicity;
-	periodicity.m_name = wxT("Periodicity");
-	// The units come from the ONE vocabulary; the four that are not units are named here because
-	// that is what they are — `Period` and `Auto` are answers about the shape of the reading, and
-	// `Record` / `Recorder` name a movement's own identity rather than a calendar interval.
-	periodicity.m_choices = { wxT("Period"), wxT("Record"), wxT("Recorder"), wxT("Auto") };
-	for (const std::pair<ibTotalsPeriod, wxString>& u : ibRegisterUnits())
-		periodicity.m_choices.push_back(u.second);
-	// ⚠ NO DEFAULT, because there is no value that stands in for "left out". Empty is its own answer:
-	// the interval read whole, no period column, one row per key. Writing `Period` in the box would
-	// mean something different — a row PER PERIOD — so a default here would quietly change the query
-	// the moment somebody accepted it.
-	periodicity.m_default.clear();
-	out.push_back(periodicity);
-}
 
 inline void ibAccumRegisterTurnoverDescriptor::DescribeParameters(std::vector<ibQuerySourceParameter>& out) const
 {
-	// PERIOD, CONDITION, then the refinements — see ibRegTurnoverArg for why that order.
-	ibFillRegisterIntervalParameters(m_reg, out);
-	ibAppendRegisterConditionParameter(out);
+	// THE INTERVAL, HOW IT IS CUT, THEN THE CONDITION — see ibRegTurnoverArg for why that order, and
+	// note that this list is read POSITIONALLY: it must run in exactly the enum's sequence.
+	ibFillRegisterIntervalParameters(ibRegisterPeriodType(m_reg), out);
 	ibAppendRegisterPeriodicityParameter(out);
+	ibAppendRegisterConditionParameter(out);
 }
 
 // A TURNOVER IS FILTERED BY ITS DIMENSIONS, never by a resource — the same rule as the balance, and
@@ -1118,9 +1005,9 @@ inline void ibAccumRegisterBalanceAndTurnoverDescriptor::FillSourceExplorer(
 // declared now so the argument is reachable and the window can show it.
 inline void ibAccumRegisterBalanceAndTurnoverDescriptor::DescribeParameters(std::vector<ibQuerySourceParameter>& out) const
 {
-	// PERIOD, CONDITION, then the refinements — see ibRegBalTurnArg for why that order.
-	ibFillRegisterIntervalParameters(m_reg, out);
-	ibAppendRegisterConditionParameter(out);
+	// THE INTERVAL, HOW IT IS CUT, WHAT TO DO WITH AN EMPTY PERIOD, THEN THE CONDITION — the sequence
+	// ibRegBalTurnArg declares, and this list is read positionally against it.
+	ibFillRegisterIntervalParameters(ibRegisterPeriodType(m_reg), out);
 	ibAppendRegisterPeriodicityParameter(out);
 
 	ibQuerySourceParameter fillMethod;
@@ -1132,6 +1019,8 @@ inline void ibAccumRegisterBalanceAndTurnoverDescriptor::DescribeParameters(std:
 	// the list is ordered the same way — what happens by default reads first.
 	fillMethod.m_default = wxT("MovementsAndBoundaries");
 	out.push_back(fillMethod);
+
+	ibAppendRegisterConditionParameter(out);
 }
 
 inline void ibAccumRegisterBalanceAndTurnoverDescriptor::FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const

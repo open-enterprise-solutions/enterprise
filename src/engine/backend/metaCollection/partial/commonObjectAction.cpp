@@ -59,8 +59,15 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::FillSourceExplorer(ibSource
 {
 	// THE PARENT HIDES ONLY WHERE IT IS THE TREE. In a real hierarchy the list SHOWS the structure by
 	// being a tree, so a Parent column beside it repeats what the indentation already says. Under
-	// SUBORDINATION there is no tree: the parent is an ordinary recorded fact ("subordinate to
-	// account"), and hiding it would leave the one thing that arrangement exists for invisible.
+	// SUBORDINATION the parent is an ordinary recorded fact ("subordinate to account"), and hiding it
+	// would leave the one thing that arrangement exists for invisible.
+	//
+	// ⏳ Left as the DECLARED question on purpose (2026-08-13). `GetHierarchyColumn()` now answers
+	// `HasParentLink()`, so a Subordination source CAN be shown as a tree — but only in a tree view,
+	// and whether the list is one is the FRONTEND's answer (`flatView`), which no metaobject can give.
+	// Asking `HasParentLink()` here would hide the column in a flat view too, taking the structure
+	// away exactly where nothing else shows it. So the two questions stay apart until the visibility
+	// is decided where the view is.
 	const bool parentIsTheTree = IsHierarchical();
 
 	for (const ibValueMetaObjectAttributeBase* a : GetGenericAttributeArrayObject()) {

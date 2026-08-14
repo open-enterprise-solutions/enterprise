@@ -60,6 +60,16 @@ void ibValueMetaObjectRecordDataMutableRef::ContributeTables(ibSchemaSnapshot& o
 	for (const auto object : GetGenericAttributeArrayObject())
 		t.Add(object);
 
+	// TEMPORARY — the column list AS DECLARED, beside the DDL the differ then emits from it. The two
+	// have disagreed all day and the trace could only show the second half: a column dropped without
+	// anything saying whether the declaration had stopped naming it or the diff had simply not seen
+	// it. This is that first half.
+	{
+		wxString declared;
+		for (const auto object : GetGenericAttributeArrayObject())
+			declared += (declared.IsEmpty() ? wxString() : wxT(", ")) + object->GetName();
+	}
+
 	t.Index(t.m_name + wxT("_INDEX"), { uuid }, true);                        // uuid uniqueness (replaced the old PRIMARY KEY)
 	if (const ibValueMetaObjectAttributeBase* refAttr = GetDataReference())
 		t.Index(t.m_name + wxT("_REF_UQ"), { refAttr }, true);               // _REF_UQ — the data-reference unique key
@@ -114,6 +124,18 @@ void ibValueMetaObjectRegisterData::ContributeTables(ibSchemaSnapshot& out) cons
 		t.Add(object);
 	for (const auto object : GetAttributeArrayObject())
 		t.Add(object);
+
+	// TEMPORARY — a REGISTER's declared columns. The record path above has its own line; this is the
+	// other one, and its absence is what hid where the movements column list actually comes from.
+	{
+		wxString declared;
+		for (const auto object : GetPredefinedAttributeArrayObject())
+			declared += (declared.IsEmpty() ? wxString() : wxT(", ")) + object->GetName();
+		for (const auto object : GetDimensionArrayObject())
+			declared += wxT(", ") + object->GetName();
+		for (const auto object : GetResourceArrayObject())
+			declared += wxT(", ") + object->GetName();
+	}
 
 	// The key index: recorder + line for a subordinate register, else the dimension columns
 	// (period + dimensions when periodic — GetGenericDimensionArrayObject prepends the period).
@@ -201,17 +223,26 @@ void ibValueMetaObjectRecordDataHierarchyMutableRef::ContributeTables(ibSchemaSn
 
 			t.m_beforeChange = [tableName, objectName, parentField, folderField](ibRestructureInfo* report) -> bool {
 				// Counted by the database, compared here — see the note on the chart of accounts' rule for
-				// why the comparison does not ride in SQL. A table that does not exist yet holds nobody.
+				// why the comparison does not ride in SQL.
+				//
+				// ⭐⭐ AND A FAILED COUNT IS NOT A COUNT OF ZERO. This used to answer 0 to any exception,
+				// which reads as "nobody is in the way" — the strongest possible permission, granted
+				// precisely when the rule could not establish anything. What it guards is not cosmetic:
+				// zero here lets a hierarchy be dropped out from under rows that have a parent.
+				//
+				// The one legitimate reason to find nothing is a table that does not exist yet, and that
+				// is asked once, in front. Anything else stops the apply.
+				ibDatabaseQueryBuilder probe;
+				if (!probe.TableExists(tableName))
+					return true;   // nothing was ever applied here; no row can be stranded
+
 				auto rowsWith = [&tableName](const wxString& field, const ibQueryExprPtr& filled) -> int {
-					try {
-						ibDatabaseQueryBuilder q;
-						ibQueryIR ir;
-						ir.m_root = ibAggregate(ibFilter(ibScan(tableName), filled),
-							{ { ibFunc(wxT("COUNT"), { ibCol(field) }), wxT("rowCount") } }, {});
-						ibQueryResult rs = q.ExecuteIR(ir);
-						return rs.Next() ? rs.GetResultInt(wxT("rowCount")) : 0;
-					}
-					catch (const ibBackendException&) { return 0; }
+					ibDatabaseQueryBuilder q;
+					ibQueryIR ir;
+					ir.m_root = ibAggregate(ibFilter(ibScan(tableName), filled),
+						{ { ibFunc(wxT("COUNT"), { ibCol(field) }), wxT("rowCount") } }, {});
+					ibQueryResult rs = q.ExecuteIR(ir);
+					return rs.Next() ? rs.GetResultInt(wxT("rowCount")) : 0;
 				};
 
 				bool allowed = true;

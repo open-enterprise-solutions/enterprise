@@ -167,10 +167,16 @@ int ibMetaDiffWalker::GroupOrderRank(ibClassID clsid)
 		{ g_metaEnumerationCLSID,                130 },
 		{ g_metaDataProcessorCLSID,              140 },
 		{ g_metaReportCLSID,                     150 },
-		{ g_metaInformationRegisterCLSID,        160 },
-		{ g_metaAccumulationRegisterCLSID,       170 },
-		{ g_metaChartOfCharacteristicTypesCLSID, 180 },
-		{ g_metaChartOfAccountsCLSID,            190 },
+		// ⭐ THE CHARTS COME BEFORE THE REGISTERS, and the registers come LAST.
+		//
+		// A register is read in terms of what the objects above it declare — an accumulation register
+		// by its dimensions, an accounting register by the chart of accounts that types its account
+		// and its analytics. Listing the registers first put the dependants above the things they
+		// depend on, so reading the tree top to bottom met a register before anything it is about.
+		{ g_metaChartOfCharacteristicTypesCLSID, 160 },
+		{ g_metaChartOfAccountsCLSID,            170 },
+		{ g_metaInformationRegisterCLSID,        180 },
+		{ g_metaAccumulationRegisterCLSID,       190 },
 		{ g_metaAccountingRegisterCLSID,         200 },
 
 		// Inner-object groups (under Catalog / Document / ...)

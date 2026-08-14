@@ -188,10 +188,15 @@ bool ibValueMetaObjectChartOfAccounts::OnLoadMetaObject(ibMetaData* metaData)
 	if (!(*m_propertyManagerModule)->OnLoadMetaObject(metaData)) return false;
 	if (!ibValueMetaObjectRecordDataHierarchyMutableRef::OnLoadMetaObject(metaData))
 		return false;
-	// The binding is READ by now, so the kind column can take its type here rather than waiting for the
-	// configuration to be run. Between load and run the metadata otherwise described a column the table
-	// does not have (and the save, which happens in between, believed it).
-	ApplyAccountDimensionKindType();
+	// ⚠ NOT HERE. The binding is read by now, but the thing it resolves THROUGH is not: a reference
+	// type is registered when its metaobject RUNS, and at load time no metaobject has run yet. So this
+	// asked the type ctor registry for something that cannot be there — the assert fired on plain
+	// "open a configuration", and in a release build the next line dereferenced null.
+	//
+	// The window this was meant to cover — metadata describing a column between load and run, with a
+	// save happening in between — is closed by the call in OnSaveMetaObject, which runs immediately
+	// before the schema snapshot is taken and therefore before anything can believe a stale column.
+	// The other call, in OnAfterRunMetaObject, fills the type in as soon as it exists.
 	return true;
 }
 
@@ -205,7 +210,7 @@ bool ibValueMetaObjectChartOfAccounts::OnSaveMetaObject(int flags)
 	// REPORTED, NOT THROWN. A metadata rule the user has not satisfied yet belongs in the message pane
 	// under the editor, the way an enumeration with no values reports itself — a modal box for something
 	// found while saving interrupts the work instead of describing it. The save still refuses.
-	if (m_propertyChartOfCharacteristicTypes->GetValueAsMetaDesc().GetTypeCount() == 0) {
+	if (m_propertyChartOfCharacteristicTypes->IsEmptyProperty()) {
 		ibValueSystemFunction::Message(
 			wxString::Format(_("%s: a chart of characteristic types is required — the account dimension kinds are elements of it"), GetName()),
 			ibStatusMessage::ibStatusMessage_Error);
@@ -291,8 +296,19 @@ void ibValueMetaObjectChartOfAccounts::ApplyAccountDimensionKindType()
 	for (unsigned int idx = 0; idx < metaDesc.GetTypeCount(); idx++) {
 		const ibValueMetaObject* chartOfCharTypes = m_metaData->FindAnyObjectByFilter(metaDesc.GetByIdx(idx));
 		if (chartOfCharTypes != nullptr) {
+			// ⚠ THE ASSERT STAYS. A missing type ctor here means this ran at a moment when the type is
+			// gone from the FACTORY — before the object was run, or after it was withdrawn on
+			// close / reload — and that is a fact worth being told, not one to skip past. The caller
+			// that made it fire (OnLoadMetaObject, which asked before anything had run) is gone; if it
+			// fires again, something else is asking at the wrong moment and the assert is the only
+			// thing that will say so.
+			//
+			// The null CHECK is separate from the assert and not a substitute for it: it keeps the
+			// release build from dereferencing, while the debug build still stops at the cause.
 			const ibCtorMetaValueType* so = m_metaData->GetTypeCtor(chartOfCharTypes, ibCtorObjectMetaType::ibCtorObjectMetaType_Reference);
 			wxASSERT(so);
+			if (so == nullptr)
+				continue;
 			typeDesc.AppendMetaType(so->GetClassType());
 		}
 	}

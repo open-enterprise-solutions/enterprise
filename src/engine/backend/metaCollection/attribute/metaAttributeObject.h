@@ -71,6 +71,11 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 	// GetName likewise resolves the ambiguity between ibValueMetaObject::GetName and
 	// the column's.
 	virtual ibTypeDescription& GetTypeDesc() const override = 0;
+
+	// (IsEmptyTypeDesc lives on ibBackendTypeConfigFactory's base — backend_type.h — because that is
+	//  where the type description itself is declared, and therefore the only place that can answer
+	//  for every holder of one rather than for attributes alone.)
+
 	virtual wxString GetName() const override         { return ibValueMetaObject::GetName(); }
 	// GetSynonym is now ALSO declared by ibBackendSourceColumn (the column base) — same single-
 	// overrider trick as GetName: the column synonym IS the metaobject synonym (the UI caption).

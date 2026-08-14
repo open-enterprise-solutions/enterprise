@@ -100,6 +100,10 @@ bool ibValueMetaObject::OnCreateMetaObject(ibMetaData* metaData, int flags)
 	wxASSERT(metaData);
 	m_metaId = metaData->GenerateNewID();
 	m_metaData = metaData;
+
+	// WHO got which number, and under whom. The owner is the half that identifies a slot: six
+	// analytics slots and a dimension are indistinguishable by class alone, and it is precisely a
+	// slot and a dimension that were seen holding the same id.
 #ifdef DEBUG  
 	wxLogDebug(wxT("* Create metaData object %s with id %i"),
 		GetClassName(), GetMetaID()

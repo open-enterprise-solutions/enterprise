@@ -38,15 +38,24 @@ void ibValueMetaObjectChartOfAccounts::ContributeTables(ibSchemaSnapshot& out) c
 	out.Shared(kindsTable->GetMetaID(), tableName).m_beforeChange =
 		[tableName, ceiling, chartName](ibRestructureInfo* report) -> bool {
 			// Rows per account, counted by the DATABASE; the comparison is done HERE. Filtering the
-			// aggregate in SQL would mean HAVING over an alias, and if the lowering did not render it the
-			// query would throw — straight into the catch below, where a refusal would read as a pass.
-			// The rule must not be able to fail quietly, so it asks for the plainest thing there is.
+			// aggregate in SQL would mean HAVING over an alias, which not every dialect renders — and a
+			// rule that cannot run must not be the thing deciding whether a change is allowed. So it asks
+			// for the plainest thing there is, and a failure to get even that now stops the apply.
 			//
-			// A database that has not got this table yet does throw, and that IS a pass: nothing has ever
-			// been applied there, so nothing can be stranded.
+			// ⭐⭐ "COULD NOT CHECK" IS NOT "CHECKED AND FINE".
+			//
+			// This used to wrap the read in catch (ibBackendException) { return true; } — every failure,
+			// whatever it was, answered PASS. The one legitimate failure is a table that does not exist
+			// yet (a base nothing was ever applied to, where no row can be stranded), so THAT is what is
+			// asked, plainly and in advance. Everything else — a broken lowering, a lost connection, a
+			// dialect that cannot render the aggregate — is now what it actually is: the rule could not
+			// run, so the apply stops instead of granting permission it never established.
+			ibDatabaseQueryBuilder q;
+			if (!q.TableExists(tableName))
+				return true;   // nothing has ever been applied here; there is nothing to strand
+
 			int overfull = 0;
-			try {
-				ibDatabaseQueryBuilder q;
+			{
 				ibQueryIR ir;
 				ir.m_root = ibAggregate(ibScan(tableName),
 					{ { ibFunc(wxT("COUNT"), { ibCol(ibRowKeyField()) }), wxT("kindCount") } },
@@ -57,9 +66,6 @@ void ibValueMetaObjectChartOfAccounts::ContributeTables(ibSchemaSnapshot& out) c
 					if (rs.GetResultInt(wxT("kindCount")) > (int)ceiling)
 						++overfull;
 				}
-			}
-			catch (const ibBackendException&) {
-				return true;
 			}
 
 			if (overfull == 0)

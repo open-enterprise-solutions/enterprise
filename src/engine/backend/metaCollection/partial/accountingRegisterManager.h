@@ -7,10 +7,19 @@ class ibValueManagerDataObjectAccountingRegister :
 	public ibValueManagerDataObject {
 	public:
 
-	ibValue Balance(const ibValue& cPeriod, const ibValue& cAccount = ibValue(), const ibValue& cFilter = ibValue());
-	ibValue Turnovers(const ibValue& cBeginOfPeriod, const ibValue& cEndOfPeriod, const ibValue& cAccount = ibValue(), const ibValue& cFilter = ibValue());
-	ibValue DrCrTurnovers(const ibValue& cBeginOfPeriod, const ibValue& cEndOfPeriod, const ibValue& cAccount = ibValue(), const ibValue& cFilter = ibValue());
-	ibValue BalanceAndTurnovers(const ibValue& cBeginOfPeriod, const ibValue& cEndOfPeriod, const ibValue& cAccount = ibValue(), const ibValue& cFilter = ibValue());
+	// ⭐ THE ARGUMENT ARRAY IS PASSED THROUGH, NOT UNPACKED HERE. This register's readings have a
+	// signature that DEPENDS ON THE REGISTER: a correspondence one takes a debit account and a credit
+	// account and a breakdown per side, a one-sided one takes one of each. Named C++ parameters cannot
+	// express that, and the moment they try, the script's argument N and the query's argument N mean
+	// different things. So both entrances read the positional array through ONE function
+	// (ibAcctParseCall) against ONE layout (ibAcctArgs::For).
+	ibValue Balance(ibValue** paParams, const long lSizeArray);
+	ibValue Turnovers(ibValue** paParams, const long lSizeArray);
+	ibValue DrCrTurnovers(ibValue** paParams, const long lSizeArray);
+	ibValue BalanceAndTurnovers(ibValue** paParams, const long lSizeArray);
+	// The movement lines themselves, with the slots widened into a column per requested kind.
+	ibValue RecordsWithAccountDimensions(ibValue** paParams, const long lSizeArray);
+
 
 	ibValueManagerDataObjectAccountingRegister(const ibValueMetaObjectAccountingRegister* metaObject = nullptr) : m_metaObject(metaObject) { m_members.Bind(this, &ibValueManagerDataObjectAccountingRegister::FillManagerMethods); }
 	virtual ~ibValueManagerDataObjectAccountingRegister() {}
