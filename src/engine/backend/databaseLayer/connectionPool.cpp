@@ -173,6 +173,16 @@ void ibConnectionPool::ReleaseAll(ibDatabaseConnectionHolder* holder)
 		if (!c) continue;
 		try { c->CloseResultSets(); } catch (...) { /* swallowed: cleanup before reparking conn — driver error here would otherwise leak into the next checkout */ }
 		try { c->CloseStatements(); } catch (...) { /* swallowed: same as above */ }
+
+		// ⚠ AND THE TRANSACTION IS LEFT ALONE. Rolling it back here was tried on 2026-08-14 and
+		// REVERTED the same hour: releasing a holder is not the same event as finishing the work.
+		// A writer that hands its connection back before its own commit — an ordinary object write —
+		// had its transaction rolled out from under it, so the value went in and came back empty on
+		// the next read, with nothing reported anywhere.
+		//
+		// The inherited-transaction problem this was aimed at is answered where it actually belongs:
+		// Checkout refuses to hand out a connection that still has one (see there). That keeps the
+		// next owner safe without deciding, from here, that somebody else's work is unwanted.
 	}
 }
 
@@ -400,9 +410,20 @@ std::shared_ptr<ibDatabaseLayer> ibConnectionPool::Checkout(std::chrono::millise
 		// then created a stmt / result set: while those live, no
 		// other thread can take the conn — driver-side cursors would
 		// race otherwise.
+		// ⭐⭐ AND NOT ONE THAT STILL HAS A TRANSACTION OPEN. `txHolder` says the pool KNOWS about a
+		// transaction; it says nothing about one opened straight on the layer (bare db_query, a path
+		// that returned without closing, a refused commit before it was made to roll back). Handing
+		// such a conn out gives the next caller somebody else's transaction: its own BeginTransaction
+		// merely nests (depth 2), its Commit only decrements, and its DDL is never made durable —
+		// which is exactly the shape the restructuring trace showed on 2026-08-14, where a deferred
+		// phase could not see tables its own apply had just created ("Table unknown").
+		//
+		// A conn in that state is not idle, whatever the bookkeeping says. Leave it where it is: the
+		// owner will finish it, or the reaper will drop it — but nobody else gets to inherit it.
 		for (auto it = m_entries.rbegin(); it != m_entries.rend(); ++it) {
 			if (it->txHolder == nullptr && it->scopeHolder == nullptr
-			    && !it->inUse && it->conn && !it->conn->IsBusy()) {
+			    && !it->inUse && it->conn && !it->conn->IsBusy()
+			    && !it->conn->IsActiveTransaction()) {
 				it->inUse    = true;
 				it->lastUsed = std::chrono::steady_clock::now();
 				return WrapHandout(it->conn);

@@ -32,8 +32,8 @@ const ibDialectDictionary& ibDatabaseLayerPostgres::Dialect()
 		d.m_typeGuid          = wxT("UUID");
 		d.m_typeNumberPattern = wxT("NUMERIC(%d,%d)");
 		d.m_analyzePrefix     = wxT("ANALYZE");   // ANALYZE <t> — refresh planner stats (temps aren't autovacuumed)
-		d.m_indexListQuery = wxT("SELECT indexname FROM pg_indexes WHERE tablename = LOWER(?)");   // differ introspects existing indexes
 		d.m_rowIdColumn    = wxT("ctid");         // physical row id for the pre-UNIQUE dedup (keep one row per key)
+		d.m_maxIndexSegments = 32;                // INDEX_MAX_KEYS — a build-time constant, 32 in every stock build
 		d.m_returningClause = wxT("RETURNING");   // PostgreSQL has had it since 8.2
 		// Period truncation. date_trunc names seven of the ten units directly; the other three are
 		// offsets from the start of the enclosing unit:
@@ -89,6 +89,33 @@ const ibTempTableDialect* ibDatabaseLayerPostgres::GetTempTableDialect() const
 	return &TempDialect();
 }
 
+// ⭐⭐ PostgreSQL HAS NO MAX / MIN OVER `uuid`, and a reference key is exactly that here — so a fold
+// over references cannot run until these exist. Four statements, created with the database.
+//
+// They live HERE, with the vendor whose gap they fill: this was the last engine-specific DDL written
+// out anywhere in `metaCollection`, where nothing else knows one dialect from another.
+//
+// ⚠ RunStatement, not RunQuery. A function BODY is `BEGIN … ; … ; END`, and RunQuery is the
+// printf-formatting, ';'-splitting door — right for text DESCRIBED by a format, wrong for text that
+// is already final. This driver happens to ignore the splitting (PQexec parses a multi-statement
+// string itself), so nothing was broken; a statement whose text is final still belongs at the door
+// meant for it, and the next driver to run one may not be so forgiving.
+//
+// CREATE OR REPLACE throughout: running this against a database that already has them is a no-op
+// rather than an error, which is what makes it safe to run again after a restore.
+bool ibDatabaseLayerPostgres::CreateMissingRoutines()
+{
+	// DDL affects no rows, so the return value is 0 and says nothing about success. A driver reports
+	// failure by THROWING — that is the only signal worth reading here. (This used to test the return
+	// against DATABASE_LAYER_QUERY_RESULT_ERROR, which is 0, and passed only because this driver
+	// reported a hardcoded 1 for every statement.)
+	RunStatement(wxT("CREATE OR REPLACE FUNCTION max_uuid(uuid, uuid) RETURNS uuid AS $$ BEGIN IF $2 IS NULL OR $1 < $2 THEN RETURN $2; END IF; RETURN $1; END; $$ LANGUAGE plpgsql;"));
+	RunStatement(wxT("CREATE OR REPLACE AGGREGATE max(uuid) (sfunc = max_uuid, stype = uuid, combinefunc = max_uuid, parallel = safe, sortop = operator ( > ));"));
+	RunStatement(wxT("CREATE OR REPLACE FUNCTION min_uuid(uuid, uuid) RETURNS uuid AS $$ BEGIN IF $2 IS NULL OR $1 > $2 THEN RETURN $2; END IF; RETURN $1; END; $$ LANGUAGE plpgsql;"));
+	RunStatement(wxT("CREATE OR REPLACE AGGREGATE min(uuid) (sfunc = min_uuid, stype = uuid, combinefunc = min_uuid, parallel = safe, sortop = operator ( < ));"));
+	return true;
+}
+
 // PG materialisation: the production target, and the one per-row engine whose shell is
 // two objects instead of one — a trigger here cannot carry a body, it can only EXECUTE a
 // FUNCTION, so m_functionShellTemplate is non-empty and the generator emits the function
@@ -116,6 +143,13 @@ const ibMaterializationDialect& ibDatabaseLayerPostgres::MaterializationDialect(
 		m.m_deltaSourceAlias  = wxT("excluded");
 		m.m_deltaUpdateItem   = wxT("{col} = {target}.{col} + {source}.{col}");
 		m.m_deltaKeyMatchItem = wxT("{target}.{col} = {source}.{col}");   // unused by ON CONFLICT — rendered, not spent
+		// THE KEY HASH. Thirty-two segments is a ceiling few keys reach, so this is the spare tyre
+		// rather than the road — but ON CONFLICT names its target by COLUMN LIST, so if a key ever does
+		// pass the ceiling the conflict target has to become this column and the engine must be able to
+		// compute it. md5() takes text; ::text renders bytea as hex and a timestamp in ISO, both stable.
+		m.m_keyHashItem   = wxT("COALESCE(md5({value}::text), '~')");
+		m.m_keyHashJoin   = wxT(" || '.' || ");
+		m.m_keyHashDigest = wxT("md5({expr})");
 		m.m_totalsTableSuffix = wxT(" WITH (fillfactor = 80)");
 		m.m_connectionIdExpr  = wxT("pg_backend_pid()");   // per-backend id — concurrent writers hash apart
 		m.m_createViewTemplate = wxT("CREATE OR REPLACE VIEW {name} AS {body}");

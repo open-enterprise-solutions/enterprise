@@ -820,6 +820,11 @@ struct ibRenderedQuery
 	std::vector<ibQueryParam> m_params;  // in placeholder order — bind 1:1, left to right
 };
 
+// Canonical column type -> this dialect's SQL type name. THE map, used by the DDL renderer below
+// and by the view renderer at L2-2 (databaseMaterializeBuilder), which holds a dictionary rather
+// than a builder and would otherwise need a copy of the same switch.
+BACKEND_API wxString ibMapColumnType(const ibDialectDictionary& dialect, const ibColumnType& type);
+
 class BACKEND_API ibQueryRenderer
 {
 public:
@@ -850,7 +855,7 @@ private:
 	static wxString JoinTypeText(ibQueryJoinType type);
 
 	wxString RenderColumn(const ibDdlColumn& col);      // "<name> <sqltype> [PRIMARY KEY|NOT NULL]"
-	wxString MapType(const ibColumnType& type) const;   // canonical type -> dialect SQL type (via dictionary)
+	wxString MapType(const ibColumnType& type) const;   // canonical type -> dialect SQL type (thin wrapper over ibMapColumnType)
 
 	ibDialectDictionary m_dialect;             // BY VALUE — a renderer built from a dialect TEMPORARY
 	                                           // (`ibQueryRenderer r(FbDialect()); … r.RenderDDL()`) outlives it;
@@ -859,6 +864,45 @@ private:
 	int                        m_paramPos = 0; // running 1-based placeholder count
 
 };
+
+// ==========================================================================
+// WHAT THE CONNECTED DRIVER CAN DO — asked of L2, never of the dictionary
+// ==========================================================================
+//
+// ⭐⭐ A CAPABILITY IS A QUESTION L2 ANSWERS, NOT A FIELD ITS CALLERS READ.
+//
+// The dialect dictionary is L2's own vocabulary. Every tier above that reached into it
+// (`layer->GetDialect().m_features.m_rollup`, `…m_indexListQuery`) was spelling an L2 fact in its
+// own words, and the day the fact changes shape — a feature that becomes two, a template that grows
+// an argument — the compiler finds the definition and not the readers. So the door vends the
+// QUESTION and keeps the field to itself.
+//
+// Each of these has exactly one thing to say and says it about a CONNECTION, because that is what
+// the answer depends on: not "does this product support X" but "can the driver I am holding do X".
+// A null layer answers NO / EMPTY rather than crashing — a passive pool is an ordinary state.
+
+// GROUP BY ROLLUP — can the subtotal levels be folded by the SERVER, or must the result tier build
+// them? (FB5, PG, MySQL yes; SQLite no.)
+BACKEND_API bool ibCanPushRollup(const ibDatabaseLayer* layer);
+
+// (No `ibCanUseTempTables` here, and the reason is worth keeping: the per-driver temp facts'
+//  PRESENCE already IS that capability, and the one caller — the temp-table manager — needs the
+//  facts themselves for the CREATE's lexical bits. An accessor beside them would be a second
+//  spelling of one null test, removing no knowledge from the caller. `GetTempTableDialect()` is
+//  already the question.)
+
+// DDL THAT CHANGES A TABLE'S SHAPE, RUN. Render through this driver's dialect and execute — the two
+// halves were spelled at the callsite, which meant the caller built a renderer out of a dictionary
+// it had no other reason to hold. Returns the driver's own row count / status.
+BACKEND_API int ibExecuteDdl(ibDatabaseLayer* layer, const ibDdlStatement& ddl);
+
+// DDL DURABILITY — does this engine keep DDL in the transaction, so a statement against a table
+// whose SHAPE this transaction just changed has to wait for the commit? (FB / PG yes, SQLite no.)
+// The barrier the schema builder runs on.
+BACKEND_API bool ibDdlCommitsBeforeData(const ibDatabaseLayer* layer);
+
+// Can several column clauses ride ONE `ALTER TABLE`, or does each need a statement of its own?
+BACKEND_API bool ibAlterTableMultiClause(const ibDatabaseLayer* layer);
 
 // ==========================================================================
 // ibQueryResult — RAII cursor. Move-only. Holds a shared_ptr to its
@@ -887,8 +931,8 @@ public:
 
 	// Typed field reads by name — the dialect-NORMALISED form of the row's physical fields
 	// (the "same shape as L1, minus the dialect"). The provider's value-assembly reads the
-	// physical _N/_S/_RRRef columns through THESE, so it never touches the raw L1 result set
-	// (RawResultSet is an L2-1 leak). Delegate to the borrowed driver cursor.
+	// physical _N/_S/_RRRef columns through THESE, so it never touches the raw L1 result set — which
+	// is no longer reachable at all (see below). Delegate to the borrowed driver cursor.
 	wxString    GetResultString(const wxString& name);
 	int         GetResultInt(const wxString& name);
 	long long   GetResultLong(const wxString& name);
@@ -901,11 +945,11 @@ public:
 	int      ColumnCount();
 	wxString ColumnName(int column);
 
-	// Borrowed raw cursor — Phase-1 bridge for callers whose row materialisation
-	// still reaches into the driver result set directly. The connection stays
-	// pinned by this ibQueryResult, so the pointer is valid for its whole
-	// lifetime; do NOT close it. Null if the query produced no cursor.
-	ibDatabaseResultSet* RawResultSet() const { return m_rs; }
+	// (RawResultSet REMOVED 2026-08-13 — the Phase-1 bridge that handed out the borrowed driver
+	//  cursor for callers still materialising rows by hand. It had ONE left, the bytecode cache
+	//  reading its blob by field number, and it now reads it by name through GetResultBlob above.
+	//  A hatch with one user is a hatch: the typed accessors are the surface, and a caller that
+	//  needs something they do not have should grow one here rather than reach past them.)
 
 private:
 	void                 Release();

@@ -3,6 +3,14 @@
 #include "firebirdBlobCompression.h"
 #include "backend/databaseLayer/databaseLayerException.h"
 
+void ibDatabaseParameterFirebird::RequireParameterBuffer() const
+{
+	if (m_pParameter != nullptr && m_pParameter->sqldata != nullptr)
+		return;
+	ibBackendCoreException::Error(
+		_("Firebird: parameter buffer is not allocated (the prepared statement has no such parameter) — the table structure is likely out of date"));
+}
+
 // ctor
 ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pInterface, XSQLVAR* pVar) : m_nParameterType(ibDatabaseParameterFirebird::PARAM_NULL)
 {
@@ -36,8 +44,7 @@ ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pI
 	// It used to memcpy straight into it, so that mismatch arrived as an access violation inside
 	// the CRT with nothing on the stack naming a column — a crash where a message belonged.
 	if (m_pParameter->sqldata == nullptr) {
-		ibBackendCoreException::Error(
-			_("Firebird: parameter buffer is not allocated (the prepared statement has no such parameter) — the table structure is likely out of date"));
+		RequireParameterBuffer();
 		return;
 	}
 
@@ -45,6 +52,29 @@ ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pI
 	// (wxChar = wchar_t = 2 bytes) walked twice as far as `length`. The
 	// driver hands UTF-8 to FB, so a plain memcpy of `length` bytes is the
 	// only correct copy.
+	//
+	// ⭐⭐ CLAMPED TO THE BUFFER THAT EXISTS, AND THE CAPACITY IS READ FIRST.
+	//
+	// sqldata was allocated when the statement was DESCRIBED, sized from the parameter's declared
+	// width (AllocateParameterSpace: `new char[sqllen + 1]` for SQL_TEXT, `+ 3` for SQL_VARYING).
+	// The value's encoded length is an unrelated number — a string longer than the column it is
+	// compared against wrote straight past the allocation, and heap corruption surfaces wherever the
+	// next allocation happens to live, never here.
+	//
+	// The order matters as much as the clamp: the assignment below REPLACES sqllen with the value's
+	// length, so after it there is no record of how much room the buffer has. Anything that clamps
+	// later would be clamping against the value it just wrote. The two sibling branches in
+	// SetParamBlob already clamp this way; this constructor was the one that did not.
+	// ⚠ AND ZERO MEANS "I DO NOT KNOW", NOT "THERE IS NO ROOM". Written as
+	// `capacity = sqllen > 0 ? sqllen : 0`, an undescribed parameter clamped every value to NOTHING —
+	// so a string went in and came back EMPTY, with the write reporting success. Caught 2026-08-14 on
+	// a chart of accounts: the code survived (it is written through another path) and the description
+	// was blank after every save.
+	//
+	// Two opposite facts must not share one number. Clamp only where the room is actually known.
+	if (m_pParameter->sqllen > 0 && length > (unsigned int)m_pParameter->sqllen)
+		length = (unsigned int)m_pParameter->sqllen;
+
 	memcpy(m_pParameter->sqldata, (const char*)valueBuffer, length);
 	m_pParameter->sqllen = (ISC_SHORT)length;
 
@@ -59,14 +89,51 @@ ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pI
 
 	int nType = (m_pParameter->sqltype & ~1);
 
+	// ⭐⭐ A SCALED COLUMN IS AN INTEGER WITH THE POINT IMPLIED, AND EVERY INTEGER TYPE CARRIES ONE.
+	//
+	// Firebird stores NUMERIC(p,s) as an integer of p digits and remembers the scale beside it, so a
+	// value must be multiplied by 10^-sqlscale before it is written and divided by the same power when
+	// it is read. The read side does that for every integer type (firebirdResultSet.cpp); the write
+	// side did it in TWO of the four — SQL_INT64 and SQL_INT128 scaled, SQL_SHORT and SQL_LONG did not.
+	//
+	// It is not a corner: Firebird maps NUMERIC(1..4,s) to SMALLINT and NUMERIC(5..9,s) to INTEGER, so
+	// an ordinary money declaration — `Number(9,2)` — took the unscaled branch. 1234.56 was written as
+	// 1234 and read back as 12.34: a hundredfold understatement, silent, on the write path of the
+	// default driver. The multiplication is written ONCE now, because a rule spelled per branch is a
+	// rule two branches can miss.
+	const auto scaledForStorage = [&pVar](const ibNumber& value) {
+		ibNumber stored = value;
+		for (int i = 0; i < -pVar->sqlscale; i++)
+			stored *= 10;
+		return stored;
+	};
+
+	// ⚠ AND THE STORED INTEGER MUST FIT. `ToInt()` (no argument) CLAMPS at INT_MAX and the clamped
+	// value then wraps modularly into a 16-bit field — 40000 stored as -25536, a sign flip on money.
+	// The checked form reports instead, and a report is the only honest answer here: a number that does
+	// not fit the column cannot be written, and writing a different one is worse than refusing.
+	//
+	// ⚠ The description is DATA, so it rides as an ARGUMENT: `Error` is a printf-style vararg, and a
+	// value handed in as the format string would read any '%' inside it as a specifier.
+	const auto storedInteger = [](const ibNumber& stored, int64_t low, int64_t high, const wxChar* what) {
+		int64_t out = 0;
+		if (stored.ToInt(out) != 0 || out < low || out > high) {
+			ibBackendCoreException::Error(
+				_("Firebird: the value does not fit the %s column it is written to (scaled: %s)"),
+				what, stored.ToString());
+		}
+		return out;
+	};
+
 	if (nType == SQL_SHORT)
 	{
-		m_numValue = dblValue;
-		m_sValue = dblValue.ToInt();
+		m_numValue = scaledForStorage(dblValue);
+		m_sValue   = static_cast<short>(storedInteger(m_numValue, -32768, 32767, wxT("SMALLINT")));
 		m_pParameter->sqldata = (char*)&m_sValue;
 	}
 	else if (nType == SQL_FLOAT)
 	{
+		// Not scaled, and not scalable: a FLOAT column carries no sqlscale — the point is in the value.
 		m_numValue = dblValue;
 		m_fValue = dblValue.ToFloat();
 		m_pParameter->sqldata = (char*)&m_fValue;
@@ -79,24 +146,42 @@ ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pI
 	}
 	else if (nType == SQL_LONG)
 	{
-		m_numValue = dblValue;
-		m_nValue = dblValue.ToInt();
+		m_numValue = scaledForStorage(dblValue);
+		m_nValue   = static_cast<int32_t>(storedInteger(m_numValue, -2147483648LL, 2147483647LL, wxT("INTEGER")));
 		m_pParameter->sqldata = (char*)&m_nValue;
 	}
 	else if (nType == SQL_INT64)
 	{
-		m_numValue = dblValue;
-		for (int i = 0; i < -pVar->sqlscale; i++)
-			m_numValue *= 10;
+		// ⚠ THE RETURN CODE IS READ. On overflow ToInt leaves `out` UNTOUCHED, so ignoring it wrote a
+		// ZERO — and this branch carries more than money: `_RTRef` holds an ibClassID, an UNSIGNED
+		// 64-bit value whose plugin range (0x80..0xFF) and raw-FNV ids have the top bit set. A reference
+		// whose type stored as 0 is a row whose identity cannot be read back.
+		//
+		// So a value past INT64_MAX is not an error here — it is 64 bits that do not happen to be a
+		// signed number, and a BIGINT column holds 64 bits either way. It is stored as the same bit
+		// pattern, which round-trips exactly; only a value that fits NEITHER reading is refused.
+		m_numValue = scaledForStorage(dblValue);
 		int64_t int64val = 0;
-		m_numValue.ToInt(int64val);
+		if (m_numValue.ToInt(int64val) != 0) {
+			unsigned long long bits = 0;
+			if (m_numValue.ToInt(bits) != 0) {
+				ibBackendCoreException::Error(
+					_("Firebird: the value does not fit the BIGINT column it is written to (scaled: %s)"),
+					m_numValue.ToString());
+			}
+			memcpy(&int64val, &bits, sizeof(int64val));
+		}
+		// The same guard the string constructor carries, for the same reason: these two branches are
+		// the only numeric ones that write into a buffer the DESCRIBE allocated rather than pointing
+		// sqldata at a member of their own. A null here is a bind addressing a parameter the
+		// statement does not have, and it used to arrive as an access violation inside the CRT.
+		RequireParameterBuffer();
 		memcpy(m_pParameter->sqldata, &int64val, sizeof(int64val));
 	}
 	else if (nType == SQL_INT128)
 	{
-		m_numValue = dblValue;
-		for (int i = 0; i < -pVar->sqlscale; i++)
-			m_numValue *= 10;
+		m_numValue = scaledForStorage(dblValue);
+		RequireParameterBuffer();
 		m_numValue.To128Bytes(reinterpret_cast<uint8_t*>(m_pParameter->sqldata));
 	}
 	else
@@ -216,8 +301,11 @@ ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pI
 		// Clamp to the column's declared length to avoid running past
 		// the allocation; FB compares CHAR/BINARY by full declared
 		// length so a short-bound buffer wouldn't match anyway.
+		// ⚠ cap == 0 means UNDESCRIBED, not "no room" — clamping to it would bind nothing (see the string
+		// ctor above, where exactly that emptied every value).
 		const long cap = (long)m_pParameter->sqllen;
-		const long n   = (nDataLength > cap) ? cap : nDataLength;
+		const long n   = (cap > 0 && nDataLength > cap) ? cap : nDataLength;
+		RequireParameterBuffer();
 		memcpy(m_pParameter->sqldata, pData, n);
 	}
 	else if (nType == SQL_VARYING) {
@@ -228,10 +316,13 @@ ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pI
 		// branch SetParamBlob was a silent no-op against varying-typed
 		// params, leaving sqldata zero-init and breaking equality
 		// against a binary column whose stored value is non-zero.
+		// ⚠ cap == 0 means UNDESCRIBED, not "no room" — clamping to it would bind nothing (see the string
+		// ctor above, where exactly that emptied every value).
 		const long cap = (long)m_pParameter->sqllen;
-		const long n   = (nDataLength > cap) ? cap : nDataLength;
+		const long n   = (cap > 0 && nDataLength > cap) ? cap : nDataLength;
 		// Length prefix as ISC_USHORT.
 		ISC_USHORT len = (ISC_USHORT)n;
+		RequireParameterBuffer();
 		memcpy(m_pParameter->sqldata, &len, sizeof(ISC_USHORT));
 		memcpy(m_pParameter->sqldata + sizeof(ISC_USHORT), pData, n);
 	}

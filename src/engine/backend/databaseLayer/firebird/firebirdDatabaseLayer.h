@@ -183,6 +183,11 @@ private:
 	// reconnect.
 	bool ReconnectIfLeaderChanged();
 
+	// Hand a server-side statement handle back on a path where nobody else will. Errors are ignored
+	// BY CONTRACT: this runs while another failure is already on its way to the caller, and that one
+	// is the error worth reporting. Interpret the original status BEFORE calling — this overwrites it.
+	void FreeStatementQuietly(isc_stmt_handle& statement);
+
 	// URL that the current `isc_db_handle` was attached with. Set on
 	// successful `Open`; compared against `ibFirebirdLeaderMode::
 	// CurrentConnectUrl()` on the reconnect path. Empty when no
@@ -213,6 +218,25 @@ private:
 	// base class collapses nested Begin/Commit calls onto this slot,
 	// so there's no need for a stack.
 	isc_tr_handle m_pTransaction = 0;
+
+	// ⭐⭐ OUR TRANSACTION DIED WITHOUT THE BASE BEING TOLD.
+	//
+	// The base owns m_txDepth and drivers must not touch it, so when this driver loses the native
+	// handle on its own initiative — Close(), or ReconnectIfLeaderChanged() swapping the attachment
+	// underneath an open TX — the two books stop agreeing: IsActiveTransaction() keeps answering YES
+	// over a handle that is 0.
+	//
+	// That silence is what made a failed apply unrecoverable. A statement arriving with no handle
+	// looks exactly like a statement arriving outside a transaction, so it opened a "quickie" TX of
+	// its own AND COMMITTED IT — every ALTER after the loss went durable one by one, and the RollBack
+	// the apply ended with rolled back nothing. The schema moved ahead of the configuration, and no
+	// later apply could bring them back together.
+	//
+	// So the loss is RECORDED rather than inferred. While set, a statement refuses instead of
+	// committing on its own, and a commit refuses instead of reporting success for work that is gone.
+	// Cleared by DoBeginTransaction (a new TX is a new fact) and by DoRollBack (which is what the
+	// caller wanted anyway — there is nothing left to undo).
+	bool m_txLost = false;
 
 	isc_db_handle m_pDatabase;
 	void *m_pStatus;

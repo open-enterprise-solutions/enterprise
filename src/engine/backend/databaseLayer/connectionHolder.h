@@ -78,8 +78,11 @@ public:
 	class ibConnectionScope OpenConnectionScope();
 
 	// --- DDL/DML barrier state (the current restructuring save) -----------------------------------
-	// Tables CREATEd this save on a barrier dialect (Firebird), and the data writes DEFERRED past the
-	// DDL commit (FB can't populate a freshly-created table in the same transaction). The state lives
+	// Tables whose SHAPE this save changed on a barrier dialect (Firebird) — created, or given /
+	// dropped / retyped a column — and the work DEFERRED past the DDL commit. What is not durable in
+	// the transaction that shaped it is the shape, not merely the table's existence: a rebuild that
+	// reads a column added three statements earlier is refused exactly like a write to a table created
+	// three statements earlier. The state lives
 	// here, not in process-wide statics, because the barrier is tied to THIS holder's connection /
 	// transaction — so the SEVERAL ibSchemaBuilder instances of one save (Reset / per-table Execute /
 	// Flush) share one home through the holder they run on. ibSchemaBuilder owns the logic; the holder

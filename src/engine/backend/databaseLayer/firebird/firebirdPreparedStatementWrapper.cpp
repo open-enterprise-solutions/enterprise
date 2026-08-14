@@ -91,6 +91,15 @@ bool ibPreparedStatementFirebirdWrapper::Prepare()
 		int nParameters = m_pParameters->sqld;
 		free(m_pParameters);
 		m_pParameters = (XSQLDA*)malloc(XSQLDA_LENGTH(nParameters));
+		// Checked like the first allocation above: the old block is already freed, so a failure here
+		// leaves the member NULL and the very next line would write through it.
+		if (m_pParameters == NULL)
+		{
+			SetErrorCode(DATABASE_LAYER_QUERY_RESULT_ERROR);
+			SetErrorMessage(wxT("Out of memory allocating the parameter descriptor"));
+			ThrowDatabaseException();
+			return false;
+		}
 		m_pParameters->version = SQLDA_VERSION1;
 		m_pParameters->sqln = nParameters;
 		nReturn = m_pInterface->GetIscDsqlDescribeBind()(m_Status, &m_pStatement, SQL_DIALECT_CURRENT, m_pParameters);
@@ -215,6 +224,13 @@ ibDatabaseResultSet* ibPreparedStatementFirebirdWrapper::DoRunQueryWithResults()
 	ResetErrorCodes();
 
 	XSQLDA* pOutputSqlda = (XSQLDA*)malloc(XSQLDA_LENGTH(1));
+	if (pOutputSqlda == NULL)
+	{
+		SetErrorCode(DATABASE_LAYER_QUERY_RESULT_ERROR);
+		SetErrorMessage(wxT("Out of memory allocating the result descriptor"));
+		ThrowDatabaseException();
+		return NULL;
+	}
 	pOutputSqlda->sqln = 1;
 	pOutputSqlda->version = SQLDA_VERSION1;
 
@@ -232,6 +248,13 @@ ibDatabaseResultSet* ibPreparedStatementFirebirdWrapper::DoRunQueryWithResults()
 		int nColumns = pOutputSqlda->sqld;
 		free(pOutputSqlda);
 		pOutputSqlda = (XSQLDA*)malloc(XSQLDA_LENGTH(nColumns));
+		if (pOutputSqlda == NULL)
+		{
+			SetErrorCode(DATABASE_LAYER_QUERY_RESULT_ERROR);
+			SetErrorMessage(wxT("Out of memory allocating the result descriptor"));
+			ThrowDatabaseException();
+			return NULL;
+		}
 		pOutputSqlda->sqln = nColumns;
 		pOutputSqlda->version = SQLDA_VERSION1;
 		nReturn = m_pInterface->GetIscDsqlDescribe()(m_Status, &m_pStatement, SQL_DIALECT_CURRENT, pOutputSqlda);

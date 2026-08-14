@@ -54,8 +54,15 @@ void ibDatabaseLayer::Commit()
 
 	// Outermost level — resolve to the driver. Reset state before the
 	// driver call so that if DoCommit / DoRollBack throws the depth
-	// still reflects "no transaction" (matching the driver's typical
-	// behaviour on failure: the TX is gone either way).
+	// still reflects "no transaction".
+	//
+	// ⚠ THE TX IS *NOT* GONE EITHER WAY — that is what this comment used to claim, and Firebird is the
+	// counter-example. A commit that fails there leaves the transaction ACTIVE and holding every lock
+	// it took; only the DEPTH went to zero, so this layer answered IsActiveTransaction() = false while
+	// the database went on blocking everyone. The next apply then waited on locks nobody would ever
+	// release and died as a "deadlock" that named neither the holder nor the original fault.
+	// Firebird compiles views and triggers AT COMMIT, so a refusal here is not exotic — it is the
+	// normal way a bad bundle reports itself.
 	m_txDepth = 0;
 	const bool aborted = m_txAborted;
 	m_txAborted = false;
@@ -65,8 +72,25 @@ void ibDatabaseLayer::Commit()
 	// reference it will be released after the driver op completes
 	// naturally via RAII.
 	ibConnectionPool::ClearActiveTxConnection(this);
-	if (aborted) DoRollBack();
-	else         DoCommit();
+	if (aborted) {
+		DoRollBack();
+		return;
+	}
+
+	// A REFUSED COMMIT IS ROLLED BACK HERE, once, for every driver and every caller. Doing it at the
+	// call sites would mean each of them knowing this about Firebird — and the two that mattered
+	// (the restructuring commit, the post-commit re-read) could not have done it anyway: the depth
+	// above is already zero, so the state they would have tested says there is nothing to roll back.
+	// The refusal itself still travels; what does not travel any more is the lock.
+	try {
+		DoCommit();
+	}
+	catch (...) {
+		try { DoRollBack(); } catch (...) { /* swallowed: cleanup after a failed commit — the caller's
+		                                       exception is the one worth reporting, and a rollback
+		                                       that also fails leaves nothing further to attempt */ }
+		throw;
+	}
 }
 
 void ibDatabaseLayer::RollBack()
@@ -178,6 +202,7 @@ void ibDatabaseLayer::CloseResultSets()
 
 void ibDatabaseLayer::CloseStatements()
 {
+
 	// Iterate through all of the statements and close them all
 	DatabaseStatementHashSet::iterator start = m_Statements.begin();
 	DatabaseStatementHashSet::iterator stop = m_Statements.end();

@@ -53,9 +53,13 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 		d.m_rowLockNoWaitSuffix = wxEmptyString;       // FB has no FOR UPDATE NOWAIT — noWait rides the TX (isc_tpb_nowait)
 		d.m_dropColumnClause  = wxT("DROP ");          // FB rejects the COLUMN keyword: ALTER TABLE t DROP c
 		d.m_ddlCommitBeforeData = true;                // legacy isc_* API can't mix CREATE/ALTER + bound INSERT in one TX
-		// FB has no CREATE INDEX IF NOT EXISTS -> the differ introspects RDB$INDICES and creates only the missing ones.
-		d.m_indexListQuery = wxT("SELECT RDB$INDEX_NAME FROM RDB$INDICES WHERE RDB$RELATION_NAME = UPPER(?)");
+		// FB has no CREATE INDEX IF NOT EXISTS. It does not need one: indexes diff by name between the
+		// BASELINE and TARGET snapshots, so the differ emits a CREATE only where the baseline had none.
+		// It does NOT ask RDB$INDICES — reading the physical schema to decide what to emit is banned
+		// (docs/schema-authority.md § 3); the introspection this line used to describe, and the
+		// `m_indexListQuery` behind it, were removed 2026-08-14. Do not revive either.
 		d.m_rowIdColumn    = wxT("RDB$DB_KEY");         // physical row id for the pre-UNIQUE dedup (keep one row per key)
+		d.m_maxIndexSegments = 16;                     // "too many keys defined for index" past this — and a failed DDL rolls the apply back
 
 		// --- period truncation: no date_trunc here, so every unit is arithmetic ---
 		// Truncate-to-midnight, the base every coarser unit builds on.
@@ -143,6 +147,21 @@ const ibMaterializationDialect& ibDatabaseLayerFirebird::MaterializationDialect(
 		// and the parser reports it at the following token rather than at the qualifier.
 		m.m_deltaUpdateItem     = wxT("{col} = {target}.{col} + {source}.{col}");
 		m.m_deltaKeyMatchItem   = wxT("{target}.{col} = {source}.{col}");
+
+		// THE KEY HASH — an identity for a key the sixteen-segment index cannot hold.
+		//
+		// CRYPT_HASH gives 128 bits per part (Firebird 4+, the driver's declared minimum), HEX_ENCODE
+		// makes it ASCII so the parts can be joined at all, and COALESCE keeps a NULL part from
+		// swallowing the whole expression — an all-NULL digest would be a unique index that allows
+		// every duplicate, which is worse than none because it looks like one. The '~' marker cannot
+		// occur in hex, so an absent value and an empty one stay different keys.
+		//
+		// Per PART and not over the concatenation: a key field may be a binary reference key or an
+		// unbounded string, and casting either into text to join it is a character-set error or a
+		// truncation. A hashed part is 32 ASCII characters whatever it holds.
+		m.m_keyHashItem   = wxT("COALESCE(HEX_ENCODE(CRYPT_HASH({value} USING MD5)), '~')");
+		m.m_keyHashJoin   = wxT(" || '.' || ");
+		m.m_keyHashDigest = wxT("HEX_ENCODE(CRYPT_HASH({expr} USING MD5))");
 
 		m.m_totalsTableSuffix  = wxEmptyString;                        // no page-fill knob in DDL
 		m.m_connectionIdExpr   = wxT("CURRENT_CONNECTION");            // per-attachment id — the shard hash source
@@ -739,6 +758,9 @@ bool ibDatabaseLayerFirebird::Close()
 			isc_tr_handle pTransaction = m_pTransaction;
 			m_pInterface->GetIscRollbackTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pTransaction);
 			m_pTransaction = 0;
+			// The base still counts this transaction as open — it was never told. RECORD the loss so
+			// the next statement refuses instead of quietly opening (and committing) one of its own.
+			m_txLost = true;
 		}
 
 		isc_db_handle pDatabase = m_pDatabase;
@@ -832,20 +854,52 @@ void ibDatabaseLayerFirebird::DoBeginTransaction(const ibTxOptions& opts)
 	}
 
 	m_pTransaction = pTransaction;
+	m_txLost = false;   // a new transaction is a new fact — whatever was lost before is settled
+}
+
+void ibDatabaseLayerFirebird::FreeStatementQuietly(isc_stmt_handle& statement)
+{
+	if (statement == 0)
+		return;
+	m_pInterface->GetIscDsqlFreeStatement()(*(ISC_STATUS_ARRAY*)m_pStatus, &statement, DSQL_drop);
+	statement = 0;
 }
 
 void ibDatabaseLayerFirebird::DoCommit()
 {
 	ResetErrorCodes();
 
+	// A COMMIT OF WORK THAT IS GONE IS NOT A COMMIT. The handle was dropped under us (see m_txLost),
+	// so everything issued since then either never ran or ran and committed on its own — either way
+	// this call cannot make the caller's transaction durable, and answering "done" is what let a
+	// half-applied restructuring look successful.
+	if (m_txLost) {
+		m_txLost = false;
+		SetErrorCode(DATABASE_LAYER_QUERY_RESULT_ERROR);
+		SetErrorMessage(wxT("The transaction was lost before it could be committed"));
+		ThrowDatabaseException();
+		return;
+	}
+
 	if (!m_pDatabase || !m_pTransaction)
 		return;
 
 	isc_tr_handle pTransaction = m_pTransaction;
 	int nReturn = m_pInterface->GetIscCommitTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pTransaction);
-	// Whether the commit succeeded or not, FB invalidates the handle —
-	// drop our copy so a stray DoRollBack / DoCommit can't double-free.
-	m_pTransaction = 0;
+
+	// ⭐⭐ FIREBIRD CLEARS THE HANDLE ON SUCCESS ONLY. This used to drop our copy unconditionally, in
+	// the belief that a failed commit kills the transaction too — it does not. The transaction stays
+	// ALIVE, holding every lock it took, and with the handle gone there is nothing left to roll it
+	// back with: DoRollBack returns at its null check, so a rollback is issued, logged, and does
+	// nothing. Everyone else then waits on locks that will never be released, and reports it as a
+	// deadlock on tables that have no quarrel with each other.
+	//
+	// It matters here more than anywhere because Firebird compiles views and triggers AT COMMIT: a
+	// bundle it cannot compile is refused exactly at the moment this handle was being discarded.
+	//
+	// Taking the value BACK from the API is the whole fix — FB zeroes it when it committed and leaves
+	// it untouched when it did not, so the one place that knows the truth is the one we now believe.
+	m_pTransaction = pTransaction;
 	if (nReturn != 0)
 	{
 		InterpretErrorCodes();
@@ -857,12 +911,16 @@ void ibDatabaseLayerFirebird::DoRollBack()
 {
 	ResetErrorCodes();
 
+	// A rollback of a lost transaction is the one case that needs no complaint: the caller wants the
+	// work gone, and it is gone. Clearing the flag here is what lets the connection be used again.
+	m_txLost = false;
+
 	if (!m_pDatabase || !m_pTransaction)
 		return;
 
 	isc_tr_handle pTransaction = m_pTransaction;
 	int nReturn = m_pInterface->GetIscRollbackTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pTransaction);
-	m_pTransaction = 0;
+	m_pTransaction = pTransaction;   // same rule as DoCommit: FB clears it only when it succeeded
 	if (nReturn != 0)
 	{
 		InterpretErrorCodes();
@@ -910,6 +968,22 @@ int ibDatabaseLayerFirebird::DoRunQuery(const wxString& strQuery, bool bParseQue
 		const long rows = 0;
 		if (QueryArray.size() > 0)
 		{
+			// ⭐⭐ NO HANDLE IS TWO DIFFERENT FACTS, AND THEY MUST NOT BE CONFUSED.
+			//
+			// "Nobody opened a transaction" is an ordinary state and gets the quickie below. "The
+			// transaction we were running in was lost under us" is a FAILURE, and running the
+			// statement in a quickie means COMMITTING it on its own — which is precisely how a
+			// restructuring left half its ALTERs durable while the apply believed it had rolled
+			// back. Refuse, so the caller learns its transaction is gone instead of being told
+			// every statement succeeded.
+			if (m_txLost)
+			{
+				SetErrorCode(DATABASE_LAYER_QUERY_RESULT_ERROR);
+				SetErrorMessage(wxT("The transaction was lost; the statement was not run"));
+				ThrowDatabaseException();
+				return DATABASE_LAYER_QUERY_RESULT_ERROR;
+			}
+
 			bool bQuickieTransaction = false;
 
 			if (m_pTransaction == 0)
@@ -1006,6 +1080,22 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 
 		if (QueryArray.size() > 0)
 		{
+			// ⭐⭐ NO HANDLE IS TWO DIFFERENT FACTS, AND THEY MUST NOT BE CONFUSED.
+			//
+			// "Nobody opened a transaction" is an ordinary state and gets the quickie below. "The
+			// transaction we were running in was lost under us" is a FAILURE, and running the
+			// statement in a quickie means COMMITTING it on its own — which is precisely how a
+			// restructuring left half its ALTERs durable while the apply believed it had rolled
+			// back. Refuse, so the caller learns its transaction is gone instead of being told
+			// every statement succeeded.
+			if (m_txLost)
+			{
+				SetErrorCode(DATABASE_LAYER_QUERY_RESULT_ERROR);
+				SetErrorMessage(wxT("The transaction was lost; the query was not run"));
+				ThrowDatabaseException();
+				return nullptr;
+			}
+
 			bool bQuickieTransaction = false;
 
 			if (m_pTransaction == 0)
@@ -1110,6 +1200,14 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 			{
 				InterpretErrorCodes();
 
+				// ⭐ THE STATEMENT WAS ALLOCATED ON THE SERVER, and from here nothing else will ever
+				// hold it: the result set that normally takes ownership is not built on this path.
+				// Read the failure first (isc_dsql_free_statement writes its own outcome into the
+				// same status vector), then hand the handle back. A rejected statement is the most
+				// ordinary failure there is — a typo in SQL — so leaking one per occurrence adds up
+				// on a connection that lives as long as the session does.
+				FreeStatementQuietly(pStatement);
+
 				// OURS TO CLOSE, or nobody's: bManageTransaction is true only when this call started
 				// the transaction. A caller-owned one is left alone and the exception below reports
 				// the failure — the same contract every other driver keeps (Postgres / MySQL / ODBC
@@ -1126,6 +1224,16 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 			//--------------------------------------------------------------
 
 			XSQLDA* pOutputSqlda = (XSQLDA*)malloc(XSQLDA_LENGTH(1));
+			if (pOutputSqlda == NULL)
+			{
+				SetErrorCode(DATABASE_LAYER_QUERY_RESULT_ERROR);
+				SetErrorMessage(wxT("Out of memory allocating the result descriptor"));
+				FreeStatementQuietly(pStatement);
+				if (bManageTransaction)
+					m_pInterface->GetIscRollbackTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction);
+				ThrowDatabaseException();
+				return NULL;
+			}
 			pOutputSqlda->sqln = 1;
 			pOutputSqlda->version = SQLDA_VERSION1;
 
@@ -1135,6 +1243,7 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 			{
 				free(pOutputSqlda);
 				InterpretErrorCodes();
+				FreeStatementQuietly(pStatement);   // nobody downstream will — see the prepare branch
 
 				// OURS TO CLOSE, or nobody's: bManageTransaction is true only when this call started
 				// the transaction. A caller-owned one is left alone and the exception below reports
@@ -1154,6 +1263,16 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 				int nColumns = pOutputSqlda->sqld;
 				free(pOutputSqlda);
 				pOutputSqlda = (XSQLDA*)malloc(XSQLDA_LENGTH(nColumns));
+				if (pOutputSqlda == NULL)
+				{
+					SetErrorCode(DATABASE_LAYER_QUERY_RESULT_ERROR);
+					SetErrorMessage(wxT("Out of memory allocating the result descriptor"));
+					FreeStatementQuietly(pStatement);
+					if (bManageTransaction)
+						m_pInterface->GetIscRollbackTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction);
+					ThrowDatabaseException();
+					return NULL;
+				}
 				pOutputSqlda->sqln = nColumns;
 				pOutputSqlda->version = SQLDA_VERSION1;
 				nReturn = m_pInterface->GetIscDsqlDescribe()(*(ISC_STATUS_ARRAY*)m_pStatus, &pStatement, SQL_DIALECT_CURRENT, pOutputSqlda);
@@ -1161,6 +1280,7 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 				{
 					free(pOutputSqlda);
 					InterpretErrorCodes();
+					FreeStatementQuietly(pStatement);   // nobody downstream will — see the prepare branch
 
 					// OURS TO CLOSE, or nobody's: bManageTransaction is true only when this call started
 					// the transaction. A caller-owned one is left alone and the exception below reports
@@ -1190,8 +1310,15 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 				// throw and never touch the transaction). Rolling back the caller's transaction from
 				// here left the base class's depth counter high over a dead handle, so later work ran
 				// outside any transaction and committed as it went.
+				//
+				// TAKE IT BACK BEFORE CLOSING IT. The result set holds a copy of the same handle and
+				// COMMITS it when destroyed, so rolling back first and deleting after had the commit
+				// land on a handle Firebird had already invalidated.
 				if (bManageTransaction)
+				{
+					pResultSet->DetachTransaction();
 					m_pInterface->GetIscRollbackTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction);
+				}
 
 				// Swallow any throw from the result-set dtor — we are
 				// already on the error path; the original isc_dsql_*
@@ -1200,6 +1327,8 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 				try { delete pResultSet; } catch (const ibBackendException&) {}
 
 				ThrowDatabaseException();
+				return NULL;   // unreachable today (the throw above always throws) — but the code below
+				               // uses pResultSet, and that must not depend on a distant guarantee.
 			}
 
 			// Now execute the SQL
@@ -1214,8 +1343,13 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 				// throw and never touch the transaction). Rolling back the caller's transaction from
 				// here left the base class's depth counter high over a dead handle, so later work ran
 				// outside any transaction and committed as it went.
+				//
+				// Take the handle back from the result set first — see the branch above for why.
 				if (bManageTransaction)
+				{
+					pResultSet->DetachTransaction();
 					m_pInterface->GetIscRollbackTransaction()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction);
+				}
 
 				// Swallow any throw from the result-set dtor — the
 				// isc_dsql_execute failure above is the user-visible
@@ -1248,6 +1382,17 @@ ibPreparedStatement* ibDatabaseLayerFirebird::DoPrepareStatement(const wxString&
 	// the new firebird.exe handle, not the dead one — see DoRunQuery
 	// for the rationale.
 	ReconnectIfLeaderChanged();
+
+	// ...and the third door onto the same fact (see m_txLost). A statement built with a null handle
+	// runs in a transaction of its own and commits there, so a caller who believes it is inside a
+	// transaction would have its writes go durable one by one. Refuse instead.
+	if (m_txLost)
+	{
+		SetErrorCode(DATABASE_LAYER_QUERY_RESULT_ERROR);
+		SetErrorMessage(wxT("The transaction was lost; the statement was not prepared"));
+		ThrowDatabaseException();
+		return NULL;
+	}
 
 	// ⚠ THE SAME LINE THE TWO DIRECT PATHS PRINT, and it was missing from the one that matters most.
 	// Everything on a hot path — every list page, every keyset tick — goes through a PREPARED
@@ -1689,6 +1834,11 @@ bool ibDatabaseLayerFirebird::ReconnectIfLeaderChanged()
 	// connection.
 	try { Close(); } catch (...) { /* best-effort */ }
 	m_pDatabase = 0;
+	// A reconnect cannot carry a transaction across: whatever was open on the old attachment is gone,
+	// and the base has not been told (it owns the depth counter, drivers do not touch it). Record the
+	// loss — the alternative is the next statement mistaking "no handle" for "no transaction".
+	if (m_pTransaction != 0)
+		m_txLost = true;
 	m_pTransaction = 0;
 	m_currentConnectUrl.Clear();
 

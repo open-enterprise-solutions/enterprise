@@ -97,6 +97,10 @@ public:
 	static const ibMaterializationDialect& MaterializationDialect();
 	virtual const ibMaterializationDialect* GetMaterializationDialect() const override;
 
+	// MAX / MIN over `uuid` — PostgreSQL ships neither, and a reference key IS a uuid here, so the
+	// aggregates are created with the database. The only driver missing anything at all.
+	virtual bool CreateMissingRoutines() override;
+
 	static int TranslateErrorCode(int nCode);
 	static bool IsAvailable();
 

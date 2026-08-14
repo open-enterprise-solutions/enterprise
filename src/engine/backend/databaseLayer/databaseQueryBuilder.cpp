@@ -1,6 +1,7 @@
 #include "databaseQueryBuilder.h"
 
-#include "databaseLayerException.h"   // ibBackendQueryException
+#include "backend/query/queryException.h"
+#include "backend/session/sessionException.h"   // NoConnection is the SESSION refusing, not the query tier   // ibBackendQueryException — L3-L5 varieties (not the DB tier)
 
 #include "backend/databaseLayer/preparedStatement.h"
 #include "backend/databaseLayer/databaseResultSet.h"
@@ -210,7 +211,7 @@ ibQueryResult ibDatabaseQueryBuilder::ExecuteIR(const ibQueryIR& ir, const std::
 {
 	std::shared_ptr<ibDatabaseLayer> conn = m_scope.shared();
 	if (!conn)
-		ibBackendQueryException::Throw(ibBackendQueryException::Kind::NoConnection,
+		ibBackendSessionException::Throw(ibBackendSessionException::Kind::NoConnection,
 			_("Query layer could not obtain a database connection from the holder."));
 
 	const ibDialectDictionary& dialect = conn->GetDialect();
@@ -227,7 +228,7 @@ ibRenderedQuery ibDatabaseQueryBuilder::Render(const ibQueryIR& ir)
 {
 	std::shared_ptr<ibDatabaseLayer> conn = m_scope.shared();
 	if (!conn)
-		ibBackendQueryException::Throw(ibBackendQueryException::Kind::NoConnection,
+		ibBackendSessionException::Throw(ibBackendSessionException::Kind::NoConnection,
 			_("Query layer could not obtain a database connection from the holder."));
 
 	ibQueryRenderer renderer(conn->GetDialect());
@@ -239,7 +240,7 @@ ibQueryResult ibDatabaseQueryBuilder::ExecuteRendered(const ibRenderedQuery& ren
 {
 	std::shared_ptr<ibDatabaseLayer> conn = m_scope.shared();
 	if (!conn)
-		ibBackendQueryException::Throw(ibBackendQueryException::Kind::NoConnection,
+		ibBackendSessionException::Throw(ibBackendSessionException::Kind::NoConnection,
 			_("Query layer could not obtain a database connection from the holder."));
 
 	return ibRunRendered(conn, rendered, externalParams);
@@ -273,7 +274,7 @@ int ibDatabaseQueryBuilder::Execute(const ibDdlStatement& ddl)
 {
 	std::shared_ptr<ibDatabaseLayer> conn = m_scope.shared();
 	if (!conn)
-		ibBackendQueryException::Throw(ibBackendQueryException::Kind::NoConnection,
+		ibBackendSessionException::Throw(ibBackendSessionException::Kind::NoConnection,
 			_("Query layer could not obtain a database connection from the holder."));
 
 	const ibDialectDictionary& dialect = conn->GetDialect();
@@ -295,7 +296,7 @@ int ibDatabaseQueryBuilder::Execute(const ibDmlStatement& dml, const std::vector
 {
 	std::shared_ptr<ibDatabaseLayer> conn = m_scope.shared();
 	if (!conn)
-		ibBackendQueryException::Throw(ibBackendQueryException::Kind::NoConnection,
+		ibBackendSessionException::Throw(ibBackendSessionException::Kind::NoConnection,
 			_("Query layer could not obtain a database connection from the holder."));
 
 	const ibDialectDictionary& dialect = conn->GetDialect();
@@ -318,7 +319,7 @@ ibQueryResult ibDatabaseQueryBuilder::ExecuteReturning(const ibDmlStatement& dml
 {
 	std::shared_ptr<ibDatabaseLayer> conn = m_scope.shared();
 	if (!conn)
-		ibBackendQueryException::Throw(ibBackendQueryException::Kind::NoConnection,
+		ibBackendSessionException::Throw(ibBackendSessionException::Kind::NoConnection,
 			_("Query layer could not obtain a database connection from the holder."));
 
 	if (dml.m_returning.empty())
@@ -951,32 +952,41 @@ wxString ibQueryRenderer::RenderColumn(const ibDdlColumn& col)
 
 wxString ibQueryRenderer::MapType(const ibColumnType& type) const
 {
+	return ibMapColumnType(m_dialect, type);
+}
+
+// THE SAME MAP, REACHABLE. It was a private method, and the second caller that needs it — the view
+// renderer at L2-2 — cannot be a renderer: it holds a dictionary, not a builder. A copy of the
+// switch there would be a second place where a canonical type turns into SQL, which is the one
+// thing this table exists to prevent.
+wxString ibMapColumnType(const ibDialectDictionary& dialect, const ibColumnType& type)
+{
 	switch (type.m_kind) {
-	case ibCanonicalKind::Boolean: return m_dialect.m_typeBoolean;
-	case ibCanonicalKind::Integer: return m_dialect.m_typeInteger;
-	case ibCanonicalKind::BigInt:  return m_dialect.m_typeBigInt;
-	case ibCanonicalKind::Blob:    return m_dialect.m_typeBlob;
-	case ibCanonicalKind::Guid:    return m_dialect.m_typeGuid;
+	case ibCanonicalKind::Boolean: return dialect.m_typeBoolean;
+	case ibCanonicalKind::Integer: return dialect.m_typeInteger;
+	case ibCanonicalKind::BigInt:  return dialect.m_typeBigInt;
+	case ibCanonicalKind::Blob:    return dialect.m_typeBlob;
+	case ibCanonicalKind::Guid:    return dialect.m_typeGuid;
 	case ibCanonicalKind::Binary:
 		// PG's BYTEA carries no length — render the pattern verbatim when it has no %d.
-		return m_dialect.m_typeBinaryPattern.Contains(wxT("%"))
-		     ? wxString::Format(m_dialect.m_typeBinaryPattern, type.m_length > 0 ? type.m_length : 16)
-		     : m_dialect.m_typeBinaryPattern;
+		return dialect.m_typeBinaryPattern.Contains(wxT("%"))
+		     ? wxString::Format(dialect.m_typeBinaryPattern, type.m_length > 0 ? type.m_length : 16)
+		     : dialect.m_typeBinaryPattern;
 	case ibCanonicalKind::Date:
 		switch (type.m_datePrec) {
-		case ibDatePrec::Date:     return m_dialect.m_typeDateOnly;
-		case ibDatePrec::Time:     return m_dialect.m_typeTime;
-		case ibDatePrec::DateTime: return m_dialect.m_typeDate;
+		case ibDatePrec::Date:     return dialect.m_typeDateOnly;
+		case ibDatePrec::Time:     return dialect.m_typeTime;
+		case ibDatePrec::DateTime: return dialect.m_typeDate;
 		}
-		return m_dialect.m_typeDate;
+		return dialect.m_typeDate;
 	case ibCanonicalKind::String:
-		return wxString::Format(type.m_fixed ? m_dialect.m_typeCharPattern : m_dialect.m_typeStringPattern,
+		return wxString::Format(type.m_fixed ? dialect.m_typeCharPattern : dialect.m_typeStringPattern,
 		                        type.m_length > 0 ? type.m_length : 255);
 	case ibCanonicalKind::Number:
-		return wxString::Format(m_dialect.m_typeNumberPattern,
+		return wxString::Format(dialect.m_typeNumberPattern,
 		                        type.m_precision > 0 ? type.m_precision : 18, type.m_scale);
 	}
-	return m_dialect.m_typeInteger;
+	return dialect.m_typeInteger;
 }
 
 // ==========================================================================
@@ -1208,4 +1218,60 @@ ibDatabaseResultSet* ibQueryStatement::RunQueryWithResults()
 {
 	RunQuery();
 	return nullptr;
+}
+
+// ==========================================================================
+// Capability accessors — the dictionary is answered FOR the caller, not handed over
+// ==========================================================================
+//
+// Every one of these was written at a callsite in query/**, as `layer->GetDialect().<field>`. That
+// is a tier reading another tier's vocabulary: the field can change shape — a feature that becomes
+// two, a template that grows an argument — and the compiler then finds the DEFINITION and not the
+// readers. Asked as questions, there is one place to change and the callers keep their own words.
+
+bool ibCanPushRollup(const ibDatabaseLayer* layer)
+{
+	return layer != nullptr && layer->GetDialect().m_features.m_rollup;
+}
+
+int ibExecuteDdl(ibDatabaseLayer* layer, const ibDdlStatement& ddl)
+{
+	// A null connection is a CALLER error, not a road: every caller resolves a channel first. Nothing
+	// ran, and 0 says so — this is a guard against a dereference, not a quiet "it worked".
+	if (layer == nullptr)
+		return 0;
+
+	// ⚠ RunStatement, NOT RunQuery. `RunQuery` is the printf-formatting, ';'-splitting door — right
+	// for text DESCRIBED by a format, wrong for text that is already final, which is exactly what a
+	// rendered DDL statement is. RenderDDL produces ONE statement, so there is nothing to split, and a
+	// '%' reaching a format door is eaten before the server ever sees it. (The same trap the trigger
+	// bodies and the period-truncation expressions hit; databaseLayer.h says the rule above
+	// RunStatement.) The two doors are indistinguishable on every DDL this renderer can produce today
+	// — which is why this is a hazard removed rather than a behaviour changed.
+	ibQueryRenderer renderer(layer->GetDialect());
+	const wxString sql = renderer.RenderDDL(ddl);
+
+	// ⚠ AN EMPTY RENDER IS A NO-OP, AND IT HAS TO BE SAID HERE. RenderDDL answers with nothing for a
+	// statement this dialect has no form for — `AlterColumn` with no column, an `Analyze` on an engine
+	// that has none. The old door hid that by accident: `RunQuery` PARSES the text into statements
+	// first, and empty text yields none, so nothing ran. `RunStatement` runs what it is given, and an
+	// empty command is not a no-op to a driver — Firebird takes it as a statement to prepare.
+	if (sql.IsEmpty())
+		return 0;
+
+	// The statement as the DATABASE receives it — the last link of the chain the trace follows: which
+	// id was minted, what the differ decided about the column that id names, and the exact text that
+	// then either succeeded or came back as "column does not exist".
+
+	return layer->RunStatement(sql);
+}
+
+bool ibDdlCommitsBeforeData(const ibDatabaseLayer* layer)
+{
+	return layer != nullptr && layer->GetDialect().m_ddlCommitBeforeData;
+}
+
+bool ibAlterTableMultiClause(const ibDatabaseLayer* layer)
+{
+	return layer != nullptr && layer->GetDialect().m_alterTableMultiClause;
 }

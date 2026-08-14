@@ -199,6 +199,44 @@ transaction).
 the most valuable fixture missing from the suite ([ROADMAP.md](ROADMAP.md), metadata test
 coverage).
 
+---
+
+## 3b. ⭐⭐ An empty virtual is the worst shape a binder can take (2026-08-14)
+
+`ibPreparedStatement` (`databaseLayer/preparedStatement.h`) declares the blob binder twice — once for
+raw bytes, once for a `wxMemoryBuffer`:
+
+```cpp
+virtual void SetParamBlob(int nPosition, const wxMemoryBuffer& buffer) {
+    SetParamBlob(nPosition, buffer.GetData(), (long)buffer.GetDataLen());   // ← was: {}
+}
+virtual void SetParamBlob(int nPosition, const void* pData, long nDataLength) = 0;
+```
+
+The buffer overload used to have an **empty body**, and **no driver overrides it** — Firebird,
+PostgreSQL, SQLite, MySQL and ODBC each implement the `(const void*, long)` one and nothing else. So
+any caller holding a `wxMemoryBuffer` picked the empty overload by ordinary overload resolution and
+bound **nothing**: no error, no exception, no log line, a row written with a NULL where its payload
+should have been. Found by audit, not by a failure — which is the point.
+
+**Why this shape is the worst of the three available.** A pure virtual is *abstract*: forget it and
+the driver does not link. A correct default is *correct*: forget it and nothing is lost. An empty
+non-pure virtual is neither — nobody is forced to implement it, and it does not do what its name
+promises, so the failure mode is a **silent wrong answer** in whichever caller happened to choose it.
+The rule this leaves: a virtual with an empty body is either abstract (`= 0`) or has a real default;
+"the derived class will surely override it" is not a third option, because nothing checks.
+
+**Blast radius, stated honestly.** The only `wxMemoryBuffer` caller in the tree is the audit sink,
+`logger/loggerSinkSqlite.cpp:139`, binding `ibLogEntry::details`. That payload is **empty today** —
+`ibLogger::Emit` still drops `details` on the floor pending the metadata-serialisation wrapper
+(`logger.cpp:174–178`, a phase-1 note) — so nothing has actually been lost yet, and the defect was
+latent at its one site: it would have dropped every detail blob the day phase 3 filled them, on a
+subsystem whose entire job is to be the record of what happened. Every other blob caller
+(`query/columnLayout.cpp`, `query/dataMover.cpp`, `databaseQueryBuilder.cpp`) passes
+`(GetData(), GetDataLen())` and was never affected. `ibQueryStatement` re-exposes the base overload
+with `using ibPreparedStatement::SetParamBlob;` (`databaseQueryBuilder.h:1109`), so an L2 statement
+inherited the same empty binder and the same latent hole.
+
 ## 4. Drivers
 
 Present in the tree:

@@ -6,6 +6,7 @@
 #include "databaseMaterializeBuilder.h"
 
 #include "backend/backend_exception.h"
+#include "backend/query/queryException.h"   // ibBackendQueryException — a bundle that will not install is OURS
 #include "databaseErrorCodes.h"   // DATABASE_LAYER_QUERY_RESULT_ERROR — a failed CREATE is real
 #include "databaseResultSet.h"    // the existence probe reads a row
 
@@ -174,6 +175,56 @@ wxString Truncate(const ibDialectDictionary& dialect, ibTotalsPeriod unit, const
 	return Fill(it->second, wxT("expr"), expr);
 }
 
+// ⭐⭐ WHAT IDENTIFIES A DERIVED ROW — the column and the value it is filled from, as ONE list.
+//
+// Two currencies for one list. `rowAlias` non-empty reads the values off the MOVEMENT row: that is the
+// trigger, where the period is a truncation of the movement's own instant and the shard is an
+// expression over the connection. Empty reads them off the derived TABLE, where both are already
+// stored — which is what the digest fill after a rebuild needs.
+//
+// They walk one function because the digest below is an identity only while both walk the same parts
+// in the same order. Two copies of this list would compile, run, and hash the same row two ways.
+std::vector<std::pair<wxString, wxString>> KeyColumnValues(const ibMaterializeSpec& spec,
+                                                           const ibMaterializationDialect& mat,
+                                                           const ibDialectDictionary& dialect,
+                                                           const wxString& rowAlias,
+                                                           unsigned int shards)
+{
+	const bool overRow = !rowAlias.IsEmpty();
+	std::vector<std::pair<wxString, wxString>> out;
+
+	if (!spec.m_periodColumn.IsEmpty()) {
+		out.push_back({ spec.m_periodColumn, overRow
+			? Truncate(dialect, spec.m_periodUnit, Fill(spec.m_periodSourceExpr, wxT("row"), rowAlias))
+			: spec.m_periodColumn });
+	}
+	for (const wxString& k : spec.m_keyColumns)
+		out.push_back({ k, overRow ? (rowAlias + wxT(".") + k) : k });
+
+	if (shards > 1) {
+		wxString shardExpr = Fill(mat.m_shardExprTemplate, wxT("conn"), mat.m_connectionIdExpr);
+		shardExpr = Fill(shardExpr, wxT("n"), wxString::Format(wxT("%u"), shards));
+		out.push_back({ ShardColumnName(), overRow ? shardExpr : wxString(ShardColumnName()) });
+	}
+	return out;
+}
+
+// The digest of that list — empty unless this table carries its identity in one field
+// (ibKeyNeedsHash). Each part is hashed BEFORE the parts are joined: a key field may be a binary
+// reference key or an unbounded string, and casting either into text to join it is a character-set
+// error or a silent truncation, while a hashed part is fixed-width ASCII whatever it holds.
+wxString RenderKeyHash(const ibMaterializeSpec& spec, const ibMaterializationDialect& mat,
+                       const ibDialectDictionary& dialect, const wxString& rowAlias, unsigned int shards)
+{
+	if (spec.m_keyHashColumn.IsEmpty() || mat.m_keyHashDigest.IsEmpty())
+		return wxEmptyString;
+
+	std::vector<wxString> parts;
+	for (const auto& keyColumn : KeyColumnValues(spec, mat, dialect, rowAlias, shards))
+		parts.push_back(Fill(mat.m_keyHashItem, wxT("value"), keyColumn.second));
+	return Fill(mat.m_keyHashDigest, wxT("expr"), Join(parts, mat.m_keyHashJoin));
+}
+
 // ---------------------------------------------------------------------------
 // One delta statement: "accumulate this movement into the row for its key".
 //
@@ -195,22 +246,24 @@ wxString RenderDelta(const ibMaterializeSpec& spec,
 	std::vector<wxString> columns, values, keyNames, keyMatch, update, selectItems;
 
 	// --- key columns ---
-	if (!spec.m_periodColumn.IsEmpty()) {
-		columns.push_back(spec.m_periodColumn);
-		values.push_back(Truncate(dialect, spec.m_periodUnit, overRow(spec.m_periodSourceExpr)));
-		keyNames.push_back(spec.m_periodColumn);
+	for (const auto& keyColumn : KeyColumnValues(spec, mat, dialect, rowAlias, shards)) {
+		columns.push_back(keyColumn.first);
+		values.push_back(keyColumn.second);
+		keyNames.push_back(keyColumn.first);
 	}
-	for (const wxString& k : spec.m_keyColumns) {
-		columns.push_back(k);
-		values.push_back(rowAlias + wxT(".") + k);
-		keyNames.push_back(k);
-	}
-	if (shards > 1) {
-		wxString shardExpr = Fill(mat.m_shardExprTemplate, wxT("conn"), mat.m_connectionIdExpr);
-		shardExpr = Fill(shardExpr, wxT("n"), wxString::Format(wxT("%u"), shards));
-		columns.push_back(ShardColumnName());
-		values.push_back(shardExpr);
-		keyNames.push_back(ShardColumnName());
+
+	// ⭐⭐ THE KEY'S IDENTITY IN ONE FIELD — declared only where an index cannot hold the key itself
+	// (ibKeyNeedsHash), and digested from the very expressions the key columns are filled with, so the
+	// stored digest and the stored key cannot describe different rows.
+	//
+	// It joins {columns} / {values} and NOT {keyNames}: the match goes on comparing the key columns
+	// (exact), and the digest only carries the UNIQUE index. It is also absent from {update} — a
+	// matched row keeps the key it was inserted with, so its digest is already right, and re-deriving
+	// one on every movement would be work with no answer to give.
+	const wxString keyHashValue = RenderKeyHash(spec, mat, dialect, rowAlias, shards);
+	if (!keyHashValue.IsEmpty()) {
+		columns.push_back(spec.m_keyHashColumn);
+		values.push_back(keyHashValue);
 	}
 
 	// --- accumulating columns ---
@@ -261,7 +314,11 @@ wxString RenderDelta(const ibMaterializeSpec& spec,
 	sql = Fill(sql, wxT("table"),     spec.m_table);
 	sql = Fill(sql, wxT("columns"),   Join(columns, wxT(", ")));
 	sql = Fill(sql, wxT("values"),    Join(values, wxT(", ")));
-	sql = Fill(sql, wxT("keys"),      Join(keyNames, wxT(", ")));
+	// {keys} is the CONFLICT TARGET, and a conflict target has to name an existing unique index. Where
+	// the key's uniqueness moved into the digest column, that is the index there is — so the engines
+	// that spell ON CONFLICT (<columns>) name it, and the ones that match by their own ON clause
+	// (Firebird's MERGE) never look at this placeholder at all.
+	sql = Fill(sql, wxT("keys"),      keyHashValue.IsEmpty() ? Join(keyNames, wxT(", ")) : spec.m_keyHashColumn);
 	sql = Fill(sql, wxT("update"),    Join(update, wxT(", ")));
 	sql = Fill(sql, wxT("keyMatch"),  Join(keyMatch, wxT(" AND ")));
 	sql = Fill(sql, wxT("sourceRel"), sourceRel);
@@ -391,8 +448,8 @@ wxString RenderMovementArm(const ibMaterializeSpec& spec,
 		select.push_back(diff + wxT(" AS ") + c.m_alias);
 	}
 
-	for (const wxString& c : view.m_movementColumns)
-		select.push_back(spec.m_source + wxT(".") + c);
+	for (const auto& c : view.m_movementColumns)
+		select.push_back(spec.m_source + wxT(".") + c.first);
 
 	// The SAME guard the trigger accumulates under. The stored arm holds only what was in force
 	// (the trigger saw to that); the movement arm has to apply the condition itself, or the tail
@@ -472,10 +529,12 @@ wxString RenderView(const ibMaterializeSpec& spec,
 		}
 	}
 
-	// A movement-only column is absent from the stored arm, and NULL is how a union says so. It is
-	// also what tells the arms apart downstream: a row with no recorder came from the totals.
-	for (const wxString& c : view.m_movementColumns)
-		select.push_back(wxT("NULL AS ") + c);
+	// A movement-only column is absent from the stored arm, and NULL is how a union says so — but a
+	// TYPED null, never a bare one. A bare NULL carries no type for the engine to reconcile the arms
+	// with, and Firebird answers "expression evaluation not supported" when it compiles the view,
+	// which it does at COMMIT rather than at CREATE (see m_movementColumns).
+	for (const auto& c : view.m_movementColumns)
+		select.push_back(wxT("CAST(NULL AS ") + ibMapColumnType(dialect, c.second) + wxT(") AS ") + c.first);
 
 	// GROUP BY only when something actually merges (see `collapses` above). An unsplit,
 	// period-carrying view already holds one row per key, and grouping it would buy nothing while
@@ -517,7 +576,61 @@ void RenderDrops(ibMaterializeSql& out, const ibMaterializeSpec& spec, const ibM
 
 } // namespace
 
-const wxChar* ShardColumnName() { return wxT("shard_"); }
+const wxChar* ShardColumnName()   { return wxT("shard_"); }
+const wxChar* KeyHashColumnName() { return wxT("keyhash_"); }
+
+unsigned int ibIndexFieldCapacity(const ibDatabaseLayer& conn)
+{
+	return conn.GetDialect().m_maxIndexSegments;
+}
+
+bool ibKeyNeedsHash(const ibDatabaseLayer& conn, size_t keyFieldCount)
+{
+	const unsigned int ceiling = ibIndexFieldCapacity(conn);
+	if (ceiling == 0 || keyFieldCount <= ceiling)
+		return false;   // no ceiling declared, or the key is under it — the plain unique index stands
+
+	// The ceiling is passed and the engine has no digest to offer. Say so by saying NO: the caller
+	// then declares the index it meant, and the engine refuses it at apply time in its own words. A
+	// hash column nothing fills would be worse — a UNIQUE index over a column of NULLs enforces
+	// nothing on any engine, and it LOOKS like it enforces the key.
+	const ibMaterializationDialect* mat = conn.GetMaterializationDialect();
+	return mat != nullptr && !mat->m_keyHashDigest.IsEmpty();
+}
+
+bool ibFillKeyHashes(ibDatabaseLayer& conn, const ibMaterializeSpec& spec,
+                     const ibMaterializationDialect* dialectOrNull)
+{
+	const ibMaterializationDialect* mat = dialectOrNull != nullptr ? dialectOrNull : conn.GetMaterializationDialect();
+	if (mat == nullptr || spec.m_table.IsEmpty() || spec.m_keyHashColumn.IsEmpty())
+		return true;   // nothing carries an identity here — not a failure
+
+	const wxString digest = RenderKeyHash(spec, *mat, conn.GetDialect(), wxEmptyString,
+	                                      EffectiveShardCount(spec, mat));
+	if (digest.IsEmpty())
+		return true;
+
+	// Only the rows that have none. A row the TRIGGER wrote already carries its digest, and rewriting
+	// it would be an update per movement-bearing key for nothing; a row a REBUILD wrote has an empty
+	// one, because a rebuild writes through the ordinary door and knows nothing about an identity the
+	// database computes.
+	//
+	// It is an UPDATE and not a constraint because the value is a function of the row: read off the
+	// table's own key columns, digested by the same expression the trigger uses over the movement row
+	// (KeyColumnValues walks one list for both), so a filled row and a triggered row are the same row.
+	//
+	// ⚠ MINTED, NOT HANDED OVER. The text is assembled here and then becomes an ibRenderedStatement —
+	// the type only this renderer can construct — and runs through the same Apply every other
+	// statement of the bundle runs through. Calling the connection with a string built by hand would
+	// be exactly the raw-L1 door this level exists to close: the rule that no SQL string reaches a
+	// driver except through here is held by the type, and a bypass costs nothing until the day
+	// something else copies it.
+	ibMaterializeSql fill;
+	fill.AddCreate(wxT("UPDATE ") + spec.m_table + wxT(" SET ") + spec.m_keyHashColumn +
+	               wxT(" = ") + digest +
+	               wxT(" WHERE ") + spec.m_keyHashColumn + wxT(" IS NULL"));
+	return fill.Apply(conn);
+}
 
 unsigned int EffectiveShardCount(const ibMaterializeSpec& spec, const ibMaterializationDialect* mat)
 {
@@ -789,17 +902,24 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const wx
 // way a speculative DROP does, and the transaction stays intact whatever the answer.
 static bool ExistsByProbe(ibDatabaseLayer& conn, const wxString& probe)
 {
-	bool found = false;
+	// "NOT THERE" AND "COULD NOT ASK" ARE OPPOSITE ANSWERS, and this used to return both as `false`.
+	// The probe reads a system table, so it does not fail on an absent object — it returns no rows.
+	// It fails when the TRANSACTION is already broken, and then every later probe fails too: each one
+	// reports "absent", each guarded DROP is skipped, and the views and triggers stay standing over
+	// the table the apply is about to drop. The database then refuses with "there are 1 dependencies"
+	// and the first fault arrives disguised as a second, unrelated one.
+	//
+	// So a probe that cannot run RAISES. That is the honest reading, and it is also the one that
+	// stops the restructuring where the fault is instead of letting it walk on half-applied.
 	ibDatabaseResultSet* rs = nullptr;
 	try {
 		rs = conn.RunQueryWithResults(probe);
-		found = (rs != nullptr && rs->Next());
 	}
-	catch (...) {
-		// A probe that cannot run tells us nothing; treat the object as absent rather than risk a
-		// speculative DROP, which is the failure mode we are here to avoid.
-		found = false;
+	catch (const ibBackendException&) {
+		conn.ResetErrorCodes();
+		throw;
 	}
+	const bool found = (rs != nullptr && rs->Next());
 	if (rs != nullptr)
 		conn.CloseResultSet(rs);
 	conn.ResetErrorCodes();
@@ -817,8 +937,14 @@ bool ibMaterializeSql::Apply(ibDatabaseLayer& conn) const
 	//
 	// So a guarded drop asks first. Engines with DROP … IF EXISTS carry no guard and just run.
 	for (const ibRenderedStatement& s : m_drop) {
-		if (!s.m_guard.IsEmpty() && !ExistsByProbe(conn, s.m_guard))
+		if (!s.m_guard.IsEmpty() && !ExistsByProbe(conn, s.m_guard)) {
+			// ⚠ A SKIPPED DROP IS THE ONE WAY AN OBJECT SURVIVES A TABLE IT DEPENDS ON. The probe says
+			// "not there", the drop is passed over, and if the probe was wrong the view stays standing
+			// over a table the differ is about to remove — which surfaces much later, and elsewhere, as
+			// "cannot delete TABLE …: there are 1 dependencies". The skip is silent by design (a first
+			// apply has nothing to drop); this note is here so the silence is not mistaken for proof.
 			continue;
+		}
 		// "Never fatal" has to hold however the DRIVER reports the failure — and it is the
 		// EXCEPTION that reports it. See the note on the create loop below.
 		try {
@@ -843,14 +969,50 @@ bool ibMaterializeSql::Apply(ibDatabaseLayer& conn) const
 	// Both surfaced together on the first apply against a clean in-memory database — first the
 	// unguarded DROP threw, then, with that caught, every CREATE "failed" at zero rows.
 	// Caught 2026-08-02 by tests/test_totalsNumericParity.cpp.
-	try {
-		for (const ibRenderedStatement& s : m_create)
+	//
+	// ⭐⭐ AND IT IS NOT SWALLOWED HERE. It used to be, turned into `false`, and `false` became a status
+	// nobody read — so a CREATE TRIGGER that could not compile ended like one that succeeded and the
+	// apply walked on, saving the configuration over a schema it had failed to build.
+	//
+	// It travels as a QUERY-layer failure, not as a database one, and the distinction is the whole
+	// point of the variety: the engine merely REPORTED the fault, it did not commit it. The trigger
+	// body is text WE generated, and "Column unknown NEW.FLDnnnn_RTRef" says our declaration named a
+	// column our own schema does not carry — a translation failure by any reading. Typed as a DB
+	// fault it would inherit DB retry semantics (docs/exceptions.md §3), and retrying a mistranslation
+	// is an infinite loop.
+	//
+	// The driver's message rides along verbatim, because it names the exact column and no summary of
+	// ours could. A refusal is an exception (docs/exceptions.md §5a).
+	// AND THE STATEMENT TRAVELS WITH IT. The driver names the fault ("expression evaluation not
+	// supported") but not what it was evaluating, and the maintenance is the ONE place where the
+	// failing text is OURS — a trigger body this level rendered a moment ago. Reported without it,
+	// the message arrives with nothing to look at and nothing to grep: the maintenance is also the
+	// only DDL that does not pass through ibExecuteDdl, so no log holds a copy either.
+	for (const ibRenderedStatement& s : m_create) {
+		try {
 			conn.RunStatement(s.m_sql);
-	}
-	catch (const ibBackendException&) {
-		return false;
+		}
+		catch (const ibBackendException& err) {
+			ibBackendQueryException::Throw(ibBackendQueryException::Kind::TranslationFailure,
+			                               wxString::Format(wxT("%s\n\nstatement:\n%s"),
+			                                                err.GetErrorDescription(), s.m_sql));
+		}
 	}
 	return true;
+}
+
+// Do these two declarations produce the SAME bundle on this engine? Answered by rendering both and
+// comparing the text — the same test ibApplyMaterialization uses to decide it has nothing to do, so
+// there is one definition of "unchanged" rather than a second one written in terms of struct fields.
+// A caller above uses it to decide what to TELL the user; it never decides what to run.
+bool ibMaterializationEquivalent(ibDatabaseLayer& conn, const ibMaterializeSpec& a,
+                                 const ibMaterializeSpec& b)
+{
+	const ibMaterializationDialect* mat = conn.GetMaterializationDialect();
+	if (mat == nullptr)
+		return true;   // nothing is maintained here, so nothing can differ
+	return RenderMaterialization(a, mat, conn.GetDialect()).CreateText()
+	    == RenderMaterialization(b, mat, conn.GetDialect()).CreateText();
 }
 
 bool ibCanMaterialize(const ibDatabaseLayer& conn)
@@ -888,14 +1050,25 @@ ibMaterializeApply ibApplyMaterialization(ibDatabaseLayer& conn, const ibMateria
 			return ibMaterializeApply::Unchanged;
 	}
 
-	return sql.Apply(conn) ? ibMaterializeApply::Rebuilt : ibMaterializeApply::Failed;
+	// Apply RAISES when it cannot install the bundle — so reaching this line means it is installed,
+	// and there is no failing value to answer with (docs/exceptions.md §5a).
+	sql.Apply(conn);
+	return ibMaterializeApply::Rebuilt;
 }
 
 bool ibDropMaterialization(ibDatabaseLayer& conn, const ibMaterializeSpec& spec)
 {
 	const ibMaterializationDialect* mat = conn.GetMaterializationDialect();
-	if (mat == nullptr || spec.m_table.IsEmpty() || spec.m_source.IsEmpty())
+	if (mat == nullptr || spec.m_table.IsEmpty() || spec.m_source.IsEmpty()) {
+		// ⚠ THREE DIFFERENT FACTS LEAVE BY THE SAME DOOR, AND THE ANSWER IS "nothing to drop" FOR ALL
+		// THREE. A driver with no materialization has genuinely nothing here; a spec with no table or
+		// no source is a spec that was never FILLED IN, and that is not the same statement — it reads
+		// as "nothing was installed" while an object may well be standing over a table the differ is
+		// about to remove ("cannot delete TABLE …: there are 1 dependencies"). Kept because a caller
+		// that hands over an empty spec has nothing this function could act on either way; noted
+		// because the emptiness is an assumption about the CALLER, not knowledge about the database.
 		return true;   // nothing was ever installed here
+	}
 
 	ibMaterializeSql sql;
 	RenderDrops(sql, spec, *mat);

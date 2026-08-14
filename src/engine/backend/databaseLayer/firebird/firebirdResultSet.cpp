@@ -440,19 +440,55 @@ void* ibDatabaseResultSetFirebird::GetResultBlob(int nField, wxMemoryBuffer& buf
 			ISC_QUAD blobId = *(ISC_QUAD*)pVar->sqldata;
 			isc_blob_handle pBlob = 0;
 			char szSegment[128];
-			unsigned short nSegmentLength;
-			m_pInterface->GetIscOpenBlob2()(m_Status, &m_pDatabase, &m_pTransaction, &pBlob, &blobId, 0, NULL);
+			// Initialised, because a failed read leaves it untouched and it was being used as a
+			// LENGTH regardless — the buffer below was sized from whatever happened to be on the
+			// stack, and the loop appended that many bytes of it.
+			unsigned short nSegmentLength = 0;
 
-			ISC_STATUS blobStatus = m_pInterface->GetIscGetSegment()(m_Status, &pBlob, &nSegmentLength, sizeof(szSegment), szSegment);
-			wxMemoryBuffer tempBuffer(nSegmentLength);
-			unsigned int bufferSize = 0;
-			while (blobStatus == 0 || m_Status[1] == isc_segment)
+			// ⭐ ASK WHETHER IT OPENED. The status of isc_open_blob2 was dropped, and everything after
+			// it read as if the blob were open: isc_get_segment on a null handle fails, but the loop's
+			// second condition consults m_Status[1] — which, on that path, still holds the code from
+			// whatever ran BEFORE this call. When that leftover happens to be isc_segment the loop
+			// never ends, appending the same uninitialised segment forever. A blob that cannot be
+			// opened has to say so, not hang.
+			if (m_pInterface->GetIscOpenBlob2()(m_Status, &m_pDatabase, &m_pTransaction, &pBlob, &blobId, 0, NULL) != 0)
 			{
+				InterpretErrorCodes();
+				ThrowDatabaseException();
+				return NULL;
+			}
+
+			wxMemoryBuffer tempBuffer;
+			unsigned int bufferSize = 0;
+			for (;;)
+			{
+				const ISC_STATUS blobStatus =
+					m_pInterface->GetIscGetSegment()(m_Status, &pBlob, &nSegmentLength, sizeof(szSegment), szSegment);
+
+				// A segment arrived: either the whole one (0) or a partial one that continues
+				// (isc_segment). Both carry data; anything else ends the read.
+				if (blobStatus != 0 && m_Status[1] != isc_segment)
+				{
+					// isc_segstr_eof is the ORDINARY end of a blob, not a failure. Any other code is,
+					// and it must not be returned as a short buffer that reads like a valid blob.
+					const bool atEnd = (m_Status[1] == isc_segstr_eof);
+					// READ THE FAILURE BEFORE CLOSING. isc_close_blob writes its own outcome into the
+					// same status vector, so interpreting after it reports how the CLOSE went and
+					// loses why the read stopped.
+					if (!atEnd)
+						InterpretErrorCodes();
+					m_pInterface->GetIscCloseBlob()(m_Status, &pBlob);
+					if (!atEnd)
+					{
+						ThrowDatabaseException();
+						return NULL;
+					}
+					break;
+				}
+
 				tempBuffer.AppendData(szSegment, nSegmentLength);
 				bufferSize += nSegmentLength;
-				blobStatus = m_pInterface->GetIscGetSegment()(m_Status, &pBlob, &nSegmentLength, sizeof(szSegment), szSegment);
 			}
-			m_pInterface->GetIscCloseBlob()(m_Status, &pBlob);
 
 			tempBuffer.SetDataLen(bufferSize);
 			tempBuffer.SetBufSize(bufferSize);

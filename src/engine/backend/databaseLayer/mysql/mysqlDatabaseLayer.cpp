@@ -20,6 +20,7 @@ const ibDialectDictionary& ibDatabaseLayerMySQL::Dialect()
 		d.m_pagination  = ibPagination::LimitOffset;
 		d.m_boolForm    = ibBoolForm::OneZero;
 		d.m_dropIndexNeedsTable = true;               // DROP INDEX <name> ON <table>
+		d.m_maxIndexSegments    = 16;                 // InnoDB: 16 columns per index (the key-BYTES ceiling is separate)
 		d.m_alterColumnTemplate = wxT("ALTER TABLE {table} MODIFY COLUMN {column} {type}");
 		// ON DUPLICATE KEY UPDATE c = VALUES(c)
 		d.m_upsertTemplate   = wxT("INSERT INTO {table} ({columns}) VALUES ({values}) ON DUPLICATE KEY UPDATE {update}");
@@ -84,6 +85,13 @@ const ibMaterializationDialect& ibDatabaseLayerMySQL::MaterializationDialect()
 		// No aliases anywhere in the item — the incoming value is VALUES(col) by construction.
 		m.m_deltaUpdateItem   = wxT("{col} = {col} + VALUES({col})");
 		m.m_deltaKeyMatchItem = wxT("{col} = VALUES({col})");   // unused (the PK drives the conflict)
+
+		// THE KEY HASH — MD5 already hands back hex, so a part needs no encoding step. CONCAT() rather
+		// than an operator: `||` is the OR operator here unless the server runs in PIPES_AS_CONCAT
+		// mode, which is not a thing to depend on.
+		m.m_keyHashItem   = wxT("IFNULL(MD5({value}), '~')");
+		m.m_keyHashJoin   = wxT(", '.', ");
+		m.m_keyHashDigest = wxT("MD5(CONCAT({expr}))");
 
 		m.m_totalsTableSuffix = wxEmptyString;
 		m.m_connectionIdExpr  = wxT("CONNECTION_ID()");

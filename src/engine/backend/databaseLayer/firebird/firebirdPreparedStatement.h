@@ -59,6 +59,7 @@ private:
 	void SetInvalidParameterPositionError(int nPosition);
 	void InterpretErrorCodes();
 
+
 	bool m_bManageTransaction;
 
 	isc_tr_handle m_pTransaction;

@@ -252,6 +252,7 @@ int ibPreparedStatementFirebird::GetParameterCount()
 
 int ibPreparedStatementFirebird::RunQuery()
 {
+
 	FirebirdStatementVector::iterator start = m_Statements.begin();
 	FirebirdStatementVector::iterator stop = m_Statements.end();
 
@@ -269,12 +270,14 @@ int ibPreparedStatementFirebird::RunQuery()
 		start++;
 	}
 
-	// If the statement is managing the transaction then commit it now
+	// ⚠ COMMIT RETAINING KEEPS THE TRANSACTION OPEN, and that is what this statement needs: the
+	// statement handle was prepared inside it and goes on being used. Closing it here and reopening
+	// lazily was tried on 2026-08-14 (with the cursor adopting the transaction on the read path) and
+	// crashed the designer. It also did not fix what it was aimed at — the restructuring refusals
+	// survived unchanged, measured — so the retaining form stays.
 	if (m_bManageTransaction)
 	{
 		int nReturn = m_pInterface->GetIscCommitRetaining()(m_Status, &m_pTransaction);
-		//int nReturn = isc_commit_transaction(m_Status, &m_pTransaction);
-		// We're done with the transaction, so set it to NULL so that we know that a new transaction must be started if we run any queries
 		if (nReturn != 0) {
 			InterpretErrorCodes();
 			ThrowDatabaseException();
@@ -286,6 +289,7 @@ int ibPreparedStatementFirebird::RunQuery()
 
 ibDatabaseResultSet* ibPreparedStatementFirebird::RunQueryWithResults()
 {
+
 	if (m_Statements.size() > 0)
 	{
 		// Assume that only the last statement in the array returns the result set
@@ -301,19 +305,25 @@ ibDatabaseResultSet* ibPreparedStatementFirebird::RunQueryWithResults()
 		}
 
 		ibPreparedStatementFirebirdWrapper* pLastStatement = m_Statements[m_Statements.size() - 1];
-		// If the statement is managing the transaction then commit it now
+
+		// ⚠ THE STATEMENT KEEPS AN OPEN TRANSACTION BETWEEN CALLS, and that is deliberate rather than
+		// merely tolerated: a prepared statement is PREPARED inside a transaction, and the cursor it
+		// vends reads through the same one. Handing the transaction to the cursor and clearing it here
+		// was tried on 2026-08-14 and crashed the designer — the statement handle outlives the call
+		// and cannot be left pointing at a transaction it no longer has.
+		//
+		// It is not free: an open transaction holds metadata, which is a real cost for concurrent DDL.
+		// But it was NOT the cause of the restructuring refusals (measured — the refusals survived the
+		// change), so the cost stays until something makes the statement's own lifetime shorter.
 		if (m_bManageTransaction)
 		{
-			//int nReturn = isc_commit_retaining(m_Status, &m_pTransaction);
 			int nReturn = m_pInterface->GetIscCommitTransaction()(m_Status, &m_pTransaction);
-			// We're done with the transaction, so set it to NULL so that we know that a new transaction must be started if we run any queries
 			if (nReturn != 0)
 			{
 				InterpretErrorCodes();
 				ThrowDatabaseException();
 			}
 
-			// Start a new transaction
 			nReturn = m_pInterface->GetIscStartTransaction()(m_Status, &m_pTransaction, 1, &m_pDatabase, 0, NULL);
 			if (nReturn != 0)
 			{
@@ -322,12 +332,8 @@ ibDatabaseResultSet* ibPreparedStatementFirebird::RunQueryWithResults()
 				return NULL;
 			}
 
-			// Make sure to update the last statements pointer to the transaction
 			pLastStatement->SetTransaction(m_pTransaction);
 		}
-
-		// The result set will be in charge of the result set now so change flag so that we don't try to close the transaction when the statement closes
-		//m_bManageTransaction = false;
 
 		ibDatabaseResultSet* pResultSet = pLastStatement->DoRunQueryWithResults();
 		if (pResultSet)

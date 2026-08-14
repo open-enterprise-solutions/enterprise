@@ -31,6 +31,17 @@ public:
 	virtual bool Next();
 	virtual void Close();
 
+	// ⭐ GIVE THE TRANSACTION BACK. Close() COMMITS the transaction it manages, which is right on the
+	// success path and wrong on every failure one: the caller wants that work gone, not durable.
+	//
+	// The result set holds a COPY of the handle, so a caller that rolls the transaction back itself
+	// and then deletes the result set has it committing an already-closed handle — two owners, one
+	// transaction, and the second call operating on a handle Firebird has already invalidated. This
+	// is how the ownership is handed over instead: the caller takes the transaction back FIRST, then
+	// closes it however it needs to, and the result set stops knowing about it.
+	void DetachTransaction() { m_pTransaction = 0; m_bManageTransaction = false; }
+
+
 	virtual int LookupField(const wxString& strField);
 
 	// get field

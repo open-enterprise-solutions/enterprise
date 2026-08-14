@@ -100,7 +100,13 @@ struct ibMaterializeView
 
 	// Columns that exist only on the movement arm — the recorder's fields, a line number. NULL on
 	// the stored arm, which is also what tells the two apart without a flag column of its own.
-	std::vector<wxString> m_movementColumns;
+	//
+	// ⚠ AND THE TYPE TRAVELS WITH THE NAME, because a bare NULL is not a column — it is an
+	// expression of no type, and a UNION arm made of them is one an engine cannot compile. Firebird
+	// refuses the view with "expression evaluation not supported", and refuses it at COMMIT (that is
+	// when it compiles a CREATE VIEW), so the statement itself appears to succeed and the fault
+	// arrives detached from anything that names it. The placeholder is CAST to this type.
+	std::vector<std::pair<wxString, ibColumnType>> m_movementColumns;
 };
 
 // Everything L2-2 needs to render the maintenance bundle. Pure names and SQL fragments: the
@@ -120,6 +126,17 @@ struct ibMaterializeSpec
 	// The derived table's KEY — the columns the delta upserts against. Physical field names, in
 	// order; the shard column (when split) is added by the renderer, not by the caller.
 	std::vector<wxString> m_keyColumns;
+
+	// ⭐ WHERE THE KEY'S UNIQUENESS LIVES WHEN AN INDEX CANNOT HOLD IT (ibKeyNeedsHash below).
+	//
+	// Non-empty = the derived table carries this column and the delta fills it with a digest of the
+	// key's own values, and it is the column the UNIQUE index stands on. The MATCH still runs over the
+	// key columns themselves, so a digest collision refuses an insert instead of merging two keys —
+	// except on the engines whose upsert names its conflict target by column list, where {keys}
+	// becomes this column because there is nothing else it could name.
+	//
+	// Empty (the ordinary case) = the index holds the whole key and nothing here changes.
+	wxString m_keyHashColumn;
 
 	// The period key: which key column holds the truncated period, and the movement expression it
 	// is truncated FROM. Empty column = this table has no period dimension.
@@ -321,10 +338,19 @@ BACKEND_API ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& sp
 // Callers use it to decide whether a materialised read surface exists to query.
 BACKEND_API bool ibCanMaterialize(const ibDatabaseLayer& conn);
 
+// Whether two declarations render to the same bundle on this engine — the one definition of
+// "unchanged", shared with ibApplyMaterialization. Used to decide what to REPORT, never what to run.
+BACKEND_API bool ibMaterializationEquivalent(ibDatabaseLayer& conn, const ibMaterializeSpec& a,
+                                             const ibMaterializeSpec& b);
+
 // What an apply actually did — so the caller reports a rebuild only when one happened. An apply
 // that touches one register used to announce a rebuild for EVERY register, which is worse than
 // noise: it hides the one line that matters in a list of lines that do not.
-enum class ibMaterializeApply { Unchanged, Rebuilt, Failed };
+// What the apply DID — and only that. There is no failing member: a bundle that cannot be installed
+// raises ibBackendQueryException (Kind::TranslationFailure), because a refusal is an exception and a
+// returned one is a refusal nobody reads (docs/exceptions.md §5a). So both members mean success, and
+// they differ only in whether there was work to do.
+enum class ibMaterializeApply { Unchanged, Rebuilt };
 
 // Render the declaration for this connection's engine and apply it — but only when it DIFFERS from
 // what is already installed. `previous` is the baseline declaration (null for a new table); the
@@ -375,5 +401,49 @@ BACKEND_API unsigned int EffectiveShardCount(const ibMaterializeSpec& spec,
 // Name of the shard column on a split table. Fixed, not configurable: it is an implementation
 // detail the view absorbs, and nothing above L3 ever names it.
 BACKEND_API const wxChar* ShardColumnName();
+
+// Name of the key-hash column. Fixed for the same reason as the shard column: nothing above L3 names
+// it, and a configurable name would be one more thing two layers could spell differently.
+BACKEND_API const wxChar* KeyHashColumnName();
+
+// ⭐⭐ CAN AN INDEX ON THIS CONNECTION'S ENGINE HOLD A KEY THIS WIDE?
+//
+// Asked by the STRUCTURE side while a derived table is being declared, because the answer is a
+// COLUMN: a key past the ceiling carries its uniqueness in one hashed field instead, and a column has
+// to be declared before any DDL is emitted. `keyFieldCount` is PHYSICAL fields, already expanded —
+// a reference column is three of them, which is exactly how a key of seven columns becomes an index
+// of twenty-one segments and stops being creatable on Firebird.
+//
+// False when the engine declares no ceiling (SQLite, ODBC), when the key fits, or when the engine
+// cannot compute a digest in SQL — in the last case the caller declares the plain unique index and
+// the engine says what it thinks at apply time, which is better than a table with an identity nothing
+// enforces.
+BACKEND_API bool ibKeyNeedsHash(const ibDatabaseLayer& conn, size_t keyFieldCount);
+
+// How many physical fields one index may cover here — 0 when the engine declares no limit.
+//
+// The DECLARATION side needs it for a second reason beside the question above: past the ceiling it
+// still wants a plain index over the LEADING key columns that fit, because the unique index then
+// stands on a digest and cannot serve a comparison of the fields it was made from. It is asked
+// THROUGH this level rather than read off a dictionary from up there — a dialect is L2's to read,
+// and the floor above has no business knowing one exists.
+BACKEND_API unsigned int ibIndexFieldCapacity(const ibDatabaseLayer& conn);
+
+// Give an identity to the rows that were written WITHOUT one — the rebuild's rows.
+//
+// The trigger fills the hash field as it inserts; a REGENERATION writes through the ordinary door and
+// cannot, because the digest is an SQL expression of the engine's own. Left empty it would be worse
+// than absent: a UNIQUE index over NULLs enforces nothing on any engine, and on the engines whose
+// upsert conflicts on that very column the next movement for a rebuilt key would insert a SECOND row
+// instead of adding to the first — one key, two totals, no error.
+//
+// So the rows are filled from the table's own key columns, by the same expression the trigger uses
+// over the movement row. Empty spec / no hash column / no dialect = true, nothing to do.
+//
+// `mat` null = ask the connection, which is what production does. It is a parameter because a TEST
+// renders its bundle with a dialect of its own (RenderMaterialization takes one for the same reason),
+// and a fill that could only read the driver's would be untestable on the engine the suite runs on.
+BACKEND_API bool ibFillKeyHashes(ibDatabaseLayer& conn, const ibMaterializeSpec& spec,
+                                 const ibMaterializationDialect* mat = nullptr);
 
 #endif // !__DATABASE_MATERIALIZE_BUILDER_H__

@@ -61,6 +61,14 @@ public:
 
 private:
 
+	// NO BUFFER MEANS NO SUCH PARAMETER — raise, do not write into nothing. sqldata is allocated when
+	// the statement is DESCRIBED, one slot per placeholder the prepared SQL actually carries, so a
+	// null is a bind addressing a parameter the statement does not have — the usual cause being a
+	// schema the code believes in and the database does not. Every branch that writes into a
+	// DESCRIBE-allocated buffer asks this first; the branches that point sqldata at a member of their
+	// own have nothing to check.
+	void RequireParameterBuffer() const;
+
 	int m_nParameterType;
 
 	// A union would probably be better here

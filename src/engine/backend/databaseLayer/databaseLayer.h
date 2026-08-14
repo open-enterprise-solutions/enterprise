@@ -129,12 +129,20 @@ struct ibDialectDictionary
 	// SQLite take just "DROP INDEX <name>". Default = standalone (no table).
 	bool m_dropIndexNeedsTable = false;
 
-	// Index introspection: a SELECT that returns the NAMES of the indexes on a table, one `?` param =
-	// the table name. Lets the schema differ ask the DB "does this declared index already exist?" and
-	// create only the missing ones through its NORMAL CreateIndex — so a code-added index reaches an
-	// EXISTING table (Firebird has no CREATE INDEX IF NOT EXISTS; this is how the retrofit works there).
-	// EMPTY (default — MySQL / ODBC) => no introspection, the differ keeps the metadata-only diff.
-	wxString m_indexListQuery;
+	// ⭐⭐ HOW MANY FIELDS AN INDEX MAY COVER. 0 (the default) = no limit worth declaring.
+	//
+	// A key is a list of LOGICAL columns; an index is built over their PHYSICAL fields, and a
+	// reference is three of those. So a key of seven columns can be an index of twenty-one segments,
+	// and Firebird stops at sixteen — "too many keys defined for index" at CREATE INDEX time, which
+	// on Firebird takes the whole restructuring down with it and names a table that is not the
+	// problem. MySQL stops at sixteen too, PostgreSQL at thirty-two, SQLite has no limit anyone
+	// reaches.
+	//
+	// It is declared rather than discovered because the DECLARATION side has to know it: a totals
+	// table whose key cannot be indexed carries its identity in one hashed field instead
+	// (databaseMaterializeBuilder.h — ibKeyHashColumnName), and that is a column, i.e. a schema
+	// decision taken before any DDL is emitted.
+	unsigned int m_maxIndexSegments = 0;
 
 	// Physical row identifier, used to drop duplicate-key rows (keep one) BEFORE a UNIQUE index is created
 	// over existing data: FB "RDB$DB_KEY", SQLite "rowid", PG "ctid". EMPTY (default) => no dedup, so the
@@ -477,6 +485,38 @@ struct ibMaterializationDialect
 	//  L2-1 renderer can reach it. A trigger keys its rows through the same map the view projects
 	//  its columns through, so the two cannot disagree.)
 
+	// --- the key HASH: an identity for a key an index cannot hold ---------------
+	//
+	// ⭐⭐ WHY A DERIVED TABLE NEEDS ONE. Its key must be UNIQUE — the delta upserts against it, and
+	// two rows for one key would each accumulate half the movements, which is a pair of individually
+	// plausible and jointly wrong totals. Uniqueness is held by an index, and an index has a segment
+	// ceiling (ibDialectDictionary::m_maxIndexSegments). An accounting register's key — the period,
+	// the account, a (kind, value) pair per analytic, the register's dimensions — passes it at four
+	// analytics, and no rearrangement of that key makes it shorter.
+	//
+	// So the identity moves into ONE field: a digest of the very expressions the key columns are
+	// filled from. The key columns stay ordinary columns and the upsert goes on MATCHING BY THEM, so
+	// a digest collision cannot merge two different keys into one row — it can only refuse an insert,
+	// loudly, which is the direction an accounting engine should fail in. (The engines whose upsert
+	// names its conflict target by COLUMN LIST — ON CONFLICT — name the digest column instead there;
+	// those engines are also the ones with no ceiling worth declaring, so it does not arise in
+	// practice.)
+	//
+	// EMPTY (SQLite) = this engine cannot compute a digest in SQL. That is the honest empty and costs
+	// nothing: its index has no ceiling to pass.
+	//
+	// {value} — one key expression, already rendered over the movement row. Per-field rather than one
+	// digest of the concatenation, because the parts must be turned into text before they can be
+	// joined at all, and a bare CAST of a binary reference key or an unbounded string is either a
+	// character-set error or a silent truncation. A hashed part is fixed-width, ASCII, and cannot
+	// truncate.
+	wxString m_keyHashItem;
+	// How the parts are joined. Firebird / PG / SQLite concatenate with ||; MySQL has CONCAT(), so
+	// its join is a comma and its digest template wraps the list.
+	wxString m_keyHashJoin = wxT(" || '.' || ");
+	// {expr} — the joined parts, digested into what the column stores.
+	wxString m_keyHashDigest;
+
 	// --- the totals table itself ----------------------------------------------
 	// Appended after the CREATE TABLE column list — PostgreSQL " WITH (fillfactor = 80)",
 	// which keeps the hot totals UPDATE on the same page (HOT update, no index write) and is
@@ -787,6 +827,30 @@ public:
 	// while PostgreSQL / SQLite (ad-hoc any-shape temp) carry the temp-table path — capability
 	// lands where the data scale needs it. (docs/query-language-arc.md — temp-db foundation)
 	virtual const ibTempTableDialect* GetTempTableDialect() const { return nullptr; }
+
+	// ⭐⭐ THE ROUTINES THIS ENGINE DOES NOT HAVE AND THE PLATFORM'S OWN SQL ASSUMES.
+	//
+	// Some vendors are missing something the generated SQL takes for granted and the dialect cannot
+	// spell around — PostgreSQL has no MAX / MIN over `uuid`, which the reference key IS, so those
+	// aggregates have to exist before a single query that folds references can run. A driver missing
+	// nothing overrides nothing.
+	//
+	// ⚠ THE VENDOR SQL LIVES WITH THE VENDOR. This used to be written out in `metaCollection`
+	// (`ExecuteSystemSQLCommand`), which made a metadata file the only place outside this layer
+	// spelling engine-specific DDL — the same leak the capability accessors closed on the read side,
+	// one tier up. The CALLER still decides WHEN (a database is being created), because that is its
+	// question; WHAT is this one's.
+	//
+	// ⚠ Called ONCE, when a database is made — deliberately NOT from Open(). Creating them on every
+	// connection would put four DDL statements on every pool clone and would demand CREATE FUNCTION
+	// rights of an ordinary working user, which a deployment is entitled to withhold.
+	//
+	// ⚠ Not "seed": in this tree that word already means posting the seed DATA a fresh schema needs
+	// (the writes RunOrDefer queues past a DDL barrier). One word, one meaning.
+	//
+	// Returns false when the database cannot be considered usable without them. Drivers report failure
+	// by THROWING, so a false is the belt beside the braces.
+	virtual bool CreateMissingRoutines() { return true; }
 
 	// The driver's MATERIALIZATION facts (trigger shell, delta upsert, period truncation,
 	// view spelling), or nullptr if it cannot maintain derived state. PRESENCE = the
