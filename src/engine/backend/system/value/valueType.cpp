@@ -102,6 +102,15 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 				return varValue;
 			}
 			else if (vt == ibValueTypes::TYPE_STRING) {
+				// ⚠ ZERO LENGTH IS "UNLIMITED", NOT "TRUNCATE TO NOTHING". A string qualifier left at
+				// its default carries 0, and `Left(value, 0)` returns an EMPTY string — so adjusting a
+				// value to such a type WIPED it. Typed in, saved, blank on the next read, with the
+				// write reporting success all the way down.
+				//
+				// The same two-facts-one-number confusion as the driver's parameter clamp: only clamp
+				// where a limit was actually declared.
+				if (typeDescription.m_typeData.m_string.m_length == 0)
+					return varValue;
 				return ibValueSystemFunction::Left(varValue, typeDescription.m_typeData.m_string.m_length);
 			}
 		}
@@ -125,6 +134,9 @@ ibValue ibValueTypeDescription::AdjustValue(const ibTypeDescription& typeDescrip
 					return varValue.GetDate();
 				}
 				else if (vt == ibValueTypes::TYPE_STRING) {
+					// Same rule as the branch above: 0 is "no declared limit", not "empty".
+					if (typeDescription.m_typeData.m_string.m_length == 0)
+						return varValue;
 					return ibValueSystemFunction::Left(varValue, typeDescription.m_typeData.m_string.m_length);
 				}
 			}
