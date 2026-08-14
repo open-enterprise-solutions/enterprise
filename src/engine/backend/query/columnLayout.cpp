@@ -98,18 +98,30 @@ ibColumnType PrimitiveType(ibValueTypes vt, const ibTypeDescription& td)
 	}
 }
 
-// Reached only under `col->IsRawColumn()` — the column has already SAID what it is, so the cast
-// asks for the type it carries rather than deciding identity (which is the column's own answer,
-// never a cast's). A column that claims raw without being one falls back instead of raising: the
-// caller is a DDL description, and a wrong-but-valid type is repairable where a throw is not.
+// Reached only under `col->IsRawColumn()` — the column has already SAID what it is, so the cast asks
+// for the type it CARRIES rather than deciding identity (which is the column's own answer, never a
+// cast's). Exactly one class in the tree answers that question with true (ibRawDBColumn,
+// queryColumn.h), which is what makes the static cast a statement of that fact rather than a hope.
+//
+// ⚠ IT USED TO ASK RTTI AND, ON A MISS, RETURN VARCHAR(255) — on the reasoning that "a wrong-but-valid
+// type is repairable where a throw is not". It is not repairable: this answer becomes a CREATE TABLE.
+// A column silently created as text where a number belonged is a migration, and it is discovered by
+// arithmetic failing months later. The per-column RTTI was also paid on every DDL and read layout.
 ibColumnType RawType(const ibBackendQueryColumn* col)
 {
-	const auto* raw = dynamic_cast<const ibRawDBColumn*>(col);
-	if (raw == nullptr)
-		return ibTypeString(255);
+	wxASSERT_MSG(col != nullptr && col->IsRawColumn(),
+		wxT("RawType asked of a column that does not carry its own physical type"));
+	const auto* raw = static_cast<const ibRawDBColumn*>(col);
 	switch (raw->GetRawType()) {
-	case ibRawDBColumn::RawType::String:  return ibTypeString(255);
-	case ibRawDBColumn::RawType::Number:  return ibTypeNumber(18, 0);
+	// ⭐ THE COLUMN'S OWN WIDTH WHERE IT DECLARED ONE. A raw column that says nothing gets the old
+	// defaults; one that DOES say — an indexed digest, a totals figure carrying a resource's own
+	// precision and scale — is created as it asked. Both of those were bugs while this ignored them:
+	// VARCHAR(255) in UTF8 passes Firebird's index key ceiling by itself, and NUMERIC(18,0) under a
+	// resource declared with kopecks drops the fraction on the way in.
+	case ibRawDBColumn::RawType::String:
+		return ibTypeString(raw->GetRawLength() > 0 ? raw->GetRawLength() : 255);
+	case ibRawDBColumn::RawType::Number:
+		return ibTypeNumber(raw->GetRawLength() > 0 ? raw->GetRawLength() : 18, raw->GetRawScale());
 	case ibRawDBColumn::RawType::Reference: return ibTypeBinary(reference_size_t);   // _RRRef fixed key
 	case ibRawDBColumn::RawType::Date:    return ibTypeDate();
 	case ibRawDBColumn::RawType::Boolean: return ibTypeBoolean();

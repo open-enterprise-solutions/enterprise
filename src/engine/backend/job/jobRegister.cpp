@@ -9,7 +9,8 @@
 // nothing here has to ask which driver it is on.
 #include "backend/databaseLayer/databaseQueryBuilder.h"
 // ibBackendQueryException — the write tells "no connection" from "the base said no" by its Kind.
-#include "backend/databaseLayer/databaseLayerException.h"
+#include "backend/query/queryException.h"
+#include "backend/session/sessionException.h"   // NoBase = the session had no connection to give
 
 #include <algorithm>
 
@@ -183,16 +184,19 @@ ibJobManager::ibWriteOutcome ibJobManager::WriteSharedSettings(const ibJobSettin
 
 		return ibWriteOutcome::Written;
 	}
-	catch (const ibBackendQueryException& err) {
-		// NO BASE IS NOT A REFUSAL, and this is the whole reason the outcome has three values.
-		// L2 already knows the difference — it throws NoConnection when the holder has nothing to
-		// give — and that knowledge died in a catch-all one line further down. A declaration made
-		// before a database is open (a unit test, the platform's own list at bring-up) has not been
-		// refused anything; it has not been asked yet.
-		if (err.GetKind() == ibBackendQueryException::Kind::NoConnection)
-			return ibWriteOutcome::NoBase;
-
-		// Any other query-tier fault is ours and the row did not land — a refusal.
+	// NO BASE IS NOT A REFUSAL, and this is the whole reason the outcome has three values. A
+	// declaration made before a database is open (a unit test, the platform's own list at bring-up)
+	// has not been refused anything; it has not been asked yet.
+	//
+	// It is caught by TYPE now rather than by a Kind on the query family: "there is no connection to
+	// work on" is the SESSION refusing, not the query tier failing at its job, and the two are told
+	// apart by which exception arrives. That is the same split the query varieties were given
+	// (docs/exceptions.md §3) — the type says WHO refused.
+	catch (const ibBackendSessionException&) {
+		return ibWriteOutcome::NoBase;
+	}
+	catch (const ibBackendQueryException&) {
+		// A query-tier fault is ours and the row did not land — a refusal.
 		return ibWriteOutcome::Refused;
 	}
 	catch (...) {

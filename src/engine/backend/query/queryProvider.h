@@ -47,6 +47,29 @@ public:
 		return ExecuteRead(spec, ibReadPageRequest{});
 	}
 
+	// ⭐⭐ THE SAME AGGREGATE, AS A RELATION INSTEAD OF ROWS.
+	//
+	// `ExecuteAggregate` builds the whole GROUP BY and then RUNS it; this stops one step earlier and
+	// hands back what it built. The difference is not where the sum is computed — that is the server
+	// either way — it is whether the result has to be MATERIALISED before anything else can be
+	// composed with it. Returning a relation is what lets a reading answer `GetSourceRelation`, so a
+	// join to it, a filter over it and paging stay one SQL statement.
+	//
+	// Null (the default, and every non-DB provider) = this source cannot be composed with; the caller
+	// falls back to reading rows, which answers the same numbers.
+	virtual ibQueryRelPtr BuildAggregateRelation(const ibDataQuerySpec& /*spec*/)
+	{
+		return nullptr;
+	}
+
+	// The same, for a query that PROJECTS rather than folds — a listing of lines. Separate from the
+	// one above because the two are different lowerings (a GROUP BY and a paged read), not one with a
+	// flag; the door picks by the shape of the query it was given.
+	virtual ibQueryRelPtr BuildReadRelation(const ibDataQuerySpec& /*spec*/)
+	{
+		return nullptr;
+	}
+
 	// Write from the spec: INSERT/UPSERT the SetValue() assignments (UPSERT matches on the
 	// queryable's uniqueness key — GetPrimaryKeyColumns); DELETE by the Where() conditions
 	// (a null-col condition keys off the uuid identity column). Only the DB-table provider

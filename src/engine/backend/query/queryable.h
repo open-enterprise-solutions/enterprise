@@ -25,6 +25,7 @@
                                         // L3 condition op is ibQueryFilterOp now, defined below.)
 #include "backend/compiler/value.h"     // ibValue
 #include "queryColumn.h"                // ibBackendQueryColumn (the column counterpart)
+#include "queryUnfold.h"                // ibQueryDimUnfold — a condition may carry the word, so a source can FOLD by it
 #include "queryRamTable.h"              // ibQueryRamTable — ComputeRows produces the L3 table (no runtime type)
 #include "backend/databaseLayer/databaseLayer.h"   // ibTotalsPeriod — the unit a PeriodTrunc expression carries
 
@@ -146,6 +147,21 @@ struct ibQueryCondition
 	// to FALSE rather than emitting it). NULL never belongs here: a NULL key matches nothing in an equi-join,
 	// and `IN (…, NULL)` is the classic SQL trap — the producer strips nulls before filling this.
 	std::vector<ibValue>        m_values;
+
+	// ⭐⭐ HOW FAR DOWN THE VALUES REACH — and, when it is not `Elements`, m_values holds the values AS
+	// NAMED rather than the subtree they stand for.
+	//
+	// A condition that only SELECTS rows never needs this: the lowering resolves the subtree into
+	// values and hands over an ordinary `In`, which every provider renders. A condition handed to a
+	// SOURCE is the other case — an accounting register asked for accounts «in hierarchy» reports the
+	// subordinates UNDER the account that was named, and to fold like that it has to know which
+	// account was named and how far down was asked. Expanded first, that question is unanswerable:
+	// twenty accounts arrive and nothing says which one they roll into.
+	//
+	// ⚠ SO A PROVIDER MUST NEVER SEE A LEAF WITH THIS SET. It is filled only for a condition the
+	// source consumes itself (ibQuerySourceParameter::m_consumedBySource); everything on the ordinary
+	// road is expanded at the lowering and arrives here as `Elements`, which is what the default says.
+	ibQueryDimUnfold            m_unfold = ibQueryDimUnfold::Elements;
 
 	// Reference DOT-WALK: when non-empty, this condition filters the LEAF attribute of a reference
 	// path (Producer.Region -> {Producer, Region}). Every non-leaf segment is a single-target
@@ -272,6 +288,7 @@ struct ibQueryColumnExpr
 	ibQueryColumnExprKind       m_kind = ibQueryColumnExprKind::Column;
 
 	const ibBackendQueryColumn* m_col = nullptr;          // Column — the source column (its FIRST sql field)
+	wxString                    m_field;                  // Column — ONE named physical field of it (empty = the first)
 	ibValue                     m_const;                  // Const — a literal value
 
 	ibQueryColumnArithOp        m_arith = ibQueryColumnArithOp::Add;   // Arith
@@ -285,6 +302,20 @@ struct ibQueryColumnExpr
 	// expression names the CONCEPT, the dialect owns the spelling.
 	ibTotalsPeriod              m_periodUnit = ibTotalsPeriod::Month;
 
+	// ⭐⭐ ONE FIELD OF A COMPOSITE COLUMN, NAMED. A plain Col() reduces to the column's FIRST value
+	// field, which is the right answer for everything that has one value — a number, a date, a
+	// reference read as a whole. It is the wrong answer for a column whose value is spread across
+	// several fields and has to be REBUILT on the other side: a CASE over an accounting register's
+	// dimension slot must be written once PER FIELD (the type tag, each admissible type's field,
+	// a reference's pair), all projected under one prefix, so the reader can reassemble the value
+	// through GetColumnObject(prefix, col). Reduced to the first field it would carry the type tag
+	// and nothing else — a column that plainly reports a reference and returns a number.
+	//
+	// Empty name = the first value field, i.e. exactly what Col() has always meant.
+	static ibQueryColumnExprPtr ColField(const ibBackendQueryColumn* col, const wxString& field) {
+		auto e = std::make_shared<ibQueryColumnExpr>();
+		e->m_kind = ibQueryColumnExprKind::Column; e->m_col = col; e->m_field = field; return e;
+	}
 	static ibQueryColumnExprPtr Col(const ibBackendQueryColumn* col) {
 		auto e = std::make_shared<ibQueryColumnExpr>();
 		e->m_kind = ibQueryColumnExprKind::Column; e->m_col = col; return e;

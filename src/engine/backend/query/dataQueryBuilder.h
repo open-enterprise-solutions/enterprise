@@ -598,6 +598,24 @@ public:
 	// leaks out). Move-only result.
 	[[nodiscard]] ibDataQueryResult Execute(const ibReadPageRequest& request) const;
 
+	// ⭐⭐ THE AGGREGATE, AS A RELATION INSTEAD OF ROWS — the non-terminal ending.
+	//
+	// Everything about the query is the same; what differs is that nothing runs. A reading that hands
+	// this to `GetSourceRelation` becomes a DERIVED TABLE in whoever asked for it, so the join to it,
+	// the filter over it and the paging stay ONE statement — instead of materialising the whole
+	// result into RAM first and composing against a snapshot.
+	//
+	// ⚠ It is NOT a second way of building SQL. The relation is assembled by the same provider code
+	// the execute path uses (`BuildAggregateQuery`), stopped one step earlier; a hand-rolled
+	// `ibQueryRel` beside it would be a second lowering, free to disagree with the first about a
+	// join, a spread or a HAVING.
+	//
+	// Null when this door cannot be composed with — a non-DB source, or a query carrying an access
+	// POLICY. The policy is the interesting one: it must fold its restriction into the read it
+	// guards, and handing the relation out unrestricted would let a caller compose past it. Such a
+	// reading falls back to rows, which answer the same numbers under the same restriction.
+	[[nodiscard]] ibQueryRelPtr BuildRelation() const;
+
 	// Build-once overload: reuses `cache` when `signature` matches its last
 	// build, otherwise resolves identity + builds IR + renders and refills the
 	// cache. Only the external anchor is rebound per tick. `signature` MUST

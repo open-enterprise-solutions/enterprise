@@ -18,7 +18,11 @@
 
 #include "backend/typeDescription.h"    // ibTypeDescription (the column's L3 type)
 
-#include <wx/icon.h>                    // wxIcon — the column's own picture (GetColumnIcon)
+// ⚠ NOT <wx/icon.h> — FORWARD-DECLARED. backend.dll is GUI-free (CLAUDE.md), and this header is
+// included by every attribute metaobject, so one GUI include here reaches ~25 direct includers and
+// everything behind them. A virtual returning wxIcon compiles against an incomplete type; only the
+// two files that DEFINE such a body need the real header, and they already include it.
+class wxIcon;
 
 #include <vector>
 
@@ -183,11 +187,32 @@ public:
 	bool                  IsRawColumn()     const override { return true; }
 
 	RawType               GetRawType()      const { return m_type; }   // the provider's bind selector
+	// The declared width: a string's length, a number's PRECISION. 0 = "no reason to say", and the
+	// layout tier then answers with its default.
+	unsigned int          GetRawLength()    const { return m_length; }
+	unsigned int          GetRawScale()     const { return m_scale; }
 
 	// Convenience makers — read cleaner than naming the enum at the call site, with no extra
 	// type to maintain (these are static factories, not subclasses). One per RawType.
-	static ibRawDBColumn String   (const wxString& field, ibMetaID id = 0) { return ibRawDBColumn(field, RawType::String, id);    }
-	static ibRawDBColumn Number   (const wxString& field, ibMetaID id = 0) { return ibRawDBColumn(field, RawType::Number, id);    }
+	// ⭐ A WIDTH, WHERE THE COLUMN HAS A REASON TO NAME ONE. Zero = the default (255), which is right
+	// for a scaffold column nobody indexes. It is NOT right for a column an INDEX stands on: Firebird
+	// sizes an index key from the DECLARED length times the charset's bytes-per-character, so a
+	// VARCHAR(255) in UTF8 is 1020 bytes and passes the key-size ceiling (≈ page_size / 4) on its own —
+	// "key size exceeds implementation restriction", with nothing wrong but the declaration.
+	static ibRawDBColumn String   (const wxString& field, ibMetaID id = 0, unsigned int length = 0) {
+		ibRawDBColumn col(field, RawType::String, id);
+		col.m_length = length;
+		return col;
+	}
+	// The same for a number: a totals column has to carry the RESOURCE's own precision and scale, or a
+	// figure with kopecks is stored in a column that has none and the fraction is lost on the way in.
+	static ibRawDBColumn Number   (const wxString& field, ibMetaID id = 0,
+	                               unsigned int precision = 0, unsigned int scale = 0) {
+		ibRawDBColumn col(field, RawType::Number, id);
+		col.m_length = precision;
+		col.m_scale  = scale;
+		return col;
+	}
 	// ⭐ A REFERENCE STORED AS ONE FIELD, WITH A CONSTANT TARGET.
 	//
 	// The ordinary reference column is a PAIR — `_RTRef` (which type) beside `_RRRef` (which row) —
@@ -216,6 +241,8 @@ private:
 	wxString                  m_field;
 	wxString                  m_name;    // what a QUERY writes; empty = the field is its own name
 	RawType                   m_type;
+	unsigned int              m_length = 0;   // string length / number precision; 0 = the tier's default
+	unsigned int              m_scale  = 0;   // number scale — the fraction a figure is stored with
 	ibMetaID                  m_modelId;   // 0 = scaffold: created with its table, never migrated
 	mutable ibTypeDescription m_typeDesc;   // mutable: GetTypeDesc() is const but returns a non-const ref
 };

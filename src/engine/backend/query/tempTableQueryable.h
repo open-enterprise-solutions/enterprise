@@ -35,19 +35,30 @@ public:
 	// with the generated table, and it must not drift), everybody who shows or resolves a field asks
 	// for the ordinary one.
 	ibTempColumn(const wxString& name, const wxString& physical,
-	             const ibTypeDescription& type, ibMetaID modelId)
-		: m_name(name), m_physical(physical), m_type(type), m_modelId(modelId) {}
+	             const ibTypeDescription& type, ibMetaID modelId, const wxString& synonym = wxEmptyString)
+		: m_name(name), m_physical(physical), m_type(type), m_modelId(modelId), m_synonym(synonym) {}
 
 	wxString           GetName()         const override { return m_name; }
 	wxString           GetPhysicalName() const override { return m_physical; }
 	ibTypeDescription& GetTypeDesc()     const override { return m_type; }   // interface returns a non-const ref
 	ibMetaID           GetColumnId()      const override { return m_modelId; }
 
+	// ⭐ AND A THIRD NAME: THE ONE A PERSON READS. The two above are for the query and for the
+	// storage; neither is a caption. A derived surface publishes figures like `Resource1Balance`,
+	// which is a correct NAME and a poor thing to put at the head of a column an accountant reads —
+	// and the runtime tables that show these rows used to build their captions separately, which is
+	// why the same figure had a presentation through one door and none through the other.
+	//
+	// Empty = the name, which is the base class's own answer and right for an ordinary temp table:
+	// its columns are named by whoever made it, and that name IS the caption.
+	wxString           GetSynonym()      const override { return m_synonym.IsEmpty() ? m_name : m_synonym; }
+
 private:
 	wxString                  m_name;
 	wxString                  m_physical;   // == m_name unless the storage spells it differently
 	mutable ibTypeDescription m_type;     // mutable: GetTypeDesc() is const but returns a non-const ref
 	ibMetaID                  m_modelId;
+	wxString                  m_synonym;    // empty = the name
 };
 
 class ibTempTableQueryable : public ibBackendQueryable

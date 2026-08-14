@@ -1036,7 +1036,16 @@ ibValue EvalColumnExprRow(const ibQueryColumnExpr* e, const ibQueryRamTable& t, 
 {
 	if (e == nullptr) return ibValue();
 	switch (e->m_kind) {
-		case ibQueryColumnExprKind::Column: return e->m_col != nullptr ? t.GetCell(row, e->m_col->GetColumnId()) : ibValue();
+		case ibQueryColumnExprKind::Column:
+			// ⚠ A NAMED FIELD HAS NO MEANING IN RAM, and saying so is the point. A materialised row holds
+			// the value WHOLE (one cell per column), never the field spread the DB path writes — so a
+			// per-field expression asked here would have to answer with the whole value under a field's
+			// name, and the caller would reassemble an object out of several copies of itself. The
+			// expression is built per field precisely to be pushed to the server; if one reaches this
+			// evaluator, the read took the join / multi-source road and the reading has to be split
+			// differently, which is a defect to be told about rather than a case to fake.
+			wxASSERT_MSG(e->m_field.IsEmpty(), wxT("a per-field column expression cannot be evaluated over a RAM row"));
+			return e->m_col != nullptr && e->m_field.IsEmpty() ? t.GetCell(row, e->m_col->GetColumnId()) : ibValue();
 		case ibQueryColumnExprKind::Const:  return e->m_const;
 		case ibQueryColumnExprKind::Arith: {
 			const ibNumber a = EvalColumnExprRow(e->m_lhs.get(), t, row).GetNumber();

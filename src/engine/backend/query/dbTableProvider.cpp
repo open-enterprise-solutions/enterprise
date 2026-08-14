@@ -13,8 +13,8 @@
 #include "dataQueryBuilder.h"  // ibDataQueryBuilder::EffectiveSort / ibDataQueryResult / ibReadPageRequest / ibDataQuerySpec / ibDotWalkColumn
 #include "resultSource.h"      // ibDataResultSource — the selection backing ibDbResultSource derives
 #include "columnLayout.h"      // the column-layout tier: DescribeColumnLayout + ibColumnCodec (value codec) + HasReference
+#include "queryException.h"    // ibBackendQueryException — L3-L5 varieties (it used to arrive through the DB header)
 
-#include "backend/databaseLayer/databaseResultSet.h"
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/valueInfo.h"                                    // ibReference (physical reference blob, GetQueryTableId source)
 #include "backend/fnumber.h"                                      // ibNumber — the _RTRef type (clsid) keyset tiebreak const
@@ -922,7 +922,11 @@ ibQueryExprPtr ibMetaIRBuilder::BuildColumnExpr(const ibBackendQueryable* querya
 		return nullptr;
 	switch (expr->m_kind) {
 	case ibQueryColumnExprKind::Column:
-		return expr->m_col != nullptr ? ibColQ(mainQual, FirstSqlFieldOfColumn(expr->m_col)) : nullptr;
+		// A NAMED field wins over the first one: a composite column read field by field is the only way
+		// a value spread across several of them survives an expression (see ibQueryColumnExpr::ColField).
+		return expr->m_col != nullptr
+			? ibColQ(mainQual, expr->m_field.IsEmpty() ? FirstSqlFieldOfColumn(expr->m_col) : expr->m_field)
+			: nullptr;
 
 	case ibQueryColumnExprKind::Const:
 		// CAST the placeholder so a bare projected constant carries a type (FB -804 otherwise). Harmless
@@ -1162,6 +1166,29 @@ ibDataQueryResult ibDbTableProvider::ExecuteRead(const ibDataQuerySpec& spec, co
 		return ibDataQueryResult(q.ExecuteIR(ir, external), spec.m_queryable);
 	}
 
+// ⭐⭐ THE READ, AS A RELATION — the projection twin of BuildAggregateRelation.
+//
+// `BuildPageIR` already builds and does not run, so this is the same lowering with the page taken
+// off: an UNBOUNDED request. That is not an omission, it is the point — paging belongs to whoever
+// composes with this relation, and a LIMIT baked in here would silently cap a join's input to one
+// screenful of rows, which reads as "the register has 40 movements".
+//
+// ⚠ NOR IS THE SORT: the effective sort is still computed (a keyset read needs a total order to
+// build its predicate against), but nothing anchors it here — there is no cursor to continue.
+ibQueryRelPtr ibDbTableProvider::BuildReadRelation(const ibDataQuerySpec& spec)
+	{
+		const std::vector<ibQuerySortItem> effective =
+			ibDataQueryBuilder::EffectiveSort(spec.m_queryable, *spec.m_sorts);
+
+		ibReadPageRequest whole;
+		whole.m_count     = 0;                          // 0 = unbounded — the composer pages, not this
+		whole.m_direction = ibFetchDirection::Reset;    // no anchor: there is no cursor being continued
+		whole.m_flatScan  = true;
+		whole.m_isTopLevel = true;
+
+		return BuildPageIR(spec, whole, effective).m_root;
+	}
+
 ibDataQueryResult ibDbTableProvider::ExecuteReadCached(const ibDataQuerySpec& spec, const ibReadPageRequest& req,
 	                                    ibRenderedPageCache& cache, const wxString& signature)
 	{
@@ -1239,7 +1266,7 @@ private:
 
 	// Aggregated read (totals) — a physical GROUP BY built from the spec. The
 	// AggregateItem / HavingItem are public on the door, so the provider lowers them.
-ibDataQueryResult ibDbTableProvider::ExecuteAggregate(const ibDataQuerySpec& spec)
+void ibDbTableProvider::BuildAggregateQuery(const ibDataQuerySpec& spec, ibDatabaseQueryBuilder& q)
 	{
 		const ibBackendQueryable* queryable = spec.m_queryable;
 		const wxString mainTable = queryable->GetQueryTableName();
@@ -1267,8 +1294,6 @@ ibDataQueryResult ibDbTableProvider::ExecuteAggregate(const ibDataQuerySpec& spe
 		auto qualCol = [](const wxString& qual, const wxString& field) {
 			return qual.empty() ? ibCol(field) : ibCol(qual, field);
 		};
-
-		ibDatabaseQueryBuilder q(spec.m_holder);
 
 		if (auto predicate = ibMetaIRBuilder::BuildWhere(queryable, *spec.m_conditions, spec.m_predicate, mainQual))
 			q.Where(predicate);
@@ -1330,8 +1355,28 @@ ibDataQueryResult ibDbTableProvider::ExecuteAggregate(const ibDataQuerySpec& spe
 
 		if (hasDotWalk) q.From(chain.From());
 		else            q.From(mainTable);
+	}
 
-		return ibDataQueryResult(q.Execute(), queryable);
+ibDataQueryResult ibDbTableProvider::ExecuteAggregate(const ibDataQuerySpec& spec)
+	{
+		ibDatabaseQueryBuilder q(spec.m_holder);
+		BuildAggregateQuery(spec, q);
+		return ibDataQueryResult(q.Execute(), spec.m_queryable);
+	}
+
+// ⭐⭐ THE SAME ASSEMBLY, STOPPED ONE STEP EARLIER. `Build()` renders nothing and touches no
+// connection — it hands back the relation tree the execute path would have rendered — so a reading
+// that answers `GetSourceRelation` with this puts its whole GROUP BY inside somebody else's FROM
+// instead of materialising rows first.
+//
+// ⚠ The alias is NOT applied here. Whoever asked owns the name it goes under (the provider wraps a
+// source relation as `FROM (<this>) AS <alias>`), and stamping one in the middle would be a second
+// place deciding what this table is called.
+ibQueryRelPtr ibDbTableProvider::BuildAggregateRelation(const ibDataQuerySpec& spec)
+	{
+		ibDatabaseQueryBuilder q(spec.m_holder);
+		BuildAggregateQuery(spec, q);
+		return q.Build().m_root;
 	}
 
 // ==========================================================================
@@ -1888,10 +1933,12 @@ bool ibDbTableProvider::CanRollupTotalsShape(const ibDataQuerySpec& spec)
 bool ibDbTableProvider::CanPushRollupTotals(const ibDataQuerySpec& spec)
 	{
 		if (!CanRollupTotalsShape(spec)) return false;
-		// The connected dialect must advertise ROLLUP (FB5 / PG / MySQL8; NOT SQLite -> RAM).
+		// The connected driver must be able to fold the levels itself (FB5 / PG / MySQL8; NOT SQLite
+		// -> RAM). Asked of L2 rather than read off its dictionary: what a driver CAN DO is a question,
+		// and this tier has no business knowing which field carries the answer.
 		ibConnectionScope scope(spec.m_holder);
 		if (!scope) return false;
-		return scope->GetDialect().m_features.m_rollup;
+		return ibCanPushRollup(scope.get());
 	}
 
 // Shared ROLLUP-totals core: SELECT g<i>, GROUPING(g<i>) AS grp<i>, <agg> AS alias FROM <from>
@@ -2215,10 +2262,12 @@ bool ibDbTableProvider::CanColocateRollupTotals(const ibDataQuerySpec& spec)
 bool ibDbTableProvider::CanPushColocatedRollupTotals(const ibDataQuerySpec& spec)
 	{
 		if (!CanColocateRollupTotals(spec)) return false;
-		// The connected dialect must advertise ROLLUP (FB5 / PG / MySQL8; NOT SQLite -> RAM).
+		// The connected driver must be able to fold the levels itself (FB5 / PG / MySQL8; NOT SQLite
+		// -> RAM). Asked of L2 rather than read off its dictionary: what a driver CAN DO is a question,
+		// and this tier has no business knowing which field carries the answer.
 		ibConnectionScope scope(spec.m_holder);
 		if (!scope) return false;
-		return scope->GetDialect().m_features.m_rollup;
+		return ibCanPushRollup(scope.get());
 	}
 
 ibSelectorTree ibDbTableProvider::ExecuteColocatedRollupTotals(const ibDataQuerySpec& spec)

@@ -574,6 +574,27 @@ ibDataQueryResult ibDataQueryBuilder::Execute(const ibReadPageRequest& req) cons
 	return r;
 }
 
+ibQueryRelPtr ibDataQueryBuilder::BuildRelation() const
+{
+	// A RESTRICTED read is not a relation somebody else composes: the policy folds its restriction
+	// into the query it guards, and a relation handed out unrestricted could be joined past it. The
+	// caller reads rows instead — same numbers, same restriction, one materialisation.
+	if (m_policy != nullptr || m_queryable == nullptr)
+		return nullptr;
+
+	// ⭐ WHICH LOWERING, DECIDED BY THE SHAPE OF THE QUERY — the same way the terminal endings are
+	// chosen (`SelectAggregate()` against `Execute()`), and by the same evidence: a query that names
+	// aggregates or group keys FOLDS, one that names neither PROJECTS. Two lowerings rather than one
+	// with a flag, because a GROUP BY and a paged read are genuinely different trees.
+	//
+	// Asked of THIS source's provider. A computed / temp source answers null to both (the base
+	// default), which is the honest "cannot be composed with" rather than an empty relation.
+	const ibDataQuerySpec spec = BuildSpec();
+	const bool folds = !m_aggregates.empty() || !m_groupBy.empty();
+	return folds ? m_queryable->GetProvider().BuildAggregateRelation(spec)
+	             : m_queryable->GetProvider().BuildReadRelation(spec);
+}
+
 ibDataQueryResult ibDataQueryBuilder::Execute(const ibReadPageRequest& req,
                                              ibRenderedPageCache& cache,
                                              const wxString& signature) const

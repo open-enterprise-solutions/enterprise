@@ -19,6 +19,7 @@
 
 #include "backend/compiler/value.h"   // ibValue
 #include "queryKeywords.h"            // ibQueryKeyword (aggregate func tag)
+#include "queryUnfold.h"              // ibQueryDimUnfold — the three unfold words, shared with L3
 
 #include <vector>
 #include <memory>
@@ -27,6 +28,9 @@ struct ibQueryAstExpr;
 using ibQueryAstExprPtr = std::shared_ptr<ibQueryAstExpr>;
 
 struct ibQuerySelect;   // an Expr may hold a nested SELECT (IN (subquery)); defined in full below
+
+// (ibQueryDimUnfold — the three unfold words — moved to queryUnfold.h, included above: an L3
+//  condition may now carry the word too, and this header stays L2/L3-free.)
 
 // What an expression node IS.
 enum class ibQueryAstExprKind
@@ -96,6 +100,15 @@ struct ibQueryAstExpr
 	bool                  m_negated = false;              // Like/In/IsNull/Between negation
 	bool                  m_isOr = false;                 // Logical: true=OR, false=AND
 
+	// In: HOW FAR DOWN the operand reaches — the same three words a TOTALS-BY dimension unfolds by,
+	// here as a modifier of the set-valued operator (`Account IN HIERARCHY (&Accounts)`). Elements —
+	// which is a plain IN — for every other node kind and for every IN written without a word.
+	//
+	// ⚠ Nothing below L4 sees it: the lowering RESOLVES the subtree into the values it stands for and
+	// emits the ordinary IN, so the door and all five drivers keep the one set-valued operator they
+	// already render. The word lives where the question is asked, not where the rows are read.
+	ibQueryDimUnfold      m_unfold = ibQueryDimUnfold::Elements;
+
 	ibQueryAstExprPtr        m_lhs, m_rhs;                   // Compare/Like/Logical/Not/Arith
 	ibQueryAstExprPtr        m_low, m_high;                  // Between
 	std::vector<ibQueryAstExprPtr> m_list;                  // In list (value list form)
@@ -164,12 +177,8 @@ struct ibQueryOrderItem
 	bool           m_ascending = true;
 };
 
-// How a TOTALS-BY dimension unfolds (mirrors the L3 door's ibDimensionKind, kept
-// here so the AST stays L3-free; the lowering maps it across).
-// PLAIN enum, not enum class: it is a registered runtime enumeration now
-// (ibValueEnumGroupKind), and ibValueEnumeration<T> converts its value to a number.
-// Qualified use (ibQueryDimUnfold::Elements) stays legal either way.
-enum ibQueryDimUnfold { Elements, Hierarchy, HierarchyOnly };
+// (ibQueryDimUnfold — the three unfold words — is declared above the expression node, which now
+//  needs it too: the same words are a FILTER modifier as well as a grouping one.)
 
 // One TOTALS-BY level: the dimension column + how it unfolds. Levels apply IN ORDER
 // (each yields a subtotal node; the root is the grand total). -> door TotalBy(col, dim).

@@ -28,6 +28,8 @@
 #include "backend/srcDataObject.h"     // ibSourceDataObject::ibSourceExplorer — the columns the source fills
 #include "backend/uniqueKey.h"         // ibUniqueKey — GetItemKey returns one BY VALUE (default = empty)
 
+#include "queryable.h"                 // ibQueryPredicatePtr — a condition the source consumes itself
+
 #include <wx/string.h>
 #include <map>
 #include <vector>
@@ -83,10 +85,24 @@ struct ibQuerySourceParameter
 	// Non-empty makes the argument a CHOICE, and the editor shows exactly these and nothing else.
 	std::vector<wxString> m_choices;
 
+	// ⭐⭐ THE SOURCE CONSUMES THIS CONDITION ITSELF — it is not folded into the WHERE around it.
+	//
+	// An ordinary condition slot is sugar: the predicate written there is ANDed into the query's own
+	// WHERE, and the source never learns of it. That is right when the condition only SELECTS rows.
+	// It is wrong when the source has to ACT on it — an accounting register asked for accounts «in
+	// hierarchy» reports the subordinate accounts UNDER the one that was named, and a filter applied
+	// around the reading cannot fold anything: it can only remove rows the reading already produced.
+	//
+	// Set, the lowering resolves the predicate against `GetConditionScope()` and hands it to
+	// `CreateQueryable` by slot position instead of into the WHERE. Nothing else changes: the source
+	// is then the only place that condition exists, which is what makes the fold possible at all.
+	bool m_consumedBySource = false;
+
 	// AND WHAT THE SOURCE USES WHEN THE ARGUMENT IS LEFT OUT. Shown to the author rather than left to
 	// be guessed: an empty box that quietly means "Auto" teaches nothing, and the first surprise
 	// arrives when somebody sets it explicitly and the result changes.
 	wxString              m_default;
+
 };
 
 class BACKEND_API ibQueryableSourceDescriptor
@@ -141,6 +157,27 @@ public:
 	// standard source returns its stable contained member. The returned pointer is owned by the
 	// descriptor (borrowed by the caller) — valid for the descriptor's life.
 	virtual const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) = 0;
+
+	// ⭐⭐ THE SAME CALL, WITH THE CONDITIONS THE SOURCE CONSUMES ITSELF.
+	//
+	// `conditions` is parallel to the declared parameter list: an entry is non-null exactly where the
+	// declaration said `m_consumedBySource` and the author wrote a predicate there. Everything else is
+	// unchanged, which is why the default forwards — a source that consumes nothing never sees this.
+	//
+	// ⚠ The predicates are ALREADY LOWERED, against `GetConditionScope()`. They have to be: a
+	// condition names columns, and the companion this call is about does not exist yet — resolving
+	// against it would be resolving against the thing being built. The scope is the source's stable
+	// side (a register's movements table), where the account column lives in any case.
+	virtual const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray,
+	                                                  const std::vector<ibQueryPredicatePtr>& conditions)
+	{
+		(void)conditions;
+		return CreateQueryable(paParams, lSizeArray);
+	}
+
+	// WHAT A CONSUMED CONDITION IS RESOLVED AGAINST — null (the default) means this source consumes
+	// none, and the lowering leaves every condition where it was: in the WHERE around the reading.
+	virtual const ibBackendQueryable* GetConditionScope() const { return nullptr; }
 
 	// ⭐⭐ THE CALL-SCOPED COMPANION, AND ITS LIFETIME — here, once, so no descriptor has to remember.
 	//
@@ -215,6 +252,21 @@ public:
 	// FILTER BY" are different sets the moment a table folds anything.
 	virtual void FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const {
 		FillSourceExplorer(explorer);
+	}
+
+	// ⭐⭐ THE SAME QUESTION, ASKED ABOUT ONE SLOT — because a source may admit different fields in
+	// different condition slots, and answering with their union is wrong in BOTH directions.
+	//
+	// An accounting register is the case: `AccountCondition` (and its Dr / Cr / Corr siblings) admit
+	// ACCOUNTS and nothing else — the source consumes them and folds by them, and a leaf about
+	// anything else is silently dropped, i.e. reports more than was asked for. The general
+	// `Condition` admits the ordinary fields — dimensions and the analytics slots — and offering it
+	// accounts instead hides everything a filter is normally written with.
+	//
+	// `slot` empty = the general condition, which is what the plain overload above answers.
+	virtual void FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer,
+	                                   const wxString& slot) const {
+		FillConditionExplorer(explorer);
 	}
 
 	// ⭐⭐ THE SAME QUESTION, ASKED WITH THE CALL'S ARGUMENTS — because for some sources the ARGUMENTS

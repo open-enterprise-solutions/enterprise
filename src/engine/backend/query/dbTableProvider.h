@@ -35,6 +35,9 @@ public:
 	ibDataQueryResult ExecuteReadCached(const ibDataQuerySpec& spec, const ibReadPageRequest& req,
 	                                    ibRenderedPageCache& cache, const wxString& signature) override;
 	ibDataQueryResult ExecuteAggregate(const ibDataQuerySpec& spec) override;
+	// The same GROUP BY / the same read, stopped one step before they run — see the base declarations.
+	ibQueryRelPtr     BuildAggregateRelation(const ibDataQuerySpec& spec) override;
+	ibQueryRelPtr     BuildReadRelation(const ibDataQuerySpec& spec) override;
 	long ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBuilder::WriteKind kind) override;
 
 	// Reference dot-walk target resolution — THIS is the ONE metadata-owning provider (clsid ->
@@ -133,6 +136,12 @@ public:
 	                              const ibValueMetaObjectAttributeBase* attr, ibValue& retValue, ibQueryResult& result, bool createData = true);
 
 private:
+	// The GROUP BY, assembled into an L2 builder and not yet run. ONE assembly, two endings: the
+	// execute path runs it, the relation path takes its IR. Split for exactly that reason — two
+	// copies of a join chain, a projection spread and a HAVING would be two chances to answer
+	// differently depending on which door was used.
+	static void BuildAggregateQuery(const ibDataQuerySpec& spec, ibDatabaseQueryBuilder& q);
+
 	// Name-substitution lowering — spec -> L2 IR (connection-free Build()).
 	static ibQueryIR BuildPageIR(const ibDataQuerySpec& spec, const ibReadPageRequest& req,
 	                             const std::vector<ibQuerySortItem>& effective);

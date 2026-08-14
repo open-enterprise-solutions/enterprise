@@ -189,6 +189,40 @@ bool Regenerate(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder
 			return false;
 	}
 
+	// 4. GIVE THOSE ROWS THE IDENTITY THE TRIGGER WOULD HAVE GIVEN THEM.
+	//
+	// Where a key is too wide for an index, the derived table holds its uniqueness in a hashed field
+	// that the TRIGGER computes as it inserts (databaseMaterializeBuilder.h). A rebuild writes through
+	// the ordinary door, so its rows arrive without one — and an empty identity is not a neutral state:
+	// a UNIQUE index over NULLs enforces nothing, and on the engines that conflict on that column the
+	// next movement for a rebuilt key would insert a second row beside the first. Same reasoning as the
+	// shard column above, one field along.
+	// ⭐⭐ AND IT GOES THROUGH THE BARRIER, like every other write into a table this save created.
+	//
+	// It used to run straight at the connection, and that is the whole reason a chart-of-accounts
+	// register could not be re-keyed: Firebird refuses DML against a table created in the SAME
+	// transaction, and refuses it AT COMMIT — so this UPDATE reported success, the twenty-six
+	// statements before it reported success, and the apply died at the end on "expression evaluation
+	// not supported", naming nothing.
+	//
+	// ⚠ WHY ONLY THIS REGISTER SHOWED IT. The hash column exists only where the key is too wide for
+	// the engine's index (ibKeyNeedsHash) — an accounting register's key is the period, the account,
+	// a (kind, value) pair per analytic and the dimensions, well past Firebird's sixteen segments. An
+	// accumulation register's key fits, carries no hash column, and therefore never issued this
+	// statement: the same switch on the same day worked there and failed here.
+	//
+	// The spec is COPIED into the closure — a deferred fill runs after this function, and after the
+	// builder that started it, has gone. The holder travels for the same reason (see schemaSnapshot).
+	{
+		ibSchemaBuilder schema(holder);
+		const ibMaterializeSpec fillSpec = spec.ToRenderSpec(derived.m_name);
+		if (!schema.RunOrDefer(derived.m_name, [fillSpec, holder]() {
+				ibSchemaBuilder deferred(holder);
+				return ibFillKeyHashes(deferred.Connection(), fillSpec);
+			}))
+			return false;
+	}
+
 	return true;
 }
 

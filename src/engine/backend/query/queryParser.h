@@ -80,10 +80,11 @@ private:
 	void   ExpectKw(ibQueryKeyword kw, const wxChar* what);
 	bool   AcceptPunct(wxChar c);
 	void   ExpectPunct(wxChar c, const wxChar* what);
-	// Reports a syntax error: formats line / position and throws
-	// ibBackendCoreException (always throws — any code after a Fail() call is
-	// logically unreachable, mirroring the codebase's "Error(); return false;" idiom).
-	void   Fail(const ibQueryToken& at, const wxString& msg) const;
+	// Reports a syntax error: formats line / position and throws ibBackendQuerySourceException —
+	// L4's own variety, carrying the token's span as data (query/queryException.h). Always throws, so
+	// any code after a call is logically unreachable, mirroring the codebase's "Error(); return false;"
+	// idiom. Named for what it DOES: "Fail" reads like a status the caller might inspect.
+	void   ThrowQueryException(const ibQueryToken& at, const wxString& msg) const;
 
 	// --- productions -----------------------------------------------------
 	ibQueryAstStatement           ParseStatement();         // one package statement: a DROP or a full SELECT

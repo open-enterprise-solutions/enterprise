@@ -113,8 +113,11 @@ std::unique_ptr<ibTempTableManager> ibTempTableManager::Materialise(ibDatabaseCo
 	if (!scope)
 		return nullptr;   // no connection (pool passive / saturated) -> RAM
 
-	// Capability = the L1 temp dialect's presence. nullptr => the driver has no DB temp tables (FB) =>
-	// the caller stays on the RAM composer.
+	// Capability = the L1 temp dialect's PRESENCE, and this is deliberately NOT wrapped in a capability
+	// accessor of its own: the caller needs the facts themselves two lines down (the CREATE's lexical
+	// bits come from them), so a `CanUseTempTables()` beside this would be a second spelling of the
+	// same null test — a question that removes no knowledge from this tier. nullptr => the driver has
+	// no DB temp tables (FB) => the caller stays on the RAM composer.
 	const ibTempTableDialect* dialect = scope->GetTempTableDialect();
 	if (dialect == nullptr)
 		return nullptr;

@@ -191,7 +191,14 @@ wxString RenderExpr(const ibQueryAstExpr& expr)
 	{
 		wxString out = RenderChild(expr.m_lhs);
 		if (expr.m_negated) out += wxT(" ") + Kw(ibQueryKeyword::Not);
-		out += wxT(" ") + Kw(ibQueryKeyword::In) + wxT(" (");
+		out += wxT(" ") + Kw(ibQueryKeyword::In);
+		// The unfold word, when there is one. It is part of the OPERATOR, so it is written where the
+		// operator is — between IN and its operand — and a query that had it comes back with it.
+		if (expr.m_unfold == ibQueryDimUnfold::Hierarchy)
+			out += wxT(" ") + Kw(ibQueryKeyword::Hierarchy);
+		else if (expr.m_unfold == ibQueryDimUnfold::HierarchyOnly)
+			out += wxT(" ") + Kw(ibQueryKeyword::HierarchyOnly);
+		out += wxT(" (");
 		if (expr.m_subquery) {
 			// An IN subquery is a nested query like any other — shifted so the bracket's contents do
 			// not read as a continuation of the condition.

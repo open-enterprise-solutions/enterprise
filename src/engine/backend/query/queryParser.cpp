@@ -4,7 +4,7 @@
 
 #include "queryParser.h"
 
-#include "backend/backend_exception.h"   // ibBackendCoreException
+#include "queryException.h"   // ibBackendQuerySourceException — L4 refuses in its own variety
 
 namespace {
 
@@ -30,7 +30,7 @@ bool ibQueryParser::AcceptKw(ibQueryKeyword kw)
 void ibQueryParser::ExpectKw(ibQueryKeyword kw, const wxChar* what)
 {
 	if (!AcceptKw(kw))
-		Fail(Cur(), wxString::Format(_("expected %s"), what));
+		ThrowQueryException(Cur(), wxString::Format(_("expected %s"), what));
 }
 
 bool ibQueryParser::AcceptPunct(wxChar c)
@@ -42,13 +42,15 @@ bool ibQueryParser::AcceptPunct(wxChar c)
 void ibQueryParser::ExpectPunct(wxChar c, const wxChar* what)
 {
 	if (!AcceptPunct(c))
-		Fail(Cur(), wxString::Format(_("expected %s"), what));
+		ThrowQueryException(Cur(), wxString::Format(_("expected %s"), what));
 }
 
-void ibQueryParser::Fail(const ibQueryToken& at, const wxString& msg) const
+// L4's refusal, in L4's variety. The token carries the span, so it rides out as data and a consumer
+// can put a caret on it rather than reading the number out of a translated sentence.
+void ibQueryParser::ThrowQueryException(const ibQueryToken& at, const wxString& msg) const
 {
-	ibBackendCoreException::Error(_("Query syntax error at line %u (position %u): %s"),
-		at.m_line, at.m_col, msg);
+	ibBackendQuerySourceException::ErrorAt(at.m_line, at.m_col,
+		_("Query syntax error at line %u (position %u): %s"), at.m_line, at.m_col, msg);
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -66,7 +68,7 @@ ibQuerySelectPtr ibQueryParser::Parse(const wxString& queryText)
 	AcceptPunct(wxT(';'));   // a lone trailing separator is punctuation, not a second statement
 
 	if (!Cur().IsEnd())
-		Fail(Cur(), _("unexpected text after the query"));
+		ThrowQueryException(Cur(), _("unexpected text after the query"));
 
 	return sel;
 }
@@ -93,7 +95,7 @@ ibQueryPackage ibQueryParser::ParsePackage(const wxString& queryText)
 	}
 
 	if (!Cur().IsEnd())
-		Fail(Cur(), _("unexpected text after the query"));
+		ThrowQueryException(Cur(), _("unexpected text after the query"));
 
 	return package;
 }
@@ -110,7 +112,7 @@ ibQueryAstExprPtr ibQueryParser::ParseExpression(const wxString& exprText)
 	ibQueryAstExprPtr expr = ParsePredicate();
 
 	if (!Cur().IsEnd())
-		Fail(Cur(), _("unexpected text after the expression"));
+		ThrowQueryException(Cur(), _("unexpected text after the expression"));
 
 	return expr;
 }
@@ -123,7 +125,7 @@ ibQueryAstStatement ibQueryParser::ParseStatement()
 
 	if (AcceptKw(ibQueryKeyword::Drop)) {
 		if (Cur().m_kind != ibQueryTokenKind::Ident)
-			Fail(Cur(), _("expected a temporary-table name after DROP"));
+			ThrowQueryException(Cur(), _("expected a temporary-table name after DROP"));
 		statement.m_dropTemp = Next().m_text;
 		return statement;
 	}
@@ -147,10 +149,10 @@ ibQuerySelectPtr ibQueryParser::ParseSelectCore()
 	if (AcceptKw(ibQueryKeyword::Top)) {
 		const ibQueryToken& n = Cur();
 		if (n.m_kind != ibQueryTokenKind::Number)
-			Fail(n, _("expected a number after TOP"));
+			ThrowQueryException(n, _("expected a number after TOP"));
 		sel->m_top = n.m_literal.GetInteger();
 		if (sel->m_top <= 0)
-			Fail(n, _("TOP expects a positive row count"));
+			ThrowQueryException(n, _("TOP expects a positive row count"));
 		++m_pos;
 	}
 
@@ -161,7 +163,7 @@ ibQuerySelectPtr ibQueryParser::ParseSelectCore()
 	// returning it. Later statements of the package select FROM the bare name.
 	if (AcceptKw(ibQueryKeyword::Into)) {
 		if (Cur().m_kind != ibQueryTokenKind::Ident)
-			Fail(Cur(), _("expected a temporary-table name after INTO"));
+			ThrowQueryException(Cur(), _("expected a temporary-table name after INTO"));
 		sel->m_intoTemp = Next().m_text;
 	}
 
@@ -228,7 +230,7 @@ ibQuerySelectPtr ibQueryParser::ParseSelectStatement()
 		// dropping the levels quietly on the way in — is the difference between a refusal and a
 		// query that returns something the author did not ask for.
 		if (!sel->m_intoTemp.IsEmpty())
-			Fail(at, _("TOTALS cannot be written with INTO: a temporary table is a flat table, "
+			ThrowQueryException(at, _("TOTALS cannot be written with INTO: a temporary table is a flat table, "
 			           "and TOTALS yields a tree"));
 	}
 
@@ -246,7 +248,7 @@ ibQuerySelectPtr ibQueryParser::ParseSelectStatement()
 		// could only describe a table that does not exist — a silent no-op, and the loudest kind of
 		// wrong in a query somebody wrote for speed.
 		if (sel->m_intoTemp.IsEmpty())
-			Fail(at, _("INDEX BY needs INTO: only a temporary table this statement makes can be indexed"));
+			ThrowQueryException(at, _("INDEX BY needs INTO: only a temporary table this statement makes can be indexed"));
 	}
 
 	// ⭐ A TABLE HANDED IN GOES INTO A TEMPORARY TABLE, AND ONLY THERE. `FROM &Goods` is legal in a
@@ -272,7 +274,7 @@ ibQuerySelectPtr ibQueryParser::ParseSelectStatement()
 				usesParameter = usesParameter || handedIn(branch->m_from);
 
 		if (usesParameter && sel->m_intoTemp.IsEmpty())
-			Fail(Cur(), _("a table passed in as a parameter can only be read INTO a temporary table: "
+			ThrowQueryException(Cur(), _("a table passed in as a parameter can only be read INTO a temporary table: "
 			              "write `SELECT * INTO <name> FROM &<parameter>` first, then read that name"));
 	}
 
@@ -326,7 +328,7 @@ ibQueryProjection ibQueryParser::ParseProjection()
 	// AS alias, or an implicit bare-identifier alias (SELECT Code c)
 	if (AcceptKw(ibQueryKeyword::As)) {
 		if (Cur().m_kind != ibQueryTokenKind::Ident)
-			Fail(Cur(), _("expected an alias name after AS"));
+			ThrowQueryException(Cur(), _("expected an alias name after AS"));
 		p.m_alias = Next().m_text;
 	}
 	else if (Cur().m_kind == ibQueryTokenKind::Ident) {
@@ -353,9 +355,9 @@ ibQuerySource ibQueryParser::ParseSource()
 		// UPDATE holds a statement's rows — inside a source both are silent no-ops, and a silent
 		// no-op in a query someone wrote deliberately is worse than a refusal.
 		if (!s.m_subquery->m_intoTemp.IsEmpty())
-			Fail(at, _("INTO belongs to a statement of a query package, not to a nested table"));
+			ThrowQueryException(at, _("INTO belongs to a statement of a query package, not to a nested table"));
 		if (s.m_subquery->m_forUpdate)
-			Fail(at, _("FOR UPDATE belongs to a statement, not to a nested table"));
+			ThrowQueryException(at, _("FOR UPDATE belongs to a statement, not to a nested table"));
 	}
 	// A TABLE HANDED IN: `FROM &Goods`. The `&` is the same mark a value parameter carries, and it
 	// says the same thing — this came from outside the query. Said at the point of use, so a reader
@@ -398,7 +400,7 @@ ibQuerySource ibQueryParser::ParseSource()
 
 	if (AcceptKw(ibQueryKeyword::As)) {
 		if (Cur().m_kind != ibQueryTokenKind::Ident)
-			Fail(Cur(), _("expected an alias name after AS"));
+			ThrowQueryException(Cur(), _("expected an alias name after AS"));
 		s.m_alias = Next().m_text;
 	}
 	else if (Cur().m_kind == ibQueryTokenKind::Ident) {
@@ -472,7 +474,7 @@ void ibQueryParser::ParseTotals(ibQuerySelect& sel)
 	if (!AcceptKw(ibQueryKeyword::By)) {
 		do {
 			if (!IsAggregateKw(Cur()))
-				Fail(Cur(), _("expected an aggregate function (SUM/COUNT/MIN/MAX/AVG) or BY in TOTALS"));
+				ThrowQueryException(Cur(), _("expected an aggregate function (SUM/COUNT/MIN/MAX/AVG) or BY in TOTALS"));
 			sel.m_totalsAggregates.push_back(ParseAggregate());
 		} while (AcceptPunct(wxT(',')));
 
@@ -502,7 +504,7 @@ void ibQueryParser::ParseTotals(ibQuerySelect& sel)
 		// belongs to the dimension and the alias belongs to the level it produces.
 		if (AcceptKw(ibQueryKeyword::As)) {
 			if (Cur().m_kind != ibQueryTokenKind::Ident)
-				Fail(Cur(), _("expected an alias name after AS"));
+				ThrowQueryException(Cur(), _("expected an alias name after AS"));
 			d.m_alias = Next().m_text;
 		}
 		else if (Cur().m_kind == ibQueryTokenKind::Ident) {
@@ -517,7 +519,7 @@ std::vector<wxString> ibQueryParser::ParseDottedName(bool firstMayBeKeyword)
 	std::vector<wxString> parts;
 	if (Cur().m_kind != ibQueryTokenKind::Ident
 	    && !(firstMayBeKeyword && Cur().m_kind == ibQueryTokenKind::Keyword))
-		Fail(Cur(), _("expected a name"));
+		ThrowQueryException(Cur(), _("expected a name"));
 	parts.push_back(Next().m_text);
 	while (AcceptPunct(wxT('.'))) {
 		// ⚠ AFTER A DOT, A KEYWORD IS A NAME. The position decides: nothing but a name can follow a
@@ -529,7 +531,7 @@ std::vector<wxString> ibQueryParser::ParseDottedName(bool firstMayBeKeyword)
 		// keyword table first, and it should not have to. Before this, `CAST(Recorder AS
 		// Document.Order)` died as "expected a name after '.'", pointing at a word plainly there.
 		if (Cur().m_kind != ibQueryTokenKind::Ident && Cur().m_kind != ibQueryTokenKind::Keyword)
-			Fail(Cur(), _("expected a name after '.'"));
+			ThrowQueryException(Cur(), _("expected a name after '.'"));
 		parts.push_back(Next().m_text);
 	}
 	return parts;
@@ -604,10 +606,32 @@ ibQueryAstExprPtr ibQueryParser::ParseComparison()
 		return n;
 	}
 	if (AcceptKw(ibQueryKeyword::In)) {
+		// ⭐⭐ «IN HIERARCHY» IS THE SAME OPERATOR, TOLD HOW FAR DOWN TO LOOK — and it is said in the
+		// three words this language already has (TOTALS BY unfolds a dimension by the very same ones).
+		// A second VENUE for one vocabulary, not a second vocabulary: a report and a filter that both
+		// say "in hierarchy" have to mean the same thing by it.
+		ibQueryDimUnfold unfold = ibQueryDimUnfold::Elements;
+		if (AcceptKw(ibQueryKeyword::HierarchyOnly))    unfold = ibQueryDimUnfold::HierarchyOnly;
+		else if (AcceptKw(ibQueryKeyword::Hierarchy))   unfold = ibQueryDimUnfold::Hierarchy;
+
 		ExpectPunct(wxT('('), wxT("'(' after IN"));
 		auto n = ibQueryAstExpr::Make(ibQueryAstExprKind::In);
-		n->m_negated = negated; n->m_lhs = lhs;
-		if (Cur().IsKeyword(ibQueryKeyword::Select))          // lhs IN (SELECT …) — subquery form
+		n->m_negated = negated; n->m_lhs = lhs; n->m_unfold = unfold;
+		if (unfold != ibQueryDimUnfold::Elements) {
+			// ⚠ THE OPERAND IS ONE PARAMETER, AND ONLY A PARAMETER — the one way this differs from a
+			// plain IN, and it is not a restriction anybody can lift later by being thorough. Expanding
+			// a subtree means WALKING DOWN from the values, so they have to be in hand before the read
+			// starts; a subquery is not in hand until it runs. (Admitting one would mean either a
+			// recursive predicate the filter vocabulary cannot state or a recursive CTE the dialect
+			// layer does not spell — a different arc.) A parameter holding a LIST is the ordinary way
+			// to name several: the operand is one expression, the values in it may be many.
+			const ibQueryToken at = Cur();
+			ibQueryAstExprPtr operand = ParseAddSub();
+			if (!operand || operand->m_kind != ibQueryAstExprKind::Param || Cur().IsPunct(wxT(',')))
+				ThrowQueryException(at, _("IN HIERARCHY takes one &parameter: the values have to be in hand to walk down to what is subordinate to them"));
+			n->m_list.push_back(operand);
+		}
+		else if (Cur().IsKeyword(ibQueryKeyword::Select))     // lhs IN (SELECT …) — subquery form
 			n->m_subquery = ParseSelectStatement();
 		else
 			do { n->m_list.push_back(ParseAddSub()); } while (AcceptPunct(wxT(',')));
@@ -633,7 +657,7 @@ ibQueryAstExprPtr ibQueryParser::ParseComparison()
 	}
 
 	if (negated)
-		Fail(Cur(), _("expected LIKE / IN / BETWEEN after NOT"));
+		ThrowQueryException(Cur(), _("expected LIKE / IN / BETWEEN after NOT"));
 
 	// bare primary (a boolean column / a parenthesized predicate)
 	return lhs;
@@ -810,7 +834,7 @@ ibQueryAstExprPtr ibQueryParser::ParsePrimary()
 		return e;
 	}
 
-	Fail(tk, _("expected a column, literal, or parameter"));
+	ThrowQueryException(tk, _("expected a column, literal, or parameter"));
 	return nullptr;   // unreachable — Fail always throws
 }
 
@@ -834,9 +858,9 @@ ibQueryAstExprPtr ibQueryParser::ParseAggregate()
 	if (Cur().IsOp(wxT("*"))) {
 		++m_pos;
 		if (fn != ibQueryKeyword::Count)
-			Fail(tk, _("'*' is only valid as COUNT(*)"));
+			ThrowQueryException(tk, _("'*' is only valid as COUNT(*)"));
 		if (e->m_distinctArg)
-			Fail(tk, _("COUNT(DISTINCT *) has no meaning: name the field whose different values to count"));
+			ThrowQueryException(tk, _("COUNT(DISTINCT *) has no meaning: name the field whose different values to count"));
 		e->m_star = true;
 	}
 	else {

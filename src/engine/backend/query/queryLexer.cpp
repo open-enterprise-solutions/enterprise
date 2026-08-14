@@ -4,7 +4,7 @@
 
 #include "queryLexer.h"
 
-#include "backend/backend_exception.h"   // ibBackendCoreException
+#include "queryException.h"   // ibBackendQuerySourceException — L4 refuses in its own variety
 
 #include <map>
 
@@ -164,11 +164,14 @@ void ibQueryLexer::DoSetError(int /*codeError*/,
 	unsigned int currPos, unsigned int currLine,
 	const wxString& errorDesc) const
 {
+	// L4 refuses in its OWN variety, carrying the position as data — the text is what is wrong here,
+	// not the machinery, and the caller that shows this is the one editing the query.
 	if (errorDesc.empty())
-		ibBackendCoreException::Error(_("Query lexical error at line %u (position %u)"), currLine, currPos);
+		ibBackendQuerySourceException::ErrorAt(currLine, currPos,
+			_("Query lexical error at line %u (position %u)"), currLine, currPos);
 	else
-		ibBackendCoreException::Error(_("Query lexical error at line %u (position %u): %s"),
-			currLine, currPos, errorDesc);
+		ibBackendQuerySourceException::ErrorAt(currLine, currPos,
+			_("Query lexical error at line %u (position %u): %s"), currLine, currPos, errorDesc);
 }
 
 wxChar ibQueryLexer::PeekRawByte() const
@@ -248,7 +251,7 @@ std::vector<ibQueryToken> ibQueryLexer::Tokenize(const wxString& queryText)
 		else if (IsByte(wxT('&'))) {           // &Name — a query parameter
 			GetByte();                         // consume '&'
 			if (!IsWord())
-				ibBackendCoreException::Error(
+				ibBackendQuerySourceException::ErrorAt(GetCurrentLine() + 1, GetCurrentPos(),
 					_("Query: expected a parameter name after '&' at line %u (position %u)"),
 					GetCurrentLine() + 1, GetCurrentPos());
 			sUpper.clear(); sOrig.clear();
