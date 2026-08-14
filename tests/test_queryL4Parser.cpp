@@ -766,3 +766,75 @@ TEST(QueryRender, IndexByRoundTrips) {
 	ExpectRoundTrip(wxT("SELECT Ref, Code INTO Sales FROM Document.Orders INDEX BY Ref, Code"));
 	ExpectRoundTrip(wxT("SELECT Ref INTO Sales FROM Document.Orders WHERE Code > 1 INDEX BY Ref"));
 }
+
+// ---------------------------------------------------------------------------
+//  «IN HIERARCHY» — the same operator, told how far down to look
+// ---------------------------------------------------------------------------
+//
+// The three words are the language's own (TOTALS BY unfolds a dimension by them), and this is their
+// SECOND venue: a filter. What the parser has to get right is which of the three was written, and
+// the one rule that separates this from a plain IN — the operand is a parameter, because a subtree
+// is walked DOWN from values that have to be in hand.
+
+TEST(QueryL4Parser, InWithoutAWordIsElements)
+{
+	auto sel = Parse(wxT("SELECT Ref FROM Catalog.Products WHERE Ref IN (&A, &B)"));
+	ASSERT_NE(nullptr, sel->m_where);
+	EXPECT_EQ(ibQueryAstExprKind::In, sel->m_where->m_kind);
+	EXPECT_EQ(ibQueryDimUnfold::Elements, sel->m_where->m_unfold);
+	EXPECT_EQ(2u, sel->m_where->m_list.size());
+}
+
+TEST(QueryL4Parser, InHierarchyCarriesTheWordAndOneParameter)
+{
+	auto sel = Parse(wxT("SELECT Ref FROM Catalog.Products WHERE Parent IN HIERARCHY (&Roots)"));
+	ASSERT_NE(nullptr, sel->m_where);
+	EXPECT_EQ(ibQueryAstExprKind::In, sel->m_where->m_kind);
+	EXPECT_EQ(ibQueryDimUnfold::Hierarchy, sel->m_where->m_unfold);
+	ASSERT_EQ(1u, sel->m_where->m_list.size());
+	EXPECT_EQ(ibQueryAstExprKind::Param, sel->m_where->m_list[0]->m_kind);
+	EXPECT_EQ(wxT("Roots"), sel->m_where->m_list[0]->m_paramName);
+	EXPECT_EQ(nullptr, sel->m_where->m_subquery);
+}
+
+TEST(QueryL4Parser, InHierarchyOnlyIsItsOwnWord)
+{
+	auto sel = Parse(wxT("SELECT Ref FROM Catalog.Products WHERE Parent IN HIERARCHYONLY (&Roots)"));
+	ASSERT_NE(nullptr, sel->m_where);
+	EXPECT_EQ(ibQueryDimUnfold::HierarchyOnly, sel->m_where->m_unfold);
+}
+
+TEST(QueryL4Parser, NotInHierarchyKeepsBothTheNegationAndTheWord)
+{
+	auto sel = Parse(wxT("SELECT Ref FROM Catalog.Products WHERE Parent NOT IN HIERARCHY (&Roots)"));
+	ASSERT_NE(nullptr, sel->m_where);
+	EXPECT_EQ(ibQueryAstExprKind::In, sel->m_where->m_kind);
+	EXPECT_TRUE(sel->m_where->m_negated);
+	EXPECT_EQ(ibQueryDimUnfold::Hierarchy, sel->m_where->m_unfold);
+}
+
+TEST(QueryL4Parser, InHierarchyRefusesEverythingButAParameter)
+{
+	// A SUBQUERY is the interesting refusal: expanding a subtree means walking down FROM the values,
+	// so they have to exist before the read starts — and a subquery does not until it runs. A literal
+	// list and a comma-separated one are refused for the same reason, said once.
+	EXPECT_THROW(Parse(wxT("SELECT Ref FROM Catalog.Products WHERE Parent IN HIERARCHY (SELECT Ref FROM Catalog.Products)")),
+		ibBackendException);
+	EXPECT_THROW(Parse(wxT("SELECT Ref FROM Catalog.Products WHERE Parent IN HIERARCHY (&A, &B)")),
+		ibBackendException);
+	EXPECT_THROW(Parse(wxT("SELECT Ref FROM Catalog.Products WHERE Parent IN HIERARCHY (1)")),
+		ibBackendException);
+
+	// …and a plain IN is untouched by that rule: it still takes a list and a subquery.
+	EXPECT_NO_THROW(Parse(wxT("SELECT Ref FROM Catalog.Products WHERE Parent IN (SELECT Ref FROM Catalog.Products)")));
+	EXPECT_NO_THROW(Parse(wxT("SELECT Ref FROM Catalog.Products WHERE Parent IN (1, 2)")));
+}
+
+TEST(QueryRender, InHierarchyRoundTrips) {
+	// The word is part of the OPERATOR, so a query that had it comes back with it — a constructor
+	// that dropped it would silently widen the filter to the whole chart.
+	ExpectRoundTrip(wxT("SELECT Ref FROM Catalog.Products WHERE Parent IN HIERARCHY (&Roots)"));
+	ExpectRoundTrip(wxT("SELECT Ref FROM Catalog.Products WHERE Parent IN HIERARCHYONLY (&Roots)"));
+	ExpectRoundTrip(wxT("SELECT Ref FROM Catalog.Products WHERE Parent NOT IN HIERARCHY (&Roots)"));
+	ExpectRoundTrip(wxT("SELECT Ref FROM Catalog.Products WHERE Parent IN (&A, &B)"));
+}

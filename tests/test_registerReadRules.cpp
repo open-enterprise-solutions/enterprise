@@ -22,6 +22,10 @@
 #include <gtest/gtest.h>
 
 #include "backend/metaCollection/partial/accumulationRegister.h"
+#include "backend/metaCollection/partial/accountingRegister.h"     // ibAcctArgs — the layout a call is read by
+#include "backend/metaCollection/partial/chartOfAccountsEnum.h"   // ibAccountType — the fold the balance applies
+
+#include <set>
 #include "backend/system/value/valuePointInTime.h"
 #include "backend/system/value/valueBoundary.h"
 
@@ -267,4 +271,342 @@ TEST(RegisterBound, ABoundaryOverAMomentKeepsTheDocument)
     EXPECT_EQ(when, bound.m_date.GetDateTime());
     EXPECT_TRUE(bound.HasRecorder());
     EXPECT_TRUE(bound.m_excluding);
+}
+
+// =============================================================================
+// A PUBLISHED COLUMN OWES THREE NAMES — and the third one had no owner
+// =============================================================================
+//
+// A derived surface names each column for a QUERY (`AmountBalanceDr`), for the STORAGE
+// (`Amount_BalanceDr`), and for a PERSON. The third used to be built somewhere else entirely — in
+// the manager, per figure, spelled by hand — so the same number arrived captioned through the script
+// door and bare through the query door. These pin the pieces that made one answer out of the three.
+
+TEST(RegisterSurface, ACaptionFallsBackToTheNameAndNeverToNothing) {
+    ibTypeDescription type;
+    const ibTempColumn bare(wxT("AmountBalanceDr"), wxT("Amount_BalanceDr"), type, 1);
+    // No caption given: the base class's own answer, which is right for a temp table whose columns
+    // are named by whoever made it. What must NOT happen is an empty heading.
+    EXPECT_EQ(wxT("AmountBalanceDr"), bare.GetSynonym());
+
+    const ibTempColumn dressed(wxT("AmountBalanceDr"), wxT("Amount_BalanceDr"), type, 1, wxT("Amount Balance Dr"));
+    EXPECT_EQ(wxT("Amount Balance Dr"), dressed.GetSynonym());
+    // …and the other two names are untouched by it. Three names, one column, no aliasing.
+    EXPECT_EQ(wxT("AmountBalanceDr"),  dressed.GetName());
+    EXPECT_EQ(wxT("Amount_BalanceDr"), dressed.GetPhysicalName());
+}
+
+TEST(RegisterSurface, EveryFigureWordHasACaption) {
+    // The point is not WHICH words come back (they are translated), it is that every figure the
+    // registers publish is IN the list. A figure that is not answers with its own name — legible,
+    // and the signal that the list has fallen behind the vocabulary.
+    const wxChar* const figures[] = {
+        ibRegFigure::Turnover, ibRegFigure::Receipt, ibRegFigure::Expense,
+        ibRegFigure::Balance,  ibRegFigure::OpeningBalance, ibRegFigure::ClosingBalance,
+    };
+    for (const wxChar* figure : figures)
+        EXPECT_FALSE(ibRegFigureCaption(figure).IsEmpty()) << "no caption for " << wxString(figure).ToStdString();
+
+    EXPECT_EQ(wxT("SomethingNobodyCaptioned"), ibRegFigureCaption(wxT("SomethingNobodyCaptioned")));
+}
+
+TEST(RegisterSurface, TheSideRidesTheCaptionTheSameWayItRidesTheName) {
+    // ibRegSidedFigure and ibRegSidedCaption are one pairing said twice — a name and a caption built
+    // from the SAME (figure, side). The builder takes that pair rather than the finished suffix,
+    // precisely so nobody recovers the side by reading the last two letters of a string.
+    EXPECT_EQ(wxT("BalanceDr"), ibRegSidedFigure(ibRegFigure::Balance, /*credit*/ false));
+    EXPECT_EQ(wxT("BalanceCr"), ibRegSidedFigure(ibRegFigure::Balance, /*credit*/ true));
+
+    const wxString dr = ibRegSidedCaption(ibRegFigure::Balance, /*credit*/ false);
+    const wxString cr = ibRegSidedCaption(ibRegFigure::Balance, /*credit*/ true);
+    EXPECT_NE(dr, cr) << "the two sides must not read alike";
+    EXPECT_TRUE(dr.StartsWith(ibRegFigureCaption(ibRegFigure::Balance)));
+    EXPECT_TRUE(cr.StartsWith(ibRegFigureCaption(ibRegFigure::Balance)));
+}
+
+TEST(RegisterSurface, AColumnCaptionSaysWhatItIsOfThenWhatItIs) {
+    EXPECT_EQ(wxT("Amount Balance"), ibRegFigureColumnCaption(wxT("Amount"), wxT("Balance")));
+    // A resource with no synonym of its own must not produce a leading space.
+    EXPECT_EQ(wxT("Balance"), ibRegFigureColumnCaption(wxEmptyString, wxT("Balance")));
+}
+
+// =============================================================================
+// The derived-surface cache — built once, rebuilt when the shape moves, never freed under a reader
+// =============================================================================
+
+TEST(RegisterSurface, TheSameQuestionGetsTheSameSurface) {
+    ibRegSurfaceCache cache;
+    ibTypeDescription type;
+    const auto build = [&type](std::vector<ibTempColumn>& columns, ibMetaID& synthetic) {
+        columns.push_back(ibTempColumn(wxT("A"), wxT("fldA"), type, synthetic++));
+    };
+
+    const ibBackendQueryable* first  = cache.Obtain(wxT("k"), wxT("sig-1"), wxT("T"), nullptr, build);
+    const ibBackendQueryable* second = cache.Obtain(wxT("k"), wxT("sig-1"), wxT("T"), nullptr, build);
+    ASSERT_NE(nullptr, first);
+    EXPECT_EQ(first, second) << "same key, same signature — the surface is built once";
+}
+
+TEST(RegisterSurface, AChangedShapeRebuildsAndTheOldPointerStaysAlive) {
+    ibRegSurfaceCache cache;
+    ibTypeDescription type;
+    const auto one = [&type](std::vector<ibTempColumn>& columns, ibMetaID& synthetic) {
+        columns.push_back(ibTempColumn(wxT("A"), wxT("fldA"), type, synthetic++));
+    };
+    const auto two = [&type](std::vector<ibTempColumn>& columns, ibMetaID& synthetic) {
+        columns.push_back(ibTempColumn(wxT("A"), wxT("fldA"), type, synthetic++));
+        columns.push_back(ibTempColumn(wxT("B"), wxT("fldB"), type, synthetic++));
+    };
+
+    const ibBackendQueryable* before = cache.Obtain(wxT("k"), wxT("sig-1"), wxT("T"), nullptr, one);
+    ASSERT_NE(nullptr, before);
+    EXPECT_EQ(1u, before->GetColumns().size());
+
+    // ⭐ THE SIGNATURE IS WHAT REBUILDS IT. Keyed by name alone, a surface asked for before the
+    // register's attributes were read stays empty for the life of the session — that is the scar
+    // this check exists for, and counting columns instead would miss a RE-TYPED one.
+    const ibBackendQueryable* after = cache.Obtain(wxT("k"), wxT("sig-2"), wxT("T"), nullptr, two);
+    ASSERT_NE(nullptr, after);
+    EXPECT_NE(before, after);
+    EXPECT_EQ(2u, after->GetColumns().size());
+
+    // ⚠ AND THE OLD ONE IS RETIRED, NOT DESTROYED — a reader may still hold the pointer handed out
+    // earlier. Reading through it after the rebuild is the whole reason the retired list exists; if
+    // this ever becomes a use-after-free, it fails here rather than in somebody's report.
+    EXPECT_EQ(1u, before->GetColumns().size());
+}
+
+TEST(RegisterSurface, TheIdBandIsOneConventionForEverySurface) {
+    // Derived columns are numbered clear of every metaID. It was re-declared as a local constant at
+    // each builder, which is a constant nobody owns.
+    ibRegSurfaceCache cache;
+    ibTypeDescription type;
+    ibMetaID seen = 0;
+    cache.Obtain(wxT("k"), wxT("sig"), wxT("T"), nullptr,
+        [&](std::vector<ibTempColumn>& columns, ibMetaID& synthetic) {
+            seen = synthetic;
+            columns.push_back(ibTempColumn(wxT("A"), wxT("fldA"), type, synthetic++));
+        });
+    EXPECT_EQ(ibRegDerivedColumnBand, seen);
+}
+
+// =============================================================================
+// The balance's server road — the shape of what it hands the door
+// =============================================================================
+//
+// The reading itself needs a register, a chart and a database, so what is pinned here is the piece
+// that decides the NUMBERS and can be checked without any of them: the fold by the account's own
+// type, said as the CASE the relation carries.
+//
+//   active         a credit entry REDUCED the debit balance   ->  Dr - Cr , 0
+//   passive        the mirror                                 ->  0 , Cr - Dr
+//   active-passive both sides stand — folding them is a LOSS
+//
+// The RAM oracle is FoldSideByAccountType; if these two ever disagree, one road reports a different
+// balance than the other for the same data, and nothing about either answer looks wrong.
+
+namespace {
+
+// The RAM rule, restated here as the oracle — deliberately by hand, so a change to the engine's copy
+// does not silently change what this test holds to be correct.
+void FoldOracle(int accountType, double& debit, double& credit)
+{
+    if (accountType == ibAccountType::eActivePassive)
+        return;
+    const double net = debit - credit;
+    if (accountType == ibAccountType::eActive) { debit = net;  credit = 0.0; }
+    else                                       { debit = 0.0; credit = -net; }
+}
+
+// What the projected CASE computes, in the same order of tests the relation declares.
+void FoldAsProjected(int accountType, double& debit, double& credit)
+{
+    const double dr = debit, cr = credit;
+    debit  = (accountType == ibAccountType::eActive)  ? dr - cr : (accountType == ibAccountType::ePassive ? 0.0 : dr);
+    credit = (accountType == ibAccountType::ePassive) ? cr - dr : (accountType == ibAccountType::eActive  ? 0.0 : cr);
+}
+
+} // namespace
+
+TEST(AcctBalanceServerRoad, TheCaseFoldsExactlyAsTheRamReadingDoes) {
+    const double figures[][2] = { { 100.0, 0.0 }, { 0.0, 100.0 }, { 100.0, 100.0 }, { 150.0, 40.0 }, { 0.0, 0.0 } };
+    const int types[] = { ibAccountType::eActive, ibAccountType::ePassive, ibAccountType::eActivePassive };
+
+    for (const int type : types)
+        for (const auto& pair : figures) {
+            double oracleDr = pair[0], oracleCr = pair[1];
+            double caseDr   = pair[0], caseCr   = pair[1];
+            FoldOracle(type, oracleDr, oracleCr);
+            FoldAsProjected(type, caseDr, caseCr);
+            EXPECT_DOUBLE_EQ(oracleDr, caseDr) << "type " << type << " debit " << pair[0] << "/" << pair[1];
+            EXPECT_DOUBLE_EQ(oracleCr, caseCr) << "type " << type << " credit " << pair[0] << "/" << pair[1];
+        }
+}
+
+TEST(AcctBalanceServerRoad, ActivePassiveIsNeverFolded) {
+    // The one case that is a LOSS rather than a simplification: a receivable of 100 against a payable
+    // of 100 is not zero, and "zero" is wrong in a way no formatting undoes.
+    double dr = 100.0, cr = 100.0;
+    FoldAsProjected(ibAccountType::eActivePassive, dr, cr);
+    EXPECT_DOUBLE_EQ(100.0, dr);
+    EXPECT_DOUBLE_EQ(100.0, cr);
+}
+
+TEST(AcctBalanceServerRoad, TheOppositeSideReducesRatherThanAccumulates) {
+    // An active account credited by 40 against 150 debited holds 110 — on the DEBIT side, with
+    // nothing on the credit one. Getting this backwards produces two plausible figures instead of one.
+    double dr = 150.0, cr = 40.0;
+    FoldAsProjected(ibAccountType::eActive, dr, cr);
+    EXPECT_DOUBLE_EQ(110.0, dr);
+    EXPECT_DOUBLE_EQ(0.0,   cr);
+
+    dr = 40.0; cr = 150.0;
+    FoldAsProjected(ibAccountType::ePassive, dr, cr);
+    EXPECT_DOUBLE_EQ(0.0,   dr);
+    EXPECT_DOUBLE_EQ(110.0, cr);
+}
+
+// =============================================================================
+// The ARGUMENT LAYOUT — positions, and why they are worth pinning at all
+// =============================================================================
+//
+// A virtual table's arguments are read BY POSITION. Two lists have to agree — the one the descriptor
+// declares and the one the call is read by — and when they disagree nothing fails: the condition is
+// read as a breakdown list, the breakdown as a periodicity, and the answer comes back looking like an
+// answer. The neighbouring register shipped exactly that once, when a declared periodicity pushed
+// every call's filter into the next slot.
+//
+// So the layout is a pure function and these are its golden rows. The reference order (the shape the
+// reference implementation's dialogs show) is: the interval, HOW IT IS CUT, then the sides — each
+// side being its account condition immediately followed by its breakdown — with the general
+// condition between the two sides for a turnover and after both for the matrix.
+
+TEST(AcctArgs, BalanceIsAMomentThenOneSide) {
+    const ibAcctArgs a = ibAcctArgs::For(ibAcctShape::Balance, /*correspondence*/ false);
+    EXPECT_EQ(0, a.m_begin);
+    EXPECT_EQ(-1, a.m_end)          << "a balance stands at ONE moment, not over an interval";
+    EXPECT_EQ(-1, a.m_periodicity)  << "there is no interval to cut";
+    EXPECT_EQ(1, a.m_accountDr);
+    EXPECT_EQ(2, a.m_kindsDr)       << "the breakdown follows ITS account, not the other account";
+    EXPECT_EQ(3, a.m_condition);
+    EXPECT_EQ(4, a.m_count);
+}
+
+TEST(AcctArgs, ABalanceHasNoOppositeSideEvenInCorrespondence) {
+    // "The balance of 51 against 62" is not a question: a balance is not a movement and has no other
+    // end. The credit account is a filter for a TURNOVER, and a filter is not a column.
+    const ibAcctArgs a = ibAcctArgs::For(ibAcctShape::Balance, /*correspondence*/ true);
+    EXPECT_EQ(-1, a.m_accountCr);
+    EXPECT_EQ(-1, a.m_kindsCr);
+    EXPECT_EQ(4, a.m_count);
+}
+
+TEST(AcctArgs, TurnoversCutTheIntervalBeforeAnythingElse) {
+    const ibAcctArgs a = ibAcctArgs::For(ibAcctShape::Turnovers, /*correspondence*/ false);
+    EXPECT_EQ(0, a.m_begin);
+    EXPECT_EQ(1, a.m_end);
+    // ⭐ THIRD, not last. It is about the interval, and an author writes the interval and immediately
+    // says how to cut it.
+    EXPECT_EQ(2, a.m_periodicity);
+    EXPECT_EQ(3, a.m_accountDr);
+    EXPECT_EQ(4, a.m_kindsDr);
+    EXPECT_EQ(5, a.m_condition);
+    EXPECT_EQ(6, a.m_count);
+}
+
+TEST(AcctArgs, ACorrespondenceTurnoverPutsTheConditionBetweenTheSides) {
+    // The reading asks "this debit side, so filtered, against THAT credit side" — the general
+    // condition belongs to the reading rather than to either side, and it is written where it acts.
+    const ibAcctArgs a = ibAcctArgs::For(ibAcctShape::Turnovers, /*correspondence*/ true);
+    EXPECT_EQ(2, a.m_periodicity);
+    EXPECT_EQ(3, a.m_accountDr);
+    EXPECT_EQ(4, a.m_kindsDr);
+    EXPECT_EQ(5, a.m_condition);
+    EXPECT_EQ(6, a.m_accountCr);
+    EXPECT_EQ(7, a.m_kindsCr);
+    EXPECT_EQ(8, a.m_count);
+}
+
+TEST(AcctArgs, TheMatrixNamesBothSidesFirstAndFiltersThePairAfterwards) {
+    const ibAcctArgs a = ibAcctArgs::For(ibAcctShape::DrCrTurnovers, /*correspondence*/ true);
+    EXPECT_EQ(2, a.m_periodicity);
+    EXPECT_EQ(3, a.m_accountDr);
+    EXPECT_EQ(4, a.m_kindsDr);
+    EXPECT_EQ(5, a.m_accountCr);
+    EXPECT_EQ(6, a.m_kindsCr);
+    EXPECT_EQ(7, a.m_condition) << "the pair is named symmetrically, THEN filtered";
+    EXPECT_EQ(8, a.m_count);
+}
+
+TEST(AcctArgs, TheSymbiosisAsksWhatToDoWithAnEmptyPeriod) {
+    const ibAcctArgs a = ibAcctArgs::For(ibAcctShape::BalanceAndTurnovers, /*correspondence*/ false);
+    EXPECT_EQ(2, a.m_periodicity);
+    // Right after the periodicity, because it is about the periods too — and only this reading can be
+    // asked it, being the only one that reports a balance for a period nothing touched.
+    EXPECT_EQ(3, a.m_fillMethod);
+    EXPECT_EQ(4, a.m_accountDr);
+    EXPECT_EQ(5, a.m_kindsDr);
+    EXPECT_EQ(6, a.m_condition);
+    EXPECT_EQ(7, a.m_count);
+    EXPECT_EQ(-1, ibAcctArgs::For(ibAcctShape::Turnovers, false).m_fillMethod)
+        << "a turnover has no balance to carry across an empty period";
+}
+
+TEST(AcctArgs, AListingTakesNeitherAccountNorBreakdownAndCanBeOrdered) {
+    const ibAcctArgs a = ibAcctArgs::For(ibAcctShape::Records, /*correspondence*/ true);
+    EXPECT_EQ(0, a.m_begin);
+    EXPECT_EQ(1, a.m_end);
+    EXPECT_EQ(-1, a.m_periodicity) << "a movement line is already as fine as this data gets";
+    EXPECT_EQ(-1, a.m_accountDr)   << "a listing reports the lines as written";
+    EXPECT_EQ(-1, a.m_kindsDr);
+    EXPECT_EQ(2, a.m_condition);
+    // Only a listing answers with LINES, so only a listing can be ordered and capped: a fold has no
+    // line to put before another.
+    EXPECT_EQ(3, a.m_order);
+    EXPECT_EQ(4, a.m_top);
+    EXPECT_EQ(5, a.m_count);
+}
+
+TEST(AcctArgs, EverySlotIsDistinctAndInsideTheCount) {
+    // The property under all the rows above: a layout that hands two arguments the same position, or
+    // a position past the end, is read as something else entirely.
+    const ibAcctShape shapes[] = { ibAcctShape::Balance, ibAcctShape::Turnovers,
+                                   ibAcctShape::DrCrTurnovers, ibAcctShape::BalanceAndTurnovers,
+                                   ibAcctShape::Records };
+    for (const ibAcctShape shape : shapes)
+        for (const bool correspondence : { false, true }) {
+            const ibAcctArgs a = ibAcctArgs::For(shape, correspondence);
+            const int slots[] = { a.m_begin, a.m_end, a.m_periodicity, a.m_fillMethod,
+                                  a.m_accountDr, a.m_kindsDr, a.m_accountCr, a.m_kindsCr,
+                                  a.m_condition, a.m_order, a.m_top };
+            std::set<int> seen;
+            for (const int slot : slots) {
+                if (slot < 0)
+                    continue;
+                EXPECT_LT(slot, a.m_count) << "slot outside the declared count";
+                EXPECT_TRUE(seen.insert(slot).second) << "two arguments share position " << slot;
+            }
+        }
+}
+
+// =============================================================================
+// The neighbour's order — the same rule, stated to the compiler there
+// =============================================================================
+
+TEST(AccumArgs, ThePeriodicityFollowsTheIntervalHereToo) {
+    // Corrected 2026-08-13: it used to sit LAST, on the argument that an option nobody states belongs
+    // where leaving it out is free. True of a DEFAULT, false of an ORDER — and two registers whose
+    // arguments run in different orders are two things to remember instead of one.
+    EXPECT_EQ(2, static_cast<int>(ibRegTurnoverArg::Periodicity));
+    EXPECT_EQ(3, static_cast<int>(ibRegTurnoverArg::Filter));
+    EXPECT_EQ(4, static_cast<int>(ibRegTurnoverArg::Count));
+
+    EXPECT_EQ(2, static_cast<int>(ibRegBalTurnArg::Periodicity));
+    EXPECT_EQ(3, static_cast<int>(ibRegBalTurnArg::FillMethod));
+    EXPECT_EQ(4, static_cast<int>(ibRegBalTurnArg::Filter));
+    EXPECT_EQ(5, static_cast<int>(ibRegBalTurnArg::Count));
+
+    // A balance is a moment and a condition, and nothing has moved there.
+    EXPECT_EQ(0, static_cast<int>(ibRegBalanceArg::Period));
+    EXPECT_EQ(1, static_cast<int>(ibRegBalanceArg::Filter));
 }

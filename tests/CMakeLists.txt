@@ -53,6 +53,7 @@ add_executable(oes_tests
     test_dbTaxonomy.cpp
     test_gitService.cpp
     test_metadataSerialize.cpp
+    test_propertySerialized.cpp
     test_metadataTree.cpp
     test_commonAttribute.cpp
     test_dataNode.cpp
@@ -92,6 +93,8 @@ add_executable(oes_tests
     test_registerReadRules.cpp
     test_totalsViewParity.cpp
     test_totalsNumericParity.cpp
+    test_totalsKeyHash.cpp
+    test_accountingTotals.cpp
     test_uniqueKey.cpp
     test_valueArray.cpp
     test_valueContainer.cpp
