@@ -107,6 +107,13 @@ has no equivalent.
 - **backend.dll is truly UI-free.** `daemon.exe` and `codeRunner.exe`
   link backend without dragging in wx. The
   pattern has proven itself over years of desktop operation.
+  ⚠ That is a statement about **linking and behaviour**, not about include
+  hygiene: nothing enforces the "no GUI headers in backend" rule, and a
+  violation compiles exactly like compliance. `query/queryColumn.h` — a
+  header whose own comment calls it light — carried `#include <wx/icon.h>`
+  for one return type until 2026-08-14, reaching 21 direct includers
+  ([query-engine-layers.md](query-engine-layers.md), the shared technical
+  floor). Found by reading, which is currently the only detector.
 - **Swapping frontend is cheap.** `wfrontend.dll` replacing
   `frontend.dll` was possible largely because this interface was
   already in place — web didn't need to touch backend to publish its

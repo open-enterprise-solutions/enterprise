@@ -977,18 +977,6 @@ msgstr "Тип запису"
 msgid "Account"
 msgstr "Рахунок"
 
-#: src/engine/backend/metaCollection/partial/accountingRegister.h:202
-msgid "Subconto 1"
-msgstr "Субконто 1"
-
-#: src/engine/backend/metaCollection/partial/accountingRegister.h:205
-msgid "Subconto 2"
-msgstr "Субконто 2"
-
-#: src/engine/backend/metaCollection/partial/accountingRegister.h:208
-msgid "Subconto 3"
-msgstr "Субконто 3"
-
 #: src/engine/backend/metaCollection/partial/accountingRegisterEnum.h:21
 msgid "Debit"
 msgstr "Дебет"
@@ -1125,7 +1113,7 @@ msgstr "Початковий залишок"
 
 #: src/engine/backend/metaCollection/partial/accountingRegisterManager_impl.cpp:1029
 msgid "Closing balance"
-msgstr "Залишок"
+msgstr "Кінцевий залишок"
 
 #: src/engine/backend/metaCollection/partial/accountingRegisterMetadataMenu.cpp:12
 #: src/engine/backend/metaCollection/partial/accumulationRegisterMetadataMenu.cpp:12
@@ -1381,17 +1369,9 @@ msgstr "Кількісний"
 msgid "Currency accounting"
 msgstr "Валютний облік"
 
-#: src/engine/backend/metaCollection/partial/chartOfAccounts.h:253
-msgid "Max subconto count"
-msgstr "Максимум субконто"
-
 #: src/engine/backend/metaCollection/partial/chartOfAccounts.h:258
 msgid "Chart of characteristic types"
 msgstr "План видів характеристик"
-
-#: src/engine/backend/metaCollection/partial/chartOfAccounts.h:264
-msgid "Subconto kinds"
-msgstr "Види субконто"
 
 #: src/engine/backend/metaCollection/partial/chartOfAccountsEnum.h:22
 #: src/engine/backend/metaCollection/partial/commonObject.h:1181

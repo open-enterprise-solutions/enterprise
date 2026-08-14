@@ -121,6 +121,42 @@ ibTypeData(const ibQualifierNumber&, const ibQualifierDate&, const ibQualifierSt
 Each constructor fills its own qualifier and leaves the others at defaults — so
 `ibTypeData(20, 2)` reads as "Number(20,2)" and the date/string parts are simply inert.
 
+### 2.3 ⭐⭐ "Is the type filled in" is asked of the FACTORY (2026-08-14)
+
+```cpp
+class BACKEND_API ibBackendTypeFactory {
+    virtual ibTypeDescription& GetTypeDesc() const = 0;              // backend_type.h:55
+    bool IsEmptyTypeDesc() const { return !GetTypeDesc().IsOk(); }   // backend_type.h:74 — NOT virtual
+};
+```
+
+An empty type description is **a column no value can ever enter**, and several rules refuse exactly
+that state: a register that says it is written by a recorder but names no document
+(`ibValueMetaObjectRegisterData::OnSaveMetaObject`, `metaCollection/partial/commonObject.cpp:1122`),
+and an accounting register's analytics slots left untyped because the chart of accounts names no
+characteristic chart (`accountingRegisterMetadataSchema.cpp:117`, a restructure WARNING — a
+configuration is built up in steps, but silence about it is how one ships).
+
+**The place is the point.** The predicate sits on `ibBackendTypeFactory` because that is where
+`GetTypeDesc()` is declared, so it is the only place that can answer for *every* holder of a type
+description — an attribute, a control's bound source, a filter's field. It spent one revision on
+`ibValueMetaObjectAttributeBase` and was wrong twice over there:
+
+- **the name was borrowed from the wrong family.** It was called `IsEmptyProperty`, which is
+  `ibPropertyObject`'s question ([property-system.md](property-system.md)) — an attribute has no
+  *property* to be empty, it has a TYPE DESCRIPTION, and reusing the neighbour's word makes two
+  different questions read alike at every callsite;
+- **the place would have produced drift.** On a subclass it answers for that subclass alone, and the
+  next holder spells the same fact its own way — `GetClsidCount() == 0`, `GetClsidList().empty()`,
+  `!GetTypeDesc().IsOk()`. Three spellings of one question, each compiling, is the shape
+  `accountingRegisterMetadataSchema.cpp` was already sliding into by counting classes at the callsite.
+
+**Deliberately non-virtual:** the answer is a function of the type description alone, and
+`GetTypeDesc()` — which *is* virtual — already supplies whatever each holder keeps. A virtual here
+would only offer subclasses a chance to disagree about what "empty" means, which is the drift it
+exists to prevent (and, inline on a `BACKEND_API` class, it would demand an out-of-line definition
+for every DLL that sees the header).
+
 ---
 
 ## 3. `ibSourceDescription` — a binding path

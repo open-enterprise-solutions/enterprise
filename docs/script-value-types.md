@@ -156,6 +156,14 @@ layer, it vends statements and result sets. Note that a **prepared statement is 
 way** to bind user values — the same rule as C++ ([../CLAUDE.md](../CLAUDE.md) § What Not
 To Do).
 
+⚠ **This is a HATCH, and it is the only script surface that reaches raw L1.** What it hands
+back is the driver itself, so a statement written through it goes past the **dialect layer**
+(the one place that knows each engine's spelling), past the **L3 door**, past the **row-level
+access policy** and past **paging** — it is yours to keep correct on all five databases, and
+a report built on it can show rows its reader may not see. Kept deliberately, for service
+work with no other door; ordinary data access is a manager, a query or LINQ
+([ai-context.md](ai-context.md) § 4.1), and that is a rule rather than an impossibility.
+
 ### 2.8 System and OS
 
 | Name | Key | | C++ |

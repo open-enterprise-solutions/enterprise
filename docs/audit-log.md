@@ -136,7 +136,16 @@ runs sweep + waits 24h on CV.  Default 90 days hard-coded.
 | `message` | `wxString` | Human-readable text |
 | `ref_guid` | `wxString` | String form of ibGuid; empty when no ref |
 | `ref_meta_id` | `int` | ibMetaID; 0 when no ref. **0 = sys_user convention** (drills via `ibDialogUserItem`, not `ibValueReferenceDataObject`) |
-| `details` | `wxMemoryBuffer` | Reserved for serialised `ibValue` details — populated by Audit overloads; column kept for forward compatibility |
+| `details` | `wxMemoryBuffer` | Reserved for serialised `ibValue` details — the column exists, the field is **still always empty**: `ibLogger::Emit` drops its `details` argument (`logger.cpp:174–178`) until the metadata-serialisation wrapper is wired in (phase 3) |
+
+⚠ **The bind for `details` was a no-op until 2026-08-14.** `ibLoggerSinkSqlite::WriteBatch` binds it
+as `raw->SetParamBlob(11, e.details)` — the `wxMemoryBuffer` overload of `ibPreparedStatement`, which
+had an **empty body** that no driver overrides, so the parameter was silently bound to nothing. This
+is the only `wxMemoryBuffer` caller in the tree, and nothing was actually lost only because the field
+is never filled yet: the day phase 3 fills it, the log would have been writing rows whose payload
+vanished at the binder, with no error anywhere. The overload now forwards to the `(const void*, long)`
+sibling — [database-layer.md § 3b](database-layer.md) has the general rule (an empty non-pure virtual
+is neither abstract nor correct, so it fails as a silent wrong answer).
 
 SQLite schema (per-month file) — emitted by `ibLoggerSinkSqlite::EnsureSchema`:
 

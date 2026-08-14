@@ -98,6 +98,14 @@ L3-2 does not render: it DECLARES what it wants (`ibSchemaMaterialize`), lowers 
 `ibMaterializeSpec` — expanding logical columns into physical fields, which is the metadata step —
 and APPLIES what comes back.
 
+⭐ **The dialect FACTS the declaration needs are asked THROUGH this floor too, never read off a
+dictionary from above.** `ibIndexFieldCapacity` / `ibKeyNeedsHash` (`databaseMaterializeBuilder.h`)
+answer *how many physical fields one index may cover here* and *is this key past that* out of
+`ibDialectDictionary::m_maxIndexSegments` (Firebird 16, MySQL 16, PostgreSQL 32, SQLite none). L3-2
+must know before it emits anything, because the answer is a COLUMN — a key past the ceiling carries
+its uniqueness in one hashed field instead — but a dialect is L2's to read, and the floor above has
+no business knowing one exists. See [register-shared-machinery.md](register-shared-machinery.md) §4a.
+
 ### The shared technical floor (between L2 and L3) — `query/`
 Not a level of its own: the **contracts every floor speaks**. `ibBackendQueryProvider`
 (`query/queryProvider.h`) is literally *"the whole L3↔L2-1 layer"* — the engine a source vends that
@@ -106,7 +114,19 @@ turns the door's calls into L2-1 IR. Alongside it:
   metaobject through (physical table, keyset tail, reference/attribute materialisation, virtual
   tables). Implemented by the two families (`…RecordDataRef`, `…RegisterData`); a pure mixin,
   **no data**, second base so `ibValue` stays at offset 0.
-- **`ibBackendQueryColumn`** (`query/queryColumn.h`) — the column counterpart.
+- **`ibBackendQueryColumn`** (`query/queryColumn.h`) — the column counterpart. Its header is
+  deliberately **light** (one include, `typeDescription.h`) so the fundamental attribute metaobject
+  can derive from it without dragging `queryable.h` / `model.h` in.
+
+  ⚠ **A light header stays light only while somebody checks** (2026-08-14). It had grown
+  `#include <wx/icon.h>` — three lines under the comment calling itself light — for the single return
+  type of `virtual wxIcon GetColumnIcon() const`. In a DLL that is supposed to be GUI-free, reached
+  by 21 direct includers and everything behind them, for one declaration. It is a **forward
+  declaration** now (`class wxIcon;`): a virtual returning a class type compiles fine against an
+  incomplete type, and only the two files that DEFINE such a body need the real header
+  (`metaCollection/attribute/metaAttributeObject.h` and `…_res.cpp`), which they already included.
+  The cost of the mistake is not correctness, it is that nothing fails — a heavy header compiles
+  exactly like a light one, only slower and with the GUI boundary quietly crossed.
 - **`ibQueryAst`** (`query/queryAst.h`) — the expression AST **shared by L4-1 and L4-2** (LINQ
   lowers a lambda body into the same AST the text parser produces).
 - **`ibTempSourceScope`** (`query/queryable.h`) — the thread-local, per-query registry for
@@ -138,6 +158,17 @@ turns the door's calls into L2-1 IR. Alongside it:
   `ibFieldSuffix` and nowhere else**; a `grep` for a bare `"_RRRef"` outside this tier is a defect
   report.
 
+  ⚠ **A raw column may declare its own WIDTH, and the tier no longer guesses a type.**
+  `ibRawDBColumn::String(field, id, length)` / `Number(field, id, precision, scale)` carry it, and
+  `columnLayout.cpp`'s `RawType` uses what the column said, falling back to the old defaults
+  (`VARCHAR(255)`, `NUMERIC(18,0)`) only where it said nothing. Both defaults were live defects while
+  this ignored them: a `VARCHAR(255)` digest column is 1020 bytes in UTF8 and passes Firebird's index
+  KEY SIZE ceiling before a row exists, and a flat `NUMERIC(18,0)` under a resource declared with a
+  scale drops the fraction on the way in. The same function used to ask RTTI and, on a miss, return
+  `VARCHAR(255)` — a wrong-but-valid type that goes straight into a CREATE TABLE, i.e. a migration
+  discovered months later by arithmetic. It now asserts the caller's own `IsRawColumn()` guard and
+  static-casts: what a column IS is the column's answer, never a cast's.
+
 ### L3 — the source-agnostic door (`ibDataQueryBuilder`, `query/dataQueryBuilder`)
 Reads **every family** (catalog / document / register / constant / tabular) through the queryable,
 backing-blind (a DB cursor **or** a RAM table, chosen once in `MakeProvider`). Four sub-floors:
@@ -148,6 +179,51 @@ backing-blind (a DB cursor **or** a RAM table, chosen once in `MakeProvider`). F
 | **L3-2** | **structure** — `ibStructureBuilder` / `DiffSnapshots` / `ibSchemaBuilder` generate & migrate the **tables** (DDL) | **metadata** |
 | **L3-3** | **data mover** — `ibDataMover` (`query/dataMover`) dumps / restores the **rows** | **metadata** |
 | **L3-4** | **regeneration** — `ibDerivedState` (`query/derivedStateBuilder`) rebuilds a **derived** table from its source | derived state |
+
+**A TERMINAL AND A NON-TERMINAL ENDING** (2026-08-13). `Execute()` runs the query and hands back
+rows; `BuildRelation()` stops one step earlier and hands back the **relation** the same assembly
+produced. There are **two** lowerings under it, chosen by the SHAPE of the query exactly as the
+terminal endings are (`SelectAggregate()` against `Execute()`): a query naming aggregates or group
+keys folds → `BuildAggregateRelation` (`BuildAggregateQuery` → `ibDatabaseQueryBuilder::Build()`);
+one naming neither projects → `BuildReadRelation`, which is `BuildPageIR` **with the page taken off**.
+That absence is the decision — paging belongs to whoever composes with the relation, and a `LIMIT`
+baked in would cap a join's input to one screenful and read as "the table has forty rows". Two
+lowerings rather than one with a flag, because a `GROUP BY` and a paged read are different trees.
+That is what
+lets a source answer `ibBackendQueryable::GetSourceRelation`, so its whole aggregate lands inside
+somebody else's `FROM` as a derived table and the join, the filter and the paging over it stay ONE
+statement — instead of the result being materialised into RAM before anything can be composed with
+it. Two properties keep it honest: it is the **same** lowering as the execute path (a hand-rolled
+`ibQueryRel` beside it would be a second way of building the same SQL, free to disagree about a join
+or a HAVING), and a query carrying an **access policy** gets `nullptr` — a policy folds its
+restriction into the read it guards, and a relation handed out unrestricted could be composed past
+it. The first callers are the accounting register's readings
+([accounting-register-arc.md](accounting-register-arc.md) § 8.3a).
+
+**A CONDITION THE SOURCE CONSUMES ITSELF** (2026-08-13). An argument slot declared `m_condition` is
+sugar: the predicate written there is ANDed into the WHERE around the reading, and the source never
+learns of it. That is right while the condition only SELECTS rows, and wrong when the source has to
+**act** on it — an accounting register asked for accounts «in hierarchy» reports the subordinates
+UNDER the account that was named, and a filter applied around the reading can only remove rows, never
+fold them. Under `HIERARCHYONLY` it removes exactly the rows the fold made.
+
+So a slot may declare `m_consumedBySource`. Then the lowering resolves the predicate against the
+descriptor's `GetConditionScope()` — the source's stable side, because the call-scoped companion
+being built does not exist yet — and hands it to `CreateQueryable(params, size, conditions)` by slot
+position **instead of** into the WHERE. Three properties make it safe:
+
+- **the word survives.** `keepUnfold` stops the lowering resolving `IN HIERARCHY` into the subtree it
+  stands for: the leaf keeps the values AS NAMED plus `ibQueryCondition::m_unfold`, because a fold
+  cannot be reconstructed from twenty expanded values — none of them says which one they roll into.
+  A provider must never see such a leaf, and never does: everything on the ordinary road is expanded
+  at the lowering and arrives as `Elements`;
+- **it is not applied twice.** The condition leaves the WHERE entirely, which is the point;
+- **a source that consumes must apply.** A slot marked and then ignored loses its filter silently, in
+  the direction of reporting MORE than was asked — so the mark and the source-side reading land
+  together or not at all.
+
+The three unfold words live in `query/queryUnfold.h` for this: an L3 condition names them, and
+`queryAst.h` stays L2/L3-free.
 
 **A rewrite that hit nothing is a MISS, and the door says so.** `Update()` reports `affected >= 0`,
 so nought rows once read as success — and a write keyed on a row that cannot be found is not "zero
@@ -182,6 +258,31 @@ restore, or a change to the grouping shape. `NeedsRegeneration` keeps the common
 column merely ADDED has no history, so its correct value everywhere is the zero the ALTER default
 already wrote. Everything else rebuilds, because skipping a needed rebuild yields silently wrong
 totals while a needless one only costs time.
+
+**The door owns the DDL/DML barrier, and the barrier is about a table's SHAPE — not its creation.**
+Some engines keep DDL transactional (Firebird; the dialect fact
+`ibDialectDictionary::m_ddlCommitBeforeData`), so a statement issued in the transaction that reshaped
+a table prepares against the shape the engine can still see. `ibSchemaBuilder::Execute`
+(`query/schemaBuilder.cpp`) therefore records EVERY shape-changing statement — CreateTable, AddColumn,
+DropColumn, AlterColumn, AlterTable — and `RunOrDefer(table, work)` parks work naming such a table
+until after the DDL commit (`ibStructureBuilder::FlushDeferredFirebird` drains the queue in its own
+transaction). It used to record CREATE alone, and what exposed the difference was an ordinary edit:
+adding an analytic to a register emits `ALTER TABLE … ADD fld…`, the totals rebuild then READS the
+movements naming that column, and the prepare answers *"Column unknown FLD…"* about a column the same
+apply added three statements earlier. The table existed, so nothing deferred; only its shape was new.
+
+**Which makes regeneration (L3-4) a DATA phase**, through the same door the seed writes go through:
+`DiffSnapshots` hands `ibDerivedState::Regenerate` to `RunOrDefer` instead of calling it inline. A
+special case used to stand there — *skip regeneration when the source is created in this apply* — and
+it was a dodge: it silenced one symptom of the barrier and left the other armed for the first person
+to add a dimension. The rule is general: **a statement that READS a table this apply reshaped belongs
+to the data phase, whatever the reshaping was.** The deferred closure takes a COPY of the table
+declaration, because the snapshot is ephemeral — built at save, diffed, discarded — while the deferred
+work runs past the point the caller still holds it.
+
+⚠ **This class of defect is invisible to the test suite by construction:** the only engine the suite
+executes against is SQLite, which has no transactional DDL, so `BarrierActive()` is false there and
+nothing ever defers. A barrier bug is found on a live Firebird apply or not at all.
 
 **The derived bit routes all four.** A table a metaobject contributes is classified source or
 derived (`ibSchemaTable::m_derived`). One bit says three things: L3-2 builds it *and* its

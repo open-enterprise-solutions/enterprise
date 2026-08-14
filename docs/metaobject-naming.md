@@ -169,6 +169,14 @@ Two constraints this must not break:
 
 The ranks live in one table: `ibMetaDiffWalker` group ranks, `metaCollection/metaDiff.cpp`.
 
+⚠ **They do not** (corrected 2026-08-14). That table is one of **three** copies of the order — the
+Designer's `s_groups`, the compare walker's ranks, and Enterprise's "All operations" dialog — and the
+half of this plan that landed had to be applied to all three by hand: **charts before registers, and
+the registers last**, because a register is expressed in terms of what stands above it. The sites and
+the reason are in [metadata-tree.md § 3.2](metadata-tree.md); the rest of the order above (moving
+enumerations up, reports and tools to the end) is still a plan, and doing it means editing three
+files or moving the rank onto the metatype first.
+
 ---
 
 ## 5. What this buys — and what it does not

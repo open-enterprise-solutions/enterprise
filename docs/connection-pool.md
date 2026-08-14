@@ -191,7 +191,8 @@ public:
     ibConnectionScope OpenConnectionScope();
 
     // DDL/DML restructuring-barrier state for the current save —
-    // tables CREATEd this save + writes DEFERRED past the DDL commit.
+    // tables whose SHAPE this save changed (CREATE / ADD / DROP /
+    // ALTER) + the work DEFERRED past the DDL commit.
     // Keyed on the holder so the several ibSchemaBuilder instances of
     // one save share a home. ibSchemaBuilder owns the logic.
     std::set<wxString>&                 DdlCreatedTables();
@@ -510,6 +511,45 @@ commit via the aborted flag.
 roll back inner work while committing outer, use `SAVEPOINT` /
 `ROLLBACK TO SAVEPOINT` explicitly at the driver level. Not currently
 exposed through `ibDatabaseLayer`.
+
+---
+
+## ⭐⭐ A conn with an OPEN TRANSACTION is not idle (2026-08-14)
+
+`ibConnectionPool::Checkout` used to consider an entry servable when nobody had reserved it
+(`txHolder == nullptr && scopeHolder == nullptr`), it was not lent out (`!inUse`), and the driver
+reported no live cursor (`!conn->IsBusy()`). It now asks one more question — `!conn->IsActiveTransaction()`
+(`connectionPool.cpp`, the reverse scan in `Checkout`).
+
+**`txHolder` is the pool's bookkeeping, not the connection's state.** It records the transactions
+the pool was TOLD about: the ones that went through `BeginTransaction` on a pool-owned layer while a
+holder was in force. It says nothing about a transaction opened straight on the layer — bare
+`db_query->BeginTransaction()`, a path that returned without closing, a refused commit before the
+driver was made to roll it back (Firebird compiles views and triggers AT COMMIT, so a bad bundle is
+refused there — see [register-shared-machinery.md § 4d](register-shared-machinery.md)).
+
+Hand such a connection out and the next owner inherits somebody else's transaction. Per the nesting
+rules above, 0→1 is the real driver Begin and this one is 1→2: the new owner's `BeginTransaction`
+merely **nests**, its `Commit` merely **decrements**, and nothing it wrote is ever made durable. That
+is the shape the restructuring trace showed on 2026-08-14 — a deferred phase failing with
+`Table unknown` on tables its own apply had just created, because the DDL was sitting inside a
+transaction that had never been committed.
+
+So a conn in that state is not idle, whatever the bookkeeping says. `Checkout` leaves it where it
+is: the owner will finish it, or the reaper will drop it — but nobody else gets to inherit it.
+
+### `ReleaseAll` rolls an unfinished transaction back before parking the conn
+
+The same rule from the other end. `ReleaseAll` already closed result sets and statements before
+returning a connection to the idle pool, for exactly the reason its comment states — *the next
+checkout must not inherit dangling cursors or pending statements from the previous user*. The
+transaction was the one piece of state left out of that list, and it is the one that matters most.
+
+It is **rolled back, not committed**: a holder that released its connection without finishing left
+nobody who could commit it, so the work is not wanted. Committing instead would make a half-written
+apply durable on the strength of a release. The rollback is wrapped in the cleanup-path `catch (...)`
+beside the other two — a rollback failing on an already-dead handle leaves nothing further to
+attempt, and this path must not throw ([exceptions.md § 5](exceptions.md)).
 
 ---
 

@@ -57,8 +57,8 @@
 >   binding derive from `(physical, type)` via `ibColumnCodec::Read/WriteValue`. Thin
 >   `Set/GetValueAttribute` adapters remain only for register-lowering callers — not a
 >   coupling.]** Still pending: balances/turnovers as DB-backed virtual tables (no RAM
->   round-trip) with role-columns = the **totals-table** arc; the accounting register (subconto
->   unfinished); running the golden tests on the CMake side.
+>   round-trip) with role-columns = the **totals-table** arc; the accounting register (account
+>   dimensions unfinished); running the golden tests on the CMake side.
 >
 > ### Update 2026-06-09 — write-door + reference-as-key (landed, FB-validated)
 >
@@ -79,6 +79,11 @@
 >   normal `CreateIndex` — plain `CREATE INDEX`, since Firebird has no `IF NOT EXISTS`. A UNIQUE index
 >   is preceded by a duplicate-key dedup: `ibSchemaBuilder::Execute` keeps one row per key via the
 >   dialect's physical `m_rowIdColumn` (`RDB$DB_KEY` / `rowid` / `ctid`). No per-index special path.)
+>   **⚠ SUPERSEDED 2026-08-14** — the index introspection described in this paragraph is GONE, and
+>   `ibDialectDictionary::m_indexListQuery` with it. Indexes now diff by name between the baseline and
+>   target snapshots like every other object (`schemaSnapshot.cpp`, `AlterTable`). Reading the
+>   physical schema to decide what to emit is banned: it turns a drift from a defect into a normal
+>   state — [schema-authority.md](schema-authority.md).
 > - **`ibDataResultSource`** (renamed from `ibMetaResultSource`) — backing-blind result;
 >   `GetGuidString` removed (the row guid reads as the uuid identity column). The DB result
 >   source + provider extracted to `query/dbTableProvider.{h,cpp}`; `ibComputedRegister
@@ -98,9 +103,11 @@
 >   L3 makes a temp table just an ordinary DB source, so the read path is reused and a runtime
 >   failure transparently falls back to RAM. Manager / adapter / planner / per-driver dialects
 >   pending — full design contract in [temp-db.md](temp-db.md).
-> - **Still open:** the index retrofit above covers dialects that can introspect (FB / SQLite / PG);
->   MySQL / ODBC keep the metadata-only diff until they gain an `m_indexListQuery`. Balances/turnovers
->   as DB-backed virtual tables (totals-table arc); the accounting register (subconto); cross-DBMS
+> - **Still open:** ~~the index retrofit above covers dialects that can introspect (FB / SQLite / PG);
+>   MySQL / ODBC keep the metadata-only diff until they gain an `m_indexListQuery`.~~ (Moot since
+>   2026-08-14: every dialect uses the metadata-only diff, which is the rule and not a shortfall —
+>   [schema-authority.md](schema-authority.md).) Balances/turnovers
+>   as DB-backed virtual tables (totals-table arc); the accounting register (account dimensions); cross-DBMS
 >   validation beyond Firebird.
 > - **L4-1 — text query language (in progress, §23):** the greenfield text-query front-end
 >   (lexer → parser → lowering → `Query`/`QueryResult` value objects) + a queryable-source
@@ -2095,9 +2102,42 @@ proj     := (aggregate | columnPath) [ [AS] alias ]
 aggregate:= (SUM|MIN|MAX|AVG) '(' columnPath ')' | COUNT '(' ('*'|columnPath) ')'
 predicate:= andE {OR andE};  andE := notE {AND notE};  notE := NOT notE | comparison
 comparison := primary [ cmpOp primary | [NOT] LIKE primary
-                      | [NOT] IN '(' … ')' | IS [NOT] NULL | [NOT] BETWEEN primary AND primary ]
-totalDim := columnPath [HIERARCHY | ELEMENTS]
+                      | [NOT] IN [HIERARCHY|HIERARCHYONLY] '(' … ')'
+                      | IS [NOT] NULL | [NOT] BETWEEN primary AND primary ]
+totalDim := columnPath [HIERARCHY | HIERARCHYONLY | ELEMENTS]
 ```
+
+**`IN HIERARCHY` — the three unfold words in their SECOND venue** (2026-08-13). `Elements` /
+`Hierarchy` / `HierarchyOnly` were parsed only as modifiers of a `TOTALS BY` dimension; they now
+also modify the set-valued operator, which is what lets a query say what «in hierarchy» has always
+meant: *the value AND everything subordinate to it*. `HIERARCHYONLY` is the subordinates without the
+value that names them, and a bare `IN` is `Elements` — exactly the values passed. One vocabulary for
+both venues, deliberately: a report and a filter that both say "hierarchy" have to mean the same
+thing by it, and a second enum is a second chance to drift.
+
+Two properties, both of them decisions:
+
+- **The operand is ONE `&parameter`, never a list and never a subquery.** Expanding a subtree means
+  walking DOWN from values, so they have to be in hand before the read starts, and a subquery is not
+  in hand until it runs. (Admitting one would mean either a recursive predicate the filter vocabulary
+  cannot state or a recursive CTE the dialect layer does not spell.) A parameter holding a LIST is
+  the ordinary way to name several — the operand is one expression, the values in it may be many.
+- **Nothing below L4 learns the word.** The lowering resolves the subtree into the values it stands
+  for (`ibQueryHierarchyScope`, `query/queryHierarchy.{h,cpp}`) and emits the ordinary `IN`, so the
+  door, the RAM evaluator and all five drivers keep the one set-valued operator they already render.
+- **The subtree is read through the COLUMN, by the provider — the same road `TOTALS BY x HIERARCHY`
+  takes.** `GetProvider().ResolveReferenceTarget(source, col)` gives the target, the target vends its
+  row key and its `GetHierarchyColumn()`, and the parent map is read in ONE query
+  (`ibQueryComposer::BuildReferenceHierarchy` does exactly this for the grouping venue). Asking the
+  VALUE instead — cast to a reference, ask its metaobject — was the first version, and it was wrong
+  twice over: a metadata cast in a tier that owns no metadata, and one query per node where one query
+  does. A column with no resolvable source is an ERROR here rather than a quieter filter; a target
+  that records no parent (a FLAT list) is not, and every named value then stands for itself.
+
+The scope object also carries the FOLD — which named value an admitted subordinate is reported under
+— because that is the other half of the same word. A WHERE cannot fold (that is what a grouping is
+for), but the accounting register's readings do, and they now do it through this one object instead
+of a private copy of the walk ([accounting-register-arc.md](accounting-register-arc.md) § 8.5).
 **The four clauses added 2026-08-06 with the query constructor** ([query-constructor.md](query-constructor.md) §5c):
 `ALLOWED` — an access refusal yields an EMPTY read instead of raising (never a default: a report
 that quietly shows fewer rows is a report that lies quietly). `FOR UPDATE` — the select HOLDS the

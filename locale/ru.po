@@ -1006,18 +1006,6 @@ msgstr "Тип записи"
 msgid "Account"
 msgstr "Счёт"
 
-#: src/engine/backend/metaCollection/partial/accountingRegister.h:202
-msgid "Subconto 1"
-msgstr "Субконто 1"
-
-#: src/engine/backend/metaCollection/partial/accountingRegister.h:205
-msgid "Subconto 2"
-msgstr "Субконто 2"
-
-#: src/engine/backend/metaCollection/partial/accountingRegister.h:208
-msgid "Subconto 3"
-msgstr "Субконто 3"
-
 #: src/engine/backend/metaCollection/partial/accountingRegisterEnum.h:21
 msgid "Debit"
 msgstr "Дебет"
@@ -1124,19 +1112,17 @@ msgstr "База данных не открыта!"
 #: src/engine/backend/metaCollection/partial/accountingRegisterManager_impl.cpp:75
 #: src/engine/backend/metaCollection/partial/accumulationRegisterManager_impl.cpp:37
 msgid "Balance"
-msgstr "Баланс"
+msgstr "Остаток"
 
 #: src/engine/backend/metaCollection/partial/accountingRegisterManager_impl.cpp:384
 #: src/engine/backend/metaCollection/partial/accountingRegisterManager_impl.cpp:1019
-#, fuzzy
 msgid "Turnover Dt"
-msgstr "Оборот"
+msgstr "Оборот Дт"
 
 #: src/engine/backend/metaCollection/partial/accountingRegisterManager_impl.cpp:389
 #: src/engine/backend/metaCollection/partial/accountingRegisterManager_impl.cpp:1024
-#, fuzzy
 msgid "Turnover Ct"
-msgstr "Оборот"
+msgstr "Оборот Кт"
 
 #: src/engine/backend/metaCollection/partial/accountingRegisterManager_impl.cpp:670
 msgid "Account Dt"
@@ -1151,13 +1137,12 @@ msgid "Amount"
 msgstr "Сумма"
 
 #: src/engine/backend/metaCollection/partial/accountingRegisterManager_impl.cpp:1014
-#, fuzzy
 msgid "Opening balance"
-msgstr "Открытие"
+msgstr "Начальный остаток"
 
 #: src/engine/backend/metaCollection/partial/accountingRegisterManager_impl.cpp:1029
 msgid "Closing balance"
-msgstr "Остаток"
+msgstr "Конечный остаток"
 
 #: src/engine/backend/metaCollection/partial/accountingRegisterMetadataMenu.cpp:12
 #: src/engine/backend/metaCollection/partial/accumulationRegisterMetadataMenu.cpp:12
@@ -1240,7 +1225,7 @@ msgstr "Тип регистра"
 
 #: src/engine/backend/metaCollection/partial/accumulationRegisterEnum.h:23
 msgid "Balances"
-msgstr "Балансовый"
+msgstr "Остатки"
 
 #: src/engine/backend/metaCollection/partial/accumulationRegisterEnum.h:24
 msgid "Turnovers"
@@ -1403,9 +1388,8 @@ msgid "Account type"
 msgstr "Выберите тип документа"
 
 #: src/engine/backend/metaCollection/partial/chartOfAccounts.h:244
-#, fuzzy
 msgid "Off-balance"
-msgstr "Баланс"
+msgstr "Забалансовый"
 
 #: src/engine/backend/metaCollection/partial/chartOfAccounts.h:247
 msgid "Quantitative"
@@ -1415,17 +1399,9 @@ msgstr "Количественный"
 msgid "Currency accounting"
 msgstr "Валютный учёт"
 
-#: src/engine/backend/metaCollection/partial/chartOfAccounts.h:253
-msgid "Max subconto count"
-msgstr "Максимум субконто"
-
 #: src/engine/backend/metaCollection/partial/chartOfAccounts.h:258
 msgid "Chart of characteristic types"
 msgstr "План видов характеристик"
-
-#: src/engine/backend/metaCollection/partial/chartOfAccounts.h:264
-msgid "Subconto kinds"
-msgstr "Виды субконто"
 
 #: src/engine/backend/metaCollection/partial/chartOfAccountsEnum.h:22
 #: src/engine/backend/metaCollection/partial/commonObject.h:1181

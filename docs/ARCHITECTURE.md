@@ -226,8 +226,40 @@ Two header-only helpers in `frontend/diagnostics/` cover the boilerplate every b
     │                                          GetDriverErrorCode() + GetSqlState().
     │                                          Created via static Throw(...).
     │
-    └── (other backend categories)
+    ├── ibBackendQueryException           ─── THIS TIER could not do its job.
+    │     │                                    Kind: TranslationFailure /
+    │     │                                    UnsupportedNode / PoolExhausted.
+    │     │                                    (query/queryException.h)
+    │     │
+    │     └── ibBackendQuerySourceException ── THE QUERY does not hold up.
+    │                                          Carries line + column, so the
+    │                                          constructor can point at the text.
+    │
+    ├── ibBackendSessionException         ─── The SESSION refuses. Kind:
+    │                                          ExclusiveHeld / OthersActive /
+    │                                          NoSession / NoConnection.
+    │                                          (session/sessionException.h)
+    │
+    ├── ibBackendLockException            ─── Optimistic-write conflict.
+    │                                          Kind: VersionChanged / …
+    │
+    ├── ibBackendAccessException          ─── A right was refused; `subject`
+    │                                          names WHAT, when affordable.
+    │
+    ├── ibBackendCoreException            ─── Everything the engine states in
+    │                                          its own voice (static Error()).
+    │
+    └── ibBackendInterruptException       ─── The user stopped the program.
 ```
+
+⭐ **Each subsystem owns its exception TYPE; `Kind` says what went wrong inside it.** One type
+plus a string would make every handler match on message TEXT. The division is by WHO refused,
+which is what a caller can act on — see [exceptions.md](exceptions.md).
+
+⚠ `NoConnection` moved from the query type to the session one on 2026-08-14: *"there is no
+connection to work on"* is the session refusing, not the query tier failing at its job, and holding
+the kind in both places would have been two names for one refusal with nothing to choose between
+them.
 
 Per-driver `ClassifyDatabaseError(int nativeCode)` on each `ibDatabaseErrorReporter` subclass maps the driver's native code (Firebird `isc_*` gds, PG SQLSTATE int, MySQL errno, ODBC SQLSTATE, SQLite result code) to a Kind. The mapping is regression-tested in `tests/test_dbTaxonomy.cpp` — if a future driver bump flips `SQLITE_CONSTRAINT (19)` away from `Kind::Constraint`, the test fails before code that branches on `IsRetryable()` silently misroutes.
 
@@ -266,6 +298,29 @@ Per-driver `ClassifyDatabaseError(int nativeCode)` on each `ibDatabaseErrorRepor
 | `odbc/` | `ibDatabaseLayerODBC` | ODBC generic driver |
 
 > Concrete driver classes use the `ib<Base><Vendor>` suffix pattern: `ibDatabaseLayer<Vendor>`, `ibDatabaseResultSet<Vendor>`, `ibPreparedStatement<Vendor>` (e.g. `ibDatabaseResultSetFirebird`, `ibPreparedStatementPostgres`).
+
+### `src/engine/backend/query/`
+
+The source-agnostic query floor — L3 and the contracts every tier speaks — plus the schema
+projection the restructuring runs on. **The floor plan is
+[query-engine-layers.md](query-engine-layers.md); it is the one to read first** and this table only
+says which file is where.
+
+| File | Holds |
+|---|---|
+| `queryProvider.h/cpp` | `ibBackendQueryProvider` — the whole L3↔L2-1 layer: turns the door's calls into L2-1 IR |
+| `queryable.h` | `ibBackendQueryable` — the source-navigation contract L3 reads a metaobject through. A pure mixin, no data, second base so `ibValue` stays at offset 0 |
+| `queryColumn.h` | `ibBackendQueryColumn` — the column counterpart. Deliberately a LIGHT header (an attribute derives from it), so nothing GUI-shaped may enter |
+| `queryAst.h`, `queryParser.*`, `queryLexer.*`, `queryRender.*`, `queryRewrite.*` | the L4-1 text query — one AST shared with LINQ, its reader, its writer, and the rules that move a term (`WHERE` → `HAVING`) |
+| `queryLowering.*` | L4 → the single L3 door: name resolution, aggregate rules, `DescribeOutput`, package execution |
+| `queryHierarchy.{h,cpp}` | `ibQueryHierarchyScope` — the parent walk and the "whom does this row report under" map, asked of the COLUMN through the provider (one read, not one per node). Left the accounting register in 2026-08-13 |
+| `queryUnfold.h` | `ibQueryDimUnfold` — `Elements` / `Hierarchy` / `HierarchyOnly`, the three words a dimension can be asked for |
+| `queryException.{h,cpp}` | `ibBackendQueryException` (this tier failed) and `ibBackendQuerySourceException` (the query itself does not hold up — carries line + column) |
+| `schemaSnapshot.{h,cpp}` | `ibSchemaSnapshot` + `DiffSnapshots` — projects a configuration into tables / columns / indexes and turns a PAIR of them into DDL. Knows nothing about metadata, and never asks the live database anything ([schema-authority.md](schema-authority.md)) |
+| `schemaBuilder.*`, `structureBuilder.*`, `structureBatch.*` | applying that difference: rendering and running the DDL, the deferred second phase, and its compensation |
+| `derivedStateBuilder.cpp` | L3-4 — regenerating what a changed declaration made stale |
+| `tempTableManager.*`, `tempTableQueryable.h` | temp tables as ordinary sources (`TempTablesManager` decides how long one lives) |
+| `dbTableProvider.cpp` | the DB-backed provider: read, aggregate and the two NON-terminal endings (`BuildRelation` / `BuildReadRelation`) that let a reading hand back a relation instead of rows |
 
 ### `src/engine/backend/metaCollection/`
 
@@ -485,15 +540,21 @@ Metadata serialization runs through a uniform, format-agnostic tree (`src/engine
 
 File-level export/import goes through `LoadConfigFromFile()` / `SaveConfigToFile()` on `ibMetaDataConfigurationBase`. (The former separate `metadataConfigurationXML.cpp` / `metadataConfigurationJSON.cpp` and the `SaveConfigToXML/JSON` API have been replaced by the provider model; XML support is currently retired.)
 
-### Accounting Objects (Work in Progress)
+### Accounting Objects
 
-Three metadata types support double-entry bookkeeping. Core classes and designer integration are implemented; SQL DDL, runtime bindings, and Balance/Turnovers queries are under active development.
+Three metadata types support double-entry bookkeeping. Built and applied to a live Firebird base
+(2026-08-13) — the write path, the account rules, the five virtual tables and the trigger-maintained
+totals bundle; see [accounting-register-arc.md](accounting-register-arc.md) for what is still absent.
+
+⚠ The word **Subconto** is gone from the engine (2026-08-12): it was a 1C calque, and the concept is
+an **account dimension** («Аналитика») whose KIND is a characteristic. Only the opaque CLSID body key
+`MD_SKTB` kept its spelling, being a key rather than a name.
 
 | Type | CLSID | Purpose |
 |---|---|---|
-| ChartOfCharacteristicTypes | `MD_CHRC` | Subconto type definitions — each element stores `ibTypeDescription` with allowed value types |
-| ChartOfAccounts | `MD_CHOA` | Chart of accounts with AccountType (Active/Passive/AP), accounting signs, predefined SubcontoKinds tabular section |
-| AccountingRegister | `MD_AREG` | Double-entry register with Account, RecordType (Debit/Credit), Subconto1-3, Balance/Turnovers/DrCrTurnovers |
+| ChartOfCharacteristicTypes | `MD_CHRC` | The account dimensions' KINDS — each element stores an `ibTypeDescription` narrowing what values that kind admits |
+| ChartOfAccounts | `MD_CHOA` | Chart of accounts with AccountType (Active/Passive/AP), accounting flags, the maximum dimension count, and the predefined `AccountDimensionKinds` tabular section |
+| AccountingRegister | `MD_AREG` | Double-entry register with Account, RecordType (Debit/Credit), N *(kind, value)* AccountDimension slots per side, Balance / Turnovers / DrCrTurnovers / BalanceAndTurnovers / RecordsWithAccountDimensions |
 
 Bindings: AccountingRegister → ChartOfAccounts (via `ibPropertyChartOfAccounts`), ChartOfAccounts → ChartOfCharacteristicTypes (via `ibPropertyChartOfCharacteristicTypes`). Each binding has its own property class and advprop UI handler with CLSID-filtered selection dialog.
 
@@ -612,6 +673,22 @@ ibDatabaseResultSet* rs = db_query->RunQueryWithResults(
 ```
 
 Every driver folder except `odbc/` contains an `engine/` subdirectory with the vendored native client library; ODBC links the system driver manager (`odbc32` / `odbccp32`).
+
+### Where the physical schema comes from
+
+> ⭐⭐ **THE DIFF BETWEEN TWO CONFIGURATIONS CARRIES ALL THE INFORMATION.** The apply is a function of
+> exactly two arguments — the baseline (the active configuration) and the target (the edited one) —
+> and it brings the database to a schema matching the target exactly. The live catalogue is never
+> consulted, and **physical introspection is banned**: insuring against the physics turns a drift
+> from a defect into a normal state and deletes the only signal that the mechanism is broken. The
+> guarantee covers a base *we* created and have maintained through restructurings; a base changed
+> from outside is not a warranty case.
+
+Stated as policy 2026-08-14. The rule, its scope, the three physical reads that remain legitimate,
+and the four things it already forces (rollback-able apply, publication last, compensated second
+phase, schema settings must serialise) are in
+**[schema-authority.md](schema-authority.md)**. The differ itself is
+`query/schemaSnapshot.{h,cpp}`.
 
 ---
 

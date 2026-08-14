@@ -68,10 +68,22 @@ business behaviour. The architect validates by running.
 **Reason:** OES enforces invariants in C++ (RAII, prepared statements,
 TX scopes, throw-by-value). When AI writes C++, those invariants
 become advisory rather than structural. When AI writes script +
-metadata, the C++ runtime gates everything: a misnamed table fails
-fast at compile, a missing access right surfaces a typed exception,
-an unsafe SQL is impossible (you do not have access to the raw SQL
-layer).
+metadata, the C++ runtime gates the ordinary roads: a misnamed table
+fails fast at compile, a missing access right surfaces a typed
+exception, and every data access you are meant to write goes through
+a manager, a query or LINQ — none of which can express an unsafe SQL,
+because none of them lets you write SQL at all.
+
+⚠ **One hatch exists, and it is a hatch rather than a road.** The
+`DatabaseLayer` script type (`system/value/valueDatabaseLayer.cpp`)
+vends `RunQuery` / `RunQueryWithResults` / `PrepareStatement` straight
+onto the session's connection. What it hands over is the raw L1
+driver, so a statement written through it goes past the dialect layer
+(one spelling per engine), past the L3 door, past the row-level
+access policy and past paging — and it is yours to get right on five
+databases. It is kept for the service work that genuinely has no
+other door; it is **not** a fallback for a query you found awkward to
+express, and § 4.1 below is still the rule.
 
 ---
 
@@ -90,9 +102,16 @@ var found = Catalogs.Products.FindByCode("APPLE-01");
 var account = ChartsOfAccounts.Hozraschetnyi.FindByCode("62");
 var balance = AccountingRegisters.Hozraschetnyi.Balance(EndOfMonth(), account);
 
-// WRONG — you cannot do this in OES script (no raw SQL surface)
-//   db_query(...)   ← C++ only
+// WRONG — do not reach for SQL from script
+//   db_query(...)                          ← C++ only, not a script name at all
+//   New DatabaseLayer().RunQuery("…")      ← EXISTS, and is not yours to use here
 ```
+
+The second line is the honest part: the hatch is reachable (§ 3), so
+"no raw SQL" is a **rule**, not an impossibility. A statement written
+through it is yours to keep correct on Firebird, PostgreSQL, SQLite,
+MySQL and ODBC at once, and it is invisible to the access policy — so
+a report built on it shows rows its reader may not see.
 
 When you need a complex query, use **LINQ** (block or chain syntax):
 
@@ -196,7 +215,7 @@ The 11 metaobject types and their script-side namespace:
 | `AccumulationRegister` | `AccumulationRegisters.<Name>` | Quantitative balances (inventory, AR / AP) |
 | `AccountingRegister` | `AccountingRegisters.<Name>` | Double-entry bookkeeping (see `docs/register-totals-strategy.md`) |
 | `ChartOfAccounts` | `ChartsOfAccounts.<Name>` | Account hierarchy for AccountingRegister |
-| `ChartOfCharacteristicTypes` | `ChartsOfCharacteristicTypes.<Name>` | Subconto-type definitions |
+| `ChartOfCharacteristicTypes` | `ChartsOfCharacteristicTypes.<Name>` | The KINDS an account dimension can be («Вид аналитики»), each narrowing what values it admits |
 | `DataProcessor` | `DataProcessors.<Name>` | Interactive tooling (utilities, batch operations) |
 | `Report` | `Reports.<Name>` | Read-only output (analytics, statements) |
 

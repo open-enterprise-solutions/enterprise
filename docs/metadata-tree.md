@@ -175,6 +175,37 @@ Two things worth knowing:
 - **Only display order is written down.** *What* the children are still comes from the property
   skeleton ([property-system.md § 5](property-system.md)).
 
+### 3.2 ⭐⭐ The charts before the registers, the registers LAST — and that one decision lives in three copies (2026-08-14)
+
+**The reading order is not taste.** A register is expressed in terms of what stands above it: an
+accumulation register by its dimensions, an accounting register by the chart of accounts that types
+its account and every analytics slot. Listed before the charts, the tree put the dependants above the
+things they depend on — so reading it top to bottom met a register before anything it is about.
+
+Metadata band order, after the change: Constants, Catalogs, Documents, Enumerations, Data processors,
+Reports, **Charts of characteristic types, Charts of accounts**, Information registers, Accumulation
+registers, Accounting registers.
+
+⚠ **It had to be changed in THREE places, and they are three separate copies of one decision:**
+
+| Copy | File | Form it takes |
+|---|---|---|
+| the Designer's metadata tree | `designer/mainFrame/metaTree/treeConfiguration_impl.cpp` — `s_groups` | row order in the table (§ 3.1) |
+| the configuration-compare tree | `backend/metaCollection/metaDiff.cpp` — `ibMetaDiffWalker::GroupOrderRank` | integer ranks, 100…200, sorted by |
+| Enterprise's "All operations" dialog | `enterprise/win/dlg/functionAll.cpp` — `BuildTree` | the sequence of `AppendGroupItem` calls |
+
+Nothing connects them. Each compiles alone, each renders plausibly alone, and a fourth consumer added
+later would start a fourth copy — the compare walker even says so in a comment ("Match the order
+`FillData` uses in `treeConfiguration_impl.cpp`"), which is a copy documenting that it is one. The
+same list is kept in a fourth form again by the role editor and the query constructor
+([metaobject-naming.md § 4](metaobject-naming.md)).
+
+This is the concrete price § 3.1 predicted: **the order belongs on the METATYPE** (a band, a rank and
+a label beside the `GetIconGroup()` it already answers), and until it moves there, every rule about
+reading order has to be re-stated once per consumer, by hand, with nothing to fail when one is
+missed. Count the copies before changing this again — the count above was three on 2026-08-14, and it
+is the kind of number that grows silently.
+
 **Why a table and not yet a walk over the type registry.** What a metatype would have to answer
 for the navigator to draw it with no table at all is exactly the columns above — a band, a rank,
 a label, beside the `GetIconGroup()` it already answers. Writing them out in one place is what

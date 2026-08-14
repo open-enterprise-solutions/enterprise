@@ -123,6 +123,62 @@ Sort and grouping travel the same way: `composer.Sort(path, ascending)` and
 
 ---
 
+## 5a. ⭐⭐ «In» and «In hierarchy» — a comparison the language already had (2026-08-14)
+
+`ibComparisonKind_In` and `ibComparisonKind_InHierarchy` (`composition/listFilter.h:63–64`) close
+the gap between what a query could say about data and what a list filter could say about the **same**
+data: membership, and membership that walks down a tree.
+
+**Neither is a new mechanism, and that is the whole design.** The language has both already — the
+`IN` operator, with `HIERARCHY` as a word on it ([query-language-arc.md § IN HIERARCHY](query-language-arc.md))
+— and the AST carries the word on the `In` node itself (`ibQueryAstExpr::m_unfold`). So the lowering
+in `BuildFilterItem` (`composition/listFilter.cpp:1287–1321`) picks the `In` node for both and sets
+`m_unfold = Hierarchy` for one of them:
+
+```cpp
+const bool isIn = (comparison == ibComparisonKind_In
+                || comparison == ibComparisonKind_InHierarchy);
+ibQueryAstExprPtr e = ibQueryAstExpr::Make(isLike ? Like : isIn ? In : Compare);
+if (comparison == ibComparisonKind_InHierarchy)
+    e->m_unfold = ibQueryDimUnfold::Hierarchy;
+```
+
+**«In hierarchy» therefore differs from «in» by the WORD alone**, and the resolution stays where it
+already lived: the lowering expands the subtree into the values it stands for and emits an ordinary
+`IN`, so the door, the RAM evaluator and all five drivers keep the one set-valued operator they
+already render (`query/queryHierarchy.{h,cpp}`; `keepUnfold` is the one path that leaves the word on
+the leaf, for a condition a SOURCE folds by — [query-engine-layers.md](query-engine-layers.md)). An
+operator of its own would have been a second way to ask what the language already asks.
+
+The right-hand side goes into `m_list` rather than `m_rhs` — an `IN` takes a **list**, and a filter
+row holds one value, which is one entry (a value that is itself a list flattens; the node is the
+set-valued one either way).
+
+⚠ **APPENDED to the enum, never inserted.** `ibComparisonKind` is serialised **by number** in every
+saved list setting (§ 4), so taking a value in the middle would re-read every stored setting as a
+different comparison — `Contains` becoming `In` on someone's saved filter, silently, with a LIKE
+turning into a membership test.
+
+Three spellings, in lock-step as always: `ComparisonKindToOp` returns the language's own `"IN"` /
+`"IN HIERARCHY"` (so a filter and a hand-written query say the same thing in the same words),
+`ibValueEnumComparisonKind::CreateEnumeration` names them `In` / `InHierarchy` with captions *In* /
+*In hierarchy*, and the registered enumeration IS the editor's drop-down — a comparison becomes
+offerable by being named there and nowhere else.
+
+⚠ **The inverse map does not read them back.** `OpToComparisonKind` (`listFilter.h:87`) knows `"LIKE"`
+and the six operators and falls through to `Equal` for everything else, `"IN"` included. It is
+reached on one path only — `ibLoadSettingsFromComposer` filling the dialog buffer from the composer's
+**flat** condition list, i.e. a filter that arrived as `composer.Filter(path, op, value)` rather than
+as a tree (a tree copies itself through its packed form and never passes through the string). So a
+flat `IN` condition opens in the dialog as `Equal` on the same field. Live asymmetry, not a decision.
+
+**`HIERARCHYONLY` exists in the language and is deliberately NOT offered here.** "The subordinates
+without the one that names them" is a question about a tree, and a list filter is not where anybody
+asks it; an offered comparison nobody wants is one more menu item to read past. The word stays
+available in a query and in a grouping, where it has askers.
+
+---
+
 ## 6. One store, one door
 
 The filter has exactly one storage: **the root group**. The flat `Filter`
@@ -201,6 +257,29 @@ type before anything was chosen.
 
 ---
 
+## 7a. ⭐⭐ Every writer of the right-hand cell normalises through `AdjustValue` (2026-08-14)
+
+**What an editor hands back is not always the value the condition is about.** Picking from a list
+yields the LIST ROW, and a row is not a reference. Stored raw, that row reached §8's validation on
+OK and was refused — *"The value of condition 'Recorder' does not fit the field's type"*
+(`backend/composition/listFilter.cpp`) — on a value the user had chosen correctly, from the picker
+the field itself opened.
+
+The cell editor's write (`SetSideValue`, case `kFilterColRight`, in
+`frontend/win/dlgs/listSettings/listSettings.cpp`) now goes through
+`ibValueTypeDescription::AdjustValue(value, m_dialog->SourceMetaData())`. `AdjustValue` answers what the TYPE
+makes of a value: a row becomes the reference it stands for, an empty becomes the type's own empty
+(False for a Boolean, an empty reference of the right kind, 0 for a number) — so the cell holds what
+the comparison will actually be made with, not what the editor happened to be holding.
+
+The shape worth carrying: **the cell had three writers and only two of them normalised.** The
+field-change path already called `AdjustValue` (to refill the right side with the new field type's
+own default), and so did the row-add path; the editor was the odd one out. One writer skipping the
+door the others use does not fail at the write — it fails one screen later, in a validator that can
+only say the value is wrong and not who wrote it that way.
+
+---
+
 ## 8. Refusing, not dropping
 
 `ibValidateSettings` raises `ibBackendException` on a setting that cannot be
@@ -252,6 +331,9 @@ previously working settings down with it.
 
 ## 11. Open defects
 
+* ⚠ **`OpToComparisonKind` does not read `IN` / `IN HIERARCHY` back** (open, 2026-08-14 — § 5a). A
+  condition that reached the composer as a flat `(path, op, value)` triple with those operators opens
+  in the settings dialog as `Equal` on the same field. One line each in the inverse map.
 * ⚠ **The filter tree's root group does not expand by default** (open, 2026-08-13). The
   dialog opens with the root folded shut, which is exactly the state that reads as
   "nothing set" — the thing §2 says the visible root exists to prevent. **The cause is

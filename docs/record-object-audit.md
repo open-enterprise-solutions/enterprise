@@ -309,12 +309,12 @@ ibValueMetaObject (root, metaObject.h)
 |---|---|
 | Catalog | Hierarchy + owner chain; Code identifier |
 | Document | Date + Number + Posting/UndoPosting state machine |
-| ChartOfAccounts | Hierarchy + accounting-specific Subconto table |
+| ChartOfAccounts | Hierarchy + accounting-specific AccountDimensionKinds table |
 | ChartOfCharacteristicTypes | Hierarchy + characteristic-type domain |
 | Enumeration | Enum values; no DB instance objects |
 | DataProcessor / Report | No DB persistence; ext file loading |
 | AccumulationRegister | Resources, dimensions; recorder ref |
-| AccountingRegister | Account/Subconto/Sum/Direction (Dr/Cr) |
+| AccountingRegister | Account / AccountDimension slots / resources / RecordType (Dr/Cr) |
 | InformationRegister | Periodicity (None/Subordinate/Year/Quarter/etc), dimensions |
 | Constant | Single-row table per metaobject |
 

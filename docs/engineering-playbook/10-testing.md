@@ -162,6 +162,38 @@ caller passes 3. Fixed to `< 3`.
   Date degrades to String, `TypeDesc` is synthetic), so the lossy-by-design
   boundary is a decision on the record rather than a surprise.
 
+### A test that reads the SOURCE, because no run can see this (added 2026-08-14)
+
+`tests/test_propertySerialized.cpp` (in `oes_tests`) walks
+`src/engine/backend/metaCollection/partial/`, and for every `<name>.h` that has a
+`<name>Metadata.cpp` beside it, collects the `m_property*` identifiers the header DECLARES and
+requires each to appear in that translation unit. No database, no session, no metadata — the sources
+are read as text (`wxTextFile`), with the directory resolved from `__FILE__` rather than the cwd (the
+same trick `test_scriptCorpus.cpp` uses for its corpus, since CMake runs the binary from the build
+tree).
+
+**Why text and not behaviour: a property written nowhere round-trips perfectly.** Both sides simply
+lack it, so a byte-for-byte serialisation round trip agrees, and so does any test of what the object
+does in memory. The fact being checked is "somebody wrote this line", which no amount of running the
+code can establish.
+
+The cost that bought it: the accounting register's `Correspondence` and `SplitTotals` were declared,
+edited, and used to BUILD THE SCHEMA, but named in neither `ReadData` nor `WriteData`. They came back
+at their defaults whenever the saved configuration was re-read — and that re-read produces the
+BASELINE the next apply diffs against, so a switch turned OFF applied, returned ON, and the next
+apply compared ON with ON and emitted nothing. It looked intermittent, because breakage depended on
+which way the setting happened to differ from the default
+([../register-shared-machinery.md § 4d](../register-shared-machinery.md)).
+
+Two details worth copying into any test of this shape:
+
+- **The exclusions are named, not guessed.** Properties whose VALUE is not part of the configuration
+  are skipped: `*DefForm*` (default-form bindings, stored by id through their own path) and
+  `*Module*` (they carry the module object, not a value).
+- **It asserts that it checked something** — `EXPECT_GT(checked, 0u)` with "the layout must have
+  moved". A source-reading test whose directory is renamed out from under it otherwise passes by
+  finding nothing, which is the one failure mode this class of test has.
+
 ### Fixtures & doubles actually in use
 
 - `MockDatabaseLayer` (`tests/mock_database_layer.h`) — minimal `ibDatabaseLayer`

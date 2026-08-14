@@ -69,7 +69,7 @@ relation is required separately from base, whether displacement is ever needed a
 each of these is answered by writing one payroll, not by designing one.
 
 This tree already carries the price of the other order, in the neighbouring metatype: the
-chart of accounts declares `Quantitative`, `Currency` and `MaxSubcontoCount`, and the
+chart of accounts declares `Quantitative`, `Currency` and its dimension ceiling, and the
 accounting register **forces none of them** — attributes declared ahead of the scenario that
 would have shaped them. The accounting register itself is declared and does not execute
 (`ROADMAP.md` §4.1). A calculation register declared on the same schedule would join them.

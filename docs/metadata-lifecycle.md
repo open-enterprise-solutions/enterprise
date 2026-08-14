@@ -263,6 +263,15 @@ construction:
    reverse: a DB rollback must not leave live memory ahead of the database.
 5. `OnSaveDatabase` / `OnAfterSaveDatabase`.
 
+**On an engine that keeps DDL transactional (Firebird), step 3 is two phases.** The DDL and the
+config blob commit together; everything that READS a table this apply RESHAPED runs after that commit,
+in its own transaction (`ibSchemaBuilder::RunOrDefer` → `ibStructureBuilder::FlushDeferredFirebird`).
+The barrier tracks the SHAPE, not the creation: an `ALTER TABLE … ADD` leaves a table as unreadable to
+a same-transaction prepare as a `CREATE` does — *"Column unknown FLD…"* about a column added three
+statements earlier. So the seed rows and the **L3-4 rebuild** alike belong to that second phase, which
+is the general rule: a statement that reads a table this apply reshaped is data, whatever the reshaping
+was. See [query-engine-layers.md](query-engine-layers.md) § L3.
+
 Commit points differ by target but the staging is uniform (buffer / detached tree, no external
 side effects until commit):
 

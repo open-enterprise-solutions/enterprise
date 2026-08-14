@@ -4,6 +4,13 @@
 > known regressions on FB 5.0 embedded; metadata-driven Apply paths
 > exercise the changed code in desktop / wenterprise-server smoke
 > runs. Three follow-ups parked (see end-of-doc).
+>
+> ⚠ **A SECOND PASS landed 2026-08-13/14** — the WRITE path this time, plus a blob read that could
+> loop forever. It found a hundredfold understatement on ordinary money columns, a write past the end
+> of a parameter buffer, and a reference losing its type; the account is
+> [§ *Second pass*](#second-pass--2026-08-1314-the-write-side-and-a-blob-read-that-could-hang) at the
+> end of this file. Read the sections below as the v1.3.0 audit, which is what they are — "no known
+> regressions" was true of what that pass looked at, and the write side was not it.
 
 Audit and fix pass on the FB driver — class `ibDatabaseLayerFirebird`
 (`databaseLayer/firebird/firebirdDatabaseLayer.h`) and the supporting
@@ -241,6 +248,85 @@ class `ibDatabaseLayer` it declares). Drivers other than FB
 ignore the flag — documented in the struct comment. PostgreSQL is
 the next candidate to honour it (`SET TRANSACTION READ ONLY`),
 straightforward to add when profile demands.
+
+---
+
+## Second pass — 2026-08-13/14 (the WRITE side, and a blob read that could hang)
+
+> Kept as a section of its own rather than folded into the sections above, so the account of the
+> v1.3.0 release stays an account of that release. Everything here was found AFTER it shipped, by
+> running the accounting register's first live applies against FB 5 embedded.
+>
+> **The shape of this pass differs from the first.** The 2026-04-30 audit fixed reads that returned
+> wrong values. This one is mostly the WRITE path, where the same class costs more: a read that is
+> wrong is visible the moment somebody looks, while a write that is wrong is durable, and the value
+> it destroyed is not recoverable from the row it produced.
+
+### The rule this pass keeps re-teaching
+
+⭐⭐ **A number that means "I could not establish this" must not share a variable with a number that
+means a measured zero.** Three of the six defects below are that collapse, in three different places.
+
+### `firebirdParameter.cpp`
+
+| Defect | What it did |
+|---|---|
+| **A string was copied without regard for the buffer's size** | `sqldata` is allocated when the statement is DESCRIBED, sized from the parameter's *declared* width; the value's encoded length is an unrelated number. A string longer than the column ran straight past the allocation, and the heap corruption surfaced wherever the next allocation happened to live — never at the write. The clamp must also come BEFORE the assignment that replaces `sqllen` with the value's own length, or it clamps against what it just wrote |
+| ⚠ **…and the first version of that clamp emptied every value** | Written as `capacity = sqllen > 0 ? sqllen : 0`, it read an *undescribed* parameter (`sqllen == 0`) as "no room at all" and clamped every value to nothing — a string went in, the write reported success, and the field came back EMPTY. Caught on a chart of accounts whose code survived (written through another path) while its description was blank after every save. Zero meant **unknown**, not **no room**; the clamp now applies only where the room is known |
+| **Scale was applied in two of the four integer branches** | FB stores `NUMERIC(p,s)` as an integer with the scale remembered beside it. `SQL_INT64` / `SQL_INT128` multiplied by `10^-sqlscale`; `SQL_SHORT` / `SQL_LONG` did not — and FB maps `NUMERIC(1..4,s)` to SMALLINT and `NUMERIC(5..9,s)` to INTEGER, so an ordinary `Number(9,2)` money declaration took the unscaled branch. **1234.56 was written as 1234 and read back as 12.34** — a hundredfold understatement, silent, on the default driver's write path. The multiplication is now written once (`scaledForStorage`) |
+| **`ToInt()` with no argument CLAMPS, and the clamped value then wraps** | At INT_MAX, then modularly into a 16-bit field: **40000 stored as −25536**, a sign flip on money. Replaced by a checked narrowing that refuses — a value that does not fit the column cannot be written, and writing a different one is worse than refusing |
+| **The return code of `ToInt` was ignored on `SQL_INT64`** | On overflow it leaves its out-param UNTOUCHED, so the branch wrote a **zero** — and this branch carries more than money: `_RTRef` holds an `ibClassID`, an unsigned 64-bit value whose plugin range and raw-FNV ids have the top bit set. A reference whose type stored as 0 is a row whose identity cannot be read back. A value past `INT64_MAX` is not an error here — it is 64 bits that are not a signed number, and a BIGINT column holds 64 bits either way, so it is stored as the same bit pattern (exact round trip) and only a value fitting NEITHER reading is refused |
+| **A null parameter buffer was checked in one place** | `RequireParameterBuffer()` is now called by every branch that writes into a DESCRIBE-allocated buffer (`SQL_INT64`, `SQL_INT128`, `SQL_TEXT`, `SQL_VARYING`). A null there is a bind addressing a parameter the statement does not have, and it used to arrive as an access violation inside the CRT with nothing on the stack naming a column |
+
+The refusal messages carry the offending value, and it rides as an **argument**: `Error` is a
+printf-style vararg, so a description handed in as the format string reads any `%` inside it as a
+specifier ([exceptions.md](exceptions.md)).
+
+#### ⏳ The clamp is not finished, and the reason is worth stating
+
+`sqllen` carries **two opposite facts**: at DESCRIBE it is the column's declared width, which is what
+`AllocateParameterSpace` sizes the buffer from; after the first bind it is the length of the last
+value written, because the ctor must put it there — FB requires that for an input `SQL_TEXT`. The
+capacity is then recorded **nowhere**, and the same `XSQLVAR` is reused for every bind at that
+position (the allocation happens once, in the collection's ctor).
+
+So the clamp reads a field that has stopped meaning capacity:
+
+```
+DESCRIBE:  sqllen = 50 (column width), buffer 51
+bind #1 "abc"       -> no clamp (3 < 50), memcpy, sqllen = 3
+bind #2 "abcdefgh"  -> 8 > 3  =>  TRUNCATED to "abc"
+```
+
+The `> 0` guard covers an *undescribed* parameter, not a *short previous* one. This is the third trip
+round the same loop: the clamp was added 2026-04-30, reverted 2026-05-08 when re-binding truncated
+(a batch insert wrote five rows with empty strings), and restored now because writing past the buffer
+is worse. Both behaviours are wrong in the other's case, which is the signature of one number holding
+two facts.
+
+**The fix is not to choose** — it is to record the capacity at `AllocateParameterSpace` (a parallel
+vector on the collection, or a field handed to the parameter's ctor) and clamp against that. Until
+then, anyone touching this must check BOTH: a string longer than the column (must not write past the
+allocation) and two different binds into one position (the second must not be cut down to the first).
+The `SetParamBlob` `SQL_TEXT` / `SQL_VARYING` branches read `cap` from the same field and inherit the
+same limitation.
+
+### `firebirdResultSet.cpp` — reading a blob
+
+| Defect | What it did |
+|---|---|
+| **The status of `isc_open_blob2` was dropped** | Everything after it read as though the blob were open. `isc_get_segment` on a null handle fails, but the loop's second condition consults `m_Status[1]`, which on that path still holds the code from whatever ran BEFORE the call — and when that leftover happened to be `isc_segment`, **the loop never ended**, appending the same uninitialised segment forever. A blob that cannot be opened has to say so, not hang |
+| **`nSegmentLength` was uninitialised and used as a LENGTH** | A failed read leaves it untouched, and the buffer was sized from whatever was on the stack; the loop then appended that many bytes of it |
+| **`isc_segstr_eof` was not told apart from a real failure** | The ordinary end of a blob and an error both ended the read, so a genuine failure could return a short buffer that reads exactly like a valid blob |
+| **The status was interpreted after `isc_close_blob`** | The close writes its own outcome into the same status vector, so the report described how the CLOSE went and lost why the READ stopped. The failure is read first, then the blob is closed |
+
+### What this pass says about the first one
+
+The 2026-04-30 audit fixed the scale arithmetic on the READ side (§ *Changes by file*,
+`firebirdResultSet.cpp`) and did not ask the same question of the write side, where the answer was
+different in two of four branches. The lesson generalises past this driver and is the same one the
+totals guard produced independently on the same days: **when a rule is found wrong in one direction,
+the sweep is every place that expresses it, not every place that reads it.**
 
 ---
 

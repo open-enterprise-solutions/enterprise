@@ -28,6 +28,16 @@ make the whole feature a matter of admitting one more tenant into seams that are
   L2 query layer, and all four are `CREATE OR REPLACE FUNCTION max_uuid/min_uuid` at PostgreSQL
   bring-up. **Zero** carry user data. There is no second path into the database, so there is no
   second path to guard.
+  > Re-checked 2026-08-13: still four, and they have moved to where they belong —
+  > `ibDatabaseLayerPostgres::CreateMissingRoutines()`, inside the driver, rather than written out in
+  > `metaCollection`. The count is unchanged and so is the conclusion; what changed is that no tier
+  > above L1 spells engine-specific SQL any more.
+  >
+  > ⚠ And one door the SCRIPT has is not counted here, because it is not the backend's: the
+  > `DatabaseLayer` value type (`system/value/valueDatabaseLayer.cpp`) hands a configuration's own
+  > code the raw driver. It is a deliberate hatch (owner, 2026-08-13 — kept, with the docs corrected
+  > to say so), and any statement written through it is outside every guarantee on this page. Ordinary
+  > script access is a manager, a query or LINQ; see [ai-context.md](ai-context.md) § 4.1.
 - **One value crossing.** `ibColumnCodec::WriteValue` / `ReadValue` (`query/columnLayout.h`) is the
   single place an `ibValue` becomes physical fields and back. It is static and stateless, and it
   already exists — as the collapse of three duplicates ("the one home for the *magic* column spread

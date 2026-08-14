@@ -9,6 +9,12 @@ survives a register kind switch** (2026-07-29). **The maintenance side landed 20
 derived table became an ordinary readable source, the shard fold and the parity check exist, and
 both sit behind one call a scheduled job makes (§6a, § *What remains* 1–1b). Nothing is wired to a
 scheduler yet, and the parity check has not been run against real traffic.
+**The ACCOUNTING register declares a bundle of its own since 2026-08-13** — one totals table one-sided,
+two in correspondence mode ([accounting-register-arc.md § 5e](accounting-register-arc.md)) — and, being
+the first key wide enough to pass an index ceiling, it forced four corrections in the machinery under
+it: § 4f (the key digest), § 4g (the accumulating column's precision), § 4h (guards compose) and § 4i
+(regeneration waits for the DDL to become durable). Suite 1303 green, with
+`tests/test_totalsKeyHash.cpp` (13) and `tests/test_accountingTotals.cpp` (7) among them.
 
 Read the two halves separately, because they landed in the opposite order to this document:
 
@@ -318,7 +324,7 @@ destination and both cheap to add now / expensive later:
   is also why MySQL's dialect now sets `m_selectFromDual = DUAL`: a FROM-less `SELECT` there
   cannot carry a `WHERE`.
 - **A trigger body is N statements, not one.** One movement can feed several totals tables
-  (debit turnover, credit turnover, later per-subconto breakdowns). The shell takes a rendered
+  (debit turnover, credit turnover, later per-dimension breakdowns). The shell takes a rendered
   multi-statement body, so the multi-table case inherits the same TX atomicity as the
   single-table one and needs no coordination above.
 
@@ -494,6 +500,99 @@ and emptiness is expressed by the read filter alone.
 > upgrade. Not a blocker — ODBC is a marginal target — but it is the one driver the dictionary
 > does not cover.
 
+#### 4f. A key an index cannot hold — the identity moves into one field (2026-08-13)
+
+Everything above assumes the key can simply be made UNIQUE. It cannot always: **a key is LOGICAL
+columns, an index is their PHYSICAL fields**, and a reference is three of those. The accounting
+register's totals key — period, account, a *(kind, value)* pair per analytic, the dimensions — is about
+twenty-one segments at four analytics against Firebird's sixteen, and the first live apply stopped on
+exactly that (`too many keys defined for index`). The accumulation register meets the same ceiling
+later, at five reference dimensions, so this is the machinery's problem and not one register's.
+
+The key therefore stays as declared and only its UNIQUENESS moves. Past the ceiling the table gains
+`keyhash_` (`KeyHashColumnName()`), the UNIQUE index stands on that one column, and **the delta goes on
+MATCHING BY THE KEY COLUMNS** — so a digest collision can only refuse an insert, never merge two keys
+into one row. Three facts decide the shape, and none of them is a detail:
+
+- **the ceiling is engine-conditional and declared as a DDL fact**: `ibDialectDictionary::m_maxIndexSegments`
+  — Firebird 16, MySQL 16, PostgreSQL 32, SQLite none (0 = no limit worth declaring). The declaration
+  tier asks `ibIndexFieldCapacity` / `ibKeyNeedsHash` (`databaseMaterializeBuilder.*`) and never reads a
+  dialect itself; `ibDeclareDerivedKey` (`query/schemaSnapshot.cpp`) is the one place that turns "this is
+  the key" into what the database is given to enforce it with, and both registers call it;
+- **a part is digested before the parts are joined.** `HEX_ENCODE(CRYPT_HASH(<part> USING MD5))` per key
+  part, joined, digested again — 32 ASCII characters whatever the part held, where casting a binary
+  reference key or an unbounded string into text to concatenate it is a character-set error or a silent
+  truncation. One walk (`KeyColumnValues`) serves both currencies — the trigger reading NEW/OLD and the
+  backfill reading the table's own columns — so the digest cannot mean two things. Confirmed on a live
+  Firebird 5: all three triggers created;
+- **the column is `VARCHAR(32)`, and the width is the mechanism.** Declared at the raw default of 255 it
+  is 1020 bytes in a UTF8 database, and Firebird sizes an index key from the DECLARED length — the apply
+  got past the trigger and died on *"key size exceeds implementation restriction"*. `ibRawDBColumn::String`
+  now carries a length so the next indexed raw column can state its own.
+
+Two consequences the sketch in "What OES Apply generates" does not cover. A **rebuild writes rows without
+a digest** — regeneration goes through the ordinary door and knows nothing about the column — so it
+finishes with `ibFillKeyHashes`, one `UPDATE … WHERE keyhash_ IS NULL` over the same expression; left
+empty, a UNIQUE index over NULLs enforces nothing on any engine while looking like it enforces the key.
+And the table also gets a **plain index over the leading key columns that fit**: the unique digest index
+answers "is this key already here", not "where is it", so without the second index every posting would
+scan the whole totals table.
+
+The mechanism is written up once, with the accounting register's own account of the failure, in
+[register-shared-machinery.md § 4a](register-shared-machinery.md). Pinned by
+`tests/test_totalsKeyHash.cpp` (13) — the decision, the render, and the backfill's idempotence.
+
+#### 4g. An accumulating column takes the RESOURCE's precision (2026-08-13)
+
+`ibRawDBColumn::Number` answered with a flat `ibTypeNumber(18, 0)`, so a resource declared `Number(10,0)`
+— or any resource carrying kopecks — got totals columns that did not match the movements table, which is
+created from the declaration. The fraction was not rounded at the edge of a long calculation; it was
+dropped **on the way into the totals**, whatever the movements held. Four sites, in both registers.
+
+They take the resource's own precision and scale now, which is also what makes the claim the demolition
+already leaned on (*What died with it*: "the view stores each figure in the resource's own declared
+type") true of the STORED column and not only of the view over it.
+
+**The totals column is NOT widened beyond the resource** (owner, 2026-08-13): *"we control it ourselves —
+I will declare 15,3 or 15,2"*. The room a sum of many movements needs is part of what the declaration
+says, not something the engine adds behind it; a sum that outgrows the declared precision raises at
+posting time, which is the loud direction.
+
+#### 4h. Two guards on one table must COMPOSE (2026-08-13)
+
+`ibSchemaMaterialize::Guard` assigned. One guard is the ordinary case — *the movement is in force* — and
+nothing showed until a register declared two: a correspondence accounting register also guards *this side
+names an account*, the second call overwrote the first, and every totals table of every such register
+accumulated movements that were out of force. Nothing about the result looks wrong; the rows are all
+rows and the figures are merely larger than they should be.
+
+It composes with `AND` now, in **both** forms — the trigger's SQL text and the regeneration's predicate,
+which have to state the same rule or a rebuild disagrees with the trigger that filled the table.
+Composing is also what the caller means each time: a guard names a reason this movement does not belong
+in this table, and reasons accumulate. The class generalises past this one setter — *a fluent setter a
+caller may reasonably call twice must compose, or say in its name that it replaces* — and is carried in
+[register-shared-machinery.md § 4b](register-shared-machinery.md). Covered by
+`tests/test_accountingTotals.cpp` (7).
+
+#### 4i. Regeneration waits for the DDL to become durable (2026-08-13)
+
+L3-4 rebuilds by READING the source, and an engine that keeps DDL transactional refuses DML against a
+table whose shape the still-open transaction is writing. The first answer to that was a condition —
+*skip regeneration when the source table is created in this apply* — and it was a dodge around a
+symptom: the engine does not care whether the apply CREATED the table or merely ADDED A COLUMN to it.
+Adding one dimension therefore failed with "Column unknown FLD…" naming a column added three statements
+earlier, and the message accused the source table.
+
+The condition is **removed**. `ibSchemaBuilder::Execute` marks a table as not-yet-durable for every
+shape-changing statement — create table, add / drop / alter column, alter table — and the regeneration
+runs through `RunOrDefer` (`query/schemaSnapshot.cpp`), the same barrier door the seed writes already
+use: queued past the DDL commit while the table is not durable, run inline when it is. One rule instead
+of one exception.
+
+⚠ **This class of defect is invisible to the test suite by construction.** The suite runs on SQLite, and
+SQLite has no DDL barrier — a statement is durable the moment it returns — so every deferral path there
+is the inline one. Only a live apply on Firebird exercises the barrier at all.
+
 ### 5. Reconciliation by the cheapest sufficient operation
 
 The "What OES Apply generates" section below always full-rebuilds on a structure change. That
@@ -574,7 +673,7 @@ converge, and the second one was missing from this section entirely:
 
 | Shape | Split? | Why |
 |---|---|---|
-| An account like revenue / VAT with no or coarse subconto | **yes** | every posting in the company lands on one key per period |
+| An account like revenue / VAT with no or coarse analytics | **yes** | every posting in the company lands on one key per period |
 | Retail with a fast-moving SKU | **yes** | hundreds of tills, one product row |
 | Settlements with one dominant counterparty | **yes** | same row, many writers |
 | Any register with fine-grained dimensions and no read-back | **no** | movements already land on different rows |
@@ -696,7 +795,9 @@ On `createMetaTable`:
    indexes on `(dim*, period)` for write-side lookup.
 2. `CREATE TABLE totals_X (period, dim1..dimN, res1..resM)` with
    `PRIMARY KEY (period, dim1..dimN)` and `fillfactor = 80` on PG
-   (enables HOT updates).
+   (enables HOT updates). ⚠ The unique key is over the key columns only while their PHYSICAL
+   fields fit the engine's index ceiling; past it the uniqueness stands on a digest column and
+   the key columns get a plain lookup index beside it (§ 4f).
 3. `CREATE TRIGGER tr_mov_X_ai/au/ad` — three triggers (after
    insert / update / delete), updating `totals_X` with delta.
 4. `CREATE VIEW vw_balance_X / vw_turnover_X / vw_slice_last_X` —
@@ -1001,9 +1102,14 @@ matters:
    table anyway. The mechanism still READS the value rather than assuming it
    (`GetTotalsPeriodUnit()`), so a register that one day needs a different floor changes one place
    plus a regeneration — but it is not a knob to hand the user.
-3. **The accounting register does not declare totals yet.** It was the reason for building the
-   primitives this way — a debit and a credit side are two guarded accumulations into one table —
-   and four `#if 0` blocks mark where its declaration goes.
+3. ✅ **The accounting register declares its totals since 2026-08-13.** It was the reason for building
+   the primitives this way, and what it asked for in the end differs from the guess written here: a
+   one-sided register keeps **one** table (the two sides told apart in the accumulated VALUE, exactly
+   as receipt is told from expense), a correspondence register **two** — one movement is about two
+   accounts, each under its own breakdown, and two different keys cannot be one upsert. The `#if 0`
+   blocks and the raw L1 SQL around them are deleted rather than revived
+   ([accounting-register-arc.md § 5e](accounting-register-arc.md)). Being the first key past an index
+   ceiling and the first table to declare two guards, it is also where § 4f–§ 4i came from.
 4. **Recorder / line-number granularity** is served only by the MOVEMENTS table. That is the
    boundary the period enum draws deliberately, but nothing in the read path yet ROUTES a sub-day
    or per-recorder request to the movements automatically; it falls back wholesale.
@@ -1016,7 +1122,8 @@ matters:
 7. **DROP + CREATE of one table name inside a single Firebird transaction** is the one path in the
    replace-don't-alter rule that has not been exercised end to end. If it turns out FB refuses, the
    release valve already exists — `m_ddlCommitBeforeData`, the barrier that already defers data
-   writes past the DDL commit.
+   writes past the DDL commit, and which since 2026-08-13 is raised by EVERY shape-changing statement
+   rather than by a create alone, with the regeneration itself riding it (§ 4i).
 
 ## The READ side, as the constructor found it (2026-08-10/11)
 
