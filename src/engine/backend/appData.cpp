@@ -21,6 +21,7 @@
 #include "backend/job/jobManager.h"           // ibJobManager (owned via GetJobManager)
 #include "backend/job/platformJobs.h"         // the engine's own jobs, declared when a database opens
 
+#include "backend/backend_exception.h"        // ibBackendCoreException — a build with no driver says so
 #include "backend/utils/passwordHash.hpp"
 
 #include "backend/moduleManager/moduleManager.h"
@@ -528,9 +529,20 @@ bool ibApplicationData::CreateFileAppDataEnv(ibRunMode runMode, const wxString& 
 {
 	if (s_instance != nullptr) s_instance->DestroyAppDataEnv();
 #ifndef OES_USE_FIREBIRD
-	// A file base IS a Firebird base (sys.fdb). With the driver left out of the build there
-	// is nothing to open, so say so instead of failing to link — see ConfigurationDefs.props
-	// for the macro contract.
+	// ⭐⭐ A BUILD WITHOUT THE DRIVER MUST SAY SO — this used to be a bare `return false`.
+	//
+	// A file base IS a Firebird base (sys.fdb), so with the driver left out there is nothing to
+	// open. But the caller reports what it is GIVEN, and it was given nothing: no exception, no
+	// error chain, no code. The startup dialog then said "the failure carried no description" —
+	// which is true and useless, because the reason is not a runtime failure at all. It is a
+	// property OF THE BUILD, known before the program ran.
+	//
+	// It cost a day. Release binaries were shipped for months with every OES_USE_* macro dropped
+	// (the Release ItemDefinitionGroups had lost `%(PreprocessorDefinitions)`, so nothing was
+	// inherited from ConfigurationDefs.props) — and the only symptom anyone could see was an
+	// infobase that would not open, with no reason given, in Release but never in Debug.
+	ibBackendCoreException::Error(
+		_("This build has no Firebird driver (OES_USE_FIREBIRD is not defined), and a file infobase is a Firebird one."));
 	return false;
 #else
 		std::shared_ptr<ibDatabaseLayerFirebird> db(new ibDatabaseLayerFirebird());
@@ -620,7 +632,11 @@ bool ibApplicationData::CreateServerAppDataEnv(ibRunMode runMode, const wxString
 {
 	if (s_instance != nullptr) s_instance->DestroyAppDataEnv();
 #ifndef OES_USE_POSTGRESQL
-	// The server base is PostgreSQL. Driver not in the build -> no server base.
+	// The server base is PostgreSQL — same silence, same reason, same cure as the file base above.
+	// A build missing this driver would otherwise refuse every server connection with no cause
+	// given, and the search would go to the network and the credentials, where nothing is wrong.
+	ibBackendCoreException::Error(
+		_("This build has no PostgreSQL driver (OES_USE_POSTGRESQL is not defined), and a server infobase is a PostgreSQL one."));
 	return false;
 #else
 		std::shared_ptr<ibDatabaseLayerPostgres> db(new ibDatabaseLayerPostgres());
