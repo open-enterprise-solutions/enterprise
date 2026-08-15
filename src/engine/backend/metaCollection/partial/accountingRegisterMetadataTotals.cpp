@@ -106,6 +106,14 @@ wxString ibValueMetaObjectAccountingRegister::AccountDimensionColumnName(const w
 	return wxString::Format(wxT("AccountDimension%s%u"), sidePrefix, no);
 }
 
+// The KIND half of the same pair, spelled through the same door — the slot creator used to format
+// this string itself, so "the name of slot N on side S" had two authorities that only happened to
+// agree.
+wxString ibValueMetaObjectAccountingRegister::AccountDimensionKindColumnName(const wxString& sidePrefix, unsigned int no)
+{
+	return AccountDimensionColumnName(sidePrefix, no) + wxT("Kind");
+}
+
 namespace {
 
 // Does a ROW of this reading name two accounts? Only the correspondence matrix and the movements

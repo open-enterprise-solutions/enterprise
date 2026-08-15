@@ -141,8 +141,12 @@ protected:
 		//get type id
 		virtual ibClassID GetClassType() const override { return m_clsid; }
 
-		//check is empty
-		virtual bool IsEmpty() const override { return false; }
+		// ⭐ BY THE SIGN, not by a member: a member number is non-negative whatever the declaration
+		// chose (backend_core.h), and the negative range is what "nothing chosen" is written in — the
+		// same number the write binds into a column carrying no value and the DDL defaults it to. So
+		// a variant built from it is the empty enumeration in its OTHER shape: same state, different
+		// carrier. Answering "not empty" here let it walk past every fill-check the owner now stops.
+		virtual bool IsEmpty() const override { return static_cast<long>(m_value) <= emptyEnum; }
 
 		//type info
 		virtual wxString GetClassName() const override { return ibValue::GetNameObjectFromID(m_clsid); }
@@ -164,8 +168,12 @@ protected:
 	private:
 		wxString m_name;
 		wxString m_description;
-		ibClassID m_clsid;
-		valType m_value;
+		// ⭐ THE DEFAULT STATE IS "NO MEMBER", SPELLED — not whatever the memory happened to hold.
+		// Every member number is valid, so an uninitialised field is indistinguishable from a
+		// choice, and the one thing it can never be is caught. Starting at emptyEnum means the
+		// only way to hold a member is to have been given one.
+		ibClassID m_clsid = 0;
+		valType m_value = static_cast<valType>(emptyEnum);
 	};
 
 	virtual wxString GetEnumName(const valT& v) const { return m_listEnumData.at(v); }
@@ -220,17 +228,54 @@ public:
 		if (m_value != nullptr) {
 			return m_value->GetEnumValue();
 		}
-		return valT();
+		// NOT valT() — that is ZERO, and zero is an ordinary member number. An enumeration with no
+		// member answered as though that member had been chosen, the same mistake the column default
+		// made one layer up.
+		return static_cast<valT>(emptyEnum);
 	}
 
+	// ⭐ SETTING A MEMBER ON AN ENUMERATION THAT HAS NONE MUST CREATE IT. The guard read as "keep the
+	// carrier in step", but an owner with no member yet is exactly the state a value arrives in —
+	// from AdjustValue, from a cleared field — so the assignment it was meant to protect was the one
+	// that mattered, and it did nothing at all, silently. The field stayed blank and the write
+	// carried nothing.
 	virtual void SetEnumValue(const valT& v) override {
-		if (m_value != nullptr) {
-			m_value->CreateEnumeration(
-				GetEnumName(v),
-				GetEnumDescription(v),
-				v
-			);
+		if (m_value == nullptr) {
+			InitializeEnumeration(v);
+			return;
 		}
+		m_value->CreateEnumeration(
+			GetEnumName(v),
+			GetEnumDescription(v),
+			v
+		);
+	}
+
+	// ⭐⭐ AN ENUMERATION WITH NO MEMBER STILL HAS A PACKED FORM — "no member".
+	//
+	// The VARIANT got these long ago (see the note on ibValueEnumerationVariantBase), and the reason
+	// given there applies to this shape word for word: without them the base's switch falls through
+	// to "a type with contents of its own that did not override this" and answers NO — which is not
+	// "empty", it is a REFUSAL, and the refusal surfaces as "Failed to read the contents of a value
+	// of type 'AccountType'" the moment anything holding one is read back. A list filter over an
+	// enum column holds exactly that: the row is created with the column's empty value, and the
+	// dialog could not be opened again afterwards.
+	//
+	// emptyEnum is the member number that means "none" — the same one the enum column binds when the
+	// cell carries no value, so the packed form and the stored column agree.
+	virtual bool DoSerialize(class ibDataNode& node) const override {
+		node.SetValue(kValueFieldData, m_value != nullptr ? (s32)m_value->GetEnumValue() : (s32)emptyEnum);
+		return true;
+	}
+
+	virtual bool DoDeserialize(const class ibDataNode& node) override {
+		const s32 member = node.GetValue<s32>(kValueFieldData);
+		if (member <= emptyEnum) {
+			m_value = decltype(m_value)();   // read back as written: an enumeration with no member
+			return true;
+		}
+		InitializeEnumeration(static_cast<valT>(member));
+		return true;
 	}
 
 	//create enumeration 
@@ -345,8 +390,12 @@ public:
 		return ibValue::CompareValueNE(cParam);
 	}
 
-	//check is empty
-	virtual bool IsEmpty() const override { return false; }
+	// ⭐ NO MEMBER CHOSEN IS EMPTY. This answered NO unconditionally, while the two methods right
+	// below already tell the truth about the same state — GetString returns "" and GetNumber returns
+	// wxNOT_FOUND when m_value is null. Fill-check asks exactly this question (SaveData), so a
+	// required enumeration left unset was saved as if it had been filled in, and the refusal the
+	// attribute's flag promised never came. The VARIANT stays non-empty: a chosen member is a value.
+	virtual bool IsEmpty() const override { return m_value == nullptr; }
 
 	//type info
 	virtual wxString GetClassName() const final {
@@ -362,7 +411,7 @@ public:
 
 	virtual ibNumber GetNumber() const final {
 		return m_value ? m_value->GetNumber() :
-			wxNOT_FOUND;
+			emptyEnum;
 	}
 
 protected:

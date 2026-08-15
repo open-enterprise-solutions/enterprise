@@ -490,13 +490,21 @@ public:
 	// target catalog's parent-map is read through ITS GetHierarchyColumn. (docs/query-language-arc.md §22.1b)
 	virtual const ibBackendQueryColumn* GetHierarchyColumn() const { return nullptr; }
 
-	// THE HIERARCHY KIND, in the word the metadata uses for it (ibHierarchyType::eItems). An ITEM
-	// hierarchy — a chart of accounts — subordinates an item to an item, so you can go INTO any
-	// element; a folders+items one lets you into a folder only, and an item there is a leaf however
-	// the level was fetched. A level read cannot tell the two apart, it returns rows either way; this
-	// declaration is what does. False for a flat source, which has no levels to begin with.
+	// ⭐⭐ THE ARRANGEMENT ITSELF — one value, four states (`ibHierarchyType`, backend_core.h), and
+	// every caller reads off it the distinction it actually needs:
+	//
+	//   is there a parent to walk        — anything but `eNone`      (grouping, IN HIERARCHY)
+	//   does a LIST walk it as a tree    — `eItems` / `eFoldersAndItems`
+	//   may an ITEM hold items           — `eItems`
+	//
+	// It used to be handed out as booleans, one per question, and a boolean is a PROJECTION: it
+	// answers what its author needed and silently answers something else for the next caller. Both
+	// mistakes that came of it were the same mistake — a chart of accounts declares `eSubordination`
+	// (a recorded parent, a flat list), and asked through `GetHierarchyColumn() != nullptr` it first
+	// said "no parent" to the grouping and later "yes, drill" to the list. Nothing to decide here:
+	// the source states its arrangement and the caller names the state it cares about.
 	// (Asked once per fetch, not per row.)
-	virtual bool IsItemHierarchy() const { return false; }
+	virtual ibHierarchyType GetHierarchyType() const { return ibHierarchyType::eNone; }
 	// (GetFolderColumn REMOVED — folders are a folder-first SORT / IsFolder FILTER set at list creation, not a
 	//  structural queryable column; the special engine mechanism kept is the HIERARCHY, not folders. — Max.)
 

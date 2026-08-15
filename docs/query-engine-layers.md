@@ -158,6 +158,32 @@ turns the door's calls into L2-1 IR. Alongside it:
   `ibFieldSuffix` and nowhere else**; a `grep` for a bare `"_RRRef"` outside this tier is a defect
   report.
 
+  ⭐ **A stored tag is checked against the layout before it is believed** (2026-08-15). `_TYPE` decides
+  which sub-field the read then names, and which sub-fields EXIST is decided by the column's type —
+  two facts that must agree and, once a row is written, can no longer be made to. So `ReadValue`
+  asks `TagFitsColumn` first (the same `ContainType` / `HasReference` gates the slots are built
+  from) and a tag the column cannot carry reads as the column's TYPED EMPTY. Rows already written
+  under a wrong tag stay readable instead of having to be rewritten. What produced them: a value
+  whose type is `TYPE_VALUE` — an enumeration with no member chosen — fell into `TagForValue`'s
+  "not a primitive, therefore a reference" arm and was stored as `Reference`; the next read asked
+  the driver for `<fld>_RTRef`, an enum column has none, and the whole list page died on one cell.
+
+  ⭐ **"I have no such value" is an answer, not a catastrophe.** Only one fault degrades:
+  `DATABASE_LAYER_FIELD_NOT_IN_RESULTSET` makes `ReadValue` return `false` with the column's typed
+  empty in hand, and the CALLER decides — a portion read swallows it and keeps the other rows, a
+  write or a targeted read lets it travel. A dropped connection or a driver failure is a fault of
+  the READ, not of the cell, and still propagates: degrading those would paint blank rows over a
+  database that stopped answering. Costs nothing on the normal path — a handler entered only when
+  the fault happens, and the ordinary form of it never reaches the handler (the tag check above).
+
+  ⚠ **An enum column's DDL default is `emptyEnum`, not `0`** (2026-08-15). Members are numbered by
+  their declaration and `0` is an ordinary member, so a column defaulting to it hands every row that
+  predates the column a member as though someone had chosen it — visible exactly when a perceptible
+  amount of data already exists (`ALTER TABLE ADD COLUMN` applies the default to every stored row).
+  Note the diff does NOT compare `m_default` (`DiffColumnInto` returns early unless the TYPE set
+  changed), so existing columns keep whatever default they were created with; the new value reaches
+  newly created columns only.
+
   ⚠ **A raw column may declare its own WIDTH, and the tier no longer guesses a type.**
   `ibRawDBColumn::String(field, id, length)` / `Number(field, id, precision, scale)` carry it, and
   `columnLayout.cpp`'s `RawType` uses what the column said, falling back to the old defaults

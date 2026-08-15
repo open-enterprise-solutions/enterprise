@@ -45,6 +45,15 @@ inline ibFieldTypes TagForValue(const ibValue& value)
 	// "not a primitive, therefore a reference" arm, and it is neither.
 	if (value.GetClassType() == g_valueTypeDescriptionCLSID)
 		return ibFieldTypes_TypeDescription;
+	// ⭐ AN ENUMERATION IS ONE BY ITS CLSID KIND, not by which of its two shapes it happens to be in.
+	// A chosen member is an ibValueEnumerationVariant (TYPE_ENUM); an unset one is the enumeration
+	// OWNER, whose value type is TYPE_VALUE — so it fell into the "not a primitive, therefore a
+	// reference" arm and was persisted with the Reference tag. The column has no _RTRef / _RRRef pair
+	// to read that back from (an enum spreads to _TYPE + _E), so the next list read asked the driver
+	// for a field that does not exist and the whole page died. Ask the KIND, and answer with what the
+	// cell actually holds: nothing, or a member.
+	if (IsEnum(value.GetClassType()))
+		return value.IsEmpty() ? ibFieldTypes_Empty : ibFieldTypes_Enum;
 	return TagForValueType(value.GetType());
 }
 
@@ -58,7 +67,7 @@ inline void BindAbsentPrimitive(ibQueryStatement* st, ibColumnRole role, int& po
 	case ibColumnRole::Number:  st->SetParamNumber(pos++, 0);               break;
 	case ibColumnRole::Date:    st->SetParamDate(pos++, emptyDate);         break;
 	case ibColumnRole::String:  st->SetParamString(pos++, wxEmptyString);   break;
-	case ibColumnRole::Enum:    st->SetParamInt(pos++, wxNOT_FOUND);        break;
+	case ibColumnRole::Enum:    st->SetParamInt(pos++, emptyEnum);          break;
 	default:                                                                break;
 	}
 }

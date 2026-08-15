@@ -11,6 +11,8 @@
 #include "backend/system/value/valuePointInTime.h"                 // g_valuePointInTimeCLSID — computed, never a column
 #include "backend/metaCollection/partial/reference/reference.h"    // ibValueReferenceDataObject (reference assembly)
 #include "backend/metaCollection/metaObject.h"                     // ibValueMetaObject (reference reconstruction)
+#include "backend/databaseLayer/databaseLayerException.h"          // ibDatabaseLayerException — the "no such field" verdict
+#include "backend/databaseLayer/databaseErrorCodes.h"              // DATABASE_LAYER_FIELD_NOT_IN_RESULTSET
 // ibFieldTypes (the wire tag) now comes from query/queryColumn.h — the codec no longer depends on
 // the attribute header (metaAttributeObject.h), only on the shared L3 column vocabulary.
 
@@ -197,7 +199,9 @@ std::vector<ibColumnSlot> DescribeColumnLayout(const ibBackendQueryColumn* col)
 	pushPrim(ibValueTypes::TYPE_NUMBER,  ibColumnRole::Number,  wxString());
 	pushPrim(ibValueTypes::TYPE_DATE,    ibColumnRole::Date,    wxString());
 	pushPrim(ibValueTypes::TYPE_STRING,  ibColumnRole::String,  wxString());
-	pushPrim(ibValueTypes::TYPE_ENUM,    ibColumnRole::Enum,    wxT("0"));
+	// The enum's DEFAULT is the "no member" number, NOT zero: 0 is an ordinary member number, so a
+	// column defaulting to it hands every unfilled row a member as though someone had chosen it.
+	pushPrim(ibValueTypes::TYPE_ENUM,    ibColumnRole::Enum,    wxString::Format(wxT("%i"), emptyEnum));
 
 	// _SCH — a schedule, serialised whole. A BLOB rather than fourteen columns: what people
 	// actually filter on is WHEN THIS RUNS NEXT, and that is a date column of its own on the job
@@ -493,11 +497,73 @@ bool ibColumnCodec::ReadField(const wxString& fieldName, int fieldType,
 	return false;
 }
 
+// ⭐⭐ DOES THE STORED TAG NAME A FIELD THIS COLUMN ACTUALLY HAS?
+//
+// The _TYPE tag decides which sub-field the read then asks the driver for BY NAME, and the sub-fields
+// that exist are decided by the column's TYPE — two facts that must agree and, once a row is written,
+// no longer can be made to. A row carrying a tag the column cannot spread to (the Reference tag on an
+// enum column, written by the shape bug in TagForValue) sent the read after `fld<n>_RTRef`, the driver
+// raised "field not found in the resultset", and the LIST FETCH that swallows it showed an empty page:
+// one bad row, and nothing at all is displayed.
+//
+// So the tag is checked against the layout before it is believed. A tag that does not fit reads as the
+// column's TYPED EMPTY value — the same answer an untagged cell gets — which keeps rows already in the
+// database readable instead of requiring them to be rewritten. Asked through the same ContainType /
+// HasReference gates DescribeColumnLayout builds the slots from, so the two cannot drift apart.
+static bool TagFitsColumn(const ibBackendQueryColumn* col, ibFieldTypes tag)
+{
+	const ibTypeDescription& td = col->GetTypeDesc();
+	switch (tag) {
+	case ibFieldTypes_Boolean:         return td.ContainType(ibValueTypes::TYPE_BOOLEAN);
+	case ibFieldTypes_Number:          return td.ContainType(ibValueTypes::TYPE_NUMBER);
+	case ibFieldTypes_Date:            return td.ContainType(ibValueTypes::TYPE_DATE);
+	case ibFieldTypes_String:          return td.ContainType(ibValueTypes::TYPE_STRING);
+	case ibFieldTypes_Enum:            return td.ContainType(ibValueTypes::TYPE_ENUM);
+	case ibFieldTypes_Schedule:        return td.ContainType(g_valueScheduleCLSID);
+	case ibFieldTypes_TypeDescription: return td.ContainType(g_valueTypeDescriptionCLSID);
+	case ibFieldTypes_Reference:       return ibColumnCodec::HasReference(col);
+	default:                           return true;   // Empty / Null read no sub-field at all
+	}
+}
+
+// ⭐ "I HAVE NO SUCH VALUE" IS AN ANSWER, NOT A CATASTROPHE.
+//
+// The result set not carrying a field this column needs is a fact about ONE cell — the codec says so
+// the way it already says everything else, by returning false with the column's typed empty in hand,
+// and the CALLER decides: a portion read swallows it and keeps the other rows, a write or a targeted
+// read lets it travel. Before, it propagated no matter who asked, so a single unreadable cell took a
+// whole list page with it.
+//
+// Costs nothing on the normal path — the guard is an exception handler, entered only when the fault
+// actually happens — and the ordinary form of this fault does not even reach it: TagFitsColumn above
+// answers from the column's own type before any sub-field is named.
+//
+// ONLY this fault. A dropped connection or a driver failure is a fault of the READ, not of the cell,
+// and still travels: degrading those would paint blank rows over a database that stopped answering.
 bool ibColumnCodec::ReadValue(const wxString& fieldName,
+	const ibBackendQueryColumn* col, const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData)
+{
+	try {
+		return ReadTaggedValue(fieldName, col, metaData, retValue, result, createData);
+	}
+	catch (const ibDatabaseLayerException& err) {
+		if (err.GetDriverErrorCode() != DATABASE_LAYER_FIELD_NOT_IN_RESULTSET)
+			throw;
+		retValue = (col != nullptr) ? ibValueTypeDescription::AdjustValue(col->GetTypeDesc()) : ibValue();
+		return false;
+	}
+}
+
+bool ibColumnCodec::ReadTaggedValue(const wxString& fieldName,
 	const ibBackendQueryColumn* col, const ibMetaData* metaData, ibValue& retValue, ibQueryResult& result, bool createData)
 {
 	ibFieldTypes fieldType =
 		static_cast<ibFieldTypes>(result.GetResultInt(fieldName + ibFieldSuffix(ibColumnRole::Discriminator)));
+
+	if (col != nullptr && !TagFitsColumn(col, fieldType)) {
+		retValue = ibValueTypeDescription::AdjustValue(col->GetTypeDesc());
+		return true;
+	}
 
 	switch (fieldType)
 	{

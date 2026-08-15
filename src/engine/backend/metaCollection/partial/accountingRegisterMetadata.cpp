@@ -417,12 +417,12 @@ void ibValueMetaObjectAccountingRegister::SyncAccountDimensionSlots()
 		// counterparty on another, so a meaningful name would be a lie. Meaning comes from the kind
 		// stored next to it — which is why a slot is created as a PAIR.
 		ibValueMetaObjectAttributePredefined* kind = CreateEmptyType(
-			wxString::Format(wxT("AccountDimension%s%uKind"), prefix, no),
+			AccountDimensionKindColumnName(prefix, no),
 			wxString::Format(_("Account dimension %s%u kind"), prefix, no),
 			wxEmptyString, false, ibItemMode::ibItemMode_Item);
 
 		ibValueMetaObjectAttributePredefined* value = CreateEmptyType(
-			wxString::Format(wxT("AccountDimension%s%u"), prefix, no),
+			AccountDimensionColumnName(prefix, no),
 			wxString::Format(_("Account dimension %s%u"), prefix, no),
 			wxEmptyString, false, ibItemMode::ibItemMode_Item);
 
@@ -439,7 +439,40 @@ void ibValueMetaObjectAccountingRegister::SyncAccountDimensionSlots()
 	};
 
 	const bool correspondence = IsCorrespondence();
-	const wxString debitPrefix = correspondence ? wxT("Dr") : wxEmptyString;
+	const wxString debitPrefix = GetDebitSidePrefix();
+
+	// ⭐⭐ THE SETTING RENAMES THE DEBIT SIDE — it does not only decide what gets written.
+	//
+	// Turning correspondence ON makes a line name both accounts, and from that moment the inherited
+	// `Account` IS the debit one. It kept its bare name anyway, so the pair read `Account` /
+	// `AccountCr` while its own dimensions right beside it read `AccountDimensionDr1` /
+	// `AccountDimensionCr1` — the same fact spelled two ways in one member list. Turning the setting
+	// back off has to undo it just as plainly: with one side, the side is said by RecordType and the
+	// prefix would be noise.
+	//
+	// SAFE TO RENAME: a metaID is what names the physical column (fld<metaID>), and the id is
+	// untouched here — this changes what the SCRIPT calls the field, which is exactly what the
+	// setting means. Applied on every Sync, so the names follow the setting in both directions,
+	// including for slots created under the previous one.
+	auto applySideName = [](ibValueMetaObjectAttributePredefined* attribute,
+		const wxString& name, const wxString& synonym) {
+		if (attribute == nullptr || attribute->GetName() == name)
+			return;
+		attribute->SetName(name);
+		attribute->SetOwnerSynonym(synonym);
+	};
+
+	applySideName(GetRegisterAccount(),
+		AccountColumnName(debitPrefix), AccountColumnSynonym(debitPrefix));
+
+	for (size_t idx = 0; idx < m_accountDimensionSlots.size(); idx++) {
+		const unsigned int no = static_cast<unsigned int>(idx) + 1;
+		applySideName(m_accountDimensionSlots[idx], AccountDimensionColumnName(debitPrefix, no),
+			wxString::Format(_("Account dimension %s%u"), debitPrefix, no));
+		if (idx < m_accountDimensionKinds.size())
+			applySideName(m_accountDimensionKinds[idx], AccountDimensionKindColumnName(debitPrefix, no),
+				wxString::Format(_("Account dimension %s%u kind"), debitPrefix, no));
+	}
 
 	// THE CREDIT ACCOUNT. In correspondence mode the line names both sides, so the inherited
 	// Account becomes the debit one and this is its counterpart. Its type is the same as the debit
@@ -476,6 +509,25 @@ void ibValueMetaObjectAccountingRegister::SyncAccountDimensionSlots()
 	//
 	// So the slots stay. A one-sided register simply never writes into them, exactly as it never
 	// writes into AccountCr, and the columns stand empty — which costs storage and nothing else.
+
+	// ⭐ AND THE SIDE THAT IS NOT THERE IS MARKED AS SUCH — the columns stay, the FIELDS do not.
+	//
+	// The paragraph above is about storage; this is about what a line offers a script. A one-sided
+	// register showed `AccountCr` and a whole credit breakdown beside its single account, all of them
+	// writable and none of them ever written — the reader could not tell which of the two accounts
+	// was the real one. metaDisableFlag is the mark the platform already uses for exactly this (a
+	// catalog with no owner, an independent information register's Recorder), and the member walk
+	// obeys it, so the mark alone is the whole change.
+	const auto markSide = [](ibValueMetaObjectAttributePredefined* attribute, bool active) {
+		if (attribute == nullptr)
+			return;
+		if (active) attribute->ClearFlag(metaDisableFlag);
+		else        attribute->SetFlag(metaDisableFlag);
+	};
+
+	markSide(m_accountCr, correspondence);
+	for (ibValueMetaObjectAttributePredefined* slot : m_accountDimensionSlotsCr) markSide(slot, correspondence);
+	for (ibValueMetaObjectAttributePredefined* slot : m_accountDimensionKindsCr) markSide(slot, correspondence);
 
 	m_accountDimensionCount = want;
 }

@@ -4,8 +4,16 @@
 
 void ibValueMetaObjectAccountingRegister::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
 {
-	// When Chart of Accounts binding changes, update the Account field type
-	if (m_propertyChartOfAccounts == property) {
+	// When Chart of Accounts binding changes, update the Account field type.
+	//
+	// ⭐ AND WHEN CORRESPONDENCE IS SWITCHED, through the SAME door. That setting decides how many
+	// sides a line has — so it decides which slots exist, whether there is a credit account to type,
+	// and what the debit side is CALLED (`Account` alone, `AccountDr` beside `AccountCr`). All three
+	// are what SyncAccountDimensionSlots + the typing below do, and none of them happened until
+	// something else — a re-bound chart, or a run — came along: the setting looked applied in the
+	// inspector while the register still had the shape of the other mode. Re-typing under an
+	// unchanged binding is idempotent, so one path serves both properties.
+	if (m_propertyChartOfAccounts == property || m_propertyCorrespondence == property) {
 		const ibMetaDescription& metaDesc = m_propertyChartOfAccounts->GetValueAsMetaDesc();
 		ibTypeDescription typeDesc;
 		for (unsigned int idx = 0; idx < metaDesc.GetTypeCount(); idx++) {

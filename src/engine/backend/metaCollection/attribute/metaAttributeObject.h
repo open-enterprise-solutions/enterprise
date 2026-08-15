@@ -261,6 +261,14 @@ public:
 	// sets. The owner restates it whenever the declaration changes; nobody else may.
 	void SetSelectMode(ibSelectMode selectMode) { m_selectMode = selectMode; }
 
+	// The SECOND such exception, and for the same reason. A predefined attribute whose meaning
+	// depends on a setting of its owner — an accounting register's debit account, which is `Account`
+	// in a one-sided register and `AccountDr` beside `AccountCr` in a correspondence one — must
+	// carry the caption that goes with the name it currently answers to, or the two say different
+	// things about the same field. The owner restates both when the setting changes; SetSynonym
+	// stays inert, so the object inspector still cannot edit what the metatype declares.
+	void SetOwnerSynonym(const wxString& strSynonym) { m_strSynonym = strSynonym; }
+
 	friend class ibValue;
 
 protected:

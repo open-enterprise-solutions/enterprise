@@ -158,23 +158,41 @@ bool ibValueMetaObjectAttribute::WriteData(ibDataNode& node) const
 }
 
 
-// Node form: the type descriptor as a Child (same readable shape as ibPropertyType,
-// via the shared ibTypeDescriptionMemory::WriteNode) + the fill flag.
+// ⭐⭐ A PREDEFINED ATTRIBUTE HAS NOTHING TO SERIALISE — that is what makes it predefined.
+//
+// The pair below used to write the type, the fill-check and the indexing, and that is INHERITED
+// SHAPE, not a decision: a predefined attribute began life as a variety of the ordinary one, whose
+// same three values ARE editable and therefore have to be stored. It stopped being that kind of
+// attribute; the storage stayed.
+//
+// Its shape comes from the METATYPE: the constructor states the type, the fill-check and the
+// indexing, and every configuration that opens tomorrow gets the same answers, because the answers
+// are in the code. Writing them into the configuration turned the declaration into a mere INITIAL
+// value — the first save froze whatever the platform said that day, and from then on the file won,
+// silently, forever.
+//
+// It cost exactly that. `AccountType` was declared fill-checked; every configuration saved before
+// that declaration existed simply had no `FillCheck` node, `GetValue<bool>` on a missing node is
+// `false`, and the read handed that `false` straight over the top of the `true` the constructor had
+// just set. An account with no side saved without a word, and no amount of looking at the write path
+// could show why: the flag was correct at construction and wrong one load later.
+//
+// The types that DEPEND on a setting are not stored either, and never needed to be: Parent, Owner,
+// Account, AccountCr and the dimension slots are all re-typed from their bindings by
+// `SetDefaultMetaType` in the run phase AND at the property change (see catalogMetadata.cpp:298,
+// accountingRegisterMetadata.cpp:659, chartOfAccountsMetadata.cpp:324) — which is precisely why
+// those calls sit in both places. Nothing else about the attribute is editable: `SetSynonym` is
+// inert, and the two owner-driven exceptions (`SetSelectMode`, `SetOwnerSynonym`) are restated by
+// the owner on every load for the same reason.
+//
+// Old configurations still carry the nodes; they are simply ignored now.
 bool ibValueMetaObjectAttributePredefined::WriteData(ibDataNode& node) const
 {
-	ibDataValue typeValue;
-	ibTypeDescriptionMemory::WriteNode(typeValue, m_typeDesc, GetMetaData());
-	node.SetProperty(wxT("Type"), typeValue);
-	node.SetValue(wxT("FillCheck"), (bool)m_fillCheck);
-	node.SetValue(wxT("Indexing"), (int)m_indexingMode);
 	return true;
 }
 
 bool ibValueMetaObjectAttributePredefined::ReadData(const ibDataNode& node)
 {
-	ibTypeDescriptionMemory::ReadNode(node.GetProperty(wxT("Type")), m_typeDesc, GetMetaData());
-	m_fillCheck = node.GetValue<bool>(wxT("FillCheck"));
-	m_indexingMode = (ibIndexingMode)node.GetValue<int>(wxT("Indexing"));   // absent -> 0 -> DontIndex
 	return true;
 }
 

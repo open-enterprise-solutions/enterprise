@@ -420,7 +420,7 @@ public:
 	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;   // { data-reference } — key authority
 	// (ResolveReferenceTarget/Targets moved to ibDbTableProvider — the provider owns metadata.)
 	virtual const ibBackendQueryColumn* GetHierarchyColumn() const override;   // the parent attribute (hierarchy key)
-	virtual bool IsItemHierarchy() const override;                            // forwarded to the metaobject, same as above
+	virtual ibHierarchyType GetHierarchyType() const override;                 // the arrangement — forwarded to the metaobject, same as above
 	virtual const ibValueMetaObjectGenericData* GetSourceMetaObject() const override;   // = m_meta (body in .cpp — the metaobject type is complete there)
 private:
 	const ibValueMetaObjectRecordDataRef* m_meta;
@@ -485,10 +485,10 @@ public:
 	// (Folder column removed — folders are a creation-time sort/filter setting, not a structural column.)
 	virtual const ibBackendQueryColumn* GetHierarchyColumn() const { return nullptr; }
 
-	// The hierarchy KIND — same name and meaning as the hierarchy class's own IsItemHierarchy(), which
-	// becomes the override. A flat source has no hierarchy, hence false. (queryable.h — the record
-	// queryable forwards here, same route as the column above.)
-	virtual bool IsItemHierarchy() const { return false; }
+	// THE ARRANGEMENT — one value, four states (queryable.h). A metaobject that cannot have a parent
+	// answers `eNone`; the hierarchy class overrides with what its property says. The record queryable
+	// forwards here, same route as the column above.
+	virtual ibHierarchyType GetHierarchyType() const { return ibHierarchyType::eNone; }
 
 	virtual bool HasQuickChoice() const {
 		return m_propertyQuickChoice->GetValueAsBoolean();
@@ -954,9 +954,11 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 	ibValueMetaObjectAttributePredefined* GetDataIsFolder() const { return m_propertyAttributeIsFolder->GetMetaObject(); }
 	virtual bool IsDataFolder(const ibMetaID& id) const { return id == (*m_propertyAttributeIsFolder)->GetMetaID(); }
 
-	// What a parent may be here. Asked wherever a parent is CHOSEN or IMPLIED — the select mode of
-	// the Parent field, the "create inside this node" rule, and the list a folder picker shows.
-	ibHierarchyType GetHierarchyType() const { return m_propertyHierarchyType->GetValueAsEnum(); }
+	// What a parent may be here — THE declaration, and the one the query tier reads through the
+	// queryable (it overrides the base's `eNone`). Asked wherever a parent is CHOSEN or IMPLIED — the
+	// select mode of the Parent field, the "create inside this node" rule, the list a folder picker
+	// shows, and whether a list walks levels at all.
+	virtual ibHierarchyType GetHierarchyType() const override { return m_propertyHierarchyType->GetValueAsEnum(); }
 
 	// An item-subordinated hierarchy (a chart of accounts) has no separate container kind: every
 	// node is the same thing, and any node may hold children. Asking this instead of comparing the

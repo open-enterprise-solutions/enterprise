@@ -36,6 +36,47 @@ constexpr ibClassID g_valueUndefinedCLSID = primitive_to_clsid("VL_UNDF");
 
 #define emptyDate -62135604000000ll
 
+// ⭐⭐ THE MEMBER NUMBER THAT MEANS "NO MEMBER" — the enumeration's emptyDate.
+//
+// A member's number is whatever its declaration says: 0, 1, 2 — or 50, 51, 52, or any set at all.
+// What holds for EVERY enumeration is the SIGN: members are NON-NEGATIVE, and the negative range is
+// reserved for "nothing was chosen". That is the only reservation that can be made without knowing
+// which numbers a particular enumeration happens to use, so the test is the sign — never a
+// comparison against a member.
+//
+// Which is why ZERO CANNOT MEAN EMPTY: it is an ordinary member number like any other. Where an enum
+// column defaulted to it, a row nobody ever filled in came back holding whichever member is 0, as
+// though someone had chosen it. Read by the write placeholder, the DDL default, the packed form and
+// the emptiness test alike, so the four cannot drift apart.
+#define emptyEnum -1
+
+// ⭐⭐ WHAT A PARENT MAY BE — ONE declaration with FOUR answers, and every layer asks it by name.
+//
+//   None            — a FLAT list. No parent at all: the field is gone, not merely unused.
+//   Subordination   — a parent that is DATA: the field exists, is filled and is shown like any other
+//                     attribute, and the list stays FLAT. This is a chart of accounts — an account
+//                     records which account it sits under, and nobody browses it as a tree.
+//   Items           — every element may hold elements; the platform drills into any of them.
+//   FoldersAndItems — items live INSIDE folders: a folder is a container, an item is a leaf.
+//
+// It lives HERE, at the bottom, because three different tiers need the same four answers: the
+// metaobject declares it, the query tier reads it off a source, the list decides how to walk it.
+// Each of them used to be handed a BOOLEAN PROJECTION instead — `GetHierarchyColumn() != nullptr`
+// for "is there a parent", `IsItemHierarchy()` for "may an item hold items" — and a projection
+// answers one question while the caller has another. That is how a chart of accounts, which
+// declares Subordination, first lost its hierarchy groupings (the accessor said "no parent") and
+// then grew a tree in its list (the same accessor, corrected, now said "yes" to a caller asking
+// whether to DRILL). One value with four states cannot be misread that way: whoever needs a
+// distinction names the state it turns on.
+//
+// ⚠ Stored as its INTEGER — these numbers are the wire. New members APPEND.
+enum ibHierarchyType {
+	eFoldersAndItems = 0,
+	eItems           = 1,
+	eNone            = 2,   // the editor lists them in reading order (see CreateEnumeration), which is free
+	eSubordination   = 3,
+};
+
 typedef int ibRoleID;
 typedef int ibMetaID;
 // A metaId acting as a SOURCE-binding hop (an element of a control's binding

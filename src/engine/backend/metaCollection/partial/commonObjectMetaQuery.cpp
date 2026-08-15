@@ -139,10 +139,11 @@ const ibBackendQueryColumn* ibRecordQueryable::GetHierarchyColumn() const {
 	// its parent column through a virtual, null on a flat ref. No cast — virtual dispatch down its OWN inheritance.
 	return m_meta->GetHierarchyColumn();
 }
-bool ibRecordQueryable::IsItemHierarchy() const {
+ibHierarchyType ibRecordQueryable::GetHierarchyType() const {
 	// Same route as the column above: the metaobject answers from its own declaration, virtual dispatch
-	// down its own inheritance, no cast.
-	return m_meta->IsItemHierarchy();
+	// down its own inheritance, no cast. The ARRANGEMENT travels whole — each caller reads off it the
+	// distinction it needs, instead of being handed one boolean per question.
+	return m_meta->GetHierarchyType();
 }
 
 // The metaobject behind the source — the front reads its icon / presentation off it (via the dynamic list's

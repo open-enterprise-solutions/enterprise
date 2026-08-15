@@ -88,6 +88,48 @@ Read the split as **collection vs member**: `ibValueEnumeration<valT>` is the *t
 `ibValueEnumerationVariant` is a *single value* (`ComparisonKind.Equal` — the thing a
 variable holds, tagged `TYPE_ENUM`).
 
+### 2.1 The state with NO member — `emptyEnum` (2026-08-15)
+
+A member's number is whatever its declaration says: `0, 1, 2`, or `50, 51, 52`, or any set at all.
+What holds for **every** enumeration is the SIGN — members are non-negative, and the negative range
+is reserved for *nothing was chosen*. That is the only reservation possible without knowing which
+numbers a particular enumeration uses, so the test is the sign, never a comparison with a member:
+
+```cpp
+#define emptyEnum -1        // backend_core.h, beside emptyDate
+```
+
+Which is why **zero cannot mean empty** — it is an ordinary member number like any other.
+
+The state has TWO carriers, because the mechanism has two shapes, and every general question must be
+answered the same way by both:
+
+| Question | Collection with no member | Variant holding `emptyEnum` |
+|---|---|---|
+| `IsEmpty()` | `m_value == nullptr` | `member <= emptyEnum` |
+| `GetEnumValue()` | `emptyEnum` (**not** `valT()` — that is member 0) | its own number |
+| packed form (`DoSerialize`) | `emptyEnum` under the payload key | the member number |
+| `GetString()` | `""` | the member's description |
+| stored in a column | `_TYPE` = `Empty` | `_TYPE` = `Enum`, `_E` = number |
+
+The variant's field starts at `emptyEnum` rather than uninitialised: every number is a valid member,
+so uninitialised memory is indistinguishable from a deliberate choice and can never be caught.
+
+**What this cost while it was missing** — one state, five wrong answers, each looking like a bug of
+its own subsystem:
+
+| Symptom | Cause |
+|---|---|
+| A required enum saved blank, no refusal | `IsEmpty()` returned `false` unconditionally — fill-check asks exactly that |
+| A whole list page showed nothing | the collection's type is `TYPE_VALUE`, so the write tagged the cell `Reference`; the read then asked for `<fld>_RTRef`, which an enum column does not have |
+| "Failed to read the contents of a value of type 'X'" when opening a saved list filter | the collection had no `DoSerialize` pair — the base answers *refusal*, not *empty* |
+| `Kind.First == <blank value>` was TRUE | `GetEnumValue()` of an empty collection returned `valT()` = 0 = whichever member is numbered 0 |
+| A column added to a table with rows made every old row hold member 0 | the enum column's DDL `DEFAULT` was `"0"` |
+
+Assigning to an empty collection is also a create, not a no-op: `SetEnumValue` on a collection whose
+member is null builds the member instead of silently doing nothing (which is what the state a value
+*arrives* in — from `AdjustValue`, from a cleared field — used to get).
+
 Two maps, not one:
 
 | Map | Holds |

@@ -1,20 +1,7 @@
 #ifndef _COMMON_OBJECT_ENUM_H__
 #define _COMMON_OBJECT_ENUM_H__
 
-// WHAT A PARENT MAY BE — the shape of a hierarchy, declared by the metaobject that could have one.
-//
-// FOUR arrangements, and only two of them are hierarchies. Not a display preference: each answers
-// both "is there a parent" and "does the platform navigate one".
-//
-//   None            — a FLAT list. No parent at all: the field is gone, not merely unused.
-//   Subordination   — a parent that is DATA: the field exists, is filled and is shown like any other
-//                     attribute. This is a chart of accounts — an account records which account it
-//                     sits under ("subordinate to account"). No separate CONTAINER kind is declared,
-//                     so a node becomes one by having children rather than by saying so.
-//   FoldersAndItems — a catalog. Items live INSIDE folders; a folder is a container and an item is a
-//                     leaf. Choosing a parent means choosing a folder.
-//   Items           — every element may hold elements. No separate container kind: each node is the
-//                     same sort of thing and the platform drills into any of them.
+// WHAT A PARENT MAY BE — `ibHierarchyType` (backend_core.h), where every tier can read it.
 //
 // ⭐⭐ THE HIERARCHY IS THE PARENT, and the line that matters is between `None` and the three above
 // it. Three arrangements record a parent, and a recorded parent IS a hierarchy: something to walk up,
@@ -22,19 +9,12 @@
 // `None` alone has nothing to ask — the field is gone, not merely unused, and in-hierarchy over such
 // a source can only ever answer with the value itself.
 //
-// ⚠ Corrected 2026-08-13. `GetHierarchyColumn()` used to gate on the two the engine NAVIGATES, which
-// made one accessor carry two questions under one null and left a chart of accounts answering "no
-// hierarchy" to a query that asked about its parent. What still differs between these three is
-// narrower than it was: whether there are FOLDERS (a second kind of node), and whether an item may be
-// entered by declaration (`IsItemHierarchy`) rather than by turning out to have children.
+// What still differs among the three is narrower: whether there are FOLDERS (a second kind of node),
+// whether an item may be entered by declaration rather than by turning out to have children, and
+// whether a LIST walks it at all (`Subordination` records a parent and stays flat).
 //
-// ⚠ The property is stored as its INTEGER, so these numbers are the wire. New members append.
-enum ibHierarchyType {
-	eFoldersAndItems = 0,
-	eItems           = 1,
-	eNone            = 2,   // the editor lists them in reading order (see CreateEnumeration), which is free
-	eSubordination   = 3,
-};
+// Below is the VALUE side — the enumeration a user picks from in the property editor.
+#include "backend/backend_core.h"   // ibHierarchyType — the declaration itself
 
 #pragma region enumeration
 #include "backend/compiler/enumUnit.h"

@@ -3633,6 +3633,21 @@ void ibValueRecordSetObject::ibValueRecordSetObjectRegisterReturnLine::FillMembe
 		for (const auto object : metaObject->GetGenericAttributeArrayObject()) {
 			if (object->IsDeleted())
 				continue;
+			// ⭐ A COLUMN THE SETTINGS TURNED OFF IS NOT A FIELD OF THIS LINE.
+			//
+			// The attribute list is the SCHEMA's: a predefined column stays declared whatever the
+			// settings say, because a column that comes and goes takes its data with it (see the note
+			// on FillArrayObjectByPredefinedAttribute). What the settings decide is which of them a
+			// line actually HAS — metaDisableFlag is exactly that mark, already set by an accumulation
+			// register with no RecordType, an independent information register with no Recorder /
+			// LineNumber / LineActive, and a correspondence register's unused account side.
+			//
+			// Listing them anyway offered a line fields nothing reads and nothing writes: assignment
+			// went into a column that never reaches storage, and autocomplete showed both `Account`
+			// and `AccountCr` on a register that has one account. Ask the mark the metatype already
+			// maintains rather than teach this walk each metatype's settings.
+			if (!object->IsEnabled())
+				continue;
 			if (!object->GetObjectNameAsString(objectName))
 				continue;
 			helper.AppendProp(

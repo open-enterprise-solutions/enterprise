@@ -462,6 +462,28 @@ public:
 	// declared first. Naming the column after the kind would put a data value (a characteristic's
 	// presentation, in the user's own language, spaces and all) into the field list of a query.
 	static wxString AccountDimensionColumnName(const wxString& sidePrefix, unsigned int no);
+	static wxString AccountDimensionKindColumnName(const wxString& sidePrefix, unsigned int no);
+
+	// ⭐ THE SIDE IS PART OF THE NAME — for the ACCOUNT exactly as it already is for its dimensions.
+	//
+	// `Account` when the register is one-sided (the side is said by RecordType, so the name carries
+	// none), `AccountDr` / `AccountCr` when a line names both. The debit account was the one name
+	// that never took the prefix: it stayed `Account` beside `AccountCr`, so a correspondence line
+	// read as "an account, and a credit account" rather than as the two sides of one entry — and
+	// which of the two the bare one was could only be learnt from documentation.
+	//
+	// Spelled here, beside the dimension's own rule, so a side added or a prefix changed is one edit.
+	static wxString AccountColumnName(const wxString& sidePrefix) { return wxT("Account") + sidePrefix; }
+	static wxString AccountColumnSynonym(const wxString& sidePrefix) {
+		if (sidePrefix == wxT("Dr")) return _("Debit account");
+		if (sidePrefix == wxT("Cr")) return _("Credit account");
+		return _("Account");
+	}
+
+	// The prefix THIS register's debit side currently carries — empty unless a line names both
+	// accounts. Asked rather than recomputed at each site: it is the same question the dimension
+	// slots are named from, and the two must never disagree.
+	wxString GetDebitSidePrefix() const { return IsCorrespondence() ? wxT("Dr") : wxEmptyString; }
 
 	// ⭐ WHAT AN OWN ATTRIBUTE IS, handed over BESIDE it rather than left to be guessed.
 	//

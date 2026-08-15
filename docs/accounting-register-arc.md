@@ -1328,6 +1328,43 @@ only what is WRITTEN into them: a one-sided register fills `RecordType` and leav
 a correspondence one fills both accounts and leaves `RecordType` empty. Two spare columns per
 register cost nothing; a column that comes and goes costs the data in it.
 
+⭐ **The setting also RENAMES the debit side** (2026-08-15). Turning correspondence on makes a line
+name both accounts, and from that moment the inherited `Account` IS the debit one — but it kept its
+bare name, so the pair read `Account` / `AccountCr` while its own dimensions right beside it read
+`AccountDimensionDr1` / `AccountDimensionCr1`: one fact spelled two ways in a single member list, and
+which of the two accounts the unprefixed one was could only be learnt from documentation. The prefix
+now follows the setting in both directions:
+
+| Correspondence | Account | Dimension slot |
+|---|---|---|
+| off | `Account` | `AccountDimension1..N` |
+| on | `AccountDr` + `AccountCr` | `AccountDimensionDr1..N` + `AccountDimensionCr1..N` |
+
+Spelled once — `AccountColumnName(prefix)` / `AccountColumnSynonym(prefix)` beside the dimension's
+own `AccountDimensionColumnName` — and applied on every `SyncAccountDimensionSlots`, so slots created
+under the previous mode are renamed too. Safe by construction: a metaID names the physical column and
+is untouched, so this changes what the SCRIPT calls the field, which is what the setting means. The
+synonym travels with it through `SetOwnerSynonym` (the second sanctioned exception to "a predefined
+attribute's shape is fixed by its constructor", after `SetSelectMode`) — otherwise the asymmetry just
+moves from the name to the caption.
+
+⭐ **And the unused side is MARKED, not listed.** The paragraph above about columns is a statement
+about STORAGE; what a line offers a script is a different question. A one-sided register showed
+`AccountCr` and a whole credit breakdown beside its single account, all writable and none ever
+written. They now carry `metaDisableFlag` — the mark the platform already uses for a catalog with no
+owner and an independent information register's `Recorder` — and the member walk
+(`ibValueRecordSetObjectRegisterReturnLine::FillMembers`) obeys it. The columns stay declared; only
+the FIELDS disappear. The same change makes an independent information register stop offering
+`Recorder` / `LineNumber` / `LineActive`, and a turnover accumulation register stop offering
+`RecordType` — the mark was always set, nothing read it.
+
+⚠ Note the asymmetry that remains, deliberately: `GetGenericAttributeArrayObject` still returns
+disabled predefined attributes, because that list is ALSO the schema's — dropping one there means
+DROP COLUMN, not "field unavailable". Ordinary (user-declared) attributes already vanish from it when
+disabled, since they arrive through `FillArrayObjectByFilter`, which tests `IsAllowed()`. Making the
+two agree means splitting the list by QUESTION — "what is this table made of" vs "what fields does
+this value have" — which is the arc the note over `FillArrayObjectByPredefinedAttribute` predicts.
+
 ⚠ **The same fix one level down, on the credit analytics slots.** `SyncAccountDimensionSlots` used to
 CLEAR the `Cr` vectors when correspondence went off, which removed those slots from every walk and
 dropped their columns at the next apply. Switching back produced the slots again — empty, under FRESH

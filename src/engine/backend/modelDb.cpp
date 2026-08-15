@@ -75,7 +75,9 @@ void ibValueModelCursor::EnsureSnapshot() const
 			// A container = a FOLDER, or ANY element when the source nests element in element, or a row already
 			// known to have children. The middle term is the hierarchy KIND, asked of the source.
 			const bool isFolderRow = (folderCol != nullptr) && r.GetValue(folderCol->GetColumnId()).GetBoolean();
-			const bool isContainer = isFolderRow || q->IsItemHierarchy() || r.m_hasChildren;
+			const bool isContainer = isFolderRow
+			                      || q->GetHierarchyType() == ibHierarchyType::eItems
+			                      || r.m_hasChildren;
 			ibComposerNode* node = new ibComposerNode(r.m_values, isContainer, std::move(rowKey));
 			m_snapshot.AddValue(this, node, false);       // adopt (silent) — const-model op, no const_cast
 		}
@@ -156,7 +158,15 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 	// TotalBy path a non-hierarchical document takes: the catalog is grouped by the field, folders no longer
 	// special. hierarchy is ON only in a Tree/Hierarchical view (not flatView) of a source with a hierarchy
 	// column AND with no grouping configured.
-	const bool hierarchy = q->GetHierarchyColumn() != nullptr && !flatView && !grouping;
+	// ⭐ WALKING A TREE IS ASKED OF THE ARRANGEMENT, not of the parent column. `GetHierarchyColumn()`
+	// answers "is there a parent to walk up", which THREE arrangements say yes to — including
+	// `eSubordination`, where the parent is ordinary data and the list is meant to stay flat. Asked
+	// through the column, a chart of accounts grew a tree it never declared: an account nested under
+	// its parent account, with a twisty to expand, over a list that is by declaration a flat one.
+	const ibHierarchyType arrangement = q->GetHierarchyType();
+	const bool browsable = arrangement == ibHierarchyType::eItems
+	                    || arrangement == ibHierarchyType::eFoldersAndItems;
+	const bool hierarchy = browsable && q->GetHierarchyColumn() != nullptr && !flatView && !grouping;
 	const bool groupLevel = grouping && !hierarchy && depth < dims.size();
 
 	ibValue hierParentKey;       // the browsed folder's self-reference (scope for its children)
@@ -384,7 +394,7 @@ unsigned int ibValueModelCursor::RunComposerPage(const ibDataViewItem& parent, c
 
 	// The hierarchy KIND, asked of the source once per fetch: where an element nests inside an element (a
 	// chart of accounts) EVERY row is enterable; where it nests inside a folder, only a folder is.
-	const bool itemHierarchy = (q != nullptr) && q->IsItemHierarchy();
+	const bool itemHierarchy = (q != nullptr) && q->GetHierarchyType() == ibHierarchyType::eItems;
 
 	// `this` is const here (fetch READS + returns rows). The node holds COPIES of the row values and
 	// overrides IsAttached() -> true, so there is NO owner pin and NO const_cast on the model state.

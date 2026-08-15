@@ -185,6 +185,13 @@ public:
 	// (The BINARY-WIRE codec — BinaryToStatement / BinaryFromResult — is the L3-3 dump / restore
 	//  PRIMITIVE; it lives with its consumer in query/dataMover.h (ibDataMover), not here. It reuses
 	//  this codec's HasReference + the shared spread driver, so the two stay byte-identical.)
+
+private:
+	// The tag switch itself, WITHOUT the "no such field" guard ReadValue wraps it in. The guard is
+	// what turns a missing field into an answer the caller can act on, so the unguarded shape is not
+	// offered: asking for it would be asking for the failure the guard exists to prevent.
+	static bool ReadTaggedValue(const wxString& fieldName, const ibBackendQueryColumn* col, const ibMetaData* metaData,
+	                            ibValue& retValue, ibQueryResult& result, bool createData);
 };
 
 #endif // !__COLUMN_LAYOUT_H__
