@@ -29,6 +29,8 @@
 #include <stdexcept>                                                  // guard for the not-yet-built multi-source composition path
 #include <algorithm>                                                  // stable_sort — RAM ORDER BY over a composed result
 #include <set>                                                        // DedupeRows — seen-row identity keys (plain UNION)
+#include <unordered_set>                                              // DISTINCT folds — keyed by value, see ibValueHash
+#include <unordered_map>                                              // RAM hash-join index
 
 namespace {
 // Build an empty RAM table with the given metadata columns (id / name / type), and append a src row to dst
@@ -135,12 +137,17 @@ ibDataQueryResult ibComputedProvider::ExecuteRead(const ibDataQuerySpec& spec, c
 	// ALL columns (the sort below may key on one not in the select list). First occurrence wins.
 	if (spec.m_distinct && spec.m_selectCols != nullptr && !spec.m_selectCols->empty()) {
 		ibQueryRamTable deduped = RamTableOf(cols);
-		std::set<wxString> seen;
+		// A row identity is the SEQUENCE of its cells — see ibValueSeqHash (value.h).
+		// It used to be those cells folded into one string through GetHashKey and
+		// joined with \x1f: a text conversion per cell per row, then a tree of
+		// strings compared character by character.
+		std::unordered_set<std::vector<ibValue>, ibValueSeqHash, ibValueSeqEqual> seen;
 		for (long i = 0; i < rows.RowCount(); ++i) {
-			wxString key;
+			std::vector<ibValue> key;
+			key.reserve(spec.m_selectCols->size());
 			for (const auto& sc : *spec.m_selectCols)
-				key += rows.GetCell(i, sc.first->GetColumnId()).GetHashKey() + wxT("\x1f");
-			if (!seen.insert(key).second) continue;
+				key.push_back(rows.GetCell(i, sc.first->GetColumnId()));
+			if (!seen.insert(std::move(key)).second) continue;
 			AppendRowByCols(rows, i, deduped, cols);
 		}
 		rows = std::move(deduped);
@@ -621,12 +628,14 @@ bool CollectDistinctJoinKeys(const ibQueryRamTable& t, const ibBackendQueryColum
 	out.clear();
 	if (col == nullptr || t.RowCount() <= 0)
 		return false;
-	std::set<wxString> seen;                                   // GetHashKey — the same identity the DISTINCT fold uses
+	// Keyed by the VALUES, same policy as the DISTINCT fold and the RAM join —
+	// no text conversion per row, no tree of strings (see ibValueHash, value.h).
+	std::unordered_set<ibValue, ibValueHash, ibValueEqual> seen;
 	for (long i = 0; i < t.RowCount(); ++i) {
 		const ibValue v = t.GetCell(i, col->GetColumnId());
 		if (v.IsNull() || v.IsEmpty())
 			continue;
-		if (!seen.insert(v.GetHashKey()).second)
+		if (!seen.insert(v).second)
 			continue;
 		if (seen.size() > kSemiJoinMaxKeys)
 			return false;                                      // too many keys — not worth the IN list
@@ -1423,7 +1432,9 @@ ibDataQueryResult ProjectToAliases(const ibQueryRamTable& TC, const ibDataQueryS
 	// path renders SQL DISTINCT; the multi-source stitch has none, so it folds here. (UNION DISTINCT is a
 	// separate fold at the UNION operator; this is DISTINCT over a JOIN / computed compose.)
 	const long limit = (page.m_count > 0) ? page.m_count : rows;
-	std::set<wxString> seenDistinct;
+	// The output cells ARE the row identity — they are already a vector of values,
+	// so the fold below inserts them directly instead of rendering them to text.
+	std::unordered_set<std::vector<ibValue>, ibValueSeqHash, ibValueSeqEqual> seenDistinct;
 	long emitted = 0;
 	for (long oi = 0; oi < rows && emitted < limit; ++oi) {
 		const long i = order[static_cast<size_t>(oi)];
@@ -1433,11 +1444,8 @@ ibDataQueryResult ProjectToAliases(const ibQueryRamTable& TC, const ibDataQueryS
 			outCells.push_back(RamCell(TC, i, sc.first));
 		for (const ibQueryColumnSelect& sc : exprs)
 			outCells.push_back(EvalColumnExprRow(sc.m_expr.get(), TC, i));
-		if (spec.m_distinct) {
-			wxString key;
-			for (const ibValue& v : outCells) key += v.GetHashKey() + wxT("\x1f");
-			if (!seenDistinct.insert(key).second) continue;   // duplicate output row -> drop
-		}
+		if (spec.m_distinct && !seenDistinct.insert(outCells).second)
+			continue;   // duplicate output row -> drop
 		const long r = TO.AppendRow();
 		for (size_t k = 0; k < outIds.size();  ++k) TO.SetCell(r, outIds[k],  outCells[k]);
 		for (size_t k = 0; k < exprIds.size(); ++k) TO.SetCell(r, exprIds[k], outCells[outIds.size() + k]);
@@ -1549,7 +1557,7 @@ ibValue AggregateOne(const ibDataQueryBuilder::AggregateItem& a, const ibQueryRa
 	// DISTINCT — count each different VALUE once. Keyed by the value's identity, never by its
 	// presentation: two references display the same string far more often than they are the same
 	// reference, and a display-keyed count would quietly merge them.
-	std::set<wxString> seen;
+	std::unordered_set<ibValue, ibValueHash, ibValueEqual> seen;
 
 	ibNumber sum(0); long n = 0; ibValue best; bool have = false;
 	for (long i : idx) {
@@ -1558,7 +1566,7 @@ ibValue AggregateOne(const ibDataQueryBuilder::AggregateItem& a, const ibQueryRa
 		const ibValue v = a.m_expr ? EvalColumnExprRow(a.m_expr.get(), TC, i) : RamCell(TC, i, a.m_col);
 		if (RamIsNullValue(v))
 			continue;
-		if (a.m_distinct && !seen.insert(v.GetHashKey()).second)
+		if (a.m_distinct && !seen.insert(v).second)
 			continue;   // already folded this value
 		switch (a.m_fn) {
 		case Fn::Count:             ++n; break;
@@ -1603,24 +1611,35 @@ void AddSyntheticAggColumns(ibSelectorTree& tree, const std::vector<ibDataQueryB
 			tree.AddColumn(kAggSyntheticBase + static_cast<ibMetaID>(i), aggs[i].m_alias, ibTypeDescription());
 }
 
-// Identity key of a cell for hierarchy linking. A REFERENCE keys by its _RRRef bytes (NOT its display
-// string): a row's OWN data-reference and a parent-ref pointing AT it carry the same _RRRef, so the
-// child's parentKey matches the parent's rowKey on identity, not on name. Any other value keys by its
-// string. (docs/query-language-arc.md §22.1b)
-wxString CellKey(const ibValue& v)
-{
-	// Stable identity key for grouping / hierarchy linking — the value's own canonical key (a reference
-	// keys by guid, anything else by string). ibValue::GetHashKey owns this, so the composer names no
-	// runtime type and the key is identity-stable (not an object address). Works for non-metadata
-	// sources (temp tables, plain columns) too.
-	return v.GetHashKey();
-}
+// CellKey is GONE. Hierarchy linking keys by the VALUE itself now (ibValueHash / ibValueEqual,
+// value.h): a REFERENCE compares by its _RRRef there — a row's own data-reference and a parent-ref
+// pointing AT it are the same value, which is what the link needs — and no cell is rendered to text
+// to say so. (docs/query-language-arc.md §22.1b)
 
 // Context for the recursive hierarchy fold (invariant across the recursion).
+// ---------------------------------------------------------------------------
+// VALUE-KEYED INDEXES, all of them, in one place.
+//
+// Every hierarchy / grouping structure below keys by the VALUE itself through ibValueHash +
+// ibValueEqual (value.h) — a reference matches by its guid there, which is what these need, and
+// nothing is rendered to text per row to say so.
+using ibRowsByValue    = std::unordered_map<ibValue, std::vector<long>,    ibValueHash, ibValueEqual>;
+using ibRefChildren    = std::unordered_map<ibValue, std::vector<ibValue>, ibValueHash, ibValueEqual>;
+using ibValueSeen      = std::unordered_map<ibValue, char,                 ibValueHash, ibValueEqual>;
+using ibValueParentMap = std::unordered_map<ibValue, ibValue,              ibValueHash, ibValueEqual>;
+
+// "No parent" — the row is a root. An absent value, an SQL null, or an empty string: the same three
+// the old string key collapsed to "" and tested with .empty().
+inline bool IsNoKey(const ibValue& v)
+{
+	return v.IsEmpty() || v.IsNull()
+		|| (v.GetType() == ibValueTypes::TYPE_STRING && v.GetString().IsEmpty());
+}
+
 struct HierBuildCtx {
 	const ibQueryRamTable*                               detail;
 	const ibBackendQueryColumn*                          rowKeyCol;
-	const std::map<wxString, std::vector<long>>*         childrenOf;
+	const ibRowsByValue*                                childrenOf;
 	const std::vector<ibDataQueryBuilder::AggregateItem>* aggregates;
 	ibDimensionKind                                      mode;
 	std::vector<bool>*                                  visited;   // cycle guard (malformed parent-ref)
@@ -1636,7 +1655,7 @@ std::vector<long> AttachHierNode(const HierBuildCtx& ctx, ibSelectorTree::Node* 
 		return {};                                   // cycle / out of range -> stop
 	(*ctx.visited)[static_cast<size_t>(rowIdx)] = true;
 
-	const wxString key = CellKey(ctx.detail->GetCell(rowIdx, ctx.rowKeyCol->GetColumnId()));
+	const ibValue key = ctx.detail->GetCell(rowIdx, ctx.rowKeyCol->GetColumnId());
 	const auto cit = ctx.childrenOf->find(key);
 	const bool hasKids = (cit != ctx.childrenOf->end() && !cit->second.empty());
 
@@ -1706,20 +1725,28 @@ ibDataQueryResult RamAggregate(const ibQueryRamTable& TC, const ibDataQuerySpec&
 		return RamCell(TC, row, (*spec.m_groupBy)[gi]);
 	};
 
-	std::vector<wxString> keyOrder;                    // first-seen group order
-	std::map<wxString, std::vector<long>> buckets;
+	// A GROUP KEY IS THE TUPLE OF ITS GROUP CELLS — see ibValueSeqHash (value.h).
+	// Folding it into one string through GetHashKey cost a text conversion per
+	// cell per row (a number through ToString, a reference through Format) and
+	// then keyed a tree that compared those strings character by character. Two
+	// references that display alike still do not merge: the values are compared,
+	// and a reference compares by guid.
+	std::vector<std::vector<ibValue>> keyOrder;        // first-seen group order
+	std::unordered_map<std::vector<ibValue>, std::vector<long>,
+	                   ibValueSeqHash, ibValueSeqEqual> buckets;
 	for (long i = 0; i < rows; ++i) {
-		wxString key;
+		std::vector<ibValue> key;
+		key.reserve(groupCount);
 		for (size_t gi = 0; gi < groupCount; ++gi)
-			key += groupCell(gi, i).GetHashKey() + wxT("\x1f");   // identity key — two refs with the same name don't merge
+			key.push_back(groupCell(gi, i));
 		auto it = buckets.find(key);
-		if (it == buckets.end()) { buckets.emplace(key, std::vector<long>{ i }); keyOrder.push_back(key); }
+		if (it == buckets.end()) { keyOrder.push_back(key); buckets.emplace(std::move(key), std::vector<long>{ i }); }
 		else it->second.push_back(i);
 	}
 	if (spec.m_groupBy->empty() && rows > 0) {          // aggregate with no GROUP BY = one bucket
 		std::vector<long> all; all.reserve(static_cast<size_t>(rows));
 		for (long i = 0; i < rows; ++i) all.push_back(i);
-		buckets.emplace(wxString(), all); keyOrder.push_back(wxString());
+		buckets.emplace(std::vector<ibValue>(), all); keyOrder.push_back(std::vector<ibValue>());
 	}
 
 	// A computed key has no model column to take an id / name from, so it gets a synthetic id in its
@@ -1744,7 +1771,7 @@ ibDataQueryResult RamAggregate(const ibQueryRamTable& TC, const ibDataQuerySpec&
 			TO.AddColumn(aggId++, a.m_alias, a.m_col != nullptr ? a.m_col->GetTypeDesc() : ibTypeDescription());
 	}
 
-	for (const wxString& key : keyOrder) {
+	for (const std::vector<ibValue>& key : keyOrder) {
 		if (spec.m_topCount > 0 && TO.RowCount() >= spec.m_topCount)
 			break;   // SELECT TOP n + GROUP BY — cap the folded groups (first-seen order)
 		const std::vector<long>& idx = buckets[key];
@@ -1781,19 +1808,22 @@ void FoldTotals(ibSelectorTree::Node& node, const ibQueryRamTable& TC, const std
 	if (level >= groupFields.size())
 		return;
 
-	std::vector<wxString> order;
-	std::map<wxString, std::vector<long>> buckets;
-	std::map<wxString, ibValue> keyVal;
+	// BUCKETED BY THE VALUE ITSELF (ibValueHash / ibValueEqual, value.h). Keying
+	// by GetHashKey() cost a text conversion per row — and forced a THIRD
+	// container, `keyVal`, whose only job was to map the string back to the value
+	// it came from. With the value as the key there is nothing to map back.
+	std::vector<ibValue> order;                                        // first-seen group order
+	std::unordered_map<ibValue, std::vector<long>, ibValueHash, ibValueEqual> buckets;
 	for (long i : rows) {
 		const ibValue v = RamCell(TC, i, groupFields[level]);
-		const wxString k = v.GetHashKey();   // identity key — refs group by guid, not display name
-		if (buckets.find(k) == buckets.end()) { order.push_back(k); keyVal[k] = v; }
-		buckets[k].push_back(i);
+		const auto it = buckets.find(v);
+		if (it == buckets.end()) { order.push_back(v); buckets.emplace(v, std::vector<long>{ i }); }
+		else it->second.push_back(i);
 	}
-	for (const wxString& k : order) {
+	for (const ibValue& k : order) {
 		ibSelectorTree::Node* child = node.AddChild(static_cast<int>(level) + 1);
 		std::map<ibMetaID, ibValue> childKeys = keys;
-		childKeys[groupFields[level]->GetColumnId()] = keyVal[k];
+		childKeys[groupFields[level]->GetColumnId()] = k;
 		FoldTotals(*child, TC, buckets[k], groupFields, aggs, level + 1, childKeys);
 	}
 	node.m_hasChildren = !node.m_children.empty();   // eager build -> has children == populated
@@ -2317,16 +2347,16 @@ ibSelectorTree ibQueryComposer::BuildHierarchyTree(const ibQueryRamTable& detail
 	}
 
 	// Recursive nest by parent-ref: index children by parent key, identify roots (no / unknown parent).
-	std::map<wxString, std::vector<long>> childrenOf;
-	std::map<wxString, long>              keyToRow;
+	ibRowsByValue childrenOf;
+	std::unordered_map<ibValue, long, ibValueHash, ibValueEqual> keyToRow;
 	for (long r = 0; r < n; ++r) {
-		keyToRow[CellKey(detail.GetCell(r, rowKeyCol->GetColumnId()))] = r;
-		childrenOf[CellKey(detail.GetCell(r, parentKeyCol->GetColumnId()))].push_back(r);
+		keyToRow[detail.GetCell(r, rowKeyCol->GetColumnId())] = r;
+		childrenOf[detail.GetCell(r, parentKeyCol->GetColumnId())].push_back(r);
 	}
 	std::vector<long> roots;
 	for (long r = 0; r < n; ++r) {
-		const wxString pk = CellKey(detail.GetCell(r, parentKeyCol->GetColumnId()));
-		if (pk.empty() || keyToRow.find(pk) == keyToRow.end()) roots.push_back(r);
+		const ibValue pk = detail.GetCell(r, parentKeyCol->GetColumnId());
+		if (IsNoKey(pk) || keyToRow.find(pk) == keyToRow.end()) roots.push_back(r);
 	}
 
 	std::vector<bool> visited(static_cast<size_t>(n), false);
@@ -2344,12 +2374,15 @@ ibSelectorTree ibQueryComposer::BuildHierarchyTree(const ibQueryRamTable& detail
 namespace {
 
 // Context for the recursive reference-value hierarchy fold (invariant across the recursion).
+// Indexed by the VALUE itself (ibValueHash, value.h). Keying by a rendered string cost a text
+// conversion per row — and needed a THIRD map, `valOf`, whose only job was to give the value back
+// once you had the string. The value is the key now, so there is nothing to give back.
+
 struct RefHierCtx {
 	const ibQueryRamTable*                                detail;
 	const ibBackendQueryColumn*                           refCol;
-	const std::map<wxString, std::vector<long>>*          rowsByVal;    // value-key -> snapshot rows with that value
-	const std::map<wxString, std::vector<wxString>>*      childrenOf;   // value-key -> child value-keys (target parent-map)
-	const std::map<wxString, ibValue>*                    valOf;        // value-key -> the ibValue (node display)
+	const ibRowsByValue*                                  rowsByVal;    // value -> snapshot rows carrying it
+	const ibRefChildren*                                  childrenOf;   // value -> child values (target parent-map)
 	const std::vector<ibDataQueryBuilder::AggregateItem>* aggregates;
 	ibDimensionKind                                       dim;
 };
@@ -2357,18 +2390,17 @@ struct RefHierCtx {
 // Attach the value-subtree rooted at `valueKey` under `parent`; returns the subtree's snapshot rows
 // (for the parent's subtotal). A node = one target-catalog value (folder), carrying the rows whose
 // refCol == this value + (recursively) descendant values' rows. Cycle-guarded.
-std::vector<long> AttachRefNode(const RefHierCtx& ctx, ibSelectorTree::Node* parent, const wxString& valueKey,
-                                int level, std::map<wxString, char>& visited)
+std::vector<long> AttachRefNode(const RefHierCtx& ctx, ibSelectorTree::Node* parent, const ibValue& valueKey,
+                                int level, ibValueSeen& visited)
 {
-	if (valueKey.empty() || visited[valueKey]) return {};
+	if (IsNoKey(valueKey) || visited[valueKey]) return {};
 	visited[valueKey] = 1;
 
 	const auto cit = ctx.childrenOf->find(valueKey);
 	const bool hasKids = (cit != ctx.childrenOf->end() && !cit->second.empty());
 
 	ibSelectorTree::Node* node = parent->AddChild(level);
-	const auto vit = ctx.valOf->find(valueKey);
-	if (vit != ctx.valOf->end()) node->m_values[ctx.refCol->GetColumnId()] = vit->second;
+	node->m_values[ctx.refCol->GetColumnId()] = valueKey;   // the key IS the value the node shows
 
 	std::vector<long> ownRows;
 	const auto rit = ctx.rowsByVal->find(valueKey);
@@ -2376,7 +2408,7 @@ std::vector<long> AttachRefNode(const RefHierCtx& ctx, ibSelectorTree::Node* par
 
 	std::vector<long> subtree = ownRows;
 	if (hasKids)
-		for (const wxString& childKey : cit->second) {
+		for (const ibValue& childKey : cit->second) {
 			std::vector<long> kr = AttachRefNode(ctx, node, childKey, level + 1, visited);
 			subtree.insert(subtree.end(), kr.begin(), kr.end());
 		}
@@ -2409,14 +2441,14 @@ ibSelectorTree ibQueryComposer::BuildReferenceHierarchy(const ibQueryRamTable& s
 	if (target == nullptr || holder == nullptr || tRowKey == nullptr || tParent == nullptr)
 		return BuildTotalsTree(snapshot, { refCol }, aggregates);
 
-	// Materialise the target's parent-map (value-key -> parent value-key) through the door.
-	std::map<wxString, wxString> parentOf;
+	// Materialise the target's parent-map (value -> parent value) through the door.
+	ibValueParentMap parentOf;
 	{
 		ibDataQueryBuilder q(holder);
 		q.From(source->GetProvider().ResolveReferenceTarget(source, refCol)).Select(tRowKey, wxEmptyString).Select(tParent, wxEmptyString);
 		ibSelector ts = q.Execute(ibReadPageRequest{}).Select(ibSelectKind::ibSelectKind_Direct);
 		while (ts.Next())
-			parentOf[CellKey(ts.GetValue(tRowKey))] = CellKey(ts.GetValue(tParent));
+			parentOf[ts.GetValue(tRowKey)] = ts.GetValue(tParent);
 	}
 
 	// Index the snapshot rows by the refCol value; build the value->children map from parentOf.
@@ -2425,33 +2457,31 @@ ibSelectorTree ibQueryComposer::BuildReferenceHierarchy(const ibQueryRamTable& s
 		tree.AddColumn(col.m_id, col.m_name, col.m_type);
 	AddSyntheticAggColumns(tree, aggregates);              // + COUNT(*) receivers
 
-	std::map<wxString, std::vector<long>> rowsByVal;
-	std::map<wxString, ibValue>           valOf;
+	// `valOf` is gone: it existed only to map a rendered key back to the value it came from, and the
+	// value is the key now.
+	ibRowsByValue rowsByVal;
 	const long n = snapshot.RowCount();
-	for (long r = 0; r < n; ++r) {
-		const ibValue v = snapshot.GetCell(r, refCol->GetColumnId());
-		const wxString k = CellKey(v);
-		rowsByVal[k].push_back(r);
-		valOf[k] = v;
-	}
-	std::map<wxString, std::vector<wxString>> childrenOf;   // among VALUES PRESENT (+ their ancestors)
-	std::map<wxString, char> seen;
-	std::function<void(const wxString&)> chainUp = [&](const wxString& key) {
-		if (key.empty() || seen[key]) return;
+	for (long r = 0; r < n; ++r)
+		rowsByVal[snapshot.GetCell(r, refCol->GetColumnId())].push_back(r);
+
+	ibRefChildren childrenOf;   // among VALUES PRESENT (+ their ancestors)
+	ibValueSeen   seen;
+	std::function<void(const ibValue&)> chainUp = [&](const ibValue& key) {
+		if (IsNoKey(key) || seen[key]) return;
 		seen[key] = 1;
 		const auto pit = parentOf.find(key);
-		const wxString par = (pit != parentOf.end()) ? pit->second : wxString();
-		childrenOf[par].push_back(key);   // par empty => a root
+		const ibValue par = (pit != parentOf.end()) ? pit->second : ibValue();
+		childrenOf[par].push_back(key);   // an absent parent => a root
 		chainUp(par);
 	};
 	for (const auto& kv : rowsByVal) chainUp(kv.first);
 
-	RefHierCtx ctx{ &snapshot, refCol, &rowsByVal, &childrenOf, &valOf, &aggregates, dim };
-	std::map<wxString, char> visited;
+	RefHierCtx ctx{ &snapshot, refCol, &rowsByVal, &childrenOf, &aggregates, dim };
+	ibValueSeen visited;
 	std::vector<long> allRows;
-	const auto rit = childrenOf.find(wxString());   // roots = values whose parent is empty/unknown
+	const auto rit = childrenOf.find(ibValue());   // roots = values whose parent is empty/unknown
 	if (rit != childrenOf.end())
-		for (const wxString& rootKey : rit->second) {
+		for (const ibValue& rootKey : rit->second) {
 			std::vector<long> rows = AttachRefNode(ctx, &tree.Root(), rootKey, 1, visited);
 			allRows.insert(allRows.end(), rows.begin(), rows.end());
 		}
@@ -2474,9 +2504,9 @@ struct DimCtx {
 // Parent-map (value-key -> parent value-key) for a level field: the target catalog of the reference
 // field (cross), or the source itself when the field is the source's OWN parent column (self). Read
 // through the door. Empty when there is no hierarchy target / no holder.
-std::map<wxString, wxString> ParentMapForField(const DimCtx& ctx, const ibBackendQueryColumn* field)
+ibValueParentMap ParentMapForField(const DimCtx& ctx, const ibBackendQueryColumn* field)
 {
-	std::map<wxString, wxString> pm;
+	ibValueParentMap pm;
 	const ibBackendQueryable* target = (ctx.source != nullptr) ? ctx.source->GetProvider().ResolveReferenceTarget(ctx.source, field) : nullptr;
 	if (target == nullptr && ctx.source != nullptr && field == ctx.source->GetHierarchyColumn())
 		target = ctx.source;
@@ -2489,7 +2519,7 @@ std::map<wxString, wxString> ParentMapForField(const DimCtx& ctx, const ibBacken
 	q.From(target).Select(rk, wxEmptyString).Select(pk, wxEmptyString);
 	ibSelector ts = q.Execute(ibReadPageRequest{}).Select(ibSelectKind::ibSelectKind_Direct);
 	while (ts.Next())
-		pm[CellKey(ts.GetValue(rk))] = CellKey(ts.GetValue(pk));
+		pm[ts.GetValue(rk)] = ts.GetValue(pk);
 	return pm;
 }
 
@@ -2498,18 +2528,17 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 // Attach one value of a Hierarchy level under `parent`: sub-values (hierarchy depth) + the NEXT level
 // inside this value's own rows (Hierarchy only). Returns the value-subtree's rows (for the subtotal).
 std::vector<long> AttachDimValue(const DimCtx& ctx, ibSelectorTree::Node* parent, size_t levelIdx,
-	const wxString& valueKey,
-	const std::map<wxString, std::vector<long>>& byVal, const std::map<wxString, ibValue>& valOf,
-	const std::map<wxString, std::vector<wxString>>& childrenOf, std::map<wxString, char>& visited)
+	const ibValue& valueKey,
+	const ibRowsByValue& byVal,
+	const ibRefChildren& childrenOf, ibValueSeen& visited)
 {
-	if (valueKey.empty() || visited[valueKey]) return {};
+	if (IsNoKey(valueKey) || visited[valueKey]) return {};
 	visited[valueKey] = 1;
 	const ibTotalLevel& level = (*ctx.levels)[levelIdx];
 
 	ibSelectorTree::Node* node = parent->AddChild(parent->m_level + 1);
 	node->m_values = parent->m_values;   // inherit the grouping fields available from the levels above (same rule as the Elements branch)
-	const auto vit = valOf.find(valueKey);
-	if (vit != valOf.end()) node->m_values[level.m_col->GetColumnId()] = vit->second;
+	node->m_values[level.m_col->GetColumnId()] = valueKey;   // the key IS the value
 
 	std::vector<long> ownRows;
 	const auto rit = byVal.find(valueKey);
@@ -2518,8 +2547,8 @@ std::vector<long> AttachDimValue(const DimCtx& ctx, ibSelectorTree::Node* parent
 	std::vector<long> subtree = ownRows;
 	const auto cit = childrenOf.find(valueKey);          // sub-values (deeper in the catalog hierarchy)
 	if (cit != childrenOf.end())
-		for (const wxString& childKey : cit->second) {
-			std::vector<long> kr = AttachDimValue(ctx, node, levelIdx, childKey, byVal, valOf, childrenOf, visited);
+		for (const ibValue& childKey : cit->second) {
+			std::vector<long> kr = AttachDimValue(ctx, node, levelIdx, childKey, byVal, childrenOf, visited);
 			subtree.insert(subtree.end(), kr.begin(), kr.end());
 		}
 	FoldDimLevel(ctx, node, ownRows, levelIdx + 1);      // next level inside this value's own rows
@@ -2535,18 +2564,18 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 	if (levelIdx >= ctx.levels->size()) return;          // leaf level reached
 	const ibTotalLevel& level = (*ctx.levels)[levelIdx];
 
-	std::map<wxString, std::vector<long>> byVal;
-	std::map<wxString, ibValue>           valOf;
-	std::vector<wxString>                 order;
+	// Grouped by the VALUE, in first-seen order. `valOf` is gone with the string key — it only ever
+	// mapped a rendered key back to the value it was rendered from.
+	ibRowsByValue            byVal;
+	std::vector<ibValue> order;
 	for (long r : rows) {
 		const ibValue v = ctx.snapshot->GetCell(r, level.m_col->GetColumnId());
-		const wxString k = CellKey(v);
-		if (byVal.find(k) == byVal.end()) { order.push_back(k); valOf[k] = v; }
-		byVal[k].push_back(r);
+		if (byVal.find(v) == byVal.end()) order.push_back(v);
+		byVal[v].push_back(r);
 	}
 
 	if (level.m_dim == ibDimensionKind::Elements) {
-		for (const wxString& k : order) {
+		for (const ibValue& k : order) {
 			ibSelectorTree::Node* child = node->AddChild(node->m_level + 1);
 			// A SUBGROUP inherits the grouping fields AVAILABLE from the levels above (Max) — copy the parent
 			// group's stamped dimension values down, then add this level's own. So a display column that
@@ -2554,7 +2583,7 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 			// Reference.DataVersion) resolves against the inherited value in the subgroup header, not just at the
 			// top level. Aggregates are (re)stamped by ApplyAggregates below, so inheriting them is harmless.
 			child->m_values = node->m_values;
-			child->m_values[level.m_col->GetColumnId()] = valOf[k];
+			child->m_values[level.m_col->GetColumnId()] = k;   // the key IS the value
 			FoldDimLevel(ctx, child, byVal[k], levelIdx + 1);   // next level inside
 			child->m_hasChildren = !child->m_children.empty();
 			ApplyAggregates(*child, *ctx.snapshot, byVal[k], *ctx.aggregates);
@@ -2563,23 +2592,23 @@ void FoldDimLevel(const DimCtx& ctx, ibSelectorTree::Node* node, const std::vect
 	}
 
 	// Hierarchy / HierarchyOnly — arrange the values into the catalog's parent-ref tree.
-	const std::map<wxString, wxString> parentOf = ParentMapForField(ctx, level.m_col);
-	std::map<wxString, std::vector<wxString>> childrenOf;
-	std::map<wxString, char> seen;
-	std::function<void(const wxString&)> chainUp = [&](const wxString& key) {
-		if (key.empty() || seen[key]) return;
+	const ibValueParentMap parentOf = ParentMapForField(ctx, level.m_col);
+	ibRefChildren childrenOf;
+	ibValueSeen   seen;
+	std::function<void(const ibValue&)> chainUp = [&](const ibValue& key) {
+		if (IsNoKey(key) || seen[key]) return;
 		seen[key] = 1;
 		const auto pit = parentOf.find(key);
-		const wxString par = (pit != parentOf.end()) ? pit->second : wxString();
+		const ibValue par = (pit != parentOf.end()) ? pit->second : ibValue();
 		childrenOf[par].push_back(key);
 		chainUp(par);
 	};
 	for (const auto& kv : byVal) chainUp(kv.first);
-	std::map<wxString, char> visited;
-	const auto rit = childrenOf.find(wxString());
+	ibValueSeen visited;
+	const auto rit = childrenOf.find(ibValue());
 	if (rit != childrenOf.end())
-		for (const wxString& rootKey : rit->second)
-			AttachDimValue(ctx, node, levelIdx, rootKey, byVal, valOf, childrenOf, visited);
+		for (const ibValue& rootKey : rit->second)
+			AttachDimValue(ctx, node, levelIdx, rootKey, byVal, childrenOf, visited);
 }
 
 } // namespace
@@ -2712,23 +2741,35 @@ ibQueryRamTable ibQueryComposer::JoinRamTables(const ibQueryRamTable& left, cons
 		return out;
 	}
 
-	std::map<wxString, std::vector<long>> rightByKey;
+	// INDEXED BY THE KEY VALUE, not by a string made from it. Building
+	// GetHashKey() per row meant a text conversion (ToString for a number,
+	// wxString::Format for a reference) on BOTH sides of every join, and then a
+	// std::map comparing those strings character by character. ibValueHash /
+	// ibValueEqual (value.h) index the values themselves — the same policy the
+	// LINQ join uses, so the two joins now agree on what "same key" means.
+	//
+	// ⚠ One behaviour follows from that agreement: matching is by the value
+	// ORDER, so a number no longer matches the string that spells it (`1` vs
+	// "1"). Through GetHashKey they collided, because both became the text "1".
+	// Same-kind keys — the case a real join is made of, a column against a
+	// column — are unaffected, and 1 vs 1.0 still match.
+	std::unordered_map<ibValue, std::vector<long>, ibValueHash, ibValueEqual> rightByKey;
 	for (long j = 0; j < right.RowCount(); ++j) {
 		if (onRight != nullptr) {
 			const ibValue keyR = right.GetCell(j, onRight->GetColumnId());
 			if (RamIsNullValue(keyR)) continue;   // NULL key: unmatchable (RIGHT/FULL emit it below as unmatched)
-			rightByKey[keyR.GetHashKey()].push_back(j);
+			rightByKey[keyR].push_back(j);
 		}
-		else rightByKey[ibValue().GetHashKey()].push_back(j);   // keyless cross
+		else rightByKey[ibValue()].push_back(j);   // keyless cross
 	}
 	std::vector<char> rightMatched(static_cast<size_t>(right.RowCount()), 0);
 	for (long i = 0; i < left.RowCount(); ++i) {
-		std::map<wxString, std::vector<long>>::const_iterator it = rightByKey.end();
+		auto it = rightByKey.cend();
 		if (onLeft != nullptr) {
 			const ibValue keyL = left.GetCell(i, onLeft->GetColumnId());
-			if (!RamIsNullValue(keyL)) it = rightByKey.find(keyL.GetHashKey());   // NULL key -> stays end() -> no match
+			if (!RamIsNullValue(keyL)) it = rightByKey.find(keyL);   // NULL key -> stays end() -> no match
 		}
-		else it = rightByKey.find(ibValue().GetHashKey());   // keyless cross
+		else it = rightByKey.find(ibValue());   // keyless cross
 		if (it == rightByKey.end()) {
 			if (keepLeft) emit(i, -1);   // unmatched left (LEFT / FULL), including a NULL-key left row
 			continue;
@@ -2765,12 +2806,15 @@ ibQueryRamTable ibQueryComposer::DedupeRows(const ibQueryRamTable& src,
 	for (const ibBackendQueryColumn* c : cols)
 		out.AddColumn(c->GetColumnId(), c->GetName(), c->GetTypeDesc());
 
-	std::set<wxString> seen;
+	// Row identity = the sequence of its cells (ibValueSeqHash, value.h), not a
+	// string folded from them.
+	std::unordered_set<std::vector<ibValue>, ibValueSeqHash, ibValueSeqEqual> seen;
 	for (long i = 0; i < src.RowCount(); ++i) {
-		wxString key;
+		std::vector<ibValue> key;
+		key.reserve(cols.size());
 		for (const ibBackendQueryColumn* c : cols)
-			key += src.GetCell(i, c->GetColumnId()).GetHashKey() + wxT("\x1f");
-		if (!seen.insert(key).second)
+			key.push_back(src.GetCell(i, c->GetColumnId()));
+		if (!seen.insert(std::move(key)).second)
 			continue;
 		const long r = out.AppendRow();
 		for (const ibBackendQueryColumn* c : cols)

@@ -223,6 +223,21 @@ public:
 	virtual bool SetAt(const ibValue& varKeyValue, const ibValue& varValue);
 	virtual bool GetAt(const ibValue& varKeyValue, ibValue& pvarValue);
 
+	// ORDERS AND COMPARES BY ITS ELEMENTS. Without these the base falls through to
+	// GetString(), which for an object kind is the CLASS NAME — every array reads
+	// as "Array", so any two arrays compare EQUAL. That is not a slow key, it is a
+	// wrong one: a join or group keyed on an array puts every row in one bucket,
+	// silently. A COMPOUND key is an array, so it is the shape that breaks first.
+	virtual int  CompareValueLS(const ibValue& cParam) const override;
+	virtual bool CompareValueEQ(const ibValue& cParam) const override;
+	// Hashes by the same elements the order walks — see ibValue::GetValueHash.
+	virtual size_t GetValueHash() const override;
+private:
+	// The other side as an array, or nullptr. The cast is the MEASURED choice for
+	// this path — see the note in valueArray.cpp before making it look cheaper.
+	const ibValueArray* AsArray(const ibValue& cParam) const;
+public:
+
 	//Working with iterators
 	virtual std::shared_ptr<ibValueIteratorState> CreateIterator() override {
 		class ArrayIteratorState : public ibValueIteratorState {

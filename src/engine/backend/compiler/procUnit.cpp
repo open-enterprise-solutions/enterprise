@@ -112,16 +112,10 @@ const ibValue& ResolveReadOuter(int slot, int idx, ibValue*** pppArrayList, bool
 // long, the inliner's size budget declines even a two-instruction body — so the
 // split had added an indirection without removing the call. Forcing it is the
 // point of the split, not a decoration.
-#if defined(_MSC_VER)
-#  define IB_FORCEINLINE __forceinline
-#  define IB_NOINLINE    __declspec(noinline)
-#elif defined(__GNUC__) || defined(__clang__)
-#  define IB_FORCEINLINE inline __attribute__((always_inline))
-#  define IB_NOINLINE    __attribute__((noinline))
-#else
-#  define IB_FORCEINLINE inline
-#  define IB_NOINLINE
-#endif
+//
+// IB_FORCEINLINE / IB_NOINLINE now live in backend/backend.h — the same wall was
+// hit a second time, by ibNumber::Compare, so the macro moved to where both can
+// reach it rather than being copied.
 
 // --- raise helpers ---------------------------------------------------------
 // Every ibBackendCoreException::Error(_("…"), arg) expands, at the call site,

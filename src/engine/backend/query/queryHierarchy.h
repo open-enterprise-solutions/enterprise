@@ -47,6 +47,7 @@
 // See docs/portability.md.
 #include <map>
 #include <memory>
+#include <unordered_map>   // value-keyed indexes — see ibValueHash (value.h)
 #include <vector>
 
 class ibBackendQueryable;
@@ -82,8 +83,11 @@ public:
 	ibValue ReportedUnder(const ibValue& value) const;
 
 private:
-	std::vector<ibValue>        m_accepted;        // what the filter admits
-	std::map<wxString, ibValue> m_reportedUnder;   // an admitted value -> the one it rolls up into
+	std::vector<ibValue> m_accepted;               // what the filter admits
+	// Keyed by the VALUE, not by a string rendered from it — see ibValueHash in
+	// value.h. A reference keys by its guid there just as it did through
+	// GetHashKey, without the text.
+	std::unordered_map<ibValue, ibValue, ibValueHash, ibValueEqual> m_reportedUnder;   // admitted value -> the one it rolls up into
 };
 
 // ONE VALUE OR A LIST OF THEM, READ THE SAME WAY. A parameter may hold a single reference or a

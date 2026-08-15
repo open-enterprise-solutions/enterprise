@@ -8,6 +8,7 @@
 #include "queryColumn.h"      // ibBackendQueryColumn
 
 #include <map>
+#include <unordered_map>   // per-column index — keyed by the value, see ibValueHash (value.h)
 
 namespace {
 
@@ -47,22 +48,23 @@ public:
 		// to the rows carrying it — which is the whole of what an index is, and the reason a read
 		// filtering that column does not have to walk the table.
 		//
-		// ⚠ KEYED BY GetHashKey(), NOT GetString(). `GetString()` of a REFERENCE is its
-		// PRESENTATION — two different references with the same description would share a bucket,
-		// and, far worse, a lookup whose presentation differs by so much as a renamed item would
-		// miss its bucket entirely and the matching rows would SILENTLY VANISH. The filter applied
-		// downstream can drop extra rows; it cannot bring back rows the index never handed over.
+		// ⚠ KEYED BY THE VALUE'S IDENTITY, NEVER BY ITS PRESENTATION. `GetString()` of a
+		// REFERENCE is its description — two different references sharing one would share a
+		// bucket, and, far worse, a lookup whose presentation differs by so much as a renamed
+		// item would miss its bucket entirely and the matching rows would SILENTLY VANISH. The
+		// filter applied downstream can drop extra rows; it cannot bring back rows the index
+		// never handed over.
 		//
-		// `GetHashKey()` is the canonical identity of a value and exists for exactly this (value.h:
-		// "where the DISPLAY string is not the identity" — a reference keys by guid). The L3
-		// selector engine groups by it for the same reason.
+		// ibValueHash / ibValueEqual (value.h) key by the value itself — a reference compares by
+		// guid there, which is the property this needs. It used to render GetHashKey() into a
+		// string per row and index THAT; same identity, one text conversion per row cheaper.
 		for (const wxString& name : indexedColumns) {
 			for (const ibQueryRamColumn& c : m_rows.Columns()) {
 				if (!c.m_name.IsSameAs(name, false))
 					continue;
-				std::map<wxString, std::vector<long>>& byValue = m_indexes[c.m_id];
+				auto& byValue = m_indexes[c.m_id];
 				for (long r = 0; r < m_rows.RowCount(); ++r)
-					byValue[m_rows.GetCell(r, c.m_id).GetHashKey()].push_back(r);
+					byValue[m_rows.GetCell(r, c.m_id)].push_back(r);
 				break;
 			}
 		}
@@ -120,7 +122,7 @@ public:
 			// The SAME key on the way in and on the way out — see the ctor. Asking with a
 			// presentation for a table keyed by identity is how an index answers "no rows" to a
 			// question that has rows.
-			const auto found = index->second.find(condition.m_value.GetHashKey());
+			const auto found = index->second.find(condition.m_value);
 			rows = found != index->second.end() ? &found->second : &s_noRows;
 			break;   // one index is enough; the rest of the conditions still filter downstream
 		}
@@ -151,7 +153,7 @@ private:
 	ibQueryRamTable                                  m_rows;
 	std::vector<std::unique_ptr<ibTempStoreColumn>>  m_columns;
 	// INDEXED BY: column id -> the value each row carries -> the rows carrying it.
-	std::map<ibMetaID, std::map<wxString, std::vector<long>>> m_indexes;
+	std::map<ibMetaID, std::unordered_map<ibValue, std::vector<long>, ibValueHash, ibValueEqual>> m_indexes;
 	static const std::vector<long> s_noRows;   // an indexed value nothing has — no rows, not all rows
 };
 

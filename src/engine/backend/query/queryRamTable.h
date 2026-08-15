@@ -13,6 +13,7 @@
 #include "backend/compiler/value.h"      // ibValue
 
 #include <map>
+#include <unordered_map>   // balance opening — keyed by the key tuple, see ibValueSeqHash (value.h)
 #include <vector>
 
 // One column of the snapshot — keyed by its model id (the same GetColumnId the rows use).
@@ -72,11 +73,21 @@ struct ibBalanceFoldSlot
 	ibMetaID m_closing  = 0;   // filled: opening + turnover
 };
 
+// The balance a key carried INTO the interval: key VALUES -> (turnover slot id -> amount).
+//
+// The outer key is the tuple of the key columns' values, hashed and compared as values
+// (ibValueSeqHash / ibValueSeqEqual, value.h). It used to be an identity STRING folded from those
+// same values through GetHashKey — a text conversion per column per row, on both the side that
+// builds this map and the side that looks into it, to express something the values say themselves.
+using ibBalanceOpening = std::unordered_map<std::vector<ibValue>,
+                                            std::map<ibMetaID, ibNumber>,
+                                            ibValueSeqHash, ibValueSeqEqual>;
+
 // Roll per-period turnovers forward into per-period BALANCES, in place.
 //
 // `table` holds one row per (key, period) with the receipt / expense pair already aggregated, and
 // must be ordered by period within a key. `opening` gives the balance each key carried INTO the
-// interval — outer key = the same identity string the fold builds from `keyColumns`, inner key =
+// interval — outer key = the same key tuple the fold builds from `keyColumns`, inner key =
 // the slot's m_turnover id (absent = zero). Then, per key,
 // walking periods in order: opening = the previous period's closing, closing = opening + turnover.
 //
@@ -93,6 +104,6 @@ BACKEND_API void FoldBalancesForward(ibQueryRamTable& table,
                                      const std::vector<ibMetaID>& keyColumns,
                                      ibMetaID periodColumn,
                                      const std::vector<ibBalanceFoldSlot>& slots,
-                                     const std::map<wxString, std::map<ibMetaID, ibNumber>>& opening);
+                                     const ibBalanceOpening& opening);
 
 #endif // __QUERY_RAM_TABLE_H__

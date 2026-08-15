@@ -135,7 +135,14 @@ public:
 	// depending on whole-program view. The BigImpl branch stays out of line —
 	// inlining it would put a decimal long-compare into every call site for the
 	// rare case. Same shape TryImmInts itself already uses.
-	int Compare(const ibNumber& rhs) const {
+	// FORCED, because `inline` was not honoured where it mattered most. The
+	// disassembly of ibValue::CompareValueLS showed a real `call` to this
+	// function on its number arm — the arm every keyed lookup and every sort of
+	// numbers goes through — while the hot/cold split above exists precisely so
+	// the caller sees the immediate path. The body forced here is the gate plus
+	// one int64 compare; CompareBig stays out of line, so what gets pasted into
+	// a caller is small.
+	IB_FORCEINLINE int Compare(const ibNumber& rhs) const {
 		int64_t am, bm;
 		if (TryImmInts(rhs, am, bm))
 			return (am > bm) - (am < bm);

@@ -49,6 +49,10 @@ public:
 	virtual int CompareValueLS(const ibValue& cParam) const;
 	virtual bool CompareValueEQ(const ibValue& cParam) const;
 	virtual bool CompareValueNE(const ibValue& cParam) const;
+	// A moment ORDERS with a plain date, so it must HASH with one too — see the
+	// contract on ibValue::GetValueHash. Defined in the .cpp beside the order it
+	// has to agree with.
+	virtual size_t GetValueHash() const override;
 
 	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal);
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);

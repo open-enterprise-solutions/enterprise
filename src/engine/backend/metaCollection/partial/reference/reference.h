@@ -43,12 +43,12 @@ public:
 		return m_reference_impl;
 	}
 
-	// Identity key = type + guid — the metaObject's metaID (the _RTRef column) plus the pure _RRRef guid.
-	// NOT the guid alone — a reference COLUMN can target several types, so the type disambiguates: two refs
-	// with the same guid but a different target type are distinct, exactly as in the database (_RTRef + _RRRef).
-	// This aligns runtime grouping / join / dedup over a reference with the DB key. See ibValue::GetHashKey.
-	// Defined in reference.cpp — m_metaObject (ibValueMetaObjectRecordDataRef) is incomplete here.
-	virtual wxString GetHashKey() const override;
+	// IDENTITY = type + guid, and it is expressed by the COMPARISON, not by a rendered key.
+	// CompareValueLS below orders by guid then by metaID (the _RTRef + _RRRef pair the database uses),
+	// and GetValueHash buckets by the guid — so grouping, join and dedup over a reference line up with
+	// the DB key exactly as they did through the old GetHashKey string, without building one.
+	// NOT the guid alone: a reference COLUMN can target several types, so the type disambiguates two
+	// refs that share a guid — which the comparison keeps and the hash resolves in the bucket.
 
 	void PrepareRef(bool createData = true);
 
@@ -101,6 +101,27 @@ public:
 		if (rhs != nullptr)
 			return m_metaObject == rhs->m_metaObject && m_objGuid == rhs->m_objGuid;
 		return false;
+	}
+
+	// Hashes by the GUID — the order's FIRST key, and the whole of identity for a
+	// reference that points at something. The type is deliberately left out: it
+	// only ever separates references that share a guid, and leaving it out merely
+	// puts those in one bucket for the comparison to sort out (see the contract
+	// on ibValue::GetValueHash — coarser is safe, finer is a bug).
+	//
+	// It also means every EMPTY reference lands in one bucket, all-zero guid
+	// being what empty IS. That is the right trade: they are few, and the
+	// alternative is reaching for m_metaObject, which is incomplete in this
+	// header — the reason CompareValueLS itself lives out of line.
+	virtual size_t GetValueHash() const override {
+		const ibGuidImpl raw = m_objGuid;
+		size_t h = 1469598103934665603ULL;                    // FNV-1a offset basis
+		h = (h ^ (size_t)raw.m_data1) * 1099511628211ULL;
+		h = (h ^ (size_t)raw.m_data2) * 1099511628211ULL;
+		h = (h ^ (size_t)raw.m_data3) * 1099511628211ULL;
+		for (const unsigned char byte : raw.m_data4)
+			h = (h ^ (size_t)byte) * 1099511628211ULL;
+		return h;
 	}
 
 	//operator '!='

@@ -162,8 +162,11 @@ TEST(BalanceFold, SeedsFromTheOpeningBalance) {
     ibQueryRamTable t = MakeTable();
     AddRow(t, wxT("A"), 5, 10, 0);
 
-    std::map<wxString, std::map<ibMetaID, ibNumber>> opening;
-    opening[wxT("A") + wxString(wxT("\x1f"))][kTurn] = ibNumber(500.0);
+    // Keyed by the key TUPLE — the same values the fold reads out of the row.
+    // It was a string folded from them with \x1f until 2026-08-15; the fold and
+    // its callers now agree on values, so a seed cannot miss its key by spelling.
+    ibBalanceOpening opening;
+    opening[{ ibValue(wxString(wxT("A"))) }][kTurn] = ibNumber(500.0);
 
     FoldBalancesForward(t, { kWarehouse }, kPeriod, { OneSlot() }, opening);
 

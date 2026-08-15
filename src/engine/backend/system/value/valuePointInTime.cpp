@@ -92,6 +92,22 @@ bool ibValuePointInTime::CompareValueNE(const ibValue& cParam) const
 	return !CompareValueEQ(cParam);
 }
 
+// THE DATE ALONE, and it is asked through an ibValue rather than hashed here, so
+// the formula lives in exactly one place: a moment orders equal to the plain
+// date of the same instant, and a second copy of "how a date hashes" would be
+// free to drift away from that.
+//
+// The reference is deliberately not mixed in. Two moments at the same instant
+// with different references share a bucket and are separated by the comparison —
+// the safe direction of the contract (ibValue::GetValueHash), and the only one
+// available while a bare date has to land in that bucket as well.
+size_t ibValuePointInTime::GetValueHash() const
+{
+	if (!m_date.IsValid())
+		return 0;   // an unset moment is the smallest, exactly as NULL is
+	return ibValue(m_date).GetValueHash();
+}
+
 enum
 {
 	eDate,

@@ -66,6 +66,8 @@
 #include "backend/session/session.h"
 
 #include <algorithm>
+#include <unordered_map>   // value-keyed indexes — see ibValueHash / ibValueSeqHash (value.h)
+#include <unordered_set>
 #include <set>
 
 // ============================================================================
@@ -806,15 +808,22 @@ ibQueryColumnExprPtr SideFigure(const ibValueMetaObjectAccountingRegister* reg,
 	return ibQueryColumnExpr::Case(std::move(cases), ibQueryColumnExpr::Const(ibValue(ibNumber())));
 }
 
-// The identity of a row's key, as a string — used to merge the two passes of a correspondence reading
+// THE IDENTITY OF A ROW IS ITS KEY VALUES — used to merge the two passes of a correspondence reading
 // (a debit pass and a credit pass produce rows for the same account and must land on one row).
-wxString KeyOfValues(const std::vector<ibValue>& values)
-{
-	wxString key;
-	for (const ibValue& value : values)
-		key += value.GetHashKey() + wxT("\x1f");
-	return key;
-}
+//
+// It used to be those values folded into a string through GetHashKey and joined with \x1f: a text
+// conversion per key column per row, and then a std::map comparing the results character by
+// character. The values compare as values now (ibValueSeqHash / ibValueSeqEqual, value.h) — a
+// reference still keys by its guid, which is the property the fold needs, without rendering it.
+using ibAcctKey     = std::vector<ibValue>;
+using ibAcctIndex   = std::unordered_map<ibAcctKey, size_t, ibValueSeqHash, ibValueSeqEqual>;
+
+// Per-ACCOUNT caches. The account is one value, so it keys directly (ibValueHash / ibValueEqual)
+// — a reference compares by guid there, which is what these caches meant by asking for its
+// GetHashKey and then keying a std::map by the resulting text.
+using ibAcctTypeCache    = std::unordered_map<ibValue, int, ibValueHash, ibValueEqual>;
+using ibAcctKindSet      = std::unordered_set<ibValue, ibValueHash, ibValueEqual>;
+using ibAcctSummaryCache = std::unordered_map<ibValue, ibAcctKindSet, ibValueHash, ibValueEqual>;
 
 // ⭐⭐ ONE PASS OF A READING — which account column the rows are grouped by, which side's slots the
 // breakdown is read from, and which figure the sums land in.
@@ -870,6 +879,10 @@ struct ibAcctRow
 	size_t                       m_layout = 0;   // which pass's names this key is spelled in
 };
 
+// Rows in insertion order, paired with the key tuple that identifies each — declared HERE rather
+// than beside ibAcctKey above, because it names ibAcctRow and that has to exist first.
+using ibAcctRowList = std::vector<std::pair<ibAcctKey, ibAcctRow>>;
+
 // The published name of a figure — the resource plus the side's suffix, spelled through ibAcctFigure
 // so the shape's column and the value written into it cannot come from two different spellings.
 wxString FigureName(const ibValueMetaObjectAttributeBase* resource, const wxString& suffix)
@@ -891,8 +904,8 @@ wxString FigureName(const ibValueMetaObjectAttributeBase* resource, const wxStri
 // for years without ever asking (GetAccountType had no callers at all).
 // Declared here, defined below beside the flag it reads: the fold needs it, and the fold reads better
 // next to the key it is folding than at the bottom of the file.
-const std::set<wxString>& SummaryOnlyKindsOf(const ibValue& account,
-                                             std::map<wxString, std::set<wxString>>& cache);
+const ibAcctKindSet& SummaryOnlyKindsOf(const ibValue& account,
+                                             ibAcctSummaryCache& cache);
 
 // Drop the turnovers-only breakdowns out of a BALANCE key and merge whatever rows then coincide.
 //
@@ -900,15 +913,15 @@ const std::set<wxString>& SummaryOnlyKindsOf(const ibValue& account,
 // once that breakdown is gone, and leaving them side by side would report the same balance twice — a
 // report that adds up to double.
 void FoldOutSummaryOnly(const std::vector<ibAcctKeyLayout>& layouts,
-                        std::vector<std::pair<wxString, ibAcctRow>>& rows)
+                        ibAcctRowList& rows)
 {
 	if (layouts.empty() || rows.empty())
 		return;
 
-	std::map<wxString, std::set<wxString>> summaryOnlyCache;
+	ibAcctSummaryCache summaryOnlyCache;
 
-	std::vector<std::pair<wxString, ibAcctRow>> merged;
-	std::map<wxString, size_t> index;
+	ibAcctRowList merged;
+	ibAcctIndex index;
 
 	for (auto& entry : rows) {
 		ibAcctRow row = entry.second;
@@ -921,7 +934,7 @@ void FoldOutSummaryOnly(const std::vector<ibAcctKeyLayout>& layouts,
 			continue;
 		}
 
-		const std::set<wxString>& summaryOnly = SummaryOnlyKindsOf(row.m_key.front(), summaryOnlyCache);
+		const ibAcctKindSet& summaryOnly = SummaryOnlyKindsOf(row.m_key.front(), summaryOnlyCache);
 
 		// The key is [account] then, per breakdown column, either (kind, value) or just the value —
 		// the same order it was built in.
@@ -936,7 +949,7 @@ void FoldOutSummaryOnly(const std::vector<ibAcctKeyLayout>& layouts,
 				break;
 
 			const ibValue kind = kindStored ? row.m_key[kindPos] : column.m_requestedKind;
-			if (kind.IsEmpty() || summaryOnly.find(kind.GetHashKey()) == summaryOnly.end())
+			if (kind.IsEmpty() || summaryOnly.find(kind) == summaryOnly.end())
 				continue;
 
 			// No balance is kept along this breakdown: the slot leaves the key entirely — its kind with
@@ -946,7 +959,7 @@ void FoldOutSummaryOnly(const std::vector<ibAcctKeyLayout>& layouts,
 				row.m_key[kindPos] = ibValue();
 		}
 
-		const wxString identity = KeyOfValues(row.m_key);
+		const ibAcctKey& identity = row.m_key;
 		const auto found = index.find(identity);
 		if (found == index.end()) {
 			index[identity] = merged.size();
@@ -962,12 +975,12 @@ void FoldOutSummaryOnly(const std::vector<ibAcctKeyLayout>& layouts,
 	rows.swap(merged);
 }
 
-int AccountTypeOf(const ibValue& account, std::map<wxString, int>& cache)
+int AccountTypeOf(const ibValue& account, ibAcctTypeCache& cache)
 {
 	if (account.IsEmpty())
 		return ibAccountType::eActivePassive;   // nothing to fold by: keep both sides
 
-	const wxString key = account.GetHashKey();
+	const ibValue& key = account;
 	const auto found = cache.find(key);
 	if (found != cache.end())
 		return found->second;
@@ -1001,20 +1014,20 @@ int AccountTypeOf(const ibValue& account, std::map<wxString, int>& cache)
 // Storage is untouched: a movement carries all its slots regardless. The flag changes only how the
 // data is READ, which is why a user may flip it in enterprise mode and nothing breaks — no column
 // appears or disappears and no stored row is reinterpreted.
-const std::set<wxString>& SummaryOnlyKindsOf(const ibValue& account,
-                                             std::map<wxString, std::set<wxString>>& cache)
+const ibAcctKindSet& SummaryOnlyKindsOf(const ibValue& account,
+                                             ibAcctSummaryCache& cache)
 {
-	static const std::set<wxString> s_none;
+	static const ibAcctKindSet s_none;
 
 	if (account.IsEmpty())
 		return s_none;
 
-	const wxString key = account.GetHashKey();
+	const ibValue& key = account;
 	const auto found = cache.find(key);
 	if (found != cache.end())
 		return found->second;
 
-	std::set<wxString> kinds;
+	ibAcctKindSet kinds;
 
 	ibValueReferenceDataObject* reference = nullptr;
 	if (account.ConvertToValue(reference) && reference != nullptr) {
@@ -1040,7 +1053,7 @@ const std::set<wxString>& SummaryOnlyKindsOf(const ibValue& account,
 							ibValue kind;
 							rows->GetValueByMetaID(item, kindColumn->GetMetaID(), kind);
 							if (!kind.IsEmpty())
-								kinds.insert(kind.GetHashKey());
+								kinds.insert(kind);
 						}
 					}
 				}
@@ -1086,10 +1099,22 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetShapeQueryable
 	// different column set per CALL (the requested kinds decide how many breakdown columns there are),
 	// and the granularity decides whether a period column exists at all. A key that ignored either
 	// would hand a reader the shape built for somebody else's arguments.
+	// A KIND CONTRIBUTES ITS HASH **AND ITS TYPE NUMBER**, not its text.
+	//
+	// This is a cache key, so a collision is not a slow path — it hands the reader a shape built for
+	// somebody else's arguments. A hash alone can collide; the class id pins WHICH KIND OF VALUE
+	// produced it, so two different kinds can no longer meet on one bucket by accident. Together they
+	// identify the argument as tightly as the old text did, without rendering a reference through
+	// wxString::Format to get there.
 	wxString key = wxString::Format(wxT("%d|%d|%d|"), static_cast<int>(shape),
 		static_cast<int>(fold.m_kind), static_cast<int>(fold.m_unit));
-	for (const ibValue& kind : kindsDr) key += wxT("d") + kind.GetHashKey();
-	for (const ibValue& kind : kindsCr) key += wxT("c") + kind.GetHashKey();
+	const auto appendKind = [&key](const wxChar side, const ibValue& kind) {
+		key += wxString::Format(wxT("%c%llu:%llu|"), side,
+			static_cast<unsigned long long>(kind.GetValueHash()),
+			static_cast<unsigned long long>(kind.GetClassType()));
+	};
+	for (const ibValue& kind : kindsDr) appendKind(wxT('d'), kind);
+	for (const ibValue& kind : kindsCr) appendKind(wxT('c'), kind);
 
 	// …and WHAT IT WAS BUILT FROM is remembered beside it, so a register whose attributes changed
 	// (a resource added, a dimension re-typed) rebuilds instead of answering from a stale shape. The
@@ -1309,7 +1334,7 @@ void SeedFromShape(ibQueryRamTable& table, const ibBackendQueryable* shape)
 // afterwards, which is what `dropEmpty` is for.
 void PourRows(ibQueryRamTable& table,
               const std::vector<ibAcctKeyLayout>& layouts,
-              const std::vector<std::pair<wxString, ibAcctRow>>& rows,
+              const ibAcctRowList& rows,
               bool dropEmpty = true)
 {
 	if (layouts.empty())
@@ -1381,8 +1406,8 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalance(
 	// totals view or on the lines: the hierarchy is the chart's, not the surface's.
 	const ibQueryHierarchyScope scopeDr = ScopeFromAccountCondition(movements, GetRegisterAccount(),   accountDr);
 	const ibQueryHierarchyScope scopeCr = ScopeFromAccountCondition(movements, GetRegisterAccountCr(), accountCr);
-	std::vector<std::pair<wxString, ibAcctRow>> rows;   // insertion-ordered; the map is the index into it
-	std::map<wxString, size_t> index;
+	ibAcctRowList rows;   // insertion-ordered; the map is the index into it
+	ibAcctIndex index;
 	std::vector<ibAcctKeyLayout> layouts;              // one per pass — see ibAcctKeyLayout
 
 	for (const ibAcctPass& pass : PassesOf(this)) {
@@ -1513,7 +1538,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalance(
 			for (const auto dimension : dimensions)
 				key.push_back(sel.GetValue(dimension));
 
-			const wxString identity = KeyOfValues(key);
+			const ibAcctKey& identity = key;
 			const auto found = index.find(identity);
 			if (found == index.end()) {
 				index[identity] = rows.size();
@@ -1543,7 +1568,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalance(
 	// only honest way to compute them; the fold is a projection applied at READ time, per account, by
 	// the type the account declares about itself. An active-passive one is left alone — that is what it
 	// exists for.
-	std::map<wxString, int> accountTypes;
+	ibAcctTypeCache accountTypes;
 	for (auto& entry : rows) {
 		const int accountType = AccountTypeOf(
 			entry.second.m_key.empty() ? ibValue() : entry.second.m_key.front(), accountTypes);
@@ -1600,8 +1625,8 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeTurnover(
 	// A document has a date of its own, so a movement-grained row carries the period too.
 	const bool withPeriod = (fold.HasPeriod() || atMovementGrain) && !periodName.IsEmpty();
 
-	std::vector<std::pair<wxString, ibAcctRow>> rows;
-	std::map<wxString, size_t> index;
+	ibAcctRowList rows;
+	ibAcctIndex index;
 	std::vector<ibAcctKeyLayout> layouts;              // one per pass — see ibAcctKeyLayout
 
 	// The accounts as they were ASKED FOR — see ComputeBalance: named in hierarchy, an account brings
@@ -1766,7 +1791,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeTurnover(
 			if (lineCol != nullptr)
 				key.push_back(sel.GetValue(lineCol));
 
-			const wxString identity = KeyOfValues(key);
+			const ibAcctKey& identity = key;
 			if (index.find(identity) == index.end()) {
 				index[identity] = rows.size();
 				rows.push_back({ identity, ibAcctRow{ key, {}, layoutIndex } });
@@ -1876,7 +1901,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeDrCrTurnover(
 	AppendBreakdownNames(breakdownCr, keyColumns);
 	for (const auto dimension : dimensions) keyColumns.push_back(dimension->GetName());
 
-	std::vector<std::pair<wxString, ibAcctRow>> rows;
+	ibAcctRowList rows;
 	ibDataQueryResult sel = b.SelectAggregate();
 	while (sel.Next()) {
 		std::vector<ibValue> key;
@@ -1889,7 +1914,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeDrCrTurnover(
 		ibAcctRow row{ key, {}, 0 };
 		for (const wxString& figure : figures)
 			row.m_figures[figure] = sel.GetColumn(figure);
-		rows.push_back({ KeyOfValues(key), row });
+		rows.push_back({ key, row });
 	}
 
 	PourRows(retTable, layouts, rows);
@@ -2046,26 +2071,28 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 	// The identity of a row over a NAMED list of columns. A column the table does not carry contributes
 	// an EMPTY value rather than nothing at all — which is what lets the opening (which has no period
 	// and no document) be found by the balance key while the two lists stay the same length.
-	const auto identityOf = [&](const ibQueryRamTable& table, long row, const std::vector<wxString>& names) {
+	// The key of a row as the TUPLE OF ITS VALUES — what the balance seed and the fold both index by
+	// (ibBalanceOpening / ibValueSeqHash). No text conversion: the values are compared as values.
+	const auto identityValuesOf = [&](const ibQueryRamTable& table, long row, const std::vector<wxString>& names) {
 		std::vector<ibValue> values;
+		values.reserve(names.size());
 		for (const wxString& name : names)
 			values.push_back(cellByName(table, row, name));
-		return KeyOfValues(values);
+		return values;
 	};
-
 	// Opening balances by the BALANCE key, so a row that carried stock in but saw no movement still reports.
-	std::map<wxString, long> openingByKey;
+	std::unordered_map<ibAcctKey, long, ibValueSeqHash, ibValueSeqEqual> openingByKey;
 	for (long row = 0; row < opening.RowCount(); row++)
-		openingByKey[identityOf(opening, row, keyColumns)] = row;
+		openingByKey[identityValuesOf(opening, row, keyColumns)] = row;
 
-	std::vector<std::pair<wxString, ibAcctRow>> rows;
-	std::map<wxString, size_t> index;
+	ibAcctRowList rows;
+	ibAcctIndex index;
 
 	std::vector<ibAcctKeyLayout> layouts(1);
 	layouts.front().m_columns   = rowColumns;
 	layouts.front().m_breakdown = layout;
 
-	const auto rowFor = [&](const wxString& identity, const std::vector<ibValue>& key) -> ibAcctRow& {
+	const auto rowFor = [&](const ibAcctKey& identity, const std::vector<ibValue>& key) -> ibAcctRow& {
 		const auto found = index.find(identity);
 		if (found == index.end()) {
 			index[identity] = rows.size();
@@ -2095,11 +2122,11 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 	// kind column and reports it under that column's own alias. Spelling `<name>Kind` out here a second
 	// time is how the question came to be asked of a column the shape did not publish — no error, no
 	// row, just a flag that never fired.
-	std::map<wxString, std::set<wxString>> summaryOnlyCache;
+	ibAcctSummaryCache summaryOnlyCache;
 	const auto standsOnTurnoversOnly = [&](const ibQueryRamTable& table, long row) {
 		const ibValue account = GetRegisterAccount() != nullptr
 			? cellByName(table, row, GetRegisterAccount()->GetName()) : ibValue();
-		const std::set<wxString>& summaryOnly = SummaryOnlyKindsOf(account, summaryOnlyCache);
+		const ibAcctKindSet& summaryOnly = SummaryOnlyKindsOf(account, summaryOnlyCache);
 		if (summaryOnly.empty())
 			return false;
 
@@ -2107,7 +2134,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 			const ibValue kind = column.m_byKind
 				? column.m_requestedKind
 				: (column.m_kindAlias.IsEmpty() ? ibValue() : cellByName(table, row, column.m_kindAlias));
-			if (kind.IsEmpty() || summaryOnly.find(kind.GetHashKey()) == summaryOnly.end())
+			if (kind.IsEmpty() || summaryOnly.find(kind) == summaryOnly.end())
 				continue;
 			// …and it only matters if this row actually carries a value along that breakdown.
 			if (!cellByName(table, row, column.m_alias).IsEmpty())
@@ -2119,12 +2146,12 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 	// The rows of one balance key, kept together: the running roll below walks them, and it can only
 	// walk what is grouped. `balanceless` runs parallel to `rows` — a row standing on a turnovers-only
 	// breakdown keeps no balance and must not be rolled one forward either.
-	std::map<wxString, std::vector<size_t>> byKey;
+	std::unordered_map<ibAcctKey, std::vector<size_t>, ibValueSeqHash, ibValueSeqEqual> byKey;
 	std::vector<bool> balanceless;
 
 	for (long row = 0; row < turnover.RowCount(); row++) {
-		const wxString identity   = identityOf(turnover, row, rowColumns);
-		const wxString balanceKey = identityOf(turnover, row, keyColumns);
+		const ibAcctKey identity   = identityValuesOf(turnover, row, rowColumns);
+		const ibAcctKey balanceKey = identityValuesOf(turnover, row, keyColumns);
 		const bool turnoversOnlyRow = standsOnTurnoversOnly(turnover, row);
 
 		const size_t before = rows.size();
@@ -2206,7 +2233,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 		return periodSlot < row.m_key.size() ? row.m_key[periodSlot].GetDate() : static_cast<wxLongLong_t>(0);
 	};
 
-	std::vector<std::pair<wxString, ibAcctRow>> ordered;
+	ibAcctRowList ordered;
 	std::vector<bool> orderedBalanceless;
 	ordered.reserve(rows.size());
 	orderedBalanceless.reserve(rows.size());
@@ -2235,7 +2262,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 	// an active-passive account keeps both at once. The fold carries its running total per slot, so
 	// two slots roll independently and neither is subtracted from the other.
 	std::vector<ibBalanceFoldSlot> slots;
-	std::map<wxString, std::map<ibMetaID, ibNumber>> openingSeed;
+	ibBalanceOpening openingSeed;   // keyed by the key TUPLE — see ibBalanceOpening (queryRamTable.h)
 	if (withPeriod) {
 		for (const auto resource : GetResourceArrayObject()) {
 			if (resource == nullptr || !resource->IsBalanceResource())
@@ -2260,7 +2287,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 			// never found and every key appears to start at zero: correct turnovers on top of balances
 			// that all begin at nothing.
 			for (long row = 0; row < opening.RowCount(); row++) {
-				std::map<ibMetaID, ibNumber>& seed = openingSeed[identityOf(opening, row, keyColumns)];
+				std::map<ibMetaID, ibNumber>& seed = openingSeed[identityValuesOf(opening, row, keyColumns)];
 				seed[debit.m_turnover]  = cellByName(opening, row, FigureName(resource, ibAcctFigure::BalanceDr)).GetNumber();
 				seed[credit.m_turnover] = cellByName(opening, row, FigureName(resource, ibAcctFigure::BalanceCr)).GetNumber();
 			}
@@ -2287,23 +2314,29 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 		const wxDateTime to   = end.m_date.GetDateTime();
 		if (fillEmptyPeriods && fold.m_kind == ibRegGranularity::Calendar && periodId != 0 && from.IsValid()) {
 			// The periods come from the same two functions the grain cut uses, so "a month" means one
-			// thing here and there. A period is keyed by its ISO text rather than by its display form:
-			// a locale-formatted date is not a key, it is a presentation.
-			const auto periodKey = [](const wxDateTime& moment) { return moment.FormatISOCombined(); };
-
-			std::map<wxString, long> firstRowOfKey;
-			std::set<wxString>       filled;
+			// thing here and there.
+			//
+			// Keyed by the key VALUES; "this key in this period" is that tuple with the period
+			// appended as one more value. The period used to be rendered to ISO text for the same
+			// job — a locale-formatted date is not a key — but an instant compares as an instant,
+			// so no rendering is needed at all now.
+			std::unordered_map<ibAcctKey, long, ibValueSeqHash, ibValueSeqEqual> firstRowOfKey;
+			std::unordered_set<ibAcctKey, ibValueSeqHash, ibValueSeqEqual>       filled;
 			for (long row = 0; row < retTable.RowCount(); row++) {
-				const wxString key = identityOf(retTable, row, keyColumns);
+				const ibAcctKey key = identityValuesOf(retTable, row, keyColumns);
 				if (firstRowOfKey.find(key) == firstRowOfKey.end())
 					firstRowOfKey[key] = row;
-				filled.insert(key + wxT("\x1f") + periodKey(retTable.GetCell(row, periodId).GetDateTime()));
+				ibAcctKey inPeriod = key;
+				inPeriod.push_back(retTable.GetCell(row, periodId));
+				filled.insert(std::move(inPeriod));
 			}
 
 			for (const auto& keyRow : firstRowOfKey) {
 				wxDateTime period = ibTruncateToPeriod(from, fold.m_unit);
 				while (period.IsValid() && (!to.IsValid() || !period.IsLaterThan(to))) {
-					if (filled.find(keyRow.first + wxT("\x1f") + periodKey(period)) == filled.end()) {
+					ibAcctKey probe = keyRow.first;
+					probe.push_back(ibValue(period));
+					if (filled.find(probe) == filled.end()) {
 						// The key as it stands on a row that exists, the period that was missing, and
 						// nothing else: zero turnover, and balances the roll will supply.
 						const long added = retTable.AppendRow();
@@ -2338,7 +2371,7 @@ ibQueryRamTable ibValueMetaObjectAccountingRegister::ComputeBalanceAndTurnover(
 	// ⚠ AND ONLY WHERE A BALANCE IS ACTUALLY KEPT. A turnovers-only row was rolled along with the rest
 	// — the roll knows nothing about the flag — so its balance cells are unsaid here rather than left
 	// carrying a running total of a breakdown that keeps none.
-	std::map<wxString, int> accountTypes;
+	ibAcctTypeCache accountTypes;
 	const wxString accountName = GetRegisterAccount() != nullptr ? GetRegisterAccount()->GetName() : wxString();
 	for (long row = 0; row < retTable.RowCount(); row++) {
 		const bool keepsBalanceHere = static_cast<size_t>(row) >= orderedBalanceless.size()

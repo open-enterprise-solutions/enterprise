@@ -153,7 +153,7 @@ in `accountingRegisterMetadataTotals.cpp` (symbols only).
 | re-point the filter's leaves at the surface the reading stands on | `:141`, `:258`, `:390` — three inline copies of one loop | `WhereCondition` |
 | the stored arm / the movement arm, told apart by the recorder being NULL | `RestrictToStoredArm`, `:74` | `StoredArm` / `MovementArm` |
 | group by the periodicity: a calendar unit TRUNCATES, `Period` groups the column as it stands, whole groups by neither | `:275–283`, `:445–450` | inside `ComputeTurnover`, and again in `ComputeBalanceAndTurnover` |
-| the key of a row as a string — `GetHashKey()` joined by `\x1f` | `keyOfValues` lambda, `:408` | `KeyOfValues` — identical body |
+| the key of a row as the TUPLE of its values (`ibValueSeqHash` / `ibValueSeqEqual`) — a string joined by `\x1f` until 2026-08-15, when the rendered identity was removed | `ibBalanceOpening`, `queryRamTable.h` | `ibAcctKey` — same shape |
 | a row of all zeros is **not a row**, and the rule is "any figure non-zero" | `:169–178`, `:305–316`, and `m_dropZeroRows` at `:637/678/731` | `PourRows` |
 
 The last one is worth stating once for both: receipt 10 against expense 10 nets to zero and MUST stay

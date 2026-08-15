@@ -18,7 +18,7 @@ namespace {
 // against, and its parent column is the hierarchy. A source with no parent column is a FLAT list —
 // the one arrangement that records no parent — and it contributes nothing, which leaves every named
 // value standing for itself.
-void ReadChildrenMap(const ibBackendQueryable* target, std::map<wxString, std::vector<ibValue>>& childrenOf)
+void ReadChildrenMap(const ibBackendQueryable* target, std::unordered_map<ibValue, std::vector<ibValue>, ibValueHash, ibValueEqual>& childrenOf)
 {
 	if (target == nullptr)
 		return;
@@ -44,7 +44,7 @@ void ReadChildrenMap(const ibBackendQueryable* target, std::map<wxString, std::v
 			continue;
 		// A ROOT's parent is an EMPTY reference, not a null — it keys the map like any other value and
 		// simply never gets asked for, because a descent starts at the values that were named.
-		childrenOf[rows.GetValue(parent).GetHashKey()].push_back(self);
+		childrenOf[rows.GetValue(parent)].push_back(self);
 	}
 }
 
@@ -66,7 +66,7 @@ ibQueryHierarchyScope::ibQueryHierarchyScope(const ibBackendQueryable* source, c
 	// would have to be cast to a reference and asked for its metaobject, which is metadata read in a
 	// tier that owns none. A COMPOSITE reference names several targets and gets a map from each — the
 	// keys carry their own type, so two charts cannot be confused for one another.
-	std::map<wxString, std::vector<ibValue>> childrenOf;
+	std::unordered_map<ibValue, std::vector<ibValue>, ibValueHash, ibValueEqual> childrenOf;
 	if (source != nullptr && column != nullptr) {
 		const ibBackendQueryProvider& provider = source->GetProvider();
 		if (const ibBackendQueryable* single = provider.ResolveReferenceTarget(source, column))
@@ -83,16 +83,16 @@ ibQueryHierarchyScope::ibQueryHierarchyScope(const ibBackendQueryable* source, c
 		// Descend from the named value. A node is expanded ONCE: a cycle in a parent link is a corrupt
 		// tree rather than a legitimate shape, and a reading is not the place to hang because of one.
 		std::vector<ibValue>     subtree;
-		std::map<wxString, char> walked;
+		std::unordered_map<ibValue, char, ibValueHash, ibValueEqual> walked;
 		subtree.push_back(value);
-		walked[value.GetHashKey()] = 1;
+		walked[value] = 1;
 		for (size_t i = 0; i < subtree.size(); i++) {
-			const wxString key = subtree[i].GetHashKey();   // taken BEFORE the pushes below reallocate
+			const ibValue key = subtree[i];   // taken BEFORE the pushes below reallocate
 			const auto kids = childrenOf.find(key);
 			if (kids == childrenOf.end())
 				continue;
 			for (const ibValue& child : kids->second) {
-				const wxString childKey = child.GetHashKey();
+				const ibValue& childKey = child;
 				if (walked[childKey])
 					continue;
 				walked[childKey] = 1;
@@ -104,14 +104,14 @@ ibQueryHierarchyScope::ibQueryHierarchyScope(const ibBackendQueryable* source, c
 			if (i == 0 && unfold == ibQueryDimUnfold::HierarchyOnly)
 				continue;   // «hierarchy only» - the subordinates, not the value that names them
 			m_accepted.push_back(subtree[i]);
-			m_reportedUnder[subtree[i].GetHashKey()] = value;
+			m_reportedUnder[subtree[i]] = value;
 		}
 	}
 }
 
 ibValue ibQueryHierarchyScope::ReportedUnder(const ibValue& value) const
 {
-	const auto found = m_reportedUnder.find(value.GetHashKey());
+	const auto found = m_reportedUnder.find(value);
 	return found != m_reportedUnder.end() ? found->second : value;
 }
 

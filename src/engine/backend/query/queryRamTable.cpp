@@ -9,24 +9,27 @@ void FoldBalancesForward(ibQueryRamTable& table,
                          const std::vector<ibMetaID>& keyColumns,
                          ibMetaID periodColumn,
                          const std::vector<ibBalanceFoldSlot>& slots,
-                         const std::map<wxString, std::map<ibMetaID, ibNumber>>& opening)
+                         const ibBalanceOpening& opening)
 {
 	(void)periodColumn;   // rows arrive ordered by period within a key; the fold only needs that order
 
 	// The running balance per key, carried across the rows of that key. Seeded from what each key
 	// held ENTERING the interval — without that seed every key would appear to start at zero, which
 	// is the classic way a stock report shows correct turnovers and nonsense balances.
-	std::map<wxString, std::map<ibMetaID, ibNumber>> running = opening;
+	ibBalanceOpening running = opening;
 
+	// The key is the TUPLE of the key columns' values — identity, not presentation,
+	// and no longer rendered to text to say so (see ibValueSeqHash, value.h).
 	auto keyOf = [&](long row) {
-		wxString k;
+		std::vector<ibValue> k;
+		k.reserve(keyColumns.size());
 		for (const ibMetaID id : keyColumns)
-			k += table.GetCell(row, id).GetHashKey() + wxT("\x1f");   // identity, not presentation
+			k.push_back(table.GetCell(row, id));
 		return k;
 	};
 
 	for (long r = 0; r < table.RowCount(); ++r) {
-		const wxString key = keyOf(r);
+		const std::vector<ibValue> key = keyOf(r);
 		std::map<ibMetaID, ibNumber>& carry = running[key];
 
 		for (const ibBalanceFoldSlot& s : slots) {

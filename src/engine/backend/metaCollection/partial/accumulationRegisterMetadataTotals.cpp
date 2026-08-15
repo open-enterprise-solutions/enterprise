@@ -395,18 +395,14 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 			b.GroupBy(key);
 	};
 
-	// The identity a set of dimension values folds to. Built the SAME way for the opening rows and
-	// for the output rows — if the two differed, every opening balance would silently miss its key
-	// and the report would look like a fresh start.
-	auto keyOfValues = [](const std::vector<ibValue>& values) {
-		wxString k;
-		for (const ibValue& v : values)
-			k += v.GetHashKey() + wxT("\x1f");
-		return k;
-	};
+	// THE KEY IS THE DIMENSION VALUES THEMSELVES. It used to be an identity string folded from them
+	// (GetHashKey + \x1f) — the same fold FoldBalancesForward did on its side, so a text conversion
+	// per dimension per row, twice. Both sides now key by the tuple (ibValueSeqHash / ibValueSeqEqual,
+	// value.h); what still matters is that they agree, or every opening balance would silently miss
+	// its key and the report would look like a fresh start.
 
 	// --- 1. OPENING — the turnovers strictly before the interval, per key ----------------------
-	std::map<wxString, std::map<ibMetaID, ibNumber>> opening;
+	ibBalanceOpening opening;
 	if (withSign) {
 		ibDataQueryBuilder b;
 		openRead(b);
@@ -422,7 +418,7 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 				std::vector<ibValue> keyValues;
 				for (const ibBackendQueryColumn* key : keyOnView)
 					keyValues.push_back(sel.GetValue(key));
-				std::map<ibMetaID, ibNumber>& row = opening[keyOfValues(keyValues)];
+				std::map<ibMetaID, ibNumber>& row = opening[std::move(keyValues)];
 				// ⚠ KEYED BY THE SLOT THE FOLD CARRIES ITS RUNNING TOTAL UNDER — the TURNOVER column, which
 				// is what FoldBalancesForward reads the seed back by (and what its header states). Keyed by
 				// the opening column instead, the seed was written where nothing ever looked: every key

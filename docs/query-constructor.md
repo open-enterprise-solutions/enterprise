@@ -939,7 +939,7 @@ questions, and a query may want either or both, so it is a flag on the aggregate
 
 Read where SQL puts it (before the argument), rendered the same way, and carried down to both
 engines: the DB path emits `COUNT(DISTINCT col)` through one line in the L2 renderer, and the RAM
-fold counts each different value once, **keyed by `ibValue::GetHashKey()`** — the identity, never the
+fold counts each different value once, **keyed by the VALUE** (`ibValueHash` / `ibValueEqual`) — the identity, never the
 display string, because two references print alike far more often than they are alike.
 
 `COUNT(DISTINCT *)` is refused with a sentence — a star names nothing to be distinct about — rather

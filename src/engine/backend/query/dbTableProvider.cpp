@@ -22,7 +22,8 @@
 #include "backend/objCtor.h"                                      // ibCtorMetaValueType::GetQueryable — reference-target resolution (clsid -> ctor -> queryable, no cast)
 #include "backend/system/value/valueType.h"                      // ibValueTypeDescription::AdjustValue (dot-walk typed empty)
 
-#include <map>          // dot-walk join dedup
+#include <map>            // dot-walk join dedup
+#include <unordered_map>  // ROLLUP node index — keyed by the group values themselves
 #include <vector>
 #include <algorithm>    // stable_sort — ROLLUP rows by level for parent-before-child tree assembly
 #include <stdexcept>    // std::logic_error — the un-co-locatable WHERE-tree guard (BuildColocatedPredicate)
@@ -2043,26 +2044,37 @@ static ibSelectorTree RunRollupTotals(const ibDataQuerySpec& spec, ibQueryRelPtr
 	// Parent-before-child: process by level ascending (a level-L node's level-(L-1) parent must
 	// exist). The grand total (level 0) is the root.
 	std::stable_sort(rrows.begin(), rrows.end(), [](const RRow& a, const RRow& b) { return a.level < b.level; });
-	std::map<wxString, ibSelectorTree::Node*> nodes;
-	nodes[wxString()] = &tree.Root();
+	// KEYED BY THE VALUES, NOT BY A STRING BUILT FROM THEM.
+	//
+	// This used to fold each level through GetHashKey() and glue the results with
+	// \x1f: per row, per level, a text conversion (a number goes through
+	// ToString, a reference through wxString::Format) plus the concatenation —
+	// and twice over, since the parent key is the same prefix built again. The
+	// std::map then compared those strings character by character.
+	//
+	// A group key IS a sequence of values, so it is one here: ibValueSeqHash /
+	// ibValueSeqEqual (value.h) hash and compare the values themselves, the same
+	// policy the LINQ join and group-by indexes use. The parent key stops being a
+	// second string and becomes the prefix it always was — the key minus its last
+	// element.
+	std::unordered_map<std::vector<ibValue>, ibSelectorTree::Node*,
+	                   ibValueSeqHash, ibValueSeqEqual> nodes;
+	nodes[std::vector<ibValue>()] = &tree.Root();
 	for (const RRow& rr : rrows) {
-		wxString key, parentKey;
-		for (int i = 0; i < rr.level; ++i) {
-			const wxString seg = rr.groups[static_cast<size_t>(i)].GetHashKey() + wxT("\x1f");   // unique per value (scalar OR reference)
-			if (i + 1 < rr.level) parentKey += seg;
-			key += seg;
-		}
+		const size_t level = static_cast<size_t>(rr.level);
+		std::vector<ibValue> key(rr.groups.begin(), rr.groups.begin() + level);
 		ibSelectorTree::Node* node = nullptr;
 		if (rr.level == 0) {
 			node = &tree.Root();          // grand total
 		}
 		else {
+			const std::vector<ibValue> parentKey(key.begin(), key.end() - 1);
 			const auto pit = nodes.find(parentKey);
 			ibSelectorTree::Node* parent = (pit != nodes.end()) ? pit->second : &tree.Root();
 			node = parent->AddChild(rr.level);
 			for (int i = 0; i < rr.level; ++i)
 				node->m_values[(*spec.m_groupBy)[static_cast<size_t>(i)]->GetColumnId()] = rr.groups[static_cast<size_t>(i)];
-			nodes[key] = node;
+			nodes[std::move(key)] = node;
 		}
 		for (size_t i = 0; i < rr.aggs.size() && i < spec.m_aggregates->size(); ++i)
 			if (const ibBackendQueryColumn* ac = (*spec.m_aggregates)[i].m_col)

@@ -788,7 +788,15 @@ const ibString& ibValue::GetString(ibString& scratch) const
 		static const ibString s_empty;         // empty string {STRING, null}
 		return s_empty;
 	}
-	scratch = GetString();                     // coerce number/bool/date/ref (one wxString→ibString)
+	// A REFERENCE TO A STRING IS STILL A STRING, and the buffer is one hop away.
+	// Without this hop the reffer fell into the coercion below and rebuilt the
+	// text it was already pointing at — a wxString allocation per call, on a path
+	// that exists to avoid exactly that. Following the chain reaches the same
+	// zero-copy return the target would have given, and a reffer to a NUMBER is
+	// no worse off: it coerces one level down instead of here.
+	if (m_pRef != nullptr && IsReference())
+		return m_pRef->GetString(scratch);
+	scratch = GetString();                     // coerce number/bool/date (one wxString→ibString)
 	return scratch;
 }
 
@@ -1014,24 +1022,165 @@ std::shared_ptr<ibValueIteratorState> ibValue::CreateIterator()
 // old two-valued < returned false BOTH ways for such an operand, leaving it unordered). The SQL-null
 // SEMANTICS (three-valued filter / join-key skip) key strictly on TYPE_NULL via IsNull(); ordering is
 // the one place both "no value" tags share a position.
+namespace {
+// -1 / 0 / +1 from ONE pass of whatever ordering the type already has. Written
+// once because every arm of the switch below wanted it and each was spelling it
+// out again — `a < b ? -1 : (b < a ? 1 : 0)`, which asks twice.
+template <class T>
+inline int CompareOrder(const T& a, const T& b) { return (b < a) - (a < b); }
+
+// Same result, from the primitives that hand back a DIFFERENCE rather than a
+// sign (std::wstring::compare, ibNumber::Compare): a raw difference must not be
+// passed on as if it were already -1/0/1.
+inline int OrderOfDifference(const int difference) { return (difference > 0) - (difference < 0); }
+
+// Both sides as text. The GetString(scratch) overload IS the "read it in place"
+// path — for a TYPE_STRING value it returns the live buffer and never touches
+// the scratch — so all four tag combinations get the cheapest reading available
+// to them from one line, and an unused scratch allocates nothing.
+inline int CompareAsText(const ibValue& a, const ibValue& b)
+{
+	ibString sa, sb;
+	return OrderOfDifference(a.GetString(sa).raw().compare(b.GetString(sb).raw()));
+}
+
+// WHICH STRETCH OF THE ORDER A KIND OCCUPIES. Values of different rank are
+// separated by rank and never compared by payload, because no coercion between
+// them states a fact: "abc" as a number is 0, `1` as text is "1" — and an OBJECT
+// as a number is 0 too, which is how an empty array came to order EQUAL to the
+// number zero (found by ValueHashContract.OrderEqualImpliesHashEqual, not by
+// reading — the tree had been quietly answering that for as long as it existed).
+//
+// EVERY SCALAR KIND GETS ITS OWN RANK, and that is not tidiness — the coercions
+// they used to meet on are NOT TRANSITIVE, so an order built on them is not a
+// strict weak ordering and std::sort over it is formally undefined:
+//
+//   True == 2 and True == 3   (any non-zero number reads as True)
+//   but 2 != 3
+//
+//   1 == date(1500) and 1 == date(1999)   (a date reads as instant/1000)
+//   but date(1500) != date(1999)
+//
+// Both were live before this change; the hash contract test surfaced them by
+// making a second implementation of "equal" disagree with the first. Separated
+// by rank, a comparison only ever meets a kind it can answer about exactly.
+//
+//   1 Boolean · 2 Number · 3 Date
+//   4 — String and the kinds whose order IS their presentation (enum, OLE,
+//       function, iterator). They stay TOGETHER because text is transitive:
+//       everything in this rank reduces to the same string comparison.
+//   5 — TYPE_VALUE: arrays, containers, references, moments. Each carries its
+//       own CompareValueLS, and what "equal" means is theirs to say.
+//
+// COERCION IS NOT GONE from the language — GetNumber() on a string still parses,
+// and every arithmetic op still coerces. What is gone is coercion inside the
+// ORDER, where it could make two unequal values compare equal to a third.
+//
+// Totality is preserved, which is the point — a std::map key and a sort need
+// every pair placed — while GetValueHash only has to agree WITHIN a rank.
+// FORCED for the same reason ibNumber::Compare is (backend.h): `inline` on a
+// switch this small was still emitting a real `call`, twice per mixed-kind
+// comparison, in the /FAsc output. The body is a jump table over eight tags.
+IB_FORCEINLINE int KindRank(const ibValueTypes type)
+{
+	switch (type) {
+	case ibValueTypes::TYPE_BOOLEAN: return 1;
+	case ibValueTypes::TYPE_NUMBER:  return 2;
+	case ibValueTypes::TYPE_DATE:    return 3;
+	case ibValueTypes::TYPE_STRING:
+	case ibValueTypes::TYPE_ENUM:
+	case ibValueTypes::TYPE_OLE:
+	case ibValueTypes::TYPE_FUNCTION:
+	case ibValueTypes::TYPE_ITERATOR:
+		return 4;
+	default:
+		return 5;
+	}
+}
+}
+
 int ibValue::CompareValueLS(const ibValue& cParam) const
 {
+	// A reference answers as its target, and it answers FIRST — every rule below
+	// reads m_typeClass, which for a reffer says only "a reference".
+	if (m_pRef != nullptr && IsReference())
+		return m_pRef->CompareValueLS(cParam);
+
+	// THE OTHER SIDE'S KIND, RESOLVED ONCE, and only when it can differ from the
+	// raw tag. GetType() is virtual, and a virtual call is opaque to the
+	// optimiser — it cannot prove two of them return the same thing. Written as
+	// two comparisons against GetType(), MSVC emitted TWO indirect calls for the
+	// null test alone, on every comparison, before any of the fast paths below
+	// (verified in /FAsc output, 2026-08-15). A non-reference answers from its
+	// own tag, so the common case now makes no virtual call at all.
+	const ibValueTypes kindThere = cParam.IsReference() ? cParam.GetType() : cParam.m_typeClass;
+
 	const bool aNull = (m_typeClass == ibValueTypes::TYPE_EMPTY || m_typeClass == ibValueTypes::TYPE_NULL);
-	const bool bNull = (cParam.GetType() == ibValueTypes::TYPE_EMPTY || cParam.GetType() == ibValueTypes::TYPE_NULL);
+	const bool bNull = (kindThere == ibValueTypes::TYPE_EMPTY || kindThere == ibValueTypes::TYPE_NULL);
 	if (aNull || bNull)
 		return aNull == bNull ? 0 : (aNull ? -1 : 1);   // no scalar payload = smallest; both -> equal
 
+	// Different stretches of the order never meet on payload — see KindRank.
+	//
+	// GUARDED BY A TAG COMPARE: two raw tags that are equal already answer the
+	// question — same tag, same rank — and that is what a real index is made of,
+	// a column against a column. Without the guard, classification ran on every
+	// comparison and cost 78% of a probe (198.8 -> 353.3 ns, §9). The left side
+	// cannot be a reffer here (forwarded above), so equal tags also rule out a
+	// reference hiding on one side only.
+	if (m_typeClass != kindThere) {
+		const int rankHere  = KindRank(m_typeClass);
+		const int rankThere = KindRank(kindThere);
+		if (rankHere != rankThere)
+			return CompareOrder(rankHere, rankThere);
+	}
+
+	// EACH ARM ASKS ITS TYPE FOR ONE THREE-WAY ANSWER, off the FIELD where the tag
+	// already says what the field is. Two things were being paid for nothing:
+	//
+	//  - Two comparisons per compare. `a < b ? -1 : (b < a ? 1 : 0)` runs the whole
+	//    comparison twice to learn what one call returns — ibNumber::Compare and
+	//    std::wstring::compare are three-way primitives already.
+	//  - A getter round-trip. Inside `case TYPE_NUMBER` the type is known in the
+	//    open, yet GetNumber() was a virtual call returning BY VALUE; on the string
+	//    arm GetString() returned a wxString by value, so an ORDERING comparison
+	//    allocated two strings. Under every sort and every keyed lookup.
+	//
+	// When both sides carry the same tag the payload is read straight off the
+	// member. Mixed tags still go through the getters, which is where coercion
+	// lives (a number compared against its own spelling) — that behaviour is
+	// unchanged, it just stopped being the price everyone pays.
 	switch (m_typeClass)
 	{
-	case ibValueTypes::TYPE_BOOLEAN: { const bool a = GetBoolean(), b = cParam.GetBoolean(); return a == b ? 0 : (!a ? -1 : 1); }
-	case ibValueTypes::TYPE_NUMBER:  { const ibNumber a = GetNumber(), b = cParam.GetNumber(); return a < b ? -1 : (b < a ? 1 : 0); }
-	case ibValueTypes::TYPE_DATE:    { const wxLongLong_t a = GetDate(), b = cParam.GetDate(); return a < b ? -1 : (a > b ? 1 : 0); }
+	// SAME RANK FROM HERE ON — KindRank separated the rest above, so every arm
+	// below meets only kinds it can honestly be compared with, and the coercions
+	// it does are facts (True is 1, a date is its instant) rather than inventions.
+	//
+	// TWO ACCESSORS, NOT INTERCHANGEABLE:
+	//   GetType()   — WHAT THE VALUE IS; follows a reffer. Classification asks it.
+	//   m_typeClass — HOW IT IS STORED; asked only to decide whether the payload
+	//                 can be read straight off the field. A reffer says REFFER
+	//                 and falls through to the getter, which is correct.
+	//
+	// The LEFT side is always raw here: a reference was forwarded to its target
+	// at the top of the function.
+	case ibValueTypes::TYPE_BOOLEAN:
+		return CompareOrder(m_bData,
+			cParam.m_typeClass == ibValueTypes::TYPE_BOOLEAN ? cParam.m_bData : cParam.GetBoolean());
+	case ibValueTypes::TYPE_NUMBER:
+		return OrderOfDifference(cParam.m_typeClass == ibValueTypes::TYPE_NUMBER
+			? m_fData.Compare(cParam.m_fData)          // both raw
+			: m_fData.Compare(cParam.GetNumber()));    // another numeric kind, or a reffer to one
+	case ibValueTypes::TYPE_DATE:
+		return CompareOrder(m_dData,
+			cParam.m_typeClass == ibValueTypes::TYPE_DATE ? cParam.m_dData : cParam.GetDate());
 	case ibValueTypes::TYPE_STRING:
 	case ibValueTypes::TYPE_ENUM:
 	case ibValueTypes::TYPE_OLE:
 	case ibValueTypes::TYPE_VALUE:
 	case ibValueTypes::TYPE_FUNCTION:
-	case ibValueTypes::TYPE_ITERATOR: { const wxString a = GetString(), b = cParam.GetString(); return a < b ? -1 : (b < a ? 1 : 0); }
+	case ibValueTypes::TYPE_ITERATOR:
+		return CompareAsText(*this, cParam);
 	case ibValueTypes::TYPE_CONST_REFFER:
 	case ibValueTypes::TYPE_REFFER:   return m_pRef->CompareValueLS(cParam);
 	default:                          break;   // EMPTY / NULL already returned above
@@ -1057,18 +1206,31 @@ bool ibValue::CompareValueEQ(const ibValue& cParam) const
 		return ibValueTypes::TYPE_EMPTY == cParam.GetType();
 	case ibValueTypes::TYPE_NULL:
 		return ibValueTypes::TYPE_NULL == cParam.GetType();
+	// TYPE-STRICT, SO THE TAG COMES FIRST — and once it matches, both payloads are
+	// known and read straight off the field.
+	//
+	// Each of these used to coerce and then check the tag: GetString() twice, BY
+	// VALUE, before discovering the other side was a number and answering false.
+	// The strictness was already there; it was just applied after paying for the
+	// conversion it makes irrelevant. Same answers, no getters, no copies.
+	// The kind check asks GetType(), which follows a reffer — a value must stay
+	// equal to itself when it arrives by reference. The field access asks
+	// m_typeClass, which does not: that one is about where the bytes are.
 	case ibValueTypes::TYPE_BOOLEAN:
-		return GetBoolean() == cParam.GetBoolean() &&
-			ibValueTypes::TYPE_BOOLEAN == cParam.GetType();
+		if (cParam.GetType() != ibValueTypes::TYPE_BOOLEAN) return false;
+		return m_bData == (cParam.m_typeClass == ibValueTypes::TYPE_BOOLEAN ? cParam.m_bData : cParam.GetBoolean());
 	case ibValueTypes::TYPE_NUMBER:
-		return GetNumber() == cParam.GetNumber() &&
-			ibValueTypes::TYPE_NUMBER == cParam.GetType();
+		if (cParam.GetType() != ibValueTypes::TYPE_NUMBER) return false;
+		return 0 == (cParam.m_typeClass == ibValueTypes::TYPE_NUMBER
+			? m_fData.Compare(cParam.m_fData)
+			: m_fData.Compare(cParam.GetNumber()));
 	case ibValueTypes::TYPE_DATE:
-		return GetDate() == cParam.GetDate() &&
-			ibValueTypes::TYPE_DATE == cParam.GetType();
+		if (cParam.GetType() != ibValueTypes::TYPE_DATE) return false;
+		return m_dData == (cParam.m_typeClass == ibValueTypes::TYPE_DATE ? cParam.m_dData : cParam.GetDate());
 	case ibValueTypes::TYPE_STRING:
-		return GetString() == cParam.GetString() &&
-			ibValueTypes::TYPE_STRING == cParam.GetType();
+		// GetString(scratch) hands back the live buffer for a string AND for a
+		// reference to one, so the text path needs no special case here.
+		return cParam.GetType() == ibValueTypes::TYPE_STRING && CompareAsText(*this, cParam) == 0;
 	case ibValueTypes::TYPE_ENUM:
 	case ibValueTypes::TYPE_OLE:
 	case ibValueTypes::TYPE_VALUE:
@@ -1089,41 +1251,84 @@ bool ibValue::CompareValueEQ(const ibValue& cParam) const
 }
 
 // compare '!='
+// '!=' IS '==' NEGATED, and nothing else. It used to be the whole EQ switch
+// written again with every branch inverted — a second copy of the same rule,
+// carrying the same coercions, and free to drift.
+//
+// It already had: a class that overrode CompareValueEQ (there are a dozen —
+// enums, guid, OLE, composition field, the module managers) inherited THIS
+// method unchanged, so its `<>` answered by the base's rule while its `=`
+// answered by its own. The two could disagree about the same pair of values.
+// Going through the virtual EQ makes an override of one an override of both.
 bool ibValue::CompareValueNE(const ibValue& cParam) const
 {
+	return !CompareValueEQ(cParam);
+}
+
+//*************************************************************
+//*          identity — the hash bound to the order           *
+//*************************************************************
+
+// Placed AFTER the whole compare family, not inside it: the contract this obeys
+// is stated over CompareValueLS (see value.h), so it reads in order — the
+// ordering first, then the hash that has to agree with it.
+
+// FNV-1a, the same mixer the container keys already use — one place to change if
+// the quality ever proves insufficient.
+static inline size_t HashStep(size_t h, uint64_t v)
+{
+	for (int i = 0; i < 8; ++i, v >>= 8)
+		h = (h ^ (size_t)(v & 0xFF)) * 1099511628211ULL;
+	return h;
+}
+
+size_t ibValue::GetValueHash() const
+{
+	constexpr size_t kBasis = 1469598103934665603ULL;   // FNV-1a offset basis
+
 	switch (m_typeClass)
 	{
+	// Both "no scalar payload" tags order equal to each other and below
+	// everything, so they share one bucket.
 	case ibValueTypes::TYPE_EMPTY:
-		return ibValueTypes::TYPE_EMPTY != cParam.GetType();
 	case ibValueTypes::TYPE_NULL:
-		return ibValueTypes::TYPE_NULL != cParam.GetType();
+		return 0;
+
+	// EACH SCALAR KIND HASHES ITS OWN PAYLOAD, exactly, because each is its own
+	// rank in the order now (see KindRank) — a boolean is never order-equal to a
+	// number, so nothing forces their hashes together and neither has to be
+	// blurred to meet the other. A date keeps its full instant for the same
+	// reason: the /1000 it used to carry existed only to meet GetNumber().
 	case ibValueTypes::TYPE_BOOLEAN:
-		return ibValueTypes::TYPE_BOOLEAN != cParam.GetType() ||
-			GetBoolean() != cParam.GetBoolean();
-	case ibValueTypes::TYPE_NUMBER:
-		return ibValueTypes::TYPE_NUMBER != cParam.GetType() ||
-			GetNumber() != cParam.GetNumber();
+		return HashStep(kBasis, m_bData ? 1u : 0u);
 	case ibValueTypes::TYPE_DATE:
-		return ibValueTypes::TYPE_DATE != cParam.GetType() ||
-			GetDate() != cParam.GetDate();
-	case ibValueTypes::TYPE_STRING:
-		return ibValueTypes::TYPE_STRING != cParam.GetType() ||
-			GetString() != cParam.GetString();
-	case ibValueTypes::TYPE_ENUM:
-	case ibValueTypes::TYPE_OLE:
-	case ibValueTypes::TYPE_VALUE:
-	case ibValueTypes::TYPE_FUNCTION:
-	case ibValueTypes::TYPE_ITERATOR:
-		return GetString() != cParam.GetString() ||
-			GetClassType() != cParam.GetClassType();
-	case ibValueTypes::TYPE_CONST_REFFER:
-	case ibValueTypes::TYPE_REFFER:
-		return m_pRef->CompareValueNE(cParam);
-	case ibValueTypes::TYPE_LAST:
-		break;      // sentinel — see CompareValueEQ above for why this is not `default:`
+		return HashStep(kBasis, (uint64_t)m_dData);
+	// A number still blurs to its integer part, and that one is NOT optional:
+	// 1 and 1.0 are the same number and must share a bucket. 1.5 joining them
+	// costs one comparison.
+	case ibValueTypes::TYPE_NUMBER: {
+		long long whole = 0;
+		if (m_fData.ToInt(whole) != 0)
+			return HashStep(kBasis, ~0ULL);   // past int64 — one bucket for all of them
+		return HashStep(kBasis, (uint64_t)whole);
 	}
 
-	return false;
+	case ibValueTypes::TYPE_CONST_REFFER:
+	case ibValueTypes::TYPE_REFFER:
+		return m_pRef->GetValueHash();        // a reference hashes as what it references
+
+	// Text, and the object kinds that ORDER as text (CompareValueLS routes them
+	// through CompareAsText) — so an enum and the string of its presentation land
+	// in the same bucket, which is what their order says about them.
+	default: {
+		ibString scratch;
+		const ibString& text = GetString(scratch);
+		size_t h = kBasis;
+		for (const wchar_t* p = text.wc_str(); *p != L'\0'; ++p)
+			h = (h ^ (size_t)*p) * 1099511628211ULL;
+		return h;
+	}
+	}
 }
 
 const ibValue& ibValue::operator+(const ibValue& cParam)

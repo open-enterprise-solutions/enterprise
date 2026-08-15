@@ -906,6 +906,9 @@ public:
 	virtual bool CompareValueEQ(const ibValue& cParam) const;
 	virtual bool CompareValueNE(const ibValue& cParam) const;
 
+	// GetValueHash — declared with GetHashKey, near GetString: the two are the
+	// value's two IDENTITIES and belong together. See the note there.
+
 	//special converting
 	template <typename valueType> inline valueType* ConvertToType() const {
 		return CastValue<valueType>(this);
@@ -1264,16 +1267,32 @@ public:
 	virtual ibNumber GetNumber() const;
 	virtual wxString GetString() const;
 
-	// Canonical IDENTITY key of the value — for grouping / hierarchy linking where the DISPLAY string
-	// is not the identity. A REFFER value is a wrapper whose m_pRef points at the real object, so the
-	// base DELEGATES through the reffer chain (like Init / method dispatch) to the target's GetHashKey
-	// — the referenced object overrides it (e.g. a reference keys by guid). A plain value keys by its
-	// string. Extend per type as needed. Used by the L3 selector engine, which speaks only ibValue.
-	virtual wxString GetHashKey() const {
-		if (IsReference() && m_pRef != nullptr)
-			return m_pRef->GetHashKey();
-		return GetString();
-	}
+	// ============================ IDENTITY ==================================
+	// ONE OF THEM. There used to be a second — `GetHashKey()`, a wxString the
+	// grouping, hierarchy, join, index and register code all rendered a value
+	// into so they could key a std::map by the text. It is GONE (2026-08-15), and
+	// deliberately so: a value's identity is the value, and every one of those
+	// callers now keys by the value itself through GetValueHash + CompareValueLS
+	// (see ibValueHash / ibValueSeqHash below the class).
+	//
+	// Do not bring it back. Two identities mean two answers to "are these the
+	// same", and they drift — the rendered one made `1` and "1" one key, which is
+	// not what the language's own comparison says anywhere else. A composite key
+	// is a SEQUENCE of values (ibValueSeqHash), not values glued with a separator.
+	// ========================================================================
+
+	// A HASH THAT AGREES WITH CompareValueLS — the contract is one-way: values
+	// that ORDER EQUAL must hash equal. The converse is not required, so a
+	// COARSER hash is always safe (the comparison resolves the collision) and a
+	// finer one is a bug. That is why a number hashes by its integer part: 1 and
+	// 1.0 order equal and must land together, while 1.5 sharing their bucket
+	// costs one extra comparison and nothing else.
+	//
+	// Override it wherever CompareValueLS is overridden, and for the same reason
+	// — the two answer one question between them. A class that changes what
+	// counts as equal and leaves this behind puts equal values in different
+	// buckets, which no test of the comparator alone would catch.
+	virtual size_t GetValueHash() const;
 	// Native-ibString overload for the runtime string functions. Zero-copy
 	// when the value is already TYPE_STRING (returns the stored buffer by
 	// const ref); otherwise coerces number/bool/date/ref via GetString()
@@ -1611,6 +1630,56 @@ private:
 	// moved: ibValue's copy/move ctors value-init it to 0, Copy/Move only
 	// touch the payload.
 	std::atomic<unsigned int> m_refCount;
+};
+
+// ---------------------------------------------------------------------------
+// KEY POLICY — the one way to key a hash container BY VALUE.
+//
+// Grouping, joining and de-duplicating all need the same pair: a hash, and the
+// equality it is bound to. Written per callsite, those two drift apart — and a
+// hash that disagrees with its equality does not fail loudly, it loses rows.
+// So they live here, once, and every index takes them from here.
+//
+// Equality is `CompareValueLS == 0`, deliberately NOT CompareValueEQ. The order
+// is the relation GetValueHash is contracted against (see the IDENTITY note on
+// the class), and EQ is type-strict where the order is not — keys that order
+// equal across kinds would stop matching.
+struct ibValueHash {
+	size_t operator()(const ibValue& key) const { return key.GetValueHash(); }
+};
+struct ibValueEqual {
+	bool operator()(const ibValue& a, const ibValue& b) const { return a.CompareValueLS(b) == 0; }
+};
+
+// A COMPOSITE key — a group-by prefix, a register's dimension tuple — is a
+// SEQUENCE OF VALUES, not a string of them joined by a separator.
+//
+// Joining was the old way (`key += v.GetHashKey() + "\x1f"`), and per row per
+// level it cost a text conversion (a number goes through ToString, a reference
+// through wxString::Format) plus the concatenation, and then keyed a std::map
+// that compared those strings character by character. A sequence pays none of
+// that and compares the values themselves.
+//
+// The COUNT goes into the hash: [a] and [a, Undefined] are different keys, and
+// without it they would only be told apart by the comparison.
+struct ibValueSeqHash {
+	size_t operator()(const std::vector<ibValue>& seq) const {
+		size_t h = 1469598103934665603ULL;                   // FNV-1a offset basis
+		h = (h ^ seq.size()) * 1099511628211ULL;
+		for (const ibValue& value : seq)
+			h = (h ^ value.GetValueHash()) * 1099511628211ULL;
+		return h;
+	}
+};
+struct ibValueSeqEqual {
+	bool operator()(const std::vector<ibValue>& a, const std::vector<ibValue>& b) const {
+		if (a.size() != b.size())
+			return false;
+		for (size_t i = 0, n = a.size(); i < n; ++i)
+			if (a[i].CompareValueLS(b[i]) != 0)
+				return false;
+		return true;
+	}
 };
 
 // ---------------------------------------------------------------------------

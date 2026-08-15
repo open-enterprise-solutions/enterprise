@@ -990,7 +990,7 @@ generic `ibCompositionDriver` in `composition/`; `ibComposerNode` is a model con
 (`m_rowKey` / `m_groupPath` / container semantics the driver has no business knowing).
 Coupling them would regress a deliberate layer split for no functional gain — the
 per-row wrap in `RunComposerPage` stays. Row identity still uses `m_rowKey` / `m_groupPath`
-/ pointer rather than `ibValue::GetHashKey()`; unifying that belongs to the L5-2 identity
+/ pointer rather than the value itself (`ibValueHash`); unifying that belongs to the L5-2 identity
 consolidation (§9.3), a separate arc.
 
 ### 9.7 `ibReadPageRequest` cleanup + hierarchy scope as a KEY, not a bare guid (2026-07)

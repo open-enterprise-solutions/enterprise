@@ -744,3 +744,356 @@ interpreter dispatch and ibValue copies, not one allocation. And it does nothing
 numeric hash, which runs into `ibNumber` canonicality (1 vs 1.0) — a percent for a risk, not taken.
 The key type remains the lever §1f-bis names (`ibValue` probe ×7.3 a `long`'s); the container no
 longer is.
+
+---
+
+## 9. The comparator itself (2026-08-15)
+
+§8 left the key type as THE lever and put a number on it: an `ibValue` probe costs ×7.3 a `long`
+one. That number is about `std::map` calling `ibValue::CompareValueLS` ~log₂n times per probe — so
+it splits in two, the COUNT of comparisons (the tree) and the COST of one. This section is the
+second half only; the tree is untouched and still O(log n).
+
+**What one comparison was paying for nothing.** Three things, all in `value.cpp`:
+
+- **Every compare ran twice.** `a < b ? -1 : (b < a ? 1 : 0)` performs the whole comparison a
+  second time to learn what one call already returns — `ibNumber::Compare` and
+  `std::wstring::compare` are three-way primitives.
+- **A getter round-trip inside a `case` that already knew the type.** In `case TYPE_NUMBER`,
+  `GetNumber()` is a virtual call returning BY VALUE; on the string arm `GetString()` returned a
+  `wxString` by value, so an ORDERING comparison **allocated two strings**. The tag says where the
+  bytes are — when both sides carry the same one, the payload is read off the member.
+- **A reference to a string rebuilt the string.** `GetString(ibString&)` exists to hand back the
+  live buffer, but a `TYPE_REFFER` fell past that into the coercion below and materialised a
+  `wxString` of text it was already pointing at. It follows the chain now.
+
+### Measured, Release x64, same machine as §8
+
+| row | 2026-08-11 (§8) | comparator only | + hashed index | Δ overall |
+|---|---:|---:|---:|---:|
+| index probe `ibValue` n=16000 | 329.5 | 198.8 | **168.3** | **−49%** |
+| index build `ibValue` n=16000 | 628.8 | 337.1 | **325.2** | −48% |
+| index probe `long` n=16000 — CONTROL | 45.2 | 44.7 | 44.0 | −3% |
+| LINQ join n=16000 | — | 2947.7 | **2837.5** | −4% |
+| join n=1000000 | — | 3692.9 | **3534.7** | −4% |
+| struct field read | 331 | 211.5 | 198.4 | −40% |
+| arith loop (untouched) | 73.4 (§7) | 62.5 | 61.6 | −16% |
+
+**Read the RATIO, not the column.** `arith loop` moved 15% without anyone touching arithmetic, so
+this machine is not the machine of §8 — every absolute figure carries that drift. What survives it
+is the pair measured in one process:
+
+| | 2026-08-11 | 2026-08-15 |
+|---|---:|---:|
+| probe `ibValue` / `long` | ×7.29 | **×3.83** |
+| build `ibValue` / `long` | ×3.50 | **×2.11** |
+
+So the lever §8 named as ×7.3 is ×3.8 now: **most of that gap was the comparison itself**, not the
+key type. What remains is the key type — an `ibValue` probe still costs ×3.8 a `long` one, and no
+amount of comparator work closes that; it is the tagged union and the virtual call, not the code
+around them.
+
+### The tree, and what replacing it was actually worth (2026-08-15)
+
+`ibValueJoinState::m_hash` was a `std::map`, so the comparator ran ~log₂n times per probe. It is a
+`std::unordered_map` now, keyed by `GetValueHash` with `CompareValueLS == 0` for equality — the same
+relation the tree meant by "same key". Group-by's `m_keyIdx` went the same way (its emission order
+was never the tree's: `m_groups` holds it).
+
+| | tree | hash |
+|---|---:|---:|
+| LINQ join n=16000 | 2947.7 | **2837.5** (−4%) |
+| join n=1000000 | 3692.9 | **3534.7** (−4%) |
+| group by, few distinct keys (n=250…16000) | 3848…4803 | 3642…4668 (−1…−5%) |
+| group by, EVERY key distinct (n=16000…1M) | 4940…5753 | 5265…5785 (**+4…6%**) |
+
+**−4% on the join, and group-by is a wash.** The prediction was "kratno" (multiple times) and it was
+wrong — worth writing down WHY, because the reasoning error is reusable: a probe is ~18% of a join
+row, and 14 tree comparisons over a hot, predictable node chain are not 14× the cost of one hash of
+an `ibValue` plus one comparison. Removing a log factor only pays when the factor multiplies
+something expensive; here it multiplied something cache-resident.
+
+The group-by split is the same arithmetic seen from the other side: with every key distinct the
+table grows to n entries and pays for that growth, while the tree paid per-comparison only. Left as
+it is — the loss is inside the run-to-run band and the win at low cardinality is real — but nobody
+should record group-by as a win.
+
+### ⚠ The ranks nearly cost more than everything above put together
+
+Separating the kinds (below) put a classification in front of every comparison, and classification
+asks `GetType()`, which is VIRTUAL. On a path a tree walks 14 times per probe:
+
+| | before ranks | ranks, unguarded | ranks, tag-guarded |
+|---|---:|---:|---:|
+| index probe `ibValue` n=16000 | 198.8 | **353.3** (+78%) | **168.3** |
+| index build `ibValue` n=16000 | 337.1 | **724.3** (+115%) | 325.2 |
+
+The guard is one line — if the two RAW tags are equal the ranks are equal, so skip the
+classification entirely — and it is the case every real index is made of, a column against a
+column. With it the comparison ends up 15% FASTER than before the ranks existed, because the same
+guard also removes a `GetType()` that the string-rank check used to do on every scalar comparison.
+
+**The lesson is placement, not correctness.** The rank rule was needed (see below); putting it at
+the top of a function that runs 14 times per lookup, unguarded, was the mistake — and it was
+invisible until measured: the suite stayed green throughout.
+
+The `long` probe holding at 45.2 → 44.7 is what makes the probe row trustworthy; the `long` BUILD
+moving 27% is why the build row is quoted but not leaned on — build allocates map nodes, and that
+is heap state as much as code.
+
+### ONE IDENTITY. `ibValue::GetHashKey` is gone (2026-08-15)
+
+There were two ways to answer "are these the same value", and the engine used both:
+
+* `GetHashKey() -> wxString` — the value rendered into text. Grouping, joins, DISTINCT, hierarchy
+  linking, temp-table indexes and the registers all keyed a `std::map<wxString, …>` by it, and built
+  COMPOSITE keys by gluing several with `\x1f`.
+* `GetValueHash() + CompareValueLS` — the value compared as a value.
+
+Two answers to one question drift, and this pair had already drifted: the rendered one made `1` and
+`"1"` the same key, which is not what the language's comparison says anywhere else. So the rendered
+one was **removed entirely**, and every caller moved onto the value.
+
+**What a rendered key cost per row.** A number went through `ToString` (175 ns measured), a
+reference through `wxString::Format("%i:%s")`; then the pieces were concatenated, and the `std::map`
+compared the results character by character. On a group-by that is one conversion per level per row,
+paid twice where a parent key was rebuilt from the same values.
+
+| moved onto the value | was |
+|---|---|
+| RAM hash-join, GROUP BY, 3 × DISTINCT, semi-join, totals fold | text per cell + `map<wxString>` |
+| ROLLUP index, reference hierarchy, multi-level dimensions | text + **three** `valOf`/`keyVal` maps |
+| temp-store per-column index | text per row |
+| balance opening, both registers (`ibBalanceOpening`) | both sides folded the same values to text |
+| report-row identity, per-account caches, kind sets | `KeyOfValues` + 16 string-keyed containers |
+| schema seed signature | two fingerprint strings per comparison |
+| container keys | rendered text; now: strings fold case, everything else compares as a value |
+
+**Three containers vanished outright** (`valOf` ×2, `keyVal`) — they existed only because a string
+key cannot give back the value it was rendered from.
+
+### Measured — median of THREE runs, machine quiet
+
+| row | before | run 1 | run 2 | run 3 | median | Δ |
+|---|---:|---:|---:|---:|---:|---:|
+| index probe `ibValue` n=16000 | 146.2 | 124.0 | 121.2 | 121.7 | **121.7** | **−17%** |
+| LINQ join n=16000 | 2319.4 | 2016.4 | 2083.2 | 2046.3 | **2046.3** | **−12%** |
+| group by n=16000 | 4369.1 | 3852.7 | 4075.5 | 4095.3 | **4075.5** | **−7%** |
+| record build+walk n=20000 | 4021.2 | 3813.9 | 3795.8 | 3828.4 | **3813.9** | **−5%** |
+| index build `ibValue` n=16000 | 311.1 | 286.9 | 334.2 | 322.1 | 322.1 | +3% — no effect |
+| New + 2 Insert | 2794.5 | 2808.7 | 2656.3 | 2767.6 | 2767.6 | −1% — noise |
+| dot access | 189.0 | 190.6 | 184.0 | 191.1 | 190.6 | 0% |
+| arith loop — CONTROL | 62.1 | 61.9 | 60.2 | 60.0 | 60.0 | −3% (machine cooled) |
+
+Net of the 3% the control moved: **probe −14%, join −9%, group-by −4%, record build −2%**, and
+**nothing** on index build, insert or field read.
+
+That split is the honest reading: the win is in LOOKUP, not in construction. Building an index
+allocates nodes, and allocation is what it is bound by — which the spread says too. Three runs of the
+identical binary vary by 0.9% on `record build`, 2.3% on `probe`, 3.3% on `join`, 6% on `group by`
+and **16% on `index build`**. The rows that allocate are the rows that shout, and they are exactly
+where a single run gets mistaken for a result — twice in this section's history, before the rule
+became "three runs or it did not happen".
+
+From the §8 baseline the probe now reads 329.5 -> **121.7 ns, −63%**, and the `ibValue`/`long` ratio
+§8 recorded as ×7.29 is **×2.7**.
+
+**The shape cache keeps a string, and that is deliberate**: its key mixes numbers with kinds. It now
+carries `GetValueHash()` **plus `GetClassType()`** — a hash alone can collide, and a collision there
+hands the reader a table built for someone else's arguments; the type number pins which kind
+produced the hash.
+
+**This FIXES A REPORTING BUG, it does not merely change a rule.**
+
+A composite-typed attribute (a characteristic's value, a ChartOfCharacteristicTypes column) holds a
+number in one row and a string in another. Group a report by that column and the two used to land in
+ONE row: both rendered to the text `"1"`, so two different values were shown as one group and their
+sums were added together. Nothing reported the merge — the total simply looked plausible.
+
+Types are compared as types now, so `1` and `"1"` are two groups, which is what an accountant reading
+the report already assumed. Pinned by tests rather than left to be discovered:
+
+* `ValueContainer.NumberAndItsSpellingAreDifferentKeys` — and that both can coexist in one container,
+  which the old rule made impossible;
+* a join / DISTINCT no longer matches a number against the string spelling it.
+
+Case-insensitive field names survive: the fold runs ONCE per lookup while hashing, and inside a
+bucket the comparison decides most candidates on length alone, folding only characters that differ —
+the same two shortcuts `stringUtils::CompareString` earned the hard way (below).
+
+### READ THE DISASSEMBLY. Two rounds of reasoning lost to one /FAsc run
+
+Everything above was argued from the source and the bench. Compiling `value.cpp` with `/FAsc`
+(flags lifted from `backend.tlog\CL.command.1.tlog`, so they match the real build) took a minute and
+contradicted three claims made from reading:
+
+```
+; const bool bNull = (cParam.GetType() == TYPE_EMPTY || cParam.GetType() == TYPE_NULL);
+  0005c   call QWORD PTR [rax+72]        <- TWO indirect calls, not one
+  00069   call QWORD PTR [rax+72]
+  00090   call ?KindRank@...             <- `inline` did NOT inline
+  00154   call ?Compare@ibNumber@@...    <- nor did the header's hot path
+```
+
+1. **A virtual call is opaque to the optimiser.** Two `GetType()` comparisons in one expression are
+   two indirect calls — MSVC cannot prove the second returns what the first did. This was paid on
+   EVERY comparison, ahead of every fast path added above. Resolving the kind ONCE, and only when
+   the value is a reference (`cParam.IsReference() ? cParam.GetType() : cParam.m_typeClass`), leaves
+   the common case with no virtual call here at all.
+2. **`KindRank` is a real `call`**, twice, despite `inline`. It sits behind the tag guard so it only
+   costs on mixed pairs — but "a switch on a tag is free" was an assumption, not a fact.
+3. **`ibNumber::Compare` is a real `call`**, next to a `call ??1ibNumber` for the temporary that
+   `GetNumber()` returns. `fnumber.h` states it lives in the header so the caller's compiler can
+   inline the immediate path; in this caller it does not. Untouched for now — `__forceinline` is not
+   portable across the three toolchains, so this needs either a shared macro or splitting the arm
+   into a small function.
+
+Measured effect of (1) alone:
+
+| row | before | after | Δ |
+|---|---:|---:|---:|
+| index probe `ibValue` n=16000 | 168.3 | **151.4** | −10% |
+| LINQ join n=16000 | 2837.5 | **2687.8** | −5% |
+| group by n=16000, all keys distinct | 5264.7 | **4542.8** | **−14%** |
+| arith loop — control | 61.6 | 59.9 | −3% |
+| probe `long` — control | 44.0 | 47.3 | +8% |
+
+The controls moved ±8% here, so only the probe and group-by rows carry. That group-by row matters
+beyond its size: hashing had made it WORSE (+6%, above), and it is now 4542.8 against the 4939.6 it
+started at — **−8% overall**. The virtual calls in the comparator were what ate the hash's win.
+
+**Method note.** Two earlier rounds in this section explained numbers by reading code, and both were
+wrong in their details (a bucket allocation that did not exist; a "cheap" switch that compiles to a
+call). The disassembly settles such questions in a minute and should come first.
+
+### Forcing the inline the header already asked for
+
+`ibNumber::Compare` lives in fnumber.h with a hot/cold split so callers can inline the immediate
+path — and the disassembly above showed a real `call` on the value comparator's number arm. `inline`
+is a hint; under a size budget the inliner declines it. **IB_FORCEINLINE already existed** in
+procUnit.cpp, portable across the three toolchains, with a note describing this exact wall ("the
+disassembly says so"); it moved to `backend/backend.h` for the second caller rather than being
+copied. Verified in `/FAsc`: `call ?Compare@ibNumber` is gone, `call ?CompareBig` (the cold path)
+remains — which is the split working as designed.
+
+| row | before | after (2 runs) |
+|---|---:|---:|
+| index probe `ibValue` n=16000 | 151.4 | **136.0 / 124.1** |
+| index build `ibValue` n=16000 | 336.3 | **302.9 / 282.3** |
+| `compare immediate` (NumberBench) | 2.7 | **2.0** |
+| `add immediate` | 5.1 | 4.2 |
+| record build+walk n=20000 | 3925.5 | 4273.9 / 4023.1 |
+| dot access | 191.3 | 209.6 / 188.6 |
+| arith loop — control | 59.9 | 60.6 / 60.4 |
+
+**Code size: 9.90 -> 9.95 MB (+0.5%)** — the forced body is a gate plus one int64 compare, CompareBig
+stays out of line, so pasting it into every caller costs almost nothing.
+
+⚠ **The first run said record build+walk and dot access had regressed 9-10%. The second says they
+had not** — both returned to their means. The rule this cost twice today: on rows whose run-to-run
+spread is ±5-9%, a single run cannot distinguish an effect of that size from noise. Two runs of the
+SAME binary read 136.0 and 124.1 on the probe — so treat anything under ~9% on these rows as
+unproven, and quote a range rather than a number.
+
+### Chasing `struct build` 1603 -> ~2200, and what it turned out to be
+
+§8 recorded `struct build 3 fields` at 1603 ns; today it reads 2131. The baseline predates
+`675b04db` (the container-becomes-a-hash commit, 23:19 the same day) by hours, and `git log -L`
+over the ctor body confirms that commit is the last thing to touch it — so the suspicion was a
+fixed price the tree never paid: the first insert allocating a bucket array.
+
+**Measured, and the hypothesis was wrong.** `DISABLED_StructBuildWidth` builds a Structure of
+0/1/2/3/5/10 fields (values omitted — the ctor allows it, so this is the insert machinery alone):
+
+| width | before | after the fix below |
+|---|---:|---:|
+| empty | 695.6 | 693.4 |
+| 1 field | 1096.5 | 1074.9 |
+| 2 fields | 1535.0 | 1467.4 |
+| 3 fields | 2007.7 | 1899.5 |
+| 10 fields | 6272.8 | 5933.7 |
+
+No step at the first field — the per-field cost RISES with width (401 -> 610 ns) instead. A bucket
+allocation would have shown as the opposite shape.
+
+**What it actually was, in part:** `Insert` asked about the key TWICE — `m_index.find`, then
+`m_index.emplace` — and the key's hash is a fold over its whole text, which on a Structure is a
+field name. `emplace` already reports whether the key was present. One question instead of two:
+−5% per field, **−7% on `New + 2 Insert`** (2955.7 -> 2747.5).
+
+**What it was NOT.** That leaves most of the 1603 -> 2131 gap unexplained, and two things say not to
+force an explanation onto it. The bench itself spread 2165.9 / 2312.2 / 2321.4 across three runs of
+identical code — 7% — so part of the "regression" is this machine. And the structural cost is
+visible elsewhere: the key is stored TWICE, as an `ibValue` in `m_index` and again in `m_entries`,
+which is the same finding the footprint probe reports as ~1000 bytes per field for 40 bytes of data.
+Removing that second copy means the index holding entry positions rather than keys, with lookup
+reaching through to `m_entries` — a rebuild of the container's store, not a patch, and not done here.
+
+### Two results that were not speedups
+
+**The type check: `dynamic_cast` WINS, ×7.6.** Array/container comparison asks "is the other side
+one of me" per compared pair, and per ELEMENT when the elements are composite. The class id looks
+cheaper — an integer compare — but obtaining it is a virtual call ending in `GetTypeIDByRef`:
+
+```
+type check: id vs cast    id=59.7ns   cast=7.9ns   x7.6
+```
+
+(`DISABLED_TypeCheckCost`.) The id version was written, measured, and reverted the same hour. The
+numbers live in a comment beside the cast so the next reader does not repeat it.
+
+**Structure footprint — the member table is NOT the weight.** The CI million-row run shows ~7.5 KB
+of resident set per 2-field row and the standing hypothesis was per-row member tables with copied
+names and helper strings. `DISABLED_StructureFootprint` separates the shapes and refutes it:
+
+```
+empty Structure          538 bytes/row      <- the object AND its member table
++ two inserted fields   1998 bytes/row      <- the fields alone (increment)
+two ibValue                80 bytes         <- what the DATA is
+```
+
+An empty Structure carries its whole member table for 538 bytes; each inserted field adds ~1000 for
+40 bytes of data. So the weight is the ENTRY storage — a key held twice (`m_entries` and
+`m_index`), an `unordered_map` node, its bucket array, the heap buffer of the name — and a common
+string pool for helper text, which was the planned arc, would have bought almost nothing.
+
+### Correctness that rode with it
+
+Not performance, found while reading the comparator:
+
+- **Arrays and containers compared EQUAL to each other.** Neither overrode `CompareValueLS`, so the
+  base compared object kinds by `GetString()`, which for an object kind is the CLASS NAME — every
+  array read as `"Array"`. A join or group keyed on a composite key put every row in one bucket,
+  silently. Both override it now, walking their elements/entries through `std::lexicographical_compare`.
+- **`CompareValueNE` was a second copy of `CompareValueEQ`, inverted.** A dozen classes override
+  only EQ (enums, guid, OLE, composition field, the module managers) and inherited the base's `<>`,
+  so `=` and `<>` could disagree about one pair. It is `!CompareValueEQ` now.
+- **A reffer must not change an answer.** `GetType()` follows the reference chain, the raw
+  `m_typeClass` tag does not. Classification asks the former, field access the latter — swap them
+  and `1 = ref(1)` turns false. `ValueThroughReference.*` in `tests/test_value.cpp` guards it.
+- **THE ORDER WAS NOT A STRICT WEAK ORDERING.** Two coercions inside it were non-transitive, both
+  live for as long as the comparator has existed:
+
+  ```
+  True == 2  and  True == 3,   but 2 != 3        (any non-zero number read as True)
+  1 == date(1500) and 1 == date(1999),  but those differ   (a date read as instant/1000)
+  0 == an empty array                            (GetNumber() on an object kind is 0)
+  ```
+
+  A relation where something equals two values that differ from each other cannot key a `std::map`
+  (lookup is unspecified) and makes `std::sort` formally undefined. Fixed by giving each kind its
+  own stretch of the order — Boolean · Number · Date · text-ish · TYPE_VALUE — so a comparison only
+  meets kinds it can answer about exactly. Coercion is untouched everywhere else: `True + 1` still
+  works, `GetNumber()` on a string still parses. `1 < "0"` is TRUE now and was false.
+
+  **None of this was found by reading.** Two rounds of it were found by
+  `ValueHashContract.OrderEqualImpliesHashEqual`, which exists only because a hash had to agree with
+  the order — a second implementation of "equal" disagreeing with the first is what made the
+  non-transitivity visible. `ValueOrderAcrossKinds.EqualityUnderOrderIsTransitive` now states the
+  property directly.
+
+⚠ **Non-ASCII key folding is the process locale's, not ours.** `KeyHash`/`KeyEq` fold case through
+`std::towupper`, which folds a non-ASCII letter only where the locale says how. The same
+configuration therefore sees case-SENSITIVE Cyrillic keys headless (daemon, codeRunner, the suite)
+and case-INSENSITIVE ones under a UI locale. Unchanged by this work — an ASCII fast path was added
+in front of the same call — but for a Russian-language platform it is a language question, open.

@@ -207,17 +207,30 @@ const ibSchemaSeedRow* FindSeedRow(const std::vector<ibSchemaSeedRow>& seed, con
 	return nullptr;
 }
 
-// A row's cell fingerprint — every (columnId -> value) flattened in column-id order (std::map is sorted),
-// so two rows compare equal iff every cell matches. Uses ibValue::GetHashKey() (NOT GetString): for a
-// reference cell it keys by the target guid — stable and cheap — whereas GetString would return the
-// presentation (unstable, possibly a DB lookup). For primitives GetHashKey is the value's string. An
-// enum row has no cells -> empty -> a matched enum never re-writes.
-wxString SeedSignature(const ibSchemaSeedRow& row)
+// Do two seed rows carry the same cells? Compared CELL BY CELL, in column-id
+// order (std::map is sorted), so the answer is yes iff every column matches.
+//
+// This used to render both rows into fingerprint STRINGS and compare those — a
+// text conversion per cell, twice per comparison, to answer a question the
+// values can answer themselves. Values are compared by ibValue's ordering, which
+// for a reference is its guid and not its presentation (the presentation is
+// unstable and can cost a DB lookup — that was the reason for the old
+// GetHashKey, and the ordering gives it for free).
+//
+// An enum row has no cells -> both empty -> equal -> a matched enum never re-writes.
+bool SeedRowsEqual(const ibSchemaSeedRow& a, const ibSchemaSeedRow& b)
 {
-	wxString s;
-	for (const auto& cell : row.m_values)
-		s << cell.first << wxT('=') << cell.second.GetHashKey() << wxT('\x1f');
-	return s;
+	if (a.m_values.size() != b.m_values.size())
+		return false;
+	auto itA = a.m_values.begin();
+	auto itB = b.m_values.begin();
+	for (; itA != a.m_values.end(); ++itA, ++itB) {
+		if (itA->first != itB->first)                       // different column -> different shape
+			return false;
+		if (itA->second.CompareValueLS(itB->second) != 0)
+			return false;
+	}
+	return true;
 }
 
 // Generic seed-row UPSERT — resolve each cell's column by id from the table's own m_columns and SetValue
@@ -304,7 +317,7 @@ int DiffSeedInto(ibStructureBatch& batch, const ibSchemaTable* old, const ibSche
 {
 	for (const ibSchemaSeedRow& row : cur.m_seed) {
 		const ibSchemaSeedRow* o = (old != nullptr) ? FindSeedRow(old->m_seed, row.m_id) : nullptr;
-		if (o != nullptr && SeedSignature(*o) == SeedSignature(row))
+		if (o != nullptr && SeedRowsEqual(*o, row))
 			continue;                              // every cell unchanged -> nothing to write
 
 		WriteSeedRow(batch, cur, row, holder);

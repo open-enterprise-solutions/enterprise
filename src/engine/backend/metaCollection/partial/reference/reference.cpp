@@ -115,14 +115,9 @@ m_initializedRef(false), m_metaObject(metaObject), m_reference_impl(nullptr), m_
 	//gs_references.emplace_back(this);
 }
 
-// Identity key = the DB reference key (metaID + guid), aligning runtime grouping / join / dedup
-// over a reference with the database. See the declaration in reference.h.
-wxString ibValueReferenceDataObject::GetHashKey() const
-{
-	return m_metaObject != nullptr
-		? wxString::Format(wxT("%i:%s"), m_metaObject->GetMetaID(), wxString(GetGuid()))
-		: wxString(GetGuid());
-}
+// GetHashKey is gone (2026-08-15). A reference's identity is carried by CompareValueLS (guid, then
+// metaID) and GetValueHash (the guid's bytes) — the same (metaID + guid) the database keys by, said
+// once, in the two methods every hash container already asks. See the note in reference.h.
 
 // Ordering: GUID first, then TYPE (metaID) as the tiebreak — see the header. m_metaObject is complete in this
 // TU, so GetMetaID() resolves. The tiebreak only fires on equal guids (in practice: empty references, which all

@@ -57,6 +57,7 @@
 #include "backend/compiler/codeDef.h"
 #include "backend/compiler/value.h"
 #include "backend/fnumber.h"
+#include "backend/system/value/valueArray.h"   // DISABLED_TypeCheckCost
 
 namespace {
 
@@ -1170,6 +1171,172 @@ TEST(RuntimeBench, DISABLED_RecordParts) {
         const double tot = BestTotalNs(3, [&]{ pu.CallAsFunc(wxT("P"), ret, argN); g_sink += (uint64_t)ret.GetInteger(); });
         RowOes(p.name, tot / double(n), "ns", tot);
     }
+    SUCCEED();
+}
+
+// --- where a field's cost goes as a structure gets wider -------------------
+// `struct build 3 fields` read 1603 ns on 2026-08-11 (§8) and 2321 today, and
+// the suspect is the commit that turned ibValueContainer into a hash index
+// (675b04db, 23:19 THAT DAY — the baseline predates it by hours). A hash pays a
+// fixed price the tree did not: the first insert allocates a bucket array, and
+// the key is then stored TWICE, in m_entries and in m_index.
+//
+// If that is the cause the shape is a STEP, not a slope: field one carries the
+// allocation and the rest are cheap. If instead the per-field cost is flat, the
+// hypothesis is wrong and the regression is somewhere else entirely.
+//
+// Values are omitted on purpose (the ctor allows it) so this measures the
+// INSERT machinery and not the copying of what goes in.
+TEST(RuntimeBench, DISABLED_StructBuildWidth) {
+    struct Shape { const char* label; const wxChar* names; double fields; };
+    static const Shape shapes[] = {
+        { "empty",     wxT(""),                     0 },
+        { "1 field",   wxT("A"),                    1 },
+        { "2 fields",  wxT("A,B"),                  2 },
+        { "3 fields",  wxT("A,B,C"),                3 },
+        { "5 fields",  wxT("A,B,C,D,E"),            5 },
+        { "10 fields", wxT("A,B,C,D,E,F,G,H,I,J"), 10 },
+    };
+
+    std::cout << "\n[ Structure ctor by width | ns per CALL, and per field ]\n";
+    for (const Shape& shape : shapes) {
+        const long n = 100000;
+        ibCompileCode cc(wxT("test"), wxT("memory"), false);
+        wxString body;
+        body << wxT("Function Make(n) Public\n")
+             << wxT("  var i; var s; i = 0;\n")
+             << wxT("  While i < n Do s = New Structure(\"") << shape.names << wxT("\"); i = i + 1; EndDo;\n")
+             << wxT("  Return i;\n")
+             << wxT("EndFunction\n");
+        if (!Build(cc, body.wc_str())) { std::cout << "  (compile failed: " << shape.label << ")\n"; continue; }
+        ibProcUnit pu;
+        if (![&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }()) {
+            std::cout << "  (execute failed: " << shape.label << ")\n"; continue;
+        }
+        ibValue argN((int)n), ret;
+        const double tot = BestTotalNs(5, [&]{ pu.CallAsFunc(wxT("Make"), ret, argN); g_sink += (uint64_t)ret.GetInteger(); });
+        const double perCall = tot / double(n);
+        std::cout << "  " << std::left << std::setw(12) << shape.label << std::right
+                  << "  " << std::setw(8) << std::fixed << std::setprecision(1) << perCall << "ns/call";
+        if (shape.fields > 0)
+            std::cout << "  " << std::setw(7) << (perCall / shape.fields) << "ns/field";
+        std::cout << "\n";
+    }
+    SUCCEED();
+}
+
+// --- how to ask "is the other side one of me" ------------------------------
+// Array and container comparison ask that once per compared PAIR, and once per
+// ELEMENT when the elements are themselves composite — so it sits on the same
+// per-row path the comparison itself does.
+//
+// Two ways to ask, and the choice is not obvious from reading them. A
+// dynamic_cast walks RTTI. The class id looks like the cheap one — an integer
+// compare — but getting it is a virtual call that, for an object kind, ends in
+// GetTypeIDByRef, and what THAT costs decides the matter. Measured side by side
+// on the same values rather than argued: x < 1 means the id is the cheaper ask
+// and the code as written is right; x > 1 means the cast should come back.
+TEST(RuntimeBench, DISABLED_TypeCheckCost) {
+    ibValueArray lhs;                            // stack — never wrapped, so never ref-counted
+    ibValueArray* rhsRaw = new ibValueArray();
+    for (int i = 0; i < 4; ++i) { lhs.Add(ibValue(i)); rhsRaw->Add(ibValue(i)); }
+    const ibValue rhs(static_cast<ibValue*>(rhsRaw));   // the reffer owns rhsRaw from here
+
+    const long n = 200000;
+
+    const double byId = BestTotalNs(5, [&]{
+        for (long i = 0; i < n; ++i) {
+            const ibValue* ref = rhs.GetRef();
+            g_sink += (ref->GetClassType() == lhs.GetClassType()) ? 1u : 0u;
+        }
+    }) / double(n);
+
+    const double byCast = BestTotalNs(5, [&]{
+        for (long i = 0; i < n; ++i)
+            g_sink += (dynamic_cast<const ibValueArray*>(rhs.GetRef()) != nullptr) ? 1u : 0u;
+    }) / double(n);
+
+    // "native" column = the dynamic_cast this replaced, so the ratio reads as
+    // id/cast directly.
+    Row("type check: id vs cast", byId, byCast, "ns");
+    SUCCEED();
+}
+
+// --- what a row costs in BYTES, not in nanoseconds -------------------------
+// MillionRowScale reports ~7.5 KB of resident set per row at n=1000000, for a
+// row that holds two numbers. Something per-row weighs far more than its data,
+// and no timing bench can say which part: they all measure the same row.
+//
+// So the shapes are separated here. An EMPTY Structure has no fields at all, so
+// whatever it costs is the object plus its member table; the two-field shape
+// adds only the fields on top of that. If an empty row already costs kilobytes,
+// the weight is the member table and the fields are noise — and that is the
+// question any fix depends on, which is why this is measured BEFORE one is made.
+//
+// Read the second row as a HIGH-WATER DIFFERENCE. The allocator does not return
+// freed pages, so the fields shape reuses what the empty one released: its
+// increment reads as the ADDITIONAL cost of two fields, not as the full cost of
+// a row measured independently. Do not quote the two as separate readings.
+TEST(RuntimeBench, DISABLED_StructureFootprint) {
+    if (ResidentBytes() == 0) {
+        std::cout << "\n  (no resident-set probe on this platform -- footprint not measured)\n";
+        SUCCEED();
+        return;
+    }
+
+    ibCompileCode cc(wxT("test"), wxT("memory"), false);
+    ASSERT_TRUE(Build(cc,
+        wxT("var keep public;\n")
+        // Rows are HELD, not built and dropped — a footprint needs them alive
+        // at the moment the process is asked how much it is holding.
+        wxT("Function Empty(n) Public\n")
+        wxT("  keep = New Array; var i; i = 0;\n")
+        wxT("  While i < n Do var row; row = New Structure; keep.Add(row); i = i + 1; EndDo;\n")
+        wxT("  Return keep.Count();\n")
+        wxT("EndFunction\n")
+        wxT("Function TwoFields(n) Public\n")
+        wxT("  keep = New Array; var i; i = 0;\n")
+        wxT("  While i < n Do\n")
+        wxT("    var row; row = New Structure;\n")
+        wxT("    row.Insert(\"Qty\", i);\n")
+        wxT("    row.Insert(\"Price\", 2);\n")
+        wxT("    keep.Add(row);\n")
+        wxT("    i = i + 1;\n")
+        wxT("  EndDo;\n")
+        wxT("  Return keep.Count();\n")
+        wxT("EndFunction\n")
+        wxT("Procedure Drop() Public\n")
+        wxT("  keep = New Array;\n")
+        wxT("EndProcedure\n")));
+    ibProcUnit pu; ASSERT_TRUE([&]{ try { pu.Execute(cc.m_cByteCode); return true; } catch (...) { return false; } }());
+
+    const long n = 200000;
+    ibValue argN((int)n), ret;
+
+    // Warm-up: the first fill grows the allocator's arenas, and arena growth is
+    // not per-row cost. Taking the baseline after it means the rows below are rows.
+    pu.CallAsFunc(wxT("Empty"), ret, argN);
+    pu.CallAsProc(wxT("Drop"));
+
+    const size_t base = ResidentBytes();
+    pu.CallAsFunc(wxT("Empty"), ret, argN);
+    const size_t afterEmpty = ResidentBytes();
+    pu.CallAsProc(wxT("Drop"));
+    pu.CallAsFunc(wxT("TwoFields"), ret, argN);
+    const size_t afterFields = ResidentBytes();
+    pu.CallAsProc(wxT("Drop"));
+
+    const size_t emptyCost  = afterEmpty  > base       ? afterEmpty  - base       : 0;
+    const size_t fieldsCost = afterFields > afterEmpty ? afterFields - afterEmpty : 0;
+
+    std::cout << "\n[ Structure footprint | n=" << n << " rows held live | resident set, high-water ]\n";
+    std::cout << std::fixed << std::setprecision(0);
+    std::cout << "  empty Structure             " << std::setw(9) << FmtBytes(emptyCost)
+              << "  " << std::setw(7) << double(emptyCost) / double(n) << " bytes/row\n";
+    std::cout << "  + two inserted fields       " << std::setw(9) << FmtBytes(fieldsCost)
+              << "  " << std::setw(7) << double(fieldsCost) / double(n) << " bytes/row (increment)\n";
+    std::cout << "  two ibValue, for scale      " << std::setw(9) << " "
+              << "  " << std::setw(7) << double(2 * sizeof(ibValue)) << " bytes — what the DATA is\n";
     SUCCEED();
 }
 

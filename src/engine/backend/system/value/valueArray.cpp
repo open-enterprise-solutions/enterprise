@@ -8,6 +8,8 @@
 #include "backend/compiler/procUnit.h"        // InvokeLambdaWithArg for selector overloads
 #include "backend/compiler/procUnitValues.h"  // CopyValue / SetTypeNumber / SetTypeBoolean / IsHasValue
 
+#include <algorithm>   // lexicographical_compare / equal — the element walk
+
 
 
 //////////////////////////////////////////////////////////////////////
@@ -373,6 +375,76 @@ bool ibValueArray::DoDeserialize(const ibDataNode& node)
 		m_listValue.push_back(ibValue::FromNode(child));
 
 	return (s32)m_listValue.size() == declared;
+}
+
+//**********************************************************************
+//*                          ordering                                  *
+//**********************************************************************
+
+// THE TYPE CHECK IS A dynamic_cast, AND THAT IS THE MEASURED CHOICE — do not
+// "optimise" it into a class-id compare. That was tried: the id looks like the
+// cheap question (one integer against another) but GETTING it is a virtual call
+// that ends in GetTypeIDByRef for an object kind, and the bench says
+//
+//     type check: id vs cast    id=59.7ns   cast=7.9ns   x7.6
+//
+// (DISABLED_TypeCheckCost, Release, 2026-08-15). The cast walks RTTI once; the
+// id walks a registry. Both comparators below sit on the per-row path of a join
+// or a sort — and on the per-ELEMENT path for a nested array — so this is the
+// difference between a check that disappears and one that dominates.
+const ibValueArray* ibValueArray::AsArray(const ibValue& cParam) const
+{
+	return dynamic_cast<const ibValueArray*>(cParam.GetRef());
+}
+
+// See the declaration in valueArray.h for WHY these exist.
+//
+// The WALK is std::lexicographical_compare / std::equal over the elements — the
+// vector's own comparison, handed the element comparator to use. Writing the
+// loop by hand would restate what those already say (common prefix first, then
+// length) and give the off-by-one somewhere to hide.
+int ibValueArray::CompareValueLS(const ibValue& cParam) const
+{
+	const ibValueArray* rhs = AsArray(cParam);
+	if (rhs == nullptr)
+		return ibValue::CompareValueLS(cParam);   // not an array — the base places it by KIND
+
+
+	const auto less = [](const ibValue& a, const ibValue& b) { return a.CompareValueLS(b) < 0; };
+	if (std::lexicographical_compare(m_listValue.begin(), m_listValue.end(),
+	                                 rhs->m_listValue.begin(), rhs->m_listValue.end(), less))
+		return -1;
+	if (std::lexicographical_compare(rhs->m_listValue.begin(), rhs->m_listValue.end(),
+	                                 m_listValue.begin(), m_listValue.end(), less))
+		return 1;
+	return 0;
+}
+
+// The elements decide this too, in order — two arrays that compare equal walk
+// the same elements pairwise, so hashing them in sequence agrees by
+// construction. The LENGTH goes in as well: [1,2] and [1,2,0] are not equal, and
+// mixing the count in keeps them apart without a second walk.
+size_t ibValueArray::GetValueHash() const
+{
+	size_t h = 1469598103934665603ULL;                       // FNV-1a offset basis
+	h = (h ^ m_listValue.size()) * 1099511628211ULL;
+	for (const ibValue& element : m_listValue)
+		h = (h ^ element.GetValueHash()) * 1099511628211ULL;
+	return h;
+}
+
+// Equality asks the elements for EQUALITY, not for order-equal: the EQ family is
+// type-strict where the order family is not, and an array must not quietly
+// upgrade its elements to the looser rule.
+bool ibValueArray::CompareValueEQ(const ibValue& cParam) const
+{
+	const ibValueArray* rhs = AsArray(cParam);
+	if (rhs == nullptr)
+		return false;  // type-strict, as everywhere in the EQ family
+
+	return m_listValue.size() == rhs->m_listValue.size()
+		&& std::equal(m_listValue.begin(), m_listValue.end(), rhs->m_listValue.begin(),
+		              [](const ibValue& a, const ibValue& b) { return a.CompareValueEQ(b); });
 }
 
 //**********************************************************************

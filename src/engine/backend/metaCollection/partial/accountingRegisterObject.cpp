@@ -12,6 +12,8 @@
 #include "backend/system/value/valueType.h"    // ibValueTypeDescription::AdjustValue
 
 #include "backend/appData.h"
+
+#include <unordered_map>   // value-keyed caches — see ibValueHash (value.h)
 #include "backend/session/session.h"
 #include "backend/databaseLayer/connectionPool.h"
 #include "backend/system/systemManager.h"
@@ -533,13 +535,14 @@ namespace {
 
 // Is this account kept OFF the balance? Read from the account itself, cached per reference: a posting
 // names few distinct accounts and this would otherwise be one read per line per resource.
-bool IsOffBalanceAccount(const ibValue& account, std::map<wxString, bool>& cache)
+bool IsOffBalanceAccount(const ibValue& account, std::unordered_map<ibValue, bool, ibValueHash, ibValueEqual>& cache)
 {
 	if (account.IsEmpty())
 		return false;
 
-	const wxString key = account.GetHashKey();
-	const auto found = cache.find(key);
+	// Cached by the ACCOUNT VALUE — a reference compares by guid there (ibValueHash, value.h),
+	// which is what keying by its GetHashKey text used to buy.
+	const auto found = cache.find(account);
 	if (found != cache.end())
 		return found->second;
 
@@ -556,7 +559,7 @@ bool IsOffBalanceAccount(const ibValue& account, std::map<wxString, bool>& cache
 		}
 	}
 
-	cache[key] = offBalance;
+	cache[account] = offBalance;
 	return offBalance;
 }
 
@@ -572,7 +575,7 @@ void ibValueRecordSetObjectAccountingRegister::CheckDoubleEntry() const
 	if (account == nullptr)
 		return;
 
-	std::map<wxString, bool> offBalanceCache;
+	std::unordered_map<ibValue, bool, ibValueHash, ibValueEqual> offBalanceCache;
 
 	// ⭐⭐ A CORRESPONDENCE LINE BALANCES IN ITS AMOUNT BY CONSTRUCTION — one figure, both accounts — so
 	// what has to be checked there is different: that the line NAMES both sides. An ordinary posting

@@ -42,6 +42,7 @@
 
 #include <algorithm>
 #include <map>
+#include <unordered_map>   // the join index — see KeyHash in ibValueJoinState
 #include <set>
 #include <vector>
 
@@ -461,11 +462,21 @@ private:
 	long                                       m_pos        = 0;
 };
 
+// The key policy for both indexes — group-by's and join's — is ibValueHash /
+// ibValueEqual from value.h, shared with everything else that keys by value.
+// It used to be declared here; a second copy of "what makes two keys the same"
+// is exactly the thing that drifts.
+//
+// Both indexes were std::map: a tree asks the comparator ~log2(n) times per
+// lookup where a bucket asks about once, and comparing an ibValue is the
+// expensive part (docs/runtime-perf.md §9). Neither is a sorted structure by
+// intent — group-by keeps its emission order in a separate vector (m_groups),
+// join has no order at all — so the tree was buying ordering nobody read.
+
 // GroupBy node — bucket upstream by key extracted via fn(elem).
-// On first MoveNext drain upstream + build ordered buckets, then
-// emit one `Structure{Key, Values:Array}` per group. Key equality
-// uses ibValue::operator< on the key (stable / total order; same
-// comparator as OrderBy / Sort).
+// On first MoveNext drain upstream + build buckets, then emit one
+// `Structure{Key, Values:Array}` per group, in FIRST-APPEARANCE order
+// (m_groups keeps it; the index below only finds a key).
 class ibValueGroupByState : public ibValueIteratorState {
 public:
 	ibValueGroupByState(std::shared_ptr<ibValueIteratorState> upstream,
@@ -498,18 +509,14 @@ public:
 	bool PeekSample(ibValue& /*current*/) const override { return false; }
 
 private:
-	struct KeyCmp {
-		bool operator()(const ibValue& a, const ibValue& b) const { return a < b; }
-	};
-
 	void EnsureGrouped() {
 		if (m_built) return;
 		m_built = true;
 		if (!m_upstream) return;
-		// Hybrid: std::map for O(log N) key lookup + std::vector for
+		// Hybrid: a hash index for key lookup + std::vector for
 		// insertion-order preservation. Each key maps to an INDEX into
-		// m_groups; previously this was a linear `!(a<b) && !(b<a)`
-		// scan giving O(N²) on lookup. New strategy is O(N log K).
+		// m_groups; this was a linear `!(a<b) && !(b<a)` scan (O(N²)),
+		// then a tree (O(N log K)), and is one bucket probe per row now.
 		ibValue elem;
 		while (m_upstream->MoveNext(elem)) {
 			ibValue key;
@@ -529,7 +536,7 @@ private:
 	ibValueFunction                                                   m_keySelector;
 	bool                                                              m_built = false;
 	std::vector<std::pair<ibValue, std::vector<ibValue>>>             m_groups;
-	std::map<ibValue, size_t, KeyCmp>                                 m_keyIdx;
+	std::unordered_map<ibValue, size_t, ibValueHash, ibValueEqual>   m_keyIdx;
 	long                                                              m_pos   = 0;
 };
 
@@ -558,9 +565,8 @@ public:
 		EnsureIndexed();
 		if (!m_outerUp) return false;
 		// Hash-bucketed lookup: per outer row resolve leftKey ONCE,
-		// look up bucket (O(log N) via std::map; could be replaced
-		// with std::unordered_map keyed on ibValue::GetString if N
-		// huge). Stateful inner-bucket cursor across MoveNext calls
+		// then one bucket probe — O(1) expected, see the note on
+		// KeyHash below. Stateful inner-bucket cursor across MoveNext calls
 		// for multi-match (one outer matches K inner rows -> K
 		// result rows). Reset m_curBucket = nullptr at start of new
 		// outer iteration; current keeps incrementing m_bucketIdx
@@ -602,10 +608,6 @@ public:
 	bool PeekSample(ibValue& /*current*/) const override { return false; }
 
 private:
-	struct KeyCmp {
-		bool operator()(const ibValue& a, const ibValue& b) const { return a < b; }
-	};
-
 	void EnsureIndexed() {
 		if (m_built) return;
 		m_built = true;
@@ -627,7 +629,9 @@ private:
 	ibValueFunction                        m_rightKey;
 	ibValueFunction                        m_projection;
 	bool                                   m_built = false;
-	std::map<ibValue, std::vector<ibValue>, KeyCmp> m_hash;
+	// One bucket probe per outer row — see the key-policy note above, and
+	// ibValueHash / ibValueEqual in value.h, for why this is not a tree any more.
+	std::unordered_map<ibValue, std::vector<ibValue>, ibValueHash, ibValueEqual> m_hash;
 	// Cross-MoveNext state — bucket cursor for multi-match.
 	bool                                   m_haveOuter = false;
 	ibValue                                m_curOuter;

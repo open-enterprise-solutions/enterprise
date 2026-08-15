@@ -152,7 +152,7 @@ L3 door.
    feeds the pickers; the UI mutates the composer directly — the view-layer
    stores (`m_filterRow` / `m_sortOrder`) and the `ApplyList*` bridges retire.
 2. **Generic row**: one row class (values map + identity via
-   `ibValue::GetHashKey()` + a container flag) replaces the four per-family
+   the value itself via `ibValueHash` + a container flag) replaces the four per-family
    row classes; the driver emits final model rows — the conversion loops,
    `AdoptAndCount`, and the manual refcount dance retire.
 3. **Group verbs** (row axis) on the composer; the tree becomes a declared

@@ -163,7 +163,7 @@
 > - **UNION vs UNION ALL** — the per-branch flag rides end-to-end: AST `m_unionAll` → door
 >   `Union(q, alias, keepDuplicates)` → `ibQueryNode::m_partAll` → the RAM stack dedupes the
 >   ACCUMULATED rows at each plain-UNION operator (`ibQueryComposer::DedupeRows`, keyed by the
->   identity hash `GetHashKey` of every output cell — pure, unit-tested; the same core a future RAM
+>   identity of every output cell (the values themselves, `ibValueSeqHash`) — pure, unit-tested; the same core a future RAM
 >   DISTINCT will use) and the co-located path emits SQL `UNION` vs `UNION ALL` natively (L2 had both
 >   spellings; the provider now picks per flag; `PromoteUnionBranches` carries the flags onto the
 >   rebuilt root). SQL left-assoc semantics: `A UNION B UNION ALL C` dedupes after B, keeps C's dups.
@@ -1687,14 +1687,20 @@ while (s.Next()) {                                   // cursor — pre-order
 - **Types.** Raw rows = `ibQueryRamTable` (a flat array); the folded tree = `ibSelectorTree`
   (`querySelectorTree.h`); the cursor/traversal = `ibSelector` (`querySelector.h`). Mirror into a
   runtime tree model via `ibValueModelRamTreeBase::PopulateFromTree`.
-- **Identity key — `ibValue::GetHashKey()`.** Grouping / hierarchy linking needs a value's IDENTITY,
-  not its display string. `ibValue::GetHashKey()` (virtual) is that key: the base delegates through the
-  reffer chain to the target object, which overrides it (a reference keys by its **guid**, so two cells
-  pointing at the same row share a key — a child's parent-ref matches the parent's row-ref; the display
-  string does NOT, so two distinct rows with the same name no longer merge). A plain value keys by its
-  string; extend per type. The composer speaks only `ibValue` — no runtime type, no object address.
-  Used by the fold engines, by RAM `GROUP BY` (`RamAggregate` / `FoldTotals`), and as the RAM hash-join
-  key (`JoinRamTables`, O(n+m)). Future RAM `DISTINCT` / `UNION` dedup will key by it too.
+- **Identity — the VALUE ITSELF.** Grouping / hierarchy linking needs a value's IDENTITY, not its
+  display string. Every index here keys by the value through `ibValueHash` + `ibValueEqual`
+  (`value.h`): a reference matches by its **guid**, so two cells pointing at the same row share a
+  bucket — a child's parent-ref matches the parent's row-ref — while the display string does not, so
+  two distinct rows with the same name never merge. A COMPOSITE key (a group-by tuple, a register's
+  dimensions) is a `std::vector<ibValue>` under `ibValueSeqHash` / `ibValueSeqEqual`.
+
+  ⚠ **UPDATED 2026-08-15.** This used to be `ibValue::GetHashKey()`, a wxString the value was
+  RENDERED into, with composite keys glued from several by `\x1f`. That method is **removed**. Two
+  reasons beyond the text conversion it cost per cell per row: the glue was ambiguous (`["a\x1f b"]`
+  and `["a", "b"]` produced one string), and rendering made `1` and `"1"` the same key — so a report
+  grouped by a composite-typed attribute merged a number with its spelling into one row and added
+  their sums. Used by the fold engines, RAM `GROUP BY` (`RamAggregate` / `FoldTotals`), the RAM
+  hash-join (`JoinRamTables`, O(n+m)), DISTINCT and the temp-store indexes.
 
 ### 22.2 The interface (proposed)
 
@@ -2684,9 +2690,13 @@ SQL null; an empty reference (type chosen, no guid) is "not filled" yet NOT a nu
 `ValueIsFilled(value)` (the latter = `!IsEmpty`, the "value is filled" predicate) expose this.
 
 ### Reference identity = the DB key
-A reference's `GetHashKey` is now `metaID + guid` (the DB key pair `_RTRef` + `_RRRef`), not the guid alone — a reference
+A reference is identified by `metaID + guid` (the DB key pair `_RTRef` + `_RRRef`), not the guid alone — a reference
 column can target several types, so the metaID disambiguates. Runtime grouping / join / dedup over a
-reference now match the database key.
+reference match the database key.
+
+Carried by the COMPARISON since 2026-08-15, not by a rendered key: `CompareValueLS` orders by guid
+then metaID, and `GetValueHash` buckets by the guid — so a bucket collision between two types is
+settled by the comparison. The `GetHashKey` string that used to spell `"metaID:guid"` is gone.
 
 ### Remaining
 - **cross-dialect parity** — the harness tests vs SQLite only; FB/PG/MySQL/ODBC need a live stand.
@@ -3050,7 +3060,7 @@ the spellings.
 value→rows map with `ibValue::GetString()`. For a reference that is the object's *presentation* —
 two different objects can present identically, and the same object can present differently after an
 edit — so an indexed lookup silently returned the wrong rows or none. Both sides now key on
-`GetHashKey()`, which is identity (a reference keys by its guid). **`GetString()` is presentation
+the VALUE itself (`ibValueHash` / `ibValueEqual`), which is identity — a reference matches by its guid. **`GetString()` is presentation
 and must never be an identity key.**
 
 ⚠ **The access policy was not consulted on three aggregate doors.** `SelectAggregate`,
@@ -3206,7 +3216,7 @@ writes for, so it rides the generic path instead of becoming a per-driver branch
 The whole chain, once measured rather than guessed: keyword (already in the table), parser (read it
 before the argument, where SQL puts it), renderer, the AST flag, the L3 aggregate item, a defaulted
 `distinct` parameter on the three `Aggregate` verbs, four projection sites in `dbTableProvider`, and
-the RAM fold — where DISTINCT counts by `ibValue::GetHashKey()`, the identity, never by the display
+the RAM fold — where DISTINCT counts by the VALUE, the identity, never by the display
 string (two references print the same far more often than they ARE the same).
 
 `COUNT(DISTINCT *)` is refused with a sentence rather than a syntax error: a star names nothing to be

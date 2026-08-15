@@ -7,52 +7,166 @@
 #include "backend/backend_exception.h"
 #include "backend/appData.h"
 
-#include <cwctype>   // towupper — inline case fold, no allocation
+#include <algorithm>  // lexicographical_compare / equal — the entry walk
+#include <cwctype>    // towupper — the non-ASCII half of the case fold
 
 
-// The key's identity as a wide C-string. A STRING value (the overwhelmingly
-// common case) is read ZERO-COPY through its own buffer; a number / reference is
-// materialised into `scratch` from its hash identity (text / guid — NOT the
-// display string of a reference). The pointer is valid for the key's lifetime
-// (string) or `scratch`'s (materialised), which is the duration of the caller.
-const wchar_t* ibValueContainer::Identity(const ibValue& key, ibString& scratch)
+namespace {
+// Upper-fold ONE character. Every name a script writes, and every digit an
+// integer key prints, is ASCII — a compare and a subtract, inlined. std::towupper
+// is locale-aware and does not inline, and it was being paid per CHARACTER of
+// every key on every hash AND every comparison; the non-ASCII tail still goes to
+// it, so what counts as equal is unchanged.
+inline wchar_t FoldChar(const wchar_t c)
 {
-	if (key.GetType() == ibValueTypes::TYPE_STRING)
-		return key.GetString(scratch).wc_str();
-	scratch = key.GetHashKey();   // wxString -> ibString (rare path)
-	return scratch.wc_str();
+	if (c < 128)
+		return (c >= L'a' && c <= L'z') ? (wchar_t)(c - (L'a' - L'A')) : c;
+	return (wchar_t)std::towupper((wint_t)c);
+}
 }
 
-// FNV-1a over the upper-folded identity — case-insensitive, allocation-free for a
-// string key. Shares Identity with KeyEq so equal keys always hash equal.
-size_t ibValueContainer::KeyHash::operator()(const ibValue& k) const
+// TWO KINDS OF KEY, TWO RULES — and both are the value's own, with nothing rendered on the way.
+//
+//   a STRING key folds case, because a script reaches a field by name and does not care how it was
+//   typed (`Структура.Имя` and `структура.имя` are one field). The fold happens ONCE, here, and the
+//   result is kept beside the entry (m_fold); a comparison is then a plain string compare.
+//
+//   anything else compares AS A VALUE — ibValue's own ordering, so a reference matches by its guid
+//   and a number by its magnitude. This is what replaced GetHashKey(): the container used to render
+//   every non-string key to text and compare the text, which made `1` and "1" the same key. They are
+//   different keys now, and deliberately: the language's own comparison says so everywhere else.
+size_t ibValueContainer::HashOf(const ibValue& key)
 {
-	ibString scratch;
-	const wchar_t* p = Identity(k, scratch);
-	size_t h = 1469598103934665603ULL;            // FNV-1a offset basis (64-bit)
-	for (; *p != L'\0'; ++p) {
-		h ^= (size_t)std::towupper((wint_t)*p);
-		h *= 1099511628211ULL;                    // FNV-1a prime
+	if (key.GetType() == ibValueTypes::TYPE_STRING) {
+		ibString scratch;
+		const ibString& text = key.GetString(scratch);       // zero-copy for a string key
+		size_t h = 1469598103934665603ULL;                   // FNV-1a offset basis (64-bit)
+		for (const wchar_t* p = text.wc_str(); *p != L'\0'; ++p)
+			h = (h ^ (size_t)FoldChar(*p)) * 1099511628211ULL;
+		return h;                                            // folded once, per lookup — not per candidate
 	}
-	return h;
+	return key.GetValueHash();                               // the value's own hash, agreeing with its order
 }
 
-// Case-insensitive comparison of the two identities, in place — no string built.
-bool ibValueContainer::KeyEq::operator()(const ibValue& a, const ibValue& b) const
+// THE BUCKET WALK, with the two shortcuts the string comparison in stringUtils earned:
+// LENGTH FIRST (two names of different length are never the same field, and that decides most
+// candidates without reading a character), then FOLD ONLY WHAT DIFFERS (characters that already
+// match need no case conversion — and in a structure the field being looked up usually matches
+// exactly). Applied to the live buffers, so no string is built to compare two.
+static bool FoldedEquals(const ibString& a, const ibString& b)
 {
-	ibString sa, sb;
-	const wchar_t* pa = Identity(a, sa);
-	const wchar_t* pb = Identity(b, sb);
-	for (; *pa != L'\0' && *pb != L'\0'; ++pa, ++pb)
-		if (std::towupper((wint_t)*pa) != std::towupper((wint_t)*pb))
+	if (a.Len() != b.Len())
+		return false;
+	const wchar_t* pa = a.wc_str();
+	const wchar_t* pb = b.wc_str();
+	for (; *pa != L'\0'; ++pa, ++pb) {
+		if (*pa == *pb)
+			continue;
+		if (FoldChar(*pa) != FoldChar(*pb))
 			return false;
-	return *pa == *pb;   // equal only if both ended together
+	}
+	return true;
+}
+
+// Entries in one bucket share a hash, not a key, so each candidate is settled against the entry
+// itself — folded text against folded text for a string, value against value otherwise.
+long ibValueContainer::FindWithHash(const ibValue& key, const size_t hash) const
+{
+	const bool isText = (key.GetType() == ibValueTypes::TYPE_STRING);
+	ibString keyScratch;
+	const ibString& keyText = isText ? key.GetString(keyScratch) : keyScratch;
+
+	const auto range = m_index.equal_range(hash);
+	for (auto it = range.first; it != range.second; ++it) {
+		const size_t at = it->second;
+		const ibValue& candidate = m_entries[at].first;
+		if (isText != (candidate.GetType() == ibValueTypes::TYPE_STRING))
+			continue;                                        // text never matches a non-text key
+		if (isText) {
+			ibString candScratch;
+			if (FoldedEquals(candidate.GetString(candScratch), keyText))
+				return (long)at;
+		}
+		else if (candidate.CompareValueLS(key) == 0) {
+			return (long)at;
+		}
+	}
+	return wxNOT_FOUND;
 }
 
 long ibValueContainer::IndexOf(const ibValue& key) const
 {
-	const auto it = m_index.find(key);
-	return it != m_index.end() ? (long)it->second : wxNOT_FOUND;
+	return FindWithHash(key, HashOf(key));
+}
+
+// The other side as a container, or nullptr. dynamic_cast for the reason
+// measured in valueArray.cpp (a class-id compare is ×7.6 SLOWER here, not
+// faster) — read that note before changing this one.
+//
+// ⚠ A cast to the BASE also accepts the derived Structure, where a class-id
+// compare would have separated them. That is deliberate and it matches the
+// store: a Structure IS a Container whose keys must be strings, and two of them
+// holding the same pairs hold the same data. If the two are ever required to
+// compare unequal, that is a rule about the TYPES and belongs in an override on
+// ibValueStructure, not in a cheaper-looking cast here.
+const ibValueContainer* ibValueContainer::AsContainer(const ibValue& cParam) const
+{
+	return dynamic_cast<const ibValueContainer*>(cParam.GetRef());
+}
+
+// An entry is a PAIR, so it orders as one: key first, value only as the
+// tiebreak. Same element walk as the array — the vector's own comparison, handed
+// the comparator for what it holds.
+int ibValueContainer::CompareValueLS(const ibValue& cParam) const
+{
+	const ibValueContainer* rhs = AsContainer(cParam);
+	if (rhs == nullptr)
+		return ibValue::CompareValueLS(cParam);   // not a container — the base places it by KIND
+
+
+	using Entry = std::pair<ibValue, ibValue>;
+	const auto less = [](const Entry& a, const Entry& b) {
+		const int c = a.first.CompareValueLS(b.first);
+		return c != 0 ? c < 0 : a.second.CompareValueLS(b.second) < 0;
+	};
+	if (std::lexicographical_compare(m_entries.begin(), m_entries.end(),
+	                                 rhs->m_entries.begin(), rhs->m_entries.end(), less))
+		return -1;
+	if (std::lexicographical_compare(rhs->m_entries.begin(), rhs->m_entries.end(),
+	                                 m_entries.begin(), m_entries.end(), less))
+		return 1;
+	return 0;
+}
+
+// Entry order is insertion order and the comparison walks it, so the hash walks
+// it too: same pairs in the same sequence, same value. Both halves of a pair go
+// in — {a:1} and {a:2} are different containers.
+size_t ibValueContainer::GetValueHash() const
+{
+	size_t h = 1469598103934665603ULL;                       // FNV-1a offset basis
+	h = (h ^ m_entries.size()) * 1099511628211ULL;
+	for (const auto& entry : m_entries) {
+		h = (h ^ entry.first.GetValueHash())  * 1099511628211ULL;
+		h = (h ^ entry.second.GetValueHash()) * 1099511628211ULL;
+	}
+	return h;
+}
+
+// Equality asks the entries for EQUALITY — the type-strict rule — rather than
+// for order-equal, exactly as the array does.
+bool ibValueContainer::CompareValueEQ(const ibValue& cParam) const
+{
+	const ibValueContainer* rhs = AsContainer(cParam);
+	if (rhs == nullptr)
+		return false;
+
+	using Entry = std::pair<ibValue, ibValue>;
+	return m_entries.size() == rhs->m_entries.size()
+		&& std::equal(m_entries.begin(), m_entries.end(), rhs->m_entries.begin(),
+		              [](const Entry& a, const Entry& b) {
+			              return a.first.CompareValueEQ(b.first)
+			                  && a.second.CompareValueEQ(b.second);
+		              });
 }
 
 //**********************************************************************
@@ -197,17 +311,22 @@ void ibValueContainer::Delete(const ibValue& varKeyValue)
 	m_entries.erase(m_entries.begin() + idx);
 	m_index.clear();
 	for (size_t i = 0; i < m_entries.size(); ++i)
-		m_index.emplace(m_entries[i].first, i);
+		m_index.emplace(HashOf(m_entries[i].first), i);
 }
 
 void ibValueContainer::Insert(const ibValue& varKeyValue, const ibValue& cValue)
 {
-	if (m_index.find(varKeyValue) != m_index.end()) {
+	// ONE HASH OF THE KEY. The hash is a fold over the key's whole text, so on a
+	// Structure — where keys are field names — walking it twice was a visible
+	// share of an insert. Computed here, then handed to both the duplicate check
+	// and the index.
+	const size_t hash = HashOf(varKeyValue);
+	if (FindWithHash(varKeyValue, hash) >= 0) {
 		if (!appData->DesignerMode())
 			ibBackendCoreException::Error(_("Key '%s' is already using!"), varKeyValue.GetString());
 		return;
 	}
-	m_index.emplace(varKeyValue, m_entries.size());
+	m_index.emplace(hash, m_entries.size());
 	m_entries.emplace_back(varKeyValue, cValue);
 }
 
@@ -251,11 +370,12 @@ bool ibValueContainer::SetAt(const ibValue& varKeyValue, const ibValue& varValue
 {
 	// Assign by key: overwrite an existing entry, create it otherwise. (Insert,
 	// the script verb, still refuses a duplicate; `[key] = v` is the put.)
-	const long idx = IndexOf(varKeyValue);
+	const size_t hash = HashOf(varKeyValue);      // one hash for both branches
+	const long idx = FindWithHash(varKeyValue, hash);
 	if (idx >= 0)
 		m_entries[idx].second = varValue;
 	else {
-		m_index.emplace(varKeyValue, m_entries.size());
+		m_index.emplace(hash, m_entries.size());
 		m_entries.emplace_back(varKeyValue, varValue);
 	}
 	return true;

@@ -492,6 +492,25 @@ jobs:
             --gtest_filter='*Bench*' \
             --gtest_color=no 2>&1 | tee benchmarks.txt || true
 
+      # The summary DROPS THE SCAFFOLDING, it does not pick the rows.
+      #
+      # It used to select by unit — 'ns/iter|ns/call|ns/app|ns/el|ns/row' — and a
+      # unit is not a property of a measurement, it is a property of how the line
+      # happened to be worded. Every bench that prints a table with its units in
+      # the header (ibString, ibNumber, the parser) fell out whole; so did
+      # ns/key and ns/probe, which is the join index — the one measurement the
+      # open question about key types is decided by. Half the run was missing
+      # from the record, and nothing said so.
+      #
+      # A new bench should not have to know about this filter to be seen. So it
+      # subtracts what is NOT a result — gtest's own lines, and the bytecode
+      # dumps (every op carries `p1(`) — and prints the rest. The file is a few
+      # KB; the 1 MB summary limit is not a constraint here.
+      #
+      # Note what this restores for free: the benches already PRINT their own
+      # per-row drift and resident-set blocks. Those are ratios taken inside one
+      # process, which is the only comparison a shared runner supports — and they
+      # were being thrown away by a filter looking for the word "ns".
       - name: Summary
         working-directory: build/linux-release
         run: |
@@ -499,9 +518,12 @@ jobs:
             echo '### Runtime benchmarks (Release, shared runner)'
             echo
             echo 'Order-of-magnitude only — a shared VM swings by 2x on some scenarios.'
+            echo 'The ratios (per-row drift, oes/native) hold up better than the absolute figures:'
+            echo 'both sides of a ratio were measured in the same process on the same VM.'
             echo
             echo '```'
-            grep -E 'ns/iter|ns/call|ns/app|ns/el|ns/row|record build|call frame' benchmarks.txt || echo '(no rows captured)'
+            grep -Ev '^\[[=-]|^\[[[:space:]]*(RUN|OK|PASSED|FAILED)|^(Running main|Note:)|p1\(|params=|^===' benchmarks.txt \
+              || echo '(no rows captured)'
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
