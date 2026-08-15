@@ -648,13 +648,21 @@ void ibDataViewCtrl::OnPagedFetchResetComplete(ibPagedFetch& req)
 		// called ChangeCurrentRow but did not scroll; ScrollTo here
 		// is what actually positions the viewport.
 		//
-		// The rows the READ pulled in above the cursor are already in this buffer
-		// (ibPagedFetch::m_backfill), so scrolling to its head puts the cursor row
-		// back at the distance from the top it had — in ONE frame. Nothing arrives
-		// later to slide it, which is what used to read as the list jumping up and
-		// then settling.
+		// ⭐ THE CURSOR SITS AT crumbCount + backfilled, NOT AT THE HEAD OF THE BUFFER.
+		//
+		// items[0] WAS the saved top back when the Reset read started there. It stopped
+		// being so when the read began pulling rows from ABOVE the cursor in the same
+		// answer (ibPagedFetch::m_backfill) — those land in front, so the saved row is
+		// now `backfilled` rows deep. Scrolling to the head therefore put the viewport
+		// exactly that many rows too high: with 19 rows above the anchor the list came
+		// back 19 rows up, which reads as "it jumped to the beginning".
+		//
+		// The selection branch above already spells this out — "the cursor sits at
+		// crumbCount + backfilled" — and computes from it. This is the same quantity
+		// the same read reports; it was simply not carried over here when the backfill
+		// was added, and the comment kept describing the world before it.
 		const int crumbCount = static_cast<int>(m_topParentChain.GetCount());
-				ScrollTo(crumbCount, -1);
+				ScrollTo(crumbCount + static_cast<int>(req.m_backfilled), -1);
 		if (m_pagedHasMoreBwd) {
 						PagedFetchBackward(batch);
 		}
