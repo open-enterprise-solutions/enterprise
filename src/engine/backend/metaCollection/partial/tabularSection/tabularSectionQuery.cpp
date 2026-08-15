@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "tabularSection.h"
+#include "backend/backend_exception.h"    // ibBackendCoreException — a failed clear says it was the clear
 #include "backend/query/columnLayout.h"   // ibRowKeyColumn — the row key, named in one place
 
 #include "backend/metaCollection/partial/commonObject.h"
@@ -143,17 +144,26 @@ bool ibValueTabularSectionDataObjectRef::SaveData()
 	if (!ibValueTabularSectionDataObjectRef::DeleteData())
 		return false;
 
-	// Per line: ALWAYS a plain INSERT. DeleteData above wiped any old rows for an EXISTING object (and was a
+	// ALWAYS a plain INSERT. DeleteData above wiped any old rows for an EXISTING object (and was a
 	// no-op for a new one), so every line here is a fresh row — never an in-place update. A native UPSERT is
 	// both wrong and impossible here: a tabular row has NO primary-key column, so MATCHING would be empty
 	// (`MATCHING ()` -> FB -104), and post-wipe there is nothing to match anyway. The owner's write is the
 	// gated event; these lines inherit it (the builder is de-policied). uuid is the parent's raw row-key.
+	//
+	// ONE STATEMENT PER CHUNK, NOT ONE PER LINE. All of the above is exactly the shape the door
+	// batches — same columns line to line, a fresh INSERT, no trigger on the table. A hundred-line
+	// document used to cost a hundred statements and a hundred round trips inside the owner's save
+	// transaction.
 	ibNumber numberLine = 1;
-	for (long row = 0; row < GetRowCount() && !hasError; row++) {
-		ibDataQueryBuilder q;
-		q.WithAccessPolicy(nullptr)
-			.From(m_metaTable->GetQueryable())
-			.SetValue(ibRowKeyColumn(), ibValue(m_objectValue->GetGuid()));
+	ibDataQueryBuilder q;
+	q.WithAccessPolicy(nullptr)
+		.From(m_metaTable->GetQueryable());
+
+	for (long row = 0; row < GetRowCount(); row++) {
+		if (row > 0) q.NextRow();
+		// The parent's raw row-key goes on EVERY row: the columns are the statement's, so each
+		// staged row must name the same list in the same order.
+		q.SetValue(ibRowKeyColumn(), ibValue(m_objectValue->GetGuid()));
 		for (const auto object : m_metaTable->GetGenericAttributeArrayObject()) {
 			if (!m_metaTable->IsNumberLine(object->GetMetaID())) {
 				ibComposerNode* node = GetViewData<ibComposerNode>(GetItem(row));
@@ -164,8 +174,11 @@ bool ibValueTabularSectionDataObjectRef::SaveData()
 				q.SetValue(object, ibValue(numberLine++));
 			}
 		}
-		hasError = !q.Insert();
 	}
+
+	// An empty section writes nothing. The door always carries one (empty) row, so this is asked
+	// here rather than left to the INSERT, which would otherwise emit a row of nulls.
+	hasError = GetRowCount() > 0 && !q.Insert();
 
 	return !hasError;
 }
@@ -179,10 +192,27 @@ bool ibValueTabularSectionDataObjectRef::DeleteData()
 	// section inherits the owner's access (WithAccessPolicy(nullptr)): the owner's OnAccessWrite already
 	// gated this save, and an EMPTY section legitimately deletes 0 rows — under a policy that 0 is misread
 	// as an access denial (fail-closed), which would wrongly block saving a document that has no lines.
-	ibDataQueryBuilder()
+	//
+	// A FAILED DELETE RAISES, AND IT SAYS THAT IT WAS THE DELETE.
+	//
+	// This used to discard what Delete() answers and report `true` unconditionally, so SaveData's
+	// `if (!DeleteData()) return false;` was unreachable — a failed DELETE was followed by the
+	// INSERT of the new lines, on top of rows still in the table. It is worse here than for a
+	// register: a tabular row has NO primary key (see SaveData), so nothing downstream can notice
+	// the collision and the document simply shows its lines twice.
+	//
+	// It raises rather than answering `false`, because the bool would reach the owner's save as
+	// "failed to save the object data" — a sentence about writing, for a failure to clear.
+	//
+	// Deleting NOTHING stays success — Delete() answers `affected >= 0`, so the empty-section case
+	// the paragraph above protects is unaffected; only a real engine failure is named here.
+	if (!ibDataQueryBuilder()
 		.WithAccessPolicy(nullptr)
 		.From(m_metaTable->GetQueryable())
 		.Where(ibRowKeyColumn(), ibValue(m_objectValue->GetGuid()))
-		.Delete();
+		.Delete())
+		ibBackendCoreException::Error(_("Tabular section '%s': failed to clear the stored rows"),
+			m_metaTable->GetSynonym());
+
 	return true;
 }

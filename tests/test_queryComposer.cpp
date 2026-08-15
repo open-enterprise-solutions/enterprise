@@ -152,7 +152,9 @@ struct SpecBuf {
 	std::vector<const ibBackendQueryColumn*> groupBy;
 	std::vector<ibDataQueryBuilder::AggregateItem> aggs;
 	std::vector<ibDataQueryBuilder::HavingItem> having;
-	std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> writes;
+	// A write is a SET of rows now (one row is the degenerate case), so the spec carries a vector
+	// of assignment lists and never an empty one — readers say front() without testing first.
+	std::vector<ibWriteRow> writeRows{ 1 };
 	std::vector<ibDotWalkColumn> dots;
 	std::vector<std::pair<const ibBackendQueryColumn*, wxString>> sel;
 	std::vector<std::vector<const ibBackendQueryColumn*>> groupPaths;   // parallel to groupBy (dot-walk keys)
@@ -163,7 +165,7 @@ struct SpecBuf {
 		s.m_root = root; s.m_queryable = primary;
 		s.m_conditions = &conds; s.m_keyIn = &keyIn; s.m_sorts = &sorts;
 		s.m_groupBy = &groupBy; s.m_aggregates = &aggs; s.m_having = &having;
-		s.m_writeValues = &writes; s.m_dotWalks = &dots; s.m_selectCols = &sel;
+		s.m_writeRows = &writeRows; s.m_dotWalks = &dots; s.m_selectCols = &sel;
 		s.m_groupPaths = &groupPaths; s.m_dimWalks = &dimWalks;
 		return s;
 	}

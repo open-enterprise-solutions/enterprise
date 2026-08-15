@@ -66,6 +66,23 @@ dictionary, and neither knows anything about metadata:
   was the entire point. `GenerateNextIdentifier` (`sys_sequence`) is the first tenant — it was
   the last raw-L1 holdout on the write path, kept there precisely because RETURNING had no L2
   form.
+  **Several rows, two spellings** (2026-08-15). `ibDmlStatement::m_extraRows` carries the rows past
+  the first; how they reach the server is decided here, by `m_features.m_multiRowValues`:
+
+  ```sql
+  -- PostgreSQL / SQLite
+  INSERT INTO t (c1, c2) VALUES (?, ?), (?, ?), (?, ?)
+  -- Firebird: no multi-row VALUES at ANY version, but it does have UNION ALL
+  INSERT INTO t (c1, c2) SELECT ?, ? FROM RDB$DATABASE
+                  UNION ALL SELECT ?, ? FROM RDB$DATABASE
+  ```
+
+  The `FROM` comes from the same `m_selectFromDual` the source-less SELECT already uses. A caller
+  says `m_extraRows` and never learns which engine it is talking to — a second SPELLING, not a
+  second mechanism. The slot pre-dates this (the temp-table manager bulk-fills through it); giving
+  it the Firebird form is what let the L3 write door batch at all, and made temp bulk-fill work on
+  Firebird as a side effect.
+
 - **L2-2 — the materialization renderer** (`databaseMaterializeBuilder`). An `ibMaterializeSpec` →
   the trigger / view statements that maintain a **derived** table, rendered through the driver's
   second dictionary, `ibMaterializationDialect`. It also RENDERS THE READ (`RenderMaterializedRead`
@@ -205,6 +222,40 @@ backing-blind (a DB cursor **or** a RAM table, chosen once in `MakeProvider`). F
 | **L3-2** | **structure** — `ibStructureBuilder` / `DiffSnapshots` / `ibSchemaBuilder` generate & migrate the **tables** (DDL) | **metadata** |
 | **L3-3** | **data mover** — `ibDataMover` (`query/dataMover`) dumps / restores the **rows** | **metadata** |
 | **L3-4** | **regeneration** — `ibDerivedState` (`query/derivedStateBuilder`) rebuilds a **derived** table from its source | derived state |
+
+**A WRITE IS A SET OF ROWS, AND ONE ROW IS THE DEGENERATE CASE** (2026-08-15). `SetValue` fills the
+row being assembled; `NextRow()` opens another; `Insert()` writes them all. A caller that never calls
+`NextRow` behaves exactly as before and pays nothing for the dimension, which is why no existing
+callsite changed.
+
+```cpp
+q.From(queryable);
+for (long row = 0; row < count; row++) {
+    if (row > 0) q.NextRow();
+    q.SetValue(col, value);   // …the row's columns
+}
+q.Insert();                   // one statement per chunk, not one per line
+```
+
+A register's record set and a document's tabular section write this way; a thousand lines used to
+cost a thousand doors, a thousand renders and a thousand round trips.
+
+- **Only a plain INSERT batches.** An UPSERT needs the dialect's own match form (Firebird's
+  `UPDATE OR INSERT` takes no SELECT source) and UPDATE/DELETE address rows by key — asking for a
+  batch there raises rather than writing the first row and reporting success for N.
+- **Under a row policy the batch turns itself off**: WITH CHECK decides per row and answers with a
+  count, and folded into a pack "3 of 1000 refused" and "1000 written" become the same number. An
+  optimisation may not change who may write what.
+- **Rows must name the same columns in the same order** — the bind is positional once the statement
+  exists. Checked by FIELD NAME, not by column pointer: a raw column is handed over by value and the
+  door owns a copy, so the same logical column staged twice is two addresses.
+- **Chunked at 50**, the number the temp-table manager already settled on; a register row is wider
+  than a temp row.
+
+How the rows are spelled is L2's business — see § L2, `m_extraRows`. Note what the batch does **not**
+change: a `FOR EACH ROW` trigger counts ROWS, so totals maintenance fires exactly as often as before.
+Reducing that needs a set-based trigger (`ibTriggerFamily::SetBased`), which the batch is the
+prerequisite for — without one statement there is nothing for a statement-level trigger to fire on.
 
 **A TERMINAL AND A NON-TERMINAL ENDING** (2026-08-13). `Execute()` runs the query and hands back
 rows; `BuildRelation()` stops one step earlier and hands back the **relation** the same assembly

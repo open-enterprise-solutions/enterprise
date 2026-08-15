@@ -432,8 +432,8 @@ ibDataQueryBuilder& ibDataQueryBuilder::WhereKeyIn(const std::vector<ibGuid>& ro
 
 ibDataQueryBuilder& ibDataQueryBuilder::SetValue(const ibBackendQueryColumn* column, const ibValue& value)
 {
-	m_writeValues.emplace_back(column, value);
-	m_writeAdditive.push_back(false);      // index-aligned with m_writeValues — always pushed, never sparse
+	m_writeRows.back().emplace_back(column, value);
+	m_writeAdditive.back().push_back(false);   // index-aligned with the row — always pushed, never sparse
 	return *this;
 }
 
@@ -441,23 +441,35 @@ ibDataQueryBuilder& ibDataQueryBuilder::SetValue(const ibRawDBColumn& rawColumn,
 {
 	// Own a copy of the caller's temporary raw column; the assignment holds a stable pointer.
 	m_ownedRawColumns.push_back(std::make_shared<ibRawDBColumn>(rawColumn));
-	m_writeValues.emplace_back(m_ownedRawColumns.back().get(), value);
-	m_writeAdditive.push_back(false);
+	m_writeRows.back().emplace_back(m_ownedRawColumns.back().get(), value);
+	m_writeAdditive.back().push_back(false);
 	return *this;
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::AddValue(const ibBackendQueryColumn* column, const ibValue& delta)
 {
-	m_writeValues.emplace_back(column, delta);
-	m_writeAdditive.push_back(true);
+	m_writeRows.back().emplace_back(column, delta);
+	m_writeAdditive.back().push_back(true);
 	return *this;
 }
 
 ibDataQueryBuilder& ibDataQueryBuilder::AddValue(const ibRawDBColumn& rawColumn, const ibValue& delta)
 {
 	m_ownedRawColumns.push_back(std::make_shared<ibRawDBColumn>(rawColumn));
-	m_writeValues.emplace_back(m_ownedRawColumns.back().get(), delta);
-	m_writeAdditive.push_back(true);
+	m_writeRows.back().emplace_back(m_ownedRawColumns.back().get(), delta);
+	m_writeAdditive.back().push_back(true);
+	return *this;
+}
+
+ibDataQueryBuilder& ibDataQueryBuilder::NextRow()
+{
+	// An empty current row is not a row. A caller whose loop ends with NextRow() — the natural way
+	// to write one — would otherwise stage a phantom line of nulls that the INSERT then wrote.
+	if (m_writeRows.back().empty())
+		return *this;
+
+	m_writeRows.emplace_back();
+	m_writeAdditive.emplace_back();
 	return *this;
 }
 
@@ -503,7 +515,7 @@ ibDataQuerySpec ibDataQueryBuilder::BuildSpec() const
 	spec.m_groupAliases = &m_groupAliases;
 	spec.m_aggregates  = &m_aggregates;
 	spec.m_having      = &m_having;
-	spec.m_writeValues = &m_writeValues;
+	spec.m_writeRows   = &m_writeRows;
 	spec.m_writeAdditive = &m_writeAdditive;
 	spec.m_dotWalks    = &m_dotWalks;
 	spec.m_dimWalks    = &m_dimWalks;

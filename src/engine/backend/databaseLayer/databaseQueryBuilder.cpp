@@ -1017,6 +1017,41 @@ ibRenderedQuery ibQueryRenderer::RenderDML(const ibDmlStatement& dml)
 			sql += wxT(" ") + RenderSelect(dml.m_selectSource.get());
 			break;
 		}
+		// SEVERAL ROWS ON AN ENGINE THAT HAS NO MULTI-ROW VALUES — the same rows, a different spelling.
+		//
+		// Firebird has no `VALUES (…), (…)` at ANY version, so the rows go out as a UNION ALL of
+		// one-row SELECTs, which it does have. The FROM comes from the same m_selectFromDual the
+		// source-less SELECT already uses (FB "RDB$DATABASE", nothing on PG / SQLite).
+		//
+		// The caller said m_extraRows either way. Which form carries them is L2's business — that is
+		// the whole reason a caller may batch without knowing which engine it is talking to, and why
+		// this is a second SPELLING rather than a second mechanism.
+		if (!dml.m_extraRows.empty() && !m_dialect.m_features.m_multiRowValues) {
+			const wxString fromDual = m_dialect.m_selectFromDual.empty()
+				? wxString() : (wxT(" FROM ") + m_dialect.m_selectFromDual);
+
+			sql = wxT("INSERT INTO ") + QuoteIdent(dml.m_table) + wxT(" (");
+			for (size_t i = 0; i < dml.m_assignments.size(); ++i) {
+				if (i) sql += wxT(", ");
+				sql += QuoteIdent(dml.m_assignments[i].m_column);
+			}
+			sql += wxT(") SELECT ");
+			for (size_t i = 0; i < dml.m_assignments.size(); ++i) {
+				if (i) sql += wxT(", ");
+				sql += RenderExpr(dml.m_assignments[i].m_value);   // pushes a bind param
+			}
+			sql += fromDual;
+			for (const std::vector<ibQueryExprPtr>& row : dml.m_extraRows) {
+				sql += wxT(" UNION ALL SELECT ");
+				for (size_t i = 0; i < row.size(); ++i) {
+					if (i) sql += wxT(", ");
+					sql += RenderExpr(row[i]);   // binds push after the prior rows' — placeholder order holds
+				}
+				sql += fromDual;
+			}
+			break;
+		}
+
 		sql = wxT("INSERT INTO ") + QuoteIdent(dml.m_table) + wxT(" (");
 		for (size_t i = 0; i < dml.m_assignments.size(); ++i) {
 			if (i) sql += wxT(", ");

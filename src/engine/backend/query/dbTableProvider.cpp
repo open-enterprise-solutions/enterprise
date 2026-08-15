@@ -2359,9 +2359,49 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 		const ibQueryStatement::Kind l2kind =
 			(kind == WriteKind::Upsert) ? ibQueryStatement::Kind::Upsert : ibQueryStatement::Kind::Insert;
 
+		// THE COLUMNS ARE THE STATEMENT'S, NOT THE ROW'S — so they are read off the first row and
+		// every other row must agree with it. A row naming different columns, or the same ones in a
+		// different order, would have its values written into somebody else's fields: the bind is
+		// POSITIONAL once the statement exists, and nothing downstream can notice the mismatch.
+		// Refused here, where the two lists are still side by side.
+		const std::vector<ibWriteRow>& writeRows = *spec.m_writeRows;   // never empty — one row is the degenerate set
+		const ibWriteRow&              firstRow  = writeRows.front();
+
 		std::vector<wxString> columns;
-		for (const auto& wv : *spec.m_writeValues)
+		for (const auto& wv : firstRow)
 			for (const wxString& f : ColumnFieldNames(wv.first)) columns.push_back(f);
+
+		if (writeRows.size() > 1) {
+			// Only a plain INSERT batches. An UPSERT needs the dialect's own match form and
+			// Firebird's UPDATE OR INSERT takes no SELECT source; UPDATE and DELETE address rows by
+			// key. Saying so is better than writing the first row and reporting success for N.
+			if (kind != WriteKind::Insert)
+				ibBackendCoreException::Error(_("Only an insert can write several rows in one statement"));
+
+			// COMPARED BY FIELD NAME, NOT BY COLUMN POINTER.
+			//
+			// A raw column (ibRawDBColumn — the parent row key a tabular section puts on every line)
+			// is handed to SetValue BY VALUE, and the door owns a COPY of each one. So the same
+			// logical column staged on two rows is two objects at two addresses, and a pointer
+			// comparison calls them different — which would refuse every tabular section with more
+			// than one line. The names are what the positional bind actually rides on, so they are
+			// what is checked.
+			std::vector<wxString> firstFields;
+			for (const auto& wv : firstRow)
+				for (const wxString& f : ColumnFieldNames(wv.first)) firstFields.push_back(f);
+
+			for (const ibWriteRow& row : writeRows) {
+				std::vector<wxString> rowFields;
+				for (const auto& wv : row)
+					for (const wxString& f : ColumnFieldNames(wv.first)) rowFields.push_back(f);
+
+				if (rowFields.size() != firstFields.size())
+					ibBackendCoreException::Error(_("A batched write has rows with different column counts"));
+				for (std::size_t i = 0; i < rowFields.size(); ++i)
+					if (rowFields[i] != firstFields[i])
+						ibBackendCoreException::Error(_("A batched write has rows naming different columns"));
+			}
+		}
 
 		// UPSERT match keys = the source's uniqueness key, OWNED by the queryable through
 		// GetPrimaryKeyColumns: a record's data-reference (_RTRef+_RRRef — _RTRef is constant for
@@ -2381,10 +2421,12 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 			// WHERE and would ignore the folded predicate. One statement, the row count is the answer.
 			ibQueryStatement upd(ibQueryStatement::Kind::Update, table, columns, matchKeys, spec.m_holder);
 			int p = 1;
-			for (size_t idx = 0; idx < spec.m_writeValues->size(); idx++) {
-				const auto& wv = (*spec.m_writeValues)[idx];
+			for (size_t idx = 0; idx < firstRow.size(); idx++) {
+				const auto& wv = firstRow[idx];
 				const bool additive = spec.m_writeAdditive != nullptr
-					&& idx < spec.m_writeAdditive->size() && (*spec.m_writeAdditive)[idx];
+					&& !spec.m_writeAdditive->empty()
+					&& idx < spec.m_writeAdditive->front().size()
+					&& spec.m_writeAdditive->front()[idx];
 
 				// ACCUMULATE (AddValue) — `col = col + <delta>`, computed by the DB. A statement's
 				// values ARE IR expressions, so this occupies exactly the slot a bound Const would:
@@ -2415,6 +2457,96 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 			return upd.RunQuery();
 		}
 
+		// ONE ROW'S VALUES AS IR EXPRESSIONS, in ColumnFieldNames order — the same capture-statement
+		// trick the temp-table manager uses (DecomposeCell): a write-only ibQueryStatement records
+		// each SetParam* as an IR node, so the bytes are exactly the ones the column codec produces
+		// for a bound parameter. Nothing here knows any SQL.
+		auto rowAsValues = [&](const ibWriteRow& row) -> std::vector<ibQueryExprPtr> {
+			std::vector<ibQueryExprPtr> out;
+			out.reserve(columns.size());
+			for (const auto& wv : row) {
+				const std::vector<wxString> fields = ColumnFieldNames(wv.first);
+				ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
+				int cp = 1;
+				ibColumnCodec::WriteValue(wv.first, metaData, wv.second, &capture, cp);
+				const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
+				for (size_t i = 0; i < fields.size(); ++i)
+					out.push_back((i < consts.size() && consts[i]) ? consts[i] : ibConst(ibValue()));
+			}
+			return out;
+		};
+
+		// BATCHED INSERT — N rows, one statement per chunk.
+		//
+		// It rides ibDmlStatement::m_extraRows, which ALREADY EXISTED for the temp-table manager's
+		// bulk fill; the only thing that had to change is that L2 now spells it two ways, because
+		// Firebird has no multi-row VALUES (see RenderDML). So this is a second TENANT of a
+		// mechanism, not a second mechanism — and the temp filler gained Firebird for free.
+		//
+		// A thousand register lines used to be a thousand doors, a thousand renders and a thousand
+		// round trips. Now it is a handful of statements, in the caller's own transaction.
+		if (kind == WriteKind::Insert && writeRows.size() > 1) {
+			// UNDER A ROW POLICY, STAY ONE ROW AT A TIME. The WITH CHECK below decides per row and
+			// answers with a count; folded into a batch, "3 of 1000 were refused" and "1000 were
+			// written" become the same number and the denial disappears. Correctness first: a batch
+			// is an optimisation, and an optimisation may not change who may write what.
+			if (spec.m_predicate) {
+				long total = 0;
+				for (const ibWriteRow& row : writeRows) {
+					const std::vector<ibQueryExprPtr> vals = rowAsValues(row);
+					std::vector<ibQueryProjItem> projItems;
+					for (size_t i = 0; i < vals.size() && i < columns.size(); ++i)
+						projItems.push_back(ibQueryProjItem{ vals[i], columns[i] });   // value AS <field>
+
+					ibQueryRelPtr valuesRow = ibProject(nullptr, std::move(projItems));
+					ibQueryExprPtr rls = ibMetaIRBuilder::BuildPredicateExpr(spec.m_queryable, spec.m_predicate, wxT("src"), /*pathAsExists*/ true);
+					ibQueryRelPtr checked = ibFilter(ibSubquery(valuesRow, wxT("src")), rls);
+					ibDatabaseQueryBuilder q(spec.m_holder);
+					try {
+						const long n = q.Execute(ibInsertSelect(table, columns, checked));
+						if (n < 0) return -1;         // a refused row stops the set — the caller's TX rolls back
+						total += n;
+					}
+					catch (const ibBackendException&) { throw; }
+					catch (...) { return -1; }
+				}
+				return total;
+			}
+
+			// CHUNKED, because one statement is not the same as one good statement. A thousand-row
+			// VALUES list (or its UNION ALL twin) is a very large parse tree and a very long
+			// statement text, and Firebird in particular has a hard ceiling on both; past some width
+			// the parse costs more than the round trips it saves. The temp-table manager settled on
+			// 50 for the same reason, and a register row is wider than a temp row — several physical
+			// fields per logical column — so this stays in the same neighbourhood rather than
+			// inventing a second number. A thousand lines become a handful of statements either way;
+			// the curve is flat well before here, so there is nothing to win by tuning it per driver.
+			const std::size_t kRowsPerStatement = 50;
+
+			long total = 0;
+			for (std::size_t start = 0; start < writeRows.size(); start += kRowsPerStatement) {
+				const std::size_t end = (std::min)(start + kRowsPerStatement, writeRows.size());
+
+				ibDmlStatement ins(ibDmlKind::Insert);
+				ins.m_table = table;
+				const std::vector<ibQueryExprPtr> first = rowAsValues(writeRows[start]);
+				for (size_t k = 0; k < columns.size() && k < first.size(); ++k)
+					ins.m_assignments.push_back(ibDmlAssign{ columns[k], first[k] });
+				for (std::size_t r = start + 1; r < end; ++r)
+					ins.m_extraRows.push_back(rowAsValues(writeRows[r]));
+
+				ibDatabaseQueryBuilder q(spec.m_holder);
+				try {
+					const long n = q.Execute(ins);
+					if (n < 0) return -1;
+					total += n;
+				}
+				catch (const ibBackendException&) { throw; }   // the DB's own reason travels up intact
+				catch (...) { return -1; }
+			}
+			return total;
+		}
+
 		// WITH CHECK on CREATE — a restricted INSERT. The folded RLS predicate rides on a derived ONE-ROW
 		// relation of this row's own values: INSERT INTO t (cols) SELECT * FROM (SELECT val AS f, …
 		// [FROM dual]) src WHERE <rls over src>. The row is inserted IFF it satisfies the restriction; 0
@@ -2423,7 +2555,7 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 		// projected bytes match what the predicate compares against; the src alias qualifies the predicate.
 		if (kind == WriteKind::Insert && spec.m_predicate) {
 			std::vector<ibQueryProjItem> projItems;
-			for (const auto& wv : *spec.m_writeValues) {
+			for (const auto& wv : firstRow) {
 				const std::vector<wxString> fields = ColumnFieldNames(wv.first);
 				ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
 				int cp = 1;
@@ -2443,9 +2575,10 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 			catch (...) { return -1; }
 		}
 
+		// The single-row path — one row staged, or an UPSERT (which does not batch).
 		ibQueryStatement statement(l2kind, table, columns, matchKeys, spec.m_holder);
 		int position = 1;
-		for (const auto& wv : *spec.m_writeValues)
+		for (const auto& wv : firstRow)
 			BindWriteValue(statement, wv.first, metaData, wv.second, position);
 
 		// A FAILED WRITE MUST SAY WHY. `catch (...) -> -1` turned every driver error — no such table, no such

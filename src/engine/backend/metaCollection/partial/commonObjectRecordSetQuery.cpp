@@ -148,7 +148,14 @@ bool ibValueRecordSetObject::ExistData(ibNumber& lastNum)
 	// MAX(line number) over the bound composite key, through the L3 door's aggregate terminal —
 	// the DB uses any index on (recorder, line_number) instead of streaming the rowset. Only the
 	// BOUND dimensions constrain (FindKeyValue filter), each decomposed inside L3. No statement.
-	// UNGUARDED like the plain ExistData() above — a raw physical-existence probe for the replace-decision.
+	// UNGUARDED (raw physical rows, whatever RLS would hide), because the number it answers has to
+	// clear EVERY stored line, not only the readable ones.
+	//
+	// It no longer decides whether the old set is deleted — a replace deletes unconditionally now
+	// — so its only consumer is the numbering of an APPEND. That is why the swallow below is
+	// narrowed: an engine failure answering "there is nothing stored" would restart the numbering
+	// at 1 and collide with rows that are still there, which surfaces as a unique-key violation
+	// with nothing pointing back here.
 	lastNum = 1;
 	try {
 		ibDataQueryBuilder q;
@@ -169,6 +176,7 @@ bool ibValueRecordSetObject::ExistData(ibNumber& lastNum)
 			}
 		}
 	}
+	catch (const ibBackendException&) { throw; }   // the engine's own reason — it names the table and the column
 	catch (...) {}
 	return false;
 }
@@ -264,33 +272,41 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 
 	ibNumber numberLine = 1, oldNumberLine = 1;
 
-	if (m_metaObject->HasRecorder() &&
-		ibValueRecordSetObject::ExistData(oldNumberLine)) {
-		if (replace && !ibValueRecordSetObject::DeleteData())
+	// REPLACE DELETES; IT DOES NOT ASK FIRST.
+	//
+	// Both branches used to probe with ExistData() and only then delete — an extra round trip on
+	// every posting, to answer a question the DELETE answers by itself: removing no rows is the
+	// ordinary state of a set addressed by its key, not a failure. Worse, the probe decided
+	// whether the old rows were cleared at all, and it reports "nothing there" for a failure as
+	// well as for an empty set (it catches everything and returns false) — so a probe that fell
+	// over skipped the delete and the new lines were written ON TOP of the old ones.
+	//
+	// The existence question survives only where it is genuinely needed: appending to a stored set
+	// continues the stored numbering, and that needs MAX(line number), not existence.
+	if (replace) {
+		if (!ibValueRecordSetObject::DeleteData())
 			return false;
-		if (!replace) {
-			numberLine = oldNumberLine;
-		}
 	}
-	else if (ibValueRecordSetObject::ExistData()) {
-		if (replace && !ibValueRecordSetObject::DeleteData())
-			return false;
-		if (!replace) {
-			numberLine = oldNumberLine;
-		}
+	else if (m_metaObject->HasRecorder()) {
+		ibValueRecordSetObject::ExistData(oldNumberLine);
+		numberLine = oldNumberLine;
 	}
 
-	// Per line, keyed off the record set's event: a NEW set (not selected) -> plain INSERT (create); an
-	// EXISTING set (selected) -> UPSERT (rewrite event; DeleteData above already wiped it under replace).
-	// m_selected (selected = the set already exists in the DB) picks the event, so create and write stay
-	// distinct — same split as the owning object. Under a policy that DeleteData is the guarded rewrite gate.
+	// Keyed off the record set's EVENT, not off what is physically stored: a NEW set (not selected)
+	// is a create -> INSERT; an EXISTING one (selected) is a rewrite -> UPSERT. m_selected picks the
+	// event so create and write stay distinct, exactly as they do for the owning object, and under a
+	// policy that distinction is which right gets asked (CheckCreate vs CheckUpdate).
+	//
+	// ⚠ Worth knowing when reading the batch below: under `replace` the DELETE above has already
+	// emptied the set, so an UPSERT there can match nothing and is an INSERT in all but name — it
+	// simply cannot batch, because the event says rewrite. Making the rewrite path batch means
+	// either a MERGE in the L2 IR, or separating "which statement" from "which right is asked".
+	// That is a decision about access, not about speed, so it is not taken here.
 	bool hasError = false;
 
-	for (long row = 0; row < GetRowCount() && !hasError; row++) {
-		// Each line's assignments BY COLUMN: a key value, the auto line number, or the row's
-		// value. No fields, no positions — the door / provider owns those.
-		ibDataQueryBuilder q;
-		q.From(m_metaObject->GetQueryable());
+	// Each line's assignments BY COLUMN: a key value, the auto line number, or the row's
+	// value. No fields, no positions — the door / provider owns those.
+	auto stageRow = [&](ibDataQueryBuilder& q, long row) {
 		for (const auto object : m_metaObject->GetGenericAttributeArrayObject()) {
 			auto foundedKey = m_keyValues.find(object->GetMetaID());
 			if (foundedKey != m_keyValues.end())
@@ -303,7 +319,34 @@ bool ibValueRecordSetObject::SaveData(bool replace, bool clearTable)
 				q.SetValue(object, node->GetTableValue(object->GetMetaID()));
 			}
 		}
-		hasError = m_selected ? !q.Upsert() : !q.Insert();   // selected = exists -> rewrite (Upsert); not selected = new -> create (Insert)
+	};
+
+	if (m_selected) {
+		// A SET THAT CAME FROM THE DATABASE REWRITES ROW BY ROW. Each line may already exist, so the
+		// write is an UPSERT, and the match is the dialect's own per-statement form — Firebird's
+		// UPDATE OR INSERT takes no SELECT source. Batching this needs a MERGE the L2 IR does not
+		// carry yet; until it does, the rewrite path stays as it was rather than pretending.
+		for (long row = 0; row < GetRowCount() && !hasError; row++) {
+			ibDataQueryBuilder q;
+			q.From(m_metaObject->GetQueryable());
+			stageRow(q, row);
+			hasError = !q.Upsert();
+		}
+	}
+	else {
+		// A FRESH SET IS ONE STATEMENT PER CHUNK, NOT ONE PER LINE. Nothing here can already exist —
+		// a new set under `replace`, or lines whose numbering continues past what is stored — so the
+		// write is a plain INSERT, and the door stages every line before the provider emits it.
+		// A thousand lines cost a thousand statements and a thousand round trips before this.
+		ibDataQueryBuilder q;
+		q.From(m_metaObject->GetQueryable());
+		for (long row = 0; row < GetRowCount(); row++) {
+			if (row > 0) q.NextRow();
+			stageRow(q, row);
+		}
+		// An empty set writes nothing — the door always carries one (empty) row, so this must be
+		// asked rather than left to the INSERT, which would otherwise emit a row of nulls.
+		hasError = GetRowCount() > 0 && !q.Insert();
 	}
 
 	// (No totals write here. Derived state is maintained by the DATABASE trigger the schema
@@ -333,12 +376,44 @@ bool ibValueRecordSetObject::DeleteData()
 	// expands each column to its physical fields and binds. No fields, no positions here.
 	ibDataQueryBuilder q;
 	q.From(m_metaObject->GetQueryable());
+
+	bool keyed = false;
 	for (const auto object : m_metaObject->GetGenericDimensionArrayObject()) {
 		if (!ibValueRecordSetObject::FindKeyValue(object->GetMetaID()))
 			continue;
 		q.Where(object, m_keyValues.at(object->GetMetaID()));
+		keyed = true;
 	}
-	q.Delete();
+
+	// A SET WITH NO KEY ADDRESSES THE WHOLE REGISTER, AND THAT IS SAID HERE RATHER THAN LEFT TO
+	// AN EMPTY LOOP. Writing a set whose key was never assigned is a legitimate way to clear a
+	// register outright — but until now the difference between "clear these movements" and "clear
+	// every movement there is" was that the loop above happened to add no condition, which is a
+	// distinction nothing in the code could see and nobody reviewing it could notice. The
+	// behaviour is unchanged; what changes is that the wide case now leaves a trace.
+	if (!keyed)
+		wxLogWarning(_("Register '%s': the record set carries no key, so writing it clears every record"),
+			m_metaObject->GetSynonym());
+
+	// A FAILED DELETE RAISES, AND IT SAYS THAT IT WAS THE DELETE.
+	//
+	// This used to discard what Delete() answers and report `true` unconditionally, so the caller's
+	// `if (replace && !DeleteData())` was unreachable: a DELETE that failed was followed by the
+	// INSERT of the new lines, ON TOP of rows that were still there — duplicated movements, or a
+	// unique-key violation far from the cause.
+	//
+	// Returning `false` would not be enough either. The bool travels up to WriteRecordSet, which
+	// has one sentence for every way SaveData can end — "failed to store the records" — so a
+	// failure to CLEAR would be reported as a failure to WRITE, and the reader would look in the
+	// wrong half. An engine error already arrives here as an exception (ExecuteWrite rethrows
+	// ibBackendException and only degrades an alien one to -1); this names the remaining case
+	// rather than flattening it.
+	//
+	// Deleting NOTHING stays success — Delete() answers `affected >= 0`, and a set addressed by its
+	// key may legitimately have no stored rows.
+	if (!q.Delete())
+		ibBackendCoreException::Error(_("Register '%s': failed to clear the stored records"),
+			m_metaObject->GetSynonym());
 
 	m_selected = false; // the record set no longer exists in the DB
 	return true;        // the delete trigger reversed the totals in this same transaction

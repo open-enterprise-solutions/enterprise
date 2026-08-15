@@ -70,6 +70,19 @@ struct ibSqlFeatures
 	bool m_fullOuterJoin = false;
 	bool m_iLike         = false;   // case-insensitive LIKE
 	bool m_rollup        = false;   // GROUP BY ROLLUP(...) — hierarchical subtotals server-side (FB 2.1+ / PG; NOT SQLite)
+
+	// INSERT … VALUES (…), (…), (…) — several rows in ONE statement.
+	//
+	// Of the two PRODUCTION engines, PostgreSQL has it and FIREBIRD DOES NOT, at any version. That
+	// is a difference in FORM, not in capability: the renderer writes the same rows as
+	// `INSERT … SELECT … UNION ALL SELECT …` instead, which Firebird does have. So this flag never
+	// reaches a caller — nobody asks "may I write many rows", they say m_extraRows and L2 spells it.
+	//
+	// SQLite is true as well, which matters for the TEST STAND rather than for deployment: the
+	// suites run their SQL against it, so a form it could not parse would go unnoticed until a
+	// live Firebird or PostgreSQL met it. Default false — an engine we know nothing about (ODBC,
+	// and the MSSQL layer that will derive from it) gets the form that works everywhere.
+	bool m_multiRowValues = false;
 };
 
 // A period truncation unit — "start of the minute / week / month / … containing this moment".

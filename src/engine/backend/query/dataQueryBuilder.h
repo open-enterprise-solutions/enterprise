@@ -73,6 +73,11 @@ enum ibSelectKind { ibSelectKind_Direct, ibSelectKind_ByGroups, ibSelectKind_ByG
 enum class ibDimensionKind { Elements, Hierarchy, HierarchyOnly };
 
 enum class ibAggregateFn { Sum, Count, Min, Max, Avg };
+
+// One row's worth of write assignments — the column and the value to put in it. A write is a
+// VECTOR of these; a single-row write is a vector of one, which is why nothing had to learn a
+// second shape when batching landed.
+using ibWriteRow = std::vector<std::pair<const ibBackendQueryColumn*, ibValue>>;
 // One output aggregate (.Sum/.Count…): rolls IN-PLACE into m_col (alias vestigial, used only by the
 // flat SelectAggregate path). m_col null = COUNT(*).
 // m_path (non-empty) = the aggregate input is a reference DOT-WALK leaf (SUM(Producer.Weight)) — the
@@ -583,6 +588,24 @@ public:
 	ibDataQueryBuilder& AddValue(const ibBackendQueryColumn* column, const ibValue& delta);
 	ibDataQueryBuilder& AddValue(const ibRawDBColumn& rawColumn, const ibValue& delta);   // direct field (door owns a copy)
 
+	// CLOSE THE ROW BEING ASSEMBLED AND OPEN THE NEXT — the whole batch surface, one verb.
+	//
+	// `SetValue(a).SetValue(b).NextRow().SetValue(a).SetValue(b).Insert()` writes TWO rows in ONE
+	// statement. Every row must name the same columns in the same order: the columns are the
+	// statement's, not the row's, so a row that named different ones would silently write its values
+	// into somebody else's fields. The provider REFUSES a ragged set rather than guessing.
+	//
+	// Insert() is the terminal that batches. Upsert / Update / Delete stay one-row (an UPSERT needs
+	// the dialect's own match form, and Firebird's UPDATE OR INSERT takes no SELECT source), so
+	// calling this before them raises rather than quietly writing the first row only.
+	//
+	// Calling it on an EMPTY current row is a no-op, so a caller may end its loop with NextRow()
+	// without producing a phantom row of nulls.
+	ibDataQueryBuilder& NextRow();
+
+	// How many rows are staged (1 before any NextRow — the degenerate case is still a set).
+	std::size_t RowsStaged() const { return m_writeRows.size(); }
+
 	// Effective sort order = user sort ++ the queryable's identity tail (deduped
 	// by metaID; the row-key sentinel kept once). This is the cursor's TOTAL
 	// order — Select() uses it internally, and a caller that builds a keyset
@@ -761,11 +784,18 @@ private:
 	std::vector<ibQueryColumnExprPtr> m_groupExprs;
 	std::vector<wxString>             m_groupAliases;
 	std::vector<ibValue>          m_keyIn;          // .WhereKeyIn() — row-key IN (OR-of-equals)
-	std::vector<std::pair<const ibBackendQueryColumn*, ibValue>> m_writeValues;   // .SetValue() — write assignments (key + data columns)
-	// Parallel to m_writeValues, ONE ENTRY PER ASSIGNMENT (both SetValue and AddValue push here):
+	// A WRITE IS A SET OF ROWS, AND ONE ROW IS THE DEGENERATE CASE.
+	//
+	// It used to be a single assignment list, so writing N lines meant N doors, N statements and N
+	// round trips — a record set of a thousand lines cost a thousand of each. The vectors below are
+	// the same list with one dimension added: SetValue / AddValue fill the LAST row, NextRow() opens
+	// another. A caller that never calls NextRow() behaves exactly as before and pays nothing for the
+	// dimension, which is why no existing callsite changed.
+	std::vector<ibWriteRow>       m_writeRows{ 1 };      // .SetValue() — one assignment list per row
+	// Parallel to m_writeRows AND to each row's assignments (both SetValue and AddValue push here):
 	// true = this assignment ACCUMULATES (col = col + value) instead of replacing. Same
 	// index-aligned-vectors shape the group-by keys already use, so the provider walks one loop.
-	std::vector<bool>             m_writeAdditive;
+	std::vector<std::vector<bool>> m_writeAdditive{ 1 };
 	std::vector<AggregateItem>    m_aggregates;     // .Group().Sum()… — GroupBy common aggregate set
 	std::vector<HavingItem>       m_having;         // .Having()
 	std::vector<ibTotalLevel>     m_totals;         // .TotalBy(field, dim) — totals dimensions, in order
@@ -829,8 +859,10 @@ struct ibDataQuerySpec
 	const std::vector<wxString>*             m_groupAliases = nullptr;   // parallel: output name of a computed key
 	const std::vector<ibDataQueryBuilder::AggregateItem>* m_aggregates = nullptr;
 	const std::vector<ibDataQueryBuilder::HavingItem>*    m_having     = nullptr;
-	const std::vector<std::pair<const ibBackendQueryColumn*, ibValue>>* m_writeValues = nullptr;
-	const std::vector<bool>*                        m_writeAdditive = nullptr;   // parallel to m_writeValues: col = col + value
+	// The rows to write, in order. NEVER empty: a door with no SetValue still carries one empty
+	// row, so a reader that wants "the row" says front() and never tests for emptiness first.
+	const std::vector<ibWriteRow>*                  m_writeRows     = nullptr;
+	const std::vector<std::vector<bool>>*           m_writeAdditive = nullptr;   // parallel to m_writeRows and to each row: col = col + value
 	const std::vector<ibDotWalkColumn>*             m_dotWalks    = nullptr;
 	const std::vector<ibDotWalkColumn>*             m_dimWalks    = nullptr;   // dot-walk TOTALS dimensions
 	const std::vector<ibQueryColumnSelect>*         m_selectExprs = nullptr;   // computed output columns (arithmetic / CASE)
