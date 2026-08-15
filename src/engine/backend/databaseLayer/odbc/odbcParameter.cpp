@@ -1,5 +1,6 @@
 #include "odbcParameter.h"
 #include "backend/databaseLayer/databaseLayer.h"
+#include "backend/backend_exception.h"
 
 #include <sqlext.h>
 
@@ -76,6 +77,18 @@ long* ibDatabaseParameterODBC::GetDataLengthPointer()
 	else return nullptr;
 }
 #endif
+
+void ibDatabaseParameterODBC::RequireDescribable() const
+{
+	switch (m_nParameterType)
+	{
+	case PARAM_STRING: case PARAM_INT:  case PARAM_DOUBLE: case PARAM_NUMBER:
+	case PARAM_DATETIME: case PARAM_BOOL: case PARAM_BLOB: case PARAM_NULL:
+		return;
+	}
+	ibBackendCoreException::Error(
+		_("ODBC: a parameter of kind %d cannot be described for binding"), m_nParameterType);
+}
 
 void* ibDatabaseParameterODBC::GetDataPtr()
 {

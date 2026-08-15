@@ -1,5 +1,7 @@
 #include "firebirdParameterCollection.h"
 
+#include "backend/backend_exception.h"
+
 ibDatabaseParameterFirebirdCollection::ibDatabaseParameterFirebirdCollection(ibInterfaceFirebird* pInterface, XSQLDA* pParameters)
 {
 	m_pInterface = pInterface;
@@ -183,7 +185,16 @@ void ibDatabaseParameterFirebirdCollection::AllocateParameterSpace()
 			pVar->sqldata = nullptr;
 			break;
 		default:
-			wxLogError(wxT("Error allocating space for unknown parameter type\n"));
+			// ⭐ RAISES, and used to only log. Every case above DECIDES about sqldata — a buffer, or
+			// the deliberate nullptr that a setter later points at a member of its own. This one
+			// decided nothing and carried on, leaving sqldata as the describe left it, and the bind
+			// that follows writes a value through it anyway. A type this collection cannot make room
+			// for is a statement that cannot be bound, and here is the last point where that is
+			// still the plain truth: one step on it is a corrupt write or a crash inside the CRT
+			// with nothing left connecting it to its cause.
+			ibBackendCoreException::Error(
+				_("Firebird: no room can be made for a parameter of SQL type %d"),
+				(int)(pVar->sqltype & ~1));
 			break;
 		}
 	}

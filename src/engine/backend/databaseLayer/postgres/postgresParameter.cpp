@@ -1,5 +1,6 @@
 #include "postgresParameter.h"
 #include "backend/databaseLayer/databaseLayer.h"
+#include "backend/backend_exception.h"
 
 // ctor
 ibDatabaseParameterPostgres::ibDatabaseParameterPostgres() : m_nParameterType(ibDatabaseParameterPostgres::PARAM_NULL)
@@ -90,10 +91,21 @@ const void* ibDatabaseParameterPostgres::GetDataPtr()
 		pReturn = nullptr;
 		break;
 	default:
-		pReturn = nullptr;
+		// ⭐ RAISES rather than returning nullptr. PARAM_NULL above returns nullptr because a NULL is
+		// what it MEANS; falling here means the kind is one this parameter cannot render, and
+		// answering with the same nullptr makes "I do not know what this is" indistinguishable from
+		// "this is deliberately empty" — a value silently becomes a NULL column, which reads back as
+		// a legitimately absent one forever after.
+		//
+		// Unreachable today: every constructor sets a known kind. It is written anyway because the
+		// Firebird driver's equivalent default was unreachable too, right up until a caller reached
+		// it, and it cost a day of looking for a phantom (docs/query-engine-layers.md).
+		ibBackendCoreException::Error(
+			_("PostgreSQL: a parameter of kind %d cannot be rendered for binding"),
+			(int)m_nParameterType);
 		break;
 	};
-	
+
 	return pReturn;
 }
 

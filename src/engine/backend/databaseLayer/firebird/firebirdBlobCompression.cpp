@@ -1,5 +1,7 @@
 #include "firebirdBlobCompression.h"
 
+#include "backend/backend_exception.h"
+
 #include <wx/log.h>
 #include <wx/mstream.h>
 #include <wx/zstream.h>
@@ -141,11 +143,16 @@ wxMemoryBuffer ibFirebirdBlobCompression::Unwrap(const void* data, size_t size) 
 	// checksum) are reported through GetLastError(); LastRead() alone
 	// just returns 0 and we'd silently return the partial inflate.
 	// Surface this — caller treats as I/O error.
+	// ⭐ RAISES, and used to only log — while STILL RETURNING the partial inflate. The comment here
+	// said "caller treats as I/O error", but nothing made that true: the caller got a short buffer
+	// and no failure, so a corrupt blob read back as a SHORTER, PERFECTLY VALID-LOOKING one. There
+	// is no answer to give here. Half of a value is not a value, and handing it back is worse than
+	// refusing, because refusing is visible.
 	if (zIn.GetLastError() != wxSTREAM_NO_ERROR
 	 && zIn.GetLastError() != wxSTREAM_EOF) {
-		wxLogError(wxT("ibFirebirdBlobCompression::Unwrap: zlib stream error ")
-		           wxT("%d after %zu bytes inflated; data likely corrupt"),
-		           (int)zIn.GetLastError(), (size_t)out.GetDataLen());
+		ibBackendCoreException::Error(
+			_("Firebird: the compressed value is corrupt (zlib error %d after %llu bytes)"),
+			(int)zIn.GetLastError(), (unsigned long long)out.GetDataLen());
 	}
 
 	return out;

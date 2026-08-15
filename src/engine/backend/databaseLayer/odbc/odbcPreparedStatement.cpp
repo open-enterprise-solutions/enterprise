@@ -318,6 +318,11 @@ void ibPreparedStatementODBC::BindParameters()
 
 		if ((nIndex > -1) && (pParameter != nullptr))
 		{
+			// The five questions below are one descriptor of one parameter, and each of them
+			// answers an unknown kind with a plausible wrong value rather than a refusal. Ask once,
+			// here, whether there is an answer at all (see ibDatabaseParameterODBC::RequireDescribable).
+			pParameter->RequireDescribable();
+
 			// Determine the data type (if supported by the ODBC driver)
 			SQLSMALLINT dataType;
 			SQLULEN dataSize;

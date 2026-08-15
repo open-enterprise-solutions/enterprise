@@ -31,9 +31,15 @@ ibPreparedStatementFirebirdWrapper::~ibPreparedStatementFirebirdWrapper()
 		int nReturn = m_pInterface->GetIscDsqlFreeStatement()(m_Status, &m_pStatement, DSQL_drop);
 		if (nReturn != 0)
 		{
-			wxLogError(wxT("Error calling isc_dsql_free_statement"));
+			// ⭐ DOES NOT RAISE, and it used to — the one site in this driver where the audit ran the
+			// other way. This is a DESTRUCTOR: a statement is most often destroyed while an
+			// exception is already travelling (a bind refused, a query failed), and a throw during
+			// unwinding is std::terminate, not an error report. The whole point of raising a failed
+			// bind is lost if the statement's own cleanup then kills the process instead of letting
+			// the reason reach the caller. Freeing a server-side handle is cleanup and follows the
+			// project's cleanup rule: report, never throw.
 			InterpretErrorCodes();
-			ThrowDatabaseException();
+			wxLogError(wxT("Firebird: isc_dsql_free_statement failed (%s)"), GetErrorMessage());
 		}
 	}
 }

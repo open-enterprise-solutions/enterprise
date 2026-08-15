@@ -68,6 +68,17 @@ public:
 
 	bool IsBinary();
 
+	// ⭐ THE GATE, asked ONCE where the parameter is bound — not repeated inside the five describe
+	// methods below it. Those five are the ODBC bind descriptor of ONE parameter, and each of them
+	// answers `default:` with a confident, wrong claim rather than an admission: the buffer pointer
+	// with a NULL (indistinguishable from a deliberate one), the C type with SQL_C_NUMERIC, the SQL
+	// type with SQL_INTEGER, the size and digits with zero. Nothing in that set says "I do not know
+	// what this is", so a kind this class cannot describe binds as a plausible different value.
+	//
+	// One question at the door instead of five answers inside — the same shape as the value gate in
+	// SetNodeValue: a rule spelled per branch is a rule some branch will spell differently.
+	void RequireDescribable() const;
+
 private:
 	int m_nParameterType;
 
