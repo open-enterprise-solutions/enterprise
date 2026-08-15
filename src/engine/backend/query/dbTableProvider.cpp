@@ -2473,6 +2473,17 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 		// trick the temp-table manager uses (DecomposeCell): a write-only ibQueryStatement records
 		// each SetParam* as an IR node, so the bytes are exactly the ones the column codec produces
 		// for a bound parameter. Nothing here knows any SQL.
+		//
+		// ⭐ THROUGH BindWriteValue, THE SAME DOOR THE SINGLE-ROW PATH USES — not through
+		// ibColumnCodec::WriteValue underneath it. A RAW column (the parent row key on every
+		// tabular-section line) has its own branch in that door: one field, bound straight by its
+		// declared RawType. The codec below the door serves METADATA columns, and its first act is
+		// always a `_TYPE` discriminator — so a raw key captured through it yielded the TAG as its
+		// first value, and the loop below, seeing the column has one field, took that tag AS THE KEY.
+		// A number went to a CHAR(16) key column, the driver refused the bind, and because that
+		// refusal was only logged the write reported success and wrote nothing: a tabular section
+		// that saved cleanly and came back empty — but only from the SECOND row on, since one row
+		// never reaches this path.
 		auto rowAsValues = [&](const ibWriteRow& row) -> std::vector<ibQueryExprPtr> {
 			std::vector<ibQueryExprPtr> out;
 			out.reserve(columns.size());
@@ -2480,10 +2491,21 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 				const std::vector<wxString> fields = ColumnFieldNames(wv.first);
 				ibQueryStatement capture(ibQueryStatement::Kind::Delete, wxString(), fields);
 				int cp = 1;
-				ibColumnCodec::WriteValue(wv.first, metaData, wv.second, &capture, cp);
+				BindWriteValue(capture, wv.first, metaData, wv.second, cp);
 				const std::vector<ibQueryExprPtr>& consts = capture.CapturedValues();
+
+				// ONE VALUE PER FIELD, EXACTLY — the bind is positional, so a column that produced a
+				// different number of values than it declares fields does not misplace ITS OWN value,
+				// it shifts every value after it into somebody else's column. This loop used to pad
+				// and truncate silently, which is how the raw-key defect above stayed invisible: the
+				// key column produced a tag plus a key, the loop kept the first of the two, and the
+				// statement went out looking perfectly well-formed.
+				if (consts.size() != fields.size())
+					ibBackendCoreException::Error(
+						_("A batched write captured %d values for a column declaring %d fields"),
+						(int)consts.size(), (int)fields.size());
 				for (size_t i = 0; i < fields.size(); ++i)
-					out.push_back((i < consts.size() && consts[i]) ? consts[i] : ibConst(ibValue()));
+					out.push_back(consts[i] ? consts[i] : ibConst(ibValue()));
 			}
 			return out;
 		};

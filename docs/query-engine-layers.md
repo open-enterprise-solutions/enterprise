@@ -104,6 +104,31 @@ dictionary, and neither knows anything about metadata:
   dialect. A spelling that exists for one engine has to be executed on that engine or it is not
   tested at all.
 
+  🛑🚪 **AND THE BATCH WENT UNDER THE DOOR, NOT THROUGH IT** (fixed the same day, and the -804 above
+  was only hiding it). A row's values are bound by `BindWriteValue`, which has a branch of its own
+  for a **RAW** column — the parent row key a tabular section puts on every line: one field, bound
+  straight by its declared `RawType`. Underneath that door sits `ibColumnCodec::WriteValue`, which
+  serves METADATA columns and whose first act is always a `_TYPE` discriminator. The batch's value
+  capture called the codec directly, so the raw key produced TWO values — the tag, then the key —
+  and the loop that pairs values with field names, seeing one field, kept the tag.
+
+  A number then went to a `CHAR(16)` key column. Firebird refused the bind, but the driver only
+  **logged** the refusal, so the statement ran anyway and the caller was told it had succeeded: a
+  tabular section that saved cleanly and reopened EMPTY, from the second row on — one row never
+  reaches this path. Three things were changed, and two of them are about the silence:
+
+  - the batch binds through `BindWriteValue`, the same door as the single row;
+  - the value/field pairing RAISES on a count mismatch instead of padding and truncating — a column
+    that yields a different number of values than it declares fields does not misplace its own
+    value, it shifts every later value into somebody else's column;
+  - `ibDatabaseParameterFirebird` raises on a refused bind (naming the SQL type the statement
+    declared) instead of `wxLogError`. Its neighbouring guards already did; that one did not, and it
+    is what turned a wrong bind into a write that reported success and stored nothing.
+
+  ⭐ The general shape, worth recognising elsewhere: **a second path that reproduces a door's insides
+  instead of calling the door.** It works for every case the door handles trivially and fails for the
+  one case the door exists for.
+
 - **L2-2 — the materialization renderer** (`databaseMaterializeBuilder`). An `ibMaterializeSpec` →
   the trigger / view statements that maintain a **derived** table, rendered through the driver's
   second dictionary, `ibMaterializationDialect`. It also RENDERS THE READ (`RenderMaterializedRead`

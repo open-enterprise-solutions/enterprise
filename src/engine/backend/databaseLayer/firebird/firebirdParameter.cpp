@@ -186,8 +186,18 @@ ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pI
 	}
 	else
 	{
-		// Error?
-		wxLogError(wxT("Parameter type is not compatible with parameter of type number\n"));
+		// ⭐ RAISES, and it did not used to. A refused bind is the caller putting a value of one kind
+		// where the statement expects another — the parameter simply stays unbound, the statement
+		// then runs, and the caller is told nothing. That turned a wrong bind into a write that
+		// REPORTED SUCCESS AND STORED NOTHING (a tabular section saving cleanly and reopening empty),
+		// which is the worst shape a data-layer failure can take. The neighbouring guards in this
+		// same function already raise; this one only logged.
+		//
+		// The SQL type is in the message because it is the whole diagnosis: it says what the
+		// statement wanted, and the caller knows what it sent.
+		ibBackendCoreException::Error(
+			_("Firebird: a number was bound to a parameter the statement declares as SQL type %d"),
+			nType);
 	}
 
 	m_nNullFlag = 0;
@@ -225,8 +235,10 @@ ibDatabaseParameterFirebird::ibDatabaseParameterFirebird(ibInterfaceFirebird* pI
 	}
 	else
 	{
-		// Error?
-		wxLogError(wxT("Parameter type is not compatible with parameter of type double\n"));
+		// Raises for the same reason the number branch above does — see the note there.
+		ibBackendCoreException::Error(
+			_("Firebird: a double was bound to a parameter the statement declares as SQL type %d"),
+			nType);
 	}
 
 	m_nNullFlag = 0;
