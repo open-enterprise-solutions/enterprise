@@ -63,9 +63,9 @@ void ibValueGauge::Cleanup(wxObject* obj, ibVisualHost* visualHost)
 
 bool ibValueGauge::ReadData(const ibDataNode& node)
 {
-	m_propertyRange->ReadNodeValue(node.GetProperty(m_propertyRange->GetName()));
-	m_propertyValue->ReadNodeValue(node.GetProperty(m_propertyValue->GetName()));
-	m_propertyOrient->ReadNodeValue(node.GetProperty(m_propertyOrient->GetName()));
+	m_propertyRange->SetNodeValue(node.GetProperty(m_propertyRange->GetName()));
+	m_propertyValue->SetNodeValue(node.GetProperty(m_propertyValue->GetName()));
+	m_propertyOrient->SetNodeValue(node.GetProperty(m_propertyOrient->GetName()));
 	return ibValueWindow::ReadData(node);
 }
 

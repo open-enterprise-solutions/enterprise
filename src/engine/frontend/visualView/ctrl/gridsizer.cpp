@@ -55,8 +55,8 @@ void ibValueGridSizer::Cleanup(wxObject* obj, ibVisualHost* visualHost)
 
 bool ibValueGridSizer::ReadData(const ibDataNode& node)
 {
-	m_propertyRows->ReadNodeValue(node.GetProperty(m_propertyRows->GetName()));
-	m_propertyCols->ReadNodeValue(node.GetProperty(m_propertyCols->GetName()));
+	m_propertyRows->SetNodeValue(node.GetProperty(m_propertyRows->GetName()));
+	m_propertyCols->SetNodeValue(node.GetProperty(m_propertyCols->GetName()));
 
 	return ibValueSizer::ReadData(node);
 }

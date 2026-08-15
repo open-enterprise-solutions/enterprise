@@ -17,7 +17,7 @@ ibValueMetaObjectPicture::ibValueMetaObjectPicture(const wxString& name, const w
 
 bool ibValueMetaObjectPicture::ReadData(const ibDataNode& node)
 {
-	m_propertyPicture->ReadNodeValue(node.GetProperty(m_propertyPicture->GetName()));
+	m_propertyPicture->SetNodeValue(node.GetProperty(m_propertyPicture->GetName()));
 	return true;
 }
 

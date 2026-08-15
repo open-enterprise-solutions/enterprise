@@ -104,10 +104,10 @@ void ibValueNotebook::Cleanup(wxObject* wxobject, ibVisualHost* visualHost)
 
 bool ibValueNotebook::ReadData(const ibDataNode& node)
 {
-	m_propertyOrient->ReadNodeValue(node.GetProperty(m_propertyOrient->GetName()));
+	m_propertyOrient->SetNodeValue(node.GetProperty(m_propertyOrient->GetName()));
 
 	//events
-	m_eventOnPageChanged->ReadNodeValue(node.GetProperty(m_eventOnPageChanged->GetName()));
+	m_eventOnPageChanged->SetNodeValue(node.GetProperty(m_eventOnPageChanged->GetName()));
 	return ibValueWindow::ReadData(node);
 }
 

@@ -66,7 +66,7 @@ bool ibValueMetaObjectSection::GetCommandByHop(const ibCommandHop& hop, ibValue&
 
 bool ibValueMetaObjectSection::ReadData(const ibDataNode& node)
 {
-	m_propertyPicture->ReadNodeValue(node.GetProperty(m_propertyPicture->GetName()));
+	m_propertyPicture->SetNodeValue(node.GetProperty(m_propertyPicture->GetName()));
 	return true;
 }
 

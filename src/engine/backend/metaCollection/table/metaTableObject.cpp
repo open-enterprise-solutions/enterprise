@@ -93,8 +93,8 @@ ibValueMetaObjectTableData::~ibValueMetaObjectTableData()
 
 bool ibValueMetaObjectTableData::ReadData(const ibDataNode& node)
 {
-	m_propertyUse->ReadNodeValue(node.GetProperty(m_propertyUse->GetName()));
-	m_propertyNumberLine->ReadNodeValue(node.GetProperty(m_propertyNumberLine->GetName()));
+	m_propertyUse->SetNodeValue(node.GetProperty(m_propertyUse->GetName()));
+	m_propertyNumberLine->SetNodeValue(node.GetProperty(m_propertyNumberLine->GetName()));
 
 	return true;
 }

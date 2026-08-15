@@ -67,9 +67,9 @@ bool ibValueMetaObject::LoadNode(const ibDataNode& node)
 	m_strHelpContent = node.GetValue<wxString>(wxT("Help"));
 
 	// editable property values ← props (owner names them inline; the property takes the value)
-	m_propertyName->ReadNodeValue(node.GetProperty(m_propertyName->GetName()));
-	m_propertySynonym->ReadNodeValue(node.GetProperty(m_propertySynonym->GetName()));
-	m_propertyComment->ReadNodeValue(node.GetProperty(m_propertyComment->GetName()));
+	m_propertyName->SetNodeValue(node.GetProperty(m_propertyName->GetName()));
+	m_propertySynonym->SetNodeValue(node.GetProperty(m_propertySynonym->GetName()));
+	m_propertyComment->SetNodeValue(node.GetProperty(m_propertyComment->GetName()));
 
 	// interface / roles ← fields
 	wxMemoryBuffer interfaceBuf = node.GetValue<wxMemoryBuffer>(wxT("Interface"));

@@ -81,11 +81,11 @@ bool ibValueMetaObjectInformationRegister::ReadData(const ibDataNode& node)
 	m_propertyDefFormRecord->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormRecord->GetName())));
 	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormList->GetName())));
 
-	m_propertyWriteMode->ReadNodeValue(node.GetProperty(m_propertyWriteMode->GetName()));
-	m_propertyPeriodicity->ReadNodeValue(node.GetProperty(m_propertyPeriodicity->GetName()));
+	m_propertyWriteMode->SetNodeValue(node.GetProperty(m_propertyWriteMode->GetName()));
+	m_propertyPeriodicity->SetNodeValue(node.GetProperty(m_propertyPeriodicity->GetName()));
 
-	m_propertyObjectModule->ReadNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
-	m_propertyManagerModule->ReadNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
+	m_propertyObjectModule->SetNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
+	m_propertyManagerModule->SetNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
 
 	return ibValueMetaObjectRegisterData::ReadData(node);
 }

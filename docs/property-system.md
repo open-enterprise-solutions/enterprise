@@ -19,7 +19,7 @@ mechanism reads that one declaration:
 |---|---|---|
 | **Designer editor** | `ibPropertyRegistry::Create()` — the FRONT builds the widget (§4); presentation pushed back via `ibPropertyObjectNotifier` (§5.3) | frontend only; the backend declares nothing about it |
 | **Runtime script** | `SetDataValue` / `GetDataValue` over `ibValue` (§7) | backend, headless-safe |
-| **Serialization** | `ReadNodeValue` / `WriteNodeValue` over `ibDataValue` (§6) | backend, headless-safe |
+| **Serialization** | `SetNodeValue` / `GetNodeValue` doors over `ibDataValue`, `ReadNodeValue` / `WriteNodeValue` bodies behind them (§6) | backend, headless-safe |
 | **Copy / paste** | `CopyNodeValue` / `PasteNodeValue` (§6) | backend, headless-safe |
 | **Compare / merge** | `GetValue()` + `wxVariantData::Eq` (§6.1) | backend, headless-safe |
 
@@ -466,24 +466,66 @@ its own TODO asks for exactly this observer.)
 
 ## 6. Serialization — the node value is the only path
 
-Per-property byte `SaveData`/`LoadData` is **gone**. One pair remains:
+Per-property byte `SaveData`/`LoadData` is **gone**. What remains is **two doors and two
+bodies**: callers use the non-virtual pair, a property type implements the virtual one.
 
 ```cpp
-virtual bool ReadNodeValue(const ibDataValue& value) = 0;
+// the doors — public, what every caller uses
+ibDataValue GetNodeValue() const;                       // writing
+bool        SetNodeValue(const ibDataValue& value);     // reading  — carries the gate below
+
+protected:
+// the bodies — a type implements these, nobody calls them
 virtual bool WriteNodeValue(ibDataValue& value) const = 0;
-ibDataValue GetNodeValue() const;   // non-virtual convenience over the writer
+virtual bool ReadNodeValue(const ibDataValue& value) = 0;
 ```
+
+The names are deliberately asymmetric with the virtuals (`Get`/`Set` outside, `Write`/`Read`
+inside) so an override never hides a door and no `using` is needed.
 
 A property yields a **typed scalar** or a `Child` sub-node (a set of values) for a
 composite; the sub-node is shared via `shared_ptr`, so an owner can place the same value
 under several named areas cheaply. This is why a JSON view shows `"Name": "Price"` rather
 than an opaque base64 blob.
 
+### ⭐ Why reading is a door: "absent" is not "the type's zero"
+
+Every caller reads the same way, and the value it hands over may be **empty**:
+
+```cpp
+prop->SetNodeValue(node.GetProperty(prop->GetName()));   // GetProperty: empty if absent
+```
+
+That empty value used to reach the property TYPE, and each type answered with its own zero —
+`false` for a boolean, `0` for a number, the first member for an enum. So a property
+**declared with a non-zero default arrived unset** the first time a configuration written
+before it existed was opened. Nothing reported it: an assigned zero is indistinguishable
+from a read one.
+
+What that cost, once: the accounting register's `Correspondence` and `SplitTotals` are both
+default-true. Both went false on load → the credit-side analytics slots were deactivated →
+the schema snapshot then knew of no slots while the DDL still built them → every apply
+re-issued `ADD` for columns that already existed, surfacing as `RDB$INDEX_15 violation` on a
+column the same apply had just created. Four layers between cause and symptom.
+
+The gate therefore lives in `SetNodeValue`, **once**, and not in forty overrides: an absent
+value leaves the constructor's default standing and answers `false` — the same "nothing was
+read" every other reader gives. The virtuals are `protected` so the gate cannot be walked
+around; reaching for `ReadNodeValue` directly is now a compile error rather than a default
+lost three layers away.
+
+Pinned by `tests/test_propertyDefaults.cpp` — absent keeps the default, present is still
+read even when it happens to equal the type's zero.
+
+> **Adding a property type?** Implement `ReadNodeValue` / `WriteNodeValue` and nothing else.
+> You will never be handed an empty value, so do not write a guard for it; and do not add a
+> public read entry point of your own, or callers will start using it and bypass the gate.
+
 Clipboard has its own overridable pair, defaulting to the node value:
 
 ```cpp
 virtual bool CopyNodeValue(ibDataValue& value) const;   // default = GetNodeValue
-virtual bool PasteNodeValue(const ibDataValue& value);  // default = ReadNodeValue
+virtual bool PasteNodeValue(const ibDataValue& value);  // default = SetNodeValue (through the gate)
 ```
 
 Byte transport lives **once**, at the owner's `CopyProperty` / `PasteProperty` boundary,

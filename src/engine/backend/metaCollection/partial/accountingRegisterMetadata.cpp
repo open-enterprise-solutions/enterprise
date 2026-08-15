@@ -42,8 +42,8 @@ ibBackendValueForm* ibValueMetaObjectAccountingRegister::GetListForm(const wxStr
 
 bool ibValueMetaObjectAccountingRegister::ReadData(const ibDataNode& node)
 {
-	m_propertyAttributeRecordType->ReadNodeValue(node.GetProperty(m_propertyAttributeRecordType->GetName()));
-	m_propertyAttributeAccount->ReadNodeValue(node.GetProperty(m_propertyAttributeAccount->GetName()));
+	m_propertyAttributeRecordType->SetNodeValue(node.GetProperty(m_propertyAttributeRecordType->GetName()));
+	m_propertyAttributeAccount->SetNodeValue(node.GetProperty(m_propertyAttributeAccount->GetName()));
 	// THE SLOTS COME BACK FROM THE FILE, not from a count.
 	//
 	// Their number is the chart of accounts' business, but their IDS are theirs alone — an id is
@@ -68,14 +68,33 @@ bool ibValueMetaObjectAccountingRegister::ReadData(const ibDataNode& node)
 	// correspondence, and it is read the same way. So the prefix is DERIVED here exactly as it is
 	// derived when writing — try the prefixed name first, fall back to the bare one for registers
 	// saved one-sided.
-	const bool savedWithCredit = (node.FindProperty(wxT("AccountDimensionCr1")) != nullptr);
-	const wxString debitPrefix = savedWithCredit ? wxT("Dr") : wxEmptyString;
-
 	for (unsigned int no = 1; ; no++) {
-		const wxString slotName = wxString::Format(wxT("AccountDimension%s%u"), debitPrefix, no);
+		// ⭐⭐ BOTH SPELLINGS ARE TRIED PER SLOT — the fallback this comment always promised, but
+		// which the code did not do.
+		//
+		// A register saved in correspondence names its debit slots AccountDimensionDr<N>, a
+		// one-sided one AccountDimension<N>. The prefix used to be decided ONCE, up front, from
+		// whether `AccountDimensionCr1` happened to be in the file — using a neighbouring block as
+		// evidence about THIS one. So the moment the credit block was missing for any reason, the
+		// debit slots were looked up under the wrong name, the very first FindProperty answered
+		// null, and the loop broke on iteration one: not "the credit half is gone" but
+		// m_accountDimensionCount == 0, the WHOLE breakdown lost.
+		//
+		// The schema snapshot then knew of no slots at all while the DDL still built them, so every
+		// apply re-issued ADD for columns that already existed — surfacing as RDB$INDEX_15 three
+		// layers from here. Asking each slot for its own name costs one extra lookup and cannot be
+		// wrong about a block it is not part of.
+		wxString slotName = wxString::Format(wxT("AccountDimensionDr%u"), no);
 		const ibDataValue* saved = node.FindProperty(slotName);
+		if (saved == nullptr) {
+			slotName = wxString::Format(wxT("AccountDimension%u"), no);
+			saved = node.FindProperty(slotName);
+		}
 		if (saved == nullptr)
 			break;
+
+		// The label follows the name that was actually found, not a prefix guessed elsewhere.
+		const wxString debitPrefix = slotName.StartsWith(wxT("AccountDimensionDr")) ? wxT("Dr") : wxEmptyString;
 
 		ibValueMetaObjectAttributePredefined* slot = CreateEmptyType(
 			slotName, wxString::Format(_("Account dimension %s%u"), debitPrefix, no),
@@ -85,8 +104,9 @@ bool ibValueMetaObjectAccountingRegister::ReadData(const ibDataNode& node)
 		if (child)
 			slot->LoadNode(*child);
 
-		// The KIND half of the same pair — its own metaobject, its own id, its own column.
-		const wxString kindName = wxString::Format(wxT("AccountDimension%s%uKind"), debitPrefix, no);
+		// The KIND half of the same pair — its own metaobject, its own id, its own column. Derived
+		// from the slot's own name, so the two halves cannot end up under different spellings.
+		const wxString kindName = slotName + wxT("Kind");
 		ibValueMetaObjectAttributePredefined* kind = CreateEmptyType(
 			kindName, wxString::Format(_("Account dimension %s%u kind"), debitPrefix, no),
 			wxEmptyString, false, ibItemMode::ibItemMode_Item);
@@ -141,7 +161,7 @@ bool ibValueMetaObjectAccountingRegister::ReadData(const ibDataNode& node)
 
 	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormList->GetName())));
 
-	m_propertyChartOfAccounts->ReadNodeValue(node.GetProperty(m_propertyChartOfAccounts->GetName()));
+	m_propertyChartOfAccounts->SetNodeValue(node.GetProperty(m_propertyChartOfAccounts->GetName()));
 
 	// ⭐⭐ THE TWO SWITCHES ARE READ BACK, and their absence here was the root of the whole
 	// "restructuring does not apply" arc.
@@ -161,8 +181,8 @@ bool ibValueMetaObjectAccountingRegister::ReadData(const ibDataNode& node)
 	//
 	// A configuration written before this reads no property and keeps the constructor's default, which
 	// is the behaviour it already had.
-	m_propertyCorrespondence->ReadNodeValue(node.GetProperty(m_propertyCorrespondence->GetName()));
-	m_propertySplitTotals->ReadNodeValue(node.GetProperty(m_propertySplitTotals->GetName()));
+	m_propertyCorrespondence->SetNodeValue(node.GetProperty(m_propertyCorrespondence->GetName()));
+	m_propertySplitTotals->SetNodeValue(node.GetProperty(m_propertySplitTotals->GetName()));
 
 	// Absent sub-node = a configuration written before the totals tables existed. The object keeps the
 	// id it was given at construction rather than being left at zero — and a zero id is what makes the
@@ -172,8 +192,8 @@ bool ibValueMetaObjectAccountingRegister::ReadData(const ibDataNode& node)
 	if (const ibDataNode* totals = node.FindChild(wxT("CreditTotals")))
 		m_totalsCr->LoadNode(*totals);
 
-	m_propertyObjectModule->ReadNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
-	m_propertyManagerModule->ReadNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
+	m_propertyObjectModule->SetNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
+	m_propertyManagerModule->SetNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
 
 	return ibValueMetaObjectRegisterData::ReadData(node);
 }

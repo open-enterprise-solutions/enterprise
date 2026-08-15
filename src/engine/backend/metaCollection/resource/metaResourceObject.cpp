@@ -36,7 +36,7 @@ bool ibValueMetaObjectResource::ReadData(const ibDataNode& node)
 	if (!ibValueMetaObjectAttribute::ReadData(node))
 		return false;
 	if (const ibDataValue* saved = node.FindProperty(m_propertyBalance->GetName()))
-		m_propertyBalance->ReadNodeValue(*saved);
+		m_propertyBalance->SetNodeValue(*saved);
 	return true;
 }
 

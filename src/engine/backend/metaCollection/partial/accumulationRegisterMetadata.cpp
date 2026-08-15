@@ -81,13 +81,13 @@ bool ibValueMetaObjectAccumulationRegister::WriteData(ibDataNode& node) const
 
 bool ibValueMetaObjectAccumulationRegister::ReadData(const ibDataNode& node)
 {
-	m_propertyAttributeRecordType->ReadNodeValue(node.GetProperty(m_propertyAttributeRecordType->GetName()));
+	m_propertyAttributeRecordType->SetNodeValue(node.GetProperty(m_propertyAttributeRecordType->GetName()));
 
 	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormList->GetName())));
 
-	m_propertyRegisterType->ReadNodeValue(node.GetProperty(m_propertyRegisterType->GetName()));
+	m_propertyRegisterType->SetNodeValue(node.GetProperty(m_propertyRegisterType->GetName()));
 
-	m_propertySplitTotals->ReadNodeValue(node.GetProperty(m_propertySplitTotals->GetName()));
+	m_propertySplitTotals->SetNodeValue(node.GetProperty(m_propertySplitTotals->GetName()));
 
 	// Absent sub-node = a configuration written before the totals tables existed. The object keeps
 	// the id it was given at construction rather than being left at zero.
@@ -96,8 +96,8 @@ bool ibValueMetaObjectAccumulationRegister::ReadData(const ibDataNode& node)
 	if (const ibDataNode* totals = node.FindChild(wxT("TurnoverTotals")))
 		m_totalsTurnovers->LoadNode(*totals);
 
-	m_propertyObjectModule->ReadNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
-	m_propertyManagerModule->ReadNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
+	m_propertyObjectModule->SetNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
+	m_propertyManagerModule->SetNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
 
 	return ibValueMetaObjectRegisterData::ReadData(node);
 }

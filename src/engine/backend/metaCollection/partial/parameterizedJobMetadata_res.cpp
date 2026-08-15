@@ -41,13 +41,13 @@ bool ibValueMetaObjectParameterizedJob::WriteData(ibDataNode& node) const
 
 bool ibValueMetaObjectParameterizedJob::ReadData(const ibDataNode& node)
 {
-	m_propertyAttributeActive->ReadNodeValue(node.GetProperty(m_propertyAttributeActive->GetName()));
-	m_propertyAttributeSchedule->ReadNodeValue(node.GetProperty(m_propertyAttributeSchedule->GetName()));
-	m_propertyAttributeLastRun->ReadNodeValue(node.GetProperty(m_propertyAttributeLastRun->GetName()));
-	m_propertyAttributeNextRun->ReadNodeValue(node.GetProperty(m_propertyAttributeNextRun->GetName()));
+	m_propertyAttributeActive->SetNodeValue(node.GetProperty(m_propertyAttributeActive->GetName()));
+	m_propertyAttributeSchedule->SetNodeValue(node.GetProperty(m_propertyAttributeSchedule->GetName()));
+	m_propertyAttributeLastRun->SetNodeValue(node.GetProperty(m_propertyAttributeLastRun->GetName()));
+	m_propertyAttributeNextRun->SetNodeValue(node.GetProperty(m_propertyAttributeNextRun->GetName()));
 
-	m_propertyObjectModule->ReadNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
-	m_propertyManagerModule->ReadNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
+	m_propertyObjectModule->SetNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
+	m_propertyManagerModule->SetNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
 
 	m_propertyDefFormObject->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormObject->GetName())));
 	m_propertyDefFormFolder->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormFolder->GetName())));
@@ -55,10 +55,10 @@ bool ibValueMetaObjectParameterizedJob::ReadData(const ibDataNode& node)
 	m_propertyDefFormSelect->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormSelect->GetName())));
 	m_propertyDefFormFolderSelect->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormFolderSelect->GetName())));
 
-	m_propertyUse->ReadNodeValue(node.GetProperty(m_propertyUse->GetName()));
-	m_propertySchedule->ReadNodeValue(node.GetProperty(m_propertySchedule->GetName()));
-	m_propertyRetryCount->ReadNodeValue(node.GetProperty(m_propertyRetryCount->GetName()));
-	m_propertyRetryInterval->ReadNodeValue(node.GetProperty(m_propertyRetryInterval->GetName()));
+	m_propertyUse->SetNodeValue(node.GetProperty(m_propertyUse->GetName()));
+	m_propertySchedule->SetNodeValue(node.GetProperty(m_propertySchedule->GetName()));
+	m_propertyRetryCount->SetNodeValue(node.GetProperty(m_propertyRetryCount->GetName()));
+	m_propertyRetryInterval->SetNodeValue(node.GetProperty(m_propertyRetryInterval->GetName()));
 
 	return ibValueMetaObjectRecordDataHierarchyMutableRef::ReadData(node);
 }

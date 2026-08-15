@@ -69,10 +69,10 @@ void ibValueSlider::Cleanup(wxObject* obj, ibVisualHost* visualHost)
 
 bool ibValueSlider::ReadData(const ibDataNode& node)
 {
-	m_propertyMinValue->ReadNodeValue(node.GetProperty(m_propertyMinValue->GetName()));
-	m_propertyMaxValue->ReadNodeValue(node.GetProperty(m_propertyMaxValue->GetName()));
-	m_propertyValue->ReadNodeValue(node.GetProperty(m_propertyValue->GetName()));
-	m_propertyOrient->ReadNodeValue(node.GetProperty(m_propertyOrient->GetName()));
+	m_propertyMinValue->SetNodeValue(node.GetProperty(m_propertyMinValue->GetName()));
+	m_propertyMaxValue->SetNodeValue(node.GetProperty(m_propertyMaxValue->GetName()));
+	m_propertyValue->SetNodeValue(node.GetProperty(m_propertyValue->GetName()));
+	m_propertyOrient->SetNodeValue(node.GetProperty(m_propertyOrient->GetName()));
 	return ibValueWindow::ReadData(node);
 }
 

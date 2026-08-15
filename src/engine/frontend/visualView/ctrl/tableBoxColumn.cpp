@@ -316,34 +316,34 @@ bool ibValueModelTableBoxColumn::GetControlValue(ibValue& pvarControlVal) const
 
 bool ibValueModelTableBoxColumn::ReadData(const ibDataNode& node)
 {
-	m_propertyTitle->ReadNodeValue(node.GetProperty(m_propertyTitle->GetName()));
-	m_propertyRepresentation->ReadNodeValue(node.GetProperty(m_propertyRepresentation->GetName()));
-	m_propertyFooterText->ReadNodeValue(node.GetProperty(m_propertyFooterText->GetName()));
-	m_propertyHeaderPicture->ReadNodeValue(node.GetProperty(m_propertyHeaderPicture->GetName()));
-	m_propertyFooterPicture->ReadNodeValue(node.GetProperty(m_propertyFooterPicture->GetName()));
-	m_propertyPasswordMode->ReadNodeValue(node.GetProperty(m_propertyPasswordMode->GetName()));
-	m_propertyMultilineMode->ReadNodeValue(node.GetProperty(m_propertyMultilineMode->GetName()));
-	m_propertyTexteditMode->ReadNodeValue(node.GetProperty(m_propertyTexteditMode->GetName()));
-	m_propertySelectButton->ReadNodeValue(node.GetProperty(m_propertySelectButton->GetName()));
-	m_propertyOpenButton->ReadNodeValue(node.GetProperty(m_propertyOpenButton->GetName()));
-	m_propertyClearButton->ReadNodeValue(node.GetProperty(m_propertyClearButton->GetName()));
-	m_propertyHeaderAlign->ReadNodeValue(node.GetProperty(m_propertyHeaderAlign->GetName()));
-	m_propertyFooterAlign->ReadNodeValue(node.GetProperty(m_propertyFooterAlign->GetName()));
-	m_propertyWidth->ReadNodeValue(node.GetProperty(m_propertyWidth->GetName()));
-	m_propertyVisible->ReadNodeValue(node.GetProperty(m_propertyVisible->GetName()));
-	m_propertyResizable->ReadNodeValue(node.GetProperty(m_propertyResizable->GetName()));
-	//m_propertySortable->ReadNodeValue(node.GetProperty(m_propertySortable->GetName()));
-	m_propertyReorderable->ReadNodeValue(node.GetProperty(m_propertyReorderable->GetName()));
-	m_propertyChoiceForm->ReadNodeValue(node.GetProperty(m_propertyChoiceForm->GetName()));
-	m_propertySource->ReadNodeValue(node.GetProperty(m_propertySource->GetName()));
+	m_propertyTitle->SetNodeValue(node.GetProperty(m_propertyTitle->GetName()));
+	m_propertyRepresentation->SetNodeValue(node.GetProperty(m_propertyRepresentation->GetName()));
+	m_propertyFooterText->SetNodeValue(node.GetProperty(m_propertyFooterText->GetName()));
+	m_propertyHeaderPicture->SetNodeValue(node.GetProperty(m_propertyHeaderPicture->GetName()));
+	m_propertyFooterPicture->SetNodeValue(node.GetProperty(m_propertyFooterPicture->GetName()));
+	m_propertyPasswordMode->SetNodeValue(node.GetProperty(m_propertyPasswordMode->GetName()));
+	m_propertyMultilineMode->SetNodeValue(node.GetProperty(m_propertyMultilineMode->GetName()));
+	m_propertyTexteditMode->SetNodeValue(node.GetProperty(m_propertyTexteditMode->GetName()));
+	m_propertySelectButton->SetNodeValue(node.GetProperty(m_propertySelectButton->GetName()));
+	m_propertyOpenButton->SetNodeValue(node.GetProperty(m_propertyOpenButton->GetName()));
+	m_propertyClearButton->SetNodeValue(node.GetProperty(m_propertyClearButton->GetName()));
+	m_propertyHeaderAlign->SetNodeValue(node.GetProperty(m_propertyHeaderAlign->GetName()));
+	m_propertyFooterAlign->SetNodeValue(node.GetProperty(m_propertyFooterAlign->GetName()));
+	m_propertyWidth->SetNodeValue(node.GetProperty(m_propertyWidth->GetName()));
+	m_propertyVisible->SetNodeValue(node.GetProperty(m_propertyVisible->GetName()));
+	m_propertyResizable->SetNodeValue(node.GetProperty(m_propertyResizable->GetName()));
+	//m_propertySortable->SetNodeValue(node.GetProperty(m_propertySortable->GetName()));
+	m_propertyReorderable->SetNodeValue(node.GetProperty(m_propertyReorderable->GetName()));
+	m_propertyChoiceForm->SetNodeValue(node.GetProperty(m_propertyChoiceForm->GetName()));
+	m_propertySource->SetNodeValue(node.GetProperty(m_propertySource->GetName()));
 
 	//events
-	m_eventOnChange->ReadNodeValue(node.GetProperty(m_eventOnChange->GetName()));
-	m_eventStartChoice->ReadNodeValue(node.GetProperty(m_eventStartChoice->GetName()));
-	m_eventStartListChoice->ReadNodeValue(node.GetProperty(m_eventStartListChoice->GetName()));
-	m_eventClearing->ReadNodeValue(node.GetProperty(m_eventClearing->GetName()));
-	m_eventOpening->ReadNodeValue(node.GetProperty(m_eventOpening->GetName()));
-	m_eventChoiceProcessing->ReadNodeValue(node.GetProperty(m_eventChoiceProcessing->GetName()));
+	m_eventOnChange->SetNodeValue(node.GetProperty(m_eventOnChange->GetName()));
+	m_eventStartChoice->SetNodeValue(node.GetProperty(m_eventStartChoice->GetName()));
+	m_eventStartListChoice->SetNodeValue(node.GetProperty(m_eventStartListChoice->GetName()));
+	m_eventClearing->SetNodeValue(node.GetProperty(m_eventClearing->GetName()));
+	m_eventOpening->SetNodeValue(node.GetProperty(m_eventOpening->GetName()));
+	m_eventChoiceProcessing->SetNodeValue(node.GetProperty(m_eventChoiceProcessing->GetName()));
 	
 	return ibValueControl::ReadData(node);
 }

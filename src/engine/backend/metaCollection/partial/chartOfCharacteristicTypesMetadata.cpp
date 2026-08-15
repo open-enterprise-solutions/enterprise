@@ -181,12 +181,12 @@ bool ibValueMetaObjectChartOfCharacteristicTypes::WriteData(ibDataNode& node) co
 
 bool ibValueMetaObjectChartOfCharacteristicTypes::ReadData(const ibDataNode& node)
 {
-	m_propertyAttributeType->ReadNodeValue(node.GetProperty(m_propertyAttributeType->GetName()));
+	m_propertyAttributeType->SetNodeValue(node.GetProperty(m_propertyAttributeType->GetName()));
 
-	m_propertyObjectModule->ReadNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
-	m_propertyManagerModule->ReadNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
+	m_propertyObjectModule->SetNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
+	m_propertyManagerModule->SetNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
 
-	m_propertyTypesOfCharacteristics->ReadNodeValue(node.GetProperty(m_propertyTypesOfCharacteristics->GetName()));
+	m_propertyTypesOfCharacteristics->SetNodeValue(node.GetProperty(m_propertyTypesOfCharacteristics->GetName()));
 
 	m_propertyDefFormObject->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormObject->GetName())));
 	m_propertyDefFormFolder->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormFolder->GetName())));

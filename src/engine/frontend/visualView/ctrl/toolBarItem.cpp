@@ -377,16 +377,16 @@ bool ibValueToolBarSeparator::CanDeleteControl() const
 
 bool ibValueToolBarItem::ReadData(const ibDataNode& node)
 {
-	m_propertyTitle->ReadNodeValue(node.GetProperty(m_propertyTitle->GetName()));
-	m_propertyPicture->ReadNodeValue(node.GetProperty(m_propertyPicture->GetName()));
-	m_propertyRepresentation->ReadNodeValue(node.GetProperty(m_propertyRepresentation->GetName()));
-	m_propertyContextMenu->ReadNodeValue(node.GetProperty(m_propertyContextMenu->GetName()));
-	m_properyTooltip->ReadNodeValue(node.GetProperty(m_properyTooltip->GetName()));
-	m_propertyEnabled->ReadNodeValue(node.GetProperty(m_propertyEnabled->GetName()));
-	m_eventAction->ReadNodeValue(node.GetProperty(m_eventAction->GetName()));
+	m_propertyTitle->SetNodeValue(node.GetProperty(m_propertyTitle->GetName()));
+	m_propertyPicture->SetNodeValue(node.GetProperty(m_propertyPicture->GetName()));
+	m_propertyRepresentation->SetNodeValue(node.GetProperty(m_propertyRepresentation->GetName()));
+	m_propertyContextMenu->SetNodeValue(node.GetProperty(m_propertyContextMenu->GetName()));
+	m_properyTooltip->SetNodeValue(node.GetProperty(m_properyTooltip->GetName()));
+	m_propertyEnabled->SetNodeValue(node.GetProperty(m_propertyEnabled->GetName()));
+	m_eventAction->SetNodeValue(node.GetProperty(m_eventAction->GetName()));
 
 	//events
-	m_eventAction->ReadNodeValue(node.GetProperty(m_eventAction->GetName()));
+	m_eventAction->SetNodeValue(node.GetProperty(m_eventAction->GetName()));
 	return ibValueControl::ReadData(node);
 }
 

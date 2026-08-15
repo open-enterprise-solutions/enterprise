@@ -34,9 +34,9 @@ ibValueMetaObjectAccountDimensionKindsTable::~ibValueMetaObjectAccountDimensionK
 // predefined columns as Child sub-nodes + the base table data (NumberLine + Use).
 bool ibValueMetaObjectAccountDimensionKindsTable::ReadData(const ibDataNode& node)
 {
-	m_propertyAccountDimensionKind->ReadNodeValue(node.GetProperty(m_propertyAccountDimensionKind->GetName()));
-	m_propertyOrder->ReadNodeValue(node.GetProperty(m_propertyOrder->GetName()));
-	m_propertySummaryOnly->ReadNodeValue(node.GetProperty(m_propertySummaryOnly->GetName()));
+	m_propertyAccountDimensionKind->SetNodeValue(node.GetProperty(m_propertyAccountDimensionKind->GetName()));
+	m_propertyOrder->SetNodeValue(node.GetProperty(m_propertyOrder->GetName()));
+	m_propertySummaryOnly->SetNodeValue(node.GetProperty(m_propertySummaryOnly->GetName()));
 	return ibValueMetaObjectTableDataRef::ReadData(node);
 }
 

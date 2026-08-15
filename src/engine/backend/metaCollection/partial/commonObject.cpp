@@ -255,7 +255,7 @@ ibValueMetaObjectRecordDataRef::~ibValueMetaObjectRecordDataRef()
 
 bool ibValueMetaObjectRecordDataRef::ReadData(const ibDataNode& node)
 {
-	m_propertyQuickChoice->ReadNodeValue(node.GetProperty(m_propertyQuickChoice->GetName()));
+	m_propertyQuickChoice->SetNodeValue(node.GetProperty(m_propertyQuickChoice->GetName()));
 
 	// ⭐⭐ THE NAME A PROPERTY IS STORED UNDER IS ITS KEY, NOT ITS LABEL.
 	//
@@ -270,7 +270,7 @@ bool ibValueMetaObjectRecordDataRef::ReadData(const ibDataNode& node)
 	ibDataValue reference = node.GetProperty(m_propertyAttributeReference->GetName());
 	if (reference.IsEmpty())
 		reference = node.GetProperty(wxT("Reference"));   // saved before the rename
-	m_propertyAttributeReference->ReadNodeValue(reference);
+	m_propertyAttributeReference->SetNodeValue(reference);
 	return true;
 }
 
@@ -417,7 +417,7 @@ bool ibValueMetaObjectRecordDataEnumRef::WriteData(ibDataNode& node) const
 
 bool ibValueMetaObjectRecordDataEnumRef::ReadData(const ibDataNode& node)
 {
-	m_propertyAttributeOrder->ReadNodeValue(node.GetProperty(m_propertyAttributeOrder->GetName()));
+	m_propertyAttributeOrder->SetNodeValue(node.GetProperty(m_propertyAttributeOrder->GetName()));
 	return ibValueMetaObjectRecordDataRef::ReadData(node);
 }
 
@@ -517,11 +517,11 @@ bool ibValueMetaObjectRecordDataMutableRef::WriteData(ibDataNode& node) const
 
 bool ibValueMetaObjectRecordDataMutableRef::ReadData(const ibDataNode& node)
 {
-	m_propertyAttributeDataVersion->ReadNodeValue(node.GetProperty(m_propertyAttributeDataVersion->GetName()));
-	m_propertyAttributeDeletionMark->ReadNodeValue(node.GetProperty(m_propertyAttributeDeletionMark->GetName()));
+	m_propertyAttributeDataVersion->SetNodeValue(node.GetProperty(m_propertyAttributeDataVersion->GetName()));
+	m_propertyAttributeDeletionMark->SetNodeValue(node.GetProperty(m_propertyAttributeDeletionMark->GetName()));
 	if (!ibValueMetaObjectRecordDataRef::ReadData(node))
 		return false;
-	m_propertyGeneration->ReadNodeValue(node.GetProperty(m_propertyGeneration->GetName()));
+	m_propertyGeneration->SetNodeValue(node.GetProperty(m_propertyGeneration->GetName()));
 	return true;
 }
 
@@ -827,13 +827,13 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::ReadData(const ibDataNode& 
 		}
 	}
 
-	m_propertyAttributePredefined->ReadNodeValue(node.GetProperty(m_propertyAttributePredefined->GetName()));
-	m_propertyAttributeCode->ReadNodeValue(node.GetProperty(m_propertyAttributeCode->GetName()));
-	m_propertyAttributeDescription->ReadNodeValue(node.GetProperty(m_propertyAttributeDescription->GetName()));
-	m_propertyAttributeParent->ReadNodeValue(node.GetProperty(m_propertyAttributeParent->GetName()));
-	m_propertyAttributeIsFolder->ReadNodeValue(node.GetProperty(m_propertyAttributeIsFolder->GetName()));
+	m_propertyAttributePredefined->SetNodeValue(node.GetProperty(m_propertyAttributePredefined->GetName()));
+	m_propertyAttributeCode->SetNodeValue(node.GetProperty(m_propertyAttributeCode->GetName()));
+	m_propertyAttributeDescription->SetNodeValue(node.GetProperty(m_propertyAttributeDescription->GetName()));
+	m_propertyAttributeParent->SetNodeValue(node.GetProperty(m_propertyAttributeParent->GetName()));
+	m_propertyAttributeIsFolder->SetNodeValue(node.GetProperty(m_propertyAttributeIsFolder->GetName()));
 
-	m_propertyHierarchyType->ReadNodeValue(node.GetProperty(m_propertyHierarchyType->GetName()));
+	m_propertyHierarchyType->SetNodeValue(node.GetProperty(m_propertyHierarchyType->GetName()));
 	// Restate it on the Parent field at once: everything that asks what a parent may be asks the
 	// FIELD, so a configuration loaded and never edited must already say what it declares.
 	ApplyHierarchyType();
@@ -1058,10 +1058,10 @@ ibValueMetaObjectRegisterData::~ibValueMetaObjectRegisterData()
 // Base ibValueMetaObjectGenericData has no data of its own — chain bottoms here.
 bool ibValueMetaObjectRegisterData::ReadData(const ibDataNode& node)
 {
-	m_propertyAttributeLineActive->ReadNodeValue(node.GetProperty(m_propertyAttributeLineActive->GetName()));
-	m_propertyAttributePeriod->ReadNodeValue(node.GetProperty(m_propertyAttributePeriod->GetName()));
-	m_propertyAttributeRecorder->ReadNodeValue(node.GetProperty(m_propertyAttributeRecorder->GetName()));
-	m_propertyAttributeLineNumber->ReadNodeValue(node.GetProperty(m_propertyAttributeLineNumber->GetName()));
+	m_propertyAttributeLineActive->SetNodeValue(node.GetProperty(m_propertyAttributeLineActive->GetName()));
+	m_propertyAttributePeriod->SetNodeValue(node.GetProperty(m_propertyAttributePeriod->GetName()));
+	m_propertyAttributeRecorder->SetNodeValue(node.GetProperty(m_propertyAttributeRecorder->GetName()));
+	m_propertyAttributeLineNumber->SetNodeValue(node.GetProperty(m_propertyAttributeLineNumber->GetName()));
 	return true;
 }
 

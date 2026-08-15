@@ -249,11 +249,11 @@ bool ibValueMetaObjectScheduledJob::ReadData(const ibDataNode& node)
 	if (!ibValueMetaObject::ReadData(node))
 		return false;
 
-	m_propertyJobModule->ReadNodeValue(node.GetProperty(m_propertyJobModule->GetName()));
-	m_propertyUse->ReadNodeValue(node.GetProperty(m_propertyUse->GetName()));
-	m_propertySchedule->ReadNodeValue(node.GetProperty(m_propertySchedule->GetName()));
-	m_propertyRetryCount->ReadNodeValue(node.GetProperty(m_propertyRetryCount->GetName()));
-	m_propertyRetryInterval->ReadNodeValue(node.GetProperty(m_propertyRetryInterval->GetName()));
+	m_propertyJobModule->SetNodeValue(node.GetProperty(m_propertyJobModule->GetName()));
+	m_propertyUse->SetNodeValue(node.GetProperty(m_propertyUse->GetName()));
+	m_propertySchedule->SetNodeValue(node.GetProperty(m_propertySchedule->GetName()));
+	m_propertyRetryCount->SetNodeValue(node.GetProperty(m_propertyRetryCount->GetName()));
+	m_propertyRetryInterval->SetNodeValue(node.GetProperty(m_propertyRetryInterval->GetName()));
 	return true;
 }
 

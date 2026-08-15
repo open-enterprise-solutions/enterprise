@@ -35,11 +35,11 @@ ibValueMetaObjectConstant::~ibValueMetaObjectConstant()
 
 bool ibValueMetaObjectConstant::ReadData(const ibDataNode& node)
 {
-	m_propertyModule->ReadNodeValue(node.GetProperty(m_propertyModule->GetName()));
+	m_propertyModule->SetNodeValue(node.GetProperty(m_propertyModule->GetName()));
 
 	// The value properties are the constant's own now — the attribute base used to carry them.
-	m_propertyType->ReadNodeValue(node.GetProperty(m_propertyType->GetName()));
-	m_propertyFillCheck->ReadNodeValue(node.GetProperty(m_propertyFillCheck->GetName()));
+	m_propertyType->SetNodeValue(node.GetProperty(m_propertyType->GetName()));
+	m_propertyFillCheck->SetNodeValue(node.GetProperty(m_propertyFillCheck->GetName()));
 
 	return ibValueMetaObjectGenericData::ReadData(node);
 }

@@ -230,8 +230,8 @@ ibValueMetaObjectForm::ibValueMetaObjectForm(const wxString& name, const wxStrin
 
 bool ibValueMetaObjectForm::ReadData(const ibDataNode& node)
 {
-	m_properyFormType->ReadNodeValue(node.GetProperty(m_properyFormType->GetName()));
-	m_propertyForm->ReadNodeValue(node.GetProperty(m_propertyForm->GetName()));
+	m_properyFormType->SetNodeValue(node.GetProperty(m_properyFormType->GetName()));
+	m_propertyForm->SetNodeValue(node.GetProperty(m_propertyForm->GetName()));
 	return true;
 }
 
@@ -393,7 +393,7 @@ ibValueMetaObjectCommonForm::ibValueMetaObjectCommonForm(const wxString& name, c
 
 bool ibValueMetaObjectCommonForm::ReadData(const ibDataNode& node)
 {
-	m_propertyForm->ReadNodeValue(node.GetProperty(m_propertyForm->GetName()));
+	m_propertyForm->SetNodeValue(node.GetProperty(m_propertyForm->GetName()));
 	return true;
 }
 

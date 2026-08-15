@@ -47,6 +47,16 @@ bool ibBackendProperty::CopyNodeValue(ibDataValue& value) const
 
 bool ibBackendProperty::PasteNodeValue(const ibDataValue& value)
 {
+	return SetNodeValue(value);   // through the door, so a pasted "nothing" cannot unset a default
+}
+
+// The read door — the gate every property type is spared. See the header for what conflating
+// "absent" with "the type's zero" cost, and why the answer for absent is `false` rather than a
+// value: nothing was read, and the constructor's default stands.
+bool ibBackendProperty::SetNodeValue(const ibDataValue& value)
+{
+	if (value.IsEmpty())
+		return false;
 	return ReadNodeValue(value);
 }
 

@@ -356,9 +356,9 @@ bool ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColu
 {
 	m_columnID = (unsigned int)node.GetValue<s32>(wxT("id"));
 	m_columnWidth = node.GetValue<s32>(wxT("width"));
-	m_propertyName->ReadNodeValue(node.GetProperty(m_propertyName->GetName()));
-	m_propertyCaption->ReadNodeValue(node.GetProperty(m_propertyCaption->GetName()));
-	m_propertyType->ReadNodeValue(node.GetProperty(m_propertyType->GetName()));
+	m_propertyName->SetNodeValue(node.GetProperty(m_propertyName->GetName()));
+	m_propertyCaption->SetNodeValue(node.GetProperty(m_propertyCaption->GetName()));
+	m_propertyType->SetNodeValue(node.GetProperty(m_propertyType->GetName()));
 	return ibPropertyObject::ReadProperty(node);
 }
 

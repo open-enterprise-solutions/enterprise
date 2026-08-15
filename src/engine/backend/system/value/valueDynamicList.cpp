@@ -655,9 +655,9 @@ bool ibValueDynamicList::ReadProperty(const ibDataNode& node)
 	// hands back), and the arbitrary query is what it READS — so neither is written in place of the
 	// other. An older blob that stored only one loads with the other simply absent, which is the same
 	// state as "not set".
-	m_propertyUseCustomQuery->ReadNodeValue(node.GetProperty(m_propertyUseCustomQuery->GetName()));
-	m_propertySource->ReadNodeValue(node.GetProperty(m_propertySource->GetName()));   // resolves the queryable from the id
-	m_propertyCustomQuery->ReadNodeValue(node.GetProperty(m_propertyCustomQuery->GetName()));
+	m_propertyUseCustomQuery->SetNodeValue(node.GetProperty(m_propertyUseCustomQuery->GetName()));
+	m_propertySource->SetNodeValue(node.GetProperty(m_propertySource->GetName()));   // resolves the queryable from the id
+	m_propertyCustomQuery->SetNodeValue(node.GetProperty(m_propertyCustomQuery->GetName()));
 	RebuildSource();
 
 	GetListSettings()->ReadData(node);   // node → buffer; then commit buffer → composer (the store)
@@ -684,10 +684,12 @@ bool ibValueDynamicList::WriteProperty(ibDataNode& node) const
 	//
 	// (It used to be an EITHER/OR, and that was the mistake: a query was allowed to stand IN PLACE OF
 	// the source, which took the list's identity away along with its data.)
-	ibDataValue value;
-	if (!m_propertySource->WriteNodeValue(value))
+	// ASKED OF THE PROPERTY, not inferred from what it wrote. This used to test the verdict of
+	// WriteNodeValue — which answers `true` whether or not a source was picked (it just writes
+	// nothing when there is none), so the check never fired and the node went out sourceless.
+	if (m_propertySource->IsEmptyProperty())
 		return false;
-	node.SetProperty(m_propertySource->GetName(), value);
+	node.SetProperty(m_propertySource->GetName(), m_propertySource->GetNodeValue());
 
 	// …and the query over it, when there is one.
 	node.SetProperty(m_propertyCustomQuery->GetName(), m_propertyCustomQuery->GetNodeValue());

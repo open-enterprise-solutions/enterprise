@@ -765,10 +765,10 @@ bool ibFormAttributeValue::ibFormAttribute::ReadProperty(const ibDataNode& node)
 {
 	m_attributeId = (ibMetaID)node.GetValue<s32>(wxT("AttributeId"));
 	m_isMain = node.GetValue<bool>(wxT("Main"));
-	m_propertyName->ReadNodeValue(node.GetProperty(m_propertyName->GetName()));
-	m_propertyCaption->ReadNodeValue(node.GetProperty(m_propertyCaption->GetName()));
-	m_propertyType->ReadNodeValue(node.GetProperty(m_propertyType->GetName()));
-	m_propertyFillCheck->ReadNodeValue(node.GetProperty(m_propertyFillCheck->GetName()));
+	m_propertyName->SetNodeValue(node.GetProperty(m_propertyName->GetName()));
+	m_propertyCaption->SetNodeValue(node.GetProperty(m_propertyCaption->GetName()));
+	m_propertyType->SetNodeValue(node.GetProperty(m_propertyType->GetName()));
+	m_propertyFillCheck->SetNodeValue(node.GetProperty(m_propertyFillCheck->GetName()));
 	// Pure definition — no value here. The facade (ibFormAttributeValue::ReadProperty) reads
 	// this attribute FIRST (Type now known), then materialises + reads the generated value.
 	return ibPropertyObject::ReadProperty(node);

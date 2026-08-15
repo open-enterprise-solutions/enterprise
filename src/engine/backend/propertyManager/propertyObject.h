@@ -227,20 +227,36 @@ public:
 	virtual bool IsEmptyProperty() const { return false; }
 
 
-	// Property <-> node value — the ONLY per-property serialization (no byte
-	// SaveData/LoadData anymore). Read/Write pair: bool + out-param + const on the
-	// writer, PARALLEL to the runtime GetDataValue/SetDataValue but over ibDataValue.
-	// WriteNodeValue yields the property's value into `value`: a typed scalar, or a
-	// Child sub-node (a SET of values) for a composite; the sub-node is shared via
-	// shared_ptr, so the owner can place the SAME value under one or several named
-	// areas cheaply. ReadNodeValue sets the property from a value found by name:
-	//     ibDataValue v; prop->WriteNodeValue(v); node.SetProperty(name, v);
-	virtual bool ReadNodeValue(const ibDataValue& value) = 0;
-	virtual bool WriteNodeValue(ibDataValue& value) const = 0;
+	// Property <-> node value — the ONLY per-property serialization (no byte SaveData/LoadData
+	// anymore). TWO DOORS, and they are the whole public surface: everything outside reads with
+	// SetNodeValue and writes with GetNodeValue. The virtual pair a type implements is protected,
+	// so no caller can reach past them.
+	//
+	// ⭐⭐ READING IS A DOOR OVER A GATE: "ABSENT" NEVER REACHES A PROPERTY TYPE.
+	//
+	// Every caller reads the same way — `prop->SetNodeValue(node.GetProperty(prop->GetName()))`
+	// — and GetProperty answers an EMPTY value when the file has no such property (dataBuilder.h).
+	// Handing that straight to the type meant each type decided for itself what "nothing" means,
+	// and each answered with its own zero: false for a boolean, 0 for a number, the first member
+	// for an enum. So a property DECLARED with a non-zero default arrived unset the first time an
+	// older configuration was opened, silently, because an assigned zero is indistinguishable from
+	// a read one.
+	//
+	// What it cost, once: the accounting register's `Correspondence` and `SplitTotals` are both
+	// default-true, both went false on load, the credit-side analytics slots were deactivated in
+	// consequence, the schema snapshot then disagreed with the DDL — and it surfaced three layers
+	// away as `RDB$INDEX_15 violation` on a column that same apply had just created.
+	//
+	// The gate lives HERE and not in forty overrides: absent means the constructor's value stands,
+	// and the answer is `false` — the same "nothing was read" every other reader gives.
+	//
+	// (Defined in the .cpp — ibDataValue is only forward-declared here, and asking it whether it
+	// is empty needs the whole type. Not worth pulling the serializer into every property header.)
+	bool SetNodeValue(const ibDataValue& value);
 
-	// Non-virtual by-value convenience over WriteNodeValue, for owners that "get the
-	// value as is" inline (yields null when the writer declines). A DIFFERENT name
-	// from the virtual, so an override does NOT hide it — no `using` needed:
+	// The writing door: yields the property's value — a typed scalar, or a Child sub-node (a SET
+	// of values) for a composite, shared via shared_ptr so the owner can place the SAME value
+	// under one or several named areas cheaply. Null when the writer declines.
 	//     node.SetProperty(name, prop->GetNodeValue());
 	ibDataValue GetNodeValue() const;
 
@@ -254,6 +270,18 @@ public:
 	//Set/Get property data
 	virtual bool SetDataValue(const ibValue& varPropVal) = 0;
 	virtual bool GetDataValue(ibValue& pvarPropVal) const = 0;
+
+protected:
+
+	// THE BODIES BEHIND THE TWO DOORS — a type implements these, nobody calls them.
+	//
+	// Protected rather than public so the gate in SetNodeValue cannot be walked around: a caller
+	// reaching for ReadNodeValue directly would hand a property type the empty value the door
+	// exists to intercept, and the compiler now says so instead of the configuration losing a
+	// default three layers away. GetNodeValue / SetNodeValue are the surface; these are the
+	// implementation, and the pair reads Read/Write while the doors read Get/Set.
+	virtual bool ReadNodeValue(const ibDataValue& value) = 0;
+	virtual bool WriteNodeValue(ibDataValue& value) const = 0;
 
 protected:
 	virtual void DoSetValue(const wxVariant& val) { m_propValue = val; }

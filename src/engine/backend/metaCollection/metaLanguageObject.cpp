@@ -83,7 +83,7 @@ bool ibValueMetaObjectLanguage::OnAfterRunMetaObject(int flags)
 
 bool ibValueMetaObjectLanguage::ReadData(const ibDataNode& node)
 {
-	m_propertyCode->ReadNodeValue(node.GetProperty(m_propertyCode->GetName()));
+	m_propertyCode->SetNodeValue(node.GetProperty(m_propertyCode->GetName()));
 	return true;
 }
 

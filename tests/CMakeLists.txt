@@ -111,6 +111,7 @@ add_executable(oes_tests
     # test_guid.cpp  # API-rotted (ibGuidImpl::isValid/str/bytes gone) — excluded until updated
     test_dbTransaction.cpp
     test_propertyObject.cpp
+    test_propertyDefaults.cpp
     test_sourceExplorer.cpp
     test_sourceDescription.cpp
     test_tabularHop.cpp

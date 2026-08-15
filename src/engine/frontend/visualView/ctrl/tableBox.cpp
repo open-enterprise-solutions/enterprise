@@ -693,26 +693,26 @@ void ibValueModelTableBox::Cleanup(wxObject* obj, ibVisualHost* visualHost)
 
 bool ibValueModelTableBox::ReadData(const ibDataNode& node)
 {
-	m_propertySource->ReadNodeValue(node.GetProperty(m_propertySource->GetName()));
+	m_propertySource->SetNodeValue(node.GetProperty(m_propertySource->GetName()));
 
-	m_propertyHeader->ReadNodeValue(node.GetProperty(m_propertyHeader->GetName()));
-	m_propertyHeaderHeight->ReadNodeValue(node.GetProperty(m_propertyHeaderHeight->GetName()));
-	m_propertyFooter->ReadNodeValue(node.GetProperty(m_propertyFooter->GetName()));
-	m_propertyFooterHeight->ReadNodeValue(node.GetProperty(m_propertyFooterHeight->GetName()));
+	m_propertyHeader->SetNodeValue(node.GetProperty(m_propertyHeader->GetName()));
+	m_propertyHeaderHeight->SetNodeValue(node.GetProperty(m_propertyHeaderHeight->GetName()));
+	m_propertyFooter->SetNodeValue(node.GetProperty(m_propertyFooter->GetName()));
+	m_propertyFooterHeight->SetNodeValue(node.GetProperty(m_propertyFooterHeight->GetName()));
 
-	m_propertyFreezeRow->ReadNodeValue(node.GetProperty(m_propertyFreezeRow->GetName()));
-	m_propertyFreezeCol->ReadNodeValue(node.GetProperty(m_propertyFreezeCol->GetName()));
+	m_propertyFreezeRow->SetNodeValue(node.GetProperty(m_propertyFreezeRow->GetName()));
+	m_propertyFreezeCol->SetNodeValue(node.GetProperty(m_propertyFreezeCol->GetName()));
 
-	m_propertyRowSelectionMode->ReadNodeValue(node.GetProperty(m_propertyRowSelectionMode->GetName()));
-	m_propertyChoiceMode->ReadNodeValue(node.GetProperty(m_propertyChoiceMode->GetName()));
+	m_propertyRowSelectionMode->SetNodeValue(node.GetProperty(m_propertyRowSelectionMode->GetName()));
+	m_propertyChoiceMode->SetNodeValue(node.GetProperty(m_propertyChoiceMode->GetName()));
 
 	//events
-	m_eventSelection->ReadNodeValue(node.GetProperty(m_eventSelection->GetName()));
-	m_eventBeforeAddRow->ReadNodeValue(node.GetProperty(m_eventBeforeAddRow->GetName()));
-	m_eventBeforeDeleteRow->ReadNodeValue(node.GetProperty(m_eventBeforeDeleteRow->GetName()));
-	m_eventOnActivateRow->ReadNodeValue(node.GetProperty(m_eventOnActivateRow->GetName()));
-	m_eventOnAddRow->ReadNodeValue(node.GetProperty(m_eventOnAddRow->GetName()));
-	m_eventOnDeleteRow->ReadNodeValue(node.GetProperty(m_eventOnDeleteRow->GetName()));
+	m_eventSelection->SetNodeValue(node.GetProperty(m_eventSelection->GetName()));
+	m_eventBeforeAddRow->SetNodeValue(node.GetProperty(m_eventBeforeAddRow->GetName()));
+	m_eventBeforeDeleteRow->SetNodeValue(node.GetProperty(m_eventBeforeDeleteRow->GetName()));
+	m_eventOnActivateRow->SetNodeValue(node.GetProperty(m_eventOnActivateRow->GetName()));
+	m_eventOnAddRow->SetNodeValue(node.GetProperty(m_eventOnAddRow->GetName()));
+	m_eventOnDeleteRow->SetNodeValue(node.GetProperty(m_eventOnDeleteRow->GetName()));
 
 	// Chain to the composite base (reads the "Layers" block) → ibValueWindow.
 	return ibValueWindowComposite::ReadData(node);

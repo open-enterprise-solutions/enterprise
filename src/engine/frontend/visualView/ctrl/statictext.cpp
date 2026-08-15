@@ -138,11 +138,11 @@ void ibValueStaticText::Cleanup(wxObject* obj, ibVisualHost* visualHost)
 
 bool ibValueStaticText::ReadData(const ibDataNode& node)
 {
-	m_propertySource->ReadNodeValue(node.GetProperty(m_propertySource->GetName()));
-	m_propertyTitleLocation->ReadNodeValue(node.GetProperty(m_propertyTitleLocation->GetName()));
-	m_propertyMarkup->ReadNodeValue(node.GetProperty(m_propertyMarkup->GetName()));
-	m_propertyWrap->ReadNodeValue(node.GetProperty(m_propertyWrap->GetName()));
-	m_propertyTitle->ReadNodeValue(node.GetProperty(m_propertyTitle->GetName()));
+	m_propertySource->SetNodeValue(node.GetProperty(m_propertySource->GetName()));
+	m_propertyTitleLocation->SetNodeValue(node.GetProperty(m_propertyTitleLocation->GetName()));
+	m_propertyMarkup->SetNodeValue(node.GetProperty(m_propertyMarkup->GetName()));
+	m_propertyWrap->SetNodeValue(node.GetProperty(m_propertyWrap->GetName()));
+	m_propertyTitle->SetNodeValue(node.GetProperty(m_propertyTitle->GetName()));
 	return ibValueWindow::ReadData(node);
 }
 

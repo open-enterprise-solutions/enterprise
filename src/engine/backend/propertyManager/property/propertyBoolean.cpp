@@ -17,7 +17,11 @@ bool ibPropertyBoolean::GetDataValue(ibValue& pvarPropVal) const
 
 bool ibPropertyBoolean::ReadNodeValue(const ibDataValue& value)
 {
-	ibPropertyBoolean::SetValue(value.AsBool()); // AsBool validates kind (Empty -> default false)
+	// An EMPTY value never arrives here — ibBackendProperty::SetNodeValue gates it, so a boolean
+	// missing from the file keeps the default it was declared with instead of being assigned
+	// false. (That conflation is what unset `Correspondence` / `SplitTotals` on load; the reason
+	// is written once, at the gate.)
+	ibPropertyBoolean::SetValue(value.AsBool());
 	return true;
 }
 

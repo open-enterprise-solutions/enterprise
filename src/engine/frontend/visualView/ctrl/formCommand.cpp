@@ -55,10 +55,10 @@ bool ibFormCommandValue::WriteProperty(ibDataNode& node) const
 bool ibFormCommandValue::ReadProperty(const ibDataNode& node)
 {
 	m_commandId = (ibMetaID)node.GetValue<int>(wxT("CommandId"));
-	m_propertyName->ReadNodeValue(node.GetProperty(m_propertyName->GetName()));
-	m_propertyCaption->ReadNodeValue(node.GetProperty(m_propertyCaption->GetName()));
-	m_propertyPicture->ReadNodeValue(node.GetProperty(m_propertyPicture->GetName()));
-	m_eventCommand->ReadNodeValue(node.GetProperty(m_eventCommand->GetName()));
+	m_propertyName->SetNodeValue(node.GetProperty(m_propertyName->GetName()));
+	m_propertyCaption->SetNodeValue(node.GetProperty(m_propertyCaption->GetName()));
+	m_propertyPicture->SetNodeValue(node.GetProperty(m_propertyPicture->GetName()));
+	m_eventCommand->SetNodeValue(node.GetProperty(m_eventCommand->GetName()));
 	return ibPropertyObject::ReadProperty(node);
 }
 

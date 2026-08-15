@@ -206,12 +206,12 @@ bool ibValueCheckbox::SetControlValue(const ibValue& varControlVal)
 
 bool ibValueCheckbox::ReadData(const ibDataNode& node)
 {
-	m_propertyTitle->ReadNodeValue(node.GetProperty(m_propertyTitle->GetName()));
-	m_propertyTitleLocation->ReadNodeValue(node.GetProperty(m_propertyTitleLocation->GetName()));
-	m_propertySource->ReadNodeValue(node.GetProperty(m_propertySource->GetName()));
+	m_propertyTitle->SetNodeValue(node.GetProperty(m_propertyTitle->GetName()));
+	m_propertyTitleLocation->SetNodeValue(node.GetProperty(m_propertyTitleLocation->GetName()));
+	m_propertySource->SetNodeValue(node.GetProperty(m_propertySource->GetName()));
 
 	//events
-	m_onCheckboxClicked->ReadNodeValue(node.GetProperty(m_onCheckboxClicked->GetName()));
+	m_onCheckboxClicked->SetNodeValue(node.GetProperty(m_onCheckboxClicked->GetName()));
 	return ibValueWindow::ReadData(node);
 }
 

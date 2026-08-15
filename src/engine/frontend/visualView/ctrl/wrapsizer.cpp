@@ -54,7 +54,7 @@ void ibValueWrapSizer::Cleanup(wxObject* obj, ibVisualHost *visualHost)
 
 bool ibValueWrapSizer::ReadData(const ibDataNode& node)
 {
-	m_propertyOrient->ReadNodeValue(node.GetProperty(m_propertyOrient->GetName()));
+	m_propertyOrient->SetNodeValue(node.GetProperty(m_propertyOrient->GetName()));
 	return ibValueSizer::ReadData(node);
 }
 

@@ -133,11 +133,11 @@ bool ibValueNotebookPage::CanDeleteControl() const
 
 bool ibValueNotebookPage::ReadData(const ibDataNode& node)
 {
-    m_propertyTitle->ReadNodeValue(node.GetProperty(m_propertyTitle->GetName()));
-    m_propertyRepresentation->ReadNodeValue(node.GetProperty(m_propertyRepresentation->GetName()));
-    m_propertyPicture->ReadNodeValue(node.GetProperty(m_propertyPicture->GetName()));
-    m_propertyVisible->ReadNodeValue(node.GetProperty(m_propertyVisible->GetName()));
-    m_propertyOrient->ReadNodeValue(node.GetProperty(m_propertyOrient->GetName()));
+    m_propertyTitle->SetNodeValue(node.GetProperty(m_propertyTitle->GetName()));
+    m_propertyRepresentation->SetNodeValue(node.GetProperty(m_propertyRepresentation->GetName()));
+    m_propertyPicture->SetNodeValue(node.GetProperty(m_propertyPicture->GetName()));
+    m_propertyVisible->SetNodeValue(node.GetProperty(m_propertyVisible->GetName()));
+    m_propertyOrient->SetNodeValue(node.GetProperty(m_propertyOrient->GetName()));
 
     return ibValueControl::ReadData(node);
 }

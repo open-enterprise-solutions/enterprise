@@ -76,7 +76,7 @@ void ibSizerOps::SetChildParams(ibFrontendSizer* sizer, wxObject* child,
 
 bool ibValueSizer::ReadData(const ibDataNode& node)
 {
-	m_propertyMinSize->ReadNodeValue(node.GetProperty(m_propertyMinSize->GetName()));
+	m_propertyMinSize->SetNodeValue(node.GetProperty(m_propertyMinSize->GetName()));
 
 	return ibValueFrame::ReadData(node);
 }

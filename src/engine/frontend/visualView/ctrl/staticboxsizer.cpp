@@ -98,18 +98,18 @@ void ibValueStaticBoxSizer::Cleanup(wxObject* wxobject, ibVisualHost* visualHost
 
 bool ibValueStaticBoxSizer::ReadData(const ibDataNode& node)
 {
-	m_propertyOrient->ReadNodeValue(node.GetProperty(m_propertyOrient->GetName()));	
-	m_propertyTitle->ReadNodeValue(node.GetProperty(m_propertyTitle->GetName()));
-	m_propertyFont->ReadNodeValue(node.GetProperty(m_propertyFont->GetName()));
-	m_propertyFG->ReadNodeValue(node.GetProperty(m_propertyFG->GetName()));
-	m_propertyBG->ReadNodeValue(node.GetProperty(m_propertyBG->GetName()));
+	m_propertyOrient->SetNodeValue(node.GetProperty(m_propertyOrient->GetName()));	
+	m_propertyTitle->SetNodeValue(node.GetProperty(m_propertyTitle->GetName()));
+	m_propertyFont->SetNodeValue(node.GetProperty(m_propertyFont->GetName()));
+	m_propertyFG->SetNodeValue(node.GetProperty(m_propertyFG->GetName()));
+	m_propertyBG->SetNodeValue(node.GetProperty(m_propertyBG->GetName()));
 
-	m_propertyTooltip->ReadNodeValue(node.GetProperty(m_propertyTooltip->GetName()));
-	m_propertyContextHelp->ReadNodeValue(node.GetProperty(m_propertyContextHelp->GetName()));
+	m_propertyTooltip->SetNodeValue(node.GetProperty(m_propertyTooltip->GetName()));
+	m_propertyContextHelp->SetNodeValue(node.GetProperty(m_propertyContextHelp->GetName()));
 
-	m_propertyContextMenu->ReadNodeValue(node.GetProperty(m_propertyContextMenu->GetName()));
-	m_propertyEnabled->ReadNodeValue(node.GetProperty(m_propertyEnabled->GetName()));
-	m_propertyVisible->ReadNodeValue(node.GetProperty(m_propertyVisible->GetName()));
+	m_propertyContextMenu->SetNodeValue(node.GetProperty(m_propertyContextMenu->GetName()));
+	m_propertyEnabled->SetNodeValue(node.GetProperty(m_propertyEnabled->GetName()));
+	m_propertyVisible->SetNodeValue(node.GetProperty(m_propertyVisible->GetName()));
 
 	return ibValueSizer::ReadData(node);
 }

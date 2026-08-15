@@ -141,10 +141,10 @@ void ibValueButton::Cleanup(wxObject* obj, ibVisualHost* visualHost)
 
 bool ibValueButton::ReadData(const ibDataNode& node)
 {
-	m_propertyTitle->ReadNodeValue(node.GetProperty(m_propertyTitle->GetName()));
-	m_propertyRepresentation->ReadNodeValue(node.GetProperty(m_propertyRepresentation->GetName()));
-	m_propertyPicture->ReadNodeValue(node.GetProperty(m_propertyPicture->GetName()));
-	m_propertyCommand->ReadNodeValue(node.GetProperty(m_propertyCommand->GetName()));   // the button's ONLY binding (hop path)
+	m_propertyTitle->SetNodeValue(node.GetProperty(m_propertyTitle->GetName()));
+	m_propertyRepresentation->SetNodeValue(node.GetProperty(m_propertyRepresentation->GetName()));
+	m_propertyPicture->SetNodeValue(node.GetProperty(m_propertyPicture->GetName()));
+	m_propertyCommand->SetNodeValue(node.GetProperty(m_propertyCommand->GetName()));   // the button's ONLY binding (hop path)
 
 	return ibValueWindow::ReadData(node);
 }

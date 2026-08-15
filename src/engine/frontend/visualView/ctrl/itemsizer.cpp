@@ -171,21 +171,21 @@ ibFormID ibValueSizerItem::GetTypeForm() const
 
 bool ibValueSizerItem::ReadData(const ibDataNode& node)
 {
-	//m_propertyProportion->ReadNodeValue(node.GetProperty(m_propertyProportion->GetName()));
-	//m_propertyFlagBorder->ReadNodeValue(node.GetProperty(m_propertyFlagBorder->GetName()));
-	//m_propertyFlagState->ReadNodeValue(node.GetProperty(m_propertyFlagState->GetName()));
-	//m_propertyBorder->ReadNodeValue(node.GetProperty(m_propertyBorder->GetName()));
+	//m_propertyProportion->SetNodeValue(node.GetProperty(m_propertyProportion->GetName()));
+	//m_propertyFlagBorder->SetNodeValue(node.GetProperty(m_propertyFlagBorder->GetName()));
+	//m_propertyFlagState->SetNodeValue(node.GetProperty(m_propertyFlagState->GetName()));
+	//m_propertyBorder->SetNodeValue(node.GetProperty(m_propertyBorder->GetName()));
 
-	m_propertyProportion->ReadNodeValue(node.GetProperty(m_propertyProportion->GetName()));
-	//m_propertyFlagBorder->ReadNodeValue(node.GetProperty(m_propertyFlagBorder->GetName()));
+	m_propertyProportion->SetNodeValue(node.GetProperty(m_propertyProportion->GetName()));
+	//m_propertyFlagBorder->SetNodeValue(node.GetProperty(m_propertyFlagBorder->GetName()));
 
-	m_propertyFlagBorderLeft->ReadNodeValue(node.GetProperty(m_propertyFlagBorderLeft->GetName()));
-	m_propertyFlagBorderRight->ReadNodeValue(node.GetProperty(m_propertyFlagBorderRight->GetName()));
-	m_propertyFlagBorderTop->ReadNodeValue(node.GetProperty(m_propertyFlagBorderTop->GetName()));
-	m_propertyFlagBorderBottom->ReadNodeValue(node.GetProperty(m_propertyFlagBorderBottom->GetName()));
+	m_propertyFlagBorderLeft->SetNodeValue(node.GetProperty(m_propertyFlagBorderLeft->GetName()));
+	m_propertyFlagBorderRight->SetNodeValue(node.GetProperty(m_propertyFlagBorderRight->GetName()));
+	m_propertyFlagBorderTop->SetNodeValue(node.GetProperty(m_propertyFlagBorderTop->GetName()));
+	m_propertyFlagBorderBottom->SetNodeValue(node.GetProperty(m_propertyFlagBorderBottom->GetName()));
 
-	m_propertyFlagState->ReadNodeValue(node.GetProperty(m_propertyFlagState->GetName()));
-	m_propertyBorder->ReadNodeValue(node.GetProperty(m_propertyBorder->GetName()));
+	m_propertyFlagState->SetNodeValue(node.GetProperty(m_propertyFlagState->GetName()));
+	m_propertyBorder->SetNodeValue(node.GetProperty(m_propertyBorder->GetName()));
 
 	return ibValueFrame::ReadData(node);
 }

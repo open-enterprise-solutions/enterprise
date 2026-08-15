@@ -1475,6 +1475,50 @@ Two rules worth more than the bug:
   rules out the whole family of explanations that looked plausible (the `Create*` helpers differ by a
   single `bool`, and `ibItemMode` converts to it silently — a convincing and entirely wrong theory).
 
+## 5j. Why every apply re-added the same columns — 2026-08-15
+
+Found from a log Max collected, and it is worth reading as a whole because **no layer of it
+was wrong on its own**. The symptom was `RDB$INDEX_15 violation` on `FLD1080_TYPE` — the
+database refusing to add a column that was already there — and it reproduced on a register
+created from scratch minutes earlier, so nothing could be blamed on an old base.
+
+The log said it plainly once the DDL was read in order: `CREATE TABLE AccountingRegister1096`
+already contained `fld1108…fld1113`, and eight seconds later `ALTER TABLE … ADD fld1108_TYPE`
+asked for the same six slots. One apply, both statements.
+
+The chain, from the bottom:
+
+| # | What | Where |
+|---|---|---|
+| 1 | A property **absent from the file** was read as the type's zero, so `Correspondence` and `SplitTotals` — both default-TRUE — arrived false | `ibPropertyBoolean::ReadNodeValue`, and every other type alike |
+| 2 | Correspondence false ⇒ the credit block of slots is not written | `WriteData` |
+| 3 | Reading derived the debit slots' NAME from whether `AccountDimensionCr1` was in the file. No credit block ⇒ look for `AccountDimension1` while the file holds `AccountDimensionDr1` ⇒ the very first `FindProperty` answers null ⇒ the loop breaks on iteration one ⇒ `m_accountDimensionCount == 0` | `ReadData` |
+| 4 | The schema snapshot therefore knows of **no slots**, while `ContributeTables` still builds them ⇒ the differ emits `ADD` every time | `DiffSnapshots` |
+
+Step 3 is why the failure was total rather than partial: losing the credit half cost the
+**whole** breakdown, debit included.
+
+**Fixed at 1 and 3, which are the two that are wrong in themselves.**
+
+*1* — the empty-value gate moved into the non-virtual door
+(`ibBackendProperty::SetNodeValue`), so no property type ever sees an absent value and every
+default-true switch in the tree is protected at once, not just this register's two. The
+virtuals went `protected` so the gate cannot be bypassed.
+See [property-system.md § 6](property-system.md) and `tests/test_propertyDefaults.cpp`.
+
+*3* — each slot is now looked up under **both** spellings, `AccountDimensionDr<N>` then
+`AccountDimension<N>`, which is what the comment there always promised ("fall back to the bare
+one") and what the code did not do. The kind half derives its name from the slot's own name, so
+the pair cannot end up under different spellings. A neighbouring block is no longer evidence
+about this one.
+
+⚠ **Diagnostic worth keeping.** *The same `ALTER … ADD` repeating two or three times in one
+log, on columns a `CREATE TABLE` in the same run already listed*, means the snapshot and the
+DDL disagree about what exists — not that the base is damaged. Look at what the snapshot
+walks, not at the differ.
+
+---
+
 ## 6. Order of work
 
 > **All seven steps are done** — 1-3 on 2026-08-12 (§ 5a), 4-7 on 2026-08-13 (§ 5e); step 6's hierarchy

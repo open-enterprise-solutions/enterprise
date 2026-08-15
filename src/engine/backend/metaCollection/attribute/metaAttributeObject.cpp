@@ -140,11 +140,11 @@ bool ibValueMetaObjectAttributeBase::OnAfterRunMetaObject(int flags)
 
 bool ibValueMetaObjectAttribute::ReadData(const ibDataNode& node)
 {
-	m_propertyType->ReadNodeValue(node.GetProperty(m_propertyType->GetName()));
-	m_propertyFillCheck->ReadNodeValue(node.GetProperty(m_propertyFillCheck->GetName()));
-	m_propertyIndexingMode->ReadNodeValue(node.GetProperty(m_propertyIndexingMode->GetName()));
-	m_propertyItemMode->ReadNodeValue(node.GetProperty(m_propertyItemMode->GetName()));
-	m_propertySelectMode->ReadNodeValue(node.GetProperty(m_propertySelectMode->GetName()));
+	m_propertyType->SetNodeValue(node.GetProperty(m_propertyType->GetName()));
+	m_propertyFillCheck->SetNodeValue(node.GetProperty(m_propertyFillCheck->GetName()));
+	m_propertyIndexingMode->SetNodeValue(node.GetProperty(m_propertyIndexingMode->GetName()));
+	m_propertyItemMode->SetNodeValue(node.GetProperty(m_propertyItemMode->GetName()));
+	m_propertySelectMode->SetNodeValue(node.GetProperty(m_propertySelectMode->GetName()));
 	return true;
 }
 bool ibValueMetaObjectAttribute::WriteData(ibDataNode& node) const

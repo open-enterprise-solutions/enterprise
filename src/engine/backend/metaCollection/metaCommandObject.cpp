@@ -114,12 +114,12 @@ bool ibValueMetaObjectCommand::ReadData(const ibDataNode& node)
 	if (!ibValueMetaObject::ReadData(node))
 		return false;
 
-	m_propertyCommandModule->ReadNodeValue(node.GetProperty(m_propertyCommandModule->GetName()));
-	m_propertyInterfaceArea->ReadNodeValue(node.GetProperty(m_propertyInterfaceArea->GetName()));
-	m_propertyPicture->ReadNodeValue(node.GetProperty(m_propertyPicture->GetName()));
-	m_propertyTooltip->ReadNodeValue(node.GetProperty(m_propertyTooltip->GetName()));
-	m_propertyModifiesData->ReadNodeValue(node.GetProperty(m_propertyModifiesData->GetName()));
-	m_propertyParamType->ReadNodeValue(node.GetProperty(m_propertyParamType->GetName()));
+	m_propertyCommandModule->SetNodeValue(node.GetProperty(m_propertyCommandModule->GetName()));
+	m_propertyInterfaceArea->SetNodeValue(node.GetProperty(m_propertyInterfaceArea->GetName()));
+	m_propertyPicture->SetNodeValue(node.GetProperty(m_propertyPicture->GetName()));
+	m_propertyTooltip->SetNodeValue(node.GetProperty(m_propertyTooltip->GetName()));
+	m_propertyModifiesData->SetNodeValue(node.GetProperty(m_propertyModifiesData->GetName()));
+	m_propertyParamType->SetNodeValue(node.GetProperty(m_propertyParamType->GetName()));
 	return true;
 }
 

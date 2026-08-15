@@ -88,14 +88,14 @@ void ibValueWindow::ApplyLook(ibFrontendWindow* window)
 
 bool ibValueWindow::ReadData(const ibDataNode& node)
 {
-	m_propertyMinSize->ReadNodeValue(node.GetProperty(m_propertyMinSize->GetName()));
-	m_propertyMaxSize->ReadNodeValue(node.GetProperty(m_propertyMaxSize->GetName()));
-	m_propertyFont->ReadNodeValue(node.GetProperty(m_propertyFont->GetName()));
-	m_propertyFG->ReadNodeValue(node.GetProperty(m_propertyFG->GetName()));
-	m_propertyBG->ReadNodeValue(node.GetProperty(m_propertyBG->GetName()));
-	m_propertyTooltip->ReadNodeValue(node.GetProperty(m_propertyTooltip->GetName()));
-	m_propertyEnabled->ReadNodeValue(node.GetProperty(m_propertyEnabled->GetName()));
-	m_propertyVisible->ReadNodeValue(node.GetProperty(m_propertyVisible->GetName()));
+	m_propertyMinSize->SetNodeValue(node.GetProperty(m_propertyMinSize->GetName()));
+	m_propertyMaxSize->SetNodeValue(node.GetProperty(m_propertyMaxSize->GetName()));
+	m_propertyFont->SetNodeValue(node.GetProperty(m_propertyFont->GetName()));
+	m_propertyFG->SetNodeValue(node.GetProperty(m_propertyFG->GetName()));
+	m_propertyBG->SetNodeValue(node.GetProperty(m_propertyBG->GetName()));
+	m_propertyTooltip->SetNodeValue(node.GetProperty(m_propertyTooltip->GetName()));
+	m_propertyEnabled->SetNodeValue(node.GetProperty(m_propertyEnabled->GetName()));
+	m_propertyVisible->SetNodeValue(node.GetProperty(m_propertyVisible->GetName()));
 
 	return ibValueControl::ReadData(node);
 }

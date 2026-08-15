@@ -143,7 +143,7 @@ void ibValueToolbar::Cleanup(wxObject* obj, ibVisualHost* visualHost)
 
 bool ibValueToolbar::ReadData(const ibDataNode& node)
 {
-	m_actSource->ReadNodeValue(node.GetProperty(m_actSource->GetName()));
+	m_actSource->SetNodeValue(node.GetProperty(m_actSource->GetName()));
 	return ibValueWindow::ReadData(node);
 }
 

@@ -55,13 +55,13 @@ ibValueMetaObjectConfiguration::~ibValueMetaObjectConfiguration()
 
 bool ibValueMetaObjectConfiguration::ReadData(const ibDataNode& node)
 {
-	m_propertyVersion->ReadNodeValue(node.GetProperty(m_propertyVersion->GetName()));
+	m_propertyVersion->SetNodeValue(node.GetProperty(m_propertyVersion->GetName()));
 
-	m_propertyDefRole->ReadNodeValue(node.GetProperty(m_propertyDefRole->GetName()));
-	m_propertyDefLanguage->ReadNodeValue(node.GetProperty(m_propertyDefLanguage->GetName()));
-	m_propertyModuleConfiguration->ReadNodeValue(node.GetProperty(m_propertyModuleConfiguration->GetName()));
-	m_propertyModuleSession->ReadNodeValue(node.GetProperty(m_propertyModuleSession->GetName()));
-	m_propertySyntax->ReadNodeValue(node.GetProperty(m_propertySyntax->GetName()));
+	m_propertyDefRole->SetNodeValue(node.GetProperty(m_propertyDefRole->GetName()));
+	m_propertyDefLanguage->SetNodeValue(node.GetProperty(m_propertyDefLanguage->GetName()));
+	m_propertyModuleConfiguration->SetNodeValue(node.GetProperty(m_propertyModuleConfiguration->GetName()));
+	m_propertyModuleSession->SetNodeValue(node.GetProperty(m_propertyModuleSession->GetName()));
+	m_propertySyntax->SetNodeValue(node.GetProperty(m_propertySyntax->GetName()));
 
 	m_homePage.ReadNode(node.GetProperty(wxT("HomePage")));
 

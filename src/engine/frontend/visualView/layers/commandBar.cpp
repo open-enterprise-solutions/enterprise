@@ -690,14 +690,14 @@ bool ibValueCommandBarItem::WriteData(ibDataNode& node) const
 
 bool ibValueCommandBarItem::ReadData(const ibDataNode& node)
 {
-	m_propertyName->ReadNodeValue(node.GetProperty(m_propertyName->GetName()));
-	m_propertyCaption->ReadNodeValue(node.GetProperty(m_propertyCaption->GetName()));
-	m_propertyRepresentation->ReadNodeValue(node.GetProperty(m_propertyRepresentation->GetName()));
-	m_propertyPicture->ReadNodeValue(node.GetProperty(m_propertyPicture->GetName()));
-	m_propertyTooltip->ReadNodeValue(node.GetProperty(m_propertyTooltip->GetName()));
-	m_propertyEnabled->ReadNodeValue(node.GetProperty(m_propertyEnabled->GetName()));
-	m_propertyVisible->ReadNodeValue(node.GetProperty(m_propertyVisible->GetName()));
-	m_propertyCommand->ReadNodeValue(node.GetProperty(m_propertyCommand->GetName()));   // command SOURCE (the hop path)
+	m_propertyName->SetNodeValue(node.GetProperty(m_propertyName->GetName()));
+	m_propertyCaption->SetNodeValue(node.GetProperty(m_propertyCaption->GetName()));
+	m_propertyRepresentation->SetNodeValue(node.GetProperty(m_propertyRepresentation->GetName()));
+	m_propertyPicture->SetNodeValue(node.GetProperty(m_propertyPicture->GetName()));
+	m_propertyTooltip->SetNodeValue(node.GetProperty(m_propertyTooltip->GetName()));
+	m_propertyEnabled->SetNodeValue(node.GetProperty(m_propertyEnabled->GetName()));
+	m_propertyVisible->SetNodeValue(node.GetProperty(m_propertyVisible->GetName()));
+	m_propertyCommand->SetNodeValue(node.GetProperty(m_propertyCommand->GetName()));   // command SOURCE (the hop path)
 	return true;
 }
 
@@ -716,7 +716,7 @@ bool ibValueCommandBar::WriteData(ibDataNode& node) const
 
 bool ibValueCommandBar::ReadData(const ibDataNode& node)
 {
-	m_propertyAutoFill->ReadNodeValue(node.GetProperty(m_propertyAutoFill->GetName()));
+	m_propertyAutoFill->SetNodeValue(node.GetProperty(m_propertyAutoFill->GetName()));
 	m_items.clear();
 	for (const ibDataNode& child : node.Children()) {
 		ibValueCommandBarItem* item = AddCommandItem();   // creates + SetBar; ReadData overwrites the name

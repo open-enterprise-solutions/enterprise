@@ -188,17 +188,17 @@ bool ibValueMetaObjectCatalog::WriteData(ibDataNode& node) const
 
 bool ibValueMetaObjectCatalog::ReadData(const ibDataNode& node)
 {
-	m_propertyAttributeOwner->ReadNodeValue(node.GetProperty(m_propertyAttributeOwner->GetName()));
+	m_propertyAttributeOwner->SetNodeValue(node.GetProperty(m_propertyAttributeOwner->GetName()));
 
-	m_propertyObjectModule->ReadNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
-	m_propertyManagerModule->ReadNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
+	m_propertyObjectModule->SetNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));
+	m_propertyManagerModule->SetNodeValue(node.GetProperty(m_propertyManagerModule->GetName()));
 
 	m_propertyDefFormObject->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormObject->GetName())));
 	m_propertyDefFormFolder->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormFolder->GetName())));
 	m_propertyDefFormList->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormList->GetName())));
 	m_propertyDefFormSelect->SetValue(GetIdByGuid(node.GetValue<wxString>(m_propertyDefFormSelect->GetName())));
 
-	m_propertyOwner->ReadNodeValue(node.GetProperty(m_propertyOwner->GetName()));
+	m_propertyOwner->SetNodeValue(node.GetProperty(m_propertyOwner->GetName()));
 
 	return ibValueMetaObjectRecordDataHierarchyMutableRef::ReadData(node);
 }

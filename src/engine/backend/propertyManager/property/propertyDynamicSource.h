@@ -48,6 +48,11 @@ public:
 	virtual bool GetDataValue(ibValue& pvarPropVal) const override;
 
 	// Node serialization of the chosen source (its table id, verbatim). Copy uses the default hook (WriteNodeValue).
+	// "No source picked" is a question the property answers, not something a caller infers from a
+	// written value. WriteNodeValue succeeds either way (it simply writes nothing when there is no
+	// queryable), so testing its verdict never detected this — it read as "always set".
+	virtual bool IsEmptyProperty() const override { return GetQueryable() == nullptr; }
+
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
 	virtual bool WriteNodeValue(ibDataValue& value) const override;
 

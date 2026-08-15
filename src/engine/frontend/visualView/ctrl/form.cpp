@@ -101,11 +101,11 @@ void ibValueForm::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVi
 
 bool ibValueForm::ReadData(const ibDataNode& node)
 {
-	m_propertyTitle->ReadNodeValue(node.GetProperty(m_propertyTitle->GetName()));
-	m_propertyOrient->ReadNodeValue(node.GetProperty(m_propertyOrient->GetName()));
-	m_propertyFG->ReadNodeValue(node.GetProperty(m_propertyFG->GetName()));
-	m_propertyBG->ReadNodeValue(node.GetProperty(m_propertyBG->GetName()));
-	m_propertyEnabled->ReadNodeValue(node.GetProperty(m_propertyEnabled->GetName()));
+	m_propertyTitle->SetNodeValue(node.GetProperty(m_propertyTitle->GetName()));
+	m_propertyOrient->SetNodeValue(node.GetProperty(m_propertyOrient->GetName()));
+	m_propertyFG->SetNodeValue(node.GetProperty(m_propertyFG->GetName()));
+	m_propertyBG->SetNodeValue(node.GetProperty(m_propertyBG->GetName()));
+	m_propertyEnabled->SetNodeValue(node.GetProperty(m_propertyEnabled->GetName()));
 
 	if (!ReadAttributes(node))
 		return false;

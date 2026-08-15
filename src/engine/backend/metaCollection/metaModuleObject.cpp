@@ -102,7 +102,7 @@ void ibValueMetaObjectModuleBase::SetDefaultFunction(const wxString& funcname, s
 
 bool ibValueMetaObjectModule::ReadData(const ibDataNode& node)
 {
-	m_propertyModule->ReadNodeValue(node.GetProperty(m_propertyModule->GetName()));
+	m_propertyModule->SetNodeValue(node.GetProperty(m_propertyModule->GetName()));
 	return true;
 }
 
@@ -123,8 +123,8 @@ ibValueMetaObjectCommonModule::ibValueMetaObjectCommonModule(const wxString& nam
 
 bool ibValueMetaObjectCommonModule::ReadData(const ibDataNode& node)
 {
-	m_propertyModule->ReadNodeValue(node.GetProperty(m_propertyModule->GetName()));
-	m_propertyGlobalModule->ReadNodeValue(node.GetProperty(m_propertyGlobalModule->GetName()));
+	m_propertyModule->SetNodeValue(node.GetProperty(m_propertyModule->GetName()));
+	m_propertyGlobalModule->SetNodeValue(node.GetProperty(m_propertyGlobalModule->GetName()));
 	return true;
 }
 
