@@ -261,6 +261,27 @@ struct ibDialectDictionary
 	// requires a one-row dummy table -> "RDB$DATABASE". Set per driver; empty = emit no FROM at all.
 	wxString m_selectFromDual = wxEmptyString;
 
+	// HOW A PLACEHOLDER STATES ITS TYPE inside the UNION-ALL spelling of a batched INSERT.
+	// Placeholders: {value} — the rendered value (a bind marker); {table} / {column} — where it is
+	// going. EMPTY = this engine needs nothing, emit {value} bare.
+	//
+	// In `INSERT INTO t (a) VALUES (?)` the parameter takes its type from the target column. In
+	// `INSERT INTO t (a) SELECT ? FROM …` it does NOT — the SELECT is typed first, on its own, and a
+	// bare `?` there has nothing to be typed FROM. Firebird says so and refuses to prepare:
+	//
+	//     Dynamic SQL Error / SQL error code = -804 / Data type unknown
+	//
+	// Three cheaper spellings were tried against a live engine and all three still fail: typing only
+	// the FIRST union branch, seeding the union with a zero-row SELECT off the target table, and
+	// leaving the extra branches bare. Firebird types EVERY branch independently. So every
+	// placeholder in every branch carries its own cast, which is what this template renders.
+	// (tests/test_firebirdBatchInsert.cpp keeps all four answers, against a real Firebird.)
+	//
+	// It casts to TYPE OF COLUMN rather than to a type word so the ENGINE looks the type up in its
+	// own catalogue. The alternative — the renderer deciding what a column holds — would be a second
+	// authority on the schema sitting next to the one that created it, free to disagree with it.
+	wxString m_batchInsertCast = wxEmptyString;
+
 	// Period truncation: unit -> a SQL expression template with ONE placeholder, {expr}. This is
 	// what the L2-1 renderer spells an ibQueryExprKind::PeriodTrunc node through, so ANY query can
 	// group by month without its author naming an engine. A unit absent from the map is NOT

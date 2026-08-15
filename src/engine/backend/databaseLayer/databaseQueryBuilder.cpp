@@ -1030,6 +1030,22 @@ ibRenderedQuery ibQueryRenderer::RenderDML(const ibDmlStatement& dml)
 			const wxString fromDual = m_dialect.m_selectFromDual.empty()
 				? wxString() : (wxT(" FROM ") + m_dialect.m_selectFromDual);
 
+			// A SELECT list types itself, so a placeholder in one cannot take its type from the
+			// column it is going into the way a VALUES list's does. Engines that need to be told
+			// say so through m_batchInsertCast; the rest leave it empty and pay nothing. The
+			// column comes from m_assignments — every row is IN THE SAME COLUMN ORDER, which is
+			// what m_extraRows means.
+			const auto value = [&](const ibQueryExprPtr& expr, size_t col) {
+				const wxString rendered = RenderExpr(expr);   // pushes a bind param — call ONCE
+				if (m_dialect.m_batchInsertCast.empty() || col >= dml.m_assignments.size())
+					return rendered;
+				wxString cast = m_dialect.m_batchInsertCast;
+				cast.Replace(wxT("{value}"),  rendered);
+				cast.Replace(wxT("{table}"),  QuoteIdent(dml.m_table));
+				cast.Replace(wxT("{column}"), QuoteIdent(dml.m_assignments[col].m_column));
+				return cast;
+			};
+
 			sql = wxT("INSERT INTO ") + QuoteIdent(dml.m_table) + wxT(" (");
 			for (size_t i = 0; i < dml.m_assignments.size(); ++i) {
 				if (i) sql += wxT(", ");
@@ -1038,14 +1054,14 @@ ibRenderedQuery ibQueryRenderer::RenderDML(const ibDmlStatement& dml)
 			sql += wxT(") SELECT ");
 			for (size_t i = 0; i < dml.m_assignments.size(); ++i) {
 				if (i) sql += wxT(", ");
-				sql += RenderExpr(dml.m_assignments[i].m_value);   // pushes a bind param
+				sql += value(dml.m_assignments[i].m_value, i);
 			}
 			sql += fromDual;
 			for (const std::vector<ibQueryExprPtr>& row : dml.m_extraRows) {
 				sql += wxT(" UNION ALL SELECT ");
 				for (size_t i = 0; i < row.size(); ++i) {
 					if (i) sql += wxT(", ");
-					sql += RenderExpr(row[i]);   // binds push after the prior rows' — placeholder order holds
+					sql += value(row[i], i);   // binds push after the prior rows' — placeholder order holds
 				}
 				sql += fromDual;
 			}

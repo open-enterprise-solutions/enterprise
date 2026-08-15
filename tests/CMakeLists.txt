@@ -49,6 +49,7 @@ add_executable(oes_tests
     # test_pagingRamTable.cpp  # API-rotted (ibValueModelTableBase renamed) — excluded until updated
     test_blobCompression.cpp
     test_firebirdLease.cpp
+    test_firebirdBatchInsert.cpp
     test_logger.cpp
     test_dbTaxonomy.cpp
     test_gitService.cpp

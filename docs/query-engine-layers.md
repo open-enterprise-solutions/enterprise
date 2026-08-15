@@ -73,8 +73,9 @@ dictionary, and neither knows anything about metadata:
   -- PostgreSQL / SQLite
   INSERT INTO t (c1, c2) VALUES (?, ?), (?, ?), (?, ?)
   -- Firebird: no multi-row VALUES at ANY version, but it does have UNION ALL
-  INSERT INTO t (c1, c2) SELECT ?, ? FROM RDB$DATABASE
-                  UNION ALL SELECT ?, ? FROM RDB$DATABASE
+  INSERT INTO t (c1, c2)
+       SELECT CAST(? AS TYPE OF COLUMN t.c1), CAST(? AS TYPE OF COLUMN t.c2) FROM RDB$DATABASE
+    UNION ALL SELECT CAST(? AS TYPE OF COLUMN t.c1), CAST(? AS TYPE OF COLUMN t.c2) FROM RDB$DATABASE
   ```
 
   The `FROM` comes from the same `m_selectFromDual` the source-less SELECT already uses. A caller
@@ -82,6 +83,26 @@ dictionary, and neither knows anything about metadata:
   second mechanism. The slot pre-dates this (the temp-table manager bulk-fills through it); giving
   it the Firebird form is what let the L3 write door batch at all, and made temp bulk-fill work on
   Firebird as a side effect.
+
+  ⚠ **THE PLACEHOLDERS HAVE TO SAY WHAT THEY ARE** (`m_batchInsertCast`, added 2026-08-16 after the
+  first live write failed). In `VALUES (?)` a parameter takes its type from the target column; in
+  `SELECT ? FROM …` it does NOT, because the SELECT is typed on its own first. Firebird refuses to
+  prepare — `SQL error code = -804 / Data type unknown` — and every branch is typed independently:
+  casting only the first branch does not help, and neither does seeding the union with a zero-row
+  `SELECT … FROM t WHERE 1=0`. Both were tried against a live engine and both still fail. So every
+  placeholder in every branch carries its own cast, and it casts to `TYPE OF COLUMN` so the ENGINE
+  looks the type up rather than the renderer holding a second opinion about the schema. Engines that
+  need nothing leave the slot empty and render the placeholder bare.
+
+  The cost is width: ~50 characters per placeholder. The widest thing that writes this way — 21
+  columns × the 50-row chunk — measures **56 548 characters and 1050 parameters, and prepares**, so
+  no chunk cap was added. `tests/test_firebirdBatchInsert.cpp` holds all of it (the four spellings
+  and the width) against a real Firebird, and SKIPS where no client exists.
+
+  🛑 **Why this reached a user.** The form is Firebird's, and CI runs SQLite — which HAS multi-row
+  VALUES and therefore never renders it. The only coverage was a TEXT assertion against the SQLite
+  dialect. A spelling that exists for one engine has to be executed on that engine or it is not
+  tested at all.
 
 - **L2-2 — the materialization renderer** (`databaseMaterializeBuilder`). An `ibMaterializeSpec` →
   the trigger / view statements that maintain a **derived** table, rendered through the driver's

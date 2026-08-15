@@ -36,6 +36,9 @@ const ibDialectDictionary& ibDatabaseLayerFirebird::Dialect()
 		d.m_pagination  = ibPagination::FirstSkip;    // SELECT FIRST n SKIP m
 		d.m_boolForm    = ibBoolForm::Smallint;       // no native boolean pre-FB3
 		d.m_selectFromDual = wxT("RDB$DATABASE");     // FB has no bare FROM-less SELECT — the WITH-CHECK one-row source needs a dummy table
+		// A `?` in a SELECT list is untyped here (-804), and the batched INSERT is spelled as
+		// SELECTs — so each one names the column it is going into and lets FB look the type up.
+		d.m_batchInsertCast = wxT("CAST({value} AS TYPE OF COLUMN {table}.{column})");   // FB 2.5+
 		// UPDATE OR INSERT … MATCHING (pk) — no separate update body.
 		d.m_upsertTemplate   = wxT("UPDATE OR INSERT INTO {table} ({columns}) VALUES ({values}) MATCHING ({keys})");
 		d.m_upsertUpdateItem = wxEmptyString;
