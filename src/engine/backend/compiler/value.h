@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <atomic>
+#include <cstdint>       // uint64_t — the hash mixer accumulates in it, never in size_t
 #include <type_traits>   // the pointer catch-all below (enable_if / is_base_of / is_same)
 #include <typeinfo>
 #include <unordered_map>
@@ -1633,6 +1634,21 @@ private:
 };
 
 // ---------------------------------------------------------------------------
+// THE MIXER, once. Every value hash in the engine is spelled through these two and
+// nowhere else — five hand-written copies of FNV-1a is five chances for one of them
+// to be typed slightly differently, and a hash that differs by site is not a hash.
+//
+// ⚠ ACCUMULATE IN uint64_t, NARROW ONCE AT THE END. size_t is 32 bits on the x86
+// build while these constants are 64, so a size_t accumulator silently TRUNCATES
+// them and that build runs a different — and much worse — hash than the x64 one.
+// MSVC does say so (C4305/C4309), but only when the SOLUTION is built: the CMake
+// test tree is x64, so the whole family of this defect is invisible there.
+constexpr std::uint64_t kIbHashBasis = 14695981039346656037ULL;   // FNV-1a offset basis
+inline std::uint64_t ibHashCombine(std::uint64_t h, std::uint64_t v)
+{
+	return (h ^ v) * 1099511628211ULL;                            // FNV-1a prime
+}
+
 // KEY POLICY — the one way to key a hash container BY VALUE.
 //
 // Grouping, joining and de-duplicating all need the same pair: a hash, and the
@@ -1664,11 +1680,10 @@ struct ibValueEqual {
 // without it they would only be told apart by the comparison.
 struct ibValueSeqHash {
 	size_t operator()(const std::vector<ibValue>& seq) const {
-		size_t h = 1469598103934665603ULL;                   // FNV-1a offset basis
-		h = (h ^ seq.size()) * 1099511628211ULL;
+		std::uint64_t h = ibHashCombine(kIbHashBasis, seq.size());
 		for (const ibValue& value : seq)
-			h = (h ^ value.GetValueHash()) * 1099511628211ULL;
-		return h;
+			h = ibHashCombine(h, value.GetValueHash());
+		return (size_t)h;
 	}
 };
 struct ibValueSeqEqual {

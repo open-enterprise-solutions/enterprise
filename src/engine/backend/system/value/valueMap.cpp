@@ -40,10 +40,10 @@ size_t ibValueContainer::HashOf(const ibValue& key)
 	if (key.GetType() == ibValueTypes::TYPE_STRING) {
 		ibString scratch;
 		const ibString& text = key.GetString(scratch);       // zero-copy for a string key
-		size_t h = 1469598103934665603ULL;                   // FNV-1a offset basis (64-bit)
+		std::uint64_t h = kIbHashBasis;
 		for (const wchar_t* p = text.wc_str(); *p != L'\0'; ++p)
-			h = (h ^ (size_t)FoldChar(*p)) * 1099511628211ULL;
-		return h;                                            // folded once, per lookup — not per candidate
+			h = ibHashCombine(h, FoldChar(*p));
+		return (size_t)h;                                    // folded once, per lookup — not per candidate
 	}
 	return key.GetValueHash();                               // the value's own hash, agreeing with its order
 }
@@ -143,13 +143,12 @@ int ibValueContainer::CompareValueLS(const ibValue& cParam) const
 // in — {a:1} and {a:2} are different containers.
 size_t ibValueContainer::GetValueHash() const
 {
-	size_t h = 1469598103934665603ULL;                       // FNV-1a offset basis
-	h = (h ^ m_entries.size()) * 1099511628211ULL;
+	std::uint64_t h = ibHashCombine(kIbHashBasis, m_entries.size());
 	for (const auto& entry : m_entries) {
-		h = (h ^ entry.first.GetValueHash())  * 1099511628211ULL;
-		h = (h ^ entry.second.GetValueHash()) * 1099511628211ULL;
+		h = ibHashCombine(h, entry.first.GetValueHash());
+		h = ibHashCombine(h, entry.second.GetValueHash());
 	}
-	return h;
+	return (size_t)h;
 }
 
 // Equality asks the entries for EQUALITY — the type-strict rule — rather than

@@ -115,13 +115,12 @@ public:
 	// header — the reason CompareValueLS itself lives out of line.
 	virtual size_t GetValueHash() const override {
 		const ibGuidImpl raw = m_objGuid;
-		size_t h = 1469598103934665603ULL;                    // FNV-1a offset basis
-		h = (h ^ (size_t)raw.m_data1) * 1099511628211ULL;
-		h = (h ^ (size_t)raw.m_data2) * 1099511628211ULL;
-		h = (h ^ (size_t)raw.m_data3) * 1099511628211ULL;
+		std::uint64_t h = ibHashCombine(kIbHashBasis, raw.m_data1);
+		h = ibHashCombine(h, raw.m_data2);
+		h = ibHashCombine(h, raw.m_data3);
 		for (const unsigned char byte : raw.m_data4)
-			h = (h ^ (size_t)byte) * 1099511628211ULL;
-		return h;
+			h = ibHashCombine(h, byte);
+		return (size_t)h;
 	}
 
 	//operator '!='

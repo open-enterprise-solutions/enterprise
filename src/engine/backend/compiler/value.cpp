@@ -1273,19 +1273,19 @@ bool ibValue::CompareValueNE(const ibValue& cParam) const
 // is stated over CompareValueLS (see value.h), so it reads in order — the
 // ordering first, then the hash that has to agree with it.
 
-// FNV-1a, the same mixer the container keys already use — one place to change if
-// the quality ever proves insufficient.
-static inline size_t HashStep(size_t h, uint64_t v)
+// A whole scalar payload, fed through the shared mixer OCTET BY OCTET — which is
+// what FNV-1a actually is, and what a raw 64-bit payload needs: the composite
+// hashes above fold values that are already well-mixed hashes, these fold a date
+// or an integer straight off the field.
+static inline std::uint64_t HashStep(std::uint64_t h, std::uint64_t v)
 {
 	for (int i = 0; i < 8; ++i, v >>= 8)
-		h = (h ^ (size_t)(v & 0xFF)) * 1099511628211ULL;
+		h = ibHashCombine(h, v & 0xFF);
 	return h;
 }
 
 size_t ibValue::GetValueHash() const
 {
-	constexpr size_t kBasis = 1469598103934665603ULL;   // FNV-1a offset basis
-
 	switch (m_typeClass)
 	{
 	// Both "no scalar payload" tags order equal to each other and below
@@ -1300,17 +1300,17 @@ size_t ibValue::GetValueHash() const
 	// blurred to meet the other. A date keeps its full instant for the same
 	// reason: the /1000 it used to carry existed only to meet GetNumber().
 	case ibValueTypes::TYPE_BOOLEAN:
-		return HashStep(kBasis, m_bData ? 1u : 0u);
+		return (size_t)HashStep(kIbHashBasis, m_bData ? 1u : 0u);
 	case ibValueTypes::TYPE_DATE:
-		return HashStep(kBasis, (uint64_t)m_dData);
+		return (size_t)HashStep(kIbHashBasis, (uint64_t)m_dData);
 	// A number still blurs to its integer part, and that one is NOT optional:
 	// 1 and 1.0 are the same number and must share a bucket. 1.5 joining them
 	// costs one comparison.
 	case ibValueTypes::TYPE_NUMBER: {
 		long long whole = 0;
 		if (m_fData.ToInt(whole) != 0)
-			return HashStep(kBasis, ~0ULL);   // past int64 — one bucket for all of them
-		return HashStep(kBasis, (uint64_t)whole);
+			return (size_t)HashStep(kIbHashBasis, ~0ULL);   // past int64 — one bucket for all of them
+		return (size_t)HashStep(kIbHashBasis, (uint64_t)whole);
 	}
 
 	case ibValueTypes::TYPE_CONST_REFFER:
@@ -1323,10 +1323,10 @@ size_t ibValue::GetValueHash() const
 	default: {
 		ibString scratch;
 		const ibString& text = GetString(scratch);
-		size_t h = kBasis;
+		std::uint64_t h = kIbHashBasis;
 		for (const wchar_t* p = text.wc_str(); *p != L'\0'; ++p)
-			h = (h ^ (size_t)*p) * 1099511628211ULL;
-		return h;
+			h = ibHashCombine(h, *p);
+		return (size_t)h;
 	}
 	}
 }

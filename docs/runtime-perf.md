@@ -1092,8 +1092,52 @@ Not performance, found while reading the comparator:
   non-transitivity visible. `ValueOrderAcrossKinds.EqualityUnderOrderIsTransitive` now states the
   property directly.
 
-⚠ **Non-ASCII key folding is the process locale's, not ours.** `KeyHash`/`KeyEq` fold case through
-`std::towupper`, which folds a non-ASCII letter only where the locale says how. The same
+⚠ **Non-ASCII key folding is the process locale's, not ours.** `HashOf`/`FoldedEquals` fold case
+through `std::towupper`, which folds a non-ASCII letter only where the locale says how. The same
 configuration therefore sees case-SENSITIVE Cyrillic keys headless (daemon, codeRunner, the suite)
 and case-INSENSITIVE ones under a UI locale. Unchanged by this work — an ASCII fast path was added
 in front of the same call — but for a Russian-language platform it is a language question, open.
+
+### The x86 build was running a different hash, and only the SOLUTION said so
+
+The arc above landed and pushed green. Then the MSBuild solution was built — Debug|x86, which the
+CMake tree never produces — and two warnings came back on `value.h`:
+
+```
+warning C4305: truncation from 'unsigned __int64' to 'size_t'
+warning C4309: truncation of constant value
+```
+
+`size_t` is 32 bits on x86. Every hash written in this arc accumulated in `size_t`, and FNV-1a's
+constants are 64-bit, so on that build the basis and the prime were **silently cut to their low 32
+bits** — a hash of a different, and much worse, shape than the x64 one. Not a crash and not a wrong
+answer: containers would still have found their keys, just with more collisions than intended, which
+is the kind of defect that never announces itself.
+
+Six sites had it — `ibValueSeqHash` (value.h), `ibValue::GetValueHash` and its `HashStep`
+(value.cpp), both container hashes (valueMap.cpp), the array's (valueArray.cpp) and the reference's
+(reference.h).
+
+**The fix is not six casts, it is one primitive.** Six hand-written copies of FNV-1a is six chances
+for one of them to be typed a little differently, so the mixer now exists once, in value.h beside the
+key policy it serves:
+
+```cpp
+constexpr std::uint64_t kIbHashBasis = 14695981039346656037ULL;   // FNV-1a offset basis
+inline std::uint64_t ibHashCombine(std::uint64_t h, std::uint64_t v)
+{
+	return (h ^ v) * 1099511628211ULL;                            // FNV-1a prime
+}
+```
+
+Every site accumulates in `uint64_t` through it and narrows ONCE at the return. The basis was also
+wrong on the way in: `1469598103934665603` is `14695981039346656037` with digits dropped, a typo
+this arc copied from `helpCorpus.cpp` / `leakTracker.cpp`, which still carry it (harmless there, and
+`helpCorpus`'s digest is compared against stored values — left alone deliberately). `clsid.h` had the
+correct one all along.
+
+🛑 **The lesson is about COVERAGE, not about casts.** The test tree is CMake and CMake here is x64;
+the solution is the only thing that builds x86. A whole class of defect — anything that depends on
+the width of `size_t`, `long`, or a pointer — is therefore invisible to `ctest` and to CI, and shows
+up only when somebody builds the solution. This one was caught by a build that was asked for after
+the push, not before it. **Build the solution before the push, not after.**

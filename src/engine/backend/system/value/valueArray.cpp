@@ -426,11 +426,10 @@ int ibValueArray::CompareValueLS(const ibValue& cParam) const
 // mixing the count in keeps them apart without a second walk.
 size_t ibValueArray::GetValueHash() const
 {
-	size_t h = 1469598103934665603ULL;                       // FNV-1a offset basis
-	h = (h ^ m_listValue.size()) * 1099511628211ULL;
+	std::uint64_t h = ibHashCombine(kIbHashBasis, m_listValue.size());
 	for (const ibValue& element : m_listValue)
-		h = (h ^ element.GetValueHash()) * 1099511628211ULL;
-	return h;
+		h = ibHashCombine(h, element.GetValueHash());
+	return (size_t)h;
 }
 
 // Equality asks the elements for EQUALITY, not for order-equal: the EQ family is
