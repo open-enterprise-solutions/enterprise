@@ -10,7 +10,7 @@
        CMake build with a driver switched OFF still referenced it and failed to link
        (caught by CI on 2026-08-02, the Windows job with PostgreSQL off). -->
   <PropertyGroup>
-    <OesDriverDefines>OES_USE_FIREBIRD;OES_USE_POSTGRESQL;OES_USE_MYSQL;OES_USE_ODBC;</OesDriverDefines>
+    <OesDriverDefines>OES_USE_FIREBIRD;OES_USE_POSTGRESQL;OES_USE_ODBC;</OesDriverDefines>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
     <ClCompile>

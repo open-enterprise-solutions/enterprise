@@ -225,7 +225,7 @@ bool ibUserInfo::Save(const ibUserInfo& info)
 	writer.w_chunk(eBlockRole, WriteRoleChunk    (info));
 	writer.w_chunk(eBlockLang, WriteLanguageChunk(info));
 
-	// One UPSERT, match on guid — the door renders ON CONFLICT (PG/SQLite/MySQL) vs
+	// One UPSERT, match on guid — the door renders ON CONFLICT (PG/SQLite) vs
 	// UPDATE OR INSERT … MATCHING (FB), so the per-driver fork is gone. The blob binds via ibConstBlob.
 	try {
 		ibDatabaseQueryBuilder q;

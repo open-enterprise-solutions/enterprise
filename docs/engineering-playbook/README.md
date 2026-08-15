@@ -2,7 +2,7 @@
 
 Corporate development standards for **Open Enterprise Solutions** — a cross-platform low-code/no-code C++ platform. Rules for project organisation, code management, teamwork, and quality control. Mandatory for all team members and AI agents.
 
-**Stack:** C++17, wxWidgets 3.3.2, MSBuild / CMake, Firebird (primary DBMS), PostgreSQL, SQLite, MySQL, ODBC
+**Stack:** C++17, wxWidgets 3.3.2, MSBuild / CMake, Firebird (primary DBMS) and PostgreSQL, SQLite (tests + logging), ODBC
 
 **License:** LGPL 2.1
 

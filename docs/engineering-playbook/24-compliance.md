@@ -84,7 +84,7 @@ Every new `.cpp` / `.h` file must start with:
 
 > **Note on LGPL 3.0:** It includes anti-tivoization requirements (§6 GPL 3.0 inherited through LGPL 3.0). That means if OES or an LGPL 3.0 dependency ships on a device with hardware restrictions (e.g. signed firmware that prevents replacing the library), the user must be able to install a modified version. For a desktop Windows/Linux application this is usually satisfied automatically (the DLL can be replaced), but it must be checked for embedded or OEM shipments. Consult lawyers when shipping to closed-platform devices.
 
-> **MySQL Connector/C warning:** The GPL 2.0 version is **incompatible with LGPL 2.1**. Dynamically or statically linking a GPL library with OES code spreads GPL across the entire distribution, breaking the OES license. If MySQL support is needed, use the **commercial MySQL Connector license** (Oracle OEM license) or switch to MariaDB Connector/C (LGPL 2.1). Verify the current version in THIRD_PARTY_LICENSES.md before every release.
+> **MySQL Connector/C - RESOLVED 2026-08-15, the driver was removed.** Its GPL 2.0 licence was **incompatible with LGPL 2.1**. Dynamically or statically linking a GPL library with OES code spreads GPL across the entire distribution, breaking the OES license. The exposure left the tree with the driver and no replacement is planned: production is Firebird and PostgreSQL. Kept here as the record of a licence risk that was closed by deletion rather than by a licence purchase.
 
 ### License audit when adding a dependency
 
@@ -113,7 +113,6 @@ Every new `.cpp` / `.h` file must start with:
 | Firebird | 4.0 | IDPL / LGPL | https://firebirdsql.org |
 | libpq (PostgreSQL) | 16 | PostgreSQL License | https://postgresql.org |
 | SQLite | 3.45 | Public Domain | https://sqlite.org |
-| MySQL Connector/C | 8.0 | GPL 2.0 / Commercial | https://mysql.com |
 | zlib | 1.3 | zlib License | https://zlib.net |
 | libcurl | 8.6 | curl License (MIT-like) | https://curl.se |
 ```

@@ -812,7 +812,7 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const wx
 			value = ibCase({ { when, value } }, zero);
 
 		if (c.m_aggregate) {
-			// Pin the width: a bare SUM narrows to (9,0)/(10,0) on Firebird and MySQL and silently
+			// Pin the width: a bare SUM narrows to (9,0)/(10,0) on Firebird and silently
 			// truncates the fraction.
 			value = ibCast(ibFunc(wxT("SUM"), { value }), ibTypeNumber(18, 6));
 			anyAggregate = true;

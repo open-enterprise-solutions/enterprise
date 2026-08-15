@@ -52,7 +52,7 @@ void ibDatabaseErrorReporter::ThrowDatabaseException()
 	// layer. Removing it leaves one clean responsibility.
 	//
 	// Virtual dispatch into the concrete driver's classifier — FB walks
-	// its isc_status array, PG/MySQL/ODBC consult SQLSTATE, SQLite stays
+	// its isc_status array, PG/ODBC consult SQLSTATE, SQLite stays
 	// with the default Unknown. GetSqlState() comes from the same
 	// per-driver override so admin logs see what the engine actually
 	// reported. Kind / native_code / sqlstate / message all travel on

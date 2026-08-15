@@ -40,7 +40,7 @@ public:
 		Constraint,
 
 		// Database-side deadlock (FB isc_lock_conflict, PG SQLSTATE
-		// 40P01, MySQL 1213, MSSQL 1205). Always safe to retry — the
+		// 40P01, MSSQL 1205). Always safe to retry — the
 		// engine has already rolled back our TX.
 		Deadlock,
 

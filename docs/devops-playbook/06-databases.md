@@ -1,7 +1,7 @@
 # 06. Database administration — OES
 
 > OES supports several DBMSs. The primary one is Firebird (embedded and server).
-> PostgreSQL, MySQL, SQLite, ODBC are alternative backends.
+> PostgreSQL is the other production backend. SQLite serves tests and logging only; ODBC is the base an MSSQL layer derives from.
 
 ---
 
@@ -552,34 +552,6 @@ gzip "${BACKUP_DIR}/oes_${DATE}.sqlite3"
 find "$BACKUP_DIR" -name "*.sqlite3.gz" -mtime +$RETENTION_DAYS -delete
 
 echo "SQLite backup: oes_${DATE}.sqlite3.gz"
-```
-
----
-
-## MySQL/MariaDB (optional)
-
-```bash
-# Installation
-sudo apt install -y mysql-server libmysqlclient-dev
-
-# Create user and database for OES
-sudo mysql
-```
-
-```sql
-CREATE USER 'oes_user'@'localhost' IDENTIFIED BY 'GENERATED_PASSWORD';
-CREATE DATABASE oes_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-GRANT ALL PRIVILEGES ON oes_db.* TO 'oes_user'@'localhost';
-FLUSH PRIVILEGES;
-QUIT;
-```
-
-```bash
-# Backup
-mysqldump -u oes_user -p oes_db | gzip > /var/backups/mysql/oes_$(date +%Y%m%d).sql.gz
-
-# Restore
-gunzip -c /var/backups/mysql/oes_20250115.sql.gz | mysql -u oes_user -p oes_db
 ```
 
 ---

@@ -350,7 +350,5 @@ and owns its own runtime.** That single difference explains every branch above.
 - **The version word is written but discarded on read** (`version_oes_last` → `(void)r_u32()`).
   No migration path yet; its real consumer is copy/paste of metaobjects across configs of
   different versions (see [metadata-serialization-arc.md](metadata-serialization-arc.md) Step 1).
-- **MySQL DDL is non-transactional** — the one place delete atomicity is not free; preflight
-  "everything droppable" is the only guard there.
 - **The DB-load path is not atomic-on-failure** (it pre-clears), unlike the file-load path — but
   a DB-load failure is a corrupt-config / startup case, not a live edit.

@@ -259,7 +259,7 @@ same balance, both compute from it, the second write silently overwrites the fir
 the second reader waits (or is refused, if the dialect can say NOWAIT).
 
 The rendering half is already in the driver layer: `m_rowLockSuffix` — `" FOR UPDATE"` on
-Postgres and MySQL, `" WITH LOCK"` on Firebird, appended after ORDER BY / LIMIT, with
+Postgres, `" WITH LOCK"` on Firebird, appended after ORDER BY / LIMIT, with
 `m_lockNoWait` for the non-blocking form (empty on Firebird, which expresses it through the
 transaction instead). And the platform already locks records on its own path at write time
 ([record-locks.md](record-locks.md), lock + DataVersion check).

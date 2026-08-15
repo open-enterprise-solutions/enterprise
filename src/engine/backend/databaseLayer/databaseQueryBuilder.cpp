@@ -476,7 +476,7 @@ ibRenderedQuery ibQueryRenderer::Render(const ibQueryIR& ir)
 	if (ir.m_lockForUpdate && !m_dialect.m_rowLockSuffix.empty()) {
 		m_out.m_sql += m_dialect.m_rowLockSuffix;
 		if (ir.m_lockNoWait)
-			m_out.m_sql += m_dialect.m_rowLockNoWaitSuffix;   // " NOWAIT" (PG/MySQL); empty on FB/SQLite
+			m_out.m_sql += m_dialect.m_rowLockNoWaitSuffix;   // " NOWAIT" (PG); empty on FB/SQLite
 	}
 	return m_out;
 }
@@ -580,7 +580,7 @@ wxString ibQueryRenderer::RenderSelect(const ibQueryRel* root)
 
 	// A source-less SELECT (the WITH-CHECK derived one-row VALUES relation: a Project with no input) has
 	// no Scan/Join/Subquery -> `source` stays null. Emit the dialect's dummy table (FB "RDB$DATABASE") or,
-	// where a bare FROM-less SELECT is legal (PG/SQLite/MySQL), no FROM at all.
+	// where a bare FROM-less SELECT is legal (PG/SQLite), no FROM at all.
 	if (source)
 		sql += wxT(" FROM ") + RenderSource(source);
 	else if (!m_dialect.m_selectFromDual.empty())
@@ -598,12 +598,12 @@ wxString ibQueryRenderer::RenderSelect(const ibQueryRel* root)
 	// plan stays in SQL-text order (HAVING params follow WHERE params).
 	if (!groupKeys.empty()) {
 		sql += wxT(" GROUP BY ");
-		if (rollup) sql += m_dialect.m_rollupPrefix;   // "ROLLUP(" (standard) / "" (MySQL WITH ROLLUP)
+		if (rollup) sql += m_dialect.m_rollupPrefix;   // "ROLLUP(" (standard) / "" (MSSQL WITH ROLLUP)
 		for (size_t i = 0; i < groupKeys.size(); ++i) {
 			if (i) sql += wxT(", ");
 			sql += RenderExpr(groupKeys[i]);
 		}
-		if (rollup) sql += m_dialect.m_rollupSuffix;   // ")" (standard) / " WITH ROLLUP" (MySQL)
+		if (rollup) sql += m_dialect.m_rollupSuffix;   // ")" (standard) / " WITH ROLLUP" (MSSQL)
 	}
 	if (having)
 		sql += wxT(" HAVING ") + RenderExpr(having);
@@ -734,7 +734,7 @@ wxString ibQueryRenderer::RenderExpr(const ibQueryExprPtr& expr)
 
 	case ibQueryExprKind::Cast:
 		// Spell the canonical target type through the dialect TYPE-MAP (SQLite date=TEXT, bool=INTEGER,
-		// FB / MySQL DECIMAL widened) — the same speller the DDL path uses. No dialect fork here.
+		// FB DECIMAL widened) — the same speller the DDL path uses. No dialect fork here.
 		return wxT("CAST(") + RenderExpr(expr->m_lhs) + wxT(" AS ") + MapType(expr->m_castType) + wxT(")");
 
 	case ibQueryExprKind::Exists:

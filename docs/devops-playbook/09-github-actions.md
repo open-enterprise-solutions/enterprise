@@ -142,7 +142,7 @@ jobs:
           brew install cmake ninja pkg-config
           brew install wxwidgets
           brew install firebird
-          brew install libpq sqlite mysql-client
+          brew install libpq sqlite
           brew install cppcheck
 
       # Linux: install dependencies via apt + wxWidgets from source
@@ -154,7 +154,6 @@ jobs:
             firebird3.0-dev \
             libpq-dev \
             libsqlite3-dev \
-            libmysqlclient-dev \
             cppcheck \
             ninja-build \
             libgtk-3-dev libgl1-mesa-dev libglu1-mesa-dev \

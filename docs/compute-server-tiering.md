@@ -41,7 +41,7 @@ connection pool. Same shape as other enterprise low-code platforms with a comput
 └────────────────────────┬────────────────────────────────────────┘
                          ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│ Data tier — DBMS (Firebird / PG / MySQL / MSSQL)                 │
+│ Data tier — DBMS (Firebird / PG / MSSQL)                          │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -181,7 +181,7 @@ Landed. See `connection-pool.md`.
 
 - Pool owns all conns, shared_ptr hand-outs, lazy Clone
 - Scope with merged SafeBeginTransaction / SafeCommitTransaction / SafeRollBackTransaction
-- Counter-based nested TX (correct across 5 drivers)
+- Counter-based nested TX (correct across 4 drivers)
 - TL TX pinning (thread sticks to conn during active TX)
 - Mutation entry points (object Write/Delete) migrated
 

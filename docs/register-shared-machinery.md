@@ -421,7 +421,7 @@ So the KEY stays as declared and its UNIQUENESS moves:
 | | Where the identity lives | What the delta matches on |
 |---|---|---|
 | index holds the key (PG, SQLite, and any key under the ceiling) | the key columns, UNIQUE — unchanged | the key columns |
-| key past the ceiling (Firebird, MySQL) | `keyhash_`, a digest of the key's own values, UNIQUE | **still the key columns** |
+| key past the ceiling (Firebird) | `keyhash_`, a digest of the key's own values, UNIQUE | **still the key columns** |
 
 Three properties are worth stating, because each one is a decision:
 
@@ -459,7 +459,7 @@ none) and leave only the WORD (`NUMERIC` / `DECIMAL`) to the dialect —
 scale are the same lesson: **a raw column that has a reason to name its own type must name it**, because the
 layout tier's default is a guess that becomes a CREATE TABLE.
 
-Where each piece lives: `m_maxIndexSegments` on `ibDialectDictionary` (a DDL fact — FB 16, MySQL 16,
+Where each piece lives: `m_maxIndexSegments` on `ibDialectDictionary` (a DDL fact — FB 16,
 PG 32, SQLite none), the three hash templates on `ibMaterializationDialect`, `ibKeyNeedsHash` /
 `ibFillKeyHashes` in `databaseMaterializeBuilder.*`, and `ibDeclareDerivedKey` in
 `query/schemaSnapshot.cpp` — the one place that turns "this is the key" into "this is what the database

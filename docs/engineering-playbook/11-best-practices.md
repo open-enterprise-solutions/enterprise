@@ -360,7 +360,6 @@ class MainWindow {
 //   ibDatabaseLayerFirebird  — Firebird (primary DBMS)
 //   ibDatabaseLayerPostgres  — PostgreSQL
 //   ibDatabaseLayerSQLite    — SQLite (embedded DB)
-//   ibDatabaseLayerMySQL     — MySQL
 //   ibDatabaseLayerODBC      — ODBC (universal driver)
 //
 // Polymorphism: code works with ibDatabaseLayer* without knowing the concrete DBMS

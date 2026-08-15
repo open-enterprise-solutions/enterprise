@@ -32,7 +32,7 @@
   L2  renderers   L2-1 ibDatabaseQueryBuilder — structured ibQueryIR (never raw SQL)
                   L2-2 ibDatabaseMaterializeBuilder — derived-state triggers + views
        │  ▼
-  L1  ibDatabaseLayer ×5 drivers — each vends its ibDialectDictionary
+  L1  ibDatabaseLayer ×4 drivers — each vends its ibDialectDictionary
 ```
 
 The rule of the house: **one door down, many front-ends up.** Everything above L3 (the three L4
@@ -44,7 +44,7 @@ L2-1 renders to a driver's dialect at L1. No front-end reaches the drivers direc
 ## 2. Floor by floor
 
 ### L1 — drivers (`ibDatabaseLayer` ×5, `databaseLayer/`)
-Firebird / PostgreSQL / SQLite / MySQL / ODBC. Each vends its own `ibDialectDictionary`
+Firebird / PostgreSQL / SQLite / ODBC. Each vends its own `ibDialectDictionary`
 (`GetDialect()`) — **zero central type-switch**. See [database-layer.md](database-layer.md),
 [connection-pool.md](connection-pool.md).
 
@@ -101,7 +101,7 @@ and APPLIES what comes back.
 ⭐ **The dialect FACTS the declaration needs are asked THROUGH this floor too, never read off a
 dictionary from above.** `ibIndexFieldCapacity` / `ibKeyNeedsHash` (`databaseMaterializeBuilder.h`)
 answer *how many physical fields one index may cover here* and *is this key past that* out of
-`ibDialectDictionary::m_maxIndexSegments` (Firebird 16, MySQL 16, PostgreSQL 32, SQLite none). L3-2
+`ibDialectDictionary::m_maxIndexSegments` (Firebird 16, PostgreSQL 32, SQLite none). L3-2
 must know before it emits anything, because the answer is a COLUMN — a key past the ceiling carries
 its uniqueness in one hashed field instead — but a dialect is L2's to read, and the floor above has
 no business knowing one exists. See [register-shared-machinery.md](register-shared-machinery.md) §4a.

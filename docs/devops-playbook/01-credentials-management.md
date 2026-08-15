@@ -11,7 +11,7 @@
 - **Firebird server** — host, port, user, password (for server mode)
 - **PostgreSQL** — host, port, user, application password
 - **SQLite** — file path (not a password, but the file must be protected by permissions)
-- **MySQL / ODBC** — connection strings, user passwords
+- **ODBC** — connection strings, user passwords
 
 ### License keys
 - **OES serial number** — end-user license key
@@ -161,7 +161,7 @@ git add oes.conf.production.enc && git commit -m "rotate db password"
 [ ] Remove from 1Password / Bitwarden
 [ ] Remove from Cloudflare
 [ ] Rotate ALL secrets the user had access to
-    - DB passwords (Firebird, PostgreSQL, MySQL)
+    - DB passwords (Firebird, PostgreSQL)
     - API tokens (License Server, Cloudflare)
     - Code Signing container password (if access existed)
 [ ] If the user had access to the license private key — reissue it immediately
@@ -232,9 +232,9 @@ LicenseKey=                 ; License key (for built-in verification)
 LicenseServerURL=           ; https://license.oes-vendor.com/api/v1/validate
 
 [Database.Primary]
-Engine=                     ; firebird | postgresql | sqlite | mysql
+Engine=                     ; firebird | postgresql | sqlite | odbc
 Host=                       ; localhost (or IP for server)
-Port=                       ; 3050 (Firebird) | 5432 (PostgreSQL) | 3306 (MySQL)
+Port=                       ; 3050 (Firebird) | 5432 (PostgreSQL)
 Database=                   ; Path to .fdb file or DB name
 User=                       ; DB user
 Password=                   ; GENERATED_PASSWORD - keep in 1Password

@@ -45,8 +45,7 @@ migration that landed.
 Connection pool and session registry are not in scope — they're the prerequisite stages and are
 already correct.
 
-> **Scope note.** Third-party TLS (Firebird `fb_*` thread state, MySQL
-> `pthread_key_*` shims, wxWidgets log target, Win32 `TlsAlloc` etc.)
+> **Scope note.** Third-party TLS (Firebird `fb_*` thread state, wxWidgets log target, Win32 `TlsAlloc` etc.)
 > is intentionally excluded. Those are connection-bound or
 > library-internal; they'll be revisited only if a worker swap surfaces
 > a concrete bug.

@@ -88,7 +88,6 @@ enterprise/
 │       │   │   ├── firebird/              — ibDatabaseLayerFirebird
 │       │   │   ├── postgres/              — ibDatabaseLayerPostgres
 │       │   │   ├── sqlite/                — ibDatabaseLayerSQLite
-│       │   │   ├── mysql/                 — ibDatabaseLayerMySQL
 │       │   │   └── odbc/                  — ibDatabaseLayerODBC
 │       │   ├── metaCollection/   — Object metadata
 │       │   │   └── partial/
@@ -177,7 +176,7 @@ Cross-platform enterprise low-code/no-code platform for building business applic
 - **Language:** C++17
 - **GUI:** wxWidgets 3.3.2
 - **Build:** MSBuild (VS 2017+), transitioning to CMake
-- **Databases:** Firebird (primary), PostgreSQL, SQLite, MySQL, ODBC
+- **Databases:** Firebird and PostgreSQL (production), SQLite (tests + logging), ODBC
 - **Tests:** Google Test
 - **License:** LGPL 2.1
 
@@ -231,7 +230,7 @@ and business logic without writing code.
 - Language: C++17
 - GUI: wxWidgets 3.3.2
 - Build: MSBuild (VS 2017+), transitioning to CMake 3.20+
-- Databases: Firebird 4.x (primary), PostgreSQL, SQLite, MySQL, ODBC
+- Databases: Firebird 4.x (primary) and PostgreSQL (production), SQLite (tests + logging), ODBC
 - Tests: Google Test (being introduced)
 - CI/CD: GitHub Actions (being introduced)
 - Platform: Windows primary, cross-platform goal
@@ -245,7 +244,7 @@ and business logic without writing code.
   - compiler/fnumber.h          — ibNumber (self-contained exact-decimal, no ttmath)
   - appData.cpp                 — ibApplicationData (authentication, AuthenticateUser())
   - appDataQuery.cpp            — session and user queries
-  - databaseLayer/              — ibDatabaseLayer + Firebird/Postgres/SQLite/MySQL/ODBC drivers
+  - databaseLayer/              — ibDatabaseLayer + Firebird/Postgres/SQLite/ODBC drivers
   - metaCollection/partial/commonObjectQuery.cpp — CRUD, CreateAndUpdateTableDB()
   - metadataConfiguration.cpp   — configuration management
   - debugger/debugServer.cpp    — ibDebuggerServer

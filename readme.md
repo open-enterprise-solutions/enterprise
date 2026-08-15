@@ -9,7 +9,7 @@ OES is an open-source, cross-platform low-code enterprise application platform w
 - **Integrated designer** — metadata tree editor, form builder, code editor with syntax highlighting and autocomplete
 - **Bytecode compiler** — two-pass compiler (lexer → parser → bytecode) producing 75-opcode bytecode (`compiler/codeDef.h`); supports procedures, functions, modules, regions, lambdas with closure capture, and preprocessor directives (`#ifdef`/`#define`)
 - **Visual form system** — 24 registered control types (TableBox, TextBox, ChartBox, GridBox, Notebook, ToolBar, sizers, etc.) rendered through wxWidgets; forms are described in metadata and instantiated at runtime
-- **Multi-database back end** — Firebird (primary, embedded shipped with the distribution), PostgreSQL, SQLite, MySQL, ODBC; unified `ibDatabaseLayer` API across all drivers
+- **Multi-database back end** — Firebird (primary, embedded shipped with the distribution), PostgreSQL, ODBC; SQLite is embedded for tests and logging rather than production; unified `ibDatabaseLayer` API across all drivers
 - **Remote TCP debugger** — client/server architecture over TCP (default port 1650); supports breakpoints, step-over, step-into, variable inspection, tooltips, and live code patching
 - **Session management** — multi-user sessions tracked in the system database; launcher, daemon, designer, enterprise, and codeRunner modes
 - **Role-based access control** — access rights on objects and operations defined in the metadata configuration
@@ -67,7 +67,7 @@ cmake --build build -j$(sysctl -n hw.logicalcpu)
 # Install dependencies
 sudo apt update
 sudo apt install -y build-essential cmake libwxgtk3.2-dev \
-    libfirebird-dev libpq-dev libsqlite3-dev libmysqlclient-dev
+    libfirebird-dev libpq-devlibsqlite3-dev
 
 # Clone and initialise submodules
 git clone https://github.com/open-enterprise-solutions/enterprise.git
@@ -94,7 +94,7 @@ Output: `bin\Win64\Release\`
 
 ### All Platforms — CMake
 
-The top-level `CMakeLists.txt` (CMake ≥ 3.20) builds every target. DB drivers opt in — `OES_USE_FIREBIRD`, `OES_USE_POSTGRESQL`, `OES_USE_MYSQL`, `OES_USE_ODBC` (all default OFF); SQLite is always embedded, no flag:
+The top-level `CMakeLists.txt` (CMake ≥ 3.20) builds every target. DB drivers opt in — `OES_USE_FIREBIRD`, `OES_USE_POSTGRESQL`, `OES_USE_ODBC` (all default OFF); SQLite is always embedded, no flag:
 
 ```bash
 cmake -B build \
@@ -132,7 +132,7 @@ enterprise/
     └── engine/
         ├── backend/          # Core engine DLL (compiler, DB, metadata, debugger)
         │   ├── compiler/     # Lexer, parser, bytecode, interpreter (ibCompileCode, ibProcUnit)
-        │   ├── databaseLayer/# DB abstraction + 5 drivers (Firebird, PG, SQLite, MySQL, ODBC)
+        │   ├── databaseLayer/# DB abstraction + 4 drivers (Firebird, PG, SQLite, ODBC)
         │   ├── debugger/     # TCP debug server/client
         │   ├── metaCollection/  # Business object metadata classes
         │   │   └── partial/  # Catalog, Document, Enumeration, Constant, Registers, DataProcessor, Report
@@ -164,7 +164,7 @@ enterprise/
 | Language | C++17 |
 | GUI framework | wxWidgets 3.3.2 |
 | Primary database | Firebird (embedded) |
-| Optional databases | PostgreSQL, SQLite, MySQL, ODBC |
+| Optional databases | PostgreSQL, ODBC; SQLite (tests + logging) |
 | Build (Windows) | MSBuild / Visual Studio 2019+ |
 | Build (cross-platform) | CMake ≥ 3.20 — `CMakeLists.txt` at repo root (macOS / Linux) |
 | License | LGPL 2.1 |

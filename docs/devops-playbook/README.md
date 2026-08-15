@@ -2,7 +2,7 @@
 
 **Practical DevOps guide for Open Enterprise Solutions (OES)**
 
-Stack: C++17, wxWidgets 3.3.2, MSBuild (Windows) / CMake (macOS/Linux), Firebird (primary, embedded), PostgreSQL, SQLite, MySQL, NSIS/WiX installer, GitHub Actions.
+Stack: C++17, wxWidgets 3.3.2, MSBuild (Windows) / CMake (macOS/Linux), Firebird (primary, embedded), PostgreSQL, SQLite (tests + logging), NSIS/WiX installer, GitHub Actions.
 
 Platforms: Windows (primary, MSBuild), macOS (Homebrew/CMake), Linux (CMake, daemon/server mode).
 
@@ -19,7 +19,7 @@ All examples use abstract server names, paths, and project names. Adapt to your 
 | 03 | [Nginx / Reverse Proxy](03-nginx.md) | Reverse proxy in front of OES Daemon, SSL termination, routing |
 | 04 | [Process Management](04-service-management.md) | Managing OES daemon processes: systemd (Linux), Windows Service, auto-restart |
 | 05 | [Docker](05-docker.md) | Containerizing OES daemon, docker-compose, multi-stage C++ builds |
-| 06 | [Database administration](06-databases.md) | Firebird (primary) plus PostgreSQL / SQLite / MySQL: setup, backups, optimization |
+| 06 | [Database administration](06-databases.md) | Firebird (primary) plus PostgreSQL, and SQLite for tests/logging: setup, backups, optimization |
 | 07 | [Caching](07-caching.md) | Optional Redis / in-process caching, relevant only in daemon and server modes |
 | 08 | [Cloudflare / DNS](08-cloudflare.md) | DNS for OES web components, SSL, DDoS protection, API |
 | 09 | [CI/CD with GitHub Actions](09-github-actions.md) | MSBuild/CMake build, cppcheck, Google Test, NSIS installer, code signing, release publishing |

@@ -434,8 +434,7 @@ Three traps that come with it, all real:
 - **Folders break a plain unique index**, since every folder has empty dimensions and therefore
   collides with every other folder. The same predicate that decides what runs decides what is
   checked: `NOT IsFolder`, a flag inherited from the hierarchical base rather than invented here.
-  At the database level that means a partial index (PostgreSQL / SQLite have one, Firebird does it
-  by expression, MySQL cannot), so treat the index as a backstop where the driver allows it and do
+  At the database level that means a partial index (PostgreSQL / SQLite have one, Firebird does it  by expression), so treat the index as a backstop where the driver allows it and do
   the check on write. **Open question, not a settled one.**
 - **Empty values.** An empty reference is a zero guid rather than SQL NULL, so behaviour should
   be uniform across drivers — but this must be checked on a live base, because if any driver

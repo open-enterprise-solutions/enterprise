@@ -45,8 +45,6 @@ RUN apt-get update && apt-get install -y \
     firebird3.0-dev libfbclient2 \
     # PostgreSQL
     libpq-dev \
-    # MySQL
-    libmysqlclient-dev \
     # SQLite
     libsqlite3-dev \
     && rm -rf /var/lib/apt/lists/*
@@ -143,7 +141,6 @@ RUN apt-get update && apt-get install -y \
     libfbclient2 \
     libpq5 \
     libsqlite3-0 \
-    libmysqlclient21 \
     libcurl4 \
     libssl3 \
     zlib1g \
@@ -276,27 +273,6 @@ services:
       timeout: 10s
       retries: 5
 
-  # === MySQL (if testing the MySQL backend) ===
-  mysql:
-    image: mysql:8.0
-    container_name: oes-dev-mysql
-    restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: dev_root_password
-      MYSQL_USER: oes_user
-      MYSQL_PASSWORD: dev_mysql_password
-      MYSQL_DATABASE: oes_db
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost",
-             "-u", "oes_user", "--password=dev_mysql_password"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-
   # === Adminer - web UI for all databases ===
   adminer:
     image: adminer:latest
@@ -308,12 +284,10 @@ services:
       ADMINER_DEFAULT_SERVER: postgres
     depends_on:
       - postgres
-      - mysql
 
 volumes:
   postgres_data:
   firebird_data:
-  mysql_data:
 ```
 
 ```bash
@@ -543,7 +517,7 @@ Docker is NOT suitable for:
 Docker IS suitable for:
   - C++ build environment (reproducible builds in CI/CD)
   - OES Daemon (headless, Linux, server mode)
-  - Dev environment (PostgreSQL, Firebird Server, MySQL for developers)
+  - Dev environment (PostgreSQL, Firebird Server for developers)
   - Vendor License Server and Update Server
 
 Recommendation for OES:

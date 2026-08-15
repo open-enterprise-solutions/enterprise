@@ -131,7 +131,7 @@ ibColumnType RawType(const ibBackendQueryColumn* col)
 	//
 	// It used to be a guid's TEXT — 36 characters, on every row of every table, and in every index
 	// over them. The bytes were already available (a reference stores exactly this guid as
-	// _RRRef BINARY(16), on all five drivers), so the text form cost 20 bytes a row to say the same
+	// _RRRef BINARY(16), on all four drivers), so the text form cost 20 bytes a row to say the same
 	// thing in a form nothing could compare against the reference key.
 	//
 	// Making them one representation is what lets a row's uuid be COMPARED with a reference to that

@@ -7,7 +7,7 @@
 > `queryProvider.cpp`, column remap incl. aggregates) are all in the tree. The decision is
 > split `WorthDbTemp` (SHOULD, size) + manager `Materialise` (CAN, presence/probe/fallback).
 > Still pending: a live PostgreSQL validation run (the dev FB never takes the temp path by
-> design), the L4 materialise-into-temp surface, and MySQL. §9 has the current table. This doc
+> design), and the L4 materialise-into-temp surface. §9 has the current table. This doc
 > is the agreed contract. Builds on [reference-as-key](#) +
 > [column-based lowering](query-language-arc.md) (L3 is source-agnostic, which is what makes all
 > of this nearly free).
@@ -91,7 +91,7 @@ on every driver, and covers the shapes temp-promote cannot reach — a cross-DB 
 The behavioural fork stays **data**, not code-in-the-dictionary:
 
 - `AdHocCreate` — `CREATE TEMP TABLE` of any shape per query, `INSERT`, `DROP` / auto-drop.
-  SQLite / PostgreSQL / MySQL / MSSQL.
+  SQLite / PostgreSQL / MSSQL.
 - `PreDeclaredPool` — grab a **typed** `GLOBAL TEMPORARY TABLE` from a schema-declared pool,
   `INSERT`, `ON COMMIT` clears the session-private rows. Firebird — GTTs are fixed-shape schema
   objects, **not** ad-hoc; an arbitrary-shape intermediate needs a generic-wide pool or RAM.
@@ -179,7 +179,7 @@ like the L3 abstraction did, because it changes the compose flow. Do not lay it 
 | Planner decision — split in two, each owned where its inputs live: `WorthDbTemp(rowCount)` = the SHOULD size-gate (§7), called at the promote sites with the EXACT materialised row count; the CAN-gate (dialect presence + runtime probe + graceful fallback) inside `ibTempTableManager::Materialise`. The generic RAM-composer `MaterialiseLeaf` seam deliberately stays RAM — temping a RAM-stitched leaf gains nothing (§8); new promotable shapes extend the promote family. | **landed** |
 | `ibDbTempTableQueryable` — DB-temp source adapter (L3, sibling of the RAM `ibTempTableQueryable`); raw columns, inherits the DB provider, read-only scan | **landed** |
 | Temp-table manager (`query/tempTableManager.{h,cpp}`) — holder-anchored lifetime (pins the connection via an owned `ibConnectionScope`), runtime capability probe, CREATE + fill via L2 DDL/DML (columns in the metadata storage format — references/enums round-trip), RAII DROP, graceful RAM fallback (null on no-dialect / failure). Probe CACHED per connection holder (`s_probeCache`, mutex-guarded — one CREATE+DROP per holder, not per `Materialise`). | **landed** |
-| Per-driver dialects — **PostgreSQL** (`AdHocCreate`, explicit DROP via the pinning scope) + **SQLite** (`AdHocCreate`; the embedded correctness-validation stand, `oes_temp_db_sqlite_test`); MySQL later; Firebird stays `nullptr` (RAM) | **PG + SQLite landed** |
+| Per-driver dialects — **PostgreSQL** (`AdHocCreate`, explicit DROP via the pinning scope) + **SQLite** (`AdHocCreate`; the embedded correctness-validation stand, `oes_temp_db_sqlite_test`); Firebird stays `nullptr` (RAM) | **PG + SQLite landed** |
 | **ANALYZE after fill** — `ibDdlKind::Analyze` + `ibAnalyzeTable(name)`, rendered from the main `ibDialectDictionary::m_analyzePrefix` (PG / SQLite `"ANALYZE"`; FB empty ⇒ `Execute` no-ops). `Materialise` runs it so the planner has the temp's REAL cardinality (not a default estimate). A general L2 verb — reusable for regular-table refresh after a restructure / bulk load. | **landed** |
 | Temp-key INDEX (index-nested-loop) — situational; build only with a PG stand to measure (wasted for a hash-join) | pending |
 | **Server-side JOIN push-down** — `PromoteComputedLeaf` (computed ⋈ DB: temp the computed side, remap columns incl. aggregates/having, rebuild the join tree → the join runs in the DBMS) and `PromoteUnionBranches` (computed UNION branches temped, the whole union server-side). Generic multi-way / DB⋈DB-cross-connection promotion = future (federation). | **landed (two shapes)** |
@@ -189,5 +189,5 @@ like the L3 abstraction did, because it changes the compose flow. Do not lay it 
 
 Remaining order: **prove the whole pipeline (presence → probe → create → fill → server-side join →
 RAM fallback) against a live PostgreSQL instance** (the dev FB never takes the temp path, so PG is
-the validation stand) → MySQL → L4 surface. Firebird stays on RAM (GTT-shape not worth it for small
+the validation stand) → L4 surface. Firebird stays on RAM (GTT-shape not worth it for small
 deployments).

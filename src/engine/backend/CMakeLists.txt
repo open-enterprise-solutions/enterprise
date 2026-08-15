@@ -32,11 +32,6 @@ if(NOT OES_USE_FIREBIRD)
     list(FILTER BACKEND_SOURCES EXCLUDE REGEX "databaseLayer/firebird/.*\\.(cpp|c)$")
 endif()
 
-# MySQL driver
-if(NOT OES_USE_MYSQL)
-    list(FILTER BACKEND_SOURCES EXCLUDE REGEX "databaseLayer/mysql/.*\\.(cpp|c)$")
-endif()
-
 # PostgreSQL driver
 if(NOT OES_USE_POSTGRESQL)
     list(FILTER BACKEND_SOURCES EXCLUDE REGEX "databaseLayer/postgres/.*\\.(cpp|c)$")
@@ -90,13 +85,6 @@ if(OES_USE_POSTGRESQL)
     )
 endif()
 
-# MySQL headers (bundled in-tree)
-if(OES_USE_MYSQL)
-    target_include_directories(backend PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/databaseLayer/mysql/engine"
-    )
-endif()
-
 # ---------------------------------------------------------------------------
 # Compile definitions
 # ---------------------------------------------------------------------------
@@ -106,9 +94,6 @@ target_compile_definitions(backend PRIVATE
 
 if(OES_USE_FIREBIRD)
     target_compile_definitions(backend PRIVATE OES_USE_FIREBIRD)
-endif()
-if(OES_USE_MYSQL)
-    target_compile_definitions(backend PRIVATE OES_USE_MYSQL)
 endif()
 if(OES_USE_POSTGRESQL)
     target_compile_definitions(backend PRIVATE OES_USE_POSTGRESQL)

@@ -62,7 +62,6 @@ sudo apt install -y \
     libfirebird-dev \
     libpq-dev \
     libsqlite3-dev \
-    libmysqlclient-dev \
     unixodbc-dev
 ```
 
@@ -75,7 +74,7 @@ for the `OES_USE_*` options you turn on — SQLite is always embedded.
 by the CMake build (see below); a distro `libwxgtk` would be both unused and older.
 
 For other distributions, install the equivalent packages providing Firebird, PostgreSQL, SQLite3,
-MySQL, and ODBC development headers.
+and ODBC development headers.
 
 ---
 
@@ -211,7 +210,6 @@ cmake --build build --parallel 6
 |---|---|---|
 | `OES_USE_FIREBIRD` | OFF | Enable Firebird database driver (fbclient loaded dynamically at runtime) |
 | `OES_USE_POSTGRESQL` | OFF | Enable PostgreSQL database driver (libpq loaded dynamically at runtime) |
-| `OES_USE_MYSQL` | OFF | Enable MySQL database driver (requires `libmysqlclient` to build) |
 | `OES_USE_ODBC` | OFF | Enable ODBC database driver |
 | `OES_FB_LOCALSERVER` | ON | Firebird out-of-process local server (Phase 6, leader-election); needs `firebird.exe` in `_fb/` at runtime |
 | `OES_USE_TBB` | (undeclared) | Intel TBB parallelism (`USE_TBB_PARALLEL`); **not declared via `option()`** in the root `CMakeLists.txt` — only read by `backend/CMakeLists.txt`, so it never appears in `cmake-gui` / `ccmake`. Pass `-DOES_USE_TBB=ON` explicitly if you want it |
@@ -319,9 +317,9 @@ The Launcher (`launcher.exe`) creates a new Firebird database file when you sele
 
 To use PostgreSQL as the storage backend, start a PostgreSQL server and use the Launcher's **Server mode**, selecting the PostgreSQL driver. The `libpq` client library must be installed.
 
-### SQLite, MySQL, ODBC
+### SQLite, ODBC
 
-These drivers are compiled in but are intended for secondary/plugin use. No additional setup is required for SQLite (statically linked). MySQL requires `libmysqlclient` at runtime; ODBC requires a configured DSN.
+These drivers are compiled in but are intended for secondary/plugin use. No additional setup is required for SQLite (statically linked), which serves tests and logging rather than production. ODBC requires a configured DSN, and is the base an MSSQL layer derives from.
 
 ---
 
@@ -391,7 +389,7 @@ Four notes on why it is shaped this way — each one paid for by a wasted round:
 - **The jobs build the driver set the release ships** (Firebird + PostgreSQL on). Neither needs a
   system client to *compile* — both carry in-tree headers and load their client at runtime — so
   enabling them costs no dependency and stops CI from testing a configuration nobody builds.
-  MySQL stays off because its CMake hard-errors without a system client; ODBC because nothing
+  ODBC stays off because nothing
   exercises it.
 - **Build every non-GUI test target, not just `oes_tests`.** `ctest` registers them all, so
   building one reports the rest as `<name>_NOT_BUILT` failures.

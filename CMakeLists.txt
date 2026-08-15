@@ -12,7 +12,6 @@
 # Optional database drivers (all OFF by default except SQLite which is embedded):
 #   -DOES_USE_FIREBIRD=ON
 #   -DOES_USE_POSTGRESQL=ON
-#   -DOES_USE_MYSQL=ON
 #   -DOES_USE_ODBC=ON
 #
 # =============================================================================
@@ -63,7 +62,6 @@ option(BUILD_TESTING       "Build unit tests (Google Test)"     OFF)
 
 option(OES_USE_FIREBIRD    "Enable Firebird database driver"    OFF)
 option(OES_USE_POSTGRESQL  "Enable PostgreSQL database driver"  OFF)
-option(OES_USE_MYSQL       "Enable MySQL database driver"       OFF)
 option(OES_USE_ODBC        "Enable ODBC database driver"        OFF)
 
 # Phase-6 local FB server — required for shared-file (leader-election)
@@ -378,34 +376,6 @@ if(OES_USE_POSTGRESQL)
     endif()
 endif()
 
-if(OES_USE_MYSQL)
-    # CMake ships FindMySQL on some platforms; fall back to pkg-config
-    find_library(MYSQL_LIBRARY NAMES mysqlclient mariadbclient
-        HINTS
-            "$ENV{MYSQL_HOME}/lib"
-            "/usr/lib"
-            "/usr/local/lib"
-            "/usr/lib/x86_64-linux-gnu"
-    )
-    find_path(MYSQL_INCLUDE_DIR NAMES mysql.h
-        HINTS
-            "$ENV{MYSQL_HOME}/include"
-            "/usr/include/mysql"
-            "/usr/local/include/mysql"
-    )
-    if(MYSQL_LIBRARY AND MYSQL_INCLUDE_DIR)
-        message(STATUS "MySQL found: ${MYSQL_LIBRARY}")
-        add_library(MySQL::MySQL UNKNOWN IMPORTED)
-        set_target_properties(MySQL::MySQL PROPERTIES
-            IMPORTED_LOCATION "${MYSQL_LIBRARY}"
-            INTERFACE_INCLUDE_DIRECTORIES "${MYSQL_INCLUDE_DIR}"
-        )
-        add_compile_definitions(OES_USE_MYSQL)
-    else()
-        message(FATAL_ERROR "OES_USE_MYSQL is ON but MySQL client library was not found.")
-    endif()
-endif()
-
 if(OES_USE_ODBC)
     if(WIN32)
         # ODBC is a system library on Windows (odbc32.lib)
@@ -487,9 +457,8 @@ message(STATUS "  Install prefix .... ${CMAKE_INSTALL_PREFIX}")
 message(STATUS "  wxWidgets ......... submodule (shared)")
 message(STATUS "  Firebird .......... ${OES_USE_FIREBIRD}")
 message(STATUS "  PostgreSQL ........ ${OES_USE_POSTGRESQL}")
-message(STATUS "  MySQL ............. ${OES_USE_MYSQL}")
 message(STATUS "  ODBC .............. ${OES_USE_ODBC}")
-message(STATUS "  SQLite ............ ON (embedded)")
+message(STATUS "  SQLite ............ ON (embedded, tests + logging only)")
 message(STATUS "  Tests ............. ${BUILD_TESTING}")
 message(STATUS "  Sanitizers ........ ${OES_SANITIZE}")
 message(STATUS "=============================================")

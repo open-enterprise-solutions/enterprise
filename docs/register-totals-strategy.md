@@ -129,7 +129,7 @@ Earlier status line, kept for the record: **design, with the FIRST slice landed 
 materialization dictionary (§4) exists in code.** Landed:
 `ibMaterializationDialect` in `databaseLayer/databaseLayer.h`, vended per driver
 through `ibDatabaseLayer::GetMaterializationDialect()` (nullable — presence IS
-the capability), with dictionaries for Firebird / PostgreSQL / SQLite / MySQL,
+the capability), with dictionaries for Firebird / PostgreSQL / SQLite,
 a deliberate `nullptr` for ODBC, and structural pins in
 `tests/test_materializationDialect.cpp`. Still absent: `totals_*` tables,
 trigger generation, totals views, the L3-4 regeneration door, and any read-path
@@ -287,11 +287,11 @@ Shape it as a 2-D table, **`kind × engine`**:
 - **`kind`** (turnover `+=` / running-balance `+=` + bump-later-periods / slice-last) is the
   **delta-clause parameter** — the same concept across engines.
 - **`engine`** is the **key**, and it splits into two template **families** by *execution model*:
-  - **per-row** — Firebird PSQL, PostgreSQL PL/pgSQL, MySQL SP, SQLite triggers. All are
+  - **per-row** — Firebird PSQL, PostgreSQL PL/pgSQL, SQLite triggers. All are
     `FOR EACH ROW`, use `NEW`/`OLD`, and reduce to a handful of plain SQL statements. Design to
     the **SQLite floor** (SQL-statements-only, no procedural block) and the same logic fits all
-    four; only the upsert idiom (`ON CONFLICT DO UPDATE` for PG/SQLite, `ON DUPLICATE KEY` for
-    MySQL, `MERGE` for Firebird) and the shell (PG needs a separate `FUNCTION`; the rest inline)
+    three; only the upsert idiom (`ON CONFLICT DO UPDATE` for PG/SQLite,
+    `MERGE` for Firebird) and the shell (PG needs a separate `FUNCTION`; the rest inline)
     differ — those are the per-engine *slots*.
   - **set-based** — MSSQL/T-SQL (`inserted`/`deleted` pseudo-tables, batch `MERGE`). This is a
     *different algorithm*, not a different word, which is exactly why a separate dictionary
@@ -319,10 +319,8 @@ destination and both cheap to add now / expensive later:
   movement carries a debit side and a credit side; each feeds a *different* totals table and
   either may be absent, so the delta must be **conditional**. `VALUES` cannot carry a predicate,
   and the alternative — a procedural `IF` — breaks the SQLite floor and splits the per-row family
-  in two. `INSERT … SELECT … WHERE` says the same thing declaratively on all four engines. An
-  unconditional delta (an accumulation register) renders the guard empty and pays nothing. This
-  is also why MySQL's dialect now sets `m_selectFromDual = DUAL`: a FROM-less `SELECT` there
-  cannot carry a `WHERE`.
+  in two. `INSERT … SELECT … WHERE` says the same thing declaratively on all three engines. An
+  unconditional delta (an accumulation register) renders the guard empty and pays nothing. This  is also why a dialect whose FROM-less `SELECT` cannot carry a `WHERE` must name a  source-less table in `m_selectFromDual` (Firebird: `RDB$DATABASE`).
 - **A trigger body is N statements, not one.** One movement can feed several totals tables
   (debit turnover, credit turnover, later per-dimension breakdowns). The shell takes a rendered
   multi-statement body, so the multi-table case inherits the same TX atomicity as the
@@ -368,10 +366,10 @@ granularity of a record KEY — a different question that happens to share a wor
 **The truncation map covers every unit on every engine.** `m_periodTrunc` maps `ibTotalsPeriod` →
 an expression template, and the same expression serves both roles — keying a totals row inside a
 trigger and projecting a coarser column inside a view — so the stored key and the read column
-cannot drift apart. Coverage is total on all four engines (`Second … Year`, including `Week`,
+cannot drift apart. Coverage is total on all three engines (`Second … Year`, including `Week`,
 `TenDays`, `HalfYear`), and the tests enforce it: partial coverage would make a query's answer
 depend on which engine the deployment happens to run. Three details are pinned because they are
-easy to get subtly wrong: the week starts **Monday** everywhere (Firebird and MySQL need opposite
+easy to get subtly wrong: the week starts **Monday** everywhere (Firebird needs a correction
 corrections to get there), the ten-day offset is **capped at 2** so day 31 folds into the third
 period instead of opening a fourth one-day bucket, and Firebird truncates sub-day units
 **textually** rather than through `EXTRACT` + `DATEADD`, whose fractional seconds would round.
@@ -515,7 +513,7 @@ MATCHING BY THE KEY COLUMNS** — so a digest collision can only refuse an inser
 into one row. Three facts decide the shape, and none of them is a detail:
 
 - **the ceiling is engine-conditional and declared as a DDL fact**: `ibDialectDictionary::m_maxIndexSegments`
-  — Firebird 16, MySQL 16, PostgreSQL 32, SQLite none (0 = no limit worth declaring). The declaration
+  — Firebird 16, PostgreSQL 32, SQLite none (0 = no limit worth declaring). The declaration
   tier asks `ibIndexFieldCapacity` / `ibKeyNeedsHash` (`databaseMaterializeBuilder.*`) and never reads a
   dialect itself; `ibDeclareDerivedKey` (`query/schemaSnapshot.cpp`) is the one place that turns "this is
   the key" into what the database is given to enforce it with, and both registers call it;
@@ -914,7 +912,6 @@ not steady state.
 | Firebird   | Triggers + totals table + views           | Embedded / SMB. Same pattern as PG, PSQL syntax. |
 | MSSQL      | Same — or `INDEXED VIEW WITH SCHEMABINDING` | Native indexed view = best, future optimisation. |
 | Oracle     | Same — or `MV REFRESH FAST ON COMMIT`     | Native MV with log = best, future optimisation.  |
-| MySQL      | Triggers + totals table + views           | No native MV; triggers are the only path.        |
 | SQLite     | Triggers + totals table + views           | No materialised views. Single-process scope only. |
 
 Implementation plan:

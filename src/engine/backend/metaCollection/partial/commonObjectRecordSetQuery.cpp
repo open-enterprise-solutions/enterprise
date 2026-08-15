@@ -32,7 +32,7 @@ bool ibValueRecordSetObject::LockByKeys()
 	// — only the BOUND dimensions constrain (FindKeyValue filter; GetGenericDimensionArrayObject
 	// = {recorder} for AR/AcR, {period, dim...} for non-recorder IR), each decomposed inside L3.
 	// The pessimistic row lock rides as page.m_lockForUpdate: the dialect appends its row-lock
-	// clause (FB "WITH LOCK", PG/MySQL "FOR UPDATE"; SQLite no-op — whole-DB TX lock). Draining
+	// clause (FB "WITH LOCK", PG "FOR UPDATE"; SQLite no-op — whole-DB TX lock). Draining
 	// the selection holds the lock. No statement, no SetValueAttribute. (docs/record-locks.md)
 	try {
 		ibDataQueryBuilder q;

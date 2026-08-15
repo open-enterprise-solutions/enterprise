@@ -192,7 +192,7 @@ gtest_discover_tests(oes_string_tests)
 
 # ---------------------------------------------------------------------------
 # Standalone ИТОГИ-tree test — backend + gtest only, no other test TUs (so it
-# links even when an optional driver, e.g. MySQL, is OFF and a sibling test TU
+# links even when an optional driver, e.g. ODBC, is OFF and a sibling test TU
 # references it). Pure RAM fold, no DB:
 #   cmake --build build --target oes_query_totals_test --config Debug
 #   ./bin/oes_query_totals_test

@@ -887,7 +887,7 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
 		if (e.m_unfold != ibQueryDimUnfold::Elements) {
 			// ⭐⭐ «IN HIERARCHY» IS RESOLVED HERE AND NOWHERE BELOW. The named values are walked down
 			// to what is subordinate to them, and what leaves this function is the ordinary IN of the
-			// line above — so the door, the RAM evaluator and all five drivers keep the ONE set-valued
+			// line above — so the door, the RAM evaluator and all four drivers keep the ONE set-valued
 			// operator they already render, and nothing under L4 learns a word it would have to expand
 			// with a read of its own. The operand is a single &parameter (the parser admits nothing
 			// else here), which may hold one value or a list of them.

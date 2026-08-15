@@ -222,7 +222,7 @@ bool ibMetaDataConfigurationStorage::OnSaveDatabase(int flags)
 #endif
 	}
 
-	// One UPSERT — the L2 door renders ON CONFLICT (PG/SQLite/MySQL) vs UPDATE OR INSERT … MATCHING (FB)
+	// One UPSERT — the L2 door renders ON CONFLICT (PG/SQLite) vs UPDATE OR INSERT … MATCHING (FB)
 	// from the match key, so the per-driver fork is gone. The blob rides as ibConstBlob (bound, not inlined).
 	// A real failure THROWS (caught below); the affected-row count is not inspected.
 	ibDatabaseQueryBuilder q_save;

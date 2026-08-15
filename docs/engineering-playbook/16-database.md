@@ -7,7 +7,7 @@
 | **Firebird** | Primary DBMS (embedded + server) |
 | **PostgreSQL** | Supported DBMS for enterprise installations |
 | **SQLite** | Supported DBMS for local/offline installations |
-| **MySQL / ODBC** | Additional supported sources |
+| **ODBC** | The base an MSSQL layer derives from |
 | **ibDatabaseLayer** | Custom abstract data-access layer |
 | **ibPreparedStatement** | Parameterized queries (mandatory for all data operations) |
 | **ibDatabaseResultSet** | Iteration over query results |
@@ -25,7 +25,7 @@ All code goes through the `ibDatabaseLayer` interface. The concrete DBMS is wire
 #pragma once
 #include "ibDatabaseLayer.h"
 
-enum class DbDriver { Firebird, PostgreSQL, SQLite, MySQL, ODBC };
+enum class DbDriver { Firebird, PostgreSQL, SQLite, ODBC };
 
 struct DbConnectionParams
 {
@@ -49,7 +49,6 @@ std::unique_ptr<ibDatabaseLayer> CreateDatabaseLayer(const DbConnectionParams& p
 #include "FirebirdDatabaseLayer.h"
 #include "PostgresDatabaseLayer.h"
 #include "SqliteDatabaseLayer.h"
-#include "MysqlDatabaseLayer.h"
 #include "OdbcDatabaseLayer.h"
 
 std::unique_ptr<ibDatabaseLayer> CreateDatabaseLayer(const DbConnectionParams& p)
@@ -66,10 +65,6 @@ std::unique_ptr<ibDatabaseLayer> CreateDatabaseLayer(const DbConnectionParams& p
 
         case DbDriver::SQLite:
             return std::make_unique<SqliteDatabaseLayer>(p.database);
-
-        case DbDriver::MySQL:
-            return std::make_unique<MysqlDatabaseLayer>(
-                p.host, p.port ? p.port : 3306, p.database, p.user, p.password);
 
         case DbDriver::ODBC:
             return std::make_unique<OdbcDatabaseLayer>(p.BuildDSN());
@@ -156,7 +151,7 @@ bool ibApplicationData::Ping()
 {
     // Use IsOpen() + a portable SELECT 1 query
     // so we don't depend on the Firebird-specific RDB$DATABASE table.
-    // SELECT 1 is supported by every DBMS: Firebird, PostgreSQL, SQLite, MySQL.
+    // SELECT 1 is supported by every DBMS: Firebird, PostgreSQL, SQLite.
     if (!m_db || !m_db->IsOpen()) return false;
     try
     {

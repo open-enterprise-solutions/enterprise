@@ -40,7 +40,7 @@ The runtime executes compiled bytecode, renders forms through wxWidgets, and sto
 | Build (Windows) | MSBuild — `enterprise.sln` (Visual Studio 2019/2022) |
 | Build (cross-platform) | CMake — `CMakeLists.txt` at repo root; macOS / Linux build supported, Windows uses MSBuild |
 | Primary database | Firebird (embedded) |
-| Other databases | PostgreSQL, MySQL, ODBC (CMake `OES_USE_*` opt-in); SQLite is always embedded |
+| Other databases | PostgreSQL (production), ODBC (CMake `OES_USE_*` opt-in, and the base an MSSQL layer derives from); SQLite is always embedded but is for **tests and logging only, never production** |
 | License | LGPL 2.1 |
 
 ---
@@ -125,7 +125,7 @@ enterprise/
 
 ### 1. ibDatabaseLayer Abstraction
 
-All database access goes through the abstract `ibDatabaseLayer` interface (`src/engine/backend/databaseLayer/databaseLayer.h`). The five concrete drivers (Firebird, PostgreSQL, SQLite, MySQL, ODBC) implement this interface. Code everywhere uses `db_query->RunQuery(...)` or `db_query->PrepareStatement(...)`. Never access driver classes directly.
+All database access goes through the abstract `ibDatabaseLayer` interface (`src/engine/backend/databaseLayer/databaseLayer.h`). The four concrete drivers (Firebird, PostgreSQL, SQLite, ODBC) implement this interface. Code everywhere uses `db_query->RunQuery(...)` or `db_query->PrepareStatement(...)`. Never access driver classes directly.
 
 ### 2. ibValue Universal Type
 
@@ -298,7 +298,7 @@ cmake --build build --parallel 3   # cap parallelism on 16 GB RAM
 ```
 
 DB driver options (all default OFF; SQLite is always embedded, no flag):
-`OES_USE_FIREBIRD`, `OES_USE_POSTGRESQL`, `OES_USE_MYSQL`, `OES_USE_ODBC`.
+`OES_USE_FIREBIRD`, `OES_USE_POSTGRESQL`, `OES_USE_ODBC`.
 See `docs/BUILD.md` for per-platform requirements.
 
 ---
@@ -500,7 +500,7 @@ Optimizes DB queries, bytecode interpreter (ibProcUnit), form rendering, memory 
 Diagnoses build errors (MSVC vs Clang), runtime crashes, logic bugs. Knows common OES pitfalls: circular includes, ibGuid conversion, empty catch blocks.
 
 ### Database Expert (`oes-database-expert`)
-Schema design, query optimization, cross-DB compatibility (Firebird/PostgreSQL/SQLite/MySQL). All queries through ibPreparedStatement.
+Schema design, query optimization, cross-DB compatibility (Firebird/PostgreSQL, plus SQLite for tests). All queries through ibPreparedStatement.
 
 ### Deployment Wizard (`oes-deployment-wizard`)
 CI/CD, cross-platform builds (MSBuild + CMake), release management. PRs → develop, releases → master with tag.

@@ -529,7 +529,7 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 	//
 	// Which engines this works on is no longer a driver list here: the atomicity rests on
 	// RETURNING, so the dialect that owns the clause owns the answer (m_returningClause).
-	// That admits SQLite as well now, and gives MySQL / ODBC one honest error from the
+	// That admits SQLite as well now, and gives ODBC one honest error from the
 	// renderer instead of a hardcoded name check that drifts from the dialects.
 	ibDatabaseQueryBuilder q;
 

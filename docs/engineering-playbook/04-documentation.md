@@ -37,7 +37,7 @@ without writing code. Built with C++17 and wxWidgets.
 - **Language:** C++17
 - **GUI:** wxWidgets 3.3.2
 - **Build:** MSBuild (VS 2017+), transitioning to CMake 3.20+
-- **Databases:** Firebird 4.x (primary), PostgreSQL, SQLite, MySQL, ODBC
+- **Databases:** Firebird 4.x (primary) and PostgreSQL (production), SQLite (tests + logging), ODBC
 - **Tests:** Google Test
 - **License:** LGPL 2.1
 
@@ -155,7 +155,7 @@ LogLevel=info
 DataDir=
 
 [Database]
-; Primary database type: firebird, postgresql, sqlite, mysql, odbc
+; Primary database type: firebird, postgresql, sqlite, odbc
 Type=firebird
 
 [Firebird]
@@ -209,7 +209,7 @@ doxygen Doxyfile
  * @brief Abstract base class for all OES database backends.
  *
  * ibDatabaseLayer provides a unified interface for working with multiple
- * database backends (Firebird, PostgreSQL, SQLite, MySQL, ODBC). Concrete
+ * database backends (Firebird, PostgreSQL, SQLite, ODBC). Concrete
  * implementations: ibDatabaseLayerFirebird, ibDatabaseLayerPostgres, etc.
  *
  * Parameterized queries are mandatory — use ibPreparedStatement with

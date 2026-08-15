@@ -75,7 +75,7 @@ embedded engine in the process.
 
 > **The driver is NOT chosen from the connection settings today.**
 > `CreateServerAppDataEnv` (`backend/appData.cpp:557`) constructs `ibDatabaseLayerPostgres`
-> unconditionally — there is no branch on any setting. PostgreSQL / MySQL / ODBC / Firebird-server
+> unconditionally — there is no branch on any setting. PostgreSQL / ODBC / Firebird-server
 > are all compiled and all implement `ibDatabaseLayer`, but only PostgreSQL is reachable from the
 > open path. The launcher adds a second inconsistency: `launcher/connectionDB.cpp:174-199` picks its
 > Test-Connection driver at COMPILE time (`#ifdef OES_USE_FIREBIRD` / `#elif OES_USE_POSTGRESQL`),

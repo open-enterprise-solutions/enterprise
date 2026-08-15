@@ -234,7 +234,7 @@ still-missing half is a GUI job there (the harness needs a window server, and th
 on macOS is not Xvfb), so on that platform CI covers the build and the backend suite, and a human
 covers the screen.
 
-The engine — backend, compiler, interpreter, query engine, all five drivers — is cross-platform
+The engine — backend, compiler, interpreter, query engine, all four drivers — is cross-platform
 as of 2026-08-02, and as of 2026-08-03 so are the **applications**: `enterprise`, `designer`,
 `daemon`, `launcher`, `codeRunner` and `simplePlugin` link on Linux and Windows in CI. Three
 toolchains, three standard libraries, two 64-bit models, two CPU architectures, one result.
@@ -247,7 +247,7 @@ What that claim does **not** cover, so nobody reads more into the table than it 
   cheap as predicted — backend and frontend are already built by the steps before it, leaving
   only the executables' own translation units.
 - **Only SQLite actually executes.** Firebird is compiled but loads `fbclient` at run time, and
-  the runner has none; PostgreSQL, MySQL and ODBC are compile-only. `FirebirdLeaseTest` exercises
+  the runner has none; PostgreSQL and ODBC are compile-only. `FirebirdLeaseTest` exercises
   file-lock mechanics against a path that need not exist, not the driver.
 - ~~**Only x86-64.**~~ **Closed 2026-08-03** by the macOS arm64 job. The earlier reasoning —
   that ARM buys little because `ibNumber` selects its carry intrinsics on `_MSC_VER` rather than

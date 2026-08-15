@@ -40,7 +40,7 @@
 // Parameter placeholder style (bound positionally; 1-based, matching SetParam*).
 enum class ibParamStyle
 {
-	QuestionMark,   // ?     — Firebird, SQLite, ODBC, MySQL
+	QuestionMark,   // ?     — Firebird, SQLite, ODBC
 	DollarN,        // $1    — PostgreSQL
 	Colon           // :p1   — Oracle-style named
 };
@@ -49,7 +49,7 @@ enum class ibParamStyle
 enum class ibPagination
 {
 	FirstSkip,      // SELECT FIRST n SKIP m ...   — Firebird
-	LimitOffset,    // ... LIMIT n OFFSET m        — PostgreSQL, SQLite, MySQL
+	LimitOffset,    // ... LIMIT n OFFSET m        — PostgreSQL, SQLite
 	OffsetFetch,    // ... OFFSET m ROWS FETCH NEXT n ROWS ONLY  — MSSQL / ANSI
 	Top             // SELECT TOP n ...            — MSSQL (legacy)
 };
@@ -58,7 +58,7 @@ enum class ibPagination
 enum class ibBoolForm
 {
 	TrueFalse,      // TRUE / FALSE   — PostgreSQL
-	OneZero,        // 1 / 0          — SQLite, MySQL
+	OneZero,        // 1 / 0          — SQLite
 	Smallint        // 1 / 0 stored as SMALLINT — Firebird (no native boolean pre-3)
 };
 
@@ -69,7 +69,7 @@ struct ibSqlFeatures
 	bool m_cte           = false;   // WITH ... AS (...)
 	bool m_fullOuterJoin = false;
 	bool m_iLike         = false;   // case-insensitive LIKE
-	bool m_rollup        = false;   // GROUP BY ROLLUP(...) — hierarchical subtotals server-side (FB 2.1+ / PG / MySQL8; NOT SQLite)
+	bool m_rollup        = false;   // GROUP BY ROLLUP(...) — hierarchical subtotals server-side (FB 2.1+ / PG; NOT SQLite)
 };
 
 // A period truncation unit — "start of the minute / week / month / … containing this moment".
@@ -125,7 +125,7 @@ struct ibDialectDictionary
 	ibPagination m_pagination = ibPagination::LimitOffset;
 	ibBoolForm   m_boolForm   = ibBoolForm::TrueFalse;
 
-	// DROP INDEX divergence: MySQL needs "DROP INDEX <name> ON <table>"; FB / PG /
+	// DROP INDEX divergence: MSSQL needs "DROP INDEX <name> ON <table>"; FB / PG /
 	// SQLite take just "DROP INDEX <name>". Default = standalone (no table).
 	bool m_dropIndexNeedsTable = false;
 
@@ -135,7 +135,7 @@ struct ibDialectDictionary
 	// reference is three of those. So a key of seven columns can be an index of twenty-one segments,
 	// and Firebird stops at sixteen — "too many keys defined for index" at CREATE INDEX time, which
 	// on Firebird takes the whole restructuring down with it and names a table that is not the
-	// problem. MySQL stops at sixteen too, PostgreSQL at thirty-two, SQLite has no limit anyone
+	// problem. PostgreSQL at thirty-two, SQLite has no limit anyone
 	// reaches.
 	//
 	// It is declared rather than discovered because the DECLARATION side has to know it: a totals
@@ -163,7 +163,7 @@ struct ibDialectDictionary
 	// this way, with no window between the write and the read for another session to slip
 	// into. Firebird, PostgreSQL and SQLite (3.35+) all spell it "RETURNING".
 	//
-	// EMPTY (default — MySQL / ODBC) = the driver has no such form. The renderer THROWS
+	// EMPTY (default — ODBC) = the driver has no such form. The renderer THROWS
 	// UnsupportedNode rather than emulate it, because the emulation (write, then SELECT)
 	// silently drops exactly the atomicity the caller asked for.
 	wxString m_returningClause;
@@ -196,49 +196,49 @@ struct ibDialectDictionary
 	// altered it: Firebird's legacy isc_* API races the metadata cache — seed rows
 	// are silently dropped or a prepare surfaces "table unknown". When TRUE, the
 	// schema door (L3-2) commits the DDL batch first and runs the data/seed phase on
-	// the commit event, in a fresh transaction. FALSE (PostgreSQL / MySQL / SQLite /
+	// the commit event, in a fresh transaction. FALSE (PostgreSQL / SQLite /
 	// ODBC) = DDL and DML coexist in one TX, no barrier needed. This is the
 	// declarative replacement for the scattered `if (driver == FIREBIRD) Commit()`
 	// forks in the metadata-save flow.
 	bool m_ddlCommitBeforeData = false;
 
 	// ALTER COLUMN (type change) as a TEMPLATE — {table} {column} {type}. Default =
-	// PG / Firebird "ALTER COLUMN c TYPE t"; MySQL "MODIFY COLUMN c t"; SQLite leaves
+	// PG / Firebird "ALTER COLUMN c TYPE t"; SQLite leaves
 	// it EMPTY (no in-place type change) so the renderer THROWS rather than emulate.
 	wxString m_alterColumnTemplate = wxT("ALTER TABLE {table} ALTER COLUMN {column} TYPE {type}");
 
 	// Multi-clause ALTER TABLE: "ALTER TABLE t ADD c1, ADD c2, DROP COLUMN c3" in one statement.
-	// FB / PG / MySQL accept it; SQLite does NOT (one ADD/DROP per ALTER), so the structure builder
+	// FB / PG accept it; SQLite does NOT (one ADD/DROP per ALTER), so the structure builder
 	// splits a batch into one statement per clause when this is false.
 	bool m_alterTableMultiClause = true;
 
-	// Column-drop spelling. Default = ANSI "DROP COLUMN c" (PG / SQLite 3.35+ / MySQL).
+	// Column-drop spelling. Default = ANSI "DROP COLUMN c" (PG / SQLite 3.35+).
 	// Firebird rejects the COLUMN keyword — it takes plain "ALTER TABLE t DROP c". Used by
 	// DropColumn and the multi-clause ALTER fold.
 	wxString m_dropColumnClause = wxT("DROP COLUMN ");
 
 	// ANALYZE spelling — the renderer emits `<prefix> <table>` for an ibDdlKind::Analyze. Refreshes
 	// the optimiser's statistics so it plans against real cardinality (after a temp materialise / bulk
-	// load / restructure). PG / SQLite: "ANALYZE"; MySQL: "ANALYZE TABLE"; Firebird: EMPTY (no portable
+	// load / restructure). PG / SQLite: "ANALYZE"; Firebird: EMPTY (no portable
 	// ANALYZE — it tunes per-index stats differently), which renders empty → Execute no-ops.
 	wxString m_analyzePrefix;   // empty = the driver has no ANALYZE statement
 
 	// Row-lock clause APPENDED to a top-level SELECT for a pessimistic read-for-update (the
-	// register set lock). Default = PG / MySQL " FOR UPDATE"; Firebird overrides to " WITH
+	// register set lock). Default = PG " FOR UPDATE"; Firebird overrides to " WITH
 	// LOCK"; SQLite leaves it EMPTY (it locks the whole DB per transaction — the open TX IS
 	// the lock, there is no row-level FOR UPDATE). Rendered after ORDER BY / LIMIT.
 	// (docs/record-locks.md)
 	wxString m_rowLockSuffix = wxT(" FOR UPDATE");
 
 	// Appended AFTER m_rowLockSuffix when the IR asks for a non-blocking acquire (ibQueryIR::
-	// m_lockNoWait). Default = PG / MySQL " NOWAIT" (=> " FOR UPDATE NOWAIT"). Firebird leaves it
+	// m_lockNoWait). Default = PG " NOWAIT" (=> " FOR UPDATE NOWAIT"). Firebird leaves it
 	// EMPTY — it has no FOR UPDATE NOWAIT; a non-blocking acquire is expressed by the transaction's
 	// own lock-timeout (ibTxOptions::noWait -> isc_tpb_nowait). SQLite empty (whole-DB lock).
 	// (docs/record-locks.md — unifies the old ibDatabaseLayer::NoWaitClause virtual onto the dictionary.)
 	wxString m_rowLockNoWaitSuffix = wxT(" NOWAIT");
 
 	// GROUP BY ROLLUP spelling (used only when m_features.m_rollup): the keys render between
-	// prefix and suffix. Standard (PG / FB): "GROUP BY ROLLUP(<keys>)". MySQL: prefix empty,
+	// prefix and suffix. Standard (PG / FB): "GROUP BY ROLLUP(<keys>)". MSSQL: prefix empty,
 	// suffix " WITH ROLLUP" -> "GROUP BY <keys> WITH ROLLUP". (docs/query-language-arc.md §22.1b)
 	wxString m_rollupPrefix = wxT("ROLLUP(");
 	wxString m_rollupSuffix = wxT(")");
@@ -284,7 +284,7 @@ struct ibDialectDictionary
 struct ibTempTableDialect
 {
 	//   AdHocCreate     : CREATE a fresh temp table per query, INSERT, DROP / auto-drop
-	//                     (SQLite / PostgreSQL / MySQL / MSSQL — any-shape, on the fly).
+	//                     (SQLite / PostgreSQL / MSSQL — any-shape, on the fly).
 	//   PreDeclaredPool : grab a typed GLOBAL TEMPORARY TABLE from a schema-declared pool, INSERT,
 	//                     ON COMMIT clears the private rows (Firebird — GTTs are fixed-shape schema
 	//                     objects, NOT ad-hoc; arbitrary-shape intermediates need a generic pool or
@@ -295,7 +295,7 @@ struct ibTempTableDialect
 	// CREATE prefix (ad-hoc) — the manager appends " <name> (<cols>)" + m_onCommitClause.
 	wxString m_createPrefix   = wxT("CREATE TEMPORARY TABLE");
 	// Clause appended after the column list: PG " ON COMMIT DROP"; FB GTT " ON COMMIT DELETE ROWS";
-	// SQLite / MySQL empty (connection-scoped, auto-dropped on disconnect).
+	// SQLite empty (connection-scoped, auto-dropped on disconnect).
 	wxString m_onCommitClause;
 	// Does the temp table drop itself at session / commit end? false => the manager emits DROP.
 	bool     m_autoDrops      = true;
@@ -316,7 +316,7 @@ struct ibTempTableDialect
 // ONCE per statement over the `inserted`/`deleted` pseudo-tables and merges a set. That
 // is a different ALGORITHM, so folding it into L2-1 would mean either imperative nodes in
 // the query IR (RETURN / IF / NEW / OLD) or a raw-SQL escape hatch — and L2-1's "never raw
-// SQL" invariant is exactly what keeps five drivers honest. A second dictionary keeps
+// SQL" invariant is exactly what keeps four drivers honest. A second dictionary keeps
 // both invariants intact.
 //
 // Vended SEPARATELY and NULLABLE (ibDatabaseLayer::GetMaterializationDialect), same as
@@ -339,8 +339,8 @@ enum class ibTriggerFamily
 {
 	//   PerRow   : fires once per affected row over NEW / OLD row aliases, and reduces to a
 	//              handful of plain SQL statements — Firebird PSQL, PostgreSQL PL/pgSQL,
-	//              MySQL, SQLite. Designed to the SQLITE FLOOR (statements only, no
-	//              procedural block), so one body fits all four; only the upsert idiom and
+	//              SQLite. Designed to the SQLITE FLOOR (statements only, no
+	//              procedural block), so one body fits all three; only the upsert idiom and
 	//              the shell differ, and both are slots below.
 	PerRow,
 	//   SetBased : fires once per STATEMENT over the `inserted` / `deleted` pseudo-tables and
@@ -392,7 +392,7 @@ struct ibMaterializationDialect
 
 	// PostgreSQL cannot inline a trigger body — it needs a FUNCTION the trigger then calls.
 	// When non-empty the generator emits THIS FIRST ({name} gets an "fn_" flavour, {body} the
-	// same rendered body) and the shell above only references it. EMPTY (FB / MySQL / SQLite)
+	// same rendered body) and the shell above only references it. EMPTY (FB / SQLite)
 	// = the body inlines, one statement instead of two.
 	wxString m_functionShellTemplate;
 
@@ -401,12 +401,12 @@ struct ibMaterializationDialect
 	wxString m_timingUpdate = wxT("AFTER UPDATE");
 	wxString m_timingDelete = wxT("AFTER DELETE");
 
-	// DROP spelling — {name} {table}. MySQL / PG drop by name alone; SQLite / FB likewise,
-	// but MSSQL and MySQL disagree about the schema qualifier, so it stays a template.
+	// DROP spelling — {name} {table}. PG drops by name alone; SQLite / FB likewise,
+	// but MSSQL disagrees about the schema qualifier, so it stays a template.
 	wxString m_dropTriggerTemplate = wxT("DROP TRIGGER {name}");
 
 	// Drops the separate function object, for the engines that have one — {name}. EMPTY where
-	// the body inlines (FB / MySQL / SQLite), because there is nothing to drop. Without this
+	// the body inlines (FB / SQLite), because there is nothing to drop. Without this
 	// a dropped table would leave its trigger function orphaned in the schema: harmless, but
 	// it accumulates across every restructure and nothing else would ever collect it.
 	wxString m_dropFunctionTemplate;
@@ -469,13 +469,12 @@ struct ibMaterializationDialect
 
 	// How the two sides are named inside the items above. PG / SQLite: the target is the
 	// table itself and the incoming row is "excluded". Firebird's MERGE binds both to
-	// explicit aliases. MySQL names neither — its item spells the incoming value as
-	// VALUES({col}), so both aliases stay unused there. One slot, three spellings.
+	// explicit aliases. One slot, two spellings.
 	wxString m_deltaTargetAlias = wxT("{table}");
 	wxString m_deltaSourceAlias = wxT("excluded");
 
 	// Renders the incoming row as a one-row relation for MERGE USING — {selectItems} is
-	// "<value> AS <col>" per column, comma-joined. Empty (PG / SQLite / MySQL) = the form
+	// "<value> AS <col>" per column, comma-joined. Empty (PG / SQLite) = the form
 	// takes VALUES directly and needs no relation. Firebird additionally needs a FROM, and
 	// takes it from ibDialectDictionary::m_selectFromDual (RDB$DATABASE) — the fact already
 	// lives there, so it is not restated here.
@@ -511,8 +510,7 @@ struct ibMaterializationDialect
 	// character-set error or a silent truncation. A hashed part is fixed-width, ASCII, and cannot
 	// truncate.
 	wxString m_keyHashItem;
-	// How the parts are joined. Firebird / PG / SQLite concatenate with ||; MySQL has CONCAT(), so
-	// its join is a comma and its digest template wraps the list.
+	// How the parts are joined. Firebird / PG / SQLite concatenate with ||; a dialect with	// CONCAT() instead joins on a comma and wraps the list in its digest template.
 	wxString m_keyHashJoin = wxT(" || '.' || ");
 	// {expr} — the joined parts, digested into what the column stores.
 	wxString m_keyHashDigest;

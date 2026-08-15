@@ -251,7 +251,6 @@ explicit NOWAIT transaction; not by the session registry, which no
 longer probes row locks):
 - **FB**: `isc_tpb_nowait` in the TPB (`firebirdDatabaseLayer.cpp:651`).
 - **PG**: session-level lock-timeout.
-- **MySQL/InnoDB**: `SET SESSION innodb_lock_wait_timeout = 1`.
 - **ODBC/MSSQL**: `SET LOCK_TIMEOUT 0` (`odbcDatabaseLayer.cpp:279`).
 - **SQLite**: no-op (whole-DB lock).
 
@@ -299,7 +298,7 @@ thread); surfaced under heavy debugger use.
 10. **DesignerExclusivePolicy** — snapshot-scan replacement for `VerifySessionUpdater` (originally probe-lock based; switched to snapshot scan when the row-lock scheme was dropped — see "Designer-exclusive policy" section).
 11. **Session-aware accessors** — `GetUserInfo / GetUserName / GetUserPassword / GetUserRoleArray / GetUserLanguageGuid / GetUserLanguageCode / ComputeMd5` out-of-line, Current()-first.
 12. **Schema extension** — pid / address / currentActivity columns + `MigrateTableSession` + `ProcessSetActivity` real UPDATE + `ibSessionTicket::SetActivity`.
-13. **Per-driver NoWait** — PG / MySQL / ODBC plus FB.
+13. **Per-driver NoWait** — PG / ODBC plus FB.
 14. **wfrontend server address plumbing** — `wfrontendSetServerAddress/ServerAddress` exports; `ibWebSession::Login` stamps `sys_session.address`.
 15. **Disconnect force-Stop** — Stop() is called unconditionally; a force-kill of the process no longer leaves a zombie thread.
 16. **HoldRowLocks removed** (#4 fix) — liveness = heartbeat + 60s cutoff + probe as fast path. Hybrid sweep (JobSweepStale).
@@ -324,7 +323,7 @@ thread); surfaced under heavy debugger use.
 - ~~`signal` column + admin kick/reload dispatcher + `/admin/sessions` endpoint~~ — landed; see "Admin signals (kick / reload)" section.
 - ~~Cookie / ibGuid unification on web~~ — landed; see "Unified session id across web layers".
 - ~~`m_sessionGuid` singleton on `ibApplicationData`~~ — gone; session guid lives in `ibSessionIdentity::m_guid`.
-- ~~Per-driver NoWait plumbing (PG / MySQL / MSSQL)~~ — landed for transaction-options. (The row-lock probe it was meant to feed was later abandoned — Gotcha #4.)
+- ~~Per-driver NoWait plumbing (PG / MSSQL)~~ — landed for transaction-options. (The row-lock probe it was meant to feed was later abandoned — Gotcha #4.)
 - ~~Web login real-auth~~ — open-access mode passes through `AuthenticateUser` like populated sys_user; same code path.
 
 ## ibSessionKind (landed 2026-04-20)

@@ -32,14 +32,15 @@
 │  ibValueForm       │◄─►  ibApplicationData (singleton)     │
 │  ibVisualHost      │  │  ibMetaDataConfiguration           │
 │  18 Controls       │  │  ibCompileCode / ibProcUnit        │
-│  ibMainFrame       │  │  ibDatabaseLayer (+ 5 drivers)     │
+│  ibMainFrame       │  │  ibDatabaseLayer (+ 4 drivers)     │
 │  Property editor   │  │  ibDebuggerServer                  │
 └────────────────────┘  └────────────────┬───────────────────┘
                                          │
                         ┌────────────────▼────────────────────┐
                         │         Database tier                │
-                        │  Firebird  PostgreSQL  SQLite        │
-                        │  MySQL     ODBC                      │
+                        │  Firebird  PostgreSQL   (production) │
+                        │  SQLite    (tests + logging)         │
+                        │  ODBC      (base for MSSQL)          │
                         └─────────────────────────────────────┘
 ```
 
@@ -261,7 +262,7 @@ connection to work on"* is the session refusing, not the query tier failing at i
 the kind in both places would have been two names for one refusal with nothing to choose between
 them.
 
-Per-driver `ClassifyDatabaseError(int nativeCode)` on each `ibDatabaseErrorReporter` subclass maps the driver's native code (Firebird `isc_*` gds, PG SQLSTATE int, MySQL errno, ODBC SQLSTATE, SQLite result code) to a Kind. The mapping is regression-tested in `tests/test_dbTaxonomy.cpp` — if a future driver bump flips `SQLITE_CONSTRAINT (19)` away from `Kind::Constraint`, the test fails before code that branches on `IsRetryable()` silently misroutes.
+Per-driver `ClassifyDatabaseError(int nativeCode)` on each `ibDatabaseErrorReporter` subclass maps the driver's native code (Firebird `isc_*` gds, PG SQLSTATE int, ODBC SQLSTATE, SQLite result code) to a Kind. The mapping is regression-tested in `tests/test_dbTaxonomy.cpp` — if a future driver bump flips `SQLITE_CONSTRAINT (19)` away from `Kind::Constraint`, the test fails before code that branches on `IsRetryable()` silently misroutes.
 
 `catch` discipline:
 - **Inside RAII destructors and rollback / cleanup paths**: `catch (...) {}` is intentional (a destructor that throws is worse than a swallowed error during cleanup).
@@ -294,7 +295,6 @@ Per-driver `ClassifyDatabaseError(int nativeCode)` on each `ibDatabaseErrorRepor
 | `firebird/` | `ibDatabaseLayerFirebird` | Firebird 3/4/5 driver (INT128 via `SQL_INT128`; RLS confirmed live on FB5) |
 | `postgres/` | `ibDatabaseLayerPostgres` | PostgreSQL driver |
 | `sqllite/` | `ibDatabaseLayerSQLite` | SQLite 3 driver (note: directory named `sqllite`) |
-| `mysql/` | `ibDatabaseLayerMySQL` | MySQL driver |
 | `odbc/` | `ibDatabaseLayerODBC` | ODBC generic driver |
 
 > Concrete driver classes use the `ib<Base><Vendor>` suffix pattern: `ibDatabaseLayer<Vendor>`, `ibDatabaseResultSet<Vendor>`, `ibPreparedStatement<Vendor>` (e.g. `ibDatabaseResultSetFirebird`, `ibPreparedStatementPostgres`).
@@ -645,21 +645,18 @@ ibDatabaseLayer  (abstract — databaseLayer.h)
   ├─ ibDatabaseLayerFirebird   (databaseLayer/firebird/)
   ├─ ibDatabaseLayerPostgres   (databaseLayer/postgres/)
   ├─ ibDatabaseLayerSQLite     (databaseLayer/sqllite/)
-  ├─ ibDatabaseLayerMySQL      (databaseLayer/mysql/)
   └─ ibDatabaseLayerODBC       (databaseLayer/odbc/)
 
 ibDatabaseResultSet  (abstract)
   ├─ ibDatabaseResultSetFirebird
   ├─ ibDatabaseResultSetPostgres
   ├─ ibDatabaseResultSetSQLite
-  ├─ ibDatabaseResultSetMySQL
   └─ ibDatabaseResultSetODBC
 
 ibPreparedStatement  (abstract)
   ├─ ibPreparedStatementFirebird
   ├─ ibPreparedStatementPostgres
   ├─ ibPreparedStatementSQLite
-  ├─ ibPreparedStatementMySQL
   └─ ibPreparedStatementODBC
 ```
 

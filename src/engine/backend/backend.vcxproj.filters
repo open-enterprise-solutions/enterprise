@@ -228,33 +228,6 @@
     <ClInclude Include="databaseLayer\firebird\firebirdResultSetMetaData.h">
       <Filter>databaseLayer\firebird</Filter>
     </ClInclude>
-    <ClInclude Include="databaseLayer\mysql\mysqlDatabaseLayer.h">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClInclude>
-    <ClInclude Include="databaseLayer\mysql\mysqlInterface.h">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClInclude>
-    <ClInclude Include="databaseLayer\mysql\mysqlParameter.h">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClInclude>
-    <ClInclude Include="databaseLayer\mysql\mysqlPreparedStatement.h">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClInclude>
-    <ClInclude Include="databaseLayer\mysql\mysqlPreparedStatementParameter.h">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClInclude>
-    <ClInclude Include="databaseLayer\mysql\mysqlPreparedStatementParameterCollection.h">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClInclude>
-    <ClInclude Include="databaseLayer\mysql\mysqlPreparedStatementResultSet.h">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClInclude>
-    <ClInclude Include="databaseLayer\mysql\mysqlPreparedStatementWrapper.h">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClInclude>
-    <ClInclude Include="databaseLayer\mysql\mysqlResultSetMetaData.h">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClInclude>
     <ClInclude Include="databaseLayer\odbc\odbcDatabaseLayer.h">
       <Filter>databaseLayer\odbc</Filter>
     </ClInclude>
@@ -1037,33 +1010,6 @@
     </ClCompile>
     <ClCompile Include="databaseLayer\firebird\firebirdResultSetMetaData.cpp">
       <Filter>databaseLayer\firebird</Filter>
-    </ClCompile>
-    <ClCompile Include="databaseLayer\mysql\mysqlDatabaseLayer.cpp">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClCompile>
-    <ClCompile Include="databaseLayer\mysql\mysqlInterface.cpp">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClCompile>
-    <ClCompile Include="databaseLayer\mysql\mysqlParameter.cpp">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClCompile>
-    <ClCompile Include="databaseLayer\mysql\mysqlPreparedStatement.cpp">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClCompile>
-    <ClCompile Include="databaseLayer\mysql\mysqlPreparedStatementParameter.cpp">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClCompile>
-    <ClCompile Include="databaseLayer\mysql\mysqlPreparedStatementParameterCollection.cpp">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClCompile>
-    <ClCompile Include="databaseLayer\mysql\mysqlPreparedStatementResultSet.cpp">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClCompile>
-    <ClCompile Include="databaseLayer\mysql\mysqlPreparedStatementWrapper.cpp">
-      <Filter>databaseLayer\mysql</Filter>
-    </ClCompile>
-    <ClCompile Include="databaseLayer\mysql\mysqlResultSetMetaData.cpp">
-      <Filter>databaseLayer\mysql</Filter>
     </ClCompile>
     <ClCompile Include="databaseLayer\odbc\odbcDatabaseLayer.cpp">
       <Filter>databaseLayer\odbc</Filter>
@@ -2014,9 +1960,6 @@
     </Filter>
     <Filter Include="databaseLayer\firebird">
       <UniqueIdentifier>{30f3747a-6465-49ff-8cf7-9d11d34be44e}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="databaseLayer\mysql">
-      <UniqueIdentifier>{204db032-98ae-4033-89f0-20216a95904f}</UniqueIdentifier>
     </Filter>
     <Filter Include="databaseLayer\odbc">
       <UniqueIdentifier>{b49afbd4-405d-43a6-9819-a18723fab8ec}</UniqueIdentifier>

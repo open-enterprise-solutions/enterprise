@@ -105,7 +105,7 @@ struct ibQueryAstExpr
 	// which is a plain IN — for every other node kind and for every IN written without a word.
 	//
 	// ⚠ Nothing below L4 sees it: the lowering RESOLVES the subtree into the values it stands for and
-	// emits the ordinary IN, so the door and all five drivers keep the one set-valued operator they
+	// emits the ordinary IN, so the door and all four drivers keep the one set-valued operator they
 	// already render. The word lives where the question is asked, not where the rows are read.
 	ibQueryDimUnfold      m_unfold = ibQueryDimUnfold::Elements;
 

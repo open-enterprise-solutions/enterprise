@@ -254,8 +254,7 @@ inline ibQueryExprPtr ibNot(ibQueryExprPtr operand)
 // CAST(expr AS <type>). `castType` is the CANONICAL target type; the renderer spells it per-DBMS
 // through the dialect TYPE-MAP (ibQueryRenderer::MapType), so the IR bakes no dialect SQL string.
 // Used where an expression's result type must be pinned (aggregate results — register balances /
-// turnovers, whose SUM(CASE …) the driver may otherwise type loosely or too narrow: FB / MySQL
-// default a bare NUMERIC / DECIMAL to (9,0) / (10,0) and truncate the fraction).
+// turnovers, whose SUM(CASE …) the driver may otherwise type loosely or too narrow: FB// defaults a bare NUMERIC / DECIMAL to (9,0) and truncates the fraction).
 inline ibQueryExprPtr ibCast(ibQueryExprPtr expr, const ibColumnType& castType)
 {
 	auto e = std::make_shared<ibQueryExpr>(ibQueryExprKind::Cast);
@@ -596,7 +595,7 @@ inline ibDdlStatement ibDropTable(const wxString& table, bool ifExists = false)
 
 // ANALYZE a table — refresh the optimiser's statistics so it plans against real cardinality
 // (after a temp materialise, a bulk load, or a restructure). The per-driver form lives in the
-// dialect (m_analyzePrefix: PG/SQLite "ANALYZE", MySQL "ANALYZE TABLE", FB empty); a driver with
+// dialect (m_analyzePrefix: PG/SQLite "ANALYZE", FB empty); a driver with
 // no ANALYZE renders to empty and Execute no-ops. (docs/temp-db.md)
 inline ibDdlStatement ibAnalyzeTable(const wxString& table)
 {
@@ -674,7 +673,7 @@ inline ibDdlStatement ibCreateIndex(const wxString& table, const wxString& index
 }
 
 // DROP INDEX <name> [ON <table>]. The table is needed only by dialects that require it
-// (MySQL — see ibDialectDictionary::m_dropIndexNeedsTable); pass it for portability.
+// (MSSQL — see ibDialectDictionary::m_dropIndexNeedsTable); pass it for portability.
 inline ibDdlStatement ibDropIndex(const wxString& indexName, const wxString& table = wxEmptyString)
 {
 	ibDdlStatement s(ibDdlKind::DropIndex);
@@ -716,8 +715,7 @@ struct ibDmlStatement
 	ibQueryExprPtr m_where;
 
 	// Upsert: the conflict / match columns (the PK, e.g. "uuid"). The dialect
-	// renders them as FB MATCHING(...) / PG-SQLite ON CONFLICT(...) / MySQL's
-	// implicit key; they are excluded from the UPDATE SET (the PK never changes).
+	// renders them as FB MATCHING(...) / PG-SQLite ON CONFLICT(...); they are	// excluded from the UPDATE SET (the PK never changes).
 	std::vector<wxString> m_matchKeys;
 
 	// Insert ONLY — INSERT … SELECT. When set, the row source is this relation tree instead of a
@@ -882,7 +880,7 @@ private:
 // A null layer answers NO / EMPTY rather than crashing — a passive pool is an ordinary state.
 
 // GROUP BY ROLLUP — can the subtotal levels be folded by the SERVER, or must the result tier build
-// them? (FB5, PG, MySQL yes; SQLite no.)
+// them? (FB5, PG yes; SQLite no.)
 BACKEND_API bool ibCanPushRollup(const ibDatabaseLayer* layer);
 
 // (No `ibCanUseTempTables` here, and the reason is worth keeping: the per-driver temp facts'

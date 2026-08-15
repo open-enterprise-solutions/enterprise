@@ -120,7 +120,7 @@ Designer keeps non-const access through:
 > at landing. Process-wide grep across `src/engine/backend/` now
 > finds 28 occurrences across 17 files (mostly outside the
 > const-meta surface — `propertyManager`, `firebirdHlc`,
-> `mysql/engine/`, etc.). The 3 in `metaObject.h::ConvertToValue`
+> `sqllite/engine/`, etc.). The 3 in `metaObject.h::ConvertToValue`
 > below are still the only ones touching the const-meta path; the
 > "floor of 13" figure is no longer accurate process-wide.
 

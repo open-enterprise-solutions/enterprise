@@ -239,7 +239,7 @@ void ibApplicationData::MigrateTableSession()
 // table exists.
 //
 // Per-driver column types: PostgreSQL uses BYTEA for the binary blob,
-// every other driver (Firebird embedded, SQLite, MySQL, ODBC) takes
+// every other driver (Firebird embedded, SQLite, ODBC) takes
 // plain BLOB. Firebird's BLOB SUB_TYPE 0 is implicit when no sub-type
 // is named.
 void ibApplicationData::MigrateTableBytecodeCache()
@@ -262,7 +262,7 @@ void ibApplicationData::MigrateTableBytecodeCache()
 
 	try {
 		// bc_blob's BLOB renders as BYTEA on PostgreSQL and BLOB on every other driver
-		// (Firebird embedded, SQLite, MySQL, ODBC) via the dialect TYPE-MAP — no fork here.
+		// (Firebird embedded, SQLite, ODBC) via the dialect TYPE-MAP — no fork here.
 		q.Execute(ibCreateTable(bytecode_cache_table, {
 			{ wxT("descriptor_id"),    ibTypeString(36), false, true,  wxEmptyString },
 			{ wxT("bytecode_version"), ibTypeString(36), true,  false, wxEmptyString },

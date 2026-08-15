@@ -145,7 +145,7 @@ if (comparison == ibComparisonKind_InHierarchy)
 
 **«In hierarchy» therefore differs from «in» by the WORD alone**, and the resolution stays where it
 already lived: the lowering expands the subtree into the values it stands for and emits an ordinary
-`IN`, so the door, the RAM evaluator and all five drivers keep the one set-valued operator they
+`IN`, so the door, the RAM evaluator and all four drivers keep the one set-valued operator they
 already render (`query/queryHierarchy.{h,cpp}`; `keepUnfold` is the one path that leaves the word on
 the leaf, for a condition a SOURCE folds by — [query-engine-layers.md](query-engine-layers.md)). An
 operator of its own would have been a second way to ask what the language already asks.

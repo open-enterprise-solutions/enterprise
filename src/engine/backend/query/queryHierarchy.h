@@ -35,7 +35,7 @@
 // is wrong: a code is a presentation somebody may re-number, the parent link is the fact.
 //
 // ⚠ THE SUBTREE IS RESOLVED INTO VALUES, not expressed as an operator the database has to
-// understand: what reaches the server is an ordinary IN, which every one of the five drivers renders
+// understand: what reaches the server is an ordinary IN, which every one of the four drivers renders
 // with no recursive CTE and no dialect that has to spell one. That is also why the language's
 // `IN HIERARCHY` takes a PARAMETER and never a subquery - the values have to be IN HAND first.
 

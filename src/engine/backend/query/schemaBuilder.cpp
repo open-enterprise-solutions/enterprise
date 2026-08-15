@@ -47,7 +47,7 @@ bool ibSchemaBuilder::AlterTableMultiClause() const
 // in place. Correlated self-join on the dialect's physical row id (RDB$DB_KEY / rowid / ctid): the outer
 // table is referenced BY NAME (SQLite forbids an alias in DELETE), the inner by alias `b`; a row survives
 // unless a smaller-row-id twin shares its full key. NULL key parts do not collide (`=` skips them), which
-// matches a UNIQUE index's NULL rule. Empty row id (MySQL / ODBC) -> skip; the create then fails loudly.
+// matches a UNIQUE index's NULL rule. Empty row id (ODBC) -> skip; the create then fails loudly.
 int ibSchemaBuilder::Execute(const ibDdlStatement& ddl)
 {
 	// ⭐⭐ ON A BARRIER DIALECT, REMEMBER EVERY TABLE WHOSE SHAPE THIS SAVE CHANGED — not only the ones

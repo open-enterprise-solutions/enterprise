@@ -891,8 +891,8 @@ ibQueryExprPtr ibMetaIRBuilder::BuildSemiJoinExists(const ibSemiJoinExists& sj, 
 // placeholder (SELECT ? AS x) — Firebird and other strict engines cannot infer its type and reject the
 // statement (FB -804 "Data type unknown"). Pin the type with a CAST derived from the value. The target is
 // a CANONICAL ibColumnType, NOT a SQL string: the L2-1 renderer spells it per-DBMS through the dialect
-// TYPE-MAP (ibQueryRenderer::MapType), so the SQLite date-affinity (TEXT), boolean (INTEGER) and FB /
-// MySQL narrow-DECIMAL forks are all closed at render time — the one place that owns the dialect.
+// TYPE-MAP (ibQueryRenderer::MapType), so the SQLite date-affinity (TEXT), boolean (INTEGER) and the
+// FB narrow-DECIMAL forks are all closed at render time — the one place that owns the dialect.
 static ibColumnType CastTypeForConst(const ibValue& v)
 {
 	switch (v.GetType()) {
@@ -1925,7 +1925,7 @@ bool ibDbTableProvider::CanRollupTotalsShape(const ibDataQuerySpec& spec)
 bool ibDbTableProvider::CanPushRollupTotals(const ibDataQuerySpec& spec)
 	{
 		if (!CanRollupTotalsShape(spec)) return false;
-		// The connected driver must be able to fold the levels itself (FB5 / PG / MySQL8; NOT SQLite
+		// The connected driver must be able to fold the levels itself (FB5 / PG; NOT SQLite
 		// -> RAM). Asked of L2 rather than read off its dictionary: what a driver CAN DO is a question,
 		// and this tier has no business knowing which field carries the answer.
 		ibConnectionScope scope(spec.m_holder);
@@ -2254,7 +2254,7 @@ bool ibDbTableProvider::CanColocateRollupTotals(const ibDataQuerySpec& spec)
 bool ibDbTableProvider::CanPushColocatedRollupTotals(const ibDataQuerySpec& spec)
 	{
 		if (!CanColocateRollupTotals(spec)) return false;
-		// The connected driver must be able to fold the levels itself (FB5 / PG / MySQL8; NOT SQLite
+		// The connected driver must be able to fold the levels itself (FB5 / PG; NOT SQLite
 		// -> RAM). Asked of L2 rather than read off its dictionary: what a driver CAN DO is a question,
 		// and this tier has no business knowing which field carries the answer.
 		ibConnectionScope scope(spec.m_holder);

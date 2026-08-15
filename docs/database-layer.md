@@ -157,7 +157,7 @@ value against that constant asks a question it cannot answer**. Failure is signa
 `ThrowDatabaseException`, and that is the only reliable signal.
 
 This was not theoretical: Firebird's `DoRunQuery` and PostgreSQL's both returned a hardcoded `1`
-(PostgreSQL even read `PQcmdTuples` and threw the parse away), while SQLite, MySQL and ODBC
+(PostgreSQL even read `PQcmdTuples` and threw the parse away), while SQLite and ODBC
 reported the truth — so the same script call answered differently per driver, and the call sites
 that compared against the sentinel only ever "worked" because of the fake `1`. Fixed 2026-08-03;
 `databaseErrorCodes.h` carries the rule. Firebird's `execute_immediate` path has no statement
@@ -166,7 +166,7 @@ every DML goes through the prepared path, whose wrapper reads the real counts.
 
 **`RETURNING`.** A write can hand back columns from the rows it wrote:
 `m_returningClause` in `ibDialectDictionary` (`"RETURNING"` on Firebird, PostgreSQL and
-SQLite 3.35+; **empty** on MySQL / ODBC). Empty means the renderer **throws** rather than
+SQLite 3.35+; **empty** on ODBC). Empty means the renderer **throws** rather than
 emulating it — the stand-in (write, then `SELECT`) drops exactly the atomicity that makes it worth
 asking for. Built at L2 with `ibReturning(dml, {cols})` and run with `ExecuteReturning`, which
 yields a cursor like any `SELECT`. See [query-engine-layers.md § L2](query-engine-layers.md).
@@ -181,7 +181,7 @@ transaction the driver started itself does it close, and then through the public
 `RollBack()` so the base keeps its own books — `databaseLayer.h` says it outright,
 *drivers must not touch `m_txDepth` / `m_txAborted`*.
 
-Postgres, MySQL and ODBC always did this. Firebird did not: in eight places it rolled
+Postgres and ODBC always did this. Firebird did not: in eight places it rolled
 the CALLER's transaction back natively (`isc_rollback_transaction` on the raw handle),
 reasoning that "the caller's own depth is theirs to resolve". It is not resolvable —
 nothing tells the caller its transaction is gone. The depth counter stayed up,
@@ -214,7 +214,7 @@ virtual void SetParamBlob(int nPosition, const void* pData, long nDataLength) = 
 ```
 
 The buffer overload used to have an **empty body**, and **no driver overrides it** — Firebird,
-PostgreSQL, SQLite, MySQL and ODBC each implement the `(const void*, long)` one and nothing else. So
+PostgreSQL, SQLite and ODBC each implement the `(const void*, long)` one and nothing else. So
 any caller holding a `wxMemoryBuffer` picked the empty overload by ordinary overload resolution and
 bound **nothing**: no error, no exception, no log line, a row written with a NULL where its payload
 should have been. Found by audit, not by a failure — which is the point.
@@ -243,14 +243,18 @@ Present in the tree:
 
 | Driver | Directory | Notes |
 |---|---|---|
-| Firebird | `firebird/` | the default; embedded in file mode ([database-modes.md](database-modes.md)) |
-| SQLite | `sqllite/` | always embedded, no build flag; vendored `engine/sqlite3.c` |
-| PostgreSQL | `postgres/` | `OES_USE_POSTGRESQL` |
-| MySQL | `mysql/` | `OES_USE_MYSQL` |
-| ODBC | `odbc/` | `OES_USE_ODBC` |
+| Firebird | `firebird/` | **production**; the default, embedded in file mode ([database-modes.md](database-modes.md)) |
+| PostgreSQL | `postgres/` | **production**; `OES_USE_POSTGRESQL` |
+| SQLite | `sqllite/` | always embedded, no build flag; vendored `engine/sqlite3.c`. **Tests and logging only** — single-process, no materialized views, `ALTER COLUMN` throws. Never a production target |
+| ODBC | `odbc/` | `OES_USE_ODBC`. The base an **MSSQL** layer derives from, with a dialect dictionary of its own |
+
+A MySQL driver used to sit here and was **removed** (2026-08-15): the production surface is
+deliberately two engines, and every extra dialect is another dictionary, another trigger shape
+and another set of hazards to meet on a live base. `DATABASELAYER_MYSQL` (4) is left vacant in
+`databaseLayerDef.h` rather than reused — see the note there.
 
 **Oracle and Microsoft SQL Server are not in this tree — but they exist upstream.**
-wxDatabaseLayer shipped drivers for SQLite3, Firebird, MySQL, PostgreSQL, **Oracle**,
+wxDatabaseLayer shipped drivers for SQLite3, Firebird, PostgreSQL, **Oracle**,
 **MSSQL** and ODBC. So "no Oracle driver" is a *porting* task against a known-good
 reference, not a from-scratch one — a materially different estimate, and the reason
 [ROADMAP.md § 5](ROADMAP.md) should not read as "impossible".

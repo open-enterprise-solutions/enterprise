@@ -34,14 +34,14 @@ public:
 	// message string. Default returns Unknown — subclasses (the
 	// per-driver ibDatabaseLayer*) override with mappings rooted in
 	// their native error space (FB isc_status, PG SQLSTATE int,
-	// MySQL errno, ODBC SQLSTATE).
+	// ODBC SQLSTATE).
 	virtual ibBackendDatabaseException::Kind ClassifyDatabaseError(int nativeCode) const {
 		(void)nativeCode;
 		return ibBackendDatabaseException::Kind::Unknown;
 	}
 
 	// Driver-native SQLSTATE (5-char) when the engine reports one. PG /
-	// MySQL / ODBC expose SQLSTATE; Firebird and SQLite don't, so the
+	// ODBC exposes SQLSTATE; Firebird and SQLite don't, so the
 	// default empty string is correct for them. Populated by per-driver
 	// override at the moment the error is set.
 	virtual wxString GetSqlState() const { return wxEmptyString; }

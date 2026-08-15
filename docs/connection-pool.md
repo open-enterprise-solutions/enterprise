@@ -52,7 +52,7 @@ Before the refactor OES had:
 Problems:
 
 1. **No thread isolation.** Every thread hit `m_db`. On FB embedded
-   a global `fb_mutex` serialised them; on PG / MySQL / MSSQL the
+   a global `fb_mutex` serialised them; on PG / MSSQL the
    driver-level state got racey.
 2. **Nested TX broken.** `Document.Write()` opens a TX, calls
    `RegisterRecordSet.Write()` which opens its own guard → both hit
@@ -145,7 +145,7 @@ the unit of ownership and the transaction the unit of bookkeeping.
 └──────────────────────┬──────────────────────────────────────────┘
                        │
 ┌──────────────────────▼──────────────────────────────────────────┐
-│  Driver implementations (firebird/postgres/sqlite/mysql/odbc)   │
+│  Driver implementations (firebird/postgres/sqlite/odbc)          │
 │    • DoBeginTransaction/DoCommit/DoRollBack — real SQL/native   │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -158,7 +158,7 @@ the unit of ownership and the transaction the unit of bookkeeping.
 | `backend/databaseLayer/connectionPool.{h,cpp}` | Pool + `m_entries` registry + private holder primitives |
 | `backend/databaseLayer/connectionScope.{h,cpp}` | RAII scope; resolves holder via `Pool::CurrentHolder()` |
 | `backend/databaseLayer/databaseLayer.{h,cpp}` | Base counter layer + `m_holder` back-pointer + `IsBusy()` |
-| `backend/databaseLayer/{firebird,postgres,sqllite,mysql,odbc}/*` | 5 drivers — `Do*` overrides only |
+| `backend/databaseLayer/{firebird,postgres,sqllite,odbc}/*` | 4 drivers — `Do*` overrides only |
 | `backend/session/session.h` | `ibSession` OWNS `ibDatabaseConnectionHolder m_dbHolder` (composition) |
 | `backend/session/sessionRegistry.h` | `ibSessionRegistryConnectionHolder` — one (`m_writeHolder`) |
 | `backend/appData.{h,cpp}` | Pool owner, `GetDatabaseLayer()` delegate |
@@ -479,7 +479,7 @@ Unmigrated call sites keep working; they just don't get parallelism.
 
 ## Nested transaction semantics
 
-Counter-based, uniform across all 5 drivers:
+Counter-based, uniform across all 4 drivers:
 
 - First `BeginTransaction()` on a conn: `m_txDepth 0→1`, fires
   `DoBeginTransaction` (real driver Begin).
@@ -500,10 +500,9 @@ Counter-based, uniform across all 5 drivers:
 | Firebird | Creates parallel TX (`isc_start_transaction`) — inner commits don't affect outer, breaking atomicity |
 | SQLite | Errors: `cannot start a transaction within a transaction` |
 | PostgreSQL | Warns + ignores — only one TX active anyway |
-| MySQL | Implicit-commits outer TX when starting new — destroys outer's atomicity |
 | ODBC / MSSQL | Increments `@@TRANCOUNT` (basically the same counter model) |
 
-Counter on base unifies all 5 drivers to a single flat-TX semantic
+Counter on base unifies all 4 drivers to a single flat-TX semantic
 with correct atomic nesting. Inner rollback propagates to outer's
 commit via the aborted flag.
 
@@ -638,12 +637,12 @@ declare a static `ibSingleConnectionHolder` and pass its address to
 
 2. **Primary conn as fallback for legacy `db_query`.** Call sites
    without a scope go to `m_source`. All threads share master.
-   FB embedded has a global `fb_mutex` that serialises; PG/MySQL/MSSQL
+   FB embedded has a global `fb_mutex` that serialises; PG/MSSQL
    may race. Migration is opt-in per call site — focus on mutation
    paths first (Write/Delete/Update).
 
 3. **Lazy Clone latency burst.** First Checkout for a new slot pays
-   Open() cost (FB embedded ~100ms, PG/MySQL remote ~50-500ms).
+   Open() cost (FB embedded ~100ms, PG remote ~50-500ms).
    Sequential burst of N new sessions → N × Open() serialised through
    pool's mutex. Acceptable for typical login pattern; mitigate with
    `minIdle` pre-warm if needed for benchmark scenarios.
@@ -733,7 +732,7 @@ addition.
 
 - **Savepoints API.** `ibDatabaseLayer::Savepoint(name) / RollbackTo(name)`
   for callers that need real sub-TX (inner rollback without affecting
-  outer). Supported by FB/PG/MySQL/MSSQL, not SQLite.
+  outer). Supported by FB/PG/MSSQL, not SQLite.
 
 - **Pool stats endpoint.** `/admin/pool` on wes returning JSON with
   LiveSize / IdleSize / MaxSize. For ops monitoring.

@@ -632,7 +632,7 @@ tell working from stuck, and a run that ends by construction cannot.
 
 - **`sys_job` goes through L2.** Read and upsert are built with `ibDatabaseQueryBuilder` /
   `ibUpsert`, never raw SQL: the dialects spell upsert differently (Firebird `MATCHING`,
-  PostgreSQL / SQLite `ON CONFLICT`, MySQL's implicit key) and closing that difference is what
+  PostgreSQL / SQLite `ON CONFLICT`) and closing that difference is what
   that level is for. Hand-rolling an UPDATE-then-INSERT fallback would have put a driver
   question inside a scheduler.
 

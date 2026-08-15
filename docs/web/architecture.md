@@ -119,7 +119,7 @@ resolves through `ibApplicationData::GetDatabaseLayer()` which uses
 the priority chain: active-TX TL → active-scope TL → primary
 (master) connection. See [`../connection-pool.md`](../connection-pool.md)
 for the full architecture (RAII `ibConnectionScope`, counter-based
-nested transactions across 5 drivers, TL pinning, migration
+nested transactions across 4 drivers, TL pinning, migration
 status).
 
 Lifecycle: `Init(primary, maxSize=32)` at `CreateFile` /

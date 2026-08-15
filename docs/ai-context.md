@@ -20,7 +20,7 @@ applications through **metadata** (object types, forms, modules) and a
 built-in **scripting language**, not by writing low-level code. The
 runtime executes compiled bytecode, renders forms through wxWidgets,
 and stores all application data in a relational database (Firebird
-embedded by default; PostgreSQL / SQLite / MySQL / ODBC also supported).
+embedded by default; PostgreSQL also supported for production, ODBC as the MSSQL base, SQLite for tests and logging).
 
 ---
 
@@ -110,7 +110,7 @@ var balance = AccountingRegisters.Hozraschetnyi.Balance(EndOfMonth(), account);
 The second line is the honest part: the hatch is reachable (§ 3), so
 "no raw SQL" is a **rule**, not an impossibility. A statement written
 through it is yours to keep correct on Firebird, PostgreSQL, SQLite,
-MySQL and ODBC at once, and it is invisible to the access policy — so
+Firebird and ODBC at once, and it is invisible to the access policy — so
 a report built on it shows rows its reader may not see.
 
 When you need a complex query, use **LINQ** (block or chain syntax):

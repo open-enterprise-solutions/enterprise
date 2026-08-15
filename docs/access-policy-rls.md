@@ -354,7 +354,7 @@ The object save (`ibValueRecordDataObjectRef::SaveData`) reads `IsNewObject()`:
   `INSERT INTO t (cols) SELECT * FROM (SELECT <val> AS f … [FROM <dual>]) src WHERE <RLS over src>`.
   The derived one-row relation carries this row's own values (reusing the write value-spread, so the bytes
   match a plain INSERT), the RLS folds over its alias `src`, and **0 rows inserted → refused on a record-controlled object**. `<dual>` is the
-  dialect's source-less-SELECT table (Firebird `RDB$DATABASE`; PG / SQLite / MySQL none —
+  dialect's source-less-SELECT table (Firebird `RDB$DATABASE`; PG / SQLite none —
   `ibDialectDictionary::m_selectFromDual`). With NO folded predicate it is a plain INSERT (creation
   unrestricted for that source).
 - **Rewrite → `Update()` → `"Write"`.** ONE `UPDATE … SET <cols> WHERE <pk> AND <folded RLS>`

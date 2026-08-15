@@ -361,7 +361,7 @@ public:
 ### DB connection passwords
 
 ```cpp
-// Store PostgreSQL/MySQL passwords encrypted
+// Store PostgreSQL passwords encrypted
 // Use Windows DPAPI (Data Protection API)
 
 #include <wincrypt.h>

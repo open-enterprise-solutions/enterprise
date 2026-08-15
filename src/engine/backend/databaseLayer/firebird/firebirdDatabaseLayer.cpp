@@ -1015,7 +1015,7 @@ int ibDatabaseLayerFirebird::DoRunQuery(const wxString& strQuery, bool bParseQue
 				{
 					InterpretErrorCodes();
 					// A FAILED STATEMENT REPORTS; IT DOES NOT DECIDE. Every other driver — Postgres,
-					// MySQL, ODBC — answers a failed statement with ThrowDatabaseException() and
+					// ODBC — answers a failed statement with ThrowDatabaseException() and
 					// leaves the transaction to whoever opened it. Firebird was the exception, and
 					// the exception is what broke restructuring.
 					//
@@ -1183,7 +1183,7 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 
 				// OURS TO CLOSE, or nobody's: bManageTransaction is true only when this call started
 				// the transaction. A caller-owned one is left alone and the exception below reports
-				// the failure — the same contract every other driver keeps (Postgres / MySQL / ODBC
+				// the failure — the same contract every other driver keeps (Postgres / ODBC
 				// throw and never touch the transaction). Rolling back the caller's transaction from
 				// here left the base class's depth counter high over a dead handle, so later work ran
 				// outside any transaction and committed as it went.
@@ -1210,7 +1210,7 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 
 				// OURS TO CLOSE, or nobody's: bManageTransaction is true only when this call started
 				// the transaction. A caller-owned one is left alone and the exception below reports
-				// the failure — the same contract every other driver keeps (Postgres / MySQL / ODBC
+				// the failure — the same contract every other driver keeps (Postgres / ODBC
 				// throw and never touch the transaction). Rolling back the caller's transaction from
 				// here left the base class's depth counter high over a dead handle, so later work ran
 				// outside any transaction and committed as it went.
@@ -1247,7 +1247,7 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 
 				// OURS TO CLOSE, or nobody's: bManageTransaction is true only when this call started
 				// the transaction. A caller-owned one is left alone and the exception below reports
-				// the failure — the same contract every other driver keeps (Postgres / MySQL / ODBC
+				// the failure — the same contract every other driver keeps (Postgres / ODBC
 				// throw and never touch the transaction). Rolling back the caller's transaction from
 				// here left the base class's depth counter high over a dead handle, so later work ran
 				// outside any transaction and committed as it went.
@@ -1284,7 +1284,7 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 
 					// OURS TO CLOSE, or nobody's: bManageTransaction is true only when this call started
 					// the transaction. A caller-owned one is left alone and the exception below reports
-					// the failure — the same contract every other driver keeps (Postgres / MySQL / ODBC
+					// the failure — the same contract every other driver keeps (Postgres / ODBC
 					// throw and never touch the transaction). Rolling back the caller's transaction from
 					// here left the base class's depth counter high over a dead handle, so later work ran
 					// outside any transaction and committed as it went.
@@ -1306,7 +1306,7 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 
 				// OURS TO CLOSE, or nobody's: bManageTransaction is true only when this call started
 				// the transaction. A caller-owned one is left alone and the exception below reports
-				// the failure — the same contract every other driver keeps (Postgres / MySQL / ODBC
+				// the failure — the same contract every other driver keeps (Postgres / ODBC
 				// throw and never touch the transaction). Rolling back the caller's transaction from
 				// here left the base class's depth counter high over a dead handle, so later work ran
 				// outside any transaction and committed as it went.
@@ -1339,7 +1339,7 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const wxStri
 
 				// OURS TO CLOSE, or nobody's: bManageTransaction is true only when this call started
 				// the transaction. A caller-owned one is left alone and the exception below reports
-				// the failure — the same contract every other driver keeps (Postgres / MySQL / ODBC
+				// the failure — the same contract every other driver keeps (Postgres / ODBC
 				// throw and never touch the transaction). Rolling back the caller's transaction from
 				// here left the base class's depth counter high over a dead handle, so later work ran
 				// outside any transaction and committed as it went.

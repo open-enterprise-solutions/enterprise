@@ -9,7 +9,7 @@
 >    (`m_loadedDataVersion`); Write re-reads under a row lock and throws
 >    `ibBackendLockException::VersionChanged` on mismatch.
 > 2. **DB-side row lock** during the Write TX — `SELECT … FOR UPDATE`
->    (PG/MySQL) / `WITH LOCK` (FB); the dialect appends the clause, the
+>    (PG) / `WITH LOCK` (FB); the dialect appends the clause, the
 >    database serializes concurrent writers against the same row.
 >    Auto-released on Commit/Rollback.
 > 3. **`sys_lock` table + `ibLockManager`** — proactive, cross-TX,
@@ -45,7 +45,7 @@
 > There is **no** `RowLockHint()` / `NoWaitClause()` virtual — those
 > were deleted. The clause lives on the dialect dictionary:
 > `m_rowLockSuffix` (` FOR UPDATE` default / FB ` WITH LOCK` / SQLite
-> empty) plus `m_rowLockNoWaitSuffix` (` NOWAIT` on PG/MySQL; empty on
+> empty) plus `m_rowLockNoWaitSuffix` (` NOWAIT` on PG; empty on
 > FB/SQLite — their non-blocking acquire rides the TX `noWait`/TPB). A
 > pessimistic SELECT is expressed at L2 as `ibQueryIR::m_lockForUpdate`
 > (+ `m_lockNoWait`); the renderer appends the dialect clause to the
@@ -205,7 +205,7 @@ consistent: the first Write's commit syncs the marker before the second
 Write's check runs.
 
 NOWAIT vs wait mode: a non-blocking acquire sets `m_lockNoWait`
-(→ ` NOWAIT` on PG/MySQL; FB rides `isc_tpb_nowait`). Default is wait
+(→ ` NOWAIT` on PG; FB rides `isc_tpb_nowait`). Default is wait
 (driver's normal lock-timeout — FB `isc_tpb_lock_timeout` plumbed).
 
 ## DataVersion lifecycle
@@ -381,7 +381,6 @@ Per-driver values:
 |---|---|---|---|
 | Firebird | ` WITH LOCK` | `` (empty) | NOWAIT rides the TPB `isc_tpb_nowait` (`ibTxOptions::noWait`) |
 | PostgreSQL | ` FOR UPDATE` (default) | ` NOWAIT` (default) | PG raises `SQLSTATE 55P03` on NOWAIT fail |
-| MySQL | ` FOR UPDATE` (default) | ` NOWAIT` (default) | NOWAIT honoured on MySQL 8+; older rely on `innodb_lock_wait_timeout` |
 | ODBC/MSSQL | ` FOR UPDATE` (default) | ` NOWAIT` (default) | dialect default; not separately tuned |
 | SQLite | `` (empty) | `` (empty) | whole-DB TX lock — no row `FOR UPDATE` |
 
@@ -704,7 +703,7 @@ Estimated: ~1 week of focused work.
 - [`firebird-driver-hardening.md`](firebird-driver-hardening.md) — FB
   TPB with `isc_tpb_lock_timeout` and `isc_tpb_nowait`.
 - [`session-registry.md`](session-registry.md) — per-driver NoWait
-  status across FB/PG/MySQL/ODBC.
+  status across FB/PG/ODBC.
 
 Related memory:
 - `project_record_write_protection` — landed status (optimistic +

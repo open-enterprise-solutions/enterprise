@@ -71,7 +71,7 @@ public:
 
 	// Derived-state materialisation (register totals). SQLite is the FLOOR the per-row
 	// family is designed against — statements only, no procedural block — so a body that
-	// fits here fits Firebird / PostgreSQL / MySQL too. (docs/register-totals-strategy.md)
+	// fits here fits Firebird / PostgreSQL too. (docs/register-totals-strategy.md)
 	static const ibMaterializationDialect& MaterializationDialect();
 	virtual const ibMaterializationDialect* GetMaterializationDialect() const override;
 

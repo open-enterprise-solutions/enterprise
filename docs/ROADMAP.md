@@ -330,7 +330,7 @@ deferred".
 
 ## 5. Drivers
 
-Firebird (default, embedded), PostgreSQL, SQLite (always embedded), MySQL, ODBC —
+Firebird (default, embedded) and PostgreSQL are the PRODUCTION pair; SQLite (always embedded) serves tests and logging only, never production; ODBC is the base an MSSQL layer derives from —
 all behind `ibDatabaseLayer` ([database-layer.md](database-layer.md),
 [../CLAUDE.md](../CLAUDE.md) §1).
 
