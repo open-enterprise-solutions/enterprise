@@ -62,14 +62,27 @@ protected:
 
 	void SetUp() override {
 		dbPath = ScratchDbPath(::testing::UnitTest::GetInstance()->current_test_info()->name());
-		layer = std::make_shared<ibDatabaseLayerFirebird>();
-		layer->SetUser(wxT("SYSDBA"));
-		layer->SetPassword(wxT("masterkey"));
-		bool opened = false;
-		try { opened = layer->Open(dbPath); }
-		catch (...) { opened = false; }
-		if (!opened)
-			GTEST_SKIP() << "no Firebird client / cannot create " << dbPath.ToStdString();
+
+		// ⚠ THE CONSTRUCTOR IS INSIDE THE GUARD, and that is the whole point of this shape.
+		// ibDatabaseLayerFirebird() loads fbclient and RAISES where there is none, so a guard around
+		// Open() alone catches nothing on a machine without a client — which is every CI runner.
+		// Written the narrow way first, and the macOS job proved it within the hour.
+		//
+		// The guard covers exactly one question: can this machine reach a Firebird at all. Creating
+		// the table is deliberately OUTSIDE it, so a genuine failure there is a failure and not a
+		// skip — a skip that can swallow real breakage is worse than no test.
+		try {
+			layer = std::make_shared<ibDatabaseLayerFirebird>();
+			layer->SetUser(wxT("SYSDBA"));
+			layer->SetPassword(wxT("masterkey"));
+			if (!layer->Open(dbPath))
+				layer.reset();
+		}
+		catch (...) { layer.reset(); }
+
+		if (!layer)
+			GTEST_SKIP() << "no Firebird client on this machine (" << dbPath.ToStdString() << ")";
+
 		layer->RunQuery(kCreateTable);
 		layer->Commit();
 	}
