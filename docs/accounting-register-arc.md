@@ -488,6 +488,25 @@ neighbour to ask); the groundwork for that is in place.
 ⚠ So the check left open in §5 is a frontend question, not a metadata one: it is about wiring an
 existing narrowing to a new pair, not about inventing one.
 
+**STATE ON 2026-08-16 — half of this is built, and the half that is missing is the form.**
+
+| | where | state |
+|---|---|---|
+| the input for a limit | `AdjustValue(value, limit)` on both type factories (`backend_type.h`) | **built** — the permitted set arrives from outside, the type description leads |
+| the script write | `ibValueAccountDimensions::SetAt` (`accountingRegisterObject.cpp`) | **built** — the kind is the key, so its own `Type` is read off the reference by the id the chart declares, and the value is adjusted to it. A kind carrying no type description is a loud `wxASSERT`; the posting still goes through in release, because refusing would turn a metadata problem into lost data |
+| the upper bound | the contour, through `GetTypeValueDesc` + the column layout | **built** — a type the chart never declared has nowhere to go physically |
+| the form | the value control asking its neighbouring KIND column | **NOT built** — the picker offers the whole contour, and changing the kind leaves a value the new kind does not admit |
+
+So today the narrowing is applied when writing THROUGH THE KIND (`row.AccountDimensionDr[kind] = …`,
+`row.AccountDimensionDr.Contractor = …`) and nowhere else — and it is an ADJUSTMENT, not a gate: a
+value the kind does not admit becomes empty rather than raising.
+
+⏳ What remains is one wiring, decided but unwritten: the value column asks its row for the
+neighbouring kind slot (`GetAccountDimensionKindSlot` already pairs them by index) and passes that
+kind's `Type` into the `limit` input that exists. No new verb, no new property — the open question is
+only whether "ask my neighbour" stays knowledge of the register or is raised to a question any column
+may ask its row.
+
 **Every slot is typed identically.** Ask three, and three columns appear on each side, all
 carrying the same characteristic type — the whole combination the CCT declares as usable. Slots
 do not differ by declaration; what tells them apart is the KIND, which is precisely the separator
