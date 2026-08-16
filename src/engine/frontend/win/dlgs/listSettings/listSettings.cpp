@@ -104,14 +104,17 @@ static void AppendSourceFields(wxTreeCtrl* tree, const wxTreeItemId& parent,
 		// A value kept WHOLE (a schedule, a type description) is one BLOB field, and SQL compares no
 		// blobs — a condition on it could never be lowered into the query. Not offered, rather than
 		// offered and then failing when the list is read.
-		if (!ibIsComparableType(col->GetTypeDesc()))
+		if (!ibIsComparableType(col->GetTypeValueDesc()))
 			continue;
 		ibSourceFieldNode* data = new ibSourceFieldNode();
 		data->m_path     = prefix.IsEmpty() ? col->GetSourceName() : prefix + wxT(".") + col->GetSourceName();
 		const wxString label = col->GetSourceSynonym().IsEmpty() ? col->GetSourceName() : col->GetSourceSynonym();
 		data->m_presentation = prefixText.IsEmpty() ? label : prefixText + wxT(".") + label;
 		data->m_leafId   = static_cast<ibMetaID>(col->GetSourceId());
-		data->m_type     = col->GetTypeDesc();
+		// The field's type as a FILTER sees it — what a value here may be. A condition holds VALUES on
+		// both sides: the right side is adjusted to this, so a declaration that stands for other types
+		// (a characteristic) would adjust every picked value away to empty.
+		data->m_type     = col->GetTypeValueDesc();
 		// Branches from what a value may BE: a characteristic declares one class no value carries, and
 		// what it walks into is the chart's own references.
 		data->m_refTypes = ibValueReferenceDataObject::ConvertToMetaIds(col->GetTypeValueDesc().GetClsidList(), metaData);

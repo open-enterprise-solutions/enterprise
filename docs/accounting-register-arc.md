@@ -2223,6 +2223,7 @@ characteristics:
 | what columns does this hold physically | `DescribeColumnLayout`, `DriveSpread`, `HasReference`, `TagFitsColumn` | otherwise the column is a bare `_TYPE` with nowhere to put the data, and the parameter list shifts |
 | what may the user pick | `ibTypeControlFactory::GetDataType` → `ShowSelectType(metaData, GetTypeValueDesc())` | with the declaration the picker saw ONE class and returned early, so it never opened and the cell settled on a class no value carries |
 | where can a dot-walk go | `ibSourceExplorer::AppendColumn` → pickers, filters, sort, group | the field was a leaf: no `[+]`, no `Field.Attribute` in a filter |
+| what may a CONDITION hold | the filter's field node (`listSettings.cpp`) → `GetRightTypeDescription` → `AdjustValue` | the right-hand cell adjusted every picked value to empty — a chosen reference would not stick, and an existing value was wiped the moment the picker opened, before anything was chosen |
 | what value do I create, and what may I hold | `ibCtorMetaValueTypeCharacteristic::CreateObject` / `AllowValue` — the ctor the CHART registers | already there: the ctor answers from the contour, so a characteristic builds the contour's type (one) or an **undefined** (several), never a value of class `Characteristic.<chart>` |
 
 ⭐ The last row is the lesson of the arc. The dot-walk was first "fixed" inside the branch resolver
