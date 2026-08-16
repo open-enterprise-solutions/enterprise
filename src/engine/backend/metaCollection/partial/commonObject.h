@@ -250,6 +250,21 @@ public:
 	// overrides with the real test).
 	virtual bool IsDataReference(const ibMetaID& /*id*/) const { return false; }
 
+	// ⭐ THE ONE QUESTION ABOUT WRITABILITY — "may this attribute be assigned?" — and the object's own
+	// reference is its FIRST answer, not a separate check beside it. Callers ask this and nothing else;
+	// a metatype that has more read-only columns of its own extends the answer.
+	//
+	// The reason it is one question: a caller that asked only about the reference would let through
+	// every OTHER derived column, and each new one would have to be found and added at every call
+	// site. Asked here, a metatype declares its own and every site obeys at once.
+	//
+	// Derived is the general case: a chart of accounts unfolds its analytics kinds into numbered
+	// columns for the list and the query, but the fact lives in the SECTION and the copy is refreshed
+	// from it on every write. Assigning such a column would create a second author for one fact, and
+	// the write would overrule it without a word — a change that seems to work and is gone by the
+	// next save.
+	virtual bool IsReadOnlyAttribute(const ibMetaID& id) const { return IsDataReference(id); }
+
 #pragma endregion
 
 #pragma region __array_h__

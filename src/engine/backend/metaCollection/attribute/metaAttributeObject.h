@@ -72,6 +72,11 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 	// the column's.
 	virtual ibTypeDescription& GetTypeDesc() const override = 0;
 
+	// A declaration that IS a characteristic answers with the chart's own list (see the factory's
+	// declaration in backend_type.h). Body in metaAttributeObject.cpp — the chart type is incomplete
+	// here.
+	virtual ibTypeDescription& GetTypeValueDesc() const override;
+
 	// (IsEmptyTypeDesc lives on ibBackendTypeConfigFactory's base — backend_type.h — because that is
 	//  where the type description itself is declared, and therefore the only place that can answer
 	//  for every holder of one rather than for attributes alone.)
@@ -138,7 +143,7 @@ class BACKEND_API ibValueMetaObjectAttribute : public ibValueMetaObjectAttribute
 	virtual ibSelectMode GetSelectMode() const;
 	virtual ibIndexingMode GetIndexingMode() const { return m_propertyIndexingMode->GetValueAsEnum(); }
 
-	//get type description 
+	//get type description
 	virtual ibTypeDescription& GetTypeDesc() const { return m_propertyType->GetValueAsTypeDesc(); }
 
 	/**
@@ -252,7 +257,7 @@ public:
 	virtual ibSelectMode GetSelectMode() const { return m_selectMode; }
 	virtual ibIndexingMode GetIndexingMode() const { return m_indexingMode; }
 
-	//get type description 
+	//get type description
 	virtual ibTypeDescription& GetTypeDesc() const { return m_typeDesc; }
 
 	// A predefined attribute is part of the metatype's definition, so its shape is fixed by the

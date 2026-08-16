@@ -255,6 +255,7 @@ public:
 	// WHAT COLUMNS THIS TABLE HAS, asked without running it — the query constructor's catalogue.
 	// Answered from the SHAPE, which is metadata plus the call's arguments and touches no database.
 	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
+
 	// …AND WITH THE CALL'S ARGUMENTS, because the REQUESTED KINDS decide which columns exist. That is
 	// the structural difference from every other register in the tree: the output schema follows the
 	// arguments of the call, not the metaobject.
@@ -310,6 +311,23 @@ public:
 	// HOW MANY dimension slots this register currently has — the number the chart of accounts
 	// declares, not a constant of the implementation.
 	unsigned int GetAccountDimensionCount() const { return m_accountDimensionCount; }
+
+	// Is this the KIND half of a dimension pair — `AccountDimension<i>Kind`, either side? Asked by
+	// IDENTITY against the slots themselves, never by reading the role back out of the name.
+	bool IsAccountDimensionKindColumn(const ibValueMetaObjectAttributeBase* attribute) const {
+		if (attribute == nullptr)
+			return false;
+		for (const ibValueMetaObjectAttributePredefined* slot : m_accountDimensionKinds)
+			if (slot == attribute) return true;
+		for (const ibValueMetaObjectAttributePredefined* slot : m_accountDimensionKindsCr)
+			if (slot == attribute) return true;
+		return false;
+	}
+
+	// ⭐ AVAILABLE, BUT NOT SHOWN — the kinds. A movement's meaning is its VALUES; opening a list with
+	// the kind beside every value doubles the columns to repeat what the value already says, and the
+	// row becomes unreadable. The column stays in the source, so anyone who wants it puts it back.
+	void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
 
 	// Give the analytics slots the types their chart declares. Called from the RUN phase and from the
 	// moment the chart binding changes — both, because editing does not run a configuration and a slot

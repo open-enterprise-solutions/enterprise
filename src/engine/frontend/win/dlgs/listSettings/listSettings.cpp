@@ -112,7 +112,9 @@ static void AppendSourceFields(wxTreeCtrl* tree, const wxTreeItemId& parent,
 		data->m_presentation = prefixText.IsEmpty() ? label : prefixText + wxT(".") + label;
 		data->m_leafId   = static_cast<ibMetaID>(col->GetSourceId());
 		data->m_type     = col->GetTypeDesc();
-		data->m_refTypes = ibValueReferenceDataObject::ConvertToMetaIds(col->GetClsidList(), metaData);
+		// Branches from what a value may BE: a characteristic declares one class no value carries, and
+		// what it walks into is the chart's own references.
+		data->m_refTypes = ibValueReferenceDataObject::ConvertToMetaIds(col->GetTypeValueDesc().GetClsidList(), metaData);
 		// THE SYNONYM IS WHAT A USER READS. The name is the technical identifier the
 		// PATH is built from (above) — showing it in the picker makes the form speak
 		// in identifiers instead of in the words the configuration author chose.

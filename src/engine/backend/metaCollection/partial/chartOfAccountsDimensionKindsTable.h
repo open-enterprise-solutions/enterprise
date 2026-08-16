@@ -29,7 +29,6 @@ class ibValueMetaObjectAccountDimensionKindsTable : public ibValueMetaObjectTabl
 
 	// Accessors for predefined columns
 	ibValueMetaObjectAttributePredefined* GetAccountDimensionKind() const { return m_propertyAccountDimensionKind->GetMetaObject(); }
-	ibValueMetaObjectAttributePredefined* GetOrder() const { return m_propertyOrder->GetMetaObject(); }
 	ibValueMetaObjectAttributePredefined* GetSummaryOnly() const { return m_propertySummaryOnly->GetMetaObject(); }
 
 	//events
@@ -53,7 +52,6 @@ protected:
 		ibValueMetaObjectTableDataRef::FillArrayObjectByPredefinedAttribute(array);
 		// Add our predefined columns
 		array.push_back(m_propertyAccountDimensionKind->GetMetaObject());
-		array.push_back(m_propertyOrder->GetMetaObject());
 		array.push_back(m_propertySummaryOnly->GetMetaObject());
 		return true;
 	}
@@ -65,14 +63,16 @@ private:
 	ibPropertyCategory* m_categoryAccountDimension = ibPropertyObject::CreatePropertyCategory(wxT("AccountDimension"), _("Account dimension"));
 
 	// Predefined columns
-	// FILL-CHECKED: a line of this table IS a kind. A row with an empty kind carries an order and a
-	// flag about nothing — it would reach the register as an analytics slot that admits everything,
-	// which is indistinguishable from an account that declares no analytics at all.
+	// FILL-CHECKED: a line of this table IS a kind. A row with an empty kind carries a flag about
+	// nothing — it would reach the register as an analytics slot that admits everything, which is
+	// indistinguishable from an account that declares no analytics at all.
+	//
+	// ⭐ NO `Order` COLUMN. The order of the kinds IS the order of the rows: slot N of a register
+	// takes row N of this table, so a number stored beside the row would be a second spelling of
+	// the row's own position — two answers to one question, and the stored one is the one that can
+	// disagree. Removed 2026-08-16; nothing had ever read it.
 	ibPropertyContainer<>* m_propertyAccountDimensionKind = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryAccountDimension,
 		ibValueMetaObjectCompositeData::CreateEmptyType(wxT("AccountDimensionKind"), _("Account dimension kind"), wxEmptyString, /*fillCheck*/ true, ibItemMode::ibItemMode_Item));
-
-	ibPropertyContainer<>* m_propertyOrder = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryAccountDimension,
-		ibValueMetaObjectCompositeData::CreateNumber(wxT("Order"), _("Order"), wxEmptyString, 3, 0, ibItemMode::ibItemMode_Item));
 
 	ibPropertyContainer<>* m_propertySummaryOnly = ibPropertyObject::CreateProperty<ibPropertyContainer<>>(m_categoryAccountDimension,
 		ibValueMetaObjectCompositeData::CreateBoolean(wxT("SummaryOnly"), _("Summary only"), wxEmptyString, ibItemMode::ibItemMode_Item));

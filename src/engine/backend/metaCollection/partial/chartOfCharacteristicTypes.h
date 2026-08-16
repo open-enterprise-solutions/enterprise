@@ -48,7 +48,7 @@ public:
 	// VALUE slots by it, and an editor offers it as the permitted set. `GetTypeDesc` says the same
 	// thing but stays protected — it is the type-factory override, an internal contract, and a
 	// caller reaching for it would be borrowing a mechanism instead of asking a question.
-	const ibTypeDescription& GetTypesOfCharacteristics() const { return m_propertyTypesOfCharacteristics->GetValueAsTypeDesc(); }
+	ibTypeDescription& GetTypesOfCharacteristics() const { return m_propertyTypesOfCharacteristics->GetValueAsTypeDesc(); }
 
 	ibValueMetaObjectAttributePredefined* GetDataType() const { return m_propertyAttributeType->GetMetaObject(); }
 	virtual bool IsDataType(const ibMetaID& id) const { return id == (*m_propertyAttributeType)->GetMetaID(); }

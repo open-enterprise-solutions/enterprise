@@ -68,10 +68,14 @@ already queryable. None of the prepared aggregates below is needed for that.
 
 ## 2. Wired to the wrong end — the defect
 
-> **Fixed 2026-08-12** (§ 5a). A value slot now takes the chart of characteristic types' own
-> composition (`SetDefaultMetaType(pvhObj->GetTypesOfCharacteristics())`,
-> `accountingRegisterMetadata.cpp`), and the second level — the per-kind narrowing — is applied on
-> assignment (§ 4.4). Kept below because it is the reason the slot became a *(kind, value)* PAIR.
+> **Fixed 2026-08-12** (§ 5a), and **restated 2026-08-16**: a value slot no longer copies the
+> composition — it is declared as the CHARACTERISTIC itself
+> (`GetTypeCtor(pvh, ibCtorObjectMetaType_Characteristic)`, `accountingRegisterMetadata.cpp`), the
+> mirror of the kind slot, which is declared as the reference. One name instead of a copy: what the
+> characteristic expands to stays the chart's business, so a chart that gains a type does not leave
+> every slot describing the old set. The expansion happens where a real type is needed — physical
+> layout, pickers, dot-walk branches (§ 5k). The second level — the per-kind narrowing — is applied
+> on assignment (§ 4.4). Kept below because it is the reason the slot became a *(kind, value)* PAIR.
 
 The chain "which values may a dimension slot hold" is resolved in
 `accountingRegisterMetadata.cpp` (`OnAfterRunMetaObject`), and it resolves to the wrong thing:
@@ -160,6 +164,51 @@ name.
 ⚠ The attribute name is what serialisation keys on (`node.GetProperty(prop->GetName())`), so the
 rename changes the key in stored configurations. There are no third-party configurations yet;
 this is exactly the window that closes once there are.
+
+### 4.1a What a chart of characteristic types IS — EAV, with the type kept
+
+Worth naming plainly, because everything else in this section follows from it: a chart of
+characteristic types is the platform's **EAV** (Entity–Attribute–Value) mechanism.
+
+**And EAV is not anybody's invention of the 1990s business-software world.** It is a model that has
+been described and re-described for decades — clinical data repositories used it in the late 1970s
+(TMR, HELP), and it was written up as "EAV with Classes and Relationships" long before any of the
+platforms that now ship it. The same shape appears under other names wherever a domain has many
+sparse properties: Magento and Drupal call it EAV outright, SAP calls it classification
+characteristics, PIM systems call it attributes and attribute sets, plain SQL practice calls it a
+properties table. A chart of characteristic types is one more spelling of it, so nothing here is
+borrowed thinking — it is the standard answer to a standard problem.
+
+What IS particular is the packaging: the model is given METADATA and a TYPE. The attribute is a
+metaobject rather than a row of names, and it carries its own `Type`, which is exactly the property
+the textbook version loses. That is why everything below can be checked by the engine instead of
+being an application convention.
+
+| EAV | here |
+|---|---|
+| Entity | the object the property is about (an account, an item, a document) |
+| **Attribute** | an ELEMENT of the chart — a kind of characteristic («вид характеристики») |
+| **Value** | a value whose admissible types the chart declares, narrowed per kind by the element's own `Type` |
+
+What the platform adds to the textbook shape is the one thing textbook EAV loses: **the value stays
+typed**. In a typical implementation the value column is a string (or a `value_str` / `value_num` /
+`value_date` triple) and only application code knows how to read it back. Here the type is not known
+to the code, it is DECLARED in the data — the chart names the contour, the kind names its own `Type`,
+and the engine both narrows on write (§ 4.4) and lays the column out from it (§ 5k).
+
+Two shapes of the same model live in the tree, and the choice between them is an applied one:
+
+- **the long table** — an information register keyed by (object, kind) with the value as a resource.
+  Any number of properties, added as DATA, no schema change. The classic cost: a row per property, a
+  join per read, nothing worth indexing by value;
+- **the unfolded one** — the accounting register's N `(kind, value)` slot pairs in a wide movement
+  row, and the chart of accounts' unfolded kind columns (§ 5k). The same model materialised into
+  columns: no join on read, the kind sits beside its value — at the price of a CEILING
+  (`MaxAccountDimensionCount`), which is why that number is schema and lives on the chart.
+
+This is also why a movement stores the kind BESIDE the value rather than deducing it from the
+account's table by position: in EAV the attribute is part of the record, or the record stops being
+self-describing and its meaning starts depending on the current state of a reference book.
 
 ### 4.2 The number of dimension slots is SCHEMA — the chart of ACCOUNTS declares it
 
@@ -2131,3 +2180,91 @@ Three pieces, and each closes one half of that:
 ⚠ A script call still hands the slot a VALUE, and it means the same as before: `ibAcctParseCall`
 builds the condition from it with the word `Hierarchy`. Both entrances therefore arrive as one form,
 which is the only arrangement in which they cannot answer differently.
+
+---
+
+## 5k. The characteristic became a TYPE, and the chart of accounts unfolded — 2026-08-16
+
+Four changes with one shape: a fact is DECLARED once and ASKED wherever it is needed, instead of
+being copied into every place that needs it.
+
+### The value slot is a characteristic, not a copy of the contour
+
+A register's value slot used to be typed with the chart's composition copied into it
+(`SetDefaultMetaType(GetTypesOfCharacteristics())`). The copy had to be kept in step — that is what
+`ApplyAccountDimensionSlotTypes` is for, and the arc's own history (§5i, §5j) is largely the cost of
+that. Now both halves of the pair are asked of the registry, and they mirror each other:
+
+```
+kind  slot  ← GetTypeCtor(pvh, ibCtorObjectMetaType_Reference)        ChartOfCharacteristicTypesRef.<chart>
+value slot  ← GetTypeCtor(pvh, ibCtorObjectMetaType_Characteristic)   Characteristic.<chart>
+```
+
+A kind IS an element of the chart; a value IS a characteristic of it. Nothing of the chart's is held
+in the register any more, so nothing can go stale.
+
+### The redirection is ONE question, asked where everyone already asks
+
+`Characteristic.<chart>` is a DECLARATION — no value ever carries that class. Rather than teach each
+consumer to unfold it, the field answers a second question, and the consumers ask it instead:
+
+```cpp
+GetTypeDesc()       what is DECLARED        — inspector, file, writes
+GetTypeValueDesc()  what a VALUE may be     — the chart's own list when the declaration is a
+                                              characteristic; the SAME object otherwise
+```
+
+Declared on the column base and on the type factory, overridden once by the attribute
+(`query-language-arc.md` § 22.4b-bis). What that bought, per consumer, without any of them mentioning
+characteristics:
+
+| Question | Who asks | What it fixes |
+|---|---|---|
+| what columns does this hold physically | `DescribeColumnLayout`, `DriveSpread`, `HasReference`, `TagFitsColumn` | otherwise the column is a bare `_TYPE` with nowhere to put the data, and the parameter list shifts |
+| what may the user pick | `ibTypeControlFactory::GetDataType` → `ShowSelectType(metaData, GetTypeValueDesc())` | with the declaration the picker saw ONE class and returned early, so it never opened and the cell settled on a class no value carries |
+| where can a dot-walk go | `ibSourceExplorer::AppendColumn` → pickers, filters, sort, group | the field was a leaf: no `[+]`, no `Field.Attribute` in a filter |
+| what value do I create, and what may I hold | `ibCtorMetaValueTypeCharacteristic::CreateObject` / `AllowValue` — the ctor the CHART registers | already there: the ctor answers from the contour, so a characteristic builds the contour's type (one) or an **undefined** (several), never a value of class `Characteristic.<chart>` |
+
+⭐ The last row is the lesson of the arc. The dot-walk was first "fixed" inside the branch resolver
+(`ConvertToMetaIds`), the picker by teaching a control to interrogate its bound column, and creation
+by routing `CreateValueRef` / `AdjustValue` through the value question — three mechanisms taught the
+same fact about characteristics, and all three were deleted. What holds is one answer per question,
+given where the question already was: the CTOR says what value gets built, `GetTypeValueDesc` says
+what may be held, the explorer node carries both for whoever walks it — and the picker needed exactly
+one word changed. A redirection placed where the question is already asked costs nothing; the same
+redirection placed at each consumer is a crutch per consumer.
+
+The explorer node keeps BOTH — the declaration (what a generated column and the type picker show) and
+the value type (what a branch walks into) — supplied together by the node's constructor, so a node is
+complete when it is built (`query-language-arc.md` § 22.4b-bis).
+
+### A chart of accounts unfolds its kinds into list columns
+
+The kinds of an account live in a tabular section — right for the card, invisible to a LIST, which is
+where one actually reads which analytics an account carries. So the chart declares
+`AccountDimensionKind1..N`, N = `MaxAccountDimensionCount`:
+
+- **created once and reused** (a metaID names the physical column), deactivated from the tail when the
+  ceiling is lowered — the same rule the register's slots follow;
+- **typed with the section's own kind column**, in the same call;
+- **serialised with their ids**, so a reload cannot rename the columns their data sits in;
+- **filled on write**: column N ← row N, rewritten whole, so a removed row leaves an EMPTY column
+  rather than a stale kind;
+- **read-only through `IsReadOnlyAttribute`** — which now answers for the object's own reference too,
+  so a caller asks ONE question about writability instead of two. The section is the author; a script
+  assigning the copy would be overruled without a word at the next save.
+
+⚠ They are ordinary stored columns, and the copy is refreshed only through `SaveData`. Editing the
+section behind the object's back leaves the list showing the previous kinds.
+
+### Sorted by code
+
+A chart of accounts list now sorts by CODE, not description. In a catalog the code is a serial number
+and the name is what a person reads; here the code IS the account, and its order is the plan itself —
+sorted by name, `51` lands between "Материалы" and "Налоги".
+
+### Also removed: the `Order` column of the kinds section
+
+Nothing read it. The order of the kinds IS the order of the rows — slot N takes row N — so a stored
+number beside the row was a second spelling of the row's own position, and the stored one is the one
+that can disagree.

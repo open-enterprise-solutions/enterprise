@@ -55,6 +55,11 @@ ibValue ibBackendTypeFactory::AdjustValue(const ibValue& varValue) const
 	return ibValueTypeDescription::AdjustValue(GetTypeDesc(), varValue);
 }
 
+ibValue ibBackendTypeFactory::AdjustValue(const ibValue& varValue, const ibTypeDescription& limit) const
+{
+	return ibValueTypeDescription::AdjustValue(limit, varValue);
+}
+
 /////////////////////////////////////////////////////////////////////////////////////
 
 ibValue ibBackendTypeConfigFactory::CreateValue() const
@@ -99,6 +104,15 @@ ibValue ibBackendTypeConfigFactory::AdjustValue(const ibValue& varValue) const
 {
 	return ibValueTypeDescription::AdjustValue(
 		GetTypeDesc(),
+		varValue,
+		GetMetaData()
+	);
+}
+
+ibValue ibBackendTypeConfigFactory::AdjustValue(const ibValue& varValue, const ibTypeDescription& limit) const
+{
+	return ibValueTypeDescription::AdjustValue(
+		limit,
 		varValue,
 		GetMetaData()
 	);

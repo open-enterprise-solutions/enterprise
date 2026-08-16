@@ -160,7 +160,9 @@ static void AppendComposition(wxTreeCtrl* tc, const wxTreeItemId& parent, const 
 			continue;
 		std::vector<ibSourceHop> childPath = prefix;
 		childPath.push_back({ col->GetSourceId() });   // this column's hop (scalar — a reference pins its branch when ITS children descend)
-		const std::vector<ibMetaID> refTypes = ibValueReferenceDataObject::ConvertToMetaIds(col->GetClsidList(), metaData);
+		// Branches come from what a value may BE, not from what is declared: a characteristic declares
+		// one class no value carries, and its branches are the chart's own references.
+		const std::vector<ibMetaID> refTypes = ibValueReferenceDataObject::ConvertToMetaIds(col->GetTypeValueDesc().GetClsidList(), metaData);
 		// The tree node is the column's IDENTITY — show its NAME, not its Caption/synonym (a control's
 		// header takes the synonym; the attribute tree stays name-keyed so a column is findable by name).
 		const wxString base = col->GetSourceName();

@@ -35,7 +35,6 @@ ibValueMetaObjectAccountDimensionKindsTable::~ibValueMetaObjectAccountDimensionK
 bool ibValueMetaObjectAccountDimensionKindsTable::ReadData(const ibDataNode& node)
 {
 	m_propertyAccountDimensionKind->SetNodeValue(node.GetProperty(m_propertyAccountDimensionKind->GetName()));
-	m_propertyOrder->SetNodeValue(node.GetProperty(m_propertyOrder->GetName()));
 	m_propertySummaryOnly->SetNodeValue(node.GetProperty(m_propertySummaryOnly->GetName()));
 	return ibValueMetaObjectTableDataRef::ReadData(node);
 }
@@ -43,7 +42,6 @@ bool ibValueMetaObjectAccountDimensionKindsTable::ReadData(const ibDataNode& nod
 bool ibValueMetaObjectAccountDimensionKindsTable::WriteData(ibDataNode& node) const
 {
 	node.SetProperty(m_propertyAccountDimensionKind->GetName(), m_propertyAccountDimensionKind->GetNodeValue());
-	node.SetProperty(m_propertyOrder->GetName(),        m_propertyOrder->GetNodeValue());
 	node.SetProperty(m_propertySummaryOnly->GetName(),  m_propertySummaryOnly->GetNodeValue());
 	return ibValueMetaObjectTableDataRef::WriteData(node);
 }
@@ -52,14 +50,12 @@ bool ibValueMetaObjectAccountDimensionKindsTable::OnCreateMetaObject(ibMetaData*
 {
 	if (!ibValueMetaObjectTableDataRef::OnCreateMetaObject(metaData, flags)) return false;
 	return (*m_propertyAccountDimensionKind)->OnCreateMetaObject(metaData, flags) &&
-		(*m_propertyOrder)->OnCreateMetaObject(metaData, flags) &&
 		(*m_propertySummaryOnly)->OnCreateMetaObject(metaData, flags);
 }
 
 bool ibValueMetaObjectAccountDimensionKindsTable::OnLoadMetaObject(ibMetaData* metaData)
 {
 	if (!(*m_propertyAccountDimensionKind)->OnLoadMetaObject(metaData)) return false;
-	if (!(*m_propertyOrder)->OnLoadMetaObject(metaData)) return false;
 	if (!(*m_propertySummaryOnly)->OnLoadMetaObject(metaData)) return false;
 	return ibValueMetaObjectTableDataRef::OnLoadMetaObject(metaData);
 }
@@ -67,7 +63,6 @@ bool ibValueMetaObjectAccountDimensionKindsTable::OnLoadMetaObject(ibMetaData* m
 bool ibValueMetaObjectAccountDimensionKindsTable::OnSaveMetaObject(int flags)
 {
 	if (!(*m_propertyAccountDimensionKind)->OnSaveMetaObject(flags)) return false;
-	if (!(*m_propertyOrder)->OnSaveMetaObject(flags)) return false;
 	if (!(*m_propertySummaryOnly)->OnSaveMetaObject(flags)) return false;
 	return ibValueMetaObjectTableDataRef::OnSaveMetaObject(flags);
 }
@@ -75,7 +70,6 @@ bool ibValueMetaObjectAccountDimensionKindsTable::OnSaveMetaObject(int flags)
 bool ibValueMetaObjectAccountDimensionKindsTable::OnDeleteMetaObject()
 {
 	if (!(*m_propertyAccountDimensionKind)->OnDeleteMetaObject()) return false;
-	if (!(*m_propertyOrder)->OnDeleteMetaObject()) return false;
 	if (!(*m_propertySummaryOnly)->OnDeleteMetaObject()) return false;
 	return ibValueMetaObjectTableDataRef::OnDeleteMetaObject();
 }
@@ -83,7 +77,6 @@ bool ibValueMetaObjectAccountDimensionKindsTable::OnDeleteMetaObject()
 bool ibValueMetaObjectAccountDimensionKindsTable::OnBeforeRunMetaObject(int flags)
 {
 	if (!(*m_propertyAccountDimensionKind)->OnBeforeRunMetaObject(flags)) return false;
-	if (!(*m_propertyOrder)->OnBeforeRunMetaObject(flags)) return false;
 	if (!(*m_propertySummaryOnly)->OnBeforeRunMetaObject(flags)) return false;
 	// The value-ctor pair comes from the Ref base (registerTabularSectionReference + _String). The
 	// RAM pair was registered here by hand — copied from the RAM section — which is the other half of
@@ -95,7 +88,6 @@ bool ibValueMetaObjectAccountDimensionKindsTable::OnBeforeRunMetaObject(int flag
 bool ibValueMetaObjectAccountDimensionKindsTable::OnAfterRunMetaObject(int flags)
 {
 	if (!(*m_propertyAccountDimensionKind)->OnAfterRunMetaObject(flags)) return false;
-	if (!(*m_propertyOrder)->OnAfterRunMetaObject(flags)) return false;
 	if (!(*m_propertySummaryOnly)->OnAfterRunMetaObject(flags)) return false;
 	return ibValueMetaObjectTableDataRef::OnAfterRunMetaObject(flags);
 }
@@ -103,7 +95,6 @@ bool ibValueMetaObjectAccountDimensionKindsTable::OnAfterRunMetaObject(int flags
 bool ibValueMetaObjectAccountDimensionKindsTable::OnBeforeCloseMetaObject()
 {
 	if (!(*m_propertyAccountDimensionKind)->OnBeforeCloseMetaObject()) return false;
-	if (!(*m_propertyOrder)->OnBeforeCloseMetaObject()) return false;
 	if (!(*m_propertySummaryOnly)->OnBeforeCloseMetaObject()) return false;
 	return ibValueMetaObjectTableDataRef::OnBeforeCloseMetaObject();
 }
@@ -111,7 +102,6 @@ bool ibValueMetaObjectAccountDimensionKindsTable::OnBeforeCloseMetaObject()
 bool ibValueMetaObjectAccountDimensionKindsTable::OnAfterCloseMetaObject()
 {
 	if (!(*m_propertyAccountDimensionKind)->OnAfterCloseMetaObject()) return false;
-	if (!(*m_propertyOrder)->OnAfterCloseMetaObject()) return false;
 	if (!(*m_propertySummaryOnly)->OnAfterCloseMetaObject()) return false;
 	return ibValueMetaObjectTableDataRef::OnAfterCloseMetaObject();
 }

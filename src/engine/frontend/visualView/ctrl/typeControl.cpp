@@ -569,7 +569,7 @@ ibClassID ibTypeControlFactory::GetDataType() const
 {
 	// Type + metadata come from the factory itself — its bound source property already reflects
 	// the resolved field's Type.
-	return ShowSelectType(GetMetaData(), GetTypeDesc());
+	return ShowSelectType(GetMetaData(), GetTypeValueDesc());
 }
 
 #include "frontend/win/dlgs/selectData.h"

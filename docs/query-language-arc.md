@@ -1830,6 +1830,78 @@ It is **role on the column + resolution at the queryable**: the surface speaks
 columns, each provider resolves them to its concrete form, and the attribute field
 machinery stays inside the DB provider.
 
+### 22.4b-bis Declared type vs value type — `GetTypeValueDesc` (2026-08-16)
+
+A column answers TWO questions about its type, and for almost every column they are the same object:
+
+```cpp
+virtual ibTypeDescription& GetTypeDesc()      const = 0;                      // what is DECLARED
+virtual ibTypeDescription& GetTypeValueDesc() const { return GetTypeDesc(); }  // what a VALUE may be
+```
+
+They part company for exactly one declaration. `Characteristic.<chart>` names a class **no value ever
+carries** — it says "whatever this chart admits" — so storage, comparison, pickers and the dot-walk
+have to be answered with the chart's own list instead. The attribute overrides `GetTypeValueDesc` and
+hands that list back BORROWED (the chart keeps it), so a chart that gains a type widens every field
+declared through it at once, with nothing copied, cached or recomputed.
+
+Three properties worth keeping:
+
+- **the query tier stays metadata-free.** It asks a virtual question of the column; the one who knows
+  how to redirect answers. No registry lookup, no active configuration, no cast at any call site;
+- **the default costs nothing** — the same reference, no branch — so temp, computed and value-table
+  columns are unaffected;
+- **it is declared on BOTH bases** (`ibBackendSourceColumn` and `ibBackendTypeFactory`) with one
+  overrider in the attribute, exactly as `GetTypeDesc` and `GetName` already resolve that duality.
+
+Consumers converted: `DescribeColumnLayout`, `ibColumnSpread::DriveSpread`, `ibColumnCodec::HasReference`,
+`TagFitsColumn` — i.e. the physical layout and both codecs.
+
+**And the source explorer carries BOTH.** A node is what pickers, filters, sort, group and the
+designer's attribute tree are built from, and it needs the two answers for different things: the
+DECLARATION is what a generated column and the type picker must show (a characteristic has to say it
+is one), the VALUE type is what a branch walks into. So the node stores both, filled at the one place
+a node is born from a field:
+
+```cpp
+ibSourceExplorer(name, synonym, id, typeDesc,                tableSection, select, enabled, visible);
+ibSourceExplorer(name, synonym, id, typeDesc, typeValueDesc, tableSection, select, enabled, visible);
+```
+
+The short form delegates to the long one with the declaration passed twice — "nothing to expand" —
+so every existing call site is untouched. `AppendColumn` uses the long one. Carried on the node rather
+than asked of the field per expansion: a node outlives the walk that built it.
+
+**Creating a value needs nothing of this — the redirection is already in the CTOR.**
+`ibCtorMetaValueTypeCharacteristic` (`characteristicCtor.cpp`) is registered by the chart itself and
+answers both of the value-side questions from the CONTOUR: `CreateObject()` delegates to the chart,
+whose own `GetTypeDesc()` IS `GetTypesOfCharacteristics()`, and `AllowValue(clsid)` looks the class up
+in that same list. So a characteristic never builds a value of class `Characteristic.<chart>`: one
+type in the contour gives that type outright, several give an **undefined** — a composite value the
+user then settles by picking (undefined → catalog → selection). So `CreateValueRef` / `AdjustValue`
+keep reading the declaration: putting the value question into them would be a second spelling of a
+rule the ctor already carries (written during this arc, then removed).
+
+**What the user is OFFERED is the other question, and it is one line.** `ibTypeControlFactory::GetDataType`
+hands the picker `GetTypeValueDesc()`:
+
+```cpp
+return ShowSelectType(GetMetaData(), GetTypeValueDesc());   // the CONTOUR, not the characteristic
+```
+
+With the declaration it received a single class — `Characteristic.<chart>` — and `ShowSelectType`
+returns early on anything shorter than two, so the dialog never opened and the cell settled on a class
+no value carries. With the value type it receives the chart's own list and asks. Nothing else in the
+picker changed, and an ordinary field feeds it the same object as before.
+
+⭐ The lesson is where a redirection is allowed to live. It was first written INSIDE the consumers —
+the branch resolver (`ConvertToMetaIds`), then a control taught to interrogate its bound column, then
+create/adjust taught the same trick. Each worked, and each was a copy of one rule. What survived is
+the rule stated once per question and asked where the question already was: the CTOR answers "what
+value do I build", `GetTypeValueDesc` answers "what may be held here", and the explorer node carries
+both answers for whoever walks it. A redirection placed where the question is already asked costs
+nothing; the same redirection placed at each consumer is one crutch per consumer.
+
 ### 22.4c The companion family — main is `this`, subclasses add, generic over a source
 
 A metaobject can't *be* four queryables through inheritance (one object, one base

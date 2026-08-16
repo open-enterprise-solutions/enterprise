@@ -259,7 +259,9 @@ bool ibValueTypeDescription::ContainType(const ibValue& cType) const
 {
 	ibValueType* valueType = CastValue<ibValueType>(cType);
 	wxASSERT(valueType);
-	auto it = std::find(m_typeDesc.m_listTypeClass.begin(), m_typeDesc.m_listTypeClass.begin(), valueType->GetOwnerTypeClass());
+	// The range ended at begin(), so the search was over NOTHING: find always answered begin(), and
+	// comparing that with end() made the result "yes" for every type whenever the list was not empty.
+	auto it = std::find(m_typeDesc.m_listTypeClass.begin(), m_typeDesc.m_listTypeClass.end(), valueType->GetOwnerTypeClass());
 	return it != m_typeDesc.m_listTypeClass.end();
 }
 
@@ -310,9 +312,14 @@ bool ibValueTypeDescription::CallAsFunc(const long lMethodNum, ibValue& pvarRetV
 		pvarRetValue = ContainType(*paParams[0]);
 		return true;
 	case enAdjustValue: {
-		if (lSizeArray > 0)
-			pvarRetValue = AdjustValue(*paParams[0]);
-		pvarRetValue = AdjustValue();
+		// TWO CALLS, TWO MEANINGS: with a value it CONVERTS that value, without one it BUILDS an empty
+		// one of this type. The no-argument line used to run unconditionally right after the other, so
+		// the converted result was computed and then thrown away — `Type.AdjustValue("45.2")` answered
+		// an empty number instead of 45.2, and every caller filling characteristics from raw text got
+		// blanks that looked like an unfilled source rather than a lost conversion.
+		pvarRetValue = lSizeArray > 0 && paParams != nullptr
+			? AdjustValue(*paParams[0])
+			: AdjustValue();
 		return true;
 	}
 	case enTypes:

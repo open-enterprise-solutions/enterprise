@@ -47,6 +47,11 @@ void ibValueMetaObjectChartOfAccounts::OnPropertyChanged(ibProperty* property, c
 	// describing the previous shape while the designer already shows the new one.
 	if (property == m_propertyMaxAccountDimensionCount ||
 		property == m_propertyChartOfCharacteristicTypes) {
+		// The ceiling also decides how many UNFOLDED columns the list has — the same number, the same
+		// moment. Sync first, then type: a column created here would otherwise stand untyped until the
+		// next run, which is the disagreement between metadata and schema this whole area guards against.
+		if (property == m_propertyMaxAccountDimensionCount)
+			SyncAccountDimensionKindColumns();
 		// The kinds column takes its type from the binding the user has just changed — apply it here for
 		// the same reason the registers resync here: the designer already shows the new shape.
 		if (property == m_propertyChartOfCharacteristicTypes)

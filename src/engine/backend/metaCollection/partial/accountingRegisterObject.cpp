@@ -66,42 +66,6 @@ enum dimensionFunc
 	eDimensionClear,
 };
 
-// ⭐ THE KIND'S OWN TYPE — the second tier of the two the chart of characteristic types declares.
-//
-//   the CHART's setting   every value a characteristic may ever take (the contour). That is the SLOT's
-//                         type, and it is what the column admits.
-//   a KIND's Type         a filter over that bag: of everything the chart allows, these are the ones
-//                         THIS kind takes.
-//
-// So a value written by kind is adjusted to the kind's own type — which is exactly what the owner
-// specified ("addressing by kind works on the AdjustValue principle"). An unreadable kind (an empty
-// reference, a deleted element) yields no type, and the value then goes in as it stands: the slot's
-// own type still bounds it, and refusing here would turn a missing element into a lost posting.
-ibValue AdjustToKind(const ibValue& kind, const ibValue& value)
-{
-	ibValueReferenceDataObject* reference = nullptr;
-	if (!kind.ConvertToValue(reference) || reference == nullptr)
-		return value;
-
-	const ibValueMetaObjectChartOfCharacteristicTypes* chart = nullptr;
-	if (!reference->GetMetaObject()->ConvertToValue(chart) || chart == nullptr)
-		return value;
-
-	const ibValueMetaObjectAttributePredefined* typeAttribute = chart->GetDataType();
-	if (typeAttribute == nullptr)
-		return value;
-
-	ibValue declared;
-	if (!reference->GetValueByMetaID(typeAttribute->GetMetaID(), declared))
-		return value;
-
-	ibValueTypeDescription* description = nullptr;
-	if (!declared.ConvertToValue(description) || description == nullptr)
-		return value;
-
-	return description->AdjustValue(value);
-}
-
 } // namespace
 
 void ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::FillMembers(ibMemberTable& helper) const
@@ -195,7 +159,27 @@ bool ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::SetAt(
 		return false;
 
 	m_recordSet->SetValueByMetaID(m_line, kindSlot->GetMetaID(), varKeyValue);
-	m_recordSet->SetValueByMetaID(m_line, slot->GetMetaID(), AdjustToKind(varKeyValue, varValue));
+
+	// The kind LIMITS: its own `Type` attribute IS a description of types, read straight off the
+	// reference by the id the chart of characteristic types declares for it.
+	ibValue kindType;
+	const ibValueMetaObjectChartOfCharacteristicTypes* chart = nullptr;
+	ibValueReferenceDataObject* kindRef = nullptr;
+	if (varKeyValue.ConvertToValue(kindRef) && kindRef != nullptr &&
+		kindRef->GetMetaObject()->ConvertToValue(chart) && chart != nullptr)
+		kindRef->GetValueByMetaID(chart->GetDataType()->GetMetaID(), kindType);
+
+	ibValueTypeDescription* limit = nullptr;
+	const bool limited = kindType.ConvertToValue(limit) && limit != nullptr;
+
+	// LOUD, because there is nothing to deduce from silence here: a kind that carries no type
+	// description means the value went in bounded by the column alone, and the kind's own rule was
+	// never applied. In a release build the posting still goes through — refusing would turn a
+	// metadata problem into lost data.
+	wxASSERT_MSG(limited, "account dimension: the kind carries no Type description, the limit is unknown");
+
+	m_recordSet->SetValueByMetaID(m_line, slot->GetMetaID(),
+		limited ? slot->AdjustValue(varValue, limit->m_typeDesc) : slot->AdjustValue(varValue));
 	return true;
 }
 

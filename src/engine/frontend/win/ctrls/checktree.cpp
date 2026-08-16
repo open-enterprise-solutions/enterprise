@@ -56,7 +56,7 @@ void ibCheckTree::mohighlight(const wxTreeItemId& id, bool toggle)
 		checkedCount += i.second ? 1 : 0;
 	}
 
-	bool is_checked;
+	bool is_checked = false;
 
 	if (ibCheckTree::UNCHECKED <= i && i < ibCheckTree::UNCHECKED_DISABLED)
 	{
@@ -69,6 +69,15 @@ void ibCheckTree::mohighlight(const wxTreeItemId& id, bool toggle)
 			return;
 		ibCheckTree::SetItemState(id, toggle ? ibCheckTree::UNCHECKED_MOUSE_OVER : ibCheckTree::CHECKED_MOUSE_OVER);
 		is_checked = false;
+	}
+	else
+	{
+		// A state outside BOTH ranges is one of the *_DISABLED ones — an item that refuses to be
+		// toggled. Nothing was set above, so there is no answer to report and nothing to file:
+		// falling through announced a choice nobody made and recorded it in m_checkedItems, which
+		// is also what checkedCount is counted from. The flag stayed uninitialised on that path,
+		// so the value announced was whatever the stack held (Debug: Run-Time Check #3).
+		return;
 	}
 
 	if (toggle)

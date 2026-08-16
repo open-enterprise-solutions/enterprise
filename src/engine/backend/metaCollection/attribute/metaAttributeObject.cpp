@@ -6,6 +6,7 @@
 #include "metaAttributeObject.h"
 #include "backend/metaData.h"
 #include "backend/serialize/dataBuilder.h"   // ibDataNode — per-type DescribeData
+#include "backend/metaCollection/partial/chartOfCharacteristicTypes.h"   // a characteristic answers with its chart's list
 
 ////////////////////////////////////////////////////////////////////////////
 
@@ -16,6 +17,32 @@
 //***********************************************************************
 
 #include "backend/objCtor.h"
+
+// WHAT A VALUE HERE MAY BE. Ordinary declarations answer with themselves; a characteristic answers
+// with the list its CHART declares — the owner keeps it, the field borrows it, so a chart that gains
+// a type widens every field declared through it at once, with nothing copied or recomputed.
+//
+// The chart is reached through the registry this attribute already belongs to — its own configuration,
+// never the active one. An unresolved chart (not loaded yet) leaves the declaration standing.
+ibTypeDescription& ibValueMetaObjectAttributeBase::GetTypeValueDesc() const
+{
+	ibTypeDescription& declared = GetTypeDesc();
+	if (m_metaData == nullptr || declared.GetClsidCount() != 1 || !IsCharacteristic(declared.GetFirstClsid()))
+		return declared;
+
+	const ibCtorMetaValueType* typeCtor = m_metaData->GetTypeCtor(declared.GetFirstClsid());
+	const ibValueMetaObjectChartOfCharacteristicTypes* chart = nullptr;
+	if (typeCtor == nullptr || typeCtor->GetMetaObject() == nullptr ||
+		!typeCtor->GetMetaObject()->ConvertToValue(chart) || chart == nullptr)
+		return declared;
+
+	// The chart's list, BORROWED: the owner keeps it, the field only points at it.
+	//
+	// Non-const on purpose. Reaching it THROUGH THE METADATA is the legal way to get at a live
+	// declaration — a configuration is edited, so its type descriptions are state, not a frozen
+	// snapshot. Constifying the borrow here would only force a cast at the first editor that needs it.
+	return chart->GetTypesOfCharacteristics();
+}
 
 bool ibValueMetaObjectAttributeBase::ContainType(const ibValueTypes& valType) const
 {

@@ -50,9 +50,28 @@ public:
 	//Adjust value
 	virtual ibValue AdjustValue() const;
 	virtual ibValue AdjustValue(const ibValue& varValue) const;
+	// Same, kept inside what `limit` admits — the column's own set narrowed by the types handed in.
+	virtual ibValue AdjustValue(const ibValue& varValue, const ibTypeDescription& limit) const;
 
 	//get type description
 	virtual ibTypeDescription& GetTypeDesc() const = 0;
+
+	// ⭐ WHAT A VALUE HERE MAY ACTUALLY BE — the same object as the declaration for everyone except one
+	// case, which is why it lives on the FACTORY and not on some particular holder: whoever owns a type
+	// description (an attribute, a column, a control) answers both questions the same way by default.
+	//
+	// The exception is a declaration that stands for other types — a characteristic
+	// («Characteristic.<chart>») names a class no value ever carries, so what a value may BE is the
+	// chart's own list. The holder that can redirect overrides this; nothing changes for the rest.
+	//
+	//   GetTypeDesc()       what is DECLARED — the author's choice, shown in the inspector, written to
+	//                       the file.
+	//   GetTypeValueDesc()  what may be STORED, compared, offered and adjusted.
+	//
+	// Same signature as its twin: they are two answers to one question, so a caller swaps one for the
+	// other without the type changing under it — and the redirected answer is handed back as it is
+	// held, with no cast anywhere.
+	virtual ibTypeDescription& GetTypeValueDesc() const { return GetTypeDesc(); }
 
 	// ⭐⭐ IS THE TYPE FILLED IN — asked HERE, of whoever owns a type description, and never counted
 	// at a callsite.
@@ -106,6 +125,7 @@ public:
 	//Adjust value
 	virtual ibValue AdjustValue() const;
 	virtual ibValue AdjustValue(const ibValue& varValue) const;
+	virtual ibValue AdjustValue(const ibValue& varValue, const ibTypeDescription& limit) const;
 
 	//get metadata
 	// The universal factory capability is READ-only: every type-factory can hand

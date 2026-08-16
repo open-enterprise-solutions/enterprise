@@ -56,6 +56,41 @@ public:
 
 	ibValueMetaObjectAccountDimensionKindsTable* GetAccountDimensionKindsTable() const { return m_propertyAccountDimensionKindsTable->GetMetaObject(); }
 
+	// ⭐⭐ THE KINDS SECTION, UNFOLDED INTO COLUMNS — the LIST needs what the object already has as rows.
+	//
+	// An account's analytics kinds live in a tabular section, which is right for the card: a section is
+	// how a variable number of rows is edited. A LIST cannot show a section — and showing which kinds an
+	// account carries is exactly what a chart of accounts list is read for, filter included.
+	//
+	// Both halves of the unfolding are already known, which is what makes it possible at all: HOW MANY
+	// columns there are is `MaxAccountDimensionCount` (schema, declared on the chart), and WHAT each one
+	// holds is the same reference type the section's own kind column carries. So column N is row N —
+	// the position IS the correspondence, the same rule the register's slots follow.
+	unsigned int GetAccountDimensionKindColumnCount() const {
+		return static_cast<unsigned int>(m_accountDimensionKindColumns.size());
+	}
+	ibValueMetaObjectAttributePredefined* GetAccountDimensionKindColumn(unsigned int idx) const {
+		return idx < m_accountDimensionKindColumns.size() ? m_accountDimensionKindColumns[idx] : nullptr;
+	}
+
+	// Bring the column set in line with the declared ceiling. Slots are created once and REUSED: a
+	// metaID is the physical column name (fld<metaID>), so a column that came back with a fresh id
+	// would be a different column with the old one's data unreachable.
+	void SyncAccountDimensionKindColumns();
+
+	// READ, NEVER WRITTEN — added to what the base already refuses (the object's own reference).
+	// The kinds live in the section; these columns are its copy, refreshed from it on every save, so
+	// an assignment here would be a second author for one fact and would vanish at the next write.
+	virtual bool IsReadOnlyAttribute(const ibMetaID& id) const override {
+		if (ibValueMetaObjectRecordDataHierarchyMutableRef::IsReadOnlyAttribute(id))
+			return true;
+		for (const ibValueMetaObjectAttributePredefined* column : m_accountDimensionKindColumns) {
+			if (column != nullptr && column->GetMetaID() == id)
+				return true;
+		}
+		return false;
+	}
+
 	// Chart of Characteristic Types binding (determines the values an account dimension may hold)
 	ibPropertyChartOfCharacteristicTypes* GetChartOfCharacteristicTypes() const { return m_propertyChartOfCharacteristicTypes; }
 
@@ -140,6 +175,10 @@ protected:
 		array.push_back(m_propertyAttributeOffBalance->GetMetaObject());
 		array.push_back(m_propertyAttributeQuantitative->GetMetaObject());
 		array.push_back(m_propertyAttributeCurrency->GetMetaObject());
+		// The unfolded kinds — ordinary attributes from here on, which is the whole point: the list
+		// shows them, a filter reads them and a query selects them, with nothing taught about sections.
+		for (ibValueMetaObjectAttributePredefined* column : m_accountDimensionKindColumns)
+			array.push_back(column);
 		return true;
 	}
 
@@ -292,6 +331,11 @@ private:
 	// Created manually because ibPropertyContainer template can't pass args to non-default constructor via wxClassInfo
 	ibPropertyContainer<ibValueMetaObjectAccountDimensionKindsTable>* m_propertyAccountDimensionKindsTable =
 		ibPropertyObject::CreateProperty<ibPropertyContainer<ibValueMetaObjectAccountDimensionKindsTable>>(m_categoryAccounting, wxT("AccountDimensionKinds"), _("Account dimension kinds"));
+
+	// The kinds section unfolded — one attribute per position, count declared by MaxAccountDimensionCount.
+	// Created by SyncAccountDimensionKindColumns and never destroyed: lowering the ceiling deactivates
+	// from the tail, raising it again finds the very same columns (their metaIDs name real DB columns).
+	std::vector<ibValueMetaObjectAttributePredefined*> m_accountDimensionKindColumns;
 
 	friend class ibValueRecordDataObjectChartOfAccounts;
 	friend class ibMetaData;

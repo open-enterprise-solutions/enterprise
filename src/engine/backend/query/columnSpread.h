@@ -83,7 +83,11 @@ template <class BindActive, class BindRef>
 void DriveSpread(const ibBackendQueryColumn* col, int tag,
                  ibQueryStatement* st, int& pos, BindActive bindActive, BindRef bindRef)
 {
-	const ibTypeDescription& td = col->GetTypeDesc();
+	// The SAME description the layout used — what a value may BE, characteristic redirection included.
+	// This driver has to agree with DescribeColumnLayout slot for slot: the INSERT's column list comes
+	// from the layout, the parameters come from here, and a slot one of them knows about and the other
+	// does not shifts every parameter after it one position early (see the note further down).
+	const ibTypeDescription& td = col->GetTypeValueDesc();
 	st->SetParamInt(pos++, tag);   // _TYPE discriminator
 
 	auto primitive = [&](ibValueTypes vt, ibColumnRole role) {

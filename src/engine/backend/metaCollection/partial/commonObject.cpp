@@ -1728,7 +1728,7 @@ void ibValueRecordDataObject::FillDataMembers(ibMemberTable& helper) const
 		helper.AppendProp(
 			objectName,
 			true,
-			!metaObject->IsDataReference(object->GetMetaID()),
+			!metaObject->IsReadOnlyAttribute(object->GetMetaID()),   // the reference is one of these
 			object->GetMetaID(),
 			eProperty
 		);

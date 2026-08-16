@@ -48,7 +48,8 @@ public:
 			wxString          m_srcName;
 			wxString          m_srcSynonym;
 			ibMetaID          m_mid = wxNOT_FOUND;
-			ibTypeDescription m_typeDesc;
+			ibTypeDescription m_typeDesc;        // what the field IS — the declaration, shown as it was written
+			ibTypeDescription m_typeValueDesc;   // what a VALUE here may be — the declaration expanded (see below)
 			int               m_flags = eSrcEnabled | eSrcVisible | eSrcSelect;   // packed; default: enabled+visible+select
 			ibSourceDataObject* m_owner = nullptr;   // source this node fetches its live value FROM (set by GetSourceExplorer)
 			const ibBackendSourceColumn* m_col = nullptr;   // descriptor this node was built FROM (the leaf WalkSource/structure-hop returns); null for a plain-value node
@@ -61,11 +62,21 @@ public:
 		// The one value ctor — every node is built from plain values + flags, no metaobject.
 		ibSourceExplorer(const wxString& name, const wxString& synonym, const ibMetaID& id,
 			const ibTypeDescription& typeDesc, bool tableSection = false, bool select = true,
-			bool enabled = true, bool visible = true) {
+			bool enabled = true, bool visible = true)
+			: ibSourceExplorer(name, synonym, id, typeDesc, typeDesc, tableSection, select, enabled, visible) {
+		}
+
+		// The same node, told BOTH answers: what the field IS and what a value here may BE. They differ
+		// for a declaration that stands for another type — a characteristic names its chart, and the
+		// chart's own references are what a branch walks into and what storage lays out.
+		ibSourceExplorer(const wxString& name, const wxString& synonym, const ibMetaID& id,
+			const ibTypeDescription& typeDesc, const ibTypeDescription& typeValueDesc,
+			bool tableSection = false, bool select = true, bool enabled = true, bool visible = true) {
 			m_sourceInfo.m_srcName = name;
 			m_sourceInfo.m_srcSynonym = synonym;
 			m_sourceInfo.m_mid = id;
 			m_sourceInfo.m_typeDesc = typeDesc;
+			m_sourceInfo.m_typeValueDesc = typeValueDesc;
 			m_sourceInfo.m_flags = (enabled ? eSrcEnabled : 0) | (visible ? eSrcVisible : 0)
 				| (tableSection ? eSrcTableSection : 0) | (select ? eSrcSelect : 0);
 		}
@@ -78,7 +89,17 @@ public:
 		wxString GetSourceName()    const { return m_sourceInfo.m_srcName; }
 		wxString GetSourceSynonym() const { return m_sourceInfo.m_srcSynonym; }
 		ibMetaID GetSourceId()      const { return m_sourceInfo.m_mid; }
-		const ibTypeDescription& GetTypeDesc() const { return m_sourceInfo.m_typeDesc; }   // node's Type (structure-hop reads the reference target)
+		const ibTypeDescription& GetTypeDesc() const { return m_sourceInfo.m_typeDesc; }   // node's Type (structure-hop reads the reference target)	
+		
+		// ⭐ WHAT A VALUE HERE MAY BE. The declaration above says WHAT THE FIELD IS — a characteristic
+		// stays a characteristic, which is what the inspector, a generated column and the type picker
+		// must show — while this says what it EXPANDS TO: the chart's own references, which is what a
+		// dot-walk branches into and what storage lays out.
+		//
+		// Carried on the node rather than asked of the field each time: a node outlives the walk that
+		// built it, and it is read on every tree expansion. Equal to the declaration for every ordinary
+		// field, so nothing else in the tree notices it exists.
+		const ibTypeDescription& GetTypeValueDesc() const { return m_sourceInfo.m_typeValueDesc; }
 		const ibBackendSourceColumn* GetColumn() const { return m_sourceInfo.m_col; }      // descriptor (the leaf WalkSource returns); null for a plain-value node
 
 		// THE NODE'S PICTURE, asked of the column it was built from — so a dimension and a resource
@@ -110,8 +131,11 @@ public:
 		// the metadata judgement lives on the column, not here.
 		void AppendColumn(const ibBackendQueryColumn* col, bool enabled = true, bool visible = true) {
 			if (col == nullptr || !col->IsAllowed()) return;
+			// BOTH ANSWERS AT ONCE: the DECLARATION (a characteristic must say it is one — inspector,
+			// generated column, type picker) and what a value here may BE (the chart's references —
+			// what a branch walks into and what storage lays out). Equal for every ordinary field.
 			m_arraySource.emplace_back(ibSourceExplorer{ col->GetName(), col->GetSynonym(), col->GetColumnId(),
-				col->GetTypeDesc(), /*tableSection*/false, /*select*/true, enabled, visible });
+				col->GetTypeDesc(), col->GetTypeValueDesc(), /*tableSection*/false, /*select*/true, enabled, visible });
 			m_arraySource.back().m_sourceInfo.m_owner = m_sourceInfo.m_owner;   // child fetches through the same source
 			m_arraySource.back().m_sourceInfo.m_col = col;                      // keep the descriptor (a query column IS-A source column)
 		}
@@ -129,7 +153,7 @@ public:
 		void AppendColumn(const ibBackendSourceColumn* col, const ibMetaID& id, bool enabled = true, bool visible = true) {
 			if (col == nullptr || !col->IsAllowed()) return;
 			m_arraySource.emplace_back(ibSourceExplorer{ col->GetName(), col->GetSynonym(), id,
-				col->GetTypeDesc(), /*tableSection*/false, /*select*/true, enabled, visible });
+				col->GetTypeDesc(), col->GetTypeValueDesc(), /*tableSection*/false, /*select*/true, enabled, visible });
 			m_arraySource.back().m_sourceInfo.m_owner = m_sourceInfo.m_owner;
 			m_arraySource.back().m_sourceInfo.m_col = col;
 		}

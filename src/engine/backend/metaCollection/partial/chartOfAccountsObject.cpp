@@ -70,6 +70,25 @@ bool ibValueRecordDataObjectChartOfAccounts::SaveData()
 							}
 							seen.push_back(kind);
 						}
+
+						// ⭐ THE SECTION, UNFOLDED INTO THE ACCOUNT'S OWN COLUMNS — written here, where
+						// the rows are already in hand and already checked.
+						//
+						// Column N takes row N: the position IS the correspondence, the same rule the
+						// register's slots follow. Filled on every save rather than maintained
+						// incrementally, because the section is small and a rewrite cannot drift —
+						// rows removed leave their columns EMPTY rather than holding a stale kind.
+						for (unsigned int idx = 0; idx < metaRef->GetAccountDimensionKindColumnCount(); idx++) {
+							ibValueMetaObjectAttributePredefined* column = metaRef->GetAccountDimensionKindColumn(idx);
+							if (column == nullptr || column->IsDeleted())
+								continue;
+
+							ibValue kind;
+							if (static_cast<long>(idx) < rows->GetRowCount())
+								rows->GetValueByMetaID(rows->GetItem(idx), kindAttr->GetMetaID(), kind);
+
+							SetValueByMetaID(column->GetMetaID(), kind);
+						}
 					}
 				}
 			}

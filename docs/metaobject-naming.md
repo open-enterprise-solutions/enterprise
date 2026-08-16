@@ -47,23 +47,50 @@ is legally required to speak.
 | **Синтетический и аналитический учёт**, **двойная запись** | UA 996-XIV art. 9 §1 |
 | **План счетов** | RU order 94н; UA НП(С)БО |
 
+#### "Register" is the CANONICAL generic — not a platform coinage
+
+Worth stating separately, because the word keeps being suspected of being borrowed from one
+particular vendor. **The law itself uses "register" as the generic term for a store of accounting
+records, and then lists its FORMS.** UA 996-XIV art. 9 and RU 402-FZ art. 10 both name *accounting
+registers* and enumerate books, journals, statements and machine printouts as the shapes such a
+register may take. The platform therefore did not invent a generic over its stores — it uses the one
+the law already declares, and the four kinds (information / accumulation / accounting / calculation)
+are its forms.
+
+⚠ Do not overclaim the reach. In common-law and continental practice the generic is **books /
+records** — `books of account`, `accounting records` (EU Directive 2013/34), DE `Handelsbücher`
+(HGB §239), FR `livres comptables`, PL `księgi rachunkowe` — while `register` is reserved there for
+SPECIFIC ones: `fixed asset register`, `VAT register`, `share register`. The honest formulation is
+therefore: canonical in the jurisdictions this product is written for, and a recognised (if
+narrower) accounting term elsewhere.
+
+**Consequence for this plan:** the generic stays, and a future rename must not drop it on the
+grounds that it "sounds like 1C". If a replacement is ever attempted, the only generic of equal
+standing is *book* (general ledger, purchase book, cash book — `Ledger`, `Book`): it covers
+accumulation and accounting well and reads badly over information. The ENGLISH metatype names are a
+separate question and may legitimately be MORE specific than the interface labels — e.g.
+`AccountingRegister` → `GeneralLedger`, which is what the rest of the world calls that exact
+thing — without changing the label the interface shows.
+
 ### 2.2 Professional canon
 
-Five centuries old (Pacioli, Venice 1494 — `conto`, `giornale`, `libro maestro`), reached Russian
-bookkeeping through German (`Konto`, `Buchhalter` → бухгалтер). Owned by nobody.
+Five centuries old (Pacioli, Venice 1494 — `conto`, `giornale`, `libro maestro`), and it reached
+Russian bookkeeping through German (`Konto`, `Buchhalter`). Owned by nobody.
 
-Справочник · Документ · Журнал документов · Константа · Перечисление · Отчёт · дебет/кредит ·
-сальдо · оборот · оборотно-сальдовая ведомость.
+Catalog · Document · Document journal · Constant · Enumeration · Report · debit/credit · balance ·
+turnover · trial balance — shown in the interface as «Справочник», «Документ», «Журнал документов»,
+«Константа», «Перечисление», «Отчёт», дебет/кредит, сальдо, оборот, оборотно-сальдовая ведомость.
 
 ### 2.3 Honestly descriptive
 
 Not legislative — these are **our storage taxonomy**, and should be presented as such, never as
 legal terms. They survive the criterion because the name says what is inside.
 
-- **Регистр накопления** — it accumulates: приход / расход / остаток.
-- **Регистр сведений** — the weakest name on this list ("сведения" is anything), but every
-  honest replacement is either equally general or reads like programmer vocabulary to the person
-  who has to use it. Not worth the recognition it would cost.
+- **Accumulation register** («регистр накопления») — it accumulates: receipt, expense, balance.
+- **Information register** («регистр сведений») — the weakest name on this list (its Russian label
+  means, roughly, "whatever is known"), but every honest replacement is either equally general or
+  reads like programmer vocabulary to the person who has to use it. Not worth the recognition it
+  would cost.
 
 ---
 
@@ -78,19 +105,21 @@ legal terms. They survive the criterion because the name says what is inside.
 | Обработка / `DataProcessor` | **Инструмент** / `Tool` — ⏸️ **UNDECIDED** | `DataProcessor` names the *mechanism* (so does a report, so does a document when posted), and `Tool` names the purpose, symmetrically beside `Report`. Held 2026-08-06: *обработка* is defensible — it does process data — and the objection to `Tool` is that it is **general to the point of saying little**. This is the one rename on the list that trades an honest-but-broad name for another broad name, so it is the weakest case here. If it is not clearly better, § 1 says leave it. | **yes** — breaking |
 | `dataReport.*` / `dataProcessor.*` | `report.*` / `tool.*` | The `data` prefix is on exactly these two of eleven metatypes — `catalog.*`, `document.*`, `constant.*` carry none. It is an accident, not a family convention, and `Data` distinguishes nothing (a catalog is data too). Symmetry by **subtraction**. | no — file names |
 
-Already applied: **Конфигуратор → Дизайнер**, **Подсистема → Раздел / `Section`**.
+Already applied: **Configurator → Designer** («Конфигуратор» → «Дизайнер»), **Subsystem → Section**
+(«Подсистема» → «Раздел» / `Section`).
 
 ### 3.1 Rejected candidates, so they stop coming up
 
-- `Instrument` for Обработка — direct cognate of «инструмент», but *financial instruments* are
-  securities. In an accounting product this misreads on sight.
+- `Instrument` for the data processor — a direct cognate of the Russian label «инструмент», but
+  *financial instruments* are securities. In an accounting product this misreads on sight.
 - `Utility` — reads as system maintenance ("Utilities: bank statement import" is wrong).
 - `Processor` / `Action` / `Command` / `Operation` / `Task` / `Service` — all taken: `ibProcUnit`,
-  the command subsystem, *хозяйственная операция*, scheduled jobs, background services.
+  the command subsystem, the accounting term *business transaction* («хозяйственная операция»),
+  scheduled jobs, background services.
 - `DataReports` / `DataTools` — symmetric with each other, asymmetric with the other nine
   metatypes. See the last row above.
-- **`Table` for Табличная часть — rejected 2026-08-06, and it was on this list as a proposal
-  until then.** Two reasons, either one sufficient. **The word is taken:**
+- **`Table` for the tabular section («табличная часть») — rejected 2026-08-06, and it was on this
+  list as a proposal until then.** Two reasons, either one sufficient. **The word is taken:**
   `VALUE_TYPE_REGISTER(ibValueModelTable, "Table", …)` — a table of values, a type a script
   creates on its own. Registering the metatype under the same word would put a standalone thing
   and a dependent one behind one name, the exact ambiguity this document avoids elsewhere.
@@ -99,7 +128,7 @@ Already applied: **Конфигуратор → Дизайнер**, **Подси
   argument ("the reader already knows it belongs to an object") had it backwards: the name is
   what carries the dependency once the reader is somewhere else — a signature, an error message,
   a document written by someone who is not looking at the tree.
-- Renaming **Регистр накопления / сведений** — descriptive names that work; renaming them
+- Renaming the **accumulation / information registers** — descriptive names that work; renaming them
   differentiates without clarifying, which is the thing this document exists to prevent.
 
 ### 3.2 The hierarchy kinds — four labels, one family (in the product, not a plan)
@@ -181,11 +210,13 @@ files or moving the rank onto the metatype first.
 
 ## 5. What this buys — and what it does not
 
-**Buys.** Four visible differences at the top of the tree (Дизайнер, Разделы, Виды аналитики,
-Инструменты) over a completely untouched depth (Документы, Справочники, План счетов, Регистры).
-First glance says "different", second says "I know this". Plus one real clarity gain — the two
-worst names in the taxonomy (субконто, план видов характеристик) are replaced by names that
-describe their contents, and a live code/UI inconsistency (`Table` vs `TabularSection`) is closed.
+**Buys.** Four visible differences at the top of the tree — designer, sections, dimension types,
+tools («Дизайнер», «Разделы», «Виды аналитики», «Инструменты») — over a completely untouched depth:
+documents, catalogs, chart of accounts, registers («Документы», «Справочники», «План счетов»,
+«Регистры»). First glance says "different", second says "I know this". Plus one real clarity gain —
+the two worst names in the taxonomy (the sub-conto and the chart of characteristic types) are
+replaced by names that describe their contents, and a live code/UI inconsistency (`Table` vs
+`TabularSection`) is closed.
 
 **Does not buy.** Differentiation is not positioning. The naming makes the product legible on the
 first screen; it does not make the case for it. That case is made by the change loop — the buyer
@@ -197,8 +228,8 @@ adding an attribute themselves and watching it appear everywhere — not by voca
 
 The cost axis is one question: **is the name visible from a script?**
 
-- **Free** — kind labels and file names: Таблица, Таблицы разрезов, `report.*` / `tool.*`. Pure
-  source and UI churn.
+- **Free** — kind labels and file names: the table label, the dimension-tables label
+  («Таблица», «Таблицы разрезов»), `report.*` / `tool.*`. Pure source and UI churn.
 - **Breaking** — metaobject names a script writes: `Subconto1`, `ChartOfCharacteristicTypes`,
   `DataProcessor`. These change what existing configurations and code compile against.
 
@@ -256,9 +287,9 @@ matching the product.
 
 **The plan survived one item out of four, and that is the plan working, not failing.** Each of the
 three that fell was measured against § 1 — *rename what the domain expert does not think in, keep
-what they do* — and each turned out to be on the "keep" side: a family of names (`План *`), a word
-whose adjective carries the meaning (табличная **часть**), and a broad name that would have been
-traded for another broad name. What is left is the one term that means nothing outside a single
+what they do* — and each turned out to be on the "keep" side: a family of names (the «План *» chart
+family), a word whose adjective carries the meaning (a tabular **part**, not a table), and a broad
+name that would have been traded for another broad name. What is left is the one term that means nothing outside a single
 vendor's product, which is exactly the shape a rename is supposed to have.
 
 ### 7.4 Order — smallest blast radius first
@@ -272,9 +303,10 @@ Each step is its own commit, builds clean, and keeps the suite green before the 
 | — | `dataReport.*` / `dataProcessor.*` → `report.*` / `tool.*` | **Unscheduled**: these file renames only make sense alongside the type rename, which is held. |
 
 ⚠️ With the chart of characteristic types keeping its name, the mechanism is described by two
-vocabularies: *виды характеристик* in the catalogue, *разрез аналитики* on the account. That is
-survivable — a bookkeeper does say "аналитика по счёту" and "виды характеристик" — but it means the
-link between them now lives in the documentation and the UI rather than in a shared word. Worth
+vocabularies: *characteristic kinds* («виды характеристик») in the catalogue, *account dimension*
+(«разрез аналитики») on the account. That is survivable — a bookkeeper does say both, in those very
+words — but it means the link between them now lives in the documentation and the UI rather than in
+a shared word. Worth
 knowing before step 1, not a reason to stop it.
 
 ### 7.5 Verification after each step

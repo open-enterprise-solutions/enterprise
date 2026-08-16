@@ -95,6 +95,12 @@ public:
 	// "what this column holds". The SAME accessor the attribute already exposes — free.
 	virtual ibTypeDescription& GetTypeDesc() const = 0;
 
+	// WHAT A VALUE HERE MAY BE — the same object for every ordinary column. Declared on BOTH bases (the
+	// type factory names it too, backend_type.h) for the same reason GetTypeDesc is: an attribute is a
+	// column AND a type factory, and one overrider then answers for both. A column that stands behind
+	// no declaration of its own — temp, computed — inherits this default and never differs.
+	virtual ibTypeDescription& GetTypeValueDesc() const { return GetTypeDesc(); }
+
 	// Is the column usable / shown? A plain (queryable) column always is; a metaobject attribute
 	// overrides — a deleted or access-denied field is not. The metadata-agnostic source explorer
 	// gates on THIS instead of poking the metaobject.

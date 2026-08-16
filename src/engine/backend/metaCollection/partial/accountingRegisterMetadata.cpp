@@ -474,11 +474,17 @@ void ibValueMetaObjectAccountingRegister::SyncAccountDimensionSlots()
 	// untouched here — this changes what the SCRIPT calls the field, which is exactly what the
 	// setting means. Applied on every Sync, so the names follow the setting in both directions,
 	// including for slots created under the previous one.
+	// ⚠ THE SYNONYM IS NOT GUARDED BY THE NAME. Renaming is guarded because a rename is a real edit
+	// (and SetName tells the registry its by-name cache is stale); the SYNONYM is presentation and
+	// costs nothing to restate. Tied to the rename it only ever landed when the name happened to
+	// change too — so a register whose account was already `AccountDr` kept the caption "Account"
+	// beside "Credit account", and the debit side was the one column that never said which side it is.
 	auto applySideName = [](ibValueMetaObjectAttributePredefined* attribute,
 		const wxString& name, const wxString& synonym) {
-		if (attribute == nullptr || attribute->GetName() == name)
+		if (attribute == nullptr)
 			return;
-		attribute->SetName(name);
+		if (attribute->GetName() != name)
+			attribute->SetName(name);
 		attribute->SetOwnerSynonym(synonym);
 	};
 
@@ -582,17 +588,18 @@ void ibValueMetaObjectAccountingRegister::ApplyAccountDimensionSlotTypes()
 		if (pvhBinding == nullptr)
 			continue;
 
-		// THE CONTOUR, not a reference to a kind. A slot holds the VALUE of a characteristic, and
-		// what a characteristic may be is exactly what the chart declares as its composition
-		// (TypesOfCharacteristics, vended by GetTypeDesc). The chart's ELEMENTS are the KINDS, and a
-		// kind is stored separately, in the account's kinds table beside the value.
+		// ⭐ BOTH HALVES ARE THE SAME CHART, SAID TWICE, and both are asked of the REGISTRY:
 		//
-		// This used to append a Reference-to-element type instead, which typed the value slot as the
-		// kind slot — "Contractors" could be written where "OOO Romashka" belongs.
+		//   the KIND    a REFERENCE to an element of the chart — "Contractors", "Items". That is what
+		//               a kind IS: one of the chart's own elements.
+		//   the VALUE   a CHARACTERISTIC of the chart — one declared type meaning "whatever this chart
+		//               admits", not a copy of its composition. What it expands to stays the chart's
+		//               business, asked when a picker or a conversion needs it, so a chart that gains a
+		//               type does not leave every slot describing the old set.
 		const ibMetaDescription& pvhDesc = pvhBinding->GetValueAsMetaDesc();
 
-		ibTypeDescription kindTypeDesc;   // reference to a characteristic — the KIND half
-		ibTypeDescription valueTypeDesc;  // the chart's composition — the VALUE half
+		ibTypeDescription kindTypeDesc;   // reference to an element of the chart — the KIND half
+		ibTypeDescription valueTypeDesc;  // the characteristic itself — the VALUE half
 
 		for (unsigned int pvhIdx = 0; pvhIdx < pvhDesc.GetTypeCount(); pvhIdx++) {
 			const ibValueMetaObject* pvh = m_metaData->FindAnyObjectByFilter(pvhDesc.GetByIdx(pvhIdx));
@@ -605,16 +612,13 @@ void ibValueMetaObjectAccountingRegister::ApplyAccountDimensionSlotTypes()
 			if (pvhCtor != nullptr)
 				kindTypeDesc.AppendMetaType(pvhCtor->GetClassType());
 
-			// The VALUE is whatever a characteristic of this chart may BE. The chart answers that
-			// itself — GetTypeDesc vends TypesOfCharacteristics — so the slot asks rather than
-			// rebuilds, and it cannot drift from what the chart declares.
-			// ⚠ One bound chart is the supported case: the composition is taken WHOLE, so with more
-			// than one bound the last wins rather than the union. Merging them needs an append over
-			// a type description, which this type does not vend — worth adding only when a
-			// configuration actually binds two charts to one chart of accounts.
-			const ibValueMetaObjectChartOfCharacteristicTypes* pvhObj = nullptr;
-			if (pvh->ConvertToValue(pvhObj) && pvhObj != nullptr)
-				valueTypeDesc.SetDefaultMetaType(pvhObj->GetTypesOfCharacteristics());
+			// The VALUE is a CHARACTERISTIC of the same chart — one declared type, the mirror of the
+			// kind's reference type. Not the composition copied in: the declaration says WHICH CHART,
+			// and what that chart admits is answered on demand (GetTypeValueDesc), so a chart that
+			// gains a type does not leave every slot describing the old set.
+			const ibCtorMetaValueType* pvhValueCtor = m_metaData->GetTypeCtor(pvh, ibCtorObjectMetaType::ibCtorObjectMetaType_Characteristic);
+			if (pvhValueCtor != nullptr)
+				valueTypeDesc.AppendMetaType(pvhValueCtor->GetClassType());
 		}
 
 		// Both halves of every pair are typed identically across slots — slots differ by the kind
@@ -790,6 +794,17 @@ ibSourceDataObject* ibValueMetaObjectAccountingRegister::CreateSourceObject(cons
 	case eFormList: return ibCreateList(GetQueryable(), GetRegisterPeriod());   // migrated onto the universal dynamic list
 	}
 	return nullptr;
+}
+
+// The register variant shows everything by default; here the KIND halves start hidden. They remain in
+// the source — pickers, filters and the query see them — so this is a default, not a removal.
+void ibValueMetaObjectAccountingRegister::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+{
+	for (const ibValueMetaObjectAttributeBase* attribute : GetGenericAttributeArrayObject()) {
+		if (attribute == nullptr)
+			continue;
+		explorer.AppendColumn(attribute, /*enabled*/true, /*visible*/ !IsAccountDimensionKindColumn(attribute));
+	}
 }
 
 METADATA_TYPE_REGISTER(ibValueMetaObjectAccountingRegister, "AccountingRegister", g_metaAccountingRegisterCLSID);

@@ -172,7 +172,9 @@ std::vector<ibColumnSlot> DescribeColumnLayout(const ibBackendQueryColumn* col)
 		return slots;
 	}
 
-	const ibTypeDescription& td = col->GetTypeDesc();
+	// What a VALUE here may be — not what is declared. The two differ only for a characteristic, whose
+	// declaration names a class no value carries (backend_type.h).
+	const ibTypeDescription& td = col->GetTypeValueDesc();
 	const wxString base = col->GetPhysicalName();
 
 	// A slot named off its role through the one suffix table.
@@ -284,7 +286,7 @@ ibValue ReadSingleTargetReference(const ibMetaData* metaData, const ibClassID& t
 
 bool ibColumnCodec::HasReference(const ibBackendQueryColumn* col)
 {
-	for (const auto& clsid : col->GetTypeDesc().GetClsidList())
+	for (const auto& clsid : col->GetTypeValueDesc().GetClsidList())
 		if (IsReference(clsid))
 			return true;
 	return false;
@@ -512,7 +514,7 @@ bool ibColumnCodec::ReadField(const wxString& fieldName, int fieldType,
 // HasReference gates DescribeColumnLayout builds the slots from, so the two cannot drift apart.
 static bool TagFitsColumn(const ibBackendQueryColumn* col, ibFieldTypes tag)
 {
-	const ibTypeDescription& td = col->GetTypeDesc();
+	const ibTypeDescription& td = col->GetTypeValueDesc();
 	switch (tag) {
 	case ibFieldTypes_Boolean:         return td.ContainType(ibValueTypes::TYPE_BOOLEAN);
 	case ibFieldTypes_Number:          return td.ContainType(ibValueTypes::TYPE_NUMBER);

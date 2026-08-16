@@ -71,9 +71,13 @@ ibSourceDataObject* ibValueMetaObjectChartOfAccounts::CreateSourceObject(const i
 	{
 	case eFormObject: return CreateObjectValue(ibObjectMode::OBJECT_ITEM);
 	case eFormFolder: return CreateObjectValue(ibObjectMode::OBJECT_FOLDER);
-	case eFormList: return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder(), GetDataDescription());   // migrated onto the universal dynamic list (hierarchy via queryable)
-	case eFormSelect: return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder(), GetDataDescription(), ibDynamicListView_Choice);   // select front-driven — choice mode
-	case eFormFolderSelect: return ibCreateFolderList(GetQueryable(), GetDataIsFolder(), GetDataDescription(), ibDynamicListView_Choice);   // folder-select = choice + IsFolder = true
+	// ⭐ SORTED BY CODE, not by description. In a catalog the code is a serial number and the name is what
+	// a person reads, so the name is the order. In a chart of accounts the CODE IS THE ACCOUNT — "51",
+	// "60.01" — and its order is the plan itself: sorted by name, 51 lands between "Материалы" and
+	// "Налоги" and the chart stops reading as a chart.
+	case eFormList: return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder(), GetAttributeForCode());   // migrated onto the universal dynamic list (hierarchy via queryable)
+	case eFormSelect: return ibCreateHierarchyList(GetQueryable(), GetDataIsFolder(), GetAttributeForCode(), ibDynamicListView_Choice);   // select front-driven — choice mode
+	case eFormFolderSelect: return ibCreateFolderList(GetQueryable(), GetDataIsFolder(), GetAttributeForCode(), ibDynamicListView_Choice);   // folder-select = choice + IsFolder = true
 	}
 	return nullptr;
 }
@@ -137,6 +141,17 @@ bool ibValueMetaObjectChartOfAccounts::WriteData(ibDataNode& node) const
 
 	node.SetProperty(m_propertyChartOfCharacteristicTypes->GetName(), m_propertyChartOfCharacteristicTypes->GetNodeValue());
 
+	// THE UNFOLDED COLUMNS TRAVEL WITH THEIR IDS. Each rides its whole node, keyed by its own name —
+	// the id is what names the physical column, so a column re-created on load without it would be a
+	// different column and the data in the old one unreachable.
+	for (ibValueMetaObjectAttributePredefined* column : m_accountDimensionKindColumns) {
+		if (column == nullptr)
+			continue;
+		auto child = std::make_shared<ibDataNode>();
+		column->SaveNode(*child);
+		node.SetProperty(column->GetName(), ibDataValue::Child(child));
+	}
+
 	return ibValueMetaObjectRecordDataHierarchyMutableRef::WriteData(node);
 }
 
@@ -161,6 +176,28 @@ bool ibValueMetaObjectChartOfAccounts::ReadData(const ibDataNode& node)
 
 	m_propertyChartOfCharacteristicTypes->SetNodeValue(node.GetProperty(m_propertyChartOfCharacteristicTypes->GetName()));
 
+	// READ BY WHAT IS IN THE FILE, not by the ceiling: the property above may already say a smaller
+	// number, and the columns beyond it still have to come back — they carry ids that name real DB
+	// columns, and forgetting one is how a restructuring drops a column it never created.
+	// Sync (at run) is what then activates or deactivates them.
+	m_accountDimensionKindColumns.clear();
+	for (unsigned int no = 1; ; no++) {
+		const wxString columnName = wxString::Format(wxT("AccountDimensionKind%u"), no);
+		const ibDataValue* saved = node.FindProperty(columnName);
+		if (saved == nullptr)
+			break;
+
+		ibValueMetaObjectAttributePredefined* column = CreateEmptyType(
+			columnName, wxString::Format(_("Account dimension kind %u"), no),
+			wxEmptyString, false, ibItemMode::ibItemMode_Item);
+
+		const std::shared_ptr<ibDataNode>& child = saved->AsChild();
+		if (child)
+			column->LoadNode(*child);
+
+		m_accountDimensionKindColumns.push_back(column);
+	}
+
 	return ibValueMetaObjectRecordDataHierarchyMutableRef::ReadData(node);
 }
 
@@ -168,13 +205,19 @@ bool ibValueMetaObjectChartOfAccounts::OnCreateMetaObject(ibMetaData* metaData, 
 {
 	if (!ibValueMetaObjectRecordDataHierarchyMutableRef::OnCreateMetaObject(metaData, flags)) return false;
 
-	return (*m_propertyAttributeAccountType)->OnCreateMetaObject(metaData, flags) &&
+	if (!((*m_propertyAttributeAccountType)->OnCreateMetaObject(metaData, flags) &&
 		(*m_propertyAttributeOffBalance)->OnCreateMetaObject(metaData, flags) &&
 		(*m_propertyAttributeQuantitative)->OnCreateMetaObject(metaData, flags) &&
 		(*m_propertyAttributeCurrency)->OnCreateMetaObject(metaData, flags) &&
 		(*m_propertyAccountDimensionKindsTable)->OnCreateMetaObject(metaData, flags) &&
 		(*m_propertyObjectModule)->OnCreateMetaObject(metaData, flags) &&
-		(*m_propertyManagerModule)->OnCreateMetaObject(metaData, flags);
+		(*m_propertyManagerModule)->OnCreateMetaObject(metaData, flags)))
+		return false;
+
+	// A NEW CHART GETS ITS COLUMNS AT ONCE — the ceiling has a default (3), so the unfolded set is
+	// known the moment the chart exists. Sync hands each one its id through the create event.
+	SyncAccountDimensionKindColumns();
+	return true;
 }
 
 bool ibValueMetaObjectChartOfAccounts::OnLoadMetaObject(ibMetaData* metaData)
@@ -186,6 +229,9 @@ bool ibValueMetaObjectChartOfAccounts::OnLoadMetaObject(ibMetaData* metaData)
 	if (!(*m_propertyAccountDimensionKindsTable)->OnLoadMetaObject(metaData)) return false;
 	if (!(*m_propertyObjectModule)->OnLoadMetaObject(metaData)) return false;
 	if (!(*m_propertyManagerModule)->OnLoadMetaObject(metaData)) return false;
+	for (ibValueMetaObjectAttributePredefined* column : m_accountDimensionKindColumns) {
+		if (column != nullptr && !column->OnLoadMetaObject(metaData)) return false;
+	}
 	if (!ibValueMetaObjectRecordDataHierarchyMutableRef::OnLoadMetaObject(metaData))
 		return false;
 	// ⚠ NOT HERE. The binding is read by now, but the thing it resolves THROUGH is not: a reference
@@ -219,8 +265,14 @@ bool ibValueMetaObjectChartOfAccounts::OnSaveMetaObject(int flags)
 
 
 	// Re-apply before the schema is computed: whatever the user has just picked is what the columns must
-	// describe, and the snapshot is taken off these metaobjects.
+	// describe, and the snapshot is taken off these metaobjects. The column SET comes first for the same
+	// reason — a ceiling raised a moment ago must be in the snapshot this save takes.
+	SyncAccountDimensionKindColumns();
 	ApplyAccountDimensionKindType();
+
+	for (ibValueMetaObjectAttributePredefined* column : m_accountDimensionKindColumns) {
+		if (column != nullptr && !column->OnSaveMetaObject(flags)) return false;
+	}
 
 	if (!(*m_propertyAttributeAccountType)->OnSaveMetaObject(flags)) return false;
 	if (!(*m_propertyAttributeOffBalance)->OnSaveMetaObject(flags)) return false;
@@ -241,6 +293,9 @@ bool ibValueMetaObjectChartOfAccounts::OnDeleteMetaObject()
 	if (!(*m_propertyAccountDimensionKindsTable)->OnDeleteMetaObject()) return false;
 	if (!(*m_propertyObjectModule)->OnDeleteMetaObject()) return false;
 	if (!(*m_propertyManagerModule)->OnDeleteMetaObject()) return false;
+	for (ibValueMetaObjectAttributePredefined* column : m_accountDimensionKindColumns) {
+		if (column != nullptr && !column->OnDeleteMetaObject()) return false;
+	}
 	return ibValueMetaObjectRecordDataHierarchyMutableRef::OnDeleteMetaObject();
 }
 
@@ -265,6 +320,9 @@ bool ibValueMetaObjectChartOfAccounts::OnBeforeRunMetaObject(int flags)
 	if (!(*m_propertyAccountDimensionKindsTable)->OnBeforeRunMetaObject(flags)) return false;
 	if (!(*m_propertyObjectModule)->OnBeforeRunMetaObject(flags)) return false;
 	if (!(*m_propertyManagerModule)->OnBeforeRunMetaObject(flags)) return false;
+	for (ibValueMetaObjectAttributePredefined* column : m_accountDimensionKindColumns) {
+		if (column != nullptr && !column->OnBeforeRunMetaObject(flags)) return false;
+	}
 	registerSelection();
 	if (!ibValueMetaObjectRecordDataHierarchyMutableRef::OnBeforeRunMetaObject(flags)) return false;
 	const ibCtorMetaValueType* typeCtor = m_metaData->GetTypeCtor(this, ibCtorObjectMetaType::ibCtorObjectMetaType_Reference);
@@ -322,6 +380,55 @@ void ibValueMetaObjectChartOfAccounts::ApplyAccountDimensionKindType()
 		return;
 
 	kindAttr->GetTypeDesc().SetDefaultMetaType(typeDesc);
+
+	// The unfolded list columns hold the SAME thing the section's column holds — an element of the bound
+	// chart — so they are declared from the same description rather than from a second walk of their own.
+	for (ibValueMetaObjectAttributePredefined* column : m_accountDimensionKindColumns) {
+		if (column != nullptr)
+			column->GetTypeDesc().SetDefaultMetaType(typeDesc);
+	}
+}
+
+// ⭐ THE SECTION UNFOLDED — one attribute per position, as many as the chart declares.
+//
+// Created once and REUSED, exactly like the register's slots: a metaID names the physical column
+// (fld<metaID>), so handing a column a fresh id would point it at a column that does not hold its data.
+// Lowering the ceiling therefore deactivates from the TAIL rather than destroying, and raising it again
+// finds the very same columns waiting.
+void ibValueMetaObjectChartOfAccounts::SyncAccountDimensionKindColumns()
+{
+	const unsigned int want = GetMaxAccountDimensionCount();
+
+	while (m_accountDimensionKindColumns.size() < want) {
+		const unsigned int no = static_cast<unsigned int>(m_accountDimensionKindColumns.size()) + 1;
+
+		// Numbered, because a column IS a position: the same position holds a counterparty on one
+		// account and an item on another, so a meaningful name would be a lie. What it means on a
+		// given account is the value standing in it.
+		ibValueMetaObjectAttributePredefined* column = CreateEmptyType(
+			wxString::Format(wxT("AccountDimensionKind%u"), no),
+			wxString::Format(_("Account dimension kind %u"), no),
+			wxEmptyString, false, ibItemMode::ibItemMode_Item);
+
+		// The id is handed out by the create event — a column born after the chart's own creation has
+		// to ask for one itself. GenerateNewID is monotonic, so it can never reuse a dropped column's.
+		if (m_metaData != nullptr)
+			column->OnCreateMetaObject(m_metaData, 0);
+
+		m_accountDimensionKindColumns.push_back(column);
+	}
+
+	// Beyond the ceiling: marked, not destroyed. The mark is the one the platform already uses for an
+	// attribute that exists but has nothing to say (a catalog with no owner), and every member walk
+	// obeys it — so the mark alone takes the column out of the list, the filters and the queries.
+	for (size_t idx = 0; idx < m_accountDimensionKindColumns.size(); idx++) {
+		ibValueMetaObjectAttributePredefined* column = m_accountDimensionKindColumns[idx];
+		if (column == nullptr)
+			continue;
+
+		if (idx < want) column->ClearFlag(metaDisableFlag);
+		else            column->SetFlag(metaDisableFlag);
+	}
 }
 
 bool ibValueMetaObjectChartOfAccounts::OnAfterRunMetaObject(int flags)
@@ -334,6 +441,13 @@ bool ibValueMetaObjectChartOfAccounts::OnAfterRunMetaObject(int flags)
 	if (!(*m_propertyObjectModule)->OnAfterRunMetaObject(flags)) return false;
 	if (!(*m_propertyManagerModule)->OnAfterRunMetaObject(flags)) return false;
 
+	// THE COLUMN SET FIRST, THE TYPING AFTER IT — a run that types what exists before this call types
+	// the previous state, and a column created here would stand untyped for a whole configuration run.
+	SyncAccountDimensionKindColumns();
+
+	for (ibValueMetaObjectAttributePredefined* column : m_accountDimensionKindColumns) {
+		if (column != nullptr && !column->OnAfterRunMetaObject(flags)) return false;
+	}
 
 	ApplyAccountDimensionKindType();
 
@@ -354,6 +468,9 @@ bool ibValueMetaObjectChartOfAccounts::OnBeforeCloseMetaObject()
 	if (!(*m_propertyAccountDimensionKindsTable)->OnBeforeCloseMetaObject()) return false;
 	if (!(*m_propertyObjectModule)->OnBeforeCloseMetaObject()) return false;
 	if (!(*m_propertyManagerModule)->OnBeforeCloseMetaObject()) return false;
+	for (ibValueMetaObjectAttributePredefined* column : m_accountDimensionKindColumns) {
+		if (column != nullptr && !column->OnBeforeCloseMetaObject()) return false;
+	}
 	if (auto* cc = m_metaData->GetCompileCache()) {
 		if (ibValueMetaObjectRecordDataHierarchyMutableRef::OnBeforeCloseMetaObject())
 			{ cc->RemoveCompileModule(m_propertyObjectModule->GetMetaObject()); return true; }
@@ -371,6 +488,9 @@ bool ibValueMetaObjectChartOfAccounts::OnAfterCloseMetaObject()
 	if (!(*m_propertyAccountDimensionKindsTable)->OnAfterCloseMetaObject()) return false;
 	if (!(*m_propertyObjectModule)->OnAfterCloseMetaObject()) return false;
 	if (!(*m_propertyManagerModule)->OnAfterCloseMetaObject()) return false;
+	for (ibValueMetaObjectAttributePredefined* column : m_accountDimensionKindColumns) {
+		if (column != nullptr && !column->OnAfterCloseMetaObject()) return false;
+	}
 	unregisterSelection();
 	return ibValueMetaObjectRecordDataHierarchyMutableRef::OnAfterCloseMetaObject();
 }
