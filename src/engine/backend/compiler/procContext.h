@@ -31,6 +31,17 @@ class BACKEND_API ibProcUnitEvaluate;
 // DestroyLocals so there is ONE place that knows how the storage was obtained
 // — which matters because an exception unwinding through a live frame (every
 // Raise, every script `try`, every session cancel) runs that destructor.
+// C4324 — "structure was padded due to alignment specifier". BOTH frames below hold an
+// `alignas(ibValue)` byte buffer that local slots are placement-constructed into, so the padding is
+// the POINT of the declaration, not an accident: without it the slots would be misaligned. MSVC
+// reports it once per translation unit that sees this header — hundreds of identical lines in a full
+// build, which is how a real warning goes unnoticed. Silenced HERE, around the two declarations that
+// earn it, rather than project-wide.
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable: 4324)
+#endif
+
 struct ibRunContextSmall {
 
 	ibRunContextSmall(int varCount = wxNOT_FOUND) :
@@ -176,5 +187,9 @@ struct ibRunContext : std::enable_shared_from_this<ibRunContext> {
 	// found nothing. A vector is what the code was already doing.
 	std::vector<std::pair<wxString, std::shared_ptr<ibProcUnitEvaluate>>> m_listEval;
 };
+
+#ifdef _MSC_VER
+#pragma warning(pop)   // C4324 — see the note above ibRunContextSmall
+#endif
 
 #endif // ! _PROC_CONTEXT__H__

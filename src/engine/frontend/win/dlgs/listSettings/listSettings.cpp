@@ -1556,8 +1556,10 @@ void ibDialogListSettings::PopulateFieldTree(wxTreeCtrl* tree)
 			ibSourceFieldNode* data = new ibSourceFieldNode();
 			data->m_path     = col->GetColumnName();
 			data->m_leafId   = static_cast<ibMetaID>(col->GetColumnID());
-			data->m_type     = col->GetColumnType();
-			data->m_refTypes = ibValueReferenceDataObject::ConvertToMetaIds(col->GetColumnType().GetClsidList(), metaData);
+			// Same two questions as the explorer path above: a condition holds VALUES, and a branch walks
+			// into what a value may be.
+			data->m_type     = col->GetColumnTypeValue();
+			data->m_refTypes = ibValueReferenceDataObject::ConvertToMetaIds(col->GetColumnTypeValue().GetClsidList(), metaData);
 			const wxTreeItemId item = tree->AppendItem(root, col->GetColumnName(), 0, 0, data);
 			if (!data->m_refTypes.empty())
 				tree->AppendItem(item, wxEmptyString);   // dummy -> [+]

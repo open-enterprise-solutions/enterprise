@@ -31,6 +31,8 @@ public:
 		// Name + id + TYPE straight off the column (an attribute IS-A column → GetTypeDesc is free).
 		// Enough to render/edit a cell type-aware; for 90% of sources nothing else is needed.
 		virtual const ibTypeDescription GetColumnType() const override { return m_col != nullptr ? m_col->GetTypeDesc() : ibTypeDescription(); }
+		// The wrapped column already tells the declaration from what a value may be — pass it on.
+		virtual const ibTypeDescription GetColumnTypeValue() const override { return m_col != nullptr ? m_col->GetTypeValueDesc() : ibTypeDescription(); }
 	private:
 		const ibBackendQueryColumn* m_col;
 	};
@@ -69,6 +71,7 @@ public:
 		virtual wxString GetColumnName() const override { return m_name; }
 		virtual wxString GetColumnCaption() const override { return m_name; }
 		virtual const ibTypeDescription GetColumnType() const override { return m_col != nullptr ? m_col->GetTypeDesc() : ibTypeDescription(); }
+		virtual const ibTypeDescription GetColumnTypeValue() const override { return m_col != nullptr ? m_col->GetTypeValueDesc() : ibTypeDescription(); }
 	private:
 		wxString                    m_name;
 		const ibBackendQueryColumn* m_col;

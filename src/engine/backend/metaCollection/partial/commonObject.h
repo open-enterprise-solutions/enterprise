@@ -2400,6 +2400,9 @@ class BACKEND_API ibValueRecordSetObject : public ibValueModelStorage, public ib
 			virtual wxString GetColumnName() const { return m_metaAttribute->GetName(); }
 			virtual wxString GetColumnCaption() const { return m_metaAttribute->GetSynonym(); }
 			virtual const ibTypeDescription GetColumnType() const { return m_metaAttribute->GetTypeDesc(); }
+			// The attribute tells the declaration from what a value may be (a characteristic answers with
+			// its chart's list) — ask it rather than deciding here.
+			virtual const ibTypeDescription GetColumnTypeValue() const { return m_metaAttribute->GetTypeValueDesc(); }
 
 			friend ibValueRecordSetObjectRegisterColumnCollection;
 

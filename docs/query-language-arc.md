@@ -1872,6 +1872,14 @@ The short form delegates to the long one with the declaration passed twice — "
 so every existing call site is untouched. `AppendColumn` uses the long one. Carried on the node rather
 than asked of the field per expansion: a node outlives the walk that built it.
 
+**The model layer keeps the same pair, for the same reason.** `ibValueModelColumnInfo` has two
+natures: a column that DECLARES its own type (a value-table's edited property) and a column that
+WRAPS one that can already tell the questions apart (a queryable column, a metaobject attribute). So
+`GetColumnTypeValue()` defaults to `GetColumnType()` and is overridden only by the wrappers, which
+pass the question on rather than re-deciding it (`valueDynamicList.cpp`, `commonObject.h`). Without it
+a list built from model columns rather than from a source explorer would type its filter by the
+declaration again — the same defect, one aisle over.
+
 **Creating a value needs nothing of this — the redirection is already in the CTOR.**
 `ibCtorMetaValueTypeCharacteristic` (`characteristicCtor.cpp`) is registered by the chart itself and
 answers both of the value-side questions from the CONTOUR: `CreateObject()` delegates to the chart,

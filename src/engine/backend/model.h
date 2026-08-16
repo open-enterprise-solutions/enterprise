@@ -353,6 +353,13 @@ public:
 			virtual const ibTypeDescription GetColumnType() const = 0;
 			virtual void SetColumnType(const ibTypeDescription& typeData) {}
 
+			// WHAT A VALUE IN THIS COLUMN MAY BE — the model-layer twin of GetTypeDesc / GetTypeValueDesc
+			// (backend_type.h). A column that DECLARES its own type (a value-table's edited property) answers
+			// both the same way, which is the default here; a column that WRAPS something already able to tell
+			// them apart — a metaobject attribute, a queryable column — passes the question on instead of
+			// re-deciding it. Read by whoever holds VALUES against the column: a filter's right-hand side.
+			virtual const ibTypeDescription GetColumnTypeValue() const { return GetColumnType(); }
+
 			virtual int GetColumnWidth() const { return wxDVC_DEFAULT_WIDTH; }
 
 			virtual void SetColumnWidth(int width) {};
